@@ -10,7 +10,17 @@ export const SPEND_SINKS = ["shop"] as const;
 export type SpendSink = (typeof SPEND_SINKS)[number];
 
 export type EntryOrigin = EarnSource | SpendSink;
-export type EntryKind = "earn" | "spend" | "reversal";
+
+export const ENTRY_KINDS = ["earn", "spend", "reversal"] as const;
+export type EntryKind = (typeof ENTRY_KINDS)[number];
+
+export function isEntryKind(value: string): value is EntryKind {
+  return ENTRY_KINDS.some((kind) => kind === value);
+}
+
+export function isEntryOrigin(value: string): value is EntryOrigin {
+  return EARN_SOURCES.some((source) => source === value) || SPEND_SINKS.some((sink) => sink === value);
+}
 
 /** One immutable row of the ledger. A player's account is the sum of their entries. */
 export interface LedgerEntry {
@@ -89,7 +99,7 @@ export function draftEntry(posting: Posting): EntryDraft {
       return {
         ...base,
         kind: "spend",
-        balanceDelta: -posting.amount,
+        balanceDelta: 0 - posting.amount,
         lifetimeDelta: 0,
         origin: posting.sink,
         reversesId: null,

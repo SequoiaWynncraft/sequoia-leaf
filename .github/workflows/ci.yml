@@ -27,9 +27,11 @@ jobs:
           install_args: bun node
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      - name: Lint and format
+      - name: Format
+        run: bun fmt --check
+      - name: Lint
         run: bun run lint
       - name: Typecheck
-        run: bun run typecheck
+        run: bun run types && bun check --build
       - name: Test
         run: bun run test

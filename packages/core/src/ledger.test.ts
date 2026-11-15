@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
+
 import { leaf } from "./leaf.ts";
 import { draftEntry, InvalidPostingError, type LedgerEntry, sameDraft } from "./ledger.ts";
-import { type PlayerId, parsePlayerId } from "./player.ts";
+import { playerId } from "./player.ts";
 
-const alice = parsePlayerId("00000000-0000-4000-8000-00000000000a") as PlayerId;
-const bob = parsePlayerId("00000000-0000-4000-8000-00000000000b") as PlayerId;
+const alice = playerId("00000000-0000-4000-8000-00000000000a");
+const bob = playerId("00000000-0000-4000-8000-00000000000b");
 
 function stored(draft: ReturnType<typeof draftEntry>, id: number): LedgerEntry {
   return { ...draft, id, createdAt: 1_000 };

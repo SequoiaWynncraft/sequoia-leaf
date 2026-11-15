@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "types": "wrangler types",
-    "typecheck": "wrangler types && tsc --noEmit",
-    "test": "wrangler types && vitest run"
+    "test": "vitest run"
   },
   "dependencies": {
     "@sequoia-leaf/core": "workspace:*",
@@ -14,8 +13,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.8.2",
-    "typescript": "catalog:",
-    "vitest": "catalog:",
+    "vitest": "5.1.0",
     "wrangler": "4.162.0"
   }
 }

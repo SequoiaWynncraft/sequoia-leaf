@@ -4,14 +4,17 @@ export {
   draftEntry,
   EARN_SOURCES,
   type EarnSource,
+  ENTRY_KINDS,
   type EntryDraft,
   type EntryKind,
   type EntryOrigin,
   InvalidPostingError,
+  isEntryKind,
+  isEntryOrigin,
   type LedgerEntry,
   type Posting,
+  sameDraft,
   SPEND_SINKS,
   type SpendSink,
-  sameDraft,
 } from "./ledger.ts";
-export { type PlayerId, parsePlayerId } from "./player.ts";
+export { parsePlayerId, type PlayerId, playerId } from "./player.ts";
