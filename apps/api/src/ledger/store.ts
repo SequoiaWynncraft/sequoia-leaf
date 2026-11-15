@@ -30,7 +30,7 @@ interface EntryRow {
   player_id: string;
   kind: string;
   balance_delta: number;
-  lifetime_delta: number;
+  xp_delta: number;
   origin: string;
   idempotency_key: string;
   reverses_id: number | null;
@@ -40,7 +40,7 @@ interface EntryRow {
 }
 
 const ENTRY_COLUMNS =
-  "id, player_id, kind, balance_delta, lifetime_delta, origin, idempotency_key, reverses_id, actor, memo, created_at";
+  "id, player_id, kind, balance_delta, xp_delta, origin, idempotency_key, reverses_id, actor, memo, created_at";
 
 // Rows are checked as they leave the database, so a row written by anything
 // other than this module fails loudly here instead of flowing on as a
@@ -55,7 +55,7 @@ function toEntry(row: EntryRow): LedgerEntry {
     playerId,
     kind: row.kind,
     balanceDelta: row.balance_delta,
-    lifetimeDelta: row.lifetime_delta,
+    xpDelta: row.xp_delta,
     origin: row.origin,
     idempotencyKey: row.idempotency_key,
     reversesId: row.reverses_id,
@@ -63,6 +63,33 @@ function toEntry(row: EntryRow): LedgerEntry {
     memo: row.memo,
     createdAt: row.created_at,
   };
+}
+
+/**
+ * The statement that inserts one entry. On its own it is atomic; inside a
+ * `db.batch` it commits or rolls back with the other statements, which is how
+ * an activity and the Leaf it pays are recorded together.
+ */
+export function entryInsert(db: D1Database, draft: EntryDraft, now: number): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO ledger_entries
+         (player_id, kind, balance_delta, xp_delta, origin, idempotency_key, reverses_id, actor, memo, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       RETURNING ${ENTRY_COLUMNS}`,
+    )
+    .bind(
+      draft.playerId,
+      draft.kind,
+      draft.balanceDelta,
+      draft.xpDelta,
+      draft.origin,
+      draft.idempotencyKey,
+      draft.reversesId,
+      draft.actor,
+      draft.memo,
+      now,
+    );
 }
 
 /**
@@ -75,26 +102,7 @@ function toEntry(row: EntryRow): LedgerEntry {
 export async function postEntry(db: D1Database, posting: Posting, now: number): Promise<PostResult> {
   const draft = draftEntry(posting);
   try {
-    const row = await db
-      .prepare(
-        `INSERT INTO ledger_entries
-           (player_id, kind, balance_delta, lifetime_delta, origin, idempotency_key, reverses_id, actor, memo, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         RETURNING ${ENTRY_COLUMNS}`,
-      )
-      .bind(
-        draft.playerId,
-        draft.kind,
-        draft.balanceDelta,
-        draft.lifetimeDelta,
-        draft.origin,
-        draft.idempotencyKey,
-        draft.reversesId,
-        draft.actor,
-        draft.memo,
-        now,
-      )
-      .first<EntryRow>();
+    const row = await entryInsert(db, draft, now).first<EntryRow>();
     if (row === null) {
       throw new Error("Ledger insert returned no row");
     }
@@ -142,13 +150,13 @@ async function findByIdempotencyKey(db: D1Database, idempotencyKey: string): Pro
 /** A player's totals. A player with no entries has an account of zero. */
 export async function getAccount(db: D1Database, playerId: PlayerId): Promise<Account> {
   const row = await db
-    .prepare("SELECT balance, lifetime_earned FROM accounts WHERE player_id = ?")
+    .prepare("SELECT balance, xp FROM accounts WHERE player_id = ?")
     .bind(playerId)
-    .first<{ balance: number; lifetime_earned: number }>();
+    .first<{ balance: number; xp: number }>();
   return {
     playerId,
     balance: row?.balance ?? 0,
-    lifetimeEarned: row?.lifetime_earned ?? 0,
+    xp: row?.xp ?? 0,
   };
 }
 

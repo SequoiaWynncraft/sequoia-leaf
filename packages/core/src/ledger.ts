@@ -1,4 +1,4 @@
-import type { Leaf } from "./leaf.ts";
+import { type Leaf, MAX_LEAF } from "./leaf.ts";
 import type { PlayerId } from "./player.ts";
 
 /** Where earned Leaf comes from. */
@@ -29,8 +29,8 @@ export interface LedgerEntry {
   readonly kind: EntryKind;
   /** Signed change to the spendable balance. */
   readonly balanceDelta: number;
-  /** Signed change to lifetime earned Leaf, which drives SEQ level and never drops when Leaf is spent. */
-  readonly lifetimeDelta: number;
+  /** Signed change to XP, which drives SEQ level and never drops when Leaf is spent. */
+  readonly xpDelta: number;
   readonly origin: EntryOrigin;
   readonly idempotencyKey: string;
   readonly reversesId: number | null;
@@ -44,7 +44,7 @@ export interface LedgerEntry {
 export interface Account {
   readonly playerId: PlayerId;
   readonly balance: number;
-  readonly lifetimeEarned: number;
+  readonly xp: number;
 }
 
 interface PostingBase {
@@ -60,7 +60,13 @@ interface PostingBase {
 
 /** A request to add one entry to the ledger. */
 export type Posting =
-  | (PostingBase & { readonly kind: "earn"; readonly amount: Leaf; readonly source: EarnSource })
+  | (PostingBase & {
+      readonly kind: "earn";
+      readonly amount: Leaf;
+      readonly source: EarnSource;
+      /** XP granted with the Leaf. Defaults to the amount, so earned Leaf levels a player one for one. */
+      readonly xp?: number;
+    })
   | (PostingBase & { readonly kind: "spend"; readonly amount: Leaf; readonly sink: SpendSink })
   | (PostingBase & { readonly kind: "reversal"; readonly reverses: LedgerEntry });
 
@@ -74,7 +80,7 @@ export class InvalidPostingError extends Error {
 /**
  * Turns a posting into the entry it would write.
  *
- * - Earning raises the balance and lifetime earned by the same amount.
+ * - Earning raises the balance and grants XP, by default as much XP as Leaf.
  * - Spending lowers the balance only.
  * - A reversal undoes exactly one earlier earn or spend, in full.
  */
@@ -86,21 +92,26 @@ export function draftEntry(posting: Posting): EntryDraft {
     memo: posting.memo ?? null,
   };
   switch (posting.kind) {
-    case "earn":
+    case "earn": {
+      const xp = posting.xp ?? posting.amount;
+      if (!Number.isInteger(xp) || xp < 0 || xp > MAX_LEAF) {
+        throw new InvalidPostingError(`XP must be a whole number from 0 to ${MAX_LEAF}, got ${xp}`);
+      }
       return {
         ...base,
         kind: "earn",
         balanceDelta: posting.amount,
-        lifetimeDelta: posting.amount,
+        xpDelta: xp,
         origin: posting.source,
         reversesId: null,
       };
+    }
     case "spend":
       return {
         ...base,
         kind: "spend",
         balanceDelta: 0 - posting.amount,
-        lifetimeDelta: 0,
+        xpDelta: 0,
         origin: posting.sink,
         reversesId: null,
       };
@@ -117,7 +128,7 @@ export function draftEntry(posting: Posting): EntryDraft {
         kind: "reversal",
         // Subtracting from zero rather than negating keeps a zero delta from becoming -0.
         balanceDelta: 0 - original.balanceDelta,
-        lifetimeDelta: 0 - original.lifetimeDelta,
+        xpDelta: 0 - original.xpDelta,
         origin: original.origin,
         reversesId: original.id,
       };
@@ -131,7 +142,7 @@ export function sameDraft(a: EntryDraft, b: EntryDraft): boolean {
     a.playerId === b.playerId &&
     a.kind === b.kind &&
     a.balanceDelta === b.balanceDelta &&
-    a.lifetimeDelta === b.lifetimeDelta &&
+    a.xpDelta === b.xpDelta &&
     a.origin === b.origin &&
     a.idempotencyKey === b.idempotencyKey &&
     a.reversesId === b.reversesId

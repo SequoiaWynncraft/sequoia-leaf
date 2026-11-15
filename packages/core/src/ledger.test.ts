@@ -12,7 +12,7 @@ function stored(draft: ReturnType<typeof draftEntry>, id: number): LedgerEntry {
 }
 
 describe("draftEntry", () => {
-  it("counts earned Leaf toward both the balance and lifetime earned", () => {
+  it("counts earned Leaf toward both the balance and XP", () => {
     const draft = draftEntry({
       kind: "earn",
       playerId: alice,
@@ -24,13 +24,13 @@ describe("draftEntry", () => {
     expect(draft).toMatchObject({
       kind: "earn",
       balanceDelta: 110,
-      lifetimeDelta: 110,
+      xpDelta: 110,
       origin: "raid",
       reversesId: null,
     });
   });
 
-  it("takes spent Leaf from the balance and leaves lifetime earned alone", () => {
+  it("takes spent Leaf from the balance and leaves XP alone", () => {
     const draft = draftEntry({
       kind: "spend",
       playerId: alice,
@@ -39,10 +39,10 @@ describe("draftEntry", () => {
       idempotencyKey: "order:1",
     });
 
-    expect(draft).toMatchObject({ kind: "spend", balanceDelta: -40, lifetimeDelta: 0, origin: "shop" });
+    expect(draft).toMatchObject({ kind: "spend", balanceDelta: -40, xpDelta: 0, origin: "shop" });
   });
 
-  it("reverses an earn by removing it from the balance and from lifetime earned", () => {
+  it("reverses an earn by removing it from the balance and from XP", () => {
     const earn = stored(
       draftEntry({ kind: "earn", playerId: alice, amount: leaf(110), source: "raid", idempotencyKey: "raid:1" }),
       7,
@@ -53,7 +53,7 @@ describe("draftEntry", () => {
     expect(draft).toMatchObject({
       kind: "reversal",
       balanceDelta: -110,
-      lifetimeDelta: -110,
+      xpDelta: -110,
       origin: "raid",
       reversesId: 7,
     });
@@ -67,7 +67,7 @@ describe("draftEntry", () => {
 
     const draft = draftEntry({ kind: "reversal", playerId: alice, reverses: spend, idempotencyKey: "undo:order:1" });
 
-    expect(draft).toMatchObject({ balanceDelta: 40, lifetimeDelta: 0, origin: "shop", reversesId: 8 });
+    expect(draft).toMatchObject({ balanceDelta: 40, xpDelta: 0, origin: "shop", reversesId: 8 });
   });
 
   it("refuses to reverse a reversal", () => {
@@ -94,6 +94,29 @@ describe("draftEntry", () => {
     expect(() =>
       draftEntry({ kind: "reversal", playerId: bob, reverses: earn, idempotencyKey: "undo:grant:1" }),
     ).toThrow(InvalidPostingError);
+  });
+});
+
+describe("earned XP", () => {
+  it("grants the XP a posting names instead of the Leaf amount", () => {
+    const draft = draftEntry({
+      kind: "earn",
+      playerId: alice,
+      amount: leaf(300),
+      xp: 150,
+      source: "staff",
+      idempotencyKey: "grant:2",
+    });
+
+    expect(draft).toMatchObject({ balanceDelta: 300, xpDelta: 150 });
+  });
+
+  it("refuses XP that is negative or fractional", () => {
+    for (const xp of [-1, 1.5, Number.NaN]) {
+      expect(() =>
+        draftEntry({ kind: "earn", playerId: alice, amount: leaf(1), xp, source: "staff", idempotencyKey: "grant:3" }),
+      ).toThrow(InvalidPostingError);
+    }
   });
 });
 

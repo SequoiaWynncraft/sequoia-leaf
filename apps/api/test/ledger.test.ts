@@ -33,29 +33,29 @@ async function expectAccountsMatchEntries(): Promise<void> {
   const { results } = await env.DB.prepare(
     `SELECT player_id FROM accounts AS a
      WHERE balance <> (SELECT COALESCE(SUM(balance_delta), 0) FROM ledger_entries WHERE player_id = a.player_id)
-        OR lifetime_earned <> (SELECT COALESCE(SUM(lifetime_delta), 0) FROM ledger_entries WHERE player_id = a.player_id)`,
+        OR xp <> (SELECT COALESCE(SUM(xp_delta), 0) FROM ledger_entries WHERE player_id = a.player_id)`,
   ).all();
   expect(results).toEqual([]);
 }
 
 describe("earning and spending", () => {
   it("gives a player with no entries an account of zero", async () => {
-    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 0, lifetimeEarned: 0 });
+    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 0, xp: 0 });
   });
 
-  it("adds earned Leaf to the balance and to lifetime earned", async () => {
+  it("adds earned Leaf to the balance and to XP", async () => {
     const entry = await posted(earn(alice, 110, "raid:1:alice"));
 
     expect(entry).toMatchObject({ playerId: alice, kind: "earn", balanceDelta: 110, origin: "raid", createdAt: NOW });
-    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 110, lifetimeEarned: 110 });
+    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
   });
 
-  it("takes spent Leaf from the balance without lowering lifetime earned", async () => {
+  it("takes spent Leaf from the balance without lowering XP", async () => {
     await posted(earn(alice, 110, "raid:1:alice"));
 
     await posted(spend(alice, 40, "order:1"));
 
-    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 70, lifetimeEarned: 110 });
+    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 70, xp: 110 });
   });
 
   it("lets a player spend their whole balance", async () => {
@@ -72,7 +72,7 @@ describe("earning and spending", () => {
     const result = await post(spend(alice, 31, "order:1"));
 
     expect(result).toEqual({ status: "rejected", reason: "insufficient_leaf" });
-    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 30, lifetimeEarned: 30 });
+    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 30, xp: 30 });
     expect(await listEntries(env.DB, alice, { limit: 10 })).toHaveLength(1);
   });
 
@@ -127,7 +127,7 @@ describe("idempotency", () => {
 });
 
 describe("reversals", () => {
-  it("removes a reversed earn from the balance and from lifetime earned", async () => {
+  it("removes a reversed earn from the balance and from XP", async () => {
     const earned = await posted(earn(alice, 110, "raid:1:alice"));
 
     const reversal = await posted({
@@ -140,7 +140,7 @@ describe("reversals", () => {
     });
 
     expect(reversal).toMatchObject({ kind: "reversal", reversesId: earned.id, origin: "raid", actor: "staff:1" });
-    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 0, lifetimeEarned: 0 });
+    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 0, xp: 0 });
   });
 
   it("returns a reversed spend to the balance", async () => {
@@ -149,7 +149,7 @@ describe("reversals", () => {
 
     await posted({ kind: "reversal", playerId: alice, reverses: spent, idempotencyKey: "undo:order:1" });
 
-    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 110, lifetimeEarned: 110 });
+    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
   });
 
   it("leaves the player in debt when reversed Leaf was already spent", async () => {
@@ -158,7 +158,7 @@ describe("reversals", () => {
 
     await posted({ kind: "reversal", playerId: alice, reverses: earned, idempotencyKey: "undo:raid:1:alice" });
 
-    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: -100, lifetimeEarned: 0 });
+    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: -100, xp: 0 });
     expect(await post(spend(alice, 1, "order:2"))).toEqual({ status: "rejected", reason: "insufficient_leaf" });
   });
 
@@ -183,7 +183,7 @@ describe("reversals", () => {
 
   it("refuses a reversal that does not match the stored entry", async () => {
     const earned = await posted(earn(alice, 110, "raid:1:alice"));
-    const tampered: LedgerEntry = { ...earned, balanceDelta: 500, lifetimeDelta: 500 };
+    const tampered: LedgerEntry = { ...earned, balanceDelta: 500, xpDelta: 500 };
 
     await expect(
       post({ kind: "reversal", playerId: alice, reverses: tampered, idempotencyKey: "undo:raid:1:alice" }),
@@ -206,7 +206,7 @@ describe("the ledger table", () => {
 
   it("refuses an entry whose deltas do not fit its kind", async () => {
     const insert = env.DB.prepare(
-      `INSERT INTO ledger_entries (player_id, kind, balance_delta, lifetime_delta, origin, idempotency_key, created_at)
+      `INSERT INTO ledger_entries (player_id, kind, balance_delta, xp_delta, origin, idempotency_key, created_at)
        VALUES (?, 'spend', 50, 0, 'shop', 'bad', ?)`,
     ).bind(alice, NOW);
 
@@ -216,7 +216,7 @@ describe("the ledger table", () => {
   it("undoes a spend when a later statement in the same batch fails", async () => {
     await posted(earn(alice, 100, "raid:1:alice"));
     const insert = `INSERT INTO ledger_entries
-        (player_id, kind, balance_delta, lifetime_delta, origin, idempotency_key, created_at)
+        (player_id, kind, balance_delta, xp_delta, origin, idempotency_key, created_at)
       VALUES (?, 'spend', ?, 0, 'shop', ?, ?)`;
 
     await expect(
