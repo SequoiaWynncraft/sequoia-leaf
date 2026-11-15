@@ -20,6 +20,9 @@ CREATE TABLE activities (
 
 CREATE INDEX activities_by_player_time ON activities (player_id, occurred_at);
 
+-- Serves the sync's "which of this window's activities are already recorded" read.
+CREATE INDEX activities_by_time ON activities (occurred_at, source_key);
+
 -- One row per background job. `locked_until` is a lease: a run takes it by
 -- moving it into the future, so two runs never process the same job at once,
 -- and a run that dies releases it by letting it pass.

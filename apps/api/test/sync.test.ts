@@ -1,6 +1,6 @@
 import { type Activity, DEFAULT_RULES, type PlayerId, playerId } from "@sequoia-leaf/core";
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { type CreditSource, RECENT_OVERLAP_MS, SETTLE_MS, syncCredits, type SyncMode } from "../src/earning/sync.ts";
 import { getAccount, listEntries } from "../src/ledger/store.ts";
@@ -181,6 +181,21 @@ describe("syncCredits", () => {
     const second = await sync(source, T0 + 6 * MINUTE, "recent", 1);
     expect(second).toEqual({ status: "synced", recorded: 1, leafPaid: 110, complete: true });
     expect(await recordedKeys()).toEqual([`raid:1:${alice}`, `raid:2:${bob}`]);
+  });
+
+  it("checks a whole window for recorded activities in one database read", async () => {
+    const many = Array.from({ length: 300 }, (_, index) => raid(index + 1, alice, T0 + MINUTE + index));
+    const { source } = feed(many);
+    await sync(source, T0);
+    await sync(source, T0 + 5 * MINUTE);
+    const prepared = vi.spyOn(env.DB, "prepare");
+
+    const again = await sync(source, T0 + 6 * MINUTE);
+
+    expect(again).toEqual({ status: "synced", recorded: 0, leafPaid: 0, complete: true });
+    const lookups = prepared.mock.calls.filter(([sql]) => sql.includes("FROM activities"));
+    expect(lookups).toHaveLength(1);
+    prepared.mockRestore();
   });
 
   it("does nothing while another run holds the lease", async () => {

@@ -39,7 +39,6 @@ const LEASE_MS = 60_000;
  * to the next.
  */
 export const MAX_PLAYERS_PER_RUN = 20;
-const KEY_LOOKUP_CHUNK = 50;
 
 export interface SyncOptions {
   readonly mode: SyncMode;
@@ -95,7 +94,7 @@ async function runSync(
 
   const reach = options.mode === "recent" ? state.cursor - RECENT_OVERLAP_MS : to - DEEP_LOOKBACK_MS;
   const from = Math.max(state.started_at, reach);
-  const activities = from < to ? await newActivities(db, await source(from, to)) : [];
+  const activities = from < to ? await newActivities(db, await source(from, to), from, to) : [];
 
   const byPlayer = new Map<PlayerId, Activity[]>();
   for (const activity of activities) {
@@ -143,28 +142,27 @@ async function runSync(
   return { status: "synced", recorded, leafPaid, complete: deferred.length === 0 };
 }
 
-/** The activities not recorded yet, oldest first, each source key once. */
-async function newActivities(db: D1Database, activities: readonly Activity[]): Promise<Activity[]> {
+/**
+ * The activities in [from, to) that are not recorded yet, oldest first, each
+ * source key once. One query reads the keys already recorded for the window,
+ * however many activities the feed lists.
+ */
+async function newActivities(
+  db: D1Database,
+  activities: readonly Activity[],
+  from: number,
+  to: number,
+): Promise<Activity[]> {
+  const { results } = await db
+    .prepare("SELECT source_key FROM activities WHERE occurred_at >= ? AND occurred_at < ?")
+    .bind(from, to)
+    .all<{ source_key: string }>();
+  const recorded = new Set(results.map((row) => row.source_key));
   const unique = new Map<string, Activity>();
   for (const activity of activities) {
-    unique.set(activity.sourceKey, activity);
-  }
-  const keys = [...unique.keys()];
-  const chunks: string[][] = [];
-  for (let start = 0; start < keys.length; start += KEY_LOOKUP_CHUNK) {
-    chunks.push(keys.slice(start, start + KEY_LOOKUP_CHUNK));
-  }
-  const lookups = await Promise.all(
-    chunks.map((chunk) =>
-      db
-        .prepare(`SELECT source_key FROM activities WHERE source_key IN (${chunk.map(() => "?").join(", ")})`)
-        .bind(...chunk)
-        .all<{ source_key: string }>(),
-    ),
-  );
-  for (const { results } of lookups) {
-    for (const row of results) {
-      unique.delete(row.source_key);
+    const inWindow = activity.occurredAt >= from && activity.occurredAt < to;
+    if (inWindow && !recorded.has(activity.sourceKey)) {
+      unique.set(activity.sourceKey, activity);
     }
   }
   return [...unique.values()].toSorted((a, b) => a.occurredAt - b.occurredAt || a.sourceKey.localeCompare(b.sourceKey));
