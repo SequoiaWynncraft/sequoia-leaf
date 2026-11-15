@@ -8,7 +8,7 @@
     {
       "binding": "DB",
       "database_name": "sequoia-leaf",
-      "migrations_dir": "migrations"
-    }
-  ]
+      "migrations_dir": "migrations",
+    },
+  ],
 }

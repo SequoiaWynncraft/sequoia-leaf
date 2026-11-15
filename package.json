@@ -3,25 +3,19 @@
   "private": true,
   "type": "module",
   "packageManager": "bun@1.4.4",
-  "workspaces": {
-    "packages": [
-      "apps/*",
-      "packages/*"
-    ],
-    "catalog": {
-      "typescript": "7.0.2",
-      "vitest": "5.1.0"
-    }
-  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "check": "bun run lint && bun run typecheck && bun run test",
-    "lint": "biome ci",
-    "fix": "biome check --write",
-    "typecheck": "bun run --filter '*' typecheck",
+    "verify": "bun fmt --check && bun run lint && bun run types && bun check --build && bun run test",
+    "lint": "oxlint --type-aware --deny-warnings",
+    "types": "bun run --filter @sequoia-leaf/api types",
     "test": "bun run --filter '*' test",
     "dev": "bun run --filter @sequoia-leaf/api dev"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.7"
+    "oxlint": "1.93.0",
+    "oxlint-tsgolint": "7.0.2007"
   }
 }

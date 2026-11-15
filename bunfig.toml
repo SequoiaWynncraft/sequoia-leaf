@@ -3,3 +3,7 @@
 # has time to be noticed and pulled before it can reach this repository.
 minimumReleaseAge = 86400
 linker = "isolated"
+
+[fmt]
+printWidth = 120
+sortImports = true

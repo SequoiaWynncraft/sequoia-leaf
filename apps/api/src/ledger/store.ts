@@ -2,9 +2,10 @@ import {
   type Account,
   draftEntry,
   type EntryDraft,
-  type EntryKind,
-  type EntryOrigin,
+  isEntryKind,
+  isEntryOrigin,
   type LedgerEntry,
+  parsePlayerId,
   type PlayerId,
   type Posting,
   sameDraft,
@@ -41,16 +42,21 @@ interface EntryRow {
 const ENTRY_COLUMNS =
   "id, player_id, kind, balance_delta, lifetime_delta, origin, idempotency_key, reverses_id, actor, memo, created_at";
 
-// Rows only ever come from this module's inserts, which the schema's CHECK
-// constraints and triggers have already validated.
+// Rows are checked as they leave the database, so a row written by anything
+// other than this module fails loudly here instead of flowing on as a
+// wrongly typed entry.
 function toEntry(row: EntryRow): LedgerEntry {
+  const playerId = parsePlayerId(row.player_id);
+  if (playerId === undefined || !isEntryKind(row.kind) || !isEntryOrigin(row.origin)) {
+    throw new Error(`Ledger entry ${row.id} is not a valid entry`);
+  }
   return {
     id: row.id,
-    playerId: row.player_id as PlayerId,
-    kind: row.kind as EntryKind,
+    playerId,
+    kind: row.kind,
     balanceDelta: row.balance_delta,
     lifetimeDelta: row.lifetime_delta,
-    origin: row.origin as EntryOrigin,
+    origin: row.origin,
     idempotencyKey: row.idempotency_key,
     reversesId: row.reverses_id,
     actor: row.actor,
