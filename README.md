@@ -4,10 +4,12 @@ The service behind Leaf, the Sequoia guild currency, and the game built on it.
 Members earn Leaf from guild activity such as raids and wars, and spend it.
 
 It runs on Cloudflare Workers with a D1 database, and is written in TypeScript.
-Bun is the only toolchain: package manager, runtime for the tools, formatter
-(`bun fmt`), type checker (`bun check`) and test runner. Linting is oxlint with
-type-aware rules. Worker tests use Vitest, because that is what runs tests
-inside the Workers runtime.
+Bun is the toolchain: package manager, formatter (`bun fmt`), type checker
+(`bun check`) and test runner. Linting is oxlint with type-aware rules.
+
+Node.js is installed for one reason: Cloudflare's tools need it. Wrangler does
+not support running on Bun, and the Worker tests use Vitest with Cloudflare's
+plugin, which runs them inside the Workers runtime through wrangler.
 
 ## Status
 
@@ -17,7 +19,7 @@ or staff endpoints yet, and nothing is deployed.
 ## Getting started
 
 ```sh
-mise install     # install the pinned bun
+mise install     # install the pinned bun and node
 bun install
 bun run verify   # format check, lint, typecheck and test
 bun fmt          # format everything
