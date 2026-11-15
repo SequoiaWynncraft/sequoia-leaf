@@ -1,0 +1,5 @@
+[install]
+# Refuse packages published less than a day ago, so a compromised release
+# has time to be noticed and pulled before it can reach this repository.
+minimumReleaseAge = 86400
+linker = "isolated"
