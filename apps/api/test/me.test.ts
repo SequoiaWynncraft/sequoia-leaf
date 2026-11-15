@@ -202,6 +202,20 @@ describe("GET /v1/me/quests", () => {
     expect(backendCalls).toEqual(["/auth/web/me"]);
   });
 
+  it("does not retry a failed sync until the few seconds are up", async () => {
+    await get("/v1/me/quests?sync=1");
+    credits = { not: "a credit feed" };
+    vi.setSystemTime(T0 + MINUTE);
+    const failed = await get("/v1/me/quests?sync=1");
+    vi.setSystemTime(T0 + MINUTE + 5_000);
+    await get("/v1/me/quests?sync=1");
+    vi.setSystemTime(T0 + MINUTE + 15_000);
+    await get("/v1/me/quests?sync=1");
+
+    expect(failed.status).toBe(200);
+    expect(backendCalls.filter((path) => path === "/internal/player-credits")).toHaveLength(2);
+  });
+
   it("syncs at most once every few seconds however often it is asked", async () => {
     await get("/v1/me/quests?sync=1");
     vi.setSystemTime(T0 + MINUTE);

@@ -1,7 +1,7 @@
 import { DEFAULT_RULES } from "@sequoia-leaf/core";
 
 import { fetchCredits } from "../backend/credits.ts";
-import { SETTLE_MS, syncCredits, type SyncMode, type SyncResult } from "./sync.ts";
+import { syncCredits, type SyncMode, type SyncResult } from "./sync.ts";
 
 /** A player asking for fresh quests triggers a sync at most this often. */
 const ON_DEMAND_INTERVAL_MS = 15_000;
@@ -26,17 +26,19 @@ export async function runCreditSync(env: Env, mode: SyncMode, now: number): Prom
 
 /**
  * Syncs on a player's request, so a raid they just finished shows up without
- * waiting for the next scheduled run. It does nothing when a sync ran in the
- * last few seconds, and a failure is logged rather than shown to the player:
- * the scheduled run will catch up.
+ * waiting for the next scheduled run. Requests share one allowance: whoever
+ * asks first in a 15 second span starts a sync, and everyone else is answered
+ * from what is stored. A failure is logged rather than shown to the player,
+ * and still uses up the allowance; the scheduled run will catch up.
  */
 export async function syncOnDemand(env: Env, now: number): Promise<void> {
   try {
-    const state = await env.DB.prepare("SELECT cursor FROM sync_state WHERE name = 'credits'").first<{
-      cursor: number | null;
-    }>();
-    const cursor = state?.cursor ?? null;
-    if (cursor !== null && now - SETTLE_MS - cursor < ON_DEMAND_INTERVAL_MS) {
+    const claim = await env.DB.prepare(
+      "UPDATE sync_state SET on_demand_at = ? WHERE name = 'credits' AND on_demand_at <= ?",
+    )
+      .bind(now, now - ON_DEMAND_INTERVAL_MS)
+      .run();
+    if (claim.meta.changes === 0) {
       return;
     }
     await runCreditSync(env, "recent", now);

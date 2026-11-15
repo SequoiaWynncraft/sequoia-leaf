@@ -33,3 +33,7 @@ CREATE TABLE quests (
   completed_at   INTEGER,
   PRIMARY KEY (player_id, slot, sequence)
 ) STRICT, WITHOUT ROWID;
+
+-- When a player last asked for a sync outside the schedule. Such requests are
+-- allowed one sync between them every few seconds, whatever the sync's outcome.
+ALTER TABLE sync_state ADD COLUMN on_demand_at INTEGER NOT NULL DEFAULT 0;
