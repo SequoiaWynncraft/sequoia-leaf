@@ -8,7 +8,7 @@
 CREATE TABLE accounts (
   player_id       TEXT    PRIMARY KEY,
   balance         INTEGER NOT NULL,
-  lifetime_earned INTEGER NOT NULL,
+  xp              INTEGER NOT NULL,
   updated_at      INTEGER NOT NULL
 ) STRICT;
 
@@ -17,7 +17,7 @@ CREATE TABLE ledger_entries (
   player_id       TEXT    NOT NULL,
   kind            TEXT    NOT NULL,
   balance_delta   INTEGER NOT NULL,
-  lifetime_delta  INTEGER NOT NULL,
+  xp_delta        INTEGER NOT NULL,
   origin          TEXT    NOT NULL,
   idempotency_key TEXT    NOT NULL UNIQUE,
   reverses_id     INTEGER UNIQUE REFERENCES ledger_entries (id),
@@ -25,8 +25,8 @@ CREATE TABLE ledger_entries (
   memo            TEXT,
   created_at      INTEGER NOT NULL,
   CHECK (
-    (kind = 'earn' AND balance_delta > 0 AND lifetime_delta = balance_delta AND reverses_id IS NULL)
-    OR (kind = 'spend' AND balance_delta < 0 AND lifetime_delta = 0 AND reverses_id IS NULL)
+    (kind = 'earn' AND balance_delta > 0 AND xp_delta >= 0 AND reverses_id IS NULL)
+    OR (kind = 'spend' AND balance_delta < 0 AND xp_delta = 0 AND reverses_id IS NULL)
     OR (kind = 'reversal' AND balance_delta <> 0 AND reverses_id IS NOT NULL)
   )
 ) STRICT;
@@ -59,7 +59,7 @@ BEGIN
       AND original.kind <> 'reversal'
       AND original.origin = NEW.origin
       AND original.balance_delta = -NEW.balance_delta
-      AND original.lifetime_delta = -NEW.lifetime_delta
+      AND original.xp_delta = -NEW.xp_delta
   );
 END;
 
@@ -71,7 +71,7 @@ END;
 CREATE TRIGGER ledger_entries_apply
 AFTER INSERT ON ledger_entries
 BEGIN
-  INSERT OR IGNORE INTO accounts (player_id, balance, lifetime_earned, updated_at)
+  INSERT OR IGNORE INTO accounts (player_id, balance, xp, updated_at)
   VALUES (NEW.player_id, 0, 0, NEW.created_at);
 
   SELECT RAISE(ABORT, 'insufficient_leaf')
@@ -80,7 +80,7 @@ BEGIN
 
   UPDATE accounts
   SET balance = balance + NEW.balance_delta,
-      lifetime_earned = lifetime_earned + NEW.lifetime_delta,
+      xp = xp + NEW.xp_delta,
       updated_at = NEW.created_at
   WHERE player_id = NEW.player_id;
 END;

@@ -4,6 +4,14 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
   "observability": { "enabled": true },
+  "vars": {
+    // sequoia-backend, which reports who took part in each raid and war.
+    "BACKEND_URL": "https://api.seqwawa.com",
+  },
+  "triggers": {
+    // Every minute: read new credits. At minute 17 of each hour: re-read the last week.
+    "crons": ["* * * * *", "17 * * * *"],
+  },
   "d1_databases": [
     {
       "binding": "DB",

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
-import app from "../src/index.ts";
+import { app } from "../src/index.ts";
 
 describe("HTTP", () => {
   it("reports healthy", async () => {
