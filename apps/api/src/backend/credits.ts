@@ -80,24 +80,23 @@ function warActivity(row: unknown): Activity | undefined {
   if (!isRecord(row)) {
     throw new CreditFeedError("A war credit is not an object");
   }
-  const warSubmissionId = integer(row, "war_submission_id");
   const playerId = player(row);
-  const warPoints = row["war_points"];
-  if (warPoints === null || warPoints === undefined) {
-    return undefined;
-  }
-  if (typeof warPoints !== "number" || !Number.isFinite(warPoints)) {
-    throw new CreditFeedError("A war credit has war_points that is not a number");
-  }
-  return {
+  const activity = {
     kind: "war",
-    sourceKey: `war:${warSubmissionId}:${playerId}`,
+    sourceKey: `war:${integer(row, "war_submission_id")}:${playerId}`,
     playerId,
     occurredAt: instant(row, "completed_at"),
     seasonRating: integer(row, "season_rating"),
     territory: text(row, "territory"),
-    warPoints,
-  };
+  } as const;
+  const warPoints = row["war_points"];
+  if (warPoints === null) {
+    return undefined;
+  }
+  if (typeof warPoints !== "number" || !Number.isFinite(warPoints)) {
+    throw new CreditFeedError("A war credit has war_points that is neither a number nor null");
+  }
+  return { ...activity, warPoints };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

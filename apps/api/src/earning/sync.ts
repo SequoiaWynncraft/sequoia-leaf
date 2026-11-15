@@ -84,14 +84,14 @@ async function runSync(
   const state = await db
     .prepare("SELECT started_at, cursor FROM sync_state WHERE name = 'credits'")
     .first<{ started_at: number | null; cursor: number | null }>();
-  const to = now - SETTLE_MS;
   if (state === null || state.started_at === null || state.cursor === null) {
     await db
       .prepare("UPDATE sync_state SET started_at = ?, cursor = ?, locked_until = 0 WHERE name = 'credits'")
-      .bind(to, to)
+      .bind(now, now)
       .run();
     return { status: "started" };
   }
+  const to = now - SETTLE_MS;
 
   const reach = options.mode === "recent" ? state.cursor - RECENT_OVERLAP_MS : to - DEEP_LOOKBACK_MS;
   const from = Math.max(state.started_at, reach);

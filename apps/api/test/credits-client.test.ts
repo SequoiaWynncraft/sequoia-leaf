@@ -99,6 +99,8 @@ describe("fetchCredits", () => {
     ["a raid without a player", { raids: [{ ...raidRow, player_uuid: "Notch" }], wars: [] }],
     ["a raid with a fractional rating", { raids: [{ ...raidRow, season_rating: 1.5 }], wars: [] }],
     ["a war with text for points", { raids: [], wars: [{ ...warRow, war_points: "many" }] }],
+    ["a war without a points field", { raids: [], wars: [{ ...warRow, war_points: undefined }] }],
+    ["an unscored war without a territory", { raids: [], wars: [{ ...warRow, war_points: null, territory: "" }] }],
     ["a raid without a timestamp", { raids: [{ ...raidRow, completed_at: "yesterday" }], wars: [] }],
   ])("fails on %s instead of paying part of the feed", async (_name, body) => {
     const { fetcher } = answering(body);

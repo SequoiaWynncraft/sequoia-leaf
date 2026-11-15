@@ -9,7 +9,7 @@ const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const bob = playerId("00000000-0000-4000-8000-00000000000b");
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-/** The first sync runs at T0, so crediting starts at T0 - SETTLE_MS. */
+/** The first sync runs at T0, so crediting starts at T0. */
 const T0 = 1_763_000_000_000;
 
 function raid(id: number, player: PlayerId, occurredAt: number, seasonRating = 110): Activity {
@@ -69,13 +69,13 @@ async function recordedKeys(): Promise<string[]> {
 
 describe("syncCredits", () => {
   it("credits nothing that happened before its first run", async () => {
-    const { source, windows } = feed([raid(1, alice, T0 - HOUR)]);
+    const { source, windows } = feed([raid(1, alice, T0 - HOUR), raid(2, alice, T0 - 1), raid(3, bob, T0)]);
 
     expect(await sync(source, T0)).toEqual({ status: "started" });
     await sync(source, T0 + MINUTE);
 
-    expect(windows).toEqual([[T0 - SETTLE_MS, T0 + MINUTE - SETTLE_MS]]);
-    expect(await recordedKeys()).toEqual([]);
+    expect(windows).toEqual([[T0, T0 + MINUTE - SETTLE_MS]]);
+    expect(await recordedKeys()).toEqual([`raid:3:${bob}`]);
     expect((await getAccount(env.DB, alice)).balance).toBe(0);
   });
 
