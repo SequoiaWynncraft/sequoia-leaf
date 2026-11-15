@@ -1,6 +1,18 @@
-import { type Activity, draftEntry, type EarningRules, leaf, leafForActivity, type PlayerId } from "@sequoia-leaf/core";
+import {
+  type Activity,
+  applyActivityToQuests,
+  draftEntry,
+  leaf,
+  leafForActivity,
+  openQuestBook,
+  type PlayerId,
+  type Quest,
+  type QuestStep,
+  type Rules,
+} from "@sequoia-leaf/core";
 
 import { entryInsert } from "../ledger/store.ts";
+import { loadQuestBook, questWrites } from "../quests/store.ts";
 
 /** Returns what players did during [from, to), in milliseconds since the Unix epoch. */
 export type CreditSource = (from: number, to: number) => Promise<readonly Activity[]>;
@@ -34,9 +46,9 @@ export const DEEP_LOOKBACK_MS = 7 * 24 * 60 * 60_000;
 /** A run that dies holds the lease for at most this long. */
 const LEASE_MS = 60_000;
 /**
- * Each player costs one database round trip, and a Worker invocation on the
- * free plan may make 50. A run handles this many players and leaves the rest
- * to the next.
+ * Each player costs two database round trips, one to read their quests and one
+ * to write the batch, and a Worker invocation on the free plan may make 50. A
+ * run handles this many players and leaves the rest to the next.
  */
 export const MAX_PLAYERS_PER_RUN = 20;
 
@@ -46,15 +58,16 @@ export interface SyncOptions {
 }
 
 /**
- * Records new activities from the source and pays the Leaf they earn. Each
- * player's activities and Leaf are written in one batch, so an activity is
- * never recorded without its Leaf or paid twice. Running it again over the
- * same window changes nothing.
+ * Records new activities from the source, pays the Leaf they earn, and moves
+ * the player's quests forward. Everything for one player is written in one
+ * batch, so an activity is never recorded without its Leaf and quest progress,
+ * and nothing is paid twice. Running it again over the same window changes
+ * nothing.
  */
 export async function syncCredits(
   db: D1Database,
   source: CreditSource,
-  rules: EarningRules,
+  rules: Rules,
   now: number,
   options: SyncOptions,
 ): Promise<SyncResult> {
@@ -76,7 +89,7 @@ export async function syncCredits(
 async function runSync(
   db: D1Database,
   source: CreditSource,
-  rules: EarningRules,
+  rules: Rules,
   now: number,
   options: SyncOptions,
 ): Promise<SyncResult> {
@@ -109,16 +122,21 @@ async function runSync(
   const handled = players.slice(0, options.maxPlayers ?? MAX_PLAYERS_PER_RUN);
   const deferred = players.slice(handled.length).flat();
 
+  const books = await Promise.all(handled.map((mine) => loadQuestBook(db, playerOf(mine))));
   let leafPaid = 0;
-  const batches = handled.map((mine) => {
+  const batches = handled.map((mine, index) => {
+    const playerId = playerOf(mine);
     const statements: D1PreparedStatement[] = [];
+    let book = books[index] ?? openQuestBook(mine[0]?.occurredAt ?? now);
+    const written = new Map<string, Quest>();
+    const completed: Quest[] = [];
     for (const activity of mine) {
       statements.push(activityInsert(db, activity, now));
-      const amount = leafForActivity(activity, rules);
+      const amount = leafForActivity(activity, rules.earning);
       if (amount > 0) {
         const draft = draftEntry({
           kind: "earn",
-          playerId: activity.playerId,
+          playerId,
           amount: leaf(amount),
           source: activity.kind,
           idempotencyKey: activity.sourceKey,
@@ -126,10 +144,21 @@ async function runSync(
         statements.push(entryInsert(db, draft, now));
         leafPaid += amount;
       }
+      const step = applyActivityToQuests(book, activity, rules.quests);
+      book = step.book;
+      for (const quest of step.written) {
+        written.set(`${quest.slot}:${quest.sequence}`, quest);
+      }
+      completed.push(...step.completed);
     }
+    const questStep: QuestStep = { book, written: [...written.values()], completed };
+    for (const quest of completed) {
+      leafPaid += quest.reward.leaf;
+    }
+    statements.push(...questWrites(db, playerId, questStep, now));
     return db.batch(statements);
   });
-  // One batch per player: a player's activities and Leaf commit together or not at all.
+  // One batch per player: their activities, Leaf and quest progress commit together or not at all.
   await Promise.all(batches);
   const recorded = handled.reduce((count, mine) => count + mine.length, 0);
 
@@ -166,6 +195,14 @@ async function newActivities(
     }
   }
   return [...unique.values()].toSorted((a, b) => a.occurredAt - b.occurredAt || a.sourceKey.localeCompare(b.sourceKey));
+}
+
+function playerOf(activities: readonly Activity[]): PlayerId {
+  const [first] = activities;
+  if (first === undefined) {
+    throw new Error("A player's activity list is empty");
+  }
+  return first.playerId;
 }
 
 function activityInsert(db: D1Database, activity: Activity, now: number): D1PreparedStatement {

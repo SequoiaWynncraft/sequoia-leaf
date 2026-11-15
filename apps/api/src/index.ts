@@ -1,12 +1,13 @@
-import { DEFAULT_RULES } from "@sequoia-leaf/core";
 import { Hono } from "hono";
 
-import { fetchCredits } from "./backend/credits.ts";
-import { syncCredits } from "./earning/sync.ts";
+import { runCreditSync } from "./earning/run.ts";
+import { me } from "./http/me.ts";
 
 export const app = new Hono<{ Bindings: Env }>();
 
 app.get("/healthz", (c) => c.json({ status: "ok" }));
+
+app.route("/v1/me", me);
 
 // Every error response has the same shape: a stable machine-readable `code`
 // and a human-readable `message`. Clients branch on `code` only.
@@ -21,19 +22,12 @@ app.onError((error, c) => {
 const DEEP_SYNC_CRON = "17 * * * *";
 
 async function scheduled(controller: ScheduledController, env: Env): Promise<void> {
-  const token = env.BACKEND_INTERNAL_TOKEN;
-  if (token === undefined || token === "") {
+  const mode = controller.cron === DEEP_SYNC_CRON ? "deep" : "recent";
+  const result = await runCreditSync(env, mode, Date.now());
+  if (result === undefined) {
     console.warn("Skipping the credit sync: BACKEND_INTERNAL_TOKEN is not set");
     return;
   }
-  const mode = controller.cron === DEEP_SYNC_CRON ? "deep" : "recent";
-  const result = await syncCredits(
-    env.DB,
-    (from, to) => fetchCredits((url, init) => fetch(url, init), { baseUrl: env.BACKEND_URL, token }, from, to),
-    DEFAULT_RULES.earning,
-    Date.now(),
-    { mode },
-  );
   console.log(JSON.stringify({ event: "credit_sync", mode, ...result }));
 }
 

@@ -222,6 +222,21 @@ function refresh(step: Step, at: number): void {
   }
 }
 
+/**
+ * The quests a player sees at this moment, in slot order: the one in progress
+ * for each slot, and a finished weekly until its week ends.
+ */
+export function currentQuests(book: QuestBook, at: number): Quest[] {
+  return QUEST_SLOTS.map((slot) => book.latest[slot]).filter(
+    (quest): quest is Quest => quest !== undefined && holdsSlot(quest, at),
+  );
+}
+
+/** When the next daily becomes available, or null while the player holds as many as can be banked. */
+export function nextDailyChargeAt(book: QuestBook, rules: QuestRules): number | null {
+  return book.dailyCharges >= rules.dailyChargeCap ? null : (book.dailyChargedDay + 1) * DAY_MS;
+}
+
 /** Whether the slot's latest quest still occupies the slot at this moment. */
 function holdsSlot(quest: Quest | undefined, at: number): boolean {
   if (quest === undefined || (quest.expiresAt !== null && at >= quest.expiresAt)) {

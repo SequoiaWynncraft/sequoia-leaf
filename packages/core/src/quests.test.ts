@@ -4,7 +4,9 @@ import type { Activity, RaidKey } from "./activity.ts";
 import { playerId } from "./player.ts";
 import {
   applyActivityToQuests,
+  currentQuests,
   DAY_MS,
+  nextDailyChargeAt,
   openQuestBook,
   pickTemplate,
   type QuestBook,
@@ -236,6 +238,34 @@ describe("the repeatable", () => {
 
     expect(result.completed.filter((key) => key.startsWith("repeatable"))).toEqual(["repeatable:1", "repeatable:2"]);
     expect(result.book.latest.repeatable).toMatchObject({ sequence: 3, progress: 0 });
+  });
+});
+
+describe("what a player sees", () => {
+  it("shows the quest in progress for each slot", () => {
+    const { book } = refreshQuests(openQuestBook(WEDNESDAY_NOON), alice, WEDNESDAY_NOON, rules);
+
+    expect(currentQuests(book, WEDNESDAY_NOON).map((quest) => quest.slot)).toEqual(["daily", "weekly", "repeatable"]);
+  });
+
+  it("keeps a finished weekly on show until its week ends, and drops a finished daily", () => {
+    const raids = [0, 1, 2].map((offset) => raid(WEDNESDAY_NOON + offset));
+    const { book } = play(openQuestBook(WEDNESDAY_NOON), raids);
+
+    const seen = currentQuests(book, WEDNESDAY_NOON + HOUR);
+    expect(seen.map((quest) => [quest.slot, quest.completedAt !== null])).toEqual([
+      ["weekly", true],
+      ["repeatable", false],
+    ]);
+    expect(currentQuests(book, MONDAY + WEEK_MS).map((quest) => quest.slot)).toEqual(["repeatable"]);
+  });
+
+  it("says when the next daily arrives, unless the bank is full", () => {
+    const fresh = openQuestBook(WEDNESDAY_NOON);
+    expect(nextDailyChargeAt(fresh, rules)).toBe(MONDAY + 3 * DAY_MS);
+
+    const full = refreshQuests(fresh, alice, WEDNESDAY_NOON + 5 * DAY_MS, rules).book;
+    expect(nextDailyChargeAt(full, rules)).toBeNull();
   });
 });
 

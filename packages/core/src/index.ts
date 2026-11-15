@@ -22,7 +22,9 @@ export { parsePlayerId, type PlayerId, playerId } from "./player.ts";
 export {
   applyActivityToQuests,
   countsToward,
+  currentQuests,
   DAY_MS,
+  nextDailyChargeAt,
   openQuestBook,
   pickTemplate,
   type Quest,

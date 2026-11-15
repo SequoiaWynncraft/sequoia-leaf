@@ -13,9 +13,10 @@ plugin, which runs them inside the Workers runtime through wrangler.
 
 ## Status
 
-The Leaf ledger is in place, and the Worker reads sequoia-backend's player
-credit feed every minute and pays Leaf and XP for raids and wars. There are no
-player or staff endpoints yet, and nothing is deployed.
+The Worker reads sequoia-backend's player credit feed every minute, pays Leaf
+and XP for raids and wars, and runs quests on top of them. Signed-in members
+can read their balance, level and quests. There is no way to spend Leaf yet,
+no staff endpoints, and nothing is deployed.
 
 ## Getting started
 
@@ -52,6 +53,43 @@ Worker's first run is ever credited.
 
 The Worker needs the backend's internal token as the secret
 `BACKEND_INTERNAL_TOKEN`. Without it, it serves requests but skips the feed.
+
+## Quests
+
+Every member has three quest slots. The templates and rewards are in
+`packages/core/src/rules.ts`.
+
+- **Daily.** One becomes available each UTC day, and up to three bank up, so
+  playing every third day loses nothing. Finishing one starts the next banked
+  one at once. There are no streaks.
+- **Weekly.** One per week, Monday to Monday in UTC. It expires with the week.
+- **Repeatable.** Always one; finishing it unlocks the next.
+
+A quest counts the activities the credit sync records, in the same database
+batch that records them, and a finished quest pays its Leaf and XP in that
+batch too. Between activities nothing is written: what a member sees is
+calculated from their last stored state.
+
+## API
+
+Responses are JSON with `snake_case` fields. Errors are `{ "code", "message" }`.
+
+| Route               | What it returns                                            |
+| ------------------- | ---------------------------------------------------------- |
+| `GET /healthz`      | `{ "status": "ok" }`                                       |
+| `GET /v1/me`        | The signed-in member's Leaf, XP and level.                 |
+| `GET /v1/me/quests` | Their quests, banked dailies and recently finished quests. |
+
+`/v1/me` routes take the member's Sequoia session, as `Authorization: Bearer`
+or as the site's `seq_session` cookie. The Worker asks sequoia-backend who the
+session belongs to; the mod can send the token it already holds for the
+backend. Only current guild members are let in.
+
+`GET /v1/me/quests?sync=1` reads the credit feed first, at most once every 15
+seconds, so a raid that just finished shows up without waiting for the next
+scheduled run. A client that wants a pop-up when a quest completes calls this
+shortly after the player finishes a raid or war, and shows the quests in
+`recently_completed` it has not shown before.
 
 ## Rules the code is built on
 
