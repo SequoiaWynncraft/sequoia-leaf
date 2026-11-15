@@ -51,13 +51,7 @@ const failing: CreditSource = async () => {
 };
 
 function sync(source: CreditSource, now: number, mode: SyncMode = "recent", maxPlayers?: number) {
-  return syncCredits(
-    env.DB,
-    source,
-    DEFAULT_RULES.earning,
-    now,
-    maxPlayers === undefined ? { mode } : { mode, maxPlayers },
-  );
+  return syncCredits(env.DB, source, DEFAULT_RULES, now, maxPlayers === undefined ? { mode } : { mode, maxPlayers });
 }
 
 async function recordedKeys(): Promise<string[]> {
