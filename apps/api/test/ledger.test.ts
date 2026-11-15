@@ -1,10 +1,11 @@
+import { leaf, type LedgerEntry, type PlayerId, playerId, type Posting } from "@sequoia-leaf/core";
 import { env } from "cloudflare:workers";
-import { type LedgerEntry, leaf, type PlayerId, type Posting, parsePlayerId } from "@sequoia-leaf/core";
 import { describe, expect, it } from "vitest";
-import { getAccount, listEntries, type PostResult, postEntry } from "../src/ledger/store.ts";
 
-const alice = parsePlayerId("00000000-0000-4000-8000-00000000000a") as PlayerId;
-const bob = parsePlayerId("00000000-0000-4000-8000-00000000000b") as PlayerId;
+import { getAccount, listEntries, postEntry, type PostResult } from "../src/ledger/store.ts";
+
+const alice = playerId("00000000-0000-4000-8000-00000000000a");
+const bob = playerId("00000000-0000-4000-8000-00000000000b");
 const NOW = 1_763_000_000_000;
 
 function post(posting: Posting, now = NOW): Promise<PostResult> {
@@ -19,12 +20,12 @@ async function posted(posting: Posting): Promise<LedgerEntry> {
   return result.entry;
 }
 
-function earn(playerId: PlayerId, amount: number, key: string): Posting {
-  return { kind: "earn", playerId, amount: leaf(amount), source: "raid", idempotencyKey: key };
+function earn(player: PlayerId, amount: number, key: string): Posting {
+  return { kind: "earn", playerId: player, amount: leaf(amount), source: "raid", idempotencyKey: key };
 }
 
-function spend(playerId: PlayerId, amount: number, key: string): Posting {
-  return { kind: "spend", playerId, amount: leaf(amount), sink: "shop", idempotencyKey: key };
+function spend(player: PlayerId, amount: number, key: string): Posting {
+  return { kind: "spend", playerId: player, amount: leaf(amount), sink: "shop", idempotencyKey: key };
 }
 
 /** Every account's totals must equal the sums of that player's entries. */
@@ -92,7 +93,7 @@ describe("earning and spending", () => {
 
     const results = await Promise.all([post(spend(alice, 60, "order:1")), post(spend(alice, 60, "order:2"))]);
 
-    expect(results.map((result) => result.status).sort()).toEqual(["posted", "rejected"]);
+    expect(results.map((result) => result.status).toSorted()).toEqual(["posted", "rejected"]);
     expect((await getAccount(env.DB, alice)).balance).toBe(40);
     await expectAccountsMatchEntries();
   });

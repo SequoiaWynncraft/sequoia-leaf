@@ -3,3 +3,12 @@
 # has time to be noticed and pulled before it can reach this repository.
 minimumReleaseAge = 86400
 linker = "isolated"
+
+[run]
+# Run package binaries such as wrangler and vitest on Bun, so the repository
+# needs no Node.js install.
+bun = true
+
+[fmt]
+printWidth = 120
+sortImports = true

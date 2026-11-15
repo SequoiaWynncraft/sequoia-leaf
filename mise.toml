@@ -2,4 +2,3 @@ min_version = "2026.10.17"
 
 [tools]
 bun = "1.4.4"
-node = "26.13.0"

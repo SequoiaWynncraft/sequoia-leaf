@@ -24,12 +24,14 @@ jobs:
         with:
           version: "2026.10.17"
           sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          install_args: bun node
+          install_args: bun
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      - name: Lint and format
+      - name: Format
+        run: bun fmt --check
+      - name: Lint
         run: bun run lint
       - name: Typecheck
-        run: bun run typecheck
+        run: bun run types && bun check --build
       - name: Test
         run: bun run test
