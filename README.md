@@ -13,8 +13,9 @@ plugin, which runs them inside the Workers runtime through wrangler.
 
 ## Status
 
-The foundation is in place: the Leaf ledger, with tests. There are no player
-or staff endpoints yet, and nothing is deployed.
+The Leaf ledger is in place, and the Worker reads sequoia-backend's player
+credit feed every minute and pays Leaf and XP for raids and wars. There are no
+player or staff endpoints yet, and nothing is deployed.
 
 ## Getting started
 
@@ -33,6 +34,24 @@ bun run dev      # run the Worker at http://localhost:8787
 | `packages/core`       | The rules of the game as pure functions and types. No I/O. |
 | `apps/api`            | The Cloudflare Worker: HTTP routes and the D1 database.    |
 | `apps/api/migrations` | The database schema, applied in order.                     |
+
+## How Leaf is earned
+
+sequoia-backend records raids and wars. Its `/internal/player-credits` endpoint
+lists who took part in each one. The Worker reads it on a schedule:
+
+- Every minute it reads the events since its last run, once they are 30 seconds
+  old, and records each player's part as an activity together with the Leaf it
+  pays. The rates are in `packages/core/src/rules.ts`.
+- Every hour it re-reads the last week, to pick up credits that appear late,
+  such as a war scored afterwards or a name matched to a player afterwards.
+
+Each credit carries the backend's event id and the player's UUID, so reading
+the same events again pays nothing twice. Nothing that happened before the
+Worker's first run is ever credited.
+
+The Worker needs the backend's internal token as the secret
+`BACKEND_INTERNAL_TOKEN`. Without it, it serves requests but skips the feed.
 
 ## Rules the code is built on
 
