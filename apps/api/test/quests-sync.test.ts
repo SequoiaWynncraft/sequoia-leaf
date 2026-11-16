@@ -5,7 +5,8 @@ import { type Activity, DEFAULT_RULES, type PlayerId, playerId, type Rules } fro
 
 import { type CreditSource, syncCredits } from "../src/earning/sync.ts";
 import { getAccount, listEntries } from "../src/ledger/store.ts";
-import { loadQuestBook } from "../src/quests/store.ts";
+import { questJson } from "../src/quests/json.ts";
+import { listCompletedSince, loadQuestBook } from "../src/quests/store.ts";
 import { testDatabase } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
@@ -32,13 +33,13 @@ const rules: Rules = {
   },
 };
 
-function raid(id: number, player: PlayerId, occurredAt: number): Activity {
+function raid(id: number, player: PlayerId, occurredAt: number, seasonRating = 110): Activity {
   return {
     kind: "raid",
     sourceKey: `raid:${id}:${player}`,
     playerId: player,
     occurredAt,
-    seasonRating: 110,
+    seasonRating,
     raid: "tna",
     raidName: "The Nameless Anomaly",
   };
@@ -114,5 +115,51 @@ describe("quests in the credit sync", () => {
 
     expect(again).toEqual({ status: "synced", recorded: 0, leafPaid: 0 });
     expect(getAccount(db, alice).balance).toBe(470);
+  });
+});
+
+describe("a season rating quest in the credit sync", () => {
+  const ratingRules: Rules = {
+    ...DEFAULT_RULES,
+    quests: {
+      dailyChargeCap: 3,
+      templates: [
+        {
+          id: "rating",
+          slot: "daily",
+          objective: { type: "season_rating", amount: 500 },
+          reward: { leaf: 250, xp: 125 },
+        },
+      ],
+    },
+  };
+
+  it("keeps the season rating earned so far between runs and pays when it reaches the amount", async () => {
+    const activities = [raid(1, alice, T0 + MINUTE, 440)];
+    const source = feed(activities);
+    await syncCredits(db, source, ratingRules, T0, "recent");
+
+    await syncCredits(db, source, ratingRules, T0 + 5 * MINUTE, "recent");
+
+    expect(loadQuestBook(db, alice)?.latest.daily).toMatchObject({
+      objective: { type: "season_rating", amount: 500 },
+      progress: 440,
+      completedAt: null,
+    });
+
+    activities.push(raid(2, alice, T0 + 6 * MINUTE, 220));
+    await syncCredits(db, source, ratingRules, T0 + 10 * MINUTE, "recent");
+
+    // Two raids at 440 and 220, and the quest at 250.
+    expect(getAccount(db, alice).balance).toBe(910);
+    const [finished] = listCompletedSince(db, alice, T0);
+    expect(finished === undefined ? undefined : questJson(finished)).toMatchObject({
+      id: "daily:1",
+      title: "Earn 500 season rating",
+      objective: { type: "season_rating", raid: null },
+      progress: 500,
+      target: 500,
+      reward: { leaf: 250, xp: 125 },
+    });
   });
 });

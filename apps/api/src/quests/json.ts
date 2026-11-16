@@ -1,4 +1,4 @@
-import { type Quest, questTitle } from "@sequoia-leaf/core";
+import { objectiveTarget, type Quest, questTitle } from "@sequoia-leaf/core";
 
 /** A quest as the API sends it. */
 export function questJson(quest: Quest) {
@@ -11,7 +11,7 @@ export function questJson(quest: Quest) {
       raid: quest.objective.type === "raids" ? (quest.objective.raid ?? null) : null,
     },
     progress: quest.progress,
-    target: quest.objective.count,
+    target: objectiveTarget(quest.objective),
     reward: { leaf: quest.reward.leaf, xp: quest.reward.xp },
     started_at: iso(quest.startedAt),
     expires_at: quest.expiresAt === null ? null : iso(quest.expiresAt),
