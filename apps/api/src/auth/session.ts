@@ -1,6 +1,6 @@
 import { parsePlayerId, type PlayerId } from "@sequoia-leaf/core";
 
-import type { Fetcher } from "../backend/credits.ts";
+import type { Fetcher } from "../services.ts";
 
 /** Who is making a request, as sequoia-backend vouches for them. */
 export interface Identity {
@@ -23,7 +23,7 @@ const CACHE_MS = 60_000;
 const CACHE_LIMIT = 500;
 
 // Sessions the backend confirmed in the last minute, so a page that makes
-// several requests asks the backend once. It lives in this isolate's memory
+// several requests asks the backend once. It lives in this process's memory
 // only, and a revoked session stops working within a minute.
 const confirmed = new Map<string, { identity: Identity; until: number }>();
 
@@ -44,8 +44,8 @@ export function sessionToken(headers: Headers): string | undefined {
 
 /**
  * Asks sequoia-backend who a session token belongs to. The backend issued the
- * token and is the only one that can tell whether it was revoked, so the
- * Worker never inspects the token itself.
+ * token and is the only one that can tell whether it was revoked, so this
+ * service never inspects the token itself.
  */
 export async function identify(
   fetcher: Fetcher,

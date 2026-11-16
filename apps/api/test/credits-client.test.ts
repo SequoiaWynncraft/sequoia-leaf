@@ -1,11 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
-import { CreditFeedError, fetchCredits, type Fetcher } from "../src/backend/credits.ts";
+import { playerId } from "@sequoia-leaf/core";
+
+import { CreditFeedError, fetchCredits } from "../src/backend/credits.ts";
+import type { Fetcher } from "../src/services.ts";
+import { rejection } from "./support.ts";
 
 const config = { baseUrl: "https://backend.test", token: "secret-token" };
 const FROM = Date.parse("2026-11-02T00:00:00.000Z");
 const TO = Date.parse("2026-11-02T00:05:00.000Z");
-const ALICE = "10000000-0000-0000-0000-000000000001";
+const ALICE = playerId("10000000-0000-0000-0000-000000000001");
 
 function answering(body: unknown, status = 200): { fetcher: Fetcher; calls: { url: string; init: RequestInit }[] } {
   const calls: { url: string; init: RequestInit }[] = [];
@@ -91,7 +95,7 @@ describe("fetchCredits", () => {
   it("fails when the backend refuses the request", async () => {
     const { fetcher } = answering({ error: "Missing or invalid API token" }, 401);
 
-    await expect(fetchCredits(fetcher, config, FROM, TO)).rejects.toThrow(CreditFeedError);
+    expect(await rejection(fetchCredits(fetcher, config, FROM, TO))).toBeInstanceOf(CreditFeedError);
   });
 
   it.each([
@@ -105,6 +109,6 @@ describe("fetchCredits", () => {
   ])("fails on %s instead of paying part of the feed", async (_name, body) => {
     const { fetcher } = answering(body);
 
-    await expect(fetchCredits(fetcher, config, FROM, TO)).rejects.toThrow(CreditFeedError);
+    expect(await rejection(fetchCredits(fetcher, config, FROM, TO))).toBeInstanceOf(CreditFeedError);
   });
 });

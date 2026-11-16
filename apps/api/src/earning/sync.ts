@@ -1,3 +1,5 @@
+import type { Database } from "bun:sqlite";
+
 import {
   type Activity,
   applyActivityToQuests,
@@ -7,12 +9,11 @@ import {
   openQuestBook,
   type PlayerId,
   type Quest,
-  type QuestStep,
   type Rules,
 } from "@sequoia-leaf/core";
 
-import { entryInsert } from "../ledger/store.ts";
-import { loadQuestBook, questWrites } from "../quests/store.ts";
+import { insertEntry } from "../ledger/store.ts";
+import { loadQuestBook, saveQuestStep } from "../quests/store.ts";
 
 /** Returns what players did during [from, to), in milliseconds since the Unix epoch. */
 export type CreditSource = (from: number, to: number) => Promise<readonly Activity[]>;
@@ -34,8 +35,6 @@ export type SyncResult =
       /** Activities recorded by this run. */
       readonly recorded: number;
       readonly leafPaid: number;
-      /** False when the run stopped at the per-run player limit; the next run continues. */
-      readonly complete: boolean;
     };
 
 /** Events younger than this are left for the next run: the backend merges duplicate raid reports within seconds. */
@@ -45,148 +44,130 @@ export const RECENT_OVERLAP_MS = 20 * 60_000;
 export const DEEP_LOOKBACK_MS = 7 * 24 * 60 * 60_000;
 /** A run that dies holds the lease for at most this long. */
 const LEASE_MS = 60_000;
-/**
- * Each player costs two database round trips, one to read their quests and one
- * to write the batch, and a Worker invocation on the free plan may make 50. A
- * run handles this many players and leaves the rest to the next.
- */
-export const MAX_PLAYERS_PER_RUN = 20;
-
-export interface SyncOptions {
-  readonly mode: SyncMode;
-  readonly maxPlayers?: number;
-}
 
 /**
  * Records new activities from the source, pays the Leaf they earn, and moves
- * the player's quests forward. Everything for one player is written in one
- * batch, so an activity is never recorded without its Leaf and quest progress,
- * and nothing is paid twice. Running it again over the same window changes
+ * the players' quests forward. A run writes everything in one transaction, so
+ * an activity is never recorded without its Leaf and quest progress, and
+ * nothing is paid twice. Running it again over the same window changes
  * nothing.
  */
 export async function syncCredits(
-  db: D1Database,
+  db: Database,
   source: CreditSource,
   rules: Rules,
   now: number,
-  options: SyncOptions,
+  mode: SyncMode,
 ): Promise<SyncResult> {
-  const lease = await db
-    .prepare("UPDATE sync_state SET locked_until = ? WHERE name = 'credits' AND locked_until <= ?")
-    .bind(now + LEASE_MS, now)
-    .run();
-  if (lease.meta.changes === 0) {
+  // The scheduled run and a player's request can overlap while one of them
+  // waits for the backend; the lease lets only one of them through.
+  const lease = db
+    .query("UPDATE sync_state SET locked_until = ? WHERE name = 'credits' AND locked_until <= ?")
+    .run(now + LEASE_MS, now);
+  if (lease.changes === 0) {
     return { status: "busy" };
   }
   try {
-    return await runSync(db, source, rules, now, options);
-  } catch (error) {
-    await db.prepare("UPDATE sync_state SET locked_until = 0 WHERE name = 'credits'").run();
-    throw error;
+    return await runSync(db, source, rules, now, mode);
+  } finally {
+    db.run("UPDATE sync_state SET locked_until = 0 WHERE name = 'credits'");
   }
 }
 
 async function runSync(
-  db: D1Database,
+  db: Database,
   source: CreditSource,
   rules: Rules,
   now: number,
-  options: SyncOptions,
+  mode: SyncMode,
 ): Promise<SyncResult> {
-  const state = await db
-    .prepare("SELECT started_at, cursor FROM sync_state WHERE name = 'credits'")
-    .first<{ started_at: number | null; cursor: number | null }>();
+  const state = db
+    .query<{ started_at: number | null; cursor: number | null }, []>(
+      "SELECT started_at, cursor FROM sync_state WHERE name = 'credits'",
+    )
+    .get();
   if (state === null || state.started_at === null || state.cursor === null) {
-    await db
-      .prepare("UPDATE sync_state SET started_at = ?, cursor = ?, locked_until = 0 WHERE name = 'credits'")
-      .bind(now, now)
-      .run();
+    db.query("UPDATE sync_state SET started_at = ?, cursor = ? WHERE name = 'credits'").run(now, now);
     return { status: "started" };
   }
   const to = now - SETTLE_MS;
-
-  const reach = options.mode === "recent" ? state.cursor - RECENT_OVERLAP_MS : to - DEEP_LOOKBACK_MS;
+  const reach = mode === "recent" ? state.cursor - RECENT_OVERLAP_MS : to - DEEP_LOOKBACK_MS;
   const from = Math.max(state.started_at, reach);
-  const activities = from < to ? await newActivities(db, await source(from, to), from, to) : [];
+  const reported = from < to ? await source(from, to) : [];
 
-  const byPlayer = new Map<PlayerId, Activity[]>();
-  for (const activity of activities) {
-    const mine = byPlayer.get(activity.playerId);
-    if (mine === undefined) {
-      byPlayer.set(activity.playerId, [activity]);
-    } else {
-      mine.push(activity);
-    }
-  }
-  const players = [...byPlayer.values()];
-  const handled = players.slice(0, options.maxPlayers ?? MAX_PLAYERS_PER_RUN);
-  const deferred = players.slice(handled.length).flat();
-
-  const books = await Promise.all(handled.map((mine) => loadQuestBook(db, playerOf(mine))));
-  let leafPaid = 0;
-  const batches = handled.map((mine, index) => {
-    const playerId = playerOf(mine);
-    const statements: D1PreparedStatement[] = [];
-    let book = books[index] ?? openQuestBook(mine[0]?.occurredAt ?? now);
-    const written = new Map<string, Quest>();
-    const completed: Quest[] = [];
-    for (const activity of mine) {
-      statements.push(activityInsert(db, activity, now));
-      const amount = leafForActivity(activity, rules.earning);
-      if (amount > 0) {
-        const draft = draftEntry({
-          kind: "earn",
-          playerId,
-          amount: leaf(amount),
-          source: activity.kind,
-          idempotencyKey: activity.sourceKey,
-        });
-        statements.push(entryInsert(db, draft, now));
-        leafPaid += amount;
+  return db.transaction((): SyncResult => {
+    const byPlayer = new Map<PlayerId, Activity[]>();
+    for (const activity of newActivities(db, reported, from, to)) {
+      const mine = byPlayer.get(activity.playerId);
+      if (mine === undefined) {
+        byPlayer.set(activity.playerId, [activity]);
+      } else {
+        mine.push(activity);
       }
-      const step = applyActivityToQuests(book, activity, rules.quests);
-      book = step.book;
-      for (const quest of step.written) {
-        written.set(`${quest.slot}:${quest.sequence}`, quest);
-      }
-      completed.push(...step.completed);
     }
-    const questStep: QuestStep = { book, written: [...written.values()], completed };
-    for (const quest of completed) {
-      leafPaid += quest.reward.leaf;
+    let recorded = 0;
+    let leafPaid = 0;
+    for (const [playerId, mine] of byPlayer) {
+      leafPaid += recordPlayer(db, playerId, mine, rules, now);
+      recorded += mine.length;
     }
-    statements.push(...questWrites(db, playerId, questStep, now));
-    return db.batch(statements);
-  });
-  // One batch per player: their activities, Leaf and quest progress commit together or not at all.
-  await Promise.all(batches);
-  const recorded = handled.reduce((count, mine) => count + mine.length, 0);
-
-  // Everything before the first activity left for later has been processed.
-  const processedThrough = deferred.reduce((earliest, activity) => Math.min(earliest, activity.occurredAt), to);
-  await db
-    .prepare("UPDATE sync_state SET cursor = MAX(cursor, ?), locked_until = 0 WHERE name = 'credits'")
-    .bind(options.mode === "recent" ? processedThrough : state.cursor)
-    .run();
-  return { status: "synced", recorded, leafPaid, complete: deferred.length === 0 };
+    if (mode === "recent") {
+      db.query("UPDATE sync_state SET cursor = MAX(cursor, ?) WHERE name = 'credits'").run(to);
+    }
+    return { status: "synced", recorded, leafPaid };
+  })();
 }
 
-/**
- * The activities in [from, to) that are not recorded yet, oldest first, each
- * source key once. One query reads the keys already recorded for the window,
- * however many activities the feed lists.
- */
-async function newActivities(
-  db: D1Database,
+/** Records one player's new activities, oldest first, with what they earn. Returns the Leaf paid. */
+function recordPlayer(
+  db: Database,
+  playerId: PlayerId,
   activities: readonly Activity[],
-  from: number,
-  to: number,
-): Promise<Activity[]> {
-  const { results } = await db
-    .prepare("SELECT source_key FROM activities WHERE occurred_at >= ? AND occurred_at < ?")
-    .bind(from, to)
-    .all<{ source_key: string }>();
-  const recorded = new Set(results.map((row) => row.source_key));
+  rules: Rules,
+  now: number,
+): number {
+  let leafPaid = 0;
+  let book = loadQuestBook(db, playerId) ?? openQuestBook(activities[0]?.occurredAt ?? now);
+  const written = new Map<string, Quest>();
+  const completed: Quest[] = [];
+  for (const activity of activities) {
+    insertActivity(db, activity, now);
+    const amount = leafForActivity(activity, rules.earning);
+    if (amount > 0) {
+      const draft = draftEntry({
+        kind: "earn",
+        playerId,
+        amount: leaf(amount),
+        source: activity.kind,
+        idempotencyKey: activity.sourceKey,
+      });
+      insertEntry(db, draft, now);
+      leafPaid += amount;
+    }
+    const step = applyActivityToQuests(book, activity, rules.quests);
+    book = step.book;
+    for (const quest of step.written) {
+      written.set(`${quest.slot}:${quest.sequence}`, quest);
+    }
+    completed.push(...step.completed);
+  }
+  for (const quest of completed) {
+    leafPaid += quest.reward.leaf;
+  }
+  saveQuestStep(db, playerId, { book, written: [...written.values()], completed }, now);
+  return leafPaid;
+}
+
+/** The activities in [from, to) that are not recorded yet, oldest first, each source key once. */
+function newActivities(db: Database, activities: readonly Activity[], from: number, to: number): Activity[] {
+  const recorded = new Set(
+    db
+      .query<{ source_key: string }, [number, number]>(
+        "SELECT source_key FROM activities WHERE occurred_at >= ? AND occurred_at < ?",
+      )
+      .all(from, to)
+      .map((row) => row.source_key),
+  );
   const unique = new Map<string, Activity>();
   for (const activity of activities) {
     const inWindow = activity.occurredAt >= from && activity.occurredAt < to;
@@ -197,30 +178,20 @@ async function newActivities(
   return [...unique.values()].toSorted((a, b) => a.occurredAt - b.occurredAt || a.sourceKey.localeCompare(b.sourceKey));
 }
 
-function playerOf(activities: readonly Activity[]): PlayerId {
-  const [first] = activities;
-  if (first === undefined) {
-    throw new Error("A player's activity list is empty");
-  }
-  return first.playerId;
-}
-
-function activityInsert(db: D1Database, activity: Activity, now: number): D1PreparedStatement {
-  return db
-    .prepare(
-      `INSERT INTO activities
-         (source_key, player_id, kind, raid, detail, season_rating, war_points, occurred_at, recorded_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      activity.sourceKey,
-      activity.playerId,
-      activity.kind,
-      activity.kind === "raid" ? (activity.raid ?? null) : null,
-      activity.kind === "raid" ? activity.raidName : activity.territory,
-      activity.seasonRating,
-      activity.kind === "war" ? activity.warPoints : null,
-      activity.occurredAt,
-      now,
-    );
+function insertActivity(db: Database, activity: Activity, now: number): void {
+  db.query(
+    `INSERT INTO activities
+       (source_key, player_id, kind, raid, detail, season_rating, war_points, occurred_at, recorded_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    activity.sourceKey,
+    activity.playerId,
+    activity.kind,
+    activity.kind === "raid" ? (activity.raid ?? null) : null,
+    activity.kind === "raid" ? activity.raidName : activity.territory,
+    activity.seasonRating,
+    activity.kind === "war" ? activity.warPoints : null,
+    activity.occurredAt,
+    now,
+  );
 }
