@@ -1,3 +1,5 @@
+import type { Database } from "bun:sqlite";
+
 import {
   type Account,
   draftEntry,
@@ -66,19 +68,23 @@ function toEntry(row: EntryRow): LedgerEntry {
 }
 
 /**
- * The statement that inserts one entry. On its own it is atomic; inside a
- * `db.batch` it commits or rolls back with the other statements, which is how
- * an activity and the Leaf it pays are recorded together.
+ * Inserts one entry, and through the table's trigger applies it to the
+ * player's account. It throws when the database refuses the entry. Call it
+ * inside a transaction to record an entry together with what caused it, as
+ * the credit sync does; use `postEntry` to post a single entry.
  */
-export function entryInsert(db: D1Database, draft: EntryDraft, now: number): D1PreparedStatement {
-  return db
-    .prepare(
+export function insertEntry(db: Database, draft: EntryDraft, now: number): LedgerEntry {
+  const row = db
+    .query<
+      EntryRow,
+      [string, string, number, number, string, string, number | null, string | null, string | null, number]
+    >(
       `INSERT INTO ledger_entries
          (player_id, kind, balance_delta, xp_delta, origin, idempotency_key, reverses_id, actor, memo, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING ${ENTRY_COLUMNS}`,
     )
-    .bind(
+    .get(
       draft.playerId,
       draft.kind,
       draft.balanceDelta,
@@ -90,6 +96,10 @@ export function entryInsert(db: D1Database, draft: EntryDraft, now: number): D1P
       draft.memo,
       now,
     );
+  if (row === null) {
+    throw new Error("Ledger insert returned no row");
+  }
+  return toEntry(row);
 }
 
 /**
@@ -99,16 +109,12 @@ export function entryInsert(db: D1Database, draft: EntryDraft, now: number): D1P
  * Posting the same fact twice is safe: the second call returns `duplicate`
  * with the original entry and changes nothing.
  */
-export async function postEntry(db: D1Database, posting: Posting, now: number): Promise<PostResult> {
+export function postEntry(db: Database, posting: Posting, now: number): PostResult {
   const draft = draftEntry(posting);
   try {
-    const row = await entryInsert(db, draft, now).first<EntryRow>();
-    if (row === null) {
-      throw new Error("Ledger insert returned no row");
-    }
-    return { status: "posted", entry: toEntry(row) };
+    return { status: "posted", entry: insertEntry(db, draft, now) };
   } catch (error) {
-    const rejection = await explainFailure(db, draft, error);
+    const rejection = explainFailure(db, draft, error);
     if (rejection === undefined) {
       throw error;
     }
@@ -117,7 +123,7 @@ export async function postEntry(db: D1Database, posting: Posting, now: number): 
 }
 
 /** Maps a failed insert to a result, or returns undefined when the failure is not one the ledger expects. */
-async function explainFailure(db: D1Database, draft: EntryDraft, error: unknown): Promise<PostResult | undefined> {
+function explainFailure(db: Database, draft: EntryDraft, error: unknown): PostResult | undefined {
   const message = error instanceof Error ? error.message : "";
   if (message.includes("insufficient_leaf")) {
     return { status: "rejected", reason: "insufficient_leaf" };
@@ -129,7 +135,7 @@ async function explainFailure(db: D1Database, draft: EntryDraft, error: unknown)
   }
   // A retried reversal collides on both unique columns and SQLite reports only
   // one of them, so the key lookup decides which case this is.
-  const existing = await findByIdempotencyKey(db, draft.idempotencyKey);
+  const existing = findByIdempotencyKey(db, draft.idempotencyKey);
   if (existing === undefined) {
     return { status: "rejected", reason: "already_reversed" };
   }
@@ -139,20 +145,18 @@ async function explainFailure(db: D1Database, draft: EntryDraft, error: unknown)
   return { status: "rejected", reason: "idempotency_conflict" };
 }
 
-async function findByIdempotencyKey(db: D1Database, idempotencyKey: string): Promise<LedgerEntry | undefined> {
-  const row = await db
-    .prepare(`SELECT ${ENTRY_COLUMNS} FROM ledger_entries WHERE idempotency_key = ?`)
-    .bind(idempotencyKey)
-    .first<EntryRow>();
+function findByIdempotencyKey(db: Database, idempotencyKey: string): LedgerEntry | undefined {
+  const row = db
+    .query<EntryRow, [string]>(`SELECT ${ENTRY_COLUMNS} FROM ledger_entries WHERE idempotency_key = ?`)
+    .get(idempotencyKey);
   return row === null ? undefined : toEntry(row);
 }
 
 /** A player's totals. A player with no entries has an account of zero. */
-export async function getAccount(db: D1Database, playerId: PlayerId): Promise<Account> {
-  const row = await db
-    .prepare("SELECT balance, xp FROM accounts WHERE player_id = ?")
-    .bind(playerId)
-    .first<{ balance: number; xp: number }>();
+export function getAccount(db: Database, playerId: PlayerId): Account {
+  const row = db
+    .query<{ balance: number; xp: number }, [string]>("SELECT balance, xp FROM accounts WHERE player_id = ?")
+    .get(playerId);
   return {
     playerId,
     balance: row?.balance ?? 0,
@@ -168,19 +172,14 @@ export interface ListEntriesOptions {
 }
 
 /** A player's entries, newest first. */
-export async function listEntries(
-  db: D1Database,
-  playerId: PlayerId,
-  options: ListEntriesOptions,
-): Promise<LedgerEntry[]> {
-  const { results } = await db
-    .prepare(
+export function listEntries(db: Database, playerId: PlayerId, options: ListEntriesOptions): LedgerEntry[] {
+  return db
+    .query<EntryRow, [string, number, number]>(
       `SELECT ${ENTRY_COLUMNS} FROM ledger_entries
        WHERE player_id = ? AND id < ?
        ORDER BY id DESC
        LIMIT ?`,
     )
-    .bind(playerId, options.beforeId ?? Number.MAX_SAFE_INTEGER, options.limit)
-    .all<EntryRow>();
-  return results.map(toEntry);
+    .all(playerId, options.beforeId ?? Number.MAX_SAFE_INTEGER, options.limit)
+    .map(toEntry);
 }

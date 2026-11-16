@@ -1,13 +1,13 @@
 import { type Activity, parsePlayerId, raidKeyForName } from "@sequoia-leaf/core";
 
+import type { Fetcher } from "../services.ts";
+
 export interface BackendConfig {
   /** Origin of sequoia-backend, such as `https://api.seqwawa.com`. */
   readonly baseUrl: string;
   /** The backend's internal API token. */
   readonly token: string;
 }
-
-export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
 
 /** The backend could not be read, or it returned something that is not a credit feed. */
 export class CreditFeedError extends Error {

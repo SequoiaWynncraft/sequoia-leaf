@@ -1,3 +1,5 @@
+import type { Database } from "bun:sqlite";
+
 import {
   draftEntry,
   leaf,
@@ -12,7 +14,7 @@ import {
   type RaidKey,
 } from "@sequoia-leaf/core";
 
-import { entryInsert } from "../ledger/store.ts";
+import { insertEntry } from "../ledger/store.ts";
 
 interface QuestRow {
   slot: string;
@@ -82,12 +84,12 @@ function hasQuest(row: JoinedRow): row is JoinedRow & QuestRow {
   return row.slot !== null;
 }
 
-/** A player's quest book, or undefined for a player who has never had a quest. One database read. */
-export async function loadQuestBook(db: D1Database, playerId: PlayerId): Promise<QuestBook | undefined> {
+/** A player's quest book, or undefined for a player who has never had a quest. */
+export function loadQuestBook(db: Database, playerId: PlayerId): QuestBook | undefined {
   // One row per slot's latest quest, each carrying the player's daily charges;
   // a single row of NULL quest columns for a player with charges but no quest.
-  const { results } = await db
-    .prepare(
+  const rows = db
+    .query<JoinedRow, [string]>(
       `SELECT player.daily_charges, player.daily_charged_day, ${QUEST_COLUMNS.split(", ")
         .map((column) => `quest.${column}`)
         .join(", ")}
@@ -98,14 +100,13 @@ export async function loadQuestBook(db: D1Database, playerId: PlayerId): Promise
                               WHERE later.player_id = quest.player_id AND later.slot = quest.slot)
        WHERE player.player_id = ?`,
     )
-    .bind(playerId)
-    .all<JoinedRow>();
-  const [first] = results;
+    .all(playerId);
+  const [first] = rows;
   if (first === undefined) {
     return undefined;
   }
   const latest: { [slot in QuestSlot]?: Quest } = {};
-  for (const row of results) {
+  for (const row of rows) {
     if (hasQuest(row)) {
       const quest = toQuest(row);
       latest[quest.slot] = quest;
@@ -115,43 +116,35 @@ export async function loadQuestBook(db: D1Database, playerId: PlayerId): Promise
 }
 
 /**
- * The statements that save a step: the player's daily charges, every quest
- * handed out or changed, and the reward of every quest finished. They belong
- * in the same batch as the activities that caused the step.
+ * Saves a step: the player's daily charges, every quest handed out or
+ * changed, and the reward of every quest finished. Call it in the same
+ * transaction as the activities that caused the step.
  */
-export function questWrites(db: D1Database, playerId: PlayerId, step: QuestStep, now: number): D1PreparedStatement[] {
-  const statements = [
-    db
-      .prepare(
-        `INSERT INTO quest_players (player_id, daily_charges, daily_charged_day) VALUES (?, ?, ?)
-         ON CONFLICT (player_id) DO UPDATE
-         SET daily_charges = excluded.daily_charges, daily_charged_day = excluded.daily_charged_day`,
-      )
-      .bind(playerId, step.book.dailyCharges, step.book.dailyChargedDay),
-  ];
+export function saveQuestStep(db: Database, playerId: PlayerId, step: QuestStep, now: number): void {
+  db.query(
+    `INSERT INTO quest_players (player_id, daily_charges, daily_charged_day) VALUES (?, ?, ?)
+     ON CONFLICT (player_id) DO UPDATE
+     SET daily_charges = excluded.daily_charges, daily_charged_day = excluded.daily_charged_day`,
+  ).run(playerId, step.book.dailyCharges, step.book.dailyChargedDay);
   for (const quest of step.written) {
-    statements.push(
-      db
-        .prepare(
-          `INSERT INTO quests (player_id, ${QUEST_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT (player_id, slot, sequence) DO UPDATE
-           SET progress = excluded.progress, completed_at = excluded.completed_at`,
-        )
-        .bind(
-          playerId,
-          quest.slot,
-          quest.sequence,
-          quest.templateId,
-          quest.objective.type,
-          quest.objective.type === "raids" ? (quest.objective.raid ?? null) : null,
-          quest.objective.count,
-          quest.reward.leaf,
-          quest.reward.xp,
-          quest.progress,
-          quest.startedAt,
-          quest.expiresAt,
-          quest.completedAt,
-        ),
+    db.query(
+      `INSERT INTO quests (player_id, ${QUEST_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (player_id, slot, sequence) DO UPDATE
+       SET progress = excluded.progress, completed_at = excluded.completed_at`,
+    ).run(
+      playerId,
+      quest.slot,
+      quest.sequence,
+      quest.templateId,
+      quest.objective.type,
+      quest.objective.type === "raids" ? (quest.objective.raid ?? null) : null,
+      quest.objective.count,
+      quest.reward.leaf,
+      quest.reward.xp,
+      quest.progress,
+      quest.startedAt,
+      quest.expiresAt,
+      quest.completedAt,
     );
   }
   for (const quest of step.completed) {
@@ -163,21 +156,19 @@ export function questWrites(db: D1Database, playerId: PlayerId, step: QuestStep,
       source: "quest",
       idempotencyKey: `quest:${playerId}:${quest.slot}:${quest.sequence}`,
     });
-    statements.push(entryInsert(db, draft, now));
+    insertEntry(db, draft, now);
   }
-  return statements;
 }
 
 /** A player's quests finished at or after a moment, newest first. */
-export async function listCompletedSince(db: D1Database, playerId: PlayerId, since: number): Promise<Quest[]> {
-  const { results } = await db
-    .prepare(
+export function listCompletedSince(db: Database, playerId: PlayerId, since: number): Quest[] {
+  return db
+    .query<QuestRow, [string, number]>(
       `SELECT ${QUEST_COLUMNS} FROM quests
        WHERE player_id = ? AND completed_at >= ?
        ORDER BY completed_at DESC, slot, sequence DESC
        LIMIT 20`,
     )
-    .bind(playerId, since)
-    .all<QuestRow>();
-  return results.map(toQuest);
+    .all(playerId, since)
+    .map(toQuest);
 }

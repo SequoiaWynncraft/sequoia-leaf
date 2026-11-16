@@ -3,57 +3,69 @@
 The service behind Leaf, the Sequoia guild currency, and the game built on it.
 Members earn Leaf from guild activity such as raids and wars, and spend it.
 
-It runs on Cloudflare Workers with a D1 database, and is written in TypeScript.
-Bun is the toolchain: package manager, formatter (`bun fmt`), type checker
-(`bun check`) and test runner. Linting is oxlint with type-aware rules.
-
-Node.js is installed for one reason: Cloudflare's tools need it. Wrangler does
-not support running on Bun, and the Worker tests use Vitest with Cloudflare's
-plugin, which runs them inside the Workers runtime through wrangler.
+It is one Bun process with a SQLite database file, written in TypeScript. Bun
+is the whole toolchain: runtime, package manager, formatter (`bun fmt`), type
+checker (`bun check`), test runner and the SQLite driver. Linting is oxlint
+with type-aware rules.
 
 ## Status
 
-Live at `https://leaf.seqwawa.com` since 16 November 2026. The Worker reads
+Live at `https://leaf.seqwawa.com` since 16 November 2026. It reads
 sequoia-backend's player credit feed every minute, pays Leaf and XP for raids
 and wars, and runs quests on top of them. Signed-in members can read their
 balance, level and quests. There is no way to spend Leaf yet and there are no
 staff endpoints.
 
+Production is moving from a Cloudflare Worker to the Sequoia server. Until
+that is done, `leaf.seqwawa.com` is served by the Worker built from commit
+`8448be8`.
+
 ## Getting started
 
 ```sh
-mise install     # install the pinned bun and node
+mise install     # install the pinned bun
 bun install
 bun run verify   # format check, lint, typecheck and test
 bun fmt          # format everything
-bun run dev      # run the Worker at http://localhost:8787
+bun run dev      # run the server at http://localhost:3000, restarting on changes
 ```
+
+The server is configured with environment variables:
+
+| Variable                 | Default                   | What it is                                              |
+| ------------------------ | ------------------------- | ------------------------------------------------------- |
+| `PORT`                   | `3000`                    | The port to listen on.                                  |
+| `DATABASE_PATH`          | `data/leaf.db`            | The SQLite file. It is created when missing.            |
+| `BACKEND_URL`            | `https://api.seqwawa.com` | sequoia-backend, for the credit feed and session check. |
+| `BACKEND_INTERNAL_TOKEN` | none                      | sequoia-backend's `APP_INTERNAL_API_TOKEN`.             |
+
+Without `BACKEND_INTERNAL_TOKEN` the server answers requests but does not read
+the credit feed, which is what local development wants.
 
 ## Layout
 
-| Path                  | What it is                                                 |
-| --------------------- | ---------------------------------------------------------- |
-| `packages/core`       | The rules of the game as pure functions and types. No I/O. |
-| `apps/api`            | The Cloudflare Worker: HTTP routes and the D1 database.    |
-| `apps/api/migrations` | The database schema, applied in order.                     |
+| Path                  | What it is                                                    |
+| --------------------- | ------------------------------------------------------------- |
+| `packages/core`       | The rules of the game as pure functions and types. No I/O.    |
+| `apps/api`            | The server: HTTP routes, the database and the credit sync.    |
+| `apps/api/migrations` | The database schema. New files are applied in order at start. |
+| `Dockerfile`          | The production image.                                         |
 
 ## How Leaf is earned
 
 sequoia-backend records raids and wars. Its `/internal/player-credits` endpoint
-lists who took part in each one. The Worker reads it on a schedule:
+lists who took part in each one. The server reads it on a schedule:
 
 - Every minute it reads the events since its last run, once they are 30 seconds
   old, and records each player's part as an activity together with the Leaf it
   pays. The rates are in `packages/core/src/rules.ts`.
-- Every hour it re-reads the last week, to pick up credits that appear late,
-  such as a war scored afterwards or a name matched to a player afterwards.
+- At minute 17 of every hour it re-reads the last week instead, to pick up
+  credits that appear late, such as a war scored afterwards or a name matched
+  to a player afterwards.
 
 Each credit carries the backend's event id and the player's UUID, so reading
 the same events again pays nothing twice. Nothing that happened before the
-Worker's first run is ever credited.
-
-The Worker needs the backend's internal token as the secret
-`BACKEND_INTERNAL_TOKEN`. Without it, it serves requests but skips the feed.
+first run is ever credited.
 
 ## Quests
 
@@ -67,8 +79,8 @@ Every member has three quest slots. The templates and rewards are in
 - **Repeatable.** Always one; finishing it unlocks the next.
 
 A quest counts the activities the credit sync records, in the same database
-batch that records them, and a finished quest pays its Leaf and XP in that
-batch too. Between activities nothing is written: what a member sees is
+transaction that records them, and a finished quest pays its Leaf and XP in
+that transaction too. Between activities nothing is written: what a member sees is
 calculated from their last stored state.
 
 ## API
@@ -82,7 +94,7 @@ Responses are JSON with `snake_case` fields. Errors are `{ "code", "message" }`.
 | `GET /v1/me/quests` | Their quests, banked dailies and recently finished quests. |
 
 `/v1/me` routes take the member's Sequoia session, as `Authorization: Bearer`
-or as the site's `seq_session` cookie. The Worker asks sequoia-backend who the
+or as the site's `seq_session` cookie. The server asks sequoia-backend who the
 session belongs to; the mod can send the token it already holds for the
 backend. Only current guild members are let in.
 
@@ -113,22 +125,27 @@ shortly after the player finishes a raid or war, and shows the quests in
    client alone.
 9. **Rules live in `packages/core`, I/O lives in `apps/api`.** Anything that
    decides an amount, an outcome or whether an action is allowed is a pure
-   function in `core`, with a test beside it. Worker tests run against a real
-   local D1 database; the database is never mocked.
+   function in `core`, with a test beside it. The `apps/api` tests run against
+   a real SQLite database in memory, with the production migrations; the
+   database is never mocked.
+10. **Writes that belong together share a transaction.** An activity, the Leaf
+    it pays and the quest progress it causes are written by one
+    `db.transaction`, so none of them exists without the others.
 
 ## Deploying
 
-Nothing deploys automatically. From `apps/api`, signed in to the Sequoia
-Cloudflare account:
+The production image is the `Dockerfile` at the root. It runs the server as an
+unprivileged user and keeps the database in `/data`, which has to be a volume
+that survives deploys:
 
 ```sh
-wrangler d1 migrations apply sequoia-leaf --remote   # only when there are new migrations
-wrangler deploy
+docker build --tag sequoia-leaf .
+docker run --publish 3000:3000 --volume leaf-data:/data --env BACKEND_INTERNAL_TOKEN=... sequoia-leaf
 ```
 
-Apply migrations before deploying code that needs them. The Worker's one
-secret, `BACKEND_INTERNAL_TOKEN`, is sequoia-backend's `APP_INTERNAL_API_TOKEN`
-and is set with `wrangler secret put BACKEND_INTERNAL_TOKEN`.
+The server applies new migrations when it starts, before it takes requests. It
+is built to run as a single instance: SQLite has one writer, and the credit
+sync's schedule lives in the process.
 
 The `seqwawa.com` zone redirects every hostname that is not on an allowlist to
 the main site (the "Catch-all unused" redirect rule). `leaf.seqwawa.com` is on

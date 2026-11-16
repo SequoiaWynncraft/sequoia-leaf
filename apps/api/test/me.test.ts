@@ -1,10 +1,13 @@
-import { leaf, playerId } from "@sequoia-leaf/core";
-import { env } from "cloudflare:workers";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
+import { leaf, playerId } from "@sequoia-leaf/core";
+import type { Hono } from "hono";
+
+import { createApp } from "../src/app.ts";
 import { forgetSessions } from "../src/auth/session.ts";
-import { app } from "../src/index.ts";
 import { postEntry } from "../src/ledger/store.ts";
+import type { Services } from "../src/services.ts";
+import { testServices } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const MINUTE = 60_000;
@@ -22,9 +25,12 @@ const member = {
 };
 
 /** What the stand-in backend answers, by bearer token and for the credit feed. */
-let sessions: Record<string, Response | (() => Response)>;
+let sessions: Record<string, () => Response>;
 let credits: unknown;
 let backendCalls: string[];
+const clock = { now: T0 };
+let services: Services;
+let app: Hono;
 
 function backend(url: string, init: RequestInit): Promise<Response> {
   const request = new Request(url, init);
@@ -32,8 +38,8 @@ function backend(url: string, init: RequestInit): Promise<Response> {
   backendCalls.push(path);
   if (path === "/auth/web/me") {
     const token = request.headers.get("Authorization")?.slice("Bearer ".length) ?? "";
-    const answer = sessions[token] ?? Response.json({ error: "unauthorized" }, { status: 401 });
-    return Promise.resolve(typeof answer === "function" ? answer() : answer.clone());
+    const answer = sessions[token] ?? (() => Response.json({ error: "unauthorized" }, { status: 401 }));
+    return Promise.resolve(answer());
   }
   if (path === "/internal/player-credits") {
     return Promise.resolve(Response.json(credits));
@@ -42,22 +48,20 @@ function backend(url: string, init: RequestInit): Promise<Response> {
 }
 
 function get(path: string, headers: Record<string, string> = { Authorization: "Bearer alice-token" }) {
-  return app.request(path, { headers }, { ...env, BACKEND_INTERNAL_TOKEN: "internal-token" });
+  return app.request(path, { headers });
 }
 
 beforeEach(() => {
-  sessions = { "alice-token": Response.json(member) };
+  sessions = { "alice-token": () => Response.json(member) };
   credits = { raids: [], wars: [] };
   backendCalls = [];
-  vi.stubGlobal("fetch", backend);
-  vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(T0);
+  clock.now = T0;
+  services = testServices(clock, backend);
+  app = createApp(services);
 });
 
 afterEach(() => {
   forgetSessions();
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
 });
 
 describe("signing in", () => {
@@ -83,7 +87,7 @@ describe("signing in", () => {
   });
 
   it("turns away someone who is not in the guild", async () => {
-    sessions["visitor-token"] = Response.json({ ...member, guild_rank: null });
+    sessions["visitor-token"] = () => Response.json({ ...member, guild_rank: null });
 
     const response = await get("/v1/me", { Authorization: "Bearer visitor-token" });
 
@@ -92,7 +96,7 @@ describe("signing in", () => {
   });
 
   it("says so when the backend cannot be asked, instead of calling the session invalid", async () => {
-    sessions["alice-token"] = new Response("down", { status: 502 });
+    sessions["alice-token"] = () => new Response("down", { status: 502 });
 
     const response = await get("/v1/me");
 
@@ -103,7 +107,7 @@ describe("signing in", () => {
   it("asks the backend once for several requests in the same minute", async () => {
     await get("/v1/me");
     await get("/v1/me");
-    vi.setSystemTime(T0 + 2 * MINUTE);
+    clock.now = T0 + 2 * MINUTE;
     await get("/v1/me");
 
     expect(backendCalls).toEqual(["/auth/web/me", "/auth/web/me"]);
@@ -123,16 +127,9 @@ describe("GET /v1/me", () => {
   });
 
   it("shows the balance, XP and level the ledger adds up to", async () => {
-    await postEntry(
-      env.DB,
-      { kind: "earn", playerId: alice, amount: leaf(1300), source: "staff", idempotencyKey: "a" },
-      T0,
-    );
-    await postEntry(
-      env.DB,
-      { kind: "spend", playerId: alice, amount: leaf(300), sink: "shop", idempotencyKey: "b" },
-      T0,
-    );
+    const { db } = services;
+    postEntry(db, { kind: "earn", playerId: alice, amount: leaf(1300), source: "staff", idempotencyKey: "a" }, T0);
+    postEntry(db, { kind: "spend", playerId: alice, amount: leaf(300), sink: "shop", idempotencyKey: "b" }, T0);
 
     const response = await get("/v1/me");
 
@@ -144,34 +141,30 @@ describe("GET /v1/me", () => {
   });
 });
 
-interface QuestsBody {
-  daily: { charges: number; charge_cap: number; next_charge_at: string | null };
-  quests: { id: string; slot: string; title: string; progress: number; target: number; completed_at: string | null }[];
-  recently_completed: { id: string }[];
-}
-
 describe("GET /v1/me/quests", () => {
   it("shows a new member a daily, a weekly and a repeatable without storing anything", async () => {
     const response = await get("/v1/me/quests");
-    const body: QuestsBody = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.daily).toEqual({ charges: 1, charge_cap: 3, next_charge_at: "2026-11-05T00:00:00.000Z" });
-    expect(body.quests.map((quest) => [quest.id, quest.progress])).toEqual([
-      ["daily:1", 0],
-      ["weekly:1", 0],
-      ["repeatable:1", 0],
-    ]);
-    expect(body.quests[2]).toMatchObject({
-      title: "Complete 8 raids",
-      target: 8,
-      reward: { leaf: 200, xp: 100 },
-      started_at: "2026-11-04T12:00:00.000Z",
-      expires_at: null,
-      completed_at: null,
+    expect(await response.json()).toMatchObject({
+      daily: { charges: 1, charge_cap: 3, next_charge_at: "2026-11-05T00:00:00.000Z" },
+      quests: [
+        { id: "daily:1", progress: 0 },
+        { id: "weekly:1", progress: 0 },
+        {
+          id: "repeatable:1",
+          progress: 0,
+          title: "Complete 8 raids",
+          target: 8,
+          reward: { leaf: 200, xp: 100 },
+          started_at: "2026-11-04T12:00:00.000Z",
+          expires_at: null,
+          completed_at: null,
+        },
+      ],
+      recently_completed: [],
     });
-    expect(body.recently_completed).toEqual([]);
-    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM quests").first()).toEqual({ n: 0 });
+    expect(services.db.query("SELECT COUNT(*) AS n FROM quests").get()).toEqual({ n: 0 });
   });
 
   it("syncs on request, so a raid just finished shows in the same answer", async () => {
@@ -188,11 +181,13 @@ describe("GET /v1/me/quests", () => {
       ],
       wars: [],
     };
-    vi.setSystemTime(T0 + 5 * MINUTE);
+    clock.now = T0 + 5 * MINUTE;
 
-    const body: QuestsBody = await (await get("/v1/me/quests?sync=1")).json();
+    const response = await get("/v1/me/quests?sync=1");
 
-    expect(body.quests.find((quest) => quest.slot === "repeatable")).toMatchObject({ progress: 1, target: 8 });
+    expect(await response.json()).toMatchObject({
+      quests: expect.arrayContaining([expect.objectContaining({ slot: "repeatable", progress: 1, target: 8 })]),
+    });
     expect(await (await get("/v1/me")).json()).toMatchObject({ leaf: 110, xp: 110 });
   });
 
@@ -205,11 +200,11 @@ describe("GET /v1/me/quests", () => {
   it("does not retry a failed sync until the few seconds are up", async () => {
     await get("/v1/me/quests?sync=1");
     credits = { not: "a credit feed" };
-    vi.setSystemTime(T0 + MINUTE);
+    clock.now = T0 + MINUTE;
     const failed = await get("/v1/me/quests?sync=1");
-    vi.setSystemTime(T0 + MINUTE + 5_000);
+    clock.now = T0 + MINUTE + 5_000;
     await get("/v1/me/quests?sync=1");
-    vi.setSystemTime(T0 + MINUTE + 15_000);
+    clock.now = T0 + MINUTE + 15_000;
     await get("/v1/me/quests?sync=1");
 
     expect(failed.status).toBe(200);
@@ -218,9 +213,9 @@ describe("GET /v1/me/quests", () => {
 
   it("syncs at most once every few seconds however often it is asked", async () => {
     await get("/v1/me/quests?sync=1");
-    vi.setSystemTime(T0 + MINUTE);
+    clock.now = T0 + MINUTE;
     await get("/v1/me/quests?sync=1");
-    vi.setSystemTime(T0 + MINUTE + 5_000);
+    clock.now = T0 + MINUTE + 5_000;
     await get("/v1/me/quests?sync=1");
 
     expect(backendCalls.filter((path) => path === "/internal/player-credits")).toHaveLength(1);
