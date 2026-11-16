@@ -14,7 +14,9 @@ export type QuestObjective =
   /** Complete this many raids: of one kind when `raid` is set, of any kind otherwise. */
   | { readonly type: "raids"; readonly raid?: RaidKey; readonly count: number }
   /** Take part in this many wars. */
-  | { readonly type: "wars"; readonly count: number };
+  | { readonly type: "wars"; readonly count: number }
+  /** Take part in raids and wars that together earn the guild this much season rating. */
+  | { readonly type: "season_rating"; readonly amount: number };
 
 export interface QuestReward {
   readonly leaf: number;
@@ -43,6 +45,7 @@ export interface Quest {
   readonly templateId: string;
   readonly objective: QuestObjective;
   readonly reward: QuestReward;
+  /** How far along it is, from 0 to the objective's target. It never goes past the target. */
   readonly progress: number;
   /** Activities from this moment on count toward it. */
   readonly startedAt: number;
@@ -79,11 +82,25 @@ export function openQuestBook(at: number): QuestBook {
   return { dailyCharges: 1, dailyChargedDay: utcDay(at), latest: {} };
 }
 
-export function countsToward(objective: QuestObjective, activity: Activity): boolean {
-  if (objective.type === "wars") {
-    return activity.kind === "war";
+/** The progress at which an objective is met. */
+export function objectiveTarget(objective: QuestObjective): number {
+  return objective.type === "season_rating" ? objective.amount : objective.count;
+}
+
+/**
+ * How far one activity moves an objective: 1 for a raid or war that is being
+ * counted, the season rating it earned when that is being added up, and 0 for
+ * an activity that does not count.
+ */
+export function progressFrom(objective: QuestObjective, activity: Activity): number {
+  switch (objective.type) {
+    case "raids":
+      return activity.kind === "raid" && (objective.raid === undefined || objective.raid === activity.raid) ? 1 : 0;
+    case "wars":
+      return activity.kind === "war" ? 1 : 0;
+    case "season_rating":
+      return Number.isFinite(activity.seasonRating) ? Math.max(0, Math.floor(activity.seasonRating)) : 0;
   }
-  return activity.kind === "raid" && (objective.raid === undefined || objective.raid === activity.raid);
 }
 
 /**
@@ -147,14 +164,19 @@ export function applyActivityToQuests(book: QuestBook, activity: Activity, rules
   refresh(step, at);
   // The quests are fixed before counting, so one handed out below never sees this activity.
   for (const quest of QUEST_SLOTS.map((slot) => step.latest[slot])) {
-    if (quest === undefined || quest.completedAt !== null || !countsToward(quest.objective, activity)) {
+    if (quest === undefined || quest.completedAt !== null) {
       continue;
     }
     if (at < quest.startedAt || (quest.expiresAt !== null && at >= quest.expiresAt)) {
       continue;
     }
-    const progress = quest.progress + 1;
-    if (progress < quest.objective.count) {
+    const gained = progressFrom(quest.objective, activity);
+    if (gained === 0) {
+      continue;
+    }
+    const target = objectiveTarget(quest.objective);
+    const progress = Math.min(target, quest.progress + gained);
+    if (progress < target) {
       write(step, { ...quest, progress });
       continue;
     }
@@ -273,6 +295,9 @@ function write(step: Step, quest: Quest): void {
 
 /** A short sentence for the quest, such as "Complete 3 NOL raids". */
 export function questTitle(objective: QuestObjective): string {
+  if (objective.type === "season_rating") {
+    return `Earn ${objective.amount.toLocaleString("en-US")} season rating`;
+  }
   if (objective.type === "wars") {
     return objective.count === 1 ? "Take part in 1 war" : `Take part in ${objective.count} wars`;
   }

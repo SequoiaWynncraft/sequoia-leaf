@@ -25,7 +25,8 @@ export interface LevelRules {
   readonly xpGrowthPerLevel: number;
 }
 
-// As a rough anchor, 100 Leaf is worth about 1 LE and a raid pays about 110 Leaf.
+// As a rough anchor, 100 Leaf is worth about 1 LE. In the first day of real
+// play a raid earned 220 to 440 season rating, about 330 on average, and a war 60.
 const QUEST_TEMPLATES: readonly QuestTemplate[] = [
   ...RAID_KEYS.map((raid): QuestTemplate => ({
     id: `daily.raids.${raid}.3`,
@@ -35,6 +36,12 @@ const QUEST_TEMPLATES: readonly QuestTemplate[] = [
   })),
   { id: "daily.raids.any.2", slot: "daily", objective: { type: "raids", count: 2 }, reward: { leaf: 200, xp: 100 } },
   { id: "daily.wars.2", slot: "daily", objective: { type: "wars", count: 2 }, reward: { leaf: 200, xp: 100 } },
+  {
+    id: "daily.season_rating.1000",
+    slot: "daily",
+    objective: { type: "season_rating", amount: 1000 },
+    reward: { leaf: 250, xp: 125 },
+  },
   ...RAID_KEYS.map((raid): QuestTemplate => ({
     id: `weekly.raids.${raid}.12`,
     slot: "weekly",
@@ -48,6 +55,12 @@ const QUEST_TEMPLATES: readonly QuestTemplate[] = [
     reward: { leaf: 800, xp: 400 },
   },
   { id: "weekly.wars.15", slot: "weekly", objective: { type: "wars", count: 15 }, reward: { leaf: 800, xp: 400 } },
+  {
+    id: "weekly.season_rating.6000",
+    slot: "weekly",
+    objective: { type: "season_rating", amount: 6000 },
+    reward: { leaf: 800, xp: 400 },
+  },
   {
     id: "repeatable.raids.any.8",
     slot: "repeatable",

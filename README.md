@@ -75,6 +75,14 @@ Every member has three quest slots. The templates and rewards are in
 - **Weekly.** One per week, Monday to Monday in UTC. It expires with the week.
 - **Repeatable.** Always one; finishing it unlocks the next.
 
+A quest asks for one of these:
+
+| Objective       | Example                    | What counts                                                  |
+| --------------- | -------------------------- | ------------------------------------------------------------ |
+| `raids`         | "Complete 2 raids"         | Every raid, or only one named raid ("Complete 3 NOL raids"). |
+| `wars`          | "Take part in 2 wars"      | Every war the member took part in.                           |
+| `season_rating` | "Earn 1,000 season rating" | The season rating of every raid and war they took part in.   |
+
 A quest counts the activities the credit sync records, in the same database
 transaction that records them, and a finished quest pays its Leaf and XP in
 that transaction too. Between activities nothing is written: what a member sees is

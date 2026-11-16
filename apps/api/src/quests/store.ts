@@ -3,6 +3,7 @@ import type { Database } from "bun:sqlite";
 import {
   draftEntry,
   leaf,
+  objectiveTarget,
   type PlayerId,
   type Quest,
   QUEST_SLOTS,
@@ -45,6 +46,9 @@ function isRaidKey(value: string): value is RaidKey {
 function toObjective(row: QuestRow): QuestObjective {
   if (row.objective_type === "wars") {
     return { type: "wars", count: row.target };
+  }
+  if (row.objective_type === "season_rating") {
+    return { type: "season_rating", amount: row.target };
   }
   if (row.objective_type !== "raids") {
     throw new Error(`Quest has an unknown objective type: ${row.objective_type}`);
@@ -138,7 +142,7 @@ export function saveQuestStep(db: Database, playerId: PlayerId, step: QuestStep,
       quest.templateId,
       quest.objective.type,
       quest.objective.type === "raids" ? (quest.objective.raid ?? null) : null,
-      quest.objective.count,
+      objectiveTarget(quest.objective),
       quest.reward.leaf,
       quest.reward.xp,
       quest.progress,

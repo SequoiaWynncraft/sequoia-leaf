@@ -1,5 +1,6 @@
+import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,6 +10,7 @@ import { migrate, openDatabase } from "../src/db.ts";
 import { getAccount, postEntry } from "../src/ledger/store.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
+const MIGRATIONS = join(import.meta.dir, "..", "migrations");
 
 let directory: string;
 
@@ -43,7 +45,61 @@ describe("openDatabase", () => {
       "0002_activities.sql",
       "0003_quests.sql",
       "0004_events.sql",
+      "0005_season_rating_quests.sql",
     ]);
+    db.close();
+  });
+
+  it("keeps the quests already handed out when the table is rebuilt for season rating", () => {
+    const before = join(directory, "migrations");
+    mkdirSync(before);
+    for (const name of readdirSync(MIGRATIONS).filter((file) => file < "0005")) {
+      copyFileSync(join(MIGRATIONS, name), join(before, name));
+    }
+    const db = new Database(":memory:");
+    migrate(db, before);
+    db.run(
+      `INSERT INTO quests VALUES ('${alice}', 'daily', 1, 'daily.raids.nol.3', 'raids', 'nol', 3, 300, 150, 2, 10, NULL, NULL),
+                                 ('${alice}', 'weekly', 1, 'weekly.wars.15', 'wars', NULL, 15, 800, 400, 15, 10, 20, 15)`,
+    );
+
+    expect(migrate(db)).toEqual(["0005_season_rating_quests.sql"]);
+
+    expect(db.query("SELECT * FROM quests ORDER BY slot").all()).toEqual([
+      {
+        player_id: alice,
+        slot: "daily",
+        sequence: 1,
+        template_id: "daily.raids.nol.3",
+        objective_type: "raids",
+        objective_raid: "nol",
+        target: 3,
+        reward_leaf: 300,
+        reward_xp: 150,
+        progress: 2,
+        started_at: 10,
+        expires_at: null,
+        completed_at: null,
+      },
+      {
+        player_id: alice,
+        slot: "weekly",
+        sequence: 1,
+        template_id: "weekly.wars.15",
+        objective_type: "wars",
+        objective_raid: null,
+        target: 15,
+        reward_leaf: 800,
+        reward_xp: 400,
+        progress: 15,
+        started_at: 10,
+        expires_at: 20,
+        completed_at: 15,
+      },
+    ]);
+    db.run(
+      `INSERT INTO quests VALUES ('${alice}', 'daily', 2, 'daily.season_rating.1000', 'season_rating', NULL, 1000, 250, 125, 440, 30, NULL, NULL)`,
+    );
     db.close();
   });
 
