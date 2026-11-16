@@ -1,9 +1,13 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sequoia-leaf",
+  // The Sequoia Cloudflare account, which holds the seqwawa.com zone.
+  "account_id": "0641c96244af5c3212601f04a36e66ae",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
   "observability": { "enabled": true },
+  // Under seqwawa.com so the site's login cookie reaches the Worker.
+  "routes": [{ "pattern": "leaf.seqwawa.com", "custom_domain": true }],
   "vars": {
     // sequoia-backend, which reports who took part in each raid and war.
     "BACKEND_URL": "https://api.seqwawa.com",
@@ -16,6 +20,7 @@
     {
       "binding": "DB",
       "database_name": "sequoia-leaf",
+      "database_id": "27599eb7-e222-4e06-bc5e-5d24cd07003d",
       "migrations_dir": "migrations",
     },
   ],
