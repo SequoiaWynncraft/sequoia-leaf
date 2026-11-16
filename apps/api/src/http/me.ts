@@ -5,23 +5,52 @@ import {
   levelForXp,
   nextDailyChargeAt,
   openQuestBook,
-  type Quest,
-  questTitle,
   refreshQuests,
 } from "@sequoia-leaf/core";
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 
 import { identify, type Identity, sessionToken } from "../auth/session.ts";
 import { syncOnDemand } from "../earning/run.ts";
+import { eventJsonText, latestEventId, listEventsAfter, listLatestEvents } from "../events/store.ts";
 import { getAccount } from "../ledger/store.ts";
+import { questJson } from "../quests/json.ts";
 import { listCompletedSince, loadQuestBook } from "../quests/store.ts";
 import type { Services } from "../services.ts";
 
 /** How far back the list of finished quests reaches. */
 const RECENTLY_COMPLETED_MS = 2 * DAY_MS;
 
+/** How the event stream paces itself. Tests shorten these. */
+export interface StreamTuning {
+  /** How often an open stream looks for new events. */
+  readonly pollMs: number;
+  /** A stream with nothing to send writes a comment this often, so proxies keep the connection open. */
+  readonly heartbeatMs: number;
+  /** A stream is closed after this long. The client reconnects, which checks its session again. */
+  readonly maxMs: number;
+}
+
+export const DEFAULT_STREAM_TUNING: StreamTuning = { pollMs: 2_000, heartbeatMs: 20_000, maxMs: 15 * 60_000 };
+
+/** The most events one answer or one look by a stream returns. */
+const EVENT_PAGE = 100;
+/** How many events `GET /events` returns when the client does not say where it is. */
+const LATEST_EVENTS = 50;
+
+/** Reads an event id sent by a client. Undefined means it sent none; null means it sent something that is not one. */
+function eventId(value: string | undefined): number | null | undefined {
+  if (value === undefined || value === "") {
+    return undefined;
+  }
+  return /^\d{1,15}$/.test(value) ? Number(value) : null;
+}
+
 /** Routes about the signed-in player. Every one needs a Sequoia session of a current guild member. */
-export function meRoutes(services: Services): Hono<{ Variables: { identity: Identity } }> {
+export function meRoutes(
+  services: Services,
+  tuning: StreamTuning = DEFAULT_STREAM_TUNING,
+): Hono<{ Variables: { identity: Identity } }> {
   const { db } = services;
   const me = new Hono<{ Variables: { identity: Identity } }>();
 
@@ -83,25 +112,61 @@ export function meRoutes(services: Services): Hono<{ Variables: { identity: Iden
     });
   });
 
-  return me;
-}
+  me.get("/events", (c) => {
+    const after = eventId(c.req.query("after"));
+    if (after === null) {
+      return c.json({ code: "invalid_after", message: "after must be an event id" }, 400);
+    }
+    const playerId = c.var.identity.playerId;
+    const events =
+      after === undefined
+        ? listLatestEvents(db, playerId, LATEST_EVENTS)
+        : listEventsAfter(db, playerId, after, EVENT_PAGE);
+    return c.body(`{"events":[${events.map(eventJsonText).join(",")}]}`, 200, {
+      "Content-Type": "application/json",
+    });
+  });
 
-function questJson(quest: Quest) {
-  return {
-    id: `${quest.slot}:${quest.sequence}`,
-    slot: quest.slot,
-    title: questTitle(quest.objective),
-    objective: {
-      type: quest.objective.type,
-      raid: quest.objective.type === "raids" ? (quest.objective.raid ?? null) : null,
-    },
-    progress: quest.progress,
-    target: quest.objective.count,
-    reward: { leaf: quest.reward.leaf, xp: quest.reward.xp },
-    started_at: iso(quest.startedAt),
-    expires_at: quest.expiresAt === null ? null : iso(quest.expiresAt),
-    completed_at: quest.completedAt === null ? null : iso(quest.completedAt),
-  };
+  // Server-sent events. A client that reconnects sends the last id it saw as
+  // `Last-Event-ID` (browsers do this by themselves) and gets what it missed;
+  // a client that sends none gets only what happens from now on.
+  me.get("/events/stream", (c) => {
+    const resumeFrom = eventId(c.req.header("Last-Event-ID") ?? c.req.query("after"));
+    if (resumeFrom === null) {
+      return c.json({ code: "invalid_after", message: "after must be an event id" }, 400);
+    }
+    const playerId = c.var.identity.playerId;
+    let after = resumeFrom ?? latestEventId(db);
+    return streamSSE(c, async (stream) => {
+      // The stream finds new events by looking in the database, not by being
+      // told, so it also sees events written by another process: during a
+      // deploy the old and the new container run side by side.
+      /* oxlint-disable no-await-in-loop -- each write and each wait must finish before the next */
+      // The first frame carries the starting position as its id, so a client
+      // whose stream ends before any event arrives still reconnects from here
+      // and gets what happened in between.
+      await stream.write(`id: ${after}\nretry: 3000\n\n`);
+      let quietMs = 0;
+      for (let openMs = 0; openMs < tuning.maxMs && !stream.aborted; openMs += tuning.pollMs) {
+        const events = listEventsAfter(db, playerId, after, EVENT_PAGE);
+        for (const event of events) {
+          await stream.writeSSE({ id: String(event.id), event: event.type, data: eventJsonText(event) });
+          after = event.id;
+        }
+        if (events.length > 0) {
+          quietMs = 0;
+        } else if (quietMs >= tuning.heartbeatMs) {
+          await stream.write(": keep-alive\n\n");
+          quietMs = 0;
+        }
+        await stream.sleep(tuning.pollMs);
+        quietMs += tuning.pollMs;
+      }
+      /* oxlint-enable no-await-in-loop */
+    });
+  });
+
+  return me;
 }
 
 function iso(at: number): string {

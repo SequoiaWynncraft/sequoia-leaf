@@ -15,7 +15,12 @@ const services: Services = {
   now: () => Date.now(),
 };
 
-const server = Bun.serve({ port: config.port, fetch: createApp(services).fetch });
+const server = Bun.serve({
+  port: config.port,
+  // Seconds. An event stream with nothing to send writes a keep-alive every 20, well inside this.
+  idleTimeout: 60,
+  fetch: createApp(services).fetch,
+});
 const schedule = everyMinute(async () => {
   await runScheduledSync(services);
   try {

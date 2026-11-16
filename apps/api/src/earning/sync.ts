@@ -6,13 +6,16 @@ import {
   draftEntry,
   leaf,
   leafForActivity,
+  levelForXp,
   openQuestBook,
   type PlayerId,
   type Quest,
   type Rules,
 } from "@sequoia-leaf/core";
 
-import { insertEntry } from "../ledger/store.ts";
+import { insertEvent } from "../events/store.ts";
+import { getAccount, insertEntry } from "../ledger/store.ts";
+import { questJson } from "../quests/json.ts";
 import { loadQuestBook, saveQuestStep } from "../quests/store.ts";
 
 /** Returns what players did during [from, to), in milliseconds since the Unix epoch. */
@@ -118,7 +121,10 @@ async function runSync(
   })();
 }
 
-/** Records one player's new activities, oldest first, with what they earn. Returns the Leaf paid. */
+/**
+ * Records one player's new activities, oldest first, with what they earn, and
+ * an event for each thing a client would want to show. Returns the Leaf paid.
+ */
 function recordPlayer(
   db: Database,
   playerId: PlayerId,
@@ -127,6 +133,7 @@ function recordPlayer(
   now: number,
 ): number {
   let leafPaid = 0;
+  const levelBefore = levelForXp(getAccount(db, playerId).xp, rules.levels).level;
   let book = loadQuestBook(db, playerId) ?? openQuestBook(activities[0]?.occurredAt ?? now);
   const written = new Map<string, Quest>();
   const completed: Quest[] = [];
@@ -141,8 +148,23 @@ function recordPlayer(
         source: activity.kind,
         idempotencyKey: activity.sourceKey,
       });
-      insertEntry(db, draft, now);
+      const entry = insertEntry(db, draft, now);
       leafPaid += amount;
+      insertEvent(
+        db,
+        playerId,
+        {
+          type: "leaf_earned",
+          data: {
+            source: activity.kind,
+            leaf: entry.balanceDelta,
+            xp: entry.xpDelta,
+            detail: activity.kind === "raid" ? activity.raidName : activity.territory,
+            occurred_at: new Date(activity.occurredAt).toISOString(),
+          },
+        },
+        now,
+      );
     }
     const step = applyActivityToQuests(book, activity, rules.quests);
     book = step.book;
@@ -150,11 +172,16 @@ function recordPlayer(
       written.set(`${quest.slot}:${quest.sequence}`, quest);
     }
     completed.push(...step.completed);
-  }
-  for (const quest of completed) {
-    leafPaid += quest.reward.leaf;
+    for (const quest of step.completed) {
+      leafPaid += quest.reward.leaf;
+      insertEvent(db, playerId, { type: "quest_completed", data: { quest: questJson(quest) } }, now);
+    }
   }
   saveQuestStep(db, playerId, { book, written: [...written.values()], completed }, now);
+  const levelAfter = levelForXp(getAccount(db, playerId).xp, rules.levels).level;
+  if (levelAfter > levelBefore) {
+    insertEvent(db, playerId, { type: "level_up", data: { level: levelAfter } }, now);
+  }
   return leafPaid;
 }
 
