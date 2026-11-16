@@ -1,26 +1,30 @@
 import { DEFAULT_RULES } from "@sequoia-leaf/core";
 
 import { fetchCredits } from "../backend/credits.ts";
+import type { Services } from "../services.ts";
 import { syncCredits, type SyncMode, type SyncResult } from "./sync.ts";
 
 /** A player asking for fresh quests triggers a sync at most this often. */
 const ON_DEMAND_INTERVAL_MS = 15_000;
+const MINUTE_MS = 60_000;
+/** The minute of each hour whose run re-reads the last week instead of the last few minutes. */
+const DEEP_SYNC_MINUTE = 17;
 
 /**
  * Reads the backend's credit feed and pays what it lists. Returns undefined,
  * and does nothing, when the backend token is not configured.
  */
-export async function runCreditSync(env: Env, mode: SyncMode, now: number): Promise<SyncResult | undefined> {
-  const token = env.BACKEND_INTERNAL_TOKEN;
-  if (token === undefined || token === "") {
+export async function runCreditSync(services: Services, mode: SyncMode): Promise<SyncResult | undefined> {
+  const { token, url } = services.backend;
+  if (token === undefined) {
     return undefined;
   }
   return syncCredits(
-    env.DB,
-    (from, to) => fetchCredits((url, init) => fetch(url, init), { baseUrl: env.BACKEND_URL, token }, from, to),
+    services.db,
+    (from, to) => fetchCredits(services.fetcher, { baseUrl: url, token }, from, to),
     DEFAULT_RULES,
-    now,
-    { mode },
+    services.now(),
+    mode,
   );
 }
 
@@ -31,18 +35,46 @@ export async function runCreditSync(env: Env, mode: SyncMode, now: number): Prom
  * from what is stored. A failure is logged rather than shown to the player,
  * and still uses up the allowance; the scheduled run will catch up.
  */
-export async function syncOnDemand(env: Env, now: number): Promise<void> {
+export async function syncOnDemand(services: Services): Promise<void> {
   try {
-    const claim = await env.DB.prepare(
-      "UPDATE sync_state SET on_demand_at = ? WHERE name = 'credits' AND on_demand_at <= ?",
-    )
-      .bind(now, now - ON_DEMAND_INTERVAL_MS)
-      .run();
-    if (claim.meta.changes === 0) {
+    const now = services.now();
+    const claim = services.db
+      .query("UPDATE sync_state SET on_demand_at = ? WHERE name = 'credits' AND on_demand_at <= ?")
+      .run(now, now - ON_DEMAND_INTERVAL_MS);
+    if (claim.changes === 0) {
       return;
     }
-    await runCreditSync(env, "recent", now);
+    await runCreditSync(services, "recent");
   } catch (error) {
     console.error("The on-demand credit sync failed", error);
   }
+}
+
+/** The scheduled run: a deep sync at minute 17 of each hour, a recent one every other minute. Never throws. */
+export async function runScheduledSync(services: Services): Promise<void> {
+  const mode = new Date(services.now()).getUTCMinutes() === DEEP_SYNC_MINUTE ? "deep" : "recent";
+  try {
+    const result = await runCreditSync(services, mode);
+    if (result !== undefined) {
+      console.log(JSON.stringify({ event: "credit_sync", mode, ...result }));
+    }
+  } catch (error) {
+    console.error(`The scheduled ${mode} credit sync failed`, error);
+  }
+}
+
+/** Runs the scheduled sync at the start of every minute until `stop` is called. */
+export function startSchedule(services: Services): { stop: () => void } {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const arm = (): void => {
+    timer = setTimeout(
+      () => {
+        arm();
+        void runScheduledSync(services);
+      },
+      MINUTE_MS - (Date.now() % MINUTE_MS),
+    );
+  };
+  arm();
+  return { stop: () => clearTimeout(timer) };
 }

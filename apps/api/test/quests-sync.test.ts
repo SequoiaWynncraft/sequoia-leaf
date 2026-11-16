@@ -1,15 +1,23 @@
+import type { Database } from "bun:sqlite";
+import { beforeEach, describe, expect, it } from "bun:test";
+
 import { type Activity, DEFAULT_RULES, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
-import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
 
 import { type CreditSource, syncCredits } from "../src/earning/sync.ts";
 import { getAccount, listEntries } from "../src/ledger/store.ts";
 import { loadQuestBook } from "../src/quests/store.ts";
+import { testDatabase } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const MINUTE = 60_000;
 /** Wednesday 4 November 2026, 12:00 UTC. */
 const T0 = Date.UTC(2026, 10, 4, 12);
+
+let db: Database;
+
+beforeEach(() => {
+  db = testDatabase();
+});
 
 /** One template per slot, so every test knows which quests it gets. */
 const rules: Rules = {
@@ -41,14 +49,16 @@ function feed(activities: Activity[]): CreditSource {
 }
 
 function sync(source: CreditSource, now: number) {
-  return syncCredits(env.DB, source, rules, now, { mode: "recent" });
+  return syncCredits(db, source, rules, now, "recent");
 }
 
-async function questRows() {
-  const { results } = await env.DB.prepare(
-    "SELECT slot, sequence, progress, completed_at FROM quests ORDER BY slot, sequence",
-  ).all<{ slot: string; sequence: number; progress: number; completed_at: number | null }>();
-  return results.map((row) => `${row.slot}:${row.sequence} ${row.progress}${row.completed_at === null ? "" : " done"}`);
+function questRows(): string[] {
+  return db
+    .query<{ slot: string; sequence: number; progress: number; completed_at: number | null }, []>(
+      "SELECT slot, sequence, progress, completed_at FROM quests ORDER BY slot, sequence",
+    )
+    .all()
+    .map((row) => `${row.slot}:${row.sequence} ${row.progress}${row.completed_at === null ? "" : " done"}`);
 }
 
 describe("quests in the credit sync", () => {
@@ -58,8 +68,8 @@ describe("quests in the credit sync", () => {
 
     await sync(source, T0 + 5 * MINUTE);
 
-    expect(await questRows()).toEqual(["daily:1 1", "repeatable:1 1", "weekly:1 1"]);
-    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
+    expect(questRows()).toEqual(["daily:1 1", "repeatable:1 1", "weekly:1 1"]);
+    expect(getAccount(db, alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
   });
 
   it("pays a finished quest's Leaf and XP with the raid that finished it", async () => {
@@ -69,10 +79,10 @@ describe("quests in the credit sync", () => {
     const result = await sync(source, T0 + 5 * MINUTE);
 
     // Two raids at 110, the daily at 200 and the repeatable at 50.
-    expect(result).toEqual({ status: "synced", recorded: 2, leafPaid: 470, complete: true });
-    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 470, xp: 345 });
-    expect(await questRows()).toEqual(["daily:1 2 done", "repeatable:1 2 done", "repeatable:2 0", "weekly:1 2"]);
-    const quests = (await listEntries(env.DB, alice, { limit: 10 })).filter((entry) => entry.origin === "quest");
+    expect(result).toEqual({ status: "synced", recorded: 2, leafPaid: 470 });
+    expect(getAccount(db, alice)).toEqual({ playerId: alice, balance: 470, xp: 345 });
+    expect(questRows()).toEqual(["daily:1 2 done", "repeatable:1 2 done", "repeatable:2 0", "weekly:1 2"]);
+    const quests = listEntries(db, alice, { limit: 10 }).filter((entry) => entry.origin === "quest");
     const paid = quests.toSorted((a, b) => a.idempotencyKey.localeCompare(b.idempotencyKey));
     expect(paid.map((entry) => [entry.idempotencyKey, entry.balanceDelta, entry.xpDelta])).toEqual([
       [`quest:${alice}:daily:1`, 200, 100],
@@ -89,10 +99,10 @@ describe("quests in the credit sync", () => {
 
     await sync(source, T0 + 10 * MINUTE);
 
-    expect(await questRows()).toEqual(["daily:1 2 done", "repeatable:1 2 done", "repeatable:2 1", "weekly:1 3 done"]);
+    expect(questRows()).toEqual(["daily:1 2 done", "repeatable:1 2 done", "repeatable:2 1", "weekly:1 3 done"]);
     // Three raids at 110, the daily at 200, the repeatable at 50 and the weekly at 800.
-    expect((await getAccount(env.DB, alice)).balance).toBe(1380);
-    expect((await loadQuestBook(env.DB, alice))?.dailyCharges).toBe(0);
+    expect(getAccount(db, alice).balance).toBe(1380);
+    expect(loadQuestBook(db, alice)?.dailyCharges).toBe(0);
   });
 
   it("pays a quest once when the same events are read again", async () => {
@@ -102,7 +112,7 @@ describe("quests in the credit sync", () => {
 
     const again = await sync(source, T0 + 6 * MINUTE);
 
-    expect(again).toEqual({ status: "synced", recorded: 0, leafPaid: 0, complete: true });
-    expect((await getAccount(env.DB, alice)).balance).toBe(470);
+    expect(again).toEqual({ status: "synced", recorded: 0, leafPaid: 0 });
+    expect(getAccount(db, alice).balance).toBe(470);
   });
 });

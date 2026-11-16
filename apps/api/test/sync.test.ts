@@ -1,9 +1,11 @@
+import type { Database } from "bun:sqlite";
+import { beforeEach, describe, expect, it } from "bun:test";
+
 import { type Activity, DEFAULT_RULES, type PlayerId, playerId } from "@sequoia-leaf/core";
-import { env } from "cloudflare:workers";
-import { describe, expect, it, vi } from "vitest";
 
 import { type CreditSource, RECENT_OVERLAP_MS, SETTLE_MS, syncCredits, type SyncMode } from "../src/earning/sync.ts";
 import { getAccount, listEntries } from "../src/ledger/store.ts";
+import { rejection, testDatabase } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const bob = playerId("00000000-0000-4000-8000-00000000000b");
@@ -11,6 +13,12 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 /** The first sync runs at T0, so crediting starts at T0. */
 const T0 = 1_763_000_000_000;
+
+let db: Database;
+
+beforeEach(() => {
+  db = testDatabase();
+});
 
 function raid(id: number, player: PlayerId, occurredAt: number, seasonRating = 110): Activity {
   return {
@@ -50,15 +58,15 @@ const failing: CreditSource = async () => {
   throw new Error("backend is down");
 };
 
-function sync(source: CreditSource, now: number, mode: SyncMode = "recent", maxPlayers?: number) {
-  return syncCredits(env.DB, source, DEFAULT_RULES, now, maxPlayers === undefined ? { mode } : { mode, maxPlayers });
+function sync(source: CreditSource, now: number, mode: SyncMode = "recent") {
+  return syncCredits(db, source, DEFAULT_RULES, now, mode);
 }
 
-async function recordedKeys(): Promise<string[]> {
-  const { results } = await env.DB.prepare("SELECT source_key FROM activities ORDER BY occurred_at, source_key").all<{
-    source_key: string;
-  }>();
-  return results.map((row) => row.source_key);
+function recordedKeys(): string[] {
+  return db
+    .query<{ source_key: string }, []>("SELECT source_key FROM activities ORDER BY occurred_at, source_key")
+    .all()
+    .map((row) => row.source_key);
 }
 
 describe("syncCredits", () => {
@@ -69,8 +77,8 @@ describe("syncCredits", () => {
     await sync(source, T0 + MINUTE);
 
     expect(windows).toEqual([[T0, T0 + MINUTE - SETTLE_MS]]);
-    expect(await recordedKeys()).toEqual([`raid:3:${bob}`]);
-    expect((await getAccount(env.DB, alice)).balance).toBe(0);
+    expect(recordedKeys()).toEqual([`raid:3:${bob}`]);
+    expect(getAccount(db, alice).balance).toBe(0);
   });
 
   it("records a raid and pays its season rating in Leaf and XP", async () => {
@@ -79,11 +87,11 @@ describe("syncCredits", () => {
 
     const result = await sync(source, T0 + 5 * MINUTE);
 
-    expect(result).toEqual({ status: "synced", recorded: 1, leafPaid: 110, complete: true });
-    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
-    const [entry] = await listEntries(env.DB, alice, { limit: 10 });
+    expect(result).toEqual({ status: "synced", recorded: 1, leafPaid: 110 });
+    expect(getAccount(db, alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
+    const [entry] = listEntries(db, alice, { limit: 10 });
     expect(entry).toMatchObject({ kind: "earn", origin: "raid", idempotencyKey: `raid:1:${alice}` });
-    const row = await env.DB.prepare("SELECT kind, raid, detail, season_rating, occurred_at FROM activities").first();
+    const row = db.query("SELECT kind, raid, detail, season_rating, occurred_at FROM activities").get();
     expect(row).toEqual({
       kind: "raid",
       raid: "tna",
@@ -99,8 +107,8 @@ describe("syncCredits", () => {
 
     await sync(source, T0 + 5 * MINUTE);
 
-    expect(await getAccount(env.DB, alice)).toEqual({ playerId: alice, balance: 31, xp: 31 });
-    const [entry] = await listEntries(env.DB, alice, { limit: 10 });
+    expect(getAccount(db, alice)).toEqual({ playerId: alice, balance: 31, xp: 31 });
+    const [entry] = listEntries(db, alice, { limit: 10 });
     expect(entry).toMatchObject({ origin: "war", idempotencyKey: `war:7:${alice}` });
   });
 
@@ -110,9 +118,9 @@ describe("syncCredits", () => {
 
     const result = await sync(source, T0 + 5 * MINUTE);
 
-    expect(result).toEqual({ status: "synced", recorded: 1, leafPaid: 0, complete: true });
-    expect(await recordedKeys()).toEqual([`war:7:${alice}`]);
-    expect(await listEntries(env.DB, alice, { limit: 10 })).toEqual([]);
+    expect(result).toEqual({ status: "synced", recorded: 1, leafPaid: 0 });
+    expect(recordedKeys()).toEqual([`war:7:${alice}`]);
+    expect(listEntries(db, alice, { limit: 10 })).toEqual([]);
   });
 
   it("pays each credit once when a later run reads the same events again", async () => {
@@ -122,9 +130,9 @@ describe("syncCredits", () => {
 
     const again = await sync(source, T0 + 6 * MINUTE);
 
-    expect(again).toEqual({ status: "synced", recorded: 0, leafPaid: 0, complete: true });
-    expect((await getAccount(env.DB, alice)).balance).toBe(110);
-    expect((await getAccount(env.DB, bob)).balance).toBe(110);
+    expect(again).toEqual({ status: "synced", recorded: 0, leafPaid: 0 });
+    expect(getAccount(db, alice).balance).toBe(110);
+    expect(getAccount(db, bob).balance).toBe(110);
   });
 
   it("leaves events younger than the settle delay for the next run", async () => {
@@ -133,10 +141,10 @@ describe("syncCredits", () => {
     await sync(source, T0);
 
     await sync(source, now);
-    expect(await recordedKeys()).toEqual([]);
+    expect(recordedKeys()).toEqual([]);
 
     await sync(source, now + MINUTE);
-    expect(await recordedKeys()).toEqual([`raid:1:${alice}`]);
+    expect(recordedKeys()).toEqual([`raid:1:${alice}`]);
   });
 
   it("starts a recent run a little before where the last one stopped", async () => {
@@ -158,46 +166,16 @@ describe("syncCredits", () => {
     activities.push(raid(1, bob, T0 + HOUR));
 
     await sync(source, T0 + 3 * HOUR + MINUTE);
-    expect((await getAccount(env.DB, bob)).balance).toBe(0);
+    expect(getAccount(db, bob).balance).toBe(0);
 
     await sync(source, T0 + 3 * HOUR + 2 * MINUTE, "deep");
-    expect((await getAccount(env.DB, bob)).balance).toBe(110);
-  });
-
-  it("stops at the player limit and finishes on the next run", async () => {
-    const { source } = feed([raid(1, alice, T0 + MINUTE), raid(2, bob, T0 + 2 * MINUTE)]);
-    await sync(source, T0);
-
-    const first = await sync(source, T0 + 5 * MINUTE, "recent", 1);
-    expect(first).toEqual({ status: "synced", recorded: 1, leafPaid: 110, complete: false });
-    expect(await recordedKeys()).toEqual([`raid:1:${alice}`]);
-
-    const second = await sync(source, T0 + 6 * MINUTE, "recent", 1);
-    expect(second).toEqual({ status: "synced", recorded: 1, leafPaid: 110, complete: true });
-    expect(await recordedKeys()).toEqual([`raid:1:${alice}`, `raid:2:${bob}`]);
-  });
-
-  it("checks a whole window for recorded activities in one database read", async () => {
-    const many = Array.from({ length: 300 }, (_, index) => raid(index + 1, alice, T0 + MINUTE + index));
-    const { source } = feed(many);
-    await sync(source, T0);
-    await sync(source, T0 + 5 * MINUTE);
-    const prepared = vi.spyOn(env.DB, "prepare");
-
-    const again = await sync(source, T0 + 6 * MINUTE);
-
-    expect(again).toEqual({ status: "synced", recorded: 0, leafPaid: 0, complete: true });
-    const lookups = prepared.mock.calls.filter(([sql]) => sql.includes("FROM activities"));
-    expect(lookups).toHaveLength(1);
-    prepared.mockRestore();
+    expect(getAccount(db, bob).balance).toBe(110);
   });
 
   it("does nothing while another run holds the lease", async () => {
     const { source } = feed([]);
     await sync(source, T0);
-    await env.DB.prepare("UPDATE sync_state SET locked_until = ? WHERE name = 'credits'")
-      .bind(T0 + 2 * MINUTE)
-      .run();
+    db.query("UPDATE sync_state SET locked_until = ? WHERE name = 'credits'").run(T0 + 2 * MINUTE);
 
     expect(await sync(source, T0 + MINUTE)).toEqual({ status: "busy" });
     expect(await sync(source, T0 + 2 * MINUTE)).toMatchObject({ status: "synced" });
@@ -206,7 +184,7 @@ describe("syncCredits", () => {
   it("releases the lease and pays nothing when the feed fails", async () => {
     const { source } = feed([raid(1, alice, T0 + MINUTE)]);
     await sync(source, T0);
-    await expect(sync(failing, T0 + 5 * MINUTE)).rejects.toThrow("backend is down");
+    expect(await rejection(sync(failing, T0 + 5 * MINUTE))).toEqual(new Error("backend is down"));
 
     expect(await sync(source, T0 + 5 * MINUTE)).toMatchObject({ status: "synced", recorded: 1 });
   });

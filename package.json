@@ -8,11 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "verify": "bun fmt --check && bun run types && bun run lint && bun check --build && bun run test",
+    "verify": "bun fmt --check && bun run lint && bun check --build && bun run test",
     "lint": "oxlint --type-aware --deny-warnings",
-    "types": "bun run --filter @sequoia-leaf/api types",
     "test": "bun run --filter '*' test",
-    "dev": "bun run --filter @sequoia-leaf/api dev"
+    "dev": "bun run --filter @sequoia-leaf/api dev",
+    "start": "bun apps/api/src/main.ts"
   },
   "devDependencies": {
     "oxlint": "1.93.0",
