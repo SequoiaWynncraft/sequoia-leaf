@@ -27,6 +27,6 @@ import {
 }
 
 import {
-  to = coolify_environment_variable.backend_internal_token
-  id = "application:0lb6odu6pvqxsftlnc0aqg0s:5og033e5mccbcbtjpjrf8wcc"
+  to = cloudflare_r2_bucket.state
+  id = "${local.account_id}/sequoia-opentofu-state/default"
 }

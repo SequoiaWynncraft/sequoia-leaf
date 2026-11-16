@@ -1,6 +1,9 @@
 # Things Leaf uses but does not own. They belong to the Sequoia server and its
 # Coolify, are shared with the backend and the site, and are not managed here.
 locals {
+  # The Sequoia Cloudflare account, which holds the zone and the R2 buckets.
+  account_id = "0641c96244af5c3212601f04a36e66ae"
+
   # The seqwawa.com zone in Cloudflare.
   zone_id = "93eca720df561fc923ea214b551ee37f"
 
