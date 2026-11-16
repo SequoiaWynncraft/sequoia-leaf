@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -59,6 +59,16 @@ describe("snapshots", () => {
     expect(snapshotIfDue(db, backups, T0 + SNAPSHOT_INTERVAL_MS)).toBeDefined();
 
     expect(names()).toEqual(["leaf-2026-11-16T13-00-00Z.db", "leaf-2026-11-16T19-00-00Z.db"]);
+  });
+
+  it("does not count a copy that was cut short, and replaces it", () => {
+    const backups = join(directory, "backups");
+    mkdirSync(backups);
+    writeFileSync(join(backups, "leaf-2026-11-16T13-00-00Z.db.partial"), "half a database");
+
+    expect(snapshotIfDue(db, backups, T0)).toBeDefined();
+
+    expect(readdirSync(backups)).toEqual(["leaf-2026-11-16T13-00-00Z.db"]);
   });
 
   it("keeps the newest snapshots and leaves other files alone", () => {

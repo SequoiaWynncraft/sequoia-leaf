@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { mkdirSync, readdirSync, rmSync } from "node:fs";
+import { mkdirSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 /** A new snapshot is taken when the newest one is this old. */
@@ -48,7 +48,12 @@ export function listSnapshots(directory: string): { name: string; takenAt: numbe
 export function takeSnapshot(db: Database, directory: string, now: number): string {
   mkdirSync(directory, { recursive: true });
   const path = join(directory, nameAt(now));
-  db.query("VACUUM INTO ?").run(path);
+  // The copy is written under another name and renamed when it is complete,
+  // so a copy that was cut short never counts as a snapshot.
+  const unfinished = `${path}.partial`;
+  rmSync(unfinished, { force: true });
+  db.query("VACUUM INTO ?").run(unfinished);
+  renameSync(unfinished, path);
   const snapshots = listSnapshots(directory);
   for (const old of snapshots.slice(0, Math.max(0, snapshots.length - SNAPSHOTS_KEPT))) {
     rmSync(join(directory, old.name));
