@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -61,14 +61,22 @@ describe("snapshots", () => {
     expect(names()).toEqual(["leaf-2026-11-16T13-00-00Z.db", "leaf-2026-11-16T19-00-00Z.db"]);
   });
 
-  it("does not count a copy that was cut short, and replaces it", () => {
+  it("does not count a copy that was cut short, and deletes it once it is clearly abandoned", () => {
     const backups = join(directory, "backups");
     mkdirSync(backups);
-    writeFileSync(join(backups, "leaf-2026-11-16T13-00-00Z.db.partial"), "half a database");
+    const abandoned = join(backups, "leaf-2026-11-16T07-00-00Z.db.one.partial");
+    const inProgress = join(backups, "leaf-2026-11-16T13-00-00Z.db.two.partial");
+    writeFileSync(abandoned, "half a database");
+    writeFileSync(inProgress, "half a database");
+    const twoHoursAgo = new Date(Date.now() - 2 * HOUR);
+    utimesSync(abandoned, twoHoursAgo, twoHoursAgo);
 
     expect(snapshotIfDue(db, backups, T0)).toBeDefined();
 
-    expect(readdirSync(backups)).toEqual(["leaf-2026-11-16T13-00-00Z.db"]);
+    expect(readdirSync(backups).toSorted((a, b) => a.localeCompare(b))).toEqual([
+      "leaf-2026-11-16T13-00-00Z.db",
+      "leaf-2026-11-16T13-00-00Z.db.two.partial",
+    ]);
   });
 
   it("keeps the newest snapshots and leaves other files alone", () => {

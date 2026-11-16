@@ -1,11 +1,14 @@
 import type { Database } from "bun:sqlite";
-import { mkdirSync, readdirSync, renameSync, rmSync } from "node:fs";
+import { mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /** A new snapshot is taken when the newest one is this old. */
 export const SNAPSHOT_INTERVAL_MS = 6 * 60 * 60_000;
 /** A week of snapshots at four a day. Older ones are deleted. */
 export const SNAPSHOTS_KEPT = 28;
+
+/** An unfinished copy this old was abandoned by a server that stopped mid-copy. A copy takes seconds at most. */
+const ABANDONED_AFTER_MS = 60 * 60_000;
 
 const NAME = /^leaf-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})Z\.db$/;
 
@@ -49,16 +52,32 @@ export function takeSnapshot(db: Database, directory: string, now: number): stri
   mkdirSync(directory, { recursive: true });
   const path = join(directory, nameAt(now));
   // The copy is written under another name and renamed when it is complete,
-  // so a copy that was cut short never counts as a snapshot.
-  const unfinished = `${path}.partial`;
-  rmSync(unfinished, { force: true });
-  db.query("VACUUM INTO ?").run(unfinished);
-  renameSync(unfinished, path);
+  // so a copy that was cut short never counts as a snapshot. The name is
+  // unique to this attempt: during a deploy two servers can copy at once.
+  const unfinished = `${path}.${crypto.randomUUID()}.partial`;
+  try {
+    db.query("VACUUM INTO ?").run(unfinished);
+    renameSync(unfinished, path);
+  } finally {
+    rmSync(unfinished, { force: true });
+  }
+  removeAbandonedCopies(directory);
   const snapshots = listSnapshots(directory);
   for (const old of snapshots.slice(0, Math.max(0, snapshots.length - SNAPSHOTS_KEPT))) {
     rmSync(join(directory, old.name));
   }
   return path;
+}
+
+/** Deletes unfinished copies left behind by a server that stopped mid-copy. */
+function removeAbandonedCopies(directory: string): void {
+  for (const name of readdirSync(directory)) {
+    const path = join(directory, name);
+    // File times come from the real clock, so this compares against it too.
+    if (name.endsWith(".partial") && Date.now() - statSync(path).mtimeMs > ABANDONED_AFTER_MS) {
+      rmSync(path, { force: true });
+    }
+  }
 }
 
 /** Takes a snapshot when there is none younger than the interval. Returns its path, or undefined when none was due. */
