@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 
-import { meRoutes } from "./http/me.ts";
+import { DEFAULT_STREAM_TUNING, meRoutes, type StreamTuning } from "./http/me.ts";
 import type { Services } from "./services.ts";
 
 /** The HTTP API. */
-export function createApp(services: Services): Hono {
+export function createApp(services: Services, streamTuning: StreamTuning = DEFAULT_STREAM_TUNING): Hono {
   const app = new Hono();
 
   // Healthy means the database answers, since nothing works without it.
@@ -13,7 +13,7 @@ export function createApp(services: Services): Hono {
     return c.json({ status: "ok" });
   });
 
-  app.route("/v1/me", meRoutes(services));
+  app.route("/v1/me", meRoutes(services, streamTuning));
 
   // Every error response has the same shape: a stable machine-readable `code`
   // and a human-readable `message`. Clients branch on `code` only.

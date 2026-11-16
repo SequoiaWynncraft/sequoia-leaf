@@ -38,7 +38,12 @@ describe("openDatabase", () => {
 
     expect(migrate(db)).toEqual([]);
     const applied = db.query<{ name: string }, []>("SELECT name FROM schema_migrations ORDER BY name").all();
-    expect(applied.map((row) => row.name)).toEqual(["0001_ledger.sql", "0002_activities.sql", "0003_quests.sql"]);
+    expect(applied.map((row) => row.name)).toEqual([
+      "0001_ledger.sql",
+      "0002_activities.sql",
+      "0003_quests.sql",
+      "0004_events.sql",
+    ]);
     db.close();
   });
 
