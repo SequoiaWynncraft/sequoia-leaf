@@ -36,14 +36,14 @@ const rules: QuestRules = {
 };
 
 let nextId = 1;
-function raid(occurredAt: number, key: RaidKey = "tna"): Activity {
+function raid(occurredAt: number, key: RaidKey = "tna", seasonRating = 110): Activity {
   nextId += 1;
   return {
     kind: "raid",
     sourceKey: `raid:${nextId}:${alice}`,
     playerId: alice,
     occurredAt,
-    seasonRating: 110,
+    seasonRating,
     raid: key,
     raidName: key,
   };
@@ -72,6 +72,16 @@ function play(book: QuestBook, activities: Activity[], questRules = rules) {
     completed.push(...step.completed.map((quest) => `${quest.slot}:${quest.sequence}`));
   }
   return { book: current, completed };
+}
+
+/** Rules whose only quest is a daily for this much season rating. */
+function ratingDaily(amount: number): QuestRules {
+  return {
+    dailyChargeCap: 3,
+    templates: [
+      { id: "rating", slot: "daily", objective: { type: "season_rating", amount }, reward: { leaf: 1, xp: 1 } },
+    ],
+  };
 }
 
 function progress(book: QuestBook, slot: QuestSlot): number | undefined {
@@ -144,6 +154,38 @@ describe("counting activities", () => {
     );
 
     expect(completed).toEqual(["daily:1"]);
+  });
+
+  it("adds up the season rating of raids and wars toward a season rating quest", () => {
+    const { book, completed } = play(
+      openQuestBook(WEDNESDAY_NOON),
+      [raid(WEDNESDAY_NOON, "wtp", 440), war(WEDNESDAY_NOON + 1)],
+      ratingDaily(1000),
+    );
+
+    expect(progress(book, "daily")).toBe(500);
+    expect(completed).toEqual([]);
+  });
+
+  it("finishes a season rating quest on reaching the amount and shows no more than the amount", () => {
+    const { book, completed } = play(
+      openQuestBook(WEDNESDAY_NOON),
+      [raid(WEDNESDAY_NOON, "wtp", 440), raid(WEDNESDAY_NOON + 1, "wtp", 440), raid(WEDNESDAY_NOON + 2, "notg", 220)],
+      ratingDaily(1000),
+    );
+
+    expect(completed).toEqual(["daily:1"]);
+    expect(book.latest.daily).toMatchObject({ progress: 1000, completedAt: WEDNESDAY_NOON + 2 });
+  });
+
+  it("leaves a season rating quest alone for an activity that earned none", () => {
+    const step = applyActivityToQuests(
+      openQuestBook(WEDNESDAY_NOON),
+      raid(WEDNESDAY_NOON, "tna", 0),
+      ratingDaily(1000),
+    );
+
+    expect(progress(step.book, "daily")).toBe(0);
   });
 
   it("ignores an activity from before a quest started", () => {
@@ -303,6 +345,7 @@ describe("calendar and wording", () => {
     expect(questTitle({ type: "raids", count: 8 })).toBe("Complete 8 raids");
     expect(questTitle({ type: "raids", count: 1 })).toBe("Complete 1 raid");
     expect(questTitle({ type: "wars", count: 2 })).toBe("Take part in 2 wars");
+    expect(questTitle({ type: "season_rating", amount: 1000 })).toBe("Earn 1,000 season rating");
   });
 });
 
