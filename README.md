@@ -180,7 +180,8 @@ Merging to `main` deploys. Coolify on the Sequoia server builds the
 in the `sequoia-leaf` project. The server applies new migrations when it
 starts, before it takes requests.
 
-What the Coolify app is set up with:
+The app's settings and the DNS record are written down in [`infra/`](infra/)
+as OpenTofu configuration. What the Coolify app is set up with:
 
 - **A volume at `/data`** (`leaf-data`), which holds the database and survives
   deploys. The image runs as an unprivileged user that owns `/data`.
