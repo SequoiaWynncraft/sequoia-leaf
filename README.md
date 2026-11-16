@@ -84,11 +84,13 @@ calculated from their last stored state.
 
 Responses are JSON with `snake_case` fields. Errors are `{ "code", "message" }`.
 
-| Route               | What it returns                                            |
-| ------------------- | ---------------------------------------------------------- |
-| `GET /healthz`      | `{ "status": "ok" }`                                       |
-| `GET /v1/me`        | The signed-in member's Leaf, XP and level.                 |
-| `GET /v1/me/quests` | Their quests, banked dailies and recently finished quests. |
+| Route                      | What it returns                                            |
+| -------------------------- | ---------------------------------------------------------- |
+| `GET /healthz`             | `{ "status": "ok" }`                                       |
+| `GET /v1/me`               | The signed-in member's Leaf, XP and level.                 |
+| `GET /v1/me/quests`        | Their quests, banked dailies and recently finished quests. |
+| `GET /v1/me/events`        | What happened to them recently, oldest first.              |
+| `GET /v1/me/events/stream` | The same events as they happen, as server-sent events.     |
 
 `/v1/me` routes take the member's Sequoia session, as `Authorization: Bearer`
 or as the site's `seq_session` cookie. The server asks sequoia-backend who the
@@ -97,9 +99,43 @@ backend. Only current guild members are let in.
 
 `GET /v1/me/quests?sync=1` reads the credit feed first, at most once every 15
 seconds, so a raid that just finished shows up without waiting for the next
-scheduled run. A client that wants a pop-up when a quest completes calls this
-shortly after the player finishes a raid or war, and shows the quests in
-`recently_completed` it has not shown before.
+scheduled run.
+
+### Events
+
+An event is something a client would want to show when it happens. Each one is
+written in the same transaction as the change it reports, and has an id that
+only grows.
+
+| Type              | When                       | `data`                                          |
+| ----------------- | -------------------------- | ----------------------------------------------- |
+| `leaf_earned`     | A raid or war paid Leaf.   | `source`, `leaf`, `xp`, `detail`, `occurred_at` |
+| `quest_completed` | A quest finished and paid. | `quest`, in the shape `/v1/me/quests` uses      |
+| `level_up`        | XP reached a new level.    | `level`                                         |
+
+`detail` is the raid's name or the territory fought over. `occurred_at` is when
+the raid or war was played, which can be well before the event: a credit that
+appears late is paid, and reported, when it appears.
+
+`GET /v1/me/events` answers `{ "events": [{ "id", "type", "created_at", "data" }] }`.
+With `?after=<id>` it lists up to 100 events after that id; without, the newest 50.
+
+`GET /v1/me/events/stream` is a server-sent event stream. Every message has
+the event's id as `id`, its type as `event`, and the same JSON object as above
+as `data`. To show a pop-up when a quest completes, keep this stream open and
+react to `quest_completed`.
+
+- A client that sends no position gets only what happens from then on.
+- The stream opens with a frame that has only an `id`, the position it starts
+  from, so a client whose stream ends before any event arrives still knows
+  where to resume.
+- A client that reconnects sends the last id it saw as the `Last-Event-ID`
+  header, or as `?after=<id>`, and first gets everything it missed. Browsers'
+  `EventSource` does this by itself.
+- The server closes a stream after 15 minutes. Reconnect the same way; this is
+  when the session is checked again.
+- A quiet stream carries a comment line every 20 seconds to keep the
+  connection open. Ignore lines that start with `:`.
 
 ## Rules the code is built on
 
