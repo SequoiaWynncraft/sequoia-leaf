@@ -28,16 +28,21 @@ bun run dev      # run the server at http://localhost:3000, restarting on change
 
 The server is configured with environment variables:
 
-| Variable                 | Default                   | What it is                                              |
-| ------------------------ | ------------------------- | ------------------------------------------------------- |
-| `PORT`                   | `3000`                    | The port to listen on.                                  |
-| `DATABASE_PATH`          | `data/leaf.db`            | The SQLite file. It is created when missing.            |
-| `BACKUP_DIR`             | `backups` beside the file | Where snapshots of the database are written.            |
-| `BACKEND_URL`            | `https://api.seqwawa.com` | sequoia-backend, for the credit feed and session check. |
-| `BACKEND_INTERNAL_TOKEN` | none                      | sequoia-backend's `APP_INTERNAL_API_TOKEN`.             |
+| Variable                      | Default                   | What it is                                              |
+| ----------------------------- | ------------------------- | ------------------------------------------------------- |
+| `PORT`                        | `3000`                    | The port to listen on.                                  |
+| `DATABASE_PATH`               | `data/leaf.db`            | The SQLite file. It is created when missing.            |
+| `BACKUP_DIR`                  | `backups` beside the file | Where snapshots of the database are written.            |
+| `BACKEND_URL`                 | `https://api.seqwawa.com` | sequoia-backend, for the credit feed and session check. |
+| `BACKEND_INTERNAL_TOKEN`      | none                      | sequoia-backend's `APP_INTERNAL_API_TOKEN`.             |
+| `BACKUP_S3_ENDPOINT`          | none                      | The S3 endpoint snapshots are copied to.                |
+| `BACKUP_S3_BUCKET`            | none                      | The bucket there.                                       |
+| `BACKUP_S3_ACCESS_KEY_ID`     | none                      | A key that may write to that bucket.                    |
+| `BACKUP_S3_SECRET_ACCESS_KEY` | none                      | Its secret.                                             |
 
 Without `BACKEND_INTERNAL_TOKEN` the server answers requests but does not read
-the credit feed, which is what local development wants.
+the credit feed, which is what local development wants. Without all four
+`BACKUP_S3_*` variables, snapshots stay on the machine.
 
 ## Layout
 
@@ -215,6 +220,13 @@ is a week. A snapshot is an ordinary SQLite file. To restore one, stop the app
 in Coolify, copy the snapshot over `/data/leaf.db`, delete `leaf.db-wal` and
 `leaf.db-shm` beside it, and start the app.
 
-The snapshots are on the same volume as the database, so they protect against
-a bad deploy or a damaged file, not against losing the server's disk. Nothing
-copies them off the server yet.
+When the four `BACKUP_S3_*` variables are set, each new snapshot is also
+copied off the server to that bucket. A failed copy is tried again ten minutes
+later. Only the newest snapshot is copied, so if the bucket is unreachable for
+longer than six hours, the snapshots taken meanwhile are skipped, apart from
+the last. Leaf never deletes anything in the bucket; give it a rule that
+deletes old copies. The local snapshots protect against a bad deploy, the
+copies against losing the server.
+
+To restore from the bucket, download a copy with any S3 client, or from the
+Cloudflare dashboard for R2, and restore it as above.

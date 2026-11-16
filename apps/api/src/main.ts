@@ -1,4 +1,5 @@
 import { createApp } from "./app.ts";
+import { bucketOffsite, offsiteCopier } from "./backup/offsite.ts";
 import { snapshotIfDue } from "./backup/snapshot.ts";
 import { readConfig } from "./config.ts";
 import { openDatabase } from "./db.ts";
@@ -21,6 +22,8 @@ const server = Bun.serve({
   idleTimeout: 60,
   fetch: createApp(services).fetch,
 });
+const copyOffsite =
+  config.offsite === undefined ? undefined : offsiteCopier(bucketOffsite(config.offsite), config.backupDirectory);
 const schedule = everyMinute(async () => {
   await runScheduledSync(services);
   try {
@@ -31,11 +34,33 @@ const schedule = everyMinute(async () => {
   } catch (error) {
     console.error("Taking a snapshot of the database failed", error);
   }
+  if (copyOffsite !== undefined) {
+    try {
+      const name = await copyOffsite(services.now());
+      if (name !== undefined) {
+        console.log(JSON.stringify({ event: "snapshot_copied_offsite", name }));
+      }
+    } catch (error) {
+      console.error("Copying a snapshot off the server failed; trying again in ten minutes", error);
+    }
+  }
 });
 
-console.log(JSON.stringify({ event: "started", port: server.port, database: config.databasePath }));
+console.log(
+  JSON.stringify({
+    event: "started",
+    port: server.port,
+    database: config.databasePath,
+    offsite_bucket: config.offsite?.bucket ?? null,
+  }),
+);
 if (config.backendToken === undefined) {
   console.warn("BACKEND_INTERNAL_TOKEN is not set: serving requests, but not reading the credit feed");
+}
+if (config.offsitePartlySet.length > 0) {
+  console.warn(
+    `Only ${config.offsitePartlySet.join(", ")} of the BACKUP_S3_* variables are set: snapshots stay on this machine`,
+  );
 }
 
 // A deploy stops the old container with SIGTERM. Finish the requests in
