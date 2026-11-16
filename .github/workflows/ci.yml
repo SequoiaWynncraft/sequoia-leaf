@@ -36,6 +36,27 @@ jobs:
       - name: Test
         run: bun run test
 
+  # Checks that the infrastructure configuration is well-formed. It does not
+  # compare it with production: that needs credentials.
+  infra:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          version: "2026.10.17"
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          install_args: opentofu
+      - name: Format
+        run: tofu -chdir=infra fmt -check -diff
+      - name: Validate
+        run: |
+          tofu -chdir=infra init -backend=false -input=false -lockfile=readonly
+          tofu -chdir=infra validate
+
   image:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
