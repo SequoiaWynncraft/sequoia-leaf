@@ -6,7 +6,6 @@ import { syncCredits, type SyncMode, type SyncResult } from "./sync.ts";
 
 /** A player asking for fresh quests triggers a sync at most this often. */
 const ON_DEMAND_INTERVAL_MS = 15_000;
-const MINUTE_MS = 60_000;
 /** The minute of each hour whose run re-reads the last week instead of the last few minutes. */
 const DEEP_SYNC_MINUTE = 17;
 
@@ -61,20 +60,4 @@ export async function runScheduledSync(services: Services): Promise<void> {
   } catch (error) {
     console.error(`The scheduled ${mode} credit sync failed`, error);
   }
-}
-
-/** Runs the scheduled sync at the start of every minute until `stop` is called. */
-export function startSchedule(services: Services): { stop: () => void } {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const arm = (): void => {
-    timer = setTimeout(
-      () => {
-        arm();
-        void runScheduledSync(services);
-      },
-      MINUTE_MS - (Date.now() % MINUTE_MS),
-    );
-  };
-  arm();
-  return { stop: () => clearTimeout(timer) };
 }

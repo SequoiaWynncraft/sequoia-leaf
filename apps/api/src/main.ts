@@ -1,7 +1,9 @@
 import { createApp } from "./app.ts";
+import { snapshotIfDue } from "./backup/snapshot.ts";
 import { readConfig } from "./config.ts";
 import { openDatabase } from "./db.ts";
-import { startSchedule } from "./earning/run.ts";
+import { runScheduledSync } from "./earning/run.ts";
+import { everyMinute } from "./schedule.ts";
 import type { Services } from "./services.ts";
 
 const config = readConfig(Bun.env);
@@ -14,7 +16,17 @@ const services: Services = {
 };
 
 const server = Bun.serve({ port: config.port, fetch: createApp(services).fetch });
-const schedule = startSchedule(services);
+const schedule = everyMinute(async () => {
+  await runScheduledSync(services);
+  try {
+    const path = snapshotIfDue(db, config.backupDirectory, services.now());
+    if (path !== undefined) {
+      console.log(JSON.stringify({ event: "snapshot", path }));
+    }
+  } catch (error) {
+    console.error("Taking a snapshot of the database failed", error);
+  }
+});
 
 console.log(JSON.stringify({ event: "started", port: server.port, database: config.databasePath }));
 if (config.backendToken === undefined) {
