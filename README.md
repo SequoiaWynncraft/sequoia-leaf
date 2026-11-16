@@ -10,15 +10,11 @@ with type-aware rules.
 
 ## Status
 
-Live at `https://leaf.seqwawa.com` since 16 November 2026. It reads
-sequoia-backend's player credit feed every minute, pays Leaf and XP for raids
-and wars, and runs quests on top of them. Signed-in members can read their
-balance, level and quests. There is no way to spend Leaf yet and there are no
-staff endpoints.
-
-Production is moving from a Cloudflare Worker to the Sequoia server. Until
-that is done, `leaf.seqwawa.com` is served by the Worker built from commit
-`8448be8`.
+Live at `https://leaf.seqwawa.com` since 16 November 2026, on the Sequoia
+server. It reads sequoia-backend's player credit feed every minute, pays Leaf
+and XP for raids and wars, and runs quests on top of them. Signed-in members
+can read their balance, level and quests. There is no way to spend Leaf yet
+and there are no staff endpoints.
 
 ## Getting started
 
@@ -36,6 +32,7 @@ The server is configured with environment variables:
 | ------------------------ | ------------------------- | ------------------------------------------------------- |
 | `PORT`                   | `3000`                    | The port to listen on.                                  |
 | `DATABASE_PATH`          | `data/leaf.db`            | The SQLite file. It is created when missing.            |
+| `BACKUP_DIR`             | `backups` beside the file | Where snapshots of the database are written.            |
 | `BACKEND_URL`            | `https://api.seqwawa.com` | sequoia-backend, for the credit feed and session check. |
 | `BACKEND_INTERNAL_TOKEN` | none                      | sequoia-backend's `APP_INTERNAL_API_TOKEN`.             |
 
@@ -134,19 +131,45 @@ shortly after the player finishes a raid or war, and shows the quests in
 
 ## Deploying
 
-The production image is the `Dockerfile` at the root. It runs the server as an
-unprivileged user and keeps the database in `/data`, which has to be a volume
-that survives deploys:
+Merging to `main` deploys. Coolify on the Sequoia server builds the
+`Dockerfile` and replaces the running container; the app is `sequoia-leaf-prod`
+in the `sequoia-leaf` project. The server applies new migrations when it
+starts, before it takes requests.
+
+What the Coolify app is set up with:
+
+- **A volume at `/data`** (`leaf-data`), which holds the database and survives
+  deploys. The image runs as an unprivileged user that owns `/data`.
+- **`BACKEND_URL=http://sequoia-backend:8081`**, the backend's address on the
+  server's private Docker network, so the credit feed and session checks never
+  leave the machine.
+- **`BACKEND_INTERNAL_TOKEN`**, the backend's `APP_INTERNAL_API_TOKEN`.
+- **The network alias `sequoia-leaf`**, so other services on the server can
+  reach it at `http://sequoia-leaf:3000`.
+- **The domain `https://leaf.seqwawa.com`**. Its DNS record points straight at
+  the server and is not proxied by Cloudflare; the certificate comes from
+  Let's Encrypt.
+
+During a deploy the old and the new container run side by side for a few
+seconds on the same database file. That is safe: SQLite locks the file between
+them, and the credit sync's lease lets only one of them read the feed.
+Otherwise the service is built to run as a single instance.
+
+To run the image anywhere else:
 
 ```sh
 docker build --tag sequoia-leaf .
 docker run --publish 3000:3000 --volume leaf-data:/data --env BACKEND_INTERNAL_TOKEN=... sequoia-leaf
 ```
 
-The server applies new migrations when it starts, before it takes requests. It
-is built to run as a single instance: SQLite has one writer, and the credit
-sync's schedule lives in the process.
+## Backups
 
-The `seqwawa.com` zone redirects every hostname that is not on an allowlist to
-the main site (the "Catch-all unused" redirect rule). `leaf.seqwawa.com` is on
-that list; a new hostname has to be added to it before it will serve anything.
+Every six hours the server writes a snapshot, a complete copy of the database
+consistent as of one moment, to `/data/backups`, and keeps the newest 28, which
+is a week. A snapshot is an ordinary SQLite file. To restore one, stop the app
+in Coolify, copy the snapshot over `/data/leaf.db`, delete `leaf.db-wal` and
+`leaf.db-shm` beside it, and start the app.
+
+The snapshots are on the same volume as the database, so they protect against
+a bad deploy or a damaged file, not against losing the server's disk. Nothing
+copies them off the server yet.
