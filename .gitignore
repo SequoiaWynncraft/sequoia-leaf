@@ -5,3 +5,9 @@ node_modules/
 
 # The local development database.
 data/
+
+# OpenTofu's downloaded providers, and any state or saved plan made by hand.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
