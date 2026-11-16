@@ -13,10 +13,11 @@ plugin, which runs them inside the Workers runtime through wrangler.
 
 ## Status
 
-The Worker reads sequoia-backend's player credit feed every minute, pays Leaf
-and XP for raids and wars, and runs quests on top of them. Signed-in members
-can read their balance, level and quests. There is no way to spend Leaf yet,
-no staff endpoints, and nothing is deployed.
+Live at `https://leaf.seqwawa.com` since 16 November 2026. The Worker reads
+sequoia-backend's player credit feed every minute, pays Leaf and XP for raids
+and wars, and runs quests on top of them. Signed-in members can read their
+balance, level and quests. There is no way to spend Leaf yet and there are no
+staff endpoints.
 
 ## Getting started
 
@@ -114,3 +115,21 @@ shortly after the player finishes a raid or war, and shows the quests in
    decides an amount, an outcome or whether an action is allowed is a pure
    function in `core`, with a test beside it. Worker tests run against a real
    local D1 database; the database is never mocked.
+
+## Deploying
+
+Nothing deploys automatically. From `apps/api`, signed in to the Sequoia
+Cloudflare account:
+
+```sh
+wrangler d1 migrations apply sequoia-leaf --remote   # only when there are new migrations
+wrangler deploy
+```
+
+Apply migrations before deploying code that needs them. The Worker's one
+secret, `BACKEND_INTERNAL_TOKEN`, is sequoia-backend's `APP_INTERNAL_API_TOKEN`
+and is set with `wrangler secret put BACKEND_INTERNAL_TOKEN`.
+
+The `seqwawa.com` zone redirects every hostname that is not on an allowlist to
+the main site (the "Catch-all unused" redirect rule). `leaf.seqwawa.com` is on
+that list; a new hostname has to be added to it before it will serve anything.
