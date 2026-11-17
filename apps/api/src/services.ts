@@ -11,6 +11,12 @@ export interface Services {
     /** The backend's internal API token. Without it the credit feed is not read. */
     readonly token: string | undefined;
   };
+  readonly sierra: {
+    /** Origin of Sierra's internal API, such as `http://sequoia-sierra:8082`. Without it the awards feed is not read. */
+    readonly url: string | undefined;
+    /** The internal API token, which Sierra shares with the backend. */
+    readonly token: string | undefined;
+  };
   readonly fetcher: Fetcher;
   /** The current time in milliseconds since the Unix epoch. */
   readonly now: () => number;

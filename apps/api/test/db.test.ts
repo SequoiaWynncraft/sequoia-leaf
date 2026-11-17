@@ -46,6 +46,22 @@ describe("openDatabase", () => {
       "0003_quests.sql",
       "0004_events.sql",
       "0005_season_rating_quests.sql",
+      "0006_achievement_sync.sql",
+    ]);
+    db.close();
+  });
+
+  it("gives the awards feed its own lease and cursor, not started yet", () => {
+    const db = new Database(":memory:");
+    migrate(db);
+    const states = db
+      .query<{ name: string; started_at: number | null; cursor: number | null }, []>(
+        "SELECT name, started_at, cursor FROM sync_state ORDER BY name",
+      )
+      .all();
+    expect(states).toEqual([
+      { name: "achievements", started_at: null, cursor: null },
+      { name: "credits", started_at: null, cursor: null },
     ]);
     db.close();
   });
@@ -63,7 +79,11 @@ describe("openDatabase", () => {
                                  ('${alice}', 'weekly', 1, 'weekly.wars.15', 'wars', NULL, 15, 800, 400, 15, 10, 20, 15)`,
     );
 
-    expect(migrate(db)).toEqual(["0005_season_rating_quests.sql"]);
+    expect(migrate(db)).toEqual(
+      readdirSync(MIGRATIONS)
+        .filter((file) => file >= "0005")
+        .toSorted(),
+    );
 
     expect(db.query("SELECT * FROM quests ORDER BY slot").all()).toEqual([
       {

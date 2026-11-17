@@ -80,5 +80,13 @@ resource "coolify_environment_variable" "backend_url" {
   value            = "http://sequoia-backend:8081"
 }
 
+# Sierra's internal API, which lists achievement awards for Leaf to pay. It
+# takes the same internal token as the backend.
+resource "coolify_environment_variable" "sierra_url" {
+  application_uuid = coolify_application_github_app.leaf.uuid
+  key              = "SIERRA_URL"
+  value            = "http://sequoia-sierra:8082"
+}
+
 # BACKEND_INTERNAL_TOKEN is set by hand in Coolify and not managed here. The
 # backend owns the value, and managing the variable would put it in the state.
