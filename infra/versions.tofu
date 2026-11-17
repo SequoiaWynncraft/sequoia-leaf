@@ -1,17 +1,16 @@
 terraform {
   required_version = "~> 1.13"
 
-  # The state is in R2, in a bucket this configuration also manages
-  # (state.tofu). Credentials come from AWS_ACCESS_KEY_ID and
-  # AWS_SECRET_ACCESS_KEY: for R2 they are a Cloudflare API token's id and the
-  # SHA-256 of its value.
+  # The state is in the R2 bucket `sequoia-opentofu-state`, which is in a
+  # separate Cloudflare account rather than the Sequoia one, and is not
+  # managed here. The endpoint, which names that account, comes from
+  # AWS_ENDPOINT_URL_S3. The credentials come from AWS_ACCESS_KEY_ID and
+  # AWS_SECRET_ACCESS_KEY: an R2 token that can only read and write objects
+  # in that one bucket.
   backend "s3" {
-    bucket = "sequoia-opentofu-state"
-    key    = "sequoia-leaf/terraform.tfstate"
-    region = "auto"
-    endpoints = {
-      s3 = "https://0641c96244af5c3212601f04a36e66ae.r2.cloudflarestorage.com"
-    }
+    bucket                      = "sequoia-opentofu-state"
+    key                         = "sequoia-leaf/terraform.tfstate"
+    region                      = "auto"
     use_path_style              = true
     skip_credentials_validation = true
     skip_region_validation      = true
