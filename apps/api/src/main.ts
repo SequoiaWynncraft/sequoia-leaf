@@ -1,3 +1,4 @@
+import { runScheduledAchievementSync } from "./achievements/run.ts";
 import { createApp } from "./app.ts";
 import { bucketOffsite, offsiteCopier } from "./backup/offsite.ts";
 import { snapshotIfDue } from "./backup/snapshot.ts";
@@ -12,6 +13,7 @@ const db = openDatabase(config.databasePath);
 const services: Services = {
   db,
   backend: { url: config.backendUrl, token: config.backendToken },
+  sierra: { url: config.sierraUrl, token: config.backendToken },
   fetcher: (url, init) => fetch(url, init),
   now: () => Date.now(),
 };
@@ -26,6 +28,7 @@ const copyOffsite =
   config.offsite === undefined ? undefined : offsiteCopier(bucketOffsite(config.offsite), config.backupDirectory);
 const schedule = everyMinute(async () => {
   await runScheduledSync(services);
+  await runScheduledAchievementSync(services);
   try {
     const path = snapshotIfDue(db, config.backupDirectory, services.now());
     if (path !== undefined) {
@@ -52,6 +55,7 @@ console.log(
     port: server.port,
     database: config.databasePath,
     offsite_bucket: config.offsite?.bucket ?? null,
+    awards_feed: config.sierraUrl ?? null,
   }),
 );
 if (config.backendToken === undefined) {

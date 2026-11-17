@@ -12,6 +12,12 @@ export interface Config {
   readonly backendUrl: string;
   /** sequoia-backend's `APP_INTERNAL_API_TOKEN`. Without it the credit feed is not read. */
   readonly backendToken: string | undefined;
+  /**
+   * Origin of Sierra's internal API, which reports achievement milestones.
+   * It takes the same internal token as the backend. Without it the awards
+   * feed is not read and milestones pay nothing.
+   */
+  readonly sierraUrl: string | undefined;
   /** The bucket snapshots are copied to. Without it they stay on this machine only. */
   readonly offsite: BucketConfig | undefined;
   /** The `BACKUP_S3_*` variables that are set, when some but not all of them are. */
@@ -44,6 +50,7 @@ export function readConfig(env: Record<string, string | undefined>): Config {
     backupDirectory: env["BACKUP_DIR"] || join(dirname(databasePath), "backups"),
     backendUrl: env["BACKEND_URL"] || "https://api.seqwawa.com",
     backendToken: env["BACKEND_INTERNAL_TOKEN"] || undefined,
+    sierraUrl: env["SIERRA_URL"] || undefined,
     offsite,
     offsitePartlySet: offsite === undefined ? set : [],
   };

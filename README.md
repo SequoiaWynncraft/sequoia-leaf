@@ -35,13 +35,15 @@ The server is configured with environment variables:
 | `BACKUP_DIR`                  | `backups` beside the file | Where snapshots of the database are written.            |
 | `BACKEND_URL`                 | `https://api.seqwawa.com` | sequoia-backend, for the credit feed and session check. |
 | `BACKEND_INTERNAL_TOKEN`      | none                      | sequoia-backend's `APP_INTERNAL_API_TOKEN`.             |
+| `SIERRA_URL`                  | none                      | Sierra's internal API, for the awards feed.             |
 | `BACKUP_S3_ENDPOINT`          | none                      | The S3 endpoint snapshots are copied to.                |
 | `BACKUP_S3_BUCKET`            | none                      | The bucket there.                                       |
 | `BACKUP_S3_ACCESS_KEY_ID`     | none                      | A key that may write to that bucket.                    |
 | `BACKUP_S3_SECRET_ACCESS_KEY` | none                      | Its secret.                                             |
 
 Without `BACKEND_INTERNAL_TOKEN` the server answers requests but does not read
-the credit feed, which is what local development wants. Without all four
+the credit feed, which is what local development wants. Without `SIERRA_URL` it
+does not read the awards feed, and achievement milestones pay nothing. Without all four
 `BACKUP_S3_*` variables, snapshots stay on the machine.
 
 ## Layout
@@ -49,7 +51,7 @@ the credit feed, which is what local development wants. Without all four
 | Path                  | What it is                                                    |
 | --------------------- | ------------------------------------------------------------- |
 | `packages/core`       | The rules of the game as pure functions and types. No I/O.    |
-| `apps/api`            | The server: HTTP routes, the database and the credit sync.    |
+| `apps/api`            | The server: HTTP routes, the database and the feed syncs.     |
 | `apps/api/migrations` | The database schema. New files are applied in order at start. |
 | `Dockerfile`          | The production image.                                         |
 
@@ -68,6 +70,19 @@ lists who took part in each one. The server reads it on a schedule:
 Each credit carries the backend's event id and the player's UUID, so reading
 the same events again pays nothing twice. Nothing that happened before the
 first run is ever credited.
+
+### Achievement milestones
+
+Sierra, in sequoia-backend, runs the guild's achievement ladders and records an
+award when a member reaches a milestone. Its `/internal/v1/achievements/awards`
+lists them, and the server reads it on the same schedule as the credit feed.
+
+Only what members do for the guild pays: the raid ladders, which count guild
+raids, and the guild war ladder. Each tier pays its own amount, from 250 Leaf
+for Bronze to 20,000 for Mythril, set in `packages/core/src/rules.ts`.
+Profession, role and badge ladders pay nothing. Each award pays once, keyed by
+Sierra's award id, and milestones reached before the feed's first run pay
+nothing.
 
 ## Quests
 
@@ -120,11 +135,12 @@ An event is something a client would want to show when it happens. Each one is
 written in the same transaction as the change it reports, and has an id that
 only grows.
 
-| Type              | When                       | `data`                                          |
-| ----------------- | -------------------------- | ----------------------------------------------- |
-| `leaf_earned`     | A raid or war paid Leaf.   | `source`, `leaf`, `xp`, `detail`, `occurred_at` |
-| `quest_completed` | A quest finished and paid. | `quest`, in the shape `/v1/me/quests` uses      |
-| `level_up`        | XP reached a new level.    | `level`                                         |
+| Type               | When                       | `data`                                                                        |
+| ------------------ | -------------------------- | ----------------------------------------------------------------------------- |
+| `leaf_earned`      | A raid or war paid Leaf.   | `source`, `leaf`, `xp`, `detail`, `occurred_at`                               |
+| `quest_completed`  | A quest finished and paid. | `quest`, in the shape `/v1/me/quests` uses                                    |
+| `level_up`         | XP reached a new level.    | `level`                                                                       |
+| `achievement_paid` | A milestone paid Leaf.     | `award_id`, `ladder`, `milestone`, `tier`, `count`, `leaf`, `xp`, `earned_at` |
 
 `detail` is the raid's name or the territory fought over. `occurred_at` is when
 the raid or war was played, which can be well before the event: a credit that
@@ -194,6 +210,9 @@ as OpenTofu configuration. What the Coolify app is set up with:
   server's private Docker network, so the credit feed and session checks never
   leave the machine.
 - **`BACKEND_INTERNAL_TOKEN`**, the backend's `APP_INTERNAL_API_TOKEN`.
+  Sierra takes the same token.
+- **`SIERRA_URL=http://sequoia-sierra:8082`**, Sierra's internal API on the
+  same network, for the awards feed.
 - **The network alias `sequoia-leaf`**, so other services on the server can
   reach it at `http://sequoia-leaf:3000`.
 - **The domain `https://leaf.seqwawa.com`**. Its DNS record points straight at

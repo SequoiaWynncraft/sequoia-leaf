@@ -17,36 +17,12 @@ import { insertEvent } from "../events/store.ts";
 import { getAccount, insertEntry } from "../ledger/store.ts";
 import { questJson } from "../quests/json.ts";
 import { loadQuestBook, saveQuestStep } from "../quests/store.ts";
+import { type SyncMode, type SyncResult, windowedSync } from "../sync/windowed.ts";
 
 /** Returns what players did during [from, to), in milliseconds since the Unix epoch. */
 export type CreditSource = (from: number, to: number) => Promise<readonly Activity[]>;
 
-/**
- * - `recent` reads from a little before where the last run stopped. It runs every minute.
- * - `deep` re-reads the last week, to pick up credits that appeared late: a
- *   name that resolved to a player afterwards, or a war scored afterwards.
- */
-export type SyncMode = "recent" | "deep";
-
-export type SyncResult =
-  /** Another run holds the lease. */
-  | { readonly status: "busy" }
-  /** First run ever: recorded the starting moment. Nothing before it is credited. */
-  | { readonly status: "started" }
-  | {
-      readonly status: "synced";
-      /** Activities recorded by this run. */
-      readonly recorded: number;
-      readonly leafPaid: number;
-    };
-
-/** Events younger than this are left for the next run: the backend merges duplicate raid reports within seconds. */
-export const SETTLE_MS = 30_000;
-/** How far before the cursor a recent run starts, to catch events recorded slightly out of order. */
-export const RECENT_OVERLAP_MS = 20 * 60_000;
-export const DEEP_LOOKBACK_MS = 7 * 24 * 60 * 60_000;
-/** A run that dies holds the lease for at most this long. */
-const LEASE_MS = 60_000;
+export { DEEP_LOOKBACK_MS, RECENT_OVERLAP_MS, SETTLE_MS, type SyncMode, type SyncResult } from "../sync/windowed.ts";
 
 /**
  * Records new activities from the source, pays the Leaf they earn, and moves
@@ -62,43 +38,7 @@ export async function syncCredits(
   now: number,
   mode: SyncMode,
 ): Promise<SyncResult> {
-  // The scheduled run and a player's request can overlap while one of them
-  // waits for the backend; the lease lets only one of them through.
-  const lease = db
-    .query("UPDATE sync_state SET locked_until = ? WHERE name = 'credits' AND locked_until <= ?")
-    .run(now + LEASE_MS, now);
-  if (lease.changes === 0) {
-    return { status: "busy" };
-  }
-  try {
-    return await runSync(db, source, rules, now, mode);
-  } finally {
-    db.run("UPDATE sync_state SET locked_until = 0 WHERE name = 'credits'");
-  }
-}
-
-async function runSync(
-  db: Database,
-  source: CreditSource,
-  rules: Rules,
-  now: number,
-  mode: SyncMode,
-): Promise<SyncResult> {
-  const state = db
-    .query<{ started_at: number | null; cursor: number | null }, []>(
-      "SELECT started_at, cursor FROM sync_state WHERE name = 'credits'",
-    )
-    .get();
-  if (state === null || state.started_at === null || state.cursor === null) {
-    db.query("UPDATE sync_state SET started_at = ?, cursor = ? WHERE name = 'credits'").run(now, now);
-    return { status: "started" };
-  }
-  const to = now - SETTLE_MS;
-  const reach = mode === "recent" ? state.cursor - RECENT_OVERLAP_MS : to - DEEP_LOOKBACK_MS;
-  const from = Math.max(state.started_at, reach);
-  const reported = from < to ? await source(from, to) : [];
-
-  return db.transaction((): SyncResult => {
+  return windowedSync(db, "credits", now, mode, source, (reported, from, to) => {
     const byPlayer = new Map<PlayerId, Activity[]>();
     for (const activity of newActivities(db, reported, from, to)) {
       const mine = byPlayer.get(activity.playerId);
@@ -114,11 +54,8 @@ async function runSync(
       leafPaid += recordPlayer(db, playerId, mine, rules, now);
       recorded += mine.length;
     }
-    if (mode === "recent") {
-      db.query("UPDATE sync_state SET cursor = MAX(cursor, ?) WHERE name = 'credits'").run(to);
-    }
-    return { status: "synced", recorded, leafPaid };
-  })();
+    return { recorded, leafPaid };
+  });
 }
 
 /**

@@ -49,9 +49,14 @@ export async function syncOnDemand(services: Services): Promise<void> {
   }
 }
 
-/** The scheduled run: a deep sync at minute 17 of each hour, a recent one every other minute. Never throws. */
+/** A deep sync at minute 17 of each hour, a recent one every other minute. */
+export function scheduledMode(now: number): SyncMode {
+  return new Date(now).getUTCMinutes() === DEEP_SYNC_MINUTE ? "deep" : "recent";
+}
+
+/** The scheduled run of the credit sync. Never throws. */
 export async function runScheduledSync(services: Services): Promise<void> {
-  const mode = new Date(services.now()).getUTCMinutes() === DEEP_SYNC_MINUTE ? "deep" : "recent";
+  const mode = scheduledMode(services.now());
   try {
     const result = await runCreditSync(services, mode);
     if (result !== undefined) {

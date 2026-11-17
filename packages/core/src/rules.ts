@@ -1,3 +1,4 @@
+import type { AchievementRules } from "./achievements.ts";
 import { type Activity, RAID_KEYS } from "./activity.ts";
 import type { QuestRules, QuestTemplate } from "./quests.ts";
 
@@ -9,6 +10,7 @@ export interface Rules {
   readonly earning: EarningRules;
   readonly quests: QuestRules;
   readonly levels: LevelRules;
+  readonly achievements: AchievementRules;
 }
 
 export interface EarningRules {
@@ -69,6 +71,21 @@ const QUEST_TEMPLATES: readonly QuestTemplate[] = [
   },
 ];
 
+// A milestone pays roughly 6 to 9% on top of the Leaf the raids or wars on the
+// way to it paid. The "all raids" ladder has the same tiers at twice the count.
+const ACHIEVEMENT_RULES: AchievementRules = {
+  payingLadders: ["raid:", "war:"],
+  leafByMilestone: new Map([
+    ["bronze", 250],
+    ["silver", 500],
+    ["gold", 1000],
+    ["platinum", 2500],
+    ["diamond", 5000],
+    ["obsidian", 10_000],
+    ["mythril", 20_000],
+  ]),
+};
+
 export const DEFAULT_RULES: Rules = {
   earning: {
     leafPerRaidSeasonRating: 1,
@@ -82,6 +99,7 @@ export const DEFAULT_RULES: Rules = {
     firstLevelXp: 1000,
     xpGrowthPerLevel: 250,
   },
+  achievements: ACHIEVEMENT_RULES,
 };
 
 /**
