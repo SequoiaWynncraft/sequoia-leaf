@@ -17,7 +17,8 @@ export type PlayerEvent =
   | { readonly type: "level_up"; readonly data: { level: number } }
   /**
    * An achievement milestone paid Leaf. `ladder` is Sierra's key, such as
-   * `raid:TNA`; `count` is how many raids or wars the milestone stands for.
+   * `raid:TNA`; `threshold` is how many raids or wars the milestone stands
+   * for and `label` its name, such as `Diamond`.
    */
   | {
       readonly type: "achievement_paid";
@@ -26,7 +27,8 @@ export type PlayerEvent =
         ladder: string;
         milestone: string;
         tier: string | null;
-        count: number | null;
+        threshold: number | null;
+        label: string | null;
         leaf: number;
         xp: number;
         earned_at: string;

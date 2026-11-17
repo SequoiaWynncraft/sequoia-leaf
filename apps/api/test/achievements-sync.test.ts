@@ -30,7 +30,8 @@ function award(player: PlayerId, ladder: string, milestoneId: string | null, ear
     ladder,
     milestoneId,
     tier: milestoneId,
-    count: 25,
+    threshold: 25,
+    label: null,
     earnedAt,
   };
 }
@@ -69,7 +70,7 @@ describe("syncAchievements", () => {
   });
 
   it("pays a guild milestone once however often its window is read, and says so", async () => {
-    const diamond = { ...award(alice, "raid:TNA", "diamond", T0 + 10 * SECOND), count: 1000 };
+    const diamond = { ...award(alice, "raid:TNA", "diamond", T0 + 10 * SECOND), threshold: 1000, label: "Diamond" };
     const source = feed([diamond]);
 
     await sync(source, T0);
@@ -90,7 +91,8 @@ describe("syncAchievements", () => {
           ladder: "raid:TNA",
           milestone: "diamond",
           tier: "diamond",
-          count: 1000,
+          threshold: 1000,
+          label: "Diamond",
           leaf: 5000,
           xp: 5000,
           earned_at: new Date(T0 + 10 * SECOND).toISOString(),

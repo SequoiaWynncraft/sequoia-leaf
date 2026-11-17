@@ -13,7 +13,8 @@ function award(ladder: string, milestoneId: string | null): AchievementAward {
     ladder,
     milestoneId,
     tier: milestoneId,
-    count: 25,
+    threshold: 25,
+    label: null,
     earnedAt: 0,
   };
 }

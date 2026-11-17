@@ -26,7 +26,8 @@ const diamondRow = {
   achievement_key: "raid:TNA",
   milestone_id: "diamond",
   tier: "diamond",
-  count: 1000,
+  threshold: 1000,
+  label: "Diamond",
   earned_at: "2026-11-02T00:01:30.250Z",
 };
 
@@ -53,19 +54,27 @@ describe("fetchAwards", () => {
         ladder: "raid:TNA",
         milestoneId: "diamond",
         tier: "diamond",
-        count: 1000,
+        threshold: 1000,
+        label: "Diamond",
         earnedAt: Date.parse("2026-11-02T00:01:30.250Z"),
       },
     ]);
   });
 
-  it("keeps an award that has no milestone, tier or count, such as a badge", async () => {
-    const badge = { ...diamondRow, achievement_key: "badge:tcc", milestone_id: null, tier: null, count: null };
+  it("keeps an award that has no milestone, tier, threshold or label, such as a badge", async () => {
+    const badge = {
+      ...diamondRow,
+      achievement_key: "badge:tcc",
+      milestone_id: null,
+      tier: null,
+      threshold: null,
+      label: null,
+    };
     const { fetcher } = answering({ awards: [badge] });
 
     const [award] = await fetchAwards(fetcher, config, FROM, TO);
 
-    expect([award?.milestoneId, award?.tier, award?.count]).toEqual([null, null, null]);
+    expect([award?.milestoneId, award?.tier, award?.threshold, award?.label]).toEqual([null, null, null, null]);
   });
 
   it("fails when Sierra refuses the request", async () => {
@@ -80,7 +89,7 @@ describe("fetchAwards", () => {
     const malformed = [
       { ...diamondRow, player_uuid: "not-a-uuid" },
       { ...diamondRow, earned_at: "yesterday" },
-      { ...diamondRow, count: 2.5 },
+      { ...diamondRow, threshold: 2.5 },
       { ...diamondRow, award_id: "" },
     ];
 

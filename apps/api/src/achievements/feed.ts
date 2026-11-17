@@ -63,7 +63,8 @@ function award(row: unknown): AchievementAward {
     ladder: text(row, "achievement_key"),
     milestoneId: optionalText(row, "milestone_id"),
     tier: optionalText(row, "tier"),
-    count: optionalCount(row, "count"),
+    threshold: optionalCount(row, "threshold"),
+    label: optionalText(row, "label"),
     earnedAt,
   };
 }

@@ -135,12 +135,12 @@ An event is something a client would want to show when it happens. Each one is
 written in the same transaction as the change it reports, and has an id that
 only grows.
 
-| Type               | When                       | `data`                                                                        |
-| ------------------ | -------------------------- | ----------------------------------------------------------------------------- |
-| `leaf_earned`      | A raid or war paid Leaf.   | `source`, `leaf`, `xp`, `detail`, `occurred_at`                               |
-| `quest_completed`  | A quest finished and paid. | `quest`, in the shape `/v1/me/quests` uses                                    |
-| `level_up`         | XP reached a new level.    | `level`                                                                       |
-| `achievement_paid` | A milestone paid Leaf.     | `award_id`, `ladder`, `milestone`, `tier`, `count`, `leaf`, `xp`, `earned_at` |
+| Type               | When                       | `data`                                                                                     |
+| ------------------ | -------------------------- | ------------------------------------------------------------------------------------------ |
+| `leaf_earned`      | A raid or war paid Leaf.   | `source`, `leaf`, `xp`, `detail`, `occurred_at`                                            |
+| `quest_completed`  | A quest finished and paid. | `quest`, in the shape `/v1/me/quests` uses                                                 |
+| `level_up`         | XP reached a new level.    | `level`                                                                                    |
+| `achievement_paid` | A milestone paid Leaf.     | `award_id`, `ladder`, `milestone`, `tier`, `threshold`, `label`, `leaf`, `xp`, `earned_at` |
 
 `detail` is the raid's name or the territory fought over. `occurred_at` is when
 the raid or war was played, which can be well before the event: a credit that

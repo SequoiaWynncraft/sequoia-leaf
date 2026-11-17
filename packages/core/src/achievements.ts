@@ -15,8 +15,10 @@ export interface AchievementAward {
   readonly milestoneId: string | null;
   /** The milestone's tier, such as `diamond`, when Sierra reports one. */
   readonly tier: string | null;
-  /** How many raids or wars the milestone stands for, when Sierra reports it. */
-  readonly count: number | null;
+  /** How many raids or wars the milestone stands for, such as 1000, as it was when reached. */
+  readonly threshold: number | null;
+  /** The milestone's name, such as `Diamond`, as it was when reached. */
+  readonly label: string | null;
   /** When it was reached, in milliseconds since the Unix epoch. */
   readonly earnedAt: number;
 }
