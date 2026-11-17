@@ -11,6 +11,7 @@ production is.
 | The `sequoia-leaf-prod` app     | Coolify    | `coolify_application_github_app.leaf`      |
 | Its `/data` volume              | Coolify    | `coolify_storage.data`                     |
 | `BACKEND_URL`                   | Coolify    | `coolify_environment_variable.backend_url` |
+| `SIERRA_URL`                    | Coolify    | `coolify_environment_variable.sierra_url`  |
 | `BACKUP_S3_ENDPOINT`, `_BUCKET` | Coolify    | `coolify_environment_variable.backup_*`    |
 
 The code itself is not deployed from here. Coolify builds and deploys every

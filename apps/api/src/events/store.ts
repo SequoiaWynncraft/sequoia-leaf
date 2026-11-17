@@ -14,7 +14,26 @@ export type PlayerEvent =
   /** A quest was finished and its reward paid. */
   | { readonly type: "quest_completed"; readonly data: { quest: ReturnType<typeof questJson> } }
   /** The player's XP reached a new level. */
-  | { readonly type: "level_up"; readonly data: { level: number } };
+  | { readonly type: "level_up"; readonly data: { level: number } }
+  /**
+   * An achievement milestone paid Leaf. `ladder` is Sierra's key, such as
+   * `raid:TNA`; `threshold` is how many raids or wars the milestone stands
+   * for and `label` its name, such as `Diamond`.
+   */
+  | {
+      readonly type: "achievement_paid";
+      readonly data: {
+        award_id: string;
+        ladder: string;
+        milestone: string;
+        tier: string | null;
+        threshold: number | null;
+        label: string | null;
+        leaf: number;
+        xp: number;
+        earned_at: string;
+      };
+    };
 
 /** An event as stored: its place in the player's history, and its details as the JSON text that was written. */
 export interface StoredEvent {

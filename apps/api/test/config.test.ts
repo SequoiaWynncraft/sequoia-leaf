@@ -17,9 +17,14 @@ describe("readConfig", () => {
       backupDirectory: "data/backups",
       backendUrl: "https://api.seqwawa.com",
       backendToken: undefined,
+      sierraUrl: undefined,
       offsite: undefined,
       offsitePartlySet: [],
     });
+  });
+
+  it("reads Sierra's address for the awards feed", () => {
+    expect(readConfig({ SIERRA_URL: "http://sequoia-sierra:8082" }).sierraUrl).toBe("http://sequoia-sierra:8082");
   });
 
   it("copies snapshots off the server when all four bucket variables are set", () => {

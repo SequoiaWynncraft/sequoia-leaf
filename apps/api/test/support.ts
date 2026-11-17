@@ -18,6 +18,7 @@ export function testServices(clock: TestClock, fetcher: Fetcher, token = "intern
   return {
     db: testDatabase(),
     backend: { url: "https://backend.test", token },
+    sierra: { url: "https://sierra.test", token },
     fetcher,
     now: () => clock.now,
   };
