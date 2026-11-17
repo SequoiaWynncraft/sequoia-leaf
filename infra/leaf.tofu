@@ -1,5 +1,5 @@
-# Everything that exists for Leaf outside its repository: a DNS record, and a
-# Coolify project with one application, its volume and its settings.
+# Leaf in production: a DNS record, and a Coolify project with one
+# application, its volume and its settings.
 
 resource "cloudflare_dns_record" "leaf" {
   zone_id = local.zone_id
@@ -80,16 +80,5 @@ resource "coolify_environment_variable" "backend_url" {
   value            = "http://sequoia-backend:8081"
 }
 
-# The backend's internal API token. The backend owns the value, so it is set
-# by hand in Coolify and never appears here or in the state: this only says
-# that the variable exists.
-resource "coolify_environment_variable" "backend_internal_token" {
-  application_uuid = coolify_application_github_app.leaf.uuid
-  key              = "BACKEND_INTERNAL_TOKEN"
-  value            = "set by hand in Coolify"
-  is_literal       = true
-
-  lifecycle {
-    ignore_changes = [value]
-  }
-}
+# BACKEND_INTERNAL_TOKEN is set by hand in Coolify and not managed here. The
+# backend owns the value, and managing the variable would put it in the state.
