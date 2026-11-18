@@ -2,7 +2,7 @@ import { type Leaf, MAX_LEAF } from "./leaf.ts";
 import type { PlayerId } from "./player.ts";
 
 /** Where earned Leaf comes from. */
-export const EARN_SOURCES = ["raid", "war", "quest", "achievement", "event", "staff"] as const;
+export const EARN_SOURCES = ["raid", "war", "quest", "achievement", "level", "event", "staff"] as const;
 export type EarnSource = (typeof EARN_SOURCES)[number];
 
 /** What Leaf is spent on. */

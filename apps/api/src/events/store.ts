@@ -21,8 +21,11 @@ export type PlayerEvent =
     }
   /** A quest was finished and its reward paid. */
   | { readonly type: "quest_completed"; readonly data: { quest: ReturnType<typeof questJson> } }
-  /** The player's XP reached a new level. */
-  | { readonly type: "level_up"; readonly data: { level: number } }
+  /**
+   * The player's XP reached a new level. `leaf` is what the levels reached
+   * paid, every level from the one before up to `level`.
+   */
+  | { readonly type: "level_up"; readonly data: { level: number; leaf: number } }
   /**
    * An achievement milestone paid Leaf. `ladder` is Sierra's key, such as
    * `raid:TNA`; `threshold` is how many raids or wars the milestone stands

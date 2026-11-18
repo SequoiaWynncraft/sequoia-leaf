@@ -31,6 +31,10 @@ export interface LevelRules {
   readonly firstLevelXp: number;
   /** How much more XP each further level needs than the one before it. */
   readonly xpGrowthPerLevel: number;
+  /** Leaf paid for reaching level 2. */
+  readonly firstLevelLeaf: number;
+  /** How much more Leaf each further level pays than the one before it. */
+  readonly leafGrowthPerLevel: number;
 }
 
 // As a rough anchor, 100 Leaf is worth about 1 LE. In the first day of real
@@ -105,6 +109,9 @@ export const DEFAULT_RULES: Rules = {
   levels: {
     firstLevelXp: 1000,
     xpGrowthPerLevel: 250,
+    // A level pays a tenth of the XP it took: 100 Leaf for level 2, 300 for level 10.
+    firstLevelLeaf: 100,
+    leafGrowthPerLevel: 25,
   },
   achievements: ACHIEVEMENT_RULES,
 };
@@ -143,4 +150,16 @@ export function levelForXp(xp: number, rules: LevelRules): LevelProgress {
     needed += rules.xpGrowthPerLevel;
   }
   return { level, xpIntoLevel: remaining, xpForNextLevel: needed };
+}
+
+/**
+ * The Leaf paid for reaching a level, as a whole number that is never
+ * negative. Everyone starts at level 1, so it pays nothing.
+ */
+export function leafForLevel(level: number, rules: LevelRules): number {
+  if (!Number.isInteger(level) || level < 2) {
+    return 0;
+  }
+  const raw = rules.firstLevelLeaf + (level - 2) * rules.leafGrowthPerLevel;
+  return Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
 }
