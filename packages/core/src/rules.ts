@@ -1,6 +1,6 @@
 import type { AchievementRules } from "./achievements.ts";
-import { type Activity, RAID_KEYS } from "./activity.ts";
-import type { QuestRules, QuestTemplate } from "./quests.ts";
+import { type Activity, RAID_KEYS, type RaidKey } from "./activity.ts";
+import type { QuestReward, QuestRules, QuestSlot, QuestTemplate } from "./quests.ts";
 
 /**
  * The numbers that tune the game. They live here, together, so they can be
@@ -39,46 +39,52 @@ export interface LevelRules {
 
 // As a rough anchor, 100 Leaf is worth about 1 LE. In the first day of real
 // play a raid earned 220 to 440 season rating, about 330 on average, and a war 60.
+//
+// Most quests can be finished by raiding or by warring, whichever comes first, so
+// raiders and warrers both have a way. Over the first three days a raid took
+// about 10 minutes and a war about 3.4, measured between two in a row, so a war
+// goal asks three wars for each raid the quest is worth. A weekly for 12 of one
+// raid is worth 20 raids of any kind, as its reward says.
+const WARS_PER_RAID = 3;
+
+function raidsOrWars(
+  slot: QuestSlot,
+  raids: { readonly raid?: RaidKey; readonly count: number },
+  raidsWorth: number,
+  reward: QuestReward,
+): QuestTemplate {
+  const wars = raidsWorth * WARS_PER_RAID;
+  return {
+    id: `${slot}.raids.${raids.raid ?? "any"}.${raids.count}.or.wars.${wars}`,
+    slot,
+    objectives: [
+      raids.raid === undefined
+        ? { type: "raids", count: raids.count }
+        : { type: "raids", raid: raids.raid, count: raids.count },
+      { type: "wars", count: wars },
+    ],
+    reward,
+  };
+}
+
 const QUEST_TEMPLATES: readonly QuestTemplate[] = [
-  ...RAID_KEYS.map((raid): QuestTemplate => ({
-    id: `daily.raids.${raid}.3`,
-    slot: "daily",
-    objective: { type: "raids", raid, count: 3 },
-    reward: { leaf: 300, xp: 150 },
-  })),
-  { id: "daily.raids.any.2", slot: "daily", objective: { type: "raids", count: 2 }, reward: { leaf: 200, xp: 100 } },
-  { id: "daily.wars.2", slot: "daily", objective: { type: "wars", count: 2 }, reward: { leaf: 200, xp: 100 } },
+  ...RAID_KEYS.map((raid) => raidsOrWars("daily", { raid, count: 3 }, 3, { leaf: 300, xp: 150 })),
+  raidsOrWars("daily", { count: 2 }, 2, { leaf: 200, xp: 100 }),
   {
     id: "daily.season_rating.1000",
     slot: "daily",
-    objective: { type: "season_rating", amount: 1000 },
+    objectives: [{ type: "season_rating", amount: 1000 }],
     reward: { leaf: 250, xp: 125 },
   },
-  ...RAID_KEYS.map((raid): QuestTemplate => ({
-    id: `weekly.raids.${raid}.12`,
-    slot: "weekly",
-    objective: { type: "raids", raid, count: 12 },
-    reward: { leaf: 800, xp: 400 },
-  })),
-  {
-    id: "weekly.raids.any.20",
-    slot: "weekly",
-    objective: { type: "raids", count: 20 },
-    reward: { leaf: 800, xp: 400 },
-  },
-  { id: "weekly.wars.15", slot: "weekly", objective: { type: "wars", count: 15 }, reward: { leaf: 800, xp: 400 } },
+  ...RAID_KEYS.map((raid) => raidsOrWars("weekly", { raid, count: 12 }, 20, { leaf: 800, xp: 400 })),
+  raidsOrWars("weekly", { count: 20 }, 20, { leaf: 800, xp: 400 }),
   {
     id: "weekly.season_rating.6000",
     slot: "weekly",
-    objective: { type: "season_rating", amount: 6000 },
+    objectives: [{ type: "season_rating", amount: 6000 }],
     reward: { leaf: 800, xp: 400 },
   },
-  {
-    id: "repeatable.raids.any.8",
-    slot: "repeatable",
-    objective: { type: "raids", count: 8 },
-    reward: { leaf: 200, xp: 100 },
-  },
+  raidsOrWars("repeatable", { count: 8 }, 8, { leaf: 200, xp: 100 }),
 ];
 
 // A milestone pays roughly 6 to 9% on top of the Leaf the raids or wars on the

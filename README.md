@@ -96,7 +96,11 @@ Every member has three quest slots. The templates and rewards are in
 - **Weekly.** One per week, Monday to Monday in UTC. It expires with the week.
 - **Repeatable.** Always one; finishing it unlocks the next.
 
-A quest asks for one of these:
+A quest asks for one or two of these. Most ask for two, raids or wars, as in
+"Complete 3 NOL raids or 9 wars", so raiders and warrers can both finish them.
+Each keeps its own progress, and whichever is met first finishes the quest. A
+war goal asks three wars for each raid the quest is worth, because a war takes
+about a third of a raid's time.
 
 | Objective       | Example                    | What counts                                                  |
 | --------------- | -------------------------- | ------------------------------------------------------------ |
@@ -125,6 +129,11 @@ Responses are JSON with `snake_case` fields. Errors are `{ "code", "message" }`.
 or as the site's `seq_session` cookie. The server asks sequoia-backend who the
 session belongs to; the mod can send the token it already holds for the
 backend. Only current guild members are let in.
+
+Each quest in `/v1/me/quests` lists its `goals`, every way to finish it, each
+with its own `type`, `raid`, `title`, `progress` and `target`. Its `objective`,
+`progress` and `target` repeat the goal nearest to being met, for clients that
+show one bar.
 
 `GET /v1/me/quests?sync=1` reads the credit feed first, at most once every 15
 seconds, so a raid that just finished shows up without waiting for the next
