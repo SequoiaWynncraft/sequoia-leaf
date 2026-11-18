@@ -47,6 +47,7 @@ describe("openDatabase", () => {
       "0004_events.sql",
       "0005_season_rating_quests.sql",
       "0006_achievement_sync.sql",
+      "0007_war_claim.sql",
     ]);
     db.close();
   });

@@ -32,8 +32,8 @@ function raid(id: number, player: PlayerId, occurredAt: number, seasonRating = 1
   };
 }
 
-function war(id: number, player: PlayerId, occurredAt: number, warPoints: number): Activity {
-  return {
+function war(id: number, player: PlayerId, occurredAt: number, warPoints: number, inClaim?: boolean): Activity {
+  const activity: Activity = {
     kind: "war",
     sourceKey: `war:${id}:${player}`,
     playerId: player,
@@ -42,6 +42,7 @@ function war(id: number, player: PlayerId, occurredAt: number, warPoints: number
     territory: "Detlas",
     warPoints,
   };
+  return inClaim === undefined ? activity : { ...activity, inClaim };
 }
 
 /** A feed that answers a window with the activities inside it, and remembers what it was asked. */
@@ -110,6 +111,42 @@ describe("syncCredits", () => {
     expect(getAccount(db, alice)).toEqual({ playerId: alice, balance: 31, xp: 31 });
     const [entry] = listEntries(db, alice, { limit: 10 });
     expect(entry).toMatchObject({ origin: "war", idempotencyKey: `war:7:${alice}` });
+  });
+
+  it("pays a defence of Sequoia's claim twice per point, and says so in its event", async () => {
+    const { source } = feed([war(7, alice, T0 + MINUTE, 73.4, true), war(8, bob, T0 + MINUTE, 73.4, false)]);
+    await sync(source, T0);
+
+    await sync(source, T0 + 5 * MINUTE);
+
+    expect(getAccount(db, alice).balance).toBe(146);
+    expect(getAccount(db, bob).balance).toBe(73);
+    const rows = db
+      .query<{ in_claim: number | null }, []>("SELECT in_claim FROM activities ORDER BY source_key")
+      .all()
+      .map((row) => row.in_claim);
+    expect(rows).toEqual([1, 0]);
+    const events: unknown[] = db
+      .query<{ data: string }, []>("SELECT data FROM events WHERE type = 'leaf_earned' ORDER BY id")
+      .all()
+      .map((row): unknown => JSON.parse(row.data));
+    expect(events).toEqual([
+      expect.objectContaining({ leaf: 146, in_claim: true }),
+      expect.objectContaining({ leaf: 73, in_claim: false }),
+    ]);
+  });
+
+  it("records nothing about the claim for a war the backend could not place", async () => {
+    const { source } = feed([war(7, alice, T0 + MINUTE, 40)]);
+    await sync(source, T0);
+
+    await sync(source, T0 + 5 * MINUTE);
+
+    expect(getAccount(db, alice).balance).toBe(40);
+    expect(db.query("SELECT in_claim FROM activities").get()).toEqual({ in_claim: null });
+    const event = db.query<{ data: string }, []>("SELECT data FROM events WHERE type = 'leaf_earned'").get();
+    const data: unknown = JSON.parse(event?.data ?? "{}");
+    expect(data).not.toHaveProperty("in_claim");
   });
 
   it("records a war scored at zero without paying for it", async () => {

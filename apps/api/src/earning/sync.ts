@@ -98,6 +98,7 @@ function recordPlayer(
             xp: entry.xpDelta,
             detail: activity.kind === "raid" ? activity.raidName : activity.territory,
             occurred_at: new Date(activity.occurredAt).toISOString(),
+            ...(activity.kind === "war" && activity.inClaim !== undefined ? { in_claim: activity.inClaim } : {}),
           },
         },
         now,
@@ -145,8 +146,8 @@ function newActivities(db: Database, activities: readonly Activity[], from: numb
 function insertActivity(db: Database, activity: Activity, now: number): void {
   db.query(
     `INSERT INTO activities
-       (source_key, player_id, kind, raid, detail, season_rating, war_points, occurred_at, recorded_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (source_key, player_id, kind, raid, detail, season_rating, war_points, in_claim, occurred_at, recorded_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     activity.sourceKey,
     activity.playerId,
@@ -155,6 +156,7 @@ function insertActivity(db: Database, activity: Activity, now: number): void {
     activity.kind === "raid" ? activity.raidName : activity.territory,
     activity.seasonRating,
     activity.kind === "war" ? activity.warPoints : null,
+    activity.kind === "war" && activity.inClaim !== undefined ? Number(activity.inClaim) : null,
     activity.occurredAt,
     now,
   );
