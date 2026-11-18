@@ -78,10 +78,14 @@ describe("syncAchievements", () => {
     await sync(source, T0 + 2 * MINUTE);
     await sync(source, T0 + 3 * MINUTE, "deep");
 
-    expect(getAccount(db, alice)).toMatchObject({ balance: 5000, xp: 5000 });
+    // 5,000 XP reaches level 4, and levels 2 to 4 pay 100, 125 and 150 Leaf, with no XP.
+    expect(getAccount(db, alice)).toMatchObject({ balance: 5375, xp: 5000 });
     const entries = listEntries(db, alice, { limit: 10 });
-    expect(entries.map((entry) => [entry.origin, entry.idempotencyKey, entry.balanceDelta])).toEqual([
-      ["achievement", `achievement:${diamond.awardId}`, 5000],
+    expect(entries.map((entry) => [entry.origin, entry.idempotencyKey, entry.balanceDelta, entry.xpDelta])).toEqual([
+      ["level", `level:${alice}:4`, 150, 0],
+      ["level", `level:${alice}:3`, 125, 0],
+      ["level", `level:${alice}:2`, 100, 0],
+      ["achievement", `achievement:${diamond.awardId}`, 5000, 5000],
     ]);
     expect(events(alice)).toEqual([
       {
@@ -98,7 +102,7 @@ describe("syncAchievements", () => {
           earned_at: new Date(T0 + 10 * SECOND).toISOString(),
         },
       },
-      { type: "level_up", data: { level: 4 } },
+      { type: "level_up", data: { level: 4, leaf: 375 } },
     ]);
   });
 

@@ -48,6 +48,7 @@ export {
   DEFAULT_RULES,
   type EarningRules,
   leafForActivity,
+  leafForLevel,
   levelForXp,
   type LevelProgress,
   type LevelRules,

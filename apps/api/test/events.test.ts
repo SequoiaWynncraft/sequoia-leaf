@@ -27,7 +27,7 @@ const rules: Rules = {
       { id: "repeatable", slot: "repeatable", objective: { type: "raids", count: 30 }, reward: { leaf: 50, xp: 25 } },
     ],
   },
-  levels: { firstLevelXp: 300, xpGrowthPerLevel: 250 },
+  levels: { firstLevelXp: 300, xpGrowthPerLevel: 250, firstLevelLeaf: 30, leafGrowthPerLevel: 25 },
 };
 
 function raid(id: number, player: PlayerId, occurredAt: number): Activity {
@@ -144,8 +144,8 @@ describe("events from the credit sync", () => {
           quest: { id: "daily:1", title: "Complete 2 raids", progress: 2, target: 2, reward: { leaf: 200, xp: 100 } },
         },
       },
-      // 110 + 110 + 100 XP passes the 300 the first level takes.
-      { type: "level_up", data: { level: 2 } },
+      // 110 + 110 + 100 XP passes the 300 the first level takes, and level 2 pays 30 Leaf.
+      { type: "level_up", data: { level: 2, leaf: 30 } },
     ]);
   });
 
