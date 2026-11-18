@@ -27,8 +27,19 @@ export interface QuestReward {
 export interface QuestTemplate {
   readonly id: string;
   readonly slot: QuestSlot;
-  readonly objective: QuestObjective;
+  /**
+   * The ways to finish the quest, at least one: meeting any of them finishes it.
+   * Most quests have a raid goal and a war goal, so raiders and warrers both can.
+   */
+  readonly objectives: readonly QuestObjective[];
   readonly reward: QuestReward;
+}
+
+/** One way to finish a quest, and how far along it is. */
+export interface QuestGoal {
+  readonly objective: QuestObjective;
+  /** From 0 to the objective's target. It never goes past the target. */
+  readonly progress: number;
 }
 
 export interface QuestRules {
@@ -43,10 +54,9 @@ export interface Quest {
   /** Counts this player's quests in this slot, starting at 1. */
   readonly sequence: number;
   readonly templateId: string;
-  readonly objective: QuestObjective;
+  /** One goal for each of the template's objectives, in the same order. The first one met finishes the quest. */
+  readonly goals: readonly QuestGoal[];
   readonly reward: QuestReward;
-  /** How far along it is, from 0 to the objective's target. It never goes past the target. */
-  readonly progress: number;
   /** Activities from this moment on count toward it. */
   readonly startedAt: number;
   /** Activities from this moment on no longer count. Null for a quest that never expires. */
@@ -85,6 +95,24 @@ export function openQuestBook(at: number): QuestBook {
 /** The progress at which an objective is met. */
 export function objectiveTarget(objective: QuestObjective): number {
   return objective.type === "season_rating" ? objective.amount : objective.count;
+}
+
+/** Whether a goal's objective is met. */
+export function goalMet(goal: QuestGoal): boolean {
+  return goal.progress >= objectiveTarget(goal.objective);
+}
+
+/**
+ * The goal nearest to being met, by the share of its target reached; the
+ * earlier one on a tie. It is the one to show where there is room for only one.
+ */
+export function leadingGoal(quest: Quest): QuestGoal {
+  const share = (goal: QuestGoal) => goal.progress / objectiveTarget(goal.objective);
+  const [first, ...rest] = quest.goals;
+  if (first === undefined) {
+    throw new Error(`Quest ${quest.slot}:${quest.sequence} has no goal`);
+  }
+  return rest.reduce((leading, goal) => (share(goal) > share(leading) ? goal : leading), first);
 }
 
 /**
@@ -170,17 +198,19 @@ export function applyActivityToQuests(book: QuestBook, activity: Activity, rules
     if (at < quest.startedAt || (quest.expiresAt !== null && at >= quest.expiresAt)) {
       continue;
     }
-    const gained = progressFrom(quest.objective, activity);
-    if (gained === 0) {
+    const gains = quest.goals.map((goal) => progressFrom(goal.objective, activity));
+    if (gains.every((gained) => gained === 0)) {
       continue;
     }
-    const target = objectiveTarget(quest.objective);
-    const progress = Math.min(target, quest.progress + gained);
-    if (progress < target) {
-      write(step, { ...quest, progress });
+    const goals = quest.goals.map((goal, index) => ({
+      objective: goal.objective,
+      progress: Math.min(objectiveTarget(goal.objective), goal.progress + (gains[index] ?? 0)),
+    }));
+    if (!goals.some(goalMet)) {
+      write(step, { ...quest, goals });
       continue;
     }
-    const done: Quest = { ...quest, progress, completedAt: at };
+    const done: Quest = { ...quest, goals, completedAt: at };
     write(step, done);
     step.completed.push(done);
     if (quest.slot === "daily") {
@@ -279,9 +309,8 @@ function issue(step: Step, slot: QuestSlot, startedAt: number, expiresAt: number
     slot,
     sequence,
     templateId: template.id,
-    objective: template.objective,
+    goals: template.objectives.map((objective) => ({ objective, progress: 0 })),
     reward: template.reward,
-    progress: 0,
     startedAt,
     expiresAt,
     completedAt: null,
@@ -293,14 +322,33 @@ function write(step: Step, quest: Quest): void {
   step.written.set(`${quest.slot}:${quest.sequence}`, quest);
 }
 
-/** A short sentence for the quest, such as "Complete 3 NOL raids". */
-export function questTitle(objective: QuestObjective): string {
+/** A short sentence for one objective, such as "Complete 3 NOL raids". */
+export function objectiveTitle(objective: QuestObjective): string {
   if (objective.type === "season_rating") {
-    return `Earn ${objective.amount.toLocaleString("en-US")} season rating`;
+    return `Earn ${amountOf(objective)}`;
   }
-  if (objective.type === "wars") {
-    return objective.count === 1 ? "Take part in 1 war" : `Take part in ${objective.count} wars`;
+  return `${objective.type === "wars" ? "Take part in" : "Complete"} ${amountOf(objective)}`;
+}
+
+/** A short sentence for a quest, such as "Complete 3 NOL raids or 9 wars". */
+export function questTitle(objectives: readonly QuestObjective[]): string {
+  const [first, ...rest] = objectives;
+  if (first === undefined) {
+    return "";
   }
-  const kind = objective.raid === undefined ? "" : `${objective.raid.toUpperCase()} `;
-  return objective.count === 1 ? `Complete 1 ${kind}raid` : `Complete ${objective.count} ${kind}raids`;
+  return [objectiveTitle(first), ...rest.map(amountOf)].join(" or ");
+}
+
+/** What an objective asks for, without the verb: "3 NOL raids", "1 war", "1,000 season rating". */
+function amountOf(objective: QuestObjective): string {
+  switch (objective.type) {
+    case "season_rating":
+      return `${objective.amount.toLocaleString("en-US")} season rating`;
+    case "wars":
+      return objective.count === 1 ? "1 war" : `${objective.count} wars`;
+    case "raids": {
+      const kind = objective.raid === undefined ? "" : `${objective.raid.toUpperCase()} `;
+      return objective.count === 1 ? `1 ${kind}raid` : `${objective.count} ${kind}raids`;
+    }
+  }
 }

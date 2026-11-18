@@ -22,9 +22,14 @@ const rules: Rules = {
   quests: {
     dailyChargeCap: 3,
     templates: [
-      { id: "daily", slot: "daily", objective: { type: "raids", count: 2 }, reward: { leaf: 200, xp: 100 } },
-      { id: "weekly", slot: "weekly", objective: { type: "raids", count: 30 }, reward: { leaf: 800, xp: 400 } },
-      { id: "repeatable", slot: "repeatable", objective: { type: "raids", count: 30 }, reward: { leaf: 50, xp: 25 } },
+      { id: "daily", slot: "daily", objectives: [{ type: "raids", count: 2 }], reward: { leaf: 200, xp: 100 } },
+      { id: "weekly", slot: "weekly", objectives: [{ type: "raids", count: 30 }], reward: { leaf: 800, xp: 400 } },
+      {
+        id: "repeatable",
+        slot: "repeatable",
+        objectives: [{ type: "raids", count: 30 }],
+        reward: { leaf: 50, xp: 25 },
+      },
     ],
   },
   levels: { firstLevelXp: 300, xpGrowthPerLevel: 250, firstLevelLeaf: 30, leafGrowthPerLevel: 25 },

@@ -153,9 +153,14 @@ describe("GET /v1/me/quests", () => {
         { id: "weekly:1", progress: 0 },
         {
           id: "repeatable:1",
+          title: "Complete 8 raids or 24 wars",
+          objective: { type: "raids", raid: null },
           progress: 0,
-          title: "Complete 8 raids",
           target: 8,
+          goals: [
+            { type: "raids", raid: null, title: "Complete 8 raids", progress: 0, target: 8 },
+            { type: "wars", raid: null, title: "Take part in 24 wars", progress: 0, target: 24 },
+          ],
           reward: { leaf: 200, xp: 100 },
           started_at: "2026-11-04T12:00:00.000Z",
           expires_at: null,

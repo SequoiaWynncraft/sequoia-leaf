@@ -6,10 +6,14 @@ import {
   applyActivityToQuests,
   currentQuests,
   DAY_MS,
+  leadingGoal,
   nextDailyChargeAt,
+  objectiveTitle,
   openQuestBook,
   pickTemplate,
+  type Quest,
   type QuestBook,
+  type QuestObjective,
   type QuestRules,
   type QuestSlot,
   questTitle,
@@ -29,9 +33,9 @@ const WEDNESDAY_NOON = MONDAY + 2 * DAY_MS + 12 * HOUR;
 const rules: QuestRules = {
   dailyChargeCap: 3,
   templates: [
-    { id: "daily", slot: "daily", objective: { type: "raids", count: 2 }, reward: { leaf: 200, xp: 100 } },
-    { id: "weekly", slot: "weekly", objective: { type: "raids", count: 3 }, reward: { leaf: 800, xp: 400 } },
-    { id: "repeatable", slot: "repeatable", objective: { type: "raids", count: 2 }, reward: { leaf: 50, xp: 25 } },
+    { id: "daily", slot: "daily", objectives: [{ type: "raids", count: 2 }], reward: { leaf: 200, xp: 100 } },
+    { id: "weekly", slot: "weekly", objectives: [{ type: "raids", count: 3 }], reward: { leaf: 800, xp: 400 } },
+    { id: "repeatable", slot: "repeatable", objectives: [{ type: "raids", count: 2 }], reward: { leaf: 50, xp: 25 } },
   ],
 };
 
@@ -79,13 +83,13 @@ function ratingDaily(amount: number): QuestRules {
   return {
     dailyChargeCap: 3,
     templates: [
-      { id: "rating", slot: "daily", objective: { type: "season_rating", amount }, reward: { leaf: 1, xp: 1 } },
+      { id: "rating", slot: "daily", objectives: [{ type: "season_rating", amount }], reward: { leaf: 1, xp: 1 } },
     ],
   };
 }
 
 function progress(book: QuestBook, slot: QuestSlot): number | undefined {
-  return book.latest[slot]?.progress;
+  return book.latest[slot]?.goals[0]?.progress;
 }
 
 describe("refreshQuests", () => {
@@ -128,7 +132,12 @@ describe("counting activities", () => {
     const nolOnly: QuestRules = {
       dailyChargeCap: 3,
       templates: [
-        { id: "nol", slot: "daily", objective: { type: "raids", raid: "nol", count: 3 }, reward: { leaf: 1, xp: 1 } },
+        {
+          id: "nol",
+          slot: "daily",
+          objectives: [{ type: "raids", raid: "nol", count: 3 }],
+          reward: { leaf: 1, xp: 1 },
+        },
       ],
     };
 
@@ -144,7 +153,7 @@ describe("counting activities", () => {
   it("counts wars toward a war quest", () => {
     const wars: QuestRules = {
       dailyChargeCap: 3,
-      templates: [{ id: "wars", slot: "daily", objective: { type: "wars", count: 2 }, reward: { leaf: 1, xp: 1 } }],
+      templates: [{ id: "wars", slot: "daily", objectives: [{ type: "wars", count: 2 }], reward: { leaf: 1, xp: 1 } }],
     };
 
     const { completed } = play(
@@ -175,7 +184,7 @@ describe("counting activities", () => {
     );
 
     expect(completed).toEqual(["daily:1"]);
-    expect(book.latest.daily).toMatchObject({ progress: 1000, completedAt: WEDNESDAY_NOON + 2 });
+    expect(book.latest.daily).toMatchObject({ goals: [{ progress: 1000 }], completedAt: WEDNESDAY_NOON + 2 });
   });
 
   it("leaves a season rating quest alone for an activity that earned none", () => {
@@ -200,6 +209,108 @@ describe("counting activities", () => {
   });
 });
 
+const NOL_RAIDS: QuestObjective = { type: "raids", raid: "nol", count: 3 };
+const NINE_WARS: QuestObjective = { type: "wars", count: 9 };
+
+/** Rules whose only quest is a daily for 3 NOL raids or 9 wars. */
+const raidsOrWars: QuestRules = {
+  dailyChargeCap: 3,
+  templates: [{ id: "either", slot: "daily", objectives: [NOL_RAIDS, NINE_WARS], reward: { leaf: 300, xp: 150 } }],
+};
+
+describe("a quest with two ways to finish it", () => {
+  it("counts raids and wars toward their own goals", () => {
+    const { book, completed } = play(
+      openQuestBook(WEDNESDAY_NOON),
+      [raid(WEDNESDAY_NOON, "nol"), war(WEDNESDAY_NOON + 1), war(WEDNESDAY_NOON + 2), raid(WEDNESDAY_NOON + 3, "tna")],
+      raidsOrWars,
+    );
+
+    expect(book.latest.daily?.goals).toEqual([
+      { objective: NOL_RAIDS, progress: 1 },
+      { objective: NINE_WARS, progress: 2 },
+    ]);
+    expect(completed).toEqual([]);
+  });
+
+  it("finishes by wars alone, keeping the raids counted so far", () => {
+    const wars = Array.from({ length: 9 }, (_, offset) => war(WEDNESDAY_NOON + 1 + offset));
+    const { book, completed } = play(
+      openQuestBook(WEDNESDAY_NOON),
+      [raid(WEDNESDAY_NOON, "nol"), ...wars],
+      raidsOrWars,
+    );
+
+    expect(completed).toEqual(["daily:1"]);
+    expect(book.latest.daily).toMatchObject({
+      sequence: 1,
+      goals: [
+        { objective: NOL_RAIDS, progress: 1 },
+        { objective: NINE_WARS, progress: 9 },
+      ],
+      completedAt: WEDNESDAY_NOON + 9,
+    });
+  });
+
+  it("finishes by raids alone, however many wars there were", () => {
+    const wars = Array.from({ length: 8 }, (_, offset) => war(WEDNESDAY_NOON + offset));
+    const raids = [10, 11, 12].map((offset) => raid(WEDNESDAY_NOON + offset, "nol"));
+    const { completed } = play(openQuestBook(WEDNESDAY_NOON), [...wars, ...raids], raidsOrWars);
+
+    expect(completed).toEqual(["daily:1"]);
+  });
+
+  it("leads with the goal nearest to being met, and the first on a tie", () => {
+    const quest = (raids: number, wars: number): Quest => ({
+      slot: "daily",
+      sequence: 1,
+      templateId: "either",
+      reward: { leaf: 300, xp: 150 },
+      startedAt: MONDAY,
+      expiresAt: null,
+      completedAt: null,
+      goals: [
+        { objective: NOL_RAIDS, progress: raids },
+        { objective: NINE_WARS, progress: wars },
+      ],
+    });
+
+    expect(leadingGoal(quest(1, 4)).objective).toBe(NINE_WARS);
+    expect(leadingGoal(quest(2, 4)).objective).toBe(NOL_RAIDS);
+    expect(leadingGoal(quest(1, 3)).objective).toBe(NOL_RAIDS);
+  });
+});
+
+describe("the default quests", () => {
+  const templates = DEFAULT_RULES.quests.templates;
+  const warsFor = (id: string) =>
+    templates.find((template) => template.id === id)?.objectives.find((objective) => objective.type === "wars");
+
+  it("give every raid quest a war goal, at three wars for each raid it is worth", () => {
+    for (const template of templates.filter((each) =>
+      each.objectives.some((objective) => objective.type === "raids"),
+    )) {
+      expect([template.id, template.objectives.map((objective) => objective.type)]).toEqual([
+        template.id,
+        ["raids", "wars"],
+      ]);
+    }
+    expect(warsFor("daily.raids.nol.3.or.wars.9")).toEqual({ type: "wars", count: 9 });
+    expect(warsFor("daily.raids.any.2.or.wars.6")).toEqual({ type: "wars", count: 6 });
+    expect(warsFor("weekly.raids.tna.12.or.wars.60")).toEqual({ type: "wars", count: 60 });
+    expect(warsFor("weekly.raids.any.20.or.wars.60")).toEqual({ type: "wars", count: 60 });
+    expect(warsFor("repeatable.raids.any.8.or.wars.24")).toEqual({ type: "wars", count: 24 });
+  });
+
+  it("use each template id once, with one or two ways to finish", () => {
+    expect(new Set(templates.map((template) => template.id)).size).toBe(templates.length);
+    for (const template of templates) {
+      expect(template.objectives.length).toBeGreaterThanOrEqual(1);
+      expect(template.objectives.length).toBeLessThanOrEqual(2);
+    }
+  });
+});
+
 describe("dailies", () => {
   it("finishes the daily and hands out no other until the next day", () => {
     const first = play(openQuestBook(WEDNESDAY_NOON), [raid(WEDNESDAY_NOON), raid(WEDNESDAY_NOON + HOUR)]);
@@ -212,7 +323,11 @@ describe("dailies", () => {
     expect(sameDay.written).toEqual([]);
 
     const nextDay = refreshQuests(first.book, alice, WEDNESDAY_NOON + DAY_MS, rules);
-    expect(nextDay.book.latest.daily).toMatchObject({ sequence: 2, progress: 0, startedAt: MONDAY + 3 * DAY_MS });
+    expect(nextDay.book.latest.daily).toMatchObject({
+      sequence: 2,
+      goals: [{ progress: 0 }],
+      startedAt: MONDAY + 3 * DAY_MS,
+    });
   });
 
   it("banks a daily for each day away, up to the cap", () => {
@@ -239,7 +354,11 @@ describe("dailies", () => {
 
     const result = play(book, [raid(WEDNESDAY_NOON), raid(WEDNESDAY_NOON + 1)]);
 
-    expect(result.book.latest.daily).toMatchObject({ sequence: 2, progress: 0, startedAt: WEDNESDAY_NOON + 1 });
+    expect(result.book.latest.daily).toMatchObject({
+      sequence: 2,
+      goals: [{ progress: 0 }],
+      startedAt: WEDNESDAY_NOON + 1,
+    });
   });
 });
 
@@ -251,12 +370,12 @@ describe("the weekly", () => {
     expect(done.completed).toContain("weekly:1");
 
     const more = play(done.book, [raid(WEDNESDAY_NOON + DAY_MS)]);
-    expect(more.book.latest.weekly).toMatchObject({ sequence: 1, progress: 3 });
+    expect(more.book.latest.weekly).toMatchObject({ sequence: 1, goals: [{ progress: 3 }] });
 
     const nextWeek = refreshQuests(more.book, alice, MONDAY + WEEK_MS, rules);
     expect(nextWeek.book.latest.weekly).toMatchObject({
       sequence: 2,
-      progress: 0,
+      goals: [{ progress: 0 }],
       startedAt: MONDAY + WEEK_MS,
       expiresAt: MONDAY + 2 * WEEK_MS,
     });
@@ -268,7 +387,7 @@ describe("the weekly", () => {
     const nextWeek = play(partial.book, [raid(MONDAY + WEEK_MS + HOUR)]);
 
     expect(nextWeek.completed).not.toContain("weekly:1");
-    expect(nextWeek.book.latest.weekly).toMatchObject({ sequence: 2, progress: 1 });
+    expect(nextWeek.book.latest.weekly).toMatchObject({ sequence: 2, goals: [{ progress: 1 }] });
   });
 });
 
@@ -279,7 +398,7 @@ describe("the repeatable", () => {
     const result = play(openQuestBook(WEDNESDAY_NOON), raids);
 
     expect(result.completed.filter((key) => key.startsWith("repeatable"))).toEqual(["repeatable:1", "repeatable:2"]);
-    expect(result.book.latest.repeatable).toMatchObject({ sequence: 3, progress: 0 });
+    expect(result.book.latest.repeatable).toMatchObject({ sequence: 3, goals: [{ progress: 0 }] });
   });
 });
 
@@ -340,12 +459,23 @@ describe("calendar and wording", () => {
     expect(new Date(MONDAY).getUTCDay()).toBe(1);
   });
 
-  it("words quests the way players say them", () => {
-    expect(questTitle({ type: "raids", raid: "nol", count: 3 })).toBe("Complete 3 NOL raids");
-    expect(questTitle({ type: "raids", count: 8 })).toBe("Complete 8 raids");
-    expect(questTitle({ type: "raids", count: 1 })).toBe("Complete 1 raid");
-    expect(questTitle({ type: "wars", count: 2 })).toBe("Take part in 2 wars");
-    expect(questTitle({ type: "season_rating", amount: 1000 })).toBe("Earn 1,000 season rating");
+  it("words objectives the way players say them", () => {
+    expect(objectiveTitle({ type: "raids", raid: "nol", count: 3 })).toBe("Complete 3 NOL raids");
+    expect(objectiveTitle({ type: "raids", count: 8 })).toBe("Complete 8 raids");
+    expect(objectiveTitle({ type: "raids", count: 1 })).toBe("Complete 1 raid");
+    expect(objectiveTitle({ type: "wars", count: 2 })).toBe("Take part in 2 wars");
+    expect(objectiveTitle({ type: "season_rating", amount: 1000 })).toBe("Earn 1,000 season rating");
+  });
+
+  it("words a quest with two ways as one sentence", () => {
+    expect(questTitle([NOL_RAIDS, NINE_WARS])).toBe("Complete 3 NOL raids or 9 wars");
+    expect(
+      questTitle([
+        { type: "wars", count: 2 },
+        { type: "raids", count: 1 },
+      ]),
+    ).toBe("Take part in 2 wars or 1 raid");
+    expect(questTitle([{ type: "season_rating", amount: 1000 }])).toBe("Earn 1,000 season rating");
   });
 });
 
