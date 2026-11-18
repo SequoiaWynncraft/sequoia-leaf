@@ -96,7 +96,15 @@ function warActivity(row: unknown): Activity | undefined {
   if (typeof warPoints !== "number" || !Number.isFinite(warPoints)) {
     throw new CreditFeedError("A war credit has war_points that is neither a number nor null");
   }
-  return { ...activity, warPoints };
+  // Left out, or null, when the backend does not know whether the territory was in Sequoia's claim.
+  const inClaim = row["in_claim"];
+  if (inClaim === undefined || inClaim === null) {
+    return { ...activity, warPoints };
+  }
+  if (typeof inClaim !== "boolean") {
+    throw new CreditFeedError("A war credit has in_claim that is neither true, false nor null");
+  }
+  return { ...activity, warPoints, inClaim };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

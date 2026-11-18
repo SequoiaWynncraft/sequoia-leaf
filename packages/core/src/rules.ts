@@ -16,8 +16,14 @@ export interface Rules {
 export interface EarningRules {
   /** Leaf paid to each party member per point of season rating a raid earns. */
   readonly leafPerRaidSeasonRating: number;
-  /** Leaf paid to a participant per war point they scored. */
+  /** Leaf paid to a participant per war point they scored, in an FFA war or a snipe. */
   readonly leafPerWarPoint: number;
+  /**
+   * Leaf per war point in a war over Sequoia's own claim. The guild agreed that
+   * defending pays a lot and FFA and snipes a little; war points already score
+   * a claim war about three times an FFA one, and this doubles it again.
+   */
+  readonly leafPerClaimWarPoint: number;
 }
 
 export interface LevelRules {
@@ -90,6 +96,7 @@ export const DEFAULT_RULES: Rules = {
   earning: {
     leafPerRaidSeasonRating: 1,
     leafPerWarPoint: 1,
+    leafPerClaimWarPoint: 2,
   },
   quests: {
     templates: QUEST_TEMPLATES,
@@ -104,13 +111,15 @@ export const DEFAULT_RULES: Rules = {
 
 /**
  * The Leaf an activity pays, as a whole number that is never negative. A war
- * scored at zero or below pays nothing but still counts as an activity.
+ * scored at zero or below pays nothing but still counts as an activity. A war
+ * over Sequoia's claim pays its own rate; one the backend could not place pays
+ * the ordinary rate.
  */
 export function leafForActivity(activity: Activity, rules: EarningRules): number {
   const raw =
     activity.kind === "raid"
       ? activity.seasonRating * rules.leafPerRaidSeasonRating
-      : activity.warPoints * rules.leafPerWarPoint;
+      : activity.warPoints * (activity.inClaim === true ? rules.leafPerClaimWarPoint : rules.leafPerWarPoint);
   return Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
 }
 
