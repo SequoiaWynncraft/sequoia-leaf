@@ -98,9 +98,11 @@ Every member has three quest slots. The templates and rewards are in
   04:00, 08:00, 12:00, 16:00 and 20:00 UTC, so there is a two-hour gap between
   them. It pays more than a daily for less time to do it in. The timed
   templates take turns in a fixed order, so two windows in a row never share one.
+  The first window opened at 04:00 UTC on 19 November 2026; none comes before it,
+  even for an activity reported late.
 - **Repeatable.** Finishing one unlocks the next. Off for now: the default rules
   have no repeatable templates, and the ones open when timed quests began were
-  dropped.
+  dropped. Nothing counts toward them, even an activity reported late.
 
 A quest asks for one or two of these. Most ask for two, raids or wars, as in
 "Complete 3 NOL raids or 9 wars", so raiders and warrers can both finish them.

@@ -123,8 +123,9 @@ export const DEFAULT_RULES: Rules = {
   quests: {
     templates: QUEST_TEMPLATES,
     dailyChargeCap: 3,
-    // A timed quest opens at 00:00, 04:00, 08:00, ... UTC, for two hours each.
-    timed: { everyMs: 4 * HOUR_MS, openMs: 2 * HOUR_MS },
+    // A timed quest opens at 00:00, 04:00, 08:00, ... UTC, for two hours each,
+    // from the first window after they launched.
+    timed: { everyMs: 4 * HOUR_MS, openMs: 2 * HOUR_MS, firstAt: Date.UTC(2026, 10, 19, 4) },
   },
   levels: {
     firstLevelXp: 1000,
