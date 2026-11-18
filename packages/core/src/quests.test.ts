@@ -389,7 +389,7 @@ describe("timed quests", () => {
     expect(DEFAULT_RULES.quests.templates.some((template) => template.slot === "repeatable")).toBe(false);
   });
 
-  it("leave a repeatable dropped for them unfinished, even for an activity reported late", () => {
+  it("leave a repeatable unfinished once the rules hand none out, however it was handed out", () => {
     const dropped = {
       ...openQuestBook(WEDNESDAY_NOON),
       latest: {
@@ -400,13 +400,16 @@ describe("timed quests", () => {
           goals: [{ objective: { type: "raids" as const, count: 2 }, progress: 1 }],
           reward: { leaf: 50, xp: 25 },
           startedAt: WEDNESDAY_NOON,
-          expiresAt: WEDNESDAY_NOON,
+          expiresAt: null,
           completedAt: null,
         },
       },
     };
 
-    expect(play(dropped, [raid(WEDNESDAY_NOON + 60_000)], timedRules).completed).toEqual([]);
+    const { book, completed } = play(dropped, [raid(WEDNESDAY_NOON + 60_000)], timedRules);
+    expect(completed).toEqual([]);
+    expect(book.latest.repeatable).toMatchObject({ sequence: 4, expiresAt: WEDNESDAY_NOON });
+    expect(currentQuests(book, WEDNESDAY_NOON + HOUR).map((quest) => quest.slot)).toEqual(["timed"]);
   });
 
   it("open no window before the first, even for an activity reported late", () => {
@@ -425,6 +428,8 @@ describe("timed quests", () => {
     expect(book.latest.timed).toBeUndefined();
     expect(timedWindowAt(WEDNESDAY_NOON, launch.timed)).toBeUndefined();
     expect(nextTimedWindowAt(WEDNESDAY_NOON - 8 * HOUR, launch.timed)).toBe(WEDNESDAY_NOON + 4 * HOUR);
+    const unaligned = { ...launch.timed, firstAt: WEDNESDAY_NOON + 5 * HOUR };
+    expect(nextTimedWindowAt(WEDNESDAY_NOON + 3 * HOUR, unaligned)).toBe(WEDNESDAY_NOON + 8 * HOUR);
     expect(refreshQuests(book, alice, WEDNESDAY_NOON + 4 * HOUR, launch).book.latest.timed).toMatchObject({
       startedAt: WEDNESDAY_NOON + 4 * HOUR,
     });

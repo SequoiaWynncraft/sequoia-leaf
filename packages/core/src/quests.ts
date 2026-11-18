@@ -82,7 +82,8 @@ export function timedWindowAt(at: number, rules: TimedQuestRules): TimedWindow |
 
 /** When the next timed window opens after this moment. */
 export function nextTimedWindowAt(at: number, rules: TimedQuestRules): number {
-  return Math.max(rules.firstAt, (Math.floor(at / rules.everyMs) + 1) * rules.everyMs);
+  const first = Math.ceil(rules.firstAt / rules.everyMs) * rules.everyMs;
+  return Math.max(first, (Math.floor(at / rules.everyMs) + 1) * rules.everyMs);
 }
 
 /**
@@ -310,6 +311,18 @@ function finishStep(step: Step): QuestStep {
 }
 
 function refresh(step: Step, at: number): void {
+  // A slot the rules hand nothing out in is off. A quest still open there, however
+  // it got there, ends where it began, so nothing counts toward it or shows it.
+  for (const slot of QUEST_SLOTS) {
+    const quest = step.latest[slot];
+    if (
+      quest?.completedAt === null &&
+      holdsSlot(quest, quest.startedAt) &&
+      !step.rules.templates.some((template) => template.slot === slot)
+    ) {
+      write(step, { ...quest, expiresAt: quest.startedAt });
+    }
+  }
   const day = utcDay(at);
   if (day > step.dailyChargedDay) {
     step.dailyCharges = Math.min(step.rules.dailyChargeCap, step.dailyCharges + (day - step.dailyChargedDay));
