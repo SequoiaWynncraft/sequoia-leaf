@@ -45,6 +45,12 @@ export type Activity =
       readonly territory: string;
       /** The participant's share of the war, as scored by the backend. */
       readonly warPoints: number;
+      /**
+       * Whether the territory was in Sequoia's claim when the war was won: the
+       * guild taking back its own ground, which members call defending. Left out
+       * when the backend does not know.
+       */
+      readonly inClaim?: boolean;
     });
 
 export type ActivityKind = Activity["kind"];

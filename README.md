@@ -137,14 +137,17 @@ only grows.
 
 | Type               | When                       | `data`                                                                                     |
 | ------------------ | -------------------------- | ------------------------------------------------------------------------------------------ |
-| `leaf_earned`      | A raid or war paid Leaf.   | `source`, `leaf`, `xp`, `detail`, `occurred_at`                                            |
+| `leaf_earned`      | A raid or war paid Leaf.   | `source`, `leaf`, `xp`, `detail`, `occurred_at`, and for a war `in_claim`                  |
 | `quest_completed`  | A quest finished and paid. | `quest`, in the shape `/v1/me/quests` uses                                                 |
 | `level_up`         | XP reached a new level.    | `level`                                                                                    |
 | `achievement_paid` | A milestone paid Leaf.     | `award_id`, `ladder`, `milestone`, `tier`, `threshold`, `label`, `leaf`, `xp`, `earned_at` |
 
 `detail` is the raid's name or the territory fought over. `occurred_at` is when
 the raid or war was played, which can be well before the event: a credit that
-appears late is paid, and reported, when it appears.
+appears late is paid, and reported, when it appears. `in_claim` is `true` for a
+war over a territory in Sequoia's claim, a defence, which pays twice as much per
+war point; `false` for an FFA war or a snipe; and left out when the backend
+could not tell.
 
 `GET /v1/me/events` answers `{ "events": [{ "id", "type", "created_at", "data" }] }`.
 With `?after=<id>` it lists up to 100 events after that id; without, the newest 50.
