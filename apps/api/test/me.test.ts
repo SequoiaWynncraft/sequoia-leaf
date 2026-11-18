@@ -142,28 +142,23 @@ describe("GET /v1/me", () => {
 });
 
 describe("GET /v1/me/quests", () => {
-  it("shows a new member a daily, a weekly and a repeatable without storing anything", async () => {
+  it("shows a new member a daily, a weekly and the open timed quest without storing anything", async () => {
     const response = await get("/v1/me/quests");
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       daily: { charges: 1, charge_cap: 3, next_charge_at: "2026-11-05T00:00:00.000Z" },
+      timed: { ends_at: "2026-11-04T14:00:00.000Z", next_at: "2026-11-04T16:00:00.000Z" },
       quests: [
         { id: "daily:1", progress: 0 },
         { id: "weekly:1", progress: 0 },
         {
-          id: "repeatable:1",
-          title: "Complete 8 raids or 24 wars",
-          objective: { type: "raids", raid: null },
+          id: "timed:1",
+          slot: "timed",
           progress: 0,
-          target: 8,
-          goals: [
-            { type: "raids", raid: null, title: "Complete 8 raids", progress: 0, target: 8 },
-            { type: "wars", raid: null, title: "Take part in 24 wars", progress: 0, target: 24 },
-          ],
-          reward: { leaf: 200, xp: 100 },
+          reward: { leaf: 500, xp: 250 },
           started_at: "2026-11-04T12:00:00.000Z",
-          expires_at: null,
+          expires_at: "2026-11-04T14:00:00.000Z",
           completed_at: null,
         },
       ],
@@ -190,9 +185,7 @@ describe("GET /v1/me/quests", () => {
 
     const response = await get("/v1/me/quests?sync=1");
 
-    expect(await response.json()).toMatchObject({
-      quests: expect.arrayContaining([expect.objectContaining({ slot: "repeatable", progress: 1, target: 8 })]),
-    });
+    expect(await response.json()).toMatchObject({ quests: [{ slot: "daily" }, { slot: "weekly" }, { slot: "timed" }] });
     expect(await (await get("/v1/me")).json()).toMatchObject({ leaf: 110, xp: 110 });
   });
 
