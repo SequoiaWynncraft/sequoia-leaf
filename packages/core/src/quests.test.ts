@@ -17,7 +17,7 @@ import {
   utcWeekStart,
   WEEK_MS,
 } from "./quests.ts";
-import { DEFAULT_RULES, levelForXp } from "./rules.ts";
+import { DEFAULT_RULES, leafForLevel, levelForXp } from "./rules.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const HOUR = 60 * 60 * 1000;
@@ -350,7 +350,7 @@ describe("calendar and wording", () => {
 });
 
 describe("levelForXp", () => {
-  const levels = { firstLevelXp: 1000, xpGrowthPerLevel: 250 };
+  const levels = { firstLevelXp: 1000, xpGrowthPerLevel: 250, firstLevelLeaf: 100, leafGrowthPerLevel: 25 };
 
   it("starts everyone at level 1", () => {
     expect(levelForXp(0, levels)).toEqual({ level: 1, xpIntoLevel: 0, xpForNextLevel: 1000 });
@@ -361,5 +361,28 @@ describe("levelForXp", () => {
     expect(levelForXp(1000, levels)).toEqual({ level: 2, xpIntoLevel: 0, xpForNextLevel: 1250 });
     expect(levelForXp(2249, levels)).toEqual({ level: 2, xpIntoLevel: 1249, xpForNextLevel: 1250 });
     expect(levelForXp(2250, levels)).toEqual({ level: 3, xpIntoLevel: 0, xpForNextLevel: 1500 });
+  });
+});
+
+describe("leafForLevel", () => {
+  const levels = { firstLevelXp: 1000, xpGrowthPerLevel: 250, firstLevelLeaf: 100, leafGrowthPerLevel: 25 };
+
+  it("pays nothing for the level everyone starts at", () => {
+    expect(leafForLevel(1, levels)).toBe(0);
+    expect(leafForLevel(0, levels)).toBe(0);
+    expect(leafForLevel(2.5, levels)).toBe(0);
+  });
+
+  it("pays a fixed amount more for each further level", () => {
+    expect(leafForLevel(2, levels)).toBe(100);
+    expect(leafForLevel(3, levels)).toBe(125);
+    expect(leafForLevel(10, levels)).toBe(300);
+  });
+
+  it("pays a tenth of the XP each level took, as the guild's rules are set", () => {
+    for (let level = 2; level <= 40; level += 1) {
+      const took = DEFAULT_RULES.levels.firstLevelXp + (level - 2) * DEFAULT_RULES.levels.xpGrowthPerLevel;
+      expect(leafForLevel(level, DEFAULT_RULES.levels)).toBe(took / 10);
+    }
   });
 });

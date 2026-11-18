@@ -12,6 +12,7 @@ import {
 
 import { insertEvent } from "../events/store.ts";
 import { getAccount, insertEntry } from "../ledger/store.ts";
+import { payLevels } from "../levels/pay.ts";
 import { type SyncMode, type SyncResult, windowedSync } from "../sync/windowed.ts";
 
 /** Returns the achievement milestones players reached during [from, to), in milliseconds since the Unix epoch. */
@@ -76,7 +77,9 @@ export async function syncAchievements(
     for (const [playerId, before] of levelBefore) {
       const after = levelForXp(getAccount(db, playerId).xp, rules.levels).level;
       if (after > before) {
-        insertEvent(db, playerId, { type: "level_up", data: { level: after } }, now);
+        const levelLeaf = payLevels(db, playerId, rules.levels, now);
+        leafPaid += levelLeaf;
+        insertEvent(db, playerId, { type: "level_up", data: { level: after, leaf: levelLeaf } }, now);
       }
     }
     return { recorded, leafPaid };

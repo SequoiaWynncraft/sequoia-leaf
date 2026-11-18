@@ -12,7 +12,8 @@ with type-aware rules.
 
 Live at `https://leaf.seqwawa.com` since 16 November 2026, on the Sequoia
 server. It reads sequoia-backend's player credit feed every minute, pays Leaf
-and XP for raids and wars, and runs quests on top of them. Signed-in members
+and XP for raids and wars, runs quests on top of them, and pays Leaf for each
+level a member reaches: a tenth of the XP the level took. Signed-in members
 can read their balance, level and quests. There is no way to spend Leaf yet
 and there are no staff endpoints.
 
@@ -139,7 +140,7 @@ only grows.
 | ------------------ | -------------------------- | ------------------------------------------------------------------------------------------ |
 | `leaf_earned`      | A raid or war paid Leaf.   | `source`, `leaf`, `xp`, `detail`, `occurred_at`, and for a war `in_claim`                  |
 | `quest_completed`  | A quest finished and paid. | `quest`, in the shape `/v1/me/quests` uses                                                 |
-| `level_up`         | XP reached a new level.    | `level`                                                                                    |
+| `level_up`         | XP reached a new level.    | `level`, and `leaf`, what the levels reached paid                                          |
 | `achievement_paid` | A milestone paid Leaf.     | `award_id`, `ladder`, `milestone`, `tier`, `threshold`, `label`, `leaf`, `xp`, `earned_at` |
 
 `detail` is the raid's name or the territory fought over. `occurred_at` is when

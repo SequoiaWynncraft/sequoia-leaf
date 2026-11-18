@@ -1,3 +1,5 @@
+import { DEFAULT_RULES } from "@sequoia-leaf/core";
+
 import { runScheduledAchievementSync } from "./achievements/run.ts";
 import { createApp } from "./app.ts";
 import { bucketOffsite, offsiteCopier } from "./backup/offsite.ts";
@@ -5,6 +7,7 @@ import { snapshotIfDue } from "./backup/snapshot.ts";
 import { readConfig } from "./config.ts";
 import { openDatabase } from "./db.ts";
 import { runScheduledSync } from "./earning/run.ts";
+import { payMissedLevels } from "./levels/pay.ts";
 import { everyMinute } from "./schedule.ts";
 import type { Services } from "./services.ts";
 
@@ -17,6 +20,16 @@ const services: Services = {
   fetcher: (url, init) => fetch(url, init),
   now: () => Date.now(),
 };
+
+// Levels reached before levels paid Leaf, or left unpaid by a failed run, are paid here once.
+try {
+  const missed = payMissedLevels(db, DEFAULT_RULES.levels, services.now());
+  if (missed.leaf > 0) {
+    console.log(JSON.stringify({ event: "missed_levels_paid", players: missed.players, leaf: missed.leaf }));
+  }
+} catch (error) {
+  console.error("Paying for levels already reached failed; trying again at the next start", error);
+}
 
 const server = Bun.serve({
   port: config.port,

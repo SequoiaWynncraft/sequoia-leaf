@@ -15,6 +15,7 @@ import {
 
 import { insertEvent } from "../events/store.ts";
 import { getAccount, insertEntry } from "../ledger/store.ts";
+import { payLevels } from "../levels/pay.ts";
 import { questJson } from "../quests/json.ts";
 import { loadQuestBook, saveQuestStep } from "../quests/store.ts";
 import { type SyncMode, type SyncResult, windowedSync } from "../sync/windowed.ts";
@@ -118,7 +119,9 @@ function recordPlayer(
   saveQuestStep(db, playerId, { book, written: [...written.values()], completed }, now);
   const levelAfter = levelForXp(getAccount(db, playerId).xp, rules.levels).level;
   if (levelAfter > levelBefore) {
-    insertEvent(db, playerId, { type: "level_up", data: { level: levelAfter } }, now);
+    const levelLeaf = payLevels(db, playerId, rules.levels, now);
+    leafPaid += levelLeaf;
+    insertEvent(db, playerId, { type: "level_up", data: { level: levelAfter, leaf: levelLeaf } }, now);
   }
   return leafPaid;
 }
