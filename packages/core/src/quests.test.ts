@@ -325,12 +325,12 @@ const timedRules: QuestRules = {
     { id: "timed.a", slot: "timed", objectives: [TIMED_A], reward: { leaf: 500, xp: 250 } },
     { id: "timed.b", slot: "timed", objectives: [TIMED_B], reward: { leaf: 500, xp: 250 } },
   ],
-  timed: { everyMs: 4 * HOUR, openMs: 2 * HOUR },
+  timed: { everyMs: 4 * HOUR, openMs: 2 * HOUR, firstAt: 0 },
 };
 
 describe("timed quests", () => {
   it("open for two hours every four, from midnight UTC", () => {
-    const schedule = { everyMs: 4 * HOUR, openMs: 2 * HOUR };
+    const schedule = { everyMs: 4 * HOUR, openMs: 2 * HOUR, firstAt: 0 };
     expect(timedWindowAt(WEDNESDAY_NOON, schedule)).toEqual({
       index: Math.floor(WEDNESDAY_NOON / (4 * HOUR)),
       start: WEDNESDAY_NOON,
@@ -381,11 +381,53 @@ describe("timed quests", () => {
   });
 
   it("take the third slot in the default rules, which hand out no repeatable", () => {
-    const { book } = refreshQuests(openQuestBook(WEDNESDAY_NOON), alice, WEDNESDAY_NOON, DEFAULT_RULES.quests);
+    const launched = Date.UTC(2026, 10, 25, 12);
+    const { book } = refreshQuests(openQuestBook(launched), alice, launched, DEFAULT_RULES.quests);
 
-    expect(currentQuests(book, WEDNESDAY_NOON).map((quest) => quest.slot)).toEqual(["daily", "weekly", "timed"]);
+    expect(currentQuests(book, launched).map((quest) => quest.slot)).toEqual(["daily", "weekly", "timed"]);
     expect(book.latest.timed?.reward).toEqual({ leaf: 500, xp: 250 });
     expect(DEFAULT_RULES.quests.templates.some((template) => template.slot === "repeatable")).toBe(false);
+  });
+
+  it("leave a repeatable dropped for them unfinished, even for an activity reported late", () => {
+    const dropped = {
+      ...openQuestBook(WEDNESDAY_NOON),
+      latest: {
+        repeatable: {
+          slot: "repeatable" as const,
+          sequence: 4,
+          templateId: "repeatable",
+          goals: [{ objective: { type: "raids" as const, count: 2 }, progress: 1 }],
+          reward: { leaf: 50, xp: 25 },
+          startedAt: WEDNESDAY_NOON,
+          expiresAt: WEDNESDAY_NOON,
+          completedAt: null,
+        },
+      },
+    };
+
+    expect(play(dropped, [raid(WEDNESDAY_NOON + 60_000)], timedRules).completed).toEqual([]);
+  });
+
+  it("open no window before the first, even for an activity reported late", () => {
+    const launch = {
+      ...timedRules,
+      timed: { everyMs: 4 * HOUR, openMs: 2 * HOUR, firstAt: WEDNESDAY_NOON + 4 * HOUR },
+    };
+    const early = refreshQuests(openQuestBook(WEDNESDAY_NOON), alice, WEDNESDAY_NOON + 3 * HOUR, launch).book;
+    const { book, completed } = play(
+      early,
+      [raid(WEDNESDAY_NOON + 10 * 60_000), raid(WEDNESDAY_NOON + 20 * 60_000)],
+      launch,
+    );
+
+    expect(completed).toEqual([]);
+    expect(book.latest.timed).toBeUndefined();
+    expect(timedWindowAt(WEDNESDAY_NOON, launch.timed)).toBeUndefined();
+    expect(nextTimedWindowAt(WEDNESDAY_NOON - 8 * HOUR, launch.timed)).toBe(WEDNESDAY_NOON + 4 * HOUR);
+    expect(refreshQuests(book, alice, WEDNESDAY_NOON + 4 * HOUR, launch).book.latest.timed).toMatchObject({
+      startedAt: WEDNESDAY_NOON + 4 * HOUR,
+    });
   });
 });
 

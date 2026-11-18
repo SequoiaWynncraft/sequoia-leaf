@@ -56,11 +56,14 @@ export interface QuestRules {
 
 /**
  * Timed quests open on a fixed UTC schedule: one window starts every
- * `everyMs`, counted from midnight, and stays open for `openMs`.
+ * `everyMs`, counted from midnight, and stays open for `openMs`. No window
+ * starts before `firstAt`, so an activity reported late from before timed
+ * quests began never earns one.
  */
 export interface TimedQuestRules {
   readonly everyMs: number;
   readonly openMs: number;
+  readonly firstAt: number;
 }
 
 /** One timed quest window: open from `start` until `end`, numbered from the Unix epoch. */
@@ -74,12 +77,12 @@ export interface TimedWindow {
 export function timedWindowAt(at: number, rules: TimedQuestRules): TimedWindow | undefined {
   const index = Math.floor(at / rules.everyMs);
   const start = index * rules.everyMs;
-  return at < start + rules.openMs ? { index, start, end: start + rules.openMs } : undefined;
+  return start >= rules.firstAt && at < start + rules.openMs ? { index, start, end: start + rules.openMs } : undefined;
 }
 
 /** When the next timed window opens after this moment. */
 export function nextTimedWindowAt(at: number, rules: TimedQuestRules): number {
-  return (Math.floor(at / rules.everyMs) + 1) * rules.everyMs;
+  return Math.max(rules.firstAt, (Math.floor(at / rules.everyMs) + 1) * rules.everyMs);
 }
 
 /**

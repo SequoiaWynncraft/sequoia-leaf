@@ -142,29 +142,43 @@ describe("GET /v1/me", () => {
 });
 
 describe("GET /v1/me/quests", () => {
-  it("shows a new member a daily, a weekly and the open timed quest without storing anything", async () => {
+  it("shows a new member a daily and a weekly without storing anything, and when timed quests begin", async () => {
     const response = await get("/v1/me/quests");
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       daily: { charges: 1, charge_cap: 3, next_charge_at: "2026-11-05T00:00:00.000Z" },
-      timed: { ends_at: "2026-11-04T14:00:00.000Z", next_at: "2026-11-04T16:00:00.000Z" },
+      timed: { ends_at: null, next_at: "2026-11-19T04:00:00.000Z" },
       quests: [
         { id: "daily:1", progress: 0 },
         { id: "weekly:1", progress: 0 },
+      ],
+      recently_completed: [],
+    });
+    expect(services.db.query("SELECT COUNT(*) AS n FROM quests").get()).toEqual({ n: 0 });
+  });
+
+  it("shows the open timed quest, the same window for everyone", async () => {
+    clock.now = Date.UTC(2026, 10, 25, 12, 30);
+
+    const response = await get("/v1/me/quests");
+
+    expect(await response.json()).toMatchObject({
+      timed: { ends_at: "2026-11-25T14:00:00.000Z", next_at: "2026-11-25T16:00:00.000Z" },
+      quests: [
+        { slot: "daily" },
+        { slot: "weekly" },
         {
           id: "timed:1",
           slot: "timed",
           progress: 0,
           reward: { leaf: 500, xp: 250 },
-          started_at: "2026-11-04T12:00:00.000Z",
-          expires_at: "2026-11-04T14:00:00.000Z",
+          started_at: "2026-11-25T12:00:00.000Z",
+          expires_at: "2026-11-25T14:00:00.000Z",
           completed_at: null,
         },
       ],
-      recently_completed: [],
     });
-    expect(services.db.query("SELECT COUNT(*) AS n FROM quests").get()).toEqual({ n: 0 });
   });
 
   it("syncs on request, so a raid just finished shows in the same answer", async () => {
@@ -185,7 +199,7 @@ describe("GET /v1/me/quests", () => {
 
     const response = await get("/v1/me/quests?sync=1");
 
-    expect(await response.json()).toMatchObject({ quests: [{ slot: "daily" }, { slot: "weekly" }, { slot: "timed" }] });
+    expect(await response.json()).toMatchObject({ quests: [{ slot: "daily" }, { slot: "weekly" }] });
     expect(await (await get("/v1/me")).json()).toMatchObject({ leaf: 110, xp: 110 });
   });
 

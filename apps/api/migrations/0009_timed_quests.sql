@@ -1,6 +1,7 @@
 -- Timed quests take the third slot: the same quest for the whole guild, open for
 -- a short window every few hours. Repeatable quests stop being handed out, and
--- the ones still open are dropped: they expire now, so they no longer count or
+-- the ones still open are dropped: they expire as of when they started, so no
+-- activity counts toward them, not even one reported late, and they no longer
 -- show. Finished ones stay as they are.
 --
 -- SQLite cannot change a CHECK constraint, so the table is rebuilt with 'timed'
@@ -47,5 +48,5 @@ DROP TABLE quests;
 ALTER TABLE quests_rebuilt RENAME TO quests;
 
 UPDATE quests
-SET expires_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000
+SET expires_at = started_at
 WHERE slot = 'repeatable' AND completed_at IS NULL AND expires_at IS NULL;

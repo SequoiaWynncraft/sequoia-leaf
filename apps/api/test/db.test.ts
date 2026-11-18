@@ -191,7 +191,6 @@ describe("openDatabase", () => {
          ('${alice}', 'repeatable', 4, 'repeatable.raids.any.8', 'raids', NULL, 8, 200, 100, 7, 40, NULL, NULL),
          ('${alice}', 'daily', 1, 'daily.raids.any.2', 'raids', NULL, 2, 200, 100, 1, 10, NULL, NULL)`,
     );
-    const startedAt = Date.now();
 
     migrate(db);
 
@@ -203,7 +202,7 @@ describe("openDatabase", () => {
     expect(rows.map((row) => row.quest)).toEqual(["daily:1", "repeatable:3", "repeatable:4"]);
     expect(rows[0]?.expires_at).toBeNull();
     expect(rows[1]?.expires_at).toBeNull();
-    expect(rows[2]?.expires_at).toBeGreaterThanOrEqual(Math.floor(startedAt / 1000) * 1000);
+    expect(rows[2]?.expires_at).toBe(40);
     db.run(
       `INSERT INTO quests (${FIRST_QUEST_COLUMNS})
        VALUES ('${alice}', 'timed', 1, 'timed.raids.any.3.or.wars.9', 'raids', NULL, 3, 500, 250, 0, 50, 60, NULL)`,
