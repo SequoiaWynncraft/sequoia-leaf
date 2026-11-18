@@ -8,6 +8,7 @@ import {
   type Quest,
   QUEST_SLOTS,
   type QuestBook,
+  type QuestGoal,
   type QuestObjective,
   type QuestSlot,
   type QuestStep,
@@ -30,10 +31,17 @@ interface QuestRow {
   started_at: number;
   expires_at: number | null;
   completed_at: number | null;
+  alternative_type: string | null;
+  alternative_raid: string | null;
+  alternative_target: number | null;
+  alternative_progress: number | null;
 }
 
 const QUEST_COLUMNS =
-  "slot, sequence, template_id, objective_type, objective_raid, target, reward_leaf, reward_xp, progress, started_at, expires_at, completed_at";
+  "slot, sequence, template_id, objective_type, objective_raid, target, reward_leaf, reward_xp, progress, started_at, expires_at, completed_at, alternative_type, alternative_raid, alternative_target, alternative_progress";
+
+/** A quest row holds its first goal in the objective columns and a second, when it has one, in the alternative ones. */
+const MAX_GOALS = 2;
 
 function isSlot(value: string): value is QuestSlot {
   return QUEST_SLOTS.some((slot) => slot === value);
@@ -43,23 +51,50 @@ function isRaidKey(value: string): value is RaidKey {
   return RAID_KEYS.some((key) => key === value);
 }
 
-function toObjective(row: QuestRow): QuestObjective {
-  if (row.objective_type === "wars") {
-    return { type: "wars", count: row.target };
+function toObjective(type: string, raid: string | null, target: number): QuestObjective {
+  if (type === "wars") {
+    return { type: "wars", count: target };
   }
-  if (row.objective_type === "season_rating") {
-    return { type: "season_rating", amount: row.target };
+  if (type === "season_rating") {
+    return { type: "season_rating", amount: target };
   }
-  if (row.objective_type !== "raids") {
-    throw new Error(`Quest has an unknown objective type: ${row.objective_type}`);
+  if (type !== "raids") {
+    throw new Error(`Quest has an unknown objective type: ${type}`);
   }
-  if (row.objective_raid === null) {
-    return { type: "raids", count: row.target };
+  if (raid === null) {
+    return { type: "raids", count: target };
   }
-  if (!isRaidKey(row.objective_raid)) {
-    throw new Error(`Quest names an unknown raid: ${row.objective_raid}`);
+  if (!isRaidKey(raid)) {
+    throw new Error(`Quest names an unknown raid: ${raid}`);
   }
-  return { type: "raids", raid: row.objective_raid, count: row.target };
+  return { type: "raids", raid, count: target };
+}
+
+function toGoals(row: QuestRow): QuestGoal[] {
+  const goals = [
+    { objective: toObjective(row.objective_type, row.objective_raid, row.target), progress: row.progress },
+  ];
+  if (row.alternative_type !== null && row.alternative_target !== null && row.alternative_progress !== null) {
+    goals.push({
+      objective: toObjective(row.alternative_type, row.alternative_raid, row.alternative_target),
+      progress: row.alternative_progress,
+    });
+  }
+  return goals;
+}
+
+/** The columns one goal is stored in, or all NULL for an alternative the quest doesn't have. */
+function goalColumns(goal: QuestGoal | undefined): [string | null, string | null, number | null, number | null] {
+  if (goal === undefined) {
+    return [null, null, null, null];
+  }
+  const { objective, progress } = goal;
+  return [
+    objective.type,
+    objective.type === "raids" ? (objective.raid ?? null) : null,
+    objectiveTarget(objective),
+    progress,
+  ];
 }
 
 function toQuest(row: QuestRow): Quest {
@@ -70,9 +105,8 @@ function toQuest(row: QuestRow): Quest {
     slot: row.slot,
     sequence: row.sequence,
     templateId: row.template_id,
-    objective: toObjective(row),
+    goals: toGoals(row),
     reward: { leaf: row.reward_leaf, xp: row.reward_xp },
-    progress: row.progress,
     startedAt: row.started_at,
     expiresAt: row.expires_at,
     completedAt: row.completed_at,
@@ -131,24 +165,33 @@ export function saveQuestStep(db: Database, playerId: PlayerId, step: QuestStep,
      SET daily_charges = excluded.daily_charges, daily_charged_day = excluded.daily_charged_day`,
   ).run(playerId, step.book.dailyCharges, step.book.dailyChargedDay);
   for (const quest of step.written) {
+    const [first, second] = quest.goals;
+    if (first === undefined || quest.goals.length > MAX_GOALS) {
+      throw new Error(
+        `Quest ${quest.slot}:${quest.sequence} has ${quest.goals.length} goals; it can have 1 to ${MAX_GOALS}`,
+      );
+    }
+    const [type, raid, target, progress] = goalColumns(first);
     db.query(
-      `INSERT INTO quests (player_id, ${QUEST_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO quests (player_id, ${QUEST_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (player_id, slot, sequence) DO UPDATE
-       SET progress = excluded.progress, completed_at = excluded.completed_at`,
+       SET progress = excluded.progress, alternative_progress = excluded.alternative_progress,
+           completed_at = excluded.completed_at`,
     ).run(
       playerId,
       quest.slot,
       quest.sequence,
       quest.templateId,
-      quest.objective.type,
-      quest.objective.type === "raids" ? (quest.objective.raid ?? null) : null,
-      objectiveTarget(quest.objective),
+      type,
+      raid,
+      target,
       quest.reward.leaf,
       quest.reward.xp,
-      quest.progress,
+      progress,
       quest.startedAt,
       quest.expiresAt,
       quest.completedAt,
+      ...goalColumns(second),
     );
   }
   for (const quest of step.completed) {

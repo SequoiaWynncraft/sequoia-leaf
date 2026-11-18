@@ -26,9 +26,9 @@ const rules: Rules = {
   quests: {
     dailyChargeCap: 3,
     templates: [
-      { id: "daily", slot: "daily", objective: { type: "raids", count: 2 }, reward: { leaf: 200, xp: 100 } },
-      { id: "weekly", slot: "weekly", objective: { type: "raids", count: 3 }, reward: { leaf: 800, xp: 400 } },
-      { id: "repeatable", slot: "repeatable", objective: { type: "raids", count: 2 }, reward: { leaf: 50, xp: 25 } },
+      { id: "daily", slot: "daily", objectives: [{ type: "raids", count: 2 }], reward: { leaf: 200, xp: 100 } },
+      { id: "weekly", slot: "weekly", objectives: [{ type: "raids", count: 3 }], reward: { leaf: 800, xp: 400 } },
+      { id: "repeatable", slot: "repeatable", objectives: [{ type: "raids", count: 2 }], reward: { leaf: 50, xp: 25 } },
     ],
   },
 };
@@ -42,6 +42,18 @@ function raid(id: number, player: PlayerId, occurredAt: number, seasonRating = 1
     seasonRating,
     raid: "tna",
     raidName: "The Nameless Anomaly",
+  };
+}
+
+function war(id: number, player: PlayerId, occurredAt: number): Activity {
+  return {
+    kind: "war",
+    sourceKey: `war:${id}:${player}`,
+    playerId: player,
+    occurredAt,
+    seasonRating: 60,
+    territory: "Detlas",
+    warPoints: 40,
   };
 }
 
@@ -118,6 +130,53 @@ describe("quests in the credit sync", () => {
   });
 });
 
+describe("a quest that raids or wars can finish", () => {
+  const eitherRules: Rules = {
+    ...DEFAULT_RULES,
+    quests: {
+      dailyChargeCap: 3,
+      templates: [
+        {
+          id: "either",
+          slot: "daily",
+          objectives: [
+            { type: "raids", raid: "tna", count: 3 },
+            { type: "wars", count: 3 },
+          ],
+          reward: { leaf: 300, xp: 150 },
+        },
+      ],
+    },
+  };
+
+  it("keeps each goal's progress between runs and pays when the wars finish it", async () => {
+    const activities = [raid(1, alice, T0 + MINUTE), war(2, alice, T0 + 2 * MINUTE)];
+    const source = feed(activities);
+    await syncCredits(db, source, eitherRules, T0, "recent");
+    await syncCredits(db, source, eitherRules, T0 + 5 * MINUTE, "recent");
+
+    expect(loadQuestBook(db, alice)?.latest.daily?.goals.map((goal) => goal.progress)).toEqual([1, 1]);
+
+    activities.push(war(3, alice, T0 + 6 * MINUTE), war(4, alice, T0 + 7 * MINUTE));
+    await syncCredits(db, source, eitherRules, T0 + 10 * MINUTE, "recent");
+
+    // One raid at 110, three wars at 40 and the quest at 300.
+    expect(getAccount(db, alice).balance).toBe(530);
+    const [finished] = listCompletedSince(db, alice, T0);
+    expect(finished === undefined ? undefined : questJson(finished)).toMatchObject({
+      id: "daily:1",
+      title: "Complete 3 TNA raids or 3 wars",
+      objective: { type: "wars", raid: null },
+      progress: 3,
+      target: 3,
+      goals: [
+        { type: "raids", raid: "tna", progress: 1, target: 3 },
+        { type: "wars", raid: null, progress: 3, target: 3 },
+      ],
+    });
+  });
+});
+
 describe("a season rating quest in the credit sync", () => {
   const ratingRules: Rules = {
     ...DEFAULT_RULES,
@@ -127,7 +186,7 @@ describe("a season rating quest in the credit sync", () => {
         {
           id: "rating",
           slot: "daily",
-          objective: { type: "season_rating", amount: 500 },
+          objectives: [{ type: "season_rating", amount: 500 }],
           reward: { leaf: 250, xp: 125 },
         },
       ],
@@ -142,8 +201,7 @@ describe("a season rating quest in the credit sync", () => {
     await syncCredits(db, source, ratingRules, T0 + 5 * MINUTE, "recent");
 
     expect(loadQuestBook(db, alice)?.latest.daily).toMatchObject({
-      objective: { type: "season_rating", amount: 500 },
-      progress: 440,
+      goals: [{ objective: { type: "season_rating", amount: 500 }, progress: 440 }],
       completedAt: null,
     });
 

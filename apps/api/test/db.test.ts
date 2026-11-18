@@ -10,6 +10,12 @@ import { migrate, openDatabase } from "../src/db.ts";
 import { getAccount, postEntry } from "../src/ledger/store.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
+const bob = playerId("00000000-0000-4000-8000-00000000000b");
+const carol = playerId("00000000-0000-4000-8000-00000000000c");
+const dave = playerId("00000000-0000-4000-8000-00000000000d");
+/** The quest columns from before quests had a second way to finish. */
+const FIRST_QUEST_COLUMNS =
+  "player_id, slot, sequence, template_id, objective_type, objective_raid, target, reward_leaf, reward_xp, progress, started_at, expires_at, completed_at";
 const MIGRATIONS = join(import.meta.dir, "..", "migrations");
 
 let directory: string;
@@ -48,6 +54,7 @@ describe("openDatabase", () => {
       "0005_season_rating_quests.sql",
       "0006_achievement_sync.sql",
       "0007_war_claim.sql",
+      "0008_either_or_quests.sql",
     ]);
     db.close();
   });
@@ -86,7 +93,7 @@ describe("openDatabase", () => {
         .toSorted(),
     );
 
-    expect(db.query("SELECT * FROM quests ORDER BY slot").all()).toEqual([
+    expect(db.query(`SELECT ${FIRST_QUEST_COLUMNS} FROM quests ORDER BY slot`).all()).toEqual([
       {
         player_id: alice,
         slot: "daily",
@@ -119,8 +126,53 @@ describe("openDatabase", () => {
       },
     ]);
     db.run(
-      `INSERT INTO quests VALUES ('${alice}', 'daily', 2, 'daily.season_rating.1000', 'season_rating', NULL, 1000, 250, 125, 440, 30, NULL, NULL)`,
+      `INSERT INTO quests (${FIRST_QUEST_COLUMNS})
+       VALUES ('${alice}', 'daily', 2, 'daily.season_rating.1000', 'season_rating', NULL, 1000, 250, 125, 440, 30, NULL, NULL)`,
     );
+    db.close();
+  });
+
+  it("gives quests still open a second way to finish, counting from the upgrade", () => {
+    const before = join(directory, "migrations");
+    mkdirSync(before);
+    for (const name of readdirSync(MIGRATIONS).filter((file) => file < "0008")) {
+      copyFileSync(join(MIGRATIONS, name), join(before, name));
+    }
+    const db = new Database(":memory:");
+    migrate(db, before);
+    db.run(
+      `INSERT INTO quests VALUES
+         ('${alice}', 'daily', 4, 'daily.raids.nol.3', 'raids', 'nol', 3, 300, 150, 2, 10, NULL, NULL),
+         ('${alice}', 'daily', 3, 'daily.raids.any.2', 'raids', NULL, 2, 200, 100, 2, 5, NULL, 9),
+         ('${bob}', 'daily', 1, 'daily.raids.any.2', 'raids', NULL, 2, 200, 100, 1, 10, NULL, NULL),
+         ('${carol}', 'daily', 1, 'daily.wars.2', 'wars', NULL, 2, 200, 100, 1, 10, NULL, NULL),
+         ('${dave}', 'daily', 1, 'daily.season_rating.1000', 'season_rating', NULL, 1000, 250, 125, 440, 10, NULL, NULL),
+         ('${alice}', 'weekly', 1, 'weekly.raids.tna.12', 'raids', 'tna', 12, 800, 400, 5, 10, 20, NULL),
+         ('${bob}', 'weekly', 1, 'weekly.raids.any.20', 'raids', NULL, 20, 800, 400, 5, 10, 20, NULL),
+         ('${carol}', 'weekly', 1, 'weekly.wars.15', 'wars', NULL, 15, 800, 400, 5, 10, 20, NULL),
+         ('${alice}', 'repeatable', 7, 'repeatable.raids.any.8', 'raids', NULL, 8, 200, 100, 3, 10, NULL, NULL)`,
+    );
+
+    migrate(db);
+
+    const rows = db
+      .query<{ quest: string; alternative: string | null }, []>(
+        `SELECT template_id || ' ' || progress || '/' || target || (CASE WHEN completed_at IS NULL THEN '' ELSE ' done' END) AS quest,
+                alternative_type || ' ' || alternative_progress || '/' || alternative_target AS alternative
+         FROM quests ORDER BY player_id, slot, sequence`,
+      )
+      .all();
+    expect(rows).toEqual([
+      { quest: "daily.raids.any.2 2/2 done", alternative: null },
+      { quest: "daily.raids.nol.3 2/3", alternative: "wars 0/9" },
+      { quest: "repeatable.raids.any.8 3/8", alternative: "wars 0/24" },
+      { quest: "weekly.raids.tna.12 5/12", alternative: "wars 0/60" },
+      { quest: "daily.raids.any.2 1/2", alternative: "wars 0/6" },
+      { quest: "weekly.raids.any.20 5/20", alternative: "wars 0/60" },
+      { quest: "daily.wars.2 1/2", alternative: "raids 0/1" },
+      { quest: "weekly.wars.15 5/15", alternative: "raids 0/5" },
+      { quest: "daily.season_rating.1000 440/1000", alternative: null },
+    ]);
     db.close();
   });
 
