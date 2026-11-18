@@ -9,7 +9,15 @@ export type PlayerEvent =
   /** A raid or war paid Leaf. `detail` is the raid's name or the territory; `occurred_at` is when it was played. */
   | {
       readonly type: "leaf_earned";
-      readonly data: { source: "raid" | "war"; leaf: number; xp: number; detail: string; occurred_at: string };
+      readonly data: {
+        source: "raid" | "war";
+        leaf: number;
+        xp: number;
+        detail: string;
+        occurred_at: string;
+        /** For a war: whether it was over Sequoia's claim, a defence. Left out when not known. */
+        in_claim?: boolean;
+      };
     }
   /** A quest was finished and its reward paid. */
   | { readonly type: "quest_completed"; readonly data: { quest: ReturnType<typeof questJson> } }

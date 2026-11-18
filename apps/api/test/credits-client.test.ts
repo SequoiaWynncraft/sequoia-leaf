@@ -85,6 +85,26 @@ describe("fetchCredits", () => {
     expect(activity).toMatchObject({ kind: "raid", raid: undefined, raidName: "A Raid Added Next Year" });
   });
 
+  it("keeps whether a war was over Sequoia's claim when the backend says", async () => {
+    const { fetcher } = answering({
+      raids: [],
+      wars: [
+        { ...warRow, war_submission_id: 1, in_claim: true },
+        { ...warRow, war_submission_id: 2, in_claim: false },
+        { ...warRow, war_submission_id: 3, in_claim: null },
+      ],
+    });
+
+    const activities = await fetchCredits(fetcher, config, FROM, TO);
+
+    expect(activities.map((activity) => (activity.kind === "war" ? activity.inClaim : "raid"))).toEqual([
+      true,
+      false,
+      undefined,
+    ]);
+    expect(activities[2]).not.toHaveProperty("inClaim");
+  });
+
   it("leaves out a war whose points are not calculated yet", async () => {
     const pending = { ...warRow, war_points: null, points_status: "unavailable" };
     const { fetcher } = answering({ raids: [], wars: [pending] });
@@ -104,6 +124,7 @@ describe("fetchCredits", () => {
     ["a raid with a fractional rating", { raids: [{ ...raidRow, season_rating: 1.5 }], wars: [] }],
     ["a war with text for points", { raids: [], wars: [{ ...warRow, war_points: "many" }] }],
     ["a war without a points field", { raids: [], wars: [{ ...warRow, war_points: undefined }] }],
+    ["a war with text for in_claim", { raids: [], wars: [{ ...warRow, in_claim: "yes" }] }],
     ["an unscored war without a territory", { raids: [], wars: [{ ...warRow, war_points: null, territory: "" }] }],
     ["a raid without a timestamp", { raids: [{ ...raidRow, completed_at: "yesterday" }], wars: [] }],
   ])("fails on %s instead of paying part of the feed", async (_name, body) => {
