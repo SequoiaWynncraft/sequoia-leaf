@@ -330,6 +330,34 @@ copies against losing the server.
 To restore from the bucket, download a copy with any S3 client, or from the
 Cloudflare dashboard for R2, and restore it as above.
 
+## Correcting guild shares, 2026-11-19
+
+Until sequoia-backend#536, the credit feed split each raid's season rating
+among everyone in the party, allies from other guilds included, though the
+rating is Sequoia's alone. So members were paid less than their share, and 16
+players who were never in the guild were paid 9,509 Leaf between them.
+`apps/api/scripts/correct-guild-shares.ts` corrects both against the fixed feed:
+
+- For each member, each raid is compared with what still stands for it (the
+  sync's payment and any share the first correction paid, less reversals).
+  What the share is still owed is paid by `raid:<completion id>:<player>:guild-share`,
+  and the levels the extra XP reaches are paid as levels always are. A payment
+  above the share, or one the feed no longer lists, stands and is counted.
+- For each player who was never in the guild, every earn is reversed
+  (`undo:<key>`): raids, and the quests and levels those raids reached.
+
+The players who were never in the guild come from the backend's records: Leaf
+accounts with no `guild_membership_state` row for Sequoia, which also never
+appear in Sequoia's roster in `wynn_guild_member_observations`. Write them to a
+file, one UUID per line, and give it as `--never-members`. Like the first
+correction it writes no events, is idempotent, does a dry run by default (run
+that on a `VACUUM INTO` copy) and snapshots the database before `--apply`:
+
+```sh
+DATABASE_PATH=/tmp/leaf-dry-run.db bun run apps/api/scripts/correct-guild-shares.ts --never-members /tmp/never-members.txt
+bun run apps/api/scripts/correct-guild-shares.ts --never-members /tmp/never-members.txt --apply
+```
+
 ## Correcting raid shares, 2026-11-19
 
 Until sequoia-backend#530, the credit feed gave every raid party member the
