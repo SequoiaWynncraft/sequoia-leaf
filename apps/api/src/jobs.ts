@@ -17,7 +17,7 @@ const DEEP_SYNC_MINUTE = 17;
 const step = <R>(name: string, effect: Effect.Effect<void, unknown, R>) =>
   effect.pipe(
     Effect.catchCause((cause) =>
-      Cause.hasInterruptsOnly(cause) ? Effect.failCause(cause) : Effect.logError(`${name} failed`, cause),
+      Cause.hasInterruptsOnly(cause) ? Effect.interrupt : Effect.logError(`${name} failed`, cause),
     ),
   );
 
@@ -45,47 +45,55 @@ export const scheduledSync = <E, R>(
     );
   });
 
-/** Snapshots the database every six hours and copies the newest snapshot off the server, once each. */
-const backups = Effect.gen(function* () {
-  const config = yield* AppConfig;
+/** Snapshots the database every six hours. */
+const snapshots = Effect.gen(function* () {
+  const { backupDirectory } = yield* AppConfig;
   const db = yield* Db;
-  const copyOffsite =
-    config.offsite === undefined ? undefined : offsiteCopier(bucketOffsite(config.offsite), config.backupDirectory);
-  return Effect.gen(function* () {
-    const now = yield* Clock.currentTimeMillis;
-    yield* step(
-      "Taking a snapshot of the database",
-      Effect.try(() => snapshotIfDue(db, config.backupDirectory, now)).pipe(
-        Effect.flatMap((path) =>
-          path === undefined ? Effect.void : Effect.logInfo("snapshot").pipe(Effect.annotateLogs({ path })),
-        ),
-      ),
-    );
-    if (copyOffsite !== undefined) {
-      yield* step(
-        "Copying a snapshot off the server (it is tried again in ten minutes)",
-        Effect.tryPromise(() => copyOffsite(now)).pipe(
-          Effect.flatMap((name) =>
-            name === undefined
-              ? Effect.void
-              : Effect.logInfo("snapshot_copied_offsite").pipe(Effect.annotateLogs({ name })),
-          ),
-        ),
-      );
-    }
-  });
+  return step(
+    "Taking a snapshot of the database",
+    Effect.gen(function* () {
+      const path = snapshotIfDue(db, backupDirectory, yield* Clock.currentTimeMillis);
+      if (path !== undefined) {
+        yield* Effect.logInfo("snapshot").pipe(Effect.annotateLogs({ path }));
+      }
+    }),
+  );
 });
 
-/** Everything Leaf does at the start of each minute, one after the other, for as long as it runs. */
+/** Copies the newest snapshot off the server once, when a bucket is configured. */
+const offsiteCopies = Effect.gen(function* () {
+  const { offsite, backupDirectory } = yield* AppConfig;
+  if (offsite === undefined) {
+    return Effect.void;
+  }
+  const copyOffsite = offsiteCopier(bucketOffsite(offsite), backupDirectory);
+  return step(
+    "Copying a snapshot off the server (it is tried again in ten minutes)",
+    Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      const name = yield* Effect.tryPromise(() => copyOffsite(now));
+      if (name !== undefined) {
+        yield* Effect.logInfo("snapshot_copied_offsite").pipe(Effect.annotateLogs({ name }));
+      }
+    }),
+  );
+});
+
+/** Runs a job at the start of every minute on its own fiber, so a slow run of one never holds up another. */
+const everyMinute = <R>(job: Effect.Effect<void, never, R>) =>
+  job.pipe(Effect.repeat(Schedule.cron("* * * * *")), Effect.forkScoped);
+
+/**
+ * What Leaf does every minute, for as long as it runs: the two feed syncs,
+ * snapshots and offsite copies, each on its own. An offsite copy can take
+ * minutes; the syncs, the deep sync at minute 17, and snapshots carry on meanwhile.
+ */
 export const EveryMinute = Layer.effectDiscard(
   Effect.gen(function* () {
-    const backup = yield* backups;
-    yield* Effect.all(
-      [scheduledSync("credit", runCreditSync), scheduledSync("achievement", runAchievementSync), backup],
-      {
-        discard: true,
-      },
-    ).pipe(Effect.repeat(Schedule.cron("* * * * *")), Effect.forkScoped);
+    yield* everyMinute(scheduledSync("credit", runCreditSync));
+    yield* everyMinute(scheduledSync("achievement", runAchievementSync));
+    yield* everyMinute(yield* snapshots);
+    yield* everyMinute(yield* offsiteCopies);
   }),
 );
 
