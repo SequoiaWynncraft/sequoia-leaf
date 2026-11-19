@@ -72,6 +72,11 @@ Each credit carries the backend's event id and the player's UUID, so reading
 the same events again pays nothing twice. Nothing that happened before the
 first run is ever credited.
 
+A raid pays each member for their share of the party's season rating, which
+the backend works out: the rating the guild message reports, divided by the
+number of members it names, rounded down. Until 2026-11-19 it gave every member
+the whole party's rating; see [Correcting raid shares](#correcting-raid-shares-2026-11-19).
+
 ### Achievement milestones
 
 Sierra, in sequoia-backend, runs the guild's achievement ladders and records an
@@ -114,7 +119,7 @@ about a third of a raid's time.
 | --------------- | -------------------------- | ------------------------------------------------------------ |
 | `raids`         | "Complete 2 raids"         | Every raid, or only one named raid ("Complete 3 NOL raids"). |
 | `wars`          | "Take part in 2 wars"      | Every war the member took part in.                           |
-| `season_rating` | "Earn 1,000 season rating" | The season rating of every raid and war they took part in.   |
+| `season_rating` | "Earn 1,000 season rating" | Each war's season rating, and their share of each raid's.    |
 
 A quest counts the activities the credit sync records, in the same database
 transaction that records them, and a finished quest pays its Leaf and XP in
@@ -273,3 +278,56 @@ copies against losing the server.
 
 To restore from the bucket, download a copy with any S3 client, or from the
 Cloudflare dashboard for R2, and restore it as above.
+
+## Correcting raid shares, 2026-11-19
+
+Until sequoia-backend#530, the credit feed gave every raid party member the
+whole party's season rating, so each was paid about 3.3 times their share, in
+Leaf and in XP. The guild decided the excess is taken back. The feed now gives
+each member their share, so raids paid from then on are right, and
+`apps/api/scripts/correct-raid-shares.ts` corrects the ones paid before.
+
+It reads the corrected feed from the credit sync's first run to now, 31 days
+at a time, and then, for each player in a transaction of their own:
+
+- Each raid payment the sync made (`raid:<completion id>:<player>`) that is
+  more than the member's share is reversed in full, Leaf and XP, by
+  `undo:raid:<completion id>:<player>`, and the share is paid in its place by
+  `raid:<completion id>:<player>:share`. A share of zero pays nothing.
+- A payment that is the share or less stands. So does one the feed no longer
+  lists, for example because the name no longer resolves; the report counts
+  those.
+- With the XP corrected, the payout of each level the player no longer reaches
+  is reversed (`undo:level:<player>:<level>`). Reaching that level again pays it
+  again, once, keyed `level:<player>:<level>:2`.
+
+A player is corrected entirely or not at all. The correction writes no events:
+there is no event type for it, and the mod would not know one. Players see the
+corrected balance, XP and level the next time they read them.
+
+It is idempotent. A payment that has been reversed is not looked at again, and
+the shares' keys are not raid payment keys, so running it again changes
+nothing. A run that stops partway leaves the players it reached corrected, and
+the next run does the rest.
+
+Run it in the production container once the backend's fix is deployed, from a
+terminal on the Coolify app or with `docker exec` on the server. Before the
+fix the feed still lists the whole party's rating, which is what was paid, so
+it finds nothing to correct. It uses the app's own `DATABASE_PATH`,
+`BACKEND_URL` and `BACKEND_INTERNAL_TOKEN`, and the server can keep running.
+
+```sh
+bun run apps/api/scripts/correct-raid-shares.ts           # dry run: reports what it would do, keeps nothing
+bun run apps/api/scripts/correct-raid-shares.ts --apply   # takes a snapshot, then corrects
+```
+
+A dry run does everything in one transaction and rolls it back. `--apply`
+first writes a snapshot to `/data/backups`, since a reversal cannot itself be
+reversed. Restoring it as under [Backups](#backups) undoes the correction, and
+everything else written after it.
+
+Either prints one JSON object: how many players and payments were corrected,
+the Leaf and XP the reversals took back and the shares paid, the level payouts
+reversed, the net change, how many players lost a level and the most any lost,
+the payments without a feed row, and the five players it took the most Leaf
+from, by UUID.
