@@ -3,10 +3,10 @@
 The service behind Leaf, the Sequoia guild currency, and the game built on it.
 Members earn Leaf from guild activity such as raids and wars, and spend it.
 
-It is one Bun process with a SQLite database file, written in TypeScript. Bun
-is the whole toolchain: runtime, package manager, formatter (`bun fmt`), type
-checker (`bun check`), test runner and the SQLite driver. Linting is oxlint
-with type-aware rules.
+It is one Bun process with a SQLite database file, written in TypeScript with
+[Effect](https://effect.website). Bun is the whole toolchain: runtime, package
+manager, formatter (`bun fmt`), type checker (`bun check`), test runner and the
+SQLite driver. Linting is oxlint with type-aware rules.
 
 ## Status
 
@@ -52,7 +52,7 @@ does not read the awards feed, and achievement milestones pay nothing. Without a
 | Path                  | What it is                                                    |
 | --------------------- | ------------------------------------------------------------- |
 | `packages/core`       | The rules of the game as pure functions and types. No I/O.    |
-| `apps/api`            | The server: HTTP routes, the database and the feed syncs.     |
+| `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs. |
 | `apps/api/migrations` | The database schema. New files are applied in order at start. |
 | `Dockerfile`          | The production image.                                         |
 
@@ -136,7 +136,16 @@ member sees is calculated from their last stored state.
 
 ## API
 
-Responses are JSON with `snake_case` fields. Errors are `{ "code", "message" }`.
+Responses are JSON with `snake_case` fields. Errors are `{ "code", "message" }`,
+including 404 `not_found` for a route that does not exist and 500
+`internal_error` for a failure nothing expected, which is logged with its
+cause. The one exception is a body sent with a `Content-Type` other than JSON,
+which gets a plain 415.
+
+The routes are declared once, as an Effect `HttpApi` in
+`apps/api/src/api/api.ts`, with the shape of every answer and error in
+`schemas.ts` and `errors.ts` beside it. The server implements that declaration,
+and `GET /openapi.json` serves the OpenAPI document generated from it.
 
 | Route                            | What it returns                                            |
 | -------------------------------- | ---------------------------------------------------------- |
@@ -146,11 +155,13 @@ Responses are JSON with `snake_case` fields. Errors are `{ "code", "message" }`.
 | `POST /v1/me/quests/{id}/reroll` | Swaps one of their quests for another.                     |
 | `GET /v1/me/events`              | What happened to them recently, oldest first.              |
 | `GET /v1/me/events/stream`       | The same events as they happen, as server-sent events.     |
+| `GET /openapi.json`              | This API as an OpenAPI document.                           |
 
-`/v1/me` routes take the member's Sequoia session, as `Authorization: Bearer`
-or as the site's `seq_session` cookie. The server asks sequoia-backend who the
-session belongs to; the mod can send the token it already holds for the
-backend. Only current guild members are let in.
+`/v1/me` routes take the member's Sequoia session, the token sequoia-backend
+issued, as `Authorization: Bearer`; the mod sends the one it already holds for
+the backend. The server asks sequoia-backend who the session belongs to, and
+remembers a confirmed session for a minute. Only current guild members are let
+in.
 
 Each quest in `/v1/me/quests` lists its `goals`, every way to finish it, each
 with its own `type`, `raid`, `title`, `progress` and `target`. Its `objective`,
@@ -243,8 +254,8 @@ react to `quest_completed`.
   `EventSource` does this by itself.
 - The server closes a stream after 15 minutes. Reconnect the same way; this is
   when the session is checked again.
-- A quiet stream carries a comment line every 20 seconds to keep the
-  connection open. Ignore lines that start with `:`.
+- A stream carries a comment line every 20 seconds to keep the connection
+  open. Ignore lines that start with `:`.
 
 ## Rules the code is built on
 
@@ -298,6 +309,12 @@ as OpenTofu configuration. What the Coolify app is set up with:
 - **The domain `https://leaf.seqwawa.com`**. Its DNS record points straight at
   the server and is not proxied by Cloudflare; the certificate comes from
   Let's Encrypt.
+
+The server logs one JSON object per line to stdout, which Coolify shows as the
+app's logs: `started`, each run of a feed sync with what it recorded
+(`credit_sync`, `achievement_sync`), each `snapshot`, and every error with its
+cause. On SIGTERM it finishes the requests in flight, for up to eight seconds,
+closes the database and exits 0.
 
 During a deploy the old and the new container run side by side for a few
 seconds on the same database file. That is safe: SQLite locks the file between

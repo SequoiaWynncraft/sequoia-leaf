@@ -12,6 +12,7 @@ import {
   type Quest,
   type Rules,
 } from "@sequoia-leaf/core";
+import type { Effect } from "effect";
 
 import { insertEvent } from "../events/store.ts";
 import { getAccount, insertEntry } from "../ledger/store.ts";
@@ -20,8 +21,8 @@ import { questJson } from "../quests/json.ts";
 import { loadQuestBook, saveQuestStep } from "../quests/store.ts";
 import { type SyncMode, type SyncResult, windowedSync } from "../sync/windowed.ts";
 
-/** Returns what players did during [from, to), in milliseconds since the Unix epoch. */
-export type CreditSource = (from: number, to: number) => Promise<readonly Activity[]>;
+/** Reads what players did during [from, to), in milliseconds since the Unix epoch. */
+export type CreditSource<E = never, R = never> = (from: number, to: number) => Effect.Effect<readonly Activity[], E, R>;
 
 export { DEEP_LOOKBACK_MS, RECENT_OVERLAP_MS, SETTLE_MS, type SyncMode, type SyncResult } from "../sync/windowed.ts";
 
@@ -32,13 +33,13 @@ export { DEEP_LOOKBACK_MS, RECENT_OVERLAP_MS, SETTLE_MS, type SyncMode, type Syn
  * nothing is paid twice. Running it again over the same window changes
  * nothing.
  */
-export async function syncCredits(
+export function syncCredits<E, R>(
   db: Database,
-  source: CreditSource,
+  source: CreditSource<E, R>,
   rules: Rules,
   now: number,
   mode: SyncMode,
-): Promise<SyncResult> {
+): Effect.Effect<SyncResult, E, R> {
   return windowedSync(db, "credits", now, mode, source, (reported, from, to) => {
     const byPlayer = new Map<PlayerId, Activity[]>();
     for (const activity of newActivities(db, reported, from, to)) {

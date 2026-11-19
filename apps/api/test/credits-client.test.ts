@@ -1,12 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
 import { playerId } from "@sequoia-leaf/core";
+import { Redacted } from "effect";
 
-import { CreditFeedError, fetchCredits } from "../src/backend/credits.ts";
-import type { Fetcher } from "../src/services.ts";
-import { rejection } from "./support.ts";
+import { readCredits } from "../src/backend/credits.ts";
+import { FeedError } from "../src/feeds.ts";
+import { type Fetcher, rejection, testLeaf } from "./support.ts";
 
-const config = { baseUrl: "https://backend.test", token: "secret-token" };
+const config = { baseUrl: "https://backend.test", token: Redacted.make("secret-token") };
 const FROM = Date.parse("2026-11-02T00:00:00.000Z");
 const TO = Date.parse("2026-11-02T00:05:00.000Z");
 const ALICE = playerId("10000000-0000-0000-0000-000000000001");
@@ -18,6 +19,11 @@ function answering(body: unknown, status = 200): { fetcher: Fetcher; calls: { ur
     return Response.json(body, { status });
   };
   return { fetcher, calls };
+}
+
+/** Reads the window through Leaf's HTTP client, answered by `fetcher`. */
+function read(fetcher: Fetcher) {
+  return testLeaf({ now: TO }, fetcher).run(readCredits(config, FROM, TO));
 }
 
 const raidRow = {
@@ -37,11 +43,11 @@ const warRow = {
   points_status: "scored",
 };
 
-describe("fetchCredits", () => {
+describe("readCredits", () => {
   it("asks the backend for the window with the internal token", async () => {
     const { fetcher, calls } = answering({ raids: [], wars: [] });
 
-    await fetchCredits(fetcher, config, FROM, TO);
+    await read(fetcher);
 
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe(
@@ -53,7 +59,7 @@ describe("fetchCredits", () => {
   it("turns raid and war credits into activities with stable keys", async () => {
     const { fetcher } = answering({ raids: [raidRow], wars: [warRow] });
 
-    const activities = await fetchCredits(fetcher, config, FROM, TO);
+    const activities = await read(fetcher);
 
     expect(activities).toEqual([
       {
@@ -80,7 +86,7 @@ describe("fetchCredits", () => {
   it("keeps a raid it has no short name for", async () => {
     const { fetcher } = answering({ raids: [{ ...raidRow, raid_name: "A Raid Added Next Year" }], wars: [] });
 
-    const [activity] = await fetchCredits(fetcher, config, FROM, TO);
+    const [activity] = await read(fetcher);
 
     expect(activity).toMatchObject({ kind: "raid", raid: undefined, raidName: "A Raid Added Next Year" });
   });
@@ -95,7 +101,7 @@ describe("fetchCredits", () => {
       ],
     });
 
-    const activities = await fetchCredits(fetcher, config, FROM, TO);
+    const activities = await read(fetcher);
 
     expect(activities.map((activity) => (activity.kind === "war" ? activity.inClaim : "raid"))).toEqual([
       true,
@@ -109,13 +115,13 @@ describe("fetchCredits", () => {
     const pending = { ...warRow, war_points: null, points_status: "unavailable" };
     const { fetcher } = answering({ raids: [], wars: [pending] });
 
-    expect(await fetchCredits(fetcher, config, FROM, TO)).toEqual([]);
+    expect(await read(fetcher)).toEqual([]);
   });
 
   it("fails when the backend refuses the request", async () => {
     const { fetcher } = answering({ error: "Missing or invalid API token" }, 401);
 
-    expect(await rejection(fetchCredits(fetcher, config, FROM, TO))).toBeInstanceOf(CreditFeedError);
+    expect(await rejection(read(fetcher))).toBeInstanceOf(FeedError);
   });
 
   it.each([
@@ -130,6 +136,6 @@ describe("fetchCredits", () => {
   ])("fails on %s instead of paying part of the feed", async (_name, body) => {
     const { fetcher } = answering(body);
 
-    expect(await rejection(fetchCredits(fetcher, config, FROM, TO))).toBeInstanceOf(CreditFeedError);
+    expect(await rejection(read(fetcher))).toBeInstanceOf(FeedError);
   });
 });
