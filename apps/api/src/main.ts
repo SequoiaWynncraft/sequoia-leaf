@@ -5,21 +5,14 @@ import { createApp } from "./app.ts";
 import { bucketOffsite, offsiteCopier } from "./backup/offsite.ts";
 import { snapshotIfDue } from "./backup/snapshot.ts";
 import { readConfig } from "./config.ts";
-import { openDatabase } from "./db.ts";
 import { runScheduledSync } from "./earning/run.ts";
 import { payMissedLevels } from "./levels/pay.ts";
 import { everyMinute } from "./schedule.ts";
-import type { Services } from "./services.ts";
+import { liveServices } from "./services.ts";
 
 const config = readConfig(Bun.env);
-const db = openDatabase(config.databasePath);
-const services: Services = {
-  db,
-  backend: { url: config.backendUrl, token: config.backendToken },
-  sierra: { url: config.sierraUrl, token: config.backendToken },
-  fetcher: (url, init) => fetch(url, init),
-  now: () => Date.now(),
-};
+const services = liveServices(config);
+const { db } = services;
 
 // Levels reached before levels paid Leaf, or left unpaid by a failed run, are paid here once.
 try {

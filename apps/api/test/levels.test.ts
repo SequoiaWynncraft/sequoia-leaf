@@ -1,12 +1,20 @@
 import type { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
 
-import { type Activity, DEFAULT_RULES, leaf, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
+import {
+  type Activity,
+  DEFAULT_RULES,
+  leaf,
+  type LedgerEntry,
+  type PlayerId,
+  playerId,
+  type Rules,
+} from "@sequoia-leaf/core";
 
 import { type CreditSource, syncCredits } from "../src/earning/sync.ts";
 import { listEventsAfter } from "../src/events/store.ts";
 import { getAccount, listEntries, postEntry } from "../src/ledger/store.ts";
-import { payMissedLevels } from "../src/levels/pay.ts";
+import { payLevels, payMissedLevels, takeBackLevels } from "../src/levels/pay.ts";
 import { testDatabase } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
@@ -51,8 +59,34 @@ function events(player: PlayerId): { type: string; data: unknown }[] {
 }
 
 /** Gives a player XP the way a raid paid before levels paid Leaf: an earn entry with no level pay. */
-function earnedBefore(player: PlayerId, amount: number, key: string): void {
-  postEntry(db, { kind: "earn", playerId: player, amount: leaf(amount), source: "raid", idempotencyKey: key }, T0);
+function earnedBefore(player: PlayerId, amount: number, key: string): LedgerEntry {
+  const result = postEntry(
+    db,
+    { kind: "earn", playerId: player, amount: leaf(amount), source: "raid", idempotencyKey: key },
+    T0,
+  );
+  if (result.status !== "posted") {
+    throw new Error(`Expected ${key} to post, got ${result.status}`);
+  }
+  return result.entry;
+}
+
+/** Takes an entry back in full, as a correction does. */
+function reverse(entry: LedgerEntry): void {
+  postEntry(
+    db,
+    { kind: "reversal", playerId: entry.playerId, reverses: entry, idempotencyKey: `undo:${entry.idempotencyKey}` },
+    T0,
+  );
+}
+
+/** The entry that paid for a level. */
+function levelPayout(player: PlayerId, key: string): LedgerEntry {
+  const entry = listEntries(db, player, { limit: 50 }).find((candidate) => candidate.idempotencyKey === key);
+  if (entry === undefined) {
+    throw new Error(`No entry ${key}`);
+  }
+  return entry;
 }
 
 describe("Leaf for levels", () => {
@@ -110,5 +144,47 @@ describe("Leaf for levels", () => {
       [`level:${alice}:2`, 100, 0],
     ]);
     expect(events(alice).at(-1)).toEqual({ type: "level_up", data: { level: 3, leaf: 125 } });
+  });
+
+  it("pays a level again, once, when it is reached again after its payout was reversed", () => {
+    const raidPay = earnedBefore(alice, 1000, "raid:old:a");
+    payMissedLevels(db, rules.levels, T0);
+    reverse(raidPay);
+    reverse(levelPayout(alice, `level:${alice}:2`));
+    earnedBefore(alice, 1000, "raid:new:a");
+
+    expect(payLevels(db, alice, rules.levels, T0 + MINUTE)).toBe(100);
+    expect(payLevels(db, alice, rules.levels, T0 + 2 * MINUTE)).toBe(0);
+    expect(payMissedLevels(db, rules.levels, T0 + 3 * MINUTE)).toEqual({ players: 0, leaf: 0 });
+    expect(levelEntries(alice)).toEqual([
+      [`level:${alice}:2:2`, 100, 0],
+      [`undo:level:${alice}:2`, -100, 0],
+      [`level:${alice}:2`, 100, 0],
+    ]);
+    expect(getAccount(db, alice)).toMatchObject({ balance: 1000 + 100, xp: 1000 });
+  });
+
+  it("does not pay a level twice while its payout stands, even when XP fell below it and came back", () => {
+    const raidPay = earnedBefore(alice, 1000, "raid:old:a");
+    payMissedLevels(db, rules.levels, T0);
+    reverse(raidPay);
+    earnedBefore(alice, 1000, "raid:new:a");
+
+    expect(payLevels(db, alice, rules.levels, T0)).toBe(0);
+    expect(levelEntries(alice)).toEqual([[`level:${alice}:2`, 100, 0]]);
+  });
+
+  it("takes back the payouts of the levels the XP no longer reaches, once, and keeps the rest", () => {
+    const raidPay = earnedBefore(alice, 2300, "raid:old:a");
+    payMissedLevels(db, rules.levels, T0);
+    reverse(raidPay);
+    earnedBefore(alice, 1100, "raid:old:a:share");
+
+    const taken = takeBackLevels(db, alice, rules.levels, T0, "correction");
+
+    expect(taken.map((entry) => entry.idempotencyKey)).toEqual([`level:${alice}:3`]);
+    expect(takeBackLevels(db, alice, rules.levels, T0, "correction")).toEqual([]);
+    expect(getAccount(db, alice)).toMatchObject({ balance: 1100 + 100, xp: 1100 });
+    expect(events(alice)).toEqual([]);
   });
 });

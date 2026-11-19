@@ -3,6 +3,7 @@ import type { Database } from "bun:sqlite";
 import {
   type Account,
   draftEntry,
+  type EarnSource,
   type EntryDraft,
   isEntryKind,
   isEntryOrigin,
@@ -162,6 +163,26 @@ export function getAccount(db: Database, playerId: PlayerId): Account {
     balance: row?.balance ?? 0,
     xp: row?.xp ?? 0,
   };
+}
+
+/** An earn entry, and whether a reversal has undone it. */
+export interface Earn {
+  readonly entry: LedgerEntry;
+  readonly reversed: boolean;
+}
+
+/** A player's earn entries from one source, oldest first. */
+export function listEarns(db: Database, playerId: PlayerId, source: EarnSource): Earn[] {
+  return db
+    .query<EntryRow & { reversed: number }, [string, string]>(
+      `SELECT ${ENTRY_COLUMNS},
+         EXISTS (SELECT 1 FROM ledger_entries AS reversal WHERE reversal.reverses_id = earn.id) AS reversed
+       FROM ledger_entries AS earn
+       WHERE player_id = ? AND kind = 'earn' AND origin = ?
+       ORDER BY id`,
+    )
+    .all(playerId, source)
+    .map((row) => ({ entry: toEntry(row), reversed: row.reversed === 1 }));
 }
 
 export interface ListEntriesOptions {
