@@ -1,9 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
-import { createApp } from "../src/app.ts";
-import { testServices } from "./support.ts";
+import { testLeaf } from "./support.ts";
 
-const app = createApp(testServices({ now: 0 }, () => Promise.reject(new Error("No backend in this test"))));
+const app = testLeaf({ now: 0 }, () => Promise.reject(new Error("No backend in this test"))).app();
 
 describe("HTTP", () => {
   it("reports healthy", async () => {

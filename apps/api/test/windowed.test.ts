@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { leaf, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { Effect } from "effect";
 
 import { openDatabase } from "../src/db.ts";
 import { postEntry } from "../src/ledger/store.ts";
@@ -49,26 +50,30 @@ function writeNothing() {
 }
 
 /** A feed with nothing in it. */
-async function nothing(): Promise<never[]> {
-  return [];
+function nothing() {
+  return Effect.succeed([]);
 }
 
 describe("windowedSync", () => {
   it("holds the write lock for its whole write, so another connection's commit cannot land between its reads and its writes", async () => {
-    await windowedSync(server, "credits", T0, "recent", nothing, () => ({ recorded: 0, leafPaid: 0 }));
+    await Effect.runPromise(
+      windowedSync(server, "credits", T0, "recent", nothing, () => ({ recorded: 0, leafPaid: 0 })),
+    );
     let otherWrite: unknown;
 
-    const result = await windowedSync(server, "credits", T0 + MINUTE, "recent", nothing, () => {
-      // The credit sync reads what it has recorded before it writes.
-      server.query("SELECT COUNT(*) FROM activities").get();
-      try {
-        raidPay(other, 1, alice, T0 + MINUTE);
-      } catch (error) {
-        otherWrite = error;
-      }
-      raidPay(server, 2, alice, T0 + MINUTE);
-      return { recorded: 1, leafPaid: 110 };
-    });
+    const result = await Effect.runPromise(
+      windowedSync(server, "credits", T0 + MINUTE, "recent", nothing, () => {
+        // The credit sync reads what it has recorded before it writes.
+        server.query("SELECT COUNT(*) FROM activities").get();
+        try {
+          raidPay(other, 1, alice, T0 + MINUTE);
+        } catch (error) {
+          otherWrite = error;
+        }
+        raidPay(server, 2, alice, T0 + MINUTE);
+        return { recorded: 1, leafPaid: 110 };
+      }),
+    );
 
     expect(result).toEqual({ status: "synced", recorded: 1, leafPaid: 110 });
     expect(otherWrite).toMatchObject({ code: "SQLITE_BUSY" });
@@ -79,15 +84,16 @@ describe("windowedSync", () => {
 
   it("catches up after a gap longer than the feeds answer a window for, a window per run", async () => {
     const windows: [number, number][] = [];
-    const read = async (from: number, to: number): Promise<never[]> => {
-      windows.push([from, to]);
-      return [];
-    };
-    await windowedSync(server, "credits", T0, "recent", read, writeNothing);
+    const read = (from: number, to: number) =>
+      Effect.sync(() => {
+        windows.push([from, to]);
+        return [];
+      });
+    await Effect.runPromise(windowedSync(server, "credits", T0, "recent", read, writeNothing));
     const back = T0 + 45 * 24 * 60 * MINUTE;
 
-    await windowedSync(server, "credits", back, "recent", read, writeNothing);
-    await windowedSync(server, "credits", back + MINUTE, "recent", read, writeNothing);
+    await Effect.runPromise(windowedSync(server, "credits", back, "recent", read, writeNothing));
+    await Effect.runPromise(windowedSync(server, "credits", back + MINUTE, "recent", read, writeNothing));
 
     expect(windows.map(([from, to]) => to - from <= MAX_WINDOW_MS)).toEqual([true, true]);
     expect(windows[0]).toEqual([T0, T0 + MAX_WINDOW_MS]);

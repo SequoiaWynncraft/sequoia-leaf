@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
 
 import { type Activity, DEFAULT_RULES, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { Effect } from "effect";
 
 import { type CreditSource, RECENT_OVERLAP_MS, SETTLE_MS, syncCredits, type SyncMode } from "../src/earning/sync.ts";
 import { getAccount, listEntries } from "../src/ledger/store.ts";
@@ -48,19 +49,18 @@ function war(id: number, player: PlayerId, occurredAt: number, warPoints: number
 /** A feed that answers a window with the activities inside it, and remembers what it was asked. */
 function feed(activities: Activity[]): { source: CreditSource; windows: [number, number][] } {
   const windows: [number, number][] = [];
-  const source: CreditSource = async (from, to) => {
-    windows.push([from, to]);
-    return activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to);
-  };
+  const source: CreditSource = (from, to) =>
+    Effect.sync(() => {
+      windows.push([from, to]);
+      return activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to);
+    });
   return { source, windows };
 }
 
-const failing: CreditSource = async () => {
-  throw new Error("backend is down");
-};
+const failing: CreditSource<Error> = () => Effect.fail(new Error("backend is down"));
 
-function sync(source: CreditSource, now: number, mode: SyncMode = "recent") {
-  return syncCredits(db, source, DEFAULT_RULES, now, mode);
+function sync(source: CreditSource<Error>, now: number, mode: SyncMode = "recent") {
+  return Effect.runPromise(syncCredits(db, source, DEFAULT_RULES, now, mode));
 }
 
 function recordedKeys(): string[] {

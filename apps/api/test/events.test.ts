@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { type Activity, DEFAULT_RULES, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
-import type { Hono } from "hono";
+import { Effect, Layer } from "effect";
 
-import { createApp } from "../src/app.ts";
-import { forgetSessions } from "../src/auth/session.ts";
 import { syncCredits } from "../src/earning/sync.ts";
 import { insertEvent, listEventsAfter } from "../src/events/store.ts";
-import type { Services } from "../src/services.ts";
-import { testServices } from "./support.ts";
+import { StreamTuning } from "../src/http/handlers.ts";
+import { testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -59,18 +57,18 @@ function backend(url: string, init: RequestInit): Promise<Response> {
 }
 
 const clock = { now: T0 };
-let services: Services;
-let app: Hono;
+let services: ReturnType<typeof testLeaf>;
+let app: ReturnType<(typeof services)["app"]>;
 
 beforeEach(() => {
   clock.now = T0;
-  services = testServices(clock, backend);
+  services = testLeaf(clock, backend);
   // A stream that looks for events every 5 ms, keeps quiet connections alive every 20 ms and closes after 300 ms.
-  app = createApp(services, { pollMs: 5, heartbeatMs: 20, maxMs: 300 });
+  app = services.app(Layer.succeed(StreamTuning)({ pollMs: 5, heartbeatMs: 20, maxMs: 300 }));
 });
 
-afterEach(() => {
-  forgetSessions();
+afterEach(async () => {
+  await app.dispose();
 });
 
 function get(path: string, headers: Record<string, string> = {}): Promise<Response> {
@@ -120,10 +118,10 @@ describe("events from the credit sync", () => {
   it("records what a client would show: Leaf earned, a quest finished, a level gained", async () => {
     const activities = [raid(1, alice, T0 + MINUTE), raid(2, alice, T0 + 2 * MINUTE)];
     const source = (from: number, to: number) =>
-      Promise.resolve(activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to));
-    await syncCredits(services.db, source, rules, T0, "recent");
+      Effect.succeed(activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to));
+    await Effect.runPromise(syncCredits(services.db, source, rules, T0, "recent"));
 
-    await syncCredits(services.db, source, rules, T0 + 5 * MINUTE, "recent");
+    await Effect.runPromise(syncCredits(services.db, source, rules, T0 + 5 * MINUTE, "recent"));
 
     const events = listEventsAfter(services.db, alice, 0, 10).map((event) => ({
       type: event.type,
@@ -155,11 +153,11 @@ describe("events from the credit sync", () => {
   });
 
   it("records nothing when the same events are read again", async () => {
-    const source = () => Promise.resolve([raid(1, alice, T0 + MINUTE)]);
-    await syncCredits(services.db, source, rules, T0, "recent");
-    await syncCredits(services.db, source, rules, T0 + 5 * MINUTE, "recent");
+    const source = () => Effect.succeed([raid(1, alice, T0 + MINUTE)]);
+    await Effect.runPromise(syncCredits(services.db, source, rules, T0, "recent"));
+    await Effect.runPromise(syncCredits(services.db, source, rules, T0 + 5 * MINUTE, "recent"));
 
-    await syncCredits(services.db, source, rules, T0 + 6 * MINUTE, "recent");
+    await Effect.runPromise(syncCredits(services.db, source, rules, T0 + 6 * MINUTE, "recent"));
 
     expect(listEventsAfter(services.db, alice, 0, 10)).toHaveLength(1);
   });
