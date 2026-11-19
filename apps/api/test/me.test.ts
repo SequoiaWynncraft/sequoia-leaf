@@ -337,6 +337,12 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     expect(await quests()).toMatchObject({ quests: [{ id: "daily:1", reroll_leaf: 0 }, { id: "weekly:1" }] });
   });
 
+  it("takes the id with its colon escaped, as clients that escape path segments send it", async () => {
+    const response = await reroll("daily%3A1");
+
+    expect(await response.json()).toMatchObject({ quest: { id: "daily:2" } });
+  });
+
   it("swaps once when the same request is sent twice", async () => {
     earn(500);
     const first = await reroll("daily:1");
