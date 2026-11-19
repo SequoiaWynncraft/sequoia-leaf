@@ -14,7 +14,7 @@ export interface Rules {
 }
 
 export interface EarningRules {
-  /** Leaf paid to each party member per point of season rating a raid earns. */
+  /** Leaf paid to a party member per point of their share of the season rating a raid earns. */
   readonly leafPerRaidSeasonRating: number;
   /** Leaf paid to a participant per war point they scored, in an FFA war or a snipe. */
   readonly leafPerWarPoint: number;
