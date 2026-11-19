@@ -297,11 +297,10 @@ A migration is a file in `apps/api/migrations` named `NNNN_name.ts` whose
 default export is an Effect that runs its statements one `sql` call each: the
 SQLite client runs a single statement per call, so a script of several is cut
 short silently. Effect's migrator applies the ones a database has not seen, in
-order, in one transaction, and records them in `effect_sql_migrations`. A
-database set up before Leaf used Effect's migrator kept that record in
-`schema_migrations`; each start copies it across, so nothing runs twice, and
-leaves the old table in place, so the version before can still start on the
-same database.
+order, in one transaction, and records them in `effect_sql_migrations`.
+`0010_schema.ts` is the whole schema as of migration 10, which every running
+database had reached when the earlier migrations were folded into it; a new
+database starts there. Changes go in `0011_name.ts` and up.
 
 The app's settings and the DNS record are written down in [`infra/`](infra/)
 as OpenTofu configuration. What the Coolify app is set up with:

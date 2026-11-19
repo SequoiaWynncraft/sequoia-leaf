@@ -1,5 +1,5 @@
 import { BunHttpServer, BunRuntime } from "@effect/platform-bun";
-import { Cause, Effect, Exit, Layer, Logger, Runtime } from "effect";
+import { Cause, Effect, Exit, Layer, Logger, References, Runtime } from "effect";
 import { HttpRouter } from "effect/http";
 
 import { routerConfig, Routes, Services } from "./app.ts";
@@ -29,6 +29,8 @@ const Server = Layer.unwrap(
 Layer.mergeAll(Startup, Server, EveryMinute).pipe(
   Layer.provide(Services),
   Layer.provide(Logger.layer([Logger.consoleJson])),
+  // Nothing collects traces, so spans would only cost time on every request.
+  Layer.provide(Layer.succeed(References.TracerEnabled)(false)),
   Layer.launch,
   BunRuntime.runMain({
     // A stop signal is a clean stop, not a failure.

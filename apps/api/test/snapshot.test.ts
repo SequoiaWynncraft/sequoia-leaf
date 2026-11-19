@@ -14,7 +14,7 @@ import {
   SNAPSHOTS_KEPT,
   takeSnapshot,
 } from "../src/backup/snapshot.ts";
-import { testLeaf } from "./support.ts";
+import { noNetwork, testLeaf } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const T0 = Date.parse("2026-11-16T13:00:00Z");
@@ -25,7 +25,7 @@ let server: ReturnType<typeof testLeaf>;
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), "leaf-snapshot-"));
-  server = testLeaf({ now: T0 }, () => Promise.reject(new Error("No network in this test")));
+  server = testLeaf({ now: T0 }, noNetwork);
 });
 
 afterEach(async () => {

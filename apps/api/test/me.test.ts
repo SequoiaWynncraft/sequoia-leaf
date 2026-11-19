@@ -2,10 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { leaf, playerId, RAIDS } from "@sequoia-leaf/core";
 
-import { testLeaf } from "./support.ts";
+import { MINUTE, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
-const MINUTE = 60_000;
 /** Wednesday 4 November 2026, 12:00 UTC. */
 const T0 = Date.UTC(2026, 10, 4, 12);
 
@@ -269,14 +268,14 @@ describe("POST /v1/me/quests/:id/reroll", () => {
         { id: "weekly:1", reroll_leaf: 0 },
       ],
     });
-    const stored = await services.query<{ sequence: number; templateId: string; expiresAt: number | null }>(
+    const stored = await services.query<{ sequence: number; template_id: string; expires_at: number | null }>(
       (sql) => sql`SELECT sequence, template_id, expires_at FROM quests WHERE slot = 'daily' ORDER BY sequence`,
     );
-    expect(stored.map((row) => [row.sequence, row.expiresAt])).toEqual([
+    expect(stored.map((row) => [row.sequence, row.expires_at])).toEqual([
       [1, T0 + MINUTE],
       [2, null],
     ]);
-    expect(stored[0]?.templateId).not.toBe(stored[1]?.templateId);
+    expect(stored[0]?.template_id).not.toBe(stored[1]?.template_id);
     expect(await (await get("/v1/me/events")).json()).toMatchObject({
       events: [{ type: "quest_rerolled", data: { replaced: { id: "daily:1" }, quest: { id: "daily:2" }, leaf: 0 } }],
     });
@@ -297,7 +296,7 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     const spends = await services.query(
       (sql) => sql`SELECT origin, balance_delta, idempotency_key FROM ledger_entries WHERE kind = 'spend'`,
     );
-    expect(spends).toEqual([{ origin: "reroll", balanceDelta: -100, idempotencyKey: `reroll:${alice}:daily:2` }]);
+    expect(spends).toEqual([{ origin: "reroll", balance_delta: -100, idempotency_key: `reroll:${alice}:daily:2` }]);
   });
 
   it("counts each slot's free reroll on its own, and gives another the next UTC day", async () => {

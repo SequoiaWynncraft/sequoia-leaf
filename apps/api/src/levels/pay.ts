@@ -2,6 +2,7 @@ import { draftEntry, leaf, leafForLevel, levelForXp, type LevelRules, type Playe
 import { Effect, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
+import { Events } from "../events/store.ts";
 import { Ledger } from "../ledger/store.ts";
 import { PlayerUuid } from "../wire.ts";
 
@@ -62,6 +63,30 @@ export const payLevels = Effect.fn("payLevels")(function* (playerId: PlayerId, r
   return total;
 });
 
+/** The level a player's XP has reached. */
+export const levelOf = (playerId: PlayerId, rules: LevelRules) =>
+  Ledger.use((ledger) => ledger.account(playerId)).pipe(Effect.map((account) => levelForXp(account.xp, rules).level));
+
+/**
+ * When the player's XP has passed `levelBefore`, pays the levels reached and
+ * says so with a `level_up` event. Returns the Leaf paid. Call it in the
+ * transaction that added the XP.
+ */
+export const levelUp = Effect.fn("levelUp")(function* (
+  playerId: PlayerId,
+  levelBefore: number,
+  rules: LevelRules,
+  now: number,
+) {
+  const level = yield* levelOf(playerId, rules);
+  if (level <= levelBefore) {
+    return 0;
+  }
+  const paid = yield* payLevels(playerId, rules, now);
+  yield* Events.use((events) => events.insert(playerId, { type: "level_up", data: { level, leaf: paid } }, now));
+  return paid;
+});
+
 /**
  * Pays every player for the levels they have reached and not been paid for,
  * such as the ones reached before levels paid Leaf. It writes no events: those
@@ -73,7 +98,7 @@ export const payMissedLevels = Effect.fn("payMissedLevels")(function* (rules: Le
   const players = SqlSchema.findAll({
     Request: Schema.Void,
     Result: Schema.Struct({ playerId: PlayerUuid }),
-    execute: () => sql`SELECT player_id FROM accounts ORDER BY player_id`,
+    execute: () => sql`SELECT player_id AS playerId FROM accounts ORDER BY player_id`,
   });
   return yield* sql
     .withTransaction(

@@ -1,23 +1,21 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 
 import { type Activity, DEFAULT_RULES, type PlayerId, playerId, refreshQuests, type Rules } from "@sequoia-leaf/core";
-import { Effect } from "effect";
 
 import { type CreditSource, syncCredits } from "../src/earning/sync.ts";
 import { Ledger } from "../src/ledger/store.ts";
 import { questJson } from "../src/quests/json.ts";
 import { Quests } from "../src/quests/store.ts";
-import { testLeaf } from "./support.ts";
+import { feed, MINUTE, noNetwork, raid, testLeaf } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
-const MINUTE = 60_000;
 /** Wednesday 4 November 2026, 12:00 UTC. */
 const T0 = Date.UTC(2026, 10, 4, 12);
 
 let leaf: ReturnType<typeof testLeaf>;
 
 beforeEach(() => {
-  leaf = testLeaf({ now: T0 }, () => Promise.reject(new Error("No network in this test")));
+  leaf = testLeaf({ now: T0 }, noNetwork);
 });
 
 /** One template per slot, so every test knows which quests it gets. */
@@ -33,18 +31,6 @@ const rules: Rules = {
   },
 };
 
-function raid(id: number, player: PlayerId, occurredAt: number, seasonRating = 110): Activity {
-  return {
-    kind: "raid",
-    sourceKey: `raid:${id}:${player}`,
-    playerId: player,
-    occurredAt,
-    seasonRating,
-    raid: "tna",
-    raidName: "The Nameless Anomaly",
-  };
-}
-
 function war(id: number, player: PlayerId, occurredAt: number): Activity {
   return {
     kind: "war",
@@ -57,20 +43,15 @@ function war(id: number, player: PlayerId, occurredAt: number): Activity {
   };
 }
 
-function feed(activities: Activity[]): CreditSource {
-  return (from, to) =>
-    Effect.succeed(activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to));
-}
-
 function sync(source: CreditSource, now: number) {
   return leaf.run(syncCredits(source, rules, now, "recent"));
 }
 
 async function questRows(): Promise<string[]> {
-  const rows = await leaf.query<{ slot: string; sequence: number; progress: number; completedAt: number | null }>(
+  const rows = await leaf.query<{ slot: string; sequence: number; progress: number; completed_at: number | null }>(
     (sql) => sql`SELECT slot, sequence, progress, completed_at FROM quests ORDER BY slot, sequence`,
   );
-  return rows.map((row) => `${row.slot}:${row.sequence} ${row.progress}${row.completedAt === null ? "" : " done"}`);
+  return rows.map((row) => `${row.slot}:${row.sequence} ${row.progress}${row.completed_at === null ? "" : " done"}`);
 }
 
 function book(player: PlayerId) {
@@ -141,7 +122,7 @@ describe("quests in the credit sync", () => {
     const stored = await leaf.query(
       (sql) => sql`SELECT progress, started_at, expires_at FROM quests WHERE slot = 'repeatable'`,
     );
-    expect(stored).toEqual([{ progress: 1, startedAt: T0 + MINUTE, expiresAt: T0 + MINUTE }]);
+    expect(stored).toEqual([{ progress: 1, started_at: T0 + MINUTE, expires_at: T0 + MINUTE }]);
     const storedBook = await book(alice);
     expect(storedBook && refreshQuests(storedBook, alice, T0 + 11 * MINUTE, off.quests).written).toEqual([]);
   });
