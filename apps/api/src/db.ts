@@ -12,7 +12,8 @@ const MIGRATIONS = join(import.meta.dir, "..", "migrations");
 /**
  * Before Leaf ran Effect's migrator, it recorded the migrations it applied in
  * `schema_migrations`, by file name. This copies that record into the
- * migrator's table, once, so the migrator does not apply them again.
+ * migrator's table, so the migrator does not apply them again. The old table
+ * stays, so the version before this one can still start on the database.
  */
 const adoptOldRecord = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -32,12 +33,11 @@ const adoptOldRecord = Effect.gen(function* () {
       `;
       // `0007_war_claim.sql` is migration 7, `war_claim`.
       yield* sql`
-        INSERT INTO effect_sql_migrations (migration_id, name, created_at)
+        INSERT OR IGNORE INTO effect_sql_migrations (migration_id, name, created_at)
         SELECT CAST(substr(name, 1, 4) AS INTEGER), substr(name, 6, length(name) - 9),
                datetime(applied_at / 1000, 'unixepoch')
         FROM schema_migrations
       `;
-      yield* sql`DROP TABLE schema_migrations`;
     }),
   );
 });
