@@ -128,7 +128,7 @@ describe("the database", () => {
         const sql = yield* SqlClient.SqlClient;
         return [
           yield* sql`SELECT migration_id, name, created_at FROM effect_sql_migrations ORDER BY 1`,
-          yield* sql`SELECT name FROM sqlite_master WHERE name = 'schema_migrations'`,
+          yield* sql`SELECT count(*) AS migrations FROM schema_migrations`,
           yield* Ledger.use((ledger) => ledger.account(alice)),
         ] as const;
       }),
@@ -137,7 +137,8 @@ describe("the database", () => {
     expect(record).toHaveLength(10);
     expect(record[0]).toEqual({ migrationId: 1, name: "ledger", createdAt: "2025-11-16 12:00:00" });
     expect(record[9]).toEqual({ migrationId: 10, name: "quest_rerolls", createdAt: "2025-11-16 12:00:00" });
-    expect(old).toEqual([]);
+    // Kept, so the version before can still start on this database.
+    expect(old).toEqual([{ migrations: 10 }]);
     expect(account.balance).toBe(110);
   });
 

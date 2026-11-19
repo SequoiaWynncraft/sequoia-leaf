@@ -299,8 +299,9 @@ SQLite client runs a single statement per call, so a script of several is cut
 short silently. Effect's migrator applies the ones a database has not seen, in
 order, in one transaction, and records them in `effect_sql_migrations`. A
 database set up before Leaf used Effect's migrator kept that record in
-`schema_migrations`; the first start copies it across and drops the old
-table, so nothing runs twice.
+`schema_migrations`; each start copies it across, so nothing runs twice, and
+leaves the old table in place, so the version before can still start on the
+same database.
 
 The app's settings and the DNS record are written down in [`infra/`](infra/)
 as OpenTofu configuration. What the Coolify app is set up with:
