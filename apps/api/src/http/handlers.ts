@@ -17,6 +17,7 @@ import {
 import { Clock, Context, Duration, Effect, Layer, Redacted, Ref, Schedule, Stream } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder, HttpApiError } from "effect/http-api";
+import { SqlClient } from "effect/sql";
 
 import { CurrentIdentity, LeafApi, RerollBodyErrors, Session, Unexpected } from "../api/api.ts";
 import {
@@ -33,13 +34,12 @@ import {
   Unauthorized,
 } from "../api/errors.ts";
 import { Identities } from "../auth/session.ts";
-import { Db } from "../db.ts";
 import { syncOnDemand } from "../earning/run.ts";
-import { eventJsonText, latestEventId, listEventsAfter, listLatestEvents, type StoredEvent } from "../events/store.ts";
-import { getAccount } from "../ledger/store.ts";
+import { eventJsonText, Events, type StoredEvent } from "../events/store.ts";
+import { Ledger } from "../ledger/store.ts";
 import { questJson } from "../quests/json.ts";
-import { rerollQuestFor, rerollsOnDay } from "../quests/reroll.ts";
-import { listCompletedSince, loadQuestBook } from "../quests/store.ts";
+import { rerollQuestFor } from "../quests/reroll.ts";
+import { Quests } from "../quests/store.ts";
 
 /** How far back the list of finished quests reaches. */
 const RECENTLY_COMPLETED_MS = 2 * DAY_MS;
@@ -139,7 +139,8 @@ const SystemHandlers = HttpApiBuilder.group(LeafApi, "system", (handlers) =>
   handlers.handle("healthz", () =>
     Effect.gen(function* () {
       // Healthy means the database answers, since nothing works without it.
-      (yield* Db).query("SELECT 1").get();
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`SELECT 1`.pipe(Effect.orDie);
       return { status: "ok" as const };
     }),
   ),
@@ -150,7 +151,7 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
     .handle("account", () =>
       Effect.gen(function* () {
         const identity = yield* CurrentIdentity;
-        const account = getAccount(yield* Db, identity.playerId);
+        const account = yield* (yield* Ledger).account(identity.playerId);
         const level = levelForXp(account.xp, DEFAULT_RULES.levels);
         return {
           player: { id: identity.playerId, username: identity.username },
@@ -166,17 +167,17 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
         if (query.sync === "1") {
           yield* syncOnDemand;
         }
-        const db = yield* Db;
+        const quests = yield* Quests;
         const now = yield* Clock.currentTimeMillis;
-        const stored = loadQuestBook(db, identity.playerId);
-        const completed = listCompletedSince(db, identity.playerId, now - RECENTLY_COMPLETED_MS);
+        const stored = yield* quests.book(identity.playerId);
+        const completed = yield* quests.completedSince(identity.playerId, now - RECENTLY_COMPLETED_MS);
         // The stored book is as of the player's last activity or reroll. Bringing it
         // up to now is a pure calculation; only the credit sync and rerolls write quests.
         const { book } = refreshQuests(stored ?? openQuestBook(now), identity.playerId, now, DEFAULT_RULES.quests);
         const nextCharge = nextDailyChargeAt(book, DEFAULT_RULES.quests);
         const timedRules = DEFAULT_RULES.quests.timed;
         const window = timedRules === undefined ? undefined : timedWindowAt(now, timedRules);
-        const rerolls = rerollsOnDay(db, identity.playerId, now);
+        const rerolls = yield* quests.rerollsOnDay(identity.playerId, now);
         return {
           daily: {
             charges: book.dailyCharges,
@@ -207,10 +208,8 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
         const identity = yield* CurrentIdentity;
         // A quest just finished is paid rather than swapped away.
         yield* syncOnDemand;
-        const db = yield* Db;
         const now = yield* Clock.currentTimeMillis;
-        const result = rerollQuestFor(
-          db,
+        const result = yield* rerollQuestFor(
           identity.playerId,
           slot,
           Number(id[2]),
@@ -224,7 +223,7 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
         return {
           leaf: result.balance,
           spent: result.spent,
-          quest: questOnOffer(result.quest, rerollsOnDay(db, identity.playerId, now)),
+          quest: questOnOffer(result.quest, yield* (yield* Quests).rerollsOnDay(identity.playerId, now)),
         };
       }),
     )
@@ -235,11 +234,11 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
           return yield* new InvalidAfter({ message: "after must be an event id" });
         }
         const identity = yield* CurrentIdentity;
-        const db = yield* Db;
+        const store = yield* Events;
         const events =
           after === undefined
-            ? listLatestEvents(db, identity.playerId, LATEST_EVENTS)
-            : listEventsAfter(db, identity.playerId, after, EVENT_PAGE);
+            ? yield* store.latest(identity.playerId, LATEST_EVENTS)
+            : yield* store.after(identity.playerId, after, EVENT_PAGE);
         return {
           events: events.map((event) => ({
             id: event.id,
@@ -261,9 +260,10 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
           return yield* new InvalidAfter({ message: "after must be an event id" });
         }
         const identity = yield* CurrentIdentity;
-        const db = yield* Db;
+        const events = yield* Events;
         const tuning = yield* StreamTuning;
-        return HttpServerResponse.stream(eventStream(db, identity.playerId, resumeFrom ?? latestEventId(db), tuning), {
+        const from = resumeFrom ?? (yield* events.latestId);
+        return HttpServerResponse.stream(eventStream(events, identity.playerId, from, tuning), {
           contentType: "text/event-stream",
           headers: { "cache-control": "no-cache", connection: "keep-alive" },
         });
@@ -276,19 +276,19 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
  * database every `pollMs`, not by being told, so it also sees events written by
  * another process: during a deploy the old and the new container run side by side.
  */
-const eventStream = (db: Db["Service"], playerId: PlayerId, from: number, tuning: StreamTuning) =>
+const eventStream = (events: Events["Service"], playerId: PlayerId, from: number, tuning: StreamTuning) =>
   Stream.unwrap(
     Effect.gen(function* () {
       const position = yield* Ref.make(from);
       const look = Effect.gen(function* () {
-        const events = listEventsAfter(db, playerId, yield* Ref.get(position), EVENT_PAGE);
-        const last = events.at(-1);
+        const found = yield* events.after(playerId, yield* Ref.get(position), EVENT_PAGE);
+        const last = found.at(-1);
         if (last !== undefined) {
           yield* Ref.set(position, last.id);
         }
-        return events.map(sseFrame).join("");
+        return found.map(sseFrame).join("");
       });
-      const events = Stream.fromEffectSchedule(look, Schedule.spaced(Duration.millis(tuning.pollMs))).pipe(
+      const fresh = Stream.fromEffectSchedule(look, Schedule.spaced(Duration.millis(tuning.pollMs))).pipe(
         Stream.filter((frames) => frames !== ""),
       );
       // Clients ignore comments; proxies see traffic and keep a quiet connection open.
@@ -300,7 +300,7 @@ const eventStream = (db: Db["Service"], playerId: PlayerId, from: number, tuning
       // stream ends before any event arrives still reconnects from here and gets
       // what happened in between.
       return Stream.make(`id: ${from}\nretry: 3000\n\n`).pipe(
-        Stream.concat(Stream.merge(events, keepAlive)),
+        Stream.concat(Stream.merge(fresh, keepAlive)),
         Stream.interruptWhen(Effect.sleep(Duration.millis(tuning.maxMs))),
         Stream.encodeText,
       );

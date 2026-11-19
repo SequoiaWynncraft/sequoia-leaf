@@ -6,7 +6,8 @@ Members earn Leaf from guild activity such as raids and wars, and spend it.
 It is one Bun process with a SQLite database file, written in TypeScript with
 [Effect](https://effect.website). Bun is the whole toolchain: runtime, package
 manager, formatter (`bun fmt`), type checker (`bun check`), test runner and the
-SQLite driver. Linting is oxlint with type-aware rules.
+SQLite driver, which the code reaches through Effect's SQL client
+(`@effect/sql-sqlite-bun`). Linting is oxlint with type-aware rules.
 
 ## Status
 
@@ -49,12 +50,12 @@ does not read the awards feed, and achievement milestones pay nothing. Without a
 
 ## Layout
 
-| Path                  | What it is                                                    |
-| --------------------- | ------------------------------------------------------------- |
-| `packages/core`       | The rules of the game as pure functions and types. No I/O.    |
-| `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs. |
-| `apps/api/migrations` | The database schema. New files are applied in order at start. |
-| `Dockerfile`          | The production image.                                         |
+| Path                  | What it is                                                           |
+| --------------------- | -------------------------------------------------------------------- |
+| `packages/core`       | The rules of the game as pure functions and types. No I/O.           |
+| `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.        |
+| `apps/api/migrations` | The database schema, as Effect migrations applied in order at start. |
+| `Dockerfile`          | The production image.                                                |
 
 ## How Leaf is earned
 
@@ -283,7 +284,7 @@ react to `quest_completed`.
    database is never mocked.
 10. **Writes that belong together share a transaction.** An activity, the Leaf
     it pays and the quest progress it causes are written by one
-    `db.transaction`, so none of them exists without the others.
+    `sql.withTransaction`, so none of them exists without the others.
 
 ## Deploying
 
@@ -291,6 +292,16 @@ Merging to `main` deploys. Coolify on the Sequoia server builds the
 `Dockerfile` and replaces the running container; the app is `sequoia-leaf-prod`
 in the `sequoia-leaf` project. The server applies new migrations when it
 starts, before it takes requests.
+
+A migration is a file in `apps/api/migrations` named `NNNN_name.ts` whose
+default export is an Effect that runs its statements one `sql` call each: the
+SQLite client runs a single statement per call, so a script of several is cut
+short silently. Effect's migrator applies the ones a database has not seen, in
+order, in one transaction, and records them in `effect_sql_migrations`. A
+database set up before Leaf used Effect's migrator kept that record in
+`schema_migrations`; each start copies it across, so nothing runs twice, and
+leaves the old table in place, so the version before can still start on the
+same database.
 
 The app's settings and the DNS record are written down in [`infra/`](infra/)
 as OpenTofu configuration. What the Coolify app is set up with:

@@ -4,7 +4,7 @@ import { type Activity, DEFAULT_RULES, type PlayerId, playerId, type Rules } fro
 import { Effect, Layer } from "effect";
 
 import { syncCredits } from "../src/earning/sync.ts";
-import { insertEvent, listEventsAfter } from "../src/events/store.ts";
+import { Events } from "../src/events/store.ts";
 import { StreamTuning } from "../src/http/handlers.ts";
 import { testLeaf } from "./support.ts";
 
@@ -75,22 +75,29 @@ function get(path: string, headers: Record<string, string> = {}): Promise<Respon
   return Promise.resolve(app.request(path, { headers: { Authorization: "Bearer alice-token", ...headers } }));
 }
 
-function earned(player: PlayerId, amount: number): void {
-  insertEvent(
-    services.db,
-    player,
-    {
-      type: "leaf_earned",
-      data: {
-        source: "raid",
-        leaf: amount,
-        xp: amount,
-        detail: "The Nameless Anomaly",
-        occurred_at: "2026-11-04T12:00:00.000Z",
-      },
-    },
-    clock.now,
+function earned(player: PlayerId, amount: number): Promise<void> {
+  return services.run(
+    Events.use((events) =>
+      events.insert(
+        player,
+        {
+          type: "leaf_earned",
+          data: {
+            source: "raid",
+            leaf: amount,
+            xp: amount,
+            detail: "The Nameless Anomaly",
+            occurred_at: "2026-11-04T12:00:00.000Z",
+          },
+        },
+        clock.now,
+      ),
+    ),
   );
+}
+
+function eventsOf(player: PlayerId) {
+  return services.run(Events.use((events) => events.after(player, 0, 10)));
 }
 
 /** Reads a stream until its text contains every one of the strings, and returns the text. */
@@ -119,11 +126,11 @@ describe("events from the credit sync", () => {
     const activities = [raid(1, alice, T0 + MINUTE), raid(2, alice, T0 + 2 * MINUTE)];
     const source = (from: number, to: number) =>
       Effect.succeed(activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to));
-    await Effect.runPromise(syncCredits(services.db, source, rules, T0, "recent"));
+    await services.run(syncCredits(source, rules, T0, "recent"));
 
-    await Effect.runPromise(syncCredits(services.db, source, rules, T0 + 5 * MINUTE, "recent"));
+    await services.run(syncCredits(source, rules, T0 + 5 * MINUTE, "recent"));
 
-    const events = listEventsAfter(services.db, alice, 0, 10).map((event) => ({
+    const events = (await eventsOf(alice)).map((event) => ({
       type: event.type,
       data: JSON.parse(event.data) as unknown,
       createdAt: event.createdAt,
@@ -154,21 +161,21 @@ describe("events from the credit sync", () => {
 
   it("records nothing when the same events are read again", async () => {
     const source = () => Effect.succeed([raid(1, alice, T0 + MINUTE)]);
-    await Effect.runPromise(syncCredits(services.db, source, rules, T0, "recent"));
-    await Effect.runPromise(syncCredits(services.db, source, rules, T0 + 5 * MINUTE, "recent"));
+    await services.run(syncCredits(source, rules, T0, "recent"));
+    await services.run(syncCredits(source, rules, T0 + 5 * MINUTE, "recent"));
 
-    await Effect.runPromise(syncCredits(services.db, source, rules, T0 + 6 * MINUTE, "recent"));
+    await services.run(syncCredits(source, rules, T0 + 6 * MINUTE, "recent"));
 
-    expect(listEventsAfter(services.db, alice, 0, 10)).toHaveLength(1);
+    expect(await eventsOf(alice)).toHaveLength(1);
   });
 });
 
 describe("GET /v1/me/events", () => {
   it("lists the member's own events, oldest first", async () => {
-    earned(alice, 110);
-    earned(bob, 999);
+    await earned(alice, 110);
+    await earned(bob, 999);
     clock.now = T0 + MINUTE;
-    earned(alice, 440);
+    await earned(alice, 440);
 
     const response = await get("/v1/me/events");
 
@@ -205,9 +212,9 @@ describe("GET /v1/me/events", () => {
   });
 
   it("lists only what came after the event the client saw last", async () => {
-    earned(alice, 110);
-    earned(alice, 220);
-    earned(alice, 330);
+    await earned(alice, 110);
+    await earned(alice, 220);
+    await earned(alice, 330);
 
     const response = await get("/v1/me/events?after=1");
 
@@ -230,12 +237,12 @@ describe("GET /v1/me/events", () => {
 
 describe("GET /v1/me/events/stream", () => {
   it("sends an event as soon as it happens, and nothing from before the client connected", async () => {
-    earned(alice, 110);
+    await earned(alice, 110);
     const response = await get("/v1/me/events/stream");
     expect(response.headers.get("Content-Type")).toBe("text/event-stream");
 
-    earned(bob, 999);
-    earned(alice, 440);
+    await earned(bob, 999);
+    await earned(alice, 440);
     const text = await readUntil(response, '"leaf":440');
 
     expect(text.startsWith("id: 1\nretry: 3000\n\n")).toBe(true);
@@ -247,9 +254,9 @@ describe("GET /v1/me/events/stream", () => {
   });
 
   it("sends what a reconnecting client missed", async () => {
-    earned(alice, 110);
-    earned(alice, 220);
-    earned(alice, 330);
+    await earned(alice, 110);
+    await earned(alice, 220);
+    await earned(alice, 330);
 
     const response = await get("/v1/me/events/stream", { "Last-Event-ID": "1" });
     const text = await readUntil(response, '"leaf":220', '"leaf":330');
@@ -267,10 +274,10 @@ describe("GET /v1/me/events/stream", () => {
   });
 
   it("tells a client where it started, so one whose quiet stream ended misses nothing on reconnecting", async () => {
-    earned(alice, 110);
+    await earned(alice, 110);
     const quiet = await (await get("/v1/me/events/stream")).text();
     const started = /^id: (\d+)\n/.exec(quiet)?.[1] ?? "";
-    earned(alice, 440);
+    await earned(alice, 440);
 
     const response = await get("/v1/me/events/stream", { "Last-Event-ID": started });
     const text = await readUntil(response, '"leaf":440');

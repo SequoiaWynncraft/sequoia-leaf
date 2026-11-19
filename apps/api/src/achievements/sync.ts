@@ -1,5 +1,3 @@
-import type { Database } from "bun:sqlite";
-
 import {
   type AchievementAward,
   draftEntry,
@@ -9,12 +7,12 @@ import {
   type PlayerId,
   type Rules,
 } from "@sequoia-leaf/core";
-import type { Effect } from "effect";
+import { Effect } from "effect";
 
-import { insertEvent } from "../events/store.ts";
-import { getAccount, insertEntry } from "../ledger/store.ts";
+import { Events } from "../events/store.ts";
+import { Ledger } from "../ledger/store.ts";
 import { payLevels } from "../levels/pay.ts";
-import { type SyncMode, type SyncResult, windowedSync } from "../sync/windowed.ts";
+import { type SyncMode, windowedSync } from "../sync/windowed.ts";
 
 /** Reads the achievement milestones players reached during [from, to), in milliseconds since the Unix epoch. */
 export type AwardSource<E = never, R = never> = (
@@ -28,67 +26,65 @@ export type AwardSource<E = never, R = never> = (
  * history. Each award pays once: its ledger entry is keyed by the award's id,
  * so reading a window again, or the same award in two windows, changes nothing.
  */
-export function syncAchievements<E, R>(
-  db: Database,
-  source: AwardSource<E, R>,
-  rules: Rules,
-  now: number,
-  mode: SyncMode,
-): Effect.Effect<SyncResult, E, R> {
-  return windowedSync(db, "achievements", now, mode, source, (awards, from, to) => {
-    const levelBefore = new Map<PlayerId, number>();
-    let recorded = 0;
-    let leafPaid = 0;
-    for (const award of inWindow(awards, from, to)) {
-      const amount = leafForAward(award, rules.achievements);
-      const idempotencyKey = `achievement:${award.awardId}`;
-      if (amount === 0 || award.milestoneId === null || isPaid(db, idempotencyKey)) {
-        continue;
-      }
-      if (!levelBefore.has(award.playerId)) {
-        levelBefore.set(award.playerId, levelForXp(getAccount(db, award.playerId).xp, rules.levels).level);
-      }
-      const draft = draftEntry({
-        kind: "earn",
-        playerId: award.playerId,
-        amount: leaf(amount),
-        source: "achievement",
-        idempotencyKey,
-      });
-      const entry = insertEntry(db, draft, now);
-      insertEvent(
-        db,
-        award.playerId,
-        {
-          type: "achievement_paid",
-          data: {
-            award_id: award.awardId,
-            ladder: award.ladder,
-            milestone: award.milestoneId,
-            tier: award.tier,
-            threshold: award.threshold,
-            label: award.label,
-            leaf: entry.balanceDelta,
-            xp: entry.xpDelta,
-            earned_at: new Date(award.earnedAt).toISOString(),
+export const syncAchievements = <E, R>(source: AwardSource<E, R>, rules: Rules, now: number, mode: SyncMode) =>
+  windowedSync("achievements", now, mode, source, (awards, from, to) =>
+    Effect.gen(function* () {
+      const ledger = yield* Ledger;
+      const events = yield* Events;
+      const levelBefore = new Map<PlayerId, number>();
+      let recorded = 0;
+      let leafPaid = 0;
+      for (const award of inWindow(awards, from, to)) {
+        const amount = leafForAward(award, rules.achievements);
+        const idempotencyKey = `achievement:${award.awardId}`;
+        if (amount === 0 || award.milestoneId === null || (yield* ledger.isRecorded(idempotencyKey))) {
+          continue;
+        }
+        if (!levelBefore.has(award.playerId)) {
+          levelBefore.set(award.playerId, levelForXp((yield* ledger.account(award.playerId)).xp, rules.levels).level);
+        }
+        const entry = yield* ledger.insert(
+          draftEntry({
+            kind: "earn",
+            playerId: award.playerId,
+            amount: leaf(amount),
+            source: "achievement",
+            idempotencyKey,
+          }),
+          now,
+        );
+        yield* events.insert(
+          award.playerId,
+          {
+            type: "achievement_paid",
+            data: {
+              award_id: award.awardId,
+              ladder: award.ladder,
+              milestone: award.milestoneId,
+              tier: award.tier,
+              threshold: award.threshold,
+              label: award.label,
+              leaf: entry.balanceDelta,
+              xp: entry.xpDelta,
+              earned_at: new Date(award.earnedAt).toISOString(),
+            },
           },
-        },
-        now,
-      );
-      recorded += 1;
-      leafPaid += amount;
-    }
-    for (const [playerId, before] of levelBefore) {
-      const after = levelForXp(getAccount(db, playerId).xp, rules.levels).level;
-      if (after > before) {
-        const levelLeaf = payLevels(db, playerId, rules.levels, now);
-        leafPaid += levelLeaf;
-        insertEvent(db, playerId, { type: "level_up", data: { level: after, leaf: levelLeaf } }, now);
+          now,
+        );
+        recorded += 1;
+        leafPaid += amount;
       }
-    }
-    return { recorded, leafPaid };
-  });
-}
+      for (const [playerId, before] of levelBefore) {
+        const after = levelForXp((yield* ledger.account(playerId)).xp, rules.levels).level;
+        if (after > before) {
+          const levelLeaf = yield* payLevels(playerId, rules.levels, now);
+          leafPaid += levelLeaf;
+          yield* events.insert(playerId, { type: "level_up", data: { level: after, leaf: levelLeaf } }, now);
+        }
+      }
+      return { recorded, leafPaid };
+    }),
+  );
 
 /** The awards earned in [from, to), each once, oldest first. */
 function inWindow(awards: readonly AchievementAward[], from: number, to: number): AchievementAward[] {
@@ -99,12 +95,4 @@ function inWindow(awards: readonly AchievementAward[], from: number, to: number)
     }
   }
   return [...unique.values()].toSorted((a, b) => a.earnedAt - b.earnedAt || a.awardId.localeCompare(b.awardId));
-}
-
-function isPaid(db: Database, idempotencyKey: string): boolean {
-  return (
-    db
-      .query<{ found: number }, [string]>("SELECT 1 AS found FROM ledger_entries WHERE idempotency_key = ?")
-      .get(idempotencyKey) !== null
-  );
 }
