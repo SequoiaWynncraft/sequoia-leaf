@@ -38,7 +38,9 @@ export interface LevelRules {
 }
 
 // As a rough anchor, 100 Leaf is worth about 1 LE. In the first day of real
-// play a raid earned 220 to 440 season rating, about 330 on average, and a war 60.
+// play a raid's guild message reported 220 to 440 season rating for the whole
+// party, about 330 on average; each member's share is about 80 to 110. A war
+// earned 60.
 //
 // Most quests can be finished by raiding or by warring, whichever comes first, so
 // raiders and warrers both have a way. Over the first three days a raid took
@@ -69,21 +71,24 @@ function raidsOrWars(
   };
 }
 
+// A raid earns each member their share of its season rating, about 80 to 110, so
+// a season rating quest asks for about as many raids as the raids-or-wars quests
+// beside it: 300 for three, 2,000 for twenty.
 const QUEST_TEMPLATES: readonly QuestTemplate[] = [
   ...RAID_KEYS.map((raid) => raidsOrWars("daily", { raid, count: 3 }, 3, { leaf: 300, xp: 150 })),
   raidsOrWars("daily", { count: 2 }, 2, { leaf: 200, xp: 100 }),
   {
-    id: "daily.season_rating.1000",
+    id: "daily.season_rating.300",
     slot: "daily",
-    objectives: [{ type: "season_rating", amount: 1000 }],
+    objectives: [{ type: "season_rating", amount: 300 }],
     reward: { leaf: 250, xp: 125 },
   },
   ...RAID_KEYS.map((raid) => raidsOrWars("weekly", { raid, count: 12 }, 20, { leaf: 800, xp: 400 })),
   raidsOrWars("weekly", { count: 20 }, 20, { leaf: 800, xp: 400 }),
   {
-    id: "weekly.season_rating.6000",
+    id: "weekly.season_rating.2000",
     slot: "weekly",
-    objectives: [{ type: "season_rating", amount: 6000 }],
+    objectives: [{ type: "season_rating", amount: 2000 }],
     reward: { leaf: 800, xp: 400 },
   },
   // Timed quests: the whole guild gets the same one for a two-hour window. They
@@ -92,9 +97,9 @@ const QUEST_TEMPLATES: readonly QuestTemplate[] = [
   ...RAID_KEYS.map((raid) => raidsOrWars("timed", { raid, count: 2 }, 2, { leaf: 500, xp: 250 })),
   raidsOrWars("timed", { count: 3 }, 3, { leaf: 500, xp: 250 }),
   {
-    id: "timed.season_rating.1500",
+    id: "timed.season_rating.300",
     slot: "timed",
-    objectives: [{ type: "season_rating", amount: 1500 }],
+    objectives: [{ type: "season_rating", amount: 300 }],
     reward: { leaf: 500, xp: 250 },
   },
 ];
