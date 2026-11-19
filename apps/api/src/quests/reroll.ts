@@ -28,7 +28,10 @@ export type RerollResult =
       /** The player's balance after it. */
       readonly balance: number;
     }
-  | { readonly status: "refused"; readonly reason: "not_current" | "not_rerollable" | "insufficient_leaf" };
+  | {
+      readonly status: "refused";
+      readonly reason: "not_current" | "not_rerollable" | "cost_changed" | "insufficient_leaf";
+    };
 
 /** How many times a player rerolled each slot on the UTC day of `at`. Slots not rerolled that day are absent. */
 export function rerollsOnDay(db: Database, playerId: PlayerId, at: number): Map<QuestSlot, number> {
@@ -46,13 +49,16 @@ export function rerollsOnDay(db: Database, playerId: PlayerId, at: number): Map<
 /**
  * Swaps a player's quest `slot:sequence` for another and charges what it costs,
  * all in one transaction: the quests, the spend, the count of the day's rerolls
- * and a `quest_rerolled` event. Nothing is written when it is refused.
+ * and a `quest_rerolled` event. `agreedLeaf` is the cost the player was shown;
+ * when the reroll costs anything else now, it is refused. Nothing is written
+ * when it is refused.
  */
 export function rerollQuestFor(
   db: Database,
   playerId: PlayerId,
   slot: QuestSlot,
   sequence: number,
+  agreedLeaf: number,
   now: number,
   rules: QuestRules,
 ): RerollResult {
@@ -64,6 +70,9 @@ export function rerollQuestFor(
       const step = rerollQuest(book, playerId, slot, sequence, now, rerollsToday, rules);
       if (step.status === "refused") {
         return step;
+      }
+      if (step.cost !== agreedLeaf) {
+        return { status: "refused", reason: "cost_changed" };
       }
       // A free reroll needs no Leaf, even from a member a correction left in debt.
       if (step.cost > 0 && getAccount(db, playerId).balance < step.cost) {

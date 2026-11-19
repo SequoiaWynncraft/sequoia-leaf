@@ -8,7 +8,7 @@ import { leaf, type PlayerId, playerId } from "@sequoia-leaf/core";
 
 import { openDatabase } from "../src/db.ts";
 import { postEntry } from "../src/ledger/store.ts";
-import { windowedSync } from "../src/sync/windowed.ts";
+import { MAX_WINDOW_MS, SETTLE_MS, windowedSync } from "../src/sync/windowed.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const MINUTE = 60_000;
@@ -43,6 +43,11 @@ function raidPay(db: Database, id: number, player: PlayerId, at: number): void {
   );
 }
 
+/** A write that records nothing. */
+function writeNothing() {
+  return { recorded: 0, leafPaid: 0 };
+}
+
 /** A feed with nothing in it. */
 async function nothing(): Promise<never[]> {
   return [];
@@ -70,5 +75,22 @@ describe("windowedSync", () => {
     expect(other.query("SELECT idempotency_key FROM ledger_entries").all()).toEqual([
       { idempotency_key: `raid:2:${alice}` },
     ]);
+  });
+
+  it("catches up after a gap longer than the feeds answer a window for, a window per run", async () => {
+    const windows: [number, number][] = [];
+    const read = async (from: number, to: number): Promise<never[]> => {
+      windows.push([from, to]);
+      return [];
+    };
+    await windowedSync(server, "credits", T0, "recent", read, writeNothing);
+    const back = T0 + 45 * 24 * 60 * MINUTE;
+
+    await windowedSync(server, "credits", back, "recent", read, writeNothing);
+    await windowedSync(server, "credits", back + MINUTE, "recent", read, writeNothing);
+
+    expect(windows.map(([from, to]) => to - from <= MAX_WINDOW_MS)).toEqual([true, true]);
+    expect(windows[0]).toEqual([T0, T0 + MAX_WINDOW_MS]);
+    expect(windows[1]?.[1]).toBe(back + MINUTE - SETTLE_MS);
   });
 });
