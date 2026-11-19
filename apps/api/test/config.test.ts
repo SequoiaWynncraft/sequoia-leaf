@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
-import { readConfig } from "../src/config.ts";
+import { Redacted } from "effect";
+
+import { readSettings } from "./support.ts";
 
 const bucket = {
   BACKUP_S3_ENDPOINT: "https://example.r2.cloudflarestorage.com",
@@ -9,9 +11,9 @@ const bucket = {
   BACKUP_S3_SECRET_ACCESS_KEY: "key-secret",
 };
 
-describe("readConfig", () => {
+describe("settings", () => {
   it("falls back to what local development needs", () => {
-    expect(readConfig({})).toEqual({
+    expect(readSettings({})).toEqual({
       port: 3000,
       databasePath: "data/leaf.db",
       backupDirectory: "data/backups",
@@ -23,30 +25,46 @@ describe("readConfig", () => {
     });
   });
 
-  it("reads Sierra's address for the awards feed", () => {
-    expect(readConfig({ SIERRA_URL: "http://sequoia-sierra:8082" }).sierraUrl).toBe("http://sequoia-sierra:8082");
-  });
-
-  it("copies snapshots off the server when all four bucket variables are set", () => {
-    expect(readConfig(bucket)).toMatchObject({
-      offsite: {
-        endpoint: "https://example.r2.cloudflarestorage.com",
-        bucket: "leaf-backups",
-        accessKeyId: "key-id",
-        secretAccessKey: "key-secret",
-      },
-      offsitePartlySet: [],
+  it("treats a variable set to nothing as left out", () => {
+    expect(readSettings({ PORT: "", BACKEND_INTERNAL_TOKEN: "", DATABASE_PATH: "" })).toMatchObject({
+      port: 3000,
+      databasePath: "data/leaf.db",
+      backendToken: undefined,
     });
   });
 
+  it("keeps the internal token out of anything that prints it", () => {
+    const { backendToken } = readSettings({ BACKEND_INTERNAL_TOKEN: "internal-secret" });
+
+    expect(backendToken === undefined ? undefined : Redacted.value(backendToken)).toBe("internal-secret");
+    expect(Bun.inspect(backendToken)).not.toContain("internal-secret");
+    expect(JSON.stringify({ backendToken })).not.toContain("internal-secret");
+  });
+
+  it("reads Sierra's address for the awards feed", () => {
+    expect(readSettings({ SIERRA_URL: "http://sequoia-sierra:8082" }).sierraUrl).toBe("http://sequoia-sierra:8082");
+  });
+
+  it("copies snapshots off the server when all four bucket variables are set", () => {
+    const { offsite, offsitePartlySet } = readSettings(bucket);
+
+    expect(offsite).toMatchObject({
+      endpoint: "https://example.r2.cloudflarestorage.com",
+      bucket: "leaf-backups",
+      accessKeyId: "key-id",
+    });
+    expect(offsite === undefined ? undefined : Redacted.value(offsite.secretAccessKey)).toBe("key-secret");
+    expect(offsitePartlySet).toEqual([]);
+  });
+
   it("names the bucket variables that are set when some are missing, and copies nothing", () => {
-    expect(readConfig({ ...bucket, BACKUP_S3_SECRET_ACCESS_KEY: "" })).toMatchObject({
+    expect(readSettings({ ...bucket, BACKUP_S3_SECRET_ACCESS_KEY: "" })).toMatchObject({
       offsite: undefined,
       offsitePartlySet: ["BACKUP_S3_ENDPOINT", "BACKUP_S3_BUCKET", "BACKUP_S3_ACCESS_KEY_ID"],
     });
   });
 
   it("refuses a port that is not a port number", () => {
-    expect(() => readConfig({ PORT: "eighty" })).toThrow("PORT is not a port number: eighty");
+    expect(() => readSettings({ PORT: "eighty" })).toThrow("PORT");
   });
 });

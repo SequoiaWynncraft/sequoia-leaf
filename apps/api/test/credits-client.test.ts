@@ -1,12 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
 import { playerId } from "@sequoia-leaf/core";
+import { Redacted } from "effect";
 
 import { readCredits } from "../src/backend/credits.ts";
 import { FeedError } from "../src/feeds.ts";
 import { type Fetcher, rejection, testLeaf } from "./support.ts";
 
-const config = { baseUrl: "https://backend.test", token: "secret-token" };
+const config = { baseUrl: "https://backend.test", token: Redacted.make("secret-token") };
 const FROM = Date.parse("2026-11-02T00:00:00.000Z");
 const TO = Date.parse("2026-11-02T00:05:00.000Z");
 const ALICE = playerId("10000000-0000-0000-0000-000000000001");

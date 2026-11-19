@@ -137,7 +137,10 @@ member sees is calculated from their last stored state.
 ## API
 
 Responses are JSON with `snake_case` fields. Errors are `{ "code", "message" }`,
-including 404 `not_found` for a route that does not exist.
+including 404 `not_found` for a route that does not exist and 500
+`internal_error` for a failure nothing expected, which is logged with its
+cause. The one exception is a body sent with a `Content-Type` other than JSON,
+which gets a plain 415.
 
 The routes are declared once, as an Effect `HttpApi` in
 `apps/api/src/api/api.ts`, with the shape of every answer and error in
@@ -154,10 +157,11 @@ and `GET /openapi.json` serves the OpenAPI document generated from it.
 | `GET /v1/me/events/stream`       | The same events as they happen, as server-sent events.     |
 | `GET /openapi.json`              | This API as an OpenAPI document.                           |
 
-`/v1/me` routes take the member's Sequoia session, as `Authorization: Bearer`
-or as the site's `seq_session` cookie. The server asks sequoia-backend who the
-session belongs to; the mod can send the token it already holds for the
-backend. Only current guild members are let in.
+`/v1/me` routes take the member's Sequoia session, the token sequoia-backend
+issued, as `Authorization: Bearer`; the mod sends the one it already holds for
+the backend. The server asks sequoia-backend who the session belongs to, and
+remembers a confirmed session for a minute. Only current guild members are let
+in.
 
 Each quest in `/v1/me/quests` lists its `goals`, every way to finish it, each
 with its own `type`, `raid`, `title`, `progress` and `target`. Its `objective`,

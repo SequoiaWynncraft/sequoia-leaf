@@ -1,10 +1,10 @@
 import type { Database } from "bun:sqlite";
 
-import { Clock, Effect, Layer, References } from "effect";
+import { Clock, ConfigProvider, Effect, Layer, Redacted, References } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 
 import { routerConfig, Routes } from "../src/app.ts";
-import { AppConfig, type Config, readConfig } from "../src/config.ts";
+import { AppConfig, type Settings, settings } from "../src/config.ts";
 import { Db, openDatabase } from "../src/db.ts";
 
 /** An empty, fully migrated database that lives in memory. */
@@ -20,13 +20,18 @@ export interface TestClock {
 /** A stand-in for the network: answers each request Leaf makes. */
 export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
 
-/** Leaf's configuration in tests: a backend and Sierra at made-up addresses, with an internal token. */
-export function testConfig(overrides: Partial<Config> = {}): Config {
+/** Leaf's settings as these environment variables give them, or fails with why they are invalid. */
+export function readSettings(env: Record<string, string>): Settings {
+  return Effect.runSync(settings.pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env })))));
+}
+
+/** Leaf's settings in tests: a backend and Sierra at made-up addresses, with an internal token. */
+export function testConfig(overrides: Partial<Settings> = {}): Settings {
   return {
-    ...readConfig({}),
+    ...readSettings({}),
     databasePath: ":memory:",
     backendUrl: "https://backend.test",
-    backendToken: "internal-token",
+    backendToken: Redacted.make("internal-token"),
     sierraUrl: "https://sierra.test",
     ...overrides,
   };
@@ -36,7 +41,7 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
  * Leaf around a fresh database, a hand-set clock and a stand-in network, as the
  * layer Leaf's code runs with, and `run` to run an effect against it.
  */
-export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Config> = {}) {
+export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Settings> = {}) {
   const db = testDatabase();
   const handClock = Layer.effect(
     Clock.Clock,

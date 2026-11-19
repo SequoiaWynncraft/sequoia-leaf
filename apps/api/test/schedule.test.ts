@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { playerId } from "@sequoia-leaf/core";
+import { Redacted } from "effect";
 
 import { runCreditSync } from "../src/earning/run.ts";
 import { scheduledSync } from "../src/jobs.ts";
@@ -42,7 +43,7 @@ describe("the scheduled run", () => {
   it("reads the backend's credit feed and pays the Leaf it lists", async () => {
     const clock = { now: T0 };
     const { requests, fetcher } = backend();
-    const leaf = testLeaf(clock, fetcher, { backendToken: "secret-token" });
+    const leaf = testLeaf(clock, fetcher, { backendToken: Redacted.make("secret-token") });
 
     await leaf.run(runScheduledSync);
     clock.now = T0 + 5 * MINUTE;

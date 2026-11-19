@@ -4,6 +4,8 @@ import { dirname, join } from "node:path";
 
 import { Context, Effect, Layer } from "effect";
 
+import { AppConfig } from "./config.ts";
+
 const MIGRATIONS_DIR = join(import.meta.dir, "..", "migrations");
 
 /**
@@ -57,12 +59,15 @@ export function migrate(db: Database, directory: string = MIGRATIONS_DIR): strin
  * it as it is.
  */
 export class Db extends Context.Service<Db, Database>()("leaf/Db") {
-  static readonly layer = (path: string) =>
-    Layer.effect(
-      Db,
-      Effect.acquireRelease(
-        Effect.sync(() => openDatabase(path)),
+  /** The file the settings name. */
+  static readonly layer = Layer.effect(
+    Db,
+    Effect.gen(function* () {
+      const { databasePath } = yield* AppConfig;
+      return yield* Effect.acquireRelease(
+        Effect.sync(() => openDatabase(databasePath)),
         (db) => Effect.sync(() => db.close()),
-      ),
-    );
+      );
+    }),
+  );
 }

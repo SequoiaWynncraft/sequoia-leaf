@@ -2,6 +2,7 @@ import { renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { S3Client } from "bun";
+import { Redacted } from "effect";
 
 import { listSnapshots } from "./snapshot.ts";
 
@@ -17,11 +18,11 @@ export interface BucketConfig {
   readonly endpoint: string;
   readonly bucket: string;
   readonly accessKeyId: string;
-  readonly secretAccessKey: string;
+  readonly secretAccessKey: Redacted.Redacted;
 }
 
 export function bucketOffsite(config: BucketConfig): Offsite {
-  const client = new S3Client({ ...config, region: "auto" });
+  const client = new S3Client({ ...config, secretAccessKey: Redacted.value(config.secretAccessKey), region: "auto" });
   return {
     async upload(name, path) {
       await client.write(name, Bun.file(path), { type: "application/vnd.sqlite3" });

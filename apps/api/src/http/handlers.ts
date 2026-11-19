@@ -14,15 +14,16 @@ import {
   rerollCost,
   timedWindowAt,
 } from "@sequoia-leaf/core";
-import { Clock, Context, Duration, Effect, Layer, Schedule, Stream, type Types } from "effect";
-import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { Clock, Context, Duration, Effect, Layer, Redacted, Ref, Schedule, Stream } from "effect";
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder, HttpApiError } from "effect/http-api";
 
-import { CurrentIdentity, LeafApi, RerollBodyErrors, Session } from "../api/api.ts";
+import { CurrentIdentity, LeafApi, RerollBodyErrors, Session, Unexpected } from "../api/api.ts";
 import {
   CostChanged,
   IdentityUnavailable,
   InsufficientLeaf,
+  InternalError,
   InvalidAfter,
   InvalidCost,
   InvalidQuest,
@@ -31,7 +32,7 @@ import {
   NotRerollable,
   Unauthorized,
 } from "../api/errors.ts";
-import { Identities, sessionToken } from "../auth/session.ts";
+import { Identities } from "../auth/session.ts";
 import { Db } from "../db.ts";
 import { syncOnDemand } from "../earning/run.ts";
 import { eventJsonText, latestEventId, listEventsAfter, listLatestEvents, type StoredEvent } from "../events/store.ts";
@@ -94,10 +95,10 @@ export const SessionLive = Layer.effect(
   Session,
   Effect.gen(function* () {
     const identities = yield* Identities;
-    return (httpEffect) =>
-      Effect.gen(function* () {
-        const token = sessionToken(yield* HttpServerRequest.HttpServerRequest);
-        if (token === undefined) {
+    return Session.of({
+      bearer: Effect.fnUntraced(function* (httpEffect, { credential }) {
+        const token = Redacted.value(credential);
+        if (token === "") {
           return yield* new Unauthorized({ message: "Sign in with your Sequoia account" });
         }
         const result = yield* identities.identify(token);
@@ -111,22 +112,28 @@ export const SessionLive = Layer.effect(
           return yield* new NotAMember({ message: "Leaf is for current Sequoia members" });
         }
         return yield* Effect.provideService(httpEffect, CurrentIdentity, result.identity);
-      });
+      }),
+    });
   }),
 );
 
-/** A reroll whose body is not `{ "leaf": n }`, JSON or not, gets `invalid_cost`. */
-export const RerollBodyErrorsLive = Layer.succeed(RerollBodyErrors)((httpEffect) => {
-  const invalid = new InvalidCost({ message: 'Send the cost you agreed to as { "leaf": n }' });
-  return httpEffect.pipe(
-    Effect.catch((error): Effect.Effect<never, InvalidCost | Types.unhandled> =>
-      HttpApiError.HttpApiSchemaError.is(error) && (error.kind === "Payload" || error.kind === "Body")
-        ? Effect.fail(invalid)
-        : Effect.fail(error),
+/** A reroll whose body does not decode as `{ "leaf": n }` gets `invalid_cost`. */
+export const RerollBodyErrorsLive = Layer.succeed(RerollBodyErrors)((httpEffect) =>
+  Effect.catchIf(
+    httpEffect,
+    (error) => HttpApiError.HttpApiSchemaError.is(error) && error.kind === "Payload",
+    () => Effect.fail(new InvalidCost({ message: 'Send the cost you agreed to as { "leaf": n }' })),
+  ),
+);
+
+/** Logs a defect, anything thrown rather than failed with a declared error, and answers `internal_error`. */
+export const UnexpectedLive = Layer.succeed(Unexpected)((httpEffect) =>
+  Effect.catchDefect(httpEffect, (defect) =>
+    Effect.logError("An unexpected error answered 500", defect).pipe(
+      Effect.andThen(Effect.fail(new InternalError({ message: "Something went wrong" }))),
     ),
-    Effect.flatMap((response) => (response.status === 415 ? Effect.fail(invalid) : Effect.succeed(response))),
-  );
-});
+  ),
+);
 
 const SystemHandlers = HttpApiBuilder.group(LeafApi, "system", (handlers) =>
   handlers.handle("healthz", () =>
@@ -269,30 +276,36 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
  * database every `pollMs`, not by being told, so it also sees events written by
  * another process: during a deploy the old and the new container run side by side.
  */
-function eventStream(db: Db["Service"], playerId: PlayerId, from: number, tuning: StreamTuning) {
-  let after = from;
-  const look = Effect.sync(() => {
-    const events = listEventsAfter(db, playerId, after, EVENT_PAGE);
-    after = events.at(-1)?.id ?? after;
-    return events.map(sseFrame).join("");
-  });
-  const events = Stream.fromEffectSchedule(look, Schedule.spaced(Duration.millis(tuning.pollMs))).pipe(
-    Stream.filter((frames) => frames !== ""),
+const eventStream = (db: Db["Service"], playerId: PlayerId, from: number, tuning: StreamTuning) =>
+  Stream.unwrap(
+    Effect.gen(function* () {
+      const position = yield* Ref.make(from);
+      const look = Effect.gen(function* () {
+        const events = listEventsAfter(db, playerId, yield* Ref.get(position), EVENT_PAGE);
+        const last = events.at(-1);
+        if (last !== undefined) {
+          yield* Ref.set(position, last.id);
+        }
+        return events.map(sseFrame).join("");
+      });
+      const events = Stream.fromEffectSchedule(look, Schedule.spaced(Duration.millis(tuning.pollMs))).pipe(
+        Stream.filter((frames) => frames !== ""),
+      );
+      // Clients ignore comments; proxies see traffic and keep a quiet connection open.
+      const keepAlive = Stream.tick(Duration.millis(tuning.heartbeatMs)).pipe(
+        Stream.drop(1),
+        Stream.as(": keep-alive\n\n"),
+      );
+      // The first frame carries the starting position as its id, so a client whose
+      // stream ends before any event arrives still reconnects from here and gets
+      // what happened in between.
+      return Stream.make(`id: ${from}\nretry: 3000\n\n`).pipe(
+        Stream.concat(Stream.merge(events, keepAlive)),
+        Stream.interruptWhen(Effect.sleep(Duration.millis(tuning.maxMs))),
+        Stream.encodeText,
+      );
+    }),
   );
-  // Clients ignore comments; proxies see traffic and keep a quiet connection open.
-  const keepAlive = Stream.tick(Duration.millis(tuning.heartbeatMs)).pipe(
-    Stream.drop(1),
-    Stream.as(": keep-alive\n\n"),
-  );
-  // The first frame carries the starting position as its id, so a client whose
-  // stream ends before any event arrives still reconnects from here and gets
-  // what happened in between.
-  return Stream.make(`id: ${from}\nretry: 3000\n\n`).pipe(
-    Stream.concat(Stream.merge(events, keepAlive)),
-    Stream.interruptWhen(Effect.sleep(Duration.millis(tuning.maxMs))),
-    Stream.encodeText,
-  );
-}
 
 function sseFrame(event: StoredEvent): string {
   return `event: ${event.type}\ndata: ${eventJsonText(event)}\nid: ${event.id}\n\n`;
@@ -301,35 +314,12 @@ function sseFrame(event: StoredEvent): string {
 /** The API's routes and the implementations of its middleware. */
 export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.json" }).pipe(
   Layer.provide([SystemHandlers, MeHandlers]),
-  Layer.provide([SessionLive, RerollBodyErrorsLive]),
+  Layer.provide([SessionLive, RerollBodyErrorsLive, UnexpectedLive]),
 );
 
-const NOT_FOUND = HttpServerResponse.jsonUnsafe({ code: "not_found", message: "No such route" }, { status: 404 });
-const INTERNAL = HttpServerResponse.jsonUnsafe(
-  { code: "internal_error", message: "Something went wrong" },
-  { status: 500 },
-);
-
-/**
- * Every error answer has the same shape, `{ "code", "message" }`: a route that
- * does not exist is `not_found`, and anything unexpected is logged and answered
- * `internal_error`. Global, so it also sees requests no route matched.
- */
-export const JsonFallbacks = HttpRouter.middleware(
-  (httpEffect) =>
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the typings refuse to let a middleware answer `unhandled` errors, which is its whole job here
-    Effect.catchCause(httpEffect, (cause) =>
-      Effect.gen(function* () {
-        const [response] = yield* HttpServerError.causeResponse(cause);
-        if (response.status === 404) {
-          return NOT_FOUND;
-        }
-        if (response.status >= 500 && response.status !== 503) {
-          yield* Effect.logError("An unexpected error answered 500", cause);
-          return INTERNAL;
-        }
-        return response;
-      }),
-    ) as Effect.Effect<HttpServerResponse.HttpServerResponse, Types.unhandled>,
-  { global: true },
+/** Any request no route takes, answered in the same `{ "code", "message" }` shape as every other error. */
+export const NotFound = HttpRouter.add(
+  "*",
+  "/*",
+  HttpServerResponse.jsonUnsafe({ code: "not_found", message: "No such route" }, { status: 404 }),
 );

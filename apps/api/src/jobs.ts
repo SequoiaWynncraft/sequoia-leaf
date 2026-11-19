@@ -56,7 +56,9 @@ const backups = Effect.gen(function* () {
     yield* step(
       "Taking a snapshot of the database",
       Effect.try(() => snapshotIfDue(db, config.backupDirectory, now)).pipe(
-        Effect.flatMap((path) => (path === undefined ? Effect.void : Effect.logInfo("snapshot", { path }))),
+        Effect.flatMap((path) =>
+          path === undefined ? Effect.void : Effect.logInfo("snapshot").pipe(Effect.annotateLogs({ path })),
+        ),
       ),
     );
     if (copyOffsite !== undefined) {
@@ -64,7 +66,9 @@ const backups = Effect.gen(function* () {
         "Copying a snapshot off the server (it is tried again in ten minutes)",
         Effect.tryPromise(() => copyOffsite(now)).pipe(
           Effect.flatMap((name) =>
-            name === undefined ? Effect.void : Effect.logInfo("snapshot_copied_offsite", { name }),
+            name === undefined
+              ? Effect.void
+              : Effect.logInfo("snapshot_copied_offsite").pipe(Effect.annotateLogs({ name })),
           ),
         ),
       );
@@ -95,16 +99,18 @@ export const Startup = Layer.effectDiscard(
       Effect.gen(function* () {
         const missed = payMissedLevels(db, DEFAULT_RULES.levels, yield* Clock.currentTimeMillis);
         if (missed.leaf > 0) {
-          yield* Effect.logInfo("missed_levels_paid", missed);
+          yield* Effect.logInfo("missed_levels_paid").pipe(Effect.annotateLogs(missed));
         }
       }),
     );
-    yield* Effect.logInfo("started", {
-      port: config.port,
-      database: config.databasePath,
-      offsite_bucket: config.offsite?.bucket ?? null,
-      awards_feed: config.sierraUrl ?? null,
-    });
+    yield* Effect.logInfo("started").pipe(
+      Effect.annotateLogs({
+        port: config.port,
+        database: config.databasePath,
+        offsite_bucket: config.offsite?.bucket ?? null,
+        awards_feed: config.sierraUrl ?? null,
+      }),
+    );
     if (config.backendToken === undefined) {
       yield* Effect.logWarning("BACKEND_INTERNAL_TOKEN is not set: serving requests, but not reading the credit feed");
     }

@@ -1,11 +1,20 @@
 import type { PlayerId } from "@sequoia-leaf/core";
 import { Context, Schema } from "effect";
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/http-api";
+import {
+  HttpApi,
+  HttpApiEndpoint,
+  HttpApiGroup,
+  HttpApiMiddleware,
+  HttpApiSchema,
+  HttpApiSecurity,
+  OpenApi,
+} from "effect/http-api";
 
 import {
   CostChanged,
   IdentityUnavailable,
   InsufficientLeaf,
+  InternalError,
   InvalidAfter,
   InvalidCost,
   InvalidQuest,
@@ -31,12 +40,17 @@ export interface Identity {
 export class CurrentIdentity extends Context.Service<CurrentIdentity, Identity>()("leaf/api/CurrentIdentity") {}
 
 /**
- * Lets in current guild members with a Sequoia session, sent as
- * `Authorization: Bearer` or as the site's `seq_session` cookie, and provides
- * who they are.
+ * Lets in current guild members with a Sequoia session, the token
+ * sequoia-backend issued, sent as `Authorization: Bearer`. Provides who they are.
  */
 export class Session extends HttpApiMiddleware.Service<Session, { provides: CurrentIdentity }>()("leaf/api/Session", {
+  security: { bearer: HttpApiSecurity.bearer },
   error: [Unauthorized, NotAMember, IdentityUnavailable],
+}) {}
+
+/** Answers a failure nothing expected with `internal_error`, after logging it. */
+export class Unexpected extends HttpApiMiddleware.Service<Unexpected>()("leaf/api/Unexpected", {
+  error: InternalError,
 }) {}
 
 /** Answers a reroll whose body is not `{ "leaf": n }` with `invalid_cost`. */
@@ -73,4 +87,5 @@ export class MeApi extends HttpApiGroup.make("me")
 export class LeafApi extends HttpApi.make("sequoia-leaf")
   .add(SystemApi)
   .add(MeApi)
+  .middleware(Unexpected)
   .annotateMerge(OpenApi.annotations({ title: "Leaf", description: "The Sequoia guild currency and its game" })) {}
