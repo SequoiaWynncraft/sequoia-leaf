@@ -1,16 +1,12 @@
-import type { Database } from "bun:sqlite";
-
-import { Clock, ConfigProvider, Effect, Layer, Redacted, References } from "effect";
+import type { PlayerId, Posting } from "@sequoia-leaf/core";
+import { Clock, ConfigProvider, Effect, Layer, ManagedRuntime, Redacted, References } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
+import { SqlClient } from "effect/sql";
 
-import { routerConfig, Routes } from "../src/app.ts";
+import { routerConfig, Routes, Stores } from "../src/app.ts";
 import { AppConfig, type Settings, settings } from "../src/config.ts";
-import { Db, openDatabase } from "../src/db.ts";
-
-/** An empty, fully migrated database that lives in memory. */
-export function testDatabase(): Database {
-  return openDatabase(":memory:");
-}
+import { databaseAt } from "../src/db.ts";
+import { Ledger } from "../src/ledger/store.ts";
 
 /** A clock that tests set by hand. */
 export interface TestClock {
@@ -38,11 +34,11 @@ export function testConfig(overrides: Partial<Settings> = {}): Settings {
 }
 
 /**
- * Leaf around a fresh database, a hand-set clock and a stand-in network, as the
- * layer Leaf's code runs with, and `run` to run an effect against it.
+ * Leaf around a fresh, fully migrated database in memory, a hand-set clock and
+ * a stand-in network: the layer Leaf's code runs with, `run` to run an effect
+ * against it, and `app` for its HTTP API. They all share the one database.
  */
 export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Settings> = {}) {
-  const db = testDatabase();
   const handClock = Layer.effect(
     Clock.Clock,
     Clock.clockWith((real) =>
@@ -58,9 +54,8 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
       }),
     ),
   );
-  const layer = Layer.mergeAll(
+  const outside = Layer.mergeAll(
     Layer.succeed(AppConfig)(testConfig(config)),
-    Layer.succeed(Db)(db),
     FetchHttpClient.layer,
     Layer.succeed(FetchHttpClient.Fetch)(
       // Bun's fetch type carries `preconnect` as well.
@@ -75,17 +70,27 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     handClock,
     Layer.succeed(References.MinimumLogLevel)("None"),
   );
+  const layer = Stores.pipe(Layer.provideMerge(databaseAt(":memory:")), Layer.provideMerge(outside));
+  // Layers built through the same memo map are built once, so `run` and `app` see the same database.
+  const memoMap = Layer.makeMemoMapUnsafe();
+  const runtime = ManagedRuntime.make(layer, { memoMap });
   return {
-    db,
-    layer,
     /** Runs an effect against this Leaf. */
-    run: <A, E>(effect: Effect.Effect<A, E, Layer.Success<typeof layer>>): Promise<A> =>
-      Effect.runPromise(Effect.provide(effect, layer)),
+    run: <A, E>(effect: Effect.Effect<A, E, Layer.Success<typeof layer>>): Promise<A> => runtime.runPromise(effect),
+    /** A player's account, as the ledger has it now. */
+    account: (playerId: PlayerId) => runtime.runPromise(Ledger.use((ledger) => ledger.account(playerId))),
+    /** Posts one entry to the ledger, as setup for a test. */
+    post: (posting: Posting, now: number) => runtime.runPromise(Ledger.use((ledger) => ledger.post(posting, now))),
+    /** Runs SQL against the database directly, as a script would. Rows come back with camelCase keys. */
+    query: <A>(statement: (sql: SqlClient.SqlClient) => Effect.Effect<ReadonlyArray<A>, unknown>) =>
+      runtime.runPromise(SqlClient.SqlClient.use(statement)),
+    /** Closes the database. */
+    dispose: () => runtime.dispose(),
     /** The HTTP API, answering a standard Request with a standard Response, without opening a port. */
     app: (extra: Layer.Layer<never> = Layer.empty) => {
       const { handler, dispose } = HttpRouter.toWebHandler(
         Routes.pipe(Layer.provideMerge(layer), Layer.provide(extra), Layer.provide(HttpServer.layerServices)),
-        { disableLogger: true, routerConfig },
+        { disableLogger: true, routerConfig, memoMap },
       );
       return {
         dispose,

@@ -1,4 +1,3 @@
-import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,24 +7,23 @@ import { Redacted } from "effect";
 
 import { bucketOffsite, type Offsite, offsiteCopier, RETRY_MS } from "../src/backup/offsite.ts";
 import { takeSnapshot } from "../src/backup/snapshot.ts";
-import { openDatabase } from "../src/db.ts";
-import { rejection } from "./support.ts";
+import { rejection, testLeaf } from "./support.ts";
 
 const T0 = Date.parse("2026-11-16T13:00:00Z");
 const HOUR = 60 * 60_000;
 
 let directory: string;
 let backups: string;
-let db: Database;
+let leafServer: ReturnType<typeof testLeaf>;
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), "leaf-offsite-"));
   backups = join(directory, "backups");
-  db = openDatabase(join(directory, "leaf.db"));
+  leafServer = testLeaf({ now: T0 }, () => Promise.reject(new Error("No network in this test")));
 });
 
-afterEach(() => {
-  db.close();
+afterEach(async () => {
+  await leafServer.dispose();
   rmSync(directory, { recursive: true });
 });
 
@@ -55,11 +53,11 @@ describe("copying snapshots off the server", () => {
   it("copies the newest snapshot once, and the next one when it appears", async () => {
     const { offsite, uploads } = recorder();
     const copy = offsiteCopier(offsite, backups);
-    takeSnapshot(db, backups, T0);
+    await leafServer.run(takeSnapshot(backups, T0));
 
     expect(await copy(T0)).toBe("leaf-2026-11-16T13-00-00Z.db");
     expect(await copy(T0 + 1)).toBeUndefined();
-    takeSnapshot(db, backups, T0 + 6 * HOUR);
+    await leafServer.run(takeSnapshot(backups, T0 + 6 * HOUR));
     expect(await copy(T0 + 6 * HOUR)).toBe("leaf-2026-11-16T19-00-00Z.db");
 
     expect(uploads.map((upload) => upload.name)).toEqual([
@@ -70,7 +68,7 @@ describe("copying snapshots off the server", () => {
   });
 
   it("remembers what it copied when the server restarts", async () => {
-    takeSnapshot(db, backups, T0);
+    await leafServer.run(takeSnapshot(backups, T0));
     await offsiteCopier(recorder().offsite, backups)(T0);
     const { offsite, uploads } = recorder();
 
@@ -80,8 +78,8 @@ describe("copying snapshots off the server", () => {
 
   it("skips a snapshot that a newer one replaced before it was copied", async () => {
     const { offsite, uploads } = recorder();
-    takeSnapshot(db, backups, T0);
-    takeSnapshot(db, backups, T0 + 6 * HOUR);
+    await leafServer.run(takeSnapshot(backups, T0));
+    await leafServer.run(takeSnapshot(backups, T0 + 6 * HOUR));
 
     await offsiteCopier(offsite, backups)(T0 + 6 * HOUR);
 
@@ -91,7 +89,7 @@ describe("copying snapshots off the server", () => {
   it("waits ten minutes after a failed copy before trying again", async () => {
     const { offsite, uploads, state } = recorder();
     const copy = offsiteCopier(offsite, backups);
-    takeSnapshot(db, backups, T0);
+    await leafServer.run(takeSnapshot(backups, T0));
     state.failing = true;
 
     expect(await rejection(copy(T0))).toEqual(new Error("the bucket is unreachable"));
@@ -111,7 +109,7 @@ describe("copying snapshots off the server", () => {
       },
     };
     const copy = offsiteCopier(slow, backups);
-    takeSnapshot(db, backups, T0);
+    await leafServer.run(takeSnapshot(backups, T0));
 
     const first = copy(T0);
     expect(await copy(T0 + 60_000)).toBeUndefined();
@@ -137,7 +135,7 @@ describe("bucketOffsite", () => {
         return new Response(null, { status: 200, headers: { ETag: '"1"' } });
       },
     });
-    const path = takeSnapshot(db, backups, T0);
+    const path = await leafServer.run(takeSnapshot(backups, T0));
     const offsite = bucketOffsite({
       endpoint: server.url.origin,
       bucket: "leaf-backups",

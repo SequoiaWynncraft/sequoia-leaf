@@ -43,15 +43,25 @@ describe("HTTP", () => {
   });
 
   it("answers a failure nothing expected with the standard error shape", async () => {
-    const broken = testLeaf({ now: 0 }, noBackend);
+    // A backend that confirms any session as a member's.
+    const broken = testLeaf({ now: 0 }, () =>
+      Promise.resolve(
+        Response.json({
+          minecraft_uuid: "10000000-0000-0000-0000-000000000001",
+          minecraft_username: "Alice",
+          guild_rank: "Member",
+        }),
+      ),
+    );
     const brokenApp = broken.app();
-    broken.db.close();
+    await broken.query((sql) => sql`DROP TABLE accounts`);
 
-    const response = await brokenApp.request("/healthz");
+    const response = await brokenApp.request("/v1/me", { headers: { Authorization: "Bearer alice-token" } });
 
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ code: "internal_error", message: "Something went wrong" });
     await brokenApp.dispose();
+    await broken.dispose();
   });
 
   it("describes itself as an OpenAPI document, sessions included", async () => {

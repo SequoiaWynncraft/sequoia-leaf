@@ -1,6 +1,5 @@
-import type { Database } from "bun:sqlite";
-
 import {
+  DAY_MS,
   draftEntry,
   leaf,
   objectiveTarget,
@@ -13,209 +12,261 @@ import {
   type QuestSlot,
   type QuestStep,
   RAID_KEYS,
-  type RaidKey,
+  utcDay,
 } from "@sequoia-leaf/core";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/sql";
 
-import { insertEntry } from "../ledger/store.ts";
-
-interface QuestRow {
-  slot: string;
-  sequence: number;
-  template_id: string;
-  objective_type: string;
-  objective_raid: string | null;
-  target: number;
-  reward_leaf: number;
-  reward_xp: number;
-  progress: number;
-  started_at: number;
-  expires_at: number | null;
-  completed_at: number | null;
-  alternative_type: string | null;
-  alternative_raid: string | null;
-  alternative_target: number | null;
-  alternative_progress: number | null;
-}
-
-const QUEST_COLUMNS =
-  "slot, sequence, template_id, objective_type, objective_raid, target, reward_leaf, reward_xp, progress, started_at, expires_at, completed_at, alternative_type, alternative_raid, alternative_target, alternative_progress";
+import { Ledger } from "../ledger/store.ts";
 
 /** A quest row holds its first goal in the objective columns and a second, when it has one, in the alternative ones. */
 const MAX_GOALS = 2;
 
-function isSlot(value: string): value is QuestSlot {
-  return QUEST_SLOTS.some((slot) => slot === value);
-}
+const ObjectiveType = Schema.Literals(["raids", "wars", "season_rating"]);
+const Raid = Schema.NullOr(Schema.Literals(RAID_KEYS));
 
-function isRaidKey(value: string): value is RaidKey {
-  return RAID_KEYS.some((key) => key === value);
-}
+const QuestRow = Schema.Struct({
+  slot: Schema.Literals(QUEST_SLOTS),
+  sequence: Schema.Int,
+  templateId: Schema.String,
+  objectiveType: ObjectiveType,
+  objectiveRaid: Raid,
+  target: Schema.Int,
+  rewardLeaf: Schema.Int,
+  rewardXp: Schema.Int,
+  progress: Schema.Int,
+  startedAt: Schema.Int,
+  expiresAt: Schema.NullOr(Schema.Int),
+  completedAt: Schema.NullOr(Schema.Int),
+  alternativeType: Schema.NullOr(ObjectiveType),
+  alternativeRaid: Raid,
+  alternativeTarget: Schema.NullOr(Schema.Int),
+  alternativeProgress: Schema.NullOr(Schema.Int),
+});
+type QuestRow = typeof QuestRow.Type;
 
-function toObjective(type: string, raid: string | null, target: number): QuestObjective {
-  if (type === "wars") {
-    return { type: "wars", count: target };
-  }
-  if (type === "season_rating") {
-    return { type: "season_rating", amount: target };
-  }
-  if (type !== "raids") {
-    throw new Error(`Quest has an unknown objective type: ${type}`);
-  }
-  if (raid === null) {
-    return { type: "raids", count: target };
-  }
-  if (!isRaidKey(raid)) {
-    throw new Error(`Quest names an unknown raid: ${raid}`);
-  }
-  return { type: "raids", raid, count: target };
-}
+const Charges = { dailyCharges: Schema.Int, dailyChargedDay: Schema.Int };
 
-function toGoals(row: QuestRow): QuestGoal[] {
-  const goals = [
-    { objective: toObjective(row.objective_type, row.objective_raid, row.target), progress: row.progress },
-  ];
-  if (row.alternative_type !== null && row.alternative_target !== null && row.alternative_progress !== null) {
-    goals.push({
-      objective: toObjective(row.alternative_type, row.alternative_raid, row.alternative_target),
-      progress: row.alternative_progress,
-    });
-  }
-  return goals;
-}
+/** A player's daily charges, with the latest quest of one slot, or with NULL quest columns when they have no quest yet. */
+const BookRow = Schema.Union([
+  Schema.Struct({ ...Charges, ...QuestRow.fields }),
+  Schema.Struct({ ...Charges, slot: Schema.Null }),
+]);
 
-/** The columns one goal is stored in, or all NULL for an alternative the quest doesn't have. */
-function goalColumns(goal: QuestGoal | undefined): [string | null, string | null, number | null, number | null] {
-  if (goal === undefined) {
-    return [null, null, null, null];
+function toObjective(type: typeof ObjectiveType.Type, raid: typeof Raid.Type, target: number): QuestObjective {
+  switch (type) {
+    case "wars":
+      return { type, count: target };
+    case "season_rating":
+      return { type, amount: target };
+    case "raids":
+      return raid === null ? { type, count: target } : { type, raid, count: target };
   }
-  const { objective, progress } = goal;
-  return [
-    objective.type,
-    objective.type === "raids" ? (objective.raid ?? null) : null,
-    objectiveTarget(objective),
-    progress,
-  ];
 }
 
 function toQuest(row: QuestRow): Quest {
-  if (!isSlot(row.slot)) {
-    throw new Error(`Quest has an unknown slot: ${row.slot}`);
+  const goals: QuestGoal[] = [
+    { objective: toObjective(row.objectiveType, row.objectiveRaid, row.target), progress: row.progress },
+  ];
+  if (row.alternativeType !== null && row.alternativeTarget !== null && row.alternativeProgress !== null) {
+    goals.push({
+      objective: toObjective(row.alternativeType, row.alternativeRaid, row.alternativeTarget),
+      progress: row.alternativeProgress,
+    });
   }
   return {
     slot: row.slot,
     sequence: row.sequence,
-    templateId: row.template_id,
-    goals: toGoals(row),
-    reward: { leaf: row.reward_leaf, xp: row.reward_xp },
-    startedAt: row.started_at,
-    expiresAt: row.expires_at,
-    completedAt: row.completed_at,
+    templateId: row.templateId,
+    goals,
+    reward: { leaf: row.rewardLeaf, xp: row.rewardXp },
+    startedAt: row.startedAt,
+    expiresAt: row.expiresAt,
+    completedAt: row.completedAt,
   };
 }
 
-type JoinedRow = { daily_charges: number; daily_charged_day: number } & {
-  [Column in keyof QuestRow]: QuestRow[Column] | null;
-};
-
-/** The quest columns are all NULL when the player has no quest yet, and all set otherwise. */
-function hasQuest(row: JoinedRow): row is JoinedRow & QuestRow {
-  return row.slot !== null;
-}
-
-/** A player's quest book, or undefined for a player who has never had a quest. */
-export function loadQuestBook(db: Database, playerId: PlayerId): QuestBook | undefined {
-  // One row per slot's latest quest, each carrying the player's daily charges;
-  // a single row of NULL quest columns for a player with charges but no quest.
-  const rows = db
-    .query<JoinedRow, [string]>(
-      `SELECT player.daily_charges, player.daily_charged_day, ${QUEST_COLUMNS.split(", ")
-        .map((column) => `quest.${column}`)
-        .join(", ")}
-       FROM quest_players AS player
-       LEFT JOIN quests AS quest
-         ON quest.player_id = player.player_id
-        AND quest.sequence = (SELECT MAX(later.sequence) FROM quests AS later
-                              WHERE later.player_id = quest.player_id AND later.slot = quest.slot)
-       WHERE player.player_id = ?`,
-    )
-    .all(playerId);
-  const [first] = rows;
-  if (first === undefined) {
-    return undefined;
-  }
-  const latest: { [slot in QuestSlot]?: Quest } = {};
-  for (const row of rows) {
-    if (hasQuest(row)) {
-      const quest = toQuest(row);
-      latest[quest.slot] = quest;
-    }
-  }
-  return { dailyCharges: first.daily_charges, dailyChargedDay: first.daily_charged_day, latest };
+/** The columns one goal is stored in, all NULL for an alternative the quest doesn't have. */
+function goalColumns(goal: QuestGoal | undefined) {
+  const objective = goal?.objective;
+  return {
+    type: objective?.type ?? null,
+    raid: objective?.type === "raids" ? (objective.raid ?? null) : null,
+    target: objective === undefined ? null : objectiveTarget(objective),
+    progress: goal?.progress ?? null,
+  };
 }
 
 /**
- * Saves a step: the player's daily charges, every quest handed out or
- * changed, and the reward of every quest finished. Call it in the same
- * transaction as the activities that caused the step.
+ * Each player's quests, their daily charges and their rerolls. Saving a step
+ * also pays the quests it finished, through the ledger. A database failure is
+ * a defect.
  */
-export function saveQuestStep(db: Database, playerId: PlayerId, step: QuestStep, now: number): void {
-  db.query(
-    `INSERT INTO quest_players (player_id, daily_charges, daily_charged_day) VALUES (?, ?, ?)
-     ON CONFLICT (player_id) DO UPDATE
-     SET daily_charges = excluded.daily_charges, daily_charged_day = excluded.daily_charged_day`,
-  ).run(playerId, step.book.dailyCharges, step.book.dailyChargedDay);
-  for (const quest of step.written) {
-    const [first, second] = quest.goals;
-    if (first === undefined || quest.goals.length > MAX_GOALS) {
-      throw new Error(
-        `Quest ${quest.slot}:${quest.sequence} has ${quest.goals.length} goals; it can have 1 to ${MAX_GOALS}`,
-      );
-    }
-    const [type, raid, target, progress] = goalColumns(first);
-    db.query(
-      `INSERT INTO quests (player_id, ${QUEST_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (player_id, slot, sequence) DO UPDATE
-       SET progress = excluded.progress, alternative_progress = excluded.alternative_progress,
-           expires_at = excluded.expires_at, completed_at = excluded.completed_at`,
-    ).run(
-      playerId,
-      quest.slot,
-      quest.sequence,
-      quest.templateId,
-      type,
-      raid,
-      target,
-      quest.reward.leaf,
-      quest.reward.xp,
-      progress,
-      quest.startedAt,
-      quest.expiresAt,
-      quest.completedAt,
-      ...goalColumns(second),
-    );
+export class Quests extends Context.Service<
+  Quests,
+  {
+    /** A player's quest book, or undefined for a player who has never had a quest. */
+    readonly book: (playerId: PlayerId) => Effect.Effect<QuestBook | undefined>;
+    /**
+     * Saves a step: the player's daily charges, every quest handed out or
+     * changed, and the reward of every quest finished. Call it in the same
+     * transaction as what caused the step.
+     */
+    readonly saveStep: (playerId: PlayerId, step: QuestStep, now: number) => Effect.Effect<void>;
+    /** A player's quests finished at or after a moment, newest first. */
+    readonly completedSince: (playerId: PlayerId, since: number) => Effect.Effect<readonly Quest[]>;
+    /** How many times a player rerolled each slot on the UTC day of `at`. Slots not rerolled that day are absent. */
+    readonly rerollsOnDay: (playerId: PlayerId, at: number) => Effect.Effect<ReadonlyMap<QuestSlot, number>>;
+    /** Records that a player swapped quest `slot:sequence` for the next, and what it cost. */
+    readonly recordReroll: (
+      playerId: PlayerId,
+      slot: QuestSlot,
+      sequence: number,
+      cost: number,
+      now: number,
+    ) => Effect.Effect<void>;
   }
-  for (const quest of step.completed) {
-    const draft = draftEntry({
-      kind: "earn",
-      playerId,
-      amount: leaf(quest.reward.leaf),
-      xp: quest.reward.xp,
-      source: "quest",
-      idempotencyKey: `quest:${playerId}:${quest.slot}:${quest.sequence}`,
-    });
-    insertEntry(db, draft, now);
-  }
-}
+>()("leaf/Quests") {
+  static readonly layer = Layer.effect(
+    Quests,
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const ledger = yield* Ledger;
 
-/** A player's quests finished at or after a moment, newest first. */
-export function listCompletedSince(db: Database, playerId: PlayerId, since: number): Quest[] {
-  return db
-    .query<QuestRow, [string, number]>(
-      `SELECT ${QUEST_COLUMNS} FROM quests
-       WHERE player_id = ? AND completed_at >= ?
-       ORDER BY completed_at DESC, slot, sequence DESC
-       LIMIT 20`,
-    )
-    .all(playerId, since)
-    .map(toQuest);
+      // One row per slot's latest quest, each carrying the player's daily charges;
+      // a single row of NULL quest columns for a player with charges but no quest.
+      const bookRows = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: BookRow,
+        execute: (playerId) => sql`
+          SELECT player.daily_charges, player.daily_charged_day, quest.*
+          FROM quest_players AS player
+          LEFT JOIN quests AS quest
+            ON quest.player_id = player.player_id
+           AND quest.sequence = (SELECT MAX(later.sequence) FROM quests AS later
+                                 WHERE later.player_id = quest.player_id AND later.slot = quest.slot)
+          WHERE player.player_id = ${playerId}
+        `,
+      });
+      const completedSince = SqlSchema.findAll({
+        Request: Schema.Struct({ playerId: Schema.String, since: Schema.Int }),
+        Result: QuestRow,
+        execute: ({ playerId, since }) => sql`
+          SELECT * FROM quests
+          WHERE player_id = ${playerId} AND completed_at >= ${since}
+          ORDER BY completed_at DESC, slot, sequence DESC
+          LIMIT 20
+        `,
+      });
+      const rerollCounts = SqlSchema.findAll({
+        Request: Schema.Struct({ playerId: Schema.String, from: Schema.Int, to: Schema.Int }),
+        Result: Schema.Struct({ slot: Schema.Literals(QUEST_SLOTS), rerolls: Schema.Int }),
+        execute: ({ playerId, from, to }) => sql`
+          SELECT slot, COUNT(*) AS rerolls FROM quest_rerolls
+          WHERE player_id = ${playerId} AND rerolled_at >= ${from} AND rerolled_at < ${to}
+          GROUP BY slot
+        `,
+      });
+
+      const saveQuest = (playerId: PlayerId, quest: Quest) => {
+        const [first, second] = quest.goals;
+        if (first === undefined || quest.goals.length > MAX_GOALS) {
+          return Effect.die(
+            new Error(
+              `Quest ${quest.slot}:${quest.sequence} has ${quest.goals.length} goals; it can have 1 to ${MAX_GOALS}`,
+            ),
+          );
+        }
+        const goal = goalColumns(first);
+        const alternative = goalColumns(second);
+        return sql`
+          INSERT INTO quests ${sql.insert({
+            playerId,
+            slot: quest.slot,
+            sequence: quest.sequence,
+            templateId: quest.templateId,
+            objectiveType: goal.type,
+            objectiveRaid: goal.raid,
+            target: goal.target,
+            rewardLeaf: quest.reward.leaf,
+            rewardXp: quest.reward.xp,
+            progress: goal.progress,
+            startedAt: quest.startedAt,
+            expiresAt: quest.expiresAt,
+            completedAt: quest.completedAt,
+            alternativeType: alternative.type,
+            alternativeRaid: alternative.raid,
+            alternativeTarget: alternative.target,
+            alternativeProgress: alternative.progress,
+          })}
+          ON CONFLICT (player_id, slot, sequence) DO UPDATE
+          SET progress = excluded.progress, alternative_progress = excluded.alternative_progress,
+              expires_at = excluded.expires_at, completed_at = excluded.completed_at
+        `;
+      };
+
+      const saveStep = Effect.fn("Quests.saveStep")(function* (playerId: PlayerId, step: QuestStep, now: number) {
+        const { dailyCharges, dailyChargedDay } = step.book;
+        yield* sql`
+          INSERT INTO quest_players ${sql.insert({ playerId, dailyCharges, dailyChargedDay })}
+          ON CONFLICT (player_id) DO UPDATE
+          SET daily_charges = excluded.daily_charges, daily_charged_day = excluded.daily_charged_day
+        `.pipe(Effect.orDie);
+        for (const quest of step.written) {
+          yield* saveQuest(playerId, quest).pipe(Effect.orDie);
+        }
+        for (const quest of step.completed) {
+          yield* ledger.insert(
+            draftEntry({
+              kind: "earn",
+              playerId,
+              amount: leaf(quest.reward.leaf),
+              xp: quest.reward.xp,
+              source: "quest",
+              idempotencyKey: `quest:${playerId}:${quest.slot}:${quest.sequence}`,
+            }),
+            now,
+          );
+        }
+      });
+
+      return Quests.of({
+        book: (playerId) =>
+          bookRows(playerId).pipe(
+            Effect.map((rows): QuestBook | undefined => {
+              const [first] = rows;
+              if (first === undefined) {
+                return undefined;
+              }
+              const latest: { [slot in QuestSlot]?: Quest } = {};
+              for (const row of rows) {
+                if (row.slot !== null) {
+                  latest[row.slot] = toQuest(row);
+                }
+              }
+              return { dailyCharges: first.dailyCharges, dailyChargedDay: first.dailyChargedDay, latest };
+            }),
+            Effect.orDie,
+          ),
+        saveStep,
+        completedSince: (playerId, since) =>
+          completedSince({ playerId, since }).pipe(
+            Effect.map((rows) => rows.map(toQuest)),
+            Effect.orDie,
+          ),
+        rerollsOnDay: (playerId, at) => {
+          const from = utcDay(at) * DAY_MS;
+          return rerollCounts({ playerId, from, to: from + DAY_MS }).pipe(
+            Effect.map((rows) => new Map(rows.map((row) => [row.slot, row.rerolls]))),
+            Effect.orDie,
+          );
+        },
+        recordReroll: (playerId, slot, sequence, cost, now) =>
+          sql`INSERT INTO quest_rerolls ${sql.insert({ playerId, slot, sequence, leaf: cost, rerolledAt: now })}`.pipe(
+            Effect.asVoid,
+            Effect.orDie,
+          ),
+      });
+    }),
+  );
 }
