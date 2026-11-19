@@ -1,28 +1,16 @@
-import { Hono } from "hono";
+import { Layer } from "effect";
+import { FetchHttpClient } from "effect/http";
 
-import { DEFAULT_STREAM_TUNING, meRoutes, type StreamTuning } from "./http/me.ts";
-import type { Services } from "./services.ts";
+import { Identities } from "./auth/session.ts";
+import { AppConfig } from "./config.ts";
+import { Db } from "./db.ts";
+import { ApiRoutes, NotFound } from "./http/handlers.ts";
 
-/** The HTTP API. */
-export function createApp(services: Services, streamTuning: StreamTuning = DEFAULT_STREAM_TUNING): Hono {
-  const app = new Hono();
+/** Leaf's HTTP routes. They need the services below. */
+export const Routes = Layer.mergeAll(ApiRoutes, NotFound).pipe(Layer.provide(Identities.layer));
 
-  // Healthy means the database answers, since nothing works without it.
-  app.get("/healthz", (c) => {
-    services.db.query("SELECT 1").get();
-    return c.json({ status: "ok" });
-  });
+/** Effect's router takes `/healthz/` for `/healthz` unless told otherwise; Leaf's routes are exact. */
+export const routerConfig = { ignoreTrailingSlash: false };
 
-  app.route("/v1/me", meRoutes(services, streamTuning));
-
-  // Every error response has the same shape: a stable machine-readable `code`
-  // and a human-readable `message`. Clients branch on `code` only.
-  app.notFound((c) => c.json({ code: "not_found", message: "No such route" }, 404));
-
-  app.onError((error, c) => {
-    console.error(error);
-    return c.json({ code: "internal_error", message: "Something went wrong" }, 500);
-  });
-
-  return app;
-}
+/** What Leaf reaches outside its own code: its settings, its database and the network. */
+export const Services = Layer.mergeAll(Db.layer, FetchHttpClient.layer).pipe(Layer.provideMerge(AppConfig.layer));

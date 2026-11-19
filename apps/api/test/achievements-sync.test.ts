@@ -2,13 +2,14 @@ import type { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
 
 import { type AchievementAward, DEFAULT_RULES, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { Effect } from "effect";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { type AwardSource, syncAchievements } from "../src/achievements/sync.ts";
 import { listEventsAfter } from "../src/events/store.ts";
 import { getAccount, listEntries } from "../src/ledger/store.ts";
 import type { SyncMode } from "../src/sync/windowed.ts";
-import { rejection, testDatabase, testServices } from "./support.ts";
+import { rejection, testDatabase, testLeaf } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const bob = playerId("00000000-0000-4000-8000-00000000000b");
@@ -36,17 +37,15 @@ function award(player: PlayerId, ladder: string, milestoneId: string | null, ear
   };
 }
 
-const unreachable: AwardSource = async () => {
-  throw new Error("Sierra is down");
-};
+const unreachable: AwardSource<Error> = () => Effect.fail(new Error("Sierra is down"));
 
 /** A feed that answers a window with the awards inside it. The list can grow, as Sierra's does. */
 function feed(awards: AchievementAward[]): AwardSource {
-  return async (from, to) => awards.filter((one) => one.earnedAt >= from && one.earnedAt < to);
+  return (from, to) => Effect.succeed(awards.filter((one) => one.earnedAt >= from && one.earnedAt < to));
 }
 
-function sync(source: AwardSource, now: number, mode: SyncMode = "recent") {
-  return syncAchievements(db, source, DEFAULT_RULES, now, mode);
+function sync(source: AwardSource<Error>, now: number, mode: SyncMode = "recent") {
+  return Effect.runPromise(syncAchievements(db, source, DEFAULT_RULES, now, mode));
 }
 
 function events(player: PlayerId): { type: string; data: unknown }[] {
@@ -145,7 +144,7 @@ describe("syncAchievements", () => {
   it("lets one run through at a time", async () => {
     await sync(feed([]), T0);
     const answer = Promise.withResolvers<AchievementAward[]>();
-    const slow: AwardSource = () => answer.promise;
+    const slow: AwardSource = () => Effect.promise(() => answer.promise);
 
     const first = sync(slow, T0 + MINUTE);
     expect(await sync(feed([]), T0 + MINUTE)).toEqual({ status: "busy" });
@@ -156,17 +155,16 @@ describe("syncAchievements", () => {
   it("does not read the feed until Sierra's address is configured", async () => {
     const calls: string[] = [];
     const clock = { now: T0 };
-    const services = testServices(clock, async (url) => {
+    const sierra = async (url: string) => {
       calls.push(url);
       return Response.json({ awards: [] });
-    });
+    };
 
-    expect(await runAchievementSync({ ...services, sierra: { ...services.sierra, url: undefined } }, "recent")).toBe(
-      undefined,
-    );
-    expect(await runAchievementSync(services, "recent")).toEqual({ status: "started" });
+    expect(await testLeaf(clock, sierra, { sierraUrl: undefined }).run(runAchievementSync("recent"))).toBe(undefined);
+    const leaf = testLeaf(clock, sierra);
+    expect(await leaf.run(runAchievementSync("recent"))).toEqual({ status: "started" });
     clock.now += MINUTE;
-    await runAchievementSync(services, "recent");
+    await leaf.run(runAchievementSync("recent"));
     expect(calls).toHaveLength(1);
     expect(calls[0]).toStartWith("https://sierra.test/internal/v1/achievements/awards?");
   });

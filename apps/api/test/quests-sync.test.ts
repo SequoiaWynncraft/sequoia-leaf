@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
 
 import { type Activity, DEFAULT_RULES, type PlayerId, playerId, refreshQuests, type Rules } from "@sequoia-leaf/core";
+import { Effect } from "effect";
 
 import { type CreditSource, syncCredits } from "../src/earning/sync.ts";
 import { getAccount, listEntries } from "../src/ledger/store.ts";
@@ -58,11 +59,12 @@ function war(id: number, player: PlayerId, occurredAt: number): Activity {
 }
 
 function feed(activities: Activity[]): CreditSource {
-  return async (from, to) => activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to);
+  return (from, to) =>
+    Effect.succeed(activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to));
 }
 
 function sync(source: CreditSource, now: number) {
-  return syncCredits(db, source, rules, now, "recent");
+  return Effect.runPromise(syncCredits(db, source, rules, now, "recent"));
 }
 
 function questRows(): string[] {
@@ -129,7 +131,7 @@ describe("quests in the credit sync", () => {
     };
     activities.push(raid(2, alice, T0 + 6 * MINUTE));
 
-    await syncCredits(db, source, off, T0 + 10 * MINUTE, "recent");
+    await Effect.runPromise(syncCredits(db, source, off, T0 + 10 * MINUTE, "recent"));
 
     const stored = db
       .query<{ progress: number; started_at: number; expires_at: number | null }, []>(
@@ -175,13 +177,13 @@ describe("a quest that raids or wars can finish", () => {
   it("keeps each goal's progress between runs and pays when the wars finish it", async () => {
     const activities = [raid(1, alice, T0 + MINUTE), war(2, alice, T0 + 2 * MINUTE)];
     const source = feed(activities);
-    await syncCredits(db, source, eitherRules, T0, "recent");
-    await syncCredits(db, source, eitherRules, T0 + 5 * MINUTE, "recent");
+    await Effect.runPromise(syncCredits(db, source, eitherRules, T0, "recent"));
+    await Effect.runPromise(syncCredits(db, source, eitherRules, T0 + 5 * MINUTE, "recent"));
 
     expect(loadQuestBook(db, alice)?.latest.daily?.goals.map((goal) => goal.progress)).toEqual([1, 1]);
 
     activities.push(war(3, alice, T0 + 6 * MINUTE), war(4, alice, T0 + 7 * MINUTE));
-    await syncCredits(db, source, eitherRules, T0 + 10 * MINUTE, "recent");
+    await Effect.runPromise(syncCredits(db, source, eitherRules, T0 + 10 * MINUTE, "recent"));
 
     // One raid at 110, three wars at 40 and the quest at 300.
     expect(getAccount(db, alice).balance).toBe(530);
@@ -219,9 +221,9 @@ describe("a season rating quest in the credit sync", () => {
   it("keeps the season rating earned so far between runs and pays when it reaches the amount", async () => {
     const activities = [raid(1, alice, T0 + MINUTE, 440)];
     const source = feed(activities);
-    await syncCredits(db, source, ratingRules, T0, "recent");
+    await Effect.runPromise(syncCredits(db, source, ratingRules, T0, "recent"));
 
-    await syncCredits(db, source, ratingRules, T0 + 5 * MINUTE, "recent");
+    await Effect.runPromise(syncCredits(db, source, ratingRules, T0 + 5 * MINUTE, "recent"));
 
     expect(loadQuestBook(db, alice)?.latest.daily).toMatchObject({
       goals: [{ objective: { type: "season_rating", amount: 500 }, progress: 440 }],
@@ -229,7 +231,7 @@ describe("a season rating quest in the credit sync", () => {
     });
 
     activities.push(raid(2, alice, T0 + 6 * MINUTE, 220));
-    await syncCredits(db, source, ratingRules, T0 + 10 * MINUTE, "recent");
+    await Effect.runPromise(syncCredits(db, source, ratingRules, T0 + 10 * MINUTE, "recent"));
 
     // Two raids at 440 and 220, and the quest at 250.
     expect(getAccount(db, alice).balance).toBe(910);

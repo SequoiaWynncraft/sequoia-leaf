@@ -1,86 +1,38 @@
-import { DEFAULT_RULES } from "@sequoia-leaf/core";
+import { BunHttpServer, BunRuntime } from "@effect/platform-bun";
+import { Cause, Effect, Exit, Layer, Logger, Runtime } from "effect";
+import { HttpRouter } from "effect/http";
 
-import { runScheduledAchievementSync } from "./achievements/run.ts";
-import { createApp } from "./app.ts";
-import { bucketOffsite, offsiteCopier } from "./backup/offsite.ts";
-import { snapshotIfDue } from "./backup/snapshot.ts";
-import { readConfig } from "./config.ts";
-import { runScheduledSync } from "./earning/run.ts";
-import { payMissedLevels } from "./levels/pay.ts";
-import { everyMinute } from "./schedule.ts";
-import { liveServices } from "./services.ts";
+import { routerConfig, Routes, Services } from "./app.ts";
+import { AppConfig } from "./config.ts";
+import { EveryMinute, Startup } from "./jobs.ts";
 
-const config = readConfig(Bun.env);
-const services = liveServices(config);
-const { db } = services;
-
-// Levels reached before levels paid Leaf, or left unpaid by a failed run, are paid here once.
-try {
-  const missed = payMissedLevels(db, DEFAULT_RULES.levels, services.now());
-  if (missed.leaf > 0) {
-    console.log(JSON.stringify({ event: "missed_levels_paid", players: missed.players, leaf: missed.leaf }));
-  }
-} catch (error) {
-  console.error("Paying for levels already reached failed; trying again at the next start", error);
-}
-
-const server = Bun.serve({
-  port: config.port,
-  // Seconds. An event stream with nothing to send writes a keep-alive every 20, well inside this.
-  idleTimeout: 60,
-  fetch: createApp(services).fetch,
-});
-const copyOffsite =
-  config.offsite === undefined ? undefined : offsiteCopier(bucketOffsite(config.offsite), config.backupDirectory);
-const schedule = everyMinute(async () => {
-  await runScheduledSync(services);
-  await runScheduledAchievementSync(services);
-  try {
-    const path = snapshotIfDue(db, config.backupDirectory, services.now());
-    if (path !== undefined) {
-      console.log(JSON.stringify({ event: "snapshot", path }));
-    }
-  } catch (error) {
-    console.error("Taking a snapshot of the database failed", error);
-  }
-  if (copyOffsite !== undefined) {
-    try {
-      const name = await copyOffsite(services.now());
-      if (name !== undefined) {
-        console.log(JSON.stringify({ event: "snapshot_copied_offsite", name }));
-      }
-    } catch (error) {
-      console.error("Copying a snapshot off the server failed; trying again in ten minutes", error);
-    }
-  }
-});
-
-console.log(
-  JSON.stringify({
-    event: "started",
-    port: server.port,
-    database: config.databasePath,
-    offsite_bucket: config.offsite?.bucket ?? null,
-    awards_feed: config.sierraUrl ?? null,
+const Server = Layer.unwrap(
+  Effect.gen(function* () {
+    const { port } = yield* AppConfig;
+    return HttpRouter.serve(Routes, { routerConfig, disableLogger: true }).pipe(
+      Layer.provide(
+        BunHttpServer.layer({
+          port,
+          // Seconds. An event stream writes a keep-alive every 20, well inside this.
+          idleTimeout: 60,
+          // A deploy stops the old container with SIGTERM and kills it ten seconds later. Requests in
+          // flight finish first; an event stream is cut, and its client reconnects to the new one.
+          gracefulShutdownTimeout: "8 seconds",
+        }),
+      ),
+    );
   }),
 );
-if (config.backendToken === undefined) {
-  console.warn("BACKEND_INTERNAL_TOKEN is not set: serving requests, but not reading the credit feed");
-}
-if (config.offsitePartlySet.length > 0) {
-  console.warn(
-    `Only ${config.offsitePartlySet.join(", ")} of the BACKUP_S3_* variables are set: snapshots stay on this machine`,
-  );
-}
 
-// A deploy stops the old container with SIGTERM. Finish the requests in
-// flight, then close the database so its write-ahead log is folded back in.
-function shutDown(): void {
-  schedule.stop();
-  void server.stop().then(() => {
-    db.close();
-    process.exit(0);
-  });
-}
-process.on("SIGTERM", shutDown);
-process.on("SIGINT", shutDown);
+// The services are provided underneath the server and the jobs, so the database
+// is closed, folding its write-ahead log back in, only after both have stopped.
+Layer.mergeAll(Startup, Server, EveryMinute).pipe(
+  Layer.provide(Services),
+  Layer.provide(Logger.layer([Logger.consoleJson])),
+  Layer.launch,
+  BunRuntime.runMain({
+    // A stop signal is a clean stop, not a failure.
+    teardown: (exit, onExit) =>
+      Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause) ? onExit(0) : Runtime.defaultTeardown(exit, onExit),
+  }),
+);

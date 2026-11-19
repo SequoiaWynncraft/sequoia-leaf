@@ -9,14 +9,18 @@ import {
   type PlayerId,
   type Rules,
 } from "@sequoia-leaf/core";
+import type { Effect } from "effect";
 
 import { insertEvent } from "../events/store.ts";
 import { getAccount, insertEntry } from "../ledger/store.ts";
 import { payLevels } from "../levels/pay.ts";
 import { type SyncMode, type SyncResult, windowedSync } from "../sync/windowed.ts";
 
-/** Returns the achievement milestones players reached during [from, to), in milliseconds since the Unix epoch. */
-export type AwardSource = (from: number, to: number) => Promise<readonly AchievementAward[]>;
+/** Reads the achievement milestones players reached during [from, to), in milliseconds since the Unix epoch. */
+export type AwardSource<E = never, R = never> = (
+  from: number,
+  to: number,
+) => Effect.Effect<readonly AchievementAward[], E, R>;
 
 /**
  * Pays the Leaf each new achievement milestone earns, with an event for each.
@@ -24,13 +28,13 @@ export type AwardSource = (from: number, to: number) => Promise<readonly Achieve
  * history. Each award pays once: its ledger entry is keyed by the award's id,
  * so reading a window again, or the same award in two windows, changes nothing.
  */
-export async function syncAchievements(
+export function syncAchievements<E, R>(
   db: Database,
-  source: AwardSource,
+  source: AwardSource<E, R>,
   rules: Rules,
   now: number,
   mode: SyncMode,
-): Promise<SyncResult> {
+): Effect.Effect<SyncResult, E, R> {
   return windowedSync(db, "achievements", now, mode, source, (awards, from, to) => {
     const levelBefore = new Map<PlayerId, number>();
     let recorded = 0;

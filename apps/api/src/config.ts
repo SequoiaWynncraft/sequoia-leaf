@@ -1,8 +1,10 @@
 import { dirname, join } from "node:path";
 
+import { Config, Context, Layer, Option, type Redacted } from "effect";
+
 import type { BucketConfig } from "./backup/offsite.ts";
 
-export interface Config {
+export interface Settings {
   readonly port: number;
   /** The SQLite file. In production it is on a volume that survives deploys. */
   readonly databasePath: string;
@@ -11,7 +13,7 @@ export interface Config {
   /** Origin of sequoia-backend, which reports raids and wars and checks sessions. */
   readonly backendUrl: string;
   /** sequoia-backend's `APP_INTERNAL_API_TOKEN`. Without it the credit feed is not read. */
-  readonly backendToken: string | undefined;
+  readonly backendToken: Redacted.Redacted | undefined;
   /**
    * Origin of Sierra's internal API, which reports achievement milestones.
    * It takes the same internal token as the backend. Without it the awards
@@ -24,34 +26,53 @@ export interface Config {
   readonly offsitePartlySet: readonly string[];
 }
 
-const OFFSITE_VARIABLES = [
-  "BACKUP_S3_ENDPOINT",
-  "BACKUP_S3_BUCKET",
-  "BACKUP_S3_ACCESS_KEY_ID",
-  "BACKUP_S3_SECRET_ACCESS_KEY",
-] as const;
+/** A variable that may be left out. One set to the empty string counts as left out. */
+const optional = <A>(config: Config.Config<A>) => config.pipe(Config.option, Config.map(Option.getOrUndefined));
 
-/** Reads the configuration from environment variables, falling back to what local development needs. */
-export function readConfig(env: Record<string, string | undefined>): Config {
-  const port = Number(env["PORT"] ?? "3000");
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw new Error(`PORT is not a port number: ${env["PORT"]}`);
-  }
-  const databasePath = env["DATABASE_PATH"] || "data/leaf.db";
-  const [endpoint, bucket, accessKeyId, secretAccessKey] = OFFSITE_VARIABLES.map((name) => env[name] || undefined);
-  const offsite =
-    endpoint !== undefined && bucket !== undefined && accessKeyId !== undefined && secretAccessKey !== undefined
-      ? { endpoint, bucket, accessKeyId, secretAccessKey }
-      : undefined;
-  const set = OFFSITE_VARIABLES.filter((name) => Boolean(env[name]));
-  return {
-    port,
-    databasePath,
-    backupDirectory: env["BACKUP_DIR"] || join(dirname(databasePath), "backups"),
-    backendUrl: env["BACKEND_URL"] || "https://api.seqwawa.com",
-    backendToken: env["BACKEND_INTERNAL_TOKEN"] || undefined,
-    sierraUrl: env["SIERRA_URL"] || undefined,
-    offsite,
-    offsitePartlySet: offsite === undefined ? set : [],
-  };
+/**
+ * Leaf's settings, from environment variables, falling back to what local
+ * development needs. A variable that is set but invalid, such as a `PORT` that
+ * is not a port, stops the app at start.
+ */
+export const settings: Config.Config<Settings> = Config.all({
+  port: Config.Port("PORT").pipe(Config.withDefault(3000)),
+  databasePath: Config.String("DATABASE_PATH").pipe(Config.withDefault("data/leaf.db")),
+  backupDirectory: optional(Config.String("BACKUP_DIR")),
+  backendUrl: Config.String("BACKEND_URL").pipe(Config.withDefault("https://api.seqwawa.com")),
+  backendToken: optional(Config.Redacted("BACKEND_INTERNAL_TOKEN")),
+  sierraUrl: optional(Config.String("SIERRA_URL")),
+  endpoint: optional(Config.String("BACKUP_S3_ENDPOINT")),
+  bucket: optional(Config.String("BACKUP_S3_BUCKET")),
+  accessKeyId: optional(Config.String("BACKUP_S3_ACCESS_KEY_ID")),
+  secretAccessKey: optional(Config.Redacted("BACKUP_S3_SECRET_ACCESS_KEY")),
+}).pipe(
+  Config.map((read): Settings => {
+    const { databasePath, endpoint, bucket, accessKeyId, secretAccessKey } = read;
+    const offsite =
+      endpoint !== undefined && bucket !== undefined && accessKeyId !== undefined && secretAccessKey !== undefined
+        ? { endpoint, bucket, accessKeyId, secretAccessKey }
+        : undefined;
+    const set = Object.entries({
+      BACKUP_S3_ENDPOINT: endpoint,
+      BACKUP_S3_BUCKET: bucket,
+      BACKUP_S3_ACCESS_KEY_ID: accessKeyId,
+      BACKUP_S3_SECRET_ACCESS_KEY: secretAccessKey,
+    }).flatMap(([name, value]) => (value === undefined ? [] : [name]));
+    return {
+      port: read.port,
+      databasePath,
+      backupDirectory: read.backupDirectory ?? join(dirname(databasePath), "backups"),
+      backendUrl: read.backendUrl,
+      backendToken: read.backendToken,
+      sierraUrl: read.sierraUrl,
+      offsite,
+      offsitePartlySet: offsite === undefined ? set : [],
+    };
+  }),
+);
+
+/** The settings the app runs with. */
+export class AppConfig extends Context.Service<AppConfig, Settings>()("leaf/AppConfig") {
+  /** Read from the environment as the app starts. */
+  static readonly layer = Layer.effect(AppConfig, settings);
 }

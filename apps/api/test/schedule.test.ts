@@ -1,15 +1,18 @@
 import { describe, expect, it } from "bun:test";
 
 import { playerId } from "@sequoia-leaf/core";
+import { Redacted } from "effect";
 
-import { runScheduledSync } from "../src/earning/run.ts";
+import { runCreditSync } from "../src/earning/run.ts";
+import { scheduledSync } from "../src/jobs.ts";
 import { getAccount } from "../src/ledger/store.ts";
-import { testServices } from "./support.ts";
+import { testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const T0 = Date.parse("2026-11-02T00:00:00Z");
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
+const runScheduledSync = scheduledSync("credit", runCreditSync);
 
 const feed = {
   raids: [
@@ -40,28 +43,28 @@ describe("the scheduled run", () => {
   it("reads the backend's credit feed and pays the Leaf it lists", async () => {
     const clock = { now: T0 };
     const { requests, fetcher } = backend();
-    const services = testServices(clock, fetcher, "secret-token");
+    const leaf = testLeaf(clock, fetcher, { backendToken: Redacted.make("secret-token") });
 
-    await runScheduledSync(services);
+    await leaf.run(runScheduledSync);
     clock.now = T0 + 5 * MINUTE;
-    await runScheduledSync(services);
+    await leaf.run(runScheduledSync);
 
     expect(requests).toHaveLength(1);
     const url = new URL(requests[0]?.url ?? "");
     expect(url.origin + url.pathname).toBe("https://backend.test/internal/player-credits");
     expect(url.searchParams.get("to")).toBe("2026-11-02T00:04:30.000Z");
     expect(requests[0]?.headers.get("Authorization")).toBe("Bearer secret-token");
-    expect(getAccount(services.db, alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
+    expect(getAccount(leaf.db, alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
   });
 
   it("re-reads the last week at minute 17 of the hour", async () => {
     const clock = { now: T0 };
     const { requests, fetcher } = backend();
-    const services = testServices(clock, fetcher);
-    await runScheduledSync(services);
+    const leaf = testLeaf(clock, fetcher);
+    await leaf.run(runScheduledSync);
 
     clock.now = T0 + 10 * DAY + 17 * MINUTE;
-    await runScheduledSync(services);
+    await leaf.run(runScheduledSync);
 
     const asked = new URL(requests[0]?.url ?? "").searchParams;
     expect(asked.get("from")).toBe("2026-11-05T00:16:30.000Z");
@@ -71,12 +74,11 @@ describe("the scheduled run", () => {
   it("skips the feed when the backend token is not configured", async () => {
     const clock = { now: T0 };
     const { requests, fetcher } = backend();
-    const services = testServices(clock, fetcher);
-    const withoutToken = { ...services, backend: { ...services.backend, token: undefined } };
+    const withoutToken = testLeaf(clock, fetcher, { backendToken: undefined });
 
-    await runScheduledSync(withoutToken);
+    await withoutToken.run(runScheduledSync);
     clock.now = T0 + 5 * MINUTE;
-    await runScheduledSync(withoutToken);
+    await withoutToken.run(runScheduledSync);
 
     expect(requests).toEqual([]);
   });
@@ -85,18 +87,18 @@ describe("the scheduled run", () => {
     const clock = { now: T0 };
     let down = false;
     const { fetcher } = backend();
-    const services = testServices(clock, (url, init) =>
+    const leaf = testLeaf(clock, (url, init) =>
       down ? Promise.resolve(new Response("down", { status: 502 })) : fetcher(url, init),
     );
-    await runScheduledSync(services);
+    await leaf.run(runScheduledSync);
 
     down = true;
     clock.now = T0 + 5 * MINUTE;
-    await runScheduledSync(services);
+    await leaf.run(runScheduledSync);
     down = false;
     clock.now = T0 + 6 * MINUTE;
-    await runScheduledSync(services);
+    await leaf.run(runScheduledSync);
 
-    expect(getAccount(services.db, alice).balance).toBe(110);
+    expect(getAccount(leaf.db, alice).balance).toBe(110);
   });
 });

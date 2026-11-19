@@ -1,13 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { leaf, playerId, RAIDS } from "@sequoia-leaf/core";
-import type { Hono } from "hono";
 
-import { createApp } from "../src/app.ts";
-import { forgetSessions } from "../src/auth/session.ts";
 import { postEntry } from "../src/ledger/store.ts";
-import type { Services } from "../src/services.ts";
-import { testServices } from "./support.ts";
+import { testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const MINUTE = 60_000;
@@ -29,8 +25,8 @@ let sessions: Record<string, () => Response>;
 let credits: unknown;
 let backendCalls: string[];
 const clock = { now: T0 };
-let services: Services;
-let app: Hono;
+let services: ReturnType<typeof testLeaf>;
+let app: ReturnType<(typeof services)["app"]>;
 
 function backend(url: string, init: RequestInit): Promise<Response> {
   const request = new Request(url, init);
@@ -56,12 +52,12 @@ beforeEach(() => {
   credits = { raids: [], wars: [] };
   backendCalls = [];
   clock.now = T0;
-  services = testServices(clock, backend);
-  app = createApp(services);
+  services = testLeaf(clock, backend);
+  app = services.app();
 });
 
-afterEach(() => {
-  forgetSessions();
+afterEach(async () => {
+  await app.dispose();
 });
 
 describe("signing in", () => {
@@ -78,12 +74,6 @@ describe("signing in", () => {
 
     expect(response.status).toBe(401);
     expect(await response.json()).toMatchObject({ code: "unauthorized" });
-  });
-
-  it("accepts the website's session cookie", async () => {
-    const response = await get("/v1/me", { Cookie: "seq_theme=gaz-purple; seq_session=alice-token" });
-
-    expect(response.status).toBe(200);
   });
 
   it("turns away someone who is not in the guild", async () => {

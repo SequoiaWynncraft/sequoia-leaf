@@ -4,6 +4,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Redacted } from "effect";
+
 import { bucketOffsite, type Offsite, offsiteCopier, RETRY_MS } from "../src/backup/offsite.ts";
 import { takeSnapshot } from "../src/backup/snapshot.ts";
 import { openDatabase } from "../src/db.ts";
@@ -140,7 +142,7 @@ describe("bucketOffsite", () => {
       endpoint: server.url.origin,
       bucket: "leaf-backups",
       accessKeyId: "key-id",
-      secretAccessKey: "key-secret",
+      secretAccessKey: Redacted.make("key-secret"),
     });
 
     await offsite.upload("leaf-2026-11-16T13-00-00Z.db", path);
