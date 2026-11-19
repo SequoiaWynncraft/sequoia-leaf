@@ -6,7 +6,7 @@ export const EARN_SOURCES = ["raid", "war", "quest", "achievement", "level", "ev
 export type EarnSource = (typeof EARN_SOURCES)[number];
 
 /** What Leaf is spent on. */
-export const SPEND_SINKS = ["shop"] as const;
+export const SPEND_SINKS = ["shop", "reroll"] as const;
 export type SpendSink = (typeof SPEND_SINKS)[number];
 
 export type EntryOrigin = EarnSource | SpendSink;

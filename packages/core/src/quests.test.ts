@@ -19,6 +19,9 @@ import {
   type QuestSlot,
   questTitle,
   refreshQuests,
+  rerollCost,
+  rerollQuest,
+  type RerollRules,
   timedTemplateFor,
   timedWindowAt,
   utcWeekStart,
@@ -525,6 +528,203 @@ describe("the repeatable", () => {
 
     expect(result.completed.filter((key) => key.startsWith("repeatable"))).toEqual(["repeatable:1", "repeatable:2"]);
     expect(result.book.latest.repeatable).toMatchObject({ sequence: 3, goals: [{ progress: 0 }] });
+  });
+});
+
+/** One free reroll a slot a day, then 100 Leaf, for dailies and weeklies. */
+const REROLLS: RerollRules = { slots: ["daily", "weekly"], freePerDay: 1, leaf: 100 };
+
+/** Two dailies and two weeklies to swap between. */
+const rerollRules: QuestRules = {
+  dailyChargeCap: 3,
+  templates: [
+    { id: "daily.raids", slot: "daily", objectives: [{ type: "raids", count: 2 }], reward: { leaf: 200, xp: 100 } },
+    { id: "daily.wars", slot: "daily", objectives: [{ type: "wars", count: 6 }], reward: { leaf: 200, xp: 100 } },
+    { id: "weekly.raids", slot: "weekly", objectives: [{ type: "raids", count: 3 }], reward: { leaf: 800, xp: 400 } },
+    { id: "weekly.wars", slot: "weekly", objectives: [{ type: "wars", count: 9 }], reward: { leaf: 800, xp: 400 } },
+  ],
+  reroll: REROLLS,
+};
+
+/** The progress of every goal of a slot's latest quest. */
+function goalProgress(book: QuestBook, slot: QuestSlot): number[] | undefined {
+  return book.latest[slot]?.goals.map((goal) => goal.progress);
+}
+
+/** Alice on Wednesday at noon, after a raid and a war, so every quest has some progress. */
+function started() {
+  const fresh = refreshQuests(openQuestBook(WEDNESDAY_NOON), alice, WEDNESDAY_NOON, rerollRules).book;
+  return play(fresh, [raid(WEDNESDAY_NOON + 1), war(WEDNESDAY_NOON + 2)], rerollRules).book;
+}
+
+describe("rerolling", () => {
+  it("swaps the daily for another that counts from the reroll, on the same banked daily", () => {
+    const book = started();
+    const daily = book.latest.daily;
+    if (daily === undefined) throw new Error("no daily");
+    const at = WEDNESDAY_NOON + HOUR;
+
+    const step = rerollQuest(book, alice, "daily", 1, at, 0, rerollRules);
+
+    if (step.status !== "rerolled") throw new Error(`refused: ${step.reason}`);
+    expect(step.cost).toBe(0);
+    expect(step.replaced).toEqual({ ...daily, expiresAt: at });
+    expect(daily.goals.some((goal) => goal.progress === 1)).toBe(true);
+    expect(step.quest).toMatchObject({ slot: "daily", sequence: 2, startedAt: at, expiresAt: null, completedAt: null });
+    expect(step.quest.templateId).not.toBe(step.replaced.templateId);
+    expect(goalProgress(step.book, "daily")).toEqual([0]);
+    expect(step.book.dailyCharges).toBe(book.dailyCharges);
+    expect(step.written).toEqual([step.replaced, step.quest]);
+    expect(step.completed).toEqual([]);
+    expect(currentQuests(step.book, at).find((quest) => quest.slot === "daily")).toEqual(step.quest);
+  });
+
+  it("keeps the weekly's end, and counts only what happens after the reroll", () => {
+    const at = WEDNESDAY_NOON + HOUR;
+    const step = rerollQuest(started(), alice, "weekly", 1, at, 0, rerollRules);
+    if (step.status !== "rerolled") throw new Error(`refused: ${step.reason}`);
+    expect(step.quest).toMatchObject({ sequence: 2, startedAt: at, expiresAt: MONDAY + WEEK_MS });
+
+    // A raid and a war from before the reroll, reported late, count toward neither weekly.
+    const late = play(step.book, [raid(at - 60_000), war(at - 60_000)], rerollRules).book;
+    expect(goalProgress(late, "weekly")).toEqual([0]);
+    expect(late.latest.weekly?.sequence).toBe(2);
+
+    const after = play(late, [raid(at + 60_000), war(at + 60_000)], rerollRules).book;
+    expect(goalProgress(after, "weekly")).toEqual([1]);
+  });
+
+  it("is free the first time a slot is rerolled each day, and costs Leaf after", () => {
+    const book = started();
+
+    const second = rerollQuest(book, alice, "daily", 1, WEDNESDAY_NOON + HOUR, 1, rerollRules);
+    expect(second).toMatchObject({ status: "rerolled", cost: 100 });
+
+    const daily = book.latest.daily;
+    if (daily === undefined) throw new Error("no daily");
+    expect(rerollCost(daily, 0, rerollRules)).toBe(0);
+    expect(rerollCost(daily, 1, rerollRules)).toBe(100);
+    expect(rerollCost(daily, 5, rerollRules)).toBe(100);
+  });
+
+  it("refuses a quest that is no longer the one in its slot, so a request sent twice swaps once", () => {
+    const at = WEDNESDAY_NOON + HOUR;
+    const once = rerollQuest(started(), alice, "daily", 1, at, 0, rerollRules);
+    if (once.status !== "rerolled") throw new Error(`refused: ${once.reason}`);
+
+    expect(rerollQuest(once.book, alice, "daily", 1, at + 1, 1, rerollRules)).toEqual({
+      status: "refused",
+      reason: "not_current",
+    });
+    expect(rerollQuest(once.book, alice, "daily", 7, at + 1, 1, rerollRules)).toMatchObject({ reason: "not_current" });
+  });
+
+  it("refuses a daily when none is banked", () => {
+    const done = play(openQuestBook(WEDNESDAY_NOON), [raid(WEDNESDAY_NOON), raid(WEDNESDAY_NOON + 1)], {
+      ...rerollRules,
+      templates: rerollRules.templates.filter((template) => template.id !== "daily.wars"),
+    }).book;
+    expect(done.dailyCharges).toBe(0);
+
+    expect(rerollQuest(done, alice, "daily", 1, WEDNESDAY_NOON + HOUR, 0, rerollRules)).toMatchObject({
+      reason: "not_current",
+    });
+  });
+
+  it("refuses a finished weekly, which would otherwise pay twice", () => {
+    const fresh = refreshQuests(openQuestBook(WEDNESDAY_NOON), alice, WEDNESDAY_NOON, rerollRules).book;
+    const isRaids = fresh.latest.weekly?.templateId === "weekly.raids";
+    const activities = Array.from({ length: isRaids ? 3 : 9 }, (_, index) =>
+      isRaids ? raid(WEDNESDAY_NOON + index + 1) : war(WEDNESDAY_NOON + index + 1),
+    );
+    const { book, completed } = play(fresh, activities, rerollRules);
+    expect(completed).toContain("weekly:1");
+
+    expect(rerollQuest(book, alice, "weekly", 1, WEDNESDAY_NOON + HOUR, 0, rerollRules)).toEqual({
+      status: "refused",
+      reason: "not_rerollable",
+    });
+  });
+
+  it("refuses a slot the rules don't allow, a slot with nothing else to swap to, and rules without rerolls", () => {
+    const timed = { ...timedRules, reroll: REROLLS };
+    const open = refreshQuests(openQuestBook(WEDNESDAY_NOON), alice, WEDNESDAY_NOON, timed).book;
+    expect(rerollQuest(open, alice, "timed", 1, WEDNESDAY_NOON + 1, 0, timed)).toMatchObject({
+      reason: "not_rerollable",
+    });
+
+    const single = { ...rules, reroll: REROLLS };
+    const alone = refreshQuests(openQuestBook(WEDNESDAY_NOON), alice, WEDNESDAY_NOON, single).book;
+    expect(rerollQuest(alone, alice, "daily", 1, WEDNESDAY_NOON + 1, 0, single)).toMatchObject({
+      reason: "not_rerollable",
+    });
+
+    const { reroll: _, ...noRerolls } = rerollRules;
+    expect(rerollQuest(started(), alice, "daily", 1, WEDNESDAY_NOON + 1, 0, noRerolls)).toMatchObject({
+      reason: "not_rerollable",
+    });
+  });
+
+  it("brings the book up to the reroll first, so a daily banked overnight is the one swapped", () => {
+    const tomorrow = WEDNESDAY_NOON + DAY_MS;
+    const done = play(openQuestBook(WEDNESDAY_NOON), [raid(WEDNESDAY_NOON), raid(WEDNESDAY_NOON + 1)], {
+      ...rerollRules,
+      templates: rerollRules.templates.filter((template) => template.id !== "daily.wars"),
+    }).book;
+
+    const step = rerollQuest(done, alice, "daily", 2, tomorrow, 0, rerollRules);
+
+    expect(step).toMatchObject({
+      status: "rerolled",
+      replaced: { sequence: 2, startedAt: MONDAY + 3 * DAY_MS, expiresAt: tomorrow },
+      quest: { sequence: 3, startedAt: tomorrow },
+    });
+  });
+
+  it("changes only the slot rerolled, so last week's weekly still takes Sunday's raids counted late", () => {
+    const sunday = MONDAY + WEEK_MS - HOUR;
+    const lastWeek = refreshQuests(openQuestBook(sunday), alice, sunday, rerollRules).book;
+    const monday = MONDAY + WEEK_MS + 10 * 60_000;
+
+    const step = rerollQuest(lastWeek, alice, "daily", 1, monday, 0, rerollRules);
+
+    if (step.status !== "rerolled") throw new Error(`refused: ${step.reason}`);
+    expect(step.book.latest.weekly).toEqual(lastWeek.latest.weekly);
+    expect(step.written.map((quest) => `${quest.slot}:${quest.sequence}`)).toEqual(["daily:1", "daily:2"]);
+    const late = play(step.book, [raid(sunday + 1), war(sunday + 2)], rerollRules).book;
+    expect(late.latest.weekly?.sequence).toBe(1);
+    expect(goalProgress(late, "weekly")).toEqual([1]);
+  });
+
+  it("leaves the banked dailies as they were when another slot is rerolled", () => {
+    const yesterday = WEDNESDAY_NOON - DAY_MS;
+    const book = refreshQuests(openQuestBook(yesterday), alice, yesterday, rerollRules).book;
+
+    const step = rerollQuest(book, alice, "weekly", 1, WEDNESDAY_NOON, 0, rerollRules);
+
+    expect(step).toMatchObject({
+      status: "rerolled",
+      book: { dailyCharges: 1, dailyChargedDay: book.dailyChargedDay },
+    });
+    expect(rerollQuest(book, alice, "daily", 1, WEDNESDAY_NOON, 0, rerollRules)).toMatchObject({
+      book: { dailyCharges: 2 },
+    });
+  });
+
+  it("lets members reroll dailies and weeklies, once a day each for free and then for 100 Leaf", () => {
+    const at = Date.UTC(2026, 10, 25, 12);
+    const { book } = refreshQuests(openQuestBook(at), alice, at, DEFAULT_RULES.quests);
+    const costs = currentQuests(book, at).map((quest) => [
+      quest.slot,
+      rerollCost(quest, 0, DEFAULT_RULES.quests),
+      rerollCost(quest, 1, DEFAULT_RULES.quests),
+    ]);
+
+    expect(costs).toEqual([
+      ["daily", 0, 100],
+      ["weekly", 0, 100],
+      ["timed", null, null],
+    ]);
   });
 });
 
