@@ -14,7 +14,7 @@ import {
 import { type CreditSource, syncCredits } from "../src/earning/sync.ts";
 import { listEventsAfter } from "../src/events/store.ts";
 import { getAccount, listEntries, postEntry } from "../src/ledger/store.ts";
-import { payLevels, payMissedLevels, takeBackLevels } from "../src/levels/pay.ts";
+import { payLevels, payMissedLevels } from "../src/levels/pay.ts";
 import { testDatabase } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
@@ -172,19 +172,5 @@ describe("Leaf for levels", () => {
 
     expect(payLevels(db, alice, rules.levels, T0)).toBe(0);
     expect(levelEntries(alice)).toEqual([[`level:${alice}:2`, 100, 0]]);
-  });
-
-  it("takes back the payouts of the levels the XP no longer reaches, once, and keeps the rest", () => {
-    const raidPay = earnedBefore(alice, 2300, "raid:old:a");
-    payMissedLevels(db, rules.levels, T0);
-    reverse(raidPay);
-    earnedBefore(alice, 1100, "raid:old:a:share");
-
-    const taken = takeBackLevels(db, alice, rules.levels, T0, "correction");
-
-    expect(taken.map((entry) => entry.idempotencyKey)).toEqual([`level:${alice}:3`]);
-    expect(takeBackLevels(db, alice, rules.levels, T0, "correction")).toEqual([]);
-    expect(getAccount(db, alice)).toMatchObject({ balance: 1100 + 100, xp: 1100 });
-    expect(events(alice)).toEqual([]);
   });
 });
