@@ -6,7 +6,11 @@ import {
   nextDailyChargeAt,
   nextTimedWindowAt,
   openQuestBook,
+  type Quest,
+  QUEST_SLOTS,
+  type QuestSlot,
   refreshQuests,
+  rerollCost,
   timedWindowAt,
 } from "@sequoia-leaf/core";
 import { Hono } from "hono";
@@ -17,6 +21,7 @@ import { syncOnDemand } from "../earning/run.ts";
 import { eventJsonText, latestEventId, listEventsAfter, listLatestEvents } from "../events/store.ts";
 import { getAccount } from "../ledger/store.ts";
 import { questJson } from "../quests/json.ts";
+import { rerollQuestFor, rerollsOnDay } from "../quests/reroll.ts";
 import { listCompletedSince, loadQuestBook } from "../quests/store.ts";
 import type { Services } from "../services.ts";
 
@@ -39,6 +44,19 @@ export const DEFAULT_STREAM_TUNING: StreamTuning = { pollMs: 2_000, heartbeatMs:
 const EVENT_PAGE = 100;
 /** How many events `GET /events` returns when the client does not say where it is. */
 const LATEST_EVENTS = 50;
+
+/** A quest in progress as `/quests` sends it: with `reroll_leaf`, what rerolling it costs now, or null when it can't be. */
+function questOnOffer(quest: Quest, rerollsToday: ReadonlyMap<QuestSlot, number>) {
+  return Object.assign(questJson(quest), {
+    reroll_leaf: rerollCost(quest, rerollsToday.get(quest.slot) ?? 0, DEFAULT_RULES.quests),
+  });
+}
+
+const REROLL_REFUSALS = {
+  not_current: "That quest is no longer in its slot. Refresh your quests",
+  not_rerollable: "That quest can't be rerolled",
+  insufficient_leaf: "You don't have enough Leaf to reroll it",
+} as const;
 
 /** Reads an event id sent by a client. Undefined means it sent none; null means it sent something that is not one. */
 function eventId(value: string | undefined): number | null | undefined {
@@ -99,12 +117,13 @@ export function meRoutes(
     const now = services.now();
     const stored = loadQuestBook(db, identity.playerId);
     const completed = listCompletedSince(db, identity.playerId, now - RECENTLY_COMPLETED_MS);
-    // The stored book is as of the player's last activity. Bringing it up to now
-    // is a pure calculation; only the credit sync writes quests.
+    // The stored book is as of the player's last activity or reroll. Bringing it
+    // up to now is a pure calculation; only the credit sync and rerolls write quests.
     const { book } = refreshQuests(stored ?? openQuestBook(now), identity.playerId, now, DEFAULT_RULES.quests);
     const nextCharge = nextDailyChargeAt(book, DEFAULT_RULES.quests);
     const timedRules = DEFAULT_RULES.quests.timed;
     const window = timedRules === undefined ? undefined : timedWindowAt(now, timedRules);
+    const rerolls = rerollsOnDay(db, identity.playerId, now);
     return c.json({
       daily: {
         charges: book.dailyCharges,
@@ -119,8 +138,30 @@ export function meRoutes(
               ends_at: window === undefined ? null : iso(window.end),
               next_at: iso(nextTimedWindowAt(now, timedRules)),
             },
-      quests: currentQuests(book, now).map(questJson),
+      quests: currentQuests(book, now).map((quest) => questOnOffer(quest, rerolls)),
       recently_completed: completed.map(questJson),
+    });
+  });
+
+  // Swaps a quest in progress for another. The id is the one `/quests` gave,
+  // so a request sent twice swaps once.
+  me.post("/quests/:id/reroll", async (c) => {
+    const id = /^([a-z]+):(\d{1,9})$/.exec(c.req.param("id"));
+    const slot = QUEST_SLOTS.find((each): each is QuestSlot => each === id?.[1]);
+    if (id === null || slot === undefined) {
+      return c.json({ code: "invalid_quest", message: "That is not a quest id" }, 400);
+    }
+    const identity = c.var.identity;
+    // A quest just finished is paid rather than swapped away.
+    await syncOnDemand(services);
+    const result = rerollQuestFor(db, identity.playerId, slot, Number(id[2]), services.now(), DEFAULT_RULES.quests);
+    if (result.status === "refused") {
+      return c.json({ code: result.reason, message: REROLL_REFUSALS[result.reason] }, 409);
+    }
+    return c.json({
+      leaf: result.balance,
+      spent: result.spent,
+      quest: questOnOffer(result.quest, rerollsOnDay(db, identity.playerId, services.now())),
     });
   });
 

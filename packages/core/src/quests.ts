@@ -52,6 +52,21 @@ export interface QuestRules {
   readonly dailyChargeCap: number;
   /** When timed quests are open; none are handed out without it. */
   readonly timed?: TimedQuestRules;
+  /** Which quests a player can swap for another, and what it costs; none can without it. */
+  readonly reroll?: RerollRules;
+}
+
+/**
+ * Rerolling swaps the quest in progress in a slot for another from the same
+ * slot. Each slot has a few free rerolls a UTC day; after those, each one costs
+ * Leaf.
+ */
+export interface RerollRules {
+  readonly slots: readonly QuestSlot[];
+  /** Rerolls each slot gets free per UTC day. */
+  readonly freePerDay: number;
+  /** What each further reroll that day costs. */
+  readonly leaf: number;
 }
 
 /**
@@ -352,6 +367,83 @@ export function currentQuests(book: QuestBook, at: number): Quest[] {
   return QUEST_SLOTS.map((slot) => book.latest[slot]).filter(
     (quest): quest is Quest => quest !== undefined && holdsSlot(quest, at),
   );
+}
+
+/**
+ * What rerolling a quest costs, or null when it can't be rerolled: its slot
+ * doesn't allow it, it is finished, or the slot has no other quest to swap it
+ * for. `rerollsToday` is how many times the player rerolled that slot this UTC day.
+ */
+export function rerollCost(quest: Quest, rerollsToday: number, rules: QuestRules): number | null {
+  const reroll = rules.reroll;
+  if (
+    reroll === undefined ||
+    !reroll.slots.includes(quest.slot) ||
+    quest.completedAt !== null ||
+    !rules.templates.some((template) => template.slot === quest.slot && template.id !== quest.templateId)
+  ) {
+    return null;
+  }
+  return rerollsToday < reroll.freePerDay ? 0 : reroll.leaf;
+}
+
+export type RerollStep =
+  | (QuestStep & {
+      readonly status: "rerolled";
+      /** The quest swapped out, now ended. */
+      readonly replaced: Quest;
+      /** The quest that took its place. */
+      readonly quest: Quest;
+      /** The Leaf it costs. */
+      readonly cost: number;
+    })
+  | {
+      readonly status: "refused";
+      /**
+       * - `not_current`: the quest asked for is not the one in its slot any more;
+       *   it was finished, rerolled or replaced since the player saw it.
+       * - `not_rerollable`: see {@link rerollCost}.
+       */
+      readonly reason: "not_current" | "not_rerollable";
+    };
+
+/**
+ * Swaps the quest in progress in a slot for another from the same slot, as the
+ * player asked at `at`. `sequence` names the quest they saw, so a request sent
+ * twice swaps once. The book is brought up to `at` first, as
+ * {@link refreshQuests} does, and the step includes what that wrote.
+ *
+ * The old quest ends at `at` and keeps the progress it had. The new one is a
+ * different template, counts activities from `at` on, and ends when the old one
+ * would have. A rerolled daily is the same banked daily: none is granted or used up.
+ */
+export function rerollQuest(
+  book: QuestBook,
+  playerId: PlayerId,
+  slot: QuestSlot,
+  sequence: number,
+  at: number,
+  rerollsToday: number,
+  rules: QuestRules,
+): RerollStep {
+  const step = startStep(book, playerId, rules);
+  refresh(step, at);
+  const current = step.latest[slot];
+  if (current === undefined || current.sequence !== sequence || !holdsSlot(current, at)) {
+    return { status: "refused", reason: "not_current" };
+  }
+  const cost = rerollCost(current, rerollsToday, rules);
+  if (cost === null) {
+    return { status: "refused", reason: "not_rerollable" };
+  }
+  const replaced: Quest = { ...current, expiresAt: at };
+  write(step, replaced);
+  issue(step, slot, at, current.expiresAt);
+  const quest = step.latest[slot];
+  if (quest === undefined || quest.sequence !== sequence + 1) {
+    throw new Error(`Rerolling ${slot}:${sequence} handed out no quest`);
+  }
+  return { status: "rerolled", ...finishStep(step), replaced, quest, cost };
 }
 
 /** When the next daily becomes available, or null while the player holds as many as can be banked. */
