@@ -5,9 +5,13 @@ import type { PlayerId } from "./player.ts";
  * - `daily`: one becomes available each UTC day and they bank up, so a player
  *   who plays every third day loses nothing. There are no streaks.
  * - `weekly`: one per week, Monday to Monday in UTC. It expires when the week ends.
- * - `repeatable`: always one; finishing it unlocks the next.
+ * - `timed`: the same quest for the whole guild, open for a short window that
+ *   comes round every few hours (see {@link TimedQuestRules}). Bigger rewards
+ *   for a shorter time.
+ * - `repeatable`: always one; finishing it unlocks the next. Only handed out
+ *   while the rules have templates for it, which the default rules don't.
  */
-export const QUEST_SLOTS = ["daily", "weekly", "repeatable"] as const;
+export const QUEST_SLOTS = ["daily", "weekly", "timed", "repeatable"] as const;
 export type QuestSlot = (typeof QUEST_SLOTS)[number];
 
 export type QuestObjective =
@@ -46,6 +50,56 @@ export interface QuestRules {
   readonly templates: readonly QuestTemplate[];
   /** How many dailies can be banked, counting the one in progress. */
   readonly dailyChargeCap: number;
+  /** When timed quests are open; none are handed out without it. */
+  readonly timed?: TimedQuestRules;
+}
+
+/**
+ * Timed quests open on a fixed UTC schedule: one window starts every
+ * `everyMs`, counted from midnight, and stays open for `openMs`. No window
+ * starts before `firstAt`, so an activity reported late from before timed
+ * quests began never earns one.
+ */
+export interface TimedQuestRules {
+  readonly everyMs: number;
+  readonly openMs: number;
+  readonly firstAt: number;
+}
+
+/** One timed quest window: open from `start` until `end`, numbered from the Unix epoch. */
+export interface TimedWindow {
+  readonly index: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+/** The timed window open at this moment, or undefined between windows. */
+export function timedWindowAt(at: number, rules: TimedQuestRules): TimedWindow | undefined {
+  const index = Math.floor(at / rules.everyMs);
+  const start = index * rules.everyMs;
+  return start >= rules.firstAt && at < start + rules.openMs ? { index, start, end: start + rules.openMs } : undefined;
+}
+
+/** When the next timed window opens after this moment. */
+export function nextTimedWindowAt(at: number, rules: TimedQuestRules): number {
+  const first = Math.ceil(rules.firstAt / rules.everyMs) * rules.everyMs;
+  return Math.max(first, (Math.floor(at / rules.everyMs) + 1) * rules.everyMs);
+}
+
+/**
+ * The template for a timed window, the same for everyone. The timed templates
+ * take turns in a fixed, shuffled order, so a window never gets the one the
+ * window before had while there are two or more; with six windows a day and a
+ * different number of templates, each hour of the day sees them all in turn.
+ */
+export function timedTemplateFor(rules: QuestRules, windowIndex: number): QuestTemplate | undefined {
+  const timed = rules.templates
+    .filter((template) => template.slot === "timed")
+    .toSorted((a, b) => hash(a.id) - hash(b.id) || a.id.localeCompare(b.id));
+  if (timed.length === 0) {
+    return undefined;
+  }
+  return timed[((windowIndex % timed.length) + timed.length) % timed.length];
 }
 
 /** A quest handed to a player. `(playerId, slot, sequence)` identifies it. */
@@ -257,6 +311,18 @@ function finishStep(step: Step): QuestStep {
 }
 
 function refresh(step: Step, at: number): void {
+  // A slot the rules hand nothing out in is off. A quest still open there, however
+  // it got there, ends where it began, so nothing counts toward it or shows it.
+  for (const slot of QUEST_SLOTS) {
+    const quest = step.latest[slot];
+    if (
+      quest?.completedAt === null &&
+      holdsSlot(quest, quest.startedAt) &&
+      !step.rules.templates.some((template) => template.slot === slot)
+    ) {
+      write(step, { ...quest, expiresAt: quest.startedAt });
+    }
+  }
   const day = utcDay(at);
   if (day > step.dailyChargedDay) {
     step.dailyCharges = Math.min(step.rules.dailyChargeCap, step.dailyCharges + (day - step.dailyChargedDay));
@@ -269,6 +335,10 @@ function refresh(step: Step, at: number): void {
     const weekStart = utcWeekStart(at);
     issue(step, "weekly", weekStart, weekStart + WEEK_MS);
   }
+  const window = step.rules.timed === undefined ? undefined : timedWindowAt(at, step.rules.timed);
+  if (window !== undefined && !holdsSlot(step.latest.timed, at)) {
+    issue(step, "timed", window.start, window.end, timedTemplateFor(step.rules, window.index));
+  }
   if (!holdsSlot(step.latest.repeatable, at)) {
     issue(step, "repeatable", at, null);
   }
@@ -276,7 +346,7 @@ function refresh(step: Step, at: number): void {
 
 /**
  * The quests a player sees at this moment, in slot order: the one in progress
- * for each slot, and a finished weekly until its week ends.
+ * for each slot, and a finished weekly or timed quest until it ends.
  */
 export function currentQuests(book: QuestBook, at: number): Quest[] {
   return QUEST_SLOTS.map((slot) => book.latest[slot]).filter(
@@ -291,17 +361,21 @@ export function nextDailyChargeAt(book: QuestBook, rules: QuestRules): number | 
 
 /** Whether the slot's latest quest still occupies the slot at this moment. */
 function holdsSlot(quest: Quest | undefined, at: number): boolean {
-  if (quest === undefined || (quest.expiresAt !== null && at >= quest.expiresAt)) {
+  // A quest that expires where it began never held its slot: it was retired.
+  if (
+    quest === undefined ||
+    (quest.expiresAt !== null && (at >= quest.expiresAt || quest.expiresAt <= quest.startedAt))
+  ) {
     return false;
   }
-  // A finished weekly occupies the slot until its week ends; other finished quests free it at once.
-  return quest.completedAt === null || quest.slot === "weekly";
+  // A finished weekly or timed quest occupies the slot until it ends; other finished quests free it at once.
+  return quest.completedAt === null || quest.slot === "weekly" || quest.slot === "timed";
 }
 
-function issue(step: Step, slot: QuestSlot, startedAt: number, expiresAt: number | null): void {
+function issue(step: Step, slot: QuestSlot, startedAt: number, expiresAt: number | null, shared?: QuestTemplate): void {
   const previous = step.latest[slot];
   const sequence = (previous?.sequence ?? 0) + 1;
-  const template = pickTemplate(step.rules, slot, step.playerId, sequence, previous?.templateId);
+  const template = shared ?? pickTemplate(step.rules, slot, step.playerId, sequence, previous?.templateId);
   if (template === undefined) {
     return;
   }

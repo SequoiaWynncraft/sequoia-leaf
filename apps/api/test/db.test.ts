@@ -55,6 +55,7 @@ describe("openDatabase", () => {
       "0006_achievement_sync.sql",
       "0007_war_claim.sql",
       "0008_either_or_quests.sql",
+      "0009_timed_quests.sql",
     ]);
     db.close();
   });
@@ -173,6 +174,39 @@ describe("openDatabase", () => {
       { quest: "weekly.wars.15 5/15", alternative: "raids 0/5" },
       { quest: "daily.season_rating.1000 440/1000", alternative: null },
     ]);
+    db.close();
+  });
+
+  it("drops the repeatable quests still open when timed quests take their slot", () => {
+    const before = join(directory, "migrations");
+    mkdirSync(before);
+    for (const name of readdirSync(MIGRATIONS).filter((file) => file < "0009")) {
+      copyFileSync(join(MIGRATIONS, name), join(before, name));
+    }
+    const db = new Database(":memory:");
+    migrate(db, before);
+    db.run(
+      `INSERT INTO quests (${FIRST_QUEST_COLUMNS}) VALUES
+         ('${alice}', 'repeatable', 3, 'repeatable.raids.any.8', 'raids', NULL, 8, 200, 100, 8, 10, NULL, 40),
+         ('${alice}', 'repeatable', 4, 'repeatable.raids.any.8', 'raids', NULL, 8, 200, 100, 7, 40, NULL, NULL),
+         ('${alice}', 'daily', 1, 'daily.raids.any.2', 'raids', NULL, 2, 200, 100, 1, 10, NULL, NULL)`,
+    );
+
+    migrate(db);
+
+    const rows = db
+      .query<{ quest: string; expires_at: number | null }, []>(
+        "SELECT slot || ':' || sequence AS quest, expires_at FROM quests ORDER BY slot, sequence",
+      )
+      .all();
+    expect(rows.map((row) => row.quest)).toEqual(["daily:1", "repeatable:3", "repeatable:4"]);
+    expect(rows[0]?.expires_at).toBeNull();
+    expect(rows[1]?.expires_at).toBeNull();
+    expect(rows[2]?.expires_at).toBe(40);
+    db.run(
+      `INSERT INTO quests (${FIRST_QUEST_COLUMNS})
+       VALUES ('${alice}', 'timed', 1, 'timed.raids.any.3.or.wars.9', 'raids', NULL, 3, 500, 250, 0, 50, 60, NULL)`,
+    );
     db.close();
   });
 

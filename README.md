@@ -94,7 +94,15 @@ Every member has three quest slots. The templates and rewards are in
   playing every third day loses nothing. Finishing one starts the next banked
   one at once. There are no streaks.
 - **Weekly.** One per week, Monday to Monday in UTC. It expires with the week.
-- **Repeatable.** Always one; finishing it unlocks the next.
+- **Timed.** The same quest for the whole guild, open for two hours from 00:00,
+  04:00, 08:00, 12:00, 16:00 and 20:00 UTC, so there is a two-hour gap between
+  them. It pays more than a daily for less time to do it in. The timed
+  templates take turns in a fixed order, so two windows in a row never share one.
+  The first window opened at 04:00 UTC on 19 November 2026; none comes before it,
+  even for an activity reported late.
+- **Repeatable.** Finishing one unlocks the next. Off for now: the default rules
+  have no repeatable templates, and the ones open when timed quests began were
+  dropped. Nothing counts toward them, even an activity reported late.
 
 A quest asks for one or two of these. Most ask for two, raids or wars, as in
 "Complete 3 NOL raids or 9 wars", so raiders and warrers can both finish them.
@@ -134,6 +142,9 @@ Each quest in `/v1/me/quests` lists its `goals`, every way to finish it, each
 with its own `type`, `raid`, `title`, `progress` and `target`. Its `objective`,
 `progress` and `target` repeat the goal nearest to being met, for clients that
 show one bar.
+
+Its `timed` says when the open timed quest ends (`ends_at`, null between
+windows) and when the next one opens (`next_at`).
 
 `GET /v1/me/quests?sync=1` reads the credit feed first, at most once every 15
 seconds, so a raid that just finished shows up without waiting for the next
