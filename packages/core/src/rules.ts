@@ -47,6 +47,8 @@ export interface LevelRules {
 // raid is worth 20 raids of any kind, as its reward says.
 const WARS_PER_RAID = 3;
 
+const HOUR_MS = 60 * 60 * 1000;
+
 function raidsOrWars(
   slot: QuestSlot,
   raids: { readonly raid?: RaidKey; readonly count: number },
@@ -84,7 +86,17 @@ const QUEST_TEMPLATES: readonly QuestTemplate[] = [
     objectives: [{ type: "season_rating", amount: 6000 }],
     reward: { leaf: 800, xp: 400 },
   },
-  raidsOrWars("repeatable", { count: 8 }, 8, { leaf: 200, xp: 100 }),
+  // Timed quests: the whole guild gets the same one for a two-hour window. They
+  // pay more than a daily for a shorter time to do it in. Repeatable quests are
+  // off for now: the rules give them no template.
+  ...RAID_KEYS.map((raid) => raidsOrWars("timed", { raid, count: 2 }, 2, { leaf: 500, xp: 250 })),
+  raidsOrWars("timed", { count: 3 }, 3, { leaf: 500, xp: 250 }),
+  {
+    id: "timed.season_rating.1500",
+    slot: "timed",
+    objectives: [{ type: "season_rating", amount: 1500 }],
+    reward: { leaf: 500, xp: 250 },
+  },
 ];
 
 // A milestone pays roughly 6 to 9% on top of the Leaf the raids or wars on the
@@ -111,6 +123,9 @@ export const DEFAULT_RULES: Rules = {
   quests: {
     templates: QUEST_TEMPLATES,
     dailyChargeCap: 3,
+    // A timed quest opens at 00:00, 04:00, 08:00, ... UTC, for two hours each,
+    // from the first window after they launched.
+    timed: { everyMs: 4 * HOUR_MS, openMs: 2 * HOUR_MS, firstAt: Date.UTC(2026, 10, 19, 4) },
   },
   levels: {
     firstLevelXp: 1000,

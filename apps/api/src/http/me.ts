@@ -4,8 +4,10 @@ import {
   DEFAULT_RULES,
   levelForXp,
   nextDailyChargeAt,
+  nextTimedWindowAt,
   openQuestBook,
   refreshQuests,
+  timedWindowAt,
 } from "@sequoia-leaf/core";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -101,12 +103,22 @@ export function meRoutes(
     // is a pure calculation; only the credit sync writes quests.
     const { book } = refreshQuests(stored ?? openQuestBook(now), identity.playerId, now, DEFAULT_RULES.quests);
     const nextCharge = nextDailyChargeAt(book, DEFAULT_RULES.quests);
+    const timedRules = DEFAULT_RULES.quests.timed;
+    const window = timedRules === undefined ? undefined : timedWindowAt(now, timedRules);
     return c.json({
       daily: {
         charges: book.dailyCharges,
         charge_cap: DEFAULT_RULES.quests.dailyChargeCap,
         next_charge_at: nextCharge === null ? null : iso(nextCharge),
       },
+      // When the open timed quest ends (null between windows) and when the next one opens.
+      timed:
+        timedRules === undefined
+          ? null
+          : {
+              ends_at: window === undefined ? null : iso(window.end),
+              next_at: iso(nextTimedWindowAt(now, timedRules)),
+            },
       quests: currentQuests(book, now).map(questJson),
       recently_completed: completed.map(questJson),
     });
