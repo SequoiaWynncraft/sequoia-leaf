@@ -24,6 +24,12 @@ export const SETTLE_MS = 30_000;
 /** How far before the cursor a recent run starts, to catch events recorded slightly out of order. */
 export const RECENT_OVERLAP_MS = 20 * 60_000;
 export const DEEP_LOOKBACK_MS = 7 * 24 * 60 * 60_000;
+/**
+ * The longest window one run reads. The backend's and Sierra's feeds refuse windows
+ * over 31 days, so after a longer outage the recent sync catches up a window per
+ * run instead of asking for one the feeds refuse, for good.
+ */
+export const MAX_WINDOW_MS = 30 * 24 * 60 * 60_000;
 /** A run that dies holds the lease for at most this long. */
 const LEASE_MS = 60_000;
 
@@ -62,9 +68,10 @@ export async function windowedSync<T>(
       db.query("UPDATE sync_state SET started_at = ?, cursor = ? WHERE name = ?").run(now, now, name);
       return { status: "started" };
     }
-    const to = now - SETTLE_MS;
-    const reach = mode === "recent" ? state.cursor - RECENT_OVERLAP_MS : to - DEEP_LOOKBACK_MS;
+    const settled = now - SETTLE_MS;
+    const reach = mode === "recent" ? state.cursor - RECENT_OVERLAP_MS : settled - DEEP_LOOKBACK_MS;
     const from = Math.max(state.started_at, reach);
+    const to = Math.min(settled, from + MAX_WINDOW_MS);
     const items = from < to ? await read(from, to) : [];
     // Immediate, so the transaction holds the write lock from its start. A
     // deferred one reads first, and if another connection, such as a script

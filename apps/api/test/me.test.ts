@@ -234,8 +234,13 @@ describe("GET /v1/me/quests", () => {
   });
 });
 
-function reroll(id: string, token = "alice-token") {
-  return app.request(`/v1/me/quests/${id}/reroll`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+/** Asks to reroll a quest, agreeing to pay `cost` Leaf for it. */
+function reroll(id: string, cost = 0, token = "alice-token") {
+  return app.request(`/v1/me/quests/${id}/reroll`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ leaf: cost }),
+  });
 }
 
 async function quests(): Promise<unknown> {
@@ -293,10 +298,10 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     earn(150);
     await reroll("daily:1");
 
-    const paid = await reroll("daily:2");
+    const paid = await reroll("daily:2", 100);
     expect(await paid.json()).toMatchObject({ leaf: 50, spent: 100, quest: { id: "daily:3" } });
 
-    const refused = await reroll("daily:3");
+    const refused = await reroll("daily:3", 100);
     expect(refused.status).toBe(409);
     expect(await refused.json()).toMatchObject({ code: "insufficient_leaf" });
     expect(await quests()).toMatchObject({ quests: [{ id: "daily:3", reroll_leaf: 100 }, { id: "weekly:1" }] });
@@ -340,14 +345,14 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     postEntry(db, { kind: "reversal", playerId: alice, reverses: paid.entry, idempotencyKey: "undo:r" }, T0);
 
     expect(await (await reroll("daily:1")).json()).toMatchObject({ leaf: -100, spent: 0, quest: { id: "daily:2" } });
-    expect(await (await reroll("daily:2")).json()).toMatchObject({ code: "insufficient_leaf" });
+    expect(await (await reroll("daily:2", 100)).json()).toMatchObject({ code: "insufficient_leaf" });
   });
 
   it("counts each member's rerolls on their own", async () => {
     const bob = playerId("10000000-0000-0000-0000-000000000002");
     sessions["bob-token"] = () => Response.json({ ...member, minecraft_uuid: bob, minecraft_username: "Bob" });
 
-    expect((await reroll("daily:1", "bob-token")).status).toBe(200);
+    expect((await reroll("daily:1", 0, "bob-token")).status).toBe(200);
 
     expect(await quests()).toMatchObject({ quests: [{ id: "daily:1", reroll_leaf: 0 }, { id: "weekly:1" }] });
   });
@@ -356,6 +361,34 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     const response = await reroll("daily%3A1");
 
     expect(await response.json()).toMatchObject({ quest: { id: "daily:2" } });
+  });
+
+  it("charges only the cost the member agreed to, and refuses when it costs something else now", async () => {
+    earn(500);
+    await reroll("daily:1");
+
+    const shownFree = await reroll("daily:2", 0);
+    expect(shownFree.status).toBe(409);
+    expect(await shownFree.json()).toMatchObject({ code: "cost_changed" });
+    expect(await (await reroll("daily:2", 250)).json()).toMatchObject({ code: "cost_changed" });
+    expect(await (await get("/v1/me")).json()).toMatchObject({ leaf: 500 });
+    expect(await (await reroll("daily:2", 100)).json()).toMatchObject({ leaf: 400, spent: 100 });
+  });
+
+  it("asks for the cost the member agreed to", async () => {
+    const bodies = [undefined, "not json", "{}", '{"leaf":-1}', '{"leaf":1.5}', '{"leaf":"0"}', "[0]"];
+    const answers = await Promise.all(
+      bodies.map(async (body) => {
+        const response = await app.request("/v1/me/quests/daily:1/reroll", {
+          method: "POST",
+          headers: { Authorization: "Bearer alice-token", "Content-Type": "application/json" },
+          ...(body === undefined ? {} : { body }),
+        });
+        return [response.status, await response.json()];
+      }),
+    );
+
+    expect(answers).toEqual(bodies.map(() => [400, expect.objectContaining({ code: "invalid_cost" })]));
   });
 
   it("swaps once when the same request is sent twice", async () => {
