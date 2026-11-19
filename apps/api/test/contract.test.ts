@@ -6,7 +6,7 @@ import { playerId, RAIDS } from "@sequoia-leaf/core";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
-import { testLeaf } from "./support.ts";
+import { MINUTE, testLeaf } from "./support.ts";
 
 /**
  * Leaf's API as clients see it, from the real routes: `contracts/leaf-api-v1.json`
@@ -21,7 +21,6 @@ import { testLeaf } from "./support.ts";
 const CONTRACT = join(import.meta.dir, "..", "..", "..", "contracts", "leaf-api-v1.json");
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
-const MINUTE = 60_000;
 /** Wednesday 25 November 2026, 12:30 UTC: inside the 12:00 timed window. */
 const T0 = Date.UTC(2026, 10, 25, 12, 30);
 

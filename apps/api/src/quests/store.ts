@@ -45,6 +45,13 @@ const QuestRow = Schema.Struct({
 });
 type QuestRow = typeof QuestRow.Type;
 
+/** The quest columns, named as the code names them. */
+const QUEST_COLUMNS = `slot, sequence, template_id AS templateId, objective_type AS objectiveType,
+  objective_raid AS objectiveRaid, target, reward_leaf AS rewardLeaf, reward_xp AS rewardXp, progress,
+  started_at AS startedAt, expires_at AS expiresAt, completed_at AS completedAt,
+  alternative_type AS alternativeType, alternative_raid AS alternativeRaid,
+  alternative_target AS alternativeTarget, alternative_progress AS alternativeProgress`;
+
 const Charges = { dailyCharges: Schema.Int, dailyChargedDay: Schema.Int };
 
 /** A player's daily charges, with the latest quest of one slot, or with NULL quest columns when they have no quest yet. */
@@ -139,7 +146,7 @@ export class Quests extends Context.Service<
         Request: Schema.String,
         Result: BookRow,
         execute: (playerId) => sql`
-          SELECT player.daily_charges, player.daily_charged_day, quest.*
+          SELECT daily_charges AS dailyCharges, daily_charged_day AS dailyChargedDay, ${sql.literal(QUEST_COLUMNS)}
           FROM quest_players AS player
           LEFT JOIN quests AS quest
             ON quest.player_id = player.player_id
@@ -152,7 +159,7 @@ export class Quests extends Context.Service<
         Request: Schema.Struct({ playerId: Schema.String, since: Schema.Int }),
         Result: QuestRow,
         execute: ({ playerId, since }) => sql`
-          SELECT * FROM quests
+          SELECT ${sql.literal(QUEST_COLUMNS)} FROM quests
           WHERE player_id = ${playerId} AND completed_at >= ${since}
           ORDER BY completed_at DESC, slot, sequence DESC
           LIMIT 20

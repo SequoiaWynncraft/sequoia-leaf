@@ -5,12 +5,10 @@ import { Redacted } from "effect";
 
 import { runCreditSync } from "../src/earning/run.ts";
 import { scheduledSync } from "../src/jobs.ts";
-import { testLeaf } from "./support.ts";
+import { DAY, MINUTE, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const T0 = Date.parse("2026-11-02T00:00:00Z");
-const MINUTE = 60_000;
-const DAY = 24 * 60 * MINUTE;
 const runScheduledSync = scheduledSync("credit", runCreditSync);
 
 const feed = {
