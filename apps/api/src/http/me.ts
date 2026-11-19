@@ -55,8 +55,14 @@ function questOnOffer(quest: Quest, rerollsToday: ReadonlyMap<QuestSlot, number>
 const REROLL_REFUSALS = {
   not_current: "That quest is no longer in its slot. Refresh your quests",
   not_rerollable: "That quest can't be rerolled",
+  cost_changed: "Rerolling it costs something else now. Refresh your quests",
   insufficient_leaf: "You don't have enough Leaf to reroll it",
 } as const;
+
+/** A field of a parsed JSON body, or undefined when the body is not an object or lacks it. */
+function field(body: unknown, key: string): unknown {
+  return typeof body === "object" && body !== null ? Object.getOwnPropertyDescriptor(body, key)?.value : undefined;
+}
 
 /** Reads an event id sent by a client. Undefined means it sent none; null means it sent something that is not one. */
 function eventId(value: string | undefined): number | null | undefined {
@@ -151,10 +157,23 @@ export function meRoutes(
     if (id === null || slot === undefined) {
       return c.json({ code: "invalid_quest", message: "That is not a quest id" }, 400);
     }
+    // The cost the member was shown and agreed to: Leaf charges that or nothing.
+    const agreed = field(await c.req.json().catch(() => undefined), "leaf");
+    if (typeof agreed !== "number" || !Number.isSafeInteger(agreed) || agreed < 0) {
+      return c.json({ code: "invalid_cost", message: 'Send the cost you agreed to as { "leaf": n }' }, 400);
+    }
     const identity = c.var.identity;
     // A quest just finished is paid rather than swapped away.
     await syncOnDemand(services);
-    const result = rerollQuestFor(db, identity.playerId, slot, Number(id[2]), services.now(), DEFAULT_RULES.quests);
+    const result = rerollQuestFor(
+      db,
+      identity.playerId,
+      slot,
+      Number(id[2]),
+      agreed,
+      services.now(),
+      DEFAULT_RULES.quests,
+    );
     if (result.status === "refused") {
       return c.json({ code: result.reason, message: REROLL_REFUSALS[result.reason] }, 409);
     }

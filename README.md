@@ -160,15 +160,20 @@ show one bar.
 Each quest in its `quests` also has `reroll_leaf`: what rerolling it costs now,
 0 when it is free, or null when it can't be rerolled.
 
-`POST /v1/me/quests/{id}/reroll`, with the quest's `id` such as `daily:4`,
-first counts what was just played, as `?sync=1` does, so a quest just finished
-is paid rather than swapped. It answers `{ "leaf", "spent", "quest" }`: the
-balance after it, what it cost, and the new quest in the shape `quests` uses.
-It refuses with 409 and one of these codes, changing nothing:
+`POST /v1/me/quests/{id}/reroll`, with the quest's `id` such as `daily:4` and
+the body `{ "leaf": n }`, the `reroll_leaf` the member was shown and agreed to
+pay, first counts what was just played, as `?sync=1` does, so a quest just
+finished is paid rather than swapped. It answers `{ "leaf", "spent", "quest" }`:
+the balance after it, what it cost, and the new quest in the shape `quests`
+uses. A body without a whole `leaf` of 0 or more gets 400 `invalid_cost`. It
+refuses with 409 and one of these codes, changing nothing:
 
 - `not_current`: that quest is no longer in its slot. It was finished or
   swapped since, or the same request was sent twice.
 - `not_rerollable`: a finished or timed quest.
+- `cost_changed`: rerolling it costs something other than `leaf` now, such as
+  after another reroll of the slot today. Leaf never charges more, or less,
+  than the member agreed to.
 - `insufficient_leaf`: the balance doesn't cover the cost.
 
 Its `timed` says when the open timed quest ends (`ends_at`, null between
@@ -177,6 +182,22 @@ windows) and when the next one opens (`next_at`).
 `GET /v1/me/quests?sync=1` reads the credit feed first, at most once every 15
 seconds, so a raid that just finished shows up without waiting for the next
 scheduled run.
+
+### The contract clients test against
+
+`contracts/leaf-api-v1.json` holds what the routes above answer for one member
+after a day of play: raids, a defence, a war, a milestone, a level, finished
+quests and a reroll. `apps/api/test/contract.test.ts` makes those calls on the
+real routes and fails when the answers differ from the file, so the file is
+always what Leaf sends, including the order of each list.
+
+Clients test against a copy of the file instead of answers written by hand,
+which is how the mod once read `GET /v1/me/events`, oldest first, as newest
+first. After changing what a route sends:
+
+1. `cd apps/api && WRITE_CONTRACTS=1 bun test test/contract.test.ts` writes it again.
+2. Copy it to the mod's `src/test/resources/contracts/leaf-api-v1.json` and run
+   the mod's tests, which read it.
 
 ### Events
 
@@ -199,8 +220,10 @@ war over a territory in Sequoia's claim, a defence, which pays twice as much per
 war point; `false` for an FFA war or a snipe; and left out when the backend
 could not tell.
 
-`GET /v1/me/events` answers `{ "events": [{ "id", "type", "created_at", "data" }] }`.
-With `?after=<id>` it lists up to 100 events after that id; without, the newest 50.
+`GET /v1/me/events` answers `{ "events": [{ "id", "type", "created_at", "data" }] }`,
+oldest first. With `?after=<id>` it lists up to 100 events after that id; without,
+the newest 50. Ids only grow, so a client that orders events itself should order
+them by id.
 
 `GET /v1/me/events/stream` is a server-sent event stream. Every message has
 the event's id as `id`, its type as `event`, and the same JSON object as above
