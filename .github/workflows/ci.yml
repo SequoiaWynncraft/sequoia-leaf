@@ -38,6 +38,28 @@ jobs:
 
   # Checks that the infrastructure configuration is well-formed. It does not
   # compare it with production: that needs credentials.
+  # Clients test against a copy of contracts/leaf-api-v1.json. A copy that drifts from ours tests
+  # nothing true, as when the mod read GET /v1/me/events backwards. The mod is public, so this
+  # compares ours with the copy on its main branch; change the mod's copy with or before ours.
+  contract-copies:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Compare the contract with Sequoia-mod's copy
+        run: |
+          copy="$RUNNER_TEMP/leaf-api-v1.json"
+          curl --fail --silent --show-error --location --retry 3 --output "$copy" \
+            https://raw.githubusercontent.com/SequoiaWynncraft/Sequoia-mod/main/src/test/resources/contracts/leaf-api-v1.json
+          if ! cmp --silent contracts/leaf-api-v1.json "$copy"; then
+            echo "::error file=contracts/leaf-api-v1.json::Sequoia-mod's copy differs; copy this file to its src/test/resources/contracts/"
+            diff <(jq --sort-keys . contracts/leaf-api-v1.json) <(jq --sort-keys . "$copy") | head -50
+            exit 1
+          fi
+          echo "Sequoia-mod's copy matches ($(sha256sum < contracts/leaf-api-v1.json | cut -c1-16))"
+
   infra:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

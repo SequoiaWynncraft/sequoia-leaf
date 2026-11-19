@@ -199,6 +199,10 @@ first. After changing what a route sends:
 2. Copy it to the mod's `src/test/resources/contracts/leaf-api-v1.json` and run
    the mod's tests, which read it.
 
+CI's `contract-copies` job compares the file with the copy on Sequoia-mod's
+`main` and fails while they differ, so merge the mod's copy with or before the
+change here.
+
 ### Events
 
 An event is something a client would want to show when it happens. Each one is
