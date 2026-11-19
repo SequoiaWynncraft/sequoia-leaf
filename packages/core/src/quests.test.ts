@@ -410,6 +410,7 @@ describe("timed quests", () => {
     expect(completed).toEqual([]);
     expect(book.latest.repeatable).toMatchObject({ sequence: 4, expiresAt: WEDNESDAY_NOON });
     expect(currentQuests(book, WEDNESDAY_NOON + HOUR).map((quest) => quest.slot)).toEqual(["timed"]);
+    expect(currentQuests(book, WEDNESDAY_NOON - 1).some((quest) => quest.slot === "repeatable")).toBe(false);
   });
 
   it("open no window before the first, even for an activity reported late", () => {

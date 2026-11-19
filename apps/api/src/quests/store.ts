@@ -176,7 +176,7 @@ export function saveQuestStep(db: Database, playerId: PlayerId, step: QuestStep,
       `INSERT INTO quests (player_id, ${QUEST_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (player_id, slot, sequence) DO UPDATE
        SET progress = excluded.progress, alternative_progress = excluded.alternative_progress,
-           completed_at = excluded.completed_at`,
+           expires_at = excluded.expires_at, completed_at = excluded.completed_at`,
     ).run(
       playerId,
       quest.slot,
