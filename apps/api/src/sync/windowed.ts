@@ -61,7 +61,7 @@ export const windowedSync = <T, E, R, RW>(
     const state = SqlSchema.findOneOption({
       Request: Schema.String,
       Result: SyncState,
-      execute: (feed) => sql`SELECT started_at, cursor FROM sync_state WHERE name = ${feed}`,
+      execute: (feed) => sql`SELECT started_at AS startedAt, cursor FROM sync_state WHERE name = ${feed}`,
     });
     // The scheduled run and a player's request can overlap while one of them
     // waits for the feed; the lease lets only one of them through.

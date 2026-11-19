@@ -20,19 +20,8 @@ import { HttpApiBuilder, HttpApiError } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 
 import { CurrentIdentity, LeafApi, RerollBodyErrors, Session, Unexpected } from "../api/api.ts";
-import {
-  CostChanged,
-  IdentityUnavailable,
-  InsufficientLeaf,
-  InternalError,
-  InvalidAfter,
-  InvalidCost,
-  InvalidQuest,
-  NotAMember,
-  NotCurrent,
-  NotRerollable,
-  Unauthorized,
-} from "../api/errors.ts";
+import { IdentityUnavailable, InternalError, Invalid, NotAMember, Refused, Unauthorized } from "../api/errors.ts";
+import type * as Body from "../api/schemas.ts";
 import { Identities } from "../auth/session.ts";
 import { syncOnDemand } from "../earning/run.ts";
 import { eventJsonText, Events, type StoredEvent } from "../events/store.ts";
@@ -62,13 +51,13 @@ export const StreamTuning = Context.Reference<StreamTuning>("leaf/StreamTuning",
   defaultValue: () => ({ pollMs: 2_000, heartbeatMs: 20_000, maxMs: 15 * 60_000 }),
 });
 
-/** Why Leaf refused a reroll, as the error each reason answers with. */
-const REROLL_REFUSED = {
-  not_current: () => new NotCurrent({ message: "That quest is no longer in its slot. Refresh your quests" }),
-  not_rerollable: () => new NotRerollable({ message: "That quest can't be rerolled" }),
-  cost_changed: () => new CostChanged({ message: "Rerolling it costs something else now. Refresh your quests" }),
-  insufficient_leaf: () => new InsufficientLeaf({ message: "You don't have enough Leaf to reroll it" }),
-};
+/** What a member is told when Leaf refuses a reroll, by the refusal's code. */
+const REFUSALS = {
+  not_current: "That quest is no longer in its slot. Refresh your quests",
+  not_rerollable: "That quest can't be rerolled",
+  cost_changed: "Rerolling it costs something else now. Refresh your quests",
+  insufficient_leaf: "You don't have enough Leaf to reroll it",
+} as const;
 
 /** A quest in progress as `/quests` sends it: with `reroll_leaf`, what rerolling it costs now, or null when it can't be. */
 function questOnOffer(quest: Quest, rerollsToday: ReadonlyMap<QuestSlot, number>) {
@@ -99,17 +88,20 @@ export const SessionLive = Layer.effect(
       bearer: Effect.fnUntraced(function* (httpEffect, { credential }) {
         const token = Redacted.value(credential);
         if (token === "") {
-          return yield* new Unauthorized({ message: "Sign in with your Sequoia account" });
+          return yield* new Unauthorized({ code: "unauthorized", message: "Sign in with your Sequoia account" });
         }
         const result = yield* identities.identify(token);
         if (result.status === "unauthorized") {
-          return yield* new Unauthorized({ message: "Your session has expired. Sign in again" });
+          return yield* new Unauthorized({ code: "unauthorized", message: "Your session has expired. Sign in again" });
         }
         if (result.status === "unavailable") {
-          return yield* new IdentityUnavailable({ message: "Could not check your session. Try again shortly" });
+          return yield* new IdentityUnavailable({
+            code: "identity_unavailable",
+            message: "Could not check your session. Try again shortly",
+          });
         }
         if (result.identity.guildRank === null && !result.identity.admin) {
-          return yield* new NotAMember({ message: "Leaf is for current Sequoia members" });
+          return yield* new NotAMember({ code: "not_a_member", message: "Leaf is for current Sequoia members" });
         }
         return yield* Effect.provideService(httpEffect, CurrentIdentity, result.identity);
       }),
@@ -122,7 +114,7 @@ export const RerollBodyErrorsLive = Layer.succeed(RerollBodyErrors)((httpEffect)
   Effect.catchIf(
     httpEffect,
     (error) => HttpApiError.HttpApiSchemaError.is(error) && error.kind === "Payload",
-    () => Effect.fail(new InvalidCost({ message: 'Send the cost you agreed to as { "leaf": n }' })),
+    () => Effect.fail(new Invalid({ code: "invalid_cost", message: 'Send the cost you agreed to as { "leaf": n }' })),
   ),
 );
 
@@ -130,145 +122,152 @@ export const RerollBodyErrorsLive = Layer.succeed(RerollBodyErrors)((httpEffect)
 export const UnexpectedLive = Layer.succeed(Unexpected)((httpEffect) =>
   Effect.catchDefect(httpEffect, (defect) =>
     Effect.logError("An unexpected error answered 500", defect).pipe(
-      Effect.andThen(Effect.fail(new InternalError({ message: "Something went wrong" }))),
+      Effect.andThen(Effect.fail(new InternalError({ code: "internal_error", message: "Something went wrong" }))),
     ),
   ),
 );
+
+// Handlers answer with their JSON themselves. `satisfies` checks each body against
+// the endpoint's schema when the code compiles, so it is not checked again, field
+// by field, on every request. The schemas still describe the API in `/openapi.json`.
+// The services they use are looked up once, when the handlers are built.
 
 const SystemHandlers = HttpApiBuilder.group(LeafApi, "system", (handlers) =>
-  handlers.handle("healthz", () =>
-    Effect.gen(function* () {
-      // Healthy means the database answers, since nothing works without it.
-      const sql = yield* SqlClient.SqlClient;
-      yield* sql`SELECT 1`.pipe(Effect.orDie);
-      return { status: "ok" as const };
-    }),
-  ),
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    // Healthy means the database answers, since nothing works without it.
+    const healthy = sql`SELECT 1`.pipe(
+      Effect.orDie,
+      Effect.as(HttpServerResponse.jsonUnsafe({ status: "ok" } satisfies typeof Body.Health.Type)),
+    );
+    return handlers.handle("healthz", () => healthy);
+  }),
 );
 
+const invalidAfter = new Invalid({ code: "invalid_after", message: "after must be an event id" });
+
 const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
-  handlers
-    .handle("account", () =>
-      Effect.gen(function* () {
-        const identity = yield* CurrentIdentity;
-        const account = yield* (yield* Ledger).account(identity.playerId);
-        const level = levelForXp(account.xp, DEFAULT_RULES.levels);
-        return {
-          player: { id: identity.playerId, username: identity.username },
-          leaf: account.balance,
-          xp: account.xp,
-          level: { number: level.level, xp_into_level: level.xpIntoLevel, xp_for_next_level: level.xpForNextLevel },
-        };
-      }),
-    )
-    .handle("quests", ({ query }) =>
-      Effect.gen(function* () {
-        const identity = yield* CurrentIdentity;
-        if (query.sync === "1") {
-          yield* syncOnDemand;
-        }
-        const quests = yield* Quests;
-        const now = yield* Clock.currentTimeMillis;
-        const stored = yield* quests.book(identity.playerId);
-        const completed = yield* quests.completedSince(identity.playerId, now - RECENTLY_COMPLETED_MS);
-        // The stored book is as of the player's last activity or reroll. Bringing it
-        // up to now is a pure calculation; only the credit sync and rerolls write quests.
-        const { book } = refreshQuests(stored ?? openQuestBook(now), identity.playerId, now, DEFAULT_RULES.quests);
-        const nextCharge = nextDailyChargeAt(book, DEFAULT_RULES.quests);
-        const timedRules = DEFAULT_RULES.quests.timed;
-        const window = timedRules === undefined ? undefined : timedWindowAt(now, timedRules);
-        const rerolls = yield* quests.rerollsOnDay(identity.playerId, now);
-        return {
-          daily: {
-            charges: book.dailyCharges,
-            charge_cap: DEFAULT_RULES.quests.dailyChargeCap,
-            next_charge_at: nextCharge === null ? null : iso(nextCharge),
-          },
-          timed:
-            timedRules === undefined
-              ? null
-              : {
-                  ends_at: window === undefined ? null : iso(window.end),
-                  next_at: iso(nextTimedWindowAt(now, timedRules)),
-                },
-          quests: currentQuests(book, now).map((quest) => questOnOffer(quest, rerolls)),
-          recently_completed: completed.map(questJson),
-        };
-      }),
-    )
-    // Swaps a quest in progress for another. The id is the one `/quests` gave,
-    // so a request sent twice swaps once.
-    .handle("reroll", ({ params, payload }) =>
-      Effect.gen(function* () {
-        const id = /^([a-z]+):(\d{1,9})$/.exec(params.id);
-        const slot = QUEST_SLOTS.find((each): each is QuestSlot => each === id?.[1]);
-        if (id === null || slot === undefined) {
-          return yield* new InvalidQuest({ message: "That is not a quest id" });
-        }
-        const identity = yield* CurrentIdentity;
-        // A quest just finished is paid rather than swapped away.
-        yield* syncOnDemand;
-        const now = yield* Clock.currentTimeMillis;
-        const result = yield* rerollQuestFor(
-          identity.playerId,
-          slot,
-          Number(id[2]),
-          payload.leaf,
-          now,
-          DEFAULT_RULES.quests,
-        );
-        if (result.status === "refused") {
-          return yield* REROLL_REFUSED[result.reason]();
-        }
-        return {
-          leaf: result.balance,
-          spent: result.spent,
-          quest: questOnOffer(result.quest, yield* (yield* Quests).rerollsOnDay(identity.playerId, now)),
-        };
-      }),
-    )
-    .handle("events", ({ query }) =>
-      Effect.gen(function* () {
-        const after = eventId(query.after);
-        if (after === null) {
-          return yield* new InvalidAfter({ message: "after must be an event id" });
-        }
-        const identity = yield* CurrentIdentity;
-        const store = yield* Events;
-        const events =
-          after === undefined
-            ? yield* store.latest(identity.playerId, LATEST_EVENTS)
-            : yield* store.after(identity.playerId, after, EVENT_PAGE);
-        return {
-          events: events.map((event) => ({
-            id: event.id,
-            type: event.type,
-            created_at: iso(event.createdAt),
-            data: JSON.parse(event.data) as unknown,
-          })),
-        };
-      }),
-    )
-    // Server-sent events. A client that reconnects sends the last id it saw as
-    // `Last-Event-ID` (browsers do this by themselves) and gets what it missed;
-    // a client that sends none gets only what happens from now on.
-    .handle("stream", ({ query }) =>
-      Effect.gen(function* () {
-        const request = yield* HttpServerRequest.HttpServerRequest;
-        const resumeFrom = eventId(request.headers["last-event-id"] ?? query.after);
-        if (resumeFrom === null) {
-          return yield* new InvalidAfter({ message: "after must be an event id" });
-        }
-        const identity = yield* CurrentIdentity;
-        const events = yield* Events;
-        const tuning = yield* StreamTuning;
-        const from = resumeFrom ?? (yield* events.latestId);
-        return HttpServerResponse.stream(eventStream(events, identity.playerId, from, tuning), {
-          contentType: "text/event-stream",
-          headers: { "cache-control": "no-cache", connection: "keep-alive" },
-        });
-      }),
-    ),
+  Effect.gen(function* () {
+    const ledger = yield* Ledger;
+    const quests = yield* Quests;
+    const events = yield* Events;
+    return (
+      handlers
+        .handle("account", () =>
+          Effect.gen(function* () {
+            const identity = yield* CurrentIdentity;
+            const account = yield* ledger.account(identity.playerId);
+            const level = levelForXp(account.xp, DEFAULT_RULES.levels);
+            return HttpServerResponse.jsonUnsafe({
+              player: { id: identity.playerId, username: identity.username },
+              leaf: account.balance,
+              xp: account.xp,
+              level: { number: level.level, xp_into_level: level.xpIntoLevel, xp_for_next_level: level.xpForNextLevel },
+            } satisfies typeof Body.Me.Type);
+          }),
+        )
+        .handle("quests", ({ query }) =>
+          Effect.gen(function* () {
+            const { playerId } = yield* CurrentIdentity;
+            if (query.sync === "1") {
+              yield* syncOnDemand;
+            }
+            const now = yield* Clock.currentTimeMillis;
+            const stored = yield* quests.book(playerId);
+            const completed = yield* quests.completedSince(playerId, now - RECENTLY_COMPLETED_MS);
+            const rerolls = yield* quests.rerollsOnDay(playerId, now);
+            // The stored book is as of the player's last activity or reroll. Bringing it
+            // up to now is a pure calculation; only the credit sync and rerolls write quests.
+            const { book } = refreshQuests(stored ?? openQuestBook(now), playerId, now, DEFAULT_RULES.quests);
+            const nextCharge = nextDailyChargeAt(book, DEFAULT_RULES.quests);
+            const timedRules = DEFAULT_RULES.quests.timed;
+            const window = timedRules === undefined ? undefined : timedWindowAt(now, timedRules);
+            return HttpServerResponse.jsonUnsafe({
+              daily: {
+                charges: book.dailyCharges,
+                charge_cap: DEFAULT_RULES.quests.dailyChargeCap,
+                next_charge_at: nextCharge === null ? null : iso(nextCharge),
+              },
+              timed:
+                timedRules === undefined
+                  ? null
+                  : {
+                      ends_at: window === undefined ? null : iso(window.end),
+                      next_at: iso(nextTimedWindowAt(now, timedRules)),
+                    },
+              quests: currentQuests(book, now).map((quest) => questOnOffer(quest, rerolls)),
+              recently_completed: completed.map(questJson),
+            } satisfies typeof Body.Quests.Type);
+          }),
+        )
+        // Swaps a quest in progress for another. The id is the one `/quests` gave,
+        // so a request sent twice swaps once.
+        .handle("reroll", ({ params, payload }) =>
+          Effect.gen(function* () {
+            const id = /^([a-z]+):(\d{1,9})$/.exec(params.id);
+            const slot = QUEST_SLOTS.find((each): each is QuestSlot => each === id?.[1]);
+            if (id === null || slot === undefined) {
+              return yield* new Invalid({ code: "invalid_quest", message: "That is not a quest id" });
+            }
+            const { playerId } = yield* CurrentIdentity;
+            // A quest just finished is paid rather than swapped away.
+            yield* syncOnDemand;
+            const now = yield* Clock.currentTimeMillis;
+            const result = yield* rerollQuestFor(
+              playerId,
+              slot,
+              Number(id[2]),
+              payload.leaf,
+              now,
+              DEFAULT_RULES.quests,
+            );
+            if (result.status === "refused") {
+              return yield* new Refused({ code: result.reason, message: REFUSALS[result.reason] });
+            }
+            return HttpServerResponse.jsonUnsafe({
+              leaf: result.balance,
+              spent: result.spent,
+              quest: questOnOffer(result.quest, yield* quests.rerollsOnDay(playerId, now)),
+            } satisfies typeof Body.Rerolled.Type);
+          }),
+        )
+        .handle("events", ({ query }) =>
+          Effect.gen(function* () {
+            const after = eventId(query.after);
+            if (after === null) {
+              return yield* invalidAfter;
+            }
+            const { playerId } = yield* CurrentIdentity;
+            const found =
+              after === undefined
+                ? yield* events.latest(playerId, LATEST_EVENTS)
+                : yield* events.after(playerId, after, EVENT_PAGE);
+            // Each event's details are stored as the JSON text they are sent as, so they are spliced in, not parsed.
+            return HttpServerResponse.text(`{"events":[${found.map(eventJsonText).join(",")}]}`, {
+              contentType: "application/json",
+            });
+          }),
+        )
+        // Server-sent events. A client that reconnects sends the last id it saw as
+        // `Last-Event-ID` (browsers do this by themselves) and gets what it missed;
+        // a client that sends none gets only what happens from now on.
+        .handle("stream", ({ query }) =>
+          Effect.gen(function* () {
+            const request = yield* HttpServerRequest.HttpServerRequest;
+            const resumeFrom = eventId(request.headers["last-event-id"] ?? query.after);
+            if (resumeFrom === null) {
+              return yield* invalidAfter;
+            }
+            const { playerId } = yield* CurrentIdentity;
+            const from = resumeFrom ?? (yield* events.latestId);
+            return HttpServerResponse.stream(eventStream(events, playerId, from, yield* StreamTuning), {
+              contentType: "text/event-stream",
+              headers: { "cache-control": "no-cache", connection: "keep-alive" },
+            });
+          }),
+        )
+    );
+  }),
 );
 
 /**

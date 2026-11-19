@@ -1,25 +1,15 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 
-import {
-  type Activity,
-  DEFAULT_RULES,
-  leaf,
-  type LedgerEntry,
-  type PlayerId,
-  playerId,
-  type Rules,
-} from "@sequoia-leaf/core";
-import { Effect } from "effect";
+import { DEFAULT_RULES, leaf, type LedgerEntry, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
 
 import { type CreditSource, syncCredits } from "../src/earning/sync.ts";
 import { Events } from "../src/events/store.ts";
 import { Ledger } from "../src/ledger/store.ts";
 import { payLevels, payMissedLevels } from "../src/levels/pay.ts";
-import { testLeaf } from "./support.ts";
+import { feed, MINUTE, noNetwork, raid, testLeaf } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const bob = playerId("00000000-0000-4000-8000-00000000000b");
-const MINUTE = 60_000;
 /** Wednesday 4 November 2026, 12:00 UTC. */
 const T0 = Date.UTC(2026, 10, 4, 12);
 
@@ -29,36 +19,19 @@ const rules: Rules = { ...DEFAULT_RULES, quests: { ...DEFAULT_RULES.quests, temp
 let ledger: ReturnType<typeof testLeaf>;
 
 beforeEach(() => {
-  ledger = testLeaf({ now: T0 }, () => Promise.reject(new Error("No network in this test")));
+  ledger = testLeaf({ now: T0 }, noNetwork);
 });
-
-function raid(id: number, player: PlayerId, occurredAt: number, seasonRating: number): Activity {
-  return {
-    kind: "raid",
-    sourceKey: `raid:${id}:${player}`,
-    playerId: player,
-    occurredAt,
-    seasonRating,
-    raid: "tna",
-    raidName: "The Nameless Anomaly",
-  };
-}
-
-function feed(activities: Activity[]): CreditSource {
-  return (from, to) =>
-    Effect.succeed(activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to));
-}
 
 /** The player's level entries, payouts and their reversals, newest first. */
 async function levelEntries(player: PlayerId): Promise<[string, number, number][]> {
-  const rows = await ledger.query<{ idempotencyKey: string; balanceDelta: number; xpDelta: number }>(
+  const rows = await ledger.query<{ idempotency_key: string; balance_delta: number; xp_delta: number }>(
     (sql) => sql`
       SELECT idempotency_key, balance_delta, xp_delta FROM ledger_entries
       WHERE player_id = ${player} AND origin = 'level'
       ORDER BY id DESC
     `,
   );
-  return rows.map((row) => [row.idempotencyKey, row.balanceDelta, row.xpDelta]);
+  return rows.map((row) => [row.idempotency_key, row.balance_delta, row.xp_delta]);
 }
 
 async function events(player: PlayerId): Promise<{ type: string; data: unknown }[]> {

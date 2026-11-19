@@ -4,32 +4,18 @@ import { type Activity, DEFAULT_RULES, type PlayerId, playerId } from "@sequoia-
 import { Effect } from "effect";
 
 import { type CreditSource, RECENT_OVERLAP_MS, SETTLE_MS, syncCredits, type SyncMode } from "../src/earning/sync.ts";
-import { rejection, testLeaf } from "./support.ts";
+import { HOUR, MINUTE, noNetwork, raid, rejection, testLeaf } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const bob = playerId("00000000-0000-4000-8000-00000000000b");
-const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
 /** The first sync runs at T0, so crediting starts at T0. */
 const T0 = 1_763_000_000_000;
 
 let leaf: ReturnType<typeof testLeaf>;
 
 beforeEach(() => {
-  leaf = testLeaf({ now: T0 }, () => Promise.reject(new Error("No network in this test")));
+  leaf = testLeaf({ now: T0 }, noNetwork);
 });
-
-function raid(id: number, player: PlayerId, occurredAt: number, seasonRating = 110): Activity {
-  return {
-    kind: "raid",
-    sourceKey: `raid:${id}:${player}`,
-    playerId: player,
-    occurredAt,
-    seasonRating,
-    raid: "tna",
-    raidName: "The Nameless Anomaly",
-  };
-}
 
 function war(id: number, player: PlayerId, occurredAt: number, warPoints: number, inClaim?: boolean): Activity {
   const activity: Activity = {
@@ -62,10 +48,10 @@ function sync(source: CreditSource<Error>, now: number, mode: SyncMode = "recent
 }
 
 async function recordedKeys(): Promise<string[]> {
-  const rows = await leaf.query<{ sourceKey: string }>(
+  const rows = await leaf.query<{ source_key: string }>(
     (sql) => sql`SELECT source_key FROM activities ORDER BY occurred_at, source_key`,
   );
-  return rows.map((row) => row.sourceKey);
+  return rows.map((row) => row.source_key);
 }
 
 /** A player's ledger entries, newest first. */
@@ -94,10 +80,10 @@ describe("syncCredits", () => {
     expect(result).toEqual({ status: "synced", recorded: 1, leafPaid: 110 });
     expect(await leaf.account(alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
     const [entry] = await entries(alice);
-    expect(entry).toMatchObject({ kind: "earn", origin: "raid", idempotencyKey: `raid:1:${alice}` });
+    expect(entry).toMatchObject({ kind: "earn", origin: "raid", idempotency_key: `raid:1:${alice}` });
     const rows = await leaf.query((sql) => sql`SELECT kind, raid, detail, season_rating, occurred_at FROM activities`);
     expect(rows).toEqual([
-      { kind: "raid", raid: "tna", detail: "The Nameless Anomaly", seasonRating: 110, occurredAt: T0 + MINUTE },
+      { kind: "raid", raid: "tna", detail: "The Nameless Anomaly", season_rating: 110, occurred_at: T0 + MINUTE },
     ]);
   });
 
@@ -109,7 +95,7 @@ describe("syncCredits", () => {
 
     expect(await leaf.account(alice)).toEqual({ playerId: alice, balance: 31, xp: 31 });
     const [entry] = await entries(alice);
-    expect(entry).toMatchObject({ origin: "war", idempotencyKey: `war:7:${alice}` });
+    expect(entry).toMatchObject({ origin: "war", idempotency_key: `war:7:${alice}` });
   });
 
   it("pays a defence of Sequoia's claim twice per point, and says so in its event", async () => {
@@ -121,8 +107,8 @@ describe("syncCredits", () => {
     expect((await leaf.account(alice)).balance).toBe(146);
     expect((await leaf.account(bob)).balance).toBe(73);
     expect(await leaf.query((sql) => sql`SELECT in_claim FROM activities ORDER BY source_key`)).toEqual([
-      { inClaim: 1 },
-      { inClaim: 0 },
+      { in_claim: 1 },
+      { in_claim: 0 },
     ]);
     const events = (
       await leaf.query<{ data: string }>((sql) => sql`SELECT data FROM events WHERE type = 'leaf_earned' ORDER BY id`)
@@ -140,7 +126,7 @@ describe("syncCredits", () => {
     await sync(source, T0 + 5 * MINUTE);
 
     expect((await leaf.account(alice)).balance).toBe(40);
-    expect(await leaf.query((sql) => sql`SELECT in_claim FROM activities`)).toEqual([{ inClaim: null }]);
+    expect(await leaf.query((sql) => sql`SELECT in_claim FROM activities`)).toEqual([{ in_claim: null }]);
     const [event] = await leaf.query<{ data: string }>(
       (sql) => sql`SELECT data FROM events WHERE type = 'leaf_earned'`,
     );

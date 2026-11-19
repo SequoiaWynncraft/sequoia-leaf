@@ -1,4 +1,4 @@
-import type { PlayerId, Posting } from "@sequoia-leaf/core";
+import type { Activity, PlayerId, Posting } from "@sequoia-leaf/core";
 import { Clock, ConfigProvider, Effect, Layer, ManagedRuntime, Redacted, References } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -6,7 +6,12 @@ import { SqlClient } from "effect/sql";
 import { routerConfig, Routes, Stores } from "../src/app.ts";
 import { AppConfig, type Settings, settings } from "../src/config.ts";
 import { databaseAt } from "../src/db.ts";
+import type { CreditSource } from "../src/earning/sync.ts";
 import { Ledger } from "../src/ledger/store.ts";
+
+export const MINUTE = 60_000;
+export const HOUR = 60 * MINUTE;
+export const DAY = 24 * HOUR;
 
 /** A clock that tests set by hand. */
 export interface TestClock {
@@ -15,6 +20,28 @@ export interface TestClock {
 
 /** A stand-in for the network: answers each request Leaf makes. */
 export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
+
+/** A network that answers nothing, for tests that make no calls. */
+export const noNetwork: Fetcher = () => Promise.reject(new Error("No network in this test"));
+
+/** A raid `player` took part in, as the credit feed reports it. */
+export function raid(id: number, player: PlayerId, occurredAt: number, seasonRating = 110): Activity {
+  return {
+    kind: "raid",
+    sourceKey: `raid:${id}:${player}`,
+    playerId: player,
+    occurredAt,
+    seasonRating,
+    raid: "tna",
+    raidName: "The Nameless Anomaly",
+  };
+}
+
+/** A credit feed that answers each window with the activities inside it. */
+export function feed(activities: readonly Activity[]): CreditSource {
+  return (from, to) =>
+    Effect.succeed(activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to));
+}
 
 /** Leaf's settings as these environment variables give them, or fails with why they are invalid. */
 export function readSettings(env: Record<string, string>): Settings {
@@ -81,7 +108,7 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     account: (playerId: PlayerId) => runtime.runPromise(Ledger.use((ledger) => ledger.account(playerId))),
     /** Posts one entry to the ledger, as setup for a test. */
     post: (posting: Posting, now: number) => runtime.runPromise(Ledger.use((ledger) => ledger.post(posting, now))),
-    /** Runs SQL against the database directly, as a script would. Rows come back with camelCase keys. */
+    /** Runs SQL against the database directly, as a script would. */
     query: <A>(statement: (sql: SqlClient.SqlClient) => Effect.Effect<ReadonlyArray<A>, unknown>) =>
       runtime.runPromise(SqlClient.SqlClient.use(statement)),
     /** Closes the database. */

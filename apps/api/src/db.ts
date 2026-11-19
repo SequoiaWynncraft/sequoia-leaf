@@ -12,8 +12,9 @@ const MIGRATIONS = join(import.meta.dir, "..", "migrations");
 /**
  * Before Leaf ran Effect's migrator, it recorded the migrations it applied in
  * `schema_migrations`, by file name. This copies that record into the
- * migrator's table, so the migrator does not apply them again. The old table
- * stays, so the version before this one can still start on the database.
+ * migrator's table, so the migrator does not apply them again. Every backup
+ * taken before 19 November 2026 is such a database, so this is what lets one
+ * be restored. The old table stays, so an older version can still start on it.
  */
 const adoptOldRecord = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -47,8 +48,9 @@ const adoptOldRecord = Effect.gen(function* () {
  * up to date before anything uses it. `:memory:` gives a private, empty one,
  * which is what the tests use.
  *
- * Columns are snake_case in SQL and camelCase in code: rows come back with
- * camelCase keys, and `sql.insert` takes camelCase objects.
+ * Columns are snake_case in SQL and camelCase in code: `sql.insert` takes
+ * camelCase objects, and queries name the columns they read as the code does
+ * (`player_id AS playerId`), which costs nothing per row.
  */
 export const databaseAt = (filename: string) =>
   Layer.effectDiscard(
@@ -61,9 +63,7 @@ export const databaseAt = (filename: string) =>
     }),
   ).pipe(
     Layer.provide(BunServices.layer),
-    Layer.provideMerge(
-      SqliteClient.layer({ filename, transformResultNames: Str.snakeToCamel, transformQueryNames: Str.camelToSnake }),
-    ),
+    Layer.provideMerge(SqliteClient.layer({ filename, transformQueryNames: Str.camelToSnake })),
   );
 
 /** The database file the settings name, its directory created when missing. */

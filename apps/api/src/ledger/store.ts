@@ -55,6 +55,10 @@ const Entry = Schema.Struct({
   createdAt: Schema.Int,
 });
 
+/** The entry columns, named as the code names them. */
+const ENTRY_COLUMNS = `id, player_id AS playerId, kind, balance_delta AS balanceDelta, xp_delta AS xpDelta, origin,
+  idempotency_key AS idempotencyKey, reverses_id AS reversesId, actor, memo, created_at AS createdAt`;
+
 const Totals = Schema.Struct({ balance: Schema.Int, xp: Schema.Int });
 
 /**
@@ -108,7 +112,7 @@ export class Ledger extends Context.Service<
       const byKey = SqlSchema.findOneOption({
         Request: Schema.String,
         Result: Entry,
-        execute: (key) => sql`SELECT * FROM ledger_entries WHERE idempotency_key = ${key}`,
+        execute: (key) => sql`SELECT ${sql.literal(ENTRY_COLUMNS)} FROM ledger_entries WHERE idempotency_key = ${key}`,
       });
       const totals = SqlSchema.findOneOption({
         Request: Schema.String,
@@ -119,7 +123,8 @@ export class Ledger extends Context.Service<
         Request: Schema.Struct({ playerId: Schema.String, source: Schema.String }),
         Result: Schema.Struct({ ...Entry.fields, reversed: Schema.Literals([0, 1]) }),
         execute: ({ playerId, source }) => sql`
-          SELECT *, EXISTS (SELECT 1 FROM ledger_entries AS reversal WHERE reversal.reverses_id = earn.id) AS reversed
+          SELECT ${sql.literal(ENTRY_COLUMNS)},
+                 EXISTS (SELECT 1 FROM ledger_entries AS reversal WHERE reversal.reverses_id = earn.id) AS reversed
           FROM ledger_entries AS earn
           WHERE player_id = ${playerId} AND kind = 'earn' AND origin = ${source}
           ORDER BY id
@@ -127,7 +132,7 @@ export class Ledger extends Context.Service<
       });
 
       const insert = (draft: EntryDraft, now: number) =>
-        sql`INSERT INTO ledger_entries ${sql.insert({ ...draft, createdAt: now })} RETURNING *`.pipe(
+        sql`INSERT INTO ledger_entries ${sql.insert({ ...draft, createdAt: now })} RETURNING ${sql.literal(ENTRY_COLUMNS)}`.pipe(
           Effect.flatMap(([row]) => decodeEntry(row)),
         );
 

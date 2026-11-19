@@ -81,7 +81,7 @@ export class Events extends Context.Service<
         Request: Schema.Struct({ playerId: Schema.String, afterId: Schema.Int, limit: Schema.Int }),
         Result: StoredEvent,
         execute: ({ playerId, afterId, limit }) => sql`
-          SELECT id, type, data, created_at FROM events
+          SELECT id, type, data, created_at AS createdAt FROM events
           WHERE player_id = ${playerId} AND id > ${afterId}
           ORDER BY id LIMIT ${limit}
         `,
@@ -90,7 +90,7 @@ export class Events extends Context.Service<
         Request: Schema.Struct({ playerId: Schema.String, limit: Schema.Int }),
         Result: StoredEvent,
         execute: ({ playerId, limit }) => sql`
-          SELECT id, type, data, created_at FROM events
+          SELECT id, type, data, created_at AS createdAt FROM events
           WHERE player_id = ${playerId}
           ORDER BY id DESC LIMIT ${limit}
         `,

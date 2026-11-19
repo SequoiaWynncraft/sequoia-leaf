@@ -4,7 +4,6 @@ import {
   draftEntry,
   leaf,
   leafForActivity,
-  levelForXp,
   openQuestBook,
   type PlayerId,
   type Quest,
@@ -15,7 +14,7 @@ import { SqlClient, SqlSchema } from "effect/sql";
 
 import { Events } from "../events/store.ts";
 import { Ledger } from "../ledger/store.ts";
-import { payLevels } from "../levels/pay.ts";
+import { levelOf, levelUp } from "../levels/pay.ts";
 import { questJson } from "../quests/json.ts";
 import { Quests } from "../quests/store.ts";
 import { type SyncMode, windowedSync } from "../sync/windowed.ts";
@@ -68,7 +67,7 @@ const recordPlayer = Effect.fnUntraced(function* (
   const quests = yield* Quests;
   const events = yield* Events;
   let leafPaid = 0;
-  const levelBefore = levelForXp((yield* ledger.account(playerId)).xp, rules.levels).level;
+  const levelBefore = yield* levelOf(playerId, rules.levels);
   let book = (yield* quests.book(playerId)) ?? openQuestBook(activities[0]?.occurredAt ?? now);
   const written = new Map<string, Quest>();
   const completed: Quest[] = [];
@@ -115,13 +114,7 @@ const recordPlayer = Effect.fnUntraced(function* (
     }
   }
   yield* quests.saveStep(playerId, { book, written: [...written.values()], completed }, now);
-  const levelAfter = levelForXp((yield* ledger.account(playerId)).xp, rules.levels).level;
-  if (levelAfter > levelBefore) {
-    const levelLeaf = yield* payLevels(playerId, rules.levels, now);
-    leafPaid += levelLeaf;
-    yield* events.insert(playerId, { type: "level_up", data: { level: levelAfter, leaf: levelLeaf } }, now);
-  }
-  return leafPaid;
+  return leafPaid + (yield* levelUp(playerId, levelBefore, rules.levels, now));
 });
 
 /** The activities in [from, to) that are not recorded yet, oldest first, each source key once. */
@@ -131,7 +124,7 @@ const newActivities = Effect.fnUntraced(function* (activities: readonly Activity
     Request: Schema.Struct({ from: Schema.Int, to: Schema.Int }),
     Result: Schema.Struct({ sourceKey: Schema.String }),
     execute: (window) =>
-      sql`SELECT source_key FROM activities WHERE occurred_at >= ${window.from} AND occurred_at < ${window.to}`,
+      sql`SELECT source_key AS sourceKey FROM activities WHERE occurred_at >= ${window.from} AND occurred_at < ${window.to}`,
   });
   const recorded = new Set((yield* recordedKeys({ from, to }).pipe(Effect.orDie)).map((row) => row.sourceKey));
   const unique = new Map<string, Activity>();

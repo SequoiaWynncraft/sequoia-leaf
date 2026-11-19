@@ -1,17 +1,9 @@
-import {
-  type AchievementAward,
-  draftEntry,
-  leaf,
-  leafForAward,
-  levelForXp,
-  type PlayerId,
-  type Rules,
-} from "@sequoia-leaf/core";
+import { type AchievementAward, draftEntry, leaf, leafForAward, type PlayerId, type Rules } from "@sequoia-leaf/core";
 import { Effect } from "effect";
 
 import { Events } from "../events/store.ts";
 import { Ledger } from "../ledger/store.ts";
-import { payLevels } from "../levels/pay.ts";
+import { levelOf, levelUp } from "../levels/pay.ts";
 import { type SyncMode, windowedSync } from "../sync/windowed.ts";
 
 /** Reads the achievement milestones players reached during [from, to), in milliseconds since the Unix epoch. */
@@ -41,7 +33,7 @@ export const syncAchievements = <E, R>(source: AwardSource<E, R>, rules: Rules, 
           continue;
         }
         if (!levelBefore.has(award.playerId)) {
-          levelBefore.set(award.playerId, levelForXp((yield* ledger.account(award.playerId)).xp, rules.levels).level);
+          levelBefore.set(award.playerId, yield* levelOf(award.playerId, rules.levels));
         }
         const entry = yield* ledger.insert(
           draftEntry({
@@ -75,12 +67,7 @@ export const syncAchievements = <E, R>(source: AwardSource<E, R>, rules: Rules, 
         leafPaid += amount;
       }
       for (const [playerId, before] of levelBefore) {
-        const after = levelForXp((yield* ledger.account(playerId)).xp, rules.levels).level;
-        if (after > before) {
-          const levelLeaf = yield* payLevels(playerId, rules.levels, now);
-          leafPaid += levelLeaf;
-          yield* events.insert(playerId, { type: "level_up", data: { level: after, leaf: levelLeaf } }, now);
-        }
+        leafPaid += yield* levelUp(playerId, before, rules.levels, now);
       }
       return { recorded, leafPaid };
     }),
