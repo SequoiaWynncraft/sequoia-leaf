@@ -1,73 +1,77 @@
-import { Database } from "bun:sqlite";
-import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { Context, Effect, Layer } from "effect";
+import { BunServices } from "@effect/platform-bun";
+import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-bun";
+import { Effect, FileSystem, Layer, String as Str } from "effect";
+import { SqlClient } from "effect/sql";
 
 import { AppConfig } from "./config.ts";
 
-const MIGRATIONS_DIR = join(import.meta.dir, "..", "migrations");
+const MIGRATIONS = join(import.meta.dir, "..", "migrations");
 
 /**
- * Opens the database file, creating it and its directory when missing, and
- * brings its schema up to date. `:memory:` opens a private empty database,
- * which is what the tests use.
+ * Before Leaf ran Effect's migrator, it recorded the migrations it applied in
+ * `schema_migrations`, by file name. This copies that record into the
+ * migrator's table, once, so the migrator does not apply them again.
  */
-export function openDatabase(path: string): Database {
-  if (path !== ":memory:") {
-    mkdirSync(dirname(path), { recursive: true });
+const adoptOldRecord = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const old = yield* sql`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'`;
+  if (old.length === 0) {
+    return;
   }
-  const db = new Database(path, { create: true });
-  // Readers do not block the writer, and a snapshot can be taken while serving.
-  db.run("PRAGMA journal_mode = WAL");
-  db.run("PRAGMA foreign_keys = ON");
-  db.run("PRAGMA busy_timeout = 5000");
-  migrate(db);
-  return db;
-}
-
-/**
- * Applies the migrations that have not run yet, in file name order, each in
- * its own transaction. Returns the names of the ones it applied.
- */
-export function migrate(db: Database, directory: string = MIGRATIONS_DIR): string[] {
-  db.run(
-    "CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL) STRICT, WITHOUT ROWID",
-  );
-  const applied = new Set(
-    db
-      .query<{ name: string }, []>("SELECT name FROM schema_migrations")
-      .all()
-      .map((row) => row.name),
-  );
-  const pending = readdirSync(directory)
-    .filter((name) => name.endsWith(".sql") && !applied.has(name))
-    .toSorted((a, b) => a.localeCompare(b));
-  for (const name of pending) {
-    const sql = readFileSync(join(directory, name), "utf8");
-    db.transaction(() => {
-      db.run(sql);
-      db.query("INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)").run(name, Date.now());
-    })();
-  }
-  return pending;
-}
-
-/**
- * The database, open for the life of the app and closed when it stops, which
- * folds the write-ahead log back in. Its calls are synchronous: the stores take
- * it as it is.
- */
-export class Db extends Context.Service<Db, Database>()("leaf/Db") {
-  /** The file the settings name. */
-  static readonly layer = Layer.effect(
-    Db,
+  yield* sql.withTransaction(
     Effect.gen(function* () {
-      const { databasePath } = yield* AppConfig;
-      return yield* Effect.acquireRelease(
-        Effect.sync(() => openDatabase(databasePath)),
-        (db) => Effect.sync(() => db.close()),
-      );
+      // The table the migrator makes for SQLite; it leaves one that exists alone.
+      yield* sql`
+        CREATE TABLE IF NOT EXISTS effect_sql_migrations (
+          migration_id integer PRIMARY KEY NOT NULL,
+          created_at datetime NOT NULL DEFAULT current_timestamp,
+          name VARCHAR(255) NOT NULL
+        )
+      `;
+      // `0007_war_claim.sql` is migration 7, `war_claim`.
+      yield* sql`
+        INSERT INTO effect_sql_migrations (migration_id, name, created_at)
+        SELECT CAST(substr(name, 1, 4) AS INTEGER), substr(name, 6, length(name) - 9),
+               datetime(applied_at / 1000, 'unixepoch')
+        FROM schema_migrations
+      `;
+      yield* sql`DROP TABLE schema_migrations`;
     }),
   );
-}
+});
+
+/**
+ * A SQLite database, open for the life of the layer, with its schema brought
+ * up to date before anything uses it. `:memory:` gives a private, empty one,
+ * which is what the tests use.
+ *
+ * Columns are snake_case in SQL and camelCase in code: rows come back with
+ * camelCase keys, and `sql.insert` takes camelCase objects.
+ */
+export const databaseAt = (filename: string) =>
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      // Off by default, for each connection. A reversal references the entry it undoes.
+      yield* sql`PRAGMA foreign_keys = ON`;
+      yield* adoptOldRecord;
+      yield* SqliteMigrator.run({ loader: SqliteMigrator.fromFileSystem(MIGRATIONS) });
+    }),
+  ).pipe(
+    Layer.provide(BunServices.layer),
+    Layer.provideMerge(
+      SqliteClient.layer({ filename, transformResultNames: Str.snakeToCamel, transformQueryNames: Str.camelToSnake }),
+    ),
+  );
+
+/** The database file the settings name, its directory created when missing. */
+export const Database = Layer.unwrap(
+  Effect.gen(function* () {
+    const { databasePath } = yield* AppConfig;
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.makeDirectory(dirname(databasePath), { recursive: true });
+    return databaseAt(databasePath);
+  }),
+).pipe(Layer.provide(BunServices.layer));

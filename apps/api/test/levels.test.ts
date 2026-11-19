@@ -1,4 +1,3 @@
-import type { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
 
 import {
@@ -13,10 +12,10 @@ import {
 import { Effect } from "effect";
 
 import { type CreditSource, syncCredits } from "../src/earning/sync.ts";
-import { listEventsAfter } from "../src/events/store.ts";
-import { getAccount, listEntries, postEntry } from "../src/ledger/store.ts";
+import { Events } from "../src/events/store.ts";
+import { Ledger } from "../src/ledger/store.ts";
 import { payLevels, payMissedLevels } from "../src/levels/pay.ts";
-import { testDatabase } from "./support.ts";
+import { testLeaf } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const bob = playerId("00000000-0000-4000-8000-00000000000b");
@@ -27,10 +26,10 @@ const T0 = Date.UTC(2026, 10, 4, 12);
 /** No quests, so only raids and levels pay. Level 2 takes 1,000 XP and pays 100 Leaf, level 3 1,250 more and 125. */
 const rules: Rules = { ...DEFAULT_RULES, quests: { ...DEFAULT_RULES.quests, templates: [] } };
 
-let db: Database;
+let ledger: ReturnType<typeof testLeaf>;
 
 beforeEach(() => {
-  db = testDatabase();
+  ledger = testLeaf({ now: T0 }, () => Promise.reject(new Error("No network in this test")));
 });
 
 function raid(id: number, player: PlayerId, occurredAt: number, seasonRating: number): Activity {
@@ -50,20 +49,30 @@ function feed(activities: Activity[]): CreditSource {
     Effect.succeed(activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to));
 }
 
-function levelEntries(player: PlayerId): [string, number, number][] {
-  return listEntries(db, player, { limit: 50 })
-    .filter((entry) => entry.origin === "level")
-    .map((entry) => [entry.idempotencyKey, entry.balanceDelta, entry.xpDelta]);
+/** The player's level entries, payouts and their reversals, newest first. */
+async function levelEntries(player: PlayerId): Promise<[string, number, number][]> {
+  const rows = await ledger.query<{ idempotencyKey: string; balanceDelta: number; xpDelta: number }>(
+    (sql) => sql`
+      SELECT idempotency_key, balance_delta, xp_delta FROM ledger_entries
+      WHERE player_id = ${player} AND origin = 'level'
+      ORDER BY id DESC
+    `,
+  );
+  return rows.map((row) => [row.idempotencyKey, row.balanceDelta, row.xpDelta]);
 }
 
-function events(player: PlayerId): { type: string; data: unknown }[] {
-  return listEventsAfter(db, player, 0, 50).map((event) => ({ type: event.type, data: JSON.parse(event.data) }));
+async function events(player: PlayerId): Promise<{ type: string; data: unknown }[]> {
+  const stored = await ledger.run(Events.use((store) => store.after(player, 0, 50)));
+  return stored.map((event) => ({ type: event.type, data: JSON.parse(event.data) }));
+}
+
+function sync(source: CreditSource, now: number, mode: "recent" | "deep" = "recent") {
+  return ledger.run(syncCredits(source, rules, now, mode));
 }
 
 /** Gives a player XP the way a raid paid before levels paid Leaf: an earn entry with no level pay. */
-function earnedBefore(player: PlayerId, amount: number, key: string): LedgerEntry {
-  const result = postEntry(
-    db,
+async function earnedBefore(player: PlayerId, amount: number, key: string): Promise<LedgerEntry> {
+  const result = await ledger.post(
     { kind: "earn", playerId: player, amount: leaf(amount), source: "raid", idempotencyKey: key },
     T0,
   );
@@ -74,17 +83,17 @@ function earnedBefore(player: PlayerId, amount: number, key: string): LedgerEntr
 }
 
 /** Takes an entry back in full, as a correction does. */
-function reverse(entry: LedgerEntry): void {
-  postEntry(
-    db,
+async function reverse(entry: LedgerEntry): Promise<void> {
+  await ledger.post(
     { kind: "reversal", playerId: entry.playerId, reverses: entry, idempotencyKey: `undo:${entry.idempotencyKey}` },
     T0,
   );
 }
 
 /** The entry that paid for a level. */
-function levelPayout(player: PlayerId, key: string): LedgerEntry {
-  const entry = listEntries(db, player, { limit: 50 }).find((candidate) => candidate.idempotencyKey === key);
+async function levelPayout(player: PlayerId, key: string): Promise<LedgerEntry> {
+  const payouts = await ledger.run(Ledger.use((store) => store.earns(player, "level")));
+  const entry = payouts.map((payout) => payout.entry).find((candidate) => candidate.idempotencyKey === key);
   if (entry === undefined) {
     throw new Error(`No entry ${key}`);
   }
@@ -94,85 +103,85 @@ function levelPayout(player: PlayerId, key: string): LedgerEntry {
 describe("Leaf for levels", () => {
   it("pays a level in the sync that reaches it, says so, and pays it once", async () => {
     const source = feed([raid(1, alice, T0 + MINUTE, 600), raid(2, alice, T0 + 2 * MINUTE, 500)]);
-    await Effect.runPromise(syncCredits(db, source, rules, T0, "recent"));
+    await sync(source, T0, "recent");
 
-    const result = await Effect.runPromise(syncCredits(db, source, rules, T0 + 5 * MINUTE, "recent"));
-    await Effect.runPromise(syncCredits(db, source, rules, T0 + 6 * MINUTE, "deep"));
+    const result = await sync(source, T0 + 5 * MINUTE, "recent");
+    await sync(source, T0 + 6 * MINUTE, "deep");
 
     expect(result).toEqual({ status: "synced", recorded: 2, leafPaid: 1100 + 100 });
-    expect(getAccount(db, alice)).toMatchObject({ balance: 1200, xp: 1100 });
-    expect(levelEntries(alice)).toEqual([[`level:${alice}:2`, 100, 0]]);
-    expect(events(alice).at(-1)).toEqual({ type: "level_up", data: { level: 2, leaf: 100 } });
+    expect(await ledger.account(alice)).toMatchObject({ balance: 1200, xp: 1100 });
+    expect(await levelEntries(alice)).toEqual([[`level:${alice}:2`, 100, 0]]);
+    expect((await events(alice)).at(-1)).toEqual({ type: "level_up", data: { level: 2, leaf: 100 } });
   });
 
   it("pays every level a single sync passes, with one event for the level reached", async () => {
     const source = feed([raid(1, alice, T0 + MINUTE, 2300)]);
-    await Effect.runPromise(syncCredits(db, source, rules, T0, "recent"));
+    await sync(source, T0, "recent");
 
-    await Effect.runPromise(syncCredits(db, source, rules, T0 + 5 * MINUTE, "recent"));
+    await sync(source, T0 + 5 * MINUTE, "recent");
 
-    expect(levelEntries(alice)).toEqual([
+    expect(await levelEntries(alice)).toEqual([
       [`level:${alice}:3`, 125, 0],
       [`level:${alice}:2`, 100, 0],
     ]);
-    expect(events(alice).filter((event) => event.type === "level_up")).toEqual([
+    expect((await events(alice)).filter((event) => event.type === "level_up")).toEqual([
       { type: "level_up", data: { level: 3, leaf: 225 } },
     ]);
   });
 
-  it("pays each player once for the levels reached before levels paid Leaf, without events", () => {
-    earnedBefore(alice, 2300, "raid:old:a");
-    earnedBefore(bob, 900, "raid:old:b");
+  it("pays each player once for the levels reached before levels paid Leaf, without events", async () => {
+    await earnedBefore(alice, 2300, "raid:old:a");
+    await earnedBefore(bob, 900, "raid:old:b");
 
-    expect(payMissedLevels(db, rules.levels, T0)).toEqual({ players: 1, leaf: 225 });
-    expect(payMissedLevels(db, rules.levels, T0 + MINUTE)).toEqual({ players: 0, leaf: 0 });
+    expect(await ledger.run(payMissedLevels(rules.levels, T0))).toEqual({ players: 1, leaf: 225 });
+    expect(await ledger.run(payMissedLevels(rules.levels, T0 + MINUTE))).toEqual({ players: 0, leaf: 0 });
 
-    expect(getAccount(db, alice)).toMatchObject({ balance: 2300 + 225, xp: 2300 });
-    expect(getAccount(db, bob)).toMatchObject({ balance: 900, xp: 900 });
-    expect(levelEntries(alice)).toHaveLength(2);
-    expect(events(alice)).toEqual([]);
+    expect(await ledger.account(alice)).toMatchObject({ balance: 2300 + 225, xp: 2300 });
+    expect(await ledger.account(bob)).toMatchObject({ balance: 900, xp: 900 });
+    expect(await levelEntries(alice)).toHaveLength(2);
+    expect(await events(alice)).toEqual([]);
   });
 
   it("pays a level reached after the missed ones were paid, and none of those again", async () => {
-    earnedBefore(alice, 1000, "raid:old:a");
-    payMissedLevels(db, rules.levels, T0);
+    await earnedBefore(alice, 1000, "raid:old:a");
+    await ledger.run(payMissedLevels(rules.levels, T0));
     const source = feed([raid(1, alice, T0 + MINUTE, 1300)]);
-    await Effect.runPromise(syncCredits(db, source, rules, T0, "recent"));
+    await sync(source, T0, "recent");
 
-    await Effect.runPromise(syncCredits(db, source, rules, T0 + 5 * MINUTE, "recent"));
+    await sync(source, T0 + 5 * MINUTE, "recent");
 
-    expect(levelEntries(alice)).toEqual([
+    expect(await levelEntries(alice)).toEqual([
       [`level:${alice}:3`, 125, 0],
       [`level:${alice}:2`, 100, 0],
     ]);
-    expect(events(alice).at(-1)).toEqual({ type: "level_up", data: { level: 3, leaf: 125 } });
+    expect((await events(alice)).at(-1)).toEqual({ type: "level_up", data: { level: 3, leaf: 125 } });
   });
 
-  it("pays a level again, once, when it is reached again after its payout was reversed", () => {
-    const raidPay = earnedBefore(alice, 1000, "raid:old:a");
-    payMissedLevels(db, rules.levels, T0);
-    reverse(raidPay);
-    reverse(levelPayout(alice, `level:${alice}:2`));
-    earnedBefore(alice, 1000, "raid:new:a");
+  it("pays a level again, once, when it is reached again after its payout was reversed", async () => {
+    const raidPay = await earnedBefore(alice, 1000, "raid:old:a");
+    await ledger.run(payMissedLevels(rules.levels, T0));
+    await reverse(raidPay);
+    await reverse(await levelPayout(alice, `level:${alice}:2`));
+    await earnedBefore(alice, 1000, "raid:new:a");
 
-    expect(payLevels(db, alice, rules.levels, T0 + MINUTE)).toBe(100);
-    expect(payLevels(db, alice, rules.levels, T0 + 2 * MINUTE)).toBe(0);
-    expect(payMissedLevels(db, rules.levels, T0 + 3 * MINUTE)).toEqual({ players: 0, leaf: 0 });
-    expect(levelEntries(alice)).toEqual([
+    expect(await ledger.run(payLevels(alice, rules.levels, T0 + MINUTE))).toBe(100);
+    expect(await ledger.run(payLevels(alice, rules.levels, T0 + 2 * MINUTE))).toBe(0);
+    expect(await ledger.run(payMissedLevels(rules.levels, T0 + 3 * MINUTE))).toEqual({ players: 0, leaf: 0 });
+    expect(await levelEntries(alice)).toEqual([
       [`level:${alice}:2:2`, 100, 0],
       [`undo:level:${alice}:2`, -100, 0],
       [`level:${alice}:2`, 100, 0],
     ]);
-    expect(getAccount(db, alice)).toMatchObject({ balance: 1000 + 100, xp: 1000 });
+    expect(await ledger.account(alice)).toMatchObject({ balance: 1000 + 100, xp: 1000 });
   });
 
-  it("does not pay a level twice while its payout stands, even when XP fell below it and came back", () => {
-    const raidPay = earnedBefore(alice, 1000, "raid:old:a");
-    payMissedLevels(db, rules.levels, T0);
-    reverse(raidPay);
-    earnedBefore(alice, 1000, "raid:new:a");
+  it("does not pay a level twice while its payout stands, even when XP fell below it and came back", async () => {
+    const raidPay = await earnedBefore(alice, 1000, "raid:old:a");
+    await ledger.run(payMissedLevels(rules.levels, T0));
+    await reverse(raidPay);
+    await earnedBefore(alice, 1000, "raid:new:a");
 
-    expect(payLevels(db, alice, rules.levels, T0)).toBe(0);
-    expect(levelEntries(alice)).toEqual([[`level:${alice}:2`, 100, 0]]);
+    expect(await ledger.run(payLevels(alice, rules.levels, T0))).toBe(0);
+    expect(await levelEntries(alice)).toEqual([[`level:${alice}:2`, 100, 0]]);
   });
 });

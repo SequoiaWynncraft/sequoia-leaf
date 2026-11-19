@@ -1,9 +1,9 @@
 import { DEFAULT_RULES } from "@sequoia-leaf/core";
 import { Clock, Effect } from "effect";
+import { SqlClient } from "effect/sql";
 
 import { readCredits } from "../backend/credits.ts";
 import { AppConfig } from "../config.ts";
-import { Db } from "../db.ts";
 import { syncCredits, type SyncMode } from "./sync.ts";
 
 /** A player asking for fresh quests triggers a sync at most this often. */
@@ -20,7 +20,6 @@ export const runCreditSync = Effect.fnUntraced(function* (mode: SyncMode) {
   }
   const feed = { baseUrl: backendUrl, token: backendToken };
   return yield* syncCredits(
-    yield* Db,
     (from, to) => readCredits(feed, from, to),
     DEFAULT_RULES,
     yield* Clock.currentTimeMillis,
@@ -36,12 +35,14 @@ export const runCreditSync = Effect.fnUntraced(function* (mode: SyncMode) {
  * and still uses up the allowance; the scheduled run will catch up.
  */
 export const syncOnDemand = Effect.gen(function* () {
-  const db = yield* Db;
+  const sql = yield* SqlClient.SqlClient;
   const now = yield* Clock.currentTimeMillis;
-  const claim = db
-    .query("UPDATE sync_state SET on_demand_at = ? WHERE name = 'credits' AND on_demand_at <= ?")
-    .run(now, now - ON_DEMAND_INTERVAL_MS);
-  if (claim.changes > 0) {
+  const claim = yield* sql`
+    UPDATE sync_state SET on_demand_at = ${now}
+    WHERE name = 'credits' AND on_demand_at <= ${now - ON_DEMAND_INTERVAL_MS}
+    RETURNING name
+  `;
+  if (claim.length > 0) {
     yield* runCreditSync("recent");
   }
 }).pipe(Effect.catchCause((cause) => Effect.logError("The on-demand credit sync failed", cause)));

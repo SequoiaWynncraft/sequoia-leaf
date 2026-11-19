@@ -1,17 +1,9 @@
-import type { Database } from "bun:sqlite";
+import { draftEntry, leaf, leafForLevel, levelForXp, type LevelRules, type PlayerId } from "@sequoia-leaf/core";
+import { Effect, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/sql";
 
-import {
-  draftEntry,
-  leaf,
-  leafForLevel,
-  type LedgerEntry,
-  levelForXp,
-  type LevelRules,
-  parsePlayerId,
-  type PlayerId,
-} from "@sequoia-leaf/core";
-
-import { getAccount, insertEntry, listEarns } from "../ledger/store.ts";
+import { Ledger } from "../ledger/store.ts";
+import { PlayerUuid } from "../wire.ts";
 
 /**
  * The key of a level's payout. The first time a player reaches a level it is
@@ -32,15 +24,6 @@ function levelOfKey(key: string): number {
   return Number(level);
 }
 
-/** The player's level payouts, each with the level it paid for. */
-function levelPayouts(db: Database, playerId: PlayerId): { level: number; entry: LedgerEntry; reversed: boolean }[] {
-  return listEarns(db, playerId, "level").map(({ entry, reversed }) => ({
-    level: levelOfKey(entry.idempotencyKey),
-    entry,
-    reversed,
-  }));
-}
-
 /**
  * Pays the Leaf for every level the player has reached and is not paid for,
  * lowest first, and returns the Leaf paid. A level is paid for while its
@@ -51,14 +34,16 @@ function levelPayouts(db: Database, playerId: PlayerId): { level: number; entry:
  *
  * Call it in the transaction that added the XP.
  */
-export function payLevels(db: Database, playerId: PlayerId, rules: LevelRules, now: number): number {
-  const reached = levelForXp(getAccount(db, playerId).xp, rules).level;
+export const payLevels = Effect.fn("payLevels")(function* (playerId: PlayerId, rules: LevelRules, now: number) {
+  const ledger = yield* Ledger;
+  const reached = levelForXp((yield* ledger.account(playerId)).xp, rules).level;
   const standing = new Set<number>();
   const times = new Map<number, number>();
-  for (const payout of levelPayouts(db, playerId)) {
-    times.set(payout.level, (times.get(payout.level) ?? 0) + 1);
-    if (!payout.reversed) {
-      standing.add(payout.level);
+  for (const { entry, reversed } of yield* ledger.earns(playerId, "level")) {
+    const level = levelOfKey(entry.idempotencyKey);
+    times.set(level, (times.get(level) ?? 0) + 1);
+    if (!reversed) {
+      standing.add(level);
     }
   }
   let total = 0;
@@ -68,41 +53,42 @@ export function payLevels(db: Database, playerId: PlayerId, rules: LevelRules, n
       continue;
     }
     const idempotencyKey = levelKey(playerId, level, (times.get(level) ?? 0) + 1);
-    insertEntry(
-      db,
+    yield* ledger.insert(
       draftEntry({ kind: "earn", playerId, amount: leaf(amount), xp: 0, source: "level", idempotencyKey }),
       now,
     );
     total += amount;
   }
   return total;
-}
+});
 
 /**
  * Pays every player for the levels they have reached and not been paid for,
  * such as the ones reached before levels paid Leaf. It writes no events: those
  * levels were announced when they were reached. Running it again changes
- * nothing. Immediate, for the reason the credit sync's write is
- * (`windowedSync`): it reads before it writes.
+ * nothing.
  */
-export function payMissedLevels(db: Database, rules: LevelRules, now: number): { players: number; leaf: number } {
-  return db
-    .transaction(() => {
-      let players = 0;
-      let total = 0;
-      const rows = db.query<{ player_id: string }, []>("SELECT player_id FROM accounts ORDER BY player_id").all();
-      for (const row of rows) {
-        const playerId = parsePlayerId(row.player_id);
-        if (playerId === undefined) {
-          continue;
+export const payMissedLevels = Effect.fn("payMissedLevels")(function* (rules: LevelRules, now: number) {
+  const sql = yield* SqlClient.SqlClient;
+  const players = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: Schema.Struct({ playerId: PlayerUuid }),
+    execute: () => sql`SELECT player_id FROM accounts ORDER BY player_id`,
+  });
+  return yield* sql
+    .withTransaction(
+      Effect.gen(function* () {
+        let paidPlayers = 0;
+        let total = 0;
+        for (const { playerId } of yield* players(undefined)) {
+          const paid = yield* payLevels(playerId, rules, now);
+          if (paid > 0) {
+            paidPlayers += 1;
+            total += paid;
+          }
         }
-        const paid = payLevels(db, playerId, rules, now);
-        if (paid > 0) {
-          players += 1;
-          total += paid;
-        }
-      }
-      return { players, leaf: total };
-    })
-    .immediate();
-}
+        return { players: paidPlayers, leaf: total };
+      }),
+    )
+    .pipe(Effect.orDie);
+});

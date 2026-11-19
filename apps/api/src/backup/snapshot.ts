@@ -1,6 +1,8 @@
-import type { Database } from "bun:sqlite";
 import { mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
+
+import { Effect } from "effect";
+import { SqlClient } from "effect/sql";
 
 /** A new snapshot is taken when the newest one is this old. */
 export const SNAPSHOT_INTERVAL_MS = 6 * 60 * 60_000;
@@ -48,26 +50,27 @@ export function listSnapshots(directory: string): { name: string; takenAt: numbe
  * Returns the new file's path. The copy is an ordinary database file: to
  * restore, stop the server and put it in place of the database.
  */
-export function takeSnapshot(db: Database, directory: string, now: number): string {
-  mkdirSync(directory, { recursive: true });
+export const takeSnapshot = Effect.fn("takeSnapshot")(function* (directory: string, now: number) {
+  const sql = yield* SqlClient.SqlClient;
   const path = join(directory, nameAt(now));
   // The copy is written under another name and renamed when it is complete,
   // so a copy that was cut short never counts as a snapshot. The name is
   // unique to this attempt: during a deploy two servers can copy at once.
   const unfinished = `${path}.${crypto.randomUUID()}.partial`;
-  try {
-    db.query("VACUUM INTO ?").run(unfinished);
-    renameSync(unfinished, path);
-  } finally {
-    rmSync(unfinished, { force: true });
-  }
-  removeAbandonedCopies(directory);
-  const snapshots = listSnapshots(directory);
-  for (const old of snapshots.slice(0, Math.max(0, snapshots.length - SNAPSHOTS_KEPT))) {
-    rmSync(join(directory, old.name));
-  }
+  yield* Effect.sync(() => mkdirSync(directory, { recursive: true }));
+  yield* sql`VACUUM INTO ${unfinished}`.pipe(
+    Effect.andThen(Effect.sync(() => renameSync(unfinished, path))),
+    Effect.ensuring(Effect.sync(() => rmSync(unfinished, { force: true }))),
+  );
+  yield* Effect.sync(() => {
+    removeAbandonedCopies(directory);
+    const snapshots = listSnapshots(directory);
+    for (const old of snapshots.slice(0, Math.max(0, snapshots.length - SNAPSHOTS_KEPT))) {
+      rmSync(join(directory, old.name));
+    }
+  });
   return path;
-}
+});
 
 /** Deletes unfinished copies left behind by a server that stopped mid-copy. */
 function removeAbandonedCopies(directory: string): void {
@@ -81,10 +84,10 @@ function removeAbandonedCopies(directory: string): void {
 }
 
 /** Takes a snapshot when there is none younger than the interval. Returns its path, or undefined when none was due. */
-export function snapshotIfDue(db: Database, directory: string, now: number): string | undefined {
-  const newest = listSnapshots(directory).at(-1);
-  if (newest !== undefined && now - newest.takenAt < SNAPSHOT_INTERVAL_MS) {
-    return undefined;
-  }
-  return takeSnapshot(db, directory, now);
-}
+export const snapshotIfDue = (directory: string, now: number) =>
+  Effect.suspend(() => {
+    const newest = listSnapshots(directory).at(-1);
+    return newest !== undefined && now - newest.takenAt < SNAPSHOT_INTERVAL_MS
+      ? Effect.succeed(undefined)
+      : takeSnapshot(directory, now);
+  });

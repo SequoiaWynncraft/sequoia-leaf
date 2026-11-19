@@ -1,6 +1,5 @@
-import type { Database } from "bun:sqlite";
-
-import { Effect } from "effect";
+import { Effect, Option, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/sql";
 
 /**
  * - `recent` reads from a little before where the last run stopped. It runs every minute.
@@ -35,6 +34,8 @@ export const MAX_WINDOW_MS = 30 * 24 * 60 * 60_000;
 /** A run that dies holds the lease for at most this long. */
 const LEASE_MS = 60_000;
 
+const SyncState = Schema.Struct({ startedAt: Schema.NullOr(Schema.Int), cursor: Schema.NullOr(Schema.Int) });
+
 /**
  * Runs one feed's sync: takes the feed's lease in `sync_state`, works out the
  * window the mode calls for, reads it, and hands what it read to `write`,
@@ -44,53 +45,63 @@ const LEASE_MS = 60_000;
  * `write` must record each thing once however often a window is read again:
  * windows overlap on purpose.
  */
-export function windowedSync<T, E, R>(
-  db: Database,
+export const windowedSync = <T, E, R, RW>(
   name: string,
   now: number,
   mode: SyncMode,
   read: (from: number, to: number) => Effect.Effect<readonly T[], E, R>,
-  write: (items: readonly T[], from: number, to: number) => { recorded: number; leafPaid: number },
-): Effect.Effect<SyncResult, E, R> {
-  return Effect.suspend(() => {
+  write: (
+    items: readonly T[],
+    from: number,
+    to: number,
+  ) => Effect.Effect<{ readonly recorded: number; readonly leafPaid: number }, never, RW>,
+): Effect.Effect<SyncResult, E, R | RW | SqlClient.SqlClient> =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const state = SqlSchema.findOneOption({
+      Request: Schema.String,
+      Result: SyncState,
+      execute: (feed) => sql`SELECT started_at, cursor FROM sync_state WHERE name = ${feed}`,
+    });
     // The scheduled run and a player's request can overlap while one of them
     // waits for the feed; the lease lets only one of them through.
-    const lease = db
-      .query("UPDATE sync_state SET locked_until = ? WHERE name = ? AND locked_until <= ?")
-      .run(now + LEASE_MS, name, now);
-    if (lease.changes === 0) {
-      return Effect.succeed<SyncResult>({ status: "busy" });
+    const lease = yield* sql`
+      UPDATE sync_state SET locked_until = ${now + LEASE_MS}
+      WHERE name = ${name} AND locked_until <= ${now}
+      RETURNING name
+    `.pipe(Effect.orDie);
+    if (lease.length === 0) {
+      return { status: "busy" } satisfies SyncResult;
     }
-    return Effect.gen(function* () {
-      const state = db
-        .query<{ started_at: number | null; cursor: number | null }, [string]>(
-          "SELECT started_at, cursor FROM sync_state WHERE name = ?",
-        )
-        .get(name);
-      if (state === null || state.started_at === null || state.cursor === null) {
-        db.query("UPDATE sync_state SET started_at = ?, cursor = ? WHERE name = ?").run(now, now, name);
+    const release = sql`UPDATE sync_state SET locked_until = 0 WHERE name = ${name}`.pipe(Effect.orDie);
+    return yield* Effect.gen(function* () {
+      const { startedAt, cursor } = Option.getOrElse(yield* state(name).pipe(Effect.orDie), () => ({
+        startedAt: null,
+        cursor: null,
+      }));
+      if (startedAt === null || cursor === null) {
+        yield* sql`UPDATE sync_state SET started_at = ${now}, cursor = ${now} WHERE name = ${name}`.pipe(Effect.orDie);
         return { status: "started" } satisfies SyncResult;
       }
       const settled = now - SETTLE_MS;
-      const reach = mode === "recent" ? state.cursor - RECENT_OVERLAP_MS : settled - DEEP_LOOKBACK_MS;
-      const from = Math.max(state.started_at, reach);
+      const reach = mode === "recent" ? cursor - RECENT_OVERLAP_MS : settled - DEEP_LOOKBACK_MS;
+      const from = Math.max(startedAt, reach);
       const to = Math.min(settled, from + MAX_WINDOW_MS);
       const items = from < to ? yield* read(from, to) : [];
-      // Immediate, so the transaction holds the write lock from its start. A
-      // deferred one reads first, and if another connection, such as a script
-      // run by hand, commits before its first write, that write fails with
-      // SQLITE_BUSY_SNAPSHOT instead of waiting its turn.
-      return db
-        .transaction((): SyncResult => {
-          const { recorded, leafPaid } = write(items, from, to);
-          if (mode === "recent") {
-            db.query("UPDATE sync_state SET cursor = MAX(cursor, ?) WHERE name = ?").run(to, name);
-          }
-          return { status: "synced", recorded, leafPaid };
-        })
-        .immediate();
-    }).pipe(
-      Effect.ensuring(Effect.sync(() => db.query("UPDATE sync_state SET locked_until = 0 WHERE name = ?").run(name))),
-    );
+      // The client opens transactions with BEGIN IMMEDIATE, so the write lock is
+      // held from the start. A deferred one reads first, and if another
+      // connection, such as a script run by hand, commits before its first
+      // write, that write fails with SQLITE_BUSY_SNAPSHOT instead of waiting.
+      return yield* sql
+        .withTransaction(
+          Effect.gen(function* () {
+            const { recorded, leafPaid } = yield* write(items, from, to);
+            if (mode === "recent") {
+              yield* sql`UPDATE sync_state SET cursor = MAX(cursor, ${to}) WHERE name = ${name}`;
+            }
+            return { status: "synced", recorded, leafPaid } satisfies SyncResult;
+          }),
+        )
+        .pipe(Effect.orDie);
+    }).pipe(Effect.ensuring(release));
   });
-}

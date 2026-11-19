@@ -1,12 +1,10 @@
-import type { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
 
 import { type Activity, DEFAULT_RULES, type PlayerId, playerId } from "@sequoia-leaf/core";
 import { Effect } from "effect";
 
 import { type CreditSource, RECENT_OVERLAP_MS, SETTLE_MS, syncCredits, type SyncMode } from "../src/earning/sync.ts";
-import { getAccount, listEntries } from "../src/ledger/store.ts";
-import { rejection, testDatabase } from "./support.ts";
+import { rejection, testLeaf } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const bob = playerId("00000000-0000-4000-8000-00000000000b");
@@ -15,10 +13,10 @@ const HOUR = 60 * MINUTE;
 /** The first sync runs at T0, so crediting starts at T0. */
 const T0 = 1_763_000_000_000;
 
-let db: Database;
+let leaf: ReturnType<typeof testLeaf>;
 
 beforeEach(() => {
-  db = testDatabase();
+  leaf = testLeaf({ now: T0 }, () => Promise.reject(new Error("No network in this test")));
 });
 
 function raid(id: number, player: PlayerId, occurredAt: number, seasonRating = 110): Activity {
@@ -60,14 +58,19 @@ function feed(activities: Activity[]): { source: CreditSource; windows: [number,
 const failing: CreditSource<Error> = () => Effect.fail(new Error("backend is down"));
 
 function sync(source: CreditSource<Error>, now: number, mode: SyncMode = "recent") {
-  return Effect.runPromise(syncCredits(db, source, DEFAULT_RULES, now, mode));
+  return leaf.run(syncCredits(source, DEFAULT_RULES, now, mode));
 }
 
-function recordedKeys(): string[] {
-  return db
-    .query<{ source_key: string }, []>("SELECT source_key FROM activities ORDER BY occurred_at, source_key")
-    .all()
-    .map((row) => row.source_key);
+async function recordedKeys(): Promise<string[]> {
+  const rows = await leaf.query<{ sourceKey: string }>(
+    (sql) => sql`SELECT source_key FROM activities ORDER BY occurred_at, source_key`,
+  );
+  return rows.map((row) => row.sourceKey);
+}
+
+/** A player's ledger entries, newest first. */
+function entries(player: PlayerId) {
+  return leaf.query((sql) => sql`SELECT * FROM ledger_entries WHERE player_id = ${player} ORDER BY id DESC`);
 }
 
 describe("syncCredits", () => {
@@ -78,8 +81,8 @@ describe("syncCredits", () => {
     await sync(source, T0 + MINUTE);
 
     expect(windows).toEqual([[T0, T0 + MINUTE - SETTLE_MS]]);
-    expect(recordedKeys()).toEqual([`raid:3:${bob}`]);
-    expect(getAccount(db, alice).balance).toBe(0);
+    expect(await recordedKeys()).toEqual([`raid:3:${bob}`]);
+    expect((await leaf.account(alice)).balance).toBe(0);
   });
 
   it("records a raid and pays its season rating in Leaf and XP", async () => {
@@ -89,17 +92,13 @@ describe("syncCredits", () => {
     const result = await sync(source, T0 + 5 * MINUTE);
 
     expect(result).toEqual({ status: "synced", recorded: 1, leafPaid: 110 });
-    expect(getAccount(db, alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
-    const [entry] = listEntries(db, alice, { limit: 10 });
+    expect(await leaf.account(alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
+    const [entry] = await entries(alice);
     expect(entry).toMatchObject({ kind: "earn", origin: "raid", idempotencyKey: `raid:1:${alice}` });
-    const row = db.query("SELECT kind, raid, detail, season_rating, occurred_at FROM activities").get();
-    expect(row).toEqual({
-      kind: "raid",
-      raid: "tna",
-      detail: "The Nameless Anomaly",
-      season_rating: 110,
-      occurred_at: T0 + MINUTE,
-    });
+    const rows = await leaf.query((sql) => sql`SELECT kind, raid, detail, season_rating, occurred_at FROM activities`);
+    expect(rows).toEqual([
+      { kind: "raid", raid: "tna", detail: "The Nameless Anomaly", seasonRating: 110, occurredAt: T0 + MINUTE },
+    ]);
   });
 
   it("pays a war its points rounded down", async () => {
@@ -108,8 +107,8 @@ describe("syncCredits", () => {
 
     await sync(source, T0 + 5 * MINUTE);
 
-    expect(getAccount(db, alice)).toEqual({ playerId: alice, balance: 31, xp: 31 });
-    const [entry] = listEntries(db, alice, { limit: 10 });
+    expect(await leaf.account(alice)).toEqual({ playerId: alice, balance: 31, xp: 31 });
+    const [entry] = await entries(alice);
     expect(entry).toMatchObject({ origin: "war", idempotencyKey: `war:7:${alice}` });
   });
 
@@ -119,17 +118,15 @@ describe("syncCredits", () => {
 
     await sync(source, T0 + 5 * MINUTE);
 
-    expect(getAccount(db, alice).balance).toBe(146);
-    expect(getAccount(db, bob).balance).toBe(73);
-    const rows = db
-      .query<{ in_claim: number | null }, []>("SELECT in_claim FROM activities ORDER BY source_key")
-      .all()
-      .map((row) => row.in_claim);
-    expect(rows).toEqual([1, 0]);
-    const events: unknown[] = db
-      .query<{ data: string }, []>("SELECT data FROM events WHERE type = 'leaf_earned' ORDER BY id")
-      .all()
-      .map((row): unknown => JSON.parse(row.data));
+    expect((await leaf.account(alice)).balance).toBe(146);
+    expect((await leaf.account(bob)).balance).toBe(73);
+    expect(await leaf.query((sql) => sql`SELECT in_claim FROM activities ORDER BY source_key`)).toEqual([
+      { inClaim: 1 },
+      { inClaim: 0 },
+    ]);
+    const events = (
+      await leaf.query<{ data: string }>((sql) => sql`SELECT data FROM events WHERE type = 'leaf_earned' ORDER BY id`)
+    ).map((row): unknown => JSON.parse(row.data));
     expect(events).toEqual([
       expect.objectContaining({ leaf: 146, in_claim: true }),
       expect.objectContaining({ leaf: 73, in_claim: false }),
@@ -142,9 +139,11 @@ describe("syncCredits", () => {
 
     await sync(source, T0 + 5 * MINUTE);
 
-    expect(getAccount(db, alice).balance).toBe(40);
-    expect(db.query("SELECT in_claim FROM activities").get()).toEqual({ in_claim: null });
-    const event = db.query<{ data: string }, []>("SELECT data FROM events WHERE type = 'leaf_earned'").get();
+    expect((await leaf.account(alice)).balance).toBe(40);
+    expect(await leaf.query((sql) => sql`SELECT in_claim FROM activities`)).toEqual([{ inClaim: null }]);
+    const [event] = await leaf.query<{ data: string }>(
+      (sql) => sql`SELECT data FROM events WHERE type = 'leaf_earned'`,
+    );
     const data: unknown = JSON.parse(event?.data ?? "{}");
     expect(data).not.toHaveProperty("in_claim");
   });
@@ -156,8 +155,8 @@ describe("syncCredits", () => {
     const result = await sync(source, T0 + 5 * MINUTE);
 
     expect(result).toEqual({ status: "synced", recorded: 1, leafPaid: 0 });
-    expect(recordedKeys()).toEqual([`war:7:${alice}`]);
-    expect(listEntries(db, alice, { limit: 10 })).toEqual([]);
+    expect(await recordedKeys()).toEqual([`war:7:${alice}`]);
+    expect(await entries(alice)).toEqual([]);
   });
 
   it("pays each credit once when a later run reads the same events again", async () => {
@@ -168,8 +167,8 @@ describe("syncCredits", () => {
     const again = await sync(source, T0 + 6 * MINUTE);
 
     expect(again).toEqual({ status: "synced", recorded: 0, leafPaid: 0 });
-    expect(getAccount(db, alice).balance).toBe(110);
-    expect(getAccount(db, bob).balance).toBe(110);
+    expect((await leaf.account(alice)).balance).toBe(110);
+    expect((await leaf.account(bob)).balance).toBe(110);
   });
 
   it("leaves events younger than the settle delay for the next run", async () => {
@@ -178,10 +177,10 @@ describe("syncCredits", () => {
     await sync(source, T0);
 
     await sync(source, now);
-    expect(recordedKeys()).toEqual([]);
+    expect(await recordedKeys()).toEqual([]);
 
     await sync(source, now + MINUTE);
-    expect(recordedKeys()).toEqual([`raid:1:${alice}`]);
+    expect(await recordedKeys()).toEqual([`raid:1:${alice}`]);
   });
 
   it("starts a recent run a little before where the last one stopped", async () => {
@@ -203,16 +202,16 @@ describe("syncCredits", () => {
     activities.push(raid(1, bob, T0 + HOUR));
 
     await sync(source, T0 + 3 * HOUR + MINUTE);
-    expect(getAccount(db, bob).balance).toBe(0);
+    expect((await leaf.account(bob)).balance).toBe(0);
 
     await sync(source, T0 + 3 * HOUR + 2 * MINUTE, "deep");
-    expect(getAccount(db, bob).balance).toBe(110);
+    expect((await leaf.account(bob)).balance).toBe(110);
   });
 
   it("does nothing while another run holds the lease", async () => {
     const { source } = feed([]);
     await sync(source, T0);
-    db.query("UPDATE sync_state SET locked_until = ? WHERE name = 'credits'").run(T0 + 2 * MINUTE);
+    await leaf.query((sql) => sql`UPDATE sync_state SET locked_until = ${T0 + 2 * MINUTE} WHERE name = 'credits'`);
 
     expect(await sync(source, T0 + MINUTE)).toEqual({ status: "busy" });
     expect(await sync(source, T0 + 2 * MINUTE)).toMatchObject({ status: "synced" });
