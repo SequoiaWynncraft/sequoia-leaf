@@ -1,15 +1,18 @@
 import type { Database } from "bun:sqlite";
-import { beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { DAY_MS, DEFAULT_RULES, leaf, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
 
 import { fetchCredits } from "../src/backend/credits.ts";
-import { type CorrectionRun, runRaidShareCorrection } from "../src/earning/raid-shares.ts";
+import { type CorrectionRun, parseRfc3339, runRaidShareCorrection } from "../src/earning/raid-shares.ts";
 import { syncCredits } from "../src/earning/sync.ts";
 import { getAccount, listEntries, postEntry } from "../src/ledger/store.ts";
 import { payMissedLevels } from "../src/levels/pay.ts";
 import type { Fetcher, Services } from "../src/services.ts";
-import { testServices } from "./support.ts";
+import { rejection, testServices } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const bob = playerId("00000000-0000-4000-8000-00000000000b");
@@ -23,6 +26,8 @@ const MINUTE = 60_000;
 const T0 = Date.UTC(2026, 10, 16, 12);
 /** When the correction runs. */
 const LATER = T0 + DAY_MS;
+/** When the backend's fix went live: raids paid from then on were paid from the fixed feed. */
+const FIXED = LATER - 60 * MINUTE;
 
 /**
  * The sync pays with no quests, so raids and levels are all that pay. Level 2
@@ -99,10 +104,14 @@ async function paidInFull(listed: RaidRow[]): Promise<void> {
   await syncAt(T0 + 10 * MINUTE);
 }
 
-async function correct(mode: "dry_run" | "apply", listed: RaidRow[], at = LATER): Promise<CorrectionRun> {
+async function correct(
+  mode: "dry_run" | "apply",
+  listed: RaidRow[],
+  { at = LATER, paidBefore = FIXED }: { at?: number; paidBefore?: number } = {},
+): Promise<CorrectionRun> {
   raids = listed;
   clock.now = at;
-  return runRaidShareCorrection(services, mode);
+  return runRaidShareCorrection(services, { mode, paidBefore });
 }
 
 function entries(player: PlayerId): [string, string, number, number][] {
@@ -160,6 +169,7 @@ describe("runRaidShareCorrection", () => {
     expect(db.query("SELECT * FROM events").all()).toEqual(events);
     expect(report).toMatchObject({
       mode: "apply",
+      paid_before: new Date(FIXED).toISOString(),
       feed_from: new Date(T0).toISOString(),
       feed_to: new Date(LATER).toISOString(),
       feed_windows: 1,
@@ -192,7 +202,7 @@ describe("runRaidShareCorrection", () => {
     await correct("apply", corrected);
     const after = everything();
 
-    const again = await correct("apply", corrected, LATER + MINUTE);
+    const again = await correct("apply", corrected, { at: LATER + MINUTE });
 
     expect(everything()).toEqual(after);
     expect(again).toMatchObject({
@@ -254,20 +264,79 @@ describe("runRaidShareCorrection", () => {
     expectAccountsMatchLedger();
   });
 
-  it("leaves a payment the corrected feed no longer lists, and reports it", async () => {
-    await paidInFull(raid(3, T0 + MINUTE, [alice, bob], 220));
+  it("leaves each payment the corrected feed no longer lists under its completion, and lists it in the report", async () => {
+    await paidInFull([
+      ...raid(3, T0 + MINUTE, [alice, bob], 220),
+      ...raid(4, T0 + 2 * MINUTE, [carol], 220),
+      ...raid(5, T0 + 2 * MINUTE, [dave], 220),
+    ]);
 
-    // Bob's name no longer resolves, so the feed leaves his credit out.
-    const report = await correct("apply", raid(3, T0 + MINUTE, [alice], 110));
+    // Bob's name no longer resolves, so the feed leaves his credit out, and
+    // the backend has merged report 4 into report 5.
+    const report = await correct("apply", [
+      ...raid(3, T0 + MINUTE, [alice], 110),
+      ...raid(5, T0 + 2 * MINUTE, [carol, dave], 110),
+    ]);
 
     expect(getAccount(db, alice)).toMatchObject({ balance: 110, xp: 110 });
+    expect(getAccount(db, dave)).toMatchObject({ balance: 110, xp: 110 });
     expect(entries(bob)).toEqual([["earn", `raid:3:${bob}`, 220, 220]]);
+    expect(entries(carol)).toEqual([["earn", `raid:4:${carol}`, 220, 220]]);
+    const paidAt = new Date(T0 + 10 * MINUTE).toISOString();
     expect(report).toMatchObject({
-      raid_entries_checked: 2,
-      raid_entries_reversed: 1,
-      raid_entries_without_feed_row: 1,
-      raid_leaf_without_feed_row: 220,
+      raid_entries_checked: 4,
+      raid_entries_reversed: 2,
+      raid_entries_without_feed_row: 2,
+      raid_leaf_without_feed_row: 440,
+      payments_without_feed_row: [
+        { completion_id: 3, player_id: bob, leaf: 220, xp: 220, created_at: paidAt },
+        { completion_id: 4, player_id: carol, leaf: 220, xp: 220, created_at: paidAt },
+      ],
     });
+  });
+
+  it("corrects only payments made before the cutoff, so a payment from the fixed feed stands when its share later shrinks", async () => {
+    // Raid 1 was paid before the fix, every member the whole party's rating.
+    await paidInFull(raid(1, T0 + MINUTE, party, 440));
+    // Raid 2 was paid by the first run after the fix, at the share of the two
+    // members the backend had matched by then.
+    raids = [...raid(1, T0 + MINUTE, party, 440), ...raid(2, FIXED - MINUTE, [alice, bob], 220)];
+    await syncAt(FIXED);
+
+    // The backend has since matched all four members of raid 2, so each share is smaller.
+    const report = await correct("apply", [
+      ...raid(1, T0 + MINUTE, party, 110),
+      ...raid(2, FIXED - MINUTE, party, 110),
+    ]);
+
+    expect(entries(alice)).toEqual([
+      ["earn", `raid:1:${alice}`, 440, 440],
+      ["earn", `raid:2:${alice}`, 220, 220],
+      ["reversal", `undo:raid:1:${alice}`, -440, -440],
+      ["earn", `raid:1:${alice}:share`, 110, 110],
+    ]);
+    expect(getAccount(db, bob)).toMatchObject({ balance: 330, xp: 330 });
+    expect(getAccount(db, carol)).toMatchObject({ balance: 110, xp: 110 });
+    const paidAt = new Date(FIXED).toISOString();
+    expect(report).toMatchObject({
+      raid_entries_checked: 4,
+      raid_entries_reversed: 4,
+      raid_entries_paid_after_cutoff: 2,
+      payments_after_cutoff_above_share: [
+        { completion_id: 2, player_id: alice, leaf: 220, xp: 220, created_at: paidAt, share_leaf: 110 },
+        { completion_id: 2, player_id: bob, leaf: 220, xp: 220, created_at: paidAt, share_leaf: 110 },
+      ],
+    });
+  });
+
+  it("refuses a cutoff later than now, which would correct what the sync pays while it runs", async () => {
+    await paidInFull(raid(1, T0 + MINUTE, party, 440));
+    const before = everything();
+
+    const error = await rejection(correct("apply", raid(1, T0 + MINUTE, party, 110), { paidBefore: LATER + MINUTE }));
+
+    expect(error).toMatchObject({ message: expect.stringContaining("later than now") });
+    expect(everything()).toEqual(before);
   });
 
   it("writes nothing in a dry run, and reports what applying it would do", async () => {
@@ -314,5 +383,68 @@ describe("runRaidShareCorrection", () => {
     expect(report).toMatchObject({ feed_windows: 3, raid_entries_reversed: 2 });
     expect(getAccount(db, alice).balance).toBe(110);
     expect(getAccount(db, bob).balance).toBe(110);
+  });
+});
+
+describe("parseRfc3339", () => {
+  it("reads a time with its offset, and refuses one without an offset or with a day the month does not have", () => {
+    const fixed = Date.UTC(2026, 10, 19, 7, 53);
+    expect(parseRfc3339("2026-11-19T07:53:00Z")).toBe(fixed);
+    expect(parseRfc3339("2026-11-19T08:53:00+01:00")).toBe(fixed);
+    expect(parseRfc3339("2026-11-19T07:53:00.250Z")).toBe(fixed + 250);
+    for (const text of [
+      "2026-11-19T07:53:00",
+      "2026-11-19T07:53Z",
+      "2026-11-19",
+      "2026-02-30T07:53:00Z",
+      "2026-11-19T25:00:00Z",
+      "1795074780000",
+    ]) {
+      expect(parseRfc3339(text)).toBeUndefined();
+    }
+  });
+});
+
+describe("correct-raid-shares.ts", () => {
+  const script = join(import.meta.dir, "..", "scripts", "correct-raid-shares.ts");
+  let directory: string;
+
+  beforeEach(() => {
+    directory = mkdtempSync(join(tmpdir(), "leaf-correct-"));
+  });
+
+  afterEach(() => {
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  /** Runs the script with only the environment given, so it can never reach a real backend. */
+  function run(args: string[], databasePath: string): { exitCode: number; stderr: string } {
+    const result = Bun.spawnSync({
+      cmd: [process.execPath, "run", script, ...args],
+      env: { PATH: Bun.env["PATH"] ?? "", DATABASE_PATH: databasePath, BACKEND_URL: "http://127.0.0.1:9" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return { exitCode: result.exitCode, stderr: result.stderr.toString() };
+  }
+
+  it("refuses to run without --paid-before, and opens nothing", () => {
+    const databasePath = join(directory, "leaf.db");
+
+    const result = run(["--apply"], databasePath);
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr.split("\n")[0]).toBe("--paid-before is required: the moment the backend's fix went live");
+    expect(existsSync(databasePath)).toBe(false);
+  });
+
+  it("refuses a database path that does not exist, and creates nothing", () => {
+    const databasePath = join(directory, "missing", "leaf.db");
+
+    const result = run(["--paid-before", "2026-11-19T07:53:00Z"], databasePath);
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr.split("\n")[0]).toContain("does not exist");
+    expect(existsSync(join(directory, "missing"))).toBe(false);
   });
 });
