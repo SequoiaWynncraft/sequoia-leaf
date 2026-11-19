@@ -1,9 +1,9 @@
-import { parsePlayerId } from "@sequoia-leaf/core";
-import { Clock, Context, Duration, Effect, Layer, Schema } from "effect";
-import { HttpClient, HttpClientRequest, HttpClientResponse, type HttpServerRequest } from "effect/http";
+import { Cache, Context, Duration, Effect, Exit, Layer, Schema } from "effect";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import type { Identity } from "../api/api.ts";
 import { AppConfig } from "../config.ts";
+import { PlayerUuid } from "../wire.ts";
 
 export type IdentityResult =
   | { readonly status: "ok"; readonly identity: Identity }
@@ -14,12 +14,12 @@ export type IdentityResult =
 
 const TIMEOUT = Duration.seconds(3);
 /** Sessions the backend confirmed this recently are not asked about again. */
-const CACHE_MS = 60_000;
-const CACHE_LIMIT = 500;
+const CONFIRMED_FOR = Duration.minutes(1);
+const REMEMBERED = 500;
 
 /** Who a session belongs to, as sequoia-backend's `/auth/web/me` answers. */
 const BackendIdentity = Schema.Struct({
-  minecraft_uuid: Schema.String,
+  minecraft_uuid: PlayerUuid,
   minecraft_username: Schema.String,
   guild_rank: Schema.optionalKey(Schema.NullOr(Schema.String)),
   website_admin: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
@@ -29,8 +29,9 @@ const BackendIdentity = Schema.Struct({
  * Asks sequoia-backend who a session token belongs to. The backend issued the
  * token and is the only one that can tell whether it was revoked, so Leaf never
  * inspects the token itself. Sessions it confirmed in the last minute are
- * remembered, so a page that makes several requests asks once; a revoked
- * session stops working within a minute.
+ * remembered, so a page that makes several requests asks once, and requests
+ * that arrive together share one question; a revoked session stops working
+ * within a minute.
  */
 export class Identities extends Context.Service<
   Identities,
@@ -39,78 +40,50 @@ export class Identities extends Context.Service<
   static readonly layer = Layer.effect(
     Identities,
     Effect.gen(function* () {
-      const config = yield* AppConfig;
+      const { backendUrl } = yield* AppConfig;
       const client = yield* HttpClient.HttpClient;
-      const confirmed = new Map<string, { identity: Identity; until: number }>();
 
       const ask = (token: string) =>
         client
           .execute(
-            HttpClientRequest.get(new URL("/auth/web/me", config.backendUrl)).pipe(
+            HttpClientRequest.get(new URL("/auth/web/me", backendUrl)).pipe(
               HttpClientRequest.bearerToken(token),
               HttpClientRequest.acceptJson,
             ),
           )
           .pipe(
-            Effect.flatMap((response) => {
+            Effect.flatMap((response): Effect.Effect<IdentityResult, unknown> => {
               if (response.status === 401) {
-                return Effect.succeed<IdentityResult>({ status: "unauthorized" });
+                return Effect.succeed({ status: "unauthorized" });
               }
-              if (response.status < 200 || response.status >= 300) {
-                return Effect.succeed<IdentityResult>({ status: "unavailable" });
-              }
-              return HttpClientResponse.schemaBodyJson(BackendIdentity)(response).pipe(
-                Effect.map((body): IdentityResult => {
-                  const identity = toIdentity(body);
-                  return identity === undefined ? { status: "unavailable" } : { status: "ok", identity };
-                }),
+              return HttpClientResponse.filterStatusOk(response).pipe(
+                Effect.flatMap(HttpClientResponse.schemaBodyJson(BackendIdentity)),
+                Effect.map(toResult),
               );
             }),
             Effect.timeout(TIMEOUT),
             Effect.catch(() => Effect.succeed<IdentityResult>({ status: "unavailable" })),
           );
 
-      const identify = Effect.fn("Identities.identify")(function* (token: string) {
-        const now = yield* Clock.currentTimeMillis;
-        const cached = confirmed.get(token);
-        if (cached !== undefined && cached.until > now) {
-          return { status: "ok", identity: cached.identity } satisfies IdentityResult;
-        }
-        const result = yield* ask(token);
-        if (result.status === "unauthorized") {
-          confirmed.delete(token);
-        } else if (result.status === "ok") {
-          if (confirmed.size >= CACHE_LIMIT) {
-            confirmed.clear();
-          }
-          confirmed.set(token, { identity: result.identity, until: now + CACHE_MS });
-        }
-        return result;
+      const confirmed = yield* Cache.makeWith(ask, {
+        capacity: REMEMBERED,
+        // Only a confirmed session is remembered; a refusal or an outage is asked about again.
+        timeToLive: (exit) => (Exit.isSuccess(exit) && exit.value.status === "ok" ? CONFIRMED_FOR : Duration.zero),
       });
-      return Identities.of({ identify });
+      return Identities.of({ identify: (token) => Cache.get(confirmed, token) });
     }),
   );
 }
 
-function toIdentity(body: typeof BackendIdentity.Type): Identity | undefined {
-  const playerId = parsePlayerId(body.minecraft_uuid);
-  if (playerId === undefined) {
-    return undefined;
-  }
+function toResult(body: typeof BackendIdentity.Type): IdentityResult {
   const rank = body.guild_rank;
   return {
-    playerId,
-    username: body.minecraft_username,
-    guildRank: typeof rank === "string" && rank !== "" ? rank : null,
-    admin: body.website_admin === true,
+    status: "ok",
+    identity: {
+      playerId: body.minecraft_uuid,
+      username: body.minecraft_username,
+      guildRank: typeof rank === "string" && rank !== "" ? rank : null,
+      admin: body.website_admin === true,
+    },
   };
-}
-
-/** The session token of a request: a bearer token, or the site's `seq_session` cookie. */
-export function sessionToken(request: HttpServerRequest.HttpServerRequest): string | undefined {
-  const authorization = request.headers["authorization"];
-  if (authorization?.startsWith("Bearer ")) {
-    return authorization.slice("Bearer ".length).trim() || undefined;
-  }
-  return request.cookies["seq_session"] || undefined;
 }

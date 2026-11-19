@@ -76,12 +76,6 @@ describe("signing in", () => {
     expect(await response.json()).toMatchObject({ code: "unauthorized" });
   });
 
-  it("accepts the website's session cookie", async () => {
-    const response = await get("/v1/me", { Cookie: "seq_theme=gaz-purple; seq_session=alice-token" });
-
-    expect(response.status).toBe(200);
-  });
-
   it("turns away someone who is not in the guild", async () => {
     sessions["visitor-token"] = () => Response.json({ ...member, guild_rank: null });
 

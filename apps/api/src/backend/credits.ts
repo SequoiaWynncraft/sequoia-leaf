@@ -2,29 +2,30 @@ import { type Activity, raidKeyForName } from "@sequoia-leaf/core";
 import { Effect, Schema } from "effect";
 import type { HttpClient } from "effect/http";
 
-import { type FeedConfig, type FeedError, FeedInstant, FeedPlayerId, readFeedWindow } from "../feeds.ts";
+import { type FeedConfig, type FeedError, readFeedWindow } from "../feeds.ts";
+import { IsoTime, PlayerUuid } from "../wire.ts";
 
 /** One raid party member's credit, as sequoia-backend's `/internal/player-credits` lists it. */
 const RaidCredit = Schema.Struct({
   completion_id: Schema.Int,
-  completed_at: FeedInstant,
+  completed_at: IsoTime,
   raid_name: Schema.NonEmptyString,
   /** This member's share of the rating the raid earned the guild. */
   season_rating: Schema.Int,
-  player_uuid: FeedPlayerId,
+  player_uuid: PlayerUuid,
 });
 
 /** One war participant's credit. */
 const WarCredit = Schema.Struct({
   war_submission_id: Schema.Int,
-  completed_at: FeedInstant,
+  completed_at: IsoTime,
   territory: Schema.NonEmptyString,
   season_rating: Schema.Int,
   /** Null while the backend has not scored the war yet. */
   war_points: Schema.NullOr(Schema.Finite),
   /** Whether the territory was in Sequoia's claim; left out, or null, when the backend does not know. */
   in_claim: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
-  player_uuid: FeedPlayerId,
+  player_uuid: PlayerUuid,
 });
 
 const CreditFeed = Schema.Struct({ raids: Schema.Array(RaidCredit), wars: Schema.Array(WarCredit) });
