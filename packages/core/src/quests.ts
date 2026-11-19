@@ -361,7 +361,11 @@ export function nextDailyChargeAt(book: QuestBook, rules: QuestRules): number | 
 
 /** Whether the slot's latest quest still occupies the slot at this moment. */
 function holdsSlot(quest: Quest | undefined, at: number): boolean {
-  if (quest === undefined || (quest.expiresAt !== null && at >= quest.expiresAt)) {
+  // A quest that expires where it began never held its slot: it was retired.
+  if (
+    quest === undefined ||
+    (quest.expiresAt !== null && (at >= quest.expiresAt || quest.expiresAt <= quest.startedAt))
+  ) {
     return false;
   }
   // A finished weekly or timed quest occupies the slot until it ends; other finished quests free it at once.

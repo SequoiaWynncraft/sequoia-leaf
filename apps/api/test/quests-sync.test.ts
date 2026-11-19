@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
 
-import { type Activity, DEFAULT_RULES, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
+import { type Activity, DEFAULT_RULES, type PlayerId, playerId, refreshQuests, type Rules } from "@sequoia-leaf/core";
 
 import { type CreditSource, syncCredits } from "../src/earning/sync.ts";
 import { getAccount, listEntries } from "../src/ledger/store.ts";
@@ -116,6 +116,29 @@ describe("quests in the credit sync", () => {
     // Three raids at 110, the daily at 200, the repeatable at 50 and the weekly at 800.
     expect(getAccount(db, alice).balance).toBe(1380);
     expect(loadQuestBook(db, alice)?.dailyCharges).toBe(0);
+  });
+
+  it("stores a repeatable left open as retired once the rules hand none out", async () => {
+    const activities = [raid(1, alice, T0 + MINUTE)];
+    const source = feed(activities);
+    await sync(source, T0);
+    await sync(source, T0 + 5 * MINUTE);
+    const off = {
+      ...rules,
+      quests: { ...rules.quests, templates: rules.quests.templates.filter((t) => t.slot !== "repeatable") },
+    };
+    activities.push(raid(2, alice, T0 + 6 * MINUTE));
+
+    await syncCredits(db, source, off, T0 + 10 * MINUTE, "recent");
+
+    const stored = db
+      .query<{ progress: number; started_at: number; expires_at: number | null }, []>(
+        "SELECT progress, started_at, expires_at FROM quests WHERE slot = 'repeatable'",
+      )
+      .all();
+    expect(stored).toEqual([{ progress: 1, started_at: T0 + MINUTE, expires_at: T0 + MINUTE }]);
+    const book = loadQuestBook(db, alice);
+    expect(book && refreshQuests(book, alice, T0 + 11 * MINUTE, off.quests).written).toEqual([]);
   });
 
   it("pays a quest once when the same events are read again", async () => {
