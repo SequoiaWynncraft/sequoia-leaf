@@ -116,24 +116,27 @@ export function takeBackLevels(
  * Pays every player for the levels they have reached and not been paid for,
  * such as the ones reached before levels paid Leaf. It writes no events: those
  * levels were announced when they were reached. Running it again changes
- * nothing.
+ * nothing. Immediate, for the reason the credit sync's write is
+ * (`windowedSync`): it reads before it writes.
  */
 export function payMissedLevels(db: Database, rules: LevelRules, now: number): { players: number; leaf: number } {
-  return db.transaction(() => {
-    let players = 0;
-    let total = 0;
-    const rows = db.query<{ player_id: string }, []>("SELECT player_id FROM accounts ORDER BY player_id").all();
-    for (const row of rows) {
-      const playerId = parsePlayerId(row.player_id);
-      if (playerId === undefined) {
-        continue;
+  return db
+    .transaction(() => {
+      let players = 0;
+      let total = 0;
+      const rows = db.query<{ player_id: string }, []>("SELECT player_id FROM accounts ORDER BY player_id").all();
+      for (const row of rows) {
+        const playerId = parsePlayerId(row.player_id);
+        if (playerId === undefined) {
+          continue;
+        }
+        const paid = payLevels(db, playerId, rules, now);
+        if (paid > 0) {
+          players += 1;
+          total += paid;
+        }
       }
-      const paid = payLevels(db, playerId, rules, now);
-      if (paid > 0) {
-        players += 1;
-        total += paid;
-      }
-    }
-    return { players, leaf: total };
-  })();
+      return { players, leaf: total };
+    })
+    .immediate();
 }

@@ -288,15 +288,20 @@ each member their share, so raids paid from then on are right, and
 `apps/api/scripts/correct-raid-shares.ts` corrects the ones paid before.
 
 It reads the corrected feed from the credit sync's first run to now, 31 days
-at a time, and then, for each player in a transaction of their own:
+at a time, and then, for each player in a transaction of their own, looks at
+each raid payment the sync made (`raid:<completion id>:<player>`) before the
+cutoff given as `--paid-before`:
 
-- Each raid payment the sync made (`raid:<completion id>:<player>`) that is
-  more than the member's share is reversed in full, Leaf and XP, by
-  `undo:raid:<completion id>:<player>`, and the share is paid in its place by
-  `raid:<completion id>:<player>:share`. A share of zero pays nothing.
-- A payment that is the share or less stands. So does one the feed no longer
-  lists, for example because the name no longer resolves; the report counts
-  those.
+- A payment that is more than the member's share is reversed in full, Leaf and
+  XP, by `undo:raid:<completion id>:<player>`, and the share is paid in its
+  place by `raid:<completion id>:<player>:share`. A share of zero pays nothing.
+- A payment that is the share or less stands.
+- A payment the feed no longer lists under its completion id stands, and the
+  report lists it in `payments_without_feed_row` with its completion id,
+  player, Leaf, XP and `created_at`, to be reconciled by hand. That happens
+  when a name no longer resolves, or became ambiguous, or when the backend
+  merged two reports into one completion after the sync paid the other id.
+  The correction does not try to match the ids itself.
 - With the XP corrected, the payout of each level the player no longer reaches
   is reversed (`undo:level:<player>:<level>`). Reaching that level again pays it
   again, once, keyed `level:<player>:<level>:2`.
@@ -306,28 +311,85 @@ there is no event type for it, and the mod would not know one. Players see the
 corrected balance, XP and level the next time they read them.
 
 It is idempotent. A payment that has been reversed is not looked at again, and
-the shares' keys are not raid payment keys, so running it again changes
-nothing. A run that stops partway leaves the players it reached corrected, and
-the next run does the rest.
+the shares' keys are not raid payment keys, so running it again with the same
+`--paid-before` changes nothing. A run that stops partway leaves the players it
+reached corrected, and the next run does the rest.
 
-Run it in the production container once the backend's fix is deployed, from a
-terminal on the Coolify app or with `docker exec` on the server. Before the
-fix the feed still lists the whole party's rating, which is what was paid, so
-it finds nothing to correct. It uses the app's own `DATABASE_PATH`,
-`BACKEND_URL` and `BACKEND_INTERNAL_TOKEN`, and the server can keep running.
+### The cutoff
+
+`--paid-before` is required and has no default. Give the moment the backend's
+fix went live: its new container started at about 07:53 UTC on 2026-11-19, so
+`2026-11-19T07:53:00Z`. A sync run stamps its payments with the moment it
+started, before it reads the feed, and the new container served only after it
+started, so every payment made before then was paid from the old feed.
+
+A payment made at or after the cutoff stands, even when the feed now lists a
+smaller share for it. It was paid from the fixed feed, and a smaller share now
+means the backend has since added members to the completion: its
+reconciliation can add names to a completion it already reported, under the
+same id, which divides the rating among more members. Taking that back would
+take back a payment that was right when it was made.
+
+An earlier cutoff is the safe side: it can leave an overpayment standing, but
+never takes back a payment of the share. The report lists every payment made
+after the cutoff that the feed now lists at a smaller share, in
+`payments_after_cutoff_above_share`, so one left standing can be found and
+dealt with by hand.
+
+### Running it
+
+Run it in the production container, from a terminal on the Coolify app or with
+`docker exec` on the server. It uses the app's own `DATABASE_PATH`,
+`BACKEND_URL` and `BACKEND_INTERNAL_TOKEN`, and refuses a `DATABASE_PATH` that
+does not exist rather than create an empty database, which would have nothing
+to correct.
+
+Run the dry run on a copy of the database, never on `/data/leaf.db` itself. It
+does everything in one transaction and rolls it back, so it keeps nothing, but
+it opens and migrates the database it is given, and it holds that database's
+write lock until it ends, which stalls the server's writes for the whole run.
+Copy the database with `VACUUM INTO`, which takes a consistent copy while the
+server runs, and point `DATABASE_PATH` at the copy:
 
 ```sh
-bun run apps/api/scripts/correct-raid-shares.ts           # dry run: reports what it would do, keeps nothing
-bun run apps/api/scripts/correct-raid-shares.ts --apply   # takes a snapshot, then corrects
+bun -e 'import { Database } from "bun:sqlite"; new Database("/data/leaf.db", { readonly: true }).run("VACUUM INTO ?", ["/tmp/leaf-dry-run.db"])'
+DATABASE_PATH=/tmp/leaf-dry-run.db bun run apps/api/scripts/correct-raid-shares.ts --paid-before 2026-11-19T07:53:00Z
+rm /tmp/leaf-dry-run.db*
 ```
 
-A dry run does everything in one transaction and rolls it back. `--apply`
-first writes a snapshot to `/data/backups`, since a reversal cannot itself be
-reversed. Restoring it as under [Backups](#backups) undoes the correction, and
-everything else written after it.
+Then apply it to the live database, with the server running:
 
-Either prints one JSON object: how many players and payments were corrected,
-the Leaf and XP the reversals took back and the shares paid, the level payouts
-reversed, the net change, how many players lost a level and the most any lost,
-the payments without a feed row, and the five players it took the most Leaf
-from, by UUID.
+```sh
+bun run apps/api/scripts/correct-raid-shares.ts --paid-before 2026-11-19T07:53:00Z --apply
+```
+
+`--apply` first writes a snapshot to `BACKUP_DIR` (`/data/backups`), since a
+reversal cannot itself be reversed. Restoring it as under [Backups](#backups)
+undoes the correction, and everything else written after it. It then corrects
+one player at a time, each in a short transaction. A credit sync that runs
+meanwhile waits for each to finish: its write transaction takes the write lock
+when it begins, so a correction's commit cannot land between its reads and its
+writes.
+
+Either prints one JSON object: the cutoff, how many players and payments were
+corrected, the Leaf and XP the reversals took back and the shares paid, the
+level payouts reversed, the net change, how many players lost a level and the
+most any lost, the payments without a feed row and the payments after the
+cutoff the feed now lists lower, each listed, and the five players it took the
+most Leaf from, by UUID.
+
+### What it leaves as it is
+
+- **Quest rewards.** A `season_rating` quest finished with the inflated rating
+  keeps its reward, Leaf and XP, and an open one keeps the progress it counted.
+  That is the owner's decision: quest rewards are outside the correction. The
+  XP such a reward paid still counts toward levels.
+- **What was recorded.** The `activities` table keeps the rating each raid was
+  recorded with, and nothing is counted again from it.
+- **Payments it does not correct**: those at or below the share, those made at
+  or after the cutoff, and those the feed no longer lists. The report lists the
+  last two kinds where they may be wrong.
+- **Wars and achievement milestones**, which the fix did not touch, and level
+  payouts for levels the corrected XP still reaches.
+- **Events already sent.** `leaf_earned` and `level_up` events keep the amounts
+  they announced.
