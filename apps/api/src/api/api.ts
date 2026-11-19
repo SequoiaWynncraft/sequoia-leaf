@@ -10,19 +10,7 @@ import {
   OpenApi,
 } from "effect/http-api";
 
-import {
-  CostChanged,
-  IdentityUnavailable,
-  InsufficientLeaf,
-  InternalError,
-  InvalidAfter,
-  InvalidCost,
-  InvalidQuest,
-  NotAMember,
-  NotCurrent,
-  NotRerollable,
-  Unauthorized,
-} from "./errors.ts";
+import { IdentityUnavailable, InternalError, Invalid, NotAMember, Refused, Unauthorized } from "./errors.ts";
 import { Events, Health, Me, Quests, RerollBody, Rerolled } from "./schemas.ts";
 
 // Leaf's HTTP API, declared once: the server implements it, and its OpenAPI
@@ -55,7 +43,7 @@ export class Unexpected extends HttpApiMiddleware.Service<Unexpected>()("leaf/ap
 
 /** Answers a reroll whose body is not `{ "leaf": n }` with `invalid_cost`. */
 export class RerollBodyErrors extends HttpApiMiddleware.Service<RerollBodyErrors>()("leaf/api/RerollBodyErrors", {
-  error: InvalidCost,
+  error: Invalid,
 }) {}
 
 const EventPosition = { after: Schema.optional(Schema.String) };
@@ -72,13 +60,13 @@ export class MeApi extends HttpApiGroup.make("me")
       params: { id: Schema.String },
       payload: RerollBody,
       success: Rerolled,
-      error: [InvalidQuest, NotCurrent, NotRerollable, CostChanged, InsufficientLeaf],
+      error: [Invalid, Refused],
     }).middleware(RerollBodyErrors),
-    HttpApiEndpoint.get("events", "/events", { query: EventPosition, success: Events, error: InvalidAfter }),
+    HttpApiEndpoint.get("events", "/events", { query: EventPosition, success: Events, error: Invalid }),
     HttpApiEndpoint.get("stream", "/events/stream", {
       query: EventPosition,
       success: Schema.String.pipe(HttpApiSchema.asText({ contentType: "text/event-stream" })),
-      error: InvalidAfter,
+      error: Invalid,
     }),
   )
   .middleware(Session)

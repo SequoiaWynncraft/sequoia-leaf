@@ -78,13 +78,14 @@ describe("syncAchievements", () => {
 
     // 5,000 XP reaches level 4, and levels 2 to 4 pay 100, 125 and 150 Leaf, with no XP.
     expect(await ledger.account(alice)).toMatchObject({ balance: 5375, xp: 5000 });
-    const entries = await ledger.query<{
-      origin: string;
-      idempotencyKey: string;
-      balanceDelta: number;
-      xpDelta: number;
-    }>((sql) => sql`SELECT * FROM ledger_entries WHERE player_id = ${alice} ORDER BY id DESC`);
-    expect(entries.map((entry) => [entry.origin, entry.idempotencyKey, entry.balanceDelta, entry.xpDelta])).toEqual([
+    const entries = await ledger.query(
+      (sql) =>
+        sql`
+        SELECT origin, idempotency_key, balance_delta, xp_delta FROM ledger_entries
+        WHERE player_id = ${alice} ORDER BY id DESC
+      `.values,
+    );
+    expect(entries).toEqual([
       ["level", `level:${alice}:4`, 150, 0],
       ["level", `level:${alice}:3`, 125, 0],
       ["level", `level:${alice}:2`, 100, 0],

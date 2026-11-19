@@ -5,7 +5,7 @@ import { Effect } from "effect";
 import { SqlClient } from "effect/sql";
 
 import { Ledger, type PostResult } from "../src/ledger/store.ts";
-import { rejection, testLeaf } from "./support.ts";
+import { noNetwork, rejection, testLeaf } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const bob = playerId("00000000-0000-4000-8000-00000000000b");
@@ -14,7 +14,7 @@ const NOW = 1_763_000_000_000;
 let ledger: ReturnType<typeof testLeaf>;
 
 beforeEach(() => {
-  ledger = testLeaf({ now: NOW }, () => Promise.reject(new Error("No network in this test")));
+  ledger = testLeaf({ now: NOW }, noNetwork);
 });
 
 function post(posting: Posting, now = NOW): Promise<PostResult> {

@@ -1,11 +1,14 @@
 import { Schema } from "effect";
 
-// Every error answer is `{ "code", "message" }` with the status on its class.
+// Every error answer is `{ "code", "message" }`, with one class per status.
 // `code` is stable and machine-readable, and clients branch on it; the message
-// is for people. `Schema.Error` encodes only the fields declared here, so that
-// is exactly what reaches the wire.
+// is for people. `Schema.Error` encodes only these fields, so that is exactly
+// what reaches the wire.
 
-const answer = <const Code extends string>(code: Code) => ({ code: Schema.tag(code), message: Schema.String });
+const answer = <const Codes extends readonly [string, ...string[]]>(...codes: Codes) => ({
+  code: Schema.Literals(codes),
+  message: Schema.String,
+});
 
 /** No session, or one the backend no longer accepts. */
 export class Unauthorized extends Schema.Error<Unauthorized>("Unauthorized")(answer("unauthorized"), {
@@ -17,42 +20,25 @@ export class NotAMember extends Schema.Error<NotAMember>("NotAMember")(answer("n
   httpApiStatus: 403,
 }) {}
 
-/** The backend could not be asked who the session belongs to. */
-export class IdentityUnavailable extends Schema.Error<IdentityUnavailable>("IdentityUnavailable")(
-  answer("identity_unavailable"),
-  { httpApiStatus: 503 },
+/** A request Leaf cannot read: an event id that is not one, a quest id that is not one, or a reroll without a cost. */
+export class Invalid extends Schema.Error<Invalid>("Invalid")(
+  answer("invalid_after", "invalid_quest", "invalid_cost"),
+  { httpApiStatus: 400 },
 ) {}
 
-export class InvalidAfter extends Schema.Error<InvalidAfter>("InvalidAfter")(answer("invalid_after"), {
-  httpApiStatus: 400,
-}) {}
-
-export class InvalidQuest extends Schema.Error<InvalidQuest>("InvalidQuest")(answer("invalid_quest"), {
-  httpApiStatus: 400,
-}) {}
-
-export class InvalidCost extends Schema.Error<InvalidCost>("InvalidCost")(answer("invalid_cost"), {
-  httpApiStatus: 400,
-}) {}
-
-/** The quest asked for is not the one in its slot any more. */
-export class NotCurrent extends Schema.Error<NotCurrent>("NotCurrent")(answer("not_current"), {
-  httpApiStatus: 409,
-}) {}
-
-export class NotRerollable extends Schema.Error<NotRerollable>("NotRerollable")(answer("not_rerollable"), {
-  httpApiStatus: 409,
-}) {}
-
-export class CostChanged extends Schema.Error<CostChanged>("CostChanged")(answer("cost_changed"), {
-  httpApiStatus: 409,
-}) {}
-
-export class InsufficientLeaf extends Schema.Error<InsufficientLeaf>("InsufficientLeaf")(answer("insufficient_leaf"), {
-  httpApiStatus: 409,
-}) {}
+/** A reroll Leaf refuses, changing nothing. */
+export class Refused extends Schema.Error<Refused>("Refused")(
+  answer("not_current", "not_rerollable", "cost_changed", "insufficient_leaf"),
+  { httpApiStatus: 409 },
+) {}
 
 /** Something nothing expected went wrong. It is logged with its cause. */
 export class InternalError extends Schema.Error<InternalError>("InternalError")(answer("internal_error"), {
   httpApiStatus: 500,
 }) {}
+
+/** The backend could not be asked who the session belongs to. */
+export class IdentityUnavailable extends Schema.Error<IdentityUnavailable>("IdentityUnavailable")(
+  answer("identity_unavailable"),
+  { httpApiStatus: 503 },
+) {}

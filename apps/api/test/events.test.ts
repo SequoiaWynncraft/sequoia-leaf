@@ -1,16 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import { type Activity, DEFAULT_RULES, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
+import { DEFAULT_RULES, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
 import { Effect, Layer } from "effect";
 
 import { syncCredits } from "../src/earning/sync.ts";
 import { Events } from "../src/events/store.ts";
 import { StreamTuning } from "../src/http/handlers.ts";
-import { testLeaf } from "./support.ts";
+import { MINUTE, raid, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
-const MINUTE = 60_000;
 /** Wednesday 4 November 2026, 12:00 UTC. */
 const T0 = Date.UTC(2026, 10, 4, 12);
 
@@ -32,18 +31,6 @@ const rules: Rules = {
   },
   levels: { firstLevelXp: 300, xpGrowthPerLevel: 250, firstLevelLeaf: 30, leafGrowthPerLevel: 25 },
 };
-
-function raid(id: number, player: PlayerId, occurredAt: number): Activity {
-  return {
-    kind: "raid",
-    sourceKey: `raid:${id}:${player}`,
-    playerId: player,
-    occurredAt,
-    seasonRating: 110,
-    raid: "tna",
-    raidName: "The Nameless Anomaly",
-  };
-}
 
 /** A backend whose only session is Alice's. */
 function backend(url: string, init: RequestInit): Promise<Response> {

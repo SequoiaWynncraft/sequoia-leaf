@@ -7,7 +7,7 @@ import { Redacted } from "effect";
 
 import { bucketOffsite, type Offsite, offsiteCopier, RETRY_MS } from "../src/backup/offsite.ts";
 import { takeSnapshot } from "../src/backup/snapshot.ts";
-import { rejection, testLeaf } from "./support.ts";
+import { noNetwork, rejection, testLeaf } from "./support.ts";
 
 const T0 = Date.parse("2026-11-16T13:00:00Z");
 const HOUR = 60 * 60_000;
@@ -19,7 +19,7 @@ let leafServer: ReturnType<typeof testLeaf>;
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), "leaf-offsite-"));
   backups = join(directory, "backups");
-  leafServer = testLeaf({ now: T0 }, () => Promise.reject(new Error("No network in this test")));
+  leafServer = testLeaf({ now: T0 }, noNetwork);
 });
 
 afterEach(async () => {
