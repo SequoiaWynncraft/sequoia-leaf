@@ -56,6 +56,7 @@ describe("openDatabase", () => {
       "0007_war_claim.sql",
       "0008_either_or_quests.sql",
       "0009_timed_quests.sql",
+      "0010_quest_rerolls.sql",
     ]);
     db.close();
   });

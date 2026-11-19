@@ -21,6 +21,11 @@ export type PlayerEvent =
     }
   /** A quest was finished and its reward paid. */
   | { readonly type: "quest_completed"; readonly data: { quest: ReturnType<typeof questJson> } }
+  /** The player swapped a quest for another. `leaf` is what it cost, 0 for a free reroll. */
+  | {
+      readonly type: "quest_rerolled";
+      readonly data: { replaced: ReturnType<typeof questJson>; quest: ReturnType<typeof questJson>; leaf: number };
+    }
   /**
    * The player's XP reached a new level. `leaf` is what the levels reached
    * paid, every level from the one before up to `level`.

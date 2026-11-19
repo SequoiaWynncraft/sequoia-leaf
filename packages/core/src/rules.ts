@@ -131,6 +131,9 @@ export const DEFAULT_RULES: Rules = {
     // A timed quest opens at 00:00, 04:00, 08:00, ... UTC, for two hours each,
     // from the first window after they launched.
     timed: { everyMs: 4 * HOUR_MS, openMs: 2 * HOUR_MS, firstAt: Date.UTC(2026, 10, 19, 4) },
+    // A member can swap a daily or weekly they don't fancy: once a day per slot
+    // for free, then 100 Leaf a time. Timed quests are the guild's shared one.
+    reroll: { slots: ["daily", "weekly"], freePerDay: 1, leaf: 100 },
   },
   levels: {
     firstLevelXp: 1000,

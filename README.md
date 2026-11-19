@@ -109,6 +109,14 @@ Every member has three quest slots. The templates and rewards are in
   have no repeatable templates, and the ones open when timed quests began were
   dropped. Nothing counts toward them, even an activity reported late.
 
+A member can **reroll** their daily or weekly: swap the quest in progress for a
+different one from the same slot. Each slot's first reroll of the UTC day is
+free and each one after costs 100 Leaf (`reroll` in `rules.ts`). The new quest
+counts from the moment of the reroll and ends when the old one would have; the
+old one's progress is lost, and a raid or war from before the reroll that is
+counted late counts toward neither. A rerolled daily is the same banked daily.
+Finished quests and timed quests, which the whole guild shares, can't be rerolled.
+
 A quest asks for one or two of these. Most ask for two, raids or wars, as in
 "Complete 3 NOL raids or 9 wars", so raiders and warrers can both finish them.
 Each keeps its own progress, and whichever is met first finishes the quest. A
@@ -123,20 +131,21 @@ about a third of a raid's time.
 
 A quest counts the activities the credit sync records, in the same database
 transaction that records them, and a finished quest pays its Leaf and XP in
-that transaction too. Between activities nothing is written: what a member sees is
-calculated from their last stored state.
+that transaction too. Between activities and rerolls nothing is written: what a
+member sees is calculated from their last stored state.
 
 ## API
 
 Responses are JSON with `snake_case` fields. Errors are `{ "code", "message" }`.
 
-| Route                      | What it returns                                            |
-| -------------------------- | ---------------------------------------------------------- |
-| `GET /healthz`             | `{ "status": "ok" }`                                       |
-| `GET /v1/me`               | The signed-in member's Leaf, XP and level.                 |
-| `GET /v1/me/quests`        | Their quests, banked dailies and recently finished quests. |
-| `GET /v1/me/events`        | What happened to them recently, oldest first.              |
-| `GET /v1/me/events/stream` | The same events as they happen, as server-sent events.     |
+| Route                            | What it returns                                            |
+| -------------------------------- | ---------------------------------------------------------- |
+| `GET /healthz`                   | `{ "status": "ok" }`                                       |
+| `GET /v1/me`                     | The signed-in member's Leaf, XP and level.                 |
+| `GET /v1/me/quests`              | Their quests, banked dailies and recently finished quests. |
+| `POST /v1/me/quests/{id}/reroll` | Swaps one of their quests for another.                     |
+| `GET /v1/me/events`              | What happened to them recently, oldest first.              |
+| `GET /v1/me/events/stream`       | The same events as they happen, as server-sent events.     |
 
 `/v1/me` routes take the member's Sequoia session, as `Authorization: Bearer`
 or as the site's `seq_session` cookie. The server asks sequoia-backend who the
@@ -147,6 +156,20 @@ Each quest in `/v1/me/quests` lists its `goals`, every way to finish it, each
 with its own `type`, `raid`, `title`, `progress` and `target`. Its `objective`,
 `progress` and `target` repeat the goal nearest to being met, for clients that
 show one bar.
+
+Each quest in its `quests` also has `reroll_leaf`: what rerolling it costs now,
+0 when it is free, or null when it can't be rerolled.
+
+`POST /v1/me/quests/{id}/reroll`, with the quest's `id` such as `daily:4`,
+first counts what was just played, as `?sync=1` does, so a quest just finished
+is paid rather than swapped. It answers `{ "leaf", "spent", "quest" }`: the
+balance after it, what it cost, and the new quest in the shape `quests` uses.
+It refuses with 409 and one of these codes, changing nothing:
+
+- `not_current`: that quest is no longer in its slot. It was finished or
+  swapped since, or the same request was sent twice.
+- `not_rerollable`: a finished or timed quest.
+- `insufficient_leaf`: the balance doesn't cover the cost.
 
 Its `timed` says when the open timed quest ends (`ends_at`, null between
 windows) and when the next one opens (`next_at`).
@@ -161,12 +184,13 @@ An event is something a client would want to show when it happens. Each one is
 written in the same transaction as the change it reports, and has an id that
 only grows.
 
-| Type               | When                       | `data`                                                                                     |
-| ------------------ | -------------------------- | ------------------------------------------------------------------------------------------ |
-| `leaf_earned`      | A raid or war paid Leaf.   | `source`, `leaf`, `xp`, `detail`, `occurred_at`, and for a war `in_claim`                  |
-| `quest_completed`  | A quest finished and paid. | `quest`, in the shape `/v1/me/quests` uses                                                 |
-| `level_up`         | XP reached a new level.    | `level`, and `leaf`, what the levels reached paid                                          |
-| `achievement_paid` | A milestone paid Leaf.     | `award_id`, `ladder`, `milestone`, `tier`, `threshold`, `label`, `leaf`, `xp`, `earned_at` |
+| Type               | When                        | `data`                                                                                     |
+| ------------------ | --------------------------- | ------------------------------------------------------------------------------------------ |
+| `leaf_earned`      | A raid or war paid Leaf.    | `source`, `leaf`, `xp`, `detail`, `occurred_at`, and for a war `in_claim`                  |
+| `quest_completed`  | A quest finished and paid.  | `quest`, in the shape `/v1/me/quests` uses                                                 |
+| `quest_rerolled`   | The member swapped a quest. | `replaced` and `quest`, the old and the new, and `leaf`, what it cost                      |
+| `level_up`         | XP reached a new level.     | `level`, and `leaf`, what the levels reached paid                                          |
+| `achievement_paid` | A milestone paid Leaf.      | `award_id`, `ladder`, `milestone`, `tier`, `threshold`, `label`, `leaf`, `xp`, `earned_at` |
 
 `detail` is the raid's name or the territory fought over. `occurred_at` is when
 the raid or war was played, which can be well before the event: a credit that
