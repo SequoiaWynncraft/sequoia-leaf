@@ -2,6 +2,8 @@ import { Database } from "bun:sqlite";
 import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { Context, Effect, Layer } from "effect";
+
 const MIGRATIONS_DIR = join(import.meta.dir, "..", "migrations");
 
 /**
@@ -47,4 +49,20 @@ export function migrate(db: Database, directory: string = MIGRATIONS_DIR): strin
     })();
   }
   return pending;
+}
+
+/**
+ * The database, open for the life of the app and closed when it stops, which
+ * folds the write-ahead log back in. Its calls are synchronous: the stores take
+ * it as it is.
+ */
+export class Db extends Context.Service<Db, Database>()("leaf/Db") {
+  static readonly layer = (path: string) =>
+    Layer.effect(
+      Db,
+      Effect.acquireRelease(
+        Effect.sync(() => openDatabase(path)),
+        (db) => Effect.sync(() => db.close()),
+      ),
+    );
 }

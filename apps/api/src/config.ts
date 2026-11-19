@@ -1,5 +1,7 @@
 import { dirname, join } from "node:path";
 
+import { Context } from "effect";
+
 import type { BucketConfig } from "./backup/offsite.ts";
 
 export interface Config {
@@ -55,3 +57,6 @@ export function readConfig(env: Record<string, string | undefined>): Config {
     offsitePartlySet: offsite === undefined ? set : [],
   };
 }
+
+/** The configuration the server runs with. */
+export class AppConfig extends Context.Service<AppConfig, Config>()("leaf/AppConfig") {}

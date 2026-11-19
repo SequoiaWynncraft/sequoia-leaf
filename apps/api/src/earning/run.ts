@@ -1,31 +1,32 @@
 import { DEFAULT_RULES } from "@sequoia-leaf/core";
+import { Clock, Effect } from "effect";
 
-import { fetchCredits } from "../backend/credits.ts";
-import type { Services } from "../services.ts";
-import { syncCredits, type SyncMode, type SyncResult } from "./sync.ts";
+import { readCredits } from "../backend/credits.ts";
+import { AppConfig } from "../config.ts";
+import { Db } from "../db.ts";
+import { syncCredits, type SyncMode } from "./sync.ts";
 
 /** A player asking for fresh quests triggers a sync at most this often. */
 const ON_DEMAND_INTERVAL_MS = 15_000;
-/** The minute of each hour whose run re-reads the last week instead of the last few minutes. */
-const DEEP_SYNC_MINUTE = 17;
 
 /**
- * Reads the backend's credit feed and pays what it lists. Returns undefined,
+ * Reads the backend's credit feed and pays what it lists. Answers undefined,
  * and does nothing, when the backend token is not configured.
  */
-export async function runCreditSync(services: Services, mode: SyncMode): Promise<SyncResult | undefined> {
-  const { token, url } = services.backend;
-  if (token === undefined) {
+export const runCreditSync = Effect.fnUntraced(function* (mode: SyncMode) {
+  const { backendUrl, backendToken } = yield* AppConfig;
+  if (backendToken === undefined) {
     return undefined;
   }
-  return syncCredits(
-    services.db,
-    (from, to) => fetchCredits(services.fetcher, { baseUrl: url, token }, from, to),
+  const feed = { baseUrl: backendUrl, token: backendToken };
+  return yield* syncCredits(
+    yield* Db,
+    (from, to) => readCredits(feed, from, to),
     DEFAULT_RULES,
-    services.now(),
+    yield* Clock.currentTimeMillis,
     mode,
   );
-}
+});
 
 /**
  * Syncs on a player's request, so a raid they just finished shows up without
@@ -34,35 +35,13 @@ export async function runCreditSync(services: Services, mode: SyncMode): Promise
  * from what is stored. A failure is logged rather than shown to the player,
  * and still uses up the allowance; the scheduled run will catch up.
  */
-export async function syncOnDemand(services: Services): Promise<void> {
-  try {
-    const now = services.now();
-    const claim = services.db
-      .query("UPDATE sync_state SET on_demand_at = ? WHERE name = 'credits' AND on_demand_at <= ?")
-      .run(now, now - ON_DEMAND_INTERVAL_MS);
-    if (claim.changes === 0) {
-      return;
-    }
-    await runCreditSync(services, "recent");
-  } catch (error) {
-    console.error("The on-demand credit sync failed", error);
+export const syncOnDemand = Effect.gen(function* () {
+  const db = yield* Db;
+  const now = yield* Clock.currentTimeMillis;
+  const claim = db
+    .query("UPDATE sync_state SET on_demand_at = ? WHERE name = 'credits' AND on_demand_at <= ?")
+    .run(now, now - ON_DEMAND_INTERVAL_MS);
+  if (claim.changes > 0) {
+    yield* runCreditSync("recent");
   }
-}
-
-/** A deep sync at minute 17 of each hour, a recent one every other minute. */
-export function scheduledMode(now: number): SyncMode {
-  return new Date(now).getUTCMinutes() === DEEP_SYNC_MINUTE ? "deep" : "recent";
-}
-
-/** The scheduled run of the credit sync. Never throws. */
-export async function runScheduledSync(services: Services): Promise<void> {
-  const mode = scheduledMode(services.now());
-  try {
-    const result = await runCreditSync(services, mode);
-    if (result !== undefined) {
-      console.log(JSON.stringify({ event: "credit_sync", mode, ...result }));
-    }
-  } catch (error) {
-    console.error(`The scheduled ${mode} credit sync failed`, error);
-  }
-}
+}).pipe(Effect.catchCause((cause) => Effect.logError("The on-demand credit sync failed", cause)));

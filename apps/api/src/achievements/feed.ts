@@ -1,104 +1,46 @@
-import { type AchievementAward, parsePlayerId } from "@sequoia-leaf/core";
+import type { AchievementAward } from "@sequoia-leaf/core";
+import { Effect, Schema } from "effect";
+import type { HttpClient } from "effect/http";
 
-import type { Fetcher } from "../services.ts";
+import { type FeedConfig, type FeedError, FeedInstant, FeedPlayerId, readFeedWindow } from "../feeds.ts";
 
-export interface SierraConfig {
-  /** Origin of Sierra's internal API, such as `http://sequoia-sierra:8082`. */
-  readonly baseUrl: string;
-  /** The internal API token Sierra shares with sequoia-backend. */
-  readonly token: string;
-}
+/** Text that is left out, null, or a non-empty string. */
+const OptionalText = Schema.optionalKey(Schema.NullOr(Schema.NonEmptyString));
 
-/** Sierra could not be read, or it returned something that is not an awards feed. */
-export class AwardFeedError extends Error {
-  override readonly name = "AwardFeedError";
-}
+/** One milestone a player reached, as Sierra's `/internal/v1/achievements/awards` lists it. */
+const Award = Schema.Struct({
+  award_id: Schema.NonEmptyString,
+  player_uuid: FeedPlayerId,
+  achievement_key: Schema.NonEmptyString,
+  milestone_id: OptionalText,
+  tier: OptionalText,
+  threshold: Schema.optionalKey(Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)))),
+  label: OptionalText,
+  earned_at: FeedInstant,
+});
 
-const TIMEOUT_MS = 10_000;
+const AwardFeed = Schema.Struct({ awards: Schema.Array(Award) });
 
 /**
- * Reads the achievement milestones players reached during [from, to) from
- * Sierra's `/internal/v1/achievements/awards`. Times are milliseconds since the
- * Unix epoch. Anything unexpected fails the whole read, so a malformed feed is
- * never partly paid out.
+ * The achievement milestones players reached during [from, to). Anything
+ * unexpected fails the whole read, so a malformed feed is never partly paid out.
  */
-export async function fetchAwards(
-  fetcher: Fetcher,
-  config: SierraConfig,
+export const readAwards = (
+  config: FeedConfig,
   from: number,
   to: number,
-): Promise<AchievementAward[]> {
-  const url = new URL("/internal/v1/achievements/awards", config.baseUrl);
-  url.searchParams.set("from", new Date(from).toISOString());
-  url.searchParams.set("to", new Date(to).toISOString());
-  const response = await fetcher(url.toString(), {
-    headers: { Authorization: `Bearer ${config.token}`, Accept: "application/json" },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  if (!response.ok) {
-    throw new AwardFeedError(`Sierra answered the awards feed with HTTP ${response.status}`);
-  }
-  const body: unknown = await response.json();
-  if (!isRecord(body) || !Array.isArray(body["awards"])) {
-    throw new AwardFeedError("The awards feed has no awards list");
-  }
-  return body["awards"].map(award);
-}
-
-function award(row: unknown): AchievementAward {
-  if (!isRecord(row)) {
-    throw new AwardFeedError("An award is not an object");
-  }
-  const playerId = parsePlayerId(text(row, "player_uuid"));
-  if (playerId === undefined) {
-    throw new AwardFeedError("An award has player_uuid that is not a UUID");
-  }
-  const earnedAt = Date.parse(text(row, "earned_at"));
-  if (Number.isNaN(earnedAt)) {
-    throw new AwardFeedError("An award has earned_at that is not a timestamp");
-  }
-  return {
-    awardId: text(row, "award_id"),
-    playerId,
-    ladder: text(row, "achievement_key"),
-    milestoneId: optionalText(row, "milestone_id"),
-    tier: optionalText(row, "tier"),
-    threshold: optionalCount(row, "threshold"),
-    label: optionalText(row, "label"),
-    earnedAt,
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function text(row: Record<string, unknown>, field: string): string {
-  const value = row[field];
-  if (typeof value !== "string" || value === "") {
-    throw new AwardFeedError(`An award has no ${field}`);
-  }
-  return value;
-}
-
-function optionalText(row: Record<string, unknown>, field: string): string | null {
-  const value = row[field];
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value !== "string" || value === "") {
-    throw new AwardFeedError(`An award has ${field} that is neither text nor null`);
-  }
-  return value;
-}
-
-function optionalCount(row: Record<string, unknown>, field: string): number | null {
-  const value = row[field];
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    throw new AwardFeedError(`An award has ${field} that is neither a whole number nor null`);
-  }
-  return value;
-}
+): Effect.Effect<AchievementAward[], FeedError, HttpClient.HttpClient> =>
+  readFeedWindow("awards", config, "/internal/v1/achievements/awards", AwardFeed, from, to).pipe(
+    Effect.map(({ awards }) =>
+      awards.map((row) => ({
+        awardId: row.award_id,
+        playerId: row.player_uuid,
+        ladder: row.achievement_key,
+        milestoneId: row.milestone_id ?? null,
+        tier: row.tier ?? null,
+        threshold: row.threshold ?? null,
+        label: row.label ?? null,
+        earnedAt: row.earned_at,
+      })),
+    ),
+  );

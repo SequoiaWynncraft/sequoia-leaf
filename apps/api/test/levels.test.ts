@@ -10,6 +10,7 @@ import {
   playerId,
   type Rules,
 } from "@sequoia-leaf/core";
+import { Effect } from "effect";
 
 import { type CreditSource, syncCredits } from "../src/earning/sync.ts";
 import { listEventsAfter } from "../src/events/store.ts";
@@ -45,7 +46,8 @@ function raid(id: number, player: PlayerId, occurredAt: number, seasonRating: nu
 }
 
 function feed(activities: Activity[]): CreditSource {
-  return async (from, to) => activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to);
+  return (from, to) =>
+    Effect.succeed(activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to));
 }
 
 function levelEntries(player: PlayerId): [string, number, number][] {
@@ -92,10 +94,10 @@ function levelPayout(player: PlayerId, key: string): LedgerEntry {
 describe("Leaf for levels", () => {
   it("pays a level in the sync that reaches it, says so, and pays it once", async () => {
     const source = feed([raid(1, alice, T0 + MINUTE, 600), raid(2, alice, T0 + 2 * MINUTE, 500)]);
-    await syncCredits(db, source, rules, T0, "recent");
+    await Effect.runPromise(syncCredits(db, source, rules, T0, "recent"));
 
-    const result = await syncCredits(db, source, rules, T0 + 5 * MINUTE, "recent");
-    await syncCredits(db, source, rules, T0 + 6 * MINUTE, "deep");
+    const result = await Effect.runPromise(syncCredits(db, source, rules, T0 + 5 * MINUTE, "recent"));
+    await Effect.runPromise(syncCredits(db, source, rules, T0 + 6 * MINUTE, "deep"));
 
     expect(result).toEqual({ status: "synced", recorded: 2, leafPaid: 1100 + 100 });
     expect(getAccount(db, alice)).toMatchObject({ balance: 1200, xp: 1100 });
@@ -105,9 +107,9 @@ describe("Leaf for levels", () => {
 
   it("pays every level a single sync passes, with one event for the level reached", async () => {
     const source = feed([raid(1, alice, T0 + MINUTE, 2300)]);
-    await syncCredits(db, source, rules, T0, "recent");
+    await Effect.runPromise(syncCredits(db, source, rules, T0, "recent"));
 
-    await syncCredits(db, source, rules, T0 + 5 * MINUTE, "recent");
+    await Effect.runPromise(syncCredits(db, source, rules, T0 + 5 * MINUTE, "recent"));
 
     expect(levelEntries(alice)).toEqual([
       [`level:${alice}:3`, 125, 0],
@@ -135,9 +137,9 @@ describe("Leaf for levels", () => {
     earnedBefore(alice, 1000, "raid:old:a");
     payMissedLevels(db, rules.levels, T0);
     const source = feed([raid(1, alice, T0 + MINUTE, 1300)]);
-    await syncCredits(db, source, rules, T0, "recent");
+    await Effect.runPromise(syncCredits(db, source, rules, T0, "recent"));
 
-    await syncCredits(db, source, rules, T0 + 5 * MINUTE, "recent");
+    await Effect.runPromise(syncCredits(db, source, rules, T0 + 5 * MINUTE, "recent"));
 
     expect(levelEntries(alice)).toEqual([
       [`level:${alice}:3`, 125, 0],

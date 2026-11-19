@@ -5,10 +5,8 @@ import { join } from "node:path";
 import { playerId, RAIDS } from "@sequoia-leaf/core";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
-import { createApp } from "../src/app.ts";
-import { forgetSessions } from "../src/auth/session.ts";
 import { runCreditSync } from "../src/earning/run.ts";
-import { testServices } from "./support.ts";
+import { testLeaf } from "./support.ts";
 
 /**
  * Leaf's API as clients see it, from the real routes: `contracts/leaf-api-v1.json`
@@ -85,10 +83,9 @@ interface Exchange {
 }
 
 async function exchanges(): Promise<Record<string, Exchange>> {
-  forgetSessions();
   const clock = { now: T0 };
   let reporting = false;
-  const services = testServices(clock, (url, init) => {
+  const leaf = testLeaf(clock, (url, init) => {
     const path = new URL(url).pathname;
     if (path === "/auth/web/me") {
       const token = new Request(url, init).headers.get("Authorization");
@@ -106,13 +103,13 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     }
     return Promise.resolve(new Response("not found", { status: 404 }));
   });
-  const app = createApp(services);
-  await runCreditSync(services, "recent");
-  await runAchievementSync(services, "recent");
+  const app = leaf.app();
+  await leaf.run(runCreditSync("recent"));
+  await leaf.run(runAchievementSync("recent"));
   reporting = true;
   clock.now = T0 + 10 * MINUTE;
-  await runCreditSync(services, "recent");
-  await runAchievementSync(services, "recent");
+  await leaf.run(runCreditSync("recent"));
+  await leaf.run(runAchievementSync("recent"));
 
   const recorded: Record<string, Exchange> = {};
   async function call(name: string, method: string, path: string, body?: unknown) {
@@ -135,7 +132,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/me", "GET", "/v1/me");
   await call("GET /v1/me/quests", "GET", "/v1/me/quests");
   await call("GET /v1/me/events", "GET", "/v1/me/events");
-  forgetSessions();
+  await app.dispose();
   return recorded;
 }
 
