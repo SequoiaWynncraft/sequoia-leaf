@@ -5,7 +5,6 @@ import { runAchievementSync } from "./achievements/run.ts";
 import { bucketOffsite, offsiteCopier } from "./backup/offsite.ts";
 import { snapshotIfDue } from "./backup/snapshot.ts";
 import { AppConfig } from "./config.ts";
-import { Db } from "./db.ts";
 import { runCreditSync } from "./earning/run.ts";
 import { payMissedLevels } from "./levels/pay.ts";
 import type { SyncMode, SyncResult } from "./sync/windowed.ts";
@@ -48,11 +47,10 @@ export const scheduledSync = <E, R>(
 /** Snapshots the database every six hours. */
 const snapshots = Effect.gen(function* () {
   const { backupDirectory } = yield* AppConfig;
-  const db = yield* Db;
   return step(
     "Taking a snapshot of the database",
     Effect.gen(function* () {
-      const path = snapshotIfDue(db, backupDirectory, yield* Clock.currentTimeMillis);
+      const path = yield* snapshotIfDue(backupDirectory, yield* Clock.currentTimeMillis);
       if (path !== undefined) {
         yield* Effect.logInfo("snapshot").pipe(Effect.annotateLogs({ path }));
       }
@@ -101,11 +99,10 @@ export const EveryMinute = Layer.effectDiscard(
 export const Startup = Layer.effectDiscard(
   Effect.gen(function* () {
     const config = yield* AppConfig;
-    const db = yield* Db;
     yield* step(
       "Paying for levels already reached (it is tried again at the next start)",
       Effect.gen(function* () {
-        const missed = payMissedLevels(db, DEFAULT_RULES.levels, yield* Clock.currentTimeMillis);
+        const missed = yield* payMissedLevels(DEFAULT_RULES.levels, yield* Clock.currentTimeMillis);
         if (missed.leaf > 0) {
           yield* Effect.logInfo("missed_levels_paid").pipe(Effect.annotateLogs(missed));
         }

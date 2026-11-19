@@ -1,4 +1,3 @@
-import type { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
 
 import { type AchievementAward, DEFAULT_RULES, type PlayerId, playerId } from "@sequoia-leaf/core";
@@ -6,10 +5,9 @@ import { Effect } from "effect";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { type AwardSource, syncAchievements } from "../src/achievements/sync.ts";
-import { listEventsAfter } from "../src/events/store.ts";
-import { getAccount, listEntries } from "../src/ledger/store.ts";
+import { Events } from "../src/events/store.ts";
 import type { SyncMode } from "../src/sync/windowed.ts";
-import { rejection, testDatabase, testLeaf } from "./support.ts";
+import { rejection, testLeaf } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const bob = playerId("00000000-0000-4000-8000-00000000000b");
@@ -18,10 +16,10 @@ const MINUTE = 60 * SECOND;
 /** The first sync runs at T0, so paying starts at T0. */
 const T0 = 1_763_000_000_000;
 
-let db: Database;
+let ledger: ReturnType<typeof testLeaf>;
 
 beforeEach(() => {
-  db = testDatabase();
+  ledger = testLeaf({ now: T0 }, () => Promise.reject(new Error("No network in this test")));
 });
 
 function award(player: PlayerId, ladder: string, milestoneId: string | null, earnedAt: number): AchievementAward {
@@ -45,11 +43,12 @@ function feed(awards: AchievementAward[]): AwardSource {
 }
 
 function sync(source: AwardSource<Error>, now: number, mode: SyncMode = "recent") {
-  return Effect.runPromise(syncAchievements(db, source, DEFAULT_RULES, now, mode));
+  return ledger.run(syncAchievements(source, DEFAULT_RULES, now, mode));
 }
 
-function events(player: PlayerId): { type: string; data: unknown }[] {
-  return listEventsAfter(db, player, 0, 100).map((event) => ({ type: event.type, data: JSON.parse(event.data) }));
+async function events(player: PlayerId): Promise<{ type: string; data: unknown }[]> {
+  const stored = await ledger.run(Events.use((store) => store.after(player, 0, 100)));
+  return stored.map((event) => ({ type: event.type, data: JSON.parse(event.data) }));
 }
 
 describe("syncAchievements", () => {
@@ -64,8 +63,8 @@ describe("syncAchievements", () => {
     expect(await sync(source, T0 + MINUTE)).toEqual({ status: "synced", recorded: 1, leafPaid: 250 });
     expect(await sync(source, T0 + 2 * MINUTE, "deep")).toEqual({ status: "synced", recorded: 0, leafPaid: 0 });
 
-    expect(getAccount(db, alice).balance).toBe(0);
-    expect(getAccount(db, bob).balance).toBe(250);
+    expect((await ledger.account(alice)).balance).toBe(0);
+    expect((await ledger.account(bob)).balance).toBe(250);
   });
 
   it("pays a guild milestone once however often its window is read, and says so", async () => {
@@ -78,15 +77,20 @@ describe("syncAchievements", () => {
     await sync(source, T0 + 3 * MINUTE, "deep");
 
     // 5,000 XP reaches level 4, and levels 2 to 4 pay 100, 125 and 150 Leaf, with no XP.
-    expect(getAccount(db, alice)).toMatchObject({ balance: 5375, xp: 5000 });
-    const entries = listEntries(db, alice, { limit: 10 });
+    expect(await ledger.account(alice)).toMatchObject({ balance: 5375, xp: 5000 });
+    const entries = await ledger.query<{
+      origin: string;
+      idempotencyKey: string;
+      balanceDelta: number;
+      xpDelta: number;
+    }>((sql) => sql`SELECT * FROM ledger_entries WHERE player_id = ${alice} ORDER BY id DESC`);
     expect(entries.map((entry) => [entry.origin, entry.idempotencyKey, entry.balanceDelta, entry.xpDelta])).toEqual([
       ["level", `level:${alice}:4`, 150, 0],
       ["level", `level:${alice}:3`, 125, 0],
       ["level", `level:${alice}:2`, 100, 0],
       ["achievement", `achievement:${diamond.awardId}`, 5000, 5000],
     ]);
-    expect(events(alice)).toEqual([
+    expect(await events(alice)).toEqual([
       {
         type: "achievement_paid",
         data: {
@@ -117,7 +121,7 @@ describe("syncAchievements", () => {
     await sync(source, T0);
     expect(await sync(source, T0 + MINUTE)).toEqual({ status: "synced", recorded: 2, leafPaid: 750 });
 
-    expect(events(alice).map((event) => event.type)).toEqual(["achievement_paid", "achievement_paid"]);
+    expect((await events(alice)).map((event) => event.type)).toEqual(["achievement_paid", "achievement_paid"]);
   });
 
   it("pays a milestone that Sierra reports late once the deep run reads its window again", async () => {
@@ -128,9 +132,9 @@ describe("syncAchievements", () => {
     awards.push(award(alice, "raid:TCC", "silver", T0 + 5 * MINUTE));
 
     await sync(source, T0 + 61 * MINUTE);
-    expect(getAccount(db, alice).balance).toBe(0);
+    expect((await ledger.account(alice)).balance).toBe(0);
     await sync(source, T0 + 62 * MINUTE, "deep");
-    expect(getAccount(db, alice).balance).toBe(500);
+    expect((await ledger.account(alice)).balance).toBe(500);
   });
 
   it("keeps its place when Sierra cannot be read, and pays on the next run", async () => {

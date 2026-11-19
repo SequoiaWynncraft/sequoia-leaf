@@ -1,5 +1,3 @@
-import type { Database } from "bun:sqlite";
-
 import {
   type Activity,
   applyActivityToQuests,
@@ -12,14 +10,15 @@ import {
   type Quest,
   type Rules,
 } from "@sequoia-leaf/core";
-import type { Effect } from "effect";
+import { Effect, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/sql";
 
-import { insertEvent } from "../events/store.ts";
-import { getAccount, insertEntry } from "../ledger/store.ts";
+import { Events } from "../events/store.ts";
+import { Ledger } from "../ledger/store.ts";
 import { payLevels } from "../levels/pay.ts";
 import { questJson } from "../quests/json.ts";
-import { loadQuestBook, saveQuestStep } from "../quests/store.ts";
-import { type SyncMode, type SyncResult, windowedSync } from "../sync/windowed.ts";
+import { Quests } from "../quests/store.ts";
+import { type SyncMode, windowedSync } from "../sync/windowed.ts";
 
 /** Reads what players did during [from, to), in milliseconds since the Unix epoch. */
 export type CreditSource<E = never, R = never> = (from: number, to: number) => Effect.Effect<readonly Activity[], E, R>;
@@ -33,64 +32,62 @@ export { DEEP_LOOKBACK_MS, RECENT_OVERLAP_MS, SETTLE_MS, type SyncMode, type Syn
  * nothing is paid twice. Running it again over the same window changes
  * nothing.
  */
-export function syncCredits<E, R>(
-  db: Database,
-  source: CreditSource<E, R>,
-  rules: Rules,
-  now: number,
-  mode: SyncMode,
-): Effect.Effect<SyncResult, E, R> {
-  return windowedSync(db, "credits", now, mode, source, (reported, from, to) => {
-    const byPlayer = new Map<PlayerId, Activity[]>();
-    for (const activity of newActivities(db, reported, from, to)) {
-      const mine = byPlayer.get(activity.playerId);
-      if (mine === undefined) {
-        byPlayer.set(activity.playerId, [activity]);
-      } else {
-        mine.push(activity);
+export const syncCredits = <E, R>(source: CreditSource<E, R>, rules: Rules, now: number, mode: SyncMode) =>
+  windowedSync("credits", now, mode, source, (reported, from, to) =>
+    Effect.gen(function* () {
+      const byPlayer = new Map<PlayerId, Activity[]>();
+      for (const activity of yield* newActivities(reported, from, to)) {
+        const mine = byPlayer.get(activity.playerId);
+        if (mine === undefined) {
+          byPlayer.set(activity.playerId, [activity]);
+        } else {
+          mine.push(activity);
+        }
       }
-    }
-    let recorded = 0;
-    let leafPaid = 0;
-    for (const [playerId, mine] of byPlayer) {
-      leafPaid += recordPlayer(db, playerId, mine, rules, now);
-      recorded += mine.length;
-    }
-    return { recorded, leafPaid };
-  });
-}
+      let recorded = 0;
+      let leafPaid = 0;
+      for (const [playerId, mine] of byPlayer) {
+        leafPaid += yield* recordPlayer(playerId, mine, rules, now);
+        recorded += mine.length;
+      }
+      return { recorded, leafPaid };
+    }),
+  );
 
 /**
  * Records one player's new activities, oldest first, with what they earn, and
  * an event for each thing a client would want to show. Returns the Leaf paid.
  */
-function recordPlayer(
-  db: Database,
+const recordPlayer = Effect.fnUntraced(function* (
   playerId: PlayerId,
   activities: readonly Activity[],
   rules: Rules,
   now: number,
-): number {
+) {
+  const ledger = yield* Ledger;
+  const quests = yield* Quests;
+  const events = yield* Events;
   let leafPaid = 0;
-  const levelBefore = levelForXp(getAccount(db, playerId).xp, rules.levels).level;
-  let book = loadQuestBook(db, playerId) ?? openQuestBook(activities[0]?.occurredAt ?? now);
+  const levelBefore = levelForXp((yield* ledger.account(playerId)).xp, rules.levels).level;
+  let book = (yield* quests.book(playerId)) ?? openQuestBook(activities[0]?.occurredAt ?? now);
   const written = new Map<string, Quest>();
   const completed: Quest[] = [];
   for (const activity of activities) {
-    insertActivity(db, activity, now);
+    yield* insertActivity(activity, now);
     const amount = leafForActivity(activity, rules.earning);
     if (amount > 0) {
-      const draft = draftEntry({
-        kind: "earn",
-        playerId,
-        amount: leaf(amount),
-        source: activity.kind,
-        idempotencyKey: activity.sourceKey,
-      });
-      const entry = insertEntry(db, draft, now);
+      const entry = yield* ledger.insert(
+        draftEntry({
+          kind: "earn",
+          playerId,
+          amount: leaf(amount),
+          source: activity.kind,
+          idempotencyKey: activity.sourceKey,
+        }),
+        now,
+      );
       leafPaid += amount;
-      insertEvent(
-        db,
+      yield* events.insert(
         playerId,
         {
           type: "leaf_earned",
@@ -114,29 +111,29 @@ function recordPlayer(
     completed.push(...step.completed);
     for (const quest of step.completed) {
       leafPaid += quest.reward.leaf;
-      insertEvent(db, playerId, { type: "quest_completed", data: { quest: questJson(quest) } }, now);
+      yield* events.insert(playerId, { type: "quest_completed", data: { quest: questJson(quest) } }, now);
     }
   }
-  saveQuestStep(db, playerId, { book, written: [...written.values()], completed }, now);
-  const levelAfter = levelForXp(getAccount(db, playerId).xp, rules.levels).level;
+  yield* quests.saveStep(playerId, { book, written: [...written.values()], completed }, now);
+  const levelAfter = levelForXp((yield* ledger.account(playerId)).xp, rules.levels).level;
   if (levelAfter > levelBefore) {
-    const levelLeaf = payLevels(db, playerId, rules.levels, now);
+    const levelLeaf = yield* payLevels(playerId, rules.levels, now);
     leafPaid += levelLeaf;
-    insertEvent(db, playerId, { type: "level_up", data: { level: levelAfter, leaf: levelLeaf } }, now);
+    yield* events.insert(playerId, { type: "level_up", data: { level: levelAfter, leaf: levelLeaf } }, now);
   }
   return leafPaid;
-}
+});
 
 /** The activities in [from, to) that are not recorded yet, oldest first, each source key once. */
-function newActivities(db: Database, activities: readonly Activity[], from: number, to: number): Activity[] {
-  const recorded = new Set(
-    db
-      .query<{ source_key: string }, [number, number]>(
-        "SELECT source_key FROM activities WHERE occurred_at >= ? AND occurred_at < ?",
-      )
-      .all(from, to)
-      .map((row) => row.source_key),
-  );
+const newActivities = Effect.fnUntraced(function* (activities: readonly Activity[], from: number, to: number) {
+  const sql = yield* SqlClient.SqlClient;
+  const recordedKeys = SqlSchema.findAll({
+    Request: Schema.Struct({ from: Schema.Int, to: Schema.Int }),
+    Result: Schema.Struct({ sourceKey: Schema.String }),
+    execute: (window) =>
+      sql`SELECT source_key FROM activities WHERE occurred_at >= ${window.from} AND occurred_at < ${window.to}`,
+  });
+  const recorded = new Set((yield* recordedKeys({ from, to }).pipe(Effect.orDie)).map((row) => row.sourceKey));
   const unique = new Map<string, Activity>();
   for (const activity of activities) {
     const inWindow = activity.occurredAt >= from && activity.occurredAt < to;
@@ -145,23 +142,22 @@ function newActivities(db: Database, activities: readonly Activity[], from: numb
     }
   }
   return [...unique.values()].toSorted((a, b) => a.occurredAt - b.occurredAt || a.sourceKey.localeCompare(b.sourceKey));
-}
+});
 
-function insertActivity(db: Database, activity: Activity, now: number): void {
-  db.query(
-    `INSERT INTO activities
-       (source_key, player_id, kind, raid, detail, season_rating, war_points, in_claim, occurred_at, recorded_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    activity.sourceKey,
-    activity.playerId,
-    activity.kind,
-    activity.kind === "raid" ? (activity.raid ?? null) : null,
-    activity.kind === "raid" ? activity.raidName : activity.territory,
-    activity.seasonRating,
-    activity.kind === "war" ? activity.warPoints : null,
-    activity.kind === "war" && activity.inClaim !== undefined ? Number(activity.inClaim) : null,
-    activity.occurredAt,
-    now,
-  );
-}
+const insertActivity = Effect.fnUntraced(function* (activity: Activity, now: number) {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql`
+    INSERT INTO activities ${sql.insert({
+      sourceKey: activity.sourceKey,
+      playerId: activity.playerId,
+      kind: activity.kind,
+      raid: activity.kind === "raid" ? (activity.raid ?? null) : null,
+      detail: activity.kind === "raid" ? activity.raidName : activity.territory,
+      seasonRating: activity.seasonRating,
+      warPoints: activity.kind === "war" ? activity.warPoints : null,
+      inClaim: activity.kind === "war" && activity.inClaim !== undefined ? Number(activity.inClaim) : null,
+      occurredAt: activity.occurredAt,
+      recordedAt: now,
+    })}
+  `.pipe(Effect.orDie);
+});

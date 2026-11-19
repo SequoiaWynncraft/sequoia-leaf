@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { leaf, playerId, RAIDS } from "@sequoia-leaf/core";
 
-import { postEntry } from "../src/ledger/store.ts";
 import { testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -117,9 +116,11 @@ describe("GET /v1/me", () => {
   });
 
   it("shows the balance, XP and level the ledger adds up to", async () => {
-    const { db } = services;
-    postEntry(db, { kind: "earn", playerId: alice, amount: leaf(1300), source: "staff", idempotencyKey: "a" }, T0);
-    postEntry(db, { kind: "spend", playerId: alice, amount: leaf(300), sink: "shop", idempotencyKey: "b" }, T0);
+    await services.post(
+      { kind: "earn", playerId: alice, amount: leaf(1300), source: "staff", idempotencyKey: "a" },
+      T0,
+    );
+    await services.post({ kind: "spend", playerId: alice, amount: leaf(300), sink: "shop", idempotencyKey: "b" }, T0);
 
     const response = await get("/v1/me");
 
@@ -145,7 +146,7 @@ describe("GET /v1/me/quests", () => {
       ],
       recently_completed: [],
     });
-    expect(services.db.query("SELECT COUNT(*) AS n FROM quests").get()).toEqual({ n: 0 });
+    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM quests`)).toEqual([{ n: 0 }]);
   });
 
   it("shows the open timed quest, the same window for everyone", async () => {
@@ -238,8 +239,7 @@ async function quests(): Promise<unknown> {
 }
 
 function earn(amount: number) {
-  postEntry(
-    services.db,
+  return services.post(
     { kind: "earn", playerId: alice, amount: leaf(amount), source: "staff", idempotencyKey: `staff:${amount}` },
     T0,
   );
@@ -269,23 +269,21 @@ describe("POST /v1/me/quests/:id/reroll", () => {
         { id: "weekly:1", reroll_leaf: 0 },
       ],
     });
-    const stored = services.db
-      .query<{ sequence: number; template_id: string; expires_at: number | null }, []>(
-        "SELECT sequence, template_id, expires_at FROM quests WHERE slot = 'daily' ORDER BY sequence",
-      )
-      .all();
-    expect(stored.map((row) => [row.sequence, row.expires_at])).toEqual([
+    const stored = await services.query<{ sequence: number; templateId: string; expiresAt: number | null }>(
+      (sql) => sql`SELECT sequence, template_id, expires_at FROM quests WHERE slot = 'daily' ORDER BY sequence`,
+    );
+    expect(stored.map((row) => [row.sequence, row.expiresAt])).toEqual([
       [1, T0 + MINUTE],
       [2, null],
     ]);
-    expect(stored[0]?.template_id).not.toBe(stored[1]?.template_id);
+    expect(stored[0]?.templateId).not.toBe(stored[1]?.templateId);
     expect(await (await get("/v1/me/events")).json()).toMatchObject({
       events: [{ type: "quest_rerolled", data: { replaced: { id: "daily:1" }, quest: { id: "daily:2" }, leaf: 0 } }],
     });
   });
 
   it("charges 100 Leaf for each further reroll that day, and refuses one the balance can't cover", async () => {
-    earn(150);
+    await earn(150);
     await reroll("daily:1");
 
     const paid = await reroll("daily:2", 100);
@@ -296,12 +294,10 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     expect(await refused.json()).toMatchObject({ code: "insufficient_leaf" });
     expect(await quests()).toMatchObject({ quests: [{ id: "daily:3", reroll_leaf: 100 }, { id: "weekly:1" }] });
     expect(await (await get("/v1/me")).json()).toMatchObject({ leaf: 50, xp: 150 });
-    const spends = services.db
-      .query<{ origin: string; balance_delta: number; idempotency_key: string }, []>(
-        "SELECT origin, balance_delta, idempotency_key FROM ledger_entries WHERE kind = 'spend'",
-      )
-      .all();
-    expect(spends).toEqual([{ origin: "reroll", balance_delta: -100, idempotency_key: `reroll:${alice}:daily:2` }]);
+    const spends = await services.query(
+      (sql) => sql`SELECT origin, balance_delta, idempotency_key FROM ledger_entries WHERE kind = 'spend'`,
+    );
+    expect(spends).toEqual([{ origin: "reroll", balanceDelta: -100, idempotencyKey: `reroll:${alice}:daily:2` }]);
   });
 
   it("counts each slot's free reroll on its own, and gives another the next UTC day", async () => {
@@ -324,15 +320,13 @@ describe("POST /v1/me/quests/:id/reroll", () => {
   });
 
   it("lets a member a correction left in debt use the day's free reroll, but not a paid one", async () => {
-    const { db } = services;
-    const paid = postEntry(
-      db,
+    const paid = await services.post(
       { kind: "earn", playerId: alice, amount: leaf(100), source: "raid", idempotencyKey: "r" },
       T0,
     );
-    postEntry(db, { kind: "spend", playerId: alice, amount: leaf(100), sink: "shop", idempotencyKey: "s" }, T0);
+    await services.post({ kind: "spend", playerId: alice, amount: leaf(100), sink: "shop", idempotencyKey: "s" }, T0);
     if (paid.status !== "posted") throw new Error("not posted");
-    postEntry(db, { kind: "reversal", playerId: alice, reverses: paid.entry, idempotencyKey: "undo:r" }, T0);
+    await services.post({ kind: "reversal", playerId: alice, reverses: paid.entry, idempotencyKey: "undo:r" }, T0);
 
     expect(await (await reroll("daily:1")).json()).toMatchObject({ leaf: -100, spent: 0, quest: { id: "daily:2" } });
     expect(await (await reroll("daily:2", 100)).json()).toMatchObject({ code: "insufficient_leaf" });
@@ -354,7 +348,7 @@ describe("POST /v1/me/quests/:id/reroll", () => {
   });
 
   it("charges only the cost the member agreed to, and refuses when it costs something else now", async () => {
-    earn(500);
+    await earn(500);
     await reroll("daily:1");
 
     const shownFree = await reroll("daily:2", 0);
@@ -382,7 +376,7 @@ describe("POST /v1/me/quests/:id/reroll", () => {
   });
 
   it("swaps once when the same request is sent twice", async () => {
-    earn(500);
+    await earn(500);
     const first = await reroll("daily:1");
     const second = await reroll("daily:1");
 
@@ -410,7 +404,7 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     expect(malformed).toEqual(
       Array.from({ length: 4 }, () => [400, { code: "invalid_quest", message: "That is not a quest id" }]),
     );
-    expect(services.db.query("SELECT COUNT(*) AS n FROM quest_rerolls").get()).toEqual({ n: 0 });
+    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM quest_rerolls`)).toEqual([{ n: 0 }]);
   });
 
   it("counts what was just played first, so a quest just finished is paid rather than swapped", async () => {
