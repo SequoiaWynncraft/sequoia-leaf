@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Grove art review</title>
+    <style>
+      body {
+        margin: 0;
+        background: #1b141a;
+        font: 14px monospace;
+        color: #f6ecd4;
+      }
+      .row {
+        display: flex;
+        gap: 24px;
+        padding: 16px;
+        align-items: flex-end;
+      }
+      .cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+      }
+      .bg-cream {
+        background: #f6ecd4;
+        color: #2b1d26;
+      }
+      .bg-dusk {
+        background: linear-gradient(#46507a, #7d5e9c 60%, #e58e55);
+      }
+      canvas {
+        image-rendering: pixelated;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./scene.ts"></script>
+  </body>
+</html>

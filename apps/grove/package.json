@@ -1,0 +1,9 @@
+{
+  "name": "@sequoia-leaf/grove",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun index.html",
+    "build": "bun build index.html --outdir dist --minify"
+  }
+}
