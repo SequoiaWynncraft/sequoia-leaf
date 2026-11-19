@@ -7,7 +7,6 @@ import {
   type LedgerEntry,
   levelForXp,
   type LevelRules,
-  levelsNoLongerReached,
   parsePlayerId,
   type PlayerId,
 } from "@sequoia-leaf/core";
@@ -77,39 +76,6 @@ export function payLevels(db: Database, playerId: PlayerId, rules: LevelRules, n
     total += amount;
   }
   return total;
-}
-
-/**
- * Reverses the standing payout of each level the player's XP no longer
- * reaches, and returns the reversed payouts. Reaching such a level again pays
- * it again (`payLevels`).
- *
- * Call it in the transaction that took the XP away.
- */
-export function takeBackLevels(
-  db: Database,
-  playerId: PlayerId,
-  rules: LevelRules,
-  now: number,
-  memo: string,
-): LedgerEntry[] {
-  const standing = levelPayouts(db, playerId).filter((payout) => !payout.reversed);
-  const lost = new Set(
-    levelsNoLongerReached(
-      getAccount(db, playerId).xp,
-      standing.map((payout) => payout.level),
-      rules,
-    ),
-  );
-  const taken: LedgerEntry[] = [];
-  for (const { level, entry } of standing) {
-    if (lost.has(level)) {
-      const idempotencyKey = `undo:${entry.idempotencyKey}`;
-      insertEntry(db, draftEntry({ kind: "reversal", playerId, reverses: entry, idempotencyKey, memo }), now);
-      taken.push(entry);
-    }
-  }
-  return taken;
 }
 
 /**
