@@ -330,145 +330,18 @@ copies against losing the server.
 To restore from the bucket, download a copy with any S3 client, or from the
 Cloudflare dashboard for R2, and restore it as above.
 
-## Correcting guild shares, 2026-11-19
+## Corrections in the ledger
 
-Until sequoia-backend#536, the credit feed split each raid's season rating
-among everyone in the party, allies from other guilds included, though the
-rating is Sequoia's alone. So members were paid less than their share, and 16
-players who were never in the guild were paid 9,509 Leaf between them.
-`apps/api/scripts/correct-guild-shares.ts` corrects both against the fixed feed:
+Two corrections were run by hand on 2026-11-19 and their code removed afterwards
+(see sequoia-leaf#18 and #23). Their entries stay in the ledger, with memos that
+name them:
 
-- For each member, each raid is compared with what still stands for it (the
-  sync's payment and any share the first correction paid, less reversals).
-  What the share is still owed is paid by `raid:<completion id>:<player>:guild-share`,
-  and the levels the extra XP reaches are paid as levels always are. A payment
-  above the share, or one the feed no longer lists, stands and is counted.
-- For each player who was never in the guild, every earn is reversed
-  (`undo:<key>`): raids, and the quests and levels those raids reached.
-
-The players who were never in the guild come from the backend's records: Leaf
-accounts with no `guild_membership_state` row for Sequoia, which also never
-appear in Sequoia's roster in `wynn_guild_member_observations`. Write them to a
-file, one UUID per line, and give it as `--never-members`. Like the first
-correction it writes no events, is idempotent, does a dry run by default (run
-that on a `VACUUM INTO` copy) and snapshots the database before `--apply`:
-
-```sh
-DATABASE_PATH=/tmp/leaf-dry-run.db bun run apps/api/scripts/correct-guild-shares.ts --never-members /tmp/never-members.txt
-bun run apps/api/scripts/correct-guild-shares.ts --never-members /tmp/never-members.txt --apply
-```
-
-## Correcting raid shares, 2026-11-19
-
-Until sequoia-backend#530, the credit feed gave every raid party member the
-whole party's season rating, so each was paid about 3.3 times their share, in
-Leaf and in XP. The guild decided the excess is taken back. The feed now gives
-each member their share, so raids paid from then on are right, and
-`apps/api/scripts/correct-raid-shares.ts` corrects the ones paid before.
-
-It reads the corrected feed from the credit sync's first run to now, 31 days
-at a time, and then, for each player in a transaction of their own, looks at
-each raid payment the sync made (`raid:<completion id>:<player>`) before the
-cutoff given as `--paid-before`:
-
-- A payment that is more than the member's share is reversed in full, Leaf and
-  XP, by `undo:raid:<completion id>:<player>`, and the share is paid in its
-  place by `raid:<completion id>:<player>:share`. A share of zero pays nothing.
-- A payment that is the share or less stands.
-- A payment the feed no longer lists under its completion id stands, and the
-  report lists it in `payments_without_feed_row` with its completion id,
-  player, Leaf, XP and `created_at`, to be reconciled by hand. That happens
-  when a name no longer resolves, or became ambiguous, or when the backend
-  merged two reports into one completion after the sync paid the other id.
-  The correction does not try to match the ids itself.
-- With the XP corrected, the payout of each level the player no longer reaches
-  is reversed (`undo:level:<player>:<level>`). Reaching that level again pays it
-  again, once, keyed `level:<player>:<level>:2`.
-
-A player is corrected entirely or not at all. The correction writes no events:
-there is no event type for it, and the mod would not know one. Players see the
-corrected balance, XP and level the next time they read them.
-
-It is idempotent. A payment that has been reversed is not looked at again, and
-the shares' keys are not raid payment keys, so running it again with the same
-`--paid-before` changes nothing. A run that stops partway leaves the players it
-reached corrected, and the next run does the rest.
-
-### The cutoff
-
-`--paid-before` is required and has no default. Give the moment the backend's
-fix went live: its new container started at about 07:53 UTC on 2026-11-19, so
-`2026-11-19T07:53:00Z`. A sync run stamps its payments with the moment it
-started, before it reads the feed, and the new container served only after it
-started, so every payment made before then was paid from the old feed.
-
-A payment made at or after the cutoff stands, even when the feed now lists a
-smaller share for it. It was paid from the fixed feed, and a smaller share now
-means the backend has since added members to the completion: its
-reconciliation can add names to a completion it already reported, under the
-same id, which divides the rating among more members. Taking that back would
-take back a payment that was right when it was made.
-
-An earlier cutoff is the safe side: it can leave an overpayment standing, but
-never takes back a payment of the share. The report lists every payment made
-after the cutoff that the feed now lists at a smaller share, in
-`payments_after_cutoff_above_share`, so one left standing can be found and
-dealt with by hand.
-
-### Running it
-
-Run it in the production container, from a terminal on the Coolify app or with
-`docker exec` on the server. It uses the app's own `DATABASE_PATH`,
-`BACKEND_URL` and `BACKEND_INTERNAL_TOKEN`, and refuses a `DATABASE_PATH` that
-does not exist rather than create an empty database, which would have nothing
-to correct.
-
-Run the dry run on a copy of the database, never on `/data/leaf.db` itself. It
-does everything in one transaction and rolls it back, so it keeps nothing, but
-it opens and migrates the database it is given, and it holds that database's
-write lock until it ends, which stalls the server's writes for the whole run.
-Copy the database with `VACUUM INTO`, which takes a consistent copy while the
-server runs, and point `DATABASE_PATH` at the copy:
-
-```sh
-bun -e 'import { Database } from "bun:sqlite"; new Database("/data/leaf.db", { readonly: true }).run("VACUUM INTO ?", ["/tmp/leaf-dry-run.db"])'
-DATABASE_PATH=/tmp/leaf-dry-run.db bun run apps/api/scripts/correct-raid-shares.ts --paid-before 2026-11-19T07:53:00Z
-rm /tmp/leaf-dry-run.db*
-```
-
-Then apply it to the live database, with the server running:
-
-```sh
-bun run apps/api/scripts/correct-raid-shares.ts --paid-before 2026-11-19T07:53:00Z --apply
-```
-
-`--apply` first writes a snapshot to `BACKUP_DIR` (`/data/backups`), since a
-reversal cannot itself be reversed. Restoring it as under [Backups](#backups)
-undoes the correction, and everything else written after it. It then corrects
-one player at a time, each in a short transaction. A credit sync that runs
-meanwhile waits for each to finish: its write transaction takes the write lock
-when it begins, so a correction's commit cannot land between its reads and its
-writes.
-
-Either prints one JSON object: the cutoff, how many players and payments were
-corrected, the Leaf and XP the reversals took back and the shares paid, the
-level payouts reversed, the net change, how many players lost a level and the
-most any lost, the payments without a feed row and the payments after the
-cutoff the feed now lists lower, each listed, and the five players it took the
-most Leaf from, by UUID.
-
-### What it leaves as it is
-
-- **Quest rewards.** A `season_rating` quest finished with the inflated rating
-  keeps its reward, Leaf and XP, and an open one keeps the progress it counted.
-  That is the owner's decision: quest rewards are outside the correction. The
-  XP such a reward paid still counts toward levels.
-- **What was recorded.** The `activities` table keeps the rating each raid was
-  recorded with, and nothing is counted again from it.
-- **Payments it does not correct**: those at or below the share, those made at
-  or after the cutoff, and those the feed no longer lists. The report lists the
-  last two kinds where they may be wrong.
-- **Wars and achievement milestones**, which the fix did not touch, and level
-  payouts for levels the corrected XP still reaches.
-- **Events already sent.** `leaf_earned` and `level_up` events keep the amounts
-  they announced.
+- **Raid shares** (#18): the credit feed had paid each raid member the whole
+  party's rating. Overpaid raids were reversed (`undo:raid:<completion>:<player>`)
+  and the member's share paid in their place (`raid:<completion>:<player>:share`);
+  levels the lower XP no longer reached were reversed (`undo:level:<player>:<level>`),
+  so reaching one again pays it again (`level:<player>:<level>:2`).
+- **Guild shares** (#23): the feed had split each raid's rating among allies in
+  the party too. Members were paid the rest of their share
+  (`raid:<completion>:<player>:guild-share`), and every earn of the 16 players who
+  were never in Sequoia was reversed (`undo:<key>`).
