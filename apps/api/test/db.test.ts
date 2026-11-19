@@ -70,6 +70,36 @@ describe("the database", () => {
     ]);
   });
 
+  it("opens a database migrated before Leaf used Effect's migrator, such as an older backup, applying nothing again", async () => {
+    const path = join(directory, "leaf.db");
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* Ledger.use((ledger) =>
+          ledger.post({ kind: "earn", playerId: alice, amount: leaf(110), source: "raid", idempotencyKey: "a" }, 1),
+        );
+        // Put the record back the way the old migrator kept it, one row per file.
+        yield* sql`CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL) STRICT, WITHOUT ROWID`;
+        yield* sql`
+          WITH RECURSIVE n(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM n WHERE id < 10)
+          INSERT INTO schema_migrations SELECT printf('%04d_old.sql', id), 1763294400000 FROM n
+        `;
+        yield* sql`DROP TABLE effect_sql_migrations`;
+      }),
+    );
+
+    const account = await onFile(
+      path,
+      Ledger.use((ledger) => ledger.account(alice)),
+    );
+
+    expect(account.balance).toBe(110);
+    expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
+      { latest: 10 },
+    ]);
+  });
+
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {
     expect(await query(join(directory, "leaf.db"), (sql) => sql`PRAGMA foreign_keys`)).toEqual([{ foreign_keys: 1 }]);
   });
