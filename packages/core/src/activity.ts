@@ -27,7 +27,11 @@ interface ActivityBase {
   readonly playerId: PlayerId;
   /** When the event happened, in milliseconds since the Unix epoch. */
   readonly occurredAt: number;
-  /** The season rating the whole event earned the guild. */
+  /**
+   * The season rating the event earned the guild. For a raid it is this
+   * member's share of the party's rating; until 2026-11-19 the backend
+   * reported the whole party's rating to every member.
+   */
   readonly seasonRating: number;
 }
 

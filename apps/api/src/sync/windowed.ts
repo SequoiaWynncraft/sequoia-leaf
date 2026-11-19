@@ -66,13 +66,19 @@ export async function windowedSync<T>(
     const reach = mode === "recent" ? state.cursor - RECENT_OVERLAP_MS : to - DEEP_LOOKBACK_MS;
     const from = Math.max(state.started_at, reach);
     const items = from < to ? await read(from, to) : [];
-    return db.transaction((): SyncResult => {
-      const { recorded, leafPaid } = write(items, from, to);
-      if (mode === "recent") {
-        db.query("UPDATE sync_state SET cursor = MAX(cursor, ?) WHERE name = ?").run(to, name);
-      }
-      return { status: "synced", recorded, leafPaid };
-    })();
+    // Immediate, so the transaction holds the write lock from its start. A
+    // deferred one reads first, and if another connection, such as a script
+    // run by hand, commits before its first write, that write fails with
+    // SQLITE_BUSY_SNAPSHOT instead of waiting its turn.
+    return db
+      .transaction((): SyncResult => {
+        const { recorded, leafPaid } = write(items, from, to);
+        if (mode === "recent") {
+          db.query("UPDATE sync_state SET cursor = MAX(cursor, ?) WHERE name = ?").run(to, name);
+        }
+        return { status: "synced", recorded, leafPaid };
+      })
+      .immediate();
   } finally {
     db.query("UPDATE sync_state SET locked_until = 0 WHERE name = ?").run(name);
   }
