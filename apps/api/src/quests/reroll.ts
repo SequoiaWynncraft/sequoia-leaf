@@ -65,7 +65,8 @@ export function rerollQuestFor(
       if (step.status === "refused") {
         return step;
       }
-      if (getAccount(db, playerId).balance < step.cost) {
+      // A free reroll needs no Leaf, even from a member a correction left in debt.
+      if (step.cost > 0 && getAccount(db, playerId).balance < step.cost) {
         return { status: "refused", reason: "insufficient_leaf" };
       }
       saveQuestStep(db, playerId, step, now);

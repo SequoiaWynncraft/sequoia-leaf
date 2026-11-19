@@ -328,6 +328,21 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     });
   });
 
+  it("lets a member a correction left in debt use the day's free reroll, but not a paid one", async () => {
+    const { db } = services;
+    const paid = postEntry(
+      db,
+      { kind: "earn", playerId: alice, amount: leaf(100), source: "raid", idempotencyKey: "r" },
+      T0,
+    );
+    postEntry(db, { kind: "spend", playerId: alice, amount: leaf(100), sink: "shop", idempotencyKey: "s" }, T0);
+    if (paid.status !== "posted") throw new Error("not posted");
+    postEntry(db, { kind: "reversal", playerId: alice, reverses: paid.entry, idempotencyKey: "undo:r" }, T0);
+
+    expect(await (await reroll("daily:1")).json()).toMatchObject({ leaf: -100, spent: 0, quest: { id: "daily:2" } });
+    expect(await (await reroll("daily:2")).json()).toMatchObject({ code: "insufficient_leaf" });
+  });
+
   it("counts each member's rerolls on their own", async () => {
     const bob = playerId("10000000-0000-0000-0000-000000000002");
     sessions["bob-token"] = () => Response.json({ ...member, minecraft_uuid: bob, minecraft_username: "Bob" });

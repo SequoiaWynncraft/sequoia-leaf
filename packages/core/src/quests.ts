@@ -410,8 +410,12 @@ export type RerollStep =
 /**
  * Swaps the quest in progress in a slot for another from the same slot, as the
  * player asked at `at`. `sequence` names the quest they saw, so a request sent
- * twice swaps once. The book is brought up to `at` first, as
+ * twice swaps once. The slot is brought up to `at` first, as
  * {@link refreshQuests} does, and the step includes what that wrote.
+ *
+ * Only that slot changes. The others stay as they were, so an activity from
+ * before `at` that is counted late still reaches them: a daily rerolled just
+ * after Monday leaves last week's weekly to take Sunday's raids.
  *
  * The old quest ends at `at` and keeps the progress it had. The new one is a
  * different template, counts activities from `at` on, and ends when the old one
@@ -443,7 +447,21 @@ export function rerollQuest(
   if (quest === undefined || quest.sequence !== sequence + 1) {
     throw new Error(`Rerolling ${slot}:${sequence} handed out no quest`);
   }
-  return { status: "rerolled", ...finishStep(step), replaced, quest, cost };
+  // The daily charges belong to the daily slot, so only a daily's reroll moves them on.
+  const daily = slot === "daily" ? step : book;
+  return {
+    status: "rerolled",
+    book: {
+      dailyCharges: daily.dailyCharges,
+      dailyChargedDay: daily.dailyChargedDay,
+      latest: { ...book.latest, [slot]: quest },
+    },
+    written: [...step.written.values()].filter((written) => written.slot === slot),
+    completed: [],
+    replaced,
+    quest,
+    cost,
+  };
 }
 
 /** When the next daily becomes available, or null while the player holds as many as can be banked. */
