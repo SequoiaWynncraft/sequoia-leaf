@@ -226,7 +226,12 @@ function route(): void {
 
 store.subscribe(() => menus.refresh());
 window.addEventListener("hashchange", route);
-window.addEventListener("resize", resize);
+window.addEventListener("resize", () => {
+  resize();
+  menus.fit();
+});
+// The menus' pictures are measured against their boxes: again once the stylesheet has laid them out.
+window.addEventListener("load", () => menus.fit());
 
 // ---------------------------------------------------------------------------------------------
 // Input: the HUD canvas lies over the world and takes the pointer; each event is given in both grids.

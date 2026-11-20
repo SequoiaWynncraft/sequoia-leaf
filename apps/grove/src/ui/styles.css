@@ -336,8 +336,10 @@ body[data-layout="pip"] #toast {
   inset: 0;
   z-index: 4;
   display: grid;
-  /* One track no wider than the screen, whatever the longest paragraph would like. */
+  /* One track no wider and no taller than the screen, whatever the longest paragraph would like:
+     a long menu scrolls inside its frame rather than running off the bottom. */
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   place-items: center;
   padding: calc(var(--mu) * 6);
 }
@@ -443,6 +445,7 @@ h1 {
   height: calc(var(--mu) * 16) !important;
 }
 .menu-body {
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
@@ -452,7 +455,8 @@ h1 {
 }
 .cols {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* Tracks no wider than their share, so nothing in a column pushes past the menu's frame. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: calc(var(--mu) * 10);
   margin-top: calc(var(--mu) * 6);
 }
@@ -464,7 +468,7 @@ h1 {
   min-width: 0;
 }
 body[data-layout="phone"] .cols {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
 }
 .subhead {
   display: flex;
@@ -792,6 +796,26 @@ body[data-layout="phone"] .banner-spirit {
   gap: calc(var(--mu) * 2);
   align-items: flex-end;
 }
+/* A phone has no room for a spirits column: each rank's spirits get a row of their own under it. */
+body[data-layout="phone"] .rate-card thead {
+  display: none;
+}
+body[data-layout="phone"] .rate-card tr {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  column-gap: calc(var(--mu) * 6);
+  box-shadow: inset 0 calc(var(--mu) * -1) 0 0 rgb(255 255 255 / 0.06);
+  padding: calc(var(--mu) * 3) 0;
+}
+body[data-layout="phone"] .rate-card td {
+  box-shadow: none;
+  padding: 0;
+}
+body[data-layout="phone"] .rate-card td.pool {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  padding-top: calc(var(--mu) * 2);
+}
 .rules {
   list-style: none;
   margin: calc(var(--mu) * 8) 0 0;
@@ -823,10 +847,24 @@ body[data-layout="phone"] .book {
   place-items: center;
   height: calc(var(--mu) * 76);
   margin-bottom: calc(var(--mu) * 4);
-  background:
-    radial-gradient(circle, color-mix(in srgb, var(--rank) 22%, transparent) 0 40%, transparent 41%),
-    rgb(14 12 22 / 0.9);
+  background: rgb(14 12 22 / 0.9);
   box-shadow: inset 0 0 0 var(--mu) color-mix(in srgb, var(--rank) 50%, black);
+}
+/* The glow behind a found spirit: a disc stepped on the menu's own pixel grid, never a smooth circle. */
+.display::before {
+  content: "";
+  grid-area: 1 / 1;
+  width: calc(var(--mu) * 58);
+  height: calc(var(--mu) * 58);
+  background: color-mix(in srgb, var(--rank) 22%, transparent);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 58 58' shape-rendering='crispEdges'%3E%3Cpath d='M24 0h10v1h-10zM20 1h18v1h-18zM17 2h24v1h-24zM15 3h28v1h-28zM13 4h32v1h-32zM12 5h34v1h-34zM11 6h36v1h-36zM10 7h38v1h-38zM8 8h42v1h-42zM8 9h42v1h-42zM7 10h44v1h-44zM6 11h46v1h-46zM5 12h48v1h-48zM4 13h50v1h-50zM4 14h50v1h-50zM3 15h52v1h-52zM3 16h52v1h-52zM2 17h54v1h-54zM2 18h54v1h-54zM2 19h54v1h-54zM1 20h56v1h-56zM1 21h56v1h-56zM1 22h56v1h-56zM1 23h56v1h-56zM0 24h58v1h-58zM0 25h58v1h-58zM0 26h58v1h-58zM0 27h58v1h-58zM0 28h58v1h-58zM0 29h58v1h-58zM0 30h58v1h-58zM0 31h58v1h-58zM0 32h58v1h-58zM0 33h58v1h-58zM1 34h56v1h-56zM1 35h56v1h-56zM1 36h56v1h-56zM1 37h56v1h-56zM2 38h54v1h-54zM2 39h54v1h-54zM2 40h54v1h-54zM3 41h52v1h-52zM3 42h52v1h-52zM4 43h50v1h-50zM4 44h50v1h-50zM5 45h48v1h-48zM6 46h46v1h-46zM7 47h44v1h-44zM8 48h42v1h-42zM8 49h42v1h-42zM10 50h38v1h-38zM11 51h36v1h-36zM12 52h34v1h-34zM13 53h32v1h-32zM15 54h28v1h-28zM17 55h24v1h-24zM20 56h18v1h-18zM24 57h10v1h-10z'/%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
+}
+.display > canvas {
+  grid-area: 1 / 1;
+}
+.display.unknown::before {
+  content: none;
 }
 .display.unknown {
   background: rgb(10 8 16 / 0.95);
@@ -941,7 +979,8 @@ body[data-layout="phone"] .book {
   justify-content: center;
   display: flex;
   flex-wrap: wrap;
-  gap: calc(var(--mu) * 8);
+  max-width: 100%;
+  gap: calc(var(--mu) * 4) calc(var(--mu) * 8);
   margin-top: calc(var(--mu) * 6);
   color: var(--text-2);
 }

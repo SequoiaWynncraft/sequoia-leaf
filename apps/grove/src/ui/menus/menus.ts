@@ -117,9 +117,19 @@ export class Menus {
       </section>`;
     const body = this.root.querySelector(".menu-body");
     if (body) body.scrollTop = scroll;
+    this.fit();
+    mountCast(this.root, this.app.art);
+  }
+
+  /**
+   * Paints the menu's pictures at the whole scale its boxes hold now: again whenever the screen's
+   * layout changes, and once the page's styles are in, so a picture never keeps a scale it was
+   * measured at before its box had its width.
+   */
+  fit(): void {
+    if (this.current === null) return;
     const unit = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--mu")) || 2;
     mountArt(this.root, unit);
-    mountCast(this.root, this.app.art);
   }
 
   private view(m: MenuId): MenuView {

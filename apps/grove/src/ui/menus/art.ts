@@ -18,10 +18,14 @@ export function mountArt(root: HTMLElement, unit: number): void {
     const fixedW = Number(el.dataset["w"] ?? 0);
     const H = Number(el.dataset["h"] ?? 40);
     let scale = Number(el.dataset["scale"] ?? 1);
-    // A fixed-size picture steps down a whole scale rather than overflow a narrow box.
+    // A fixed-size picture steps down a whole scale rather than overflow a narrow box: the room is
+    // the nearest box round it that has a width of its own (one that only wraps the canvas has none).
     if (el.dataset["fit"] !== undefined && el.dataset["w"]) {
       el.style.width = "0px";
-      while (scale > 1 && Number(el.dataset["w"]) * scale * unit > (box.clientWidth || Infinity)) scale--;
+      let around: HTMLElement | null = box;
+      while (around && around.clientWidth === 0) around = around.parentElement;
+      const room = around?.clientWidth || Infinity;
+      while (scale > 1 && Number(el.dataset["w"]) * scale * unit > room) scale--;
     }
     // Measure the box without the canvas in it, so the canvas never widens the box it fills.
     el.style.width = "0px";
