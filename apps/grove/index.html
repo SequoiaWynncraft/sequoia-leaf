@@ -18,10 +18,132 @@
         height: 100dvh;
         touch-action: none;
       }
+      /* The interface: plain panels in the grove's dusk colours, sized for a thumb. */
+      #hud {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        font:
+          600 14px/1.25 ui-monospace,
+          "DejaVu Sans Mono",
+          Menlo,
+          Consolas,
+          monospace;
+        color: #fff3cf;
+        padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+          max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+      }
+      #hud .panel,
+      #hud .deed {
+        pointer-events: auto;
+        background: #2a1733e6;
+        border: 2px solid #5a296e;
+        box-shadow:
+          0 0 0 2px #1a0f1e,
+          inset 0 -3px 0 #1a0f1e66;
+        border-radius: 2px;
+      }
+      #hud .purse {
+        position: absolute;
+        top: max(10px, env(safe-area-inset-top));
+        left: max(10px, env(safe-area-inset-left));
+        padding: 8px 12px;
+        min-width: 120px;
+      }
+      #hud .tree {
+        position: absolute;
+        top: max(10px, env(safe-area-inset-top));
+        right: max(10px, env(safe-area-inset-right));
+        padding: 8px 12px;
+        text-align: right;
+      }
+      #hud .label {
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #d49045;
+      }
+      #hud .sap {
+        font-size: 26px;
+        color: #f5b95e;
+      }
+      #hud .per {
+        font-size: 12px;
+        color: #e0c39a;
+      }
+      #hud .stage {
+        font-size: 17px;
+      }
+      #hud .bar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: max(12px, env(safe-area-inset-bottom));
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+        padding: 0 10px;
+      }
+      #hud .deed {
+        font: inherit;
+        color: #fff3cf;
+        min-height: 52px;
+        min-width: min(260px, 44vw);
+        padding: 8px 14px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        cursor: pointer;
+      }
+      #hud .deed .cost {
+        font-size: 12px;
+        color: #e0c39a;
+      }
+      #hud .deed.ready {
+        border-color: #f5b95e;
+        background: #54286ae6;
+      }
+      #hud .deed:disabled {
+        color: #9a86a8;
+        cursor: default;
+      }
+      #hud .deed:active:not(:disabled) {
+        transform: translateY(2px);
+      }
+      #hud .card {
+        position: absolute;
+        left: 50%;
+        top: 42%;
+        transform: translate(-50%, -50%);
+        padding: 16px 22px;
+        text-align: center;
+        display: grid;
+        gap: 6px;
+        cursor: pointer;
+        max-width: 80vw;
+      }
+      #hud .pop {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        color: #f5b95e;
+        font-size: 16px;
+        text-shadow: 0 2px 0 #1a0f1e;
+        animation: pop 0.9s ease-out forwards;
+      }
+      @keyframes pop {
+        to {
+          transform: translate(-50%, -260%);
+          opacity: 0;
+        }
+      }
     </style>
   </head>
   <body>
     <canvas></canvas>
+    <div id="hud"></div>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

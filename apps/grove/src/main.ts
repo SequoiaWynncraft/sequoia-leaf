@@ -2,16 +2,20 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 import { tailor, VILLAGERS } from "./art/skins.ts";
-import { banner, bulbs, draw, flames, loadSkin, skinned, type Wearer } from "./engine/actors.ts";
+import { banner, bulbs, draw, flames, leafling, loadSkin, skinned, type Wearer } from "./engine/actors.ts";
 import { ihash } from "./engine/rand.ts";
 import { stage } from "./engine/render.ts";
+import { hud } from "./game/hud.ts";
+import * as game from "./game/state.ts";
 import { buildBoard } from "./gen/board.ts";
 import { buildCamp } from "./gen/camp.ts";
 import { buildGlade, CX, CZ, ground, SUN } from "./gen/glade.ts";
+import { buildHome, C as HC, plant, treeHeight } from "./gen/home.ts";
 
 const canvas = document.querySelector("canvas")!;
 const query = new URLSearchParams(location.search);
-const which = query.get("scene") ?? "camp";
+// The game is the home grove; the other scenes are for looking at the world.
+const which = query.get("scene") ?? "home";
 type View = { eye: [number, number, number]; at: [number, number, number]; fov: number };
 const t0 = performance.now();
 
@@ -25,8 +29,25 @@ if (which === "camp") {
 }
 const camp = which === "camp" ? buildCamp(SUN, cast) : null;
 const board = which === "board" ? buildBoard() : null;
-const glade = camp || board ? null : buildGlade();
-const world = camp?.world ?? board?.world ?? glade!.world;
+// The grove as it was left, with the Sap it made since.
+const back = game.advance(game.load(localStorage, Date.now()), Date.now());
+let save = back.save;
+const home = which === "home" ? buildHome(save.level) : null;
+const glade = camp || board || home ? null : buildGlade();
+const world = camp?.world ?? board?.world ?? home?.world ?? glade!.world;
+/** Where the grove is looked at from, for a tree of this age. */
+const homeView = (level: number): View => {
+  const h = treeHeight(level);
+  const g = home!.ground;
+  // Near enough to stay inside the clearing; an old tree is looked up at, and does not fit the picture.
+  const d = Math.min(15 + h * 0.95, 24);
+  const aim = Math.min(1.5 + h * 0.42, 4 + d * 0.9);
+  return {
+    eye: [HC + d * 0.5, g + 3 + Math.min(h * 0.4, 6), HC + d * 0.9],
+    at: [HC + 2.5, g + aim, HC + 2],
+    fov: 42 + Math.min(20, h * 0.3),
+  };
+};
 
 const VIEWS: Record<string, View> = {};
 if (camp) {
@@ -38,6 +59,8 @@ if (camp) {
   VIEWS.tall = { eye: [fx + 2, fy + 6.5, fz + 22], at: [fx, fy + 6, fz - 2], fov: 50 };
 } else if (board) {
   Object.assign(VIEWS, board.views);
+} else if (home) {
+  VIEWS.hero = homeView(save.level);
 } else {
   const g = glade!.main.ground;
   const deck = glade!.deck;
@@ -52,17 +75,34 @@ const flies: [number, number, number][] = camp
   ? camp.flies
   : board
     ? []
-    : Array.from({ length: 90 }, (_, i) => {
-        const a = ihash(i, 1, 0, 3) * 6.283;
-        const r = 6 + ihash(i, 2, 0, 3) * 30;
-        const x = CX + Math.cos(a) * r;
-        const z = CZ + 6 + Math.sin(a) * r;
-        return [x, ground(Math.round(x), Math.round(z)) + 1 + ihash(i, 3, 0, 3) * 9, z];
-      });
+    : home
+      ? Array.from({ length: 24 }, (_, i) => [
+          HC + (ihash(i, 1, 0, 3) - 0.5) * 44,
+          home.ground + 1 + ihash(i, 3, 0, 3) * 7,
+          HC + (ihash(i, 2, 0, 3) - 0.5) * 44,
+        ])
+      : Array.from({ length: 90 }, (_, i) => {
+          const a = ihash(i, 1, 0, 3) * 6.283;
+          const r = 6 + ihash(i, 2, 0, 3) * 30;
+          const x = CX + Math.cos(a) * r;
+          const z = CZ + 6 + Math.sin(a) * r;
+          return [x, ground(Math.round(x), Math.round(z)) + 1 + ihash(i, 3, 0, 3) * 9, z];
+        });
 
 const errors: string[] = [];
-const night = Number(query.get("night") ?? (camp ? 0.7 : 0));
-const lit = camp ?? board;
+const night = Number(query.get("night") ?? (camp ? 0.7 : home ? 0.35 : 0));
+const lit =
+  camp ??
+  board ??
+  (home
+    ? {
+        fire: home.fire,
+        glows: [
+          { at: [home.fire[0], home.fire[1] + 0.9, home.fire[2]] as [number, number, number], size: 9, flicker: true },
+          { at: [HC + 10.5, home.ground + 1.5, HC + 5.5] as [number, number, number], size: 3.2, flicker: false },
+        ],
+      }
+    : null);
 // Everyone at the fire throws a shadow from it: an upright rod as tall and as wide as the figure.
 const casters = (camp?.actors ?? []).map((a) => {
   const k = (a.scale ?? 1) / 16;
@@ -95,6 +135,64 @@ function view(name: string): void {
   controls.update();
 }
 view(query.get("view") ?? "hero");
+
+// ---------- the game: Sap ticking up, and what it buys ----------
+
+const face = home
+  ? hud(document.querySelector<HTMLElement>("#hud")!, {
+      grow() {
+        const next = game.grow(save);
+        if (!next) return;
+        save = next;
+        plant(world, save.level);
+        s.remesh();
+        VIEWS.hero = homeView(save.level);
+        view("hero");
+        keep();
+      },
+      welcome() {
+        const next = game.welcome(save);
+        if (!next) return;
+        save = next;
+        keep();
+      },
+    })
+  : null;
+const keep = (): void => {
+  game.store(localStorage, save);
+  face?.show(save);
+};
+let shown = 0;
+/** Counts the Sap made since the last frame, and shows and saves it now and then. */
+function tick(now: number): void {
+  save = game.advance(save, Date.now()).save;
+  if (now - shown < 250) return;
+  shown = now;
+  face?.show(save);
+  if (Math.floor(now / 5000) !== Math.floor((now - 250) / 5000)) game.store(localStorage, save);
+}
+if (face) {
+  face.show(save);
+  if (back.awayMs > 60_000 && back.gained >= 1) {
+    const mins = Math.round(Math.min(back.awayMs, game.AWAY_CAP_MS) / 60_000);
+    face.card("Welcome back", [
+      `Your tree made ${game.short(back.gained)} sap`,
+      `in ${mins < 90 ? `${mins} minutes` : `${Math.round(mins / 60)} hours`}${back.capped ? " (it rests after a day)" : ""}`,
+    ]);
+  }
+  // A tap on the world, not a drag, shakes some Sap loose.
+  let down: [number, number] | null = null;
+  canvas.addEventListener("pointerdown", (e) => (down = [e.clientX, e.clientY]));
+  canvas.addEventListener("pointerup", (e) => {
+    if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 6) {
+      face.pop(e.clientX, e.clientY, `+${game.short(game.tapGain(save))}`);
+      save = game.tap(save);
+      face.show(save);
+    }
+    down = null;
+  });
+  addEventListener("pagehide", () => game.store(localStorage, save));
+}
 
 let frames = 0;
 const snaps: ((png: string) => void)[] = [];
@@ -130,6 +228,16 @@ function loop(now: number): void {
     for (const line of camp.strings) bulbs(s.dyn, world, line.a, line.b, line.points);
   }
   if (board) flames(s.dyn, board.fire, time);
+  if (home) {
+    flames(s.dyn, home.fire, time);
+    for (let i = 0; i < Math.min(save.leaflings, home.spots.length); i++) {
+      const at = home.spots[i]!;
+      const a = leafling(at, Math.atan2(home.fire[0] - at[0], home.fire[2] - at[2]), i * 1.7);
+      a.update?.(time);
+      draw(s.dyn, world, a);
+    }
+    tick(now);
+  }
   s.frame(time);
   // A picture of the frame just drawn, for the review scripts.
   if (snaps.length) {
@@ -153,6 +261,16 @@ Object.assign(window, {
       s.camera.fov = fov;
       s.camera.updateProjectionMatrix();
       controls.update();
+    },
+    /** Puts the grove in a given state, for review. */
+    set(next: game.Save): void {
+      if (!home) return;
+      save = { ...next, seen: Date.now() };
+      plant(world, save.level);
+      s.remesh();
+      VIEWS.hero = homeView(save.level);
+      view("hero");
+      keep();
     },
     snap: () => new Promise<string>((done) => snaps.push(done)),
     errors,

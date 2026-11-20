@@ -170,8 +170,11 @@ async function run(step: Step): Promise<void> {
     case "shot": {
       // A page that draws with WebGL hands over a finished frame itself; a screenshot taken from
       // outside can land in the middle of one and show half a scene.
+      // A name starting `ui-` asks for the whole page, interface and all, not only the world.
       const own = await send("Runtime.evaluate", {
-        expression: "window.grove && window.grove.snap ? window.grove.snap() : null",
+        expression: step[1].startsWith("ui-")
+          ? "null"
+          : "window.grove && window.grove.snap ? window.grove.snap() : null",
         awaitPromise: true,
         returnByValue: true,
       });

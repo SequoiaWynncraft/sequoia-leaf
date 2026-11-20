@@ -102,6 +102,8 @@ export interface Stage {
   readonly dyn: Dyn;
   /** Where the fog begins, in blocks from the eye. */
   fogStart: number;
+  /** Rebuilds the world's meshes after its blocks have changed. */
+  remesh(): void;
   frame(time: number): void;
   resize(): void;
 }
@@ -467,19 +469,31 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
     geo.setAttribute("aLight", new THREE.InterleavedBufferAttribute(buf, 4, 10));
   };
   const CHUNK = 24;
-  for (let z = 0; z < world.sz; z += CHUNK)
-    for (let x = 0; x < world.sx; x += CHUNK) {
-      const m = meshRegion(world, sun, x, z, Math.min(world.sx, x + CHUNK), Math.min(world.sz, z + CHUNK));
-      if (!m.ni) continue;
-      const geo = new THREE.BufferGeometry();
-      attributes(geo, new THREE.InterleavedBuffer(m.data.subarray(0, m.nv * STRIDE), STRIDE));
-      geo.setIndex(new THREE.BufferAttribute(m.index.subarray(0, m.ni), 1));
-      geo.boundingSphere = new THREE.Sphere(
-        new THREE.Vector3(x + CHUNK / 2, world.sy / 2, z + CHUNK / 2),
-        Math.hypot(CHUNK, world.sy, CHUNK) / 2,
-      );
-      scene.add(new THREE.Mesh(geo, blocks));
+  let chunks: THREE.Mesh[] = [];
+  /** Builds the world's meshes from its blocks as they now are, in place of any built before. */
+  const remesh = (): void => {
+    for (const c of chunks) {
+      scene.remove(c);
+      c.geometry.dispose();
     }
+    chunks = [];
+    for (let z = 0; z < world.sz; z += CHUNK)
+      for (let x = 0; x < world.sx; x += CHUNK) {
+        const m = meshRegion(world, sun, x, z, Math.min(world.sx, x + CHUNK), Math.min(world.sz, z + CHUNK));
+        if (!m.ni) continue;
+        const geo = new THREE.BufferGeometry();
+        attributes(geo, new THREE.InterleavedBuffer(m.data.subarray(0, m.nv * STRIDE), STRIDE));
+        geo.setIndex(new THREE.BufferAttribute(m.index.subarray(0, m.ni), 1));
+        geo.boundingSphere = new THREE.Sphere(
+          new THREE.Vector3(x + CHUNK / 2, world.sy / 2, z + CHUNK / 2),
+          Math.hypot(CHUNK, world.sy, CHUNK) / 2,
+        );
+        const mesh = new THREE.Mesh(geo, blocks);
+        chunks.push(mesh);
+        scene.add(mesh);
+      }
+  };
+  remesh();
 
   // The moving things share the blocks' shader; their corners are rewritten every frame.
   const dyn = new Dyn();
@@ -624,6 +638,7 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
     camera,
     dyn,
     fogStart: 40,
+    remesh,
     resize() {
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;

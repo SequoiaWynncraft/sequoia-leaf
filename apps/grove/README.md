@@ -1,8 +1,22 @@
-# Sequoia Grove (block prototype)
+# Sequoia Grove
 
-A first look at the Leaf game as a block game: a redwood glade at dusk, built from 16x16 tiles on
-boxes, in the welcome scenes' colours. This is a prototype of the look and the engine, not yet a
-game: there is no play, no account and no server in it.
+The Leaf game: an idle game in a block-built sequoia grove. Your tree makes Sap while you are away;
+Sap grows the tree and welcomes the leaflings that tend it. This is the first playable slice. It
+keeps its state in the browser; there is no account and no server in it yet.
+
+## The game so far
+
+- `src/game/state.ts`: the rules, as pure functions over a small save: Sap a second, what growth
+  and leaflings cost, what a tap gives, how much a grove makes while away (it rests after a day, so
+  nobody has to come back daily), saving and loading. `bun test` holds them to their promises.
+- `src/game/hud.ts` and the styles in `index.html`: the interface, plain panels over the world.
+- `src/gen/home.ts`: the member's grove; the tree's size is its level, so growing it rebuilds it.
+- `?scene=home` is the game and the default. `?scene=camp`, `?scene=glade` and `?scene=board` are
+  for looking at the world.
+
+Decided for this game: Sap is the main currency and comes only from the grove. Leaf, earned by
+raiding, will buy speed and variety, never anything Sap cannot reach. The tree has thirteen rings.
+Rebirth, cones, building and the guild's shared tree come after this slice.
 
 ```sh
 bun run dev                         # the glade, with hot reload
@@ -12,8 +26,8 @@ bun review/drawn.ts out.png         # check the hand-drawn tiles and write them 
 bun review/drive.ts http://grove.test/ shots steps.json dist   # screenshots in headless Chromium
 ```
 
-`?scene=camp` (the default) is the campfire at nightfall; `?scene=glade` is the first glade with the
-giant tree; `?scene=board` is the material board (below). `?view=hero|close|side|tall` picks a camera and `?night=0..1` the hour. Drag to look
+`?scene=camp` is the campfire at nightfall; `?scene=glade` is the first glade with the giant tree;
+`?scene=board` is the material board. `?view=hero|close|side|tall` picks a camera and `?night=0..1` the hour. Drag to look
 round, scroll or pinch to zoom.
 
 ## The one rule
