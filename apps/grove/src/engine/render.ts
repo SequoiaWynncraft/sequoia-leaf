@@ -2,7 +2,7 @@
 import * as THREE from "three";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 
-import { paintTile, TILE, tileNames } from "../art/tiles.ts";
+import { paintTile, reliefTile, TILE, tileNames } from "../art/tiles.ts";
 import { Dyn } from "./actors.ts";
 import { meshRegion, STRIDE } from "./mesh.ts";
 import { ihash } from "./rand.ts";
@@ -45,11 +45,12 @@ const SHARED = /* glsl */ `
     return mix(c, c * vec3(0.42, 0.42, 0.62), uNight);
   }`;
 
-function tiles(): THREE.DataArrayTexture {
+/** Every tile as a layer of one texture: its colours, or its relief (see `reliefTile`). */
+function tiles(paint: (name: string) => Uint8Array = paintTile): THREE.DataArrayTexture {
   const names = tileNames();
   const data = new Uint8Array(TILE * TILE * 4 * names.length);
   names.forEach((name, layer) => {
-    const px = paintTile(name);
+    const px = paint(name);
     // Rows go in from the bottom, so v runs up the tile.
     for (let y = 0; y < TILE; y++)
       data.set(px.subarray(y * TILE * 4, (y + 1) * TILE * 4), layer * TILE * TILE * 4 + (TILE - 1 - y) * TILE * 4);
@@ -132,6 +133,7 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
     uniforms: {
       ...common(),
       uTiles: { value: tiles() },
+      uRelief: { value: tiles(reliefTile) },
       uLamp: { value: lamps.map((g) => new THREE.Vector4(g.at[0], g.at[1], g.at[2], 6 + g.size * 2)) },
       uLampSet: { value: lamps.map((g) => new THREE.Vector2(g.size > 5 ? 2.2 : 1.2, g.flicker ? 1 : 0)) },
       uLampN: { value: Math.min(LAMPS, strong.length) },
@@ -170,6 +172,7 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       precision highp float;
       precision highp sampler2DArray;
       uniform sampler2DArray uTiles;
+      uniform sampler2DArray uRelief;
       uniform vec4 uLamp[${LAMPS}];
       uniform vec2 uLampSet[${LAMPS}];
       uniform int uLampN;
@@ -201,14 +204,31 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
           float bough = vnoise3(cell * 0.21) * 0.7 + vnoise3(cell * 0.53 + 9.0) * 0.3;
           t.rgb *= mix(vec3(0.84, 0.90, 0.98), vec3(1.14, 1.10, 0.86), bough);
         }
+        // Each pixel of a tile leans its own way (the tile's relief), so light picks out a stone's
+        // edge or a board's groove. The lean is turned from the tile's own axes to the world's by
+        // how position and tile coordinate change across the screen, whichever way the face is turned.
+        vec4 relief = texture(uRelief, vec3(vUv, vTile));
+        vec3 lean = relief.xyz * 2.0 - 1.0;
+        float smoothness = relief.a;
+        vec3 n = vN;
+        if (!leafy && abs(lean.x) + abs(lean.y) > 0.01) {
+          vec3 px = dFdx(vPos), py = dFdy(vPos);
+          vec2 ux = dFdx(vUv), uy = dFdy(vUv);
+          vec3 right = px * uy.y - py * ux.y;
+          vec3 up = py * ux.x - px * uy.x;
+          float det = ux.x * uy.y - uy.x * ux.y;
+          if (abs(det) > 1e-9) n = normalize(normalize(right * sign(det)) * lean.x + normalize(up * sign(det)) * lean.y + vN * lean.z);
+        }
+        vec3 toEye = normalize(cameraPosition - vPos);
         float side = vN.y > 0.5 ? 1.0 : vN.y < -0.5 ? 0.55 : abs(vN.x) > abs(vN.z) ? 0.88 : 0.74;
+        side *= 0.86 + 0.28 * dot(n, vN) * (0.5 + 0.5 * dot(n, normalize(vec3(0.3, 1.0, 0.2))));
         float open = vLight.x * sqrt(sqrt(vLight.x));
         // Under the open sky a surface shows its own colour; shade goes down toward purple, and
         // night takes nearly all of it, leaving a dim blue for the lamps to stand against.
         vec3 lit = mix(vec3(1.0, 0.95, 1.06), vec3(0.14, 0.17, 0.36), uNight);
         vec3 shade = mix(vec3(0.20, 0.15, 0.30), vec3(0.05, 0.055, 0.13), uNight);
         vec3 sky = mix(shade, lit, open) * side * vLight.w;
-        float toSun = dot(vN, uSun);
+        float toSun = dot(n, uSun) * step(0.0, dot(vN, uSun) + 0.2);
         // Foliage is lit from behind as well: the sun comes through it.
         float sunAmt = (leafy ? toSun * 0.3 + 0.5 : max(toSun, 0.0)) * vLight.z * (1.0 - uNight);
         vec3 sun = vec3(1.0, 0.62, 0.32) * sunAmt * 0.95;
@@ -217,6 +237,7 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
         // near side is bright and its far side is not. The flooded light says whether the lamp can
         // reach the point at all, which keeps it from shining through a wall.
         float direct = 0.0;
+        float shine = 0.0;
         for (int i = 0; i < ${LAMPS}; i++) {
           if (i >= uLampN) break;
           vec3 to = uLamp[i].xyz - vPos;
@@ -224,11 +245,20 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
           float k = d / uLamp[i].w;
           float fall = max(0.0, 1.0 - k * k);
           fall = fall * fall / (1.0 + d * d * 0.015);
-          float facing = dot(vN, to / max(d, 0.01));
+          vec3 dir = to / max(d, 0.01);
+          float facing = dot(n, dir);
           float shape = leafy ? facing * 0.25 + 0.6 : clamp(facing * 0.8 + 0.2, 0.0, 1.0);
-          direct += uLampSet[i].x * fall * shape * mix(1.0, flicker, uLampSet[i].y);
+          // A lamp behind the face lights none of its pixels, however they lean.
+          shape *= leafy ? 1.0 : smoothstep(-0.25, 0.1, dot(vN, dir));
+          float power = uLampSet[i].x * fall * mix(1.0, flicker, uLampSet[i].y);
+          direct += power * shape;
+          // The lamp's own glint on what is smooth: glass, a lantern, worn stone.
+          float glint = pow(max(dot(n, normalize(dir + toEye)), 0.0), mix(6.0, 90.0, smoothness));
+          shine += power * glint * smoothness * step(0.0, facing);
         }
-        direct *= smoothstep(0.02, 0.28, vLight.y);
+        float reach = smoothstep(0.02, 0.28, vLight.y);
+        direct *= reach;
+        shine *= reach;
         // What the lamps' light does after it lands: a soft warm fill wherever the flood reached.
         float reached = min(vLight.y, 1.0);
         float fill = reached * reached * 0.9 * mix(1.0, vLight.w, 0.6);
@@ -237,6 +267,8 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
         float lum = dot(t.rgb, vec3(0.4, 0.45, 0.15));
         vec3 cool = mix(t.rgb, vec3(lum) * vec3(0.9, 0.95, 1.25), uNight * 0.45);
         vec3 c = cool * sky + t.rgb * (sun + lamp);
+        float sunGlint = pow(max(dot(n, normalize(uSun + toEye)), 0.0), mix(6.0, 90.0, smoothness)) * smoothness * sunAmt;
+        c += vec3(1.0, 0.72, 0.42) * shine * 1.4 + vec3(1.0, 0.8, 0.55) * sunGlint;
         // The low sun lays a little gold on what it touches.
         c += vec3(0.83, 0.56, 0.27) * sunAmt * 0.14;
         // Bright light rolls off instead of burning out, the red first, so a hot spot goes to gold.

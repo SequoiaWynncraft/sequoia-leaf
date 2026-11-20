@@ -67,6 +67,10 @@ from them, not the code.
 - The fire and the lanterns (a scene's eight strongest lamps) light each point by its distance and
   by how squarely the surface faces them, so a log's near side is bright and its far side is not.
   The flooded lamp light decides whether a lamp reaches a point at all, and adds a soft warm fill.
+- Every tile has a relief: how each of its pixels leans and how smooth it is, read from the
+  drawing itself (dark for a crack, light for a ridge) with a depth and a shine per material
+  (`reliefTile` in `src/art/tiles.ts`). Lamps and the sun light each pixel by its lean, so a fire
+  picks out every cobble and board, and smooth things (glass, a lantern) catch a glint.
 - Night is a dim blue, so the warm light has something to stand against.
 - Light in the air is not a sprite. Whatever gives light (flames, lantern glass, lit windows,
   bulbs, sparks) is marked in the picture's alpha; that part is blurred at three sizes and laid back

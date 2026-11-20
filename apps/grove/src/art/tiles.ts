@@ -102,6 +102,60 @@ export function paintTile(name: string): Uint8Array {
   return out;
 }
 
+// ---------- relief: how a tile's surface stands up and how much it shines ----------
+
+/**
+ * How deep a material's relief is and how smooth it is, by the start of the tile's name. A tile not
+ * listed is flat and matt: a skin, a flame, a leaf.
+ */
+const SURFACE: readonly (readonly [string, number, number])[] = [
+  ["cobble", 1.5, 0.16],
+  ["stone_bricks", 1.4, 0.3],
+  ["bricks", 1.3, 0.14],
+  ["log", 0.9, 0.1],
+  ["planks", 1.0, 0.18],
+  ["roof", 1.0, 0.18],
+  ["barrel", 1.0, 0.18],
+  ["ladder", 0.9, 0.12],
+  ["dirt", 0.45, 0.1],
+  ["path", 0.5, 0.1],
+  ["podzol", 0.45, 0.1],
+  ["grass_top", 0.5, 0.14],
+  ["grass_side", 0.6, 0.12],
+  ["moss", 0.5, 0.12],
+  ["wool", 0.35, 0.04],
+  ["window", 0.3, 0.9],
+  ["lantern", 0, 0.6],
+];
+
+/**
+ * A tile's relief as RGBA rows from the top: the way each pixel's surface leans (red to the right,
+ * green upward, blue out of the face, 128 being none) and its smoothness in alpha. The relief is
+ * read from the drawing itself, dark for a crack and light for a ridge, wrapping at the edges as
+ * the tile does. It lets a lamp pick out each stone and board where a flat face would only fade.
+ */
+export function reliefTile(name: string): Uint8Array {
+  const [, bump, smooth] = SURFACE.find(([start]) => name.startsWith(start)) ?? ["", 0, 0.05];
+  const px = paintTile(name);
+  const height = (x: number, y: number): number => {
+    const i = (((y + TILE) % TILE) * TILE + ((x + TILE) % TILE)) * 4;
+    return (px[i]! * 0.3 + px[i + 1]! * 0.59 + px[i + 2]! * 0.11) / 255;
+  };
+  const out = new Uint8Array(TILE * TILE * 4);
+  for (let y = 0; y < TILE; y++)
+    for (let x = 0; x < TILE; x++) {
+      const dx = (height(x + 1, y) - height(x - 1, y)) * bump * 2.2;
+      // Rows run down the drawing and up the face.
+      const dy = (height(x, y - 1) - height(x, y + 1)) * bump * 2.2;
+      const len = Math.hypot(dx, dy, 1);
+      out.set(
+        [128 - (dx / len) * 127, 128 - (dy / len) * 127, 128 + (1 / len) * 127, Math.round(smooth * 255)],
+        (y * TILE + x) * 4,
+      );
+    }
+  return out;
+}
+
 // ---------- the campfire's things ----------
 
 /** A flame two tiles tall, drawn afresh for each frame: licks that lean and rise, a pale core, a few sparks. */
