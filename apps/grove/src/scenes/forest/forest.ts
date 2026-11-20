@@ -272,8 +272,8 @@ export class Forest implements Scene {
     this.tick(t);
     const pic = this.pic;
     const art = this.app.art;
-    const season = f && f.seasons.includes(this.params.season) ? this.params.season : (f?.seasons[0] ?? "normal");
-    const ambiance: Ambiance = f && f.ambiances.includes(this.light) ? this.light : "dusk";
+    const season = f ? this.seasonNow(f) : "normal";
+    const ambiance = f ? this.ambianceNow(f) : "dusk";
     const img = (layer: string): Pixels | null =>
       f ? art.image(fill(f.layer, { layer, season, ambiance })).value : null;
     const far = img("far");
@@ -373,6 +373,14 @@ export class Forest implements Scene {
     if (this.edge?.key !== key) this.edge = { key, colour: edgeColour(pic.px, pic.W, pic.H) };
     pic.blit(out, this.world.W, this.world.H, this.cropX);
     this.renderHud(t, hudOut, fonts, raidOut);
+  }
+
+  private seasonNow(f: ForestManifest): string {
+    return f.seasons.includes(this.params.season) ? this.params.season : (f.seasons[0] ?? "normal");
+  }
+
+  private ambianceNow(f: ForestManifest): Ambiance {
+    return f.ambiances.includes(this.light) ? this.light : "dusk";
   }
 
   private drawCrabs(s: Stage, t: number): void {
@@ -580,6 +588,7 @@ export class Forest implements Scene {
       if (!p) return null;
       const lv = p.member.level;
       const done = this.app.store.state.watered.includes(p.member.name);
+      const mine = target.id === this.meId();
       return {
         ax: a.x,
         ay: a.y,
@@ -592,9 +601,11 @@ export class Forest implements Scene {
             colour: mix([146, 196, 106], [253, 211, 111], (lv - 1) / 9),
           },
         ],
-        action: done
-          ? { text: "Watered · thank you!", colour: UI.muted, hot: false }
-          : { text: "Water (1 care)", colour: UI.leaf, hot: actionHot },
+        action: mine
+          ? { text: "Your tree · visit your glade", colour: UI.purpleHover, hot: actionHot }
+          : done
+            ? { text: "Watered · thank you!", colour: UI.muted, hot: false }
+            : { text: "Water (1 care)", colour: UI.leaf, hot: actionHot },
       };
     }
     const info = PLACE_INFO[target.id];
@@ -751,6 +762,7 @@ export class Forest implements Scene {
     }
     const member = this.trees[target.id]?.member;
     if (!member) return;
+    if (target.id === this.meId()) return this.app.go("glade");
     const next = waterFriend(this.app.store.state, member.name);
     if (next) {
       this.app.store.set(next);
@@ -764,11 +776,48 @@ export class Forest implements Scene {
     const me = this.meId();
     const p = this.trees[me];
     if (!p) return;
-    this.target = p.x;
+    this.target = this.clearView(me) ?? p.x;
     this.vx = 0;
     this.cameraFree = true;
     this.meAt = t;
     this.pinned = { kind: "tree", id: me };
+  }
+
+  /**
+   * Where to look so a tree stands clear of the near ferns and trunks: near the tree's own place,
+   * where the near layer covers least of it, a little aside rather than far.
+   */
+  private clearView(id: number): number | null {
+    const f = this.forest;
+    const s = this.standing.find((x) => x.id === id);
+    const near = f
+      ? this.app.art.image(fill(f.layer, { layer: "near", season: this.seasonNow(f), ambiance: this.ambianceNow(f) }))
+          .value
+      : null;
+    if (!f || !s || !near) return null;
+    const centre = s.left + s.box.w / 2;
+    // Never so far aside that the tree leaves the screen.
+    const reach = Math.max(0, Math.floor((this.shown / 2 - s.box.w / 2 - 4) / 4));
+    let best: { at: number; score: number } | null = null;
+    for (let step = 0; step <= Math.min(10, reach); step++) {
+      for (const dir of step === 0 ? [0] : [-1, 1]) {
+        const at = centre + dir * step * 4;
+        const l = look(at, this.shown, f.width, this.view);
+        const off = layerOffset(l.cx, f.layers.near.depth, this.view);
+        let covered = 0;
+        for (let y = 0; y < s.box.h; y++)
+          for (let x = 0; x < s.box.w; x++) {
+            if ((s.atlas.data[(s.box.y + y) * s.atlas.w + s.box.x + x] ?? 0) >>> 24 < 128) continue;
+            const nx = toPicture(s.left + x, l.cx, this.view) + off;
+            if (nx < 0 || nx >= near.w) continue;
+            const v = near.data[(s.top + y) * near.w + nx] ?? 0;
+            if (v >>> 24 >= 128) covered++;
+          }
+        const score = covered + step * 4 * 0.3;
+        if (!best || score < best.score) best = { at, score };
+      }
+    }
+    return best?.at ?? null;
   }
 
   private debug(i: number, t: number): void {
