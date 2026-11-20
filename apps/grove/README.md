@@ -8,8 +8,7 @@ game: there is no play, no account and no server in it.
 bun run dev                         # the glade, with hot reload
 bun run build                       # dist/
 bun review/atlas.ts out.png 4       # every tile on one sheet, each shown 3x3
-bun review/bench.ts out.png 6 log planks roof    # chosen tiles repeated, with their numbers
-bun run pack                        # rebuild the tile data after changing assets/pack or tools/pack.ts
+bun review/drawn.ts out.png         # check the hand-drawn tiles and write them to a sheet
 bun review/drive.ts http://grove.test/ shots steps.json dist   # screenshots in headless Chromium
 ```
 
@@ -20,7 +19,7 @@ round, scroll or pinch to zoom.
 ## The one rule
 
 Everything in the world is a 16x16 tile on a box. Consistency comes from that rule, from one
-texture pack and from one light model.
+set of hand-drawn tiles and from one light model.
 
 - `src/engine/blocks.ts`: the block registry. A block is data: its tiles, its shape (cube, boxes,
   crossed sheets, fence), the light it gives.
@@ -46,13 +45,11 @@ Every block shows one 16x16 tile, as a block game does; where a block has severa
 
 - `src/art/drawn.ts`: the game's own tiles, drawn pixel by pixel as sixteen rows of sixteen
   letters with a colour key each: the lawn, dirt, the forest floor, redwood bark and its sawn end,
-  sequoia foliage, seat logs, planks, the roof, cobblestone, grass tufts and fern. They aim at the
+  sequoia foliage, seat logs, planks, the roof, cobblestone, bricks, the barrel, the window, the
+  ladder, wool, grass tufts, fern, flowers and mushrooms. No other pack's art is in the game. They aim at the
   flat, friendly look of the classic block-game packs and copy none of them.
   `bun review/drawn.ts out.png` checks them (shape, palette, seams) and writes a sheet.
-- `assets/pack/` and `tools/pack.ts` (`bun run pack`): tiles not drawn yet come from REFI Textures,
-  an openly licensed 16x16 pack (CC BY-SA 4.0, credit in `assets/pack/LICENSE.md`): flowers,
-  mushrooms, the barrel, glass, wool, the ladder. A drawn tile of the same name replaces a pack tile.
-- `src/art/tiles.ts`: puts the two together, and draws the few things the game shapes its own way:
+- `src/art/tiles.ts`: registers them, and draws the few things the game shapes its own way:
   the lantern, the flame, the banner, the string lights.
 
 The meadow is kept off the grid the way block games do it: a lawn block's top is turned one of four

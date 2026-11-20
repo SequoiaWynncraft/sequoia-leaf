@@ -57,7 +57,7 @@ const column = (side: string, top: string, bottom = top): FaceTiles => [
   t(side),
   t(side),
 ];
-/** The pack's numbered variants of a tile: `planks`, `planks1`, ... */
+/** The numbered variants of a tile: `planks`, `planks1`, ... */
 const variants = (name: string): string[] => {
   const names = new Set(tileNames());
   const out = [name];

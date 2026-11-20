@@ -1,14 +1,12 @@
 /**
- * Every texture in the game, 16x16.
+ * Every texture in the game, 16x16, all of it the game's own.
  *
- * The world's blocks wear a texture pack: REFI Textures, an openly licensed pack in Minecraft's look (see
- * `assets/pack/LICENSE.md`), built into `pack.gen.ts` by `bun run pack`. Each block shows its one
- * tile, as a block game does. The few things the pack has no texture for are drawn here: the
- * lantern, the flame, the banner, the string lights.
+ * The world's blocks wear the tiles drawn pixel by pixel in `drawn.ts`. Each block shows its one
+ * tile, as a block game does. The few things the game shapes its own way are drawn here in code:
+ * the lantern, the flame, the banner, the string lights.
  */
 import { ihash, noise2 } from "../engine/rand.ts";
 import { DRAWN } from "./drawn.ts";
-import { PACK } from "./pack.gen.ts";
 
 export const TILE = 16;
 export type Paint = (x: number, y: number) => string | null;
@@ -19,16 +17,6 @@ const rows =
     const ch = art[y]?.[x] ?? ".";
     return ch === "." ? null : (key[ch] ?? null);
   };
-
-/** A pack tile: its pixels as they were drawn. */
-const fromPack = (data: string): Paint => {
-  const px = atob(data);
-  const two = (i: number): string => px.charCodeAt(i).toString(16).padStart(2, "0");
-  return (x, y) => {
-    const i = (y * TILE + x) * 4;
-    return px.charCodeAt(i + 3) < 128 ? null : `#${two(i)}${two(i + 1)}${two(i + 2)}`;
-  };
-};
 
 /** One tile for every face of the lantern's small boxes: frame, glass, cap, chain. */
 const lantern: Paint = (x, y) => {
@@ -59,8 +47,6 @@ const FLAME = [
 ];
 
 export const TILES: Record<string, Paint> = {
-  ...Object.fromEntries(Object.entries(PACK).map(([name, data]) => [name, fromPack(data)])),
-  // A tile drawn by hand stands in for the pack's.
   ...Object.fromEntries(Object.entries(DRAWN).map(([name, d]) => [name, rows(d.rows, d.key)])),
   lantern,
   flame: rows(FLAME, { o: "#e67967", y: "#f5b95e", w: "#fff3cf" }),
