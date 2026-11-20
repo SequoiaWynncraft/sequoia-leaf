@@ -4,7 +4,7 @@ import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 
 import { GROUNDS, paintTile, reliefTile, TILE, tileNames } from "../art/tiles.ts";
 import { Dyn } from "./actors.ts";
-import { meshRegion, STRIDE } from "./mesh.ts";
+import { type Mesh, meshRegion, STRIDE } from "./mesh.ts";
 import { ihash } from "./rand.ts";
 import type { World } from "./world.ts";
 
@@ -92,6 +92,8 @@ export interface Scene {
   readonly night?: number;
   /** Who stands in the light of the strongest lamp and throws a shadow from it. */
   readonly casters?: readonly Caster[];
+  /** What lies beyond the world and never changes: the ground running on, the far forest. */
+  readonly beyond?: Mesh;
 }
 
 export interface Stage {
@@ -110,8 +112,10 @@ export interface Stage {
 
 export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
   const { world, sun } = set;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  // The picture is drawn to a target of its own, so the canvas needs no smoothing; and a phone's
+  // dense screen is not drawn at full density, which would cost four times the work for little gain.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(36, 1, 0.3, 600);
   /** Each material gets its own copies; `each` sets one on all of them. */
@@ -234,12 +238,8 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       void main() {
         vec4 t = texture(uTiles, vec3(vUv, vTile));
         bool leafy = vEmit > 1.5 && vEmit < 2.5;
-        // A gap between leaves is the dark inside of the tree, not a hole: looking through a crown
-        // at the trunk and the sky behind it only speckles it.
-        if (t.a < 0.5) {
-          if (!leafy) discard;
-          t.rgb *= 0.55;
-        }
+        // Leaves have real gaps: what shows through one is the next layer of the crown, a block deeper and darker.
+        if (t.a < 0.5) discard;
         float glows = vEmit > 0.5 && vEmit < 1.5 ? 1.0 : 0.0;
         bool lawn = vEmit > 3.5 && vEmit < 4.5;
         bool earth = lawn || vEmit > 5.5;
@@ -494,6 +494,15 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       }
   };
   remesh();
+  if (set.beyond?.ni) {
+    const m = set.beyond;
+    const geo = new THREE.BufferGeometry();
+    attributes(geo, new THREE.InterleavedBuffer(m.data.subarray(0, m.nv * STRIDE), STRIDE));
+    geo.setIndex(new THREE.BufferAttribute(m.index.subarray(0, m.ni), 1));
+    const far = new THREE.Mesh(geo, blocks);
+    far.frustumCulled = false;
+    scene.add(far);
+  }
 
   // The moving things share the blocks' shader; their corners are rewritten every frame.
   const dyn = new Dyn();
@@ -576,7 +585,7 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
   // blurred at three sizes and laid back over the picture, then the corners are drawn in a little.
   renderer.setClearColor(0x000000, 0);
   renderer.info.autoReset = false;
-  const picture = new THREE.WebGLRenderTarget(1, 1, { samples: 4 });
+  const picture = new THREE.WebGLRenderTarget(1, 1, { samples: devicePixelRatio > 1.25 ? 0 : 4 });
   const levels = [2, 4, 8].map((div) => ({
     div,
     a: new THREE.WebGLRenderTarget(1, 1),

@@ -10,7 +10,7 @@ import * as game from "./game/state.ts";
 import { buildBoard } from "./gen/board.ts";
 import { buildCamp } from "./gen/camp.ts";
 import { buildGlade, CX, CZ, ground, SUN } from "./gen/glade.ts";
-import { buildHome, C as HC, plant, treeHeight } from "./gen/home.ts";
+import { beyond, buildHome, C as HC, plant, treeHeight } from "./gen/home.ts";
 
 const canvas = document.querySelector("canvas")!;
 const query = new URLSearchParams(location.search);
@@ -35,18 +35,15 @@ let save = back.save;
 const home = which === "home" ? buildHome(save.level) : null;
 const glade = camp || board || home ? null : buildGlade();
 const world = camp?.world ?? board?.world ?? home?.world ?? glade!.world;
-/** Where the grove is looked at from, for a tree of this age. */
+/**
+ * Where the grove is looked at from: across the fire to the foot of the tree, from a little above,
+ * a step further back as the tree grows. The tree's height is for the growing ceremony to show.
+ */
 const homeView = (level: number): View => {
-  const h = treeHeight(level);
   const g = home!.ground;
-  // Near enough to stay inside the clearing; an old tree is looked up at, and does not fit the picture.
-  const d = Math.min(15 + h * 0.95, 24);
-  const aim = Math.min(1.5 + h * 0.42, 4 + d * 0.9);
-  return {
-    eye: [HC + d * 0.5, g + 3 + Math.min(h * 0.4, 6), HC + d * 0.9],
-    at: [HC + 2.5, g + aim, HC + 2],
-    fov: 42 + Math.min(20, h * 0.3),
-  };
+  const d = 15 + level * 0.9;
+  const at: [number, number, number] = [HC + 3.2, g + 2.4 + level * 0.25, HC + 2.6];
+  return { eye: [at[0] + d * 0.42, at[1] + d * 0.3, at[2] + d * 0.86], at, fov: 46 };
 };
 
 const VIEWS: Record<string, View> = {};
@@ -116,6 +113,7 @@ const s = stage(canvas, {
   flies,
   night,
   casters,
+  ...(home ? { beyond: beyond() } : {}),
   ...(lit ? { glows: lit.glows, fire: lit.fire } : {}),
 });
 s.renderer.debug.onShaderError = (gl, _program, vs, fs) => {
@@ -125,6 +123,15 @@ const t1 = performance.now();
 const controls = new OrbitControls(s.camera, canvas);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.53;
+if (home) {
+  // The grove is turned and looked into, never left: no sliding away, no going under the ground or off into the sky.
+  controls.enablePan = false;
+  controls.minDistance = 8;
+  controls.maxDistance = 34;
+  controls.minPolarAngle = 0.75;
+  controls.maxPolarAngle = 1.5;
+  controls.rotateSpeed = 0.6;
+}
 
 function view(name: string): void {
   const v = VIEWS[name] ?? VIEWS.hero!;
@@ -138,22 +145,57 @@ view(query.get("view") ?? "hero");
 
 // ---------- the game: Sap ticking up, and what it buys ----------
 
+/** A ceremony in progress takes the camera; `null` when the player has it. */
+let rite: ((now: number) => void) | null = null;
+let arrived = -1e9;
+const ease = (t: number): number => t * t * (3 - 2 * t);
 const face = home
   ? hud(document.querySelector<HTMLElement>("#hud")!, {
       grow() {
         const next = game.grow(save);
-        if (!next) return;
+        if (!next || rite) return;
+        const before = game.rate(save);
         save = next;
-        plant(world, save.level);
-        s.remesh();
-        VIEWS.hero = homeView(save.level);
-        view("hero");
         keep();
+        // The ceremony: the grove goes gold, the tree grows behind the light, and the camera
+        // climbs the new trunk to its crown and comes back down to the fire.
+        const from = VIEWS.hero!;
+        const to = homeView(save.level);
+        const top = home!.ground + treeHeight(save.level) * 0.72;
+        const start = performance.now();
+        let grown = false;
+        face!.veil(
+          `Ring ${save.level + 1}`,
+          game.stage(save.level),
+          `+${game.short(Math.max(1, game.rate(save) - before))} sap a second`,
+        );
+        rite = (now) => {
+          const t = (now - start) / 1000;
+          if (!grown && t > 0.45) {
+            grown = true;
+            plant(world, save.level);
+            s.remesh();
+            VIEWS.hero = to;
+          }
+          // Up for a second and a half, a held breath at the crown, and down again.
+          const up =
+            t < 0.45 ? 0 : t < 2.1 ? ease((t - 0.45) / 1.65) : t < 2.7 ? 1 : 1 - ease(Math.min(1, (t - 2.7) / 1.5));
+          const base = grown ? to : from;
+          const lift = (top - base.at[1]) * up;
+          s.camera.position.set(base.eye[0] + up * 6, base.eye[1] + lift * 0.55, base.eye[2] + up * 12);
+          s.camera.lookAt(base.at[0], base.at[1] + lift, base.at[2]);
+          if (t > 4.2) {
+            rite = null;
+            view("hero");
+          }
+        };
       },
       welcome() {
         const next = game.welcome(save);
-        if (!next) return;
+        if (!next || rite) return;
         save = next;
+        arrived = performance.now();
+        face!.toast("A leafling has come to stay");
         keep();
       },
     })
@@ -185,6 +227,7 @@ if (face) {
   canvas.addEventListener("pointerdown", (e) => (down = [e.clientX, e.clientY]));
   canvas.addEventListener("pointerup", (e) => {
     if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 6) {
+      if (rite) return;
       face.pop(e.clientX, e.clientY, `+${game.short(game.tapGain(save))}`);
       save = game.tap(save);
       face.show(save);
@@ -215,7 +258,8 @@ function picture(): string {
 function loop(now: number): void {
   const time = now / 1000;
   s.resize();
-  controls.update();
+  if (rite) rite(now);
+  else controls.update();
   s.fogStart = Math.max(26, s.camera.position.distanceTo(controls.target) * 0.85);
   s.dyn.reset();
   if (camp) {
@@ -234,6 +278,9 @@ function loop(now: number): void {
       const at = home.spots[i]!;
       const a = leafling(at, Math.atan2(home.fire[0] - at[0], home.fire[2] - at[2]), i * 1.7);
       a.update?.(time);
+      // The newest one pops up out of the ground, overshoots and settles.
+      const age = i === save.leaflings - 1 ? (now - arrived) / 600 : 1;
+      if (age < 1) a.scale = (a.scale ?? 1) * (age < 0.7 ? (age / 0.7) * 1.25 : 1.25 - ((age - 0.7) / 0.3) * 0.25);
       draw(s.dyn, world, a);
     }
     tick(now);

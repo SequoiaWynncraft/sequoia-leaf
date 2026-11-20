@@ -133,6 +133,106 @@
         text-shadow: 0 2px 0 #1a0f1e;
         animation: pop 0.9s ease-out forwards;
       }
+      #hud .sap.bump {
+        animation: bump 0.25s ease-out;
+      }
+      @keyframes bump {
+        40% {
+          transform: scale(1.18);
+          color: #fff3cf;
+        }
+      }
+      /* The growing ceremony: gold light floods in, holds while the tree grows behind it, and clears. */
+      #hud .veil {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+      }
+      #hud .veil::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 50% 55%, #fff3cf 0%, #f5b95e 38%, #d4904500 78%);
+        animation: veil 4.2s ease-in-out forwards;
+      }
+      @keyframes veil {
+        0% {
+          opacity: 0;
+        }
+        10%,
+        16% {
+          opacity: 1;
+        }
+        42% {
+          opacity: 0.16;
+        }
+        86% {
+          opacity: 0.16;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+      #hud .rite {
+        text-align: center;
+        display: grid;
+        gap: 4px;
+        text-shadow:
+          0 2px 0 #1a0f1e,
+          0 0 18px #1a0f1e;
+        animation: rite 4.2s ease-out forwards;
+      }
+      #hud .rite .name {
+        font-size: clamp(30px, 7vw, 54px);
+        color: #fff3cf;
+      }
+      #hud .rite .line {
+        font-size: 16px;
+        color: #f5b95e;
+      }
+      @keyframes rite {
+        0%,
+        14% {
+          opacity: 0;
+          transform: scale(0.7);
+        }
+        26% {
+          opacity: 1;
+          transform: scale(1.06);
+        }
+        32%,
+        84% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(-12px);
+        }
+      }
+      #hud .toast {
+        position: absolute;
+        left: 50%;
+        top: 22%;
+        padding: 10px 16px;
+        animation: toast 2.4s ease-out forwards;
+      }
+      @keyframes toast {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, 10px);
+        }
+        12%,
+        80% {
+          opacity: 1;
+          transform: translate(-50%, 0);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -10px);
+        }
+      }
       @keyframes pop {
         to {
           transform: translate(-50%, -260%);

@@ -94,6 +94,24 @@ export function store(to: Store, s: Save): void {
   }
 }
 
+const STAGES = [
+  "Seedling",
+  "Sprout",
+  "Sapling",
+  "Young tree",
+  "Pole",
+  "Tall tree",
+  "Old growth",
+  "Elder",
+  "Monarch",
+  "Giant",
+  "Titan",
+  "Ancient",
+  "Great Sequoia",
+];
+/** What a tree of this level is called. */
+export const stage = (level: number): string => STAGES[Math.min(level, STAGES.length - 1)]!;
+
 /** 1234 as "1,234", 12345 as "12.3k", and so on up. */
 export function short(n: number): string {
   if (n < 10000) return Math.floor(n).toLocaleString("en-US");

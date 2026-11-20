@@ -11,6 +11,11 @@ keeps its state in the browser; there is no account and no server in it yet.
   nobody has to come back daily), saving and loading. `bun test` holds them to their promises.
 - `src/game/hud.ts` and the styles in `index.html`: the interface, plain panels over the world.
 - `src/gen/home.ts`: the member's grove; the tree's size is its level, so growing it rebuilds it.
+- The grove is looked into from a fixed side: it can be turned and zoomed, never left. Growing the
+  tree is a ceremony (the grove goes gold, the tree grows behind the light, the camera climbs the
+  new trunk and comes back to the fire); the heavy rebuild happens under the light, so nothing freezes.
+- Beyond the grove's own blocks the meadow runs on and a far forest stands in the haze
+  (`beyond()` in `home.ts`), built once, so the grove is never an island in a void.
 - `?scene=home` is the game and the default. `?scene=camp`, `?scene=glade` and `?scene=board` are
   for looking at the world.
 

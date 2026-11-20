@@ -2,13 +2,26 @@
  * The grove's interface: plain panels laid over the world. The world is for looking at; everything
  * you do is a button here, large enough for a thumb.
  */
-import { growCost, leaflingCost, leaflingRoom, MAX_LEVEL, rate, type Save, short } from "./state.ts";
+import {
+  growCost,
+  leaflingCost,
+  leaflingRoom,
+  MAX_LEVEL,
+  rate,
+  type Save,
+  short,
+  stage as stageName,
+} from "./state.ts";
 
 export interface Hud {
   /** Shows the grove as it now is. */
   show(s: Save): void;
   /** A number rising from a point of the screen, for a tap. */
   pop(x: number, y: number, text: string): void;
+  /** The growing ceremony: the screen goes gold, and the tree's new name comes up through it. */
+  veil(over: string, title: string, under: string): void;
+  /** A line that comes and goes by itself. */
+  toast(text: string): void;
   /** A card in the middle of the screen until it is tapped away. */
   card(title: string, lines: readonly string[]): void;
 }
@@ -16,22 +29,6 @@ export interface Deeds {
   grow(): void;
   welcome(): void;
 }
-
-const STAGES = [
-  "Seedling",
-  "Sprout",
-  "Sapling",
-  "Young tree",
-  "Pole",
-  "Tall tree",
-  "Old growth",
-  "Elder",
-  "Monarch",
-  "Giant",
-  "Titan",
-  "Ancient",
-  "Great Sequoia",
-];
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text = ""): HTMLElementTagNameMap[K] => {
   const e = document.createElement(tag);
@@ -59,6 +56,7 @@ export function hud(root: HTMLElement, deeds: Deeds): Hud {
   bar.append(grow, welcome);
   root.append(top, tree, bar);
 
+  let held = 0;
   const button = (b: HTMLButtonElement, title: string, cost: number | null, have: number, done: string): void => {
     b.replaceChildren(
       el("span", "what", cost === null ? done : title),
@@ -69,9 +67,17 @@ export function hud(root: HTMLElement, deeds: Deeds): Hud {
   };
   return {
     show(s) {
-      sap.textContent = short(s.sap);
+      const now = short(s.sap);
+      // The purse jumps a little when it takes a leap, as from a tap.
+      if (sap.textContent !== now && s.sap - held > rate(s) * 1.5 + 0.9) {
+        sap.classList.remove("bump");
+        void sap.offsetWidth;
+        sap.classList.add("bump");
+      }
+      held = s.sap;
+      sap.textContent = now;
       per.textContent = `+${rate(s) < 10 ? rate(s).toFixed(1) : short(rate(s))} a second`;
-      stage.textContent = STAGES[s.level] ?? "";
+      stage.textContent = stageName(s.level);
       rings.textContent = s.level >= MAX_LEVEL ? "Full grown" : `Ring ${s.level + 1} of ${MAX_LEVEL + 1}`;
       button(grow, "Grow the tree", growCost(s), s.sap, "Full grown");
       button(
@@ -88,6 +94,19 @@ export function hud(root: HTMLElement, deeds: Deeds): Hud {
       p.style.top = `${y}px`;
       root.append(p);
       p.addEventListener("animationend", () => p.remove());
+    },
+    veil(over, title, under) {
+      const v = el("div", "veil");
+      const words = el("div", "rite");
+      words.append(el("div", "label", over), el("div", "name", title), el("div", "line", under));
+      v.append(words);
+      root.append(v);
+      words.addEventListener("animationend", () => v.remove());
+    },
+    toast(text) {
+      const t = el("div", "panel toast", text);
+      root.append(t);
+      t.addEventListener("animationend", () => t.remove());
     },
     card(title, lines) {
       const c = el("div", "panel card");

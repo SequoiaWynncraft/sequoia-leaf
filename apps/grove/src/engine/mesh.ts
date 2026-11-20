@@ -242,6 +242,15 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
     shade[3] = 1 - (1 - ao) * soft;
   };
 
+  /** Whether a cell has open air on any side. */
+  const open = (x: number, y: number, z: number): boolean =>
+    w.occ(x + 1, y, z) === 0 ||
+    w.occ(x - 1, y, z) === 0 ||
+    w.occ(x, y + 1, z) === 0 ||
+    w.occ(x, y - 1, z) === 0 ||
+    w.occ(x, y, z + 1) === 0 ||
+    w.occ(x, y, z - 1) === 0;
+
   /** A box inside a cell: a whole cube, or a slab, a stair's step, a post. Each corner takes the light of where it is. */
   const boxAt = (
     x: number,
@@ -267,10 +276,16 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
         (n[1] < 0 && from[1] === 0) ||
         (n[2] > 0 && to[2] === 16) ||
         (n[2] < 0 && from[2] === 0);
+      let inner = false;
       if (flush) {
         const o = w.occ(x + n[0], y + n[1], z + n[2]);
         // Foliage is drawn as a solid mass, its gaps painted as deep shade, so nothing shows between two blocks of it.
-        if (o === 2 || (leafy && o === 1)) continue;
+        if (o === 2) continue;
+        // Between two blocks of foliage a face is kept at the outside of a crown, where it is seen
+        // through the gaps in the leaves in front of it, and dropped deep inside, where it never is.
+        inner = leafy && o === 1;
+        // The face looks into the block in front of it; it is seen through that block's gaps only if that block is at the outside.
+        if (inner && !open(x + n[0], y + n[1], z + n[2])) continue;
       }
       // Light comes through foliage, so its faces turned from the sun take some too.
       const facing = leafy || n[0] * sun[0] + n[1] * sun[1] + n[2] * sun[2] > 0.02;
@@ -286,7 +301,15 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
         const s = f === 2 ? spin : 0;
         uv.push(s === 1 ? [tv, 1 - tu] : s === 2 ? [1 - tu, 1 - tv] : s === 3 ? [1 - tv, tu] : [tu, tv]);
         corner(x + lx, y + ly, z + lz, f, facing, soft);
-        lights.splice(k * 4, 4, shade[0]!, shade[1]!, shade[2]!, shade[3]!);
+        // What is seen through a gap is inside the crown, and in its shade.
+        lights.splice(
+          k * 4,
+          4,
+          shade[0]!,
+          shade[1]!,
+          inner ? shade[2]! * 0.4 : shade[2]!,
+          inner ? shade[3]! * 0.5 : shade[3]!,
+        );
       }
       m.quad(pos, uv, tiles[f]!, f === 2 ? top : kind, n, lights);
     }
