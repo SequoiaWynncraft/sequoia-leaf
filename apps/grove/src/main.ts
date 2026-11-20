@@ -82,6 +82,23 @@ function view(name: string): void {
 view(query.get("view") ?? "hero");
 
 let frames = 0;
+const snaps: ((png: string) => void)[] = [];
+/** The frame just drawn as a PNG, read pixel by pixel: asking the WebGL canvas itself can return half a frame. */
+function picture(): string {
+  const gl = s.renderer.getContext();
+  const w = gl.drawingBufferWidth;
+  const h = gl.drawingBufferHeight;
+  const px = new Uint8Array(w * h * 4);
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const flat = document.createElement("canvas");
+  flat.width = w;
+  flat.height = h;
+  const image = new ImageData(w, h);
+  for (let y = 0; y < h; y++) image.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+  for (let i = 3; i < image.data.length; i += 4) image.data[i] = 255;
+  flat.getContext("2d")!.putImageData(image, 0, 0);
+  return flat.toDataURL("image/png");
+}
 function loop(now: number): void {
   const time = now / 1000;
   s.resize();
@@ -99,6 +116,11 @@ function loop(now: number): void {
   }
   if (board) flames(s.dyn, board.fire, time);
   s.frame(time);
+  // A picture of the frame just drawn, for the review scripts.
+  if (snaps.length) {
+    const png = picture();
+    for (const done of snaps.splice(0)) done(png);
+  }
   if (++frames === 3) document.title = "ready";
   requestAnimationFrame(loop);
 }
@@ -109,6 +131,7 @@ const dbg = gl.getExtension("WEBGL_debug_renderer_info");
 Object.assign(window, {
   grove: {
     view,
+    snap: () => new Promise<string>((done) => snaps.push(done)),
     errors,
     s,
     THREE,

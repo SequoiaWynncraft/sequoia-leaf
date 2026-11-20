@@ -2,9 +2,7 @@
  * The block registry. A block is data: which tiles it wears, what shape it is, what light it
  * gives. Adding one is a line here and, if it needs a new look, a tile in art/tiles.ts.
  */
-import "../art/macro.ts";
-import "../art/materials.ts";
-import { tileIndex } from "../art/tiles.ts";
+import { tileIndex, tileNames } from "../art/tiles.ts";
 
 /** Faces in the order +x, -x, +y, -y, +z, -z. */
 export type FaceTiles = readonly [number, number, number, number, number, number];
@@ -14,9 +12,6 @@ export interface Box {
   readonly to: readonly [number, number, number];
   readonly tiles: FaceTiles;
   readonly emit?: boolean;
-  /** The first tile of a drawing `wideN` blocks wide, when the box wears one. */
-  readonly wide?: number;
-  readonly wideN?: number;
 }
 
 export interface BlockDef {
@@ -27,21 +22,18 @@ export interface BlockDef {
   readonly foliage?: boolean;
   /** The cube's faces, for opaque and foliage blocks. */
   readonly tiles?: FaceTiles;
+  /** Other drawings of the same block; each block in the world wears one, chosen by where it stands. */
+  readonly alts?: readonly FaceTiles[];
   /** Faces whose texture is turned a quarter, for logs lying down. */
   readonly turned?: readonly boolean[];
   /** Boxes in sixteenths of a block, for everything that is not a full cube. */
   readonly boxes?: readonly Box[];
-  /** Two crossed sheets, for plants and flames. */
-  readonly cross?: { readonly tile: number; readonly emit?: boolean };
+  /** Two crossed sheets, for plants and flames; each plant wears one of the tiles. */
+  readonly cross?: { readonly tiles: readonly number[]; readonly emit?: boolean };
   /** Joins to its neighbours with rails, as a fence does. */
   readonly fence?: boolean;
-  /** Each block turns its texture a different way, so a field of it does not show a grid. */
+  /** The top face is turned a different way on each block, so a lawn does not show a grid. */
   readonly scatter?: boolean;
-  /** For each face, the first tile of a drawing several blocks wide, or null; `macroN` is its width in blocks. */
-  readonly macro?: readonly (number | null)[];
-  readonly macroN?: number;
-  /** Bare ground: moss next to it creeps over its edge. */
-  readonly fringed?: boolean;
   /** Light given off, 0 to 15. */
   readonly light?: number;
 }
@@ -56,101 +48,82 @@ const column = (side: string, top: string, bottom = top): FaceTiles => [
   t(side),
   t(side),
 ];
-/** Materials whose drawing is wider than a block, and how many blocks wide. */
-const WIDE: Record<string, number> = { planks: 2, slate: 2, stone: 2 };
+/** The pack's numbered variants of a tile: `planks`, `planks1`, ... */
+const variants = (name: string): string[] => {
+  const names = new Set(tileNames());
+  const out = [name];
+  for (let k = 1; names.has(`${name}${k}`); k++) out.push(`${name}${k}`);
+  return out;
+};
+/** A cube of one material, in every variant the pack draws. */
+const solid = (name: string, tile: string, more: Partial<BlockDef> = {}): BlockDef => {
+  const [first, ...rest] = variants(tile);
+  return { name, opaque: true, tiles: all(first!), alts: rest.map(all), ...more };
+};
 const box = (from: Box["from"], to: Box["to"], tile: string, emit = false): Box => ({
   from,
   to,
   tiles: all(tile),
   emit,
-  ...(WIDE[tile] ? { wide: t(`${tile}_m@0,0`), wideN: WIDE[tile] } : {}),
 });
-
-const m = (name: string): number => tileIndex(`${name}@0,0`);
-const everyFace = (name: string): number[] => Array.from({ length: 6 }, () => m(name));
-const topOnly = (name: string): (number | null)[] => [null, null, m(name), null, null, null];
-const decal = (name: string, tile: string): BlockDef => ({
+const plant = (name: string, tile: string, more: Partial<BlockDef> = {}): BlockDef => ({
   name,
   opaque: false,
-  boxes: [box([0, 0, 0], [16, 0.3, 16], tile)],
+  cross: { tiles: variants(tile).map(t) },
+  ...more,
 });
 
 const DEFS: BlockDef[] = [
   { name: "air", opaque: false },
-  { name: "bark", opaque: true, tiles: all("bark"), macro: everyFace("bark_m"), macroN: 4 },
-  { name: "bark_char", opaque: true, tiles: all("bark_char"), macro: everyFace("bark_char_m"), macroN: 4 },
-  {
-    name: "log",
-    opaque: true,
-    tiles: column("bark", "log_top"),
-    macro: [m("bark_m"), m("bark_m"), m("log_top_m"), m("log_top_m"), m("bark_m"), m("bark_m")],
-    macroN: 4,
-  },
+  solid("bark", "log"),
+  solid("bark_char", "log_dark"),
+  { name: "log", opaque: true, tiles: column("log_seat", "log_seat_top") },
   {
     name: "log_x",
     opaque: true,
-    tiles: [t("log_top"), t("log_top"), t("log_side"), t("log_side"), t("log_side"), t("log_side")],
-    macro: [m("log_top_m"), m("log_top_m"), m("log_side_m"), m("log_side_m"), m("log_side_m"), m("log_side_m")],
-    macroN: 4,
+    tiles: [t("log_seat_top"), t("log_seat_top"), t("log_seat"), t("log_seat"), t("log_seat"), t("log_seat")],
+    turned: [false, false, true, true, true, true],
   },
   {
     name: "log_z",
     opaque: true,
-    tiles: [t("log_side"), t("log_side"), t("bark"), t("bark"), t("log_top"), t("log_top")],
-    macro: [m("log_side_m"), m("log_side_m"), m("bark_m"), m("bark_m"), m("log_top_m"), m("log_top_m")],
-    macroN: 4,
+    tiles: [t("log_seat"), t("log_seat"), t("log_seat"), t("log_seat"), t("log_seat_top"), t("log_seat_top")],
+    turned: [true, true, false, false, false, false],
   },
-  { name: "leaves", opaque: false, foliage: true, tiles: all("leaves"), macro: everyFace("leaves_m"), macroN: 3 },
-  {
-    name: "leaves_lit",
+  ...(["leaves", "leaves_lit", "leaves_dark"] as const).map((name): BlockDef => ({
+    ...solid(name, name),
     opaque: false,
     foliage: true,
-    tiles: all("leaves_lit"),
-    macro: everyFace("leaves_lit_m"),
-    macroN: 3,
-  },
+  })),
   {
-    name: "leaves_dark",
-    opaque: false,
-    foliage: true,
-    tiles: all("leaves_dark"),
-    macro: everyFace("leaves_dark_m"),
-    macroN: 3,
-  },
-  { name: "moss", opaque: true, tiles: column("moss_side", "moss", "dirt"), macro: topOnly("moss_m"), macroN: 4 },
-  {
-    name: "duff",
+    name: "moss",
     opaque: true,
-    fringed: true,
-    tiles: column("dirt", "duff", "dirt"),
-    macro: topOnly("duff_m"),
-    macroN: 2,
+    scatter: true,
+    tiles: column("grass_side", "grass_top", "dirt"),
+    alts: variants("grass_top")
+      .slice(1)
+      .map((top) => column("grass_side", top, "dirt")),
   },
-  { name: "moss_full", opaque: true, tiles: all("moss") },
-  { name: "dirt", opaque: true, fringed: true, tiles: all("dirt") },
-  { name: "path", opaque: true, fringed: true, tiles: column("dirt", "path", "dirt") },
-  decal("d_needles", "d_needles"),
-  decal("d_pebbles", "d_pebbles"),
-  decal("d_clover", "d_clover"),
+  { name: "duff", opaque: true, scatter: true, tiles: column("podzol_side", "podzol_top", "dirt") },
+  solid("moss_full", "moss", { scatter: true }),
+  solid("dirt", "dirt", { scatter: true }),
+  solid("path", "path", { scatter: true }),
   {
     name: "cone",
     opaque: false,
-    boxes: [box([6, 0, 4], [10, 3, 11], "cone_t"), box([7, 0, 11], [9, 2, 13], "cone_t")],
+    boxes: [box([6, 0, 4], [10, 3, 11], "cone"), box([7, 0, 11], [9, 2, 13], "cone")],
   },
-  { name: "stone", opaque: true, tiles: all("stone"), macro: everyFace("stone_m"), macroN: 2 },
-  {
-    name: "stone_mossy",
-    opaque: true,
-    tiles: column("stone_mossy", "moss", "stone"),
-    macro: [m("stone_mossy_m"), m("stone_mossy_m"), null, m("stone_m"), m("stone_mossy_m"), m("stone_mossy_m")],
-    macroN: 2,
-  },
-  { name: "planks", opaque: true, tiles: all("planks"), macro: everyFace("planks_m"), macroN: 2 },
-  { name: "slate", opaque: true, tiles: all("slate"), macro: everyFace("slate_m"), macroN: 2 },
+  solid("stone", "cobble"),
+  solid("stone_mossy", "cobble_mossy"),
+  solid("stone_bricks", "stone_bricks"),
+  solid("planks", "planks"),
+  solid("planks_dark", "planks_dark"),
+  solid("slate", "roof"),
+  solid("bricks", "bricks"),
   { name: "window", opaque: true, tiles: all("window"), light: 12 },
   { name: "planks_slab", opaque: false, boxes: [box([0, 0, 0], [16, 8, 16], "planks")] },
   { name: "planks_slab_top", opaque: false, boxes: [box([0, 8, 0], [16, 16, 16], "planks")] },
-  { name: "slate_slab", opaque: false, boxes: [box([0, 0, 0], [16, 8, 16], "slate")] },
+  { name: "slate_slab", opaque: false, boxes: [box([0, 0, 0], [16, 8, 16], "roof")] },
   { name: "fence", opaque: false, fence: true, boxes: [box([6, 0, 6], [10, 16, 10], "planks")] },
   {
     name: "lantern",
@@ -169,24 +142,30 @@ const DEFS: BlockDef[] = [
     ],
   },
   { name: "ladder_s", opaque: false, boxes: [box([0, 0, 0], [16, 16, 1], "ladder")] },
-  { name: "fern", opaque: false, cross: { tile: t("fern") } },
-  { name: "grass", opaque: false, cross: { tile: t("grass") } },
-  { name: "sprout", opaque: false, cross: { tile: t("sprout") } },
-  { name: "shroom", opaque: false, cross: { tile: t("shroom"), emit: true }, light: 5 },
+  plant("fern", "fern"),
+  plant("grass", "grass"),
+  plant("sprout", "sapling"),
+  plant("shroom", "mushroom_brown"),
+  plant("shroom_red", "mushroom_red"),
+  plant("dandelion", "dandelion"),
+  plant("poppy", "poppy"),
+  plant("cornflower", "cornflower"),
+  plant("daisy", "daisy"),
+  plant("berry_bush", "berry_bush"),
   {
     name: "campfire",
     opaque: false,
     light: 15,
-    cross: { tile: t("flame"), emit: true },
+    cross: { tiles: [t("flame")], emit: true },
     boxes: [
-      { from: [1, 0, 5], to: [15, 3, 8], tiles: all("bark") },
-      { from: [1, 0, 9], to: [15, 3, 12], tiles: all("bark") },
-      { from: [5, 2, 1], to: [8, 5, 15], tiles: all("bark") },
-      { from: [9, 2, 1], to: [12, 5, 15], tiles: all("bark") },
+      { from: [1, 0, 5], to: [15, 3, 8], tiles: all("log") },
+      { from: [1, 0, 9], to: [15, 3, 12], tiles: all("log") },
+      { from: [5, 2, 1], to: [8, 5, 15], tiles: all("log") },
+      { from: [9, 2, 1], to: [12, 5, 15], tiles: all("log") },
     ],
   },
-  { name: "rug", opaque: false, boxes: [box([0, 0, 0], [16, 1, 16], "rug")] },
-  { name: "crate", opaque: true, tiles: all("crate") },
+  { name: "rug", opaque: false, boxes: [box([0, 0, 0], [16, 1, 16], "wool_red")] },
+  { name: "crate", opaque: true, tiles: column("barrel_side", "barrel_top", "barrel_bottom") },
   /** Nothing to see: a point of light, for strings of bulbs. */
   { name: "light", opaque: false, light: 10 },
   {
@@ -206,12 +185,17 @@ const DEFS: BlockDef[] = [
           [6, 0],
           [1, 0],
         ] as const
-      ).map(([x, z], i) => box([x, 0, z], [x + 3, 2 + (i % 2), z + 3], "stone")),
-      { from: [2, 2, 6], to: [14, 5, 9], tiles: all("bark") },
-      { from: [7, 3, 2], to: [10, 6, 14], tiles: all("bark") },
+      ).map(([x, z], i) => box([x, 0, z], [x + 3, 2 + (i % 2), z + 3], "cobble")),
+      { from: [2, 2, 6], to: [14, 5, 9], tiles: all("log") },
+      { from: [7, 3, 2], to: [10, 6, 14], tiles: all("log") },
     ],
   },
-  ...(["slate", "planks"] as const).flatMap((m) =>
+  ...(
+    [
+      ["slate", "roof"],
+      ["planks", "planks"],
+    ] as const
+  ).flatMap(([m, tile]) =>
     (
       [
         ["e", [8, 8, 0], [16, 16, 16]],
@@ -222,7 +206,7 @@ const DEFS: BlockDef[] = [
     ).map(([dir, from, to]): BlockDef => ({
       name: `${m}_stairs_${dir}`,
       opaque: false,
-      boxes: [box([0, 0, 0], [16, 8, 16], m), box(from, to, m)],
+      boxes: [box([0, 0, 0], [16, 8, 16], tile), box(from, to, tile)],
     })),
   ),
 ];

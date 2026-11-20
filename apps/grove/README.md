@@ -8,7 +8,8 @@ game: there is no play, no account and no server in it.
 bun run dev                         # the glade, with hot reload
 bun run build                       # dist/
 bun review/atlas.ts out.png 4       # every tile on one sheet, each shown 3x3
-bun review/bench.ts out.png 6 bark_m planks_m log_top   # chosen drawings repeated, with their numbers
+bun review/bench.ts out.png 6 log planks roof    # chosen tiles repeated, with their numbers
+bun run pack                        # rebuild the tile data after changing assets/pack or tools/pack.ts
 bun review/drive.ts http://grove.test/ shots steps.json dist   # screenshots in headless Chromium
 ```
 
@@ -18,17 +19,9 @@ round, scroll or pinch to zoom.
 
 ## The one rule
 
-Everything in the world is a 16x16 tile on a box. Consistency comes from that rule and from one
-light model, not from matching a painting by hand.
+Everything in the world is a 16x16 tile on a box. Consistency comes from that rule, from one
+texture pack and from one light model.
 
-- `src/art/tiles.ts`: every texture, each a small function from a pixel to one of the welcome
-  forest's colours. A new look is a new function here.
-- `src/art/macro.ts`: textures that run across blocks. Bark, moss, foliage and the bare floor are
-  each one drawing several blocks wide, cut into tiles, so nothing repeats block by block. Also the
-  ragged moss laid over a seam between two kinds of ground, moss at a trunk's foot, and the small
-  things on the floor (needles, clover, pebbles, cones).
-- `src/art/materials.ts`: what things are built of: bark, logs, sawn boards, stone, roof slates,
-  the crate, the ladder, the window. See "Drawing a material".
 - `src/engine/blocks.ts`: the block registry. A block is data: its tiles, its shape (cube, boxes,
   crossed sheets, fence), the light it gives.
 - `src/engine/world.ts`: the grid of blocks, and the light flooded through it from the sky and
@@ -46,28 +39,34 @@ light model, not from matching a painting by hand.
 - `src/gen/sequoia.ts`: grows a sequoia of any age from a few numbers.
 - `src/gen/glade.ts`: the prototype's world: the giant, its house and bridge, the forest round it.
 
-## Drawing a material
+## Textures
 
-The first wood was noise in dark, saturated reds, and it read as brickwork. What replaced it follows
-how hand-drawn 16px block textures are built, measured on openly licensed packs (studied for
-technique, never copied):
+The world wears **Pixel Perfection**, an openly licensed, hand-drawn 16x16 texture pack (CC BY-SA
+4.0; credits and terms in `assets/pack/LICENSE.md`). Each block shows its one 16x16 tile, as a
+block game does; where the pack draws a block several ways (`planks1.png`, `planks2.png`), each
+block in the world wears one of them, and a lawn's tiles are turned four ways.
 
-- **A ramp, not a colour.** Six or seven steps that turn as they lighten: plum in the deepest
-  furrow, tan on a lit edge. Saturation near 0.5 at most (0.15 for stone), and light enough that the
-  scene's own shading has room to work: the lightest step near 0.6 luminance, the darkest near 0.12.
-- **Shapes with a light side.** A bark ridge has a lit left edge, a body of fibres and a shaded
-  right edge. A board has a lit lip, two rows of grain and a seam. A stone has a rim. Nothing is
-  speckle.
-- **Runs, not pixels.** Grain and fibres are runs several pixels long. `review/bench.ts` prints the
-  share of pixels with no neighbour of their own colour; a material should stay under about 5%
-  (a hand-drawn tile with fine rings may run higher).
-- **Wider than a block.** Every material is a drawing two or four blocks wide, so a board end or a
-  stone does not come round again on the next block. Stairs, slabs and posts wear the same drawing.
-- **Small things by hand.** A tile whose shape matters (the log end) is sixteen rows of sixteen
-  letters, each a colour of the ramp, so a ring can be moved a pixel.
+- `assets/pack/`: the pack's PNGs, unchanged, only the ones the game uses.
+- `tools/pack.ts` (`bun run pack`): builds `src/art/pack.gen.ts` from them. It names each tile for
+  the game, tints the pack's grey grass, ferns and needles with the grove's greens, and makes the lit
+  window. Adding a block's texture is copying a PNG in and adding a line there.
+- `src/art/tiles.ts`: the pack's tiles, and the few things drawn here because the pack has no
+  texture for them: the lantern, the flame, the banner, the string lights.
 
-The way to work: draw, look at it repeated on the bench, then look at the board in the game, by
-day and by firelight, before it goes into a scene.
+Anyone who ships the game must credit the pack; the licence covers the textures and what is made
+from them, not the code.
+
+## Light
+
+- The world's light is two fields, sky and lamp, flooded through the cells. Light spreads to the
+  cells beside a cell and diagonal to it, losing as much as the distance, so a lamp's pool is round.
+- Every surface (a cube's face, a stair's step, a slab, a fence post) asks one function for the
+  light at each of its corners: the four cells of air round the corner, blended by how near each
+  is. So light and corner shading run smoothly from one surface to the next.
+- The sun is tested with four rays from each cell of air beside a surface and blended the same way,
+  so a shadow's edge is soft.
+- Foliage has gaps you can see through, faces kept one block into a crown so the gaps have depth,
+  light coming through from behind, a slow sway, and greens that vary in broad patches.
 
 ## People
 

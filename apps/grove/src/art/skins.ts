@@ -182,8 +182,8 @@ export const VILLAGERS: Record<string, Villager> = {
       cap: "#763332",
     },
     extras: [
-      { follow: "body", box: [-4.5, 12.5, -7, 4.5, 23, -2], tile: "crate" },
-      { follow: "body", box: [-5.5, 23, -6.5, 5.5, 26, -2.5], tile: "rug" },
+      { follow: "body", box: [-4.5, 12.5, -7, 4.5, 23, -2], tile: "barrel_side" },
+      { follow: "body", box: [-5.5, 23, -6.5, 5.5, 26, -2.5], tile: "wool_red" },
     ],
   },
   // Carries the guild's news: its purple and gold, the sun on her tabard, a feather in her cap.

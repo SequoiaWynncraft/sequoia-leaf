@@ -130,13 +130,24 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       out vec4 vLight;
       out vec3 vN;
       out vec3 vPos;
+      uniform float uTime;
       void main() {
         vUv = aUv.xy;
         vTile = aUv.z;
         vEmit = aUv.w;
         vLight = aLight;
         vN = normal;
-        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vec3 p = position;
+        // Foliage stirs: every corner at one place moves the same way, so no gap opens between
+        // blocks. A plant is rooted and only its top moves.
+        if (aUv.w > 1.5) {
+          float reach = aUv.w > 2.5 ? aUv.y * 0.07 : 0.03;
+          float phase = dot(floor(position + 0.5), vec3(0.71, 0.37, 0.93));
+          p.x += sin(uTime * 1.3 + phase) * reach;
+          p.z += cos(uTime * 1.1 + phase * 1.3) * reach;
+          p.y += sin(uTime * 0.9 + phase * 0.7) * reach * 0.4 * step(aUv.w, 2.5);
+        }
+        vec4 wp = modelMatrix * vec4(p, 1.0);
         vPos = wp.xyz;
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
@@ -152,32 +163,51 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       in vec3 vN;
       in vec3 vPos;
       out vec4 outColour;
+      float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+      float vnoise3(vec3 p) {
+        vec3 i = floor(p), f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(
+          mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
+          mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), f.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), f.x), f.y),
+          f.z);
+      }
       void main() {
         vec4 t = texture(uTiles, vec3(vUv, vTile));
         if (t.a < 0.5) discard;
+        bool leafy = vEmit > 1.5 && vEmit < 2.5;
+        float glows = vEmit > 0.5 && vEmit < 1.5 ? 1.0 : 0.0;
+        if (leafy) {
+          // No two boughs are one green: broad patches run warmer and lighter, or cooler and deeper.
+          vec3 cell = floor(vPos - vN * 0.5);
+          float bough = vnoise3(cell * 0.21) * 0.7 + vnoise3(cell * 0.53 + 9.0) * 0.3;
+          t.rgb *= mix(vec3(0.84, 0.90, 0.98), vec3(1.14, 1.10, 0.86), bough);
+        }
         float side = vN.y > 0.5 ? 1.0 : vN.y < -0.5 ? 0.55 : abs(vN.x) > abs(vN.z) ? 0.88 : 0.74;
         float open = vLight.x * sqrt(sqrt(vLight.x));
         // Under the open sky a surface shows its own colour; shade goes down toward purple, night toward blue.
         vec3 lit = mix(vec3(1.0, 0.95, 1.06), vec3(0.34, 0.37, 0.72), uNight);
         vec3 shade = mix(vec3(0.20, 0.15, 0.30), vec3(0.07, 0.07, 0.17), uNight);
         vec3 sky = mix(shade, lit, open) * side * vLight.w;
-        float sunAmt = max(dot(vN, uSun), 0.0) * vLight.z * (1.0 - uNight);
+        float toSun = dot(vN, uSun);
+        // Foliage is lit from behind as well: the sun comes through it.
+        float sunAmt = (leafy ? toSun * 0.3 + 0.5 : max(toSun, 0.0)) * vLight.z * (1.0 - uNight);
         vec3 sun = vec3(1.0, 0.62, 0.32) * sunAmt * 0.95;
         float flicker = 1.0 + 0.05 * sin(uTime * 9.0) + 0.035 * sin(uTime * 23.7) + 0.03 * sin(uTime * 4.3);
         float lampAmt = vLight.y * vLight.y;
-        vec3 lamp = vec3(1.0, 0.68, 0.36) * lampAmt * mix(1.7, 2.5, uNight) * flicker * mix(1.0, vLight.w, 0.6);
+        vec3 lamp = vec3(1.0, 0.72, 0.42) * lampAmt * mix(1.0, 1.35, uNight) * flicker * mix(1.0, vLight.w, 0.6);
         // Firelight turns what it falls on toward gold, whatever its own colour, as a real fire does.
         float lum = dot(t.rgb, vec3(0.4, 0.45, 0.15));
-        vec3 warm = mix(t.rgb, vec3(lum) * vec3(1.5, 1.12, 0.62), min(1.0, lampAmt * 0.75));
+        vec3 warm = mix(t.rgb, vec3(lum) * vec3(1.5, 1.12, 0.62), min(1.0, lampAmt * 0.3));
         // Away from the fire, night takes the red out of things and leaves them blue.
         vec3 cool = mix(t.rgb, vec3(lum) * vec3(0.9, 0.95, 1.25), uNight * 0.45);
         vec3 c = cool * sky + t.rgb * sun + warm * lamp;
         // The low sun lays a little gold on what it touches, as the welcome's rim light does.
         c += vec3(0.83, 0.56, 0.27) * sunAmt * 0.14;
         // Keep the brightest light from burning out.
-        vec3 over = max(c - 0.62, 0.0);
-        c = min(c, 0.62) + over / (1.0 + over * 2.2);
-        c = mix(c, t.rgb * 1.15, vEmit);
+        vec3 over = max(c - 0.75, 0.0);
+        c = min(c, 0.75) + over / (1.0 + over * 2.2);
+        c = mix(c, t.rgb * 1.15, glows);
         vec3 eye = vPos - cameraPosition;
         float fd = max(length(eye) - uFogStart, 0.0) / 62.0;
         float f = 1.0 - exp(-fd * sqrt(fd));
@@ -390,6 +420,9 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
     resize() {
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
+      // Setting a canvas's size clears it, even to the size it has, so only when it changes.
+      const now = renderer.getSize(new THREE.Vector2());
+      if (now.x === w && now.y === h) return;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();

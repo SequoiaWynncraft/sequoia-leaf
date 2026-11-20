@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "bun --hot index.html",
     "build": "bun build index.html --outdir dist --minify",
-    "test": "bun test"
+    "test": "bun test",
+    "pack": "bun tools/pack.ts"
   },
   "devDependencies": {
     "@types/bun": "1.4.4",

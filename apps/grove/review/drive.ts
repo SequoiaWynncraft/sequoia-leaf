@@ -168,6 +168,19 @@ async function run(step: Step): Promise<void> {
       return;
     }
     case "shot": {
+      // A page that draws with WebGL hands over a finished frame itself; a screenshot taken from
+      // outside can land in the middle of one and show half a scene.
+      const own = await send("Runtime.evaluate", {
+        expression: "window.grove && window.grove.snap ? window.grove.snap() : null",
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const png = isRecord(own) && isRecord(own.result) ? own.result.value : null;
+      if (typeof png === "string" && png.startsWith("data:image/png;base64,")) {
+        await Bun.write(`${outDir}/${step[1]}.png`, Buffer.from(png.slice(22), "base64"));
+        console.log(`${outDir}/${step[1]}.png`);
+        return;
+      }
       const shot = await send("Page.captureScreenshot", { format: "png" });
       if (!isRecord(shot) || typeof shot.data !== "string") throw new Error("no screenshot");
       await Bun.write(`${outDir}/${step[1]}.png`, Buffer.from(shot.data, "base64"));
