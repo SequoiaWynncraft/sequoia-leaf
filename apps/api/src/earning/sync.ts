@@ -13,6 +13,7 @@ import { Effect, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
 import { Events } from "../events/store.ts";
+import { growGroveFrom } from "../grove/sync.ts";
 import { Ledger } from "../ledger/store.ts";
 import { levelOf, levelUp } from "../levels/pay.ts";
 import { questJson } from "../quests/json.ts";
@@ -25,17 +26,18 @@ export type CreditSource<E = never, R = never> = (from: number, to: number) => E
 export { DEEP_LOOKBACK_MS, RECENT_OVERLAP_MS, SETTLE_MS, type SyncMode, type SyncResult } from "../sync/windowed.ts";
 
 /**
- * Records new activities from the source, pays the Leaf they earn, and moves
- * the players' quests forward. A run writes everything in one transaction, so
- * an activity is never recorded without its Leaf and quest progress, and
- * nothing is paid twice. Running it again over the same window changes
- * nothing.
+ * Records new activities from the source, pays the Leaf they earn, moves the
+ * players' quests forward and grows their Grove. A run writes everything in one
+ * transaction, so an activity is never recorded without its Leaf, quest
+ * progress and Bloom, and nothing is paid twice. Running it again over the same
+ * window changes nothing.
  */
 export const syncCredits = <E, R>(source: CreditSource<E, R>, rules: Rules, now: number, mode: SyncMode) =>
   windowedSync("credits", now, mode, source, (reported, from, to) =>
     Effect.gen(function* () {
+      const fresh = yield* newActivities(reported, from, to);
       const byPlayer = new Map<PlayerId, Activity[]>();
-      for (const activity of yield* newActivities(reported, from, to)) {
+      for (const activity of fresh) {
         const mine = byPlayer.get(activity.playerId);
         if (mine === undefined) {
           byPlayer.set(activity.playerId, [activity]);
@@ -49,6 +51,7 @@ export const syncCredits = <E, R>(source: CreditSource<E, R>, rules: Rules, now:
         leafPaid += yield* recordPlayer(playerId, mine, rules, now);
         recorded += mine.length;
       }
+      yield* growGroveFrom(fresh, rules, now);
       return { recorded, leafPaid };
     }),
   );
@@ -142,6 +145,7 @@ const insertActivity = Effect.fnUntraced(function* (activity: Activity, now: num
   yield* sql`
     INSERT INTO activities ${sql.insert({
       sourceKey: activity.sourceKey,
+      eventKey: activity.eventKey,
       playerId: activity.playerId,
       kind: activity.kind,
       raid: activity.kind === "raid" ? (activity.raid ?? null) : null,

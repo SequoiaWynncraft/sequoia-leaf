@@ -1,5 +1,5 @@
 import type { Activity, PlayerId, Posting } from "@sequoia-leaf/core";
-import { Clock, ConfigProvider, Effect, Layer, ManagedRuntime, Redacted, References } from "effect";
+import { Clock, ConfigProvider, Effect, Layer, ManagedRuntime, Random, Redacted, References } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import { SqlClient } from "effect/sql";
 
@@ -42,6 +42,23 @@ export function raid(id: number, player: PlayerId, occurredAt: number, seasonRat
 export function feed(activities: readonly Activity[]): CreditSource {
   return (from, to) =>
     Effect.succeed(activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to));
+}
+
+/**
+ * The server's dice, loaded: each roll Leaf draws is the next of these, in turn,
+ * starting again after the last. Rolls are whole numbers below 2^32, as a cone's are.
+ */
+export function rolling(rolls: readonly number[]) {
+  let next = 0;
+  const roll = () => {
+    const value = rolls[next % rolls.length] ?? 0;
+    next += 1;
+    return value;
+  };
+  return Layer.succeed(Random.Random)({
+    nextIntUnsafe: roll,
+    nextDoubleUnsafe: () => roll() / 2 ** 32,
+  });
 }
 
 /** Leaf's settings as these environment variables give them, or fails with why they are invalid. */

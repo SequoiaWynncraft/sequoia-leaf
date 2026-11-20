@@ -29,6 +29,7 @@ import { Ledger } from "../ledger/store.ts";
 import { questJson } from "../quests/json.ts";
 import { rerollQuestFor } from "../quests/reroll.ts";
 import { Quests } from "../quests/store.ts";
+import { ForestHandlers, GroveBodyErrorsLive, GroveHandlers } from "./grove.ts";
 
 /** How far back the list of finished quests reaches. */
 const RECENTLY_COMPLETED_MS = 2 * DAY_MS;
@@ -312,8 +313,8 @@ function sseFrame(event: StoredEvent): string {
 
 /** The API's routes and the implementations of its middleware. */
 export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.json" }).pipe(
-  Layer.provide([SystemHandlers, MeHandlers]),
-  Layer.provide([SessionLive, RerollBodyErrorsLive, UnexpectedLive]),
+  Layer.provide([SystemHandlers, MeHandlers, GroveHandlers, ForestHandlers]),
+  Layer.provide([SessionLive, RerollBodyErrorsLive, GroveBodyErrorsLive, UnexpectedLive]),
 );
 
 /** Any request no route takes, answered in the same `{ "code", "message" }` shape as every other error. */

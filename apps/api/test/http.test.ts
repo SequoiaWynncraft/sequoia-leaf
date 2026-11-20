@@ -69,6 +69,13 @@ describe("HTTP", () => {
 
     expect(Object.keys(document.paths).toSorted()).toEqual([
       "/healthz",
+      "/v1/grove",
+      "/v1/grove/care",
+      "/v1/grove/companion",
+      "/v1/grove/cones/buy",
+      "/v1/grove/cones/open",
+      "/v1/grove/forest",
+      "/v1/grove/rates",
       "/v1/me",
       "/v1/me/events",
       "/v1/me/events/stream",

@@ -10,8 +10,34 @@ import {
   OpenApi,
 } from "effect/http-api";
 
-import { IdentityUnavailable, InternalError, Invalid, NotAMember, Refused, Unauthorized } from "./errors.ts";
-import { Events, Health, Me, Quests, RerollBody, Rerolled } from "./schemas.ts";
+import {
+  GroveInvalid,
+  GroveRefused,
+  IdentityUnavailable,
+  InternalError,
+  Invalid,
+  NotAMember,
+  Refused,
+  Unauthorized,
+} from "./errors.ts";
+import {
+  CareBody,
+  Cared,
+  Companion,
+  CompanionBody,
+  ConesBody,
+  ConesBought,
+  ConesOpened,
+  Events,
+  Forest,
+  GroveMe,
+  Health,
+  Me,
+  Quests,
+  Rates,
+  RerollBody,
+  Rerolled,
+} from "./schemas.ts";
 
 // Leaf's HTTP API, declared once: the server implements it, and its OpenAPI
 // document (`/openapi.json`) is generated from it.
@@ -46,6 +72,11 @@ export class RerollBodyErrors extends HttpApiMiddleware.Service<RerollBodyErrors
   error: Invalid,
 }) {}
 
+/** Answers a Grove request whose body is not what the route takes with `invalid_request`. */
+export class GroveBodyErrors extends HttpApiMiddleware.Service<GroveBodyErrors>()("leaf/api/GroveBodyErrors", {
+  error: GroveInvalid,
+}) {}
+
 const EventPosition = { after: Schema.optional(Schema.String) };
 
 export class SystemApi extends HttpApiGroup.make("system", { topLevel: true }).add(
@@ -72,8 +103,43 @@ export class MeApi extends HttpApiGroup.make("me")
   .middleware(Session)
   .prefix("/v1/me") {}
 
+/** The signed-in member's Grove: their tree, its care, their cones and spirits. */
+export class GroveApi extends HttpApiGroup.make("grove")
+  .add(
+    HttpApiEndpoint.get("grove", "/", { success: GroveMe }),
+    HttpApiEndpoint.post("care", "/care", { payload: CareBody, success: Cared, error: [GroveInvalid, GroveRefused] }),
+    HttpApiEndpoint.post("buy", "/cones/buy", {
+      payload: ConesBody,
+      success: ConesBought,
+      error: [GroveInvalid, GroveRefused],
+    }),
+    HttpApiEndpoint.post("open", "/cones/open", {
+      payload: ConesBody,
+      success: ConesOpened,
+      error: [GroveInvalid, GroveRefused],
+    }),
+    HttpApiEndpoint.put("companion", "/companion", {
+      payload: CompanionBody,
+      success: Companion,
+      error: [GroveInvalid, GroveRefused],
+    }),
+  )
+  .middleware(GroveBodyErrors)
+  .middleware(Session)
+  .prefix("/v1/grove") {}
+
+/** What anyone may see of the Grove, signed in or not: the published odds and the Forest. */
+export class ForestApi extends HttpApiGroup.make("forest")
+  .add(
+    HttpApiEndpoint.get("rates", "/rates", { success: Rates }),
+    HttpApiEndpoint.get("forest", "/forest", { success: Forest }),
+  )
+  .prefix("/v1/grove") {}
+
 export class LeafApi extends HttpApi.make("sequoia-leaf")
   .add(SystemApi)
   .add(MeApi)
+  .add(GroveApi)
+  .add(ForestApi)
   .middleware(Unexpected)
   .annotateMerge(OpenApi.annotations({ title: "Leaf", description: "The Sequoia guild currency and its game" })) {}

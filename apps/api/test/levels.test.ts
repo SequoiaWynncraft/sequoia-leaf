@@ -84,7 +84,10 @@ describe("Leaf for levels", () => {
     expect(result).toEqual({ status: "synced", recorded: 2, leafPaid: 1100 + 100 });
     expect(await ledger.account(alice)).toMatchObject({ balance: 1200, xp: 1100 });
     expect(await levelEntries(alice)).toEqual([[`level:${alice}:2`, 100, 0]]);
-    expect((await events(alice)).at(-1)).toEqual({ type: "level_up", data: { level: 2, leaf: 100 } });
+    expect((await events(alice)).findLast((event) => event.type === "level_up")).toEqual({
+      type: "level_up",
+      data: { level: 2, leaf: 100 },
+    });
   });
 
   it("pays every level a single sync passes, with one event for the level reached", async () => {
@@ -127,7 +130,10 @@ describe("Leaf for levels", () => {
       [`level:${alice}:3`, 125, 0],
       [`level:${alice}:2`, 100, 0],
     ]);
-    expect((await events(alice)).at(-1)).toEqual({ type: "level_up", data: { level: 3, leaf: 125 } });
+    expect((await events(alice)).findLast((event) => event.type === "level_up")).toEqual({
+      type: "level_up",
+      data: { level: 3, leaf: 125 },
+    });
   });
 
   it("pays a level again, once, when it is reached again after its payout was reversed", async () => {

@@ -1,4 +1,4 @@
-import type { PlayerId } from "@sequoia-leaf/core";
+import type { GroveRank, PlayerId } from "@sequoia-leaf/core";
 import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
@@ -49,6 +49,32 @@ export type PlayerEvent =
         xp: number;
         earned_at: string;
       };
+    }
+  /**
+   * The player opened a Grove cone of a rank the Forest announces, Dryad or
+   * better. `copy` is which copy of the spirit it was, 1 for a new one.
+   */
+  | {
+      readonly type: "grove.cone_opened";
+      readonly data: { banner: string; spirit: string; rank: GroveRank; verdant: boolean; copy: number };
+    }
+  /** The player's Bloom filled, from a raid or from care, and gave them a cone. `cycle` counts their Blooms. */
+  | { readonly type: "grove.bloomed"; readonly data: { source: "raid" | "care"; cycle: number } }
+  /**
+   * A raid the player was in hung a lantern in the Forest. `party` is everyone
+   * Leaf credited for it, the player included, in the order of their ids.
+   */
+  | {
+      readonly type: "grove.raid_lantern";
+      readonly data: { raid: string; raid_name: string; party: string[]; occurred_at: string };
+    }
+  /**
+   * The guild won a war the player fought in. `players` is everyone Leaf
+   * credited for it, in the order of their ids; `in_claim` is left out when not known.
+   */
+  | {
+      readonly type: "guild.war_win";
+      readonly data: { war: string; territory: string; players: string[]; occurred_at: string; in_claim?: boolean };
     };
 
 /** An event as stored: its place in the player's history, and its details as the JSON text that was written. */

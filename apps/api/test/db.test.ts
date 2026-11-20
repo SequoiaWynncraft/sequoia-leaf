@@ -3,10 +3,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-bun";
 import { leaf, playerId } from "@sequoia-leaf/core";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, String as Str } from "effect";
 import { SqlClient } from "effect/sql";
 
+import schemaAtMigration10 from "../migrations/0010_schema.ts";
 import { AppConfig } from "../src/config.ts";
 import { Database } from "../src/db.ts";
 import { Ledger } from "../src/ledger/store.ts";
@@ -62,6 +64,7 @@ describe("the database", () => {
 
     expect(await query(path, (sql) => sql`SELECT migration_id, name FROM effect_sql_migrations`)).toEqual([
       { migration_id: 10, name: "schema" },
+      { migration_id: 11, name: "grove" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -70,23 +73,29 @@ describe("the database", () => {
     ]);
   });
 
-  it("opens a database migrated before Leaf used Effect's migrator, such as an older backup, applying nothing again", async () => {
+  it("opens a database migrated before Leaf used Effect's migrator, such as an older backup, applying only what came after", async () => {
     const path = join(directory, "leaf.db");
-    await onFile(
-      path,
+    // A database as the old migrator left it: the schema of migration 10, recorded one row per file.
+    await Effect.runPromise(
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
+        yield* SqliteMigrator.run({ loader: SqliteMigrator.fromRecord({ "10_schema": schemaAtMigration10 }) });
         yield* Ledger.use((ledger) =>
           ledger.post({ kind: "earn", playerId: alice, amount: leaf(110), source: "raid", idempotencyKey: "a" }, 1),
         );
-        // Put the record back the way the old migrator kept it, one row per file.
         yield* sql`CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL) STRICT, WITHOUT ROWID`;
         yield* sql`
           WITH RECURSIVE n(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM n WHERE id < 10)
           INSERT INTO schema_migrations SELECT printf('%04d_old.sql', id), 1763294400000 FROM n
         `;
         yield* sql`DROP TABLE effect_sql_migrations`;
-      }),
+      }).pipe(
+        Effect.provide(
+          Ledger.layer.pipe(
+            Layer.provideMerge(SqliteClient.layer({ filename: path, transformQueryNames: Str.camelToSnake })),
+          ),
+        ),
+      ),
     );
 
     const account = await onFile(
@@ -95,9 +104,12 @@ describe("the database", () => {
     );
 
     expect(account.balance).toBe(110);
-    expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 10 },
-    ]);
+    expect(
+      await query(
+        path,
+        (sql) => sql`SELECT migration_id FROM effect_sql_migrations WHERE migration_id > 10 ORDER BY 1`,
+      ),
+    ).toEqual([{ migration_id: 11 }]);
   });
 
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {

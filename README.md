@@ -156,9 +156,16 @@ and `GET /openapi.json` serves the OpenAPI document generated from it.
 | `POST /v1/me/quests/{id}/reroll` | Swaps one of their quests for another.                     |
 | `GET /v1/me/events`              | What happened to them recently, oldest first.              |
 | `GET /v1/me/events/stream`       | The same events as they happen, as server-sent events.     |
+| `GET /v1/grove`                  | Their Grove: tree, Bloom, care, cones, pity and spirits.   |
+| `POST /v1/grove/care`            | Waters, mists or prunes their tree.                        |
+| `POST /v1/grove/cones/buy`       | Buys cones for Leaf.                                       |
+| `POST /v1/grove/cones/open`      | Opens cones they hold.                                     |
+| `PUT /v1/grove/companion`        | Chooses the spirit that follows them.                      |
+| `GET /v1/grove/rates`            | The cones' published odds. Public.                         |
+| `GET /v1/grove/forest`           | Every member's tree in the Forest. Public.                 |
 | `GET /openapi.json`              | This API as an OpenAPI document.                           |
 
-`/v1/me` routes take the member's Sequoia session, the token sequoia-backend
+`/v1/me` routes, and the `/v1/grove` routes that are not public, take the member's Sequoia session, the token sequoia-backend
 issued, as `Authorization: Bearer`; the mod sends the one it already holds for
 the backend. The server asks sequoia-backend who the session belongs to, and
 remembers a confirmed session for a minute. Only current guild members are let
@@ -221,13 +228,17 @@ An event is something a client would want to show when it happens. Each one is
 written in the same transaction as the change it reports, and has an id that
 only grows.
 
-| Type               | When                        | `data`                                                                                     |
-| ------------------ | --------------------------- | ------------------------------------------------------------------------------------------ |
-| `leaf_earned`      | A raid or war paid Leaf.    | `source`, `leaf`, `xp`, `detail`, `occurred_at`, and for a war `in_claim`                  |
-| `quest_completed`  | A quest finished and paid.  | `quest`, in the shape `/v1/me/quests` uses                                                 |
-| `quest_rerolled`   | The member swapped a quest. | `replaced` and `quest`, the old and the new, and `leaf`, what it cost                      |
-| `level_up`         | XP reached a new level.     | `level`, and `leaf`, what the levels reached paid                                          |
-| `achievement_paid` | A milestone paid Leaf.      | `award_id`, `ladder`, `milestone`, `tier`, `threshold`, `label`, `leaf`, `xp`, `earned_at` |
+| Type                 | When                                              | `data`                                                                                     |
+| -------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `leaf_earned`        | A raid or war paid Leaf.                          | `source`, `leaf`, `xp`, `detail`, `occurred_at`, and for a war `in_claim`                  |
+| `quest_completed`    | A quest finished and paid.                        | `quest`, in the shape `/v1/me/quests` uses                                                 |
+| `quest_rerolled`     | The member swapped a quest.                       | `replaced` and `quest`, the old and the new, and `leaf`, what it cost                      |
+| `level_up`           | XP reached a new level.                           | `level`, and `leaf`, what the levels reached paid                                          |
+| `achievement_paid`   | A milestone paid Leaf.                            | `award_id`, `ladder`, `milestone`, `tier`, `threshold`, `label`, `leaf`, `xp`, `earned_at` |
+| `grove.cone_opened`  | They opened a cone of Dryad or better.            | `banner`, `spirit`, `rank`, `verdant`, `copy`                                              |
+| `grove.bloomed`      | Their Bloom filled and gave a cone.               | `source` (`raid` or `care`), `cycle`                                                       |
+| `grove.raid_lantern` | A raid they were in hung a lantern in the Forest. | `raid`, `raid_name`, `party`, `occurred_at`                                                |
+| `guild.war_win`      | The guild won a war they fought in.               | `war`, `territory`, `players`, `occurred_at`, and `in_claim` when known                    |
 
 `detail` is the raid's name or the territory fought over. `occurred_at` is when
 the raid or war was played, which can be well before the event: a credit that
@@ -257,6 +268,69 @@ react to `quest_completed`.
   when the session is checked again.
 - A stream carries a comment line every 20 seconds to keep the connection
   open. Ignore lines that start with `:`.
+
+## Sequoia Grove
+
+The Grove is the game the Grove client (`apps/grove`) draws: each member's tree,
+the spirits they find in cones, and the Forest where every member's tree stands.
+Its numbers are `grove` in `packages/core/src/rules.ts` and its rules are
+`packages/core/src/grove.ts`.
+
+- **The tree** has no XP of its own: its level is the member's SEQ level. Its
+  variant, one of three looks per level, is a stable hash of the member's UUID
+  (FNV-1a, as the client hashes a seed), so it never changes. It can't be bought.
+  It grows when its member levels up, which the `level_up` event already says.
+- **Bloom** fills by one for each raid the credit sync pays, keyed by the raid's
+  own ledger key (`raid:<completion>:<player>`), so a raid read again adds none,
+  and by one for each care. At 10 it gives a cone, keyed by the Bloom's number
+  (`bloom:<player>:<n>`), and starts again. It never decays.
+- **Care**: watering, misting and pruning (`water`, `mist`, `shears`) each spend
+  a charge. A charge comes back four hours after it was spent and six bank up,
+  so a member who visits once a day loses nothing. Charges are worked out from
+  one stored moment, so nothing is written until one is spent; nothing wilts and
+  there is no streak.
+- **Cones** cost 400 Leaf, one or ten at a time, spent through the ledger with
+  sink `cone`. Opening one is `openCone`: the server rolls a whole number below
+  2^32 with Web Crypto, and the rank, the spirit, the featured share and the
+  Verdant coat all follow from that roll and the member's pity. A cone is a
+  Treant or better within 40, and the count carries over between banners. The
+  banner on is the latest in `grove.banners` to have started; its featured
+  spirit is half its rank's cones. Every cone opened is a row of
+  `grove_openings`, with its roll and the pity before and after it, which is
+  never changed or deleted, so any cone can be checked against the rules.
+- **Spirits**: each copy of a spirit deepens its bond, up to five hearts; the
+  fourth copy, and 4% of all cones, wear the Verdant coat. A member's companion
+  is one spirit they have opened, which the mod's nametag and the Discord role
+  icon can show.
+- **The Forest** lists every member who has opened the Grove. Each takes the
+  free spot nearest the heart the first time they come, and keeps it: a new
+  member never moves anyone. Spots are numbers from 0; the client places them.
+
+Each write names the request it answers with a `request_id` the client makes,
+such as a UUID (letters, digits, `-` and `_`, up to 64). Sending a request
+again does what it did once and answers as it did: a purchase spends once
+(`cone:<player>:<request>` in the ledger), and an opening answers with the cones
+it opened the first time. The same id with a different body is refused.
+
+A body the route doesn't take gets 400 `invalid_request`. Leaf refuses with 409,
+changing nothing, and one of these codes:
+
+- `insufficient_leaf`: the balance doesn't cover the cones.
+- `request_conflict`: the request id was used before for something else.
+- `not_enough_cones`: they hold fewer cones than they asked to open.
+- `no_charges`: the tree has had all the care it can take until a charge comes back.
+- `no_banner`: no banner is on, so cones can't be opened.
+- `not_owned`: a companion they have not opened.
+
+`GET /v1/grove/rates` publishes the odds from the same rules a cone is opened
+with: each rank's chance and each spirit's, the pity, the Verdant coat, the
+price and the care. `GET /v1/grove/forest` answers `{ "trees": [{ "player_id",
+"name", "level", "variant", "spot", "companion" }] }`, nearest the heart first.
+Neither needs a session.
+
+The Grove's tables keep each member's totals and spirits by trigger
+(`grove_totals`, `grove_spirits`), as `accounts` is kept from the ledger, so
+`GET /v1/grove` costs the same however long a member has played.
 
 ## Rules the code is built on
 

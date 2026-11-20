@@ -563,6 +563,204 @@
         },
         {
           "id": 21,
+          "type": "grove.bloomed",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "source": "raid",
+            "cycle": 1
+          }
+        },
+        {
+          "id": 22,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:100",
+            "raid_name": "Nest of the Grootslangs",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:31:00.000Z"
+          }
+        },
+        {
+          "id": 23,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:101",
+            "raid_name": "Nest of the Grootslangs",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:31:20.000Z"
+          }
+        },
+        {
+          "id": 24,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:102",
+            "raid_name": "Nest of the Grootslangs",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:31:40.000Z"
+          }
+        },
+        {
+          "id": 25,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:103",
+            "raid_name": "Orphion's Nexus of Light",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:32:00.000Z"
+          }
+        },
+        {
+          "id": 26,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:104",
+            "raid_name": "Orphion's Nexus of Light",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:32:20.000Z"
+          }
+        },
+        {
+          "id": 27,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:105",
+            "raid_name": "Orphion's Nexus of Light",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:32:40.000Z"
+          }
+        },
+        {
+          "id": 28,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:106",
+            "raid_name": "The Canyon Colossus",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:33:00.000Z"
+          }
+        },
+        {
+          "id": 29,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:107",
+            "raid_name": "The Canyon Colossus",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:33:20.000Z"
+          }
+        },
+        {
+          "id": 30,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:108",
+            "raid_name": "The Canyon Colossus",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:33:40.000Z"
+          }
+        },
+        {
+          "id": 31,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:109",
+            "raid_name": "The Nameless Anomaly",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:34:00.000Z"
+          }
+        },
+        {
+          "id": 32,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:110",
+            "raid_name": "The Nameless Anomaly",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:34:20.000Z"
+          }
+        },
+        {
+          "id": 33,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:111",
+            "raid_name": "The Nameless Anomaly",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:34:40.000Z"
+          }
+        },
+        {
+          "id": 34,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:112",
+            "raid_name": "The Wartorn Palace",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:35:00.000Z"
+          }
+        },
+        {
+          "id": 35,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:113",
+            "raid_name": "The Wartorn Palace",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:35:20.000Z"
+          }
+        },
+        {
+          "id": 36,
+          "type": "grove.raid_lantern",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "raid": "raid:114",
+            "raid_name": "The Wartorn Palace",
+            "party": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:35:40.000Z"
+          }
+        },
+        {
+          "id": 37,
+          "type": "guild.war_win",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "war": "war:900",
+            "territory": "Detlas",
+            "players": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:37:00.000Z",
+            "in_claim": true
+          }
+        },
+        {
+          "id": 38,
+          "type": "guild.war_win",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "war": "war:901",
+            "territory": "Ragni",
+            "players": ["10000000-0000-0000-0000-000000000001"],
+            "occurred_at": "2026-11-25T12:37:20.000Z",
+            "in_claim": false
+          }
+        },
+        {
+          "id": 39,
           "type": "achievement_paid",
           "created_at": "2026-11-25T12:40:00.000Z",
           "data": {
@@ -578,7 +776,7 @@
           }
         },
         {
-          "id": 22,
+          "id": 40,
           "type": "level_up",
           "created_at": "2026-11-25T12:40:00.000Z",
           "data": {
@@ -587,7 +785,19 @@
           }
         },
         {
-          "id": 23,
+          "id": 41,
+          "type": "grove.cone_opened",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "banner": "tcc",
+            "spirit": "rock",
+            "rank": "treant",
+            "verdant": false,
+            "copy": 1
+          }
+        },
+        {
+          "id": 42,
           "type": "quest_rerolled",
           "created_at": "2026-11-25T12:40:00.000Z",
           "data": {

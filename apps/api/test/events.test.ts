@@ -109,7 +109,7 @@ async function readUntil(response: Response, ...wanted: string[]): Promise<strin
 }
 
 describe("events from the credit sync", () => {
-  it("records what a client would show: Leaf earned, a quest finished, a level gained", async () => {
+  it("records what a client would show: Leaf earned, a quest finished, a level gained, the raids' lanterns", async () => {
     const activities = [raid(1, alice, T0 + MINUTE), raid(2, alice, T0 + 2 * MINUTE)];
     const source = (from: number, to: number) =>
       Effect.succeed(activities.filter((activity) => activity.occurredAt >= from && activity.occurredAt < to));
@@ -143,6 +143,8 @@ describe("events from the credit sync", () => {
       },
       // 110 + 110 + 100 XP passes the 300 the first level takes, and level 2 pays 30 Leaf.
       { type: "level_up", data: { level: 2, leaf: 30 } },
+      { type: "grove.raid_lantern", data: { raid: "raid:1", raid_name: "The Nameless Anomaly", party: [alice] } },
+      { type: "grove.raid_lantern", data: { raid: "raid:2", party: [alice] } },
     ]);
   });
 
@@ -153,7 +155,7 @@ describe("events from the credit sync", () => {
 
     await services.run(syncCredits(source, rules, T0 + 6 * MINUTE, "recent"));
 
-    expect(await eventsOf(alice)).toHaveLength(1);
+    expect((await eventsOf(alice)).map((event) => event.type)).toEqual(["leaf_earned", "grove.raid_lantern"]);
   });
 });
 

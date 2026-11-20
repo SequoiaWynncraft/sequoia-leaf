@@ -2,11 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { playerId, RAIDS } from "@sequoia-leaf/core";
+import { DEFAULT_RULES, openCone, playerId, RAIDS, ROLL_RANGE } from "@sequoia-leaf/core";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
-import { MINUTE, testLeaf } from "./support.ts";
+import { MINUTE, rolling, testLeaf } from "./support.ts";
 
 /**
  * Leaf's API as clients see it, from the real routes: `contracts/leaf-api-v1.json`
@@ -73,7 +73,24 @@ const award = {
   earned_at: new Date(T0 + 4 * MINUTE).toISOString(),
 };
 
-/** Plays a day: the backend and Sierra report it, Leaf pays it, and the member rerolls their weekly. */
+/** The first roll that opens a Treant from a member's first cone. */
+function treantRoll(): number {
+  const banner = DEFAULT_RULES.grove.banners[0];
+  if (banner === undefined) {
+    throw new Error("The rules have no banner");
+  }
+  for (let roll = 0; roll < ROLL_RANGE; roll += 1) {
+    if (openCone(0, roll, () => 0, banner, DEFAULT_RULES.grove).rank === "treant") {
+      return roll;
+    }
+  }
+  throw new Error("No roll opens a Treant");
+}
+
+/**
+ * Plays a day: the backend and Sierra report it, Leaf pays it, the member opens
+ * the cone their Bloom gave them in the Grove, and rerolls their weekly.
+ */
 /** One call: what the client sent, and what Leaf answered. */
 interface Exchange {
   readonly request: { readonly method: string; readonly path: string; readonly body?: unknown };
@@ -102,13 +119,20 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     }
     return Promise.resolve(new Response("not found", { status: 404 }));
   });
-  const app = leaf.app();
+  const app = leaf.app(rolling([treantRoll()]));
   await leaf.run(runCreditSync("recent"));
   await leaf.run(runAchievementSync("recent"));
   reporting = true;
   clock.now = T0 + 10 * MINUTE;
   await leaf.run(runCreditSync("recent"));
   await leaf.run(runAchievementSync("recent"));
+
+  // The Grove is not a client of this contract, so its call is not recorded; its event is.
+  await app.request("/v1/grove/cones/open", {
+    method: "POST",
+    headers: { Authorization: "Bearer alice-token", "Content-Type": "application/json" },
+    body: JSON.stringify({ count: 1, request_id: "contract-cone" }),
+  });
 
   const recorded: Record<string, Exchange> = {};
   async function call(name: string, method: string, path: string, body?: unknown) {
@@ -164,6 +188,10 @@ describe("Leaf's API contract", () => {
 
     expect(eventTypes(contract).toSorted()).toEqual([
       "achievement_paid",
+      "grove.bloomed",
+      "grove.cone_opened",
+      "grove.raid_lantern",
+      "guild.war_win",
       "leaf_earned",
       "level_up",
       "quest_completed",

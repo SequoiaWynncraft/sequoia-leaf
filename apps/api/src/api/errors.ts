@@ -32,6 +32,17 @@ export class Refused extends Schema.Error<Refused>("Refused")(
   { httpApiStatus: 409 },
 ) {}
 
+/** A Grove request Leaf cannot read: a body that is not what the route takes. */
+export class GroveInvalid extends Schema.Error<GroveInvalid>("GroveInvalid")(answer("invalid_request"), {
+  httpApiStatus: 400,
+}) {}
+
+/** A Grove request Leaf refuses, changing nothing. */
+export class GroveRefused extends Schema.Error<GroveRefused>("GroveRefused")(
+  answer("insufficient_leaf", "request_conflict", "not_enough_cones", "no_charges", "no_banner", "not_owned"),
+  { httpApiStatus: 409 },
+) {}
+
 /** Something nothing expected went wrong. It is logged with its cause. */
 export class InternalError extends Schema.Error<InternalError>("InternalError")(answer("internal_error"), {
   httpApiStatus: 500,
