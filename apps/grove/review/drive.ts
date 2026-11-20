@@ -1,6 +1,10 @@
 /**
  * Drives the client in headless Chromium over the DevTools protocol, to check taps as a player
- * makes them: `bun review/drive.ts <page-url> <out-dir> <steps.json>`.
+ * makes them: `bun review/drive.ts <page-url> <out-dir> <steps.json> [<site-dir>]`.
+ *
+ * With `<site-dir>` (a built client, such as `dist`), the page needs no server: every request to
+ * the page URL's origin is answered from that folder over the protocol, so any made-up origin does
+ * (`http://grove.test/?debug#glade`).
  *
  * Steps run one after another:
  * - `["size", w, h]` sets the window (CSS pixels); `["wait", ms]` waits;
@@ -38,8 +42,8 @@ function isStep(v: unknown): v is Step {
   );
 }
 
-const [url, outDir, stepsPath] = process.argv.slice(2);
-if (!url || !outDir || !stepsPath) throw new Error("usage: drive.ts <url> <out-dir> <steps.json>");
+const [url, outDir, stepsPath, siteDir] = process.argv.slice(2);
+if (!url || !outDir || !stepsPath) throw new Error("usage: drive.ts <url> <out-dir> <steps.json> [<site-dir>]");
 const parsed: unknown = await Bun.file(stepsPath).json();
 if (!Array.isArray(parsed) || !parsed.every(isStep)) throw new Error("steps must be a list of steps");
 const steps: Step[] = parsed;
@@ -81,7 +85,9 @@ let id = 0;
 const pending = new Map<number, (v: unknown) => void>();
 ws.addEventListener("message", (e) => {
   const msg: unknown = JSON.parse(String(e.data));
-  if (isRecord(msg) && typeof msg.id === "number") pending.get(msg.id)?.(msg.result);
+  if (!isRecord(msg)) return;
+  if (typeof msg.id === "number") pending.get(msg.id)?.(msg.result);
+  else if (msg.method === "Fetch.requestPaused" && isRecord(msg.params)) void answer(msg.params);
 });
 const send = (method: string, params: Record<string, unknown> = {}): Promise<unknown> =>
   new Promise((resolve) => {
@@ -90,6 +96,20 @@ const send = (method: string, params: Record<string, unknown> = {}): Promise<unk
     ws.send(JSON.stringify({ id: n, method, params }));
   });
 
+/** A paused request for the site, answered from `siteDir`. */
+async function answer(paused: Record<string, unknown>): Promise<void> {
+  const request = isRecord(paused.request) ? paused.request : {};
+  const path = decodeURIComponent(new URL(String(request.url)).pathname);
+  const file = Bun.file(`${siteDir}${path === "/" ? "/index.html" : path}`);
+  const found = !path.includes("..") && (await file.exists());
+  await send("Fetch.fulfillRequest", {
+    requestId: paused.requestId,
+    responseCode: found ? 200 : 404,
+    responseHeaders: [{ name: "Content-Type", value: found ? file.type : "text/plain" }],
+    body: found ? Buffer.from(await file.arrayBuffer()).toString("base64") : "",
+  });
+}
+
 const metrics = (w: number, h: number): Promise<unknown> =>
   send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
 
@@ -97,6 +117,7 @@ await send("Page.enable");
 // A tab opened over the protocol starts in the background, where animation frames never run.
 await send("Page.bringToFront");
 await metrics(1440, 900);
+if (siteDir) await send("Fetch.enable", { patterns: [{ urlPattern: `${new URL(url).origin}/*` }] });
 await send("Page.navigate", { url });
 await Bun.sleep(1500);
 
