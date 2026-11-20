@@ -1,34 +1,28 @@
 /**
- * The Campfire: the Discord Activity's view. Friends in the voice call sit round the fire on log
- * benches, each a small nameplated player head with their companion spirit beside them. Cones burn
- * one at a time from the queue: whoever is next sets theirs in the fire and everyone watches the
- * glade's own reveal. A Leafle tile opens the daily word; the grove cat tells a dad joke when
- * tapped; the White Fox sleeps by the fire.
+ * The Campfire: the Discord Activity's view, played from the art bundle (grove/campfire.py): the
+ * welcome's clearing with a fire on its stones, two fallen logs to sit on and the grove cat asleep
+ * on its stump, a 160-frame loop by season and light. Each frame is composed as the glade's is: the
+ * loop, then the friends and the cones over it, then the near layer put back in front.
  *
- * Three layouts: `normal` (a window), `phone` (portrait) and `pip` (320 by 180, picture in
- * picture: just the fire, whose cone is burning, and what came out).
+ * Friends in the call sit on the manifest's seats as their companion spirits, facing the fire, each
+ * with a nametag in the HUD; now and then one hops for joy. Cones burn one at a time from the queue:
+ * whoever is next throws theirs into the fire (the bundle's cone), where it opens as the glade's do
+ * (`../glade/reveal.ts`) and the spirit lands by the fire. A tap on the cat wakes a dad joke; a
+ * Leafle tile opens the daily word; a cheer counts as taking part, mic or no mic.
+ *
+ * Three layouts: `normal` (a window: the whole picture), `phone` (portrait: a crop centred on the
+ * fire) and `pip` (Discord's 320 by 180: only the fire, whose cone is burning, and what came out).
  */
 
-import type { Frame } from "../../art/cast/cast.ts";
-import { frameAt, WHITE_FOX } from "../../art/cast/cast.ts";
-import { CAT } from "../../art/cast/grove.ts";
-import {
-  drawEmbers,
-  drawFireBack,
-  drawFireflies,
-  drawFireFront,
-  drawFlames,
-  drawSmoke,
-  drawSnow,
-  drawStars,
-  fireLight,
-  type Mote,
-  placeFireflies,
-} from "../../art/life.ts";
-import { buildLut, C, ix, type Lut, R } from "../../engine/palette.ts";
-import { compose, Light, type Sprite, sprite, Surface } from "../../engine/raster.ts";
+import type { Pixels } from "../../bundle/art.ts";
+import type { CastFrame } from "../../bundle/cast.ts";
+import { fitPicture } from "../../bundle/fit.ts";
+import { type CampfireManifest, fill, type Manifest } from "../../bundle/manifest.ts";
+import { type Ambiance, Ink, packHex } from "../../bundle/palette.ts";
+import { edgeColour, Picture } from "../../bundle/picture.ts";
+import { castFrame } from "../../bundle/vocabulary.ts";
 import { hashString, Rng } from "../../engine/rng.ts";
-import { between, type Grid, type Point, worldGrid } from "../../engine/view.ts";
+import { between, type Grid, type Point } from "../../engine/view.ts";
 import { FRIENDS } from "../../game/friends.ts";
 import type { CampLayout } from "../../game/params.ts";
 import { CONE_PRICE, openCone } from "../../game/rules.ts";
@@ -36,14 +30,12 @@ import { spirit, spiritForRank } from "../../game/spirits.ts";
 import { warmCones } from "../../game/state.ts";
 import { Canvas, drawText, hex, mix, type Rgb, textWidth, UI, wrap } from "../../ui/hud.ts";
 import { playerHead } from "../forest/heads.ts";
-import { blitFrame, spiritFrame } from "../glade/actors.ts";
-import { type Backdrop, drawBackdrop } from "../glade/backdrop.ts";
-import { buildGlade, type Glade, type Placed } from "../glade/ground.ts";
-import { type Layout, layout } from "../glade/layout.ts";
-import { drawAurora } from "../reveal/aurora.ts";
+import { drawAurora, drawReveal, drawRevealScreen } from "../glade/reveal.ts";
+import type { Fx, Places, TreeShape } from "../glade/stage.ts";
 import { drawConeCardAt } from "../reveal/card.ts";
-import { beatOf, type ConeEvent, coneLook, coneScreen, drawConeWorld, rankColour, shakeFrame } from "../reveal/cone.ts";
-import type { App, PointerKind, Scene, Screen } from "../scene.ts";
+import { beatOf, type ConeEvent, coneLook, rankColour } from "../reveal/cone.ts";
+import { type App, lightOf, type PointerKind, type Scene, type Screen } from "../scene.ts";
+import { seatPeople, type Sitter, throwFrom } from "./seats.ts";
 
 /** The last seat is yours. */
 const YOU = "You";
@@ -56,34 +48,26 @@ const JOKES: readonly string[] = [
   "What's a tree's favourite drink? Root beer.",
 ];
 
-/** Where each seat is, from the fire, in world pixels; `side` is where the companion sits. */
-interface Seat {
-  dx: number;
-  dy: number;
-  side: -1 | 1;
-}
-
-const SEATS: Record<"wide" | "narrow", readonly Seat[]> = {
-  wide: [
-    { dx: -66, dy: 4, side: -1 },
-    { dx: -34, dy: -15, side: -1 },
-    { dx: 36, dy: -15, side: 1 },
-    { dx: 68, dy: 4, side: 1 },
-    { dx: -38, dy: 22, side: -1 },
-  ],
-  narrow: [
-    { dx: -21, dy: -17, side: -1 },
-    { dx: 22, dy: -17, side: 1 },
-    { dx: -31, dy: 5, side: -1 },
-    { dx: 32, dy: 5, side: 1 },
-    { dx: -17, dy: 25, side: -1 },
-  ],
-};
+/** The picture's size and its places before the manifest is in (the bundle's own). */
+const PICTURE = { w: 256, h: 144 };
+const FIRE = { x: 128, y: 129 };
+const CAT = { x: 78, y: 128 };
+/** The page round the picture before its first frame: the HUD's dark. */
+const DARK = "#150f0d";
+/** Picture in picture shows this many rows round the fire. */
+const PIP_ROWS = 60;
+/** The Campfire has no tree to keep the aurora off. */
+const NO_TREE: TreeShape = { level: 1, box: { x: 0, y: 0, w: 0, h: 0 }, foot: FIRE, mask: null };
 
 interface Burn {
   who: string;
   ev: ConeEvent;
   mine: boolean;
+}
+
+interface Person {
+  name: string;
+  spirit: string;
 }
 
 /** How long after the burst a friend's card stays up before their spirit trots off. */
@@ -93,21 +77,16 @@ export class Campfire implements Scene {
   readonly id = "campfire";
   cursor: "default" | "pointer" = "default";
   private readonly app: App;
+  private pic = new Picture(PICTURE.w, PICTURE.h);
   private world: Grid = { W: 1, H: 1, scale: 1, offX: 0, offY: 0, dpr: 1 };
   private hud: Grid = { W: 1, H: 1, scale: 1, offX: 0, offY: 0, dpr: 1 };
   private kind: CampLayout = "normal";
-  private L: Layout = layout(160, 120);
-  private base = new Surface(1, 1);
-  private surface = new Surface(1, 1);
-  private light = new Light(1, 1);
-  /** The fire's wide, still glow over the clearing, worked out once per size. */
-  private glow = new Light(1, 1);
-  private rare = new Light(1, 1);
-  private lut: Lut;
-  private backdrop: Backdrop | null = null;
-  private glade: Glade | null = null;
-  private fireflies: Mote[] = [];
-  private readonly seed = hashString("campfire");
+  /** The picture's first column and row on screen. */
+  private crop = { x: 0, y: 0 };
+  private light: Ambiance;
+  private ink: Ink;
+  private lightCheckedAt = -99;
+  private edge: { path: string; colour: string } | null = null;
   private readonly rng = new Rng(hashString("campfire:cones"));
 
   // The call.
@@ -117,11 +96,10 @@ export class Campfire implements Scene {
   private youQueued = false;
   private catAt = -99;
   private joke = 0;
-  private cheers: { who: number; t0: number }[] = [];
-  private hits: { leafle: Rect | null; queue: Rect | null; cat: Rect | null; cheer: Rect | null } = {
+  private cheers: number[] = [];
+  private hits: { leafle: Rect | null; queue: Rect | null; cheer: Rect | null } = {
     leafle: null,
     queue: null,
-    cat: null,
     cheer: null,
   };
   private hudHover: Point | null = null;
@@ -129,7 +107,8 @@ export class Campfire implements Scene {
   constructor(app: App) {
     this.app = app;
     const p = app.params;
-    this.lut = buildLut(p.time, p.season, rankColour(p.rank));
+    this.light = lightOf(p);
+    this.ink = new Ink(this.light);
     if (p.burn !== null) {
       const who = this.queue.shift() ?? FRIENDS[0]?.name ?? "Moss";
       this.burn = {
@@ -144,23 +123,61 @@ export class Campfire implements Scene {
         },
       };
     }
-    if (p.joke) {
-      this.catAt = p.still ? p.t - 0.5 : 0.5;
-    }
+    if (p.joke) this.catAt = p.still ? p.t - 0.5 : 0.5;
   }
 
-  private layoutKind(): CampLayout {
+  private get manifest(): Manifest | null {
+    return this.app.art.manifest.value;
+  }
+
+  private get camp(): CampfireManifest | null {
+    return this.manifest?.campfire ?? null;
+  }
+
+  private get fire(): Point {
+    return this.camp?.fire ?? FIRE;
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Where it sits.
+
+  grid(s: Screen): Grid {
+    const { devW, devH, dpr } = s;
     const forced = this.app.params.camp;
-    if (forced) return forced;
-    const dev = { w: this.world.W * this.world.scale, h: this.world.H * this.world.scale };
-    if (dev.h <= 260 * this.world.dpr && dev.w <= 520 * this.world.dpr) return "pip";
-    return dev.w < dev.h * 0.75 ? "phone" : "normal";
+    this.kind = forced ?? (devH <= 260 * dpr && devW <= 520 * dpr ? "pip" : s.phone ? "phone" : "normal");
+    const picW = this.manifest?.width ?? PICTURE.w;
+    const picH = this.manifest?.height ?? PICTURE.h;
+    const fire = this.fire;
+    if (this.kind === "pip") {
+      // A close crop round the fire, its stones on the bottom edge.
+      const scale = Math.max(1, Math.floor(devH / PIP_ROWS));
+      const W = Math.min(picW, Math.ceil(devW / scale));
+      const H = Math.min(picH, Math.ceil(devH / scale));
+      this.crop = { x: Math.max(0, Math.min(picW - W, Math.round(fire.x - W / 2))), y: picH - H };
+      return { W, H, scale, offX: Math.floor((devW - W * scale) / 2), offY: Math.floor((devH - H * scale) / 2), dpr };
+    }
+    const fit = fitPicture({
+      devW,
+      devH,
+      picW,
+      picH,
+      phone: this.kind === "phone",
+      hudScale: s.hud.scale,
+      hud: this.kind === "phone" && !this.app.params.bare,
+      focusX: fire.x,
+      clearRow: picH,
+    });
+    this.crop = { x: fit.cropX, y: 0 };
+    return { W: fit.W, H: fit.H, scale: fit.scale, offX: fit.offX, offY: fit.offY, dpr };
   }
 
-  grid({ devW, devH, dpr }: Screen): Grid {
-    const pip = this.app.params.camp === "pip" || (devH <= 260 * dpr && devW <= 520 * dpr);
-    // Closer in than the glade: the fire and the people round it are the picture.
-    return worldGrid(devW, devH, pip ? 84 : devW < devH * 0.75 ? 240 : 216, dpr);
+  layoutKey(): string {
+    const m = this.manifest;
+    return m ? `${m.width}x${m.height}:${m.campfire ? "campfire" : ""}` : "";
+  }
+
+  pageColour(): string {
+    return this.edge?.colour ?? DARK;
   }
 
   busy(): boolean {
@@ -170,57 +187,22 @@ export class Campfire implements Scene {
   resize(world: Grid, hud: Grid): void {
     this.world = world;
     this.hud = hud;
-    this.kind = this.layoutKind();
-    const { W, H } = world;
-    const narrow = this.kind === "phone";
-    const pip = this.kind === "pip";
-    const base = layout(W, H, 0);
-    const fx = Math.round(W / 2);
-    const fy = pip ? H - 22 : narrow ? Math.round(H * 0.66) : H - Math.max(44, Math.round(H * 0.24));
-    // The clearing is centred on the fire: no tree of its own, the path coming in from below.
-    this.L = {
-      ...base,
-      narrow,
-      treeX: fx,
-      ground: fy - 6,
-      fire: { x: fx, y: fy },
-      cone: { x: fx + 12, y: fy + 1 },
-      lantern: { x: -40, y: fy },
-      squirrel: { x: -40, y: fy },
-      crab: { x: W + 40, y: fy },
-      sign: null,
-      great: { x: Math.round(W * (narrow ? 0.82 : 0.76)), y: base.horizon + 6 },
-    };
-    this.base = new Surface(W, H);
-    this.surface = new Surface(W, H);
-    this.light = new Light(W, H);
-    this.glow = new Light(W, H);
-    this.glow.pool(fx, fy - 4, pip ? 50 : 70, 1.6, 1.6);
-    this.rare = new Light(W, H);
-    const p = this.app.params;
-    this.backdrop = drawBackdrop(this.base, this.L, p.time, this.seed);
-    this.glade = buildGlade(this.base, this.L, p.time, p.season, this.seed);
-    if (!pip) this.benches(this.base);
-    this.fireflies = placeFireflies(this.L, p.time, this.seed);
+    const man = this.manifest;
+    if (man && (this.pic.W !== man.width || this.pic.H !== man.height)) this.pic = new Picture(man.width, man.height);
   }
 
-  /** A log bench under each pair of seats, and a short one for the front seat. */
-  private benches(s: Surface): void {
-    const { x, y } = this.L.fire;
-    const winter = this.app.params.season === "winter";
-    for (const st of this.seats()) {
-      const len = st.dy < 0 ? 15 : 17;
-      bench(s, x + st.dx, y + st.dy + 1, len, winter);
-    }
-  }
-
-  private seats(): readonly Seat[] {
-    return SEATS[this.kind === "phone" ? "narrow" : "wide"];
+  /** A picture point in the HUD's grid. */
+  private toHud(p: Point): Point {
+    return between(this.world, this.hud, { x: p.x - this.crop.x, y: p.y - this.crop.y });
   }
 
   /** Everyone in the call, in seat order: the friends, then you. */
-  private people(): { name: string; spirit: string }[] {
+  private people(): Person[] {
     return [...FRIENDS, { name: YOU, spirit: this.app.store.state.companion ?? "glorp" }];
+  }
+
+  private sitters(): Sitter<Person>[] {
+    return seatPeople(this.people(), this.camp?.seats ?? [], this.fire);
   }
 
   // -------------------------------------------------------------------------------------------
@@ -238,7 +220,6 @@ export class Campfire implements Scene {
         if (!b.mine) this.queue.push(b.who);
         this.burn = null;
         this.nextAt = t + 2.2;
-        this.lut = buildLut(this.app.params.time, this.app.params.season, rankColour(this.app.params.rank));
       }
       return;
     }
@@ -255,36 +236,33 @@ export class Campfire implements Scene {
         return;
       }
       this.app.store.set(opened.state);
-      this.start({
+      this.burn = {
         who,
         mine: true,
         ev: { t0: t, rank: pull.rank, spirit: pull.spirit, verdant: pull.verdant, closedAt: null, bond: pull.count },
-      });
+      };
       return;
     }
     // A friend's cone: they keep their own pity; the demo rolls it from the published odds.
     const pull = openCone(this.rng.int(0, 30), () => this.rng.next());
-    this.start({
+    this.burn = {
       who,
       mine: false,
       ev: { t0: t, rank: pull.rank, spirit: pull.spirit, verdant: this.rng.chance(0.04), closedAt: null },
-    });
+    };
   }
 
-  private start(b: Burn): void {
-    this.burn = b;
-    this.lut = buildLut(this.app.params.time, this.app.params.season, rankColour(b.ev.rank));
-  }
-
-  /** The burner's seat, where their cone waits before it hops into the fire. */
-  private stageFor(b: Burn): Layout {
-    const i = this.people().findIndex((p) => p.name === b.who);
-    const seat = this.seats()[i];
-    const { x, y } = this.L.fire;
-    if (!seat || this.kind === "pip") return this.L;
+  /** Where a burn plays: the fire, the burner's paws the cone leaves, and where the spirit lands. */
+  private placesFor(b: Burn | null): Places {
+    const fire = this.fire;
+    const burner = b ? this.sitters().find((s) => s.person.name === b.who) : undefined;
     return {
-      ...this.L,
-      cone: { x: x + Math.round(seat.dx * 0.55), y: y + Math.min(4, Math.round(seat.dy * 0.4)) + 2 },
+      arc: burner ? 14 : 6,
+      hearth: fire,
+      cone: burner ? throwFrom(burner) : { x: fire.x - 18, y: fire.y + 4 },
+      landing: { x: fire.x + 14, y: Math.min((this.manifest?.height ?? PICTURE.h) - 2, fire.y + 12) },
+      companion: fire,
+      heralds: [],
     };
   }
 
@@ -293,121 +271,146 @@ export class Campfire implements Scene {
 
   render(t: number, out: Uint32Array, hudOut: Uint32Array, fonts: boolean): void {
     this.tick(t);
-    const s = this.surface;
-    const L = this.L;
-    const p = this.app.params;
-    const glade = this.glade;
-    const backdrop = this.backdrop;
-    if (!glade || !backdrop) return;
-    s.copyFrom(this.base);
-    this.light.data.set(this.glow.data);
-    this.rare.clear();
+    if (t - this.lightCheckedAt > 10) {
+      this.lightCheckedAt = t;
+      const light = lightOf(this.app.params);
+      if (light !== this.light) {
+        this.light = light;
+        this.ink = new Ink(light);
+      }
+    }
+    const art = this.app.art;
+    const man = this.manifest;
+    const camp = man?.campfire ?? null;
+    const pic = this.pic;
     const b = this.burn;
     const look = b ? coneLook(b.ev, t) : null;
+    // Yggdrasil stops the world: the loop holds still while it opens.
     const tw = look ? look.worldT : t;
-    const fire = { flare: look?.flare ?? 0 };
+    const season = man?.glade.seasons.includes(this.app.params.season) ? this.app.params.season : "normal";
+    const ambiance = this.light;
+    const path = camp ? fill(camp.loop, { season, ambiance }) : "";
+    if (camp) art.keep([path]);
+    const loop = camp ? art.loop(path).value : null;
+    let frameIndex = 0;
+    if (loop) {
+      frameIndex = loop.indexAt(tw * 1000);
+      const frame = loop.frame(frameIndex, performance.now() + 4, () => performance.now());
+      if (frame) {
+        pic.begin(frame);
+        if (this.edge?.path !== path) this.edge = { path, colour: edgeColour(frame, loop.width, loop.height) };
+      }
+    }
+    if (!man || !camp || !pic.ready) {
+      pic.blank(packHex(DARK));
+      pic.blit(out, this.world.W, this.world.H, this.crop.x, 0, 0, this.crop.y);
+      this.renderHud(t, hudOut, fonts);
+      return;
+    }
 
-    drawStars(s, backdrop.stars, tw);
-    if (look && b && look.aurora > 0) drawAurora(s, L, look.aurora, tw, this.seed, look.curtains);
-    for (const f of glade.ferns) drawSway(s, f, tw);
-    drawFireBack(s, L);
-    const pip = this.kind === "pip";
-    // The friends' companions, then the fire, then the front seats' companions.
-    const people = this.people();
-    const seats = this.seats();
-    if (!pip) {
-      people.forEach((person, i) => {
-        const seat = seats[i];
-        if (!seat || seat.dy >= 0) return;
-        this.drawSeat(s, person, seat, tw, i);
+    const places = this.placesFor(b);
+    const fx: Fx = {
+      pic,
+      ink: this.ink,
+      season,
+      ambiance,
+      cast: art.cast.value,
+      props: art.props.value,
+      tree: NO_TREE,
+      ground: places.landing.y,
+      places,
+    };
+    const aurora = b && look ? this.aurora(man, season, b, t) : null;
+    // The aurora behind the friends; the rest of the reveal in front of them.
+    if (b && look && aurora && look.aurora > 0) {
+      const beat = beatOf(b.ev.rank);
+      drawAurora(fx, aurora, frameIndex, {
+        strength: look.aurora,
+        span: [0, 46, 84, 140][beat.aurora] ?? 140,
+        gold: beat.freeze,
       });
     }
-    drawFlames(s, L, tw, fire);
-    if (b) drawConeWorld(s, this.light, this.rare, this.stageFor(b), b.ev, t);
-    drawFireFront(s, L);
-    drawSmoke(s, L, tw);
-    drawEmbers(s, L, tw, look?.embers ?? 0);
-    if (!pip) {
-      people.forEach((person, i) => {
-        const seat = seats[i];
-        if (!seat || seat.dy < 0) return;
-        this.drawSeat(s, person, seat, tw, i);
-      });
-      // The White Fox, asleep by the fire; the cat, loafing at the edge of the light.
-      const fox = WHITE_FOX.poses["sleep"] ?? WHITE_FOX.idle;
-      blitFrame(s, frameAt(fox, tw * 1000), L.fire.x + (this.kind === "phone" ? 8 : 16), L.fire.y + 17, true);
-      const cat = this.catSpot();
-      const blink = t - this.catAt < 0.3 || (Math.floor(t / 4.3) % 3 === 2 && t % 4.3 < 0.15);
-      s.blit(blink ? CAT.blink : CAT.loaf, cat.x - 5, cat.y - 7);
-    }
-    s.overlay(glade.front);
-    for (const f of glade.frontFerns) drawSway(s, f, tw);
-    for (const c of glade.canopy) drawSway(s, c, tw);
-    drawFireflies(s, this.light, this.fireflies, tw);
-    if (p.season === "winter") drawSnow(s, L, tw, this.seed);
-    fireLight(this.light, L, tw, p.time, fire);
-    compose(s, this.light, this.lut, out, this.rare, hex(rankColour(b?.ev.rank ?? p.rank)));
-    if (look && b) {
-      coneScreen(out, this.world.W, this.world.H, L, look, rankColour(b.ev.rank));
-      shakeFrame(out, this.world.W, this.world.H, look.shake.x, look.shake.y);
-    }
+    if (this.kind !== "pip") for (const s of this.sitters()) this.drawSitter(fx, s, tw, b);
+    if (b && look) drawReveal(fx, b.ev, look, t, null, frameIndex);
+    // The near layer back in front of everything drawn in the world.
+    pic.restore(art.mask(fill(camp.near, { season })).value);
+    if (b && look) drawRevealScreen(pic, places, look, b.ev.rank);
+    pic.blit(out, this.world.W, this.world.H, this.crop.x, look?.shake.x ?? 0, look?.shake.y ?? 0, this.crop.y);
     this.renderHud(t, hudOut, fonts);
+    art.idle(performance.now() + 3);
   }
 
-  /** A friend on their bench, their companion on the ground beside them. */
-  private drawSeat(s: Surface, person: { name: string; spirit: string }, seat: Seat, t: number, i: number): void {
-    const { x, y } = this.L.fire;
-    const f: Frame = spiritFrame(person.spirit, t * 1000 + i * 530);
-    blitFrame(s, f, x + seat.dx + seat.side * 15, y + seat.dy + 4, seat.side > 0);
-    // A nod now and then, as people in a call do.
-    const nod = Math.floor(t * 0.7 + i * 1.3) % 5 === 0 && (t * 0.7 + i * 1.3) % 1 < 0.25 ? 1 : 0;
-    s.blit(headSprite(person.name === YOU ? "you" : person.name), x + seat.dx - 4, y + seat.dy - 10 + nod);
+  /** The welcome's aurora for a rare cone, fetched while it burns and let go after. */
+  private aurora(man: Manifest, season: string, b: Burn, t: number): Pixels | null {
+    const fxm = man.effects;
+    if (!fxm) return null;
+    const path = fill(fxm.aurora, { season });
+    if (beatOf(b.ev.rank).aurora === 0 || t < b.ev.t0) {
+      this.app.art.drop(path);
+      return null;
+    }
+    return this.app.art.image(path).value;
   }
 
-  private catSpot(): Point {
-    const { x, y } = this.L.fire;
-    return this.kind === "phone" ? { x: x + 30, y: y + 27 } : { x: x + 52, y: y + 22 };
+  /** One friend on their seat as their companion, facing the fire, warmed by it; a hop for joy now and then. */
+  private drawSitter(fx: Fx, s: Sitter<Person>, t: number, b: Burn | null): void {
+    const i = s.seat;
+    const throwing = !!b && b.who === s.person.name && t - b.ev.t0 >= -0.2 && t - b.ev.t0 < 0.5;
+    const period = 6.5 + i * 0.9;
+    const local = (t + i * 1.7) % period;
+    const hop = (fx.cast?.length(s.person.spirit, "happy") ?? 0) / 1000;
+    const happy = throwing || local < hop;
+    const ms = throwing && b ? (t - b.ev.t0 + 0.2) * 1000 : happy ? local * 1000 : t * 1000 + i * 530;
+    const f = castFrame(fx, [s.person.spirit], happy ? ["happy", "idle"] : ["idle"], ms);
+    if (!f) return;
+    fx.pic.sprite(f, s.x, s.y, s.flip);
+    warm(fx, f, s.x, s.y, s.flip, this.fire);
   }
+
+  // -------------------------------------------------------------------------------------------
+  // The HUD.
 
   private renderHud(t: number, hudOut: Uint32Array, fonts: boolean): void {
     const c = new Canvas(hudOut, this.hud.W, this.hud.H);
     c.clear();
-    this.hits = { leafle: null, queue: null, cat: null, cheer: null };
+    this.hits = { leafle: null, queue: null, cheer: null };
     const p = this.app.params;
     if (p.bare || !fonts) return;
-    const toHud = (q: Point): Point => between(this.world, this.hud, q);
-    const L = this.L;
     const b = this.burn;
     const pip = this.kind === "pip";
-    const people = this.people();
-    const seats = this.seats();
+    const fireHud = this.toHud(this.fire);
+    const cast = this.app.art.cast.value;
 
-    // Heads with nameplates, on the benches.
+    // The nametags, over each friend's companion; one that would cover a neighbour's steps up.
     if (!pip) {
-      people.forEach((person, i) => {
-        const seat = seats[i];
-        if (!seat) return;
-        const at = toHud({ x: L.fire.x + seat.dx, y: L.fire.y + seat.dy - 11 });
-        const burning = b?.who === person.name && b.ev.closedAt === null;
-        nameplate(c, person.name, at.x, at.y - 11, burning ? UI.gold : UI.text);
-        const cheer = this.cheers.find((ch) => ch.who === i && t - ch.t0 < 1.2);
-        if (cheer) flameAbove(c, at.x, at.y - 20, t - cheer.t0);
-      });
+      const placed: Rect[] = [];
+      for (const s of this.sitters().toSorted((front, back) => back.y - front.y || front.x - back.x)) {
+        const h = cast?.entries.get(s.person.spirit)?.h ?? 20;
+        // A frame keeps a little room over the head for its hop's sparkles.
+        const at = this.toHud({ x: s.x, y: s.y - h + 4 });
+        const w = textWidth(s.person.name) + 4;
+        let y = at.y - 9;
+        const box = (yy: number): Rect => ({ x: Math.round(at.x - w / 2) - 1, y: yy - 1, w: w + 2, h: 11 });
+        while (placed.some((r) => overlaps(r, box(y)))) y -= 10;
+        placed.push(box(y));
+        const burning = b?.who === s.person.name && b.ev.closedAt === null;
+        nameplate(c, s.person.name, at.x, y, burning ? UI.gold : UI.text);
+        if (s.person.name === YOU)
+          for (const at0 of this.cheers) if (t - at0 < 1.2) flameAbove(c, at.x, y - 9, t - at0);
+      }
     }
 
-    // The burning cone's owner, over the fire.
-    const fireHud = toHud(L.fire);
-    // In picture in picture there is no queue to read it from, so it rides over the fire.
-    if (pip && b && b.ev.closedAt === null)
-      nameplate(c, b.mine ? "Your cone" : `${b.who}'s cone`, fireHud.x, fireHud.y - 36, UI.gold);
-
     if (pip) {
-      this.pipCard(c, t);
+      // No queue to read it from, so whose cone it is rides over the fire.
+      if (b && b.ev.closedAt === null)
+        nameplate(c, b.mine ? "Your cone" : `${b.who}'s cone`, fireHud.x, fireHud.y - 40, UI.gold);
+      this.pipCard(c, t, b ? (cast?.portrait(b.ev.spirit) ?? null) : null);
       return;
     }
 
     const narrow = this.kind === "phone";
     // The call: who is here.
+    const people = this.people();
     const call = `${people.length} in voice`;
     const chipW = 4 + 7 + 4 + textWidth("Campfire") + 8 + textWidth(call) + 5;
     c.panel(3, 3, chipW, 15, mix(UI.purple, UI.popup, 0.35), 0.92, UI.body);
@@ -418,7 +421,7 @@ export class Campfire implements Scene {
 
     // The burn queue; on a phone it gives way to the reveal's card, which opens at the top.
     const cardUp = !!b && t - b.ev.t0 >= cardAt(b.ev) && (b.ev.closedAt === null || t - b.ev.closedAt < 0.25);
-    if (!narrow || !cardUp) this.queuePanel(c, narrow, t);
+    if (!narrow || !cardUp) this.queuePanel(c, narrow);
 
     // The Leafle tile.
     const tile = narrow ? { x: 3, y: c.H - 32, w: 84, h: 29 } : { x: c.W - 92, y: c.H - 34, w: 89, h: 31 };
@@ -444,28 +447,20 @@ export class Campfire implements Scene {
     const cheer = narrow
       ? { x: tile.x + tile.w + 3, y: tile.y + 7, w: 18, h: 18 }
       : { x: tile.x - 21, y: tile.y + 13, w: 18, h: 18 };
-    c.panel(
-      cheer.x,
-      cheer.y,
-      cheer.w,
-      cheer.h,
-      this.hudHover && inside(cheer, this.hudHover) ? UI.purpleHover : mix(UI.gold, UI.popup, 0.4),
-      0.94,
-      UI.body,
-    );
+    const cheerHot = !!this.hudHover && inside(cheer, this.hudHover);
+    c.panel(cheer.x, cheer.y, cheer.w, cheer.h, cheerHot ? UI.purpleHover : mix(UI.gold, UI.popup, 0.4), 0.94, UI.body);
     flameIcon(c, cheer.x + 6, cheer.y + 5);
     this.hits.cheer = cheer;
 
-    // The cat's joke.
-    const cat = toHud(this.catSpot());
-    this.hits.cat = { x: cat.x - 8, y: cat.y - 12, w: 16, h: 14 };
-    if (t - this.catAt < 5) bubble(c, cat.x, cat.y - 10, JOKES[this.joke % JOKES.length] ?? "", narrow ? c.W - 8 : 150);
+    // The cat's joke, over its stump.
+    const cat = this.toHud(this.camp?.cat ?? CAT);
+    if (t - this.catAt < 5) bubble(c, cat.x, cat.y - 12, JOKES[this.joke % JOKES.length] ?? "", narrow ? c.W - 8 : 150);
 
     // The reveal's card, beside the fire.
-    if (b) this.card(c, fireHud, b, t);
+    if (b) this.card(c, fireHud, b, t, cast?.portrait(b.ev.spirit) ?? null);
   }
 
-  private queuePanel(c: Canvas, narrow: boolean, t: number): void {
+  private queuePanel(c: Canvas, narrow: boolean): void {
     const b = this.burn;
     const order = [...(b && b.ev.closedAt === null ? [b.who] : []), ...this.queue];
     const rows = narrow ? order.slice(0, 2) : order.slice(0, 5);
@@ -480,7 +475,7 @@ export class Campfire implements Scene {
     drawText(c, waiting, x + w - 5 - textWidth(waiting), y + 5, UI.muted, { shadow: true });
     rows.forEach((name, i) => {
       const ry = y + 17 + i * rowH;
-      drawHead(c, name === YOU ? "you" : name, x + 5, ry - 1, false);
+      drawHead(c, name === YOU ? "you" : name, x + 5, ry - 1);
       const now = i === 0 && b && b.ev.closedAt === null;
       drawText(c, name, x + 16, ry, now ? UI.text : UI.textSecondary, { shadow: true });
       const tag = now ? "burning" : i === (b && b.ev.closedAt === null ? 1 : 0) ? "next" : "";
@@ -505,10 +500,9 @@ export class Campfire implements Scene {
       shadow: true,
     });
     this.hits.queue = queued || !can ? null : btn;
-    void t;
   }
 
-  private card(c: Canvas, fire: Point, b: Burn, t: number): void {
+  private card(c: Canvas, fire: Point, b: Burn, t: number, portrait: CastFrame | null): void {
     const tau = t - b.ev.t0;
     const at = cardAt(b.ev);
     if (tau < at) return;
@@ -530,12 +524,12 @@ export class Campfire implements Scene {
       },
       Math.min(1, (tau - at) / 0.15),
       closing,
-      this.app.art.cast.value?.portrait(sp.id) ?? null,
+      portrait,
     );
   }
 
-  /** Picture in picture: no room for the full card, so what came out in one line under the fire. */
-  private pipCard(c: Canvas, t: number): void {
+  /** Picture in picture: no room for the full card, so what came out in one line over the fire. */
+  private pipCard(c: Canvas, t: number, portrait: CastFrame | null): void {
     const b = this.burn;
     if (!b) {
       const next = this.queue[0];
@@ -548,16 +542,27 @@ export class Campfire implements Scene {
     const sp = spirit(b.ev.spirit);
     const colour = hex(rankColour(b.ev.rank));
     const rank = b.ev.rank;
-    const w = Math.max(textWidth(sp.name, true), textWidth(rank) + 9) + 10 + 18;
-    const h = 26;
+    const w = Math.max(textWidth(sp.name, true), textWidth(rank) + 9) + 10 + 26;
+    const h = 30;
     const x = Math.floor((c.W - w) / 2);
     const y = 4;
     c.panel(x, y, w, h, colour, 0.95, [24, 18, 36]);
-    const fig = this.app.art.cast.value?.portrait(sp.id);
-    if (fig) c.frame(fig, x + 4 + Math.floor((16 - fig.w) / 2), y + Math.floor((h - fig.h) / 2));
-    drawText(c, sp.name, x + 24, y + 4, colour, { bold: true, shadow: true });
-    c.icon(GEM, { x: mix(colour, UI.ink, 0.25), X: mix(colour, [255, 255, 255], 0.35) }, x + 24, y + 15);
-    drawText(c, rank, x + 32, y + 15, colour, { shadow: true });
+    if (portrait) c.frame(portrait, x + 4 + Math.floor((22 - portrait.w) / 2), y + Math.floor((h - portrait.h) / 2));
+    drawText(c, sp.name, x + 30, y + 5, colour, { bold: true, shadow: true });
+    c.icon(GEM, { x: mix(colour, UI.ink, 0.25), X: mix(colour, [255, 255, 255], 0.35) }, x + 30, y + 17);
+    drawText(c, rank, x + 38, y + 17, colour, { shadow: true });
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Taps and keys.
+
+  /** A tap on the sleeping cat, in the picture. */
+  private onCat(world: Point): boolean {
+    if (this.kind === "pip") return false;
+    const cat = this.camp?.cat ?? CAT;
+    const x = world.x + this.crop.x;
+    const y = world.y + this.crop.y;
+    return Math.abs(x - cat.x) <= 9 && y >= cat.y - 12 && y <= cat.y + 3;
   }
 
   pointer(world: Point, hud: Point, kind: PointerKind, t: number, touch: boolean): void {
@@ -568,7 +573,7 @@ export class Campfire implements Scene {
     }
     this.hudHover = touch ? null : hud;
     const h = this.hits;
-    const over = [h.leafle, h.queue, h.cat, h.cheer].some((r) => r && inside(r, hud));
+    const over = [h.leafle, h.queue, h.cheer].some((r) => r && inside(r, hud)) || this.onCat(world);
     this.cursor = over ? "pointer" : "default";
     if (kind !== "up") return;
     const b = this.burn;
@@ -584,14 +589,13 @@ export class Campfire implements Scene {
       return;
     }
     if (h.cheer && inside(h.cheer, hud)) {
-      this.cheers.push({ who: FRIENDS.length, t0: t });
+      this.cheers = [...this.cheers.filter((at) => t - at < 1.2), t];
       return;
     }
-    if (h.cat && inside(h.cat, hud)) {
+    if (this.onCat(world)) {
       this.catAt = t;
       this.joke++;
     }
-    void world;
   }
 
   key(key: string, t: number): void {
@@ -612,74 +616,34 @@ interface Rect {
 }
 
 const inside = (r: Rect, p: Point): boolean => p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
+const overlaps = (a: Rect, b: Rect): boolean =>
+  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
-/** Seconds from the tap to the reveal's card. */
+/** Seconds from the throw to the reveal's card. */
 const cardAt = (ev: ConeEvent): number => beatOf(ev.rank).burst + beatOf(ev.rank).card;
 
-function bench(s: Surface, x: number, y: number, len: number, winter: boolean): void {
-  const x0 = Math.round(x - len / 2);
-  for (let k = 0; k < len; k++) {
-    s.set(x0 + k, y - 3, winter ? ix(R.SNOW, 6) : ix(R.WOOD, 6));
-    s.set(x0 + k, y - 2, ix(R.WOOD, 4));
-    s.set(x0 + k, y - 1, ix(R.WOOD, 3));
-    s.set(x0 + k, y, ix(R.WOOD, 1));
-  }
-  // The cut ends, with rings.
-  for (const ex of [x0 - 1, x0 + len]) {
-    s.set(ex, y - 2, ix(R.WOOD, 7));
-    s.set(ex, y - 1, ix(R.WOOD, 5));
-  }
-}
-
-/**
- * A member's player head as a world sprite: their made-up 8x8 face matched to the nearest of the
- * cast's character colours, so it is lit by the fire like everyone else and drawn on the same
- * pixel grid, with an inked edge so it reads against the night.
- */
-const heads = new Map<string, Sprite>();
-const DUSK = buildLut("dusk", "normal", "#fdd36f");
-const CHARACTER_INDICES = Array.from({ length: 256 }, (_, j) => 256 + j).filter((i) => {
-  const ramp = i >> 3;
-  return (i & 7) > 0 && ![C.FIRE, C.GLOW, C.STAR, C.LIGHTS, C.RARITY].some((r) => r === ramp);
-});
-
-function nearest(c: Rgb): number {
-  let best = CHARACTER_INDICES[0] ?? 256;
-  let bestD = Infinity;
-  for (const i of CHARACTER_INDICES) {
-    const [r, g, b] = DUSK.rgb(i);
-    const d = (r - c[0]) ** 2 * 0.3 + (g - c[1]) ** 2 * 0.59 + (b - c[2]) ** 2 * 0.11;
-    if (d < bestD) {
-      bestD = d;
-      best = i;
+/** The fire's warmth on a sitter: its light over their pixels, stronger nearer the fire and by night. */
+function warm(fx: Fx, f: CastFrame, x: number, y: number, flip: boolean, fire: Point): void {
+  const lit = fx.ink.c("lantern_light");
+  const most = fx.ambiance === "night" ? 0.4 : 0.22;
+  const ox = Math.round(x) - (flip ? f.w - 1 - f.foot.x : f.foot.x);
+  const oy = Math.round(y) - f.foot.y;
+  for (let yy = 0; yy < f.h; yy++)
+    for (let xx = 0; xx < f.w; xx++) {
+      const v = f.strip.data[yy * f.strip.w + f.index * f.w + xx] ?? 0;
+      if (v >>> 24 < 128) continue;
+      const px = ox + (flip ? f.w - 1 - xx : xx);
+      const py = oy + yy;
+      const k = most * Math.max(0, 1 - Math.hypot(px - fire.x, (py - fire.y + 6) * 1.3) / 70);
+      if (k > 0.01) fx.pic.light(px, py, lit, k);
     }
-  }
-  return best;
-}
-
-function headSprite(seed: string): Sprite {
-  const hit = heads.get(seed);
-  if (hit) return hit;
-  const sp = sprite(10, 10);
-  const ink = ix(C.INK, 1);
-  for (let y = 0; y < 10; y++)
-    for (let x = 0; x < 10; x++) if (x === 0 || y === 0 || x === 9 || y === 9) sp.data[y * 10 + x] = ink;
-  sp.data[0] = 0;
-  sp.data[9] = 0;
-  sp.data[90] = 0;
-  sp.data[99] = 0;
-  playerHead(seed).forEach((col, i) => {
-    sp.data[(1 + Math.floor(i / 8)) * 10 + 1 + (i % 8)] = nearest(col);
-  });
-  heads.set(seed, sp);
-  return sp;
 }
 
 /** A player head in the HUD (the queue's rows): the 8x8 face on a dark edge. */
-function drawHead(c: Canvas, seed: string, x: number, y: number, lit: boolean): void {
+function drawHead(c: Canvas, seed: string, x: number, y: number): void {
   const px = playerHead(seed);
   c.rect(x - 1, y - 1, 10, 10, [16, 10, 14]);
-  px.forEach((col, i) => c.px(x + (i % 8), y + Math.floor(i / 8), mix(col, [255, 168, 84], lit ? 0.18 : 0.08)));
+  px.forEach((col, i) => c.px(x + (i % 8), y + Math.floor(i / 8), mix(col, [255, 168, 84], 0.08)));
 }
 
 /** A Minecraft nametag: the name on a dark see-through plate, centred over `x`. */
@@ -725,21 +689,4 @@ function flameIcon(c: Canvas, x: number, y: number): void {
 function flameAbove(c: Canvas, x: number, y: number, age: number): void {
   const up = Math.round(age * 10);
   c.icon(FLAME, FLAME_LEGEND, x - 2, y - up, Math.max(0, 1 - age / 1.2));
-}
-
-/** A stepped sway, as the glade draws its ferns. */
-function drawSway(s: Surface, p: Placed, t: number): void {
-  const u = ((((t + p.phase) / p.period) % 1) + 1) % 1;
-  const i =
-    p.frames.length === 3
-      ? u < 0.25
-        ? 0
-        : u < 0.5
-          ? 1
-          : u < 0.75
-            ? 0
-            : 2
-      : Math.floor(u * p.frames.length) % p.frames.length;
-  const frame = p.frames[i] ?? p.frames[0];
-  if (frame) s.blit(frame, p.x, p.y);
 }
