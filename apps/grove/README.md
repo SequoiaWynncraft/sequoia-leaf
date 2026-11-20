@@ -22,6 +22,10 @@ light model, not from matching a painting by hand.
 
 - `src/art/tiles.ts`: every texture, each a small function from a pixel to one of the welcome
   forest's colours. A new look is a new function here.
+- `src/art/macro.ts`: textures that run across blocks. Bark, moss, foliage and the bare floor are
+  each one drawing several blocks wide, cut into tiles, so nothing repeats block by block. Also the
+  ragged moss laid over a seam between two kinds of ground, moss at a trunk's foot, and the small
+  things on the floor (needles, clover, pebbles, cones).
 - `src/engine/blocks.ts`: the block registry. A block is data: its tiles, its shape (cube, boxes,
   crossed sheets, fence), the light it gives.
 - `src/engine/world.ts`: the grid of blocks, and the light flooded through it from the sky and
@@ -36,6 +40,12 @@ light model, not from matching a painting by hand.
 - `src/gen/camp.ts`: the campfire scene.
 - `src/gen/sequoia.ts`: grows a sequoia of any age from a few numbers.
 - `src/gen/glade.ts`: the prototype's world: the giant, its house and bridge, the forest round it.
+
+## Skins
+
+`skinned()` in `actors.ts` puts any 64x64 Minecraft skin on a figure, outer layer included. The
+campfire loads `skins/notes.png` from beside the page if it is there. No skin is kept in this
+repository: copy one into `dist/skins/` after building.
 
 ## Not done
 

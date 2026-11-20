@@ -1,9 +1,10 @@
+import { tileIndex } from "../art/tiles.ts";
 /**
  * Turns a part of the world into triangles. Every corner carries its own light: the sky's, the
  * lamps', how much of the low sun reaches it, and how tucked into a corner it is. Smooth light and
  * soft corners come from that, not from anything painted.
  */
-import { BLOCKS, type Box, type FaceTiles, OCC } from "./blocks.ts";
+import { B, BLOCKS, type Box, type FaceTiles, OCC } from "./blocks.ts";
 import { ihash } from "./rand.ts";
 import type { World } from "./world.ts";
 
@@ -78,6 +79,8 @@ export const uvOf = (face: number, x: number, y: number, z: number): [number, nu
             ? [x, y]
             : [1 - x, y];
 
+const FRINGE = [tileIndex("moss_fringe0"), tileIndex("moss_fringe1")];
+const CREEP = [tileIndex("moss_creep0"), tileIndex("moss_creep1")];
 const AO = [1, 0.8, 0.62, 0.46];
 /** Floats per corner: position 3, uv 2, tile 1, emit 1, normal 3, sky 1, glow 1, sun 1, ao 1. */
 export const STRIDE = 14;
@@ -163,6 +166,7 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
     turned: boolean,
     foliage: boolean,
     spin: number,
+    lift = 0,
   ): void => {
     const { n, c } = FACES[f]!;
     const qx = x + n[0];
@@ -173,7 +177,7 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
     const uv: [number, number][] = [];
     for (let k = 0; k < 4; k++) {
       const [cx, cy, cz] = c[k]!;
-      pos.push([x + cx, y + cy, z + cz]);
+      pos.push([x + cx + n[0] * lift, y + cy + n[1] * lift, z + cz + n[2] * lift]);
       const [u, v] = uvOf(f, cx, cy, cz);
       const [tu, tv] = turned ? [v, 1 - u] : [u, v];
       uv.push(spin === 1 ? [tv, 1 - tu] : spin === 2 ? [1 - tu, 1 - tv] : spin === 3 ? [1 - tv, tu] : [tu, tv]);
@@ -314,8 +318,36 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
             const o = OCC[there]!;
             if (o === 2 || (def.foliage && o === 1)) continue;
             // Only faces that have no up or down are turned: a mossy side keeps its moss on top.
-            const spin = def.scatter && (def.foliage || f === 2) ? Math.floor(ihash(x, y, z, f) * 4) : 0;
-            cubeFace(x, y, z, f, def.tiles![f]!, def.turned?.[f] ?? false, !!def.foliage, spin);
+            let spin = def.scatter && (def.foliage || f === 2) ? Math.floor(ihash(x, y, z, f) * 4) : 0;
+            let tile = def.tiles![f]!;
+            const wide = def.macro?.[f];
+            if (wide != null) {
+              // The piece of the wide drawing that belongs to this block's place on this face.
+              const N = def.macroN ?? 1;
+              const mod = (v: number): number => ((v % N) + N) % N;
+              const col = f === 0 ? mod(-z) : f === 1 ? mod(z) : f === 5 ? mod(-x) : mod(x);
+              const row = f === 2 ? mod(z) : f === 3 ? mod(-z) : mod(-y);
+              tile = wide + row * N + col;
+              spin = 0;
+            }
+            cubeFace(x, y, z, f, tile, def.turned?.[f] ?? false, !!def.foliage, spin);
+            const pick = ihash(x, y, z, 11 + f) < 0.5 ? 0 : 1;
+            if (f === 2 && def.fringed) {
+              // Moss on a neighbouring block creeps over this bare block's edge.
+              const sides = [
+                [0, -1, 0],
+                [-1, 0, 1],
+                [0, 1, 2],
+                [1, 0, 3],
+              ] as const;
+              for (const [dx, dz, turn] of sides)
+                if (w.get(x + dx, y, z + dz) === B.moss && OCC[w.get(x + dx, y + 1, z + dz)] !== 2)
+                  cubeFace(x, y, z, 2, FRINGE[pick]!, false, false, turn, 0.012);
+            }
+            if (f !== 2 && f !== 3 && id === B.bark) {
+              const under = w.get(x, y - 1, z);
+              if (under === B.moss || under === B.duff) cubeFace(x, y, z, f, CREEP[pick]!, false, false, 0, 0.012);
+            }
           }
           continue;
         }

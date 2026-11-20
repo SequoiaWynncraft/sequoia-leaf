@@ -50,6 +50,8 @@ export interface Part {
   rot?: V3;
   off?: V3;
   emit?: boolean;
+  /** Pushes every face outward by this many pixels without stretching its picture: a hat over a head. */
+  grow?: number;
 }
 
 export interface Actor {
@@ -58,6 +60,8 @@ export interface Actor {
   parts: Part[];
   /** How much of the low sun reaches it, worked out once where it stands. */
   sun?: number;
+  /** 1 is a pixel to a sixteenth of a block. */
+  scale?: number;
   update?: (t: number) => void;
 }
 
@@ -79,6 +83,7 @@ const UV0 = 3;
 
 export function draw(dyn: Dyn, w: World, a: Actor): void {
   const yaw: V3 = [0, a.yaw, 0];
+  const size = a.scale ?? 1;
   for (const part of a.parts) {
     const [x0, y0, z0, x1, y1, z1] = part.box;
     const pivot = part.pivot ?? [0, 0, 0];
@@ -87,7 +92,7 @@ export function draw(dyn: Dyn, w: World, a: Actor): void {
     const place = (p: V3): V3 => {
       const q = turn([p[0] - pivot[0], p[1] - pivot[1], p[2] - pivot[2]], rot);
       const r = turn([q[0] + pivot[0] + off[0], q[1] + pivot[1] + off[1], q[2] + pivot[2] + off[2]], yaw);
-      return [a.pos[0] + r[0] / 16, a.pos[1] + r[1] / 16, a.pos[2] + r[2] / 16];
+      return [a.pos[0] + (r[0] / 16) * size, a.pos[1] + (r[1] / 16) * size, a.pos[2] + (r[2] / 16) * size];
     };
     for (let f = 0; f < 6; f++) {
       const { n, c } = FACES[f]!;
@@ -99,7 +104,8 @@ export function draw(dyn: Dyn, w: World, a: Actor): void {
         const lx = c[k]![0] ? x1 : x0;
         const ly = c[k]![1] ? y1 : y0;
         const lz = c[k]![2] ? z1 : z0;
-        const q = place([lx, ly, lz]);
+        const gr = part.grow ?? 0;
+        const q = place([lx + (c[k]![0] ? gr : -gr), ly + (c[k]![1] ? gr : -gr), lz + (c[k]![2] ? gr : -gr)]);
         pos.push(q);
         mid[0] += q[0] / 4;
         mid[1] += q[1] / 4;
@@ -484,4 +490,123 @@ export function bulbs(dyn: Dyn, w: World, a: V3, b: V3, points: readonly V3[]): 
       yaw: 0,
       parts: [{ box: [-1, 0, -1, 1, 2.5, 1], tiles: all("bulb"), emit: true }],
     });
+}
+
+// ---------- a person wearing a Minecraft skin ----------
+
+type Rect = readonly [number, number, number, number];
+/** The six pictures of one box in a skin: its corner in the sheet and the box's width, height and depth. */
+const unwrap = (ox: number, oy: number, w: number, h: number, d: number): Rect[] => [
+  [ox + d + w, oy + d, d, h],
+  [ox, oy + d, d, h],
+  [ox + d, oy, w, d],
+  [ox + d + w, oy, w, d],
+  [ox + d, oy + d, w, h],
+  [ox + d + w + d, oy + d, w, h],
+];
+
+/**
+ * Cuts a 64x64 skin into tiles, one for each face of each limb, and returns the model that wears
+ * them: the usual proportions, the outer layer (hat, jacket, sleeves) standing a little off the body.
+ */
+export function skinned(
+  id: string,
+  rgba: Uint8ClampedArray,
+  slim: boolean,
+): (pos: V3, yaw: number, phase: number) => Actor {
+  const aw = slim ? 3 : 4;
+  const limbs: { name: string; box: Part["box"]; at: [number, number]; over: [number, number]; pivot: V3 }[] = [
+    { name: "legR", box: [-4, 0, -2, 0, 12, 2], at: [0, 16], over: [0, 32], pivot: [-2, 12, 0] },
+    { name: "legL", box: [0, 0, -2, 4, 12, 2], at: [16, 48], over: [0, 48], pivot: [2, 12, 0] },
+    { name: "body", box: [-4, 12, -2, 4, 24, 2], at: [16, 16], over: [16, 32], pivot: [0, 12, 0] },
+    { name: "armR", box: [-4 - aw, 12, -2, -4, 24, 2], at: [40, 16], over: [40, 32], pivot: [-5.5, 22, 0] },
+    { name: "armL", box: [4, 12, -2, 4 + aw, 24, 2], at: [32, 48], over: [48, 48], pivot: [5.5, 22, 0] },
+    { name: "head", box: [-4, 24, -4, 4, 32, 4], at: [0, 0], over: [32, 0], pivot: [0, 24, 0] },
+  ];
+  const make = (limb: (typeof limbs)[number], layer: "base" | "over"): FaceTiles => {
+    const [x0, y0, z0, x1, y1, z1] = limb.box;
+    const [ox, oy] = layer === "base" ? limb.at : limb.over;
+    const rects = unwrap(ox, oy, x1 - x0, y1 - y0, z1 - z0);
+    const names = rects.map(([sx, sy, w, h], f) => {
+      // Where this face's picture falls on its tile, from the corners of the box as the tile sees them.
+      let u0 = 16;
+      let v0 = 16;
+      for (const c of FACES[f]!.c) {
+        const [u, v] = uvOf(
+          f,
+          (UV0 + (c[0] ? x1 - x0 : 0)) / 16,
+          (UV0 + (c[1] ? y1 - y0 : 0)) / 16,
+          (UV0 + (c[2] ? z1 - z0 : 0)) / 16,
+        );
+        u0 = Math.min(u0, Math.round(u * 16));
+        v0 = Math.min(v0, Math.round(v * 16));
+      }
+      const name = `skin_${id}_${limb.name}_${layer}_${f}`;
+      addTile(name, (x, y) => {
+        const i = x - u0;
+        const j = y - (16 - v0 - h);
+        if (i < 0 || j < 0 || i >= w || j >= h) return null;
+        const o = ((sy + j) * 64 + sx + i) * 4;
+        if (layer === "over" && rgba[o + 3]! < 128) return null;
+        return `#${[rgba[o]!, rgba[o + 1]!, rgba[o + 2]!].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+      });
+      return tileIndex(name);
+    });
+    return [names[0]!, names[1]!, names[2]!, names[3]!, names[4]!, names[5]!];
+  };
+  const tiles = limbs.map((l) => ({ base: make(l, "base"), over: make(l, "over") }));
+  return (pos, yaw, phase) => {
+    const parts: Part[] = [];
+    const of: Record<string, Part[]> = {};
+    limbs.forEach((l, i) => {
+      const base: Part = { box: [...l.box], tiles: tiles[i]!.base, pivot: l.pivot, rot: [0, 0, 0] };
+      const over: Part = {
+        box: [...l.box],
+        tiles: tiles[i]!.over,
+        pivot: l.pivot,
+        rot: [0, 0, 0],
+        grow: l.name === "head" ? 0.5 : 0.3,
+      };
+      of[l.name] = [base, over];
+      parts.push(base, over);
+    });
+    const set = (name: string, rot: V3, lift = 0): void => {
+      for (const p of of[name]!) {
+        p.rot = rot;
+        p.off = [0, lift, 0];
+      }
+    };
+    return {
+      pos,
+      yaw,
+      parts,
+      scale: 0.9375,
+      update(time) {
+        // Standing easy, waving with one hand, the head looking about.
+        const breath = Math.sin(time * 1.6 + phase) * 0.3;
+        set("body", [0, 0, 0], 0);
+        set("head", [Math.sin(time * 0.5 + phase) * 0.06, Math.sin(time * 0.33 + phase) * 0.3, 0], breath);
+        set("armR", [Math.sin(time * 0.9 + phase) * 0.06, 0, -0.05], breath);
+        set("armL", [0, 0, 2.5 + Math.sin(time * 5) * 0.28], breath);
+        set("legR", [0, 0, 0]);
+        set("legL", [0, 0, 0]);
+      },
+    };
+  };
+}
+
+/** Reads a skin picture into its pixels, or nothing if there is none. */
+export async function loadSkin(url: string): Promise<Uint8ClampedArray | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const image = await createImageBitmap(await res.blob());
+    if (image.width !== 64 || image.height !== 64) return null;
+    const ctx = new OffscreenCanvas(64, 64).getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(image, 0, 0);
+    return ctx.getImageData(0, 0, 64, 64).data;
+  } catch {
+    return null;
+  }
 }

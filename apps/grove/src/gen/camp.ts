@@ -162,6 +162,9 @@ export function buildCamp(sun: readonly [number, number, number]): Camp {
       const thick = smoothstep(5, 12, d) * (0.1 + noise2(x / 7, z / 7, 23) * 0.3) + (nearTrunk ? 0.3 : 0);
       const h = ihash(x, 0, z, 24);
       if (h < thick * (under === B.duff ? 0.2 : 0.55)) w.set(x, y, z, ihash(x, 1, z, 25) < 0.5 ? B.fern! : B.grass!);
+      else if (under === B.moss && h > 0.9 && h < 0.96)
+        w.set(x, y, z, h < 0.925 ? B.d_needles! : h < 0.95 ? B.d_clover! : B.d_pebbles!);
+      else if (h > 0.96 && h < 0.966) w.set(x, y, z, B.cone!);
       else if (d > 5 && (h > 0.99 || (nearTrunk && h > 0.93))) w.set(x, y, z, B.shroom!);
     }
   w.light();

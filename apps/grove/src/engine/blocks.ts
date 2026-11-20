@@ -2,6 +2,7 @@
  * The block registry. A block is data: which tiles it wears, what shape it is, what light it
  * gives. Adding one is a line here and, if it needs a new look, a tile in art/tiles.ts.
  */
+import "../art/macro.ts";
 import { tileIndex } from "../art/tiles.ts";
 
 /** Faces in the order +x, -x, +y, -y, +z, -z. */
@@ -32,6 +33,11 @@ export interface BlockDef {
   readonly fence?: boolean;
   /** Each block turns its texture a different way, so a field of it does not show a grid. */
   readonly scatter?: boolean;
+  /** For each face, the first tile of a drawing several blocks wide, or null; `macroN` is its width in blocks. */
+  readonly macro?: readonly (number | null)[];
+  readonly macroN?: number;
+  /** Bare ground: moss next to it creeps over its edge. */
+  readonly fringed?: boolean;
   /** Light given off, 0 to 15. */
   readonly light?: number;
 }
@@ -53,9 +59,18 @@ const box = (from: Box["from"], to: Box["to"], tile: string, emit = false): Box 
   emit,
 });
 
+const m = (name: string): number => tileIndex(`${name}@0,0`);
+const everyFace = (name: string): number[] => Array.from({ length: 6 }, () => m(name));
+const topOnly = (name: string): (number | null)[] => [null, null, m(name), null, null, null];
+const decal = (name: string, tile: string): BlockDef => ({
+  name,
+  opaque: false,
+  boxes: [box([0, 0, 0], [16, 0.3, 16], tile)],
+});
+
 const DEFS: BlockDef[] = [
   { name: "air", opaque: false },
-  { name: "bark", opaque: true, tiles: all("bark") },
+  { name: "bark", opaque: true, tiles: all("bark"), macro: everyFace("bark_m"), macroN: 4 },
   { name: "bark_char", opaque: true, tiles: all("bark_char") },
   { name: "log", opaque: true, tiles: column("bark", "log_top") },
   {
@@ -70,14 +85,43 @@ const DEFS: BlockDef[] = [
     tiles: [t("bark"), t("bark"), t("bark"), t("bark"), t("log_top"), t("log_top")],
     turned: [true, true, false, false, false, false],
   },
-  { name: "leaves", opaque: false, foliage: true, scatter: true, tiles: all("leaves") },
-  { name: "leaves_lit", opaque: false, foliage: true, scatter: true, tiles: all("leaves_lit") },
-  { name: "leaves_dark", opaque: false, foliage: true, scatter: true, tiles: all("leaves_dark") },
-  { name: "moss", opaque: true, scatter: true, tiles: column("moss_side", "moss", "dirt") },
-  { name: "duff", opaque: true, scatter: true, tiles: column("dirt", "duff", "dirt") },
+  { name: "leaves", opaque: false, foliage: true, tiles: all("leaves"), macro: everyFace("leaves_m"), macroN: 3 },
+  {
+    name: "leaves_lit",
+    opaque: false,
+    foliage: true,
+    tiles: all("leaves_lit"),
+    macro: everyFace("leaves_lit_m"),
+    macroN: 3,
+  },
+  {
+    name: "leaves_dark",
+    opaque: false,
+    foliage: true,
+    tiles: all("leaves_dark"),
+    macro: everyFace("leaves_dark_m"),
+    macroN: 3,
+  },
+  { name: "moss", opaque: true, tiles: column("moss_side", "moss", "dirt"), macro: topOnly("moss_m"), macroN: 4 },
+  {
+    name: "duff",
+    opaque: true,
+    fringed: true,
+    tiles: column("dirt", "duff", "dirt"),
+    macro: topOnly("duff_m"),
+    macroN: 2,
+  },
   { name: "moss_full", opaque: true, tiles: all("moss") },
-  { name: "dirt", opaque: true, tiles: all("dirt") },
-  { name: "path", opaque: true, tiles: column("dirt", "path", "dirt") },
+  { name: "dirt", opaque: true, fringed: true, tiles: all("dirt") },
+  { name: "path", opaque: true, fringed: true, tiles: column("dirt", "path", "dirt") },
+  decal("d_needles", "d_needles"),
+  decal("d_pebbles", "d_pebbles"),
+  decal("d_clover", "d_clover"),
+  {
+    name: "cone",
+    opaque: false,
+    boxes: [box([6, 0, 4], [10, 3, 11], "cone_t"), box([7, 0, 11], [9, 2, 13], "cone_t")],
+  },
   { name: "stone", opaque: true, tiles: all("stone") },
   { name: "stone_mossy", opaque: true, tiles: column("stone_mossy", "moss", "stone") },
   { name: "planks", opaque: true, tiles: all("planks") },

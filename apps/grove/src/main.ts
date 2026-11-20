@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-import { banner, bulbs, draw, flames } from "./engine/actors.ts";
+import { banner, bulbs, draw, flames, loadSkin, skinned } from "./engine/actors.ts";
 import { ihash } from "./engine/rand.ts";
 import { stage } from "./engine/render.ts";
 import { buildCamp } from "./gen/camp.ts";
@@ -13,7 +13,16 @@ const which = query.get("scene") ?? "camp";
 type View = { eye: [number, number, number]; at: [number, number, number]; fov: number };
 const t0 = performance.now();
 
+// A member's own skin, if one is there to load: its tiles must exist before the texture is built.
+const skin = which === "camp" ? await loadSkin("./skins/notes.png") : null;
+const wearer = skin ? skinned("notes", skin, true) : null;
 const camp = which === "camp" ? buildCamp(SUN) : null;
+if (camp && wearer) {
+  const at: [number, number, number] = [camp.fire[0] - 2.9, Math.floor(camp.fire[1]), camp.fire[2] - 3.6];
+  const guest = wearer(at, 0.35, 0.8);
+  guest.sun = camp.world.sun(at[0], at[1] + 1, at[2], SUN);
+  camp.actors.push(guest);
+}
 const glade = camp ? null : buildGlade();
 const world = camp?.world ?? glade!.world;
 
