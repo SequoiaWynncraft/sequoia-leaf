@@ -85,6 +85,9 @@ export const PLAIN = 0;
 export const GLOWS = 1;
 export const LEAFY = 2;
 export const PLANT = 3;
+/** A lawn's top, and the grass and fern that grow on it: both take the meadow's drifting colour. */
+export const LAWN = 4;
+export const WILD = 5;
 /** Floats per corner: position 3, uv 2, tile 1, kind 1, normal 3, sky 1, glow 1, sun 1, ao 1. */
 export const STRIDE = 14;
 
@@ -257,6 +260,7 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
     kind: number,
     turned?: readonly boolean[],
     spin = 0,
+    top = kind,
   ): void => {
     const leafy = kind === LEAFY;
     const soft = leafy ? 0.5 : 1;
@@ -292,36 +296,53 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
         corner(x + lx, y + ly, z + lz, f, facing, soft);
         lights.splice(k * 4, 4, shade[0]!, shade[1]!, shade[2]!, shade[3]!);
       }
-      m.quad(pos, uv, tiles[f]!, kind, n, lights);
+      m.quad(pos, uv, tiles[f]!, f === 2 ? top : kind, n, lights);
     }
   };
 
-  const crossAt = (x: number, y: number, z: number, tile: number, emit: boolean): void => {
+  /**
+   * A plant: two crossed sheets. As in the block games this follows, no two stand quite alike: each
+   * is nudged off the middle of its block by where it stands, some are mirrored, and wild grass
+   * sits a little lower on some blocks than on others. That is what keeps a meadow off the grid.
+   */
+  const crossAt = (x: number, y: number, z: number, tile: number, emit: boolean, wild: boolean): void => {
     w.lightAt(x + 0.5, y + 0.5, z + 0.5, shade);
     const sky = shade[0]! / 15;
     const glow = shade[1]! / 15;
     const lit = sunCell(x, y, z, 2);
     for (let k = 0; k < 4; k++) lights.splice(k * 4, 4, sky, glow, lit, 1);
     const up: V3 = [0, 1, 0];
-    const uv: [number, number][] = [
-      [0, 0],
-      [1, 0],
-      [1, 1],
-      [0, 1],
-    ];
+    const flip = !emit && ihash(x, z, 1, 91) < 0.5;
+    const uv: [number, number][] = flip
+      ? [
+          [1, 0],
+          [0, 0],
+          [0, 1],
+          [1, 1],
+        ]
+      : [
+          [0, 0],
+          [1, 0],
+          [1, 1],
+          [0, 1],
+        ];
+    const dx = emit ? 0 : (ihash(x, z, 2, 91) - 0.5) * 0.5;
+    const dz = emit ? 0 : (ihash(x, z, 3, 91) - 0.5) * 0.5;
+    const sink = wild ? ihash(x, z, 4, 91) * 0.22 : 0;
+    const kind = emit ? GLOWS : wild ? WILD : PLANT;
     const sheets: [number, number, number, number][] = [
       [0.1, 0.1, 0.9, 0.9],
       [0.1, 0.9, 0.9, 0.1],
     ];
     for (const [ax, az, bx, bz] of sheets) {
       const p: V3[] = [
-        [x + ax, y, z + az],
-        [x + bx, y, z + bz],
-        [x + bx, y + 1, z + bz],
-        [x + ax, y + 1, z + az],
+        [x + ax + dx, y - sink, z + az + dz],
+        [x + bx + dx, y - sink, z + bz + dz],
+        [x + bx + dx, y + 1 - sink, z + bz + dz],
+        [x + ax + dx, y + 1 - sink, z + az + dz],
       ];
-      m.quad(p, uv, tile, emit ? GLOWS : PLANT, up, lights);
-      m.quad([p[1]!, p[0]!, p[3]!, p[2]!], [uv[1]!, uv[0]!, uv[3]!, uv[2]!], tile, emit ? GLOWS : PLANT, up, lights);
+      m.quad(p, uv, tile, kind, up, lights);
+      m.quad([p[1]!, p[0]!, p[3]!, p[2]!], [uv[1]!, uv[0]!, uv[3]!, uv[2]!], tile, kind, up, lights);
     }
   };
 
@@ -336,13 +357,14 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
         if (def.tiles) {
           const tiles = pick ? def.alts![pick - 1]! : def.tiles;
           const spin = def.scatter ? Math.floor(ihash(x, y, z, 5) * 4) : 0;
-          boxAt(x, y, z, FULL, FULL_TO, tiles, def.foliage ? LEAFY : def.glows ? GLOWS : PLAIN, def.turned, spin);
+          const kind = def.foliage ? LEAFY : def.glows ? GLOWS : PLAIN;
+          boxAt(x, y, z, FULL, FULL_TO, tiles, kind, def.turned, spin, def.lawn ? LAWN : kind);
           continue;
         }
         for (const b of def.boxes ?? []) boxAt(x, y, z, b.from, b.to, b.tiles, b.emit ? GLOWS : PLAIN);
         if (def.cross) {
           const tiles = def.cross.tiles;
-          crossAt(x, y, z, tiles[Math.floor(ihash(x, y, z, 7) * tiles.length)]!, !!def.cross.emit);
+          crossAt(x, y, z, tiles[Math.floor(ihash(x, y, z, 7) * tiles.length)]!, !!def.cross.emit, !!def.cross.wild);
         }
         if (def.fence) {
           const arms: [number, number, Box["from"], Box["to"], Box["from"], Box["to"]][] = [

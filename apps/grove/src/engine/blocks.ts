@@ -29,11 +29,18 @@ export interface BlockDef {
   /** Boxes in sixteenths of a block, for everything that is not a full cube. */
   readonly boxes?: readonly Box[];
   /** Two crossed sheets, for plants and flames; each plant wears one of the tiles. */
-  readonly cross?: { readonly tiles: readonly number[]; readonly emit?: boolean };
+  readonly cross?: {
+    readonly tiles: readonly number[];
+    readonly emit?: boolean;
+    /** Grass and fern: takes the lawn's colour where it stands, and sits a little lower on some blocks than others. */
+    readonly wild?: boolean;
+  };
   /** Joins to its neighbours with rails, as a fence does. */
   readonly fence?: boolean;
   /** The top face is turned a different way on each block, so a lawn does not show a grid. */
   readonly scatter?: boolean;
+  /** A lawn: its top drifts in colour from place to place, as grass does across a meadow. */
+  readonly lawn?: boolean;
   /** Light given off, 0 to 15. */
   readonly light?: number;
   /** Shows its own colour whatever the light, and glows in the air: a lit window. */
@@ -68,11 +75,10 @@ const box = (from: Box["from"], to: Box["to"], tile: string, emit = false): Box 
   tiles: all(tile),
   emit,
 });
-const plant = (name: string, tile: string, more: Partial<BlockDef> = {}): BlockDef => ({
+const plant = (name: string, tile: string, wild = false): BlockDef => ({
   name,
   opaque: false,
-  cross: { tiles: variants(tile).map(t) },
-  ...more,
+  cross: { tiles: variants(tile).map(t), wild },
 });
 
 const DEFS: BlockDef[] = [
@@ -101,6 +107,7 @@ const DEFS: BlockDef[] = [
     name: "moss",
     opaque: true,
     scatter: true,
+    lawn: true,
     tiles: column("grass_side", "grass_top", "dirt"),
     alts: variants("grass_top")
       .slice(1)
@@ -144,8 +151,8 @@ const DEFS: BlockDef[] = [
     ],
   },
   { name: "ladder_s", opaque: false, boxes: [box([0, 0, 0], [16, 16, 1], "ladder")] },
-  plant("fern", "fern"),
-  plant("grass", "grass"),
+  plant("fern", "fern", true),
+  plant("grass", "grass", true),
   plant("sprout", "sapling"),
   plant("shroom", "mushroom_brown"),
   plant("shroom_red", "mushroom_red"),

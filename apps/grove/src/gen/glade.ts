@@ -261,7 +261,7 @@ export function buildGlade(): Glade {
       const thick =
         noise2(x / 9, z / 9, 44) * 0.34 + (nearTrunk ? 0.3 : 0) + smoothstep(18, 34, Math.hypot(x - CX, z - CZ)) * 0.12;
       const h = ihash(x, 0, z, 45);
-      if (h < thick * (under === B.duff ? 0.12 : 0.42)) w.set(x, y, z, ihash(x, 1, z, 46) < 0.55 ? B.fern! : B.grass!);
+      if (h < thick * (under === B.duff ? 0.12 : 0.8)) w.set(x, y, z, ihash(x, 1, z, 46) < 0.25 ? B.fern! : B.grass!);
       else if (under === B.moss && h > 0.9 && h < 0.928)
         w.set(x, y, z, h < 0.908 ? B.dandelion! : h < 0.916 ? B.daisy! : h < 0.922 ? B.cornflower! : B.poppy!);
       else if (h > 0.96 && h < 0.966) w.set(x, y, z, B.cone!);

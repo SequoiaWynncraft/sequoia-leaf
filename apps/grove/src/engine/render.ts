@@ -157,12 +157,13 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
         vec3 p = position;
         // Foliage stirs: every corner at one place moves the same way, so no gap opens between
         // blocks. A plant is rooted and only its top moves.
-        if (aUv.w > 1.5) {
-          float reach = aUv.w > 2.5 ? aUv.y * 0.07 : 0.03;
+        bool plant = aUv.w > 2.5 && aUv.w < 3.5 || aUv.w > 4.5;
+        if (plant || (aUv.w > 1.5 && aUv.w < 2.5)) {
+          float reach = plant ? aUv.y * 0.07 : 0.03;
           float phase = dot(floor(position + 0.5), vec3(0.71, 0.37, 0.93));
           p.x += sin(uTime * 1.3 + phase) * reach;
           p.z += cos(uTime * 1.1 + phase * 1.3) * reach;
-          p.y += sin(uTime * 0.9 + phase * 0.7) * reach * 0.4 * step(aUv.w, 2.5);
+          p.y += sin(uTime * 0.9 + phase * 0.7) * reach * (plant ? 0.0 : 0.4);
         }
         vec4 wp = modelMatrix * vec4(p, 1.0);
         vPos = wp.xyz;
@@ -198,6 +199,14 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
         if (t.a < 0.5) discard;
         bool leafy = vEmit > 1.5 && vEmit < 2.5;
         float glows = vEmit > 0.5 && vEmit < 1.5 ? 1.0 : 0.0;
+        if (vEmit > 3.5) {
+          // A meadow is not one green: its colour drifts slowly from place to place, the way a
+          // block game blends grass colour across the land, and the tufts take the colour of the
+          // ground they stand on.
+          vec2 at = floor(vPos.xz);
+          float drift = vnoise3(vec3(at * 0.06, 1.0)) * 0.65 + vnoise3(vec3(at * 0.17, 5.0)) * 0.35;
+          t.rgb *= mix(vec3(0.86, 0.94, 0.82), vec3(1.12, 1.07, 0.96), drift);
+        }
         if (leafy) {
           // No two boughs are one green: broad patches run warmer and lighter, or cooler and deeper.
           vec3 cell = floor(vPos - vN * 0.5);
