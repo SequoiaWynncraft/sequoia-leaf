@@ -198,7 +198,7 @@ export const MarketHandlers = HttpApiBuilder.group(LeafApi, "market", (handlers)
       .handle("deliver", ({ params }) => act(params.id, "deliver", null))
       .handle("confirm", ({ params }) => act(params.id, "confirm", null))
       .handle("cancel", ({ params }) => act(params.id, "cancel", null))
-      .handle("dispute", ({ params, payload }) => act(params.id, "dispute", payload.reason.trim()));
+      .handle("dispute", ({ params, payload }) => act(params.id, "dispute", payload.reason));
   }),
 );
 

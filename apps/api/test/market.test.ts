@@ -736,6 +736,20 @@ describe("disputes", () => {
     expect(await eventTypes("alice-token")).toContain("market.disputed");
   });
 
+  it("need a reason that isn't blank", async () => {
+    await list({ title: "Arrows", request_id: "list-2" });
+    const placed = await order(2, "buy-2");
+    await act(placed.id, "deliver", "alice-token");
+
+    expect(await act(placed.id, "dispute", "bob-token", { reason: "   " })).toMatchObject({
+      status: 400,
+      body: { code: "invalid_request" },
+    });
+    expect(await act(placed.id, "dispute", "bob-token", { reason: "  Short  " })).toMatchObject({
+      body: { order: { dispute_reason: "Short" } },
+    });
+  });
+
   it("can't be raised before delivery", async () => {
     await list({ title: "Arrows", request_id: "list-2" });
     const placed = await order(2, "buy-2");

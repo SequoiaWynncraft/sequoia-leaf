@@ -39,7 +39,7 @@ export const StaffHandlers = HttpApiBuilder.group(LeafApi, "staff", (handlers) =
             { kind: "staff", playerId: identity.playerId },
             params.id,
             payload.outcome,
-            payload.note?.trim() ?? null,
+            payload.note ?? null,
             now,
             marketRules,
           );
@@ -68,7 +68,7 @@ export const StaffHandlers = HttpApiBuilder.group(LeafApi, "staff", (handlers) =
         Effect.gen(function* () {
           const identity = yield* CurrentIdentity;
           const now = yield* Clock.currentTimeMillis;
-          const note = payload.note?.trim() ?? null;
+          const note = payload.note ?? null;
           const result = yield* payConversion(identity.playerId, params.id, note, now, conversionRules);
           if (result.status === "refused") {
             return yield* tradeError(result.reason);
@@ -82,13 +82,7 @@ export const StaffHandlers = HttpApiBuilder.group(LeafApi, "staff", (handlers) =
         Effect.gen(function* () {
           const identity = yield* CurrentIdentity;
           const now = yield* Clock.currentTimeMillis;
-          const result = yield* declineConversion(
-            identity.playerId,
-            params.id,
-            payload.reason.trim(),
-            now,
-            conversionRules,
-          );
+          const result = yield* declineConversion(identity.playerId, params.id, payload.reason, now, conversionRules);
           if (result.status === "refused") {
             return yield* tradeError(result.reason);
           }

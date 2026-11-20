@@ -55,7 +55,7 @@ export const ConversionHandlers = HttpApiBuilder.group(LeafApi, "conversions", (
           }
           const identity = yield* CurrentIdentity;
           const now = yield* Clock.currentTimeMillis;
-          const note = payload.note?.trim() ?? null;
+          const note = payload.note ?? null;
           const result = yield* requestConversion(identity, payload.kind, count, note, payload.request_id, now, rules);
           if (result.status === "refused") {
             return yield* tradeError(result.reason);

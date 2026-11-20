@@ -298,8 +298,8 @@ const PageLimit = Schema.FiniteFromString.check(Schema.isInt(), Schema.isBetween
 /** A page of a list that is newest first: `before` is the `next_before` of the page before. */
 export const Page = { before: Schema.optional(Id), limit: Schema.optional(PageLimit) };
 
-/** What a member writes for others to read: a dispute's reason, a staff note, a claim's note. */
-const Note = (max: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(max));
+/** What a member writes for others to read, trimmed: a dispute's reason, a staff note, a claim's note. */
+const Note = (max: number) => Schema.Trim.check(Schema.isMinLength(1), Schema.isMaxLength(max));
 const MarketNote = Note(DEFAULT_RULES.market.note.max);
 const ClaimNote = Note(DEFAULT_RULES.conversions.note.max);
 
