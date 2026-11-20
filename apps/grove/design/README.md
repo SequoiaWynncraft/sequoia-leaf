@@ -42,7 +42,8 @@ Everything serves one of three verbs. Anything that doesn't is cut.
 
 **Your tree is yours alone.**
 
-- Its shape is one of three, chosen from your Minecraft UUID.
+- It's one of three trees, chosen from your Minecraft UUID, each drawn
+  growing through all 13 stages.
 - It grows with your SEQ level, which only guild play earns, and it can't be
   bought. It's an honest picture of your time with Sequoia.
 - The canopy turns from the forest's olive toward the canopy's gold as you
@@ -242,9 +243,11 @@ The world is **the welcome messages' own forest**, made the same way:
   (`assets/welcome/authoring/grove` in sequoia-backend), in the forest
   painting's own 44 colours, and composed by the ceremony renderer. Night,
   winter, the Christmas lights, fireflies and the aurora are the welcome's.
-- Your tree's bark is the giant trunk's painted bark resampled to its width;
-  its crown is lobes cut from the canopy painting; its feet stand in the
-  painting's ferns.
+- Your tree is one of 39 drawn sprites (13 levels, 3 variants), drawn by an
+  image model from this forest's references, reduced to its pixel grid and
+  its 44 colours, cleaned by hand at 1x and kept as pixel-grid SVG like the
+  forest's own layers. The raw drawings aren't kept. Its feet stand in moss
+  and, when it's old, the painting's ferns.
 - The web client plays those 256×144 loops at whole-pixel scale and draws its
   sprites between the forest's layers, the way Sierra draws a member's sign.
 
