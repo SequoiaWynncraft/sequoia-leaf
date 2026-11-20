@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <title>The Works</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #1b1220;
+        overflow: hidden;
+        font:
+          600 13px/1.25 ui-monospace,
+          "DejaVu Sans Mono",
+          Menlo,
+          Consolas,
+          monospace;
+        color: #fff3cf;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100dvh;
+        touch-action: none;
+      }
+      .panel,
+      .tool {
+        background: #2a1733ee;
+        border: 2px solid #5a296e;
+        box-shadow: 0 0 0 2px #1a0f1e;
+        border-radius: 2px;
+      }
+      .label {
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #d49045;
+      }
+      #purse {
+        position: fixed;
+        top: max(8px, env(safe-area-inset-top));
+        left: max(8px, env(safe-area-inset-left));
+        padding: 6px 12px;
+      }
+      #coins {
+        font-size: 22px;
+        color: #f5b95e;
+      }
+      #order {
+        position: fixed;
+        top: max(8px, env(safe-area-inset-top));
+        right: max(8px, env(safe-area-inset-right));
+        padding: 6px 12px;
+        min-width: 210px;
+        max-width: 46vw;
+      }
+      #order .title {
+        font-size: 15px;
+      }
+      #order .row {
+        display: grid;
+        grid-template-columns: 12px 56px 1fr 44px;
+        gap: 6px;
+        align-items: center;
+        margin-top: 4px;
+        font-size: 12px;
+      }
+      #order .chip {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+      }
+      #order .bar {
+        height: 8px;
+        background: #1a0f1e;
+        border: 1px solid #5a296e;
+      }
+      #order .bar i {
+        display: block;
+        height: 100%;
+        background: #f5b95e;
+        transition: width 0.25s;
+      }
+      #order .pay {
+        margin-top: 5px;
+        font-size: 11px;
+        color: #e0c39a;
+      }
+      #hint {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: calc(max(8px, env(safe-area-inset-bottom)) + 74px);
+        padding: 5px 12px;
+        background: #1a0f1ecc;
+        border-left: 3px solid #f5b95e;
+        max-width: 92vw;
+        text-align: center;
+      }
+      #hint.bad {
+        border-left-color: #e67967;
+        color: #ffb3a6;
+      }
+      #tools {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: max(8px, env(safe-area-inset-bottom));
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+        padding: 0 8px;
+      }
+      .tool {
+        font: inherit;
+        color: #fff3cf;
+        min-width: 78px;
+        min-height: 54px;
+        padding: 5px 8px;
+        display: grid;
+        justify-items: center;
+        align-content: center;
+        gap: 1px;
+        cursor: pointer;
+      }
+      .tool small {
+        font-size: 10px;
+        color: #e0c39a;
+      }
+      .tool.on {
+        border-color: #f5b95e;
+        background: #54286a;
+      }
+      .tool.locked {
+        opacity: 0.4;
+      }
+      .tool:active {
+        transform: translateY(2px);
+      }
+      #banner {
+        position: fixed;
+        left: 50%;
+        top: 28%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        pointer-events: none;
+        text-shadow:
+          0 2px 0 #1a0f1e,
+          0 0 16px #1a0f1e;
+        animation: banner 3.2s ease-out forwards;
+      }
+      #banner b {
+        display: block;
+        font-size: clamp(22px, 5vw, 36px);
+        color: #ffd98a;
+      }
+      @keyframes banner {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -30%) scale(0.8);
+        }
+        10%,
+        80% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -70%);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas></canvas>
+    <div id="purse" class="panel">
+      <div class="label">Coins</div>
+      <div id="coins">0</div>
+    </div>
+    <div id="order" class="panel"></div>
+    <div id="hint"></div>
+    <div id="tools"></div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
