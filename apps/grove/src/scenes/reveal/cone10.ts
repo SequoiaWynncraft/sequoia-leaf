@@ -9,12 +9,11 @@
  * crown's place in that grid.
  */
 
-import type { Tree } from "../../art/tree.ts";
-import { ix, R, type RankName, RANKS } from "../../engine/palette.ts";
-import type { Sprite, Surface } from "../../engine/raster.ts";
+import { type RankName, RANKS } from "../../engine/palette.ts";
+import type { Sprite } from "../../engine/raster.ts";
 import { hash3, hashString, Rng } from "../../engine/rng.ts";
 import { type Canvas, drawText, hex, mix, type Rgb, textWidth, UI } from "../../ui/hud.ts";
-import type { Point } from "../glade/layout.ts";
+import { crown, type Fx, leaf, leafKeys, type Point, sparkleStage } from "../glade/stage.ts";
 import { INSIGNIA } from "./card.ts";
 import { rankColour, tier } from "./cone.ts";
 
@@ -77,16 +76,27 @@ const allIn = (): number => flyAt(9) + FLY;
 
 export const cone10Done = (ev: Cone10Event, t: number): boolean => t - ev.t0 > END;
 
-/** The world side: the crown rustles where each leaf lets go. */
-export function drawCone10World(s: Surface, ev: Cone10Event, t: number, tree: Tree): void {
+/** The world side: the crown rustles where each leaf lets go, a leaf and a sparkle. */
+export function drawCone10World(fx: Fx, ev: Cone10Event, t: number): void {
   const tau = t - ev.t0;
+  const c = crown(fx.tree);
+  const box = { x0: c.x, y0: c.y, x1: c.x + c.w, y1: c.y + c.h };
+  const [light, dark] = leafKeys(fx.tree, fx.season);
   ev.ranks.forEach((_, i) => {
-    const u = (tau - releaseAt(i)) / 0.3;
+    const u = (tau - releaseAt(i)) / 0.4;
     if (u < 0 || u > 1) return;
-    const p = startPoint(i, tree.crown);
-    for (let k = 0; k < 4; k++) {
-      const a = k * 1.7 + i;
-      s.set(p.x + Math.cos(a) * (2 + u * 4), p.y + Math.sin(a) * (1 + u * 3), ix(R.FOLI, 7));
+    const p = startPoint(i, box);
+    fx.pic.sparkle(p.x, p.y, sparkleStage(u, false), fx.ink.c("star"), fx.ink.c("star_arm"));
+    for (let k = 0; k < 2; k++) {
+      const a = k * 2.6 + i;
+      leaf(
+        fx,
+        Math.round(p.x + Math.cos(a) * (2 + u * 4)),
+        Math.round(p.y + Math.sin(a) + u * 5),
+        k + Math.floor(u * 4),
+        fx.ink.c(light),
+        fx.ink.c(dark),
+      );
     }
   });
 }

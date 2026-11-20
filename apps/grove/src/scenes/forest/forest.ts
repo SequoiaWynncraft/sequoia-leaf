@@ -17,12 +17,12 @@ import {
 import { buildLut, ix, type Lut, PALETTE_SIZE, R, rampOf } from "../../engine/palette.ts";
 import { compose, type Indices, Light, Surface } from "../../engine/raster.ts";
 import { hash3 } from "../../engine/rng.ts";
-import { between, type Grid, type Point } from "../../engine/view.ts";
+import { between, type Grid, type Point, worldGrid } from "../../engine/view.ts";
 import type { EventKind, Params } from "../../game/params.ts";
 import { waterFriend } from "../../game/state.ts";
 import { Canvas, mix, UI } from "../../ui/hud.ts";
 import { layout } from "../glade/layout.ts";
-import type { App, PointerKind, Scene } from "../scene.ts";
+import type { App, PointerKind, Scene, Screen } from "../scene.ts";
 import {
   clamp01,
   drawLevelUp,
@@ -266,8 +266,8 @@ export class Forest implements Scene {
     this.buildMs = performance.now() - started;
   }
 
-  worldRows(): number {
-    return WORLD_H;
+  grid({ devW, devH, dpr }: Screen): Grid {
+    return worldGrid(devW, devH, WORLD_H, dpr);
   }
 
   busy(): boolean {

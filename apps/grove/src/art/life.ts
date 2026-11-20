@@ -1,16 +1,16 @@
 /**
- * Everything that moves on its own, as functions of time: the campfire and its embers and smoke,
- * fireflies, drifting needles, falling snow, twinkling stars, the lantern, fairy lights and the
- * two companions' idle loops. Every motion is periodic and calm, and the same `t` always draws
+ * Everything that moves on its own in the forest and the Campfire, as functions of time: the
+ * campfire and its embers and smoke, fireflies, drifting needles, falling snow, twinkling stars,
+ * fairy lights and the Chickaree's idle loop. Every motion is periodic and calm, and the same `t` always draws
  * the same frame, so a still is exact.
  */
 
-import { ix, R, rampOf, type Season, type Time } from "../engine/palette.ts";
+import { ix, R, type Season, type Time } from "../engine/palette.ts";
 import { bayer, fromRows, type Light, type Sprite, type Surface } from "../engine/raster.ts";
 import { hash3, Rng } from "../engine/rng.ts";
 import { isSky } from "../scenes/glade/backdrop.ts";
 import type { Layout, Point } from "../scenes/glade/layout.ts";
-import { CRAB, LANTERN, SQUIRREL } from "./sprites.ts";
+import { SQUIRREL } from "./sprites.ts";
 
 const frac = (v: number): number => v - Math.floor(v);
 /** Pixel animation runs at ten frames a second, as the welcome loops do. */
@@ -288,60 +288,8 @@ export function drawStars(
   }
 }
 
-const onLake = (v: number): boolean => rampOf(v) === R.SKY2;
-
-/**
- * The lake's glints: short runs of the sunset's gold on the water, each coming and going on its
- * own slow beat. Drawn only on the lake itself, never on what stands in front of it.
- */
-export function drawLakeGlints(
-  s: Surface,
-  lake: { x: number; y: number; rx: number; ry: number },
-  t: number,
-  time: Time,
-): void {
-  const n = Math.max(3, Math.round(lake.rx / 4));
-  for (let i = 0; i < n; i++) {
-    const row = lake.y - lake.ry + 1 + (i % Math.max(1, lake.ry * 2 - 1));
-    const across = 1 - Math.abs(row - lake.y) / (lake.ry + 1);
-    const x = Math.round(lake.x + (hash3(i, 1, 31) - 0.5) * 1.7 * lake.rx * across);
-    const b = 0.5 + 0.5 * Math.sin(t * (0.7 + hash3(i, 2, 31) * 0.7) + i * 2.1);
-    if (b < 0.45) continue;
-    const len = b > 0.85 ? 3 : 2;
-    const c = time === "night" ? ix(R.STAR, b > 0.85 ? 7 : 5) : ix(R.SKY2, b > 0.85 ? 7 : 6);
-    for (let k = 0; k < len; k++) s.setWhere(x + k, row, c, onLake);
-  }
-}
-
-/** The Great Sequoia's lanterns: warm specks that come and go, one per contribution. */
-export function drawGuildLanterns(s: Surface, lanterns: Point[], t: number): void {
-  lanterns.forEach((p, i) => {
-    const b = 0.5 + 0.5 * Math.sin(t * 1.3 + i * 2.1);
-    if (b < 0.25) return;
-    s.setWhere(p.x, p.y, ix(R.GLOW, b > 0.7 ? 6 : 3), (v) => rampOf(v) === R.HAZE);
-  });
-}
-
 // ---------------------------------------------------------------------------------------------
 // The lantern on its crook.
-
-export function drawLantern(s: Surface, light: Light, L: Layout, t: number, time: Time): void {
-  const { x, y } = L.lantern;
-  const top = y - 30;
-  for (let py = top; py <= y; py++) {
-    s.set(x, py, ix(R.WOOD, 4));
-    s.set(x + 1, py, ix(R.WOOD, py < top + 3 ? 5 : 2));
-  }
-  // The crook: an arm out to the right with a hook.
-  for (let k = 0; k < 6; k++) s.set(x + 1 + k, top - (k < 2 ? 1 : 0), ix(R.WOOD, k < 2 ? 5 : 4));
-  s.set(x + 1, top - 1, ix(R.WOOD, 6));
-  s.set(x + 6, top + 1, ix(R.METAL, 1));
-  const swing = Math.sin((t / 5.5) * Math.PI * 2) > 0.55 ? 1 : 0;
-  s.blit(LANTERN, x + 3 + swing, top + 2);
-  light.pool(x + 6 + swing, top + 8, time === "night" ? 30 : time === "day" ? 8 : 24, time === "day" ? 1 : 2.4, 1.15);
-  // Its pool on the ground.
-  light.pool(x + 5, y + 2, time === "night" ? 22 : 16, time === "day" ? 0.6 : 1.5, 3);
-}
 
 // ---------------------------------------------------------------------------------------------
 // Fairy lights, in winter: festoons from cluster to cluster with a bulb every seven pixels.
@@ -402,74 +350,4 @@ export function squirrelFrame(t: number, hopAt: number): { sprite: Sprite; dy: n
   return { sprite: SQUIRREL.idle, dy: 0 };
 }
 
-export function crabFrame(t: number, partyAt: number): { sprite: Sprite; dx: number; dy: number } {
-  const since = t - partyAt;
-  if (since >= 0 && since < 2.4) {
-    // A little crab rave: claws up on the beat, a hop, a shuffle.
-    const beat = Math.floor(since * 5);
-    return { sprite: beat % 2 === 0 ? CRAB.wave : CRAB.idle, dx: beat % 4 < 2 ? 0 : 1, dy: beat % 2 === 0 ? -1 : 0 };
-  }
-  const u = frac(t / 7) * 7;
-  if ((u > 1.4 && u < 1.6) || (u > 1.8 && u < 2.0)) return { sprite: CRAB.snap, dx: 0, dy: 0 };
-  if (u > 3.0 && u < 3.15) return { sprite: CRAB.blink, dx: 0, dy: 0 };
-  if (u > 3.5 && u < 4.8) {
-    const k = Math.floor((u - 3.5) * 4);
-    return { sprite: CRAB.idle, dx: [0, 1, 2, 2, 1][k] ?? 0, dy: 0 };
-  }
-  if (u > 4.8 && u < 5.6) return { sprite: CRAB.wave, dx: 0, dy: Math.floor((u - 4.8) * 5) % 2 === 0 ? -1 : 0 };
-  return { sprite: CRAB.idle, dx: 0, dy: 0 };
-}
-
 export const seasonHasSnow = (season: Season): boolean => season === "winter";
-
-/**
- * A shaft of evening light through the gap in the canopy onto a young tree, with dust drifting in
- * it, so the eye finds a seedling first. Warm light only: the sky behind it is untouched.
- */
-export function lightShaft(s: Surface, light: Light, foot: Point, top: number, t: number, H: number): void {
-  const x0 = foot.x + 30;
-  const y0 = 0;
-  const y1 = foot.y + 4;
-  for (let y = y0; y <= y1; y++) {
-    const u = (y - y0) / (y1 - y0);
-    const cx = x0 + (foot.x - x0) * u;
-    const hw = 3 + u * 9;
-    for (let x = Math.floor(cx - hw - 1); x <= cx + hw + 1; x++) {
-      if (x < 0 || x >= light.w || y < 0 || y >= light.h) continue;
-      const d = Math.abs(x - cx) / hw;
-      if (d > 1) continue;
-      // One step of light across the beam, a second down its heart near the ground; only the
-      // beam's very edge is broken, with a one-pixel checker.
-      if (d > 0.82 && (x + y) % 2 === 0) continue;
-      const level = d < 0.55 && u > 0.4 ? (u > 0.8 && d < 0.35 ? 3 : 2) : 1;
-      const i = y * light.w + x;
-      if ((light.data[i] ?? 0) < level) light.data[i] = level;
-    }
-  }
-  // Dust in the beam.
-  for (let i = 0; i < 9; i++) {
-    const u = (((t / (7 + hash3(i, 1, 41) * 5) + hash3(i, 2, 41)) % 1) + 1) % 1;
-    const y = Math.round(Math.max(top - 30, 4) + u * (y1 - Math.max(top - 30, 4)));
-    const v = (y - y0) / (y1 - y0);
-    const cx = x0 + (foot.x - x0) * v;
-    const x = Math.round(cx + (hash3(i, 3, 41) - 0.5) * (6 + v * 10) + Math.sin(t * 0.8 + i) * 1.5);
-    const b = 0.5 + 0.5 * Math.sin(t * 1.7 + i * 2.3);
-    if (b < 0.4 || y > H) continue;
-    s.set(x, y, ix(R.GLOW, b > 0.8 ? 6 : 4));
-  }
-}
-
-/** Day: soft shafts of sun slanting through the canopy, drifting slowly. */
-export function sunbeams(light: Light, L: Layout, t: number): void {
-  const drift = t * 1.5;
-  for (let y = Math.max(0, L.horizon - 30); y < L.H; y++) {
-    for (let x = 0; x < L.W; x++) {
-      const u = (((x + y * 0.55 + drift) % 58) + 58) % 58;
-      const inBeam = u < 11 ? 1 - Math.abs(u - 5.5) / 5.5 : 0;
-      if (inBeam <= 0) continue;
-      if (bayer(x, y) > inBeam * 0.9) continue;
-      const i = y * L.W + x;
-      if ((light.data[i] ?? 0) < 1) light.data[i] = 1;
-    }
-  }
-}

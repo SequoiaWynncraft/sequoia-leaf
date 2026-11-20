@@ -193,21 +193,6 @@ const HEAT = [1, 2, 3].map((k) => {
   return m;
 });
 
-export function drawRestingCone(s: Surface, L: Stage, spent: boolean): void {
-  // A flat stone beside the fire, the cone on it.
-  for (let dx = -4; dx <= 4; dx++) {
-    s.set(L.cone.x + dx, L.cone.y + 1, ix(R.STONE, Math.abs(dx) > 3 ? 2 : 4));
-    s.set(L.cone.x + dx, L.cone.y + 2, ix(R.STONE, 2));
-  }
-  s.hline(L.cone.x - 3, L.cone.x + 3, L.cone.y, ix(R.STONE, 5));
-  if (spent) s.blit(CONE.spent, L.cone.x + (L.cone.x > L.fire.x ? 6 : -14), L.cone.y - 7);
-  s.blit(CONE.shut, L.cone.x - 3, L.cone.y - 8);
-}
-
-export function coneHit(L: Stage, x: number, y: number): boolean {
-  return x >= L.cone.x - 6 && x <= L.cone.x + 6 && y >= L.cone.y - 11 && y <= L.cone.y + 3;
-}
-
 export function spiritLanding(L: Stage): Point {
   // On the trodden earth beside the fire, in clear view: left of it, or in front on a phone.
   return L.narrow ? { x: L.fire.x - 2, y: L.fire.y + 15 } : { x: L.fire.x - 25, y: L.fire.y + 5 };

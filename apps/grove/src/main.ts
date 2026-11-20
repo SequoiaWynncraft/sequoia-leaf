@@ -2,16 +2,18 @@
  * Sequoia Grove's client: one page for the website and the Discord Activity.
  *
  * The router reads the hash. Scenes (`#glade`, `#forest`, `#campfire`) are pixel worlds drawn on
- * two canvases, the world at its own zoom and the HUD on one unit; moving between them dissolves
- * through a dithered dark. Menus (`#cones`, `#rates`, `#spirits`, `#shop`, `#rings`, `#great`,
+ * two canvases, the world at its own whole-pixel scale and the HUD on one unit; moving between them
+ * dissolves through a dithered dark. The glade plays the art bundle (`bundle/`, from `grove-art/`
+ * or `?art=`); the page round a world that does not fill the screen takes the scene's backdrop. Menus (`#cones`, `#rates`, `#spirits`, `#shop`, `#rings`, `#great`,
  * `#leafle`) are HTML panels in the mod's style over the dimmed, still-living scene. The dock is the
  * one navigation, at the bottom where a thumb is.
  */
 
+import { Art, artBase } from "./bundle/art.ts";
 import boldUrl from "./engine/fonts/minecraft-bold.woff2";
 import regularUrl from "./engine/fonts/minecraft-regular.woff2";
 import { bayer } from "./engine/raster.ts";
-import { fitCanvas, fixedGrid, type Grid, hudScale, toArt, worldGrid } from "./engine/view.ts";
+import { fitCanvas, fixedGrid, type Grid, hudScale, toArt } from "./engine/view.ts";
 import { readParams } from "./game/params.ts";
 import { Store } from "./game/store.ts";
 import { Campfire } from "./scenes/campfire/campfire.ts";
@@ -71,6 +73,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 const app: App = {
   params,
   store,
+  art: new Art(artBase(location.search, location.href)),
   go: (to) => {
     location.hash = to;
   },
@@ -105,7 +108,8 @@ let worldG: Grid = fixedGrid(1, 1, 1, 1);
 let hudG: Grid = fixedGrid(1, 1, 1, 1);
 let worldImage = worldCtx.createImageData(1, 1);
 let hudImage = hudCtx.createImageData(1, 1);
-let rows = 0;
+let layoutKey = "";
+let backdrop = "";
 
 function layoutKind(): "pip" | "phone" | "wide" {
   if (params.camp === "pip" || (innerHeight <= 240 && innerWidth <= 480)) return "pip";
@@ -126,9 +130,9 @@ function resize(): void {
   // On a phone the dock is a strip under the world; elsewhere it floats over the world's corner.
   const dockH = kind === "phone" && !params.bare ? Math.round(dock.height(unit) * dpr) : 0;
   const devH = fullH - dockH;
-  rows = scene.worldRows(devW, devH, clock());
-  worldG = worldGrid(devW, devH, rows, dpr);
   hudG = fixedGrid(devW, devH, hs, dpr);
+  layoutKey = scene.layoutKey?.() ?? "";
+  worldG = scene.grid({ devW, devH, dpr, phone: kind === "phone", hud: hudG }, clock());
   fitCanvas(worldCanvas, worldG);
   fitCanvas(hudCanvas, hudG);
   fitCanvas(fadeCanvas, hudG);
@@ -267,8 +271,13 @@ const perf = { total: 0, frames: 0, worst: 0 };
 
 function frame(): void {
   const t = clock();
-  // A level-up opens the world mid-ceremony: the canvas grows on the flash.
-  if (scene.worldRows(worldG.W * worldG.scale, worldG.H * worldG.scale, t) !== rows) resize();
+  // A scene's layout can change under it (the glade's bundle arriving).
+  if ((scene.layoutKey?.() ?? "") !== layoutKey) resize();
+  const colour = scene.pageColour?.() ?? "";
+  if (colour !== backdrop) {
+    backdrop = colour;
+    document.body.style.backgroundColor = colour;
+  }
   const started = params.perf ? performance.now() : 0;
   scene.render(t, new Uint32Array(worldImage.data.buffer), new Uint32Array(hudImage.data.buffer), fontsReady);
   if (params.perf) {

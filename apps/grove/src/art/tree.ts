@@ -735,15 +735,6 @@ export function blitPad(s: Surface, p: Pad, pruned: boolean, dx: number, map?: I
   s.blit(a.sprite, a.ox + dx, a.oy, map ? { map } : {});
 }
 
-/** Is the glade pixel (x, y) on this pad's foliage? */
-export function padHit(p: Pad, pruned: boolean, x: number, y: number): boolean {
-  const a = pruned ? p.pruned : p.art;
-  const px = Math.round(x - a.ox);
-  const py = Math.round(y - a.oy);
-  if (px < 0 || py < 0 || px >= a.sprite.w || py >= a.sprite.h) return false;
-  return (a.sprite.data[py * a.sprite.w + px] ?? 0) !== 0;
-}
-
 function finishTree(
   c: Ctx,
   stage: StageName,

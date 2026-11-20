@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun index.html",
-    "build": "bun build index.html --outdir dist --minify",
+    "dev": "bun dev.ts",
+    "build": "bun build index.html --outdir dist --minify && bun scripts/art.ts --build",
+    "art": "bun scripts/art.ts",
     "test": "bun test"
   },
   "devDependencies": {

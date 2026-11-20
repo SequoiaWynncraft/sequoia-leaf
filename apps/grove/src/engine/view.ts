@@ -1,8 +1,9 @@
 /**
  * How art sits on the screen. Every canvas is drawn at its art's own resolution and scaled up by a
- * whole number of device pixels with nearest filtering, so pixels stay square and sharp. The world
- * picks its scale from how many rows it wants (a seedling's glade is short and close); the HUD and
- * the menus keep one unit, as Minecraft's GUI scale does, so they stay one size everywhere.
+ * whole number of device pixels with nearest filtering, so pixels stay square and sharp. A scene's
+ * world picks its scale from how many rows it wants (the forest, the Campfire) or from the bundle's
+ * fixed picture (the glade, `bundle/fit.ts`); the HUD and the menus keep one unit, as Minecraft's
+ * GUI scale does, so they stay one size everywhere.
  */
 
 export interface Point {

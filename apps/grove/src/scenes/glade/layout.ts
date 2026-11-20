@@ -1,23 +1,14 @@
 /**
- * Where everything stands, from the art size alone. The art is as wide as the screen's aspect
- * makes it, so a phone in portrait gets a narrow glade and a desktop a wide one. Places are
- * measured from the tree and the edges, never eyeballed per screen.
- *
- * The world opens as your tree grows: a seedling's glade is drawn on a short canvas, so its pixels
- * are big and the camera sits close, in a nook between the redwoods with only a sliver of valley.
- * Each level up the canvas grows taller, until at level 6 the whole valley is in view. The HUD
- * keeps its own grid (`hudHeight`), so it stays the same size whatever the world's zoom.
+ * Where everything stands in the engine-drawn clearing, from the art size alone: the Campfire's
+ * scene, the forest's measures and the cone reveal's stage still use it until they move onto the
+ * art bundle as the glade has (the glade's own places are in `stage.ts`). The art is as wide as the
+ * screen's aspect makes it, so a phone in portrait gets a narrow clearing and a desktop a wide one.
  */
 
 export interface Point {
   x: number;
   y: number;
 }
-
-/** How tall the world's art is at each SEQ level, before rounding to a whole screen scale. */
-const ART_HEIGHT = [128, 140, 150, 166, 180, 216, 216, 216, 216, 216, 216, 216, 216];
-
-export const artHeight = (level: number): number => ART_HEIGHT[Math.max(0, Math.min(12, Math.round(level) - 1))] ?? 216;
 
 /**
  * The HUD's grid: this many of its pixels tall at every level. A phone in portrait gets a finer

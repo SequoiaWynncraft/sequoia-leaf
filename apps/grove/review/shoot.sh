@@ -10,6 +10,8 @@ build="$out/.build"
 mkdir -p "$out"
 rm -rf "$build"
 bun build index.html --outdir "$build" --minify >/dev/null
+# The art bundle (`bun run art`), served beside the page.
+[ -d public/grove-art ] && ln -s "$PWD/public/grove-art" "$build/grove-art"
 port=$((5400 + RANDOM % 400))
 bun review/serve.ts "$build" "$port" &
 server=$!

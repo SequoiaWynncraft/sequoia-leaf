@@ -1,2 +1,4 @@
 # The production build (`bun run build`).
 dist/
+# The art bundle, copied from the welcome authoring package by `bun run art`; generated, never committed.
+public/grove-art/

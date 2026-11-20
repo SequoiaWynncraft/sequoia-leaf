@@ -1,9 +1,11 @@
 /**
- * What every scene gives the app: the world it draws at its own zoom, the HUD it draws on the HUD's
- * grid, and how it answers taps and keys. The app owns the canvases, the clock, the routes, the
- * transitions and the menus; a scene owns everything inside its world.
+ * What every scene gives the app: where its world sits on the screen and at what scale, the world
+ * it draws there, the HUD it draws on the HUD's grid, and how it answers taps and keys. The app owns
+ * the canvases, the clock, the routes, the transitions, the menus and the art bundle; a scene owns
+ * everything inside its world.
  */
 
+import type { Art } from "../bundle/art.ts";
 import type { Grid, Point } from "../engine/view.ts";
 import type { Params } from "../game/params.ts";
 import type { Pull } from "../game/rules.ts";
@@ -17,6 +19,8 @@ export type PointerKind = "down" | "move" | "up" | "leave";
 export interface App {
   readonly params: Params;
   readonly store: Store;
+  /** The art bundle (`grove-art/`, or `?art=`). */
+  readonly art: Art;
   /** Go to a route (`glade`, `cones`, `spirits`...). */
   go(route: string): void;
   /** A short message in the mod's toast, read out to screen readers too. */
@@ -26,10 +30,24 @@ export interface App {
 /** One opened cone, as a scene plays it. */
 export type Opening = Pull & { verdant: boolean; fresh: boolean; count: number };
 
+/** The screen a scene lays its world out on, in device pixels (on a phone, above the dock). */
+export interface Screen {
+  devW: number;
+  devH: number;
+  dpr: number;
+  phone: boolean;
+  /** The HUD's grid, which the world keeps clear of where it must. */
+  hud: Grid;
+}
+
 export interface Scene {
   readonly id: SceneId;
-  /** How many art rows the world wants at `t` (the glade's grows with its level). */
-  worldRows(devW: number, devH: number, t: number): number;
+  /** The world's grid on this screen. */
+  grid(screen: Screen, t: number): Grid;
+  /** Changes when the world must be laid out again (the glade's bundle arriving, say). */
+  layoutKey?(): string;
+  /** The page's colour round the world, when the world does not fill the screen. */
+  pageColour?(): string;
   /** The grids changed: rebuild whatever depends on the screen's size. */
   resize(world: Grid, hud: Grid, t: number): void;
   /** One frame: the world into `world`, the HUD (on a transparent layer) into `hud`. */

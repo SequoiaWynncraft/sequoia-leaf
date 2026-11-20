@@ -13,6 +13,8 @@ export type CampLayout = "normal" | "pip" | "phone";
 export interface Params {
   // Everywhere.
   time: Time;
+  /** `time=` was given; otherwise the glade follows the member's clock. */
+  timeFromUrl: boolean;
   season: Season;
   /** Freeze the clock (at `t` seconds) so a screenshot is the same every time. */
   still: boolean;
@@ -37,8 +39,6 @@ export interface Params {
   rank: RankName;
   verdant: boolean;
   tool: Tool | null;
-  /** The hand-drawn glade sprites, large, for review. */
-  sheet: boolean;
   /** A care action already under way, `careT` seconds in, for stills. */
   care: Tool | null;
   careT: number;
@@ -88,6 +88,7 @@ export function readParams(search: string): Params {
   const burn = q.get("burn");
   return {
     time: time === "day" || time === "night" ? time : "dusk",
+    timeFromUrl: time !== null,
     season: season === "winter" ? "winter" : "normal",
     still,
     t: Number(q.get("t") ?? 2.6) || 0,
@@ -103,7 +104,6 @@ export function readParams(search: string): Params {
     rank: rank?.name ?? "Dryad",
     verdant: q.has("verdant"),
     tool: asTool(q.get("tool")),
-    sheet: q.has("sheet"),
     care: asTool(q.get("care")),
     careT: Number(q.get("caret") ?? 0.8),
     groot: groot === null ? 0 : Math.max(1, Math.min(9, Math.round(Number(groot)) || 3)),

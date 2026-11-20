@@ -28,7 +28,7 @@ import {
 import { buildLut, C, ix, type Lut, R } from "../../engine/palette.ts";
 import { compose, Light, type Sprite, sprite, Surface } from "../../engine/raster.ts";
 import { hashString, Rng } from "../../engine/rng.ts";
-import { between, type Grid, type Point } from "../../engine/view.ts";
+import { between, type Grid, type Point, worldGrid } from "../../engine/view.ts";
 import { FRIENDS } from "../../game/friends.ts";
 import type { CampLayout } from "../../game/params.ts";
 import { CONE_PRICE, openCone } from "../../game/rules.ts";
@@ -43,7 +43,7 @@ import { type Layout, layout } from "../glade/layout.ts";
 import { drawAurora } from "../reveal/aurora.ts";
 import { drawConeCardAt } from "../reveal/card.ts";
 import { beatOf, type ConeEvent, coneLook, coneScreen, drawConeWorld, rankColour, shakeFrame } from "../reveal/cone.ts";
-import type { App, PointerKind, Scene } from "../scene.ts";
+import type { App, PointerKind, Scene, Screen } from "../scene.ts";
 
 /** The last seat is yours. */
 const YOU = "You";
@@ -157,11 +157,10 @@ export class Campfire implements Scene {
     return dev.w < dev.h * 0.75 ? "phone" : "normal";
   }
 
-  worldRows(devW: number, devH: number): number {
-    const dpr = window.devicePixelRatio || 1;
+  grid({ devW, devH, dpr }: Screen): Grid {
     const pip = this.app.params.camp === "pip" || (devH <= 260 * dpr && devW <= 520 * dpr);
     // Closer in than the glade: the fire and the people round it are the picture.
-    return pip ? 84 : devW < devH * 0.75 ? 240 : 216;
+    return worldGrid(devW, devH, pip ? 84 : devW < devH * 0.75 ? 240 : 216, dpr);
   }
 
   busy(): boolean {

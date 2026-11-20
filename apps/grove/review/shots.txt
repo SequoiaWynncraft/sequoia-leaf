@@ -1,7 +1,7 @@
 # The slice's screenshots: <name> <width> <height> <query#route>. Run: review/shoot.sh <outdir> < review/shots.txt
 # Every route, desktop and phone.
-glade-desktop 1440 900 ?still&level=9#glade
-glade-phone 390 844 ?still&level=9#glade
+glade-desktop 1440 900 ?still&level=9&time=dusk#glade
+glade-phone 390 844 ?still&level=9&time=dusk#glade
 forest-desktop 1440 900 ?still&at=905#forest
 forest-phone 390 844 ?still&at=935#forest
 campfire-desktop 1440 900 ?still#campfire
@@ -28,20 +28,21 @@ campfire-pip-burning 320 180 ?still&camp=pip&burn=1.2&rank=Treant#campfire
 campfire-pip-result 320 180 ?still&camp=pip&burn=4.6&rank=Treant#campfire
 campfire-joke 1440 900 ?still&joke#campfire
 campfire-night 1440 900 ?still&time=night&burn=3.0&rank=Yggdrasil#campfire
-# The glade's moments, as the lab shot them.
-glade-l01 1440 900 ?still&level=1&greet#glade
-glade-l13 1440 900 ?still&level=13#glade
-glade-winter 1440 900 ?still&level=9&season=winter#glade
-glade-night 1440 900 ?still&level=9&time=night#glade
-glade-day 1440 900 ?still&level=9&time=day#glade
-glade-groot 1440 900 ?still&level=7&groot=3&t=2.15#glade
-glade-levelup 1440 900 ?still&level=6&levelup&t=2.95#glade
-glade-levelup-gg 1440 900 ?still&level=6&levelup&t=5.6#glade
-glade-cone-ygg-aurora 1440 900 ?still&level=9&scene=cone&rank=Yggdrasil&conet=5.0#glade
-glade-cone-ygg-card 1440 900 ?still&level=9&scene=cone&rank=Yggdrasil&conet=6.6#glade
-glade-cone10-row 1440 900 ?still&level=9&scene=cone10&rank=Treant&t=4.55#glade
-glade-cone10-grid 1440 900 ?still&level=9&scene=cone10&rank=Treant&t=7.0#glade
-glade-phone-l01 390 844 ?still&level=1&greet#glade
+# The glade on the art bundle (`bun run art` first): levels by light and season, desktop and phone.
+glade-l01 1280 720 ?still&nogreet&level=1&time=dusk#glade
+glade-l06-night 1280 720 ?still&nogreet&level=6&time=night#glade
+glade-l13-winter 1280 720 ?still&nogreet&level=13&time=dusk&season=winter#glade
+glade-phone-l01 390 844 ?still&level=1&time=dusk&greet#glade
+glade-phone-l13-night 390 844 ?still&nogreet&level=13&time=night#glade
+# The glade's moments.
+glade-groot 1440 900 ?still&nogreet&level=7&time=dusk&groot=3&t=2.15#glade
+glade-levelup 1440 900 ?still&nogreet&level=6&time=dusk&levelup&t=3.75#glade
+glade-levelup-gg 1440 900 ?still&nogreet&level=6&time=dusk&levelup&t=5.6#glade
+glade-cone-treant 1440 900 ?still&nogreet&level=9&time=dusk&scene=cone&rank=Treant&conet=2.85#glade
+glade-cone-ygg-card 1440 900 ?still&nogreet&level=9&time=dusk&scene=cone&rank=Yggdrasil&conet=6.6#glade
+glade-cone10-row 1440 900 ?still&nogreet&level=9&time=dusk&scene=cone10&rank=Treant&t=4.55#glade
+glade-cone10-grid 1440 900 ?still&nogreet&level=9&time=dusk&scene=cone10&rank=Treant&t=7.0#glade
+glade-care-water 1440 900 ?still&nogreet&level=8&time=dusk&care=water&caret=0.8#glade
 # The forest's moments, now with the shared cast.
 forest-pond 1440 900 ?still&at=pond#forest
 forest-swamp 1440 900 ?still&at=swamp#forest
