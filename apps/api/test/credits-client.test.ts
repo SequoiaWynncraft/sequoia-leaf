@@ -65,6 +65,7 @@ describe("readCredits", () => {
       {
         kind: "raid",
         sourceKey: `raid:4812:${ALICE}`,
+        eventKey: "raid:4812",
         playerId: ALICE,
         occurredAt: Date.parse("2026-11-02T00:01:30Z"),
         seasonRating: 110,
@@ -74,6 +75,7 @@ describe("readCredits", () => {
       {
         kind: "war",
         sourceKey: `war:977:${ALICE}`,
+        eventKey: "war:977",
         playerId: ALICE,
         occurredAt: Date.parse("2026-11-02T00:03:10Z"),
         seasonRating: 60,

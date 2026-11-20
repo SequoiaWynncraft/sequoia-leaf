@@ -35,6 +35,7 @@ function war(id: number, player: PlayerId, occurredAt: number): Activity {
   return {
     kind: "war",
     sourceKey: `war:${id}:${player}`,
+    eventKey: `war:${id}`,
     playerId: player,
     occurredAt,
     seasonRating: 60,

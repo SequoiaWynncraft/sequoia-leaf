@@ -51,6 +51,7 @@ function raid(occurredAt: number, key: RaidKey = "tna", seasonRating = 110): Act
   return {
     kind: "raid",
     sourceKey: `raid:${nextId}:${alice}`,
+    eventKey: `raid:${nextId}`,
     playerId: alice,
     occurredAt,
     seasonRating,
@@ -64,6 +65,7 @@ function war(occurredAt: number): Activity {
   return {
     kind: "war",
     sourceKey: `war:${nextId}:${alice}`,
+    eventKey: `war:${nextId}`,
     playerId: alice,
     occurredAt,
     seasonRating: 60,

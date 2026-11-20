@@ -29,6 +29,7 @@ export function raid(id: number, player: PlayerId, occurredAt: number, seasonRat
   return {
     kind: "raid",
     sourceKey: `raid:${id}:${player}`,
+    eventKey: `raid:${id}`,
     playerId: player,
     occurredAt,
     seasonRating,

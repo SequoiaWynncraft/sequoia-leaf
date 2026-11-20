@@ -48,6 +48,7 @@ function raidActivity(row: typeof RaidCredit.Type): Activity {
   return {
     kind: "raid",
     sourceKey: `raid:${row.completion_id}:${row.player_uuid}`,
+    eventKey: `raid:${row.completion_id}`,
     playerId: row.player_uuid,
     occurredAt: row.completed_at,
     seasonRating: row.season_rating,
@@ -64,6 +65,7 @@ function warActivity(row: typeof WarCredit.Type): Activity[] {
   const war = {
     kind: "war",
     sourceKey: `war:${row.war_submission_id}:${row.player_uuid}`,
+    eventKey: `war:${row.war_submission_id}`,
     playerId: row.player_uuid,
     occurredAt: row.completed_at,
     seasonRating: row.season_rating,

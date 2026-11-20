@@ -21,6 +21,7 @@ function war(id: number, player: PlayerId, occurredAt: number, warPoints: number
   const activity: Activity = {
     kind: "war",
     sourceKey: `war:${id}:${player}`,
+    eventKey: `war:${id}`,
     playerId: player,
     occurredAt,
     seasonRating: 60,

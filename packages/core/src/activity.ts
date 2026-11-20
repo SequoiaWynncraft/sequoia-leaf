@@ -24,6 +24,11 @@ interface ActivityBase {
    * Recording the same key twice records the activity once.
    */
   readonly sourceKey: string;
+  /**
+   * Identifies the event itself, the same for everyone who took part, such as
+   * `raid:4812` for one party's run of a raid or `war:977` for one war.
+   */
+  readonly eventKey: string;
   readonly playerId: PlayerId;
   /** When the event happened, in milliseconds since the Unix epoch. */
   readonly occurredAt: number;

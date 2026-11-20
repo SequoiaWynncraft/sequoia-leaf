@@ -5,7 +5,7 @@ import { playerId } from "./player.ts";
 import { DEFAULT_RULES, leafForActivity } from "./rules.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
-const base = { sourceKey: "x", playerId: alice, occurredAt: 1_000 };
+const base = { sourceKey: "x", eventKey: "x", playerId: alice, occurredAt: 1_000 };
 
 function raid(seasonRating: number): Activity {
   return { ...base, kind: "raid", raid: "tna", raidName: "The Nameless Anomaly", seasonRating };
