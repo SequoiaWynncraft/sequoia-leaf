@@ -310,9 +310,10 @@ Its numbers are `grove` in `packages/core/src/rules.ts` and its rules are
 
 Each write names the request it answers with a `request_id` the client makes,
 such as a UUID (letters, digits, `-` and `_`, up to 64). Sending a request
-again does what it did once and answers as it did: a purchase spends once
-(`cone:<player>:<request>` in the ledger), and an opening answers with the cones
-it opened the first time. The same id with a different body is refused.
+again does what it did once: a purchase spends once (`cone:<player>:<request>`
+in the ledger) and a care spends one charge. A retried opening answers with the
+cones it opened the first time; a retried care or purchase answers with how
+things stand now. The same id with a different body is refused.
 
 A body the route doesn't take gets 400 `invalid_request`. Leaf refuses with 409,
 changing nothing, and one of these codes:

@@ -63,8 +63,8 @@ export const enterGrove = Effect.fn("enterGrove")(function* (visitor: Visitor, n
 
 /**
  * Gives the tree care with a tool: spends a charge and adds Bloom, which gives
- * a cone when it fills. A request sent again changes nothing and answers as
- * the first did.
+ * a cone when it fills. A request sent again changes nothing, and answers
+ * with the charges and Bloom as they are now.
  */
 export const careForTree = Effect.fn("careForTree")(function* (
   visitor: Visitor,
