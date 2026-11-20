@@ -72,12 +72,14 @@ waiting.
 ## How the Forest is drawn
 
 The Forest (`src/scenes/forest/`) is the bundle's valley (`grove/forest.py`): ground 1024 pixels wide
-and 144 tall, the Great Sequoia at its heart (512), the crab pond at 788 and the "Do Not The Farm"
-sign at the gate (905). It has no loop; its still layers slide at their depths as the camera pans
-(`valley.ts`): a layer at depth f is `256 + 768f` wide and starts `(cx - 128)f` pixels in, for a
-camera centred on ground x `cx` from 128 to 896. Each frame (`forest.ts`):
+and 144 tall. Along it stand the Swamp memorial at the west end, the Great Sequoia at the heart
+(512), the crab pond (736), the stall (the Trading Post) and the "Do Not The Farm" sign at the gate
+(905). It has no loop; its still layers slide at their depths as the camera pans (`valley.ts`): a
+layer at depth f is `256 + 768f` wide and starts `(cx - 128)f` pixels in, for a camera centred on
+ground x `cx` from 128 to 896. Each frame (`forest.ts`):
 
-1. `far` (the sky and the far valley, opaque, depth 0.35), and a war's pennant on its ridge;
+1. `far` (the drawn far valley and its sky, opaque, depth 0.5), the guild's sun pennant waving on its
+   ridge (the manifest's `pennant`), and a war's pennant raised on another ridge top;
 2. `ground` (depth 1), with the lanterns hung in the Great Sequoia's canopy on the manifest's
    `hooks` (where its underside has open air);
 3. the members' trees from the two row atlases (`trees-<row>-<season>-<ambiance>.png`, boxes in
@@ -88,16 +90,20 @@ camera centred on ground x `cx` from 128 to 896. Each frame (`forest.ts`):
 
 Members stand on the manifest's spots, which run nearest the heart first: the highest trees take
 the nearest, the older member first among equals, so the same roster always lands the same way
-(`plant`). The bundle has 42 spots, none in the pond and none where a tree could reach over the
-sign, so the prototype's 70 members show their 42 highest. A tree is tapped by its own pixels in
-the atlas. The Great Sequoia opens its menu (`#great`), its hollow leads to the Campfire; the pond,
-a crab, No. 08 and the sign have tooltips. Each place answers taps in its box from the manifest's
-`places`, and the crabs amble on its `crabs` spots: the client measures none of them itself. A phone sees a crop of
-the picture that slides on past the camera's range, so it reaches the valley's ends too.
+(`plant`). The bundle has 31 spots: none in the pond, none where a tree could reach over the sign,
+and none where a tree would cover the Swamp or the stall. The prototype's 70 members show their 31
+highest. A tree is tapped by its own pixels in the atlas.
+
+The Great Sequoia opens its menu (`#great`) and its hollow leads to the Campfire. The Swamp ("Held
+for two years"), the pond, a crab, No. 08, the stall ("Trading Post · coming soon", where a member
+marketplace will live) and the sign have tooltips. Each place answers taps in its box from the
+manifest's `places`, and the crabs amble on its `crabs` spots: the client measures none of them
+itself. A phone sees a crop of the picture that slides on past the camera's range, so it reaches
+the valley's ends too.
 
 Moments, in the welcome's vocabulary with the bundle's props: a raid lights the party's four trees,
 and their lights drift to the Great Sequoia and become one `lantern` hanging there; a war win
-raises the gold `pennant` on the far ridge (the manifest's `ridge`, in the far layer's pixels)
+raises a second sun `pennant` on the far ridge (the manifest's `ridge`, in the far layer's pixels)
 while falling leaves spell S E Q; a guild level-up lifts
 `sky-lantern`s; the anniversary's `crab` and `crab-08` dance at the pond under fairy lights.
 Fireflies (not in winter), falling leaves and snow (in winter) are the ambient life.
@@ -105,10 +111,10 @@ Fireflies (not in winter), falling leaves and snow (in winter) are the ambient l
 ## How the Campfire is drawn
 
 The Campfire (`src/scenes/campfire/`) plays `campfire/campfire-<season>-<ambiance>.gif`, the
-welcome's clearing with a fire, two seat logs and the grove cat asleep on its stump, composed as
-the glade is, with the glade's near masks. Everyone in the call sits on the manifest's `seats` in
-order (`seats.ts`), as their companion spirit facing the fire (those right of it mirrored), warmed
-by it, idle with a happy hop now and then, a nametag just over each head in the HUD (the cast's
+welcome's clearing with the drawn fire ring, two seat logs and the grove cat asleep on its stump,
+composed as the glade is, with the glade's near masks. Everyone in the call sits on the manifest's
+`seats` in order (the logs' seat points, then the standing spots; `seats.ts`), as their companion
+spirit facing the fire (those right of it mirrored), warmed by it, idle with a happy hop now and then, a nametag just over each head in the HUD (the cast's
 `head` row), clear of the others and of the screen's sides. The burn queue's `cone` is thrown from
 the burner's paws into the `fire`, where it sinks behind the ring's front stones (the `front` mask)
 and opens as the glade's cones do, and the spirit lands on the manifest's `landing`, clear of every
@@ -150,25 +156,25 @@ numbers that tune the game live in `src/game/rules.ts`.
 
 ## URL parameters
 
-| Parameter                                          | Where    | Meaning                                                        |
-| -------------------------------------------------- | -------- | -------------------------------------------------------------- |
-| `art=`                                             | all      | Where the art bundle is (default `grove-art/` beside the page) |
-| `time=dusk\|day\|night`, `season=normal\|winter`   | all      | The light and season; by default the clock and the date        |
-| `still`, `t=`                                      | all      | Freeze the clock at `t` seconds                                |
-| `perf`                                             | all      | Mean and worst render ms in `document.body.dataset`            |
-| `bare`                                             | all      | No HUD or dock                                                 |
-| `debug`                                            | all      | The forest's event buttons; `window.grove` for drivers         |
-| `reset`                                            | all      | Start the saved state afresh                                   |
-| `level=1..13`, `seed=`, `xp=`                      | glade    | Your tree's level and variant (`seed`); the XP bar             |
-| `scene=cone\|cone10`, `conet=`, `rank=`, `verdant` | glade    | A cone opening (or ten) on load                                |
-| `groot=N`, `levelup`, `greet`, `nogreet`           | glade    | Raids watering the tree; the level-up ceremony; the greeting   |
-| `tool=`, `care=`, `caret=`                         | glade    | A tool in hand; care under way                                 |
-| `at=heart\|pond\|gate\|west\|east` or a ground x   | forest   | Where the camera looks                                         |
-| `event=raid\|war\|levelup`, `et=`                  | forest   | A guild moment and how far into it                             |
-| `anniversary`, `me=`, `tip=`                       | forest   | The crab rave; whose tree is yours; a member's tooltip open    |
-| `look=great\|hollow\|pond\|no8\|farm`              | forest   | A place's tooltip open on load                                 |
-| `camp=normal\|pip\|phone`                          | campfire | Force a layout (by default the window picks it)                |
-| `burn=`, `rank=`, `joke`                           | campfire | A cone this many seconds into burning; the cat's joke          |
+| Parameter                                                      | Where    | Meaning                                                        |
+| -------------------------------------------------------------- | -------- | -------------------------------------------------------------- |
+| `art=`                                                         | all      | Where the art bundle is (default `grove-art/` beside the page) |
+| `time=dusk\|day\|night`, `season=normal\|winter`               | all      | The light and season; by default the clock and the date        |
+| `still`, `t=`                                                  | all      | Freeze the clock at `t` seconds                                |
+| `perf`                                                         | all      | Mean and worst render ms in `document.body.dataset`            |
+| `bare`                                                         | all      | No HUD or dock                                                 |
+| `debug`                                                        | all      | The forest's event buttons; `window.grove` for drivers         |
+| `reset`                                                        | all      | Start the saved state afresh                                   |
+| `level=1..13`, `seed=`, `xp=`                                  | glade    | Your tree's level and variant (`seed`); the XP bar             |
+| `scene=cone\|cone10`, `conet=`, `rank=`, `verdant`             | glade    | A cone opening (or ten) on load                                |
+| `groot=N`, `levelup`, `greet`, `nogreet`                       | glade    | Raids watering the tree; the level-up ceremony; the greeting   |
+| `tool=`, `care=`, `caret=`                                     | glade    | A tool in hand; care under way                                 |
+| `at=heart\|swamp\|pond\|stall\|gate\|west\|east` or a ground x | forest   | Where the camera looks                                         |
+| `event=raid\|war\|levelup`, `et=`                              | forest   | A guild moment and how far into it                             |
+| `anniversary`, `me=`, `tip=`                                   | forest   | The crab rave; whose tree is yours; a member's tooltip open    |
+| `look=great\|hollow\|swamp\|pond\|no8\|stall\|farm`            | forest   | A place's tooltip open on load                                 |
+| `camp=normal\|pip\|phone`                                      | campfire | Force a layout (by default the window picks it)                |
+| `burn=`, `rank=`, `joke`                                       | campfire | A cone this many seconds into burning; the cat's joke          |
 
 `time=day` is dusk: the bundle has dusk and night. With `?debug`, the forest's buttons (and the
 keys `r`, `w`, `l`, `a`) play a raid, a war win, a level-up and the rave; `f` finds your tree.
