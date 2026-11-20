@@ -2,9 +2,11 @@
  * The Forest, the guild's valley round the Great Sequoia, composed from the art bundle's still
  * parallax layers (grove/forest.py) the way the welcome renderer composes a frame:
  *
- *   1. the far valley and its sky (opaque), at depth 0.35, and a war's pennant on its ridge;
- *   2. the ground at depth 1: the floor, the Great Sequoia at the heart with the lanterns hung in
- *      its canopy, the crab pond and the "Do Not The Farm" sign at the gate;
+ *   1. the drawn far valley and its sky (opaque) at its depth, the guild's sun pennant waving on
+ *      its ridge, and a war's pennant raised beside it;
+ *   2. the ground at depth 1: the floor, the Swamp memorial at the west end, the Great Sequoia at
+ *      the heart with the lanterns hung in its canopy, the crab pond, the stall (the Trading Post)
+ *      and the "Do Not The Farm" sign at the gate;
  *   3. the members' trees from the row atlases, the back row then the front, each on its spot;
  *   4. the crabs, the moments and the ambient life, in the welcome's vocabulary (`moments.ts`);
  *   5. the near ferns and the welcome's giant trunks at depth 1.3, over everything;
@@ -12,8 +14,8 @@
  *
  * The picture is the bundle's 256x144 at a whole-pixel scale (`bundle/fit.ts`); a phone shows a
  * crop of it, and its crop slides on past the camera's range so it reaches the valley's ends
- * (`valley.ts`). Drag or swipe to pan; tap a tree, the Great Sequoia, its hollow, the pond, a crab
- * or the sign.
+ * (`valley.ts`). Drag or swipe to pan; tap a tree, the Great Sequoia, its hollow, the Swamp, the
+ * pond, a crab, the stall or the sign.
  */
 
 import type { Pixels } from "../../bundle/art.ts";
@@ -64,10 +66,12 @@ import { layerOffset, look, lookRange, plant, type Planted, toGround, toPicture 
 const PICTURE = { w: 256, h: 144 };
 /** The page round the picture before its first frame: the HUD's dark. */
 const DARK = "#150f0d";
+/** A pennant that has long since risen (`drawPennant`'s seconds since its moment began). */
+const RAISED = 99;
 /** How many lanterns already hang in the Great Sequoia this week. */
 const WEEK_LANTERNS = 3;
 
-type PlaceId = "great" | "hollow" | "pond" | "no8" | "farm";
+type PlaceId = "great" | "hollow" | "swamp" | "pond" | "no8" | "stall" | "farm";
 type Target = { kind: "tree"; id: number } | { kind: "place"; id: PlaceId };
 
 interface Moment {
@@ -300,10 +304,11 @@ export class Forest implements Scene {
     const m = this.moment;
     const e = m ? t - m.t0 : -1;
 
-    // 1. The far valley, and a war's pennant on its ridge.
+    // 1. The far valley, the guild's sun pennant on its ridge, and a war's pennant raised beside it.
     pic.layer(far, layerOffset(cx, f.layers.far.depth, view), true);
+    drawPennant(stage, f.pennant, RAISED, t, f.layers.far.depth);
     if (m?.kind === "war") drawPennant(stage, f.ridge, e, t, f.layers.far.depth);
-    else if (this.warDone) drawPennant(stage, f.ridge, 99, t, f.layers.far.depth);
+    else if (this.warDone) drawPennant(stage, f.ridge, RAISED, t, f.layers.far.depth);
 
     // 2. The ground, and the lanterns in the Great Sequoia.
     pic.layer(ground, layerOffset(cx, 1, view));
@@ -663,7 +668,7 @@ export class Forest implements Scene {
       gx >= 0 &&
       gx < ground.w &&
       (ground.data[Math.round(y) * ground.w + Math.round(gx)] ?? 0) >>> 24 >= 128;
-    for (const id of ["hollow", "farm", "great", "pond"] as const) {
+    for (const id of ["hollow", "farm", "stall", "swamp", "great", "pond"] as const) {
       const r = placeRect(id, f, this.crabs);
       if (gx >= r.x0 && gx < r.x1 && y >= r.y0 && y < r.y1 && (solid || id === "hollow")) return { kind: "place", id };
     }
@@ -854,12 +859,22 @@ export class Forest implements Scene {
 // ---------------------------------------------------------------------------------------------
 // The valley's places.
 
-const PLACES = ["great", "hollow", "pond", "no8", "farm"] as const;
+const PLACES = ["great", "hollow", "swamp", "pond", "no8", "stall", "farm"] as const;
 const isPlace = (s: string): s is PlaceId => PLACES.some((p) => p === s);
 
-/** `?at=`: a named place (`heart`, `pond`, `gate`, `west`, `east`) or a ground x. */
+const middle = (r: Rect): number => Math.round((r.x0 + r.x1) / 2);
+
+/** `?at=`: a named place (`heart`, `swamp`, `pond`, `stall`, `gate`, `west`, `east`) or a ground x. */
 export function placeX(name: string, f: ForestManifest): number | null {
-  const named: Record<string, number> = { heart: f.heart, pond: f.pond, gate: f.gate, west: 0, east: f.width };
+  const named: Record<string, number> = {
+    heart: f.heart,
+    swamp: middle(f.places.swamp),
+    pond: f.pond,
+    stall: middle(f.places.stall),
+    gate: f.gate,
+    west: 0,
+    east: f.width,
+  };
   if (name in named) return named[name] ?? null;
   const n = Number(name);
   return name !== "" && Number.isFinite(n) ? n : null;
@@ -867,7 +882,7 @@ export function placeX(name: string, f: ForestManifest): number | null {
 
 /**
  * Where each place answers a tap, on the ground: the bundle's own boxes for the Great Sequoia, its
- * hollow, the pond and the sign, and No. 08 round where it stands.
+ * hollow, the Swamp, the pond, the stall and the sign, and No. 08 round where it stands.
  */
 function placeRect(id: PlaceId, f: ForestManifest, crabs: readonly Crab[]): Rect {
   if (id !== "no8") return f.places[id];
@@ -923,6 +938,16 @@ const PLACE_INFO: Record<PlaceId, { title: string; colour: Rgb; lines: { text: s
     title: "Do Not The Farm",
     colour: GOLD,
     lines: [{ text: "Guild policy.", colour: UI.lore }],
+  },
+  stall: {
+    title: "Trading Post",
+    colour: GOLD,
+    lines: [{ text: "Coming soon", colour: UI.lore }],
+  },
+  swamp: {
+    title: "The Swamp",
+    colour: GOLD,
+    lines: [{ text: "Held for two years", colour: UI.lore }],
   },
 };
 

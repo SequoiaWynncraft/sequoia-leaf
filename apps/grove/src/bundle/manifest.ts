@@ -53,17 +53,17 @@ export interface Point {
   y: number;
 }
 
-/** The Campfire (grove/campfire.py): the welcome's clearing with a fire, two seat logs and the cat. */
+/** The Campfire (grove/campfire.py): the welcome's clearing with the drawn fire ring, two seat logs, the stump and the cat. */
 export interface CampfireManifest {
   /** By `{season}` and `{ambiance}`: 160 frames, as the glade's loops. */
   loop: string;
   /** The near mask, by `{season}` (the glade's own). */
   near: string;
-  /** The fire's foot, where cones burn. */
+  /** The fire's foot, where cones burn: the ring's flame origin. */
   fire: Point;
-  /** Where friends sit, each a point on a log or the ground (its foot row), in the bundle's order. */
+  /** Where friends sit, each a log's seat point or a standing spot (its foot row), in the bundle's order. */
   seats: Point[];
-  /** The grove cat, asleep on its stump. */
+  /** The grove cat, asleep on its stump: the stump's perch, where the cat lies. */
   cat: Point;
   /** Where the spirit out of a burned cone lands, clear of every seat. */
   landing: Point;
@@ -79,8 +79,8 @@ export interface Rect {
   y1: number;
 }
 
-/** The Forest's places a tap answers: the Great Sequoia, its hollow, the pond and the sign. */
-export type PlaceName = "great" | "hollow" | "pond" | "farm";
+/** The Forest's places a tap answers: the Great Sequoia, its hollow, the Swamp memorial, the pond, the stall and the sign. */
+export type PlaceName = "great" | "hollow" | "swamp" | "pond" | "stall" | "farm";
 
 /** Where a lantern hangs in the Great Sequoia: a column under its canopy, the canopy's underside there, its cord. */
 export interface Hook {
@@ -127,7 +127,7 @@ export interface ForestManifest {
   heart: number;
   pond: number;
   gate: number;
-  /** `far` (opaque: the sky and the far valley), `ground` and `near`. */
+  /** `far` (opaque: the drawn far valley and its sky), `ground` and `near`. */
   layers: { far: ForestLayer; ground: ForestLayer; near: ForestLayer };
   rows: ForestRow[];
   /** Where members' trees stand, nearest the heart first. */
@@ -144,7 +144,9 @@ export interface ForestManifest {
   places: Record<PlaceName, Rect>;
   /** Where lanterns hang in the Great Sequoia, nearest the heart first. */
   hooks: Hook[];
-  /** Where the war pennant stands on the far ridge, in the far layer's own pixels. */
+  /** Where the guild's sun pennant stands on the far ridge, in the far layer's own pixels (its pole's foot). */
+  pennant: Point;
+  /** Where a war win raises another pennant on the far ridge, in the far layer's own pixels. */
   ridge: Point;
   /** Where the crabs amble. */
   crabs: CrabSpot[];
@@ -365,8 +367,16 @@ function readForest(f: Record<string, unknown>): ForestManifest {
       x: int(field(great, "x", "forest.great"), "forest.great.x"),
       w: int(field(great, "w", "forest.great"), "forest.great.w"),
     },
-    places: { great: place("great"), hollow: place("hollow"), pond: place("pond"), farm: place("farm") },
+    places: {
+      great: place("great"),
+      hollow: place("hollow"),
+      swamp: place("swamp"),
+      pond: place("pond"),
+      stall: place("stall"),
+      farm: place("farm"),
+    },
     hooks: list(field(f, "hooks", "forest"), "forest.hooks", hook),
+    pennant: pair(field(f, "pennant", "forest"), "forest.pennant"),
     ridge: pair(field(f, "ridge", "forest"), "forest.ridge"),
     crabs: list(field(f, "crabs", "forest"), "forest.crabs", crab),
     index,

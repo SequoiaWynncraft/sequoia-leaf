@@ -7,8 +7,8 @@
  *
  * - A raid: the party's four trees light up, a light rises from each and drifts to the Great
  *   Sequoia, and the four become one lantern hanging in its canopy, glowing warm.
- * - A war win: the gold pennant rises on the far ridge (in the far layer's parallax) while falling
- *   leaves spell S E Q.
+ * - A war win: a second sun pennant rises on the far ridge beside the guild's own (in the far
+ *   layer's parallax) while falling leaves spell S E Q.
  * - A guild level-up: sky lanterns lift from the Great Sequoia and the trees into the sky.
  * - The anniversary: the crabs rave at the pond under coloured lights.
  */
@@ -178,8 +178,10 @@ export function warCamera(e: number, from: number, ridgeCx: number): number {
 }
 
 /**
- * The gold pennant rising on the far ridge (the bundle's ridge point, in the far layer's own pixels,
- * drawn in its parallax), then flying.
+ * A sun pennant on the far ridge (the bundle's drawn `pennant` prop, standing on a ridge point in
+ * the far layer's own pixels, drawn in its parallax): rising from behind the ridge `e` seconds
+ * into its moment, then flying, its frames waving at their own pace. One long risen stands there
+ * always, the guild's own.
  */
 export function drawPennant(s: Stage, ridge: Point, e: number, t: number, farDepth: number): void {
   const x = s.at(ridge.x, farDepth);
@@ -201,13 +203,15 @@ export function drawPennant(s: Stage, ridge: Point, e: number, t: number, farDep
     }
   }
   const since = e - 2.5;
+  // The flag flies from the pole's top.
+  const flag = { x: x + Math.ceil(f.w / 2), y: ridge.y - f.h + 3 };
   if (since > 0 && since < 0.9)
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2;
       const rr = 3 + since * 12;
       s.pic.sparkle(
-        x + 5 + Math.cos(a) * rr,
-        ridge.y - 9 + Math.sin(a) * rr * 0.7,
+        flag.x + Math.cos(a) * rr,
+        flag.y + Math.sin(a) * rr * 0.7,
         sparkleStage(since / 0.9, false),
         s.ink.c("star"),
         s.ink.c("ring_gold_light"),

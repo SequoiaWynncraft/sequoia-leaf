@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { readCast, stepAt } from "../src/bundle/cast.ts";
 import { fitPicture, HUD_BAR } from "../src/bundle/fit.ts";
 import { ambianceAt, fill, pickGlade, readManifest, variantOf } from "../src/bundle/manifest.ts";
 import { Ink, moonlit, packHex } from "../src/bundle/palette.ts";
@@ -31,10 +32,10 @@ const MANIFEST = {
     near: "glade/near-{season}.png",
     fire: [128, 129],
     seats: [
-      { x: 90, y: 131 },
-      { x: 151, y: 131 },
+      { x: 88, y: 126 },
+      { x: 151, y: 126 },
     ],
-    cat: [76, 128],
+    cat: [72, 126],
     landing: [128, 142],
     front: "campfire/fire-front.png",
   },
@@ -42,38 +43,41 @@ const MANIFEST = {
     width: 1024,
     heart: 512,
     height: 144,
-    pond: 788,
+    pond: 736,
     gate: 905,
-    layers: { far: { depth: 0.35, width: 525 }, ground: { depth: 1, width: 1024 }, near: { depth: 1.3, width: 1255 } },
+    layers: { far: { depth: 0.5, width: 640 }, ground: { depth: 1, width: 1024 }, near: { depth: 1.3, width: 1255 } },
     rows: [
-      { name: "back", scale: 0.5, foot: 117, haze: 0.42 },
+      { name: "back", scale: 0.5, foot: 117, haze: 0.3 },
       { name: "front", scale: 0.72, foot: 128, haze: 0 },
     ],
     spots: [
-      { row: "front", x: 591 },
-      { row: "back", x: 441 },
+      { row: "front", x: 586 },
+      { row: "back", x: 594 },
     ],
     seasons: ["normal"],
     ambiances: ["dusk", "night"],
     layer: "forest/{layer}-{season}-{ambiance}.png",
     trees: "forest/trees-{row}-{season}-{ambiance}.png",
-    great: { x: 437, w: 150, seam: 512 },
+    great: { x: 439, w: 150, seam: 512 },
     places: {
-      great: [437, 0, 587, 117],
-      hollow: [497, 107, 519, 132],
-      pond: [705, 91, 868, 128],
+      great: [439, 0, 589, 117],
+      hollow: [502, 99, 522, 132],
+      swamp: [72, 84, 151, 134],
+      pond: [653, 91, 816, 128],
+      stall: [822, 90, 870, 130],
       farm: [874, 102, 936, 133],
     },
     hooks: [
-      { x: 540, y: 11, cord: 6 },
-      { x: 482, y: 19, cord: 4 },
+      { x: 547, y: 15, cord: 6 },
+      { x: 471, y: 15, cord: 4 },
     ],
-    ridge: [206, 78],
+    pennant: [259, 80],
+    ridge: [460, 80],
     crabs: [
-      { x: 724, foot: 132, numbered: false },
+      { x: 672, foot: 132, numbered: false },
       { x: 945, foot: 131, numbered: true },
     ],
-    "index-normal": { back: { "L13-v2": [0, 0, 52, 87, 21, 83] }, front: { "L01-v0": [630, 123, 9, 11, 4, 8] } },
+    "index-normal": { back: { "L13-v2": [82, 0, 40, 75, 18, 75] }, front: { "L01-v0": [438, 109, 6, 7, 3, 7] } },
   },
   later: { anything: true },
 };
@@ -97,10 +101,10 @@ describe("the bundle's manifest", () => {
     const c = readManifest(MANIFEST).campfire;
     expect(c?.fire).toEqual({ x: 128, y: 129 });
     expect(c?.seats).toEqual([
-      { x: 90, y: 131 },
-      { x: 151, y: 131 },
+      { x: 88, y: 126 },
+      { x: 151, y: 126 },
     ]);
-    expect(c?.cat).toEqual({ x: 76, y: 128 });
+    expect(c?.cat).toEqual({ x: 72, y: 126 });
     expect(c?.landing).toEqual({ x: 128, y: 142 });
     expect(c?.front).toBe("campfire/fire-front.png");
     expect(c?.near).toBe("glade/near-{season}.png");
@@ -112,17 +116,26 @@ describe("the bundle's manifest", () => {
     expect(g.front).toBe("glade/hearth-front.png");
   });
 
-  test("reads the Forest's places, lantern hooks, ridge and crabs rather than guessing them", () => {
+  test("reads the Forest's places, lantern hooks, ridge points and crabs rather than guessing them", () => {
     const f = readManifest(MANIFEST).forest;
-    expect(f?.places.pond).toEqual({ x0: 705, y0: 91, x1: 868, y1: 128 });
+    expect(f?.places.pond).toEqual({ x0: 653, y0: 91, x1: 816, y1: 128 });
     expect(f?.places.farm).toEqual({ x0: 874, y0: 102, x1: 936, y1: 133 });
-    expect(f?.hooks[0]).toEqual({ x: 540, y: 11, cord: 6 });
-    expect(f?.ridge).toEqual({ x: 206, y: 78 });
+    expect(f?.places.stall).toEqual({ x0: 822, y0: 90, x1: 870, y1: 130 });
+    expect(f?.places.swamp).toEqual({ x0: 72, y0: 84, x1: 151, y1: 134 });
+    expect(f?.hooks[0]).toEqual({ x: 547, y: 15, cord: 6 });
+    expect(f?.pennant).toEqual({ x: 259, y: 80 });
+    expect(f?.ridge).toEqual({ x: 460, y: 80 });
     expect(f?.crabs.map((c) => c.numbered)).toEqual([false, true]);
-    const places = { ...MANIFEST.forest.places, pond: [868, 91, 705, 128] };
+    const places = { ...MANIFEST.forest.places, pond: [816, 91, 653, 128] };
     expect(() => readManifest({ ...MANIFEST, forest: { ...MANIFEST.forest, places } })).toThrow("forest.places.pond");
+    const { stall: _s, ...noStall } = MANIFEST.forest.places;
+    expect(() => readManifest({ ...MANIFEST, forest: { ...MANIFEST.forest, places: noStall } })).toThrow(
+      "forest.places.stall",
+    );
     const { ridge: _, ...noRidge } = MANIFEST.forest;
     expect(() => readManifest({ ...MANIFEST, forest: noRidge })).toThrow("forest.ridge");
+    const { pennant: __, ...noPennant } = MANIFEST.forest;
+    expect(() => readManifest({ ...MANIFEST, forest: noPennant })).toThrow("forest.pennant");
   });
 
   test("reads the Forest's layers, rows, spots and each season's atlas boxes", () => {
@@ -132,15 +145,16 @@ describe("the bundle's manifest", () => {
       ["back", 117],
       ["front", 128],
     ]);
-    expect(f?.spots[0]).toEqual({ row: "front", x: 591 });
-    expect(f?.great).toEqual({ x: 437, w: 150 });
+    expect(f?.layers.far).toEqual({ depth: 0.5, width: 640 });
+    expect(f?.spots[0]).toEqual({ row: "front", x: 586 });
+    expect(f?.great).toEqual({ x: 439, w: 150 });
     expect(f?.index.get("normal")?.get("back")?.get("L13-v2")).toEqual({
-      x: 0,
+      x: 82,
       y: 0,
-      w: 52,
-      h: 87,
-      footX: 21,
-      footY: 83,
+      w: 40,
+      h: 75,
+      footX: 18,
+      footY: 75,
     });
   });
 
@@ -168,6 +182,39 @@ describe("the bundle's manifest", () => {
   test("names levels with two digits, as the bundle's files are named", () => {
     expect(fill("glade/L{level}-v{variant}.gif", { level: 7, variant: 2 })).toBe("glade/L07-v2.gif");
     expect(fill("glade/L{level}.gif", { level: 13 })).toBe("glade/L13.gif");
+  });
+});
+
+describe("the props' sheets", () => {
+  const props = readCast(
+    {
+      pennant: {
+        w: 6,
+        h: 24,
+        foot: [0, 23],
+        anims: { wave: { frames: [0, 1, 2], ms: 207, durations: [210, 190, 220] } },
+      },
+      cone: { w: 7, h: 11, foot: [3, 10], anims: { open: { frames: [1, 2, 3], ms: 140 } } },
+    },
+    "props",
+    () => {
+      throw new Error("no strips in this test");
+    },
+  );
+
+  test("waves the drawn sun pennant's frames each for its own time", () => {
+    const wave = props.entries.get("pennant")?.anims.get("wave");
+    if (!wave) throw new Error("no wave");
+    expect([0, 209, 210, 399, 400, 619, 620].map((ms) => stepAt(wave, ms))).toEqual([0, 0, 1, 1, 2, 2, 0]);
+    expect(props.length("pennant", "wave")).toBe(620);
+  });
+
+  test("shows each frame of an animation without durations for its one pace", () => {
+    const open = props.entries.get("cone")?.anims.get("open");
+    if (!open) throw new Error("no open");
+    expect(open.durations).toBeNull();
+    expect([0, 139, 140, 420].map((ms) => stepAt(open, ms))).toEqual([0, 0, 1, 0]);
+    expect(props.length("cone", "open")).toBe(420);
   });
 });
 

@@ -3,7 +3,8 @@
  * package's `grove/cast`: the spirits, the gnome herald and Cinfy) and the props (`props/props.json`,
  * `grove/props.py`: the cone, the drop of raid water, the lanterns, the pennant), drawn as the
  * welcome draws its characters and small things. Each has one frame box (`w` by `h`) with its
- * ground contact at `foot`, and named animations, each a list of strip frames shown `ms` apiece.
+ * ground contact at `foot`, and named animations, each a list of strip frames shown `ms` apiece, or
+ * for a drawn one with `durations` (the sun pennant), each frame for its own ms.
  * Its strips, in the sheet's folder:
  *
  *   <id>.png  <id>-night.png  [<id>-winter.png  <id>-winter-night.png]
@@ -19,6 +20,23 @@ import type { Ambiance } from "./palette.ts";
 export interface Anim {
   frames: number[];
   ms: number;
+  /** Each frame's own ms, when the frames keep their own pace; null when each shows `ms`. */
+  durations: number[] | null;
+}
+
+/** Which of an animation's frames shows `ms` into it, looping. */
+export function stepAt(a: Anim, ms: number): number {
+  const t = Math.max(0, ms);
+  const d = a.durations;
+  if (!d) return Math.floor(t / a.ms) % a.frames.length;
+  const total = d.reduce((sum, v) => sum + v, 0);
+  let u = t % total;
+  for (let i = 0; i < d.length; i++) {
+    const v = d[i] ?? 0;
+    if (u < v) return i;
+    u -= v;
+  }
+  return d.length - 1;
 }
 
 export interface CastEntry {
@@ -56,7 +74,13 @@ function readEntry(id: string, v: unknown): CastEntry | null {
     if (!isRecord(a)) continue;
     const frames = Array.isArray(a["frames"]) ? a["frames"].filter(isNum) : [];
     const ms = a["ms"];
-    if (frames.length > 0) table.set(name, { frames, ms: isNum(ms) && ms > 0 ? ms : 100 });
+    const durations = Array.isArray(a["durations"]) ? a["durations"].filter((d) => isNum(d) && d > 0) : [];
+    if (frames.length > 0)
+      table.set(name, {
+        frames,
+        ms: isNum(ms) && ms > 0 ? ms : 100,
+        durations: durations.length === frames.length ? durations : null,
+      });
   }
   return { id, w, h, foot: { x: fx, y: fy }, head: isNum(head) ? head : null, anims: table, winter: winter === true };
 }
@@ -103,8 +127,7 @@ export class CastSheet {
     if (!e) return null;
     const a = e.anims.get(anim) ?? e.anims.values().next().value;
     if (!a) return null;
-    const step = Math.floor(Math.max(0, ms) / a.ms) % a.frames.length;
-    const index = a.frames[step] ?? 0;
+    const index = a.frames[stepAt(a, ms)] ?? 0;
     const winter = season === "winter" && e.winter ? "-winter" : "";
     const night = ambiance === "night" ? "-night" : "";
     const strip = this.image(`${this.dir}/${id}${winter}${night}.png`).value;
@@ -146,7 +169,8 @@ export class CastSheet {
   /** How long one pass of `anim` takes, in ms. */
   length(id: string, anim: string): number {
     const a = this.entries.get(id)?.anims.get(anim);
-    return a ? a.frames.length * a.ms : 0;
+    if (!a) return 0;
+    return a.durations ? a.durations.reduce((sum, v) => sum + v, 0) : a.frames.length * a.ms;
   }
 }
 

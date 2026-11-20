@@ -16,7 +16,7 @@ import {
 const VALLEY = 1024;
 const VIEW = 256;
 const LAYERS = {
-  far: { depth: 0.35, width: 525 },
+  far: { depth: 0.5, width: 640 },
   ground: { depth: 1, width: 1024 },
   near: { depth: 1.3, width: 1255 },
 };
@@ -27,9 +27,9 @@ describe("the forest's parallax", () => {
   });
 
   test("slides each layer at its depth: the far valley slowly, the near ferns faster", () => {
-    expect(layerOffset(128, 0.35, VIEW)).toBe(0);
+    expect(layerOffset(128, 0.5, VIEW)).toBe(0);
     expect(layerOffset(512, 1, VIEW)).toBe(384);
-    expect(layerOffset(512, 0.35, VIEW)).toBe(134);
+    expect(layerOffset(512, 0.5, VIEW)).toBe(192);
     expect(layerOffset(512, 1.3, VIEW)).toBe(499);
   });
 
@@ -51,8 +51,8 @@ describe("the forest's parallax", () => {
   test("puts a ground x and its picture column on each other", () => {
     expect(toPicture(512, 512, VIEW)).toBe(128);
     expect(toGround(128, 512, VIEW)).toBe(512);
-    // The far ridge's pennant stands in the middle when the camera is where the war glides to.
-    expect(toPicture(230, 128 + (230 - 128) / 0.35, VIEW, 0.35)).toBe(128);
+    // The war's pennant stands in the middle when the camera is where the war glides to.
+    expect(toPicture(460, 128 + (460 - 128) / 0.5, VIEW, 0.5)).toBe(128);
   });
 });
 
