@@ -1,0 +1,56 @@
+# The slice's screenshots: <name> <width> <height> <query#route>. Run: review/shoot.sh <outdir> < review/shots.txt
+# Every route, desktop and phone.
+glade-desktop 1440 900 ?still&level=9#glade
+glade-phone 390 844 ?still&level=9#glade
+forest-desktop 1440 900 ?still&at=905#forest
+forest-phone 390 844 ?still&at=935#forest
+campfire-desktop 1440 900 ?still#campfire
+campfire-phone 390 844 ?still#campfire
+campfire-pip 320 180 ?still&camp=pip#campfire
+cones-desktop 1440 900 ?still#cones
+cones-phone 390 844 ?still#cones
+rates-desktop 1440 900 ?still#rates
+rates-phone 390 844 ?still#rates
+spirits-desktop 1440 900 ?still#spirits
+spirits-phone 390 844 ?still#spirits
+shop-desktop 1440 900 ?still#shop
+shop-phone 390 844 ?still#shop
+rings-desktop 1440 900 ?still#rings
+rings-phone 390 844 ?still#rings
+great-desktop 1440 900 ?still#great
+great-phone 390 844 ?still#great
+leafle-desktop 1440 900 ?still#leafle
+leafle-phone 390 844 ?still#leafle
+# The campfire's burn: a cone in the fire, its reveal, and picture in picture.
+campfire-burn-desktop 1440 900 ?still&burn=4.6&rank=Treant#campfire
+campfire-burn-phone 390 844 ?still&burn=4.6&rank=Treant#campfire
+campfire-pip-burning 320 180 ?still&camp=pip&burn=1.2&rank=Treant#campfire
+campfire-pip-result 320 180 ?still&camp=pip&burn=4.6&rank=Treant#campfire
+campfire-joke 1440 900 ?still&joke#campfire
+campfire-night 1440 900 ?still&time=night&burn=3.0&rank=Yggdrasil#campfire
+# The glade's moments, as the lab shot them.
+glade-l01 1440 900 ?still&level=1&greet#glade
+glade-l13 1440 900 ?still&level=13#glade
+glade-winter 1440 900 ?still&level=9&season=winter#glade
+glade-night 1440 900 ?still&level=9&time=night#glade
+glade-day 1440 900 ?still&level=9&time=day#glade
+glade-groot 1440 900 ?still&level=7&groot=3&t=2.15#glade
+glade-levelup 1440 900 ?still&level=6&levelup&t=2.95#glade
+glade-levelup-gg 1440 900 ?still&level=6&levelup&t=5.6#glade
+glade-cone-ygg-aurora 1440 900 ?still&level=9&scene=cone&rank=Yggdrasil&conet=5.0#glade
+glade-cone-ygg-card 1440 900 ?still&level=9&scene=cone&rank=Yggdrasil&conet=6.6#glade
+glade-cone10-row 1440 900 ?still&level=9&scene=cone10&rank=Treant&t=4.55#glade
+glade-cone10-grid 1440 900 ?still&level=9&scene=cone10&rank=Treant&t=7.0#glade
+glade-phone-l01 390 844 ?still&level=1&greet#glade
+# The forest's moments, now with the shared cast.
+forest-pond 1440 900 ?still&at=pond#forest
+forest-swamp 1440 900 ?still&at=swamp#forest
+forest-campfire 1440 900 ?still&at=campfire#forest
+forest-stall 1440 900 ?still&at=stall#forest
+forest-crab-rave 1440 900 ?still&anniversary&t=3.1#forest
+forest-night 1440 900 ?still&time=night&at=930#forest
+forest-winter 1440 900 ?still&season=winter&at=905#forest
+forest-raid 1440 900 ?still&event=raid&et=6.45#forest
+forest-war 1440 900 ?still&event=war&et=6.0#forest
+forest-levelup 1440 900 ?still&event=levelup&time=night&et=2.8#forest
+forest-joke 1440 900 ?still&at=campfire&look=campfire#forest

@@ -1,166 +1,294 @@
 # Sequoia Grove
 
-A cozy game about growing a Sequoia. Your tree grows as you raid and war with
-the guild. You tend it whenever you like, fill its little grove with things
-from the shop, crack sequoia cones by the fire to find forest Sprites, and bring
-it into Discord calls to show your friends. Together the guild grows the Great
-Sequoia.
+**Grow your own giant sequoia from your guild play, raise forest spirits from
+cones you open in fire, and gather the whole guild's trees into one living
+forest.**
 
-This is the plan as of 19 November 2026: what the game is, how it plays, what it
-costs, where it lives and the order to build it in. The pictures are real
-screens from the prototype in `apps/grove` (run `bun apps/grove/index.html` and
-open a screen by its hash: `#grove`, `#welcome`, `#care`, `#shop`, `#cone`,
-`#reveal`, `#book`, `#activity`, `#leafle`, `#great`).
+This is the plan as of 20 November 2026, round three. Every picture here is a
+real screen from the client in `apps/grove`. Run it with `bun index.html` and
+open a route (see the README one folder up). **All art is placeholder made by
+agents**; see "Who draws it".
 
-![Your grove at golden hour](grove.webp)
+![An ancient sequoia in its glade at dusk](l09.webp)
 
-## What it should feel like
+## Why this game, for this guild
 
-1. **Cozy, never punishing.** No streaks. Nothing wilts or dies. Care banks up
-   while you're away, so coming back after a week is a treat, not a debt.
-2. **Earned in Wynncraft, spent in the Grove.** Leaf from guild play is the only
-   currency. Nothing is sold for money, and nothing costs the guild real items:
-   everything Leaf buys here is made of pixels.
-3. **Unmistakably Sequoia.** The guild's ranks are the rarities. Raids hatch
-   critters. The guild's own art, places and jokes are everywhere.
-4. **Made to be seen.** Visit friends' groves, put your favourite Sprite by your
-   nametag and on your Discord profile, and grow the guild's tree together.
-5. **Every reward is a moment.** Cones open by the fire with light and sound.
-   Rare finds get the whole call watching.
+Sequoia already thinks of itself as a growing tree:
 
-## Storyboard
+- Its ranks run Leafkin, Sapling, Sprite, Dryad, Druid, Treant, Yggdrasil.
+- Its departments are branches and its leadership is Root.
+- It calls itself the tree guild, and guild raids are "groot".
+- Members have painted the Grove again and again: a giant sequoia with
+  members in its branches, treehouses in misty trunks, a campfire under giant
+  leaves, and a bonsai that grows every month.
 
-### 1. A seed arrives
+We aren't imposing a theme. We're making their metaphor playable.
 
-![Conelet welcomes you and your seed](welcome.webp)
+The guild also told us, without being asked, what it doesn't want:
 
-The first visit plants your seed in its pot. Conelet, a cone that never quite
-opened, explains the one thing to know: everything you play with the guild
-helps it grow.
+- personal streaks;
+- anything that competes with raiding;
+- status for sale;
+- AI art.
 
-### 2. Tend it whenever
+It loves shared rituals and being seen together.
 
-![Watering the tree](care.webp)
+## The three verbs
 
-Each UTC day gives two care charges, and unused ones bank up to six. Watering,
-pruning or misting spends a charge and adds a point of Bloom. Seven Bloom drops
-a free cone. Friends can water your tree too, and so can solving the daily
-puzzle. A day you miss costs you nothing; your charges are waiting.
+Everything serves one of three verbs. Anything that doesn't is cut.
 
-### 3. It grows as you play
+### Grow
 
-![Sprout, sapling, young and old sequoia](growth.webp)
+**Your tree is yours alone.**
 
-The tree's size follows your SEQ level, which comes from the XP you earn
-raiding, warring and finishing quests. It can't be bought, so your tree is a
-picture of your time with the guild. The stages:
+- It's generated from your Minecraft UUID, so no two are alike.
+- It grows with your SEQ level, which only guild play earns, and it can't be
+  bought. It's an honest picture of your time with Sequoia.
+- The canopy turns from summer green toward the guild's gold (#C1A66E) as you
+  level, like the gold-canopy logo.
 
-| Stage       | SEQ level | Who's there today          |
-| ----------- | --------- | -------------------------- |
-| Sprout      | 1         | about half the guild       |
-| Sapling     | 2–3       |                            |
-| Young       | 4–5       | the 90th percentile is 5   |
-| Old sequoia | 6–8       |                            |
-| Ancient     | 9–12      | the top player is level 10 |
-| Giant       | 13+       | nobody yet                 |
+![A seedling in its nook, with the daily greeting](seed.webp)
 
-Old, Ancient and Giant still need their own drawings; the prototype's biggest
-tree stands in for them.
+| Stage    | SEQ level | Look                                                    |
+| -------- | --------- | ------------------------------------------------------- |
+| Seedling | 1         | A staked sprout in its own shaft of light, framed close |
+| Sapling  | 2–3       | A slim stem and its first limbs                         |
+| Young    | 4–5       | The dense narrow spire young sequoias really have       |
+| Mature   | 6–8       | Cinnamon trunk showing, clumped masses, a rounded top   |
+| Ancient  | 9–12      | Bare buttressed trunk, fire scar, clouded crown         |
+| Giant    | 13        | Nobody's there yet. A cathedral, hung with lanterns     |
 
-### 4. Make the grove yours
+The world opens as your tree grows. Half the guild is level 1, so the first
+stages are framed close and intimate. By level 6 you see the whole valley.
 
-![Fennel's Wandering Stall](shop.webp)
+**Raids water it.** Every guild raid you finish is a groot:
 
-Fennel, a travelling fox merchant, brings a stall of four things every
-morning: the same stall for everyone, so it's something to talk about. Fennel
-holds an item for you for three days. Behind the stall is the full catalogue:
-pots, stands, tree styles, lights, ground cover and homes for your Sprites.
-Seasonal styles, like the autumn canopy, come and go with the seasons.
+- A small cloud rains on your tree alone: "You grooted 3 times today. The
+  tree drank deeply."
+- Watering fills Bloom, and a full Bloom drops a free cone.
+- Tapping to water, mist or prune is a bonus. Those charges bank, so missing a
+  week costs nothing and nothing ever wilts.
 
-![The same tree in autumn](seasons.webp)
+The game is powered by raiding; it never competes with it.
 
-### 5. Crack a cone by the fire
+![Rain on the tree after three groots](groot.webp)
 
-![The cone warming](cone.webp)
-![A Glimmerwing steps out](reveal.webp)
+**Level-ups are ceremonies.** Gnome heralds march in and toot, the tree rises
+into its next stage, and the GG card stays in the forest for good.
 
-Real sequoia cones stay shut for decades and only open in the heat of a fire.
-That's how they open here: you set a cone by the campfire, it warms and shakes,
-the scales part, and a Sprite steps out. Each Sprite's rarity is a guild rank
-from Leafkin up to Yggdrasil, and the rank's colour lights up the opening.
+![Level 6! No gg left behind](levelup-gg.webp)
 
-### 6. Fill the Sprite Book
+**Rings.** A cross-section of your tree shows one ring per Wynncraft season
+you played. Marks show your first raid, your first war win and every level.
+If you played in a season the guild won, that ring is gilded. The rings are
+drawn from your own ledger.
 
-![The Sprite Book](book.webp)
+### Burn
 
-Sprites you haven't found are dark shapes in the book. Finding one again
-deepens your bond with it:
+**Cones open in fire.** Real giant-sequoia cones stay shut for decades and
+only open in a fire's heat, and 🔥 is the guild's favourite reaction.
 
-| Bond  | What it gives                                           |
-| ----- | ------------------------------------------------------- |
-| ♥     | It lives in your grove                                  |
-| ♥♥    | A shiny coat you can switch on                          |
-| ♥♥♥   | It can sit by your nametag in game (Sequoia mod)        |
-| ♥♥♥♥♥ | Its Discord role icon, for Treant and Yggdrasil Sprites |
+- Every rank has its own beat. A Leafkin pops.
+- A Yggdrasil freezes the world, beats like a heart, and bursts under an
+  aurora in its rank's colour while the Great Sequoia answers with a beam.
+- Opening ten at once drops ten leaves from your tree. Each turns its rank
+  colour halfway down, then they flip into cards in a summary grid. That
+  part comes from a member's storyboard.
 
-Past five hearts, a duplicate turns into two Bloom.
+![A Yggdrasil opening under a gold aurora](cone-aurora.webp)
 
-![The first Sprites](cast.webp)
+![Ten cones' summary grid](cone10-grid.webp)
 
-### 7. Bring your tree to the call
+**Rarity is the guild's rank ladder.** A **Verdant** spirit is the shiny
+variant, named after the guild's golden-leaf distinction.
 
-![A gathering in a voice channel](activity.webp)
+**The spirits are a little feral, the way the guild likes its creatures.**
+They're numbered ("No. 08, whereabouts unknown"), and when they're happy they
+explode affectionately into confetti.
 
-Launched from a Discord voice channel, Sequoia Grove opens as an Activity:
-everyone in the call brings their tree to one clearing. When someone warms a
-cone, everybody watches it open together. That's the cone party, and it's the
-reason to play inside Discord at all.
+- **Glorps:** the guild's own blob family, in seven vowel colours.
+- **Raid spirits:** chibi takes on the guild's nicknames for each raid, each
+  one the face of its raid's banner:
+  - Rock (TCC);
+  - Worm (NotG);
+  - Greg (TNA), who eats your offerings;
+  - Moth (TWP);
+  - a golden-antlered white fox (NoL), the legendary, asleep by the fire.
+- **Forest critters:** the Chickaree (the squirrel that really spreads sequoia
+  seeds), the Mossmote, the Slug, the Fog Owl and the Emberkit.
+- **Folk who are never pulled:** numbered crabs, gnome heralds, a grove cat
+  with dad jokes, and Cinfy.
 
-### 8. A puzzle a day, together
+![The cast](cast-portraits.webp)
 
-![Leafle](leafle.webp)
+**What a spirit does after the pull.** The guild argued about this; here's the
+call:
 
-Leafle is a five-letter Wynncraft word a day: provinces, towns, raids,
-bosses, guild words. Play it alone on the site or together in a call, where
-everyone's result shows once they've solved it. Solving it gives a point of
-Bloom. There's no streak counter.
+- **It works in your glade.** The Chickaree plants seedlings, the Fog Owl's
+  mist refills a care charge.
+- **It's your companion.** It follows you, sits with you at the Campfire,
+  rides by your nametag in Wynncraft through the Sequoia mod, and at full bond
+  becomes your Discord role icon.
+- **Duplicates deepen the bond:** hearts, then the Verdant coat, then the
+  nametag, then the role icon.
+- **No battler.** Members rejected one about four to one. Wynncraft is the
+  game; this is home.
 
-### 9. Grow the Great Sequoia
+**Gacha manners the guild will check:**
 
-![The Great Sequoia on the website](great.webp)
+- **The rate card is published in the game:**
 
-The guild's own tree lives on the website. Every week it has goals drawn from
-real guild play (raids, wars won, trees watered), and members who help hang a
-light in it. When it blooms, everyone in the guild gets that season's gift for
-their grove.
+  | Leafkin | Sapling | Sprite | Dryad | Druid | Treant | Yggdrasil |
+  | ------- | ------- | ------ | ----- | ----- | ------ | --------- |
+  | 40%     | 27%     | 16%    | 9%    | 5%    | 2.5%   | 0.5%      |
 
-## The design decisions
+- **Pity:** a Treant or better within 40 cones, carrying over between banners.
+- **Price:** 400 Leaf a cone, with no bulk discount.
+- **Duplicates always show** what they add.
+- **Dry streaks:** breaking a long one can be announced in Discord (opt-in).
 
-These are the calls I've made as lead designer, with the reason for each.
+![The published rate card](rates.webp)
 
-- **The website is home; Discord is for being together.** An Activity runs
-  well, but it's a panel inside a chat: small, sometimes picture-in-picture,
-  often on a phone. So the full game lives on the web, and the Activity does
-  the things that are better in a call: gatherings, cone parties and Leafle.
-  Both run the same client.
-- **Growth can't be bought.** The tree's size comes from SEQ level. Leaf buys
-  how it looks, never how big it is.
-- **Cones hold Sprites; the shop sells everything else.** Anything you want for
-  your grove, you can buy outright. Chance is only for the creatures.
-- **No streaks, anywhere.** Care banks, Leafle has no streak, and nothing
-  expires because you were away. This follows the guild call of 15 November.
-- **Rarity is rank.** The seven ranks, in their colours on the website, are the
-  rarities everywhere, with the name shown beside the colour so it never
-  depends on colour alone.
-- **No trading and no real money.** Sprites and items stay with you, which rules
-  out selling accounts or items for money. Odds are published in the game.
-- **Pixel art in side-on dioramas.** One scene, 240 by 150 pixels, scaled up by
-  whole pixels so it stays sharp on any screen.
+### Gather
+
+**The Forest.** Every member's tree stands in one valley round the **Great
+Sequoia**. Older members stand near the heart and new saplings at the edges,
+the way a real grove grows. Tap any tree to see whose it is, and water it with
+one of your care charges. Friends' watering waits for you as dew. The valley
+also holds:
+
+- the **Swamp**, the claim the guild held for two years, kept as a misty
+  memorial;
+- the **Fruma ridge** with the guild's gold sun pennants;
+- a **crab pond** with posted rules ("No crabellions"), a roll call with one
+  crab unaccounted for, and a crab rave on the guild's birthday;
+- **Cinfy's stall**;
+- a **"Do Not The Farm" sign** at the gate.
+
+![The heart of the Forest](forest-heart.webp)
+
+![The crab pond](forest-pond.webp)
+
+**The Forest shows the guild playing, live:**
+
+- **A raid.** A party clears a raid and their four trees light up. The lights
+  travel to the campfire and merge into one lantern with their names, which
+  hangs in the Great Sequoia.
+- **A war win.** The guild takes a territory and a pennant rises on the ridge,
+  while the falling leaves spell S E Q, as members do with reactions under
+  every win.
+- **A guild level-up.** Lanterns lift into the night.
+
+![A raid party's lights becoming one lantern](raid-3.webp)
+
+![A war win spells SEQ](war-seq.webp)
+
+**The Great Sequoia** is the guild's tree:
+
+- Members pour Leaf into it toward three weekly goals, and everyone who helps
+  hangs a lantern.
+- Its rings are the guild's history: the Swamp years deep inside, Season 32
+  gilded.
+- There's no ranking.
+
+**The Campfire** is the Discord Activity:
+
+- **Who's there.** Friends in a voice call sit round the fire, each with their
+  companion.
+- **The burn queue** sets one cone at a time in the fire, and the whole call
+  watches.
+- **Leafle**, the daily five-letter Wynncraft word, opens from the corner. It
+  has a group mode and no streak counter.
+- **The grove cat** tells dad jokes.
+- **Lurkers count.** A reaction counts as taking part, because much of the
+  guild is in voice without a mic.
+- **Picture-in-picture.** At Discord's 320×180 it shows only the fire, whose
+  cone is burning, and the result.
+
+![The Campfire](campfire.webp)
+
+**The Burn.** At the end of each season, the guild opens its saved cones
+together round a bonfire, and the Great Sequoia gains a ring.
+
+## The guild's voice
+
+The copy is short, warm, a little menacing and erm-proof:
+
+- **The daily greeting:** "I hope you have a moderately excellent next 14
+  hours."
+- **The shop** is **Cinfy's Treasury**, run by the guild bank cast as a
+  nervous hamster treasurer. Its small print is Sequoia Inc. corporate parody:
+  "Leaf has no cash value… Treasury@seqwawa thanks you for your
+  understanding."
+- **Big animations are for rare moments only.** Everything else gets a small,
+  funny ceremony.
+
+![Cinfy's Treasury](shop.webp)
+
+## Look and feel
+
+The world is **pixel art in the family of Sierra's welcome scenes**:
+
+- the purple-amber dusk, giant cinnamon trunks framing the clearing, ferns,
+  mushrooms and fireflies;
+- teal mist in the distance, like the guild's favourite painting;
+- gold as the constant accent;
+- day, night and a winter season with fairy lights.
+
+It's drawn in 16-bit palette indices, so one palette recolours the world and
+the cast together for time and season. It's always scaled by whole pixels.
+
+The interface is **the Sequoia mod's own**:
+
+- slate panels with cut corners;
+- the Minecraft font;
+- segmented bars.
+
+On top of that sit Minecraft habits: a **hotbar** for your tools, **inventory
+grids** for spirits and the shop, **tooltips** with names in rank colours (the
+way Wynncraft colours its tiers), and **player heads** for members.
+
+![The spirit book](spirits.webp)
+
+Two looks were tried and dropped:
+
+- **Smooth 3D with a storybook interface** didn't look like Sequoia.
+- **A Minecraft-style block diorama** read as Minecraft instantly, but it was a
+  small object floating in space and less beautiful than the pixel scene. It's
+  shelved; git history has it, in the round-three prototypes commit.
+
+## Who draws it
+
+The guild's line on AI art is firm. The plan:
+
+- **We build** the engine, the interface, tree growth, lighting and effects.
+- **Guild artists draw** the characters and key art. They're credited in the
+  game and rewarded the way the guild already rewards art. The guild has pixel
+  artists and composers whose style fits.
+- **The placeholders become their briefs.**
+
+This is Notes' call, and nobody has been contacted.
+
+## Cut, kept and deferred
+
+| Idea                                       | Call     | Why                                                                         |
+| ------------------------------------------ | -------- | --------------------------------------------------------------------------- |
+| Team battler with stats and PvP            | Cut      | Rejected about 4 to 1; it competes with raiding                             |
+| Members' faces as pulls, a roulette reveal | Cut      | Needs everyone's consent; the fire reveal is ours                           |
+| Ranked climb of the guild tree             | Cut      | No leaderboard in the cozy space                                            |
+| LE, tomes, aspects in the shop             | Cut      | Leaf never converts to LE                                                   |
+| A 200 Leaf cone                            | Cut      | Earnings are top-heavy; the top earner would hit Yggdrasil pity in two days |
+| Nametag companion, role icon, pets         | Kept     | As spirits                                                                  |
+| A shared tree watered with Leaf            | Kept     | As the Great Sequoia                                                        |
+| Raid banners, rarity as ranks              | Kept     | Each raid's spirit fronts its banner                                        |
+| A member's pull storyboard                 | Partly   | Its aurora and falling leaves, inside the fire reveal                       |
+| Members drawn as the creature they pick    | Deferred | Loved, but it needs artists and each member's consent                       |
+| Expeditions, WynnGuessr, bonsai show       | Deferred | After the three verbs land                                                  |
+| Co-op Campfire games                       | Deferred | Leafle first                                                                |
 
 ## Prices that fit how people earn
 
-Since the raid-share correction on 19 November, members net this much Leaf a
-day (66 accounts, 16 to 19 November):
+Since the raid-share correction, members net this much Leaf a day:
 
 | Member          | Leaf a day | A cone at 400 Leaf every… |
 | --------------- | ---------- | ------------------------- |
@@ -169,109 +297,57 @@ day (66 accounts, 16 to 19 November):
 | 90th percentile | 2,169      | 4.4 hours                 |
 | Top earner      | 5,656      | 1.7 hours                 |
 
-One raid credit pays about 170 Leaf, so a cone is a little over two raids. On
-top of what they buy, caring for their tree gives everyone up to two free cones
-a week. Friends watering it and Leafle add more, up to five Bloom a day, which
-is five cones a week at most.
+On top of that, Bloom gives about two free cones a week, mostly from raiding.
 
-**A cone costs 400 Leaf.** There's no discount for buying many: no bulk
-pricing.
+Shop prices fall in three bands:
 
-**What's in a cone** (published in game):
+- everyday: 300–1,500 Leaf;
+- special: 2,000–6,000;
+- prestige: 10,000–50,000.
 
-| Rarity    | Chance | Sprites at launch |
-| --------- | ------ | ----------------- |
-| Leafkin   | 40%    | 10                |
-| Sapling   | 27%    | 9                 |
-| Sprite    | 16%    | 8                 |
-| Dryad     | 9%     | 6                 |
-| Druid     | 5%     | 4                 |
-| Treant    | 2.5%   | 3                 |
-| Yggdrasil | 0.5%   | 2                 |
+Every number lives in `src/game/rules.ts` as data. It moves to `packages/core`
+when the server side is built.
 
-A Treant or better is guaranteed within 40 cones of the last one. On a banner,
-the featured Sprite takes half the Treant-and-up chance and is guaranteed
-within 80 cones on that banner. Every opening is decided on the server, with
-its seed and pity count kept in an audit log.
+## One art pipeline for every surface
 
-**Shop bands:** everyday things cost 300 to 1,500 Leaf. Special pieces cost
-2,000 to 6,000. Prestige pieces, like a koi pond or the giant tree style, cost
-10,000 to 50,000, for the members who earn thousands a day.
+Every sprite is defined once, as palette-indexed pixel data in the repo, and
+rendered wherever it's needed:
 
-There's about 188,000 Leaf in circulation today, enough for roughly 470 cones on
-day one. That's fine for a launch party, and every price above lives in the
-rules as data, so it can be tuned without new code. As agreed, Leaf never
-converts into LE.
-
-## Where it lives
-
-- **Website.** The full game at `seqwawa.com/grove`, and every member's grove at
-  a page of its own that friends can visit and water. The Great Sequoia sits on
-  the front page.
-- **Discord Activity.** The same client, launched from the app launcher in a
-  voice channel. Discord loads it in a frame and routes all its traffic through
-  its own proxy, so the game maps two paths: the client and the Leaf API.
-  Players sign in with Discord. The backend already holds verified
-  Discord-to-Minecraft links, so it can issue a Sequoia session from a Discord
-  sign-in. The layout adapts to Discord's focused, picture-in-picture and grid
-  modes, and to phones.
-- **Sequoia mod.** Your companion Sprite next to your nametag, a toast when a
-  cone is ready, and a button to open your grove.
-- **Sierra.** Rare finds posted to Discord (only if you opt in) as an animated
-  clip of the opening, plus a daily Leafle thread. The Sprites are pixel grids,
-  so the server can draw those clips without a browser.
-
-## Look and feel
-
-![Things for the grove](items.webp)
-
-- **Like a cartridge game on an old handheld.** Warm and a little faded. Bark is
-  red-brown and fibrous, needles are blue-green and muted, and there are never
-  bright greens. Outlines are a deep plum, never black.
-- **Everything is drawn by hand and placed by hand.** Sprites are written as
-  rows of palette letters in `src/art`, so they're easy to edit, review and
-  diff. Nothing is scattered at random, and nothing repeats evenly round a
-  shape.
-- **Menus look like the ones we grew up with.** Cream panels with a double
-  border, a pixel font, and text boxes with a blinking ▼.
-- **The sky follows your clock.** Morning, day, golden hour, dusk and night,
-  with fireflies and lantern light after dark.
-- **Reward moments always move.** Opening a cone is never a static picture.
+- **Web and Activity:** the scene itself.
+- **Sequoia mod:** the nametag companion.
+- **Discord:** role icons, plus animated clips of rare reveals and a weekly
+  forest flyover for Sierra (opt-in). Sierra's welcome renderer already draws
+  pixel GIFs this way.
 
 ## Building it
 
-Each milestone ships when it's fun on its own.
+Each milestone ships when it's good on its own.
 
-1. **Seedling.** Your tree on the website: growth from SEQ level, care and
-   Bloom, Fennel's stall with about 30 things to buy, and a grove you can
-   arrange. In Leaf: grove and inventory tables, the catalogue as data, and
-   every purchase as a spend in the ledger.
-2. **Cones.** Cones, the first 42 Sprites, the fireside opening, the Sprite
-   Book and the first banner. Odds and pity live in `packages/core` with tests,
-   and every opening is logged.
-3. **Gathering.** The Discord Activity (gatherings, cone parties, Leafle),
-   Discord sign-in, and the companion by your nametag in the mod.
-4. **The Great Sequoia.** The guild tree and its weekly goals, seasonal events
-   (Halloween pumpkins, winter lights, the July anniversary), and expeditions,
-   where Sprites set off to Wynncraft's provinces and come home with postcards.
+1. **Grow.** Your tree on the website, with growth from SEQ level, groot
+   watering, care and Bloom, level-up ceremonies, the rings and Cinfy's
+   Treasury. In Leaf: tree and inventory tables, the catalogue as data, and
+   every purchase as a ledger spend.
+2. **Burn.** Cones and the fire reveal, the spirits and banners, the spirit
+   book and glade jobs. Rate card and pity go in `packages/core`, with an audit
+   log of openings. Then reveal clips for Sierra and the companion in the mod.
+3. **Gather.** The Forest with live guild moments from Leaf's event stream,
+   the Great Sequoia, and the Campfire Activity with Discord sign-in, a shared
+   burn queue and Leafle.
+4. **Seasons.** The Burn, the weekly flyover, seasonal styles, then the
+   deferred ideas.
 
-The client in `apps/grove` is plain TypeScript and canvas, with no framework.
-It's small and fast, and it suits Discord's single-page frame. Its API types
-come from Leaf's `/openapi.json`. Leaf serves the built client itself.
+What the client doesn't do yet:
 
-## What I still need
+- Purchases are recorded but don't appear in the glade.
+- Your companion appears only at the Campfire.
+- The Campfire is local, with no Discord SDK yet.
+- Forest spots must become fixed per member before real roster data arrives,
+  so a new member never moves anyone else's tree.
 
-- **The community's voice.** Joyeuse is ready to read Sequoia main and Branch
-  Masters, read-only, for the guild's in-jokes, how people feel about Leaf so
-  far, and what they want from a game. It needs Notes to confirm in its thread.
-  Names and Sprites will change once that's in: every name here is a
-  placeholder.
-- **Members as Sprites.** The guild's chibi art is lovely, and members as
-  collectibles was a popular idea in the gacha channel. It needs each member's
-  yes, so Member Sprites would be opt-in.
-- **Artists.** EpicPuppy613 drew a storyboard for a pull animation and offered
-  to build on the site; Pat_crafter07 might help with pixel art. Forty-two Sprites, the
-  remaining tree stages and around 60 grove items are more art than one person
-  should draw, so I'd like to bring both in.
-- **A Discord app for the Activity.** Activities belong to an app. That's
-  either Sierra's or a new Sequoia Grove app, which is Notes' call.
+## Before launch
+
+- **Walk back the LE promise.** On 18 November, staff were told Leaf would buy
+  LE, tomes and aspects. It won't.
+- **Announce Leaf on the main server.** It launched quietly, and members are
+  still asking what it is.
+- **Decide who draws it.** See "Who draws it".

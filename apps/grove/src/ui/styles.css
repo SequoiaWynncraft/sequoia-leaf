@@ -1,0 +1,1068 @@
+/*
+ * Sequoia Grove's page, menus and dock, in the Sequoia mod's language (Sequoia-mod's PixelArt and
+ * UiColor): dark slate panels with one-unit borders and cut corners, a lit inner top row and a
+ * shaded bottom row, the Minecraft font at whole units, segmented bars and square inventory slots.
+ *
+ * --u is the HUD's unit (CSS pixels per art pixel) and --mu the menus' unit; both are whole pixels,
+ * set by main.ts. Every size here is a whole number of units, so nothing is ever drawn between pixels.
+ */
+
+@font-face {
+  font-family: Minecraft;
+  src: url("../engine/fonts/minecraft-regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: Minecraft;
+  font-weight: bold;
+  src: url("../engine/fonts/minecraft-bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: Minecraft;
+  font-style: italic;
+  src: url("../engine/fonts/minecraft-italic.woff2") format("woff2");
+}
+
+:root {
+  --u: 3px;
+  --mu: 3px;
+  --ink: #08060c;
+  --popup: rgb(40 40 55);
+  --body: rgb(20 20 30);
+  --purple: rgb(160 130 220);
+  --purple-hover: rgb(190 160 250);
+  --purple-dark: rgb(60 30 120);
+  --leaf: rgb(88 196 122);
+  --gold: rgb(242 192 68);
+  --text: #fff;
+  --text-2: rgb(220 220 230);
+  --muted: rgb(160 160 180);
+  --lore: rgb(176 150 232);
+  --tip: rgb(22 14 32);
+  --accent: var(--purple);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #150f0d;
+  color: var(--text);
+  font-family: Minecraft, monospace;
+  font-size: calc(var(--mu) * 10);
+  line-height: calc(var(--mu) * 12);
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+canvas {
+  position: fixed;
+  left: 0;
+  top: 0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+#fade {
+  pointer-events: none;
+}
+#hud[hidden],
+#fade[hidden] {
+  display: none;
+}
+
+img.px {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: inline-block;
+  vertical-align: middle;
+}
+img.glyph {
+  vertical-align: calc(var(--mu) * -1);
+  margin: 0 calc(var(--mu) * 1);
+}
+
+a {
+  color: inherit;
+}
+.link {
+  color: var(--purple-hover);
+  text-decoration: none;
+}
+.link:hover,
+.link:focus-visible {
+  color: var(--text);
+}
+
+:focus-visible {
+  outline: var(--mu) solid var(--purple-hover);
+  outline-offset: var(--mu);
+}
+
+/* ------------------------------------------------------------------------------------------
+ * The mod's panel: PixelArt.pixelPanel. Inset shadows draw the border, the lit top rows and the
+ * shaded bottom row; the clip path cuts each corner's pixel. */
+
+.panel,
+.btn,
+.tooltip,
+.tab {
+  --a: var(--accent);
+  --p: var(--mu);
+  background: color-mix(in srgb, var(--popup) 94%, transparent);
+  box-shadow:
+    inset 0 0 0 var(--p) var(--a),
+    inset 0 calc(var(--p) * 2) 0 0 color-mix(in srgb, var(--a) 42%, transparent),
+    inset 0 calc(var(--p) * 3) 0 0 color-mix(in srgb, var(--a) 16%, transparent),
+    inset 0 calc(var(--p) * -2) 0 0 color-mix(in srgb, color-mix(in srgb, var(--a) 40%, black) 40%, transparent);
+  clip-path: polygon(
+    var(--p) 0,
+    calc(100% - var(--p)) 0,
+    calc(100% - var(--p)) var(--p),
+    100% var(--p),
+    100% calc(100% - var(--p)),
+    calc(100% - var(--p)) calc(100% - var(--p)),
+    calc(100% - var(--p)) 100%,
+    var(--p) 100%,
+    var(--p) calc(100% - var(--p)),
+    0 calc(100% - var(--p)),
+    0 var(--p),
+    var(--p) var(--p)
+  );
+}
+
+/* Minecraft's tooltip: a near-black violet body inside the accent frame and a dark inner frame. */
+.tooltip {
+  --a: var(--rank, var(--purple));
+  background: color-mix(in srgb, var(--tip) 95%, transparent);
+  box-shadow:
+    inset 0 0 0 var(--p) var(--a),
+    inset 0 0 0 calc(var(--p) * 2) color-mix(in srgb, var(--purple-dark) 90%, transparent);
+  padding: calc(var(--mu) * 5) calc(var(--mu) * 6);
+}
+.tooltip h3 {
+  margin: 0 0 calc(var(--mu) * 2);
+  font-size: inherit;
+  font-weight: normal;
+  text-shadow: var(--mu) var(--mu) 0 rgb(0 0 0 / 0.55);
+}
+.tooltip p {
+  margin: calc(var(--mu) * 2) 0 0;
+}
+.tooltip small {
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------------------------------
+ * The dock. */
+
+#dock {
+  position: fixed;
+  z-index: 5;
+}
+.dock-panel {
+  --accent: color-mix(in srgb, var(--purple) 55%, var(--popup));
+  display: flex;
+  gap: calc(var(--u) * 2);
+  padding: calc(var(--u) * 3);
+  background: color-mix(in srgb, var(--body) 86%, transparent);
+  box-shadow:
+    inset 0 0 0 var(--u) var(--accent),
+    inset 0 calc(var(--u) * 2) 0 0 color-mix(in srgb, var(--accent) 42%, transparent),
+    inset 0 calc(var(--u) * -2) 0 0 rgb(0 0 0 / 0.25);
+  clip-path: polygon(
+    var(--u) 0,
+    calc(100% - var(--u)) 0,
+    calc(100% - var(--u)) var(--u),
+    100% var(--u),
+    100% calc(100% - var(--u)),
+    calc(100% - var(--u)) calc(100% - var(--u)),
+    calc(100% - var(--u)) 100%,
+    var(--u) 100%,
+    var(--u) calc(100% - var(--u)),
+    0 calc(100% - var(--u)),
+    0 var(--u),
+    var(--u) var(--u)
+  );
+}
+body[data-layout="wide"] #dock {
+  left: calc(var(--u) * 3);
+  top: 50%;
+  transform: translateY(-50%);
+}
+body[data-layout="wide"] .dock-panel {
+  flex-direction: column;
+  clip-path: none;
+}
+body[data-layout="phone"] #dock {
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+body[data-layout="phone"] .dock-panel {
+  justify-content: space-evenly;
+  clip-path: none;
+  padding-bottom: calc(var(--u) * 3 + env(safe-area-inset-bottom));
+}
+body[data-layout="pip"] #dock,
+body.bare #dock {
+  display: none;
+}
+
+/* Minecraft's hotbar slot: sunken, dark at its top and left, lit at its bottom and right. */
+.slot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 20);
+  height: calc(var(--u) * 20);
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  background: rgb(14 14 22 / 0.9);
+  box-shadow:
+    inset var(--u) var(--u) 0 0 rgb(6 6 10 / 0.9),
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 0 rgb(70 70 92 / 0.8);
+  cursor: pointer;
+}
+.slot img {
+  width: calc(var(--u) * 16) !important;
+  height: calc(var(--u) * 16) !important;
+}
+.slot:hover,
+.slot:focus-visible {
+  background: rgb(36 30 52 / 0.95);
+  outline: none;
+}
+.slot.on::after,
+.slot:focus-visible::after {
+  content: "";
+  position: absolute;
+  inset: calc(var(--u) * -2);
+  box-shadow:
+    0 0 0 var(--u) var(--purple-hover) inset,
+    0 0 0 calc(var(--u) * 2) color-mix(in srgb, var(--purple-hover) 30%, transparent) inset;
+  pointer-events: none;
+}
+.slot .tip {
+  display: none;
+}
+body[data-layout="wide"] .slot:hover .tip,
+body[data-layout="wide"] .slot:focus-visible .tip {
+  display: block;
+  position: absolute;
+  left: calc(100% + var(--u) * 5);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: calc(var(--u) * 10);
+  line-height: calc(var(--u) * 10);
+  padding: calc(var(--u) * 4) calc(var(--u) * 5);
+  background: var(--tip);
+  box-shadow:
+    0 0 0 var(--u) var(--purple),
+    0 0 0 calc(var(--u) * 2) var(--purple-dark) inset;
+  text-align: left;
+}
+.slot .tip b {
+  display: block;
+  font-weight: normal;
+  color: var(--text);
+  text-shadow: var(--u) var(--u) 0 rgb(0 0 0 / 0.55);
+}
+.slot .tip i {
+  font-style: normal;
+  color: var(--lore);
+}
+/* A moment is playing: the navigation steps back. */
+body.busy #dock {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------------------------------
+ * The toast: the mod's milestone toast, dropping in at the top. */
+
+#toast {
+  position: fixed;
+  z-index: 6;
+  left: 50%;
+  top: calc(var(--u) * 4);
+  max-width: calc(100% - var(--u) * 8);
+  transform: translate(-50%, -200%);
+  padding: calc(var(--u) * 4) calc(var(--u) * 6);
+  font-size: calc(var(--u) * 10);
+  line-height: calc(var(--u) * 11);
+  color: var(--text-2);
+  background: rgb(30 26 40 / 0.94);
+  box-shadow:
+    inset 0 0 0 var(--u) color-mix(in srgb, var(--purple) 75%, var(--gold)),
+    inset 0 calc(var(--u) * 2) 0 0 color-mix(in srgb, var(--gold) 30%, transparent);
+  transition: transform 0.18s steps(3);
+  pointer-events: none;
+}
+#toast.on {
+  transform: translate(-50%, 0);
+}
+/* On a wide screen the toast drops in at the top right, as Minecraft's do, clear of the menus. */
+body[data-layout="wide"] #toast {
+  left: auto;
+  right: calc(var(--u) * 4);
+  max-width: calc(var(--u) * 150);
+  transform: translateY(-200%);
+}
+body[data-layout="wide"] #toast.on {
+  transform: translateY(0);
+}
+body[data-layout="pip"] #toast {
+  display: none;
+}
+
+/* ------------------------------------------------------------------------------------------
+ * Menus over the dimmed live scene. */
+
+#menu {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  /* One track no wider than the screen, whatever the longest paragraph would like. */
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  padding: calc(var(--mu) * 6);
+}
+#menu[hidden] {
+  display: none;
+}
+body[data-layout="wide"] #menu {
+  padding-left: calc(var(--u) * 32);
+}
+body[data-layout="phone"] #menu {
+  bottom: calc(var(--u) * 28);
+  padding: calc(var(--mu) * 3);
+  place-items: stretch;
+}
+.menu-dim {
+  position: absolute;
+  inset: 0;
+  background: rgb(10 7 16 / 0.5);
+  /* A two-unit checker of shade, so the dimming is pixel art too. */
+  background-image: conic-gradient(
+    rgb(10 7 16 / 0.25) 25%,
+    transparent 0 50%,
+    rgb(10 7 16 / 0.25) 0 75%,
+    transparent 0
+  );
+  background-size: calc(var(--mu) * 2) calc(var(--mu) * 2);
+}
+.menu {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, calc(var(--mu) * 360));
+  max-height: 100%;
+}
+.menu.opening {
+  animation: open 0.12s steps(3, jump-none);
+}
+body.still .menu.opening {
+  animation: none;
+}
+@keyframes open {
+  from {
+    transform: scaleY(0.1);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.menu > header {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--mu) * 6);
+  padding: calc(var(--mu) * 7) calc(var(--mu) * 8) calc(var(--mu) * 5);
+  box-shadow: inset 0 calc(var(--mu) * -1) 0 0 color-mix(in srgb, var(--accent) 35%, transparent);
+  margin: 0 calc(var(--mu) * 2);
+}
+.titles {
+  flex: 1;
+  min-width: 0;
+}
+.titles small {
+  display: block;
+  color: var(--muted);
+}
+h1 {
+  margin: calc(var(--mu) * 2) 0 0;
+  font-size: calc(var(--mu) * 20);
+  line-height: calc(var(--mu) * 20);
+  font-weight: normal;
+  color: var(--text);
+  text-shadow: calc(var(--mu) * 2) calc(var(--mu) * 2) 0 rgb(0 0 0 / 0.55);
+  outline: none;
+}
+.balance {
+  padding-top: calc(var(--mu) * 2);
+}
+.leaf-amount {
+  color: var(--leaf);
+  white-space: nowrap;
+  text-shadow:
+    var(--mu) 0 0 #0b2414,
+    calc(var(--mu) * -1) 0 0 #0b2414,
+    0 var(--mu) 0 #0b2414,
+    0 calc(var(--mu) * -1) 0 #0b2414;
+}
+.close {
+  --accent: color-mix(in srgb, var(--purple) 60%, var(--popup));
+  display: grid;
+  place-items: center;
+  width: calc(var(--mu) * 18);
+  height: calc(var(--mu) * 18);
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  background: rgb(14 14 22 / 0.9);
+  box-shadow: inset 0 0 0 var(--mu) var(--accent);
+}
+.close:hover {
+  --accent: var(--purple-hover);
+}
+.close img {
+  width: calc(var(--mu) * 16) !important;
+  height: calc(var(--mu) * 16) !important;
+}
+.menu-body {
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: calc(var(--mu) * 6) calc(var(--mu) * 8) calc(var(--mu) * 8);
+  scrollbar-width: thin;
+  scrollbar-color: var(--purple-dark) transparent;
+}
+.cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--mu) * 10);
+  margin-top: calc(var(--mu) * 6);
+}
+.cols:first-child {
+  margin-top: 0;
+}
+.cols > *,
+.book > * {
+  min-width: 0;
+}
+body[data-layout="phone"] .cols {
+  grid-template-columns: 1fr;
+}
+.subhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: calc(var(--mu) * 4);
+  margin-bottom: calc(var(--mu) * 4);
+}
+.subhead h2,
+h2.small {
+  margin: 0;
+  font-size: inherit;
+  font-weight: normal;
+  color: var(--text);
+  text-shadow: var(--mu) var(--mu) 0 rgb(0 0 0 / 0.55);
+}
+.subhead small,
+.note {
+  color: var(--muted);
+}
+.note {
+  margin: calc(var(--mu) * 4) 0 0;
+}
+.gold {
+  color: var(--gold);
+}
+.fine {
+  margin: calc(var(--mu) * 8) 0 0;
+  color: var(--muted);
+}
+.lore {
+  color: var(--lore);
+  font-style: italic;
+}
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--mu) * 4);
+  margin-top: calc(var(--mu) * 6);
+}
+
+/* The mod's button: a small panel, purple by default, gold for the main action, green for Leaf. */
+.btn {
+  --accent: var(--purple);
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--mu) * 2);
+  min-height: calc(var(--mu) * 18);
+  padding: calc(var(--mu) * 3) calc(var(--mu) * 8);
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  text-decoration: none;
+  text-shadow: var(--mu) var(--mu) 0 rgb(0 0 0 / 0.55);
+  cursor: pointer;
+}
+.btn.gold {
+  --accent: var(--gold);
+}
+.btn.green {
+  --accent: var(--leaf);
+}
+.btn:hover:not(:disabled),
+.btn:focus-visible {
+  --accent: var(--purple-hover);
+  background: color-mix(in srgb, var(--purple-dark) 45%, var(--popup));
+  outline: none;
+}
+.btn.gold:hover:not(:disabled) {
+  --accent: rgb(255 222 120);
+}
+.btn.green:hover:not(:disabled) {
+  --accent: rgb(140 230 160);
+}
+.btn:disabled {
+  --accent: rgb(80 80 96);
+  color: var(--muted);
+  cursor: default;
+}
+.tab {
+  --accent: color-mix(in srgb, var(--purple) 45%, var(--popup));
+  padding: calc(var(--mu) * 3) calc(var(--mu) * 5);
+  border: 0;
+  color: var(--text-2);
+  font: inherit;
+  cursor: pointer;
+}
+.tab.on {
+  --accent: var(--purple-hover);
+  color: var(--text);
+}
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--mu) * 2);
+  margin-bottom: calc(var(--mu) * 5);
+}
+
+/* A rank, always as its insignia in its colour with its name beside it. */
+.rank {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--mu) * 3);
+  color: var(--rank);
+  white-space: nowrap;
+}
+.gem {
+  width: calc(var(--mu) * 5);
+  height: calc(var(--mu) * 5);
+  background: var(--rank);
+  clip-path: polygon(
+    40% 0,
+    60% 0,
+    60% 20%,
+    80% 20%,
+    80% 40%,
+    100% 40%,
+    100% 60%,
+    80% 60%,
+    80% 80%,
+    60% 80%,
+    60% 100%,
+    40% 100%,
+    40% 80%,
+    20% 80%,
+    20% 60%,
+    0 60%,
+    0 40%,
+    20% 40%,
+    20% 20%,
+    40% 20%
+  );
+  box-shadow: inset calc(var(--mu) * 2) calc(var(--mu) * 2) 0 0 rgb(255 255 255 / 0.3);
+}
+
+/* Minecraft's experience bar: notched segments in an inked frame. */
+.bar {
+  position: relative;
+  height: calc(var(--mu) * 5);
+  background: color-mix(in srgb, var(--fill) 30%, var(--ink));
+  box-shadow: 0 0 0 var(--mu) color-mix(in srgb, var(--fill) 20%, var(--ink));
+  margin: var(--mu);
+}
+.bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--fill);
+  box-shadow:
+    inset 0 var(--mu) 0 0 color-mix(in srgb, var(--fill) 55%, white),
+    inset 0 calc(var(--mu) * -1) 0 0 color-mix(in srgb, var(--fill) 70%, black);
+}
+.bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0 calc(100% / var(--segments) - var(--mu)),
+    rgb(8 6 12 / 0.45) calc(100% / var(--segments) - var(--mu)) calc(100% / var(--segments))
+  );
+}
+
+.hearts {
+  display: inline-flex;
+  gap: var(--mu);
+  vertical-align: middle;
+}
+.hearts img.glyph {
+  margin: 0;
+}
+.hearts .off img {
+  filter: grayscale(1) brightness(0.45);
+}
+
+/* ------------------------------------------------------------------------------------------
+ * Inventory slots, for spirits and items. */
+
+.inventory {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, calc(var(--mu) * 36));
+  gap: calc(var(--mu) * 2);
+}
+.inventory.items {
+  grid-template-columns: repeat(auto-fill, calc(var(--mu) * 22));
+}
+.inventory .slot {
+  width: calc(var(--mu) * 36);
+  height: calc(var(--mu) * 36);
+  box-shadow:
+    inset var(--mu) var(--mu) 0 0 rgb(6 6 10 / 0.9),
+    inset calc(var(--mu) * -1) calc(var(--mu) * -1) 0 0 rgb(70 70 92 / 0.8),
+    inset 0 0 0 calc(var(--mu) * 2) color-mix(in srgb, var(--rank, var(--purple)) 22%, transparent);
+}
+.inventory.items .slot {
+  width: calc(var(--mu) * 22);
+  height: calc(var(--mu) * 22);
+}
+.inventory .slot img {
+  width: auto !important;
+  height: auto !important;
+}
+.inventory .slot.spirit > img {
+  width: calc(var(--mu) * 32) !important;
+  height: calc(var(--mu) * 32) !important;
+}
+.inventory .slot sup img {
+  width: calc(var(--mu) * 8) !important;
+  height: calc(var(--mu) * 6) !important;
+}
+.inventory.items .slot img {
+  width: calc(var(--mu) * 16) !important;
+  height: calc(var(--mu) * 16) !important;
+}
+.inventory .slot.picked::after,
+.trade.picked::after {
+  content: "";
+  position: absolute;
+  inset: calc(var(--mu) * -1);
+  box-shadow: 0 0 0 var(--mu) var(--purple-hover) inset;
+  pointer-events: none;
+}
+.inventory .slot.unknown {
+  background: rgb(10 8 16 / 0.95);
+}
+.inventory .slot sub,
+.inventory .slot sup {
+  position: absolute;
+  right: calc(var(--mu) * 2);
+  bottom: calc(var(--mu) * 1);
+  line-height: calc(var(--mu) * 10);
+  text-shadow: var(--mu) var(--mu) 0 rgb(0 0 0 / 0.7);
+}
+.inventory .slot sup {
+  left: calc(var(--mu) * 2);
+  top: calc(var(--mu) * 2);
+  right: auto;
+  bottom: auto;
+}
+.inventory .slot.verdant {
+  box-shadow:
+    inset var(--mu) var(--mu) 0 0 rgb(6 6 10 / 0.9),
+    inset 0 0 0 var(--mu) var(--gold);
+}
+.inventory .slot.owned::before {
+  content: "";
+  position: absolute;
+  right: calc(var(--mu) * 2);
+  top: calc(var(--mu) * 2);
+  width: calc(var(--mu) * 3);
+  height: calc(var(--mu) * 3);
+  background: var(--leaf);
+}
+
+/* ------------------------------------------------------------------------------------------
+ * The banner and its rate card. */
+
+.banner-art {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 0 var(--mu) color-mix(in srgb, var(--accent) 70%, black);
+  margin: var(--mu);
+}
+.banner-art canvas {
+  position: static;
+  display: block;
+}
+.banner-caption {
+  position: absolute;
+  left: calc(var(--mu) * 8);
+  bottom: calc(var(--mu) * 6);
+  text-shadow: var(--mu) var(--mu) 0 rgb(0 0 0 / 0.6);
+}
+.banner-caption small {
+  display: block;
+  color: var(--text-2);
+}
+.banner-caption strong {
+  display: block;
+  font-size: calc(var(--mu) * 20);
+  line-height: calc(var(--mu) * 22);
+  font-weight: normal;
+  text-shadow: calc(var(--mu) * 2) calc(var(--mu) * 2) 0 rgb(0 0 0 / 0.6);
+}
+.banner-spirit {
+  position: absolute;
+  right: calc(var(--mu) * 10);
+  bottom: calc(var(--mu) * 2);
+}
+body[data-layout="phone"] .banner-spirit {
+  right: calc(var(--mu) * 2);
+}
+.odds {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.odds li {
+  display: flex;
+  justify-content: space-between;
+  padding: calc(var(--mu) * 1) 0 calc(var(--mu) * 2);
+  box-shadow: inset 0 calc(var(--mu) * -1) 0 0 rgb(255 255 255 / 0.06);
+}
+.price {
+  margin: calc(var(--mu) * 6) 0 0;
+  color: var(--leaf);
+}
+.rate-card {
+  width: 100%;
+  border-collapse: collapse;
+}
+.rate-card th {
+  text-align: left;
+  font-weight: normal;
+  color: var(--muted);
+  padding: 0 calc(var(--mu) * 4) calc(var(--mu) * 4) 0;
+}
+.rate-card td {
+  padding: calc(var(--mu) * 2) calc(var(--mu) * 4) calc(var(--mu) * 2) 0;
+  box-shadow: inset 0 calc(var(--mu) * -1) 0 0 rgb(255 255 255 / 0.06);
+  vertical-align: middle;
+}
+.rate-card td.pool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--mu) * 2);
+  align-items: flex-end;
+}
+.rules {
+  list-style: none;
+  margin: calc(var(--mu) * 8) 0 0;
+  padding: 0;
+  display: grid;
+  gap: calc(var(--mu) * 4);
+}
+.rules li {
+  display: grid;
+  grid-template-columns: calc(var(--mu) * 16) 1fr;
+  gap: calc(var(--mu) * 4);
+  align-items: center;
+  color: var(--text-2);
+}
+
+/* ------------------------------------------------------------------------------------------
+ * The spirit book. */
+
+.book {
+  display: grid;
+  grid-template-columns: 1fr calc(var(--mu) * 140);
+  gap: calc(var(--mu) * 10);
+}
+body[data-layout="phone"] .book {
+  grid-template-columns: 1fr;
+}
+.display {
+  display: grid;
+  place-items: center;
+  height: calc(var(--mu) * 76);
+  margin-bottom: calc(var(--mu) * 4);
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--rank) 22%, transparent) 0 40%, transparent 41%),
+    rgb(14 12 22 / 0.9);
+  box-shadow: inset 0 0 0 var(--mu) color-mix(in srgb, var(--rank) 50%, black);
+}
+.display.unknown {
+  background: rgb(10 8 16 / 0.95);
+}
+.kind {
+  color: var(--muted);
+}
+.job {
+  color: var(--text-2);
+}
+
+/* ------------------------------------------------------------------------------------------
+ * Cinfy's Treasury. */
+
+.vendor {
+  display: flex;
+  gap: calc(var(--mu) * 8);
+  align-items: center;
+  padding: calc(var(--mu) * 4) calc(var(--mu) * 6);
+  background: linear-gradient(rgb(110 72 40 / 0.35), rgb(60 36 24 / 0.35));
+  box-shadow:
+    inset 0 calc(var(--mu) * 3) 0 0 rgb(170 110 60 / 0.6),
+    inset 0 calc(var(--mu) * -1) 0 0 rgb(40 24 16 / 0.8);
+}
+.vendor small {
+  display: block;
+  color: var(--muted);
+}
+.vendor strong {
+  display: block;
+  font-weight: normal;
+  font-size: calc(var(--mu) * 20);
+  line-height: calc(var(--mu) * 20);
+  color: var(--gold);
+  text-shadow: calc(var(--mu) * 2) calc(var(--mu) * 2) 0 rgb(0 0 0 / 0.55);
+}
+.vendor .lore {
+  margin: calc(var(--mu) * 3) 0 0;
+}
+.trades {
+  display: grid;
+  gap: calc(var(--mu) * 3);
+}
+.trade {
+  position: relative;
+  display: grid;
+  grid-template-columns: calc(var(--mu) * 16) 1fr auto;
+  gap: calc(var(--mu) * 5);
+  align-items: center;
+  padding: calc(var(--mu) * 3) calc(var(--mu) * 5);
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: rgb(14 14 22 / 0.7);
+  box-shadow: inset 0 0 0 var(--mu) rgb(70 70 92 / 0.6);
+}
+.trade:hover {
+  background: rgb(36 30 52 / 0.95);
+}
+.trade b {
+  font-weight: normal;
+  color: var(--leaf);
+}
+.trade.owned b {
+  color: var(--muted);
+}
+.trade-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: calc(var(--mu) * 6);
+  margin-top: calc(var(--mu) * 6);
+}
+#item-tip {
+  margin-top: calc(var(--mu) * 6);
+}
+
+/* ------------------------------------------------------------------------------------------
+ * Rings, the Great Sequoia and Leafle. */
+
+.wood {
+  display: grid;
+  justify-items: center;
+}
+.ring-box {
+  position: relative;
+}
+.wood canvas {
+  position: static;
+  display: block;
+  cursor: pointer;
+}
+.mark {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: var(--mu);
+  border: 0;
+  background: rgb(40 24 16 / 0.55);
+  box-shadow: 0 0 0 var(--mu) rgb(255 240 200 / 0.35);
+  cursor: pointer;
+}
+.mark.on {
+  box-shadow: 0 0 0 var(--mu) var(--gold);
+}
+.mark img.glyph {
+  margin: 0;
+}
+.ring-key {
+  justify-self: stretch;
+  justify-content: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--mu) * 8);
+  margin-top: calc(var(--mu) * 6);
+  color: var(--text-2);
+}
+.season-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--mu) * 3);
+  margin: calc(var(--mu) * 6) 0;
+}
+.goal {
+  margin-bottom: calc(var(--mu) * 6);
+}
+.goal > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: calc(var(--mu) * 2);
+}
+.goal small {
+  color: var(--muted);
+}
+.lanterns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--mu) * 5);
+  margin-bottom: calc(var(--mu) * 8);
+}
+.lantern {
+  display: grid;
+  justify-items: center;
+  gap: calc(var(--mu) * 2);
+}
+.lantern img {
+  box-shadow:
+    0 0 0 var(--mu) #1a1018,
+    0 0 0 calc(var(--mu) * 2) color-mix(in srgb, var(--gold) 70%, transparent);
+}
+.lantern small {
+  color: var(--muted);
+}
+.wordboard {
+  display: grid;
+  grid-template-columns: repeat(5, calc(var(--mu) * 18));
+  gap: calc(var(--mu) * 2);
+  margin: calc(var(--mu) * 6) 0;
+}
+.wordboard b {
+  display: grid;
+  place-items: center;
+  height: calc(var(--mu) * 18);
+  font-weight: normal;
+  background: rgb(14 14 22 / 0.9);
+  box-shadow: inset 0 0 0 var(--mu) rgb(70 70 92 / 0.8);
+}
+.wordboard b.current {
+  box-shadow: inset 0 0 0 var(--mu) var(--purple-hover);
+}
+.wordboard b.right,
+.mini i.right {
+  background: #5e9b5a;
+  box-shadow: inset 0 calc(var(--mu) * -1) 0 0 #2f5a2e;
+}
+.wordboard b.near,
+.mini i.near {
+  background: #c9a23c;
+  box-shadow: inset 0 calc(var(--mu) * -1) 0 0 #6e5418;
+}
+.wordboard b.miss,
+.mini i.miss {
+  background: #4a4858;
+}
+.keyboard {
+  display: grid;
+  gap: calc(var(--mu) * 2);
+}
+.keyboard div {
+  display: flex;
+  gap: calc(var(--mu) * 2);
+}
+.keyboard button {
+  flex: 1;
+  min-width: 0;
+  height: calc(var(--mu) * 18);
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  background: rgb(36 34 50 / 0.95);
+  box-shadow:
+    inset 0 var(--mu) 0 0 rgb(90 88 112 / 0.8),
+    inset 0 calc(var(--mu) * -1) 0 0 rgb(8 8 14 / 0.8);
+}
+.keyboard button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--purple-dark) 60%, var(--popup));
+}
+.friend {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--mu) * 5);
+  margin: calc(var(--mu) * 5) 0;
+}
+.friend small {
+  display: block;
+  color: var(--muted);
+}
+.friend strong {
+  font-weight: normal;
+}
+.mini {
+  display: grid;
+  grid-template-columns: repeat(5, calc(var(--mu) * 3));
+  gap: var(--mu);
+}
+.mini i {
+  height: calc(var(--mu) * 3);
+  background: rgb(40 38 52);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu {
+    animation: none;
+  }
+  #toast {
+    transition: none;
+  }
+}

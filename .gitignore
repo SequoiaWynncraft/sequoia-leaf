@@ -11,4 +11,3 @@ data/
 *.tfstate
 *.tfstate.*
 *.tfplan
-apps/grove/review/.build/

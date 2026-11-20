@@ -1,13 +1,29 @@
 #!/usr/bin/env bash
-# Usage: review/shoot.sh <page.html> <out.png> [width] [height] [scale] [suffix]. Builds the page with Bun, serves it, and screenshots it in headless Chromium.
-# A suffix such as "?still#shop" opens a particular screen, frozen.
+# Usage: review/shoot.sh <outdir> < shots.txt
+# Builds the client once, serves it, and screenshots each line of stdin in headless Chromium:
+#   <name> <width> <height> <query-and-hash>      e.g.  glade-l8 1440 900 ?level=8&still#glade
+# Lines starting with # are skipped. BUDGET sets Chromium's virtual time budget (ms, default 4000).
 set -euo pipefail
-cd "$(dirname "$0")"
-page=$1; out=$2; w=${3:-1400}; h=${4:-900}; scale=${5:-1}; suffix=${6:-}
-rm -rf .build && bun build "$page" --outdir .build --minify >/dev/null
-port=$((4300 + RANDOM % 500))
-bun -e "Bun.serve({ port: $port, fetch: (r) => { const p = new URL(r.url).pathname; const f = Bun.file('.build' + (p === '/' ? '/$(basename "$page")' : p)); return f.size ? new Response(f) : new Response('', { status: 404 }); } })" &
+cd "$(dirname "$0")/.."
+out=$(realpath -m "$1")
+build="$out/.build"
+mkdir -p "$out"
+rm -rf "$build"
+bun build index.html --outdir "$build" --minify >/dev/null
+port=$((5400 + RANDOM % 400))
+bun review/serve.ts "$build" "$port" &
 server=$!
 trap 'kill $server 2>/dev/null' EXIT
-for i in $(seq 1 40); do curl -sf "localhost:$port/" >/dev/null && break; sleep 0.1; done
-chromium --headless=new --disable-gpu --hide-scrollbars --default-background-color=00000000 --force-device-scale-factor="$scale" --window-size="$w,$h" --virtual-time-budget=4000 --screenshot="$out" "http://localhost:$port/$suffix" 2>/dev/null
+for _ in $(seq 1 50); do curl -sf "localhost:$port/" >/dev/null && break; sleep 0.1; done
+while read -r name width height query; do
+  [ -z "${name:-}" ] && continue
+  case "$name" in \#*) continue ;; esac
+  profile=$(mktemp -d)
+  chromium --headless=new --use-angle=gl --ignore-gpu-blocklist --hide-scrollbars --user-data-dir="$profile" \
+    --force-device-scale-factor=1 --window-size="$width,$height" \
+    --virtual-time-budget="${BUDGET:-4000}" --screenshot="$out/$name.png" \
+    "http://localhost:$port/${query:-}" 2>/dev/null >/dev/null || echo "failed: $name" >&2
+  rm -rf "$profile"
+  [ -f "$out/$name.png" ] || echo "missing: $name" >&2
+  echo "$out/$name.png"
+done
