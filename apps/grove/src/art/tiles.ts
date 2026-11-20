@@ -7,6 +7,7 @@
  * lantern, the flame, the banner, the string lights.
  */
 import { ihash, noise2 } from "../engine/rand.ts";
+import { DRAWN } from "./drawn.ts";
 import { PACK } from "./pack.gen.ts";
 
 export const TILE = 16;
@@ -59,6 +60,8 @@ const FLAME = [
 
 export const TILES: Record<string, Paint> = {
   ...Object.fromEntries(Object.entries(PACK).map(([name, data]) => [name, fromPack(data)])),
+  // A tile drawn by hand stands in for the pack's.
+  ...Object.fromEntries(Object.entries(DRAWN).map(([name, d]) => [name, rows(d.rows, d.key)])),
   lantern,
   flame: rows(FLAME, { o: "#e67967", y: "#f5b95e", w: "#fff3cf" }),
   cone: (x, y) => ((x + y) & 1 ? ((x ^ y) & 2 ? "#6b3d1f" : "#94582c") : "#3a1f12"),
