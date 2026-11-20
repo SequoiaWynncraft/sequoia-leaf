@@ -184,8 +184,8 @@ const flameAt =
     const top = 23 - dx * dx * 0.42 + lick;
     if (up > top) return up < top + 6 && ihash(x, up, frame, 61) > 0.985 ? "#f5b95e" : null;
     const k = up / Math.max(top, 1);
-    if (dx < 3.2 - k * 3 && k < 0.55) return "#fff3cf";
-    if (dx < 5 - k * 4.2 && k < 0.8) return "#f7c75a";
+    if (dx < 2.4 - k * 3 && k < 0.45) return "#ffe9a0";
+    if (dx < 5 - k * 4.2 && k < 0.8) return "#f8bd4a";
     return k > 0.85 ? "#c8452c" : "#f08a3c";
   };
 for (let f = 0; f < 4; f++) {

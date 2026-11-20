@@ -73,6 +73,13 @@ export interface Glow {
   readonly flicker: boolean;
 }
 const LAMPS = 8;
+/** Something standing in the firelight: a figure or a pet, as an upright rod that casts a shadow. */
+export interface Caster {
+  readonly at: V3;
+  readonly height: number;
+  readonly radius: number;
+}
+const CASTERS = 16;
 
 export interface Scene {
   readonly world: World;
@@ -83,6 +90,8 @@ export interface Scene {
   readonly fire?: V3;
   /** 0 is sunset, 1 is full night. */
   readonly night?: number;
+  /** Who stands in the light of the strongest lamp and throws a shadow from it. */
+  readonly casters?: readonly Caster[];
 }
 
 export interface Stage {
@@ -128,6 +137,10 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
     { length: LAMPS },
     (_, i) => strong[i] ?? { at: [0, -999, 0], size: 0, flicker: false },
   );
+  const casters: Caster[] = Array.from(
+    { length: CASTERS },
+    (_, i) => (set.casters ?? [])[i] ?? { at: [0, -999, 0], height: 0, radius: 0 },
+  );
   const blocks = new THREE.ShaderMaterial({
     glslVersion: THREE.GLSL3,
     uniforms: {
@@ -137,6 +150,9 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       uLamp: { value: lamps.map((g) => new THREE.Vector4(g.at[0], g.at[1], g.at[2], 6 + g.size * 2)) },
       uLampSet: { value: lamps.map((g) => new THREE.Vector2(g.size > 5 ? 2.2 : 1.2, g.flicker ? 1 : 0)) },
       uLampN: { value: Math.min(LAMPS, strong.length) },
+      uCaster: { value: casters.map((c) => new THREE.Vector4(c.at[0], c.at[1], c.at[2], c.radius)) },
+      uCasterH: { value: casters.map((c) => c.height) },
+      uCasterN: { value: Math.min(CASTERS, (set.casters ?? []).length) },
     },
     vertexShader: /* glsl */ `
       in vec4 aUv;
@@ -177,6 +193,9 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       uniform vec4 uLamp[${LAMPS}];
       uniform vec2 uLampSet[${LAMPS}];
       uniform int uLampN;
+      uniform vec4 uCaster[${CASTERS}];
+      uniform float uCasterH[${CASTERS}];
+      uniform int uCasterN;
       ${SHARED}
       in vec2 vUv;
       in float vTile;
@@ -185,6 +204,16 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       in vec3 vN;
       in vec3 vPos;
       out vec4 outColour;
+      /** The least distance between the line from p1 to q1 and the line from p2 to q2. */
+      float apart(vec3 p1, vec3 q1, vec3 p2, vec3 q2) {
+        vec3 d1 = q1 - p1, d2 = q2 - p2, r = p1 - p2;
+        float a = dot(d1, d1), e = dot(d2, d2), f = dot(d2, r), c = dot(d1, r), b = dot(d1, d2);
+        float den = a * e - b * b;
+        float s = den > 1e-5 ? clamp((b * f - c * e) / den, 0.0, 1.0) : 0.0;
+        float t = clamp((b * s + f) / max(e, 1e-5), 0.0, 1.0);
+        s = clamp((b * t - c) / max(a, 1e-5), 0.0, 1.0);
+        return length(p1 + d1 * s - p2 - d2 * t);
+      }
       float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
       float vnoise3(vec3 p) {
         vec3 i = floor(p), f = fract(p);
@@ -253,6 +282,22 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
         // A lamp lights each point by how far it is and how squarely the surface faces it, so a log's
         // near side is bright and its far side is not. The flooded light says whether the lamp can
         // reach the point at all, which keeps it from shining through a wall.
+        // The strongest lamp, the fire, throws shadows: whoever stands between it and this point
+        // takes most of its light away, with a soft edge that widens with the figure.
+        float clear = 1.0;
+        for (int j = 0; j < ${CASTERS}; j++) {
+          if (j >= uCasterN || uLampN < 1) break;
+          vec3 foot = uCaster[j].xyz;
+          float r = uCaster[j].w;
+          vec2 off = vPos.xz - foot.xz;
+          // Not the figure's own surface.
+          if (dot(off, off) < r * r * 2.6 && vPos.y > foot.y + 0.04 && vPos.y < foot.y + uCasterH[j] + 0.4) continue;
+          float gap = apart(vPos + vN * 0.03, uLamp[0].xyz, foot, foot + vec3(0.0, uCasterH[j], 0.0));
+          // A low fire would throw a shadow right across the glade; it softens and fades a few blocks out.
+          float far = length(off);
+          float dark = (1.0 - smoothstep(r * 0.45, r * (1.25 + far * 0.12), gap)) * (1.0 - smoothstep(1.5, 6.5, far));
+          clear *= 1.0 - dark;
+        }
         float direct = 0.0;
         float shine = 0.0;
         for (int i = 0; i < ${LAMPS}; i++) {
@@ -268,6 +313,7 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
           // A lamp behind the face lights none of its pixels, however they lean.
           shape *= leafy ? 1.0 : smoothstep(-0.25, 0.1, dot(vN, dir));
           float power = uLampSet[i].x * fall * mix(1.0, flicker, uLampSet[i].y);
+          if (i == 0) power *= mix(0.15, 1.0, clear);
           // Some of a lamp's light comes round by way of everything else it lights, so a ledge above
           // the fire or a wall turned from it is dim, not black.
           direct += power * mix(0.2, 1.0, shape);
@@ -280,7 +326,8 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
         shine *= reach;
         // What the lamps' light does after it lands: a soft warm fill wherever the flood reached.
         float reached = min(vLight.y, 1.0);
-        float fill = reached * reached * 0.9 * mix(1.0, vLight.w, 0.6);
+        // The warm fill near the fire is mostly the fire's own, so its shadows take some of that too.
+        float fill = reached * reached * 0.9 * mix(1.0, vLight.w, 0.6) * mix(0.5, 1.0, clear);
         vec3 lamp = vec3(1.0, 0.58, 0.24) * (direct + fill) * mix(0.75, 1.0, uNight);
         // Away from the lamps, night takes the red out of things and leaves them blue.
         float lum = dot(t.rgb, vec3(0.4, 0.45, 0.15));

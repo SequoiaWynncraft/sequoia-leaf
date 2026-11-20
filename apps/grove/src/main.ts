@@ -63,7 +63,21 @@ const flies: [number, number, number][] = camp
 const errors: string[] = [];
 const night = Number(query.get("night") ?? (camp ? 0.7 : 0));
 const lit = camp ?? board;
-const s = stage(canvas, { world, sun: SUN, flies, night, ...(lit ? { glows: lit.glows, fire: lit.fire } : {}) });
+// Everyone at the fire throws a shadow from it: an upright rod as tall and as wide as the figure.
+const casters = (camp?.actors ?? []).map((a) => {
+  const k = (a.scale ?? 1) / 16;
+  const top = Math.max(...a.parts.map((p) => p.box[4]));
+  const wide = Math.max(...a.parts.map((p) => Math.max(Math.abs(p.box[0]), Math.abs(p.box[3]))));
+  return { at: a.pos, height: Math.max(0.3, top * k), radius: Math.min(0.42, Math.max(0.2, wide * k * 0.75)) };
+});
+const s = stage(canvas, {
+  world,
+  sun: SUN,
+  flies,
+  night,
+  casters,
+  ...(lit ? { glows: lit.glows, fire: lit.fire } : {}),
+});
 s.renderer.debug.onShaderError = (gl, _program, vs, fs) => {
   errors.push(String(gl.getShaderInfoLog(vs)), String(gl.getShaderInfoLog(fs)));
 };
