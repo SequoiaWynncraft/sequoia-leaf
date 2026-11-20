@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <title>The Little Raid</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #1b1220;
+        overflow: hidden;
+        font:
+          600 13px/1.3 ui-monospace,
+          "DejaVu Sans Mono",
+          Menlo,
+          Consolas,
+          monospace;
+        color: #fff3cf;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100dvh;
+        touch-action: none;
+      }
+      button {
+        font: inherit;
+        color: #fff3cf;
+        background: #2a1733;
+        border: 2px solid #5a296e;
+        box-shadow: 0 0 0 2px #1a0f1e;
+        border-radius: 3px;
+        min-height: 40px;
+        padding: 4px 12px;
+        cursor: pointer;
+      }
+      button:active {
+        transform: translateY(2px);
+      }
+      button.main {
+        border-color: #f5b95e;
+        background: #54286a;
+        color: #ffd98a;
+      }
+      button.on {
+        border-color: #f5b95e;
+        color: #ffd98a;
+      }
+      button.off {
+        opacity: 0.45;
+      }
+      button small {
+        display: block;
+        font-size: 10px;
+        font-weight: 500;
+        color: #e0c39a;
+      }
+      .label {
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #d49045;
+      }
+      .nut {
+        display: inline-block;
+        width: 0.62em;
+        height: 0.78em;
+        margin-right: 0.3em;
+        border-radius: 45% 45% 50% 50%;
+        background: linear-gradient(#79553a 0 38%, #d49045 38%);
+        box-shadow: 0 0 0 1.5px #1a0f1e;
+        vertical-align: -0.04em;
+      }
+
+      #hud {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        box-sizing: border-box;
+        height: calc(52px + env(safe-area-inset-top));
+        padding: env(safe-area-inset-top) max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: #2a1733;
+        border-bottom: 2px solid #5a296e;
+      }
+      #hud .grow {
+        flex: 1;
+      }
+      #pips {
+        display: flex;
+        gap: 4px;
+        margin-top: 4px;
+      }
+      #pips i {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        box-sizing: border-box;
+        border: 2px solid #5a296e;
+      }
+      #pips i:last-child {
+        border-radius: 3px;
+        width: 14px;
+      }
+      #pips i.win {
+        background: #62a658;
+        border-color: #62a658;
+      }
+      #pips i.loss {
+        background: #e67967;
+        border-color: #e67967;
+      }
+      #pips i.draw {
+        background: #888788;
+        border-color: #888788;
+      }
+      #pips i.now {
+        border-color: #ffd98a;
+      }
+      #hearts {
+        font-size: 20px;
+        letter-spacing: 2px;
+        color: #e67967;
+        white-space: nowrap;
+      }
+      #hearts s {
+        text-decoration: none;
+        color: #5a296e;
+      }
+      #hearts.kind {
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #d49045;
+        text-align: right;
+        white-space: normal;
+        max-width: 96px;
+      }
+      #purse {
+        text-align: right;
+        line-height: 1.05;
+      }
+      #acorns {
+        font-size: 24px;
+        color: #f5b95e;
+      }
+      #buried {
+        display: block;
+        font-size: 10px;
+        color: #e0c39a;
+        min-height: 11px;
+      }
+      #menu {
+        min-height: 34px;
+        padding: 2px 9px;
+      }
+
+      #panel {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        box-sizing: border-box;
+        height: calc(150px + env(safe-area-inset-bottom));
+        padding: 8px max(10px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom))
+          max(10px, env(safe-area-inset-left));
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        background: #231329;
+        border-top: 2px solid #5a296e;
+      }
+      #card {
+        flex: 1;
+        max-width: 720px;
+        min-width: 0;
+        box-sizing: border-box;
+        padding: 8px 12px;
+        background: #2a1733;
+        border: 2px solid #5a296e;
+        border-radius: 3px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        overflow: hidden;
+      }
+      #card .who {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 15px;
+      }
+      #card .who i {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        box-shadow: 0 0 0 1.5px #1a0f1e;
+      }
+      #card .lv {
+        font-size: 11px;
+        color: #ffd98a;
+      }
+      #card .atk {
+        color: #f5b95e;
+        font-size: 12px;
+      }
+      #card .hp {
+        color: #ff8f7d;
+        font-size: 12px;
+      }
+      #card .pad {
+        color: #fff3cf;
+        font-size: 12px;
+      }
+      #card p {
+        margin: 0;
+        font-weight: 500;
+      }
+      #card p b {
+        color: #ffd98a;
+      }
+      #card .quip {
+        color: #b9a3c4;
+        font-style: italic;
+        font-size: 12px;
+      }
+      #card .acts {
+        margin-top: auto;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      #card .acts button {
+        min-height: 34px;
+      }
+      #bar {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 250px;
+      }
+      #bar .row {
+        display: flex;
+        gap: 8px;
+        flex: 1;
+      }
+      #bar button {
+        flex: 1;
+        padding: 4px 6px;
+      }
+      #bar button.main {
+        font-size: 16px;
+      }
+
+      #toast {
+        position: fixed;
+        left: 50%;
+        bottom: calc(160px + env(safe-area-inset-bottom));
+        transform: translateX(-50%);
+        padding: 6px 14px;
+        background: #1a0f1eee;
+        border-left: 3px solid #e67967;
+        color: #ffb3a6;
+        max-width: 90vw;
+        text-align: center;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+      }
+      #toast.up {
+        opacity: 1;
+      }
+
+      #veil {
+        position: fixed;
+        inset: 0;
+        display: none;
+        place-items: center;
+        background: #1b1220d9;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+      #veil.up {
+        display: grid;
+      }
+      #veil .sheet {
+        max-width: 460px;
+        padding: 20px 22px;
+        background: #2a1733;
+        border: 2px solid #5a296e;
+        box-shadow: 0 0 0 2px #1a0f1e;
+        border-radius: 4px;
+        text-align: center;
+      }
+      #veil h1 {
+        margin: 2px 0 8px;
+        font-size: clamp(24px, 6vw, 34px);
+        color: #ffd98a;
+      }
+      #veil p {
+        margin: 0 0 12px;
+        font-weight: 500;
+        color: #e9d9c3;
+      }
+      #veil .ways {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      #veil .ways button {
+        padding: 8px 12px;
+        font-size: 15px;
+      }
+      #veil .tally {
+        display: flex;
+        justify-content: center;
+        gap: 5px;
+        margin-bottom: 12px;
+      }
+      #veil .tally i {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+      }
+
+      @media (max-width: 719px) {
+        #panel {
+          height: calc(226px + env(safe-area-inset-bottom));
+          flex-direction: column;
+          gap: 8px;
+        }
+        #card {
+          max-width: none;
+          padding: 7px 10px;
+        }
+        #card .acts button {
+          padding: 3px 9px;
+          font-size: 12px;
+        }
+        #card .quip {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        #bar {
+          width: auto;
+          flex-direction: row;
+          height: 52px;
+          flex: none;
+        }
+        #toast {
+          bottom: calc(236px + env(safe-area-inset-bottom));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas></canvas>
+    <div id="hud">
+      <div>
+        <div id="round" class="label"></div>
+        <div id="pips"></div>
+      </div>
+      <div class="grow"></div>
+      <div id="hearts"></div>
+      <div id="purse"><span class="nut"></span><b id="acorns">0</b><small id="buried"></small></div>
+      <button id="menu" data-do="menu" aria-label="Menu">&#9776;</button>
+    </div>
+    <div id="panel">
+      <div id="card"></div>
+      <div id="bar"></div>
+    </div>
+    <div id="toast"></div>
+    <div id="veil"></div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,40 @@
+[
+  ["size", 1280, 760],
+  ["wait", 600],
+  [
+    "eval",
+    "battler.start(7); for (let i = 0; i < 7 && battler.run.phase === 'shop' && battler.run.round < 8; i++) { battler.auto(); battler.go(); battler.skip(); battler.onward(); } battler.veil(null); JSON.stringify(battler.state())"
+  ],
+  [
+    "eval",
+    "battler.run.hearts = 2; battler.line([['slug',2],['fox'],['greg'],['owl'],['emberkit',2]], 3); const L = battler.run.line; L[0].hp = 16; L[1].cushion = 1; L[2].atk = 9; L[2].hp = 14; battler.sync(); battler.select('foe', 2); battler.tick(1200); JSON.stringify(battler.state())"
+  ],
+  ["wait", 300],
+  ["shot", "30-boss-shop"],
+  ["eval", "battler.go(); battler.until('Swoops', 330)"],
+  ["wait", 300],
+  ["shot", "31-boss-owl-swoops"],
+  ["eval", "battler.until('Slimed', 420)"],
+  ["wait", 300],
+  ["shot", "32-boss-slimed"],
+  ["eval", "battler.until('Crabbier', 380)"],
+  ["wait", 300],
+  ["shot", "33-boss-crabbier"],
+  ["eval", "battler.skip(); battler.tick(500); JSON.stringify(battler.state())"],
+  ["wait", 300],
+  ["shot", "34-boss-result"],
+  ["eval", "battler.onward(); battler.tick(500); JSON.stringify(battler.state())"],
+  ["wait", 300],
+  ["shot", "35-over"],
+  ["size", 390, 844],
+  ["eval", "battler.tick(50); 1"],
+  ["wait", 300],
+  ["shot", "36-phone-over"],
+  ["eval", "battler.start(5, 'friendly'); battler.auto(); battler.tick(1200); JSON.stringify(battler.state())"],
+  ["wait", 300],
+  ["shot", "37-phone-friendly-shop"],
+  ["size", 1280, 760],
+  ["eval", "battler.go(); battler.until('clash', 235)"],
+  ["wait", 300],
+  ["shot", "38-friendly-clash"]
+]

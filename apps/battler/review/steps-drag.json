@@ -1,0 +1,33 @@
+[
+  ["size", 1280, 760],
+  ["wait", 600],
+  [
+    "eval",
+    "window.ptr = (type, p) => document.querySelector('canvas').dispatchEvent(new PointerEvent(type, { clientX: p.x, clientY: p.y, pointerId: 1, bubbles: true })); battler.start(21); battler.tick(800); 1"
+  ],
+  [
+    "eval",
+    "const a = battler.at('stall', 0), b = battler.at('line', 3); ptr('pointerdown', a); ptr('pointermove', { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }); battler.tick(50); 1"
+  ],
+  ["wait", 300],
+  ["shot", "40-dragging-an-offer"],
+  [
+    "eval",
+    "ptr('pointermove', battler.at('line', 3)); ptr('pointerup', battler.at('line', 3)); battler.tick(300); JSON.stringify(battler.state().line)"
+  ],
+  [
+    "eval",
+    "ptr('pointerdown', battler.at('line', 3)); ptr('pointermove', battler.at('line', 1)); ptr('pointerup', battler.at('line', 0)); battler.tick(300); JSON.stringify(battler.state().line)"
+  ],
+  [
+    "eval",
+    "ptr('pointerdown', battler.at('snack', 0)); ptr('pointermove', battler.at('line', 1)); ptr('pointerup', battler.at('line', 0)); battler.tick(1300); JSON.stringify([battler.state().line, battler.state().acorns])"
+  ],
+  [
+    "eval",
+    "battler.line([['rock'], ['slug']], 8); battler.tick(400); ptr('pointerdown', battler.at('line', 0)); ptr('pointermove', battler.at('line', 2)); battler.tick(200); JSON.stringify(battler.state().line)"
+  ],
+  ["wait", 300],
+  ["shot", "41-a-rock-will-not-be-dragged"],
+  ["eval", "ptr('pointerup', battler.at('line', 2)); battler.tick(100); JSON.stringify(battler.state().line)"]
+]
