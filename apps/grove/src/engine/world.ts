@@ -8,11 +8,14 @@ export class World {
   /** Light from lanterns, fires and windows, 0 to 15. */
   readonly glow: Uint8Array;
 
-  constructor(
-    readonly sx: number,
-    readonly sy: number,
-    readonly sz: number,
-  ) {
+  readonly sx: number;
+  readonly sy: number;
+  readonly sz: number;
+
+  constructor(sx: number, sy: number, sz: number) {
+    this.sx = sx;
+    this.sy = sy;
+    this.sz = sz;
     this.blocks = new Uint8Array(sx * sy * sz);
     this.sky = new Uint8Array(sx * sy * sz);
     this.glow = new Uint8Array(sx * sy * sz);

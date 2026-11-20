@@ -41,11 +41,17 @@ light model, not from matching a painting by hand.
 - `src/gen/sequoia.ts`: grows a sequoia of any age from a few numbers.
 - `src/gen/glade.ts`: the prototype's world: the giant, its house and bridge, the forest round it.
 
-## Skins
+## People
 
-`skinned()` in `actors.ts` puts any 64x64 Minecraft skin on a figure, outer layer included. The
-campfire loads `skins/notes.png` from beside the page if it is there. No skin is kept in this
-repository: copy one into `dist/skins/` after building.
+Everyone stands on one model, the Minecraft skin's: `skinned()` in `actors.ts` puts any 64x64 skin
+on a figure, outer layer included. A member appears in their own skin. The grove's own people
+(`src/art/skins.ts`: the keeper, the trader, the herald, the cook) are skins too, each an outfit
+tailored into a sheet in code, plus the solid things a flat sheet cannot show: a staff, a pack, a
+feather.
+
+No member's skin is kept in this repository. The campfire loads `skins/notes.png` from beside the
+page if it is there: copy one into `dist/skins/` after building. The game proper will get skins
+from the Leaf server by player id.
 
 ## Not done
 

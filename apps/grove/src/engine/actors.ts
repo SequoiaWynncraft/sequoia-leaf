@@ -150,164 +150,10 @@ const front =
     const ch = row?.[x - UV0];
     return ch ? (key[ch] ?? fill) : fill;
   };
-/** A tile coloured in bands by height, for limbs: `bands` gives a colour to the pixels from that height up. */
-const banded =
-  (height: number, base: string, low: number, lowColour: string) =>
-  (_x: number, y: number): string => {
-    const up = 15 - y - UV0;
-    return up >= 0 && up < low && up < height ? lowColour : base;
-  };
 const flecked =
   (a: string, b: string, seed: number) =>
   (x: number, y: number): string =>
     ihash(x, y, 1, seed) < 0.18 ? b : a;
-
-// ---------- people ----------
-
-export interface Look {
-  skin: string;
-  hair: string;
-  hairDark: string;
-  top: string;
-  topDark: string;
-  accent: string;
-  legs: string;
-  shoes: string;
-}
-
-export const LOOKS: Look[] = [
-  {
-    skin: "#e8b48a",
-    hair: "#3b1910",
-    hairDark: "#2a110c",
-    top: "#54286a",
-    topDark: "#472365",
-    accent: "#f5b95e",
-    legs: "#2c1e25",
-    shoes: "#241612",
-  },
-  {
-    skin: "#f0c9a0",
-    hair: "#d49045",
-    hairDark: "#9b7724",
-    top: "#524915",
-    topDark: "#453814",
-    accent: "#e67967",
-    legs: "#3b1910",
-    shoes: "#241612",
-  },
-  {
-    skin: "#b9774f",
-    hair: "#241612",
-    hairDark: "#150a09",
-    top: "#763332",
-    topDark: "#602714",
-    accent: "#f5b95e",
-    legs: "#2c1e25",
-    shoes: "#150a09",
-  },
-  {
-    skin: "#e8b48a",
-    hair: "#e0c39a",
-    hairDark: "#c9a57a",
-    top: "#3d2050",
-    topDark: "#321b3c",
-    accent: "#b84d84",
-    legs: "#47253b",
-    shoes: "#241612",
-  },
-  {
-    skin: "#f0c9a0",
-    hair: "#453814",
-    hairDark: "#363210",
-    top: "#453814",
-    topDark: "#363210",
-    accent: "#d49045",
-    legs: "#3b1910",
-    shoes: "#241612",
-  },
-];
-
-const FACE = [
-  "hhhhhhhhhh",
-  "hhhhhhhhhh",
-  "hhhhhhhhhh",
-  "hhsssssshh",
-  "ssssssssss",
-  "ssewssewss",
-  "sseesseess",
-  "sbssssssbs",
-  "ssssmmssss",
-  "ssssssssss",
-];
-const SHIRT = ["aaaaaaaa", "ttaatttt", "ttaatttt", "tttttttt", "tttddttt", "tttttttt", "dddddddd", "tttttttt"];
-
-LOOKS.forEach((l, i) => {
-  addTile(
-    `p${i}_face`,
-    front(FACE, { h: l.hair, s: l.skin, e: "#241612", w: "#fff3cf", b: "#e67967", m: "#8a3b3c" }, l.hair),
-  );
-  addTile(`p${i}_hair`, flecked(l.hair, l.hairDark, 90 + i));
-  addTile(`p${i}_body`, front(SHIRT, { a: l.accent, t: l.top, d: l.topDark }, l.top));
-  addTile(`p${i}_side`, banded(8, l.top, 2, l.topDark));
-  addTile(`p${i}_arm`, banded(8, l.top, 2, l.skin));
-  addTile(`p${i}_leg`, banded(7, l.legs, 2, l.shoes));
-});
-addTile("stick", () => "#74501f");
-addTile("mallow", (x, y) => ((x + y) & 3 ? "#fff3cf" : "#e0c39a"));
-
-export interface Person extends Actor {
-  head: Part;
-  armL: Part;
-  armR: Part;
-}
-
-/** A small person, 25 pixels tall with a large head. `sit` folds the legs forward for a seat. */
-export function person(look: number, pos: V3, yaw: number, sit: boolean, phase: number, roast = false): Person {
-  const t = (n: string): string => `p${look}_${n}`;
-  const legs: Part[] = [-4, 0].map((x) => ({
-    box: [x, 0, -2, x + 4, 7, 2],
-    tiles: all(t("leg")),
-    pivot: [0, 7, 0],
-    rot: [sit ? -Math.PI / 2 : 0, 0, 0],
-  }));
-  const body: Part = { box: [-4, 7, -2.5, 4, 15, 2.5], tiles: six(t("body"), t("side")) };
-  const arm = (x: number): Part => ({
-    box: [x, 7, -1.5, x + 3, 15, 1.5],
-    tiles: all(t("arm")),
-    pivot: [x + 1.5, 14, 0],
-    rot: [sit ? -0.55 : -0.1, 0, 0],
-  });
-  const armL = arm(-7);
-  const armR = arm(4);
-  const head: Part = {
-    box: [-5, 15, -5, 5, 25, 5],
-    tiles: six(t("face"), t("hair")),
-    pivot: [0, 15, 0],
-    rot: [0, 0, 0],
-  };
-  const parts = [...legs, body, armL, armR, head];
-  if (roast) {
-    armR.rot = [-1.25, 0, 0];
-    // The stick and its marshmallow, held out from the hand.
-    parts.push({ box: [5, 13, 6, 6, 14, 22], tiles: all("stick"), pivot: [5.5, 14, 6], rot: [-0.18, 0, 0] });
-    parts.push({ box: [4.5, 15.5, 20, 6.5, 17.5, 23], tiles: all("mallow") });
-  }
-  const turnTo = ihash(look, 1, 0, 7) - 0.5;
-  return {
-    pos,
-    yaw,
-    parts,
-    head,
-    armL,
-    armR,
-    update(time) {
-      const breath = Math.sin(time * 1.6 + phase) * 0.35;
-      for (const p of [body, armL, armR, head]) p.off = [0, breath, 0];
-      head.rot = [Math.sin(time * 0.5 + phase) * 0.05, turnTo * 0.5 + Math.sin(time * 0.33 + phase * 2) * 0.25, 0];
-    },
-  };
-}
 
 // ---------- the leafling: a pet the size of a boot, a sprout on its head ----------
 
@@ -492,11 +338,11 @@ export function bulbs(dyn: Dyn, w: World, a: V3, b: V3, points: readonly V3[]): 
     });
 }
 
-// ---------- a person wearing a Minecraft skin ----------
+// ---------- people: a member in their own Minecraft skin, or one of the grove's own ----------
 
 type Rect = readonly [number, number, number, number];
 /** The six pictures of one box in a skin: its corner in the sheet and the box's width, height and depth. */
-const unwrap = (ox: number, oy: number, w: number, h: number, d: number): Rect[] => [
+export const unwrap = (ox: number, oy: number, w: number, h: number, d: number): Rect[] => [
   [ox + d + w, oy + d, d, h],
   [ox, oy + d, d, h],
   [ox + d, oy, w, d],
@@ -505,15 +351,21 @@ const unwrap = (ox: number, oy: number, w: number, h: number, d: number): Rect[]
   [ox + d + w + d, oy + d, w, h],
 ];
 
+/** Something solid a person carries or wears, which moves with one of their limbs. */
+export interface Extra {
+  follow: "head" | "body" | "armR" | "armL";
+  box: Part["box"];
+  tile: string;
+  emit?: boolean;
+}
+export type Pose = "stand" | "wave" | "sit" | "roast";
+export type Wearer = (pos: V3, yaw: number, phase: number, pose?: Pose) => Actor;
+
 /**
  * Cuts a 64x64 skin into tiles, one for each face of each limb, and returns the model that wears
  * them: the usual proportions, the outer layer (hat, jacket, sleeves) standing a little off the body.
  */
-export function skinned(
-  id: string,
-  rgba: Uint8ClampedArray,
-  slim: boolean,
-): (pos: V3, yaw: number, phase: number) => Actor {
+export function skinned(id: string, rgba: Uint8ClampedArray, slim: boolean, extras: readonly Extra[] = []): Wearer {
   const aw = slim ? 3 : 4;
   const limbs: { name: string; box: Part["box"]; at: [number, number]; over: [number, number]; pivot: V3 }[] = [
     { name: "legR", box: [-4, 0, -2, 0, 12, 2], at: [0, 16], over: [0, 32], pivot: [-2, 12, 0] },
@@ -526,8 +378,7 @@ export function skinned(
   const make = (limb: (typeof limbs)[number], layer: "base" | "over"): FaceTiles => {
     const [x0, y0, z0, x1, y1, z1] = limb.box;
     const [ox, oy] = layer === "base" ? limb.at : limb.over;
-    const rects = unwrap(ox, oy, x1 - x0, y1 - y0, z1 - z0);
-    const names = rects.map(([sx, sy, w, h], f) => {
+    const names = unwrap(ox, oy, x1 - x0, y1 - y0, z1 - z0).map(([sx, sy, w, h], f) => {
       // Where this face's picture falls on its tile, from the corners of the box as the tile sees them.
       let u0 = 16;
       let v0 = 16;
@@ -555,7 +406,7 @@ export function skinned(
     return [names[0]!, names[1]!, names[2]!, names[3]!, names[4]!, names[5]!];
   };
   const tiles = limbs.map((l) => ({ base: make(l, "base"), over: make(l, "over") }));
-  return (pos, yaw, phase) => {
+  return (pos, yaw, phase, pose = "stand") => {
     const parts: Part[] = [];
     const of: Record<string, Part[]> = {};
     limbs.forEach((l, i) => {
@@ -570,26 +421,41 @@ export function skinned(
       of[l.name] = [base, over];
       parts.push(base, over);
     });
+    for (const e of extras) {
+      const part: Part = {
+        box: [...e.box],
+        tiles: all(e.tile),
+        pivot: of[e.follow]![0]!.pivot!,
+        ...(e.emit ? { emit: true } : {}),
+      };
+      of[e.follow]!.push(part);
+      parts.push(part);
+    }
     const set = (name: string, rot: V3, lift = 0): void => {
       for (const p of of[name]!) {
         p.rot = rot;
         p.off = [0, lift, 0];
       }
     };
+    const sit = pose === "sit";
     return {
       pos,
       yaw,
       parts,
       scale: 0.9375,
       update(time) {
-        // Standing easy, waving with one hand, the head looking about.
         const breath = Math.sin(time * 1.6 + phase) * 0.3;
-        set("body", [0, 0, 0], 0);
-        set("head", [Math.sin(time * 0.5 + phase) * 0.06, Math.sin(time * 0.33 + phase) * 0.3, 0], breath);
-        set("armR", [Math.sin(time * 0.9 + phase) * 0.06, 0, -0.05], breath);
-        set("armL", [0, 0, 2.5 + Math.sin(time * 5) * 0.28], breath);
-        set("legR", [0, 0, 0]);
-        set("legL", [0, 0, 0]);
+        const sway = Math.sin(time * 0.9 + phase) * 0.06;
+        set("body", [0, 0, 0]);
+        set("head", [Math.sin(time * 0.5 + phase) * 0.06, Math.sin(time * 0.33 + phase * 1.7) * 0.32, 0], breath);
+        set("armR", pose === "roast" ? [-1.2 + sway * 0.5, 0, 0] : [(sit ? -0.5 : 0) + sway, 0, -0.05], breath);
+        set(
+          "armL",
+          pose === "wave" ? [0, 0, 2.5 + Math.sin(time * 5) * 0.28] : [(sit ? -0.5 : 0) - sway, 0, 0.05],
+          breath,
+        );
+        set("legR", sit ? [-Math.PI / 2, 0.1, 0] : [0, 0, 0]);
+        set("legL", sit ? [-Math.PI / 2, -0.1, 0] : [0, 0, 0]);
       },
     };
   };

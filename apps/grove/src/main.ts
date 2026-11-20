@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-import { banner, bulbs, draw, flames, loadSkin, skinned } from "./engine/actors.ts";
+import { tailor, VILLAGERS } from "./art/skins.ts";
+import { banner, bulbs, draw, flames, loadSkin, skinned, type Wearer } from "./engine/actors.ts";
 import { ihash } from "./engine/rand.ts";
 import { stage } from "./engine/render.ts";
 import { buildCamp } from "./gen/camp.ts";
@@ -13,16 +14,15 @@ const which = query.get("scene") ?? "camp";
 type View = { eye: [number, number, number]; at: [number, number, number]; fov: number };
 const t0 = performance.now();
 
-// A member's own skin, if one is there to load: its tiles must exist before the texture is built.
-const skin = which === "camp" ? await loadSkin("./skins/notes.png") : null;
-const wearer = skin ? skinned("notes", skin, true) : null;
-const camp = which === "camp" ? buildCamp(SUN) : null;
-if (camp && wearer) {
-  const at: [number, number, number] = [camp.fire[0] - 2.9, Math.floor(camp.fire[1]), camp.fire[2] - 3.6];
-  const guest = wearer(at, 0.35, 0.8);
-  guest.sun = camp.world.sun(at[0], at[1] + 1, at[2], SUN);
-  camp.actors.push(guest);
+// Everyone's tiles must exist before the texture is built: the grove's own people, drawn here, and
+// a member's own skin if one is there to load.
+const cast: Record<string, Wearer | undefined> = {};
+if (which === "camp") {
+  for (const [name, v] of Object.entries(VILLAGERS)) cast[name] = skinned(name, tailor(v.outfit), false, v.extras);
+  const skin = await loadSkin("./skins/notes.png");
+  if (skin) cast.guest = skinned("guest", skin, true);
 }
+const camp = which === "camp" ? buildCamp(SUN, cast) : null;
 const glade = camp ? null : buildGlade();
 const world = camp?.world ?? glade!.world;
 

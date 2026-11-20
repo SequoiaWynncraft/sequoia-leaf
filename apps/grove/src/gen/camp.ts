@@ -1,6 +1,6 @@
 /** The campfire: a ring of logs round a fire between the giants, a hut, banners, a string of lights. */
-import type { Actor } from "../engine/actors.ts";
-import { cat, leafling, person, string } from "../engine/actors.ts";
+import type { Actor, Wearer } from "../engine/actors.ts";
+import { cat, leafling, string } from "../engine/actors.ts";
 import { B } from "../engine/blocks.ts";
 import { ihash, noise2 } from "../engine/rand.ts";
 import { World } from "../engine/world.ts";
@@ -32,7 +32,7 @@ export interface Camp {
   look: V3;
 }
 
-export function buildCamp(sun: readonly [number, number, number]): Camp {
+export function buildCamp(sun: readonly [number, number, number], cast: Record<string, Wearer | undefined>): Camp {
   const w = new World(SIZE, 104, SIZE);
   for (let z = 0; z < SIZE; z++)
     for (let x = 0; x < SIZE; x++) {
@@ -170,15 +170,19 @@ export function buildCamp(sun: readonly [number, number, number]): Camp {
   w.light();
 
   // Who is here.
-  const seat = g + 1 - 7 / 16;
+  // A seated person's hips rest on the log's top.
+  const seat = g + 1 - (12 / 16) * 0.9375;
   const standing: V3 = [CX + 2.4, g, CZ + 2.8];
+  const people: (Actor | undefined)[] = [
+    cast.herald?.([CX - 0.6, seat, CZ - 3.15], 0, 0.3, "sit"),
+    cast.keeper?.([CX - 3.15, seat, CZ + 0.4], Math.PI / 2 - 0.25, 2.9, "sit"),
+    cast.trader?.([CX + 4.15, seat, CZ - 0.2], -Math.PI / 2 + 0.3, 4.1, "sit"),
+    cast.cook?.(standing, Math.atan2(CX + 0.5 - standing[0], CZ + 0.5 - standing[2]), 5.2, "roast"),
+    cast.guest?.([CX - 2.5, g, CZ - 3.3], 0.35, 0.8, "wave"),
+  ];
   const actors: Actor[] = [
-    person(0, [CX - 0.6, seat, CZ - 3.2], 0, true, 0.3),
-    person(1, [CX + 1.4, seat, CZ - 3.2], 0, true, 1.7),
-    person(2, [CX - 3.2, seat, CZ + 0.4], Math.PI / 2 - 0.25, true, 2.9),
-    person(3, [CX + 4.2, seat, CZ - 0.2], -Math.PI / 2 + 0.3, true, 4.1),
-    person(4, standing, Math.atan2(CX + 0.5 - standing[0], CZ + 0.5 - standing[2]), false, 5.2, true),
-    leafling([CX + 0.45, g + 1, CZ - 3.45], 0.2, 0.4),
+    ...people.filter((p) => p !== undefined),
+    leafling([CX + 1.3, g + 1, CZ - 3.45], 0.2, 0.4),
     leafling([CX - 2.2, g + 1 / 16, CZ + 3.7], 0.9, 1.6),
     leafling([CX - 0.9, g + 1 / 16, CZ + 4.5], 0.3, 2.5),
     leafling([CX + 5.6, g, CZ + 3.2], -1.2, 0.9),
