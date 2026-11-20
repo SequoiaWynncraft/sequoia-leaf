@@ -250,7 +250,8 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
           float grain = hash3(px + 3.0);
           float clump = vnoise3(px / 2.6 + 11.0);
           float lush = vnoise3(px / 9.0 + 23.0) * 0.6 + vnoise3(px / 31.0 + 37.0) * 0.4;
-          float v = 0.5 + (grain - 0.5) * 0.92 + (clump - 0.5) * 0.62 + (lush - 0.5) * 0.4;
+          // Mostly the middle greens, in soft clumps; the darkest and lightest are rare.
+          float v = 0.5 + (grain - 0.5) * 0.5 + (clump - 0.5) * 0.6 + (lush - 0.5) * 0.4;
           // Far off, a pixel covers many of the ground's; the grain gives way to the patches, and nothing shimmers.
           vec3 across = fwidth(vPos * 16.0);
           float fine = clamp(1.6 - max(across.x, max(across.y, across.z)) * 0.7, 0.0, 1.0);
@@ -259,6 +260,8 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
           for (int k = 0; k < 5; k++) if (v > uCut[gi * 5 + k]) rung = k + 1;
           vec3 g = uGround[gi * 6 + rung];
           if (hash3(px + 71.0) < uSpeck[gi].a * 0.5 * fine) g = uSpeck[gi].rgb;
+          // Quiet ground: its colours are drawn in toward their middle, and a lawn sits a little deeper than it was drawn.
+          g = mix(uGround[gi * 6 + 2], g, lawn ? 0.55 : 0.7) * (lawn ? 0.86 : 0.95);
           t = vec4(g, 1.0);
         }
         if (vEmit > 3.5 && vEmit < 5.5) {
@@ -267,7 +270,9 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
           // the ground they stand on.
           vec2 at = floor(vPos.xz);
           float drift = vnoise3(vec3(at * 0.06, 1.0)) * 0.65 + vnoise3(vec3(at * 0.17, 5.0)) * 0.35;
-          t.rgb *= mix(vec3(0.91, 0.96, 0.88), vec3(1.08, 1.05, 0.97), drift);
+          t.rgb *= mix(vec3(0.9, 0.95, 0.88), vec3(1.03, 1.02, 0.95), drift);
+          // The tufts are as deep a green as the lawn they grow from.
+          if (!lawn) t.rgb *= 0.86;
         }
         if (leafy) {
           // No two boughs are one green: it runs warmer and lighter here, cooler and deeper there,
