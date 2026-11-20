@@ -6,6 +6,8 @@
  */
 
 import type { Art } from "../bundle/art.ts";
+import { ambianceAt } from "../bundle/manifest.ts";
+import type { Ambiance } from "../bundle/palette.ts";
 import type { Grid, Point } from "../engine/view.ts";
 import type { Params } from "../game/params.ts";
 import type { Pull } from "../game/rules.ts";
@@ -59,4 +61,10 @@ export interface Scene {
   readonly cursor: "default" | "pointer" | "grab" | "grabbing";
   /** A moment is playing (a reveal, a ceremony): the navigation steps back. */
   busy(t: number): boolean;
+}
+
+/** The light every scene plays in: `?time=` if given (`day` is dusk), otherwise the member's own clock. */
+export function lightOf(params: Params, now: Date = new Date()): Ambiance {
+  if (params.timeFromUrl) return params.time === "night" ? "night" : "dusk";
+  return ambianceAt(now.getHours());
 }

@@ -9,10 +9,14 @@
  *      everything drawn in step 2;
  *   4. what stands over the world (tools in hand, a reveal's flash), then `blit` to the screen.
  *
+ * The Forest has no loop: its frame is its still parallax layers, each pasted at its own offset
+ * (`layer`), the far one first and opaque; its member trees come from atlases (`paste`), and its
+ * near layer is pasted last rather than restored.
+ *
  * Coordinates are the picture's own (0 to 255 by 0 to 143); colours are packed RGBA (`palette.ts`).
  */
 
-import type { Mask } from "./art.ts";
+import type { Mask, Pixels } from "./art.ts";
 import type { CastFrame } from "./cast.ts";
 import { blue, green, mixColour, red } from "./palette.ts";
 
@@ -45,6 +49,7 @@ export class Picture {
   readonly px: Uint32Array;
   /** The decoded loop frame under this one, or null before the loop is in. */
   private under: Uint32Array | null = null;
+  private drawn = false;
 
   constructor(W: number, H: number) {
     this.W = W;
@@ -55,17 +60,60 @@ export class Picture {
   /** Step 1: a loop frame. */
   begin(frame: Uint32Array): void {
     this.under = frame;
+    this.drawn = true;
     this.px.set(frame);
   }
 
   /** No frame yet: one colour. */
   blank(colour: number): void {
     this.under = null;
+    this.drawn = false;
     this.px.fill(colour);
   }
 
   get ready(): boolean {
-    return this.under !== null;
+    return this.drawn;
+  }
+
+  /**
+   * A still layer `ox` columns into it: its opaque pixels over what is there. The first, opaque,
+   * layer of a frame (`base`) covers the whole picture and makes it ready.
+   */
+  layer(src: Pixels, ox: number, base = false): void {
+    const W = this.W;
+    const x0 = Math.max(0, -ox);
+    const x1 = Math.min(W, src.w - ox);
+    const rows = Math.min(this.H, src.h);
+    if (base) {
+      this.under = null;
+      this.drawn = true;
+    }
+    for (let y = 0; y < rows; y++) {
+      const si = y * src.w + ox;
+      const di = y * W;
+      if (base && x0 === 0 && x1 === W) {
+        this.px.set(src.data.subarray(si, si + W), di);
+        continue;
+      }
+      for (let x = x0; x < x1; x++) {
+        const v = src.data[si + x] ?? 0;
+        if (v >>> 24 >= 128) this.px[di + x] = (v | 0xff000000) >>> 0;
+      }
+    }
+  }
+
+  /** A box of an atlas (`sx`, `sy`, `w` by `h`) with its top left at (dx, dy): its opaque pixels. */
+  paste(src: Pixels, sx: number, sy: number, w: number, h: number, dx: number, dy: number): void {
+    dx = Math.round(dx);
+    dy = Math.round(dy);
+    for (let y = Math.max(0, -dy); y < h && dy + y < this.H; y++) {
+      const si = (sy + y) * src.w + sx;
+      const di = (dy + y) * this.W + dx;
+      for (let x = Math.max(0, -dx); x < w && dx + x < this.W; x++) {
+        const v = src.data[si + x] ?? 0;
+        if (v >>> 24 >= 128) this.px[di + x] = (v | 0xff000000) >>> 0;
+      }
+    }
   }
 
   inside(x: number, y: number): boolean {
@@ -149,12 +197,12 @@ export class Picture {
   }
 
   /**
-   * Copies `W` columns from `cropX` into a screen buffer `W` wide, the whole picture knocked by
-   * (dx, dy) pixels for a reveal's impact.
+   * Copies `W` columns from `cropX` and `H` rows from `cropY` into a screen buffer `W` wide, the
+   * whole picture knocked by (dx, dy) pixels for a reveal's impact.
    */
-  blit(out: Uint32Array, W: number, H: number, cropX: number, dx = 0, dy = 0): void {
+  blit(out: Uint32Array, W: number, H: number, cropX: number, dx = 0, dy = 0, cropY = 0): void {
     for (let y = 0; y < H; y++) {
-      const sy = Math.max(0, Math.min(this.H - 1, y - dy));
+      const sy = Math.max(0, Math.min(this.H - 1, cropY + y - dy));
       const row = sy * this.W;
       if (dx === 0) {
         out.set(this.px.subarray(row + cropX, row + cropX + W), y * W);

@@ -1,7 +1,8 @@
 /**
- * The forest's HUD, in the Sequoia mod's language (`../pixel/hud.ts` holds the mod's `PixelArt`
+ * The forest's HUD, in the Sequoia mod's language (`../../ui/hud.ts` holds the mod's `PixelArt`
  * rules: cut-corner slate panels, a lit inner top row, the Minecraft font): the header, the event
- * feed chip, "Find my tree", tooltips with a player head, the GG card and the debug strip.
+ * feed chip, "Find my tree", tooltips with a player head, a raid lantern's label, the GG card and
+ * the debug strip.
  */
 
 import { Canvas, drawText, mix, textWidth, UI } from "../../ui/hud.ts";
@@ -153,12 +154,6 @@ export interface Label {
   a: number;
 }
 
-export interface Bubble {
-  x: number;
-  y: number;
-  lines: readonly string[];
-}
-
 export interface HudModel {
   trees: number;
   /** `short` and `detail` are the two lines a phone shows instead. */
@@ -169,7 +164,6 @@ export interface HudModel {
   debug: { labels: readonly string[]; hot: number } | null;
   card: Card | null;
   label: Label | null;
-  bubble: Bubble | null;
   /** Where "your" tree is on screen, for the marker over it. */
   me: { x: number; y: number } | null;
   t: number;
@@ -270,7 +264,6 @@ export function drawHud(c: Canvas, m: HudModel, fonts: boolean): HudHits {
   }
 
   if (m.label) drawLabel(c, m.label);
-  if (m.bubble) drawBubble(c, m.bubble);
   if (m.card) drawCard(c, m.card);
   if (m.tooltip) {
     const r = drawTooltip(c, m.tooltip);
@@ -354,11 +347,14 @@ function drawLabel(c: Canvas, l: Label): void {
   const rows = Math.ceil(l.names.length / cols);
   const h = 6 + 10 + rows * 10 + 3;
   const x = Math.max(2, Math.min(c.W - w - 2, Math.round(l.x - w / 2)));
-  const y = Math.max(22, Math.round(l.y - h - 8));
+  // Above its lantern, or below it when the lantern hangs too near the top.
+  const above = l.y - h - 8 >= 22;
+  const y = above ? Math.round(l.y - h - 8) : Math.round(l.y + 16);
   c.panel(x, y, w, h, GOLD, 0.94 * l.a, TOOLTIP_BODY);
-  // A tick of string from the label down to its lantern.
+  // A tick of string from the label to its lantern.
   const sx = Math.round(Math.max(x + 3, Math.min(x + w - 4, l.x)));
-  for (let k = y + h; k < l.y - 2; k++) c.px(sx, k, GOLD, 0.6 * l.a);
+  if (above) for (let k = y + h; k < l.y - 2; k++) c.px(sx, k, GOLD, 0.6 * l.a);
+  else for (let k = Math.round(l.y + 8); k < y; k++) c.px(sx, k, GOLD, 0.6 * l.a);
   if (l.a < 0.5) return;
   drawText(c, l.title, x + 5, y + 5, GOLD, { shadow: true });
   l.names.forEach((n, i) => {
@@ -366,26 +362,4 @@ function drawLabel(c: Canvas, l: Label): void {
     const row = Math.floor(i / cols);
     drawText(c, n, x + 5 + col * colW, y + 16 + row * 10, UI.text, { shadow: true });
   });
-}
-
-function drawBubble(c: Canvas, b: Bubble): void {
-  const w = Math.max(...b.lines.map((l) => textWidth(l))) + 10;
-  const h = b.lines.length * 10 + 7;
-  const x = Math.max(2, Math.min(c.W - w - 2, Math.round(b.x - w / 2)));
-  const y = Math.max(22, Math.round(b.y - h - 7));
-  const cream: Rgb = [242, 230, 212];
-  const ink: Rgb = [40, 28, 24];
-  c.rect(x + 1, y + 1, w - 2, h - 2, cream);
-  c.border(x, y, w, h, ink);
-  // The tail, pointing down at the speaker.
-  const tx = Math.max(x + 3, Math.min(x + w - 5, Math.round(b.x)));
-  c.rect(tx, y + h - 1, 3, 1, cream);
-  c.rect(tx + 1, y + h, 2, 1, cream);
-  c.px(tx - 1, y + h - 1, ink);
-  c.px(tx, y + h, ink);
-  c.px(tx + 1, y + h + 1, ink);
-  c.px(tx + 2, y + h + 1, ink);
-  c.px(tx + 3, y + h, ink);
-  c.px(tx + 3, y + h - 1, ink);
-  b.lines.forEach((l, i) => drawText(c, l, x + 5, y + 4 + i * 10, ink));
 }

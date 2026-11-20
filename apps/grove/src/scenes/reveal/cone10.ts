@@ -9,11 +9,12 @@
  * crown's place in that grid.
  */
 
+import { leaf, sparkleStage } from "../../bundle/vocabulary.ts";
 import { type RankName, RANKS } from "../../engine/palette.ts";
 import type { Sprite } from "../../engine/raster.ts";
 import { hash3, hashString, Rng } from "../../engine/rng.ts";
 import { type Canvas, drawText, hex, mix, type Rgb, textWidth, UI } from "../../ui/hud.ts";
-import { crown, type Fx, leaf, leafKeys, type Point, sparkleStage } from "../glade/stage.ts";
+import { crown, type Fx, leafKeys, type Point } from "../glade/stage.ts";
 import { INSIGNIA } from "./card.ts";
 import { rankColour, tier } from "./cone.ts";
 

@@ -14,6 +14,7 @@ import { fitPicture } from "../../bundle/fit.ts";
 import { ambianceAt, fill, type GladePick, type Manifest, pickGlade } from "../../bundle/manifest.ts";
 import { type Ambiance, Ink, packHex } from "../../bundle/palette.ts";
 import { edgeColour, Picture } from "../../bundle/picture.ts";
+import { castFrame } from "../../bundle/vocabulary.ts";
 import { buildLut, type Lut } from "../../engine/palette.ts";
 import { between, type Grid } from "../../engine/view.ts";
 import type { Params, Tool } from "../../game/params.ts";
@@ -29,7 +30,7 @@ import { CARE_LENGTH, type CareEffect, drawCareTool, drawCareWorld } from "./car
 import { drawGrootWorld, grootDrink, type GrootEvent, grootPopup, grootPopupOpen } from "./groot.ts";
 import { drawLevelUp, ggPopup, ggPopupOpen, type LevelUpEvent, levelUpOver, shownLevel } from "./levelup.ts";
 import { coneHit, drawAurora, drawRestingCone, drawReveal, drawRevealScreen } from "./reveal.ts";
-import { castFrame, crown, type Fx, type Places, places, type Point, tapsTree, type TreeShape } from "./stage.ts";
+import { crown, type Fx, type Places, places, type Point, tapsTree, type TreeShape } from "./stage.ts";
 
 const GREETING = "I hope you have a moderately excellent next 14 hours.";
 

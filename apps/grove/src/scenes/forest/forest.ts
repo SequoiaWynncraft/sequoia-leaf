@@ -1,163 +1,133 @@
 /**
- * The Forest, the guild's shared valley round the Great Sequoia: builds the valley's still layers
- * once, then each frame copies the visible slice of each (at its parallax), draws only what moves
- * between them and lights it. The HUD draws on the HUD's own grid. Drag or swipe to pan.
+ * The Forest, the guild's valley round the Great Sequoia, composed from the art bundle's still
+ * parallax layers (grove/forest.py) the way the welcome renderer composes a frame:
+ *
+ *   1. the far valley and its sky (opaque), at depth 0.35, and a war's pennant on its ridge;
+ *   2. the ground at depth 1: the floor, the Great Sequoia at the heart with the lanterns hung in
+ *      its canopy, the crab pond and the "Do Not The Farm" sign at the gate;
+ *   3. the members' trees from the row atlases, the back row then the front, each on its spot;
+ *   4. the crabs, the moments and the ambient life, in the welcome's vocabulary (`moments.ts`);
+ *   5. the near ferns and the welcome's giant trunks at depth 1.3, over everything;
+ *   6. falling leaves and snow, then the HUD on its own grid (`hud.ts`).
+ *
+ * The picture is the bundle's 256x144 at a whole-pixel scale (`bundle/fit.ts`); a phone shows a
+ * crop of it, and its crop slides on past the camera's range so it reaches the valley's ends
+ * (`valley.ts`). Drag or swipe to pan; tap a tree, the Great Sequoia, its hollow, the pond, a crab
+ * or the sign.
  */
 
-import {
-  drawEmbers,
-  drawFestoon,
-  drawFireBack,
-  drawFireFront,
-  drawFlames,
-  drawSmoke,
-  fireLight,
-  squirrelFrame,
-} from "../../art/life.ts";
-import { buildLut, ix, type Lut, PALETTE_SIZE, R, rampOf } from "../../engine/palette.ts";
-import { compose, type Indices, Light, Surface } from "../../engine/raster.ts";
-import { hash3 } from "../../engine/rng.ts";
-import { between, type Grid, type Point, worldGrid } from "../../engine/view.ts";
+import type { Pixels } from "../../bundle/art.ts";
+import { fitPicture } from "../../bundle/fit.ts";
+import { type AtlasBox, fill, type ForestManifest, type Manifest } from "../../bundle/manifest.ts";
+import { type Ambiance, Ink, packHex } from "../../bundle/palette.ts";
+import { edgeColour, Picture } from "../../bundle/picture.ts";
+import { castFrame } from "../../bundle/vocabulary.ts";
+import { between, type Grid, type Point } from "../../engine/view.ts";
 import type { EventKind, Params } from "../../game/params.ts";
 import { waterFriend } from "../../game/state.ts";
 import { Canvas, mix, UI } from "../../ui/hud.ts";
-import { layout } from "../glade/layout.ts";
-import type { App, PointerKind, Scene, Screen } from "../scene.ts";
-import {
-  clamp01,
-  drawLevelUp,
-  drawNewPennant,
-  drawRaid,
-  drawRave,
-  drawWarLeaves,
-  LENGTH,
-  levelCamera,
-  raidCamera,
-  raidLantern,
-  type RaidSetup,
-  raidShimmer,
-  type RaveSetup,
-  type View,
-  warCamera,
-} from "./events.ts";
-import { DOOR_ID, type Great, GREAT_FOOT, GREAT_ID, type Hook, paintGreat } from "./great.ts";
-import { paintTrees, type Planted, plantForest } from "./grove.ts";
+import { type App, lightOf, type PointerKind, type Scene, type Screen } from "../scene.ts";
 import { playerHead } from "./heads.ts";
 import { drawHud, type FeedIcon, type HudHits, type HudModel, inside, type Tooltip } from "./hud.ts";
-import { ID, paintPlaces, type Places } from "./landmarks.ts";
 import {
-  CAT_SEAT,
+  clamp01,
   type Crab,
-  crabHappy,
   crabPose,
-  drawBanners,
-  drawBirds,
-  drawCinfy,
-  drawDucks,
+  drawDew,
+  drawFallingLeaves,
   drawFireflies,
-  drawFireside,
-  drawHanging,
-  drawMist,
-  drawNeedles,
-  drawOwl,
+  drawLantern,
+  drawPennant,
+  drawRaid,
+  drawRave,
+  drawSeq,
+  drawSkyLanterns,
   drawSnow,
-  type Mist,
-  type Mote,
-  type Needle,
-  type Place,
+  drawWatering,
+  ease,
+  type Firefly,
+  type Hook,
+  lanternAt,
+  lanternHooks,
+  LENGTH,
+  lightTree,
   placeCrabs,
   placeFireflies,
-  placeNeedles,
-  put,
-  putFrame,
-} from "./life.ts";
-import { stageLabel } from "./roster.ts";
-import { paintForeground, paintGround, paintRidge, paintWildForest } from "./scenery.ts";
-import { drawStars, paintSky, type Star } from "./sky.ts";
-import { glintMap, reflectionMap, reflectWater } from "./water.ts";
-import { clampCam, HEART_X, Layer, PLACES, placeX, ROWS, WORLD_H } from "./world.ts";
+  raidCamera,
+  type RaidSetup,
+  raidShimmer,
+  RIDGE,
+  type Stage,
+  warCamera,
+} from "./moments.ts";
+import { type Member, ROSTER, stageLabel } from "./roster.ts";
+import { layerOffset, look, lookRange, plant, type Planted, toGround, toPicture } from "./valley.ts";
 
-type Rgb = readonly [number, number, number];
+/** The picture's size before the manifest is in (the bundle's own). */
+const PICTURE = { w: 256, h: 144 };
+/** The page round the picture before its first frame: the HUD's dark. */
+const DARK = "#150f0d";
+/** How many lanterns already hang in the Great Sequoia this week. */
+const WEEK_LANTERNS = 3;
 
-const MIST_HEX: Record<Params["time"], string> = { dusk: "#52a292", day: "#9aab92", night: "#305f59" };
-
-const JOKES: readonly (readonly string[])[] = [
-  ["Why do trees hate tests?", "They get stumped."],
-  ["What's a tree's favourite", "drink? Root beer."],
-  ["Crabs never share.", "They're shellfish."],
-  ["I'm rooting for you."],
-  ["What did the tree say", "to autumn? Leaf me be."],
-];
+type PlaceId = "great" | "hollow" | "pond" | "no8" | "farm";
+type Target = { kind: "tree"; id: number } | { kind: "place"; id: PlaceId };
 
 interface Moment {
   kind: EventKind;
   t0: number;
+  /** Where the camera was looking when it began. */
   from: number;
 }
 
-interface Splash {
+interface Feed {
+  icon: FeedIcon;
+  text: string;
+  short: string;
+  detail: string;
+  ago: string;
+  at: number;
+}
+
+/** A tree as it stands this frame: its atlas box, and where its box's corner is on the ground. */
+interface Standing {
   id: number;
-  t0: number;
+  planted: Planted<Member>;
+  atlas: Pixels;
+  box: AtlasBox;
+  /** Ground x of its box's left edge, and its box's top row. */
+  left: number;
+  top: number;
 }
 
 export class Forest implements Scene {
   readonly id = "forest";
-  readonly params: Params;
+  cursor: "grab" | "grabbing" | "pointer" = "grab";
   private readonly app: App;
-  private readonly lut: Lut;
-  private readonly layers: {
-    sky: Layer;
-    ridge: Layer;
-    haze: Layer;
-    far: Layer;
-    near: Layer;
-    back: Layer;
-    mid: Layer;
-    front: Layer;
-    fore: Layer;
-  };
-  private readonly rows: Layer[];
-  private readonly stars: Star[];
-  private readonly great: Great;
-  private readonly places: Places;
-  private readonly planted: Planted[];
-  private readonly byName = new Map<string, Planted>();
-  private readonly liveSeedlings: Planted[];
-  private readonly fireflies: Mote[];
-  private readonly needles: Needle[];
-  private readonly crabs: Crab[];
-  private readonly mists: { layer: Layer; banks: Mist[] }[];
-  private readonly reflect = reflectionMap();
-  private readonly glint = glintMap();
-  private readonly shimmer: Indices;
-  private readonly shine: Indices;
-  /** Lanterns hung by raids since the page opened. */
-  private readonly hung: Hook[] = [];
-  readonly buildMs: number;
-
-  // Per screen size.
-  private W = 0;
-  private H = 0;
-  private top = 0;
-  private frame = new Surface(1, 1);
-  private light = new Light(1, 1);
-  private worldGrid: Grid = { W: 1, H: 1, scale: 1, offX: 0, offY: 0, dpr: 1 };
+  private readonly params: Params;
+  private pic = new Picture(PICTURE.w, PICTURE.h);
+  private world: Grid = { W: 1, H: 1, scale: 1, offX: 0, offY: 0, dpr: 1 };
   private hudGrid: Grid = { W: 1, H: 1, scale: 1, offX: 0, offY: 0, dpr: 1 };
-
-  // Camera and input.
-  cx = HEART_X;
-  vx = 0;
+  /** The columns on screen: the whole picture, or a phone's crop of it. */
+  private shown = PICTURE.w;
+  /** The ground x at the screen's middle, and the camera and crop it makes. */
+  private at = 512;
+  private cx = 512;
+  private cropX = 0;
+  private placed = false;
+  private vx = 0;
   private target: number | null = null;
   private lastT = 0;
-  private drag: { x: number; cx: number; moved: number; lastX: number; lastT: number } | null = null;
-  private hover: { x: number; y: number } | null = null;
+  private drag: { x: number; at: number; moved: number; lastX: number; lastT: number } | null = null;
+  private hover: Point | null = null;
   private hudHover: Point | null = null;
-  private pinned: { kind: "tree"; id: number } | { kind: "place"; id: number } | null = null;
+  private pinned: Target | null = null;
   hits: HudHits = { find: null, action: null, debug: [], panels: [] };
   private moment: Moment | null = null;
   private cameraFree = false;
   private rave: boolean;
-  private feed: { icon: FeedIcon; text: string; short: string; detail: string; ago: string; at: number } = {
+  private warDone = false;
+  private feed: Feed = {
     icon: "raid",
     text: "Party of 4 cleared TCC",
     short: "TCC cleared",
@@ -165,419 +135,320 @@ export class Forest implements Scene {
     ago: "2m",
     at: -99,
   };
-
-  private splashes: Splash[] = [];
+  private splashes: { id: number; t0: number }[] = [];
   private meAt = -99;
-  private catAt = -99;
-  private catJoke = 0;
   private crabHop = new Map<number, number>();
-  private no8At = -99;
-  private raidHookIndex = 0;
-  cursor: "grab" | "grabbing" | "pointer" = "grab";
+  /** Lanterns hung by raids since the page opened, by hook. */
+  private hung: number[] = [];
+  private light: Ambiance;
+  private ink: Ink;
+  private lightCheckedAt = -99;
+  private edge: { key: string; colour: string } | null = null;
+  private hudKey = "";
+  private hudBuffer: ArrayBufferLike | null = null;
+  // Worked out once the manifest and the ground layer are in.
+  private trees: Planted<Member>[] = [];
+  private crabs: Crab[] = [];
+  private fireflies: Firefly[] = [];
+  private hooks: { ground: Pixels; list: Hook[] } | null = null;
+  private raidCache: RaidSetup | null = null;
+  private standing: Standing[] = [];
 
   constructor(app: App) {
-    const started = performance.now();
-    const params = app.params;
     this.app = app;
+    const params = app.params;
     this.params = params;
     this.rave = params.anniversary;
-    const { time, season } = params;
-    this.lut = buildLut(time, season, MIST_HEX[time]);
-    const L = {
-      sky: new Layer(0.04, false),
-      ridge: new Layer(0.18, true),
-      haze: new Layer(0.32, false),
-      far: new Layer(0.5, false),
-      near: new Layer(0.68, false),
-      back: new Layer(ROWS[0]?.f ?? 0.84, true),
-      mid: new Layer(ROWS[1]?.f ?? 0.92, true),
-      front: new Layer(ROWS[2]?.f ?? 1, true),
-      fore: new Layer(1.14, false),
-    };
-    this.layers = L;
-    this.rows = [L.back, L.mid, L.front];
-    this.stars = paintSky(L.sky, time, 0x5e9);
-    paintRidge(L.ridge, season);
-    paintWildForest(L.haze, "haze", 101);
-    paintWildForest(L.far, "far", 202);
-    paintWildForest(L.near, "near", 303);
-    const [rb, rm, rf] = ROWS;
-    if (!rb || !rm || !rf) throw new Error("rows");
-    const grounds = {
-      back: paintGround(L.back, rb, season, 11),
-      mid: paintGround(L.mid, rm, season, 22),
-      front: paintGround(L.front, rf, season, 33),
-    };
-    this.places = paintPlaces({ back: L.back, mid: L.mid, front: L.front }, grounds, season);
-    this.great = paintGreat(L.front, season);
-    this.planted = plantForest(this.rows, season);
-    paintTrees(this.rows, this.planted);
-    paintForeground(L.fore, season, 44);
-    for (const layer of Object.values(L)) layer.seal();
-    for (const p of this.planted) this.byName.set(p.member.name.toLowerCase(), p);
-    this.liveSeedlings = this.planted.filter((p) => p.sway).toSorted((a, b) => a.foot - b.foot);
-
-    this.fireflies = time === "day" ? [] : placeFireflies(L.front, time === "night", 77);
-    const gx = L.front.lx(HEART_X);
-    this.needles = placeNeedles(gx - 150, gx + 150, 9, 14);
-    const pond = this.places.pond;
-    this.crabs = placeCrabs(pond.x0 + 6, pond.x1 - 6, pond.shore, pond.back);
-    this.mists = [
-      {
-        layer: L.haze,
-        banks: [
-          { X0: -200, X1: 2000, y: 171, thick: 4, density: 0.55, speed: 1.1, seed: 1 },
-          { X0: -200, X1: 330, y: 180, thick: 6, density: 0.95, speed: 1.5, seed: 2, teal: true },
-        ],
-      },
-      { layer: L.near, banks: [{ X0: -200, X1: 420, y: 191, thick: 7, density: 1, speed: 2.2, seed: 3, teal: true }] },
-      { layer: L.back, banks: [{ X0: -200, X1: 330, y: 199, thick: 5, density: 0.9, speed: 3, seed: 5, teal: true }] },
-      { layer: L.mid, banks: [{ X0: -200, X1: 290, y: 213, thick: 4, density: 0.8, speed: 4, seed: 6, teal: true }] },
-    ];
-
-    // Highlight tables: a party tree's shimmer lifts its foliage and bark a level, its bright band two.
-    this.shimmer = new Uint16Array(PALETTE_SIZE);
-    this.shine = new Uint16Array(PALETTE_SIZE);
-    for (let i = 0; i < PALETTE_SIZE; i++) {
-      const r = rampOf(i);
-      const lift = r === R.FOLI || r === R.OLIVE || r === R.CANOPY || r === R.BARK || r === R.FERN || r === R.MOSS;
-      this.shimmer[i] = lift ? ix(r, (i & 7) + 1) : i;
-      this.shine[i] = lift ? (r === R.BARK ? ix(r, (i & 7) + 2) : ix(R.OLIVE, Math.min(7, (i & 7) + 3))) : i;
-    }
-
-    const at = params.at ? placeX(params.at) : null;
-    this.cx = at ?? (params.anniversary ? PLACES.pond : HEART_X);
+    this.light = lightOf(params);
+    this.ink = new Ink(this.light);
     if (params.event) {
-      const et = params.still ? Math.max(0, params.et < 0 ? 0 : params.et) : Math.max(0, params.et);
+      const et = Math.max(0, params.et);
       this.startMoment(params.event, params.still ? params.t - et : params.et >= 0 ? -et : 0.6);
     }
-    if (params.tip) {
-      const p = this.byName.get(params.tip.toLowerCase());
-      if (p) {
-        this.pinned = { kind: "tree", id: p.id };
-        if (!params.at) this.cx = p.X;
-      }
-    }
-    if (params.look) {
-      const id = lookId(params.look);
-      if (id) this.pinned = { kind: "place", id };
-    }
-    if (this.rave) this.feed = BIRTHDAY(-99);
-    this.buildMs = performance.now() - started;
+    if (this.rave) this.feed = birthday(-99);
   }
 
-  grid({ devW, devH, dpr }: Screen): Grid {
-    return worldGrid(devW, devH, WORLD_H, dpr);
+  // -------------------------------------------------------------------------------------------
+  // Where it sits.
+
+  private get manifest(): Manifest | null {
+    return this.app.art.manifest.value;
+  }
+
+  private get forest(): ForestManifest | null {
+    return this.manifest?.forest ?? null;
+  }
+
+  private get view(): number {
+    return this.manifest?.width ?? PICTURE.w;
+  }
+
+  grid(s: Screen): Grid {
+    const man = this.manifest;
+    // No hotbar here: the picture fills the screen, and a phone keeps room under it for the button.
+    const fit = fitPicture({
+      devW: s.devW,
+      devH: s.devH,
+      picW: man?.width ?? PICTURE.w,
+      picH: man?.height ?? PICTURE.h,
+      phone: s.phone,
+      hudScale: s.hud.scale,
+      hud: s.phone && !this.params.bare,
+      focusX: (man?.width ?? PICTURE.w) / 2,
+      clearRow: man?.height ?? PICTURE.h,
+    });
+    this.shown = fit.W;
+    return { W: fit.W, H: fit.H, scale: fit.scale, offX: fit.offX, offY: fit.offY, dpr: s.dpr };
+  }
+
+  layoutKey(): string {
+    const man = this.manifest;
+    return man ? `${man.width}x${man.height}:${man.forest ? "forest" : ""}` : "";
+  }
+
+  pageColour(): string {
+    return this.edge?.colour ?? DARK;
+  }
+
+  resize(world: Grid, hud: Grid): void {
+    this.world = world;
+    this.hudGrid = hud;
+    const man = this.manifest;
+    if (man && (this.pic.W !== man.width || this.pic.H !== man.height)) this.pic = new Picture(man.width, man.height);
+    this.lookAt(this.at);
   }
 
   busy(): boolean {
     return this.moment !== null;
   }
 
-  resize(world: Grid, hud: Grid): void {
-    const W = world.W;
-    const H = world.H;
-    this.worldGrid = world;
-    this.hudGrid = hud;
-    this.W = W;
-    this.H = H;
-    // A phone keeps its button at the bottom, where a thumb is; so the view drops a little and the
-    // ground runs on beneath the world, leaving the button on grass rather than on the campfire.
-    this.top = Math.max(0, WORLD_H - H) + (W < 200 ? FOOT_ROOM : 0);
-    this.frame = new Surface(W, H);
-    this.light = new Light(W, H);
-    this.cx = clampCam(this.cx, W);
+  /** Points the screen's middle at ground x `at`, kept inside the valley. */
+  private lookAt(at: number): void {
+    const f = this.forest;
+    const valley = f?.width ?? 1024;
+    const [lo, hi] = lookRange(Math.min(this.shown, this.view), valley);
+    this.at = Math.max(lo, Math.min(hi, at));
+    const l = look(this.at, this.shown, valley, this.view);
+    this.cx = l.cx;
+    this.cropX = l.cropX;
+  }
+
+  /** The first time the manifest is in: who stands where, and where the camera starts. */
+  private settle(f: ForestManifest): void {
+    if (this.placed) return;
+    this.placed = true;
+    this.trees = plant(ROSTER, f.spots);
+    this.crabs = placeCrabs(f.pond, f.gate);
+    this.fireflies = placeFireflies(f.width, 30);
+    const p = this.params;
+    let at = this.rave ? f.pond : f.heart;
+    const named = p.at ? placeX(p.at, f) : null;
+    if (named !== null) at = named;
+    if (p.tip) {
+      const id = this.trees.findIndex((tr) => tr.member.name.toLowerCase() === p.tip?.toLowerCase());
+      if (id >= 0) {
+        this.pinned = { kind: "tree", id };
+        if (named === null) at = this.trees[id]?.x ?? at;
+      }
+    }
+    if (p.look && isPlace(p.look)) this.pinned = { kind: "place", id: p.look };
+    this.lookAt(at);
   }
 
   // -------------------------------------------------------------------------------------------
   // The frame.
 
   render(t: number, out: Uint32Array, hudOut: Uint32Array, fonts: boolean): void {
+    if (t - this.lightCheckedAt > 10) {
+      this.lightCheckedAt = t;
+      const light = lightOf(this.params);
+      if (light !== this.light) {
+        this.light = light;
+        this.ink = new Ink(light);
+      }
+    }
+    const f = this.forest;
+    if (f) this.settle(f);
     this.tick(t);
-    const { W, H, top } = this;
-    const s = this.frame;
-    const light = this.light;
-    const L = this.layers;
-    const night = this.params.time === "night";
-    const winter = this.params.season === "winter";
-    light.clear();
-    const cx = Math.round(this.cx);
-    const place = (layer: Layer): Place => ({ ox: layer.offset(cx, W), oy: top });
-    const view: View = { W, H, cx, top, place };
+    const pic = this.pic;
+    const art = this.app.art;
+    const season = f && f.seasons.includes(this.params.season) ? this.params.season : (f?.seasons[0] ?? "normal");
+    const ambiance: Ambiance = f && f.ambiances.includes(this.light) ? this.light : "dusk";
+    const img = (layer: string): Pixels | null =>
+      f ? art.image(fill(f.layer, { layer, season, ambiance })).value : null;
+    const far = img("far");
+    const ground = img("ground");
+    const near = img("near");
+    if (!f || !far || !ground) {
+      pic.blank(packHex(DARK));
+      pic.blit(out, this.world.W, this.world.H, 0);
+      this.renderHud(t, hudOut, fonts, null);
+      return;
+    }
+    if (!this.hooks || this.hooks.ground.w !== ground.w)
+      this.hooks = { ground, list: lanternHooks(ground, f.great, f.heart) };
+
+    const view = this.view;
+    const cx = this.cx;
+    const stage: Stage = {
+      pic,
+      ink: this.ink,
+      cast: art.cast.value,
+      props: art.props.value,
+      season,
+      ambiance,
+      view,
+      mid: this.cropX + this.shown / 2,
+      at: (x, depth = 1) => toPicture(x, cx, view, depth),
+    };
     const m = this.moment;
     const e = m ? t - m.t0 : -1;
 
-    this.copy(L.sky, cx, null);
-    drawStars(s, this.stars, t, place(L.sky).ox, top);
-    this.copy(L.ridge, cx, null);
-    drawBanners(s, L.ridge, t, place(L.ridge));
-    if (m?.kind === "war") drawNewPennant(s, light, L.ridge, e, t, view);
-    else if (this.warDone) drawNewPennant(s, light, L.ridge, 99, t, view);
-    if (this.params.time !== "night") drawBirds(s, L.ridge, t, place(L.ridge), ix(R.MID, 1));
-    this.copy(L.haze, cx, null);
-    for (const mist of this.mists) if (mist.layer === L.haze) drawMist(s, mist.layer, mist.banks, t, place(mist.layer));
-    this.copy(L.far, cx, null);
-    this.copy(L.near, cx, null);
-    for (const mist of this.mists) if (mist.layer === L.near) drawMist(s, mist.layer, mist.banks, t, place(mist.layer));
+    // 1. The far valley, and a war's pennant on its ridge.
+    pic.layer(far, layerOffset(cx, f.layers.far.depth, view), true);
+    if (m?.kind === "war") drawPennant(stage, e, t, f.layers.far.depth);
+    else if (this.warDone) drawPennant(stage, 99, t, f.layers.far.depth);
 
-    // The member rows, back to front, shimmering where a party's trees stand or a tree is watered.
+    // 2. The ground, and the lanterns in the Great Sequoia.
+    pic.layer(ground, layerOffset(cx, 1, view));
+    const hooks = this.hooks.list;
+    for (let i = 0; i < Math.min(WEEK_LANTERNS, hooks.length); i++) {
+      const h = hooks[i * 2 + 1] ?? hooks[i];
+      if (h) drawLantern(stage, h, t);
+    }
+    for (const i of this.hung) {
+      const h = hooks[i];
+      if (h) drawLantern(stage, h, t);
+    }
+
+    // 3. The members' trees, back row then front, each lit when it is the focus or in a raid.
+    this.standing = [];
     const glow = this.glowing(t, e);
-    this.copy(L.back, cx, glow);
-    for (const mist of this.mists) if (mist.layer === L.back) drawMist(s, mist.layer, mist.banks, t, place(mist.layer));
-    this.copy(L.mid, cx, glow);
-    for (const mist of this.mists) if (mist.layer === L.mid) drawMist(s, mist.layer, mist.banks, t, place(mist.layer));
-    this.copy(L.front, cx, glow);
-
-    const pf = place(L.front);
-    // The Great Sequoia's lanterns and the root office's window.
-    this.great.lanterns.forEach((h, i) => drawHanging(s, light, h, t, i, pf, night));
-    this.hung.forEach((h, i) => {
-      const x = h.x - pf.ox;
-      for (let k = 0; k < h.cord; k++) s.set(x, h.y - top + k, ix(R.METAL, 1));
-      raidLantern(s, light, x, h.y - top + h.cord, 0.9 + 0.1 * Math.sin(t * 1.4 + i), t);
-    });
-    const door = this.great.door;
-    light.pool(door.x - pf.ox, door.y - top + 1, night ? 12 : 7, 1.6, 1.2);
-    if (night) drawOwl(s, L.front.lx(HEART_X - 96), 70, t, pf);
-    if (winter) {
-      const pts = this.great.festoon.map((p) => ({ x: p.x - pf.ox, y: p.y - top }));
-      drawFestoon(s, light, pts, t, 80);
-    }
-    // Front-row seedlings sway, back to front.
-    for (const p of this.liveSeedlings) {
-      if (!p.sway) continue;
-      const x = L.front.lx(p.X) - pf.ox;
-      if (x < -10 || x > W + 10) continue;
-      const k = swayIndex(t, 3.6, hash3(p.id, 1, 1) * 3.6);
-      const fr = p.sway[k] ?? p.sway[0];
-      if (fr) s.blit(fr, x - Math.floor(fr.w / 2), p.foot - fr.h + 1 - top);
+    for (const row of f.rows) {
+      const atlas = art.image(fill(f.trees, { row: row.name, season, ambiance })).value;
+      const index = f.index.get(season)?.get(row.name);
+      if (!atlas || !index) continue;
+      const mine = this.trees
+        .map((p, id) => ({ p, id, box: index.get(p.key) }))
+        .filter((x): x is { p: Planted<Member>; id: number; box: AtlasBox } => x.p.row === row.name && !!x.box)
+        .toSorted((a, b) => b.box.h - a.box.h);
+      for (const { p, id, box } of mine) {
+        const s: Standing = { id, planted: p, atlas, box, left: p.x - box.footX, top: row.foot - box.footY };
+        this.standing.push(s);
+        const dx = stage.at(s.left);
+        if (dx + box.w < 0 || dx > view) continue;
+        pic.paste(atlas, box.x, box.y, box.w, box.h, dx, s.top);
+        const k = glow.get(id);
+        if (k) lightTree(stage, atlas, box, dx, s.top, k.k, k.band ? box.h - ((t * 40) % (box.h + 8)) : null);
+      }
     }
 
-    // The campfire.
-    const fx = this.places.fire.x - pf.ox;
-    if (fx > -60 && fx < W + 60) {
-      const FL = { ...layout(W, H), fire: { x: fx, y: this.places.fire.y - top } };
-      drawFireBack(s, FL);
-      drawFlames(s, FL, t, { flare: 0 });
-      drawFireFront(s, FL);
-      drawSmoke(s, FL, t);
-      drawEmbers(s, FL, t, 0);
-      fireLight(light, FL, t, this.params.time, { flare: 0 });
-      drawFireside(
-        s,
-        this.places.fire.x,
-        this.places.fire.y,
-        t,
-        pf,
-        t - this.catAt < 0.3 || (Math.floor(t / 4.3) % 3 === 2 && t % 4.3 < 0.15),
-      );
-    }
-    // The squirrel on the left buttress.
-    const sq = squirrelFrame(t, -99);
-    put(s, sq.sprite, L.front.lx(HEART_X - 40) - 8, GREAT_FOOT + sq.dy, pf);
-    // Cinfy at the stall, and its lantern; the gate's lantern.
-    const st = this.places.stall;
-    drawCinfy(s, st.x, st.counter, t, pf);
-    drawHanging(s, light, { x: st.lantern.x, y: st.lantern.y, cord: 2 }, t, 7, pf, night);
-    drawHanging(s, light, { x: this.places.gate.lantern.x, y: this.places.gate.lantern.y, cord: 3 }, t, 9, pf, night);
-    // The old Swamp pennant, faded, still flying.
-    this.oldPennant(s, t, pf);
-    drawNeedles(s, this.needles, t, pf);
-
-    // Water: everything that stands above it is now drawn, so fill it with its reflection.
-    this.reflectWater(t, pf.ox);
-
-    // Life on the water and its shore.
-    for (const [i, c] of this.crabs.entries()) {
-      const hop = t - (this.crabHop.get(i) ?? -99);
-      const pose =
-        hop >= 0 && hop < 0.8
-          ? { f: crabHappy(false, hop * 1000), dx: 0, dy: hop < 0.25 ? -2 : 0 }
-          : crabPose(c, t, this.rave);
-      putFrame(s, pose.f, c.x + pose.dx, c.foot + pose.dy, pf);
-    }
-    // No. 08, by the Swamp's sign.
-    const no8 = t - this.no8At;
-    const n8 =
-      no8 >= 0 && no8 < 1
-        ? { f: crabHappy(true, no8 * 1000), dy: no8 < 0.25 ? -2 : 0 }
-        : crabPose({ x: 0, foot: 0, phase: 2.2, roam: 1 }, t, this.rave, true);
-    putFrame(s, n8.f, this.places.swampSign.x + 13, this.places.swampSign.y + n8.dy, pf);
-    drawDucks(s, L.front.lx(14), L.front.lx(120), 228, t, pf);
-    if (this.rave) drawRave(s, light, this.raveSetup(), t, view);
-
-    // Events in the world.
+    // 4. The crabs, the moments and the life among the trees.
+    this.drawCrabs(stage, t);
     let raidOut: ReturnType<typeof drawRaid> | null = null;
-    if (m?.kind === "raid") raidOut = drawRaid(s, light, this.raidSetup(), e, view);
-    if (m?.kind === "levelup") drawLevelUp(s, light, L.front, [...this.great.lanterns, ...this.great.free], e, t, view);
-    this.drawSplashes(t);
-
-    this.copy(L.fore, cx, null);
-    drawFireflies(s, light, this.fireflies, t, pf);
-    if (winter) drawSnow(s, t, pf, 7);
-    if (m?.kind === "war") drawWarLeaves(s, light, e, W);
-
-    compose(s, light, this.lut, out);
-
-    // The HUD, on its own grid: redrawn only when something on it changed.
-    const c = new Canvas(hudOut, this.hudGrid.W, this.hudGrid.H);
-    if (this.params.bare) {
-      c.clear();
-      return;
+    if (m?.kind === "raid") raidOut = drawRaid(stage, this.raidSetup(), e, t);
+    if (m?.kind === "levelup") drawSkyLanterns(stage, this.lanternSources(f), e, t);
+    if (this.rave) drawRave(stage, f.pond, t);
+    this.splashes = this.splashes.filter((sp) => t - sp.t0 < 2.4);
+    for (const sp of this.splashes) {
+      const c = this.crownOf(sp.id);
+      if (c) drawWatering(stage, c, t - sp.t0, t);
     }
-    const model = this.hudModel(t, e, raidOut);
-    const key = `${fonts}:${this.hudGrid.W}x${this.hudGrid.H}:${JSON.stringify({ ...model, t: model.me ? Math.round(t * 12) : 0 })}`;
-    if (key === this.hudKey && hudOut.buffer === this.hudBuffer) return;
-    this.hudKey = key;
-    this.hudBuffer = hudOut.buffer;
-    c.clear();
-    this.hits = drawHud(c, model, fonts);
-  }
-
-  private hudKey = "";
-  private hudBuffer: ArrayBufferLike | null = null;
-
-  /** A point in the world's grid, in the HUD's. */
-  private toHud(p: Point): Point {
-    return between(this.worldGrid, this.hudGrid, p);
-  }
-
-  private warDone = false;
-
-  /** Copies the visible slice of a layer into the frame; `glow` lights the given trees. */
-  private copy(layer: Layer, cx: number, glow: Map<number, number> | null): void {
-    const { W, H, top } = this;
-    const src = layer.s.data;
-    const dst = this.frame.data;
-    const ox = layer.offset(cx, W);
-    const x0 = Math.max(0, -ox);
-    const x1 = Math.min(W, layer.w - ox);
-    const owner = glow && glow.size && layer.owner ? layer.owner : null;
-    for (let y = 0; y < H; y++) {
-      let wy = y + top;
-      if (wy >= WORLD_H) {
-        // Below the world: the front ground's last rows, repeated, for a phone's foot room.
-        if (layer !== this.layers.front) break;
-        wy = WORLD_H - 1 - ((wy - WORLD_H) % 4);
-      }
-      const si = wy * layer.w + ox;
-      const di = y * W;
-      if (!owner && wy >= layer.opaqueFrom && x0 === 0 && x1 === W) {
-        dst.set(src.subarray(si, si + W), di);
-        continue;
-      }
-      if (!owner) {
-        for (let x = x0; x < x1; x++) {
-          const v = src[si + x] ?? 0;
-          if (v) dst[di + x] = v;
-        }
-        continue;
-      }
-      for (let x = x0; x < x1; x++) {
-        let v = src[si + x] ?? 0;
-        if (!v) continue;
-        const k = glow?.get(owner[si + x] ?? 0);
-        if (k) {
-          // A band of light sweeps up through the tree.
-          const band = (x + ox - wy * 0.6 + this.lastT * 40) % 22;
-          v = k > 1 && band >= 0 && band < 3 ? (this.shine[v] ?? v) : (this.shimmer[v] ?? v);
-        }
-        dst[di + x] = v;
-      }
+    for (const name of this.app.store.state.watered) {
+      const id = this.trees.findIndex((p) => p.member.name === name);
+      const c = id >= 0 && !this.splashes.some((sp) => sp.id === id) ? this.crownOf(id) : null;
+      if (c) drawDew(stage, c, t);
     }
+    if (season !== "winter") drawFireflies(stage, this.fireflies, t);
+
+    // 5. The near ferns and trunks, over everything.
+    if (near) pic.layer(near, layerOffset(cx, f.layers.near.depth, view));
+
+    // 6. What falls in front: leaves, snow, and a war's S E Q.
+    drawFallingLeaves(stage, season === "winter" ? 3 : 7, t);
+    if (season === "winter") drawSnow(stage, t);
+    if (m?.kind === "war") drawSeq(stage, e);
+
+    const key = `${season}-${ambiance}`;
+    if (this.edge?.key !== key) this.edge = { key, colour: edgeColour(pic.px, pic.W, pic.H) };
+    pic.blit(out, this.world.W, this.world.H, this.cropX);
+    this.renderHud(t, hudOut, fonts, raidOut);
   }
 
-  /** Which trees glow this frame, and how strongly (1 lit, 2 with the sweeping band). */
-  private glowing(t: number, e: number): Map<number, number> {
-    const out = new Map<number, number>();
+  private drawCrabs(s: Stage, t: number): void {
+    this.crabs.forEach((c, i) => {
+      // No. 08 turns up for the rave.
+      const at = c.numbered && this.rave && this.forest ? { ...c, x: this.forest.pond + 70, foot: 132 } : c;
+      const pose = crabPose(at, t, this.rave, t - (this.crabHop.get(i) ?? -99));
+      const f = castFrame(s, [c.numbered ? "crab-08" : "crab"], [pose.anim, "idle"], pose.ms);
+      const x = s.at(pose.x);
+      if (f && x > -16 && x < s.view + 16) s.pic.sprite(f, x, at.foot, pose.flip);
+    });
+  }
+
+  /** Which trees are lit this frame, how strongly, and whether a band of light climbs them. */
+  private glowing(t: number, e: number): Map<number, { k: number; band: boolean }> {
+    const out = new Map<number, { k: number; band: boolean }>();
     if (this.moment?.kind === "raid") {
       const k = raidShimmer(e);
-      if (k > 0.05) for (const p of this.raidSetup().party) out.set(p.id, k > 0.4 ? 2 : 1);
+      if (k > 0.05) for (const id of this.raidParty()) out.set(id, { k, band: k > 0.4 });
     }
-    for (const sp of this.splashes) if (t - sp.t0 > 0.5 && t - sp.t0 < 2.2) out.set(sp.id, 1);
+    for (const sp of this.splashes) if (t - sp.t0 > 0.5 && t - sp.t0 < 2.2) out.set(sp.id, { k: 0.6, band: false });
     const focus = this.pinned ?? (this.hover && !this.drag ? this.pick(this.hover.x, this.hover.y) : null);
-    if (focus?.kind === "tree" && !out.has(focus.id)) out.set(focus.id, 2);
+    if (focus?.kind === "tree" && !out.has(focus.id)) out.set(focus.id, { k: 0.55, band: false });
     return out;
   }
 
-  private reflectWater(t: number, phase: number): void {
-    reflectWater(this.frame, t, this.reflect, this.glint, this.params.season === "winter", phase);
-  }
-
-  private oldPennant(s: Surface, t: number, pf: Place): void {
-    const { x } = this.places.oldPennant;
-    const px = x - pf.ox - 3;
-    const py = 200 - pf.oy;
-    if (px < -10 || px > s.w + 10) return;
-    // Faded to straw, frayed at the tail, hanging rather than flying.
-    const rows = [
-      ["ggggg.", "goGgg.", "gggg..", "gg.g..", "g....."],
-      ["gggg..", "goGgg.", "ggggg.", "g.gg..", "g....."],
-    ];
-    const fr = rows[Math.floor(t / 1.7) % 2] ?? rows[0] ?? [];
-    fr.forEach((row, ry) => {
-      for (let k = 0; k < row.length; k++) {
-        const ch = row[k];
-        const v = ch === "g" ? ix(R.SHROOM, 2) : ch === "G" ? ix(R.SHROOM, 3) : ch === "o" ? ix(R.CRAB, 3) : 0;
-        if (v) s.set(px + 1 + k, py + 1 + ry, v);
-      }
-    });
-  }
-
-  private drawSplashes(t: number): void {
-    const s = this.frame;
-    this.splashes = this.splashes.filter((sp) => t - sp.t0 < 2.4);
-    for (const sp of this.splashes) {
-      const p = this.planted[sp.id - 1];
-      const layer = p ? this.rows[p.rowIndex] : null;
-      if (!p || !layer) continue;
-      const off = layer.offset(Math.round(this.cx), this.W);
-      const age = t - sp.t0;
-      for (let k = 0; k < 9; k++) {
-        const u = age * 1.4 - k * 0.09;
-        if (u < 0 || u > 1) continue;
-        const x = p.box.x0 + (p.box.x1 - p.box.x0) * (0.2 + 0.6 * hash3(k, sp.id, 1)) - off;
-        const y = p.box.y0 - 10 + u * (p.foot - p.box.y0 + 6) - this.top;
-        s.set(x, y, ix(R.WATER, 6));
-        s.set(x, y - 1, ix(R.WATER, 4));
-      }
-      if (age > 0.6 && age < 1.8)
-        for (let k = 0; k < 5; k++) {
-          const tw = Math.floor(age * 8 + k);
-          const x = p.box.x0 + hash3(k, tw, 3) * (p.box.x1 - p.box.x0) - off;
-          const y = p.box.y0 + hash3(k, tw, 4) * (p.box.y1 - p.box.y0) * 0.7 - this.top;
-          s.set(x, y, ix(R.GLOW, 6));
-        }
-    }
+  /** A tree's crown on the ground: its middle, its top row and its width. */
+  private crownOf(id: number): { x: number; top: number; w: number } | null {
+    const s = this.standing.find((x) => x.id === id);
+    return s ? { x: s.left + s.box.w / 2, top: s.top, w: s.box.w } : null;
   }
 
   // -------------------------------------------------------------------------------------------
-  // Events.
+  // Moments.
 
-  private raidCache: RaidSetup | null = null;
+  /** The lab's raid party: your tree and the three nearest yours a player would see. */
+  private raidParty(): number[] {
+    const me = this.meId();
+    const anchor = me >= 0 ? (this.trees[me]?.x ?? 640) : (this.trees[9]?.x ?? 640);
+    const near = this.trees
+      .map((p, id) => ({ p, id }))
+      .filter(({ p, id }) => id !== me && p.member.level >= 3)
+      .toSorted((a, b) => Math.abs(a.p.x - anchor) - Math.abs(b.p.x - anchor))
+      .slice(0, me >= 0 ? 3 : 4)
+      .map(({ id }) => id);
+    return (me >= 0 ? [me, ...near] : near).toSorted((a, b) => (this.trees[a]?.x ?? 0) - (this.trees[b]?.x ?? 0));
+  }
 
   private raidSetup(): RaidSetup {
-    if (this.raidCache) return this.raidCache;
-    const party = raidParty(this.planted, this.params.me);
-    const hook = this.great.free[this.raidHookIndex] ?? this.great.free[0] ?? { x: 0, y: 0, cord: 4 };
-    this.raidCache = { party, layers: this.rows, front: this.layers.front, fire: this.places.fire, hook };
+    if (this.raidCache && this.raidCache.party.length > 0) return this.raidCache;
+    const hooks = this.hooks?.list ?? [];
+    const taken = new Set([...Array.from({ length: WEEK_LANTERNS }, (_, i) => i * 2 + 1), ...this.hung]);
+    const free = hooks.findIndex((_, i) => !taken.has(i));
+    const hook = hooks[free] ?? hooks[0] ?? { x: this.forest?.heart ?? 512, y: 12, cord: 5 };
+    const party = this.raidParty().flatMap((id) => {
+      const c = this.crownOf(id);
+      return c ? [{ x: c.x, top: c.top }] : [];
+    });
+    this.raidCache = { party, hook };
     return this.raidCache;
   }
 
-  private raveSetup(): RaveSetup {
-    const f = this.layers.front;
-    return {
-      front: f,
-      from: { x: f.lx(PLACES.rules) + 25, y: 189 },
-      to: { x: f.lx(PLACES.rollcall) - 18, y: 192 },
-      shore: this.places.pond.shore,
-    };
+  /** Where the level-up's sky lanterns lift from: the Great Sequoia's lanterns, then the trees round the heart. */
+  private lanternSources(f: ForestManifest): Point[] {
+    const fromGreat = (this.hooks?.list ?? []).slice(0, 6).map((h) => lanternAt(h).glass);
+    const fromTrees = this.standing
+      .filter((s) => Math.abs(s.planted.x - f.heart) < 200)
+      .slice(0, 10)
+      .map((s) => ({ x: s.left + s.box.w / 2, y: s.top + 4 }));
+    return [...fromGreat, ...fromTrees].toSorted((a, b) => Math.abs(a.x - this.at) - Math.abs(b.x - this.at));
   }
 
   startMoment(kind: EventKind, t0: number): void {
     if (this.moment?.kind === "war") this.warDone = true;
     if (this.moment?.kind === "raid") this.finishRaid();
-    this.moment = { kind, t0, from: this.cx };
+    this.moment = { kind, t0, from: this.at };
     this.cameraFree = false;
     this.target = null;
     this.raidCache = null;
@@ -585,54 +456,30 @@ export class Forest implements Scene {
   }
 
   private finishRaid(): void {
-    const r = this.raidSetup();
-    this.hung.push(r.hook);
-    this.raidHookIndex++;
+    const hook = this.raidSetup().hook;
+    const i = this.hooks?.list.indexOf(hook) ?? -1;
+    if (i >= 0) this.hung.push(i);
   }
 
   private tick(t: number): void {
     const dt = Math.max(0, Math.min(0.1, t - this.lastT));
     this.lastT = t;
     const m = this.moment;
-    if (m) {
+    const f = this.forest;
+    if (m && f) {
       const e = t - m.t0;
       if (!this.cameraFree && e >= 0) {
-        if (m.kind === "raid") this.cx = raidCamera(this.raidSetup(), e, m.from, this.W);
-        else if (m.kind === "war") this.cx = warCamera(e, m.from);
-        else this.cx = levelCamera(e, m.from);
+        if (m.kind === "raid" && this.standing.length > 0) this.lookAt(raidCamera(this.raidSetup(), e, m.from));
+        else if (m.kind === "war") {
+          // The ridge's pennant in the middle of the picture.
+          const ridgeCx = this.view / 2 + (RIDGE.x - this.view / 2) / f.layers.far.depth;
+          this.lookAt(warCamera(e, m.from, ridgeCx));
+        } else if (m.kind === "levelup") this.lookAt(m.from + (f.heart - m.from) * ease(e / 2));
       }
-      // Feed updates as each moment lands.
+      // The feed updates as each moment lands.
       const landed = m.kind === "raid" ? 6.5 : m.kind === "war" ? 3.2 : 2.2;
-      if (e >= landed && this.feed.at < m.t0) {
-        this.feed =
-          m.kind === "raid"
-            ? {
-                icon: "raid",
-                text: "Party of 4 cleared TCC",
-                short: "TCC cleared",
-                detail: "Party of 4",
-                ago: "now",
-                at: t,
-              }
-            : m.kind === "war"
-              ? {
-                  icon: "war",
-                  text: "SEQ took a Fruma territory",
-                  short: "War won",
-                  detail: "Fruma",
-                  ago: "now",
-                  at: t,
-                }
-              : {
-                  icon: "level",
-                  text: "Guild reached level 251",
-                  short: "Level 251!",
-                  detail: "GG",
-                  ago: "now",
-                  at: t,
-                };
-      }
-      if (e > LENGTH[m.kind]) {
+      if (e >= landed && this.feed.at < m.t0) this.feed = { ...FEEDS[m.kind], at: t };
+      if (e > LENGTH[m.kind] && !this.params.still) {
         if (m.kind === "raid") this.finishRaid();
         if (m.kind === "war") this.warDone = true;
         this.moment = null;
@@ -641,37 +488,53 @@ export class Forest implements Scene {
     if (!this.drag) {
       if (this.target !== null) {
         const k = 1 - Math.exp(-dt * 3.2);
-        this.cx += (this.target - this.cx) * k;
-        if (Math.abs(this.target - this.cx) < 0.5) {
-          this.cx = this.target;
+        const next = this.at + (this.target - this.at) * k;
+        if (Math.abs(this.target - next) < 0.5) {
+          this.lookAt(this.target);
           this.target = null;
-        }
+        } else this.lookAt(next);
       } else if (Math.abs(this.vx) > 1) {
-        this.cx += this.vx * dt;
+        this.lookAt(this.at + this.vx * dt);
         this.vx *= Math.exp(-dt * 3.5);
       } else this.vx = 0;
     }
-    this.cx = clampCam(this.cx, this.W);
   }
 
   // -------------------------------------------------------------------------------------------
-  // The HUD's model.
+  // The HUD.
 
-  private hudModel(t: number, e: number, raid: ReturnType<typeof drawRaid> | null): HudModel {
-    const m = this.moment;
-    const me = this.byName.get(this.params.me.toLowerCase()) ?? null;
-    let mePos: { x: number; y: number } | null = null;
-    const marked =
-      this.pinned?.kind === "tree" ? this.planted[this.pinned.id - 1] : me && t - this.meAt < 6 ? me : null;
-    if (marked) {
-      const layer = this.rows[marked.rowIndex];
-      const topY = marked.sway ? marked.foot - (marked.sway[0]?.h ?? 12) : marked.box.y0;
-      if (layer)
-        mePos = this.toHud({
-          x: layer.lx(marked.X) - layer.offset(Math.round(this.cx), this.W),
-          y: topY - this.top - 2,
-        });
+  /** A picture point in the HUD's grid. */
+  private toHud(p: Point): Point {
+    return between(this.world, this.hudGrid, { x: p.x - this.cropX, y: p.y });
+  }
+
+  private renderHud(t: number, hudOut: Uint32Array, fonts: boolean, raid: ReturnType<typeof drawRaid> | null): void {
+    const c = new Canvas(hudOut, this.hudGrid.W, this.hudGrid.H);
+    if (this.params.bare) {
+      c.clear();
+      return;
     }
+    const model = this.hudModel(t, raid);
+    const key = `${fonts}:${this.hudGrid.W}x${this.hudGrid.H}:${JSON.stringify({ ...model, t: model.me ? Math.round(t * 12) : 0 })}`;
+    if (key === this.hudKey && hudOut.buffer === this.hudBuffer) return;
+    this.hudKey = key;
+    this.hudBuffer = hudOut.buffer;
+    c.clear();
+    this.hits = drawHud(c, model, fonts);
+  }
+
+  private meId(): number {
+    const me = this.params.me.toLowerCase();
+    return this.trees.findIndex((p) => p.member.name.toLowerCase() === me);
+  }
+
+  private hudModel(t: number, raid: ReturnType<typeof drawRaid> | null): HudModel {
+    const m = this.moment;
+    const e = m ? t - m.t0 : -1;
+    const me = this.meId();
+    const marked = this.pinned?.kind === "tree" ? this.pinned.id : me >= 0 && t - this.meAt < 6 ? me : -1;
+    const crown = marked >= 0 ? this.crownOf(marked) : null;
+    const mePos = crown ? this.toHud({ x: toPicture(crown.x, this.cx, this.view), y: crown.top - 2 }) : null;
     let card: HudModel["card"] = null;
     if (m?.kind === "levelup") {
       const a = clamp01((e - 2.2) / 0.4) * (1 - clamp01((e - 8.4) / 0.6));
@@ -682,74 +545,63 @@ export class Forest implements Scene {
       label = {
         ...this.toHud(raid.lantern),
         title: "TCC cleared",
-        names: this.raidSetup().party.map((p) => p.member.name),
+        names: this.raidParty().map((id) => this.trees[id]?.member.name ?? ""),
         a: raid.labelA,
       };
-    const bubble =
-      t - this.catAt < 4.5
-        ? {
-            ...this.toHud({
-              x: this.places.fire.x + CAT_SEAT.dx - this.layers.front.offset(Math.round(this.cx), this.W),
-              y: this.places.fire.y + CAT_SEAT.dy - 8 - this.top,
-            }),
-            lines: JOKES[this.catJoke % JOKES.length] ?? [],
-          }
-        : null;
     return {
-      trees: this.planted.length + 1,
+      trees: this.trees.length,
       feed: { ...this.feed, flash: Math.max(0, 1 - (t - this.feed.at) / 1.2) },
       findHot: !!this.hudHover && inside(this.hits.find, this.hudHover.x, this.hudHover.y),
       findOn: t - this.meAt < 6,
-      tooltip: this.tooltip(t),
+      tooltip: this.tooltip(),
       debug: this.params.debug ? { labels: ["Raid", "War", "Level up", "Rave"], hot: this.debugHot() } : null,
       card,
       label,
-      bubble,
       me: mePos,
       t,
     };
   }
 
   private debugHot(): number {
-    if (!this.hudHover) return -1;
     const h = this.hudHover;
-    return this.hits.debug.findIndex((r) => inside(r, h.x, h.y));
+    return h ? this.hits.debug.findIndex((r) => inside(r, h.x, h.y)) : -1;
   }
 
-  private tooltip(t: number): Tooltip | null {
+  private tooltip(): Tooltip | null {
     const at = this.pinned ? null : this.hover;
     const target = this.pinned ?? (at ? this.pick(at.x, at.y) : null);
     if (!target) return null;
-    const worldAnchor = this.anchorOf(target, at);
-    if (!worldAnchor) return null;
-    const anchor = this.toHud(worldAnchor);
+    const anchor = this.anchorOf(target, at);
+    if (!anchor) return null;
+    const a = this.toHud(anchor);
+    const actionHot = !!this.hudHover && inside(this.hits.action, this.hudHover.x, this.hudHover.y);
     if (target.kind === "tree") {
-      const p = this.planted[target.id - 1];
+      const p = this.trees[target.id];
       if (!p) return null;
       const lv = p.member.level;
-      const colour = mix([146, 196, 106], [253, 211, 111], (lv - 1) / 9);
       const done = this.app.store.state.watered.includes(p.member.name);
-      const actionHot = !!this.hudHover && inside(this.hits.action, this.hudHover.x, this.hudHover.y);
       return {
-        ax: anchor.x,
-        ay: anchor.y,
+        ax: a.x,
+        ay: a.y,
         head: playerHead(p.member.seed),
         title: p.member.name,
         titleColour: UI.text,
-        lines: [{ text: `Level ${lv} · ${stageLabel(p.member.stage)}`, colour }],
+        lines: [
+          {
+            text: `Level ${lv} · ${stageLabel(p.member.stage)}`,
+            colour: mix([146, 196, 106], [253, 211, 111], (lv - 1) / 9),
+          },
+        ],
         action: done
           ? { text: "Watered · thank you!", colour: UI.muted, hot: false }
           : { text: "Water (1 care)", colour: UI.leaf, hot: actionHot },
       };
     }
-    void t;
     const info = PLACE_INFO[target.id];
-    if (!info) return null;
     const go = PLACE_ACTION[target.id];
-    const actionHot = !!this.hudHover && inside(this.hits.action, this.hudHover.x, this.hudHover.y);
     return {
-      ax: anchor.x,
-      ay: anchor.y,
+      ax: a.x,
+      ay: a.y,
       head: null,
       title: info.title,
       titleColour: info.colour,
@@ -758,55 +610,59 @@ export class Forest implements Scene {
     };
   }
 
-  private anchorOf(
-    target: { kind: "tree" | "place"; id: number },
-    at: { x: number; y: number } | null,
-  ): { x: number; y: number } | null {
-    if (at) return at;
-    const cx = Math.round(this.cx);
+  /** Where a tooltip points, in the picture: the pointer, or the target's top. */
+  private anchorOf(target: Target, at: Point | null): Point | null {
+    if (at) return { x: at.x + this.cropX, y: at.y };
+    const f = this.forest;
+    if (!f) return null;
     if (target.kind === "tree") {
-      const p = this.planted[target.id - 1];
-      const layer = p ? this.rows[p.rowIndex] : null;
-      if (!p || !layer) return null;
-      return { x: layer.lx(p.X) - layer.offset(cx, this.W), y: p.box.y0 - this.top + 4 };
+      const c = this.crownOf(target.id);
+      return c ? { x: toPicture(c.x, this.cx, this.view), y: c.top + 4 } : null;
     }
-    const f = this.layers.front;
-    const X = PLACE_X[target.id] ?? HEART_X;
-    return { x: f.lx(X) - f.offset(cx, this.W), y: (PLACE_Y[target.id] ?? 200) - this.top };
+    const spot = placeSpot(target.id, f);
+    return { x: toPicture(spot.x, this.cx, this.view), y: spot.y };
   }
 
   // -------------------------------------------------------------------------------------------
   // Input.
 
-  /** What is under a screen point: a tree, a place, or nothing. Front layers first. */
-  private pick(x: number, y: number): { kind: "tree" | "place"; id: number } | null {
-    const cx = Math.round(this.cx);
-    const wy = y + this.top;
-    if (wy < 0 || wy >= WORLD_H) return null;
-    // No. 08, by the sign.
-    const pf = this.layers.front.offset(cx, this.W);
-    const n8x = this.places.swampSign.x + 13 - pf;
-    if (Math.abs(x - n8x) <= 9 && wy >= this.places.swampSign.y - 14 && wy <= this.places.swampSign.y + 1)
-      return { kind: "place", id: NO8_ID };
-    // Front seedlings sway outside the layer: test their boxes.
-    for (const p of this.planted) {
-      if (!p.sway) continue;
-      const sx = this.layers.front.lx(p.X) - pf;
-      if (Math.abs(x - sx) <= 6 && wy <= p.foot + 1 && wy >= p.foot - 20) return { kind: "tree", id: p.id };
+  /** What is under a point of the screen's grid: a crab, a tree (by its own pixels), a place, or nothing. */
+  private pick(x: number, y: number): Target | null {
+    const f = this.forest;
+    if (!f || y < 0 || y >= this.pic.H) return null;
+    const gx = toGround(x + this.cropX, this.cx, this.view);
+    if (this.crabAt(x, y) >= 0) return { kind: "place", id: this.crabAt(x, y) === 4 ? "no8" : "pond" };
+    // Front row first: it stands in front.
+    for (const s of this.standing.toReversed()) {
+      const lx = Math.round(gx - s.left);
+      const ly = Math.round(y - s.top);
+      if (lx < 0 || ly < 0 || lx >= s.box.w || ly >= s.box.h) continue;
+      if ((s.atlas.data[(s.box.y + ly) * s.atlas.w + s.box.x + lx] ?? 0) >>> 24 >= 128)
+        return { kind: "tree", id: s.id };
     }
-    for (const layer of [this.layers.front, this.layers.mid, this.layers.back, this.layers.ridge]) {
-      const lx = x + layer.offset(cx, this.W);
-      if (lx < 0 || lx >= layer.w) continue;
-      const i = wy * layer.w + lx;
-      if (!layer.s.data[i]) continue;
-      const id = layer.owner?.[i] ?? 0;
-      if (!id) {
-        if (layer === this.layers.ridge) continue;
-        return null;
-      }
-      return id <= this.planted.length ? { kind: "tree", id } : { kind: "place", id };
+    const ground = this.hooks?.ground;
+    const solid =
+      !!ground &&
+      gx >= 0 &&
+      gx < ground.w &&
+      (ground.data[Math.round(y) * ground.w + Math.round(gx)] ?? 0) >>> 24 >= 128;
+    for (const id of ["hollow", "farm", "great", "pond"] as const) {
+      const r = placeRect(id, f);
+      if (gx >= r.x0 && gx <= r.x1 && y >= r.y0 && y <= r.y1 && (solid || id === "hollow"))
+        return { kind: "place", id };
     }
     return null;
+  }
+
+  /** The crab under a screen point, or -1. */
+  private crabAt(x: number, y: number): number {
+    const t = this.lastT;
+    return this.crabs.findIndex((c, i) => {
+      const at = c.numbered && this.rave && this.forest ? { ...c, x: this.forest.pond + 70, foot: 132 } : c;
+      const pose = crabPose(at, t, this.rave, t - (this.crabHop.get(i) ?? -99));
+      const sx = toPicture(pose.x, this.cx, this.view) - this.cropX;
+      return Math.abs(x - sx) <= 9 && y <= at.foot + 1 && y >= at.foot - 13;
+    });
   }
 
   pointer(world: Point, hud: Point, kind: PointerKind, t: number, touch: boolean): void {
@@ -817,7 +673,7 @@ export class Forest implements Scene {
       return;
     }
     if (kind === "down") {
-      this.drag = { x, cx: this.cx, moved: 0, lastX: x, lastT: t };
+      this.drag = { x, at: this.at, moved: 0, lastX: x, lastT: t };
       this.vx = 0;
       if (!touch) {
         this.hover = { x, y };
@@ -838,10 +694,10 @@ export class Forest implements Scene {
           this.vx = ((d.lastX - x) / dt) * 0.6 + this.vx * 0.4;
           d.lastX = x;
           d.lastT = t;
-          this.cx = clampCam(d.cx - (x - d.x), this.W);
+          this.lookAt(d.at - (x - d.x));
           this.cameraFree = true;
           this.target = null;
-          if (this.pinned) this.pinned = null;
+          this.pinned = null;
         }
       }
       this.cursor = this.drag && this.drag.moved > 2 ? "grabbing" : this.isHot(world, hud) ? "pointer" : "grab";
@@ -868,70 +724,51 @@ export class Forest implements Scene {
   }
 
   private tap(world: Point, hud: Point, t: number): void {
-    const { x, y } = world;
     const h = this.hits;
     if (inside(h.find, hud.x, hud.y)) return this.findMe(t);
-    if (inside(h.action, hud.x, hud.y) && this.pinned) {
-      if (this.pinned.kind === "place") {
-        const go = PLACE_ACTION[this.pinned.id];
-        if (go) this.app.go(go.route);
-        return;
-      }
-      const id = this.pinned.id;
-      const member = this.planted[id - 1]?.member;
-      if (!member) return;
-      const next = waterFriend(this.app.store.state, member.name);
-      if (next) {
-        this.app.store.set(next);
-        this.splashes.push({ id, t0: t });
-        this.app.say(`You watered ${member.name}'s tree. It will wait for them as dew.`);
-      } else if (!this.app.store.state.watered.includes(member.name))
-        this.app.say("No care charges left. They come back.");
-      return;
-    }
+    if (inside(h.action, hud.x, hud.y) && this.pinned) return this.act(this.pinned, t);
     const di = h.debug.findIndex((r) => inside(r, hud.x, hud.y));
     if (di >= 0) return this.debug(di, t);
     if (h.panels.some((r) => inside(r, hud.x, hud.y))) return;
-    const target = this.pick(x, y);
-    if (this.nearCat(x, y)) {
-      this.catAt = t;
-      this.catJoke++;
+    // A crab: it explodes affectionately.
+    const crab = this.crabAt(world.x, world.y);
+    if (crab >= 0) {
+      this.crabHop.set(crab, t);
+      this.pinned = { kind: "place", id: crab === 4 ? "no8" : "pond" };
       return;
     }
-    if (target?.kind === "place" && target.id === NO8_ID) this.no8At = t;
-    // A crab on the shore: it explodes affectionately.
-    const hit = this.crabAt(x, y);
-    if (hit >= 0) {
-      this.crabHop.set(hit, t);
-      this.pinned = { kind: "place", id: ID.rollcall };
+    const target = this.pick(world.x, world.y);
+    const same = target && this.pinned && target.kind === this.pinned.kind && target.id === this.pinned.id;
+    this.pinned = same ? null : target;
+  }
+
+  /** A pinned tooltip's action: water a friend's tree, or go where a place leads. */
+  private act(target: Target, t: number): void {
+    if (target.kind === "place") {
+      const go = PLACE_ACTION[target.id];
+      if (go) this.app.go(go.route);
       return;
     }
-    if (target && this.pinned && target.kind === this.pinned.kind && target.id === this.pinned.id) this.pinned = null;
-    else this.pinned = target;
-  }
-
-  private nearCat(x: number, y: number): boolean {
-    const pf = this.layers.front.offset(Math.round(this.cx), this.W);
-    const cx = this.places.fire.x + CAT_SEAT.dx - pf;
-    const cy = this.places.fire.y + CAT_SEAT.dy - 4 - this.top;
-    return Math.abs(x - cx) < 8 && Math.abs(y - cy) < 7;
-  }
-
-  private crabAt(x: number, y: number): number {
-    const pf = this.layers.front.offset(Math.round(this.cx), this.W);
-    return this.crabs.findIndex(
-      (c) => Math.abs(x - (c.x - pf)) <= 9 && y + this.top <= c.foot + 1 && y + this.top >= c.foot - 13,
-    );
+    const member = this.trees[target.id]?.member;
+    if (!member) return;
+    const next = waterFriend(this.app.store.state, member.name);
+    if (next) {
+      this.app.store.set(next);
+      this.splashes.push({ id: target.id, t0: t });
+      this.app.say(`You watered ${member.name}'s tree. It will wait for them as dew.`);
+    } else if (!this.app.store.state.watered.includes(member.name))
+      this.app.say("No care charges left. They come back.");
   }
 
   findMe(t: number): void {
-    const me = this.byName.get(this.params.me.toLowerCase());
-    if (!me) return;
-    this.target = clampCam(me.X, this.W);
+    const me = this.meId();
+    const p = this.trees[me];
+    if (!p) return;
+    this.target = p.x;
     this.vx = 0;
     this.cameraFree = true;
     this.meAt = t;
-    this.pinned = { kind: "tree", id: me.id };
+    this.pinned = { kind: "tree", id: me };
   }
 
   private debug(i: number, t: number): void {
@@ -941,8 +778,8 @@ export class Forest implements Scene {
     else {
       this.rave = !this.rave;
       if (this.rave) {
-        this.target = PLACES.pond;
-        this.feed = BIRTHDAY(t);
+        this.target = this.forest?.pond ?? this.at;
+        this.feed = birthday(t);
       }
     }
   }
@@ -954,65 +791,58 @@ export class Forest implements Scene {
     else if (k === "a") this.debug(3, t);
     else if (k === "f") this.findMe(t);
     else if (k === "ArrowLeft" || k === "ArrowRight") {
-      this.target = clampCam((this.target ?? this.cx) + (k === "ArrowLeft" ? -1 : 1) * this.W * 0.5, this.W);
+      this.target = (this.target ?? this.at) + (k === "ArrowLeft" ? -1 : 1) * this.shown * 0.5;
       this.cameraFree = true;
     } else if (k === "Escape") this.pinned = null;
-  }
-
-  /** Where each tree stands, for the README and tests. */
-  get trees(): readonly Planted[] {
-    return this.planted;
   }
 }
 
 // ---------------------------------------------------------------------------------------------
+// The valley's places.
 
-const NO8_ID = 120;
-/** Extra ground rows under a phone's view, for its button. */
-const FOOT_ROOM = 18;
+const PLACES = ["great", "hollow", "pond", "no8", "farm"] as const;
+const isPlace = (s: string): s is PlaceId => PLACES.some((p) => p === s);
 
-const BIRTHDAY = (
-  at: number,
-): { icon: FeedIcon; text: string; short: string; detail: string; ago: string; at: number } => ({
-  icon: "crab",
-  text: "Happy 4th birthday, SEQ!",
-  short: "Happy 4th, SEQ!",
-  detail: "Crab rave",
-  ago: "today",
-  at,
-});
+/** `?at=`: a named place (`heart`, `pond`, `gate`, `west`, `east`) or a ground x. */
+export function placeX(name: string, f: ForestManifest): number | null {
+  const named: Record<string, number> = { heart: f.heart, pond: f.pond, gate: f.gate, west: 0, east: f.width };
+  if (name in named) return named[name] ?? null;
+  const n = Number(name);
+  return name !== "" && Number.isFinite(n) ? n : null;
+}
 
-const PLACE_X: Record<number, number> = {
-  [GREAT_ID]: HEART_X,
-  [DOOR_ID]: HEART_X + 22,
-  [ID.swampSign]: PLACES.swampSign,
-  [ID.rules]: PLACES.rules,
-  [ID.rollcall]: PLACES.rollcall,
-  [ID.farm]: PLACES.farm,
-  [ID.stall]: PLACES.stall,
-  [ID.campfire]: PLACES.campfire,
-  [ID.pennant]: 106,
-  [NO8_ID]: PLACES.swampSign + 8,
-};
+/**
+ * Where each place answers a tap, on the ground: the Great Sequoia's span and its hollow (the fire
+ * scar at its foot), the pond and its far bank, the gate's sign. Measured against the bundle's
+ * ground layer, from the manifest's places so they follow it.
+ */
+function placeRect(id: PlaceId, f: ForestManifest): { x0: number; x1: number; y0: number; y1: number } {
+  switch (id) {
+    case "hollow":
+      return { x0: f.heart - 15, x1: f.heart + 6, y0: 106, y1: 129 };
+    case "great":
+      return { x0: f.great.x, x1: f.great.x + f.great.w, y0: 0, y1: 117 };
+    case "pond":
+      return { x0: f.pond - 94, x1: f.pond + 76, y0: 88, y1: 122 };
+    case "farm":
+      return { x0: f.gate - 49, x1: f.gate + 5, y0: 98, y1: 126 };
+    case "no8":
+      return { x0: f.gate + 6, x1: f.gate + 22, y0: 118, y1: 132 };
+  }
+}
 
-const PLACE_Y: Record<number, number> = {
-  [GREAT_ID]: 150,
-  [DOOR_ID]: 206,
-  [ID.swampSign]: 208,
-  [ID.rules]: 192,
-  [ID.rollcall]: 193,
-  [ID.farm]: 207,
-  [ID.stall]: 190,
-  [ID.campfire]: 222,
-  [ID.pennant]: 200,
-  [NO8_ID]: 226,
-};
+/** Where a pinned place's tooltip points. */
+function placeSpot(id: PlaceId, f: ForestManifest): Point {
+  const r = placeRect(id, f);
+  return { x: (r.x0 + r.x1) / 2, y: id === "great" ? 40 : r.y0 + 4 };
+}
 
+type Rgb = readonly [number, number, number];
 const GOLD: Rgb = [242, 192, 68];
 const CRABBY: Rgb = [238, 122, 68];
 
-const PLACE_INFO: Record<number, { title: string; colour: Rgb; lines: { text: string; colour: Rgb }[] }> = {
-  [GREAT_ID]: {
+const PLACE_INFO: Record<PlaceId, { title: string; colour: Rgb; lines: { text: string; colour: Rgb }[] }> = {
+  great: {
     title: "The Great Sequoia",
     colour: GOLD,
     lines: [
@@ -1020,112 +850,55 @@ const PLACE_INFO: Record<number, { title: string; colour: Rgb; lines: { text: st
       { text: "Every lantern is a gift of Leaf.", colour: UI.lore },
     ],
   },
-  [DOOR_ID]: {
-    title: "Root Office",
-    colour: GOLD,
-    lines: [{ text: "Open whenever someone's in.", colour: UI.lore }],
-  },
-  [ID.swampSign]: {
-    title: "The Swamp",
+  hollow: {
+    title: "The Hollow",
     colour: GOLD,
     lines: [
-      { text: "Held for two years, 2024 to 2026.", colour: UI.text },
-      { text: "We moved on to Fruma.", colour: UI.lore },
+      { text: "An old fire scar. The guild", colour: UI.text },
+      { text: "sits round the fire inside.", colour: UI.text },
     ],
   },
-  [ID.pennant]: {
-    title: "The Swamp's banner",
-    colour: GOLD,
-    lines: [{ text: "It flew for two years.", colour: UI.lore }],
-  },
-  [ID.rules]: {
-    title: "Crab Rules",
+  pond: {
+    title: "The Crab Pond",
     colour: CRABBY,
     lines: [
-      { text: "1. Walk sideways.", colour: UI.text },
-      { text: "2. No crabellions.", colour: UI.text },
-      { text: "3. Snacks are shared.", colour: UI.text },
+      { text: "Rule 1. Walk sideways.", colour: UI.text },
+      { text: "Rule 2. No crabellions.", colour: UI.text },
+      { text: "Roll call: 11 of 12 present.", colour: UI.lore },
     ],
   },
-  [ID.rollcall]: {
-    title: "Roll Call",
-    colour: CRABBY,
-    lines: [
-      { text: "11 of 12 present.", colour: UI.text },
-      { text: "No. 08: unaccounted for.", colour: UI.lore },
-    ],
-  },
-  [NO8_ID]: {
+  no8: {
     title: "Crab No. 08",
     colour: CRABBY,
     lines: [
-      { text: "Found!", colour: UI.text },
-      { text: "Still holding the Swamp.", colour: UI.lore },
+      { text: "Found! By the gate, of all places.", colour: UI.text },
+      { text: "Whereabouts: now known.", colour: UI.lore },
     ],
   },
-  [ID.farm]: {
+  farm: {
     title: "Do Not The Farm",
     colour: GOLD,
     lines: [{ text: "Guild policy.", colour: UI.lore }],
   },
-  [ID.stall]: {
-    title: "Cinfy's Stall",
-    colour: GOLD,
-    lines: [
-      { text: "Treasury@seqwawa regrets to", colour: UI.text },
-      { text: "inform you the vault is closed", colour: UI.text },
-      { text: "for counting.", colour: UI.text },
-    ],
-  },
-  [ID.campfire]: {
-    title: "The Campfire",
-    colour: GOLD,
-    lines: [
-      { text: "Sit round it in a Discord call.", colour: UI.text },
-      { text: "Burn cones. Play Leafle.", colour: UI.lore },
-    ],
-  },
 };
 
-/** A landmark's tooltip can take you somewhere. */
-const PLACE_ACTION: Record<number, { text: string; route: string }> = {
-  [GREAT_ID]: { text: "Water the Great Sequoia", route: "great" },
-  [DOOR_ID]: { text: "Visit the Great Sequoia", route: "great" },
-  [ID.stall]: { text: "Open the Treasury", route: "shop" },
-  [ID.campfire]: { text: "Sit by the fire", route: "campfire" },
+/** A place's tooltip can take you somewhere. */
+const PLACE_ACTION: Partial<Record<PlaceId, { text: string; route: string }>> = {
+  great: { text: "Water the Great Sequoia", route: "great" },
+  hollow: { text: "Sit by the fire", route: "campfire" },
 };
 
-function lookId(name: string): number | null {
-  const ids: Record<string, number> = {
-    great: GREAT_ID,
-    door: DOOR_ID,
-    swamp: ID.swampSign,
-    pennant: ID.pennant,
-    rules: ID.rules,
-    rollcall: ID.rollcall,
-    no8: NO8_ID,
-    farm: ID.farm,
-    stall: ID.stall,
-    campfire: ID.campfire,
-  };
-  return ids[name] ?? null;
-}
+const FEEDS: Record<EventKind, Omit<Feed, "at">> = {
+  raid: { icon: "raid", text: "Party of 4 cleared TCC", short: "TCC cleared", detail: "Party of 4", ago: "now" },
+  war: { icon: "war", text: "SEQ took a Fruma territory", short: "War won", detail: "Fruma", ago: "now" },
+  levelup: { icon: "level", text: "Guild reached level 251", short: "Level 251!", detail: "GG", ago: "now" },
+};
 
-/**
- * The lab's raid party: you, and the three trees nearest yours that a player would see (no back-row
- * seedlings), so the camera can show all four shimmering before their lights set off.
- */
-function raidParty(planted: readonly Planted[], me: string): Planted[] {
-  const mine = planted.find((p) => p.member.name.toLowerCase() === me.toLowerCase());
-  const anchor = mine && mine.X > 960 ? mine.X : 1130;
-  const seen = planted.filter((p) => p !== mine && !(p.rowIndex === 0 && p.member.level < 3) && p.X > 990);
-  const near = seen
-    .toSorted((a, b) => Math.abs(a.X - anchor) - Math.abs(b.X - anchor))
-    .slice(0, mine && mine.X > 960 ? 3 : 4);
-  return (mine && mine.X > 960 ? [mine, ...near] : near).toSorted((a, b) => a.X - b.X);
-}
-
-function swayIndex(t: number, period: number, phase: number): number {
-  const u = ((((t + phase) / period) % 1) + 1) % 1;
-  return u < 0.25 ? 0 : u < 0.5 ? 1 : u < 0.75 ? 0 : 2;
-}
+const birthday = (at: number): Feed => ({
+  icon: "crab",
+  text: "Happy 4th birthday, SEQ!",
+  short: "Happy 4th, SEQ!",
+  detail: "Crab rave",
+  ago: "today",
+  at,
+});

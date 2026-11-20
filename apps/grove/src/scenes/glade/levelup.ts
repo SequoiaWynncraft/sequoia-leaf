@@ -12,9 +12,10 @@
  */
 
 import { STAGE_OF_LEVEL, STAGE_TITLE } from "../../art/tree.ts";
+import { castFrame, leaf, mote, sparkleStage } from "../../bundle/vocabulary.ts";
 import { hash3 } from "../../engine/rng.ts";
 import { type Canvas, drawLevelBadge, mix, type PopupSpec, UI } from "../../ui/hud.ts";
-import { castFrame, crown, type Fx, isTree, leaf, mote, sparkleStage } from "./stage.ts";
+import { crown, type Fx, isTree } from "./stage.ts";
 
 export interface LevelUpEvent {
   t0: number;

@@ -14,10 +14,11 @@
 import type { Pixels } from "../../bundle/art.ts";
 import { blue, green, mixColour, packHex, red, WELCOME } from "../../bundle/palette.ts";
 import type { Picture } from "../../bundle/picture.ts";
-import { bayer } from "../../engine/raster.ts";
+import { castFrame, leaf, mote, NEIGHBOURS, pool, propFrame } from "../../bundle/vocabulary.ts";
+import { bayer } from "../../engine/dither.ts";
 import { hash3 } from "../../engine/rng.ts";
 import { beatOf, type ConeEvent, type ConeLook, rankColour, tier } from "../reveal/cone.ts";
-import { castFrame, type Fx, isTree, leaf, mote, NEIGHBOURS, type Places, type Point, propFrame } from "./stage.ts";
+import { type Fx, isTree, type Places, type Point } from "./stage.ts";
 
 const ease = (u: number): number => 1 - Math.pow(1 - Math.max(0, Math.min(1, u)), 3);
 /** Yggdrasil's world stops here, once the cone has kindled (as in `coneLook`). */
@@ -107,20 +108,6 @@ function kindle(fx: Fx, x: number, y: number, t: number, size: number): void {
   }
 }
 
-/** A warm pool of light, as the welcome's lanterns spill theirs. */
-function pool(fx: Fx, cx: number, cy: number, r: number, colour: number, strength: number): void {
-  if (strength <= 0 || r <= 0) return;
-  for (let y = Math.floor(cy - r); y <= cy + r; y++)
-    for (let x = Math.floor(cx - r); x <= cx + r; x++) {
-      const d = Math.hypot(x - cx, (y - cy) * 1.4) / r;
-      if (d >= 1) continue;
-      // Stepped, as the welcome's light rings are, with the dither between steps.
-      const k = d < 0.4 ? 1 : d < 0.7 ? 0.55 : 0.25;
-      if (d > 0.65 && bayer(x, y) > 0.5) continue;
-      fx.pic.light(x, y, colour, strength * k);
-    }
-}
-
 /** Where the cone is, and how it moves, `tau` after the tap: a hop into the hearth, then the heat. */
 function conePose(at: Places, tau: number, opensAt: number, freeze: boolean): Point {
   const fire = { x: at.hearth.x - 1, y: at.hearth.y - 1 };
@@ -129,7 +116,7 @@ function conePose(at: Places, tau: number, opensAt: number, freeze: boolean): Po
   if (tau < 0.4) {
     const u = tau / 0.4;
     x = Math.round(at.cone.x + (fire.x - at.cone.x) * u);
-    y = Math.round(at.cone.y + (fire.y - at.cone.y) * u - Math.sin(u * Math.PI) * 6);
+    y = Math.round(at.cone.y + (fire.y - at.cone.y) * u - Math.sin(u * Math.PI) * at.arc);
   } else if (tau < opensAt) {
     if (freeze && tau > FREEZE_FROM) {
       const beat = (tau - FREEZE_FROM) % 0.55;

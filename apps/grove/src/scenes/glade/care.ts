@@ -7,11 +7,12 @@
  * over the world.
  */
 
-import { bayer } from "../../engine/raster.ts";
+import { leaf, sparkleStage } from "../../bundle/vocabulary.ts";
+import { bayer } from "../../engine/dither.ts";
 import { hash3 } from "../../engine/rng.ts";
 import type { Tool } from "../../game/params.ts";
 import { type Canvas, drawPouringCan, drawToolIcon } from "../../ui/hud.ts";
-import { drinkWave, type Fx, isTree, leaf, leafKeys, sparkleStage } from "./stage.ts";
+import { drinkWave, type Fx, isTree, leafKeys } from "./stage.ts";
 
 export interface CareEffect {
   tool: Tool;

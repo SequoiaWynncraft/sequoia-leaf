@@ -7,10 +7,11 @@
  */
 
 import { mixColour } from "../../bundle/palette.ts";
-import { bayer } from "../../engine/raster.ts";
+import { propFrame, sparkleStage } from "../../bundle/vocabulary.ts";
+import { bayer } from "../../engine/dither.ts";
 import { hash3 } from "../../engine/rng.ts";
 import { type Canvas, hex, mix, type PopupSpec, type Rgb, UI } from "../../ui/hud.ts";
-import { crown, drinkWave, type Fx, propFrame, sparkleStage, treeTop } from "./stage.ts";
+import { crown, drinkWave, type Fx, treeTop } from "./stage.ts";
 
 export interface GrootEvent {
   t0: number;
