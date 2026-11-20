@@ -30,6 +30,8 @@ export interface Fx extends Paint, Sheets {
   /** The front path's row, where characters stand. */
   ground: number;
   places: Places;
+  /** The stones in front of the fire (the bundle's mask), copied back over a cone in it; null while loading. */
+  front: Mask | null;
 }
 
 /** Where things happen in the clearing. */
@@ -49,12 +51,11 @@ export interface Places {
 }
 
 /**
- * The places, from the tree's foot, the hearth and the path. On a wide screen the hotbar covers the
- * path's middle, so characters stand either side of it; a phone's crop shows the middle only, so
- * they stand between the tree and the hearth.
+ * The places, from the tree's foot, the hearth, where the next cone lies (all the bundle's) and the
+ * path. On a wide screen the hotbar covers the path's middle, so characters stand either side of it;
+ * a phone's crop shows the middle only, so they stand between the tree and the hearth.
  */
-export function places(foot: Point, hearth: Point, ground: number, narrow: boolean): Places {
-  const cone = { x: hearth.x - 12, y: hearth.y - 2 };
+export function places(foot: Point, hearth: Point, cone: Point, ground: number, narrow: boolean): Places {
   return narrow
     ? {
         arc: 6,

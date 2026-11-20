@@ -72,8 +72,16 @@ function drawCone(fx: Fx, stage: ConeStage, x: number, y: number, outline: numbe
   });
 }
 
-/** The next cone, resting on the moss by the tree. */
+/**
+ * The next cone, lying on its side on the moss by the tree, once its strip is in (never a stand-in
+ * that would turn into it a moment later); stood up, for a bundle with no lying cone.
+ */
 export function drawRestingCone(fx: Fx): void {
+  if (fx.props?.has("cone-rest")) {
+    const f = propFrame(fx, "cone-rest", "rest", 0);
+    if (f) fx.pic.sprite(f, fx.places.cone.x, fx.places.cone.y);
+    return;
+  }
   drawCone(fx, 0, fx.places.cone.x, fx.places.cone.y, null);
 }
 
@@ -141,6 +149,12 @@ export function drawReveal(
   const tau = t - ev.t0;
   const since = tau - b.burst;
   const { pic, ink } = fx;
+  // Ask for the spirit's strips from the throw, so its sprite and the card's portrait are in long
+  // before the burst rather than popping in after it.
+  if (since < 0) {
+    fx.cast?.portrait(ev.spirit);
+    castFrame(fx, [ev.spirit], ["idle"], 0);
+  }
   const rare = ink.any(rankColour(ev.rank), true);
   const rareLight = mixColour(rare, ink.c("star"), 0.45);
   const star = ink.c("star");
@@ -167,6 +181,8 @@ export function drawReveal(
       const hot = tau > 0.6 && since < 0 && pulse ? (tau > b.burst - 0.6 ? rare : ink.c("glow_3")) : null;
       drawCone(fx, stage, pose.x, pose.y, hot);
     }
+    // In the fire, it sits behind the ring's front stones.
+    if (tau >= 0.4) pic.restore(fx.front);
     // Embers lifting off it.
     if (look.embers > 0)
       for (let i = 0; i < 8; i++) {

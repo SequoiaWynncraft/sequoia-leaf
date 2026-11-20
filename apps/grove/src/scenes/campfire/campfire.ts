@@ -35,7 +35,7 @@ import type { Fx, Places, TreeShape } from "../glade/stage.ts";
 import { drawConeCardAt } from "../reveal/card.ts";
 import { beatOf, type ConeEvent, coneLook, rankColour } from "../reveal/cone.ts";
 import { type App, lightOf, type PointerKind, type Scene, type Screen } from "../scene.ts";
-import { seatPeople, type Sitter, throwFrom } from "./seats.ts";
+import { overlaps, placeTags, type Rect, seatPeople, type Sitter, throwFrom } from "./seats.ts";
 
 /** The last seat is yours. */
 const YOU = "You";
@@ -260,7 +260,7 @@ export class Campfire implements Scene {
       arc: burner ? 14 : 6,
       hearth: fire,
       cone: burner ? throwFrom(burner) : { x: fire.x - 18, y: fire.y + 4 },
-      landing: { x: fire.x + 14, y: Math.min((this.manifest?.height ?? PICTURE.h) - 2, fire.y + 12) },
+      landing: this.camp?.landing ?? { x: fire.x, y: fire.y + 13 },
       companion: fire,
       heralds: [],
     };
@@ -319,6 +319,7 @@ export class Campfire implements Scene {
       tree: NO_TREE,
       ground: places.landing.y,
       places,
+      front: art.mask(camp.front).value,
     };
     const aurora = b && look ? this.aurora(man, season, b, t) : null;
     // The aurora behind the friends; the rest of the reveal in front of them.
@@ -381,24 +382,26 @@ export class Campfire implements Scene {
     const fireHud = this.toHud(this.fire);
     const cast = this.app.art.cast.value;
 
-    // The nametags, over each friend's companion; one that would cover a neighbour's steps up.
-    if (!pip) {
-      const placed: Rect[] = [];
-      for (const s of this.sitters().toSorted((front, back) => back.y - front.y || front.x - back.x)) {
-        const h = cast?.entries.get(s.person.spirit)?.h ?? 20;
-        // A frame keeps a little room over the head for its hop's sparkles.
-        const at = this.toHud({ x: s.x, y: s.y - h + 4 });
-        const w = textWidth(s.person.name) + 4;
-        let y = at.y - 9;
-        const box = (yy: number): Rect => ({ x: Math.round(at.x - w / 2) - 1, y: yy - 1, w: w + 2, h: 11 });
-        while (placed.some((r) => overlaps(r, box(y)))) y -= 10;
-        placed.push(box(y));
-        const burning = b?.who === s.person.name && b.ev.closedAt === null;
-        nameplate(c, s.person.name, at.x, y, burning ? UI.gold : UI.text);
-        if (s.person.name === YOU)
-          for (const at0 of this.cheers) if (t - at0 < 1.2) flameAbove(c, at.x, y - 9, t - at0);
+    // The nametags, just over each friend's companion's head and on the screen.
+    const tags: Rect[] = [];
+    if (!pip)
+      for (const tag of placeTags(
+        this.sitters().map((s) => {
+          const entry = cast?.entries.get(s.person.spirit);
+          const top = cast?.top(s.person.spirit) ?? null;
+          // The head's top in the picture: the frame's top row with a pixel, or a guess while it loads.
+          const head = entry && top !== null ? s.y - entry.foot.y + top : s.y - 14;
+          const at = this.toHud({ x: s.x, y: head });
+          return { name: s.person.name, w: textWidth(s.person.name) + 4, x: at.x, y: at.y - 2, front: s.y };
+        }),
+        c.W,
+      )) {
+        tags.push(tag.box);
+        const burning = b?.who === tag.name && b.ev.closedAt === null;
+        nameplate(c, tag.name, tag.x, tag.y, burning ? UI.gold : UI.text);
+        if (tag.name === YOU)
+          for (const at0 of this.cheers) if (t - at0 < 1.2) flameAbove(c, tag.x, tag.y - 9, t - at0);
       }
-    }
 
     if (pip) {
       // No queue to read it from, so whose cone it is rides over the fire.
@@ -454,7 +457,8 @@ export class Campfire implements Scene {
 
     // The cat's joke, over its stump.
     const cat = this.toHud(this.camp?.cat ?? CAT);
-    if (t - this.catAt < 5) bubble(c, cat.x, cat.y - 12, JOKES[this.joke % JOKES.length] ?? "", narrow ? c.W - 8 : 150);
+    if (t - this.catAt < 5)
+      bubble(c, cat.x, cat.y - 12, JOKES[this.joke % JOKES.length] ?? "", narrow ? c.W - 8 : 150, tags);
 
     // The reveal's card, beside the fire.
     if (b) this.card(c, fireHud, b, t, cast?.portrait(b.ev.spirit) ?? null);
@@ -608,16 +612,7 @@ export class Campfire implements Scene {
 
 // ---------------------------------------------------------------------------------------------
 
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
 const inside = (r: Rect, p: Point): boolean => p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
-const overlaps = (a: Rect, b: Rect): boolean =>
-  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 /** Seconds from the throw to the reveal's card. */
 const cardAt = (ev: ConeEvent): number => beatOf(ev.rank).burst + beatOf(ev.rank).card;
@@ -654,26 +649,44 @@ function nameplate(c: Canvas, text: string, x: number, y: number, colour: Rgb): 
   drawText(c, text, left + 2, y + 1, colour);
 }
 
-/** The cat's joke in a speech bubble, its tail pointing down at the cat. */
-function bubble(c: Canvas, x: number, y: number, text: string, maxW: number): void {
+/**
+ * The cat's joke in a speech bubble over it, its tail pointing down at the cat. It sits clear of the
+ * nametags (`avoid`): to one side if that does it, otherwise lifted, its tail a stalk down to the cat.
+ */
+function bubble(c: Canvas, x: number, y: number, text: string, maxW: number, avoid: readonly Rect[]): void {
   const lines = wrap(text, maxW - 10);
   const w = Math.max(...lines.map((l) => textWidth(l))) + 10;
   const h = lines.length * 10 + 7;
-  const left = Math.max(2, Math.min(c.W - w - 2, Math.round(x - w / 2)));
-  const top = Math.max(22, Math.round(y - h - 4));
+  const clampLeft = (l: number): number => Math.max(2, Math.min(c.W - w - 2, Math.round(l)));
+  const base = Math.max(22, Math.round(y - h - 4));
+  const clear = (l: number, t: number): boolean =>
+    !avoid.some((r) => overlaps(r, { x: l - 1, y: t - 1, w: w + 2, h: h + 4 }));
+  let left = clampLeft(x - w / 2);
+  let top = base;
+  const sides = [x - w / 2, x - w + 12, x - 12];
+  const side = sides.map(clampLeft).find((l) => clear(l, base));
+  if (side !== undefined) left = side;
+  else while (top > 22 && !clear(left, top)) top -= 2;
   const cream: Rgb = [242, 230, 212];
   const ink: Rgb = [40, 28, 24];
   c.rect(left + 1, top + 1, w - 2, h - 2, cream);
   c.border(left, top, w, h, ink);
   const tx = Math.max(left + 3, Math.min(left + w - 5, Math.round(x)));
-  c.rect(tx, top + h - 1, 3, 1, cream);
-  c.rect(tx + 1, top + h, 2, 1, cream);
-  c.px(tx - 1, top + h - 1, ink);
-  c.px(tx, top + h, ink);
-  c.px(tx + 1, top + h + 1, ink);
-  c.px(tx + 2, top + h + 1, ink);
-  c.px(tx + 3, top + h, ink);
-  c.px(tx + 3, top + h - 1, ink);
+  // A lifted bubble's stalk, down to where its tail would have been.
+  for (let yy = top + h + 1; yy < base + h; yy++) {
+    c.px(tx + 1, yy, cream);
+    c.px(tx, yy, ink);
+    c.px(tx + 2, yy, ink);
+  }
+  const tail = Math.max(top, base);
+  c.rect(tx, tail + h - 1, 3, 1, cream);
+  c.rect(tx + 1, tail + h, 2, 1, cream);
+  c.px(tx - 1, tail + h - 1, ink);
+  c.px(tx, tail + h, ink);
+  c.px(tx + 1, tail + h + 1, ink);
+  c.px(tx + 2, tail + h + 1, ink);
+  c.px(tx + 3, tail + h, ink);
+  c.px(tx + 3, tail + h - 1, ink);
   lines.forEach((l, i) => drawText(c, l, left + 5, top + 4 + i * 10, ink));
 }
 

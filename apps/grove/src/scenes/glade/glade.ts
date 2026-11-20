@@ -170,7 +170,7 @@ export class GladeScene implements Scene {
 
   private placesOf(man: Manifest): Places {
     const g = man.glade;
-    return places(g.foot, g.hearth, g.ground, this.narrow);
+    return places(g.foot, g.hearth, g.cone, g.ground, this.narrow);
   }
 
   private treeOf(man: Manifest, pick: GladePick): TreeShape {
@@ -240,6 +240,7 @@ export class GladeScene implements Scene {
       places: this.placesOf(man),
       cast: art.cast.value,
       props: art.props.value,
+      front: art.mask(man.glade.front).value,
     };
     // A still's care (`?care=`) is aimed at the crown's lit shoulder once the tree is known.
     for (const e of m.effects)

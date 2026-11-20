@@ -26,6 +26,8 @@ export interface CastEntry {
   w: number;
   h: number;
   foot: { x: number; y: number };
+  /** The top row of its own body in its idle frames (the bundle's; not what floats round it). */
+  head: number | null;
   anims: Map<string, Anim>;
   winter: boolean;
 }
@@ -44,7 +46,7 @@ const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFin
 
 function readEntry(id: string, v: unknown): CastEntry | null {
   if (!isRecord(v)) return null;
-  const { w, h, foot, anims, winter } = v;
+  const { w, h, foot, head, anims, winter } = v;
   if (!isNum(w) || !isNum(h) || !isRecord(anims)) return null;
   const f = Array.isArray(foot) ? foot : isRecord(foot) ? [foot["x"], foot["y"]] : [];
   const [fx, fy] = f;
@@ -56,7 +58,7 @@ function readEntry(id: string, v: unknown): CastEntry | null {
     const ms = a["ms"];
     if (frames.length > 0) table.set(name, { frames, ms: isNum(ms) && ms > 0 ? ms : 100 });
   }
-  return { id, w, h, foot: { x: fx, y: fy }, anims: table, winter: winter === true };
+  return { id, w, h, foot: { x: fx, y: fy }, head: isNum(head) ? head : null, anims: table, winter: winter === true };
 }
 
 /** Reads a sheet index (`cast.json`, `props.json`) in folder `dir`: the table itself or `{ cast: table }`. */
@@ -75,6 +77,7 @@ export class CastSheet {
   readonly entries: ReadonlyMap<string, CastEntry>;
   private readonly dir: string;
   private readonly image: (path: string) => Handle<Pixels>;
+  private readonly tops = new Map<string, number>();
 
   constructor(entries: ReadonlyMap<string, CastEntry>, dir: string, image: (path: string) => Handle<Pixels>) {
     this.entries = entries;
@@ -122,9 +125,42 @@ export class CastSheet {
     return this.frame(id, "idle", 0, "normal", "dusk");
   }
 
+  /**
+   * The top row of a member's head, so a nametag sits just over it whatever room the frame leaves
+   * above: the bundle's `head`, or for a bundle from before it, the highest row of its idle frames
+   * with a pixel, measured from its strip (null while the strip loads).
+   */
+  top(id: string): number | null {
+    const known = this.tops.get(id);
+    if (known !== undefined) return known;
+    const e = this.entries.get(id);
+    if (e?.head !== null && e?.head !== undefined) return e.head;
+    const a = e?.anims.get("idle") ?? e?.anims.values().next().value;
+    const strip = e ? this.image(`${this.dir}/${id}.png`).value : null;
+    if (!e || !a || !strip) return null;
+    const top = headRow(strip, e.w, e.h, a.frames);
+    this.tops.set(id, top);
+    return top;
+  }
+
   /** How long one pass of `anim` takes, in ms. */
   length(id: string, anim: string): number {
     const a = this.entries.get(id)?.anims.get(anim);
     return a ? a.frames.length * a.ms : 0;
   }
+}
+
+/** The first row with a pixel in any of these frames of a strip (frame `k` is columns `k * w` on). */
+export function headRow(strip: Pixels, w: number, h: number, frames: readonly number[]): number {
+  let top = h - 1;
+  for (const k of frames)
+    for (let y = 0; y < top; y++) {
+      let hit = false;
+      for (let x = 0; x < w && !hit; x++) hit = (strip.data[y * strip.w + k * w + x] ?? 0) >>> 24 >= 128;
+      if (hit) {
+        top = y;
+        break;
+      }
+    }
+  return top;
 }

@@ -1,39 +1,39 @@
 import { describe, expect, test } from "bun:test";
 
-import { seatPeople, throwFrom } from "../src/scenes/campfire/seats.ts";
+import { overlaps, placeTags, seatPeople, throwFrom } from "../src/scenes/campfire/seats.ts";
 
-/** The bundle's Campfire: the fire, then the seats in its order (two logs, the ground in front, behind). */
+/** The bundle's Campfire (grove/campfire.py): the fire, then the seats in its order. */
 const FIRE = { x: 128, y: 129 };
 const SEATS = [
-  { x: 92, y: 131 },
-  { x: 104, y: 131 },
-  { x: 152, y: 131 },
-  { x: 164, y: 131 },
-  { x: 116, y: 139 },
-  { x: 140, y: 139 },
-  { x: 80, y: 139 },
-  { x: 176, y: 139 },
-  { x: 120, y: 121 },
-  { x: 136, y: 121 },
+  { x: 90, y: 131 },
+  { x: 151, y: 131 },
+  { x: 167, y: 131 },
+  { x: 182, y: 140 },
+  { x: 106, y: 131 },
+  { x: 98, y: 141 },
+  { x: 160, y: 141 },
+  { x: 106, y: 121 },
+  { x: 150, y: 121 },
+  { x: 66, y: 141 },
 ];
 const CALL = ["Moss", "Fern", "Cinder", "Wren", "You"];
 
 describe("the Campfire's seats", () => {
-  test("seats everyone in the call in the bundle's order: the two logs, then the ground in front", () => {
+  test("seats everyone in the call in the bundle's order", () => {
     const seated = seatPeople(CALL, SEATS, FIRE);
     const where = Object.fromEntries(seated.map((s) => [s.person, [s.x, s.y]]));
     expect(where).toEqual({
-      Moss: [92, 131],
-      Fern: [104, 131],
-      Cinder: [152, 131],
-      Wren: [164, 131],
-      You: [116, 139],
+      Moss: [90, 131],
+      Fern: [151, 131],
+      Cinder: [167, 131],
+      Wren: [182, 140],
+      You: [106, 131],
     });
   });
 
   test("turns everyone to face the fire: those on its right are mirrored", () => {
     const seated = seatPeople(CALL, SEATS, FIRE);
-    expect(seated.filter((s) => s.flip).map((s) => s.person)).toEqual(["Cinder", "Wren"]);
+    expect(seated.filter((s) => s.flip).map((s) => s.person)).toEqual(["Fern", "Cinder", "Wren"]);
   });
 
   test("comes back to front, the order they are drawn in", () => {
@@ -54,6 +54,41 @@ describe("the Campfire's seats", () => {
       const from = throwFrom(s);
       expect(Math.abs(from.x - FIRE.x)).toBeLessThan(Math.abs(s.x - FIRE.x));
       expect(from.y).toBeLessThan(s.y);
+    }
+  });
+});
+
+describe("the Campfire's nametags", () => {
+  test("sit just over each head when there is room", () => {
+    const [tag] = placeTags([{ name: "Moss", w: 24, x: 100, y: 80, front: 131 }], 400);
+    expect(tag?.x).toBe(100);
+    expect(tag?.y).toBe(71);
+  });
+
+  test("never cover one another, however close the heads", () => {
+    const heads = ["Moss", "Fern", "Cinder", "Wren", "You"].map((name, i) => ({
+      name,
+      w: 6 * name.length + 4,
+      x: 140 + i * 9,
+      y: 90,
+      front: 131,
+    }));
+    const tags = placeTags(heads, 400);
+    expect(tags).toHaveLength(5);
+    for (const a of tags) for (const b of tags) if (a !== b) expect(overlaps(a.box, b.box)).toBe(false);
+  });
+
+  test("stay on the screen at its edges", () => {
+    const tags = placeTags(
+      [
+        { name: "Moss", w: 24, x: 1, y: 80, front: 131 },
+        { name: "Cinder", w: 36, x: 199, y: 80, front: 131 },
+      ],
+      200,
+    );
+    for (const t of tags) {
+      expect(t.box.x).toBeGreaterThanOrEqual(0);
+      expect(t.box.x + t.box.w).toBeLessThanOrEqual(200);
     }
   });
 });
