@@ -75,6 +75,8 @@ describe("HTTP", () => {
       "/v1/grove/cones/buy",
       "/v1/grove/cones/open",
       "/v1/grove/forest",
+      "/v1/grove/great",
+      "/v1/grove/great/offer",
       "/v1/grove/rates",
       "/v1/me",
       "/v1/me/events",

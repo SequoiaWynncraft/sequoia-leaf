@@ -32,10 +32,11 @@ export class Refused extends Schema.Error<Refused>("Refused")(
   { httpApiStatus: 409 },
 ) {}
 
-/** A Grove request Leaf cannot read: a body that is not what the route takes. */
-export class GroveInvalid extends Schema.Error<GroveInvalid>("GroveInvalid")(answer("invalid_request"), {
-  httpApiStatus: 400,
-}) {}
+/** A Grove request Leaf cannot read: a body that is not what the route takes, or an offering it doesn't take. */
+export class GroveInvalid extends Schema.Error<GroveInvalid>("GroveInvalid")(
+  answer("invalid_request", "invalid_offering"),
+  { httpApiStatus: 400 },
+) {}
 
 /** A Grove request Leaf refuses, changing nothing. */
 export class GroveRefused extends Schema.Error<GroveRefused>("GroveRefused")(

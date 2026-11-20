@@ -1,4 +1,4 @@
-import { CARE_TOOLS, GROVE_RANKS } from "@sequoia-leaf/core";
+import { CARE_TOOLS, GREAT_GOAL_KINDS, GROVE_RANKS } from "@sequoia-leaf/core";
 import { Schema } from "effect";
 
 // What each route answers, field for field. Names are snake_case, as the mod and
@@ -223,4 +223,57 @@ export const Forest = Schema.Struct({
       companion: Schema.NullOr(Schema.String),
     }),
   ),
+});
+
+// The Great Sequoia.
+
+const GreatGoal = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.Literals(GREAT_GOAL_KINDS),
+  title: Schema.String,
+  /** From 0 to `target`; it never goes past it. */
+  progress: Schema.Number,
+  target: Schema.Number,
+  met: Schema.Boolean,
+  /** The cosmetic the whole guild gets when the goal is met. */
+  reward: Schema.Struct({ id: Schema.String, title: Schema.String }),
+});
+
+const GreatWeek = Schema.Struct({ starts_at: Time, ends_at: Time, goals: Schema.Array(GreatGoal) });
+
+export const Great = Schema.Struct({
+  /** This week, Monday to Monday in UTC, and its goals so far. */
+  week: GreatWeek,
+  /** Last week's goals, as they ended. A goal met then is still rewarded this week. */
+  last_week: GreatWeek,
+  /** The rewards everyone has now: those of the goals met this week or last. */
+  rewards: Schema.Array(Schema.Struct({ id: Schema.String, title: Schema.String })),
+  /**
+   * A lantern for everyone who helped this week, in the order they first did.
+   * `glow` is a step from 1 up for helping more; it is not a ranking. `name` is
+   * null for a member who has not opened the Grove.
+   */
+  lanterns: Schema.Array(
+    Schema.Struct({ player_id: Schema.String, name: Schema.NullOr(Schema.String), glow: Schema.Number }),
+  ),
+  me: Schema.Struct({
+    /** Whether they helped this week, which hangs their lantern and marks a ring on their tree. */
+    lantern: Schema.Boolean,
+    glow: Schema.Number,
+    /** Leaf they offered this week. */
+    offered: Schema.Number,
+    /** The weeks they have helped in, this one included. */
+    rings: Schema.Number,
+  }),
+  offering: Schema.Struct({ min: Schema.Number, max: Schema.Number }),
+});
+
+export const OfferBody = Schema.Struct({ leaf: Schema.Int, request_id: RequestId });
+
+export const Offered = Schema.Struct({
+  /** The balance after it. */
+  leaf: Schema.Number,
+  /** What they have offered in the offering's week, this one included. */
+  offered: Schema.Number,
+  glow: Schema.Number,
 });

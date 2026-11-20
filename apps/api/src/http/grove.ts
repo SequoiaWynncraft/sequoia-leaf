@@ -5,9 +5,16 @@ import {
   CARE_TOOLS,
   chargesAt,
   type ConePull,
+  contributionsOf,
   DEFAULT_RULES,
+  goalProgress,
+  type GreatRules,
+  type GreatTotals,
+  greatWeek,
   type GroveRules,
+  lanternGlow,
   ODDS_SCALE,
+  offeringAllowed,
   rankOfSpirit,
   rateCard,
   treeOf,
@@ -19,6 +26,8 @@ import { HttpApiBuilder, HttpApiError } from "effect/http-api";
 import { CurrentIdentity, GroveBodyErrors, LeafApi } from "../api/api.ts";
 import { GroveInvalid, GroveRefused } from "../api/errors.ts";
 import type * as Body from "../api/schemas.ts";
+import { offerToGreat } from "../great/offer.ts";
+import { Great } from "../great/store.ts";
 import {
   buyCones,
   careForTree,
@@ -32,6 +41,7 @@ import { Grove, type GroveMember } from "../grove/store.ts";
 import { Ledger } from "../ledger/store.ts";
 
 const rules: GroveRules = DEFAULT_RULES.grove;
+const greatRules: GreatRules = DEFAULT_RULES.great;
 
 /** What a member is told when the Grove refuses a request, by the refusal's code. */
 const REFUSALS: Record<GroveRefusal, string> = {
@@ -44,6 +54,11 @@ const REFUSALS: Record<GroveRefusal, string> = {
 };
 
 const refusal = ({ reason }: Refused) => new GroveRefused({ code: reason, message: REFUSALS[reason] });
+
+const invalidOffering = new GroveInvalid({
+  code: "invalid_offering",
+  message: `An offering is a whole ${greatRules.offering.min} to ${greatRules.offering.max} Leaf`,
+});
 
 const invalidCount = new GroveInvalid({
   code: "invalid_request",
@@ -94,12 +109,33 @@ function pullJson(pull: ConePull) {
   };
 }
 
+/** A week of the Great Sequoia's goals, as the guild's totals stand. */
+function greatWeekJson(week: { readonly start: number; readonly end: number }, totals: GreatTotals) {
+  return {
+    starts_at: iso(week.start),
+    ends_at: iso(week.end),
+    goals: greatRules.goals.map((goal) => ({
+      id: goal.id,
+      kind: goal.kind,
+      title: goal.title,
+      ...goalProgress(goal, totals),
+      target: goal.target,
+      reward: goal.reward,
+    })),
+  };
+}
+
+function glowOf(helped: GreatTotals): number {
+  return lanternGlow(contributionsOf(helped, greatRules), greatRules);
+}
+
 // Handlers answer with their JSON themselves, checked against the schemas when the
 // code compiles (see handlers.ts).
 
 export const GroveHandlers = HttpApiBuilder.group(LeafApi, "grove", (handlers) =>
   Effect.gen(function* () {
     const grove = yield* Grove;
+    const great = yield* Great;
     const ledger = yield* Ledger;
     return handlers
       .handle("grove", () =>
@@ -192,6 +228,57 @@ export const GroveHandlers = HttpApiBuilder.group(LeafApi, "grove", (handlers) =
           return HttpServerResponse.jsonUnsafe({
             companion: result.member.companion,
           } satisfies typeof Body.Companion.Type);
+        }),
+      )
+      .handle("great", () =>
+        Effect.gen(function* () {
+          const identity = yield* CurrentIdentity;
+          const now = yield* Clock.currentTimeMillis;
+          yield* enterGrove(identity, now);
+          const week = greatWeek(now);
+          const lastWeek = greatWeek(week.start - 1);
+          const thisWeek = greatWeekJson(week, yield* great.totals(week.start));
+          const last = greatWeekJson(lastWeek, yield* great.totals(lastWeek.start));
+          const helpers = yield* great.helpers(week.start);
+          const mine = helpers.find((helper) => helper.playerId === identity.playerId);
+          const rewards = new Map(
+            [...thisWeek.goals, ...last.goals].filter((goal) => goal.met).map((goal) => [goal.reward.id, goal.reward]),
+          );
+          return HttpServerResponse.jsonUnsafe({
+            week: thisWeek,
+            last_week: last,
+            rewards: [...rewards.values()],
+            lanterns: helpers.map((helper) => ({
+              player_id: helper.playerId,
+              name: helper.username,
+              glow: glowOf(helper),
+            })),
+            me: {
+              lantern: mine !== undefined,
+              glow: mine === undefined ? 0 : glowOf(mine),
+              offered: mine?.offeredLeaf ?? 0,
+              rings: yield* great.rings(identity.playerId),
+            },
+            offering: greatRules.offering,
+          } satisfies typeof Body.Great.Type);
+        }),
+      )
+      .handle("offer", ({ payload }) =>
+        Effect.gen(function* () {
+          if (!offeringAllowed(payload.leaf, greatRules)) {
+            return yield* invalidOffering;
+          }
+          const identity = yield* CurrentIdentity;
+          const now = yield* Clock.currentTimeMillis;
+          const result = yield* offerToGreat(identity, payload.leaf, payload.request_id, now);
+          if (result.status === "refused") {
+            return yield* refusal(result);
+          }
+          return HttpServerResponse.jsonUnsafe({
+            leaf: result.balance,
+            offered: result.helped.offeredLeaf,
+            glow: glowOf(result.helped),
+          } satisfies typeof Body.Offered.Type);
         }),
       );
   }),

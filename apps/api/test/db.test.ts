@@ -9,6 +9,7 @@ import { Effect, Layer, String as Str } from "effect";
 import { SqlClient } from "effect/sql";
 
 import schemaAtMigration10 from "../migrations/0010_schema.ts";
+import groveAtMigration11 from "../migrations/0011_grove.ts";
 import { AppConfig } from "../src/config.ts";
 import { Database } from "../src/db.ts";
 import { Ledger } from "../src/ledger/store.ts";
@@ -65,6 +66,7 @@ describe("the database", () => {
     expect(await query(path, (sql) => sql`SELECT migration_id, name FROM effect_sql_migrations`)).toEqual([
       { migration_id: 10, name: "schema" },
       { migration_id: 11, name: "grove" },
+      { migration_id: 12, name: "great" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -109,7 +111,43 @@ describe("the database", () => {
         path,
         (sql) => sql`SELECT migration_id FROM effect_sql_migrations WHERE migration_id > 10 ORDER BY 1`,
       ),
-    ).toEqual([{ migration_id: 11 }]);
+    ).toEqual([{ migration_id: 11 }, { migration_id: 12 }]);
+  });
+
+  it("adds up for the Great Sequoia the raids and wars recorded before it was built", async () => {
+    const path = join(directory, "leaf.db");
+    const before = Date.UTC(2026, 10, 24);
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* SqliteMigrator.run({
+          loader: SqliteMigrator.fromRecord({ "10_schema": schemaAtMigration10, "11_grove": groveAtMigration11 }),
+        });
+        // A party of two in one raid, and a war, on Tuesday 24 November 2026.
+        for (const [key, event, kind] of [
+          [`raid:5:${alice}`, "raid:5", "raid"],
+          ["raid:5:00000000-0000-4000-8000-00000000000b", "raid:5", "raid"],
+          [`war:8:${alice}`, "war:8", "war"],
+        ] as const) {
+          yield* sql`
+            INSERT INTO activities (source_key, event_key, player_id, kind, detail, season_rating, occurred_at, recorded_at)
+            VALUES (${key}, ${event}, ${key.slice(-36)}, ${kind}, 'x', 100, ${before}, ${before})
+          `;
+        }
+      }).pipe(Effect.provide(SqliteClient.layer({ filename: path, transformQueryNames: Str.camelToSnake }))),
+    );
+
+    await onFile(path, Effect.void);
+
+    expect(await query(path, (sql) => sql`SELECT raids, wars, offered FROM great_weeks`)).toEqual([
+      { raids: 1, wars: 1, offered: 0 },
+    ]);
+    expect(
+      await query(path, (sql) => sql`SELECT player_id, raids, wars FROM great_helpers ORDER BY player_id`),
+    ).toEqual([
+      { player_id: alice, raids: 1, wars: 1 },
+      { player_id: "00000000-0000-4000-8000-00000000000b", raids: 1, wars: 0 },
+    ]);
   });
 
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {

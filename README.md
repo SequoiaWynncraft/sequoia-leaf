@@ -161,6 +161,8 @@ and `GET /openapi.json` serves the OpenAPI document generated from it.
 | `POST /v1/grove/cones/buy`       | Buys cones for Leaf.                                       |
 | `POST /v1/grove/cones/open`      | Opens cones they hold.                                     |
 | `PUT /v1/grove/companion`        | Chooses the spirit that follows them.                      |
+| `GET /v1/grove/great`            | The Great Sequoia's goals this week, and its lanterns.     |
+| `POST /v1/grove/great/offer`     | Offers Leaf to the Great Sequoia.                          |
 | `GET /v1/grove/rates`            | The cones' published odds. Public.                         |
 | `GET /v1/grove/forest`           | Every member's tree in the Forest. Public.                 |
 | `GET /openapi.json`              | This API as an OpenAPI document.                           |
@@ -322,6 +324,8 @@ changing nothing, and one of these codes:
 - `no_banner`: no banner is on, so cones can't be opened.
 - `not_owned`: a companion they have not opened.
 
+An offering outside 100 to 10,000 whole Leaf gets 400 `invalid_offering`.
+
 `GET /v1/grove/rates` publishes the odds from the same rules a cone is opened
 with: each rank's chance and each spirit's, the pity, the Verdant coat, the
 price and the care. `GET /v1/grove/forest` answers `{ "trees": [{ "player_id",
@@ -331,6 +335,33 @@ Neither needs a session.
 The Grove's tables keep each member's totals and spirits by trigger
 (`grove_totals`, `grove_spirits`), as `accounts` is kept from the ledger, so
 `GET /v1/grove` costs the same however long a member has played.
+
+### The Great Sequoia
+
+The tree at the Forest's heart has three guild goals a week, Monday to Monday in
+UTC: raids, Leaf offered and wars (`great` in `rules.ts`). A raid party's run
+counts once however many members it credits, and so does a war. Members offer
+Leaf with `POST /v1/grove/great/offer` and `{ "leaf", "request_id" }`, 100 to
+10,000 at a time, spent through the ledger with sink `offering`
+(`offering:<player>:<request>`), so a request sent again offers once. It answers
+`{ "leaf", "offered", "glow" }`: the balance, what they offered this week, and
+their lantern's glow.
+
+Everyone who helps in a week, by raiding, warring or offering, hangs a lantern.
+A lantern's glow steps up at 1, 10 and 30 contributions (a raid, a war, or 100
+Leaf offered), a cosmetic extra for helping more; it is a step, not a place, and
+nothing ranks who helped most. The rewards are cosmetic and for everyone: a goal
+met gives the whole guild its reward until the end of the next week. Each week
+a member helped is a ring on their tree.
+
+`GET /v1/grove/great` answers the week and last week, each with its `goals`
+(`progress`, `target`, `met` and `reward`), the `rewards` everyone has now, the
+`lanterns` in the order their members first helped, the member's own `lantern`,
+`glow`, `offered` and `rings`, and the `offering` limits.
+
+Triggers add each week up as activities and offerings are recorded
+(`great_weeks`, `great_helpers`), so reading a busy week takes as long as a
+quiet one.
 
 ## Rules the code is built on
 

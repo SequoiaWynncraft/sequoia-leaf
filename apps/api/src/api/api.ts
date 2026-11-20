@@ -30,9 +30,12 @@ import {
   ConesOpened,
   Events,
   Forest,
+  Great,
   GroveMe,
   Health,
   Me,
+  OfferBody,
+  Offered,
   Quests,
   Rates,
   RerollBody,
@@ -103,7 +106,7 @@ export class MeApi extends HttpApiGroup.make("me")
   .middleware(Session)
   .prefix("/v1/me") {}
 
-/** The signed-in member's Grove: their tree, its care, their cones and spirits. */
+/** The signed-in member's Grove: their tree, its care, their cones and spirits, and the Great Sequoia. */
 export class GroveApi extends HttpApiGroup.make("grove")
   .add(
     HttpApiEndpoint.get("grove", "/", { success: GroveMe }),
@@ -121,6 +124,12 @@ export class GroveApi extends HttpApiGroup.make("grove")
     HttpApiEndpoint.put("companion", "/companion", {
       payload: CompanionBody,
       success: Companion,
+      error: [GroveInvalid, GroveRefused],
+    }),
+    HttpApiEndpoint.get("great", "/great", { success: Great }),
+    HttpApiEndpoint.post("offer", "/great/offer", {
+      payload: OfferBody,
+      success: Offered,
       error: [GroveInvalid, GroveRefused],
     }),
   )
