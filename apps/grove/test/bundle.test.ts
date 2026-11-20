@@ -4,27 +4,33 @@ import { readCast, stepAt } from "../src/bundle/cast.ts";
 import { fitPicture, HUD_BAR } from "../src/bundle/fit.ts";
 import { ambianceAt, fill, pickGlade, readManifest, variantOf } from "../src/bundle/manifest.ts";
 import { Ink, moonlit, packHex } from "../src/bundle/palette.ts";
+import { Picture } from "../src/bundle/picture.ts";
+import { treeMask } from "../src/scenes/glade/stage.ts";
 
-/** A manifest as `grove/bundle.py` writes it, trimmed to two levels' boxes. */
+/** A manifest as `grove/bundle.py` writes it, trimmed to two trees. */
 const MANIFEST = {
   version: 1,
   canvas: { width: 256, height: 144 },
   frame_ms: 100,
   frames: 160,
   glade: {
-    foot: [116, 126],
-    hearth: [160, 134],
+    density: 2,
+    foot: [116, 127],
+    hearth: [164, 134],
     levels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
     variants: 3,
     seasons: ["normal", "winter"],
     ambiances: ["dusk", "night"],
-    loop: "glade/L{level}-v{variant}-{season}-{ambiance}.gif",
+    loop: "glade/back-{season}-{ambiance}.gif",
     near: "glade/near-{season}.png",
-    tree: "glade/L{level}-v{variant}-{season}-tree.png",
+    tree: "glade/tree-L{level}-v{variant}-{season}-{ambiance}.png",
     ground: 139,
-    cone: [147, 134],
+    cone: [150, 135],
     front: "glade/hearth-front.png",
-    tree_boxes: { "L01-v0-normal": [112, 118, 9, 11], "L13-v2-winter": [75, 0, 103, 127] },
+    trees: {
+      "L01-v0-normal": { size: [15, 21], foot: [7, 17], box: [112, 118, 8, 11] },
+      "L13-v2-winter": { size: [212, 236], foot: [108, 225], box: [62, 14, 106, 119] },
+    },
   },
   effects: { aurora: "effects/aurora-{season}.png", sky: "effects/sky-{season}.png", frames: 160 },
   campfire: {
@@ -89,9 +95,15 @@ describe("the bundle's manifest", () => {
     const m = readManifest(MANIFEST);
     expect(m.width).toBe(256);
     expect(m.height).toBe(144);
-    expect(m.glade.foot).toEqual({ x: 116, y: 126 });
-    expect(m.glade.hearth).toEqual({ x: 160, y: 134 });
-    expect(m.glade.treeBoxes.get("L01-v0-normal")).toEqual({ x: 112, y: 118, w: 9, h: 11 });
+    expect(m.glade.density).toBe(2);
+    expect(m.glade.foot).toEqual({ x: 116, y: 127 });
+    expect(m.glade.hearth).toEqual({ x: 164, y: 134 });
+    expect(m.glade.trees.get("L01-v0-normal")).toEqual({
+      w: 15,
+      h: 21,
+      foot: { x: 7, y: 17 },
+      box: { x: 112, y: 118, w: 8, h: 11 },
+    });
     expect(m.effects?.aurora).toBe("effects/aurora-{season}.png");
     expect(m.other.has("later")).toBe(true);
     expect(m.other.has("campfire")).toBe(false);
@@ -112,7 +124,7 @@ describe("the bundle's manifest", () => {
 
   test("reads where the glade's next cone lies and the stones in front of its hearth", () => {
     const g = readManifest(MANIFEST).glade;
-    expect(g.cone).toEqual({ x: 147, y: 134 });
+    expect(g.cone).toEqual({ x: 150, y: 135 });
     expect(g.front).toBe("glade/hearth-front.png");
   });
 
@@ -171,7 +183,7 @@ describe("the bundle's manifest", () => {
 
   test("places the hearth for a bundle from before it had one", () => {
     const { hearth: _, ...older } = MANIFEST.glade;
-    expect(readManifest({ ...MANIFEST, glade: older }).glade.hearth).toEqual({ x: 160, y: 134 });
+    expect(readManifest({ ...MANIFEST, glade: older }).glade.hearth).toEqual({ x: 160, y: 135 });
   });
 
   test("refuses a manifest without a glade", () => {
@@ -243,17 +255,20 @@ describe("the glade's loop", () => {
     const seed = "sequoia";
     const v = variantOf(seed, 3);
     const pick = pickGlade(glade, { level: 9, seed, season: "winter", ambiance: "night" });
-    expect(pick.loopPath).toBe(`glade/L09-v${v}-winter-night.gif`);
-    expect(pick.treePath).toBe(`glade/L09-v${v}-winter-tree.png`);
+    expect(pick.loopPath).toBe("glade/back-winter-night.gif");
+    expect(pick.treePath).toBe(`glade/tree-L09-v${v}-winter-night.png`);
     expect(pick.nearPath).toBe("glade/near-winter.png");
     expect(pick.tree).toBe(`L09-v${v}-winter`);
   });
 
-  test("shares one tree mask between dusk and night", () => {
+  test("plays one clearing loop under every tree, and gives a tree its own sprite by night", () => {
     const dusk = pickGlade(glade, { level: 4, seed: "x", season: "normal", ambiance: "dusk" });
     const night = pickGlade(glade, { level: 4, seed: "x", season: "normal", ambiance: "night" });
+    const older = pickGlade(glade, { level: 9, seed: "x", season: "normal", ambiance: "dusk" });
+    expect(dusk.loopPath).toBe(older.loopPath);
     expect(dusk.loopPath).not.toBe(night.loopPath);
-    expect(dusk.treePath).toBe(night.treePath);
+    expect(dusk.treePath).not.toBe(night.treePath);
+    expect(dusk.treePath).not.toBe(older.treePath);
   });
 
   test("takes the nearest level the bundle has, and a season it has", () => {
@@ -262,14 +277,56 @@ describe("the glade's loop", () => {
     expect(pickGlade(glade, { level: 3, seed: "x", season: "autumn", ambiance: "dusk" }).season).toBe("normal");
   });
 
-  test("carries the tree's box from the manifest", () => {
+  test("carries the tree's box from the manifest, and stands its sprite's foot on the glade's", () => {
     const seed = Array.from({ length: 30 }, (_, i) => `member-${i}`).find((s) => variantOf(s, 3) === 0) ?? "";
-    expect(pickGlade(glade, { level: 1, seed, season: "normal", ambiance: "dusk" }).box).toEqual({
-      x: 112,
-      y: 118,
-      w: 9,
-      h: 11,
-    });
+    const pick = pickGlade(glade, { level: 1, seed, season: "normal", ambiance: "dusk" });
+    expect(pick.box).toEqual({ x: 112, y: 118, w: 8, h: 11 });
+    // The foot (116, 127) at two tree pixels a pixel, less the sprite's own foot (7, 17).
+    expect(pick.at).toEqual({ x: 225, y: 237 });
+  });
+});
+
+describe("a picture finer than its loop", () => {
+  const frame = new Uint32Array([1, 2, 3, 4]); // 2x2
+  const sprite = { w: 2, h: 2, data: new Uint32Array([0xff0000aa, 0, 0, 0xff0000bb]) };
+
+  test("lays the loop down in blocks and stamps the tree on its own finer grid", () => {
+    const pic = new Picture(2, 2, 2);
+    pic.begin(frame);
+    expect([...pic.px.subarray(0, 4)]).toEqual([1, 1, 2, 2]);
+    expect([...pic.px.subarray(8, 12)]).toEqual([3, 3, 4, 4]);
+    pic.stamp(sprite, 1, 0);
+    expect([...pic.px.subarray(0, 4)]).toEqual([1, 0xff0000aa, 2, 2]);
+    expect([...pic.px.subarray(4, 8)]).toEqual([1, 1, 0xff0000bb, 2]);
+  });
+
+  test("draws in picture pixels a block at a time, and puts the near layer back over the tree", () => {
+    const pic = new Picture(2, 2, 2);
+    pic.begin(frame);
+    pic.stamp(sprite, 1, 0);
+    pic.set(1, 1, 9);
+    expect([...pic.px.subarray(8, 12)]).toEqual([3, 3, 9, 9]);
+    expect([...pic.px.subarray(12, 16)]).toEqual([3, 3, 9, 9]);
+    pic.restore({ w: 2, h: 2, bits: new Uint8Array([1, 1, 0, 0]), set: new Uint32Array([0, 1]) });
+    expect([...pic.px.subarray(0, 8)]).toEqual([1, 1, 2, 2, 1, 1, 2, 2]);
+  });
+
+  test("brings back only what a picture-pixel drawing changed", () => {
+    const pic = new Picture(2, 2, 2);
+    pic.begin(frame);
+    pic.stamp(sprite, 1, 0);
+    const before = pic.coarse();
+    const after = before.slice();
+    after[3] = 7;
+    pic.merge(after, before);
+    expect([...pic.px.subarray(0, 4)]).toEqual([1, 0xff0000aa, 2, 2]);
+    expect([...pic.px.subarray(12, 16)]).toEqual([3, 3, 7, 7]);
+  });
+
+  test("finds the tree's picture pixels from its sprite, for taps", () => {
+    const mask = treeMask(sprite, { x: 1, y: 0 }, 2, 2, 2);
+    expect([...mask.bits]).toEqual([1, 1, 0, 0]);
+    expect([...mask.set]).toEqual([0, 1]);
   });
 });
 
@@ -280,6 +337,13 @@ describe("the picture on the screen", () => {
     const f = fitPicture({ ...base, devW: 1440, devH: 900, phone: false, hudScale: 3 });
     expect(f).toMatchObject({ scale: 5, W: 256, H: 144, cropX: 0, offX: 80, offY: 90 });
     expect(f.offY + 133 * f.scale).toBeLessThanOrEqual(900 - HUD_BAR * 3);
+  });
+
+  test("fits the glade by its tree's finer pixels, so a clearing pixel is always a whole block", () => {
+    const fine = { picW: 512, picH: 288, hud: true, focusX: 232, clearRow: 266 };
+    const f = fitPicture({ ...fine, devW: 1920, devH: 1080, phone: false, hudScale: 4 });
+    expect(f).toMatchObject({ scale: 3, W: 512, H: 288, cropX: 0 });
+    expect(f.offY + 266 * f.scale).toBeLessThanOrEqual(1080 - HUD_BAR * 4);
   });
 
   test("steps down a scale rather than hide the tree's foot under the hotbar", () => {

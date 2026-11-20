@@ -1,11 +1,13 @@
 /**
  * The player's glade: the welcome's forest with the member's own tree in its clearing, played from
- * the art bundle (`../../bundle/`). Each frame is the loop for the tree's level, the member's
- * variant, the season and the light, with the glade's moments drawn over it in the welcome's
- * vocabulary and the near layer put back in front; the HUD lies over it on its own grid.
+ * the art bundle (`../../bundle/`). Each frame is the clearing's loop for the season and the light,
+ * the member's tree stamped on it (the sprite for its level and their variant, drawn at twice the
+ * welcome's pixel density), the glade's moments drawn over both in the welcome's vocabulary, and the
+ * near layer put back in front; the HUD lies over it on its own grid.
  *
- * The picture is a fixed 256x144 at a whole-pixel scale (`bundle/fit.ts`): fitted and centred on a
- * wide screen, a vertical crop centred on the tree on a phone. It no longer zooms with the level.
+ * The picture is a fixed 256x144, shown at a whole number of device pixels per tree pixel
+ * (`bundle/fit.ts`), so every pixel of the clearing is a whole block of them: fitted and centred on
+ * a wide screen, a vertical crop centred on the tree on a phone. It no longer zooms with the level.
  */
 
 import type { Mask, Pixels } from "../../bundle/art.ts";
@@ -28,14 +30,14 @@ import { CARE_LENGTH, type CareEffect, drawCareTool, drawCareWorld } from "./car
 import { drawGrootWorld, grootDrink, type GrootEvent, grootPopup, grootPopupOpen } from "./groot.ts";
 import { drawLevelUp, ggPopup, ggPopupOpen, type LevelUpEvent, levelUpOver, shownLevel } from "./levelup.ts";
 import { coneHit, drawAurora, drawRestingCone, drawReveal, drawRevealScreen } from "./reveal.ts";
-import { crown, type Fx, type Places, places, type Point, tapsTree, type TreeShape } from "./stage.ts";
+import { crown, type Fx, type Places, places, type Point, tapsTree, treeMask, type TreeShape } from "./stage.ts";
 
 const GREETING = "I hope you have a moderately excellent next 14 hours.";
 
 /** Rows of the picture above this stay clear of the hotbar: the tree's foot and the resting cone. */
 const CLEAR_ROW = 133;
 /** The picture's size and the tree's foot before the manifest is in (the bundle's own). */
-const PICTURE = { w: 256, h: 144, footX: 116 };
+const PICTURE = { w: 256, h: 144, footX: 116, density: 2 };
 /** The page round the picture before its first frame is in: the HUD's dark. */
 const DARK = "#150f0d";
 
@@ -72,10 +74,10 @@ export class GladeScene implements Scene {
   private readonly app: App;
   private readonly params: Params;
   private readonly m: Moments;
-  private pic = new Picture(PICTURE.w, PICTURE.h);
+  private pic = new Picture(PICTURE.w, PICTURE.h, PICTURE.density);
   private world: Grid = { W: 1, H: 1, scale: 1, offX: 0, offY: 0, dpr: 1 };
   private hud: Grid = { W: 1, H: 1, scale: 1, offX: 0, offY: 0, dpr: 1 };
-  /** The first picture column on screen (a phone shows a crop). */
+  /** The first buffer column on screen (a phone shows a crop), in the tree's fine pixels. */
   private cropX = 0;
   private narrow = false;
   private ink: Ink;
@@ -118,16 +120,18 @@ export class GladeScene implements Scene {
 
   grid(s: Screen): Grid {
     const man = this.manifest;
+    // The world's grid is the tree's: a whole number of device pixels to each of its fine pixels.
+    const k = this.density;
     const fit = fitPicture({
       devW: s.devW,
       devH: s.devH,
-      picW: man?.width ?? PICTURE.w,
-      picH: man?.height ?? PICTURE.h,
+      picW: (man?.width ?? PICTURE.w) * k,
+      picH: (man?.height ?? PICTURE.h) * k,
       phone: s.phone,
       hudScale: s.hud.scale,
       hud: !this.params.bare,
-      focusX: man?.glade.foot.x ?? PICTURE.footX,
-      clearRow: CLEAR_ROW,
+      focusX: (man?.glade.foot.x ?? PICTURE.footX) * k,
+      clearRow: CLEAR_ROW * k,
     });
     this.cropX = fit.cropX;
     this.narrow = s.phone;
@@ -136,7 +140,7 @@ export class GladeScene implements Scene {
 
   layoutKey(): string {
     const man = this.manifest;
-    return man ? `${man.width}x${man.height}@${man.glade.foot.x}` : "";
+    return man ? `${man.width}x${man.height}@${man.glade.foot.x}x${man.glade.density}` : "";
   }
 
   pageColour(): string {
@@ -147,12 +151,19 @@ export class GladeScene implements Scene {
     this.world = world;
     this.hud = hud;
     const man = this.manifest;
-    if (man && (this.pic.W !== man.width || this.pic.H !== man.height)) this.pic = new Picture(man.width, man.height);
+    if (man && (this.pic.W !== man.width || this.pic.H !== man.height || this.pic.density !== man.glade.density))
+      this.pic = new Picture(man.width, man.height, man.glade.density);
+  }
+
+  /** Tree pixels per picture pixel. */
+  private get density(): number {
+    return this.manifest?.glade.density ?? PICTURE.density;
   }
 
   /** A picture point in the world grid's pixels, then the HUD's. */
   private toHud(p: Point): Point {
-    return between(this.world, this.hud, { x: p.x - this.cropX, y: p.y });
+    const k = this.density;
+    return between(this.world, this.hud, { x: p.x * k - this.cropX, y: p.y * k });
   }
 
   // -------------------------------------------------------------------------------------------
@@ -174,7 +185,8 @@ export class GladeScene implements Scene {
   }
 
   private treeOf(man: Manifest, pick: GladePick): TreeShape {
-    const mask: Mask | null = this.app.art.mask(pick.treePath).value;
+    const sprite = this.app.art.image(pick.treePath).value;
+    const mask: Mask | null = sprite ? treeMask(sprite, pick.at, man.glade.density, man.width, man.height) : null;
     return { level: pick.level, box: pick.box, foot: man.glade.foot, mask };
   }
 
@@ -206,18 +218,18 @@ export class GladeScene implements Scene {
       pick = this.pickFor(man, m.shownLevel(this.params.level, t));
       const after = m.levelUp ? this.pickFor(man, m.levelUp.to) : null;
       const next = after && after.level !== pick.level ? after : null;
-      art.keep(next ? [pick.loopPath, next.loopPath] : [pick.loopPath]);
-      if (next) {
-        // The next level's loop and tree, ready by the swap.
-        art.loop(next.loopPath);
-        art.mask(next.treePath);
-      }
+      art.keep([pick.loopPath]);
+      // The next level's tree, ready by the swap.
+      if (next) art.image(next.treePath);
       const loop = art.loop(pick.loopPath).value;
-      if (loop) {
+      const sprite = art.image(pick.treePath).value;
+      if (loop && sprite) {
         frameIndex = loop.indexAt(tw * 1000);
         const frame = loop.frame(frameIndex, performance.now() + 4, () => performance.now());
         if (frame) {
           pic.begin(frame);
+          // The member's tree, on its own finer grid, in front of the clearing and behind everything else.
+          pic.stamp(sprite, pick.at.x, pick.at.y);
           if (this.edge?.path !== pick.loopPath)
             this.edge = { path: pick.loopPath, colour: edgeColour(frame, loop.width, loop.height) };
         }
@@ -263,8 +275,14 @@ export class GladeScene implements Scene {
     pic.restore(art.mask(fill(man.glade.near, { season: pick.season })).value);
     // What stands over the world: the reveal's dark and flash, the tools in hand.
     if (m.cone && look) drawRevealScreen(pic, fx.places, look, m.cone.rank);
-    const wc = new Canvas(pic.px, pic.W, pic.H);
-    for (const e of m.effects) drawCareTool(wc, e, t);
+    if (m.effects.length > 0) {
+      // The tools are drawn in picture pixels on a copy of the picture, and what they changed comes back.
+      const before = pic.coarse();
+      const after = before.slice();
+      const wc = new Canvas(after, pic.W, pic.H);
+      for (const e of m.effects) drawCareTool(wc, e, t);
+      pic.merge(after, before);
+    }
     pic.blit(out, this.world.W, this.world.H, this.cropX, look?.shake.x ?? 0, look?.shake.y ?? 0);
 
     this.renderHud(t, hudOut, fonts, fx.tree);
@@ -409,14 +427,15 @@ export class GladeScene implements Scene {
     }
     const man = this.manifest;
     if (!man) return null;
+    const k = this.density;
     if (name === "cone") {
       const cone = this.placesOf(man).cone;
-      return { x: cone.x - this.cropX, y: cone.y - 4 };
+      return { x: cone.x * k - this.cropX, y: (cone.y - 4) * k };
     }
     const tree = this.tree();
     if (!tree) return null;
     const c = crown(tree);
-    return { x: Math.round(c.x + c.w / 2) - this.cropX, y: Math.round(c.y + c.h * 0.45) };
+    return { x: Math.round(c.x + c.w / 2) * k - this.cropX, y: Math.round(c.y + c.h * 0.45) * k };
   }
 
   /** A still of care mid-way (`?care=`): aimed at the crown, as a player would tap. */
@@ -482,8 +501,9 @@ export class GladeScene implements Scene {
       return this.app.go("rings");
     if (inBox(lay.leaf)) return this.app.go("shop");
     if (this.overHud(hudPoint.x, hudPoint.y)) return;
-    const x = world.x + this.cropX;
-    const y = world.y;
+    // The pointer comes in the world grid's fine pixels; the glade's places are in picture pixels.
+    const x = Math.floor((world.x + this.cropX) / this.density);
+    const y = Math.floor(world.y / this.density);
     const man = this.manifest;
     if (man && coneHit(this.placesOf(man), x, y)) return this.openCone(t);
     if (m.tool) this.care(m.tool, x, y, t, touch);

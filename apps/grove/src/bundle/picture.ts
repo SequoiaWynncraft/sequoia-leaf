@@ -14,6 +14,13 @@
  * near layer is pasted last rather than restored.
  *
  * Coordinates are the picture's own (0 to 255 by 0 to 143); colours are packed RGBA (`palette.ts`).
+ *
+ * A picture can hold art finer than its loop (`density`): the glade's is two, because a member's
+ * tree is drawn at twice the welcome's pixel density. Then every picture pixel is a block of
+ * `density` by `density` buffer pixels: the loop frame is laid down in blocks, the tree is stamped
+ * on the buffer's own grid (`stamp`), and everything else still draws in picture pixels, a block at
+ * a time, so whatever is drawn over the tree lights or covers the tree's own fine pixels. Nothing is
+ * ever smoothed, and the screen shows a whole number of device pixels per buffer pixel.
  */
 
 import type { Mask, Pixels } from "./art.ts";
@@ -44,24 +51,42 @@ const SPARKLE: readonly (readonly [number, number, boolean])[][] = [
 ];
 
 export class Picture {
+  /** The picture's size in its own pixels. */
   readonly W: number;
   readonly H: number;
+  /** Buffer pixels per picture pixel, each way. */
+  readonly density: number;
+  /** The buffer's size: the picture's, times `density`. */
+  readonly FW: number;
+  readonly FH: number;
   readonly px: Uint32Array;
   /** The decoded loop frame under this one, or null before the loop is in. */
   private under: Uint32Array | null = null;
   private drawn = false;
 
-  constructor(W: number, H: number) {
+  constructor(W: number, H: number, density = 1) {
     this.W = W;
     this.H = H;
-    this.px = new Uint32Array(W * H);
+    this.density = Math.max(1, Math.round(density));
+    this.FW = W * this.density;
+    this.FH = H * this.density;
+    this.px = new Uint32Array(this.FW * this.FH);
   }
 
-  /** Step 1: a loop frame. */
+  /** Step 1: a loop frame, a block to each of its pixels. */
   begin(frame: Uint32Array): void {
     this.under = frame;
     this.drawn = true;
-    this.px.set(frame);
+    const k = this.density;
+    if (k === 1) {
+      this.px.set(frame);
+      return;
+    }
+    for (let y = 0; y < this.H; y++) {
+      const row = y * k * this.FW;
+      for (let x = 0; x < this.W; x++) this.px.fill(frame[y * this.W + x] ?? 0, row + x * k, row + x * k + k);
+      for (let d = 1; d < k; d++) this.px.copyWithin(row + d * this.FW, row, row + this.FW);
+    }
   }
 
   /** No frame yet: one colour. */
@@ -77,7 +102,8 @@ export class Picture {
 
   /**
    * A still layer `ox` columns into it: its opaque pixels over what is there. The first, opaque,
-   * layer of a frame (`base`) covers the whole picture and makes it ready.
+   * layer of a frame (`base`) covers the whole picture and makes it ready. (The Forest's; its
+   * picture has a density of one.)
    */
   layer(src: Pixels, ox: number, base = false): void {
     const W = this.W;
@@ -116,6 +142,23 @@ export class Picture {
     }
   }
 
+  /**
+   * A sprite drawn on the buffer's own grid, its top left at buffer pixel (fx, fy): its opaque
+   * pixels. The member's tree, at the glade's density.
+   */
+  stamp(src: Pixels, fx: number, fy: number): void {
+    fx = Math.round(fx);
+    fy = Math.round(fy);
+    for (let y = Math.max(0, -fy); y < src.h && fy + y < this.FH; y++) {
+      const si = y * src.w;
+      const di = (fy + y) * this.FW + fx;
+      for (let x = Math.max(0, -fx); x < src.w && fx + x < this.FW; x++) {
+        const v = src.data[si + x] ?? 0;
+        if (v >>> 24 >= 128) this.px[di + x] = (v | 0xff000000) >>> 0;
+      }
+    }
+  }
+
   inside(x: number, y: number): boolean {
     return x >= 0 && y >= 0 && x < this.W && y < this.H;
   }
@@ -123,13 +166,35 @@ export class Picture {
   get(x: number, y: number): number {
     x = Math.round(x);
     y = Math.round(y);
-    return this.inside(x, y) ? (this.px[y * this.W + x] ?? 0) : 0;
+    return this.inside(x, y) ? (this.px[y * this.density * this.FW + x * this.density] ?? 0) : 0;
+  }
+
+  /** One picture pixel: its whole block. */
+  private block(x: number, y: number, c: number): void {
+    const k = this.density;
+    if (k === 1) {
+      this.px[y * this.W + x] = c;
+      return;
+    }
+    for (let d = 0; d < k; d++) {
+      const i = (y * k + d) * this.FW + x * k;
+      this.px.fill(c, i, i + k);
+    }
+  }
+
+  /** Each buffer pixel of one picture pixel through `change`. */
+  private each(x: number, y: number, change: (v: number) => number): void {
+    const k = this.density;
+    for (let d = 0; d < k; d++) {
+      const row = (y * k + d) * this.FW + x * k;
+      for (let i = row; i < row + k; i++) this.px[i] = change(this.px[i] ?? 0);
+    }
   }
 
   set(x: number, y: number, c: number): void {
     x = Math.round(x);
     y = Math.round(y);
-    if (this.inside(x, y)) this.px[y * this.W + x] = c;
+    if (this.inside(x, y)) this.block(x, y, c);
   }
 
   /** The pixel moved `a` of the way toward `c`, as the welcome blends a glow over what is there. */
@@ -137,8 +202,7 @@ export class Picture {
     x = Math.round(x);
     y = Math.round(y);
     if (!this.inside(x, y) || a <= 0) return;
-    const i = y * this.W + x;
-    this.px[i] = mixColour(this.px[i] ?? 0, c, a);
+    this.each(x, y, (v) => mixColour(v, c, a));
   }
 
   /** Light added over a pixel: warm light brightens what it falls on rather than painting it. */
@@ -146,11 +210,12 @@ export class Picture {
     x = Math.round(x);
     y = Math.round(y);
     if (!this.inside(x, y) || a <= 0) return;
-    const i = y * this.W + x;
-    const v = this.px[i] ?? 0;
     const add = (ch: number, l: number): number => Math.min(255, Math.round(ch + l * a * (1 - ch / 320)));
-    this.px[i] =
-      ((255 << 24) | (add(blue(v), blue(c)) << 16) | (add(green(v), green(c)) << 8) | add(red(v), red(c))) >>> 0;
+    this.each(
+      x,
+      y,
+      (v) => ((255 << 24) | (add(blue(v), blue(c)) << 16) | (add(green(v), green(c)) << 8) | add(red(v), red(c))) >>> 0,
+    );
   }
 
   /** The welcome's sparkle at (x, y): stage 0 a dot, 1 a plus, 2 a big plus. */
@@ -184,7 +249,7 @@ export class Picture {
         const v = f.strip.data[yy * sw + sx + xx] ?? 0;
         if (v >>> 24 < 128) continue;
         const tx = ox + (flip ? f.w - 1 - xx : xx);
-        if (tx >= 0 && tx < this.W) this.px[ty * this.W + tx] = solid ?? (v | 0xff000000) >>> 0;
+        if (tx >= 0 && tx < this.W) this.block(tx, ty, solid ?? (v | 0xff000000) >>> 0);
       }
     }
   }
@@ -193,23 +258,48 @@ export class Picture {
   restore(near: Mask | null): void {
     const under = this.under;
     if (!under || !near || near.w !== this.W) return;
-    for (const i of near.set) this.px[i] = under[i] ?? 0;
+    if (this.density === 1) {
+      for (const i of near.set) this.px[i] = under[i] ?? 0;
+      return;
+    }
+    for (const i of near.set) this.block(i % this.W, Math.floor(i / this.W), under[i] ?? 0);
   }
 
   /**
-   * Copies `W` columns from `cropX` and `H` rows from `cropY` into a screen buffer `W` wide, the
-   * whole picture knocked by (dx, dy) pixels for a reveal's impact.
+   * The picture in its own pixels (the first buffer pixel of each block), for a drawing that works
+   * in picture pixels on a buffer of its own; `merge` brings back what it changed.
+   */
+  coarse(): Uint32Array {
+    const k = this.density;
+    if (k === 1) return this.px.slice();
+    const out = new Uint32Array(this.W * this.H);
+    for (let y = 0; y < this.H; y++)
+      for (let x = 0; x < this.W; x++) out[y * this.W + x] = this.px[y * k * this.FW + x * k] ?? 0;
+    return out;
+  }
+
+  /** Every picture pixel of `after` that differs from `before`, as its block. */
+  merge(after: Uint32Array, before: Uint32Array): void {
+    for (let i = 0; i < after.length; i++)
+      if (after[i] !== before[i]) this.block(i % this.W, Math.floor(i / this.W), after[i] ?? 0);
+  }
+
+  /**
+   * Copies `W` buffer columns from `cropX` and `H` buffer rows from `cropY` into a screen buffer `W`
+   * wide, the whole picture knocked by (dx, dy) picture pixels for a reveal's impact.
    */
   blit(out: Uint32Array, W: number, H: number, cropX: number, dx = 0, dy = 0, cropY = 0): void {
+    const kx = dx * this.density;
+    const ky = dy * this.density;
     for (let y = 0; y < H; y++) {
-      const sy = Math.max(0, Math.min(this.H - 1, cropY + y - dy));
-      const row = sy * this.W;
-      if (dx === 0) {
+      const sy = Math.max(0, Math.min(this.FH - 1, cropY + y - ky));
+      const row = sy * this.FW;
+      if (kx === 0) {
         out.set(this.px.subarray(row + cropX, row + cropX + W), y * W);
         continue;
       }
       for (let x = 0; x < W; x++) {
-        const sx = Math.max(0, Math.min(this.W - 1, cropX + x - dx));
+        const sx = Math.max(0, Math.min(this.FW - 1, cropX + x - kx));
         out[y * W + x] = this.px[row + sx] ?? 0;
       }
     }

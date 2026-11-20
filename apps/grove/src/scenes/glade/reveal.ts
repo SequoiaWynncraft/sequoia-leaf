@@ -415,20 +415,16 @@ export function drawRevealScreen(pic: Picture, at: Places, look: ConeLook, rank:
   const fx0 = at.hearth.x;
   const fy0 = at.hearth.y - 10;
   const dark = 0xff0a0610;
+  const flash = mixColour(rc, 0xffffffff, 0.35);
   for (let y = 0; y < pic.H; y++)
     for (let x = 0; x < pic.W; x++) {
-      const i = y * pic.W + x;
-      let v = pic.px[i] ?? 0;
       if (look.dim > 0) {
         const d = Math.hypot((x - fx0) / 62, (y - fy0) / 46);
         const k = Math.min(1, Math.max(0, (d - 0.55) * 2.2));
         const level = Math.floor(k * 3 + bayer(x, y) * 0.99) / 3;
-        if (level > 0) v = mixColour(v, dark, 0.55 * look.dim * level);
+        if (level > 0) pic.blend(x, y, dark, 0.55 * look.dim * level);
       }
-      if (look.flash > 0) {
-        const f = look.flash * Math.max(0.25, 1 - Math.hypot(x - fx0, (y - fy0) * 1.3) / 160);
-        v = mixColour(v, mixColour(rc, 0xffffffff, 0.35), f);
-      }
-      pic.px[i] = v;
+      if (look.flash > 0)
+        pic.blend(x, y, flash, look.flash * Math.max(0.25, 1 - Math.hypot(x - fx0, (y - fy0) * 1.3) / 160));
     }
 }

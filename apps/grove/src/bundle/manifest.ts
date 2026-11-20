@@ -17,7 +17,20 @@ export interface Box {
   h: number;
 }
 
+/** One member's tree in the bundle: a sprite at the glade's density. */
+export interface TreeArt {
+  /** The sprite's size, in its own (fine) pixels. */
+  w: number;
+  h: number;
+  /** The point of the sprite that stands on the glade's foot. */
+  foot: Point;
+  /** Every picture pixel the tree touches. */
+  box: Box;
+}
+
 export interface GladeManifest {
+  /** Tree pixels per pixel of the clearing, each way: the tree is drawn finer than the welcome's forest. */
+  density: number;
   /** Where every tree meets the ground. */
   foot: { x: number; y: number };
   /** The member's hearth, the small fire beside the tree where cones open. */
@@ -26,9 +39,10 @@ export interface GladeManifest {
   variants: number;
   seasons: string[];
   ambiances: string[];
-  /** Path templates with `{level}`, `{variant}`, `{season}` and `{ambiance}`. */
+  /** The clearing's loop, by `{season}` and `{ambiance}`; its near mask, by `{season}`. */
   loop: string;
   near: string;
+  /** A tree's sprite, by `{level}`, `{variant}`, `{season}` and `{ambiance}`. */
   tree: string;
   /** The front path's row, where characters stand. */
   ground: number;
@@ -36,8 +50,8 @@ export interface GladeManifest {
   cone: Point;
   /** The 1-bit mask of the stones in front of the hearth's fire, which a cone thrown in sinks behind. */
   front: string;
-  /** Each tree's bounding box, by `L<level>-v<variant>-<season>`. */
-  treeBoxes: Map<string, Box>;
+  /** Each tree's sprite, by `L<level>-v<variant>-<season>`. */
+  trees: Map<string, TreeArt>;
 }
 
 export interface EffectsManifest {
@@ -215,13 +229,25 @@ function box(v: unknown, path: string): Box {
   return { x, y, w, h };
 }
 
+function treeArt(v: unknown, path: string): TreeArt {
+  const t = rec(v, path);
+  const size = pair(field(t, "size", path), `${path}.size`);
+  return {
+    w: size.x,
+    h: size.y,
+    foot: pair(field(t, "foot", path), `${path}.foot`),
+    box: box(field(t, "box", path), `${path}.box`),
+  };
+}
+
 export function readManifest(json: unknown): Manifest {
   const m = rec(json, "manifest");
   const canvas = rec(field(m, "canvas", "manifest"), "canvas");
   const g = rec(field(m, "glade", "manifest"), "glade");
-  const boxes = rec(field(g, "tree_boxes", "glade"), "glade.tree_boxes");
+  const trees = rec(field(g, "trees", "glade"), "glade.trees");
   const foot = pair(field(g, "foot", "glade"), "glade.foot");
   const glade: GladeManifest = {
+    density: Math.max(1, int(field(g, "density", "glade"), "glade.density")),
     foot,
     // Bundles before the hearth: where it stands in the ones after.
     hearth: "hearth" in g ? pair(g["hearth"], "glade.hearth") : { x: foot.x + 44, y: foot.y + 8 },
@@ -235,7 +261,7 @@ export function readManifest(json: unknown): Manifest {
     ground: num(field(g, "ground", "glade"), "glade.ground"),
     cone: pair(field(g, "cone", "glade"), "glade.cone"),
     front: str(field(g, "front", "glade"), "glade.front"),
-    treeBoxes: new Map(Object.entries(boxes).map(([k, v]) => [k, box(v, `glade.tree_boxes.${k}`)])),
+    trees: new Map(Object.entries(trees).map(([k, v]) => [k, treeArt(v, `glade.trees.${k}`)])),
   };
   if (glade.levels.length === 0 || glade.variants < 1 || glade.seasons.length === 0)
     throw new Error("manifest: the glade has no loops");
@@ -411,7 +437,7 @@ export interface GladeWant {
   ambiance: Ambiance;
 }
 
-/** One glade loop: its files and its tree's box. */
+/** The glade for one member: the clearing's loop, their tree's sprite and where it stands. */
 export interface GladePick {
   level: number;
   variant: number;
@@ -422,10 +448,13 @@ export interface GladePick {
   loopPath: string;
   treePath: string;
   nearPath: string;
+  /** Every picture pixel the tree touches. */
   box: Box;
+  /** The buffer pixel the sprite's top left corner goes on, at the glade's density. */
+  at: Point;
 }
 
-/** The loop for a member's tree: the nearest level the bundle has, their variant, the season and light. */
+/** The glade for a member's tree: the nearest level the bundle has, their variant, the season and light. */
 export function pickGlade(g: GladeManifest, want: GladeWant): GladePick {
   const level = g.levels.reduce(
     (best, l) => (Math.abs(l - want.level) < Math.abs(best - want.level) ? l : best),
@@ -436,6 +465,7 @@ export function pickGlade(g: GladeManifest, want: GladeWant): GladePick {
   const ambiance: Ambiance = g.ambiances.includes(want.ambiance) ? want.ambiance : "dusk";
   const values = { level, variant, season, ambiance };
   const tree = fill("L{level}-v{variant}-{season}", values);
+  const art = g.trees.get(tree);
   return {
     level,
     variant,
@@ -445,6 +475,7 @@ export function pickGlade(g: GladeManifest, want: GladeWant): GladePick {
     loopPath: fill(g.loop, values),
     treePath: fill(g.tree, values),
     nearPath: fill(g.near, values),
-    box: g.treeBoxes.get(tree) ?? { x: g.foot.x - 4, y: g.foot.y - 10, w: 9, h: 11 },
+    box: art?.box ?? { x: g.foot.x - 4, y: g.foot.y - 10, w: 9, h: 11 },
+    at: { x: g.foot.x * g.density - (art?.foot.x ?? 0), y: g.foot.y * g.density - (art?.foot.y ?? 0) },
   };
 }
