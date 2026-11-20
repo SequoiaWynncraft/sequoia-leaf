@@ -18,6 +18,64 @@ const rows =
     return ch === "." ? null : (key[ch] ?? null);
   };
 
+/**
+ * The world's one tone: quiet and a little deep, as the lawn is. A drawn tile keeps its drawing,
+ * but its colours are pulled in toward their own middle and set a little darker, by how loud that
+ * material was drawn: [how much contrast is kept, how light it stays], by the start of its name.
+ */
+const TONE: readonly (readonly [string, number, number])[] = [
+  ["window", 1, 1],
+  ["log_seat", 0.7, 0.9],
+  ["log_top", 0.75, 0.88],
+  ["log", 0.58, 0.8],
+  ["leaves", 0.6, 0.88],
+  ["cobble", 0.62, 0.84],
+  ["stone_bricks", 0.7, 0.86],
+  ["grass_side", 0.65, 0.9],
+  ["grass_top", 0.55, 0.86],
+  ["grass", 0.8, 1],
+  ["fern", 0.8, 1],
+  ["dirt", 0.7, 0.95],
+  ["podzol", 0.7, 0.95],
+  ["path", 0.7, 0.95],
+  ["mushroom", 0.9, 0.92],
+  ["dandelion", 0.9, 0.92],
+  ["poppy", 0.9, 0.92],
+  ["cornflower", 0.9, 0.92],
+  ["daisy", 0.9, 0.9],
+  ["sapling", 0.85, 0.92],
+  ["wool", 0.8, 0.88],
+];
+function calm(
+  name: string,
+  d: { key: Readonly<Record<string, string>>; rows: readonly string[] },
+): Record<string, string> {
+  const [, keep, level] = TONE.find(([start]) => name.startsWith(start)) ?? ["", 0.7, 0.9];
+  const mid = [0, 0, 0];
+  let n = 0;
+  for (const row of d.rows)
+    for (const ch of row) {
+      const hex = d.key[ch];
+      if (!hex) continue;
+      for (let i = 0; i < 3; i++) mid[i]! += parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+      n++;
+    }
+  return Object.fromEntries(
+    Object.entries(d.key).map(([k, hex]) => [
+      k,
+      `#${[0, 1, 2]
+        .map((i) => {
+          const m = mid[i]! / Math.max(1, n);
+          const v = (m + (parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) - m) * keep) * level;
+          return Math.round(Math.max(0, Math.min(255, v)))
+            .toString(16)
+            .padStart(2, "0");
+        })
+        .join("")}`,
+    ]),
+  );
+}
+
 /** One tile for every face of the lantern's small boxes: frame, glass, cap, chain. */
 const lantern: Paint = (x, y) => {
   if (y <= 3) return "#2c1e25";
@@ -47,7 +105,7 @@ const FLAME = [
 ];
 
 export const TILES: Record<string, Paint> = {
-  ...Object.fromEntries(Object.entries(DRAWN).map(([name, d]) => [name, rows(d.rows, d.key)])),
+  ...Object.fromEntries(Object.entries(DRAWN).map(([name, d]) => [name, rows(d.rows, calm(name, d))])),
   lantern,
   flame: rows(FLAME, { o: "#e67967", y: "#f5b95e", w: "#fff3cf" }),
   cone: (x, y) => ((x + y) & 1 ? ((x ^ y) & 2 ? "#6b3d1f" : "#94582c") : "#3a1f12"),
