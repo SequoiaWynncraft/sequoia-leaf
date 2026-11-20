@@ -31,7 +31,7 @@ const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(
  */
 function ridges(S: number, put: Put, seed: number, lying: boolean): void {
   const A = lying ? 16 : S;
-  const gaps = lying ? [5, 4, 4, 3] : [4, 6, 3, 5, 7, 4, 5, 3, 6, 5, 4, 7, 5];
+  const gaps = lying ? [5, 4, 4, 3] : [3, 7, 4, 9, 3, 6, 5, 8, 3, 6, 4, 6];
   const home: number[] = [];
   gaps.reduce((at, g) => (home.push(at), at + g), lying ? 15 : 1);
   const K = home.length;
@@ -120,20 +120,49 @@ const rows = (art: readonly string[], key: Record<string, string>): Paint => {
   if (art.length !== 16 || art.some((r) => r.length !== 16)) throw new Error("a hand-drawn tile is 16 rows of 16");
   return (x, y) => key[art[y]![x]!] ?? null;
 };
-addTile(
-  "log_top",
-  rows(LOG_END, {
-    a: BARK[1],
-    b: BARK[2],
-    c: BARK[3],
-    s: HEART[3],
-    t: HEART[4],
-    h: HEART[2],
-    r: HEART[1],
-    p: HEART[0],
-    x: HEART[0],
-  }),
-);
+const LOG_END_B = [
+  "babbcbbabbbbcbab",
+  "absstsssssssstba",
+  "bsshhhhhhhhhhssb",
+  "bshhrrrrrrhhhhsc",
+  "cshrhhhhhhrrhhsb",
+  "bshrhrrrrhhhrhsb",
+  "bthrhrpphrhhrhsb",
+  "bshrhrpphrxxxxtb",
+  "ashrhhrrrhhhrhsb",
+  "bshhrhhhhhhrhhsb",
+  "bshhhrrrrrrhhhsa",
+  "cshhhhhhhhhhhhsb",
+  "bshhrrrrhrrrhhsb",
+  "bsshhhhhhhhhhstb",
+  "absssstsssssssba",
+  "bbabbbbcbbabbbab",
+];
+const END_KEY = {
+  a: BARK[1],
+  b: BARK[2],
+  c: BARK[3],
+  s: HEART[3],
+  t: HEART[4],
+  h: HEART[2],
+  r: HEART[1],
+  p: HEART[0],
+  x: HEART[0],
+};
+const ENDS_DRAWN: Paint[] = [
+  rows(LOG_END, END_KEY),
+  rows(LOG_END_B, END_KEY),
+  rows(
+    LOG_END_B.map((r) => [...r].reverse().join("")),
+    END_KEY,
+  ),
+  rows([...LOG_END].reverse(), END_KEY),
+];
+addTile("log_top", ENDS_DRAWN[0]!);
+// Sixteen tiles, as a wide drawing is cut, so that neighbouring logs in a pile show different ends.
+for (let row = 0; row < 4; row++)
+  for (let col = 0; col < 4; col++)
+    addTile(`log_top_m@${col},${row}`, ENDS_DRAWN[(col * 3 + row * 5 + (col & row)) % 4]!);
 
 // ---------- sawn boards ----------
 
@@ -149,8 +178,11 @@ macro("planks_m", 2, PLANK, (S, put) => {
       const base = 3 - DARKER[b]!;
       const dx = mod(X - ENDS[b]!, S);
       let t: number;
-      if (r === 3) t = dx === 0 ? 0 : 1;
-      else if (dx === 0) t = 1;
+      if (r === 3) {
+        const near = dx <= 2 || dx >= S - 2;
+        const run = ihash(Math.floor((X + b * 9) / 4), b, 3, 311);
+        t = dx === 0 ? 0 : near || run < 0.4 ? base - 2 : base - 1;
+      } else if (dx === 0) t = 1;
       else if (r === 0) {
         const run = ihash(Math.floor((X + b * 5) / 5), b, 1, 311);
         t = dx === 1 ? base + 2 : run < 0.25 ? base + 2 : run > 0.78 ? base : base + 1;
