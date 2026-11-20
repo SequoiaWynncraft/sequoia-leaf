@@ -5,7 +5,7 @@
  * the debug strip.
  */
 
-import { Canvas, drawText, mix, textWidth, UI } from "../../ui/hud.ts";
+import { Canvas, drawText, mix, textWidth, UI, wrap } from "../../ui/hud.ts";
 
 type Rgb = readonly [number, number, number];
 
@@ -266,7 +266,9 @@ export function drawHud(c: Canvas, m: HudModel, fonts: boolean): HudHits {
   if (m.label) drawLabel(c, m.label);
   if (m.card) drawCard(c, m.card);
   if (m.tooltip) {
-    const r = drawTooltip(c, m.tooltip);
+    // Below the header and the feed chip, never over them.
+    const top = Math.max(header.y + header.h, chip.y + chip.h) + 3;
+    const r = drawTooltip(c, m.tooltip, top);
     hits.action = r.action;
     hits.panels.push(r.panel);
   }
@@ -281,19 +283,29 @@ function fit(text: string, width: number): string {
   return `${t.trimEnd()}…`;
 }
 
-function drawTooltip(c: Canvas, tip: Tooltip): { panel: Rect; action: Rect | null } {
+/**
+ * A tooltip by its point, on the screen and below `top`: on a screen too narrow for its lines they
+ * wrap, and its title and action shorten, so nothing runs past its frame.
+ */
+function drawTooltip(c: Canvas, tip: Tooltip, top: number): { panel: Rect; action: Rect | null } {
   const pad = 4;
   const headW = tip.head ? 10 : 0;
-  const titleW = headW + textWidth(tip.title);
-  const lineW = Math.max(0, ...tip.lines.map((l) => textWidth(l.text)));
-  const actW = tip.action ? 7 + textWidth(tip.action.text) : 0;
+  const room = c.W - 4 - pad * 2 - 1;
+  const title = fit(tip.title, room - headW);
+  const lines = tip.lines.flatMap((l) => wrap(l.text, room).map((text) => ({ text, colour: l.colour })));
+  const actText = tip.action ? fit(tip.action.text, room - 7) : "";
+  const titleW = headW + textWidth(title);
+  const lineW = Math.max(0, ...lines.map((l) => textWidth(l.text)));
+  const actW = tip.action ? 7 + textWidth(actText) : 0;
   const w = Math.min(c.W - 4, Math.max(titleW, lineW, actW) + pad * 2 + 1);
-  const h = pad + 10 + tip.lines.length * 10 + (tip.action ? 12 : 0) + pad - 1;
+  const h = pad + 10 + lines.length * 10 + (tip.action ? 12 : 0) + pad - 1;
   let x = Math.round(tip.ax + 8);
   let y = Math.round(tip.ay - h - 6);
   if (x + w > c.W - 2) x = Math.round(tip.ax - w - 8);
   x = Math.max(2, Math.min(c.W - w - 2, x));
-  y = Math.max(20, Math.min(c.H - h - 22, y));
+  // Above its point if there is room under the panels, otherwise below it.
+  if (y < top) y = Math.round(tip.ay + 8);
+  y = Math.max(top, Math.min(c.H - h - 22, y));
   // Minecraft's tooltip: a near-black violet body inside a purple frame.
   c.panel(x, y, w, h, UI.purple, 0.95, TOOLTIP_BODY);
   c.border(x + 1, y + 1, w - 2, h - 2, UI.purpleDark, 0.9);
@@ -304,9 +316,9 @@ function drawTooltip(c: Canvas, tip: Tooltip): { panel: Rect; action: Rect | nul
     tip.head.forEach((px, i) => c.px(tx + (i % 8), ty + Math.floor(i / 8), px));
     tx += 11;
   }
-  drawText(c, tip.title, tx, ty + 1, tip.titleColour, { shadow: true });
+  drawText(c, title, tx, ty + 1, tip.titleColour, { shadow: true });
   ty += 11;
-  for (const l of tip.lines) {
+  for (const l of lines) {
     drawText(c, l.text, x + pad, ty, l.colour, { shadow: true });
     ty += 10;
   }
@@ -316,7 +328,7 @@ function drawTooltip(c: Canvas, tip: Tooltip): { panel: Rect; action: Rect | nul
     c.rect(x + pad, ty - 2, w - pad * 2, 1, UI.purpleDark, 0.9);
     const col = tip.action.hot ? mix(tip.action.colour, [255, 255, 255], 0.35) : tip.action.colour;
     c.icon(DROP_ICON, ICON_LEGEND, x + pad, ty + 1);
-    drawText(c, tip.action.text, x + pad + 7, ty + 1, col, { shadow: true });
+    drawText(c, actText, x + pad + 7, ty + 1, col, { shadow: true });
     action = { x: x + 1, y: ty - 2, w: w - 2, h: 12 };
   }
   return { panel: { x, y, w, h }, action };
