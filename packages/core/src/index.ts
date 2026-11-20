@@ -1,5 +1,33 @@
 export { type AchievementAward, type AchievementRules, leafForAward } from "./achievements.ts";
 export { type Activity, type ActivityKind, RAID_KEYS, type RaidKey, raidKeyForName, RAIDS } from "./activity.ts";
+export {
+  announcesCone,
+  assignSpots,
+  type Banner,
+  bannerAt,
+  bloomCyclesBetween,
+  bloomFrom,
+  bondOf,
+  CARE_TOOLS,
+  type CareTool,
+  chargesAt,
+  type ConePull,
+  GROVE_RANKS,
+  type GroveRank,
+  type GroveRules,
+  ODDS_SCALE,
+  openCone,
+  openCones,
+  rankIndex,
+  rankOfSpirit,
+  type RankRule,
+  type RateCard,
+  rateCard,
+  ROLL_RANGE,
+  spendCharge,
+  treeOf,
+  treeVariant,
+} from "./grove.ts";
 export { isLeaf, type Leaf, leaf, MAX_LEAF } from "./leaf.ts";
 export {
   type Account,

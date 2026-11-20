@@ -1,5 +1,6 @@
 import type { AchievementRules } from "./achievements.ts";
 import { type Activity, RAID_KEYS, type RaidKey } from "./activity.ts";
+import type { GroveRules } from "./grove.ts";
 import type { QuestReward, QuestRules, QuestSlot, QuestTemplate } from "./quests.ts";
 
 /**
@@ -11,6 +12,7 @@ export interface Rules {
   readonly quests: QuestRules;
   readonly levels: LevelRules;
   readonly achievements: AchievementRules;
+  readonly grove: GroveRules;
 }
 
 export interface EarningRules {
@@ -119,6 +121,45 @@ const ACHIEVEMENT_RULES: AchievementRules = {
   ]),
 };
 
+// The Grove's cones, as the prototype client tuned them (apps/grove's rules.ts). A
+// cone costs 400 Leaf, about four raids' worth for one member; a Treant or better
+// comes within 40, so about 16,000 Leaf, and pity carries over between banners.
+const GROVE_RULES: GroveRules = {
+  conePrice: 400,
+  coneBatches: [1, 10],
+  ranks: [
+    {
+      rank: "leafkin",
+      name: "Leafkin",
+      odds: 4000,
+      spirits: ["glarp", "glerp", "glirp", "glorp", "glurp", "glyrp", "gleep"],
+    },
+    { rank: "sapling", name: "Sapling", odds: 2700, spirits: ["mossmote", "slug", "crab"] },
+    { rank: "sprite", name: "Sprite", odds: 1600, spirits: ["chickaree", "emberkit"] },
+    { rank: "dryad", name: "Dryad", odds: 900, spirits: ["fog-owl", "crab-08"] },
+    { rank: "druid", name: "Druid", odds: 500, spirits: ["moth", "worm"] },
+    { rank: "treant", name: "Treant", odds: 250, spirits: ["rock", "greg"] },
+    { rank: "yggdrasil", name: "Yggdrasil", odds: 50, spirits: ["white-fox"] },
+  ],
+  pity: { cones: 40, rank: "treant" },
+  banners: [
+    // The first banner: The Canyon Colossus's cone season, its face the Rock. It runs
+    // until the next banner is added here.
+    { id: "tcc", title: "The Canyon Colossus", featured: "rock", featuredShare: 5000, from: Date.UTC(2026, 10, 20) },
+  ],
+  verdant: { odds: 400, copy: 4 },
+  bondMax: 5,
+  bloomMax: 10,
+  raidBloom: 1,
+  // A charge comes back every four hours and six bank up, so a member who visits
+  // once a day finds a full bank and loses nothing by missing a day.
+  chargeSeconds: 4 * 60 * 60,
+  chargeMax: 6,
+  careBloom: 1,
+  treeVariants: 3,
+  announceFrom: "dryad",
+};
+
 export const DEFAULT_RULES: Rules = {
   earning: {
     leafPerRaidSeasonRating: 1,
@@ -143,6 +184,7 @@ export const DEFAULT_RULES: Rules = {
     leafGrowthPerLevel: 25,
   },
   achievements: ACHIEVEMENT_RULES,
+  grove: GROVE_RULES,
 };
 
 /**
