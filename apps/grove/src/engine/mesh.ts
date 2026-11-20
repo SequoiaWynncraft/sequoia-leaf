@@ -8,7 +8,7 @@ import { ihash } from "./rand.ts";
 import type { World } from "./world.ts";
 
 type V3 = readonly [number, number, number];
-const FACES: readonly { n: V3; c: readonly [V3, V3, V3, V3] }[] = [
+export const FACES: readonly { n: V3; c: readonly [V3, V3, V3, V3] }[] = [
   {
     n: [1, 0, 0],
     c: [
@@ -65,7 +65,7 @@ const FACES: readonly { n: V3; c: readonly [V3, V3, V3, V3] }[] = [
   },
 ];
 
-const uvOf = (face: number, x: number, y: number, z: number): [number, number] =>
+export const uvOf = (face: number, x: number, y: number, z: number): [number, number] =>
   face === 0
     ? [1 - z, y]
     : face === 1

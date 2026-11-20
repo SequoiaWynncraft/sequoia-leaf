@@ -1,7 +1,10 @@
 /** Writes every tile to one sheet, each shown 3x3 so its seams can be judged: `bun review/atlas.ts <out.png> [scale]`. */
 import { deflateSync } from "node:zlib";
 
-import { paintTile, TILE, TILE_NAMES } from "../src/art/tiles.ts";
+import { paintTile, TILE, tileNames } from "../src/art/tiles.ts";
+import "../src/engine/actors.ts";
+
+const TILE_NAMES = tileNames();
 
 const [out = "/tmp/grove-atlas.png", scaleArg = "4"] = process.argv.slice(2);
 const scale = Number(scaleArg);

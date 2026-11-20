@@ -65,28 +65,25 @@ const bark = (ramp: readonly string[]): Paint => {
 
 /** Foliage in clumps, each lit from the upper right, with the sky showing between them. */
 const leaves = (ramp: readonly string[], seed: number, holes: number): Paint => {
-  const blobs = Array.from({ length: 17 }, (_, i) => ({
-    cx: ihash(i, 1, 0, seed) * 16,
-    cy: ihash(i, 2, 0, seed) * 16,
-    r: 1.9 + ihash(i, 3, 0, seed) * 1.2,
-  }));
-  return (x, y) => {
-    let best = 9;
-    let bx = 0;
-    let by = 0;
-    for (const b of blobs) {
-      const dx = wrap(x + 0.5 - b.cx) / b.r;
-      const dy = wrap(y + 0.5 - b.cy) / b.r;
-      const d = Math.hypot(dx, dy);
-      if (d < best) {
-        best = d;
-        bx = dx;
-        by = dy;
-      }
+  // Sprays of needles: short strokes climbing to the left or right, each lighter toward its tip.
+  const tone = new Int8Array(256).fill(-1);
+  for (let i = 0; i < 30; i++) {
+    const x = Math.floor(ihash(i, 1, 0, seed) * 16);
+    const y = Math.floor(ihash(i, 2, 0, seed) * 16);
+    const dir = ihash(i, 3, 0, seed) < 0.5 ? 1 : -1;
+    const len = 3 + Math.floor(ihash(i, 4, 0, seed) * 3);
+    for (let k = 0; k < len; k++) {
+      const px = (x + dir * k + 160) & 15;
+      const py = (y - k + 160) & 15;
+      const beside = (px + dir + 16) & 15;
+      if (tone[py * 16 + beside]! < 1) tone[py * 16 + beside] = k >= len - 2 ? 2 : 1;
+      tone[py * 16 + px] = k === len - 1 ? 3 : k >= len - 3 ? 2 : 1;
     }
-    if (best > 1.02) return ihash(x, y, 7, seed) < holes ? null : ramp[0]!;
-    const light = bx * 0.5 - by * 0.75 + (ihash(x, y, 9, seed) - 0.5) * 0.5;
-    return light > 0.42 ? ramp[3]! : light > -0.1 ? ramp[2]! : ramp[1]!;
+  }
+  return (x, y) => {
+    const t = tone[y * 16 + x]!;
+    if (t < 0) return ihash(x, y, 7, seed) < holes ? null : ramp[0]!;
+    return ramp[t]!;
   };
 };
 
@@ -109,9 +106,9 @@ const dirt = speckle(DIRT, 31, 2);
 
 /** The redwood floor where no moss grows: a litter of fallen needles, rust on dark earth. */
 const duff: Paint = (x, y) => {
-  const needle = ihash(x >> 1, y, 1, 36) > 0.8 || ihash(x, y >> 1, 2, 37) > 0.86;
-  if (needle) return ihash(x, y, 3, 38) > 0.6 ? "#763332" : "#602714";
-  return speckle(DIRT.slice(0, 3), 39, 2)(x, y);
+  const needle = ihash(x >> 1, y, 1, 36) > 0.9 || ihash(x, y >> 1, 2, 37) > 0.93;
+  if (needle) return ihash(x, y, 3, 38) > 0.6 ? "#602714" : "#471d10";
+  return speckle(["#241612", "#2c1810", "#34150d"], 39, 3)(x, y);
 };
 
 const mossSide: Paint = (x, y) => {
@@ -151,7 +148,10 @@ const planks: Paint = (x, y) => {
   if (row === 3) return PLANK[0]!;
   const end = (board * 7 + 3) & 15;
   if (x === end) return PLANK[0]!;
-  if (row === 0) return ihash(x >> 1, board, 1, 51) < 0.7 ? PLANK[3]! : PLANK[2]!;
+  const knot = Math.hypot(x - ((board * 5 + 9) & 15), (row - 1) * 1.6);
+  if (board % 2 === 0 && knot < 0.6) return PLANK[0]!;
+  if (board % 2 === 0 && knot < 1.7) return PLANK[1]!;
+  if (row === 0) return ihash(x >> 1, board, 1, 51) < 0.4 ? PLANK[3]! : PLANK[2]!;
   return ihash(x >> 2, y, 2, 52) < 0.3 ? PLANK[1]! : PLANK[2]!;
 };
 
@@ -160,7 +160,7 @@ const logTop: Paint = (x, y) => {
   if (d > 6.9) return BARK[1]!;
   if (d > 6.1) return BARK[3]!;
   if (d < 1) return BARK[3]!;
-  return Math.floor(d * 0.95) % 2 ? BARK[4]! : BARK[5]!;
+  return Math.floor(d * 0.95) % 2 ? BARK[3]! : BARK[4]!;
 };
 
 /** Roof slates in courses, each course half a slate along from the last. */
@@ -322,9 +322,13 @@ export const TILES: Record<string, Paint> = {
   flame: rows(FLAME, { o: "#e67967", y: "#f5b95e", w: "#fff3cf" }),
 };
 
-export const TILE_NAMES = Object.keys(TILES);
+/** Every tile's name, in the order of its layer in the texture. Tiles can be added until the texture is built. */
+export const tileNames = (): string[] => Object.keys(TILES);
+export const addTile = (name: string, paint: Paint): void => {
+  TILES[name] = paint;
+};
 export const tileIndex = (name: string): number => {
-  const i = TILE_NAMES.indexOf(name);
+  const i = tileNames().indexOf(name);
   if (i < 0) throw new Error(`no tile ${name}`);
   return i;
 };
@@ -355,3 +359,65 @@ export function paintTile(name: string): Uint8Array {
   for (let i = 0; i < TILE * TILE; i++) if (!out[i * 4 + 3]) out.set([sum[0]! / n, sum[1]! / n, sum[2]! / n, 0], i * 4);
   return out;
 }
+
+// ---------- the campfire's things ----------
+
+/** A flame two tiles tall, drawn afresh for each frame: licks that lean and rise, a pale core, a few sparks. */
+const flameAt =
+  (frame: number) =>
+  (x: number, up: number): string | null => {
+    const dx = Math.abs(x - 7.5);
+    const lick = Math.sin(x * 1.3 + frame * 1.7) * 2.2 + Math.sin(x * 0.7 - frame * 2.3) * 1.6;
+    const top = 23 - dx * dx * 0.42 + lick;
+    if (up > top) return up < top + 6 && ihash(x, up, frame, 61) > 0.985 ? "#f5b95e" : null;
+    const k = up / Math.max(top, 1);
+    if (dx < 3.2 - k * 3 && k < 0.55) return "#fff3cf";
+    if (dx < 5 - k * 4.2 && k < 0.8) return "#f7c75a";
+    return k > 0.85 ? "#c8452c" : "#f08a3c";
+  };
+for (let f = 0; f < 4; f++) {
+  TILES[`flame${f}_lo`] = (x, y) => flameAt(f)(x, 15 - y);
+  TILES[`flame${f}_hi`] = (x, y) => flameAt(f)(x, 31 - y);
+}
+
+/** The guild's banner, twelve pixels wide: a gold sun on purple, cut to two points at the foot. */
+const bannerAt = (x: number, down: number): string | null => {
+  if (x < 2 || x > 13 || down > 27) return null;
+  if (down > 22 && Math.abs(x - 7.5) < (down - 22) * 1.15) return null;
+  if (x === 2 || x === 13 || down === 0) return "#d49045";
+  const r = Math.hypot(x - 7.5, down - 10.5);
+  if (r < 2.7) return r < 1.4 ? "#fff3cf" : "#f5b95e";
+  const ray =
+    (Math.abs(x - 7.5) < 0.6 ||
+      Math.abs(down - 10.5) < 0.6 ||
+      Math.abs(Math.abs(x - 7.5) - Math.abs(down - 10.5)) < 0.6) &&
+    r < 5.2 &&
+    r > 3.4;
+  if (ray) return "#d49045";
+  if (down === 19 && x > 4 && x < 11) return "#d49045";
+  return x === 5 || x === 10 ? "#472365" : "#54286a";
+};
+TILES.banner_top = (x, y) => bannerAt(x, y);
+TILES.banner_foot = (x, y) => bannerAt(x, y + 16);
+
+/** A woven rug: rust, with a gold and purple lattice. */
+TILES.rug = (x, y) => {
+  const d = (x + y) & 7;
+  const e = (x - y + 16) & 7;
+  if (d === 0 || e === 0) return d === e ? "#f5b95e" : "#d49045";
+  if (d === 4 && e === 4) return "#54286a";
+  return ihash(x, y, 1, 71) < 0.25 ? "#602714" : "#763332";
+};
+TILES.crate = (x, y) => {
+  if (x === 0 || y === 0 || x === 15 || y === 15) return PLANK[0]!;
+  if (x === 1 || y === 1 || x === 14 || y === 14) return PLANK[3]!;
+  if (Math.abs(x - y) < 1.5) return PLANK[1]!;
+  return planks(x, y);
+};
+/** The bed of the fire: charred wood with coals glowing through. */
+TILES.embers = (x, y) => {
+  const hot = noise2(x / 3, y / 3, 81, 0) + ihash(x, y, 1, 82) * 0.3;
+  return hot > 0.95 ? "#fff3cf" : hot > 0.75 ? "#f5b95e" : hot > 0.55 ? "#e67967" : hot > 0.4 ? "#763332" : "#230e0c";
+};
+TILES.bulb = () => "#ffe9b0";
+TILES.wire = () => "#241612";

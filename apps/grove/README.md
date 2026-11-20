@@ -11,7 +11,9 @@ bun review/atlas.ts out.png 4       # every tile on one sheet, each shown 3x3
 bun review/drive.ts http://grove.test/ shots steps.json dist   # screenshots in headless Chromium
 ```
 
-`?view=hero|tree|deck|floor|tall` picks a camera. Drag to look round, scroll or pinch to zoom.
+`?scene=camp` (the default) is the campfire at nightfall; `?scene=glade` is the first glade with the
+giant tree. `?view=hero|close|side|tall` picks a camera and `?night=0..1` the hour. Drag to look
+round, scroll or pinch to zoom.
 
 ## The one rule
 
@@ -28,10 +30,14 @@ light model, not from matching a painting by hand.
   sunlight and how tucked into a corner it is, so soft shading comes free with every build.
 - `src/engine/render.ts`: three.js. One shader for all blocks, a pixel-art sky worked out in
   screen cells (bands, streak clouds, stars, three rows of far spruces), fog, fireflies.
+- `src/engine/actors.ts`: everything that moves, built of the same boxes and tiles at the same pixel
+  size: people, the leafling pet, the cat, flames, banners, strings of lights. Each face takes the
+  light of the air in front of it, so a figure by the fire is lit by it.
+- `src/gen/camp.ts`: the campfire scene.
 - `src/gen/sequoia.ts`: grows a sequoia of any age from a few numbers.
 - `src/gen/glade.ts`: the prototype's world: the giant, its house and bridge, the forest round it.
 
 ## Not done
 
 Lint does not pass yet (the repository forbids non-null assertions and this was written fast).
-No tests. No characters, no interface, no saving, no editing of the world.
+No tests. No interface, no saving, no editing of the world. Figures cast no shadows.

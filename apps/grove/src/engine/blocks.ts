@@ -120,6 +120,46 @@ const DEFS: BlockDef[] = [
       { from: [9, 2, 1], to: [12, 5, 15], tiles: all("bark") },
     ],
   },
+  { name: "rug", opaque: false, boxes: [box([0, 0, 0], [16, 1, 16], "rug")] },
+  { name: "crate", opaque: true, tiles: all("crate") },
+  /** Nothing to see: a point of light, for strings of bulbs. */
+  { name: "light", opaque: false, light: 10 },
+  {
+    name: "firepit",
+    opaque: false,
+    light: 15,
+    boxes: [
+      box([3, 0, 3], [13, 2, 13], "embers", true),
+      ...(
+        [
+          [0, 4],
+          [1, 10],
+          [5, 13],
+          [11, 12],
+          [13, 6],
+          [12, 1],
+          [6, 0],
+          [1, 0],
+        ] as const
+      ).map(([x, z], i) => box([x, 0, z], [x + 3, 2 + (i % 2), z + 3], "stone")),
+      { from: [2, 2, 6], to: [14, 5, 9], tiles: all("bark") },
+      { from: [7, 3, 2], to: [10, 6, 14], tiles: all("bark") },
+    ],
+  },
+  ...(["slate", "planks"] as const).flatMap((m) =>
+    (
+      [
+        ["e", [8, 8, 0], [16, 16, 16]],
+        ["w", [0, 8, 0], [8, 16, 16]],
+        ["s", [0, 8, 8], [16, 16, 16]],
+        ["n", [0, 8, 0], [16, 16, 8]],
+      ] as const
+    ).map(([dir, from, to]): BlockDef => ({
+      name: `${m}_stairs_${dir}`,
+      opaque: false,
+      boxes: [box([0, 0, 0], [16, 8, 16], m), box(from, to, m)],
+    })),
+  ),
 ];
 
 export const BLOCKS: readonly BlockDef[] = DEFS;
