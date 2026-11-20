@@ -17,9 +17,9 @@ export interface Box {
   h: number;
 }
 
-/** One member's tree in the bundle: a sprite at the glade's density. */
+/** One member's tree in the bundle: a sprite at the picture's own pixel size. */
 export interface TreeArt {
-  /** The sprite's size, in its own (fine) pixels. */
+  /** The sprite's size. */
   w: number;
   h: number;
   /** The point of the sprite that stands on the glade's foot. */
@@ -29,8 +29,6 @@ export interface TreeArt {
 }
 
 export interface GladeManifest {
-  /** Tree pixels per pixel of the clearing, each way: the tree is drawn finer than the welcome's forest. */
-  density: number;
   /** Where every tree meets the ground. */
   foot: { x: number; y: number };
   /** The member's hearth, the small fire beside the tree where cones open. */
@@ -116,7 +114,10 @@ export interface ForestLayer {
   width: number;
 }
 
-/** A row of members' trees: drawn at `scale` of a glade tree, standing on `foot`. */
+/**
+ * A row of members' trees, standing on `foot`: at `scale` 1 the glade's own painted trees, and
+ * behind them their outlines at `scale` of that size, as distant trees. Rows come back to front.
+ */
 export interface ForestRow {
   name: string;
   scale: number;
@@ -247,7 +248,6 @@ export function readManifest(json: unknown): Manifest {
   const trees = rec(field(g, "trees", "glade"), "glade.trees");
   const foot = pair(field(g, "foot", "glade"), "glade.foot");
   const glade: GladeManifest = {
-    density: Math.max(1, int(field(g, "density", "glade"), "glade.density")),
     foot,
     // Bundles before the hearth: where it stands in the ones after.
     hearth: "hearth" in g ? pair(g["hearth"], "glade.hearth") : { x: foot.x + 44, y: foot.y + 8 },
@@ -450,7 +450,7 @@ export interface GladePick {
   nearPath: string;
   /** Every picture pixel the tree touches. */
   box: Box;
-  /** The buffer pixel the sprite's top left corner goes on, at the glade's density. */
+  /** The picture pixel the sprite's top left corner goes on. */
   at: Point;
 }
 
@@ -476,6 +476,6 @@ export function pickGlade(g: GladeManifest, want: GladeWant): GladePick {
     treePath: fill(g.tree, values),
     nearPath: fill(g.near, values),
     box: art?.box ?? { x: g.foot.x - 4, y: g.foot.y - 10, w: 9, h: 11 },
-    at: { x: g.foot.x * g.density - (art?.foot.x ?? 0), y: g.foot.y * g.density - (art?.foot.y ?? 0) },
+    at: { x: g.foot.x - (art?.foot.x ?? 0), y: g.foot.y - (art?.foot.y ?? 0) },
   };
 }

@@ -14,7 +14,6 @@ const MANIFEST = {
   frame_ms: 100,
   frames: 160,
   glade: {
-    density: 2,
     foot: [116, 127],
     hearth: [164, 134],
     levels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
@@ -28,8 +27,8 @@ const MANIFEST = {
     cone: [150, 135],
     front: "glade/hearth-front.png",
     trees: {
-      "L01-v0-normal": { size: [15, 21], foot: [7, 17], box: [112, 118, 8, 11] },
-      "L13-v2-winter": { size: [212, 236], foot: [108, 225], box: [62, 14, 106, 119] },
+      "L01-v0-normal": { size: [6, 7], foot: [2, 8], box: [114, 119, 6, 7] },
+      "L13-v2-winter": { size: [116, 127], foot: [49, 126], box: [67, 1, 116, 127] },
     },
   },
   effects: { aurora: "effects/aurora-{season}.png", sky: "effects/sky-{season}.png", frames: 160 },
@@ -53,8 +52,9 @@ const MANIFEST = {
     gate: 905,
     layers: { far: { depth: 0.5, width: 640 }, ground: { depth: 1, width: 1024 }, near: { depth: 1.3, width: 1255 } },
     rows: [
-      { name: "back", scale: 0.5, foot: 117, haze: 0.3 },
-      { name: "front", scale: 0.72, foot: 128, haze: 0 },
+      { name: "back", scale: 0.3333333333333333, foot: 118 },
+      { name: "middle", scale: 0.5, foot: 121 },
+      { name: "front", scale: 1, foot: 125 },
     ],
     spots: [
       { row: "front", x: 586 },
@@ -83,7 +83,11 @@ const MANIFEST = {
       { x: 672, foot: 132, numbered: false },
       { x: 945, foot: 131, numbered: true },
     ],
-    "index-normal": { back: { "L13-v2": [82, 0, 40, 75, 18, 75] }, front: { "L01-v0": [438, 109, 6, 7, 3, 7] } },
+    "index-normal": {
+      back: { "L13-v2": [82, 0, 40, 75, 18, 75] },
+      middle: {},
+      front: { "L01-v0": [438, 109, 6, 7, 3, 7] },
+    },
   },
   later: { anything: true },
 };
@@ -95,14 +99,13 @@ describe("the bundle's manifest", () => {
     const m = readManifest(MANIFEST);
     expect(m.width).toBe(256);
     expect(m.height).toBe(144);
-    expect(m.glade.density).toBe(2);
     expect(m.glade.foot).toEqual({ x: 116, y: 127 });
     expect(m.glade.hearth).toEqual({ x: 164, y: 134 });
     expect(m.glade.trees.get("L01-v0-normal")).toEqual({
-      w: 15,
-      h: 21,
-      foot: { x: 7, y: 17 },
-      box: { x: 112, y: 118, w: 8, h: 11 },
+      w: 6,
+      h: 7,
+      foot: { x: 2, y: 8 },
+      box: { x: 114, y: 119, w: 6, h: 7 },
     });
     expect(m.effects?.aurora).toBe("effects/aurora-{season}.png");
     expect(m.other.has("later")).toBe(true);
@@ -154,8 +157,9 @@ describe("the bundle's manifest", () => {
     const f = readManifest(MANIFEST).forest;
     expect(f?.layers.near).toEqual({ depth: 1.3, width: 1255 });
     expect(f?.rows.map((r) => [r.name, r.foot])).toEqual([
-      ["back", 117],
-      ["front", 128],
+      ["back", 118],
+      ["middle", 121],
+      ["front", 125],
     ]);
     expect(f?.layers.far).toEqual({ depth: 0.5, width: 640 });
     expect(f?.spots[0]).toEqual({ row: "front", x: 586 });
@@ -176,7 +180,7 @@ describe("the bundle's manifest", () => {
     expect(m.campfire).toBeNull();
     expect(m.forest).toBeNull();
     expect(() =>
-      readManifest({ ...MANIFEST, forest: { ...MANIFEST.forest, spots: [{ row: "middle", x: 1 }] } }),
+      readManifest({ ...MANIFEST, forest: { ...MANIFEST.forest, spots: [{ row: "nearest", x: 1 }] } }),
     ).toThrow("row");
     expect(() => readManifest({ ...MANIFEST, campfire: { ...MANIFEST.campfire, fire: [1] } })).toThrow("campfire.fire");
   });
@@ -280,53 +284,29 @@ describe("the glade's loop", () => {
   test("carries the tree's box from the manifest, and stands its sprite's foot on the glade's", () => {
     const seed = Array.from({ length: 30 }, (_, i) => `member-${i}`).find((s) => variantOf(s, 3) === 0) ?? "";
     const pick = pickGlade(glade, { level: 1, seed, season: "normal", ambiance: "dusk" });
-    expect(pick.box).toEqual({ x: 112, y: 118, w: 8, h: 11 });
-    // The foot (116, 127) at two tree pixels a pixel, less the sprite's own foot (7, 17).
-    expect(pick.at).toEqual({ x: 225, y: 237 });
+    expect(pick.box).toEqual({ x: 114, y: 119, w: 6, h: 7 });
+    // The glade's foot (116, 127), less the sprite's own foot (2, 8).
+    expect(pick.at).toEqual({ x: 114, y: 119 });
   });
 });
 
-describe("a picture finer than its loop", () => {
+describe("the member's tree in the picture", () => {
   const frame = new Uint32Array([1, 2, 3, 4]); // 2x2
   const sprite = { w: 2, h: 2, data: new Uint32Array([0xff0000aa, 0, 0, 0xff0000bb]) };
 
-  test("lays the loop down in blocks and stamps the tree on its own finer grid", () => {
-    const pic = new Picture(2, 2, 2);
+  test("pastes the tree's own pixels over the loop frame, and puts the near layer back over it", () => {
+    const pic = new Picture(2, 2);
     pic.begin(frame);
-    expect([...pic.px.subarray(0, 4)]).toEqual([1, 1, 2, 2]);
-    expect([...pic.px.subarray(8, 12)]).toEqual([3, 3, 4, 4]);
-    pic.stamp(sprite, 1, 0);
-    expect([...pic.px.subarray(0, 4)]).toEqual([1, 0xff0000aa, 2, 2]);
-    expect([...pic.px.subarray(4, 8)]).toEqual([1, 1, 0xff0000bb, 2]);
-  });
-
-  test("draws in picture pixels a block at a time, and puts the near layer back over the tree", () => {
-    const pic = new Picture(2, 2, 2);
-    pic.begin(frame);
-    pic.stamp(sprite, 1, 0);
-    pic.set(1, 1, 9);
-    expect([...pic.px.subarray(8, 12)]).toEqual([3, 3, 9, 9]);
-    expect([...pic.px.subarray(12, 16)]).toEqual([3, 3, 9, 9]);
-    pic.restore({ w: 2, h: 2, bits: new Uint8Array([1, 1, 0, 0]), set: new Uint32Array([0, 1]) });
-    expect([...pic.px.subarray(0, 8)]).toEqual([1, 1, 2, 2, 1, 1, 2, 2]);
-  });
-
-  test("brings back only what a picture-pixel drawing changed", () => {
-    const pic = new Picture(2, 2, 2);
-    pic.begin(frame);
-    pic.stamp(sprite, 1, 0);
-    const before = pic.coarse();
-    const after = before.slice();
-    after[3] = 7;
-    pic.merge(after, before);
-    expect([...pic.px.subarray(0, 4)]).toEqual([1, 0xff0000aa, 2, 2]);
-    expect([...pic.px.subarray(12, 16)]).toEqual([3, 3, 7, 7]);
+    pic.paste(sprite, 0, 0, sprite.w, sprite.h, 0, 0);
+    expect([...pic.px]).toEqual([0xff0000aa, 2, 3, 0xff0000bb]);
+    pic.restore({ w: 2, h: 2, bits: new Uint8Array([1, 0, 0, 0]), set: new Uint32Array([0]) });
+    expect([...pic.px]).toEqual([1, 2, 3, 0xff0000bb]);
   });
 
   test("finds the tree's picture pixels from its sprite, for taps", () => {
-    const mask = treeMask(sprite, { x: 1, y: 0 }, 2, 2, 2);
-    expect([...mask.bits]).toEqual([1, 1, 0, 0]);
-    expect([...mask.set]).toEqual([0, 1]);
+    const mask = treeMask(sprite, { x: 1, y: 0 }, 3, 2);
+    expect([...mask.bits]).toEqual([0, 1, 0, 0, 0, 1]);
+    expect([...mask.set]).toEqual([1, 5]);
   });
 });
 

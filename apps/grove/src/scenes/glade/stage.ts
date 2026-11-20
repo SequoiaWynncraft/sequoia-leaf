@@ -84,23 +84,22 @@ export function places(foot: Point, hearth: Point, cone: Point, ground: number, 
 }
 
 /**
- * The tree's own pixels in the picture's grid, from its sprite: a picture pixel is the tree's when
- * any of the sprite's pixels in its block is. The sprite stands with its top left on buffer pixel
- * `at`, `density` buffer pixels to a picture pixel.
+ * The tree's own pixels in the picture, from its sprite, which stands with its top left on picture
+ * pixel `at`.
  */
-export function treeMask(sprite: Pixels, at: Point, density: number, W: number, H: number): Mask {
-  const key = `${at.x},${at.y},${density},${W},${H}`;
+export function treeMask(sprite: Pixels, at: Point, W: number, H: number): Mask {
+  const key = `${at.x},${at.y},${W},${H}`;
   const hit = MASKS.get(sprite);
   if (hit && hit.key === key) return hit.mask;
   const bits = new Uint8Array(W * H);
   let n = 0;
   for (let y = 0; y < sprite.h; y++) {
-    const py = Math.floor((at.y + y) / density);
+    const py = at.y + y;
     if (py < 0 || py >= H) continue;
     for (let x = 0; x < sprite.w; x++) {
       if ((sprite.data[y * sprite.w + x] ?? 0) >>> 24 < 128) continue;
-      const px = Math.floor((at.x + x) / density);
-      if (px < 0 || px >= W || bits[py * W + px]) continue;
+      const px = at.x + x;
+      if (px < 0 || px >= W) continue;
       bits[py * W + px] = 1;
       n++;
     }
