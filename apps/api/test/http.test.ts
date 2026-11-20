@@ -81,6 +81,8 @@ describe("HTTP", () => {
       "/v1/grove/great",
       "/v1/grove/great/offer",
       "/v1/grove/rates",
+      "/v1/guild/events",
+      "/v1/guild/events/stream",
       "/v1/market/listings",
       "/v1/market/listings/{id}",
       "/v1/market/listings/{id}/buy",

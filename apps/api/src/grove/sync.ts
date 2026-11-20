@@ -1,8 +1,10 @@
-import { type Activity, leafForActivity, type PlayerId, type Rules } from "@sequoia-leaf/core";
+import { type Activity, greatWeek, leafForActivity, type PlayerId, type Rules } from "@sequoia-leaf/core";
 import { Effect, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
 import { Events } from "../events/store.ts";
+import { announceGoalsMet } from "../great/goals.ts";
+import { GuildEvents } from "../guild/store.ts";
 import { PlayerUuid } from "../wire.ts";
 import { Grove } from "./store.ts";
 
@@ -17,6 +19,9 @@ import { Grove } from "./store.ts";
  *   every member it credits is told, with the whole party as Leaf knows it. A
  *   member credited later, when the backend matches their name afterwards, is
  *   told then, and the others are not told twice.
+ * - The guild feed gets each raid's lantern and each war once, the first time
+ *   any member of it is recorded, and a Great Sequoia goal the week's raids or
+ *   wars just met.
  */
 export const growGroveFrom = Effect.fn("growGroveFrom")(function* (
   activities: readonly Activity[],
@@ -25,6 +30,7 @@ export const growGroveFrom = Effect.fn("growGroveFrom")(function* (
 ) {
   const grove = yield* Grove;
   const events = yield* Events;
+  const feed = yield* GuildEvents;
   const sql = yield* SqlClient.SqlClient;
   const partyOf = SqlSchema.findAll({
     Request: Schema.String,
@@ -53,6 +59,30 @@ export const growGroveFrom = Effect.fn("growGroveFrom")(function* (
   const byEvent = Map.groupBy(activities, (activity) => activity.eventKey);
   for (const [eventKey, credited] of byEvent) {
     const party: PlayerId[] = (yield* partyOf(eventKey).pipe(Effect.orDie)).map((row) => row.playerId);
+    const [first] = credited;
+    if (first !== undefined) {
+      const members = yield* feed.members(party);
+      const occurredAt = new Date(first.occurredAt).toISOString();
+      yield* feed.insert(
+        eventKey,
+        first.kind === "raid"
+          ? {
+              type: "grove.raid_lantern",
+              data: { raid: eventKey, raid_name: first.raidName, party: members, occurred_at: occurredAt },
+            }
+          : {
+              type: "guild.war_win",
+              data: {
+                war: eventKey,
+                territory: first.territory,
+                players: members,
+                occurred_at: occurredAt,
+                ...(first.inClaim === undefined ? {} : { in_claim: first.inClaim }),
+              },
+            },
+        now,
+      );
+    }
     for (const activity of credited) {
       const occurredAt = new Date(activity.occurredAt).toISOString();
       yield* events.insert(
@@ -75,5 +105,10 @@ export const growGroveFrom = Effect.fn("growGroveFrom")(function* (
         now,
       );
     }
+  }
+
+  const weeks = new Set(activities.map((activity) => greatWeek(activity.occurredAt).start));
+  for (const week of weeks) {
+    yield* announceGoalsMet(week, now, rules.great);
   }
 });

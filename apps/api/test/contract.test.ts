@@ -206,6 +206,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/me", "GET", "/v1/me");
   await call("GET /v1/me/quests", "GET", "/v1/me/quests");
   await call("GET /v1/me/events", "GET", "/v1/me/events");
+  await call("GET /v1/guild/events", "GET", "/v1/guild/events");
   await app.dispose();
   return recorded;
 }

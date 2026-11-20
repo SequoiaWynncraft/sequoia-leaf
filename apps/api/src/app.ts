@@ -8,6 +8,7 @@ import { Database } from "./db.ts";
 import { Events } from "./events/store.ts";
 import { Great } from "./great/store.ts";
 import { Grove } from "./grove/store.ts";
+import { GuildEvents } from "./guild/store.ts";
 import { ApiRoutes, NotFound } from "./http/handlers.ts";
 import { Ledger } from "./ledger/store.ts";
 import { Market } from "./market/store.ts";
@@ -22,7 +23,8 @@ export const routerConfig = { ignoreTrailingSlash: false };
 
 /**
  * Leaf's stores: the ledger, the events, the quests, the Grove, the Great
- * Sequoia, the marketplace and conversions, on whichever database is provided.
+ * Sequoia, the marketplace, conversions and the guild feed, on whichever
+ * database is provided.
  */
 export const Stores = Layer.mergeAll(
   Events.layer,
@@ -31,6 +33,7 @@ export const Stores = Layer.mergeAll(
   Great.layer,
   Market.layer,
   Conversions.layer,
+  GuildEvents.layer,
 ).pipe(Layer.provideMerge(Ledger.layer));
 
 /** What Leaf reaches outside its own code: its settings, its database, the network and its dice. */

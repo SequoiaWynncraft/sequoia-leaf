@@ -187,6 +187,14 @@ export class ForestApi extends HttpApiGroup.make("forest")
   )
   .prefix("/v1/grove") {}
 
+/** What anyone may see of what happens in the guild, signed in or not, for the Forest to show live. */
+export class GuildApi extends HttpApiGroup.make("guild")
+  .add(
+    HttpApiEndpoint.get("events", "/events", { query: EventPosition, success: Events, error: Invalid }),
+    HttpApiEndpoint.get("stream", "/events/stream", { query: EventPosition, success: EventStream, error: Invalid }),
+  )
+  .prefix("/v1/guild") {}
+
 /** Every way a marketplace or conversion request can be turned down. */
 const TradeErrors = [TradeInvalid, TradeRefused, TradeForbidden, TradeMissing];
 
@@ -307,6 +315,7 @@ export class LeafApi extends HttpApi.make("sequoia-leaf")
   .add(MeApi)
   .add(GroveApi)
   .add(ForestApi)
+  .add(GuildApi)
   .add(MarketApi)
   .add(MarketBrowseApi)
   .add(ConversionsApi)

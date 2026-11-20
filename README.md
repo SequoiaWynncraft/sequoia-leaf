@@ -165,6 +165,8 @@ and `GET /openapi.json` serves the OpenAPI document generated from it.
 | `POST /v1/grove/great/offer`                | Offers Leaf to the Great Sequoia.                          |
 | `GET /v1/grove/rates`                       | The cones' published odds. Public.                         |
 | `GET /v1/grove/forest`                      | Every member's tree in the Forest. Public.                 |
+| `GET /v1/guild/events`                      | What happened in the guild, oldest first. Public.          |
+| `GET /v1/guild/events/stream`               | The same as it happens, as server-sent events. Public.     |
 | `GET /v1/market/listings`                   | Listings taking orders, newest first. Public.              |
 | `GET /v1/market/listings/{id}`              | One listing, however it stands. Public.                    |
 | `POST /v1/market/listings`                  | Lists an item or a service.                                |
@@ -228,7 +230,8 @@ scheduled run.
 
 `contracts/leaf-api-v1.json` holds what the routes above answer for one member
 after a day of play: raids, a defence, a war, a milestone, a level, finished
-quests, a reroll, three marketplace orders and two conversion claims. `apps/api/test/contract.test.ts` makes those calls on the
+quests, a reroll, three marketplace orders and two conversion claims, and the
+guild feed. `apps/api/test/contract.test.ts` makes those calls on the
 real routes and fails when the answers differ from the file, so the file is
 always what Leaf sends, including the order of each list.
 
@@ -480,6 +483,31 @@ not the rate, is what keeps payouts inside the budget.
 
 `GET /v1/conversions/rates`, with no session, publishes each kind's rate,
 counts, cap and member limit, and the month a claim made now would be due from.
+
+## The guild feed
+
+What happens in the guild, for anyone to see as it happens, which the Forest
+shows live. `GET /v1/guild/events` and `GET /v1/guild/events/stream` page and
+stream it exactly as `/v1/me/events` does, without a session. Each event is
+written once by the fact it reports, in the same transaction as the change. It
+carries no more than the Forest already shows: members' ids, and their names as
+the Forest shows them, null for a member who has not opened the Grove.
+
+| Type                    | When                                                     | `data`                                                            |
+| ----------------------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
+| `grove.raid_lantern`    | A raid was first recorded.                               | `raid`, `raid_name`, `party`, `occurred_at`                       |
+| `guild.war_win`         | A war was first recorded.                                | `war`, `territory`, `players`, `occurred_at`, `in_claim` if known |
+| `grove.cone_opened`     | A member opened a cone of Dryad or better.               | `member`, `banner`, `spirit`, `rank`, `verdant`                   |
+| `grove.level_up`        | A member with a tree reached a level for the first time. | `member`, `level`                                                 |
+| `great.goal_met`        | The guild met a Great Sequoia goal for the week.         | `goal`, `kind`, `title`, `target`, `reward`, `week_starts_at`     |
+| `market.listings_added` | Members listed things in an hour that ended.             | `count`, `from`, `to`                                             |
+
+`party`, `players` and `member` are `{ "player_id", "name" }`. Every level is
+told, because each level is a new tree in the Forest's atlas, but only once per
+member and level ever, and only for members with a tree: twelve to reach the
+Giant at level 13, about one a day for an active member at first and fewer
+after. New listings are counted an hour at a time and never named, so nobody
+can post to the Forest by listing.
 
 ## Staff
 

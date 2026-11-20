@@ -8,6 +8,7 @@ import { AppConfig } from "./config.ts";
 import { runCreditSync } from "./earning/run.ts";
 import { payMissedLevels } from "./levels/pay.ts";
 import { autoConfirmOrders } from "./market/actions.ts";
+import { digestListings } from "./market/digest.ts";
 import type { SyncMode, SyncResult } from "./sync/windowed.ts";
 
 /** The minute of each hour whose run re-reads the last week instead of the last few minutes. */
@@ -78,7 +79,11 @@ const offsiteCopies = Effect.gen(function* () {
   );
 });
 
-/** The marketplace's own upkeep: confirms delivered orders nobody disputed in time, paying their sellers. */
+/**
+ * The marketplace's own upkeep, each on its own: confirms delivered orders
+ * nobody disputed in time, paying their sellers, and tells the guild feed how
+ * many listings were made in each hour that ended.
+ */
 const marketUpkeep = Effect.gen(function* () {
   yield* step(
     "Confirming delivered orders",
@@ -87,6 +92,12 @@ const marketUpkeep = Effect.gen(function* () {
       if (confirmed > 0) {
         yield* Effect.logInfo("orders_auto_confirmed").pipe(Effect.annotateLogs({ confirmed }));
       }
+    }),
+  );
+  yield* step(
+    "Counting new listings for the guild feed",
+    Effect.gen(function* () {
+      yield* digestListings(yield* Clock.currentTimeMillis, DEFAULT_RULES.market);
     }),
   );
 });

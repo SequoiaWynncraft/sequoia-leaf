@@ -6,7 +6,6 @@ import {
   nextDailyChargeAt,
   nextTimedWindowAt,
   openQuestBook,
-  type PlayerId,
   type Quest,
   QUEST_SLOTS,
   type QuestSlot,
@@ -14,7 +13,7 @@ import {
   rerollCost,
   timedWindowAt,
 } from "@sequoia-leaf/core";
-import { Clock, Context, Duration, Effect, Layer, Redacted, Ref, Schedule, Stream } from "effect";
+import { Clock, Effect, Layer, Redacted } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder, HttpApiError } from "effect/http-api";
 import { SqlClient } from "effect/sql";
@@ -32,36 +31,31 @@ import {
 import type * as Body from "../api/schemas.ts";
 import { Identities } from "../auth/session.ts";
 import { syncOnDemand } from "../earning/run.ts";
-import { eventJsonText, Events, type StoredEvent } from "../events/store.ts";
+import { Events } from "../events/store.ts";
 import { Ledger } from "../ledger/store.ts";
 import { questJson } from "../quests/json.ts";
 import { rerollQuestFor } from "../quests/reroll.ts";
 import { Quests } from "../quests/store.ts";
 import { ConversionHandlers, ConversionRatesHandlers } from "./conversions.ts";
 import { ForestHandlers, GroveBodyErrorsLive, GroveHandlers } from "./grove.ts";
+import { GuildHandlers } from "./guild.ts";
 import { MarketBrowseHandlers, MarketHandlers, TradeBodyErrorsLive } from "./market.ts";
 import { StaffHandlers } from "./staff.ts";
+import {
+  EVENT_PAGE,
+  eventId,
+  eventsPage,
+  eventStream,
+  invalidAfter,
+  LATEST_EVENTS,
+  streamResponse,
+  StreamTuning,
+} from "./stream.ts";
+
+export { StreamTuning } from "./stream.ts";
 
 /** How far back the list of finished quests reaches. */
 const RECENTLY_COMPLETED_MS = 2 * DAY_MS;
-/** The most events one answer or one look by a stream returns. */
-const EVENT_PAGE = 100;
-/** How many events `GET /events` returns when the client does not say where it is. */
-const LATEST_EVENTS = 50;
-
-/** How the event stream paces itself. Tests shorten these. */
-export interface StreamTuning {
-  /** How often an open stream looks for new events. */
-  readonly pollMs: number;
-  /** A stream writes a comment this often, so proxies keep a quiet connection open. */
-  readonly heartbeatMs: number;
-  /** A stream is closed after this long. The client reconnects, which checks its session again. */
-  readonly maxMs: number;
-}
-
-export const StreamTuning = Context.Reference<StreamTuning>("leaf/StreamTuning", {
-  defaultValue: () => ({ pollMs: 2_000, heartbeatMs: 20_000, maxMs: 15 * 60_000 }),
-});
 
 /** What a member is told when Leaf refuses a reroll, by the refusal's code. */
 const REFUSALS = {
@@ -77,14 +71,6 @@ function questOnOffer(quest: Quest, rerollsToday: ReadonlyMap<QuestSlot, number>
     ...questJson(quest),
     reroll_leaf: rerollCost(quest, rerollsToday.get(quest.slot) ?? 0, DEFAULT_RULES.quests),
   };
-}
-
-/** Reads an event id sent by a client. Undefined means it sent none; null means it sent something that is not one. */
-function eventId(value: string | undefined): number | null | undefined {
-  if (value === undefined || value === "") {
-    return undefined;
-  }
-  return /^\d{1,15}$/.test(value) ? Number(value) : null;
 }
 
 function iso(at: number): string {
@@ -166,8 +152,6 @@ const SystemHandlers = HttpApiBuilder.group(LeafApi, "system", (handlers) =>
     return handlers.handle("healthz", () => healthy);
   }),
 );
-
-const invalidAfter = new Invalid({ code: "invalid_after", message: "after must be an event id" });
 
 const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
   Effect.gen(function* () {
@@ -265,10 +249,7 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
               after === undefined
                 ? yield* events.latest(playerId, LATEST_EVENTS)
                 : yield* events.after(playerId, after, EVENT_PAGE);
-            // Each event's details are stored as the JSON text they are sent as, so they are spliced in, not parsed.
-            return HttpServerResponse.text(`{"events":[${found.map(eventJsonText).join(",")}]}`, {
-              contentType: "application/json",
-            });
+            return eventsPage(found);
           }),
         )
         // Server-sent events. A client that reconnects sends the last id it saw as
@@ -283,55 +264,13 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
             }
             const { playerId } = yield* CurrentIdentity;
             const from = resumeFrom ?? (yield* events.latestId);
-            return HttpServerResponse.stream(eventStream(events, playerId, from, yield* StreamTuning), {
-              contentType: "text/event-stream",
-              headers: { "cache-control": "no-cache", connection: "keep-alive" },
-            });
+            const after = (afterId: number, limit: number) => events.after(playerId, afterId, limit);
+            return streamResponse(eventStream(after, from, yield* StreamTuning));
           }),
         )
     );
   }),
 );
-
-/**
- * The frames of one event stream. It finds new events by looking in the
- * database every `pollMs`, not by being told, so it also sees events written by
- * another process: during a deploy the old and the new container run side by side.
- */
-const eventStream = (events: Events["Service"], playerId: PlayerId, from: number, tuning: StreamTuning) =>
-  Stream.unwrap(
-    Effect.gen(function* () {
-      const position = yield* Ref.make(from);
-      const look = Effect.gen(function* () {
-        const found = yield* events.after(playerId, yield* Ref.get(position), EVENT_PAGE);
-        const last = found.at(-1);
-        if (last !== undefined) {
-          yield* Ref.set(position, last.id);
-        }
-        return found.map(sseFrame).join("");
-      });
-      const fresh = Stream.fromEffectSchedule(look, Schedule.spaced(Duration.millis(tuning.pollMs))).pipe(
-        Stream.filter((frames) => frames !== ""),
-      );
-      // Clients ignore comments; proxies see traffic and keep a quiet connection open.
-      const keepAlive = Stream.tick(Duration.millis(tuning.heartbeatMs)).pipe(
-        Stream.drop(1),
-        Stream.as(": keep-alive\n\n"),
-      );
-      // The first frame carries the starting position as its id, so a client whose
-      // stream ends before any event arrives still reconnects from here and gets
-      // what happened in between.
-      return Stream.make(`id: ${from}\nretry: 3000\n\n`).pipe(
-        Stream.concat(Stream.merge(fresh, keepAlive)),
-        Stream.interruptWhen(Effect.sleep(Duration.millis(tuning.maxMs))),
-        Stream.encodeText,
-      );
-    }),
-  );
-
-function sseFrame(event: StoredEvent): string {
-  return `event: ${event.type}\ndata: ${eventJsonText(event)}\nid: ${event.id}\n\n`;
-}
 
 /** The API's routes and the implementations of its middleware. */
 export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.json" }).pipe(
@@ -340,6 +279,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     MeHandlers,
     GroveHandlers,
     ForestHandlers,
+    GuildHandlers,
     MarketHandlers,
     MarketBrowseHandlers,
     ConversionHandlers,

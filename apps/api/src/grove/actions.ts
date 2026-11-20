@@ -15,6 +15,7 @@ import { Effect, Random } from "effect";
 import { SqlClient } from "effect/sql";
 
 import { Events } from "../events/store.ts";
+import { GuildEvents } from "../guild/store.ts";
 import { Ledger } from "../ledger/store.ts";
 import { Grove, type GroveMember, type StoredOpening } from "./store.ts";
 
@@ -165,7 +166,7 @@ export type Opened = {
  * each cone, and pity carries over from the member's last cone, whichever
  * banner it was on. Every cone is stored with its roll under the request, so
  * the same request sent again answers with the same cones and opens no more.
- * A cone of the announced ranks is told to the Forest as an event.
+ * A cone of the announced ranks is told to the member and to the guild feed.
  */
 export const openConesFor = Effect.fn("openConesFor")(function* (
   visitor: Visitor,
@@ -173,10 +174,11 @@ export const openConesFor = Effect.fn("openConesFor")(function* (
   requestId: string,
   now: number,
   rules: GroveRules,
-): Effect.fn.Return<Opened | Refused, never, SqlClient.SqlClient | Grove | Events> {
+): Effect.fn.Return<Opened | Refused, never, SqlClient.SqlClient | Grove | Events | GuildEvents> {
   const sql = yield* SqlClient.SqlClient;
   const grove = yield* Grove;
   const events = yield* Events;
+  const feed = yield* GuildEvents;
   const playerId = visitor.playerId;
   return yield* sql
     .withTransaction(
@@ -203,12 +205,29 @@ export const openConesFor = Effect.fn("openConesFor")(function* (
         );
         const pulls = openCones(yield* grove.pity(playerId), rolls, copies, banner, rules);
         yield* grove.recordOpenings(playerId, requestId, banner.id, pulls, now);
-        for (const pull of pulls.filter((each) => announcesCone(each.rank, rules))) {
+        for (const [position, pull] of pulls.entries()) {
+          if (!announcesCone(pull.rank, rules)) {
+            continue;
+          }
           yield* events.insert(
             playerId,
             {
               type: "grove.cone_opened",
               data: { banner: banner.id, spirit: pull.spirit, rank: pull.rank, verdant: pull.verdant, copy: pull.copy },
+            },
+            now,
+          );
+          yield* feed.insert(
+            `cone:${playerId}:${requestId}:${position}`,
+            {
+              type: "grove.cone_opened",
+              data: {
+                member: { player_id: playerId, name: visitor.username },
+                banner: banner.id,
+                spirit: pull.spirit,
+                rank: pull.rank,
+                verdant: pull.verdant,
+              },
             },
             now,
           );

@@ -3,6 +3,8 @@ import { Effect, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
 import { Events } from "../events/store.ts";
+import { Grove } from "../grove/store.ts";
+import { GuildEvents } from "../guild/store.ts";
 import { Ledger } from "../ledger/store.ts";
 import { PlayerUuid } from "../wire.ts";
 
@@ -69,8 +71,9 @@ export const levelOf = (playerId: PlayerId, rules: LevelRules) =>
 
 /**
  * When the player's XP has passed `levelBefore`, pays the levels reached and
- * says so with a `level_up` event. Returns the Leaf paid. Call it in the
- * transaction that added the XP.
+ * says so with a `level_up` event. A member with a tree in the Forest also has
+ * it told to the guild feed, once per level ever, since each level is a new
+ * tree there. Returns the Leaf paid. Call it in the transaction that added the XP.
  */
 export const levelUp = Effect.fn("levelUp")(function* (
   playerId: PlayerId,
@@ -84,6 +87,16 @@ export const levelUp = Effect.fn("levelUp")(function* (
   }
   const paid = yield* payLevels(playerId, rules, now);
   yield* Events.use((events) => events.insert(playerId, { type: "level_up", data: { level, leaf: paid } }, now));
+  const member = yield* Grove.use((grove) => grove.member(playerId));
+  if (member !== undefined) {
+    yield* GuildEvents.use((feed) =>
+      feed.insert(
+        `level:${playerId}:${level}`,
+        { type: "grove.level_up", data: { member: { player_id: playerId, name: member.username }, level } },
+        now,
+      ),
+    );
+  }
   return paid;
 });
 
