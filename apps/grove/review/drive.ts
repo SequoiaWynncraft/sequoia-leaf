@@ -13,7 +13,7 @@
  * Uses only Bun's own fetch and WebSocket.
  */
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 
 type Step =
   | ["size", number, number]
@@ -46,12 +46,14 @@ const steps: Step[] = parsed;
 mkdirSync(outDir, { recursive: true });
 
 const port = 9400 + Math.floor(Math.random() * 400);
+/** Chromium's profile for this run, about 15 MB: removed when the run ends, so runs do not fill /tmp. */
+const profile = `/tmp/grove-drive-${port}-${process.pid}`;
 const browser = Bun.spawn(
   [
     "chromium",
     "--headless=new",
     `--remote-debugging-port=${port}`,
-    `--user-data-dir=/tmp/grove-drive-${port}`,
+    `--user-data-dir=${profile}`,
     "--hide-scrollbars",
     "--use-angle=gl",
     "about:blank",
@@ -152,3 +154,5 @@ async function run(step: Step): Promise<void> {
 await steps.reduce<Promise<void>>((prev, step) => prev.then(() => run(step)), Promise.resolve());
 ws.close();
 browser.kill();
+await browser.exited;
+rmSync(profile, { recursive: true, force: true });
