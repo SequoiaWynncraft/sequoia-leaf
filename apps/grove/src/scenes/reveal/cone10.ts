@@ -9,9 +9,9 @@
  * crown's place in that grid.
  */
 
+import type { CastFrame } from "../../bundle/cast.ts";
 import { leaf, sparkleStage } from "../../bundle/vocabulary.ts";
 import { type RankName, RANKS } from "../../engine/palette.ts";
-import type { Sprite } from "../../engine/raster.ts";
 import { hash3, hashString, Rng } from "../../engine/rng.ts";
 import { type Canvas, drawText, hex, mix, type Rgb, textWidth, UI } from "../../ui/hud.ts";
 import { crown, type Fx, leafKeys, type Point } from "../glade/stage.ts";
@@ -152,8 +152,8 @@ function rowSlot(c: Canvas, g: Grid, i: number): Point {
 
 /** The spirit to show on each rank's card, and the colours its palette sprite is drawn in. */
 export interface CardArt {
-  spriteFor: (spirit: string) => Sprite;
-  rgb: (index: number) => Rgb;
+  /** A spirit's portrait from the bundle's cast sheets, or null while it loads. */
+  spriteFor: (spirit: string) => CastFrame | null;
 }
 
 export function drawCone10(c: Canvas, ev: Cone10Event, t: number, crownTL: Point, crownBR: Point, art: CardArt): void {
@@ -314,7 +314,7 @@ function drawCard(
   // The spirit itself when the card is wide enough, standing on the card's floor; otherwise its
   // rank's insignia.
   const sp = art.spriteFor(spirit);
-  if (w >= sp.w + 2 && h >= sp.h + 9) c.indexed(sp, cx - Math.floor(sp.w / 2), y + h - 8 - sp.h, art.rgb);
+  if (sp && w >= sp.w + 2 && h >= sp.h + 9) c.frame(sp, cx - Math.floor(sp.w / 2), y + h - 8 - sp.h);
   else c.icon(INSIGNIA, { x: mix(colour, UI.ink, 0.2), X: mix(colour, [255, 255, 255], 0.55) }, cx - 2, cy - 2);
   // Pips: one per rank step, Leafkin one to Yggdrasil seven.
   const pips = rare + 1;

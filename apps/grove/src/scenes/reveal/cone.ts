@@ -17,6 +17,7 @@
  * bursts, the spirit leaps out and lands, and the tooltip card opens until you tap.
  */
 
+import type { CastFrame } from "../../bundle/cast.ts";
 import { spirit } from "../../game/spirits.ts";
 import { type Canvas, hex } from "../../ui/hud.ts";
 import { blitFrame, spiritFrame } from "../glade/actors.ts";
@@ -513,13 +514,7 @@ export function shakeFrame(out: Uint32Array, W: number, H: number, dx: number, d
 // ---------------------------------------------------------------------------------------------
 
 /** The tooltip card, in the HUD's grid, beside the fire (`fire` is the fire's place in that grid). */
-export function drawConeCard(
-  c: Canvas,
-  fire: Point,
-  ev: ConeEvent,
-  t: number,
-  rgb: (index: number) => readonly [number, number, number],
-): void {
+export function drawConeCard(c: Canvas, fire: Point, ev: ConeEvent, t: number, portrait: CastFrame | null): void {
   const b = BEATS[ev.rank];
   const tau = t - ev.t0;
   const at = b.burst + b.card;
@@ -542,7 +537,6 @@ export function drawConeCard(
     },
     open,
     closing,
-    rgb,
-    found.member.portrait,
+    portrait,
   );
 }

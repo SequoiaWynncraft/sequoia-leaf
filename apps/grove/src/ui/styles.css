@@ -78,7 +78,9 @@ canvas {
   display: none;
 }
 
-img.px {
+img.px,
+canvas.px {
+  position: static;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   display: inline-block;
@@ -664,7 +666,7 @@ h2.small {
   width: auto !important;
   height: auto !important;
 }
-.inventory .slot.spirit > img {
+.inventory .slot.spirit > canvas {
   width: calc(var(--mu) * 32) !important;
   height: calc(var(--mu) * 32) !important;
 }

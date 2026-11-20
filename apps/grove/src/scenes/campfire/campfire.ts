@@ -530,8 +530,7 @@ export class Campfire implements Scene {
       },
       Math.min(1, (tau - at) / 0.15),
       closing,
-      this.lut.rgb,
-      sp.member.portrait,
+      this.app.art.cast.value?.portrait(sp.id) ?? null,
     );
   }
 
@@ -554,8 +553,8 @@ export class Campfire implements Scene {
     const x = Math.floor((c.W - w) / 2);
     const y = 4;
     c.panel(x, y, w, h, colour, 0.95, [24, 18, 36]);
-    const fig = spiritFrame(sp.id, 0).sprite;
-    c.indexed(fig, x + 4 + Math.floor((16 - fig.w) / 2), y + Math.floor((h - fig.h) / 2), this.lut.rgb);
+    const fig = this.app.art.cast.value?.portrait(sp.id);
+    if (fig) c.frame(fig, x + 4 + Math.floor((16 - fig.w) / 2), y + Math.floor((h - fig.h) / 2));
     drawText(c, sp.name, x + 24, y + 4, colour, { bold: true, shadow: true });
     c.icon(GEM, { x: mix(colour, UI.ink, 0.25), X: mix(colour, [255, 255, 255], 0.35) }, x + 24, y + 15);
     drawText(c, rank, x + 32, y + 15, colour, { shadow: true });

@@ -14,6 +14,7 @@ import { cones, rates } from "./cones.ts";
 import { great } from "./great.ts";
 import { icon } from "./icons.ts";
 import { answerFor, leafle, today } from "./leafle.ts";
+import { mountCast } from "./portraits.ts";
 import { rings } from "./rings.ts";
 import { itemTip, shop } from "./shop.ts";
 import { spirits, tooltip } from "./spirits.ts";
@@ -118,6 +119,7 @@ export class Menus {
     if (body) body.scrollTop = scroll;
     const unit = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--mu")) || 2;
     mountArt(this.root, unit);
+    mountCast(this.root, this.app.art);
   }
 
   private view(m: MenuId): MenuView {
@@ -164,8 +166,10 @@ export class Menus {
       b.classList.toggle("picked", b === el);
       b.setAttribute("aria-selected", String(b === el));
     }
-    const tip = this.root.querySelector(tipId);
-    if (tip) tip.innerHTML = html;
+    const tip = this.root.querySelector<HTMLElement>(tipId);
+    if (!tip) return;
+    tip.innerHTML = html;
+    mountCast(tip, this.app.art);
   }
 
   private click(e: MouseEvent): void {

@@ -11,21 +11,19 @@
 import { STAGE_OF_LEVEL, STAGE_TITLE } from "../../art/tree.ts";
 import type { Mask, Pixels } from "../../bundle/art.ts";
 import { fitPicture } from "../../bundle/fit.ts";
-import { ambianceAt, fill, type GladePick, type Manifest, pickGlade } from "../../bundle/manifest.ts";
+import { fill, type GladePick, type Manifest, pickGlade } from "../../bundle/manifest.ts";
 import { type Ambiance, Ink, packHex } from "../../bundle/palette.ts";
 import { edgeColour, Picture } from "../../bundle/picture.ts";
 import { castFrame } from "../../bundle/vocabulary.ts";
-import { buildLut, type Lut } from "../../engine/palette.ts";
 import { between, type Grid } from "../../engine/view.ts";
 import type { Params, Tool } from "../../game/params.ts";
 import { BLOOM_MAX, CHARGE_MAX, CHARGE_SECONDS } from "../../game/rules.ts";
 import { spiritForRank } from "../../game/spirits.ts";
 import { care, groot, type GroveState, warmCones } from "../../game/state.ts";
 import { Canvas, drawHud, drawPopup, drawToast, drawToolIcon, hudLayout, popupSize, TOOLS } from "../../ui/hud.ts";
-import { beatOf, type ConeEvent, coneLook, drawConeCard, rankColour } from "../reveal/cone.ts";
+import { beatOf, type ConeEvent, coneLook, drawConeCard } from "../reveal/cone.ts";
 import { cone10Done, type Cone10Event, cone10Of, drawCone10, drawCone10World, makeCone10 } from "../reveal/cone10.ts";
-import type { App, Opening, PointerKind, Scene, Screen } from "../scene.ts";
-import { spiritFrame } from "./actors.ts";
+import { type App, lightOf, type Opening, type PointerKind, type Scene, type Screen } from "../scene.ts";
 import { CARE_LENGTH, type CareEffect, drawCareTool, drawCareWorld } from "./care.ts";
 import { drawGrootWorld, grootDrink, type GrootEvent, grootPopup, grootPopupOpen } from "./groot.ts";
 import { drawLevelUp, ggPopup, ggPopupOpen, type LevelUpEvent, levelUpOver, shownLevel } from "./levelup.ts";
@@ -80,7 +78,6 @@ export class GladeScene implements Scene {
   /** The first picture column on screen (a phone shows a crop). */
   private cropX = 0;
   private narrow = false;
-  private hudLut: Lut;
   private ink: Ink;
   private light: Ambiance;
   private lightCheckedAt = -99;
@@ -94,7 +91,6 @@ export class GladeScene implements Scene {
     this.m = new Moments(p, app.store.state.leaf);
     this.light = this.lightNow();
     this.ink = new Ink(this.light);
-    this.hudLut = this.lutFor(p.rank);
     const t0 = p.still ? 0 : 0.6;
     if (p.groot > 0) {
       this.m.groot = { t0, count: p.groot, bloomFrom: app.store.state.bloom };
@@ -164,9 +160,7 @@ export class GladeScene implements Scene {
 
   /** The light by the member's clock, unless `?time=` says (`day` is dusk). */
   private lightNow(): Ambiance {
-    const p = this.params;
-    if (p.timeFromUrl) return p.time === "night" ? "night" : "dusk";
-    return ambianceAt(new Date().getHours());
+    return lightOf(this.params);
   }
 
   private pickFor(man: Manifest, level: number): GladePick {
@@ -182,11 +176,6 @@ export class GladeScene implements Scene {
   private treeOf(man: Manifest, pick: GladePick): TreeShape {
     const mask: Mask | null = this.app.art.mask(pick.treePath).value;
     return { level: pick.level, box: pick.box, foot: man.glade.foot, mask };
-  }
-
-  private lutFor(rank: ConeEvent["rank"]): Lut {
-    // The HUD's palette sprites (the Bloom cone, the cards' portraits) keep the dusk light.
-    return buildLut("dusk", "normal", rankColour(rank));
   }
 
   // -------------------------------------------------------------------------------------------
@@ -315,7 +304,7 @@ export class GladeScene implements Scene {
     const level = m.shownLevel(p.level, t);
     const stage =
       STAGE_TITLE[STAGE_OF_LEVEL[Math.max(0, Math.min(STAGE_OF_LEVEL.length - 1, level - 1))] ?? "seedling"];
-    const rgb = this.hudLut.rgb;
+    const cast = this.app.art.cast.value;
     if (!busy) {
       const grootDrank = m.groot ? grootDrink(m.groot, t) : null;
       drawHud(
@@ -331,7 +320,6 @@ export class GladeScene implements Scene {
           tool: m.tool,
           bloomFlash: Math.max(grootDrank?.flash ?? 0, Math.max(0, 1 - (t - m.bloomFlashAt) / 0.6)),
           chargeFlash: Math.max(0, 1 - (t - m.chargeFlashAt) / 0.6),
-          rgb,
         },
         fonts,
       );
@@ -362,7 +350,8 @@ export class GladeScene implements Scene {
     if (m.greetAt !== null && !busy && !m.levelUp && !m.groot)
       drawToast(c, GREETING, narrowHud ? 36 : 4, narrowHud ? this.hud.W - 8 : 180, t - m.greetAt);
     const man = this.manifest;
-    if (m.cone && man) drawConeCard(c, this.toHud(this.placesOf(man).hearth), m.cone, t, rgb);
+    if (m.cone && man)
+      drawConeCard(c, this.toHud(this.placesOf(man).hearth), m.cone, t, cast?.portrait(m.cone.spirit) ?? null);
     if (m.cone10) {
       const box = tree ? crown(tree) : { x: 100, y: 80, w: 32, h: 40 };
       drawCone10(
@@ -371,7 +360,7 @@ export class GladeScene implements Scene {
         t,
         this.toHud({ x: box.x, y: box.y }),
         this.toHud({ x: box.x + box.w, y: Math.min(box.y + box.h, 120) }),
-        { spriteFor: (id) => spiritFrame(id, 0).sprite, rgb },
+        { spriteFor: (id) => cast?.portrait(id) ?? null },
       );
       if (cone10Done(m.cone10, t)) m.cone10 = null;
     }
@@ -454,7 +443,6 @@ export class GladeScene implements Scene {
         closedAt: null,
         bond: first.count,
       };
-      this.hudLut = this.lutFor(first.rank);
     } else this.m.cone10 = cone10Of(t + 0.3, openings);
   }
 
@@ -533,7 +521,6 @@ export class GladeScene implements Scene {
       closedAt: null,
       bond: pull.count,
     };
-    this.hudLut = this.lutFor(pull.rank);
   }
 
   private care(tool: Tool, x: number, y: number, t: number, touch: boolean): void {

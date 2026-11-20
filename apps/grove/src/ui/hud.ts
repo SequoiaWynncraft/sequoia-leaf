@@ -5,8 +5,8 @@
  * icons in square slots. Drawn straight onto the frame's pixels, on the same grid as the art.
  */
 
-import { ix, R } from "../engine/palette.ts";
-import { fromRows, type Sprite } from "../engine/raster.ts";
+import type { CastFrame } from "../bundle/cast.ts";
+import { WELCOME } from "../bundle/palette.ts";
 import type { Tool } from "../game/params.ts";
 
 export type Rgb = readonly [number, number, number];
@@ -117,12 +117,16 @@ export class Canvas {
     }
   }
 
-  /** A palette sprite, its indices turned to colours by `rgb`. */
-  indexed(sp: Sprite, x: number, y: number, rgb: (index: number) => Rgb): void {
-    for (let yy = 0; yy < sp.h; yy++)
-      for (let xx = 0; xx < sp.w; xx++) {
-        const v = sp.data[yy * sp.w + xx] ?? 0;
-        if (v) this.px(x + xx, y + yy, rgb(v));
+  /** A cast or prop frame from the bundle's sheets, its top left at (x, y), at a whole `scale`. */
+  frame(f: CastFrame, x: number, y: number, scale = 1, a = 1): void {
+    const sx = f.index * f.w;
+    for (let yy = 0; yy < f.h; yy++)
+      for (let xx = 0; xx < f.w; xx++) {
+        const v = f.strip.data[yy * f.strip.w + sx + xx] ?? 0;
+        if (v >>> 24 < 128) continue;
+        const c: Rgb = [v & 255, (v >>> 8) & 255, (v >>> 16) & 255];
+        if (scale === 1) this.px(x + xx, y + yy, c, a);
+        else this.rect(x + xx * scale, y + yy * scale, scale, scale, c, a);
       }
   }
 
@@ -405,8 +409,6 @@ export interface HudModel {
   /** A pulse when Bloom fills or a charge is spent, 0 to 1. */
   bloomFlash: number;
   chargeFlash: number;
-  /** Colours for palette sprites drawn in the HUD (the Bloom cone). */
-  rgb: (index: number) => Rgb;
 }
 
 export interface HudLayout {
@@ -518,7 +520,7 @@ export function drawHud(c: Canvas, m: HudModel, fonts: boolean): void {
   const P = lay.bar;
   c.panel(P.x, P.y, P.w, P.h, mix(UI.purple, UI.popup, 0.45), 0.86, UI.body);
   const flash = m.bloomFlash > 0 ? mix(UI.gold, [255, 255, 255], m.bloomFlash * 0.6) : UI.gold;
-  c.indexed(BLOOM_CONE, P.x + 3, P.y + 2, m.rgb);
+  c.icon(BLOOM_CONE, BLOOM_LEGEND, P.x + 3, P.y + 2);
   c.bar(P.x + 11, P.y + 3, P.w - 14, 5, m.bloom / m.bloomMax, flash, m.bloomMax);
   for (const s of lay.slots) {
     c.rect(s.x + 1, s.y + 1, s.w - 2, s.h - 2, [14, 14, 22], 0.9);
@@ -542,13 +544,14 @@ export function drawHud(c: Canvas, m: HudModel, fonts: boolean): void {
   }
 }
 
-/** A small cone for the Bloom bar: a full Bloom gives a free one. Drawn in palette indices. */
-const BLOOM_CONE = fromRows(["..k..", ".khk.", "khnhk", "knhnk", "khnhk", ".knk.", "..s.."], {
-  k: ix(R.CONE, 0),
-  h: ix(R.CONE, 6),
-  n: ix(R.CONE, 3),
-  s: ix(R.WOOD, 3),
-});
+/** A small cone for the Bloom bar, a full Bloom gives a free one: the bundle cone's colours, outlined as the welcome outlines. */
+const BLOOM_CONE = ["..k..", ".khk.", "khnhk", "knhnk", "khnhk", ".knk.", "..s.."];
+const BLOOM_LEGEND: Record<string, Rgb> = {
+  k: hex(WELCOME.panda_outline),
+  h: hex(WELCOME.acorn_light),
+  n: hex(WELCOME.acorn),
+  s: hex(WELCOME.acorn_cap),
+};
 
 // ---------------------------------------------------------------------------------------------
 // Popups, in the mod's milestone style: a slate panel with a coloured border, a medallion at the

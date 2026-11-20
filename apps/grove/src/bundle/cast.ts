@@ -108,6 +108,20 @@ export class CastSheet {
     return strip ? { strip, index, w: e.w, h: e.h, foot: e.foot } : null;
   }
 
+  /** A member's strip, once it has loaded (for a picture painted once, as the menus' portraits are). */
+  async load(id: string, season = "normal", ambiance: Ambiance = "dusk"): Promise<Pixels | null> {
+    const e = this.entries.get(id);
+    if (!e) return null;
+    const winter = season === "winter" && e.winter ? "-winter" : "";
+    const night = ambiance === "night" ? "-night" : "";
+    return this.image(`${this.dir}/${id}${winter}${night}.png`).promise;
+  }
+
+  /** A member as the cards and menus show them: the first frame of their idle, at dusk. */
+  portrait(id: string): CastFrame | null {
+    return this.frame(id, "idle", 0, "normal", "dusk");
+  }
+
   /** How long one pass of `anim` takes, in ms. */
   length(id: string, anim: string): number {
     const a = this.entries.get(id)?.anims.get(anim);

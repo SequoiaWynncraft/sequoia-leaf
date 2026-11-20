@@ -4,10 +4,10 @@
  * and its bond hearts. Spirits are numbered and a little feral.
  */
 
+import type { CastFrame } from "../../bundle/cast.ts";
 import type { RankName } from "../../engine/palette.ts";
-import type { Sprite } from "../../engine/raster.ts";
+import type { Point } from "../../engine/view.ts";
 import { type Canvas, drawLeafGlyph, drawText, mix, type Rgb, textWidth, UI, wrap } from "../../ui/hud.ts";
-import type { Point } from "../glade/layout.ts";
 
 export const INSIGNIA = ["..x..", ".xXx.", "xXXXx", ".xXx.", "..x.."];
 const HEART = [".k.k.", "kRkRk", "kRRRk", ".kRk.", "..k.."];
@@ -32,7 +32,8 @@ const PORTRAIT = 34;
 
 /**
  * Draws the card near `fire` (in the HUD's grid). `open` runs 0 to 1, `closing` 0 to 1. The
- * portrait is a palette sprite about 32 pixels square, drawn through `rgb`.
+ * portrait is the spirit's idle frame from the bundle's cast sheets, one HUD pixel to its pixel
+ * (none while its strip loads).
  */
 export function drawConeCardAt(
   c: Canvas,
@@ -40,8 +41,7 @@ export function drawConeCardAt(
   info: CardInfo,
   open: number,
   closing: number,
-  rgb: (index: number) => Rgb,
-  portrait: Sprite,
+  portrait: CastFrame | null,
 ): void {
   const cardW = Math.min(c.W - 8, 168);
   const pad = 5;
@@ -63,7 +63,8 @@ export function drawConeCardAt(
   const py = y + pad;
   c.rect(px, py, PORTRAIT, PORTRAIT, mix(info.colour, [14, 12, 22], 0.86));
   c.border(px, py, PORTRAIT, PORTRAIT, mix(info.colour, UI.ink, 0.3));
-  c.indexed(portrait, px + Math.floor((PORTRAIT - portrait.w) / 2), py + Math.floor((PORTRAIT - portrait.h) / 2), rgb);
+  if (portrait)
+    c.frame(portrait, px + Math.floor((PORTRAIT - portrait.w) / 2), py + Math.floor((PORTRAIT - portrait.h) / 2));
 
   const nameW = drawText(c, info.name, x + textX, py + 2, info.colour, { bold: true, shadow: true });
   if (info.verdant) drawLeafGlyph(c, x + textX + nameW + 3, py + 1);
