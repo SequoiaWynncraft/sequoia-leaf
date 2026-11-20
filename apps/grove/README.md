@@ -41,17 +41,16 @@ texture pack and from one light model.
 
 ## Textures
 
-The world wears **Pixel Perfection**, an openly licensed, hand-drawn 16x16 texture pack (CC BY-SA
-4.0; credits and terms in `assets/pack/LICENSE.md`). Each block shows its one 16x16 tile, as a
-block game does; where the pack draws a block several ways (`planks1.png`, `planks2.png`), each
-block in the world wears one of them, and a lawn's tiles are turned four ways.
+The world wears **REFI Textures**, an openly licensed 16x16 pack drawn from scratch to recapture
+the look of Minecraft (CC BY-SA 4.0; credits and terms in `assets/pack/LICENSE.md`). Each block
+shows its one 16x16 tile, as a block game does, and a lawn's tiles are turned four ways.
 
 - `assets/pack/`: the pack's PNGs, unchanged, only the ones the game uses.
 - `tools/pack.ts` (`bun run pack`): builds `src/art/pack.gen.ts` from them. It names each tile for
-  the game, tints the pack's grey grass, ferns and needles with the grove's greens, and makes the lit
-  window. Adding a block's texture is copying a PNG in and adding a line there.
-- `src/art/tiles.ts`: the pack's tiles, and the few things drawn here because the pack has no
-  texture for them: the lantern, the flame, the banner, the string lights.
+  the game and makes a few from the pack's own: the grass block's side, a lighter and a darker
+  spruce, the lit window. Adding a block's texture is copying a PNG in and adding a line there.
+- `src/art/tiles.ts`: the pack's tiles, and the few things drawn here because the game shapes them
+  its own way: the lantern, the flame, the banner, the string lights.
 
 Anyone who ships the game must credit the pack; the licence covers the textures and what is made
 from them, not the code.
@@ -65,6 +64,13 @@ from them, not the code.
   is. So light and corner shading run smoothly from one surface to the next.
 - The sun is tested with four rays from each cell of air beside a surface and blended the same way,
   so a shadow's edge is soft.
+- The fire and the lanterns (a scene's eight strongest lamps) light each point by its distance and
+  by how squarely the surface faces them, so a log's near side is bright and its far side is not.
+  The flooded lamp light decides whether a lamp reaches a point at all, and adds a soft warm fill.
+- Night is a dim blue, so the warm light has something to stand against.
+- Light in the air is not a sprite. Whatever gives light (flames, lantern glass, lit windows,
+  bulbs, sparks) is marked in the picture's alpha; that part is blurred at three sizes and laid back
+  over the picture, and the corners are drawn in a little.
 - Foliage has gaps you can see through, faces kept one block into a crown so the gaps have depth,
   light coming through from behind, a slow sway, and greens that vary in broad patches.
 

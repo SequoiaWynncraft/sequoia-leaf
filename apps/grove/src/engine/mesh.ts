@@ -336,7 +336,7 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
         if (def.tiles) {
           const tiles = pick ? def.alts![pick - 1]! : def.tiles;
           const spin = def.scatter ? Math.floor(ihash(x, y, z, 5) * 4) : 0;
-          boxAt(x, y, z, FULL, FULL_TO, tiles, def.foliage ? LEAFY : PLAIN, def.turned, spin);
+          boxAt(x, y, z, FULL, FULL_TO, tiles, def.foliage ? LEAFY : def.glows ? GLOWS : PLAIN, def.turned, spin);
           continue;
         }
         for (const b of def.boxes ?? []) boxAt(x, y, z, b.from, b.to, b.tiles, b.emit ? GLOWS : PLAIN);

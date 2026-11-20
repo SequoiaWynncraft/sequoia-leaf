@@ -1,5 +1,6 @@
 /** Draws a world: the block meshes with their baked light, the moving things, a pixel sky, glows and sparks. */
 import * as THREE from "three";
+import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 
 import { paintTile, TILE, tileNames } from "../art/tiles.ts";
 import { Dyn } from "./actors.ts";
@@ -63,12 +64,14 @@ function tiles(): THREE.DataArrayTexture {
   return tex;
 }
 
+/** A lamp: the larger ones light what is round them point by point; all of them glow in the air. */
 export interface Glow {
   readonly at: V3;
-  /** How wide the halo is, in blocks. */
+  /** How strong it is: a fire is about 9, a lantern 3, a bulb on a string 1.5. */
   readonly size: number;
   readonly flicker: boolean;
 }
+const LAMPS = 8;
 
 export interface Scene {
   readonly world: World;
@@ -118,9 +121,21 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
     for (const u of sets) u[name]!.value = value;
   };
 
+  // The strongest lamps light the world point by point; the shader always has room for eight.
+  const strong = [...(set.glows ?? [])].filter((g) => g.size >= 2.5).sort((a, b) => b.size - a.size);
+  const lamps: Glow[] = Array.from(
+    { length: LAMPS },
+    (_, i) => strong[i] ?? { at: [0, -999, 0], size: 0, flicker: false },
+  );
   const blocks = new THREE.ShaderMaterial({
     glslVersion: THREE.GLSL3,
-    uniforms: { ...common(), uTiles: { value: tiles() } },
+    uniforms: {
+      ...common(),
+      uTiles: { value: tiles() },
+      uLamp: { value: lamps.map((g) => new THREE.Vector4(g.at[0], g.at[1], g.at[2], 6 + g.size * 2)) },
+      uLampSet: { value: lamps.map((g) => new THREE.Vector2(g.size > 5 ? 2.2 : 1.2, g.flicker ? 1 : 0)) },
+      uLampN: { value: Math.min(LAMPS, strong.length) },
+    },
     vertexShader: /* glsl */ `
       in vec4 aUv;
       in vec4 aLight;
@@ -155,6 +170,9 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       precision highp float;
       precision highp sampler2DArray;
       uniform sampler2DArray uTiles;
+      uniform vec4 uLamp[${LAMPS}];
+      uniform vec2 uLampSet[${LAMPS}];
+      uniform int uLampN;
       ${SHARED}
       in vec2 vUv;
       in float vTile;
@@ -185,36 +203,54 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
         }
         float side = vN.y > 0.5 ? 1.0 : vN.y < -0.5 ? 0.55 : abs(vN.x) > abs(vN.z) ? 0.88 : 0.74;
         float open = vLight.x * sqrt(sqrt(vLight.x));
-        // Under the open sky a surface shows its own colour; shade goes down toward purple, night toward blue.
-        vec3 lit = mix(vec3(1.0, 0.95, 1.06), vec3(0.34, 0.37, 0.72), uNight);
-        vec3 shade = mix(vec3(0.20, 0.15, 0.30), vec3(0.07, 0.07, 0.17), uNight);
+        // Under the open sky a surface shows its own colour; shade goes down toward purple, and
+        // night takes nearly all of it, leaving a dim blue for the lamps to stand against.
+        vec3 lit = mix(vec3(1.0, 0.95, 1.06), vec3(0.14, 0.17, 0.36), uNight);
+        vec3 shade = mix(vec3(0.20, 0.15, 0.30), vec3(0.05, 0.055, 0.13), uNight);
         vec3 sky = mix(shade, lit, open) * side * vLight.w;
         float toSun = dot(vN, uSun);
         // Foliage is lit from behind as well: the sun comes through it.
         float sunAmt = (leafy ? toSun * 0.3 + 0.5 : max(toSun, 0.0)) * vLight.z * (1.0 - uNight);
         vec3 sun = vec3(1.0, 0.62, 0.32) * sunAmt * 0.95;
-        float flicker = 1.0 + 0.05 * sin(uTime * 9.0) + 0.035 * sin(uTime * 23.7) + 0.03 * sin(uTime * 4.3);
-        float lampAmt = vLight.y * vLight.y;
-        vec3 lamp = vec3(1.0, 0.72, 0.42) * lampAmt * mix(1.0, 1.35, uNight) * flicker * mix(1.0, vLight.w, 0.6);
-        // Firelight turns what it falls on toward gold, whatever its own colour, as a real fire does.
+        float flicker = 1.0 + 0.06 * sin(uTime * 9.0) + 0.04 * sin(uTime * 23.7) + 0.035 * sin(uTime * 4.3);
+        // A lamp lights each point by how far it is and how squarely the surface faces it, so a log's
+        // near side is bright and its far side is not. The flooded light says whether the lamp can
+        // reach the point at all, which keeps it from shining through a wall.
+        float direct = 0.0;
+        for (int i = 0; i < ${LAMPS}; i++) {
+          if (i >= uLampN) break;
+          vec3 to = uLamp[i].xyz - vPos;
+          float d = length(to);
+          float k = d / uLamp[i].w;
+          float fall = max(0.0, 1.0 - k * k);
+          fall = fall * fall / (1.0 + d * d * 0.015);
+          float facing = dot(vN, to / max(d, 0.01));
+          float shape = leafy ? facing * 0.25 + 0.6 : clamp(facing * 0.8 + 0.2, 0.0, 1.0);
+          direct += uLampSet[i].x * fall * shape * mix(1.0, flicker, uLampSet[i].y);
+        }
+        direct *= smoothstep(0.02, 0.28, vLight.y);
+        // What the lamps' light does after it lands: a soft warm fill wherever the flood reached.
+        float reached = min(vLight.y, 1.0);
+        float fill = reached * reached * 0.9 * mix(1.0, vLight.w, 0.6);
+        vec3 lamp = vec3(1.0, 0.58, 0.24) * (direct + fill) * mix(0.75, 1.0, uNight);
+        // Away from the lamps, night takes the red out of things and leaves them blue.
         float lum = dot(t.rgb, vec3(0.4, 0.45, 0.15));
-        vec3 warm = mix(t.rgb, vec3(lum) * vec3(1.5, 1.12, 0.62), min(1.0, lampAmt * 0.3));
-        // Away from the fire, night takes the red out of things and leaves them blue.
         vec3 cool = mix(t.rgb, vec3(lum) * vec3(0.9, 0.95, 1.25), uNight * 0.45);
-        vec3 c = cool * sky + t.rgb * sun + warm * lamp;
-        // The low sun lays a little gold on what it touches, as the welcome's rim light does.
+        vec3 c = cool * sky + t.rgb * (sun + lamp);
+        // The low sun lays a little gold on what it touches.
         c += vec3(0.83, 0.56, 0.27) * sunAmt * 0.14;
-        // Keep the brightest light from burning out.
-        vec3 over = max(c - 0.75, 0.0);
-        c = min(c, 0.75) + over / (1.0 + over * 2.2);
-        c = mix(c, t.rgb * 1.15, glows);
+        // Bright light rolls off instead of burning out, the red first, so a hot spot goes to gold.
+        vec3 over = max(c - 0.7, 0.0);
+        c = min(c, 0.7) + over / (1.0 + over * 2.5);
+        c = mix(c, t.rgb * 1.1, glows);
         vec3 eye = vPos - cameraPosition;
         float fd = max(length(eye) - uFogStart, 0.0) / 62.0;
         float f = 1.0 - exp(-fd * sqrt(fd));
         // The haze lies thicker near the ground.
         f *= mix(1.0, 0.75, clamp((vPos.y - 12.0) / 90.0, 0.0, 1.0));
         c = mix(c, fogColour(eye, uSun), clamp(f, 0.0, 1.0));
-        outColour = vec4(c, 1.0);
+        // Alpha marks what gives light, for the glow that is laid over the picture afterwards.
+        outColour = vec4(c, glows * (1.0 - clamp(f, 0.0, 1.0)));
       }`,
   });
 
@@ -285,7 +321,7 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
             if (el < line) c = mix(fogColour(dir, uSun), vec3(0.19, 0.105, 0.26) * (1.0 - uNight * 0.5), 0.25 + fk * 0.25);
           }
           if (el < 0.0) c = fogColour(dir, uSun);
-          outColour = vec4(c, 1.0);
+          outColour = vec4(c, 0.0);
         }`,
     }),
   );
@@ -374,26 +410,6 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
     }`,
   );
 
-  // Halos round the fire and the lamps: warm light in the air, stepped like the sky's bands.
-  const glows = set.glows ?? [];
-  points(
-    glows.map((g) => g.at),
-    glows.flatMap((g) => [g.size, g.flicker ? 1 : 0]),
-    /* glsl */ `void main() {
-      vec4 mv = viewMatrix * vec4(position, 1.0);
-      gl_Position = projectionMatrix * mv;
-      float flick = 1.0 + aData.y * (0.06 * sin(uTime * 9.0) + 0.04 * sin(uTime * 23.7));
-      gl_PointSize = min(uScale * 1.5 * aData.x * flick / -mv.z, 900.0);
-      vA = flick * (aData.x > 5.0 ? 1.0 : 0.8);
-    }`,
-    /* glsl */ `void main() {
-      float r = length(gl_PointCoord - 0.5) * 2.0;
-      float a = max(0.0, 1.0 - r);
-      a = a * a * 0.34;
-      outColour = vec4(vec3(1.0, 0.62, 0.28) * a * vA, 1.0);
-    }`,
-  );
-
   // Sparks from the fire: each rises, drifts and goes out, then starts again.
   const fire = set.fire;
   points(
@@ -411,6 +427,66 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
     /* glsl */ `void main() { outColour = vec4(mix(vec3(0.9, 0.3, 0.1), vec3(1.0, 0.85, 0.5), vA) * min(1.0, vA * 2.0), 1.0); }`,
   );
 
+  // The glow of lights in the air. What gives light was marked in the picture's alpha; that part is
+  // blurred at three sizes and laid back over the picture, then the corners are drawn in a little.
+  renderer.setClearColor(0x000000, 0);
+  renderer.info.autoReset = false;
+  const picture = new THREE.WebGLRenderTarget(1, 1, { samples: 4 });
+  const levels = [2, 4, 8].map((div) => ({
+    div,
+    a: new THREE.WebGLRenderTarget(1, 1),
+    b: new THREE.WebGLRenderTarget(1, 1),
+  }));
+  const flat = /* glsl */ `out vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+  const pass = (uniforms: Record<string, THREE.IUniform>, body: string): THREE.ShaderMaterial =>
+    new THREE.ShaderMaterial({
+      glslVersion: THREE.GLSL3,
+      depthTest: false,
+      depthWrite: false,
+      uniforms,
+      vertexShader: flat,
+      fragmentShader: `precision highp float;\nin vec2 vUv;\nout vec4 outColour;\n${body}`,
+    });
+  const take = pass(
+    { tMap: { value: null }, uMask: { value: 1 } },
+    /* glsl */ `uniform sampler2D tMap; uniform float uMask;
+    void main() { vec4 c = texture(tMap, vUv); outColour = vec4(c.rgb * mix(1.0, min(c.a, 1.0), uMask), 1.0); }`,
+  );
+  const blur = pass(
+    { tMap: { value: null }, uStep: { value: new THREE.Vector2() } },
+    /* glsl */ `uniform sampler2D tMap; uniform vec2 uStep;
+    void main() {
+      vec3 c = texture(tMap, vUv).rgb * 0.227;
+      c += (texture(tMap, vUv + uStep * 1.385).rgb + texture(tMap, vUv - uStep * 1.385).rgb) * 0.316;
+      c += (texture(tMap, vUv + uStep * 3.231).rgb + texture(tMap, vUv - uStep * 3.231).rgb) * 0.0703;
+      outColour = vec4(c, 1.0);
+    }`,
+  );
+  const join = pass(
+    {
+      tMap: { value: picture.texture },
+      tNear: { value: levels[0]!.a.texture },
+      tMid: { value: levels[1]!.a.texture },
+      tFar: { value: levels[2]!.a.texture },
+      uNight: { value: set.night ?? 0 },
+    },
+    /* glsl */ `uniform sampler2D tMap; uniform sampler2D tNear; uniform sampler2D tMid; uniform sampler2D tFar; uniform float uNight;
+    void main() {
+      vec3 c = texture(tMap, vUv).rgb;
+      vec3 glow = texture(tNear, vUv).rgb * 0.16 + texture(tMid, vUv).rgb * 0.4 + texture(tFar, vUv).rgb * 0.6;
+      c += glow * mix(0.4, 0.75, uNight);
+      vec2 q = (vUv - 0.5) * vec2(1.0, 0.82);
+      c *= mix(1.0, 0.74, smoothstep(0.32, 0.86, length(q)) * mix(0.5, 1.0, uNight));
+      outColour = vec4(c, 1.0);
+    }`,
+  );
+  const quad = new FullScreenQuad(take);
+  const draw = (material: THREE.ShaderMaterial, to: THREE.WebGLRenderTarget | null): void => {
+    quad.material = material;
+    renderer.setRenderTarget(to);
+    quad.render(renderer);
+  };
+
   const out: Stage = {
     renderer,
     scene,
@@ -424,6 +500,12 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       const now = renderer.getSize(new THREE.Vector2());
       if (now.x === w && now.y === h) return;
       renderer.setSize(w, h, false);
+      const px = renderer.getDrawingBufferSize(new THREE.Vector2());
+      picture.setSize(px.x, px.y);
+      for (const l of levels) {
+        l.a.setSize(Math.ceil(px.x / l.div), Math.ceil(px.y / l.div));
+        l.b.setSize(Math.ceil(px.x / l.div), Math.ceil(px.y / l.div));
+      }
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
     },
@@ -440,7 +522,25 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       s.uCam!.value.copy(camera.matrixWorld);
       dynBuf.needsUpdate = true;
       dynGeo.setDrawRange(0, dyn.quads * 6);
+      renderer.info.reset();
+      renderer.setRenderTarget(picture);
       renderer.render(scene, camera);
+      let from = picture.texture;
+      for (const [i, l] of levels.entries()) {
+        take.uniforms.tMap!.value = from;
+        take.uniforms.uMask!.value = i ? 0 : 1;
+        draw(take, l.a);
+        for (let turn = 0; turn < 2; turn++) {
+          blur.uniforms.tMap!.value = l.a.texture;
+          blur.uniforms.uStep!.value.set(1 / l.a.width, 0);
+          draw(blur, l.b);
+          blur.uniforms.tMap!.value = l.b.texture;
+          blur.uniforms.uStep!.value.set(0, 1 / l.a.height);
+          draw(blur, l.a);
+        }
+        from = l.a.texture;
+      }
+      draw(join, null);
     },
   };
   return out;

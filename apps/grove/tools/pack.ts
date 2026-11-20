@@ -1,9 +1,9 @@
 /**
  * Builds `src/art/pack.gen.ts` from the texture pack in `assets/pack` (see its LICENSE.md).
  *
- * A tile is a 16x16 PNG taken as it is. A few are grey in the pack because a block game tints them
- * by biome; they get the grove's one grass colour here. `bun run pack` after changing this file or
- * adding a PNG.
+ * A tile is a 16x16 PNG taken as it is. A few are made here from the pack's own: the grass block's
+ * side (its dirt under its grass edge), a lighter and a darker spruce, the lit window. `bun run pack`
+ * after changing this file or adding a PNG.
  */
 import { readdirSync } from "node:fs";
 import { inflateSync } from "node:zlib";
@@ -14,65 +14,62 @@ interface Spec {
   from: string;
   /** Multiplied into every pixel, as a block game tints grey grass and leaves. */
   tint?: RGB;
+  /** Added to every pixel after the tint: the pack's spruce has no red in it at all, and a little warms it. */
+  add?: RGB;
   /** Another pack file laid on top where it is opaque. */
   over?: string;
   overTint?: RGB;
   /** Painted first, under a file with clear pixels. */
   under?: (x: number, y: number) => RGB;
-  /** Numbered variants of the file (`name1.png`, ...) become `<tile>1`, ... */
-  variants?: boolean;
+  /** Other drawings of the same thing; they become `<tile>1`, `<tile>2`, ... */
+  more?: readonly string[];
 }
 
-const GRASS: RGB = [94, 190, 107];
 const warm = (x: number, y: number): RGB => {
   const h = ((x >> 1) * 7 + (y >> 1) * 13 + ((x >> 1) ^ (y >> 1)) * 5) % 10;
   return h < 3 ? [255, 233, 176] : h < 8 ? [245, 185, 94] : [212, 144, 69];
 };
 
-/** The pack's spruce needles are a grey-blue green; the grove's sequoias are a warmer forest green, near its grass. */
-const LEAF: RGB = [180, 214, 140];
-
 const SPECS: Record<string, Spec> = {
-  grass_top: { from: "grass_block_top", tint: GRASS, variants: true },
-  grass_side: { from: "grass_block_side", over: "grass_block_side_overlay", overTint: GRASS },
-  dirt: { from: "dirt", variants: true },
-  podzol_top: { from: "podzol_top" },
-  podzol_side: { from: "podzol_side" },
-  path: { from: "coarse_dirt" },
-  moss: { from: "moss_block" },
-  log: { from: "jungle_log", variants: true },
-  log_top: { from: "jungle_log_top" },
-  log_dark: { from: "spruce_log", variants: true },
-  log_dark_top: { from: "spruce_log_top" },
-  log_seat: { from: "oak_log", variants: true },
-  log_seat_top: { from: "oak_log_top" },
-  leaves: { from: "spruce_leaves", tint: LEAF, variants: true },
-  leaves_lit: { from: "spruce_leaves", tint: [228, 250, 150], variants: true },
-  leaves_dark: { from: "spruce_leaves", tint: [140, 180, 136], variants: true },
-  planks: { from: "oak_planks", variants: true },
-  planks_dark: { from: "spruce_planks", variants: true },
-  cobble: { from: "cobblestone", variants: true },
-  cobble_mossy: { from: "mossy_cobblestone", variants: true },
-  stone_bricks: { from: "stone_bricks", variants: true },
-  roof: { from: "deepslate_tiles", variants: true },
-  bricks: { from: "bricks", variants: true },
-  ladder: { from: "ladder" },
-  window: { from: "glass", under: warm },
-  barrel_side: { from: "barrel_side" },
-  barrel_top: { from: "barrel_top" },
-  barrel_bottom: { from: "barrel_bottom" },
-  fern: { from: "fern", tint: GRASS, variants: true },
-  grass: { from: "grass", tint: GRASS, variants: true },
-  sapling: { from: "spruce_sapling" },
-  mushroom_brown: { from: "brown_mushroom" },
-  mushroom_red: { from: "red_mushroom" },
-  dandelion: { from: "dandelion" },
-  poppy: { from: "poppy" },
-  cornflower: { from: "cornflower" },
-  daisy: { from: "oxeye_daisy" },
-  berry_bush: { from: "sweet_berry_bush_stage3" },
-  wool_red: { from: "red_wool" },
-  wool_purple: { from: "purple_wool" },
+  grass_top: { from: "default_grass" },
+  grass_side: { from: "default_dirt", over: "default_grass_side" },
+  dirt: { from: "default_dirt" },
+  podzol_top: { from: "mcl_core_dirt_podzol_top" },
+  podzol_side: { from: "mcl_core_dirt_podzol_side" },
+  path: { from: "mcl_core_coarse_dirt" },
+  moss: { from: "default_moss" },
+  log: { from: "mcl_core_log_spruce" },
+  log_top: { from: "mcl_core_log_spruce_top" },
+  log_dark: { from: "mcl_core_log_big_oak" },
+  log_dark_top: { from: "mcl_core_log_big_oak_top" },
+  log_seat: { from: "default_tree" },
+  log_seat_top: { from: "default_tree_top" },
+  leaves: { from: "mcl_core_leaves_spruce", tint: [255, 290, 235], add: [16, 8, 0] },
+  leaves_lit: { from: "mcl_core_leaves_spruce", tint: [255, 345, 190], add: [34, 22, 0] },
+  leaves_dark: { from: "mcl_core_leaves_spruce", tint: [255, 225, 235], add: [6, 2, 4] },
+  planks: { from: "default_wood" },
+  planks_dark: { from: "mcl_core_planks_spruce" },
+  roof: { from: "mcl_core_planks_big_oak" },
+  cobble: { from: "default_cobble" },
+  cobble_mossy: { from: "default_mossycobble" },
+  stone_bricks: { from: "default_stone_brick" },
+  bricks: { from: "default_brick" },
+  ladder: { from: "default_ladder_wood" },
+  window: { from: "default_glass", under: warm },
+  barrel_side: { from: "mcl_barrels_barrel_side" },
+  barrel_top: { from: "mcl_barrels_barrel_top" },
+  barrel_bottom: { from: "mcl_barrels_barrel_bottom" },
+  fern: { from: "mcl_flowers_fern", tint: [70, 170, 70] },
+  grass: { from: "default_grass_3", more: ["default_grass_4", "default_grass_5"] },
+  sapling: { from: "mcl_core_sapling_spruce" },
+  mushroom_brown: { from: "flowers_mushroom_brown" },
+  mushroom_red: { from: "flowers_mushroom_red" },
+  dandelion: { from: "flowers_dandelion_yellow" },
+  poppy: { from: "mcl_flowers_poppy" },
+  cornflower: { from: "mcl_flowers_cornflower" },
+  daisy: { from: "mcl_flowers_oxeye_daisy" },
+  wool_red: { from: "wool_red" },
+  wool_purple: { from: "wool_violet" },
 };
 
 /** Reads an 8-bit PNG (grey, RGB, palette, with or without alpha) as RGBA rows; a taller image gives its top 16 rows. */
@@ -144,6 +141,7 @@ const out: string[] = [];
 const used: string[] = [];
 async function build(tile: string, spec: Spec, from: string): Promise<void> {
   const px = tinted(await read(from), spec.tint);
+  if (spec.add) for (let i = 0; i < px.length; i++) if (i % 4 !== 3) px[i] = Math.min(255, px[i]! + spec.add[i % 4]!);
   used.push(from);
   if (spec.under)
     for (let i = 0; i < 256; i++) if (px[i * 4 + 3]! < 128) px.set([...spec.under(i % 16, i >> 4), 255], i * 4);
@@ -156,12 +154,11 @@ async function build(tile: string, spec: Spec, from: string): Promise<void> {
 }
 for (const [tile, spec] of Object.entries(SPECS)) {
   await build(tile, spec, spec.from);
-  if (spec.variants)
-    for (let k = 1; files.has(`${spec.from}${k}.png`); k++) await build(`${tile}${k}`, spec, `${spec.from}${k}`);
+  for (const [k, from] of (spec.more ?? []).entries()) await build(`${tile}${k + 1}`, spec, from);
 }
 await Bun.write(
   `${import.meta.dir}/../src/art/pack.gen.ts`,
-  `// Generated by tools/pack.ts from assets/pack. Do not edit.\n// Textures: Pixel Perfection by XSSheep and Nova_Wostra, CC BY-SA 4.0. See assets/pack/LICENSE.md.\n/** Each tile as base64 RGBA, 16 rows of 16 from the top. */\nexport const PACK: Record<string, string> = {\n${out.join("\n")}\n};\n`,
+  `// Generated by tools/pack.ts from assets/pack. Do not edit.\n// Textures: REFI Textures by MysticTempest, CC BY-SA 4.0. See assets/pack/LICENSE.md.\n/** Each tile as base64 RGBA, 16 rows of 16 from the top. */\nexport const PACK: Record<string, string> = {\n${out.join("\n")}\n};\n`,
 );
 const unused = [...files].filter((f) => f.endsWith(".png") && !used.includes(f.slice(0, -4)));
 console.log(

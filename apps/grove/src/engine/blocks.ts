@@ -36,6 +36,8 @@ export interface BlockDef {
   readonly scatter?: boolean;
   /** Light given off, 0 to 15. */
   readonly light?: number;
+  /** Shows its own colour whatever the light, and glows in the air: a lit window. */
+  readonly glows?: boolean;
 }
 
 const t = tileIndex;
@@ -120,7 +122,7 @@ const DEFS: BlockDef[] = [
   solid("planks_dark", "planks_dark"),
   solid("slate", "roof"),
   solid("bricks", "bricks"),
-  { name: "window", opaque: true, tiles: all("window"), light: 12 },
+  { name: "window", opaque: true, tiles: all("window"), light: 12, glows: true },
   { name: "planks_slab", opaque: false, boxes: [box([0, 0, 0], [16, 8, 16], "planks")] },
   { name: "planks_slab_top", opaque: false, boxes: [box([0, 8, 0], [16, 16, 16], "planks")] },
   { name: "slate_slab", opaque: false, boxes: [box([0, 0, 0], [16, 8, 16], "roof")] },
@@ -151,11 +153,10 @@ const DEFS: BlockDef[] = [
   plant("poppy", "poppy"),
   plant("cornflower", "cornflower"),
   plant("daisy", "daisy"),
-  plant("berry_bush", "berry_bush"),
   {
     name: "campfire",
     opaque: false,
-    light: 15,
+    light: 22,
     cross: { tiles: [t("flame")], emit: true },
     boxes: [
       { from: [1, 0, 5], to: [15, 3, 8], tiles: all("log") },
@@ -171,7 +172,7 @@ const DEFS: BlockDef[] = [
   {
     name: "firepit",
     opaque: false,
-    light: 15,
+    light: 22,
     boxes: [
       box([3, 0, 3], [13, 2, 13], "embers", true),
       ...(

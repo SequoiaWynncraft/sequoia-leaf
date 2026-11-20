@@ -1,7 +1,7 @@
 /**
  * Every texture in the game, 16x16.
  *
- * The world's blocks wear a texture pack: Pixel Perfection, an openly licensed hand-drawn pack (see
+ * The world's blocks wear a texture pack: REFI Textures, an openly licensed pack in Minecraft's look (see
  * `assets/pack/LICENSE.md`), built into `pack.gen.ts` by `bun run pack`. Each block shows its one
  * tile, as a block game does. The few things the pack has no texture for are drawn here: the
  * lantern, the flame, the banner, the string lights.

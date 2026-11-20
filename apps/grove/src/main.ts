@@ -60,7 +60,7 @@ const flies: [number, number, number][] = camp
       });
 
 const errors: string[] = [];
-const night = Number(query.get("night") ?? (camp ? 0.6 : 0));
+const night = Number(query.get("night") ?? (camp ? 0.7 : 0));
 const lit = camp ?? board;
 const s = stage(canvas, { world, sun: SUN, flies, night, ...(lit ? { glows: lit.glows, fire: lit.fire } : {}) });
 s.renderer.debug.onShaderError = (gl, _program, vs, fs) => {
