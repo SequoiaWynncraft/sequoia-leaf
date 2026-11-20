@@ -2,7 +2,7 @@
 import * as THREE from "three";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 
-import { paintTile, reliefTile, RES, tileNames } from "../art/tiles.ts";
+import { paintTile, reliefTile, TILE, tileNames } from "../art/tiles.ts";
 import { Dyn } from "./actors.ts";
 import { meshRegion, STRIDE } from "./mesh.ts";
 import { ihash } from "./rand.ts";
@@ -48,14 +48,14 @@ const SHARED = /* glsl */ `
 /** Every tile as a layer of one texture: its colours, or its relief (see `reliefTile`). */
 function tiles(paint: (name: string) => Uint8Array = paintTile): THREE.DataArrayTexture {
   const names = tileNames();
-  const data = new Uint8Array(RES * RES * 4 * names.length);
+  const data = new Uint8Array(TILE * TILE * 4 * names.length);
   names.forEach((name, layer) => {
     const px = paint(name);
     // Rows go in from the bottom, so v runs up the tile.
-    for (let y = 0; y < RES; y++)
-      data.set(px.subarray(y * RES * 4, (y + 1) * RES * 4), layer * RES * RES * 4 + (RES - 1 - y) * RES * 4);
+    for (let y = 0; y < TILE; y++)
+      data.set(px.subarray(y * TILE * 4, (y + 1) * TILE * 4), layer * TILE * TILE * 4 + (TILE - 1 - y) * TILE * 4);
   });
-  const tex = new THREE.DataArrayTexture(data, RES, RES, names.length);
+  const tex = new THREE.DataArrayTexture(data, TILE, TILE, names.length);
   tex.format = THREE.RGBAFormat;
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestMipmapLinearFilter;

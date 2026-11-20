@@ -19,7 +19,7 @@ round, scroll or pinch to zoom.
 
 ## The one rule
 
-Everything in the world is a square tile on a box. Consistency comes from that rule, from one
+Everything in the world is a 16x16 tile on a box. Consistency comes from that rule, from one
 texture pack and from one light model.
 
 - `src/engine/blocks.ts`: the block registry. A block is data: its tiles, its shape (cube, boxes,
@@ -41,26 +41,19 @@ texture pack and from one light model.
 
 ## Textures
 
-The world wears **[Faithful 32x](https://faithfulpack.net)**, by the Faithful Resource Pack team,
-under the Faithful License v4 (`assets/pack/LICENSE.txt`; credit and details in
-`assets/pack/CREDITS.md`). Each block shows its one 32x32 tile, as a block game does, and a lawn's
-tiles are turned four ways.
+The world wears **REFI Textures**, an openly licensed 16x16 pack drawn from scratch to recapture
+the look of Minecraft (CC BY-SA 4.0; credits and terms in `assets/pack/LICENSE.md`). Each block
+shows its one 16x16 tile, as a block game does, and a lawn's tiles are turned four ways.
 
 - `assets/pack/`: the pack's PNGs, unchanged, only the ones the game uses.
 - `tools/pack.ts` (`bun run pack`): builds `src/art/pack.gen.ts` from them. It names each tile for
-  the game, tints the pack's grey grass, fern and spruce leaves as a block game tints them by biome,
-  and makes the lit window. Adding a block's texture is copying a PNG in and adding a line there.
-- `src/art/tiles.ts`: the pack's tiles, and the few things drawn here on a 16x16 grid because the
-  game shapes them its own way: the lantern, the flame, the banner, the string lights.
+  the game and makes a few from the pack's own: the grass block's side, a lighter and a darker
+  spruce, the lit window. Adding a block's texture is copying a PNG in and adding a line there.
+- `src/art/tiles.ts`: the pack's tiles, and the few things drawn here because the game shapes them
+  its own way: the lantern, the flame, the banner, the string lights.
 
-The licence allows use in a game of our own with clear credit, a visible link and the licence text
-in every distribution. It forbids a paywall, monetised links, taking donations for it, and passing
-as official. This project is free, open source and takes no money, and must stay so while it uses
-the pack. One term needs Faithful's own word before a public release: the pack may not stand in for
-Minecraft's graphics "when default textures otherwise wouldn't be allowed".
-
-Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft. Not run
-or endorsed by Faithful.
+Anyone who ships the game must credit the pack; the licence covers the textures and what is made
+from them, not the code.
 
 ## Light
 

@@ -5,7 +5,7 @@
  */
 import { deflateSync } from "node:zlib";
 
-import { paintTile, RES, tileNames } from "../src/art/tiles.ts";
+import { paintTile, TILE, tileNames } from "../src/art/tiles.ts";
 import "../src/engine/blocks.ts";
 
 const [out = "/tmp/grove-bench.png", scaleArg = "6", ...names] = process.argv.slice(2);
@@ -16,15 +16,15 @@ const SPAN = 64;
 /** A drawing as RGBA with its width in pixels. */
 function drawing(name: string): { px: Uint8Array; size: number } {
   const parts = all.filter((n) => n.startsWith(`${name}@`));
-  if (!parts.length) return { px: paintTile(name), size: RES };
+  if (!parts.length) return { px: paintTile(name), size: TILE };
   const n = Math.round(Math.sqrt(parts.length));
-  const size = n * RES;
+  const size = n * TILE;
   const px = new Uint8Array(size * size * 4);
   for (let row = 0; row < n; row++)
     for (let col = 0; col < n; col++) {
       const t = paintTile(`${name}@${col},${row}`);
-      for (let y = 0; y < RES; y++)
-        px.set(t.subarray(y * RES * 4, (y + 1) * RES * 4), ((row * RES + y) * size + col * RES) * 4);
+      for (let y = 0; y < TILE; y++)
+        px.set(t.subarray(y * TILE * 4, (y + 1) * TILE * 4), ((row * TILE + y) * size + col * TILE) * 4);
     }
   return { px, size };
 }

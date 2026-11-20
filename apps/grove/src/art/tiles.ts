@@ -1,17 +1,15 @@
 /**
- * Every texture in the game.
+ * Every texture in the game, 16x16.
  *
- * The world's blocks wear a texture pack, Faithful 32x (credit and licence in
- * `assets/pack/CREDITS.md`), built into `pack.gen.ts` by `bun run pack`. Each block shows its one
- * tile, as a block game does. The few things the game shapes its own way are drawn here on a
- * 16x16 grid: the lantern, the flame, the banner, the string lights.
+ * The world's blocks wear a texture pack: REFI Textures, an openly licensed pack in Minecraft's look (see
+ * `assets/pack/LICENSE.md`), built into `pack.gen.ts` by `bun run pack`. Each block shows its one
+ * tile, as a block game does. The few things the pack has no texture for are drawn here: the
+ * lantern, the flame, the banner, the string lights.
  */
 import { ihash, noise2 } from "../engine/rand.ts";
 import { PACK } from "./pack.gen.ts";
 
-/** The grid a tile drawn here is written on, and the grid of the texture pack and of every tile as the game shows it. */
 export const TILE = 16;
-export const RES = 32;
 export type Paint = (x: number, y: number) => string | null;
 
 const rows =
@@ -21,16 +19,15 @@ const rows =
     return ch === "." ? null : (key[ch] ?? null);
   };
 
-/** A pack tile: its pixels as they were drawn, on the pack's own grid. */
+/** A pack tile: its pixels as they were drawn. */
 const fromPack = (data: string): Paint => {
   const px = atob(data);
   const two = (i: number): string => px.charCodeAt(i).toString(16).padStart(2, "0");
   return (x, y) => {
-    const i = (y * RES + x) * 4;
+    const i = (y * TILE + x) * 4;
     return px.charCodeAt(i + 3) < 128 ? null : `#${two(i)}${two(i + 1)}${two(i + 2)}`;
   };
 };
-const FINE = new Set(Object.keys(PACK));
 
 /** One tile for every face of the lantern's small boxes: frame, glass, cap, chain. */
 const lantern: Paint = (x, y) => {
@@ -84,29 +81,24 @@ const hex = (c: string): [number, number, number] => [
   parseInt(c.slice(5, 7), 16),
 ];
 
-/**
- * A tile as RGBA rows from the top, on the game's grid: a pack tile as it is, a tile drawn here
- * with each of its pixels doubled. Clear pixels carry the tile's mean colour, so far-off edges
- * stay clean.
- */
+/** A tile as RGBA rows from the top. Clear pixels carry the tile's mean colour, so far-off edges stay clean. */
 export function paintTile(name: string): Uint8Array {
   const paint = TILES[name]!;
-  const scale = FINE.has(name) ? 1 : RES / TILE;
-  const out = new Uint8Array(RES * RES * 4);
+  const out = new Uint8Array(TILE * TILE * 4);
   const sum = [0, 0, 0];
   let n = 0;
-  for (let y = 0; y < RES; y++)
-    for (let x = 0; x < RES; x++) {
-      const c = paint(Math.floor(x / scale), Math.floor(y / scale));
+  for (let y = 0; y < TILE; y++)
+    for (let x = 0; x < TILE; x++) {
+      const c = paint(x, y);
       if (!c) continue;
       const [r, g, b] = hex(c);
-      out.set([r, g, b, 255], (y * RES + x) * 4);
+      out.set([r, g, b, 255], (y * TILE + x) * 4);
       sum[0]! += r;
       sum[1]! += g;
       sum[2]! += b;
       n++;
     }
-  for (let i = 0; i < RES * RES; i++) if (!out[i * 4 + 3]) out.set([sum[0]! / n, sum[1]! / n, sum[2]! / n, 0], i * 4);
+  for (let i = 0; i < TILE * TILE; i++) if (!out[i * 4 + 3]) out.set([sum[0]! / n, sum[1]! / n, sum[2]! / n, 0], i * 4);
   return out;
 }
 
@@ -146,19 +138,19 @@ export function reliefTile(name: string): Uint8Array {
   const [, bump, smooth] = SURFACE.find(([start]) => name.startsWith(start)) ?? ["", 0, 0.05];
   const px = paintTile(name);
   const height = (x: number, y: number): number => {
-    const i = (((y + RES) % RES) * RES + ((x + RES) % RES)) * 4;
+    const i = (((y + TILE) % TILE) * TILE + ((x + TILE) % TILE)) * 4;
     return (px[i]! * 0.3 + px[i + 1]! * 0.59 + px[i + 2]! * 0.11) / 255;
   };
-  const out = new Uint8Array(RES * RES * 4);
-  for (let y = 0; y < RES; y++)
-    for (let x = 0; x < RES; x++) {
-      const dx = (height(x + 1, y) - height(x - 1, y)) * bump * 3;
+  const out = new Uint8Array(TILE * TILE * 4);
+  for (let y = 0; y < TILE; y++)
+    for (let x = 0; x < TILE; x++) {
+      const dx = (height(x + 1, y) - height(x - 1, y)) * bump * 2.2;
       // Rows run down the drawing and up the face.
-      const dy = (height(x, y - 1) - height(x, y + 1)) * bump * 3;
+      const dy = (height(x, y - 1) - height(x, y + 1)) * bump * 2.2;
       const len = Math.hypot(dx, dy, 1);
       out.set(
         [128 - (dx / len) * 127, 128 - (dy / len) * 127, 128 + (1 / len) * 127, Math.round(smooth * 255)],
-        (y * RES + x) * 4,
+        (y * TILE + x) * 4,
       );
     }
   return out;
