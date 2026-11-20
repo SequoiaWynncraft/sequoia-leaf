@@ -98,8 +98,9 @@ ground x `cx` from 128 to 896. Each frame (`forest.ts`):
 5. `near` (depth 1.3): ferns, and the welcome's giant trunks at the valley's ends;
 6. falling leaves and snow, then the HUD (`hud.ts`).
 
-Members stand on the manifest's spots, which run nearest the heart first: the highest trees take
-the nearest, the older member first among equals, so the same roster always lands the same way
+Members stand on the manifest's spots in the spots' order, which runs front row first and, within a
+row, from the heart outward: the highest trees take the painted front row, the older member first
+among equals, so the same roster always lands the same way
 (`plant`). The bundle has as many spots as its trees leave room for (40 now): none in the pond,
 none where a tree could reach over the sign, and none where a tree would cover the Great Sequoia,
 the Swamp or the stall. The prototype's 70 members show their highest. A tree is tapped by its own
