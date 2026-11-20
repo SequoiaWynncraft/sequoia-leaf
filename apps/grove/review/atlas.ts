@@ -1,7 +1,7 @@
 /** Writes every tile to one sheet, each shown 3x3 so its seams can be judged: `bun review/atlas.ts <out.png> [scale]`. */
 import { deflateSync } from "node:zlib";
 
-import { paintTile, TILE, tileNames } from "../src/art/tiles.ts";
+import { paintTile, RES, tileNames } from "../src/art/tiles.ts";
 import "../src/engine/actors.ts";
 
 const TILE_NAMES = tileNames();
@@ -9,7 +9,7 @@ const TILE_NAMES = tileNames();
 const [out = "/tmp/grove-atlas.png", scaleArg = "4"] = process.argv.slice(2);
 const scale = Number(scaleArg);
 const cols = 6;
-const cell = TILE * 3 * scale + 8;
+const cell = RES * 3 * scale + 8;
 const rowsN = Math.ceil(TILE_NAMES.length / cols);
 const w = cols * cell + 8;
 const h = rowsN * cell + 8;
@@ -19,9 +19,9 @@ TILE_NAMES.forEach((name, n) => {
   const px = paintTile(name);
   const ox = 8 + (n % cols) * cell;
   const oy = 8 + Math.floor(n / cols) * cell;
-  for (let y = 0; y < TILE * 3 * scale; y++)
-    for (let x = 0; x < TILE * 3 * scale; x++) {
-      const s = ((Math.floor(y / scale) % TILE) * TILE + (Math.floor(x / scale) % TILE)) * 4;
+  for (let y = 0; y < RES * 3 * scale; y++)
+    for (let x = 0; x < RES * 3 * scale; x++) {
+      const s = ((Math.floor(y / scale) % RES) * RES + (Math.floor(x / scale) % RES)) * 4;
       if (px[s + 3]) img.set([px[s]!, px[s + 1]!, px[s + 2]!, 255], ((oy + y) * w + ox + x) * 4);
     }
 });
