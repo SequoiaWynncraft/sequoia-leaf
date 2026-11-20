@@ -17,14 +17,25 @@ const G = 8;
 const HEIGHT = [6, 9, 13, 17, 22, 28, 35, 43, 52, 62, 73, 85, 98];
 const GIRTH = [0.5, 0.6, 0.8, 1.0, 1.3, 1.7, 2.1, 2.6, 3.1, 3.6, 4.2, 4.8, 5.4];
 
+export interface Find {
+  readonly at: V3;
+  readonly tile: string;
+  /** The colours it scatters when picked. */
+  readonly petals: readonly string[];
+}
 export interface Home {
   readonly world: World;
   readonly ground: number;
   readonly fire: V3;
-  /** Where leaflings stand, nearest the fire first. */
+  /** Where spirits live, one for each kind, in an arc round the far side of the fire. */
   readonly spots: readonly V3[];
+  /** Where cones come to rest, by the tree's foot on the side the grove is looked at from. */
+  readonly rest: readonly V3[];
+  /** Flowers and mushrooms to find. */
+  readonly finds: readonly Find[];
 }
 export const treeHeight = (level: number): number => HEIGHT[Math.min(level, HEIGHT.length - 1)]!;
+export const treeGirth = (level: number): number => GIRTH[Math.min(level, GIRTH.length - 1)]!;
 
 const GIRTHS = GIRTH;
 /** The clearing and the old forest round it, without the member's tree: built once, kept, and laid down again at every growth. */
@@ -61,10 +72,8 @@ function clearing(w: World): Uint8Array {
       if (w.get(x, G, z) || w.get(x, G - 1, z) !== B.moss || Math.hypot(x - C, z - C) < 9) continue;
       const h = ihash(x, 1, z, 9);
       const wild = 0.25 + noise2(x / 8, z / 8, 6) * 0.5;
-      if (h < wild * 0.7) w.set(x, G, z, ihash(x, 2, z, 9) < 0.18 ? B.fern! : B.grass!);
-      else if (h > 0.985)
-        w.set(x, G, z, [B.dandelion!, B.daisy!, B.cornflower!, B.poppy!][Math.floor(ihash(x, 3, z, 9) * 4)]!);
-      else if (h > 0.978) w.set(x, G, z, B.shroom!);
+      // Flowers and mushrooms are not blocks here: they are things to find, and the game draws and regrows them.
+      if (h < wild * 0.7 && h < 0.97) w.set(x, G, z, ihash(x, 2, z, 9) < 0.18 ? B.fern! : B.grass!);
     }
   return w.blocks.slice();
 }
@@ -170,14 +179,39 @@ export function beyond(): Mesh {
   return m;
 }
 
+const FOUND: readonly (readonly [string, readonly string[]])[] = [
+  ["dandelion", ["#fed639", "#ffec4f", "#f19d25"]],
+  ["daisy", ["#f7f7f7", "#d6e8e8", "#faca34"]],
+  ["cornflower", ["#466aeb", "#6c83e7", "#2a4cc7"]],
+  ["poppy", ["#ed302c", "#bf2529", "#912214"]],
+  ["mushroom_brown", ["#cc9978", "#b5947d", "#916d55"]],
+  ["mushroom_red", ["#fe2a2a", "#e21212", "#f0ece0"]],
+];
 export function buildHome(level: number): Home {
   const world = new World(SIZE, 126, SIZE);
   plant(world, level);
   const fire: V3 = [C + 7.5, G + 0.25, C + 6.5];
-  const spots: V3[] = Array.from({ length: 10 }, (_, i) => {
-    const a = 2.2 + i * 0.83;
-    const r = 2.1 + (i % 3) * 0.9;
+  // An arc round the fire on the side away from the eye, in two rows.
+  const spots: V3[] = Array.from({ length: 12 }, (_, i) => {
+    const a = 3.86 + (i - 5.5) * 0.31;
+    const r = 2.5 + (i % 2) * 1.5;
     return [fire[0] + Math.cos(a) * r, G, fire[2] + Math.sin(a) * r];
   });
-  return { world, ground: G, fire, spots };
+  const rest: V3[] = Array.from({ length: 6 }, (_, i) => {
+    const a = -0.35 + i * 0.36;
+    const r = 6.2 + (i % 2) * 1.1;
+    return [C + 0.5 + Math.cos(a) * r, G, C + 0.5 + Math.sin(a) * r];
+  });
+  // Things to find, in the lawn within reach of the eye: never under the tree, on the fire or where a spirit lives.
+  const finds: Find[] = [];
+  for (let i = 0; finds.length < 26 && i < 400; i++) {
+    const x = C + Math.round((ihash(i, 1, 0, 77) - 0.35) * 40);
+    const z = C + Math.round((ihash(i, 2, 0, 77) - 0.35) * 40);
+    if (world.get(x, G, z) || world.get(x, G - 1, z) !== B.moss) continue;
+    if (Math.hypot(x - C, z - C) < 10 || Math.hypot(x + 0.5 - fire[0], z + 0.5 - fire[2]) < 5.2) continue;
+    if (finds.some((f) => Math.hypot(f.at[0] - x - 0.5, f.at[2] - z - 0.5) < 2.5)) continue;
+    const [tile, petals] = FOUND[Math.floor(ihash(i, 3, 0, 77) * FOUND.length)]!;
+    finds.push({ at: [x + 0.5, G, z + 0.5], tile, petals });
+  }
+  return { world, ground: G, fire, spots, rest, finds };
 }

@@ -6,22 +6,41 @@ keeps its state in the browser; there is no account and no server in it yet.
 
 ## The game so far
 
-- `src/game/state.ts`: the rules, as pure functions over a small save: Sap a second, what growth
-  and leaflings cost, what a tap gives, how much a grove makes while away (it rests after a day, so
-  nobody has to come back daily), saving and loading. `bun test` holds them to their promises.
-- `src/game/hud.ts` and the styles in `index.html`: the interface, plain panels over the world.
-- `src/gen/home.ts`: the member's grove; the tree's size is its level, so growing it rebuilds it.
-- The grove is looked into from a fixed side: it can be turned and zoomed, never left. Growing the
-  tree is a ceremony (the grove goes gold, the tree grows behind the light, the camera climbs the
-  new trunk and comes back to the fire); the heavy rebuild happens under the light, so nothing freezes.
-- Beyond the grove's own blocks the meadow runs on and a far forest stands in the haze
-  (`beyond()` in `home.ts`), built once, so the grove is never an island in a void.
+Everything in the grove answers a touch, and what it does happens in the world, not on a card.
+
+- **The tree** makes Sap all the time, online or off (it rests after a day away). Tap it and it
+  shakes: leaves fall, Sap flies to the purse. Grow it and it swells out of its old size while
+  gold rises round its foot and everyone turns to watch. Thirteen rings.
+- **Care.** Water the tree: a cloud comes over and rains on it. Waterings come back by themselves
+  and never spoil. Three fill the Bloom, and a full Bloom drops a cone from the crown.
+- **Cones open in fire.** Tap a cone and it is tossed into the fire, which burns up through the
+  colours of the guild's ranks, one beat a rank, to the rank the cone holds, lighting the whole grove
+  that colour. Then it bursts and a spirit rises out of the flames.
+- **Spirits** live round the fire: twelve of them, Leafkin to Yggdrasil, each adding to what the
+  tree makes. More of the same deepen its bond, up to four hearts. Tap one and it spins. The rate
+  card is published in the game, with a Treant or better within forty cones.
+- **The fire** can be stoked for half as much Sap again, for twenty seconds.
+- **Finds.** Flowers and mushrooms in the lawn can be picked for a little Sap and grow back.
+
+Where it is in the code:
+
+- `src/game/state.ts`, `src/game/spirits.ts`: the rules and the rate card, as pure functions over a
+  small save, with chance handed in. `bun test` holds them to their promises.
+- `src/game/play.ts`: the hand that carries the rules out in the world: what a tap hits, the rain,
+  the burn, the growth, who lives where.
+- `src/game/hud.ts` and the styles in `index.html`: the purse, the meters, the buttons, the
+  spirits' book, the cards.
+- `src/game/sfx.ts`: the sounds, made from plain tones and noise.
+- `src/art/critters.ts`: the spirits as block creatures. `src/engine/particles.ts`: sparks, leaves,
+  rain. `src/gen/home.ts`: the grove and what lies beyond it.
+- The grove a ring older is built ahead of time in idle moments, so growing never waits; a device
+  that cannot keep up gets a softer picture, not a slower game.
 - `?scene=home` is the game and the default. `?scene=camp`, `?scene=glade` and `?scene=board` are
   for looking at the world.
 
 Decided for this game: Sap is the main currency and comes only from the grove. Leaf, earned by
-raiding, will buy speed and variety, never anything Sap cannot reach. The tree has thirteen rings.
-Rebirth, cones, building and the guild's shared tree come after this slice.
+raiding, will buy speed and variety (cones, water), never anything Sap cannot reach. No prestige
+yet, no ranking. The state is kept in the browser; there is no account and no server in it yet.
 
 ```sh
 bun run dev                         # the glade, with hot reload

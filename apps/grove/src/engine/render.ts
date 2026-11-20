@@ -106,6 +106,23 @@ export interface Stage {
   fogStart: number;
   /** Rebuilds the world's meshes after its blocks have changed. */
   remesh(): void;
+  /** Draws at a share of the screen's own pixel density: less on a device that cannot keep up. */
+  sharpness: number;
+  /**
+   * Builds meshes for another world a piece at a time, to be put in place of this one's all at once:
+   * `step()` does one piece and says whether more are left; `swap()` shows them.
+   */
+  ahead(from: World): { step(): boolean; swap(): void };
+  /** What the game plays on the world: wind, the tree's growth, the fire's colour and strength, who throws shadows. */
+  readonly fx: {
+    gust: number;
+    /** The tree's foot (x, z, ground) and how much of its size it stands at, 0 to 1. */
+    tree: [number, number, number, number];
+    fire: [number, number, number];
+    fireMix: number;
+    firePower: number;
+    casters: Caster[];
+  };
   frame(time: number): void;
   resize(): void;
 }
@@ -162,6 +179,10 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       uCaster: { value: casters.map((c) => new THREE.Vector4(c.at[0], c.at[1], c.at[2], c.radius)) },
       uCasterH: { value: casters.map((c) => c.height) },
       uCasterN: { value: Math.min(CASTERS, (set.casters ?? []).length) },
+      uGust: { value: 0 },
+      uTree: { value: new THREE.Vector4(0, 0, 0, 1) },
+      uFire: { value: new THREE.Vector4(1, 0.58, 0.24, 1) },
+      uFireMix: { value: 0 },
     },
     vertexShader: /* glsl */ `
       in vec4 aUv;
@@ -173,21 +194,36 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       out vec3 vN;
       out vec3 vPos;
       uniform float uTime;
+      uniform float uGust;
+      uniform vec4 uTree;
       void main() {
+        // A moving thing (a figure, a flame) carries its kind sixteen higher, so the world's own
+        // tricks (the tree growing, the wind) leave it alone.
+        bool moving = aUv.w > 15.5;
+        float kind = moving ? aUv.w - 16.0 : aUv.w;
         vUv = aUv.xy;
         vTile = aUv.z;
-        vEmit = aUv.w;
+        vEmit = kind;
         vLight = aLight;
         vN = normal;
         vec3 p = position;
+        // The member's tree, growing: everything of it is drawn toward its foot by uTree.w, so a
+        // tree just grown can stand at its old size and swell to its new one.
+        float up = position.y - uTree.z;
+        if (!moving && uTree.w < 0.9995 && up > 0.001 && distance(position.xz, uTree.xy) < min(15.0, 8.5 + up * 1.2)) {
+          p.xz = uTree.xy + (position.xz - uTree.xy) * uTree.w;
+          p.y = uTree.z + up * uTree.w;
+        }
         // Foliage stirs: every corner at one place moves the same way, so no gap opens between
         // blocks. A plant is rooted and only its top moves.
-        bool plant = aUv.w > 2.5 && aUv.w < 3.5 || aUv.w > 4.5 && aUv.w < 5.5;
-        if (plant || (aUv.w > 1.5 && aUv.w < 2.5)) {
-          float reach = plant ? aUv.y * 0.07 : 0.03;
+        bool plant = kind > 2.5 && kind < 3.5 || kind > 4.5 && kind < 5.5;
+        if (!moving && (plant || (kind > 1.5 && kind < 2.5))) {
+          // A gust (a shake of the tree, rain, a growth) throws everything about for a moment.
+          float reach = (plant ? aUv.y * 0.07 : 0.03) * (1.0 + uGust * 5.0);
           float phase = dot(floor(position + 0.5), vec3(0.71, 0.37, 0.93));
-          p.x += sin(uTime * 1.3 + phase) * reach;
-          p.z += cos(uTime * 1.1 + phase * 1.3) * reach;
+          float quick = 1.0 + uGust * 3.0;
+          p.x += sin(uTime * 1.3 * quick + phase) * reach;
+          p.z += cos(uTime * 1.1 * quick + phase * 1.3) * reach;
           p.y += sin(uTime * 0.9 + phase * 0.7) * reach * (plant ? 0.0 : 0.4);
         }
         vec4 wp = modelMatrix * vec4(p, 1.0);
@@ -208,6 +244,8 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       uniform vec4 uCaster[${CASTERS}];
       uniform float uCasterH[${CASTERS}];
       uniform int uCasterN;
+      uniform vec4 uFire;
+      uniform float uFireMix;
       ${SHARED}
       in vec2 vUv;
       in float vTile;
@@ -348,7 +386,7 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
           // A lamp behind the face lights none of its pixels, however they lean.
           shape *= leafy ? 1.0 : smoothstep(-0.25, 0.1, dot(vN, dir));
           float power = uLampSet[i].x * fall * mix(1.0, flicker, uLampSet[i].y);
-          if (i == 0) power *= mix(0.15, 1.0, clear);
+          if (i == 0) power *= mix(0.15, 1.0, clear) * uFire.a;
           // Some of a lamp's light comes round by way of everything else it lights, so a ledge above
           // the fire or a wall turned from it is dim, not black.
           direct += power * mix(0.2, 1.0, shape);
@@ -363,7 +401,8 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
         float reached = min(vLight.y, 1.0);
         // The warm fill near the fire is mostly the fire's own, so its shadows take some of that too.
         float fill = reached * reached * 0.9 * mix(1.0, vLight.w, 0.6) * mix(0.5, 1.0, clear);
-        vec3 lamp = vec3(1.0, 0.58, 0.24) * (direct + fill) * mix(0.75, 1.0, uNight);
+        // The fire takes the colour of what burns in it, and the grove takes the fire's.
+        vec3 lamp = mix(vec3(1.0, 0.58, 0.24), uFire.rgb, uFireMix * 0.8) * (direct + fill) * mix(0.75, 1.0, uNight);
         // Away from the lamps, night takes the red out of things and leaves them blue.
         float lum = dot(t.rgb, vec3(0.4, 0.45, 0.15));
         vec3 cool = mix(t.rgb, vec3(lum) * vec3(0.9, 0.95, 1.25), uNight * 0.45);
@@ -375,7 +414,10 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
         // Bright light rolls off instead of burning out, the red first, so a hot spot goes to gold.
         vec3 over = max(c - 0.7, 0.0);
         c = min(c, 0.7) + over / (1.0 + over * 2.5);
-        c = mix(c, t.rgb * 1.1, glows);
+        vec3 own = t.rgb;
+        if (glows > 0.5 && uLampN > 0 && distance(vPos, uLamp[0].xyz) < 3.2)
+          own = mix(own, dot(own, vec3(0.3, 0.5, 0.2)) * uFire.rgb * 1.7, uFireMix);
+        c = mix(c, own * 1.1, glows);
         vec3 eye = vPos - cameraPosition;
         float fd = max(length(eye) - uFogStart, 0.0) / 62.0;
         float f = 1.0 - exp(-fd * sqrt(fd));
@@ -468,31 +510,50 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
     geo.setAttribute("normal", new THREE.InterleavedBufferAttribute(buf, 3, 7));
     geo.setAttribute("aLight", new THREE.InterleavedBufferAttribute(buf, 4, 10));
   };
-  const CHUNK = 24;
+  // Small pieces, so building one is never a long pause.
+  const CHUNK = 16;
   let chunks: THREE.Mesh[] = [];
   /** Builds the world's meshes from its blocks as they now are, in place of any built before. */
-  const remesh = (): void => {
-    for (const c of chunks) {
-      scene.remove(c);
-      c.geometry.dispose();
-    }
-    chunks = [];
-    for (let z = 0; z < world.sz; z += CHUNK)
-      for (let x = 0; x < world.sx; x += CHUNK) {
-        const m = meshRegion(world, sun, x, z, Math.min(world.sx, x + CHUNK), Math.min(world.sz, z + CHUNK));
-        if (!m.ni) continue;
-        const geo = new THREE.BufferGeometry();
-        attributes(geo, new THREE.InterleavedBuffer(m.data.subarray(0, m.nv * STRIDE), STRIDE));
-        geo.setIndex(new THREE.BufferAttribute(m.index.subarray(0, m.ni), 1));
-        geo.boundingSphere = new THREE.Sphere(
-          new THREE.Vector3(x + CHUNK / 2, world.sy / 2, z + CHUNK / 2),
-          Math.hypot(CHUNK, world.sy, CHUNK) / 2,
-        );
-        const mesh = new THREE.Mesh(geo, blocks);
-        chunks.push(mesh);
-        scene.add(mesh);
-      }
+  const piece = (from: World, x: number, z: number): THREE.Mesh | null => {
+    const m = meshRegion(from, sun, x, z, Math.min(from.sx, x + CHUNK), Math.min(from.sz, z + CHUNK));
+    if (!m.ni) return null;
+    const geo = new THREE.BufferGeometry();
+    attributes(geo, new THREE.InterleavedBuffer(m.data.subarray(0, m.nv * STRIDE), STRIDE));
+    geo.setIndex(new THREE.BufferAttribute(m.index.subarray(0, m.ni), 1));
+    geo.boundingSphere = new THREE.Sphere(
+      new THREE.Vector3(x + CHUNK / 2, from.sy / 2, z + CHUNK / 2),
+      Math.hypot(CHUNK, from.sy, CHUNK) / 2,
+    );
+    // The tree's growth moves its corners, so a piece must not be dropped for seeming out of sight.
+    const mesh = new THREE.Mesh(geo, blocks);
+    mesh.frustumCulled = false;
+    return mesh;
   };
+  const ahead = (from: World): { step(): boolean; swap(): void } => {
+    const todo: [number, number][] = [];
+    for (let z = 0; z < from.sz; z += CHUNK) for (let x = 0; x < from.sx; x += CHUNK) todo.push([x, z]);
+    const made: THREE.Mesh[] = [];
+    return {
+      step() {
+        const next = todo.shift();
+        if (next) {
+          const mesh = piece(from, next[0], next[1]);
+          if (mesh) made.push(mesh);
+        }
+        return todo.length > 0;
+      },
+      swap() {
+        while (this.step());
+        for (const c of chunks) {
+          scene.remove(c);
+          c.geometry.dispose();
+        }
+        chunks = made;
+        for (const c of chunks) scene.add(c);
+      },
+    };
+  };
+  const remesh = (): void => ahead(world).swap();
   remesh();
   if (set.beyond?.ni) {
     const m = set.beyond;
@@ -647,13 +708,17 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
     camera,
     dyn,
     fogStart: 40,
+    sharpness: Math.min(devicePixelRatio, 1.5),
     remesh,
+    ahead,
+    fx: { gust: 0, tree: [0, 0, 0, 1], fire: [1, 0.58, 0.24], fireMix: 0, firePower: 1, casters: [] },
     resize() {
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       // Setting a canvas's size clears it, even to the size it has, so only when it changes.
       const now = renderer.getSize(new THREE.Vector2());
-      if (now.x === w && now.y === h) return;
+      if (now.x === w && now.y === h && renderer.getPixelRatio() === out.sharpness) return;
+      renderer.setPixelRatio(out.sharpness);
       renderer.setSize(w, h, false);
       const px = renderer.getDrawingBufferSize(new THREE.Vector2());
       picture.setSize(px.x, px.y);
@@ -669,6 +734,18 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       each("uTime", time);
       each("uFogStart", out.fogStart);
       each("uScale", size.y);
+      const u = blocks.uniforms;
+      u.uGust!.value = out.fx.gust;
+      u.uTree!.value.set(...out.fx.tree);
+      u.uFire!.value.set(...out.fx.fire, out.fx.firePower);
+      u.uFireMix!.value = out.fx.fireMix;
+      if (out.fx.casters.length) {
+        out.fx.casters.slice(0, CASTERS).forEach((c, i) => {
+          u.uCaster!.value[i].set(c.at[0], c.at[1], c.at[2], c.radius);
+          u.uCasterH!.value[i] = c.height;
+        });
+        u.uCasterN!.value = Math.min(CASTERS, out.fx.casters.length);
+      }
       camera.updateMatrixWorld();
       const s = sky.material.uniforms;
       s.uRes!.value.copy(size);

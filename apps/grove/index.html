@@ -18,7 +18,7 @@
         height: 100dvh;
         touch-action: none;
       }
-      /* The interface: plain panels in the grove's dusk colours, sized for a thumb. */
+      /* The interface: panels in the grove's dusk colours, sized for a thumb. */
       #hud {
         position: fixed;
         inset: 0;
@@ -30,8 +30,16 @@
           Consolas,
           monospace;
         color: #fff3cf;
-        padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
-          max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+        --pad: 10px;
+        --top: max(var(--pad), env(safe-area-inset-top));
+        --left: max(var(--pad), env(safe-area-inset-left));
+        --right: max(var(--pad), env(safe-area-inset-right));
+        --bottom: max(12px, env(safe-area-inset-bottom));
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      #hud [hidden] {
+        display: none !important;
       }
       #hud .panel,
       #hud .deed {
@@ -43,29 +51,11 @@
           inset 0 -3px 0 #1a0f1e66;
         border-radius: 2px;
       }
-      #hud .purse {
-        position: absolute;
-        top: max(10px, env(safe-area-inset-top));
-        left: max(10px, env(safe-area-inset-left));
-        padding: 8px 12px;
-        min-width: 120px;
-      }
-      #hud .tree {
-        position: absolute;
-        top: max(10px, env(safe-area-inset-top));
-        right: max(10px, env(safe-area-inset-right));
-        padding: 8px 12px;
-        text-align: right;
-      }
       #hud .label {
         font-size: 11px;
         letter-spacing: 0.08em;
         text-transform: uppercase;
         color: #d49045;
-      }
-      #hud .sap {
-        font-size: 26px;
-        color: #f5b95e;
       }
       #hud .per {
         font-size: 12px;
@@ -74,64 +64,17 @@
       #hud .stage {
         font-size: 17px;
       }
-      #hud .bar {
+      #hud .purse {
         position: absolute;
-        left: 0;
-        right: 0;
-        bottom: max(12px, env(safe-area-inset-bottom));
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 10px;
-        padding: 0 10px;
+        top: var(--top);
+        left: var(--left);
+        padding: 8px 12px;
+        min-width: 132px;
       }
-      #hud .deed {
-        font: inherit;
-        color: #fff3cf;
-        min-height: 52px;
-        min-width: min(260px, 44vw);
-        padding: 8px 14px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 2px;
-        cursor: pointer;
-      }
-      #hud .deed .cost {
-        font-size: 12px;
-        color: #e0c39a;
-      }
-      #hud .deed.ready {
-        border-color: #f5b95e;
-        background: #54286ae6;
-      }
-      #hud .deed:disabled {
-        color: #9a86a8;
-        cursor: default;
-      }
-      #hud .deed:active:not(:disabled) {
-        transform: translateY(2px);
-      }
-      #hud .card {
-        position: absolute;
-        left: 50%;
-        top: 42%;
-        transform: translate(-50%, -50%);
-        padding: 16px 22px;
-        text-align: center;
-        display: grid;
-        gap: 6px;
-        cursor: pointer;
-        max-width: 80vw;
-      }
-      #hud .pop {
-        position: absolute;
-        transform: translate(-50%, -100%);
+      #hud .sap {
+        font-size: 26px;
         color: #f5b95e;
-        font-size: 16px;
-        text-shadow: 0 2px 0 #1a0f1e;
-        animation: pop 0.9s ease-out forwards;
+        transform-origin: left center;
       }
       #hud .sap.bump {
         animation: bump 0.25s ease-out;
@@ -142,88 +85,334 @@
           color: #fff3cf;
         }
       }
-      /* The growing ceremony: gold light floods in, holds while the tree grows behind it, and clears. */
-      #hud .veil {
-        position: absolute;
-        inset: 0;
+      #hud .warm {
+        margin-top: 5px;
+        font-size: 11px;
+        color: #ffd98a;
         display: grid;
-        place-items: center;
+        gap: 3px;
       }
-      #hud .veil::before {
-        content: "";
+      #hud .warm i {
+        display: block;
+        height: 3px;
+        background: #f08a3c;
+      }
+      #hud .tree {
         position: absolute;
-        inset: 0;
-        background: radial-gradient(circle at 50% 55%, #fff3cf 0%, #f5b95e 38%, #d4904500 78%);
-        animation: veil 4.2s ease-in-out forwards;
+        top: var(--top);
+        right: var(--right);
+        padding: 8px 12px;
+        text-align: right;
       }
-      @keyframes veil {
-        0% {
-          opacity: 0;
-        }
-        10%,
-        16% {
-          opacity: 1;
-        }
-        42% {
-          opacity: 0.16;
-        }
-        86% {
-          opacity: 0.16;
-        }
-        100% {
-          opacity: 0;
-        }
-      }
-      #hud .rite {
-        text-align: center;
+      #hud .care {
+        position: absolute;
+        top: calc(var(--top) + 92px);
+        left: var(--left);
+        padding: 8px 12px;
+        width: 132px;
         display: grid;
         gap: 4px;
+      }
+      #hud .meter {
+        height: 10px;
+        background: #1a0f1e;
+        border: 1px solid #5a296e;
+      }
+      #hud .meter i {
+        display: block;
+        height: 100%;
+        background: linear-gradient(#ffd98a, #f5b95e);
+        transition: width 0.6s cubic-bezier(0.3, 1.4, 0.5, 1);
+      }
+      #hud .pips {
+        display: flex;
+        gap: 5px;
+      }
+      #hud .pips b {
+        width: 12px;
+        height: 12px;
+        background: #1a0f1e;
+        border: 1px solid #5a296e;
+        transition: background 0.3s;
+      }
+      #hud .pips b.full {
+        background: #7fb6e6;
+        border-color: #cfe6ff;
+      }
+      #hud .dock {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: var(--bottom);
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 var(--pad);
+        transition: opacity 0.3s;
+      }
+      #hud .dock.waiting {
+        opacity: 0.35;
+        pointer-events: none;
+      }
+      #hud .deed {
+        font: inherit;
+        color: #fff3cf;
+        min-height: 50px;
+        min-width: min(168px, 44vw);
+        padding: 7px 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        cursor: pointer;
+        transition:
+          transform 0.08s,
+          border-color 0.2s,
+          background 0.2s;
+      }
+      #hud .deed .cost {
+        font-size: 11px;
+        color: #e0c39a;
+      }
+      #hud .deed.ready {
+        border-color: #f5b95e;
+        background: #54286ae6;
+      }
+      #hud .deed.water.ready {
+        border-color: #7fb6e6;
+      }
+      #hud .deed:disabled {
+        color: #9a86a8;
+        cursor: default;
+      }
+      #hud .deed:active:not(:disabled) {
+        transform: translateY(2px) scale(0.98);
+      }
+      #hud .deed.mute {
+        min-width: 0;
+        font-size: 11px;
+        color: #e0c39a;
+      }
+      #hud .hint {
+        position: absolute;
+        left: 50%;
+        top: calc(var(--top) + 70px);
+        transform: translateX(-50%);
+        padding: 6px 12px;
+        background: #1a0f1ecc;
+        border-left: 3px solid #f5b95e;
+        animation: nudge 1.6s ease-in-out infinite;
+        white-space: nowrap;
+      }
+      @keyframes nudge {
+        50% {
+          transform: translate(-50%, -4px);
+        }
+      }
+      #hud .card {
+        position: absolute;
+        left: 50%;
+        top: 42%;
+        transform: translate(-50%, -50%);
+        padding: 16px 22px;
+        text-align: center;
+        display: grid;
+        gap: 6px;
+        justify-items: center;
+        cursor: pointer;
+        max-width: min(360px, 84vw);
+        animation: rise 0.35s cubic-bezier(0.3, 1.5, 0.5, 1);
+      }
+      @keyframes rise {
+        from {
+          transform: translate(-50%, -38%) scale(0.7);
+          opacity: 0;
+        }
+      }
+      #hud .card.spirit {
+        border-color: var(--rank);
+        box-shadow:
+          0 0 0 2px #1a0f1e,
+          0 0 34px -4px var(--rank);
+        top: 64%;
+      }
+      #hud .card.spirit .rank {
+        color: var(--rank);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        font-size: 13px;
+      }
+      #hud .card .tag {
+        font-size: 11px;
+        padding: 1px 8px;
+        background: var(--rank);
+        color: #1a0f1e;
+      }
+      #hud .face {
+        width: 64px;
+        height: 64px;
+        image-rendering: pixelated;
+        border: 2px solid var(--rank, #5a296e);
+        background: #1a0f1e;
+      }
+      #hud .shade {
+        position: absolute;
+        inset: 0;
+        background: #1a0f1eb0;
+        pointer-events: auto;
+        display: grid;
+        place-items: center;
+        overflow: auto;
+        padding: 12px;
+      }
+      #hud .pages {
+        padding: 14px 16px;
+        display: grid;
+        gap: 8px;
+        width: min(560px, 94vw);
+        text-align: center;
+        animation: rise2 0.25s ease-out;
+      }
+      @keyframes rise2 {
+        from {
+          transform: translateY(14px);
+          opacity: 0;
+        }
+      }
+      #hud .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+        gap: 6px;
+      }
+      #hud .cell {
+        display: grid;
+        justify-items: center;
+        gap: 2px;
+        padding: 6px 2px;
+        background: #1a0f1e80;
+        border-bottom: 3px solid var(--rank);
+      }
+      #hud .cell .face {
+        width: 48px;
+        height: 48px;
+        display: grid;
+        place-items: center;
+        font-size: 22px;
+        color: #5a296e;
+      }
+      #hud .cell.unknown {
+        opacity: 0.55;
+      }
+      #hud .cell .rank {
+        font-size: 10px;
+        color: var(--rank);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      #hud .cell .name {
+        font-size: 12px;
+      }
+      #hud .hearts {
+        color: #e67fb0;
+        font-size: 12px;
+        min-height: 14px;
+      }
+      #hud .rates {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px;
+      }
+      #hud .rate {
+        display: grid;
+        padding: 3px 7px;
+        font-size: 11px;
+        background: #1a0f1e80;
+        border-top: 2px solid var(--rank);
+      }
+      #hud .rate b {
+        color: var(--rank);
+      }
+      #hud .pop {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        color: #f5b95e;
+        font-size: 16px;
+        text-shadow: 0 2px 0 #1a0f1e;
+        animation: pop 0.9s ease-out forwards;
+        white-space: nowrap;
+      }
+      @keyframes pop {
+        to {
+          transform: translate(-50%, -260%);
+          opacity: 0;
+        }
+      }
+      #hud .mote {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        margin: -4px;
+        background: #f5b95e;
+        box-shadow:
+          0 0 0 1px #fff3cf,
+          0 0 8px #f5b95e;
+      }
+      /* A title for what just happened in the world: it slides in under the top panels and leaves by itself. */
+      #hud .banner {
+        position: absolute;
+        left: 50%;
+        top: calc(var(--top) + 6px);
+        text-align: center;
+        display: grid;
+        gap: 2px;
         text-shadow:
           0 2px 0 #1a0f1e,
-          0 0 18px #1a0f1e;
-        animation: rite 4.2s ease-out forwards;
+          0 0 14px #1a0f1e;
+        animation: banner 3.6s ease-out forwards;
+        white-space: nowrap;
       }
-      #hud .rite .name {
-        font-size: clamp(30px, 7vw, 54px);
-        color: #fff3cf;
+      #hud .banner .name {
+        font-size: clamp(22px, 5vw, 36px);
       }
-      #hud .rite .line {
-        font-size: 16px;
+      #hud .banner .line {
         color: #f5b95e;
       }
-      @keyframes rite {
-        0%,
-        14% {
+      @keyframes banner {
+        0% {
           opacity: 0;
-          transform: scale(0.7);
+          transform: translate(-50%, -24px);
         }
-        26% {
+        9% {
           opacity: 1;
-          transform: scale(1.06);
+          transform: translate(-50%, 4px);
         }
-        32%,
+        14%,
         84% {
           opacity: 1;
-          transform: scale(1);
+          transform: translate(-50%, 0);
         }
         100% {
           opacity: 0;
-          transform: translateY(-12px);
+          transform: translate(-50%, -12px);
         }
       }
       #hud .toast {
         position: absolute;
         left: 50%;
-        top: 22%;
-        padding: 10px 16px;
-        animation: toast 2.4s ease-out forwards;
+        top: 24%;
+        padding: 8px 14px;
+        animation: toast 2.6s ease-out forwards;
+        white-space: nowrap;
       }
       @keyframes toast {
         0% {
           opacity: 0;
           transform: translate(-50%, 10px);
         }
-        12%,
+        10%,
         80% {
           opacity: 1;
           transform: translate(-50%, 0);
@@ -233,10 +422,9 @@
           transform: translate(-50%, -10px);
         }
       }
-      @keyframes pop {
-        to {
-          transform: translate(-50%, -260%);
-          opacity: 0;
+      @media (max-width: 620px) {
+        #hud .deed {
+          min-width: 44vw;
         }
       }
     </style>

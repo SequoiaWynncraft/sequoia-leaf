@@ -33,7 +33,8 @@ export class Dyn {
     if (this.quads >= 8000) return;
     for (let k = 0; k < 4; k++) {
       this.data.set(
-        [p[k]![0], p[k]![1], p[k]![2], uv[k]![0], uv[k]![1], tile, emit, n[0], n[1], n[2], sky, glow, sun, 1],
+        // Sixteen is added to the kind: the mark of a moving thing (see the block shader).
+        [p[k]![0], p[k]![1], p[k]![2], uv[k]![0], uv[k]![1], tile, emit + 16, n[0], n[1], n[2], sky, glow, sun, 1],
         (this.quads * 4 + k) * STRIDE,
       );
     }
@@ -79,7 +80,7 @@ const turn = (v: V3, r: V3): V3 => {
   return [x, y, z];
 };
 
-const UV0 = 3;
+export const UV0 = 3;
 
 export function draw(dyn: Dyn, w: World, a: Actor): void {
   const yaw: V3 = [0, a.yaw, 0];
@@ -132,7 +133,7 @@ export function draw(dyn: Dyn, w: World, a: Actor): void {
   }
 }
 
-const six = (front: string, rest: string, top = rest): FaceTiles => [
+export const six = (front: string, rest: string, top = rest): FaceTiles => [
   tileIndex(rest),
   tileIndex(rest),
   tileIndex(top),
@@ -140,17 +141,17 @@ const six = (front: string, rest: string, top = rest): FaceTiles => [
   tileIndex(front),
   tileIndex(rest),
 ];
-const all = (name: string): FaceTiles => six(name, name);
+export const all = (name: string): FaceTiles => six(name, name);
 
 /** Paints small art onto the part of a tile that a box's front shows; the rest of the tile is `fill`. */
-const front =
+export const front =
   (art: readonly string[], key: Record<string, string>, fill: string) =>
   (x: number, y: number): string => {
     const row = art[y - (16 - UV0 - art.length)];
     const ch = row?.[x - UV0];
     return ch ? (key[ch] ?? fill) : fill;
   };
-const flecked =
+export const flecked =
   (a: string, b: string, seed: number) =>
   (x: number, y: number): string =>
     ihash(x, y, 1, seed) < 0.18 ? b : a;
@@ -245,14 +246,17 @@ function sheet(
 }
 
 /** The fire's flames: two crossed sheets two blocks tall, a new drawing nine times a second. */
-export function flames(dyn: Dyn, at: V3, time: number): void {
+/** The fire's flames; `size` is 1 for a quiet fire and more when it is stoked or a cone burns in it. */
+export function flames(dyn: Dyn, at: V3, time: number, size = 1): void {
   const f = Math.floor(time * 9) % 4;
   // A tall flame in the middle and a low one across it, a frame apart, so the fire is never a flat card.
-  for (const [ax, az, bx, bz, wide, tall, lag] of [
+  for (const [ax, az, bx, bz, w0, t0, lag] of [
     [-1, -1, 1, 1, 0.72, 1.25, 0],
     [-1, 1, 1, -1, 0.6, 0.95, 1],
     [-1, 0, 1, 0, 0.5, 0.7, 2],
-  ] as const)
+  ] as const) {
+    const wide = w0 * (0.6 + size * 0.4);
+    const tall = t0 * size;
     for (const [part, y] of [
       ["lo", 0],
       ["hi", 1],
@@ -266,6 +270,7 @@ export function flames(dyn: Dyn, at: V3, time: number): void {
       ];
       sheet(dyn, p, tileIndex(`flame${(f + lag) % 4}_${part}`), 1, 1, 1);
     }
+  }
 }
 
 /** A banner hanging from a bar at `at`, facing `yaw`, its foot moving more than its head. */
