@@ -1,4 +1,13 @@
-import { CARE_TOOLS, GREAT_GOAL_KINDS, GROVE_RANKS } from "@sequoia-leaf/core";
+import {
+  CARE_TOOLS,
+  CONVERSION_KINDS,
+  CONVERSION_STATUSES,
+  DEFAULT_RULES,
+  GREAT_GOAL_KINDS,
+  GROVE_RANKS,
+  LISTING_KINDS,
+  ORDER_STATES,
+} from "@sequoia-leaf/core";
 import { Schema } from "effect";
 
 // What each route answers, field for field. Names are snake_case, as the mod and
@@ -276,4 +285,201 @@ export const Offered = Schema.Struct({
   /** What they have offered in the offering's week, this one included. */
   offered: Schema.Number,
   glow: Schema.Number,
+});
+
+// The marketplace and conversions.
+
+/** A row's id in a path or a query: a whole number from 1. */
+export const Id = Schema.FiniteFromString.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 2 ** 53 - 1 }));
+
+/** How many a page holds: up to 100, 50 when the client doesn't say. */
+const PageLimit = Schema.FiniteFromString.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 100 }));
+
+/** A page of a list that is newest first: `before` is the `next_before` of the page before. */
+export const Page = { before: Schema.optional(Id), limit: Schema.optional(PageLimit) };
+
+/** What a member writes for others to read: a dispute's reason, a staff note, a claim's note. */
+const Note = (max: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(max));
+const MarketNote = Note(DEFAULT_RULES.market.note.max);
+const ClaimNote = Note(DEFAULT_RULES.conversions.note.max);
+
+const Member = Schema.Struct({ player_id: Schema.String, name: Schema.String });
+const ListingKind = Schema.Literals(LISTING_KINDS);
+const NextBefore = Schema.NullOr(Schema.Number);
+
+export const ListingJson = Schema.Struct({
+  id: Schema.Number,
+  kind: ListingKind,
+  title: Schema.String,
+  description: Schema.String,
+  /** Leaf for one unit. */
+  price: Schema.Number,
+  quantity: Schema.Number,
+  /** Units the orders that stand haven't taken. */
+  remaining: Schema.Number,
+  status: Schema.Literals(["open", "sold_out", "expired", "withdrawn"]),
+  seller: Member,
+  created_at: Time,
+  updated_at: Time,
+  /** It takes no orders from then. */
+  expires_at: Time,
+});
+
+export const ListingAnswer = Schema.Struct({ listing: ListingJson });
+
+/** Listings taking orders, newest first. `next_before` asks for the page after, or is null on the last. */
+export const Listings = Schema.Struct({ listings: Schema.Array(ListingJson), next_before: NextBefore });
+
+/** The seller's own listings, however they stand, newest first, with how many orders on each are open. */
+export const MyListings = Schema.Struct({
+  listings: Schema.Array(Schema.Struct({ ...ListingJson.fields, open_orders: Schema.Number })),
+  next_before: NextBefore,
+});
+
+export const ListingQuery = {
+  kind: Schema.optional(ListingKind),
+  /** Words in the title or the description. */
+  q: Schema.optional(Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100))),
+  ...Page,
+};
+
+export const ListingBody = Schema.Struct({
+  kind: ListingKind,
+  title: Schema.String,
+  description: Schema.optional(Schema.String),
+  price: Schema.Int,
+  /** 1 when left out. */
+  quantity: Schema.optional(Schema.Int),
+  request_id: RequestId,
+});
+
+/** The terms a seller may change while no order on the listing is open. */
+export const ListingEditBody = Schema.Struct({
+  price: Schema.optional(Schema.Int),
+  description: Schema.optional(Schema.String),
+});
+
+/** `price` is the unit price the buyer was shown and agreed to: Leaf holds that or nothing. */
+export const BuyBody = Schema.Struct({
+  price: Schema.Int,
+  /** 1 when left out. */
+  quantity: Schema.optional(Schema.Int),
+  request_id: RequestId,
+});
+
+export const DisputeBody = Schema.Struct({ reason: MarketNote });
+
+export const ResolveBody = Schema.Struct({
+  outcome: Schema.Literals(["release", "refund"]),
+  note: Schema.optional(MarketNote),
+});
+
+export const OrderJson = Schema.Struct({
+  id: Schema.Number,
+  listing: Schema.Struct({ id: Schema.Number, kind: ListingKind, title: Schema.String }),
+  seller: Member,
+  buyer: Member,
+  quantity: Schema.Number,
+  /** The unit price agreed, the Leaf held, and the part of it the seller is not paid. */
+  price: Schema.Number,
+  leaf: Schema.Number,
+  fee: Schema.Number,
+  state: Schema.Literals(ORDER_STATES),
+  placed_at: Time,
+  delivered_at: Schema.NullOr(Time),
+  disputed_at: Schema.NullOr(Time),
+  /** When it was completed, cancelled or refunded. */
+  closed_at: Schema.NullOr(Time),
+  /** While delivered and not disputed: when it confirms itself and pays the seller. */
+  auto_confirms_at: Schema.NullOr(Time),
+  cancelled_by: Schema.NullOr(Schema.Literals(["buyer", "seller"])),
+  dispute_reason: Schema.NullOr(Schema.String),
+  /** How staff settled a dispute, and their note to both sides. */
+  resolution: Schema.NullOr(
+    Schema.Struct({ outcome: Schema.Literals(["release", "refund"]), note: Schema.NullOr(Schema.String) }),
+  ),
+});
+
+export const OrderAnswer = Schema.Struct({ order: OrderJson });
+
+/** An order after one of its sides acted on it, and that member's balance after it. */
+export const OrderActed = Schema.Struct({ order: OrderJson, leaf: Schema.Number });
+
+/** Orders the member bought or sold, newest first. */
+export const Orders = Schema.Struct({ orders: Schema.Array(OrderJson), next_before: NextBefore });
+
+/** Disputed orders, the longest-waiting first. */
+export const Disputes = Schema.Struct({ orders: Schema.Array(OrderJson) });
+
+const ConversionKind = Schema.Literals(CONVERSION_KINDS);
+
+export const ConversionJson = Schema.Struct({
+  id: Schema.Number,
+  kind: ConversionKind,
+  /** LE for a claim of LE; 1 for a tome or an aspect. */
+  count: Schema.Number,
+  leaf: Schema.Number,
+  note: Schema.NullOr(Schema.String),
+  status: Schema.Literals(CONVERSION_STATUSES),
+  requested_at: Time,
+  /**
+   * The start of the month whose allowance pays it: while it waits, the month
+   * it is due from, which can only come sooner; once paid, the month it was
+   * paid from. Null once declined or cancelled.
+   */
+  due_from: Schema.NullOr(Time),
+  /** Whether staff can pay it now. */
+  due: Schema.Boolean,
+  /** Its place in its kind's queue, from 1, while it waits. */
+  position: Schema.NullOr(Schema.Number),
+  closed_at: Schema.NullOr(Time),
+  /** Staff's reason, when they declined it. */
+  decline_reason: Schema.NullOr(Schema.String),
+});
+
+const StaffConversionJson = Schema.Struct({ ...ConversionJson.fields, player: Member });
+
+/** `count` is how many LE, from the rate card's `min_count`; 1 when left out, for a tome or an aspect. */
+export const ConversionBody = Schema.Struct({
+  kind: ConversionKind,
+  count: Schema.optional(Schema.Int),
+  /** What the member wants, such as which tome or aspect. */
+  note: Schema.optional(ClaimNote),
+  request_id: RequestId,
+});
+
+/** A claim after the member made or cancelled it, and their balance after it. */
+export const ConversionAnswer = Schema.Struct({ conversion: ConversionJson, leaf: Schema.Number });
+
+/** The member's claims, newest first. */
+export const MyConversions = Schema.Struct({ conversions: Schema.Array(ConversionJson) });
+
+export const StaffConversionAnswer = Schema.Struct({ conversion: StaffConversionJson });
+
+/** Every claim waiting, kind by kind, each kind in its order. */
+export const ConversionQueue = Schema.Struct({ queue: Schema.Array(StaffConversionJson) });
+
+export const PayBody = Schema.Struct({ note: Schema.optional(ClaimNote) });
+
+export const DeclineBody = Schema.Struct({ reason: ClaimNote });
+
+export const ConversionRates = Schema.Struct({
+  /** True while the rates are a first proposal still to be tuned. */
+  provisional: Schema.Boolean,
+  kinds: Schema.Array(
+    Schema.Struct({
+      kind: ConversionKind,
+      name: Schema.String,
+      /** Leaf for one LE, one tome or one aspect. */
+      leaf_per_unit: Schema.Number,
+      min_count: Schema.Number,
+      max_count: Schema.Number,
+      /** What the guild pays out each calendar month in UTC, for everyone together. */
+      monthly_cap: Schema.Number,
+      /** What one member may claim in a calendar month, or null for no limit of their own. */
+      member_monthly_limit: Schema.NullOr(Schema.Number),
+      /** The month a claim made now would be paid from. */
+      next_due_from: Time,
+    }),
+  ),
 });

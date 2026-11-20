@@ -19,8 +19,16 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder, HttpApiError } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 
-import { CurrentIdentity, LeafApi, RerollBodyErrors, Session, Unexpected } from "../api/api.ts";
-import { IdentityUnavailable, InternalError, Invalid, NotAMember, Refused, Unauthorized } from "../api/errors.ts";
+import { CurrentIdentity, LeafApi, RerollBodyErrors, Session, StaffOnly, Unexpected } from "../api/api.ts";
+import {
+  IdentityUnavailable,
+  InternalError,
+  Invalid,
+  NotAMember,
+  NotStaff,
+  Refused,
+  Unauthorized,
+} from "../api/errors.ts";
 import type * as Body from "../api/schemas.ts";
 import { Identities } from "../auth/session.ts";
 import { syncOnDemand } from "../earning/run.ts";
@@ -29,7 +37,10 @@ import { Ledger } from "../ledger/store.ts";
 import { questJson } from "../quests/json.ts";
 import { rerollQuestFor } from "../quests/reroll.ts";
 import { Quests } from "../quests/store.ts";
+import { ConversionHandlers, ConversionRatesHandlers } from "./conversions.ts";
 import { ForestHandlers, GroveBodyErrorsLive, GroveHandlers } from "./grove.ts";
+import { MarketBrowseHandlers, MarketHandlers, TradeBodyErrorsLive } from "./market.ts";
+import { StaffHandlers } from "./staff.ts";
 
 /** How far back the list of finished quests reaches. */
 const RECENTLY_COMPLETED_MS = 2 * DAY_MS;
@@ -107,6 +118,17 @@ export const SessionLive = Layer.effect(
         return yield* Effect.provideService(httpEffect, CurrentIdentity, result.identity);
       }),
     });
+  }),
+);
+
+/** Lets in only staff, the members the backend marks as website administrators. */
+export const StaffOnlyLive = Layer.succeed(StaffOnly)((httpEffect) =>
+  Effect.gen(function* () {
+    const identity = yield* CurrentIdentity;
+    if (!identity.admin) {
+      return yield* new NotStaff({ code: "not_staff", message: "Only staff can do that" });
+    }
+    return yield* httpEffect;
   }),
 );
 
@@ -313,8 +335,25 @@ function sseFrame(event: StoredEvent): string {
 
 /** The API's routes and the implementations of its middleware. */
 export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.json" }).pipe(
-  Layer.provide([SystemHandlers, MeHandlers, GroveHandlers, ForestHandlers]),
-  Layer.provide([SessionLive, RerollBodyErrorsLive, GroveBodyErrorsLive, UnexpectedLive]),
+  Layer.provide([
+    SystemHandlers,
+    MeHandlers,
+    GroveHandlers,
+    ForestHandlers,
+    MarketHandlers,
+    MarketBrowseHandlers,
+    ConversionHandlers,
+    ConversionRatesHandlers,
+    StaffHandlers,
+  ]),
+  Layer.provide([
+    SessionLive,
+    StaffOnlyLive,
+    RerollBodyErrorsLive,
+    GroveBodyErrorsLive,
+    TradeBodyErrorsLive,
+    UnexpectedLive,
+  ]),
 );
 
 /** Any request no route takes, answered in the same `{ "code", "message" }` shape as every other error. */

@@ -2,7 +2,35 @@ import type { GroveRank, PlayerId } from "@sequoia-leaf/core";
 import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
+import type { conversionJson } from "../conversions/json.ts";
+import type { orderJson } from "../market/json.ts";
 import type { questJson } from "../quests/json.ts";
+
+/**
+ * What happened to a marketplace order, told to both its sides with the order
+ * as it is after it: placed, delivered, completed (the seller was paid, on the
+ * buyer's word or after the days to dispute it passed), cancelled before
+ * delivery, disputed, or resolved by staff (`order.resolution` says how).
+ */
+export type MarketEvent = {
+  readonly type:
+    | "market.order_placed"
+    | "market.delivered"
+    | "market.completed"
+    | "market.cancelled"
+    | "market.disputed"
+    | "market.resolved";
+  readonly data: { order: ReturnType<typeof orderJson> };
+};
+
+/**
+ * A claim of Leaf out to LE, a tome or an aspect: made and waiting in the
+ * queue, paid in-game by staff, or declined by staff and its Leaf refunded.
+ */
+export type ConversionEvent = {
+  readonly type: "conversion.requested" | "conversion.paid" | "conversion.declined";
+  readonly data: { conversion: ReturnType<typeof conversionJson> };
+};
 
 /** Something that happened to a player, with its details in the shape the API sends. */
 export type PlayerEvent =
@@ -75,7 +103,9 @@ export type PlayerEvent =
   | {
       readonly type: "guild.war_win";
       readonly data: { war: string; territory: string; players: string[]; occurred_at: string; in_claim?: boolean };
-    };
+    }
+  | MarketEvent
+  | ConversionEvent;
 
 /** An event as stored: its place in the player's history, and its details as the JSON text that was written. */
 const StoredEvent = Schema.Struct({ id: Schema.Int, type: Schema.String, data: Schema.String, createdAt: Schema.Int });

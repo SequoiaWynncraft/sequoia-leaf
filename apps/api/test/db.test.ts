@@ -67,6 +67,8 @@ describe("the database", () => {
       { migration_id: 10, name: "schema" },
       { migration_id: 11, name: "grove" },
       { migration_id: 12, name: "great" },
+      { migration_id: 13, name: "market" },
+      { migration_id: 14, name: "conversions" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -111,7 +113,7 @@ describe("the database", () => {
         path,
         (sql) => sql`SELECT migration_id FROM effect_sql_migrations WHERE migration_id > 10 ORDER BY 1`,
       ),
-    ).toEqual([{ migration_id: 11 }, { migration_id: 12 }]);
+    ).toEqual([11, 12, 13, 14].map((id) => ({ migration_id: id })));
   });
 
   it("adds up for the Great Sequoia the raids and wars recorded before it was built", async () => {

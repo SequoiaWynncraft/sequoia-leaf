@@ -7,6 +7,7 @@ import { snapshotIfDue } from "./backup/snapshot.ts";
 import { AppConfig } from "./config.ts";
 import { runCreditSync } from "./earning/run.ts";
 import { payMissedLevels } from "./levels/pay.ts";
+import { autoConfirmOrders } from "./market/actions.ts";
 import type { SyncMode, SyncResult } from "./sync/windowed.ts";
 
 /** The minute of each hour whose run re-reads the last week instead of the last few minutes. */
@@ -77,19 +78,34 @@ const offsiteCopies = Effect.gen(function* () {
   );
 });
 
+/** The marketplace's own upkeep: confirms delivered orders nobody disputed in time, paying their sellers. */
+const marketUpkeep = Effect.gen(function* () {
+  yield* step(
+    "Confirming delivered orders",
+    Effect.gen(function* () {
+      const confirmed = yield* autoConfirmOrders(yield* Clock.currentTimeMillis, DEFAULT_RULES.market);
+      if (confirmed > 0) {
+        yield* Effect.logInfo("orders_auto_confirmed").pipe(Effect.annotateLogs({ confirmed }));
+      }
+    }),
+  );
+});
+
 /** Runs a job at the start of every minute on its own fiber, so a slow run of one never holds up another. */
 const everyMinute = <R>(job: Effect.Effect<void, never, R>) =>
   job.pipe(Effect.repeat(Schedule.cron("* * * * *")), Effect.forkScoped);
 
 /**
- * What Leaf does every minute, for as long as it runs: the two feed syncs,
- * snapshots and offsite copies, each on its own. An offsite copy can take
- * minutes; the syncs, the deep sync at minute 17, and snapshots carry on meanwhile.
+ * What Leaf does every minute, for as long as it runs: the two feed syncs, the
+ * marketplace's upkeep, snapshots and offsite copies, each on its own. An
+ * offsite copy can take minutes; the syncs, the deep sync at minute 17, and
+ * snapshots carry on meanwhile.
  */
 export const EveryMinute = Layer.effectDiscard(
   Effect.gen(function* () {
     yield* everyMinute(scheduledSync("credit", runCreditSync));
     yield* everyMinute(scheduledSync("achievement", runAchievementSync));
+    yield* everyMinute(marketUpkeep);
     yield* everyMinute(yield* snapshots);
     yield* everyMinute(yield* offsiteCopies);
   }),

@@ -9,7 +9,7 @@
     },
     "status": 200,
     "body": {
-      "leaf": 3846,
+      "leaf": 7346,
       "spent": 0,
       "quest": {
         "id": "weekly:2",
@@ -87,7 +87,7 @@
         "id": "10000000-0000-0000-0000-000000000001",
         "username": "Alice"
       },
-      "leaf": 3846,
+      "leaf": 7346,
       "xp": 3221,
       "level": {
         "number": 3,
@@ -264,66 +264,6 @@
     "status": 200,
     "body": {
       "events": [
-        {
-          "id": 1,
-          "type": "leaf_earned",
-          "created_at": "2026-11-25T12:40:00.000Z",
-          "data": {
-            "source": "raid",
-            "leaf": 110,
-            "xp": 110,
-            "detail": "Nest of the Grootslangs",
-            "occurred_at": "2026-11-25T12:31:00.000Z"
-          }
-        },
-        {
-          "id": 2,
-          "type": "leaf_earned",
-          "created_at": "2026-11-25T12:40:00.000Z",
-          "data": {
-            "source": "raid",
-            "leaf": 110,
-            "xp": 110,
-            "detail": "Nest of the Grootslangs",
-            "occurred_at": "2026-11-25T12:31:20.000Z"
-          }
-        },
-        {
-          "id": 3,
-          "type": "leaf_earned",
-          "created_at": "2026-11-25T12:40:00.000Z",
-          "data": {
-            "source": "raid",
-            "leaf": 110,
-            "xp": 110,
-            "detail": "Nest of the Grootslangs",
-            "occurred_at": "2026-11-25T12:31:40.000Z"
-          }
-        },
-        {
-          "id": 4,
-          "type": "leaf_earned",
-          "created_at": "2026-11-25T12:40:00.000Z",
-          "data": {
-            "source": "raid",
-            "leaf": 110,
-            "xp": 110,
-            "detail": "Orphion's Nexus of Light",
-            "occurred_at": "2026-11-25T12:32:00.000Z"
-          }
-        },
-        {
-          "id": 5,
-          "type": "leaf_earned",
-          "created_at": "2026-11-25T12:40:00.000Z",
-          "data": {
-            "source": "raid",
-            "leaf": 110,
-            "xp": 110,
-            "detail": "Orphion's Nexus of Light",
-            "occurred_at": "2026-11-25T12:32:20.000Z"
-          }
-        },
         {
           "id": 6,
           "type": "leaf_earned",
@@ -798,6 +738,417 @@
         },
         {
           "id": 42,
+          "type": "market.order_placed",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "order": {
+              "id": 1,
+              "listing": {
+                "id": 1,
+                "kind": "service",
+                "title": "A raid carry"
+              },
+              "seller": {
+                "player_id": "10000000-0000-0000-0000-000000000002",
+                "name": "Bob"
+              },
+              "buyer": {
+                "player_id": "10000000-0000-0000-0000-000000000001",
+                "name": "Alice"
+              },
+              "quantity": 1,
+              "price": 100,
+              "leaf": 100,
+              "fee": 0,
+              "state": "placed",
+              "placed_at": "2026-11-25T12:40:00.000Z",
+              "delivered_at": null,
+              "disputed_at": null,
+              "closed_at": null,
+              "auto_confirms_at": null,
+              "cancelled_by": null,
+              "dispute_reason": null,
+              "resolution": null
+            }
+          }
+        },
+        {
+          "id": 44,
+          "type": "market.delivered",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "order": {
+              "id": 1,
+              "listing": {
+                "id": 1,
+                "kind": "service",
+                "title": "A raid carry"
+              },
+              "seller": {
+                "player_id": "10000000-0000-0000-0000-000000000002",
+                "name": "Bob"
+              },
+              "buyer": {
+                "player_id": "10000000-0000-0000-0000-000000000001",
+                "name": "Alice"
+              },
+              "quantity": 1,
+              "price": 100,
+              "leaf": 100,
+              "fee": 0,
+              "state": "delivered",
+              "placed_at": "2026-11-25T12:40:00.000Z",
+              "delivered_at": "2026-11-25T12:40:00.000Z",
+              "disputed_at": null,
+              "closed_at": null,
+              "auto_confirms_at": "2026-12-02T12:40:00.000Z",
+              "cancelled_by": null,
+              "dispute_reason": null,
+              "resolution": null
+            }
+          }
+        },
+        {
+          "id": 46,
+          "type": "market.completed",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "order": {
+              "id": 1,
+              "listing": {
+                "id": 1,
+                "kind": "service",
+                "title": "A raid carry"
+              },
+              "seller": {
+                "player_id": "10000000-0000-0000-0000-000000000002",
+                "name": "Bob"
+              },
+              "buyer": {
+                "player_id": "10000000-0000-0000-0000-000000000001",
+                "name": "Alice"
+              },
+              "quantity": 1,
+              "price": 100,
+              "leaf": 100,
+              "fee": 0,
+              "state": "completed",
+              "placed_at": "2026-11-25T12:40:00.000Z",
+              "delivered_at": "2026-11-25T12:40:00.000Z",
+              "disputed_at": null,
+              "closed_at": "2026-11-25T12:40:00.000Z",
+              "auto_confirms_at": null,
+              "cancelled_by": null,
+              "dispute_reason": null,
+              "resolution": null
+            }
+          }
+        },
+        {
+          "id": 48,
+          "type": "market.order_placed",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "order": {
+              "id": 2,
+              "listing": {
+                "id": 1,
+                "kind": "service",
+                "title": "A raid carry"
+              },
+              "seller": {
+                "player_id": "10000000-0000-0000-0000-000000000002",
+                "name": "Bob"
+              },
+              "buyer": {
+                "player_id": "10000000-0000-0000-0000-000000000001",
+                "name": "Alice"
+              },
+              "quantity": 1,
+              "price": 100,
+              "leaf": 100,
+              "fee": 0,
+              "state": "placed",
+              "placed_at": "2026-11-25T12:40:00.000Z",
+              "delivered_at": null,
+              "disputed_at": null,
+              "closed_at": null,
+              "auto_confirms_at": null,
+              "cancelled_by": null,
+              "dispute_reason": null,
+              "resolution": null
+            }
+          }
+        },
+        {
+          "id": 50,
+          "type": "market.cancelled",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "order": {
+              "id": 2,
+              "listing": {
+                "id": 1,
+                "kind": "service",
+                "title": "A raid carry"
+              },
+              "seller": {
+                "player_id": "10000000-0000-0000-0000-000000000002",
+                "name": "Bob"
+              },
+              "buyer": {
+                "player_id": "10000000-0000-0000-0000-000000000001",
+                "name": "Alice"
+              },
+              "quantity": 1,
+              "price": 100,
+              "leaf": 100,
+              "fee": 0,
+              "state": "cancelled",
+              "placed_at": "2026-11-25T12:40:00.000Z",
+              "delivered_at": null,
+              "disputed_at": null,
+              "closed_at": "2026-11-25T12:40:00.000Z",
+              "auto_confirms_at": null,
+              "cancelled_by": "buyer",
+              "dispute_reason": null,
+              "resolution": null
+            }
+          }
+        },
+        {
+          "id": 52,
+          "type": "market.order_placed",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "order": {
+              "id": 3,
+              "listing": {
+                "id": 1,
+                "kind": "service",
+                "title": "A raid carry"
+              },
+              "seller": {
+                "player_id": "10000000-0000-0000-0000-000000000002",
+                "name": "Bob"
+              },
+              "buyer": {
+                "player_id": "10000000-0000-0000-0000-000000000001",
+                "name": "Alice"
+              },
+              "quantity": 1,
+              "price": 100,
+              "leaf": 100,
+              "fee": 0,
+              "state": "placed",
+              "placed_at": "2026-11-25T12:40:00.000Z",
+              "delivered_at": null,
+              "disputed_at": null,
+              "closed_at": null,
+              "auto_confirms_at": null,
+              "cancelled_by": null,
+              "dispute_reason": null,
+              "resolution": null
+            }
+          }
+        },
+        {
+          "id": 54,
+          "type": "market.delivered",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "order": {
+              "id": 3,
+              "listing": {
+                "id": 1,
+                "kind": "service",
+                "title": "A raid carry"
+              },
+              "seller": {
+                "player_id": "10000000-0000-0000-0000-000000000002",
+                "name": "Bob"
+              },
+              "buyer": {
+                "player_id": "10000000-0000-0000-0000-000000000001",
+                "name": "Alice"
+              },
+              "quantity": 1,
+              "price": 100,
+              "leaf": 100,
+              "fee": 0,
+              "state": "delivered",
+              "placed_at": "2026-11-25T12:40:00.000Z",
+              "delivered_at": "2026-11-25T12:40:00.000Z",
+              "disputed_at": null,
+              "closed_at": null,
+              "auto_confirms_at": "2026-12-02T12:40:00.000Z",
+              "cancelled_by": null,
+              "dispute_reason": null,
+              "resolution": null
+            }
+          }
+        },
+        {
+          "id": 56,
+          "type": "market.disputed",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "order": {
+              "id": 3,
+              "listing": {
+                "id": 1,
+                "kind": "service",
+                "title": "A raid carry"
+              },
+              "seller": {
+                "player_id": "10000000-0000-0000-0000-000000000002",
+                "name": "Bob"
+              },
+              "buyer": {
+                "player_id": "10000000-0000-0000-0000-000000000001",
+                "name": "Alice"
+              },
+              "quantity": 1,
+              "price": 100,
+              "leaf": 100,
+              "fee": 0,
+              "state": "disputed",
+              "placed_at": "2026-11-25T12:40:00.000Z",
+              "delivered_at": "2026-11-25T12:40:00.000Z",
+              "disputed_at": "2026-11-25T12:40:00.000Z",
+              "closed_at": null,
+              "auto_confirms_at": null,
+              "cancelled_by": null,
+              "dispute_reason": "No carry",
+              "resolution": null
+            }
+          }
+        },
+        {
+          "id": 58,
+          "type": "market.resolved",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "order": {
+              "id": 3,
+              "listing": {
+                "id": 1,
+                "kind": "service",
+                "title": "A raid carry"
+              },
+              "seller": {
+                "player_id": "10000000-0000-0000-0000-000000000002",
+                "name": "Bob"
+              },
+              "buyer": {
+                "player_id": "10000000-0000-0000-0000-000000000001",
+                "name": "Alice"
+              },
+              "quantity": 1,
+              "price": 100,
+              "leaf": 100,
+              "fee": 0,
+              "state": "refunded",
+              "placed_at": "2026-11-25T12:40:00.000Z",
+              "delivered_at": "2026-11-25T12:40:00.000Z",
+              "disputed_at": "2026-11-25T12:40:00.000Z",
+              "closed_at": "2026-11-25T12:40:00.000Z",
+              "auto_confirms_at": null,
+              "cancelled_by": null,
+              "dispute_reason": "No carry",
+              "resolution": {
+                "outcome": "refund",
+                "note": null
+              }
+            }
+          }
+        },
+        {
+          "id": 60,
+          "type": "conversion.requested",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "conversion": {
+              "id": 1,
+              "kind": "le",
+              "count": 32,
+              "leaf": 6400,
+              "note": null,
+              "status": "pending",
+              "requested_at": "2026-11-25T12:40:00.000Z",
+              "due_from": "2026-11-01T00:00:00.000Z",
+              "due": true,
+              "position": 1,
+              "closed_at": null,
+              "decline_reason": null
+            }
+          }
+        },
+        {
+          "id": 61,
+          "type": "conversion.paid",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "conversion": {
+              "id": 1,
+              "kind": "le",
+              "count": 32,
+              "leaf": 6400,
+              "note": null,
+              "status": "paid",
+              "requested_at": "2026-11-25T12:40:00.000Z",
+              "due_from": "2026-11-01T00:00:00.000Z",
+              "due": false,
+              "position": null,
+              "closed_at": "2026-11-25T12:40:00.000Z",
+              "decline_reason": null
+            }
+          }
+        },
+        {
+          "id": 62,
+          "type": "conversion.requested",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "conversion": {
+              "id": 2,
+              "kind": "aspect",
+              "count": 1,
+              "leaf": 4000,
+              "note": "Mage",
+              "status": "pending",
+              "requested_at": "2026-11-25T12:40:00.000Z",
+              "due_from": "2026-11-01T00:00:00.000Z",
+              "due": true,
+              "position": 1,
+              "closed_at": null,
+              "decline_reason": null
+            }
+          }
+        },
+        {
+          "id": 63,
+          "type": "conversion.declined",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "data": {
+            "conversion": {
+              "id": 2,
+              "kind": "aspect",
+              "count": 1,
+              "leaf": 4000,
+              "note": "Mage",
+              "status": "declined",
+              "requested_at": "2026-11-25T12:40:00.000Z",
+              "due_from": null,
+              "due": false,
+              "position": null,
+              "closed_at": "2026-11-25T12:40:00.000Z",
+              "decline_reason": "None in the bank"
+            }
+          }
+        },
+        {
+          "id": 64,
           "type": "quest_rerolled",
           "created_at": "2026-11-25T12:40:00.000Z",
           "data": {

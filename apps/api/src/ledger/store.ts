@@ -101,6 +101,8 @@ export class Ledger extends Context.Service<
     readonly earns: (playerId: PlayerId, source: EarnSource) => Effect.Effect<readonly Earn[]>;
     /** Whether an entry with this idempotency key exists. */
     readonly isRecorded: (idempotencyKey: string) => Effect.Effect<boolean>;
+    /** The entry recorded under an idempotency key, such as a hold to refund. */
+    readonly entry: (idempotencyKey: string) => Effect.Effect<LedgerEntry | undefined>;
   }
 >()("leaf/Ledger") {
   static readonly layer = Layer.effect(
@@ -180,6 +182,7 @@ export class Ledger extends Context.Service<
             Effect.orDie,
           ),
         isRecorded: (idempotencyKey) => byKey(idempotencyKey).pipe(Effect.map(Option.isSome), Effect.orDie),
+        entry: (idempotencyKey) => byKey(idempotencyKey).pipe(Effect.map(Option.getOrUndefined), Effect.orDie),
       });
     }),
   );

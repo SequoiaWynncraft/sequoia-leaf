@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { DEFAULT_RULES, openCone, playerId, RAIDS, ROLL_RANGE } from "@sequoia-leaf/core";
+import { DEFAULT_RULES, leaf as leafAmount, openCone, playerId, RAIDS, ROLL_RANGE } from "@sequoia-leaf/core";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
@@ -21,6 +21,8 @@ import { MINUTE, rolling, testLeaf } from "./support.ts";
 const CONTRACT = join(import.meta.dir, "..", "..", "..", "contracts", "leaf-api-v1.json");
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
+const bob = playerId("10000000-0000-0000-0000-000000000002");
+const staff = playerId("10000000-0000-0000-0000-00000000000f");
 /** Wednesday 25 November 2026, 12:30 UTC: inside the 12:00 timed window. */
 const T0 = Date.UTC(2026, 10, 25, 12, 30);
 
@@ -87,9 +89,28 @@ function treantRoll(): number {
   throw new Error("No roll opens a Treant");
 }
 
+/** Others the stand-in backend knows besides the member: a seller in the marketplace, and staff. */
+const others: Readonly<Record<string, typeof member>> = {
+  "Bearer bob-token": {
+    ...member,
+    discord_id: "2",
+    minecraft_uuid: bob,
+    minecraft_username: "Bob",
+    guild_rank: "MEMBER",
+  },
+  "Bearer staff-token": {
+    ...member,
+    discord_id: "3",
+    minecraft_uuid: staff,
+    minecraft_username: "Steward",
+    website_admin: true,
+  },
+};
+
 /**
  * Plays a day: the backend and Sierra report it, Leaf pays it, the member opens
- * the cone their Bloom gave them in the Grove, and rerolls their weekly.
+ * the cone their Bloom gave them in the Grove, trades in the marketplace,
+ * claims Leaf out, and rerolls their weekly.
  */
 /** One call: what the client sent, and what Leaf answered. */
 interface Exchange {
@@ -104,11 +125,10 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   const leaf = testLeaf(clock, (url, init) => {
     const path = new URL(url).pathname;
     if (path === "/auth/web/me") {
-      const token = new Request(url, init).headers.get("Authorization");
+      const token = new Request(url, init).headers.get("Authorization") ?? "";
+      const known = token === "Bearer alice-token" ? member : others[token];
       return Promise.resolve(
-        token === "Bearer alice-token"
-          ? Response.json(member)
-          : Response.json({ error: "unauthorized" }, { status: 401 }),
+        known === undefined ? Response.json({ error: "unauthorized" }, { status: 401 }) : Response.json(known),
       );
     }
     if (path === "/internal/player-credits") {
@@ -127,12 +147,43 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await leaf.run(runCreditSync("recent"));
   await leaf.run(runAchievementSync("recent"));
 
-  // The Grove is not a client of this contract, so its call is not recorded; its event is.
-  await app.request("/v1/grove/cones/open", {
-    method: "POST",
-    headers: { Authorization: "Bearer alice-token", "Content-Type": "application/json" },
-    body: JSON.stringify({ count: 1, request_id: "contract-cone" }),
+  // The Grove, the marketplace and conversions are not clients of this contract, so
+  // their calls are not recorded; their events are.
+  const as = (token: string, method: string, path: string, body?: unknown) =>
+    app.request(path, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+  await as("alice-token", "POST", "/v1/grove/cones/open", { count: 1, request_id: "contract-cone" });
+  await leaf.post(
+    { kind: "earn", playerId: alice, amount: leafAmount(10_000), xp: 0, source: "staff", idempotencyKey: "contract" },
+    clock.now,
+  );
+  // Three orders from another member's listing: one confirmed, one cancelled, one disputed and refunded.
+  await as("bob-token", "POST", "/v1/market/listings", {
+    kind: "service",
+    title: "A raid carry",
+    price: 100,
+    quantity: 3,
+    request_id: "contract-listing",
   });
+  const buy = (order: number) =>
+    as("alice-token", "POST", "/v1/market/listings/1/buy", { price: 100, request_id: `contract-order-${order}` });
+  await buy(1);
+  await as("bob-token", "POST", "/v1/market/orders/1/deliver");
+  await as("alice-token", "POST", "/v1/market/orders/1/confirm");
+  await buy(2);
+  await as("alice-token", "POST", "/v1/market/orders/2/cancel");
+  await buy(3);
+  await as("bob-token", "POST", "/v1/market/orders/3/deliver");
+  await as("alice-token", "POST", "/v1/market/orders/3/dispute", { reason: "No carry" });
+  await as("staff-token", "POST", "/v1/staff/market/orders/3/resolve", { outcome: "refund" });
+  // Two claims out: LE that staff pay, and an aspect they decline.
+  await as("alice-token", "POST", "/v1/conversions", { kind: "le", count: 32, request_id: "contract-le" });
+  await as("staff-token", "POST", "/v1/staff/conversions/1/pay", {});
+  await as("alice-token", "POST", "/v1/conversions", { kind: "aspect", note: "Mage", request_id: "contract-aspect" });
+  await as("staff-token", "POST", "/v1/staff/conversions/2/decline", { reason: "None in the bank" });
 
   const recorded: Record<string, Exchange> = {};
   async function call(name: string, method: string, path: string, body?: unknown) {
@@ -188,12 +239,21 @@ describe("Leaf's API contract", () => {
 
     expect(eventTypes(contract).toSorted()).toEqual([
       "achievement_paid",
+      "conversion.declined",
+      "conversion.paid",
+      "conversion.requested",
       "grove.bloomed",
       "grove.cone_opened",
       "grove.raid_lantern",
       "guild.war_win",
       "leaf_earned",
       "level_up",
+      "market.cancelled",
+      "market.completed",
+      "market.delivered",
+      "market.disputed",
+      "market.order_placed",
+      "market.resolved",
       "quest_completed",
       "quest_rerolled",
     ]);

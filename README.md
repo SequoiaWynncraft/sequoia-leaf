@@ -148,26 +148,46 @@ The routes are declared once, as an Effect `HttpApi` in
 `schemas.ts` and `errors.ts` beside it. The server implements that declaration,
 and `GET /openapi.json` serves the OpenAPI document generated from it.
 
-| Route                            | What it returns                                            |
-| -------------------------------- | ---------------------------------------------------------- |
-| `GET /healthz`                   | `{ "status": "ok" }`                                       |
-| `GET /v1/me`                     | The signed-in member's Leaf, XP and level.                 |
-| `GET /v1/me/quests`              | Their quests, banked dailies and recently finished quests. |
-| `POST /v1/me/quests/{id}/reroll` | Swaps one of their quests for another.                     |
-| `GET /v1/me/events`              | What happened to them recently, oldest first.              |
-| `GET /v1/me/events/stream`       | The same events as they happen, as server-sent events.     |
-| `GET /v1/grove`                  | Their Grove: tree, Bloom, care, cones, pity and spirits.   |
-| `POST /v1/grove/care`            | Waters, mists or prunes their tree.                        |
-| `POST /v1/grove/cones/buy`       | Buys cones for Leaf.                                       |
-| `POST /v1/grove/cones/open`      | Opens cones they hold.                                     |
-| `PUT /v1/grove/companion`        | Chooses the spirit that follows them.                      |
-| `GET /v1/grove/great`            | The Great Sequoia's goals this week, and its lanterns.     |
-| `POST /v1/grove/great/offer`     | Offers Leaf to the Great Sequoia.                          |
-| `GET /v1/grove/rates`            | The cones' published odds. Public.                         |
-| `GET /v1/grove/forest`           | Every member's tree in the Forest. Public.                 |
-| `GET /openapi.json`              | This API as an OpenAPI document.                           |
+| Route                                       | What it returns                                            |
+| ------------------------------------------- | ---------------------------------------------------------- |
+| `GET /healthz`                              | `{ "status": "ok" }`                                       |
+| `GET /v1/me`                                | The signed-in member's Leaf, XP and level.                 |
+| `GET /v1/me/quests`                         | Their quests, banked dailies and recently finished quests. |
+| `POST /v1/me/quests/{id}/reroll`            | Swaps one of their quests for another.                     |
+| `GET /v1/me/events`                         | What happened to them recently, oldest first.              |
+| `GET /v1/me/events/stream`                  | The same events as they happen, as server-sent events.     |
+| `GET /v1/grove`                             | Their Grove: tree, Bloom, care, cones, pity and spirits.   |
+| `POST /v1/grove/care`                       | Waters, mists or prunes their tree.                        |
+| `POST /v1/grove/cones/buy`                  | Buys cones for Leaf.                                       |
+| `POST /v1/grove/cones/open`                 | Opens cones they hold.                                     |
+| `PUT /v1/grove/companion`                   | Chooses the spirit that follows them.                      |
+| `GET /v1/grove/great`                       | The Great Sequoia's goals this week, and its lanterns.     |
+| `POST /v1/grove/great/offer`                | Offers Leaf to the Great Sequoia.                          |
+| `GET /v1/grove/rates`                       | The cones' published odds. Public.                         |
+| `GET /v1/grove/forest`                      | Every member's tree in the Forest. Public.                 |
+| `GET /v1/market/listings`                   | Listings taking orders, newest first. Public.              |
+| `GET /v1/market/listings/{id}`              | One listing, however it stands. Public.                    |
+| `POST /v1/market/listings`                  | Lists an item or a service.                                |
+| `PATCH /v1/market/listings/{id}`            | Changes a listing's price or description.                  |
+| `POST /v1/market/listings/{id}/withdraw`    | Stops a listing taking orders.                             |
+| `GET /v1/market/my-listings`                | The member's own listings.                                 |
+| `POST /v1/market/listings/{id}/buy`         | Buys from a listing, holding the Leaf.                     |
+| `GET /v1/market/orders`                     | Orders the member bought or sold, newest first.            |
+| `GET /v1/market/orders/{id}`                | One of their orders.                                       |
+| `POST /v1/market/orders/{id}/…`             | `deliver`, `confirm`, `cancel` or `dispute` an order.      |
+| `GET /v1/conversions/rates`                 | What Leaf converts to, at what rate and cap. Public.       |
+| `POST /v1/conversions`                      | Claims Leaf out as LE, a tome or an aspect.                |
+| `GET /v1/conversions`                       | The member's claims.                                       |
+| `POST /v1/conversions/{id}/cancel`          | Cancels a waiting claim, refunding it.                     |
+| `GET /v1/staff/market/disputes`             | Disputed orders. Staff.                                    |
+| `POST /v1/staff/market/orders/{id}/resolve` | Releases or refunds a dispute. Staff.                      |
+| `GET /v1/staff/conversions`                 | The conversion queue. Staff.                               |
+| `POST /v1/staff/conversions/{id}/pay`       | Marks a claim paid in-game. Staff.                         |
+| `POST /v1/staff/conversions/{id}/decline`   | Declines a claim, refunding it. Staff.                     |
+| `GET /openapi.json`                         | This API as an OpenAPI document.                           |
 
-`/v1/me` routes, and the `/v1/grove` routes that are not public, take the member's Sequoia session, the token sequoia-backend
+`/v1/me` routes, and the `/v1/grove`, `/v1/market`, `/v1/conversions` and
+`/v1/staff` routes that are not public, take the member's Sequoia session, the token sequoia-backend
 issued, as `Authorization: Bearer`; the mod sends the one it already holds for
 the backend. The server asks sequoia-backend who the session belongs to, and
 remembers a confirmed session for a minute. Only current guild members are let
@@ -208,7 +228,7 @@ scheduled run.
 
 `contracts/leaf-api-v1.json` holds what the routes above answer for one member
 after a day of play: raids, a defence, a war, a milestone, a level, finished
-quests and a reroll. `apps/api/test/contract.test.ts` makes those calls on the
+quests, a reroll, three marketplace orders and two conversion claims. `apps/api/test/contract.test.ts` makes those calls on the
 real routes and fails when the answers differ from the file, so the file is
 always what Leaf sends, including the order of each list.
 
@@ -230,17 +250,26 @@ An event is something a client would want to show when it happens. Each one is
 written in the same transaction as the change it reports, and has an id that
 only grows.
 
-| Type                 | When                                              | `data`                                                                                     |
-| -------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `leaf_earned`        | A raid or war paid Leaf.                          | `source`, `leaf`, `xp`, `detail`, `occurred_at`, and for a war `in_claim`                  |
-| `quest_completed`    | A quest finished and paid.                        | `quest`, in the shape `/v1/me/quests` uses                                                 |
-| `quest_rerolled`     | The member swapped a quest.                       | `replaced` and `quest`, the old and the new, and `leaf`, what it cost                      |
-| `level_up`           | XP reached a new level.                           | `level`, and `leaf`, what the levels reached paid                                          |
-| `achievement_paid`   | A milestone paid Leaf.                            | `award_id`, `ladder`, `milestone`, `tier`, `threshold`, `label`, `leaf`, `xp`, `earned_at` |
-| `grove.cone_opened`  | They opened a cone of Dryad or better.            | `banner`, `spirit`, `rank`, `verdant`, `copy`                                              |
-| `grove.bloomed`      | Their Bloom filled and gave a cone.               | `source` (`raid` or `care`), `cycle`                                                       |
-| `grove.raid_lantern` | A raid they were in hung a lantern in the Forest. | `raid`, `raid_name`, `party`, `occurred_at`                                                |
-| `guild.war_win`      | The guild won a war they fought in.               | `war`, `territory`, `players`, `occurred_at`, and `in_claim` when known                    |
+| Type                   | When                                                                     | `data`                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `leaf_earned`          | A raid or war paid Leaf.                                                 | `source`, `leaf`, `xp`, `detail`, `occurred_at`, and for a war `in_claim`                  |
+| `quest_completed`      | A quest finished and paid.                                               | `quest`, in the shape `/v1/me/quests` uses                                                 |
+| `quest_rerolled`       | The member swapped a quest.                                              | `replaced` and `quest`, the old and the new, and `leaf`, what it cost                      |
+| `level_up`             | XP reached a new level.                                                  | `level`, and `leaf`, what the levels reached paid                                          |
+| `achievement_paid`     | A milestone paid Leaf.                                                   | `award_id`, `ladder`, `milestone`, `tier`, `threshold`, `label`, `leaf`, `xp`, `earned_at` |
+| `grove.cone_opened`    | They opened a cone of Dryad or better.                                   | `banner`, `spirit`, `rank`, `verdant`, `copy`                                              |
+| `grove.bloomed`        | Their Bloom filled and gave a cone.                                      | `source` (`raid` or `care`), `cycle`                                                       |
+| `grove.raid_lantern`   | A raid they were in hung a lantern in the Forest.                        | `raid`, `raid_name`, `party`, `occurred_at`                                                |
+| `guild.war_win`        | The guild won a war they fought in.                                      | `war`, `territory`, `players`, `occurred_at`, and `in_claim` when known                    |
+| `market.order_placed`  | An order on their listing, or one they placed.                           | `order`, in the shape the marketplace's routes use; the same for both sides                |
+| `market.delivered`     | The seller marked an order delivered.                                    | `order`                                                                                    |
+| `market.completed`     | The seller was paid: the buyer confirmed, or the days to dispute passed. | `order`                                                                                    |
+| `market.cancelled`     | Either side cancelled an order before delivery.                          | `order`, with `cancelled_by`                                                               |
+| `market.disputed`      | The buyer disputed a delivered order.                                    | `order`, with `dispute_reason`                                                             |
+| `market.resolved`      | Staff released or refunded a dispute.                                    | `order`, with `resolution`                                                                 |
+| `conversion.requested` | They claimed Leaf out, and the claim joined the queue.                   | `conversion`, in the shape `/v1/conversions` uses                                          |
+| `conversion.paid`      | Staff paid their claim in-game.                                          | `conversion`                                                                               |
+| `conversion.declined`  | Staff declined their claim and refunded it.                              | `conversion`, with `decline_reason`                                                        |
 
 `detail` is the raid's name or the territory fought over. `occurred_at` is when
 the raid or war was played, which can be well before the event: a credit that
@@ -363,6 +392,111 @@ a member helped is a ring on their tree.
 Triggers add each week up as activities and offerings are recorded
 (`great_weeks`, `great_helpers`), so reading a busy week takes as long as a
 quiet one.
+
+## The marketplace
+
+Members trade in-game items and services with each other for Leaf. It belongs
+to Leaf as a whole: the Grove client shows it as the Trading Post, and the
+website and mod can use the same routes. The numbers are `market` in
+`packages/core/src/rules.ts` and the rules are `packages/core/src/market.ts`.
+
+- **A listing** is an `item` or a `service`, with a title (3 to 80 characters),
+  a description (up to 1,000), a price of 1 to 1,000,000 Leaf a unit, and a
+  quantity of 1 to 64. It has no images, which keeps moderation light. It
+  takes orders for 14 days. A seller may have 20 taking orders at once, may
+  change its price and description only while no order on it is open, and may
+  withdraw it, which leaves the orders already open to carry on.
+  `POST /v1/market/listings` takes `{ "kind", "title", "description"?, "price",
+"quantity"?, "request_id" }`; a request sent again makes one listing.
+- **Buying** holds the buyer's Leaf: a spend with sink `market_hold`, keyed by
+  the order (`market_hold:<order>`). `POST /v1/market/listings/{id}/buy` takes
+  `{ "price", "quantity"?, "request_id" }`, where `price` is the unit price the
+  buyer was shown: Leaf holds that or nothing (`price_changed`). Nobody can buy
+  their own listing, or from one withdrawn or expired.
+- **Delivering and confirming**: the seller marks the order delivered and the
+  buyer confirms, which pays the seller an earn with source `market_sale`
+  (`market_sale:<order>`), less the fee, which is 0 for now. A sale grants no
+  XP: Leaf passed between members is not guild activity, and would otherwise
+  level two members trading back and forth. The buyer may confirm before the
+  seller marks it, or while disputing it. A delivered order nobody disputes
+  confirms itself 7 days after delivery: a job checks every minute.
+- **Cancelling**: either side may cancel before delivery, which refunds the
+  buyer by reversing the hold (`undo:market_hold:<order>`). The hold is undone
+  in full, by the ledger's own rule that an entry is reversed at most once, and
+  a refund is not new Leaf, so it is a reversal rather than an earn.
+- **Disputes**: the buyer may dispute a delivered order with a reason. Staff
+  see the disputes and release the Leaf to the seller or refund the buyer,
+  with a note both sides see. Staff can't settle an order they are a side of.
+
+Every step an order takes is a row of `market_order_steps`, once each, with
+the role and the player who took it (none for Leaf's own confirmation), and a
+trigger lets an order only move forward, so a seller can never be paid after
+a refund nor a buyer refunded after a sale. Every change to a listing is a row
+of `market_listing_changes`. Neither table is ever changed or deleted. Each
+step answers the order as it is when it was taken before, so a retry is safe.
+
+An order is the same for both sides, in every answer and event:
+`{ "id", "listing": { "id", "kind", "title" }, "seller", "buyer", "quantity",
+"price", "leaf", "fee", "state", "placed_at", "delivered_at", "disputed_at",
+"closed_at", "auto_confirms_at", "cancelled_by", "dispute_reason", "resolution" }`.
+`state` is `placed`, `delivered`, `disputed`, `completed`, `cancelled` or
+`refunded`. Who on staff settled a dispute is recorded but not sent.
+
+`GET /v1/market/listings` takes `kind`, `q` (words in the title or the
+description), `limit` (up to 100, 50 by default) and `before`, the
+`next_before` of the page before. It and `GET /v1/market/listings/{id}` need
+no session.
+
+## Conversions
+
+Leaf converts out to Liquid Emeralds, tomes and aspects, which staff pay
+in-game. The rates are `conversions` in `rules.ts`, the Branchmasters' first
+proposal, marked `provisional` until they are tuned with them: 200 Leaf to 1
+LE, 32 to 64 LE at a time; 4,000 Leaf for a tome or an aspect.
+
+- `POST /v1/conversions` with `{ "kind", "count"?, "note"?, "request_id" }`
+  spends the Leaf at once, sink `conversion`, keyed by the claim
+  (`conversion:<id>`), and puts the claim in its kind's queue. `count` is how
+  many LE; 1, when left out, for a tome or an aspect. `note` says which.
+- **A monthly cap** guards the guild's budget: 100 LE, 4 tomes and 4 aspects a
+  calendar month in UTC, for everyone. A claim past it is still taken and
+  held, and waits, in the order claims were made, for the first month with
+  room. It is never dropped. No claim passes one made before it, a month's
+  unclaimed allowance doesn't carry over, and when a claim ahead leaves the
+  queue the ones behind move up. Each claim says the month it is due from
+  (`due_from`), whether staff can pay it now (`due`) and its place (`position`).
+  `allotMonths` in `packages/core/src/conversions.ts` decides it.
+- **Each member** may claim 64 LE, one tome and one aspect a month, so one
+  member can't hold the whole queue.
+- **Staff** pay a claim once its month has come, which records the month whose
+  allowance paid it and who paid it, or decline it with a reason, which
+  refunds it by reversing the spend (`undo:conversion:<id>`). A member may
+  cancel their own claim while it waits, with the same refund. Staff can't pay
+  their own claim. A claim is closed once; a trigger keeps it as it was then.
+
+At launch Leaf was issued at about 118,000 a day, about 590 LE a day at 200 to
+1, against a budget of about 100 LE a month: the queue will be long. The cap,
+not the rate, is what keeps payouts inside the budget.
+
+`GET /v1/conversions/rates`, with no session, publishes each kind's rate,
+counts, cap and member limit, and the month a claim made now would be due from.
+
+## Staff
+
+Staff are members sequoia-backend marks as website administrators
+(`website_admin`), the narrowest notion of staff its session check gives; the
+`/v1/staff` routes answer anyone else 403 `not_staff`. Each staff step records
+the staff member's player id, in the audit and as the ledger entry's `actor`.
+
+The marketplace and conversions answer `{ "code", "message" }` errors: 400
+`invalid_request`, `invalid_listing` or `invalid_count`; 403 `not_seller`,
+`not_buyer`, `own_order` or `own_claim`; 404 `listing_not_found`,
+`order_not_found` or `conversion_not_found` (also for an order or claim that
+isn't the member's); and 409, changing nothing, `insufficient_leaf`,
+`request_conflict`, `own_listing`, `listing_closed`, `sold_out`,
+`price_changed`, `has_open_orders`, `too_many_listings`, `already_delivered`,
+`not_delivered`, `not_disputed`, `order_closed`, `member_limit`, `not_pending`
+or `not_due`.
 
 ## Rules the code is built on
 
