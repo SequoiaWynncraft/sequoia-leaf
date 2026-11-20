@@ -86,12 +86,15 @@ export const sparkleStage = (u: number, big = true): number => {
   return steps[Math.min(steps.length - 1, Math.max(0, Math.floor(u * steps.length)))] ?? 0;
 };
 
-/** A warm pool of light, as the welcome's lanterns spill theirs: stepped rings, dithered between. */
-export function pool(p: Paint, cx: number, cy: number, r: number, colour: number, strength: number): void {
+/**
+ * A warm pool of light, as the welcome's lanterns spill theirs: stepped rings, dithered between.
+ * `flat` squashes it (a pool on the ground is wider than it is tall).
+ */
+export function pool(p: Paint, cx: number, cy: number, r: number, colour: number, strength: number, flat = 1.4): void {
   if (strength <= 0 || r <= 0) return;
-  for (let y = Math.floor(cy - r); y <= cy + r; y++)
+  for (let y = Math.floor(cy - r / flat); y <= cy + r / flat; y++)
     for (let x = Math.floor(cx - r); x <= cx + r; x++) {
-      const d = Math.hypot(x - cx, (y - cy) * 1.4) / r;
+      const d = Math.hypot(x - cx, (y - cy) * flat) / r;
       if (d >= 1) continue;
       const k = d < 0.4 ? 1 : d < 0.7 ? 0.55 : 0.25;
       if (d > 0.65 && bayer(x, y) > 0.5) continue;

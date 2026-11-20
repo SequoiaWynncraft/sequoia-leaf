@@ -32,6 +32,10 @@ export interface GladeManifest {
   tree: string;
   /** The front path's row, where characters stand. */
   ground: number;
+  /** Where the next cone lies on the moss by the hearth. */
+  cone: Point;
+  /** The 1-bit mask of the stones in front of the hearth's fire, which a cone thrown in sinks behind. */
+  front: string;
   /** Each tree's bounding box, by `L<level>-v<variant>-<season>`. */
   treeBoxes: Map<string, Box>;
 }
@@ -61,6 +65,35 @@ export interface CampfireManifest {
   seats: Point[];
   /** The grove cat, asleep on its stump. */
   cat: Point;
+  /** Where the spirit out of a burned cone lands, clear of every seat. */
+  landing: Point;
+  /** The 1-bit mask of the stones in front of the fire, which a cone thrown in sinks behind. */
+  front: string;
+}
+
+/** A place on the ground, `x0` to `x1` and `y0` to `y1` (the ends past its last pixel). */
+export interface Rect {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** The Forest's places a tap answers: the Great Sequoia, its hollow, the pond and the sign. */
+export type PlaceName = "great" | "hollow" | "pond" | "farm";
+
+/** Where a lantern hangs in the Great Sequoia: a column under its canopy, the canopy's underside there, its cord. */
+export interface Hook {
+  x: number;
+  y: number;
+  cord: number;
+}
+
+/** A crab's place on the pond's bank (No. 08's by the sign). */
+export interface CrabSpot {
+  x: number;
+  foot: number;
+  numbered: boolean;
 }
 
 /** A layer of the Forest's parallax: a layer at `depth` slides `depth` pixels for each pixel of ground. */
@@ -107,6 +140,14 @@ export interface ForestManifest {
   trees: string;
   /** The Great Sequoia's span on the ground layer. */
   great: { x: number; w: number };
+  /** Each place's box on the ground. */
+  places: Record<PlaceName, Rect>;
+  /** Where lanterns hang in the Great Sequoia, nearest the heart first. */
+  hooks: Hook[];
+  /** Where the war pennant stands on the far ridge, in the far layer's own pixels. */
+  ridge: Point;
+  /** Where the crabs amble. */
+  crabs: CrabSpot[];
   /** Each atlas's boxes, by season, then row, then `L<level>-v<variant>`. */
   index: Map<string, Map<string, Map<string, AtlasBox>>>;
 }
@@ -190,6 +231,8 @@ export function readManifest(json: unknown): Manifest {
     near: str(field(g, "near", "glade"), "glade.near"),
     tree: str(field(g, "tree", "glade"), "glade.tree"),
     ground: num(field(g, "ground", "glade"), "glade.ground"),
+    cone: pair(field(g, "cone", "glade"), "glade.cone"),
+    front: str(field(g, "front", "glade"), "glade.front"),
     treeBoxes: new Map(Object.entries(boxes).map(([k, v]) => [k, box(v, `glade.tree_boxes.${k}`)])),
   };
   if (glade.levels.length === 0 || glade.variants < 1 || glade.seasons.length === 0)
@@ -228,6 +271,8 @@ function readCampfire(c: Record<string, unknown>): CampfireManifest {
     fire: pair(field(c, "fire", "campfire"), "campfire.fire"),
     seats: list(field(c, "seats", "campfire"), "campfire.seats", seat),
     cat: pair(field(c, "cat", "campfire"), "campfire.cat"),
+    landing: pair(field(c, "landing", "campfire"), "campfire.landing"),
+    front: str(field(c, "front", "campfire"), "campfire.front"),
   };
 }
 
@@ -279,6 +324,30 @@ function readForest(f: Record<string, unknown>): ForestManifest {
     );
   }
   const great = rec(field(f, "great", "forest"), "forest.great");
+  const placeBoxes = rec(field(f, "places", "forest"), "forest.places");
+  const place = (name: PlaceName): Rect => {
+    const p = `forest.places.${name}`;
+    const [x0, y0, x1, y1] = list(field(placeBoxes, name, "forest.places"), p, int);
+    if (x0 === undefined || y0 === undefined || x1 === undefined || y1 === undefined || x1 <= x0 || y1 <= y0)
+      throw new Error(`manifest: ${p} is not a box`);
+    return { x0, y0, x1, y1 };
+  };
+  const hook = (v: unknown, p: string): Hook => {
+    const h = rec(v, p);
+    return {
+      x: int(field(h, "x", p), `${p}.x`),
+      y: int(field(h, "y", p), `${p}.y`),
+      cord: int(field(h, "cord", p), `${p}.cord`),
+    };
+  };
+  const crab = (v: unknown, p: string): CrabSpot => {
+    const c = rec(v, p);
+    return {
+      x: int(field(c, "x", p), `${p}.x`),
+      foot: int(field(c, "foot", p), `${p}.foot`),
+      numbered: field(c, "numbered", p) === true,
+    };
+  };
   const out: ForestManifest = {
     width: int(field(f, "width", "forest"), "forest.width"),
     height: int(field(f, "height", "forest"), "forest.height"),
@@ -296,6 +365,10 @@ function readForest(f: Record<string, unknown>): ForestManifest {
       x: int(field(great, "x", "forest.great"), "forest.great.x"),
       w: int(field(great, "w", "forest.great"), "forest.great.w"),
     },
+    places: { great: place("great"), hollow: place("hollow"), pond: place("pond"), farm: place("farm") },
+    hooks: list(field(f, "hooks", "forest"), "forest.hooks", hook),
+    ridge: pair(field(f, "ridge", "forest"), "forest.ridge"),
+    crabs: list(field(f, "crabs", "forest"), "forest.crabs", crab),
     index,
   };
   if (out.spots.some((s) => !out.rows.some((r) => r.name === s.row)))

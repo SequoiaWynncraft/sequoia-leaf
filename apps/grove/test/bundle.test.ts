@@ -21,6 +21,8 @@ const MANIFEST = {
     near: "glade/near-{season}.png",
     tree: "glade/L{level}-v{variant}-{season}-tree.png",
     ground: 139,
+    cone: [147, 134],
+    front: "glade/hearth-front.png",
     tree_boxes: { "L01-v0-normal": [112, 118, 9, 11], "L13-v2-winter": [75, 0, 103, 127] },
   },
   effects: { aurora: "effects/aurora-{season}.png", sky: "effects/sky-{season}.png", frames: 160 },
@@ -29,16 +31,18 @@ const MANIFEST = {
     near: "glade/near-{season}.png",
     fire: [128, 129],
     seats: [
-      { x: 92, y: 131 },
-      { x: 152, y: 131 },
+      { x: 90, y: 131 },
+      { x: 151, y: 131 },
     ],
-    cat: [78, 128],
+    cat: [76, 128],
+    landing: [128, 142],
+    front: "campfire/fire-front.png",
   },
   forest: {
     width: 1024,
     heart: 512,
     height: 144,
-    pond: 800,
+    pond: 788,
     gate: 905,
     layers: { far: { depth: 0.35, width: 525 }, ground: { depth: 1, width: 1024 }, near: { depth: 1.3, width: 1255 } },
     rows: [
@@ -54,6 +58,21 @@ const MANIFEST = {
     layer: "forest/{layer}-{season}-{ambiance}.png",
     trees: "forest/trees-{row}-{season}-{ambiance}.png",
     great: { x: 437, w: 150, seam: 512 },
+    places: {
+      great: [437, 0, 587, 117],
+      hollow: [497, 107, 519, 132],
+      pond: [705, 91, 868, 128],
+      farm: [874, 102, 936, 133],
+    },
+    hooks: [
+      { x: 540, y: 11, cord: 6 },
+      { x: 482, y: 19, cord: 4 },
+    ],
+    ridge: [206, 78],
+    crabs: [
+      { x: 724, foot: 132, numbered: false },
+      { x: 945, foot: 131, numbered: true },
+    ],
     "index-normal": { back: { "L13-v2": [0, 0, 52, 87, 21, 83] }, front: { "L01-v0": [630, 123, 9, 11, 4, 8] } },
   },
   later: { anything: true },
@@ -74,15 +93,36 @@ describe("the bundle's manifest", () => {
     expect(m.other.has("campfire")).toBe(false);
   });
 
-  test("reads the Campfire's fire, seats and cat", () => {
+  test("reads the Campfire's fire, seats, cat, landing and the stones in front of its fire", () => {
     const c = readManifest(MANIFEST).campfire;
     expect(c?.fire).toEqual({ x: 128, y: 129 });
     expect(c?.seats).toEqual([
-      { x: 92, y: 131 },
-      { x: 152, y: 131 },
+      { x: 90, y: 131 },
+      { x: 151, y: 131 },
     ]);
-    expect(c?.cat).toEqual({ x: 78, y: 128 });
+    expect(c?.cat).toEqual({ x: 76, y: 128 });
+    expect(c?.landing).toEqual({ x: 128, y: 142 });
+    expect(c?.front).toBe("campfire/fire-front.png");
     expect(c?.near).toBe("glade/near-{season}.png");
+  });
+
+  test("reads where the glade's next cone lies and the stones in front of its hearth", () => {
+    const g = readManifest(MANIFEST).glade;
+    expect(g.cone).toEqual({ x: 147, y: 134 });
+    expect(g.front).toBe("glade/hearth-front.png");
+  });
+
+  test("reads the Forest's places, lantern hooks, ridge and crabs rather than guessing them", () => {
+    const f = readManifest(MANIFEST).forest;
+    expect(f?.places.pond).toEqual({ x0: 705, y0: 91, x1: 868, y1: 128 });
+    expect(f?.places.farm).toEqual({ x0: 874, y0: 102, x1: 936, y1: 133 });
+    expect(f?.hooks[0]).toEqual({ x: 540, y: 11, cord: 6 });
+    expect(f?.ridge).toEqual({ x: 206, y: 78 });
+    expect(f?.crabs.map((c) => c.numbered)).toEqual([false, true]);
+    const places = { ...MANIFEST.forest.places, pond: [868, 91, 705, 128] };
+    expect(() => readManifest({ ...MANIFEST, forest: { ...MANIFEST.forest, places } })).toThrow("forest.places.pond");
+    const { ridge: _, ...noRidge } = MANIFEST.forest;
+    expect(() => readManifest({ ...MANIFEST, forest: noRidge })).toThrow("forest.ridge");
   });
 
   test("reads the Forest's layers, rows, spots and each season's atlas boxes", () => {

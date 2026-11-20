@@ -18,7 +18,7 @@
 
 import type { Pixels } from "../../bundle/art.ts";
 import { fitPicture } from "../../bundle/fit.ts";
-import { type AtlasBox, fill, type ForestManifest, type Manifest } from "../../bundle/manifest.ts";
+import { type AtlasBox, fill, type ForestManifest, type Manifest, type Rect } from "../../bundle/manifest.ts";
 import { type Ambiance, Ink, packHex } from "../../bundle/palette.ts";
 import { edgeColour, Picture } from "../../bundle/picture.ts";
 import { castFrame } from "../../bundle/vocabulary.ts";
@@ -46,9 +46,7 @@ import {
   drawWatering,
   ease,
   type Firefly,
-  type Hook,
   lanternAt,
-  lanternHooks,
   LENGTH,
   lightTree,
   placeCrabs,
@@ -56,7 +54,6 @@ import {
   raidCamera,
   type RaidSetup,
   raidShimmer,
-  RIDGE,
   type Stage,
   warCamera,
 } from "./moments.ts";
@@ -150,7 +147,7 @@ export class Forest implements Scene {
   private trees: Planted<Member>[] = [];
   private crabs: Crab[] = [];
   private fireflies: Firefly[] = [];
-  private hooks: { ground: Pixels; list: Hook[] } | null = null;
+  private ground: Pixels | null = null;
   private raidCache: RaidSetup | null = null;
   private standing: Standing[] = [];
 
@@ -238,7 +235,7 @@ export class Forest implements Scene {
     if (this.placed) return;
     this.placed = true;
     this.trees = plant(ROSTER, f.spots);
-    this.crabs = placeCrabs(f.pond, f.gate);
+    this.crabs = placeCrabs(f.crabs);
     this.fireflies = placeFireflies(f.width, 30);
     const p = this.params;
     let at = this.rave ? f.pond : f.heart;
@@ -285,8 +282,7 @@ export class Forest implements Scene {
       this.renderHud(t, hudOut, fonts, null);
       return;
     }
-    if (!this.hooks || this.hooks.ground.w !== ground.w)
-      this.hooks = { ground, list: lanternHooks(ground, f.great, f.heart) };
+    this.ground = ground;
 
     const view = this.view;
     const cx = this.cx;
@@ -306,12 +302,12 @@ export class Forest implements Scene {
 
     // 1. The far valley, and a war's pennant on its ridge.
     pic.layer(far, layerOffset(cx, f.layers.far.depth, view), true);
-    if (m?.kind === "war") drawPennant(stage, e, t, f.layers.far.depth);
-    else if (this.warDone) drawPennant(stage, 99, t, f.layers.far.depth);
+    if (m?.kind === "war") drawPennant(stage, f.ridge, e, t, f.layers.far.depth);
+    else if (this.warDone) drawPennant(stage, f.ridge, 99, t, f.layers.far.depth);
 
     // 2. The ground, and the lanterns in the Great Sequoia.
     pic.layer(ground, layerOffset(cx, 1, view));
-    const hooks = this.hooks.list;
+    const hooks = f.hooks;
     for (let i = 0; i < Math.min(WEEK_LANTERNS, hooks.length); i++) {
       const h = hooks[i * 2 + 1] ?? hooks[i];
       if (h) drawLantern(stage, h, t);
@@ -386,12 +382,21 @@ export class Forest implements Scene {
   private drawCrabs(s: Stage, t: number): void {
     this.crabs.forEach((c, i) => {
       // No. 08 turns up for the rave.
-      const at = c.numbered && this.rave && this.forest ? { ...c, x: this.forest.pond + 70, foot: 132 } : c;
+      const at = this.raveSpot(c);
       const pose = crabPose(at, t, this.rave, t - (this.crabHop.get(i) ?? -99));
       const f = castFrame(s, [c.numbered ? "crab-08" : "crab"], [pose.anim, "idle"], pose.ms);
       const x = s.at(pose.x);
       if (f && x > -16 && x < s.view + 16) s.pic.sprite(f, x, at.foot, pose.flip);
     });
+  }
+
+  /** Where a crab is: No. 08 comes in from the gate to the rave, between the last crab and the sign. */
+  private raveSpot(c: Crab): Crab {
+    const f = this.forest;
+    if (!c.numbered || !this.rave || !f) return c;
+    const bank = this.crabs.filter((k) => !k.numbered);
+    const last = Math.max(...bank.map((k) => k.x));
+    return { ...c, x: Math.round((last + f.places.farm.x0) / 2), foot: bank.at(-1)?.foot ?? c.foot };
   }
 
   /** Which trees are lit this frame, how strongly, and whether a band of light climbs them. */
@@ -431,7 +436,7 @@ export class Forest implements Scene {
 
   private raidSetup(): RaidSetup {
     if (this.raidCache && this.raidCache.party.length > 0) return this.raidCache;
-    const hooks = this.hooks?.list ?? [];
+    const hooks = this.forest?.hooks ?? [];
     const taken = new Set([...Array.from({ length: WEEK_LANTERNS }, (_, i) => i * 2 + 1), ...this.hung]);
     const free = hooks.findIndex((_, i) => !taken.has(i));
     const hook = hooks[free] ?? hooks[0] ?? { x: this.forest?.heart ?? 512, y: 12, cord: 5 };
@@ -445,7 +450,7 @@ export class Forest implements Scene {
 
   /** Where the level-up's sky lanterns lift from: the Great Sequoia's lanterns, then the trees round the heart. */
   private lanternSources(f: ForestManifest): Point[] {
-    const fromGreat = (this.hooks?.list ?? []).slice(0, 6).map((h) => lanternAt(h).glass);
+    const fromGreat = f.hooks.slice(0, 6).map((h) => lanternAt(h).glass);
     const fromTrees = this.standing
       .filter((s) => Math.abs(s.planted.x - f.heart) < 200)
       .slice(0, 10)
@@ -465,7 +470,7 @@ export class Forest implements Scene {
 
   private finishRaid(): void {
     const hook = this.raidSetup().hook;
-    const i = this.hooks?.list.indexOf(hook) ?? -1;
+    const i = this.forest?.hooks.indexOf(hook) ?? -1;
     if (i >= 0) this.hung.push(i);
   }
 
@@ -480,7 +485,7 @@ export class Forest implements Scene {
         if (m.kind === "raid" && this.standing.length > 0) this.lookAt(raidCamera(this.raidSetup(), e, m.from));
         else if (m.kind === "war") {
           // The ridge's pennant in the middle of the picture.
-          const ridgeCx = this.view / 2 + (RIDGE.x - this.view / 2) / f.layers.far.depth;
+          const ridgeCx = this.view / 2 + (f.ridge.x - this.view / 2) / f.layers.far.depth;
           this.lookAt(warCamera(e, m.from, ridgeCx));
         } else if (m.kind === "levelup") this.lookAt(m.from + (f.heart - m.from) * ease(e / 2));
       }
@@ -630,7 +635,7 @@ export class Forest implements Scene {
       const c = this.crownOf(target.id);
       return c ? { x: toPicture(c.x, this.cx, this.view), y: c.top + 4 } : null;
     }
-    const spot = placeSpot(target.id, f);
+    const spot = placeSpot(target.id, f, this.crabs);
     return { x: toPicture(spot.x, this.cx, this.view), y: spot.y };
   }
 
@@ -642,7 +647,8 @@ export class Forest implements Scene {
     const f = this.forest;
     if (!f || y < 0 || y >= this.pic.H) return null;
     const gx = toGround(x + this.cropX, this.cx, this.view);
-    if (this.crabAt(x, y) >= 0) return { kind: "place", id: this.crabAt(x, y) === 4 ? "no8" : "pond" };
+    const crab = this.crabAt(x, y);
+    if (crab >= 0) return { kind: "place", id: this.crabs[crab]?.numbered ? "no8" : "pond" };
     // Front row first: it stands in front.
     for (const s of this.standing.toReversed()) {
       const lx = Math.round(gx - s.left);
@@ -651,16 +657,15 @@ export class Forest implements Scene {
       if ((s.atlas.data[(s.box.y + ly) * s.atlas.w + s.box.x + lx] ?? 0) >>> 24 >= 128)
         return { kind: "tree", id: s.id };
     }
-    const ground = this.hooks?.ground;
+    const ground = this.ground;
     const solid =
       !!ground &&
       gx >= 0 &&
       gx < ground.w &&
       (ground.data[Math.round(y) * ground.w + Math.round(gx)] ?? 0) >>> 24 >= 128;
     for (const id of ["hollow", "farm", "great", "pond"] as const) {
-      const r = placeRect(id, f);
-      if (gx >= r.x0 && gx <= r.x1 && y >= r.y0 && y <= r.y1 && (solid || id === "hollow"))
-        return { kind: "place", id };
+      const r = placeRect(id, f, this.crabs);
+      if (gx >= r.x0 && gx < r.x1 && y >= r.y0 && y < r.y1 && (solid || id === "hollow")) return { kind: "place", id };
     }
     return null;
   }
@@ -669,7 +674,7 @@ export class Forest implements Scene {
   private crabAt(x: number, y: number): number {
     const t = this.lastT;
     return this.crabs.findIndex((c, i) => {
-      const at = c.numbered && this.rave && this.forest ? { ...c, x: this.forest.pond + 70, foot: 132 } : c;
+      const at = this.raveSpot(c);
       const pose = crabPose(at, t, this.rave, t - (this.crabHop.get(i) ?? -99));
       const sx = toPicture(pose.x, this.cx, this.view) - this.cropX;
       return Math.abs(x - sx) <= 9 && y <= at.foot + 1 && y >= at.foot - 13;
@@ -745,7 +750,7 @@ export class Forest implements Scene {
     const crab = this.crabAt(world.x, world.y);
     if (crab >= 0) {
       this.crabHop.set(crab, t);
-      this.pinned = { kind: "place", id: crab === 4 ? "no8" : "pond" };
+      this.pinned = { kind: "place", id: this.crabs[crab]?.numbered ? "no8" : "pond" };
       return;
     }
     const target = this.pick(world.x, world.y);
@@ -861,29 +866,19 @@ export function placeX(name: string, f: ForestManifest): number | null {
 }
 
 /**
- * Where each place answers a tap, on the ground: the Great Sequoia's span and its hollow (the fire
- * scar at its foot), the pond and its far bank, the gate's sign. Measured against the bundle's
- * ground layer, from the manifest's places so they follow it.
+ * Where each place answers a tap, on the ground: the bundle's own boxes for the Great Sequoia, its
+ * hollow, the pond and the sign, and No. 08 round where it stands.
  */
-function placeRect(id: PlaceId, f: ForestManifest): { x0: number; x1: number; y0: number; y1: number } {
-  switch (id) {
-    case "hollow":
-      return { x0: f.heart - 15, x1: f.heart + 6, y0: 106, y1: 129 };
-    case "great":
-      return { x0: f.great.x, x1: f.great.x + f.great.w, y0: 0, y1: 117 };
-    case "pond":
-      return { x0: f.pond - 94, x1: f.pond + 76, y0: 88, y1: 122 };
-    case "farm":
-      return { x0: f.gate - 49, x1: f.gate + 5, y0: 98, y1: 126 };
-    case "no8":
-      return { x0: f.gate + 6, x1: f.gate + 22, y0: 118, y1: 132 };
-  }
+function placeRect(id: PlaceId, f: ForestManifest, crabs: readonly Crab[]): Rect {
+  if (id !== "no8") return f.places[id];
+  const c = crabs.find((k) => k.numbered) ?? { x: f.gate, foot: 132 };
+  return { x0: c.x - 8, x1: c.x + 8, y0: c.foot - 14, y1: c.foot + 1 };
 }
 
-/** Where a pinned place's tooltip points. */
-function placeSpot(id: PlaceId, f: ForestManifest): Point {
-  const r = placeRect(id, f);
-  return { x: (r.x0 + r.x1) / 2, y: id === "great" ? 40 : r.y0 + 4 };
+/** Where a pinned place's tooltip points: the top of its box (the Great Sequoia's, a third of the way down). */
+function placeSpot(id: PlaceId, f: ForestManifest, crabs: readonly Crab[]): Point {
+  const r = placeRect(id, f, crabs);
+  return { x: (r.x0 + r.x1) / 2, y: id === "great" ? Math.round(r.y1 / 3) : r.y0 + 4 };
 }
 
 type Rgb = readonly [number, number, number];

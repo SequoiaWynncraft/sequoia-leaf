@@ -14,6 +14,7 @@
  */
 
 import type { Pixels } from "../../bundle/art.ts";
+import type { CrabSpot, Hook } from "../../bundle/manifest.ts";
 import { mixColour } from "../../bundle/palette.ts";
 import {
   leaf,
@@ -25,6 +26,7 @@ import {
   snowflake,
   sparkleStage,
 } from "../../bundle/vocabulary.ts";
+import { bayer } from "../../engine/dither.ts";
 import { hash3 } from "../../engine/rng.ts";
 
 export const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
@@ -54,38 +56,7 @@ export interface Point {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Lanterns in the Great Sequoia.
-
-/** Where a lantern hangs: a column under the Great Sequoia's canopy, the canopy's underside there, and its cord. */
-export interface Hook {
-  x: number;
-  y: number;
-  cord: number;
-}
-
-/**
- * The places a lantern can hang in the Great Sequoia, read from the ground layer: columns where
- * its canopy (opaque from the picture's top) has open air under it rather than the trunk, nearest
- * the heart first, alternating sides, a little apart.
- */
-export function lanternHooks(ground: Pixels, great: { x: number; w: number }, heart: number): Hook[] {
-  const solid = (x: number, y: number): boolean =>
-    x >= 0 && y >= 0 && x < ground.w && y < ground.h && (ground.data[y * ground.w + x] ?? 0) >>> 24 >= 128;
-  const trunkRow = Math.round(ground.h * 0.42);
-  const open: { x: number; y: number }[] = [];
-  for (let x = great.x + 6; x < great.x + great.w - 6; x++) {
-    if (!solid(x, 0) || solid(x, trunkRow) || solid(x - 5, trunkRow) || solid(x + 5, trunkRow)) continue;
-    let y = 0;
-    while (y < 40 && solid(x, y)) y++;
-    if (y >= 5 && y < 40) open.push({ x, y });
-  }
-  const picked: Hook[] = [];
-  for (const c of open.toSorted((a, b) => Math.abs(a.x - heart) - Math.abs(b.x - heart))) {
-    if (picked.some((h) => Math.abs(h.x - c.x) < 9)) continue;
-    picked.push({ x: c.x, y: c.y, cord: 3 + Math.floor(hash3(c.x, 5, 61) * 7) });
-  }
-  return picked;
-}
+// Lanterns in the Great Sequoia, on the bundle's hooks (where its canopy has open air under it).
 
 /** Where a hook's lantern hangs: its foot (the prop's bottom) and the middle of its glass. */
 export const lanternAt = (h: Hook): { foot: Point; glass: Point } => ({
@@ -201,33 +172,29 @@ export function drawRaid(s: Stage, r: RaidSetup, e: number, t: number): { lanter
 // ---------------------------------------------------------------------------------------------
 // A war win.
 
-/**
- * Where the pennant stands on the far ridge, in the far layer's own pixels: the top of the far
- * mountains in the stretch over the heart (measured from the bundle's far layer, the same shape in
- * every season and light). The bundle does not mark it yet.
- */
-export const RIDGE: Point = { x: 230, y: 81 };
-
 /** The war's camera: to where the ridge's pennant stands in the middle of the picture. */
 export function warCamera(e: number, from: number, ridgeCx: number): number {
   return lerp(from, ridgeCx, ease(e / 1.8));
 }
 
-/** The gold pennant rising on the far ridge (drawn in the far layer's parallax), then flying. */
-export function drawPennant(s: Stage, e: number, t: number, farDepth: number): void {
-  const x = s.at(RIDGE.x, farDepth);
+/**
+ * The gold pennant rising on the far ridge (the bundle's ridge point, in the far layer's own pixels,
+ * drawn in its parallax), then flying.
+ */
+export function drawPennant(s: Stage, ridge: Point, e: number, t: number, farDepth: number): void {
+  const x = s.at(ridge.x, farDepth);
   if (x < -12 || x > s.view + 2) return;
   const rise = ease((e - 0.5) / 2);
   if (rise <= 0) return;
   const f = propFrame(s, "pennant", "wave", t * 1000);
   if (!f) return;
-  const foot = RIDGE.y + Math.round((1 - rise) * (f.h + 1));
+  const foot = ridge.y + Math.round((1 - rise) * (f.h + 1));
   // Only what has risen above the ridge shows: the rest is still behind it.
   const ox = Math.round(x) - f.foot.x;
   const oy = foot - f.foot.y;
   for (let yy = 0; yy < f.h; yy++) {
     const ty = oy + yy;
-    if (ty >= RIDGE.y || ty < 0) continue;
+    if (ty >= ridge.y || ty < 0) continue;
     for (let xx = 0; xx < f.w; xx++) {
       const v = f.strip.data[yy * f.strip.w + f.index * f.w + xx] ?? 0;
       if (v >>> 24 >= 128) s.pic.set(ox + xx, ty, (v | 0xff000000) >>> 0);
@@ -240,7 +207,7 @@ export function drawPennant(s: Stage, e: number, t: number, farDepth: number): v
       const rr = 3 + since * 12;
       s.pic.sparkle(
         x + 5 + Math.cos(a) * rr,
-        RIDGE.y - 9 + Math.sin(a) * rr * 0.7,
+        ridge.y - 9 + Math.sin(a) * rr * 0.7,
         sparkleStage(since / 0.9, false),
         s.ink.c("star"),
         s.ink.c("ring_gold_light"),
@@ -355,15 +322,9 @@ export interface Crab {
   numbered: boolean;
 }
 
-/** The pond's crabs on its near bank, and No. 08 off by the gate's sign. */
-export function placeCrabs(pond: number, gate: number): Crab[] {
-  return [
-    { x: pond - 64, foot: 132, phase: 0.4, numbered: false },
-    { x: pond - 30, foot: 134, phase: 2.1, numbered: false },
-    { x: pond + 8, foot: 131, phase: 3.7, numbered: false },
-    { x: pond + 44, foot: 133, phase: 5.2, numbered: false },
-    { x: gate + 14, foot: 131, phase: 1.3, numbered: true },
-  ];
+/** The crabs on the bundle's spots (the pond's near bank, and No. 08 beside the gate's sign), each ambling to its own time. */
+export function placeCrabs(spots: readonly CrabSpot[]): Crab[] {
+  return spots.map((c, i) => ({ ...c, phase: hash3(i, 7, 151) * Math.PI * 2 }));
 }
 
 export interface CrabPose {
@@ -426,10 +387,11 @@ export function drawRave(s: Stage, pond: number, t: number): void {
       } else s.pic.set(px, y, s.ink.c("panda_outline"));
     }
   }
+  // The coloured lights sweep the bank as light does: a low, wide pool on the ground, not a ball.
   colours.forEach((c, i) => {
     const x = s.at(pond + Math.sin(t * (0.9 + i * 0.23) + i * 1.7) * 70);
-    const y = 128 + Math.sin(t * (1.3 + i * 0.17) + i) * 4;
-    pool(s, x, y, 9, c, 0.6);
+    const y = 132 + Math.sin(t * (1.3 + i * 0.17) + i) * 2;
+    pool(s, x, y, 11, c, 0.32, 2.6);
   });
   for (let i = 0; i < 6; i++) {
     const u = (t * 2.2) % 1;
@@ -531,7 +493,10 @@ export function drawDew(s: Stage, crown: { x: number; top: number; w: number }, 
   }
 }
 
-/** A tree's light: lantern light over its own pixels (the atlas box at dx, dy), with a band climbing it. */
+/**
+ * A tree's light: lantern light over its own pixels (the atlas box at dx, dy), with a band climbing
+ * it that fades through the welcome's ordered dither at its edges rather than ending in a ruled line.
+ */
 export function lightTree(
   s: Paint,
   atlas: Pixels,
@@ -546,11 +511,12 @@ export function lightTree(
   for (let y = 0; y < box.h; y++) {
     const py = dy + y;
     if (py < 0 || py >= s.pic.H) continue;
-    const inBand = band !== null && Math.abs(y - band) < 2.5;
+    const near = band === null ? 0 : Math.max(0, 1 - Math.abs(y - band) / 4);
     for (let x = 0; x < box.w; x++) {
       const v = atlas.data[(box.y + y) * atlas.w + box.x + x] ?? 0;
       if (v >>> 24 < 128) continue;
-      s.pic.light(dx + x, py, inBand ? bright : lit, inBand ? k * 0.55 : k * 0.2);
+      const inBand = near > 0 && bayer(dx + x, py) < near;
+      s.pic.light(dx + x, py, inBand ? bright : lit, inBand ? k * 0.45 : k * 0.2);
     }
   }
 }
