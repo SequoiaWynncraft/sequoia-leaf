@@ -124,21 +124,44 @@ interface Grid {
   ch: number;
   gap: number;
   cols: number;
+  /** The panel's title, and how far in from the panel's side the cards start. */
+  title: string;
+  inset: number;
 }
 
+const TITLE = "Ten cones, opened by fire";
+
+/** The summary panel: as wide as its cards and its title, which shortens on a screen too narrow for it. */
 function gridOf(c: Canvas): Grid {
   const narrow = c.W < 180;
   const cols = 5;
   const cw = narrow ? 17 : 26;
   const ch = narrow ? 24 : 32;
   const gap = narrow ? 2 : 4;
-  const w = cols * cw + (cols - 1) * gap + 12;
+  const cards = cols * cw + (cols - 1) * gap;
+  const title = textWidth(TITLE) + 12 <= c.W - 8 ? TITLE : "Ten cones";
+  const w = Math.max(cards + 12, textWidth(title) + 12);
   const h = 2 * ch + gap + 12 + 14 + 12;
-  return { x: Math.floor((c.W - w) / 2), y: Math.max(26, Math.floor(c.H * 0.22)), w, h, cw, ch, gap, cols };
+  const inset = Math.floor((w - cards) / 2);
+  return {
+    x: Math.floor((c.W - w) / 2),
+    y: Math.max(26, Math.floor(c.H * 0.22)),
+    w,
+    h,
+    cw,
+    ch,
+    gap,
+    cols,
+    title,
+    inset,
+  };
 }
 
 function slot(g: Grid, i: number): Point {
-  return { x: g.x + 6 + (i % g.cols) * (g.cw + g.gap), y: g.y + 6 + 14 + Math.floor(i / g.cols) * (g.ch + g.gap) };
+  return {
+    x: g.x + g.inset + (i % g.cols) * (g.cw + g.gap),
+    y: g.y + 6 + 14 + Math.floor(i / g.cols) * (g.ch + g.gap),
+  };
 }
 
 /** Where card `i` lands in the row in front of the tree: one row of ten, or two of five on a phone. */
@@ -159,6 +182,8 @@ export interface CardArt {
 export function drawCone10(c: Canvas, ev: Cone10Event, t: number, crownTL: Point, crownBR: Point, art: CardArt): void {
   const tau = t - ev.t0;
   if (tau > END) return;
+  // Ask for every card's portrait from the start, so none pops in as its card flips.
+  if (tau < GRID) for (const id of ev.spirits) art.spriteFor(id);
   const g = gridOf(c);
   const box = { x0: crownTL.x, y0: crownTL.y, x1: crownBR.x, y1: crownBR.y };
   // The summary grid's panel opens once every card is down, and the world behind it dims.
@@ -169,7 +194,7 @@ export function drawCone10(c: Canvas, ev: Cone10Event, t: number, crownTL: Point
     const h = Math.max(3, Math.round(g.h * step));
     c.panel(g.x, g.y + Math.round((g.h - h) / 2), g.w, h, UI.purple, 0.95, [24, 18, 36]);
     if (h >= g.h) {
-      drawText(c, "Ten cones, opened by fire", g.x + 6, g.y + 5, UI.gold, { shadow: true });
+      drawText(c, g.title, g.x + Math.floor((g.w - textWidth(g.title)) / 2), g.y + 5, UI.gold, { shadow: true });
       for (let i = 0; i < 10; i++) {
         const s = slot(g, i);
         c.rect(s.x, s.y, g.cw, g.ch, [14, 12, 22], 0.8);
