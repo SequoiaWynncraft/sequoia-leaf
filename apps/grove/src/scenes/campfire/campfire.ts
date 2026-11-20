@@ -51,7 +51,7 @@ const JOKES: readonly string[] = [
 /** The picture's size and its places before the manifest is in (the bundle's own). */
 const PICTURE = { w: 256, h: 144 };
 const FIRE = { x: 128, y: 129 };
-const CAT = { x: 78, y: 128 };
+const CAT = { x: 72, y: 126 };
 /** The page round the picture before its first frame: the HUD's dark. */
 const DARK = "#150f0d";
 /** Picture in picture shows this many rows round the fire. */

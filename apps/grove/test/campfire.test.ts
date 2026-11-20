@@ -2,14 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import { overlaps, placeTags, seatPeople, throwFrom } from "../src/scenes/campfire/seats.ts";
 
-/** The bundle's Campfire (grove/campfire.py): the fire, then the seats in its order. */
+/** The bundle's Campfire (grove/campfire.py): the fire, then the seats in its order (the logs' seat points, then the standing spots). */
 const FIRE = { x: 128, y: 129 };
 const SEATS = [
-  { x: 90, y: 131 },
-  { x: 151, y: 131 },
-  { x: 167, y: 131 },
+  { x: 88, y: 126 },
+  { x: 151, y: 126 },
+  { x: 167, y: 126 },
   { x: 182, y: 140 },
-  { x: 106, y: 131 },
+  { x: 104, y: 126 },
   { x: 98, y: 141 },
   { x: 160, y: 141 },
   { x: 106, y: 121 },
@@ -23,11 +23,11 @@ describe("the Campfire's seats", () => {
     const seated = seatPeople(CALL, SEATS, FIRE);
     const where = Object.fromEntries(seated.map((s) => [s.person, [s.x, s.y]]));
     expect(where).toEqual({
-      Moss: [90, 131],
-      Fern: [151, 131],
-      Cinder: [167, 131],
+      Moss: [88, 126],
+      Fern: [151, 126],
+      Cinder: [167, 126],
       Wren: [182, 140],
-      You: [106, 131],
+      You: [104, 126],
     });
   });
 
