@@ -5,8 +5,14 @@ import type { PlayerId } from "./player.ts";
 export const EARN_SOURCES = ["raid", "war", "quest", "achievement", "level", "event", "staff"] as const;
 export type EarnSource = (typeof EARN_SOURCES)[number];
 
-/** What Leaf is spent on. */
-export const SPEND_SINKS = ["shop", "reroll"] as const;
+/**
+ * What Leaf is spent on:
+ * - `shop`: an item bought.
+ * - `reroll`: a quest swapped for another.
+ * - `cone`: Grove cones bought.
+ * - `offering`: Leaf offered to the Great Sequoia toward the guild's weekly goal.
+ */
+export const SPEND_SINKS = ["shop", "reroll", "cone", "offering"] as const;
 export type SpendSink = (typeof SPEND_SINKS)[number];
 
 export type EntryOrigin = EarnSource | SpendSink;

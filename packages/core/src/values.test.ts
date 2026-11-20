@@ -44,6 +44,8 @@ describe("entry vocabulary", () => {
     expect(isEntryKind("reversal")).toBe(true);
     expect(isEntryOrigin("raid")).toBe(true);
     expect(isEntryOrigin("shop")).toBe(true);
+    expect(isEntryOrigin("cone")).toBe(true);
+    expect(isEntryOrigin("offering")).toBe(true);
   });
 
   it("rejects anything else", () => {

@@ -42,6 +42,14 @@ describe("draftEntry", () => {
     expect(draft).toMatchObject({ kind: "spend", balanceDelta: -40, xpDelta: 0, origin: "shop" });
   });
 
+  it("spends on Grove cones and on offerings to the Great Sequoia as it spends on anything", () => {
+    for (const sink of ["cone", "offering"] as const) {
+      const draft = draftEntry({ kind: "spend", playerId: alice, amount: leaf(400), sink, idempotencyKey: sink });
+
+      expect(draft).toMatchObject({ kind: "spend", balanceDelta: -400, xpDelta: 0, origin: sink });
+    }
+  });
+
   it("reverses an earn by removing it from the balance and from XP", () => {
     const earn = stored(
       draftEntry({ kind: "earn", playerId: alice, amount: leaf(110), source: "raid", idempotencyKey: "raid:1" }),
