@@ -33,7 +33,8 @@ if (camp) {
   const [fx, fy, fz] = camp.fire;
   VIEWS.hero = { eye: camp.eye, at: camp.look, fov: 38 };
   VIEWS.close = { eye: [fx + 1.5, fy + 2.6, fz + 8.5], at: [fx - 0.3, fy + 1.3, fz - 2], fov: 36 };
-  VIEWS.side = { eye: [fx + 11, fy + 4, fz + 9], at: [fx - 2, fy + 1.6, fz - 2], fov: 38 };
+  // Clear of the trunk that stands to the right of the fire.
+  VIEWS.side = { eye: [fx + 6.5, fy + 3.6, fz + 11.5], at: [fx - 2, fy + 1.6, fz - 2], fov: 42 };
   VIEWS.tall = { eye: [fx + 2, fy + 6.5, fz + 22], at: [fx, fy + 6, fz - 2], fov: 50 };
 } else if (board) {
   Object.assign(VIEWS, board.views);

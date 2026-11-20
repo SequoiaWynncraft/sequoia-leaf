@@ -210,7 +210,7 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
           // ground they stand on.
           vec2 at = floor(vPos.xz);
           float drift = vnoise3(vec3(at * 0.06, 1.0)) * 0.65 + vnoise3(vec3(at * 0.17, 5.0)) * 0.35;
-          t.rgb *= mix(vec3(0.86, 0.94, 0.82), vec3(1.12, 1.07, 0.96), drift);
+          t.rgb *= mix(vec3(0.91, 0.96, 0.88), vec3(1.08, 1.05, 0.97), drift);
         }
         if (leafy) {
           // No two boughs are one green: it runs warmer and lighter here, cooler and deeper there,
