@@ -39,8 +39,12 @@ export interface BlockDef {
   readonly fence?: boolean;
   /** The top face is turned a different way on each block, so a lawn does not show a grid. */
   readonly scatter?: boolean;
-  /** A lawn: its top drifts in colour from place to place, as grass does across a meadow. */
-  readonly lawn?: boolean;
+  /**
+   * Natural ground, coloured pixel by pixel by where it lies so that it never repeats: which ground
+   * (an index into `GROUNDS`), and whether every face is that ground or only the top.
+   */
+  readonly ground?: number;
+  readonly groundAll?: boolean;
   /** Light given off, 0 to 15. */
   readonly light?: number;
   /** Shows its own colour whatever the light, and glows in the air: a lit window. */
@@ -108,16 +112,16 @@ const DEFS: BlockDef[] = [
     name: "moss",
     opaque: true,
     scatter: true,
-    lawn: true,
+    ground: 0,
     tiles: column("grass_side", "grass_top", "dirt"),
     alts: variants("grass_top")
       .slice(1)
       .map((top) => column("grass_side", top, "dirt")),
   },
-  { name: "duff", opaque: true, scatter: true, tiles: column("podzol_side", "podzol_top", "dirt") },
+  { name: "duff", opaque: true, scatter: true, ground: 1, tiles: column("podzol_side", "podzol_top", "dirt") },
   solid("moss_full", "moss", { scatter: true }),
-  solid("dirt", "dirt", { scatter: true }),
-  solid("path", "path", { scatter: true }),
+  solid("dirt", "dirt", { scatter: true, ground: 3, groundAll: true }),
+  solid("path", "path", { scatter: true, ground: 2, groundAll: true }),
   {
     name: "cone",
     opaque: false,

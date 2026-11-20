@@ -88,6 +88,8 @@ export const PLANT = 3;
 /** A lawn's top, and the grass and fern that grow on it: both take the meadow's drifting colour. */
 export const LAWN = 4;
 export const WILD = 5;
+/** Other natural ground, coloured by the world as the lawn is: this plus its index in `GROUNDS`. */
+export const GROUND = 5;
 /** Floats per corner: position 3, uv 2, tile 1, kind 1, normal 3, sky 1, glow 1, sun 1, ao 1. */
 export const STRIDE = 14;
 
@@ -348,7 +350,8 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
           const tiles = pick ? def.alts![pick - 1]! : def.tiles;
           const spin = def.scatter ? Math.floor(ihash(x, y, z, 5) * 4) : 0;
           const kind = def.foliage ? LEAFY : def.glows ? GLOWS : PLAIN;
-          boxAt(x, y, z, FULL, FULL_TO, tiles, kind, def.turned, spin, def.lawn ? LAWN : kind);
+          const earth = def.ground === undefined ? kind : def.ground === 0 ? LAWN : GROUND + def.ground;
+          boxAt(x, y, z, FULL, FULL_TO, tiles, def.groundAll ? earth : kind, def.turned, spin, earth);
           continue;
         }
         for (const b of def.boxes ?? []) boxAt(x, y, z, b.from, b.to, b.tiles, b.emit ? GLOWS : PLAIN);

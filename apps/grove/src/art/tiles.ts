@@ -53,6 +53,61 @@ export const TILES: Record<string, Paint> = {
   cone: (x, y) => ((x + y) & 1 ? ((x ^ y) & 2 ? "#6b3d1f" : "#94582c") : "#3a1f12"),
 };
 
+/**
+ * The lawn's greens, darkest first. A lawn is not tiled from a drawing: the game colours every pixel
+ * of it by where it lies in the world, from these, so no patch of grass is ever the same as another.
+ */
+export interface Ground {
+  /** Six colours, darkest first. */
+  readonly ramp: readonly string[];
+  /** Where the grain's value passes from one colour to the next, so each keeps its share of the ground. */
+  readonly cuts: readonly number[];
+  /** A rare other thing lying in it (a pebble), and how much of the ground it covers. */
+  readonly speck: string;
+  readonly rate: number;
+}
+const light = (hex: string): number =>
+  (parseInt(hex.slice(1, 3), 16) * 0.2126 +
+    parseInt(hex.slice(3, 5), 16) * 0.7152 +
+    parseInt(hex.slice(5, 7), 16) * 0.0722) /
+  255;
+const grey = (hex: string): boolean => {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return Math.max(...c) - Math.min(...c) < 14;
+};
+/** The value below which a share `q` of the grain falls; the grain is close to a bell round a half. */
+const quantile = (q: number): number => {
+  const x = 2 * Math.min(0.999, Math.max(0.001, q)) - 1;
+  const l = Math.log(1 - x * x);
+  const t = 2 / (Math.PI * 0.147) + l / 2;
+  return 0.5 + 0.165 * Math.SQRT2 * Math.sign(x) * Math.sqrt(Math.sqrt(t * t - l / 0.147) - t);
+};
+/** Reads a ground's colours and their shares off its drawn tile: what the artist chose, laid out by the world. */
+function ground(name: string): Ground {
+  const d = DRAWN[name]!;
+  const count = new Map<string, number>();
+  for (const row of d.rows) for (const ch of row) count.set(d.key[ch]!, (count.get(d.key[ch]!) ?? 0) + 1);
+  const specks = [...count].filter(([hex]) => grey(hex)).sort((a, b) => b[1] - a[1]);
+  const body = [...count].filter(([hex]) => !grey(hex)).sort((a, b) => light(a[0]) - light(b[0]));
+  const total = body.reduce((n, [, k]) => n + k, 0);
+  const ramp = body.map(([hex]) => hex);
+  const cuts: number[] = [];
+  let sum = 0;
+  for (const [, k] of body.slice(0, -1)) cuts.push(quantile((sum += k) / total));
+  while (ramp.length < 6) {
+    ramp.push(ramp[ramp.length - 1]!);
+    cuts.push(2);
+  }
+  return {
+    ramp: ramp.slice(0, 6),
+    cuts: cuts.slice(0, 5),
+    speck: specks[0]?.[0] ?? ramp[0]!,
+    rate: specks.reduce((n, [, k]) => n + k, 0) / 256,
+  };
+}
+/** The grounds the world colours pixel by pixel: the lawn, the forest floor, the path, bare earth. */
+export const GROUNDS: readonly Ground[] = ["grass_top", "podzol_top", "path", "dirt"].map(ground);
+
 /** A tile with every colour darkened: the charred bark inside a fire scar is the tree's own bark, burnt. */
 const dim =
   (paint: Paint, k: number): Paint =>

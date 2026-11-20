@@ -52,9 +52,13 @@ Every block shows one 16x16 tile, as a block game does; where a block has severa
 - `src/art/tiles.ts`: registers them, and draws the few things the game shapes its own way:
   the lantern, the flame, the banner, the string lights.
 
-The meadow is kept off the grid the way block games do it: a lawn block's top is turned one of four
-ways, every plant is nudged off the middle of its block and some are mirrored, wild grass sits lower
-on some blocks than others, and the lawn's colour drifts slowly from place to place.
+Natural ground is never tiled. The lawn, the forest floor, the path and bare earth are coloured
+pixel by pixel by where each pixel lies in the world (`GROUNDS` in `src/art/tiles.ts`, the shader in
+`render.ts`): a fine grain that never repeats, gathered into small clumps and wider patches, using
+the colours of that ground's drawn tile in the shares the drawing gave them. Far off, the grain
+gives way to the patches so nothing shimmers. On top of that the meadow is kept off the grid the way
+block games do it: every plant is nudged off the middle of its block and some are mirrored, wild
+grass sits lower on some blocks than others, and the lawn's colour drifts slowly from place to place.
 
 ## Light
 

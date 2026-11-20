@@ -2,7 +2,7 @@
 import * as THREE from "three";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 
-import { paintTile, reliefTile, TILE, tileNames } from "../art/tiles.ts";
+import { GROUNDS, paintTile, reliefTile, TILE, tileNames } from "../art/tiles.ts";
 import { Dyn } from "./actors.ts";
 import { meshRegion, STRIDE } from "./mesh.ts";
 import { ihash } from "./rand.ts";
@@ -147,6 +147,9 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       ...common(),
       uTiles: { value: tiles() },
       uRelief: { value: tiles(reliefTile) },
+      uGround: { value: GROUNDS.flatMap((g) => g.ramp.map(rgb)) },
+      uCut: { value: GROUNDS.flatMap((g) => [...g.cuts]) },
+      uSpeck: { value: GROUNDS.map((g) => new THREE.Vector4(...rgb(g.speck).toArray(), g.rate)) },
       uLamp: { value: lamps.map((g) => new THREE.Vector4(g.at[0], g.at[1], g.at[2], 6 + g.size * 2)) },
       uLampSet: { value: lamps.map((g) => new THREE.Vector2(g.size > 5 ? 2.2 : 1.2, g.flicker ? 1 : 0)) },
       uLampN: { value: Math.min(LAMPS, strong.length) },
@@ -173,7 +176,7 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
         vec3 p = position;
         // Foliage stirs: every corner at one place moves the same way, so no gap opens between
         // blocks. A plant is rooted and only its top moves.
-        bool plant = aUv.w > 2.5 && aUv.w < 3.5 || aUv.w > 4.5;
+        bool plant = aUv.w > 2.5 && aUv.w < 3.5 || aUv.w > 4.5 && aUv.w < 5.5;
         if (plant || (aUv.w > 1.5 && aUv.w < 2.5)) {
           float reach = plant ? aUv.y * 0.07 : 0.03;
           float phase = dot(floor(position + 0.5), vec3(0.71, 0.37, 0.93));
@@ -190,6 +193,9 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       precision highp sampler2DArray;
       uniform sampler2DArray uTiles;
       uniform sampler2DArray uRelief;
+      uniform vec3 uGround[24];
+      uniform float uCut[20];
+      uniform vec4 uSpeck[4];
       uniform vec4 uLamp[${LAMPS}];
       uniform vec2 uLampSet[${LAMPS}];
       uniform int uLampN;
@@ -233,10 +239,32 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
           t.rgb *= 0.55;
         }
         float glows = vEmit > 0.5 && vEmit < 1.5 ? 1.0 : 0.0;
-        if (vEmit > 3.5) {
-          // A meadow is not one green: its colour drifts slowly from place to place, the way a
-          // block game blends grass colour across the land, and the tufts take the colour of the
-          // ground they stand on.
+        bool lawn = vEmit > 3.5 && vEmit < 4.5;
+        bool earth = lawn || vEmit > 5.5;
+        if (earth) {
+          // Natural ground is not a tile laid over and over. Every pixel of it is coloured by where
+          // it lies in the world: fine grain that never repeats, gathered into small clumps and into
+          // wider rich and thin patches, in the ground's own colours and in the shares its drawing gave them.
+          int gi = lawn ? 0 : int(vEmit - 4.5);
+          vec3 px = floor((vPos - vN * 0.02) * 16.0);
+          float grain = hash3(px + 3.0);
+          float clump = vnoise3(px / 2.6 + 11.0);
+          float lush = vnoise3(px / 9.0 + 23.0) * 0.6 + vnoise3(px / 31.0 + 37.0) * 0.4;
+          float v = 0.5 + (grain - 0.5) * 0.92 + (clump - 0.5) * 0.62 + (lush - 0.5) * 0.4;
+          // Far off, a pixel covers many of the ground's; the grain gives way to the patches, and nothing shimmers.
+          vec3 across = fwidth(vPos * 16.0);
+          float fine = clamp(1.6 - max(across.x, max(across.y, across.z)) * 0.7, 0.0, 1.0);
+          v = mix(0.5 + (lush - 0.5) * 0.5, v, fine);
+          int rung = 0;
+          for (int k = 0; k < 5; k++) if (v > uCut[gi * 5 + k]) rung = k + 1;
+          vec3 g = uGround[gi * 6 + rung];
+          if (hash3(px + 71.0) < uSpeck[gi].a * 0.5 * fine) g = uSpeck[gi].rgb;
+          t = vec4(g, 1.0);
+        }
+        if (vEmit > 3.5 && vEmit < 5.5) {
+          // A meadow is not one green either: its colour drifts slowly from place to place, the way
+          // a block game blends grass colour across the land, and the tufts take the colour of
+          // the ground they stand on.
           vec2 at = floor(vPos.xz);
           float drift = vnoise3(vec3(at * 0.06, 1.0)) * 0.65 + vnoise3(vec3(at * 0.17, 5.0)) * 0.35;
           t.rgb *= mix(vec3(0.91, 0.96, 0.88), vec3(1.08, 1.05, 0.97), drift);
@@ -255,7 +283,7 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
         vec3 lean = relief.xyz * 2.0 - 1.0;
         float smoothness = relief.a;
         vec3 n = vN;
-        if (!leafy && abs(lean.x) + abs(lean.y) > 0.01) {
+        if (!leafy && !earth && abs(lean.x) + abs(lean.y) > 0.01) {
           vec3 px = dFdx(vPos), py = dFdy(vPos);
           vec2 ux = dFdx(vUv), uy = dFdy(vUv);
           vec3 right = px * uy.y - py * ux.y;
