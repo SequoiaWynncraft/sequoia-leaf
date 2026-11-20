@@ -50,6 +50,27 @@ describe("draftEntry", () => {
     }
   });
 
+  it("holds a marketplace order's Leaf and claims Leaf out, as it spends on anything", () => {
+    for (const sink of ["market_hold", "conversion"] as const) {
+      const draft = draftEntry({ kind: "spend", playerId: alice, amount: leaf(6_400), sink, idempotencyKey: sink });
+
+      expect(draft).toMatchObject({ kind: "spend", balanceDelta: -6_400, xpDelta: 0, origin: sink });
+    }
+  });
+
+  it("pays a seller their sale without XP, when the posting grants none", () => {
+    const draft = draftEntry({
+      kind: "earn",
+      playerId: bob,
+      amount: leaf(500),
+      xp: 0,
+      source: "market_sale",
+      idempotencyKey: "market_sale:1",
+    });
+
+    expect(draft).toMatchObject({ kind: "earn", balanceDelta: 500, xpDelta: 0, origin: "market_sale" });
+  });
+
   it("reverses an earn by removing it from the balance and from XP", () => {
     const earn = stored(
       draftEntry({ kind: "earn", playerId: alice, amount: leaf(110), source: "raid", idempotencyKey: "raid:1" }),

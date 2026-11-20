@@ -46,6 +46,9 @@ describe("entry vocabulary", () => {
     expect(isEntryOrigin("shop")).toBe(true);
     expect(isEntryOrigin("cone")).toBe(true);
     expect(isEntryOrigin("offering")).toBe(true);
+    expect(isEntryOrigin("market_hold")).toBe(true);
+    expect(isEntryOrigin("market_sale")).toBe(true);
+    expect(isEntryOrigin("conversion")).toBe(true);
   });
 
   it("rejects anything else", () => {

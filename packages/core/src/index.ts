@@ -1,6 +1,20 @@
 export { type AchievementAward, type AchievementRules, leafForAward } from "./achievements.ts";
 export { type Activity, type ActivityKind, RAID_KEYS, type RaidKey, raidKeyForName, RAIDS } from "./activity.ts";
 export {
+  allotMonths,
+  CONVERSION_KINDS,
+  CONVERSION_STATUSES,
+  type ConversionKind,
+  conversionCost,
+  type ConversionRule,
+  type ConversionRules,
+  type ConversionStatus,
+  type QueuedClaim,
+  utcMonth,
+  utcMonthStart,
+  withinMemberLimit,
+} from "./conversions.ts";
+export {
   contributionsOf,
   GREAT_GOAL_KINDS,
   type GreatGoal,
@@ -59,6 +73,36 @@ export {
   SPEND_SINKS,
   type SpendSink,
 } from "./ledger.ts";
+export {
+  autoConfirmsAt,
+  buyRefusal,
+  type BuyRefusal,
+  checkListing,
+  checkTerms,
+  FEE_SCALE,
+  type ListingCheck,
+  type ListingInput,
+  type ListingKind,
+  LISTING_KINDS,
+  listingExpiresAt,
+  type ListingProblem,
+  listingStatus,
+  type ListingStatus,
+  type MarketRules,
+  type OrderAction,
+  type OrderMove,
+  orderMove,
+  type OrderRefusal,
+  type OrderRole,
+  ORDER_ROLES,
+  type OrderState,
+  ORDER_STATES,
+  type OrderStep,
+  ORDER_STEPS,
+  orderTotals,
+  quantityAllowed,
+  settlementOf,
+} from "./market.ts";
 export { parsePlayerId, type PlayerId, playerId } from "./player.ts";
 export {
   applyActivityToQuests,

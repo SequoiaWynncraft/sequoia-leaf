@@ -1,7 +1,9 @@
 import type { AchievementRules } from "./achievements.ts";
 import { type Activity, RAID_KEYS, type RaidKey } from "./activity.ts";
+import type { ConversionRules } from "./conversions.ts";
 import type { GreatRules } from "./great.ts";
 import type { GroveRules } from "./grove.ts";
+import type { MarketRules } from "./market.ts";
 import type { QuestReward, QuestRules, QuestSlot, QuestTemplate } from "./quests.ts";
 
 /**
@@ -15,6 +17,8 @@ export interface Rules {
   readonly achievements: AchievementRules;
   readonly grove: GroveRules;
   readonly great: GreatRules;
+  readonly market: MarketRules;
+  readonly conversions: ConversionRules;
 }
 
 export interface EarningRules {
@@ -196,6 +200,41 @@ const GREAT_RULES: GreatRules = {
   glowAt: [1, 10, 30],
 };
 
+// The member marketplace. A listing takes orders for two weeks and a delivered
+// order confirms itself a week after delivery unless the buyer disputes it,
+// so held Leaf never waits on a buyer who forgot. There is no fee for now. A
+// price is up to a million Leaf a unit, and a listing up to a stack of 64.
+const MARKET_RULES: MarketRules = {
+  listingDays: 14,
+  autoConfirmDays: 7,
+  fee: 0,
+  title: { min: 3, max: 80 },
+  description: { max: 1000 },
+  price: { min: 1, max: 1_000_000 },
+  quantity: { max: 64 },
+  maxOpenListings: 20,
+  note: { max: 500 },
+  digestMs: HOUR_MS,
+};
+
+// Leaf out to LE, tomes and aspects, which staff pay in-game. PLACEHOLDERS, to
+// tune with the Branchmasters: their first proposal was 200 Leaf to 1 LE from
+// 32 LE, and 3,000 to 4,000 Leaf for a tome or an aspect, here 4,000. The
+// guild's budget was about 100 LE a month. At launch Leaf was issued at about
+// 118,000 a day, about 590 LE a day at this rate, so the cap, not the rate, is
+// what keeps payouts inside the budget: a claim past it waits, in order, for
+// the months after. A member may ask for 64 LE, one tome and one aspect a
+// month, so one member can't hold the whole queue.
+const CONVERSION_RULES: ConversionRules = {
+  provisional: true,
+  kinds: {
+    le: { name: "Liquid Emerald", leafPerUnit: 200, minUnits: 32, maxUnits: 64, monthlyCap: 100, memberMonthly: 64 },
+    tome: { name: "Tome", leafPerUnit: 4000, minUnits: 1, maxUnits: 1, monthlyCap: 4, memberMonthly: 1 },
+    aspect: { name: "Aspect", leafPerUnit: 4000, minUnits: 1, maxUnits: 1, monthlyCap: 4, memberMonthly: 1 },
+  },
+  note: { max: 200 },
+};
+
 export const DEFAULT_RULES: Rules = {
   earning: {
     leafPerRaidSeasonRating: 1,
@@ -222,6 +261,8 @@ export const DEFAULT_RULES: Rules = {
   achievements: ACHIEVEMENT_RULES,
   grove: GROVE_RULES,
   great: GREAT_RULES,
+  market: MARKET_RULES,
+  conversions: CONVERSION_RULES,
 };
 
 /**

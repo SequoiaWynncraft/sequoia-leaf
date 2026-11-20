@@ -1,8 +1,12 @@
 import { type Leaf, MAX_LEAF } from "./leaf.ts";
 import type { PlayerId } from "./player.ts";
 
-/** Where earned Leaf comes from. */
-export const EARN_SOURCES = ["raid", "war", "quest", "achievement", "level", "event", "staff"] as const;
+/**
+ * Where earned Leaf comes from. All but one are new Leaf; `market_sale` is Leaf
+ * passed on: a buyer's held Leaf (`market_hold`) paid to the seller, which
+ * grants no XP.
+ */
+export const EARN_SOURCES = ["raid", "war", "quest", "achievement", "level", "event", "staff", "market_sale"] as const;
 export type EarnSource = (typeof EARN_SOURCES)[number];
 
 /**
@@ -11,8 +15,12 @@ export type EarnSource = (typeof EARN_SOURCES)[number];
  * - `reroll`: a quest swapped for another.
  * - `cone`: Grove cones bought.
  * - `offering`: Leaf offered to the Great Sequoia toward the guild's weekly goal.
+ * - `market_hold`: a marketplace order's Leaf, held until the seller is paid
+ *   (`market_sale`) or the buyer refunded (a reversal of it).
+ * - `conversion`: Leaf claimed out as LE, a tome or an aspect, which staff pay
+ *   in-game; a declined or cancelled claim is refunded by a reversal of it.
  */
-export const SPEND_SINKS = ["shop", "reroll", "cone", "offering"] as const;
+export const SPEND_SINKS = ["shop", "reroll", "cone", "offering", "market_hold", "conversion"] as const;
 export type SpendSink = (typeof SPEND_SINKS)[number];
 
 export type EntryOrigin = EarnSource | SpendSink;
