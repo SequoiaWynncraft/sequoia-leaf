@@ -1,7 +1,6 @@
 /** Small pieces every menu uses, in the mod's language. They return HTML strings. */
 
-import { type RankName, RANKS } from "../../engine/palette.ts";
-import { BOND_MAX } from "../../game/rules.ts";
+import { BOND_MAX, type RankName, RANKS } from "../../game/rules.ts";
 import { glyph } from "./icons.ts";
 
 export const esc = (s: string): string =>

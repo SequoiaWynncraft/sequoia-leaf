@@ -4,8 +4,17 @@
  * between banners. "Warm 1" and "Warm 10" play the real reveal by the glade's fire.
  */
 
-import { RANKS } from "../../engine/palette.ts";
-import { BANNER, CONE_PRICE, ODDS, PITY, PITY_RANK, POOLS, VERDANT_AT, VERDANT_CHANCE } from "../../game/rules.ts";
+import {
+  BANNER,
+  CONE_PRICE,
+  ODDS,
+  PITY,
+  PITY_RANK,
+  POOLS,
+  RANKS,
+  VERDANT_AT,
+  VERDANT_CHANCE,
+} from "../../game/rules.ts";
 import { spirit } from "../../game/spirits.ts";
 import type { GroveState } from "../../game/state.ts";
 import { glyph, icon } from "./icons.ts";

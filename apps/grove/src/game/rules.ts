@@ -5,7 +5,18 @@
  * they take a random number and return what happens, so the tests can check the maths.
  */
 
-import { type RankName, RANKS } from "../engine/palette.ts";
+/** The ranks, commonest first, in the website's rank colours lifted to read on a dark tooltip. */
+export const RANKS = [
+  { name: "Leafkin", colour: "#c9bba4" },
+  { name: "Sapling", colour: "#92c46a" },
+  { name: "Sprite", colour: "#78a8e2" },
+  { name: "Dryad", colour: "#a2dcec" },
+  { name: "Druid", colour: "#cfe070" },
+  { name: "Treant", colour: "#f08c62" },
+  { name: "Yggdrasil", colour: "#fdd36f" },
+] as const;
+
+export type RankName = (typeof RANKS)[number]["name"];
 
 /** A cone costs this much, one at a time or ten at once: no bulk discount. */
 export const CONE_PRICE = 400;

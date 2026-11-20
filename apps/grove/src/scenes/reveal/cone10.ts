@@ -11,8 +11,8 @@
 
 import type { CastFrame } from "../../bundle/cast.ts";
 import { leaf, sparkleStage } from "../../bundle/vocabulary.ts";
-import { type RankName, RANKS } from "../../engine/palette.ts";
 import { hash3, hashString, Rng } from "../../engine/rng.ts";
+import { type RankName, RANKS } from "../../game/rules.ts";
 import { type Canvas, drawText, hex, mix, type Rgb, textWidth, UI } from "../../ui/hud.ts";
 import { crown, type Fx, leafKeys, type Point } from "../glade/stage.ts";
 import { INSIGNIA } from "./card.ts";
@@ -150,7 +150,7 @@ function rowSlot(c: Canvas, g: Grid, i: number): Point {
   return { x: x0 + (i % perRow) * (g.cw + g.gap), y: y0 + Math.floor(i / perRow) * (g.ch + g.gap) };
 }
 
-/** The spirit to show on each rank's card, and the colours its palette sprite is drawn in. */
+/** The spirit to show on each rank's card, from the bundle's cast sheets. */
 export interface CardArt {
   /** A spirit's portrait from the bundle's cast sheets, or null while it loads. */
   spriteFor: (spirit: string) => CastFrame | null;

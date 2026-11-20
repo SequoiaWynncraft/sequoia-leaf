@@ -1,9 +1,8 @@
 /**
  * How art sits on the screen. Every canvas is drawn at its art's own resolution and scaled up by a
  * whole number of device pixels with nearest filtering, so pixels stay square and sharp. A scene's
- * world picks its scale from how many rows it wants (the forest, the Campfire) or from the bundle's
- * fixed picture (the glade, `bundle/fit.ts`); the HUD and the menus keep one unit, as Minecraft's
- * GUI scale does, so they stay one size everywhere.
+ * world takes its scale from the bundle's fixed picture (`bundle/fit.ts`); the HUD and the menus
+ * keep one unit, as Minecraft's GUI scale does, so they stay one size everywhere.
  */
 
 export interface Point {
@@ -19,18 +18,6 @@ export interface Grid {
   offX: number;
   offY: number;
   dpr: number;
-}
-
-/** The narrowest a world can be, and the widest: enough for a tree, a fire and a companion. */
-export const MIN_ART_WIDTH = 78;
-export const MAX_ART_WIDTH = 560;
-
-/** A grid `rows` art pixels tall (to the nearest whole scale) on a `devW` by `devH` device area. */
-export function worldGrid(devW: number, devH: number, rows: number, dpr: number): Grid {
-  let s = Math.max(1, Math.round(devH / rows));
-  while (Math.ceil(devW / s) > MAX_ART_WIDTH) s++;
-  while (s > 1 && Math.ceil(devW / s) < MIN_ART_WIDTH) s--;
-  return place(devW, devH, s, dpr);
 }
 
 /** A grid at a fixed scale, for the HUD. */

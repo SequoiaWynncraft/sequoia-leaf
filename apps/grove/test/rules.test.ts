@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { RANKS } from "../src/engine/palette.ts";
 import {
   CATALOGUE,
   dailyTrades,
@@ -11,6 +10,7 @@ import {
   POOLS,
   rankAt,
   rankIndex,
+  RANKS,
 } from "../src/game/rules.ts";
 import { SPIRITS } from "../src/game/spirits.ts";
 

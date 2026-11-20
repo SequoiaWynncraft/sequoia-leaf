@@ -7,7 +7,7 @@
  * newer ones have shot up.
  */
 
-import { STAGE_OF_LEVEL, type StageName } from "../../art/tree.ts";
+import { type StageName, stageOf } from "../../game/stages.ts";
 
 export interface Member {
   name: string;
@@ -97,7 +97,7 @@ export const ROSTER: readonly Member[] = OLDEST_FIRST.map(([name, level], tenure
   seed: name,
   level,
   tenure,
-  stage: STAGE_OF_LEVEL[Math.max(0, Math.min(12, level - 1))] ?? "seedling",
+  stage: stageOf(level),
 }));
 
 export const stageLabel = (stage: StageName): string => stage[0]?.toUpperCase() + stage.slice(1);

@@ -2,8 +2,8 @@
 # Every route, desktop and phone.
 glade-desktop 1440 900 ?still&level=9&time=dusk#glade
 glade-phone 390 844 ?still&level=9&time=dusk#glade
-forest-desktop 1440 900 ?still&at=905#forest
-forest-phone 390 844 ?still&at=935#forest
+forest-desktop 1440 900 ?still&at=gate#forest
+forest-phone 390 844 ?still&at=heart#forest
 campfire-desktop 1440 900 ?still#campfire
 campfire-phone 390 844 ?still#campfire
 campfire-pip 320 180 ?still&camp=pip#campfire
@@ -43,15 +43,15 @@ glade-cone-ygg-card 1440 900 ?still&nogreet&level=9&time=dusk&scene=cone&rank=Yg
 glade-cone10-row 1440 900 ?still&nogreet&level=9&time=dusk&scene=cone10&rank=Treant&t=4.55#glade
 glade-cone10-grid 1440 900 ?still&nogreet&level=9&time=dusk&scene=cone10&rank=Treant&t=7.0#glade
 glade-care-water 1440 900 ?still&nogreet&level=8&time=dusk&care=water&caret=0.8#glade
-# The forest's moments, now with the shared cast.
-forest-pond 1440 900 ?still&at=pond#forest
-forest-swamp 1440 900 ?still&at=swamp#forest
-forest-campfire 1440 900 ?still&at=campfire#forest
-forest-stall 1440 900 ?still&at=stall#forest
-forest-crab-rave 1440 900 ?still&anniversary&t=3.1#forest
-forest-night 1440 900 ?still&time=night&at=930#forest
-forest-winter 1440 900 ?still&season=winter&at=905#forest
-forest-raid 1440 900 ?still&event=raid&et=6.45#forest
-forest-war 1440 900 ?still&event=war&et=6.0#forest
-forest-levelup 1440 900 ?still&event=levelup&time=night&et=2.8#forest
-forest-joke 1440 900 ?still&at=campfire&look=campfire#forest
+# The Forest on the art bundle: its places by light and season, and its moments (BUDGET=6000).
+forest-heart 1280 720 ?still&at=heart&time=dusk&season=normal#forest
+forest-pond 1280 720 ?still&at=pond&time=dusk&season=normal#forest
+forest-gate 1280 720 ?still&at=gate&time=dusk&season=normal#forest
+forest-heart-night 1280 720 ?still&at=heart&time=night&season=normal#forest
+forest-pond-winter 1280 720 ?still&at=pond&time=dusk&season=winter#forest
+forest-raid 1280 720 ?still&time=dusk&season=normal&event=raid&et=4.4&t=20#forest
+forest-raid-lantern 1280 720 ?still&time=dusk&season=normal&event=raid&et=7.2&t=20#forest
+forest-war 1280 720 ?still&time=dusk&season=normal&event=war&et=4.0&t=20#forest
+forest-levelup 1280 720 ?still&time=night&season=normal&event=levelup&et=4.0&t=20#forest
+forest-crab-rave 1280 720 ?still&time=night&season=normal&anniversary&t=3.1#forest
+forest-tip 1280 720 ?still&time=dusk&season=normal&look=great&at=heart#forest

@@ -6,10 +6,8 @@
  * - Loops (`Loop`) decode lazily: the first frame as soon as the bytes are in, the rest in the
  *   time each frame leaves over (`idle`). Only the loops a scene says it uses (`keep`) stay cached.
  * - Masks (1-bit PNGs) become `Mask`s: a bit per pixel and the list of pixels that are set.
- * - Images (the cast's and props' strips, the aurora) become packed RGBA `Pixels`.
- *
- * The scenes that move onto bundles next (the forest, the campfire) read their sections of the
- * manifest (`manifest.other`) and fetch their layers through the same handles.
+ * - Images (the cast's and props' strips, the aurora, the Forest's layers and tree atlases) become
+ *   packed RGBA `Pixels`.
  */
 
 import { type CastSheet, readCast } from "./cast.ts";

@@ -3,8 +3,11 @@
  * moment. Every lab's parameters still work; each scene reads the ones it knows.
  */
 
-import { type RankName, RANKS, type Season, type Time } from "../engine/palette.ts";
-import { LEVEL_MAX } from "./rules.ts";
+import { LEVEL_MAX, type RankName, RANKS } from "./rules.ts";
+
+/** The light asked for (`day` is dusk in the bundle's scenes, which have dusk and night). */
+export type Time = "dusk" | "day" | "night";
+export type Season = "normal" | "winter";
 
 export type Tool = "water" | "shears" | "mist";
 export type EventKind = "raid" | "war" | "levelup";

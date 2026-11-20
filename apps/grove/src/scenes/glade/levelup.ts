@@ -11,9 +11,9 @@
  *   4.7  the GG card opens; the heralds cheer       12   all done
  */
 
-import { STAGE_OF_LEVEL, STAGE_TITLE } from "../../art/tree.ts";
 import { castFrame, leaf, mote, sparkleStage } from "../../bundle/vocabulary.ts";
 import { hash3 } from "../../engine/rng.ts";
+import { STAGE_OF_LEVEL, STAGE_TITLE } from "../../game/stages.ts";
 import { type Canvas, drawLevelBadge, mix, type PopupSpec, UI } from "../../ui/hud.ts";
 import { crown, type Fx, isTree } from "./stage.ts";
 

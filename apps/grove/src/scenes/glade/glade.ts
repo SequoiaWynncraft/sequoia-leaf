@@ -8,7 +8,6 @@
  * wide screen, a vertical crop centred on the tree on a phone. It no longer zooms with the level.
  */
 
-import { STAGE_OF_LEVEL, STAGE_TITLE } from "../../art/tree.ts";
 import type { Mask, Pixels } from "../../bundle/art.ts";
 import { fitPicture } from "../../bundle/fit.ts";
 import { fill, type GladePick, type Manifest, pickGlade } from "../../bundle/manifest.ts";
@@ -19,6 +18,7 @@ import { between, type Grid } from "../../engine/view.ts";
 import type { Params, Tool } from "../../game/params.ts";
 import { BLOOM_MAX, CHARGE_MAX, CHARGE_SECONDS } from "../../game/rules.ts";
 import { spiritForRank } from "../../game/spirits.ts";
+import { STAGE_TITLE, stageOf } from "../../game/stages.ts";
 import { care, groot, type GroveState, warmCones } from "../../game/state.ts";
 import { Canvas, drawHud, drawPopup, drawToast, drawToolIcon, hudLayout, popupSize, TOOLS } from "../../ui/hud.ts";
 import { beatOf, type ConeEvent, coneLook, drawConeCard } from "../reveal/cone.ts";
@@ -302,8 +302,7 @@ export class GladeScene implements Scene {
     if (p.bare) return;
     const busy = m.cone !== null || m.cone10 !== null;
     const level = m.shownLevel(p.level, t);
-    const stage =
-      STAGE_TITLE[STAGE_OF_LEVEL[Math.max(0, Math.min(STAGE_OF_LEVEL.length - 1, level - 1))] ?? "seedling"];
+    const stage = STAGE_TITLE[stageOf(level)];
     const cast = this.app.art.cast.value;
     if (!busy) {
       const grootDrank = m.groot ? grootDrink(m.groot, t) : null;

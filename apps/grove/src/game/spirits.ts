@@ -1,12 +1,12 @@
 /**
  * The spirit book: every spirit a cone can give, with its rank, its number in the guild's book, its
- * job in your glade and its book line. The art and the book line come from the cast; the rank comes
- * from the banner's pools in rules.ts, so the book and the odds can never disagree.
+ * job in your glade and its book line. The name and the book line come from the cast (`cast.ts`; its
+ * pictures are the bundle's cast sheets); the rank comes from the banner's pools in rules.ts, so the
+ * book and the odds can never disagree.
  */
 
-import { CAST, type CastMember, castMember } from "../art/cast/cast.ts";
-import { type RankName, RANKS } from "../engine/palette.ts";
-import { POOLS } from "./rules.ts";
+import { CAST, type CastMember, castMember } from "./cast.ts";
+import { POOLS, type RankName, RANKS } from "./rules.ts";
 
 /** What each spirit does in your glade, visibly. */
 const JOBS: Readonly<Record<string, string>> = {

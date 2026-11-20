@@ -10,9 +10,9 @@
  */
 
 import { Art, artBase } from "./bundle/art.ts";
+import { bayer } from "./engine/dither.ts";
 import boldUrl from "./engine/fonts/minecraft-bold.woff2";
 import regularUrl from "./engine/fonts/minecraft-regular.woff2";
-import { bayer } from "./engine/raster.ts";
 import { fitCanvas, fixedGrid, type Grid, hudScale, toArt } from "./engine/view.ts";
 import { readParams } from "./game/params.ts";
 import { Store } from "./game/store.ts";

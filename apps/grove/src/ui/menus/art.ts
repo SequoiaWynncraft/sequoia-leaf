@@ -4,7 +4,7 @@
  * the raid banner's canyon at dusk, and the cross-section of your tree's rings.
  */
 
-import { bayer } from "../../engine/raster.ts";
+import { bayer } from "../../engine/dither.ts";
 import { hash3 } from "../../engine/rng.ts";
 
 type Paint = (g: CanvasRenderingContext2D, W: number, H: number, el: HTMLCanvasElement) => void;

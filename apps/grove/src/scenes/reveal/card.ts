@@ -5,8 +5,8 @@
  */
 
 import type { CastFrame } from "../../bundle/cast.ts";
-import type { RankName } from "../../engine/palette.ts";
 import type { Point } from "../../engine/view.ts";
+import type { RankName } from "../../game/rules.ts";
 import { type Canvas, drawLeafGlyph, drawText, mix, type Rgb, textWidth, UI, wrap } from "../../ui/hud.ts";
 
 export const INSIGNIA = ["..x..", ".xXx.", "xXXXx", ".xXx.", "..x.."];

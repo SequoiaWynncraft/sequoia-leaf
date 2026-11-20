@@ -1,4 +1,4 @@
-/** Seeded randomness. Every random choice in the glade comes from here, so a seed always draws the same glade. */
+/** Seeded randomness: stable hashes for the client's effects and members' variants, and a seeded stream for the demo's rolls. */
 
 export function hashString(text: string): number {
   let h = 2166136261 >>> 0;
@@ -15,16 +15,6 @@ export function hash3(x: number, y: number, z = 0): number {
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
-}
-
-/** Smooth 1-D value noise in [0, 1). */
-export function noise1(x: number, seed: number): number {
-  const i = Math.floor(x);
-  const f = x - i;
-  const a = hash3(i, seed, 11);
-  const b = hash3(i + 1, seed, 11);
-  const s = f * f * (3 - 2 * f);
-  return a + (b - a) * s;
 }
 
 export class Rng {
