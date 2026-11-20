@@ -13,7 +13,7 @@ import { addTile } from "./tiles.ts";
 const CLEAR = 255;
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 /** Value noise that wraps after `px` cells across and `py` down. */
-function pn(x: number, y: number, seed: number, px: number, py: number): number {
+export function pn(x: number, y: number, seed: number, px: number, py: number): number {
   const x0 = Math.floor(x);
   const y0 = Math.floor(y);
   const fx = smooth(x - x0);
@@ -26,9 +26,9 @@ function pn(x: number, y: number, seed: number, px: number, py: number): number 
   return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
 }
 
-type Put = (x: number, y: number, tone: number) => void;
+export type Put = (x: number, y: number, tone: number) => void;
 /** Registers an n-by-n block drawing as n*n tiles, row by row, named `name@col,row`. */
-function macro(
+export function macro(
   name: string,
   n: number,
   colours: readonly string[],
@@ -51,54 +51,6 @@ function macro(
         return t === CLEAR ? null : colours[t]!;
       });
 }
-const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(b, v));
-
-// ---------- redwood bark, four blocks wide and tall ----------
-
-const BARK = ["#2a110c", "#3b1910", "#471d10", "#602714", "#763332", "#8a3b3c"];
-macro("bark_m", 4, BARK, (S, put) => {
-  // Furrows run the height of the drawing, each drifting a few pixels on its way; fibrous plates lie between.
-  const K = 12;
-  const home = Array.from({ length: K }, (_, i) => Math.round((i * S) / K + (ihash(i, 1, 0, 201) - 0.5) * 3));
-  const wide = home.map((_, i) => ihash(i, 2, 0, 201) < 0.3);
-  const shade = home.map((_, i) => Math.floor(ihash(i, 3, 0, 201) * 3) - 1);
-  for (let Y = 0; Y < S; Y++) {
-    const f = home.map((b, i) => (((b + Math.round((pn(Y / 8, i * 3.7, 202, 8, 64) - 0.5) * 5)) % S) + S) % S);
-    for (let X = 0; X < S; X++) {
-      let dl = S;
-      let dr = S;
-      let li = 0;
-      for (let i = 0; i < K; i++) {
-        const a = (((X - f[i]!) % S) + S) % S;
-        if (a < dl) {
-          dl = a;
-          li = i;
-        }
-        dr = Math.min(dr, (((f[i]! - X) % S) + S) % S);
-      }
-      const edge = wide[li] ? 2 : 1;
-      let t: number;
-      if (dl < edge) t = 0;
-      else if (dl === edge) t = 1;
-      else if (dr === 1) t = 2;
-      else {
-        t = 3 + shade[li]!;
-        const fibre = pn(X, Y / 8, 203, 64, 8);
-        if (fibre > 0.7) t++;
-        else if (fibre < 0.22) t--;
-        t = clamp(t, 2, 5);
-        // A plate is cracked across here and there: a dark line, a lit lip under it.
-        const seg = Y >> 3;
-        if (ihash(li, seg, 1, 204) < 0.3) {
-          const cy = seg * 8 + Math.floor(ihash(li, seg, 0, 204) * 7);
-          if (Y === cy) t = 1;
-          else if (Y === cy + 1) t = Math.min(5, t + 1);
-        }
-      }
-      put(X, Y, t);
-    }
-  }
-});
 
 // ---------- moss, four blocks wide: patches, tufts, a few needles and flowers ----------
 

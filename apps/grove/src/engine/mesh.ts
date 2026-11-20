@@ -233,6 +233,14 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
     m.quad(pos, uv, tile, 0, n, lights);
   };
 
+  /** The tile of a drawing N blocks wide that belongs to the block at x, y, z on face f. */
+  const piece = (wide: number, N: number, f: number, x: number, y: number, z: number): number => {
+    const mod = (v: number): number => ((v % N) + N) % N;
+    const col = f === 0 ? mod(-z) : f === 1 ? mod(z) : f === 5 ? mod(-x) : mod(x);
+    const row = f === 2 ? mod(z) : f === 3 ? mod(-z) : mod(-y);
+    return wide + row * N + col;
+  };
+
   /** A box inside a cell, lit flat by the cell's own light. */
   const boxAt = (
     x: number,
@@ -242,6 +250,8 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
     to: Box["to"],
     tiles: FaceTiles,
     emit: boolean,
+    wide?: number,
+    wideN = 1,
   ): void => {
     const sky = w.skyAt(x, y, z) / 15;
     const glow = w.glowAt(x, y, z) / 15;
@@ -269,7 +279,7 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
       const lit =
         facing > 0.02 && sky > 0 ? w.sun(x + 0.5 + n[0] * 0.3, y + 0.5 + n[1] * 0.3, z + 0.5 + n[2] * 0.3, sun) : 0;
       for (let k = 0; k < 4; k++) lights.splice(k * 4, 4, sky, glow, lit, 1);
-      m.quad(pos, uv, tiles[f]!, emit ? 1 : 0, n, lights);
+      m.quad(pos, uv, wide == null ? tiles[f]! : piece(wide, wideN, f, x, y, z), emit ? 1 : 0, n, lights);
     }
   };
 
@@ -323,11 +333,7 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
             const wide = def.macro?.[f];
             if (wide != null) {
               // The piece of the wide drawing that belongs to this block's place on this face.
-              const N = def.macroN ?? 1;
-              const mod = (v: number): number => ((v % N) + N) % N;
-              const col = f === 0 ? mod(-z) : f === 1 ? mod(z) : f === 5 ? mod(-x) : mod(x);
-              const row = f === 2 ? mod(z) : f === 3 ? mod(-z) : mod(-y);
-              tile = wide + row * N + col;
+              tile = piece(wide, def.macroN ?? 1, f, x, y, z);
               spin = 0;
             }
             cubeFace(x, y, z, f, tile, def.turned?.[f] ?? false, !!def.foliage, spin);
@@ -351,7 +357,7 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
           }
           continue;
         }
-        for (const b of def.boxes ?? []) boxAt(x, y, z, b.from, b.to, b.tiles, !!b.emit);
+        for (const b of def.boxes ?? []) boxAt(x, y, z, b.from, b.to, b.tiles, !!b.emit, b.wide, b.wideN);
         if (def.cross) crossAt(x, y, z, def.cross.tile, !!def.cross.emit);
         if (def.fence) {
           const arms: [number, number, Box["from"], Box["to"], Box["from"], Box["to"]][] = [
@@ -363,8 +369,8 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
           for (const [dx, dz, f1, t1, f2, t2] of arms) {
             const nb = w.get(x + dx, y, z + dz);
             if (nb !== id && OCC[nb] !== 2) continue;
-            boxAt(x, y, z, f1, t1, def.boxes![0]!.tiles, false);
-            boxAt(x, y, z, f2, t2, def.boxes![0]!.tiles, false);
+            boxAt(x, y, z, f1, t1, def.boxes![0]!.tiles, false, def.boxes![0]!.wide, def.boxes![0]!.wideN);
+            boxAt(x, y, z, f2, t2, def.boxes![0]!.tiles, false, def.boxes![0]!.wide, def.boxes![0]!.wideN);
           }
         }
       }

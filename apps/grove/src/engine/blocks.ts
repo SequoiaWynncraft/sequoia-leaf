@@ -3,6 +3,7 @@
  * gives. Adding one is a line here and, if it needs a new look, a tile in art/tiles.ts.
  */
 import "../art/macro.ts";
+import "../art/materials.ts";
 import { tileIndex } from "../art/tiles.ts";
 
 /** Faces in the order +x, -x, +y, -y, +z, -z. */
@@ -13,6 +14,9 @@ export interface Box {
   readonly to: readonly [number, number, number];
   readonly tiles: FaceTiles;
   readonly emit?: boolean;
+  /** The first tile of a drawing `wideN` blocks wide, when the box wears one. */
+  readonly wide?: number;
+  readonly wideN?: number;
 }
 
 export interface BlockDef {
@@ -52,11 +56,14 @@ const column = (side: string, top: string, bottom = top): FaceTiles => [
   t(side),
   t(side),
 ];
+/** Materials whose drawing is wider than a block, and how many blocks wide. */
+const WIDE: Record<string, number> = { planks: 2, slate: 2, stone: 2 };
 const box = (from: Box["from"], to: Box["to"], tile: string, emit = false): Box => ({
   from,
   to,
   tiles: all(tile),
   emit,
+  ...(WIDE[tile] ? { wide: t(`${tile}_m@0,0`), wideN: WIDE[tile] } : {}),
 });
 
 const m = (name: string): number => tileIndex(`${name}@0,0`);
@@ -71,19 +78,27 @@ const decal = (name: string, tile: string): BlockDef => ({
 const DEFS: BlockDef[] = [
   { name: "air", opaque: false },
   { name: "bark", opaque: true, tiles: all("bark"), macro: everyFace("bark_m"), macroN: 4 },
-  { name: "bark_char", opaque: true, tiles: all("bark_char") },
-  { name: "log", opaque: true, tiles: column("bark", "log_top") },
+  { name: "bark_char", opaque: true, tiles: all("bark_char"), macro: everyFace("bark_char_m"), macroN: 4 },
+  {
+    name: "log",
+    opaque: true,
+    tiles: column("bark", "log_top"),
+    macro: [m("bark_m"), m("bark_m"), null, null, m("bark_m"), m("bark_m")],
+    macroN: 4,
+  },
   {
     name: "log_x",
     opaque: true,
-    tiles: [t("log_top"), t("log_top"), t("bark"), t("bark"), t("bark"), t("bark")],
-    turned: [false, false, true, true, true, true],
+    tiles: [t("log_top"), t("log_top"), t("log_side"), t("log_side"), t("log_side"), t("log_side")],
+    macro: [null, null, m("log_side_m"), m("log_side_m"), m("log_side_m"), m("log_side_m")],
+    macroN: 4,
   },
   {
     name: "log_z",
     opaque: true,
-    tiles: [t("bark"), t("bark"), t("bark"), t("bark"), t("log_top"), t("log_top")],
-    turned: [true, true, false, false, false, false],
+    tiles: [t("log_side"), t("log_side"), t("bark"), t("bark"), t("log_top"), t("log_top")],
+    macro: [m("log_side_m"), m("log_side_m"), m("bark_m"), m("bark_m"), null, null],
+    macroN: 4,
   },
   { name: "leaves", opaque: false, foliage: true, tiles: all("leaves"), macro: everyFace("leaves_m"), macroN: 3 },
   {
@@ -122,10 +137,16 @@ const DEFS: BlockDef[] = [
     opaque: false,
     boxes: [box([6, 0, 4], [10, 3, 11], "cone_t"), box([7, 0, 11], [9, 2, 13], "cone_t")],
   },
-  { name: "stone", opaque: true, tiles: all("stone") },
-  { name: "stone_mossy", opaque: true, tiles: column("stone_mossy", "moss", "stone") },
-  { name: "planks", opaque: true, tiles: all("planks") },
-  { name: "slate", opaque: true, tiles: all("slate") },
+  { name: "stone", opaque: true, tiles: all("stone"), macro: everyFace("stone_m"), macroN: 2 },
+  {
+    name: "stone_mossy",
+    opaque: true,
+    tiles: column("stone_mossy", "moss", "stone"),
+    macro: [m("stone_mossy_m"), m("stone_mossy_m"), null, m("stone_m"), m("stone_mossy_m"), m("stone_mossy_m")],
+    macroN: 2,
+  },
+  { name: "planks", opaque: true, tiles: all("planks"), macro: everyFace("planks_m"), macroN: 2 },
+  { name: "slate", opaque: true, tiles: all("slate"), macro: everyFace("slate_m"), macroN: 2 },
   { name: "window", opaque: true, tiles: all("window"), light: 12 },
   { name: "planks_slab", opaque: false, boxes: [box([0, 0, 0], [16, 8, 16], "planks")] },
   { name: "planks_slab_top", opaque: false, boxes: [box([0, 8, 0], [16, 16, 16], "planks")] },

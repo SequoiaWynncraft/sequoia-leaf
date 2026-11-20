@@ -11,7 +11,6 @@ export const TILE = 16;
 export type Paint = (x: number, y: number) => string | null;
 
 const at = (ramp: readonly string[], i: number): string => ramp[Math.max(0, Math.min(ramp.length - 1, Math.round(i)))]!;
-const wrap = (d: number): number => d - 16 * Math.round(d / 16);
 const rows =
   (art: readonly string[], key: Record<string, string>): Paint =>
   (x, y) => {
@@ -21,47 +20,12 @@ const rows =
 
 // The welcome's ramps.
 const BARK = ["#2a110c", "#3b1910", "#471d10", "#602714", "#763332", "#8a3b3c"] as const;
-const CHAR = ["#150a09", "#1c0c0a", "#230e0c", "#34150d"] as const;
 const LEAF = ["#221d0c", "#2d290e", "#453814", "#5c5017"] as const;
 const LEAF_LIT = ["#2d290e", "#453814", "#5c5017", "#857022"] as const;
 const LEAF_DARK = ["#1a160a", "#221d0c", "#2d290e", "#3b3311"] as const;
 const MOSS = ["#2a240f", "#363210", "#453814", "#524915", "#6a5f1a"] as const;
 const DIRT = ["#241612", "#34150d", "#3b1910", "#471d10"] as const;
 const STONE = ["#231a20", "#2f2229", "#3d2c35", "#544049"] as const;
-const PLANK = ["#3b2412", "#5e3d1a", "#74501f", "#8a6426"] as const;
-const SLATE = ["#241a22", "#39212e", "#47253b", "#5a3148"] as const;
-
-/**
- * Redwood bark: long plates between dark furrows, as the welcome's giant trunks are painted. Tone
- * goes by column, so the bark reads as vertical streaks; a furrow steps aside a pixel here and
- * there, and each plate is cracked across once.
- */
-const bark = (ramp: readonly string[]): Paint => {
-  const n = ramp.length - 1;
-  const column = [0, 2, 3, 4, 3, 0, 3, 4, 4, 3, 1, 0, 3, 4, 3, 2];
-  const shift = (x: number, y: number): number =>
-    x >= 5 && x <= 7 && y >= 6 && y <= 11 ? 1 : x >= 9 && x <= 11 && (y <= 4 || y >= 13) ? -1 : 0;
-  const cracks: [number, number, number][] = [
-    [7, 2, 4],
-    [13, 6, 9],
-    [2, 8, 10],
-    [10, 12, 14],
-    [15, 1, 3],
-  ];
-  const lights: [number, number, number][] = [
-    [3, 1, 4],
-    [8, 8, 11],
-    [13, 3, 5],
-    [7, 14, 15],
-    [14, 11, 13],
-  ];
-  return (x, y) => {
-    let tone = column[(x - shift(x, y) + 16) & 15]!;
-    if (tone > 0 && cracks.some(([cy, x0, x1]) => y === cy && x >= x0 && x <= x1)) tone = 1;
-    if (tone >= 3 && lights.some(([cx, y0, y1]) => x === cx && y >= y0 && y <= y1)) tone = 5;
-    return ramp[Math.round((tone / 5) * n)]!;
-  };
-};
 
 /** Foliage in clumps, each lit from the upper right, with the sky showing between them. */
 const leaves = (ramp: readonly string[], seed: number, holes: number): Paint => {
@@ -118,69 +82,6 @@ const mossSide: Paint = (x, y) => {
   return dirt(x, y);
 };
 
-/** Stones fitted together: a few cells, each darker at its seam and lit on its upper left. */
-const stone = (seed: number, moss: number): Paint => {
-  const pts = Array.from({ length: 7 }, (_, i) => [ihash(i, 1, 0, seed) * 16, ihash(i, 2, 0, seed) * 16] as const);
-  return (x, y) => {
-    let d1 = 99;
-    let d2 = 99;
-    let own = 0;
-    pts.forEach(([px, py], i) => {
-      const d = Math.hypot(wrap(x + 0.5 - px), wrap(y + 0.5 - py) * 1.25);
-      if (d < d1) {
-        d2 = d1;
-        d1 = d;
-        own = i;
-      } else if (d < d2) d2 = d;
-    });
-    if (moss && noise2(x / 4, y / 4, seed + 5, 4) + ihash(x, y, 2, seed) * 0.3 > 1.15 - moss) return mossTop(x, y);
-    if (d2 - d1 < 0.9) return STONE[0]!;
-    const [px, py] = pts[own]!;
-    const lit = wrap(x + 0.5 - px) + wrap(y + 0.5 - py) < -1.2;
-    return lit ? STONE[3]! : ihash(x, y, 3, seed) < 0.3 ? STONE[1]! : STONE[2]!;
-  };
-};
-
-/** Boards four pixels high, their ends staggered, a grain line in each. */
-const planks: Paint = (x, y) => {
-  const board = y >> 2;
-  const row = y & 3;
-  if (row === 3) return PLANK[0]!;
-  const end = (board * 7 + 3) & 15;
-  if (x === end) return PLANK[0]!;
-  const knot = Math.hypot(x - ((board * 5 + 9) & 15), (row - 1) * 1.6);
-  if (board % 2 === 0 && knot < 0.6) return PLANK[0]!;
-  if (board % 2 === 0 && knot < 1.7) return PLANK[1]!;
-  if (row === 0) return ihash(x >> 1, board, 1, 51) < 0.4 ? PLANK[3]! : PLANK[2]!;
-  return ihash(x >> 2, y, 2, 52) < 0.3 ? PLANK[1]! : PLANK[2]!;
-};
-
-const logTop: Paint = (x, y) => {
-  const d = Math.hypot(x - 7.5, y - 7.5) + (noise2(x / 3, y / 3, 61) - 0.5) * 1.2;
-  if (d > 6.9) return BARK[1]!;
-  if (d > 6.1) return BARK[3]!;
-  if (d < 1) return BARK[3]!;
-  return Math.floor(d * 0.95) % 2 ? BARK[3]! : BARK[4]!;
-};
-
-/** Roof slates in courses, each course half a slate along from the last. */
-const slate: Paint = (x, y) => {
-  const course = y >> 2;
-  const row = y & 3;
-  const sx = (x + (course & 1) * 4) & 7;
-  if (row === 0) return SLATE[0]!;
-  if (sx === 0) return SLATE[1]!;
-  if (row === 3) return ihash(x >> 1, course, 1, 71) < 0.5 ? SLATE[3]! : SLATE[2]!;
-  return ihash(x, y, 2, 72) < 0.2 ? SLATE[1]! : SLATE[2]!;
-};
-
-const windowPane: Paint = (x, y) => {
-  if (x < 2 || x > 13 || y < 2 || y > 13) return planks(x, y);
-  if (x === 2 || x === 13 || y === 2 || y === 13 || x === 7 || x === 8 || y === 7 || y === 8) return "#452a14";
-  const glow = ihash(x >> 1, y >> 1, 1, 81);
-  return glow < 0.3 ? "#ffe9b0" : glow < 0.8 ? "#f5b95e" : "#d49045";
-};
-
 /** One tile for every face of the lantern's small boxes: frame, glass, cap, chain. */
 const lantern: Paint = (x, y) => {
   if (y <= 3) return "#2c1e25";
@@ -188,15 +89,6 @@ const lantern: Paint = (x, y) => {
   if (x < 5 || x > 10 || y > 13) return "#2c1e25";
   if (x === 5 || x === 10 || y === 6 || y === 13) return "#2c1e25";
   return (x === 7 || x === 8) && y >= 8 && y <= 11 ? "#fff3cf" : y >= 12 ? "#d49045" : "#f5b95e";
-};
-
-const ladder: Paint = (x, y) => {
-  const rail = x === 2 || x === 3 || x === 12 || x === 13;
-  const rung = (y & 3) === 1 && x >= 2 && x <= 13;
-  if (rail) return x === 3 || x === 13 ? PLANK[1]! : PLANK[2]!;
-  if (rung) return PLANK[3]!;
-  if ((y & 3) === 2 && x >= 4 && x <= 11) return PLANK[0]!;
-  return null;
 };
 
 const FERN = [
@@ -297,9 +189,6 @@ const GRASS = [
 ];
 
 export const TILES: Record<string, Paint> = {
-  bark: bark(BARK),
-  bark_char: bark(CHAR),
-  log_top: logTop,
   leaves: leaves(LEAF, 11, 0.3),
   leaves_lit: leaves(LEAF_LIT, 12, 0.3),
   leaves_dark: leaves(LEAF_DARK, 13, 0.2),
@@ -308,13 +197,7 @@ export const TILES: Record<string, Paint> = {
   dirt,
   duff,
   path: pathTop,
-  stone: stone(101, 0),
-  stone_mossy: stone(102, 0.55),
-  planks,
-  slate,
-  window: windowPane,
   lantern,
-  ladder,
   fern: rows(FERN, { a: MOSS[0]!, c: MOSS[2]!, b: MOSS[4]! }),
   grass: rows(GRASS, { a: MOSS[1]!, c: MOSS[3]!, b: MOSS[4]! }),
   sprout: rows(SPROUT, { a: BARK[3]!, c: LEAF[2]!, b: LEAF_LIT[3]! }),
@@ -407,12 +290,6 @@ TILES.rug = (x, y) => {
   if (d === 0 || e === 0) return d === e ? "#f5b95e" : "#d49045";
   if (d === 4 && e === 4) return "#54286a";
   return ihash(x, y, 1, 71) < 0.25 ? "#602714" : "#763332";
-};
-TILES.crate = (x, y) => {
-  if (x === 0 || y === 0 || x === 15 || y === 15) return PLANK[0]!;
-  if (x === 1 || y === 1 || x === 14 || y === 14) return PLANK[3]!;
-  if (Math.abs(x - y) < 1.5) return PLANK[1]!;
-  return planks(x, y);
 };
 /** The bed of the fire: charred wood with coals glowing through. */
 TILES.embers = (x, y) => {

@@ -5,6 +5,7 @@ import { tailor, VILLAGERS } from "./art/skins.ts";
 import { banner, bulbs, draw, flames, loadSkin, skinned, type Wearer } from "./engine/actors.ts";
 import { ihash } from "./engine/rand.ts";
 import { stage } from "./engine/render.ts";
+import { buildBoard } from "./gen/board.ts";
 import { buildCamp } from "./gen/camp.ts";
 import { buildGlade, CX, CZ, ground, SUN } from "./gen/glade.ts";
 
@@ -23,8 +24,9 @@ if (which === "camp") {
   if (skin) cast.guest = skinned("guest", skin, true);
 }
 const camp = which === "camp" ? buildCamp(SUN, cast) : null;
-const glade = camp ? null : buildGlade();
-const world = camp?.world ?? glade!.world;
+const board = which === "board" ? buildBoard() : null;
+const glade = camp || board ? null : buildGlade();
+const world = camp?.world ?? board?.world ?? glade!.world;
 
 const VIEWS: Record<string, View> = {};
 if (camp) {
@@ -33,6 +35,8 @@ if (camp) {
   VIEWS.close = { eye: [fx + 1.5, fy + 2.6, fz + 8.5], at: [fx - 0.3, fy + 1.3, fz - 2], fov: 36 };
   VIEWS.side = { eye: [fx + 11, fy + 4, fz + 9], at: [fx - 2, fy + 1.6, fz - 2], fov: 38 };
   VIEWS.tall = { eye: [fx + 2, fy + 6.5, fz + 22], at: [fx, fy + 6, fz - 2], fov: 50 };
+} else if (board) {
+  Object.assign(VIEWS, board.views);
 } else {
   const g = glade!.main.ground;
   const deck = glade!.deck;
@@ -45,17 +49,20 @@ if (camp) {
 
 const flies: [number, number, number][] = camp
   ? camp.flies
-  : Array.from({ length: 90 }, (_, i) => {
-      const a = ihash(i, 1, 0, 3) * 6.283;
-      const r = 6 + ihash(i, 2, 0, 3) * 30;
-      const x = CX + Math.cos(a) * r;
-      const z = CZ + 6 + Math.sin(a) * r;
-      return [x, ground(Math.round(x), Math.round(z)) + 1 + ihash(i, 3, 0, 3) * 9, z];
-    });
+  : board
+    ? []
+    : Array.from({ length: 90 }, (_, i) => {
+        const a = ihash(i, 1, 0, 3) * 6.283;
+        const r = 6 + ihash(i, 2, 0, 3) * 30;
+        const x = CX + Math.cos(a) * r;
+        const z = CZ + 6 + Math.sin(a) * r;
+        return [x, ground(Math.round(x), Math.round(z)) + 1 + ihash(i, 3, 0, 3) * 9, z];
+      });
 
 const errors: string[] = [];
 const night = Number(query.get("night") ?? (camp ? 0.6 : 0));
-const s = stage(canvas, { world, sun: SUN, flies, night, ...(camp ? { glows: camp.glows, fire: camp.fire } : {}) });
+const lit = camp ?? board;
+const s = stage(canvas, { world, sun: SUN, flies, night, ...(lit ? { glows: lit.glows, fire: lit.fire } : {}) });
 s.renderer.debug.onShaderError = (gl, _program, vs, fs) => {
   errors.push(String(gl.getShaderInfoLog(vs)), String(gl.getShaderInfoLog(fs)));
 };
@@ -90,6 +97,7 @@ function loop(now: number): void {
     camp.banners.forEach((b, i) => banner(s.dyn, world, b.at, b.yaw, time, i * 2.1));
     for (const line of camp.strings) bulbs(s.dyn, world, line.a, line.b, line.points);
   }
+  if (board) flames(s.dyn, board.fire, time);
   s.frame(time);
   if (++frames === 3) document.title = "ready";
   requestAnimationFrame(loop);
