@@ -240,15 +240,6 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
     shade[3] = 1 - (1 - ao) * soft;
   };
 
-  /** Whether a cell has open air on any side. */
-  const open = (x: number, y: number, z: number): boolean =>
-    w.occ(x + 1, y, z) === 0 ||
-    w.occ(x - 1, y, z) === 0 ||
-    w.occ(x, y + 1, z) === 0 ||
-    w.occ(x, y - 1, z) === 0 ||
-    w.occ(x, y, z + 1) === 0 ||
-    w.occ(x, y, z - 1) === 0;
-
   /** A box inside a cell: a whole cube, or a slab, a stair's step, a post. Each corner takes the light of where it is. */
   const boxAt = (
     x: number,
@@ -276,9 +267,8 @@ export function meshRegion(w: World, sun: V3, x0: number, z0: number, x1: number
         (n[2] < 0 && from[2] === 0);
       if (flush) {
         const o = w.occ(x + n[0], y + n[1], z + n[2]);
-        // Between two blocks of foliage a face is kept near the outside of a crown, where it is
-        // seen through the gaps in the leaves, and dropped deep inside, where it never is.
-        if (o === 2 || (leafy && o === 1 && !(open(x, y, z) && open(x + n[0], y + n[1], z + n[2])))) continue;
+        // Foliage is drawn as a solid mass, its gaps painted as deep shade, so nothing shows between two blocks of it.
+        if (o === 2 || (leafy && o === 1)) continue;
       }
       // Light comes through foliage, so its faces turned from the sun take some too.
       const facing = leafy || n[0] * sun[0] + n[1] * sun[1] + n[2] * sun[2] > 0.02;

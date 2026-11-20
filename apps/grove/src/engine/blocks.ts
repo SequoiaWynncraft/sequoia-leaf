@@ -98,8 +98,9 @@ const DEFS: BlockDef[] = [
     tiles: [t("log_seat"), t("log_seat"), t("log_seat"), t("log_seat"), t("log_seat_top"), t("log_seat_top")],
     turned: [true, true, false, false, false, false],
   },
+  // One foliage, whatever the tree generator calls it: light and the shader vary it, not three tints.
   ...(["leaves", "leaves_lit", "leaves_dark"] as const).map((name): BlockDef => ({
-    ...solid(name, name),
+    ...solid(name, "leaves"),
     opaque: false,
     foliage: true,
   })),

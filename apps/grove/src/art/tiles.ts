@@ -67,6 +67,20 @@ export const TILES: Record<string, Paint> = {
   cone: (x, y) => ((x + y) & 1 ? ((x ^ y) & 2 ? "#6b3d1f" : "#94582c") : "#3a1f12"),
 };
 
+/** A tile with every colour darkened: the charred bark inside a fire scar is the tree's own bark, burnt. */
+const dim =
+  (paint: Paint, k: number): Paint =>
+  (x, y) => {
+    const c = paint(x, y);
+    if (!c) return null;
+    const v = (i: number): string =>
+      Math.round(parseInt(c.slice(i, i + 2), 16) * k)
+        .toString(16)
+        .padStart(2, "0");
+    return `#${v(1)}${v(3)}${v(5)}`;
+  };
+TILES.log_dark = dim(TILES.log!, 0.42);
+
 /** Every tile's name, in the order of its layer in the texture. Tiles can be added until the texture is built. */
 export const tileNames = (): string[] => Object.keys(TILES);
 export const addTile = (name: string, paint: Paint): void => {
@@ -115,7 +129,7 @@ const SURFACE: readonly (readonly [string, number, number])[] = [
   ["cobble", 1.5, 0.16],
   ["stone_bricks", 1.4, 0.3],
   ["bricks", 1.3, 0.14],
-  ["log", 0.9, 0.1],
+  ["log", 0.55, 0.1],
   ["planks", 1.0, 0.18],
   ["roof", 1.0, 0.18],
   ["barrel", 1.0, 0.18],

@@ -93,19 +93,27 @@ export function growSequoia(w: World, t: Tree): void {
   }
 
   const start = Math.round(t.height * (young ? 0.16 : 0.36 + Math.min(0.1, t.height / 1000)));
-  const reach = young ? t.height * 0.24 : Math.min(11, 3 + t.height * 0.085);
+  const reach = young ? 1.2 + t.height * 0.17 : Math.min(11, 3 + t.height * 0.085);
   let angle = ihash(3, 0, 0, t.seed) * 6.28;
   let n = 0;
-  // A young tree is a cone: skirts of foliage, each smaller than the one below, a wide one and a narrow one in turn.
+  // A young sequoia is a dense spire, foliage almost to the ground: a full cone, a little uneven
+  // at its edge, with sprays hanging under its widest rows.
   if (young)
-    for (let y = start; y <= t.height; y++) {
-      const k = (y - start) / (t.height - start);
-      const r = 0.7 + (1 - k) * reach * ((y - start) % 3 === 0 ? 1 : (y - start) % 3 === 1 ? 0.72 : 0.45);
+    for (let y = start; y <= t.height + 1; y++) {
+      const k = Math.min(1, (y - start) / (t.height + 1 - start));
+      const r = 0.75 + reach * Math.pow(1 - k, 0.85) * (0.9 + 0.1 * Math.sin(y * 2.1 + t.seed));
       const R = Math.ceil(r);
       for (let dz = -R; dz <= R; dz++)
-        for (let dx = -R; dx <= R; dx++)
-          if (dx * dx + dz * dz <= r * r - ihash(t.x + dx, y, t.z + dz, t.seed) * r * 0.9)
-            w.fill(t.x + dx, t.ground + y, t.z + dz, B.leaves!);
+        for (let dx = -R; dx <= R; dx++) {
+          const h = ihash(t.x + dx, y, t.z + dz, t.seed);
+          const d = dx * dx + dz * dz;
+          // Boughs reach further on some sides than others, and turn as they go up, so the spire is not a turned cone.
+          const lobe = 1 + 0.2 * Math.cos(Math.atan2(dz, dx) * 3 + t.seed + y * 0.4);
+          if (d > r * r * lobe * lobe - h * r * 0.9) continue;
+          w.fill(t.x + dx, t.ground + y, t.z + dz, B.leaves!);
+          if (y > start && d > (r - 1.2) * (r - 1.2) && h > 0.7)
+            w.fill(t.x + dx, t.ground + y - 1, t.z + dz, B.leaves!);
+        }
     }
   for (let y = young ? t.height : start; y < t.height - 2;) {
     const k = (y - start) / Math.max(1, t.height - start);
@@ -147,8 +155,7 @@ export function growSequoia(w: World, t: Tree): void {
   }
   // The top: a rounded tuft on an old tree, a point on a young one.
   if (young) {
-    blob(w, cx, t.ground + t.height - 1, cz, 1.3, 1.6, t.seed + 91);
-    w.fill(t.x, t.ground + t.height + 1, t.z, B.leaves!);
+    w.fill(t.x, t.ground + t.height + 2, t.z, B.leaves!);
   } else {
     clump(w, cx, t.ground + t.height, cz, 2.8, 2.0, t.seed + 91);
     blob(w, cx, t.ground + t.height + 2, cz, 1.8, 1.6, t.seed + 92);

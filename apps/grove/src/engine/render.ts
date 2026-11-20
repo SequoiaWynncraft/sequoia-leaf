@@ -196,8 +196,13 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
       }
       void main() {
         vec4 t = texture(uTiles, vec3(vUv, vTile));
-        if (t.a < 0.5) discard;
         bool leafy = vEmit > 1.5 && vEmit < 2.5;
+        // A gap between leaves is the dark inside of the tree, not a hole: looking through a crown
+        // at the trunk and the sky behind it only speckles it.
+        if (t.a < 0.5) {
+          if (!leafy) discard;
+          t.rgb *= 0.55;
+        }
         float glows = vEmit > 0.5 && vEmit < 1.5 ? 1.0 : 0.0;
         if (vEmit > 3.5) {
           // A meadow is not one green: its colour drifts slowly from place to place, the way a
@@ -208,10 +213,11 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
           t.rgb *= mix(vec3(0.86, 0.94, 0.82), vec3(1.12, 1.07, 0.96), drift);
         }
         if (leafy) {
-          // No two boughs are one green: broad patches run warmer and lighter, or cooler and deeper.
-          vec3 cell = floor(vPos - vN * 0.5);
-          float bough = vnoise3(cell * 0.21) * 0.7 + vnoise3(cell * 0.53 + 9.0) * 0.3;
-          t.rgb *= mix(vec3(0.84, 0.90, 0.98), vec3(1.14, 1.10, 0.86), bough);
+          // No two boughs are one green: it runs warmer and lighter here, cooler and deeper there,
+          // changing slowly across a crown and never in steps from one block to the next.
+          vec3 at = floor((vPos - vN * 0.03) * 16.0) / 16.0;
+          float bough = vnoise3(at * 0.09) * 0.65 + vnoise3(at * 0.23 + 9.0) * 0.35;
+          t.rgb *= mix(vec3(0.86, 0.92, 0.99), vec3(1.12, 1.08, 0.9), bough);
         }
         // Each pixel of a tile leans its own way (the tile's relief), so light picks out a stone's
         // edge or a board's groove. The lean is turned from the tile's own axes to the world's by
@@ -231,6 +237,8 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
         vec3 toEye = normalize(cameraPosition - vPos);
         float side = vN.y > 0.5 ? 1.0 : vN.y < -0.5 ? 0.55 : abs(vN.x) > abs(vN.z) ? 0.88 : 0.74;
         side *= 0.86 + 0.28 * dot(n, vN) * (0.5 + 0.5 * dot(n, normalize(vec3(0.3, 1.0, 0.2))));
+        // A crown is a soft mass: its faces differ less than a wall's do.
+        if (leafy) side = mix(1.0, side, 0.5);
         float open = vLight.x * sqrt(sqrt(vLight.x));
         // Under the open sky a surface shows its own colour; shade goes down toward purple, and
         // night takes nearly all of it, leaving a dim blue for the lamps to stand against.
@@ -253,14 +261,16 @@ export function stage(canvas: HTMLCanvasElement, set: Scene): Stage {
           float d = length(to);
           float k = d / uLamp[i].w;
           float fall = max(0.0, 1.0 - k * k);
-          fall = fall * fall / (1.0 + d * d * 0.015);
+          fall = fall * fall / (1.0 + d * d * 0.03);
           vec3 dir = to / max(d, 0.01);
           float facing = dot(n, dir);
           float shape = leafy ? facing * 0.25 + 0.6 : clamp(facing * 0.8 + 0.2, 0.0, 1.0);
           // A lamp behind the face lights none of its pixels, however they lean.
           shape *= leafy ? 1.0 : smoothstep(-0.25, 0.1, dot(vN, dir));
           float power = uLampSet[i].x * fall * mix(1.0, flicker, uLampSet[i].y);
-          direct += power * shape;
+          // Some of a lamp's light comes round by way of everything else it lights, so a ledge above
+          // the fire or a wall turned from it is dim, not black.
+          direct += power * mix(0.2, 1.0, shape);
           // The lamp's own glint on what is smooth: glass, a lantern, worn stone.
           float glint = pow(max(dot(n, normalize(dir + toEye)), 0.0), mix(6.0, 90.0, smoothness));
           shine += power * glint * smoothness * step(0.0, facing);

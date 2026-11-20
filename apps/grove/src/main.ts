@@ -131,6 +131,14 @@ const dbg = gl.getExtension("WEBGL_debug_renderer_info");
 Object.assign(window, {
   grove: {
     view,
+    /** Puts the camera anywhere, for review shots. */
+    look(eye: [number, number, number], at: [number, number, number], fov = 40): void {
+      s.camera.position.set(...eye);
+      controls.target.set(...at);
+      s.camera.fov = fov;
+      s.camera.updateProjectionMatrix();
+      controls.update();
+    },
     snap: () => new Promise<string>((done) => snaps.push(done)),
     errors,
     s,

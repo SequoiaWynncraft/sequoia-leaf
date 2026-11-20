@@ -41,19 +41,23 @@ texture pack and from one light model.
 
 ## Textures
 
-The world wears **REFI Textures**, an openly licensed 16x16 pack drawn from scratch to recapture
-the look of Minecraft (CC BY-SA 4.0; credits and terms in `assets/pack/LICENSE.md`). Each block
-shows its one 16x16 tile, as a block game does, and a lawn's tiles are turned four ways.
+Every block shows one 16x16 tile, as a block game does; where a block has several drawings
+(`grass_top1`, `log2`), each block in the world wears one by where it stands.
 
-- `assets/pack/`: the pack's PNGs, unchanged, only the ones the game uses.
-- `tools/pack.ts` (`bun run pack`): builds `src/art/pack.gen.ts` from them. It names each tile for
-  the game and makes a few from the pack's own: the grass block's side, a lighter and a darker
-  spruce, the lit window. Adding a block's texture is copying a PNG in and adding a line there.
-- `src/art/tiles.ts`: the pack's tiles, and the few things drawn here because the game shapes them
-  its own way: the lantern, the flame, the banner, the string lights.
+- `src/art/drawn.ts`: the game's own tiles, drawn pixel by pixel as sixteen rows of sixteen
+  letters with a colour key each: the lawn, dirt, the forest floor, redwood bark and its sawn end,
+  sequoia foliage, seat logs, planks, the roof, cobblestone, grass tufts and fern. They aim at the
+  flat, friendly look of the classic block-game packs and copy none of them.
+  `bun review/drawn.ts out.png` checks them (shape, palette, seams) and writes a sheet.
+- `assets/pack/` and `tools/pack.ts` (`bun run pack`): tiles not drawn yet come from REFI Textures,
+  an openly licensed 16x16 pack (CC BY-SA 4.0, credit in `assets/pack/LICENSE.md`): flowers,
+  mushrooms, the barrel, glass, wool, the ladder. A drawn tile of the same name replaces a pack tile.
+- `src/art/tiles.ts`: puts the two together, and draws the few things the game shapes its own way:
+  the lantern, the flame, the banner, the string lights.
 
-Anyone who ships the game must credit the pack; the licence covers the textures and what is made
-from them, not the code.
+The meadow is kept off the grid the way block games do it: a lawn block's top is turned one of four
+ways, every plant is nudged off the middle of its block and some are mirrored, wild grass sits lower
+on some blocks than others, and the lawn's colour drifts slowly from place to place.
 
 ## Light
 
@@ -75,8 +79,9 @@ from them, not the code.
 - Light in the air is not a sprite. Whatever gives light (flames, lantern glass, lit windows,
   bulbs, sparks) is marked in the picture's alpha; that part is blurred at three sizes and laid back
   over the picture, and the corners are drawn in a little.
-- Foliage has gaps you can see through, faces kept one block into a crown so the gaps have depth,
-  light coming through from behind, a slow sway, and greens that vary in broad patches.
+- Foliage is one material lit one way: a solid mass whose gaps are painted as deep shade, with
+  softer face shading than a wall, light coming through from behind, a slow sway, and a green that
+  drifts smoothly across a crown.
 
 ## People
 
