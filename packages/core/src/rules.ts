@@ -1,5 +1,6 @@
 import type { AchievementRules } from "./achievements.ts";
 import { type Activity, RAID_KEYS, type RaidKey } from "./activity.ts";
+import type { GreatRules } from "./great.ts";
 import type { GroveRules } from "./grove.ts";
 import type { QuestReward, QuestRules, QuestSlot, QuestTemplate } from "./quests.ts";
 
@@ -13,6 +14,7 @@ export interface Rules {
   readonly levels: LevelRules;
   readonly achievements: AchievementRules;
   readonly grove: GroveRules;
+  readonly great: GreatRules;
 }
 
 export interface EarningRules {
@@ -160,6 +162,40 @@ const GROVE_RULES: GroveRules = {
   announceFrom: "dryad",
 };
 
+// The Great Sequoia's weekly goals. In the first days the guild finished a raid
+// about every 10 minutes and a war about every 3.4, so a week holds about 1,000
+// raids and 3,000 wars; the goals sit near that, for a week of ordinary play to
+// reach. The offering goal is a few percent of the Leaf a week pays. Tune them
+// after the first weeks.
+const GREAT_RULES: GreatRules = {
+  goals: [
+    {
+      id: "raids",
+      kind: "raids",
+      target: 1000,
+      title: "Finish 1,000 guild raids",
+      reward: { id: "great.aurora", title: "An aurora over the Great Sequoia" },
+    },
+    {
+      id: "offered_leaf",
+      kind: "offered_leaf",
+      target: 50_000,
+      title: "Offer 50,000 Leaf to the Great Sequoia",
+      reward: { id: "great.fairy-lights", title: "Fairy lights in the Great Sequoia's crown" },
+    },
+    {
+      id: "wars",
+      kind: "wars",
+      target: 3000,
+      title: "Fight 3,000 wars",
+      reward: { id: "great.sky-lanterns", title: "Sky lanterns over the valley" },
+    },
+  ],
+  offering: { min: 100, max: 10_000 },
+  leafPerContribution: 100,
+  glowAt: [1, 10, 30],
+};
+
 export const DEFAULT_RULES: Rules = {
   earning: {
     leafPerRaidSeasonRating: 1,
@@ -185,6 +221,7 @@ export const DEFAULT_RULES: Rules = {
   },
   achievements: ACHIEVEMENT_RULES,
   grove: GROVE_RULES,
+  great: GREAT_RULES,
 };
 
 /**

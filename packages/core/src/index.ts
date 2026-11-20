@@ -1,6 +1,18 @@
 export { type AchievementAward, type AchievementRules, leafForAward } from "./achievements.ts";
 export { type Activity, type ActivityKind, RAID_KEYS, type RaidKey, raidKeyForName, RAIDS } from "./activity.ts";
 export {
+  contributionsOf,
+  GREAT_GOAL_KINDS,
+  type GreatGoal,
+  type GreatGoalKind,
+  type GreatRules,
+  type GreatTotals,
+  goalProgress,
+  greatWeek,
+  lanternGlow,
+  offeringAllowed,
+} from "./great.ts";
+export {
   announcesCone,
   assignSpots,
   type Banner,
