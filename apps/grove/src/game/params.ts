@@ -15,6 +15,7 @@ export interface Params {
   time: Time;
   /** `time=` was given; otherwise the glade follows the member's clock. */
   timeFromUrl: boolean;
+  /** `season=`, or winter from December 1 to the end of February by the local date. */
   season: Season;
   /** Freeze the clock (at `t` seconds) so a screenshot is the same every time. */
   still: boolean;
@@ -55,7 +56,7 @@ export interface Params {
   /** A guild moment that plays on load, and how far into it a still is (`et` seconds). */
   event: EventKind | null;
   et: number;
-  /** Where the camera starts: a named place or a nominal world x. */
+  /** Where the camera starts: `heart`, `pond`, `gate`, `west`, `east` or a valley x. */
   at: string | null;
   /** The guild's birthday: the crabs throw a rave. */
   anniversary: boolean;
@@ -74,7 +75,13 @@ export interface Params {
   joke: boolean;
 }
 
-export function readParams(search: string): Params {
+/** Winter in December, January and February (the first of December to the end of February). */
+export const seasonOn = (date: Date): Season => {
+  const month = date.getMonth();
+  return month === 11 || month === 0 || month === 1 ? "winter" : "normal";
+};
+
+export function readParams(search: string, today: Date = new Date()): Params {
   const q = new URLSearchParams(search);
   const level = Math.max(1, Math.min(LEVEL_MAX, Math.round(Number(q.get("level") ?? 8)) || 8));
   const time = q.get("time");
@@ -89,7 +96,7 @@ export function readParams(search: string): Params {
   return {
     time: time === "day" || time === "night" ? time : "dusk",
     timeFromUrl: time !== null,
-    season: season === "winter" ? "winter" : "normal",
+    season: season === null ? seasonOn(today) : season === "winter" ? "winter" : "normal",
     still,
     t: Number(q.get("t") ?? 2.6) || 0,
     perf: q.has("perf"),

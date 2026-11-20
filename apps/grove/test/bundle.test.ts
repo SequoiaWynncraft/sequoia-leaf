@@ -24,13 +24,45 @@ const MANIFEST = {
     tree_boxes: { "L01-v0-normal": [112, 118, 9, 11], "L13-v2-winter": [75, 0, 103, 127] },
   },
   effects: { aurora: "effects/aurora-{season}.png", sky: "effects/sky-{season}.png", frames: 160 },
-  campfire: { loop: "campfire/campfire-{season}-{ambiance}.gif" },
+  campfire: {
+    loop: "campfire/campfire-{season}-{ambiance}.gif",
+    near: "glade/near-{season}.png",
+    fire: [128, 129],
+    seats: [
+      { x: 92, y: 131 },
+      { x: 152, y: 131 },
+    ],
+    cat: [78, 128],
+  },
+  forest: {
+    width: 1024,
+    heart: 512,
+    height: 144,
+    pond: 800,
+    gate: 905,
+    layers: { far: { depth: 0.35, width: 525 }, ground: { depth: 1, width: 1024 }, near: { depth: 1.3, width: 1255 } },
+    rows: [
+      { name: "back", scale: 0.5, foot: 117, haze: 0.42 },
+      { name: "front", scale: 0.72, foot: 128, haze: 0 },
+    ],
+    spots: [
+      { row: "front", x: 591 },
+      { row: "back", x: 441 },
+    ],
+    seasons: ["normal"],
+    ambiances: ["dusk", "night"],
+    layer: "forest/{layer}-{season}-{ambiance}.png",
+    trees: "forest/trees-{row}-{season}-{ambiance}.png",
+    great: { x: 437, w: 150, seam: 512 },
+    "index-normal": { back: { "L13-v2": [0, 0, 52, 87, 21, 83] }, front: { "L01-v0": [630, 123, 9, 11, 4, 8] } },
+  },
+  later: { anything: true },
 };
 
 const glade = readManifest(MANIFEST).glade;
 
 describe("the bundle's manifest", () => {
-  test("reads the glade, the effects and keeps the sections it does not draw yet", () => {
+  test("reads the glade, the effects and keeps the sections it does not know", () => {
     const m = readManifest(MANIFEST);
     expect(m.width).toBe(256);
     expect(m.height).toBe(144);
@@ -38,7 +70,49 @@ describe("the bundle's manifest", () => {
     expect(m.glade.hearth).toEqual({ x: 160, y: 134 });
     expect(m.glade.treeBoxes.get("L01-v0-normal")).toEqual({ x: 112, y: 118, w: 9, h: 11 });
     expect(m.effects?.aurora).toBe("effects/aurora-{season}.png");
-    expect(m.other.has("campfire")).toBe(true);
+    expect(m.other.has("later")).toBe(true);
+    expect(m.other.has("campfire")).toBe(false);
+  });
+
+  test("reads the Campfire's fire, seats and cat", () => {
+    const c = readManifest(MANIFEST).campfire;
+    expect(c?.fire).toEqual({ x: 128, y: 129 });
+    expect(c?.seats).toEqual([
+      { x: 92, y: 131 },
+      { x: 152, y: 131 },
+    ]);
+    expect(c?.cat).toEqual({ x: 78, y: 128 });
+    expect(c?.near).toBe("glade/near-{season}.png");
+  });
+
+  test("reads the Forest's layers, rows, spots and each season's atlas boxes", () => {
+    const f = readManifest(MANIFEST).forest;
+    expect(f?.layers.near).toEqual({ depth: 1.3, width: 1255 });
+    expect(f?.rows.map((r) => [r.name, r.foot])).toEqual([
+      ["back", 117],
+      ["front", 128],
+    ]);
+    expect(f?.spots[0]).toEqual({ row: "front", x: 591 });
+    expect(f?.great).toEqual({ x: 437, w: 150 });
+    expect(f?.index.get("normal")?.get("back")?.get("L13-v2")).toEqual({
+      x: 0,
+      y: 0,
+      w: 52,
+      h: 87,
+      footX: 21,
+      footY: 83,
+    });
+  });
+
+  test("reads a bundle from before the Campfire and the Forest, and refuses a broken one", () => {
+    const { campfire: _, forest: __, ...older } = MANIFEST;
+    const m = readManifest(older);
+    expect(m.campfire).toBeNull();
+    expect(m.forest).toBeNull();
+    expect(() =>
+      readManifest({ ...MANIFEST, forest: { ...MANIFEST.forest, spots: [{ row: "middle", x: 1 }] } }),
+    ).toThrow("row");
+    expect(() => readManifest({ ...MANIFEST, campfire: { ...MANIFEST.campfire, fire: [1] } })).toThrow("campfire.fire");
   });
 
   test("places the hearth for a bundle from before it had one", () => {

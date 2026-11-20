@@ -2,8 +2,9 @@
  * The art bundle's manifest (`manifest.json`, written by the welcome authoring package's
  * `grove/bundle.py`), read and checked once, and the choice of a glade loop for a member's tree.
  *
- * Only the sections the client draws from are read strictly; the rest (`campfire`, `forest` and
- * anything newer) are kept as they came, for the scenes that move onto bundles next.
+ * The glade, the effects, the Campfire and the Forest are read strictly; anything newer is kept as
+ * it came (`other`). A bundle from before the Campfire or the Forest had sections reads with them
+ * null, and those scenes wait for one that has them.
  */
 
 import { hashString } from "../engine/rng.ts";
@@ -43,6 +44,73 @@ export interface EffectsManifest {
   frames: number;
 }
 
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** The Campfire (grove/campfire.py): the welcome's clearing with a fire, two seat logs and the cat. */
+export interface CampfireManifest {
+  /** By `{season}` and `{ambiance}`: 160 frames, as the glade's loops. */
+  loop: string;
+  /** The near mask, by `{season}` (the glade's own). */
+  near: string;
+  /** The fire's foot, where cones burn. */
+  fire: Point;
+  /** Where friends sit, each a point on a log or the ground (its foot row), in the bundle's order. */
+  seats: Point[];
+  /** The grove cat, asleep on its stump. */
+  cat: Point;
+}
+
+/** A layer of the Forest's parallax: a layer at `depth` slides `depth` pixels for each pixel of ground. */
+export interface ForestLayer {
+  depth: number;
+  width: number;
+}
+
+/** A row of members' trees: drawn at `scale` of a glade tree, standing on `foot`. */
+export interface ForestRow {
+  name: string;
+  scale: number;
+  foot: number;
+}
+
+/** A member tree's place in its row's atlas, and its foot within that box. */
+export interface AtlasBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  footX: number;
+  footY: number;
+}
+
+/** The guild's Forest (grove/forest.py): a valley in parallax layers, and its members' trees. */
+export interface ForestManifest {
+  /** The ground plane's size, and the Great Sequoia's centre, the crab pond's and the gate's. */
+  width: number;
+  height: number;
+  heart: number;
+  pond: number;
+  gate: number;
+  /** `far` (opaque: the sky and the far valley), `ground` and `near`. */
+  layers: { far: ForestLayer; ground: ForestLayer; near: ForestLayer };
+  rows: ForestRow[];
+  /** Where members' trees stand, nearest the heart first. */
+  spots: { row: string; x: number }[];
+  seasons: string[];
+  ambiances: string[];
+  /** By `{layer}`, `{season}` and `{ambiance}`. */
+  layer: string;
+  /** The tree atlases, by `{row}`, `{season}` and `{ambiance}`. */
+  trees: string;
+  /** The Great Sequoia's span on the ground layer. */
+  great: { x: number; w: number };
+  /** Each atlas's boxes, by season, then row, then `L<level>-v<variant>`. */
+  index: Map<string, Map<string, Map<string, AtlasBox>>>;
+}
+
 export interface Manifest {
   version: number;
   width: number;
@@ -51,7 +119,9 @@ export interface Manifest {
   frames: number;
   glade: GladeManifest;
   effects: EffectsManifest | null;
-  /** Sections this client does not read yet, as they came. */
+  campfire: CampfireManifest | null;
+  forest: ForestManifest | null;
+  /** Sections this client does not read, as they came. */
   other: Map<string, unknown>;
 }
 
@@ -91,6 +161,10 @@ function pair(v: unknown, path: string): { x: number; y: number } {
   return { x, y };
 }
 
+function int(v: unknown, path: string): number {
+  return Math.round(num(v, path));
+}
+
 function box(v: unknown, path: string): Box {
   const [x, y, w, h] = list(v, path, num);
   if (x === undefined || y === undefined || w === undefined || h === undefined)
@@ -128,7 +202,7 @@ export function readManifest(json: unknown): Manifest {
         frames: num(field(e, "frames", "effects"), "effects.frames"),
       }
     : null;
-  const known = new Set(["version", "canvas", "frame_ms", "frames", "glade", "effects"]);
+  const known = new Set(["version", "canvas", "frame_ms", "frames", "glade", "effects", "campfire", "forest"]);
   return {
     version: num(field(m, "version", "manifest"), "manifest.version"),
     width: num(field(canvas, "width", "canvas"), "canvas.width"),
@@ -137,8 +211,96 @@ export function readManifest(json: unknown): Manifest {
     frames: num(field(m, "frames", "manifest"), "manifest.frames"),
     glade,
     effects,
+    campfire: isRecord(m["campfire"]) ? readCampfire(m["campfire"]) : null,
+    forest: isRecord(m["forest"]) ? readForest(m["forest"]) : null,
     other: new Map(Object.entries(m).filter(([k]) => !known.has(k))),
   };
+}
+
+function readCampfire(c: Record<string, unknown>): CampfireManifest {
+  const seat = (v: unknown, p: string): Point => {
+    const s = rec(v, p);
+    return { x: int(field(s, "x", p), `${p}.x`), y: int(field(s, "y", p), `${p}.y`) };
+  };
+  return {
+    loop: str(field(c, "loop", "campfire"), "campfire.loop"),
+    near: str(field(c, "near", "campfire"), "campfire.near"),
+    fire: pair(field(c, "fire", "campfire"), "campfire.fire"),
+    seats: list(field(c, "seats", "campfire"), "campfire.seats", seat),
+    cat: pair(field(c, "cat", "campfire"), "campfire.cat"),
+  };
+}
+
+function readForest(f: Record<string, unknown>): ForestManifest {
+  const layers = rec(field(f, "layers", "forest"), "forest.layers");
+  const layer = (name: string): ForestLayer => {
+    const l = rec(field(layers, name, "forest.layers"), `forest.layers.${name}`);
+    const p = `forest.layers.${name}`;
+    return { depth: num(field(l, "depth", p), `${p}.depth`), width: int(field(l, "width", p), `${p}.width`) };
+  };
+  const row = (v: unknown, p: string): ForestRow => {
+    const r = rec(v, p);
+    return {
+      name: str(field(r, "name", p), `${p}.name`),
+      scale: num(field(r, "scale", p), `${p}.scale`),
+      foot: int(field(r, "foot", p), `${p}.foot`),
+    };
+  };
+  const spot = (v: unknown, p: string): { row: string; x: number } => {
+    const s = rec(v, p);
+    return { row: str(field(s, "row", p), `${p}.row`), x: int(field(s, "x", p), `${p}.x`) };
+  };
+  const atlas = (v: unknown, p: string): AtlasBox => {
+    const [x, y, w, h, footX, footY] = list(v, p, int);
+    if (
+      x === undefined ||
+      y === undefined ||
+      w === undefined ||
+      h === undefined ||
+      footX === undefined ||
+      footY === undefined
+    )
+      throw new Error(`manifest: ${p} is not an atlas box`);
+    return { x, y, w, h, footX, footY };
+  };
+  const seasons = list(field(f, "seasons", "forest"), "forest.seasons", str);
+  const index = new Map<string, Map<string, Map<string, AtlasBox>>>();
+  for (const season of seasons) {
+    const p = `forest.index-${season}`;
+    const rows = rec(field(f, `index-${season}`, "forest"), p);
+    index.set(
+      season,
+      new Map(
+        Object.entries(rows).map(([name, boxes]) => [
+          name,
+          new Map(Object.entries(rec(boxes, `${p}.${name}`)).map(([k, v]) => [k, atlas(v, `${p}.${name}.${k}`)])),
+        ]),
+      ),
+    );
+  }
+  const great = rec(field(f, "great", "forest"), "forest.great");
+  const out: ForestManifest = {
+    width: int(field(f, "width", "forest"), "forest.width"),
+    height: int(field(f, "height", "forest"), "forest.height"),
+    heart: int(field(f, "heart", "forest"), "forest.heart"),
+    pond: int(field(f, "pond", "forest"), "forest.pond"),
+    gate: int(field(f, "gate", "forest"), "forest.gate"),
+    layers: { far: layer("far"), ground: layer("ground"), near: layer("near") },
+    rows: list(field(f, "rows", "forest"), "forest.rows", row),
+    spots: list(field(f, "spots", "forest"), "forest.spots", spot),
+    seasons,
+    ambiances: list(field(f, "ambiances", "forest"), "forest.ambiances", str),
+    layer: str(field(f, "layer", "forest"), "forest.layer"),
+    trees: str(field(f, "trees", "forest"), "forest.trees"),
+    great: {
+      x: int(field(great, "x", "forest.great"), "forest.great.x"),
+      w: int(field(great, "w", "forest.great"), "forest.great.w"),
+    },
+    index,
+  };
+  if (out.spots.some((s) => !out.rows.some((r) => r.name === s.row)))
+    throw new Error("manifest: a forest spot names no row");
+  return out;
 }
 
 /** Fills a path template; a level is always two digits, as the bundle names its files. */
