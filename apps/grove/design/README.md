@@ -4,12 +4,13 @@
 cones you open in fire, and gather the whole guild's trees into one living
 forest.**
 
-This is the plan as of 20 November 2026, round three. Every picture here is a
-real screen from the client in `apps/grove`. Run it with `bun index.html` and
-open a route (see the README one folder up). **All art is placeholder made by
-agents**; see "Who draws it".
+This is the plan as of 20 November 2026, round four. Every picture here is a
+real screen from the client in `apps/grove`. Run it with `bun run art` and
+`bun run dev`, and open a route (see the README one folder up). **The art is
+agent-made, drawn with the welcome messages' own authoring code**; see "Look
+and feel" and "Who draws it".
 
-![An ancient sequoia in its glade at dusk](l09.webp)
+![An ancient sequoia in the welcome's clearing at dusk](glade.webp)
 
 ## Why this game, for this guild
 
@@ -41,25 +42,25 @@ Everything serves one of three verbs. Anything that doesn't is cut.
 
 **Your tree is yours alone.**
 
-- It's generated from your Minecraft UUID, so no two are alike.
+- Its shape is one of three, chosen from your Minecraft UUID.
 - It grows with your SEQ level, which only guild play earns, and it can't be
   bought. It's an honest picture of your time with Sequoia.
-- The canopy turns from summer green toward the guild's gold (#C1A66E) as you
+- The canopy turns from the forest's olive toward the canopy's gold as you
   level, like the gold-canopy logo.
 
-![A seedling in its nook, with the daily greeting](seed.webp)
+![A seedling by the hearth, with the daily greeting](seed.webp)
 
-| Stage    | SEQ level | Look                                                    |
-| -------- | --------- | ------------------------------------------------------- |
-| Seedling | 1         | A staked sprout in its own shaft of light, framed close |
-| Sapling  | 2–3       | A slim stem and its first limbs                         |
-| Young    | 4–5       | The dense narrow spire young sequoias really have       |
-| Mature   | 6–8       | Cinnamon trunk showing, clumped masses, a rounded top   |
-| Ancient  | 9–12      | Bare buttressed trunk, fire scar, clouded crown         |
-| Giant    | 13        | Nobody's there yet. A cathedral, hung with lanterns     |
+| Stage    | SEQ level | Look                                                           |
+| -------- | --------- | -------------------------------------------------------------- |
+| Seedling | 1         | A red stem and its first needles in fresh earth                |
+| Sapling  | 2–3       | A small cone of drooping sprays                                |
+| Young    | 4–5       | A dense cone of olive sprays, lit gold toward the sunset       |
+| Mature   | 6–8       | Its trunk showing, the crown starting to turn                  |
+| Ancient  | 9–12      | A buttressed trunk in ferns, clouds of foliage on great limbs  |
+| Giant    | 13        | A fire-scar hollow at its foot, its crown in the canopy itself |
 
-The world opens as your tree grows. Half the guild is level 1, so the first
-stages are framed close and intimate. By level 6 you see the whole valley.
+The glade is the welcome's own clearing. Your tree grows in the middle of it,
+with a small hearth beside it where cones open.
 
 **Raids water it.** Every guild raid you finish is a groot:
 
@@ -67,16 +68,18 @@ stages are framed close and intimate. By level 6 you see the whole valley.
   tree drank deeply."
 - Watering fills Bloom, and a full Bloom drops a free cone.
 - Tapping to water, mist or prune is a bonus. Those charges bank, so missing a
-  week costs nothing and nothing ever wilts.
+  week costs nothing and nothing ever wilts. (Trees are painted ahead of time,
+  so for now pruning only drops leaves.)
 
 The game is powered by raiding; it never competes with it.
 
 ![Rain on the tree after three groots](groot.webp)
 
-**Level-ups are ceremonies.** Gnome heralds march in and toot, the tree rises
-into its next stage, and the GG card stays in the forest for good.
+**Level-ups are ceremonies.** The welcome's gnomes march in as heralds and
+toot, firefly light gathers, and the tree rises into its next stage under a
+burst of the welcome's sparkles. The GG card stays in the forest for good.
 
-![Level 6! No gg left behind](levelup-gg.webp)
+![Gnome heralds at a level-up](levelup.webp)
 
 **Rings.** A cross-section of your tree shows one ring per Wynncraft season
 you played. Marks show your first raid, your first war win and every level.
@@ -89,13 +92,13 @@ drawn from your own ledger.
 only open in a fire's heat, and 🔥 is the guild's favourite reaction.
 
 - Every rank has its own beat. A Leafkin pops.
-- A Yggdrasil freezes the world, beats like a heart, and bursts under an
-  aurora in its rank's colour while the Great Sequoia answers with a beam.
+- The cone hops onto your hearth, kindles and bursts. From Dryad up it opens
+  under the welcome's own aurora, wider with rank and gold for a Yggdrasil.
 - Opening ten at once drops ten leaves from your tree. Each turns its rank
   colour halfway down, then they flip into cards in a summary grid. That
   part comes from a member's storyboard.
 
-![A Yggdrasil opening under a gold aurora](cone-aurora.webp)
+![A Yggdrasil opening under the aurora](cone-aurora-ygg.webp)
 
 ![Ten cones' summary grid](cone10-grid.webp)
 
@@ -113,13 +116,17 @@ explode affectionately into confetti.
   - Worm (NotG);
   - Greg (TNA), who eats your offerings;
   - Moth (TWP);
-  - a golden-antlered white fox (NoL), the legendary, asleep by the fire.
+  - a golden-antlered white fox (NoL), the legendary.
 - **Forest critters:** the Chickaree (the squirrel that really spreads sequoia
   seeds), the Mossmote, the Slug, the Fog Owl and the Emberkit.
 - **Folk who are never pulled:** numbered crabs, gnome heralds, a grove cat
   with dad jokes, and Cinfy.
 
-![The cast](cast-portraits.webp)
+Every spirit is drawn the way the welcome's characters are: hand-written
+sprite rows through its sprite code, with its outline and light, each with
+idle, happy and walk, a moonlit strip and most a winter look.
+
+![The cast in the forest](cast.webp)
 
 **What a spirit does after the pull.** The guild argued about this; here's the
 call:
@@ -155,15 +162,17 @@ call:
 Sequoia**. Older members stand near the heart and new saplings at the edges,
 the way a real grove grows. Tap any tree to see whose it is, and water it with
 one of your care charges. Friends' watering waits for you as dew. The valley
-also holds:
+is the welcome's own, four screens wide, and also holds:
 
-- the **Swamp**, the claim the guild held for two years, kept as a misty
-  memorial;
-- the **Fruma ridge** with the guild's gold sun pennants;
-- a **crab pond** with posted rules ("No crabellions"), a roll call with one
-  crab unaccounted for, and a crab rave on the guild's birthday;
-- **Cinfy's stall**;
+- the **Great Sequoia** at its heart, one trunk of the giants' own bark, with
+  a hollow at its foot that leads to the Campfire;
+- a **crab pond** (the still pool ceremony's pond) with posted rules ("No
+  crabellions"), a roll call with one crab unaccounted for, and a crab rave on
+  the guild's birthday;
 - a **"Do Not The Farm" sign** at the gate.
+
+The Swamp memorial, the Fruma ridge pennants and Cinfy's stall are deferred
+until they're painted.
 
 ![The heart of the Forest](forest-heart.webp)
 
@@ -172,14 +181,14 @@ also holds:
 **The Forest shows the guild playing, live:**
 
 - **A raid.** A party clears a raid and their four trees light up. The lights
-  travel to the campfire and merge into one lantern with their names, which
-  hangs in the Great Sequoia.
-- **A war win.** The guild takes a territory and a pennant rises on the ridge,
-  while the falling leaves spell S E Q, as members do with reactions under
-  every win.
-- **A guild level-up.** Lanterns lift into the night.
+  drift to the Great Sequoia and become one lantern with their names, which
+  hangs there.
+- **A war win.** The guild takes a territory and a gold pennant rises on the
+  far ridge, while the falling leaves spell S E Q, as members do with
+  reactions under every win.
+- **A guild level-up.** Sky lanterns lift into the night.
 
-![A raid party's lights becoming one lantern](raid-3.webp)
+![A raid party's lantern in the Great Sequoia](raid.webp)
 
 ![A war win spells SEQ](war-seq.webp)
 
@@ -193,8 +202,8 @@ also holds:
 
 **The Campfire** is the Discord Activity:
 
-- **Who's there.** Friends in a voice call sit round the fire, each with their
-  companion.
+- **Who's there.** Friends in a voice call gather round the fire in the
+  welcome's clearing, each as their companion.
 - **The burn queue** sets one cone at a time in the fire, and the whole call
   watches.
 - **Leafle**, the daily five-letter Wynncraft word, opens from the corner. It
@@ -227,16 +236,19 @@ The copy is short, warm, a little menacing and erm-proof:
 
 ## Look and feel
 
-The world is **pixel art in the family of Sierra's welcome scenes**:
+The world is **the welcome messages' own forest**, made the same way:
 
-- the purple-amber dusk, giant cinnamon trunks framing the clearing, ferns,
-  mushrooms and fireflies;
-- teal mist in the distance, like the guild's favourite painting;
-- gold as the constant accent;
-- day, night and a winter season with fairy lights.
+- Every picture is authored in Python in Sierra's welcome authoring package
+  (`assets/welcome/authoring/grove` in sequoia-backend), in the forest
+  painting's own 44 colours, and composed by the ceremony renderer. Night,
+  winter, the Christmas lights, fireflies and the aurora are the welcome's.
+- Your tree's bark is the giant trunk's painted bark resampled to its width;
+  its crown is lobes cut from the canopy painting; its feet stand in the
+  painting's ferns.
+- The web client plays those 256×144 loops at whole-pixel scale and draws its
+  sprites between the forest's layers, the way Sierra draws a member's sign.
 
-It's drawn in 16-bit palette indices, so one palette recolours the world and
-the cast together for time and season. It's always scaled by whole pixels.
+![A welcome message, and your glade](welcome-and-glade.webp)
 
 The interface is **the Sequoia mod's own**:
 
@@ -250,24 +262,21 @@ way Wynncraft colours its tiers), and **player heads** for members.
 
 ![The spirit book](spirits.webp)
 
-Two looks were tried and dropped:
+Three looks were tried and dropped:
 
 - **Smooth 3D with a storybook interface** didn't look like Sequoia.
 - **A Minecraft-style block diorama** read as Minecraft instantly, but it was a
-  small object floating in space and less beautiful than the pixel scene. It's
-  shelved; git history has it, in the round-three prototypes commit.
+  small object floating in space. It's shelved in git history.
+- **A procedural pixel engine of our own** (round three) looked like another
+  game next to the welcome messages. Git history has it.
 
 ## Who draws it
 
-The guild's line on AI art is firm. The plan:
+Notes decided on 20 November that the art can be agent-made. It's drawn in
+the welcome's own pipeline, so it's one world with the welcome messages.
 
-- **We build** the engine, the interface, tree growth, lighting and effects.
-- **Guild artists draw** the characters and key art. They're credited in the
-  game and rewarded the way the guild already rewards art. The guild has pixel
-  artists and composers whose style fits.
-- **The placeholders become their briefs.**
-
-This is Notes' call, and nobody has been contacted.
+Members have been firm against AI art, so the announcement should say plainly
+how the art is made.
 
 ## Cut, kept and deferred
 
@@ -285,6 +294,10 @@ This is Notes' call, and nobody has been contacted.
 | Members drawn as the creature they pick    | Deferred | Loved, but it needs artists and each member's consent                       |
 | Expeditions, WynnGuessr, bonsai show       | Deferred | After the three verbs land                                                  |
 | Co-op Campfire games                       | Deferred | Leafle first                                                                |
+| Art from the welcome's own pipeline        | Kept     | Notes' direction: one world with the welcome messages                       |
+| A hearth beside your tree                  | New      | Cones open in fire, and its light warms the glade at night                  |
+| Pruning that reshapes your tree            | Deferred | Trees are painted ahead of time; shears drop leaves for now                 |
+| Swamp memorial, Fruma pennants, the stall  | Deferred | Not yet painted; the war pennant rises on the far ridge instead             |
 
 ## Prices that fit how people earn
 
@@ -310,14 +323,14 @@ when the server side is built.
 
 ## One art pipeline for every surface
 
-Every sprite is defined once, as palette-indexed pixel data in the repo, and
-rendered wherever it's needed:
+Everything is drawn once, in the welcome authoring package, and used wherever
+it's needed:
 
-- **Web and Activity:** the scene itself.
-- **Sequoia mod:** the nametag companion.
-- **Discord:** role icons, plus animated clips of rare reveals and a weekly
-  forest flyover for Sierra (opt-in). Sierra's welcome renderer already draws
-  pixel GIFs this way.
+- **Web and Activity:** `python -m grove.bundle` writes the loops, layers,
+  masks, cast and props the client composes (`bun run art` copies them in).
+- **Sequoia mod:** the nametag companion, from the cast strips.
+- **Discord:** role icons, plus clips of rare reveals and a weekly forest
+  flyover for Sierra (opt-in), rendered the way the ceremonies already are.
 
 ## Building it
 
@@ -339,10 +352,11 @@ Each milestone ships when it's good on its own.
 What the client doesn't do yet:
 
 - Purchases are recorded but don't appear in the glade.
-- Your companion appears only at the Campfire.
 - The Campfire is local, with no Discord SDK yet.
-- Forest spots must become fixed per member before real roster data arrives,
-  so a new member never moves anyone else's tree.
+- The Forest has 46 spots; a real roster needs a third row or a wider valley,
+  and spots must become fixed per member so a new member never moves anyone
+  else's tree.
+- Spirits have no sitting pose, so friends stand on the Campfire's logs.
 
 ## Before launch
 
@@ -350,4 +364,3 @@ What the client doesn't do yet:
   LE, tomes and aspects. It won't.
 - **Announce Leaf on the main server.** It launched quietly, and members are
   still asking what it is.
-- **Decide who draws it.** See "Who draws it".
