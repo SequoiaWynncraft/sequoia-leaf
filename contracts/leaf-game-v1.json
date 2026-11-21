@@ -70,6 +70,7 @@
       "method": "PUT",
       "path": "/v1/game/saves/town",
       "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
         "version": 0,
         "data": {
           "saved_at": 1795610400000,
@@ -90,6 +91,7 @@
       "method": "PUT",
       "path": "/v1/game/saves/town",
       "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
         "version": 0,
         "data": {
           "saved_at": 1795610400000,
@@ -103,6 +105,27 @@
     "body": {
       "code": "version_conflict",
       "message": "The save changed since it was read. Read it again"
+    }
+  },
+  "PUT /v1/game/saves/{slot}, not you": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/saves/town",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "version": 1,
+        "data": {
+          "saved_at": 1795610400000,
+          "keys": {
+            "town.save.v1": "{\"v\":1,\"lanterns\":3}"
+          }
+        }
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "not_you",
+      "message": "This page is signed in as someone else now. Load it again"
     }
   },
   "GET /v1/game/saves/{slot}": {

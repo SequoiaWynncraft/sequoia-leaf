@@ -285,6 +285,7 @@ async function route(req: Request): Promise<Response> {
     if (req.method === "GET")
       return row ? json({ slot, ...row }) : json({ code: "no_save", message: "Nothing is saved in that slot" }, 404);
     const b = await sentBody(req);
+    if (b.player !== ME) return json({ code: "not_you", message: "Load it again" }, 409);
     if ((row?.version ?? 0) !== b.version) return json({ code: "version_conflict", message: "Read it again" }, 409);
     const next = { version: (row?.version ?? 0) + 1, data: b.data, updated_at: iso(Date.now()) };
     saves.set(slot, next);

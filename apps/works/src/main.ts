@@ -72,7 +72,7 @@ import { putAway, reading, showLetter } from "./ui/letter.ts";
 import { closeBanner, feed, initNotes, tickNotes } from "./ui/notes.ts";
 import { closePanel, initPanels, openPanel, panelHooks, type PanelId, refreshPanel } from "./ui/panels.ts";
 import { $ } from "./ui/parts.ts";
-import { keep, openYard, screen, swapYard, tick } from "./yard.ts";
+import { forgetYard, keep, openYard, screen, swapYard, tick } from "./yard.ts";
 import large from "./yards/large.json";
 import mid from "./yards/mid.json";
 import short from "./yards/short.json";
@@ -193,12 +193,7 @@ async function boot(): Promise<void> {
   if (params.has("fresh")) {
     // Start the yard over, once: the address is put right so that a reload does not do it again.
     // On the guild's server the yard is the member's account's, and is not thrown away from an address.
-    try {
-      if (!live) localStorage.removeItem("works.save.v2");
-      if (!live) localStorage.removeItem("works.screen.v1");
-    } catch {
-      // Nothing was kept.
-    }
+    if (!live) forgetYard();
     params.delete("fresh");
     const rest = params.toString();
     history.replaceState(null, "", `${location.pathname}${rest ? `?${rest}` : ""}${location.hash}`);

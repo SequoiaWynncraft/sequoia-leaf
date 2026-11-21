@@ -356,13 +356,17 @@ place, with no history.
 
 - `GET /v1/game/saves/{slot}` answers `{ "slot", "version", "updated_at", "data" }`,
   or 404 `no_save` for a slot never written.
-- `PUT /v1/game/saves/{slot}` takes `{ "version", "data" }`, where `version` is
-  the version last read, 0 for none. It is written only while that is still the
-  stored version, as the next one, and answers `{ "version", "updated_at" }`.
-  Otherwise it gets 409 `version_conflict` and changes nothing: read the save
-  again. A slot that is not one gets 400 `invalid_slot`; a body that is not a
-  save, or `data` that is not an object, 400 `invalid_save`; a save over 256 KiB,
-  413 `save_too_large`. A body over twice that is not read at all.
+- `PUT /v1/game/saves/{slot}` takes `{ "player", "version", "data" }`, where
+  `player` is the id of the member the page believes it is (from
+  `/v1/game/me`), and `version` is the version last read, 0 for none. A save
+  whose `player` is not the session's member gets 409 `not_you` and changes
+  nothing: the page was left open as someone else, and should load again. It is
+  written only while `version` is still the stored version, as the next one,
+  and answers `{ "version", "updated_at" }`. Otherwise it gets 409
+  `version_conflict` and changes nothing: read the save again. A slot that is
+  not one gets 400 `invalid_slot`; a body that is not a save, or `data` that is
+  not an object, 400 `invalid_save`; a save over 256 KiB, 413 `save_too_large`.
+  A body over twice that is not read at all.
 
 **Skins.** `GET /v1/game/skins/{uuid}` takes a Minecraft UUID with or without
 dashes, or gets 400 `invalid_uuid`. It serves only the skins of players Leaf

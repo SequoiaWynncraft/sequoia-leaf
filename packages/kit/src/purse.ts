@@ -9,6 +9,7 @@
  * cannot be spent, and every Leaf button shows itself closed (`leafOpen`).
  */
 
+import { keepText } from "./keep.ts";
 import { outside } from "./net.ts";
 
 export interface Purse {
@@ -53,13 +54,10 @@ function tell(why: string): void {
   for (const fn of watchers) fn(p, why);
 }
 
+/** Keeps the purse in the browser (where it cannot be, it still holds for this visit), and says so. */
 function write(why: string): void {
   const p = now();
-  try {
-    outside.store()?.setItem(KEY, JSON.stringify(ledger === null ? p : { coins: p.coins }));
-  } catch {
-    // It still holds for this visit.
-  }
+  keepText(KEY, JSON.stringify(ledger === null ? p : { coins: p.coins }));
   tell(why);
 }
 

@@ -1,7 +1,7 @@
 /**
  * A stand-in for the guild's server and the browser, for tests: answers requests from a table of
- * routes, keeps what is put in storage in a map, and writes down every request and every address
- * the page tried to go to. Pages never load this.
+ * routes, keeps what is put in storage in a map, and writes down every request, every address
+ * the page tried to go to, and every time it loaded itself again. Pages never load this.
  */
 
 import { pretend, type Store } from "./net.ts";
@@ -40,6 +40,8 @@ export interface Standin {
   store: MemoryStore;
   sent: Sent[];
   went: string[];
+  /** How many times the page loaded itself again. */
+  reloaded: { count: number };
   /** Sets the time the page sees. */
   clock: { now: number };
   /** Puts the real world back. */
@@ -57,6 +59,7 @@ export function standin(
   const store = opts.store ?? new MemoryStore();
   const sent: Sent[] = [];
   const went: string[] = [];
+  const reloaded = { count: 0 };
   const clock = { now: 1_800_000_000_000 };
   const done = pretend({
     async fetch(path, init = {}) {
@@ -80,9 +83,12 @@ export function standin(
     go: (url) => {
       went.push(url);
     },
+    reload: () => {
+      reloaded.count++;
+    },
     now: () => clock.now,
   });
-  return { store, sent, went, clock, done };
+  return { store, sent, went, reloaded, clock, done };
 }
 
 /** The member `/v1/game/me` answers with in tests. */

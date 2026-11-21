@@ -78,6 +78,7 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `net.ts`      | Everything asked of the world outside the page: the server, storage, the address                   |
 | `live.ts`     | Where the game is being played, who the member is, and the cards for when it is shut               |
 | `cloud.ts`    | Keeping what the games keep on the member's account, when the game is live                         |
+| `keep.ts`     | Writing the game into the browser; a page that has let go of it (`stopped()`) writes none of it    |
 | `presence.ts` | Telling the server where in the game the member is, and hearing who else is about                  |
 | `standin.ts`  | A stand-in server and storage for tests; no page loads it                                          |
 
@@ -113,6 +114,13 @@ most every five seconds, with the version it last read and the time it changed (
 a conflict it fetches the slot and keeps whichever was saved later. On the town's `closing`, when
 the page is put away or hidden, it runs whatever the page asked to run first (`before`) and sends
 at once. With the made-up guild none of this fetches anything.
+
+Every page writes what it keeps through `keepText` (`keep.ts`), never straight into storage.
+Once a page has pulled, each write first makes sure the browser's game is still its member's.
+When another member's page has taken the browser over (or the server answers `not_you`), the
+page stops (`stopped()`) before it loads again, and writes nothing more, not even as it goes, so
+nothing it still holds lands under the other member's names. A test in `keep.test.ts` holds
+every file in the kit and the games to this.
 
 **Who is here** (`presence.ts`). A live page says where the member is (`here("town" | "camp" |
 "works" | "table")`) every half minute and at once when it changes; the answer, everybody seen
