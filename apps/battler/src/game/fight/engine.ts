@@ -333,14 +333,29 @@ export function speedNow(f: Fight, u: Unit): number {
   return speed;
 }
 
-/** An attack arrives. */
-function land(f: Fight, u: Unit, t: Unit, upClose: boolean): void {
+/**
+ * What an attack takes with it from the moment it is made: how hard its maker hit then, and how
+ * likely it was to land hard. A shot in the air is not made stronger, or weaker, by what happens to
+ * its maker before it arrives, and it still arrives if its maker has fallen.
+ */
+interface Blow {
+  readonly attack: number;
+  readonly crit: number;
+}
+const blowOf = (u: Unit): Blow => ({ attack: u.attack, crit: u.crit });
+
+/**
+ * An attack arrives, as strong as it was made (`blow`). Whether it slips and whether it lands hard
+ * are rolled as it arrives, in that order, so a fight draws its chances in the order it always has;
+ * the odds of landing hard are its maker's when it was made.
+ */
+function land(f: Fight, u: Unit, t: Unit, upClose: boolean, blow: Blow): void {
   if (!targetable(f, t)) return;
   if (t.slip > 0 && chance(f) * 100 < t.slip) {
     emit(f, { t: "slip", id: t.id, by: u.id });
     return;
   }
-  let amount = u.attack;
+  let amount = blow.attack;
   let hard = false;
   if (u.sneakHits > 0) {
     // A Sneak's first hits land hard, unless what they land on cannot be hit hard.
@@ -349,7 +364,7 @@ function land(f: Fight, u: Unit, t: Unit, upClose: boolean): void {
       hard = true;
       amount *= 1 + u.sneakBy / 100;
     }
-  } else if (u.crit > 0 && !t.noHard && chance(f) * 100 < u.crit) {
+  } else if (blow.crit > 0 && !t.noHard && chance(f) * 100 < blow.crit) {
     hard = true;
     amount *= 1 + FIGHT.hard / 100;
   }
@@ -384,14 +399,16 @@ function strike(f: Fight, u: Unit, t: Unit): void {
   if (twice) emit(f, { t: "item", id: u.id, item: "wasptail" });
   if (distance(u.cell, t.cell) <= 1) {
     emit(f, { t: "swing", id: u.id, target: t.id });
-    land(f, u, t, true);
-    if (twice) land(f, u, t, true);
+    land(f, u, t, true, blowOf(u));
+    if (twice) land(f, u, t, true, blowOf(u));
   } else {
+    // Thrown now, with the strength it has now, however long it is in the air.
+    const blow = blowOf(u);
     const ticks = flight(u.cell, t.cell);
     for (let n = 0; n < (twice ? 2 : 1); n++) {
       const wait = ticks + n * 2;
       emit(f, { t: "shot", id: u.id, target: t.id, from: u.cell, to: t.cell, ticks: wait, what: "attack" });
-      later(f, wait, () => land(f, u, t, false));
+      later(f, wait, () => land(f, u, t, false, blow));
     }
   }
   if (u.quicken > 0 && u.quick < u.quickMost) u.quick++;

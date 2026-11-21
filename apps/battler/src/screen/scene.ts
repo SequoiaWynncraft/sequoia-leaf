@@ -12,14 +12,17 @@ import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 import { isBossId, type UnitKind } from "../game/content/figures.ts";
 import { ROOMS } from "../game/content/rooms.ts";
 import { HOME_ROWS, seatCell } from "../game/hex.ts";
-import { fieldCap, fielded, type Run, type Spot, type Stars } from "../game/index.ts";
+import { fieldCap, fielded, type ItemId, pieceAt, type Run, type Spot, type Stars } from "../game/index.ts";
+import { itemPic } from "./art/icons.ts";
 import { bodyOf, MATE_NAMES } from "./art/mates.ts";
 import { drawBase, drawFigure, drawStars, framesOf } from "./art/sprites.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
-import { drawFight, drawFightAir, fightOn } from "./fightview.ts";
+import { drawFight, drawFightAir, fightHeldUnder, fightOn } from "./fightview.ts";
 import { burst, drawFlyers, drawFxOver, drawFxUnder, wordsFx } from "./fx.ts";
 import { cellXY, GAP, HEX_H, HEX_W, type Pt, ROW, seatXY, slotXY } from "./geometry.ts";
+import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
 import { DIM, shineOf } from "./light.ts";
+import { handing } from "./logic.ts";
 import { FOOT, type Pawn, pawns } from "./pawns.ts";
 import { snd } from "./sounds.ts";
 import { boardHalves, place, type Standing, V } from "./stage.ts";
@@ -44,6 +47,8 @@ export const marks: {
   at: Pt;
   /** Something carried in the hand that is not a pawn yet: an offer from the stall, an item. */
   ghost: { kind: UnitKind | null; pic: HTMLCanvasElement | null } | null;
+  /** A component in the hand (carried or tapped): figures holding its pair show what the two would make. */
+  forging: ItemId | null;
   /** When the board was last found full, for flashing its count. */
   fullAt: number;
 } = {
@@ -57,6 +62,7 @@ export const marks: {
   taker: -1,
   at: { x: 0, y: 0 },
   ghost: null,
+  forging: null,
   fullAt: -9,
 };
 
@@ -139,6 +145,8 @@ function beatOf(phase: number): 0 | 1 {
 /** One of the party's own figures, where it stands or hops. */
 function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
   const f = framesOf(p.kind);
+  const piece = S.run && p.spot && !p.leaving ? pieceAt(S.run, p.spot) : null;
+  const items = piece?.items ?? [];
   const pop = V.t - p.popAt;
   const cheer = V.t - p.cheerAt;
   const shine = shineOf(p.kind, p.x, V.t);
@@ -166,24 +174,35 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
         flash: pop >= 0 && pop < 0.09,
         lit: shine.lit,
       });
+      drawHeld(g, heldRow(items, p.x + sway, heldTop(p.y - lift, false)), ox, oy);
       g.globalAlpha = 1;
     },
     top: () => {
       if (p.alpha < 0.6) return;
       const grew = pop >= 0 && pop < 0.7;
-      drawStars(
-        g,
-        p.stars,
-        x,
-        y - 3 - hover - f.tall - (grew ? Math.round(Math.sin((pop / 0.7) * Math.PI) * 3) : 0),
-        grew,
-      );
+      const starsAt = y - 3 - hover - f.tall - (grew ? Math.round(Math.sin((pop / 0.7) * Math.PI) * 3) : 0);
+      drawStars(g, p.stars, x, starsAt, grew);
+      // A component in the hand: what it would make with the one this figure holds, faint, over its head.
+      const would = marks.forging && piece ? handing(piece, marks.forging) : null;
+      if (would?.can && would.forged) {
+        const pic = itemPic(would.forged);
+        g.globalAlpha = 0.55 + 0.15 * Math.sin(V.t * 4 + p.phase * 6);
+        g.drawImage(pic, Math.round(x - pic.width / 2), Math.round(starsAt - 6 - pic.height + Math.sin(V.t * 3) * 1.5));
+        g.globalAlpha = 1;
+      }
     },
   };
 }
 
 /** One of the far party's figures, waiting on its hex while the member plans. */
-function foeStanding(g: Ctx, kind: UnitKind, stars: Stars, seat: number, order: number): Standing | null {
+function foeStanding(
+  g: Ctx,
+  kind: UnitKind,
+  stars: Stars,
+  seat: number,
+  order: number,
+  items: readonly ItemId[],
+): Standing | null {
   const at = cellXY(seatCell(1, seat), V.gap);
   const big = isBossId(kind);
   const come = approach(order, big);
@@ -201,6 +220,7 @@ function foeStanding(g: Ctx, kind: UnitKind, stars: Stars, seat: number, order: 
       if (shine.dim) g.globalAlpha = DIM;
       drawBase(g, kind, x, y);
       drawFigure(g, kind, x, y - 2 - hover, { beat: beatOf(phase), left: true, lit: shine.lit });
+      drawHeld(g, heldRow(items, at.x, heldTop(at.y + FOOT - come.away - come.lift - shine.hop, false)), V.bx, V.by);
       g.globalAlpha = 1;
     },
     top: () => {
@@ -325,7 +345,7 @@ export function drawScene(g: Ctx): void {
       (a, b) => Number(isBossId(b.kind)) - Number(isBossId(a.kind)) || a.seat - b.seat,
     );
     waiting.forEach((foe, i) => {
-      const s = foeStanding(g, foe.kind, foe.stars, foe.seat, i);
+      const s = foeStanding(g, foe.kind, foe.stars, foe.seat, i, foe.items);
       if (s) list.push(s);
     });
   }
@@ -423,4 +443,22 @@ export function foeAt(run: Run, x: number, y: number): { kind: UnitKind; stars: 
     }
   }
   return best;
+}
+
+/** The item a figure holds under a point measured from the board's corner: in its row under the base. */
+export function heldUnder(run: Run, x: number, y: number): HeldAt | null {
+  if (S.mode === "fight" || S.mode === "after") return fightHeldUnder(x, y);
+  if (S.mode !== "plan") return null;
+  for (const p of pawns.values()) {
+    if (p.leaving || !p.spot || p.id === marks.held) continue;
+    const piece = pieceAt(run, p.spot);
+    const hit = piece ? heldAt(heldRow(piece.items, p.x, heldTop(p.y, false)), x, y) : null;
+    if (hit) return hit;
+  }
+  for (const foe of run.foe.figures) {
+    const at = cellXY(seatCell(1, foe.seat), V.gap);
+    const hit = heldAt(heldRow(foe.items, at.x, heldTop(at.y + FOOT, false)), x, y);
+    if (hit) return hit;
+  }
+  return null;
 }

@@ -4,7 +4,8 @@
  *
  * Sizes are counted in `--u`, one art pixel of the interface (two CSS pixels, three on a very large
  * window), so frames and letters always land on whole pixels. The font is drawn ten pixels to the
- * em, which makes ten units the sharp text size.
+ * em, which makes ten units the sharp text size. Words that are read rather than glanced at (a line
+ * about a thing, a note, a tip) are in Inter, the reading face, at `--t-r`.
  */
 @import "./frames.css";
 
@@ -36,16 +37,26 @@
   font-weight: 700;
   font-display: block;
 }
+@font-face {
+  font-family: Inter;
+  src: url("./fonts/inter-variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
 
 :root {
   --u: 2px;
-  /* Text: the usual size, a small one for labels, and two for titles. */
+  /* Text: the usual size, a small one for labels, and two for titles; and the reading size. */
   --t-m: calc(var(--u) * 10);
   --t-s: calc((var(--u) - 1px) * 10);
-  --t-d: var(--t-m);
   --t-l: calc((var(--u) + 1px) * 10);
   --t-xl: calc((var(--u) + 2px) * 10);
+  --t-r: calc(var(--u) * 7);
+  /* The second line under a name is read, so it is the reading size. */
+  --t-d: var(--t-r);
   --k-font: Minecraft, ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --k-font-read: Inter, system-ui, sans-serif;
 
   --k-ink: #1a0f1e;
   --k-deep: #211228;
@@ -67,12 +78,6 @@
   --k-bark-dk: #3b1f19;
   --k-bark-lt: #a35d3b;
   --k-paper: #f8e6bd;
-}
-/* Sharper screens can show a size between the two, which suits second lines on a phone. */
-@media (min-resolution: 2dppx) {
-  :root {
-    --t-d: calc(var(--u) * 7.5);
-  }
 }
 @media (min-width: 1800px) and (min-height: 940px) {
   :root {
@@ -130,10 +135,37 @@ img.k-px {
 .k-s {
   font-size: var(--t-s);
 }
+/* Words that are read: a line about a thing, a note, a tip. In Inter, smooth, at the reading size. */
+.k-read,
+.k-d,
+.k-tip,
+.k-say,
+.k-paper p {
+  font: 500 var(--t-r) / 1.4 var(--k-font-read);
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  font-smooth: auto;
+}
+:is(.k-read, .k-d, .k-tip, .k-say, .k-paper p) b {
+  font-weight: 700;
+}
 /* The second line under a name: what the thing is. */
 .k-d {
-  font-size: var(--t-d);
   color: var(--k-dim);
+}
+/* Names, labels, numbers and buttons inside reading text keep the pixel font; `k-pix` asks for it. */
+:is(.k-read, .k-d, .k-tip, .k-say, .k-paper p) :is(.k-title, .k-name, .k-label, .k-chip, .k-btn, .k-cur, .k-pix),
+.k-pix {
+  font-family: var(--k-font);
+  line-height: 1.2;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+/* A thing's name: bold and gold, in the pixel font. */
+.k-name {
+  font-size: var(--t-m);
+  font-weight: 700;
+  color: var(--k-gold);
 }
 .k-label {
   font-size: var(--t-s);
@@ -325,6 +357,9 @@ button.k-slot:hover {
 }
 .k-say b {
   display: block;
+  font-family: var(--k-font);
+  -webkit-font-smoothing: none;
+  font-smooth: never;
   font-size: var(--t-s);
   letter-spacing: calc(var(--t-s) / 10);
   text-transform: uppercase;
@@ -347,6 +382,296 @@ button.k-slot:hover {
   top: 0;
   max-width: min(calc(var(--u) * 120), calc(100vw - var(--u) * 8));
   pointer-events: none;
+}
+
+/* ---------- cards (card.ts) ---------- */
+
+/* What a thing is: one frame for every card in every game, 220 units wide where there is room. */
+.k-tip.k-info {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 2);
+  width: min(calc(var(--u) * 220), calc(100vw - 8px));
+  max-width: none;
+  box-sizing: border-box;
+  padding: calc(var(--u) * 3) calc(var(--u) * 4);
+  /* Names, labels and numbers are the pixel font; the words read in it are `k-read`. */
+  font: 400 var(--t-m) / 1.2 var(--k-font);
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+.k-tip.k-info.pinned {
+  z-index: 89;
+  pointer-events: auto;
+}
+.k-info:focus {
+  outline: none;
+}
+/* Asked for with a finger: a sheet along the bottom, the whole width. */
+.k-tip.k-info.sheet {
+  top: auto;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-height: 72vh;
+  overflow-y: auto;
+  transform: none;
+  padding-bottom: calc(var(--u) * 5 + env(safe-area-inset-bottom, 0px));
+}
+.k-info-head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+}
+.k-slot.k-info-pic {
+  flex: none;
+  min-width: calc(var(--u) * 26);
+  min-height: calc(var(--u) * 26);
+  padding: var(--u);
+}
+.k-info-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+}
+.k-info-aside {
+  flex: none;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  white-space: nowrap;
+}
+.k-info-back,
+.k-info-x {
+  flex: none;
+  align-self: flex-start;
+}
+/* The parts of a card, a thin rule between them. */
+.k-info-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  padding-top: calc(var(--u) * 2);
+  border-top: var(--u) solid var(--k-edge);
+}
+.k-info-chips {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--u) calc(var(--u) * 4);
+}
+.k-info-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--u);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+button.k-info-chip:hover .k-chip {
+  filter: brightness(1.2);
+}
+.k-info-count {
+  margin-left: var(--u);
+}
+.k-info-stats {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  justify-content: space-between;
+  gap: var(--u) calc(var(--u) * 4);
+}
+.k-info-stat {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 2);
+  white-space: nowrap;
+}
+.k-info-blocks {
+  gap: calc(var(--u) * 2);
+}
+.k-info-bhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(var(--u) * 3);
+}
+.k-info-note {
+  color: var(--k-dim);
+  white-space: nowrap;
+}
+.k-info-body {
+  color: var(--k-cream);
+}
+/* A block on one line: a trait's step, its count first and how many more at the end. */
+.k-info-block.line {
+  display: grid;
+  grid-template-columns: calc(var(--u) * 7) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: calc(var(--u) * 2);
+  padding: 0 var(--u);
+  color: var(--k-dim);
+}
+.k-info-block.line .k-info-title {
+  color: var(--k-faint);
+}
+.k-info-block.line .k-info-body {
+  color: inherit;
+}
+.k-info-block.line .k-info-note {
+  font: 400 var(--t-s) / 1.2 var(--k-font);
+  letter-spacing: calc(var(--t-s) / 10);
+  text-transform: uppercase;
+  -webkit-font-smoothing: none;
+}
+.k-info-block.lit {
+  color: var(--k-cream);
+  background: #f5b95e26;
+  box-shadow: inset var(--u) 0 0 var(--k-gold);
+}
+.k-info-block.line.lit .k-info-title {
+  color: var(--k-gold-lt);
+}
+.k-info-rows {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 2) calc(var(--u) * 6);
+}
+.k-info-row {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  min-width: 0;
+}
+/* A row of pictures only sits beside the next one where it fits. */
+.k-info-row.k-look-icons {
+  flex: 0 1 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+}
+.k-info-things {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--u) calc(var(--u) * 4);
+}
+.k-info-row.k-look-icons .k-info-things {
+  gap: calc(var(--u) * 2);
+}
+.k-info-row.k-look-tiles .k-info-things {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: calc(var(--u) * 2);
+}
+.k-slot.k-info-icon {
+  width: calc(var(--u) * 16);
+  height: calc(var(--u) * 16);
+}
+/* "This with that makes": the other half, an arrow, and what they make. */
+.k-info-make {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  padding: 0 var(--u);
+}
+.k-info-make.lit {
+  background: #f5b95e26;
+  box-shadow: inset var(--u) 0 0 var(--k-gold);
+}
+.k-info-with {
+  display: grid;
+  place-items: center;
+}
+.k-slot.k-info-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--u);
+  min-height: calc(var(--u) * 42);
+  padding: calc(var(--u) * 2) var(--u);
+  text-align: center;
+}
+.k-info-tile-pic {
+  display: grid;
+  place-items: end center;
+  min-height: calc(var(--u) * 22);
+}
+.k-info-tile-name {
+  line-height: 1.1;
+}
+.k-info-tile .k-cur {
+  font-size: var(--t-s);
+  gap: var(--u);
+}
+.k-info-tile.locked {
+  opacity: 0.8;
+}
+/* A small tag on a thing: "have", "bench", "stall". */
+.k-info-tagged {
+  padding: 0 var(--u);
+  background: var(--k-mid);
+  color: var(--k-gold-lt);
+  font-size: var(--t-s);
+  font-family: var(--k-font);
+  text-transform: uppercase;
+  letter-spacing: calc(var(--t-s) / 10);
+}
+.k-info-tagged.corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.k-info-acts {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 2);
+}
+.k-info-acts > .k-btn {
+  flex: 1 1 auto;
+}
+.k-slot.k-info-pin {
+  width: calc(var(--u) * 18);
+  height: calc(var(--u) * 18);
+}
+
+/* A thing named anywhere: its picture and name, which explains itself when pointed at. */
+.k-thing {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  font-family: var(--k-font);
+  white-space: nowrap;
+  -webkit-font-smoothing: none;
+}
+.k-thing-pic {
+  display: grid;
+  place-items: center;
+  min-width: calc(var(--u) * 10);
+}
+.k-thing-count {
+  color: var(--k-gold);
+}
+.k-thing.lit .k-thing-name {
+  color: var(--k-gold-lt);
+}
+.k-link {
+  cursor: pointer;
+}
+.k-link:is(.k-thing, .k-info-with):hover {
+  filter: brightness(1.25);
+}
+.k-thing:hover .k-thing-name {
+  text-decoration: underline dotted var(--k-faint);
+  text-underline-offset: calc(var(--u) * 1.5);
 }
 
 /* ---------- buttons ---------- */

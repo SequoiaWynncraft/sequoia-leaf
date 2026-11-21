@@ -14,8 +14,8 @@
 
 import { el } from "./dom.ts";
 import { ask, isRecord, listen, type Listening, outside } from "./net.ts";
-import { fromLedger } from "./purse.ts";
-import { inTown, leave, tell } from "./shell.ts";
+import { balance, fromLedger, leafOpen, watch } from "./purse.ts";
+import { fromTown, inTown, leave, tell } from "./shell.ts";
 
 export interface Member {
   /** Their block-game account's id. */
@@ -198,4 +198,56 @@ export function followLeaf(
     },
     since === undefined ? {} : { after: since },
   );
+}
+
+// ---------- the member's Leaf in a game in the town ----------
+
+/**
+ * Keeps the member's Leaf up to date in a game for as long as it is open. A game takes its Leaf
+ * once, as it starts. In the town's frame the town hears the member's news, and says each new
+ * number the ledger gives (`passLeaf`); the purse takes it as it takes a fresh read of the ledger.
+ * Opened on its own, the game listens to the member's news itself, as the town does. With the
+ * made-up guild there is no ledger, and nothing the town says about Leaf is taken. Returns how to
+ * stop.
+ */
+export function keepLeaf(): () => void {
+  if (inTown()) {
+    return fromTown((msg) => {
+      if (msg.town === "leaf" && member()) fromLedger(msg.leaf);
+    });
+  }
+  if (!member()) return () => undefined;
+  const ears = followLeaf();
+  return () => {
+    ears.stop();
+  };
+}
+
+/**
+ * In the town, while a game is open in its frame: passes each new Leaf the guild's ledger gives
+ * the member to `say`, which tells the game. A game hears nothing until it is ready, so a change
+ * while it is still opening waits for `ready()` and is said then. With the made-up guild there is
+ * no ledger, and nothing is said.
+ */
+export function passLeaf(say: (leaf: number) => void): { ready(): void; stop(): void } {
+  let leaf = balance().leaf;
+  let heard = false;
+  let owed = false;
+  const stop = watch((p) => {
+    if (leafOpen() || p.leaf === leaf) return;
+    leaf = p.leaf;
+    if (heard) say(leaf);
+    else owed = true;
+  });
+  return {
+    ready() {
+      heard = true;
+      if (!owed) return;
+      owed = false;
+      say(leaf);
+    },
+    stop() {
+      stop();
+    },
+  };
 }

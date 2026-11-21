@@ -5,14 +5,14 @@
  * is never done by accident: a tap aims, and a second tap (or the Build button) builds.
  */
 
+import { pick, point, shown, surface } from "@sequoia-leaf/kit/card.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
-import { LONG_PRESS, tipAt, tipOff } from "@sequoia-leaf/kit/tip.ts";
+import { LONG_PRESS } from "@sequoia-leaf/kit/tip.ts";
 
-import { TILE } from "./art/belts.ts";
 import { pan, zoom } from "./camera.ts";
 import { callerAt } from "./events.ts";
 import { at } from "./sim/index.ts";
-import { S, tileAt, toPage, toYard } from "./state.ts";
+import { S, tileAt, toYard } from "./state.ts";
 import {
   aimAt,
   cancel,
@@ -29,7 +29,7 @@ import {
   tapBelt,
   undo,
 } from "./tools.ts";
-import { closeCard, describe, openCard } from "./ui/card.ts";
+import { closeCard, openCard, refAt, riderAt, tileBox } from "./ui/card.ts";
 import { refreshDock, toolForKey } from "./ui/dock.ts";
 import { closeBanner } from "./ui/notes.ts";
 import { closePanel, togglePanel } from "./ui/panels.ts";
@@ -42,10 +42,7 @@ export const inputHooks: {
   letter: () => boolean;
 } = { caller: () => {}, letter: () => false };
 
-const TIP = {};
 const keys = new Set<string>();
-/** How long the mouse rests on a thing before its tip shows, in milliseconds. */
-const REST = 450;
 
 interface Down {
   id: number;
@@ -62,14 +59,12 @@ interface Down {
 const downs = new Map<number, Down>();
 let pinch: { d: number; cx: number; cy: number } | null = null;
 let pressTimer = 0;
-let rest: { x: number; y: number; since: number; shown: boolean } | null = null;
 
-function tipFor(tx: number, ty: number): void {
-  const said = describe(tx, ty);
-  if (!said) return;
-  const a = toPage(tx * TILE, ty * TILE);
-  const b = toPage((tx + 1) * TILE, (ty + 1) * TILE);
-  tipAt({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y }, said[0], said[1], TIP);
+/** What the mouse is on says what it is, after a moment: something riding a belt, or else the tile. */
+function pointAt(tx: number, ty: number): void {
+  const ref = S.tool === null && downs.size === 0 ? (riderAt(tx, ty) ?? refAt(tx, ty)) : null;
+  const b = tileBox(tx, ty);
+  point(ref, b.x, b.y, b.w, b.h);
 }
 
 /** A tap or click on a tile with nothing in hand: ask about what is there. */
@@ -80,12 +75,11 @@ function ask(tx: number, ty: number, pageX: number, pageY: number): void {
     inputHooks.caller(who.order);
     return;
   }
-  const i = at(S.world, tx, ty);
-  if (i >= 0 && S.picked === i) {
+  if (at(S.world, tx, ty) < 0) {
     closeCard();
     return;
   }
-  if (!openCard(tx, ty)) closeCard();
+  openCard(tx, ty);
 }
 
 /** A finger's tap with a tool in hand: aim first, build on the second tap of the same tile. */
@@ -126,9 +120,10 @@ export function initInput(canvas: HTMLCanvasElement): void {
   });
   document.addEventListener("pointerdown", unlock, true);
 
+  // A press on the yard is read here: the cards do not put themselves away for it.
+  surface(canvas);
   canvas.addEventListener("pointerdown", (e) => {
-    tipOff(TIP);
-    rest = null;
+    point(null, 0, 0);
     window.clearTimeout(pressTimer);
     const finger = e.pointerType !== "mouse";
     if (S.finger !== finger) {
@@ -157,14 +152,13 @@ export function initInput(canvas: HTMLCanvasElement): void {
         for (const o of downs.values()) o.moved = true;
         return;
       }
-      // A finger kept on a thing asks what it is.
+      // A finger kept on a thing asks what it is: its card, pinned, even with a tool in hand.
       pressTimer = window.setTimeout(() => {
         if (d.moved || !downs.has(d.id)) return;
         d.moved = true;
-        tipFor(t.x, t.y);
-        window.setTimeout(() => {
-          tipOff(TIP);
-        }, 2600);
+        const ref = riderAt(t.x, t.y) ?? refAt(t.x, t.y);
+        const b = tileBox(t.x, t.y);
+        if (ref) pick(ref, b.x, b.y, b.w, b.h);
       }, LONG_PRESS);
       return;
     }
@@ -196,8 +190,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
           aimAt(t.x, t.y);
           refreshDock();
         }
-        if (rest?.shown) tipOff(TIP);
-        rest = { x: t.x, y: t.y, since: performance.now(), shown: false };
+        pointAt(t.x, t.y);
       }
     }
     if (!d) return;
@@ -239,8 +232,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
     if (e.pointerType !== "mouse") return;
     S.hover = null;
     if (!running() && !S.finger) S.aim = null;
-    if (rest?.shown) tipOff(TIP);
-    rest = null;
+    point(null, 0, 0);
   });
   canvas.addEventListener(
     "wheel",
@@ -256,13 +248,15 @@ export function initInput(canvas: HTMLCanvasElement): void {
     if (e.target instanceof HTMLInputElement) return;
     const k = e.key.toLowerCase();
     if (k === "escape" || k === "enter") {
+      // The card that was up has taken this Escape.
+      if (e.defaultPrevented) return;
       if (inputHooks.letter()) {
         e.preventDefault();
         return;
       }
       if (k === "enter") return;
       if (S.tool !== null) cancel();
-      else if (S.picked >= 0) closeCard();
+      else if (shown()) closeCard();
       else if (S.panel) closePanel();
       else closeBanner();
       return;
@@ -301,13 +295,9 @@ export function initInput(canvas: HTMLCanvasElement): void {
   });
 }
 
-/** Each frame: the keys that move the view, and the tip for whatever the mouse has come to rest on. */
+/** Each frame: the keys that move the view. */
 export function stepInput(dt: number): void {
   const dx = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
   const dy = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
   if (dx !== 0 || dy !== 0) pan(-dx * dt * 620, -dy * dt * 620);
-  if (rest && !rest.shown && S.tool === null && downs.size === 0 && performance.now() - rest.since > REST) {
-    rest.shown = true;
-    tipFor(rest.x, rest.y);
-  }
 }

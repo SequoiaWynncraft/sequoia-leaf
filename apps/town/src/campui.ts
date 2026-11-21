@@ -4,6 +4,7 @@
  * The purse, the feed and the panel's frame are shared with the town (`hud.ts`).
  */
 
+import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph, shown } from "@sequoia-leaf/kit/dom.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
@@ -13,6 +14,7 @@ import { hop } from "./actors.ts";
 import { COSY, KIND, type PetId, PETS, petsOf, trayList } from "./camp.ts";
 import { type CampArt, type CampIcon, campIcon, pictureOf } from "./campart.ts";
 import type { CampScene } from "./campscene.ts";
+import { named, thingRef } from "./cards.ts";
 import { changed, G, hooks, toPage } from "./game.ts";
 import { guild } from "./guild.ts";
 import {
@@ -36,6 +38,12 @@ import { camp } from "./record.ts";
 import type { Sprites } from "./sprites.ts";
 import { thingOf, THINGS } from "./things.ts";
 import { openPanel as openTownPanel, thingSlot } from "./ui.ts";
+
+/** An element that stands for a thing: pointing at it shows the thing's card. */
+function linked(target: HTMLElement, ref: string): HTMLElement {
+  link(target, ref);
+  return target;
+}
 
 export type CampPanel = "cabin" | "mailbox" | "signpost" | "note" | "present" | "choose";
 
@@ -70,7 +78,6 @@ const ICONS: Readonly<Record<CampPanel, CampIcon>> = {
 };
 
 /** How to win each trophy, for the empty places on the shelf. */
-const TO_WIN = "Not won yet.";
 
 /** A guild-mate's face, for a letter or a row of the signpost. */
 function face(name: string): HTMLCanvasElement | null {
@@ -169,9 +176,8 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
             const won = camp.earned.includes(t.id);
             const small = art.small[t.id];
             const s = slot(won && small ? pic(small, 2) : el("span", "k-dim", { text: "?" }), 24);
-            s.tabIndex = 0;
             if (won) s.classList.add("lit");
-            tip(s, t.name, won ? t.about : `${TO_WIN} ${t.about}`);
+            link(s, thingRef(t.id));
             return s;
           }),
         );
@@ -355,7 +361,7 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
               "div",
               "k-row",
               {},
-              thingSlot(art, left.id, 26),
+              linked(thingSlot(art, left.id, 26), thingRef(left.id)),
               el("div", "k-grow", { text: `You left ${who} ${left.name.toLowerCase()}.` }),
             ),
             el("div", "k-d", { text: "One present a camp. It stays where you put it." }),
@@ -372,8 +378,8 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
                 "div",
                 "k-card",
                 {},
-                thingSlot(art, id, 26),
-                el("div", "k-grow", {}, thing.name, el("div", "k-d", { text: thing.about })),
+                linked(thingSlot(art, id, 26), thingRef(id)),
+                el("div", "k-grow", {}, named(thing.name, thingRef(id)), el("div", "k-d", { text: thing.about })),
                 button("sm", ["Leave it"], () => {
                   at().give(id);
                   refreshPanel();
@@ -493,7 +499,8 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
             b.addEventListener("click", () => {
               s.takeOut(id);
             });
-            if (thing) tip(b, thing.name, thing.about);
+            // A tap sets it out; pointing (or a finger kept on it) shows its card.
+            if (thing) link(b, thingRef(id), { acts: true });
             traySlots.set(id, b);
             return b;
           })

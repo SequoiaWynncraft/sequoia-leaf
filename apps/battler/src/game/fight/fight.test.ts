@@ -199,6 +199,49 @@ describe("attacking", () => {
     expect(hit?.amount).toBe(finch.attack);
     expect(hit?.kind).toBe("physical");
   });
+  test("a shot in the air is as strong as when it was thrown: more attack after does not reach it", () => {
+    const f = fightOf([at("finch", 3, 2)], [at("mud", 3, 0)]);
+    stillSide(f, 1);
+    const finch = unitOf(f, "finch");
+    finch.manaFull = 0;
+    const thrown = finch.attack;
+    const throwing = stepUntil(f, (e) => e.t === "shot");
+    expect(only(throwing, "hit").length).toBe(0);
+    // A bonus lands on the Finch while its seed is in the air, as a Leafling's or an item's would.
+    finch.attack += 40;
+    const landing = stepUntil(f, (e) => e.t === "hit");
+    expect(only(landing, "hit")[0]?.amount).toBe(thrown);
+    // The next one is thrown with the bonus.
+    const next = stepUntil(f, (e) => e.t === "hit");
+    expect(only(next, "hit")[0]?.amount).toBe(thrown + 40);
+  });
+  test("a shot in the air lands hard as often as its thrower did when it was thrown", () => {
+    const f = fightOf([at("finch", 3, 2)], [at("mud", 3, 0)]);
+    stillSide(f, 1);
+    const finch = unitOf(f, "finch");
+    finch.manaFull = 0;
+    finch.crit = 0;
+    stepUntil(f, (e) => e.t === "shot");
+    finch.crit = 100;
+    const landing = stepUntil(f, (e) => e.t === "hit");
+    expect(only(landing, "hit")[0]?.hard).toBe(false);
+  });
+  test("a shot in the air still lands, as strong as it was thrown, when its thrower falls first", () => {
+    const f = fightOf([at("finch", 3, 2), at("crab7", 6, 3)], [at("mud", 3, 0)]);
+    stillSide(f, 1);
+    const finch = unitOf(f, "finch");
+    still(unitOf(f, "crab7"));
+    finch.manaFull = 0;
+    const thrown = finch.attack;
+    stepUntil(f, (e) => e.t === "shot");
+    hurt(f, finch, 99_999, "true", "item", null);
+    expect(finch.alive).toBe(false);
+    const hits = only(
+      stepUntil(f, (e) => e.t === "hit"),
+      "hit",
+    );
+    expect(hits.map((h) => [h.id, h.by, h.amount])).toEqual([[unitOf(f, "mud", 1).id, finch.id, thrown]]);
+  });
   test("what is thrown at somebody who falls first just drops", () => {
     const f = fightOf([at("finch", 3, 2)], [at("mud", 3, 0)]);
     const mud = still(unitOf(f, "mud", 1), 5);

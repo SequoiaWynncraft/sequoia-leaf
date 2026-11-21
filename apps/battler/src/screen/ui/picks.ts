@@ -3,6 +3,7 @@
  * component after trouble, a boon now and then (with the one redraw). Nothing else can be done
  * until the pick is made, so the cards sit over the board.
  */
+import { link, thing } from "@sequoia-leaf/kit/card.ts";
 import { add, el } from "@sequoia-leaf/kit/dom.ts";
 
 import {
@@ -17,21 +18,21 @@ import {
   type FigureId,
   FIGURES,
   itemAdds,
-  itemName,
+  pieces,
   redraw,
   roleLine,
   type Run,
+  TRAITS,
   traitsOf,
 } from "../../game/index.ts";
-import { boonIcon, glyphPic, itemIcon, itemPic } from "../art/icons.ts";
+import { boonIcon, glyphPic, itemIcon, itemPic, traitIcon } from "../art/icons.ts";
 import { portrait } from "../art/sprites.ts";
 import { fly } from "../fx.ts";
-import { combosWithHeld } from "../logic.ts";
 import { signal } from "../signals.ts";
 import { snd } from "../sounds.ts";
 import { boardSpot } from "../stage.ts";
 import { act, S } from "../state.ts";
-import { pic, rich, traitTag } from "./cards.ts";
+import { boonRef, figureRef, itemRef, makesLines, pic, rich, traitRef } from "./cards.ts";
 import { holdAcorns } from "./table.ts";
 
 let key = "";
@@ -42,43 +43,60 @@ const TITLES: Readonly<Record<Choice["kind"], readonly [string, string]>> = {
   boon: ["A boon", "One of these, for the rest of the raid."],
 };
 
+/** A picture on a pick that explains itself when pointed at. */
+function art(c: HTMLCanvasElement, ref: string): HTMLElement {
+  const box = el("span", "art", {}, pic(c, 3));
+  link(box, ref);
+  return box;
+}
+
 function starterCard(kind: FigureId): HTMLElement[] {
   const spec = FIGURES[kind];
   return [
-    pic(portrait(kind), 3, "art"),
+    art(portrait(kind), figureRef(kind)),
     el("b", "k-gold", { text: spec.name }),
     el("div", "k-d", { text: roleLine(spec.calling) }),
-    el("div", "k-wrap", {}, ...traitsOf(kind).map((t) => traitTag(t))),
+    el(
+      "div",
+      "k-wrap",
+      {},
+      ...traitsOf(kind).map((t) => {
+        const chip = el("span", "k-chip", {}, pic(traitIcon(t)), TRAITS[t].name);
+        link(chip, traitRef(t));
+        return chip;
+      }),
+    ),
     el("b", "", { text: spec.ability?.name ?? "" }),
     rich(abilityShort(kind, 1)),
   ];
 }
+/**
+ * A component on offer: what it adds, and what it makes with each of the others, as the other
+ * half's picture, an arrow and the finished item. The ones whose other half the party already
+ * holds come first, lit and tagged "have", so the pick that finishes an item is plain.
+ */
 function componentCard(run: Run, item: ComponentId): HTMLElement[] {
-  const combos = combosWithHeld(run, item);
-  const parts = [
-    pic(itemIcon(item), 3, "art"),
+  const lines = makesLines(item, run).map((line) =>
+    el(
+      "div",
+      `makes${line.lit ? " lit" : ""}`,
+      {},
+      line.from ? thing(line.from, { bare: true }) : null,
+      el("span", "k-dim", { text: "→" }),
+      thing(line.ref, line.tag ? { tag: line.tag } : {}),
+    ),
+  );
+  return [
+    art(itemIcon(item), itemRef(item)),
     el("b", "k-gold", { text: COMPONENTS[item].name }),
     rich(itemAdds(item).join(" · ")),
+    el("div", "makeslist", {}, ...lines),
   ];
-  for (const c of combos.slice(0, 3)) {
-    parts.push(
-      el(
-        "div",
-        "recipe",
-        {},
-        pic(itemIcon(c.with)),
-        el("span", "k-dim", { text: "makes" }),
-        pic(itemIcon(c.makes)),
-        el("span", "k-s", { text: itemName(c.makes) }),
-      ),
-    );
-  }
-  return parts;
 }
 function boonCardParts(boon: BoonId): HTMLElement[] {
   const spec = BOONS[boon];
   return [
-    pic(boonIcon(boon), 3, "art"),
+    art(boonIcon(boon), boonRef(boon)),
     el("b", "k-gold", { text: spec.name }),
     el("div", "k-d", { text: spec.sort === "charm" ? "A charm" : "A boon" }),
     rich(boonShort(boon)),
@@ -138,7 +156,11 @@ export function renderPicks(): void {
     box.replaceChildren();
     return;
   }
-  const now = `${run.seed}:${run.record.length}:${run.choices.length}:${choice.kind}:${choice.options.join()}`;
+  // What the party holds too: a component's lines light the halves it already has.
+  const held = `${run.items.join()}|${pieces(run)
+    .map((p) => p.items.join())
+    .join(";")}`;
+  const now = `${run.seed}:${run.record.length}:${run.choices.length}:${choice.kind}:${choice.options.join()}:${held}`;
   if (now === key) return;
   key = now;
   box.hidden = false;

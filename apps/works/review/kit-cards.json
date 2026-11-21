@@ -1,0 +1,71 @@
+[
+  ["size", 1280, 800],
+  ["wait", 1200],
+  [
+    "eval",
+    "(window.works.stage('mid'), window.works.hold(true), window.works.run(300), window.works.open('orders'), window.works.skip(0.5), 'orders open')"
+  ],
+  [
+    "moveAt",
+    "(()=>{const t = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:gear'); const b = t.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["wait", 500],
+  ["eval", "'passing: ' + document.querySelector('.k-info .k-name')?.textContent"],
+  [
+    "downAt",
+    "(()=>{const t = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:gear'); const b = t.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "upAt",
+    "(()=>{const t = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:gear'); const b = t.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["move", 640, 300],
+  ["wait", 400],
+  ["eval", "'pinned: ' + document.querySelector('.k-info.pinned .k-name')?.textContent"],
+  ["shot", "w-01-gear-from-order"],
+  ["click", ".k-info.pinned .k-info-row .k-thing[data-ref='machine:bench']"],
+  ["move", 640, 300],
+  ["wait", 400],
+  [
+    "eval",
+    "'followed: ' + document.querySelector('.k-info.pinned .k-name')?.textContent + ', back ' + !!document.querySelector('.k-info-back')"
+  ],
+  ["shot", "w-02-followed-to-machine"],
+  ["key", "Escape"],
+  [
+    "eval",
+    "(window.works.close(), (()=>{const b = window.works.where('bench')[0]; window.works.look(b.x, b.y); window.works.card(b.x, b.y); window.works.skip(0.5); return 'bench card: ' + document.querySelector('.k-info.pinned .k-name')?.textContent})())"
+  ],
+  ["wait", 400],
+  ["shot", "w-03-machine-in-yard"],
+  ["key", "Escape"],
+  [
+    "eval",
+    "(()=>{const w = window.works; const belts = w.where('belt'); window.__belts = belts; return belts.length + ' belts'})()"
+  ],
+  [
+    "moveAt",
+    "(()=>{const w = window.works; const b = window.__belts.find(b => w.rider(b.x, b.y)); window.__rider = b; w.look(b.x, b.y); w.skip(0.2); return w.page(b.x, b.y)})()"
+  ],
+  ["wait", 600],
+  [
+    "eval",
+    "'rider: ' + window.works.rider(window.__rider.x, window.__rider.y) + ', card: ' + document.querySelector('.k-info .k-name')?.textContent"
+  ],
+  ["shot", "w-04-item-on-belt"],
+  ["move", 640, 40],
+  [
+    "moveAt",
+    "(()=>{const b = document.querySelector('#dock [data-ref=\"machine:workshop\"]').getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["wait", 500],
+  ["shot", "w-05-toolbar-machine"],
+  ["move", 640, 40],
+  ["eval", "(window.works.open('plans'), window.works.skip(0.5), 'plans')"],
+  [
+    "moveAt",
+    "(()=>{const b = document.querySelector('#panel .k-thing[data-ref=\"plan:jigs\"]').getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["wait", 500],
+  ["shot", "w-06-plan-card"]
+]

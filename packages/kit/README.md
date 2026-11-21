@@ -1,7 +1,8 @@
 # The kit
 
 The look and the plumbing every part of the guild's game shares, so the town and the games in it
-read as one thing: the Minecraft font, the dusk palette, wooden frames and buttons drawn as pixel
+read as one thing: the Minecraft font and a reading face beside it, the dusk palette, one card for
+anything to explain itself, wooden frames and buttons drawn as pixel
 art, the tools for drawing sprites in code, the member's character from their skin, the sounds, the
 one purse, and finding out whether the game is being played on the guild's own server.
 
@@ -22,11 +23,17 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
 - **Units.** Everything is sized in `--u`, one art pixel of the interface: two CSS pixels, three on
   a very large window. Write sizes as `calc(var(--u) * n)` and frames and letters stay on whole
   pixels.
-- **Letters.** The font is drawn ten pixels to the em, so it is sharp at ten units and soft at
+- **Letters.** Two faces. The Minecraft font is for names, titles, numbers, buttons, chips and
+  small capital labels: it is drawn ten pixels to the em, so it is sharp at ten units and soft at
   anything in between. Use `--t-m` (the usual size) for nearly everything, `--t-l` and `--t-xl`
-  for titles, `--t-s` for small capital labels, and `--t-d` (class `k-d`) for the second line
-  under a name. Avoid other sizes. On a canvas, `text.ts` writes in the same font; wait for
-  `fontsReady()` first.
+  for titles and `--t-s` for small capital labels (`k-label`); `k-name` is a thing's name, bold
+  and gold. Words that are read (a line about a thing, a role, a tip, a note) are in Inter, the
+  face the guild's website sets its body text in, at `--t-r` (14 pixels at the usual size):
+  class `k-read`, with `b` inside it bold. The second line under a name (`k-d`), a tip's words,
+  somebody speaking (`k-say`) and a page's paragraphs (`k-paper p`) are in it already; inside
+  them a title, label, chip, button or amount keeps the pixel font, and `k-pix` asks for it.
+  Avoid other sizes. On a canvas, `text.ts` writes in the pixel font; wait for `fontsReady()`
+  first.
 - **Colours.** `palette.ts` holds the ramps, and the stylesheet has the same colours as `--k-…`
   variables. Art is drawn from these and nothing else; light comes from the upper left, and every
   sprite has a one-pixel dark edge.
@@ -43,7 +50,8 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
 | `k-slot` (`lit`)                                                      | A hollow that holds one thing; as a button, one of a row to choose   |
 | `k-paper`                                                             | A page: letters, notes, anything read like a sheet                   |
 | `k-say` (`left`)                                                      | Somebody speaking                                                    |
-| `k-tip` (`k-float`)                                                   | What a thing is, shown while pointing at it (`tip.ts` places it)     |
+| `k-tip` (`k-float`)                                                   | A one-line hint while pointing at a thing (`tip.ts` places it)       |
+| `k-info` (`pinned`, `sheet`), `k-thing`                               | A thing's card, and the small picture of a thing (`card.ts`)         |
 | `k-btn` (`wood`, `plum`, `leaf`, `coral`, `sm`, `icon`, `wide`)       | A button on its lip; gold is the main action                         |
 | `k-tabs`                                                              | A row of buttons where one is chosen (`aria-selected="true"`)        |
 | `k-i k-i-<name>`                                                      | A pixel icon; `--s` makes it larger by whole steps                   |
@@ -51,7 +59,8 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
 | `k-bar` (`leaf`, `coral`)                                             | How far along something is: `<div class="k-bar"><i style="--v:40%">` |
 | `k-chip` (`lit`)                                                      | A small tag                                                          |
 | `k-toast` (`leaf`, `coral`, `rose`, `alone`)                          | A line of news; `alone`, over the whole page at the top              |
-| `k-title`, `k-label`, `k-d`, `k-dim`, `k-over`                        | Words: titles, small labels, second lines, words over the world      |
+| `k-title`, `k-name`, `k-label`, `k-d`, `k-read`, `k-pix`, `k-dim`     | Words: titles, names, small labels, second lines, reading, pixel     |
+| `k-over`                                                              | Words written straight over the world, with a dark edge              |
 | `k-scrim`, `k-rise`, `k-row`, `k-col`, `k-wrap`, `k-grow`, `k-scroll` | Laying things out                                                    |
 | `k-shut`                                                              | The card a page shows instead of itself when it will not open        |
 
@@ -67,7 +76,8 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `util.ts`     | Canvases, numbers, repeatable noise                                                                |
 | `text.ts`     | Words on a canvas in the font                                                                      |
 | `signs.ts`    | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines                  |
-| `tip.ts`      | Tips: `tip(el, title, text)` shows one on hover, focus and long press                              |
+| `tip.ts`      | Tips: `tip(el, title, text)` shows a one-line hint on hover, focus and long press                  |
+| `card.ts`     | Cards: how anything in any game says what it is (below)                                            |
 | `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look                   |
 | `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all                   |
 | `dom.ts`      | `el`, `icon`, `amount` and a few more for building the interface                                   |
@@ -83,6 +93,42 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `standin.ts`  | A stand-in server and storage for tests; no page loads it                                          |
 
 `tools/drive.ts` drives a built page in headless Chromium and takes screenshots; its header says how.
+
+## Cards
+
+Anything shown or named in any of the games explains itself the same way, in `card.ts`.
+
+**What a game gives it.** Each kind of thing is registered once, `register(kind, describe)`, where
+`describe(id)` gives a description or null; from then on a thing is named by a reference,
+`"kind:id"` (`"item:gear"`, `"trait:ember"`). A description has a `name` and, all optional, an
+`icon` (a canvas, fitted to its slot by whole steps, or a kit icon), a `tag` under the name, an
+`aside` at the right of the head (a price, stars), `chips` (labelled, each optionally a
+reference), `stats` (label and value, three to a row, each optionally `raised` or `lowered`),
+`blocks` (a bold title, a note at its right, words in the reading face; `line` puts them on one
+line, `lit` picks one out), `rows` (a small capital label and things, as icon and name, as
+pictures only, or as tiles; each may be lit, tagged, counted, given a note, locked with what opens
+it, or drawn as "this, an arrow, that") and `actions` (buttons, shown only on a pinned card).
+
+**How a thing becomes a target.** An element: `link(el, ref)`; with `{ acts: true }` for one that
+does something of its own when clicked (buys, picks up), and `{ side: true }` for a card to its
+side. `thing(ref)` is the standard small picture of a thing, icon and name, already linked: lists
+of things are built from it. Something drawn on a canvas: the game hit-tests and calls
+`point(ref | null, x, y, w, h)` as the pointer moves and `pick(ref | null, x, y, w, h)` on a click
+or tap; `surface(canvas)` tells the cards a press there is the game's to read.
+
+**How it behaves.** With a mouse, resting on a target shows its card beside it (above, else below,
+else to a side, kept on screen); leaving hides it; a click pins it, and a click on it again, a
+click elsewhere or Escape puts it away. With a finger a tap pins it (a long press, on a target
+that acts) as a sheet along the bottom with a close button; a tap elsewhere puts it away. A thing
+named inside an open card is followed instead: its card takes the place, with a back arrow. One
+card is up at a time. The keyboard: a focused target shows its card and Enter pins it. While the
+game drags something it calls `hold(true)`, and no card opens until `hold(false)`; `show(ref)`
+still shows what letting go would do. `watch(fn)` tells a game what is pointed at and what is
+pinned; `refresh()` draws the card again from a fresh description, and `settle()` puts it back
+beside its target after the page has been laid out again. A passing card whose target leaves the
+page goes with it.
+
+The rules of all that (`Deck`, `partsOf`) touch no page and are tested in `card.test.ts`.
 
 ## Live, on the guild's server
 

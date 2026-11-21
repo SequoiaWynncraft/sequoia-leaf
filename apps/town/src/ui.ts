@@ -4,6 +4,7 @@
  * the camp (`hud.ts`). What a button does still lands in the town behind it.
  */
 
+import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph, replay, shown } from "@sequoia-leaf/kit/dom.ts";
 import { CREAM, GOLD, GREEN, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { earn, grant } from "@sequoia-leaf/kit/purse.ts";
@@ -13,8 +14,10 @@ import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
 
 import { callToFire, goSit, hop, inTown, release, say, sitters } from "./actors.ts";
+import { redrawn } from "./board.ts";
 import { owned } from "./camp.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
+import { named, registerCards, thingRef, wareRef } from "./cards.ts";
 import { KEEPER } from "./cast.ts";
 import { fling } from "./flights.ts";
 import { bit, float, flutter, puff, sparkle } from "./fx.ts";
@@ -174,12 +177,14 @@ function treasury(body: HTMLElement): () => void {
   body.append(el("div", "k-label", { text: "To wear" }));
   const parts = guild.wares().map((w) => {
     const side = el("span");
+    const art = slot(wareArt(w.id) ?? glyph("star"));
+    link(art, wareRef(w.id));
     const row = el(
       "div",
       "k-card",
       {},
-      slot(wareArt(w.id) ?? glyph("star")),
-      el("div", "k-grow", {}, w.name, el("div", "k-d", { text: w.about })),
+      art,
+      el("div", "k-grow", {}, named(w.name, wareRef(w.id)), el("div", "k-d", { text: w.about })),
       side,
     );
     body.append(row);
@@ -250,7 +255,17 @@ const clock = (ms: number): string => {
   return `${two(d.getHours())}:${two(d.getMinutes())}`;
 };
 
+/** The quest board: drawn whole again whenever its quests are no longer the ones it shows. */
 function quests(body: HTMLElement): () => void {
+  return redrawn(
+    () => guild.quests().map((q) => q.id),
+    () => notes(body),
+  );
+}
+
+/** A note for each quest on the board, in place of whatever was there; gives back how to bring them up to date. */
+function notes(body: HTMLElement): () => void {
+  body.replaceChildren();
   const parts = guild.quests().map((first) => {
     const fill = el("i");
     const count = el("span", "k-dim k-grow");
@@ -352,15 +367,17 @@ function shopRow(
   );
   if (kind !== "leaf" || !closeLeaf(buy, `${s.price} Leaf`))
     tip(buy, `${s.price} ${kind === "leaf" ? "Leaf" : "Coins"}`, "It will be waiting at your camp.");
+  // The picture and the name explain the thing (its card); the button buys it.
+  const picture = thingSlot(art, thing.id);
+  link(picture, thingRef(thing.id));
   const row = el(
     "div",
     "k-card",
-    { tabindex: 0 },
-    thingSlot(art, thing.id),
-    el("div", "k-grow", {}, thing.name, el("div", "k-d", { text: thing.about }), have),
+    {},
+    picture,
+    el("div", "k-grow", {}, named(thing.name, thingRef(thing.id)), el("div", "k-d", { text: thing.about }), have),
     buy,
   );
-  tip(row, thing.name, thing.does ? `${thing.about} ${thing.does}` : thing.about);
   body.append(row);
   return when(
     () => String(owned(camp, thing.id)),
@@ -831,5 +848,6 @@ export function townDock(): void {
 export function initUI(sprites: Sprites, art: CampArt): void {
   S = sprites;
   ART = art;
+  registerCards(sprites, art);
   townDock();
 }
