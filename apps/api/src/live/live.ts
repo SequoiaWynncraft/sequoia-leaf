@@ -32,7 +32,7 @@ export const LiveTuning = Context.Reference<LiveTuning>("leaf/LiveTuning", {
   defaultValue: () => ({ recheckMs: 30_000, graceMs: 10_000, mostPlayers: 1000 }),
 });
 
-/** The longest text frame Leaf reads. Every message the game sends is far shorter. */
+/** The longest text frame Leaf reads, in characters. Every message the game sends is far shorter. */
 const MOST_TEXT = 512;
 /** How many frames may wait to go to one connection before it is taken to be stuck and closed. */
 const MOST_WAITING = 1024;
@@ -200,7 +200,7 @@ interface Counts {
 const noCounts = (): Counts => ({ opened: 0, closed: 0, movesIn: 0, textsIn: 0, dropped: 0 });
 
 /** What came of a player's asking to open a connection: served until it closed, or turned away. */
-export type Opened = "served" | "full" | "busy";
+export type Opened = "served" | "full" | "busy" | "stopping";
 
 /**
  * Live: players in the same room see each other move as it happens (the wire is in
@@ -242,6 +242,8 @@ export class Live extends Context.Service<
       const players = new Map<string, Player>();
       let counts = noCounts();
       let tick = 0;
+      /** Leaf is stopping: no connection is let in, and one still opening is told to come back. */
+      let stopping = false;
 
       // ---- who is in which room: these three alone change it ----
 
@@ -376,6 +378,11 @@ export class Live extends Context.Service<
         Effect.gen(function* () {
           const socket = yield* Effect.orDie(upgrade);
           const pipe = new Pipe(yield* Queue.unbounded<Frame>(), yield* socket.writer);
+          // Opened as Leaf began to stop, after its farewell: told to come back, and never anybody's.
+          if (stopping) {
+            yield* pipe.closeNow(CLOSE.restart, "restart");
+            return null;
+          }
           // Whatever ends this connection, this decides what becomes of the player, and only while it
           // is still theirs: signed out, they leave at once; otherwise they wait out their grace.
           yield* Effect.addFinalizer(() =>
@@ -435,6 +442,7 @@ export class Live extends Context.Service<
       ) =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
+          if (stopping) return "stopping" as const;
           // Looked for, counted and taken in one step, with nothing in between: no two can both
           // take the last place.
           const id = identity.playerId;
@@ -443,23 +451,28 @@ export class Live extends Context.Service<
           const p = known ?? new Player(identity, now);
           players.set(id, p);
           if (!p.opens.take(now)) return "busy" as const;
-          // Held while the socket opens, however long it takes; let go once it is theirs, or never opened.
-          p.opening++;
-          const { socket, pipe } = yield* Effect.ensuring(
-            attach(p, identity, kindName, upgrade),
+          // Held while the socket opens, however long it takes, and let go once it is theirs or never
+          // opened: taking it and promising to let it go are one step that nothing can come between.
+          const attached = yield* Effect.acquireUseRelease(
             Effect.sync(() => {
-              p.opening--;
+              p.opening++;
             }),
+            () => attach(p, identity, kindName, upgrade),
+            () =>
+              Effect.sync(() => {
+                p.opening--;
+              }),
           );
-          yield* serve(socket, pipe, p, session);
+          if (attached) yield* serve(attached.socket, attached.pipe, p, session);
           return "served" as const;
         });
 
-      const farewell = Effect.suspend(() =>
-        Effect.forEach([...players.values()], (p) => p.pipe?.closeNow(CLOSE.restart, "restart") ?? Effect.void, {
+      const farewell = Effect.suspend(() => {
+        stopping = true;
+        return Effect.forEach([...players.values()], (p) => p.pipe?.closeNow(CLOSE.restart, "restart") ?? Effect.void, {
           discard: true,
-        }),
-      );
+        });
+      });
 
       return Live.of({ open, census, farewell });
     }),

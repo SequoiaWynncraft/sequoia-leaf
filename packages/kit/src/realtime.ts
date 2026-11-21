@@ -300,9 +300,11 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
     }
   }
 
+  // Whoever hears the status may close the room from inside it: each is said only once the change
+  // it tells of is complete, and nothing is done after it that a close would undo.
+
   function connect(): void {
     if (done) return;
-    status("connecting");
     const l: Link = {
       socket: outside.socket(liveUrl(room)),
       people: new Map(),
@@ -325,6 +327,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       if (typeof e.data === "string") heard(l, e.data);
       else if (e.data instanceof ArrayBuffer) snapshot(l, e.data);
     });
+    status("connecting");
     l.socket.addEventListener("close", (e) => {
       if (link !== l) return;
       link = null;
@@ -336,8 +339,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         shown = null;
         return status(e.code === CLOSE.replaced ? "replaced" : "signedout");
       }
-      status("closed");
       retry = setTimeout(connect, retryAfter(tries++, Math.random()));
+      status("closed");
     });
   }
 

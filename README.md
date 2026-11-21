@@ -521,7 +521,7 @@ the first copy with space, or a new one (`town/2`); a copy closes when its last
 player leaves. Rooms live in memory, in the one process.
 
 **Limits.** No frame over 4 KiB (Bun closes the connection, 1009). Text frames
-over 512 bytes are not read. A player may send 30 moves a second (bursts of 40),
+over 512 characters are not read. A player may send 30 moves a second (bursts of 40),
 8 texts a second (20), and 3 actions a second (6); more is dropped, as is
 anything that cannot be read, and a player who keeps it up (200 such frames,
 forgiven at one a second) has the connection closed. A client a megabyte behind

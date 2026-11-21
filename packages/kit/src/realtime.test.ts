@@ -335,6 +335,28 @@ describe("a live room", () => {
     expect(seen).toEqual(["connecting", "open", said]);
   });
 
+  test("may be closed by whoever hears its status, even as it connects again, and then does nothing more", async () => {
+    const w = await live();
+    let closeOn: LiveStatus | null = null;
+    room = joinLive("town", {
+      status: (st) => {
+        if (st === closeOn) room?.close();
+      },
+    });
+    socket(0).open();
+    closeOn = "connecting";
+    socket(0).drop();
+    await Bun.sleep(800);
+    const second = socket(1);
+
+    expect(second.closed).toBe(CLOSE.done);
+    second.open();
+    second.says(welcome(1, w.clock.now, [{ ...ALICE, id: 1 }, ALICE]));
+    expect([room.members().size, second.sent]).toEqual([0, []]);
+    await Bun.sleep(800);
+    expect(sockets.length).toBe(2);
+  });
+
   test("shows nobody once the connection is gone for good, though a drop keeps the room in view", async () => {
     const w = await live();
     room = joinLive("town");
