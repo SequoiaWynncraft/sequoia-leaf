@@ -1,0 +1,85 @@
+[
+  ["size", 390, 844],
+  ["wait", 1200],
+  [
+    "eval",
+    "(window.works.stage('mid'), window.works.hold(true), window.works.run(300), window.works.open('orders'), window.works.skip(0.5), 'orders open')"
+  ],
+  ["eval", "'a first touch: the page settles its touch layout (dvh) before the tap that counts'"],
+  [
+    "finger",
+    "down",
+    "(()=>{const b = document.querySelector('#panel .k-title').getBoundingClientRect(); return {x: b.left + 4, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const b = document.querySelector('#panel .k-title').getBoundingClientRect(); return {x: b.left + 4, y: b.top + b.height / 2}})()"
+  ],
+  ["wait", 300],
+  [
+    "eval",
+    "(()=>{const e = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:gear'); e.scrollIntoView({block: 'center', behavior: 'instant'}); return 'scrolled'})()"
+  ],
+  [
+    "finger",
+    "down",
+    "(()=>{const e = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:gear'); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const e = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:gear'); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["wait", 300],
+  [
+    "eval",
+    "'sheet: ' + !!document.querySelector('.k-info.sheet') + ' ' + document.querySelector('.k-info .k-name')?.textContent"
+  ],
+  ["shot", "wp-01-gear-from-order"],
+  [
+    "finger",
+    "down",
+    "(()=>{const e = document.querySelector('.k-info-x'); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const e = document.querySelector('.k-info-x'); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "eval",
+    "(window.works.close(), (()=>{const b = window.works.where('bench')[0]; window.works.look(b.x, b.y); window.works.skip(0.3); return 'looking'})())"
+  ],
+  ["finger", "down", "(()=>{const b = window.works.where('bench')[0]; return window.works.page(b.x, b.y)})()"],
+  ["finger", "up", "(()=>{const b = window.works.where('bench')[0]; return window.works.page(b.x, b.y)})()"],
+  ["wait", 400],
+  [
+    "eval",
+    "'machine sheet: ' + !!document.querySelector('.k-info.sheet') + ' ' + document.querySelector('.k-info .k-name')?.textContent"
+  ],
+  ["shot", "wp-02-machine-in-yard"],
+  [
+    "finger",
+    "down",
+    "(()=>{const b = document.querySelector('.k-info-x'); const r = b.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const b = document.querySelector('.k-info-x'); const r = b.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}})()"
+  ],
+  [
+    "eval",
+    "(()=>{const w = window.works; const b = w.where('belt').find(b => w.rider(b.x, b.y)); window.__rider = b; w.look(b.x, b.y); w.skip(0.2); return 'a belt carrying ' + w.rider(b.x, b.y)})()"
+  ],
+  ["finger", "down", "(()=>{const w = window.works; const b = window.__rider; return w.page(b.x, b.y)})()"],
+  ["wait", 700],
+  ["finger", "up", "(()=>{const w = window.works; const b = window.__rider; return w.page(b.x, b.y)})()"],
+  ["wait", 300],
+  [
+    "eval",
+    "'item on a belt: ' + document.querySelector('.k-info .k-name')?.textContent + ', sheet ' + !!document.querySelector('.k-info.sheet')"
+  ],
+  ["shot", "wp-03-item-on-belt"]
+]

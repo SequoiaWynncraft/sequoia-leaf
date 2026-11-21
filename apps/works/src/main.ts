@@ -65,7 +65,7 @@ import {
   takeAway,
   tapBelt,
 } from "./tools.ts";
-import { cardHooks, closeCard, initCard, openCard, refreshCard } from "./ui/card.ts";
+import { closeCard, followCards, initCard, openCard, refreshCard, riderAt } from "./ui/card.ts";
 import { initDock, refreshDock } from "./ui/dock.ts";
 import { initHud, refreshHud } from "./ui/hud.ts";
 import { putAway, reading, showLetter } from "./ui/letter.ts";
@@ -113,6 +113,8 @@ declare global {
       /** Sends the depot everything a standing order still wants, as if the yard had made it. */
       fill: (slot: number) => void;
       page: (x: number, y: number) => Pt;
+      /** What is riding a belt on a tile, as a card's reference, if anything. */
+      rider: (x: number, y: number) => string | null;
       /** The tiles where a kind of thing stands. */
       where: (kind: Kind) => Pt[];
       bench: () => number;
@@ -227,12 +229,7 @@ async function boot(): Promise<void> {
     refreshAll();
   };
   inputHooks.letter = putAway;
-  cardHooks.opened = (x, y, box): void => {
-    const at = toPage(x * TILE + 8, y * TILE + 8);
-    const under = at.y > box.top - 24 && at.x > box.left - 16 && at.x < box.right + 16;
-    // Moved up just far enough to stand clear of the card.
-    if (under) pan(0, box.top - 40 - at.y);
-  };
+  followCards(pan);
 
   function fit(): void {
     measure();
@@ -507,6 +504,7 @@ async function boot(): Promise<void> {
       S.world.seen = Date.now();
       refreshAll();
     },
+    rider: riderAt,
     page(x, y) {
       return toPage(x * TILE + 8, y * TILE + 8);
     },

@@ -3,6 +3,7 @@
  * buttons for the yard's books, and the way back to town.
  */
 
+import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { leave } from "@sequoia-leaf/kit/shell.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
@@ -12,6 +13,7 @@ import type { Art } from "../art/index.ts";
 import { boostLeft, isFilled, PLANS, planState, power, SHIFT, storyOrder } from "../sim/index.ts";
 import { S } from "../state.ts";
 import { coins, keep } from "../yard.ts";
+import { orderRef } from "./card.ts";
 import { storyLabel } from "./notes.ts";
 import { type PanelId, togglePanel } from "./panels.ts";
 import { $, wantRows, when, yardIcon } from "./parts.ts";
@@ -62,7 +64,8 @@ function tracker(art: Art): () => void {
   host.addEventListener("click", () => {
     togglePanel("orders");
   });
-  tip(host, "The order in hand", "Everything the depot takes in goes toward it first. Tap for all the orders.");
+  // Tapping opens the orders; pointing (or a finger kept on it) shows the order's card.
+  link(host, orderRef("story"), { acts: true });
   return when(
     () => {
       const w = S.world;

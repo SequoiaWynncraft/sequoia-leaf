@@ -3,6 +3,7 @@
  * that act on it: turn, undo, and (for a finger, which cannot hover) build and put away.
  */
 
+import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
@@ -10,6 +11,7 @@ import type { Art } from "../art/index.ts";
 import { costOf, KIND, type Kind } from "../sim/index.ts";
 import { S, type Tool } from "../state.ts";
 import { cancel, confirm, rotate, setTool, toolHooks, undo } from "../tools.ts";
+import { machineRef } from "./card.ts";
 import { $, button, fitted, when, yardIcon } from "./parts.ts";
 
 /** The tools in the order they sit in the dock, which is also the order of the number keys. */
@@ -27,7 +29,7 @@ export const TOOLS: readonly Kind[] = [
   "wheel",
   "boiler",
 ];
-const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="];
+export const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="];
 
 /** The tools the yard may build, in dock order. */
 export const openTools = (): Kind[] => TOOLS.filter((k) => S.world.open.kinds.has(k));
@@ -37,9 +39,8 @@ let known: Set<Kind> | null = null;
 let message = "";
 let messageUntil = 0;
 
-function slotFor(art: Art, kind: Kind, n: number, fresh: boolean): HTMLElement {
+function slotFor(art: Art, kind: Kind, fresh: boolean): HTMLElement {
   const cost = costOf(S.world, kind);
-  const spare = S.world.spare[kind] ?? 0;
   const b = el(
     "button",
     `k-slot${S.tool === kind ? " lit" : ""}${fresh ? " new" : ""}${S.nudgeTool === kind && S.tool !== kind ? " nudged" : ""}`,
@@ -50,17 +51,8 @@ function slotFor(art: Art, kind: Kind, n: number, fresh: boolean): HTMLElement {
   b.addEventListener("click", () => {
     setTool(S.tool === kind ? null : kind);
   });
-  const key = KEYS[n];
-  tip(
-    b,
-    `${KIND[kind].name}${key ? ` (${key})` : ""}`,
-    () =>
-      `${KIND[kind].what} ${
-        spare > 0
-          ? `${spare} to hand, free to stand.`
-          : `${KIND[kind].cost} Coin${KIND[kind].cost === 1 ? "" : "s"}, and all of it back when it is taken away.`
-      }${KIND[kind].draw ? ` Draws ${KIND[kind].draw} power.` : ""}${KIND[kind].gives ? ` Gives ${KIND[kind].gives} power.` : ""}`,
-  );
+  // Clicking takes it up as the tool; pointing (or a finger kept on it) shows the machine's card.
+  link(b, machineRef(kind), { acts: true });
   return b;
 }
 
@@ -68,7 +60,7 @@ function buildDock(art: Art): void {
   const dock = $("dock");
   const open = openTools();
   const first = known === null;
-  const kids = open.map((k, n) => slotFor(art, k, n, !first && !(known?.has(k) ?? true)));
+  const kids = open.map((k) => slotFor(art, k, !first && !(known?.has(k) ?? true)));
   known = new Set(open);
   const spade = el(
     "button",

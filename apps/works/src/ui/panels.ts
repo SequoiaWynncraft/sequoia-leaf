@@ -3,6 +3,7 @@
  * power comes from and goes, and the second shift.
  */
 
+import { thing } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { balance, spend } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
@@ -37,8 +38,9 @@ import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
 import { buyIdea } from "../tools.ts";
 import { coins } from "../yard.ts";
+import { itemRef, machineRef, planRef, plotRef } from "./card.ts";
 import { feed, leafTo, storyLabel } from "./notes.ts";
-import { $, button, centre, fitted, pic, wantWords, when, yardIcon } from "./parts.ts";
+import { $, button, centre, wantWords, when, yardIcon } from "./parts.ts";
 
 export type PanelId = "orders" | "plans" | "depot" | "power" | "shift";
 
@@ -62,12 +64,12 @@ const TITLES: Record<PanelId, string> = {
 // ---------- what an order wants ----------
 
 /** Rows for what an order wants, and a way to bring their bars up to date without rebuilding them. */
-function wants(art: Art, want: Tally, filled: () => Tally): { rows: HTMLElement[]; update: () => void } {
+function wants(want: Tally, filled: () => Tally): { rows: HTMLElement[]; update: () => void } {
   const parts = ITEMS.filter((k) => (want[k] ?? 0) > 0).map((k) => {
     const bar = el("i");
     const count = el("span", "n");
     const holder = el("div", "k-bar", {}, bar);
-    const row = el("div", "want", {}, pic(art.item(k), 1), el("span", "", { text: ITEM[k].name }), holder, count);
+    const row = el("div", "want", {}, thing(itemRef(k)), holder, count);
     return { k, bar, count, holder, row };
   });
   const update = (): void => {
@@ -84,17 +86,17 @@ function wants(art: Art, want: Tally, filled: () => Tally): { rows: HTMLElement[
   return { rows: parts.map((p) => p.row), update };
 }
 
-function opensWords(o: (typeof STORY)[number]): string {
-  const parts = [
-    ...(o.opens.kinds ?? []).map((k) => `the ${KIND[k].name.toLowerCase()}`),
-    ...(o.opens.plots ?? []).flatMap((id) => S.world.land.plots.filter((p) => p.id === id).map((p) => p.name)),
-    ...(o.opens.plans ?? []).flatMap((id) => PLANS.filter((p) => p.id === id).map((p) => `"${p.name}"`)),
-    ...(o.opens.board ? ["the board of standing orders"] : []),
+/** What a story order opens, each machine, plot and plan as a thing that explains itself. */
+function opensThings(o: (typeof STORY)[number]): HTMLElement[] {
+  return [
+    ...(o.opens.kinds ?? []).map((k) => thing(machineRef(k))),
+    ...(o.opens.plots ?? []).map((id) => thing(plotRef(id))),
+    ...(o.opens.plans ?? []).map((id) => thing(planRef(id))),
+    ...(o.opens.board ? [el("span", "k-read", { text: "the board of standing orders" })] : []),
   ];
-  return parts.join(", ");
 }
 
-function orders(art: Art, body: HTMLElement): () => void {
+function orders(_art: Art, body: HTMLElement): () => void {
   let live: (() => void)[] = [];
   const build = (): void => {
     const w = S.world;
@@ -102,9 +104,9 @@ function orders(art: Art, body: HTMLElement): () => void {
     const o = storyOrder(w);
     const kids: HTMLElement[] = [];
     if (o) {
-      const rows = wants(art, o.want, () => S.world.filled);
+      const rows = wants(o.want, () => S.world.filled);
       live.push(rows.update);
-      const opens = opensWords(o);
+      const opens = opensThings(o);
       kids.push(
         el(
           "div",
@@ -112,13 +114,13 @@ function orders(art: Art, body: HTMLElement): () => void {
           {},
           el("div", "k-label", { text: `${storyLabel()} · from ${o.from}` }),
           el("div", "k-title", { text: o.title }),
-          el("div", "k-dim", { text: o.say }),
+          el("div", "k-read k-dim", { text: o.say }),
           ...rows.rows,
           el(
             "div",
             "k-row",
             {},
-            el("span", "k-grow k-dim", { text: opens ? `Opens ${opens}.` : "" }),
+            el("div", "k-grow opens", {}, opens.length > 0 ? el("span", "k-label", { text: "Opens" }) : null, ...opens),
             el("span", "k-chip", {}, amount("coin", o.pay)),
           ),
         ),
@@ -142,7 +144,7 @@ function orders(art: Art, body: HTMLElement): () => void {
       );
     w.board.forEach((s: Standing, slot) => {
       const full = isFilled(s.want, s.filled);
-      const rows = wants(art, s.want, () => S.world.board[slot]?.filled ?? {});
+      const rows = wants(s.want, () => S.world.board[slot]?.filled ?? {});
       live.push(rows.update);
       const why = swapRefusal(w, slot);
       const act = full
@@ -218,22 +220,6 @@ const BRANCHES: readonly { label: string; plans: readonly PlanId[] }[] = [
   { label: "New things to build", plans: ["boiler", "tunnel", "workshop"] },
   { label: "The yard itself", plans: ["flywheel", "tallpylons", "bigcrates", "fourth"] },
 ];
-/** Which machine's picture stands for a plan. */
-const PLAN_ART: Record<PlanId, Kind> = {
-  rakes: "gatherer",
-  barrows: "gatherer",
-  tooling: "mill",
-  jigs: "bench",
-  waxed: "belt",
-  rollers: "belt",
-  boiler: "boiler",
-  tunnel: "tunnel",
-  workshop: "workshop",
-  flywheel: "depot",
-  tallpylons: "pylon",
-  bigcrates: "crate",
-  fourth: "depot",
-};
 
 /** Why a plan cannot be had yet, without its own name on the front: "Comes with a later order." */
 function later(why: string, name: string): string {
@@ -241,7 +227,7 @@ function later(why: string, name: string): string {
   return `${rest.charAt(0).toUpperCase()}${rest.slice(1)}.`;
 }
 
-function plans(art: Art, body: HTMLElement): () => void {
+function plans(_art: Art, body: HTMLElement): () => void {
   const build = (): void => {
     const w = S.world;
     const kids: HTMLElement[] = [
@@ -274,14 +260,7 @@ function plans(art: Art, body: HTMLElement): () => void {
           "div",
           `k-card plan ${state === "owned" ? "owned" : state === "not yet" ? "locked" : ""}`,
           {},
-          el(
-            "div",
-            "k-row",
-            {},
-            fitted(art.icon(PLAN_ART[id]), 18, 18),
-            el("div", "k-grow", { text: plan.name }),
-            side,
-          ),
+          el("div", "k-row", {}, el("div", "k-grow", {}, thing(planRef(id))), side),
           el("div", "k-d", { text: plan.what }),
           state === "not yet" && why ? el("div", "k-d k-gold", { text: later(why, plan.name) }) : null,
         );
@@ -300,14 +279,13 @@ function plans(art: Art, body: HTMLElement): () => void {
 
 // ---------- the depot's books ----------
 
-function depot(art: Art, body: HTMLElement): () => void {
+function depot(_art: Art, body: HTMLElement): () => void {
   const build = (): void => {
     const w = S.world;
     const ticks = w.pace.ticks;
     const perHour = (k: (typeof ITEMS)[number]): number => (ticks > 0 ? ((w.pace.made[k] ?? 0) / ticks) * 36_000 : 0);
     const rows = ITEMS.flatMap((k) => ((w.depot[k] ?? 0) > 0 || perHour(k) > 0 ? [k] : [])).flatMap((k) => [
-      pic(art.item(k), 1),
-      el("span", "", { text: ITEM[k].name }),
+      thing(itemRef(k)),
       el("span", "num k-gold", {
         text: perHour(k) >= 1 ? `${Math.round(perHour(k)).toLocaleString("en-US")} an hour` : "",
       }),

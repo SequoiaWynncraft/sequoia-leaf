@@ -49,7 +49,7 @@
   ["wait", 600],
   [
     "eval",
-    "'card up: ' + !!document.querySelector('.raid-card') + ', lit offers: ' + document.querySelectorAll('.offer.tlit').length + ', dim offers: ' + document.querySelectorAll('.offer.tdim').length"
+    "'card up: ' + !!document.querySelector('.k-info') + ', lit offers: ' + document.querySelectorAll('.offer.tlit').length + ', dim offers: ' + document.querySelectorAll('.offer.tdim').length"
   ],
   ["shot", "c-05-trait-pointed"],
   [
@@ -61,21 +61,21 @@
     "(()=>{const r=document.querySelector('#traits .trait').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
   ],
   ["move", 900, 140],
-  ["eval", "(window.raid.skip(0.5), 'kept card: ' + !!document.querySelector('.raid-card.pinned'))"],
+  ["eval", "(window.raid.skip(0.5), 'kept card: ' + !!document.querySelector('.k-info.pinned'))"],
   ["wait", 600],
   ["shot", "c-06-trait-clicked"],
-  ["click", ".raid-card.pinned [data-member]:not([disabled])"],
+  ["click", ".k-info.pinned .k-info-tile.k-link"],
   ["move", 900, 140],
   [
     "eval",
-    "(window.raid.skip(0.2), 'figure from trait: ' + document.querySelector('.raid-card.pinned .nameline b').textContent)"
+    "(window.raid.skip(0.2), 'figure from trait: ' + document.querySelector('.k-info.pinned .k-name').textContent)"
   ],
   ["wait", 500],
   ["shot", "c-07-figure-from-trait"],
   ["key", "Escape"],
   [
     "eval",
-    "(window.raid.skip(0.2), 'after Escape: card ' + !!document.querySelector('.raid-card') + ', lit ' + document.body.classList.contains('trait-lit'))"
+    "(window.raid.skip(0.2), 'after Escape: card ' + !!document.querySelector('.k-info') + ', lit ' + document.body.classList.contains('trait-lit'))"
   ],
   [
     "moveAt",

@@ -1,0 +1,73 @@
+[
+  ["size", 1280, 800],
+  ["wait", 900],
+  [
+    "eval",
+    "(window.raid.fresh(), window.raid.hold(true), window.raid.start(11, 0), window.raid.taught(), window.raid.bot(5), window.raid.skip(2), window.raid.plan(), window.raid.skip(2), JSON.stringify(window.raid.state().choice))"
+  ],
+  ["eval", "(window.raid.strip(), window.raid.party().filter(p => p.on === 'board').map(p => p.kind).join(' '))"],
+  [
+    "eval",
+    "(()=>{const r = window.raid; const board = r.party().filter(p => p.on === 'board'); const one = board[0]; const three = board[1]; r.item('thorn'); r.hand(r.rack().length - 1, one.id); for (const k of ['honeycake', 'mothlantern', 'stewpot']) { r.item(k); r.hand(r.rack().length - 1, three.id); } r.skip(0.6); return 'one: ' + one.kind + ', three: ' + three.kind + ', held: ' + JSON.stringify(r.held())})()"
+  ],
+  ["move", 640, 40],
+  ["wait", 500],
+  ["shot", "b-01-board-holding"],
+  [
+    "moveAt",
+    "(()=>{const r = window.raid; const three = r.party().filter(p => p.on === 'board')[1]; const at = r.heldAt(three.id, 1); return at})()"
+  ],
+  ["eval", "(window.raid.skip(0.4), 'card: ' + document.querySelector('.k-info .k-name')?.textContent)"],
+  ["wait", 500],
+  ["shot", "b-02-held-item-card"],
+  ["move", 640, 40],
+  [
+    "eval",
+    "(()=>{const r = window.raid; const p = r.party().filter(p => p.on === 'board')[1]; r.tap(p.id); r.skip(0.3); return 'pinned: ' + document.querySelector('.k-info.pinned .k-name')?.textContent})()"
+  ],
+  ["wait", 400],
+  ["click", ".k-info.pinned .k-info-chip"],
+  ["move", 1200, 760],
+  [
+    "eval",
+    "(window.raid.skip(0.4), 'followed to: ' + document.querySelector('.k-info.pinned .k-name')?.textContent + ', back: ' + !!document.querySelector('.k-info-back') + ', lit: ' + document.body.classList.contains('trait-lit'))"
+  ],
+  ["wait", 500],
+  ["shot", "b-03-followed-back"],
+  ["key", "Escape"],
+  ["click", "#traits .trait"],
+  ["move", 1200, 760],
+  [
+    "eval",
+    "(window.raid.skip(0.5), 'trait pinned: ' + document.querySelector('.k-info.pinned .k-name')?.textContent + ', lit offers: ' + document.querySelectorAll('.offer.tlit').length)"
+  ],
+  ["wait", 500],
+  ["shot", "b-04-trait-pinned"],
+  ["key", "Escape"],
+  [
+    "eval",
+    "(()=>{const r = window.raid; const p = r.party().filter(p => p.on === 'board')[0]; r.item('plume'); r.hover(r.rack().length - 1, p.id); r.skip(0.5); return 'forging over ' + p.kind + ': ' + document.querySelector('.k-info .k-name')?.textContent})()"
+  ],
+  ["wait", 500],
+  ["shot", "b-05-forge-preview"],
+  [
+    "eval",
+    "(window.raid.drop(), window.raid.to('component'), window.raid.skip(1.5), JSON.stringify(window.raid.state().choice))"
+  ],
+  [
+    "eval",
+    "(window.raid.item('glowcap'), window.raid.skip(0.4), 'have tags: ' + document.querySelectorAll('#picks .k-info-tagged').length)"
+  ],
+  [
+    "moveAt",
+    "(()=>{const r = document.querySelector('#picks .makes.lit .k-thing:not(.bare)') ?? document.querySelector('#picks .makes .k-thing:not(.bare)'); const b = r.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["eval", "(window.raid.skip(0.4), 'card: ' + document.querySelector('.k-info .k-name')?.textContent)"],
+  ["wait", 500],
+  ["shot", "b-06-component-pick"],
+  ["move", 640, 40],
+  ["eval", "(document.querySelector(\"[data-pick='0']\").click(), 'took the first pick')"],
+  ["eval", "(window.raid.skip(1.5), window.raid.plan(), window.raid.fight(), window.raid.busy(), 'a fight')"],
+  ["wait", 600],
+  ["shot", "b-07-fight-holding"]
+]
