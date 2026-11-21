@@ -1,55 +1,70 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 
-import { encodeMove, Flag, type Motion, playerId } from "@sequoia-leaf/core";
-import { Schema } from "effect";
+import { CLOSE, encodeMove, Flag, LIVE_PATH, LIVE_VERSION, livePath, type Motion, playerId } from "@sequoia-leaf/core";
+import { Deferred, Effect, Fiber, Schema } from "effect";
+import { Socket } from "effect/socket";
 
-import { Live } from "../src/live/live.ts";
+import { Live, type LiveTuning } from "../src/live/live.ts";
 import { LiveClient, type Opening } from "./live-client.ts";
 import { type Backend, fakeBackend, sessionOf, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
 const carol = playerId("10000000-0000-0000-0000-000000000003");
-/** Wednesday 25 November 2026, 12:00 UTC. */
-const T0 = Date.UTC(2026, 10, 25, 12);
 const ORIGIN = "https://leaf.seqwawa.com";
+const LIVE = livePath("town");
 
-const clock = { now: T0 };
+// The real clock, which a test may move ahead: Live's tick and its waits keep time by it.
+let ahead = 0;
+const clock = {
+  get now() {
+    return Date.now() + ahead;
+  },
+  set now(_: number) {},
+};
 let backend: Backend;
-let services: ReturnType<typeof testLeaf>;
-let server: Awaited<ReturnType<(typeof services)["serve"]>>;
+let services: ReturnType<typeof testLeaf> | null = null;
+let server: Awaited<ReturnType<ReturnType<typeof testLeaf>["serve"]>> | null = null;
 const open: LiveClient[] = [];
 
-beforeEach(async () => {
-  clock.now = T0;
+/** Leaf on a free port, with Live tuned as the test needs. */
+async function start(live: Partial<LiveTuning> = {}): Promise<string> {
   const fake = fakeBackend({
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
     "bob-token": () => Response.json(sessionOf(bob, "Bob", "RECRUIT")),
     "carol-token": () => Response.json(sessionOf(carol, "Carol", null)),
+    // Alice signed in a second time, on another device.
+    "alice-2-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
   });
   backend = fake.backend;
-  services = testLeaf(clock, fake.fetcher);
+  services = testLeaf(clock, fake.fetcher, {}, { live });
   server = await services.serve();
-});
+  return server.origin;
+}
 
 afterEach(async () => {
+  ahead = 0;
   for (const c of open.splice(0)) c.close();
-  await server.close();
-  await services.dispose();
+  await server?.close();
+  await services?.dispose();
+  server = null;
+  services = null;
 });
 
 /** A player's game opening the live connection, as a browser on Leaf's page does by default. */
-async function connect(sent: Opening = { cookie: "alice-token", origin: ORIGIN }): Promise<LiveClient> {
-  const client = await LiveClient.open(server.origin, sent);
+async function connect(sent: Opening): Promise<LiveClient> {
+  const client = await LiveClient.open(server?.origin ?? "", sent);
   open.push(client);
   return client;
 }
+
+const census = () => services?.run(Live.use((live) => live.census));
 
 const codeOf = async (response: Response) =>
   Schema.decodeUnknownSync(Schema.Struct({ code: Schema.String }))(await response.json()).code;
 
 const page = (who: "alice" | "bob" | "carol"): Opening => ({ cookie: `${who}-token`, origin: ORIGIN });
-const at = (x: number, y: number, flags: number = Flag.Moving): Motion => ({
+const at = (x: number, y: number, flags: number = Flag.Moving, jump = 0): Motion => ({
   x,
   y,
   vx: 64,
@@ -57,11 +72,12 @@ const at = (x: number, y: number, flags: number = Flag.Moving): Motion => ({
   facing: 2,
   pose: 1,
   flags,
+  jump,
 });
 
 /** The answer to a request to open a live connection that is refused before it is upgraded. */
 async function refused(path: string, headers: Record<string, string>) {
-  const response = await fetch(`${server.origin}${path}`, {
+  const response = await fetch(`${server?.origin ?? ""}${path}`, {
     headers: {
       Connection: "Upgrade",
       Upgrade: "websocket",
@@ -75,64 +91,96 @@ async function refused(path: string, headers: Record<string, string>) {
 
 describe("opening a live connection", () => {
   it("is refused, before it is upgraded, as the API refuses", async () => {
+    const origin = await start();
     backend.sessions["down-token"] = () => new Response("down", { status: 502 });
 
-    expect(await refused("/v1/game/live?v=1", {})).toEqual([401, "unauthorized"]);
-    expect(await refused("/v1/game/live?v=1", { Cookie: "seq_session=stale", Origin: ORIGIN })).toEqual([
-      401,
-      "unauthorized",
-    ]);
+    expect(await refused(LIVE, {})).toEqual([401, "unauthorized"]);
+    expect(await refused(LIVE, { Cookie: "seq_session=stale", Origin: ORIGIN })).toEqual([401, "unauthorized"]);
     // A page on another site can open a WebSocket to Leaf with the cookie, so it must be Leaf's own.
-    expect(await refused("/v1/game/live?v=1", { Cookie: "seq_session=alice-token" })).toEqual([403, "bad_origin"]);
-    expect(
-      await refused("/v1/game/live?v=1", { Cookie: "seq_session=alice-token", Origin: "https://seqwawa.com" }),
-    ).toEqual([403, "bad_origin"]);
-    expect(await refused("/v1/game/live?v=1", { Authorization: "Bearer down-token" })).toEqual([
-      503,
-      "identity_unavailable",
+    expect(await refused(LIVE, { Cookie: "seq_session=alice-token" })).toEqual([403, "bad_origin"]);
+    expect(await refused(LIVE, { Cookie: "seq_session=alice-token", Origin: "https://seqwawa.com" })).toEqual([
+      403,
+      "bad_origin",
     ]);
+    expect(await refused(LIVE, { Authorization: "Bearer down-token" })).toEqual([503, "identity_unavailable"]);
     expect(await refused("/v1/game/live", { Authorization: "Bearer alice-token" })).toEqual([
       400,
       "unsupported_version",
     ]);
-    expect(await refused("/v1/game/live?v=2", { Authorization: "Bearer alice-token" })).toEqual([
+    // Version 1 had no jump count; nothing speaks it.
+    expect(await refused(`${LIVE_PATH}?v=1&room=town`, { Authorization: "Bearer alice-token" })).toEqual([
       400,
       "unsupported_version",
     ]);
-    const plain = await fetch(`${server.origin}/v1/game/live?v=1`, {
-      headers: { Authorization: "Bearer alice-token" },
-    });
+    // A connection is into a room, one there is.
+    expect(await refused(`${LIVE_PATH}?v=${LIVE_VERSION}`, { Authorization: "Bearer alice-token" })).toEqual([
+      400,
+      "unknown_room",
+    ]);
+    expect(await refused(livePath("hall"), { Authorization: "Bearer alice-token" })).toEqual([400, "unknown_room"]);
+    const plain = await fetch(`${origin}${LIVE}`, { headers: { Authorization: "Bearer alice-token" } });
     expect([plain.status, await codeOf(plain)]).toEqual([400, "not_websocket"]);
   });
 
   it("opens for a member or a guest by the cookie from Leaf's page, and by a Bearer from anywhere", async () => {
+    await start();
     const byCookie = await connect(page("alice"));
     const guest = await connect(page("carol"));
     const byBearer = await connect({ bearer: "bob-token" });
 
-    expect((await byCookie.join()).roster.map((m) => m.name)).toEqual(["Alice"]);
-    expect((await guest.join()).roster.map((m) => [m.name, m.guest])).toEqual([
+    expect((await byCookie.welcome()).roster.map((m) => m.name)).toEqual(["Alice"]);
+    expect((await guest.welcome()).roster.map((m) => [m.name, m.guest])).toEqual([
       ["Alice", false],
       ["Carol", true],
     ]);
-    expect((await byBearer.join()).roster.map((m) => m.name)).toEqual(["Alice", "Carol", "Bob"]);
+    expect((await byBearer.welcome()).roster.map((m) => m.name)).toEqual(["Alice", "Carol", "Bob"]);
+  });
+
+  it("charges every connection a player opens, and turns them away past ten at once", async () => {
+    await start();
+    const tabs = await Promise.all(Array.from({ length: 10 }, () => connect(page("alice"))));
+    for (const tab of tabs) tab.close();
+
+    expect(await refused(LIVE, { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
+  });
+
+  it("keeps what a player owes after they have left, so that leaving refills nothing", async () => {
+    await start({ graceMs: 50 });
+    const tabs = await Promise.all(Array.from({ length: 10 }, () => connect(page("alice"))));
+    await tabs.at(-1)?.welcome();
+    for (const tab of tabs) tab.close();
+    await Bun.sleep(300);
+
+    expect(await census()).toMatchObject({ connected: 0, rooms: {} });
+    expect(await refused(LIVE, { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
+  });
+
+  it("never lets in more players than it holds, however many open at once", async () => {
+    await start({ mostPlayers: 2 });
+    const opened = await Promise.allSettled(
+      (["alice", "bob", "carol"] as const).map((who) => LiveClient.open(server?.origin ?? "", page(who))),
+    );
+    for (const o of opened) if (o.status === "fulfilled") open.push(o.value);
+
+    expect(opened.filter((o) => o.status === "fulfilled").length).toBe(2);
+    expect(await census()).toMatchObject({ players: 2, connected: 2 });
   });
 });
 
 describe("a live room", () => {
   it("welcomes a player with who is there, and tells the others they came, member or guest", async () => {
+    await start();
     const a = await connect(page("alice"));
-    const welcome = await a.join();
+    const welcome = await a.welcome();
     const c = await connect(page("carol"));
-    const carols = await c.join();
+    const carols = await c.welcome();
 
-    expect(welcome).toEqual({
+    expect(welcome).toMatchObject({
       t: "welcome",
-      v: 1,
+      v: LIVE_VERSION,
       you: 1,
       room: "town/1",
       hz: 30,
-      time: T0,
       roster: [{ id: 1, player: alice, name: "Alice", rank: "CAPTAIN", guest: false }],
     });
     expect(carols.roster).toEqual([
@@ -146,50 +194,43 @@ describe("a live room", () => {
   });
 
   it("sends a player's motion to everybody in the room within a tick or two", async () => {
+    await start();
     const a = await connect(page("alice"));
     const b = await connect(page("bob"));
-    await a.join();
-    const { you: bobsId } = await b.join();
+    await a.welcome();
+    const { you: bobsId } = await b.welcome();
 
     const sentAt = performance.now();
     const seq = b.move(at(200, 120));
     const seen = await a.snapshot((s) => s.entries.some((e) => e.id === bobsId));
     const took = performance.now() - sentAt;
 
-    expect(seen.entries).toEqual([{ id: bobsId, seq, ...at(200, 120) }]);
-    expect(seen.time).toBe(T0);
-    // A tick is 33 ms; on this machine the rest is next to nothing.
+    // Their first move, and so a jump to everybody else.
+    expect(seen.entries).toEqual([{ id: bobsId, seq, ...at(200, 120, Flag.Moving, 1) }]);
     expect(took).toBeLessThan(150);
   });
 
-  it("shows a newcomer where everybody already is, at once", async () => {
+  it("shows a newcomer where everybody already is, at once, and keeps a player inside the room", async () => {
+    await start();
     const a = await connect(page("alice"));
-    const { you } = await a.join();
-    a.move(at(40, 300, 0));
+    const { you } = await a.welcome();
+    a.move({ ...at(-40, 1e6, 0), jump: 2 });
     await a.snapshot();
     const b = await connect(page("bob"));
-    await b.join();
+    await b.welcome();
 
-    expect((await b.snapshot()).entries.map((e) => [e.id, e.x, e.y])).toEqual([[you, 40, 300]]);
+    // Leaf counts the jumps everybody is shown: their first move is one.
+    expect((await b.snapshot()).entries.map((e) => [e.id, e.x, e.y, e.jump])).toEqual([[you, 0, 352, 1]]);
   });
 
-  it("keeps a player inside the room", async () => {
+  it("passes on only the actions there are", async () => {
+    await start();
     const a = await connect(page("alice"));
     const b = await connect(page("bob"));
-    await a.join();
-    await b.join();
-    b.move({ x: -30, y: 1e6, vx: 0, vy: 0, facing: 0, pose: 0, flags: Flag.Snap });
-
-    expect((await a.snapshot()).entries.map((e) => [e.x, e.y, e.flags])).toEqual([[0, 352, Flag.Snap]]);
-  });
-
-  it("passes on what somebody did to the others, as short tokens only", async () => {
-    const a = await connect(page("alice"));
-    const b = await connect(page("bob"));
-    const { you } = await a.join();
-    await b.join();
+    const { you } = await a.welcome();
+    await b.welcome();
     a.send({ t: "act", kind: "emote", arg: "wave" });
-    a.send({ t: "act", kind: "say", arg: "Hello there, anybody about?" });
+    a.send({ t: "act", kind: "emote", arg: "you_are_dumb" });
 
     expect(await b.next("act")).toEqual({ t: "act", id: you, kind: "emote", arg: "wave" });
     expect(await a.next("error")).toEqual({ t: "error", code: "bad_act" });
@@ -197,50 +238,215 @@ describe("a live room", () => {
   });
 
   it("answers a ping with the game's clock and its own, and says what it cannot do", async () => {
+    await start();
     const a = await connect(page("alice"));
+    await a.welcome();
     a.send({ t: "ping", c: 123.5 });
+    a.send({ t: "leave" });
     a.send({ t: "act", kind: "emote", arg: "wave" });
     a.send({ t: "join", room: "hall" });
 
-    expect(await a.next("pong")).toEqual({ t: "pong", c: 123.5, s: T0 });
+    expect(await a.next("pong")).toMatchObject({ t: "pong", c: 123.5 });
     expect(await a.next("error")).toEqual({ t: "error", code: "not_in_room" });
     expect(await a.next("error")).toEqual({ t: "error", code: "unknown_room" });
   });
 
-  it("tells the others when somebody leaves the room or closes the connection", async () => {
+  it("greets a player who joins the room they are in again, keeping their place, and nobody else hears", async () => {
+    await start();
+    const a = await connect(page("alice"));
+    const first = await a.welcome();
+    const b = await connect(page("bob"));
+    await b.welcome();
+    await a.next("joined");
+    const again = await a.join("town");
+
+    expect([again.room, again.you]).toEqual([first.room, first.you]);
+    expect(again.roster.map((m) => m.name)).toEqual(["Alice", "Bob"]);
+    await Bun.sleep(100);
+    expect(b.texts.filter((m) => m.t === "joined" || m.t === "left")).toEqual([]);
+    expect(await census()).toMatchObject({ players: 2, rooms: { "town/1": 2 } });
+  });
+
+  it("tells the others when somebody leaves the room", async () => {
+    await start();
     const a = await connect(page("alice"));
     const b = await connect(page("bob"));
-    const c = await connect(page("carol"));
-    await a.join();
-    const { you: bobsId } = await b.join();
-    const { you: carolsId } = await c.join();
+    await a.welcome();
+    const { you: bobsId } = await b.welcome();
     b.send({ t: "leave" });
-    c.close();
 
-    expect(await a.next("left", (m) => m.id === bobsId)).toEqual({ t: "left", id: bobsId });
-    expect(await a.next("left", (m) => m.id === carolsId)).toEqual({ t: "left", id: carolsId });
-    expect(await services.run(Live.use((live) => live.census))).toMatchObject({ rooms: { "town/1": 1 } });
+    expect(await a.next("left")).toEqual({ t: "left", id: bobsId });
+    expect(await census()).toMatchObject({ players: 2, rooms: { "town/1": 1 } });
   });
 });
 
-describe("one connection a player", () => {
-  it("closes the first when the same player opens a second, saying why, and keeps one figure in the room", async () => {
-    const watcher = await connect(page("bob"));
-    await watcher.join();
+describe("a player, whatever their connection", () => {
+  it("keeps their place through a second tab, which takes it over without anybody seeing them go", async () => {
+    await start();
+    const watchers = await Promise.all(
+      (["bob", "carol"] as const).map(async (who) => {
+        const w = await connect(page(who));
+        await w.welcome();
+        return w;
+      }),
+    );
     const first = await connect(page("alice"));
-    const { you: firstId } = await first.join();
+    const { you } = await first.welcome();
     const second = await connect({ bearer: "alice-token" });
-    await second.join();
+    const again = await second.welcome();
 
-    expect(await first.next("bye")).toEqual({ t: "bye", code: "replaced" });
-    expect(await first.ended()).toEqual({ code: 4001, reason: "replaced" });
-    expect(await watcher.next("left", (m) => m.id === firstId)).toBeDefined();
-    expect(await services.run(Live.use((live) => live.census))).toEqual({ players: 2, rooms: { "town/1": 2 } });
+    expect((await first.ended()).code).toBe(CLOSE.replaced);
+    expect(again.you).toBe(you);
+    await Bun.sleep(100);
+    for (const w of watchers) expect(w.texts.filter((m) => m.t === "left")).toEqual([]);
+    expect(await census()).toEqual({ players: 3, connected: 3, rooms: { "town/1": 3 } });
+  });
+
+  it("follows a second tab's moves at once, though it numbers them from the start, and shows it as a jump", async () => {
+    await start();
+    const b = await connect(page("bob"));
+    await b.welcome();
+    const first = await connect(page("alice"));
+    const { you } = await first.welcome();
+    for (let i = 0; i < 30; i++) first.move(at(i, 10));
+    const before = await b.snapshot((s) => s.entries.some((e) => e.id === you && e.x === 29));
+    const second = await connect({ bearer: "alice-token" });
+    await second.welcome();
+    const seq = second.move(at(300, 200, 0));
+
+    const after = await b.snapshot((s) => s.entries.some((e) => e.id === you && e.x === 300));
+    const was = before.entries.find((e) => e.id === you);
+    const now = after.entries.find((e) => e.id === you);
+    expect(now?.seq).toBe(seq);
+    expect(now?.jump).not.toBe(was?.jump);
+  });
+
+  it("is not let go by an old connection's session ending once a new one has taken over", async () => {
+    await start({ recheckMs: 50 });
+    const b = await connect(page("bob"));
+    await b.welcome();
+    const first = await connect(page("alice"));
+    const { you } = await first.welcome();
+    const second = await connect({ bearer: "alice-2-token" });
+    await second.welcome();
+    // The first device's session is revoked; the second's is not.
+    backend.sessions["alice-token"] = () => Response.json({ error: "unauthorized" }, { status: 401 });
+    ahead = 61_000;
+    await Bun.sleep(300);
+
+    expect(second.closed).toBeNull();
+    expect(b.texts.filter((m) => m.t === "left" && m.id === you)).toEqual([]);
+    expect(await census()).toEqual({ players: 2, connected: 2, rooms: { "town/1": 2 } });
+  });
+
+  it("stands still in their place for a while after a drop, keeps it if they come back, and leaves if not", async () => {
+    await start({ graceMs: 300 });
+    const b = await connect(page("bob"));
+    await b.welcome();
+    const a = await connect(page("alice"));
+    const { you } = await a.welcome();
+    await b.next("joined");
+    a.move(at(100, 100, Flag.Moving));
+    await b.snapshot((s) => s.entries.some((e) => e.id === you && e.flags === Flag.Moving));
+    a.close();
+
+    // They are seen to stop, not to go.
+    const stopped = await b.snapshot((s) => s.entries.some((e) => e.id === you));
+    expect(stopped.entries.find((e) => e.id === you)).toMatchObject({ x: 100, vx: 0, flags: 0 });
+    const back = await connect(page("alice"));
+    expect((await back.welcome()).you).toBe(you);
+    back.close();
+
+    expect(await b.next("left", (m) => m.id === you, 2000)).toEqual({ t: "left", id: you });
+    expect(b.texts.filter((m) => m.t === "joined")).toEqual([]);
+    // Alice's record stays a while yet, for what she owes on opening connections; she is in no room.
+    expect(await census()).toMatchObject({ connected: 1, rooms: { "town/1": 1 } });
+  });
+
+  it("is gone at once, the connection closed as signed out, when their session ends", async () => {
+    await start({ recheckMs: 100 });
+    const b = await connect(page("bob"));
+    await b.welcome();
+    const a = await connect(page("alice"));
+    const { you } = await a.welcome();
+    backend.sessions["alice-token"] = () => Response.json({ error: "unauthorized" }, { status: 401 });
+    // A confirmed session is remembered for a minute; once that is up, it is asked about again.
+    await Bun.sleep(300);
+    expect(a.closed).toBeNull();
+    ahead = 61_000;
+
+    expect((await a.ended()).code).toBe(CLOSE.signedOut);
+    expect(await b.next("left", (m) => m.id === you)).toEqual({ t: "left", id: you });
+    expect(await census()).toMatchObject({ connected: 1, rooms: { "town/1": 1 } });
+  });
+});
+
+describe("opening a connection", () => {
+  it("is entering the room: the welcome is the first thing it says, before anything of the room", async () => {
+    await start();
+    const b = await connect(page("bob"));
+    const { you: bobsId } = await b.welcome();
+    for (let i = 0; i < 30; i++) b.move(at(i, 0));
+    const a = await connect(page("alice"));
+    await b.snapshot((s) => s.entries.some((e) => e.id === bobsId && e.x === 29));
+
+    expect(a.arrived.slice(0, 2)).toEqual(["welcome", "snapshot"]);
+    expect((await a.welcome()).roster.map((m) => m.name)).toEqual(["Bob", "Alice"]);
+  });
+
+  it("holds a player's place among the players while their socket opens, however long that takes", async () => {
+    await start({ mostPlayers: 1 });
+    const sessionOk = Effect.succeed(true);
+    const alicesIdentity = { playerId: alice, username: "Alice", guildRank: "CAPTAIN", admin: false };
+    const bobsIdentity = { playerId: bob, username: "Bob", guildRank: "RECRUIT", admin: false };
+    const opening = await Effect.runPromise(Deferred.make<Socket.Socket, Error>());
+    // Alice's socket is slow to open: past the time her open's charge refills.
+    const pending = services?.run(
+      Effect.scoped(Live.use((live) => live.open(alicesIdentity, "town", Deferred.await(opening), sessionOk))).pipe(
+        Effect.exit,
+      ),
+    );
+    await Bun.sleep(50);
+    ahead = 60_000;
+    await Bun.sleep(100);
+
+    expect(await census()).toMatchObject({ players: 1, connected: 0 });
+    // Her place is held: nobody else gets it meanwhile.
+    expect(
+      await services?.run(
+        Effect.scoped(Live.use((live) => live.open(bobsIdentity, "town", Deferred.await(opening), sessionOk))),
+      ),
+    ).toBe("full");
+
+    await Effect.runPromise(Deferred.fail(opening, new Error("never opened")));
+    await pending;
+    await Bun.sleep(100);
+    expect(await census()).toMatchObject({ players: 0, connected: 0, rooms: {} });
+  });
+
+  it("shows a player as they are now when a new connection of theirs takes over", async () => {
+    await start();
+    const b = await connect(page("bob"));
+    await b.welcome();
+    const first = await connect(page("alice"));
+    const { you } = await first.welcome();
+    await b.next("joined");
+    // Alice is a recruit now, as her second device's session says.
+    backend.sessions["alice-2-token"] = () => Response.json(sessionOf(alice, "Alice", "RECRUIT"));
+    const second = await connect({ bearer: "alice-2-token" });
+    const again = await second.welcome();
+
+    expect(await b.next("left")).toEqual({ t: "left", id: you });
+    expect(await b.next("joined")).toEqual({
+      t: "joined",
+      member: { id: again.you, player: alice, name: "Alice", rank: "RECRUIT", guest: false },
+    });
   });
 });
 
 describe("what a connection may send", () => {
   it("drops what it cannot read and keeps going, and closes one that keeps sending it", async () => {
+    await start();
     const a = await connect(page("alice"));
     a.sendRaw(new Uint8Array([1, 2, 3]));
     a.sendRaw("{ not json");
@@ -249,41 +455,101 @@ describe("what a connection may send", () => {
     expect(await a.next("pong")).toMatchObject({ c: 1 });
 
     for (let i = 0; i < 260; i++) a.sendRaw(new Uint8Array([9]));
-    expect(await a.next("bye")).toEqual({ t: "bye", code: "invalid" });
-    expect((await a.ended()).code).toBe(1008);
+    expect((await a.ended()).code).toBe(CLOSE.policy);
   });
 
   it("drops moves over its allowance, and closes a connection that floods", async () => {
+    await start();
     const a = await connect(page("alice"));
     const b = await connect(page("bob"));
-    await a.join();
-    const { you } = await b.join();
+    await a.welcome();
+    const { you } = await b.welcome();
     // Sixty at once: the first burst of forty is taken, the rest dropped.
     for (let seq = 1; seq <= 60; seq++) b.sendRaw(encodeMove(seq, at(seq, 10)));
     const seen = await a.snapshot((s) => s.entries.some((e) => e.id === you));
-
     expect(seen.entries.find((e) => e.id === you)?.seq).toBe(40);
 
     for (let seq = 61; seq <= 400; seq++) b.sendRaw(encodeMove(seq, at(seq, 10)));
-    expect(await b.next("bye")).toEqual({ t: "bye", code: "rate" });
-    expect((await b.ended()).code).toBe(1008);
+    expect((await b.ended()).code).toBe(CLOSE.policy);
   });
 
   it("closes a frame larger than 4 KiB at once", async () => {
+    await start();
     const a = await connect(page("alice"));
     a.sendRaw("x".repeat(5000));
 
-    expect((await a.ended()).code).toBe(1009);
+    expect((await a.ended()).code).toBe(CLOSE.tooBig);
+  });
+});
+
+/** A socket standing in for Bun's, writing down what Leaf writes to it. It is never read. */
+function standInSocket(written: unknown[]): Socket.Socket {
+  return Socket.make({
+    reader: Effect.succeed({ pull: Effect.never, upgrade: () => Effect.void }),
+    writer: Effect.succeed({
+      write: (chunk) => Effect.sync(() => void written.push(chunk)),
+      writeAll: (chunks) => Effect.sync(() => void written.push(...chunks)),
+    }),
+  });
+}
+
+const alicesIdentity = { playerId: alice, username: "Alice", guildRank: "CAPTAIN", admin: false };
+const signedIn = Effect.succeed(true);
+
+describe("an open interrupted while its socket opens", () => {
+  it("lets go of the player's place, however it was interrupted", async () => {
+    await start();
+    await services?.run(
+      Effect.gen(function* () {
+        const live = yield* Live;
+        const opening = yield* Deferred.make<Socket.Socket, Error>();
+        const fiber = yield* Effect.forkChild(
+          Effect.scoped(live.open(alicesIdentity, "town", Deferred.await(opening), signedIn)),
+        );
+        yield* Effect.sleep("50 millis");
+        yield* Fiber.interrupt(fiber);
+      }),
+    );
+    ahead = 60_000;
+    await Bun.sleep(100);
+
+    expect(await census()).toEqual({ players: 0, connected: 0, rooms: {} });
   });
 });
 
 describe("when Leaf stops", () => {
-  it("tells everybody it is restarting, and closes their connections to come back", async () => {
+  it("closes every connection as restarting, for the game to come back", async () => {
+    await start();
     const a = await connect(page("alice"));
-    await a.join();
-    await server.close();
+    await a.welcome();
+    await server?.close();
 
-    expect(await a.next("bye")).toEqual({ t: "bye", code: "restart" });
-    expect(await a.ended()).toEqual({ code: 1012, reason: "restart" });
+    expect(await a.ended()).toEqual({ code: CLOSE.restart, reason: "restart" });
+  });
+
+  it("lets nobody in after its farewell, and tells a socket that finishes opening after it to come back", async () => {
+    await start();
+    const written: unknown[] = [];
+    const outcome = await services?.run(
+      Effect.gen(function* () {
+        const live = yield* Live;
+        const opening = yield* Deferred.make<Socket.Socket, Error>();
+        const slow = yield* Effect.forkChild(
+          Effect.scoped(live.open(alicesIdentity, "town", Deferred.await(opening), signedIn)),
+        );
+        yield* Effect.sleep("50 millis");
+        yield* live.farewell;
+        const late = yield* Effect.scoped(
+          live.open({ ...alicesIdentity, playerId: bob, username: "Bob" }, "town", Deferred.await(opening), signedIn),
+        );
+        yield* Deferred.succeed(opening, standInSocket(written));
+        return { late, slow: yield* Fiber.join(slow), census: yield* live.census };
+      }),
+    );
+
+    expect(outcome?.late).toBe("stopping");
+    expect(outcome?.slow).toBe("served");
+    expect(written).toEqual([new Socket.CloseEvent(CLOSE.restart, "restart")]);
+    expect(outcome?.census).toMatchObject({ connected: 0, rooms: {} });
   });
 });

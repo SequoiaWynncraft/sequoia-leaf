@@ -1,4 +1,4 @@
-import { type ByeCode, decodeMove, KIND, LIVE_VERSION, SERVER_HZ, type ToClient, TOKEN } from "@sequoia-leaf/core";
+import { CLOSE, decodeMove, isAct, LIVE_VERSION, roomKind, SERVER_HZ, type ToClient } from "@sequoia-leaf/core";
 import { Clock, Context, Duration, Effect, Layer, Option, Queue, Schedule, Schema, type Scope } from "effect";
 import { Socket } from "effect/socket";
 
@@ -19,17 +19,34 @@ export const LIVE_SOCKETS = {
   perMessageDeflate: false,
 } as const;
 
-/** The longest text frame Leaf reads. Every message the game sends is far shorter. */
-const MOST_TEXT = 512;
+export interface LiveTuning {
+  /** How often an open connection's session is checked again with the backend. */
+  readonly recheckMs: number;
+  /** How long a player whose connection dropped stays in their room, standing, for them to come back. */
+  readonly graceMs: number;
+  /** The most players Live holds at once, connected or in their grace. */
+  readonly mostPlayers: number;
+}
 
-/** Allowances, as a steady rate a second and a burst: moves, then everything sent as text, then actions within it. */
+export const LiveTuning = Context.Reference<LiveTuning>("leaf/LiveTuning", {
+  defaultValue: () => ({ recheckMs: 30_000, graceMs: 10_000, mostPlayers: 1000 }),
+});
+
+/** The longest text frame Leaf reads, in UTF-16 code units (as JavaScript counts a string's length). Every message the game sends is far shorter. */
+const MOST_TEXT = 512;
+/** How many frames may wait to go to one connection before it is taken to be stuck and closed. */
+const MOST_WAITING = 1024;
+
+/**
+ * Allowances, as a steady rate a second and a burst, all the player's own, kept across their
+ * connections: moves, texts, actions within the texts, connections opened, and strikes (frames over
+ * an allowance or that cannot be read; with none left, the connection is closed).
+ */
 const MOVES = { rate: 30, burst: 40 } as const;
 const TEXTS = { rate: 8, burst: 20 } as const;
 const ACTS = { rate: 3, burst: 6 } as const;
-/** How many frames over an allowance, or that cannot be read, a connection may send before it is closed. */
-const STRIKES = 200;
-/** How many frames may wait to go to one connection before it is taken to be stuck and closed. */
-const MOST_WAITING = 1024;
+const OPENS = { rate: 0.1, burst: 10 } as const;
+const STRIKES = { rate: 1, burst: 200 } as const;
 
 /** A token bucket: an allowance that refills at `rate` a second, up to `burst`. */
 class Allowance {
@@ -41,12 +58,20 @@ class Allowance {
     this.tokens = spec.burst;
     this.at = now;
   }
-  take(now: number): boolean {
-    this.tokens = Math.min(this.spec.burst, this.tokens + ((now - this.at) / 1000) * this.spec.rate);
+  private refill(now: number): void {
+    this.tokens = Math.min(this.spec.burst, this.tokens + (Math.max(0, now - this.at) / 1000) * this.spec.rate);
     this.at = now;
+  }
+  take(now: number): boolean {
+    this.refill(now);
     if (this.tokens < 1) return false;
     this.tokens -= 1;
     return true;
+  }
+  /** Whether it has filled up again: nothing is owed on it. */
+  full(now: number): boolean {
+    this.refill(now);
+    return this.tokens >= this.spec.burst;
   }
 }
 
@@ -61,64 +86,104 @@ const ToServerJson = Schema.fromJsonString(
 );
 const readText = Schema.decodeUnknownOption(ToServerJson);
 
+const say = (m: ToClient): string => JSON.stringify(m);
+
 type Frame = string | Uint8Array | Socket.CloseEvent;
 
-/** The close codes Leaf uses, by why it closes. */
-const CLOSE: Readonly<Record<ByeCode, number>> = { replaced: 4001, restart: 1012, invalid: 1008, rate: 1008 };
-
-/** One player's live connection: what waits to be sent to them, the room they are in, and their allowances. */
-class Connection {
-  occupant: Occupant | null = null;
-  room: Room | null = null;
-  strikes = 0;
-  closing = false;
-  readonly moves: Allowance;
-  readonly texts: Allowance;
-  readonly acts: Allowance;
-  readonly identity: Identity;
+/**
+ * One connection to a player's browser: frames wait here in order, and its own fiber writes them.
+ * It is only a way through; everything about the player is on the `Player`.
+ */
+class Pipe {
+  /** The code it was closed with, once Leaf closed it. */
+  closedWith: number | null = null;
   private readonly out: Queue.Queue<Frame>;
   private readonly writer: Socket.Writer;
 
-  constructor(identity: Identity, out: Queue.Queue<Frame>, writer: Socket.Writer, now: number) {
-    this.identity = identity;
+  constructor(out: Queue.Queue<Frame>, writer: Socket.Writer) {
     this.out = out;
     this.writer = writer;
-    this.moves = new Allowance(MOVES, now);
-    this.texts = new Allowance(TEXTS, now);
-    this.acts = new Allowance(ACTS, now);
+  }
+
+  get closed(): boolean {
+    return this.closedWith !== null;
   }
 
   send(frame: string | Uint8Array): void {
-    if (this.closing) return;
-    if (Queue.sizeUnsafe(this.out) >= MOST_WAITING) {
-      // The socket takes frames as fast as they come; a backlog this long means it is stuck.
-      this.closing = true;
-      Queue.offerUnsafe(this.out, new Socket.CloseEvent(1008, "too far behind"));
-      return;
-    }
+    if (this.closed) return;
+    // The socket takes frames as fast as they come; a backlog this long means it is stuck.
+    if (Queue.sizeUnsafe(this.out) >= MOST_WAITING) return this.close(CLOSE.policy, "too far behind");
     Queue.offerUnsafe(this.out, frame);
   }
 
-  /** Says why, and closes. Nothing more is sent after it. */
-  bye(code: ByeCode): void {
-    if (this.closing) return;
-    this.send(JSON.stringify({ t: "bye", code } satisfies ToClient));
-    this.closing = true;
-    Queue.offerUnsafe(this.out, new Socket.CloseEvent(CLOSE[code], code));
+  /** Closes it after whatever is waiting, saying why by the code. */
+  close(code: number, reason: string): void {
+    if (this.closed) return;
+    this.closedWith = code;
+    Queue.offerUnsafe(this.out, new Socket.CloseEvent(code, reason));
   }
 
-  /**
-   * Leaf is stopping: says so and closes, straight to the socket, ahead of anything still waiting,
-   * since there is no time to wait for it.
-   */
-  goodbye(): Effect.Effect<void> {
-    if (this.closing) return Effect.void;
-    this.closing = true;
-    return Effect.ignore(
-      Effect.andThen(
-        this.writer.write(JSON.stringify({ t: "bye", code: "restart" } satisfies ToClient)),
-        this.writer.write(new Socket.CloseEvent(CLOSE.restart, "restart")),
+  /** Writes what waits, in order, as soon as it does, for as long as the connection lasts. */
+  pump(): Effect.Effect<never, Socket.SocketError> {
+    return Effect.forever(
+      Effect.flatMap(Queue.takeAll(this.out), (frames) =>
+        Effect.forEach(frames, (frame) => this.writer.write(frame), { discard: true }),
       ),
+    );
+  }
+
+  /** Closes it at once, ahead of anything waiting: Leaf is stopping, and there is no time to wait. */
+  closeNow(code: number, reason: string): Effect.Effect<void> {
+    if (this.closed) return Effect.void;
+    this.closedWith = code;
+    return Effect.ignore(this.writer.write(new Socket.CloseEvent(code, reason)));
+  }
+}
+
+/**
+ * A player in Live: who they are, their place in a room, their allowances, and their connection now.
+ * A player outlives their connections: a new one (after a drop, or from another tab) takes over the
+ * same place, and the room never notices. A player with no connection stays, standing, for a grace
+ * period, and then leaves the room. Their record is kept for as long as anything is left of them: a
+ * connection, a place, or an allowance not yet filled up again, so that leaving and coming back
+ * never refills one.
+ */
+class Player {
+  identity: Identity;
+  room: Room | null = null;
+  occupant: Occupant | null = null;
+  pipe: Pipe | null = null;
+  /** When their last connection closed, while they have none. */
+  goneAt: number | null = null;
+  /** Connections of theirs let in and not yet open: while there are any, the record is theirs. */
+  opening = 0;
+  readonly moves: Allowance;
+  readonly texts: Allowance;
+  readonly acts: Allowance;
+  readonly opens: Allowance;
+  readonly strikes: Allowance;
+
+  constructor(identity: Identity, now: number) {
+    this.identity = identity;
+    this.moves = new Allowance(MOVES, now);
+    this.texts = new Allowance(TEXTS, now);
+    this.acts = new Allowance(ACTS, now);
+    this.opens = new Allowance(OPENS, now);
+    this.strikes = new Allowance(STRIKES, now);
+  }
+
+  /** The room's outbox for this player: whichever connection they have now, or none. */
+  send(frame: string | Uint8Array): void {
+    this.pipe?.send(frame);
+  }
+
+  /** Whether nothing is left of them: no connection, opening or open, no place, and nothing owed on any allowance. */
+  gone(now: number): boolean {
+    return (
+      this.opening === 0 &&
+      this.pipe === null &&
+      this.room === null &&
+      [this.moves, this.texts, this.acts, this.opens, this.strikes].every((a) => a.full(now))
     );
   }
 }
@@ -130,24 +195,41 @@ interface Counts {
   movesIn: number;
   textsIn: number;
   dropped: number;
-  framesOut: number;
 }
 
-const noCounts = (): Counts => ({ opened: 0, closed: 0, movesIn: 0, textsIn: 0, dropped: 0, framesOut: 0 });
+const noCounts = (): Counts => ({ opened: 0, closed: 0, movesIn: 0, textsIn: 0, dropped: 0 });
+
+/** What came of a player's asking to open a connection: served until it closed, or turned away. */
+export type Opened = "served" | "full" | "busy" | "stopping";
 
 /**
  * Live: players in the same room see each other move as it happens (the wire is in
- * `packages/core/src/live.ts`). Each player has one connection; a second, from another tab or
- * device, replaces the first. Rooms are in memory, in this process: during a deploy every player is
- * told Leaf is restarting and reconnects to the new container.
+ * `packages/core/src/live.ts`). Who is in which room is kept here and nowhere else, by player, not
+ * by connection. Rooms are in memory, in this process: during a deploy every player is told Leaf is
+ * restarting, and reconnects to the new container.
  */
 export class Live extends Context.Service<
   Live,
   {
-    /** Serves one player's connection until it closes, or until Leaf stops. */
-    readonly serve: (socket: Socket.Socket, identity: Identity) => Effect.Effect<void, never, Scope.Scope>;
-    /** How many are connected, and in which rooms (for tests and the log). */
-    readonly census: Effect.Effect<{ readonly players: number; readonly rooms: Readonly<Record<string, number>> }>;
+    /**
+     * Lets a player open a connection into a room of a kind, unless Live is full (`full`) or they
+     * open them too fast (`busy`). Their place among the players is taken, and held, before
+     * `upgrade` opens the socket, so that nobody can slip in between. Once it is open it is theirs,
+     * and they are in the room, greeted, in one step. Then it is served until it closes, Leaf stops,
+     * or `session` (asked every `recheckMs`) says the player's session has ended.
+     */
+    readonly open: (
+      identity: Identity,
+      kindName: string,
+      upgrade: Effect.Effect<Socket.Socket, unknown>,
+      session: Effect.Effect<boolean>,
+    ) => Effect.Effect<Opened, never, Scope.Scope>;
+    /** How many players there are, how many connected, and who is in which room (for tests and the log). */
+    readonly census: Effect.Effect<{
+      readonly players: number;
+      readonly connected: number;
+      readonly rooms: Readonly<Record<string, number>>;
+    }>;
     /** Tells every player Leaf is restarting, and closes their connections, so that they come back to the next one. */
     readonly farewell: Effect.Effect<void>;
   }
@@ -155,140 +237,196 @@ export class Live extends Context.Service<
   static readonly layer = Layer.effect(
     Live,
     Effect.gen(function* () {
+      const tuning = yield* LiveTuning;
       const rooms = new Rooms();
-      const players = new Map<string, Connection>();
+      const players = new Map<string, Player>();
       let counts = noCounts();
       let tick = 0;
+      /** Leaf is stopping: no connection is let in, and one still opening is told to come back. */
+      let stopping = false;
 
-      const leaveRoom = (c: Connection): void => {
-        const { room, occupant } = c;
+      // ---- who is in which room: these three alone change it ----
+
+      const leave = (p: Player): void => {
+        const { room, occupant } = p;
+        p.room = null;
+        p.occupant = null;
         if (!room || !occupant) return;
         room.leave(occupant.member.id);
         rooms.tidy(room);
-        c.room = null;
-        c.occupant = null;
       };
 
-      const join = (c: Connection, kindName: string, now: number): void => {
-        const room = rooms.place(kindName);
-        if (!room) {
-          c.send(JSON.stringify({ t: "error", code: "unknown_room" } satisfies ToClient));
-          return;
-        }
-        leaveRoom(c);
-        const { identity } = c;
-        const outbox = { send: (frame: string | Uint8Array) => c.send(frame) };
+      /**
+       * Puts a player in a room of a kind. One already in one, shown as they are now, is greeted there
+       * again, keeping their place; shown otherwise (their rank or name changed), they leave and come
+       * back, so that everybody sees them as they are.
+       */
+      const enter = (p: Player, kindName: string, now: number): void => {
+        if (roomKind(kindName) === undefined) return p.send(say({ t: "error", code: "unknown_room" }));
+        const { identity } = p;
         const who = {
           player: identity.playerId,
           name: identity.username,
           rank: identity.guildRank,
           guest: isGuest(identity),
         };
-        c.occupant = room.join(who, outbox, now, SERVER_HZ, LIVE_VERSION);
-        c.room = room;
+        const shown = p.occupant?.member;
+        const same = shown?.name === who.name && shown.rank === who.rank && shown.guest === who.guest;
+        if (p.room?.kindName === kindName && p.occupant && same) {
+          return p.room.greet(p.occupant, now, SERVER_HZ, LIVE_VERSION);
+        }
+        leave(p);
+        const room = rooms.place(kindName);
+        if (!room) return;
+        p.occupant = room.join(who, p, now, SERVER_HZ, LIVE_VERSION);
+        p.room = room;
       };
 
-      const strike = (c: Connection, why: ByeCode): void => {
+      // ---- what a player sends ----
+
+      const strike = (p: Player, now: number): void => {
         counts.dropped++;
-        c.strikes++;
-        if (c.strikes > STRIKES) c.bye(why);
+        if (!p.strikes.take(now)) p.pipe?.close(CLOSE.policy, "too much that could not be taken");
       };
 
-      /** One frame from the game. */
-      const take = (c: Connection, frame: string | Uint8Array, now: number): void => {
-        if (c.closing) return;
+      const take = (p: Player, frame: string | Uint8Array, now: number): void => {
         if (typeof frame !== "string") {
           counts.movesIn++;
           const move = decodeMove(frame);
-          if (!move) return strike(c, "invalid");
-          if (!c.moves.take(now)) return strike(c, "rate");
-          if (c.room && c.occupant) c.room.move(c.occupant.member.id, move.seq, move.motion);
+          if (!move || !p.moves.take(now)) return strike(p, now);
+          if (p.room && p.occupant) p.room.move(p.occupant.member.id, move.seq, move.motion);
           return;
         }
         counts.textsIn++;
-        if (frame.length > MOST_TEXT) return strike(c, "invalid");
-        if (!c.texts.take(now)) return strike(c, "rate");
-        const message = readText(frame);
-        if (Option.isNone(message)) return strike(c, "invalid");
+        const message = frame.length > MOST_TEXT || !p.texts.take(now) ? Option.none() : readText(frame);
+        if (Option.isNone(message)) return strike(p, now);
         const m = message.value;
         switch (m.t) {
           case "ping":
-            c.send(JSON.stringify({ t: "pong", c: m.c, s: now } satisfies ToClient));
-            return;
+            return p.send(say({ t: "pong", c: m.c, s: now }));
           case "join":
-            join(c, m.room, now);
-            return;
+            return enter(p, m.room, now);
           case "leave":
-            leaveRoom(c);
-            return;
+            return leave(p);
           case "act":
-            if (!KIND.test(m.kind) || !TOKEN.test(m.arg)) {
-              c.send(JSON.stringify({ t: "error", code: "bad_act" } satisfies ToClient));
-              return strike(c, "invalid");
+            if (!isAct(m.kind, m.arg)) {
+              p.send(say({ t: "error", code: "bad_act" }));
+              return strike(p, now);
             }
-            if (!c.acts.take(now)) return strike(c, "rate");
-            if (!c.room || !c.occupant) {
-              c.send(JSON.stringify({ t: "error", code: "not_in_room" } satisfies ToClient));
-              return;
-            }
-            c.room.act(c.occupant.member.id, m.kind, m.arg);
-            return;
+            if (!p.acts.take(now)) return strike(p, now);
+            if (!p.room || !p.occupant) return p.send(say({ t: "error", code: "not_in_room" }));
+            return p.room.act(p.occupant.member.id, m.kind, m.arg);
         }
       };
 
-      // Every tick, each room with any change sends it to everyone in it.
+      // ---- time ----
+
+      // Every tick: players whose grace has run out leave their room, players of whom nothing is
+      // left are forgotten, and each room with any change sends it to everyone in it.
       const flush = Effect.flatMap(Clock.currentTimeMillis, (now) =>
         Effect.sync(() => {
           tick++;
-          for (const room of rooms.all()) if (room.flush(tick, now)) counts.framesOut += room.size;
+          for (const [id, p] of players) {
+            if (p.goneAt !== null && now - p.goneAt >= tuning.graceMs) {
+              p.goneAt = null;
+              leave(p);
+            }
+            if (p.gone(now)) players.delete(id);
+          }
+          for (const room of rooms.all()) room.flush(tick, now);
         }),
       );
       yield* Effect.forkScoped(Effect.repeat(flush, Schedule.fixed(Duration.millis(1000 / SERVER_HZ))));
 
-      // A line a minute while anybody is connected, or anything happened.
-      const report = Effect.suspend(() => {
-        const was = counts;
-        counts = noCounts();
-        if (players.size === 0 && was.opened === 0 && was.closed === 0) return Effect.void;
+      const census = Effect.sync(() => {
         const inRooms: Record<string, number> = {};
         for (const room of rooms.all()) inRooms[room.name] = room.size;
-        return Effect.logInfo("live").pipe(Effect.annotateLogs({ players: players.size, rooms: inRooms, ...was }));
+        let connected = 0;
+        for (const p of players.values()) if (p.pipe) connected++;
+        return { players: players.size, connected, rooms: inRooms };
+      });
+
+      // A line a minute while anybody is about, or anything happened.
+      const report = Effect.flatMap(census, (now) => {
+        const was = counts;
+        counts = noCounts();
+        if (now.players === 0 && was.opened === 0) return Effect.void;
+        return Effect.logInfo("live").pipe(Effect.annotateLogs({ ...now, ...was }));
       });
       yield* Effect.forkScoped(Effect.repeat(report, Schedule.spaced(Duration.minutes(1))));
 
-      const serve = (socket: Socket.Socket, identity: Identity) =>
-        Effect.gen(function* () {
-          const writer = yield* socket.writer;
-          const out = yield* Queue.unbounded<Frame>();
-          const connection = new Connection(identity, out, writer, yield* Clock.currentTimeMillis);
-          const id = identity.playerId;
-          players.get(id)?.bye("replaced");
-          players.set(id, connection);
-          counts.opened++;
-          yield* Effect.addFinalizer(() =>
-            Effect.sync(() => {
-              leaveRoom(connection);
-              if (players.get(id) === connection) players.delete(id);
-              counts.closed++;
-            }),
-          );
+      // ---- connections ----
 
-          // Everything for this player goes out in the order it was sent, as soon as it is.
-          yield* Effect.forkScoped(
-            Effect.forever(
-              Effect.flatMap(Queue.takeAll(out), (frames) => {
-                counts.framesOut += frames.length;
-                return Effect.forEach(frames, (frame) => writer.write(frame), { discard: true });
+      /** Asks about the session every `recheckMs`, and ends once it says the session has ended. */
+      const watch = (session: Effect.Effect<boolean>): Effect.Effect<void> =>
+        Effect.sleep(Duration.millis(tuning.recheckMs)).pipe(
+          Effect.andThen(session),
+          Effect.flatMap((ok) => (ok ? watch(session) : Effect.void)),
+        );
+
+      /**
+       * Opens a player's connection and makes it theirs, in one step once the socket is open: it
+       * takes over from any other of theirs, carries who they are now, and puts them in the room,
+       * greeted, so that the welcome is the first thing it sends.
+       */
+      const attach = (
+        p: Player,
+        identity: Identity,
+        kindName: string,
+        upgrade: Effect.Effect<Socket.Socket, unknown>,
+      ) =>
+        Effect.gen(function* () {
+          const socket = yield* Effect.orDie(upgrade);
+          const pipe = new Pipe(yield* Queue.unbounded<Frame>(), yield* socket.writer);
+          // Whatever ends this connection, this decides what becomes of the player, and only while it
+          // is still theirs: signed out, they leave at once; otherwise they wait out their grace.
+          yield* Effect.addFinalizer(() =>
+            Effect.flatMap(Clock.currentTimeMillis, (now) =>
+              Effect.sync(() => {
+                counts.closed++;
+                if (p.pipe !== pipe) return;
+                p.pipe = null;
+                if (pipe.closedWith === CLOSE.signedOut) return leave(p);
+                p.goneAt = now;
+                if (p.occupant) p.room?.halt(p.occupant.member.id);
               }),
             ),
           );
+          const now = yield* Clock.currentTimeMillis;
+          // From here to the end, nothing waits: whether Leaf is stopping is asked in the same step
+          // as the connection is made the player's. Opened after the farewell, it is told to come
+          // back, and is never anybody's.
+          if (stopping) {
+            yield* pipe.closeNow(CLOSE.restart, "restart");
+            return null;
+          }
+          p.pipe?.close(CLOSE.replaced, "replaced");
+          p.pipe = pipe;
+          p.identity = identity;
+          p.goneAt = null;
+          if (p.occupant) p.room?.reconnected(p.occupant.member.id);
+          enter(p, kindName, now);
+          counts.opened++;
+          return { socket, pipe };
+        });
 
+      /** Serves an open connection: what goes out, the session's watch, and what comes in. */
+      const serve = (socket: Socket.Socket, pipe: Pipe, p: Player, session: Effect.Effect<boolean>) =>
+        Effect.gen(function* () {
+          yield* Effect.forkScoped(pipe.pump());
+          // The connection lasts only as long as the session: once it has ended, this connection closes.
+          yield* Effect.forkScoped(
+            Effect.andThen(
+              watch(session),
+              Effect.sync(() => pipe.close(CLOSE.signedOut, "signed out")),
+            ),
+          );
           const { pull } = yield* socket.reader;
           yield* Effect.forever(
             Effect.flatMap(pull, (frames) =>
               Effect.flatMap(Clock.currentTimeMillis, (now) =>
                 Effect.sync(() => {
-                  for (const frame of frames) take(connection, frame, now);
+                  for (const frame of frames) if (!pipe.closed) take(p, frame, now);
                 }),
               ),
             ),
@@ -296,27 +434,49 @@ export class Live extends Context.Service<
         }).pipe(
           // The player closed it, or Leaf did.
           Effect.catchTag("SocketError", () => Effect.void),
-          // Leaf is stopping: the player is told to come back in a moment.
-          Effect.onInterrupt(() =>
-            Effect.gen(function* () {
-              const writer = yield* socket.writer;
-              yield* writer.write(JSON.stringify({ t: "bye", code: "restart" } satisfies ToClient));
-              yield* writer.write(new Socket.CloseEvent(CLOSE.restart, "restart"));
-            }).pipe(Effect.scoped, Effect.ignore),
-          ),
         );
 
-      const census = Effect.sync(() => {
-        const inRooms: Record<string, number> = {};
-        for (const room of rooms.all()) inRooms[room.name] = room.size;
-        return { players: players.size, rooms: inRooms };
+      const open = (
+        identity: Identity,
+        kindName: string,
+        upgrade: Effect.Effect<Socket.Socket, unknown>,
+        session: Effect.Effect<boolean>,
+      ) =>
+        Effect.gen(function* () {
+          const now = yield* Clock.currentTimeMillis;
+          if (stopping) return "stopping" as const;
+          // Looked for, counted and taken in one step, with nothing in between: no two can both
+          // take the last place.
+          const id = identity.playerId;
+          const known = players.get(id);
+          if (!known && players.size >= tuning.mostPlayers) return "full" as const;
+          const p = known ?? new Player(identity, now);
+          players.set(id, p);
+          if (!p.opens.take(now)) return "busy" as const;
+          // Held while the socket opens, however long it takes, and let go once it is theirs or never
+          // opened: taking it and promising to let it go are one step that nothing can come between.
+          const attached = yield* Effect.acquireUseRelease(
+            Effect.sync(() => {
+              p.opening++;
+            }),
+            () => attach(p, identity, kindName, upgrade),
+            () =>
+              Effect.sync(() => {
+                p.opening--;
+              }),
+          );
+          if (attached) yield* serve(attached.socket, attached.pipe, p, session);
+          return "served" as const;
+        });
+
+      const farewell = Effect.suspend(() => {
+        stopping = true;
+        return Effect.forEach([...players.values()], (p) => p.pipe?.closeNow(CLOSE.restart, "restart") ?? Effect.void, {
+          discard: true,
+        });
       });
 
-      const farewell = Effect.suspend(() =>
-        Effect.forEach([...players.values()], (c) => c.goodbye(), { discard: true }),
-      );
-
-      return Live.of({ serve, census, farewell });
+      return Live.of({ open, census, farewell });
     }),
   );
 }

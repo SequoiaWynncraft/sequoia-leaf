@@ -1,4 +1,4 @@
-import { LIVE_PATH, LIVE_VERSION } from "@sequoia-leaf/core";
+import { LIVE_PATH, LIVE_VERSION, roomKind } from "@sequoia-leaf/core";
 import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
@@ -11,10 +11,12 @@ const refuse = (status: number, code: string, message: string) =>
   HttpServerResponse.jsonUnsafe({ code, message }, { status, headers: { "cache-control": "no-store" } });
 
 /**
- * `GET /v1/game/live?v=1`: a WebSocket for anyone the game's routes let in, members and guests,
- * with the session as the cookie (from Leaf's own pages only) or a Bearer header. It is refused,
- * before it is upgraded, as the API refuses: 401 `unauthorized`, 403 `bad_origin`, 503
- * `identity_unavailable`; and 400 `unsupported_version` or `not_websocket`.
+ * `GET /v1/game/live?v=2&room=<kind>` (`livePath`): a WebSocket into a room, for anyone the game's
+ * routes let in, members and guests, with the session as the cookie (from Leaf's own pages only)
+ * or a Bearer header. It is refused, before it is upgraded, as the API refuses: 401
+ * `unauthorized`, 403 `bad_origin`, 503 `identity_unavailable`; 400 `unsupported_version`,
+ * `unknown_room` or `not_websocket`; 503 `live_full`, or `restarting` while Leaf stops; and 429
+ * `slow_down` for a player who opens connections too often.
  */
 export const LiveRoute = Layer.unwrap(
   Effect.gen(function* () {
@@ -22,16 +24,28 @@ export const LiveRoute = Layer.unwrap(
     const live = yield* Live;
     const handler = Effect.gen(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest;
-      const version = new URL(request.url, "http://leaf").searchParams.get("v");
-      if (version !== String(LIVE_VERSION)) {
+      const query = new URL(request.url, "http://leaf").searchParams;
+      if (query.get("v") !== String(LIVE_VERSION)) {
         return refuse(400, "unsupported_version", `Leaf speaks version ${LIVE_VERSION} of the live connection`);
       }
+      const kindName = query.get("room") ?? "";
+      if (roomKind(kindName) === undefined) return refuse(400, "unknown_room", "There is no such room");
       if (request.headers["upgrade"]?.toLowerCase() !== "websocket") {
         return refuse(400, "not_websocket", "Open this as a WebSocket");
       }
       const identity = yield* checks.upgrade;
-      const socket = yield* Effect.orDie(request.upgrade);
-      yield* live.serve(socket, identity);
+      // The session is asked about again as the connection goes on: it holds only while the session
+      // does. The backend being out of reach is not taken to mean it has ended.
+      const asked = yield* Effect.context<HttpServerRequest.HttpServerRequest | HttpServerRequest.ParsedSearchParams>();
+      const session = checks.upgrade.pipe(
+        Effect.map((again) => again.playerId === identity.playerId),
+        Effect.catch((e) => Effect.succeed(!(e instanceof Unauthorized))),
+        Effect.provideContext(asked),
+      );
+      const opened = yield* live.open(identity, kindName, request.upgrade, session);
+      if (opened === "full") return refuse(503, "live_full", "Live is full just now. Try again shortly");
+      if (opened === "busy") return refuse(429, "slow_down", "Opened too often. Try again in a little while");
+      if (opened === "stopping") return refuse(503, "restarting", "Leaf is restarting. Try again in a moment");
       return HttpServerResponse.empty();
     }).pipe(
       Effect.catch((e) =>

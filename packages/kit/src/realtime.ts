@@ -2,10 +2,15 @@
  * Live, the game's side: being in a room on Leaf with other players, and seeing them move as it
  * happens (the wire is `@sequoia-leaf/core`'s `live.ts`; the server is `apps/api/src/live`).
  *
- * `joinLive(room, ears)` opens the connection and keeps it open: it reconnects after a drop with a
- * growing, jittered wait, joins the room again, and says where the player is again. A player who
- * opens the game live somewhere else is told so here (`status("replaced")`) and this page lets go.
- * With the made-up guild there is no server, and it does nothing.
+ * `joinLive(room, ears)` opens the connection and keeps it open: after a drop it connects again with
+ * a growing, jittered wait, joins the room again, and says where the player is again (Leaf shows
+ * others that as a jump). Why a connection closed is its close code alone (`CLOSE`): told the
+ * player opened the game live somewhere else, or that their session ended, this page lets go. With
+ * the made-up guild there is no server, and it does nothing.
+ *
+ * What this page knows of the room starts at a welcome, each time: who is in it, where they have
+ * been, and Leaf's clock. Nothing heard before a welcome counts, and a new connection's picture
+ * replaces the old one only then, so nothing of one room, or one connection, is mixed with another's.
  *
  * What it does not do is draw anybody. A page asks it each frame where somebody is to be drawn
  * (`sample`): their motion as it was `INTERP_MS` ago by Leaf's clock, between the two snapshots
@@ -14,15 +19,16 @@
 
 import {
   CLIENT_HZ,
+  CLOSE,
   decodeSnapshot,
   encodeMove,
   Flag,
   INTERP_MS,
-  LIVE_PATH,
-  LIVE_VERSION,
   type LiveMember,
+  livePath,
   type Motion,
   readToClient,
+  reconnects,
   type ToServer,
 } from "@sequoia-leaf/core";
 
@@ -34,27 +40,22 @@ import { type LiveSocket, outside } from "./net.ts";
 /**
  * Leaf's clock as this page can know it, from pings: each answer says how far Leaf's clock is from
  * this one, give or take half the round trip. The answer that came back quickest is the best guess,
- * so the offset is the one from the quickest of the last few.
+ * so the offset is the one from the quickest of the last few. Until a ping comes back, the welcome's.
  */
 export class ClockSync {
   private readonly samples: { rtt: number; offset: number }[] = [];
-  private best = 0;
-  private known = false;
+  private best: number;
+
+  constructor(server: number, now: number) {
+    this.best = server - now;
+  }
 
   /** A pong: `sent` is this page's clock when the ping went (as it came back), `server` Leaf's, `now` this page's. */
   add(sent: number, server: number, now: number): void {
     const rtt = Math.max(0, now - sent);
     this.samples.push({ rtt, offset: server - (sent + rtt / 2) });
     if (this.samples.length > 8) this.samples.shift();
-    const quickest = this.samples.reduce((a, b) => (b.rtt < a.rtt ? b : a));
-    this.best = quickest.offset;
-    this.known = true;
-  }
-
-  /** Takes Leaf's clock from a welcome, until a ping says better. */
-  guess(server: number, now: number): void {
-    if (this.known) return;
-    this.best = server - now;
+    this.best = this.samples.reduce((a, b) => (b.rtt < a.rtt ? b : a)).offset;
   }
 
   /** Leaf's clock now. */
@@ -89,8 +90,8 @@ export class Track {
 
   /**
    * Where they are at `time`: between the snapshots either side of it, or going on from the newest
-   * for a little while if none is newer yet. Across a snap (`Flag.Snap`) they are drawn where they
-   * jumped to, not on the way.
+   * for a little while if none is newer yet, if they were moving. Between two snapshots with
+   * different jumps they are drawn where they were, then where they jumped to, never on the way.
    */
   at(time: number): Motion | null {
     const pts = this.points;
@@ -108,15 +109,41 @@ export class Track {
     const a = pts[i - 1];
     const b = pts[i];
     if (!a || !b) return last.m;
-    if ((b.m.flags & Flag.Snap) !== 0) return a.m;
+    if (a.m.jump !== b.m.jump) return a.m;
     const k = (time - a.time) / Math.max(1, b.time - a.time);
     return { ...a.m, x: a.m.x + (b.m.x - a.m.x) * k, y: a.m.y + (b.m.y - a.m.y) * k };
   }
 }
 
+// ---------- sending the player's motion ----------
+
+/** Where the page says its player is: a motion, but for the jump, which `joinLive` counts itself. */
+export type Step = Omit<Motion, "jump">;
+
+const same = (a: Motion, b: Motion): boolean =>
+  a.x === b.x &&
+  a.y === b.y &&
+  a.vx === b.vx &&
+  a.vy === b.vy &&
+  a.facing === b.facing &&
+  a.pose === b.pose &&
+  a.flags === b.flags &&
+  a.jump === b.jump;
+
+/**
+ * When to send the player's newest motion, given the last one sent and when: at once when it is the
+ * first, or they started or stopped or jumped (those cannot wait); not at all when nothing changed;
+ * otherwise once `CLIENT_HZ` allows. Returns the delay in milliseconds, or null for none.
+ */
+export function sendIn(m: Motion, sent: Motion | null, sentAt: number, now: number): number | null {
+  if (sent === null || m.flags !== sent.flags || m.jump !== sent.jump) return 0;
+  if (same(m, sent)) return null;
+  return Math.max(0, 1000 / CLIENT_HZ - (now - sentAt));
+}
+
 // ---------- the connection ----------
 
-export type LiveStatus = "connecting" | "open" | "closed" | "replaced";
+export type LiveStatus = "connecting" | "open" | "closed" | "replaced" | "signedout";
 
 /** What a page hears from its room. Every one is optional. */
 export interface LiveEars {
@@ -134,12 +161,13 @@ export interface LiveRoom {
   /** The player's own number in the room, once in it. */
   you(): number | null;
   /**
-   * Says where the player is and how they move. It goes at most `CLIENT_HZ` times a second, and only
-   * when it changed; starting, stopping and a snap go at once, and the last change always goes.
+   * Says where the player is and how they move, `jumped` when they did not walk there. It goes at
+   * most `CLIENT_HZ` times a second, and only when it changed; starting, stopping and a jump at
+   * once, and the last change always.
    */
-  move(m: Motion): void;
-  /** Something the player did that others see once: a kind and an argument, short tokens. */
-  act(kind: string, arg?: string): void;
+  move(step: Step, jumped?: boolean): void;
+  /** Something the player did that others see once: one of core's `ACTS`. */
+  act(kind: string, arg: string): void;
   /** Where somebody is to be drawn now, `INTERP_MS` behind Leaf's clock. */
   sample(id: number): Motion | null;
   /** Leaf's clock now, as far as this page can tell. */
@@ -154,181 +182,196 @@ export interface LiveRoom {
 export const retryAfter = (tries: number, chance: number): number =>
   Math.min(10_000, 500 * 2 ** Math.min(tries, 5)) * (1 + chance / 2);
 
-const SEND_EVERY = 1000 / CLIENT_HZ;
 /** Pings: quickly at first, to learn the clock, then now and then, to keep it. */
 const PING_FIRST = 1000;
 const PING_EVERY = 10_000;
 
-const same = (a: Motion, b: Motion): boolean =>
-  a.x === b.x &&
-  a.y === b.y &&
-  a.vx === b.vx &&
-  a.vy === b.vy &&
-  a.facing === b.facing &&
-  a.pose === b.pose &&
-  a.flags === b.flags;
-
-/** The address of Leaf's live connection, next to the page. */
-const liveUrl = (): string => {
-  const url = new URL(`${LIVE_PATH}?v=${LIVE_VERSION}`, outside.href());
+/** The address of Leaf's live connection into a room, next to the page. */
+const liveUrl = (room: string): string => {
+  const url = new URL(livePath(room), outside.href());
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return url.toString();
 };
 
+/** What one connection knows of the room. Made afresh for each, and shown only once its welcome came. */
+interface Link {
+  readonly socket: LiveSocket;
+  readonly people: Map<number, LiveMember>;
+  readonly tracks: Map<number, Track>;
+  clock: ClockSync | null;
+  you: number | null;
+  open: boolean;
+}
+
+const NOBODY: ReadonlyMap<number, LiveMember> = new Map();
+
 /** Puts the player in a room on Leaf, live. With the made-up guild it does nothing, and nobody is ever there. */
 export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
-  const people = new Map<number, LiveMember>();
-  const tracks = new Map<number, Track>();
-  const clock = new ClockSync();
-  let you: number | null = null;
-  let socket: LiveSocket | null = null;
-  let open = false;
+  /** The connection open now, if any; and the one whose picture of the room is shown. */
+  let link: Link | null = null;
+  let shown: Link | null = null;
   let done = member() === null;
-  let replaced = false;
   let tries = 0;
   let retry: ReturnType<typeof setTimeout> | null = null;
   let pinger: ReturnType<typeof setTimeout> | null = null;
-  let pings = 0;
-  // What the player last said, what was last sent, when, and a send waiting for its turn.
+  // The player's motion: as the page last said it, as last sent, and when, and a send waiting its turn.
   let motion: Motion | null = null;
   let sent: Motion | null = null;
-  let sentAt = -Infinity;
+  let sentAt = 0;
   let seq = 0;
   let later: ReturnType<typeof setTimeout> | null = null;
 
   const status = (s: LiveStatus): void => ears.status?.(s);
-  const say = (m: ToServer): void => {
-    if (open) socket?.send(JSON.stringify(m));
-  };
+  const say = (l: Link, m: ToServer): void => l.socket.send(JSON.stringify(m));
 
-  function sendMotion(m: Motion): void {
-    if (!open || !socket) return;
+  function sendNow(): void {
+    if (later) clearTimeout(later);
+    later = null;
+    const l = shown;
+    if (!l || l !== link || !motion) return;
     seq = (seq + 1) & 0xffff;
-    socket.send(encodeMove(seq, m));
-    sent = m;
+    l.socket.send(encodeMove(seq, motion));
+    sent = motion;
     sentAt = outside.now();
   }
 
-  function ping(): void {
-    if (!open) return;
-    say({ t: "ping", c: outside.now() });
-    pings++;
-    pinger = setTimeout(ping, pings < 5 ? PING_FIRST : PING_EVERY);
+  function want(m: Motion): void {
+    motion = m;
+    const wait = sendIn(m, sent, sentAt, outside.now());
+    if (wait === 0) return sendNow();
+    if (wait === null || later) return;
+    later = setTimeout(sendNow, wait);
   }
 
-  function heard(text: string): void {
+  function ping(l: Link, n: number): void {
+    if (link !== l) return;
+    say(l, { t: "ping", c: outside.now() });
+    pinger = setTimeout(() => ping(l, n + 1), n < 5 ? PING_FIRST : PING_EVERY);
+  }
+
+  function heard(l: Link, text: string): void {
     const m = readToClient(text);
     if (!m) return;
     switch (m.t) {
       case "welcome": {
         tries = 0;
-        you = m.you;
-        clock.guess(m.time, outside.now());
-        const here = new Set(m.roster.map((r) => r.id));
-        for (const id of people.keys()) if (!here.has(id)) tracks.delete(id);
-        people.clear();
-        for (const r of m.roster) people.set(r.id, r);
+        l.you = m.you;
+        l.clock = new ClockSync(m.time, outside.now());
+        l.people.clear();
+        l.tracks.clear();
+        for (const r of m.roster) l.people.set(r.id, r);
+        shown = l;
+        // Nothing has been sent on this connection yet: whatever the player says next goes at once.
+        sent = null;
         ears.welcome?.(m.you, m.room, m.roster);
-        // Where the player is goes again at once, as a jump: nobody has seen them in this room yet.
-        if (motion) sendMotion({ ...motion, flags: motion.flags | Flag.Snap });
+        // Said again, unless whoever heard the welcome has just said it: this room has not heard
+        // from the player on this connection yet.
+        if (motion && sent === null) want(motion);
         return;
       }
       case "joined":
-        people.set(m.member.id, m.member);
-        ears.joined?.(m.member);
+        l.people.set(m.member.id, m.member);
+        if (shown === l) ears.joined?.(m.member);
         return;
       case "left":
-        people.delete(m.id);
-        tracks.delete(m.id);
-        ears.left?.(m.id);
+        l.people.delete(m.id);
+        l.tracks.delete(m.id);
+        if (shown === l) ears.left?.(m.id);
         return;
       case "act":
-        ears.act?.(m.id, m.kind, m.arg);
+        if (shown === l) ears.act?.(m.id, m.kind, m.arg);
         return;
       case "pong":
-        clock.add(m.c, m.s, outside.now());
-        return;
-      case "bye":
-        if (m.code === "replaced") {
-          done = true;
-          replaced = true;
-          status("replaced");
-        }
+        l.clock?.add(m.c, m.s, outside.now());
         return;
       case "error":
         return;
     }
   }
 
+  function snapshot(l: Link, data: ArrayBuffer): void {
+    // Before its welcome, a connection is in no room this page asked for.
+    if (l.you === null) return;
+    const snap = decodeSnapshot(new Uint8Array(data));
+    if (!snap) return;
+    for (const entry of snap.entries) {
+      if (entry.id === l.you) continue;
+      let track = l.tracks.get(entry.id);
+      if (!track) l.tracks.set(entry.id, (track = new Track()));
+      track.add(snap.time, entry);
+    }
+  }
+
+  // Whoever hears the status may close the room from inside it: each is said only once the change
+  // it tells of is complete, and nothing is done after it that a close would undo.
+
   function connect(): void {
     if (done) return;
-    status("connecting");
-    const s = outside.socket(liveUrl());
-    socket = s;
-    s.binaryType = "arraybuffer";
-    s.addEventListener("open", () => {
-      open = true;
+    const l: Link = {
+      socket: outside.socket(liveUrl(room)),
+      people: new Map(),
+      tracks: new Map(),
+      clock: null,
+      you: null,
+      open: false,
+    };
+    link = l;
+    l.socket.binaryType = "arraybuffer";
+    l.socket.addEventListener("open", () => {
+      if (link !== l) return;
+      // Opening it is entering the room: Leaf's welcome comes first.
+      l.open = true;
       status("open");
-      say({ t: "join", room });
-      pings = 0;
-      ping();
+      ping(l, 0);
     });
-    s.addEventListener("message", (e) => {
-      if (typeof e.data === "string") return heard(e.data);
-      if (!(e.data instanceof ArrayBuffer)) return;
-      const snap = decodeSnapshot(new Uint8Array(e.data));
-      if (!snap) return;
-      for (const entry of snap.entries) {
-        if (entry.id === you) continue;
-        let track = tracks.get(entry.id);
-        if (!track) tracks.set(entry.id, (track = new Track()));
-        track.add(snap.time, entry);
-      }
+    l.socket.addEventListener("message", (e) => {
+      if (link !== l) return;
+      if (typeof e.data === "string") heard(l, e.data);
+      else if (e.data instanceof ArrayBuffer) snapshot(l, e.data);
     });
-    s.addEventListener("close", () => {
-      open = false;
-      socket = null;
-      you = null;
+    status("connecting");
+    l.socket.addEventListener("close", (e) => {
+      if (link !== l) return;
+      link = null;
       if (pinger) clearTimeout(pinger);
-      if (done) {
-        if (!replaced) status("closed");
-        return;
+      if (done) return;
+      if (!reconnects(e.code)) {
+        // For good: nothing of the room is shown any more. A drop keeps it until the next welcome.
+        done = true;
+        shown = null;
+        return status(e.code === CLOSE.replaced ? "replaced" : "signedout");
       }
-      status("closed");
       retry = setTimeout(connect, retryAfter(tries++, Math.random()));
+      status("closed");
     });
   }
 
   connect();
 
   return {
-    members: () => people,
-    you: () => you,
-    move(m) {
-      motion = m;
-      if (later) return;
-      const changedHow = sent === null || (m.flags ^ sent.flags) !== 0;
-      if (sent !== null && same(m, sent)) return;
-      const wait = SEND_EVERY - (outside.now() - sentAt);
-      if (changedHow || (m.flags & Flag.Snap) !== 0 || wait <= 0) return sendMotion(m);
-      later = setTimeout(() => {
-        later = null;
-        if (motion && (sent === null || !same(motion, sent))) sendMotion(motion);
-      }, wait);
+    members: () => shown?.people ?? NOBODY,
+    you: () => shown?.you ?? null,
+    move(step, jumped = false) {
+      const jump = motion?.jump ?? 0;
+      want({ ...step, jump: jumped ? (jump + 1) & 0xff : jump });
     },
-    act(kind, arg = "") {
-      say({ t: "act", kind, arg });
+    act(kind, arg) {
+      if (link && shown === link) say(link, { t: "act", kind, arg });
     },
     sample(id) {
-      return tracks.get(id)?.at(clock.server(outside.now()) - INTERP_MS) ?? null;
+      const l = shown;
+      if (!l?.clock) return null;
+      return l.tracks.get(id)?.at(l.clock.server(outside.now()) - INTERP_MS) ?? null;
     },
-    serverNow: () => clock.server(outside.now()),
-    rtt: () => clock.rtt(),
+    serverNow: () => shown?.clock?.server(outside.now()) ?? outside.now(),
+    rtt: () => shown?.clock?.rtt() ?? null,
     close() {
       done = true;
       for (const t of [retry, pinger, later]) if (t) clearTimeout(t);
-      if (open) say({ t: "leave" });
-      socket?.close(1000, "bye");
+      if (link?.open) say(link, { t: "leave" });
+      link?.socket.close(CLOSE.done, "bye");
+      link = null;
+      shown = null;
     },
   };
 }

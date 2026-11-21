@@ -449,7 +449,7 @@ await leaf.serve(port, Layer.mergeAll(signingRoute("/sign-in"), signingRoute("/s
  */
 async function walk(who: { readonly name: string }, path: readonly (readonly [number, number])[], pause: number) {
   const client = await LiveClient.open(origin, { bearer: sessionFor(who) });
-  await client.join("town");
+  await client.welcome();
   const speed = 30;
   let leg = 0;
   let [x, y] = path[0] ?? [256, 200];
@@ -471,12 +471,12 @@ async function walk(who: { readonly name: string }, path: readonly (readonly [nu
       [x, y] = [tx, ty];
       leg = (leg + 1) % path.length;
       resting = pause;
-      client.move({ x, y, vx: 0, vy: 0, facing, pose: 0, flags: 0 });
+      client.move({ x, y, vx: 0, vy: 0, facing, pose: 0, flags: 0, jump: 0 });
       return;
     }
     x += (dx / d) * step;
     y += (dy / d) * step;
-    client.move({ x, y, vx: (dx / d) * speed, vy: (dy / d) * speed, facing, pose: 0, flags: Flag.Moving });
+    client.move({ x, y, vx: (dx / d) * speed, vy: (dy / d) * speed, facing, pose: 0, flags: Flag.Moving, jump: 0 });
   }, 1000 / CLIENT_HZ);
 }
 if (birchwood) {
