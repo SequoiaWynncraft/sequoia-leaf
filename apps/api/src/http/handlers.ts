@@ -137,7 +137,7 @@ function sessionCookies(header: string | undefined): number {
  * request that came with both: a Bearer that would let it in on its own wins, and otherwise the
  * cookie decides. A request with two session cookies is refused on both turns.
  */
-const sessionChecks = Effect.gen(function* () {
+export const sessionChecks = Effect.gen(function* () {
   const identities = yield* Identities;
   const { publicOrigin } = yield* AppConfig;
   const bearerToken = HttpApiBuilder.securityDecode(HttpApiSecurity.bearer);
@@ -181,6 +181,23 @@ const sessionChecks = Effect.gen(function* () {
         return yield* new Unauthorized({ code: "unauthorized", message: "Sign in with your Sequoia account" });
       }
       return yield* admit(Redacted.value(credential));
+    }),
+    /**
+     * For a request that opens a live connection (`/v1/game/live`), which is a GET: the cookie, or
+     * the Bearer when there is no cookie. A page on another site can open a WebSocket to Leaf, and
+     * the browser sends the cookie with it, so with the cookie it must come from Leaf's own pages.
+     */
+    upgrade: Effect.gen(function* () {
+      yield* oneSessionCookie;
+      const cookie = Redacted.value(yield* cookieToken);
+      if (cookie === "") {
+        return yield* admit(Redacted.value(yield* bearerToken));
+      }
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      if (request.headers["origin"] !== publicOrigin) {
+        return yield* new BadOrigin({ code: "bad_origin", message: "Leaf takes this only from its own pages" });
+      }
+      return yield* admit(cookie);
     }),
     /** The cookie's turn: the cookie, or the Bearer when there is no cookie. */
     cookie: Effect.fnUntraced(function* (credential: Redacted.Redacted) {

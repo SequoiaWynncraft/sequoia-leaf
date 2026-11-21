@@ -441,6 +441,94 @@ whose `stay` was true, newest first, at most 24. A game that says where it is
 less than 5 seconds after it last did is answered the lists, but nothing is
 written. Players not seen for a day are forgotten.
 
+### Live: players in the same place, as it happens
+
+`GET /v1/game/live?v=1` is a WebSocket. Players in the same room see each other
+move with about a tick of delay (Leaf's tick is 33 ms), and see who comes, goes
+and does what. Anyone the game's routes let in may open it, members and guests
+alike. The wire is `packages/core/src/live.ts`, shared by Leaf and the game; the
+server is `apps/api/src/live`; the game's side is `packages/kit/src/realtime.ts`.
+
+**Opening it.** The session comes as the cookie or a Bearer header, checked as
+for the game's routes. With the cookie, the request must carry `Origin` equal to
+`PUBLIC_ORIGIN`, though it is a `GET`: a page on another site can open a
+WebSocket to Leaf, and the browser would send the cookie with it. Before the
+upgrade it is refused as the API refuses: 401 `unauthorized`, 403 `bad_origin`,
+503 `identity_unavailable`, and 400 `unsupported_version` (no `v`, or another)
+or `not_websocket`. Each player has one connection; opening a second, in another
+tab or on another device, closes the first.
+
+**Frames.** Binary frames carry motion, little-endian:
+
+| Frame    | From | Bytes               | Holds                                                                                                         |
+| -------- | ---- | ------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Move     | game | 22                  | `1`, `seq` u16 (counting up, wrapping), then a motion: `x`, `y`, `vx`, `vy` f32, `facing`, `pose`, `flags` u8 |
+| Snapshot | Leaf | 15, and 23 a player | `2`, `tick` u32, `time` f64 (Leaf's clock, ms), `count` u16, then per player `id` u16, `seq` u16, a motion    |
+
+Positions are in the room's units and kept inside it; speeds are kept below
+1024 a second. `flags` bit 0 says the player is moving and bit 1 that they
+jumped there (a door, a reconnect) and are not to be drawn on the way; the
+other bits, `facing` and `pose` are the game's, passed on as they come. Leaf
+sends a room's snapshot once a tick, only when somebody's motion changed, with
+only those who changed, made once and sent to everyone in the room. A move older
+than one already taken is dropped.
+
+Text frames are JSON with a `t`:
+
+| From | `t`       | Holds                                                                                                       |
+| ---- | --------- | ----------------------------------------------------------------------------------------------------------- |
+| game | `join`    | `room`: a kind of room (`town`). Leaves any other.                                                          |
+| game | `leave`   |                                                                                                             |
+| game | `act`     | `kind` (`[a-z][a-z0-9_]{0,23}`) and `arg` (`[a-z0-9_-]{0,32}`): something others see once. Never free text. |
+| game | `ping`    | `c`: the game's clock.                                                                                      |
+| Leaf | `welcome` | `v`, `you` (the player's number in the room), `room` (with its copy: `town/1`), `hz`, `time`, `roster`      |
+| Leaf | `joined`  | `member`: `{ id, player, name, rank, guest }`                                                               |
+| Leaf | `left`    | `id`                                                                                                        |
+| Leaf | `act`     | `id`, `kind`, `arg`                                                                                         |
+| Leaf | `pong`    | `c` as it came, and `s`: Leaf's clock                                                                       |
+| Leaf | `error`   | `code`: `unknown_room`, `not_in_room` or `bad_act`                                                          |
+| Leaf | `bye`     | `code`: why Leaf is closing (below)                                                                         |
+
+A `welcome` is followed at once by a snapshot of everybody's motion, so a
+newcomer sees where everyone already is.
+
+**Rooms.** `ROOMS` in `packages/core/src/live.ts` lists the kinds, each with its
+size and how many fit in one copy (the town: 512 by 352, 32). A player is put in
+the first copy with space, or a new one (`town/2`); a copy closes when its last
+player leaves. Rooms live in memory, in the one process.
+
+**Limits.** No frame over 4 KiB (Bun closes the connection, 1009). Text frames
+over 512 bytes are not read. A connection may send 30 moves a second (bursts of
+40), 8 texts a second (20), and 3 actions a second (6); more is dropped, as is
+anything that cannot be read, and after 200 such frames the connection is
+closed. A client a megabyte behind is cut off by Bun; Bun pings every
+connection, and one silent for a minute is closed. Nothing is compressed.
+
+**Closing.** Before closing, Leaf says why with a `bye`, and closes with a code:
+
+| `bye`      | Close code | What the game does                                                |
+| ---------- | ---------- | ----------------------------------------------------------------- |
+| `replaced` | 4001       | The player opened the game live elsewhere. It does not reconnect. |
+| `restart`  | 1012       | Leaf is stopping, as in a deploy. It reconnects in a moment.      |
+| `invalid`  | 1008       | It sent too much Leaf could not read.                             |
+| `rate`     | 1008       | It sent too much, too fast.                                       |
+
+When Leaf stops, every player is told `restart` before the HTTP server stops
+(`LiveFarewell` sits on top of the server so that it is taken down first). The
+game reconnects to the new container after half a second or so, joins its room
+again, and says where its player is again, as a jump.
+
+Once a minute while anybody is connected, Leaf logs a `live` line: players, who
+is in which room, and how many frames came in, were dropped and went out.
+
+**How it holds up.** `bun apps/api/test/live-load.ts [players] [seconds]` runs the
+real app with that many players walking about the town at the game's pace, and
+times every move from its sender to each other player in the room. On the
+development machine, with the server and every player in one process: 32 players,
+every move seen by all 31 others, 16 ms at the median and 35 ms at worst, 14 KiB a
+second to each player; 128 players in four copies of the town, 19 ms and 38 ms,
+19% of one core for everything.
+
 ## The game's pages
 
 When `PUBLIC_DIR` is set, the server serves its contents under `/play`, with
@@ -477,7 +565,9 @@ other members who raid and war with them and on their own. Two of the four are
 then in the game (Birchwood in town, Mossling at the table) and stay so, and
 two left a while ago and doze in town (Fernhollow three hours ago, Quillon
 forty minutes ago, last at the Works). Pebblefoot, who is not in the guild, is
-in town too, as a guest.
+in town too, as a guest. Birchwood and Pebblefoot are in the town's live room
+as well (`/v1/game/live`), walking about it: Birchwood round the square, and
+Pebblefoot from spot to spot.
 
 - The cookie `seq_session=tester` is Tester's session; any other, or none, is
   signed out. `/sign-in?return_to=<address>` sets it and goes back, as the
