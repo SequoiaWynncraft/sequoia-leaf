@@ -282,6 +282,44 @@ function takeFromTray(camp: Camp, id: string): void {
   else delete camp.tray[id];
 }
 
+// ---------- things arriving ----------
+
+/** How many parcels may wait by the trail at once: nothing more is sent while that many are there. */
+export const MOST_PARCELS = 200;
+
+/**
+ * Sets a thing down at a spot, or puts it in the tray when there is no spot. Gives what was set
+ * down, or `null` if it went into the tray.
+ */
+export function setDown(
+  camp: Pick<Camp, "placed" | "tray">,
+  id: string,
+  spot: { x: number; y: number } | null,
+): Placed | null {
+  if (!spot) {
+    camp.tray[id] = (camp.tray[id] ?? 0) + 1;
+    return null;
+  }
+  const at: Placed = { id, x: spot.x, y: spot.y, t: 0, s: 0 };
+  camp.placed.push(at);
+  return at;
+}
+
+/**
+ * Opens the first parcel waiting by the trail. What was in it goes from the parcels into the camp
+ * in this one step, at the spot `room` finds for it (or into the tray when there is none), before
+ * anybody sees it arrive: a reload, or leaving, while it is in the air loses nothing. Gives the
+ * thing and what was set down, or `null` when no parcel is waiting.
+ */
+export function unpackParcel(
+  camp: Camp,
+  room: (id: string) => { x: number; y: number } | null,
+): { id: string; at: Placed | null } | null {
+  const id = camp.parcels.shift();
+  if (id === undefined) return null;
+  return { id, at: setDown(camp, id, room(id)) };
+}
+
 /** How many of a thing the member has, wherever it is. */
 export function owned(camp: Camp, id: string): number {
   return (
@@ -411,7 +449,7 @@ const things = (v: unknown, most: number): string[] => (Array.isArray(v) ? v.fil
 const isHandle = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z][A-Za-z '-]{0,23}$/.test(v);
 
 /** The most of anything a record may hold. */
-const MOST = { placed: 240, each: 99, parcels: 40, letters: 24, gave: 40 };
+const MOST = { placed: 240, each: 99, parcels: MOST_PARCELS, letters: 24, gave: 40 };
 
 /**
  * Reads a kept camp back. Anything that is not a camp gives `null` (a new camp is made); inside

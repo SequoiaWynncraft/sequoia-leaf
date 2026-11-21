@@ -11,6 +11,7 @@ import {
   freeSpot,
   KIND,
   layout,
+  MOST_PARCELS,
   move,
   newCamp,
   owned,
@@ -22,8 +23,10 @@ import {
   TRAIL,
   trayList,
   turned,
+  unpackParcel,
   YARD,
 } from "./camp.ts";
+import { clearFlights, flights } from "./flights.ts";
 import { isLetter, letter, open, post, tidied, waiting } from "./mail.ts";
 import { footprint, isThing, KINDS, thingOf, THINGS, turnsOf } from "./things.ts";
 
@@ -232,6 +235,17 @@ describe("keeping a camp", () => {
     expect(parseCamp(JSON.parse(JSON.stringify(camp)))).toEqual(camp);
   });
 
+  test("every parcel waiting by the trail comes back, up to as many as may wait", () => {
+    expect(MOST_PARCELS).toBe(200);
+    const camp = fresh();
+    for (const n of [41, MOST_PARCELS]) {
+      camp.parcels = Array.from({ length: n }, (_v, i) => THINGS[i % THINGS.length]?.id ?? "gnome");
+      const back = parseCamp(JSON.parse(JSON.stringify(camp)));
+      expect(back?.parcels).toHaveLength(n);
+      expect(back?.parcels).toEqual(camp.parcels);
+    }
+  });
+
   test("nonsense is not a camp", () => {
     for (const raw of [null, 7, "camp", [], {}, { placed: "everywhere" }]) expect(parseCamp(raw)).toBeNull();
   });
@@ -279,6 +293,37 @@ describe("keeping a camp", () => {
     for (const t of THINGS)
       for (let turn = 0; turn < turnsOf(t); turn++) expect(freeSpot([], t.id, { x: 24, y: 24 }, turn)).not.toBeNull();
     expect(isThing("cabin")).toBe(true);
+  });
+});
+
+describe("unpacking a parcel", () => {
+  const near = { x: 37, y: 31 };
+
+  test("what was in it is in the kept camp before it is seen to land, and stays if the flight is cleared", () => {
+    const camp = fresh();
+    camp.parcels = ["barrel", "gnome"];
+    const got = unpackParcel(camp, (id) => freeSpot(camp.placed, id, near));
+    expect(got?.id).toBe("barrel");
+    expect(got?.at?.id).toBe("barrel");
+    // Delivery has started and nothing has landed: a reload now finds it standing, not waiting.
+    const reloaded = (): Camp | null => parseCamp(JSON.parse(JSON.stringify(camp)));
+    expect(reloaded()?.parcels).toEqual(["gnome"]);
+    expect(reloaded()?.placed.filter((p) => p.id === "barrel")).toEqual(got?.at ? [got.at] : []);
+    expect(owned(camp, "barrel")).toBe(1);
+    // Leaving the camp drops whatever is in the air, and the flight was only ever how it was seen.
+    clearFlights();
+    expect(flights).toHaveLength(0);
+    expect(reloaded()?.placed.filter((p) => p.id === "barrel")).toHaveLength(1);
+    expect(reloaded()?.parcels).toEqual(["gnome"]);
+  });
+
+  test("with nowhere to go it goes into the tray, still in one step", () => {
+    const camp = fresh();
+    camp.parcels = ["well"];
+    expect(unpackParcel(camp, () => null)).toEqual({ id: "well", at: null });
+    expect(camp.parcels).toEqual([]);
+    expect(camp.tray).toEqual({ well: 1 });
+    expect(unpackParcel(camp, () => null)).toBeNull();
   });
 });
 

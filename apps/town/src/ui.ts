@@ -37,7 +37,7 @@ import {
 } from "./hud.ts";
 import type { Letter } from "./letter.ts";
 import { waiting } from "./mail.ts";
-import { camp, sendToCamp } from "./record.ts";
+import { buyForCamp, camp } from "./record.ts";
 import { icon, type Sprites } from "./sprites.ts";
 import { thingOf } from "./things.ts";
 import { flare, nudgeCrab, ringBell, rollCall } from "./town.ts";
@@ -315,11 +315,18 @@ function shopRow(
     kind === "leaf" ? "leaf sm" : "sm",
     [glyph(kind === "leaf" ? "leaf" : "coin"), String(s.price)],
     (b) => {
-      if (!pay(kind, b, s.price, thing.name)) return;
+      const sent = buyForCamp(thing.id, () => pay(kind, b, s.price, thing.name));
+      if (sent === "full") {
+        // Nothing is charged: as many parcels are waiting by the trail as may.
+        sfx.no();
+        replay(b, "shake");
+        hooks.feed("Too many parcels are waiting by the trail. Unpack some first.", "coral");
+        return;
+      }
+      if (sent !== "sent") return;
       const from = sold();
       // It leaves for the camp at once: a parcel, up the path and out through the gate.
       if (S) fling(S.crate.c, from, { x: 256, y: 92 }, 0.9, 30, () => puff(256, 90, 4, CREAM));
-      sendToCamp(thing.id);
       if (G.player) hop(G.player);
       hooks.feed(`${thing.name}: on its way to your camp.`, kind === "leaf" ? "leaf" : "gold");
     },

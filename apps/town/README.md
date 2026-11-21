@@ -9,7 +9,7 @@ own camp, and down the trail from that, everybody else's.
 ```sh
 bun run dev      # with hot reload
 bun run build    # dist/
-bun test         # the rules: saving, the arrival letter, the made-up guild, the camp, the mailbox
+bun test         # the rules: saving, the arrival letter, the made-up guild, the camp, the mailbox, parcels
 ```
 
 To play as a real skin, put a 64x64 skin sheet at `dist/skins/player.png` after building (it is
@@ -90,7 +90,10 @@ in off the trail. Walking out past the two lantern posts on the camp's east side
   cannot be bought (a carved figure for each boss beaten in The Little Raid, a model of each
   capstone built in the Works), and from guild-mates as small presents. Whatever is bought or won
   waits by the trail as a parcel, and the parcels open one after another when the member is in:
-  each thing flies to a clear spot and lands.
+  each thing flies to a clear spot and lands. As many as two hundred parcels may wait; with that
+  many by the trail the market and the Treasury sell nothing more (and take nothing) until some are
+  unpacked, and a trophy waits in its game. A thing is in the camp, and kept, the moment its parcel
+  opens; the flight is only how it is seen arriving.
 - **The cabin.** Walking up to its door opens the member's own things: their rank, level and week
   with the guild, what they are wearing (each thing put on or taken off), the trophies they have
   won, and who lives with them and what would bring the next. In town the member's face in the
@@ -199,7 +202,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/campsfx.ts`                      | The camp's own sounds                                                                   |
 
 `grid.ts`, `camp.ts`, `things.ts`, `mail.ts`, `save.ts`, `letter.ts`, `madeup.ts` and `games.ts`
-have no page in them, and tests beside them.
+have no page in them, and tests beside them. `record.ts` has tests too, for what is sent to the camp.
 
 ## The games beside it
 
