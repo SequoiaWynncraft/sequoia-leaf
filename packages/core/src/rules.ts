@@ -15,10 +15,12 @@ export interface Rules {
 
 export interface EarningRules {
   /**
-   * Leaf paid to each party member for a guild raid, whatever its season rating
-   * or gambits. The Branchmasters asked for a flat amount, so every raid pays the same.
+   * Leaf paid to a party member per point of their share of the season rating a
+   * raid earns. The share follows the gambits the member took: 110 for three, 80
+   * for two, 60 for one and 50 for none, or an even split of the party's rating
+   * when the backend does not know them.
    */
-  readonly leafPerRaid: number;
+  readonly leafPerRaidSeasonRating: number;
   /** Leaf paid to a participant per war point they scored, in an FFA war or a snipe. */
   readonly leafPerWarPoint: number;
   /**
@@ -40,10 +42,11 @@ export interface LevelRules {
   readonly leafGrowthPerLevel: number;
 }
 
-// A guild raid pays each member 100 Leaf, and a war half its war points (the
-// whole war points over our own claim). In the week to 2026-11-21 a war scored
-// about 25 war points, so a war pays about 12 Leaf, and raids, which drive the
-// guild, pay well ahead of wars, as the Branchmasters asked on 2026-11-19.
+// A guild raid pays each member their share of its season rating, 50 to 110 by
+// the gambits they took, and a war half its war points (the whole war points
+// over our own claim). In the week to 2026-11-21 a war scored about 25 war
+// points, so a war pays about 12 Leaf, and raids, which drive the guild, pay
+// well ahead of wars, as the Branchmasters asked on 2026-11-19.
 //
 // Most quests can be finished by raiding or by warring, whichever comes first, so
 // raiders and warrers both have a way. Over the first three days a raid took
@@ -108,7 +111,7 @@ const QUEST_TEMPLATES: readonly QuestTemplate[] = [
 ];
 
 // Raid milestones come at 25, 50, 100, 500, 1,000, 2,500 and 5,000 raids (the
-// "all raids" ladder at twice that). At 100 Leaf a raid, the first three pay
+// "all raids" ladder at twice that). At about 100 Leaf a raid, the first three pay
 // 40 to 60% on top of the Leaf the raids since the last milestone paid, so the
 // early ones feel big; the rest pay 20 to 30%. War milestones sit at the same
 // counts, but a war takes about a third of a raid's time and pays far less, so
@@ -146,7 +149,7 @@ const ACHIEVEMENT_RULES: AchievementRules = {
 
 export const DEFAULT_RULES: Rules = {
   earning: {
-    leafPerRaid: 100,
+    leafPerRaidSeasonRating: 1,
     leafPerWarPoint: 0.5,
     leafPerClaimWarPoint: 1,
   },
@@ -179,7 +182,7 @@ export const DEFAULT_RULES: Rules = {
 export function leafForActivity(activity: Activity, rules: EarningRules): number {
   const raw =
     activity.kind === "raid"
-      ? rules.leafPerRaid
+      ? activity.seasonRating * rules.leafPerRaidSeasonRating
       : activity.warPoints * (activity.inClaim === true ? rules.leafPerClaimWarPoint : rules.leafPerWarPoint);
   return Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
 }

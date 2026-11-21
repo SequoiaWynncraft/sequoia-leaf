@@ -71,14 +71,14 @@ describe("syncCredits", () => {
     expect((await leaf.account(alice)).balance).toBe(0);
   });
 
-  it("records a raid and pays its flat Leaf and XP", async () => {
+  it("records a raid and pays its season rating in Leaf and XP", async () => {
     const { source } = feed([raid(1, alice, T0 + MINUTE)]);
     await sync(source, T0);
 
     const result = await sync(source, T0 + 5 * MINUTE);
 
-    expect(result).toEqual({ status: "synced", recorded: 1, leafPaid: 100 });
-    expect(await leaf.account(alice)).toEqual({ playerId: alice, balance: 100, xp: 100 });
+    expect(result).toEqual({ status: "synced", recorded: 1, leafPaid: 110 });
+    expect(await leaf.account(alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
     const [entry] = await entries(alice);
     expect(entry).toMatchObject({ kind: "earn", origin: "raid", idempotency_key: `raid:1:${alice}` });
     const rows = await leaf.query((sql) => sql`SELECT kind, raid, detail, season_rating, occurred_at FROM activities`);
@@ -153,8 +153,8 @@ describe("syncCredits", () => {
     const again = await sync(source, T0 + 6 * MINUTE);
 
     expect(again).toEqual({ status: "synced", recorded: 0, leafPaid: 0 });
-    expect((await leaf.account(alice)).balance).toBe(100);
-    expect((await leaf.account(bob)).balance).toBe(100);
+    expect((await leaf.account(alice)).balance).toBe(110);
+    expect((await leaf.account(bob)).balance).toBe(110);
   });
 
   it("leaves events younger than the settle delay for the next run", async () => {
@@ -191,7 +191,7 @@ describe("syncCredits", () => {
     expect((await leaf.account(bob)).balance).toBe(0);
 
     await sync(source, T0 + 3 * HOUR + 2 * MINUTE, "deep");
-    expect((await leaf.account(bob)).balance).toBe(100);
+    expect((await leaf.account(bob)).balance).toBe(110);
   });
 
   it("does nothing while another run holds the lease", async () => {
