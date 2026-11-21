@@ -221,7 +221,7 @@ const BRANCHES: readonly { label: string; plans: readonly PlanId[] }[] = [
   { label: "The yard itself", plans: ["flywheel", "tallpylons", "bigcrates", "fourth"] },
 ];
 
-/** Why a plan cannot be had yet, without its own name on the front: "Comes with a later order." */
+/** Why a plan cannot be had yet, without its own name on the front: "Unlocks when you fill order 3: Gears and frames." */
 function later(why: string, name: string): string {
   const rest = why.startsWith(`${name} `) ? why.slice(name.length + 1) : why;
   return `${rest.charAt(0).toUpperCase()}${rest.slice(1)}.`;
