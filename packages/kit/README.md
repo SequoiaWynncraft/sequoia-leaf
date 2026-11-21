@@ -39,6 +39,10 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
   sprite has a one-pixel dark edge.
 - **Leaf is green.** Spending Leaf is always the green button (`k-btn leaf`) and Leaf amounts are
   always the pale green, so the precious currency is never spent by surprise.
+- **The town's own are marked.** Whoever lives in the game and is not a member (a keeper, a cat,
+  a gnome, a regular at the battler's table) has its name in that pale green with the small acorn
+  before it: `folkName(name)` on a page, `acornPicture()` and `FOLK_COLOUR` beside letters on a
+  canvas (`mark.ts`). A member's name is cream (`k-member` on a title).
 
 ## The pieces (`src/kit.css`)
 
@@ -60,6 +64,7 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
 | `k-chip` (`lit`)                                                      | A small tag                                                          |
 | `k-toast` (`leaf`, `coral`, `rose`, `alone`)                          | A line of news; `alone`, over the whole page at the top              |
 | `k-title`, `k-name`, `k-label`, `k-d`, `k-read`, `k-pix`, `k-dim`     | Words: titles, names, small labels, second lines, reading, pixel     |
+| `k-folk`, `k-member`                                                  | A name of the town's own (leaf green, the acorn first); a member's   |
 | `k-over`                                                              | Words written straight over the world, with a dark edge              |
 | `k-scrim`, `k-rise`, `k-row`, `k-col`, `k-wrap`, `k-grow`, `k-scroll` | Laying things out                                                    |
 | `k-shut`                                                              | The card a page shows instead of itself when it will not open        |
@@ -78,6 +83,7 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `signs.ts`    | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines                  |
 | `tip.ts`      | Tips: `tip(el, title, text)` shows a one-line hint on hover, focus and long press                  |
 | `card.ts`     | Cards: how anything in any game says what it is (below)                                            |
+| `mark.ts`     | The mark of the town's own: a name in leaf green after the acorn, on a page or a canvas            |
 | `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look                   |
 | `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all                   |
 | `dom.ts`      | `el`, `icon`, `amount` and a few more for building the interface                                   |
@@ -169,8 +175,10 @@ nothing it still holds lands under the other member's names. A test in `keep.tes
 every file in the kit and the games to this.
 
 **Who is here** (`presence.ts`). A live page says where the member is (`here("town" | "camp" |
-"works" | "table")`) every half minute and at once when it changes; the answer, everybody seen
-lately, goes to whoever `hearPresent`s.
+"works" | "table")`) and whether their character stays in town after they go (`stay(on)`, true
+until told otherwise), every half minute and at once when either changes; the answer, everybody
+seen lately and those gone in the last day who stay (`Resting`, with when each was last seen),
+goes to whoever `hearPresent`s.
 
 All of it reaches the server through `net.ts`, which tests replace with `standin.ts`; the tests
 read the server's own contract files (`contracts/leaf-api-v1.json`, `contracts/leaf-game-v1.json`).

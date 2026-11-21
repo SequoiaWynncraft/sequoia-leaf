@@ -1,6 +1,6 @@
 /**
  * A camp, as rules with no page in them: the clearing's squares, what stands where, what may be
- * set down and what may not, the tray of things put away, who lives there, and how a guild-mate's
+ * set down and what may not, the tray of things put away, who lives there, and how somebody else's
  * camp is laid out from nothing but a number. `campscene.ts` shows it; `save.ts` keeps it.
  */
 
@@ -47,7 +47,7 @@ export interface Placed {
   s: number;
 }
 
-/** A present the member has left at a guild-mate's camp. */
+/** A present the member has left at somebody else's camp. */
 export interface Gave {
   to: string;
   what: string;
@@ -63,6 +63,8 @@ export interface Camp {
   parcels: string[];
   letters: Letter[];
   gave: Gave[];
+  /** How many of the town's own who dropped by the member has greeted (touched while they were here). */
+  greeted: number;
   /** Trophies already handed over, so that each arrives once. */
   earned: string[];
 }
@@ -356,18 +358,24 @@ export function trayList(camp: Camp): { id: string; n: number }[] {
 
 /** How many things must be set out before somebody else moves in: a new camp starts with nine. */
 export const COSY = 24;
-/** At how many guild-mates' camps a present must be left before somebody follows the member home. */
+/**
+ * How many of the town's own who drop by must be greeted before somebody follows them in to stay.
+ * (Leaving presents at as many members' camps did the same, and still does for whoever did.)
+ */
 export const KIND = 3;
+
+/** Whether the camp has been welcoming enough for somebody else to move in. */
+export const welcoming = (camp: Camp): boolean => camp.greeted >= KIND || camp.gave.length >= KIND;
 
 /** The pets that live in the camp, in the order they came: the first chosen, then one for each thing done. */
 export function petsOf(camp: Camp): PetId[] {
   if (!camp.first) return [];
   const rest = PETS.filter((p) => p !== camp.first);
-  const more = (camp.placed.length >= COSY ? 1 : 0) + (camp.gave.length >= KIND ? 1 : 0);
+  const more = (camp.placed.length >= COSY ? 1 : 0) + (welcoming(camp) ? 1 : 0);
   return [camp.first, ...rest.slice(0, more)];
 }
 
-// ---------- a new camp, and a guild-mate's ----------
+// ---------- a new camp, and somebody else's ----------
 
 const put = (id: string, x: number, y: number, t = 0): Placed => ({ id, x, y, t, s: 0 });
 
@@ -390,6 +398,7 @@ export function newCamp(): Camp {
     parcels: [],
     letters: [],
     gave: [],
+    greeted: 0,
     earned: [],
   };
 }
@@ -397,7 +406,7 @@ export function newCamp(): Camp {
 const CABIN_AT = [5, 20, 34] as const;
 
 /**
- * A guild-mate's camp, laid out from a number: the same number always gives the same camp. `taste`
+ * Somebody else's camp (for when members' camps can be visited), laid out from a number: the same number always gives the same camp. `taste`
  * is what they like to have about (said more than once, liked more), and `count` how much of it.
  */
 export function layout(seed: number, taste: readonly string[], count: number): Placed[] {
@@ -482,6 +491,7 @@ export function parseCamp(raw: unknown): Camp | null {
     parcels: things(raw.parcels, MOST.parcels),
     letters: Array.isArray(raw.letters) ? raw.letters.filter(isLetter).slice(-MOST.letters) : [],
     gave: [],
+    greeted: whole(raw.greeted, 999),
     earned: [...new Set(things(raw.earned, 64))],
   };
   if (isRecord(raw.tray))

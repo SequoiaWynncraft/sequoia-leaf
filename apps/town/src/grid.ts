@@ -27,7 +27,7 @@ export interface Ground {
   /**
    * A way from one point to another round whatever is in between, as points to walk to in turn.
    * `straight` pulls the way taut (the member, going where they pointed); otherwise it keeps to the
-   * squares, and so to the paths (guild-mates, ambling). Nothing at all if there is no way.
+   * squares, and so to the paths (anybody ambling). Nothing at all if there is no way.
    */
   readonly findPath: (from: Pt, to: Pt, straight: boolean) => Pt[];
   /** How far outside trodden earth a point is (negative: on a path). */

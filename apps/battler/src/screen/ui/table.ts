@@ -6,10 +6,12 @@
  */
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { add, amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
+import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, watch } from "@sequoia-leaf/kit/purse.ts";
 import { isMuted } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
+import { regularNamed } from "../../game/content/rooms.ts";
 import {
   BOONS,
   ECONOMY,
@@ -36,7 +38,7 @@ import { rimTop, stumpOf } from "../art/table.ts";
 import { fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
 import { light } from "../light.ts";
-import { canBuy, savings, steppedUp, stepsOf } from "../logic.ts";
+import { canBuy, opening, savings, steppedUp, stepsOf } from "../logic.ts";
 import { artPx, place, V } from "../stage.ts";
 import { S } from "../state.ts";
 import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } from "./cards.ts";
@@ -433,20 +435,29 @@ function renderFightBar(run: Run): void {
   sides.replaceChildren(
     el("b", "k-leafy", { text: "You" }),
     el("span", "k-dim", { text: "against" }),
-    el("b", "k-coral", { text: run.foe.who }),
+    regularNamed(run.foe.who) ? folkName(run.foe.who, "k-pix") : el("b", "k-coral", { text: run.foe.who }),
   );
   for (const tab of document.querySelectorAll<HTMLElement>("#speeds [data-speed]")) {
     tab.setAttribute("aria-selected", String(Number(tab.dataset.speed) === S.prefs.speed));
   }
 }
 
-/** Who is across the table, on a small plate beside them. */
+/**
+ * Who is across the table, on a small plate beside them: a regular with the town's mark, "Greg
+ * brought Mist Fangs"; the forest's own trouble by its name.
+ */
 function renderFoe(run: Run): void {
   const foe = byId("foe");
   if (!foe) return;
   foe.hidden = S.mode === "front" || S.mode === "over";
-  foe.replaceChildren(el("b", "k-name", { text: run.foe.who }));
-  if (run.foe.title) foe.append(el("span", "k-d", { text: run.foe.title }));
+  if (regularNamed(run.foe.who)) {
+    foe.replaceChildren(
+      el("div", "brought", {}, folkName(opening(run.foe.who), "k-pix"), el("span", "k-read", { text: run.foe.title })),
+    );
+  } else {
+    foe.replaceChildren(el("b", "k-name", { text: run.foe.who }));
+    if (run.foe.title) foe.append(el("span", "k-d", { text: run.foe.title }));
+  }
   placeFoe();
 }
 /** Puts that plate where the far side of the table is, for the size of the window. */

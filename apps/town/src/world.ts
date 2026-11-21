@@ -7,7 +7,6 @@ import type { Dir } from "@sequoia-leaf/kit/skin.ts";
 import { clamp, type Pt, vnoise } from "@sequoia-leaf/kit/util.ts";
 
 import { CELL, type Ground, makeGround } from "./grid.ts";
-import type { Activity } from "./guild.ts";
 
 /** The walkable town, in art pixels. */
 export const W = 512;
@@ -197,27 +196,50 @@ export interface Seat {
   dir: Dir;
   /** The clear spot they step up from. */
   from: Pt;
-  at: "fire" | "bench" | "table";
+  /** By the fire, on the garden bench or the bench by the Works' door, or at the stump. */
+  at: "fire" | "bench" | "works" | "table";
   taken: boolean;
-  /** Left for the member: guild-mates sit elsewhere. */
+  /** Left for the member: nobody else sits there. */
   yours?: boolean;
 }
 
+/** The bench by the Works' door (under the belt, clear of the lantern tree), by its foot. */
+export const WORKS_BENCH: Pt = { x: 428, y: 152 };
+
 export const SEATS: Seat[] = [
   { x: 248, y: 201, dir: 0, from: { x: 248, y: 188 }, at: "fire", taken: false },
-  { x: 264, y: 201, dir: 0, from: { x: 264, y: 188 }, at: "fire", taken: false },
+  { x: 264, y: 201, dir: 0, from: { x: 264, y: 188 }, at: "fire", taken: false, yours: true },
   { x: 248, y: 236, dir: 3, from: { x: 248, y: 246 }, at: "fire", taken: false },
   { x: 264, y: 236, dir: 3, from: { x: 264, y: 246 }, at: "fire", taken: false },
   { x: 221, y: 213, dir: 2, from: { x: 212, y: 214 }, at: "fire", taken: false },
   { x: 291, y: 213, dir: 1, from: { x: 300, y: 214 }, at: "fire", taken: false },
   { x: 114, y: 312, dir: 0, from: { x: 114, y: 320 }, at: "bench", taken: false },
   { x: 127, y: 312, dir: 0, from: { x: 127, y: 320 }, at: "bench", taken: false },
+  {
+    x: WORKS_BENCH.x - 6,
+    y: WORKS_BENCH.y,
+    dir: 0,
+    from: { x: WORKS_BENCH.x - 6, y: WORKS_BENCH.y + 8 },
+    at: "works",
+    taken: false,
+  },
+  {
+    x: WORKS_BENCH.x + 7,
+    y: WORKS_BENCH.y,
+    dir: 0,
+    from: { x: WORKS_BENCH.x + 7, y: WORKS_BENCH.y + 8 },
+    at: "works",
+    taken: false,
+  },
   { x: 431, y: 213, dir: 3, from: { x: 431, y: 224 }, at: "table", taken: false, yours: true },
   { x: 457, y: 213, dir: 3, from: { x: 457, y: 224 }, at: "table", taken: false },
 ];
 
-/** Somewhere to stand and be busy: the guild's errands, and mustering at the gate for a raid. */
-export type Errand = Exclude<Activity, "fire" | "bench" | "play"> | "gate";
+/**
+ * Somewhere to stand and be busy: counting the crabs at the pond, reading the quest board, minding
+ * the gate, warming the Works' doorstep, the fire's edge, and watching a game at the stump.
+ */
+export type Errand = "crabs" | "board" | "gate" | "works" | "fire" | "table";
 
 export interface Spot {
   x: number;
@@ -230,29 +252,30 @@ export interface Spot {
 const spot = (x: number, y: number, dir: Dir, errand: Errand): Spot => ({ x, y, dir, errand, taken: false });
 
 export const SPOTS: Spot[] = [
-  spot(92, 128, 3, "treasury"),
-  spot(118, 129, 3, "treasury"),
-  spot(188, 166, 3, "quests"),
-  spot(208, 167, 3, "quests"),
-  spot(60, 254, 3, "market"),
-  spot(110, 255, 3, "market"),
-  spot(156, 254, 3, "market"),
-  spot(60, 238, 0, "stall"),
-  spot(156, 238, 0, "stall"),
-  spot(360, 128, 3, "works"),
-  spot(428, 137, 3, "works"),
-  spot(342, 280, 2, "pond"),
-  spot(404, 254, 0, "pond"),
-  spot(448, 250, 0, "pond"),
-  spot(340, 216, 2, "tree"),
-  spot(300, 164, 3, "pole"),
-  spot(64, 300, 0, "garden"),
-  spot(170, 300, 1, "garden"),
+  spot(404, 254, 0, "crabs"),
+  spot(342, 280, 2, "crabs"),
+  spot(188, 166, 3, "board"),
+  spot(208, 167, 3, "board"),
+  spot(240, 112, 0, "gate"),
+  spot(387, 126, 0, "works"),
+  spot(398, 131, 1, "works"),
+  spot(284, 226, 1, "fire"),
+  spot(230, 230, 2, "fire"),
   spot(414, 197, 2, "table"),
   spot(474, 197, 1, "table"),
   spot(437, 171, 0, "table"),
   spot(457, 171, 0, "table"),
 ];
+
+/** Where the stallkeepers stand, behind each stall by its place in the row, and in front of each (on the counter). */
+export const STALL_BEHIND: readonly Pt[] = [
+  { x: 60, y: 238 },
+  { x: 108, y: 238 },
+  { x: 156, y: 238 },
+];
+export const STALL_FRONT_Y = 249;
+/** The top of a stall's counter, for whoever is on it. */
+export const STALL_TOP_Y = 233;
 
 /** Where a raid party musters before the gate. */
 export const MUSTER: readonly Pt[] = [
@@ -303,6 +326,7 @@ function build(): void {
   fill(11, 30, 15, 30, 1);
   fill(17, 30, 21, 30, 1);
   fill(13, 38, 16, 38, 1); // garden bench
+  fill(52, 17, 55, 17, 1); // the bench by the Works' door
   fill(53, 22, 57, 24, 1); // the great stump
   fill(53, 26, 54, 26, 1); // its two log seats
   fill(56, 26, 57, 26, 1);

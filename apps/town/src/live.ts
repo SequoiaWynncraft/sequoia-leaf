@@ -2,17 +2,24 @@
  * The live guild: the town's questions (`guild.ts`) answered from the guild's own server, for a
  * real member. What is real comes from here: who the member is, their quests, what happened to
  * them since they were last in town, the guild's news as it happens, and who else is in the game.
- * Everything that is not real guild data (the townsfolk, the stalls' and the Treasury's wares, the
- * camps, the mail) is still the made-up guild's, which keeps quiet about its own news and Leaf.
+ * Nothing invented comes from here: the made-up guild only lends what is not guild data (the stalls'
+ * and the Treasury's wares, the mail and calls of the town's own), and has no members, news, quests
+ * or Leaf of its own beside the real guild. The town's own creatures and keepers are in `folk.ts`.
  *
  * `prepare()` fetches what the town needs before it opens; `makeLive` is the guild from then on.
  */
 
 import { followLeaf, type Member, member } from "@sequoia-leaf/kit/live.ts";
 import { ask, isRecord, listen, outside } from "@sequoia-leaf/kit/net.ts";
-import { hearPresent, here as sayHere, type Present } from "@sequoia-leaf/kit/presence.ts";
+import {
+  hearPresent,
+  here as sayHere,
+  type Present,
+  type Resting,
+  stay as sayStay,
+} from "@sequoia-leaf/kit/presence.ts";
 
-import type { Away, AwayLine, Guild, Happening, Me, Person, Quest, Visitor } from "./guild.ts";
+import type { Away, AwayLine, Guild, Happening, Me, Person, Quest, Rester, Visitor } from "./guild.ts";
 import type { MadeUp } from "./madeup.ts";
 import { parse } from "./save.ts";
 
@@ -270,6 +277,24 @@ export function toVisitors(present: readonly Present[], meId: string): Visitor[]
   return out;
 }
 
+/** The most members the town draws dozing at once. */
+export const RESTING_MOST = 12;
+
+/**
+ * Who is resting, as the town shows them: members gone in the last day whose characters stay,
+ * most recent first; never the member, nobody in the game just now, nobody last at their own camp.
+ */
+export function toResting(resting: readonly Resting[], present: readonly Present[], meId: string): Rester[] {
+  const here = new Set(present.map((p) => p.id));
+  const out: Rester[] = [];
+  for (const r of resting.toSorted((a, b) => b.seen - a.seen)) {
+    if (r.id === meId || here.has(r.id) || r.place === "camp" || out.some((o) => o.id === r.id)) continue;
+    if (out.length >= RESTING_MOST) break;
+    out.push({ id: r.id, name: r.name, rank: null, at: r.place, skin: skinOf(r.id), seen: r.seen });
+  }
+  return out;
+}
+
 // ---------- before the town opens ----------
 
 /** What the town needs from the server before it opens. */
@@ -347,6 +372,8 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
   let quests = p.quests;
   let told = p.mark;
   let present: Visitor[] = [];
+  let resting: Rester[] = [];
+  let heard = false;
   let begun = false;
   const ears = new Set<(h: Happening) => void>();
   const news = makeNews(me.id);
@@ -385,8 +412,10 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
       const ev = readEvent(e.data);
       if (ev) news.add(ev, outside.now());
     });
-    hearPresent((seen) => {
+    hearPresent((seen, gone) => {
       present = toVisitors(seen, me.id);
+      resting = toResting(gone, seen, me.id);
+      heard = true;
     });
     setInterval(() => void fetchBoard(), BOARD_EVERY);
   }
@@ -406,9 +435,6 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
         week: p.week,
       };
     },
-    keeper: () => madeUp.keeper(),
-    roster: () => madeUp.roster(),
-    doing: (name) => madeUp.doing(name),
     quests: () => quests,
     wares: () => madeUp.wares(),
     pieces: () => madeUp.pieces(),
@@ -419,8 +445,8 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
     lostCrab: () => madeUp.lostCrab(),
     away(from, to): Away {
       const made = madeUp.away(from, to);
-      // The townsfolk's lines stay; what the made-up guild says it paid, or did, does not.
-      const townsfolk = made.lines.filter((l) => l.art === "mates" || l.art === "crab");
+      // The town's own lines stay; what the made-up guild says it paid, or did, does not.
+      const townsfolk = made.lines.filter((l) => l.art === "folk" || l.art === "crab");
       return { first: made.first, hours: made.hours, lines: [...letterLines(p.since), ...townsfolk] };
     },
     hear(fn) {
@@ -433,8 +459,13 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
       for (const h of news.due(outside.now())) tell(h);
     },
     visitors: () => present,
+    resting: () => resting,
+    heard: () => heard,
     here(place) {
       sayHere(place);
+    },
+    stay(on) {
+      sayStay(on);
     },
     told: () => told,
   };

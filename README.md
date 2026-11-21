@@ -270,8 +270,8 @@ CI's `contract-copies` job compares the file with the copy on Sequoia-mod's
 change here.
 
 The game's routes have their own file, `contracts/leaf-game-v1.json`, written
-by `apps/api/test/game-contract.test.ts` from one member's day of play with a
-guild-mate, the same way. No other repository keeps a copy, so changing it
+by `apps/api/test/game-contract.test.ts` from one member's day of play with
+another member, the same way. No other repository keeps a copy, so changing it
 needs no change elsewhere first: `cd apps/api && WRITE_CONTRACTS=1 bun test
 test/game-contract.test.ts` writes it again. It has every answer except the
 skin, which is a picture.
@@ -333,7 +333,7 @@ react to `quest_completed`.
 | `GET /v1/game/skins/{uuid}`        | A player's skin sheet, as a PNG.                                      |
 | `GET /v1/game/guild/events`        | What happened across the guild, oldest first.                         |
 | `GET /v1/game/guild/events/stream` | The same as it happens, as server-sent events.                        |
-| `PUT /v1/game/presence`            | Says where in the game the member is, and lists who else is there.    |
+| `PUT /v1/game/presence`            | Says where in the game the member is; lists who is there and resting. |
 
 Every one but `hello` takes a session, as above, and lets in only current guild
 members.
@@ -412,11 +412,15 @@ players it knows, as for skins. It keeps the names it learns, and each time it
 learns a new one, removes those nobody asked for in 30 days. An event whose
 member no one can name yet, because Mojang can't be reached, is left out.
 
-**Presence.** `PUT /v1/game/presence` takes `{ "place" }`, one of `town`,
-`camp`, `works` and `table`, or gets 400 `invalid_place`. It records where the
-member is and answers `{ "present": [{ "id", "username", "place" }] }`: everyone
-whose game said where they were in the last 90 seconds, the member included.
-Members not seen for a day are forgotten.
+**Presence.** `PUT /v1/game/presence` takes `{ "place", "stay" }`: `place` is
+one of `town`, `camp`, `works` and `table`, and `stay`, true or false and true
+when left out, says whether the member's character may stay in town, dozing,
+for a day after they go. Anything else gets 400 `invalid_place`. It records
+both and answers `{ "present": [{ "id", "username", "place" }], "resting": [{
+"id", "username", "place", "seen_at" }] }`: `present` is everyone whose game
+said where they were in the last 90 seconds, the member included; `resting`
+is those last seen between 90 seconds and a day ago whose `stay` was true,
+newest first, at most 24. Members not seen for a day are forgotten.
 
 ## The game's pages
 
@@ -450,7 +454,10 @@ This runs the real app at `http://127.0.0.1:4000/play/town/`, on a database in
 memory, with the tests' stand-ins for the backend, Sierra and Mojang, so nothing
 leaves the machine. It first plays a day: a member called Tester raids, wars,
 finishes and rerolls quests, reaches a level and a dozen milestones, beside four
-guild-mates who raid and war with them and on their own.
+other members who raid and war with them and on their own. Two of the four are
+then in the game (Birchwood in town, Mossling at the table) and stay so, and
+two left a while ago and doze in town (Fernhollow three hours ago, Quillon
+forty minutes ago, last at the Works).
 
 - The cookie `seq_session=tester` is Tester's session; any other, or none, is
   signed out. `/sign-in?return_to=<address>` sets it and goes back, as the
@@ -459,7 +466,7 @@ guild-mates who raid and war with them and on their own.
 - `PUBLIC_ORIGIN` is `http://127.0.0.1:4000`.
 - `--not-a-member`: Tester is signed in but not in the guild, so the game's routes answer 403.
 - `--down`: the backend can't be asked who Tester is, so they answer 503.
-- `--busy`: every minute a few guild-mates finish a raid together, for the guild's news.
+- `--busy`: every minute a few of the four finish a raid together, for the guild's news.
 
 ## Rules the code is built on
 

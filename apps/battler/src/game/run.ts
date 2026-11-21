@@ -224,7 +224,7 @@ export function fightSetup(run: Run): FightSetup | null {
 
 // ---------- the forest's side ----------
 
-/** Who is waiting in a room: the forest's trouble as planned, or a guild-mate's party for sparring. */
+/** Who is waiting in a room: the forest's trouble as planned, or a regular's party for sparring. */
 export function opposition(seed: number, roomIndex: number, trailIndex: number): Party {
   const room = ROOMS[roomIndex];
   const trail = TRAILS[trailIndex] ?? TRAILS[0];

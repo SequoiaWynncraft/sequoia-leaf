@@ -19,6 +19,7 @@ const full: Kept = {
   chest: "2026-11-20",
   lastSeen: 1_795_000_000_000,
   cursor: 1204,
+  stay: false,
   camp,
 };
 
@@ -67,6 +68,13 @@ describe("the town's kept record", () => {
 
   test("a missing part is a new member's", () => {
     expect(parse(JSON.stringify({ v: VERSION }))).toEqual(blank());
+  });
+
+  test("a member's character stays in town after they go unless they said it should not", () => {
+    expect(blank().stay).toBe(true);
+    for (const stay of [true, undefined, "no", 0, null])
+      expect(parse(JSON.stringify({ v: VERSION, stay }))?.stay).toBe(true);
+    expect(parse(JSON.stringify({ v: VERSION, stay: false }))?.stay).toBe(false);
   });
 
   test("a record from before there were camps keeps what it had, and gets a new camp", () => {

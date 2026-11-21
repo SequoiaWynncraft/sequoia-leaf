@@ -143,9 +143,16 @@ export const GuildEvents = Schema.Struct({
 /** The places in the game a member can be. */
 export const PLACES = ["town", "camp", "works", "table"] as const;
 
-export const PresenceBody = Schema.Struct({ place: Schema.Literals(PLACES) });
+/** Where the member is, and whether their character may stay in town, dozing, after they go (true when left out). */
+export const PresenceBody = Schema.Struct({ place: Schema.Literals(PLACES), stay: Schema.optional(Schema.Boolean) });
 
-/** Everyone seen in the game in the last 90 seconds, the caller included. */
+/**
+ * Everyone seen in the game in the last 90 seconds, the caller included; and those who were seen
+ * between 90 seconds and a day ago and are happy to be left in town, newest first, at most 24.
+ */
 export const Present = Schema.Struct({
   present: Schema.Array(Schema.Struct({ id: Schema.String, username: Schema.String, place: Schema.String })),
+  resting: Schema.Array(
+    Schema.Struct({ id: Schema.String, username: Schema.String, place: Schema.String, seen_at: Time }),
+  ),
 });

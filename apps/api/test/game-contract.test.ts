@@ -79,6 +79,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   const clock = { now: T0 };
   const { backend, fetcher } = fakeBackend({
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
+    "bob-token": () => Response.json(sessionOf(bob, "Bob", "RECRUIT")),
     "visitor-token": () => Response.json(sessionOf(playerId("10000000-0000-0000-0000-000000000003"), "Visitor", null)),
   });
   const mojang = fakeMojang();
@@ -129,7 +130,14 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/game/saves", "GET", "/v1/game/saves");
   await call("GET /v1/game/guild/events", "GET", "/v1/game/guild/events");
   await call("GET /v1/game/guild/events?after=", "GET", "/v1/game/guild/events?after=6");
-  await call("PUT /v1/game/presence", "PUT", "/v1/game/presence", { place: "town" });
+  // Bob had the game open a while ago, and his character stays in town, dozing.
+  await app.request("/v1/game/presence", {
+    method: "PUT",
+    headers: { Authorization: "Bearer bob-token", "Content-Type": "application/json" },
+    body: JSON.stringify({ place: "works" }),
+  });
+  clock.now = T0 + 25 * MINUTE;
+  await call("PUT /v1/game/presence", "PUT", "/v1/game/presence", { place: "town", stay: true });
   await app.dispose();
   return recorded;
 }

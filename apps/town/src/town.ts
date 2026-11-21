@@ -16,7 +16,7 @@ import { GROUND, paintTrunk } from "./ground.ts";
 import { guild } from "./guild.ts";
 import { flame, type Light, makeProp, type Prop, propUnder, type Standing } from "./props.ts";
 import { BOARD, type Sprite, type Sprites } from "./sprites.ts";
-import { place, type PlaceId, pondD, POSTS, SEATS } from "./world.ts";
+import { place, type PlaceId, pondD, POSTS, SEATS, WORKS_BENCH } from "./world.ts";
 
 export const props: Prop[] = [];
 export const lights: Light[] = [];
@@ -676,9 +676,11 @@ export function buildTown(s: Sprites, ground: Ctx): void {
   add("seat", s.stump, 220, 216, { tap: (_p, wx, wy) => tapSeat(wx, wy) });
   add("seat", s.stump, 292, 216, { tap: (_p, wx, wy) => tapSeat(wx, wy) });
   add("seat", s.bench, 120, 312, { tap: (_p, wx, wy) => tapSeat(wx, wy) });
+  add("seat", s.bench, WORKS_BENCH.x, WORKS_BENCH.y, { tap: (_p, wx, wy) => tapSeat(wx, wy) });
   shadow(ground, 256, 201, 18, 3);
   shadow(ground, 256, 241, 18, 3);
   shadow(ground, 120, 313, 15, 2);
+  shadow(ground, WORKS_BENCH.x, WORKS_BENCH.y + 1, 15, 2);
 
   // The garden, the pond's edge, and green things round the clearing.
   for (const [x, y, big] of [
@@ -1058,8 +1060,10 @@ export function stepTown(dt: number): void {
 /** While anybody is at the stump, a figure is moved every couple of seconds. */
 function stepTable(dt: number): void {
   if (table.moving !== -1 && G.t - table.movedAt > 0.3) table.moving = -1;
-  const all = G.player ? [G.player, ...G.mates] : G.mates;
-  const played = all.some((a) => !a.away && !a.moving && (a.seat?.at === "table" || a.doing === "table"));
+  const all = G.player ? [G.player, ...G.visitors] : G.visitors;
+  const played = all.some(
+    (a) => !a.away && !a.moving && a.dozing === null && (a.seat?.at === "table" || a.doing === "table"),
+  );
   if (!played) return;
   table.next -= dt;
   if (table.next > 0) return;
