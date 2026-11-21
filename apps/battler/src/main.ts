@@ -6,7 +6,7 @@
  * in `screen/`. Opened alone it plays by itself; inside the town it says when it is ready, sends
  * news worth a line in the town's feed, and saves when the town puts it away.
  */
-import { before, pull } from "@sequoia-leaf/kit/cloud.ts";
+import { before, pickUp, pull } from "@sequoia-leaf/kit/cloud.ts";
 import { followLeaf, shutCard, start } from "@sequoia-leaf/kit/live.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
@@ -72,7 +72,7 @@ async function boot(): Promise<void> {
   }
   const live = where.mode === "live";
   // Opened on its own, the table also keeps the town's slot, where its postcard is.
-  if (live && !(await pull(inTown() ? ["purse", "raid"] : ["purse", "raid", "town"]))) {
+  if (live && !(await pull(inTown() ? ["purse", "raid"] : ["purse", "raid", "town"], { onReplaced: pickUp }))) {
     shutCard("closed", where.signIn);
     return;
   }

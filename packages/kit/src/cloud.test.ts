@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { forget, pull, push, PUSH_EVERY, SLOTS, sumOf, tick } from "./cloud.ts";
+import { flush, forget, pull, push, PUSH_EVERY, type Slot, SLOTS, sumOf, tick } from "./cloud.ts";
 import { restart, start } from "./live.ts";
 import { isRecord } from "./net.ts";
 import { balance, forgetLedger } from "./purse.ts";
@@ -66,6 +66,33 @@ afterEach(() => {
 });
 
 const meta = (store: MemoryStore): Record<string, unknown> => JSON.parse(store.getItem("town.cloud.v1") ?? "null");
+/** A page that does nothing when another device's copy wins. */
+const page = { onReplaced: (): void => undefined };
+const putsOf = (w: Standin): Sent[] => w.sent.filter((s) => s.method === "PUT");
+
+/** The town's record, standing in for `save.ts`'s: what the member owns, and when they were last in town. */
+const record = (lastSeen: number, owned: string[] = []): string => JSON.stringify({ v: 1, owned, lastSeen });
+
+/**
+ * Stands in for the page around the saves: its window and document, so that `pull` listens to them
+ * as it does in a browser, and the page can be hidden. Returns how to hide it and how to take it away.
+ */
+function aPage(): { hide: () => void; done: () => void } {
+  const win = Object.assign(new EventTarget(), { setInterval: (): number => 0 });
+  const doc = Object.assign(new EventTarget(), { visibilityState: "visible" });
+  Object.defineProperty(globalThis, "window", { value: win, configurable: true });
+  Object.defineProperty(globalThis, "document", { value: doc, configurable: true });
+  return {
+    hide: () => {
+      doc.visibilityState = "hidden";
+      doc.dispatchEvent(new Event("visibilitychange"));
+    },
+    done: () => {
+      Reflect.deleteProperty(globalThis, "window");
+      Reflect.deleteProperty(globalThis, "document");
+    },
+  };
+}
 
 describe("saves on the member's account", () => {
   test("pull writes the server's texts into the browser before the page reads them", async () => {
@@ -79,7 +106,7 @@ describe("saves on the member's account", () => {
     world.store.setItem("town.save.v1", "old");
     world.store.setItem("town.postcard.raid.v1", "old card");
     await start();
-    expect(await pull(["purse", "town"])).toBe(true);
+    expect(await pull(["purse", "town"], page)).toBe(true);
     expect(world.store.getItem("town.save.v1")).toBe('{"v":1,"town":"yes"}');
     expect(world.store.getItem("town.postcard.raid.v1")).toBeNull();
     expect(balance()).toEqual({ leaf: TESTER.leaf, coins: 812 });
@@ -90,7 +117,7 @@ describe("saves on the member's account", () => {
     const rows: Record<string, Row> = {};
     world = standin(saves(rows));
     await start();
-    await pull(["works"]);
+    await pull(["works"], page);
     world.store.setItem("works.save.v2", "a yard");
     tick();
     await Bun.sleep(1);
@@ -105,7 +132,7 @@ describe("saves on the member's account", () => {
     world = standin(saves(rows));
     world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
     await start();
-    await pull(["raid"]);
+    await pull(["raid"], page);
     tick();
     expect(world.sent.filter((s) => s.method === "PUT")).toEqual([]);
 
@@ -141,7 +168,7 @@ describe("saves on the member's account", () => {
     world = standin(saves(rows));
     world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
     await start();
-    await pull(["works"]);
+    await pull(["works"], page);
     world.store.setItem("works.save.v2", "changed here");
     world.clock.now = 5000;
     tick();
@@ -160,7 +187,7 @@ describe("saves on the member's account", () => {
     world = standin(saves(rows));
     world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
     await start();
-    await pull(["works"]);
+    await pull(["works"], page);
     rows.works = { version: 4, data: { saved_at: 200, keys: { "works.save.v2": "older, elsewhere" } } };
     world.store.setItem("works.save.v2", "later, here");
     world.clock.now = 9000;
@@ -170,6 +197,114 @@ describe("saves on the member's account", () => {
     expect(world.store.getItem("works.save.v2")).toBe("later, here");
   });
 
+  test("when another device's later copy wins, that slot is sent no more and the page is told once", async () => {
+    const rows: Record<string, Row> = {
+      works: { version: 3, data: { saved_at: 100, keys: { "works.save.v2": "mine" } } },
+    };
+    world = standin(saves(rows));
+    world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+    await start();
+    const told: Slot[] = [];
+    await pull(["works"], { onReplaced: (s) => told.push(s) });
+    // The phone saved the yard a minute from now; this page changes its older yard meanwhile.
+    const phone = { version: 4, data: { saved_at: world.clock.now + 60_000, keys: { "works.save.v2": "phone" } } };
+    rows.works = phone;
+    world.store.setItem("works.save.v2", "changed here");
+    tick();
+    await Bun.sleep(5);
+    expect(putsOf(world).length).toBe(1);
+    expect(told).toEqual(["works"]);
+    expect(world.store.getItem("works.save.v2")).toBe("phone");
+
+    // The page still holds its older yard and writes it down again, while it is still open.
+    world.store.setItem("works.save.v2", "changed here, again");
+    world.clock.now += PUSH_EVERY;
+    tick();
+    flush();
+    expect(await push("works")).toBe(false);
+    await Bun.sleep(5);
+    expect(putsOf(world).length).toBe(1);
+    expect(told).toEqual(["works"]);
+    expect(rows.works).toEqual(phone);
+  });
+
+  test("the purse is only read again when another device's copy wins, and is still sent", async () => {
+    const rows: Record<string, Row> = {
+      purse: { version: 1, data: { saved_at: 100, keys: { "town.purse.v1": '{"coins":300}' } } },
+    };
+    world = standin(saves(rows));
+    world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+    await start();
+    const told: Slot[] = [];
+    await pull(["purse"], { onReplaced: (s) => told.push(s) });
+    rows.purse = {
+      version: 2,
+      data: { saved_at: world.clock.now + 60_000, keys: { "town.purse.v1": '{"coins":90}' } },
+    };
+    world.store.setItem("town.purse.v1", '{"coins":250}');
+    expect(await push("purse")).toBe(false);
+    expect(told).toEqual([]);
+    expect(balance().coins).toBe(90);
+    world.store.setItem("town.purse.v1", '{"coins":95}');
+    world.clock.now += 120_000;
+    expect(await push("purse")).toBe(true);
+    expect(rows.purse?.data.keys).toEqual({ "town.purse.v1": '{"coins":95}' });
+  });
+
+  test("the time last seen alone is not sent; it goes with a real change", async () => {
+    const rows: Record<string, Row> = {
+      town: { version: 2, data: { saved_at: 100, keys: { "town.save.v1": record(100) } } },
+    };
+    world = standin(saves(rows));
+    world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+    await start();
+    await pull(["town"], page);
+    // Standing in town: the record is written again and again, with only the time last seen moved.
+    for (let i = 0; i < 4; i++) {
+      world.clock.now += PUSH_EVERY;
+      world.store.setItem("town.save.v1", record(world.clock.now));
+      tick();
+    }
+    await Bun.sleep(5);
+    expect(putsOf(world)).toEqual([]);
+
+    world.clock.now += PUSH_EVERY;
+    world.store.setItem("town.save.v1", record(world.clock.now, ["lantern"]));
+    tick();
+    await Bun.sleep(5);
+    expect(putsOf(world).length).toBe(1);
+    expect(rows.town?.data).toEqual({
+      saved_at: world.clock.now,
+      keys: { "town.save.v1": record(world.clock.now, ["lantern"]) },
+    });
+  });
+
+  test("the time last seen alone is sent when the page is hidden", async () => {
+    const shown = aPage();
+    try {
+      const rows: Record<string, Row> = {
+        town: { version: 2, data: { saved_at: 100, keys: { "town.save.v1": record(100) } } },
+      };
+      world = standin(saves(rows));
+      world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+      await start();
+      await pull(["town"], page);
+      world.clock.now += 3 * PUSH_EVERY;
+      world.store.setItem("town.save.v1", record(world.clock.now));
+      tick();
+      await Bun.sleep(5);
+      expect(putsOf(world)).toEqual([]);
+
+      shown.hide();
+      await Bun.sleep(5);
+      expect(putsOf(world)).toMatchObject([{ keepalive: true, body: { version: 2 } }]);
+      // Nothing else changed, so the slot was last really changed when it was last saved.
+      expect(rows.town?.data).toEqual({ saved_at: 100, keys: { "town.save.v1": record(world.clock.now) } });
+    } finally {
+      shown.done();
+    }
+  });
+
   test("a browser that last held somebody else's game is cleared before pulling", async () => {
     world = standin(saves({}));
     world.store.setItem("town.cloud.v1", JSON.stringify({ player: "somebody-else", slots: {} }));
@@ -177,7 +312,7 @@ describe("saves on the member's account", () => {
     world.store.setItem("raid.prefs.v1", "a view setting");
     world.store.setItem("town.muted", "1");
     await start();
-    await pull(["purse"]);
+    await pull(["purse"], page);
     for (const names of Object.values(SLOTS)) for (const name of names) expect(world.store.getItem(name)).toBeNull();
     expect(world.store.getItem("raid.prefs.v1")).toBe("a view setting");
     expect(world.store.getItem("town.muted")).toBe("1");
@@ -191,21 +326,21 @@ describe("saves on the member's account", () => {
     world = standin(saves({}));
     world.store.setItem("works.save.v2", "from before");
     await start();
-    await pull(["works"]);
+    await pull(["works"], page);
     expect(world.store.getItem("works.save.v2")).toBeNull();
   });
 
   test("a pull the server cannot answer says so", async () => {
     world = standin(saves({}, { "GET /v1/game/saves/town": () => ({ status: 503 }) }));
     await start();
-    expect(await pull(["purse", "town"])).toBe(false);
+    expect(await pull(["purse", "town"], page)).toBe(false);
   });
 
   test("with the made-up guild nothing is fetched", async () => {
     world = standin({ "GET /v1/game/hello": "offline" });
     await start();
     world.store.setItem("works.save.v2", "a yard");
-    expect(await pull(["purse", "works"])).toBe(true);
+    expect(await pull(["purse", "works"], page)).toBe(true);
     tick();
     expect(await push("works")).toBe(false);
     expect(world.sent.map((s) => s.path)).toEqual(["/v1/game/hello"]);
@@ -235,7 +370,7 @@ describe("saves against what Leaf really answers", () => {
       "PUT /v1/game/saves/town": said("PUT /v1/game/saves/{slot}"),
     });
     await start();
-    expect(await pull(["town"])).toBe(true);
+    expect(await pull(["town"], page)).toBe(true);
     expect(world.store.getItem("town.save.v1")).toBe('{"v":1,"lanterns":3}');
     world.store.setItem("town.save.v1", '{"v":1,"lanterns":4}');
     world.clock.now += PUSH_EVERY;
@@ -251,7 +386,7 @@ describe("saves against what Leaf really answers", () => {
       "PUT /v1/game/saves/town": said("PUT /v1/game/saves/{slot}"),
     });
     await start();
-    expect(await pull(["town"])).toBe(true);
+    expect(await pull(["town"], page)).toBe(true);
     world.store.setItem("town.save.v1", "x");
     expect(await push("town")).toBe(true);
     expect(world.sent.at(-1)?.body).toMatchObject({ version: 0 });

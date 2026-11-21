@@ -10,6 +10,8 @@
  */
 
 import { unit } from "@sequoia-leaf/kit/dom.ts";
+import { where } from "@sequoia-leaf/kit/live.ts";
+import { earn } from "@sequoia-leaf/kit/purse.ts";
 import { bake, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
@@ -60,6 +62,8 @@ declare global {
       leave: () => void;
       /** Stops the town's clock (it is still drawn), so that `skip` alone moves it on. */
       hold: (on: boolean) => void;
+      /** Puts `n` Coins in the purse, for a tour that buys things; only with the made-up guild, never live. */
+      coins: (n: number) => void;
       /** What the town has kept, as it would be saved now. */
       kept: () => unknown;
       /** Which place is on the stage, and how dark the walk between two has got (0 for not at all). */
@@ -449,6 +453,9 @@ async function boot(): Promise<void> {
     },
     hold(on) {
       heldStill = on;
+    },
+    coins(n) {
+      if (where().mode !== "live") earn(n, "a tour's pocket money");
     },
     where: () => ({ where: G.where, dark: Math.round(G.dark * 100) / 100 }),
     camp: {

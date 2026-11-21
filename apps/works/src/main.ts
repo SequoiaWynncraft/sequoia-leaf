@@ -7,7 +7,7 @@
  * `tools.ts` and `input.ts`, and everything that sits over the yard in `ui/`.
  */
 
-import { before, pull } from "@sequoia-leaf/kit/cloud.ts";
+import { before, pickUp, pull } from "@sequoia-leaf/kit/cloud.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { followLeaf, shutCard, start } from "@sequoia-leaf/kit/live.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
@@ -184,7 +184,7 @@ async function boot(): Promise<void> {
   }
   const live = where.mode === "live";
   // Opened on its own, the yard also keeps the town's slot, where its postcard is.
-  if (live && !(await pull(inTown() ? ["purse", "works"] : ["purse", "works", "town"]))) {
+  if (live && !(await pull(inTown() ? ["purse", "works"] : ["purse", "works", "town"], { onReplaced: pickUp }))) {
     shutCard("closed", where.signIn);
     return;
   }
