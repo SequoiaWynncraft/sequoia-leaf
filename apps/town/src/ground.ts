@@ -146,20 +146,27 @@ export interface Painted {
 }
 
 /**
+ * How far a trunk's bark reaches either side of its middle on row `y` of its picture (`paintTrunk`):
+ * `hw` up the trunk, spreading into the roots near the foot.
+ */
+export function trunkHalf(hw: number, height: number, seed: number, y: number): number {
+  const flare = Math.round(hw * 0.5);
+  const rootH = hw * 1.5;
+  return hw + flare * clamp((y - (height - rootH)) / rootH, 0, 1) ** 2.6 + Math.sin(y * 0.021 + seed) * 1.4;
+}
+
+/**
  * A redwood trunk seen from its foot upwards: round, deeply furrowed, spreading into roots.
  * `dim` is how many rows from the top are lost in the canopy's shade.
  */
 export function paintTrunk(hw: number, height: number, seed: number, dim: number): Painted {
   const flare = Math.round(hw * 0.5);
-  const rootH = hw * 1.5;
   const w = (hw + flare) * 2 + 4;
   const cx = w / 2;
-  const half = (y: number): number =>
-    hw + flare * clamp((y - (height - rootH)) / rootH, 0, 1) ** 2.6 + Math.sin(y * 0.021 + seed) * 1.4;
   const foot = (x: number): number =>
     height - 2 - 3.2 * (0.5 + 0.5 * Math.sin(x * 0.2 + seed * 2.1)) - 2 * (0.5 + 0.5 * Math.sin(x * 0.57 + seed));
   const c = paint(w, height, (x, y) => {
-    const hf = half(y);
+    const hf = trunkHalf(hw, height, seed, y);
     const off = Math.abs(x + 0.5 - cx);
     if (off >= hf || y > foot(x)) return null;
     const u = (x + 0.5 - cx) / hf;

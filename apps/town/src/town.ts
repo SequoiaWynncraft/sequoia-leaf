@@ -16,7 +16,19 @@ import { GROUND, paintTrunk } from "./ground.ts";
 import { guild } from "./guild.ts";
 import { flame, type Light, makeProp, type Prop, propUnder, type Standing } from "./props.ts";
 import { BOARD, type Sprite, type Sprites } from "./sprites.ts";
-import { place, type PlaceId, pondD, POSTS, SEATS, WORKS_BENCH } from "./world.ts";
+import { type Strand, STRINGS, wire } from "./strings.ts";
+import {
+  BUILDINGS,
+  place,
+  type PlaceId,
+  pondD,
+  POSTS,
+  SEATS,
+  STALL_FEET,
+  TRUNKS,
+  trunkTall,
+  WORKS_BENCH,
+} from "./world.ts";
 
 export const props: Prop[] = [];
 export const lights: Light[] = [];
@@ -198,19 +210,11 @@ interface Str {
 const strings: Str[] = [];
 const BULBS = [GOLD[2], SKY[5], CREAM, SKY[4]] as const;
 
-function strung(x1: number, y1: number, x2: number, y2: number, sag: number): void {
-  const n = Math.max(2, Math.round(Math.hypot(x2 - x1, y2 - y1)));
-  const wire: Pt[] = [];
-  const bulbs: Str["bulbs"] = [];
-  for (let i = 0; i <= n; i++) {
-    const t = i / n;
-    const p = { x: Math.round(lerp(x1, x2, t)), y: Math.round(lerp(y1, y2, t) + sag * 4 * t * (1 - t)) };
-    const last = wire[wire.length - 1];
-    if (last && last.x === p.x && last.y === p.y) continue;
-    wire.push(p);
-    if (wire.length % 7 === 4) bulbs.push({ x: p.x, y: p.y + 1, c: bulbs.length % BULBS.length });
-  }
-  strings.push({ wire, bulbs, chase: -9 });
+/** Hangs a string of lights, with a bulb on every seventh pixel of its wire from the fourth. */
+function strung(s: Strand): void {
+  const w = wire(s);
+  const bulbs = w.filter((_, i) => i % 7 === 3).map((p, k) => ({ x: p.x, y: p.y + 1, c: k % BULBS.length }));
+  strings.push({ wire: w, bulbs, chase: -9 });
 }
 
 // ---------- what touching things does ----------
@@ -503,22 +507,16 @@ export function buildTown(s: Sprites, ground: Ctx): void {
   S = s;
 
   // The enormous trunks: four across the back, two down each side.
-  const trunk = (cx: number, base: number, hw: number, seed: number): void => {
-    const t = paintTrunk(hw, base + 210, seed, 250);
-    add("trunk", t, cx, base, { tap: tapTrunk });
-  };
-  trunk(10, 106, 44, 1);
-  trunk(196, 96, 26, 2);
-  trunk(316, 96, 26, 3);
-  trunk(502, 108, 44, 4);
-  trunk(-12, 204, 40, 5);
-  trunk(524, 236, 40, 6);
-  trunk(-6, 344, 44, 7);
-  trunk(520, 348, 46, 8);
+  for (const t of TRUNKS) add("trunk", paintTrunk(t.hw, trunkTall(t), t.seed, 250), t.x, t.y, { tap: tapTrunk });
 
   // Treasury, with its counter a separate piece in front of where Cinfy stands.
   const TREASURY = tipOf("treasury");
-  add("treasury", s.treasury, 56, 120, { z: 110, place: "treasury", tap: tapPlace, tip: TREASURY });
+  add("treasury", s.treasury, BUILDINGS.treasury.x, BUILDINGS.treasury.y, {
+    z: 110,
+    place: "treasury",
+    tap: tapPlace,
+    tip: TREASURY,
+  });
   add("counter", s.counter, 81, 120, {
     place: "treasury",
     tip: TREASURY,
@@ -544,7 +542,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
   add("barrel", s.barrel, 51, 122, { tap: tapStone, hops: true });
 
   // The Works: the shop, the belt out front, and the pile the belt feeds.
-  add("works", s.works, 344, 120, {
+  add("works", s.works, BUILDINGS.works.x, BUILDINGS.works.y, {
     z: 118,
     place: "works",
     tip: tipOf("works"),
@@ -581,7 +579,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
 
   // The gate out to the member's own camp, and the signpost that says so.
   const CAMP = tipOf("camp");
-  add("gate", s.gate, 256, 98, { place: "camp", tap: tapPlace, tip: CAMP });
+  add("gate", s.gate, BUILDINGS.gate.x, BUILDINGS.gate.y, { place: "camp", tap: tapPlace, tip: CAMP });
   light(237, 65, 24, 0.9);
   light(275, 65, 24, 0.9);
   light(256, 84, 34, 0.85); // the last of the sun, coming up the path
@@ -618,9 +616,10 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     tip: ["Banner pole", "A banner goes up when the guild takes land."],
   });
 
-  s.stalls.forEach((st, i) => {
-    const x = 40 + i * 48;
-    add("stall", st, x, 248, {
+  STALL_FEET.forEach(({ x, y }, i) => {
+    const st = s.stalls[i];
+    if (!st) return;
+    add("stall", st, x, y, {
       place: "market",
       tip: tipOf("market"),
       tap: (p) => {
@@ -629,8 +628,8 @@ export function buildTown(s: Sprites, ground: Ctx): void {
         tapPlace(p);
       },
     });
-    light(x + 12, 224, 34, 0.9);
-    shadow(ground, x + 20, 249, 22, 3);
+    light(x + 12, y - 24, 34, 0.9);
+    shadow(ground, x + 20, y + 1, 22, 3);
   });
 
   POSTS.forEach((p) => {
@@ -825,15 +824,8 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     if (pondD(x, y) < -5) glints.push({ x: Math.round(x), y: Math.round(y), ph: random() * 6.28 });
   }
 
-  // Strings of lights, slung between the shops, the gate and the great trunks.
-  strung(150, 72, 172, 58, 5);
-  strung(220, 54, 228, 50, 2);
-  strung(222, 60, 290, 60, 9);
-  strung(284, 50, 292, 54, 2);
-  strung(340, 58, 350, 68, 3);
-  strung(34, 190, 196, 232, 12);
-  strung(433, 144, 488, 154, 7);
-  strung(34, 250, 100, 262, 5);
+  // Strings of lights, slung between the shops, the gate, the posts and the great trunks.
+  for (const st of STRINGS) strung(st);
 }
 
 function hideCrab(i: number): void {

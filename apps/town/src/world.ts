@@ -187,6 +187,43 @@ export const POSTS: readonly Pt[] = [
   { x: 424, y: 181 }, // over the stump's board
 ];
 
+/** The market stalls, by the left end of their foot. */
+export const STALL_FEET: readonly Pt[] = [
+  { x: 40, y: 248 },
+  { x: 88, y: 248 },
+  { x: 136, y: 248 },
+];
+
+/** The Treasury and the Works, by the left end of their foot, and the gate by the middle of its. */
+export const BUILDINGS: Readonly<Record<"treasury" | "works" | "gate", Pt>> = {
+  treasury: { x: 56, y: 120 },
+  works: { x: 344, y: 120 },
+  gate: { x: 256, y: 98 },
+};
+
+/** One of the enormous trunks, by the middle of its foot: half its width above the roots, and its bark's seed. */
+export interface Trunk {
+  x: number;
+  y: number;
+  hw: number;
+  seed: number;
+}
+
+/** The enormous trunks: four across the back, two down each side. */
+export const TRUNKS: readonly Trunk[] = [
+  { x: 10, y: 106, hw: 44, seed: 1 },
+  { x: 196, y: 96, hw: 26, seed: 2 },
+  { x: 316, y: 96, hw: 26, seed: 3 },
+  { x: 502, y: 108, hw: 44, seed: 4 },
+  { x: -12, y: 204, hw: 40, seed: 5 },
+  { x: 524, y: 236, hw: 40, seed: 6 },
+  { x: -6, y: 344, hw: 44, seed: 7 },
+  { x: 520, y: 348, hw: 46, seed: 8 },
+];
+
+/** How tall a trunk's picture is: from its foot to well past the top of the map. */
+export const trunkTall = (t: Trunk): number => t.y + 210;
+
 // ---------- somewhere to sit, somewhere to be ----------
 
 export interface Seat {

@@ -10,7 +10,7 @@ member's own camp.
 ```sh
 bun run dev      # with hot reload
 bun run build    # dist/
-bun test         # the rules: saving, the arrival letter, the made-up guild, the town's own, the camp, the mailbox, parcels
+bun test         # the rules: saving, the arrival letter, the made-up guild, the town's own, the camp, the mailbox, parcels, strings of lights tied at both ends
 ```
 
 To play as a real skin, put a 64x64 skin sheet at `dist/skins/player.png` after building (it is
