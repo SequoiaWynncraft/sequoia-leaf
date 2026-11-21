@@ -41,13 +41,13 @@ function meeting(kind: "joiner" | "belt"): World {
   belts(w, 7, 3, 10, 3);
   return w;
 }
-/** Twelve gatherers round the depot, feeding it straight, and as many idle mills as asked for. */
-function ring(mills: number): World {
+/** Twelve gatherers round the depot, feeding it straight, and as many idle mills and benches as asked for. */
+function ring(mills: number, benches = 0): World {
   const spots: [number, number, 0 | 1 | 2 | 3][] = [];
   for (const k of [-1, 0, 1]) spots.push([10, 6 + k, 0], [14, 6 + k, 2], [12 + k, 4, 1], [12 + k, 8, 3]);
   const w = bare(Object.fromEntries(spots.map(([x, y]) => [`${x},${y}`, "ore" as const])));
   for (const [x, y, dir] of spots) put(w, "gatherer", x, y, dir);
-  for (let k = 0; k < mills; k++) put(w, "mill", 7 + (k % 2), 3 + Math.floor(k / 2));
+  for (let k = 0; k < mills + benches; k++) put(w, k < mills ? "mill" : "bench", 7 + (k % 2), 3 + Math.floor(k / 2));
   return w;
 }
 
@@ -402,7 +402,7 @@ describe("power", () => {
   });
   test("when demand passes supply everything slows by the same share, and nothing stops", () => {
     const enough = ring(0);
-    const short = ring(14);
+    const short = ring(0, 7);
     expect(power(enough)).toEqual({ supply: 20, demand: 12, pace: 1 });
     expect(power(short)).toEqual({ supply: 20, demand: 40, pace: 0.5 });
     steps(enough, 200 * TICKS.gather);
@@ -410,7 +410,7 @@ describe("power", () => {
     expect(enough.depot.ore).toBe(2400);
     expect(short.depot.ore).toBe(1200);
     // A third over, a quarter slower: the same two hundred each take that much longer.
-    const tight = ring(7);
+    const tight = ring(2, 2);
     expect(power(tight).pace).toBeCloseTo(20 / 26, 9);
     steps(tight, 200 * TICKS.gather * 1.3 + 2);
     expect(tight.depot.ore).toBe(2400);
@@ -448,7 +448,7 @@ describe("power", () => {
     expect(on(w, 8, 6).item).toBe("plank");
   });
   test("a boiler lifts a yard that was short of power back to its plain pace", () => {
-    const w = ring(14);
+    const w = ring(0, 7);
     steps(w, 80 * TICKS.gather);
     expect(w.depot.ore).toBe(12 * 40);
     const boiler = put(w, "boiler", 16, 2);

@@ -3,7 +3,7 @@
  * clear run of belt between them, going under what is in the way by tunnel where tunnels are open.
  * A screen can use it to lay a belt from two taps; the balance script lays its whole yards with it.
  */
-import { build, refusal, type Spent, tunnelExit } from "./build.ts";
+import { build, digsUnder, refusal, type Spent, tunnelExit } from "./build.ts";
 import { KIND, SPAN } from "./content/machines.ts";
 import { type Dir, DIRS, DX, DY } from "./grid.ts";
 import { at, type World } from "./world.ts";
@@ -136,6 +136,8 @@ function search(
         push(j * 5, c + 1, s, -1);
         if (!digs || ruled.has(j)) continue;
         for (let span = 1; span <= SPAN; span++) {
+          // Nothing is dug under the depot, so no longer tunnel this way will do either.
+          if (!digsUnder(w, x + DX[d] * (span + 1), y + DY[d] * (span + 1))) break;
           const e = at(w, x + DX[d] * (span + 2), y + DY[d] * (span + 2));
           if (clear(e) && e !== goal) push(e * 5 + 1 + d, c + 2 * span + 2 + DIG, s, span);
         }
@@ -178,12 +180,20 @@ function wayBetween(W: number, a: number, b: number): Dir {
   return dx > 0 ? 0 : dx < 0 ? 2 : dy > 0 ? 1 : 3;
 }
 
-/** What a run would cost to lay. */
-export const runCost = (legs: readonly Leg[]): number => legs.reduce((sum, leg) => sum + KIND[leg.kind].cost, 0);
+/** What a run would cost to lay: the belts the yard has to hand go down first, for nothing. */
+export function runCost(w: World, legs: readonly Leg[]): number {
+  const spare = { belt: w.spare.belt ?? 0, tunnel: w.spare.tunnel ?? 0 };
+  let cost = 0;
+  for (const leg of legs) {
+    if (spare[leg.kind] > 0) spare[leg.kind]--;
+    else cost += KIND[leg.kind].cost;
+  }
+  return cost;
+}
 
 /** Lays a run found by `route`, all of it or none, and says what it cost. */
 export function lay(w: World, legs: readonly Leg[], coins: number): Spent {
-  const cost = runCost(legs);
+  const cost = runCost(w, legs);
   const tiles = new Set<number>();
   for (const leg of legs) {
     const mouth = leg.kind === "tunnel" ? tunnelExit(w, leg.x, leg.y, leg.dir, leg.span) : null;

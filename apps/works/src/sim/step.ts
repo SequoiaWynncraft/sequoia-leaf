@@ -223,12 +223,14 @@ function give(w: World, wire: Wire, to: number, item: Item, from: number, over: 
       if (b.turn > 2) b.turn = 0;
       b.item = item;
       b.prog = over;
+      b.via = from;
       break;
     case "belt":
     case "splitter":
     case "tunnel":
       b.item = item;
       b.prog = over;
+      b.via = from;
       break;
     case "mill":
     case "bench":
@@ -265,6 +267,7 @@ function passUnder(w: World, wire: Wire, b: Building, i: number): void {
       if (!mouth || mouth.item !== null) continue;
       mouth.item = item;
       mouth.prog = over;
+      mouth.via = -1;
     } else {
       if ((b.under[k + 1] ?? null) !== null) continue;
       b.under[k + 1] = item;
@@ -278,6 +281,7 @@ function passUnder(w: World, wire: Wire, b: Building, i: number): void {
     b.underProg[0] = b.prog - 1;
     b.item = null;
     b.prog = 0;
+    b.via = -1;
   }
 }
 
@@ -378,6 +382,7 @@ export function step(w: World): void {
           give(w, wire, to, b.item, i, b.prog - 1);
           b.item = null;
           b.prog = 0;
+          b.via = -1;
           b.turn = (b.turn + 1) % 3;
           break;
         }
@@ -418,6 +423,7 @@ function carryOn(w: World, wire: Wire, b: Building, i: number): void {
   give(w, wire, to, b.item, i, b.prog - 1);
   b.item = null;
   b.prog = 0;
+  b.via = -1;
 }
 
 /** A machine or crate hands on its finished piece. */

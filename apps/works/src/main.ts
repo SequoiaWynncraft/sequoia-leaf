@@ -1,725 +1,511 @@
 /**
- * The Works, as a grey-box: the yard drawn plainly on a canvas, with the tools to build it. It is
- * here so the rules in `sim/` can be seen and played while the real screen is being drawn; nothing
- * about how it looks is meant to last.
+ * The Works: the yard behind the guild's workshop, where gatherers, belts and machines turn what
+ * lies on the forest floor into what the guild has asked for.
  *
- * It keeps a number of Coins of its own, since it runs outside the town. The rules never hold the
- * purse: they are told the balance, say what they took, and their earnings are collected from the
- * till.
+ * This file is the stage: it opens the yard, owns the canvas and the loop, and joins the parts
+ * together. The rules are in `sim/`, the picture in `scene.ts` and `art/`, what the member does in
+ * `tools.ts` and `input.ts`, and everything that sits over the yard in `ui/`.
  */
+
+import { unit } from "@sequoia-leaf/kit/dom.ts";
+import { balance, earn, grant, spend } from "@sequoia-leaf/kit/purse.ts";
+import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
+import { fontsReady } from "@sequoia-leaf/kit/text.ts";
+import { tipOff } from "@sequoia-leaf/kit/tip.ts";
+import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
+
+import { stepFlights, stepWalkers } from "./actors.ts";
+import { TILE } from "./art/belts.ts";
+import { makeArt } from "./art/index.ts";
+import { ease, inset, inView, look, pan, resize, setCamera, setZoom, zoom, zoomSteps } from "./camera.ts";
+import { callers, capstones, forget, handOver, onNews, shiftOn } from "./events.ts";
+import { updateFx } from "./fx.ts";
+import { initInput, inputHooks, stepInput } from "./input.ts";
+import { layout } from "./layout.ts";
+import { drawWords, drawYard } from "./scene.ts";
+import { sheets } from "./sheets.ts";
 import {
-  at,
   type Away,
-  awayLine,
   boost,
-  boostLeft,
-  build,
-  type Building,
-  buyPlan,
-  buyPlot,
-  claim,
-  collect,
+  boosted,
   create,
+  deliver,
   type Dir,
-  drain,
-  DX,
-  DY,
-  isFilled,
   ITEM,
-  type Item,
   ITEMS,
-  KIND,
   type Kind,
   load,
-  oldCoins,
-  PLANS,
-  planState,
-  plotAt,
-  plotState,
+  type PlanId,
+  type PlotId,
   power,
-  type Raw,
-  REACH,
-  RECIPE,
-  refusal,
-  remove,
-  RIGHT,
-  runTo,
-  save,
-  setOpen,
-  type Spent,
   step,
-  STORY,
   storyOrder,
-  swap,
-  swapRefusal,
   type Tally,
   TICK_MS,
-  TICKS,
-  tunnelExit,
-  type World,
 } from "./sim/index.ts";
+import { murmur, yardSfx } from "./sound.ts";
+import { S, type Tool, toPage, touched } from "./state.ts";
+import { nudge } from "./teach.ts";
+import {
+  aimAt,
+  buyIdea,
+  buyLand,
+  confirm,
+  place,
+  runEnd,
+  runOver,
+  runStart,
+  setTool,
+  stepClearing,
+  takeAway,
+  tapBelt,
+} from "./tools.ts";
+import { cardHooks, closeCard, initCard, openCard, refreshCard } from "./ui/card.ts";
+import { initDock, refreshDock } from "./ui/dock.ts";
+import { initHud, refreshHud } from "./ui/hud.ts";
+import { putAway, reading, showLetter } from "./ui/letter.ts";
+import { closeBanner, feed, initNotes, tickNotes } from "./ui/notes.ts";
+import { closePanel, initPanels, openPanel, panelHooks, type PanelId, refreshPanel } from "./ui/panels.ts";
+import { $ } from "./ui/parts.ts";
+import { keep, openYard, screen, swapYard, tick } from "./yard.ts";
+import large from "./yards/large.json";
+import mid from "./yards/mid.json";
+import short from "./yards/short.json";
+import small from "./yards/small.json";
 
-function need<T>(value: T | null | undefined, what: string): T {
-  if (value === null || value === undefined) throw new Error(`the page has no ${what}`);
-  return value;
-}
-const canvas = need(document.querySelector("canvas"), "canvas");
-const g = need(canvas.getContext("2d"), "2d context");
-const $ = (id: string): HTMLElement => need(document.querySelector<HTMLElement>(`#${id}`), id);
+/** Yards kept part-way through the story by `review/balance.ts --yards`, for looking at the game at each stage. */
+const STAGES = { small, short, mid, large } as const;
+type Stage = keyof typeof STAGES | "new";
 
-const COLOUR: Record<Item, string> = {
-  deadfall: "#9a6a3a",
-  stone: "#a3a9b5",
-  ore: "#d0804c",
-  clay: "#c98a6a",
-  sand: "#e6d49a",
-  resin: "#e0a030",
-  plank: "#e2bd72",
-  brick: "#c65a44",
-  ingot: "#e8e2d4",
-  pot: "#b5623f",
-  glass: "#9fd8e6",
-  oil: "#f0c040",
-  tool: "#5aa9e6",
-  gear: "#f5b95e",
-  frame: "#8bbf5a",
-  hamper: "#c9a06a",
-  shell: "#7fc9b8",
-  lantern: "#ffe08a",
-  engine: "#e67fb0",
-  pole: "#b07ae6",
-  kit: "#6fb36a",
-  beacon: "#fff3cf",
-  crab: "#f08060",
-};
-const GROUND: Record<Raw, string> = {
-  deadfall: "#2f4a2c",
-  stone: "#3c4250",
-  ore: "#5a3a2c",
-  clay: "#5a4034",
-  sand: "#5c5638",
-  resin: "#57431c",
-};
-const LETTER: Partial<Record<Kind, string>> = {
-  gatherer: "G",
-  mill: "M",
-  bench: "B",
-  workshop: "W",
-  crate: "C",
-  wheel: "~",
-  boiler: "F",
-};
-const BODY: Partial<Record<Kind, string>> = {
-  gatherer: "#6a4a3a",
-  mill: "#5a4a7a",
-  bench: "#3f6a78",
-  workshop: "#2f7a5a",
-  crate: "#7a5a2f",
-  wheel: "#2f5a8a",
-  boiler: "#8a3f2f",
-};
-const TOOLS: readonly Kind[] = [
-  "belt",
-  "gatherer",
-  "mill",
-  "bench",
-  "workshop",
-  "splitter",
-  "joiner",
-  "tunnel",
-  "crate",
-  "pylon",
-  "wheel",
-  "boiler",
-];
-const KEY = "works.save.v2";
-const PURSE = "works.coins.v2";
-const OLD = "works.save.v1";
-
-// ---------- the yard, as it was left ----------
-
-const kept = (key: string): string | null => {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
+declare global {
+  interface Window {
+    /** Handles for looking at the yard from outside: load a yard, run the clock, open things, act as a player would. */
+    works?: {
+      stage: (name: Stage, story?: number) => void;
+      hold: (on: boolean) => void;
+      run: (ticks: number) => void;
+      skip: (seconds: number) => void;
+      pick: (tool: Tool, dir?: Dir) => void;
+      finger: (on: boolean) => void;
+      aim: (x: number, y: number) => void;
+      tap: (x: number, y: number) => void;
+      build: (kind: Kind, x: number, y: number, dir?: Dir) => boolean;
+      remove: (x: number, y: number) => boolean;
+      drag: (x0: number, y0: number, x1: number, y1: number) => void;
+      drop: () => void;
+      confirm: () => boolean;
+      open: (panel: PanelId) => void;
+      close: () => void;
+      card: (x: number, y: number) => boolean;
+      look: (x: number, y: number) => void;
+      zoom: (by: number) => void;
+      purse: (coins: number, leaf?: number) => void;
+      boost: (minutes: number) => void;
+      away: (hours: number) => void;
+      plot: (id: PlotId) => boolean;
+      plan: (id: PlanId) => boolean;
+      taught: (ids: string[]) => void;
+      /** Sends the depot everything a standing order still wants, as if the yard had made it. */
+      fill: (slot: number) => void;
+      page: (x: number, y: number) => Pt;
+      /** The tiles where a kind of thing stands. */
+      where: (kind: Kind) => Pt[];
+      bench: () => number;
+      state: () => Record<string, unknown>;
+    };
   }
-};
-let world: World = load(kept(KEY)) ?? create({ seed: Math.floor(Math.random() * 0xffffffff) });
-// The grey-box's own purse: what it had, or what the yard before this one had earned.
-let coins = Math.max(0, Math.floor(Number(kept(PURSE) ?? oldCoins(kept(OLD)) ?? 0) || 0));
-const bank = (): void => {
-  coins += collect(world);
-};
-const pay = (did: Spent): boolean => {
-  if (!did.ok) say(did.why, true);
-  else coins -= did.cost;
-  return did.ok;
+}
+
+/** A long enough absence gets a letter; a short one, a line. */
+const LETTER_AFTER = 300;
+
+function refreshAll(): void {
+  refreshHud();
+  refreshDock();
+  refreshPanel();
+  refreshCard();
+}
+
+/** How much of the screen the interface covers, so the camera can keep the yard clear of it. */
+function measure(): void {
+  const top = $("top").getBoundingClientRect();
+  const track = $("track").getBoundingClientRect();
+  const hand = $("hand").getBoundingClientRect();
+  const dock = $("dock").getBoundingClientRect();
+  // On a narrow screen the order in hand runs the width of it, and the yard is clear only below.
+  inset.top = track.width > window.innerWidth * 0.6 ? Math.max(top.bottom, track.bottom) : top.bottom;
+  inset.bottom = Math.max(0, window.innerHeight - hand.top);
+  document.documentElement.style.setProperty("--toph", `${Math.round(top.bottom)}px`);
+  document.documentElement.style.setProperty("--dockh", `${Math.round(dock.height)}px`);
+  document.documentElement.style.setProperty("--handh", `${Math.round(hand.height)}px`);
+}
+
+/** The middle of the depot, in the yard's pixels: where the camera starts. */
+const home = (): Pt => ({ x: S.world.land.depot[0] * TILE + 8, y: S.world.land.depot[1] * TILE + 8 });
+
+/** Keeps the yard, and how the member had it zoomed. */
+const save = (): void => {
+  screen.zoom = zoomSteps();
+  keep();
 };
 
-let tool: Kind | "erase" | "land" | null = "gatherer";
-let dir: Dir = 0;
-let hover: [number, number] | null = null;
-let plansOpen = false;
-/** When each thing was built, for its small pop; and words rising over the yard. */
-const born = new Map<number, number>();
-const pops: { x: number; y: number; text: string; t: number; colour: string }[] = [];
-let pulse = 0;
+/** Sets the purse to exact amounts, for looking at the game with more or less to spend. */
+const setPurse = (coins: number, leaf?: number): void => {
+  const now = balance();
+  if (coins > now.coins) earn(coins - now.coins, "review");
+  else spend("coins", now.coins - coins, "review");
+  if (leaf === undefined) return;
+  if (leaf > now.leaf) grant(leaf - now.leaf, "review");
+  else spend("leaf", now.leaf - leaf, "review");
+};
 
-// ---------- the view ----------
+async function boot(): Promise<void> {
+  await fontsReady();
+  const params = new URLSearchParams(location.search);
+  if (params.has("fresh")) {
+    // Start the yard over, once: the address is put right so that a reload does not do it again.
+    try {
+      localStorage.removeItem("works.save.v2");
+      localStorage.removeItem("works.screen.v1");
+    } catch {
+      // Nothing was kept.
+    }
+    params.delete("fresh");
+    const rest = params.toString();
+    history.replaceState(null, "", `${location.pathname}${rest ? `?${rest}` : ""}${location.hash}`);
+  }
+  const away = openYard();
+  const art = makeArt(S.world.land);
+  if (params.has("sheet")) {
+    sheets(art, params.get("sheet") ?? "");
+    return;
+  }
 
-let tile = 24;
-let ox = 0;
-let oy = 0;
-/** The tiles on show: the yard's own plots, or the whole map while choosing land. */
-let view = { x0: 0, y0: 0, x1: 1, y1: 1 };
-function fit(): void {
-  const ratio = Math.min(devicePixelRatio, 2);
-  canvas.width = Math.round(innerWidth * ratio);
-  canvas.height = Math.round(innerHeight * ratio);
-  g.setTransform(ratio, 0, 0, ratio, 0, 0);
-  const plots = world.land.plots.filter((p) => tool === "land" || world.plots.includes(p.id));
-  view = {
-    x0: Math.min(...plots.map((p) => p.x)),
-    y0: Math.min(...plots.map((p) => p.y)),
-    x1: Math.max(...plots.map((p) => p.x + p.w)),
-    y1: Math.max(...plots.map((p) => p.y + p.h)),
+  const canvas = must(document.querySelector<HTMLCanvasElement>("#view"), "canvas");
+  const ctx = must(canvas.getContext("2d"), "2d context");
+  let wordPx = 2;
+
+  initNotes();
+  initPanels(art);
+  initCard(art);
+  initHud(art);
+  initDock(art);
+  initInput(canvas);
+  panelHooks.handOver = (slot): void => {
+    handOver(slot);
+    refreshAll();
   };
-  const top = 96;
-  const bottom = innerWidth < 700 ? 250 : 140;
-  const w = view.x1 - view.x0;
-  const h = view.y1 - view.y0;
-  tile = Math.max(6, Math.floor(Math.min(innerWidth / w, (innerHeight - top - bottom) / h)));
-  ox = Math.round((innerWidth - tile * w) / 2) - view.x0 * tile;
-  oy = Math.round(top + (innerHeight - top - bottom - tile * h) / 2) - view.y0 * tile;
-}
-addEventListener("resize", fit);
-const cellAt = (px: number, py: number): [number, number] => [
-  Math.floor((px - ox) / tile),
-  Math.floor((py - oy) / tile),
-];
+  panelHooks.shiftOn = shiftOn;
+  panelHooks.changed = refreshAll;
+  inputHooks.caller = (order): void => {
+    const slot = S.world.board.findIndex((o) => o.id === order);
+    if (slot >= 0) handOver(slot);
+    refreshAll();
+  };
+  inputHooks.letter = putAway;
+  cardHooks.opened = (x, y, box): void => {
+    const at = toPage(x * TILE + 8, y * TILE + 8);
+    const under = at.y > box.top - 24 && at.x > box.left - 16 && at.x < box.right + 16;
+    // Moved up just far enough to stand clear of the card.
+    if (under) pan(0, box.top - 40 - at.y);
+  };
 
-// ---------- the tools ----------
+  function fit(): void {
+    measure();
+    resize();
+    const dpr = window.devicePixelRatio || 1;
+    // The usual text size; on a sharp screen, the size the kit gives second lines.
+    wordPx = Math.max(1, Math.round(unit() * dpr * (dpr >= 2 ? 0.75 : 1)));
+  }
 
-const hint = $("hint");
-let scold = 0;
-function say(text: string, bad = false): void {
-  hint.textContent = text;
-  hint.classList.toggle("bad", bad);
-  if (bad) scold = performance.now() + 2200;
-}
-const tools = $("tools");
-const ARROW = ["→", "↓", "←", "↑"] as const;
-function button(cls: string, title: string, under: string, act: () => void): HTMLButtonElement {
-  const b = document.createElement("button");
-  b.className = cls;
-  b.innerHTML = `<span>${title}</span><small>${under}</small>`;
-  b.addEventListener("click", () => {
-    act();
-    fit();
-    toolbar();
-  });
-  return b;
-}
-function toolbar(): void {
-  tools.replaceChildren(
-    ...TOOLS.map((k, i) => {
-      const open = world.open.kinds.has(k);
-      const cls = `tool${tool === k ? " on" : ""}${open ? "" : " locked"}`;
-      const key = i < 9 ? ` · ${i + 1}` : "";
-      return button(cls, KIND[k].name, open ? `${KIND[k].cost}${key}` : "locked", () => {
-        if (!open) say(`The ${KIND[k].name.toLowerCase()} has not been opened yet`, true);
-        else tool = tool === k ? null : k;
-      });
-    }),
-    button("tool", `Turn ${ARROW[dir]}`, "R", () => {
-      dir = RIGHT[dir];
-    }),
-    button(`tool${tool === "erase" ? " on" : ""}`, "Remove", "E · refunds", () => {
-      tool = tool === "erase" ? null : "erase";
-    }),
-    button(`tool${tool === "land" ? " on" : ""}`, "Land", "L · buy plots", () => {
-      tool = tool === "land" ? null : "land";
-    }),
-    button(`tool${plansOpen ? " on" : ""}`, "Plans", "P", () => {
-      plansOpen = !plansOpen;
-      showPlans();
-    }),
-  );
-}
-window.addEventListener("keydown", (e: KeyboardEvent) => {
-  const n = Number(e.key);
-  const picked = TOOLS[n - 1];
-  if (n >= 1 && picked && world.open.kinds.has(picked)) tool = picked;
-  else if (e.key === "r" || e.key === "R") dir = RIGHT[dir];
-  else if (e.key === "e" || e.key === "E") tool = "erase";
-  else if (e.key === "l" || e.key === "L") tool = tool === "land" ? null : "land";
-  else if (e.key === "p" || e.key === "P") {
-    plansOpen = !plansOpen;
-    showPlans();
-  } else if (e.key === "Escape") tool = null;
-  else return;
+  setCamera(canvas, art.ground);
+  setZoom(screen.zoom);
   fit();
-  toolbar();
-});
+  // The dock's height is only known once it has been laid out with its tools in it.
+  measure();
+  look(home().x, home().y, true);
+  window.addEventListener("resize", fit);
+  // The dock grows a row when the story opens more tools than fit: everything over it moves up.
+  const watch = new ResizeObserver(measure);
+  for (const id of ["top", "dock", "hand", "track"]) watch.observe($(id));
 
-function take(x: number, y: number): void {
-  const did = remove(world, x, y);
-  if (did.ok) coins += did.refund;
-}
-function place(x: number, y: number, d: Dir): boolean {
-  if (tool === null) {
-    // With nothing in hand, a tap shuts or opens a crate.
-    const there = world.cells[at(world, x, y)];
-    if (there?.kind === "crate") setOpen(world, x, y, !there.open);
-    return false;
-  }
-  if (tool === "erase") {
-    take(x, y);
-    return true;
-  }
-  if (tool === "land") {
-    const plot = plotAt(world, x, y);
-    if (plot && !plot.owned && pay(buyPlot(world, plot.id, coins))) say("The yard is bigger");
-    return false;
-  }
-  const fresh = !world.cells[at(world, x, y)];
-  if (!pay(build(world, tool, x, y, d, coins))) return false;
-  if (fresh) born.set(at(world, x, y), performance.now());
-  return true;
-}
-/** A drag lays belts along its path, each pointing at the next; other tools place where the pointer goes down. */
-let drag: { last: [number, number]; erase: boolean } | null = null;
-canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-canvas.addEventListener("pointerdown", (e) => {
-  const [x, y] = cellAt(e.clientX, e.clientY);
-  const erase = e.button === 2 || tool === "erase";
-  drag = { last: [x, y], erase };
-  if (erase) take(x, y);
-  else place(x, y, dir);
-  canvas.setPointerCapture(e.pointerId);
-  fit();
-  toolbar();
-});
-canvas.addEventListener("pointermove", (e) => {
-  const [x, y] = cellAt(e.clientX, e.clientY);
-  hover = [x, y];
-  if (!drag || (x === drag.last[0] && y === drag.last[1])) return;
-  if (drag.erase) take(x, y);
-  else if (tool === "belt") {
-    // Step a tile at a time toward the pointer, so a fast drag leaves no gaps.
-    let [cx, cy] = drag.last;
-    while (cx !== x || cy !== y) {
-      const sx = Math.abs(x - cx) >= Math.abs(y - cy) ? Math.sign(x - cx) : 0;
-      const sy = sx ? 0 : Math.sign(y - cy);
-      const d: Dir = sx > 0 ? 0 : sx < 0 ? 2 : sy > 0 ? 1 : 3;
-      dir = d;
-      const back = world.cells[at(world, cx, cy)];
-      if (back?.kind === "belt") build(world, "belt", cx, cy, d, coins);
-      cx += sx;
-      cy += sy;
-      place(cx, cy, d);
-    }
-    toolbar();
-  }
-  drag.last = [x, y];
-});
-const drop = (): void => {
-  drag = null;
-};
-canvas.addEventListener("pointerup", drop);
-canvas.addEventListener("pointercancel", drop);
-canvas.addEventListener("pointerleave", () => (hover = null));
+  // ---------- the clock ----------
 
-// ---------- what is asked for ----------
-
-const orderEl = $("order");
-const wants = (want: Tally, filled: Tally): string =>
-  ITEMS.filter((k) => (want[k] ?? 0) > 0)
-    .map((k) => {
-      const have = filled[k] ?? 0;
-      const n = want[k] ?? 1;
-      return `<div class="row"><span class="chip" style="background:${COLOUR[k]}"></span><span>${ITEM[k].name}</span><span class="bar"><i style="width:${(have / n) * 100}%"></i></span><span>${have}/${n}</span></div>`;
-    })
-    .join("");
-function showOrders(): void {
-  const o = storyOrder(world);
-  const opens = o
-    ? [...(o.opens.kinds ?? []).map((k) => KIND[k].name), ...(o.opens.plots ?? []), ...(o.opens.plans ?? [])]
-    : [];
-  const story = o
-    ? `<div class="label">Order ${world.story + 1} of ${STORY.length} · ${o.from}</div><div class="title">${o.title}</div>` +
-      wants(o.want, world.filled) +
-      `<div class="pay">Pays ${o.pay} Coins${opens.length ? ` · opens ${opens.join(", ")}` : ""}</div>`
-    : `<div class="label">The story is told</div><div class="title">The Works is running</div>`;
-  const board = world.board
-    .map((s, slot) => {
-      const full = isFilled(s.want, s.filled);
-      const act = full
-        ? `<button data-claim="${slot}">Hand over · ${s.pay}</button>`
-        : `<button data-swap="${slot}"${swapRefusal(world, slot) === null ? "" : " disabled"}>Swap</button>`;
-      return `<div class="standing${full ? " full" : ""}"><div class="label">${s.from} · pays ${s.pay}</div><div>${s.title}</div>${wants(s.want, s.filled)}${act}</div>`;
-    })
-    .join("");
-  orderEl.innerHTML = story + board;
-}
-// Taken on the way down: the panel is written afresh twice a second, and a click needs its button to last.
-orderEl.addEventListener("pointerdown", (e) => {
-  const hit = e.target instanceof Element ? e.target.closest("button") : null;
-  if (!(hit instanceof HTMLElement)) return;
-  if (hit.dataset.claim !== undefined) {
-    const got = claim(world, Number(hit.dataset.claim));
-    if (got !== null) say(`Handed over for ${got} Coins`);
-  } else if (hit.dataset.swap !== undefined && !swap(world, Number(hit.dataset.swap)))
-    say(swapRefusal(world, Number(hit.dataset.swap)) ?? "", true);
-  showOrders();
-});
-
-const plansEl = $("plans");
-function showPlans(): void {
-  plansEl.hidden = !plansOpen;
-  if (!plansOpen) return;
-  plansEl.innerHTML =
-    `<div class="label">Plans</div>` +
-    PLANS.map((p) => {
-      const { state, why } = planState(world, p.id);
-      const under = state === "owned" ? "bought" : state === "for sale" ? `${p.price} Coins` : (why ?? "");
-      return `<button data-plan="${p.id}" class="plan ${state.replace(" ", "-")}"><b>${p.name}</b> · ${under}<br /><small>${p.what}</small></button>`;
-    }).join("");
-}
-plansEl.addEventListener("pointerdown", (e) => {
-  const hit = e.target instanceof Element ? e.target.closest("button") : null;
-  const plan = PLANS.find((p) => hit instanceof HTMLElement && p.id === hit.dataset.plan);
-  if (!plan) return;
-  if (pay(buyPlan(world, plan.id, coins))) say(`${plan.name}: ${plan.what}`);
-  showPlans();
-  toolbar();
-});
-
-function banner(label: string, title: string, under: string): void {
-  document.querySelector("#banner")?.remove();
-  const b = document.createElement("div");
-  b.id = "banner";
-  b.innerHTML = `<span class="label">${label}</span><b>${title}</b><span>${under}</span>`;
-  document.body.append(b);
-  b.addEventListener("animationend", () => b.remove());
-}
-function guide(): void {
-  if (performance.now() < scold) return;
-  const has = (k: Kind): boolean => world.cells.some((b) => b?.kind === k);
-  const taken = ITEMS.reduce((sum, k) => sum + (world.depot[k] ?? 0), 0);
-  const p = power(world);
-  if (tool === "land") say("Tap a plot that is for sale to buy it");
-  else if (!has("gatherer")) say("Pick Gatherer and put one on the green deadfall near the depot");
-  else if (!has("mill")) say("Put a Mill where the gatherer points (its arrow). It saws deadfall into planks");
-  else if (!has("belt") || taken === 0) say("Pick Belt and drag from the mill's arrow to the depot in the middle");
-  else if (p.pace < 1) say(`Short of power: everything is working at ${Math.round(p.pace * 100)}% of its pace`);
-  else if (world.story === 0) say("More gatherers, more planks. Belts can join from the side");
-  else if (world.story === 1 && !has("pylon"))
-    say("Ore and stone are out of the depot's power. Carry it to them with Pylons");
-  else if (world.story === 2) say("A Bench takes two different things, one from each side, and makes a third");
-  else say(storyOrder(world)?.say ?? "Right-click or Remove to take things back. R turns what you place");
-}
-
-// ---------- drawing ----------
-
-const centre = (x: number, y: number): [number, number] => [ox + (x + 0.5) * tile, oy + (y + 0.5) * tile];
-function arrow(cx: number, cy: number, d: Dir, size: number, colour: string): void {
-  g.save();
-  g.translate(cx, cy);
-  g.rotate((d * Math.PI) / 2);
-  g.fillStyle = colour;
-  g.beginPath();
-  g.moveTo(size, 0);
-  g.lineTo(-size * 0.6, -size * 0.8);
-  g.lineTo(-size * 0.6, size * 0.8);
-  g.fill();
-  g.restore();
-}
-function drawItem(item: Item, px: number, py: number, size: number): void {
-  g.fillStyle = "#1a0f1e";
-  g.fillRect(px - size / 2 - 1, py - size / 2 - 1, size + 2, size + 2);
-  g.fillStyle = COLOUR[item];
-  g.fillRect(px - size / 2, py - size / 2, size, size);
-  g.fillStyle = "#ffffff40";
-  g.fillRect(px - size / 2, py - size / 2, size, Math.max(1, size * 0.25));
-}
-const letters = (size: number): void => {
-  g.font = `700 ${Math.round(size)}px ui-monospace, monospace`;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-};
-function drawBuilding(b: Building, i: number, alpha: number, now: number): void {
-  const x = i % world.land.w;
-  const y = Math.floor(i / world.land.w);
-  const [cx, cy] = centre(x, y);
-  // A thing just built pops up a little past its size and settles.
-  const age = Math.min(1, (now - (born.get(i) ?? -1e9)) / 160);
-  const s = (age < 1 ? 0.6 + 0.55 * Math.sin(age * 2.2) : 1) * tile;
-  const live = world.power[i] === 1;
-  const along = world.rates.belt / TICKS.belt;
-  if (b.kind === "belt" || b.kind === "splitter" || b.kind === "joiner" || b.kind === "tunnel") {
-    g.fillStyle = b.kind === "belt" ? "#4b3d5c" : b.kind === "tunnel" ? "#1a0f1e" : "#5a4274";
-    g.fillRect(cx - s * 0.42, cy - s * 0.42, s * 0.84, s * 0.84);
-    // Chevrons run along a belt at the pace it carries.
-    const run = ((now / 1000) * 10 * along) % 1;
-    for (const k of [-0.5, 0, 0.5]) {
-      const off = ((k + run * 0.5 + 0.75) % 1) - 0.5;
-      arrow(cx + DX[b.dir] * off * tile * 0.8, cy + DY[b.dir] * off * tile * 0.8, b.dir, tile * 0.12, "#8f7fa8");
-    }
-    if (b.kind !== "belt") {
-      g.strokeStyle = b.kind === "splitter" ? "#b07ae6" : b.kind === "joiner" ? "#5aa9e6" : "#d49045";
-      g.lineWidth = 2;
-      g.strokeRect(cx - s * 0.42, cy - s * 0.42, s * 0.84, s * 0.84);
-    }
-    if (b.item) {
-      const p = Math.min(1, b.prog + (b.prog < 1 ? alpha * along : 0)) - 0.5;
-      drawItem(b.item, cx + DX[b.dir] * p * tile, cy + DY[b.dir] * p * tile, tile * 0.36);
-    }
-    return;
+  function absent(a: Away): void {
+    if (a.seconds >= LETTER_AFTER && !reading()) showLetter(art, a, refreshAll);
+    else if (a.coins > 0) feed(`While you were away the yard made ${a.coins.toLocaleString("en-US")} Coins.`, "gold");
   }
-  if (b.kind === "pylon") {
-    g.fillStyle = "#1a0f1e";
-    g.fillRect(cx - s * 0.12, cy - s * 0.3, s * 0.24, s * 0.66);
-    g.fillStyle = live ? "#ffd98a" : "#6a5a80";
-    g.beginPath();
-    g.arc(cx, cy - s * 0.22, s * 0.2, 0, 6.3);
-    g.fill();
-    return;
-  }
-  g.fillStyle = "#1a0f1e";
-  g.fillRect(cx - s * 0.46, cy - s * 0.46, s * 0.92, s * 0.92);
-  g.fillStyle = live || b.kind === "crate" ? (BODY[b.kind] ?? "#3a3340") : "#3a3340";
-  g.fillRect(cx - s * 0.4, cy - s * 0.4, s * 0.8, s * 0.8);
-  g.fillStyle = "#ffffff22";
-  g.fillRect(cx - s * 0.4, cy - s * 0.4, s * 0.8, s * 0.16);
-  g.fillStyle = b.kind === "boiler" && b.fuel > 0 ? "#ffb060" : live ? "#fff3cf" : "#9a86a8";
-  letters(tile * 0.42);
-  g.fillText(b.kind === "crate" ? (b.open ? String(b.count) : `[${b.count}]`) : (LETTER[b.kind] ?? "?"), cx, cy + 1);
-  if (b.kind !== "wheel" && b.kind !== "boiler")
-    arrow(cx + DX[b.dir] * tile * 0.43, cy + DY[b.dir] * tile * 0.43, b.dir, tile * 0.13, live ? "#f5b95e" : "#6a5a80");
-  // How far its work has come, along the bottom.
-  const needs = b.kind === "gatherer" ? TICKS.gather : b.making ? (RECIPE[b.making]?.ticks ?? 0) : 0;
-  if (b.work > 0 && needs > 0) {
-    g.fillStyle = "#f5b95e";
-    g.fillRect(cx - s * 0.4, cy + s * 0.32, s * 0.8 * Math.min(1, b.work / needs), s * 0.08);
-  }
-  if (b.out && b.kind !== "crate")
-    drawItem(b.out, cx + DX[b.dir] * tile * 0.2, cy + DY[b.dir] * tile * 0.2, tile * 0.3);
-  if (!live && b.kind !== "crate") {
-    g.fillStyle = "#e67967";
-    letters(tile * 0.5);
-    g.fillText("!", cx + tile * 0.3, cy - tile * 0.28);
-  }
-}
-function draw(alpha: number, now: number): void {
-  const { land } = world;
-  g.fillStyle = "#1b1220";
-  g.fillRect(0, 0, innerWidth, innerHeight);
-  const powering =
-    tool !== null &&
-    tool !== "erase" &&
-    tool !== "land" &&
-    (KIND[tool].draw > 0 || KIND[tool].gives > 0 || tool === "pylon");
-  const owned = land.plots.map((p) => world.plots.includes(p.id));
-  for (let y = view.y0; y < view.y1; y++)
-    for (let x = view.x0; x < view.x1; x++) {
-      const i = y * land.w + x;
-      const dep = land.deposit[i];
-      g.fillStyle = land.water[i]
-        ? "#24507a"
-        : land.trunk[i]
-          ? "#3b1f19"
-          : dep
-            ? GROUND[dep]
-            : (x + y) % 2
-              ? "#261b2e"
-              : "#231829";
-      g.fillRect(ox + x * tile, oy + y * tile, tile, tile);
-      if (dep) {
-        g.fillStyle = COLOUR[dep];
-        const k = (x * 7 + y * 13) % 5;
-        g.fillRect(ox + x * tile + tile * (0.2 + k * 0.1), oy + y * tile + tile * 0.3, tile * 0.14, tile * 0.14);
-        g.fillRect(ox + x * tile + tile * (0.6 - k * 0.06), oy + y * tile + tile * 0.62, tile * 0.12, tile * 0.12);
+
+  /** What the depot had taken in a moment ago, to hear each thing arrive. */
+  let heard: Tally = { ...S.world.depot };
+  let arriveAt = 0;
+  function arrivals(): void {
+    const w = S.world;
+    for (const k of ITEMS) {
+      const n = w.depot[k] ?? 0;
+      if (n > (heard[k] ?? 0) && S.t > arriveAt) {
+        arriveAt = S.t + 0.11;
+        yardSfx.arrive(ITEM[k].step);
       }
-      // Where power reaches is shown while placing something that needs it.
-      if (powering && world.power[i]) {
-        g.fillStyle = "rgba(245,185,94,0.09)";
-        g.fillRect(ox + x * tile, oy + y * tile, tile, tile);
-      }
-      if (!owned[land.plot[i] ?? -1]) {
-        g.fillStyle = "rgba(10,6,14,0.6)";
-        g.fillRect(ox + x * tile, oy + y * tile, tile, tile);
+      heard[k] = n;
+    }
+  }
+
+  /** The nudge showing, since when, and the last one the camera was turned towards. */
+  let nudgeAt = 0;
+  let shown = "";
+  let since = 0;
+  function nudges(): void {
+    if (S.t < nudgeAt) return;
+    nudgeAt = S.t + 0.4;
+    const n = reading() ? null : nudge(S.world, new Set(screen.taught), S.finger);
+    if (!n) {
+      S.nudge = null;
+      S.nudgeTool = null;
+      shown = "";
+      return;
+    }
+    if (n.id !== shown) {
+      shown = n.id;
+      since = S.t;
+      // The first lessons bring the place they are about into view.
+      if (n.lasting && S.world.story === 0 && !inView(n.x * TILE + 8, n.y * TILE + 8))
+        look(n.x * TILE + 8, n.y * TILE - 8);
+    }
+    // A lesson that is not learnt by doing is said for a while, and then counts as taken.
+    if (!n.lasting && S.t - since > 14) {
+      screen.taught.push(n.id);
+      return;
+    }
+    S.nudge = { x: n.x, y: n.y, text: n.text, id: n.id };
+    S.nudgeTool = n.tool;
+  }
+
+  let slow = 0;
+  function advance(dt: number, clock: boolean): void {
+    S.t += dt;
+    if (clock) {
+      const { away: gone, news } = tick(Date.now());
+      if (gone) absent(gone);
+      if (news.length > 0) {
+        onNews(art, news);
+        refreshAll();
       }
     }
-  world.cells.forEach((b, i) => {
-    if (b && b.kind !== "depot") drawBuilding(b, i, alpha, now);
+    stepWalkers(dt);
+    stepFlights(dt);
+    updateFx(dt);
+    stepClearing();
+    ease(dt);
+    stepInput(dt);
+    arrivals();
+    nudges();
+    tickNotes(dt);
+    const p = power(S.world);
+    murmur(S.t, Math.min(1, p.demand / 45) * p.pace * (boosted(S.world, Date.now()) ? 1.3 : 1));
+    slow -= dt;
+    if (slow > 0) return;
+    slow = 0.25;
+    capstones();
+    callers();
+    refreshAll();
+  }
+
+  function draw(): void {
+    const w = S.world;
+    const fast = boosted(w, Date.now());
+    const lead = S.held ? 0 : clamp((Date.now() - w.seen) / TICK_MS, 0, 1) * (fast ? 2 : 1);
+    const picture = drawYard(art, { lead, pace: power(w).pace, boosted: fast });
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(picture, 0, 0, picture.width * S.view.z, picture.height * S.view.z);
+    drawWords(ctx, wordPx);
+  }
+
+  let last = performance.now();
+  let told = false;
+  function frame(now: number): void {
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    last = now;
+    if (!S.held) advance(dt, true);
+    draw();
+    if (!told) {
+      told = true;
+      tell({ town: "ready" });
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- keeping, and the town ----------
+
+  fromTown((msg) => {
+    if (msg.town === "closing") save();
   });
-  // The depot: three tiles square, and it swells a little each time something arrives.
-  const [px, py] = centre(...land.depot);
-  const big = tile * (1.44 + pulse * 0.08);
-  g.fillStyle = "#1a0f1e";
-  g.fillRect(px - big - 2, py - big - 2, big * 2 + 4, big * 2 + 4);
-  g.fillStyle = "#54286a";
-  g.fillRect(px - big, py - big, big * 2, big * 2);
-  g.strokeStyle = "#f5b95e";
-  g.lineWidth = 3;
-  g.strokeRect(px - big + 3, py - big + 3, big * 2 - 6, big * 2 - 6);
-  g.fillStyle = "#ffd98a";
-  letters(tile * 0.5);
-  g.fillText("DEPOT", px, py);
-  // Plots, by name, while choosing land.
-  if (tool === "land")
-    for (const p of land.plots) {
-      const { state } = plotState(world, p.id);
-      g.strokeStyle = state === "owned" ? "#8bbf5a" : state === "for sale" ? "#f5b95e" : "#5a4a6a";
-      g.lineWidth = 2;
-      g.strokeRect(ox + p.x * tile + 2, oy + p.y * tile + 2, p.w * tile - 4, p.h * tile - 4);
-      g.fillStyle = state === "not yet" ? "#9a86a8" : "#fff3cf";
-      letters(Math.max(10, tile * 0.9));
-      g.fillText(p.name, ox + (p.x + p.w / 2) * tile, oy + (p.y + 1.2) * tile);
-      if (state !== "owned")
-        g.fillText(
-          state === "for sale" ? `${p.price} Coins` : "not yet",
-          ox + (p.x + p.w / 2) * tile,
-          oy + (p.y + 2.6) * tile,
-        );
-    }
-  for (const p of pops) {
-    const k = (now - p.t) / 2600;
-    if (k < 0) continue;
-    g.globalAlpha = Math.max(0, 1 - k * k);
-    g.fillStyle = p.colour;
-    letters(Math.min(18, Math.max(12, innerWidth / 44)));
-    g.fillText(p.text, p.x, p.y - k * 30);
-  }
-  g.globalAlpha = 1;
-  // What would be built where the pointer is.
-  if (!hover || tool === null || tool === "land" || at(world, hover[0], hover[1]) < 0) return;
-  const [hx, hy] = centre(hover[0], hover[1]);
-  const ok = tool === "erase" ? false : refusal(world, tool, hover[0], hover[1], coins, dir) === null;
-  g.strokeStyle = ok ? "#8bbf5a" : "#e67967";
-  g.lineWidth = 2;
-  g.strokeRect(hx - tile / 2 + 1, hy - tile / 2 + 1, tile - 2, tile - 2);
-  if (tool === "erase") return;
-  if (tool === "pylon") {
-    g.beginPath();
-    g.arc(hx, hy, REACH.pylon * world.rates.reach * tile, 0, 6.3);
-    g.stroke();
-  } else arrow(hx, hy, dir, tile * 0.2, ok ? "#8bbf5aaa" : "#e67967aa");
-  // A tunnel shows where it would come up.
-  const exit = tool === "tunnel" ? tunnelExit(world, hover[0], hover[1], dir) : null;
-  if (exit) g.strokeRect(ox + exit.x * tile + 1, oy + exit.y * tile + 1, tile - 2, tile - 2);
-}
-
-// ---------- the clock ----------
-
-let keptAt = 0;
-let shown = "";
-let taken = ITEMS.reduce((sum, k) => sum + (world.depot[k] ?? 0), 0);
-function welcome(away: Away | null): void {
-  if (!away) return;
-  pops.push({
-    x: innerWidth / 2,
-    y: innerHeight * 0.4,
-    text: awayLine(away),
-    t: performance.now() + 400,
-    colour: "#ffd98a",
+  window.addEventListener("pagehide", save);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") save();
   });
-}
-function frame(now: number): void {
-  welcome(runTo(world, Date.now()));
-  bank();
-  for (const news of drain(world)) {
-    if (news.kind === "story") banner("Order filled", news.title, `+${news.pay} Coins`);
-    else if (news.kind === "filled") banner("Ready to hand over", news.title, `${news.pay} Coins waiting`);
-    toolbar();
-    fit();
-  }
-  const total = ITEMS.reduce((sum, k) => sum + (world.depot[k] ?? 0), 0);
-  if (total > taken) pulse = 1;
-  taken = total;
-  pulse *= 0.9;
-  while (pops[0] && now - pops[0].t > 2600) pops.shift();
-  draw(Math.min(1, Math.max(0, (Date.now() - world.seen) / TICK_MS)), now);
-  const p = power(world);
-  const left = boostLeft(world, Date.now());
-  const line = `${Math.floor(coins)}|${p.demand}|${p.supply}|${Math.ceil(left / 1000)}|${world.tick - (world.tick % 5)}|${world.story}`;
-  if (line !== shown) {
-    shown = line;
-    $("coins").textContent = Math.floor(coins).toLocaleString("en-US");
-    $("power").textContent =
-      `Power ${p.demand} of ${p.supply}${p.pace < 1 ? ` · ${Math.round(p.pace * 100)}%` : ""}` +
-      (left > 0 ? ` · second shift ${Math.ceil(left / 60_000)} min` : "");
-    showOrders();
-    guide();
-  }
-  if (now - keptAt > 3000) {
-    keptAt = now;
-    keep();
-  }
+
+  if (away) absent(away);
+  callers();
+  refreshAll();
   requestAnimationFrame(frame);
-}
-function keep(): void {
-  try {
-    localStorage.setItem(KEY, save(world));
-    localStorage.setItem(PURSE, String(Math.floor(coins)));
-  } catch {
-    // Not kept this time.
-  }
-}
-addEventListener("pagehide", keep);
-fit();
-toolbar();
-showPlans();
-requestAnimationFrame(frame);
 
-Object.assign(window, {
-  works: {
-    get world() {
-      return world;
+  // ---------- handles for looking at it from outside ----------
+
+  window.works = {
+    stage(name, story = 0) {
+      const world = name === "new" ? create({ seed: 20261121, story }) : load(JSON.stringify(STAGES[name]));
+      if (!world) throw new Error(`the ${name} yard would not load`);
+      forget();
+      tipOff();
+      $("feed").replaceChildren();
+      closeBanner();
+      closeCard();
+      closePanel();
+      setTool(null);
+      swapYard(world);
+      heard = { ...world.depot };
+      screen.taught = name === "new" && story === 0 ? [] : ["planks", "pylon", "bench", "board", "short", "starved"];
+      shown = "";
+      nudgeAt = 0;
+      look(home().x, home().y, true);
+      refreshAll();
     },
-    get coins() {
-      return coins;
+    hold(on) {
+      S.held = on;
+      S.world.seen = Date.now();
     },
-    set coins(n: number) {
-      coins = n;
+    run(ticks) {
+      S.held = true;
+      for (let k = 0; k < ticks; k++) {
+        step(S.world);
+        if (k % 3 === 0) advance(0.3, false);
+      }
+      const news = tick(Date.now()).news;
+      if (news.length > 0) onNews(art, news);
+      S.world.seen = Date.now();
+      refreshAll();
     },
-    /** Starts a new yard, some way into the story if asked, for review. */
-    reset(story = 0, seed = 1): void {
-      world = create({ seed, story });
-      world.seen = Date.now();
-      coins = 0;
-      taken = 0;
-      fit();
-      toolbar();
-      showPlans();
+    skip(seconds) {
+      for (let k = 0; k < seconds * 30; k++) advance(1 / 30, false);
+      refreshAll();
     },
-    build: (k: Kind, x: number, y: number, d: Dir): boolean => pay(build(world, k, x, y, d, coins)),
-    plot(id: Parameters<typeof buyPlot>[1]): boolean {
-      const ok = pay(buyPlot(world, id, coins));
-      fit();
+    pick(tool, dir) {
+      if (dir !== undefined) S.dir = dir;
+      setTool(tool);
+    },
+    finger(on) {
+      S.finger = on;
+      if (on) S.hover = null;
+      refreshDock();
+    },
+    aim(x, y) {
+      S.hover = S.finger ? null : { x, y };
+      aimAt(x, y);
+      refreshDock();
+    },
+    tap(x, y) {
+      if (S.tool === "belt") tapBelt(x, y);
+      else if (S.tool === null) openCard(x, y);
+      else if (S.aim && S.aim.x === x && S.aim.y === y) confirm();
+      else aimAt(x, y);
+      refreshDock();
+    },
+    build(kind, x, y, dir = 0) {
+      S.dir = dir;
+      setTool(kind);
+      const ok = place(x, y);
+      setTool(null);
       return ok;
     },
-    plan(id: Parameters<typeof buyPlan>[1]): boolean {
-      const ok = pay(buyPlan(world, id, coins));
-      toolbar();
-      showPlans();
-      return ok;
+    remove: (x, y) => takeAway(x, y),
+    drag(x0, y0, x1, y1) {
+      runStart(x0, y0);
+      runOver(x1, y1);
     },
-    /** Runs the yard on by hand, since a headless page draws about a frame a second. */
-    run(ticks: number): void {
-      for (let i = 0; i < ticks; i++) step(world);
-      world.seen = Date.now();
+    drop: runEnd,
+    confirm,
+    open: openPanel,
+    close() {
+      closePanel();
+      closeCard();
     },
-    /** Starts a second shift of so many minutes. */
-    boost: (minutes: number): void => boost(world, Date.now(), minutes * 60_000),
-    pick(t: typeof tool): void {
-      tool = t;
-      fit();
-      toolbar();
+    card: openCard,
+    look(x, y) {
+      look(x * TILE + 8, y * TILE + 8, true);
     },
-    /** Where a tile is on the page, for a script to tap. */
-    page: (x: number, y: number): { x: number; y: number } => ({ x: ox + (x + 0.5) * tile, y: oy + (y + 0.5) * tile }),
-  },
-});
+    zoom(by) {
+      zoom(by, window.innerWidth / 2, window.innerHeight / 2);
+    },
+    purse: setPurse,
+    boost(minutes) {
+      boost(S.world, Date.now(), minutes * 60_000);
+      shiftOn();
+      refreshAll();
+    },
+    away(hours) {
+      S.world.seen = Date.now() - hours * 3_600_000;
+      S.held = false;
+      const { away: gone, news } = tick(Date.now());
+      if (gone) absent(gone);
+      if (news.length > 0) onNews(art, news);
+      S.held = true;
+      touched();
+      refreshAll();
+    },
+    plot: buyLand,
+    plan: buyIdea,
+    taught(ids) {
+      screen.taught = ids;
+      nudgeAt = 0;
+    },
+    fill(slot) {
+      const order = S.world.board[slot];
+      if (!order) return;
+      for (const k of ITEMS) {
+        const n = (order.want[k] ?? 0) - (order.filled[k] ?? 0);
+        // Whatever the story order wants of it first, and then the board's.
+        if (n > 0) deliver(S.world, k, n + Math.max(0, (storyOrder(S.world)?.want[k] ?? 0) - (S.world.filled[k] ?? 0)));
+      }
+      const news = tick(Date.now()).news;
+      if (news.length > 0) onNews(art, news);
+      S.world.seen = Date.now();
+      refreshAll();
+    },
+    page(x, y) {
+      return toPage(x * TILE + 8, y * TILE + 8);
+    },
+    where(kind) {
+      const w = S.world;
+      return w.cells.flatMap((b, i) => (b?.kind === kind ? [{ x: i % w.land.w, y: Math.floor(i / w.land.w) }] : []));
+    },
+    bench() {
+      const t0 = performance.now();
+      for (let i = 0; i < 100; i++) {
+        step(S.world);
+        advance(1 / 60, false);
+        draw();
+      }
+      return (performance.now() - t0) / 100;
+    },
+    state() {
+      const w = S.world;
+      return {
+        coins: balance().coins,
+        leaf: balance().leaf,
+        story: w.story,
+        built: layout(w, S.rev).built,
+        nudge: S.nudge?.id ?? null,
+        tool: S.tool,
+        aim: S.aim,
+        run: S.run ? { legs: S.run.legs.length, cost: S.run.cost, why: S.run.why } : null,
+        panel: S.panel,
+        picked: S.picked,
+        power: power(w),
+        z: S.view.z,
+      };
+    },
+  };
+}
+
+void boot();

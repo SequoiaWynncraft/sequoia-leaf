@@ -12,8 +12,11 @@
  * The player here has quick hands and never stops to think, so a person will be slower at building
  * than this says; `THINK` is the allowance for that, and both figures are printed.
  */
+import { writeFileSync } from "node:fs";
+
 import {
   at,
+  besideWater,
   build,
   buyPlan,
   buyPlot,
@@ -60,6 +63,17 @@ import {
 } from "../src/sim/index.ts";
 
 const SHOW_MAP = process.argv.includes("--map");
+/**
+ * `--yards` keeps the yard as it stood part-way through a few of the orders, in `src/yards/`: the
+ * screen loads them to show the game at different stages of its story.
+ */
+const KEEP_YARDS = process.argv.includes("--yards");
+const YARDS = new Map<number, string>([
+  [2, "small"],
+  [3, "short"],
+  [11, "mid"],
+  [15, "large"],
+]);
 /** Ticks of a person's time allowed for: each thing placed, each run of belt, each purchase, and working out each order's line. */
 const HANDS = { place: 15, run: 30, buy: 100 } as const;
 const THINK = { order: 1200, machine: 150 } as const;
@@ -305,23 +319,35 @@ class Player {
     if (did.ok) this.purse += did.refund;
   }
 
-  /** Stands boilers (or waterwheels, where there are no boilers yet) until there is power for everything drawn. */
+  /**
+   * Stands waterwheels and boilers until there is power for everything drawn. A wheel is the cheap,
+   * steady answer to being a little short, wherever the yard has a bank; a boiler, with a gatherer
+   * to feed it, is the answer to being a lot short.
+   */
   fuel(): void {
     const { w } = this;
-    for (let tries = 0; tries < 12; tries++) {
+    for (let tries = 0; tries < 16; tries++) {
       const p = power(w);
       const burning = w.cells.filter((b) => b?.kind === "boiler").length * KIND.boiler.gives;
       const steady = p.supply - w.cells.filter((b) => b?.kind === "boiler" && b.fuel > 0).length * KIND.boiler.gives;
-      if (steady + burning >= p.demand) return;
-      if (w.open.kinds.has("boiler")) {
-        const tile = this.near(w.land.depot).find(
-          ([x, y]) =>
-            w.land.deposit[at(w, x, y)] === "deadfall" &&
-            this.free(x, y) &&
-            this.beside(x, y, w.land.depot, true).length > 0,
-        );
-        const spot = tile ? this.beside(tile[0], tile[1], w.land.depot, true)[0] : undefined;
-        if (!tile || !spot) return;
+      const short = p.demand - (steady + burning);
+      if (short <= 0) return;
+      const bank = w.open.kinds.has("wheel")
+        ? this.near(w.land.depot).find(([x, y]) => this.plain(x, y) && besideWater(w.land, x, y))
+        : undefined;
+      const tile = w.open.kinds.has("boiler")
+        ? this.near(w.land.depot).find(
+            ([x, y]) =>
+              w.land.deposit[at(w, x, y)] === "deadfall" &&
+              this.free(x, y) &&
+              this.beside(x, y, w.land.depot, true).length > 0,
+          )
+        : undefined;
+      const spot = tile ? this.beside(tile[0], tile[1], w.land.depot, true)[0] : undefined;
+      if (bank && (short <= KIND.wheel.gives * 2 || !tile || !spot)) {
+        this.put("wheel", bank[0], bank[1], 0);
+        this.light(bank[0], bank[1]);
+      } else if (tile && spot) {
         this.put(
           "gatherer",
           tile[0],
@@ -540,7 +566,7 @@ console.log(
 
 console.log("2. The story, played by script: one line for each thing an order asks for, cleared away after");
 console.log(
-  `   ${pad("#", 3)}${pad("order", 31)}${pad("asks for", 26)}${lpad("mach", 5)}${lpad("belt", 5)}${lpad("power", 9)}${lpad("build", 7)}${lpad("fill", 7)}${lpad("think", 7)}${lpad("done at", 9)}${lpad("pay", 7)}${lpad("purse", 7)}  bought on the way`,
+  `   ${pad("#", 3)}${pad("order", 31)}${pad("asks for", 26)}${lpad("mach", 5)}${lpad("belt", 5)}${lpad("power", 9)}${lpad("build", 7)}${lpad("fill", 7)}${lpad("think", 7)}${lpad("done at", 9)}${lpad("pay", 7)}${lpad("purse", 7)}  ${pad("power from", 20)}bought on the way`,
 );
 let p = new Player();
 p.purse = collect(p.w);
@@ -564,8 +590,21 @@ for (const [n, order] of STORY.entries()) {
   const built = p.ticks;
   const { machines, belts } = p.size();
   const pw = power(p.w);
+  const count = (kind: Kind): number => p.w.cells.filter((c) => c?.kind === kind).length;
+  const sources = [
+    ...(count("boiler") ? [`${count("boiler")} boiler${count("boiler") === 1 ? "" : "s"}`] : []),
+    ...(count("wheel") ? [`${count("wheel")} wheel${count("wheel") === 1 ? "" : "s"}`] : []),
+  ].join(", ");
   if (SHOW_MAP) console.log(`\n${p.map()}\n`);
+  let keptYard = false;
   for (let guard = 0; p.w.story === n; guard++) {
+    const name = YARDS.get(n);
+    const got = ITEMS.reduce((sum, k) => sum + Math.min(p.w.filled[k] ?? 0, order.want[k] ?? 0), 0);
+    const all = ITEMS.reduce((sum, k) => sum + (order.want[k] ?? 0), 0);
+    if (KEEP_YARDS && name && !keptYard && (got >= all * 0.4 || guard >= 40)) {
+      keptYard = true;
+      writeFileSync(`${import.meta.dir}/../src/yards/${name}.json`, `${save(p.w)}\n`);
+    }
     if (guard > 4000) {
       console.log(`\n${p.map()}\n`);
       p.w.cells.forEach((b, i) => {
@@ -606,7 +645,7 @@ for (const [n, order] of STORY.entries()) {
   const treats = p.treat(0.6, keep);
   const ask = wanted.map((k) => `${order.want[k]} ${ITEM[k].many}`).join(", ");
   console.log(
-    `   ${pad(n + 1, 3)}${pad(order.title, 31)}${pad(ask, 26)}${lpad(machines, 5)}${lpad(belts, 5)}${lpad(`${pw.demand}/${pw.supply}`, 9)}${minutes(built - began)}m${minutes(filled - built)}m${minutes(think)}m${lpad(clock(thought), 9)}${lpad(order.pay, 7)}${lpad(Math.floor(p.purse), 7)}  ${[...bought, ...treats].join(", ")}${p.waited > waitedBefore ? ` (waited ${minutes(p.waited - waitedBefore).trim()}m for Coins)` : ""}`,
+    `   ${pad(n + 1, 3)}${pad(order.title, 31)}${pad(ask, 26)}${lpad(machines, 5)}${lpad(belts, 5)}${lpad(`${pw.demand}/${pw.supply}`, 9)}${minutes(built - began)}m${minutes(filled - built)}m${minutes(think)}m${lpad(clock(thought), 9)}${lpad(order.pay, 7)}${lpad(Math.floor(p.purse), 7)}  ${pad(sources, 20)}${[...bought, ...treats].join(", ")}${p.waited > waitedBefore ? ` (waited ${minutes(p.waited - waitedBefore).trim()}m for Coins)` : ""}`,
   );
 }
 console.log(

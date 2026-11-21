@@ -4,259 +4,530 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <title>The Works</title>
+    <link rel="stylesheet" href="../../packages/kit/src/kit.css" />
     <style>
+      /* Only where the yard puts things; how they look is the kit's. */
+      :root {
+        --edge: max(calc(var(--u) * 4), env(safe-area-inset-left), env(safe-area-inset-right));
+        --top: max(calc(var(--u) * 4), env(safe-area-inset-top));
+        --bottom: max(calc(var(--u) * 4), env(safe-area-inset-bottom));
+      }
       html,
       body {
-        margin: 0;
         height: 100%;
-        background: #1b1220;
         overflow: hidden;
-        font:
-          600 13px/1.25 ui-monospace,
-          "DejaVu Sans Mono",
-          Menlo,
-          Consolas,
-          monospace;
-        color: #fff3cf;
         user-select: none;
         -webkit-user-select: none;
       }
-      canvas {
-        display: block;
+      #view {
+        position: fixed;
+        inset: 0;
         width: 100vw;
         height: 100dvh;
+        display: block;
         touch-action: none;
-      }
-      .panel,
-      .tool {
-        background: #2a1733ee;
-        border: 2px solid #5a296e;
-        box-shadow: 0 0 0 2px #1a0f1e;
-        border-radius: 2px;
-      }
-      .label {
-        font-size: 10px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: #d49045;
-      }
-      #purse {
-        position: fixed;
-        top: max(8px, env(safe-area-inset-top));
-        left: max(8px, env(safe-area-inset-left));
-        padding: 6px 12px;
-      }
-      #coins {
-        font-size: 22px;
-        color: #f5b95e;
-      }
-      #order {
-        position: fixed;
-        top: max(8px, env(safe-area-inset-top));
-        right: max(8px, env(safe-area-inset-right));
-        padding: 6px 12px;
-        min-width: 210px;
-        max-width: 46vw;
-      }
-      #order .title {
-        font-size: 15px;
-      }
-      #order .row {
-        display: grid;
-        grid-template-columns: 12px 56px 1fr 44px;
-        gap: 6px;
-        align-items: center;
-        margin-top: 4px;
-        font-size: 12px;
-      }
-      #order .chip {
-        width: 12px;
-        height: 12px;
-        border-radius: 3px;
-      }
-      #order .bar {
-        height: 8px;
-        background: #1a0f1e;
-        border: 1px solid #5a296e;
-      }
-      #order .bar i {
-        display: block;
-        height: 100%;
-        background: #f5b95e;
-        transition: width 0.25s;
-      }
-      #order .pay {
-        margin-top: 5px;
-        font-size: 11px;
-        color: #e0c39a;
-      }
-      #order {
-        max-height: 60vh;
-        overflow: auto;
-      }
-      #order .standing {
-        margin-top: 8px;
-        padding-top: 6px;
-        border-top: 1px solid #5a296e;
-        font-size: 12px;
-      }
-      #order .standing.full {
-        color: #ffd98a;
-      }
-      #order button,
-      #plans button {
-        font: inherit;
-        font-size: 11px;
-        color: #fff3cf;
-        background: #54286a;
-        border: 1px solid #d49045;
-        margin-top: 4px;
-        padding: 3px 8px;
-        cursor: pointer;
-      }
-      #order button:disabled {
-        opacity: 0.4;
-      }
-      #power {
-        font-size: 11px;
-        color: #e0c39a;
-      }
-      #plans {
-        position: fixed;
-        left: max(8px, env(safe-area-inset-left));
-        top: 96px;
-        bottom: 150px;
-        width: min(330px, 80vw);
-        overflow: auto;
-        padding: 6px 10px;
-      }
-      #plans button {
-        display: block;
-        width: 100%;
-        text-align: left;
-      }
-      #plans .plan.owned {
-        border-color: #8bbf5a;
-        background: #2a1733;
-      }
-      #plans .plan.not-yet {
-        opacity: 0.5;
+        image-rendering: pixelated;
       }
 
-      #hint {
+      /* Along the top: the purse and the power on the left, the yard's books and the way out on the right. */
+      #top {
         position: fixed;
-        left: 50%;
-        transform: translateX(-50%);
-        bottom: calc(max(8px, env(safe-area-inset-bottom)) + 134px);
-        padding: 5px 12px;
-        background: #1a0f1ecc;
-        border-left: 3px solid #f5b95e;
-        max-width: 92vw;
+        z-index: 5;
+        top: var(--top);
+        left: var(--edge);
+        right: var(--edge);
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: calc(var(--u) * 3);
+        pointer-events: none;
+      }
+      #top > * {
+        pointer-events: auto;
+      }
+      #purse {
+        display: flex;
+        gap: calc(var(--u) * 6);
+        padding: var(--u) calc(var(--u) * 4);
+      }
+      #power {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 3);
+        padding: var(--u) calc(var(--u) * 4);
+        background: none;
+        color: inherit;
+      }
+      #power .k-bar {
+        width: calc(var(--u) * 34);
+      }
+      #power .short {
+        color: var(--k-coral);
+      }
+      #books,
+      #corner {
+        display: flex;
+        gap: calc(var(--u) * 3);
+      }
+      #books {
+        margin-left: auto;
+      }
+      .pip {
+        position: relative;
+      }
+      .pip[data-n]::after {
+        content: attr(data-n);
+        position: absolute;
+        top: calc(var(--u) * -3);
+        right: calc(var(--u) * -3);
+        min-width: calc(var(--u) * 9);
+        height: calc(var(--u) * 9);
+        line-height: calc(var(--u) * 9);
+        font-size: var(--t-s);
         text-align: center;
+        color: #3b1f19;
+        background: var(--k-gold-lt);
+        box-shadow: 0 0 0 var(--u) var(--k-ink);
+        text-shadow: none;
       }
-      #hint.bad {
-        border-left-color: #e67967;
-        color: #ffb3a6;
-      }
-      #tools {
+
+      /* The order in hand, always in view. */
+      #track {
         position: fixed;
-        left: 0;
-        right: 0;
-        bottom: max(8px, env(safe-area-inset-bottom));
+        z-index: 4;
+        top: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
+        left: var(--edge);
+        width: min(calc(var(--u) * 132), calc(100vw - var(--edge) * 2));
+        box-sizing: border-box;
+        padding: var(--u) calc(var(--u) * 3) calc(var(--u) * 2);
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 2);
+        background: none;
+        color: inherit;
+        text-align: left;
+      }
+      .want {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 3);
+      }
+      .want .k-bar {
+        flex: 1;
+        min-width: calc(var(--u) * 16);
+      }
+      .want .n {
+        min-width: calc(var(--u) * 28);
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      /* The tools, along the bottom; and over them, what is in hand and the buttons that act on it. */
+      #dock {
+        /* A tool's slot, and how many of them go in a row (the dock says how many it has). */
+        --per: 13;
+        --slot: min(calc(var(--u) * 21), calc((100vw - var(--edge) * 2 - var(--u) * 12) / var(--per)));
+        position: fixed;
+        z-index: 6;
+        left: var(--edge);
+        right: var(--edge);
+        margin-inline: auto;
+        width: fit-content;
+        bottom: var(--bottom);
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 6px;
-        padding: 0 8px;
+        gap: var(--u);
+        padding: var(--u);
+        box-sizing: border-box;
       }
-      .tool {
-        font: inherit;
-        color: #fff3cf;
-        min-width: 78px;
-        min-height: 54px;
-        padding: 5px 8px;
+      #dock button {
+        width: var(--slot);
+        height: calc(var(--u) * 27);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0;
+        color: var(--k-cream);
+        font-size: var(--t-s);
+        line-height: 1.1;
+      }
+      #dock button .art {
+        flex: 1;
         display: grid;
-        justify-items: center;
-        align-content: center;
-        gap: 1px;
-        cursor: pointer;
+        place-items: center;
       }
-      .tool small {
-        font-size: 10px;
-        color: #e0c39a;
+      #dock button:hover canvas,
+      #dock button.lit canvas {
+        translate: 0 calc(var(--u) * -1);
       }
-      .tool.on {
-        border-color: #f5b95e;
-        background: #54286a;
+      #dock button:active {
+        translate: 0 var(--u);
       }
-      .tool.locked {
-        opacity: 0.4;
+      #dock button.new {
+        animation: new-tool 0.5s steps(5) 4;
       }
-      .tool:active {
-        transform: translateY(2px);
+      #dock button.nudged {
+        animation: nudged 0.9s steps(3) infinite;
       }
+      @keyframes new-tool {
+        50% {
+          filter: brightness(1.8);
+          translate: 0 calc(var(--u) * -2);
+        }
+      }
+      @keyframes nudged {
+        50% {
+          filter: brightness(1.5);
+          translate: 0 calc(var(--u) * -2);
+        }
+      }
+      #dock .gap {
+        width: calc(var(--u) * 2);
+      }
+      #hand {
+        position: fixed;
+        z-index: 6;
+        left: var(--edge);
+        right: var(--edge);
+        margin-inline: auto;
+        width: fit-content;
+        bottom: calc(var(--bottom) + var(--dockh, 0px) + var(--u) * 2);
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 3);
+        padding: var(--u) calc(var(--u) * 2) var(--u) calc(var(--u) * 4);
+        box-sizing: border-box;
+      }
+      #hand .say {
+        min-width: 0;
+        flex: 1;
+      }
+      #hand .say.bad {
+        color: var(--k-coral);
+      }
+      #hand .acts {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 3);
+      }
+      #hand.building {
+        border-image-source: var(--k-f-plaque);
+        box-shadow:
+          0 calc(var(--u) * 2) 0 #0006,
+          0 0 0 var(--u) var(--k-gold);
+      }
+
+      /* A panel: beside the yard on a wide screen, under it on a tall one. */
+      #panel {
+        position: fixed;
+        z-index: 8;
+        right: var(--edge);
+        top: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
+        width: min(calc(var(--u) * 196), 46vw);
+        max-height: calc(100dvh - var(--toph, calc(var(--top) + var(--u) * 24)) - var(--bottom) - var(--u) * 7);
+        display: flex;
+        flex-direction: column;
+      }
+      #panel > .k-body {
+        flex: 1;
+        min-height: 0;
+      }
+      #panel.slide {
+        animation: slide-in 0.18s ease-out;
+      }
+      @keyframes slide-in {
+        from {
+          translate: calc(var(--u) * 12) 0;
+          opacity: 0;
+        }
+      }
+      @keyframes slide-up {
+        from {
+          translate: 0 calc(var(--u) * 12);
+          opacity: 0;
+        }
+      }
+      .k-card.order,
+      .k-paper.order {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: calc(var(--u) * 2);
+      }
+      .order .from {
+        display: flex;
+        align-items: baseline;
+        gap: calc(var(--u) * 3);
+      }
+      .k-card.order.ready {
+        border-image-source: var(--k-f-card-lit);
+      }
+      .opens {
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(var(--u) * 2);
+      }
+      /* The plans, as the small tree they are: each row a line of plans, the later hanging off the earlier. */
+      .branch {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 3);
+      }
+      /* The later plan hangs off the earlier one by a twig. */
+      .branch > .twig {
+        display: none;
+      }
+      .branch > .twig + .plan {
+        position: relative;
+        margin-left: calc(var(--u) * 10);
+      }
+      .branch > .twig + .plan::before {
+        content: "";
+        position: absolute;
+        left: calc(var(--u) * -8);
+        top: calc(var(--u) * -5);
+        width: calc(var(--u) * 4);
+        height: calc(var(--u) * 16);
+        border-left: calc(var(--u) * 2) solid var(--k-bark-lt);
+        border-bottom: calc(var(--u) * 2) solid var(--k-bark-lt);
+      }
+      .k-card.plan {
+        flex-direction: column;
+        align-items: stretch;
+        gap: calc(var(--u) * 2);
+      }
+      .k-card.plan.locked {
+        opacity: 0.62;
+      }
+      .k-card.plan.owned {
+        border-image-source: var(--k-f-card-lit);
+      }
+      .rows {
+        display: grid;
+        grid-template-columns: auto 1fr auto auto;
+        align-items: center;
+        gap: calc(var(--u) * 2) calc(var(--u) * 4);
+      }
+      .rows .num {
+        text-align: right;
+      }
+
+      /* What a thing is and is doing, over the tools. */
+      #card {
+        position: fixed;
+        z-index: 7;
+        left: 50%;
+        translate: -50% 0;
+        bottom: calc(var(--bottom) + var(--dockh, 0px) + var(--handh, 0px) + var(--u) * 4);
+        width: min(calc(var(--u) * 170), calc(100vw - var(--edge) * 2));
+        box-sizing: border-box;
+        padding: calc(var(--u) * 2);
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 3);
+      }
+      #card .top {
+        align-items: flex-start;
+      }
+      #card .trouble {
+        color: var(--k-coral);
+      }
+      .recipe {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: calc(var(--u) * 2);
+      }
+      .recipe .k-slot {
+        width: calc(var(--u) * 16);
+        height: calc(var(--u) * 16);
+        position: relative;
+      }
+      .recipe .k-slot b {
+        position: absolute;
+        right: 0;
+        bottom: calc(var(--u) * -1);
+        font-size: var(--t-s);
+        text-shadow:
+          var(--u) 0 0 var(--k-ink),
+          0 var(--u) 0 var(--k-ink),
+          calc(var(--u) * -1) 0 0 var(--k-ink);
+      }
+      .pins {
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(var(--u) * 2);
+      }
+      .pins button {
+        width: calc(var(--u) * 18);
+        height: calc(var(--u) * 18);
+      }
+
+      /* News, said once and then gone. */
+      #feed {
+        position: fixed;
+        z-index: 4;
+        left: var(--edge);
+        bottom: var(--bottom);
+        width: min(calc(var(--u) * 150), calc(50vw - var(--u) * 150));
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 2);
+        pointer-events: none;
+      }
+      #feed .gone {
+        opacity: 0;
+        transition: opacity 0.9s;
+      }
+
+      /* An order filled: what it paid, what it opened, what is asked for next. */
       #banner {
         position: fixed;
-        left: 50%;
-        top: 28%;
-        transform: translate(-50%, -50%);
-        text-align: center;
+        z-index: 12;
+        right: var(--edge);
+        top: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
+        width: min(calc(var(--u) * 180), calc(100vw - var(--edge) * 2));
+        box-sizing: border-box;
+      }
+      #banner .k-body {
+        gap: calc(var(--u) * 2);
+      }
+
+      /* The letter about an absence. */
+      #letter {
+        position: fixed;
+        z-index: 20;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: var(--top) var(--edge) var(--bottom);
+        box-sizing: border-box;
+        background: #1a0f1e99;
+        transition: opacity 0.3s;
+      }
+      #letter.gone {
+        opacity: 0;
         pointer-events: none;
-        text-shadow:
-          0 2px 0 #1a0f1e,
-          0 0 16px #1a0f1e;
-        animation: banner 3.2s ease-out forwards;
       }
-      #banner b {
-        display: block;
-        font-size: clamp(22px, 5vw, 36px);
-        color: #ffd98a;
+      .letter {
+        width: min(calc(var(--u) * 180), 100%);
+        max-height: 100%;
+        overflow: auto;
       }
-      @keyframes banner {
-        0% {
+      .letter .line {
+        visibility: hidden;
+      }
+      .letter .line.in {
+        visibility: visible;
+        animation: line-in 0.3s steps(4);
+      }
+      @keyframes line-in {
+        from {
+          translate: calc(var(--u) * -6) 0;
           opacity: 0;
-          transform: translate(-50%, -30%) scale(0.8);
-        }
-        10%,
-        80% {
-          opacity: 1;
-          transform: translate(-50%, -50%) scale(1);
-        }
-        100% {
-          opacity: 0;
-          transform: translate(-50%, -70%);
         }
       }
-      @media (max-width: 700px) {
-        #order {
-          max-width: 58vw;
-          min-width: 0;
-          max-height: 34vh;
+      .made {
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(var(--u) * 2) calc(var(--u) * 5);
+      }
+      .made span {
+        display: inline-flex;
+        align-items: center;
+        gap: calc(var(--u) * 2);
+      }
+
+      @media (max-width: 1100px), (orientation: portrait) {
+        #feed {
+          bottom: calc(var(--bottom) + var(--dockh, 0px) + var(--handh, 0px) + var(--u) * 4);
+          width: min(calc(var(--u) * 150), calc(100vw - var(--edge) * 2));
         }
-        .tool {
-          min-width: 58px;
-          min-height: 40px;
-          padding: 3px 5px;
-          font-size: 11px;
+      }
+      @media (max-width: 760px), (orientation: portrait) {
+        /* Two even rows once the tools no longer fit in one. */
+        #dock {
+          max-width: calc(var(--per) * (var(--slot) + var(--u)) + var(--u) * 11);
         }
-        #hint {
-          bottom: calc(max(8px, env(safe-area-inset-bottom)) + 200px);
-          font-size: 11px;
+        #hand {
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        #hand .say {
+          flex: 1 1 11em;
+        }
+        #top {
+          gap: calc(var(--u) * 2);
+        }
+        #purse {
+          gap: calc(var(--u) * 4);
+        }
+        #power .k-bar {
+          width: calc(var(--u) * 20);
+        }
+        /* Two rows: the purse and the way out, then the power and the yard's books. */
+        #corner {
+          margin-left: auto;
+          order: 2;
+        }
+        #purse {
+          order: 1;
+        }
+        #power {
+          order: 3;
+        }
+        #books {
+          order: 4;
+        }
+        /* Short of power, the numbers say so and the bar gives them its room. */
+        #power.short .k-bar {
+          display: none;
+        }
+        #panel {
+          left: var(--edge);
+          right: var(--edge);
+          width: auto;
+          top: auto;
+          bottom: calc(var(--bottom) + var(--dockh, 0px) + var(--u) * 2);
+          max-height: min(54dvh, calc(100dvh - var(--dockh, 0px) - var(--top) - var(--u) * 56));
+        }
+        #panel.slide {
+          animation-name: slide-up;
+        }
+        #hand {
+          width: auto;
+        }
+        #feed {
+          bottom: calc(var(--bottom) + var(--dockh, 0px) + var(--u) * 28);
+        }
+        #feed > :nth-last-child(n + 3),
+        body.panel-open #feed,
+        body.panel-open #card,
+        body.panel-open #track {
+          display: none;
         }
       }
     </style>
   </head>
   <body>
-    <canvas></canvas>
-    <div id="purse" class="panel">
-      <div class="label">Coins</div>
-      <div id="coins">0</div>
-      <div id="power"></div>
+    <canvas id="view"></canvas>
+    <div id="top">
+      <div id="purse" class="k-plaque"></div>
+      <button id="power" class="k-plaque" type="button"></button>
+      <div id="books"></div>
+      <div id="corner"></div>
     </div>
-    <div id="plans" class="panel" hidden></div>
-    <div id="order" class="panel"></div>
-    <div id="hint"></div>
-    <div id="tools"></div>
+    <button id="track" class="k-plaque" type="button"></button>
+    <div id="feed" aria-live="polite"></div>
+    <div id="hand" class="k-plaque"></div>
+    <nav id="dock" class="k-plaque" aria-label="Tools"></nav>
+    <aside id="panel" class="k-panel" hidden></aside>
+    <div id="card" class="k-plaque" hidden></div>
+    <div id="banner" class="k-panel" hidden></div>
+    <div id="letter" hidden></div>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

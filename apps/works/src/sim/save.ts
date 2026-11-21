@@ -47,7 +47,7 @@ function tally(v: unknown, most: number): Tally {
 /** A building as it is kept: where, what, which way, and only the parts that are not as new. */
 function pack(b: Building, i: number): Rec {
   const o: Rec = { i, k: b.kind, d: b.dir };
-  if (b.item !== null) Object.assign(o, { it: b.item, p: b.prog });
+  if (b.item !== null) Object.assign(o, { it: b.item, p: b.prog, v: b.via });
   if (b.count > 0) o.b = tally(b.buf, 1e6);
   if (b.out !== null) o.o = b.out;
   if (b.work !== 0) o.w = b.work;
@@ -58,6 +58,7 @@ function pack(b: Building, i: number): Rec {
   if (b.span > 0) Object.assign(o, { u: b.under, up: b.underProg });
   if (!b.open) o.c = 1;
   if (b.fuel !== 0) o.f = b.fuel;
+  if (b.free) o.g = 1;
   return o;
 }
 
@@ -106,6 +107,7 @@ function unpack(w: World, b: Building, i: number, o: Rec): void {
   if (carries && isItem(o.it)) {
     b.item = o.it;
     b.prog = amount(o.p, 2) ?? 0;
+    b.via = whole(o.v, w.cells.length - 1) ?? -1;
   }
   const held = tally(o.b, 1e6);
   const room = b.kind === "crate" ? w.rates.crate : 1e6;
@@ -222,7 +224,12 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
     const x = i % land.w;
     const y = (i - x) / land.w;
     if (w.cells[i] || refusal(w, o.k, x, y, Infinity, o.d, o.k === "tunnel" ? span : undefined) !== null) continue;
-    if (!build(w, o.k, x, y, o.d, Infinity, o.k === "tunnel" ? span : undefined).ok) continue;
+    // Only a piece kept as one the yard had to hand takes the place of one: the rest were paid for.
+    const spare = w.spare[o.k] ?? 0;
+    if (o.g !== 1) w.spare[o.k] = 0;
+    const did = build(w, o.k, x, y, o.d, Infinity, o.k === "tunnel" ? span : undefined);
+    if (o.g !== 1) w.spare[o.k] = spare;
+    if (!did.ok) continue;
     const b = w.cells[i];
     if (b) kept.push([b, i, o]);
   }

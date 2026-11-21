@@ -79,7 +79,7 @@ describe("finding a way for a belt", () => {
     const legs = route(w, [3, 6], [12, 6]);
     if (!legs) throw new Error("no way");
     expect(legs.filter((l) => l.kind === "tunnel")).toEqual([{ kind: "tunnel", x: 6, y: 6, dir: 0, span: 1 }]);
-    expect(runCost(legs)).toBe(5 * KIND.belt.cost + KIND.tunnel.cost);
+    expect(runCost(w, legs)).toBe(5 * KIND.belt.cost + KIND.tunnel.cost);
     expect(lay(w, legs, 4)).toEqual({ ok: false, why: "Not enough Coins" });
     expect(w.cells[at(w, 3, 6)]).toBeNull();
     expect(lay(w, legs, 99).ok).toBe(true);

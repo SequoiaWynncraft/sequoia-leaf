@@ -1,0 +1,766 @@
+/**
+ * Everything that is built in the yard, drawn once and kept: each machine as a small hand-built
+ * thing in wood, stone and brass, in every pose its work puts it in. A machine stands on one tile,
+ * sixteen pixels square, and may rise above it; its picture goes with its foot on the tile's foot.
+ */
+
+import { BARK, CREAM, GOLD, GREEN, INK, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { bitmap, ell, flipped, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
+import { type Ctx, hash, makeCanvas } from "@sequoia-leaf/kit/util.ts";
+
+import { CLAY, DARK, PAL, spr, type Sprite } from "./pal.ts";
+
+type Canvas = HTMLCanvasElement;
+
+/** A picture for a tile: sixteen wide, `h` tall, standing on the tile's foot. */
+function tile(h: number, draw: (g: Ctx) => void, w = 16): Sprite {
+  const { c, g } = makeCanvas(w, h);
+  draw(g);
+  return spr(c, w / 2, h);
+}
+
+// ---------- surfaces, as the town draws them ----------
+
+function planks(g: Ctx, x: number, y: number, w: number, h: number, seed: number): void {
+  for (let bx = x; bx < x + w; bx += 4) {
+    const v = hash(bx, 7, seed);
+    const bw = Math.min(3, x + w - bx);
+    R(g, bx, y, bw, h, v > 0.55 ? BARK[3] : BARK[2]);
+    if (bx + 3 < x + w) R(g, bx + 3, y, 1, h, BARK[1]);
+  }
+}
+
+function stones(g: Ctx, x: number, y: number, w: number, h: number, seed: number): void {
+  R(g, x, y, w, h, STONE[0]);
+  for (let r = 0; r * 4 < h; r++) {
+    let bx = x - Math.floor(hash(r, 1, seed) * 5);
+    while (bx < x + w) {
+      const bw = 5 + Math.floor(hash(bx, r, seed) * 4);
+      const v = hash(bx, r, seed + 1);
+      const x0 = Math.max(x, bx);
+      const x1 = Math.min(x + w, bx + bw - 1);
+      const bh = Math.min(3, y + h - (y + r * 4));
+      if (x1 > x0 && bh > 0) {
+        R(g, x0, y + r * 4, x1 - x0, bh, v > 0.7 ? STONE[2] : STONE[1]);
+        if (v > 0.45) R(g, x0, y + r * 4, x1 - x0, 1, v > 0.7 ? STONE[3] : STONE[2]);
+      }
+      bx += bw;
+    }
+  }
+}
+
+const PURPLE = [SKY[0], SKY[1], SKY[2], SKY[3]] as const;
+
+/** Rows of shingles on a roof that narrows towards its ridge. `cols`: shadow, two body tones, light. */
+function shingles(
+  g: Ctx,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  inset: (row: number) => number,
+  cols: readonly [string, string, string, string],
+  seed: number,
+): void {
+  for (let r = 0; r * 4 < h; r++) {
+    const by = y + r * 4;
+    const bh = Math.min(4, y + h - by);
+    const ins = inset(by - y);
+    const bx = x + ins;
+    const bw = w - ins * 2;
+    R(g, bx, by, bw, bh, r % 2 ? cols[1] : cols[2]);
+    R(g, bx, by + bh - 1, bw, 1, cols[0]);
+    for (let sx = bx + (r % 2 ? 3 : 0); sx < bx + bw - 1; sx += 6) {
+      R(g, sx, by, 1, bh - 1, cols[0]);
+      if (hash(sx, r, seed) > 0.55 && sx + 4 < bx + bw) R(g, sx + 1, by, 3, 1, cols[3]);
+    }
+  }
+}
+
+/** A doorway with a rounded head. */
+function arch(g: Ctx, x: number, y: number, w: number, h: number, col: string): void {
+  R(g, x + 3, y, w - 6, 1, col);
+  R(g, x + 2, y + 1, w - 4, 1, col);
+  R(g, x + 1, y + 2, w - 2, 1, col);
+  R(g, x, y + 3, w, h - 3, col);
+}
+
+/** A toothed wheel; `turn` is how far round it has gone, as a share of one tooth. */
+function gear(
+  g: Ctx,
+  cx: number,
+  cy: number,
+  r: number,
+  teeth: number,
+  turn: number,
+  body: string,
+  shade: string,
+): void {
+  for (let dy = -r - 2; dy <= r + 2; dy++)
+    for (let dx = -r - 2; dx <= r + 2; dx++) {
+      const d = Math.hypot(dx + 0.5, dy + 0.5);
+      const tooth = Math.cos(Math.atan2(dy + 0.5, dx + 0.5) * teeth + turn * Math.PI * 2) > 0.25;
+      if (d < r * 0.36 || !(d <= r - 0.4 || (d <= r + 1.5 && tooth))) continue;
+      R(g, cx + dx, cy + dy, 1, 1, dx + dy > 1 ? shade : body);
+    }
+}
+
+function lantern(g: Ctx, x: number, y: number, glass: string, core: string): void {
+  R(g, x + 2, y, 1, 1, BARK[0]);
+  R(g, x, y + 1, 5, 1, BARK[0]);
+  R(g, x, y + 2, 5, 5, BARK[0]);
+  R(g, x + 1, y + 2, 3, 5, glass);
+  R(g, x + 1, y + 3, 3, 3, core);
+  R(g, x, y + 7, 5, 1, BARK[0]);
+}
+
+/** A flame in a dark mouth: the three steps of its flicker, or embers when it is out. */
+function fire(g: Ctx, x: number, y: number, w: number, h: number, step: number): void {
+  R(g, x, y, w, h, DARK);
+  if (step === 0) {
+    R(g, x + 1, y + h - 1, w - 2, 1, CLAY[0]);
+    return;
+  }
+  R(g, x, y + 1, w, h - 1, SKY[5]);
+  R(g, x + 1, y + (step === 2 ? 1 : 2), w - 2, h - (step === 2 ? 1 : 2), GOLD[1]);
+  const lick = step === 1 ? 1 : step === 2 ? w - 3 : Math.floor(w / 2) - 1;
+  R(g, x + lick, y, 2, 2, SKY[5]);
+  R(g, x + Math.floor(w / 2) - 1, y + h - 3, 2, 3, CREAM);
+  R(g, x + 1, y + h - 1, w - 2, 1, GOLD[2]);
+}
+
+// ---------- the gatherer: a gnome ----------
+
+/** The gnome's hats, by which gatherer it is. */
+const HATS: readonly (readonly [string, string])[] = [
+  [CLAY[2], CLAY[1]],
+  [GOLD[1], GOLD[0]],
+  [SKY[4], SKY[3]],
+  [GREEN[4], GREEN[3]],
+];
+
+/**
+ * A gnome, in one of five poses: standing, leaning, bent to the ground, lifting what he has found
+ * over his head, and sat down asleep (which is what a gatherer does when no power reaches it and
+ * the dusk is too deep to see by).
+ */
+function gnome(hat: readonly [string, string], pose: number): Sprite {
+  const { c, g } = makeCanvas(12, 15);
+  const [hx, hy] = pose === 1 ? [1, 1] : pose === 2 ? [2, 4] : pose === 4 ? [0, 3] : [0, 0];
+  const tunic = WATER[1];
+  const dark = WATER[0];
+  // Boots and body.
+  if (pose === 4) {
+    R(g, 2, 13, 3, 2, BARK[1]);
+    R(g, 7, 13, 3, 2, BARK[1]);
+    R(g, 3, 9, 6, 5, tunic);
+    R(g, 3, 13, 6, 1, dark);
+  } else {
+    R(g, 3, 13, 2, 2, BARK[1]);
+    R(g, 7, 13, 2, 2, BARK[1]);
+    R(g, 3, 8 + (pose === 2 ? 2 : 0), 6, 5 - (pose === 2 ? 2 : 0), tunic);
+    R(g, 3, 12, 6, 1, dark);
+    R(g, 3, 11, 6, 1, BARK[0]);
+    R(g, 5, 11, 2, 1, GOLD[1]);
+  }
+  // Arms.
+  if (pose === 3) {
+    R(g, 2, 3, 1, 5, tunic);
+    R(g, 9, 3, 1, 5, tunic);
+    R(g, 2, 2, 1, 1, "#e9d8b8");
+    R(g, 9, 2, 1, 1, "#e9d8b8");
+  } else if (pose === 2) {
+    R(g, 9, 9, 1, 4, tunic);
+    R(g, 10, 12, 1, 2, "#e9d8b8");
+  } else if (pose === 4) {
+    R(g, 2, 10, 1, 3, tunic);
+    R(g, 9, 10, 1, 3, tunic);
+  } else {
+    R(g, 2, 8 + hy, 1, 3, tunic);
+    R(g, 9, 8 + hy, 1, 3, tunic);
+    R(g, 9 + hx, 11 + hy, 1, 1, "#e9d8b8");
+  }
+  // Head: a nose, a beard, and the hat down over the eyes.
+  const x = 3 + hx;
+  const y = 4 + hy;
+  R(g, x + 1, y, 4, 2, "#e9d8b8");
+  R(g, x + 2, y + 1, 2, 1, CLAY[3]);
+  R(g, x + 1, y + 2, 4, 2, CREAM);
+  R(g, x + 2, y + 4, 2, 1, CREAM);
+  R(g, x + 1, y + 3, 1, 1, "#cbb894");
+  // The hat: a tall cone with a brim, its tip flopped over when he sleeps.
+  R(g, x, y - 1, 6, 1, hat[1]);
+  R(g, x + 1, y - 2, 4, 1, hat[0]);
+  R(g, x + 1, y - 3, 3, 1, hat[0]);
+  if (pose === 4) {
+    R(g, x + 2, y - 4, 3, 1, hat[0]);
+    R(g, x + 4, y - 3, 2, 1, hat[1]);
+  } else {
+    R(g, x + 2, y - 4, 2, 1, hat[0]);
+    R(g, x + 2 + (pose === 2 ? 1 : 0), y - 5 + (pose === 2 ? 1 : 0), 1, 1, hat[0]);
+  }
+  R(g, x + 1, y - 2, 1, 1, CREAM);
+  return spr(c, 6, 15);
+}
+
+const RAKE = ["nnnnn", "n.n.n", "..b..", "..b..", "..b..", "..b..", "..b..", "..b..", "..b..", "..b.."];
+const BASKET = [".N..N.", "NnNnNn", "nNnNnN", ".nNnN."];
+const BARROW = ["...nnnnnn.", "b..NNNNNN.", ".bbnnnnnn.", "...bbbbb..", "...sS..b..", "...Ss..b.."];
+
+// ---------- the mill's three faces ----------
+
+function saw(step: number): Sprite {
+  return tile(15, (g) => {
+    // The blade stands half out of the table: a steel disc, its teeth one way and then the other as it turns.
+    for (let k = 0; k < 9; k++) {
+      const a = Math.PI + ((k + (step === 2 ? 0.5 : 0)) / 9) * Math.PI;
+      R(g, Math.round(8 + Math.cos(a) * 6.4 - 0.5), Math.round(8 + Math.sin(a) * 6.4 - 0.5), 1, 1, STONE[3]);
+    }
+    for (let dy = -6; dy < 0; dy++)
+      for (let dx = -6; dx < 6; dx++) {
+        const d = Math.hypot(dx + 0.5, dy + 0.5);
+        if (d > 5.5) continue;
+        R(g, 8 + dx, 8 + dy, 1, 1, d > 4.3 ? STONE[1] : dx + dy < -4 ? STONE[3] : STONE[2]);
+      }
+    R(g, 7, 5, 2, 2, GOLD[0]);
+    R(g, 7, 5, 1, 1, GOLD[2]);
+    if (step > 0) R(g, step === 1 ? 4 : 10, step === 1 ? 4 : 5, 2, 1, CREAM);
+    // The table, and a bough waiting on it.
+    R(g, 0, 8, 16, 2, BARK[4]);
+    R(g, 0, 8, 16, 1, GOLD[0]);
+    R(g, 0, 10, 16, 1, BARK[1]);
+    R(g, 1, 11, 2, 4, BARK[2]);
+    R(g, 13, 11, 2, 4, BARK[2]);
+    R(g, 3, 12, 10, 1, BARK[1]);
+    R(g, 0, 6, 3, 2, BARK[3]);
+    R(g, 0, 6, 1, 2, GOLD[0]);
+    // Sawdust.
+    R(g, 10, 14, 3, 1, "#cbb894");
+    R(g, 11, 13, 1, 1, "#e9d8b8");
+  });
+}
+
+function kiln(step: number): Sprite {
+  return tile(19, (g) => {
+    // The chimney behind, then a dome of fired brick on a stone foot.
+    R(g, 10, 0, 4, 7, STONE[1]);
+    R(g, 10, 0, 1, 7, STONE[2]);
+    R(g, 9, 0, 6, 1, STONE[0]);
+    g.drawImage(
+      paint(16, 17, (x, y) => {
+        const inside = y >= 10 ? x >= 1 && x <= 14 : Math.hypot((x + 0.5 - 8) / 7.2, (y + 0.5 - 10) / 7.4) < 1;
+        if (!inside) return null;
+        const row = Math.floor((y - 1) / 3);
+        if ((y - 1) % 3 === 0 || (x + (row % 2) * 2) % 5 === 0) return CLAY[0];
+        if (x + y < 9) return CLAY[3];
+        return x + y < 14 ? CLAY[2] : CLAY[1];
+      }),
+      0,
+      0,
+    );
+    R(g, 0, 17, 16, 2, STONE[1]);
+    R(g, 0, 17, 16, 1, STONE[2]);
+    arch(g, 4, 9, 8, 8, STONE[2]);
+    fire(g, 5, 11, 6, 6, step);
+    R(g, 5, 10, 6, 1, DARK);
+  });
+}
+
+function press(step: number): Sprite {
+  return tile(19, (g) => {
+    const plate = 7 + step * 2;
+    // Two posts, a beam across, and a screw that drives the plate down.
+    R(g, 7, 3, 2, plate - 3, STONE[2]);
+    for (let y = 4; y < plate; y += 2) R(g, 7, y, 2, 1, STONE[0]);
+    R(g, 6, 0, 4, 2, STONE[1]);
+    R(g, 5, 0, 6, 1, STONE[3]);
+    R(g, 2, 3, 2, 14, BARK[2]);
+    R(g, 2, 3, 1, 14, BARK[3]);
+    R(g, 12, 3, 2, 14, BARK[2]);
+    R(g, 13, 3, 1, 14, BARK[1]);
+    R(g, 1, 2, 14, 2, BARK[3]);
+    R(g, 1, 2, 14, 1, BARK[4]);
+    R(g, 4, plate, 8, 2, BARK[4]);
+    R(g, 4, plate + 1, 8, 1, BARK[1]);
+    // The bowl, and the oil in it.
+    R(g, 4, 13, 8, 3, CLAY[1]);
+    R(g, 4, 13, 8, 1, GOLD[1]);
+    R(g, 5, 13, 2, 1, GOLD[2]);
+    R(g, 4, 15, 8, 1, CLAY[0]);
+    if (step === 2) R(g, 9, 12, 1, 1, GOLD[2]);
+    R(g, 0, 16, 16, 3, BARK[2]);
+    R(g, 0, 16, 16, 1, BARK[3]);
+    R(g, 0, 18, 16, 1, BARK[0]);
+  });
+}
+
+// ---------- bench and workshop ----------
+
+function bench(step: number): Sprite {
+  return tile(16, (g) => {
+    // The hammer on its post: raised, on its way, and struck.
+    R(g, 11, 3, 2, 5, BARK[1]);
+    R(g, 11, 3, 1, 5, BARK[3]);
+    if (step === 0) {
+      for (let k = 0; k < 5; k++) R(g, 11 - k, 3 - Math.round(k * 0.6), 1, 1, BARK[4]);
+      R(g, 4, 0, 4, 3, STONE[2]);
+      R(g, 4, 0, 4, 1, STONE[3]);
+    } else if (step === 1) {
+      R(g, 6, 3, 6, 1, BARK[4]);
+      R(g, 3, 2, 4, 3, STONE[2]);
+      R(g, 3, 2, 4, 1, STONE[3]);
+    } else {
+      for (let k = 0; k < 5; k++) R(g, 11 - k, 4 + Math.round(k * 0.5), 1, 1, BARK[4]);
+      R(g, 4, 5, 4, 3, STONE[2]);
+      R(g, 4, 5, 4, 1, STONE[3]);
+      R(g, 2, 6, 1, 1, CREAM);
+      R(g, 9, 5, 1, 1, GOLD[2]);
+    }
+    // The bench itself, with a vice at one end and a shelf under.
+    R(g, 13, 5, 3, 3, STONE[1]);
+    R(g, 13, 5, 3, 1, STONE[3]);
+    R(g, 0, 8, 16, 2, BARK[4]);
+    R(g, 0, 8, 16, 1, GOLD[0]);
+    R(g, 0, 10, 16, 2, BARK[2]);
+    R(g, 0, 11, 16, 1, BARK[1]);
+    R(g, 1, 12, 2, 4, BARK[2]);
+    R(g, 13, 12, 2, 4, BARK[2]);
+    R(g, 3, 13, 10, 1, BARK[1]);
+    R(g, 5, 12, 2, 1, GOLD[1]);
+  });
+}
+
+function workshop(lit: boolean, step: number): Sprite {
+  return tile(25, (g) => {
+    R(g, 11, 0, 2, 5, STONE[0]);
+    R(g, 11, 0, 1, 5, STONE[2]);
+    planks(g, 1, 9, 14, 13, 41);
+    R(g, 1, 9, 14, 2, BARK[0]);
+    R(g, 1, 9, 1, 13, BARK[1]);
+    R(g, 14, 9, 1, 13, BARK[1]);
+    stones(g, 0, 21, 16, 4, 42);
+    shingles(g, 0, 3, 16, 7, (r) => Math.round((7 - r) * 0.3), PURPLE, 43);
+    R(g, 2, 2, 12, 1, BARK[1]);
+    R(g, 0, 9, 16, 1, SKY[0]);
+    // A window, lit while there is work in hand.
+    R(g, 2, 12, 5, 6, BARK[0]);
+    R(g, 3, 13, 3, 4, lit ? GOLD[1] : SKY[1]);
+    if (lit) R(g, 3, 13, 3, 2, GOLD[2]);
+    if (lit) R(g, 3, 13, 1, 1, CREAM);
+    R(g, 4, 13, 1, 4, BARK[1]);
+    // And the brass wheel that says it is working.
+    ell(g, 11, 15.5, 4, 4, BARK[0]);
+    gear(g, 11, 15, 2, 6, step / 2, GOLD[1], GOLD[0]);
+  });
+}
+
+// ---------- power ----------
+
+function pylon(tall: boolean, level: number): Sprite {
+  const h = tall ? 34 : 26;
+  const { c, g } = makeCanvas(12, h);
+  R(g, 2, h - 3, 5, 3, STONE[1]);
+  R(g, 2, h - 3, 5, 1, STONE[3]);
+  R(g, 3, 2, 3, h - 4, BARK[1]);
+  R(g, 3, 2, 1, h - 4, BARK[3]);
+  R(g, 2, 0, 5, 2, BARK[2]);
+  R(g, 3, 0, 3, 1, GOLD[0]);
+  R(g, 3, 4, 8, 2, BARK[1]);
+  R(g, 3, 4, 8, 1, BARK[3]);
+  for (let k = 0; k < 3; k++) R(g, 6 + k, 8 - k, 1, 1, BARK[1]);
+  if (tall) {
+    R(g, 0, 12, 6, 2, BARK[1]);
+    R(g, 0, 12, 6, 1, BARK[3]);
+  }
+  const glass = level === 0 ? STONE[0] : level === 1 ? GOLD[0] : GOLD[2];
+  const core = level === 0 ? STONE[1] : level === 1 ? GOLD[1] : CREAM;
+  lantern(g, 7, 6, glass, core);
+  return spr(c, 4, h);
+}
+
+/** A wooden wheel face-on; `step` is one of four turns of an eighth of a spoke. */
+function wheelPic(step: number, rim: string, spoke: string, paddle: string, hub: string, r = 7.5): Canvas {
+  const size = Math.ceil(r * 2 + 3);
+  const mid = size / 2;
+  return paint(size, size, (x, y) => {
+    const dx = x + 0.5 - mid;
+    const dy = y + 0.5 - mid;
+    const d = Math.hypot(dx, dy);
+    const a = Math.atan2(dy, dx) + (step * Math.PI) / 16;
+    if (d < 1.6) return hub;
+    if (d > r + 1.2) return null;
+    if (d > r) return Math.cos(a * 8) > 0.55 ? paddle : null;
+    if (d > r - 1.6) return dx + dy < 0 ? rim : spoke;
+    return Math.abs(Math.sin(a * 4)) < 0.9 / d ? spoke : null;
+  });
+}
+
+function wheel(step: number): Sprite {
+  const { c, g } = makeCanvas(18, 20);
+  // The frame it hangs in, then the wheel.
+  R(g, 8, 8, 2, 12, BARK[1]);
+  for (let k = 0; k < 9; k++) {
+    R(g, 8 - Math.round(k * 0.6), 10 + k, 1, 1, BARK[1]);
+    R(g, 9 + Math.round(k * 0.6), 10 + k, 1, 1, BARK[1]);
+  }
+  R(g, 2, 18, 14, 2, BARK[2]);
+  R(g, 2, 18, 14, 1, BARK[3]);
+  g.drawImage(wheelPic(step, BARK[4], BARK[2], BARK[1], GOLD[1]), 0, 0);
+  return spr(c, 9, 20);
+}
+
+function boiler(step: number): Sprite {
+  return tile(23, (g) => {
+    // The stack behind, the copper in front of it, and the firebox under.
+    R(g, 12, 0, 3, 16, STONE[0]);
+    R(g, 12, 0, 1, 16, STONE[2]);
+    R(g, 11, 0, 5, 2, STONE[1]);
+    R(g, 11, 0, 5, 1, STONE[3]);
+    R(g, 2, 5, 10, 11, CLAY[1]);
+    R(g, 3, 4, 8, 1, CLAY[1]);
+    R(g, 4, 3, 6, 1, CLAY[2]);
+    R(g, 3, 4, 2, 11, CLAY[2]);
+    R(g, 4, 5, 1, 9, CLAY[3]);
+    R(g, 10, 5, 2, 11, CLAY[0]);
+    R(g, 2, 7, 10, 1, GOLD[0]);
+    R(g, 2, 13, 10, 1, GOLD[0]);
+    R(g, 3, 7, 2, 1, GOLD[2]);
+    R(g, 3, 13, 2, 1, GOLD[2]);
+    // The gauge.
+    R(g, 6, 9, 3, 3, BARK[0]);
+    R(g, 7, 10, 1, 1, CREAM);
+    R(g, 7 + (step > 0 ? 1 : -1), 9, 1, 1, step > 0 ? CLAY[2] : STONE[2]);
+    stones(g, 0, 16, 16, 7, 51);
+    R(g, 0, 16, 16, 1, STONE[3]);
+    R(g, 3, 17, 7, 5, STONE[0]);
+    fire(g, 4, 18, 5, 4, step);
+  });
+}
+
+// ---------- carrying ----------
+
+/** A stone hood over half a tile, with the dark of a tunnel under it; `side` is the side it stands on. */
+function hood(side: number): Sprite {
+  const { c, g } = makeCanvas(16, 18);
+  // Seen from the south everything is a stone box; what changes is where its mouth is.
+  const box = (x: number, y: number, w: number, h: number): void => {
+    stones(g, x, y + 3, w, h - 3, 61 + side);
+    R(g, x, y, w, 3, STONE[2]);
+    R(g, x, y, w, 1, STONE[3]);
+    R(g, x, y + 3, w, 1, STONE[0]);
+  };
+  if (side === 0) {
+    box(8, 3, 8, 15);
+    R(g, 8, 8, 3, 9, DARK);
+    R(g, 8, 7, 3, 1, STONE[0]);
+  } else if (side === 2) {
+    box(0, 3, 8, 15);
+    R(g, 5, 8, 3, 9, DARK);
+    R(g, 5, 7, 3, 1, STONE[0]);
+  } else if (side === 1) {
+    // Going away from us and down: only the top of the hood shows, and the mouth is its near lip.
+    box(1, 10, 14, 8);
+    R(g, 3, 10, 10, 2, DARK);
+  } else {
+    // Coming towards us: the arch itself.
+    box(1, 0, 14, 11);
+    arch(g, 3, 2, 10, 9, STONE[3]);
+    arch(g, 4, 3, 8, 8, DARK);
+  }
+  R(g, side === 0 ? 13 : 2, side === 1 ? 13 : 4, 2, 1, GREEN[3]);
+  return spr(c, 8, 18);
+}
+
+/** The four studs that mark a tile where belts meet: brass for a splitter, wood for a joiner. */
+function studs(body: string, lit: string): Canvas {
+  const { c, g } = makeCanvas(16, 16);
+  for (const [x, y] of [
+    [1, 1],
+    [12, 1],
+    [1, 12],
+    [12, 12],
+  ] as const) {
+    R(g, x, y, 3, 3, INK);
+    R(g, x, y, 2, 2, body);
+    R(g, x, y, 1, 1, lit);
+  }
+  return c;
+}
+
+/** A splitter's vane: a small brass arrow showing which way the next thing will go. */
+function vane(dir: number): Canvas {
+  const rows = [
+    ["k....", "yk...", "yyk..", "yk...", "k...."],
+    ["kyyyk", ".kyk.", "..k..", ".....", "....."],
+    ["....k", "...ky", "..kyy", "...ky", "....k"],
+    [".....", ".....", "..k..", ".kyk.", "kyyyk"],
+  ];
+  return bitmap(rows[dir] ?? [], PAL);
+}
+
+/** The brass pointer on a machine's way out. */
+function pointer(dir: number, col: string): Canvas {
+  const east = ["k..", "yk.", "yyk", "yk.", "k.."];
+  const west = ["..k", ".ky", "kyy", ".ky", "..k"];
+  const south = ["kyyyk", ".kyk.", "..k.."];
+  const rows = dir === 0 ? east : dir === 1 ? south : dir === 2 ? west : south.toReversed();
+  return bitmap(rows, { k: INK, y: col });
+}
+
+function crate(big: boolean, open: boolean): Sprite {
+  const w = big ? 14 : 12;
+  const h = big ? 15 : 12;
+  const { c, g } = makeCanvas(w, h + 4);
+  const top = 4;
+  const lid = big ? 4 : 3;
+  R(g, 0, top, w, h, BARK[3]);
+  R(g, 0, top, 1, h, BARK[1]);
+  R(g, w - 1, top, 1, h, BARK[1]);
+  R(g, 0, top + h - 1, w, 1, BARK[1]);
+  for (let i = 1; i < h - lid - 1 && i < w - 1; i++) R(g, i, top + lid + i, 1, 1, BARK[1]);
+  if (big) {
+    R(g, 0, top + 7, w, 1, STONE[1]);
+    R(g, 0, top + 11, w, 1, STONE[1]);
+  }
+  if (open) {
+    // The lid stood up behind, and what is inside showing.
+    R(g, 0, top, w, lid, BARK[0]);
+    R(g, 1, 0, w - 2, 4, BARK[4]);
+    R(g, 1, 0, w - 2, 1, GOLD[0]);
+    R(g, 1, 3, w - 2, 1, BARK[1]);
+    R(g, 2, top, 3, 2, "#cbb894");
+    R(g, 6, top + 1, 3, 1, GOLD[1]);
+    R(g, w - 4, top, 2, 2, STONE[2]);
+  } else {
+    R(g, 0, top, w, lid, BARK[4]);
+    R(g, 0, top, w, 1, GOLD[0]);
+    R(g, 0, top + lid, w, 1, BARK[1]);
+    R(g, Math.floor(w / 2) - 1, top + lid - 1, 2, 3, GOLD[1]);
+  }
+  return spr(c, w / 2, h + 4);
+}
+
+// ---------- the depot, the gate and the fence ----------
+
+/** Where things are on the depot's picture, for whatever is drawn onto it afresh each frame. */
+export const DEPOT = {
+  /** The middle of its doorway, at the sill. */
+  door: { x: 26, y: 63 },
+  /** The mouth of its chimney. */
+  smoke: { x: 42, y: 1 },
+  /** The board of standing orders on its wall: its corner, and the size of a note. */
+  board: { x: 38, y: 42, w: 11, h: 8 },
+  lamps: [
+    { x: 15, y: 46 },
+    { x: 36, y: 46 },
+  ],
+  flag: { x: 12, y: 8 },
+  fly: { x: -3, y: 49 },
+  wheelR: 5.5,
+} as const;
+
+/**
+ * The depot: the back of the workshop that fronts onto the town. The same plank walls on a stone
+ * foot, the same chimney and brass wheel, under the town's purple shingles, with a wide door
+ * standing open and the light of the place coming out of it.
+ */
+function depot(): Sprite {
+  const { c, g } = makeCanvas(52, 64);
+  planks(g, 3, 38, 46, 20, 17);
+  stones(g, 2, 56, 48, 8, 19);
+  R(g, 3, 38, 46, 2, BARK[0]);
+  for (const x of [2, 47]) {
+    R(g, x, 38, 3, 20, BARK[1]);
+    R(g, x, 38, 1, 20, BARK[3]);
+  }
+  // A lit window, and the frame of the order board.
+  R(g, 6, 43, 7, 8, BARK[0]);
+  R(g, 7, 44, 5, 6, GOLD[1]);
+  R(g, 7, 44, 5, 3, GOLD[2]);
+  R(g, 7, 44, 2, 1, CREAM);
+  R(g, 9, 44, 1, 6, BARK[1]);
+  R(g, 5, 51, 9, 1, STONE[3]);
+  R(g, DEPOT.board.x - 1, DEPOT.board.y - 1, DEPOT.board.w + 2, DEPOT.board.h + 2, BARK[0]);
+  R(g, DEPOT.board.x, DEPOT.board.y, DEPOT.board.w, DEPOT.board.h, BARK[4]);
+  // Two small hatches at the foot of the wall, for belts that come in beside the door.
+  for (const x of [5, 39]) {
+    R(g, x, 53, 8, 11, STONE[0]);
+    R(g, x + 1, 55, 6, 9, DARK);
+    R(g, x - 1, 52, 10, 2, BARK[3]);
+    R(g, x - 1, 52, 10, 1, BARK[4]);
+  }
+  // The door: an arch of pale stone, and inside it crates stacked in warm light.
+  arch(g, 17, 40, 18, 24, STONE[2]);
+  for (let i = 0; i < 4; i++) {
+    R(g, 17, 46 + i * 5, 2, 1, STONE[0]);
+    R(g, 33, 46 + i * 5, 2, 1, STONE[0]);
+  }
+  arch(g, 19, 42, 14, 22, "#3a1a1f");
+  R(g, 19, 52, 14, 12, CLAY[0]);
+  R(g, 19, 58, 14, 6, SKY[5]);
+  R(g, 20, 61, 12, 3, GOLD[1]);
+  R(g, 22, 63, 8, 1, GOLD[2]);
+  for (const [x, y, s] of [
+    [20, 51, 5],
+    [27, 53, 5],
+    [22, 46, 5],
+    [28, 48, 4],
+  ] as const) {
+    R(g, x, y, s, s, BARK[3]);
+    R(g, x, y, s, 1, GOLD[0]);
+    R(g, x, y + s - 1, s, 1, BARK[1]);
+    R(g, x + s - 1, y, 1, s, BARK[1]);
+  }
+  // The roof, its ridge, and the brass wheel of the Works on it.
+  shingles(g, 0, 10, 52, 28, (r) => Math.round((28 - r) * 0.22), PURPLE, 5);
+  R(g, 7, 7, 38, 3, BARK[1]);
+  R(g, 7, 7, 38, 1, BARK[3]);
+  R(g, 0, 37, 52, 1, SKY[0]);
+  ell(g, 24, 23, 8, 8, BARK[0]);
+  ell(g, 24, 23, 6.8, 6.8, BARK[2]);
+  gear(g, 24, 23, 4, 8, 0, GOLD[1], GOLD[0]);
+  // The chimney the town sees from the other side.
+  stones(g, 38, 2, 8, 22, 23);
+  R(g, 44, 2, 2, 22, STONE[0]);
+  R(g, 37, 0, 10, 3, STONE[0]);
+  R(g, 37, 0, 10, 1, STONE[2]);
+  R(g, 39, 1, 6, 1, DARK);
+  return spr(c, 26, 64);
+}
+
+function gate(): Sprite {
+  const { c, g } = makeCanvas(26, 28);
+  for (const x of [1, 21]) {
+    R(g, x, 6, 4, 22, BARK[2]);
+    R(g, x, 6, 1, 22, BARK[3]);
+    R(g, x + 3, 6, 1, 22, BARK[1]);
+    R(g, x - 1, 25, 6, 3, STONE[1]);
+    R(g, x - 1, 25, 6, 1, STONE[3]);
+  }
+  R(g, 0, 6, 26, 3, BARK[1]);
+  R(g, 0, 6, 26, 1, BARK[3]);
+  shingles(g, 0, 1, 26, 5, (r) => Math.round((5 - r) * 0.6), PURPLE, 3);
+  R(g, 4, 0, 18, 1, BARK[1]);
+  // The Works' wheel on a hanging plate, and a lantern.
+  R(g, 9, 9, 8, 6, BARK[1]);
+  R(g, 10, 10, 6, 4, BARK[3]);
+  R(g, 12, 11, 2, 2, GOLD[1]);
+  R(g, 11, 11, 1, 2, GOLD[0]);
+  R(g, 14, 11, 1, 2, GOLD[0]);
+  lantern(g, 5, 9, GOLD[2], CREAM);
+  return spr(c, 13, 28);
+}
+
+/** A stretch of post-and-rail fence one tile long: across the view, or running away down it. */
+function fence(across: boolean): Sprite {
+  if (across) {
+    const { c, g } = makeCanvas(17, 10);
+    R(g, 0, 4, 17, 1, BARK[3]);
+    R(g, 0, 5, 17, 1, BARK[1]);
+    R(g, 0, 7, 17, 1, BARK[3]);
+    R(g, 0, 8, 17, 1, BARK[1]);
+    R(g, 0, 1, 2, 9, BARK[2]);
+    R(g, 0, 1, 1, 9, BARK[4]);
+    R(g, 0, 0, 2, 1, BARK[4]);
+    return { c, ax: 0, ay: 9 };
+  }
+  const { c, g } = makeCanvas(3, 25);
+  R(g, 1, 5, 1, 20, BARK[2]);
+  R(g, 2, 5, 1, 20, BARK[0]);
+  R(g, 0, 1, 3, 9, BARK[0]);
+  R(g, 0, 1, 2, 8, BARK[2]);
+  R(g, 0, 1, 1, 8, BARK[3]);
+  R(g, 0, 0, 2, 1, BARK[4]);
+  return { c, ax: 1, ay: 9 };
+}
+
+/** A pennant for the roof while a second shift is on, in the green of the Leaf that paid for it. */
+function flag(step: number): Sprite {
+  const { c, g } = makeCanvas(12, 16);
+  R(g, 1, 0, 1, 16, BARK[1]);
+  R(g, 0, 0, 3, 1, GOLD[1]);
+  const wave = step === 0 ? [0, 0, 1, 1, 0] : [1, 0, 0, 1, 1];
+  for (let k = 0; k < 5; k++) {
+    const len = 9 - k * 2;
+    R(g, 2, 2 + k + (wave[k] ?? 0), Math.max(1, len), 1, k < 2 ? GREEN[4] : GREEN[3]);
+  }
+  R(g, 4, 3, 2, 1, "#c9ef9a");
+  return spr(c, 1, 16);
+}
+
+// ---------- the set ----------
+
+export interface Machines {
+  /** gnome[hat][pose]. */
+  gnome: Sprite[][];
+  gnomeLeft: Sprite[][];
+  rake: Canvas;
+  basket: Canvas;
+  barrow: Canvas;
+  /** Each mill face, cold first and then the steps of its work. */
+  saw: Sprite[];
+  kiln: Sprite[];
+  press: Sprite[];
+  bench: Sprite[];
+  /** workshop[lit ? 1 : 0][step]. */
+  workshop: Sprite[][];
+  /** pylon[tall ? 1 : 0][light: 0 out, 1 dim, 2 bright]. */
+  pylon: Sprite[][];
+  wheel: Sprite[];
+  boiler: Sprite[];
+  /** hood[side]. */
+  hood: Sprite[];
+  splitter: Canvas;
+  joiner: Canvas;
+  vane: Canvas[];
+  /** pointer[dir], dim and bright. */
+  pointer: Canvas[];
+  pointerLit: Canvas[];
+  /** crate[big ? 1 : 0][open ? 1 : 0]. */
+  crate: Sprite[][];
+  depot: Sprite;
+  /** The depot's brass flywheel, for when the plan is bought. */
+  fly: Canvas[];
+  flag: Sprite[];
+  gate: Sprite;
+  fenceAcross: Sprite;
+  fenceDown: Sprite;
+  /** The brass that second- and third-tier machines wear. */
+  pip: Canvas;
+}
+
+const mirror = (s: Sprite): Sprite => ({ c: flipped(s.c), ax: s.c.width - s.ax, ay: s.ay });
+
+export function makeMachines(): Machines {
+  const poses = [0, 1, 2, 3, 4];
+  const gnomes = HATS.map((hat) => poses.map((p) => gnome(hat, p)));
+  return {
+    gnome: gnomes,
+    gnomeLeft: gnomes.map((row) => row.map(mirror)),
+    rake: outlined(bitmap(RAKE, PAL), INK),
+    basket: outlined(bitmap(BASKET, PAL), INK),
+    barrow: outlined(bitmap(BARROW, PAL), INK),
+    saw: [0, 1, 2].map(saw),
+    kiln: [0, 1, 2, 3].map(kiln),
+    press: [0, 1, 2].map(press),
+    bench: [0, 1, 2].map(bench),
+    workshop: [false, true].map((lit) => [0, 1].map((s) => workshop(lit, s))),
+    pylon: [false, true].map((tall) => [0, 1, 2].map((l) => pylon(tall, l))),
+    wheel: [0, 1, 2, 3].map(wheel),
+    boiler: [0, 1, 2].map(boiler),
+    hood: [0, 1, 2, 3].map(hood),
+    splitter: studs(GOLD[1], CREAM),
+    joiner: studs(BARK[3], BARK[4]),
+    vane: [0, 1, 2, 3].map(vane),
+    pointer: [0, 1, 2, 3].map((d) => pointer(d, GOLD[0])),
+    pointerLit: [0, 1, 2, 3].map((d) => pointer(d, GOLD[2])),
+    crate: [false, true].map((big) => [false, true].map((open) => crate(big, open))),
+    depot: depot(),
+    fly: [0, 1, 2, 3].map((s) => outlined(wheelPic(s, GOLD[1], GOLD[0], GOLD[0], CREAM, DEPOT.wheelR), INK)),
+    flag: [0, 1].map(flag),
+    gate: gate(),
+    fenceAcross: fence(true),
+    fenceDown: fence(false),
+    pip: outlined(bitmap(["Yy", "yo"], PAL), INK),
+  };
+}

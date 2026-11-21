@@ -33,12 +33,12 @@ export const KIND: Record<Kind, KindInfo> = {
   mill: {
     name: "Mill",
     cost: 20,
-    draw: 2,
+    draw: 3,
     gives: 0,
     what: "One thing in, one out. It saws, fires or presses, by what arrives.",
   },
-  bench: { name: "Bench", cost: 40, draw: 3, gives: 0, what: "Puts two different things together." },
-  workshop: { name: "Workshop", cost: 120, draw: 6, gives: 0, what: "Puts three different things together." },
+  bench: { name: "Bench", cost: 40, draw: 4, gives: 0, what: "Puts two different things together." },
+  workshop: { name: "Workshop", cost: 120, draw: 8, gives: 0, what: "Puts three different things together." },
   splitter: {
     name: "Splitter",
     cost: 8,
@@ -71,6 +71,13 @@ export const isKind = (v: unknown): v is Kind => typeof v === "string" && Object
 
 /** What a new yard can build before any order is filled. */
 export const START_KINDS: readonly Kind[] = ["belt", "gatherer", "mill", "pylon"];
+
+/**
+ * What a new yard has to hand: pieces left behind the workshop, enough for a first line. Standing
+ * one costs nothing and taking it away gives nothing back, but it can be stood again elsewhere, so
+ * a yard can always be started, and started over, from an empty purse.
+ */
+export const STARTERS: Partial<Record<Kind, number>> = { gatherer: 1, mill: 1, belt: 12 };
 
 /**
  * Ticks for a gatherer to gather one thing, for a belt to carry a thing one tile, and for a boiler

@@ -18,12 +18,13 @@ export interface Bare {
 
 /**
  * A bare patch 24 tiles by 12 with the depot at (12, 6), every machine open, no orders on the board,
- * and deposits where a test wants them.
+ * no pieces to hand, and deposits where a test wants them.
  */
 export function bare(deposits: Readonly<Record<string, Raw>> = {}, opts: Bare = {}): World {
   const w = create({ land: bareLand(opts.w ?? 24, opts.h ?? 12, deposits, opts.water, opts.trunks) });
   w.open.kinds = new Set(KINDS);
-  w.till = 0;
+  // Nothing to hand: on a bare patch everything costs what the tables say.
+  w.spare = {};
   return w;
 }
 
@@ -73,7 +74,6 @@ export function on(w: World, x: number, y: number): Building {
  */
 export function workingYard(seed = 7): World {
   const w = create({ seed, story: 12 });
-  w.till = 0;
   for (const id of ["boiler", "rakes", "workshop", "tunnel"] as const) buyPlan(w, id, Infinity);
   buyPlot(w, "bank", Infinity);
   // Planks, straight to the depot.

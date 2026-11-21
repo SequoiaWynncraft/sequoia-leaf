@@ -16,17 +16,20 @@ export {
   REACH,
   SPAN,
   START_KINDS,
+  STARTERS,
   TICKS,
 } from "./content/machines.ts";
 export { type Effect, isPlanId, PLAN_IDS, type PlanId, type PlanInfo, PLANS } from "./content/plans.ts";
 export { isPlotId, PLOT_H, PLOT_IDS, PLOT_W, type PlotId, type PlotInfo, PLOTS } from "./content/plots.ts";
 export { MADE_BY, type Maker, MILLED, partsOf, type Recipe, RECIPE, RECIPES, workOf } from "./content/recipes.ts";
+export { SHIFT } from "./content/shift.ts";
 export { type Gift, type Opens, STORY, type StoryOrder } from "./content/story.ts";
 
 export {
   build,
   buyPlan,
   buyPlot,
+  costOf,
   planRefusal,
   planState,
   plotRefusal,
@@ -37,6 +40,7 @@ export {
   setOpen,
   setRecipe,
   type Spent,
+  tipOut,
   tunnelExit,
   turn,
 } from "./build.ts";
@@ -74,6 +78,7 @@ export {
 export { repower } from "./power.ts";
 export { lay, type Leg, route, runCost } from "./route.ts";
 export { load, oldCoins, save, VERSION } from "./save.ts";
+export { ahead, aim, holding, rate, type State, type Status, status } from "./status.ts";
 export { PACE_WINDOW, power, rewire, step } from "./step.ts";
 export {
   at,
@@ -88,7 +93,6 @@ export {
   type Rates,
   reopen,
   type Standing,
-  START_FLOAT,
   WARM,
   type Wire,
   type World,

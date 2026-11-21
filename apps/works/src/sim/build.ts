@@ -30,9 +30,16 @@ function ground(w: World, x: number, y: number): string | null {
   return null;
 }
 
+/** What it costs to stand one more of a thing: nothing while the yard has one to hand, else its price. */
+export const costOf = (w: World, kind: Kind): number => ((w.spare[kind] ?? 0) > 0 ? 0 : KIND[kind].cost);
+
+/** Whether a tunnel may pass under a tile. It goes under belts, roots and the stream, but never under the depot. */
+export const digsUnder = (w: World, x: number, y: number): boolean => w.cells[at(w, x, y)]?.kind !== "depot";
+
 /**
  * Where a tunnel going in at a tile would come up: the nearest clear tile beyond one to three
- * others, or the far end of `span` if one is asked for. Nothing if there is nowhere.
+ * others, or the far end of `span` if one is asked for. Nothing if there is nowhere, or if the
+ * depot is in the way.
  */
 export function tunnelExit(
   w: World,
@@ -41,13 +48,22 @@ export function tunnelExit(
   dir: Dir,
   span?: number,
 ): { x: number; y: number; span: number } | null {
-  for (let s = span ?? 1; s <= (span ?? SPAN); s++) {
-    if (s < 1 || s > SPAN) return null;
+  const most = span ?? SPAN;
+  if (most < 1 || most > SPAN) return null;
+  for (let s = 1; s <= most; s++) {
+    if (!digsUnder(w, x + DX[dir] * s, y + DY[dir] * s)) return null;
+    if (span !== undefined && s < span) continue;
     const ex = x + DX[dir] * (s + 1);
     const ey = y + DY[dir] * (s + 1);
     if (ground(w, ex, ey) === null && !w.cells[at(w, ex, ey)]) return { x: ex, y: ey, span: s };
   }
   return null;
+}
+
+/** Whether the depot is what stops a tunnel going in at a tile from coming up. */
+function depotInTheWay(w: World, x: number, y: number, dir: Dir, span?: number): boolean {
+  for (let s = 1; s <= (span ?? SPAN); s++) if (!digsUnder(w, x + DX[dir] * s, y + DY[dir] * s)) return true;
+  return false;
 }
 
 /** Why something cannot be built here with `coins` in the purse, or nothing if it can. */
@@ -72,8 +88,10 @@ export function refusal(
   if (kind === "gatherer" && !w.land.deposit[i]) return "A gatherer needs something in the ground under it";
   if (kind === "wheel" && !besideWater(w.land, x, y)) return "A waterwheel needs the stream beside it";
   if (kind === "tunnel" && !tunnelExit(w, x, y, dir, span))
-    return "A tunnel needs a clear tile to come up at, one to three tiles on";
-  if (coins < KIND[kind].cost) return "Not enough Coins";
+    return depotInTheWay(w, x, y, dir, span)
+      ? "A tunnel cannot go under the depot"
+      : "A tunnel needs a clear tile to come up at, one to three tiles on";
+  if (coins < costOf(w, kind)) return "Not enough Coins";
   return null;
 }
 
@@ -95,6 +113,12 @@ export function build(w: World, kind: Kind, x: number, y: number, dir: Dir, coin
     return { ok: true, cost: 0 };
   }
   const made = blank(kind, dir);
+  const cost = costOf(w, kind);
+  if ((w.spare[kind] ?? 0) > 0) {
+    // One of the pieces the yard has to hand.
+    made.free = true;
+    w.spare[kind] = (w.spare[kind] ?? 0) - 1;
+  }
   w.cells[i] = made;
   if (kind === "tunnel") {
     const exit = tunnelExit(w, x, y, dir, span);
@@ -109,7 +133,7 @@ export function build(w: World, kind: Kind, x: number, y: number, dir: Dir, coin
   }
   changed(w);
   if (kind === "pylon") repower(w);
-  return { ok: true, cost: KIND[kind].cost };
+  return { ok: true, cost };
 }
 
 /** Turns something to face another way. Costs nothing. A tunnel is not turned: take it away and dig again. */
@@ -123,7 +147,10 @@ export function turn(w: World, x: number, y: number, dir: Dir): boolean {
   return true;
 }
 
-/** Takes something away and says what comes back: all it cost. Whatever it was holding is lost. The depot stays. */
+/**
+ * Takes something away and says what comes back: all it cost (nothing, for one of the pieces the
+ * yard had to hand, which goes back to hand). Whatever it was holding is lost. The depot stays.
+ */
 export function remove(w: World, x: number, y: number): Refund {
   const i = at(w, x, y);
   const there = i < 0 ? null : w.cells[i];
@@ -137,7 +164,8 @@ export function remove(w: World, x: number, y: number): Refund {
   }
   changed(w);
   if (there.kind === "pylon") repower(w);
-  return { ok: true, refund: KIND[there.kind].cost };
+  if (there.free) w.spare[there.kind] = (w.spare[there.kind] ?? 0) + 1;
+  return { ok: true, refund: there.free ? 0 : KIND[there.kind].cost };
 }
 
 /**
@@ -157,6 +185,34 @@ export function setRecipe(w: World, x: number, y: number, out: Item | null): boo
   if (recipe) for (const k of ITEMS) while (!recipe.from.includes(k) && (there.buf[k] ?? 0) > 0) take(there, k);
   changed(w);
   return true;
+}
+
+/**
+ * Empties what a machine, crate or boiler holds, all of it or one kind of thing. What is tipped out
+ * is lost. It is the way to free a machine that has filled up with one part while it waits for
+ * another. Says how many things went.
+ */
+export function tipOut(w: World, x: number, y: number, only: Item | null = null): number {
+  const there = w.cells[at(w, x, y)];
+  if (!there || there.count === 0) return 0;
+  let gone = 0;
+  for (const k of ITEMS) {
+    if (only !== null && k !== only) continue;
+    while ((there.buf[k] ?? 0) > 0) {
+      take(there, k);
+      gone++;
+    }
+  }
+  if (gone === 0) return 0;
+  // Whatever it was part-way through making may have lost a part.
+  const making = there.making === null ? null : RECIPE[there.making];
+  if (making && !making.from.every((k) => (there.buf[k] ?? 0) > 0)) {
+    there.making = null;
+    there.work = 0;
+  }
+  there.idle = false;
+  changed(w);
+  return gone;
 }
 
 /** Opens or shuts a crate: shut, it takes things in and lets nothing out. Says whether there was a crate. */
