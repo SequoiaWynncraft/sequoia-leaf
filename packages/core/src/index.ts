@@ -84,6 +84,7 @@ export {
   Flag,
   INTERP_MS,
   LIVE_PATH,
+  livePath,
   LIVE_VERSION,
   type LiveMember,
   type Motion,

@@ -187,10 +187,11 @@ seen lately and those gone in the last day who stay (`Resting`, with when each w
 goes to whoever `hearPresent`s. Each says whether they are a guest.
 
 **Live** (`realtime.ts`). `joinLive(room, ears)` puts the player in one of Leaf's live rooms (the
-wire and the rooms are in `@sequoia-leaf/core`'s `live.ts`) and keeps them there: after a drop it
-connects again (half a second, doubling to ten, jittered), joins again, and says where the player
-is again as a jump. Why a connection closed is its close code alone: told the player opened the
-game live elsewhere, or their session ended, it lets go (`status("replaced")`, `"signedout"`). Each
+wire and the rooms are in `@sequoia-leaf/core`'s `live.ts`) and keeps them there: the connection
+is opened into the room (`livePath`), and after a drop it connects again (half a second, doubling
+to ten, jittered) and says where the player is again. Why a connection closed is its close code
+alone: told the player opened the game live elsewhere, or their session ended, it lets go
+(`status("replaced")`, `"signedout"`) and shows nobody any more. Each
 connection learns the room afresh (who is there, their tracks, Leaf's clock), and its picture
 replaces the old one only at its welcome, so nothing of one connection is mixed with another's.
 `ears` hear the roster on each `welcome`, who `joined` and `left`, and each `act` (one of core's

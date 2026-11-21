@@ -123,6 +123,15 @@ class Pipe {
     Queue.offerUnsafe(this.out, new Socket.CloseEvent(code, reason));
   }
 
+  /** Writes what waits, in order, as soon as it does, for as long as the connection lasts. */
+  pump(): Effect.Effect<never, Socket.SocketError> {
+    return Effect.forever(
+      Effect.flatMap(Queue.takeAll(this.out), (frames) =>
+        Effect.forEach(frames, (frame) => this.writer.write(frame), { discard: true }),
+      ),
+    );
+  }
+
   /** Closes it at once, ahead of anything waiting: Leaf is stopping, and there is no time to wait. */
   closeNow(code: number, reason: string): Effect.Effect<void> {
     if (this.closed) return Effect.void;
@@ -146,6 +155,8 @@ class Player {
   pipe: Pipe | null = null;
   /** When their last connection closed, while they have none. */
   goneAt: number | null = null;
+  /** Connections of theirs let in and not yet open: while there are any, the record is theirs. */
+  opening = 0;
   readonly moves: Allowance;
   readonly texts: Allowance;
   readonly acts: Allowance;
@@ -166,9 +177,10 @@ class Player {
     this.pipe?.send(frame);
   }
 
-  /** Whether nothing is left of them: no connection, no place, and nothing owed on any allowance. */
+  /** Whether nothing is left of them: no connection, opening or open, no place, and nothing owed on any allowance. */
   gone(now: number): boolean {
     return (
+      this.opening === 0 &&
       this.pipe === null &&
       this.room === null &&
       [this.moves, this.texts, this.acts, this.opens, this.strikes].every((a) => a.full(now))
@@ -200,13 +212,15 @@ export class Live extends Context.Service<
   Live,
   {
     /**
-     * Lets a player open a connection, unless Live is full (`full`) or they open them too fast
-     * (`busy`): their place among the players is taken before `upgrade` opens the socket, so that
-     * nobody can slip in between. Then serves it until it closes, Leaf stops, or `session` (asked
-     * every `recheckMs`) says the player's session has ended.
+     * Lets a player open a connection into a room of a kind, unless Live is full (`full`) or they
+     * open them too fast (`busy`). Their place among the players is taken, and held, before
+     * `upgrade` opens the socket, so that nobody can slip in between. Once it is open it is theirs,
+     * and they are in the room, greeted, in one step. Then it is served until it closes, Leaf stops,
+     * or `session` (asked every `recheckMs`) says the player's session has ended.
      */
     readonly open: (
       identity: Identity,
+      kindName: string,
       upgrade: Effect.Effect<Socket.Socket, unknown>,
       session: Effect.Effect<boolean>,
     ) => Effect.Effect<Opened, never, Scope.Scope>;
@@ -240,13 +254,13 @@ export class Live extends Context.Service<
         rooms.tidy(room);
       };
 
-      /** Puts a player in a room of a kind; one already in one is greeted there again, keeping their place. */
+      /**
+       * Puts a player in a room of a kind. One already in one, shown as they are now, is greeted there
+       * again, keeping their place; shown otherwise (their rank or name changed), they leave and come
+       * back, so that everybody sees them as they are.
+       */
       const enter = (p: Player, kindName: string, now: number): void => {
         if (roomKind(kindName) === undefined) return p.send(say({ t: "error", code: "unknown_room" }));
-        if (p.room?.kindName === kindName && p.occupant) return p.room.greet(p.occupant, now, SERVER_HZ, LIVE_VERSION);
-        leave(p);
-        const room = rooms.place(kindName);
-        if (!room) return;
         const { identity } = p;
         const who = {
           player: identity.playerId,
@@ -254,6 +268,14 @@ export class Live extends Context.Service<
           rank: identity.guildRank,
           guest: isGuest(identity),
         };
+        const shown = p.occupant?.member;
+        const same = shown?.name === who.name && shown.rank === who.rank && shown.guest === who.guest;
+        if (p.room?.kindName === kindName && p.occupant && same) {
+          return p.room.greet(p.occupant, now, SERVER_HZ, LIVE_VERSION);
+        }
+        leave(p);
+        const room = rooms.place(kindName);
+        if (!room) return;
         p.occupant = room.join(who, p, now, SERVER_HZ, LIVE_VERSION);
         p.room = room;
       };
@@ -340,18 +362,20 @@ export class Live extends Context.Service<
           Effect.flatMap((ok) => (ok ? watch(session) : Effect.void)),
         );
 
-      /** Serves one connection of a player's: it becomes their connection, closing any other. */
-      const serve = (socket: Socket.Socket, p: Player, session: Effect.Effect<boolean>) =>
+      /**
+       * Opens a player's connection and makes it theirs, in one step once the socket is open: it
+       * takes over from any other of theirs, carries who they are now, and puts them in the room,
+       * greeted, so that the welcome is the first thing it sends.
+       */
+      const attach = (
+        p: Player,
+        identity: Identity,
+        kindName: string,
+        upgrade: Effect.Effect<Socket.Socket, unknown>,
+      ) =>
         Effect.gen(function* () {
-          const writer = yield* socket.writer;
-          const out = yield* Queue.unbounded<Frame>();
-          const pipe = new Pipe(out, writer);
-          // Another tab of theirs, still open: this connection takes its place.
-          p.pipe?.close(CLOSE.replaced, "replaced");
-          p.pipe = pipe;
-          p.goneAt = null;
-          if (p.occupant) p.room?.reconnected(p.occupant.member.id);
-          counts.opened++;
+          const socket = yield* Effect.orDie(upgrade);
+          const pipe = new Pipe(yield* Queue.unbounded<Frame>(), yield* socket.writer);
           // Whatever ends this connection, this decides what becomes of the player, and only while it
           // is still theirs: signed out, they leave at once; otherwise they wait out their grace.
           yield* Effect.addFinalizer(() =>
@@ -366,16 +390,21 @@ export class Live extends Context.Service<
               }),
             ),
           );
+          const now = yield* Clock.currentTimeMillis;
+          p.pipe?.close(CLOSE.replaced, "replaced");
+          p.pipe = pipe;
+          p.identity = identity;
+          p.goneAt = null;
+          if (p.occupant) p.room?.reconnected(p.occupant.member.id);
+          enter(p, kindName, now);
+          counts.opened++;
+          return { socket, pipe };
+        });
 
-          // Everything for this player goes out in the order it was sent, as soon as it is.
-          yield* Effect.forkScoped(
-            Effect.forever(
-              Effect.flatMap(Queue.takeAll(out), (frames) =>
-                Effect.forEach(frames, (frame) => writer.write(frame), { discard: true }),
-              ),
-            ),
-          );
-
+      /** Serves an open connection: what goes out, the session's watch, and what comes in. */
+      const serve = (socket: Socket.Socket, pipe: Pipe, p: Player, session: Effect.Effect<boolean>) =>
+        Effect.gen(function* () {
+          yield* Effect.forkScoped(pipe.pump());
           // The connection lasts only as long as the session: once it has ended, this connection closes.
           yield* Effect.forkScoped(
             Effect.andThen(
@@ -383,7 +412,6 @@ export class Live extends Context.Service<
               Effect.sync(() => pipe.close(CLOSE.signedOut, "signed out")),
             ),
           );
-
           const { pull } = yield* socket.reader;
           yield* Effect.forever(
             Effect.flatMap(pull, (frames) =>
@@ -401,6 +429,7 @@ export class Live extends Context.Service<
 
       const open = (
         identity: Identity,
+        kindName: string,
         upgrade: Effect.Effect<Socket.Socket, unknown>,
         session: Effect.Effect<boolean>,
       ) =>
@@ -414,11 +443,15 @@ export class Live extends Context.Service<
           const p = known ?? new Player(identity, now);
           players.set(id, p);
           if (!p.opens.take(now)) return "busy" as const;
-          p.identity = identity;
-          // A socket that never opens leaves the player as they were; the tick forgets them once
-          // nothing is left of them.
-          const socket = yield* Effect.orDie(upgrade);
-          yield* serve(socket, p, session);
+          // Held while the socket opens, however long it takes; let go once it is theirs, or never opened.
+          p.opening++;
+          const { socket, pipe } = yield* Effect.ensuring(
+            attach(p, identity, kindName, upgrade),
+            Effect.sync(() => {
+              p.opening--;
+            }),
+          );
+          yield* serve(socket, pipe, p, session);
           return "served" as const;
         });
 

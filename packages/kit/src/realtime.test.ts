@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { CLOSE, decodeMove, encodeSnapshot, Flag, LIVE_VERSION, type Motion, type ToClient } from "@sequoia-leaf/core";
+import { CLOSE, decodeMove, encodeSnapshot, Flag, livePath, type Motion, type ToClient } from "@sequoia-leaf/core";
 
 import { restart, start } from "./live.ts";
 import { isRecord, type LiveSocket, pretend } from "./net.ts";
@@ -221,10 +221,10 @@ describe("a live room", () => {
       act: (id, kind, arg) => heard.push(`act ${id} ${kind} ${arg}`),
     });
     const s = socket(0);
-    expect(s.url).toBe(`wss://leaf.example/v1/game/live?v=${LIVE_VERSION}`);
+    // Opening it is entering the room: the room is in the address, and nothing need be said to join.
+    expect(s.url).toBe(`wss://leaf.example${livePath("town")}`);
     s.open();
-    expect(s.texts().map((m) => m.t)).toEqual(["join", "ping"]);
-    expect(s.texts()[0]).toEqual({ t: "join", room: "town" });
+    expect(s.texts().map((m) => m.t)).toEqual(["ping"]);
 
     const now = w.clock.now;
     s.says(welcome(1, now + 5000));
@@ -300,7 +300,7 @@ describe("a live room", () => {
     expect(room.you()).toBe(5);
     expect(room.sample(2)).toBeNull();
     expect([...room.members().values()].map((m) => m.name)).toEqual(["Alice", "Bob"]);
-    expect(second.texts()[0]).toEqual({ t: "join", room: "town" });
+    expect(second.url).toBe(first.url);
     // The player is said again on the new connection, at once (Leaf shows others that as a jump).
     expect(second.moves().map((m) => [m?.motion.x, m?.motion.jump])).toEqual([[30, 0]]);
     expect(seen).toEqual(["connecting", "open", "closed", "connecting", "open"]);
@@ -333,6 +333,19 @@ describe("a live room", () => {
     await Bun.sleep(800);
     expect(sockets.length).toBe(1);
     expect(seen).toEqual(["connecting", "open", said]);
+  });
+
+  test("shows nobody once the connection is gone for good, though a drop keeps the room in view", async () => {
+    const w = await live();
+    room = joinLive("town");
+    const s = socket(0);
+    s.open();
+    s.says(welcome(1, w.clock.now, [{ ...ALICE, id: 1 }, ALICE]));
+    s.sends(encodeSnapshot(1, w.clock.now - 100, [{ id: 2, seq: 1, ...at(5, 5) }]));
+    expect([room.members().size, room.sample(2)?.x]).toEqual([2, 5]);
+    s.drop(CLOSE.replaced);
+
+    expect([room.members().size, room.sample(2), room.you()]).toEqual([0, null, null]);
   });
 
   test("leaves and closes when the page is done with it, and sends nothing on a socket not yet open", async () => {

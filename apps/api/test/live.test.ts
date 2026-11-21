@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
 
-import { CLOSE, encodeMove, Flag, LIVE_PATH, LIVE_VERSION, type Motion, playerId } from "@sequoia-leaf/core";
-import { Schema } from "effect";
+import { CLOSE, encodeMove, Flag, LIVE_PATH, LIVE_VERSION, livePath, type Motion, playerId } from "@sequoia-leaf/core";
+import { Deferred, Effect, Schema } from "effect";
+import type { Socket } from "effect/socket";
 
 import { Live, type LiveTuning } from "../src/live/live.ts";
 import { LiveClient, type Opening } from "./live-client.ts";
@@ -11,7 +12,7 @@ const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
 const carol = playerId("10000000-0000-0000-0000-000000000003");
 const ORIGIN = "https://leaf.seqwawa.com";
-const LIVE = `${LIVE_PATH}?v=${LIVE_VERSION}`;
+const LIVE = livePath("town");
 
 // The real clock, which a test may move ahead: Live's tick and its waits keep time by it.
 let ahead = 0;
@@ -107,10 +108,16 @@ describe("opening a live connection", () => {
       "unsupported_version",
     ]);
     // Version 1 had no jump count; nothing speaks it.
-    expect(await refused("/v1/game/live?v=1", { Authorization: "Bearer alice-token" })).toEqual([
+    expect(await refused(`${LIVE_PATH}?v=1&room=town`, { Authorization: "Bearer alice-token" })).toEqual([
       400,
       "unsupported_version",
     ]);
+    // A connection is into a room, one there is.
+    expect(await refused(`${LIVE_PATH}?v=${LIVE_VERSION}`, { Authorization: "Bearer alice-token" })).toEqual([
+      400,
+      "unknown_room",
+    ]);
+    expect(await refused(livePath("hall"), { Authorization: "Bearer alice-token" })).toEqual([400, "unknown_room"]);
     const plain = await fetch(`${origin}${LIVE}`, { headers: { Authorization: "Bearer alice-token" } });
     expect([plain.status, await codeOf(plain)]).toEqual([400, "not_websocket"]);
   });
@@ -121,12 +128,12 @@ describe("opening a live connection", () => {
     const guest = await connect(page("carol"));
     const byBearer = await connect({ bearer: "bob-token" });
 
-    expect((await byCookie.join()).roster.map((m) => m.name)).toEqual(["Alice"]);
-    expect((await guest.join()).roster.map((m) => [m.name, m.guest])).toEqual([
+    expect((await byCookie.welcome()).roster.map((m) => m.name)).toEqual(["Alice"]);
+    expect((await guest.welcome()).roster.map((m) => [m.name, m.guest])).toEqual([
       ["Alice", false],
       ["Carol", true],
     ]);
-    expect((await byBearer.join()).roster.map((m) => m.name)).toEqual(["Alice", "Carol", "Bob"]);
+    expect((await byBearer.welcome()).roster.map((m) => m.name)).toEqual(["Alice", "Carol", "Bob"]);
   });
 
   it("charges every connection a player opens, and turns them away past ten at once", async () => {
@@ -140,7 +147,7 @@ describe("opening a live connection", () => {
   it("keeps what a player owes after they have left, so that leaving refills nothing", async () => {
     await start({ graceMs: 50 });
     const tabs = await Promise.all(Array.from({ length: 10 }, () => connect(page("alice"))));
-    await tabs.at(-1)?.join();
+    await tabs.at(-1)?.welcome();
     for (const tab of tabs) tab.close();
     await Bun.sleep(300);
 
@@ -164,9 +171,9 @@ describe("a live room", () => {
   it("welcomes a player with who is there, and tells the others they came, member or guest", async () => {
     await start();
     const a = await connect(page("alice"));
-    const welcome = await a.join();
+    const welcome = await a.welcome();
     const c = await connect(page("carol"));
-    const carols = await c.join();
+    const carols = await c.welcome();
 
     expect(welcome).toMatchObject({
       t: "welcome",
@@ -190,8 +197,8 @@ describe("a live room", () => {
     await start();
     const a = await connect(page("alice"));
     const b = await connect(page("bob"));
-    await a.join();
-    const { you: bobsId } = await b.join();
+    await a.welcome();
+    const { you: bobsId } = await b.welcome();
 
     const sentAt = performance.now();
     const seq = b.move(at(200, 120));
@@ -206,11 +213,11 @@ describe("a live room", () => {
   it("shows a newcomer where everybody already is, at once, and keeps a player inside the room", async () => {
     await start();
     const a = await connect(page("alice"));
-    const { you } = await a.join();
+    const { you } = await a.welcome();
     a.move({ ...at(-40, 1e6, 0), jump: 2 });
     await a.snapshot();
     const b = await connect(page("bob"));
-    await b.join();
+    await b.welcome();
 
     // Leaf counts the jumps everybody is shown: their first move is one.
     expect((await b.snapshot()).entries.map((e) => [e.id, e.x, e.y, e.jump])).toEqual([[you, 0, 352, 1]]);
@@ -220,8 +227,8 @@ describe("a live room", () => {
     await start();
     const a = await connect(page("alice"));
     const b = await connect(page("bob"));
-    const { you } = await a.join();
-    await b.join();
+    const { you } = await a.welcome();
+    await b.welcome();
     a.send({ t: "act", kind: "emote", arg: "wave" });
     a.send({ t: "act", kind: "emote", arg: "you_are_dumb" });
 
@@ -233,7 +240,9 @@ describe("a live room", () => {
   it("answers a ping with the game's clock and its own, and says what it cannot do", async () => {
     await start();
     const a = await connect(page("alice"));
+    await a.welcome();
     a.send({ t: "ping", c: 123.5 });
+    a.send({ t: "leave" });
     a.send({ t: "act", kind: "emote", arg: "wave" });
     a.send({ t: "join", room: "hall" });
 
@@ -245,11 +254,11 @@ describe("a live room", () => {
   it("greets a player who joins the room they are in again, keeping their place, and nobody else hears", async () => {
     await start();
     const a = await connect(page("alice"));
-    const first = await a.join();
+    const first = await a.welcome();
     const b = await connect(page("bob"));
-    await b.join();
+    await b.welcome();
     await a.next("joined");
-    const again = await a.join();
+    const again = await a.join("town");
 
     expect([again.room, again.you]).toEqual([first.room, first.you]);
     expect(again.roster.map((m) => m.name)).toEqual(["Alice", "Bob"]);
@@ -262,8 +271,8 @@ describe("a live room", () => {
     await start();
     const a = await connect(page("alice"));
     const b = await connect(page("bob"));
-    await a.join();
-    const { you: bobsId } = await b.join();
+    await a.welcome();
+    const { you: bobsId } = await b.welcome();
     b.send({ t: "leave" });
 
     expect(await a.next("left")).toEqual({ t: "left", id: bobsId });
@@ -277,14 +286,14 @@ describe("a player, whatever their connection", () => {
     const watchers = await Promise.all(
       (["bob", "carol"] as const).map(async (who) => {
         const w = await connect(page(who));
-        await w.join();
+        await w.welcome();
         return w;
       }),
     );
     const first = await connect(page("alice"));
-    const { you } = await first.join();
+    const { you } = await first.welcome();
     const second = await connect({ bearer: "alice-token" });
-    const again = await second.join();
+    const again = await second.welcome();
 
     expect((await first.ended()).code).toBe(CLOSE.replaced);
     expect(again.you).toBe(you);
@@ -296,13 +305,13 @@ describe("a player, whatever their connection", () => {
   it("follows a second tab's moves at once, though it numbers them from the start, and shows it as a jump", async () => {
     await start();
     const b = await connect(page("bob"));
-    await b.join();
+    await b.welcome();
     const first = await connect(page("alice"));
-    const { you } = await first.join();
+    const { you } = await first.welcome();
     for (let i = 0; i < 30; i++) first.move(at(i, 10));
     const before = await b.snapshot((s) => s.entries.some((e) => e.id === you && e.x === 29));
     const second = await connect({ bearer: "alice-token" });
-    await second.join();
+    await second.welcome();
     const seq = second.move(at(300, 200, 0));
 
     const after = await b.snapshot((s) => s.entries.some((e) => e.id === you && e.x === 300));
@@ -315,11 +324,11 @@ describe("a player, whatever their connection", () => {
   it("is not let go by an old connection's session ending once a new one has taken over", async () => {
     await start({ recheckMs: 50 });
     const b = await connect(page("bob"));
-    await b.join();
+    await b.welcome();
     const first = await connect(page("alice"));
-    const { you } = await first.join();
+    const { you } = await first.welcome();
     const second = await connect({ bearer: "alice-2-token" });
-    await second.join();
+    await second.welcome();
     // The first device's session is revoked; the second's is not.
     backend.sessions["alice-token"] = () => Response.json({ error: "unauthorized" }, { status: 401 });
     ahead = 61_000;
@@ -333,9 +342,9 @@ describe("a player, whatever their connection", () => {
   it("stands still in their place for a while after a drop, keeps it if they come back, and leaves if not", async () => {
     await start({ graceMs: 300 });
     const b = await connect(page("bob"));
-    await b.join();
+    await b.welcome();
     const a = await connect(page("alice"));
-    const { you } = await a.join();
+    const { you } = await a.welcome();
     await b.next("joined");
     a.move(at(100, 100, Flag.Moving));
     await b.snapshot((s) => s.entries.some((e) => e.id === you && e.flags === Flag.Moving));
@@ -345,7 +354,7 @@ describe("a player, whatever their connection", () => {
     const stopped = await b.snapshot((s) => s.entries.some((e) => e.id === you));
     expect(stopped.entries.find((e) => e.id === you)).toMatchObject({ x: 100, vx: 0, flags: 0 });
     const back = await connect(page("alice"));
-    expect((await back.join()).you).toBe(you);
+    expect((await back.welcome()).you).toBe(you);
     back.close();
 
     expect(await b.next("left", (m) => m.id === you, 2000)).toEqual({ t: "left", id: you });
@@ -357,9 +366,9 @@ describe("a player, whatever their connection", () => {
   it("is gone at once, the connection closed as signed out, when their session ends", async () => {
     await start({ recheckMs: 100 });
     const b = await connect(page("bob"));
-    await b.join();
+    await b.welcome();
     const a = await connect(page("alice"));
-    const { you } = await a.join();
+    const { you } = await a.welcome();
     backend.sessions["alice-token"] = () => Response.json({ error: "unauthorized" }, { status: 401 });
     // A confirmed session is remembered for a minute; once that is up, it is asked about again.
     await Bun.sleep(300);
@@ -369,6 +378,69 @@ describe("a player, whatever their connection", () => {
     expect((await a.ended()).code).toBe(CLOSE.signedOut);
     expect(await b.next("left", (m) => m.id === you)).toEqual({ t: "left", id: you });
     expect(await census()).toMatchObject({ connected: 1, rooms: { "town/1": 1 } });
+  });
+});
+
+describe("opening a connection", () => {
+  it("is entering the room: the welcome is the first thing it says, before anything of the room", async () => {
+    await start();
+    const b = await connect(page("bob"));
+    const { you: bobsId } = await b.welcome();
+    for (let i = 0; i < 30; i++) b.move(at(i, 0));
+    const a = await connect(page("alice"));
+    await b.snapshot((s) => s.entries.some((e) => e.id === bobsId && e.x === 29));
+
+    expect(a.arrived.slice(0, 2)).toEqual(["welcome", "snapshot"]);
+    expect((await a.welcome()).roster.map((m) => m.name)).toEqual(["Bob", "Alice"]);
+  });
+
+  it("holds a player's place among the players while their socket opens, however long that takes", async () => {
+    await start({ mostPlayers: 1 });
+    const sessionOk = Effect.succeed(true);
+    const alicesIdentity = { playerId: alice, username: "Alice", guildRank: "CAPTAIN", admin: false };
+    const bobsIdentity = { playerId: bob, username: "Bob", guildRank: "RECRUIT", admin: false };
+    const opening = await Effect.runPromise(Deferred.make<Socket.Socket, Error>());
+    // Alice's socket is slow to open: past the time her open's charge refills.
+    const pending = services?.run(
+      Effect.scoped(Live.use((live) => live.open(alicesIdentity, "town", Deferred.await(opening), sessionOk))).pipe(
+        Effect.exit,
+      ),
+    );
+    await Bun.sleep(50);
+    ahead = 60_000;
+    await Bun.sleep(100);
+
+    expect(await census()).toMatchObject({ players: 1, connected: 0 });
+    // Her place is held: nobody else gets it meanwhile.
+    expect(
+      await services?.run(
+        Effect.scoped(Live.use((live) => live.open(bobsIdentity, "town", Deferred.await(opening), sessionOk))),
+      ),
+    ).toBe("full");
+
+    await Effect.runPromise(Deferred.fail(opening, new Error("never opened")));
+    await pending;
+    await Bun.sleep(100);
+    expect(await census()).toMatchObject({ players: 0, connected: 0, rooms: {} });
+  });
+
+  it("shows a player as they are now when a new connection of theirs takes over", async () => {
+    await start();
+    const b = await connect(page("bob"));
+    await b.welcome();
+    const first = await connect(page("alice"));
+    const { you } = await first.welcome();
+    await b.next("joined");
+    // Alice is a recruit now, as her second device's session says.
+    backend.sessions["alice-2-token"] = () => Response.json(sessionOf(alice, "Alice", "RECRUIT"));
+    const second = await connect({ bearer: "alice-2-token" });
+    const again = await second.welcome();
+
+    expect(await b.next("left")).toEqual({ t: "left", id: you });
+    expect(await b.next("joined")).toEqual({
+      t: "joined",
+      member: { id: again.you, player: alice, name: "Alice", rank: "RECRUIT", guest: false },
+    });
   });
 });
 
@@ -390,8 +462,8 @@ describe("what a connection may send", () => {
     await start();
     const a = await connect(page("alice"));
     const b = await connect(page("bob"));
-    await a.join();
-    const { you } = await b.join();
+    await a.welcome();
+    const { you } = await b.welcome();
     // Sixty at once: the first burst of forty is taken, the rest dropped.
     for (let seq = 1; seq <= 60; seq++) b.sendRaw(encodeMove(seq, at(seq, 10)));
     const seen = await a.snapshot((s) => s.entries.some((e) => e.id === you));
@@ -414,7 +486,7 @@ describe("when Leaf stops", () => {
   it("closes every connection as restarting, for the game to come back", async () => {
     await start();
     const a = await connect(page("alice"));
-    await a.join();
+    await a.welcome();
     await server?.close();
 
     expect(await a.ended()).toEqual({ code: CLOSE.restart, reason: "restart" });
