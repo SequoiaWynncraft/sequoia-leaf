@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { worksAway } from "./games.ts";
+import { worksWaiting } from "./games.ts";
 import { compose, read, span } from "./letter.ts";
 import { makeGuild } from "./madeup.ts";
 import { blank, dayOf, type Kept } from "./save.ts";
@@ -9,10 +9,10 @@ const HOUR = 3_600_000;
 const NOW = new Date(2026, 10, 21, 18, 0).getTime();
 const g = makeGuild();
 
-/** The letter a member finds, having last been in town at `lastSeen`. */
-function letter(kept: Kept, now = NOW): ReturnType<typeof compose> {
+/** The letter a member finds, having last been in town at `lastSeen`, with `till` Coins waiting in the Works. */
+function letter(kept: Kept, now = NOW, till = 0): ReturnType<typeof compose> {
   const away = g.away(kept.lastSeen, now);
-  return compose(kept, now, away, [worksAway(away.hours, away.first)]);
+  return compose(kept, now, away, [worksWaiting(till)]);
 }
 
 describe("the arrival letter", () => {
@@ -21,7 +21,6 @@ describe("the arrival letter", () => {
     expect(l.show).toBe(true);
     expect(l.title).toBe("Welcome home");
     expect(l.leaf).toBeGreaterThan(0);
-    expect(l.coins).toBeGreaterThan(0);
   });
 
   test("once read, a reload finds nothing to pay and no letter", () => {
@@ -53,21 +52,25 @@ describe("the arrival letter", () => {
     expect(letter({ ...blank(), lastSeen: NOW - 2 * 60_000, welcomed: today }).show).toBe(false);
     const owed = letter({ ...blank(), lastSeen: NOW - 5 * HOUR, welcomed: today });
     expect(owed.show).toBe(true);
-    expect(owed.leaf).toBe(12);
-    expect(owed.coins).toBe(110);
+    expect(owed.leaf).toBe(80);
+    expect(owed.coins).toBe(0);
   });
 
-  test("what pays comes first, Leaf before Coins", () => {
-    const l = letter({ ...blank(), lastSeen: NOW - 30 * HOUR });
+  test("what pays comes first", () => {
+    const l = letter({ ...blank(), lastSeen: NOW - 30 * HOUR }, NOW, 340);
     expect(l.lines[0]?.pay?.kind).toBe("leaf");
-    expect(l.lines[1]?.pay?.kind).toBe("coins");
-    expect(l.lines.slice(2).every((x) => !x.pay)).toBe(true);
+    expect(l.lines.slice(1).every((x) => !x.pay)).toBe(true);
   });
 
-  test("the Works is paid for eight hours at most", () => {
-    expect(worksAway(8, false)?.pay?.amount).toBe(worksAway(800, false)?.pay?.amount);
-    expect(worksAway(0, false)).toBeNull();
-    expect(worksAway(0.05, false)).toBeNull();
+  test("the Works' till is mentioned and not paid: the yard pays it itself", () => {
+    expect(worksWaiting(0)).toBeNull();
+    expect(worksWaiting(1)?.text).toBe("1 Coin is waiting in the Works' till");
+    const line = worksWaiting(340);
+    expect(line?.text).toBe("340 Coins are waiting in the Works' till");
+    expect(line?.pay).toBeUndefined();
+    const l = letter({ ...blank(), lastSeen: NOW - 30 * HOUR }, NOW, 340);
+    expect(l.coins).toBe(0);
+    expect(l.lines.some((x) => x.text.includes("340 Coins"))).toBe(true);
   });
 
   test("time away, in plain words", () => {

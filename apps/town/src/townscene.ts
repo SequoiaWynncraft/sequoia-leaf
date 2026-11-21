@@ -17,7 +17,7 @@ import { beginEvents, stepEvents } from "./events.ts";
 import { flights, stepFlights } from "./flights.ts";
 import { ring, updateFx } from "./fx.ts";
 import { type Actor, after, changed, G, hooks, type PanelId } from "./game.ts";
-import { type GameId, isGame, worksAway } from "./games.ts";
+import { type GameId, isGame, worksWaiting } from "./games.ts";
 import { GROUND, NEAR, paintBackdrop, paintGround, paintNear, SKYLINE } from "./ground.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, refreshFace, setFace, setHammer, showCard } from "./hud.ts";
@@ -565,7 +565,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       const now = Date.now();
       const away = guild.away(kept.lastSeen, now);
       const mail = guild.mail(kept.lastSeen, now);
-      const letter = compose(kept, now, away, [worksAway(away.hours, away.first)]);
+      const letter = compose(kept, now, away, [worksWaiting()]);
       after(0.35, () => {
         walkTo(player, { x: 256, y: 152 }, () => {
           player.dir = 0;

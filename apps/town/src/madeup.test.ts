@@ -46,10 +46,10 @@ describe("the made-up guild while the member is away", () => {
   });
 
   test("a raid for every three hours, and never more than four", () => {
-    expect(leaf(3)).toBe(12);
-    expect(leaf(7)).toBe(24);
-    expect(leaf(12)).toBe(48);
-    expect(leaf(24 * 30)).toBe(48);
+    expect(leaf(3)).toBe(80);
+    expect(leaf(7)).toBe(160);
+    expect(leaf(12)).toBe(320);
+    expect(leaf(24 * 30)).toBe(320);
   });
 
   test("the same stretch of time always reads the same", () => {
