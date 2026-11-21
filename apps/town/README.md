@@ -94,8 +94,10 @@ in off the trail. Walking out past the two lantern posts on the camp's east side
   many by the trail the market and the Treasury sell nothing more (and take nothing) until some are
   unpacked, and a trophy waits in its game. A member may have as many as 999 of any one thing,
   standing, put away and waiting together; with that many the market and the Treasury sell no more
-  of it (and take nothing), and a present or a trophy of it is not added. A thing is in the camp,
-  and kept, the moment its parcel opens; the flight is only how it is seen arriving.
+  of it (and take nothing), and a present or a trophy of it is not added. As many as three hundred
+  things may be set out in a camp; with that many standing, nothing more comes out of the tray and
+  a parcel or a present opens into the tray instead, until something is put away. A thing is in the
+  camp, and kept, the moment its parcel opens; the flight is only how it is seen arriving.
 - **The cabin.** Walking up to its door opens the member's own things: their rank, level and week
   with the guild, what they are wearing (each thing put on or taken off), the trophies they have
   won, and who lives with them and what would bring the next. In town the member's face in the
@@ -104,6 +106,9 @@ in off the trail. Walking out past the two lantern posts on the camp's east side
   away or in town, read as letters on paper. Its flag is up and it glows while there is a letter
   unread or a present not yet taken out. Taking a present out sends it hopping from the box to a
   spot beside it. The town's signpost at the gate has a mark over it while something is waiting.
+  It holds twelve letters, and makes room by throwing out the oldest already dealt with, then the
+  oldest with nothing inside; a present is never thrown out, so while the box is full of presents
+  no more letters are left, and the feed says so.
 - **Guild-mates dropping by.** Now and then one walks in off the trail, says hello, sits on a free
   seat by the fire, says a thing or two, and leaves, sometimes by way of the mailbox. If the member
   is not there, they leave what they brought and the feed says so.

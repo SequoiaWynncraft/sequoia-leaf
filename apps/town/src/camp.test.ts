@@ -4,6 +4,7 @@ import {
   allReached,
   boxOf,
   type Camp,
+  campFull,
   canPlace,
   CGH,
   CGW,
@@ -13,6 +14,7 @@ import {
   layout,
   MOST_OWNED,
   MOST_PARCELS,
+  MOST_PLACED,
   move,
   newCamp,
   owned,
@@ -25,14 +27,25 @@ import {
   trayList,
   turned,
   unpackParcel,
+  WHY_NOT,
   YARD,
 } from "./camp.ts";
 import { clearFlights, flights } from "./flights.ts";
-import { isLetter, letter, open, post, tidied, waiting } from "./mail.ts";
+import { BOX, isLetter, letter, open, post, roomInBox, tidied, waiting } from "./mail.ts";
 import { footprint, isThing, KINDS, thingOf, THINGS, turnsOf } from "./things.ts";
 
 const fresh = (): Camp => structuredClone(newCamp());
 const at = (camp: Camp, id: string): number => camp.placed.findIndex((p) => p.id === id);
+
+/** A new camp with plank paths laid over the yard, row by row wherever one may go, until `n` things stand in it. */
+function crowded(n: number): Camp {
+  const camp = fresh();
+  for (let y = YARD.y0; y <= YARD.y1 && camp.placed.length < n; y++)
+    for (let x = YARD.x0; x < YARD.x1 && camp.placed.length < n; x += 2)
+      if (canPlace(camp.placed, "plank-path", x, y, 0) === "ok")
+        camp.placed.push({ id: "plank-path", x, y, t: 0, s: 0 });
+  return camp;
+}
 
 describe("the catalogue", () => {
   test("there are forty things and more, each with a name of its own", () => {
@@ -258,6 +271,18 @@ describe("keeping a camp", () => {
     }
   });
 
+  test("every thing set out comes back, up to as many as may be set out in a camp", () => {
+    expect(MOST_PLACED).toBe(300);
+    for (const n of [241, MOST_PLACED]) {
+      const camp = crowded(n);
+      expect(camp.placed).toHaveLength(n);
+      const back = parseCamp(JSON.parse(JSON.stringify(camp)));
+      expect(back?.placed).toHaveLength(n);
+      expect(back?.placed).toEqual(camp.placed);
+      expect(back?.tray).toEqual({});
+    }
+  });
+
   test("nonsense is not a camp", () => {
     for (const raw of [null, 7, "camp", [], {}, { placed: "everywhere" }]) expect(parseCamp(raw)).toBeNull();
   });
@@ -339,6 +364,39 @@ describe("unpacking a parcel", () => {
   });
 });
 
+describe("a full camp", () => {
+  test("the 301st thing set down is refused and stays in the tray, and a parcel opened goes there too", () => {
+    const camp = crowded(MOST_PLACED);
+    expect(campFull(camp.placed)).toBe(true);
+    camp.tray = { gnome: 1 };
+    // There is ground for it; it is only that the camp has as many set out as may be.
+    const spot = freeSpot(camp.placed, "gnome", { x: 30, y: 30 });
+    if (!spot) throw new Error("no ground for a gnome");
+    expect(setOut(camp, "gnome", spot.x, spot.y)).toBe("full");
+    expect(WHY_NOT.full).toBe("The camp is full. Put something away first.");
+    expect(camp.placed).toHaveLength(MOST_PLACED);
+    expect(camp.tray).toEqual({ gnome: 1 });
+    let looked = 0;
+    camp.parcels = ["barrel"];
+    expect(
+      unpackParcel(camp, () => {
+        looked++;
+        return spot;
+      }),
+    ).toEqual({ id: "barrel", at: null });
+    expect(looked).toBe(0);
+    expect(camp.tray).toEqual({ gnome: 1, barrel: 1 });
+    // Nothing is lost on a reload, and putting one thing away makes room for the gnome.
+    const back = parseCamp(JSON.parse(JSON.stringify(camp)));
+    expect(back?.placed).toHaveLength(MOST_PLACED);
+    expect(back?.tray).toEqual({ gnome: 1, barrel: 1 });
+    expect(putAway(camp, at(camp, "plank-path"))).toBe(true);
+    expect(setOut(camp, "gnome", spot.x, spot.y)).toBe("ok");
+    expect(camp.placed).toHaveLength(MOST_PLACED);
+    expect(camp.tray).toEqual({ barrel: 1, "plank-path": 1 });
+  });
+});
+
 describe("the mailbox", () => {
   test("a letter waits until it is read and its present taken", () => {
     const box = [letter("a", "Pipwick", "hello"), letter("b", "Tindra", "for you", "flower-pot")];
@@ -368,6 +426,34 @@ describe("the mailbox", () => {
     expect(box.every(open)).toBe(true);
     post(box, letter("newer", "Wrenly", "and another"));
     expect(box[0]?.id).toBe("l1");
+  });
+
+  test("a box full of presents throws none away: the next letter is not left, and every one comes back", () => {
+    const camp = fresh();
+    camp.letters = Array.from({ length: BOX }, (_v, i) => letter(`g${i}`, "Tindra", "for you", "toadstool"));
+    const ids = camp.letters.map((l) => l.id);
+    expect(roomInBox(camp.letters)).toBe(false);
+    expect(post(camp.letters, letter("late", "Pipwick", "and this", "cushion"))).toBe(false);
+    expect(camp.letters.map((l) => l.id)).toEqual(ids);
+    const back = parseCamp(JSON.parse(JSON.stringify(camp)));
+    expect(back?.letters.filter(open)).toHaveLength(BOX);
+    // Reading one is not enough; taking its present out makes room.
+    const first = camp.letters[0];
+    if (first) first.read = true;
+    expect(roomInBox(camp.letters)).toBe(false);
+    if (first) first.taken = true;
+    expect(post(camp.letters, letter("late", "Pipwick", "and this", "cushion"))).toBe(true);
+    expect(camp.letters).toHaveLength(BOX);
+    expect(camp.letters.filter((l) => l.gift !== "" && !l.taken)).toHaveLength(BOX);
+  });
+
+  test("an unread note with nothing inside makes room before any present", () => {
+    const box = Array.from({ length: BOX }, (_v, i) =>
+      letter(`g${i}`, "Tindra", "for you", i === 5 ? "" : "acorn-jar"),
+    );
+    expect(post(box, letter("late", "Pipwick", "hello"))).toBe(true);
+    expect(box.some((l) => l.id === "g5")).toBe(false);
+    expect(box.filter((l) => l.gift !== "")).toHaveLength(BOX - 1);
   });
 
   test("only a real letter is a letter", () => {

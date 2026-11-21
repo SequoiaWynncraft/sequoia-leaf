@@ -17,7 +17,10 @@ export interface Letter {
   taken: boolean;
 }
 
-/** The most letters the box holds; the oldest that have been dealt with make room first. */
+/**
+ * The most letters the box holds; the oldest that have been dealt with make room first, then the
+ * oldest with no present inside. A present is never thrown away to make room.
+ */
 export const BOX = 12;
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -43,15 +46,29 @@ export const open = (l: Letter): boolean => !l.read || (l.gift !== "" && !l.take
 /** How many letters are waiting. The mailbox glows while this is not nothing. */
 export const waiting = (letters: readonly Letter[]): number => letters.filter(open).length;
 
-/** Puts a letter in the box. Says whether it went in: one that is there already does not go in twice. */
+/** Whether a letter has nothing left inside it: no present came with it, or it has been taken out. */
+const emptied = (l: Letter): boolean => l.gift === "" || l.taken;
+
+/** Whether another letter could go in the box: there is room, or a letter that can make room. */
+export const roomInBox = (letters: readonly Letter[]): boolean => letters.length < BOX || letters.some(emptied);
+
+/** What the feed says when a letter is not left because the box is full of presents. */
+export const BOX_FULL = "Your mailbox is full. Take the presents out first.";
+
+/**
+ * Puts a letter in the box. Says whether it went in: one that is there already does not go in
+ * twice, and none goes in while the box is full of presents not yet taken out.
+ */
 export function post(letters: Letter[], incoming: Letter): boolean {
-  if (letters.some((l) => l.id === incoming.id)) return false;
-  letters.push(incoming);
-  // Over full: the oldest letter that has been dealt with goes; failing that, the oldest of all.
-  while (letters.length > BOX) {
+  if (letters.some((l) => l.id === incoming.id) || !roomInBox(letters)) return false;
+  // Full: the oldest letter that has been dealt with goes; failing that, the oldest with nothing inside.
+  while (letters.length >= BOX) {
     const done = letters.findIndex((l) => !open(l));
-    letters.splice(done === -1 ? 0 : done, 1);
+    const room = done === -1 ? letters.findIndex(emptied) : done;
+    if (room === -1) break;
+    letters.splice(room, 1);
   }
+  letters.push(incoming);
   return true;
 }
 

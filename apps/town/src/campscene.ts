@@ -14,6 +14,7 @@ import { clamp, type Ctx, dist, pick, type Pt, rng } from "@sequoia-leaf/kit/uti
 import { face, hop, makeActor, pushOf, release, say, shove, sit, stepActor, walkTo } from "./actors.ts";
 import {
   boxOf,
+  campFull,
   canPlace,
   CGH,
   CGW,
@@ -61,7 +62,7 @@ import { CELL, makeGround } from "./grid.ts";
 import { paintTrunk } from "./ground.ts";
 import { guild, type Happening, type MateCamp } from "./guild.ts";
 import { closeCard, closePanel, showCard } from "./hud.ts";
-import { letter, post, waiting } from "./mail.ts";
+import { BOX_FULL, letter, post, roomInBox, waiting } from "./mail.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
 import { camp as mine, roomByTrail, roomFor, sendToCamp } from "./record.ts";
@@ -847,6 +848,10 @@ export function makeCamp(
   /** A letter goes into the member's mailbox: the flag goes up, wherever the member is. */
   function deliver(h: Extract<Happening, { kind: "call" }>): void {
     if (h.note === "" && h.gift === "") return;
+    if (!roomInBox(mine.letters)) {
+      hooks.feed(`${h.who} came by. ${BOX_FULL}`, "coral");
+      return;
+    }
     if (!post(mine.letters, letter(h.id, h.who, h.note || "This is for you.", h.gift))) return;
     changed();
     hooks.feed(`${h.who} left something in your mailbox.`, "leaf");
@@ -1015,12 +1020,15 @@ export function makeCamp(
       done?.();
       return;
     }
-    const spot = landing(id, near);
+    // The member's own camp, once as full as it may be, has nowhere for it: it goes into the tray.
+    const full = owner === null && campFull(placed);
+    const spot = full ? null : landing(id, near);
     // Into the member's own camp, or their tray, it is simply not added if they have as many of it as may be had.
     if ((owner === null || !spot) && !roomFor(id)) {
       done?.();
       return;
     }
+    if (full) hooks.feed(WHY_NOT.full, "coral");
     comeDown(id, setDown({ placed, tray: mine.tray }, id, spot), from, done);
   }
 
@@ -1030,6 +1038,8 @@ export function makeCamp(
     if (unpacking || owner !== null || mine.parcels.length === 0 || G.where !== "camp" || !mine.first || G.dark > 0)
       return;
     unpacking = true;
+    // Said once, the first time a parcel opens into the tray because the camp is full.
+    let toldFull = false;
     const next = (): void => {
       const from = PARCEL_AT[Math.min(PARCEL_AT.length, mine.parcels.length) - 1] ?? { x: CW - 14, y: 246 };
       // Out of the parcels and into the camp in one step; then it is seen flying there.
@@ -1037,6 +1047,10 @@ export function makeCamp(
       if (!got) {
         unpacking = false;
         return;
+      }
+      if (!got.at && !toldFull && campFull(mine.placed)) {
+        toldFull = true;
+        hooks.feed(WHY_NOT.full, "coral");
       }
       puff(from.x, from.y - 4, 6, "#a35d3b");
       comeDown(got.id, got.at, { x: from.x, y: from.y }, () => {
@@ -1321,6 +1335,12 @@ export function makeCamp(
     const thing = thingOf(id);
     if (!decor || !thing) return false;
     settle();
+    // With as many set out as may be, it stays in the tray.
+    if (campFull(mine.placed)) {
+      sfx.no();
+      hooks.feed(WHY_NOT.full, "coral");
+      return false;
+    }
     const p = player();
     // In front of the member, in the middle of what is on screen.
     const near = {
