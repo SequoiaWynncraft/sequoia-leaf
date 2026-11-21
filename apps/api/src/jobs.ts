@@ -1,7 +1,9 @@
-import { DEFAULT_RULES } from "@sequoia-leaf/core";
+import { DEFAULT_RULES, RULE_CHANGES } from "@sequoia-leaf/core";
 import { Cause, Clock, Effect, Layer, Schedule } from "effect";
 
 import { runAchievementSync } from "./achievements/run.ts";
+import { announce } from "./announce/publish.ts";
+import { rateCard } from "./announce/rate-card.ts";
 import { bucketOffsite, offsiteCopier } from "./backup/offsite.ts";
 import { snapshotIfDue } from "./backup/snapshot.ts";
 import { AppConfig } from "./config.ts";
@@ -95,6 +97,20 @@ export const EveryMinute = Layer.effectDiscard(
   }),
 );
 
+/**
+ * Brings the rate card in Discord up to the rules this Leaf runs with. Rules
+ * change only with a deploy, so once at start is enough.
+ */
+const rateCardUpdate = Effect.gen(function* () {
+  const { ratesWebhook } = yield* AppConfig;
+  if (ratesWebhook === undefined) {
+    return;
+  }
+  const card = rateCard(DEFAULT_RULES, RULE_CHANGES);
+  const result = yield* announce("rates", ratesWebhook, card, yield* Clock.currentTimeMillis);
+  yield* Effect.logInfo("rate_card").pipe(Effect.annotateLogs({ result }));
+});
+
 /** Pays once at start the levels reached before levels paid Leaf, or left unpaid by a failed run, and says what runs. */
 export const Startup = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -108,12 +124,14 @@ export const Startup = Layer.effectDiscard(
         }
       }),
     );
+    yield* step("Updating the rate card in Discord (it is tried again at the next start)", rateCardUpdate);
     yield* Effect.logInfo("started").pipe(
       Effect.annotateLogs({
         port: config.port,
         database: config.databasePath,
         offsite_bucket: config.offsite?.bucket ?? null,
         awards_feed: config.sierraUrl ?? null,
+        rate_card: config.ratesWebhook !== undefined,
       }),
     );
     if (config.backendToken === undefined) {

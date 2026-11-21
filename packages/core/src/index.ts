@@ -65,5 +65,7 @@ export {
   levelForXp,
   type LevelProgress,
   type LevelRules,
+  type RuleChange,
+  RULE_CHANGES,
   type Rules,
 } from "./rules.ts";

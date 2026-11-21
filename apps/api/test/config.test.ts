@@ -20,6 +20,7 @@ describe("settings", () => {
       backendUrl: "https://api.seqwawa.com",
       backendToken: undefined,
       sierraUrl: undefined,
+      ratesWebhook: undefined,
       offsite: undefined,
       offsitePartlySet: [],
     });
