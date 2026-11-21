@@ -8,6 +8,9 @@
       "path": "./packages/core/tsconfig.test.json"
     },
     {
+      "path": "./packages/kit"
+    },
+    {
       "path": "./apps/api"
     },
     {
@@ -20,13 +23,7 @@
       "path": "./apps/hub-camp"
     },
     {
-      "path": "./apps/hub-map"
-    },
-    {
-      "path": "./apps/hub-street"
-    },
-    {
-      "path": "./apps/hub-town"
+      "path": "./apps/town"
     }
   ]
 }
