@@ -1,20 +1,24 @@
 /**
  * Leaf on this machine, for trying the game against it:
  *
- *   bun apps/api/test/play.ts <port> <public-dir> [--not-a-member] [--down] [--busy]
+ *   bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy]
  *
  * It runs the real app on a database in memory, seeded with a day of play for
- * a member called Tester and four guild-mates, and serves `<public-dir>` (the
- * built pages: `town/`, `works/`, `battler/`) under `/play`. The backend,
- * Sierra and Mojang are the tests' stand-ins, so nothing leaves the machine.
+ * a member called Tester and four other members, and serves `<public-dir>`
+ * (the built pages: `town/`, `works/`, `battler/`) under `/play`. Two of the
+ * four are in the game (Birchwood in town, Mossling at the table, saying so
+ * every half minute) and two left a while ago and doze in town (Fernhollow
+ * three hours ago, Quillon forty minutes ago, by the Works). Pebblefoot, who
+ * is not in the guild, is in town too, as a guest. The backend, Sierra and
+ * Mojang are the tests' stand-ins, so nothing leaves the machine.
  *
  * The cookie `seq_session=tester` is Tester's session; any other, or none, is
  * signed out. `/sign-in?return_to=<address>` sets it and goes back, as the
  * website's sign-in would, and `/sign-out?return_to=<address>` clears it.
  *
- * - `--not-a-member`: Tester is signed in but not in the guild, so the game's routes answer 403.
+ * - `--guest`: Tester is signed in but not in the guild (any more), so they play as a guest.
  * - `--down`: the backend can't be asked who Tester is, so they answer 503.
- * - `--busy`: every minute, a few guild-mates finish a raid together, for the guild's news.
+ * - `--busy`: every minute, a few of the four finish a raid together, for the guild's news.
  */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -37,11 +41,11 @@ import {
   testLeaf,
 } from "./support.ts";
 
-const USAGE = "Usage: bun apps/api/test/play.ts <port> <public-dir> [--not-a-member] [--down] [--busy]";
+const USAGE = "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy]";
 
 const [portText = "", publicDirText = "", ...options] = process.argv.slice(2);
 const port = Number(portText);
-const known = new Set(["--not-a-member", "--down", "--busy"]);
+const known = new Set(["--guest", "--down", "--busy"]);
 if (
   !Number.isInteger(port) ||
   port <= 0 ||
@@ -57,7 +61,7 @@ if (!existsSync(publicDir)) {
   console.error(`${publicDir} does not exist. Build the pages into it first.\n${USAGE}`);
   process.exit(2);
 }
-const notAMember = options.includes("--not-a-member");
+const guest = options.includes("--guest");
 const down = options.includes("--down");
 const busy = options.includes("--busy");
 const origin = `http://127.0.0.1:${port}`;
@@ -105,6 +109,12 @@ const [tester, ...mates] = members;
 if (tester === undefined) {
   throw new Error("Tester is missing");
 }
+/** Somebody who is not in the guild, in town as a guest. */
+const pebblefoot = {
+  id: playerId("7e570000-0000-4000-8000-000000000006"),
+  name: "Pebblefoot",
+  look: { skin: [240, 200, 170, 255], hair: [200, 200, 205, 255], shirt: [180, 130, 60, 255], legs: [90, 70, 50, 255] },
+} as const;
 
 // The clock is the real one, except while the past day is being played.
 let playingAt: number | undefined;
@@ -120,19 +130,25 @@ const clock: TestClock = {
 /** The session the script uses for itself while it plays the day, whatever Tester's is. */
 const SEEDING = "seeding";
 let seeding = true;
+/** The script's own session for each of the other four, to say where they are in the game. */
+const sessionFor = (member: { readonly name: string }) => `as-${member.name.toLowerCase()}`;
 const { backend, fetcher } = fakeBackend({
   tester: () =>
     down
       ? new Response("down", { status: 502 })
-      : Response.json(sessionOf(tester.id, tester.name, notAMember ? null : tester.rank)),
+      : Response.json(sessionOf(tester.id, tester.name, guest ? null : tester.rank)),
   [SEEDING]: () =>
     seeding
       ? Response.json(sessionOf(tester.id, tester.name, tester.rank))
       : Response.json({ error: "unauthorized" }, { status: 401 }),
+  ...Object.fromEntries(
+    mates.map((mate) => [sessionFor(mate), () => Response.json(sessionOf(mate.id, mate.name, mate.rank))]),
+  ),
+  [sessionFor(pebblefoot)]: () => Response.json(sessionOf(pebblefoot.id, pebblefoot.name, null)),
 });
 
 const mojang = fakeMojang();
-for (const [index, member] of members.entries()) {
+for (const [index, member] of [...members, pebblefoot].entries()) {
   const texture = `5e1f${index}a`;
   mojang.profiles.set(member.id, { name: member.name, skin: `http://textures.minecraft.net/texture/${texture}` });
   mojang.textures.set(`https://textures.minecraft.net/texture/${texture}`, skinPng(member.look));
@@ -235,7 +251,7 @@ const pick = <A>(list: readonly A[], index: number): A => {
 };
 
 // Tester plays in the guild's timed windows, which open every four hours for two: a dozen raids
-// with two or three guild-mates, three a window, and a dozen wars, so the rules finish some quests.
+// with two or three of the others, three a window, and a dozen wars, so the rules finish some quests.
 const windowsOfTheDay = Array.from({ length: 6 }, (_, k) => (Math.ceil(dayStart / (4 * HOUR)) + k) * 4 * HOUR)
   .filter((opens) => opens + 2 * HOUR < Date.now() - 5 * MINUTE)
   .map((opens) => (opens - dayStart) / MINUTE);
@@ -251,7 +267,7 @@ for (let n = 0; n < 12; n++) {
     20 + (n % 5) * 9,
   );
 }
-// The guild-mates raid without Tester too, and each reaches a milestone or two.
+// The others raid without Tester too, and each reaches a milestone or two.
 for (const [index, mate] of mates.entries()) {
   for (let n = 0; n < 4; n++) {
     raid(45 + index * 17 + n * 260, [mate, pick(mates, index + 1)], pick(RAID_NAMES, index + n), 110);
@@ -347,7 +363,29 @@ async function playTheDay() {
 await playTheDay();
 seeding = false;
 
-/** Every minute, two or three guild-mates come back from a raid. */
+/** One of the four, or Pebblefoot, says where they are in the game, as their game would. */
+async function arrive(member: { readonly name: string }, place: string) {
+  await app.request("/v1/game/presence", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${sessionFor(member)}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ place }),
+  });
+}
+
+// Two left a while ago, and their characters doze in town; two are in the game, and keep saying so.
+const [birchwood, mossling, fernhollow, quillon] = mates;
+if (birchwood && mossling && fernhollow && quillon) {
+  clock.now = Date.now() - 3 * HOUR;
+  await arrive(fernhollow, "town");
+  clock.now = Date.now() - 40 * MINUTE;
+  await arrive(quillon, "works");
+  playingAt = undefined;
+  const here = () => Promise.all([arrive(birchwood, "town"), arrive(mossling, "table"), arrive(pebblefoot, "town")]);
+  await here();
+  setInterval(() => void here(), 30_000);
+}
+
+/** Every minute, two or three of the four come back from a raid. */
 function keepBusy() {
   let n = 0;
   setInterval(() => {
@@ -396,7 +434,7 @@ Bun.serve({
   fetch: (request) => signing(request) ?? app.handle(request),
 });
 
-const state = notAMember ? " (Tester is not a member)" : down ? " (the backend is down)" : "";
+const state = guest ? " (Tester is a guest)" : down ? " (the backend is down)" : "";
 console.log(`Leaf is playing at ${origin}/play/town/${state}`);
 console.log(
   `Sign in: ${origin}/sign-in?return_to=${encodeURIComponent(`${origin}/play/town/`)}, or send the cookie seq_session=tester`,

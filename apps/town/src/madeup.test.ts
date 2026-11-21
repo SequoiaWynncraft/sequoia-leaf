@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { allReached } from "./camp.ts";
+import { CALLERS, FOLK, folk, isFolk } from "./folk.ts";
 import { trophies } from "./games.ts";
-import type { Activity, Happening } from "./guild.ts";
-import { makeGuild } from "./madeup.ts";
+import type { Happening, Person } from "./guild.ts";
+import { makeGuild, STANDINS } from "./madeup.ts";
 import { isLetter } from "./mail.ts";
 import { isThing, thingOf, THINGS } from "./things.ts";
 
-/** Things that only ever come as presents from guild-mates. */
+/** Things that only ever come as presents from the town's own. */
 const GIVEN = ["pinecone", "painted-pebble", "acorn-jar", "tiny-cairn", "crab-drawing", "gnome-traveller"];
 
 /** A stream of numbers that is the same every run. */
@@ -63,40 +63,63 @@ describe("the made-up guild while the member is away", () => {
 });
 
 describe("the made-up guild's evening", () => {
-  test("a party sets out, comes back, and nobody is in two places", () => {
+  const names = new Set(STANDINS.map((m) => m.name));
+  const real = (p: Person): boolean => p.you || names.has(p.name);
+
+  test("raids, wars, levels and milestones are only ever its stand-in members' (and the member's)", () => {
     const g = makeGuild({ random: steady(3) });
     const heard: Happening[] = [];
     g.hear((h) => heard.push(h));
-    g.stir("raidBack");
-    expect(heard).toEqual([]);
-    g.stir("raidOut");
-    g.stir("raidOut");
-    expect(heard.length).toBe(1);
-    const out = heard[0];
-    if (out?.kind !== "raidOut") throw new Error("no party set out");
-    expect(new Set(out.who).size).toBe(4);
-    const names = new Set(g.roster().map((m) => m.name));
-    expect(out.who.every((n) => names.has(n))).toBe(true);
-    // Nobody levels while they are away.
-    for (let i = 0; i < 40; i++) g.stir("level");
-    for (const h of heard) if (h.kind === "level") expect(out.who).not.toContain(h.who);
-    g.stir("raidBack");
-    const back = heard[heard.length - 1];
-    if (back?.kind !== "raidBack") throw new Error("no party came back");
-    expect(back.who).toEqual(out.who);
-    expect(back.raid).toBe(out.raid);
+    for (let i = 0; i < 12; i++) for (const kind of ["raid", "war", "level", "milestone"] as const) g.stir(kind);
+    expect(new Set(heard.map((h) => h.kind))).toEqual(new Set(["party", "war", "reached", "milestone", "quest"]));
+    for (const h of heard) {
+      if (h.kind === "party" || h.kind === "war") {
+        expect(h.who.length).toBeGreaterThan(0);
+        expect(h.who.every(real)).toBe(true);
+        expect(new Set(h.who.map((p) => p.id)).size).toBe(h.who.length);
+      }
+      if (h.kind === "reached" || h.kind === "milestone") expect(real(h.who) && !h.who.you).toBe(true);
+    }
   });
 
-  test("a level is one more than it was, and the roster says so", () => {
+  test("a level is one more than the last, for each stand-in", () => {
     const g = makeGuild({ random: steady(5) });
-    const before = new Map(g.roster().map((m) => [m.name, m.level]));
+    const last = new Map(STANDINS.map((m) => [m.name, m.level]));
     const heard: Happening[] = [];
     g.hear((h) => heard.push(h));
-    g.stir("level");
-    const h = heard[0];
-    if (h?.kind !== "level") throw new Error("nobody levelled");
-    expect(h.level).toBe((before.get(h.who) ?? 0) + 1);
-    expect(g.roster().find((m) => m.name === h.who)?.level).toBe(h.level);
+    for (let i = 0; i < 20; i++) g.stir("level");
+    for (const h of heard) {
+      if (h.kind !== "reached") continue;
+      expect(h.level).toBe((last.get(h.who.name) ?? 0) + 1);
+      last.set(h.who.name, h.level);
+    }
+  });
+
+  test("two stand-ins are in the game and two have gone a while, most recent first, never both", () => {
+    const g = makeGuild({ now: () => THEN });
+    const here = g.visitors().map((v) => v.name);
+    const resting = g.resting();
+    expect(here.length).toBe(2);
+    expect(resting.length).toBe(2);
+    expect(resting.map((r) => r.name).some((n) => here.includes(n))).toBe(false);
+    expect(resting[0]?.seen ?? 0).toBeGreaterThan(resting[1]?.seen ?? 0);
+    for (const r of resting) expect(THEN - r.seen).toBeGreaterThan(90_000);
+    for (const v of [...g.visitors(), ...resting]) expect(v.skin).toBe("");
+  });
+
+  test("beside the real guild it has nobody: no stand-ins, no news; only the town's own calling", () => {
+    const g = makeGuild({ random: steady(9), quiet: true });
+    const heard: Happening[] = [];
+    g.hear((h) => heard.push(h));
+    for (let i = 0; i < 400 * 30; i++) g.step(1 / 30);
+    for (const kind of ["raid", "war", "level", "milestone"] as const) g.stir(kind);
+    expect(g.visitors()).toEqual([]);
+    expect(g.resting()).toEqual([]);
+    expect(heard.length).toBeGreaterThan(0);
+    for (const h of heard) {
+      expect(h.kind).toBe("call");
+      if (h.kind === "call") expect(isFolk(h.who)).toBe(true);
+    }
   });
 
   test("something happens within the first few seconds, and keeps happening", () => {
@@ -106,7 +129,7 @@ describe("the made-up guild's evening", () => {
     for (let i = 0; i < 8 * 30; i++) g.step(1 / 30);
     expect(kinds.length).toBeGreaterThan(0);
     for (let i = 0; i < 100 * 30; i++) g.step(1 / 30);
-    expect(new Set(kinds)).toEqual(new Set(["level", "raidOut", "raidBack", "land", "quest", "call"]));
+    expect(new Set(kinds)).toEqual(new Set(["reached", "party", "war", "milestone", "quest", "call"]));
   });
 
   test("a quest is finished once, and says so once", () => {
@@ -141,36 +164,13 @@ describe("the made-up guild's evening", () => {
     expect(odd.quests().map((q) => q.have)).toEqual([3, 31, 60]);
   });
 
-  test("everybody is always off to do something the town has a place for", () => {
-    const g = makeGuild({ random: steady(21) });
-    const known: readonly Activity[] = [
-      "fire",
-      "bench",
-      "play",
-      "treasury",
-      "quests",
-      "market",
-      "stall",
-      "works",
-      "table",
-      "pond",
-      "tree",
-      "pole",
-      "garden",
-    ];
-    const seen = new Set<Activity>();
-    for (let i = 0; i < 600; i++) seen.add(g.doing("Mossback"));
-    for (const a of seen) expect(known).toContain(a);
-    expect(seen.size).toBe(known.length);
-  });
-
-  test("everything for sale is a camp thing with a price, sold by somebody in town", () => {
+  test("everything for sale is a camp thing with a price, each stall kept by its own keeper", () => {
     const g = makeGuild();
     for (const w of g.wares()) expect(w.price).toBeGreaterThan(0);
-    const names = g.roster().map((m) => m.name);
     const sold = new Set<string>();
-    for (const stall of g.stalls()) {
-      expect(names).toContain(stall.by);
+    g.stalls().forEach((stall, i) => {
+      const keeper = FOLK.find((t) => t.name === stall.by);
+      expect(keeper?.job).toMatchObject({ stall: i });
       expect(stall.stock.length).toBeGreaterThan(5);
       for (const s of stall.stock) {
         expect(isThing(s.thing)).toBe(true);
@@ -178,7 +178,7 @@ describe("the made-up guild's evening", () => {
         expect(sold.has(s.thing)).toBe(false);
         sold.add(s.thing);
       }
-    }
+    });
     for (const s of g.pieces()) {
       expect(isThing(s.thing)).toBe(true);
       expect(s.price).toBeGreaterThan(0);
@@ -200,34 +200,11 @@ describe("the made-up guild's evening", () => {
   });
 });
 
-describe("the made-up guild's camps and letters", () => {
-  test("every guild-mate has a camp, the same every visit", () => {
+describe("the made-up guild's letters and callers", () => {
+  test("nobody's camp may be visited yet", () => {
     const g = makeGuild({ random: steady(2) });
-    for (const m of g.roster()) {
-      const camp = g.camp(m.name);
-      expect(camp).not.toBeNull();
-      expect(camp?.placed).toEqual(makeGuild({ random: steady(40) }).camp(m.name)?.placed);
-      expect(camp?.pets.length).toBeGreaterThan(0);
-      expect(camp?.note.length).toBeGreaterThan(0);
-      expect(camp && allReached(camp.placed)).toBe(true);
-    }
-    expect(g.camp("Nobody")).toBeNull();
-  });
-
-  test("no two guild-mates keep the same camp", () => {
-    const g = makeGuild();
-    const seen = new Set(g.roster().map((m) => JSON.stringify(g.camp(m.name)?.placed)));
-    expect(seen.size).toBe(g.roster().length);
-  });
-
-  test("somebody away on a raid is not at home", () => {
-    const g = makeGuild({ random: steady(3) });
-    const heard: Happening[] = [];
-    g.hear((h) => heard.push(h));
-    g.stir("raidOut");
-    const out = heard[0];
-    if (out?.kind !== "raidOut") throw new Error("no party set out");
-    for (const m of g.roster()) expect(g.camp(m.name)?.home).toBe(!out.who.includes(m.name));
+    for (const name of [...STANDINS.map((m) => m.name), ...FOLK.map((t) => t.name), "Nobody"])
+      expect(g.camp(name)).toBeNull();
   });
 
   test("a first visit finds a letter with a present, and no time away finds none", () => {
@@ -239,22 +216,30 @@ describe("the made-up guild's camps and letters", () => {
     expect(g.mail(THEN, THEN - HOUR)).toEqual([]);
   });
 
-  test("the same time away always leaves the same letters, each a real letter", () => {
+  test("the same time away always leaves the same letters, each a real letter from one of the town's own", () => {
     const g = makeGuild();
     const mail = g.mail(THEN, THEN + 9 * HOUR);
     expect(mail.length).toBe(2);
     expect(mail).toEqual(makeGuild({ random: steady(5) }).mail(THEN, THEN + 9 * HOUR));
-    for (const l of mail) expect(isLetter(l)).toBe(true);
+    for (const l of mail) {
+      expect(isLetter(l)).toBe(true);
+      expect(isFolk(l.from)).toBe(true);
+    }
     expect(new Set(mail.map((l) => l.id)).size).toBe(mail.length);
   });
 
-  test("the letter and the arrival letter's line are about the same guild-mate", () => {
-    const g = makeGuild();
-    const line = g.away(THEN, THEN + 2 * HOUR).lines.find((l) => l.art === "mates");
-    expect(g.mail(THEN, THEN + 2 * HOUR)[0]?.from).toBe(line?.who?.[0] ?? "");
+  test("the letter and the arrival letter's line are about the same one of the town's own", () => {
+    for (let k = 0; k < 20; k++) {
+      const g = makeGuild();
+      const from = THEN + k * 7919_000;
+      const line = g.away(from, from + 2 * HOUR).lines.find((l) => l.art === "folk");
+      expect(line?.who?.length).toBe(1);
+      expect(isFolk(line?.who?.[0] ?? "")).toBe(true);
+      expect(g.mail(from, from + 2 * HOUR)[0]?.from).toBe(line?.who?.[0] ?? "");
+    }
   });
 
-  test("a guild-mate who looks in is somebody in town, and their letter has a name of its own", () => {
+  test("whoever looks in at the camp is one of the town's callers, and each visit's letter has a name of its own", () => {
     let memory = "";
     const g = makeGuild({ random: steady(8), keep: (t) => (memory = t) });
     const heard: Happening[] = [];
@@ -262,9 +247,9 @@ describe("the made-up guild's camps and letters", () => {
     for (let i = 0; i < 12; i++) g.stir("call");
     const calls = heard.flatMap((h) => (h.kind === "call" ? [h] : []));
     expect(calls.length).toBe(12);
-    const names = g.roster().map((m) => m.name);
+    const callers = CALLERS.map((id) => folk(id).name);
     for (const c of calls) {
-      expect(names).toContain(c.who);
+      expect(callers).toContain(c.who);
       expect(c.gift === "" || isThing(c.gift)).toBe(true);
     }
     expect(new Set(calls.map((c) => c.id)).size).toBe(12);

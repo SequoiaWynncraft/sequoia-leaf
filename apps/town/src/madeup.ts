@@ -1,27 +1,31 @@
 /**
- * The made-up guild: the only answer there is today to the questions in `guild.ts`. Nobody here is
- * a real member and nothing here talks to a server. It keeps a little memory of its own (how far
- * along the quests are, how many raids and lands there have been), as a server would, and hands it
- * to whoever made it to be kept.
+ * The made-up guild: the answer to the questions in `guild.ts` when there is no server (the lab
+ * site, the tours, the tests). Nothing here talks to a server, and nobody here is a real member. It
+ * keeps a little memory of its own (how far along the quests are, how many raids and lands there
+ * have been), as a server would, and hands it to whoever made it to be kept.
+ *
+ * So that visitors and members dozing in town can be seen without a server, it has four stand-in
+ * members with made-up looks: two in the game, two gone a while. Beside the real guild (`quiet`)
+ * they never exist, and all it does is send the town's own to call at the member's camp.
  */
 
 import type { Look } from "@sequoia-leaf/kit/skin.ts";
 
-import { layout, type Placed } from "./camp.ts";
+import { CALLERS, capital, folk, GIFTS, NOTES, WHILE_AWAY } from "./folk.ts";
 import type {
-  Activity,
   Away,
   AwayLine,
   Guild,
   Happening,
   MateCamp,
   Me,
-  Member,
   Moment,
-  Pet,
+  Person,
   Quest,
+  Rester,
   Stall,
   Stock,
+  Visitor,
   Ware,
 } from "./guild.ts";
 import { type Letter, letter } from "./mail.ts";
@@ -42,201 +46,26 @@ const YOU: Look = {
   trim: "#f5b95e",
 };
 
-const CINFY: Member = {
-  name: "Cinfy",
-  rank: "Keeper of the Treasury",
-  level: 99,
-  voice: 520,
-  look: {
-    skin: "#f6dcc2",
-    hair: "#f1e2a6",
-    light: "#fff8d8",
-    eye: "#5a296e",
-    top: "#5a296e",
-    legs: "#3d2050",
-    shoes: "#2a1733",
-    style: "long",
-    sleeves: "long",
-    detail: "buttons",
-    trim: "#f5b95e",
-    glasses: true,
-  },
-};
+/** A stand-in member: made up, for looking at the town without a server. */
+interface Standin {
+  name: string;
+  rank: string;
+  level: number;
+  at: Visitor["at"];
+  /** Gone this many minutes ago, dozing in town; or in the game now. */
+  gone: number | null;
+}
 
-const MATES: readonly Member[] = [
-  {
-    name: "Mossback",
-    rank: "Warden",
-    level: 91,
-    voice: 300,
-    look: {
-      skin: "#d9a57c",
-      hair: "#3b7340",
-      light: "#62a658",
-      eye: "#3b1f19",
-      top: "#6f3826",
-      legs: "#2f5c34",
-      shoes: "#3b1f19",
-      style: "hood",
-      sleeves: "long",
-      detail: "belt",
-      trim: "#d49045",
-    },
-  },
-  {
-    name: "Pipwick",
-    rank: "Sapling",
-    level: 34,
-    voice: 760,
-    look: {
-      skin: "#f0c8a0",
-      hair: "#e0823a",
-      light: "#f5b95e",
-      eye: "#2f5884",
-      top: "#2f8a8a",
-      legs: "#593d29",
-      shoes: "#3b1f19",
-      style: "short",
-      sleeves: "short",
-      detail: "scarf",
-      trim: "#f5b95e",
-    },
-  },
-  {
-    name: "Quillfeather",
-    rank: "Elder",
-    level: 104,
-    voice: 380,
-    look: {
-      skin: "#8a5a3c",
-      hair: "#e8e4f0",
-      light: "#ffffff",
-      eye: "#f5b95e",
-      top: "#5a296e",
-      legs: "#3d2050",
-      shoes: "#2a1733",
-      style: "long",
-      sleeves: "long",
-      detail: "belt",
-      trim: "#f5b95e",
-    },
-  },
-  {
-    name: "Tindra",
-    rank: "Ranger",
-    level: 67,
-    voice: 680,
-    look: {
-      skin: "#f2cfae",
-      hair: "#e88fb4",
-      light: "#ffc2d8",
-      eye: "#3b7340",
-      top: "#f3e6c8",
-      legs: "#b84d84",
-      shoes: "#542a1f",
-      style: "long",
-      sleeves: "short",
-      detail: "apron",
-      trim: "#b84d84",
-    },
-  },
-  {
-    name: "Bramblewick",
-    rank: "Ranger",
-    level: 58,
-    voice: 340,
-    look: {
-      skin: "#d9a57c",
-      hair: "#6f3826",
-      light: "#8a4a30",
-      eye: "#3b1f19",
-      top: "#4b8c4a",
-      legs: "#79553a",
-      shoes: "#3b1f19",
-      style: "cap",
-      sleeves: "short",
-      trim: "#e8c860",
-    },
-  },
-  {
-    name: "Embertoe",
-    rank: "Warden",
-    level: 88,
-    voice: 420,
-    look: {
-      skin: "#f5d2b4",
-      hair: "#c2382e",
-      light: "#e67967",
-      eye: "#3b1f19",
-      top: "#4a4a52",
-      legs: "#2e2e36",
-      shoes: "#1a0f1e",
-      style: "short",
-      sleeves: "long",
-      detail: "apron",
-      trim: "#8a4a30",
-    },
-  },
-  {
-    name: "Sootpaw",
-    rank: "Sapling",
-    level: 41,
-    voice: 880,
-    look: {
-      skin: "#f2dcc8",
-      hair: "#2b2530",
-      light: "#e88fb4",
-      eye: "#62a658",
-      top: "#3a3340",
-      legs: "#2b2530",
-      shoes: "#2b2530",
-      style: "ears",
-      sleeves: "long",
-      hands: "#f3ede0",
-      detail: "scarf",
-      trim: "#e67967",
-    },
-  },
-  {
-    name: "Wrenly",
-    rank: "Ranger",
-    level: 72,
-    voice: 600,
-    look: {
-      skin: "#f0c8a0",
-      hair: "#3f6fb0",
-      light: "#7aa8e0",
-      eye: "#3b1f19",
-      top: "#efe2c0",
-      legs: "#243a66",
-      shoes: "#3b1f19",
-      style: "short",
-      sleeves: "long",
-      detail: "buttons",
-      trim: "#d49045",
-      glasses: true,
-    },
-  },
-  {
-    name: "Fernwhistle",
-    rank: "Seedling",
-    level: 12,
-    voice: 720,
-    look: {
-      skin: "#7a4a30",
-      hair: "#4b8c4a",
-      light: "#8fd07a",
-      eye: "#f5b95e",
-      top: "#f0c040",
-      legs: "#6f3826",
-      shoes: "#2a1733",
-      style: "long",
-      sleeves: "long",
-      detail: "buttons",
-      trim: "#fff3cf",
-    },
-  },
+/** The four stand-ins: two in the game, two gone a while and dozing. They never exist on a live server. */
+export const STANDINS: readonly Standin[] = [
+  { name: "Quillfeather", rank: "Elder", level: 104, at: "town", gone: null },
+  { name: "Fernwhistle", rank: "Seedling", level: 12, at: "table", gone: null },
+  { name: "Wrenly", rank: "Ranger", level: 72, at: "town", gone: 180 },
+  { name: "Kestrelle", rank: "Warden", level: 88, at: "works", gone: 40 },
 ];
+
+const standinId = (name: string): string => `standin-${name.toLowerCase()}`;
+const person = (s: Standin): Person => ({ id: standinId(s.name), name: s.name, you: false });
 
 const RAIDS = ["the Hollow Vault", "the Sunken Orchard", "the Clockwork Canopy", "the Amber Deep"] as const;
 const LANDS = [
@@ -252,7 +81,7 @@ const pinned = { claim: true, ends: null } as const;
 const BOARD: readonly Quest[] = [
   {
     id: "raids",
-    title: "Three raids with guild-mates",
+    title: "Three raids with the guild",
     have: 3,
     need: 3,
     unit: "raids",
@@ -334,6 +163,7 @@ const WARES: readonly Ware[] = [
 const stock = (...list: readonly (readonly [string, number])[]): Stock[] =>
   list.map(([thing, price]) => ({ thing, price }));
 
+/** The market's stalls, each kept by one of the town's own (`folk.ts`). */
 const STALLS: readonly Stall[] = [
   {
     id: "lamps",
@@ -424,165 +254,13 @@ const PIECES: readonly Stock[] = stock(
   ["fountain", 3000],
 );
 
-/** What a member may leave at somebody's camp, and what a guild-mate may leave at theirs. */
+/** What a member may leave at somebody's camp. */
 const PRESENTS = ["pinecone", "painted-pebble", "acorn-jar"] as const;
-const GIFTS = [
-  "pinecone",
-  "painted-pebble",
-  "acorn-jar",
-  "tiny-cairn",
-  "crab-drawing",
-  "gnome-traveller",
-  "flower-pot",
-  "candle-stump",
-  "pumpkin",
-] as const;
-
-/** How each guild-mate keeps their own camp: what they like about them, who lives there, and what they say. */
-interface Home {
-  taste: readonly string[];
-  count: number;
-  pets: readonly Pet[];
-  note: string;
-  hello: readonly string[];
-}
-
-const HOMES: Readonly<Record<string, Home>> = {
-  Mossback: {
-    taste: ["toadstool", "toadstool", "glowcap", "potted-fern", "potted-fern", "fairy-ring", "rug-moss", "rock"],
-    count: 16,
-    pets: [{ kind: "glorp", name: "Lichen" }],
-    note: "Out being a bush for a bit. Back when the moss says.",
-    hello: ["mind the mushrooms. they mind you.", "moss is a way of life."],
-  },
-  Pipwick: {
-    taste: ["gnome", "gnome", "gnome-fishing", "gnome-napping", "gnome-traveller", "pumpkin", "pennant", "barrel"],
-    count: 15,
-    pets: [{ kind: "cat", name: "Button" }],
-    note: "Gone to count the crabs. Again.",
-    hello: ["you came! mind the gnome.", "is it true you have a WELL?"],
-  },
-  Quillfeather: {
-    taste: [
-      "telescope",
-      "guild-banner",
-      "sun-banner",
-      "lantern-post",
-      "lantern-post",
-      "bench",
-      "rug-woven",
-      "wind-chime",
-    ],
-    count: 14,
-    pets: [{ kind: "fox", name: "Vesper" }],
-    note: "At the Hollow Vault. There is tea in the pot.",
-    hello: ["sit. the fire likes company.", "the stars are out, between the trees."],
-  },
-  Tindra: {
-    taste: [
-      "flower-pot",
-      "flower-bed",
-      "flower-bed",
-      "sunflower",
-      "sunflower",
-      "picket",
-      "arch",
-      "bird-bath",
-      "cushion",
-    ],
-    count: 18,
-    pets: [
-      { kind: "glorp", name: "Petal" },
-      { kind: "cat", name: "Crumb" },
-    ],
-    note: "Minding the stall. Smell the flowers for me.",
-    hello: ["I did the corners twice.", "mind the flower beds!"],
-  },
-  Bramblewick: {
-    taste: ["picnic", "barrel", "barrel", "cook-pot", "woodpile", "bench", "stump", "berry-bush", "pumpkin", "bunting"],
-    count: 15,
-    pets: [{ kind: "cat", name: "Loaf" }],
-    note: "Baking. Follow your nose to town.",
-    hello: ["there's stew. it has always been stew.", "sit, sit. eat something."],
-  },
-  Embertoe: {
-    taste: ["brazier", "brazier", "stone-wall", "stone-wall", "woodpile", "lantern-post", "weathervane", "crab-statue"],
-    count: 14,
-    pets: [{ kind: "fox", name: "Cinder" }],
-    note: "At the Works. The key is under the rock. Not that rock.",
-    hello: ["I can fix that.", "mind the brazier. it bites."],
-  },
-  Sootpaw: {
-    taste: [
-      "candle-stump",
-      "candle-stump",
-      "paper-lantern",
-      "moth-lantern",
-      "cushion",
-      "cushion",
-      "rug-woven",
-      "hammock",
-    ],
-    count: 15,
-    pets: [
-      { kind: "cat", name: "Ink" },
-      { kind: "cat", name: "Blot" },
-      { kind: "cat", name: "Smudge" },
-    ],
-    note: "napping somewhere. meow.",
-    hello: ["meow.", "you may pet one (1) cat."],
-  },
-  Wrenly: {
-    taste: ["birdhouse", "birdhouse", "bird-bath", "telescope", "stepping-stones", "plank-path", "bench", "windsock"],
-    count: 15,
-    pets: [{ kind: "glorp", name: "Dot" }],
-    note: "Bird-watching. Shh.",
-    hello: ["shh. there's a wren.", "I'm writing it all down."],
-  },
-  Fernwhistle: {
-    taste: ["potted-fern", "potted-fern", "sapling", "stump", "flower-pot", "pennant", "rock"],
-    count: 8,
-    pets: [{ kind: "glorp", name: "Sprout" }],
-    note: "At the quest board, working out which one is mine.",
-    hello: ["it's not much yet!", "do you like my fern? it's my first."],
-  },
-};
-
-/** What a guild-mate goes off to do, and how likely each is. */
-const ERRANDS: readonly (readonly [Activity, number])[] = [
-  ["fire", 5],
-  ["bench", 1],
-  ["play", 2],
-  ["table", 3],
-  ["treasury", 2],
-  ["quests", 2],
-  ["market", 3],
-  ["stall", 2],
-  ["works", 2],
-  ["pond", 3],
-  ["tree", 1],
-  ["pole", 1],
-  ["garden", 2],
-];
 
 const LOST_CRAB = 7;
-const ORDER: readonly Moment[] = ["level", "raidOut", "raidBack", "land"];
-/** What a guild-mate writes when they find nobody in. */
-const NOTES = [
-  "Came by. You were out. I fed the fire.",
-  "Your camp is nicer than mine. I'm not upset.",
-  "I counted your logs. Two. Good logs.",
-  "Left this where the gnome couldn't get it.",
-  "Knocked. The cabin said nothing. Rude.",
-  "Something small looked at me from your barrel.",
-] as const;
-/** The letter that goes with each line of `VISITS`, and the present in it, if any. */
-const VISIT_MAIL: readonly (readonly [string, string])[] = [
-  ["Left you a mushroom. It was looking at me, so now it can look at you.", "toadstool"],
-  ["I waved down your path. You weren't in. I waved anyway.", ""],
-  ["Where were you? The fire asked too.", ""],
-  ["Saved you a seat by the fire in town. Here's one for yours.", "cushion"],
-];
+/** The made-up guild's moments, in turn, every twenty seconds or so. */
+const ORDER: readonly Moment[] = ["level", "raid", "war", "milestone"];
+
 /** Leaf each for a raid, and the most raids the made-up guild will credit for one absence. */
 const RAID_LEAF = 80;
 const RAIDS_AWAY = 4;
@@ -622,13 +300,6 @@ function recall(text: string | null | undefined): Memory {
   return m;
 }
 
-/** A number that is always the same for the same name. */
-function nameSeed(name: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619);
-  return h >>> 0;
-}
-
 /** A number in [0, 1) that is always the same for the same two numbers. */
 function mix(a: number, b: number): number {
   let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263);
@@ -638,12 +309,7 @@ function mix(a: number, b: number): number {
 }
 
 const COUNT = ["No", "One", "Two", "Three", "Four"] as const;
-const VISITS = [
-  "left a mushroom by your gate.",
-  "waved down your path.",
-  "asked where you were.",
-  "saved you a seat by the fire.",
-] as const;
+const MILESTONES = ["Ten raids", "A week of wars", "First lantern", "Fifty raids"] as const;
 
 export interface Opts {
   /** The memory a guild made earlier handed over, if any. */
@@ -651,9 +317,11 @@ export interface Opts {
   /** Called with the memory whenever it changes, to be kept. */
   keep?: (text: string) => void;
   random?: () => number;
+  /** The time now, in milliseconds since 1970. */
+  now?: () => number;
   /**
-   * Beside the real guild: only the townsfolk go on as before (about the town, at their camps,
-   * calling at the member's); the made-up guild's own news and quests stand still.
+   * Beside the real guild: it has no stand-ins, no news, no quests and no Leaf; all it still does is
+   * send the town's own to call at the member's camp.
    */
   quiet?: boolean;
 }
@@ -663,17 +331,18 @@ export type MadeUp = Guild & { stir: (kind: Moment) => void };
 
 export function makeGuild(o: Opts = {}): MadeUp {
   const random = o.random ?? Math.random;
+  const now = o.now ?? Date.now;
   const mem = recall(o.memory);
   const ears = new Set<(h: Happening) => void>();
-  // Its own copy of everybody, because people level.
-  const roster: Member[] = structuredClone([...MATES]);
-  let party: string[] = [];
-  let raid = "";
+  const standins = o.quiet ? [] : STANDINS;
+  // The stand-ins' levels, because people level.
+  const levels = new Map(standins.map((s) => [s.name, s.level]));
   let turn = 0;
   let nextIn = 7;
   let plankIn = 5.5;
   let callIn = 34;
-  const camps = new Map<string, readonly Placed[]>();
+  /** When the stand-ins who have gone were last seen: kept from the first time asked, so that they stay put. */
+  const since = now();
 
   const kept = (): void => {
     o.keep?.(JSON.stringify({ v: 1, ...mem }));
@@ -683,6 +352,16 @@ export function makeGuild(o: Opts = {}): MadeUp {
   };
   const pick = <T>(list: readonly T[]): T | undefined =>
     list[Math.min(list.length - 1, Math.floor(random() * list.length))];
+  /** Some of the stand-ins, in a random order. */
+  function some(n: number): Person[] {
+    const pool = [...standins];
+    const out: Person[] = [];
+    while (out.length < n && pool.length > 0) {
+      const at = Math.min(pool.length - 1, Math.floor(random() * pool.length));
+      out.push(...pool.splice(at, 1).map(person));
+    }
+    return out;
+  }
 
   /** Moves a quest along; says so once, the moment it is done. */
   function progress(id: string, by: number, text: string): void {
@@ -696,48 +375,56 @@ export function makeGuild(o: Opts = {}): MadeUp {
   }
 
   function stir(kind: Moment): void {
-    if (kind === "raidOut") {
-      if (party.length > 0) return;
-      const pool = roster.map((m) => m.name);
-      const out: string[] = [];
-      while (out.length < 4 && pool.length > 0) {
-        const at = Math.min(pool.length - 1, Math.floor(random() * pool.length));
-        out.push(...pool.splice(at, 1));
-      }
-      if (out.length < 4) return;
-      party = out;
-      raid = RAIDS[mem.raids % RAIDS.length] ?? "a raid";
-      tell({ kind: "raidOut", who: party, raid });
-    } else if (kind === "raidBack") {
-      if (party.length === 0) return;
-      const who = party;
-      party = [];
-      mem.raids++;
-      kept();
-      tell({ kind: "raidBack", who, raid, leaf: RAID_LEAF });
-    } else if (kind === "land") {
-      const name = LANDS[mem.lands % LANDS.length] ?? "new ground";
-      mem.lands++;
-      kept();
-      tell({ kind: "land", name });
-      progress("hold", 11, "You held a territory for an hour. See the board.");
-    } else if (kind === "call") {
-      const m = pick(roster.filter((r) => !party.includes(r.name)));
-      if (!m) return;
+    if (kind === "call") {
+      const who = pick(CALLERS);
+      if (!who) return;
       mem.calls++;
       kept();
       // Now and then a note, now and then a present with it, and often just the visit.
       const r = random();
       const gift = r < 0.4 ? (pick(GIFTS) ?? "") : "";
-      const note = r < 0.7 ? (pick(NOTES) ?? "") : "";
-      tell({ kind: "call", id: `c-${mem.calls}`, who: m.name, note, gift });
+      const note = r < 0.7 ? (pick(NOTES[who]) ?? "") : "";
+      tell({ kind: "call", id: `c-${mem.calls}`, who: folk(who).name, note, gift });
+      return;
+    }
+    if (standins.length === 0) return;
+    if (kind === "raid") {
+      // Two or three of them, and now and then the member with them.
+      const who = some(2 + Math.floor(random() * 2));
+      if (random() < 0.3) who.unshift({ id: "you", name: "You", you: true });
+      mem.raids++;
+      kept();
+      tell({ kind: "party", who, raid: RAIDS[mem.raids % RAIDS.length] ?? "a raid" });
+    } else if (kind === "war") {
+      const land = LANDS[mem.lands % LANDS.length] ?? "new ground";
+      mem.lands++;
+      kept();
+      tell({ kind: "war", who: some(2), land, held: random() < 0.5 });
+      progress("hold", 11, "You held a territory for an hour. See the board.");
+    } else if (kind === "level") {
+      const [who] = some(1);
+      if (!who) return;
+      const level = (levels.get(who.name) ?? 1) + 1;
+      levels.set(who.name, level);
+      tell({ kind: "reached", who, level });
     } else {
-      const m = pick(roster.filter((r) => !party.includes(r.name)));
-      if (!m) return;
-      m.level++;
-      tell({ kind: "level", who: m.name, level: m.level });
+      const [who] = some(1);
+      if (who) tell({ kind: "milestone", who, label: pick(MILESTONES) ?? "Ten raids" });
     }
   }
+
+  const visitors = (): Visitor[] =>
+    standins.flatMap((s) =>
+      s.gone === null ? [{ id: standinId(s.name), name: s.name, rank: s.rank, at: s.at, skin: "" }] : [],
+    );
+  const resting = (): Rester[] =>
+    standins
+      .flatMap((s) =>
+        s.gone === null
+          ? []
+          : [{ id: standinId(s.name), name: s.name, rank: s.rank, at: s.at, skin: "", seen: since - s.gone * 60_000 }],
+      )
+      .toSorted((a, b) => b.seen - a.seen);
 
   return {
     me(): Me {
@@ -754,66 +441,52 @@ export function makeGuild(o: Opts = {}): MadeUp {
         week: ["7 raids", "2 wars", "3 lanterns hung"],
       };
     },
-    keeper: () => CINFY,
-    roster: () => roster,
     quests: () => BOARD.map((q) => Object.assign({}, q, { have: mem.progress[q.id] ?? q.have })),
+    boardNote: () => null,
     wares: () => WARES,
     pieces: () => PIECES,
     stalls: () => STALLS,
     presents: () => PRESENTS,
-    camp(name): MateCamp | null {
-      const home = HOMES[name];
-      if (!home || !roster.some((m) => m.name === name)) return null;
-      let placed = camps.get(name);
-      if (!placed) {
-        placed = layout(nameSeed(name), home.taste, home.count);
-        camps.set(name, placed);
-      }
-      return { owner: name, placed, pets: home.pets, home: !party.includes(name), note: home.note, hello: home.hello };
-    },
+    // Nobody's camp may be visited yet.
+    camp: (): MateCamp | null => null,
     mail(from, to): Letter[] {
-      if (from <= 0)
+      if (from <= 0) {
+        const first = folk("tindra");
         return [
-          letter("m-first", "Tindra", "A mushroom for your gate. It's the good kind. Welcome home!", "toadstool"),
+          letter("m-first", first.name, "A mushroom for your gate. It's the good kind. Welcome home!", "toadstool"),
         ];
+      }
       const hours = Math.max(0, (to - from) / 3_600_000);
       const seed = Math.floor(from / 1000);
       const out: Letter[] = [];
       if (hours >= 1) {
-        const who = roster[Math.floor(mix(seed, 1) * roster.length)]?.name ?? "Mossback";
-        const [text, gift] = VISIT_MAIL[Math.floor(mix(seed, 2) * VISIT_MAIL.length)] ?? ["", ""];
-        out.push(letter(`m-${seed}-a`, who, text, gift));
+        const w = WHILE_AWAY[Math.floor(mix(seed, 1) * WHILE_AWAY.length)] ?? WHILE_AWAY[0];
+        if (w) out.push(letter(`m-${seed}-a`, folk(w.who).name, w.note, w.gift));
       }
       if (hours >= 6) {
-        const who = roster[Math.floor(mix(seed, 4) * roster.length)]?.name ?? "Pipwick";
-        const text = NOTES[Math.floor(mix(seed, 5) * NOTES.length)] ?? NOTES[0];
+        const who = CALLERS[Math.floor(mix(seed, 4) * CALLERS.length)] ?? "pipwick";
+        const notes = NOTES[who];
+        const text = notes[Math.floor(mix(seed, 5) * notes.length)] ?? "This is for you.";
         const gift = GIFTS[Math.floor(mix(seed, 6) * GIFTS.length)] ?? "pinecone";
-        out.push(letter(`m-${seed}-b`, who, text, gift));
+        out.push(letter(`m-${seed}-b`, folk(who).name, text, gift));
       }
       return out;
     },
     lostCrab: () => LOST_CRAB,
-    doing(): Activity {
-      const total = ERRANDS.reduce((n, [, w]) => n + w, 0);
-      let at = random() * total;
-      for (const [what, weight] of ERRANDS) {
-        at -= weight;
-        if (at < 0) return what;
-      }
-      return "fire";
-    },
     away(from, to): Away {
       const crab: AwayLine = { art: "crab", text: `Crab No. ${LOST_CRAB} is still missing.` };
-      if (from <= 0)
+      if (from <= 0) {
+        const first = folk("tindra").name;
         return {
           first: true,
           hours: 0,
           lines: [
             { art: "leaf", text: "Three raids with the guild", pay: { kind: "leaf", amount: 3 * RAID_LEAF } },
-            { art: "mates", text: "Tindra left a mushroom by your gate.", who: ["Tindra"] },
+            { art: "folk", text: `${first} left a mushroom by your gate.`, who: [first] },
             crab,
           ],
         };
+      }
       const hours = Math.max(0, (to - from) / 3_600_000);
       const seed = Math.floor(from / 1000);
       const lines: AwayLine[] = [];
@@ -825,9 +498,11 @@ export function makeGuild(o: Opts = {}): MadeUp {
           pay: { kind: "leaf", amount: raids * RAID_LEAF },
         });
       if (hours >= 1) {
-        const who = roster[Math.floor(mix(seed, 1) * roster.length)]?.name ?? "Mossback";
-        const what = VISITS[Math.floor(mix(seed, 2) * VISITS.length)] ?? VISITS[0];
-        lines.push({ art: "mates", text: `${who} ${what}`, who: [who] });
+        const w = WHILE_AWAY[Math.floor(mix(seed, 1) * WHILE_AWAY.length)] ?? WHILE_AWAY[0];
+        if (w) {
+          const who = capital(folk(w.who).name);
+          lines.push({ art: "folk", text: `${who} ${w.did}`, who: [folk(w.who).name] });
+        }
       }
       if (hours >= 6)
         lines.push({
@@ -859,8 +534,11 @@ export function makeGuild(o: Opts = {}): MadeUp {
       stir(ORDER[turn % ORDER.length] ?? "level");
       turn++;
     },
-    visitors: () => [],
+    visitors,
+    resting,
+    heard: () => true,
     here: () => undefined,
+    stay: () => undefined,
     told: () => null,
     stir,
   };

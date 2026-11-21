@@ -3,6 +3,7 @@
  * pictures the stylesheet can use (`bun run frames`). Each is a tiny SVG of whole-pixel squares, so
  * it stays sharp at any size and needs no script on the page.
  */
+import { ACORN } from "../src/mark.ts";
 import { BARK, CORAL, CREAM, GOLD, GREEN, INK, LEAF, PAPER, SKY, STONE } from "../src/palette.ts";
 
 type Grid = (string | null)[][];
@@ -338,20 +339,7 @@ const ICONS: Readonly<Record<string, readonly string[]>> = {
     "..ooyyyyoo..",
     "....oooo....",
   ],
-  acorn: [
-    ".....bb.....",
-    ".....b......",
-    "..BBBBBBBB..",
-    ".BnBnBnBnBB.",
-    ".BBnBnBnBnB.",
-    "..oyyyyyyo..",
-    "..oyYyyyyo..",
-    "..oyYyyyyo..",
-    "..oyyyyyyo..",
-    "...oyyyyo...",
-    "....oyyo....",
-    ".....oo.....",
-  ],
+  acorn: ACORN,
   close: [
     "ww......ww",
     "www....www",

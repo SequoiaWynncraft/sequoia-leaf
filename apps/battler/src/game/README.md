@@ -182,9 +182,10 @@ A charm is only offered for a kin the party owns one of, and never more than one
 | Roll Call Sheet       | Counts as one more Crab.                                                                                         |
 | Spare Hat             | Counts as one more Gnome.                                                                                        |
 
-**Sparring.** A sparring room is fought against a party "a guild-mate brought to the table". For
-now `sparParty(seed, room, trail)` makes one up: an invented handle, a taste for one kin and one
-calling, a level and a number of acorns to have spent by that room, stars bought with what is left,
+**Sparring.** A sparring room is fought against a party one of the regulars at the table brought
+(`REGULARS` in `content/rooms.ts`: Greg, the Hearth Cat, a Barrow Gnome, Crab #7, the White Fox
+and a Moth, each one of the battler's own figures). For now `sparParty(seed, room, trail)` makes
+one up: a regular, a taste for one kin and one calling, a level and a number of acorns to have spent by that room, stars bought with what is left,
 and items. It gives back a `Party`, which is plain data (`isParty` checks one that has been stored
 or sent) and is exactly what a fight takes, so a member's saved board can stand in later without
 anything else changing.
@@ -221,30 +222,30 @@ all the way on) and Crab #40 (finish a raid). The next trail opens when the last
 
 ## What is where
 
-| File                   | What it holds                                                                                                        |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `content/figures.ts`   | The 28 figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips          |
-| `content/traits.ts`    | Kins and callings: steps, sentences, numbers                                                                         |
-| `content/items.ts`     | Components, finished items, what forges into what, how a figure holds them                                           |
-| `content/boons.ts`     | The boons                                                                                                            |
-| `content/rooms.ts`     | Acorns, levels, stall odds, the fight's clock, the fifteen rooms and their plans, sparring strength, trails, handles |
-| `content/keepsakes.ts` | The payout and the locked figures                                                                                    |
-| `content/advice.ts`    | What kind of fighter each calling makes and where it stands, and three finished items that suit each figure          |
-| `hex.ts`               | The board: cells and seats, distance, neighbours, lines, cones, rings, finding a way round                           |
-| `rng.ts`               | The seeded random stream                                                                                             |
-| `party.ts`             | A party as plain data, and trait counting                                                                            |
-| `fight/types.ts`       | What a figure in a fight looks like, and the events a step gives back                                                |
-| `fight/core.ts`        | The verbs: hurt, heal, shield, stun, slow, burn, taunt, hide, leap, knock back, summon                               |
-| `fight/abilities.ts`   | Each ability, written with those verbs                                                                               |
-| `fight/engine.ts`      | Seating, traits and items switching on, the clock, the end                                                           |
-| `formation.ts`         | A plain way of seating a party, used by the bot and the sparring partners                                            |
-| `spar.ts`              | Made-up guild-mates' parties                                                                                         |
-| `run.ts`               | The run and every action on it                                                                                       |
-| `save.ts`              | A run as text and back                                                                                               |
-| `outside.ts`           | Payout, almanac, locked figures, trails                                                                              |
-| `bot.ts`               | A player with habits                                                                                                 |
-| `index.ts`             | Everything a screen needs, in one place                                                                              |
-| `testkit.ts`           | Helpers for the tests only                                                                                           |
+| File                   | What it holds                                                                                                         |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `content/figures.ts`   | The 28 figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips           |
+| `content/traits.ts`    | Kins and callings: steps, sentences, numbers                                                                          |
+| `content/items.ts`     | Components, finished items, what forges into what, how a figure holds them                                            |
+| `content/boons.ts`     | The boons                                                                                                             |
+| `content/rooms.ts`     | Acorns, levels, stall odds, the fight's clock, the fifteen rooms and their plans, sparring strength, trails, regulars |
+| `content/keepsakes.ts` | The payout and the locked figures                                                                                     |
+| `content/advice.ts`    | What kind of fighter each calling makes and where it stands, and three finished items that suit each figure           |
+| `hex.ts`               | The board: cells and seats, distance, neighbours, lines, cones, rings, finding a way round                            |
+| `rng.ts`               | The seeded random stream                                                                                              |
+| `party.ts`             | A party as plain data, and trait counting                                                                             |
+| `fight/types.ts`       | What a figure in a fight looks like, and the events a step gives back                                                 |
+| `fight/core.ts`        | The verbs: hurt, heal, shield, stun, slow, burn, taunt, hide, leap, knock back, summon                                |
+| `fight/abilities.ts`   | Each ability, written with those verbs                                                                                |
+| `fight/engine.ts`      | Seating, traits and items switching on, the clock, the end                                                            |
+| `formation.ts`         | A plain way of seating a party, used by the bot and the sparring partners                                             |
+| `spar.ts`              | The regulars' parties for sparring                                                                                    |
+| `run.ts`               | The run and every action on it                                                                                        |
+| `save.ts`              | A run as text and back                                                                                                |
+| `outside.ts`           | Payout, almanac, locked figures, trails                                                                               |
+| `bot.ts`               | A player with habits                                                                                                  |
+| `index.ts`             | Everything a screen needs, in one place                                                                               |
+| `testkit.ts`           | Helpers for the tests only                                                                                            |
 
 Tuning the game is editing the files in `content/`. The sentences shown to players are built from
 the same numbers the fight reads (`abilityText`, `traitText`, `itemText`, `boonText`), so a changed

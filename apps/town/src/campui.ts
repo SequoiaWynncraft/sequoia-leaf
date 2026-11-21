@@ -1,20 +1,24 @@
 /**
  * The camp's own part of the interface: the cabin (the member's own things), the mailbox, the
- * signpost, the tray that things are put away into, and the few panels a guild-mate's camp has.
- * The purse, the feed and the panel's frame are shared with the town (`hud.ts`).
+ * signpost, the tray that things are put away into, and the few panels somebody else's camp would
+ * have (`note`, `present`; nothing opens them until members' camps can be visited). The purse, the
+ * feed and the panel's frame are shared with the town (`hud.ts`).
  */
 
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph, shown } from "@sequoia-leaf/kit/dom.ts";
+import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { hop } from "./actors.ts";
-import { COSY, KIND, type PetId, PETS, petsOf, trayList } from "./camp.ts";
+import { COSY, KIND, type PetId, PETS, petsOf, trayList, welcoming } from "./camp.ts";
 import { type CampArt, type CampIcon, campIcon, pictureOf } from "./campart.ts";
 import type { CampScene } from "./campscene.ts";
 import { named, thingRef } from "./cards.ts";
+import { folkNamed } from "./folk.ts";
+import { folkArt } from "./folkart.ts";
 import { changed, G, hooks, toPage } from "./game.ts";
 import { guild } from "./guild.ts";
 import {
@@ -34,7 +38,7 @@ import {
 } from "./hud.ts";
 import { tidied } from "./mail.ts";
 import { MY_PETS, PET_ABOUT, PET_CHOICE } from "./pets.ts";
-import { camp } from "./record.ts";
+import { camp, kept } from "./record.ts";
 import type { Sprites } from "./sprites.ts";
 import { thingOf, THINGS } from "./things.ts";
 import { openPanel as openTownPanel, thingSlot } from "./ui.ts";
@@ -77,13 +81,17 @@ const ICONS: Readonly<Record<CampPanel, CampIcon>> = {
   choose: "home",
 };
 
-/** How to win each trophy, for the empty places on the shelf. */
-
-/** A guild-mate's face, for a letter or a row of the signpost. */
+/** Whoever wrote a letter or keeps a camp: one of the town's own as its own picture, a member by their face. */
 function face(name: string): HTMLCanvasElement | null {
-  const a = G.mates.find((m) => m.who.name === name);
-  return a ? pic(a.body.face, 2) : null;
+  const t = folkNamed(name);
+  if (t) return pic(folkArt(t).face, 1);
+  const a = G.visitors.find((m) => m.who.name === name);
+  return a?.body ? pic(a.body.face, 2) : null;
 }
+
+/** A name on a letter or a note: one of the town's own with its mark. */
+const signed = (name: string): HTMLElement =>
+  folkNamed(name) ? folkName(name, "k-pix k-grow") : el("b", "k-grow", { text: name });
 
 /** A row of the signpost: somewhere to go, and the button that goes there. */
 function way(name: string, about: string, art: HTMLCanvasElement, go: () => void): HTMLElement {
@@ -113,7 +121,7 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
     const me = guild.me();
     const p = G.player;
     const portrait = makeCanvas(12, 24);
-    const frame = p?.body.frames[0]?.[0];
+    const frame = p?.body?.frames[0]?.[0];
     if (frame) portrait.g.drawImage(frame, 0, 0);
     if (G.wearing.has("crown")) portrait.g.drawImage(sprites.crown, 2, 0);
     const xp = el("i");
@@ -121,6 +129,27 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
     const worn = el("div", "k-col");
     const living = el("div", "k-col");
     const shelf = el("div", "k-wrap");
+    // Whether the member's character stays in town, dozing, for a day after they go.
+    const stayBtn = button("sm", [], () => {
+      kept.stay = !kept.stay;
+      guild.stay(kept.stay);
+      sfx.tap();
+      changed();
+    });
+    stayBtn.setAttribute("role", "switch");
+    const stayRow = el(
+      "div",
+      "k-card",
+      {},
+      el(
+        "div",
+        "k-grow",
+        {},
+        "Leave my character in town when I go",
+        el("div", "k-d", { text: "For a day it dozes where you were, so others see you were about." }),
+      ),
+      stayBtn,
+    );
     body.append(
       el(
         "div",
@@ -134,9 +163,10 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
           el("div", "k-title big", { text: me.name }),
           el("div", "k-d", { text: `${me.rank} of the guild, level ${me.level}` }),
           el("div", "k-bar", {}, xp),
-          el("div", "k-d", { text: `This week: ${me.week.join(", ")}` }),
+          me.week.length === 0 ? null : el("div", "k-d", { text: `This week: ${me.week.join(", ")}` }),
         ),
       ),
+      stayRow,
       el("div", "k-label", { text: "Wearing" }),
       worn,
       el("div", "k-label", { text: "Trophy shelf" }),
@@ -184,7 +214,7 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
       },
     );
     const drawLiving = when(
-      () => `${petsOf(camp).join()}|${camp.placed.length}|${camp.gave.length}`,
+      () => `${petsOf(camp).join()}|${camp.placed.length}|${camp.greeted}|${camp.gave.length}`,
       () => {
         const here = petsOf(camp);
         const rows: Node[] = here.map((kind) => {
@@ -200,20 +230,33 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
         if (here.length === 0) rows.push(el("div", "k-d", { text: "Nobody yet." }));
         else if (here.length < PETS.length) {
           const cosy = camp.placed.length >= COSY;
-          const kind = camp.gave.length >= KIND;
+          const kind = welcoming(camp);
           rows.push(
             el("div", "k-d", {
-              text: "Somebody else moves in when the camp is cosier, and when you have been a kind neighbour.",
+              text: "Somebody else moves in when the camp is cosier, and when you have made the town's callers welcome.",
             }),
           );
           if (!cosy) rows.push(el("div", "k-d", { text: `Things set out: ${camp.placed.length} of ${COSY}.` }));
           if (!kind)
-            rows.push(el("div", "k-d", { text: `Presents left at other camps: ${camp.gave.length} of ${KIND}.` }));
+            rows.push(
+              el("div", "k-d", {
+                text: `Callers greeted (touch one while it is here): ${Math.min(camp.greeted, KIND)} of ${KIND}.`,
+              }),
+            );
         }
         living.replaceChildren(...rows);
       },
     );
+    const drawStay = when(
+      () => String(kept.stay),
+      () => {
+        stayBtn.replaceChildren(kept.stay ? "On" : "Off");
+        stayBtn.classList.toggle("wood", !kept.stay);
+        stayBtn.setAttribute("aria-checked", kept.stay ? "true" : "false");
+      },
+    );
     return () => {
+      drawStay();
       drawWorn();
       drawShelf();
       drawLiving();
@@ -247,7 +290,7 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
               "k-row",
               {},
               face(l.from),
-              el("b", "k-grow", { text: l.from }),
+              signed(l.from),
               fresh.has(l.id) ? el("span", "k-chip lit", { text: "New" }) : null,
             ),
             el("div", "", { text: l.text }),
@@ -280,9 +323,9 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
     );
   }
 
-  // ---------- the signpost: everybody else's camp ----------
+  // ---------- the signpost ----------
 
-  function signpost(body: HTMLElement): () => void {
+  function signpost(body: HTMLElement): null {
     const here = at().owner();
     if (here !== null)
       body.append(
@@ -294,40 +337,13 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
       way("Town", "Back up the hill.", campIcon("town"), () => {
         at().leave("town");
       }),
-      el("div", "k-label", { text: "Guild-mates' camps" }),
+      el("div", "k-label", { text: "Down the trail" }),
+      el("div", "k-paper note", {}, el("div", "", { text: "Members' camps, one day. The trail is not cut yet." })),
     );
-    const rows = guild
-      .roster()
-      .filter((m) => m.name !== here)
-      .map((m) => {
-        const status = el("div", "k-d");
-        const row = el(
-          "div",
-          "k-card",
-          {},
-          slot(face(m.name), 20),
-          el("div", "k-grow", {}, m.name, status),
-          button("wood sm", ["Visit"], () => {
-            closePanel();
-            at().leave({ visit: m.name });
-          }),
-        );
-        body.append(row);
-        return when(
-          () => `${guild.camp(m.name)?.home}|${camp.gave.some((g) => g.to === m.name)}`,
-          () => {
-            const home = guild.camp(m.name)?.home;
-            const gave = camp.gave.some((g) => g.to === m.name);
-            status.textContent = `${home ? "At home." : "Out. There will be a note."}${gave ? " You left a present." : ""}`;
-          },
-        );
-      });
-    return () => {
-      for (const f of rows) f();
-    };
+    return null;
   }
 
-  // ---------- at a guild-mate's camp ----------
+  // ---------- at somebody else's camp (nothing opens these yet) ----------
 
   function note(body: HTMLElement): null {
     const host = at().host();
@@ -338,7 +354,7 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
         {},
         el("div", "", { text: host?.note ?? "Back soon." }),
         el("hr"),
-        el("div", "k-row", {}, face(host?.owner ?? ""), el("b", "", { text: host?.owner ?? "" })),
+        el("div", "k-row", {}, face(host?.owner ?? ""), signed(host?.owner ?? "")),
       ),
       el("div", "k-d", { text: "Look round. Everything here answers a touch." }),
     );
@@ -544,8 +560,8 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
         home
           ? [
               place("cabin", "Cabin", "What you wear, what you have won, who lives here.", "cabin"),
-              place("mailbox", "Mailbox", "Notes and presents from guild-mates.", "mailbox"),
-              place("signpost", "Signpost", "Visit a guild-mate's camp.", "signpost"),
+              place("mailbox", "Mailbox", "Notes and presents from the town's own.", "mailbox"),
+              place("signpost", "Signpost", "The way to town.", "signpost"),
               trail("town", "Town", "Back up the hill.", "town"),
             ]
           : [

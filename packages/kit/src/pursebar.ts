@@ -5,7 +5,7 @@
  * for a Leaf button where Leaf may not be spent.
  */
 import { el, icon, type IconName, replay } from "./dom.ts";
-import { balance, type Currency, LEAF_SHUT, leafOpen } from "./purse.ts";
+import { balance, type Currency, leafOpen, leafShown, leafShut } from "./purse.ts";
 import { sfx } from "./sound.ts";
 import { tip, tipAt } from "./tip.ts";
 import type { Pt } from "./util.ts";
@@ -29,9 +29,13 @@ const centre = (node: Element): Pt => {
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 };
 
-/** Fills `host` (a `k-plaque`, usually) with the two counters, and keeps them in step with the purse. */
+/**
+ * Fills `host` (a `k-plaque`, usually) with the two counters, and keeps them in step with the purse.
+ * A guest's purse has only the Coins.
+ */
 export function purseBar(host: HTMLElement): PurseBar {
-  const parts = (["leaf", "coins"] as const).map((kind) => {
+  const kinds = leafShown() ? (["leaf", "coins"] as const) : (["coins"] as const);
+  const parts = kinds.map((kind) => {
     const art = icon(kind === "leaf" ? "leaf" : "coin");
     const num = el("span", "", { text: balance()[kind].toLocaleString("en-US") });
     const box = el("span", kind === "leaf" ? "k-cur leaf" : "k-cur", { tabindex: 0 }, art, num);
@@ -97,16 +101,17 @@ export function fly(what: IconName, from: Pt, to: Pt, count: number, each: ((i: 
 }
 
 /**
- * Shows a Leaf button closed where Leaf may not be spent (beside the guild's ledger, for now): it
- * looks shut, says why when pointed at or touched, and pressing it only shakes it and says why
- * again. Says whether it closed it; if not, the button is the caller's as before. Call it after
- * the button's own listeners are on, in place of giving it a tip.
+ * Shows a Leaf button closed where Leaf may not be spent (beside the guild's ledger, for now, and
+ * always for a guest): it looks shut, says why when pointed at or touched, and pressing it only
+ * shakes it and says why again. Says whether it closed it; if not, the button is the caller's as
+ * before. Call it after the button's own listeners are on, in place of giving it a tip.
  */
 export function closeLeaf(b: HTMLElement, title = "Leaf"): boolean {
   if (leafOpen()) return false;
+  const why = leafShut();
   b.classList.add("off");
   b.setAttribute("aria-disabled", "true");
-  tip(b, title, LEAF_SHUT);
+  tip(b, title, why);
   b.addEventListener(
     "click",
     (e) => {
@@ -115,7 +120,7 @@ export function closeLeaf(b: HTMLElement, title = "Leaf"): boolean {
       sfx.no();
       replay(b, "shake");
       const r = b.getBoundingClientRect();
-      tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, title, LEAF_SHUT, b);
+      tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, title, why, b);
     },
     true,
   );

@@ -16,11 +16,13 @@ import {
   IdentityUnavailable,
   InternalError,
   Invalid,
+  MembersOnly,
   Missing,
   NotAMember,
   NotYou,
   Refused,
   SaveTooLarge,
+  SlowDown,
   Unauthorized,
   VersionConflict,
 } from "./errors.ts";
@@ -58,6 +60,12 @@ export interface Identity {
 export class CurrentIdentity extends Context.Service<CurrentIdentity, Identity>()("leaf/api/CurrentIdentity") {}
 
 /**
+ * Whether someone is in the game as a guest: signed in, but neither a member of the guild now nor a
+ * website admin. Guests play, but have no Leaf, quests or news of the guild's.
+ */
+export const isGuest = (identity: Identity): boolean => identity.guildRank === null && !identity.admin;
+
+/**
  * The cookie the Sequoia website signs members in with. It is set for the whole
  * `seqwawa.com` domain, so browsers send it to Leaf too.
  */
@@ -71,6 +79,16 @@ export const SessionCookie = HttpApiSecurity.apiKey({ key: "seq_session", in: "c
 export class Session extends HttpApiMiddleware.Service<Session, { provides: CurrentIdentity }>()("leaf/api/Session", {
   security: { bearer: HttpApiSecurity.bearer, cookie: SessionCookie },
   error: [Unauthorized, NotAMember, BadOrigin, IdentityUnavailable],
+}) {}
+
+/**
+ * Lets in anyone with a Sequoia session, member of the guild or not, checked as `Session` checks
+ * it but without its gate. The game's routes take it; whoever is neither a member nor an admin
+ * plays as a guest (`isGuest`).
+ */
+export class Player extends HttpApiMiddleware.Service<Player, { provides: CurrentIdentity }>()("leaf/api/Player", {
+  security: { bearer: HttpApiSecurity.bearer, cookie: SessionCookie },
+  error: [Unauthorized, BadOrigin, IdentityUnavailable],
 }) {}
 
 /** Answers a failure nothing expected with `internal_error`, after logging it. */
@@ -129,7 +147,10 @@ export class GameHelloApi extends HttpApiGroup.make("gameHello")
 
 const SlotParams = { slot: Schema.String };
 
-/** What only the browser game uses. Its answers are recorded in `contracts/leaf-game-v1.json`. */
+/**
+ * What only the browser game uses, open to anyone signed in, members and guests alike, but for the
+ * guild's own news. Its answers are recorded in `contracts/leaf-game-v1.json`.
+ */
 export class GameApi extends HttpApiGroup.make("game")
   .add(
     HttpApiEndpoint.get("me", "/me", { success: GameMe }),
@@ -139,18 +160,22 @@ export class GameApi extends HttpApiGroup.make("game")
       params: SlotParams,
       payload: SaveBody,
       success: Saved,
-      error: [Invalid, VersionConflict, NotYou, SaveTooLarge],
+      error: [Invalid, VersionConflict, NotYou, SaveTooLarge, SlowDown],
     }).middleware(SaveBodyErrors),
     HttpApiEndpoint.get("skin", "/skins/:uuid", {
       params: { uuid: Schema.String },
       success: Png,
       error: [Invalid, Missing],
     }),
-    HttpApiEndpoint.get("guildEvents", "/guild/events", { query: EventPosition, success: GuildEvents, error: Invalid }),
+    HttpApiEndpoint.get("guildEvents", "/guild/events", {
+      query: EventPosition,
+      success: GuildEvents,
+      error: [Invalid, MembersOnly],
+    }),
     HttpApiEndpoint.get("guildStream", "/guild/events/stream", {
       query: EventPosition,
       success: EventStream,
-      error: Invalid,
+      error: [Invalid, MembersOnly],
     }),
     HttpApiEndpoint.put("presence", "/presence", {
       payload: PresenceBody,
@@ -158,7 +183,7 @@ export class GameApi extends HttpApiGroup.make("game")
       error: Invalid,
     }).middleware(PresenceBodyErrors),
   )
-  .middleware(Session)
+  .middleware(Player)
   .prefix("/v1/game") {}
 
 export class LeafApi extends HttpApi.make("sequoia-leaf")

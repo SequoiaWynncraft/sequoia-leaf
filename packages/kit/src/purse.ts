@@ -6,7 +6,9 @@
  * Leaf is earned outside the game, by what the member does with the guild. With the made-up guild,
  * `grant` stands in for the guild's ledger. On the guild's own server the purse keeps a ledger
  * (`fromLedger`): the Leaf number is the ledger's and nothing else, `grant` does nothing, Leaf
- * cannot be spent, and every Leaf button shows itself closed (`leafOpen`).
+ * cannot be spent, and every Leaf button shows itself closed (`leafOpen`). A guest, who is not in
+ * the guild, has no Leaf at all (`asGuest`): no page shows a Leaf number (`leafShown`), and every
+ * Leaf button is closed with the guest's own line (`leafShut`).
  */
 
 import { keepText } from "./keep.ts";
@@ -27,6 +29,8 @@ const watchers = new Set<(p: Purse, why: string) => void>();
 let purse: Purse | null = null;
 /** The Leaf the guild's ledger holds, once the purse keeps one; null with the made-up guild. */
 let ledger: number | null = null;
+/** Whether the purse is a guest's, with no Leaf to show. */
+let guest = false;
 
 const whole = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;
@@ -120,15 +124,33 @@ export function fromLedger(leaf: number): void {
   tell("the guild's ledger");
 }
 
+/**
+ * The purse is a guest's: somebody signed in who is not in the guild. They have no Leaf, the purse
+ * keeps none beside the Coins, and no page shows a Leaf number.
+ */
+export function asGuest(): void {
+  guest = true;
+  fromLedger(0);
+}
+
 /** Whether Leaf may be spent here at all: not beside the guild's ledger, for now. */
 export const leafOpen = (): boolean => ledger === null;
 
-/** What every closed Leaf button says. */
+/** Whether a page shows the purse's Leaf: not to a guest, who has none. */
+export const leafShown = (): boolean => !guest;
+
+/** What every closed Leaf button says to a member. */
 export const LEAF_SHUT = "Leaf spending opens after the play-test.";
+/** What every Leaf button says to a guest. */
+export const LEAF_GUEST = "Leaf is earned by raiding with Sequoia.";
+
+/** What a closed Leaf button says, to whoever is playing. */
+export const leafShut = (): string => (guest ? LEAF_GUEST : LEAF_SHUT);
 
 /** Lets the ledger go again (for tests). */
 export function forgetLedger(): void {
   ledger = null;
+  guest = false;
   purse = null;
 }
 

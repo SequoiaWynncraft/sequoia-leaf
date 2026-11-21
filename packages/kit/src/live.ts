@@ -5,16 +5,18 @@
  * is no server, and the game plays as it always has. With a server it asks who the member is:
  *
  * - known: the game is live, as them, and the purse keeps the ledger's Leaf;
+ * - known as a guest (signed in, not in the guild): the game is live, as them, with no Leaf, and
+ *   the page asks nothing that is only for members (`/v1/me...`, the guild's news);
  * - signed out: the whole window goes to the guild's sign-in and comes back, once; refused again
  *   within a minute, or in a frame, it says so on a card instead;
- * - not a member, or the server is having trouble: a card says so.
+ * - not a member (a server that lets in only members), or the server is having trouble: a card says so.
  *
  * The cards (`shutCard`) are the same on every page.
  */
 
 import { el } from "./dom.ts";
 import { ask, isRecord, listen, type Listening, outside } from "./net.ts";
-import { balance, fromLedger, leafOpen, watch } from "./purse.ts";
+import { asGuest, balance, fromLedger, leafOpen, watch } from "./purse.ts";
 import { fromTown, inTown, leave, tell } from "./shell.ts";
 
 export interface Member {
@@ -23,6 +25,8 @@ export interface Member {
   name: string;
   /** Their rank in the guild as the guild writes it, or null for somebody let in without one. */
   rank: string | null;
+  /** Whether they play as a guest: signed in, but not in the guild. A guest has no Leaf, quests or guild news. */
+  guest: boolean;
   leaf: number;
   level: { number: number; into: number; next: number };
   /** The id of the newest thing that happened to them; 0 if nothing has. */
@@ -53,7 +57,15 @@ export function readMember(v: unknown): Member | null {
   const next = num(v.level.xp_for_next_level);
   if (id === null || name === null || leaf === null || level === null || into === null || next === null) return null;
   const rank = str(v.rank);
-  return { id, name, rank, leaf, level: { number: level, into, next }, cursor: Math.max(0, num(v.event_cursor) ?? 0) };
+  return {
+    id,
+    name,
+    rank,
+    guest: v.guest === true,
+    leaf,
+    level: { number: level, into, next },
+    cursor: Math.max(0, num(v.event_cursor) ?? 0),
+  };
 }
 
 async function look(): Promise<Where> {
@@ -70,7 +82,8 @@ async function look(): Promise<Where> {
     } catch {
       // Nothing was remembered.
     }
-    fromLedger(member.leaf);
+    if (member.guest) asGuest();
+    else fromLedger(member.leaf);
     return { mode: "live", me: member, signIn };
   }
   if (me.status === 401) {
@@ -119,6 +132,8 @@ export const member = (): Member | null => {
   const w = where();
   return w.mode === "live" ? w.me : null;
 };
+/** Whether the game is live as a guest, who is not in the guild. */
+export const isGuest = (): boolean => member()?.guest === true;
 
 /** Forgets what `start()` found (for tests). */
 export function restart(): void {
@@ -130,6 +145,7 @@ export function restart(): void {
 
 const CARDS: Readonly<Record<Exclude<Shut, "signin">, readonly [string, string, string]>> = {
   signedout: ["Signed out", "Sign in with the guild's website, and the gate will know you.", "Sign in"],
+  // Only a server that lets in members alone answers so; the guild's own lets everyone in, guests too.
   member: ["Members only", "Guild Town is for Sequoia members.", "Try again"],
   closed: ["Just a moment", "The guild's books are closed for a moment. Try again.", "Try again"],
 };
@@ -171,12 +187,14 @@ export function shutCard(why: Shut, signIn: string): void {
  * Listens to what happens to the member and asks the ledger for their Leaf again whenever anything
  * does. `heard` is told each event, and `fresh` the member as the server has them after it. It
  * listens from the newest event when the member was first looked at (`cursor`), so anything paid
- * since, before the stream opened, is heard at once.
+ * since, before the stream opened, is heard at once. A guest has no news of their own, and nothing
+ * is listened to.
  */
 export function followLeaf(
   heard: (type: string, data: unknown, id: number) => void = () => undefined,
   fresh: (me: Member) => void = () => undefined,
 ): Listening {
+  if (isGuest()) return { stop: () => undefined };
   const since = member()?.cursor;
   // A raid paid out to a party arrives as a handful of events at once: one question covers them.
   let asking = false;
@@ -213,10 +231,10 @@ export function followLeaf(
 export function keepLeaf(): () => void {
   if (inTown()) {
     return fromTown((msg) => {
-      if (msg.town === "leaf" && member()) fromLedger(msg.leaf);
+      if (msg.town === "leaf" && member() && !isGuest()) fromLedger(msg.leaf);
     });
   }
-  if (!member()) return () => undefined;
+  if (!member() || isGuest()) return () => undefined;
   const ears = followLeaf();
   return () => {
     ears.stop();

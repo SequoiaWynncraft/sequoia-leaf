@@ -69,7 +69,7 @@ function quarter(src: HTMLCanvasElement): HTMLCanvasElement {
 
 // ---------- the cabin ----------
 
-/** Roofs a cabin may have: shadow, two body tones, light. A guild-mate's is chosen by their camp. */
+/** Roofs a cabin may have: shadow, two body tones, light. Somebody else's is chosen by their camp. */
 const ROOFS: readonly (readonly [string, string, string, string])[] = [
   [GREEN[0], GREEN[1], GREEN[2], GREEN[3]],
   [SKY[0], SKY[1], SKY[2], SKY[3]],

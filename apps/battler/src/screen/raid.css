@@ -134,6 +134,16 @@ button.k-chip {
 body[data-picking="yes"] #foe {
   visibility: hidden;
 }
+/* "Greg brought Mist Fangs": the regular's name with its mark, and what it brought, on one line. */
+#foe:has(.brought) {
+  max-width: calc(100vw - var(--u) * 8);
+}
+#foe .brought {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+  white-space: nowrap;
+}
 
 /* ---------- traits and the rack ---------- */
 

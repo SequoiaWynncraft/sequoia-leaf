@@ -3,7 +3,7 @@
  * the fifteen rooms of a little raid, what the forest sends into each, how strong a sparring
  * partner is by then, and what the three trails change. Tuning the run is editing this file.
  */
-import type { Stars, TroubleId } from "./figures.ts";
+import type { FigureId, Stars, TroubleId } from "./figures.ts";
 
 // ---------- acorns, levels and the stall ----------
 
@@ -306,7 +306,7 @@ export const TRAILS: readonly Trail[] = [
   },
   {
     name: "The Brambly Way",
-    text: "Shorter on the map. More of everything on the ground, and guild-mates who have done this before.",
+    text: "Shorter on the map. More of everything on the ground, and regulars at the table who have done this before.",
     trouble: 100,
     boss: 104,
     spent: 118,
@@ -325,18 +325,23 @@ export const TRAILS: readonly Trail[] = [
 ];
 export const TRAIL_COUNT = TRAILS.length;
 
-/** Made-up guild-mates, whose parties turn up for sparring. */
-export const HANDLES = [
-  "Mossback",
-  "Sootpaw",
-  "Embertoe",
-  "Quillfeather",
-  "Fernwhistle",
-  "Wrenly",
-  "Pipwick",
-  "Tindra",
-  "Bramblewick",
-  "Hobbleknot",
-  "Dunmere",
-  "Tansy Fen",
-] as const;
+/**
+ * The regulars at the table, whose parties turn up for sparring: the battler's own figures, each
+ * sitting across the table as itself. None of them is a member; one day a sparring party will be a
+ * real member's saved one.
+ */
+export const REGULARS = [
+  { name: "Greg", kind: "greg" },
+  { name: "the Hearth Cat", kind: "hearthcat" },
+  { name: "a Barrow Gnome", kind: "barrowgnome" },
+  { name: "Crab #7", kind: "crab7" },
+  { name: "the White Fox", kind: "whitefox" },
+  { name: "a Moth", kind: "moth" },
+] as const satisfies readonly { name: string; kind: FigureId }[];
+
+/** The regulars' names, as a party is signed. */
+export const HANDLES: readonly string[] = REGULARS.map((r) => r.name);
+
+/** The regular who brought a party, by the name it was signed with; none for anybody else. */
+export const regularNamed = (name: string): (typeof REGULARS)[number] | null =>
+  REGULARS.find((r) => r.name === name) ?? null;

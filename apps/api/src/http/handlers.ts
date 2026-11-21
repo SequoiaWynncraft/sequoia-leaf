@@ -25,7 +25,10 @@ import { SqlClient } from "effect/sql";
 import {
   BodyLimit,
   CurrentIdentity,
+  type Identity,
+  isGuest,
   LeafApi,
+  Player,
   PresenceBodyErrors,
   RerollBodyErrors,
   SaveBodyErrors,
@@ -39,11 +42,13 @@ import {
   IdentityUnavailable,
   InternalError,
   Invalid,
+  MembersOnly,
   Missing,
   NotAMember,
   NotYou,
   Refused,
   SaveTooLarge,
+  SlowDown,
   Unauthorized,
   VersionConflict,
 } from "../api/errors.ts";
@@ -120,81 +125,120 @@ function sessionCookies(header: string | undefined): number {
 }
 
 /**
- * Lets in current guild members with a Sequoia session, and provides who they
- * are. The session comes as a Bearer header, as the mod sends it, or as the
- * website's cookie, as a browser sends it to Leaf's own pages; both are checked
- * with the backend in the same way. A write that came with the cookie must also
- * come from one of Leaf's pages, by its `Origin`.
+ * Who a request's session belongs to, for both ways in: `Session`, which lets in only current
+ * guild members, and `Player`, which lets in anyone signed in. The session comes as a Bearer
+ * header, as the mod sends it, or as the website's cookie, as a browser sends it to Leaf's own
+ * pages; both are checked with the backend in the same way. A write that came with the cookie must
+ * also come from one of Leaf's pages, by its `Origin`.
+ *
+ * Effect tries the Bearer header, then the cookie, lets the request in on the first that admits it,
+ * and answers with the last refusal. So the cookie's turn, which comes last, is the one that
+ * refuses: alone, either way of signing in is checked there. The Bearer's turn only lets in a
+ * request that came with both: a Bearer that would let it in on its own wins, and otherwise the
+ * cookie decides. A request with two session cookies is refused on both turns.
  */
+const sessionChecks = Effect.gen(function* () {
+  const identities = yield* Identities;
+  const { publicOrigin } = yield* AppConfig;
+  const bearerToken = HttpApiBuilder.securityDecode(HttpApiSecurity.bearer);
+  const cookieToken = HttpApiBuilder.securityDecode(SessionCookie);
+
+  // With two session cookies a browser could be signed in as someone another
+  // site chose, so neither is believed, and neither is sent to the backend.
+  const oneSessionCookie = Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    if (sessionCookies(request.headers["cookie"]) > 1) {
+      return yield* new Unauthorized({
+        code: "unauthorized",
+        message: "Your browser sent two Sequoia sessions. Sign in again",
+      });
+    }
+  });
+
+  /** Who a session belongs to, as the backend vouches. */
+  const admit = Effect.fnUntraced(function* (token: string) {
+    if (token === "") {
+      return yield* new Unauthorized({ code: "unauthorized", message: "Sign in with your Sequoia account" });
+    }
+    const result = yield* identities.identify(token);
+    if (result.status === "unauthorized") {
+      return yield* new Unauthorized({ code: "unauthorized", message: "Your session has expired. Sign in again" });
+    }
+    if (result.status === "unavailable") {
+      return yield* new IdentityUnavailable({
+        code: "identity_unavailable",
+        message: "Could not check your session. Try again shortly",
+      });
+    }
+    return result.identity;
+  });
+
+  return {
+    /** The Bearer's turn: only a request that also came with the cookie. */
+    bearer: Effect.fnUntraced(function* (credential: Redacted.Redacted) {
+      yield* oneSessionCookie;
+      if (Redacted.value(yield* cookieToken) === "") {
+        return yield* new Unauthorized({ code: "unauthorized", message: "Sign in with your Sequoia account" });
+      }
+      return yield* admit(Redacted.value(credential));
+    }),
+    /** The cookie's turn: the cookie, or the Bearer when there is no cookie. */
+    cookie: Effect.fnUntraced(function* (credential: Redacted.Redacted) {
+      yield* oneSessionCookie;
+      const cookie = Redacted.value(credential);
+      if (cookie === "") {
+        return yield* admit(Redacted.value(yield* bearerToken));
+      }
+      // Another site's page can make a browser send the cookie, but not with Leaf's own origin.
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      if (!SAFE_METHODS.has(request.method) && request.headers["origin"] !== publicOrigin) {
+        return yield* new BadOrigin({ code: "bad_origin", message: "Leaf takes this only from its own pages" });
+      }
+      return yield* admit(cookie);
+    }),
+  };
+});
+
+/** Lets a member through, and refuses anyone else; website admins count as members. */
+const memberOnly = (identity: Identity) =>
+  isGuest(identity)
+    ? Effect.fail(new NotAMember({ code: "not_a_member", message: "Leaf is for current Sequoia members" }))
+    : Effect.succeed(identity);
+
+/** Lets in current guild members (and website admins) with a Sequoia session, and provides who they are. */
 export const SessionLive = Layer.effect(
   Session,
   Effect.gen(function* () {
-    const identities = yield* Identities;
-    const { publicOrigin } = yield* AppConfig;
-    const bearerToken = HttpApiBuilder.securityDecode(HttpApiSecurity.bearer);
-    const cookieToken = HttpApiBuilder.securityDecode(SessionCookie);
-
-    // With two session cookies a browser could be signed in as someone another
-    // site chose, so neither is believed, and neither is sent to the backend.
-    const oneSessionCookie = Effect.gen(function* () {
-      const request = yield* HttpServerRequest.HttpServerRequest;
-      if (sessionCookies(request.headers["cookie"]) > 1) {
-        return yield* new Unauthorized({
-          code: "unauthorized",
-          message: "Your browser sent two Sequoia sessions. Sign in again",
-        });
-      }
-    });
-
-    /** Who a session belongs to, when they may come in. */
-    const admit = Effect.fnUntraced(function* (token: string) {
-      if (token === "") {
-        return yield* new Unauthorized({ code: "unauthorized", message: "Sign in with your Sequoia account" });
-      }
-      const result = yield* identities.identify(token);
-      if (result.status === "unauthorized") {
-        return yield* new Unauthorized({ code: "unauthorized", message: "Your session has expired. Sign in again" });
-      }
-      if (result.status === "unavailable") {
-        return yield* new IdentityUnavailable({
-          code: "identity_unavailable",
-          message: "Could not check your session. Try again shortly",
-        });
-      }
-      if (result.identity.guildRank === null && !result.identity.admin) {
-        return yield* new NotAMember({ code: "not_a_member", message: "Leaf is for current Sequoia members" });
-      }
-      return result.identity;
-    });
-
-    // Effect tries the Bearer header, then the cookie, lets the request in on the
-    // first that admits it, and answers with the last refusal. So the cookie's
-    // turn, which comes last, is the one that refuses: alone, either way of
-    // signing in is checked there. The Bearer's turn only lets in a request that
-    // came with both: a Bearer that would let it in on its own wins, and otherwise
-    // the cookie decides. A request with two session cookies is refused on both turns.
+    const checks = yield* sessionChecks;
     return Session.of({
-      bearer: Effect.fnUntraced(function* (httpEffect, { credential }) {
-        yield* oneSessionCookie;
-        if (Redacted.value(yield* cookieToken) === "") {
-          return yield* new Unauthorized({ code: "unauthorized", message: "Sign in with your Sequoia account" });
-        }
-        return yield* Effect.provideService(httpEffect, CurrentIdentity, yield* admit(Redacted.value(credential)));
-      }),
-      cookie: Effect.fnUntraced(function* (httpEffect, { credential }) {
-        yield* oneSessionCookie;
-        const cookie = Redacted.value(credential);
-        if (cookie === "") {
-          const bearer = Redacted.value(yield* bearerToken);
-          return yield* Effect.provideService(httpEffect, CurrentIdentity, yield* admit(bearer));
-        }
-        // Another site's page can make a browser send the cookie, but not with Leaf's own origin.
-        const request = yield* HttpServerRequest.HttpServerRequest;
-        if (!SAFE_METHODS.has(request.method) && request.headers["origin"] !== publicOrigin) {
-          return yield* new BadOrigin({ code: "bad_origin", message: "Leaf takes this only from its own pages" });
-        }
-        return yield* Effect.provideService(httpEffect, CurrentIdentity, yield* admit(cookie));
-      }),
+      bearer: (httpEffect, { credential }) =>
+        checks.bearer(credential).pipe(
+          Effect.flatMap(memberOnly),
+          Effect.flatMap((identity) => Effect.provideService(httpEffect, CurrentIdentity, identity)),
+        ),
+      cookie: (httpEffect, { credential }) =>
+        checks.cookie(credential).pipe(
+          Effect.flatMap(memberOnly),
+          Effect.flatMap((identity) => Effect.provideService(httpEffect, CurrentIdentity, identity)),
+        ),
+    });
+  }),
+);
+
+/** Lets in anyone with a Sequoia session, member or guest, and provides who they are. */
+export const PlayerLive = Layer.effect(
+  Player,
+  Effect.gen(function* () {
+    const checks = yield* sessionChecks;
+    return Player.of({
+      bearer: (httpEffect, { credential }) =>
+        checks
+          .bearer(credential)
+          .pipe(Effect.flatMap((identity) => Effect.provideService(httpEffect, CurrentIdentity, identity))),
+      cookie: (httpEffect, { credential }) =>
+        checks
+          .cookie(credential)
+          .pipe(Effect.flatMap((identity) => Effect.provideService(httpEffect, CurrentIdentity, identity))),
     });
   }),
 );
@@ -254,13 +298,13 @@ export const SaveBodyErrorsLive = Layer.succeed(SaveBodyErrors)((httpEffect) =>
   ),
 );
 
-/** A presence whose body is not `{ "place" }`, with one of the game's places, gets `invalid_place`. */
+/** A presence whose body is not `{ "place" }` (with one of the game's places, and `stay` true or false if any) gets `invalid_place`. */
 export const PresenceBodyErrorsLive = Layer.succeed(PresenceBodyErrors)((httpEffect) =>
   Effect.catchIf(httpEffect, isPayloadError, () =>
     Effect.fail(
       new Invalid({
         code: "invalid_place",
-        message: 'Send where you are as { "place": "town" }, or camp, works or table',
+        message: 'Send where you are as { "place": "town" }, or camp, works or table, and "stay" as true or false',
       }),
     ),
   ),
@@ -488,6 +532,13 @@ const GameHelloHandlers = HttpApiBuilder.group(LeafApi, "gameHello", (handlers) 
 
 const invalidSlot = new Invalid({ code: "invalid_slot", message: "That is not a save slot" });
 
+/** Refuses a guest what only the guild's members may see: the guild's news, with members' names. */
+const membersOnly = Effect.flatMap(CurrentIdentity, (identity) =>
+  isGuest(identity)
+    ? Effect.fail(new MembersOnly({ code: "members_only", message: "The guild's news is for Sequoia members" }))
+    : Effect.void,
+);
+
 const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
@@ -504,6 +555,19 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
         .handle("me", () =>
           Effect.gen(function* () {
             const identity = yield* CurrentIdentity;
+            if (isGuest(identity)) {
+              // A guest has no Leaf, XP or news of the guild's, and nothing is read for them: a
+              // former member's ledger is theirs again only when they are a member again.
+              return HttpServerResponse.jsonUnsafe({
+                player: { id: identity.playerId, username: identity.username },
+                rank: null,
+                guest: true,
+                leaf: 0,
+                xp: 0,
+                level: levelJson(0),
+                event_cursor: 0,
+              } satisfies typeof Body.GameMe.Type);
+            }
             // The backend vouches for the name, so the guild's news can show it.
             yield* names.remember(identity.playerId, identity.username, yield* Clock.currentTimeMillis);
             // The cursor first: an event is written in the transaction that pays it, so the account
@@ -515,6 +579,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             return HttpServerResponse.jsonUnsafe({
               player: { id: identity.playerId, username: identity.username },
               rank: identity.guildRank,
+              guest: false,
               leaf: account.balance,
               xp: account.xp,
               level: levelJson(account.xp),
@@ -567,7 +632,8 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               }
               return yield* new SaveTooLarge({ code: "save_too_large", message: "A save holds at most 256 KiB" });
             }
-            const { playerId } = yield* CurrentIdentity;
+            const identity = yield* CurrentIdentity;
+            const { playerId } = identity;
             if (payload.player !== playerId) {
               return yield* new NotYou({
                 code: "not_you",
@@ -575,11 +641,24 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               });
             }
             const now = yield* Clock.currentTimeMillis;
-            const written = yield* saves.put(playerId, checked.slot, payload.version, checked.text, now);
+            const written = yield* saves.put(
+              playerId,
+              checked.slot,
+              payload.version,
+              checked.text,
+              isGuest(identity),
+              now,
+            );
             if (written.status === "conflict") {
               return yield* new VersionConflict({
                 code: "version_conflict",
                 message: "The save changed since it was read. Read it again",
+              });
+            }
+            if (written.status === "slow") {
+              return yield* new SlowDown({
+                code: "slow_down",
+                message: "That slot was saved a moment ago. Send it again in a few seconds",
               });
             }
             return HttpServerResponse.jsonUnsafe({
@@ -607,6 +686,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
         )
         .handle("guildEvents", ({ query }) =>
           Effect.gen(function* () {
+            yield* membersOnly;
             const after = eventId(query.after);
             if (after === null) {
               return yield* invalidAfter;
@@ -628,14 +708,35 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             });
           }),
         )
-        .handle("guildStream", ({ query }) => eventStreamFrom(events, streams, query.after, guild.frames))
+        .handle("guildStream", ({ query }) =>
+          Effect.andThen(membersOnly, eventStreamFrom(events, streams, query.after, guild.frames)),
+        )
         .handle("presence", ({ payload }) =>
           Effect.gen(function* () {
             const identity = yield* CurrentIdentity;
             const now = yield* Clock.currentTimeMillis;
-            const here = yield* presence.arrive(identity.playerId, identity.username, payload.place, now);
+            const here = yield* presence.arrive(
+              identity.playerId,
+              identity.username,
+              payload.place,
+              payload.stay ?? true,
+              isGuest(identity),
+              now,
+            );
             return HttpServerResponse.jsonUnsafe({
-              present: here.map((member) => ({ id: member.playerId, username: member.username, place: member.place })),
+              present: here.present.map((player) => ({
+                id: player.playerId,
+                username: player.username,
+                place: player.place,
+                guest: player.guest,
+              })),
+              resting: here.resting.map((player) => ({
+                id: player.playerId,
+                username: player.username,
+                place: player.place,
+                guest: player.guest,
+                seen_at: iso(player.seenAt),
+              })),
             } satisfies typeof Body.Present.Type);
           }),
         )
@@ -649,6 +750,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
   Layer.provide([OpenStreams.layer, GuildFeed.layer]),
   Layer.provide([
     SessionLive,
+    PlayerLive,
     BodyLimitLive,
     RerollBodyErrorsLive,
     SaveBodyErrorsLive,

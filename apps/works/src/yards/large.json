@@ -23,8 +23,8 @@
   "board": [
     {
       "id": 0,
-      "title": "Tools and bricks for the Branchmasters",
-      "from": "The Branchmasters",
+      "title": "Tools and bricks for the raid parties",
+      "from": "The raid parties",
       "line": "The raid parties are short of shovels again. Nobody will say why.",
       "want": { "brick": 185, "tool": 75 },
       "pay": 165,
@@ -41,8 +41,8 @@
     },
     {
       "id": 2,
-      "title": "Planks for Mossback",
-      "from": "Mossback",
+      "title": "Planks for the gate",
+      "from": "The gate",
       "line": "The gate squeaks. One more plank would fix it. It is never one more plank.",
       "want": { "plank": 340 },
       "pay": 105,

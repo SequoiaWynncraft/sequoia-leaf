@@ -1,7 +1,7 @@
 /**
  * A party as it comes to the table: who stands where, with how many stars, holding what. It is
  * plain data on purpose. The member's own board is turned into one before a fight; the forest's
- * trouble is written as one; and a guild-mate's party for sparring is one that could be stored and
+ * trouble is written as one; and a regular's party for sparring is one that could be stored and
  * sent as it is.
  */
 import { type BoonId, BOONS, isBoonId } from "./content/boons.ts";

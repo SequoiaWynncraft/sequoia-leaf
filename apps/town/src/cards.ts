@@ -7,13 +7,15 @@
  * - `ware:<id>` something Cinfy sells at the Treasury to wear or to share;
  * - `stall:<id>` a market stall: who keeps it and what it sells.
  *
- * Guild-mates keep the plaque they have.
+ * People keep the card they have (`hud.ts`).
  */
 import { type Description, type Entry, link, register, type Stat } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 
 import { owned } from "./camp.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
+import { folkNamed } from "./folk.ts";
+import { folkArt } from "./folkart.ts";
 import { G } from "./game.ts";
 import { guild } from "./guild.ts";
 import { camp } from "./record.ts";
@@ -47,7 +49,7 @@ function whereFrom(id: string): { rows: Entry[]; words: string } {
     };
   if (thing?.kind === "trophies") return { rows: [], words: `Won, never bought. ${thing.about}` };
   if (guild.presents().includes(id))
-    return { rows: [], words: "A present: guild-mates leave them, and a member may leave one at a camp." };
+    return { rows: [], words: "A present: the town's own leave them when they drop by." };
   if (thing?.kind === "home") return { rows: [], words: "Every camp has one." };
   return { rows: [], words: "" };
 }
@@ -99,10 +101,10 @@ function wareDesc(sprites: Sprites, id: string): Description | null {
 function stallDesc(id: string): Description | null {
   const s = guild.stalls().find((x) => x.id === id);
   if (!s) return null;
-  const keeper = G.mates.find((a) => a.who.name === s.by);
+  const keeper = folkNamed(s.by);
   return {
     name: s.name,
-    icon: keeper ? keeper.body.face : icon("home"),
+    icon: keeper ? folkArt(keeper).face : icon("home"),
     tag: `Kept by ${s.by}, in the market. Nothing sells out.`,
     rows: [
       {

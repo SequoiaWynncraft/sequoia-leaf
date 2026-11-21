@@ -1,9 +1,34 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { followLeaf, keepLeaf, passLeaf, restart, start, where } from "./live.ts";
+import { followLeaf, isGuest, keepLeaf, passLeaf, readMember, restart, start, where } from "./live.ts";
 import { isRecord, type Listening } from "./net.ts";
-import { balance, earn, forgetLedger, fromLedger, grant, leafOpen } from "./purse.ts";
-import { HELLO, MemoryStore, type Reply, type Sent, type Standin, standin, TESTER } from "./standin.ts";
+import {
+  balance,
+  earn,
+  forgetLedger,
+  fromLedger,
+  grant,
+  LEAF_GUEST,
+  LEAF_SHUT,
+  leafOpen,
+  leafShown,
+  leafShut,
+  spend,
+} from "./purse.ts";
+import {
+  GUEST,
+  HELLO,
+  membersOnly,
+  MemoryStore,
+  type Reply,
+  type Sent,
+  type Standin,
+  standin,
+  TESTER,
+} from "./standin.ts";
+
+/** What Leaf's game routes really answer, from the contract its own tests write. */
+const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
 
 let world: Standin | null = null;
 let ears: Listening | null = null;
@@ -46,6 +71,7 @@ describe("finding out where the game is", () => {
         id: TESTER.player.id,
         name: "Tester",
         rank: "captain",
+        guest: false,
         leaf: 2450,
         level: { number: 7, into: 230, next: 1400 },
         cursor: 140,
@@ -54,6 +80,43 @@ describe("finding out where the game is", () => {
     expect(where()).toBe(w);
     expect(balance().leaf).toBe(2450);
     expect(leafOpen()).toBe(false);
+  });
+
+  test("200 as a guest: live, as them, with no Leaf to show or spend, and every Leaf button says why", async () => {
+    world = live({ status: 200, body: GUEST });
+    const w = await start();
+    expect(w).toMatchObject({ mode: "live", me: { id: GUEST.player.id, name: "Wanderer", rank: null, guest: true } });
+    expect(isGuest()).toBe(true);
+    expect(balance().leaf).toBe(0);
+    expect(leafOpen()).toBe(false);
+    expect(leafShown()).toBe(false);
+    expect(leafShut()).toBe(LEAF_GUEST);
+    expect(LEAF_GUEST).toBe("Leaf is earned by raiding with Sequoia.");
+    grant(500, "a stand-in raid");
+    expect(spend("leaf", 0, "nothing")).toBe(false);
+    expect(balance().leaf).toBe(0);
+    // Coins are a guest's as a member's.
+    earn(40, "the Works");
+    expect(balance().coins).toBeGreaterThanOrEqual(40);
+  });
+
+  test("a member's Leaf buttons keep the play-test's line, and their Leaf shows", async () => {
+    world = live({ status: 200, body: TESTER });
+    await start();
+    expect([isGuest(), leafShown(), leafShut()]).toEqual([false, true, LEAF_SHUT]);
+  });
+
+  test("reads a guest from what Leaf really answers", () => {
+    const r = isRecord(GAME) ? GAME["GET /v1/game/me, a guest"] : null;
+    expect(readMember(isRecord(r) ? r.body : null)).toEqual({
+      id: "10000000-0000-0000-0000-000000000003",
+      name: "Visitor",
+      rank: null,
+      guest: true,
+      leaf: 0,
+      level: { number: 1, into: 0, next: 1000 },
+      cursor: 0,
+    });
   });
 
   test("it asks once per page", async () => {
@@ -264,8 +327,6 @@ describe("the member's Leaf in a game in the town's frame", () => {
   });
 });
 
-/** What Leaf's game routes really answer, from the contract its own tests write. */
-const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
 const said = (route: string): { status: number; body: unknown } => {
   const r = isRecord(GAME) ? GAME[route] : null;
   if (!isRecord(r) || typeof r.status !== "number") throw new Error(`no ${route} in the contract`);
@@ -283,7 +344,7 @@ describe("against what Leaf really answers", () => {
     expect(balance().leaf).toBe(w.me.leaf);
   });
 
-  test("signed out, and not a member", async () => {
+  test("signed out, and a guest", async () => {
     world = standin({
       "GET /v1/game/hello": said("GET /v1/game/hello"),
       "GET /v1/game/me": said("GET /v1/game/me, signed out"),
@@ -293,8 +354,28 @@ describe("against what Leaf really answers", () => {
     restart();
     world = standin({
       "GET /v1/game/hello": said("GET /v1/game/hello"),
-      "GET /v1/game/me": said("GET /v1/game/me, not a member"),
+      "GET /v1/game/me": said("GET /v1/game/me, a guest"),
     });
-    expect(await start()).toMatchObject({ mode: "shut", why: "member" });
+    expect(await start()).toMatchObject({ mode: "live", me: { name: "Visitor", guest: true } });
+    expect(leafShown()).toBe(false);
+  });
+});
+
+describe("a guest's page", () => {
+  test("follows no Leaf and asks nothing only a member may: on its own, in the town, or when told Leaf by the town", async () => {
+    const asked: string[] = [];
+    world = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: GUEST },
+      ...membersOnly(asked),
+    });
+    await start();
+    ears = followLeaf();
+    const stop = keepLeaf();
+    await Bun.sleep(20);
+    stop();
+    expect(asked).toEqual([]);
+    expect(world.sent.map((s) => s.path)).toEqual(["/v1/game/hello", "/v1/game/me"]);
+    expect(balance().leaf).toBe(0);
   });
 });

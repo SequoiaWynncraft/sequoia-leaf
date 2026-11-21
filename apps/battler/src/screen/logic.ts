@@ -338,3 +338,6 @@ export function postcard(run: Run | null, almanac: Almanac): Postcard {
         : "The board is set out for another raid.";
   return { waiting, trophies: [...new Set(almanac.bosses.flat())], till: 0 };
 }
+
+/** A name at the start of a sentence or a line: "a Moth" is "A Moth" there. */
+export const opening = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
