@@ -13,16 +13,8 @@ const bob = playerId("00000000-0000-4000-8000-00000000000b");
 /** Wednesday 4 November 2026, 12:00 UTC. */
 const T0 = Date.UTC(2026, 10, 4, 12);
 
-/**
- * No quests, so only raids and levels pay. A raid pays 100 Leaf and XP. Level 2
- * takes 1,000 XP and pays 100 Leaf, level 3 1,250 more and 125.
- */
+/** No quests, so only raids and levels pay. Level 2 takes 1,000 XP and pays 100 Leaf, level 3 1,250 more and 125. */
 const rules: Rules = { ...DEFAULT_RULES, quests: { ...DEFAULT_RULES.quests, templates: [] } };
-
-/** The given number of raids for a player, a minute apart from the first, with ids from `firstId`. */
-function raids(player: PlayerId, count: number, firstId = 1) {
-  return Array.from({ length: count }, (_, i) => raid(firstId + i, player, T0 + (i + 1) * MINUTE));
-}
 
 let ledger: ReturnType<typeof testLeaf>;
 
@@ -83,23 +75,23 @@ async function levelPayout(player: PlayerId, key: string): Promise<LedgerEntry> 
 
 describe("Leaf for levels", () => {
   it("pays a level in the sync that reaches it, says so, and pays it once", async () => {
-    const source = feed(raids(alice, 11));
+    const source = feed([raid(1, alice, T0 + MINUTE, 600), raid(2, alice, T0 + 2 * MINUTE, 500)]);
     await sync(source, T0, "recent");
 
-    const result = await sync(source, T0 + 15 * MINUTE, "recent");
-    await sync(source, T0 + 16 * MINUTE, "deep");
+    const result = await sync(source, T0 + 5 * MINUTE, "recent");
+    await sync(source, T0 + 6 * MINUTE, "deep");
 
-    expect(result).toEqual({ status: "synced", recorded: 11, leafPaid: 1100 + 100 });
+    expect(result).toEqual({ status: "synced", recorded: 2, leafPaid: 1100 + 100 });
     expect(await ledger.account(alice)).toMatchObject({ balance: 1200, xp: 1100 });
     expect(await levelEntries(alice)).toEqual([[`level:${alice}:2`, 100, 0]]);
     expect((await events(alice)).at(-1)).toEqual({ type: "level_up", data: { level: 2, leaf: 100 } });
   });
 
   it("pays every level a single sync passes, with one event for the level reached", async () => {
-    const source = feed(raids(alice, 23));
+    const source = feed([raid(1, alice, T0 + MINUTE, 2300)]);
     await sync(source, T0, "recent");
 
-    await sync(source, T0 + 30 * MINUTE, "recent");
+    await sync(source, T0 + 5 * MINUTE, "recent");
 
     expect(await levelEntries(alice)).toEqual([
       [`level:${alice}:3`, 125, 0],
@@ -126,10 +118,10 @@ describe("Leaf for levels", () => {
   it("pays a level reached after the missed ones were paid, and none of those again", async () => {
     await earnedBefore(alice, 1000, "raid:old:a");
     await ledger.run(payMissedLevels(rules.levels, T0));
-    const source = feed(raids(alice, 13));
+    const source = feed([raid(1, alice, T0 + MINUTE, 1300)]);
     await sync(source, T0, "recent");
 
-    await sync(source, T0 + 20 * MINUTE, "recent");
+    await sync(source, T0 + 5 * MINUTE, "recent");
 
     expect(await levelEntries(alice)).toEqual([
       [`level:${alice}:3`, 125, 0],

@@ -190,7 +190,7 @@ describe("GET /v1/me/quests", () => {
     const response = await get("/v1/me/quests?sync=1");
 
     expect(await response.json()).toMatchObject({ quests: [{ slot: "daily" }, { slot: "weekly" }] });
-    expect(await (await get("/v1/me")).json()).toMatchObject({ leaf: 100, xp: 100 });
+    expect(await (await get("/v1/me")).json()).toMatchObject({ leaf: 110, xp: 110 });
   });
 
   it("does not ask the backend for credits unless a sync is requested", async () => {
