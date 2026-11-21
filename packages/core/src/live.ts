@@ -4,14 +4,19 @@
  *
  * One WebSocket at `LIVE_PATH?v=<LIVE_VERSION>`. Two kinds of frame travel on it:
  *
- * - **Binary, the hot path.** A player's motion (`encodeMove`, 22 bytes) from the game, and the
- *   room's changes since the last tick (`encodeSnapshot`, 15 bytes and 23 a player) from Leaf. They
+ * - **Binary, the hot path.** A player's motion (`encodeMove`, 23 bytes) from the game, and the
+ *   room's changes since the last tick (`encodeSnapshot`, 15 bytes and 24 a player) from Leaf. They
  *   are fixed-size, little-endian, and the first byte says which (`Op`).
  * - **Text, the cold path.** Everything else is a small JSON object with a `t`: joining and leaving a
  *   room, who is in it, clock pings, and actions (`ToServer`, `ToClient`).
  *
- * Positions are in a room's own units (the town's are its art pixels) and kept inside its bounds.
- * `facing`, `pose` and the high bits of `flags` are the game's to define: Leaf passes them on.
+ * Why Leaf closes a connection is said by its close code alone (`CLOSE`).
+ *
+ * Motion is state, never an event: each frame says all of where a player is, and only the newest
+ * counts. Even a jump is state, a counter that goes up by one each time (`jump`), so no later frame
+ * can lose it. Positions are in a room's own units (the town's are its art pixels) and kept inside
+ * its bounds. `facing`, `pose` and the high bits of `flags` are the game's to define: Leaf passes
+ * them on.
  */
 
 export const LIVE_PATH = "/v1/game/live";
@@ -27,12 +32,10 @@ export const INTERP_MS = 100;
 /** What a binary frame is, by its first byte. */
 export const Op = { Move: 1, Snapshot: 2 } as const;
 
-/** What `flags` mean to Leaf; bits 2 to 7 are the game's. */
+/** What `flags` mean to Leaf; bits 1 to 7 are the game's. */
 export const Flag = {
   /** The player is moving. */
   Moving: 1,
-  /** The player jumped here (came through a door, was set down): draw them here at once, not on the way. */
-  Snap: 2,
 } as const;
 
 /** Where a player is and how they are moving, in the room's units. */
@@ -45,6 +48,11 @@ export interface Motion {
   facing: number;
   pose: number;
   flags: number;
+  /**
+   * How many times the player has jumped (came through a door, was set down, came back after a
+   * drop), wrapping at 256. When it changes they are drawn where they are at once, not on the way.
+   */
+  jump: number;
 }
 
 /** A player's motion in a snapshot: their number in the room, and the last of their moves it is. */
@@ -61,9 +69,9 @@ export interface Snapshot {
   entries: Entry[];
 }
 
-export const MOVE_BYTES = 22;
+export const MOVE_BYTES = 23;
 export const SNAPSHOT_HEAD_BYTES = 15;
-export const ENTRY_BYTES = 23;
+export const ENTRY_BYTES = 24;
 
 const u8 = (n: number): number => n & 0xff;
 const u16 = (n: number): number => n & 0xffff;
@@ -77,6 +85,7 @@ function writeMotion(view: DataView, at: number, m: Motion): void {
   view.setUint8(at + 16, u8(m.facing));
   view.setUint8(at + 17, u8(m.pose));
   view.setUint8(at + 18, u8(m.flags));
+  view.setUint8(at + 19, u8(m.jump));
 }
 
 function readMotion(view: DataView, at: number): Motion | null {
@@ -93,6 +102,7 @@ function readMotion(view: DataView, at: number): Motion | null {
     facing: view.getUint8(at + 16),
     pose: view.getUint8(at + 17),
     flags: view.getUint8(at + 18),
+    jump: view.getUint8(at + 19),
   };
 }
 
@@ -159,16 +169,25 @@ export function seqAfter(a: number, b: number): boolean {
 
 // ---------- the cold path ----------
 
-/** An action's kind, and its argument: short tokens, never free text (`TOKEN`). */
-export const KIND = /^[a-z][a-z0-9_]{0,23}$/;
-export const TOKEN = /^[a-z0-9_-]{0,32}$/;
+/**
+ * The actions there are: each kind, and the arguments it takes. Only these are passed on, so that
+ * nothing a player types, not even a word spelt out in a token, reaches anybody else. A place that
+ * wants a new action adds it here.
+ */
+export const ACTS: Readonly<Record<string, readonly string[]>> = {
+  emote: ["wave", "cheer", "bow", "laugh", "heart", "sit", "dance", "crab"],
+};
+
+/** Whether an action is one there is (`ACTS`). */
+export const isAct = (kind: string, arg: string): boolean =>
+  Object.hasOwn(ACTS, kind) && (ACTS[kind] ?? []).includes(arg);
 
 /** What the game sends as text. */
 export type ToServer =
   /** Puts the player in a room of this kind (`ROOMS`), leaving any other. */
   | { t: "join"; room: string }
   | { t: "leave" }
-  /** Something the player did that others in the room see once: an emote, a wave. */
+  /** Something the player did that others in the room see once, one of `ACTS`: an emote, a wave. */
   | { t: "act"; kind: string; arg: string }
   /** The game's clock, for Leaf to send back with its own (`pong`). */
   | { t: "ping"; c: number };
@@ -184,16 +203,24 @@ export interface LiveMember {
   guest: boolean;
 }
 
-/** Why Leaf is closing the connection. */
-export type ByeCode =
-  /** The player opened the game live somewhere else. Do not reconnect from here. */
-  | "replaced"
-  /** Leaf is restarting. Reconnect in a moment. */
-  | "restart"
-  /** The game sent something Leaf cannot read. */
-  | "invalid"
-  /** The game sent too much, too fast. */
-  | "rate";
+/** Why a connection closed, as its close code says; the game acts on the code alone. */
+export const CLOSE = {
+  /** The game closed it. */
+  done: 1000,
+  /** The game sent too much Leaf could not read, or too much too fast. */
+  policy: 1008,
+  /** A frame over 4 KiB. */
+  tooBig: 1009,
+  /** Leaf is restarting, as in a deploy, or turned the game away for a moment: reconnect soon. */
+  restart: 1012,
+  /** The player opened the game live somewhere else: do not reconnect from here. */
+  replaced: 4001,
+  /** The player's session ended (signed out, revoked): do not reconnect until they sign in again. */
+  signedOut: 4003,
+} as const;
+
+/** Whether the game should try again after a connection closed with this code. */
+export const reconnects = (code: number): boolean => code !== CLOSE.replaced && code !== CLOSE.signedOut;
 
 /** What Leaf sends as text. */
 export type ToClient =
@@ -214,8 +241,7 @@ export type ToClient =
   | { t: "left"; id: number }
   | { t: "act"; id: number; kind: string; arg: string }
   | { t: "pong"; c: number; s: number }
-  | { t: "error"; code: "unknown_room" | "not_in_room" | "bad_act" }
-  | { t: "bye"; code: ByeCode };
+  | { t: "error"; code: "unknown_room" | "not_in_room" | "bad_act" };
 
 /** What a kind of room is: how far it reaches, and how many fit in one copy of it before another is opened. */
 export interface RoomKind {
@@ -246,7 +272,6 @@ function readMember(v: unknown): LiveMember | null {
   return { id: v.id, player: v.player, name: v.name, rank: v.rank, guest: v.guest };
 }
 
-const BYES: readonly ByeCode[] = ["replaced", "restart", "invalid", "rate"];
 const ERRORS = ["unknown_room", "not_in_room", "bad_act"] as const;
 
 /** What Leaf sent as text, or null for anything that is not one of its messages. */
@@ -287,10 +312,6 @@ export function readToClient(text: string): ToClient | null {
     case "error": {
       const code = ERRORS.find((c) => c === v.code);
       return code ? { t: "error", code } : null;
-    }
-    case "bye": {
-      const code = BYES.find((c) => c === v.code);
-      return code ? { t: "bye", code } : null;
     }
     default:
       return null;

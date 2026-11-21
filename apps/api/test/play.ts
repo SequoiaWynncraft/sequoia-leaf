@@ -471,12 +471,12 @@ async function walk(who: { readonly name: string }, path: readonly (readonly [nu
       [x, y] = [tx, ty];
       leg = (leg + 1) % path.length;
       resting = pause;
-      client.move({ x, y, vx: 0, vy: 0, facing, pose: 0, flags: 0 });
+      client.move({ x, y, vx: 0, vy: 0, facing, pose: 0, flags: 0, jump: 0 });
       return;
     }
     x += (dx / d) * step;
     y += (dy / d) * step;
-    client.move({ x, y, vx: (dx / d) * speed, vy: (dy / d) * speed, facing, pose: 0, flags: Flag.Moving });
+    client.move({ x, y, vx: (dx / d) * speed, vy: (dy / d) * speed, facing, pose: 0, flags: Flag.Moving, jump: 0 });
   }, 1000 / CLIENT_HZ);
 }
 if (birchwood) {

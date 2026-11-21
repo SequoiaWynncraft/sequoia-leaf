@@ -188,15 +188,19 @@ goes to whoever `hearPresent`s. Each says whether they are a guest.
 
 **Live** (`realtime.ts`). `joinLive(room, ears)` puts the player in one of Leaf's live rooms (the
 wire and the rooms are in `@sequoia-leaf/core`'s `live.ts`) and keeps them there: after a drop it
-connects again (half a second, doubling to ten, jittered), joins again and says where the player is
-again as a jump; told the player opened the game live elsewhere, it lets go (`status("replaced")`).
-`ears` hear the roster on each `welcome`, who `joined` and `left`, and each `act`. The page says
-where its player is with `move(motion)` as often as it likes: it goes at most 20 times a second and
-only when it changed, starting, stopping and a jump at once, and the last change always. Each frame
-the page asks `sample(id)` where somebody is to be drawn: their motion 100 ms behind Leaf's clock
-(learnt from pings, by the quickest), between the snapshots either side, going on for up to 200 ms
-past the newest while they were moving, and never on the way across a jump. With the made-up guild
-it opens nothing, and nobody is ever there. Drawing the others is the page's.
+connects again (half a second, doubling to ten, jittered), joins again, and says where the player
+is again as a jump. Why a connection closed is its close code alone: told the player opened the
+game live elsewhere, or their session ended, it lets go (`status("replaced")`, `"signedout"`). Each
+connection learns the room afresh (who is there, their tracks, Leaf's clock), and its picture
+replaces the old one only at its welcome, so nothing of one connection is mixed with another's.
+`ears` hear the roster on each `welcome`, who `joined` and `left`, and each `act` (one of core's
+`ACTS`). The page says where its player is with `move(step, jumped)` as often as it likes: it goes
+at most 20 times a second and only when it changed; starting, stopping and a jump at once, even
+with a move waiting its turn (`sendIn`), and the last change always. Each frame the page asks
+`sample(id)` where somebody is to be drawn: their motion 100 ms behind Leaf's clock (learnt from
+pings, by the quickest), between the snapshots either side, going on for up to 200 ms past the
+newest while they were moving, and never on the way across a jump. With the made-up guild it
+opens nothing, and nobody is ever there. Drawing the others is the page's.
 
 All of it reaches the server through `net.ts`, which tests replace with `standin.ts`; the tests
 read the server's own contract files (`contracts/leaf-api-v1.json`, `contracts/leaf-game-v1.json`).

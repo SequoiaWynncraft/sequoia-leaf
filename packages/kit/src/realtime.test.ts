@@ -1,19 +1,28 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { decodeMove, encodeSnapshot, Flag, type Motion, type ToClient } from "@sequoia-leaf/core";
+import { CLOSE, decodeMove, encodeSnapshot, Flag, type Motion, type ToClient } from "@sequoia-leaf/core";
 
 import { restart, start } from "./live.ts";
 import { isRecord, type LiveSocket, pretend } from "./net.ts";
 import { forgetLedger } from "./purse.ts";
-import { ClockSync, joinLive, type LiveRoom, type LiveStatus, retryAfter, Track } from "./realtime.ts";
+import {
+  ClockSync,
+  joinLive,
+  type LiveRoom,
+  type LiveStatus,
+  retryAfter,
+  sendIn,
+  type Step,
+  Track,
+} from "./realtime.ts";
 import { HELLO, type Standin, standin, TESTER } from "./standin.ts";
 
-const at = (x: number, y: number, flags = 0, vx = 0, vy = 0): Motion => ({ x, y, vx, vy, facing: 1, pose: 0, flags });
+const step = (x: number, y: number, flags = 0, vx = 0): Step => ({ x, y, vx, vy: 0, facing: 1, pose: 0, flags });
+const at = (x: number, y: number, flags = 0, jump = 0, vx = 0): Motion => ({ ...step(x, y, flags, vx), jump });
 
 describe("Leaf's clock", () => {
-  test("is the offset the quickest ping saw, and the welcome's until a ping comes back", () => {
-    const c = new ClockSync();
-    c.guess(10_000, 1000);
+  test("is the welcome's until a ping comes back, then the offset the quickest ping saw", () => {
+    const c = new ClockSync(10_000, 1000);
     expect(c.server(1500)).toBe(10_500);
     expect(c.rtt()).toBeNull();
 
@@ -23,8 +32,6 @@ describe("Leaf's clock", () => {
     c.add(3000, 12_500, 3400);
     expect(c.server(4000)).toBe(13_010);
     expect(c.rtt()).toBe(100);
-    c.guess(0, 0);
-    expect(c.server(4000)).toBe(13_010);
   });
 });
 
@@ -39,20 +46,22 @@ describe("somebody's track", () => {
 
   test("goes on as they were for a little while past the newest, if they were moving, and no further", () => {
     const t = new Track();
-    t.add(1000, at(100, 50, Flag.Moving, 64, 0));
+    t.add(1000, at(100, 50, Flag.Moving, 0, 64));
     expect(t.at(1100)).toMatchObject({ x: 106.4, y: 50 });
     expect(t.at(5000)).toMatchObject({ x: 112.8 });
     const still = new Track();
-    still.add(1000, at(100, 50, 0, 64, 0));
+    still.add(1000, at(100, 50, 0, 0, 64));
     expect(still.at(1500)).toMatchObject({ x: 100 });
   });
 
-  test("is not drawn on the way across a jump", () => {
+  test("is never drawn on the way across a jump", () => {
     const t = new Track();
-    t.add(1000, at(0, 0));
-    t.add(1100, at(400, 300, Flag.Snap));
+    t.add(1000, at(0, 0, 0, 4));
+    t.add(1100, at(400, 300, 0, 5));
+    t.add(1200, at(410, 300, 0, 5));
     expect(t.at(1099)).toMatchObject({ x: 0, y: 0 });
     expect(t.at(1100)).toMatchObject({ x: 400, y: 300 });
+    expect(t.at(1150)).toMatchObject({ x: 405 });
   });
 
   test("keeps about a second, and takes no snapshot older than the newest", () => {
@@ -61,6 +70,22 @@ describe("somebody's track", () => {
     t.add(2000, at(-1, -1));
     expect(t.at(1000)).toMatchObject({ x: 1900 });
     expect(t.at(2950)).toMatchObject({ x: 2950 });
+  });
+});
+
+describe("sending the player's motion", () => {
+  test("goes at once the first time, and whenever they start, stop or jump, however soon", () => {
+    const sent = at(0, 0, Flag.Moving);
+    expect(sendIn(sent, null, 0, 0)).toBe(0);
+    expect(sendIn(at(1, 0, 0), sent, 1000, 1001)).toBe(0);
+    expect(sendIn(at(1, 0, Flag.Moving, 1), sent, 1000, 1001)).toBe(0);
+  });
+
+  test("goes no more than twenty times a second otherwise, and not at all when nothing changed", () => {
+    const sent = at(0, 0, Flag.Moving);
+    expect(sendIn(at(1, 0, Flag.Moving), sent, 1000, 1010)).toBe(40);
+    expect(sendIn(at(1, 0, Flag.Moving), sent, 1000, 1080)).toBe(0);
+    expect(sendIn(sent, sent, 1000, 9999)).toBeNull();
   });
 });
 
@@ -75,7 +100,7 @@ describe("trying again", () => {
 class FakeSocket implements LiveSocket {
   binaryType: BinaryType = "blob";
   readonly sent: (string | Uint8Array)[] = [];
-  closed = false;
+  closed: number | null = null;
   private readonly opens: ((e: Event) => void)[] = [];
   private readonly messages: ((e: MessageEvent) => void)[] = [];
   private readonly closes: ((e: CloseEvent) => void)[] = [];
@@ -93,8 +118,8 @@ class FakeSocket implements LiveSocket {
   send(data: string | Uint8Array): void {
     this.sent.push(data);
   }
-  close(): void {
-    this.closed = true;
+  close(code: number = CLOSE.done): void {
+    this.closed = code;
   }
   open(): void {
     for (const fn of this.opens) fn(new Event("open"));
@@ -122,6 +147,15 @@ class FakeSocket implements LiveSocket {
 }
 
 const ALICE = { id: 2, player: "a", name: "Alice", rank: "Captain", guest: false };
+const welcome = (you: number, time: number, roster = [{ ...ALICE, id: you }]): ToClient => ({
+  t: "welcome",
+  v: 1,
+  you,
+  room: "town/1",
+  hz: 30,
+  time,
+  roster,
+});
 
 describe("a live room", () => {
   let world: Standin | null = null;
@@ -140,8 +174,10 @@ describe("a live room", () => {
     forgetLedger();
   });
 
-  async function live(): Promise<void> {
-    world = standin({ "GET /v1/game/hello": HELLO, "GET /v1/game/me": { status: 200, body: TESTER } });
+  /** A live game, and the sockets it opens. */
+  async function live(): Promise<Standin> {
+    const w = standin({ "GET /v1/game/hello": HELLO, "GET /v1/game/me": { status: 200, body: TESTER } });
+    world = w;
     await start();
     undo = pretend({
       socket: (url) => {
@@ -150,7 +186,14 @@ describe("a live room", () => {
         return s;
       },
     });
+    return w;
   }
+
+  const socket = (i: number): FakeSocket => {
+    const s = sockets[i];
+    if (!s) throw new Error(`no socket ${i}`);
+    return s;
+  };
 
   test("opens nothing with the made-up guild", async () => {
     world = standin({});
@@ -163,13 +206,13 @@ describe("a live room", () => {
       },
     });
     room = joinLive("town");
-    room.move(at(1, 1));
+    room.move(step(1, 1));
     expect(opened).toBe(0);
     expect(room.members().size).toBe(0);
   });
 
   test("joins the room next to the page, learns who is there, and follows them", async () => {
-    await live();
+    const w = await live();
     const heard: string[] = [];
     room = joinLive("town", {
       welcome: (you, name, roster) => heard.push(`welcome ${you} ${name} ${roster.length}`),
@@ -177,18 +220,17 @@ describe("a live room", () => {
       left: (id) => heard.push(`left ${id}`),
       act: (id, kind, arg) => heard.push(`act ${id} ${kind} ${arg}`),
     });
-    const s = sockets[0];
-    if (!s) throw new Error("no socket");
+    const s = socket(0);
     expect(s.url).toBe("wss://leaf.example/v1/game/live?v=1");
     s.open();
     expect(s.texts().map((m) => m.t)).toEqual(["join", "ping"]);
     expect(s.texts()[0]).toEqual({ t: "join", room: "town" });
 
-    const now = world?.clock.now ?? 0;
-    s.says({ t: "welcome", v: 1, you: 1, room: "town/1", hz: 30, time: now + 5000, roster: [{ ...ALICE, id: 1 }] });
+    const now = w.clock.now;
+    s.says(welcome(1, now + 5000));
     s.says({ t: "joined", member: ALICE });
     s.says({ t: "act", id: 2, kind: "emote", arg: "wave" });
-    // Alice walks right: two snapshots 100 ms apart by Leaf's clock; Leaf's own figure (1) is not followed.
+    // Alice walks right: two snapshots 100 ms apart by Leaf's clock; the player's own figure (1) is not followed.
     s.sends(
       encodeSnapshot(1, now + 5000 - 200, [
         { id: 2, seq: 1, ...at(0, 10, Flag.Moving) },
@@ -209,73 +251,87 @@ describe("a live room", () => {
     expect(heard).toEqual(["welcome 1 town/1 1", "joined Alice", "act 2 emote wave", "left 2"]);
   });
 
-  test("sends motion at most twenty times a second, the last change always, and starting or stopping at once", async () => {
-    await live();
+  test("sends a stop or a jump at once, even with a move still waiting its turn", async () => {
+    const w = await live();
     room = joinLive("town");
-    const s = sockets[0];
-    if (!s || !world) throw new Error("no socket");
+    const s = socket(0);
     s.open();
-    room.move(at(0, 0, Flag.Moving));
-    world.clock.now += 10;
-    room.move(at(1, 0, Flag.Moving));
-    room.move(at(2, 0, Flag.Moving));
-    expect(s.moves().map((m) => m?.motion.x)).toEqual([0]);
-    await Bun.sleep(70);
-    expect(s.moves().map((m) => m?.motion.x)).toEqual([0, 2]);
-
-    world.clock.now += 10;
-    room.move(at(2, 0, 0));
-    room.move(at(2, 0, 0));
-    expect(s.moves().map((m) => [m?.seq, m?.motion.flags])).toEqual([
-      [1, Flag.Moving],
-      [2, Flag.Moving],
-      [3, 0],
+    s.says(welcome(1, 0));
+    room.move(step(0, 0, Flag.Moving));
+    w.clock.now += 10;
+    room.move(step(1, 0, Flag.Moving));
+    room.move(step(2, 0, 0));
+    w.clock.now += 1;
+    room.move(step(300, 200, 0), true);
+    expect(s.moves().map((m) => [m?.motion.x, m?.motion.flags, m?.motion.jump])).toEqual([
+      [0, Flag.Moving, 0],
+      [2, 0, 0],
+      [300, 0, 1],
     ]);
+    // Nothing is left waiting to go after them.
+    await Bun.sleep(70);
+    expect(s.moves().length).toBe(3);
   });
 
-  test("after a drop, connects again, joins again, and says where the player is as a jump", async () => {
-    await live();
+  test("after a drop, keeps showing the room until the new connection's welcome, then only the new one's", async () => {
+    const w = await live();
     const seen: LiveStatus[] = [];
     room = joinLive("town", { status: (st) => seen.push(st) });
-    const first = sockets[0];
-    if (!first) throw new Error("no socket");
+    const first = socket(0);
     first.open();
-    room.move(at(30, 40, 0));
+    first.says(welcome(1, w.clock.now, [{ ...ALICE, id: 1 }, ALICE]));
+    first.sends(encodeSnapshot(1, w.clock.now - 100, [{ id: 2, seq: 1, ...at(50, 50) }]));
+    room.move(step(30, 40));
     first.drop();
     expect(seen).toEqual(["connecting", "open", "closed"]);
+    expect(room.sample(2)).toMatchObject({ x: 50 });
 
     await Bun.sleep(800);
-    const second = sockets[1];
-    if (!second) throw new Error("did not connect again");
+    const second = socket(1);
     second.open();
-    second.says({ t: "welcome", v: 1, you: 5, room: "town/1", hz: 30, time: 0, roster: [] });
+    expect(room.members().size).toBe(2);
+    // Leaf gave number 2 to somebody else this time: nothing of the old Alice is drawn for them.
+    second.says(
+      welcome(5, w.clock.now, [
+        { ...ALICE, id: 5 },
+        { ...ALICE, id: 2, name: "Bob" },
+      ]),
+    );
+    expect(room.you()).toBe(5);
+    expect(room.sample(2)).toBeNull();
+    expect([...room.members().values()].map((m) => m.name)).toEqual(["Alice", "Bob"]);
     expect(second.texts()[0]).toEqual({ t: "join", room: "town" });
-    expect(second.moves().map((m) => [m?.motion.x, m?.motion.flags])).toEqual([[30, Flag.Snap]]);
+    // The player is said again, as a jump, on the new connection.
+    expect(second.moves().map((m) => [m?.motion.x, m?.motion.jump])).toEqual([[30, 1]]);
     expect(seen).toEqual(["connecting", "open", "closed", "connecting", "open"]);
   });
 
-  test("lets go for good when the player opened the game live somewhere else", async () => {
+  test.each([
+    [CLOSE.replaced, "replaced"],
+    [CLOSE.signedOut, "signedout"],
+  ] as const)("lets go for good on close code %d, by the code alone", async (code, said) => {
     await live();
     const seen: LiveStatus[] = [];
     room = joinLive("town", { status: (st) => seen.push(st) });
-    const s = sockets[0];
-    if (!s) throw new Error("no socket");
-    s.open();
-    s.says({ t: "bye", code: "replaced" });
-    s.drop(4001);
+    socket(0).open();
+    socket(0).drop(code);
     await Bun.sleep(800);
     expect(sockets.length).toBe(1);
-    expect(seen).toEqual(["connecting", "open", "replaced"]);
+    expect(seen).toEqual(["connecting", "open", said]);
   });
 
-  test("leaves and closes when the page is done with it", async () => {
+  test("leaves and closes when the page is done with it, and sends nothing on a socket not yet open", async () => {
     await live();
     room = joinLive("town");
-    const s = sockets[0];
-    if (!s) throw new Error("no socket");
+    room.close();
+    expect(socket(0).sent).toEqual([]);
+    expect(socket(0).closed).toBe(CLOSE.done);
+
+    room = joinLive("town");
+    const s = socket(1);
     s.open();
     room.close();
     expect(s.texts().at(-1)).toEqual({ t: "leave" });
-    expect(s.closed).toBe(true);
+    expect(s.closed).toBe(CLOSE.done);
   });
 });

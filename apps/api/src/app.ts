@@ -1,5 +1,6 @@
-import { Layer } from "effect";
-import { FetchHttpClient } from "effect/http";
+import { BunHttpServer } from "@effect/platform-bun";
+import { type Duration, Layer } from "effect";
+import { FetchHttpClient, HttpRouter } from "effect/http";
 
 import { Identities } from "./auth/session.ts";
 import { AppConfig } from "./config.ts";
@@ -14,7 +15,7 @@ import { ApiRoutes, NotFound } from "./http/handlers.ts";
 import { SafetyHeaders } from "./http/headers.ts";
 import { Pages } from "./http/pages.ts";
 import { Ledger } from "./ledger/store.ts";
-import { Live } from "./live/live.ts";
+import { Live, LIVE_SOCKETS, LiveFarewell } from "./live/live.ts";
 import { LiveRoute } from "./live/route.ts";
 import { Quests } from "./quests/store.ts";
 
@@ -28,6 +29,40 @@ export const Routes = Layer.mergeAll(ApiRoutes, LiveRoute, Pages, NotFound, Safe
 
 /** Effect's router takes `/healthz/` for `/healthz` unless told otherwise; Leaf's routes are exact. */
 export const routerConfig = { ignoreTrailingSlash: false };
+
+/**
+ * Leaf served by Bun, as production and the tests both serve it: its routes and any `extra`, live
+ * connections and all. The live rooms sit on top of the server, so that when it stops they say
+ * farewell first (the server's own stop closes WebSockets with no word of why).
+ */
+export const serveLeaf = (options: {
+  readonly port: number;
+  readonly hostname?: string;
+  /** How long requests in flight have to finish when Leaf stops. */
+  readonly gracefulShutdownTimeout: Duration.Input;
+  readonly extra?: Layer.Layer<never, never, HttpRouter.HttpRouter>;
+}) =>
+  LiveFarewell.pipe(
+    Layer.provideMerge(
+      HttpRouter.serve(Layer.mergeAll(Routes, options.extra ?? Layer.empty), {
+        routerConfig,
+        disableLogger: true,
+      }).pipe(
+        Layer.provideMerge(
+          BunHttpServer.layer({
+            port: options.port,
+            ...(options.hostname === undefined ? {} : { hostname: options.hostname }),
+            // No route reads more than a save's body; Leaf refuses anything near this itself.
+            maxRequestBodySize: 1024 * 1024,
+            // Seconds. An event stream writes a keep-alive every 20, well inside this.
+            idleTimeout: 60,
+            gracefulShutdownTimeout: options.gracefulShutdownTimeout,
+            websocket: LIVE_SOCKETS,
+          }),
+        ),
+      ),
+    ),
+  );
 
 /**
  * Leaf's stores: the ledger, the events and the quests, and what the game keeps,
