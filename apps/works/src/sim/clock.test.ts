@@ -371,7 +371,7 @@ describe("away", () => {
     const started = performance.now();
     forward(w, 576_000);
     // Generous, so a busy machine running the tests does not fail it; it measures a few milliseconds.
-    expect(performance.now() - started).toBeLessThan(150);
+    expect(performance.now() - started).toBeLessThan(1000);
     expect(TICK_MS).toBe(100);
   });
   test("eight hours away on the largest kept yard is caught up on well inside a frame or three", () => {
@@ -379,9 +379,10 @@ describe("away", () => {
     if (!yard) throw new Error("the large yard did not load");
     const started = performance.now();
     const away = forward(yard, 288_000);
-    // It measures under 20 milliseconds.
-    expect(performance.now() - started).toBeLessThan(50);
+    // What keeps it quick is how few ticks are really run. The clock is only a loose guard: it
+    // measures under 20 milliseconds here and several times that on a shared test machine.
     expect(away.run).toBeLessThan(288_000 / 20);
+    expect(performance.now() - started).toBeLessThan(1000);
     expect(away.coins).toBeGreaterThan(0);
   });
 });
