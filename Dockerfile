@@ -1,17 +1,20 @@
-# The game's pages, built from the three apps and the kit they share. Each
-# build is plain files, so only /app/public goes on to the image.
+# The game's pages, built from the three apps, the kit they share, and the core
+# rules the kit shares with Leaf (the live wire). Each build is plain files, so
+# only /app/public goes on to the image.
 FROM docker.io/oven/bun:1.4.4-slim AS pages
 
 WORKDIR /app
 
 COPY package.json bun.lock bunfig.toml tsconfig.base.json ./
 COPY packages/kit/package.json packages/kit/
+COPY packages/core/package.json packages/core/
 COPY apps/town/package.json apps/town/
 COPY apps/works/package.json apps/works/
 COPY apps/battler/package.json apps/battler/
 RUN bun install --frozen-lockfile --production
 
 COPY packages/kit packages/kit
+COPY packages/core packages/core
 COPY apps/town apps/town
 COPY apps/works apps/works
 COPY apps/battler apps/battler

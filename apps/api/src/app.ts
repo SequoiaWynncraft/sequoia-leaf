@@ -14,10 +14,17 @@ import { ApiRoutes, NotFound } from "./http/handlers.ts";
 import { SafetyHeaders } from "./http/headers.ts";
 import { Pages } from "./http/pages.ts";
 import { Ledger } from "./ledger/store.ts";
+import { Live } from "./live/live.ts";
+import { LiveRoute } from "./live/route.ts";
 import { Quests } from "./quests/store.ts";
 
-/** Leaf's HTTP routes, and the game's pages when there are any, with the headers every answer carries. They need the services below. */
-export const Routes = Layer.mergeAll(ApiRoutes, Pages, NotFound, SafetyHeaders).pipe(Layer.provide(Identities.layer));
+/**
+ * Leaf's HTTP routes, the game's live connection, and the game's pages when there are any, with the
+ * headers every answer carries. They need the services below.
+ */
+export const Routes = Layer.mergeAll(ApiRoutes, LiveRoute, Pages, NotFound, SafetyHeaders).pipe(
+  Layer.provide(Identities.layer),
+);
 
 /** Effect's router takes `/healthz/` for `/healthz` unless told otherwise; Leaf's routes are exact. */
 export const routerConfig = { ignoreTrailingSlash: false };
@@ -34,8 +41,12 @@ export const Stores = Layer.mergeAll(
   Skins.layer.pipe(Layer.provideMerge(PlayerNames.layer)),
 ).pipe(Layer.provideMerge(Ledger.layer));
 
-/** What Leaf reaches outside its own code: its settings, its database, Mojang and the network. */
+/**
+ * What Leaf reaches outside its own code (its settings, its database, Mojang and the network), and
+ * the live rooms, which the routes serve and the server's farewell closes.
+ */
 export const Services = Stores.pipe(
+  Layer.merge(Live.layer),
   Layer.provideMerge(Database),
   Layer.provide(Mojang.layer),
   Layer.provideMerge(FetchHttpClient.layer),

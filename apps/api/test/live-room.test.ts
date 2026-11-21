@@ -1,0 +1,174 @@
+import { describe, expect, it } from "bun:test";
+
+import { decodeSnapshot, Flag, type Motion, readToClient, type ToClient } from "@sequoia-leaf/core";
+
+import { Room, Rooms } from "../src/live/room.ts";
+
+/** What one person in a room was sent: the text decoded, and the binary frames as they were. */
+function inbox() {
+  const texts: ToClient[] = [];
+  const frames: Uint8Array[] = [];
+  return {
+    texts,
+    frames,
+    outbox: {
+      send(frame: string | Uint8Array) {
+        if (typeof frame !== "string") frames.push(frame);
+        else {
+          const m = readToClient(frame);
+          if (m) texts.push(m);
+        }
+      },
+    },
+  };
+}
+
+const TOWN = { width: 512, height: 352, capacity: 3 };
+const person = (name: string, guest = false) => ({ player: `id-${name}`, name, rank: guest ? null : "Captain", guest });
+const at = (x: number, y: number, flags = 0): Motion => ({ x, y, vx: 0, vy: 0, facing: 1, pose: 0, flags });
+
+describe("a room", () => {
+  it("welcomes whoever comes in with everybody there, and tells the others", () => {
+    const room = new Room("town/1", TOWN);
+    const a = inbox();
+    const b = inbox();
+    const alice = room.join(person("Alice"), a.outbox, 1000, 30, 1);
+    const bob = room.join(person("Bob", true), b.outbox, 2000, 30, 1);
+
+    expect(b.texts).toEqual([
+      {
+        t: "welcome",
+        v: 1,
+        you: 2,
+        room: "town/1",
+        hz: 30,
+        time: 2000,
+        roster: [alice.member, { id: 2, player: "id-Bob", name: "Bob", rank: null, guest: true }],
+      },
+    ]);
+    expect(a.texts.at(-1)).toEqual({ t: "joined", member: bob.member });
+    // Nobody has moved yet, so there is nobody to show.
+    expect(b.frames).toEqual([]);
+  });
+
+  it("shows whoever comes in where everybody already is, at once", () => {
+    const room = new Room("town/1", TOWN);
+    const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    room.move(alice.member.id, 1, at(100, 50));
+    const b = inbox();
+    room.join(person("Bob"), b.outbox, 0, 30, 1);
+
+    expect(b.frames.map((f) => decodeSnapshot(f)?.entries.map((e) => [e.id, e.x, e.y]))).toEqual([[[1, 100, 50]]]);
+  });
+
+  it("sends the motion that changed since the last tick, once a tick, one frame made once for all", () => {
+    const room = new Room("town/1", TOWN);
+    const a = inbox();
+    const b = inbox();
+    const alice = room.join(person("Alice"), a.outbox, 0, 30, 1);
+    const bob = room.join(person("Bob"), b.outbox, 0, 30, 1);
+    room.move(alice.member.id, 1, at(10, 10));
+    room.move(alice.member.id, 2, at(12, 10, Flag.Moving));
+
+    expect(room.flush(1, 5000)).toBe(true);
+    expect(room.flush(2, 5033)).toBe(false);
+    room.move(bob.member.id, 1, at(300, 200));
+    room.flush(3, 5066);
+
+    expect(a.frames.length).toBe(2);
+    expect(a.frames[0]).toBe(b.frames[0]);
+    expect(decodeSnapshot(a.frames[0] ?? new Uint8Array())).toEqual({
+      tick: 1,
+      time: 5000,
+      entries: [{ id: 1, seq: 2, ...at(12, 10, Flag.Moving) }],
+    });
+    expect(decodeSnapshot(b.frames[1] ?? new Uint8Array())?.entries.map((e) => e.id)).toEqual([2]);
+  });
+
+  it("keeps motion inside the room and below the fastest anybody moves", () => {
+    const room = new Room("town/1", TOWN);
+    const a = inbox();
+    const alice = room.join(person("Alice"), a.outbox, 0, 30, 1);
+    room.move(alice.member.id, 1, { x: -40, y: 9000, vx: 1e9, vy: -1e9, facing: 3, pose: 2, flags: 0 });
+
+    expect(alice.motion).toEqual({ x: 0, y: 352, vx: 1024, vy: -1024, facing: 3, pose: 2, flags: 0 });
+  });
+
+  it("drops a move older than the one it has, its number wrapping", () => {
+    const room = new Room("town/1", TOWN);
+    const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    const id = alice.member.id;
+
+    expect([room.move(id, 65_534, at(1, 1)), room.move(id, 65_535, at(2, 2)), room.move(id, 0, at(3, 3))]).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect([room.move(id, 65_535, at(9, 9)), room.move(id, 0, at(9, 9))]).toEqual([false, false]);
+    expect(alice.motion?.x).toBe(3);
+  });
+
+  it("tells the others what somebody did, and that they left", () => {
+    const room = new Room("town/1", TOWN);
+    const a = inbox();
+    const b = inbox();
+    const alice = room.join(person("Alice"), a.outbox, 0, 30, 1);
+    room.join(person("Bob"), b.outbox, 0, 30, 1);
+    room.act(alice.member.id, "emote", "wave");
+    room.leave(alice.member.id);
+    room.leave(alice.member.id);
+
+    expect(b.texts.slice(1)).toEqual([
+      { t: "act", id: 1, kind: "emote", arg: "wave" },
+      { t: "left", id: 1 },
+    ]);
+    expect(a.texts.some((m) => m.t === "act")).toBe(false);
+    expect(room.size).toBe(1);
+  });
+
+  it("numbers people counting up, never 0, wrapping and skipping anybody still there", () => {
+    const room = new Room("town/1", { ...TOWN, capacity: 5 });
+    const first = room.join(person("A"), inbox().outbox, 0, 30, 1);
+    for (let i = 0; i < 65_533; i++) {
+      const o = room.join(person("x"), inbox().outbox, 0, 30, 1);
+      room.leave(o.member.id);
+    }
+    const last = room.join(person("B"), inbox().outbox, 0, 30, 1);
+    const wrapped = room.join(person("C"), inbox().outbox, 0, 30, 1);
+
+    expect([first.member.id, last.member.id, wrapped.member.id]).toEqual([1, 65_535, 2]);
+  });
+});
+
+describe("the rooms", () => {
+  it("puts people in the first copy with space, opens another when full, and closes empty ones", () => {
+    const rooms = new Rooms();
+    const join = (i: number) => {
+      const room = rooms.place("town");
+      room?.join(person(`P${i}`), inbox().outbox, 0, 30, 1);
+      return room?.name;
+    };
+    const inCopies = Array.from({ length: 70 }, (_, i) => join(i));
+
+    expect(inCopies.filter((n) => n === "town/1").length).toBe(32);
+    expect([...rooms.all()].map((r) => [r.name, r.size])).toEqual([
+      ["town/1", 32],
+      ["town/2", 32],
+      ["town/3", 6],
+    ]);
+
+    // Everybody leaves the first copy: it closes, and its number is taken again once the others are full.
+    const first = [...rooms.all()][0];
+    for (const id of first?.occupants.keys() ?? []) first?.leave(id);
+    if (first) rooms.tidy(first);
+    expect([...rooms.all()].map((r) => r.name)).toEqual(["town/2", "town/3"]);
+    const more = Array.from({ length: 27 }, (_, i) => join(100 + i));
+    expect(more.slice(0, 26).every((n) => n === "town/3")).toBe(true);
+    expect(more.at(-1)).toBe("town/1");
+    expect([...rooms.all()].map((r) => r.name)).toEqual(["town/1", "town/2", "town/3"]);
+  });
+
+  it("has no room of a kind there is not", () => {
+    expect(new Rooms().place("hall")).toBeUndefined();
+  });
+});
