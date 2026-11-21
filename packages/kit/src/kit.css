@@ -569,6 +569,14 @@ button.k-slot:hover {
   box-sizing: border-box;
   background: #1a0f1eb8;
 }
+/* The card a page shows instead of itself when it will not open: a title, a line, one button. */
+.k-shut {
+  width: min(calc(var(--u) * 170), 100%);
+  box-sizing: border-box;
+}
+.k-shut p {
+  margin: calc(var(--u) * 3) 0 calc(var(--u) * 5);
+}
 .k-rise {
   animation: k-rise 0.32s cubic-bezier(0.2, 1.3, 0.4, 1);
 }

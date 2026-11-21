@@ -1,10 +1,13 @@
 /**
  * Small questions the screen keeps asking of a run, answered without touching the page: where a
  * held figure may go, what an item would become on a figure, how the savings stack up, what the
- * next nudge for a new member is. They are here, apart from the drawing, so that they can be
- * checked by tests.
+ * next nudge for a new member is, what the postcard for the town says. They are here, apart from
+ * the drawing, so that they can be checked by tests.
  */
+import type { Postcard } from "@sequoia-leaf/kit/postcard.ts";
+
 import {
+  type Almanac,
   boonNumber,
   COMPONENT_IDS,
   type ComponentId,
@@ -35,6 +38,7 @@ import {
   type Stars,
   starScale,
   stepFor,
+  TRAILS,
   type TraitId,
   TRAITS,
   traitsNow,
@@ -318,3 +322,19 @@ export function rackHas(run: Run, item: FinishedId): "item" | "parts" | null {
 /** Every figure of a trait, cheapest first, in the order of the roster within a tier. */
 export const membersOf = (trait: TraitId): FigureId[] =>
   FIGURE_IDS.filter((id) => traitsOf(id).includes(trait)).toSorted((a, b) => FIGURES[a].tier - FIGURES[b].tier);
+
+/**
+ * The postcard the table leaves for the town (the kit's `postcard.ts`): a raid under way and where
+ * it got to, or the board set out; and every boss ever beaten, for carved figures in the member's
+ * camp. The table keeps no till.
+ */
+export function postcard(run: Run | null, almanac: Almanac): Postcard {
+  const trail = run ? TRAILS[run.trail] : undefined;
+  const waiting =
+    run && run.phase !== "over"
+      ? `A raid is under way: room ${run.room + 1}, on ${trail?.name ?? "the trail"}.`
+      : almanac.runs === 0
+        ? "The board is set out. One crab is uncounted."
+        : "The board is set out for another raid.";
+  return { waiting, trophies: [...new Set(almanac.bosses.flat())], till: 0 };
+}

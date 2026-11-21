@@ -327,6 +327,31 @@ export function showCard(a: Actor, doing: (() => string) | null = null): void {
   );
   doingEl = el("div", "k-d");
   doingOf = doing;
+  if (G.visitors.includes(a)) {
+    // Somebody really here: their name and rank, and nothing else.
+    doingEl = null;
+    c.append(
+      el(
+        "div",
+        "k-row top",
+        {},
+        slot(pic(a.body.face, 3), 28),
+        el(
+          "div",
+          "k-grow",
+          {},
+          el("div", "k-title", { text: a.who.name }),
+          a.who.rank ? el("div", "k-d", { text: a.who.rank }) : null,
+        ),
+        x,
+      ),
+    );
+    show.card = a;
+    keep();
+    c.hidden = false;
+    replay(c, "k-rise");
+    return;
+  }
   const shop = a === G.cinfy;
   c.append(
     el(
@@ -464,8 +489,8 @@ export function tickHud(dt: number): void {
   slow = 0.3;
   refresh?.();
   const of = show.card;
-  if (of && doingEl) {
-    doingEl.textContent = doingOf ? doingOf() : of === G.cinfy ? KEEPER.doing : DOING[of.doing];
+  if (of) {
+    if (doingEl) doingEl.textContent = doingOf ? doingOf() : of === G.cinfy ? KEEPER.doing : DOING[of.doing];
     if (performance.now() > cardUntil || of.away) closeCard();
   }
 }

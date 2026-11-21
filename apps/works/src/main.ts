@@ -7,9 +7,13 @@
  * `tools.ts` and `input.ts`, and everything that sits over the yard in `ui/`.
  */
 
+import { before, pull } from "@sequoia-leaf/kit/cloud.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
+import { followLeaf, shutCard, start } from "@sequoia-leaf/kit/live.ts";
+import { post } from "@sequoia-leaf/kit/postcard.ts";
+import { here } from "@sequoia-leaf/kit/presence.ts";
 import { balance, earn, grant, spend } from "@sequoia-leaf/kit/purse.ts";
-import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
+import { fromTown, inTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
@@ -37,6 +41,7 @@ import {
   load,
   type PlanId,
   type PlotId,
+  postcard,
   power,
   step,
   storyOrder,
@@ -159,14 +164,38 @@ const setPurse = (coins: number, leaf?: number): void => {
   else spend("leaf", now.leaf - leaf, "review");
 };
 
+/** What the town was last told about the yard, so that it is told only what has changed. */
+let carded = "";
+/** Leaves the town a postcard about the yard, if anything on it has changed. */
+function sendCard(): void {
+  const card = postcard(S.world);
+  const text = JSON.stringify(card);
+  if (text === carded) return;
+  carded = text;
+  post("works", card);
+}
+
 async function boot(): Promise<void> {
+  // Where the game is, and on the guild's server the member's saves, before anything kept is read.
+  const where = await start();
+  if (where.mode === "shut") {
+    shutCard(where.why, where.signIn);
+    return;
+  }
+  const live = where.mode === "live";
+  // Opened on its own, the yard also keeps the town's slot, where its postcard is.
+  if (live && !(await pull(inTown() ? ["purse", "works"] : ["purse", "works", "town"]))) {
+    shutCard("closed", where.signIn);
+    return;
+  }
   await fontsReady();
   const params = new URLSearchParams(location.search);
   if (params.has("fresh")) {
     // Start the yard over, once: the address is put right so that a reload does not do it again.
+    // On the guild's server the yard is the member's account's, and is not thrown away from an address.
     try {
-      localStorage.removeItem("works.save.v2");
-      localStorage.removeItem("works.screen.v1");
+      if (!live) localStorage.removeItem("works.save.v2");
+      if (!live) localStorage.removeItem("works.screen.v1");
     } catch {
       // Nothing was kept.
     }
@@ -308,6 +337,7 @@ async function boot(): Promise<void> {
     slow = 0.25;
     capstones();
     callers();
+    sendCard();
     refreshAll();
   }
 
@@ -338,9 +368,19 @@ async function boot(): Promise<void> {
   // ---------- keeping, and the town ----------
 
   fromTown((msg) => {
-    if (msg.town === "closing") save();
+    if (msg.town === "closing") {
+      save();
+      sendCard();
+    }
   });
   window.addEventListener("pagehide", save);
+  before(() => {
+    save();
+    sendCard();
+  });
+  here("works");
+  // Opened on its own, nobody else is listening for the member's Leaf.
+  if (live && !inTown()) followLeaf();
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") save();
   });

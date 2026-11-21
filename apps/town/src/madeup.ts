@@ -248,10 +248,38 @@ const LANDS = [
 ] as const;
 
 /** The board as it was first pinned up: where each quest starts, and what it needs. */
+const pinned = { claim: true, ends: null } as const;
 const BOARD: readonly Quest[] = [
-  { id: "raids", title: "Three raids with guild-mates", have: 3, need: 3, unit: "raids", reward: 300, pays: "leaf" },
-  { id: "planks", title: "Forty planks down the belt", have: 31, need: 40, unit: "planks", reward: 150, pays: "coins" },
-  { id: "hold", title: "Hold a territory for an hour", have: 38, need: 60, unit: "min", reward: 250, pays: "leaf" },
+  {
+    id: "raids",
+    title: "Three raids with guild-mates",
+    have: 3,
+    need: 3,
+    unit: "raids",
+    reward: 300,
+    pays: "leaf",
+    ...pinned,
+  },
+  {
+    id: "planks",
+    title: "Forty planks down the belt",
+    have: 31,
+    need: 40,
+    unit: "planks",
+    reward: 150,
+    pays: "coins",
+    ...pinned,
+  },
+  {
+    id: "hold",
+    title: "Hold a territory for an hour",
+    have: 38,
+    need: 60,
+    unit: "min",
+    reward: 250,
+    pays: "leaf",
+    ...pinned,
+  },
 ];
 
 const WARES: readonly Ware[] = [
@@ -623,6 +651,11 @@ export interface Opts {
   /** Called with the memory whenever it changes, to be kept. */
   keep?: (text: string) => void;
   random?: () => number;
+  /**
+   * Beside the real guild: only the townsfolk go on as before (about the town, at their camps,
+   * calling at the member's); the made-up guild's own news and quests stand still.
+   */
+  quiet?: boolean;
 }
 
 /** The made-up guild, and a way to set off one of its moments at once (for looking at the town). */
@@ -809,15 +842,16 @@ export function makeGuild(o: Opts = {}): MadeUp {
       return () => ears.delete(fn);
     },
     step(dt) {
-      plankIn -= dt;
-      if (plankIn <= 0) {
-        plankIn = 5.5;
-        progress("planks", 1, "Forty planks down the belt. See the board.");
-      }
       callIn -= dt;
       if (callIn <= 0) {
         callIn = 46 + random() * 30;
         stir("call");
+      }
+      if (o.quiet) return;
+      plankIn -= dt;
+      if (plankIn <= 0) {
+        plankIn = 5.5;
+        progress("planks", 1, "Forty planks down the belt. See the board.");
       }
       nextIn -= dt;
       if (nextIn > 0) return;
@@ -825,6 +859,9 @@ export function makeGuild(o: Opts = {}): MadeUp {
       stir(ORDER[turn % ORDER.length] ?? "level");
       turn++;
     },
+    visitors: () => [],
+    here: () => undefined,
+    told: () => null,
     stir,
   };
 }

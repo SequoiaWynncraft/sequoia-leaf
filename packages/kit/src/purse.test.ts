@@ -1,6 +1,21 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { balance, earn, grant, has, reset, spend, watch } from "./purse.ts";
+import { pretend } from "./net.ts";
+import {
+  balance,
+  earn,
+  forgetLedger,
+  fromLedger,
+  grant,
+  has,
+  KEY,
+  leafOpen,
+  reread,
+  reset,
+  spend,
+  watch,
+} from "./purse.ts";
+import { MemoryStore } from "./standin.ts";
 
 describe("the purse", () => {
   beforeEach(reset);
@@ -41,5 +56,59 @@ describe("the purse", () => {
     stop();
     earn(5, "unheard");
     expect(heard).toEqual(["a crate", "a bun"]);
+  });
+});
+
+describe("the purse beside the guild's ledger", () => {
+  let store = new MemoryStore();
+  let done: (() => void) | null = null;
+  beforeEach(() => {
+    store = new MemoryStore();
+    done = pretend({ store: () => store });
+    reset();
+    fromLedger(2450);
+  });
+  afterEach(() => {
+    forgetLedger();
+    done?.();
+  });
+
+  test("Leaf is what the ledger says, and only that", () => {
+    expect(balance().leaf).toBe(2450);
+    expect(leafOpen()).toBe(false);
+    const heard: string[] = [];
+    const stop = watch((p, why) => heard.push(`${p.leaf} ${why}`));
+    fromLedger(2530);
+    stop();
+    expect(balance().leaf).toBe(2530);
+    expect(heard).toEqual(["2530 the guild's ledger"]);
+  });
+
+  test("grant changes nothing", () => {
+    const before = { ...balance() };
+    grant(500, "a quest");
+    expect(balance()).toEqual(before);
+  });
+
+  test("Leaf is never spent, even when the purse holds it", () => {
+    expect(spend("leaf", 1, "a crown")).toBe(false);
+    expect(spend("leaf", 0, "nothing at all")).toBe(false);
+    expect(balance().leaf).toBe(2450);
+  });
+
+  test("Coins still come and go, and are kept without any Leaf beside them", () => {
+    const coins = balance().coins;
+    earn(40, "a crate");
+    expect(spend("coins", 15, "a bun")).toBe(true);
+    expect(balance()).toEqual({ leaf: 2450, coins: coins + 25 });
+    expect(JSON.parse(store.getItem(KEY) ?? "null")).toEqual({ coins: coins + 25 });
+  });
+
+  test("a purse read back from the browser keeps the ledger's Leaf, whatever it says", () => {
+    store.setItem(KEY, JSON.stringify({ leaf: 999_999, coins: 812 }));
+    reread();
+    expect(balance()).toEqual({ leaf: 2450, coins: 812 });
+    reset();
+    expect(balance().leaf).toBe(2450);
   });
 });
