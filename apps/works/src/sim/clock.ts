@@ -4,7 +4,8 @@
  *
  * Away, the yard keeps working for up to eight hours. Running every tick of that would take far
  * too long, so the yard is run for a short while for real, and the rest is paid out at the pace the
- * depot has been taking things in. Where a crate would fill or run dry part-way through, or a
+ * depot took things in during that short run, and nothing from before it: a line that ran dry before
+ * the member left is paid nothing. Where a crate would fill or run dry part-way through, or a
  * boiler with nothing gathered for it would burn the last of what it has, the yard is paid up to
  * that moment, run for another short while to find its new pace, and paid on from there.
  */
@@ -122,6 +123,9 @@ export function forward(w: World, ticks: number, exact = false): Away {
     // A short run for real: it brings the pace up to date and shows which crates are filling or emptying.
     const crates = w.cells.flatMap((b) => (b?.kind === "crate" ? [{ b, was: { ...b.buf }, count: b.count }] : []));
     const had = burning.map((f) => reserve(w, f));
+    // The pace is measured from this run alone: what the depot took in before it, however recent,
+    // is no measure of what the yard does now. Ticks still left out after a change stay left out.
+    w.pace = { ticks: 0, warm: w.pace.warm, made: {} };
     real(sample);
     // What a burning boiler's store holds is reckoned with the boiler, not as a crate emptying.
     const stored = new Set(burning.flatMap((f) => f.behind.map((i) => w.cells[i])));
@@ -318,7 +322,7 @@ function burnDown(w: World, f: Store, ticks: number): void {
   boiler.fuel = keep - pieces * TICKS.burn;
 }
 
-/** Pays the yard for `ticks` it is not run for, at the pace the depot has been taking things in. */
+/** Pays the yard for `ticks` it is not run for, at the pace the depot took things in over the short run just before. */
 function leap(w: World, ticks: number): void {
   if (ticks <= 0) return;
   w.tick += ticks;

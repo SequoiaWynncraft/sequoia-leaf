@@ -3,6 +3,10 @@
  * in `content/figures.ts`; each function here is that sentence carried out with the verbs from
  * `core.ts`. One gives back false when there is nothing to use it on yet, and the figure keeps its
  * mana and carries on until there is.
+ *
+ * An ability works out how strong it is once, as it is used. Whatever it sends on its way lands
+ * with that strength: what happens to its owner after (a Fairy Ring growing, a fall) does not
+ * change it.
  */
 import { abilityNumber, specOf, type UnitKind } from "../content/figures.ts";
 import { cone, distance, line, neighbours, within } from "../hex.ts";
@@ -122,16 +126,18 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   mossmote: (f, u, n) => {
     const t = mostHurt(f, u.side, false)[0];
     if (!t) return false;
+    const shield = powered(u, n("shield"));
     say(f, u, [t.cell], [t.id], t.id === u.id ? 0 : flight(u.cell, t.cell));
-    send(f, u, u.cell, t, () => shieldUp(f, t, powered(u, n("shield")), n("lasts"), u));
+    send(f, u, u.cell, t, () => shieldUp(f, t, shield, n("lasts"), u));
     return true;
   },
   moth: (f, u, n) => {
     const t = aim(f, u);
     if (!t) return false;
+    const damage = powered(u, n("damage"));
     say(f, u, around(t.cell), [t.id], flight(u.cell, t.cell));
     send(f, u, u.cell, t, () => {
-      for (const o of foesWithin(f, u.side, t.cell, 1)) hurt(f, o, powered(u, n("damage")), "magic", "ability", u);
+      for (const o of foesWithin(f, u.side, t.cell, 1)) hurt(f, o, damage, "magic", "ability", u);
     });
     return true;
   },
@@ -151,9 +157,10 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   finch: (f, u, n) => {
     const t = aim(f, u);
     if (!t) return false;
+    const damage = powered(u, n("damage"));
     say(f, u, [t.cell], [t.id], flight(u.cell, t.cell));
     for (let i = 0; i < n("seeds"); i++) {
-      send(f, u, u.cell, t, () => hurt(f, t, powered(u, n("damage")), "physical", "ability", u), i * 2);
+      send(f, u, u.cell, t, () => hurt(f, t, damage, "physical", "ability", u), i * 2);
     }
     return true;
   },
@@ -177,8 +184,9 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   kettle: (f, u, n) => {
     const t = mostHurt(f, u.side, true)[0];
     if (!t) return false;
+    const amount = powered(u, n("heal"));
     say(f, u, [t.cell], [t.id], t.id === u.id ? 0 : flight(u.cell, t.cell));
-    send(f, u, u.cell, t, () => heal(f, t, powered(u, n("heal")), "ability", u));
+    send(f, u, u.cell, t, () => heal(f, t, amount, "ability", u));
     return true;
   },
   slug: (f, u, n) =>
@@ -196,9 +204,10 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   chickaree: (f, u, n) => {
     const t = farthestFoe(f, u);
     if (!t) return false;
+    const damage = powered(u, n("damage"));
     say(f, u, [t.cell], [t.id], flight(u.cell, t.cell));
     send(f, u, u.cell, t, () => {
-      hurt(f, t, powered(u, n("damage")), "physical", "ability", u);
+      hurt(f, t, damage, "physical", "ability", u);
       stun(f, t, n("stun"), u);
     });
     return true;
@@ -229,6 +238,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   lanterngnome: (f, u, n) => {
     const lit = foesByDistance(f, u.side, u.cell).slice(0, n("count"));
     if (lit.length === 0) return false;
+    const damage = powered(u, n("damage"));
     say(
       f,
       u,
@@ -236,7 +246,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
       ids(lit),
       flight(u.cell, lit[0]?.cell ?? u.cell),
     );
-    for (const o of lit) send(f, u, u.cell, o, () => hurt(f, o, powered(u, n("damage")), "magic", "ability", u));
+    for (const o of lit) send(f, u, u.cell, o, () => hurt(f, o, damage, "magic", "ability", u));
     return true;
   },
 
@@ -274,9 +284,10 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   drizzlefrog: (f, u, n) => {
     const t = aim(f, u);
     if (!t) return false;
+    const damage = powered(u, n("damage"));
     say(f, u, [t.cell], [t.id], flight(u.cell, t.cell));
     send(f, u, u.cell, t, () => {
-      hurt(f, t, powered(u, n("damage")), "magic", "ability", u);
+      hurt(f, t, damage, "magic", "ability", u);
       slow(f, t, n("slow"), n("lasts"), u);
     });
     return true;
@@ -297,6 +308,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   crab23: (f, u, n) => {
     const hurting = mostHurt(f, u.side, true).slice(0, n("count"));
     if (hurting.length === 0) return false;
+    const amount = powered(u, n("heal"));
     say(
       f,
       u,
@@ -304,7 +316,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
       ids(hurting),
       flight(u.cell, hurting[0]?.cell ?? u.cell),
     );
-    for (const o of hurting) send(f, u, u.cell, o, () => heal(f, o, powered(u, n("heal")), "ability", u));
+    for (const o of hurting) send(f, u, u.cell, o, () => heal(f, o, amount, "ability", u));
     return true;
   },
 
@@ -382,9 +394,10 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   gust: (f, u, n) => {
     const t = aim(f, u);
     if (!t) return false;
+    const damage = powered(u, n("damage"));
     say(f, u, [t.cell], [t.id], flight(u.cell, t.cell));
     send(f, u, u.cell, t, () => {
-      hurt(f, t, powered(u, n("damage")), "magic", "ability", u);
+      hurt(f, t, damage, "magic", "ability", u);
       knockBack(f, t, u.cell, n("push"));
       slow(f, t, n("slow"), n("lasts"), u);
     });
