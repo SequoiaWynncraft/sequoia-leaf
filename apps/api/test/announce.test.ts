@@ -116,12 +116,30 @@ describe("announce", () => {
     ]);
   });
 
-  it("leaves the message alone while it says the same", async () => {
+  it("leaves the message alone while it says the same, after checking it is still there", async () => {
     await run(embed("Leaf rates"));
 
     expect(await run(embed("Leaf rates"), T0 + 1)).toBe("unchanged");
 
-    expect(sent).toHaveLength(1);
+    expect(sent.map((request) => `${request.method} ${request.url}`)).toEqual([
+      `POST ${WEBHOOK}?wait=true`,
+      `GET ${WEBHOOK}/messages/m1`,
+    ]);
+  });
+
+  it("posts the message again when someone deleted it, though it says the same", async () => {
+    await run(embed("Leaf rates"));
+    answer = (request) =>
+      request.method === "GET"
+        ? Response.json({ message: "Unknown Message" }, { status: 404 })
+        : Response.json({ id: "m2" });
+
+    expect(await run(embed("Leaf rates"))).toBe("posted");
+
+    expect(sent.map((request) => request.method)).toEqual(["POST", "GET", "POST"]);
+    answer = () => Response.json({ id: "m2" });
+    await run(embed("New rates"));
+    expect(sent.at(-1)).toMatchObject({ method: "PATCH", url: `${WEBHOOK}/messages/m2` });
   });
 
   it("edits the same message when what it says changes", async () => {
