@@ -7,7 +7,7 @@
 
 import { add, el, icon as glyph, type IconName, replay, shown } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
-import { balance, type Currency, spend } from "@sequoia-leaf/kit/purse.ts";
+import { balance, type Currency, leafShown, spend } from "@sequoia-leaf/kit/purse.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
@@ -461,7 +461,8 @@ export function setHammer(does: (() => void) | null, on = false): void {
 }
 
 export function initHud(): void {
-  counters.leaf = counter("leaf", "Leaf", "Earned with the guild, out in the world.");
+  // A guest has no Leaf, and the purse shows only their Coins.
+  if (leafShown()) counters.leaf = counter("leaf", "Leaf", "Earned with the guild, out in the world.");
   counters.coins = counter("coins", "Coins", "Made in town: the Works, the games.");
 
   const corner = $("corner");

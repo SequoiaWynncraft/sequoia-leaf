@@ -94,8 +94,13 @@ export const Hello = Schema.Struct({
 
 export const GameMe = Schema.Struct({
   player: Me.fields.player,
-  /** Their rank in the guild as the guild writes it, or null for a website admin who is not a member. */
+  /** Their rank in the guild as the guild writes it, or null for a guest or a website admin who is not a member. */
   rank: Schema.NullOr(Schema.String),
+  /**
+   * Whether they play as a guest: signed in, but not a member of the guild. A guest's Leaf and XP
+   * are 0, their level is a new member's, and their cursor is 0, whatever the ledger holds.
+   */
+  guest: Schema.Boolean,
   leaf: Schema.Number,
   xp: Schema.Number,
   level: Me.fields.level,
@@ -147,12 +152,21 @@ export const PLACES = ["town", "camp", "works", "table"] as const;
 export const PresenceBody = Schema.Struct({ place: Schema.Literals(PLACES), stay: Schema.optional(Schema.Boolean) });
 
 /**
- * Everyone seen in the game in the last 90 seconds, the caller included; and those who were seen
- * between 90 seconds and a day ago and are happy to be left in town, newest first, at most 24.
+ * Everyone seen in the game in the last 90 seconds, the caller included, at most the 50 seen most
+ * recently; and those who were seen between 90 seconds and a day ago and are happy to be left in
+ * town, newest first, at most 24. Each says whether they play as a guest.
  */
 export const Present = Schema.Struct({
-  present: Schema.Array(Schema.Struct({ id: Schema.String, username: Schema.String, place: Schema.String })),
+  present: Schema.Array(
+    Schema.Struct({ id: Schema.String, username: Schema.String, place: Schema.String, guest: Schema.Boolean }),
+  ),
   resting: Schema.Array(
-    Schema.Struct({ id: Schema.String, username: Schema.String, place: Schema.String, seen_at: Time }),
+    Schema.Struct({
+      id: Schema.String,
+      username: Schema.String,
+      place: Schema.String,
+      guest: Schema.Boolean,
+      seen_at: Time,
+    }),
   ),
 });

@@ -149,10 +149,15 @@ and nothing below happens. With a server it asks `GET /v1/game/me`:
   `closeLeaf`, which shows it closed with the tip "Leaf spending opens after the play-test." A
   page that is the whole window listens to the member's own events (`followLeaf`) and asks for
   the Leaf number again whenever one arrives.
+- **Known as a guest** (`guest: true`: signed in, not in the guild). The game is live, as them,
+  with no Leaf (`asGuest`): `leafShown()` is false, so no page shows a Leaf number, and every Leaf
+  button's tip is "Leaf is earned by raiding with Sequoia." (`leafShut()`). `followLeaf` and
+  `keepLeaf` listen to nothing, and no page asks `/v1/me...` or the guild's news.
 - **Signed out (401).** The whole window goes to the `sign_in` address the server gave, with its
   own address on the end, and comes back. Refused again within a minute (the time it went is kept
   in the browser), or in a frame, it shows the "Signed out" card instead.
-- **Not a member (403)**, or **trouble (5xx, no answer)**: a card says so, with one button.
+- **Not a member (403)**, from a server that lets in only members (the guild's own lets in guests),
+  or **trouble (5xx, no answer)**: a card says so, with one button.
 
 The cards are `shutCard`: a `k-paper` with a title, a line and one button, in place of the page.
 
@@ -178,7 +183,7 @@ every file in the kit and the games to this.
 "works" | "table")`) and whether their character stays in town after they go (`stay(on)`, true
 until told otherwise), every half minute and at once when either changes; the answer, everybody
 seen lately and those gone in the last day who stay (`Resting`, with when each was last seen),
-goes to whoever `hearPresent`s.
+goes to whoever `hearPresent`s. Each says whether they are a guest.
 
 All of it reaches the server through `net.ts`, which tests replace with `standin.ts`; the tests
 read the server's own contract files (`contracts/leaf-api-v1.json`, `contracts/leaf-game-v1.json`).

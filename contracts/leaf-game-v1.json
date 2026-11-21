@@ -22,6 +22,7 @@
         "username": "Alice"
       },
       "rank": "CAPTAIN",
+      "guest": false,
       "leaf": 2163,
       "xp": 1063,
       "level": {
@@ -43,15 +44,27 @@
       "message": "Your session has expired. Sign in again"
     }
   },
-  "GET /v1/game/me, not a member": {
+  "GET /v1/game/me, a guest": {
     "request": {
       "method": "GET",
       "path": "/v1/game/me"
     },
-    "status": 403,
+    "status": 200,
     "body": {
-      "code": "not_a_member",
-      "message": "Leaf is for current Sequoia members"
+      "player": {
+        "id": "10000000-0000-0000-0000-000000000003",
+        "username": "Visitor"
+      },
+      "rank": null,
+      "guest": true,
+      "leaf": 0,
+      "xp": 0,
+      "level": {
+        "number": 1,
+        "xp_into_level": 0,
+        "xp_for_next_level": 1000
+      },
+      "event_cursor": 0
     }
   },
   "GET /v1/game/saves/{slot}, never saved": {
@@ -126,6 +139,27 @@
     "body": {
       "code": "not_you",
       "message": "This page is signed in as someone else now. Load it again"
+    }
+  },
+  "PUT /v1/game/saves/{slot}, too soon": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/saves/town",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "version": 1,
+        "data": {
+          "saved_at": 1795610400000,
+          "keys": {
+            "town.save.v1": "{\"v\":1,\"lanterns\":3}"
+          }
+        }
+      }
+    },
+    "status": 429,
+    "body": {
+      "code": "slow_down",
+      "message": "That slot was saved a moment ago. Send it again in a few seconds"
     }
   },
   "GET /v1/game/saves/{slot}": {
@@ -488,6 +522,17 @@
       ]
     }
   },
+  "GET /v1/game/guild/events, a guest": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/guild/events"
+    },
+    "status": 403,
+    "body": {
+      "code": "members_only",
+      "message": "The guild's news is for Sequoia members"
+    }
+  },
   "PUT /v1/game/presence": {
     "request": {
       "method": "PUT",
@@ -503,7 +548,14 @@
         {
           "id": "10000000-0000-0000-0000-000000000001",
           "username": "Alice",
-          "place": "town"
+          "place": "town",
+          "guest": false
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000003",
+          "username": "Visitor",
+          "place": "town",
+          "guest": true
         }
       ],
       "resting": [
@@ -511,6 +563,7 @@
           "id": "10000000-0000-0000-0000-000000000002",
           "username": "Bob",
           "place": "works",
+          "guest": false,
           "seen_at": "2026-11-25T12:40:00.000Z"
         }
       ]

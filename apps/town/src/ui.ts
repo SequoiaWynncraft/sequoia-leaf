@@ -260,6 +260,12 @@ const clock = (ms: number): string => {
 
 /** The quest board: drawn whole again whenever its quests are no longer the ones it shows. */
 function quests(body: HTMLElement): () => void {
+  const note = guild.boardNote();
+  if (note !== null) {
+    // Somebody quests are not for: one note says why, and nothing on the board moves.
+    body.replaceChildren(el("div", "k-paper quest", {}, el("div", "", { text: note })));
+    return () => undefined;
+  }
   return redrawn(
     () => guild.quests().map((q) => q.id),
     () => notes(body),
@@ -691,18 +697,27 @@ function profile(body: HTMLElement): null {
         el("div", "k-d", { text: `Level ${me.level}` }),
       ),
     ),
-    el(
-      "div",
-      "k-wrap",
-      {},
-      ...me.ranks.map((r) => {
-        const chip = el("span", r === me.rank ? "k-chip lit" : "k-chip", { text: r, tabindex: 0 });
-        if (r === me.rank)
-          tip(chip, r, `${me.xp.toLocaleString("en")} of ${me.next.toLocaleString("en")} to the next level.`);
-        return chip;
-      }),
-    ),
-    el("div", "k-card", {}, el("div", "k-grow", {}, "This week", el("div", "k-d", { text: me.week.join(", ") }))),
+    // A guest has no place among the guild's ranks, and no week with it to tell.
+    ...(me.ranks.length === 0
+      ? []
+      : [
+          el(
+            "div",
+            "k-wrap",
+            {},
+            ...me.ranks.map((r) => {
+              const chip = el("span", r === me.rank ? "k-chip lit" : "k-chip", { text: r, tabindex: 0 });
+              if (r === me.rank)
+                tip(chip, r, `${me.xp.toLocaleString("en")} of ${me.next.toLocaleString("en")} to the next level.`);
+              return chip;
+            }),
+          ),
+        ]),
+    ...(me.week.length === 0
+      ? []
+      : [
+          el("div", "k-card", {}, el("div", "k-grow", {}, "This week", el("div", "k-d", { text: me.week.join(", ") }))),
+        ]),
     el(
       "div",
       "k-card",

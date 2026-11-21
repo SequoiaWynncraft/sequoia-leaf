@@ -7,6 +7,11 @@
  * or Leaf of its own beside the real guild. The town's own creatures and keepers are in `folk.ts`.
  *
  * `prepare()` fetches what the town needs before it opens; `makeLive` is the guild from then on.
+ *
+ * A guest (signed in, not in the guild) gets the same town with none of the guild's own: no Leaf,
+ * quests or news, and nothing is asked of the server that is only for members (`/v1/me...`, the
+ * guild's news). Their board holds one note saying why, they are a "Guest" where a member has a
+ * rank, and other guests in town are marked the same way.
  */
 
 import { followLeaf, type Member, member } from "@sequoia-leaf/kit/live.ts";
@@ -35,6 +40,12 @@ export function rankName(rank: string | null): string {
   const known = RANKS.find((r) => r === rank.toLowerCase());
   return known ? capital(known) : rank;
 }
+
+/** What the town calls somebody who plays but is not in the guild, where a member's rank would be. */
+export const GUEST = "Guest";
+
+/** The one note on a guest's quest board, in place of quests. */
+export const GUEST_BOARD = "Quests are for members of Sequoia. Raid with the guild and yours appear here.";
 
 /** Where a member's skin sheet is served. */
 export const skinOf = (id: string): string => `/v1/game/skins/${encodeURIComponent(id)}`;
@@ -269,7 +280,7 @@ export function toVisitors(present: readonly Present[], meId: string): Visitor[]
     out.push({
       id: p.id,
       name: p.name,
-      rank: p.rank === null ? null : rankName(p.rank),
+      rank: p.guest ? GUEST : p.rank === null ? null : rankName(p.rank),
       at: p.place,
       skin: skinOf(p.id),
     });
@@ -290,7 +301,7 @@ export function toResting(resting: readonly Resting[], present: readonly Present
   for (const r of resting.toSorted((a, b) => b.seen - a.seen)) {
     if (r.id === meId || here.has(r.id) || r.place === "camp" || out.some((o) => o.id === r.id)) continue;
     if (out.length >= RESTING_MOST) break;
-    out.push({ id: r.id, name: r.name, rank: null, at: r.place, skin: skinOf(r.id), seen: r.seen });
+    out.push({ id: r.id, name: r.name, rank: r.guest ? GUEST : null, at: r.place, skin: skinOf(r.id), seen: r.seen });
   }
   return out;
 }
@@ -329,7 +340,8 @@ async function newsAfter(after: number, pages: number): Promise<Ev[] | null> {
 
 /**
  * Fetches the member's quests, their newest news (for the week) and their news since the cursor
- * the town kept. Says whether it could; with the made-up guild there is nothing to fetch.
+ * the town kept. Says whether it could; with the made-up guild there is nothing to fetch, and for a
+ * guest there is nothing that is theirs to fetch.
  */
 export async function prepare(): Promise<boolean> {
   const me = member();
@@ -339,6 +351,11 @@ export async function prepare(): Promise<boolean> {
     cursor = parse(outside.store()?.getItem("town.save.v1"))?.cursor ?? null;
   } catch {
     cursor = null;
+  }
+  if (me.guest) {
+    // The cursor stays where a member left it, for if they are one again.
+    ready = { me, quests: [], since: [], first: cursor === null, mark: cursor ?? 0, week: [] };
+    return true;
   }
   const [quests, recent, since] = await Promise.all([
     ask("/v1/me/quests"),
@@ -394,10 +411,16 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
     if (a.status === 200) quests = readQuests(a.body);
   }
 
-  /** From the first moment anybody listens: the member's news, the guild's, and who is here. */
+  /** From the first moment anybody listens: the member's news, the guild's, and who is here. A guest hears only who is here. */
   function begin(): void {
     if (begun) return;
     begun = true;
+    hearPresent((seen, gone) => {
+      present = toVisitors(seen, me.id);
+      resting = toResting(gone, seen, me.id);
+      heard = true;
+    });
+    if (me.guest) return;
     followLeaf(
       (type, _data, id) => {
         // Told here as it happened, so the next letter does not tell it again.
@@ -412,11 +435,6 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
       const ev = readEvent(e.data);
       if (ev) news.add(ev, outside.now());
     });
-    hearPresent((seen, gone) => {
-      present = toVisitors(seen, me.id);
-      resting = toResting(gone, seen, me.id);
-      heard = true;
-    });
     setInterval(() => void fetchBoard(), BOARD_EVERY);
   }
 
@@ -424,18 +442,20 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
     me(): Me {
       return {
         name: me.name,
-        rank: rankName(me.rank),
+        rank: me.guest ? GUEST : rankName(me.rank),
         level: me.level.number,
         voice: 560,
         look: madeUp.me().look,
         xp: me.level.into,
         next: Math.max(1, me.level.next),
         skin: skinOf(me.id),
-        ranks: RANKS.map(capital),
-        week: p.week,
+        // A guest has no place among the ranks, and no week with the guild to show.
+        ranks: me.guest ? [] : RANKS.map(capital),
+        week: me.guest ? [] : p.week,
       };
     },
     quests: () => quests,
+    boardNote: () => (me.guest ? GUEST_BOARD : null),
     wares: () => madeUp.wares(),
     pieces: () => madeUp.pieces(),
     stalls: () => madeUp.stalls(),

@@ -192,28 +192,34 @@ describe("signing in with the website's cookie", () => {
     expect(await (await get("/v1/me", { cookie: "alice-token" })).json()).toMatchObject({ player: { id: alice } });
   });
 
-  it("refuses a cookie the backend does not accept, a non-member's, and says so when the backend is down", async () => {
+  it("refuses a cookie the backend does not accept, lets a non-member in as a guest, and says so when the backend is down", async () => {
     const stale = await get("/v1/game/me", { cookie: "stale-token" });
     const visitor = await get("/v1/game/me", { cookie: "carol-token" });
     backend.sessions["alice-token"] = () => new Response("down", { status: 502 });
     const down = await get("/v1/game/me", { cookie: "alice-token" });
 
-    expect([stale.status, visitor.status, down.status]).toEqual([401, 403, 503]);
-    expect(await visitor.json()).toMatchObject({ code: "not_a_member" });
+    expect([stale.status, visitor.status, down.status]).toEqual([401, 200, 503]);
+    expect(await visitor.json()).toMatchObject({ player: { id: carol }, guest: true });
     expect(await down.json()).toMatchObject({ code: "identity_unavailable" });
   });
 
   it("with both, goes by a Bearer the backend accepts, and by the cookie otherwise", async () => {
     const bearerWins = await get("/v1/game/me", { cookie: "alice-token", bearer: "bob-token" });
     const staleBearer = await get("/v1/game/me", { cookie: "alice-token", bearer: "stale-token" });
-    const visitorsBearer = await get("/v1/game/me", { cookie: "alice-token", bearer: "carol-token" });
-    const bothRefused = await get("/v1/game/me", { cookie: "carol-token", bearer: "stale-token" });
+    const guestsBearer = await get("/v1/game/me", { cookie: "alice-token", bearer: "carol-token" });
+    const guestsCookie = await get("/v1/game/me", { cookie: "carol-token", bearer: "stale-token" });
+    // Only members pass the mod's routes: a non-member's Bearer lets nobody in there.
+    const visitorsBearer = await get("/v1/me", { cookie: "alice-token", bearer: "carol-token" });
+    const bothRefused = await get("/v1/me", { cookie: "carol-token", bearer: "stale-token" });
 
     expect(await bearerWins.json()).toMatchObject({ player: { id: bob } });
     expect(await staleBearer.json()).toMatchObject({ player: { id: alice } });
+    expect(await guestsBearer.json()).toMatchObject({ player: { id: carol }, guest: true });
+    expect(await guestsCookie.json()).toMatchObject({ player: { id: carol }, guest: true });
     expect(await visitorsBearer.json()).toMatchObject({ player: { id: alice } });
     // When neither lets the request in, the cookie's refusal is the answer.
     expect(bothRefused.status).toBe(403);
+    expect(await codeOf(bothRefused)).toBe("not_a_member");
   });
 
   it("refuses a request with two session cookies, with or without a Bearer, and asks the backend nothing", async () => {
@@ -287,6 +293,16 @@ describe("signing in with the website's cookie", () => {
   });
 });
 
+/** What a route answers a request: the method, the path, the status, and the error code if it refused. */
+async function outcome(
+  method: string,
+  path: string,
+  sent: Sent,
+): Promise<readonly [string, string, number, string | null]> {
+  const response = await send(method, path, sent);
+  return [method, path, response.status, response.status >= 400 ? await codeOf(response) : null];
+}
+
 describe("who may use the game's routes", () => {
   const routes = [
     ["GET", "/v1/game/me"],
@@ -299,24 +315,68 @@ describe("who may use the game's routes", () => {
     ["PUT", "/v1/game/presence"],
   ] as const;
 
-  it("refuses everyone signed out, and everyone who is not a member, on every route but hello", async () => {
+  it("refuses everyone signed out on every route but hello", async () => {
+    const answers = await Promise.all(routes.map(([method, path]) => outcome(method, path, {})));
+
+    expect(answers).toEqual(routes.map(([method, path]) => [method, path, 401, "unauthorized"]));
+  });
+
+  it("lets a non-member in as a guest on every route but the guild's news, with the cookie or a Bearer", async () => {
     const answers = await Promise.all(
       routes.flatMap(([method, path]) =>
-        [{}, { cookie: "carol-token", origin: ORIGIN }, { bearer: "carol-token" }].map(async (sent) => {
-          const response = await send(method, path, sent);
-          return [method, path, response.status, await codeOf(response)];
-        }),
+        [{ cookie: "carol-token", origin: ORIGIN }, { bearer: "carol-token" }].map((sent) =>
+          outcome(method, path, sent),
+        ),
+      ),
+    );
+
+    // Sent with no body, the two writes are let in and then refused for what they lack.
+    const expected = {
+      "/v1/game/me": [200, null],
+      "/v1/game/saves": [200, null],
+      "GET /v1/game/saves/town": [404, "no_save"],
+      "PUT /v1/game/saves/town": [400, "invalid_save"],
+      [`/v1/game/skins/${bob}`]: [404, "no_skin"],
+      "/v1/game/guild/events": [403, "members_only"],
+      "/v1/game/guild/events/stream": [403, "members_only"],
+      "/v1/game/presence": [400, "invalid_place"],
+    } as Record<string, readonly [number, string | null]>;
+    expect(answers).toEqual(
+      routes.flatMap(([method, path]) => {
+        const [status, code] = expected[path] ?? expected[`${method} ${path}`] ?? [0, null];
+        return [
+          [method, path, status, code],
+          [method, path, status, code],
+        ];
+      }),
+    );
+    // Nobody Leaf knows is called Bob for a guest: Mojang is not asked.
+    expect(mojang.calls).toEqual([]);
+  });
+
+  it("still refuses a non-member every route the mod uses", async () => {
+    const mods = [
+      ["GET", "/v1/me"],
+      ["GET", "/v1/me/quests"],
+      ["POST", "/v1/me/quests/daily:1/reroll"],
+      ["GET", "/v1/me/events"],
+      ["GET", "/v1/me/events/stream"],
+    ] as const;
+
+    const answers = await Promise.all(
+      mods.flatMap(([method, path]) =>
+        [{ cookie: "carol-token", origin: ORIGIN }, { bearer: "carol-token" }].map((sent) =>
+          outcome(method, path, method === "POST" ? { ...sent, body: { leaf: 0 } } : sent),
+        ),
       ),
     );
 
     expect(answers).toEqual(
-      routes.flatMap(([method, path]) => [
-        [method, path, 401, "unauthorized"],
+      mods.flatMap(([method, path]) => [
         [method, path, 403, "not_a_member"],
         [method, path, 403, "not_a_member"],
       ]),
     );
-    expect(mojang.calls).toEqual([]);
   });
 
   it("answers hello to anyone, with where to sign in and whether Leaf may be spent", async () => {
@@ -358,11 +418,56 @@ describe("GET /v1/game/me", () => {
     expect(await response.json()).toEqual({
       player: { id: alice, username: "Alice" },
       rank: "CAPTAIN",
+      guest: false,
       leaf: 1300,
       xp: 1300,
       level: { number: 2, xp_into_level: 300, xp_for_next_level: 1250 },
       event_cursor: 1,
     });
+  });
+
+  it("answers a guest with no Leaf, XP or cursor and a new member's level, reading nothing of the ledger", async () => {
+    // Carol was a member once: the ledger still holds her Leaf, and her news.
+    await paid(carol);
+    await raided(carol, 110);
+    const asked: string[] = [];
+    const watched = testLeaf(
+      clock,
+      fetcher,
+      {},
+      {
+        mojang: mojang.service,
+        ledger: (real) => ({
+          ...real,
+          account: (player) => Effect.suspend(() => (asked.push(`ledger ${player}`), real.account(player))),
+        }),
+        events: (real) => ({
+          ...real,
+          latestIdOf: (player) => Effect.suspend(() => (asked.push(`events ${player}`), real.latestIdOf(player))),
+        }),
+      },
+    );
+    const watchedApp = watched.app();
+
+    const guest = await watchedApp.request("/v1/game/me", { headers: { Cookie: "seq_session=carol-token" } });
+    const member = await watchedApp.request("/v1/game/me", { headers: { Cookie: "seq_session=alice-token" } });
+    const names = await watched.query((sql) => sql`SELECT username FROM player_names ORDER BY username`);
+    await watchedApp.dispose();
+    await watched.dispose();
+
+    expect(await guest.json()).toEqual({
+      player: { id: carol, username: "Carol" },
+      rank: null,
+      guest: true,
+      leaf: 0,
+      xp: 0,
+      level: { number: 1, xp_into_level: 0, xp_for_next_level: 1000 },
+      event_cursor: 0,
+    });
+    expect(await member.json()).toMatchObject({ guest: false });
+    // Only the member's answer read the ledger and the news; and only the member's name is kept for the guild's news.
+    expect(asked).toEqual([`events ${alice}`, `ledger ${alice}`]);
+    expect(names).toEqual([{ username: "Alice" }]);
   });
 
   it("starts a member with no events at cursor 0", async () => {
@@ -583,6 +688,67 @@ describe("saves", () => {
     expect(bobsRead.status).toBe(404);
     expect(await bobsWrite.json()).toMatchObject({ version: 1 });
     expect(await (await get("/v1/game/saves/town")).json()).toMatchObject({ version: 1, data: { mine: "alice" } });
+  });
+
+  it("refuses a write to a slot within 2 seconds of the last with slow_down, changing nothing", async () => {
+    await save("town", 0, { n: 1 });
+    clock.now = T0 + 1;
+    const otherSlot = await save("works", 0, { n: 1 });
+    clock.now = T0 + 1999;
+    const soon = await save("town", 1, { n: 2 });
+    const stale = await save("town", 0, { n: 2 });
+    clock.now = T0 + 2000;
+    const later = await save("town", 1, { n: 3 });
+
+    expect([otherSlot.status, soon.status, stale.status, later.status]).toEqual([200, 429, 409, 200]);
+    expect(await soon.json()).toEqual({
+      code: "slow_down",
+      message: "That slot was saved a moment ago. Send it again in a few seconds",
+    });
+    // A write over a version that is not the stored one is stale, however soon it comes.
+    expect(await codeOf(stale)).toBe("version_conflict");
+    expect(await (await get("/v1/game/saves/town")).json()).toMatchObject({ version: 2, data: { n: 3 } });
+  });
+
+  it("keeps a guest's saves as a member's, and removes guests' left 90 days when anything is saved", async () => {
+    const carols = { cookie: "carol-token", origin: ORIGIN };
+    await save("town", 0, { mine: "carol" }, carols);
+    await save("works", 0, { mine: "carol" }, carols);
+    await save("town", 0, { mine: "alice" });
+    clock.now = T0 + 60 * DAY;
+    // Carol plays the Works again: that save is fresh, her town is not.
+    await save("works", 1, { mine: "carol, later" }, carols);
+    const readBack = await get("/v1/game/saves/works", carols);
+    clock.now = T0 + 90 * DAY;
+    await save("raid", 0, {}, { bearer: "bob-token" });
+    const before = await services.query(
+      (sql) => sql`SELECT player_id, slot, guest FROM saves ORDER BY player_id, slot`,
+    );
+    // Two seconds later, so that Bob's raid may be saved again; Carol's town is now past 90 days.
+    clock.now = T0 + 90 * DAY + 2000;
+    await save("raid", 1, {}, { bearer: "bob-token" });
+    clock.now = T0 + 150 * DAY + 1;
+    const untouched = await services.query((sql) => sql`SELECT player_id, slot FROM saves ORDER BY player_id, slot`);
+    await save("purse", 0, {}, { bearer: "bob-token" });
+
+    expect(await readBack.json()).toMatchObject({ version: 2, data: { mine: "carol, later" } });
+    expect(before).toEqual([
+      { player_id: alice, slot: "town", guest: 0 },
+      { player_id: bob, slot: "raid", guest: 0 },
+      { player_id: carol, slot: "town", guest: 1 },
+      { player_id: carol, slot: "works", guest: 1 },
+    ]);
+    // Nothing is removed until something is saved.
+    expect(untouched).toEqual([
+      { player_id: alice, slot: "town" },
+      { player_id: bob, slot: "raid" },
+      { player_id: carol, slot: "works" },
+    ]);
+    expect(await services.query((sql) => sql`SELECT player_id, slot FROM saves ORDER BY player_id, slot`)).toEqual([
+      { player_id: alice, slot: "town" },
+      { player_id: bob, slot: "purse" },
+      { player_id: bob, slot: "raid" },
+    ]);
   });
 });
 
@@ -1142,14 +1308,14 @@ describe("PUT /v1/game/presence", () => {
 
     expect(await first.json()).toEqual({
       present: [
-        { id: alice, username: "Alice", place: "town" },
-        { id: bob, username: "Bob", place: "works" },
+        { id: alice, username: "Alice", place: "town", guest: false },
+        { id: bob, username: "Bob", place: "works", guest: false },
       ],
       resting: [],
     });
     expect(await later.json()).toEqual({
-      present: [{ id: alice, username: "Alice", place: "camp" }],
-      resting: [{ id: bob, username: "Bob", place: "works", seen_at: iso(T0) }],
+      present: [{ id: alice, username: "Alice", place: "camp", guest: false }],
+      resting: [{ id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0) }],
     });
   });
 
@@ -1173,12 +1339,12 @@ describe("PUT /v1/game/presence", () => {
     expect(kept.length).toBeGreaterThan(0);
     expect(body).toEqual({
       present: [
-        { id: alice, username: "Alice", place: "town" },
-        { id: rows[0]?.playerId, username: "Member0", place: "town" },
+        { id: alice, username: "Alice", place: "town", guest: false },
+        { id: rows[0]?.playerId, username: "Member0", place: "town", guest: false },
       ],
       resting: kept
         .slice(0, 24)
-        .map((r) => ({ id: r.playerId, username: r.username, place: r.place, seen_at: iso(r.seenAt) })),
+        .map((r) => ({ id: r.playerId, username: r.username, place: r.place, guest: false, seen_at: iso(r.seenAt) })),
     });
   });
 
@@ -1208,14 +1374,79 @@ describe("PUT /v1/game/presence", () => {
     clock.now = T0 + 9 * MINUTE;
     const back = await arrive("town");
 
-    expect(await without.json()).toEqual({ present: [{ id: alice, username: "Alice", place: "town" }], resting: [] });
+    expect(await without.json()).toEqual({
+      present: [{ id: alice, username: "Alice", place: "town", guest: false }],
+      resting: [],
+    });
     expect(await back.json()).toEqual({
-      present: [{ id: alice, username: "Alice", place: "town" }],
-      resting: [{ id: bob, username: "Bob", place: "table", seen_at: iso(T0 + 6 * MINUTE) }],
+      present: [{ id: alice, username: "Alice", place: "town", guest: false }],
+      resting: [{ id: bob, username: "Bob", place: "table", guest: false, seen_at: iso(T0 + 6 * MINUTE) }],
     });
     expect(await services.query((sql) => sql`SELECT stay FROM presence ORDER BY player_id`)).toEqual([
       { stay: 1 },
       { stay: 1 },
+    ]);
+  });
+
+  it("lists guests beside members, each marked, here and resting", async () => {
+    await arrive("table", { bearer: "carol-token" });
+    clock.now = T0 + 2 * MINUTE;
+    await arrive("works", { bearer: "bob-token" });
+    const withGuest = await arrive("town");
+    clock.now = T0 + 4 * MINUTE;
+    const guestGone = await arrive("camp");
+
+    expect(await withGuest.json()).toEqual({
+      present: [
+        { id: alice, username: "Alice", place: "town", guest: false },
+        { id: bob, username: "Bob", place: "works", guest: false },
+      ],
+      resting: [{ id: carol, username: "Carol", place: "table", guest: true, seen_at: iso(T0) }],
+    });
+    expect(await guestGone.json()).toMatchObject({
+      resting: [
+        { id: bob, guest: false },
+        { id: carol, guest: true },
+      ],
+    });
+  });
+
+  it("lists at most the 50 seen most recently as here, in name order", async () => {
+    // Sixty seen in the last minute, one a second; Alice makes sixty-one.
+    const rows = Array.from({ length: 60 }, (_, n) => ({
+      playerId: `40000000-0000-0000-0000-${String(n).padStart(12, "0")}`,
+      username: `Here${String(n).padStart(2, "0")}`,
+      place: "town",
+      seenAt: T0 - 1000 - n * 1000,
+      stay: 1,
+      guest: n % 2,
+    }));
+    await seen(rows);
+    const body: unknown = await (await arrive("town")).json();
+
+    const present = typeof body === "object" && body !== null && "present" in body ? body.present : null;
+    expect(Array.isArray(present) ? present.map((p: { username: string }) => p.username) : null).toEqual(
+      ["Alice", ...rows.slice(0, 49).map((r) => r.username)].toSorted(),
+    );
+  });
+
+  it("answers a game saying where it is again within 5 seconds, without writing it down", async () => {
+    await arrive("town");
+    clock.now = T0 + 4999;
+    const soon = await arrive("works", alicesPage, false);
+    const kept = await services.query((sql) => sql`SELECT place, seen_at, stay FROM presence`);
+    clock.now = T0 + 5000;
+    const later = await arrive("works", alicesPage, false);
+
+    expect(soon.status).toBe(200);
+    expect(await soon.json()).toEqual({
+      present: [{ id: alice, username: "Alice", place: "town", guest: false }],
+      resting: [],
+    });
+    expect(kept).toEqual([{ place: "town", seen_at: T0, stay: 1 }]);
+    expect(await later.json()).toMatchObject({ present: [{ id: alice, place: "works" }] });
+    expect(await services.query((sql) => sql`SELECT place, seen_at, stay FROM presence`)).toEqual([
+      { place: "works", seen_at: T0 + 5000, stay: 0 },
     ]);
   });
 

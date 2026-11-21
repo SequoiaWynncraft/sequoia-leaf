@@ -73,8 +73,8 @@ and copies the test skin in one go.
 - **The guild, live.** With the made-up guild, every twenty seconds or so: some of its stand-in
   members come home from a raid and hang a lantern in the tree, win a territory and the banner goes
   up the pole, reach a level or a milestone. The feed in the corner says so in a line. Coming in,
-  the feed counts the members in town besides the member: "You are home. 2 members are in town.",
-  "1 member is in town.", or "The town is quiet."
+  the feed counts everybody else in town, members and guests together: "You are home. 3 are in
+  town.", "1 is in town.", or "The town is quiet."
 - **Touching things.** Lantern posts, mushrooms, flowers, ferns, the great trunks, the fire, the
   water, the crabs, the pieces on the stump's board, the strings of lights and the sky all do
   something when tapped, with a sound. Pointing at a thing whose meaning is not plain (or keeping
@@ -221,13 +221,21 @@ Leaf. `live.test.ts` holds the live guild to handing the town nobody the server 
   the game and who has gone in the last day and stays. Up to twelve of the first stand about as
   visitors (`visitors.ts`) in their own skins: strolling in town, by the Works' door, or watching at
   the stump; nobody at their own camp. They come in through the gate, never speak, and their card
-  has only their name and rank. Up to twelve of the others, most recent first, doze at a free seat
+  has only their name and rank; a guest's says "Guest". Up to twelve of the others, most recent first, doze at a free seat
   for where they were (a log at the fire for the town, the log at the stump for the table, the bench
   by the Works' door for the Works, then whatever seat is free; never the member's own; nobody last
   at their camp): eyes closed, a "z" drifting up, never speaking or moving. A visitor who goes sits
   down to doze if they stay, and walks out through the gate if not; a dozer who comes back gets up.
 - **What it remembers** goes to the member's account as well as the browser (the kit's
   `cloud.ts`). `?fresh` is ignored there.
+
+- **A guest.** Somebody signed in who is not in the guild plays the same town, with none of the
+  guild's own: `prepare()` fetches nothing, and nothing only a member may ask (`/v1/me...`, the
+  guild's news) is asked. The purse shows only Coins and every Leaf button says "Leaf is earned by
+  raiding with Sequoia."; the board holds one note ("Quests are for members of Sequoia. Raid with
+  the guild and yours appear here."); the letter is the plain welcome with the townsfolk's lines;
+  their card says "Guest of the guild" with no ranks and no week. Visitors and dozers who are
+  guests look like anybody else, with "Guest" for a rank.
 
 `review/live.ts` is a stand-in for the server, for looking at all of this without one: `bun
 review/live.ts 8790` serves the built town and games under `/play/` with a made-up member called

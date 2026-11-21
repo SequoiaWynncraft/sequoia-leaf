@@ -19,8 +19,9 @@ can read their balance, level and quests. There is no way to spend Leaf yet
 and there are no staff endpoints.
 
 It also serves the guild's browser game, Guild Town, at `/play/town/`, and the
-routes only the game uses. The game shows a member's Leaf; no route lets it
-spend or pay any.
+routes only the game uses. Anyone signed in may play it: members, and guests
+who are not in the guild. The game shows a member's Leaf; no route lets it
+spend or pay any, and a guest has none.
 
 ## Getting started
 
@@ -195,7 +196,7 @@ and `GET /openapi.json` serves the OpenAPI document generated from it.
 
 The game has routes of its own under `/v1/game/`; see [The game's routes](#the-games-routes).
 
-`/v1/me` and `/v1/game` routes take the member's Sequoia session, the token
+`/v1/me` and `/v1/game` routes take a Sequoia session, the token
 sequoia-backend issued, in one of two ways:
 
 - **`Authorization: Bearer`**, as the mod sends the one it already holds for the backend.
@@ -210,7 +211,10 @@ sequoia-backend issued, in one of two ways:
 A request with both is let in by its Bearer header when that would let it in on
 its own, and is otherwise judged by the cookie alone. Either way, the server
 asks sequoia-backend who the session belongs to, and remembers a confirmed
-session for a minute. Only current guild members are let in.
+session for a minute (up to 2,000 sessions). `/v1/me` lets in only current
+guild members (and website admins), and refuses anyone else with 403
+`not_a_member`. `/v1/game` lets in anyone signed in: whoever is neither a
+member nor an admin plays as a guest (see [The game's routes](#the-games-routes)).
 
 A request that carries the `seq_session` cookie more than once gets 401
 `unauthorized`, Bearer header or not, and the backend is not asked about it. A
@@ -326,33 +330,42 @@ react to `quest_completed`.
 | Route                              | What it returns                                                       |
 | ---------------------------------- | --------------------------------------------------------------------- |
 | `GET /v1/game/hello`               | Where to sign in, and whether Leaf may be spent. Needs no session.    |
-| `GET /v1/game/me`                  | The member, their rank, Leaf, XP, level, and their newest event's id. |
-| `GET /v1/game/saves`               | The member's saves: each slot's version and when it was written.      |
+| `GET /v1/game/me`                  | The player, their rank, Leaf, XP, level, and their newest event's id. |
+| `GET /v1/game/saves`               | The player's saves: each slot's version and when it was written.      |
 | `GET /v1/game/saves/{slot}`        | One save, with what it holds.                                         |
 | `PUT /v1/game/saves/{slot}`        | Writes one.                                                           |
 | `GET /v1/game/skins/{uuid}`        | A player's skin sheet, as a PNG.                                      |
 | `GET /v1/game/guild/events`        | What happened across the guild, oldest first.                         |
 | `GET /v1/game/guild/events/stream` | The same as it happens, as server-sent events.                        |
-| `PUT /v1/game/presence`            | Says where in the game the member is; lists who is there and resting. |
+| `PUT /v1/game/presence`            | Says where in the game the player is; lists who is there and resting. |
 
-Every one but `hello` takes a session, as above, and lets in only current guild
-members.
+Every one but `hello` takes a session, as above, and lets in anyone signed in,
+member of the guild or not. Someone who is neither a member nor a website admin
+plays as a **guest**: they have saves, skins and presence like a member, but no
+Leaf, XP, quests or news, and the guild's events (and their stream) refuse them
+with 403 `members_only`. The mod's routes, `/v1/me` and those under it, still
+let in only members.
 
 `GET /v1/game/hello` answers `{ "sign_in", "leaf_spending" }`: `GAME_SIGN_IN_URL`
 and `GAME_LEAF_SPENDING`. A page that gets it knows it is on a live server.
 
-`GET /v1/game/me` answers `{ "player": { "id", "username" }, "rank", "leaf",
-"xp", "level", "event_cursor" }`. `rank` is the member's guild rank as the guild
-writes it, such as `Captain`, or null for a website admin who is not in the
-guild. `level` is as `/v1/me` has it. `event_cursor` is the id of the member's
-newest event, 0 when they have none, from which to read `/v1/me/events?after=`
-on their next visit.
+`GET /v1/game/me` answers `{ "player": { "id", "username" }, "rank", "guest",
+"leaf", "xp", "level", "event_cursor" }`. `rank` is the member's guild rank as
+the guild writes it, such as `Captain`, or null for a guest or a website admin
+who is not in the guild. `level` is as `/v1/me` has it. `event_cursor` is the id
+of the member's newest event, 0 when they have none, from which to read
+`/v1/me/events?after=` on their next visit. For a guest, `guest` is true,
+`leaf` and `xp` are 0, `level` is a new member's and `event_cursor` is 0, and
+nothing is read from the ledger or the events: a former member's old Leaf is
+not shown to them while they are a guest.
 
-**Saves.** Each member has a save in each of four slots, `purse`, `town`,
+**Saves.** Each player has a save in each of four slots, `purse`, `town`,
 `works` and `raid` (`SAVE_SLOTS` in `packages/core/src/saves.ts`). A save is a
 JSON object of at most 256 KiB as JSON text; Leaf stores it as it comes and
 reads nothing in it. It is not the ledger: one row per slot, overwritten in
-place, with no history.
+place, with no history. Each save records whether a guest wrote it; whenever
+any save is written, guests' saves not written for 90 days are removed.
+Members' saves are never removed.
 
 - `GET /v1/game/saves/{slot}` answers `{ "slot", "version", "updated_at", "data" }`,
   or 404 `no_save` for a slot never written.
@@ -363,15 +376,18 @@ place, with no history.
   nothing: the page was left open as someone else, and should load again. It is
   written only while `version` is still the stored version, as the next one,
   and answers `{ "version", "updated_at" }`. Otherwise it gets 409
-  `version_conflict` and changes nothing: read the save again. A slot that is
+  `version_conflict` and changes nothing: read the save again. A write that
+  would be taken, but comes less than 2 seconds after the slot was last
+  written, gets 429 `slow_down` and changes nothing: send it again in a few
+  seconds. A slot that is
   not one gets 400 `invalid_slot`; a body that is not a save, or `data` that is
   not an object, 400 `invalid_save`; a save over 256 KiB, 413 `save_too_large`.
   A body over twice that is not read at all.
 
 **Skins.** `GET /v1/game/skins/{uuid}` takes a Minecraft UUID with or without
 dashes, or gets 400 `invalid_uuid`. It serves only the skins of players Leaf
-knows: the member asking, anyone with an account in the ledger, and anyone
-whose game said where they were in the last day (see Presence). Any other
+knows: the player asking, anyone with an account in the ledger, and anyone
+whose game said where they were in the last day, guests too (see Presence). Any other
 player gets 404 `no_skin`, and Mojang is not asked about them.
 
 Leaf asks Mojang's session server for the player's profile and fetches the
@@ -407,20 +423,23 @@ streams are fed by one look at the database every two seconds, not one each.
 Raid party members' events share a `detail` and an `occurred_at`.
 
 A member's name is the one the backend gave when they last opened
-`/v1/game/me`, or else the one Mojang gives. Leaf asks Mojang only about
+`/v1/game/me` as a member, or else the one Mojang gives. Leaf asks Mojang only about
 players it knows, as for skins. It keeps the names it learns, and each time it
 learns a new one, removes those nobody asked for in 30 days. An event whose
 member no one can name yet, because Mojang can't be reached, is left out.
 
 **Presence.** `PUT /v1/game/presence` takes `{ "place", "stay" }`: `place` is
 one of `town`, `camp`, `works` and `table`, and `stay`, true or false and true
-when left out, says whether the member's character may stay in town, dozing,
+when left out, says whether the player's character may stay in town, dozing,
 for a day after they go. Anything else gets 400 `invalid_place`. It records
-both and answers `{ "present": [{ "id", "username", "place" }], "resting": [{
-"id", "username", "place", "seen_at" }] }`: `present` is everyone whose game
-said where they were in the last 90 seconds, the member included; `resting`
-is those last seen between 90 seconds and a day ago whose `stay` was true,
-newest first, at most 24. Members not seen for a day are forgotten.
+both, with whether the player is a guest, and answers `{ "present": [{ "id",
+"username", "place", "guest" }], "resting": [{ "id", "username", "place",
+"guest", "seen_at" }] }`: `present` is the 50 seen most recently of everyone
+whose game said where they were in the last 90 seconds, the player included,
+in name order; `resting` is those last seen between 90 seconds and a day ago
+whose `stay` was true, newest first, at most 24. A game that says where it is
+less than 5 seconds after it last did is answered the lists, but nothing is
+written. Players not seen for a day are forgotten.
 
 ## The game's pages
 
@@ -457,14 +476,15 @@ finishes and rerolls quests, reaches a level and a dozen milestones, beside four
 other members who raid and war with them and on their own. Two of the four are
 then in the game (Birchwood in town, Mossling at the table) and stay so, and
 two left a while ago and doze in town (Fernhollow three hours ago, Quillon
-forty minutes ago, last at the Works).
+forty minutes ago, last at the Works). Pebblefoot, who is not in the guild, is
+in town too, as a guest.
 
 - The cookie `seq_session=tester` is Tester's session; any other, or none, is
   signed out. `/sign-in?return_to=<address>` sets it and goes back, as the
   website's sign-in does, and it is the `sign_in` that `hello` gives.
   `/sign-out?return_to=<address>` clears it.
 - `PUBLIC_ORIGIN` is `http://127.0.0.1:4000`.
-- `--not-a-member`: Tester is signed in but not in the guild, so the game's routes answer 403.
+- `--guest`: Tester is signed in but not in the guild, so they play as a guest.
 - `--down`: the backend can't be asked who Tester is, so they answer 503.
 - `--busy`: every minute a few of the four finish a raid together, for the guild's news.
 

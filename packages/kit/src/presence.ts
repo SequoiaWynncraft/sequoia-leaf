@@ -18,6 +18,8 @@ export interface Present {
   place: Place;
   /** Their rank, if the server says. */
   rank: string | null;
+  /** Whether they play as a guest, not in the guild. */
+  guest: boolean;
 }
 
 /** Somebody gone from the game in the last day whose character stays in town, and when they were last seen. */
@@ -27,6 +29,8 @@ export interface Resting {
   place: Place;
   /** When the server last saw them, in milliseconds since 1970. */
   seen: number;
+  /** Whether they played as a guest, not in the guild. */
+  guest: boolean;
 }
 
 export const EVERY = 30_000;
@@ -40,7 +44,13 @@ export function readPresent(v: unknown): Present[] {
   const out: Present[] = [];
   for (const p of v.present) {
     if (!isRecord(p) || typeof p.id !== "string" || typeof p.username !== "string" || !isPlace(p.place)) continue;
-    out.push({ id: p.id, name: p.username, place: p.place, rank: typeof p.rank === "string" ? p.rank : null });
+    out.push({
+      id: p.id,
+      name: p.username,
+      place: p.place,
+      rank: typeof p.rank === "string" ? p.rank : null,
+      guest: p.guest === true,
+    });
   }
   return out;
 }
@@ -53,7 +63,7 @@ export function readResting(v: unknown): Resting[] {
     if (!isRecord(r) || typeof r.id !== "string" || typeof r.username !== "string" || !isPlace(r.place)) continue;
     const seen = typeof r.seen_at === "string" ? Date.parse(r.seen_at) : NaN;
     if (!Number.isFinite(seen)) continue;
-    out.push({ id: r.id, name: r.username, place: r.place, seen });
+    out.push({ id: r.id, name: r.username, place: r.place, seen, guest: r.guest === true });
   }
   return out;
 }
