@@ -357,6 +357,18 @@ describe("a live room", () => {
     expect(sockets.length).toBe(2);
   });
 
+  test("sends the player's place once after a welcome, whether or not whoever heard it said it first", async () => {
+    const w = await live();
+    room = joinLive("town", { welcome: () => room?.move(step(9, 9)) });
+    room.move(step(4, 4));
+    const s = socket(0);
+    s.open();
+    s.says(welcome(1, w.clock.now));
+    await Bun.sleep(70);
+
+    expect(s.moves().map((m) => m?.motion.x)).toEqual([9]);
+  });
+
   test("shows nobody once the connection is gone for good, though a drop keeps the room in view", async () => {
     const w = await live();
     room = joinLive("town");
