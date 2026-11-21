@@ -7,6 +7,7 @@
 import { el, icon as glyph, replay, shown } from "@sequoia-leaf/kit/dom.ts";
 import { CREAM, GOLD, GREEN, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { earn, grant } from "@sequoia-leaf/kit/purse.ts";
+import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
@@ -200,7 +201,8 @@ function treasury(body: HTMLElement): () => void {
           speak(w.thanks[0], w.thanks[1]);
           changed();
         });
-        tip(buy, `${w.price} Leaf`, w.once ? "Yours to keep." : "As often as you like.");
+        if (!closeLeaf(buy, `${w.price} Leaf`))
+          tip(buy, `${w.price} Leaf`, w.once ? "Yours to keep." : "As often as you like.");
         side.replaceChildren(buy);
       },
     );
@@ -241,6 +243,13 @@ function claim(q: Quest, b: HTMLElement): void {
   changed();
 }
 
+const two = (n: number): string => String(n).padStart(2, "0");
+/** When something ends, as the member's own clock says it. */
+const clock = (ms: number): string => {
+  const d = new Date(ms);
+  return `${two(d.getHours())}:${two(d.getMinutes())}`;
+};
+
 function quests(body: HTMLElement): () => void {
   const parts = guild.quests().map((first) => {
     const fill = el("i");
@@ -253,6 +262,7 @@ function quests(body: HTMLElement): () => void {
       el("div", "", { text: first.title }),
       el("div", first.pays === "leaf" ? "k-bar leaf" : "k-bar", {}, fill),
       el("div", "k-row", {}, count, side),
+      first.ends === null ? null : el("div", "k-dim", { text: `Ends at ${clock(first.ends)}` }),
     );
     body.append(note);
     const now = (): Quest => guild.quests().find((q) => q.id === first.id) ?? first;
@@ -260,8 +270,10 @@ function quests(body: HTMLElement): () => void {
       () => `${now().have}/${G.claimed.has(first.id)}`,
       () => {
         const q = now();
-        const done = G.claimed.has(q.id);
         const ready = q.have >= q.need;
+        // A quest that pays by itself is done the moment it is finished.
+        const paid = !q.claim && ready;
+        const done = G.claimed.has(q.id) || paid;
         fill.style.setProperty("--v", `${Math.min(100, (q.have / q.need) * 100)}%`);
         count.textContent = `${q.have} / ${q.need} ${q.unit}`;
         note.classList.toggle("done", done);
@@ -277,8 +289,9 @@ function quests(body: HTMLElement): () => void {
             q.reward,
           ),
         );
-        if (done) side.replaceChildren(el("span", "k-chip lit", {}, glyph("check"), "Claimed"));
-        else if (ready)
+        if (paid) side.replaceChildren(prize, el("span", "k-chip lit", {}, glyph("check"), "Paid"));
+        else if (done) side.replaceChildren(el("span", "k-chip lit", {}, glyph("check"), "Claimed"));
+        else if (ready && q.claim)
           side.replaceChildren(
             prize,
             button("sm", ["Claim"], (b) => {
@@ -337,7 +350,8 @@ function shopRow(
       hooks.feed(`${thing.name}: on its way to your camp.`, kind === "leaf" ? "leaf" : "gold");
     },
   );
-  tip(buy, `${s.price} ${kind === "leaf" ? "Leaf" : "Coins"}`, "It will be waiting at your camp.");
+  if (kind !== "leaf" || !closeLeaf(buy, `${s.price} Leaf`))
+    tip(buy, `${s.price} ${kind === "leaf" ? "Leaf" : "Coins"}`, "It will be waiting at your camp.");
   const row = el(
     "div",
     "k-card",
@@ -716,7 +730,10 @@ function lineArt(l: AwayLine): Node {
   return faces.length > 0 ? el("span", "k-row faces", {}, ...faces) : glyph("heart");
 }
 
-/** The letter that meets the member at the gate. Putting it away pays what it says into the purse. */
+/**
+ * The letter that meets the member at the gate. Putting it away pays what it says into the purse;
+ * what the guild's ledger has already paid is only shown.
+ */
 export function showArrival(letter: Letter, done: () => void): void {
   const root = $("arrival");
   const paper = el(
@@ -741,7 +758,7 @@ export function showArrival(letter: Letter, done: () => void): void {
         {},
         art,
         el("span", "k-grow", { text: l.text }),
-        l.pay ? el("b", "", { text: `+${l.pay.amount}` }) : null,
+        l.pay ? el("b", "", { text: `+${l.pay.amount}` }) : l.got ? el("b", "", { text: `+${l.got}` }) : null,
       ),
     );
     if (l.pay) paying.push({ art, pay: l.pay });

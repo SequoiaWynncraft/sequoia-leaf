@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { HttpApiSchema } from "effect/http-api";
 
 // What each route answers, field for field. Names are snake_case, as the mod and
 // the other Sequoia services use. Times are ISO 8601 strings in UTC.
@@ -79,4 +80,72 @@ export const Events = Schema.Struct({
   events: Schema.Array(
     Schema.Struct({ id: Schema.Number, type: Schema.String, created_at: Time, data: Schema.Unknown }),
   ),
+});
+
+// The game's routes, under /v1/game.
+
+/** Whether this is a live server, and where it signs members in. */
+export const Hello = Schema.Struct({
+  /** The sign-in address, ending in `return_to=`: the game appends its own address, URL-encoded. */
+  sign_in: Schema.String,
+  /** Whether the game may offer to spend Leaf. */
+  leaf_spending: Schema.Boolean,
+});
+
+export const GameMe = Schema.Struct({
+  player: Me.fields.player,
+  /** Their rank in the guild as the guild writes it, or null for a website admin who is not a member. */
+  rank: Schema.NullOr(Schema.String),
+  leaf: Schema.Number,
+  xp: Schema.Number,
+  level: Me.fields.level,
+  /** The id of their newest event, 0 when they have none: where to read `/v1/me/events?after=` from next visit. */
+  event_cursor: Schema.Number,
+});
+
+const SaveInfo = Schema.Struct({
+  slot: Schema.String,
+  /** How many times the slot was written. */
+  version: Schema.Number,
+  updated_at: Time,
+});
+
+export const SaveList = Schema.Struct({ saves: Schema.Array(SaveInfo) });
+
+export const Save = Schema.Struct({ ...SaveInfo.fields, data: Schema.Unknown });
+
+/** A save, written over the version the game last read: 0 when it read none. */
+export const SaveBody = Schema.Struct({
+  /** The member the page sending it believes it is: a save from a page left open as someone else is refused. */
+  player: Schema.String,
+  version: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  data: Schema.Unknown,
+});
+
+export const Saved = Schema.Struct({ version: Schema.Number, updated_at: Time });
+
+/** A skin sheet, the 64 by 64 PNG Minecraft wraps around a character. */
+export const Png = Schema.Uint8Array.pipe(HttpApiSchema.asUint8Array({ contentType: "image/png" }));
+
+/** Events across the guild, oldest first, with whose each is. `data` is cut down by type (see the README). */
+export const GuildEvents = Schema.Struct({
+  events: Schema.Array(
+    Schema.Struct({
+      id: Schema.Number,
+      type: Schema.String,
+      created_at: Time,
+      player: Me.fields.player,
+      data: Schema.Unknown,
+    }),
+  ),
+});
+
+/** The places in the game a member can be. */
+export const PLACES = ["town", "camp", "works", "table"] as const;
+
+export const PresenceBody = Schema.Struct({ place: Schema.Literals(PLACES) });
+
+/** Everyone seen in the game in the last 90 seconds, the caller included. */
+export const Present = Schema.Struct({
+  present: Schema.Array(Schema.Struct({ id: Schema.String, username: Schema.String, place: Schema.String })),
 });

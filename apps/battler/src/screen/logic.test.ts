@@ -1,6 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
-import { buy, choose, type FigureId, type ItemId, move, type Piece, type Run, startRun } from "../game/index.ts";
+import {
+  type BossId,
+  buy,
+  choose,
+  type FigureId,
+  type ItemId,
+  move,
+  newAlmanac,
+  type Piece,
+  type Run,
+  startRun,
+} from "../game/index.ts";
 import {
   canBuy,
   combosWithHeld,
@@ -12,6 +23,7 @@ import {
   ownTraitCount,
   pieceNumbers,
   plainNumbers,
+  postcard,
   rackHas,
   reachOf,
   reachOfOffer,
@@ -311,5 +323,28 @@ describe("what a card says about a figure", () => {
     run.items = ["thorn", "thorn", "hoard"];
     expect(rackHas(run, "blackthorn")).toBe("parts");
     expect(rackHas(run, "hoard")).toBe("item");
+  });
+});
+
+describe("the postcard for the town", () => {
+  test("a new member's table is set out, with nothing won and no till", () => {
+    expect(postcard(null, newAlmanac())).toEqual({
+      waiting: "The board is set out. One crab is uncounted.",
+      trophies: [],
+      till: 0,
+    });
+  });
+
+  test("a raid under way says where it got to; every boss ever beaten is a trophy, once", () => {
+    const run = begun();
+    run.room = 4;
+    const bosses: BossId[][] = [["oldbramble", "hoardmagpie"], ["oldbramble"], []];
+    const almanac = { ...newAlmanac(), runs: 3, bosses };
+    expect(postcard(run, almanac)).toEqual({
+      waiting: "A raid is under way: room 5, on The Easy Way.",
+      trophies: ["oldbramble", "hoardmagpie"],
+      till: 0,
+    });
+    expect(postcard(null, almanac).waiting).toBe("The board is set out for another raid.");
   });
 });

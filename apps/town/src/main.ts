@@ -10,6 +10,8 @@
  */
 
 import { unit } from "@sequoia-leaf/kit/dom.ts";
+import { where } from "@sequoia-leaf/kit/live.ts";
+import { earn } from "@sequoia-leaf/kit/purse.ts";
 import { bake, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
@@ -47,6 +49,8 @@ declare global {
       happen: (kind: Moment) => void;
       page: (x: number, y: number) => Pt;
       who: () => { name: string; x: number; y: number; doing: string }[];
+      /** Real members in town just now (on the guild's own server). */
+      visitors: () => { name: string; x: number; y: number }[];
       /** Where the member is, and where the missing crab is hiding. */
       me: () => Pt;
       lost: () => Pt;
@@ -58,6 +62,8 @@ declare global {
       leave: () => void;
       /** Stops the town's clock (it is still drawn), so that `skip` alone moves it on. */
       hold: (on: boolean) => void;
+      /** Puts `n` Coins in the purse, for a tour that buys things; only with the made-up guild, never live. */
+      coins: (n: number) => void;
       /** What the town has kept, as it would be saved now. */
       kept: () => unknown;
       /** Which place is on the stage, and how dark the walk between two has got (0 for not at all). */
@@ -165,6 +171,8 @@ async function boot(): Promise<void> {
     goInside(game, at) {
       if (visit) return;
       inside = game;
+      // The game says where the member is while it is open.
+      guild.here(null);
       iris.at = at;
       iris.goal = 0;
       hush(true);
@@ -179,6 +187,7 @@ async function boot(): Promise<void> {
           hush(false);
           if (inside) scene.cameBack(inside);
           inside = null;
+          guild.here(G.where);
           wake();
         },
       });
@@ -357,6 +366,7 @@ async function boot(): Promise<void> {
         scene = trip.next;
         scene.resize(G.view.w, G.view.h);
         aim(true);
+        guild.here(G.where);
       }
     } else if (trip) {
       G.dark = Math.max(0, G.dark - dt / DAYBREAK);
@@ -414,6 +424,7 @@ async function boot(): Promise<void> {
 
   resize();
   town.arrive();
+  guild.here("town");
   wake();
 
   window.town = {
@@ -442,6 +453,9 @@ async function boot(): Promise<void> {
     },
     hold(on) {
       heldStill = on;
+    },
+    coins(n) {
+      if (where().mode !== "live") earn(n, "a tour's pocket money");
     },
     where: () => ({ where: G.where, dark: Math.round(G.dark * 100) / 100 }),
     camp: {

@@ -3,7 +3,8 @@
  * a frame over the whole town. The frame opens out of the spot the view closed in on, and closes
  * back into it. The game says `ready` when it has drawn, `leave` to come back, and `news` for a
  * line in the town's feed; the town says `closing` before it puts the game away. A game that does
- * not say `ready` (not built, not served) gets a note and a way back instead of an empty frame.
+ * not say `ready` (not built, not served) gets a note and a way back instead of an empty frame; one
+ * that says it late opens over the note.
  */
 
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
@@ -61,7 +62,9 @@ export function goIn(game: Game, asks: Asks): Visit {
   let signIn = 0;
 
   function open(): void {
-    if (state !== "knocking" || !spot || !ready) return;
+    // A game that was slow to say it is ready (on the guild's server it fetches the member's saves
+    // first) still opens, even after the note has gone up.
+    if ((state !== "knocking" && state !== "shut") || !spot || !ready) return;
     state = "inside";
     window.clearTimeout(waited);
     window.clearTimeout(signIn);

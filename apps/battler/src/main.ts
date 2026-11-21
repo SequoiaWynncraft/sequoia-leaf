@@ -6,7 +6,11 @@
  * in `screen/`. Opened alone it plays by itself; inside the town it says when it is ready, sends
  * news worth a line in the town's feed, and saves when the town puts it away.
  */
-import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
+import { before, pickUp, pull } from "@sequoia-leaf/kit/cloud.ts";
+import { followLeaf, shutCard, start } from "@sequoia-leaf/kit/live.ts";
+import { post } from "@sequoia-leaf/kit/postcard.ts";
+import { here } from "@sequoia-leaf/kit/presence.ts";
+import { fromTown, inTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { isMuted, setMuted } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
@@ -30,6 +34,7 @@ import {
 import { stepFx } from "./screen/fx.ts";
 import { openHand, unpick } from "./screen/hand.ts";
 import { openHandle } from "./screen/handle.ts";
+import { postcard } from "./screen/logic.ts";
 import { hearNotes, stepPawns, syncPawns } from "./screen/pawns.ts";
 import { drawOver, drawScene, stepScene, wordsScene } from "./screen/scene.ts";
 import { showSheet } from "./screen/sheet.ts";
@@ -47,7 +52,30 @@ import { acornLanded, buildTable, placeFoe, renderTable, stepTable, toast, wakeC
 /** The window's size when the page was last laid out. */
 let windowSize = "";
 
+/** What the town was last told about the table, so that it is told only what has changed. */
+let carded = "";
+/** Leaves the town a postcard about the table, if anything on it has changed. */
+function sendCard(): void {
+  const card = postcard(S.run, S.almanac);
+  const text = JSON.stringify(card);
+  if (text === carded) return;
+  carded = text;
+  post("raid", card);
+}
+
 async function boot(): Promise<void> {
+  // Where the game is, and on the guild's server the member's saves, before anything kept is read.
+  const where = await start();
+  if (where.mode === "shut") {
+    shutCard(where.why, where.signIn);
+    return;
+  }
+  const live = where.mode === "live";
+  // Opened on its own, the table also keeps the town's slot, where its postcard is.
+  if (live && !(await pull(inTown() ? ["purse", "raid"] : ["purse", "raid", "town"], { onReplaced: pickUp }))) {
+    shutCard("closed", where.signIn);
+    return;
+  }
   await fontsReady();
   if (new URLSearchParams(location.search).has("sheet")) {
     showSheet();
@@ -103,6 +131,7 @@ async function boot(): Promise<void> {
   });
   onChange(() => {
     if (S.mode === "plan") syncPawns(S.run);
+    sendCard();
     renderTable();
     renderPicks();
     renderPages();
@@ -151,8 +180,17 @@ async function boot(): Promise<void> {
   fromTown(() => {
     unpick();
     saveNow();
+    sendCard();
   });
   window.addEventListener("pagehide", saveNow);
+  before(() => {
+    saveNow();
+    sendCard();
+  });
+  sendCard();
+  here("table");
+  // Opened on its own, nobody else is listening for the member's Leaf.
+  if (live && !inTown()) followLeaf();
   tell({ town: "ready" });
 }
 

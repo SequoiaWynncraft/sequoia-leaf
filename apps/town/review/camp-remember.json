@@ -3,7 +3,10 @@
   ["wait", 2200],
   ["click", "#arrival .k-btn"],
   ["wait", 900],
-  ["eval", "(window.town.skip(2), window.town.visit('market'), window.town.skip(6), 'at the market')"],
+  [
+    "eval",
+    "(window.town.coins(4000), window.town.skip(2), window.town.visit('market'), window.town.skip(6), 'at the market')"
+  ],
   ["wait", 400],
   ["click", "#panel .k-col .k-card:nth-of-type(1) .k-btn"],
   ["wait", 300],

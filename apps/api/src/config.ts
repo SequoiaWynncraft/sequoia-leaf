@@ -1,6 +1,6 @@
 import { dirname, join } from "node:path";
 
-import { Config, Context, Layer, Option, type Redacted } from "effect";
+import { Config, Context, Layer, Option, type Redacted, Schema } from "effect";
 
 import type { BucketConfig } from "./backup/offsite.ts";
 
@@ -30,7 +30,36 @@ export interface Settings {
   readonly offsite: BucketConfig | undefined;
   /** The `BACKUP_S3_*` variables that are set, when some but not all of them are. */
   readonly offsitePartlySet: readonly string[];
+  /**
+   * The origin Leaf's own pages are served from, such as `https://leaf.seqwawa.com`.
+   * A write signed in with the session cookie must come from a page on it.
+   */
+  readonly publicOrigin: string;
+  /** The directory of built game pages served under `/play`. Without it there is no `/play`. */
+  readonly publicDir: string | undefined;
+  /** Where the game sends a member to sign in: an address that ends in `return_to=`, to which it appends its own. */
+  readonly gameSignInUrl: string;
+  /** Whether the game may offer to spend Leaf. Only `/v1/game/hello` reads it, to tell the game. */
+  readonly gameLeafSpending: boolean;
 }
+
+/**
+ * An origin, such as `https://leaf.seqwawa.com`: an http or https address with
+ * nothing after the host and port. Anything else stops the app, naming the
+ * variable but not repeating what it was set to.
+ */
+const Origin = Schema.URL.check(
+  Schema.makeFilter(
+    (url) =>
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      url.username === "" &&
+      url.password === "" &&
+      url.pathname === "/" &&
+      url.search === "" &&
+      url.hash === "",
+    { expected: "an http or https origin, with no path" },
+  ),
+);
 
 /** A variable that may be left out. One set to the empty string counts as left out. */
 const optional = <A>(config: Config.Config<A>) => config.pipe(Config.option, Config.map(Option.getOrUndefined));
@@ -52,6 +81,16 @@ export const settings: Config.Config<Settings> = Config.all({
   bucket: optional(Config.String("BACKUP_S3_BUCKET")),
   accessKeyId: optional(Config.String("BACKUP_S3_ACCESS_KEY_ID")),
   secretAccessKey: optional(Config.Redacted("BACKUP_S3_SECRET_ACCESS_KEY")),
+  publicOrigin: Config.schema(Origin, "PUBLIC_ORIGIN").pipe(
+    Config.map((url) => url.origin),
+    Config.withDefault("https://leaf.seqwawa.com"),
+  ),
+  publicDir: optional(Config.String("PUBLIC_DIR")),
+  // The backend's web sign-in, which sends the member back to the `return_to` address once signed in.
+  gameSignInUrl: Config.String("GAME_SIGN_IN_URL").pipe(
+    Config.withDefault("https://api.seqwawa.com/auth/web/start?return_to="),
+  ),
+  gameLeafSpending: Config.Boolean("GAME_LEAF_SPENDING").pipe(Config.withDefault(false)),
 }).pipe(
   Config.map((read): Settings => {
     const { databasePath, endpoint, bucket, accessKeyId, secretAccessKey } = read;
@@ -75,6 +114,10 @@ export const settings: Config.Config<Settings> = Config.all({
       ratesWebhook: read.ratesWebhook,
       offsite,
       offsitePartlySet: offsite === undefined ? set : [],
+      publicOrigin: read.publicOrigin,
+      publicDir: read.publicDir,
+      gameSignInUrl: read.gameSignInUrl,
+      gameLeafSpending: read.gameLeafSpending,
     };
   }),
 );

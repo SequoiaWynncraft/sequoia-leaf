@@ -1,5 +1,7 @@
+import { deflateSync } from "node:zlib";
+
 import type { Activity, PlayerId, Posting } from "@sequoia-leaf/core";
-import { Clock, ConfigProvider, Effect, Layer, ManagedRuntime, Redacted, References } from "effect";
+import { Clock, ConfigProvider, Duration, Effect, Layer, ManagedRuntime, Option, Redacted, References } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import { SqlClient } from "effect/sql";
 
@@ -7,6 +9,7 @@ import { routerConfig, Routes, Stores } from "../src/app.ts";
 import { AppConfig, type Settings, settings } from "../src/config.ts";
 import { databaseAt } from "../src/db.ts";
 import type { CreditSource } from "../src/earning/sync.ts";
+import { Mojang, MojangError, type MojangProfile } from "../src/game/mojang.ts";
 import { Ledger } from "../src/ledger/store.ts";
 
 export const MINUTE = 60_000;
@@ -60,12 +63,18 @@ export function testConfig(overrides: Partial<Settings> = {}): Settings {
   };
 }
 
+/** Stand-ins for services Leaf reaches outside the network stand-in. */
+export interface Fakes {
+  /** Mojang, for skins and names. Without it Leaf asks the network stand-in, as it would ask Mojang. */
+  readonly mojang?: Mojang["Service"];
+}
+
 /**
  * Leaf around a fresh, fully migrated database in memory, a hand-set clock and
  * a stand-in network: the layer Leaf's code runs with, `run` to run an effect
  * against it, and `app` for its HTTP API. They all share the one database.
  */
-export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Settings> = {}) {
+export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Settings> = {}, fakes: Fakes = {}) {
   const handClock = Layer.effect(
     Clock.Clock,
     Clock.clockWith((real) =>
@@ -81,19 +90,24 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
       }),
     ),
   );
-  const outside = Layer.mergeAll(
-    Layer.succeed(AppConfig)(testConfig(config)),
-    FetchHttpClient.layer,
-    Layer.succeed(FetchHttpClient.Fetch)(
-      // Bun's fetch type carries `preconnect` as well.
-      Object.assign(
-        (input: string | URL | Request, init?: RequestInit) =>
-          fetcher(input instanceof Request ? input.url : input.toString(), init ?? {}),
-        {
-          preconnect: globalThis.fetch.preconnect,
-        },
+  const network = FetchHttpClient.layer.pipe(
+    Layer.provideMerge(
+      Layer.succeed(FetchHttpClient.Fetch)(
+        // Bun's fetch type carries `preconnect` as well.
+        Object.assign(
+          (input: string | URL | Request, init?: RequestInit) =>
+            fetcher(input instanceof Request ? input.url : input.toString(), init ?? {}),
+          {
+            preconnect: globalThis.fetch.preconnect,
+          },
+        ),
       ),
     ),
+  );
+  const outside = Layer.mergeAll(
+    Layer.succeed(AppConfig)(testConfig(config)),
+    fakes.mojang === undefined ? Mojang.layer.pipe(Layer.provideMerge(network)) : Layer.succeed(Mojang)(fakes.mojang),
+    network,
     handClock,
     Layer.succeed(References.MinimumLogLevel)("None"),
   );
@@ -121,6 +135,8 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
       );
       return {
         dispose,
+        /** Answers a request as the server would, such as one a browser sent. */
+        handle: (request: Request) => handler(request),
         request: (path: string, init: RequestInit = {}) => handler(new Request(`http://leaf.test${path}`, init)),
       };
     },
@@ -135,4 +151,198 @@ export async function rejection(promise: Promise<unknown>): Promise<unknown> {
     return error;
   }
   throw new Error("Expected the promise to reject, but it resolved");
+}
+
+/** A member's session as the backend's `/auth/web/me` describes it. `rank` null is someone not in the guild. */
+export function sessionOf(player: PlayerId, username: string, rank: string | null = "CAPTAIN") {
+  return {
+    discord_id: "1",
+    discord_username: username.toLowerCase(),
+    minecraft_uuid: player,
+    minecraft_username: username,
+    expires_at: "2026-12-01T00:00:00Z",
+    guild_rank: rank,
+    website_admin: false,
+  };
+}
+
+/** What a stand-in backend answers. Each is read when asked, so a test can change it as it goes. */
+export interface Backend {
+  /** The answer to `/auth/web/me`, by the session token Leaf sends; any other token is refused. */
+  sessions: Record<string, () => Response>;
+  /** The credit feed's answer for the window [from, to), in milliseconds. */
+  credits: (from: number, to: number) => unknown;
+  /** Sierra's awards feed's answer for the window [from, to). */
+  awards: (from: number, to: number) => unknown;
+  /** The path of every request it was sent, in order. */
+  readonly calls: string[];
+}
+
+/** A stand-in sequoia-backend and Sierra, with no sessions and empty feeds until a test gives them some. */
+export function fakeBackend(sessions: Record<string, () => Response> = {}): { backend: Backend; fetcher: Fetcher } {
+  const backend: Backend = {
+    sessions,
+    credits: () => ({ raids: [], wars: [] }),
+    awards: () => ({ awards: [] }),
+    calls: [],
+  };
+  const fetcher: Fetcher = (url, init) => {
+    const request = new Request(url, init);
+    const path = new URL(request.url).pathname;
+    backend.calls.push(path);
+    if (path === "/auth/web/me") {
+      const token = request.headers.get("Authorization")?.slice("Bearer ".length) ?? "";
+      const answer = backend.sessions[token] ?? (() => Response.json({ error: "unauthorized" }, { status: 401 }));
+      return Promise.resolve(answer());
+    }
+    const params = new URL(request.url).searchParams;
+    const from = Date.parse(params.get("from") ?? "");
+    const to = Date.parse(params.get("to") ?? "");
+    if (path === "/internal/player-credits") {
+      return Promise.resolve(Response.json(backend.credits(from, to)));
+    }
+    if (path === "/internal/v1/achievements/awards") {
+      return Promise.resolve(Response.json(backend.awards(from, to)));
+    }
+    return Promise.resolve(new Response("not found", { status: 404 }));
+  };
+  return { backend, fetcher };
+}
+
+/** What a stand-in Mojang knows, and what it was asked. */
+export interface FakeMojang {
+  /** Each player's profile; a player missing is one Mojang knows nothing of. */
+  readonly profiles: Map<string, MojangProfile>;
+  /** The skin sheet at each address. */
+  readonly textures: Map<string, Uint8Array>;
+  /** While true, every request fails as if Mojang could not be reached. */
+  down: boolean;
+  /** How long, in milliseconds, each answer takes. */
+  latencyMs: number;
+  /** Every request, as `profile <uuid>` or `texture <address>`. */
+  readonly calls: string[];
+  readonly service: Mojang["Service"];
+}
+
+/** Answers after the fake's latency, if it has any. */
+const after =
+  (fake: FakeMojang) =>
+  <A, E>(answer: Effect.Effect<A, E>): Effect.Effect<A, E> =>
+    fake.latencyMs === 0 ? answer : Effect.delay(answer, Duration.millis(fake.latencyMs));
+
+/** A stand-in for Mojang that answers from what a test gives it, and never reaches the network. */
+export function fakeMojang(): FakeMojang {
+  const fake: FakeMojang = {
+    profiles: new Map(),
+    textures: new Map(),
+    down: false,
+    latencyMs: 0,
+    calls: [],
+    service: {
+      profile: (player) =>
+        Effect.suspend(() => {
+          fake.calls.push(`profile ${player}`);
+          return fake.down
+            ? Effect.fail(new MojangError({ message: "Mojang is down in this test" }))
+            : Effect.succeed(Option.fromUndefinedOr(fake.profiles.get(player)));
+        }).pipe(after(fake)),
+      texture: (address) =>
+        Effect.suspend(() => {
+          fake.calls.push(`texture ${address.href}`);
+          const png = fake.textures.get(address.href);
+          return fake.down || png === undefined
+            ? Effect.fail(new MojangError({ message: "No such texture in this test" }))
+            : Effect.succeed(png);
+        }).pipe(after(fake)),
+    },
+  };
+  return fake;
+}
+
+/** One chunk of a PNG file: its length, type, data and checksum. */
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const typed = new Uint8Array([...new TextEncoder().encode(type), ...data]);
+  const chunk = new Uint8Array(12 + data.length);
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, data.length);
+  chunk.set(typed, 4);
+  view.setUint32(8 + data.length, Bun.hash.crc32(typed));
+  return chunk;
+}
+
+/** A colour as red, green, blue and alpha. */
+export type Rgba = readonly [number, number, number, number];
+
+/** A real PNG of `width` by `height` pixels, from their colours as red, green, blue and alpha, row by row. */
+export function encodePng(width: number, height: number, pixels: Uint8Array) {
+  const stride = width * 4;
+  const rows = new Uint8Array(height * (1 + stride));
+  for (let y = 0; y < height; y++) {
+    rows.set(pixels.subarray(y * stride, (y + 1) * stride), y * (1 + stride) + 1);
+  }
+  const header = new Uint8Array(13);
+  const view = new DataView(header.buffer);
+  view.setUint32(0, width);
+  view.setUint32(4, height);
+  header.set([8, 6, 0, 0, 0], 8); // 8 bits a channel, red, green, blue and alpha
+  return new Uint8Array([
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a,
+    ...pngChunk("IHDR", header),
+    ...pngChunk("IDAT", deflateSync(rows)),
+    ...pngChunk("IEND", new Uint8Array(0)),
+  ]);
+}
+
+/** A picture of `width` by `height` pixels in one colour, as a real PNG. */
+export function plainPng(width: number, height: number, colour: Rgba) {
+  const pixels = new Uint8Array(width * height * 4);
+  for (let at = 0; at < pixels.length; at += 4) {
+    pixels.set(colour, at);
+  }
+  return encodePng(width, height, pixels);
+}
+
+/**
+ * A 64 by 64 skin sheet as a real PNG: the parts of a character, laid out as
+ * Minecraft lays them out, in plain colours, with a face.
+ */
+export function skinPng(colours: {
+  readonly skin: Rgba;
+  readonly hair: Rgba;
+  readonly shirt: Rgba;
+  readonly legs: Rgba;
+}) {
+  const pixels = new Uint8Array(64 * 64 * 4);
+  const fill = (x0: number, y0: number, x1: number, y1: number, colour: Rgba) => {
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        pixels.set(colour, (y * 64 + x) * 4);
+      }
+    }
+  };
+  fill(0, 0, 32, 16, colours.skin); // the head
+  fill(8, 0, 16, 8, colours.hair); // its top
+  for (const x of [0, 8, 16, 24]) {
+    fill(x, 8, x + 8, 10, colours.hair); // a fringe all round
+  }
+  fill(24, 10, 32, 16, colours.hair); // the back of the head
+  fill(9, 12, 11, 13, [255, 255, 255, 255]); // the eyes, on the face
+  fill(13, 12, 15, 13, [255, 255, 255, 255]);
+  fill(10, 12, 11, 13, [40, 40, 60, 255]);
+  fill(13, 12, 14, 13, [40, 40, 60, 255]);
+  fill(16, 16, 40, 32, colours.shirt); // the body
+  fill(40, 16, 56, 32, colours.shirt); // the right arm
+  fill(32, 48, 48, 64, colours.shirt); // the left arm
+  fill(44, 28, 48, 32, colours.skin); // the hands
+  fill(36, 60, 40, 64, colours.skin);
+  fill(0, 16, 16, 32, colours.legs); // the right leg
+  fill(16, 48, 32, 64, colours.legs); // the left leg
+  return encodePng(64, 64, pixels);
 }

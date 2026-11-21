@@ -1,0 +1,510 @@
+{
+  "GET /v1/game/hello": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/hello"
+    },
+    "status": 200,
+    "body": {
+      "sign_in": "https://api.seqwawa.com/auth/web/start?return_to=",
+      "leaf_spending": false
+    }
+  },
+  "GET /v1/game/me": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/me"
+    },
+    "status": 200,
+    "body": {
+      "player": {
+        "id": "10000000-0000-0000-0000-000000000001",
+        "username": "Alice"
+      },
+      "rank": "CAPTAIN",
+      "leaf": 2163,
+      "xp": 1063,
+      "level": {
+        "number": 2,
+        "xp_into_level": 63,
+        "xp_for_next_level": 1250
+      },
+      "event_cursor": 14
+    }
+  },
+  "GET /v1/game/me, signed out": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/me"
+    },
+    "status": 401,
+    "body": {
+      "code": "unauthorized",
+      "message": "Your session has expired. Sign in again"
+    }
+  },
+  "GET /v1/game/me, not a member": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/me"
+    },
+    "status": 403,
+    "body": {
+      "code": "not_a_member",
+      "message": "Leaf is for current Sequoia members"
+    }
+  },
+  "GET /v1/game/saves/{slot}, never saved": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/saves/town"
+    },
+    "status": 404,
+    "body": {
+      "code": "no_save",
+      "message": "Nothing is saved in that slot"
+    }
+  },
+  "PUT /v1/game/saves/{slot}": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/saves/town",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "version": 0,
+        "data": {
+          "saved_at": 1795610400000,
+          "keys": {
+            "town.save.v1": "{\"v\":1,\"lanterns\":3}"
+          }
+        }
+      }
+    },
+    "status": 200,
+    "body": {
+      "version": 1,
+      "updated_at": "2026-11-25T12:40:00.000Z"
+    }
+  },
+  "PUT /v1/game/saves/{slot}, a stale version": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/saves/town",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "version": 0,
+        "data": {
+          "saved_at": 1795610400000,
+          "keys": {
+            "town.save.v1": "{\"v\":1,\"lanterns\":3}"
+          }
+        }
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "version_conflict",
+      "message": "The save changed since it was read. Read it again"
+    }
+  },
+  "PUT /v1/game/saves/{slot}, not you": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/saves/town",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "version": 1,
+        "data": {
+          "saved_at": 1795610400000,
+          "keys": {
+            "town.save.v1": "{\"v\":1,\"lanterns\":3}"
+          }
+        }
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "not_you",
+      "message": "This page is signed in as someone else now. Load it again"
+    }
+  },
+  "GET /v1/game/saves/{slot}": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/saves/town"
+    },
+    "status": 200,
+    "body": {
+      "slot": "town",
+      "version": 1,
+      "updated_at": "2026-11-25T12:40:00.000Z",
+      "data": {
+        "saved_at": 1795610400000,
+        "keys": {
+          "town.save.v1": "{\"v\":1,\"lanterns\":3}"
+        }
+      }
+    }
+  },
+  "GET /v1/game/saves": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/saves"
+    },
+    "status": 200,
+    "body": {
+      "saves": [
+        {
+          "slot": "town",
+          "version": 1,
+          "updated_at": "2026-11-25T12:40:00.000Z"
+        }
+      ]
+    }
+  },
+  "GET /v1/game/guild/events": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/guild/events"
+    },
+    "status": 200,
+    "body": {
+      "events": [
+        {
+          "id": 1,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:30:40.000Z"
+          }
+        },
+        {
+          "id": 2,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:31:20.000Z"
+          }
+        },
+        {
+          "id": 3,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:32:00.000Z"
+          }
+        },
+        {
+          "id": 4,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:32:40.000Z"
+          }
+        },
+        {
+          "id": 5,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:33:20.000Z"
+          }
+        },
+        {
+          "id": 6,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:34:00.000Z"
+          }
+        },
+        {
+          "id": 7,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:34:40.000Z"
+          }
+        },
+        {
+          "id": 8,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:35:20.000Z"
+          }
+        },
+        {
+          "id": 9,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:36:00.000Z"
+          }
+        },
+        {
+          "id": 10,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "war",
+            "detail": "Detlas",
+            "occurred_at": "2026-11-25T12:37:00.000Z",
+            "in_claim": true
+          }
+        },
+        {
+          "id": 11,
+          "type": "level_up",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "level": 2
+          }
+        },
+        {
+          "id": 12,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000002",
+            "username": "Bob"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:30:40.000Z"
+          }
+        },
+        {
+          "id": 13,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000002",
+            "username": "Bob"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:31:20.000Z"
+          }
+        },
+        {
+          "id": 14,
+          "type": "achievement_paid",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "label": "Bronze",
+            "tier": "bronze"
+          }
+        }
+      ]
+    }
+  },
+  "GET /v1/game/guild/events?after=": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/guild/events?after=6"
+    },
+    "status": 200,
+    "body": {
+      "events": [
+        {
+          "id": 7,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:34:40.000Z"
+          }
+        },
+        {
+          "id": 8,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:35:20.000Z"
+          }
+        },
+        {
+          "id": 9,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:36:00.000Z"
+          }
+        },
+        {
+          "id": 10,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "source": "war",
+            "detail": "Detlas",
+            "occurred_at": "2026-11-25T12:37:00.000Z",
+            "in_claim": true
+          }
+        },
+        {
+          "id": 11,
+          "type": "level_up",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "level": 2
+          }
+        },
+        {
+          "id": 12,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000002",
+            "username": "Bob"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:30:40.000Z"
+          }
+        },
+        {
+          "id": 13,
+          "type": "leaf_earned",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000002",
+            "username": "Bob"
+          },
+          "data": {
+            "source": "raid",
+            "detail": "Nest of the Grootslangs",
+            "occurred_at": "2026-11-25T12:31:20.000Z"
+          }
+        },
+        {
+          "id": 14,
+          "type": "achievement_paid",
+          "created_at": "2026-11-25T12:40:00.000Z",
+          "player": {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "username": "Alice"
+          },
+          "data": {
+            "label": "Bronze",
+            "tier": "bronze"
+          }
+        }
+      ]
+    }
+  },
+  "PUT /v1/game/presence": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/presence",
+      "body": {
+        "place": "town"
+      }
+    },
+    "status": 200,
+    "body": {
+      "present": [
+        {
+          "id": "10000000-0000-0000-0000-000000000001",
+          "username": "Alice",
+          "place": "town"
+        }
+      ]
+    }
+  }
+}

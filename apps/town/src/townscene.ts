@@ -49,6 +49,7 @@ import {
   twinkleAll,
 } from "./town.ts";
 import { dismissArrival, initUI, openPanel, showArrival, townDock } from "./ui.ts";
+import { isVisitor, stepVisitors } from "./visitors.ts";
 import { H, hedgeY, nearestFree, type Place, place, type PlaceId, PLACES, pondD, SEATS, SPOTS, W } from "./world.ts";
 
 /** Where the view closes in when the member goes into each game, and where they stand to go in. */
@@ -90,6 +91,8 @@ export interface Town extends Scene {
     tp(x: number, y: number): void;
     tap(x: number, y: number): void;
     who(): { name: string; x: number; y: number; doing: string }[];
+    /** Real members in town just now, and where they stand. */
+    visitors(): { name: string; x: number; y: number }[];
     me(): Pt;
     lost(): Pt;
     kept(): unknown;
@@ -121,7 +124,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     nearAt: { x: NEAR.x, y: NEAR.y },
     props,
     others: () => (flights.length > 0 ? [...standing, ...flights] : standing),
-    people: () => [...G.mates, player, cinfy],
+    people: () => [...G.mates, ...G.visitors, player, cinfy],
     lights: allLights,
     beyond: () => undefined,
     under: drawWater,
@@ -273,6 +276,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   /** Out through the gate and down the trail to the member's own camp. */
   let leaving = false;
+  /** The member has come in through the gate since arriving. */
+  let entered = false;
   function toCamp(): void {
     if (!G.home || going || leaving || !town.toCamp) return;
     halt();
@@ -292,7 +297,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   function personAt(wx: number, wy: number): Actor | null {
     let best: Actor | null = null;
-    for (const a of [...G.mates, player, cinfy]) {
+    for (const a of [...G.mates, ...G.visitors, player, cinfy]) {
       if (a.away || a.alpha < 0.5) continue;
       const at = a.seat ?? a;
       if (Math.abs(wx - at.x) > 7 || wy < at.y - 23 || wy > at.y + 3) continue;
@@ -324,6 +329,12 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       hop(who);
       if (who.you) {
         say(who, pick(["that's me", "hello, me", "o/"], Math.random()), 1.6);
+        return false;
+      }
+      // Somebody really here: they look round, and their card says who they are.
+      if (isVisitor(who)) {
+        if (!who.seat && !who.moving) face(who, player.x, player.y);
+        showCard(who);
         return false;
       }
       if (who === cinfy) say(who, pick(KEEPER.taps, Math.random()));
@@ -430,6 +441,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       if (awake() && steer) steerBy(dt, steer);
       stepActor(cinfy, dt);
       stepMates(dt);
+      stepVisitors(dt);
       stepTown(dt);
       stepFlights(dt);
       stepEvents();
@@ -458,8 +470,10 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       }
       show.promptT = clamp(show.promptT + (on ? dt : -dt) * 5, 0, 1);
 
-      // Stepping on into the gateway is setting off for the camp beyond it.
-      if (awake() && player.y < 92) toCamp();
+      // Stepping on into the gateway is setting off for the camp beyond it; but only once the
+      // member has come in through it, or a visit with no letter would send them straight back out.
+      if (player.y > 100) entered = true;
+      if (awake() && entered && player.y < 92) toCamp();
     },
 
     draw: () => drawPicture(pic),
@@ -538,6 +552,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       release(player);
       player.x = 256;
       player.y = 84;
+      entered = false;
       player.dir = 0;
       player.alpha = 0;
       player.say = "";
@@ -633,6 +648,9 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       },
       who() {
         return G.mates.map((a) => ({ name: a.who.name, x: Math.round(a.x), y: Math.round(a.y), doing: a.doing }));
+      },
+      visitors() {
+        return G.visitors.map((a) => ({ name: a.who.name, x: Math.round(a.x), y: Math.round(a.y) }));
       },
       me() {
         return { x: Math.round(player.x), y: Math.round(player.y) };

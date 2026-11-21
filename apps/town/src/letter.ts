@@ -1,6 +1,6 @@
 /**
  * The letter that meets the member at the gate: what happened while they were away, and what it
- * pays. It is put together from the time they were last in town and the time now, so it says the
+ * pays (or, on the guild's server, what the guild's ledger has already paid, which it only shows). It is put together from the time they were last in town and the time now, so it says the
  * same thing however often the page is reloaded before it is put away, and pays nothing for no
  * time at all.
  */
@@ -29,11 +29,11 @@ export function span(minutes: number): string {
 
 export function compose(kept: Kept, now: number, away: Away, extra: readonly (AwayLine | null)[]): Letter {
   const lines: AwayLine[] = [];
-  // What pays goes first, Leaf before Coins; then the news.
+  // What pays (or has paid) goes first, Leaf before Coins; then the news.
   const all = [...away.lines, ...extra.filter((l) => l !== null)];
-  for (const l of all) if (l.pay?.kind === "leaf") lines.push(l);
+  for (const l of all) if (l.pay?.kind === "leaf" || (!l.pay && l.got !== undefined)) lines.push(l);
   for (const l of all) if (l.pay?.kind === "coins") lines.push(l);
-  for (const l of all) if (!l.pay) lines.push(l);
+  for (const l of all) if (!l.pay && l.got === undefined) lines.push(l);
   let leaf = 0;
   let coins = 0;
   for (const l of lines) {
@@ -41,7 +41,7 @@ export function compose(kept: Kept, now: number, away: Away, extra: readonly (Aw
     else if (l.pay) coins += l.pay.amount;
   }
   return {
-    show: away.first || kept.welcomed !== dayOf(now) || leaf + coins > 0,
+    show: away.first || kept.welcomed !== dayOf(now) || leaf + coins > 0 || lines.some((l) => l.got !== undefined),
     title: away.first ? "Welcome home" : "Welcome back",
     sub: away.first ? "The guild kept these for you:" : `Gone ${span(minutesAway(kept, now))}. Meanwhile:`,
     lines,

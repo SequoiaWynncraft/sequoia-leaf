@@ -92,13 +92,18 @@ Three texts in the browser, each with a version on it:
   fights are watched at, the trail last walked, the nudges already given.
 
 Leaf and Coins are the kit's one purse. A finished run pays its Coins in with `earn`; a look takes
-its Leaf with `spend`.
+its Leaf with `spend`, where Leaf may be spent.
 
 ## In the town's frame
 
 The page says `ready` once it has drawn, sends `news` for a boss seen off, a raid cleared and a
 first three-star figure, asks to `leave` from "Leave the table" and "Back to town", and saves when
-the town says `closing`.
+the town says `closing`. It leaves the town a postcard (`postcard` in `src/screen/logic.ts`: a raid
+under way, and every boss ever beaten) whenever that changes.
+
+On the guild's own server the page first awaits the kit's `start()` and pulls its saves (the
+`purse` and `raid` slots, and `town` too when opened on its own), shows the looks' Buy buttons
+closed, and says the member is at the table; the kit's README says how.
 
 ## How it is put together
 
