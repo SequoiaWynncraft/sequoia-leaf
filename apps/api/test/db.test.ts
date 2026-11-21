@@ -62,6 +62,7 @@ describe("the database", () => {
 
     expect(await query(path, (sql) => sql`SELECT migration_id, name FROM effect_sql_migrations`)).toEqual([
       { migration_id: 10, name: "schema" },
+      { migration_id: 11, name: "announcements" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -70,7 +71,7 @@ describe("the database", () => {
     ]);
   });
 
-  it("opens a database migrated before Leaf used Effect's migrator, such as an older backup, applying nothing again", async () => {
+  it("opens a database migrated before Leaf used Effect's migrator, such as an older backup, applying only what came after", async () => {
     const path = join(directory, "leaf.db");
     await onFile(
       path,
@@ -86,6 +87,8 @@ describe("the database", () => {
           INSERT INTO schema_migrations SELECT printf('%04d_old.sql', id), 1763294400000 FROM n
         `;
         yield* sql`DROP TABLE effect_sql_migrations`;
+        // Nor had it the tables added since.
+        yield* sql`DROP TABLE announcements`;
       }),
     );
 
@@ -96,8 +99,9 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 10 },
+      { latest: 11 },
     ]);
+    expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
   });
 
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {
