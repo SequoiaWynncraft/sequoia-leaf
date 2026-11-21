@@ -1,0 +1,388 @@
+# The Little Raid: the game with no screen in it
+
+A board-and-shop auto battler for the guild. It is a tabletop game played on a great stump at the
+edge of town: carved figures of forest spirits on a hex board cut into the rings of the wood. The
+member buys figures from a rolling stall, seats them, and watches them fight by themselves through
+"a little raid" of fifteen rooms.
+
+Everything in this folder is the game itself: what is in it, how a fight goes, how a run goes, a
+bot that can play it, what lasts between runs, and saving. None of it touches the page. A screen is
+a separate layer that calls in through `index.ts`.
+
+```sh
+bun test                         # the rules, checked against their own sentences
+bun review/balance.ts 200 0      # 200 runs for each bot habit on the first trail, and what did well
+```
+
+## The rules as built
+
+**The board.** Hexes in offset rows, seven across. Each party has four rows; pushed together for a
+fight they make a board seven by eight, front lines touching. A place on a party's own half is a
+_seat_ (`row * 7 + col`, row 0 the front line); a hex in a fight is a _cell_ (`row * 7 + col`, rows
+counted from the far side). `seatCell(side, seat)` turns one into the other. There is a bench of
+nine.
+
+**A run.** Fifteen rooms in three wings of five: trouble, trouble, spar, spar, boss; spar, trouble,
+spar, spar, boss; spar, spar, trouble, spar, and The Crab Nobody Counted. Each room is planning with
+no clock, then the fight, then the takings. Winning or losing, the party moves on to the next room;
+only the last room is fought again until it is won or the party goes home.
+
+**Resolve.** Twenty. A lost room costs 2 and 1 more for each enemy still standing, never more than 7. A draw costs 2. At 0 the run ends. Clearing room fifteen wins it.
+
+**Acorns.** The run starts with 2. After every room: 5, 1 more for a win, and 1 for every 10 held
+before the room paid, up to 5. There is no bonus for winning or losing several in a row.
+
+- The stall shows 5 figures. A figure costs its tier, 1 to 5. One rustle a room is free; more cost 2. The stall can be held as it is for the next room.
+- Selling returns the price at one star, and one or two acorns less than was paid for a merged
+  figure (two stars: 3 x tier - 1; three: 9 x tier - 2). What it held goes back to the item bench.
+  The last figure cannot be sold.
+- 4 acorns buy 4 experience; every room gives 2 for nothing. Leaving levels 1 to 7 takes 2, 2, 6,
+  10, 18, 28 and 40. The level is how many figures may be fielded, up to 8.
+- The stall's odds by level, tiers 1 to 5 out of a hundred: 100/0/0/0/0, 80/20, 65/30/5,
+  50/33/15/2, 35/35/22/8, 24/32/28/14/2, 17/26/31/21/5, 12/20/30/28/10.
+- The run opens on a pick of one from three one-acorn figures.
+
+**Stars.** Three of the same figure with the same stars, anywhere on the board and bench, become
+one with a star more at once; the one furthest forward stays. Two stars is x1.8 health and attack,
+three is x3.24, and every ability has its own numbers for each star. With a full bench a figure can
+still be bought if it completes three. Items the merged copies held go to the survivor while it has
+room (two loose components forge, as they would if handed over), and the rest go back to the item
+bench.
+
+**Figures.** Twenty-eight, in five tiers of 7, 7, 6, 5 and 3. Each has health, attack, attacks a
+second, reach in hexes, armour, ward, a mana bar and one ability. Each has one kin and one calling;
+the three dearest carry a third trait.
+
+| Tier | Figure           | Kin     | Calling        | Health | Attack | Reach | Ability (one star)                                                                                                                                    |
+| ---- | ---------------- | ------- | -------------- | ------ | ------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Emberkit         | Ember   | Fang           | 270    | 30     | 1     | **Do Not Move The Fire.** A spark jumps from its fire: 75 magic damage to its target and to whoever is standing behind it.                            |
+| 1    | Mossmote         | Moss    | Mender         | 250    | 20     | 3     | **Cushion.** Tucks a cushion round whoever in the party is most hurt: a shield of 110 for 4 seconds.                                                  |
+| 1    | Moth             | Mist    | Sage           | 230    | 22     | 3     | **Wing Dust.** Shakes its wings over its target: 80 magic damage to it and to every enemy touching it.                                                |
+| 1    | Worm             | Burrow  | Sneak          | 260    | 28     | 1     | **Under And Up.** Goes under and comes up beside the enemy furthest away, biting it for 90 physical damage.                                           |
+| 1    | Twig Finch       | Feather | Slinger        | 230    | 26     | 3     | **Seed Volley.** Spits 3 seeds at its target, 34 physical damage each.                                                                                |
+| 1    | Crab #7          | Crab    | Fang           | 300    | 26     | 1     | **Pinch.** Pinches its target and does not let go: 85 physical damage, and it is stunned for 1.5 seconds.                                             |
+| 1    | Barrow Gnome     | Gnome   | Bulwark        | 320    | 20     | 1     | **Upend The Barrow.** Tips the barrow over and gets behind it: a shield of 120 for 4 seconds, and 40 physical damage to every enemy touching it.      |
+| 2    | Kettle           | Ember   | Mender         | 330    | 24     | 3     | **Tea.** Pours a cup for whoever in the party is most hurt: 150 health back.                                                                          |
+| 2    | Slug             | Moss    | Bulwark        | 430    | 24     | 1     | **Slime.** Slimes every enemy touching it: 60 magic damage, and they are 30% slower for 3 seconds.                                                    |
+| 2    | Glorp            | Mist    | Bulwark        | 400    | 28     | 1     | **A Bit Comes Off.** A bit comes off: a Glorplet with 200 health and 24 attack joins the fight beside it.                                             |
+| 2    | Chickaree        | Burrow  | Slinger        | 290    | 34     | 3     | **Cone From Above.** Lobs a cone at the enemy furthest away: 120 physical damage, and it is stunned for 1 second.                                     |
+| 2    | Dusk Jay         | Feather | Fang           | 340    | 36     | 1     | **Flurry.** Loses its temper: attacks 60% faster for 4 seconds.                                                                                       |
+| 2    | Crab #12         | Crab    | Slinger        | 300    | 32     | 3     | **Skipping Stone.** Skims a pebble at its target for 95 physical damage; it skips on to 2 more enemies close by.                                      |
+| 2    | Lantern Gnome    | Gnome   | Sage           | 280    | 24     | 3     | **Who Goes There.** Holds the lantern up at the 3 nearest enemies: 90 magic damage each.                                                              |
+| 3    | Leafling         | Moss    | Sage           | 420    | 30     | 3     | **Proper Instruction.** Tells the 2 friends nearest it how to do things properly: +22% attack for the rest of the fight.                              |
+| 3    | Cinder Newt      | Ember   | Sage           | 440    | 34     | 2     | **Warm Breath.** Breathes out over its target: 150 magic damage to every enemy in a cone two hexes deep.                                              |
+| 3    | Drizzle Frog     | Mist    | Slinger        | 400    | 44     | 3     | **One Big Drop.** Spits one big drop at its target: 190 magic damage, and it is 30% slower for 3 seconds.                                             |
+| 3    | Rock             | Burrow  | Bulwark        | 820    | 0      | 1     | **It Is A Rock.** Does nothing, pointedly. For 4 seconds it takes 40% less from every hit, and whoever attacks it up close stubs a toe for 45 damage. |
+| 3    | Gnome In A Bush  | Gnome   | Sneak          | 400    | 42     | 1     | **It Was A Bush.** Jumps out at its target: 160 physical damage, and half as much again if it was busy with somebody else.                            |
+| 3    | Crab #23         | Crab    | Mender         | 430    | 28     | 2     | **Plasters.** Hands out plasters to the 2 most hurt in the party: 140 health back each.                                                               |
+| 4    | Badger           | Burrow  | Fang           | 720    | 58     | 1     | **Clear The Sett.** Turns right round with its claws out: 170 physical damage to every enemy touching it, and it heals for 30% of what lands.         |
+| 4    | Fog Owl          | Feather | Sneak          | 560    | 62     | 1     | **Out Of The Fog.** Swoops onto the enemy furthest away: 240 physical damage, and it is stunned for 1.5 seconds.                                      |
+| 4    | Reed Heron       | Feather | Slinger        | 540    | 64     | 4     | **One Long Stab.** Stabs straight through its target: 220 physical damage to every enemy on a line 5 hexes long.                                      |
+| 4    | Crab #40         | Crab    | Bulwark        | 850    | 40     | 1     | **Hold The Line.** Gets in everybody's way: a shield of 300 for 4 seconds, and every enemy within two hexes has to attack it for 3 seconds.           |
+| 4    | Apothecary Gnome | Gnome   | Mender         | 540    | 34     | 3     | **Tonic For Everyone.** A spoonful each for itself and every friend within two hexes: 180 health back, and 25% faster attacks for 4 seconds.          |
+| 5    | Greg             | Moss    | Bulwark + Greg | 880    | 54     | 1     | **Greg Sits Down.** Greg sits down. Every enemy within two hexes takes 200 magic damage and is stunned for 1.25 seconds.                              |
+| 5    | White Fox        | Mist    | Fang + Sage    | 760    | 72     | 1     | **Antlers Ring.** Its gold antlers ring: 160 magic damage to every enemy within two hexes, and the whole party attacks 20% faster for 4 seconds.      |
+| 5    | Hearth Cat       | Ember   | Sneak + Fang   | 700    | 76     | 1     | **Off The Table.** Looks at its target, then bats it off its hex: 280 physical damage, knocked back 2 hexes, stunned for 1.5 seconds.                 |
+
+**Traits.** A trait switches on when the party fields enough _different_ figures that carry it;
+copies of one figure count once. Every kin has four members, one of them at one acorn and one at
+two, so any kin can be started in the first rooms.
+
+| Trait   | Steps   | What it does at its first step                                                                                                                                                       |
+| ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ember   | 2, 4    | Ember figures' attacks and abilities leave a burn: 2% of health a second for 4 seconds. Healing on the burning is 40% weaker.                                                        |
+| Moss    | 2, 4    | The whole party regrows 1.2% of its health every second.                                                                                                                             |
+| Mist    | 2, 4    | The whole party gains 20 ward, and 12 attacks in every hundred slip past it.                                                                                                         |
+| Burrow  | 2, 4    | Burrow figures dig in: +15 armour. The first time one drops under half health it goes to ground for 2 seconds, where nothing can reach it, and comes up with 20% of its health back. |
+| Feather | 2, 4    | Feather figures attack 5% faster after every attack, up to 10 times over.                                                                                                            |
+| Crab    | 2, 4    | Roll call: when the fight starts, an Uncounted Crab turns up beside your crabs, as starry as the best of them.                                                                       |
+| Gnome   | 2, 4    | After a room you win, the gnomes find 1 more acorn.                                                                                                                                  |
+| Bulwark | 2, 4, 6 | Bulwarks gain 20 armour.                                                                                                                                                             |
+| Fang    | 2, 4, 6 | Fangs gain 12% attack, and 10 more of their attacks in a hundred land hard, for half as much again.                                                                                  |
+| Slinger | 2, 4    | Slingers reach 1 hex further, and each attack on the same target does 7% more than the last, up to 6 times over.                                                                     |
+| Sage    | 2, 4    | Sages' abilities are 25% stronger, and each of their attacks gives 3 more mana.                                                                                                      |
+| Mender  | 2, 4    | Menders' healing and shields count for 20% more.                                                                                                                                     |
+| Sneak   | 2, 4    | When the fight starts, Sneaks leap to the enemy's back row, and their first 2 attacks do 50% more.                                                                                   |
+| Greg    | 1       | After every fight Greg is in, he has eaten something: +3% health for good, up to 10 times.                                                                                           |
+
+The second steps: Ember burns from the whole party's hits and hotter; Moss regrows more; Mist gives
+more ward and more slips; Burrow digs deeper; Feather quickens more; Crab's uncounted crab is a big
+one; Gnomes find 3 after a win and 1 after a loss; Bulwark gives the rest of the party armour too;
+and so on. `traitText(id, step)` gives the sentence for any step.
+
+**The fight.** A clock of 20 steps a second, decided entirely by the two parties and a seed: the
+same setup gives the same fight, event for event. In a step, things in flight land; once a second
+burns, regrowth and dusk tick; then everyone still up has a turn, the two sides alternating: use the
+ability if the mana bar is full, else attack whoever they are after if in reach, else walk one hex
+toward them round whoever is in the way. A figure goes for the nearest enemy and stays on it while
+it is in reach.
+
+- Physical damage meets armour and magic meets ward: damage x 100 / (100 + defence). True damage
+  meets nothing. Damage is rounded to whole numbers, never less than 1.
+- Mana: 10 for each attack made, and up to 10 for each hit taken (more for bigger hits). Burns and
+  dusk fill nobody's mana.
+- An attack from more than a hex away is thrown and lands two steps a hex later; if its target has
+  fallen by then it drops. Many abilities travel the same way.
+- Statuses: burn (a share of health every second, weaker healing meanwhile), stun, slow, shield,
+  taunt, hidden (underground: nothing reaches it), haste, braced (the Rock's).
+- After 30 seconds dusk falls: every second everyone loses 3% of their health more than the second
+  before, so it always ends. At 45 seconds it would be a draw; both sides falling in the same step
+  is a draw too.
+
+**Items.** Five components, one stat each. Any two handed to the same figure become one of fifteen
+finished items with both stats and an effect. A figure holds three. Trouble rooms give a pick of one
+component from three when won and from two when lost; a beaten boss gives two picks.
+
+| Item               | Made of             | What it does                                                                                                                                          |
+| ------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Thorn              |                     | +15% attack.                                                                                                                                          |
+| Plume              |                     | +15% attack speed.                                                                                                                                    |
+| Glowcap            |                     | +20 ability power.                                                                                                                                    |
+| Bark               |                     | +20 armour and +20 ward.                                                                                                                              |
+| Chestnut           |                     | +15% health.                                                                                                                                          |
+| Blackthorn Sprig   | Thorn + Thorn       | +30% attack. Its attacks go through 40% of the target's armour.                                                                                       |
+| Wasp-Tail Dart     | Thorn + Plume       | +15% attack, +15% attack speed. Every 3rd attack lands twice.                                                                                         |
+| Glowthorn          | Thorn + Glowcap     | +15% attack, +20 ability power. Each attack gives 5 more mana.                                                                                        |
+| Hedgehog Coat      | Thorn + Bark        | +15% attack, +20 armour and +20 ward. Whoever attacks it up close takes magic damage worth 3% of the wearer's health.                                 |
+| Conker On A String | Thorn + Chestnut    | +15% attack, +15% health. Its attacks swing on into one more enemy beside the target, for 50% as much.                                                |
+| Hummingbird Charm  | Plume + Plume       | +30% attack speed. Reaches 1 hex further.                                                                                                             |
+| Moth Lantern       | Plume + Glowcap     | +15% attack speed, +20 ability power. Starts every fight with its mana bar 50% full.                                                                  |
+| Quilted Vest       | Plume + Bark        | +15% attack speed, +20 armour and +20 ward. 20 attacks in every hundred slip past it.                                                                 |
+| Honey Cake         | Plume + Chestnut    | +15% attack speed, +15% health. Its attacks heal it for 20% of the damage they do.                                                                    |
+| Fairy Ring         | Glowcap + Glowcap   | +40 ability power. Every time it uses its ability, the ones after are 20 ability power stronger.                                                      |
+| Lichen Locket      | Glowcap + Bark      | +20 ability power, +20 armour and +20 ward. When it uses its ability it shields itself for 15% of its health, for 4 seconds.                          |
+| Stewpot            | Glowcap + Chestnut  | +20 ability power, +15% health. Every 3 seconds it serves whoever in the party is most hurt: 5% of their health back.                                 |
+| Stump Shield       | Bark + Bark         | +40 armour and +40 ward. No attack lands hard on it, and stuns on it last a quarter as long.                                                          |
+| Hollow Log         | Bark + Chestnut     | +20 armour and +20 ward, +15% health. Once a fight, when it drops under 40% health, it climbs inside: a shield worth 30% of its health for 5 seconds. |
+| Winter Hoard       | Chestnut + Chestnut | +30% health. Regrows 2% of its health every second.                                                                                                   |
+
+**Boons.** After room 2 and after each of the first two bosses: one of three, with one free redraw.
+A charm is only offered for a kin the party owns one of, and never more than one charm in a three.
+
+| Boon                  | What it does                                                                                                     |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Deep Pockets          | Savings pay an acorn for every 5 held instead of every 10, and can reach 6 a room instead of 5.                  |
+| A Regular             | The stallholder knows you: 1 more free rustle every room.                                                        |
+| Quick Study           | Every room teaches 4 experience instead of 2.                                                                    |
+| Windfall              | 10 acorns, now.                                                                                                  |
+| A Basket On The Stump | Somebody left 2 item components for you. Nobody says who.                                                        |
+| A Wider Stall         | The stall shows 6 figures instead of 5.                                                                          |
+| Haggler               | The first figure you buy each room costs 2 acorns less.                                                          |
+| Second Wind           | The first of your figures to fall each fight gets back up, once, with 40% of its health.                         |
+| Head Start            | Your figures start every fight with 25 more mana.                                                                |
+| An Extra Chair        | You may field 1 more figure than your level.                                                                     |
+| Warm Blanket          | 4 resolve back now, and every room you lose costs 1 less.                                                        |
+| Small Fry             | Your one- and two-acorn figures have 18% more health and attack.                                                 |
+| Tidy Formation        | Figures that start in your front row have 25 more armour; figures that start in your back row attack 15% faster. |
+| Coal On A String      | Counts as one more Ember.                                                                                        |
+| Pocket Moss           | Counts as one more Moss.                                                                                         |
+| Jar Of Fog            | Counts as one more Mist.                                                                                         |
+| A Small Hole          | Counts as one more Burrow.                                                                                       |
+| Lucky Feather         | Counts as one more Feather.                                                                                      |
+| Roll Call Sheet       | Counts as one more Crab.                                                                                         |
+| Spare Hat             | Counts as one more Gnome.                                                                                        |
+
+**Sparring.** A sparring room is fought against a party "a guild-mate brought to the table". For
+now `sparParty(seed, room, trail)` makes one up: an invented handle, a taste for one kin and one
+calling, a level and a number of acorns to have spent by that room, stars bought with what is left,
+and items. It gives back a `Party`, which is plain data (`isParty` checks one that has been stored
+or sent) and is exactly what a fight takes, so a member's saved board can stand in later without
+anything else changing.
+
+**Trouble and bosses.** The forest's own figures are never on the stall. Each trouble room has two
+plans and draws one.
+
+| Trouble                   | Health | Attack | Trick                                                                                                                                                                                                                          |
+| ------------------------- | ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Gnat                      | 110    | 14     | None.                                                                                                                                                                                                                          |
+| Bramble                   | 300    | 20     | Whoever attacks it up close takes 10 damage.                                                                                                                                                                                   |
+| Wasp                      | 150    | 30     | Stings its target: 50 damage that no armour stops.                                                                                                                                                                             |
+| Puddle                    | 480    | 18     | Splashes every enemy touching it: 40 magic damage, and they are 30% slower for 3 seconds.                                                                                                                                      |
+| Toadstool                 | 260    | 24     | When it falls it puffs spores: 70 magic damage to every enemy within two hexes.                                                                                                                                                |
+| Gust                      | 240    | 22     | Blows its target back 2 hexes: 50 magic damage, and it is 30% slower for 2 seconds. Unless it is a Rock.                                                                                                                       |
+| Magpie                    | 300    | 34     | Flies to your back row when the fight starts. Pecks its target for 90 physical damage, and half as much again if it is holding anything shiny.                                                                                 |
+| Mud                       | 700    | 30     | Squelches: 60 magic damage to every enemy touching it, and they are stuck for 1 second.                                                                                                                                        |
+| Counted Crab              | 380    | 30     | Starts the fight inside its shell: a shield of 120 that lasts until it is broken.                                                                                                                                              |
+| Old Bramble               | 1500   | 52     | Whoever attacks it up close takes 12 damage. Puts out a runner: a Bramble Runner sprouts beside the nearest enemy, at most 3 at a time.                                                                                        |
+| The Magpie With The Hoard | 1950   | 72     | Swoops on whoever is holding the most shiny things: 230 physical damage, and they are stunned for 1.5 seconds.                                                                                                                 |
+| The Crab Nobody Counted   | 5400   | 130    | Starts inside a shell worth 800. Gets crabbier: +15% attack for the rest of the fight, and a pinch of 320 physical damage across a cone two hexes deep. At half health it calls the roll: 2 more crabs nobody counted turn up. |
+
+**Trails.** Three difficulties of the same run: The Easy Way, The Brambly Way, The Long Way Round.
+A later trail adds figures to the forest's plans, makes its bosses a little stronger, and gives the
+sparring partners more to spend and more items. The rules do not change.
+
+**Between runs** (`outside.ts`). A run pays Coins when it ends, however it ends: 8 for every room
+won, 25 for every boss beaten, 60 for winning, and a quarter or a half more on the harder trails. A
+whole raid on the first trail is 255. The almanac remembers which figures have been fielded and
+taken to three stars, which items forged, which traits switched all the way on, which bosses beaten
+and the furthest room met on each trail. Four figures start locked and are opened by play: Kettle
+(clear the first wing), Drizzle Frog (clear the second), Gnome In A Bush (switch any kin or calling
+all the way on) and Crab #40 (finish a raid). The next trail opens when the last is cleared.
+
+## What is where
+
+| File                   | What it holds                                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `content/figures.ts`   | The 28 figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips          |
+| `content/traits.ts`    | Kins and callings: steps, sentences, numbers                                                                         |
+| `content/items.ts`     | Components, finished items, what forges into what, how a figure holds them                                           |
+| `content/boons.ts`     | The boons                                                                                                            |
+| `content/rooms.ts`     | Acorns, levels, stall odds, the fight's clock, the fifteen rooms and their plans, sparring strength, trails, handles |
+| `content/keepsakes.ts` | The payout and the locked figures                                                                                    |
+| `content/advice.ts`    | What kind of fighter each calling makes and where it stands, and three finished items that suit each figure          |
+| `hex.ts`               | The board: cells and seats, distance, neighbours, lines, cones, rings, finding a way round                           |
+| `rng.ts`               | The seeded random stream                                                                                             |
+| `party.ts`             | A party as plain data, and trait counting                                                                            |
+| `fight/types.ts`       | What a figure in a fight looks like, and the events a step gives back                                                |
+| `fight/core.ts`        | The verbs: hurt, heal, shield, stun, slow, burn, taunt, hide, leap, knock back, summon                               |
+| `fight/abilities.ts`   | Each ability, written with those verbs                                                                               |
+| `fight/engine.ts`      | Seating, traits and items switching on, the clock, the end                                                           |
+| `formation.ts`         | A plain way of seating a party, used by the bot and the sparring partners                                            |
+| `spar.ts`              | Made-up guild-mates' parties                                                                                         |
+| `run.ts`               | The run and every action on it                                                                                       |
+| `save.ts`              | A run as text and back                                                                                               |
+| `outside.ts`           | Payout, almanac, locked figures, trails                                                                              |
+| `bot.ts`               | A player with habits                                                                                                 |
+| `index.ts`             | Everything a screen needs, in one place                                                                              |
+| `testkit.ts`           | Helpers for the tests only                                                                                           |
+
+Tuning the game is editing the files in `content/`. The sentences shown to players are built from
+the same numbers the fight reads (`abilityText`, `traitText`, `itemText`, `boonText`), so a changed
+number changes its sentence with it. Every ability, trait step, item and boon is said twice: the
+sentence in the guild's voice, which the almanac shows, and a short form for the cards on the table
+(`abilityShort`, `traitShort`, `itemShort`, `boonShort`): effects and numbers only, a fragment or two
+of at most 48 characters ("Shield 210 for 4s. 70 physical to adjacent enemies."). A test holds every
+short form to that, and to using only numbers its long sentence has for the same stars.
+
+`content/advice.ts` is read by the cards only. Each calling has a role and a place ("Tank · front
+row", "Assassin · leaps to their back row"), and each figure three finished items that suit it,
+chosen by its calling first (tanks Bark and Chestnut, fighters and assassins Thorn with Chestnut or
+Plume, ranged Thorn and Plume, casters and healers Glowcap) and then by its ability.
+
+## Driving it from a screen
+
+A run is a plain object. Every action takes it, and either changes it and gives back
+`{ ok: true, notes }` or leaves it alone and gives back `{ ok: false, why }` with a sentence to show
+the player. Notes say what happened, in order, naming figures by their own number in the run
+(`piece`), so a screen can animate each one: `bought`, `merged`, `sold`, `moved`, `rustled`,
+`level`, `gave`, `acorns`, `resolve`, `choice`, `room`, `over` and so on (see `Note` in `run.ts`).
+
+```ts
+import * as raid from "./game/index.ts";
+
+let almanac = raid.loadAlmanac(localStorage.getItem("almanac") ?? "") ?? raid.newAlmanac();
+const run = raid.startRun(seed, { trail: 0, open: raid.openFigures(almanac) });
+
+// A choice is waiting whenever run.choices has anything in it: the first pick, a component, a boon.
+// Nothing else is allowed until it is settled.
+raid.choose(run, 1);
+
+// Planning. Read the run to draw it: run.stall, run.bench, run.board, run.items, run.acorns,
+// run.foe (who is waiting), raid.traitsNow(run), raid.priceOf(run, i), raid.fieldCap(run).
+const bought = raid.buy(run, 0);
+if (!bought.ok) say(bought.why); // "Not enough acorns."
+raid.move(run, { on: "bench", at: 0 }, { on: "board", at: 3 });
+raid.giveItem(run, 0, { on: "board", at: 3 });
+localStorage.setItem("run", raid.saveRun(run));
+
+// The fight. beginFight hands over the setup; the screen plays it at its own pace.
+const begun = raid.beginFight(run);
+if (begun.ok) {
+  const fight = raid.openFight(begun.setup);
+  play(fight.opening); // traits switching on, summons, leaps
+  while (!fight.over) {
+    const events = raid.stepFight(fight); // one twentieth of a second
+    play(events); // and read fight.units for where everyone is, health, mana, shields
+    await nextStep();
+  }
+}
+// The takings. The run works the fight out for itself from the same setup, so this may be called
+// at any time after beginFight: that is all "skip" is.
+const taken = raid.takeTakings(run);
+
+if (run.phase === "over") {
+  const summary = raid.summariseRun(run);
+  const paid = raid.payout(summary); // Coins for the town's purse
+  const recorded = raid.recordRun(almanac, summary); // .news says what is new
+  almanac = recorded.almanac;
+  localStorage.setItem("almanac", raid.saveAlmanac(almanac));
+}
+```
+
+**What a fight gives a renderer.** `fight.units` is everyone who has been in the fight, by `id`:
+`kind`, `side`, `stars`, `cell`, `alive`, `hp`, `maxHp`, `shield`, `mana`, `manaFull`, `items`, and
+the times each status runs until (`stunUntil` and the like, in steps, against `fight.tick`). The
+events of a step (`FightEvent` in `fight/types.ts`) are plain objects:
+
+- `move` (from, to, how many steps it takes), `leap` (a Sneak's opening leap, an ability, or being
+  knocked back)
+- `swing` (an attack up close; its `hit` follows), `shot` (something thrown: from, to, steps in the
+  air, whether it is an attack or part of an ability)
+- `hit` (who, by whom, how much, how much of it a shield took, physical, magic or true, where it
+  came from, whether it landed hard, health and shield after), `slip`
+- `cast` (whose ability, its name and shape, the hexes it covers, who it is aimed at, steps before
+  it lands). An ability that spreads out from its owner names every hex it reaches, its own first;
+  a Toadstool's spores are said as a `cast` too, straight after its `fall`
+- `heal`, `shield`, `status` (on and off), `boost`, `item` (an item doing its trick)
+- `fall`, `rise` (Second Wind), `summon`, `trait`, `dusk`, `end`
+
+Headless Chromium draws about a frame a second, so a screen should keep its own handle for stepping
+by hand; the fight needs nothing for that, since it only moves when `stepFight` is called.
+
+**Saving.** `saveRun(run)` is a string; `loadRun(text)` gives back the identical run, or a reason it
+is refused. It reads the text field by field and turns away anything this version could not have
+made. A fight in progress is not saved: a run saved mid-fight loads at the start of that fight,
+which plays out the same from its seed.
+
+## Trying the numbers
+
+`review/balance.ts` plays whole runs with the bot under different habits (sensible, a saver who
+levels, a roller who chases stars, one fond of each kin and each calling, and a careless one) and
+prints how far each gets, how every room and every trouble plan goes, and how traits, figures, items
+and boons do against the same rooms without them. Its `suits` section plays a sample of the fights
+again with each figure given each finished item, and lists for every figure the items that helped it
+most and least beside the three a card recommends; none of those is among a figure's three worst. The bot is a rough player: it seats by a plain
+rule and does not look at what it is about to fight.
+
+Where the numbers stood when this was written, 300 runs a habit:
+
+| Trail              | Habit                          | Left wing 1 | Left wing 2 | Met the last boss | Beat it   |
+| ------------------ | ------------------------------ | ----------- | ----------- | ----------------- | --------- |
+| The Easy Way       | sensible                       | 100%        | 99%         | 54%               | 25%       |
+|                    | saver who levels               | 100%        | 83%         | 31%               | 13%       |
+|                    | roller who chases stars        | 100%        | 92%         | 59%               | 14%       |
+|                    | fond of one kin (seven bots)   | 100%        | 89 to 99%   | 30 to 63%         | 17 to 41% |
+|                    | fond of one calling (six bots) | 100%        | 88 to 97%   | 38 to 58%         | 20 to 36% |
+|                    | careless                       | 95%         | 0%          | 0%                | 0%        |
+| The Brambly Way    | sensible                       | 100%        | 82%         | 19%               | 4%        |
+|                    | careless                       | 86%         | 0%          | 0%                | 0%        |
+| The Long Way Round | sensible                       | 100%        | 50%         | 5%                | 0%        |
+|                    | careless                       | 69%         | 0%          | 0%                | 0%        |
+
+On the first trail the rooms are won, by everyone who is trying, at 100, 97, 99, 88 and 98% in the
+first wing; 85, 79, 68, 58 and 72% in the second; 46, 47, 53 and 35% in the third; and the last
+boss at 35% a try. A fight lasts 16.6 seconds on average, dusk falls in 9% of them, and draws are
+too rare to show (0% when rounded).
+
+Against the same rooms without regard to them, every one- to four-acorn figure wins within 6 points
+of the rest except Crab #40 (+9); the three five-acorn figures are +11 to +16. Every kin's and
+calling's first step is within 4 points; of the second steps Mender (+14) and Sneak (+14) do best
+and Ember (-4) worst; the third steps of Bulwark and Fang were seen too seldom to judge. Every
+finished item is within 7. The kin whose fond bot does best is Burrow (41% of runs won) and worst
+are Ember and Moss (17%). These figures lean on who chooses what: a party that can afford a
+five-acorn figure is usually already doing well.
+
+## Where this differs from the brief
+
+- Losing a room moves on to the next one rather than replaying it; only the last room is repeated.
+- Every kin has exactly four members, so a kin's second step needs all four or three and a charm.
+  Bulwark and Fang have six members and a third step at six; the other callings stop at four.
+- Burrow's dig is on the way down, not at the start: a Burrow figure goes to ground the first time
+  it drops under half health.
+- A beaten boss gives two component picks, since otherwise a run forges three items at most.
+- Two loose components that meet on one figure in a merge forge without being asked.
+- Deep Pockets pays interest on every 5 acorns and raises the cap to 6, rather than only raising
+  the cap, which nobody in a fifteen-room run saves enough to reach.
+- A sparring partner's party is made directly from a budget for that room, not by playing a bot
+  through the rooms before it.
+- Trail-two and trail-three numbers are a first guess from bots; nobody has played them.

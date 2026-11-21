@@ -11,3 +11,6 @@ data/
 *.tfstate
 *.tfstate.*
 *.tfplan
+
+# Built pages.
+dist/

@@ -1,0 +1,1156 @@
+/* Only where The Little Raid puts things; how they look is the kit's. */
+:root {
+  --edge: max(calc(var(--u) * 3), env(safe-area-inset-left), env(safe-area-inset-right));
+  --top: max(calc(var(--u) * 3), env(safe-area-inset-top));
+  --bottom: max(calc(var(--u) * 3), env(safe-area-inset-bottom));
+  /* How many interface units a figure's pixel is, where figures are shown on the page. */
+  --fs: 2;
+}
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#view,
+#over {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  display: block;
+  image-rendering: pixelated;
+}
+#view {
+  touch-action: none;
+}
+#over {
+  z-index: 20;
+  pointer-events: none;
+}
+.fig {
+  width: calc(var(--u) * var(--w) * var(--fs));
+  height: calc(var(--u) * var(--h) * var(--fs));
+}
+button.k-chip {
+  border: 0;
+  font: inherit;
+  color: inherit;
+}
+.tight {
+  gap: var(--u);
+}
+.wide-only {
+  display: inline;
+}
+
+/* ---------- along the top ---------- */
+
+#hud {
+  position: fixed;
+  z-index: 5;
+  top: var(--top);
+  left: var(--edge);
+  right: var(--edge);
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--u) * 3);
+  pointer-events: none;
+}
+#hud > * {
+  pointer-events: auto;
+}
+#purse {
+  display: flex;
+  gap: calc(var(--u) * 5);
+  padding: var(--u) calc(var(--u) * 3);
+}
+#track {
+  display: flex;
+  align-items: center;
+  gap: var(--u);
+  padding: var(--u) calc(var(--u) * 2);
+}
+.pip {
+  width: calc(var(--u) * 9);
+  height: calc(var(--u) * 9);
+  padding: 0;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: var(--k-deep);
+  box-shadow: 0 0 0 var(--u) var(--k-ink);
+}
+.pip canvas {
+  opacity: 0.5;
+}
+.pip.wing {
+  margin-left: calc(var(--u) * 4);
+}
+.pip.won {
+  background: #3b7340;
+}
+.pip.lost {
+  background: #b0483a;
+}
+.pip.drawn {
+  background: var(--k-faint);
+}
+.pip.here {
+  background: var(--k-gold);
+  animation: bob 1s steps(2) infinite;
+}
+.pip:is(.won, .lost, .drawn, .here) canvas {
+  opacity: 1;
+}
+@keyframes bob {
+  50% {
+    translate: 0 calc(var(--u) * -1);
+  }
+}
+#resolve {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  padding: var(--u) calc(var(--u) * 3);
+  background: none;
+}
+#corner {
+  display: flex;
+  gap: calc(var(--u) * 2);
+}
+#foe {
+  position: fixed;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  padding: var(--u) calc(var(--u) * 3);
+  max-width: calc(var(--u) * 130);
+  pointer-events: none;
+}
+body[data-picking="yes"] #foe {
+  visibility: hidden;
+}
+
+/* ---------- traits and the rack ---------- */
+
+#traits {
+  position: fixed;
+  z-index: 5;
+  left: var(--edge);
+  top: calc(var(--top) + var(--u) * 26);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(var(--u) * 2);
+  padding: var(--u);
+  max-height: calc(100dvh - var(--u) * 140);
+  overflow: hidden auto;
+  scrollbar-width: none;
+}
+.trait {
+  min-height: calc(var(--u) * 14);
+  cursor: pointer;
+}
+.trait.top {
+  box-shadow:
+    0 0 0 var(--u) var(--k-ink),
+    0 0 0 calc(var(--u) * 2) var(--k-gold-lt);
+}
+.trait.woke {
+  animation: woke 0.7s;
+}
+@keyframes woke {
+  0% {
+    scale: 1;
+    filter: brightness(2.2);
+  }
+  30% {
+    scale: 1.25;
+  }
+  100% {
+    scale: 1;
+    filter: brightness(1);
+  }
+}
+#rack {
+  position: fixed;
+  z-index: 5;
+  right: var(--edge);
+  top: calc(var(--top) + var(--u) * 26);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: calc(var(--u) * 2);
+}
+#rack .k-plaque {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: var(--u);
+  padding: var(--u);
+}
+#rack .item {
+  width: calc(var(--u) * 18);
+  height: calc(var(--u) * 18);
+  touch-action: none;
+  cursor: grab;
+}
+#rack .boon {
+  width: calc(var(--u) * 16);
+  height: calc(var(--u) * 16);
+}
+
+/* ---------- along the bottom: the stall ---------- */
+
+#bottom {
+  position: fixed;
+  z-index: 6;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  bottom: var(--bottom);
+  width: min(calc(100vw - var(--edge) * 2), calc(var(--u) * 540));
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 2);
+  pointer-events: none;
+}
+#bottom > * {
+  pointer-events: auto;
+}
+#says {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: calc(var(--u) * 3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  pointer-events: none;
+}
+#shop {
+  position: relative;
+}
+#plan {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "rustle stall acorns levelup"
+    "hold stall level setout";
+  gap: calc(var(--u) * 2) calc(var(--u) * 3);
+  padding: calc(var(--u) * 2);
+}
+#rustle {
+  grid-area: rustle;
+}
+#holdbtn {
+  grid-area: hold;
+}
+#levelup {
+  grid-area: levelup;
+}
+#setout {
+  grid-area: setout;
+  min-width: calc(var(--u) * 62);
+}
+#plan > .k-btn {
+  min-height: 0;
+  height: auto;
+}
+#stall {
+  grid-area: stall;
+  display: grid;
+  grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr));
+  gap: calc(var(--u) * 2);
+}
+.offer {
+  position: relative;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--u);
+  padding: calc(var(--u) * 3) calc(var(--u) * 2) calc(var(--u) * 2);
+  min-height: calc(var(--u) * 60);
+  text-align: center;
+  touch-action: none;
+}
+.offer .art {
+  height: calc(var(--u) * 17 * var(--fs));
+  display: grid;
+  place-items: end center;
+}
+.offer .art canvas {
+  align-self: end;
+}
+.offer .name {
+  min-height: calc(var(--t-m) * 2);
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+.offer .foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--u) calc(var(--u) * 2);
+  width: 100%;
+  margin-top: auto;
+}
+.offer .signs {
+  display: flex;
+  gap: var(--u);
+}
+.offer .cut {
+  color: var(--k-leaf);
+}
+.offer::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(var(--u) * 2);
+  background: var(--tier, #888788);
+}
+.offer.t2 {
+  --tier: #62a658;
+}
+.offer.t3 {
+  --tier: #4a86a6;
+}
+.offer.t4 {
+  --tier: #b84d84;
+}
+.offer.t5 {
+  --tier: #f5b95e;
+}
+.offer.cant {
+  filter: saturate(0.45) brightness(0.72);
+}
+.offer.gone {
+  opacity: 0.35;
+  min-height: calc(var(--u) * 60);
+}
+.offer.gone::before {
+  display: none;
+}
+.offer .have {
+  position: absolute;
+  top: calc(var(--u) * 3);
+  right: calc(var(--u) * 2);
+  font-size: var(--t-s);
+  font-weight: 700;
+  color: var(--k-dim);
+}
+.offer .have.ready {
+  color: var(--k-gold-lt);
+  animation: bob 0.6s steps(2) infinite;
+}
+#acorns,
+#level {
+  border: 0;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--u);
+  min-width: calc(var(--u) * 58);
+  padding: var(--u) calc(var(--u) * 3);
+  background: var(--k-deep);
+  box-shadow: 0 0 0 var(--u) var(--k-ink);
+}
+#acorns {
+  grid-area: acorns;
+}
+#level {
+  grid-area: level;
+}
+#level .k-bar {
+  width: 100%;
+}
+#level .fielded {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+}
+.k-cur.big {
+  font-size: var(--t-l);
+}
+.piles {
+  display: flex;
+  gap: calc(var(--u) * 2);
+}
+.pile {
+  width: calc(var(--u) * 4);
+  height: calc(var(--u) * 4);
+  background: var(--k-mid);
+  box-shadow: 0 0 0 var(--u) var(--k-ink);
+}
+.pile.on {
+  background: var(--k-gold);
+  box-shadow:
+    0 0 0 var(--u) var(--k-ink),
+    inset 0 var(--u) 0 var(--k-gold-lt);
+}
+#fightbar {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 3);
+}
+#fightbar .controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+}
+#tally {
+  flex: 1;
+  min-width: 0;
+  max-width: calc(var(--u) * 250);
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: min-content;
+  align-content: center;
+  gap: var(--u) calc(var(--u) * 6);
+}
+#tally .row {
+  display: grid;
+  grid-template-columns: calc(var(--u) * 22) minmax(0, 1fr) calc(var(--u) * 20);
+  align-items: center;
+  justify-items: center;
+  gap: calc(var(--u) * 2);
+}
+#tally .row .k-bar {
+  width: 100%;
+}
+#tally .row.down canvas {
+  opacity: 0.4;
+}
+#sides {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 calc(var(--u) * 3);
+}
+#speeds > .k-btn {
+  min-width: calc(var(--u) * 22);
+}
+body[data-mode="fight"] #plan {
+  visibility: hidden;
+}
+body[data-mode="fight"] #fightbar {
+  display: flex;
+}
+/* While the room's pay is counted out, the purse is in view and nothing can be bought yet. */
+body[data-mode="after"] #plan {
+  pointer-events: none;
+}
+body[data-mode="after"] #plan > :not(#acorns, #level) {
+  opacity: 0.45;
+}
+body[data-picking="yes"] #plan {
+  opacity: 0.45;
+  pointer-events: none;
+}
+#sellhint {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  place-content: center;
+  grid-auto-flow: column;
+  gap: calc(var(--u) * 3);
+  font-size: var(--t-l);
+  font-weight: 700;
+  background: #1a0f1ed9;
+  pointer-events: none;
+}
+body.selling #sellhint {
+  display: grid;
+}
+body.sell-hot #sellhint {
+  background: #b0483ae0;
+}
+body.dragging,
+body.dragging * {
+  cursor: grabbing !important;
+}
+body:is([data-mode="front"], [data-mode="over"]) :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door),
+body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
+  visibility: hidden;
+}
+#rack.empty {
+  display: none;
+}
+
+/* ---------- three cards on the table ---------- */
+
+#picks {
+  position: fixed;
+  z-index: 25;
+  left: 50%;
+  top: var(--table-mid, 45%);
+  translate: -50% -50%;
+  width: min(calc(100vw - var(--u) * 8), calc(var(--u) * 380));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+}
+#picks .head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--u) calc(var(--u) * 5);
+}
+#picks .cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(var(--u) * 3);
+  width: 100%;
+}
+.pick {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: calc(var(--u) * 2);
+  padding: calc(var(--u) * 4) calc(var(--u) * 3);
+  box-shadow: 0 calc(var(--u) * 3) 0 #0007;
+}
+.pick .k-wrap {
+  justify-content: center;
+}
+.pick.chosen {
+  border-image-source: var(--k-f-card-lit);
+}
+.recipe {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+}
+.recipe.big {
+  gap: calc(var(--u) * 3);
+}
+.quip {
+  font-size: var(--t-d);
+}
+
+/* ---------- cards beside things ---------- */
+
+.k-tip.raid-card {
+  max-width: min(calc(var(--u) * 220), calc(100vw - 8px));
+}
+/* A figure's card and a trait's: one width, so lines rarely wrap. */
+.k-tip.raid-card.wide {
+  width: min(calc(var(--u) * 220), calc(100vw - 8px));
+}
+.k-tip.raid-card.pinned {
+  pointer-events: auto;
+  z-index: 89;
+}
+.card {
+  gap: calc(var(--u) * 2);
+}
+.card.fig,
+.card.trait,
+.card.item,
+.card.boon {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 2);
+}
+/* The blocks of a card, a thin rule between them. */
+.card .blk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  padding-top: calc(var(--u) * 2);
+  border-top: var(--u) solid var(--k-edge);
+}
+.card-head,
+.fhead,
+.thead {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+}
+.card-head {
+  gap: calc(var(--u) * 4);
+}
+.k-slot.port {
+  flex: none;
+  min-width: calc(var(--u) * 26);
+  min-height: calc(var(--u) * 26);
+  padding: var(--u);
+  box-sizing: border-box;
+}
+.cwho {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+}
+.nameline {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+}
+.nameline .side {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--u);
+  white-space: nowrap;
+}
+/* The words on a card: numbers bold and gold, heals and shields green, the kinds of damage their own colour. */
+b.n {
+  color: var(--k-gold);
+}
+b.n.mend {
+  color: var(--k-leaf);
+}
+b.dmg.phys {
+  color: var(--k-coral);
+}
+b.dmg.magic {
+  color: #d88ad0;
+}
+b.dmg.true {
+  color: var(--k-cream);
+}
+.card .blk.ftraits {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--u) calc(var(--u) * 4);
+}
+.tchip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--u);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.tchip .cnt {
+  margin-left: var(--u);
+}
+.tchip:hover .k-chip {
+  filter: brightness(1.2);
+}
+.card .blk.nums {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  justify-content: space-between;
+  gap: var(--u) calc(var(--u) * 4);
+}
+.num {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 2);
+  white-space: nowrap;
+}
+.nums .fed {
+  grid-column: 1 / -1;
+}
+.aname {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(var(--u) * 3);
+}
+.card .blk.fitems {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 2) calc(var(--u) * 6);
+}
+.irow {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+}
+.k-slot.islot {
+  width: calc(var(--u) * 16);
+  height: calc(var(--u) * 16);
+  box-sizing: border-box;
+}
+.acts .k-btn {
+  width: 100%;
+}
+.tsteps .tstep {
+  display: grid;
+  grid-template-columns: calc(var(--u) * 7) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: calc(var(--u) * 2);
+  padding: 0 var(--u);
+  color: var(--k-dim);
+}
+.tstep .need {
+  color: var(--k-faint);
+}
+.tstep:not(.on) .short {
+  opacity: 0.8;
+}
+.tstep.on {
+  color: var(--k-cream);
+  background: #f5b95e26;
+  box-shadow: inset var(--u) 0 0 var(--k-gold);
+}
+.tstep.on .need {
+  color: var(--k-gold-lt);
+}
+.card .blk.members {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: calc(var(--u) * 2);
+}
+.k-slot.mem {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--u);
+  min-height: calc(var(--u) * 42);
+  padding: calc(var(--u) * 2) var(--u);
+  color: var(--k-cream);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.mem .art {
+  display: grid;
+  place-items: end center;
+  min-height: calc(var(--u) * 22);
+}
+.mem .mname {
+  line-height: 1.1;
+}
+.mem .k-cur {
+  font-size: var(--t-s);
+  gap: var(--u);
+}
+.mem .tag {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0 var(--u);
+  background: var(--k-mid);
+  color: var(--k-gold-lt);
+}
+.mem.locked {
+  cursor: default;
+}
+.mem.locked .how {
+  color: var(--k-dim);
+  line-height: 1.1;
+}
+.recipes .recipe {
+  flex-wrap: wrap;
+}
+.lore .quip {
+  font-size: var(--t-d);
+}
+
+/* ---------- a trait lit on the table ---------- */
+
+.trait.on {
+  outline: var(--u) solid var(--k-cream);
+  outline-offset: var(--u);
+}
+.offer.tlit {
+  box-shadow:
+    0 0 0 var(--u) var(--k-ink),
+    0 0 0 calc(var(--u) * 2) var(--k-gold-lt);
+}
+.offer.thop {
+  animation: thop 0.3s;
+}
+@keyframes thop {
+  50% {
+    translate: 0 calc(var(--u) * -3);
+  }
+}
+.offer.tdim {
+  filter: brightness(0.55) saturate(0.6);
+}
+
+/* ---------- a nudge ---------- */
+
+#nudge {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--u);
+  pointer-events: none;
+}
+#nudge .k-say::after {
+  display: none;
+}
+#nudge .hand {
+  margin-left: calc(var(--hand, 50%) - var(--u) * 10);
+  rotate: 180deg;
+  animation: poke 0.7s steps(2) infinite;
+}
+#nudge.below {
+  flex-direction: column-reverse;
+}
+#nudge.below .hand {
+  rotate: none;
+}
+@keyframes poke {
+  50% {
+    translate: 0 calc(var(--u) * 2);
+  }
+}
+
+/* ---------- pages over the table ---------- */
+
+#modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--u) * 4);
+  box-sizing: border-box;
+  background: #1a0f1ea6;
+}
+#modal[data-page="front"] {
+  background: #1a0f1e59;
+}
+.page {
+  width: min(100%, calc(var(--u) * 190));
+  max-height: calc(100dvh - var(--u) * 8);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.page.wide {
+  width: min(100%, calc(var(--u) * 300));
+}
+.page > .k-body {
+  min-height: 0;
+  overflow: hidden auto;
+}
+.page .leaf {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 3);
+  min-height: 0;
+  max-height: calc(100dvh - var(--u) * 80);
+}
+.trails {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 2);
+}
+.three > * {
+  flex: 1;
+  min-width: 0;
+  padding-inline: calc(var(--u) * 2);
+}
+.three > .k-btn.sm {
+  flex-direction: column;
+  gap: var(--u);
+  padding-block: calc(var(--u) * 2);
+  font-size: var(--t-s);
+  white-space: normal;
+}
+.party {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: calc(var(--u) * 2);
+}
+.who {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 46), 1fr));
+  gap: calc(var(--u) * 2);
+}
+.tile {
+  position: relative;
+  flex-direction: column;
+  justify-content: flex-end;
+  text-align: center;
+  gap: var(--u);
+  padding: calc(var(--u) * 2) var(--u);
+  min-height: calc(var(--u) * 46);
+  line-height: 1.2;
+}
+.tile.unmet {
+  color: var(--k-faint);
+}
+.tile .badge {
+  position: absolute;
+  top: calc(var(--u) * 2);
+  right: calc(var(--u) * 2);
+}
+.tile .pair {
+  display: flex;
+  gap: var(--u);
+  opacity: 0.6;
+}
+.how .line {
+  align-items: flex-start;
+  margin-top: calc(var(--u) * 3);
+}
+.summary {
+  width: min(100%, calc(var(--u) * 330));
+  overflow: hidden auto;
+  gap: calc(var(--u) * 3);
+}
+.summary .cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: calc(var(--u) * 8);
+  align-items: start;
+}
+.summary .party {
+  --fs: 1;
+}
+.summary .k-label {
+  margin-top: calc(var(--u) * 2);
+}
+.pips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 2);
+}
+.pips .pip:not(.won, .lost, .drawn) {
+  background: #c9aa72;
+}
+.news {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 2) calc(var(--u) * 5);
+}
+.new {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+}
+.opened {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+  padding: calc(var(--u) * 2);
+}
+.flip {
+  position: relative;
+  display: block;
+}
+.flip .is {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.35s;
+}
+.opened.lit .is {
+  opacity: 1;
+}
+.opened.lit {
+  animation: k-bump 0.3s;
+}
+.pay.total {
+  margin-top: calc(var(--u) * 2);
+}
+.ends {
+  margin-top: calc(var(--u) * 3);
+}
+.ends > .k-btn {
+  flex: 1 1 auto;
+}
+.swatch {
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 0 var(--u) var(--k-ink);
+  background: #d49045;
+}
+.look {
+  width: auto;
+  flex: 1 1 calc(var(--u) * 70);
+  justify-content: space-between;
+}
+.look[aria-pressed="true"] {
+  filter: brightness(1.25);
+}
+
+/* ---------- a phone held upright: its own arrangement ---------- */
+
+@media (max-aspect-ratio: 4/5), (max-width: 620px) {
+  :root {
+    --fs: 1;
+  }
+  .wide-only {
+    display: none;
+  }
+  #hud {
+    flex-wrap: wrap;
+    gap: calc(var(--u) * 2);
+  }
+  #purse {
+    order: 1;
+  }
+  #resolve {
+    order: 2;
+  }
+  #corner {
+    order: 3;
+  }
+  #track {
+    order: 4;
+    margin-inline: auto;
+  }
+  #traits {
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    max-height: none;
+    overflow: auto hidden;
+    padding: var(--u);
+    min-height: calc(var(--u) * 16);
+  }
+  .trait .name {
+    display: none;
+  }
+  .trait.lit .name {
+    display: inline;
+  }
+  #rack {
+    top: calc(var(--top) + var(--u) * 48);
+  }
+  #rack .k-plaque {
+    grid-template-columns: auto;
+  }
+  #rack .item,
+  #rack .boon {
+    width: calc(var(--u) * 15);
+    height: calc(var(--u) * 15);
+  }
+  #plan {
+    grid-template-columns: 1fr 1fr 1fr auto;
+    grid-template-areas:
+      "stall stall stall stall"
+      "acorns acorns level hold"
+      "rustle levelup setout setout";
+    gap: calc(var(--u) * 2);
+    padding: var(--u);
+  }
+  #stall {
+    gap: var(--u);
+  }
+  .offer {
+    padding: calc(var(--u) * 3) var(--u) var(--u);
+    min-height: calc(var(--u) * 56);
+  }
+  .offer.gone {
+    min-height: calc(var(--u) * 56);
+  }
+  .offer .name {
+    font-size: var(--t-s);
+    min-height: calc(var(--t-s) * 2.4);
+  }
+  .offer .foot {
+    justify-content: center;
+  }
+  #acorns,
+  #level {
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: var(--u) calc(var(--u) * 3);
+  }
+  #level .k-bar {
+    width: calc(var(--u) * 24);
+  }
+  #level .fielded,
+  #acorns .interest {
+    display: none;
+  }
+  #plan > .k-btn {
+    min-height: calc(var(--u) * 20);
+    padding-inline: calc(var(--u) * 2);
+  }
+  #setout {
+    min-width: 0;
+  }
+  #fightbar {
+    gap: calc(var(--u) * 2);
+    flex-direction: column-reverse;
+    justify-content: space-evenly;
+  }
+  #tally {
+    flex: none;
+    align-self: stretch;
+    max-width: none;
+    gap: 0 calc(var(--u) * 3);
+  }
+  #tally .row:nth-child(n + 7) {
+    display: none;
+  }
+  #picks {
+    top: calc(var(--top) + var(--u) * 46);
+    translate: -50% 0;
+    gap: calc(var(--u) * 2);
+  }
+  #picks .cards {
+    grid-template-columns: minmax(0, 1fr);
+    gap: calc(var(--u) * 2);
+  }
+  .pick {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-items: start;
+    text-align: left;
+    gap: var(--u) calc(var(--u) * 4);
+    padding: calc(var(--u) * 2) calc(var(--u) * 3);
+  }
+  .pick .art {
+    grid-row: 1 / span 5;
+  }
+  .pick .k-wrap {
+    justify-content: flex-start;
+  }
+  .pick .quip {
+    display: none;
+  }
+  .k-tip.raid-card,
+  .k-tip.raid-card.wide {
+    width: calc(100vw - 8px);
+    max-width: none;
+  }
+  .three {
+    flex-wrap: wrap;
+  }
+  .summary .cols {
+    grid-template-columns: minmax(0, 1fr);
+    gap: calc(var(--u) * 2);
+  }
+  .swatch {
+    --fs: 2;
+  }
+}
