@@ -1,4 +1,4 @@
-export { type AchievementAward, type AchievementRules, leafForAward } from "./achievements.ts";
+export { type AchievementAward, type AchievementRules, leafForAward, type PayingLadder } from "./achievements.ts";
 export { type Activity, type ActivityKind, RAID_KEYS, type RaidKey, raidKeyForName, RAIDS } from "./activity.ts";
 export { isLeaf, type Leaf, leaf, MAX_LEAF } from "./leaf.ts";
 export {
