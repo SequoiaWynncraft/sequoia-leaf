@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CLOSE,
   decodeMove,
   decodeSnapshot,
   encodeMove,
@@ -8,28 +9,29 @@ import {
   type Entry,
   ENTRY_BYTES,
   Flag,
+  isAct,
   type Motion,
   MOVE_BYTES,
   readToClient,
+  reconnects,
   roomKind,
-  seqAfter,
   SNAPSHOT_HEAD_BYTES,
   type ToClient,
 } from "./live.ts";
 
-const walking: Motion = { x: 120.5, y: 88.25, vx: 64, vy: -12.5, facing: 2, pose: 7, flags: Flag.Moving };
+const walking: Motion = { x: 120.5, y: 88.25, vx: 64, vy: -12.5, facing: 2, pose: 7, flags: Flag.Moving, jump: 3 };
 
 describe("a move", () => {
-  test("is 22 bytes and reads back as it was", () => {
+  test("is 23 bytes and reads back as it was", () => {
     const bytes = encodeMove(65_535, walking);
     expect(bytes.byteLength).toBe(MOVE_BYTES);
     expect(decodeMove(bytes)).toEqual({ seq: 65_535, motion: walking });
   });
 
-  test("wraps its number and keeps only a byte of facing, pose and flags", () => {
-    expect(decodeMove(encodeMove(65_537, { ...walking, facing: 258, pose: -1, flags: 0x1ff }))).toEqual({
+  test("wraps its number and its jumps, and keeps only a byte of facing, pose and flags", () => {
+    expect(decodeMove(encodeMove(65_537, { ...walking, facing: 258, pose: -1, flags: 0x1ff, jump: 256 }))).toEqual({
       seq: 1,
-      motion: { ...walking, facing: 2, pose: 255, flags: 255 },
+      motion: { ...walking, facing: 2, pose: 255, flags: 255, jump: 0 },
     });
   });
 
@@ -53,10 +55,10 @@ describe("a move", () => {
 describe("a snapshot", () => {
   const entries: Entry[] = [
     { id: 1, seq: 40, ...walking },
-    { id: 65_535, seq: 0, x: 0, y: 352, vx: 0, vy: 0, facing: 0, pose: 0, flags: Flag.Snap },
+    { id: 65_535, seq: 0, x: 0, y: 352, vx: 0, vy: 0, facing: 0, pose: 0, flags: 0, jump: 255 },
   ];
 
-  test("reads back as it was, its size its head and 23 bytes a player", () => {
+  test("reads back as it was, its size its head and 24 bytes a player", () => {
     const bytes = encodeSnapshot(123_456, 1_795_610_400_123, entries);
     expect(bytes.byteLength).toBe(SNAPSHOT_HEAD_BYTES + 2 * ENTRY_BYTES);
     expect(decodeSnapshot(bytes)).toEqual({ tick: 123_456, time: 1_795_610_400_123, entries });
@@ -72,13 +74,6 @@ describe("a snapshot", () => {
     expect(decodeSnapshot(new Uint8Array([...bytes, 0]))).toBeNull();
     expect(decodeSnapshot(encodeMove(1, walking))).toBeNull();
     expect(decodeSnapshot(new Uint8Array(3))).toBeNull();
-  });
-});
-
-describe("move numbers", () => {
-  test("count up and wrap at 65536", () => {
-    expect([seqAfter(2, 1), seqAfter(1, 2), seqAfter(1, 1)]).toEqual([true, false, false]);
-    expect([seqAfter(0, 65_535), seqAfter(65_535, 0), seqAfter(10, 65_530)]).toEqual([true, false, true]);
   });
 });
 
@@ -108,7 +103,6 @@ describe("reading what Leaf says", () => {
       { t: "act", id: 1, kind: "emote", arg: "wave" },
       { t: "pong", c: 1.5, s: 2 },
       { t: "error", code: "not_in_room" },
-      { t: "bye", code: "restart" },
     ];
     for (const m of all) expect(readToClient(JSON.stringify(m))).toEqual(m);
   });
@@ -119,10 +113,35 @@ describe("reading what Leaf says", () => {
       "[]",
       JSON.stringify({ t: "teleport" }),
       JSON.stringify({ t: "left", id: "3" }),
-      JSON.stringify({ t: "bye", code: "because" }),
+      JSON.stringify({ t: "bye", code: "restart" }),
       JSON.stringify({ t: "joined", member: { ...alice, guest: "no" } }),
       JSON.stringify({ t: "welcome", v: 1, you: 1, room: "town/1", hz: 30, time: 5, roster: [alice, null] }),
     ])
       expect(readToClient(text)).toBeNull();
+  });
+});
+
+describe("closing", () => {
+  test("the game tries again after anything but being replaced or signed out", () => {
+    expect([CLOSE.done, CLOSE.policy, CLOSE.tooBig, CLOSE.restart, 1006].map(reconnects)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+    ]);
+    expect([CLOSE.replaced, CLOSE.signedOut].map(reconnects)).toEqual([false, false]);
+  });
+});
+
+describe("actions", () => {
+  test("are only those listed, so nothing a player types reaches anybody", () => {
+    expect([isAct("emote", "wave"), isAct("emote", "crab")]).toEqual([true, true]);
+    expect([isAct("emote", "you_are_dumb"), isAct("say", "hi"), isAct("toString", ""), isAct("emote", "")]).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
   });
 });

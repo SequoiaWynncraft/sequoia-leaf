@@ -6,8 +6,7 @@
 import {
   decodeSnapshot,
   encodeMove,
-  LIVE_PATH,
-  LIVE_VERSION,
+  livePath,
   type Motion,
   readToClient,
   type Snapshot,
@@ -32,6 +31,8 @@ const isOf =
 export class LiveClient {
   readonly texts: ToClient[] = [];
   readonly snapshots: { at: number; snapshot: Snapshot }[] = [];
+  /** What arrived, in order: each text's `t`, or `snapshot`. */
+  readonly arrived: string[] = [];
   /** How the connection closed, once it has. */
   closed: { code: number; reason: string } | null = null;
   /** Told each snapshot as it arrives, with when (`performance.now()`). */
@@ -46,8 +47,12 @@ export class LiveClient {
     ws.addEventListener("message", (e: MessageEvent) => {
       if (typeof e.data === "string") {
         const m = readToClient(e.data);
-        if (m) this.texts.push(m);
+        if (m) {
+          this.texts.push(m);
+          this.arrived.push(m.t);
+        }
       } else if (e.data instanceof ArrayBuffer) {
+        this.arrived.push("snapshot");
         const snapshot = decodeSnapshot(new Uint8Array(e.data));
         const at = performance.now();
         if (snapshot) {
@@ -63,8 +68,9 @@ export class LiveClient {
     });
   }
 
-  /** Opens a connection to Leaf at `origin` (`http://127.0.0.1:4000`), resolving once it is open. */
-  static open(origin: string, sent: Opening, path = `${LIVE_PATH}?v=${LIVE_VERSION}`): Promise<LiveClient> {
+  /** Opens a connection into a room on Leaf at `origin` (`http://127.0.0.1:4000`), resolving once it is open. */
+  static open(origin: string, sent: Opening, room = "town"): Promise<LiveClient> {
+    const path = livePath(room);
     const headers: Record<string, string> = {};
     if (sent.cookie !== undefined) headers["Cookie"] = `seq_session=${sent.cookie}`;
     if (sent.bearer !== undefined) headers["Authorization"] = `Bearer ${sent.bearer}`;
@@ -92,6 +98,12 @@ export class LiveClient {
     return this.seq;
   }
 
+  /** The welcome a connection opens with, or the next one. */
+  welcome(): Promise<Of<"welcome">> {
+    return this.next("welcome");
+  }
+
+  /** Moves into a room of another kind on this connection (or is greeted again in this one). */
   join(room = "town"): Promise<Of<"welcome">> {
     this.send({ t: "join", room });
     return this.next("welcome");

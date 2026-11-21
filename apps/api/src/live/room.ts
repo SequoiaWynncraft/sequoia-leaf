@@ -1,15 +1,15 @@
 import {
   encodeSnapshot,
   type Entry,
+  Flag,
   type LiveMember,
   type Motion,
   type RoomKind,
   roomKind,
-  seqAfter,
   type ToClient,
 } from "@sequoia-leaf/core";
 
-/** Where a room sends what it has to say to one of the people in it. */
+/** Where a room sends what it has to say to one of the people in it: the player, whichever connection they have now. */
 export interface Outbox {
   send(frame: string | Uint8Array): void;
 }
@@ -19,8 +19,13 @@ export interface Occupant {
   readonly member: LiveMember;
   readonly outbox: Outbox;
   motion: Motion | null;
+  /** The number of the move their motion is, as their game numbered it. */
   seq: number;
   dirty: boolean;
+  /** Their jumps as the room counts them: what everybody else is shown. */
+  jump: number;
+  /** The jump count their game last sent, on its present connection; null before it sends one. */
+  heard: number | null;
 }
 
 /** The fastest a motion may say a player moves, in the room's units a second. */
@@ -37,11 +42,14 @@ export class Room {
   readonly occupants = new Map<number, Occupant>();
   /** The kind and the copy, as `town/1`. */
   readonly name: string;
+  /** The kind alone, as `town`. */
+  readonly kindName: string;
   readonly kind: RoomKind;
   private lastId = 0;
 
-  constructor(name: string, kind: RoomKind) {
-    this.name = name;
+  constructor(kindName: string, copy: number, kind: RoomKind) {
+    this.kindName = kindName;
+    this.name = `${kindName}/${copy}`;
     this.kind = kind;
   }
 
@@ -53,17 +61,33 @@ export class Room {
     return this.occupants.size >= this.kind.capacity;
   }
 
-  /** Lets somebody in, and tells them who is here and everyone else that they came. Returns them. */
+  /** Lets somebody in, tells everyone else that they came, and greets them. Returns them. */
   join(who: Omit<LiveMember, "id">, outbox: Outbox, time: number, hz: number, version: number): Occupant {
     const id = this.freeId();
-    const occupant: Occupant = { member: { id, ...who }, outbox, motion: null, seq: 0, dirty: false };
+    const occupant: Occupant = {
+      member: { id, ...who },
+      outbox,
+      motion: null,
+      seq: 0,
+      dirty: false,
+      jump: 0,
+      heard: null,
+    };
     this.occupants.set(id, occupant);
-    const roster = [...this.occupants.values()].map((o) => o.member);
-    outbox.send(text({ t: "welcome", v: version, you: id, room: this.name, hz, time, roster }));
-    const everyone = this.entries(() => true);
-    if (everyone.length > 0) outbox.send(encodeSnapshot(0, time, everyone));
     this.others(id, text({ t: "joined", member: occupant.member }));
+    this.greet(occupant, time, hz, version);
     return occupant;
+  }
+
+  /**
+   * Tells somebody in the room who is here, and then where everybody is: when they come in, and
+   * again whenever they connect again. Nobody else hears of it.
+   */
+  greet(o: Occupant, time: number, hz: number, version: number): void {
+    const roster = [...this.occupants.values()].map((each) => each.member);
+    o.outbox.send(text({ t: "welcome", v: version, you: o.member.id, room: this.name, hz, time, roster }));
+    const everyone = this.entries(() => true);
+    if (everyone.length > 0) o.outbox.send(encodeSnapshot(0, time, everyone));
   }
 
   /** Lets somebody go, and tells everyone else. */
@@ -73,13 +97,20 @@ export class Room {
   }
 
   /**
-   * Takes somebody's motion, kept inside the room and below the fastest anybody moves. A move older
-   * than the one already taken (they can arrive out of order only across a reconnect) is dropped.
+   * Takes somebody's motion, kept inside the room and below the fastest anybody moves. Moves come
+   * only from the player's present connection, in the order it sent them, so the newest is the one
+   * that counts: it is all of where they are. The room keeps its own count of their jumps: it goes
+   * up whenever their game's count changes, or a new connection of theirs sends its first move (it
+   * may count from anywhere), so nobody is ever drawn sliding from where they were.
    */
-  move(id: number, seq: number, m: Motion): boolean {
+  move(id: number, seq: number, m: Motion): void {
     const o = this.occupants.get(id);
-    if (!o) return false;
-    if (o.motion !== null && !seqAfter(seq, o.seq)) return false;
+    if (!o) return;
+    if (o.heard !== m.jump) {
+      o.heard = m.jump;
+      o.jump = (o.jump + 1) & 0xff;
+    }
+    o.seq = seq;
     o.motion = {
       x: clamp(m.x, 0, this.kind.width),
       y: clamp(m.y, 0, this.kind.height),
@@ -88,10 +119,23 @@ export class Room {
       facing: m.facing,
       pose: m.pose,
       flags: m.flags,
+      jump: o.jump,
     };
-    o.seq = seq;
     o.dirty = true;
-    return true;
+  }
+
+  /** Somebody's game has a new connection: whatever it counts its jumps from, its first move is one. */
+  reconnected(id: number): void {
+    const o = this.occupants.get(id);
+    if (o) o.heard = null;
+  }
+
+  /** Somebody has stopped where they are, as when their connection drops: everyone sees them stand. */
+  halt(id: number): void {
+    const o = this.occupants.get(id);
+    if (!o?.motion || (o.motion.flags & Flag.Moving) === 0) return;
+    o.motion = { ...o.motion, vx: 0, vy: 0, flags: o.motion.flags & ~Flag.Moving };
+    o.dirty = true;
   }
 
   /** Tells everyone else what somebody did. */
@@ -151,7 +195,7 @@ export class Rooms {
     const taken = new Set(copies.map((room) => room.name));
     let n = 1;
     while (taken.has(`${kindName}/${n}`)) n++;
-    const room = new Room(`${kindName}/${n}`, kind);
+    const room = new Room(kindName, n, kind);
     this.byKind.set(
       kindName,
       [...copies, room].toSorted((a, b) => a.name.localeCompare(b.name, "en", { numeric: true })),
@@ -162,10 +206,9 @@ export class Rooms {
   /** Closes a copy nobody is in. */
   tidy(room: Room): void {
     if (room.size > 0) return;
-    const kindName = room.name.split("/")[0] ?? "";
-    const left = (this.byKind.get(kindName) ?? []).filter((r) => r !== room);
-    if (left.length > 0) this.byKind.set(kindName, left);
-    else this.byKind.delete(kindName);
+    const left = (this.byKind.get(room.kindName) ?? []).filter((r) => r !== room);
+    if (left.length > 0) this.byKind.set(room.kindName, left);
+    else this.byKind.delete(room.kindName);
   }
 
   *all(): Iterable<Room> {

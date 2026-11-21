@@ -41,7 +41,7 @@ const leaf = testLeaf(clock, fetcher);
 const server = await leaf.serve();
 
 const clients = await Promise.all(ids.map((_, i) => LiveClient.open(server.origin, { bearer: `p${i}` })));
-const welcomes = await Promise.all(clients.map((c) => c.join()));
+const welcomes = await Promise.all(clients.map((c) => c.welcome()));
 
 /** When each player sent each of its moves, by room and number in it. */
 const sentAt = new Map<string, Map<number, number>>();
@@ -55,7 +55,7 @@ for (const [i, c] of clients.entries()) {
   const room = welcomes[i]?.room ?? "";
   c.onSnapshot = (snapshot, at) => {
     snapshots++;
-    bytes += 15 + snapshot.entries.length * 23;
+    bytes += 15 + snapshot.entries.length * 24;
     for (const e of snapshot.entries) {
       const sent = sentAt.get(key(room, e.id))?.get(e.seq);
       if (sent !== undefined && e.id !== welcomes[i]?.you) latencies.push(at - sent);
@@ -83,6 +83,7 @@ const walkers = clients.map((c, i) => {
       facing: dx > 0 ? 2 : 1,
       pose: 1,
       flags: Flag.Moving,
+      jump: 0,
     });
     mine?.set(seq, performance.now());
     moves++;

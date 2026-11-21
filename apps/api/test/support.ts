@@ -1,19 +1,18 @@
 import { deflateSync } from "node:zlib";
 
-import { BunHttpServer } from "@effect/platform-bun";
 import type { Activity, PlayerId, Posting } from "@sequoia-leaf/core";
 import { Clock, ConfigProvider, Duration, Effect, Layer, ManagedRuntime, Option, Redacted, References } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import { SqlClient } from "effect/sql";
 
-import { routerConfig, Routes, Stores } from "../src/app.ts";
+import { routerConfig, Routes, serveLeaf, Stores } from "../src/app.ts";
 import { AppConfig, type Settings, settings } from "../src/config.ts";
 import { databaseAt } from "../src/db.ts";
 import type { CreditSource } from "../src/earning/sync.ts";
 import { Events } from "../src/events/store.ts";
 import { Mojang, MojangError, type MojangProfile } from "../src/game/mojang.ts";
 import { Ledger } from "../src/ledger/store.ts";
-import { Live, LIVE_SOCKETS, LiveFarewell } from "../src/live/live.ts";
+import { Live, LiveTuning } from "../src/live/live.ts";
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
@@ -74,6 +73,8 @@ export interface Fakes {
   readonly ledger?: (real: Ledger["Service"]) => Ledger["Service"];
   /** Steps in between Leaf and its events, the same way. */
   readonly events?: (real: Events["Service"]) => Events["Service"];
+  /** Live's timings and sizes, for tests that cannot wait for the real ones. */
+  readonly live?: Partial<LiveTuning>;
 }
 
 /**
@@ -130,7 +131,17 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
       Events.useSync((real) => fakes.events?.(real) ?? real),
     ),
   );
-  const layer = Layer.merge(between.pipe(Layer.provideMerge(stores)), Live.layer.pipe(Layer.provide(outside)));
+  const live = Live.layer.pipe(
+    Layer.provide(outside),
+    Layer.provide(
+      Layer.succeed(LiveTuning)({
+        recheckMs: fakes.live?.recheckMs ?? LiveTuning.defaultValue().recheckMs,
+        graceMs: fakes.live?.graceMs ?? LiveTuning.defaultValue().graceMs,
+        mostPlayers: fakes.live?.mostPlayers ?? LiveTuning.defaultValue().mostPlayers,
+      }),
+    ),
+  );
+  const layer = Layer.merge(between.pipe(Layer.provideMerge(stores)), live);
   // Layers built through the same memo map are built once, so `run` and `app` see the same database.
   const memoMap = Layer.makeMemoMapUnsafe();
   const runtime = ManagedRuntime.make(layer, { memoMap });
@@ -164,20 +175,7 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
      * all, with any routes of the caller's beside its own. Port 0 takes any free one.
      */
     serve: async (port = 0, extra: Layer.Layer<never, never, HttpRouter.HttpRouter> = Layer.empty) => {
-      const server = LiveFarewell.pipe(
-        Layer.provideMerge(
-          HttpRouter.serve(Layer.mergeAll(Routes, extra), { disableLogger: true, routerConfig }).pipe(
-            Layer.provideMerge(
-              BunHttpServer.layer({
-                hostname: "127.0.0.1",
-                port,
-                idleTimeout: 60,
-                websocket: LIVE_SOCKETS,
-                gracefulShutdownTimeout: "1 second",
-              }),
-            ),
-          ),
-        ),
+      const server = serveLeaf({ port, hostname: "127.0.0.1", gracefulShutdownTimeout: "1 second", extra }).pipe(
         Layer.provide(layer),
       );
       const served = ManagedRuntime.make(server, { memoMap });
