@@ -1,194 +1,65 @@
 /**
- * What sits over the town, built from the kit: the purse, the dock, the guild feed, a card for
- * whoever was tapped, the arrival letter, and a panel for each place. What a button does still
- * lands in the town behind it.
+ * The town's own part of the interface: a panel for each of its places, the arrival letter, and
+ * the dock that goes to them. The purse, the feed, the panel's frame and the cards are shared with
+ * the camp (`hud.ts`). What a button does still lands in the town behind it.
  */
 
-import { add, el, icon as glyph, type IconName, replay, shown } from "@sequoia-leaf/kit/dom.ts";
+import { el, icon as glyph, replay, shown } from "@sequoia-leaf/kit/dom.ts";
 import { CREAM, GOLD, GREEN, WATER } from "@sequoia-leaf/kit/palette.ts";
-import { balance, type Currency, earn, grant, spend } from "@sequoia-leaf/kit/purse.ts";
-import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
-import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
-import { dist, makeCanvas, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { earn, grant } from "@sequoia-leaf/kit/purse.ts";
+import { sfx } from "@sequoia-leaf/kit/sound.ts";
+import { tip } from "@sequoia-leaf/kit/tip.ts";
+import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
 
 import { callToFire, goSit, hop, inTown, release, say, sitters } from "./actors.ts";
-import { DOING, KEEPER } from "./cast.ts";
-import { show } from "./draw.ts";
-import { after } from "./events.ts";
+import { owned } from "./camp.ts";
+import { type CampArt, pictureOf } from "./campart.ts";
+import { KEEPER } from "./cast.ts";
+import { fling } from "./flights.ts";
 import { bit, float, flutter, puff, sparkle } from "./fx.ts";
-import { type Actor, changed, G, hooks, type PanelId, watch } from "./game.ts";
-import { GAMES, isGame } from "./games.ts";
-import { type AwayLine, guild, type Listing, type Quest, type Tone, type Ware } from "./guild.ts";
+import { type Actor, after, changed, G, hooks, type PanelId } from "./game.ts";
+import { GAMES } from "./games.ts";
+import { type AwayLine, guild, type Quest, type Stock, type Ware } from "./guild.ts";
+import {
+  $,
+  bump,
+  button,
+  centre,
+  closePanel,
+  fly,
+  openPanel as openHudPanel,
+  pay,
+  pic,
+  purseAt,
+  setDock,
+  slot,
+  when,
+} from "./hud.ts";
 import type { Letter } from "./letter.ts";
+import { waiting } from "./mail.ts";
+import { camp, sendToCamp } from "./record.ts";
 import { icon, type Sprites } from "./sprites.ts";
+import { thingOf } from "./things.ts";
 import { flare, nudgeCrab, ringBell, rollCall } from "./town.ts";
-import { place, type PlaceId, PLACES } from "./world.ts";
-
-type Kid = Node | string | null;
-
-const $ = (id: string): HTMLElement => must(document.getElementById(id), id);
-
-/** A copy of a small picture, shown `scale` interface units to each of its pixels. */
-function pic(src: HTMLCanvasElement, scale = 1): HTMLCanvasElement {
-  const { c, g } = makeCanvas(src.width, src.height);
-  g.drawImage(src, 0, 0);
-  return shown(c, scale);
-}
-
-/** A hollow `size` units square, holding one thing. */
-function slot(inside: Node | null, size = 20): HTMLElement {
-  const s = el("div", "k-slot");
-  s.style.width = `calc(var(--u) * ${size})`;
-  s.style.height = s.style.width;
-  s.style.flex = "none";
-  add(s, inside);
-  return s;
-}
-
-function button(cls: string, kids: readonly Kid[], on: (b: HTMLButtonElement) => void): HTMLButtonElement {
-  const b = el("button", `k-btn ${cls}`, { type: "button" }, ...kids);
-  b.addEventListener("click", () => {
-    on(b);
-  });
-  return b;
-}
-
-/** Redraws a part of a panel only when what it shows has changed. */
-function when(key: () => string, draw: () => void): () => void {
-  let last: string | null = null;
-  return () => {
-    const k = key();
-    if (k === last) return;
-    last = k;
-    draw();
-  };
-}
-
-const centre = (node: Element): Pt => {
-  const r = node.getBoundingClientRect();
-  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-};
+import { place, PLACES } from "./world.ts";
 
 let S: Sprites | null = null;
-
-// ---------- the purse ----------
-
-interface Counter {
-  num: HTMLElement;
-  art: HTMLElement;
-  shown: number;
-}
-const counters: Partial<Record<Currency, Counter>> = {};
-let tickAt = 0;
-
-function counter(kind: Currency, title: string, about: string): Counter {
-  const art = glyph(kind === "leaf" ? "leaf" : "coin");
-  const num = el("span", "", { text: balance()[kind] });
-  const box = el("span", kind === "leaf" ? "k-cur leaf" : "k-cur", { tabindex: 0 }, art, num);
-  $("purse").append(box);
-  tip(box, title, about);
-  return { num, art, shown: balance()[kind] };
-}
-
-function purseAt(kind: Currency): Pt {
-  const c = counters[kind];
-  return c ? centre(c.art) : { x: 30, y: 30 };
-}
-
-function bump(kind: Currency): void {
-  const c = counters[kind];
-  if (c) replay(c.art, "k-bump");
-}
-
-function roll(kind: Currency, dt: number): void {
-  const c = counters[kind];
-  if (!c) return;
-  const real = balance()[kind];
-  if (c.shown === real) return;
-  const d = real - c.shown;
-  c.shown += Math.sign(d) * Math.min(Math.abs(d), Math.max(1, Math.ceil(Math.abs(d) * dt * 5)));
-  c.num.textContent = String(c.shown);
-  const now = performance.now();
-  if (d > 0 && now > tickAt) {
-    tickAt = now + 70;
-    if (kind === "leaf") sfx.leaf(c.shown);
-    else sfx.coin(c.shown);
-  }
-}
-
-/** Little pictures that fly from one spot on the page to another: Leaf leaving the purse, Coins arriving. */
-function fly(what: IconName, from: Pt, to: Pt, count: number, each: ((i: number) => void) | null = null): void {
-  for (let i = 0; i < count; i++) {
-    const c = glyph(what);
-    c.classList.add("fly");
-    document.body.append(c);
-    const half = c.getBoundingClientRect().width / 2;
-    const midX = (from.x + to.x) / 2 + (Math.random() - 0.5) * 90;
-    const midY = Math.min(from.y, to.y) - 24 - Math.random() * 46;
-    const tr = (x: number, y: number, s: number): string => `translate(${x - half}px, ${y - half}px) scale(${s})`;
-    const anim = c.animate(
-      [
-        { transform: tr(from.x, from.y, 0.5), opacity: 0 },
-        { transform: tr(from.x, from.y, 1.1), opacity: 1, offset: 0.12 },
-        { transform: tr(midX, midY, 1.3), opacity: 1, offset: 0.55 },
-        { transform: tr(to.x, to.y, 0.7), opacity: 1 },
-      ],
-      { duration: 640, delay: i * 75, easing: "ease-in-out", fill: "both" },
-    );
-    anim.addEventListener("finish", () => {
-      c.remove();
-      each?.(i);
-    });
-  }
-}
-
-/** Takes the price in Leaf if the purse holds it, with Leaf flying from the purse to the button. */
-function payLeaf(b: HTMLElement, price: number, why: string): boolean {
-  if (!spend("leaf", price, why)) {
-    sfx.no();
-    replay(b, "shake");
-    return false;
-  }
-  sfx.buy();
-  fly("leaf", purseAt("leaf"), centre(b), Math.min(7, 2 + Math.floor(price / 10)));
-  return true;
-}
-
-// ---------- the guild feed ----------
-
-const waiting: (readonly [string, Tone])[] = [];
-let quiet = false;
-
-function feed(text: string, tone: Tone = "gold"): void {
-  if (quiet) {
-    waiting.push([text, tone]);
-    while (waiting.length > 3) waiting.shift();
-    return;
-  }
-  const f = $("feed");
-  const row = el("div", tone === "gold" ? "k-toast" : `k-toast ${tone}`, { text });
-  f.append(row);
-  while (f.children.length > 3) f.firstElementChild?.remove();
-  setTimeout(() => {
-    row.classList.add("gone");
-  }, 11000);
-  setTimeout(() => {
-    row.remove();
-  }, 12000);
-}
+let ART: CampArt | null = null;
 
 /**
- * While the member is inside a game the interface is put away and news is held back; on the way
- * out it comes back, and what was held is said.
+ * A camp thing's picture in a hollow, as large as will fit: small things twice their size, most
+ * things as they are, and the few very large ones at half.
  */
-export function hush(on: boolean): void {
-  quiet = on;
-  document.body.classList.toggle("inside", on);
-  if (on) {
-    tipOff();
-    return;
-  }
-  for (const [text, tone] of waiting.splice(0)) feed(text, tone);
+export function thingSlot(art: CampArt, id: string, box = 38): HTMLElement {
+  const sprite = pictureOf(art, id, 0, 0);
+  if (!sprite) return slot(glyph("star"), box);
+  const { width, height } = sprite.c;
+  const fits = (k: number): boolean => width * k <= box - 2 && height * k <= box + 8;
+  const scale = fits(3) ? 3 : fits(2) ? 2 : fits(1) ? 1 : 0.5;
+  const s = slot(pic(sprite.c, scale), box);
+  s.style.height = `calc(var(--u) * ${Math.max(box, Math.ceil(height * scale) + 4)})`;
+  s.style.overflow = "hidden";
+  return s;
 }
 
 // ---------- what buying things does in the town ----------
@@ -255,12 +126,6 @@ const GOT: Readonly<Record<string, (p: Actor) => void>> = {
     nearby(p, ["pretty!", "ooh"]);
   },
   cocoa,
-  bread: (p) => {
-    nearby(p, ["that smells amazing", "save me a bit"], 90);
-  },
-  run: () => {
-    hooks.feed("You're down for the Hollow Vault tonight.", "coral");
-  },
   plate: (p) => {
     sparkle(p.x, p.y - 26, 14, 9);
   },
@@ -270,7 +135,7 @@ const GOT: Readonly<Record<string, (p: Actor) => void>> = {
   },
 };
 
-function got(thing: Ware | Listing): void {
+function got(thing: Ware): void {
   if (thing.worn) G.wearing.add(thing.id);
   const p = G.player;
   if (!p) return;
@@ -305,6 +170,7 @@ function treasury(body: HTMLElement): () => void {
       hop(G.cinfy);
     }
   };
+  body.append(el("div", "k-label", { text: "To wear" }));
   const parts = guild.wares().map((w) => {
     const side = el("span");
     const row = el(
@@ -324,7 +190,7 @@ function treasury(body: HTMLElement): () => void {
           return;
         }
         const buy = button("leaf sm", [glyph("leaf"), String(w.price)], (b) => {
-          if (!payLeaf(b, w.price, w.name)) {
+          if (!pay("leaf", b, w.price, w.name)) {
             speak(KEEPER.short[0], KEEPER.short[1]);
             return;
           }
@@ -339,6 +205,16 @@ function treasury(body: HTMLElement): () => void {
       },
     );
   });
+  // The fine pieces: things for a camp that are sold for Leaf, and are as cosmetic as the rest.
+  body.append(el("div", "k-label", { text: "For your camp" }));
+  for (const piece of guild.pieces())
+    parts.push(
+      shopRow(body, piece, "leaf", () => {
+        ringBell();
+        speak("Wrapped, and on its way to your camp.", "it's on its way");
+        return { x: 104, y: 104 };
+      }),
+    );
   return () => {
     for (const f of parts) f();
   };
@@ -418,47 +294,106 @@ function quests(body: HTMLElement): () => void {
   };
 }
 
+// ---------- camp things, wherever they are sold ----------
+
+/**
+ * A row selling one camp thing, for Coins at a stall or Leaf at the Treasury. Nothing sells out:
+ * the row says how many the member has. `sold` is what the place does about it, and gives the spot
+ * in town the parcel leaves from.
+ */
+function shopRow(
+  body: HTMLElement,
+  s: Stock,
+  kind: "coins" | "leaf",
+  sold: () => { x: number; y: number },
+): () => void {
+  const thing = thingOf(s.thing);
+  if (!thing || !ART) return () => undefined;
+  const art = ART;
+  const have = el("div", "k-d");
+  const buy = button(
+    kind === "leaf" ? "leaf sm" : "sm",
+    [glyph(kind === "leaf" ? "leaf" : "coin"), String(s.price)],
+    (b) => {
+      if (!pay(kind, b, s.price, thing.name)) return;
+      const from = sold();
+      // It leaves for the camp at once: a parcel, up the path and out through the gate.
+      if (S) fling(S.crate.c, from, { x: 256, y: 92 }, 0.9, 30, () => puff(256, 90, 4, CREAM));
+      sendToCamp(thing.id);
+      if (G.player) hop(G.player);
+      hooks.feed(`${thing.name}: on its way to your camp.`, kind === "leaf" ? "leaf" : "gold");
+    },
+  );
+  tip(buy, `${s.price} ${kind === "leaf" ? "Leaf" : "Coins"}`, "It will be waiting at your camp.");
+  const row = el(
+    "div",
+    "k-card",
+    { tabindex: 0 },
+    thingSlot(art, thing.id),
+    el("div", "k-grow", {}, thing.name, el("div", "k-d", { text: thing.about }), have),
+    buy,
+  );
+  tip(row, thing.name, thing.does ? `${thing.about} ${thing.does}` : thing.about);
+  body.append(row);
+  return when(
+    () => String(owned(camp, thing.id)),
+    () => {
+      const n = owned(camp, thing.id);
+      have.textContent = n > 0 ? `You have ${n === 1 ? "one" : n}.` : "";
+      have.classList.toggle("k-gold", n > 0);
+    },
+  );
+}
+
 // ---------- the market ----------
 
+/** Where each stall stands in town, for parcels to leave from. */
+const STALL_AT = [60, 108, 156] as const;
+
 function market(body: HTMLElement): () => void {
-  const parts = guild.stalls().map((it) => {
-    const seller = G.mates.find((a) => a.who.name === it.by);
-    const side = el("span");
-    const row = el(
-      "div",
-      "k-card",
-      { tabindex: 0 },
-      slot(seller ? pic(seller.body.face, 2) : glyph("heart")),
-      el("div", "k-grow", {}, it.what, el("div", "k-d", { text: it.by })),
-      side,
-    );
-    tip(row, it.what, `${it.about} From ${it.by}.`);
-    body.append(row);
-    return when(
-      () => String(G.owned.has(it.id)),
-      () => {
-        if (G.owned.has(it.id)) {
-          side.replaceChildren(el("span", "k-chip", { text: "Yours" }));
-          return;
+  const stalls = guild.stalls();
+  const tabs = el("div", "k-tabs", { role: "tablist" });
+  const list = el("div", "k-col");
+  const line = el("span");
+  const face = slot(null, 28);
+  body.append(tabs, el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, line)), list);
+  let rows: (() => void)[] = [];
+  const pickStall = (i: number): void => {
+    const stall = stalls[i];
+    if (!stall) return;
+    G.stall = i;
+    [...tabs.children].forEach((tab, k) => {
+      tab.setAttribute("aria-selected", k === i ? "true" : "false");
+    });
+    const keeper = G.mates.find((a) => a.who.name === stall.by);
+    face.replaceChildren(...(keeper ? [pic(keeper.body.face, 3)] : []));
+    line.replaceChildren(el("b", "", { text: stall.by }), stall.name);
+    list.replaceChildren();
+    rows = stall.stock.map((s) =>
+      shopRow(list, s, "coins", () => {
+        if (keeper && !keeper.away) {
+          hop(keeper, 2);
+          say(keeper, pick(stall.words, Math.random()), 2.6);
         }
-        side.replaceChildren(
-          button("leaf sm", [glyph("leaf"), String(it.price)], (b) => {
-            if (!payLeaf(b, it.price, `${it.what}, from ${it.by}`)) return;
-            G.owned.add(it.id);
-            if (seller && !seller.away) {
-              hop(seller, 2);
-              say(seller, it.word, 2.6);
-            }
-            if (G.player) hop(G.player);
-            got(it);
-            changed();
-          }),
-        );
-      },
+        sfx.pluck(2 + i * 2);
+        return { x: STALL_AT[i] ?? 108, y: 232 };
+      }),
     );
+    for (const f of rows) f();
+  };
+  stalls.forEach((stall, i) => {
+    const first = stall.name.split(/[ ,]/)[0] ?? stall.name;
+    const tab = button("sm", [first], () => {
+      sfx.tap();
+      pickStall(i);
+    });
+    tab.setAttribute("role", "tab");
+    tip(tab, stall.name, `Kept by ${stall.by}.`);
+    tabs.append(tab);
   });
+  pickStall(G.stall);
   return () => {
-    for (const f of parts) f();
+    for (const f of rows) f();
   };
 }
 
@@ -471,6 +406,7 @@ function doorCard(id: "works" | "table"): (body: HTMLElement) => null {
     const go = button("wide", [game.go], () => {
       hooks.goIn(id);
     });
+    go.dataset.first = "";
     body.append(
       el("div", "k-row", {}, slot(shown(icon(id), 2), 34), el("div", "k-grow", { text: game.about })),
       el(
@@ -635,40 +571,43 @@ function pond(body: HTMLElement): () => void {
 
 // ---------- your camp, and you ----------
 
-function camp(body: HTMLElement): null {
+const COUNT = ["No", "One", "Two", "Three", "Four", "Five", "Six"] as const;
+const many = (n: number, one: string, more: string): string => `${COUNT[n] ?? n} ${n === 1 ? one : more}`;
+
+/** What is waiting at the camp, in a line, for the card at the gate. */
+export function campWaiting(): string {
+  const letters = waiting(camp.letters);
+  const parcels = camp.parcels.length;
+  const parts: string[] = [];
+  if (letters > 0) parts.push(`${many(letters, "letter", "letters")} in the mailbox.`);
+  if (parcels > 0) parts.push(`${many(parcels, "parcel", "parcels")} by the trail.`);
+  if (!camp.first) parts.push("Somebody small has been waiting for you.");
+  return parts.length > 0 ? parts.join(" ") : "The fire is lit. Nothing needs doing.";
+}
+
+function campCard(body: HTMLElement): () => void {
+  const news = el("div");
+  const go = button("wide", ["Go home"], () => {
+    hooks.toCamp();
+  });
+  go.dataset.first = "";
   body.append(
     el(
       "div",
       "k-row",
       {},
       slot(shown(icon("camp"), 2), 34),
-      el("div", "k-grow", { text: "The path to your own camp." }),
+      el("div", "k-grow", { text: "Your own clearing, a little way into the trees." }),
     ),
-    el("div", "k-d", { text: "Not built yet. The rope is still across the path, and Mossback left a mushroom by it." }),
-    button("wood", ["Wave down the path"], () => {
-      const p = G.player;
-      if (!p) return;
-      say(p, "o/", 1.6);
-      hop(p);
-      sfx.pluck(5);
-      after(1.1, () => {
-        float(256, 70, "something small waves back", CREAM, 2.6);
-        sfx.pluck(9);
-      });
-    }),
+    el("div", "k-paper", {}, el("div", "k-label", { text: "Waiting for you" }), news),
+    go,
   );
-  return null;
+  return when(campWaiting, () => {
+    news.textContent = campWaiting();
+  });
 }
 
-/** Everything that can be worn or carried, by what the town calls it. */
-function things(): Map<string, Ware | Listing> {
-  const all = new Map<string, Ware | Listing>();
-  for (const t of [...guild.wares(), ...guild.stalls()]) all.set(t.id, t);
-  return all;
-}
-const nameOf = (t: Ware | Listing): string => ("name" in t ? t.name : t.what);
-
-function profile(body: HTMLElement): () => void {
+function profile(body: HTMLElement): null {
   const me = guild.me();
   const p = G.player;
   const portrait = makeCanvas(12, 24);
@@ -677,7 +616,6 @@ function profile(body: HTMLElement): () => void {
   if (G.wearing.has("crown") && S) portrait.g.drawImage(S.crown, 2, 0);
   const xp = el("i");
   xp.style.setProperty("--v", `${Math.min(100, (me.xp / me.next) * 100)}%`);
-  const worn = el("div", "k-col");
   body.append(
     el(
       "div",
@@ -706,39 +644,23 @@ function profile(body: HTMLElement): () => void {
       }),
     ),
     el("div", "k-card", {}, el("div", "k-grow", {}, "This week", el("div", "k-d", { text: me.week.join(", ") }))),
-    el("div", "k-label", { text: "Yours" }),
-    worn,
+    el(
+      "div",
+      "k-card",
+      {},
+      el(
+        "div",
+        "k-grow",
+        {},
+        "Your things",
+        el("div", "k-d", { text: "What you wear and what you have won are in your cabin." }),
+      ),
+      button("wood sm", ["Go home"], () => {
+        hooks.toCamp();
+      }),
+    ),
   );
-  return when(
-    () => `${[...G.owned].join()}|${[...G.wearing].join()}`,
-    () => {
-      const all = things();
-      const mine = [...G.owned].flatMap((id) => {
-        const t = all.get(id);
-        return t ? [t] : [];
-      });
-      if (mine.length === 0) {
-        worn.replaceChildren(el("div", "k-d", { text: "Nothing yet. Cinfy can fix that." }));
-        return;
-      }
-      worn.replaceChildren(
-        ...mine.map((t) => {
-          const on = G.wearing.has(t.id);
-          const side = t.worn
-            ? button(on ? "sm" : "wood sm", [on ? "On" : "Off"], () => {
-                if (on) G.wearing.delete(t.id);
-                else G.wearing.add(t.id);
-                sfx.tap();
-                if (G.player) hop(G.player);
-                changed();
-              })
-            : el("span", "k-chip", { text: "Kept" });
-          if (t.worn) tip(side, nameOf(t), on ? "Showing. Tap to put it away." : "Put away. Tap to show it.");
-          return el("div", "k-card", {}, el("div", "k-grow", { text: nameOf(t) }), side);
-        }),
-      );
-    },
-  );
+  return null;
 }
 
 // ---------- panels ----------
@@ -751,145 +673,19 @@ const BUILD: Record<PanelId, (body: HTMLElement) => (() => void) | null> = {
   table: doorCard("table"),
   fire: fireside,
   pond,
-  camp,
+  camp: campCard,
   profile,
 };
 
-let refresh: (() => void) | null = null;
-const dockButtons = new Map<PlaceId, HTMLElement>();
-
-function markDock(): void {
-  for (const [id, b] of dockButtons) {
-    const lit = G.panel === id || (G.panel === null && G.near === id);
-    b.classList.toggle("lit", lit);
-    if (lit) b.setAttribute("aria-current", "true");
-    else b.removeAttribute("aria-current");
-  }
-  document.body.classList.toggle("panel-open", G.panel !== null);
-}
-
+/** Opens one of the town's panels. */
 export function openPanel(id: PanelId): void {
-  if (G.panel === id) return;
-  closeCard();
-  tipOff();
-  G.panel = id;
-  const p = $("panel");
-  p.hidden = true;
-  p.replaceChildren();
-  const x = el(
-    "button",
-    "k-btn wood icon sm",
-    { type: "button", "aria-label": "Close", onclick: closePanel },
-    glyph("close"),
-  );
   const face = G.player?.body.face;
-  const art = id === "profile" ? (face ? pic(face, 2) : null) : shown(icon(id), 1);
-  const title = id === "profile" ? "You" : place(id).name;
-  p.append(el("header", "k-head", {}, art, el("h2", "k-title", { text: title }), x));
-  const body = el("div", "k-body k-scroll");
-  p.append(body);
-  refresh = BUILD[id](body);
-  refresh?.();
-  p.hidden = false;
-  replay(p, "slide");
-  sfx.open();
-  markDock();
-  if (isGame(id)) body.querySelector<HTMLElement>(".k-btn.wide")?.focus({ preventScroll: true });
-}
-
-export function closePanel(): void {
-  if (!G.panel) return;
-  G.panel = null;
-  $("panel").hidden = true;
-  $("panel").replaceChildren();
-  refresh = null;
-  tipOff();
-  sfx.close();
-  markDock();
-}
-
-/** The part of the page a panel is covering, so the camera can keep the member clear of it. */
-export function panelBox(): DOMRect | null {
-  return G.panel ? $("panel").getBoundingClientRect() : null;
-}
-
-// ---------- a guild-mate's card ----------
-
-let cardUntil = 0;
-let doingEl: HTMLElement | null = null;
-
-function keep(): void {
-  cardUntil = performance.now() + 7000;
-}
-
-export function closeCard(): void {
-  show.card = null;
-  $("card").hidden = true;
-}
-
-export function showCard(a: Actor): void {
-  const c = $("card");
-  c.hidden = true;
-  c.replaceChildren();
-  const x = el(
-    "button",
-    "k-btn wood icon sm",
-    { type: "button", "aria-label": "Close", onclick: closeCard },
-    glyph("close"),
-  );
-  doingEl = el("div", "k-d");
-  const shop = a === G.cinfy;
-  c.append(
-    el(
-      "div",
-      "k-row top",
-      {},
-      slot(pic(a.body.face, 3), 28),
-      el(
-        "div",
-        "k-grow",
-        {},
-        el("div", "k-title", { text: a.who.name }),
-        el("div", "k-d", { text: shop ? a.who.rank : `${a.who.rank}, level ${a.who.level}` }),
-      ),
-      x,
-    ),
-    doingEl,
-    el(
-      "div",
-      "k-row",
-      {},
-      button("sm", ["Wave"], () => {
-        keep();
-        const p = G.player;
-        if (p) {
-          say(p, "o/", 1.4);
-          hop(p);
-        }
-        after(0.45, () => {
-          hop(a, 2);
-          say(a, pick(["o/", "hi hi!", "heya!", "\\o/"], Math.random()), 2);
-        });
-      }),
-      shop
-        ? button("wood sm", ["Treasury"], () => {
-            hooks.visit("treasury", true);
-          })
-        : button("wood sm", ["Cheer"], () => {
-            keep();
-            sfx.cheer();
-            if (G.player) hop(G.player, 2);
-            after(0.3, () => {
-              hop(a, 3);
-              say(a, pick(["woo!", "glory to the grove!", "no gg left behind!"], Math.random()), 2);
-            });
-          }),
-    ),
-  );
-  show.card = a;
-  keep();
-  c.hidden = false;
-  replay(c, "k-rise");
+  openHudPanel({
+    id,
+    title: id === "profile" ? "You" : place(id).name,
+    art: id === "profile" ? (face ? pic(face, 2) : null) : shown(icon(id), 1),
+    build: BUILD[id],
+  });
 }
 
 // ---------- arrival ----------
@@ -963,12 +759,12 @@ export function showArrival(letter: Letter, done: () => void): void {
       root.remove();
     }, 400);
     sfx.open();
-    paying.forEach(({ pay }, i) => {
+    paying.forEach(({ pay: owed }, i) => {
       const at = from[i] ?? centre(paper);
-      if (pay.kind === "leaf") grant(pay.amount, "the guild, while you were away");
-      else earn(pay.amount, "the Works, while you were away");
-      fly(pay.kind === "leaf" ? "leaf" : "coin", at, purseAt(pay.kind), 7, () => {
-        bump(pay.kind);
+      if (owed.kind === "leaf") grant(owed.amount, "the guild, while you were away");
+      else earn(owed.amount, "the Works, while you were away");
+      fly(owed.kind === "leaf" ? "leaf" : "coin", at, purseAt(owed.kind), 7, () => {
+        bump(owed.kind);
       });
     });
     done();
@@ -984,78 +780,26 @@ export function dismissArrival(): boolean {
   return true;
 }
 
-// ---------- setting up, and each moment ----------
+// ---------- setting up ----------
 
-let faceButton: HTMLElement | null = null;
-
-/** The member's face on the profile button, redrawn once their own skin has loaded. */
-export function refreshFace(): void {
-  const f = G.player?.body.face;
-  if (faceButton && f) faceButton.replaceChildren(pic(f, 1.5));
+/** The town's buttons along the bottom: every place, one touch away. */
+export function townDock(): void {
+  setDock(
+    PLACES.map((pl) => ({
+      id: pl.id,
+      name: pl.name,
+      about: pl.about,
+      art: icon(pl.id),
+      press: (): void => {
+        if (G.panel === pl.id) closePanel();
+        else hooks.visit(pl.id, true);
+      },
+    })),
+  );
 }
 
-export function initUI(sprites: Sprites): void {
+export function initUI(sprites: Sprites, art: CampArt): void {
   S = sprites;
-  counters.leaf = counter("leaf", "Leaf", "Earned with the guild, out in the world.");
-  counters.coins = counter("coins", "Coins", "Made in town: the Works, the games.");
-
-  const corner = $("corner");
-  faceButton = el("button", "k-btn wood icon", { type: "button", "aria-label": "You" });
-  faceButton.addEventListener("click", () => {
-    if (G.panel === "profile") closePanel();
-    else openPanel("profile");
-  });
-  tip(faceButton, "You", "Your rank, and what you are wearing.");
-  const mute = el("button", "k-btn wood icon", { type: "button", "aria-label": "Sound" });
-  const drawMute = (): void => {
-    mute.replaceChildren(glyph(isMuted() ? "mute" : "sound"));
-  };
-  mute.addEventListener("click", () => {
-    setMuted(!isMuted());
-    drawMute();
-    sfx.tap();
-  });
-  tip(mute, "Sound", () => (isMuted() ? "Off. Tap to turn it on." : "On. Tap to turn it off."));
-  drawMute();
-  corner.append(faceButton, mute);
-  refreshFace();
-
-  const dock = $("dock");
-  for (const pl of PLACES) {
-    const b = el("button", "k-slot", { type: "button", "aria-label": pl.name }, shown(icon(pl.id), 1));
-    b.addEventListener("click", () => {
-      if (G.panel === pl.id) closePanel();
-      else hooks.visit(pl.id, true);
-    });
-    tip(b, pl.name, pl.about);
-    dockButtons.set(pl.id, b);
-    dock.append(b);
-  }
-
-  hooks.feed = feed;
-  watch(() => {
-    refresh?.();
-  });
-}
-
-let slow = 0;
-let litFor: string | null = null;
-
-export function tickUI(dt: number): void {
-  roll("leaf", dt);
-  roll("coins", dt);
-  const lit = `${G.panel}/${G.near}`;
-  if (lit !== litFor) {
-    litFor = lit;
-    markDock();
-  }
-  slow -= dt;
-  if (slow > 0) return;
-  slow = 0.3;
-  refresh?.();
-  const of = show.card;
-  if (of && doingEl) {
-    doingEl.textContent = of === G.cinfy ? KEEPER.doing : DOING[of.doing];
-    if (performance.now() > cardUntil || of.away) closeCard();
-  }
+  ART = art;
+  townDock();
 }

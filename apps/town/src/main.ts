@@ -1,10 +1,12 @@
 /**
  * Guild Town: the member arrives as their own character in a small town in a clearing among giant
  * redwoods, where every part of the game is a place to walk up to and guild-mates are about.
+ * Behind its gate is the member's own camp, and down the trail from that, everybody else's.
  *
- * This file is the stage the town stands on: the canvas, the camera, the keys and fingers, the
- * loop, and the way through a door into a game and back. Everything about the town itself is in
- * `townscene.ts`, reached only through `Scene`.
+ * This file is the stage those places stand on: the canvas, the camera, the keys and fingers, the
+ * loop, the walk from one place to another, and the way through a door into a game and back.
+ * Everything about the town itself is in `townscene.ts` and about a camp in `campscene.ts`, each
+ * reached only through `Scene`.
  */
 
 import { unit } from "@sequoia-leaf/kit/dom.ts";
@@ -14,16 +16,21 @@ import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { LONG_PRESS, tipAt, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 
+import { makeCampArt } from "./campart.ts";
+import { type CampScene, makeCamp } from "./campscene.ts";
+import { makeCampUi } from "./campui.ts";
 import { goIn, type Visit } from "./doors.ts";
-import { drawIris } from "./draw.ts";
+import { drawIris, show } from "./draw.ts";
+import { clearFx } from "./fx.ts";
 import { G, hooks, type PanelId, toPage } from "./game.ts";
 import { type GameId, GAMES } from "./games.ts";
 import { guild, type Moment, stir } from "./guild.ts";
-import { showSheet } from "./sheet.ts";
+import { closeCard, closePanel, hush, initHud, panelBox, tickHud } from "./hud.ts";
+import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Hover, Scene, Stage, Steer } from "./stage.ts";
 import { makeTown } from "./townscene.ts";
-import { dismissArrival, hush, panelBox, tickUI } from "./ui.ts";
+import { dismissArrival } from "./ui.ts";
 import type { PlaceId } from "./world.ts";
 
 declare global {
@@ -53,12 +60,19 @@ declare global {
       hold: (on: boolean) => void;
       /** What the town has kept, as it would be saved now. */
       kept: () => unknown;
+      /** Which place is on the stage, and how dark the walk between two has got (0 for not at all). */
+      where: () => { where: "town" | "camp"; dark: number };
+      /** The member's camp, and guild-mates': go there, come back, and what `campscene.ts` offers besides. */
+      camp: CampScene["handles"] & { go: () => void };
     };
   }
 }
 
 /** How long the view takes to close in on a door, and to open out again, in seconds. */
 const CLOSE_IN = 0.55;
+/** How long night takes to close in on somebody walking off to another place, and to lift on them walking in. */
+const NIGHTFALL = 0.6;
+const DAYBREAK = 0.75;
 /** How long the pointer rests on a thing before its tip shows, in milliseconds. */
 const REST = 400;
 
@@ -74,6 +88,10 @@ async function boot(): Promise<void> {
   if (new URLSearchParams(location.search).has("sheet")) {
     const looks = [guild.me().look, guild.keeper().look, ...guild.roster().map((m) => m.look)];
     for (const id of ["purse", "corner", "dock", "feed"]) document.getElementById(id)?.remove();
+    if (new URLSearchParams(location.search).get("sheet") === "camp") {
+      showCampSheet(makeCampArt(sprites));
+      return;
+    }
     showSheet(
       sprites,
       looks.map((l) => bake(paintSkin(l))),
@@ -117,7 +135,9 @@ async function boot(): Promise<void> {
     const ch = Math.max(1, Math.round(window.innerHeight * dpr));
     canvas.width = cw;
     canvas.height = ch;
-    const z = Math.max(1, Math.floor(Math.min(cw / 160, ch / 176)));
+    // `?zoom=2` shows more of a place at once, for looking at how it is laid out.
+    const asked = Math.floor(Number(new URLSearchParams(location.search).get("zoom")));
+    const z = asked > 0 ? asked : Math.max(1, Math.floor(Math.min(cw / 160, ch / 176)));
     G.view = { w: Math.ceil(cw / z), h: Math.ceil(ch / z), z, dpr };
     // The usual text size; on a sharp screen, the size the kit gives second lines.
     wordPx = Math.max(1, Math.round(unit() * dpr * (dpr >= 2 ? 0.75 : 1)));
@@ -171,16 +191,35 @@ async function boot(): Promise<void> {
       scene.resize(G.view.w, G.view.h);
       aim(true);
     },
+    travel(next, swap) {
+      if (trip) return;
+      trip = { next, swap, there: false };
+      tipOff(TIP);
+    },
   };
+  /** A walk from one place to another, part-way through: night closing in, or lifting. */
+  let trip: { next: Scene; swap: () => void; there: boolean } | null = null;
 
-  const town = makeTown(sprites, stage);
-  /** The place that is on screen. The town is the only one there is yet. */
+  initHud();
+  const art = makeCampArt(sprites);
+  const town = makeTown(sprites, art, stage);
+  const campUi = makeCampUi(art, sprites);
+  const camp = makeCamp(sprites, art, stage, town, town.backdrop, campUi);
+  campUi.bind(camp);
+  town.toCamp = (): void => {
+    stage.travel(camp, () => {
+      camp.enter(null);
+    });
+  };
+  /** The place that is on screen: the town to begin with. */
   let scene: Scene = town;
 
   // ---------- keys and fingers ----------
 
   const keys = new Set<string>();
   let held: { x: number; y: number; sx: number; sy: number; steer: boolean } | null = null;
+  /** A finger or the mouse is down on the world. */
+  let down = false;
   let mouse: Pt | null = null;
   /** What the pointer is resting on, since when, and whether its tip is up. */
   let rest: { hover: Hover; since: number; shown: boolean } | null = null;
@@ -205,6 +244,10 @@ async function boot(): Promise<void> {
     if (!scene.awake()) return;
     if (k === "escape") {
       scene.back();
+      return;
+    }
+    if (scene.key(k)) {
+      e.preventDefault();
       return;
     }
     if (k.startsWith("arrow")) e.preventDefault();
@@ -233,7 +276,8 @@ async function boot(): Promise<void> {
     const at = toWorld(e.clientX, e.clientY);
     const groundTap = scene.tap(at.x, at.y, finger);
     held = groundTap ? { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, steer: false } : null;
-    if (held) canvas.setPointerCapture(e.pointerId);
+    down = true;
+    canvas.setPointerCapture(e.pointerId);
     // A finger kept on a thing asks what it is.
     if (finger && !groundTap)
       pressed = window.setTimeout(() => {
@@ -250,14 +294,18 @@ async function boot(): Promise<void> {
   });
   canvas.addEventListener("pointermove", (e) => {
     mouse = e.pointerType === "mouse" ? { x: e.clientX, y: e.clientY } : null;
+    if (down) scene.drag(toWorld(e.clientX, e.clientY));
     if (!held) return;
     held.x = e.clientX;
     held.y = e.clientY;
     if (!held.steer && Math.hypot(held.x - held.sx, held.y - held.sy) > 10) held.steer = true;
   });
-  const lift = (): void => {
+  const lift = (e: PointerEvent): void => {
     held = null;
     window.clearTimeout(pressed);
+    if (!down) return;
+    down = false;
+    scene.release(toWorld(e.clientX, e.clientY), document.elementFromPoint(e.clientX, e.clientY));
   };
   canvas.addEventListener("pointerup", lift);
   canvas.addEventListener("pointercancel", lift);
@@ -290,6 +338,30 @@ async function boot(): Promise<void> {
 
   function tick(dt: number): void {
     scene.step(dt, steering());
+    if (trip && !trip.there) {
+      // Night closes in on whoever is walking off; at its darkest the next place is put on.
+      G.dark = Math.min(1, G.dark + dt / NIGHTFALL);
+      if (G.dark >= 1) {
+        trip.there = true;
+        keys.clear();
+        held = null;
+        closePanel();
+        closeCard();
+        clearFx();
+        show.prompt = null;
+        show.promptT = 0;
+        show.hover = null;
+        show.pointed = null;
+        show.dest = null;
+        trip.swap();
+        scene = trip.next;
+        scene.resize(G.view.w, G.view.h);
+        aim(true);
+      }
+    } else if (trip) {
+      G.dark = Math.max(0, G.dark - dt / DAYBREAK);
+      if (G.dark <= 0) trip = null;
+    }
     if (iris.open !== iris.goal) {
       const d = iris.goal - iris.open;
       iris.open += Math.sign(d) * Math.min(Math.abs(d), dt / CLOSE_IN);
@@ -329,7 +401,7 @@ async function boot(): Promise<void> {
     if (dt > 0) tick(dt);
     aim(false);
     pointing();
-    tickUI(dt);
+    tickHud(dt);
     draw();
     requestAnimationFrame(frame);
   }
@@ -371,7 +443,21 @@ async function boot(): Promise<void> {
     hold(on) {
       heldStill = on;
     },
+    where: () => ({ where: G.where, dark: Math.round(G.dark * 100) / 100 }),
+    camp: {
+      ...camp.handles,
+      go() {
+        hooks.toCamp();
+      },
+    },
   };
+  // In whichever place is on the stage: the member, a touch, and the point on the page.
+  const outside = window.town;
+  outside.tap = (x, y): void => {
+    scene.tap(x, y, false);
+    scene.release({ x, y }, null);
+  };
+  outside.me = (): Pt => (G.player ? { x: Math.round(G.player.x), y: Math.round(G.player.y) } : { x: 0, y: 0 });
 }
 
 void boot();

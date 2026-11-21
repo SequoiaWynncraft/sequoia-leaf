@@ -1,0 +1,9 @@
+[
+  ["size", 1400, 2230],
+  ["wait", 1500],
+  [
+    "eval",
+    "JSON.stringify({ sheet: document.body.dataset.sheet, things: document.body.dataset.things, undrawn: document.body.dataset.undrawn })"
+  ],
+  ["shot", "ui-every-camp-thing"]
+]

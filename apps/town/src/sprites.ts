@@ -14,11 +14,16 @@ export interface Sprite {
   ay: number;
 }
 
-const spr = (c: HTMLCanvasElement, ax: number, ay: number): Sprite => ({ c: outlined(c, INK), ax: ax + 1, ay: ay + 1 });
-const at = (ramp: readonly string[], i: number): string => ramp[clamp(Math.round(i), 0, ramp.length - 1)] ?? "#000000";
+export const spr = (c: HTMLCanvasElement, ax: number, ay: number): Sprite => ({
+  c: outlined(c, INK),
+  ax: ax + 1,
+  ay: ay + 1,
+});
+export const at = (ramp: readonly string[], i: number): string =>
+  ramp[clamp(Math.round(i), 0, ramp.length - 1)] ?? "#000000";
 
 /** Letters for pictures typed out in rows. */
-const PAL: Readonly<Record<string, string>> = {
+export const PAL: Readonly<Record<string, string>> = {
   k: INK,
   w: CREAM,
   y: GOLD[1],
@@ -48,7 +53,7 @@ const PAL: Readonly<Record<string, string>> = {
 
 // ---------- surfaces ----------
 
-function stones(g: Ctx, x: number, y: number, w: number, h: number, seed: number): void {
+export function stones(g: Ctx, x: number, y: number, w: number, h: number, seed: number): void {
   g.save();
   g.beginPath();
   g.rect(x, y, w, h);
@@ -67,7 +72,7 @@ function stones(g: Ctx, x: number, y: number, w: number, h: number, seed: number
   g.restore();
 }
 
-function planks(g: Ctx, x: number, y: number, w: number, h: number, seed: number): void {
+export function planks(g: Ctx, x: number, y: number, w: number, h: number, seed: number): void {
   g.save();
   g.beginPath();
   g.rect(x, y, w, h);
@@ -86,7 +91,7 @@ function planksIn(g: Ctx, x: number, y: number, w: number, h: number, seed: numb
 }
 
 /** Rows of shingles on a roof that narrows towards its ridge. `cols`: shadow, two body tones, light. */
-function shingles(
+export function shingles(
   g: Ctx,
   x: number,
   y: number,
@@ -111,7 +116,7 @@ function shingles(
   }
 }
 
-function windowLit(g: Ctx, x: number, y: number, w: number, h: number): void {
+export function windowLit(g: Ctx, x: number, y: number, w: number, h: number): void {
   R(g, x - 1, y - 1, w + 2, h + 2, BARK[0]);
   R(g, x, y, w, h, GOLD[1]);
   R(g, x, y, w, Math.floor(h / 2), GOLD[2]);
@@ -160,7 +165,7 @@ function gear(g: Ctx, cx: number, cy: number, r: number, body: string, shade: st
   }
 }
 
-function lantern(g: Ctx, x: number, y: number): void {
+export function lantern(g: Ctx, x: number, y: number): void {
   R(g, x + 2, y, 1, 1, BARK[0]);
   R(g, x, y + 1, 5, 1, BARK[0]);
   R(g, x, y + 2, 5, 5, BARK[0]);
@@ -403,11 +408,12 @@ const AWNINGS: readonly (readonly [string, string, string, string])[] = [
   [SKY[3], "#ecdcb8", SKY[2], "#d0bb93"],
   [SKY[5], "#ecdcb8", "#bf584f", "#d0bb93"],
   [GREEN[3], "#ecdcb8", GREEN[2], "#d0bb93"],
+  [GOLD[1], "#ecdcb8", GOLD[0], "#d0bb93"],
 ];
 
-function stall(kind: number): Sprite {
+export function stall(kind: number): Sprite {
   const { c, g } = makeCanvas(40, 46);
-  const [a, b, a2, b2] = AWNINGS[kind % 3] ?? ["#000", "#000", "#000", "#000"];
+  const [a, b, a2, b2] = AWNINGS[kind % AWNINGS.length] ?? ["#000", "#000", "#000", "#000"];
   for (const x of [1, 37]) {
     R(g, x, 10, 2, 36, BARK[2]);
     R(g, x + 1, 10, 1, 36, BARK[1]);
@@ -447,6 +453,13 @@ function stall(kind: number): Sprite {
     R(g, 29, 26, 5, 1, GOLD[0]);
     R(g, 26, 26, 1, 4, BARK[3]);
     g.drawImage(bitmap(["..yy", ".yYy", "yYYo", "yoYy"], PAL), 10, 26);
+  } else if (kind === 3) {
+    // A stall of the member's own: a jar, a pebble, and a crab that is only looking.
+    R(g, 4, 25, 4, 5, WATER[2]);
+    R(g, 4, 25, 1, 2, CREAM);
+    R(g, 5, 24, 2, 1, BARK[3]);
+    ell(g, 30, 28, 3, 2, STONE[2]);
+    g.drawImage(bitmap(["r...r", ".rrr.", "rrrrr", ".R.R."], PAL), 9, 26);
   } else {
     // Pots in flower.
     [SKY[4], GOLD[1], CREAM, SKY[5]].forEach((col, i) => {
@@ -529,7 +542,7 @@ function lanternTree(): Sprite {
   return spr(c, 32, 80);
 }
 
-function bush(w: number, h: number, seed: number): Sprite {
+export function bush(w: number, h: number, seed: number): Sprite {
   const c = paint(w, h, (x, y) => {
     const cx = w / 2;
     const d = Math.hypot((x - cx) / (w / 2), (y - h * 0.62) / (h * 0.62));
@@ -540,7 +553,7 @@ function bush(w: number, h: number, seed: number): Sprite {
   return spr(c, Math.round(w / 2), h);
 }
 
-function rock(w: number, h: number, seed: number): Sprite {
+export function rock(w: number, h: number, seed: number): Sprite {
   const c = paint(w, h, (x, y) => {
     const d = Math.hypot((x + 0.5 - w / 2) / (w / 2), (y + 0.5 - h * 0.55) / (h * 0.6));
     if (d > 1 + (vnoise(x / 3, y / 3, seed) - 0.5) * 0.25 || y >= h) return null;
@@ -550,7 +563,7 @@ function rock(w: number, h: number, seed: number): Sprite {
   return spr(c, Math.round(w / 2), h);
 }
 
-function fern(size: number, seed: number): Sprite {
+export function fern(size: number, seed: number): Sprite {
   const { c, g } = makeCanvas(size * 2 + 6, size + 6);
   drawFern(g, size + 3, size + 4, size, [GREEN[3], GREEN[4], GREEN[3]], seed);
   R(g, size + 2, size + 4, 3, 1, GREEN[0]);

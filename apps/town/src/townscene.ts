@@ -9,27 +9,37 @@ import { bake, type Body, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 
-import { face, footfall, hop, makeActor, release, say, sit, stepActor, stepMates, walkTo } from "./actors.ts";
+import { face, hop, makeActor, pushOf, release, say, shove, sit, stepActor, stepMates, walkTo } from "./actors.ts";
+import type { CampArt } from "./campart.ts";
 import { GREETS, KEEPER } from "./cast.ts";
-import { drawTown, drawWords, show, sizeBuffers, type TownArt } from "./draw.ts";
-import { after, beginEvents, stepEvents } from "./events.ts";
+import { drawPicture, drawWords, type Picture, show, sizeBuffers } from "./draw.ts";
+import { beginEvents, stepEvents } from "./events.ts";
+import { flights, stepFlights } from "./flights.ts";
 import { ring, updateFx } from "./fx.ts";
-import { type Actor, changed, G, hooks, type PanelId, watch } from "./game.ts";
+import { type Actor, after, changed, G, hooks, type PanelId } from "./game.ts";
 import { type GameId, isGame, worksAway } from "./games.ts";
-import { paintBackdrop, paintGround, paintNear } from "./ground.ts";
+import { GROUND, NEAR, paintBackdrop, paintGround, paintNear, SKYLINE } from "./ground.ts";
 import { guild } from "./guild.ts";
-import { load, store } from "./keep.ts";
+import { closeCard, closePanel, refreshFace, setFace, setHammer, showCard } from "./hud.ts";
 import { compose, read } from "./letter.ts";
+import { post } from "./mail.ts";
+import { camp, kept, remember } from "./record.ts";
 import { dayOf } from "./save.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Hover, Scene, Stage, Steer } from "./stage.ts";
 import {
+  allLights,
   buildTown,
   crabAt,
   crabs,
+  crabsStanding,
+  drawGlows,
+  drawStrings,
+  drawWater,
   lightTable,
   openDoor,
   propAt,
+  props,
   stepTown,
   table,
   tapCrab,
@@ -38,8 +48,8 @@ import {
   tapWater,
   twinkleAll,
 } from "./town.ts";
-import { closeCard, closePanel, dismissArrival, initUI, openPanel, refreshFace, showArrival, showCard } from "./ui.ts";
-import { footBlocked, H, hedgeY, nearestFree, place, type PlaceId, PLACES, pondD, SEATS, SPOTS, W } from "./world.ts";
+import { dismissArrival, initUI, openPanel, showArrival, townDock } from "./ui.ts";
+import { H, hedgeY, nearestFree, type Place, place, type PlaceId, PLACES, pondD, SEATS, SPOTS, W } from "./world.ts";
 
 /** Where the view closes in when the member goes into each game, and where they stand to go in. */
 const DOORWAY: Readonly<Record<GameId, Pt>> = {
@@ -55,9 +65,21 @@ const HOW_MANY = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "
 
 const bodyOf = (look: Look): Body => bake(paintSkin(look));
 
+/** The member's face in the corner opens what the town knows of them, and shuts it again. */
+function openProfile(): void {
+  if (G.panel === "profile") closePanel();
+  else openPanel("profile");
+}
+
 export interface Town extends Scene {
   /** Begins the visit: the member walks in through the gate, to a letter if there is one to read. */
   arrive(): void;
+  /** The member is back from a camp: they walk in through the gate, and the town's own buttons are put back. */
+  cameFromCamp(): void;
+  /** The town's painted sky and near ferns, which a camp at the same dusk shares. */
+  readonly backdrop: { sky: HTMLCanvasElement; near: HTMLCanvasElement };
+  /** How the stage is told the way to the camp, once there is one. */
+  toCamp: (() => void) | null;
   /** The town's own handles for looking at it from outside. */
   readonly handles: {
     enter(): void;
@@ -74,32 +96,8 @@ export interface Town extends Scene {
   };
 }
 
-export function makeTown(sprites: Sprites, stage: Stage): Town {
-  // ---------- what was kept from last time ----------
-
-  const kept = load();
-  G.owned = new Set(kept.owned);
-  G.wearing = new Set(kept.wearing);
-  G.claimed = new Set(kept.claimed);
-  G.sightings = kept.sightings;
+export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town {
   G.lostCrab = guild.lostCrab();
-
-  function remember(): void {
-    kept.owned = [...G.owned];
-    kept.wearing = [...G.wearing].filter((id) => G.owned.has(id));
-    kept.claimed = [...G.claimed];
-    kept.sightings = G.sightings;
-    // Time spent in town is not time away.
-    if (G.home) kept.lastSeen = Date.now();
-    store(kept);
-  }
-  watch(remember);
-  window.setInterval(() => {
-    if (G.home && !document.hidden) remember();
-  }, 20000);
-  window.addEventListener("pagehide", () => {
-    if (G.home) remember();
-  });
   hooks.looted = (): boolean => {
     const today = dayOf(Date.now());
     if (kept.chest === today) return true;
@@ -112,7 +110,24 @@ export function makeTown(sprites: Sprites, stage: Stage): Town {
 
   const ground = paintGround();
   buildTown(sprites, must(ground.getContext("2d"), "ground"));
-  const art: TownArt = { sprites, ground, near: paintNear(), sky: paintBackdrop() };
+  const standing = crabsStanding();
+  const pic: Picture = {
+    sprites,
+    sky: paintBackdrop(),
+    skyAt: { x: SKYLINE.worldX, y: SKYLINE.worldY - SKYLINE.horizon },
+    ground,
+    groundAt: { x: GROUND.x, y: GROUND.y },
+    near: paintNear(),
+    nearAt: { x: NEAR.x, y: NEAR.y },
+    props,
+    others: () => (flights.length > 0 ? [...standing, ...flights] : standing),
+    people: () => [...G.mates, player, cinfy],
+    lights: allLights,
+    beyond: () => undefined,
+    under: drawWater,
+    over: drawStrings,
+    glows: drawGlows,
+  };
 
   // ---------- who is here ----------
 
@@ -161,13 +176,13 @@ export function makeTown(sprites: Sprites, stage: Stage): Town {
   });
   skin.src = me.skin;
 
-  initUI(sprites);
+  initUI(sprites, campArt);
+  setFace(openProfile);
 
   // ---------- going places ----------
 
   /** A place the member is walking to, to be opened on arrival. */
   let pending: PlaceId | null = null;
-  let throughGate = false;
   /** A game the member is on the way into: still walking to its door, or going through it. */
   let going: { id: GameId; through: boolean } | null = null;
   let pushing = 0;
@@ -256,6 +271,25 @@ export function makeTown(sprites: Sprites, stage: Stage): Town {
   }
   hooks.goIn = goIn;
 
+  /** Out through the gate and down the trail to the member's own camp. */
+  let leaving = false;
+  function toCamp(): void {
+    if (!G.home || going || leaving || !town.toCamp) return;
+    halt();
+    closePanel();
+    closeCard();
+    leaving = true;
+    walkTo(player, { x: 256, y: 100 });
+    player.path.push({ x: 256, y: 84 });
+    const started = G.t;
+    const wait = (): void => {
+      if (player.y < 130 || G.t - started > 0.9) town.toCamp?.();
+      else after(0.1, wait);
+    };
+    wait();
+  }
+  hooks.toCamp = toCamp;
+
   function personAt(wx: number, wy: number): Actor | null {
     let best: Actor | null = null;
     for (const a of [...G.mates, player, cinfy]) {
@@ -335,36 +369,14 @@ export function makeTown(sprites: Sprites, stage: Stage): Town {
 
   /** Walking by hand: the keys, or a finger held down and dragged. */
   function steerBy(dt: number, steer: Steer): void {
-    let { dx, dy } = steer;
-    if (dx === 0 && dy === 0 && steer.toward && dist(steer.toward.x, steer.toward.y, player.x, player.y) > 5) {
-      dx = steer.toward.x - player.x;
-      dy = steer.toward.y - player.y;
-    }
-    if (dx === 0 && dy === 0) {
+    const push = pushOf(player, steer);
+    if (!push) {
       pushing = 0;
       return;
     }
+    const { dx, dy } = push;
     if (player.seat || player.path.length > 0 || pending || going) halt();
-    const len = Math.hypot(dx, dy);
-    const go = player.speed * dt;
-    const before = player.walked;
-    const nx = player.x + (dx / len) * go;
-    const ny = player.y + (dy / len) * go;
-    let moved = 0;
-    if (!footBlocked(nx, player.y)) {
-      moved += Math.abs(nx - player.x);
-      player.x = nx;
-    }
-    if (!footBlocked(player.x, ny)) {
-      moved += Math.abs(ny - player.y);
-      player.y = ny;
-    }
-    player.dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0;
-    if (moved > 0) {
-      player.walked += moved;
-      player.moving = true;
-      footfall(player, before);
-    }
+    shove(player, dt, dx, dy);
     // Walking on into a game's doorway, or up against its table, is going in.
     const up = dy < 0 && Math.abs(dy) >= Math.abs(dx);
     const door: GameId | null = !up
@@ -393,9 +405,13 @@ export function makeTown(sprites: Sprites, stage: Stage): Town {
     return null;
   }
 
-  const awake = (): boolean => G.home && !going?.through;
+  const awake = (): boolean => G.home && !going?.through && !leaving && G.dark < 0.35;
+  /** The place the prompt is hanging by. */
+  let prompted: Place | null = null;
 
-  return {
+  const town: Town = {
+    backdrop: { sky: pic.sky, near: pic.near },
+    toCamp: null,
     bounds: { w: W, top: -72, bottom: H + 24 },
 
     resize(w, h) {
@@ -415,6 +431,7 @@ export function makeTown(sprites: Sprites, stage: Stage): Town {
       stepActor(cinfy, dt);
       stepMates(dt);
       stepTown(dt);
+      stepFlights(dt);
       stepEvents();
       if (G.home) guild.step(dt);
       updateFx(dt);
@@ -434,20 +451,20 @@ export function makeTown(sprites: Sprites, stage: Stage): Town {
 
       const near = G.home ? nearPlace() : null;
       G.near = near;
-      const prompted = near !== null && G.panel !== near && awake();
-      if (near && prompted) show.prompt = place(near);
-      show.promptT = clamp(show.promptT + (prompted ? dt : -dt) * 5, 0, 1);
+      const on = near !== null && G.panel !== near && awake();
+      if (near && on) {
+        prompted = place(near);
+        show.prompt = prompted;
+      }
+      show.promptT = clamp(show.promptT + (on ? dt : -dt) * 5, 0, 1);
 
-      // Stepping into the gateway is asking about the camp beyond it.
-      if (awake() && player.y < 92 && !throughGate) {
-        throughGate = true;
-        openPanel("camp");
-      } else if (player.y > 104) throughGate = false;
+      // Stepping on into the gateway is setting off for the camp beyond it.
+      if (awake() && player.y < 92) toCamp();
     },
 
-    draw: () => drawTown(art),
+    draw: () => drawPicture(pic),
     words(ctx: Ctx, px: number) {
-      drawWords(ctx, px);
+      drawWords(ctx, px, pic.people());
     },
 
     tap(x, y, finger) {
@@ -468,9 +485,9 @@ export function makeTown(sprites: Sprites, stage: Stage): Town {
         goIn(G.panel);
         return;
       }
-      if (show.prompt && show.promptT > 0.4) {
-        openPanel(show.prompt.id);
-        player.dir = show.prompt.face;
+      if (prompted && show.promptT > 0.4) {
+        openPanel(prompted.id);
+        player.dir = prompted.face;
         return;
       }
       if (player.seat) {
@@ -485,6 +502,10 @@ export function makeTown(sprites: Sprites, stage: Stage): Town {
       if (G.panel) closePanel();
       else closeCard();
     },
+
+    key: () => false,
+    drag: () => undefined,
+    release: () => undefined,
 
     awake,
 
@@ -503,9 +524,47 @@ export function makeTown(sprites: Sprites, stage: Stage): Town {
       player.arrive = null;
     },
 
+    cameFromCamp() {
+      G.where = "town";
+      leaving = false;
+      going = null;
+      pending = null;
+      pushing = 0;
+      show.prompt = null;
+      show.promptT = 0;
+      show.hover = null;
+      show.pointed = null;
+      show.dest = null;
+      release(player);
+      player.x = 256;
+      player.y = 84;
+      player.dir = 0;
+      player.alpha = 0;
+      player.say = "";
+      player.speed = STROLL;
+      walkTo(player, { x: 256, y: 128 }, () => {
+        player.dir = 0;
+      });
+      townDock();
+      setFace(openProfile);
+      setHammer(null);
+      hooks.toCamp = toCamp;
+      // Whoever is nearest the gate looks up.
+      const nearest = G.mates
+        .filter((a) => !a.away && !a.seat && dist(a.x, a.y, 256, 128) < 90)
+        .toSorted((a, b) => dist(a.x, a.y, 256, 128) - dist(b.x, b.y, 256, 128))[0];
+      if (nearest)
+        after(0.9, () => {
+          if (!nearest.moving) face(nearest, player.x, player.y);
+          hop(nearest);
+          say(nearest, "back already?", 2);
+        });
+    },
+
     arrive() {
       const now = Date.now();
       const away = guild.away(kept.lastSeen, now);
+      const mail = guild.mail(kept.lastSeen, now);
       const letter = compose(kept, now, away, [worksAway(away.hours, away.first)]);
       after(0.35, () => {
         walkTo(player, { x: 256, y: 152 }, () => {
@@ -514,6 +573,8 @@ export function makeTown(sprites: Sprites, stage: Stage): Town {
       });
       const begin = (): void => {
         Object.assign(kept, read(kept, Date.now()));
+        // What guild-mates left while the member was away is in the camp's mailbox, not in this letter.
+        for (const l of mail) post(camp.letters, l);
         G.home = true;
         remember();
         beginEvents();
@@ -580,4 +641,5 @@ export function makeTown(sprites: Sprites, stage: Stage): Town {
       },
     },
   };
+  return town;
 }

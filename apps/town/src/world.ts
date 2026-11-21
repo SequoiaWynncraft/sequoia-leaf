@@ -6,13 +6,13 @@
 import type { Dir } from "@sequoia-leaf/kit/skin.ts";
 import { clamp, type Pt, vnoise } from "@sequoia-leaf/kit/util.ts";
 
+import { CELL, type Ground, makeGround } from "./grid.ts";
 import type { Activity } from "./guild.ts";
 
 /** The walkable town, in art pixels. */
 export const W = 512;
 export const H = 352;
 /** Collision squares. */
-export const CELL = 8;
 export const GW = W / CELL;
 export const GH = H / CELL;
 
@@ -81,161 +81,10 @@ export function gateway(x: number): number {
 
 // ---------- what can be walked on ----------
 
-export const blocked = new Uint8Array(GW * GH);
-/** What a step onto each square costs: paths are easy, grass a little less so. */
-const cost = new Float32Array(GW * GH);
+/** The town's own ground: which squares are solid, and the ways round them. */
+export const TOWN: Ground = makeGround(GW, GH, pathD);
 
-function fill(x0: number, y0: number, x1: number, y1: number, v: number): void {
-  for (let y = Math.max(0, y0); y <= Math.min(GH - 1, y1); y++)
-    for (let x = Math.max(0, x0); x <= Math.min(GW - 1, x1); x++) blocked[y * GW + x] = v;
-}
-
-export function cellBlocked(cx: number, cy: number): boolean {
-  if (cx < 0 || cy < 0 || cx >= GW || cy >= GH) return true;
-  return blocked[cy * GW + cx] === 1;
-}
-
-/** Whether a figure's feet fit at a point: a little box round the point must be clear. */
-export function footBlocked(x: number, y: number): boolean {
-  return pointBlocked(x - 3, y - 3) || pointBlocked(x + 3, y - 3) || pointBlocked(x - 3, y) || pointBlocked(x + 3, y);
-}
-
-function pointBlocked(px: number, py: number): boolean {
-  return cellBlocked(Math.floor(px / CELL), Math.floor(py / CELL));
-}
-
-/** The clear square nearest a point, looking outwards in rings. */
-export function nearestFree(x: number, y: number): Pt {
-  const cx = clamp(Math.floor(x / CELL), 0, GW - 1);
-  const cy = clamp(Math.floor(y / CELL), 0, GH - 1);
-  if (!cellBlocked(cx, cy) && !footBlocked(x, y)) return { x, y };
-  let best: Pt | null = null;
-  let bestD = 1e9;
-  for (let r = 0; r <= 9 && !best; r++) {
-    for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || cellBlocked(cx + dx, cy + dy)) continue;
-        const p = { x: (cx + dx) * CELL + 4, y: (cy + dy) * CELL + 5 };
-        const d = Math.hypot(p.x - x, p.y - y);
-        if (d < bestD) {
-          bestD = d;
-          best = p;
-        }
-      }
-    }
-  }
-  return best ?? { x, y };
-}
-
-function clearLine(a: Pt, b: Pt): boolean {
-  const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 3);
-  for (let i = 0; i <= n; i++) {
-    const t = n === 0 ? 0 : i / n;
-    if (footBlocked(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)) return false;
-  }
-  return true;
-}
-
-const open: number[] = [];
-const gScore = new Float32Array(GW * GH);
-const came = new Int32Array(GW * GH);
-const mark = new Uint16Array(GW * GH);
-let stamp = 0;
-const STEPS: readonly (readonly [number, number])[] = [
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1],
-  [1, 1],
-  [1, -1],
-  [-1, 1],
-  [-1, -1],
-];
-
-/**
- * A way from one point to another round whatever is in between, as points to walk to in turn.
- * `straight` pulls the way taut (the player, going where they pointed); otherwise it keeps to the
- * squares, and so to the paths (guild-mates, ambling).
- */
-export function findPath(from: Pt, to: Pt, straight: boolean): Pt[] {
-  const goal = nearestFree(to.x, to.y);
-  const start = nearestFree(from.x, from.y);
-  const sx = Math.floor(start.x / CELL);
-  const sy = Math.floor(start.y / CELL);
-  const tx = Math.floor(goal.x / CELL);
-  const ty = Math.floor(goal.y / CELL);
-  const target = ty * GW + tx;
-  stamp = (stamp + 2) % 65534;
-  open.length = 0;
-  open.push(sy * GW + sx);
-  gScore[sy * GW + sx] = 0;
-  came[sy * GW + sx] = -1;
-  mark[sy * GW + sx] = stamp + 1;
-  let found = false;
-  while (open.length > 0) {
-    let bi = 0;
-    let bf = 1e9;
-    for (let i = 0; i < open.length; i++) {
-      const n = open[i] ?? 0;
-      const f = (gScore[n] ?? 0) + Math.hypot((n % GW) - tx, Math.floor(n / GW) - ty);
-      if (f < bf) {
-        bf = f;
-        bi = i;
-      }
-    }
-    const cur = open[bi] ?? 0;
-    open[bi] = open[open.length - 1] ?? 0;
-    open.pop();
-    if (cur === target) {
-      found = true;
-      break;
-    }
-    mark[cur] = stamp + 2;
-    const cx = cur % GW;
-    const cy = Math.floor(cur / GW);
-    for (const [dx, dy] of STEPS) {
-      const nx = cx + dx;
-      const ny = cy + dy;
-      if (cellBlocked(nx, ny)) continue;
-      if (dx !== 0 && dy !== 0 && (cellBlocked(cx + dx, cy) || cellBlocked(cx, cy + dy))) continue;
-      const n = ny * GW + nx;
-      if (mark[n] === stamp + 2) continue;
-      const g = (gScore[cur] ?? 0) + (dx !== 0 && dy !== 0 ? Math.SQRT2 : 1) * (cost[n] ?? 1);
-      if (mark[n] === stamp + 1 && g >= (gScore[n] ?? 0)) continue;
-      gScore[n] = g;
-      came[n] = cur;
-      if (mark[n] !== stamp + 1) {
-        mark[n] = stamp + 1;
-        open.push(n);
-      }
-    }
-  }
-  if (!found) return [];
-  const cells: Pt[] = [];
-  for (let n = target; n !== -1; n = came[n] ?? -1)
-    cells.push({ x: (n % GW) * CELL + 4, y: Math.floor(n / GW) * CELL + 5 });
-  cells.reverse();
-  cells[0] = { x: from.x, y: from.y };
-  cells.push(goal);
-  if (!straight) return cells.slice(1);
-  const out: Pt[] = [];
-  let at = 0;
-  while (at < cells.length - 1) {
-    let next = at + 1;
-    const a = cells[at];
-    for (let j = cells.length - 1; j > at + 1; j--) {
-      const b = cells[j];
-      if (a && b && clearLine(a, b)) {
-        next = j;
-        break;
-      }
-    }
-    const p = cells[next];
-    if (p) out.push(p);
-    at = next;
-  }
-  return out;
-}
+export const { cellBlocked, footBlocked, nearestFree, findPath } = TOWN;
 
 // ---------- places ----------
 
@@ -273,7 +122,7 @@ export const PLACES: readonly Place[] = [
   {
     id: "market",
     name: "Market",
-    about: "Guild-mates selling to guild-mates.",
+    about: "Things for your camp, for Coins.",
     stand: { x: 108, y: 257 },
     face: 3,
     prompt: { x: 108, y: 200 },
@@ -313,7 +162,7 @@ export const PLACES: readonly Place[] = [
   {
     id: "camp",
     name: "Your camp",
-    about: "Through the gate and down the hill.",
+    about: "Through the gate and down the trail.",
     stand: { x: 256, y: 106 },
     face: 3,
     prompt: { x: 256, y: 44 },
@@ -416,6 +265,7 @@ export const MUSTER: readonly Pt[] = [
 // ---------- the squares, worked out once everything above is known ----------
 
 function build(): void {
+  const { blocked, cost, fill } = TOWN;
   for (let y = 0; y < GH; y++) {
     for (let x = 0; x < GW; x++) {
       const px = x * CELL + 4;

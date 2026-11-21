@@ -165,6 +165,77 @@
         transition: opacity 0.9s;
       }
 
+      /* The tray, while decorating: what is in hand, and everything put away. It takes the dock's place. */
+      #tray {
+        position: fixed;
+        z-index: 7;
+        left: 50%;
+        translate: -50% 0;
+        bottom: var(--bottom);
+        width: min(calc(var(--u) * 250), calc(100vw - var(--edge) * 2));
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 2);
+        padding: calc(var(--u) * 2);
+      }
+      #tray .bar {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 3);
+        min-height: calc(var(--u) * 16);
+      }
+      #tray .bar .name {
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #tray .row {
+        display: flex;
+        align-items: center;
+        gap: var(--u);
+        min-height: calc(var(--u) * 30);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      #tray .row button {
+        position: relative;
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: calc(var(--u) * 30);
+        height: calc(var(--u) * 30);
+        padding: 0;
+      }
+      #tray .row button:active {
+        translate: 0 var(--u);
+      }
+      #tray .row .n {
+        position: absolute;
+        right: calc(var(--u) * 2);
+        bottom: 0;
+        font-weight: 700;
+        color: var(--k-gold-lt);
+        text-shadow: var(--u) var(--u) 0 var(--k-ink);
+      }
+      #tray .empty {
+        padding: 0 calc(var(--u) * 2);
+      }
+      body.decorating #dock {
+        display: none;
+      }
+      /* A letter out of the mailbox. */
+      .note {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 2);
+      }
+      .note hr {
+        margin: var(--u) 0;
+      }
+
       /* A guild-mate's card. */
       #card {
         position: fixed;
@@ -279,7 +350,8 @@
         translate: 0 calc(var(--u) * 50);
       }
       .inside #panel,
-      .inside #card {
+      .inside #card,
+      .inside #tray {
         display: none;
       }
 
@@ -287,6 +359,15 @@
         #feed {
           bottom: calc(var(--dock) + var(--u) * 4);
           width: min(calc(var(--u) * 170), calc(100vw - var(--edge) * 2));
+        }
+        body.decorating #feed {
+          bottom: calc(var(--u) * 68 + var(--bottom));
+        }
+      }
+      /* On a short screen there is no room for news and the tray both. */
+      @media (max-height: 500px) {
+        body.decorating #feed {
+          display: none;
         }
       }
       @media (max-width: 700px), (orientation: portrait) {
@@ -310,7 +391,12 @@
           gap: calc(var(--u) * 4);
         }
         #feed > :nth-last-child(n + 3),
-        body.panel-open #feed {
+        body.panel-open #feed,
+        body.decorating #feed {
+          display: none;
+        }
+        /* The tray's buttons are their pictures alone, so that the name of the thing in hand has room. */
+        #tray .bar .t {
           display: none;
         }
       }
@@ -322,6 +408,7 @@
     <div id="corner"></div>
     <div id="feed" aria-live="polite"></div>
     <nav id="dock" class="k-plaque" aria-label="Places"></nav>
+    <div id="tray" class="k-plaque" aria-label="Things put away" hidden></div>
     <aside id="panel" class="k-panel" hidden></aside>
     <div id="card" class="k-plaque" hidden></div>
     <div id="arrival" hidden></div>

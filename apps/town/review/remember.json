@@ -11,7 +11,7 @@
   ["wait", 1800],
   ["eval", "(window.town.skip(2.5), window.town.visit('treasury'), window.town.skip(4), 1)"],
   ["wait", 500],
-  ["click", "#panel .k-card:nth-of-type(2) .k-btn"],
+  ["click", "#panel .k-card:nth-of-type(3) .k-btn"],
   ["wait", 400],
   ["eval", "(window.town.visit('quests'), window.town.skip(4), 1)"],
   ["wait", 500],

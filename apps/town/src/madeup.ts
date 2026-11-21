@@ -7,7 +7,24 @@
 
 import type { Look } from "@sequoia-leaf/kit/skin.ts";
 
-import type { Activity, Away, AwayLine, Guild, Happening, Listing, Me, Member, Moment, Quest, Ware } from "./guild.ts";
+import { layout, type Placed } from "./camp.ts";
+import type {
+  Activity,
+  Away,
+  AwayLine,
+  Guild,
+  Happening,
+  MateCamp,
+  Me,
+  Member,
+  Moment,
+  Pet,
+  Quest,
+  Stall,
+  Stock,
+  Ware,
+} from "./guild.ts";
+import { type Letter, letter } from "./mail.ts";
 
 const RANKS = ["Seedling", "Sapling", "Ranger", "Warden", "Elder"] as const;
 
@@ -265,46 +282,243 @@ const WARES: readonly Ware[] = [
     worn: false,
     thanks: ["Sent over. They had better say thanks.", "cocoa's up!"],
   },
-];
-
-const STALLS: readonly Listing[] = [
-  {
-    id: "bread",
-    by: "Bramblewick",
-    what: "Raid bread",
-    about: "Still warm.",
-    price: 8,
-    worn: false,
-    word: "baked this morning!",
-  },
-  {
-    id: "run",
-    by: "Quillfeather",
-    what: "A guided run",
-    about: "The Hollow Vault, tonight.",
-    price: 15,
-    worn: false,
-    word: "bring snacks",
-  },
   {
     id: "plate",
-    by: "Tindra",
-    what: "Name plate",
+    name: "Name plate",
     about: "Hand-painted, gold corners.",
     price: 30,
+    once: true,
     worn: true,
-    word: "I did the corners twice",
+    thanks: ["Tindra did the corners twice.", "very smart"],
   },
   {
     id: "water",
-    by: "Sootpaw",
-    what: "Jar of pond water",
+    name: "Jar of pond water",
     about: "Probably haunted.",
     price: 3,
+    once: true,
     worn: true,
-    word: "no refunds. meow.",
+    thanks: ["No refunds. It knows where you live.", "no refunds"],
   },
 ];
+
+/** What each stall sells, as a thing and its price in Coins. Everything is always on sale. */
+const stock = (...list: readonly (readonly [string, number])[]): Stock[] =>
+  list.map(([thing, price]) => ({ thing, price }));
+
+const STALLS: readonly Stall[] = [
+  {
+    id: "lamps",
+    by: "Sootpaw",
+    name: "Lamps and oddments",
+    words: ["no refunds. meow.", "one careful owner", "it's probably not haunted"],
+    stock: stock(
+      ["lantern-post", 90],
+      ["paper-lantern", 60],
+      ["candle-stump", 35],
+      ["firefly-lamp", 110],
+      ["glowcap", 120],
+      ["moth-lantern", 140],
+      ["brazier", 150],
+      ["fairy-lights", 180],
+      ["rock", 9],
+      ["barrel", 70],
+      ["gnome", 55],
+      ["gnome-fishing", 65],
+      ["gnome-napping", 65],
+      ["crab-statue", 95],
+      ["wind-chime", 80],
+      ["birdhouse", 60],
+      ["bird-bath", 100],
+      ["cook-pot", 90],
+      ["music-box", 170],
+      ["telescope", 260],
+      ["well", 320],
+      ["my-stall", 400],
+    ),
+  },
+  {
+    id: "seats",
+    by: "Bramblewick",
+    name: "Seats, rugs and flags",
+    words: ["carried it here myself!", "good choice. sat on it all morning.", "mind the splinters"],
+    stock: stock(
+      ["stump", 30],
+      ["cushion", 45],
+      ["log-seat", 60],
+      ["bench", 110],
+      ["rocker", 160],
+      ["picnic", 220],
+      ["hammock", 240],
+      ["rug-moss", 40],
+      ["rug-woven", 75],
+      ["pennant", 50],
+      ["windsock", 70],
+      ["bunting", 90],
+      ["weathervane", 120],
+      ["guild-banner", 130],
+    ),
+  },
+  {
+    id: "plants",
+    by: "Tindra",
+    name: "Plants, fences and paths",
+    words: ["water it. or don't. it's hardy.", "I grew that one!", "it likes being talked to"],
+    stock: stock(
+      ["flower-pot", 25],
+      ["potted-fern", 30],
+      ["pumpkin", 35],
+      ["sunflower", 40],
+      ["toadstool", 45],
+      ["berry-bush", 55],
+      ["worm-pot", 65],
+      ["flower-bed", 70],
+      ["sapling", 80],
+      ["fairy-ring", 90],
+      ["stepping-stones", 12],
+      ["plank-path", 12],
+      ["log-fence", 16],
+      ["picket", 18],
+      ["stone-wall", 24],
+      ["doormat", 45],
+      ["woodpile", 35],
+      ["arch", 110],
+    ),
+  },
+];
+
+/** The Treasury's fine pieces, for Leaf: as cosmetic as everything else in a camp. */
+const PIECES: readonly Stock[] = stock(
+  ["glass-lantern", 25],
+  ["sun-banner", 30],
+  ["crab-throne", 40],
+  ["fox-statue", 45],
+  ["fountain", 60],
+);
+
+/** What a member may leave at somebody's camp, and what a guild-mate may leave at theirs. */
+const PRESENTS = ["pinecone", "painted-pebble", "acorn-jar"] as const;
+const GIFTS = [
+  "pinecone",
+  "painted-pebble",
+  "acorn-jar",
+  "tiny-cairn",
+  "crab-drawing",
+  "gnome-traveller",
+  "flower-pot",
+  "candle-stump",
+  "pumpkin",
+] as const;
+
+/** How each guild-mate keeps their own camp: what they like about them, who lives there, and what they say. */
+interface Home {
+  taste: readonly string[];
+  count: number;
+  pets: readonly Pet[];
+  note: string;
+  hello: readonly string[];
+}
+
+const HOMES: Readonly<Record<string, Home>> = {
+  Mossback: {
+    taste: ["toadstool", "toadstool", "glowcap", "potted-fern", "potted-fern", "fairy-ring", "rug-moss", "rock"],
+    count: 16,
+    pets: [{ kind: "glorp", name: "Lichen" }],
+    note: "Out being a bush for a bit. Back when the moss says.",
+    hello: ["mind the mushrooms. they mind you.", "moss is a way of life."],
+  },
+  Pipwick: {
+    taste: ["gnome", "gnome", "gnome-fishing", "gnome-napping", "gnome-traveller", "pumpkin", "pennant", "barrel"],
+    count: 15,
+    pets: [{ kind: "cat", name: "Button" }],
+    note: "Gone to count the crabs. Again.",
+    hello: ["you came! mind the gnome.", "is it true you have a WELL?"],
+  },
+  Quillfeather: {
+    taste: [
+      "telescope",
+      "guild-banner",
+      "sun-banner",
+      "lantern-post",
+      "lantern-post",
+      "bench",
+      "rug-woven",
+      "wind-chime",
+    ],
+    count: 14,
+    pets: [{ kind: "fox", name: "Vesper" }],
+    note: "At the Hollow Vault. There is tea in the pot.",
+    hello: ["sit. the fire likes company.", "the stars are out, between the trees."],
+  },
+  Tindra: {
+    taste: [
+      "flower-pot",
+      "flower-bed",
+      "flower-bed",
+      "sunflower",
+      "sunflower",
+      "picket",
+      "arch",
+      "bird-bath",
+      "cushion",
+    ],
+    count: 18,
+    pets: [
+      { kind: "glorp", name: "Petal" },
+      { kind: "cat", name: "Crumb" },
+    ],
+    note: "Minding the stall. Smell the flowers for me.",
+    hello: ["I did the corners twice.", "mind the flower beds!"],
+  },
+  Bramblewick: {
+    taste: ["picnic", "barrel", "barrel", "cook-pot", "woodpile", "bench", "stump", "berry-bush", "pumpkin", "bunting"],
+    count: 15,
+    pets: [{ kind: "cat", name: "Loaf" }],
+    note: "Baking. Follow your nose to town.",
+    hello: ["there's stew. it has always been stew.", "sit, sit. eat something."],
+  },
+  Embertoe: {
+    taste: ["brazier", "brazier", "stone-wall", "stone-wall", "woodpile", "lantern-post", "weathervane", "crab-statue"],
+    count: 14,
+    pets: [{ kind: "fox", name: "Cinder" }],
+    note: "At the Works. The key is under the rock. Not that rock.",
+    hello: ["I can fix that.", "mind the brazier. it bites."],
+  },
+  Sootpaw: {
+    taste: [
+      "candle-stump",
+      "candle-stump",
+      "paper-lantern",
+      "moth-lantern",
+      "cushion",
+      "cushion",
+      "rug-woven",
+      "hammock",
+    ],
+    count: 15,
+    pets: [
+      { kind: "cat", name: "Ink" },
+      { kind: "cat", name: "Blot" },
+      { kind: "cat", name: "Smudge" },
+    ],
+    note: "napping somewhere. meow.",
+    hello: ["meow.", "you may pet one (1) cat."],
+  },
+  Wrenly: {
+    taste: ["birdhouse", "birdhouse", "bird-bath", "telescope", "stepping-stones", "plank-path", "bench", "windsock"],
+    count: 15,
+    pets: [{ kind: "glorp", name: "Dot" }],
+    note: "Bird-watching. Shh.",
+    hello: ["shh. there's a wren.", "I'm writing it all down."],
+  },
+  Fernwhistle: {
+    taste: ["potted-fern", "potted-fern", "sapling", "stump", "flower-pot", "pennant", "rock"],
+    count: 8,
+    pets: [{ kind: "glorp", name: "Sprout" }],
+    note: "At the quest board, working out which one is mine.",
+    hello: ["it's not much yet!", "do you like my fern? it's my first."],
+  },
+};
 
 /** What a guild-mate goes off to do, and how likely each is. */
 const ERRANDS: readonly (readonly [Activity, number])[] = [
@@ -325,6 +539,22 @@ const ERRANDS: readonly (readonly [Activity, number])[] = [
 
 const LOST_CRAB = 7;
 const ORDER: readonly Moment[] = ["level", "raidOut", "raidBack", "land"];
+/** What a guild-mate writes when they find nobody in. */
+const NOTES = [
+  "Came by. You were out. I fed the fire.",
+  "Your camp is nicer than mine. I'm not upset.",
+  "I counted your logs. Two. Good logs.",
+  "Left this where the gnome couldn't get it.",
+  "Knocked. The cabin said nothing. Rude.",
+  "Something small looked at me from your barrel.",
+] as const;
+/** The letter that goes with each line of `VISITS`, and the present in it, if any. */
+const VISIT_MAIL: readonly (readonly [string, string])[] = [
+  ["Left you a mushroom. It was looking at me, so now it can look at you.", "toadstool"],
+  ["I waved down your path. You weren't in. I waved anyway.", ""],
+  ["Where were you? The fire asked too.", ""],
+  ["Saved you a seat by the fire in town. Here's one for yours.", "cushion"],
+];
 /** Leaf each for a raid, and the most raids the made-up guild will credit for one absence. */
 const RAID_LEAF = 12;
 const RAIDS_AWAY = 4;
@@ -333,6 +563,8 @@ interface Memory {
   progress: Record<string, number>;
   raids: number;
   lands: number;
+  /** How many times somebody has looked in at the member's camp: each visit's letter is named by it. */
+  calls: number;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -341,7 +573,7 @@ const whole = (v: unknown, most: number): number =>
 
 /** Reads the guild's memory back, putting anything that makes no sense back to how it began. */
 function recall(text: string | null | undefined): Memory {
-  const m: Memory = { progress: {}, raids: 2, lands: 0 };
+  const m: Memory = { progress: {}, raids: 2, lands: 0, calls: 0 };
   for (const q of BOARD) m.progress[q.id] = q.have;
   if (!text) return m;
   let raw: unknown;
@@ -358,7 +590,15 @@ function recall(text: string | null | undefined): Memory {
     }
   if (typeof raw.raids === "number") m.raids = whole(raw.raids, 1e6);
   if (typeof raw.lands === "number") m.lands = whole(raw.lands, 1e6);
+  if (typeof raw.calls === "number") m.calls = whole(raw.calls, 1e9);
   return m;
+}
+
+/** A number that is always the same for the same name. */
+function nameSeed(name: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619);
+  return h >>> 0;
 }
 
 /** A number in [0, 1) that is always the same for the same two numbers. */
@@ -399,6 +639,8 @@ export function makeGuild(o: Opts = {}): MadeUp {
   let turn = 0;
   let nextIn = 7;
   let plankIn = 5.5;
+  let callIn = 34;
+  const camps = new Map<string, readonly Placed[]>();
 
   const kept = (): void => {
     o.keep?.(JSON.stringify({ v: 1, ...mem }));
@@ -446,6 +688,16 @@ export function makeGuild(o: Opts = {}): MadeUp {
       kept();
       tell({ kind: "land", name });
       progress("hold", 11, "You held a territory for an hour. See the board.");
+    } else if (kind === "call") {
+      const m = pick(roster.filter((r) => !party.includes(r.name)));
+      if (!m) return;
+      mem.calls++;
+      kept();
+      // Now and then a note, now and then a present with it, and often just the visit.
+      const r = random();
+      const gift = r < 0.4 ? (pick(GIFTS) ?? "") : "";
+      const note = r < 0.7 ? (pick(NOTES) ?? "") : "";
+      tell({ kind: "call", id: `c-${mem.calls}`, who: m.name, note, gift });
     } else {
       const m = pick(roster.filter((r) => !party.includes(r.name)));
       if (!m) return;
@@ -473,7 +725,40 @@ export function makeGuild(o: Opts = {}): MadeUp {
     roster: () => roster,
     quests: () => BOARD.map((q) => Object.assign({}, q, { have: mem.progress[q.id] ?? q.have })),
     wares: () => WARES,
+    pieces: () => PIECES,
     stalls: () => STALLS,
+    presents: () => PRESENTS,
+    camp(name): MateCamp | null {
+      const home = HOMES[name];
+      if (!home || !roster.some((m) => m.name === name)) return null;
+      let placed = camps.get(name);
+      if (!placed) {
+        placed = layout(nameSeed(name), home.taste, home.count);
+        camps.set(name, placed);
+      }
+      return { owner: name, placed, pets: home.pets, home: !party.includes(name), note: home.note, hello: home.hello };
+    },
+    mail(from, to): Letter[] {
+      if (from <= 0)
+        return [
+          letter("m-first", "Tindra", "A mushroom for your gate. It's the good kind. Welcome home!", "toadstool"),
+        ];
+      const hours = Math.max(0, (to - from) / 3_600_000);
+      const seed = Math.floor(from / 1000);
+      const out: Letter[] = [];
+      if (hours >= 1) {
+        const who = roster[Math.floor(mix(seed, 1) * roster.length)]?.name ?? "Mossback";
+        const [text, gift] = VISIT_MAIL[Math.floor(mix(seed, 2) * VISIT_MAIL.length)] ?? ["", ""];
+        out.push(letter(`m-${seed}-a`, who, text, gift));
+      }
+      if (hours >= 6) {
+        const who = roster[Math.floor(mix(seed, 4) * roster.length)]?.name ?? "Pipwick";
+        const text = NOTES[Math.floor(mix(seed, 5) * NOTES.length)] ?? NOTES[0];
+        const gift = GIFTS[Math.floor(mix(seed, 6) * GIFTS.length)] ?? "pinecone";
+        out.push(letter(`m-${seed}-b`, who, text, gift));
+      }
+      return out;
+    },
     lostCrab: () => LOST_CRAB,
     doing(): Activity {
       const total = ERRANDS.reduce((n, [, w]) => n + w, 0);
@@ -528,6 +813,11 @@ export function makeGuild(o: Opts = {}): MadeUp {
       if (plankIn <= 0) {
         plankIn = 5.5;
         progress("planks", 1, "Forty planks down the belt. See the board.");
+      }
+      callIn -= dt;
+      if (callIn <= 0) {
+        callIn = 46 + random() * 30;
+        stir("call");
       }
       nextIn -= dt;
       if (nextIn > 0) return;
