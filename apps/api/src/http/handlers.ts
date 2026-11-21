@@ -1,30 +1,59 @@
 import {
+  checkSave,
   currentQuests,
   DAY_MS,
   DEFAULT_RULES,
   levelForXp,
+  MAX_SAVE_BYTES,
   nextDailyChargeAt,
   nextTimedWindowAt,
   openQuestBook,
-  type PlayerId,
+  parsePlayerId,
   type Quest,
   QUEST_SLOTS,
   type QuestSlot,
   refreshQuests,
   rerollCost,
+  saveSlot,
   timedWindowAt,
 } from "@sequoia-leaf/core";
-import { Clock, Context, Duration, Effect, Layer, Redacted, Ref, Schedule, Stream } from "effect";
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { HttpApiBuilder, HttpApiError } from "effect/http-api";
+import { ByteSize, Clock, Context, Duration, Effect, Layer, Option, Redacted, Ref, Schedule, Stream } from "effect";
+import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { HttpApiBuilder, HttpApiError, HttpApiSecurity } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 
-import { CurrentIdentity, LeafApi, RerollBodyErrors, Session, Unexpected } from "../api/api.ts";
-import { IdentityUnavailable, InternalError, Invalid, NotAMember, Refused, Unauthorized } from "../api/errors.ts";
+import {
+  CurrentIdentity,
+  LeafApi,
+  PresenceBodyErrors,
+  RerollBodyErrors,
+  SaveBodyErrors,
+  Session,
+  SessionCookie,
+  Unexpected,
+} from "../api/api.ts";
+import {
+  BadOrigin,
+  IdentityUnavailable,
+  InternalError,
+  Invalid,
+  Missing,
+  NotAMember,
+  Refused,
+  SaveTooLarge,
+  Unauthorized,
+  VersionConflict,
+} from "../api/errors.ts";
 import type * as Body from "../api/schemas.ts";
 import { Identities } from "../auth/session.ts";
+import { AppConfig } from "../config.ts";
 import { syncOnDemand } from "../earning/run.ts";
-import { eventJsonText, Events, type StoredEvent } from "../events/store.ts";
+import { eventJsonText, Events } from "../events/store.ts";
+import { GUILD_EVENT_TYPES, guildEvents } from "../game/guild.ts";
+import { PlayerNames } from "../game/names.ts";
+import { Presence } from "../game/presence.ts";
+import { Saves } from "../game/saves.ts";
+import { Skins } from "../game/skins.ts";
 import { Ledger } from "../ledger/store.ts";
 import { questJson } from "../quests/json.ts";
 import { rerollQuestFor } from "../quests/reroll.ts";
@@ -36,6 +65,10 @@ const RECENTLY_COMPLETED_MS = 2 * DAY_MS;
 const EVENT_PAGE = 100;
 /** How many events `GET /events` returns when the client does not say where it is. */
 const LATEST_EVENTS = 50;
+/** The most guild events one answer or one look by a stream returns. */
+const GUILD_EVENT_PAGE = 200;
+/** The largest save body Leaf reads at all. The save itself is checked against `MAX_SAVE_BYTES`. */
+const MAX_SAVE_BODY = ByteSize.bytes(2 * MAX_SAVE_BYTES);
 
 /** How the event stream paces itself. Tests shorten these. */
 export interface StreamTuning {
@@ -79,31 +112,76 @@ function iso(at: number): string {
   return new Date(at).toISOString();
 }
 
-/** Lets in current guild members with a Sequoia session, and provides who they are. */
+/** A member's level as the API sends it. */
+function levelJson(xp: number) {
+  const level = levelForXp(xp, DEFAULT_RULES.levels);
+  return { number: level.level, xp_into_level: level.xpIntoLevel, xp_for_next_level: level.xpForNextLevel };
+}
+
+/** Methods that change nothing. Only these may come from another site's page with the session cookie. */
+const SAFE_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD"]);
+
+/**
+ * Lets in current guild members with a Sequoia session, and provides who they
+ * are. The session comes as a Bearer header, as the mod sends it, or as the
+ * website's cookie, as a browser sends it to Leaf's own pages; both are checked
+ * with the backend in the same way. A write that came with the cookie must also
+ * come from one of Leaf's pages, by its `Origin`.
+ */
 export const SessionLive = Layer.effect(
   Session,
   Effect.gen(function* () {
     const identities = yield* Identities;
+    const { publicOrigin } = yield* AppConfig;
+    const bearerToken = HttpApiBuilder.securityDecode(HttpApiSecurity.bearer);
+    const cookieToken = HttpApiBuilder.securityDecode(SessionCookie);
+
+    /** Who a session belongs to, when they may come in. */
+    const admit = Effect.fnUntraced(function* (token: string) {
+      if (token === "") {
+        return yield* new Unauthorized({ code: "unauthorized", message: "Sign in with your Sequoia account" });
+      }
+      const result = yield* identities.identify(token);
+      if (result.status === "unauthorized") {
+        return yield* new Unauthorized({ code: "unauthorized", message: "Your session has expired. Sign in again" });
+      }
+      if (result.status === "unavailable") {
+        return yield* new IdentityUnavailable({
+          code: "identity_unavailable",
+          message: "Could not check your session. Try again shortly",
+        });
+      }
+      if (result.identity.guildRank === null && !result.identity.admin) {
+        return yield* new NotAMember({ code: "not_a_member", message: "Leaf is for current Sequoia members" });
+      }
+      return result.identity;
+    });
+
+    // Effect tries the Bearer header, then the cookie, lets the request in on the
+    // first that admits it, and answers with the last refusal. So the cookie's
+    // turn, which comes last, is the one that refuses: alone, either way of
+    // signing in is checked there. The Bearer's turn only lets in a request that
+    // came with both: a Bearer that would let it in on its own wins, and otherwise
+    // the cookie decides.
     return Session.of({
       bearer: Effect.fnUntraced(function* (httpEffect, { credential }) {
-        const token = Redacted.value(credential);
-        if (token === "") {
+        if (Redacted.value(yield* cookieToken) === "") {
           return yield* new Unauthorized({ code: "unauthorized", message: "Sign in with your Sequoia account" });
         }
-        const result = yield* identities.identify(token);
-        if (result.status === "unauthorized") {
-          return yield* new Unauthorized({ code: "unauthorized", message: "Your session has expired. Sign in again" });
+        return yield* Effect.provideService(httpEffect, CurrentIdentity, yield* admit(Redacted.value(credential)));
+      }),
+      cookie: Effect.fnUntraced(function* (httpEffect, { credential }) {
+        const cookie = Redacted.value(credential);
+        if (cookie === "") {
+          const bearer = Redacted.value(yield* bearerToken);
+          return yield* Effect.provideService(httpEffect, CurrentIdentity, yield* admit(bearer));
         }
-        if (result.status === "unavailable") {
-          return yield* new IdentityUnavailable({
-            code: "identity_unavailable",
-            message: "Could not check your session. Try again shortly",
-          });
+        // Another site's page can make a browser send the cookie, but not with Leaf's own origin.
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        if (!SAFE_METHODS.has(request.method) && request.headers["origin"] !== publicOrigin) {
+          return yield* new BadOrigin({ code: "bad_origin", message: "Leaf takes this only from its own pages" });
         }
-        if (result.identity.guildRank === null && !result.identity.admin) {
-          return yield* new NotAMember({ code: "not_a_member", message: "Leaf is for current Sequoia members" });
-        }
-        return yield* Effect.provideService(httpEffect, CurrentIdentity, result.identity);
+        return yield* Effect.provideService(httpEffect, CurrentIdentity, yield* admit(cookie));
       }),
     });
   }),
@@ -115,6 +193,44 @@ export const RerollBodyErrorsLive = Layer.succeed(RerollBodyErrors)((httpEffect)
     httpEffect,
     (error) => HttpApiError.HttpApiSchemaError.is(error) && error.kind === "Payload",
     () => Effect.fail(new Invalid({ code: "invalid_cost", message: 'Send the cost you agreed to as { "leaf": n }' })),
+  ),
+);
+
+const isPayloadError = (error: unknown) => HttpApiError.HttpApiSchemaError.is(error) && error.kind === "Payload";
+
+/** A body longer than the limit it was read under. Reading it is a defect, as every failure to read a body is. */
+const isBodyTooLarge = (defect: unknown) =>
+  HttpServerError.isHttpServerError(defect) &&
+  defect.reason instanceof HttpServerError.RequestParseError &&
+  defect.reason.reason === "BodyTooLarge";
+
+/**
+ * A save body is read only up to twice what a save may hold: one larger gets
+ * `save_too_large` unread. One that does not decode as `{ "version", "data" }` gets `invalid_save`.
+ */
+export const SaveBodyErrorsLive = Layer.succeed(SaveBodyErrors)((httpEffect) =>
+  httpEffect.pipe(
+    Effect.provideService(HttpServerRequest.MaxBodySize, MAX_SAVE_BODY),
+    Effect.catchIf(isPayloadError, () =>
+      Effect.fail(new Invalid({ code: "invalid_save", message: 'Send the save as { "version": n, "data": { ... } }' })),
+    ),
+    Effect.catchDefect((defect) =>
+      isBodyTooLarge(defect)
+        ? Effect.fail(new SaveTooLarge({ code: "save_too_large", message: "A save holds at most 256 KiB" }))
+        : Effect.die(defect),
+    ),
+  ),
+);
+
+/** A presence whose body is not `{ "place" }`, with one of the game's places, gets `invalid_place`. */
+export const PresenceBodyErrorsLive = Layer.succeed(PresenceBodyErrors)((httpEffect) =>
+  Effect.catchIf(httpEffect, isPayloadError, () =>
+    Effect.fail(
+      new Invalid({
+        code: "invalid_place",
+        message: 'Send where you are as { "place": "town" }, or camp, works or table',
+      }),
+    ),
   ),
 );
 
@@ -157,12 +273,11 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
           Effect.gen(function* () {
             const identity = yield* CurrentIdentity;
             const account = yield* ledger.account(identity.playerId);
-            const level = levelForXp(account.xp, DEFAULT_RULES.levels);
             return HttpServerResponse.jsonUnsafe({
               player: { id: identity.playerId, username: identity.username },
               leaf: account.balance,
               xp: account.xp,
-              level: { number: level.level, xp_into_level: level.xpIntoLevel, xp_for_next_level: level.xpForNextLevel },
+              level: levelJson(account.xp),
             } satisfies typeof Body.Me.Type);
           }),
         )
@@ -252,42 +367,66 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
         // `Last-Event-ID` (browsers do this by themselves) and gets what it missed;
         // a client that sends none gets only what happens from now on.
         .handle("stream", ({ query }) =>
-          Effect.gen(function* () {
-            const request = yield* HttpServerRequest.HttpServerRequest;
-            const resumeFrom = eventId(request.headers["last-event-id"] ?? query.after);
-            if (resumeFrom === null) {
-              return yield* invalidAfter;
-            }
-            const { playerId } = yield* CurrentIdentity;
-            const from = resumeFrom ?? (yield* events.latestId);
-            return HttpServerResponse.stream(eventStream(events, playerId, from, yield* StreamTuning), {
-              contentType: "text/event-stream",
-              headers: { "cache-control": "no-cache", connection: "keep-alive" },
-            });
-          }),
+          Effect.flatMap(CurrentIdentity, ({ playerId }) =>
+            eventStreamFrom(events, query.after, (after) =>
+              events.after(playerId, after, EVENT_PAGE).pipe(
+                Effect.map((found) => ({
+                  frames: found.map((event) => sseFrame(event.id, event.type, eventJsonText(event))).join(""),
+                  position: found.at(-1)?.id ?? after,
+                })),
+              ),
+            ),
+          ),
         )
     );
   }),
 );
+
+/** One look for what happened after a position: the frames to send, and the position to look from next. */
+interface Look {
+  readonly frames: string;
+  readonly position: number;
+}
+
+/**
+ * Answers a request for an event stream. A client that reconnects sends the
+ * last id it saw as `Last-Event-ID` (browsers do this by themselves), or as
+ * `?after=`, and gets what it missed; a client that sends none gets only what
+ * happens from now on. `look` finds the events after a position.
+ */
+const eventStreamFrom = (
+  events: Events["Service"],
+  after: string | undefined,
+  look: (after: number) => Effect.Effect<Look>,
+) =>
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const resumeFrom = eventId(request.headers["last-event-id"] ?? after);
+    if (resumeFrom === null) {
+      return yield* invalidAfter;
+    }
+    const from = resumeFrom ?? (yield* events.latestId);
+    return HttpServerResponse.stream(eventStream(look, from, yield* StreamTuning), {
+      contentType: "text/event-stream",
+      headers: { "cache-control": "no-cache", connection: "keep-alive" },
+    });
+  });
 
 /**
  * The frames of one event stream. It finds new events by looking in the
  * database every `pollMs`, not by being told, so it also sees events written by
  * another process: during a deploy the old and the new container run side by side.
  */
-const eventStream = (events: Events["Service"], playerId: PlayerId, from: number, tuning: StreamTuning) =>
+const eventStream = (look: (after: number) => Effect.Effect<Look>, from: number, tuning: StreamTuning) =>
   Stream.unwrap(
     Effect.gen(function* () {
       const position = yield* Ref.make(from);
-      const look = Effect.gen(function* () {
-        const found = yield* events.after(playerId, yield* Ref.get(position), EVENT_PAGE);
-        const last = found.at(-1);
-        if (last !== undefined) {
-          yield* Ref.set(position, last.id);
-        }
-        return found.map(sseFrame).join("");
+      const next = Effect.gen(function* () {
+        const found = yield* look(yield* Ref.get(position));
+        yield* Ref.set(position, found.position);
+        return found.frames;
       });
-      const fresh = Stream.fromEffectSchedule(look, Schedule.spaced(Duration.millis(tuning.pollMs))).pipe(
+      const fresh = Stream.fromEffectSchedule(next, Schedule.spaced(Duration.millis(tuning.pollMs))).pipe(
         Stream.filter((frames) => frames !== ""),
       );
       // Clients ignore comments; proxies see traffic and keep a quiet connection open.
@@ -306,14 +445,185 @@ const eventStream = (events: Events["Service"], playerId: PlayerId, from: number
     }),
   );
 
-function sseFrame(event: StoredEvent): string {
-  return `event: ${event.type}\ndata: ${eventJsonText(event)}\nid: ${event.id}\n\n`;
+function sseFrame(id: number, type: string, json: string): string {
+  return `event: ${type}\ndata: ${json}\nid: ${id}\n\n`;
 }
+
+const GameHelloHandlers = HttpApiBuilder.group(LeafApi, "gameHello", (handlers) =>
+  Effect.gen(function* () {
+    const { gameSignInUrl, gameLeafSpending } = yield* AppConfig;
+    const hello = HttpServerResponse.jsonUnsafe({
+      sign_in: gameSignInUrl,
+      leaf_spending: gameLeafSpending,
+    } satisfies typeof Body.Hello.Type);
+    return handlers.handle("hello", () => Effect.succeed(hello));
+  }),
+);
+
+const invalidSlot = new Invalid({ code: "invalid_slot", message: "That is not a save slot" });
+
+const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
+  Effect.gen(function* () {
+    const ledger = yield* Ledger;
+    const events = yield* Events;
+    const saves = yield* Saves;
+    const skins = yield* Skins;
+    const names = yield* PlayerNames;
+    const presence = yield* Presence;
+
+    /** Events across the guild after a position, as the guild sees them. */
+    const guildAfter = (after: number) =>
+      Effect.gen(function* () {
+        const found = yield* events.everyoneAfter(GUILD_EVENT_TYPES, after, GUILD_EVENT_PAGE);
+        const shown = guildEvents(found, yield* names.of(found.map((event) => event.playerId)));
+        return { found, shown };
+      });
+
+    return (
+      handlers
+        .handle("me", () =>
+          Effect.gen(function* () {
+            const identity = yield* CurrentIdentity;
+            // The backend vouches for the name, so the guild's news can show it.
+            yield* names.remember(identity.playerId, identity.username, yield* Clock.currentTimeMillis);
+            const account = yield* ledger.account(identity.playerId);
+            return HttpServerResponse.jsonUnsafe({
+              player: { id: identity.playerId, username: identity.username },
+              rank: identity.guildRank,
+              leaf: account.balance,
+              xp: account.xp,
+              level: levelJson(account.xp),
+              event_cursor: yield* events.latestIdOf(identity.playerId),
+            } satisfies typeof Body.GameMe.Type);
+          }),
+        )
+        .handle("saves", () =>
+          Effect.gen(function* () {
+            const { playerId } = yield* CurrentIdentity;
+            const stored = yield* saves.list(playerId);
+            return HttpServerResponse.jsonUnsafe({
+              saves: stored.map((save) => ({
+                slot: save.slot,
+                version: save.version,
+                updated_at: iso(save.updatedAt),
+              })),
+            } satisfies typeof Body.SaveList.Type);
+          }),
+        )
+        .handle("save", ({ params }) =>
+          Effect.gen(function* () {
+            const slot = saveSlot(params.slot);
+            if (slot === undefined) {
+              return yield* invalidSlot;
+            }
+            const { playerId } = yield* CurrentIdentity;
+            const stored = yield* saves.get(playerId, slot);
+            if (Option.isNone(stored)) {
+              return yield* new Missing({ code: "no_save", message: "Nothing is saved in that slot" });
+            }
+            const { version, updatedAt, data } = stored.value;
+            // The save is stored as the JSON text it is sent as, so it is spliced in, not parsed.
+            const head = JSON.stringify({ slot, version, updated_at: iso(updatedAt) });
+            return HttpServerResponse.text(`${head.slice(0, -1)},"data":${data}}`, { contentType: "application/json" });
+          }),
+        )
+        // Writes over the version the game last read, so a game with an older copy, such as
+        // one open in another tab, never overwrites a newer save.
+        .handle("write", ({ params, payload }) =>
+          Effect.gen(function* () {
+            const checked = checkSave(params.slot, payload.data);
+            if (!checked.ok) {
+              if (checked.reason === "invalid_slot") {
+                return yield* invalidSlot;
+              }
+              if (checked.reason === "invalid_save") {
+                return yield* new Invalid({ code: "invalid_save", message: "A save's data must be a JSON object" });
+              }
+              return yield* new SaveTooLarge({ code: "save_too_large", message: "A save holds at most 256 KiB" });
+            }
+            const { playerId } = yield* CurrentIdentity;
+            const now = yield* Clock.currentTimeMillis;
+            const written = yield* saves.put(playerId, checked.slot, payload.version, checked.text, now);
+            if (written.status === "conflict") {
+              return yield* new VersionConflict({
+                code: "version_conflict",
+                message: "The save changed since it was read. Read it again",
+              });
+            }
+            return HttpServerResponse.jsonUnsafe({
+              version: written.version,
+              updated_at: iso(written.updatedAt),
+            } satisfies typeof Body.Saved.Type);
+          }),
+        )
+        .handle("skin", ({ params }) =>
+          Effect.gen(function* () {
+            const playerId = parsePlayerId(params.uuid);
+            if (playerId === undefined) {
+              return yield* new Invalid({ code: "invalid_uuid", message: "That is not a Minecraft UUID" });
+            }
+            const sheet = yield* skins.sheet(playerId, yield* Clock.currentTimeMillis);
+            if (Option.isNone(sheet)) {
+              return yield* new Missing({ code: "no_skin", message: "No skin for that player" });
+            }
+            return HttpServerResponse.uint8Array(sheet.value, {
+              contentType: "image/png",
+              headers: { "cache-control": "private, max-age=86400" },
+            });
+          }),
+        )
+        .handle("guildEvents", ({ query }) =>
+          Effect.gen(function* () {
+            const after = eventId(query.after);
+            if (after === null) {
+              return yield* invalidAfter;
+            }
+            const shown =
+              after === undefined
+                ? yield* events
+                    .everyoneLatest(GUILD_EVENT_TYPES, LATEST_EVENTS)
+                    .pipe(
+                      Effect.flatMap((found) =>
+                        Effect.map(names.of(found.map((event) => event.playerId)), (named) =>
+                          guildEvents(found, named),
+                        ),
+                      ),
+                    )
+                : (yield* guildAfter(after)).shown;
+            return HttpServerResponse.text(`{"events":[${shown.map((event) => event.json).join(",")}]}`, {
+              contentType: "application/json",
+            });
+          }),
+        )
+        .handle("guildStream", ({ query }) =>
+          eventStreamFrom(events, query.after, (after) =>
+            guildAfter(after).pipe(
+              Effect.map(({ found, shown }) => ({
+                frames: shown.map((event) => sseFrame(event.id, event.type, event.json)).join(""),
+                // An event left out, such as one whose member Mojang could not name, is passed over.
+                position: found.at(-1)?.id ?? after,
+              })),
+            ),
+          ),
+        )
+        .handle("presence", ({ payload }) =>
+          Effect.gen(function* () {
+            const identity = yield* CurrentIdentity;
+            const now = yield* Clock.currentTimeMillis;
+            const here = yield* presence.arrive(identity.playerId, identity.username, payload.place, now);
+            return HttpServerResponse.jsonUnsafe({
+              present: here.map((member) => ({ id: member.playerId, username: member.username, place: member.place })),
+            } satisfies typeof Body.Present.Type);
+          }),
+        )
+    );
+  }),
+);
 
 /** The API's routes and the implementations of its middleware. */
 export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.json" }).pipe(
-  Layer.provide([SystemHandlers, MeHandlers]),
-  Layer.provide([SessionLive, RerollBodyErrorsLive, UnexpectedLive]),
+  Layer.provide([SystemHandlers, MeHandlers, GameHelloHandlers, GameHandlers]),
+  Layer.provide([SessionLive, RerollBodyErrorsLive, SaveBodyErrorsLive, PresenceBodyErrorsLive, UnexpectedLive]),
 );
 
 /** Any request no route takes, answered in the same `{ "code", "message" }` shape as every other error. */

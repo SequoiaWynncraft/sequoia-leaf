@@ -3,6 +3,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
 import type { questJson } from "../quests/json.ts";
+import { PlayerUuid } from "../wire.ts";
 
 /** Something that happened to a player, with its details in the shape the API sends. */
 export type PlayerEvent =
@@ -55,6 +56,10 @@ export type PlayerEvent =
 const StoredEvent = Schema.Struct({ id: Schema.Int, type: Schema.String, data: Schema.String, createdAt: Schema.Int });
 export type StoredEvent = typeof StoredEvent.Type;
 
+/** An event as stored, with whose it is. */
+const PlayersEvent = Schema.Struct({ ...StoredEvent.fields, playerId: PlayerUuid });
+export type PlayersEvent = typeof PlayersEvent.Type;
+
 /**
  * What happened to each player, in order. Streams find new events by reading
  * the table, so an event needs no notification: writing it is enough. A
@@ -71,6 +76,16 @@ export class Events extends Context.Service<
     readonly latest: (playerId: PlayerId, limit: number) => Effect.Effect<readonly StoredEvent[]>;
     /** The id of the newest event of any player, or 0 when there are none. Events written from now on have a larger id. */
     readonly latestId: Effect.Effect<number>;
+    /** The id of a player's newest event, or 0 when they have none. */
+    readonly latestIdOf: (playerId: PlayerId) => Effect.Effect<number>;
+    /** Every player's events of these types after an event id, oldest first. */
+    readonly everyoneAfter: (
+      types: readonly string[],
+      afterId: number,
+      limit: number,
+    ) => Effect.Effect<readonly PlayersEvent[]>;
+    /** Every player's newest events of these types, oldest first. */
+    readonly everyoneLatest: (types: readonly string[], limit: number) => Effect.Effect<readonly PlayersEvent[]>;
   }
 >()("leaf/Events") {
   static readonly layer = Layer.effect(
@@ -100,6 +115,29 @@ export class Events extends Context.Service<
         Result: Schema.Struct({ id: Schema.Int }),
         execute: () => sql`SELECT COALESCE(MAX(id), 0) AS id FROM events`,
       });
+      const latestIdOf = SqlSchema.findOne({
+        Request: Schema.String,
+        Result: Schema.Struct({ id: Schema.Int }),
+        execute: (playerId) => sql`SELECT COALESCE(MAX(id), 0) AS id FROM events WHERE player_id = ${playerId}`,
+      });
+      const everyoneAfter = SqlSchema.findAll({
+        Request: Schema.Struct({ types: Schema.Array(Schema.String), afterId: Schema.Int, limit: Schema.Int }),
+        Result: PlayersEvent,
+        execute: ({ types, afterId, limit }) => sql`
+          SELECT id, player_id AS playerId, type, data, created_at AS createdAt FROM events
+          WHERE id > ${afterId} AND ${sql.in("type", types)}
+          ORDER BY id LIMIT ${limit}
+        `,
+      });
+      const everyoneLatest = SqlSchema.findAll({
+        Request: Schema.Struct({ types: Schema.Array(Schema.String), limit: Schema.Int }),
+        Result: PlayersEvent,
+        execute: ({ types, limit }) => sql`
+          SELECT id, player_id AS playerId, type, data, created_at AS createdAt FROM events
+          WHERE ${sql.in("type", types)}
+          ORDER BY id DESC LIMIT ${limit}
+        `,
+      });
       return Events.of({
         insert: (playerId, event, now) =>
           sql`INSERT INTO events ${sql.insert({ playerId, type: event.type, data: JSON.stringify(event.data), createdAt: now })}`.pipe(
@@ -116,6 +154,17 @@ export class Events extends Context.Service<
           Effect.map(({ id }) => id),
           Effect.orDie,
         ),
+        latestIdOf: (playerId) =>
+          latestIdOf(playerId).pipe(
+            Effect.map(({ id }) => id),
+            Effect.orDie,
+          ),
+        everyoneAfter: (types, afterId, limit) => everyoneAfter({ types, afterId, limit }).pipe(Effect.orDie),
+        everyoneLatest: (types, limit) =>
+          everyoneLatest({ types, limit }).pipe(
+            Effect.map((events) => events.toReversed()),
+            Effect.orDie,
+          ),
       });
     }),
   );
