@@ -24,6 +24,8 @@ export interface Steer {
 export interface Hover {
   box: Rect;
   tip: readonly [string, string] | null;
+  /** A thing with a card of its own (a camp thing), which explains itself in place of the tip. */
+  ref?: string | null;
 }
 
 export interface Scene {

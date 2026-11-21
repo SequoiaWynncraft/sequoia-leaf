@@ -1,0 +1,43 @@
+[
+  ["size", 1280, 800],
+  ["wait", 1200],
+  ["shot", "k-01-demo"],
+  ["size", 390, 844],
+  ["wait", 400],
+  ["key", "Escape"],
+  [
+    "eval",
+    "(document.querySelector(\"#things [data-ref='item:lantern']\").scrollIntoView({block: 'start', behavior: 'instant'}), 'scrolled')"
+  ],
+  [
+    "finger",
+    "down",
+    "(()=>{const b = document.querySelector('#things').getBoundingClientRect(); return {x: b.right - 4, y: b.top - 30}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const b = document.querySelector('#things').getBoundingClientRect(); return {x: b.right - 4, y: b.top - 30}})()"
+  ],
+  ["wait", 300],
+  [
+    "eval",
+    "(document.querySelector(\"#things [data-ref='item:lantern']\").scrollIntoView({block: 'start', behavior: 'instant'}), 'scrolled')"
+  ],
+  [
+    "finger",
+    "down",
+    "(()=>{const b = document.querySelector(\"#things [data-ref='item:lantern']\").getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const b = document.querySelector(\"#things [data-ref='item:lantern']\").getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["wait", 400],
+  [
+    "eval",
+    "'demo card: ' + document.querySelector('.k-info .k-name')?.textContent + ', sheet ' + !!document.querySelector('.k-info.sheet')"
+  ],
+  ["shot", "kp-01-demo"]
+]

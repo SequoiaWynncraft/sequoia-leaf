@@ -287,7 +287,9 @@ export async function pull(slots: readonly Slot[], opts: Pulling): Promise<boole
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") flush();
     });
-    fromTown(flush);
+    fromTown((msg) => {
+      if (msg.town === "closing") flush();
+    });
   }
   return true;
 }

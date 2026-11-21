@@ -32,33 +32,44 @@ fight and a run go. Nothing in there touches the page. Everything else here is t
   where it goes; tap an offer to buy it; tap an item, then the figure to hold it. Hexes light for
   where a held figure may go, and a column of pips beside the front line shows how many may be
   fielded.
-- **What things are.** Resting the mouse on anything, or keeping a finger on it, shows its card;
-  tapping one of the party's figures keeps its card up. Cards say things in a few words, numbers in
-  bold gold, heals and shields in green, and physical, magic and true damage each in a colour of its
-  own. A figure's card has its picture, name, stars and price, what kind of fighter it is and where
+- **What things are.** Every thing on the table is a card in the kit's one card system
+  (`card.ts`): resting the mouse on anything shows its card, clicking pins it, and a finger taps it
+  open as a sheet along the bottom (on the stall and the rack, where a tap buys or picks up, a
+  finger kept on it asks instead). A thing named inside a card (a trait chip, an item, a figure in
+  a trait's roster) opens its own card in the same place, with a back arrow. Cards say things in a
+  few words, in the reading face, numbers in bold gold, heals and shields in green, and physical,
+  magic and true damage each in a colour of its own. A figure's card has its picture, name, stars and price, what kind of fighter it is and where
   it stands ("Tank · front row"), its kin and calling as chips with the party's count, its numbers
   (green where an item, a trait or a boon raises one, coral where something lowers it), its
   ability, what it holds and three finished items that suit it (lit if the rack has one, or both
   its halves). A trait's card has its steps (the one reached lit, the next saying how many more)
   and every figure that carries it, cheapest first: lit if fielded, tagged if on the bench or the
   stall, a dark outline with what opens it if not opened yet. An item's card has what it adds, what
-  it does and what it is made of or makes. There are cards for a boon, a room on the track, the
+  it does and what it is made of; a component's has what it makes with each other half (that
+  half's picture, an arrow, the finished item), the ones whose other half the party holds first,
+  lit and tagged "have", as on the pick of a component. There are cards for a boon, a room on the track, the
   purse and the level too. The almanac's cards add the long sentence and the flavour line.
 - **Traits.** A strip of chips, one for every trait the party has any of, with how many and how
   many the next step needs. When a step switches on the chip lights, the figures of that trait hop,
   and it says so. Pointing at a chip (in the strip, or on a figure's card) lights the trait: its
   figures on the board, the bench, the stall and across the table get a gold outline and hop once,
-  and everyone else dims a little. Clicking or tapping it keeps that and opens the trait's card
-  until the member clicks elsewhere, presses Escape or clicks the chip again; a figure picked there
-  opens in the card's place. On a phone the trait's card is a sheet along the bottom, so the board
-  stays in view.
+  and everyone else dims a little. A trait's card pinned open (a click or a tap) keeps it lit until
+  the card is put away (a click elsewhere, Escape, the chip again), and so does a figure's card
+  followed to from it. The cards say what is pointed at and pinned (`watch`); `ui/lit.ts` turns
+  that into the trait that is lit.
 - **Three become one.** The two that go hop onto the one that stays, it flashes, its new star pops
   with a ring and a run of notes; three stars is a larger ring, more sparks and a bell.
 - **Acorns.** The purse shows the number and a row of piles, one for every ten held, lit as they
   fill, with what they will pay next room. Experience is a bar under the level. Rustle (free once a
   room), hold the stall, level up, set out.
-- **Items.** Components and finished items sit on a rack. Held over a figure that already has a
-  loose component, a card shows what the two will make before it is let go.
+- **Items.** Components and finished items sit on a rack. Every figure shows what it holds as a
+  row of up to three small pictures under its base (under its health bar in a fight), on both sides
+  of the table, following it about and falling with it: a finished item has a gold edge, a loose
+  component the plain dark one, each on a small dark tile; pointing at one shows that item's card.
+  The row is never wider than a hex, so it never reaches a neighbour on its row, and it is drawn
+  with its figure, so a nearer figure stands in front of it. While a component is in the hand
+  (carried or tapped), every figure holding its other half shows what the two would make, faint,
+  over its head, and held over one a card says it by name.
 - **Picks.** The first figure, a component, a boon: three cards over the board, with the one redraw
   for boons. What is taken flies to where it lives.
 - **The fight.** Played from the rules' own steps at 1x, 2x or 4x, or skipped to its end. The two
@@ -119,37 +130,38 @@ arrangement for a wide window and another for a phone held upright.
 The clock only moves in the stage's `tick`, and a fight's clock is counted from it, so everything
 timed can be stepped by hand.
 
-| File                                | What it holds                                                                                  |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `src/main.ts`                       | Puts the parts together; speaks to the town                                                    |
-| `src/game/`                         | The rules (see its README)                                                                     |
-| `src/screen/state.ts`               | The run, the almanac, the prefs and what is on screen; every action goes through `act`         |
-| `src/screen/flow.ts`                | What happens when: sitting down, setting out, the fight, counting out the takings, the end     |
-| `src/screen/stage.ts`               | The canvases, the size of an art pixel, where the board sits, the clock                        |
-| `src/screen/geometry.ts`            | Where hexes, seats and bench hollows are, and which is under a point                           |
-| `src/screen/scene.ts`               | Drawing a frame: the board, lit hexes, who is waiting across it, the party, the fight          |
-| `src/screen/pawns.ts`               | The party's figures on board and bench; buying, selling and three-become-one acted out         |
-| `src/screen/hand.ts`                | Dragging and tapping, and asking what a thing is                                               |
-| `src/screen/light.ts`               | Which trait is lit (pointed at, or clicked and kept), and how that shows on a figure           |
-| `src/screen/rich.ts`                | The words on a card sorted for colouring: numbers, heals and shields, kinds of damage          |
-| `src/screen/fightview.ts`           | The fight played from the rules' events                                                        |
-| `src/screen/fx.ts`                  | Sparks, rings, rising words, things that fly, "in a moment"                                    |
-| `src/screen/logic.ts`               | Small questions asked of a run: where a figure may go, what an item would make, the next nudge |
-| `src/screen/keep.ts`                | Prefs and looks, and reading and writing what is kept                                          |
-| `src/screen/sounds.ts`              | The table's sounds, made from the kit's tones                                                  |
-| `src/screen/signals.ts`             | Small happenings more than one part answers: an acorn landing, a star                          |
-| `src/screen/handle.ts`              | `window.raid`, for looking at the game from outside                                            |
-| `src/screen/art/figures.ts`         | Every figure, typed out as rows of letters                                                     |
-| `src/screen/art/sprites.ts`         | Those rows baked into pictures: standing, breathing, casting, tipped over; bases and stars     |
-| `src/screen/art/icons.ts`           | A small picture for every trait, item, boon, kind of room and button                           |
-| `src/screen/art/table.ts`           | The painted table, the halves of the board, the looks                                          |
-| `src/screen/art/mates.ts`, `pal.ts` | The guild-mates at the table; the letters' colours, and the colours that mean something        |
-| `src/screen/ui/table.ts`            | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's count   |
-| `src/screen/ui/cards.ts`            | Cards: what each thing says about itself, and showing one (kept or passing) beside a thing     |
-| `src/screen/ui/lit.ts`              | Trait chips that light their figures, the trait's kept card, and letting it go                 |
-| `src/screen/ui/picks.ts`            | Three cards to choose from                                                                     |
-| `src/screen/ui/pages.ts`            | The front page, the almanac, how to play, table looks, the end of a run                        |
-| `src/screen/ui/nudge.ts`            | The first-time nudges                                                                          |
+| File                                | What it holds                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `src/main.ts`                       | Puts the parts together; speaks to the town                                                      |
+| `src/game/`                         | The rules (see its README)                                                                       |
+| `src/screen/state.ts`               | The run, the almanac, the prefs and what is on screen; every action goes through `act`           |
+| `src/screen/flow.ts`                | What happens when: sitting down, setting out, the fight, counting out the takings, the end       |
+| `src/screen/stage.ts`               | The canvases, the size of an art pixel, where the board sits, the clock                          |
+| `src/screen/geometry.ts`            | Where hexes, seats and bench hollows are, and which is under a point                             |
+| `src/screen/scene.ts`               | Drawing a frame: the board, lit hexes, who is waiting across it, the party, the fight            |
+| `src/screen/pawns.ts`               | The party's figures on board and bench; buying, selling and three-become-one acted out           |
+| `src/screen/hand.ts`                | Dragging and tapping, and asking what a thing is                                                 |
+| `src/screen/light.ts`               | Which trait is lit (pointed at, or clicked and kept), and how that shows on a figure             |
+| `src/screen/rich.ts`                | The words on a card sorted for colouring: numbers, heals and shields, kinds of damage            |
+| `src/screen/fightview.ts`           | The fight played from the rules' events                                                          |
+| `src/screen/fx.ts`                  | Sparks, rings, rising words, things that fly, "in a moment"                                      |
+| `src/screen/logic.ts`               | Small questions asked of a run: where a figure may go, what an item would make, the next nudge   |
+| `src/screen/keep.ts`                | Prefs and looks, and reading and writing what is kept                                            |
+| `src/screen/sounds.ts`              | The table's sounds, made from the kit's tones                                                    |
+| `src/screen/signals.ts`             | Small happenings more than one part answers: an acorn landing, a star                            |
+| `src/screen/handle.ts`              | `window.raid`, for looking at the game from outside                                              |
+| `src/screen/art/figures.ts`         | Every figure, typed out as rows of letters                                                       |
+| `src/screen/art/sprites.ts`         | Those rows baked into pictures: standing, breathing, casting, tipped over; bases and stars       |
+| `src/screen/art/icons.ts`           | A small picture for every trait, item, boon, kind of room and button                             |
+| `src/screen/art/table.ts`           | The painted table, the halves of the board, the looks                                            |
+| `src/screen/art/mates.ts`, `pal.ts` | The guild-mates at the table; the letters' colours, and the colours that mean something          |
+| `src/screen/ui/table.ts`            | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's count     |
+| `src/screen/held.ts`                | What a figure holds: where the row of small pictures under its base goes, drawing it, hitting it |
+| `src/screen/ui/cards.ts`            | What each thing says about itself, registered with the kit's cards, and the references to them   |
+| `src/screen/ui/lit.ts`              | Which trait the cards have pointed at or pinned, and marking the chips and the stall for it      |
+| `src/screen/ui/picks.ts`            | Three cards to choose from                                                                       |
+| `src/screen/ui/pages.ts`            | The front page, the almanac, how to play, table looks, the end of a run                          |
+| `src/screen/ui/nudge.ts`            | The first-time nudges                                                                            |
 
 `geometry.ts`, `logic.ts`, `keep.ts`, `light.ts` and `rich.ts` have tests beside them.
 
@@ -162,8 +174,9 @@ unseen and `plan()` has it plan the room that is up; `to("boon" | "component" | 
 | "end" | "front")` plays on to a moment worth looking at; `fight()` sets out; `busy()` runs a fight
 on to a moment with an ability's hexes lit and something in the air; `party()` lists the party's
 figures by number for `grab(id, x, y)`, `tap(id)`, `hover(itemAt, id)`, `hand(itemAt, id)` and
-`drop()`; `acorns(n)`, `give(kind)`, `offer(at, kind)` and `item(id)` stage a moment (a merge, an
-item to forge); `page(id)` opens a page; `arrive()` has whoever is waiting walk in again;
+`drop()`; `acorns(n)`, `give(kind)`, `offer(at, kind)`, `item(id)` and `strip()` stage a moment (a merge, an
+item to forge, empty hands); `at(id)` and `heldAt(id, i)` say where a figure and what it holds are
+on the page, and `rack()` and `held()` what is on the rack and in every hand; `page(id)` opens a page; `arrive()` has whoever is waiting walk in again;
 `taught()` counts every nudge as given; `state()` says where things stand; `bench()` times a frame.
 
 `?sheet` in the address shows every figure on one sheet with its name.
@@ -177,7 +190,11 @@ bun ../../packages/kit/tools/drive.ts "http://raid.test/" <out-dir> review/tour-
 bun ../../packages/kit/tools/drive.ts "http://raid.test/?sheet" <out-dir> review/sheet.json dist
 ```
 
-`review/cards.json` and `review/cards-phone.json` go through the cards: a figure at one and two
+`review/kit-cards.json` and `review/kit-cards-phone.json` go through what the kit's cards brought:
+a board with figures holding nothing, one component and three items, a held item's card, a card
+followed to with its back arrow, a trait pinned with its figures lit, what a component would make,
+the component pick with an item's card from a "makes" line, and a fight. `review/cards.json` and
+`review/cards-phone.json` go through the cards: a figure at one and two
 stars, one holding items, one on the stall, a trait pointed at and clicked, a figure opened from a
 trait's card, items, a boon pick. `review/trait-hover.json` points at a trait's chip through the
 moments a card used to go missing (a click on the chip, the stall changing size, the strip drawn

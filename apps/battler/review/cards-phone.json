@@ -54,39 +54,39 @@
   ],
   [
     "eval",
-    "(window.raid.skip(0.12), 'tapped a trait: kept card ' + !!document.querySelector('.raid-card.pinned') + ', lit offers ' + document.querySelectorAll('.offer.tlit').length)"
+    "(window.raid.skip(0.12), 'tapped a trait: kept card ' + !!document.querySelector('.k-info.pinned') + ', lit offers ' + document.querySelectorAll('.offer.tlit').length)"
   ],
   ["wait", 600],
   ["shot", "p-05-trait-tapped"],
   [
     "finger",
     "down",
-    "(()=>{const r=document.querySelector('.raid-card.pinned [data-member]:not([disabled])').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+    "(()=>{const r=document.querySelector('.k-info.pinned .k-info-tile.k-link').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
   ],
   [
     "finger",
     "up",
-    "(()=>{const r=document.querySelector('.raid-card.pinned [data-member]:not([disabled])').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+    "(()=>{const r=document.querySelector('.k-info.pinned .k-info-tile.k-link').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
   ],
   [
     "eval",
-    "(window.raid.skip(0.2), 'figure from trait: ' + document.querySelector('.raid-card.pinned .nameline b').textContent)"
+    "(window.raid.skip(0.2), 'figure from trait: ' + document.querySelector('.k-info.pinned .k-name').textContent)"
   ],
   ["wait", 500],
   ["shot", "p-06-figure-from-trait"],
   [
     "finger",
     "down",
-    "(()=>{const r=document.querySelector('.raid-card.pinned [data-chip]').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+    "(()=>{const r=document.querySelector('.k-info.pinned .k-info-chip').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
   ],
   [
     "finger",
     "up",
-    "(()=>{const r=document.querySelector('.raid-card.pinned [data-chip]').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+    "(()=>{const r=document.querySelector('.k-info.pinned .k-info-chip').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
   ],
   [
     "eval",
-    "(window.raid.skip(0.2), 'trait from the figure card: ' + document.querySelector('.raid-card.pinned .nameline b').textContent)"
+    "(window.raid.skip(0.2), 'trait from the figure card: ' + document.querySelector('.k-info.pinned .k-name').textContent)"
   ],
   ["wait", 400],
   ["shot", "p-07-trait-from-figure"],
@@ -94,7 +94,7 @@
   ["finger", "up", "({x: 120, y: 330})"],
   [
     "eval",
-    "(window.raid.skip(0.2), 'a tap elsewhere: card ' + !!document.querySelector('.raid-card.pinned') + ', lit ' + document.body.classList.contains('trait-lit'))"
+    "(window.raid.skip(0.2), 'a tap elsewhere: card ' + !!document.querySelector('.k-info.pinned') + ', lit ' + document.body.classList.contains('trait-lit'))"
   ],
   [
     "finger",

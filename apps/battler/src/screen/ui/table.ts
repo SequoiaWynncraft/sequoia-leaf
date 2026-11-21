@@ -4,6 +4,7 @@
  * the level and the buttons. It is drawn again from the run whenever something changes; nothing
  * here decides anything, it only shows and asks.
  */
+import { link } from "@sequoia-leaf/kit/card.ts";
 import { add, amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { balance, watch } from "@sequoia-leaf/kit/purse.ts";
 import { isMuted } from "@sequoia-leaf/kit/sound.ts";
@@ -38,19 +39,7 @@ import { light } from "../light.ts";
 import { canBuy, savings, steppedUp, stepsOf } from "../logic.ts";
 import { artPx, place, V } from "../stage.ts";
 import { S } from "../state.ts";
-import {
-  acorns,
-  boonCard,
-  explain,
-  figPic,
-  figureCard,
-  itemCard,
-  levelCard,
-  pic,
-  purseCard,
-  roomCard,
-  wireChip,
-} from "./cards.ts";
+import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } from "./cards.ts";
 import { forgetLight, paintLight } from "./lit.ts";
 
 /** What the buttons ask for. The table only asks; whoever built it answers. */
@@ -138,9 +127,9 @@ export function buildTable(a: Asks): void {
   );
   tip(hold, "Hold the stall", "Keeps these figures on the stall for the next room.");
   const acornsBtn = el("button", "", { id: "acorns", type: "button" });
-  explain(acornsBtn, () => (S.run ? purseCard(S.run) : null));
+  link(acornsBtn, "acorns:");
   const level = el("button", "", { id: "level", type: "button" });
-  explain(level, () => (S.run ? levelCard(S.run) : null));
+  link(level, "level:");
   const levelUp = el("button", "k-btn wood", { id: "levelup", type: "button", onclick: a.levelUp });
   tip(levelUp, "Level up", () => `${ECONOMY.xpCost} acorns for ${ECONOMY.xpBought} experience.`);
   const setOut = el(
@@ -238,7 +227,7 @@ function renderTrack(run: Run): void {
       { type: "button", "aria-label": `Room ${i + 1}` },
       pic(roomIcon(room.kind)),
     );
-    explain(pip, () => (S.run ? roomCard(i, S.run) : null));
+    link(pip, `room:${i}`);
     track.append(pip);
   });
 }
@@ -259,7 +248,8 @@ function chipFor(trait: TraitId): HTMLButtonElement {
   let chip = chips.get(trait);
   if (!chip) {
     chip = el("button", "k-chip trait", { type: "button", "data-trait": trait, "aria-pressed": "false" });
-    wireChip(chip, trait);
+    // Its card goes to its side, so the rest of the strip stays in view.
+    link(chip, traitRef(trait), { side: true });
     chips.set(trait, chip);
   }
   return chip;
@@ -317,7 +307,8 @@ function renderRack(run: Run): void {
         { type: "button", "data-item": at, "aria-label": item },
         pic(itemIcon(item)),
       );
-      explain(slot, () => (S.run ? itemCard(item, S.run, at) : null));
+      // Tapping an item picks it up to give it; a finger kept on it asks what it is.
+      link(slot, itemRef(item, at), { acts: true });
       items.append(slot);
     });
     rack.append(items);
@@ -326,7 +317,7 @@ function renderRack(run: Run): void {
     const boons = el("div", "k-plaque boons", {});
     for (const boon of run.boons) {
       const slot = el("button", "k-slot boon", { type: "button", "aria-label": BOONS[boon].name }, pic(boonIcon(boon)));
-      explain(slot, () => boonCard(boon));
+      link(slot, boonRef(boon));
       boons.append(slot);
     }
     rack.append(boons);
@@ -372,7 +363,8 @@ function renderStall(run: Run): void {
         ? el("span", `have${have >= 2 ? " ready" : ""}`, { text: have >= 2 ? "3!" : have === 1 ? "2" : "+" })
         : null,
     );
-    explain(card, () => figureCard(kind, 1, { run: S.run }));
+    // Tapping an offer buys it; a finger kept on it asks what it is.
+    link(card, figureRef(kind), { acts: true });
     stall.append(card);
   });
   paintLight();
@@ -453,7 +445,7 @@ function renderFoe(run: Run): void {
   const foe = byId("foe");
   if (!foe) return;
   foe.hidden = S.mode === "front" || S.mode === "over";
-  foe.replaceChildren(el("b", "k-gold", { text: run.foe.who }));
+  foe.replaceChildren(el("b", "k-name", { text: run.foe.who }));
   if (run.foe.title) foe.append(el("span", "k-d", { text: run.foe.title }));
   placeFoe();
 }
@@ -528,6 +520,8 @@ export function holdAcorns(at: number, seconds = 2.4): void {
   shown.acorns = at;
   shown.settleAt = V.t + seconds;
 }
+/** The tally's rows, one for each of the party's fighters, kept from one count to the next so a card on one stays up. */
+const tallyRows = new Map<number, { row: HTMLElement; bar: HTMLElement; n: HTMLElement }>();
 /** Who of the party has done most in the fight so far: a row each, the busiest first. */
 function renderTally(): void {
   const box = byId("tally");
@@ -537,18 +531,28 @@ function renderTally(): void {
     .toSorted((a, b) => b.dealt - a.dealt || a.id - b.id)
     .slice(0, 8);
   const most = Math.max(1, ...mine.map((u) => u.dealt));
-  box.replaceChildren(
-    ...mine.map((u) =>
-      el(
-        "div",
-        `row${u.alive ? "" : " down"}`,
-        {},
-        pic(portrait(u.kind)),
-        el("div", "k-bar coral", {}, el("i", "", { style: `--v:${Math.round((u.dealt / most) * 100)}%` })),
-        el("span", "k-s", { text: String(u.dealt) }),
-      ),
-    ),
-  );
+  const keep = new Set(mine.map((u) => u.id));
+  for (const [id, r] of tallyRows) {
+    if (keep.has(id)) continue;
+    r.row.remove();
+    tallyRows.delete(id);
+  }
+  mine.forEach((u, i) => {
+    let r = tallyRows.get(u.id);
+    if (!r || r.row.dataset.kind !== u.kind) {
+      r?.row.remove();
+      const art = el("span", "who", {}, pic(portrait(u.kind)));
+      link(art, unitRef(u.id));
+      const bar = el("i");
+      const n = el("span", "k-s");
+      r = { row: el("div", "row", { "data-kind": u.kind }, art, el("div", "k-bar coral", {}, bar), n), bar, n };
+      tallyRows.set(u.id, r);
+    }
+    r.row.classList.toggle("down", !u.alive);
+    r.bar.style.setProperty("--v", `${Math.round((u.dealt / most) * 100)}%`);
+    r.n.textContent = String(u.dealt);
+    if (box.children[i] !== r.row) box.insertBefore(r.row, box.children[i] ?? null);
+  });
 }
 let talliedAt = -9;
 

@@ -3,12 +3,12 @@
  * room, and the few signs the buttons carry. Typed as rows of letters like the figures, baked once
  * with a dark edge, and handed out as fresh little canvases to put on the page.
  */
-import { INK } from "@sequoia-leaf/kit/palette.ts";
+import { GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { type BoonId, BOONS } from "../../game/content/boons.ts";
-import type { ItemId } from "../../game/content/items.ts";
+import { isComponentId, type ItemId } from "../../game/content/items.ts";
 import type { RoomKind } from "../../game/content/rooms.ts";
 import type { TraitId } from "../../game/content/traits.ts";
 import { PAL } from "./pal.ts";
@@ -753,5 +753,54 @@ export function boonIcon(id: BoonId): HTMLCanvasElement {
   g.fillRect(Math.floor(sign.width / 2) + 1, 0, 1, 3);
   g.fillRect(Math.floor(sign.width / 2), 0, 1, 1);
   g.drawImage(sign, 0, 3);
+  return c;
+}
+
+/**
+ * Halves a picture typed as letters: each square of two by two becomes the letter most of it is,
+ * so a ten-pixel item keeps its shape and colours at five.
+ */
+function halved(rows: readonly string[]): string[] {
+  const out: string[] = [];
+  for (let y = 0; y < rows.length; y += 2) {
+    let line = "";
+    for (let x = 0; x < (rows[0]?.length ?? 0); x += 2) {
+      const seen = new Map<string, number>();
+      for (const [dx, dy] of [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+      ] as const) {
+        const ch = rows[y + dy]?.[x + dx] ?? ".";
+        if (ch !== ".") seen.set(ch, (seen.get(ch) ?? 0) + 1);
+      }
+      let best = ".";
+      let most = 0;
+      for (const [ch, n] of seen) {
+        if (n <= most) continue;
+        best = ch;
+        most = n;
+      }
+      line += best;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+/**
+ * What a figure holds, as it is shown under its base: the item at half size, a finished one with a
+ * gold edge and a loose component with the plain dark one, so a component waiting for its pair
+ * stands out. Do not put it on the page.
+ */
+export function heldPic(id: ItemId): HTMLCanvasElement {
+  const key = `h:${id}`;
+  let c = baked.get(key);
+  if (!c) {
+    const pic = bitmap(halved(ITEM_ROWS[id]), PAL);
+    c = outlined(pic, isComponentId(id) ? INK : GOLD[2]);
+    baked.set(key, c);
+  }
   return c;
 }

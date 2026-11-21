@@ -56,6 +56,12 @@ export const letGo = (now: number, l: Light = light): boolean =>
   changing(l, now, () => {
     l.kept = null;
   });
+/** Says at once which trait is pointed at and which is kept, as the cards report them. */
+export const lightUp = (pointed: TraitId | null, kept: TraitId | null, now: number, l: Light = light): boolean =>
+  changing(l, now, () => {
+    l.pointed = pointed;
+    l.kept = kept;
+  });
 /** Forgets everything, pointed and kept: a new run, the front page. */
 export const forget = (now: number, l: Light = light): boolean =>
   changing(l, now, () => {

@@ -53,6 +53,7 @@ import {
 import { csfx } from "./campsfx.ts";
 import { extraOf, lightOf, type Live, stepLive, touch, type TouchWorld } from "./camptouch.ts";
 import { type CampUi } from "./campui.ts";
+import { thingRef } from "./cards.ts";
 import { drawPicture, drawProp, drawWords, type Picture, type Prompted, show, sizeBuffers } from "./draw.ts";
 import { clearFlights, flights, fling, stepFlights } from "./flights.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle, updateFx } from "./fx.ts";
@@ -1492,7 +1493,9 @@ export function makeCamp(
       // The thing in hand has its own corners.
       const n = sel?.dragging ? -1 : thingAt(wx, wy);
       const l = n >= 0 && n !== sel?.index ? liveAt(n) : null;
-      return l?.prop.hit ? { box: l.prop.hit, tip: [l.thing.name, "Drag it somewhere else."], who: null } : null;
+      return l?.prop.hit
+        ? { box: l.prop.hit, tip: [l.thing.name, "Drag it somewhere else."], ref: thingRef(l.thing.id), who: null }
+        : null;
     }
     const who = personAt(wx, wy);
     if (who) {
@@ -1504,7 +1507,7 @@ export function makeCamp(
       return { box: { x: pet.x - 6, y: pet.y - 10, w: 12, h: 11 }, tip: [pet.name, PET_ABOUT[pet.kind]], who: null };
     const prop = propUnder([...pic.props, ...flats], wx, wy);
     if (!prop?.hit || prop.kind === "trunk") return null;
-    return { box: prop.hit, tip: prop.tip, who: null };
+    return { box: prop.hit, tip: prop.tip, ref: thingOf(prop.kind) ? thingRef(prop.kind) : null, who: null };
   }
 
   // ---------- drawing ----------

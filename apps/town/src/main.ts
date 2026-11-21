@@ -9,6 +9,7 @@
  * reached only through `Scene`.
  */
 
+import { pick as pickCard, point } from "@sequoia-leaf/kit/card.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { where } from "@sequoia-leaf/kit/live.ts";
 import { earn } from "@sequoia-leaf/kit/purse.ts";
@@ -86,6 +87,13 @@ const REST = 400;
 function toWorld(pageX: number, pageY: number): Pt {
   const k = G.view.dpr / G.view.z;
   return { x: pageX * k + Math.round(G.cam.x), y: pageY * k + Math.round(G.cam.y) };
+}
+
+/** A box in the world as a box on the page. */
+function pageBox(h: Hover): { x: number; y: number; w: number; h: number } {
+  const a = toPage(h.box.x, h.box.y);
+  const b = toPage(h.box.x + h.box.w, h.box.y + h.box.h);
+  return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
 }
 
 async function boot(): Promise<void> {
@@ -271,11 +279,15 @@ async function boot(): Promise<void> {
   });
   document.addEventListener("pointerdown", unlock, true);
 
-  function showTip(h: Hover): void {
-    if (!h.tip) return;
-    const a = toPage(h.box.x, h.box.y);
-    const b = toPage(h.box.x + h.box.w, h.box.y + h.box.h);
-    tipAt({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y }, h.tip[0], h.tip[1], TIP);
+  /** What a thing is: its card, for a camp thing; a line, for anything else. */
+  function showTip(h: Hover, pinned = false): void {
+    const box = pageBox(h);
+    if (h.ref) {
+      if (pinned) pickCard(h.ref, box.x, box.y, box.w, box.h);
+      else point(h.ref, box.x, box.y, box.w, box.h);
+      return;
+    }
+    if (h.tip) tipAt(box, h.tip[0], h.tip[1], TIP);
   }
 
   canvas.addEventListener("pointerdown", (e) => {
@@ -287,11 +299,11 @@ async function boot(): Promise<void> {
     held = groundTap ? { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, steer: false } : null;
     down = true;
     canvas.setPointerCapture(e.pointerId);
-    // A finger kept on a thing asks what it is.
+    // A finger kept on a thing asks what it is: a camp thing's card stays until put away, a line goes by itself.
     if (finger && !groundTap)
       pressed = window.setTimeout(() => {
         const h = scene.point(at);
-        if (h) showTip(h);
+        if (h) showTip(h, true);
         window.setTimeout(() => {
           tipOff(TIP);
           scene.point(null);
@@ -331,9 +343,14 @@ async function boot(): Promise<void> {
     const h = mouse ? scene.point(toWorld(mouse.x, mouse.y)) : null;
     if (!mouse) scene.point(null);
     canvas.style.cursor = h ? "pointer" : "default";
+    // A camp thing explains itself through the cards, which keep their own time.
+    if (h?.ref || rest?.hover.ref) {
+      const box = h ? pageBox(h) : null;
+      point(h?.ref ?? null, box?.x ?? 0, box?.y ?? 0, box?.w ?? 0, box?.h ?? 0);
+    }
     const same = h && rest && h.tip === rest.hover.tip && h.box.x === rest.hover.box.x && h.box.y === rest.hover.box.y;
     if (same && rest) {
-      if (!rest.shown && performance.now() - rest.since > REST) {
+      if (!rest.shown && !rest.hover.ref && performance.now() - rest.since > REST) {
         rest.shown = true;
         showTip(rest.hover);
       }

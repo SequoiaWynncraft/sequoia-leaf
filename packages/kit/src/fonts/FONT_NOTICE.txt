@@ -12,3 +12,11 @@ the embedded statement above is the licence information available.
 
 The font is drawn on a grid of ten pixels to the em, so it is sharp at 10px, 20px, 30px and so on
 (and at multiples of 5px on screens with two device pixels to a CSS pixel).
+
+Inter (inter-variable.woff2), the reading face: one variable file, weights 100 to 900.
+
+Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter). Licensed under the
+SIL Open Font License, Version 1.1; the licence travels with it as OFL-Inter.txt.
+
+Provenance: a byte-identical copy of the file the Sequoia website ships in sequoia-web
+frontend/static/assets/fonts/, where it sets the site's body text.

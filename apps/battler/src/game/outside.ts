@@ -4,10 +4,10 @@
  * out from a run's summary, so nothing here needs the run itself, a clock or a calendar.
  */
 import { BOSS_IDS, type BossId, FIGURE_IDS, type FigureId, isBossId, isFigureId } from "./content/figures.ts";
-import { type FinishedId, isFinishedId } from "./content/items.ts";
+import { FINISHED_IDS, type FinishedId, isFinishedId } from "./content/items.ts";
 import { type Milestone, MILESTONES, PAYOUT } from "./content/keepsakes.ts";
 import { ROOM_COUNT, TRAIL_COUNT, TRAILS } from "./content/rooms.ts";
-import { isTraitId, type TraitId, TRAITS } from "./content/traits.ts";
+import { isTraitId, TRAIT_IDS, type TraitId, TRAITS } from "./content/traits.ts";
 import type { RunSummary } from "./run.ts";
 
 // ---------- Coins ----------
@@ -191,8 +191,8 @@ export function loadAlmanac(text: string): Almanac | null {
   const a = raw.almanac;
   const fielded = uniqueList(a.fielded, isFigureId, FIGURE_IDS.length);
   const threeStars = uniqueList(a.threeStars, isFigureId, FIGURE_IDS.length);
-  const forged = uniqueList(a.forged, isFinishedId, 64);
-  const topped = uniqueList(a.topped, isTraitId, 64);
+  const forged = uniqueList(a.forged, isFinishedId, FINISHED_IDS.length);
+  const topped = uniqueList(a.topped, isTraitId, TRAIT_IDS.length);
   const opened = uniqueList(a.opened, isFigureId, FIGURE_IDS.length);
   if (!fielded || !threeStars || !forged || !topped || !opened) return null;
   if (!opened.every(isLocked)) return null;

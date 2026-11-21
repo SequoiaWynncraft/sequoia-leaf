@@ -220,11 +220,24 @@ accident: a tap aims, and a second tap or the Build button builds. A belt is lai
 start and end, with the router's run shown before it is laid; tapping a machine to start from
 begins the run where that machine hands things on.
 
-**Asking.** Resting the mouse on a thing, or keeping a finger on it, says what it is and what it
-is doing. Clicking or tapping it opens its card: what goes in and comes out and how fast, what it
-holds, the recipes it can be pinned to, and what can be done (turn, take away, take up another,
-shut a crate, tip out a machine that has filled up with the wrong part). Land that is not the
-yard's says what lies in it, what it costs, and sells itself from the same card.
+**Asking.** Everything in the yard is a card in the kit's one card system (`card.ts`, registered
+in `ui/card.ts`): resting the mouse on a thing shows its card, clicking pins it, and a tap (or a
+finger kept on it, with a tool in hand) pins it as a sheet along the bottom, with the yard moved
+so the thing stays in view above it. A thing named inside a card opens its own card in its place,
+with a back arrow.
+
+- _A thing_ (in an order's lines, the depot's books, a machine's recipes, riding a belt, lying in
+  the ground): its step, what it is made from and in which machine and how long one takes, what
+  it goes into, what orders and the depot pay for one, and the orders on the board still asking
+  for it with how many they are owed. One from the ground says where it comes from instead, and
+  which plots have it.
+- _A machine_ (in the dock, a plan, a recipe): what it does, what it can make, its draw, pace,
+  price and key. One standing in the yard adds what it is doing and holds, and what can be done:
+  pin a recipe, tip out, shut a crate, turn, take up another, take away.
+- _A plot, a plan, an order_: what it holds, changes or wants, every thing and machine in it a
+  thing. Land that is not the yard's is a plot's card, and sells itself from it.
+
+The orders panel's lines, the depot's books and the plans tree are built from the kit's `thing`.
 
 **The yard's books.** Always in view: the purse, power as drawn and given with a bar, and the
 order in hand. Four panels: the orders (the story's, and the board's standing orders with swap and
@@ -277,7 +290,8 @@ clockwork crab is made. Opened alone it plays just the same.
 | `teach.ts`                        | the next nudge, worked out from the yard                                    |
 | `events.ts`, `actors.ts`, `fx.ts` | the yard's moments; who walks about; sparks, dust, smoke and rising words   |
 | `sound.ts`                        | the yard's own sounds, and its working murmur                               |
-| `ui/*.ts`                         | the purse and notices, the top bar, the dock, cards, panels, the letter     |
+| `ui/card.ts`                      | what every thing, machine, tile, plot, plan and order says, as kit cards    |
+| `ui/*.ts`                         | the purse and notices, the top bar, the dock, panels, the letter            |
 | `sheet.ts`, `sheets.ts`           | the art laid out with names: `?sheet=machines`, `?sheet=items`              |
 | `yards/*.json`                    | yards kept part-way through the story, for looking at the game at a stage   |
 | `review/balance.ts`               | the story played by script; pacing and payback tables                       |
@@ -324,7 +338,7 @@ would; `finger(true)` makes the screen behave as for a touch. `open(panel)`, `ca
 `close()` show things; `look(x, y)` and `zoom(by)` move the view. `purse(coins, leaf)` sets the
 purse, `boost(minutes)` starts a second shift, `away(hours)` pretends the member has been gone,
 `fill(slot)` fills a standing order, `taught(ids)` says which lessons are already taken.
-`page(x, y)` is where a tile is on the page, `where(kind)` where a kind of thing stands, `state()`
+`page(x, y)` is where a tile is on the page, `rider(x, y)` what is riding a belt there, `where(kind)` where a kind of thing stands, `state()`
 a summary, and `bench()` the milliseconds one tick and one frame take, averaged over a hundred.
 
 The screenshot driver is the kit's (`packages/kit/tools/drive.ts`):

@@ -1,16 +1,25 @@
 /**
- * Cards: what a thing is, said in a `k-tip` beside it. Pointing at anything (or pressing on it
- * with a finger) shows its card: a figure with its role, traits, numbers, ability and the items
- * that suit it; a trait with its steps and every figure that carries it; an item; a boon; a room.
- * Every card on the table uses the short forms; the almanac's cards add the long sentence and the
- * flavour line.
+ * Cards: what each thing at the table says about itself, in the kit's one card (`card.ts`). Every
+ * kind of thing is registered once and named by a reference:
  *
- * Two cards can be up at once: one kept (it stays, and can hold buttons) and one passing (it goes
- * when the pointer does), drawn over the kept one. A card shown beside an element stays beside it
- * when the page is laid out again, and goes with it when it goes.
+ * - `figure:<kind>` a figure as the stall offers it (`figure:<kind>/<stars>/lore` in the almanac);
+ * - `piece:<id>` one of the party's own, with what it holds, its numbers as they stand, and Sell;
+ * - `foe:<seat>` one waiting across the board; `unit:<id>` anyone in a fight;
+ * - `trait:<id>`, `item:<id>` (`item:<id>@<at>` on the rack), `boon:<id>`, `room:<index>`;
+ * - `acorns:` the purse, `level:` the level, and `drop:<item>:<piece>` what giving an item would do.
+ *
+ * Cards use the short forms; the almanac's add the long sentence and the flavour line.
  */
-import { add, el, icon } from "@sequoia-leaf/kit/dom.ts";
-import { LONG_PRESS, tip } from "@sequoia-leaf/kit/tip.ts";
+import {
+  type Block,
+  type Chip,
+  type Description,
+  type Entry,
+  register,
+  type Row,
+  type Stat,
+} from "@sequoia-leaf/kit/card.ts";
+import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 
 import {
   abilityShort,
@@ -19,16 +28,19 @@ import {
   type BoonId,
   BOONS,
   boonShort,
+  type ComponentId,
   COMPONENTS,
   ECONOMY,
   type FigureId,
   FIGURES,
   FINISHED,
-  type FinishedId,
   GOOD_WITH,
+  isBoonId,
   isComponentId,
   isFigureId,
+  isItemId,
   isLocked,
+  isTraitId,
   itemAdds,
   type ItemId,
   itemName,
@@ -36,14 +48,17 @@ import {
   itemText,
   MILESTONES,
   type Party,
-  type Piece,
+  pieceAt,
+  pieces,
   roleLine,
   ROOMS,
   type Run,
+  sell,
+  sellValue,
   specOf,
+  spotOf,
   STALL_ODDS,
   type Stars,
-  TRAILS,
   type TraitId,
   TRAITS,
   traitShort,
@@ -54,41 +69,26 @@ import {
 } from "../../game/index.ts";
 import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
 import { portrait, starsPic } from "../art/sprites.ts";
+import { fightUnits } from "../fightview.ts";
 import {
   combosWithHeld,
+  handing,
   membersOf,
   NUMBER_KEYS,
   type Numbers,
   ownTraitCount,
+  pieceNumbers,
   plainNumbers,
   rackHas,
   recipesOf,
   savings,
+  startNumbers,
   type TraitCount,
   traitCount,
   whereIs,
 } from "../logic.ts";
 import { pieces as richPieces } from "../rich.ts";
-
-/** A spot on the page for a card to sit beside, in CSS pixels. */
-export interface Spot {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-interface Box {
-  node: HTMLElement;
-  owner: unknown;
-  /** The element it sits beside, if it was shown beside one. */
-  anchor: Element | null;
-  spot: Spot;
-  /** Sits to the side of its spot rather than above or below it, where there is room. */
-  aside: boolean;
-}
-let kept: Box | null = null;
-let passing: Box | null = null;
+import { act, S } from "../state.ts";
 
 /** A drawn picture on the page, `scale` interface units to each of its pixels. */
 export function pic(c: HTMLCanvasElement, scale = 1, cls = ""): HTMLCanvasElement {
@@ -106,228 +106,6 @@ export function figPic(c: HTMLCanvasElement): HTMLCanvasElement {
   return c;
 }
 
-const spotOf = (target: Element): Spot => {
-  const r = target.getBoundingClientRect();
-  return { x: r.left, y: r.top, w: r.width, h: r.height };
-};
-
-/**
- * Puts a card beside a spot: above it where there is room, otherwise below, otherwise to the side.
- * With `aside`, to the side first; and where the window is too narrow for that (a phone held
- * upright), as a sheet along the bottom, so the table above it stays in view. Never off the page.
- */
-function place(node: HTMLElement, spot: Spot, aside = false): void {
-  const r = node.getBoundingClientRect();
-  const gap = 8;
-  const right = spot.x + spot.w + gap;
-  if (aside) {
-    const fits = right + r.width <= window.innerWidth - 4;
-    const x = fits ? right : Math.round((window.innerWidth - r.width) / 2);
-    const y = fits
-      ? Math.min(Math.max(4, spot.y), window.innerHeight - r.height - 4)
-      : window.innerHeight - r.height - 4;
-    node.style.transform = `translate(${Math.round(x)}px, ${Math.round(Math.max(4, y))}px)`;
-    return;
-  }
-  const x = Math.round(Math.min(Math.max(4, spot.x + spot.w / 2 - r.width / 2), window.innerWidth - r.width - 4));
-  const above = spot.y - r.height - gap;
-  const below = spot.y + spot.h + gap;
-  const y = Math.round(
-    above >= 4
-      ? above
-      : below + r.height <= window.innerHeight - 4
-        ? below
-        : Math.max(4, window.innerHeight - r.height - 4),
-  );
-  if (above < 4 && below + r.height > window.innerHeight - 4) {
-    const left = spot.x - r.width - gap;
-    const sx = right + r.width <= window.innerWidth - 4 ? right : left >= 4 ? left : x;
-    node.style.transform = `translate(${Math.round(sx)}px, ${y}px)`;
-  } else node.style.transform = `translate(${x}px, ${y}px)`;
-}
-
-function show(where: Spot | Element, content: HTMLElement, by: unknown, pin: boolean, aside = false): void {
-  const anchor = where instanceof Element ? where : null;
-  if (anchor && !anchor.isConnected) return;
-  const spot = where instanceof Element ? spotOf(where) : where;
-  const node = el("div", `k-tip k-float raid-card${pin ? " pinned" : ""}`, { role: "tooltip" }, content);
-  if (content.classList.contains("wide")) node.classList.add("wide");
-  if (pin) {
-    kept?.node.remove();
-    passing?.node.remove();
-    passing = null;
-  } else passing?.node.remove();
-  document.body.append(node);
-  place(node, spot, aside);
-  const box: Box = { node, owner: by, anchor, spot, aside };
-  if (pin) kept = box;
-  else passing = box;
-}
-
-/** Shows a card beside a spot on the page. A kept card stays until put away; a passing one shows over it. */
-export function cardAt(spot: Spot, content: HTMLElement, by: unknown, pinned = false): void {
-  show(spot, content, by, pinned);
-}
-/** Shows a card beside an element (to its side, with `aside`), and keeps it there if the page is laid out again. */
-export function cardBy(target: Element, content: HTMLElement, by: unknown, pinned = false, aside = false): void {
-  show(target, content, by, pinned, aside);
-}
-/** Puts cards away: with `by`, only that owner's; without, both. */
-export function cardOff(by: unknown = null): void {
-  if (passing && (by === null || passing.owner === by)) {
-    passing.node.remove();
-    passing = null;
-  }
-  if (kept && (by === null || kept.owner === by)) {
-    kept.node.remove();
-    kept = null;
-  }
-}
-/** Whose kept card is up, if any. */
-export const keptOwner = (): unknown => kept?.owner ?? null;
-/** Whether any card is up. */
-export const cardUp = (): boolean => kept !== null || passing !== null;
-/** Whether a point on the page is on a card that is showing. */
-export const onCard = (target: EventTarget | null): boolean =>
-  target instanceof Node && ((kept?.node.contains(target) ?? false) || (passing?.node.contains(target) ?? false));
-
-/**
- * Puts a card in the kept card's place, over the same corner of the page and beside the same thing,
- * with a new owner: a trait's card opened from a figure's, a figure's from a trait's. Gives whether
- * there was a kept card to replace.
- */
-export function swapKept(content: HTMLElement, by: unknown): boolean {
-  const was = kept;
-  if (!was) return false;
-  const r = was.node.getBoundingClientRect();
-  const node = el("div", "k-tip k-float raid-card pinned", { role: "tooltip" }, content);
-  if (content.classList.contains("wide")) node.classList.add("wide");
-  was.node.remove();
-  passing?.node.remove();
-  passing = null;
-  document.body.append(node);
-  const n = node.getBoundingClientRect();
-  const x = Math.round(Math.min(Math.max(4, r.left), window.innerWidth - n.width - 4));
-  const y = Math.round(Math.min(Math.max(4, r.top), window.innerHeight - n.height - 4));
-  node.style.transform = `translate(${x}px, ${y}px)`;
-  kept = { node, owner: by, anchor: was.anchor, spot: was.spot, aside: was.aside };
-  return true;
-}
-
-/**
- * The page has been laid out again: a card beside an element moves with it (or goes, if the element
- * has gone), and a card beside a spot stays where it was if `keepSpots`, or else goes.
- */
-export function recard(keepSpots: boolean): void {
-  for (const box of [kept, passing]) {
-    if (!box) continue;
-    if (box.anchor ? !box.anchor.isConnected : !keepSpots) {
-      cardOff(box.owner);
-      continue;
-    }
-    place(box.node, box.anchor ? spotOf(box.anchor) : box.spot, box.aside);
-  }
-}
-
-/**
- * Gives an element a card, made afresh each time it shows: on resting the mouse there, on keyboard
- * focus, and on a long press with a finger (which then does not count as a tap). A click with the
- * mouse puts the card away for the click, and it comes back if the mouse stays.
- */
-export function explain(target: HTMLElement, build: () => HTMLElement | null): void {
-  let rest = 0;
-  let press = 0;
-  let swallow = false;
-  const open = (): void => {
-    if (!target.isConnected) return;
-    const content = build();
-    if (content) cardBy(target, content, target);
-  };
-  const soon = (): void => {
-    window.clearTimeout(rest);
-    rest = window.setTimeout(open, 180);
-  };
-  target.addEventListener("pointerenter", (e) => {
-    if (e.pointerType === "mouse") soon();
-  });
-  target.addEventListener("pointerleave", () => {
-    window.clearTimeout(rest);
-    cardOff(target);
-  });
-  target.addEventListener("focus", () => {
-    if (target.matches(":focus-visible")) open();
-  });
-  target.addEventListener("blur", () => cardOff(target));
-  target.addEventListener("pointerdown", (e) => {
-    window.clearTimeout(rest);
-    if (e.pointerType === "mouse") {
-      cardOff(target);
-      return;
-    }
-    swallow = false;
-    window.clearTimeout(press);
-    press = window.setTimeout(() => {
-      swallow = true;
-      open();
-    }, LONG_PRESS);
-  });
-  const lift = (): void => window.clearTimeout(press);
-  target.addEventListener("pointerup", (e) => {
-    lift();
-    // The click is over and the mouse is still here: the card comes back, unless something else is showing.
-    if (e.pointerType !== "mouse") return;
-    window.clearTimeout(rest);
-    rest = window.setTimeout(() => {
-      if (!cardUp() && target.matches(":hover")) open();
-    }, 260);
-  });
-  target.addEventListener("pointercancel", lift);
-  target.addEventListener("pointermove", (e) => {
-    if (e.pointerType !== "mouse" && Math.abs(e.movementX) + Math.abs(e.movementY) > 6) lift();
-  });
-  target.addEventListener(
-    "click",
-    (e) => {
-      if (!swallow) return;
-      swallow = false;
-      e.stopPropagation();
-      e.preventDefault();
-    },
-    true,
-  );
-}
-
-// ---------- trait chips that do something ----------
-
-/** What a trait's chip does when it is pointed at, left, or pressed; and a figure picked from a trait's card. */
-export interface ChipHooks {
-  point: (trait: TraitId, chip: HTMLElement) => void;
-  leave: (trait: TraitId, chip: HTMLElement) => void;
-  press: (trait: TraitId, chip: HTMLElement) => void;
-  figure: (kind: FigureId, from: HTMLElement) => void;
-}
-let chipHooks: ChipHooks | null = null;
-/** Says what trait chips do; `lit.ts` answers. */
-export const hookChips = (hooks: ChipHooks): void => {
-  chipHooks = hooks;
-};
-
-/** Makes an element a trait's chip: pointing lights the trait, pressing (or tapping) keeps it and opens its card. */
-export function wireChip(chip: HTMLElement, trait: TraitId): void {
-  chip.dataset.chip = trait;
-  chip.addEventListener("pointerenter", (e) => {
-    if (e.pointerType === "mouse") chipHooks?.point(trait, chip);
-  });
-  chip.addEventListener("pointerleave", (e) => {
-    if (e.pointerType === "mouse") chipHooks?.leave(trait, chip);
-  });
-  chip.addEventListener("focus", () => {
-    if (chip.matches(":focus-visible")) chipHooks?.point(trait, chip);
-  });
-  chip.addEventListener("blur", () => chipHooks?.leave(trait, chip));
-  chip.addEventListener("click", () => chipHooks?.press(trait, chip));
-}
-
 // ---------- the words on a card ----------
 
 const RICH: Readonly<Record<string, string>> = {
@@ -339,10 +117,10 @@ const RICH: Readonly<Record<string, string>> = {
 };
 /**
  * A short form with its numbers bold and gold, heals and shields green, and the kinds of damage
- * coloured; each fragment on a line of its own.
+ * coloured; each fragment on a line of its own. It is read, so it is in the reading face.
  */
 export function rich(text: string, cls = "short"): HTMLElement {
-  const box = el("div", cls);
+  const box = el("div", `k-read ${cls}`);
   for (const fragment of text.split(/(?<=\.)\s+/)) {
     const line = el("div", "frag");
     for (const p of richPieces(fragment)) {
@@ -354,26 +132,33 @@ export function rich(text: string, cls = "short"): HTMLElement {
   return box;
 }
 
-const line = (text: string, cls = "k-d"): HTMLElement => el("div", cls, { text });
-const label = (text: string): HTMLElement => el("span", "k-label", { text });
-/** A thin rule between the blocks of a card. */
-const block = (cls: string, ...kids: (Node | string | null)[]): HTMLElement => el("div", `blk ${cls}`, {}, ...kids);
-
-/** A trait as a small tag: its sign and its name. */
-export function traitTag(id: TraitId, lit = false): HTMLElement {
-  return el("span", `k-chip${lit ? " lit" : ""}`, {}, pic(traitIcon(id)), TRAITS[id].name);
-}
 /** An amount of acorns with their sign. */
 export const acorns = (n: number | string): HTMLElement => el("span", "k-cur", {}, icon("acorn"), String(n));
 
 const tierName = ["", "one acorn", "two acorns", "three acorns", "four acorns", "five acorns"];
 
-/** An item's picture in a hollow, with its name and what it does as a tip. */
-function itemSlot(item: ItemId, lit = false, note = ""): HTMLElement {
-  const slot = el("span", `k-slot islot${lit ? " lit" : ""}`, { tabindex: 0 }, pic(itemIcon(item)));
-  tip(slot, itemName(item), () => `${itemShort(item)}${note ? ` ${note}` : ""}`);
-  return slot;
-}
+// ---------- references ----------
+
+export const figureRef = (kind: FigureId): string => `figure:${kind}`;
+export const pieceRef = (id: number): string => `piece:${id}`;
+export const foeRef = (seat: number): string => `foe:${seat}`;
+export const unitRef = (id: number): string => `unit:${id}`;
+export const traitRef = (id: TraitId): string => `trait:${id}`;
+export const itemRef = (id: ItemId, at = -1): string => (at >= 0 ? `item:${id}@${at}` : `item:${id}`);
+export const boonRef = (id: BoonId): string => `boon:${id}`;
+export const dropRef = (item: number, piece: number): string => `drop:${item}:${piece}`;
+/** The trait a reference names, if it names one. */
+export const traitOfRef = (ref: string | null): TraitId | null => {
+  const id = ref?.startsWith("trait:") ? (ref.slice(6).split("/")[0] ?? "") : "";
+  return isTraitId(id) ? id : null;
+};
+
+/** An id and the flags after it: `"emberkit/3/lore"` is `emberkit` with `3` and `lore`. */
+const flagsOf = (id: string): { id: string; flags: string[] } => {
+  const [head = "", ...flags] = id.split("/");
+  return { id: head, flags };
+};
+const starsOf = (flags: readonly string[]): Stars => (flags.includes("3") ? 3 : flags.includes("2") ? 2 : 1);
 
 // ---------- a figure ----------
 
@@ -381,8 +166,6 @@ export interface FigureExtras {
   items?: readonly ItemId[];
   /** How many times Greg has eaten. */
   fed?: number;
-  /** Something to do with it, under its card: selling it, say. */
-  actions?: HTMLElement | null;
   /** As it stands in a fight just now. */
   unit?: Unit;
   /** A line under the price: whose it is. */
@@ -395,452 +178,383 @@ export interface FigureExtras {
   party?: Pick<Party, "figures" | "charms"> | null;
   /** The almanac's card: the long sentence and the flavour line too. */
   lore?: boolean;
+  /** One of the party's own while planning: it can be sold. */
+  sellable?: { id: number } | null;
 }
 
-/** A trait's chip on a figure's card: a small label over it, and the count as the strip shows it. */
-function cardChip(trait: TraitId, over: string, count: TraitCount | null): HTMLElement {
-  const chip = el(
-    "button",
-    "tchip",
-    { type: "button", "aria-label": `${TRAITS[trait].name}, ${over.toLowerCase()}` },
-    label(over),
-    el(
-      "span",
-      `k-chip${count && count.step > 0 ? " lit" : ""}`,
-      {},
-      pic(traitIcon(trait)),
-      TRAITS[trait].name,
-      count ? el("b", "cnt", { text: `${count.count}/${count.next}` }) : null,
-    ),
-  );
-  wireChip(chip, trait);
-  return chip;
-}
+const NAMES = { health: "Health", attack: "Attack", speed: "Speed", reach: "Reach", armour: "Armour", ward: "Ward" };
 
-function numberCell(name: string, now: string, raised: number): HTMLElement {
-  return el(
-    "span",
-    "num",
-    {},
-    label(name),
-    el("b", raised > 0 ? "k-leafy" : raised < 0 ? "k-coral" : "", { text: now }),
-  );
-}
-
-/** Any figure's card: its role, its traits, its numbers, its ability in a few words, and the items that suit it. */
-export function figureCard(kind: UnitKind, stars: Stars, extras: FigureExtras = {}): HTMLElement {
+/** Any figure: its role, its traits, its numbers, its ability in a few words, and the items that suit it. */
+export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = {}): Description {
   const spec = specOf(kind);
   const u = extras.unit;
   const figure = isFigureId(kind) ? FIGURES[kind] : null;
-  const card = el("div", "card fig wide");
 
-  // The head: its picture, name, stars and price, and what kind of fighter it is.
-  const right = el(
-    "span",
-    "side",
-    {},
-    figure ? acorns(figure.tier) : null,
-    extras.whose ? el("span", "k-d", { text: extras.whose }) : null,
-  );
-  add(
-    card,
-    el(
-      "div",
-      "fhead",
-      {},
-      el("span", "k-slot port", {}, pic(portrait(kind), 2)),
-      el(
-        "div",
-        "cwho",
-        {},
-        el("div", "nameline", {}, el("b", "k-gold", { text: spec.name }), pic(starsPic(stars)), right),
-        figure ? line(roleLine(figure.calling)) : null,
-      ),
-    ),
-  );
-
-  // Its traits, each a button that lights the trait.
-  if (figure && isFigureId(kind)) {
-    const count = (t: TraitId): TraitCount | null =>
-      extras.party ? traitCount(extras.party, t) : extras.run ? ownTraitCount(extras.run, t) : null;
-    const [kin, calling, ...more] = traitsOf(kind);
-    add(
-      card,
-      block(
-        "ftraits",
-        kin ? cardChip(kin, "Kin", count(kin)) : null,
-        calling ? cardChip(calling, "Calling", count(calling)) : null,
-        ...more.map((t) => cardChip(t, "Also", count(t))),
-      ),
-    );
-  }
+  const count = (t: TraitId): TraitCount | null =>
+    extras.party ? traitCount(extras.party, t) : extras.run ? ownTraitCount(extras.run, t) : null;
+  const [kin, calling, ...more] = isFigureId(kind) ? traitsOf(kind) : [];
+  const chip = (t: TraitId | undefined, label: string): Chip | null => {
+    if (!t) return null;
+    const c = count(t);
+    return {
+      label,
+      text: TRAITS[t].name,
+      icon: traitIcon(t),
+      ...(c ? { count: `${c.count}/${c.next}`, lit: c.step > 0 } : {}),
+      ref: traitRef(t),
+    };
+  };
 
   // Its numbers: raised by what it holds or belongs to in green, lowered in coral.
   const plain = plainNumbers(kind, stars);
   const now: Numbers = u
     ? { health: u.maxHp, attack: u.attack, speed: u.speed, reach: u.range, armour: u.armour, ward: u.ward }
     : (extras.numbers ?? plain);
-  const shown = (key: (typeof NUMBER_KEYS)[number]): string => {
-    if (key === "speed") return spec.speed > 0 ? `${now.speed.toFixed(2)}/s` : "none";
-    if (key === "health" && u) return `${Math.max(0, Math.round(u.hp))}/${Math.round(u.maxHp)}`;
-    return String(Math.round(now[key]));
-  };
-  const diff = (key: (typeof NUMBER_KEYS)[number]): number => {
+  const stats: Stat[] = NUMBER_KEYS.map((key) => {
+    const value =
+      key === "speed"
+        ? spec.speed > 0
+          ? `${now.speed.toFixed(2)}/s`
+          : "none"
+        : key === "health" && u
+          ? `${Math.max(0, Math.round(u.hp))}/${Math.round(u.maxHp)}`
+          : String(Math.round(now[key]));
     const d = now[key] - plain[key];
-    return Math.abs(d) < (key === "speed" ? 0.005 : 0.5) ? 0 : d;
-  };
-  const names = { health: "Health", attack: "Attack", speed: "Speed", reach: "Reach", armour: "Armour", ward: "Ward" };
-  const nums = block("nums", ...NUMBER_KEYS.map((key) => numberCell(names[key], shown(key), diff(key))));
-  if (kind === "greg" && (extras.fed ?? 0) > 0)
-    add(nums, el("span", "k-d fed", { text: `Has eaten ${extras.fed} times: +${(extras.fed ?? 0) * 3}% health.` }));
-  add(card, nums);
+    const moved = Math.abs(d) < (key === "speed" ? 0.005 : 0.5) ? 0 : d;
+    return moved === 0
+      ? { label: NAMES[key], value }
+      : { label: NAMES[key], value, mark: moved > 0 ? "raised" : "lowered" };
+  });
 
-  // Its ability, in a few words.
-  if (spec.ability) {
-    add(
-      card,
-      block(
-        "abil",
-        el(
-          "div",
-          "aname",
-          {},
-          el("b", "", { text: spec.ability.name }),
-          spec.mana[1] > 0 ? el("span", "k-d", { text: `mana ${spec.mana[1]}` }) : null,
-        ),
-        rich(abilityShort(kind, stars)),
-      ),
-    );
+  const blocks: Block[] = [];
+  if (spec.ability)
+    blocks.push({
+      title: spec.ability.name,
+      ...(spec.mana[1] > 0 ? { note: `mana ${spec.mana[1]}` } : {}),
+      body: rich(abilityShort(kind, stars)),
+    });
+  if (kind === "greg" && (extras.fed ?? 0) > 0)
+    blocks.push({ body: `Has eaten ${extras.fed} times: +${(extras.fed ?? 0) * 3}% health.` });
+  if (extras.lore) {
+    if (spec.ability) blocks.push({ body: abilityText(kind, stars) });
+    blocks.push({ body: el("i", "k-dim quip", { text: spec.quip }) });
   }
 
-  // What it holds, and what suits it.
+  // What it holds, and the three finished items that suit it (lit if the rack has one, or both its halves).
   const items = extras.items ?? u?.items ?? [];
   const run = extras.run ?? null;
-  if (items.length > 0 || isFigureId(kind)) {
-    const parts: (Node | null)[] = [];
-    if (items.length > 0) parts.push(el("div", "irow", {}, label("Holds"), ...items.map((item) => itemSlot(item))));
-    if (isFigureId(kind)) {
-      const good = GOOD_WITH[kind].map((item: FinishedId) => {
-        const has = run ? rackHas(run, item) : null;
-        const [a, b] = FINISHED[item].made;
-        const note =
-          has === "item"
-            ? "On your rack."
-            : has === "parts"
-              ? `${COMPONENTS[a].name} and ${COMPONENTS[b].name} are on your rack.`
-              : `${COMPONENTS[a].name} and ${COMPONENTS[b].name}.`;
-        return itemSlot(item, has !== null, note);
-      });
-      parts.push(el("div", "irow", {}, label("Good with"), ...good));
-    }
-    add(card, block("fitems", ...parts));
-  }
+  const rows: Row[] = [{ label: "Holds", look: "icons", things: items.map((item) => ({ ref: itemRef(item) })) }];
+  if (isFigureId(kind))
+    rows.push({
+      label: "Good with",
+      look: "icons",
+      things: GOOD_WITH[kind].map((item) => ({ ref: itemRef(item), lit: run ? rackHas(run, item) !== null : false })),
+    });
 
-  if (extras.lore) {
-    add(
-      card,
-      block(
-        "lore",
-        spec.ability ? line(abilityText(kind, stars), "") : null,
-        el("i", "k-dim quip", { text: spec.quip }),
-      ),
-    );
-  }
-  if (extras.actions) add(card, block("acts", extras.actions));
-  return card;
-}
-
-/** One of the party's own figures, with what it holds, its numbers as they stand, and a way to sell it. */
-export function pieceCard(piece: Piece, actions: HTMLElement | null, run: Run, numbers: Numbers | null): HTMLElement {
-  return figureCard(piece.kind, piece.stars, { items: piece.items, fed: piece.fed, actions, run, numbers });
+  const sale = extras.sellable;
+  const piece = sale && run ? pieces(run).find((p) => p.id === sale.id) : undefined;
+  return {
+    name: spec.name,
+    icon: portrait(kind),
+    tag: figure ? roleLine(figure.calling) : "",
+    aside: el(
+      "span",
+      "fside",
+      {},
+      el("span", "k-row tight", {}, pic(starsPic(stars)), figure ? acorns(figure.tier) : null),
+      extras.whose ? el("span", "k-d", { text: extras.whose }) : null,
+    ),
+    chips: [chip(kin, "Kin"), chip(calling, "Calling"), ...more.map((t) => chip(t, "Also"))].filter(
+      (c): c is Chip => c !== null,
+    ),
+    stats,
+    blocks,
+    rows,
+    actions:
+      sale && piece && run
+        ? [
+            {
+              label: "Sell",
+              look: "wood sm wide",
+              after: acorns(`+${sellValue(piece)}`),
+              on: () => {
+                const spot = spotOf(S.run ?? run, sale.id);
+                // Sold from its card: the card goes with it.
+                if (spot) act((r) => sell(r, spot));
+              },
+            },
+          ]
+        : [],
+  };
 }
 
 // ---------- a trait ----------
 
-/** A figure in a trait's card: its picture, name and price; lit if fielded, tagged if on the bench or the stall, dark if not opened yet. */
-function member(id: FigureId, run: Run | null, almanac: Almanac): HTMLElement {
+/** A figure in a trait's roster: lit if fielded, tagged if on the bench or the stall, dark if not opened yet. */
+function member(id: FigureId, run: Run | null, almanac: Almanac): Entry {
   const where = run ? whereIs(run, id) : null;
   const locked = isLocked(id) && !almanac.opened.includes(id) && where === null;
-  const how = MILESTONES.find((m) => m.figure === id)?.text ?? "";
-  const name = locked && id === "crab40" ? "Uncounted" : FIGURES[id].name;
-  const slot = el(
-    "button",
-    `k-slot mem${where === "board" ? " lit" : ""}${locked ? " locked" : ""}`,
-    { type: "button", "data-member": id, "aria-label": name, disabled: locked },
-    el("span", "art", {}, pic(portrait(id, { dark: locked }))),
-    el("span", "k-s mname", { text: name }),
-    locked ? el("span", "k-s how", { text: how }) : acorns(FIGURES[id].tier),
-    where === "bench" || where === "stall" ? el("span", "k-s tag", { text: where }) : null,
-  );
-  if (!locked) slot.addEventListener("click", () => chipHooks?.figure(id, slot));
-  return slot;
+  const own = run
+    ? pieces(run)
+        .filter((p) => p.kind === id)
+        .toSorted((a, b) => b.stars - a.stars)[0]
+    : undefined;
+  const base = { ref: own ? pieceRef(own.id) : figureRef(id), lit: where === "board" };
+  if (locked)
+    return {
+      ...base,
+      name: id === "crab40" ? "Uncounted" : FIGURES[id].name,
+      icon: portrait(id, { dark: true }),
+      locked: MILESTONES.find((m) => m.figure === id)?.text ?? "",
+    };
+  return {
+    ...base,
+    name: FIGURES[id].name,
+    icon: portrait(id),
+    note: acorns(FIGURES[id].tier),
+    ...(where === "bench" || where === "stall" ? { tag: where } : {}),
+  };
 }
 
-/** A trait's card: what it is, its steps, and every figure that carries it. */
-export function traitCard(id: TraitId, run: Run | null, almanac: Almanac, lore = false): HTMLElement {
+/** A trait: what it is, its steps (the one reached lit, the next saying how many more), and every figure that carries it. */
+export function traitDesc(id: TraitId, run: Run | null, almanac: Almanac, lore = false): Description {
   const spec = TRAITS[id];
   const state = run ? ownTraitCount(run, id) : null;
   const count = state?.count ?? 0;
   const step = state?.step ?? 0;
-  const card = el(
-    "div",
-    "card trait wide",
-    {},
-    el(
-      "div",
-      "thead",
-      {},
-      el("span", "k-slot port", {}, pic(traitIcon(id), 2)),
-      el(
-        "div",
-        "cwho",
-        {},
-        el(
-          "div",
-          "nameline",
-          {},
-          el("b", "k-gold", { text: spec.name }),
-          label(spec.sort === "kin" ? "Kin" : spec.sort === "calling" ? "Calling" : "Own"),
-          state ? el("span", "side", {}, el("b", "cnt", { text: `${count}/${state.next}` })) : null,
-        ),
-        line(spec.gist),
-      ),
-    ),
-  );
   const next = spec.steps.findIndex((need) => need > count);
-  const steps = block("tsteps");
-  spec.steps.forEach((need, i) => {
+  const blocks: Block[] = spec.steps.map((need, i) => {
     const more = run && i === next ? need - count : 0;
-    add(
-      steps,
-      el(
-        "div",
-        `tstep${step === i + 1 ? " on" : ""}`,
-        {},
-        el("b", "need", { text: String(need) }),
-        rich(traitShort(id, i + 1), "short"),
-        more > 0 ? el("span", "k-label more", { text: `${more} more` }) : null,
-      ),
-    );
+    return {
+      line: true,
+      title: String(need),
+      body: rich(traitShort(id, i + 1)),
+      lit: step === i + 1,
+      ...(more > 0 ? { note: `${more} more` } : {}),
+    };
   });
-  add(card, steps);
-  add(card, block("members", ...membersOf(id).map((f) => member(f, run, almanac))));
-  if (lore) {
-    add(
-      card,
-      block(
-        "lore",
-        ...spec.steps.map((need, i) => el("div", "", {}, el("b", "", { text: `${need}: ` }), traitText(id, i + 1))),
-      ),
-    );
-  }
-  if (run) {
-    const charms = run.boons.filter((b) => BOONS[b].charm === id).length;
-    if (charms > 0) add(card, line(`A charm counts as one more.`));
-  }
-  return card;
+  if (lore) spec.steps.forEach((need, i) => blocks.push({ title: `${need}`, body: traitText(id, i + 1) }));
+  if (run && run.boons.some((b) => BOONS[b].charm === id)) blocks.push({ body: "A charm counts as one more." });
+  return {
+    name: spec.name,
+    icon: traitIcon(id),
+    tag: spec.gist,
+    aside: el(
+      "span",
+      "k-row tight",
+      {},
+      el("span", "k-label", { text: spec.sort === "kin" ? "Kin" : spec.sort === "calling" ? "Calling" : "Own" }),
+      state ? el("b", "", { text: `${count}/${state.next}` }) : null,
+    ),
+    blocks,
+    rows: [{ label: "Every figure", look: "tiles", things: membersOf(id).map((f) => member(f, run, almanac)) }],
+  };
 }
 
 // ---------- an item, a boon ----------
 
-/** What an item adds, in numbers, on one line. */
-const addsLine = (id: ItemId): HTMLElement => rich(itemAdds(id).join(" · "), "adds");
+/** What an item adds, in numbers, on a line; and what it does. */
+const itemWords = (id: ItemId): HTMLElement =>
+  el("div", "", {}, rich(itemAdds(id).join(" · "), "adds"), isComponentId(id) ? null : rich(itemShort(id)));
 
-/** An item's card: what it adds, what it does, and what it is made of or makes. */
-export function itemCard(id: ItemId, run: Run | null, itemAt = -1, lore = false): HTMLElement {
-  const component = isComponentId(id);
-  const card = el(
-    "div",
-    "card item",
-    {},
-    el(
-      "div",
-      "thead",
-      {},
-      el("span", "k-slot port", {}, pic(itemIcon(id), 2)),
-      el(
-        "div",
-        "cwho",
-        {},
-        el("b", "k-gold", { text: itemName(id) }),
-        line(component ? "A component" : "A finished item"),
-      ),
-    ),
-  );
-  add(card, block("adds", addsLine(id), component ? null : rich(itemShort(id))));
-  if (component) {
-    const held = run ? combosWithHeld(run, id, itemAt) : [];
-    const rows = held.length > 0 ? held : recipesOf(id);
-    const recipes = block("recipes", label(held.length > 0 ? "With what you hold" : "Two on one figure make"));
-    for (const r of rows) {
-      add(
-        recipes,
-        el(
-          "div",
-          "recipe",
-          {},
-          pic(itemIcon(r.with)),
-          el("span", "k-dim", { text: "makes" }),
-          pic(itemIcon(r.makes)),
-          el("span", "", { text: itemName(r.makes) }),
-        ),
-      );
-    }
-    add(card, recipes);
-  } else {
-    const [a, b] = FINISHED[id].made;
-    add(
-      card,
-      block(
-        "recipes",
-        el(
-          "div",
-          "recipe",
-          {},
-          label("Made of"),
-          itemSlot(a),
-          el("span", "k-dim", { text: "+" }),
-          itemSlot(b),
-          el("span", "k-d", { text: `${COMPONENTS[a].name} and ${COMPONENTS[b].name}` }),
-        ),
-      ),
-    );
-  }
+/**
+ * An item: what it adds and does, and what it is made of or makes. A component's "makes" lines put
+ * first, lit and tagged "have", the ones whose other half the party already holds.
+ */
+export function itemDesc(id: ItemId, run: Run | null, itemAt = -1, lore = false): Description {
+  const blocks: Block[] = [{ body: itemWords(id) }];
   if (lore) {
-    add(
-      card,
-      block(
-        "lore",
-        line(itemText(id), ""),
-        el("i", "k-dim quip", { text: component ? COMPONENTS[id].quip : FINISHED[id].quip }),
-      ),
-    );
+    blocks.push({ body: itemText(id) });
+    blocks.push({ body: el("i", "k-dim quip", { text: isComponentId(id) ? COMPONENTS[id].quip : FINISHED[id].quip }) });
   }
-  return card;
+  return {
+    name: itemName(id),
+    icon: itemIcon(id),
+    tag: isComponentId(id) ? "A component" : "A finished item",
+    blocks,
+    rows: isComponentId(id)
+      ? [{ label: "With", things: makesLines(id, run, itemAt) }]
+      : [{ label: "Made from", things: FINISHED[id].made.map((c) => ({ ref: itemRef(c) })) }],
+  };
 }
 
-/** What two things would become, shown while one is held over a figure. */
-export function forgeCard(holding: ItemId, withItem: ItemId, makes: ItemId): HTMLElement {
-  return el(
-    "div",
-    "card item",
-    {},
-    el(
-      "div",
-      "recipe big",
-      {},
-      pic(itemIcon(withItem), 2),
-      el("b", "", { text: "+" }),
-      pic(itemIcon(holding), 2),
-      el("b", "", { text: "=" }),
-      pic(itemIcon(makes), 2),
-    ),
-    el("b", "k-gold", { text: itemName(makes) }),
-    block("adds", addsLine(makes), isComponentId(makes) ? null : rich(itemShort(makes))),
-  );
+/** A component's "makes" lines: the other half, an arrow, and the finished item; the ones the party can finish first. */
+export function makesLines(id: ItemId, run: Run | null, itemAt = -1): Entry[] {
+  if (!isComponentId(id)) return [];
+  const held = new Set(run ? combosWithHeld(run, id, itemAt).map((c) => c.with) : []);
+  const line = (r: { with: ComponentId; makes: ItemId }): Entry =>
+    held.has(r.with)
+      ? { ref: itemRef(r.makes), from: itemRef(r.with), lit: true, tag: "have" }
+      : { ref: itemRef(r.makes), from: itemRef(r.with) };
+  return recipesOf(id)
+    .map(line)
+    .toSorted((a, b) => Number(b.lit ?? false) - Number(a.lit ?? false));
 }
 
-export function boonCard(id: BoonId): HTMLElement {
+export function boonDesc(id: BoonId): Description {
   const spec = BOONS[id];
-  return el(
-    "div",
-    "card boon",
-    {},
-    el(
-      "div",
-      "thead",
-      {},
-      el("span", "k-slot port", {}, pic(boonIcon(id), 2)),
-      el("div", "cwho", {}, el("b", "k-gold", { text: spec.name }), line(spec.sort === "charm" ? "A charm" : "A boon")),
-    ),
-    block("adds", rich(boonShort(id))),
-  );
+  const kin = spec.charm;
+  return {
+    name: spec.name,
+    icon: boonIcon(id),
+    tag: spec.sort === "charm" ? "A charm" : "A boon",
+    blocks: [{ body: rich(boonShort(id)) }],
+    chips: kin ? [{ label: "Counts for", text: TRAITS[kin].name, icon: traitIcon(kin), ref: traitRef(kin) }] : [],
+  };
 }
 
 // ---------- the rest ----------
 
-const head = (art: HTMLElement | null, name: string, under: (Node | string | null)[]): HTMLElement =>
-  el("div", "card-head", {}, art, el("div", "k-col tight", {}, el("b", "k-gold", { text: name }), ...under));
-
 /** A room on the track: what kind it is, who is or was there, and what it gives. */
-export function roomCard(index: number, run: Run): HTMLElement {
+function roomDesc(index: number, run: Run): Description | null {
   const room = ROOMS[index];
-  if (!room) return el("div", "card", { text: "" });
+  if (!room) return null;
   const record = run.record.findLast((r) => r.room === index);
   const here = run.room === index && run.phase !== "over";
   const kind = room.kind === "spar" ? "Sparring" : room.kind === "boss" ? "A boss" : "Trouble";
-  const card = el(
-    "div",
-    "k-col card",
-    {},
-    head(pic(roomIcon(room.kind), 2), `Room ${index + 1}`, [line(`${kind}, wing ${room.wing}.`)]),
-  );
-  if (here) add(card, el("div", "", {}, el("b", "", { text: run.foe.who }), run.foe.title ? `: ${run.foe.title}` : ""));
-  if (record) add(card, line(record.result === "win" ? "Won." : record.result === "loss" ? "Lost." : "A draw.", ""));
+  const lines: string[] = [];
+  if (here) lines.push(`${run.foe.who}${run.foe.title ? `: ${run.foe.title}` : ""}.`);
+  if (record) lines.push(record.result === "win" ? "Won." : record.result === "loss" ? "Lost." : "A draw.");
   else if (room.kind === "spar")
-    add(card, line("A guild-mate's party. It pays the same, won or lost, but a win pays an acorn more."));
+    lines.push("A guild-mate's party. It pays the same, won or lost, but a win pays an acorn more.");
   else if (room.kind === "trouble")
-    add(
-      card,
-      line(
-        `The forest's own. Win for a pick of ${ECONOMY.componentsWon} components; lose and it is ${ECONOMY.componentsLost}.`,
-      ),
+    lines.push(
+      `The forest's own. Win for a pick of ${ECONOMY.componentsWon} components; lose and it is ${ECONOMY.componentsLost}.`,
     );
   else
-    add(
-      card,
-      line(
-        index === ROOMS.length - 1
-          ? "The last room. It is fought until it is won, or the party goes home."
-          : "Beat it for two picks of components, and a boon either way.",
-      ),
+    lines.push(
+      index === ROOMS.length - 1
+        ? "The last room. It is fought until it is won, or the party goes home."
+        : "Beat it for two picks of components, and a boon either way.",
     );
-  if (ECONOMY.boonRooms.some((r) => r === index) && room.kind !== "boss")
-    add(card, line("A boon is offered after it."));
-  return card;
+  if (ECONOMY.boonRooms.some((r) => r === index) && room.kind !== "boss") lines.push("A boon is offered after it.");
+  return {
+    name: `Room ${index + 1}`,
+    icon: roomIcon(room.kind),
+    tag: `${kind}, wing ${room.wing}.`,
+    blocks: [{ body: lines.join(" ") }],
+  };
 }
 
 /** The purse of acorns: how the savings are counted. */
-export function purseCard(run: Run): HTMLElement {
+function purseDesc(run: Run): Description {
   const s = savings(run);
-  return el(
-    "div",
-    "k-col card",
-    {},
-    head(pic(glyph("acorn"), 2), "Acorns", [line("The money inside a raid.")]),
-    line(`Every room pays ${ECONOMY.roomAcorns}, and 1 more for a win.`, ""),
-    line(
-      `Every ${s.per} you keep earns 1 more each room, up to ${s.most}. You will be paid ${s.pays} for what you hold now.`,
-      "",
-    ),
-    s.toNext > 0 ? line(`${s.toNext} more for the next pile.`) : line("Every pile is full."),
-  );
+  return {
+    name: "Acorns",
+    icon: glyph("acorn"),
+    tag: "The money inside a raid.",
+    stats: [
+      { label: "Held", value: String(run.acorns) },
+      { label: "Piles", value: `${s.piles}/${s.most}` },
+      { label: "Pays", value: `+${s.pays}` },
+    ],
+    blocks: [
+      {
+        body: `Every room pays ${ECONOMY.roomAcorns}, and 1 more for a win. Every ${s.per} you keep earns 1 more each room, up to ${s.most}.`,
+      },
+      { body: s.toNext > 0 ? `${s.toNext} more for the next pile.` : "Every pile is full." },
+    ],
+  };
 }
 
 /** The level: how many may be fielded, and what the stall offers at it. */
-export function levelCard(run: Run): HTMLElement {
+function levelDesc(run: Run): Description {
   const odds = STALL_ODDS[Math.min(run.level, STALL_ODDS.length) - 1] ?? STALL_ODDS[0] ?? [100, 0, 0, 0, 0];
   const parts = odds.flatMap((share, i) => (share > 0 ? [`${tierName[i + 1] ?? ""} ${share}%`] : []));
-  return el(
-    "div",
-    "k-col card",
-    {},
-    el("b", "k-gold", { text: `Level ${run.level}` }),
-    line("The level is how many figures you may field.", ""),
-    line(
-      `${ECONOMY.xpCost} acorns buy ${ECONOMY.xpBought} experience; every room gives ${ECONOMY.xpRoom} for nothing.`,
-    ),
-    el("div", "k-label", { text: "The stall offers" }),
-    line(parts.join(", "), ""),
-  );
+  return {
+    name: `Level ${run.level}`,
+    icon: glyph("acorn"),
+    tag: "How many figures you may field.",
+    blocks: [
+      {
+        body: `${ECONOMY.xpCost} acorns buy ${ECONOMY.xpBought} experience; every room gives ${ECONOMY.xpRoom} for nothing.`,
+      },
+      { title: "The stall offers", body: parts.join(", ") },
+    ],
+  };
 }
 
-export function trailCard(index: number): HTMLElement {
-  const trail = TRAILS[index];
-  return el("div", "k-col card", {}, el("b", "k-gold", { text: trail?.name ?? "" }), line(trail?.text ?? "", ""));
+/** What giving the item on the rack to one of the party would do: what the two make, or just that it is given. */
+function dropDesc(run: Run, at: number, pieceId: number): Description | null {
+  const item = run.items[at];
+  const spot = spotOf(run, pieceId);
+  const piece = spot ? pieceAt(run, spot) : null;
+  if (item === undefined || !piece) return null;
+  const would = handing(piece, item);
+  if (would.can && would.forged)
+    return {
+      name: itemName(would.forged),
+      icon: itemIcon(would.forged),
+      tag: `${itemName(would.with)} and ${itemName(item)} make it.`,
+      blocks: [{ body: itemWords(would.forged) }],
+    };
+  return { name: `Give ${itemName(item)}`, tag: `to ${piece.kind === "greg" ? "Greg" : "this figure"}.` };
 }
 
-/** A plain card: a name and a line about it. */
-export function plainCard(title: string, text: string): HTMLElement {
-  return el("div", "k-col card", {}, el("b", "k-gold", { text: title }), text ? line(text) : null);
+/** Says what every kind of thing at the table is. */
+export function registerCards(): void {
+  register("figure", (raw) => {
+    const { id, flags } = flagsOf(raw);
+    if (!isFigureId(id)) return null;
+    const lore = flags.includes("lore");
+    return figureDesc(id, starsOf(flags), lore ? { lore } : { run: S.run });
+  });
+  register("piece", (raw) => {
+    const run = S.run;
+    const id = Number(raw);
+    const spot = run ? spotOf(run, id) : null;
+    const piece = run && spot ? pieceAt(run, spot) : null;
+    if (!run || !spot || !piece) return null;
+    const planning = S.mode === "plan" && run.phase === "plan" && run.choices.length === 0;
+    return figureDesc(piece.kind, piece.stars, {
+      items: piece.items,
+      fed: piece.fed,
+      run,
+      numbers: pieceNumbers(run, spot),
+      sellable: planning ? { id } : null,
+    });
+  });
+  register("foe", (raw) => {
+    const run = S.run;
+    const foe = run?.foe.figures.find((p) => p.seat === Number(raw));
+    if (!run || !foe) return null;
+    return figureDesc(foe.kind, foe.stars, {
+      items: foe.items,
+      whose: `${run.foe.who}'s`,
+      party: run.foe,
+      numbers: startNumbers(run.foe, foe.seat),
+    });
+  });
+  register("unit", (raw) => {
+    const run = S.run;
+    const u = fightUnits().find((x) => x.id === Number(raw));
+    if (!run || !u) return null;
+    return figureDesc(u.kind, u.stars, {
+      unit: u,
+      whose: u.side === 0 ? "Yours" : `${run.foe.who}'s`,
+      run: u.side === 0 ? run : null,
+      party: u.side === 1 ? run.foe : null,
+    });
+  });
+  register("trait", (raw) => {
+    const { id, flags } = flagsOf(raw);
+    if (!isTraitId(id)) return null;
+    const lore = flags.includes("lore");
+    return traitDesc(id, lore ? null : S.run, S.almanac, lore);
+  });
+  register("item", (raw) => {
+    const { id: head, flags } = flagsOf(raw);
+    const [id = "", at = "-1"] = head.split("@");
+    if (!isItemId(id)) return null;
+    const lore = flags.includes("lore");
+    return itemDesc(id, lore ? null : S.run, Number(at), lore);
+  });
+  register("boon", (id) => (isBoonId(id) ? boonDesc(id) : null));
+  register("room", (id) => (S.run ? roomDesc(Number(id), S.run) : null));
+  register("acorns", () => (S.run ? purseDesc(S.run) : null));
+  register("level", () => (S.run ? levelDesc(S.run) : null));
+  register("drop", (raw) => {
+    const [at = "", piece = ""] = raw.split(":");
+    return S.run ? dropDesc(S.run, Number(at), Number(piece)) : null;
+  });
 }
