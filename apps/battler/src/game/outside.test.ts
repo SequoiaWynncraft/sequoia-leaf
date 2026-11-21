@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
+import { BOSS_IDS, FIGURE_IDS, FIGURES } from "./content/figures.ts";
+import { FINISHED_IDS } from "./content/items.ts";
 import { MILESTONES, PAYOUT } from "./content/keepsakes.ts";
 import { TRAILS } from "./content/rooms.ts";
+import { TRAIT_IDS } from "./content/traits.ts";
 import {
   ALMANAC_VERSION,
   isLocked,
@@ -198,6 +200,18 @@ describe("keeping the almanac", () => {
     const text = saveAlmanac(almanac);
     expect(loadAlmanac(text)).toEqual(almanac);
     expect(loadAlmanac(saveAlmanac(newAlmanac()))).toEqual(newAlmanac());
+  });
+  test("an almanac with every figure, every finished item and every trait in it loads back the same", () => {
+    const almanac = {
+      ...newAlmanac(),
+      fielded: [...FIGURE_IDS],
+      threeStars: [...FIGURE_IDS],
+      forged: [...FINISHED_IDS],
+      topped: [...TRAIT_IDS],
+      opened: FIGURE_IDS.filter(isLocked),
+      bosses: TRAILS.map(() => BOSS_IDS.slice()),
+    };
+    expect(loadAlmanac(saveAlmanac(almanac))).toEqual(almanac);
   });
   test("it refuses nonsense", () => {
     const good = saveAlmanac(recordRun(newAlmanac(), WON).almanac);

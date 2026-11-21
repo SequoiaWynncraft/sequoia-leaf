@@ -9,7 +9,7 @@
 
 import { before, pickUp, pull } from "@sequoia-leaf/kit/cloud.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
-import { followLeaf, shutCard, start } from "@sequoia-leaf/kit/live.ts";
+import { keepLeaf, shutCard, start } from "@sequoia-leaf/kit/live.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
 import { balance, earn, grant, spend } from "@sequoia-leaf/kit/purse.ts";
@@ -371,8 +371,8 @@ async function boot(): Promise<void> {
     sendCard();
   });
   here("works");
-  // Opened on its own, nobody else is listening for the member's Leaf.
-  if (live && !inTown()) followLeaf();
+  // In the town, the town says when the member's Leaf changes; opened on its own, the yard listens itself.
+  if (live) keepLeaf();
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") save();
   });

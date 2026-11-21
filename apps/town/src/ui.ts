@@ -14,6 +14,7 @@ import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
 
 import { callToFire, goSit, hop, inTown, release, say, sitters } from "./actors.ts";
+import { redrawn } from "./board.ts";
 import { owned } from "./camp.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { named, registerCards, thingRef, wareRef } from "./cards.ts";
@@ -254,7 +255,17 @@ const clock = (ms: number): string => {
   return `${two(d.getHours())}:${two(d.getMinutes())}`;
 };
 
+/** The quest board: drawn whole again whenever its quests are no longer the ones it shows. */
 function quests(body: HTMLElement): () => void {
+  return redrawn(
+    () => guild.quests().map((q) => q.id),
+    () => notes(body),
+  );
+}
+
+/** A note for each quest on the board, in place of whatever was there; gives back how to bring them up to date. */
+function notes(body: HTMLElement): () => void {
+  body.replaceChildren();
   const parts = guild.quests().map((first) => {
     const fill = el("i");
     const count = el("span", "k-dim k-grow");
