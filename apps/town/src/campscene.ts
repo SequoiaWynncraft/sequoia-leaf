@@ -24,11 +24,13 @@ import {
   petsOf,
   type Placed,
   putAway,
+  setDown,
   setOut,
   standsBy,
   taken,
   TRAIL,
   turned,
+  unpackParcel,
   type Verdict,
   walkable,
   WHY_NOT,
@@ -62,7 +64,7 @@ import { closeCard, closePanel, showCard } from "./hud.ts";
 import { letter, post, waiting } from "./mail.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
-import { camp as mine } from "./record.ts";
+import { camp as mine, roomByTrail, sendToCamp } from "./record.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Hover, Scene, Stage } from "./stage.ts";
 import { footprint, thingOf, turnsOf } from "./things.ts";
@@ -194,9 +196,10 @@ function leafy(p: Prop): void {
 function winnings(): void {
   for (const id of trophies()) {
     const thing = thingOf(id);
-    if (!thing || mine.earned.includes(id)) continue;
+    // While the trail is full it is not handed over; it comes another time, when there is room.
+    if (!thing || mine.earned.includes(id) || !roomByTrail()) continue;
     mine.earned.push(id);
-    mine.parcels.push(id);
+    sendToCamp(id);
     hooks.feed(`Won: ${thing.name}. It is waiting by the trail.`, "gold");
   }
 }
@@ -225,6 +228,11 @@ export function makeCamp(
   let mate: MateCamp | null = null;
   /** The layout on show: the member's own record, or a copy of a guild-mate's. */
   let placed: Placed[] = mine.placed;
+  /**
+   * What is set down in the layout but still in the air on its way there: not drawn standing, in
+   * nobody's way and not to be picked up, until it lands or the flights are cleared away.
+   */
+  const aloft = new Set<Placed>();
   let lives: Live[] = [];
   const kept = new WeakMap<Placed, Live>();
   let scenery: Prop[] = [];
@@ -372,7 +380,7 @@ export function makeCamp(
   }
 
   function block(): void {
-    const on = taken(placed);
+    const on = taken(placed.filter((p) => !aloft.has(p)));
     for (let y = 0; y < CGH; y++)
       for (let x = 0; x < CGW; x++) {
         const n = y * CGW + x;
@@ -404,7 +412,7 @@ export function makeCamp(
   /** Everything is made again from the record: after a thing is moved, turned, put away or set out. */
   function rebuild(): void {
     lives = placed.flatMap((p) => {
-      const l = liveOf(p);
+      const l = aloft.has(p) ? null : liveOf(p);
       return l ? [l] : [];
     });
     flats = lives.filter((l) => l.thing.flat).map((l) => l.prop);
@@ -711,7 +719,9 @@ export function makeCamp(
   /** Everything in the air, everything about to happen and everything said is forgotten: the camp is being left. */
   function clear(): void {
     forgetLater("camp");
+    // What was on its way down is where it was going already.
     clearFlights();
+    aloft.clear();
     for (const s of seats) s.taken = false;
     guests = [];
     unpacking = false;
@@ -959,42 +969,52 @@ export function makeCamp(
     return best;
   }
 
-  /** Sets a thing down as near a spot as it will go, flying there from somewhere; into the tray if there is no room. */
-  function arrive(id: string, from: Pt, near: { x: number; y: number }, done: (() => void) | null = null): void {
+  /** Where a thing arriving near a square comes down: somewhere with air round it, or else anywhere it fits. */
+  const landing = (id: string, near: { x: number; y: number }): { x: number; y: number } | null =>
+    roomy(id, near) ?? freeSpot(placed, id, near);
+
+  /**
+   * Shows a thing that has just been set down (`at`, or `null` if it went into the tray) flying
+   * there from somewhere. The layout has it already, and holds its ground while it is in the air:
+   * the flight is only how it is seen arriving, so leaving, or a reload, meanwhile loses nothing.
+   */
+  function comeDown(id: string, at: Placed | null, from: Pt, done: (() => void) | null): void {
     const thing = thingOf(id);
-    const sprite = pictureOf(art, id, 0, 0);
-    if (!thing || !sprite) {
-      done?.();
-      return;
-    }
-    const spot = roomy(id, near) ?? freeSpot(placed, id, near);
-    if (!spot) {
-      mine.tray[id] = (mine.tray[id] ?? 0) + 1;
-      float(from.x, from.y - 14, `${thing.name}: in your tray`, CREAM, 2.2);
+    if (!at) {
+      if (thing) float(from.x, from.y - 14, `${thing.name}: in your tray`, CREAM, 2.2);
       changed();
       ui.tray();
       done?.();
       return;
     }
-    const where: Placed = { id, x: spot.x, y: spot.y, t: 0, s: 0 };
-    const foot = footOf(where) ?? from;
+    if (owner === null) changed();
+    const sprite = pictureOf(art, id, 0, 0);
+    const foot = footOf(at);
+    if (!thing || !sprite || !foot) {
+      rebuild();
+      done?.();
+      return;
+    }
+    aloft.add(at);
     sfx.pop();
     fling(sprite.c, from, foot, 0.6, 30, () => {
-      // Somebody may have put something there while it was in the air.
-      const at =
-        canPlace(placed, id, where.x, where.y, 0) === "ok"
-          ? where
-          : { ...where, ...(freeSpot(placed, id, near) ?? spot) };
-      placed.push(at);
+      aloft.delete(at);
       rebuild();
-      const f = footOf(at) ?? foot;
       csfx.thud();
-      puff(f.x, f.y, 5, "#966c4a");
-      sparkle(f.x, f.y - 8, 8, 6);
-      float(f.x, f.y - 20, thing.name, GOLD[2], 1.8);
-      if (owner === null) changed();
+      puff(foot.x, foot.y, 5, "#966c4a");
+      sparkle(foot.x, foot.y - 8, 8, 6);
+      float(foot.x, foot.y - 20, thing.name, GOLD[2], 1.8);
       done?.();
     });
+  }
+
+  /** Sets a thing down as near a spot as it will go, flying there from somewhere; into the tray if there is no room. */
+  function arrive(id: string, from: Pt, near: { x: number; y: number }, done: (() => void) | null = null): void {
+    if (!thingOf(id) || !pictureOf(art, id, 0, 0)) {
+      done?.();
+      return;
+    }
+    comeDown(id, setDown({ placed, tray: mine.tray }, id, landing(id, near)), from, done);
   }
 
   /** The parcels by the trail open one after another, and what was in each lands in the camp. */
@@ -1004,15 +1024,15 @@ export function makeCamp(
       return;
     unpacking = true;
     const next = (): void => {
-      const id = mine.parcels[0];
-      if (id === undefined || owner !== null) {
+      const from = PARCEL_AT[Math.min(PARCEL_AT.length, mine.parcels.length) - 1] ?? { x: CW - 14, y: 246 };
+      // Out of the parcels and into the camp in one step; then it is seen flying there.
+      const got = owner === null ? unpackParcel(mine, (id) => landing(id, { x: 37, y: 31 })) : null;
+      if (!got) {
         unpacking = false;
         return;
       }
-      const from = PARCEL_AT[Math.min(PARCEL_AT.length, mine.parcels.length) - 1] ?? { x: CW - 14, y: 246 };
-      mine.parcels.shift();
       puff(from.x, from.y - 4, 6, "#a35d3b");
-      arrive(id, { x: from.x, y: from.y }, { x: 37, y: 31 }, () => {
+      comeDown(got.id, got.at, { x: from.x, y: from.y }, () => {
         after(0.3, next);
       });
     };
