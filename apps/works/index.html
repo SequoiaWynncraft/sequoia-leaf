@@ -90,11 +90,64 @@
         font-size: 11px;
         color: #e0c39a;
       }
+      #order {
+        max-height: 60vh;
+        overflow: auto;
+      }
+      #order .standing {
+        margin-top: 8px;
+        padding-top: 6px;
+        border-top: 1px solid #5a296e;
+        font-size: 12px;
+      }
+      #order .standing.full {
+        color: #ffd98a;
+      }
+      #order button,
+      #plans button {
+        font: inherit;
+        font-size: 11px;
+        color: #fff3cf;
+        background: #54286a;
+        border: 1px solid #d49045;
+        margin-top: 4px;
+        padding: 3px 8px;
+        cursor: pointer;
+      }
+      #order button:disabled {
+        opacity: 0.4;
+      }
+      #power {
+        font-size: 11px;
+        color: #e0c39a;
+      }
+      #plans {
+        position: fixed;
+        left: max(8px, env(safe-area-inset-left));
+        top: 96px;
+        bottom: 150px;
+        width: min(330px, 80vw);
+        overflow: auto;
+        padding: 6px 10px;
+      }
+      #plans button {
+        display: block;
+        width: 100%;
+        text-align: left;
+      }
+      #plans .plan.owned {
+        border-color: #8bbf5a;
+        background: #2a1733;
+      }
+      #plans .plan.not-yet {
+        opacity: 0.5;
+      }
+
       #hint {
         position: fixed;
         left: 50%;
         transform: translateX(-50%);
-        bottom: calc(max(8px, env(safe-area-inset-bottom)) + 74px);
+        bottom: calc(max(8px, env(safe-area-inset-bottom)) + 134px);
         padding: 5px 12px;
         background: #1a0f1ecc;
         border-left: 3px solid #f5b95e;
@@ -174,6 +227,23 @@
           transform: translate(-50%, -70%);
         }
       }
+      @media (max-width: 700px) {
+        #order {
+          max-width: 58vw;
+          min-width: 0;
+          max-height: 34vh;
+        }
+        .tool {
+          min-width: 58px;
+          min-height: 40px;
+          padding: 3px 5px;
+          font-size: 11px;
+        }
+        #hint {
+          bottom: calc(max(8px, env(safe-area-inset-bottom)) + 200px);
+          font-size: 11px;
+        }
+      }
     </style>
   </head>
   <body>
@@ -181,7 +251,9 @@
     <div id="purse" class="panel">
       <div class="label">Coins</div>
       <div id="coins">0</div>
+      <div id="power"></div>
     </div>
+    <div id="plans" class="panel" hidden></div>
     <div id="order" class="panel"></div>
     <div id="hint"></div>
     <div id="tools"></div>
