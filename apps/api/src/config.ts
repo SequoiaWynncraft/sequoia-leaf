@@ -20,6 +20,12 @@ export interface Settings {
    * feed is not read and milestones pay nothing.
    */
   readonly sierraUrl: string | undefined;
+  /**
+   * A Discord webhook in the channel where Leaf keeps its rate card, which it
+   * posts once and then edits as the rates change. A secret: anyone with it can
+   * post there. Without it no rate card is kept.
+   */
+  readonly ratesWebhook: Redacted.Redacted | undefined;
   /** The bucket snapshots are copied to. Without it they stay on this machine only. */
   readonly offsite: BucketConfig | undefined;
   /** The `BACKUP_S3_*` variables that are set, when some but not all of them are. */
@@ -41,6 +47,7 @@ export const settings: Config.Config<Settings> = Config.all({
   backendUrl: Config.String("BACKEND_URL").pipe(Config.withDefault("https://api.seqwawa.com")),
   backendToken: optional(Config.Redacted("BACKEND_INTERNAL_TOKEN")),
   sierraUrl: optional(Config.String("SIERRA_URL")),
+  ratesWebhook: optional(Config.Redacted("LEAF_RATES_WEBHOOK_URL")),
   endpoint: optional(Config.String("BACKUP_S3_ENDPOINT")),
   bucket: optional(Config.String("BACKUP_S3_BUCKET")),
   accessKeyId: optional(Config.String("BACKUP_S3_ACCESS_KEY_ID")),
@@ -65,6 +72,7 @@ export const settings: Config.Config<Settings> = Config.all({
       backendUrl: read.backendUrl,
       backendToken: read.backendToken,
       sierraUrl: read.sierraUrl,
+      ratesWebhook: read.ratesWebhook,
       offsite,
       offsitePartlySet: offsite === undefined ? set : [],
     };

@@ -38,6 +38,7 @@ The server is configured with environment variables:
 | `BACKEND_URL`                 | `https://api.seqwawa.com` | sequoia-backend, for the credit feed and session check. |
 | `BACKEND_INTERNAL_TOKEN`      | none                      | sequoia-backend's `APP_INTERNAL_API_TOKEN`.             |
 | `SIERRA_URL`                  | none                      | Sierra's internal API, for the awards feed.             |
+| `LEAF_RATES_WEBHOOK_URL`      | none                      | A Discord webhook where Leaf keeps its rate card.       |
 | `BACKUP_S3_ENDPOINT`          | none                      | The S3 endpoint snapshots are copied to.                |
 | `BACKUP_S3_BUCKET`            | none                      | The bucket there.                                       |
 | `BACKUP_S3_ACCESS_KEY_ID`     | none                      | A key that may write to that bucket.                    |
@@ -45,7 +46,8 @@ The server is configured with environment variables:
 
 Without `BACKEND_INTERNAL_TOKEN` the server answers requests but does not read
 the credit feed, which is what local development wants. Without `SIERRA_URL` it
-does not read the awards feed, and achievement milestones pay nothing. Without all four
+does not read the awards feed, and achievement milestones pay nothing. Without
+`LEAF_RATES_WEBHOOK_URL` it keeps no rate card in Discord. Without all four
 `BACKUP_S3_*` variables, snapshots stay on the machine.
 
 ## Layout
@@ -314,6 +316,13 @@ as OpenTofu configuration. What the Coolify app is set up with:
   Sierra takes the same token.
 - **`SIERRA_URL=http://sequoia-sierra:8082`**, Sierra's internal API on the
   same network, for the awards feed.
+- **`LEAF_RATES_WEBHOOK_URL`**, a webhook in the Branchmasters' #lets-go-gambling.
+  At each start Leaf builds a rate card from the rules it runs with, posts it
+  there once and edits that message whenever the card changes (it remembers the
+  message in `announcements`). Add a line to `RULE_CHANGES` in
+  `packages/core/src/rules.ts` with each change to the rates, so the card says
+  what changed. Like the other secrets, it is set by hand in Coolify, runtime
+  only, and kept out of `infra/`.
 - **The network alias `sequoia-leaf`**, so other services on the server can
   reach it at `http://sequoia-leaf:3000`.
 - **The domain `https://leaf.seqwawa.com`**. Its DNS record points straight at

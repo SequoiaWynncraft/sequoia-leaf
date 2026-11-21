@@ -220,3 +220,35 @@ export function leafForLevel(level: number, rules: LevelRules): number {
   const raw = rules.firstLevelLeaf + (level - 2) * rules.leafGrowthPerLevel;
   return Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
 }
+
+/** A change to the rates, for members to read: the newest first in {@link RULE_CHANGES}. */
+export interface RuleChange {
+  /** The UTC day it went live, as `YYYY-MM-DD`. */
+  readonly date: string;
+  /** One or two sentences in plain words, such as a member would read in Discord. */
+  readonly text: string;
+}
+
+/**
+ * What changed in the rates and when, newest first. Leaf shows the latest few
+ * under its rate card in Discord, so add a line here with every change to the
+ * rules above that members would notice.
+ */
+export const RULE_CHANGES: readonly RuleChange[] = [
+  {
+    date: "2026-11-21",
+    text: "Wars pay half their war points, or the full war points when we take back our own claim. Raid milestones pay 1,000 to 50,000 Leaf and war milestones 300 to 15,000, with no XP. Raids still pay by gambits.",
+  },
+  {
+    date: "2026-11-19",
+    text: "Swap a daily or weekly quest: once a day each for free, then 100 Leaf.",
+  },
+  {
+    date: "2026-11-19",
+    text: "Timed quests take the third slot: a new one every 4 hours, open for 2, the same for the whole guild.",
+  },
+  {
+    date: "2026-11-19",
+    text: "Raids pay your own share of the party's season rating, by the gambits you took, instead of the whole party's.",
+  },
+];
