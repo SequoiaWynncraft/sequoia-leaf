@@ -5,7 +5,7 @@
  * mana and carries on until there is.
  */
 import { abilityNumber, specOf, type UnitKind } from "../content/figures.ts";
-import { cone, distance, line, neighbours } from "../hex.ts";
+import { cone, distance, line, neighbours, within } from "../hex.ts";
 import {
   alliesOf,
   brace,
@@ -76,6 +76,8 @@ function send(f: Fight, u: Unit, from: number, target: Unit, land: () => void, w
 }
 /** Touching hexes, with the middle one first. */
 const around = (cell: number): number[] => [cell, ...neighbours(cell)];
+/** Every hex within some steps of one, the middle one first: what an ability that spreads out covers. */
+const spread = (cell: number, steps: number): number[] => (steps === 1 ? around(cell) : [cell, ...within(cell, steps)]);
 
 /** Everything touching it: damage, and something on top for each one hurt. */
 function splash(
@@ -88,7 +90,7 @@ function splash(
 ): number {
   const foes = foesWithin(f, u.side, u.cell, steps);
   if (foes.length === 0) return -1;
-  say(f, u, steps === 1 ? around(u.cell) : [u.cell], ids(foes), 0);
+  say(f, u, spread(u.cell, steps), ids(foes), 0);
   let total = 0;
   for (const o of foes) {
     total += hurt(f, o, damage, kind, "ability", u);
@@ -335,14 +337,14 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   },
   crab40: (f, u, n) => {
     const foes = foesWithin(f, u.side, u.cell, 2);
-    say(f, u, [u.cell], ids(foes), 0);
+    say(f, u, spread(u.cell, 2), ids(foes), 0);
     shieldUp(f, u, powered(u, n("shield")), n("lasts"), u);
     for (const o of foes) taunt(f, o, n("taunt"), u);
     return true;
   },
   apothecary: (f, u, n) => {
     const dosed = alliesOf(f, u.side).filter((o) => distance(u.cell, o.cell) <= 2);
-    say(f, u, [u.cell], ids(dosed), 0);
+    say(f, u, spread(u.cell, 2), ids(dosed), 0);
     for (const o of dosed) {
       heal(f, o, powered(u, n("heal")), "ability", u);
       haste(f, o, n("haste"), n("lasts"), u);

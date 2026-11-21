@@ -1,0 +1,117 @@
+[
+  ["size", 1280, 800],
+  ["wait", 900],
+  ["eval", "(window.raid.fresh(), window.raid.hold(true), 'a new member, clock held')"],
+  ["wait", 700],
+  ["shot", "d-01-front-page"],
+  ["eval", "(window.raid.start(11, 0), window.raid.skip(1.2), 'first pick')"],
+  ["wait", 700],
+  ["shot", "d-02-first-pick"],
+  ["click", "[data-pick='0']"],
+  ["tap", 3, 3],
+  ["eval", "(window.raid.skip(1.6), 'first room, first nudge')"],
+  ["wait", 500],
+  ["shot", "d-03-first-room"],
+  ["eval", "(window.raid.taught(), window.raid.to('boon'), window.raid.skip(1.5))"],
+  ["wait", 700],
+  ["shot", "d-04-boon-pick"],
+  ["click", "[data-pick='1']"],
+  ["tap", 3, 3],
+  [
+    "eval",
+    "(window.raid.skip(1.5), window.raid.plan(), window.raid.acorns(24), window.raid.give('glorp'), window.raid.give('glorp'), window.raid.offer(0,'glorp'), window.raid.item('thorn'), window.raid.item('plume'), window.raid.skip(1.5), 'planning, staged for a merge and an item')"
+  ],
+  ["wait", 800],
+  ["eval", "(window.raid.skip(0.3), JSON.stringify(window.raid.state().view))"],
+  ["wait", 500],
+  ["shot", "d-05-planning"],
+  [
+    "eval",
+    "(()=>{const p=window.raid.party().find(p=>p.on==='board'); window.raid.grab(p.id, 95, 96); window.raid.skip(0.25); return 'holding '+p.kind})()"
+  ],
+  ["wait", 500],
+  ["shot", "d-06-figure-held"],
+  [
+    "eval",
+    "(()=>{window.raid.drop(); const p=window.raid.party().find(p=>p.on==='board'); window.raid.tap(p.id); window.raid.skip(0.2); return 'card for '+p.kind})()"
+  ],
+  ["wait", 500],
+  ["shot", "d-07-figure-card"],
+  [
+    "eval",
+    "(window.raid.drop(), document.querySelector('#traits .trait').dispatchEvent(new PointerEvent('pointerenter',{pointerType:'mouse'})), 'a trait')"
+  ],
+  ["wait", 700],
+  ["shot", "d-08-trait-card"],
+  [
+    "eval",
+    "(()=>{document.querySelector('#traits .trait').dispatchEvent(new PointerEvent('pointerleave',{pointerType:'mouse'})); const p=window.raid.party().find(p=>p.on==='board'); window.raid.hand(0, p.id); window.raid.skip(0.8); window.raid.hover(0, p.id); window.raid.skip(0.1); return 'a second component over '+p.kind})()"
+  ],
+  ["wait", 500],
+  ["shot", "d-09-item-combining"],
+  [
+    "eval",
+    "(()=>{const p=window.raid.party().find(p=>p.on==='board'); window.raid.drop(); window.raid.hand(0, p.id); window.raid.skip(0.4); return 'forged'})()"
+  ],
+  ["wait", 400],
+  ["shot", "d-10-item-forged"],
+  ["eval", "(window.raid.skip(1.5), 'before the merge')"],
+  ["click", "[data-offer='0']"],
+  ["tap", 3, 3],
+  ["eval", "(window.raid.skip(0.4), 'three hopping together')"],
+  ["wait", 400],
+  ["shot", "d-11-merge-hop"],
+  ["eval", "(window.raid.skip(0.2), 'the star pops')"],
+  ["wait", 400],
+  ["shot", "d-12-merge-star"],
+  ["eval", "(window.raid.skip(2), window.raid.plan(), window.raid.skip(1), window.raid.fight(), window.raid.tick(10))"],
+  ["wait", 400],
+  ["shot", "d-13-halves-meet"],
+  ["eval", "window.raid.busy(500)"],
+  ["wait", 400],
+  ["shot", "d-14-fight"],
+  ["eval", "(window.raid.tick(14), window.raid.busy(300))"],
+  ["wait", 400],
+  ["shot", "d-15-fight-later"],
+  [
+    "eval",
+    "(()=>{for(let i=0;i<4000&&!window.raid.state().fight.over;i++)window.raid.tick(1); window.raid.skip(1.9); return window.raid.state().mode})()"
+  ],
+  ["wait", 400],
+  ["shot", "d-16-takings"],
+  [
+    "eval",
+    "(window.raid.skip(9), window.raid.to('boss'), window.raid.arrive(), window.raid.skip(1.5), 'the boss is on its way in')"
+  ],
+  ["wait", 400],
+  ["shot", "d-17-boss-arriving"],
+  ["eval", "(window.raid.skip(3.5), 'the boss')"],
+  ["wait", 400],
+  ["shot", "d-18-boss"],
+  ["eval", "(window.raid.fight(), window.raid.tick(40), window.raid.busy(400))"],
+  ["wait", 400],
+  ["shot", "d-19-boss-fight"],
+  [
+    "eval",
+    "(window.raid.tick(3000), window.raid.skip(10), window.raid.to('end'), window.raid.skip(4), JSON.stringify(window.raid.state().mode))"
+  ],
+  ["wait", 900],
+  ["shot", "d-20-end-summary"],
+  ["click", "#again"],
+  ["tap", 3, 3],
+  [
+    "eval",
+    "(window.raid.skip(1), window.raid.to('front'), window.raid.skip(0.2), 'the front page with a raid laid out')"
+  ],
+  ["wait", 800],
+  ["shot", "d-21-front-page-again"],
+  ["eval", "(window.raid.page('almanac'), 'the almanac')"],
+  ["wait", 800],
+  ["shot", "d-22-almanac"],
+  ["eval", "(window.raid.page('looks'), 'table looks')"],
+  ["wait", 800],
+  ["shot", "d-23-table-looks"],
+  ["eval", "(window.raid.page('howto'), 'how to play')"],
+  ["wait", 800],
+  ["shot", "d-24-how-to-play"]
+]

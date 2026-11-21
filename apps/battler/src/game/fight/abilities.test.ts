@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { abilityNumber, type Stars, type UnitKind } from "../content/figures.ts";
 import type { ItemId } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
-import { cellAt, cone, distance, line, rowOf } from "../hex.ts";
+import { cellAt, cone, distance, line, neighbours, rowOf, within } from "../hex.ts";
 import type { Placed } from "../party.ts";
 import { fightOf, inOrder, onCell, only, ready, steps, stepUntil, still, unitOf } from "../testkit.ts";
 import { hurt, HZ } from "./core.ts";
@@ -593,5 +593,39 @@ describe("the forest's trouble", () => {
     expect(f.units.filter((o) => o.kind === "uncounted").length).toBe(n("bigcrab", "crabs"));
     // Too big to push about: stuns on it last half as long.
     expect(u.steady).toBe(true);
+  });
+});
+
+describe("what an ability says it covers, for whoever draws it", () => {
+  test("an ability that spreads two hexes names every hex within two, its own first", () => {
+    for (const kind of ["greg", "whitefox", "crab40", "apothecary"] as const) {
+      const { f, u } = scene(kind, [NEAR]);
+      const cast = only(steps(f, 1), "cast")[0];
+      expect(cast?.id).toBe(u.id);
+      expect(cast?.cells[0]).toBe(HOME);
+      expect(inOrder(cast?.cells ?? [])).toEqual(inOrder([HOME, ...within(HOME, 2)]));
+    }
+  });
+  test("an ability that only reaches whoever is touching names the hex and the six round it", () => {
+    const { f } = scene("slug", [NEAR]);
+    const cast = only(steps(f, 1), "cast")[0];
+    expect(inOrder(cast?.cells ?? [])).toEqual(inOrder([HOME, ...neighbours(HOME)]));
+  });
+  test("a falling toadstool says its spores as an ability, with who they caught", () => {
+    const f = fightOf([onCell("mud", 0, HOME), onCell("mud", 0, cellAt(3, 7))], [onCell("toadstool", 1, NEAR)]);
+    for (const o of f.units) if (o.side === 0) still(o);
+    const stool = unitOf(f, "toadstool", 1);
+    f.out = [];
+    hurt(f, stool, 99_999, "true", "item", null);
+    const cast = only(f.out, "cast")[0];
+    expect(cast?.id).toBe(stool.id);
+    expect(cast?.name).toBe("Spores");
+    expect(cast?.shape).toBe("ring");
+    expect(inOrder(cast?.cells ?? [])).toEqual(inOrder([NEAR, ...within(NEAR, 2)]));
+    expect(cast?.targets).toEqual([unitOf(f, "mud", 0).id]);
+    // The fall is said before the spores, and the spores before what they did.
+    const order = f.out.map((e) => e.t);
+    expect(order.indexOf("fall")).toBeLessThan(order.indexOf("cast"));
+    expect(order.indexOf("cast")).toBeLessThan(order.lastIndexOf("hit"));
   });
 });

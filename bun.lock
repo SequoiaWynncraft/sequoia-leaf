@@ -23,12 +23,9 @@
     },
     "apps/battler": {
       "name": "@sequoia-leaf/battler",
-      "devDependencies": {
-        "@types/bun": "1.4.4",
+      "dependencies": {
+        "@sequoia-leaf/kit": "workspace:*",
       },
-    },
-    "apps/hub-camp": {
-      "name": "@sequoia-leaf/hub-camp",
       "devDependencies": {
         "@types/bun": "1.4.4",
       },
@@ -44,6 +41,9 @@
     },
     "apps/works": {
       "name": "@sequoia-leaf/works",
+      "dependencies": {
+        "@sequoia-leaf/kit": "workspace:*",
+      },
       "devDependencies": {
         "@types/bun": "1.4.4",
       },
@@ -123,8 +123,6 @@
     "@sequoia-leaf/battler": ["@sequoia-leaf/battler@workspace:apps/battler"],
 
     "@sequoia-leaf/core": ["@sequoia-leaf/core@workspace:packages/core"],
-
-    "@sequoia-leaf/hub-camp": ["@sequoia-leaf/hub-camp@workspace:apps/hub-camp"],
 
     "@sequoia-leaf/kit": ["@sequoia-leaf/kit@workspace:packages/kit"],
 
