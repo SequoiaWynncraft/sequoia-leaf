@@ -311,7 +311,8 @@ events of a step (`FightEvent` in `fight/types.ts`) are plain objects:
 - `hit` (who, by whom, how much, how much of it a shield took, physical, magic or true, where it
   came from, whether it landed hard, health and shield after), `slip`
 - `cast` (whose ability, its name and shape, the hexes it covers, who it is aimed at, steps before
-  it lands)
+  it lands). An ability that spreads out from its owner names every hex it reaches, its own first;
+  a Toadstool's spores are said as a `cast` too, straight after its `fall`
 - `heal`, `shield`, `status` (on and off), `boost`, `item` (an item doing its trick)
 - `fall`, `rise` (Second Wind), `summon`, `trait`, `dusk`, `end`
 

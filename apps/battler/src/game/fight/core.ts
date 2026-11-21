@@ -530,8 +530,20 @@ function fall(f: Fight, u: Unit, by: Unit | null): void {
   f.standing[u.side]--;
   emit(f, { t: "fall", id: u.id, by: by?.id ?? -1, cell: u.cell });
   if (u.kind === "toadstool") {
+    // It puffs as it goes: said as an ability, so that a screen can show the spores spreading.
     const spores = powered(u, abilityNumber("toadstool", "damage", u.stars));
-    for (const o of foesWithin(f, u.side, u.cell, 2)) hurt(f, o, spores, "magic", "ability", u);
+    const caught = foesWithin(f, u.side, u.cell, 2);
+    emit(f, {
+      t: "cast",
+      id: u.id,
+      kind: u.kind,
+      name: specOf(u.kind).ability?.name ?? "",
+      shape: "ring",
+      cells: [u.cell, ...within(u.cell, 2)],
+      targets: caught.map((o) => o.id),
+      ticks: 0,
+    });
+    for (const o of caught) hurt(f, o, spores, "magic", "ability", u);
   }
 }
 
