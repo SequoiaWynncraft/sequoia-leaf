@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { playerId } from "@sequoia-leaf/core";
 
+import { API_POLICY } from "../src/http/headers.ts";
 import { PAGE_POLICY } from "../src/http/pages.ts";
 import { fakeBackend, sessionOf, testLeaf } from "./support.ts";
 
@@ -38,7 +39,7 @@ function leafServing(dir: string | undefined) {
 describe("the game's pages, with PUBLIC_DIR set", () => {
   it("lets a page use only what Leaf serves, its inline styles, drawn pictures and built-in font", () => {
     expect(PAGE_POLICY).toBe(
-      "default-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-src 'self'; frame-ancestors 'self'; connect-src 'self'",
+      "default-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-src 'self'; frame-ancestors 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'",
     );
   });
 
@@ -52,6 +53,7 @@ describe("the game's pages, with PUBLIC_DIR set", () => {
       expect(response.status).toBe(200);
       expect(response.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
       expect(response.headers.get("Content-Security-Policy")).toBe(PAGE_POLICY);
+      expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
       expect(response.headers.get("Cache-Control")).toBe("no-cache");
       // oxlint-disable-next-line no-await-in-loop -- one page after another
       expect(await response.text()).toContain("./index-meamkakx.js");
@@ -70,6 +72,25 @@ describe("the game's pages, with PUBLIC_DIR set", () => {
     expect(script.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
     expect(styles.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
     expect(styles.headers.get("Content-Security-Policy")).toBe(PAGE_POLICY);
+    await app.dispose();
+  });
+
+  it("decides what browsers keep by the path alone, never the query", async () => {
+    const app = leafServing(publicDir);
+
+    const answers = await Promise.all(
+      ["/play/town/index.html?/index-meamkakx.js", "/play/town/?x=/index-meamkakx.js"].map(async (path) => {
+        const response = await app.request(path);
+        return [path, response.status, response.headers.get("Cache-Control")];
+      }),
+    );
+    const script = await app.request("/play/town/index-meamkakx.js?v=2");
+
+    expect(answers).toEqual([
+      ["/play/town/index.html?/index-meamkakx.js", 200, "no-cache"],
+      ["/play/town/?x=/index-meamkakx.js", 200, "no-cache"],
+    ]);
+    expect(script.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
     await app.dispose();
   });
 
@@ -115,10 +136,31 @@ describe("the game's pages, with PUBLIC_DIR set", () => {
 
     expect(me.headers.get("Content-Type")).toBe("application/json");
     expect(await me.json()).toMatchObject({ player: { id: alice } });
-    expect(me.headers.get("Content-Security-Policy")).toBeNull();
     expect(nope.status).toBe(404);
     expect(await nope.json()).toEqual({ code: "not_found", message: "No such route" });
     expect(await health.json()).toEqual({ status: "ok" });
+    await app.dispose();
+  });
+
+  it("sends every API answer, errors and the JSON 404 included, with nosniff and a policy that allows nothing", async () => {
+    const app = leafServing(publicDir);
+
+    const answers = await Promise.all(
+      [
+        app.request("/v1/me", { headers: { Authorization: "Bearer alice-token" } }),
+        app.request("/v1/me"),
+        app.request("/v1/nope"),
+        app.request("/healthz"),
+        app.request("/openapi.json"),
+        app.request("/"),
+      ].map(async (answer) => {
+        const response = await answer;
+        return [response.headers.get("Content-Security-Policy"), response.headers.get("X-Content-Type-Options")];
+      }),
+    );
+
+    expect(API_POLICY).toBe("default-src 'none'; frame-ancestors 'none'");
+    expect(answers).toEqual(Array.from({ length: 6 }, () => [API_POLICY, "nosniff"]));
     await app.dispose();
   });
 });

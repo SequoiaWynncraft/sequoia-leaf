@@ -58,6 +58,11 @@ export class SaveTooLarge extends Schema.Error<SaveTooLarge>("SaveTooLarge")(ans
   httpApiStatus: 413,
 }) {}
 
+/** A request body longer than Leaf reads, refused unread. A save may be longer (`SaveTooLarge`). */
+export class BodyTooLarge extends Schema.Error<BodyTooLarge>("BodyTooLarge")(answer("body_too_large"), {
+  httpApiStatus: 413,
+}) {}
+
 /** A reroll Leaf refuses, changing nothing. */
 export class Refused extends Schema.Error<Refused>("Refused")(
   answer("not_current", "not_rerollable", "cost_changed", "insufficient_leaf"),

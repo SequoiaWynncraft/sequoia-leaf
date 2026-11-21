@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import { playerId } from "@sequoia-leaf/core";
+import { leaf, playerId } from "@sequoia-leaf/core";
 import { Effect, Option } from "effect";
 
 import { MAX_SKIN_BYTES, Mojang, MojangError } from "../src/game/mojang.ts";
-import { fakeBackend, type Fetcher, sessionOf, testLeaf } from "./support.ts";
+import { fakeBackend, type Fetcher, sessionOf, skinPng, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-00000000000b");
@@ -114,19 +114,31 @@ describe("Mojang, over the network", () => {
 
   it("serves a member a skin through Leaf, fetched over HTTPS from the address Mojang writes with http:", async () => {
     const backend = fakeBackend({ "alice-token": () => Response.json(sessionOf(alice, "Alice")) });
+    const sheet = skinPng({
+      skin: [224, 172, 140, 255],
+      hair: [92, 58, 33, 255],
+      shirt: [52, 110, 70, 255],
+      legs: [58, 62, 92, 255],
+    });
     const { asked, fetcher } = mojangAt({
       "https://sessionserver.mojang.com/session/minecraft/profile/1000000000000000000000000000000b": () =>
         Response.json(profile("Bob", { textures: { SKIN: { url: "http://textures.minecraft.net/texture/b0b5" } } })),
-      "https://textures.minecraft.net/texture/b0b5": () => new Response(png),
+      "https://textures.minecraft.net/texture/b0b5": () => new Response(sheet),
     });
-    const app = testLeaf({ now: 0 }, (url, init) =>
+    const services = testLeaf({ now: 0 }, (url, init) =>
       new URL(url).hostname === "backend.test" ? backend.fetcher(url, init) : fetcher(url, init),
-    ).app();
+    );
+    // Bob has earned Leaf, so Leaf knows him.
+    await services.post(
+      { kind: "earn", playerId: bob, amount: leaf(110), source: "raid", idempotencyKey: "raid:1" },
+      0,
+    );
+    const app = services.app();
 
     const response = await app.request(`/v1/game/skins/${bob}`, { headers: { Cookie: "seq_session=alice-token" } });
 
     expect(response.status).toBe(200);
-    expect(new Uint8Array(await response.arrayBuffer())).toEqual(png);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(sheet);
     expect(asked).toEqual([
       "https://sessionserver.mojang.com/session/minecraft/profile/1000000000000000000000000000000b",
       "https://textures.minecraft.net/texture/b0b5",

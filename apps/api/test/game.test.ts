@@ -4,13 +4,28 @@ import { leaf, MAX_SAVE_BYTES, type PlayerId, playerId } from "@sequoia-leaf/cor
 import { Layer, Schema } from "effect";
 
 import { Events, type PlayerEvent } from "../src/events/store.ts";
-import { StreamTuning } from "../src/http/handlers.ts";
+import { API_POLICY } from "../src/http/headers.ts";
+import { StreamTuning } from "../src/http/streams.ts";
 import type { questJson } from "../src/quests/json.ts";
-import { type Backend, DAY, fakeBackend, type FakeMojang, fakeMojang, HOUR, sessionOf, testLeaf } from "./support.ts";
+import {
+  type Backend,
+  DAY,
+  fakeBackend,
+  type FakeMojang,
+  fakeMojang,
+  type Fetcher,
+  HOUR,
+  MINUTE,
+  plainPng,
+  sessionOf,
+  skinPng,
+  testLeaf,
+} from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
 const carol = playerId("10000000-0000-0000-0000-000000000003");
+const dave = playerId("10000000-0000-0000-0000-000000000004");
 /** Wednesday 25 November 2026, 12:00 UTC. */
 const T0 = Date.UTC(2026, 10, 25, 12);
 const ORIGIN = "https://leaf.seqwawa.com";
@@ -32,6 +47,7 @@ const questLike: ReturnType<typeof questJson> = {
 
 const clock = { now: T0 };
 let backend: Backend;
+let fetcher: Fetcher;
 let mojang: FakeMojang;
 let services: ReturnType<typeof testLeaf>;
 let app: ReturnType<(typeof services)["app"]>;
@@ -44,6 +60,7 @@ beforeEach(() => {
     "carol-token": () => Response.json(sessionOf(carol, "Carol", null)),
   });
   backend = fake.backend;
+  fetcher = fake.fetcher;
   mojang = fakeMojang();
   services = testLeaf(clock, fake.fetcher, {}, { mojang: mojang.service });
   // A stream that looks for events every 5 ms, keeps quiet connections alive every 20 ms and closes after 300 ms.
@@ -118,6 +135,14 @@ function happened(player: PlayerId, event: PlayerEvent): Promise<void> {
   return services.run(Events.use((events) => events.insert(player, event, clock.now)));
 }
 
+/** Pays a player for a raid in the ledger, without its event, so Leaf knows them. */
+function paid(player: PlayerId): Promise<unknown> {
+  return services.post(
+    { kind: "earn", playerId: player, amount: leaf(110), source: "raid", idempotencyKey: `raid:0:${player}` },
+    clock.now,
+  );
+}
+
 function raided(player: PlayerId, amount: number, detail = "The Nameless Anomaly") {
   return happened(player, {
     type: "leaf_earned",
@@ -182,6 +207,30 @@ describe("signing in with the website's cookie", () => {
     expect(await visitorsBearer.json()).toMatchObject({ player: { id: alice } });
     // When neither lets the request in, the cookie's refusal is the answer.
     expect(bothRefused.status).toBe(403);
+  });
+
+  it("refuses a request with two session cookies, with or without a Bearer, and asks the backend nothing", async () => {
+    const twice = await get("/v1/game/me", { headers: { Cookie: "seq_session=alice-token; seq_session=bob-token" } });
+    const withBearer = await get("/v1/me", {
+      bearer: "alice-token",
+      headers: { Cookie: "seq_session=bob-token; theme=dark; seq_session=alice-token" },
+    });
+    const write = await send("PUT", "/v1/game/presence", {
+      origin: ORIGIN,
+      body: { place: "town" },
+      headers: { Cookie: "seq_session=alice-token;seq_session=alice-token" },
+    });
+
+    expect([twice.status, withBearer.status, write.status]).toEqual([401, 401, 401]);
+    expect(await codeOf(twice)).toBe("unauthorized");
+    expect(backend.calls).toEqual([]);
+    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM presence`)).toEqual([{ n: 0 }]);
+  });
+
+  it("finds the session cookie among others", async () => {
+    const response = await get("/v1/game/me", { headers: { Cookie: "theme=dark; seq_session=alice-token; lang=en" } });
+
+    expect(await response.json()).toMatchObject({ player: { id: alice } });
   });
 
   it("refuses a write with the cookie that has no Origin or another one, and changes nothing", async () => {
@@ -432,13 +481,38 @@ async function guild(path = "/v1/game/guild/events"): Promise<unknown> {
 }
 
 const BOBS_SKIN = "http://textures.minecraft.net/texture/b0b5";
-const bobsPng = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
-const newPng = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 4, 5, 6]);
+const BOBS_TEXTURE = "https://textures.minecraft.net/texture/b0b5";
+const bobsPng = skinPng({
+  skin: [224, 172, 140, 255],
+  hair: [92, 58, 33, 255],
+  shirt: [52, 110, 70, 255],
+  legs: [58, 62, 92, 255],
+});
+const newPng = skinPng({
+  skin: [198, 140, 104, 255],
+  hair: [30, 26, 24, 255],
+  shirt: [150, 60, 48, 255],
+  legs: [70, 52, 40, 255],
+});
+
+/** Gives a player a skin at Mojang, at its own address. */
+function wears(player: PlayerId, name: string, png: Uint8Array) {
+  const texture = `c0de${player.slice(-1)}`;
+  mojang.profiles.set(player, { name, skin: `http://textures.minecraft.net/texture/${texture}` });
+  mojang.textures.set(`https://textures.minecraft.net/texture/${texture}`, png);
+}
+
+/** The players whose skins Leaf keeps. */
+const keptSkins = () => services.query((sql) => sql`SELECT player_id FROM skins ORDER BY player_id`);
+
+/** The names Leaf keeps. */
+const keptNames = () => services.query((sql) => sql`SELECT username FROM player_names ORDER BY username`);
 
 describe("GET /v1/game/skins/{uuid}", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mojang.profiles.set(bob, { name: "Bob", skin: BOBS_SKIN });
-    mojang.textures.set("https://textures.minecraft.net/texture/b0b5", bobsPng);
+    mojang.textures.set(BOBS_TEXTURE, bobsPng);
+    await paid(bob);
   });
 
   it("serves a player's skin sheet from Mojang's texture server, fetched over HTTPS, for a day", async () => {
@@ -447,8 +521,10 @@ describe("GET /v1/game/skins/{uuid}", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("image/png");
     expect(response.headers.get("Cache-Control")).toBe("private, max-age=86400");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(response.headers.get("Content-Security-Policy")).toBe(API_POLICY);
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(bobsPng);
-    expect(mojang.calls).toEqual([`profile ${bob}`, "texture https://textures.minecraft.net/texture/b0b5"]);
+    expect(mojang.calls).toEqual([`profile ${bob}`, `texture ${BOBS_TEXTURE}`]);
   });
 
   it("serves it from the database within the day without asking Mojang", async () => {
@@ -463,7 +539,7 @@ describe("GET /v1/game/skins/{uuid}", () => {
   it("asks Mojang again after a day", async () => {
     await skin(bob);
     clock.now = T0 + DAY;
-    mojang.textures.set("https://textures.minecraft.net/texture/b0b5", newPng);
+    mojang.textures.set(BOBS_TEXTURE, newPng);
 
     expect(await skin(bob)).toEqual([200, newPng]);
   });
@@ -484,9 +560,11 @@ describe("GET /v1/game/skins/{uuid}", () => {
 
   it("has none for a player in a default skin, or one Mojang does not know", async () => {
     mojang.profiles.set(alice, { name: "Alice", skin: undefined });
+    await paid(carol);
 
     expect(await skin(alice)).toEqual([404, "no_skin"]);
     expect(await skin(carol)).toEqual([404, "no_skin"]);
+    expect(mojang.calls).toEqual([`profile ${alice}`, `profile ${carol}`]);
   });
 
   it("refuses a skin address on any other host, and never fetches it", async () => {
@@ -500,14 +578,54 @@ describe("GET /v1/game/skins/{uuid}", () => {
       mojang.profiles.set(bob, { name: "Bob", skin: address });
       // oxlint-disable-next-line no-await-in-loop -- each address in turn, on the same database
       expect(await skin(bob)).toEqual([404, "no_skin"]);
+      // A failure is remembered for an hour.
+      clock.now += HOUR;
     }
     expect(mojang.calls.filter((call) => call.startsWith("texture"))).toEqual([]);
+    expect(mojang.calls).toHaveLength(5);
   });
 
   it("refuses what Mojang serves that is not a PNG", async () => {
-    mojang.textures.set("https://textures.minecraft.net/texture/b0b5", new TextEncoder().encode("<html>"));
+    mojang.textures.set(BOBS_TEXTURE, new TextEncoder().encode("<html>"));
 
     expect(await skin(bob)).toEqual([404, "no_skin"]);
+  });
+
+  it("takes only a PNG whose header says 64 by 64, or 64 by 32 as older skins are", async () => {
+    const answers = [];
+    for (const png of [
+      plainPng(128, 128, [1, 2, 3, 255]),
+      plainPng(64, 63, [1, 2, 3, 255]),
+      plainPng(32, 64, [1, 2, 3, 255]),
+      bobsPng.slice(0, 40),
+      plainPng(64, 32, [1, 2, 3, 255]),
+    ]) {
+      mojang.textures.set(BOBS_TEXTURE, png);
+      // oxlint-disable-next-line no-await-in-loop -- each picture in turn, an hour apart, on the same database
+      answers.push(await skin(bob));
+      clock.now += HOUR;
+    }
+
+    expect(answers).toEqual([
+      [404, "no_skin"],
+      [404, "no_skin"],
+      [404, "no_skin"],
+      [404, "no_skin"],
+      [200, plainPng(64, 32, [1, 2, 3, 255])],
+    ]);
+  });
+
+  it("keeps and serves the picture only, up to the end of its last chunk, not what follows it", async () => {
+    const trailing = new TextEncoder().encode("<html><script>alert(1)</script>");
+    mojang.textures.set(BOBS_TEXTURE, new Uint8Array([...bobsPng, ...trailing]));
+
+    const served = await skin(bob);
+    clock.now = T0 + HOUR;
+    const kept = await skin(bob);
+
+    expect(served).toEqual([200, bobsPng]);
+    expect(kept).toEqual([200, bobsPng]);
+    expect(await services.query((sql) => sql`SELECT length(png) AS n FROM skins`)).toEqual([{ n: bobsPng.length }]);
   });
 
   it("takes a UUID with or without dashes, in any case, and refuses anything else", async () => {
@@ -523,11 +641,95 @@ describe("GET /v1/game/skins/{uuid}", () => {
       { player_id: bob, username: "Bob" },
     ]);
   });
+
+  it("has none for a player Leaf does not know, and does not ask Mojang about them", async () => {
+    wears(carol, "Carol", newPng);
+    wears(dave, "Dave", newPng);
+
+    expect(await skin(carol)).toEqual([404, "no_skin"]);
+    expect(await skin(dave)).toEqual([404, "no_skin"]);
+    expect(mojang.calls).toEqual([]);
+    expect(await keptSkins()).toEqual([]);
+    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM player_names`)).toEqual([{ n: 0 }]);
+  });
+
+  it("serves the asker's own skin, and that of anyone whose game said where they were in the last day", async () => {
+    backend.sessions["dave-token"] = () => Response.json(sessionOf(dave, "Dave", "RECRUIT"));
+    wears(alice, "Alice", newPng);
+    wears(dave, "Dave", newPng);
+    await arrive("works", { bearer: "dave-token" });
+
+    const own = await skin(alice);
+    const present = await skin(dave);
+    clock.now = T0 + DAY + MINUTE;
+    const gone = await skin(dave);
+
+    expect([own, present, gone]).toEqual([
+      [200, newPng],
+      [200, newPng],
+      [404, "no_skin"],
+    ]);
+  });
+
+  it("remembers for an hour that Mojang had no skin for a player, or could not be asked", async () => {
+    await paid(carol);
+    mojang.down = true;
+    await skin(bob);
+    await skin(carol);
+    mojang.down = false;
+    mojang.calls.length = 0;
+    clock.now = T0 + HOUR - 1;
+    const withinTheHour = [await skin(bob), await skin(carol)];
+    clock.now = T0 + HOUR;
+    const afterIt = [await skin(bob), await skin(carol)];
+    clock.now = T0 + HOUR + 1;
+    await skin(carol);
+
+    expect(withinTheHour).toEqual([
+      [404, "no_skin"],
+      [404, "no_skin"],
+    ]);
+    expect(afterIt).toEqual([
+      [200, bobsPng],
+      [404, "no_skin"],
+    ]);
+    expect(mojang.calls).toEqual([`profile ${bob}`, `texture ${BOBS_TEXTURE}`, `profile ${carol}`]);
+  });
+
+  it("asks Mojang once for requests about one player that arrive together", async () => {
+    mojang.latencyMs = 20;
+
+    const answers = await Promise.all([skin(bob), skin(bob), skin(bob)]);
+
+    expect(answers).toEqual([
+      [200, bobsPng],
+      [200, bobsPng],
+      [200, bobsPng],
+    ]);
+    expect(mojang.calls).toEqual([`profile ${bob}`, `texture ${BOBS_TEXTURE}`]);
+  });
+
+  it("removes the skins nobody asked for in 30 days when it keeps a new one", async () => {
+    wears(alice, "Alice", newPng);
+    await paid(carol);
+    wears(carol, "Carol", newPng);
+    await skin(bob);
+    clock.now = T0 + 20 * DAY;
+    await skin(alice);
+    clock.now = T0 + 30 * DAY;
+    const before = await keptSkins();
+    clock.now = T0 + 31 * DAY;
+    await skin(carol);
+
+    expect(before).toEqual([{ player_id: alice }, { player_id: bob }]);
+    expect(await keptSkins()).toEqual([{ player_id: alice }, { player_id: carol }]);
+  });
 });
 
 describe("GET /v1/game/guild/events", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mojang.profiles.set(bob, { name: "Bob", skin: undefined });
+    await paid(bob);
   });
 
   it("shows other members' raids and wars without what they paid", async () => {
@@ -592,6 +794,7 @@ describe("GET /v1/game/guild/events", () => {
   });
 
   it("names the member, from their own sign-in or from Mojang, and leaves out one no one can name yet", async () => {
+    await paid(carol);
     await raided(alice, 110);
     await raided(bob, 220);
     await raided(carol, 330);
@@ -604,6 +807,32 @@ describe("GET /v1/game/guild/events", () => {
       ],
     });
     expect(mojang.calls).toEqual([`profile ${bob}`, `profile ${carol}`]);
+  });
+
+  it("asks Mojang only about players Leaf knows, and leaves out the rest", async () => {
+    mojang.profiles.set(dave, { name: "Dave", skin: undefined });
+    await raided(dave, 110);
+
+    expect(await guild()).toEqual({ events: [] });
+    expect(mojang.calls).toEqual([]);
+  });
+
+  it("removes the names nobody asked for in 30 days when it learns a new one", async () => {
+    const erin = playerId("10000000-0000-0000-0000-00000000000e");
+    backend.sessions["dave-token"] = () => Response.json(sessionOf(dave, "Dave", "RECRUIT"));
+    backend.sessions["erin-token"] = () => Response.json(sessionOf(erin, "Erin", "RECRUIT"));
+    await get("/v1/game/me", { bearer: "bob-token" });
+    await get("/v1/game/me", { bearer: "erin-token" });
+    await happened(erin, { type: "level_up", data: { level: 3, leaf: 30 } });
+    clock.now = T0 + 20 * DAY;
+    // Erin's level is in the guild's news, which asks for her name.
+    await guild();
+    clock.now = T0 + 31 * DAY;
+    const before = await keptNames();
+    await get("/v1/game/me", { bearer: "dave-token" });
+
+    expect(before).toEqual([{ username: "Bob" }, { username: "Erin" }]);
+    expect(await keptNames()).toEqual([{ username: "Dave" }, { username: "Erin" }]);
   });
 
   it("asks Mojang for a name once, and leaves the event out while Mojang can't be reached", async () => {
@@ -643,8 +872,9 @@ describe("GET /v1/game/guild/events", () => {
 });
 
 describe("GET /v1/game/guild/events/stream", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mojang.profiles.set(bob, { name: "Bob", skin: undefined });
+    await paid(bob);
   });
 
   it("sends the guild's events as they happen, cut down, and nothing from before", async () => {
@@ -688,6 +918,20 @@ describe("GET /v1/game/guild/events/stream", () => {
     expect(text).toContain(": keep-alive\n\n");
   });
 
+  it("sends each of several streams what happened from where it started, once", async () => {
+    await raided(bob, 1, "First");
+    const fromStart = await get("/v1/game/guild/events/stream?after=0", { bearer: "alice-token" });
+    const fromNow = await get("/v1/game/guild/events/stream", { bearer: "bob-token" });
+    await raided(bob, 2, "Second");
+
+    const [early, late] = await Promise.all([readUntil(fromStart, "Second"), readUntil(fromNow, "Second")]);
+
+    expect(early.indexOf("First")).toBeLessThan(early.indexOf("Second"));
+    expect(early.match(/event: leaf_earned/g)).toHaveLength(2);
+    expect(late).not.toContain("First");
+    expect(late.match(/event: leaf_earned/g)).toHaveLength(1);
+  });
+
   it("refuses a Last-Event-ID that is not an event id", async () => {
     const response = await get("/v1/game/guild/events/stream", {
       cookie: "alice-token",
@@ -697,6 +941,64 @@ describe("GET /v1/game/guild/events/stream", () => {
     expect(response.status).toBe(400);
   });
 });
+
+/** What these tests read a stream with. */
+interface Reader {
+  read(): Promise<{ readonly done: boolean }>;
+  cancel(): Promise<void>;
+}
+
+/** A stream's reader once its first frame, which comes when it opens, has arrived. */
+async function opened(response: Response): Promise<Reader> {
+  const reader = response.body?.getReader();
+  if (reader === undefined) {
+    throw new Error("The response has no body");
+  }
+  await reader.read();
+  return reader;
+}
+
+/** Reads a stream to its end. */
+async function untilEnd(reader: Reader): Promise<"ended"> {
+  return (await reader.read()).done ? "ended" : untilEnd(reader);
+}
+
+/** Whether a stream ends within `ms` milliseconds. */
+function endsWithin(reader: Reader, ms: number): Promise<"ended" | "open"> {
+  return Promise.race([untilEnd(reader), Bun.sleep(ms).then(() => "open" as const)]);
+}
+
+describe("open streams", () => {
+  it("lets a member keep six open, their own and the guild's together, closing their oldest when a seventh opens", async () => {
+    // Streams that stay open for a minute unless closed.
+    const own = testLeaf(clock, fetcher, {}, { mojang: mojang.service });
+    const long = own.app(Layer.succeed(StreamTuning)({ pollMs: 5, heartbeatMs: 20, maxMs: 60_000 }));
+    const open = async (path: string, token: string) =>
+      opened(await long.request(path, { headers: { Authorization: `Bearer ${token}` } }));
+    const first = await open("/v1/me/events/stream", "alice-token");
+    const kept = [
+      await open("/v1/game/guild/events/stream", "alice-token"),
+      await open("/v1/me/events/stream", "alice-token"),
+      await open("/v1/game/guild/events/stream", "alice-token"),
+      await open("/v1/me/events/stream", "alice-token"),
+      await open("/v1/game/guild/events/stream", "alice-token"),
+    ];
+    const bobs = await open("/v1/game/guild/events/stream", "bob-token");
+    const seventh = await open("/v1/me/events/stream", "alice-token");
+
+    expect(await endsWithin(first, 1_000)).toBe("ended");
+    const rest = [...kept, seventh, bobs];
+    expect(await Promise.all(rest.map((reader) => endsWithin(reader, 100)))).toEqual(rest.map(() => "open"));
+    await Promise.all(rest.map((reader) => reader.cancel()));
+    await long.dispose();
+  });
+});
+
+/** A JSON body padded with a field Leaf ignores to exactly `bytes` long. */
+function paddedTo(body: object, bytes: number): string {
+  const text = JSON.stringify(body);
+  return `${text.slice(0, -1)},"pad":"${"x".repeat(bytes - text.length - 9)}"}`;
+}
 
 function arrive(place: string, sent: Sent = alicesPage) {
   return send("PUT", "/v1/game/presence", { ...sent, body: { place } });
@@ -732,5 +1034,23 @@ describe("PUT /v1/game/presence", () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ code: "invalid_place" });
+  });
+
+  it("does not read a body over 16 KiB, here or on any route but saves", async () => {
+    const over = paddedTo({ place: "town" }, 17 * 1024);
+    const within = paddedTo({ place: "town" }, 16 * 1024);
+
+    const presence = await send("PUT", "/v1/game/presence", { ...alicesPage, body: over });
+    const reroll = await send("POST", "/v1/me/quests/daily:1/reroll", {
+      ...alicesPage,
+      body: paddedTo({ leaf: 0 }, 17 * 1024),
+    });
+    const fits = await send("PUT", "/v1/game/presence", { ...alicesPage, body: within });
+
+    expect([over.length, within.length]).toEqual([17 * 1024, 16 * 1024]);
+    expect([presence.status, reroll.status, fits.status]).toEqual([413, 413, 200]);
+    expect(await presence.json()).toEqual({ code: "body_too_large", message: "Leaf reads a body of at most 16 KiB" });
+    expect(await codeOf(reroll)).toBe("body_too_large");
+    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM quest_rerolls`)).toEqual([{ n: 0 }]);
   });
 });

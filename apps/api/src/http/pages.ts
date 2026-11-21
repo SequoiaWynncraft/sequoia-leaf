@@ -8,7 +8,9 @@ import { AppConfig } from "../config.ts";
  * What the game's pages may do: load and frame only what Leaf serves, talk only
  * to Leaf, and be framed only by Leaf's own pages. Their styles are partly
  * inline, their pictures are partly drawn in the page, and their font is
- * built into their styles as a `data:` address.
+ * built into their styles as a `data:` address. A `<base>` may point only at
+ * Leaf, a form may be sent only to Leaf, and no plugin content loads: none of
+ * these falls back to `default-src`.
  */
 export const PAGE_POLICY = [
   "default-src 'self'",
@@ -18,13 +20,20 @@ export const PAGE_POLICY = [
   "frame-src 'self'",
   "frame-ancestors 'self'",
   "connect-src 'self'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
 ].join("; ");
 
 /** A file whose name carries a hash of what it holds, as `bun build` names a page's script and styles. */
 const HASHED = /\/index-[0-9a-z]+\.(?:js|css)$/;
 
-/** Hashed files never change under their name; anything else is asked about again each time. */
-function cacheControl(path: string): string {
+/**
+ * Hashed files never change under their name; anything else is asked about
+ * again each time. Decided by the path alone: a query names no other file.
+ */
+function cacheControl(url: string): string {
+  const [path = ""] = url.split("?", 1);
   return HASHED.test(path) ? "public, max-age=31536000, immutable" : "no-cache";
 }
 

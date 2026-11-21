@@ -23,23 +23,29 @@ export default Effect.gen(function* () {
   `;
 
   // Players' skin sheets as Mojang last served them, kept for a day and kept
-  // longer for when Mojang can't be reached.
+  // longer for when Mojang can't be reached. `asked_at` is when one was last
+  // asked for: those not asked for in 30 days are removed.
   yield* sql`
     CREATE TABLE skins (
       player_id  TEXT    PRIMARY KEY,
       png        BLOB    NOT NULL,
-      fetched_at INTEGER NOT NULL
+      fetched_at INTEGER NOT NULL,
+      asked_at   INTEGER NOT NULL
     ) STRICT
   `;
+  yield* sql`CREATE INDEX skins_by_asked ON skins (asked_at)`;
 
-  // Players' Minecraft names, for showing members by name in the guild's news.
+  // Players' Minecraft names, for showing members by name in the guild's news,
+  // removed like skins when not asked for in 30 days.
   yield* sql`
     CREATE TABLE player_names (
       player_id  TEXT    PRIMARY KEY,
       username   TEXT    NOT NULL,
-      updated_at INTEGER NOT NULL
+      updated_at INTEGER NOT NULL,
+      asked_at   INTEGER NOT NULL
     ) STRICT
   `;
+  yield* sql`CREATE INDEX player_names_by_asked ON player_names (asked_at)`;
 
   // Where each member who has the game open was last seen.
   yield* sql`

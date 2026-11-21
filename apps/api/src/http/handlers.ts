@@ -17,12 +17,13 @@ import {
   saveSlot,
   timedWindowAt,
 } from "@sequoia-leaf/core";
-import { ByteSize, Clock, Context, Duration, Effect, Layer, Option, Redacted, Ref, Schedule, Stream } from "effect";
+import { ByteSize, Clock, Duration, Effect, Layer, Option, Redacted, Ref, Schedule, Stream } from "effect";
 import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder, HttpApiError, HttpApiSecurity } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 
 import {
+  BodyLimit,
   CurrentIdentity,
   LeafApi,
   PresenceBodyErrors,
@@ -34,6 +35,7 @@ import {
 } from "../api/api.ts";
 import {
   BadOrigin,
+  BodyTooLarge,
   IdentityUnavailable,
   InternalError,
   Invalid,
@@ -58,6 +60,7 @@ import { Ledger } from "../ledger/store.ts";
 import { questJson } from "../quests/json.ts";
 import { rerollQuestFor } from "../quests/reroll.ts";
 import { Quests } from "../quests/store.ts";
+import { GuildFeed, OpenStreams, sseFrame, StreamTuning } from "./streams.ts";
 
 /** How far back the list of finished quests reaches. */
 const RECENTLY_COMPLETED_MS = 2 * DAY_MS;
@@ -65,24 +68,10 @@ const RECENTLY_COMPLETED_MS = 2 * DAY_MS;
 const EVENT_PAGE = 100;
 /** How many events `GET /events` returns when the client does not say where it is. */
 const LATEST_EVENTS = 50;
-/** The most guild events one answer or one look by a stream returns. */
-const GUILD_EVENT_PAGE = 200;
+/** The largest body Leaf reads, but for a save's. */
+const MAX_BODY = ByteSize.kibibytes(16);
 /** The largest save body Leaf reads at all. The save itself is checked against `MAX_SAVE_BYTES`. */
 const MAX_SAVE_BODY = ByteSize.bytes(2 * MAX_SAVE_BYTES);
-
-/** How the event stream paces itself. Tests shorten these. */
-export interface StreamTuning {
-  /** How often an open stream looks for new events. */
-  readonly pollMs: number;
-  /** A stream writes a comment this often, so proxies keep a quiet connection open. */
-  readonly heartbeatMs: number;
-  /** A stream is closed after this long. The client reconnects, which checks its session again. */
-  readonly maxMs: number;
-}
-
-export const StreamTuning = Context.Reference<StreamTuning>("leaf/StreamTuning", {
-  defaultValue: () => ({ pollMs: 2_000, heartbeatMs: 20_000, maxMs: 15 * 60_000 }),
-});
 
 /** What a member is told when Leaf refuses a reroll, by the refusal's code. */
 const REFUSALS = {
@@ -122,6 +111,14 @@ function levelJson(xp: number) {
 const SAFE_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD"]);
 
 /**
+ * How many session cookies a `Cookie` header carries. A browser sends two
+ * when another `seqwawa.com` site has set one of its own beside the website's.
+ */
+function sessionCookies(header: string | undefined): number {
+  return (header ?? "").split(/[;,]/).filter((pair) => pair.split("=", 1)[0]?.trim() === SessionCookie.key).length;
+}
+
+/**
  * Lets in current guild members with a Sequoia session, and provides who they
  * are. The session comes as a Bearer header, as the mod sends it, or as the
  * website's cookie, as a browser sends it to Leaf's own pages; both are checked
@@ -135,6 +132,18 @@ export const SessionLive = Layer.effect(
     const { publicOrigin } = yield* AppConfig;
     const bearerToken = HttpApiBuilder.securityDecode(HttpApiSecurity.bearer);
     const cookieToken = HttpApiBuilder.securityDecode(SessionCookie);
+
+    // With two session cookies a browser could be signed in as someone another
+    // site chose, so neither is believed, and neither is sent to the backend.
+    const oneSessionCookie = Effect.gen(function* () {
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      if (sessionCookies(request.headers["cookie"]) > 1) {
+        return yield* new Unauthorized({
+          code: "unauthorized",
+          message: "Your browser sent two Sequoia sessions. Sign in again",
+        });
+      }
+    });
 
     /** Who a session belongs to, when they may come in. */
     const admit = Effect.fnUntraced(function* (token: string) {
@@ -162,15 +171,17 @@ export const SessionLive = Layer.effect(
     // turn, which comes last, is the one that refuses: alone, either way of
     // signing in is checked there. The Bearer's turn only lets in a request that
     // came with both: a Bearer that would let it in on its own wins, and otherwise
-    // the cookie decides.
+    // the cookie decides. A request with two session cookies is refused on both turns.
     return Session.of({
       bearer: Effect.fnUntraced(function* (httpEffect, { credential }) {
+        yield* oneSessionCookie;
         if (Redacted.value(yield* cookieToken) === "") {
           return yield* new Unauthorized({ code: "unauthorized", message: "Sign in with your Sequoia account" });
         }
         return yield* Effect.provideService(httpEffect, CurrentIdentity, yield* admit(Redacted.value(credential)));
       }),
       cookie: Effect.fnUntraced(function* (httpEffect, { credential }) {
+        yield* oneSessionCookie;
         const cookie = Redacted.value(credential);
         if (cookie === "") {
           const bearer = Redacted.value(yield* bearerToken);
@@ -203,6 +214,21 @@ const isBodyTooLarge = (defect: unknown) =>
   HttpServerError.isHttpServerError(defect) &&
   defect.reason instanceof HttpServerError.RequestParseError &&
   defect.reason.reason === "BodyTooLarge";
+
+/**
+ * A body is read only up to 16 KiB: one larger gets `body_too_large` unread.
+ * Saves read up to their own limit, which `SaveBodyErrorsLive` sets inside this one.
+ */
+export const BodyLimitLive = Layer.succeed(BodyLimit)((httpEffect) =>
+  httpEffect.pipe(
+    Effect.provideService(HttpServerRequest.MaxBodySize, MAX_BODY),
+    Effect.catchDefect((defect) =>
+      isBodyTooLarge(defect)
+        ? Effect.fail(new BodyTooLarge({ code: "body_too_large", message: "Leaf reads a body of at most 16 KiB" }))
+        : Effect.die(defect),
+    ),
+  ),
+);
 
 /**
  * A save body is read only up to twice what a save may hold: one larger gets
@@ -267,6 +293,8 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
     const ledger = yield* Ledger;
     const quests = yield* Quests;
     const events = yield* Events;
+    const streams = yield* OpenStreams;
+    const { pollMs } = yield* StreamTuning;
     return (
       handlers
         .handle("account", () =>
@@ -368,12 +396,17 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
         // a client that sends none gets only what happens from now on.
         .handle("stream", ({ query }) =>
           Effect.flatMap(CurrentIdentity, ({ playerId }) =>
-            eventStreamFrom(events, query.after, (after) =>
-              events.after(playerId, after, EVENT_PAGE).pipe(
-                Effect.map((found) => ({
-                  frames: found.map((event) => sseFrame(event.id, event.type, eventJsonText(event))).join(""),
-                  position: found.at(-1)?.id ?? after,
-                })),
+            eventStreamFrom(events, streams, query.after, (from) =>
+              polled(
+                (after) =>
+                  events.after(playerId, after, EVENT_PAGE).pipe(
+                    Effect.map((found) => ({
+                      frames: found.map((event) => sseFrame(event.id, event.type, eventJsonText(event))).join(""),
+                      position: found.at(-1)?.id ?? after,
+                    })),
+                  ),
+                from,
+                pollMs,
               ),
             ),
           ),
@@ -389,35 +422,12 @@ interface Look {
 }
 
 /**
- * Answers a request for an event stream. A client that reconnects sends the
- * last id it saw as `Last-Event-ID` (browsers do this by themselves), or as
- * `?after=`, and gets what it missed; a client that sends none gets only what
- * happens from now on. `look` finds the events after a position.
+ * The frames found by looking for what happened after a position every
+ * `pollMs`, starting at once. It looks in the database rather than being told,
+ * so it also sees events written by another process: during a deploy the old
+ * and the new container run side by side.
  */
-const eventStreamFrom = (
-  events: Events["Service"],
-  after: string | undefined,
-  look: (after: number) => Effect.Effect<Look>,
-) =>
-  Effect.gen(function* () {
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    const resumeFrom = eventId(request.headers["last-event-id"] ?? after);
-    if (resumeFrom === null) {
-      return yield* invalidAfter;
-    }
-    const from = resumeFrom ?? (yield* events.latestId);
-    return HttpServerResponse.stream(eventStream(look, from, yield* StreamTuning), {
-      contentType: "text/event-stream",
-      headers: { "cache-control": "no-cache", connection: "keep-alive" },
-    });
-  });
-
-/**
- * The frames of one event stream. It finds new events by looking in the
- * database every `pollMs`, not by being told, so it also sees events written by
- * another process: during a deploy the old and the new container run side by side.
- */
-const eventStream = (look: (after: number) => Effect.Effect<Look>, from: number, tuning: StreamTuning) =>
+const polled = (look: (after: number) => Effect.Effect<Look>, from: number, pollMs: number) =>
   Stream.unwrap(
     Effect.gen(function* () {
       const position = yield* Ref.make(from);
@@ -426,28 +436,38 @@ const eventStream = (look: (after: number) => Effect.Effect<Look>, from: number,
         yield* Ref.set(position, found.position);
         return found.frames;
       });
-      const fresh = Stream.fromEffectSchedule(next, Schedule.spaced(Duration.millis(tuning.pollMs))).pipe(
+      return Stream.fromEffectSchedule(next, Schedule.spaced(Duration.millis(pollMs))).pipe(
         Stream.filter((frames) => frames !== ""),
-      );
-      // Clients ignore comments; proxies see traffic and keep a quiet connection open.
-      const keepAlive = Stream.tick(Duration.millis(tuning.heartbeatMs)).pipe(
-        Stream.drop(1),
-        Stream.as(": keep-alive\n\n"),
-      );
-      // The first frame carries the starting position as its id, so a client whose
-      // stream ends before any event arrives still reconnects from here and gets
-      // what happened in between.
-      return Stream.make(`id: ${from}\nretry: 3000\n\n`).pipe(
-        Stream.concat(Stream.merge(fresh, keepAlive)),
-        Stream.interruptWhen(Effect.sleep(Duration.millis(tuning.maxMs))),
-        Stream.encodeText,
       );
     }),
   );
 
-function sseFrame(id: number, type: string, json: string): string {
-  return `event: ${type}\ndata: ${json}\nid: ${id}\n\n`;
-}
+/**
+ * Answers a request for an event stream. A client that reconnects sends the
+ * last id it saw as `Last-Event-ID` (browsers do this by themselves), or as
+ * `?after=`, and gets what it missed; a client that sends none gets only what
+ * happens from now on. `frames` are the stream's frames from a position. It is
+ * counted among the member's open streams.
+ */
+const eventStreamFrom = (
+  events: Events["Service"],
+  streams: OpenStreams["Service"],
+  after: string | undefined,
+  frames: (from: number) => Stream.Stream<string>,
+) =>
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const resumeFrom = eventId(request.headers["last-event-id"] ?? after);
+    if (resumeFrom === null) {
+      return yield* invalidAfter;
+    }
+    const from = resumeFrom ?? (yield* events.latestId);
+    const { playerId } = yield* CurrentIdentity;
+    return HttpServerResponse.stream(streams.open(playerId, from, frames(from)), {
+      contentType: "text/event-stream",
+      headers: { "cache-control": "no-cache", connection: "keep-alive" },
+    });
+  });
 
 const GameHelloHandlers = HttpApiBuilder.group(LeafApi, "gameHello", (handlers) =>
   Effect.gen(function* () {
@@ -470,14 +490,8 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
     const skins = yield* Skins;
     const names = yield* PlayerNames;
     const presence = yield* Presence;
-
-    /** Events across the guild after a position, as the guild sees them. */
-    const guildAfter = (after: number) =>
-      Effect.gen(function* () {
-        const found = yield* events.everyoneAfter(GUILD_EVENT_TYPES, after, GUILD_EVENT_PAGE);
-        const shown = guildEvents(found, yield* names.of(found.map((event) => event.playerId)));
-        return { found, shown };
-      });
+    const guild = yield* GuildFeed;
+    const streams = yield* OpenStreams;
 
     return (
       handlers
@@ -562,7 +576,8 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             if (playerId === undefined) {
               return yield* new Invalid({ code: "invalid_uuid", message: "That is not a Minecraft UUID" });
             }
-            const sheet = yield* skins.sheet(playerId, yield* Clock.currentTimeMillis);
+            const { playerId: asker } = yield* CurrentIdentity;
+            const sheet = yield* skins.sheet(playerId, asker, yield* Clock.currentTimeMillis);
             if (Option.isNone(sheet)) {
               return yield* new Missing({ code: "no_skin", message: "No skin for that player" });
             }
@@ -589,23 +604,13 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
                         ),
                       ),
                     )
-                : (yield* guildAfter(after)).shown;
+                : (yield* guild.after(after)).shown;
             return HttpServerResponse.text(`{"events":[${shown.map((event) => event.json).join(",")}]}`, {
               contentType: "application/json",
             });
           }),
         )
-        .handle("guildStream", ({ query }) =>
-          eventStreamFrom(events, query.after, (after) =>
-            guildAfter(after).pipe(
-              Effect.map(({ found, shown }) => ({
-                frames: shown.map((event) => sseFrame(event.id, event.type, event.json)).join(""),
-                // An event left out, such as one whose member Mojang could not name, is passed over.
-                position: found.at(-1)?.id ?? after,
-              })),
-            ),
-          ),
-        )
+        .handle("guildStream", ({ query }) => eventStreamFrom(events, streams, query.after, guild.frames))
         .handle("presence", ({ payload }) =>
           Effect.gen(function* () {
             const identity = yield* CurrentIdentity;
@@ -623,7 +628,15 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
 /** The API's routes and the implementations of its middleware. */
 export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.json" }).pipe(
   Layer.provide([SystemHandlers, MeHandlers, GameHelloHandlers, GameHandlers]),
-  Layer.provide([SessionLive, RerollBodyErrorsLive, SaveBodyErrorsLive, PresenceBodyErrorsLive, UnexpectedLive]),
+  Layer.provide([OpenStreams.layer, GuildFeed.layer]),
+  Layer.provide([
+    SessionLive,
+    BodyLimitLive,
+    RerollBodyErrorsLive,
+    SaveBodyErrorsLive,
+    PresenceBodyErrorsLive,
+    UnexpectedLive,
+  ]),
 );
 
 /** Any request no route takes, answered in the same `{ "code", "message" }` shape as every other error. */
