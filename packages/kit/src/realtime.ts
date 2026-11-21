@@ -261,10 +261,12 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         l.tracks.clear();
         for (const r of m.roster) l.people.set(r.id, r);
         shown = l;
-        ears.welcome?.(m.you, m.room, m.roster);
-        // Said again at once: this room has not heard from the player on this connection yet.
+        // Nothing has been sent on this connection yet: whatever the player says next goes at once.
         sent = null;
-        if (motion) want(motion);
+        ears.welcome?.(m.you, m.room, m.roster);
+        // Said again, unless whoever heard the welcome has just said it: this room has not heard
+        // from the player on this connection yet.
+        if (motion && sent === null) want(motion);
         return;
       }
       case "joined":

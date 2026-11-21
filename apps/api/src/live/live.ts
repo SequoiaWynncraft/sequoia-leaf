@@ -32,7 +32,7 @@ export const LiveTuning = Context.Reference<LiveTuning>("leaf/LiveTuning", {
   defaultValue: () => ({ recheckMs: 30_000, graceMs: 10_000, mostPlayers: 1000 }),
 });
 
-/** The longest text frame Leaf reads, in characters. Every message the game sends is far shorter. */
+/** The longest text frame Leaf reads, in UTF-16 code units (as JavaScript counts a string's length). Every message the game sends is far shorter. */
 const MOST_TEXT = 512;
 /** How many frames may wait to go to one connection before it is taken to be stuck and closed. */
 const MOST_WAITING = 1024;
@@ -378,11 +378,6 @@ export class Live extends Context.Service<
         Effect.gen(function* () {
           const socket = yield* Effect.orDie(upgrade);
           const pipe = new Pipe(yield* Queue.unbounded<Frame>(), yield* socket.writer);
-          // Opened as Leaf began to stop, after its farewell: told to come back, and never anybody's.
-          if (stopping) {
-            yield* pipe.closeNow(CLOSE.restart, "restart");
-            return null;
-          }
           // Whatever ends this connection, this decides what becomes of the player, and only while it
           // is still theirs: signed out, they leave at once; otherwise they wait out their grace.
           yield* Effect.addFinalizer(() =>
@@ -398,6 +393,13 @@ export class Live extends Context.Service<
             ),
           );
           const now = yield* Clock.currentTimeMillis;
+          // From here to the end, nothing waits: whether Leaf is stopping is asked in the same step
+          // as the connection is made the player's. Opened after the farewell, it is told to come
+          // back, and is never anybody's.
+          if (stopping) {
+            yield* pipe.closeNow(CLOSE.restart, "restart");
+            return null;
+          }
           p.pipe?.close(CLOSE.replaced, "replaced");
           p.pipe = pipe;
           p.identity = identity;
