@@ -13,6 +13,8 @@ const Server = Layer.unwrap(
       Layer.provide(
         BunHttpServer.layer({
           port,
+          // No route reads more than a save's body; Leaf refuses anything near this itself.
+          maxRequestBodySize: 1024 * 1024,
           // Seconds. An event stream writes a keep-alive every 20, well inside this.
           idleTimeout: 60,
           // A deploy stops the old container with SIGTERM and kills it ten seconds later. Requests in

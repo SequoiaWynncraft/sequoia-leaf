@@ -59,6 +59,10 @@ does not read the awards feed, and achievement milestones pay nothing. Without
 `BACKUP_S3_*` variables, snapshots stay on the machine. Without `PUBLIC_DIR`
 there is no `/play` and nothing at `/`; the image sets it.
 
+`PUBLIC_ORIGIN` must be an `http` or `https` origin with nothing after the
+host and port, such as `https://leaf.seqwawa.com`; anything else stops the
+server at start with an error that names the variable but not its value.
+
 `GAME_SIGN_IN_URL` defaults to the website's sign-in,
 `https://api.seqwawa.com/auth/web/start?return_to=`; the game adds its own
 address after `return_to=`. Only `GET /v1/game/hello` reads `GAME_LEAF_SPENDING`.
@@ -162,6 +166,18 @@ including 404 `not_found` for a route that does not exist and 500
 cause. The one exception is a body sent with a `Content-Type` other than JSON,
 which gets a plain 415.
 
+A route reads at most 16 KiB of a request's body, and answers a longer one
+with 413 `body_too_large` without reading it; only saves may be longer (see
+[The game's routes](#the-games-routes)). The server itself takes no body over
+1 MiB.
+
+Every answer carries `X-Content-Type-Options: nosniff`, so browsers never take
+it for another type than the one it was sent as. Every answer but the game's
+pages, the JSON, the skins and the streams, also carries
+`Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`: a
+browser that opens one loads and runs nothing with it, and no page may frame
+it (`API_POLICY` in `apps/api/src/http/headers.ts`).
+
 The routes are declared once, as an Effect `HttpApi` in
 `apps/api/src/api/api.ts`, with the shape of every answer and error in
 `schemas.ts` and `errors.ts` beside it. The server implements that declaration,
@@ -195,6 +211,12 @@ A request with both is let in by its Bearer header when that would let it in on
 its own, and is otherwise judged by the cookie alone. Either way, the server
 asks sequoia-backend who the session belongs to, and remembers a confirmed
 session for a minute. Only current guild members are let in.
+
+A request that carries the `seq_session` cookie more than once gets 401
+`unauthorized`, Bearer header or not, and the backend is not asked about it. A
+browser sends two when another `seqwawa.com` site has set a cookie of that
+name beside the website's, which could sign the game in as someone else;
+signing in on the website again sets things right.
 
 Each quest in `/v1/me/quests` lists its `goals`, every way to finish it, each
 with its own `type`, `raid`, `title`, `progress` and `target`. Its `objective`,
@@ -294,6 +316,8 @@ react to `quest_completed`.
   `EventSource` does this by itself.
 - The server closes a stream after 15 minutes. Reconnect the same way; this is
   when the session is checked again.
+- A member may have six streams open at once, this one and the guild's
+  (below) together. Opening a seventh closes their oldest.
 - A stream carries a comment line every 20 seconds to keep the connection
   open. Ignore lines that start with `:`.
 
@@ -341,14 +365,25 @@ place, with no history.
   413 `save_too_large`. A body over twice that is not read at all.
 
 **Skins.** `GET /v1/game/skins/{uuid}` takes a Minecraft UUID with or without
-dashes, or gets 400 `invalid_uuid`. Leaf asks Mojang's session server for the
-player's profile and fetches the skin it names, but only from
-`textures.minecraft.net/texture/<hex>`, over HTTPS (Mojang writes these
-addresses with `http:`). Each request to Mojang has five seconds, and a skin
-may be at most 64 KiB and must be a PNG. Leaf keeps the skin in the database
-for a day; when Mojang can't be reached, it serves the one it kept, however
-old. A player in a default skin, one Mojang does not know, or one whose skin
-Leaf has never been able to get gets 404 `no_skin`. A skin is sent with
+dashes, or gets 400 `invalid_uuid`. It serves only the skins of players Leaf
+knows: the member asking, anyone with an account in the ledger, and anyone
+whose game said where they were in the last day (see Presence). Any other
+player gets 404 `no_skin`, and Mojang is not asked about them.
+
+Leaf asks Mojang's session server for the player's profile and fetches the
+skin it names, but only from `textures.minecraft.net/texture/<hex>`, over HTTPS
+(Mojang writes these addresses with `http:`). Each request to Mojang has five
+seconds. A skin must be a PNG of at most 64 KiB whose header says it is 64 by
+64 pixels, or 64 by 32 as older skins are; Leaf keeps and serves its bytes up
+to the end of its last chunk, and nothing after them. Requests for one player
+that arrive together share one fetch.
+
+Leaf keeps the skin in the database for a day; when Mojang can't be reached,
+it serves the one it kept, however old. A player in a default skin, one Mojang
+does not know, or one whose skin Leaf has never been able to get gets 404
+`no_skin`. After Mojang had no skin for a player, or could not be asked, Leaf
+does not ask about them again for an hour. Each time Leaf keeps a new skin, it
+removes those nobody asked for in 30 days. A skin is sent with
 `Cache-Control: private, max-age=86400`.
 
 **The guild's events** are the events above of every member, read from the
@@ -363,13 +398,15 @@ same table, of three types only, with what they paid cut out:
 Each is `{ "id", "type", "created_at", "player": { "id", "username" }, "data" }`.
 `GET /v1/game/guild/events` lists the newest 50, or with `?after=<id>` up to 200
 after that id. The stream behaves exactly as the member's own does, from where
-it starts to when it closes. Raid party members' events share a `detail` and an
-`occurred_at`.
+it starts to when it closes, and counts toward the same six. All open guild
+streams are fed by one look at the database every two seconds, not one each.
+Raid party members' events share a `detail` and an `occurred_at`.
 
 A member's name is the one the backend gave when they last opened
-`/v1/game/me`, or else the one Mojang gives; Leaf keeps every name it learns.
-An event whose member no one can name yet, because Mojang can't be reached, is
-left out.
+`/v1/game/me`, or else the one Mojang gives. Leaf asks Mojang only about
+players it knows, as for skins. It keeps the names it learns, and each time it
+learns a new one, removes those nobody asked for in 30 days. An event whose
+member no one can name yet, because Mojang can't be reached, is left out.
 
 **Presence.** `PUT /v1/game/presence` takes `{ "place" }`, one of `town`,
 `camp`, `works` and `table`, or gets 400 `invalid_place`. It records where the
@@ -387,10 +424,12 @@ A path that is not a file there gets the JSON 404 like any other.
 Every page and file there is sent with a `Content-Security-Policy` that lets it
 load and frame only what Leaf serves, talk only to Leaf, and be framed only by
 Leaf's own pages; it allows the pages' inline styles, pictures drawn in the
-page, and the font built into their styles (`PAGE_POLICY` in
+page, and the font built into their styles. A `<base>` may point only at Leaf,
+a form may be sent only to Leaf, and no plugin content loads (`PAGE_POLICY` in
 `apps/api/src/http/pages.ts`). The pages themselves are sent with
 `Cache-Control: no-cache`, and their scripts and styles, whose names carry a
-hash of what they hold (`index-<hash>.js`), are kept for a year.
+hash of what they hold (`index-<hash>.js`), are kept for a year. Which of the
+two a file gets is decided by its path alone, never by the query.
 
 The `Dockerfile` builds the three apps with `bun build index.html --minify`,
 each into `/app/public/<app>`, in a stage of its own, and the image sets

@@ -1,6 +1,6 @@
 import { dirname, join } from "node:path";
 
-import { Config, Context, Layer, Option, type Redacted } from "effect";
+import { Config, Context, Layer, Option, type Redacted, Schema } from "effect";
 
 import type { BucketConfig } from "./backup/offsite.ts";
 
@@ -43,6 +43,24 @@ export interface Settings {
   readonly gameLeafSpending: boolean;
 }
 
+/**
+ * An origin, such as `https://leaf.seqwawa.com`: an http or https address with
+ * nothing after the host and port. Anything else stops the app, naming the
+ * variable but not repeating what it was set to.
+ */
+const Origin = Schema.URL.check(
+  Schema.makeFilter(
+    (url) =>
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      url.username === "" &&
+      url.password === "" &&
+      url.pathname === "/" &&
+      url.search === "" &&
+      url.hash === "",
+    { expected: "an http or https origin, with no path" },
+  ),
+);
+
 /** A variable that may be left out. One set to the empty string counts as left out. */
 const optional = <A>(config: Config.Config<A>) => config.pipe(Config.option, Config.map(Option.getOrUndefined));
 
@@ -63,7 +81,7 @@ export const settings: Config.Config<Settings> = Config.all({
   bucket: optional(Config.String("BACKUP_S3_BUCKET")),
   accessKeyId: optional(Config.String("BACKUP_S3_ACCESS_KEY_ID")),
   secretAccessKey: optional(Config.Redacted("BACKUP_S3_SECRET_ACCESS_KEY")),
-  publicOrigin: Config.URL("PUBLIC_ORIGIN").pipe(
+  publicOrigin: Config.schema(Origin, "PUBLIC_ORIGIN").pipe(
     Config.map((url) => url.origin),
     Config.withDefault("https://leaf.seqwawa.com"),
   ),

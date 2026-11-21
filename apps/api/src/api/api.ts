@@ -12,6 +12,7 @@ import {
 
 import {
   BadOrigin,
+  BodyTooLarge,
   IdentityUnavailable,
   InternalError,
   Invalid,
@@ -74,6 +75,11 @@ export class Session extends HttpApiMiddleware.Service<Session, { provides: Curr
 /** Answers a failure nothing expected with `internal_error`, after logging it. */
 export class Unexpected extends HttpApiMiddleware.Service<Unexpected>()("leaf/api/Unexpected", {
   error: InternalError,
+}) {}
+
+/** Reads a request's body only up to 16 KiB: a longer one gets 413 `body_too_large` unread. Saves read more. */
+export class BodyLimit extends HttpApiMiddleware.Service<BodyLimit>()("leaf/api/BodyLimit", {
+  error: BodyTooLarge,
 }) {}
 
 /** Answers a reroll whose body is not `{ "leaf": n }` with `invalid_cost`. */
@@ -159,5 +165,6 @@ export class LeafApi extends HttpApi.make("sequoia-leaf")
   .add(MeApi)
   .add(GameHelloApi)
   .add(GameApi)
+  .middleware(BodyLimit)
   .middleware(Unexpected)
   .annotateMerge(OpenApi.annotations({ title: "Leaf", description: "The Sequoia guild currency and its game" })) {}

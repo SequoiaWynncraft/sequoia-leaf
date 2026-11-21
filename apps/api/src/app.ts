@@ -11,12 +11,13 @@ import { Presence } from "./game/presence.ts";
 import { Saves } from "./game/saves.ts";
 import { Skins } from "./game/skins.ts";
 import { ApiRoutes, NotFound } from "./http/handlers.ts";
+import { SafetyHeaders } from "./http/headers.ts";
 import { Pages } from "./http/pages.ts";
 import { Ledger } from "./ledger/store.ts";
 import { Quests } from "./quests/store.ts";
 
-/** Leaf's HTTP routes, and the game's pages when there are any. They need the services below. */
-export const Routes = Layer.mergeAll(ApiRoutes, Pages, NotFound).pipe(Layer.provide(Identities.layer));
+/** Leaf's HTTP routes, and the game's pages when there are any, with the headers every answer carries. They need the services below. */
+export const Routes = Layer.mergeAll(ApiRoutes, Pages, NotFound, SafetyHeaders).pipe(Layer.provide(Identities.layer));
 
 /** Effect's router takes `/healthz/` for `/healthz` unless told otherwise; Leaf's routes are exact. */
 export const routerConfig = { ignoreTrailingSlash: false };

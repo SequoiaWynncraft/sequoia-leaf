@@ -1,7 +1,7 @@
 import { deflateSync } from "node:zlib";
 
 import type { Activity, PlayerId, Posting } from "@sequoia-leaf/core";
-import { Clock, ConfigProvider, Effect, Layer, ManagedRuntime, Option, Redacted, References } from "effect";
+import { Clock, ConfigProvider, Duration, Effect, Layer, ManagedRuntime, Option, Redacted, References } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import { SqlClient } from "effect/sql";
 
@@ -217,10 +217,18 @@ export interface FakeMojang {
   readonly textures: Map<string, Uint8Array>;
   /** While true, every request fails as if Mojang could not be reached. */
   down: boolean;
+  /** How long, in milliseconds, each answer takes. */
+  latencyMs: number;
   /** Every request, as `profile <uuid>` or `texture <address>`. */
   readonly calls: string[];
   readonly service: Mojang["Service"];
 }
+
+/** Answers after the fake's latency, if it has any. */
+const after =
+  (fake: FakeMojang) =>
+  <A, E>(answer: Effect.Effect<A, E>): Effect.Effect<A, E> =>
+    fake.latencyMs === 0 ? answer : Effect.delay(answer, Duration.millis(fake.latencyMs));
 
 /** A stand-in for Mojang that answers from what a test gives it, and never reaches the network. */
 export function fakeMojang(): FakeMojang {
@@ -228,6 +236,7 @@ export function fakeMojang(): FakeMojang {
     profiles: new Map(),
     textures: new Map(),
     down: false,
+    latencyMs: 0,
     calls: [],
     service: {
       profile: (player) =>
@@ -236,7 +245,7 @@ export function fakeMojang(): FakeMojang {
           return fake.down
             ? Effect.fail(new MojangError({ message: "Mojang is down in this test" }))
             : Effect.succeed(Option.fromUndefinedOr(fake.profiles.get(player)));
-        }),
+        }).pipe(after(fake)),
       texture: (address) =>
         Effect.suspend(() => {
           fake.calls.push(`texture ${address.href}`);
@@ -244,7 +253,7 @@ export function fakeMojang(): FakeMojang {
           return fake.down || png === undefined
             ? Effect.fail(new MojangError({ message: "No such texture in this test" }))
             : Effect.succeed(png);
-        }),
+        }).pipe(after(fake)),
     },
   };
   return fake;
@@ -263,6 +272,42 @@ function pngChunk(type: string, data: Uint8Array): Uint8Array {
 
 /** A colour as red, green, blue and alpha. */
 export type Rgba = readonly [number, number, number, number];
+
+/** A real PNG of `width` by `height` pixels, from their colours as red, green, blue and alpha, row by row. */
+export function encodePng(width: number, height: number, pixels: Uint8Array) {
+  const stride = width * 4;
+  const rows = new Uint8Array(height * (1 + stride));
+  for (let y = 0; y < height; y++) {
+    rows.set(pixels.subarray(y * stride, (y + 1) * stride), y * (1 + stride) + 1);
+  }
+  const header = new Uint8Array(13);
+  const view = new DataView(header.buffer);
+  view.setUint32(0, width);
+  view.setUint32(4, height);
+  header.set([8, 6, 0, 0, 0], 8); // 8 bits a channel, red, green, blue and alpha
+  return new Uint8Array([
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a,
+    ...pngChunk("IHDR", header),
+    ...pngChunk("IDAT", deflateSync(rows)),
+    ...pngChunk("IEND", new Uint8Array(0)),
+  ]);
+}
+
+/** A picture of `width` by `height` pixels in one colour, as a real PNG. */
+export function plainPng(width: number, height: number, colour: Rgba) {
+  const pixels = new Uint8Array(width * height * 4);
+  for (let at = 0; at < pixels.length; at += 4) {
+    pixels.set(colour, at);
+  }
+  return encodePng(width, height, pixels);
+}
 
 /**
  * A 64 by 64 skin sheet as a real PNG: the parts of a character, laid out as
@@ -299,26 +344,5 @@ export function skinPng(colours: {
   fill(36, 60, 40, 64, colours.skin);
   fill(0, 16, 16, 32, colours.legs); // the right leg
   fill(16, 48, 32, 64, colours.legs); // the left leg
-  const rows = new Uint8Array(64 * (1 + 64 * 4));
-  for (let y = 0; y < 64; y++) {
-    rows.set(pixels.subarray(y * 256, (y + 1) * 256), y * 257 + 1);
-  }
-  const header = new Uint8Array(13);
-  const view = new DataView(header.buffer);
-  view.setUint32(0, 64);
-  view.setUint32(4, 64);
-  header.set([8, 6, 0, 0, 0], 8); // 8 bits a channel, red, green, blue and alpha
-  return new Uint8Array([
-    0x89,
-    0x50,
-    0x4e,
-    0x47,
-    0x0d,
-    0x0a,
-    0x1a,
-    0x0a,
-    ...pngChunk("IHDR", header),
-    ...pngChunk("IDAT", deflateSync(rows)),
-    ...pngChunk("IEND", new Uint8Array(0)),
-  ]);
+  return encodePng(64, 64, pixels);
 }
