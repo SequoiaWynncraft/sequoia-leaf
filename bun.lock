@@ -21,6 +21,36 @@
         "@types/bun": "1.4.4",
       },
     },
+    "apps/battler": {
+      "name": "@sequoia-leaf/battler",
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
+    "apps/hub-camp": {
+      "name": "@sequoia-leaf/hub-camp",
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
+    "apps/hub-map": {
+      "name": "@sequoia-leaf/hub-map",
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
+    "apps/hub-street": {
+      "name": "@sequoia-leaf/hub-street",
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
+    "apps/hub-town": {
+      "name": "@sequoia-leaf/hub-town",
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
     "apps/works": {
       "name": "@sequoia-leaf/works",
       "devDependencies": {
@@ -93,7 +123,17 @@
 
     "@sequoia-leaf/api": ["@sequoia-leaf/api@workspace:apps/api"],
 
+    "@sequoia-leaf/battler": ["@sequoia-leaf/battler@workspace:apps/battler"],
+
     "@sequoia-leaf/core": ["@sequoia-leaf/core@workspace:packages/core"],
+
+    "@sequoia-leaf/hub-camp": ["@sequoia-leaf/hub-camp@workspace:apps/hub-camp"],
+
+    "@sequoia-leaf/hub-map": ["@sequoia-leaf/hub-map@workspace:apps/hub-map"],
+
+    "@sequoia-leaf/hub-street": ["@sequoia-leaf/hub-street@workspace:apps/hub-street"],
+
+    "@sequoia-leaf/hub-town": ["@sequoia-leaf/hub-town@workspace:apps/hub-town"],
 
     "@sequoia-leaf/works": ["@sequoia-leaf/works@workspace:apps/works"],
 

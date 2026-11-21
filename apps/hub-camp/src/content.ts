@@ -526,7 +526,14 @@ export const SPARE_LOOK: Look = {
   extraInk: "#3b7340",
 };
 
-export const HELLO = ["evening!", "knock knock.", "room by the fire?", "hi hi hi.", "I come bearing a pinecone.", "smelled the fire. came over."];
+export const HELLO = [
+  "evening!",
+  "knock knock.",
+  "room by the fire?",
+  "hi hi hi.",
+  "I come bearing a pinecone.",
+  "smelled the fire. came over.",
+];
 export const BYE = ["leafin. night!", "back to my camp.", "gn. glory to Sequoia.", "off I go. be nice to the fox."];
 export const CHAT = [
   "erm. nice camp.",
@@ -550,9 +557,19 @@ export const CHEERS = ["gg!", "LET'S GO", "glory!", "groot!", "woo!", "gg gg gg"
 export const WAVES = ["o/", "hey you.", "evening!", "hi!", "there you are."];
 export const WELCOME = ["welcome back!", "there you are!", "you missed a good raid.", "the fire's warm."];
 export const HOST_HI = ["you came! sit, sit.", "welcome to my camp.", "mind the gnome.", "oh! a visitor. hi."];
-export const GIFT_THANKS = ["for me? erm. thank you.", "I will treasure this pinecone.", "you shouldn't have. (you should.)"];
+export const GIFT_THANKS = [
+  "for me? erm. thank you.",
+  "I will treasure this pinecone.",
+  "you shouldn't have. (you should.)",
+];
 
-export const RAIDS = ["the Sunken Vault", "the Lantern Depths", "the Thornwarden", "the Hollow King", "the Brine Cellar"];
+export const RAIDS = [
+  "the Sunken Vault",
+  "the Lantern Depths",
+  "the Thornwarden",
+  "the Hollow King",
+  "the Brine Cellar",
+];
 
 export interface Land {
   name: string;
@@ -586,10 +603,34 @@ export interface Listing {
   reply: string;
 }
 export const MARKET: Listing[] = [
-  { by: "nettle", what: "A raid carry, any vault", note: "I bring the key. You bring snacks.", price: 20, reply: "deal. tomorrow, after supper." },
-  { by: "quill", what: "A banner, hand-painted", note: "Your crabs on it, if they hold still.", price: 14, reply: "yes!! send me your colours." },
-  { by: "pipkin", what: "Crab-sitting, one evening", note: "I will count them every hour.", price: 3, reply: "ribbit. your crabs are in good claws." },
-  { by: "barkley", what: "A lantern that hums", note: "It only knows one tune. It is a good tune.", price: 9, reply: "it's yours. it hums when it rains." },
+  {
+    by: "nettle",
+    what: "A raid carry, any vault",
+    note: "I bring the key. You bring snacks.",
+    price: 20,
+    reply: "deal. tomorrow, after supper.",
+  },
+  {
+    by: "quill",
+    what: "A banner, hand-painted",
+    note: "Your crabs on it, if they hold still.",
+    price: 14,
+    reply: "yes!! send me your colours.",
+  },
+  {
+    by: "pipkin",
+    what: "Crab-sitting, one evening",
+    note: "I will count them every hour.",
+    price: 3,
+    reply: "ribbit. your crabs are in good claws.",
+  },
+  {
+    by: "barkley",
+    what: "A lantern that hums",
+    note: "It only knows one tune. It is a good tune.",
+    price: 9,
+    reply: "it's yours. it hums when it rains.",
+  },
 ];
 
 export interface Quest {

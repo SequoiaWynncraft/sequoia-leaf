@@ -33,7 +33,10 @@ export function measure(): View {
   const tall = W < H * 0.82;
   const dw = W * dpr;
   const dh = H * dpr;
-  const s = Math.max(1, tall ? Math.min(Math.round(dw / 200), Math.floor(dh / 330)) : Math.min(Math.round(dh / 250), Math.floor(dw / 380)));
+  const s = Math.max(
+    1,
+    tall ? Math.min(Math.round(dw / 200), Math.floor(dh / 330)) : Math.min(Math.round(dh / 250), Math.floor(dw / 380)),
+  );
   const w = Math.ceil(dw / s);
   const h = Math.ceil(dh / s);
   const gx0 = tall ? 9 : 24;
@@ -81,7 +84,8 @@ export function buildFar(v: View): Far {
   }
   const rand = rng(v.w * 31 + v.h);
   const stars: [number, number, number][] = [];
-  for (let n = 0; n < (v.tall ? 16 : 26); n++) stars.push([Math.floor(rand() * v.w), Math.floor(rand() * y0 * 0.34), rand() * 6]);
+  for (let n = 0; n < (v.tall ? 16 : 26); n++)
+    stars.push([Math.floor(rand() * v.w), Math.floor(rand() * y0 * 0.34), rand() * 6]);
   // the sun, going down behind the trees
   const sx = Math.round(v.w * (v.tall ? 0.6 : 0.585));
   const sy = y0 - Math.round(y0 * 0.2);
@@ -144,7 +148,8 @@ export interface Marks {
 
 function trunk(g: G2, cx: number, base: number, w: number, lit: number, tone: number, seed: number): void {
   const far = mix(I.k, I.a, 0.5);
-  const ramp = tone > 0.75 ? [I.k, I.l, I.m, I.n, I.o] : tone > 0.4 ? [far, I.k, I.l, I.m, I.n] : [I.a, far, I.k, I.l, I.m];
+  const ramp =
+    tone > 0.75 ? [I.k, I.l, I.m, I.n, I.o] : tone > 0.4 ? [far, I.k, I.l, I.m, I.n] : [I.a, far, I.k, I.l, I.m];
   for (let y = 0; y <= base; y++) {
     const up = base - y;
     const flare = up < 20 ? (1 - up / 20) ** 2 * w * 0.34 : 0;
@@ -165,7 +170,14 @@ function trunk(g: G2, cx: number, base: number, w: number, lit: number, tone: nu
   }
 }
 
-function clump(g: G2, x: number, y: number, r: number, inks: readonly [string, string, string], rand: () => number): void {
+function clump(
+  g: G2,
+  x: number,
+  y: number,
+  r: number,
+  inks: readonly [string, string, string],
+  rand: () => number,
+): void {
   for (let dy = -r; dy <= Math.round(r * 0.45); dy++) {
     const hw = Math.sqrt(Math.max(0, 1 - (dy / r) ** 2)) * r * 1.2;
     R(g, x - hw, y + dy, hw * 2, 1, inks[0]);
@@ -292,7 +304,8 @@ export function buildNear(v: View, m: Marks): Cv {
   const dark: [string, string, string] = [mix(I.p, I.a, 0.55), mix(I.p, I.a, 0.2), I.q];
   const mid: [string, string, string] = [mix(I.p, I.a, 0.25), I.q, I.r];
   const br = rng(91);
-  for (let x = -6; x < v.w + 6; x += 7 + br() * 6) clump(g, Math.round(x), y0 - 2 + Math.round(br() * 3), 7 + Math.round(br() * 5), dark, br);
+  for (let x = -6; x < v.w + 6; x += 7 + br() * 6)
+    clump(g, Math.round(x), y0 - 2 + Math.round(br() * 3), 7 + Math.round(br() * 5), dark, br);
   for (let x = -4; x < v.w + 4; x += 9 + br() * 9) {
     if (br() < 0.25) continue;
     clump(g, Math.round(x), y0 + 5 + Math.round(br() * 3), 5 + Math.round(br() * 4), mid, br);
@@ -345,7 +358,8 @@ export function buildOver(v: View): Cv {
       const r = 7 + Math.round(rand() * 5);
       clump(g, Math.round(x), y, r, row >= rows - 2 ? lit : deep, rand);
       // needles hanging off the underside
-      if (row === rows - 1) for (let k = -r; k < r; k += 3) R(g, x + k, y + Math.round(r * 0.45), 1, 1 + Math.round(rand() * 3), lit[0]);
+      if (row === rows - 1)
+        for (let k = -r; k < r; k += 3) R(g, x + k, y + Math.round(r * 0.45), 1, 1 + Math.round(rand() * 3), lit[0]);
     }
   }
   // ferns and stones along the bottom

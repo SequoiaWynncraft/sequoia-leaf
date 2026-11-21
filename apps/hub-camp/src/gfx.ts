@@ -212,7 +212,10 @@ export function outlined(s: Spr, colour = "#2a1733"): Spr {
       const i = y * w + x;
       if (solid[i]) continue;
       const near =
-        (x > 0 && solid[i - 1]) || (x < w - 1 && solid[i + 1]) || (y > 0 && solid[i - w]) || (y < h - 1 && solid[i + w]);
+        (x > 0 && solid[i - 1]) ||
+        (x < w - 1 && solid[i + 1]) ||
+        (y > 0 && solid[i - w]) ||
+        (y < h - 1 && solid[i + w]);
       if (!near) continue;
       d[i * 4] = r;
       d[i * 4 + 1] = gg;

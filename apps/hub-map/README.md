@@ -40,17 +40,17 @@ the raids, the lands and the feed are all simulated in the page.
 
 ## How it is put together
 
-| File | What is in it |
-| --- | --- |
-| `src/world.ts` | The province as facts: nodes, roads, shortest ways, lands, places |
-| `src/terrain.ts` | Paints the whole map once at load, from noise and small drawn sprites |
-| `src/lands.ts` | The see-through layer that shows who holds what, and the spreading colour |
-| `src/game.ts` | The guild's evening: members, walking, raids, scouts, crabs, the shop |
-| `src/view.ts` | The camera, and everything drawn each frame over the painted ground |
-| `src/ui.ts` | The purse, dock, feed, panels, cards and the welcome-home card |
-| `src/skins.ts` | Faces, small figures and portraits from a skin sheet; made-up skins |
-| `src/audio.ts`, `src/fx.ts`, `src/pix.ts` | Sounds made on the spot; sparks and flights; pixel pictures |
-| `src/main.ts` | Ties it together: the arrival, travel, touches, the frame loop |
+| File                                      | What is in it                                                             |
+| ----------------------------------------- | ------------------------------------------------------------------------- |
+| `src/world.ts`                            | The province as facts: nodes, roads, shortest ways, lands, places         |
+| `src/terrain.ts`                          | Paints the whole map once at load, from noise and small drawn sprites     |
+| `src/lands.ts`                            | The see-through layer that shows who holds what, and the spreading colour |
+| `src/game.ts`                             | The guild's evening: members, walking, raids, scouts, crabs, the shop     |
+| `src/view.ts`                             | The camera, and everything drawn each frame over the painted ground       |
+| `src/ui.ts`                               | The purse, dock, feed, panels, cards and the welcome-home card            |
+| `src/skins.ts`                            | Faces, small figures and portraits from a skin sheet; made-up skins       |
+| `src/audio.ts`, `src/fx.ts`, `src/pix.ts` | Sounds made on the spot; sparks and flights; pixel pictures               |
+| `src/main.ts`                             | Ties it together: the arrival, travel, touches, the frame loop            |
 
 The simulation moves only by `update(dt)`, so it can be run forward from outside. For looking at it
 in a headless browser, `window.hub` has `advance(seconds)`, `until(() => condition)`, `goTo(place)`,

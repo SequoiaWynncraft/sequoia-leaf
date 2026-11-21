@@ -102,8 +102,18 @@ export function smoothLine(ctrl: Pt[], step = 3): Pt[] {
       const t2 = t * t;
       const t3 = t2 * t;
       out.push({
-        x: 0.5 * (2 * p1.x + (p2.x - p0.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (3 * p1.x - p0.x - 3 * p2.x + p3.x) * t3),
-        y: 0.5 * (2 * p1.y + (p2.y - p0.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (3 * p1.y - p0.y - 3 * p2.y + p3.y) * t3),
+        x:
+          0.5 *
+          (2 * p1.x +
+            (p2.x - p0.x) * t +
+            (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+            (3 * p1.x - p0.x - 3 * p2.x + p3.x) * t3),
+        y:
+          0.5 *
+          (2 * p1.y +
+            (p2.y - p0.y) * t +
+            (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+            (3 * p1.y - p0.y - 3 * p2.y + p3.y) * t3),
       });
     }
   }
@@ -243,17 +253,7 @@ export const GATES: Record<GateId, { name: string; hue: Hue; x: number; y: numbe
 };
 
 export type PlaceId =
-  | "town"
-  | "treasury"
-  | "board"
-  | "market"
-  | "fire"
-  | "works"
-  | "gateA"
-  | "gateB"
-  | "gateC"
-  | "pond"
-  | "camp";
+  "town" | "treasury" | "board" | "market" | "fire" | "works" | "gateA" | "gateB" | "gateC" | "pond" | "camp";
 
 export type Place = {
   id: PlaceId;
@@ -273,14 +273,69 @@ export type Place = {
 
 export const PLACES: Place[] = [
   { id: "town", node: "town", name: "Guild Town", lx: 500, ly: 268, hx: 500, hy: 340, hr: 62, zoom: 3.4, tier: "far" },
-  { id: "treasury", node: "treasury", name: "Treasury", lx: 466, ly: 284, hx: 466, hy: 304, hr: 17, zoom: 3.6, tier: "near" },
-  { id: "board", node: "board", name: "Quest board", lx: 534, ly: 292, hx: 534, hy: 308, hr: 13, zoom: 3.6, tier: "near" },
+  {
+    id: "treasury",
+    node: "treasury",
+    name: "Treasury",
+    lx: 466,
+    ly: 284,
+    hx: 466,
+    hy: 304,
+    hr: 17,
+    zoom: 3.6,
+    tier: "near",
+  },
+  {
+    id: "board",
+    node: "board",
+    name: "Quest board",
+    lx: 534,
+    ly: 292,
+    hx: 534,
+    hy: 308,
+    hr: 13,
+    zoom: 3.6,
+    tier: "near",
+  },
   { id: "market", node: "market", name: "Market", lx: 553, ly: 338, hx: 553, hy: 354, hr: 20, zoom: 3.6, tier: "near" },
   { id: "fire", node: "fire", name: "Campfire", lx: 484, ly: 352, hx: 484, hy: 370, hr: 14, zoom: 3.8, tier: "near" },
   { id: "works", node: "works", name: "The Works", lx: 694, ly: 264, hx: 694, hy: 298, hr: 26, zoom: 3, tier: "both" },
-  { id: "gateA", node: "gateA", name: GATES.gateA.name, lx: 222, ly: 98, hx: 222, hy: 120, hr: 20, zoom: 3, tier: "both" },
-  { id: "gateB", node: "gateB", name: GATES.gateB.name, lx: 758, ly: 76, hx: 758, hy: 98, hr: 20, zoom: 3, tier: "both" },
-  { id: "gateC", node: "gateC", name: GATES.gateC.name, lx: 172, ly: 572, hx: 172, hy: 594, hr: 20, zoom: 3, tier: "both" },
+  {
+    id: "gateA",
+    node: "gateA",
+    name: GATES.gateA.name,
+    lx: 222,
+    ly: 98,
+    hx: 222,
+    hy: 120,
+    hr: 20,
+    zoom: 3,
+    tier: "both",
+  },
+  {
+    id: "gateB",
+    node: "gateB",
+    name: GATES.gateB.name,
+    lx: 758,
+    ly: 76,
+    hx: 758,
+    hy: 98,
+    hr: 20,
+    zoom: 3,
+    tier: "both",
+  },
+  {
+    id: "gateC",
+    node: "gateC",
+    name: GATES.gateC.name,
+    lx: 172,
+    ly: 572,
+    hx: 172,
+    hy: 594,
+    hr: 20,
+    zoom: 3,
+    tier: "both",
+  },
   { id: "pond", node: "pond", name: "Crab pond", lx: 820, ly: 494, hx: 820, hy: 516, hr: 26, zoom: 3.4, tier: "both" },
   { id: "camp", node: "camp", name: "Your camp", lx: 462, ly: 518, hx: 464, hy: 540, hr: 20, zoom: 3.4, tier: "both" },
 ];

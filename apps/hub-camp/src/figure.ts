@@ -3,7 +3,7 @@
  * and two legs, and drawn small, one skin pixel to one scene pixel. The member's own sheet is used
  * if it loads; guild-mates wear sheets made up here.
  */
-import { canvas, type Cv, type G2, INK, mix, R, sprite, type Spr } from "./gfx.ts";
+import { canvas, type Cv, type G2, INK, mix, R, type Spr, sprite } from "./gfx.ts";
 
 export type Face = "down" | "up" | "left" | "right";
 export type Pose = "stand" | "walk" | "cheer" | "wave";
@@ -147,7 +147,8 @@ export function drawFigure(
     }
     sg.drawImage(s.body, CX - 2, top + 8);
     sg.drawImage(s.head, CX - 4, top);
-    if (pose === "cheer" || pose === "wave") sheared(sg, s.arm, CX - 2, top + 9, pose === "wave" ? Math.round(2 + Math.sin(t * 14)) : 2, true);
+    if (pose === "cheer" || pose === "wave")
+      sheared(sg, s.arm, CX - 2, top + 9, pose === "wave" ? Math.round(2 + Math.sin(t * 14)) : 2, true);
     else if (sit) sheared(sg, s.arm, CX - 2, top + 8, 3);
     else sheared(sg, s.arm, CX - 2, top + 8, Math.round(-swing * 3));
     if (f.hat) sg.drawImage(f.hat.c, CX - f.hat.ax, top - f.hat.h + 1);
