@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { CLOSE, decodeMove, encodeSnapshot, Flag, type Motion, type ToClient } from "@sequoia-leaf/core";
+import { CLOSE, decodeMove, encodeSnapshot, Flag, LIVE_VERSION, type Motion, type ToClient } from "@sequoia-leaf/core";
 
 import { restart, start } from "./live.ts";
 import { isRecord, type LiveSocket, pretend } from "./net.ts";
@@ -221,7 +221,7 @@ describe("a live room", () => {
       act: (id, kind, arg) => heard.push(`act ${id} ${kind} ${arg}`),
     });
     const s = socket(0);
-    expect(s.url).toBe("wss://leaf.example/v1/game/live?v=1");
+    expect(s.url).toBe(`wss://leaf.example/v1/game/live?v=${LIVE_VERSION}`);
     s.open();
     expect(s.texts().map((m) => m.t)).toEqual(["join", "ping"]);
     expect(s.texts()[0]).toEqual({ t: "join", room: "town" });
@@ -301,9 +301,24 @@ describe("a live room", () => {
     expect(room.sample(2)).toBeNull();
     expect([...room.members().values()].map((m) => m.name)).toEqual(["Alice", "Bob"]);
     expect(second.texts()[0]).toEqual({ t: "join", room: "town" });
-    // The player is said again, as a jump, on the new connection.
-    expect(second.moves().map((m) => [m?.motion.x, m?.motion.jump])).toEqual([[30, 1]]);
+    // The player is said again on the new connection, at once (Leaf shows others that as a jump).
+    expect(second.moves().map((m) => [m?.motion.x, m?.motion.jump])).toEqual([[30, 0]]);
     expect(seen).toEqual(["connecting", "open", "closed", "connecting", "open"]);
+  });
+
+  test("counts nothing heard before a welcome, and starts afresh at each one", async () => {
+    const w = await live();
+    room = joinLive("town");
+    const s = socket(0);
+    s.open();
+    // The player's place from before this connection, in another room: not this page's to show.
+    s.sends(encodeSnapshot(1, w.clock.now, [{ id: 2, seq: 1, ...at(70, 70) }]));
+    s.says(welcome(1, w.clock.now, [{ ...ALICE, id: 1 }, ALICE]));
+    expect(room.sample(2)).toBeNull();
+    s.sends(encodeSnapshot(2, w.clock.now - 100, [{ id: 2, seq: 2, ...at(10, 10) }]));
+    expect(room.sample(2)).toMatchObject({ x: 10 });
+    s.says(welcome(1, w.clock.now, [{ ...ALICE, id: 1 }, ALICE]));
+    expect(room.sample(2)).toBeNull();
   });
 
   test.each([

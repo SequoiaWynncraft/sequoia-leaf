@@ -443,7 +443,7 @@ written. Players not seen for a day are forgotten.
 
 ### Live: players in the same place, as it happens
 
-`GET /v1/game/live?v=1` is a WebSocket. Players in the same room see each other
+`GET /v1/game/live?v=2` is a WebSocket. Players in the same room see each other
 move as it happens, and see who comes, goes and does what. Anyone the game's
 routes let in may open it, members and guests alike. The wire is
 `packages/core/src/live.ts`, shared by Leaf and the game; the server is
@@ -455,7 +455,9 @@ second connection (another tab, another device) takes over their place and
 closes the first; nobody else sees them go. A player whose connection drops
 stands still where they were for ten seconds, and keeps their place if they come
 back in that time; otherwise they leave. Their allowances are the player's too,
-so reconnecting does not refill them.
+and Leaf keeps them until they have filled up again, so neither reconnecting
+nor leaving refills them. Moves come only from the player's present connection,
+in the order it sent them.
 
 **Opening it.** The session comes as the cookie or a Bearer header, checked as
 for the game's routes. With the cookie, the request must carry `Origin` equal to
@@ -464,8 +466,9 @@ WebSocket to Leaf, and the browser would send the cookie with it. Before the
 upgrade it is refused as the API refuses: 401 `unauthorized`, 403 `bad_origin`,
 503 `identity_unavailable`, 400 `unsupported_version` (no `v`, or another) or
 `not_websocket`; 429 `slow_down` for a player who opens connections too often
-(ten at once, then one every ten seconds); and 503 `live_full` past 1000
-players. A connection lasts only as long as its session: Leaf asks about it
+(ten at once, then one every ten seconds, each counted); and 503 `live_full` past
+1000 players. A player's place among them is taken before the socket is opened,
+so that no two can take the last one. A connection lasts only as long as its session: Leaf asks about it
 again every 30 seconds (as every request does, through the minute it remembers
 a confirmed session), and closes it as signed out once it has ended.
 
@@ -478,9 +481,12 @@ a confirmed session), and closes it as signed out once it has ended.
 
 Motion is state: each frame is all of where a player is, and only the newest
 counts. Positions are in the room's units and kept inside it; speeds are kept
-below 1024 a second. `flags` bit 0 says the player is moving; `jump` counts the
-times they did not walk where they are (a door, a reconnect), so that the game
-draws them there at once, not on the way, whenever it changes. The other bits of
+below 1024 a second. `flags` bit 0 says the player is moving. `jump` counts the
+times they did not walk where they are, so that the game draws them there at
+once, not on the way, whenever it changes: the game counts its own player's
+(a door, being set down), and Leaf counts what everybody else is shown, one up
+whenever the game's count changes and at the first move of each new connection
+(which may count from anywhere). The other bits of
 `flags`, `facing` and `pose` are the game's, passed on as they come. Leaf sends
 a room's snapshot once a tick, only when somebody's motion changed, with only
 those who changed, made once and sent to everyone in the room. A move older
@@ -538,6 +544,15 @@ its player is again, as a jump.
 
 Once a minute while anybody is about, Leaf logs a `live` line: players, how many
 are connected, who is in which room, and how many frames came in and were dropped.
+
+**What it is not, yet.** Positions are the game's to say, inside the room:
+right for walking about together, never for anything that pays or wins. Fights
+and rewards will need commands Leaf checks and outcomes Leaf decides. A room is
+found by its kind; camps and tables will need copies addressed by who they
+belong to, and a moment the whole town sees (a pull at the tree) will need to
+reach every copy of the town. One process holds every room; a second would need
+each copy owned by one of them. A change to the wire goes with a new
+`LIVE_VERSION`, and pages built for the old one need a way to load again.
 
 **How long it takes.** From a player moving to another player seeing it: up to
 50 ms waiting for the game's next send (starting, stopping and jumping go at

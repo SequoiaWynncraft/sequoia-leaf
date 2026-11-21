@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 
-import { CLOSE, encodeMove, Flag, type Motion, playerId } from "@sequoia-leaf/core";
+import { CLOSE, encodeMove, Flag, LIVE_PATH, LIVE_VERSION, type Motion, playerId } from "@sequoia-leaf/core";
 import { Schema } from "effect";
 
 import { Live, type LiveTuning } from "../src/live/live.ts";
@@ -11,6 +11,7 @@ const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
 const carol = playerId("10000000-0000-0000-0000-000000000003");
 const ORIGIN = "https://leaf.seqwawa.com";
+const LIVE = `${LIVE_PATH}?v=${LIVE_VERSION}`;
 
 // The real clock, which a test may move ahead: Live's tick and its waits keep time by it.
 let ahead = 0;
@@ -31,6 +32,8 @@ async function start(live: Partial<LiveTuning> = {}): Promise<string> {
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
     "bob-token": () => Response.json(sessionOf(bob, "Bob", "RECRUIT")),
     "carol-token": () => Response.json(sessionOf(carol, "Carol", null)),
+    // Alice signed in a second time, on another device.
+    "alice-2-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
   });
   backend = fake.backend;
   services = testLeaf(clock, fake.fetcher, {}, { live });
@@ -90,25 +93,25 @@ describe("opening a live connection", () => {
     const origin = await start();
     backend.sessions["down-token"] = () => new Response("down", { status: 502 });
 
-    expect(await refused("/v1/game/live?v=1", {})).toEqual([401, "unauthorized"]);
-    expect(await refused("/v1/game/live?v=1", { Cookie: "seq_session=stale", Origin: ORIGIN })).toEqual([
-      401,
-      "unauthorized",
-    ]);
+    expect(await refused(LIVE, {})).toEqual([401, "unauthorized"]);
+    expect(await refused(LIVE, { Cookie: "seq_session=stale", Origin: ORIGIN })).toEqual([401, "unauthorized"]);
     // A page on another site can open a WebSocket to Leaf with the cookie, so it must be Leaf's own.
-    expect(await refused("/v1/game/live?v=1", { Cookie: "seq_session=alice-token" })).toEqual([403, "bad_origin"]);
-    expect(
-      await refused("/v1/game/live?v=1", { Cookie: "seq_session=alice-token", Origin: "https://seqwawa.com" }),
-    ).toEqual([403, "bad_origin"]);
-    expect(await refused("/v1/game/live?v=1", { Authorization: "Bearer down-token" })).toEqual([
-      503,
-      "identity_unavailable",
+    expect(await refused(LIVE, { Cookie: "seq_session=alice-token" })).toEqual([403, "bad_origin"]);
+    expect(await refused(LIVE, { Cookie: "seq_session=alice-token", Origin: "https://seqwawa.com" })).toEqual([
+      403,
+      "bad_origin",
     ]);
+    expect(await refused(LIVE, { Authorization: "Bearer down-token" })).toEqual([503, "identity_unavailable"]);
     expect(await refused("/v1/game/live", { Authorization: "Bearer alice-token" })).toEqual([
       400,
       "unsupported_version",
     ]);
-    const plain = await fetch(`${origin}/v1/game/live?v=1`, { headers: { Authorization: "Bearer alice-token" } });
+    // Version 1 had no jump count; nothing speaks it.
+    expect(await refused("/v1/game/live?v=1", { Authorization: "Bearer alice-token" })).toEqual([
+      400,
+      "unsupported_version",
+    ]);
+    const plain = await fetch(`${origin}${LIVE}`, { headers: { Authorization: "Bearer alice-token" } });
     expect([plain.status, await codeOf(plain)]).toEqual([400, "not_websocket"]);
   });
 
@@ -126,15 +129,34 @@ describe("opening a live connection", () => {
     expect((await byBearer.join()).roster.map((m) => m.name)).toEqual(["Alice", "Carol", "Bob"]);
   });
 
-  it("turns a player away who opens connections too often, and anybody new when Live is full", async () => {
-    await start({ mostPlayers: 2 });
-    // The first is free; then ten more in a burst.
-    const tabs = await Promise.all(Array.from({ length: 11 }, () => connect(page("alice"))));
+  it("charges every connection a player opens, and turns them away past ten at once", async () => {
+    await start();
+    const tabs = await Promise.all(Array.from({ length: 10 }, () => connect(page("alice"))));
     for (const tab of tabs) tab.close();
-    expect(await refused("/v1/game/live?v=1", { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
 
-    await connect(page("bob"));
-    expect(await refused("/v1/game/live?v=1", { Authorization: "Bearer carol-token" })).toEqual([503, "live_full"]);
+    expect(await refused(LIVE, { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
+  });
+
+  it("keeps what a player owes after they have left, so that leaving refills nothing", async () => {
+    await start({ graceMs: 50 });
+    const tabs = await Promise.all(Array.from({ length: 10 }, () => connect(page("alice"))));
+    await tabs.at(-1)?.join();
+    for (const tab of tabs) tab.close();
+    await Bun.sleep(300);
+
+    expect(await census()).toMatchObject({ connected: 0, rooms: {} });
+    expect(await refused(LIVE, { Authorization: "Bearer alice-token" })).toEqual([429, "slow_down"]);
+  });
+
+  it("never lets in more players than it holds, however many open at once", async () => {
+    await start({ mostPlayers: 2 });
+    const opened = await Promise.allSettled(
+      (["alice", "bob", "carol"] as const).map((who) => LiveClient.open(server?.origin ?? "", page(who))),
+    );
+    for (const o of opened) if (o.status === "fulfilled") open.push(o.value);
+
+    expect(opened.filter((o) => o.status === "fulfilled").length).toBe(2);
+    expect(await census()).toMatchObject({ players: 2, connected: 2 });
   });
 });
 
@@ -148,7 +170,7 @@ describe("a live room", () => {
 
     expect(welcome).toMatchObject({
       t: "welcome",
-      v: 1,
+      v: LIVE_VERSION,
       you: 1,
       room: "town/1",
       hz: 30,
@@ -176,7 +198,8 @@ describe("a live room", () => {
     const seen = await a.snapshot((s) => s.entries.some((e) => e.id === bobsId));
     const took = performance.now() - sentAt;
 
-    expect(seen.entries).toEqual([{ id: bobsId, seq, ...at(200, 120) }]);
+    // Their first move, and so a jump to everybody else.
+    expect(seen.entries).toEqual([{ id: bobsId, seq, ...at(200, 120, Flag.Moving, 1) }]);
     expect(took).toBeLessThan(150);
   });
 
@@ -189,7 +212,8 @@ describe("a live room", () => {
     const b = await connect(page("bob"));
     await b.join();
 
-    expect((await b.snapshot()).entries.map((e) => [e.id, e.x, e.y, e.jump])).toEqual([[you, 0, 352, 2]]);
+    // Leaf counts the jumps everybody is shown: their first move is one.
+    expect((await b.snapshot()).entries.map((e) => [e.id, e.x, e.y, e.jump])).toEqual([[you, 0, 352, 1]]);
   });
 
   it("passes on only the actions there are", async () => {
@@ -269,6 +293,43 @@ describe("a player, whatever their connection", () => {
     expect(await census()).toEqual({ players: 3, connected: 3, rooms: { "town/1": 3 } });
   });
 
+  it("follows a second tab's moves at once, though it numbers them from the start, and shows it as a jump", async () => {
+    await start();
+    const b = await connect(page("bob"));
+    await b.join();
+    const first = await connect(page("alice"));
+    const { you } = await first.join();
+    for (let i = 0; i < 30; i++) first.move(at(i, 10));
+    const before = await b.snapshot((s) => s.entries.some((e) => e.id === you && e.x === 29));
+    const second = await connect({ bearer: "alice-token" });
+    await second.join();
+    const seq = second.move(at(300, 200, 0));
+
+    const after = await b.snapshot((s) => s.entries.some((e) => e.id === you && e.x === 300));
+    const was = before.entries.find((e) => e.id === you);
+    const now = after.entries.find((e) => e.id === you);
+    expect(now?.seq).toBe(seq);
+    expect(now?.jump).not.toBe(was?.jump);
+  });
+
+  it("is not let go by an old connection's session ending once a new one has taken over", async () => {
+    await start({ recheckMs: 50 });
+    const b = await connect(page("bob"));
+    await b.join();
+    const first = await connect(page("alice"));
+    const { you } = await first.join();
+    const second = await connect({ bearer: "alice-2-token" });
+    await second.join();
+    // The first device's session is revoked; the second's is not.
+    backend.sessions["alice-token"] = () => Response.json({ error: "unauthorized" }, { status: 401 });
+    ahead = 61_000;
+    await Bun.sleep(300);
+
+    expect(second.closed).toBeNull();
+    expect(b.texts.filter((m) => m.t === "left" && m.id === you)).toEqual([]);
+    expect(await census()).toEqual({ players: 2, connected: 2, rooms: { "town/1": 2 } });
+  });
+
   it("stands still in their place for a while after a drop, keeps it if they come back, and leaves if not", async () => {
     await start({ graceMs: 300 });
     const b = await connect(page("bob"));
@@ -289,7 +350,8 @@ describe("a player, whatever their connection", () => {
 
     expect(await b.next("left", (m) => m.id === you, 2000)).toEqual({ t: "left", id: you });
     expect(b.texts.filter((m) => m.t === "joined")).toEqual([]);
-    expect(await census()).toEqual({ players: 1, connected: 1, rooms: { "town/1": 1 } });
+    // Alice's record stays a while yet, for what she owes on opening connections; she is in no room.
+    expect(await census()).toMatchObject({ connected: 1, rooms: { "town/1": 1 } });
   });
 
   it("is gone at once, the connection closed as signed out, when their session ends", async () => {
@@ -306,7 +368,7 @@ describe("a player, whatever their connection", () => {
 
     expect((await a.ended()).code).toBe(CLOSE.signedOut);
     expect(await b.next("left", (m) => m.id === you)).toEqual({ t: "left", id: you });
-    expect(await census()).toEqual({ players: 1, connected: 1, rooms: { "town/1": 1 } });
+    expect(await census()).toMatchObject({ connected: 1, rooms: { "town/1": 1 } });
   });
 });
 
