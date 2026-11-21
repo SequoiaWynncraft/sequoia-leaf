@@ -5,6 +5,7 @@
  * yard always show the one number.
  */
 
+import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { balance, earn, spend } from "@sequoia-leaf/kit/purse.ts";
 
 import {
@@ -29,27 +30,17 @@ const OLD = "works.save.v1";
 const GREYBOX_PURSE = "works.coins.v2";
 const SCREEN = "works.screen.v1";
 
-const read = (key: string): string | null => {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
-const write = (key: string, text: string): void => {
-  try {
-    localStorage.setItem(key, text);
-  } catch {
-    // Not kept this time; it still holds for this visit.
-  }
-};
-const drop = (key: string): void => {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // Nothing to do.
-  }
-};
+// All through the kit's `keepText`: a page that has let go of the browser's game (`stopped()`)
+// writes none of it. What is not kept still holds for this visit.
+const read = keptText;
+const write = (key: string, text: string): void => void keepText(key, text);
+const drop = (key: string): void => void keepText(key, null);
+
+/** Starts the yard over: it and what the screen remembered are forgotten. */
+export function forgetYard(): void {
+  drop(KEY);
+  drop(SCREEN);
+}
 
 /** What the screen itself remembers between visits, beside the yard: nudges already taken, and the zoom. */
 export interface Screen {

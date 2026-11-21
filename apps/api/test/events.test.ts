@@ -5,7 +5,7 @@ import { Effect, Layer } from "effect";
 
 import { syncCredits } from "../src/earning/sync.ts";
 import { Events } from "../src/events/store.ts";
-import { StreamTuning } from "../src/http/handlers.ts";
+import { StreamTuning } from "../src/http/streams.ts";
 import { MINUTE, raid, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");

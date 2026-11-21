@@ -12,8 +12,10 @@ import { clamp, dist } from "@sequoia-leaf/kit/util.ts";
 import { cheerAll, face, hop, inTown, lead, letGo, say, walkTo } from "./actors.ts";
 import { burst, float, sparkle } from "./fx.ts";
 import { type Actor, after, changed, G, hooks, stepLater } from "./game.ts";
-import { guild, type Happening } from "./guild.ts";
+import { guild, type Happening, type Person } from "./guild.ts";
+import { lineFor } from "./news.ts";
 import { hangLantern, raiseBanner } from "./town.ts";
+import { done, figure, GATE, visitorOf } from "./visitors.ts";
 import { MUSTER } from "./world.ts";
 
 const named = (who: readonly string[]): Actor[] =>
@@ -114,14 +116,87 @@ function raidBack(who: readonly string[], raid: string, leaf: number): void {
   after(6, home);
 }
 
-function land(name: string): void {
+function land(name: string, h: Happening): void {
   raiseBanner(name);
   G.lands++;
   sfx.fanfare();
-  hooks.feed(`The guild has taken ${name}.`, "rose");
+  const line = lineFor(h);
+  if (line) hooks.feed(line[0], line[1]);
   after(0.7, () => {
     cheerAll(["glory to the grove!", "ours now!", "woo!", "huge", "be nice to them"]);
   });
+  // Whoever fought for it and is in town is pleased about it.
+  if (h.kind === "war")
+    for (const p of h.who) {
+      const a = visitorOf(p);
+      if (a) hop(a, 3);
+    }
+}
+
+/**
+ * Real members home from a raid together: they walk in through the gate (whoever is in town
+ * already comes over), the first of them hangs a lantern in the tree, and the town cheers. Then
+ * they go back to where they were, or out through the gate again if they were only passing.
+ */
+function partyHome(who: readonly Person[], h: Happening): void {
+  G.raidsToday++;
+  const line = lineFor(h);
+  const party = who
+    .filter((p) => !p.you)
+    .slice(0, MUSTER.length)
+    .map((p) => figure(p));
+  let cheered = false;
+  const home = (): void => {
+    if (cheered) return;
+    cheered = true;
+    sfx.fanfare();
+    if (line) hooks.feed(line[0], line[1]);
+    cheerAll();
+    for (const a of party) hop(a, 3);
+    const leader = party[0];
+    if (!leader) {
+      hangLantern({ x: 344, y: 206 });
+      return;
+    }
+    after(1.3, () => {
+      for (const a of party.slice(1)) done(a);
+      walkTo(leader, { x: 340, y: 216 }, () => {
+        leader.dir = 2;
+        hangLantern({ x: leader.x + 4, y: leader.y - 10 });
+        hop(leader, 2);
+        after(1.6, () => {
+          done(leader);
+        });
+      });
+    });
+  };
+  if (party.length === 0) {
+    home();
+    return;
+  }
+  party.forEach((a, i) => {
+    // Somebody passing comes in out of the dark beyond the gate.
+    if (a.alpha < 0.5) {
+      a.x = GATE.x - 7 + (i % 2) * 13;
+      a.y = GATE.y;
+    }
+    after(i * 0.35, () => {
+      walkTo(a, MUSTER[i] ?? { x: 256, y: 116 }, i === 0 ? home : null);
+    });
+  });
+  after(7, home);
+}
+
+/** A real member reached a level or a milestone: a line in the feed, and a flourish if they are in town. */
+function realNews(who: Person, h: Happening): void {
+  const line = lineFor(h);
+  if (line) hooks.feed(line[0], line[1]);
+  const a = who.you ? G.player : visitorOf(who);
+  if (!a || a.away) return;
+  sfx.levelUp();
+  sparkle(a.x, a.y - 10, 20, 7);
+  if (h.kind === "reached") float(a.x, a.y - 32, `Level ${h.level}!`, GOLD[2], 2.2);
+  hop(a, 3);
 }
 
 function levelUp(who: string, level: number): void {
@@ -188,6 +263,16 @@ function quietly(h: Happening): void {
     case "quest":
       changed();
       return;
+    case "party":
+      G.raidsToday++;
+      hangLantern({ x: 344, y: 206 });
+      return;
+    case "war":
+      raiseBanner(h.land);
+      G.lands++;
+      return;
+    case "reached":
+    case "milestone":
     case "call":
   }
 }
@@ -205,7 +290,17 @@ function stage(h: Happening): void {
       raidBack(h.who, h.raid, h.leaf);
       return;
     case "land":
-      land(h.name);
+      land(h.name, h);
+      return;
+    case "war":
+      land(h.land, h);
+      return;
+    case "party":
+      partyHome(h.who, h);
+      return;
+    case "reached":
+    case "milestone":
+      realNews(h.who, h);
       return;
     case "level":
       levelUp(h.who, h.level);
@@ -230,7 +325,7 @@ export function beginEvents(): void {
 export function stepEvents(): void {
   stepLater();
   // Whoever is in the gateway is half in the dark beyond it.
-  const all = G.player ? [G.player, ...G.mates] : G.mates;
+  const all = G.player ? [G.player, ...G.mates, ...G.visitors] : [...G.mates, ...G.visitors];
   for (const a of all) {
     if (a.away || (a.you && G.inDoor)) continue;
     a.alpha = a.y < 98 ? clamp((a.y - 84) / 12, 0, 1) : 1;

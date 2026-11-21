@@ -6,7 +6,12 @@
  * member has it.
  *
  * The looks are the one thing here bought with Leaf, and they change nothing but the picture.
+ *
+ * Everything is written through the kit's `keepText`, so a page that has let go of the browser's
+ * game (`stopped()`) writes none of it.
  */
+
+import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 
 export const PREFS_VERSION = 1;
 export const KEYS = {
@@ -144,19 +149,8 @@ export function loadPrefs(text: string | null): Prefs {
 }
 
 /** Reads a kept text, or null where there is none or no storage. */
-export function read(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-/** Keeps a text; `null` forgets it. Without storage it simply does not last. */
+export const read = keptText;
+/** Keeps a text; `null` forgets it. Without storage, or once the page has stopped, it simply does not last. */
 export function keep(key: string, text: string | null): void {
-  try {
-    if (text === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, text);
-  } catch {
-    // Nowhere to keep it; it still holds for this visit.
-  }
+  keepText(key, text);
 }

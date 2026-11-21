@@ -153,7 +153,7 @@ describe("a whole life of raids", () => {
     expect(almanac.fielded.length).toBeGreaterThan(15);
     expect(almanac.best[0]).toBeGreaterThan(5);
     expect(almanac.opened).toContain("kettle");
-    expect(coins).toBeGreaterThan(8 * 40);
-    expect(coins).toBeLessThan(8 * 300);
+    expect(coins).toBeGreaterThan(8 * 80);
+    expect(coins).toBeLessThan(8 * 600);
   });
 });

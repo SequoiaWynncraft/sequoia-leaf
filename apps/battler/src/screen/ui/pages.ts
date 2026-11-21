@@ -5,6 +5,7 @@
  */
 import { add, amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { balance, has, spend } from "@sequoia-leaf/kit/purse.ts";
+import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 
 import {
   BOSS_IDS,
@@ -518,6 +519,7 @@ function looks(): HTMLElement {
             "Buy",
             amount("leaf", spec.leaf),
           );
+    if (!on && !mine) closeLeaf(act, `${spec.leaf} Leaf`);
     add(
       body,
       el(

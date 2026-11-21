@@ -18,6 +18,7 @@ const full: Kept = {
   welcomed: "2026-11-21",
   chest: "2026-11-20",
   lastSeen: 1_795_000_000_000,
+  cursor: 1204,
   camp,
 };
 
@@ -47,6 +48,7 @@ describe("the town's kept record", () => {
         welcomed: "yesterday",
         chest: 20261120,
         lastSeen: -5,
+        cursor: -3,
       }),
     );
     expect(kept).toEqual({ ...blank(), owned: ["crown", "jar"] });

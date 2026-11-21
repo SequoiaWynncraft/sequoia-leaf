@@ -52,6 +52,8 @@ export interface Game {
   player: Actor | null;
   cinfy: Actor | null;
   mates: Actor[];
+  /** Real members who are in the game just now, standing about the town as themselves. */
+  visitors: Actor[];
   /** Top-left of what is on screen, in the town's pixels; and the size of the screen in them. */
   cam: Pt;
   view: { w: number; h: number; z: number; dpr: number };
@@ -85,6 +87,7 @@ export const G: Game = {
   player: null,
   cinfy: null,
   mates: [],
+  visitors: [],
   cam: { x: 96, y: 0 },
   view: { w: 320, h: 190, z: 4, dpr: 1 },
   panel: null,

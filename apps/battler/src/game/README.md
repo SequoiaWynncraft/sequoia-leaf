@@ -211,9 +211,9 @@ plans and draws one.
 A later trail adds figures to the forest's plans, makes its bosses a little stronger, and gives the
 sparring partners more to spend and more items. The rules do not change.
 
-**Between runs** (`outside.ts`). A run pays Coins when it ends, however it ends: 8 for every room
-won, 25 for every boss beaten, 60 for winning, and a quarter or a half more on the harder trails. A
-whole raid on the first trail is 255. The almanac remembers which figures have been fielded and
+**Between runs** (`outside.ts`). A run pays Coins when it ends, however it ends: 16 for every room
+won, 50 for every boss beaten, 120 for winning, and a quarter or a half more on the harder trails.
+A whole raid on the first trail is 510. The almanac remembers which figures have been fielded and
 taken to three stars, which items forged, which traits switched all the way on, which bosses beaten
 and the furthest room met on each trail. Four figures start locked and are opened by play: Kettle
 (clear the first wing), Drizzle Frog (clear the second), Gnome In A Bush (switch any kin or calling

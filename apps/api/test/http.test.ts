@@ -9,7 +9,7 @@ const OpenApiDocument = Schema.decodeUnknownSync(
   Schema.Struct({
     paths: Schema.Record(Schema.String, Schema.Unknown),
     components: Schema.Struct({
-      securitySchemes: Schema.Record(Schema.String, Schema.Struct({ type: Schema.String, scheme: Schema.String })),
+      securitySchemes: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.String)),
     }),
   }),
 );
@@ -69,6 +69,14 @@ describe("HTTP", () => {
 
     expect(Object.keys(document.paths).toSorted()).toEqual([
       "/healthz",
+      "/v1/game/guild/events",
+      "/v1/game/guild/events/stream",
+      "/v1/game/hello",
+      "/v1/game/me",
+      "/v1/game/presence",
+      "/v1/game/saves",
+      "/v1/game/saves/{slot}",
+      "/v1/game/skins/{uuid}",
       "/v1/me",
       "/v1/me/events",
       "/v1/me/events/stream",
@@ -77,6 +85,7 @@ describe("HTTP", () => {
     ]);
     expect(Object.values(document.components.securitySchemes)).toEqual([
       expect.objectContaining({ type: "http", scheme: "Bearer" }),
+      expect.objectContaining({ type: "apiKey", in: "cookie", name: "seq_session" }),
     ]);
   });
 });

@@ -3,7 +3,7 @@
   ["wait", 2200],
   ["click", "#arrival .k-btn"],
   ["wait", 900],
-  ["eval", "(window.town.skip(2), \"in town\")"],
+  ["eval", "(window.town.coins(4000), window.town.skip(2), \"in town, with Coins for the market\")"],
   ["eval", "(window.town.visit('market'), window.town.skip(6), \"the market\")"],
   ["move", -30, -30],
   ["wait", 350],

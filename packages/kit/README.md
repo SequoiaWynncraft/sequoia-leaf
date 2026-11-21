@@ -2,8 +2,8 @@
 
 The look and the plumbing every part of the guild's game shares, so the town and the games in it
 read as one thing: the Minecraft font, the dusk palette, wooden frames and buttons drawn as pixel
-art, the tools for drawing sprites in code, the member's character from their skin, the sounds, and
-the one purse.
+art, the tools for drawing sprites in code, the member's character from their skin, the sounds, the
+one purse, and finding out whether the game is being played on the guild's own server.
 
 ```html
 <link rel="stylesheet" href="../../packages/kit/src/kit.css" />
@@ -50,28 +50,81 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
 | `k-cur` (`leaf`)                                                      | An amount of Leaf or Coins                                           |
 | `k-bar` (`leaf`, `coral`)                                             | How far along something is: `<div class="k-bar"><i style="--v:40%">` |
 | `k-chip` (`lit`)                                                      | A small tag                                                          |
-| `k-toast` (`leaf`, `coral`, `rose`)                                   | A line of news                                                       |
+| `k-toast` (`leaf`, `coral`, `rose`, `alone`)                          | A line of news; `alone`, over the whole page at the top              |
 | `k-title`, `k-label`, `k-d`, `k-dim`, `k-over`                        | Words: titles, small labels, second lines, words over the world      |
 | `k-scrim`, `k-rise`, `k-row`, `k-col`, `k-wrap`, `k-grow`, `k-scroll` | Laying things out                                                    |
+| `k-shut`                                                              | The card a page shows instead of itself when it will not open        |
 
 The frames and icons are drawn in `tools/frames.ts` as rows of letters and written into
 `src/frames.css` as small pictures (`bun run frames`); add a frame or an icon there.
 
 ## The modules (`src/`)
 
-| File          | What it holds                                                                      |
-| ------------- | ---------------------------------------------------------------------------------- |
-| `palette.ts`  | The colour ramps                                                                   |
-| `pix.ts`      | Pixel-art tools: rectangles, pictures typed as rows of letters, outlines, ellipses |
-| `util.ts`     | Canvases, numbers, repeatable noise                                                |
-| `text.ts`     | Words on a canvas in the font                                                      |
-| `signs.ts`    | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines  |
-| `tip.ts`      | Tips: `tip(el, title, text)` shows one on hover, focus and long press              |
-| `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look   |
-| `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all   |
-| `dom.ts`      | `el`, `icon`, `amount` and a few more for building the interface                   |
-| `purse.ts`    | Leaf and Coins, shared by every page of the game and kept in step between them     |
-| `pursebar.ts` | The purse as a page shows it, its numbers rolling; and things that fly across it   |
-| `shell.ts`    | How a game that is a place in the town and the town speak to each other            |
+| File          | What it holds                                                                                      |
+| ------------- | -------------------------------------------------------------------------------------------------- |
+| `palette.ts`  | The colour ramps                                                                                   |
+| `pix.ts`      | Pixel-art tools: rectangles, pictures typed as rows of letters, outlines, ellipses                 |
+| `util.ts`     | Canvases, numbers, repeatable noise                                                                |
+| `text.ts`     | Words on a canvas in the font                                                                      |
+| `signs.ts`    | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines                  |
+| `tip.ts`      | Tips: `tip(el, title, text)` shows one on hover, focus and long press                              |
+| `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look                   |
+| `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all                   |
+| `dom.ts`      | `el`, `icon`, `amount` and a few more for building the interface                                   |
+| `purse.ts`    | Leaf and Coins, shared by every page of the game and kept in step between them                     |
+| `pursebar.ts` | The purse as a page shows it, its numbers rolling; things that fly across it; a closed Leaf button |
+| `shell.ts`    | How a game that is a place in the town and the town speak to each other                            |
+| `postcard.ts` | What a game leaves for the town to read about it while nobody is in it                             |
+| `net.ts`      | Everything asked of the world outside the page: the server, storage, the address                   |
+| `live.ts`     | Where the game is being played, who the member is, and the cards for when it is shut               |
+| `cloud.ts`    | Keeping what the games keep on the member's account, when the game is live                         |
+| `keep.ts`     | Writing the game into the browser; a page that has let go of it (`stopped()`) writes none of it    |
+| `presence.ts` | Telling the server where in the game the member is, and hearing who else is about                  |
+| `standin.ts`  | A stand-in server and storage for tests; no page loads it                                          |
 
 `tools/drive.ts` drives a built page in headless Chromium and takes screenshots; its header says how.
+
+## Live, on the guild's server
+
+The same pages play with a made-up guild anywhere, and as a real member when the guild's own
+server (Leaf) serves them. Every page awaits `start()` (`live.ts`) before anything else. It asks
+`GET /v1/game/hello` on the page's own origin: anything but its answer means there is no server,
+and nothing below happens. With a server it asks `GET /v1/game/me`:
+
+- **Known.** The game is live, as that member. The purse keeps a ledger from then on
+  (`fromLedger`): its Leaf is the number the server gives and nothing else, `grant` does nothing,
+  `spend("leaf", …)` refuses, and `leafOpen()` is false. Every Leaf button is passed to
+  `closeLeaf`, which shows it closed with the tip "Leaf spending opens after the play-test." A
+  page that is the whole window listens to the member's own events (`followLeaf`) and asks for
+  the Leaf number again whenever one arrives.
+- **Signed out (401).** The whole window goes to the `sign_in` address the server gave, with its
+  own address on the end, and comes back. Refused again within a minute (the time it went is kept
+  in the browser), or in a frame, it shows the "Signed out" card instead.
+- **Not a member (403)**, or **trouble (5xx, no answer)**: a card says so, with one button.
+
+The cards are `shutCard`: a `k-paper` with a title, a line and one button, in place of the page.
+
+**Saves** (`cloud.ts`). What the games keep is text in the browser under a few names; `SLOTS`
+says which slot on the server each name belongs to (`purse`, `town`, `works`, `raid`). The
+sound setting and each game's view settings are in none, and stay in the browser. Before a page
+reads anything it `pull`s its slots, which writes the server's copy into the browser; if the
+browser last held another member's game (or nobody's), the names in every slot are cleared
+first. After that the page looks once a second for changed text, and sends a changed slot at
+most every five seconds, with the version it last read and the time it changed (`saved_at`). On
+a conflict it fetches the slot and keeps whichever was saved later. On the town's `closing`, when
+the page is put away or hidden, it runs whatever the page asked to run first (`before`) and sends
+at once. With the made-up guild none of this fetches anything.
+
+Every page writes what it keeps through `keepText` (`keep.ts`), never straight into storage.
+Once a page has pulled, each write first makes sure the browser's game is still its member's.
+When another member's page has taken the browser over (or the server answers `not_you`), the
+page stops (`stopped()`) before it loads again, and writes nothing more, not even as it goes, so
+nothing it still holds lands under the other member's names. A test in `keep.test.ts` holds
+every file in the kit and the games to this.
+
+**Who is here** (`presence.ts`). A live page says where the member is (`here("town" | "camp" |
+"works" | "table")`) every half minute and at once when it changes; the answer, everybody seen
+lately, goes to whoever `hearPresent`s.
+
+All of it reaches the server through `net.ts`, which tests replace with `standin.ts`; the tests
+read the server's own contract files (`contracts/leaf-api-v1.json`, `contracts/leaf-game-v1.json`).

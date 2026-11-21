@@ -18,6 +18,10 @@ level a member reaches: a tenth of the XP the level took. Signed-in members
 can read their balance, level and quests. There is no way to spend Leaf yet
 and there are no staff endpoints.
 
+It also serves the guild's browser game, Guild Town, at `/play/town/`, and the
+routes only the game uses. The game shows a member's Leaf; no route lets it
+spend or pay any.
+
 ## Getting started
 
 ```sh
@@ -30,25 +34,38 @@ bun run dev      # run the server at http://localhost:3000, restarting on change
 
 The server is configured with environment variables:
 
-| Variable                      | Default                   | What it is                                              |
-| ----------------------------- | ------------------------- | ------------------------------------------------------- |
-| `PORT`                        | `3000`                    | The port to listen on.                                  |
-| `DATABASE_PATH`               | `data/leaf.db`            | The SQLite file. It is created when missing.            |
-| `BACKUP_DIR`                  | `backups` beside the file | Where snapshots of the database are written.            |
-| `BACKEND_URL`                 | `https://api.seqwawa.com` | sequoia-backend, for the credit feed and session check. |
-| `BACKEND_INTERNAL_TOKEN`      | none                      | sequoia-backend's `APP_INTERNAL_API_TOKEN`.             |
-| `SIERRA_URL`                  | none                      | Sierra's internal API, for the awards feed.             |
-| `LEAF_RATES_WEBHOOK_URL`      | none                      | A Discord webhook where Leaf keeps its rate card.       |
-| `BACKUP_S3_ENDPOINT`          | none                      | The S3 endpoint snapshots are copied to.                |
-| `BACKUP_S3_BUCKET`            | none                      | The bucket there.                                       |
-| `BACKUP_S3_ACCESS_KEY_ID`     | none                      | A key that may write to that bucket.                    |
-| `BACKUP_S3_SECRET_ACCESS_KEY` | none                      | Its secret.                                             |
+| Variable                      | Default                    | What it is                                              |
+| ----------------------------- | -------------------------- | ------------------------------------------------------- |
+| `PORT`                        | `3000`                     | The port to listen on.                                  |
+| `DATABASE_PATH`               | `data/leaf.db`             | The SQLite file. It is created when missing.            |
+| `BACKUP_DIR`                  | `backups` beside the file  | Where snapshots of the database are written.            |
+| `BACKEND_URL`                 | `https://api.seqwawa.com`  | sequoia-backend, for the credit feed and session check. |
+| `BACKEND_INTERNAL_TOKEN`      | none                       | sequoia-backend's `APP_INTERNAL_API_TOKEN`.             |
+| `SIERRA_URL`                  | none                       | Sierra's internal API, for the awards feed.             |
+| `LEAF_RATES_WEBHOOK_URL`      | none                       | A Discord webhook where Leaf keeps its rate card.       |
+| `BACKUP_S3_ENDPOINT`          | none                       | The S3 endpoint snapshots are copied to.                |
+| `BACKUP_S3_BUCKET`            | none                       | The bucket there.                                       |
+| `BACKUP_S3_ACCESS_KEY_ID`     | none                       | A key that may write to that bucket.                    |
+| `BACKUP_S3_SECRET_ACCESS_KEY` | none                       | Its secret.                                             |
+| `PUBLIC_ORIGIN`               | `https://leaf.seqwawa.com` | The origin Leaf's own pages are served from.            |
+| `PUBLIC_DIR`                  | none                       | The built game pages to serve under `/play`.            |
+| `GAME_SIGN_IN_URL`            | see below                  | Where the game sends a member to sign in.               |
+| `GAME_LEAF_SPENDING`          | `false`                    | Whether the game may offer to spend Leaf.               |
 
 Without `BACKEND_INTERNAL_TOKEN` the server answers requests but does not read
 the credit feed, which is what local development wants. Without `SIERRA_URL` it
 does not read the awards feed, and achievement milestones pay nothing. Without
 `LEAF_RATES_WEBHOOK_URL` it keeps no rate card in Discord. Without all four
-`BACKUP_S3_*` variables, snapshots stay on the machine.
+`BACKUP_S3_*` variables, snapshots stay on the machine. Without `PUBLIC_DIR`
+there is no `/play` and nothing at `/`; the image sets it.
+
+`PUBLIC_ORIGIN` must be an `http` or `https` origin with nothing after the
+host and port, such as `https://leaf.seqwawa.com`; anything else stops the
+server at start with an error that names the variable but not its value.
+
+`GAME_SIGN_IN_URL` defaults to the website's sign-in,
+`https://api.seqwawa.com/auth/web/start?return_to=`; the game adds its own
+address after `return_to=`. Only `GET /v1/game/hello` reads `GAME_LEAF_SPENDING`.
 
 ## Layout
 
@@ -57,7 +74,11 @@ does not read the awards feed, and achievement milestones pay nothing. Without
 | `packages/core`       | The rules of the game as pure functions and types. No I/O.           |
 | `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.        |
 | `apps/api/migrations` | The database schema, as Effect migrations applied in order at start. |
-| `Dockerfile`          | The production image.                                                |
+| `apps/town`           | Guild Town, the browser game's home screen.                          |
+| `apps/works`          | The Works, a game in the town.                                       |
+| `apps/battler`        | The Little Raid, a game in the town.                                 |
+| `packages/kit`        | What the town and its games share: look, sound and plumbing.         |
+| `Dockerfile`          | The production image, with the game's pages built into it.           |
 
 ## How Leaf is earned
 
@@ -145,6 +166,18 @@ including 404 `not_found` for a route that does not exist and 500
 cause. The one exception is a body sent with a `Content-Type` other than JSON,
 which gets a plain 415.
 
+A route reads at most 16 KiB of a request's body, and answers a longer one
+with 413 `body_too_large` without reading it; only saves may be longer (see
+[The game's routes](#the-games-routes)). The server itself takes no body over
+1 MiB.
+
+Every answer carries `X-Content-Type-Options: nosniff`, so browsers never take
+it for another type than the one it was sent as. Every answer but the game's
+pages, the JSON, the skins and the streams, also carries
+`Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`: a
+browser that opens one loads and runs nothing with it, and no page may frame
+it (`API_POLICY` in `apps/api/src/http/headers.ts`).
+
 The routes are declared once, as an Effect `HttpApi` in
 `apps/api/src/api/api.ts`, with the shape of every answer and error in
 `schemas.ts` and `errors.ts` beside it. The server implements that declaration,
@@ -160,11 +193,30 @@ and `GET /openapi.json` serves the OpenAPI document generated from it.
 | `GET /v1/me/events/stream`       | The same events as they happen, as server-sent events.     |
 | `GET /openapi.json`              | This API as an OpenAPI document.                           |
 
-`/v1/me` routes take the member's Sequoia session, the token sequoia-backend
-issued, as `Authorization: Bearer`; the mod sends the one it already holds for
-the backend. The server asks sequoia-backend who the session belongs to, and
-remembers a confirmed session for a minute. Only current guild members are let
-in.
+The game has routes of its own under `/v1/game/`; see [The game's routes](#the-games-routes).
+
+`/v1/me` and `/v1/game` routes take the member's Sequoia session, the token
+sequoia-backend issued, in one of two ways:
+
+- **`Authorization: Bearer`**, as the mod sends the one it already holds for the backend.
+- **The website's cookie, `seq_session`**, as a browser sends it. The website
+  sets it for the whole `seqwawa.com` domain when a member signs in, so it
+  reaches Leaf's own pages too. A request with the cookie whose method is not
+  `GET` or `HEAD` must carry an `Origin` header equal to `PUBLIC_ORIGIN`, or it
+  gets 403 `bad_origin` and changes nothing: another site can make a browser
+  send the cookie, but not with Leaf's origin. Leaf sends no CORS headers, so
+  only its own pages can read its answers.
+
+A request with both is let in by its Bearer header when that would let it in on
+its own, and is otherwise judged by the cookie alone. Either way, the server
+asks sequoia-backend who the session belongs to, and remembers a confirmed
+session for a minute. Only current guild members are let in.
+
+A request that carries the `seq_session` cookie more than once gets 401
+`unauthorized`, Bearer header or not, and the backend is not asked about it. A
+browser sends two when another `seqwawa.com` site has set a cookie of that
+name beside the website's, which could sign the game in as someone else;
+signing in on the website again sets things right.
 
 Each quest in `/v1/me/quests` lists its `goals`, every way to finish it, each
 with its own `type`, `raid`, `title`, `progress` and `target`. Its `objective`,
@@ -217,6 +269,13 @@ CI's `contract-copies` job compares the file with the copy on Sequoia-mod's
 `main` and fails while they differ, so merge the mod's copy with or before the
 change here.
 
+The game's routes have their own file, `contracts/leaf-game-v1.json`, written
+by `apps/api/test/game-contract.test.ts` from one member's day of play with a
+guild-mate, the same way. No other repository keeps a copy, so changing it
+needs no change elsewhere first: `cd apps/api && WRITE_CONTRACTS=1 bun test
+test/game-contract.test.ts` writes it again. It has every answer except the
+skin, which is a picture.
+
 ### Events
 
 An event is something a client would want to show when it happens. Each one is
@@ -257,8 +316,150 @@ react to `quest_completed`.
   `EventSource` does this by itself.
 - The server closes a stream after 15 minutes. Reconnect the same way; this is
   when the session is checked again.
+- A member may have six streams open at once, this one and the guild's
+  (below) together. Opening a seventh closes their oldest.
 - A stream carries a comment line every 20 seconds to keep the connection
   open. Ignore lines that start with `:`.
+
+### The game's routes
+
+| Route                              | What it returns                                                       |
+| ---------------------------------- | --------------------------------------------------------------------- |
+| `GET /v1/game/hello`               | Where to sign in, and whether Leaf may be spent. Needs no session.    |
+| `GET /v1/game/me`                  | The member, their rank, Leaf, XP, level, and their newest event's id. |
+| `GET /v1/game/saves`               | The member's saves: each slot's version and when it was written.      |
+| `GET /v1/game/saves/{slot}`        | One save, with what it holds.                                         |
+| `PUT /v1/game/saves/{slot}`        | Writes one.                                                           |
+| `GET /v1/game/skins/{uuid}`        | A player's skin sheet, as a PNG.                                      |
+| `GET /v1/game/guild/events`        | What happened across the guild, oldest first.                         |
+| `GET /v1/game/guild/events/stream` | The same as it happens, as server-sent events.                        |
+| `PUT /v1/game/presence`            | Says where in the game the member is, and lists who else is there.    |
+
+Every one but `hello` takes a session, as above, and lets in only current guild
+members.
+
+`GET /v1/game/hello` answers `{ "sign_in", "leaf_spending" }`: `GAME_SIGN_IN_URL`
+and `GAME_LEAF_SPENDING`. A page that gets it knows it is on a live server.
+
+`GET /v1/game/me` answers `{ "player": { "id", "username" }, "rank", "leaf",
+"xp", "level", "event_cursor" }`. `rank` is the member's guild rank as the guild
+writes it, such as `Captain`, or null for a website admin who is not in the
+guild. `level` is as `/v1/me` has it. `event_cursor` is the id of the member's
+newest event, 0 when they have none, from which to read `/v1/me/events?after=`
+on their next visit.
+
+**Saves.** Each member has a save in each of four slots, `purse`, `town`,
+`works` and `raid` (`SAVE_SLOTS` in `packages/core/src/saves.ts`). A save is a
+JSON object of at most 256 KiB as JSON text; Leaf stores it as it comes and
+reads nothing in it. It is not the ledger: one row per slot, overwritten in
+place, with no history.
+
+- `GET /v1/game/saves/{slot}` answers `{ "slot", "version", "updated_at", "data" }`,
+  or 404 `no_save` for a slot never written.
+- `PUT /v1/game/saves/{slot}` takes `{ "player", "version", "data" }`, where
+  `player` is the id of the member the page believes it is (from
+  `/v1/game/me`), and `version` is the version last read, 0 for none. A save
+  whose `player` is not the session's member gets 409 `not_you` and changes
+  nothing: the page was left open as someone else, and should load again. It is
+  written only while `version` is still the stored version, as the next one,
+  and answers `{ "version", "updated_at" }`. Otherwise it gets 409
+  `version_conflict` and changes nothing: read the save again. A slot that is
+  not one gets 400 `invalid_slot`; a body that is not a save, or `data` that is
+  not an object, 400 `invalid_save`; a save over 256 KiB, 413 `save_too_large`.
+  A body over twice that is not read at all.
+
+**Skins.** `GET /v1/game/skins/{uuid}` takes a Minecraft UUID with or without
+dashes, or gets 400 `invalid_uuid`. It serves only the skins of players Leaf
+knows: the member asking, anyone with an account in the ledger, and anyone
+whose game said where they were in the last day (see Presence). Any other
+player gets 404 `no_skin`, and Mojang is not asked about them.
+
+Leaf asks Mojang's session server for the player's profile and fetches the
+skin it names, but only from `textures.minecraft.net/texture/<hex>`, over HTTPS
+(Mojang writes these addresses with `http:`). Each request to Mojang has five
+seconds. A skin must be a PNG of at most 64 KiB whose header says it is 64 by
+64 pixels, or 64 by 32 as older skins are; Leaf keeps and serves its bytes up
+to the end of its last chunk, and nothing after them. Requests for one player
+that arrive together share one fetch.
+
+Leaf keeps the skin in the database for a day; when Mojang can't be reached,
+it serves the one it kept, however old. A player in a default skin, one Mojang
+does not know, or one whose skin Leaf has never been able to get gets 404
+`no_skin`. After Mojang had no skin for a player, or could not be asked, Leaf
+does not ask about them again for an hour. Each time Leaf keeps a new skin, it
+removes those nobody asked for in 30 days. A skin is sent with
+`Cache-Control: private, max-age=86400`.
+
+**The guild's events** are the events above of every member, read from the
+same table, of three types only, with what they paid cut out:
+
+| Type               | `data`                                                     |
+| ------------------ | ---------------------------------------------------------- |
+| `leaf_earned`      | `source`, `detail`, `occurred_at`, and `in_claim` if known |
+| `level_up`         | `level`                                                    |
+| `achievement_paid` | `label`, `tier`                                            |
+
+Each is `{ "id", "type", "created_at", "player": { "id", "username" }, "data" }`.
+`GET /v1/game/guild/events` lists the newest 50, or with `?after=<id>` up to 200
+after that id. The stream behaves exactly as the member's own does, from where
+it starts to when it closes, and counts toward the same six. All open guild
+streams are fed by one look at the database every two seconds, not one each.
+Raid party members' events share a `detail` and an `occurred_at`.
+
+A member's name is the one the backend gave when they last opened
+`/v1/game/me`, or else the one Mojang gives. Leaf asks Mojang only about
+players it knows, as for skins. It keeps the names it learns, and each time it
+learns a new one, removes those nobody asked for in 30 days. An event whose
+member no one can name yet, because Mojang can't be reached, is left out.
+
+**Presence.** `PUT /v1/game/presence` takes `{ "place" }`, one of `town`,
+`camp`, `works` and `table`, or gets 400 `invalid_place`. It records where the
+member is and answers `{ "present": [{ "id", "username", "place" }] }`: everyone
+whose game said where they were in the last 90 seconds, the member included.
+Members not seen for a day are forgotten.
+
+## The game's pages
+
+When `PUBLIC_DIR` is set, the server serves its contents under `/play`, with
+`index.html` for a directory, and `GET /` sends the browser to `/play/town/`.
+The town frames its games from `/play/works/` and `/play/battler/`, beside it.
+A path that is not a file there gets the JSON 404 like any other.
+
+Every page and file there is sent with a `Content-Security-Policy` that lets it
+load and frame only what Leaf serves, talk only to Leaf, and be framed only by
+Leaf's own pages; it allows the pages' inline styles, pictures drawn in the
+page, and the font built into their styles. A `<base>` may point only at Leaf,
+a form may be sent only to Leaf, and no plugin content loads (`PAGE_POLICY` in
+`apps/api/src/http/pages.ts`). The pages themselves are sent with
+`Cache-Control: no-cache`, and their scripts and styles, whose names carry a
+hash of what they hold (`index-<hash>.js`), are kept for a year. Which of the
+two a file gets is decided by its path alone, never by the query.
+
+The `Dockerfile` builds the three apps with `bun build index.html --minify`,
+each into `/app/public/<app>`, in a stage of its own, and the image sets
+`PUBLIC_DIR=/app/public`.
+
+### Trying the game on this machine
+
+```sh
+for app in town works battler; do (cd apps/$app && bun build index.html --outdir /tmp/play/$app --minify); done
+bun apps/api/test/play.ts 4000 /tmp/play
+```
+
+This runs the real app at `http://127.0.0.1:4000/play/town/`, on a database in
+memory, with the tests' stand-ins for the backend, Sierra and Mojang, so nothing
+leaves the machine. It first plays a day: a member called Tester raids, wars,
+finishes and rerolls quests, reaches a level and a dozen milestones, beside four
+guild-mates who raid and war with them and on their own.
+
+- The cookie `seq_session=tester` is Tester's session; any other, or none, is
+  signed out. `/sign-in?return_to=<address>` sets it and goes back, as the
+  website's sign-in does, and it is the `sign_in` that `hello` gives.
+  `/sign-out?return_to=<address>` clears it.
+- `PUBLIC_ORIGIN` is `http://127.0.0.1:4000`.
+- `--not-a-member`: Tester is signed in but not in the guild, so the game's routes answer 403.
+- `--down`: the backend can't be asked who Tester is, so they answer 503.
+- `--busy`: every minute a few guild-mates finish a raid together, for the guild's news.
 
 ## Rules the code is built on
 
@@ -309,6 +510,8 @@ as OpenTofu configuration. What the Coolify app is set up with:
 
 - **A volume at `/data`** (`leaf-data`), which holds the database and survives
   deploys. The image runs as an unprivileged user that owns `/data`.
+- **`PUBLIC_DIR`**, set by the image. `PUBLIC_ORIGIN` and `GAME_SIGN_IN_URL`
+  are left at their defaults, which are production's.
 - **`BACKEND_URL=http://sequoia-backend:8081`**, the backend's address on the
   server's private Docker network, so the credit feed and session checks never
   leave the machine.
