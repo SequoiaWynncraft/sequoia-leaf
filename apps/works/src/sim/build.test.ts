@@ -257,7 +257,7 @@ describe("plots", () => {
 describe("plans", () => {
   test("a plan is for sale once the story opens it and the plan before it is owned", () => {
     const w = create({ story: 3 });
-    expect(planRefusal(w, "rakes", 99999)).toBe("Sharper rakes comes with a later order");
+    expect(planRefusal(w, "rakes", 99999)).toBe("Sharper rakes unlocks when you fill order 4: Gears and frames");
     const later = create({ story: 20 });
     expect(planState(later, "rakes").state).toBe("for sale");
     expect(planRefusal(later, "rakes", price("rakes") - 1)).toBe("Not enough Coins");

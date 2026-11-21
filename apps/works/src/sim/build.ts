@@ -8,6 +8,7 @@ import { KIND, type Kind, SPAN } from "./content/machines.ts";
 import { type PlanId, type PlanInfo, PLANS } from "./content/plans.ts";
 import type { PlotId } from "./content/plots.ts";
 import { RECIPE } from "./content/recipes.ts";
+import { STORY } from "./content/story.ts";
 import { type Dir, DX, DY } from "./grid.ts";
 import { besideWater, type Plot, touching } from "./land.ts";
 import { fillBoard } from "./orders.ts";
@@ -262,12 +263,23 @@ export function buyPlot(w: World, id: PlotId, coins: number): Spent {
 
 const planOf = (id: PlanId): PlanInfo | null => PLANS.find((p) => p.id === id) ?? null;
 
+/** Which story order puts a plan up for sale, as the yard counts them ("order 3"), and its title. */
+function openedBy(id: PlanId): { n: number; title: string } | null {
+  const i = STORY.findIndex((order) => order.opens.plans?.includes(id) === true);
+  const order = STORY[i];
+  return order ? { n: i + 1, title: order.title } : null;
+}
+
 /** Where a plan stands: owned, for sale now, or not yet (and why). */
 export function planState(w: World, id: PlanId): { state: "owned" | "for sale" | "not yet"; why: string | null } {
   const plan = planOf(id);
   if (!plan) return { state: "not yet", why: "There is no such plan" };
   if (w.plans.includes(id)) return { state: "owned", why: null };
-  if (!w.open.plans.has(id)) return { state: "not yet", why: `${plan.name} comes with a later order` };
+  if (!w.open.plans.has(id)) {
+    const by = openedBy(id);
+    const why = by ? `unlocks when you fill order ${by.n}: ${by.title}` : "unlocks later in the story";
+    return { state: "not yet", why: `${plan.name} ${why}` };
+  }
   const missing = plan.needs.find((n) => !w.plans.includes(n));
   if (missing !== undefined)
     return { state: "not yet", why: `${plan.name} needs ${planOf(missing)?.name ?? missing} first` };

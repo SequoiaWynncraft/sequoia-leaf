@@ -9,8 +9,10 @@
  * four are in the game (Birchwood in town, Mossling at the table, saying so
  * every half minute) and two left a while ago and doze in town (Fernhollow
  * three hours ago, Quillon forty minutes ago, by the Works). Pebblefoot, who
- * is not in the guild, is in town too, as a guest. The backend, Sierra and
- * Mojang are the tests' stand-ins, so nothing leaves the machine.
+ * is not in the guild, is in town too, as a guest. Birchwood and Pebblefoot
+ * are in the town's live room as well, walking about it (`/v1/game/live`).
+ * The backend, Sierra and Mojang are the tests' stand-ins, so nothing leaves
+ * the machine.
  *
  * The cookie `seq_session=tester` is Tester's session; any other, or none, is
  * signed out. `/sign-in?return_to=<address>` sets it and goes back, as the
@@ -23,11 +25,13 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { type PlayerId, playerId } from "@sequoia-leaf/core";
-import { Effect } from "effect";
+import { CLIENT_HZ, Flag, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { Effect, Layer } from "effect";
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
+import { LiveClient } from "./live-client.ts";
 import {
   DAY,
   fakeBackend,
@@ -426,13 +430,76 @@ function signing(request: Request): Response | undefined {
   return new Response(null, { status: 302, headers: { Location: back, "Set-Cookie": cookie } });
 }
 
-Bun.serve({
-  hostname: "127.0.0.1",
-  port,
-  // Seconds. An event stream writes a keep-alive every 20, well inside this.
-  idleTimeout: 60,
-  fetch: (request) => signing(request) ?? app.handle(request),
-});
+// Served as production serves it, so that live connections work too, with the sign-in beside it.
+const signingRoute = (path: "/sign-in" | "/sign-out") =>
+  HttpRouter.add(
+    "GET",
+    path,
+    Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
+      HttpServerResponse.fromWeb(
+        signing(new Request(`${origin}${request.url}`)) ?? new Response(null, { status: 404 }),
+      ),
+    ),
+  );
+await leaf.serve(port, Layer.mergeAll(signingRoute("/sign-in"), signingRoute("/sign-out")));
+
+/**
+ * Two of those in town walk about it live, as a player's game would say they do: Birchwood round
+ * the square, and Pebblefoot, the guest, from spot to spot with a pause at each.
+ */
+async function walk(who: { readonly name: string }, path: readonly (readonly [number, number])[], pause: number) {
+  const client = await LiveClient.open(origin, { bearer: sessionFor(who) });
+  await client.join("town");
+  const speed = 30;
+  let leg = 0;
+  let [x, y] = path[0] ?? [256, 200];
+  let resting = 0;
+  setInterval(() => {
+    const dt = 1 / CLIENT_HZ;
+    const [tx, ty] = path[(leg + 1) % path.length] ?? [x, y];
+    if (resting > 0) {
+      resting -= dt;
+      return;
+    }
+    const dx = tx - x;
+    const dy = ty - y;
+    const d = Math.hypot(dx, dy);
+    const step = speed * dt;
+    // The town's facings: 0 down, 1 left, 2 right, 3 up.
+    const facing = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0;
+    if (d <= step) {
+      [x, y] = [tx, ty];
+      leg = (leg + 1) % path.length;
+      resting = pause;
+      client.move({ x, y, vx: 0, vy: 0, facing, pose: 0, flags: 0 });
+      return;
+    }
+    x += (dx / d) * step;
+    y += (dy / d) * step;
+    client.move({ x, y, vx: (dx / d) * speed, vy: (dy / d) * speed, facing, pose: 0, flags: Flag.Moving });
+  }, 1000 / CLIENT_HZ);
+}
+if (birchwood) {
+  await walk(
+    birchwood,
+    [
+      [200, 190],
+      [320, 190],
+      [320, 250],
+      [200, 250],
+    ],
+    0,
+  );
+}
+await walk(
+  pebblefoot,
+  [
+    [256, 120],
+    [150, 220],
+    [380, 230],
+  ],
+  3,
+);
 
 const state = guest ? " (Tester is a guest)" : down ? " (the backend is down)" : "";
 console.log(`Leaf is playing at ${origin}/play/town/${state}`);

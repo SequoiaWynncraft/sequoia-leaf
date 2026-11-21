@@ -56,6 +56,9 @@
     },
     "packages/kit": {
       "name": "@sequoia-leaf/kit",
+      "dependencies": {
+        "@sequoia-leaf/core": "workspace:*",
+      },
       "devDependencies": {
         "@types/bun": "1.4.4",
       },

@@ -1,5 +1,6 @@
 import { deflateSync } from "node:zlib";
 
+import { BunHttpServer } from "@effect/platform-bun";
 import type { Activity, PlayerId, Posting } from "@sequoia-leaf/core";
 import { Clock, ConfigProvider, Duration, Effect, Layer, ManagedRuntime, Option, Redacted, References } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
@@ -12,6 +13,7 @@ import type { CreditSource } from "../src/earning/sync.ts";
 import { Events } from "../src/events/store.ts";
 import { Mojang, MojangError, type MojangProfile } from "../src/game/mojang.ts";
 import { Ledger } from "../src/ledger/store.ts";
+import { Live, LIVE_SOCKETS, LiveFarewell } from "../src/live/live.ts";
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
@@ -128,7 +130,7 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
       Events.useSync((real) => fakes.events?.(real) ?? real),
     ),
   );
-  const layer = between.pipe(Layer.provideMerge(stores));
+  const layer = Layer.merge(between.pipe(Layer.provideMerge(stores)), Live.layer.pipe(Layer.provide(outside)));
   // Layers built through the same memo map are built once, so `run` and `app` see the same database.
   const memoMap = Layer.makeMemoMapUnsafe();
   const runtime = ManagedRuntime.make(layer, { memoMap });
@@ -155,6 +157,42 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
         /** Answers a request as the server would, such as one a browser sent. */
         handle: (request: Request) => handler(request),
         request: (path: string, init: RequestInit = {}) => handler(new Request(`http://leaf.test${path}`, init)),
+      };
+    },
+    /**
+     * Leaf on a real port of this machine, served by Bun as in production, live connections and
+     * all, with any routes of the caller's beside its own. Port 0 takes any free one.
+     */
+    serve: async (port = 0, extra: Layer.Layer<never, never, HttpRouter.HttpRouter> = Layer.empty) => {
+      const server = LiveFarewell.pipe(
+        Layer.provideMerge(
+          HttpRouter.serve(Layer.mergeAll(Routes, extra), { disableLogger: true, routerConfig }).pipe(
+            Layer.provideMerge(
+              BunHttpServer.layer({
+                hostname: "127.0.0.1",
+                port,
+                idleTimeout: 60,
+                websocket: LIVE_SOCKETS,
+                gracefulShutdownTimeout: "1 second",
+              }),
+            ),
+          ),
+        ),
+        Layer.provide(layer),
+      );
+      const served = ManagedRuntime.make(server, { memoMap });
+      const address = await served.runPromise(
+        Effect.gen(function* () {
+          const http = yield* HttpServer.HttpServer;
+          return http.address;
+        }),
+      );
+      const at = "port" in address ? address.port : 0;
+      return {
+        port: at,
+        origin: `http://127.0.0.1:${at}`,
+        /** Stops serving: live connections are told Leaf is restarting. */
+        close: () => served.dispose(),
       };
     },
   };

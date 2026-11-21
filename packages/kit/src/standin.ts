@@ -87,6 +87,9 @@ export function standin(
       reloaded.count++;
     },
     now: () => clock.now,
+    socket: () => {
+      throw new Error("No live connection in this test");
+    },
   });
   return { store, sent, went, reloaded, clock, done };
 }
