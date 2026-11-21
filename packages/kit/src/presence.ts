@@ -6,6 +6,7 @@
  * it does nothing.
  */
 
+import { keptText } from "./keep.ts";
 import { member } from "./live.ts";
 import { isRecord, put } from "./net.ts";
 
@@ -68,14 +69,33 @@ export function readResting(v: unknown): Resting[] {
   return out;
 }
 
+/** The town's record, where the member's choice to stay or not is kept (its `stay`, true unless false). */
+const TOWN_RECORD = "town.save.v1";
+
+/**
+ * Whether the member would stay, as the town last wrote it down. Every page of the game reads it,
+ * so that a game opened in the town's frame, or on its own, does not say "stay" for a member who
+ * switched it off in their cabin.
+ */
+export function keptStay(): boolean {
+  try {
+    const raw: unknown = JSON.parse(keptText(TOWN_RECORD) ?? "null");
+    return !(isRecord(raw) && raw.stay === false);
+  } catch {
+    return true;
+  }
+}
+
 let at: Place | null = null;
-let staying = true;
+/** What this page last said about staying; until it says, what the town kept. */
+let staying: boolean | null = null;
+const stayingNow = (): boolean => staying ?? keptStay();
 let timer: ReturnType<typeof setInterval> | null = null;
 const ears = new Set<(present: readonly Present[], resting: readonly Resting[]) => void>();
 
 async function send(): Promise<void> {
   if (at === null || !member()) return;
-  const a = await put("/v1/game/presence", { place: at, stay: staying });
+  const a = await put("/v1/game/presence", { place: at, stay: stayingNow() });
   if (a.status !== 200) return;
   const present = readPresent(a.body);
   const resting = readResting(a.body);
@@ -93,7 +113,10 @@ export function here(place: Place | null): void {
 
 /** Says whether the member's character stays in town, dozing, for a day after they go; tells the server at once. */
 export function stay(on: boolean): void {
-  if (on === staying) return;
+  if (on === stayingNow()) {
+    staying = on;
+    return;
+  }
   staying = on;
   if (member() && at !== null) void send();
 }
