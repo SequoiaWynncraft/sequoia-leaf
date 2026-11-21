@@ -31,9 +31,6 @@ export const LiveRoute = Layer.unwrap(
         return refuse(400, "not_websocket", "Open this as a WebSocket");
       }
       const identity = yield* checks.upgrade;
-      const admission = yield* live.admit(identity);
-      if (admission === "full") return refuse(503, "live_full", "Live is full just now. Try again shortly");
-      if (admission === "busy") return refuse(429, "slow_down", "Opened too often. Try again in a little while");
       // The session is asked about again as the connection goes on: it holds only while the session
       // does. The backend being out of reach is not taken to mean it has ended.
       const asked = yield* Effect.context<HttpServerRequest.HttpServerRequest | HttpServerRequest.ParsedSearchParams>();
@@ -42,8 +39,9 @@ export const LiveRoute = Layer.unwrap(
         Effect.catch((e) => Effect.succeed(!(e instanceof Unauthorized))),
         Effect.provideContext(asked),
       );
-      const socket = yield* Effect.orDie(request.upgrade);
-      yield* live.serve(socket, identity, session);
+      const opened = yield* live.open(identity, request.upgrade, session);
+      if (opened === "full") return refuse(503, "live_full", "Live is full just now. Try again shortly");
+      if (opened === "busy") return refuse(429, "slow_down", "Opened too often. Try again in a little while");
       return HttpServerResponse.empty();
     }).pipe(
       Effect.catch((e) =>

@@ -6,7 +6,6 @@ import {
   type Motion,
   type RoomKind,
   roomKind,
-  seqAfter,
   type ToClient,
 } from "@sequoia-leaf/core";
 
@@ -20,8 +19,13 @@ export interface Occupant {
   readonly member: LiveMember;
   readonly outbox: Outbox;
   motion: Motion | null;
+  /** The number of the move their motion is, as their game numbered it. */
   seq: number;
   dirty: boolean;
+  /** Their jumps as the room counts them: what everybody else is shown. */
+  jump: number;
+  /** The jump count their game last sent, on its present connection; null before it sends one. */
+  heard: number | null;
 }
 
 /** The fastest a motion may say a player moves, in the room's units a second. */
@@ -60,7 +64,15 @@ export class Room {
   /** Lets somebody in, tells everyone else that they came, and greets them. Returns them. */
   join(who: Omit<LiveMember, "id">, outbox: Outbox, time: number, hz: number, version: number): Occupant {
     const id = this.freeId();
-    const occupant: Occupant = { member: { id, ...who }, outbox, motion: null, seq: 0, dirty: false };
+    const occupant: Occupant = {
+      member: { id, ...who },
+      outbox,
+      motion: null,
+      seq: 0,
+      dirty: false,
+      jump: 0,
+      heard: null,
+    };
     this.occupants.set(id, occupant);
     this.others(id, text({ t: "joined", member: occupant.member }));
     this.greet(occupant, time, hz, version);
@@ -85,14 +97,20 @@ export class Room {
   }
 
   /**
-   * Takes somebody's motion, kept inside the room and below the fastest anybody moves. A move older
-   * than the one already taken (they can arrive out of order only across a reconnect) is dropped.
-   * Only the newest motion counts: it is all of where they are, jumps included.
+   * Takes somebody's motion, kept inside the room and below the fastest anybody moves. Moves come
+   * only from the player's present connection, in the order it sent them, so the newest is the one
+   * that counts: it is all of where they are. The room keeps its own count of their jumps: it goes
+   * up whenever their game's count changes, or a new connection of theirs sends its first move (it
+   * may count from anywhere), so nobody is ever drawn sliding from where they were.
    */
-  move(id: number, seq: number, m: Motion): boolean {
+  move(id: number, seq: number, m: Motion): void {
     const o = this.occupants.get(id);
-    if (!o) return false;
-    if (o.motion !== null && !seqAfter(seq, o.seq)) return false;
+    if (!o) return;
+    if (o.heard !== m.jump) {
+      o.heard = m.jump;
+      o.jump = (o.jump + 1) & 0xff;
+    }
+    o.seq = seq;
     o.motion = {
       x: clamp(m.x, 0, this.kind.width),
       y: clamp(m.y, 0, this.kind.height),
@@ -101,11 +119,15 @@ export class Room {
       facing: m.facing,
       pose: m.pose,
       flags: m.flags,
-      jump: m.jump,
+      jump: o.jump,
     };
-    o.seq = seq;
     o.dirty = true;
-    return true;
+  }
+
+  /** Somebody's game has a new connection: whatever it counts its jumps from, its first move is one. */
+  reconnected(id: number): void {
+    const o = this.occupants.get(id);
+    if (o) o.heard = null;
   }
 
   /** Somebody has stopped where they are, as when their connection drops: everyone sees them stand. */

@@ -3,14 +3,14 @@
  * happens (the wire is `@sequoia-leaf/core`'s `live.ts`; the server is `apps/api/src/live`).
  *
  * `joinLive(room, ears)` opens the connection and keeps it open: after a drop it connects again with
- * a growing, jittered wait, joins the room again, and says where the player is again, as a jump. Why
- * a connection closed is its close code alone (`CLOSE`): told the player opened the game live
- * somewhere else, or that their session ended, this page lets go. With the made-up guild there is
- * no server, and it does nothing.
+ * a growing, jittered wait, joins the room again, and says where the player is again (Leaf shows
+ * others that as a jump). Why a connection closed is its close code alone (`CLOSE`): told the
+ * player opened the game live somewhere else, or that their session ended, this page lets go. With
+ * the made-up guild there is no server, and it does nothing.
  *
- * Each connection learns the room afresh (`Link`): who is in it, where they have been, and Leaf's
- * clock. A new connection's picture replaces the old one only once it is whole, at its welcome, so
- * nothing from one connection is ever mixed with another's.
+ * What this page knows of the room starts at a welcome, each time: who is in it, where they have
+ * been, and Leaf's clock. Nothing heard before a welcome counts, and a new connection's picture
+ * replaces the old one only then, so nothing of one room, or one connection, is mixed with another's.
  *
  * What it does not do is draw anybody. A page asks it each frame where somebody is to be drawn
  * (`sample`): their motion as it was `INTERP_MS` ago by Leaf's clock, between the two snapshots
@@ -259,11 +259,13 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         l.you = m.you;
         l.clock = new ClockSync(m.time, outside.now());
         l.people.clear();
+        l.tracks.clear();
         for (const r of m.roster) l.people.set(r.id, r);
         shown = l;
         ears.welcome?.(m.you, m.room, m.roster);
-        // Said again as a jump: whatever anybody saw of the player before, they are here now.
-        if (motion) want({ ...motion, jump: (motion.jump + 1) & 0xff });
+        // Said again at once: this room has not heard from the player on this connection yet.
+        sent = null;
+        if (motion) want(motion);
         return;
       }
       case "joined":
@@ -287,6 +289,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
   }
 
   function snapshot(l: Link, data: ArrayBuffer): void {
+    // Before its welcome, a connection is in no room this page asked for.
+    if (l.you === null) return;
     const snap = decodeSnapshot(new Uint8Array(data));
     if (!snap) return;
     for (const entry of snap.entries) {

@@ -15,7 +15,6 @@ import {
   readToClient,
   reconnects,
   roomKind,
-  seqAfter,
   SNAPSHOT_HEAD_BYTES,
   type ToClient,
 } from "./live.ts";
@@ -75,13 +74,6 @@ describe("a snapshot", () => {
     expect(decodeSnapshot(new Uint8Array([...bytes, 0]))).toBeNull();
     expect(decodeSnapshot(encodeMove(1, walking))).toBeNull();
     expect(decodeSnapshot(new Uint8Array(3))).toBeNull();
-  });
-});
-
-describe("move numbers", () => {
-  test("count up and wrap at 65536", () => {
-    expect([seqAfter(2, 1), seqAfter(1, 2), seqAfter(1, 1)]).toEqual([true, false, false]);
-    expect([seqAfter(0, 65_535), seqAfter(65_535, 0), seqAfter(10, 65_530)]).toEqual([true, false, true]);
   });
 });
 

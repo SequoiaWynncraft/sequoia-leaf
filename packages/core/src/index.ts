@@ -94,7 +94,6 @@ export {
   readToClient,
   reconnects,
   ROOMS,
-  seqAfter,
   SERVER_HZ,
   type Snapshot,
   SNAPSHOT_HEAD_BYTES,

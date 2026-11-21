@@ -89,7 +89,8 @@ describe("a room", () => {
     expect(decodeSnapshot(a.frames[0] ?? new Uint8Array())).toEqual({
       tick: 1,
       time: 5000,
-      entries: [{ id: 1, seq: 2, ...at(12, 10, Flag.Moving) }],
+      // Their first move counts as a jump: nobody has seen them anywhere yet.
+      entries: [{ id: 1, seq: 2, ...at(12, 10, Flag.Moving, 1) }],
     });
     expect(decodeSnapshot(b.frames[1] ?? new Uint8Array())?.entries.map((e) => e.id)).toEqual([2]);
   });
@@ -100,21 +101,43 @@ describe("a room", () => {
     const alice = room.join(person("Alice"), a.outbox, 0, 30, 1);
     room.move(alice.member.id, 1, { x: -40, y: 9000, vx: 1e9, vy: -1e9, facing: 3, pose: 2, flags: 0, jump: 4 });
 
-    expect(alice.motion).toEqual({ x: 0, y: 352, vx: 1024, vy: -1024, facing: 3, pose: 2, flags: 0, jump: 4 });
+    expect(alice.motion).toEqual({ x: 0, y: 352, vx: 1024, vy: -1024, facing: 3, pose: 2, flags: 0, jump: 1 });
   });
 
-  it("drops a move older than the one it has, its number wrapping", () => {
+  it("takes every move of the present connection, in the order sent, whatever its numbers", () => {
     const room = new Room("town", 1, TOWN);
     const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
     const id = alice.member.id;
+    room.move(id, 1200, at(1, 1));
+    // A new tab numbers its moves from the start again.
+    room.reconnected(id);
+    room.move(id, 1, at(2, 2));
 
-    expect([room.move(id, 65_534, at(1, 1)), room.move(id, 65_535, at(2, 2)), room.move(id, 0, at(3, 3))]).toEqual([
-      true,
-      true,
-      true,
-    ]);
-    expect([room.move(id, 65_535, at(9, 9)), room.move(id, 0, at(9, 9))]).toEqual([false, false]);
-    expect(alice.motion?.x).toBe(3);
+    expect([alice.seq, alice.motion?.x]).toEqual([1, 2]);
+  });
+
+  it("counts jumps itself: when the game's count changes, and at a new connection's first move", () => {
+    const room = new Room("town", 1, TOWN);
+    const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    const id = alice.member.id;
+    const shown: number[] = [];
+    const move = (jump: number) => {
+      room.move(id, 1, at(0, 0, 0, jump));
+      shown.push(alice.motion?.jump ?? -1);
+    };
+    move(0);
+    move(0);
+    move(1);
+    move(1);
+    // A fresh tab counts from 0 again, and an old tab that had jumped once counts from 1: both are a
+    // jump all the same, since nobody may see them slide from where the last connection left them.
+    room.reconnected(id);
+    move(1);
+    room.reconnected(id);
+    move(0);
+    move(0);
+
+    expect(shown).toEqual([1, 1, 2, 2, 3, 4, 4]);
   });
 
   it("keeps a jump through a later move before the tick, since only the newest motion counts", () => {

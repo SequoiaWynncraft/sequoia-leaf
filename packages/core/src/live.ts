@@ -20,7 +20,8 @@
  */
 
 export const LIVE_PATH = "/v1/game/live";
-export const LIVE_VERSION = 1;
+/** The wire's version. Version 1 had no jump count, and no client ever spoke it. */
+export const LIVE_VERSION = 2;
 
 /** How often Leaf sends a room's changes, a second. */
 export const SERVER_HZ = 30;
@@ -49,8 +50,9 @@ export interface Motion {
   pose: number;
   flags: number;
   /**
-   * How many times the player has jumped (came through a door, was set down, came back after a
-   * drop), wrapping at 256. When it changes they are drawn where they are at once, not on the way.
+   * How many times the player has jumped (came through a door, was set down), wrapping at 256: the
+   * game counts its own player's; Leaf counts each player's for everybody else, from the game's
+   * count and their connections. When it changes they are drawn where they are at once, not on the way.
    */
   jump: number;
 }
@@ -159,12 +161,6 @@ export function decodeSnapshot(bytes: Uint8Array): Snapshot | null {
     entries.push({ id: view.getUint16(at, true), seq: view.getUint16(at + 2, true), ...motion });
   }
   return { tick: view.getUint32(1, true), time, entries };
-}
-
-/** Whether move `a` came after move `b`, their numbers wrapping at 65536 (within half of that of each other). */
-export function seqAfter(a: number, b: number): boolean {
-  const d = u16(a - b);
-  return d !== 0 && d < 0x8000;
 }
 
 // ---------- the cold path ----------
