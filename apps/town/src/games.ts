@@ -1,9 +1,11 @@
 /**
  * The games that are places in the town. Each is a page of its own beside the town's; the town
- * shows it in a frame over itself (see `doors.ts`). What a game's card says is waiting there comes
- * from a small function per game, so that the day a game can say for itself, its real numbers go
- * in here and nowhere else.
+ * shows it in a frame over itself (see `doors.ts`). What a game's card says is waiting there, and
+ * what the member has won there, come from the postcard each game leaves for the town (the kit's
+ * `postcard.ts`); a game that has never been opened has sent none, and gets a line of the town's.
  */
+
+import { read } from "@sequoia-leaf/kit/postcard.ts";
 
 import type { AwayLine } from "./guild.ts";
 
@@ -34,7 +36,7 @@ export const GAMES: Readonly<Record<GameId, Game>> = {
     name: "The Works",
     url: "../works/index.html",
     about: "Your yard, behind the workshop. Coins are made here.",
-    waiting: () => "Three orders are up on the depot's board.",
+    waiting: () => read("works")?.waiting ?? "The yard is quiet. Somebody should start it up.",
     go: "Go in",
     shut: ["Door's stuck", "Embertoe has gone to find the key. The Works is not open yet."],
   },
@@ -43,7 +45,7 @@ export const GAMES: Readonly<Record<GameId, Game>> = {
     name: "The Little Raid",
     url: "../battler/index.html",
     about: "The guild's board game, cut into a great stump.",
-    waiting: () => "The first wing is set out. One crab is uncounted.",
+    waiting: () => read("raid")?.waiting ?? "The board is set out. One crab is uncounted.",
     go: "Sit down",
     shut: ["No game yet", "Somebody is still carving the figures. Not long now."],
   },
@@ -51,36 +53,23 @@ export const GAMES: Readonly<Record<GameId, Game>> = {
 
 export const isGame = (id: string): id is GameId => id === "works" || id === "table";
 
-/** The most hours of being away that the Works is paid for. */
-const WORKS_HOURS = 8;
-const PLANKS_AN_HOUR = 11;
-const COINS_A_PLANK = 2;
-
 /**
- * What the Works made while the member was away, as a line for the arrival letter. It is made up
- * from the time alone until the Works can report what its yard really did.
+ * What the Works has waiting, as a line for the arrival letter. The yard pays its own till from
+ * its own letter when the member goes in, so this line says so and pays nothing.
  */
-export function worksAway(hours: number, first: boolean): AwayLine | null {
-  const planks = Math.floor(Math.min(WORKS_HOURS, first ? WORKS_HOURS : Math.max(0, hours)) * PLANKS_AN_HOUR);
-  if (planks < 1) return null;
-  return {
-    art: "coin",
-    text: `${planks} plank${planks === 1 ? "" : "s"} off your Works`,
-    pay: { kind: "coins", amount: planks * COINS_A_PLANK },
-  };
+export function worksWaiting(till = read("works")?.till ?? 0): AwayLine | null {
+  if (till < 1) return null;
+  return { art: "coin", text: `${till} Coin${till === 1 ? " is" : "s are"} waiting in the Works' till` };
 }
 
-/**
- * What the member has won in The Little Raid: the bosses they have beaten, by the game's own names
- * for them. Made up until the game can say for itself.
- */
+/** The bosses the member has beaten in The Little Raid, by the game's own names for them. */
 export function raidWon(): readonly string[] {
-  return ["oldbramble"];
+  return read("raid")?.trophies ?? [];
 }
 
-/** The capstones the member has built in the Works, by the Works' own names for them. Made up for now. */
+/** The capstones the member has built in the Works, by the Works' own names for them. */
 export function worksBuilt(): readonly string[] {
-  return ["crab"];
+  return read("works")?.trophies ?? [];
 }
 
 /** The camp things those have earned: a carved figure for each boss, a model of each capstone. */

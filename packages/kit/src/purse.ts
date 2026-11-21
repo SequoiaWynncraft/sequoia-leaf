@@ -14,7 +14,8 @@ export interface Purse {
 export type Currency = keyof Purse;
 
 const KEY = "town.purse.v1";
-const START: Purse = { leaf: 69, coins: 752 };
+/** What the stand-in purse opens with: about a week of raiding, and a little pocket money. */
+const START: Purse = { leaf: 1860, coins: 300 };
 
 const watchers = new Set<(p: Purse, why: string) => void>();
 let purse: Purse = read();

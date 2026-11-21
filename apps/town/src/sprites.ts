@@ -308,7 +308,7 @@ function works(): Sprite {
   for (let i = 0; i < 4; i++) R(g, 57 + i * 4, 84, 3, 5, SKY[1]);
   windowLit(g, 81, 62, 10, 12);
 
-  shingles(g, 0, 16, 104, 34, (r) => Math.round((34 - r) * 0.28), [BARK[0], BARK[2], BARK[3], BARK[4]], 9);
+  shingles(g, 0, 16, 104, 34, (r) => Math.round((34 - r) * 0.28), [SKY[0], SKY[1], SKY[2], SKY[3]], 9);
   R(g, 9, 13, 86, 3, BARK[1]);
   R(g, 9, 13, 86, 1, BARK[3]);
   R(g, 0, 49, 104, 1, BARK[0]);

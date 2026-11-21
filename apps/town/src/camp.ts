@@ -299,8 +299,8 @@ export function trayList(camp: Camp): { id: string; n: number }[] {
 
 // ---------- who lives there ----------
 
-/** How many things must be set out before somebody else moves in. */
-export const COSY = 16;
+/** How many things must be set out before somebody else moves in: a new camp starts with nine. */
+export const COSY = 24;
 /** At how many guild-mates' camps a present must be left before somebody follows the member home. */
 export const KIND = 3;
 
