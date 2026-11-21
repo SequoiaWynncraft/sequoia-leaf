@@ -19,6 +19,7 @@ import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
 import { drawFight, drawFightAir, fightOn } from "./fightview.ts";
 import { burst, drawFlyers, drawFxOver, drawFxUnder, wordsFx } from "./fx.ts";
 import { cellXY, GAP, HEX_H, HEX_W, type Pt, ROW, seatXY, slotXY } from "./geometry.ts";
+import { DIM, shineOf } from "./light.ts";
 import { FOOT, type Pawn, pawns } from "./pawns.ts";
 import { snd } from "./sounds.ts";
 import { boardHalves, place, type Standing, V } from "./stage.ts";
@@ -140,7 +141,8 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
   const f = framesOf(p.kind);
   const pop = V.t - p.popAt;
   const cheer = V.t - p.cheerAt;
-  let lift = p.lift;
+  const shine = shineOf(p.kind, p.x, V.t);
+  let lift = p.lift + shine.hop;
   if (pop >= 0 && pop < 0.4) lift += Math.sin((pop / 0.4) * Math.PI) * 8;
   if (cheer >= 0 && cheer < 0.3) lift += Math.sin((cheer / 0.3) * Math.PI) * 5;
   const sway = V.t < p.wiggleUntil ? Math.round(Math.sin(V.t * 24) * 1.5) : 0;
@@ -155,9 +157,15 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
         g.fillStyle = "rgba(26,15,30,0.3)";
         g.fillRect(Math.round(ox + p.x) - 6, Math.round(oy + p.y) - 1, 12, 2);
       }
-      if (p.alpha < 1) g.globalAlpha = p.alpha;
+      const alpha = p.alpha * (shine.dim ? DIM : 1);
+      if (alpha < 1) g.globalAlpha = alpha;
       drawBase(g, p.kind, x, y, S.prefs.bases);
-      drawFigure(g, p.kind, x, y - 2 - hover, { beat: beatOf(p.phase), left: p.facing, flash: pop >= 0 && pop < 0.09 });
+      drawFigure(g, p.kind, x, y - 2 - hover, {
+        beat: beatOf(p.phase),
+        left: p.facing,
+        flash: pop >= 0 && pop < 0.09,
+        lit: shine.lit,
+      });
       g.globalAlpha = 1;
     },
     top: () => {
@@ -181,16 +189,19 @@ function foeStanding(g: Ctx, kind: UnitKind, stars: Stars, seat: number, order: 
   const come = approach(order, big);
   if (!come.here) return null;
   const f = framesOf(kind);
+  const shine = shineOf(kind, at.x, V.t);
   const x = V.bx + at.x;
-  const y = V.by + at.y + FOOT - come.away - come.lift;
+  const y = V.by + at.y + FOOT - come.away - come.lift - shine.hop;
   const phase = (seat * 0.23) % 1;
   const hover = f.flies ? 2 + Math.round(Math.sin(V.t * 4 + phase * 6)) : 0;
   return {
     x: at.x,
     y: at.y + FOOT - come.away,
     draw: () => {
+      if (shine.dim) g.globalAlpha = DIM;
       drawBase(g, kind, x, y);
-      drawFigure(g, kind, x, y - 2 - hover, { beat: beatOf(phase), left: true });
+      drawFigure(g, kind, x, y - 2 - hover, { beat: beatOf(phase), left: true, lit: shine.lit });
+      g.globalAlpha = 1;
     },
     top: () => {
       if (stars > 1) drawStars(g, stars, x, y - 3 - hover - f.tall);

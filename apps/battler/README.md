@@ -32,14 +32,26 @@ fight and a run go. Nothing in there touches the page. Everything else here is t
   where it goes; tap an offer to buy it; tap an item, then the figure to hold it. Hexes light for
   where a held figure may go, and a column of pips beside the front line shows how many may be
   fielded.
-- **What things are.** Resting the mouse on anything, or keeping a finger on it, shows its card: a
-  figure (stars, health, attack, speed, reach, armour, ward, its ability in a sentence, its kin and
-  calling, what it holds), a trait (what each step does, who carries it, how many are fielded; a
-  figure not opened yet is a dark outline with what opens it), an item (what it adds and what it
-  makes with the other components held), a boon, a room on the track, the purse, the level.
+- **What things are.** Resting the mouse on anything, or keeping a finger on it, shows its card;
+  tapping one of the party's figures keeps its card up. Cards say things in a few words, numbers in
+  bold gold, heals and shields in green, and physical, magic and true damage each in a colour of its
+  own. A figure's card has its picture, name, stars and price, what kind of fighter it is and where
+  it stands ("Tank · front row"), its kin and calling as chips with the party's count, its numbers
+  (green where an item, a trait or a boon raises one, coral where something lowers it), its
+  ability, what it holds and three finished items that suit it (lit if the rack has one, or both
+  its halves). A trait's card has its steps (the one reached lit, the next saying how many more)
+  and every figure that carries it, cheapest first: lit if fielded, tagged if on the bench or the
+  stall, a dark outline with what opens it if not opened yet. An item's card has what it adds, what
+  it does and what it is made of or makes. There are cards for a boon, a room on the track, the
+  purse and the level too. The almanac's cards add the long sentence and the flavour line.
 - **Traits.** A strip of chips, one for every trait the party has any of, with how many and how
   many the next step needs. When a step switches on the chip lights, the figures of that trait hop,
-  and it says so.
+  and it says so. Pointing at a chip (in the strip, or on a figure's card) lights the trait: its
+  figures on the board, the bench, the stall and across the table get a gold outline and hop once,
+  and everyone else dims a little. Clicking or tapping it keeps that and opens the trait's card
+  until the member clicks elsewhere, presses Escape or clicks the chip again; a figure picked there
+  opens in the card's place. On a phone the trait's card is a sheet along the bottom, so the board
+  stays in view.
 - **Three become one.** The two that go hop onto the one that stays, it flashes, its new star pops
   with a ring and a run of notes; three stars is a larger ring, more sparks and a bell.
 - **Acorns.** The purse shows the number and a row of piles, one for every ten held, lit as they
@@ -113,6 +125,8 @@ timed can be stepped by hand.
 | `src/screen/scene.ts`               | Drawing a frame: the board, lit hexes, who is waiting across it, the party, the fight          |
 | `src/screen/pawns.ts`               | The party's figures on board and bench; buying, selling and three-become-one acted out         |
 | `src/screen/hand.ts`                | Dragging and tapping, and asking what a thing is                                               |
+| `src/screen/light.ts`               | Which trait is lit (pointed at, or clicked and kept), and how that shows on a figure           |
+| `src/screen/rich.ts`                | The words on a card sorted for colouring: numbers, heals and shields, kinds of damage          |
 | `src/screen/fightview.ts`           | The fight played from the rules' events                                                        |
 | `src/screen/fx.ts`                  | Sparks, rings, rising words, things that fly, "in a moment"                                    |
 | `src/screen/logic.ts`               | Small questions asked of a run: where a figure may go, what an item would make, the next nudge |
@@ -126,12 +140,13 @@ timed can be stepped by hand.
 | `src/screen/art/table.ts`           | The painted table, the halves of the board, the looks                                          |
 | `src/screen/art/mates.ts`, `pal.ts` | The guild-mates at the table; the letters' colours, and the colours that mean something        |
 | `src/screen/ui/table.ts`            | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's count   |
-| `src/screen/ui/cards.ts`            | Cards: what each thing says about itself, and showing one beside a thing                       |
+| `src/screen/ui/cards.ts`            | Cards: what each thing says about itself, and showing one (kept or passing) beside a thing     |
+| `src/screen/ui/lit.ts`              | Trait chips that light their figures, the trait's kept card, and letting it go                 |
 | `src/screen/ui/picks.ts`            | Three cards to choose from                                                                     |
 | `src/screen/ui/pages.ts`            | The front page, the almanac, how to play, table looks, the end of a run                        |
 | `src/screen/ui/nudge.ts`            | The first-time nudges                                                                          |
 
-`geometry.ts`, `logic.ts` and `keep.ts` have tests beside them.
+`geometry.ts`, `logic.ts`, `keep.ts`, `light.ts` and `rich.ts` have tests beside them.
 
 ## Looking at it from outside
 
@@ -157,8 +172,16 @@ bun ../../packages/kit/tools/drive.ts "http://raid.test/" <out-dir> review/tour-
 bun ../../packages/kit/tools/drive.ts "http://raid.test/?sheet" <out-dir> review/sheet.json dist
 ```
 
+`review/cards.json` and `review/cards-phone.json` go through the cards: a figure at one and two
+stars, one holding items, one on the stall, a trait pointed at and clicked, a figure opened from a
+trait's card, items, a boon pick. `review/trait-hover.json` points at a trait's chip through the
+moments a card used to go missing (a click on the chip, the stall changing size, the strip drawn
+again under the pointer, just after a drag, the first room with a nudge up) and prints whether the
+card is up after each.
+
 `review/balance.ts` plays whole runs with bots of different habits and prints how far each gets
-(`bun review/balance.ts 200 0`); it is the rules' gauge and has nothing to do with the screen.
+(`bun review/balance.ts 200 0`); it is the rules' gauge and has nothing to do with the screen. Its
+`suits` section is how the items a card recommends were checked.
 
 ## Where the shape comes from
 

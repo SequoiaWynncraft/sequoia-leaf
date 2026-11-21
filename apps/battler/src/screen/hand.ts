@@ -28,7 +28,7 @@ import {
 import { itemPic } from "./art/icons.ts";
 import { framesOf } from "./art/sprites.ts";
 import { unitUnder } from "./fightview.ts";
-import { type Handing, handing, reachOf, reachOfOffer } from "./logic.ts";
+import { type Handing, handing, pieceNumbers, reachOf, reachOfOffer, startNumbers } from "./logic.ts";
 import { hop, type Pawn, pawnAt, pawns, spotAt, spotXY } from "./pawns.ts";
 import { foeAt, marks } from "./scene.ts";
 import { snd } from "./sounds.ts";
@@ -141,7 +141,12 @@ function showPawnCard(run: Run, p: Pawn, pinned: boolean): void {
   const piece = p.spot ? pieceAt(run, p.spot) : null;
   if (!piece || !p.spot) return;
   const actions = pinned && planning() ? sellButton(run, p.spot) : null;
-  cardAt(pageBox(p.x, p.y, framesOf(p.kind).tall), pieceCard(piece, actions), CARD, pinned);
+  cardAt(
+    pageBox(p.x, p.y, framesOf(p.kind).tall),
+    pieceCard(piece, actions, run, pieceNumbers(run, p.spot)),
+    CARD,
+    pinned,
+  );
 }
 
 function pick(run: Run, held: Held): void {
@@ -327,7 +332,9 @@ function showStranger(run: Run, x: number, y: number, pinned: boolean): boolean 
       pageBox(u.x, u.y, framesOf(u.unit.kind).tall),
       figureCard(u.unit.kind, u.unit.stars, {
         unit: u.unit,
-        whose: u.unit.side === 0 ? "One of yours." : `${run.foe.who}'s.`,
+        whose: u.unit.side === 0 ? "Yours" : `${run.foe.who}'s`,
+        run: u.unit.side === 0 ? run : null,
+        party: u.unit.side === 1 ? run.foe : null,
       }),
       CARD,
       pinned,
@@ -339,7 +346,12 @@ function showStranger(run: Run, x: number, y: number, pinned: boolean): boolean 
   const placed = run.foe.figures.find((p) => p.seat === foe.seat);
   cardAt(
     { ...boardToPage(x - 9, y - 22), w: 18 * artPx(), h: 30 * artPx() },
-    figureCard(foe.kind, foe.stars, { items: placed?.items ?? [], whose: `${run.foe.who}'s.` }),
+    figureCard(foe.kind, foe.stars, {
+      items: placed?.items ?? [],
+      whose: `${run.foe.who}'s`,
+      party: run.foe,
+      numbers: startNumbers(run.foe, foe.seat),
+    }),
     CARD,
     pinned,
   );

@@ -37,11 +37,15 @@ import { onSignal } from "./screen/signals.ts";
 import { snd } from "./screen/sounds.ts";
 import * as stage from "./screen/stage.ts";
 import { onChange, onNotes, onRefused, S, saveNow, wake } from "./screen/state.ts";
-import { cardOff } from "./screen/ui/cards.ts";
+import { recard } from "./screen/ui/cards.ts";
+import { openLight } from "./screen/ui/lit.ts";
 import { renderNudge, stepNudge } from "./screen/ui/nudge.ts";
 import { openPages, pagesClick, renderPages, showPage } from "./screen/ui/pages.ts";
 import { renderPicks } from "./screen/ui/picks.ts";
 import { acornLanded, buildTable, placeFoe, renderTable, stepTable, toast, wakeChip } from "./screen/ui/table.ts";
+
+/** The window's size when the page was last laid out. */
+let windowSize = "";
 
 async function boot(): Promise<void> {
   await fontsReady();
@@ -125,11 +129,16 @@ async function boot(): Promise<void> {
     over: drawOver,
     resized() {
       placeFoe();
-      cardOff();
+      // The stall growing or shrinking lays the page out again too: a card stays beside its thing,
+      // and only a new window size puts away a card shown beside a figure on the table.
+      const size = `${window.innerWidth}x${window.innerHeight}`;
+      recard(size === windowSize);
+      windowSize = size;
       renderNudge();
     },
   });
   openHand(must(document.querySelector<HTMLCanvasElement>("#view"), "the table's canvas"));
+  openLight();
   openHandle();
 
   // A run in progress is offered again on the front page; nothing starts by itself.

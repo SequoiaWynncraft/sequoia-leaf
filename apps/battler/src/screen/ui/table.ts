@@ -34,6 +34,7 @@ import { portrait } from "../art/sprites.ts";
 import { rimTop, stumpOf } from "../art/table.ts";
 import { fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
+import { light } from "../light.ts";
 import { canBuy, savings, steppedUp, stepsOf } from "../logic.ts";
 import { artPx, place, V } from "../stage.ts";
 import { S } from "../state.ts";
@@ -48,8 +49,9 @@ import {
   pic,
   purseCard,
   roomCard,
-  traitCard,
+  wireChip,
 } from "./cards.ts";
+import { forgetLight, paintLight } from "./lit.ts";
 
 /** What the buttons ask for. The table only asks; whoever built it answers. */
 export interface Asks {
@@ -251,6 +253,18 @@ function renderResolve(run: Run): void {
   if (was !== undefined && was !== String(n)) replay(node, "k-bump");
 }
 
+/** The strip's chips, one for each trait, kept from one drawing to the next so the pointer on one is not lost. */
+const chips = new Map<TraitId, HTMLButtonElement>();
+function chipFor(trait: TraitId): HTMLButtonElement {
+  let chip = chips.get(trait);
+  if (!chip) {
+    chip = el("button", "k-chip trait", { type: "button", "data-trait": trait, "aria-pressed": "false" });
+    wireChip(chip, trait);
+    chips.set(trait, chip);
+  }
+  return chip;
+}
+
 function renderTraits(run: Run): void {
   const box = byId("traits");
   if (!box) return;
@@ -265,22 +279,25 @@ function renderTraits(run: Run): void {
   stepsFor = run;
   if (key === traitKey && lit.length === 0) return;
   traitKey = key;
-  box.replaceChildren();
-  for (const state of states) {
+  const wanted = new Set(states.map((t) => t.trait));
+  for (const [trait, chip] of chips) if (!wanted.has(trait)) chip.remove();
+  states.forEach((state, i) => {
     const spec = TRAITS[state.trait];
     const next = spec.steps.find((need) => need > state.count) ?? spec.steps[spec.steps.length - 1] ?? 1;
     const top = state.step >= topStep(state.trait);
-    const chip = el(
-      "button",
-      `k-chip trait${state.step > 0 ? " lit" : ""}${top ? " top" : ""}${lit.includes(state.trait) ? " woke" : ""}`,
-      { type: "button", "data-trait": state.trait },
+    const chip = chipFor(state.trait);
+    chip.classList.toggle("lit", state.step > 0);
+    chip.classList.toggle("top", top);
+    chip.replaceChildren(
       pic(traitIcon(state.trait)),
       el("b", "", { text: `${state.count}/${next}` }),
       el("span", "name", { text: spec.name }),
     );
-    explain(chip, () => traitCard(state.trait, S.run, S.almanac));
-    box.append(chip);
-  }
+    // Moved only when out of place: a chip under the pointer stays where it is.
+    if (box.children[i] !== chip) box.insertBefore(chip, box.children[i] ?? null);
+    if (lit.includes(state.trait)) replay(chip, "woke");
+  });
+  paintLight();
 }
 
 function renderRack(run: Run): void {
@@ -355,9 +372,10 @@ function renderStall(run: Run): void {
         ? el("span", `have${have >= 2 ? " ready" : ""}`, { text: have >= 2 ? "3!" : have === 1 ? "2" : "+" })
         : null,
     );
-    explain(card, () => figureCard(kind, 1));
+    explain(card, () => figureCard(kind, 1, { run: S.run }));
     stall.append(card);
   });
+  paintLight();
 }
 
 function renderPurseSide(run: Run): void {
@@ -467,6 +485,8 @@ export function renderTable(): void {
   sound?.replaceChildren(icon(isMuted() ? "mute" : "sound"));
   const run = S.run;
   document.body.classList.toggle("no-run", !run);
+  if ((!run || S.mode === "front" || S.mode === "over") && (light.kept !== null || light.pointed !== null))
+    forgetLight();
   if (!run) return;
   document.body.dataset.picking = run.choices.length > 0 && S.mode === "plan" ? "yes" : "no";
   renderTrack(run);
@@ -486,6 +506,7 @@ export function forgetTable(): void {
   rackKey = "";
   traitKey = "";
   trackKey = "";
+  forgetLight();
   steps = null;
   stepsFor = null;
   shown.acorns = null;

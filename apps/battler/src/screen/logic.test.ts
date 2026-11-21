@@ -6,14 +6,20 @@ import {
   combosWithHeld,
   handing,
   looseComponents,
+  membersOf,
   nudgeFor,
   type NudgeId,
+  ownTraitCount,
+  pieceNumbers,
+  plainNumbers,
+  rackHas,
   reachOf,
   reachOfOffer,
   recipesOf,
   savings,
   steppedUp,
   stepsOf,
+  whereIs,
 } from "./logic.ts";
 
 /** A run past its first pick, with the starter on the front row. */
@@ -254,5 +260,56 @@ describe("teaching by doing", () => {
     expect(
       nudgeFor(run, "plan", all("pick", "buy", "setout", "watch", "field", "three", "item", "trait", "save", "rustle")),
     ).toBeNull();
+  });
+});
+
+describe("what a card says about a figure", () => {
+  test("a figure's numbers on the board count its items and its party's traits", () => {
+    const run = startRun(3, { trail: 0 });
+    run.choices = [];
+    run.board.fill(null);
+    run.bench.fill(null);
+    run.board[0] = { id: 1, kind: "barrowgnome", stars: 1, items: ["stump"], fed: 0 };
+    run.board[1] = { id: 2, kind: "slug", stars: 1, items: [], fed: 0 };
+    const plain = plainNumbers("barrowgnome", 1);
+    const now = pieceNumbers(run, { on: "board", at: 0 });
+    // Stump Shield's 40 armour and two Bulwarks' 20.
+    expect(now?.armour).toBe(plain.armour + 40 + 20);
+    expect(now?.health).toBe(plain.health);
+    // On the bench the trait does not count, the item still does.
+    run.bench[0] = run.board[0];
+    run.board[0] = null;
+    expect(pieceNumbers(run, { on: "bench", at: 0 })?.armour).toBe(plain.armour + 40);
+  });
+  test("a trait's count and next step, as the strip shows them", () => {
+    const run = startRun(3, { trail: 0 });
+    run.board.fill(null);
+    run.board[0] = { id: 1, kind: "emberkit", stars: 1, items: [], fed: 0 };
+    expect(ownTraitCount(run, "ember")).toEqual({ count: 1, next: 2, step: 0 });
+    run.board[1] = { id: 2, kind: "kettle", stars: 1, items: [], fed: 0 };
+    expect(ownTraitCount(run, "ember")).toEqual({ count: 2, next: 4, step: 1 });
+    expect(ownTraitCount(run, "sage")).toEqual({ count: 0, next: 2, step: 0 });
+  });
+  test("a trait's figures run cheapest first", () => {
+    expect(membersOf("ember")).toEqual(["emberkit", "kettle", "cindernewt", "hearthcat"]);
+    expect(membersOf("fang")).toEqual(["emberkit", "crab7", "jay", "badger", "whitefox", "hearthcat"]);
+  });
+  test("where a figure is, and what the rack has", () => {
+    const run = startRun(3, { trail: 0 });
+    run.board.fill(null);
+    run.bench.fill(null);
+    run.stall = ["moth", null, null, null, null];
+    run.board[0] = { id: 1, kind: "emberkit", stars: 1, items: [], fed: 0 };
+    run.bench[2] = { id: 2, kind: "worm", stars: 1, items: [], fed: 0 };
+    expect(whereIs(run, "emberkit")).toBe("board");
+    expect(whereIs(run, "worm")).toBe("bench");
+    expect(whereIs(run, "moth")).toBe("stall");
+    expect(whereIs(run, "greg")).toBe(null);
+    run.items = ["thorn", "plume"];
+    expect(rackHas(run, "wasptail")).toBe("parts");
+    expect(rackHas(run, "blackthorn")).toBe(null);
+    run.items = ["thorn", "thorn", "hoard"];
+    expect(rackHas(run, "blackthorn")).toBe("parts");
+    expect(rackHas(run, "hoard")).toBe("item");
   });
 });

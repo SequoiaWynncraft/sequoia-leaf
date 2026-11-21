@@ -1,43 +1,52 @@
 /**
  * Cards: what a thing is, said in a `k-tip` beside it. Pointing at anything (or pressing on it
- * with a finger) shows its card: a figure with its numbers and its ability in a sentence, a trait
- * with what each step does and who carries it, an item with what it makes, a boon, a room.
+ * with a finger) shows its card: a figure with its role, traits, numbers, ability and the items
+ * that suit it; a trait with its steps and every figure that carries it; an item; a boon; a room.
+ * Every card on the table uses the short forms; the almanac's cards add the long sentence and the
+ * flavour line.
  *
- * One card is on the page at a time. A card may be pinned (it stays, and can hold a button) or
- * passing (it goes when the pointer does).
+ * Two cards can be up at once: one kept (it stays, and can hold buttons) and one passing (it goes
+ * when the pointer does), drawn over the kept one. A card shown beside an element stays beside it
+ * when the page is laid out again, and goes with it when it goes.
  */
 import { add, el, icon } from "@sequoia-leaf/kit/dom.ts";
-import { LONG_PRESS } from "@sequoia-leaf/kit/tip.ts";
+import { LONG_PRESS, tip } from "@sequoia-leaf/kit/tip.ts";
 
 import {
+  abilityShort,
   abilityText,
   type Almanac,
   type BoonId,
   BOONS,
-  boonText,
+  boonShort,
   COMPONENTS,
   ECONOMY,
   type FigureId,
   FIGURES,
   FINISHED,
+  type FinishedId,
+  GOOD_WITH,
   isComponentId,
   isFigureId,
   isLocked,
+  itemAdds,
   type ItemId,
   itemName,
+  itemShort,
   itemText,
   MILESTONES,
+  type Party,
   type Piece,
+  roleLine,
   ROOMS,
   type Run,
   specOf,
   STALL_ODDS,
   type Stars,
-  starScale,
   TRAILS,
   type TraitId,
   TRAITS,
-  traitsNow,
+  traitShort,
   traitsOf,
   traitText,
   type Unit,
@@ -45,7 +54,21 @@ import {
 } from "../../game/index.ts";
 import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
 import { portrait, starsPic } from "../art/sprites.ts";
-import { combosWithHeld, recipesOf, savings } from "../logic.ts";
+import {
+  combosWithHeld,
+  membersOf,
+  NUMBER_KEYS,
+  type Numbers,
+  ownTraitCount,
+  plainNumbers,
+  rackHas,
+  recipesOf,
+  savings,
+  type TraitCount,
+  traitCount,
+  whereIs,
+} from "../logic.ts";
+import { pieces as richPieces } from "../rich.ts";
 
 /** A spot on the page for a card to sit beside, in CSS pixels. */
 export interface Spot {
@@ -55,8 +78,17 @@ export interface Spot {
   h: number;
 }
 
-let box: HTMLElement | null = null;
-let owner: unknown = null;
+interface Box {
+  node: HTMLElement;
+  owner: unknown;
+  /** The element it sits beside, if it was shown beside one. */
+  anchor: Element | null;
+  spot: Spot;
+  /** Sits to the side of its spot rather than above or below it, where there is room. */
+  aside: boolean;
+}
+let kept: Box | null = null;
+let passing: Box | null = null;
 
 /** A drawn picture on the page, `scale` interface units to each of its pixels. */
 export function pic(c: HTMLCanvasElement, scale = 1, cls = ""): HTMLCanvasElement {
@@ -74,75 +106,156 @@ export function figPic(c: HTMLCanvasElement): HTMLCanvasElement {
   return c;
 }
 
-/** Shows a card beside a spot: above it where there is room, otherwise below; never off the page. */
-export function cardAt(spot: Spot, content: HTMLElement, by: unknown, pinned = false): void {
-  cardOff();
-  const node = el("div", `k-tip k-float raid-card${pinned ? " pinned" : ""}`, { role: "tooltip" }, content);
-  document.body.append(node);
-  const r = node.getBoundingClientRect();
-  const gap = 8;
-  const x = Math.round(Math.min(Math.max(4, spot.x + spot.w / 2 - r.width / 2), window.innerWidth - r.width - 4));
-  const above = spot.y - r.height - gap;
-  const below = spot.y + spot.h + gap;
-  let y =
-    above >= 4
-      ? above
-      : below + r.height <= window.innerHeight - 4
-        ? below
-        : Math.max(4, window.innerHeight - r.height - 4);
-  // Beside it, when neither above nor below has the room.
-  if (above < 4 && below + r.height > window.innerHeight - 4) {
-    const right = spot.x + spot.w + gap;
-    const left = spot.x - r.width - gap;
-    const sx = right + r.width <= window.innerWidth - 4 ? right : left >= 4 ? left : x;
-    node.style.transform = `translate(${Math.round(sx)}px, ${Math.round(y)}px)`;
-  } else {
-    y = Math.round(y);
-    node.style.transform = `translate(${x}px, ${y}px)`;
-  }
-  box = node;
-  owner = by;
-}
-/** Puts the card away; with `by`, only if it is that owner's. */
-export function cardOff(by: unknown = null): void {
-  if (by !== null && owner !== by) return;
-  box?.remove();
-  box = null;
-  owner = null;
-}
-export const cardOwner = (): unknown => owner;
-/** Whether a point on the page is on the card that is showing. */
-export const onCard = (target: EventTarget | null): boolean =>
-  target instanceof Node && box !== null && box.contains(target);
-
 const spotOf = (target: Element): Spot => {
   const r = target.getBoundingClientRect();
   return { x: r.left, y: r.top, w: r.width, h: r.height };
 };
 
 /**
+ * Puts a card beside a spot: above it where there is room, otherwise below, otherwise to the side.
+ * With `aside`, to the side first; and where the window is too narrow for that (a phone held
+ * upright), as a sheet along the bottom, so the table above it stays in view. Never off the page.
+ */
+function place(node: HTMLElement, spot: Spot, aside = false): void {
+  const r = node.getBoundingClientRect();
+  const gap = 8;
+  const right = spot.x + spot.w + gap;
+  if (aside) {
+    const fits = right + r.width <= window.innerWidth - 4;
+    const x = fits ? right : Math.round((window.innerWidth - r.width) / 2);
+    const y = fits
+      ? Math.min(Math.max(4, spot.y), window.innerHeight - r.height - 4)
+      : window.innerHeight - r.height - 4;
+    node.style.transform = `translate(${Math.round(x)}px, ${Math.round(Math.max(4, y))}px)`;
+    return;
+  }
+  const x = Math.round(Math.min(Math.max(4, spot.x + spot.w / 2 - r.width / 2), window.innerWidth - r.width - 4));
+  const above = spot.y - r.height - gap;
+  const below = spot.y + spot.h + gap;
+  const y = Math.round(
+    above >= 4
+      ? above
+      : below + r.height <= window.innerHeight - 4
+        ? below
+        : Math.max(4, window.innerHeight - r.height - 4),
+  );
+  if (above < 4 && below + r.height > window.innerHeight - 4) {
+    const left = spot.x - r.width - gap;
+    const sx = right + r.width <= window.innerWidth - 4 ? right : left >= 4 ? left : x;
+    node.style.transform = `translate(${Math.round(sx)}px, ${y}px)`;
+  } else node.style.transform = `translate(${x}px, ${y}px)`;
+}
+
+function show(where: Spot | Element, content: HTMLElement, by: unknown, pin: boolean, aside = false): void {
+  const anchor = where instanceof Element ? where : null;
+  if (anchor && !anchor.isConnected) return;
+  const spot = where instanceof Element ? spotOf(where) : where;
+  const node = el("div", `k-tip k-float raid-card${pin ? " pinned" : ""}`, { role: "tooltip" }, content);
+  if (content.classList.contains("wide")) node.classList.add("wide");
+  if (pin) {
+    kept?.node.remove();
+    passing?.node.remove();
+    passing = null;
+  } else passing?.node.remove();
+  document.body.append(node);
+  place(node, spot, aside);
+  const box: Box = { node, owner: by, anchor, spot, aside };
+  if (pin) kept = box;
+  else passing = box;
+}
+
+/** Shows a card beside a spot on the page. A kept card stays until put away; a passing one shows over it. */
+export function cardAt(spot: Spot, content: HTMLElement, by: unknown, pinned = false): void {
+  show(spot, content, by, pinned);
+}
+/** Shows a card beside an element (to its side, with `aside`), and keeps it there if the page is laid out again. */
+export function cardBy(target: Element, content: HTMLElement, by: unknown, pinned = false, aside = false): void {
+  show(target, content, by, pinned, aside);
+}
+/** Puts cards away: with `by`, only that owner's; without, both. */
+export function cardOff(by: unknown = null): void {
+  if (passing && (by === null || passing.owner === by)) {
+    passing.node.remove();
+    passing = null;
+  }
+  if (kept && (by === null || kept.owner === by)) {
+    kept.node.remove();
+    kept = null;
+  }
+}
+/** Whose kept card is up, if any. */
+export const keptOwner = (): unknown => kept?.owner ?? null;
+/** Whether any card is up. */
+export const cardUp = (): boolean => kept !== null || passing !== null;
+/** Whether a point on the page is on a card that is showing. */
+export const onCard = (target: EventTarget | null): boolean =>
+  target instanceof Node && ((kept?.node.contains(target) ?? false) || (passing?.node.contains(target) ?? false));
+
+/**
+ * Puts a card in the kept card's place, over the same corner of the page and beside the same thing,
+ * with a new owner: a trait's card opened from a figure's, a figure's from a trait's. Gives whether
+ * there was a kept card to replace.
+ */
+export function swapKept(content: HTMLElement, by: unknown): boolean {
+  const was = kept;
+  if (!was) return false;
+  const r = was.node.getBoundingClientRect();
+  const node = el("div", "k-tip k-float raid-card pinned", { role: "tooltip" }, content);
+  if (content.classList.contains("wide")) node.classList.add("wide");
+  was.node.remove();
+  passing?.node.remove();
+  passing = null;
+  document.body.append(node);
+  const n = node.getBoundingClientRect();
+  const x = Math.round(Math.min(Math.max(4, r.left), window.innerWidth - n.width - 4));
+  const y = Math.round(Math.min(Math.max(4, r.top), window.innerHeight - n.height - 4));
+  node.style.transform = `translate(${x}px, ${y}px)`;
+  kept = { node, owner: by, anchor: was.anchor, spot: was.spot, aside: was.aside };
+  return true;
+}
+
+/**
+ * The page has been laid out again: a card beside an element moves with it (or goes, if the element
+ * has gone), and a card beside a spot stays where it was if `keepSpots`, or else goes.
+ */
+export function recard(keepSpots: boolean): void {
+  for (const box of [kept, passing]) {
+    if (!box) continue;
+    if (box.anchor ? !box.anchor.isConnected : !keepSpots) {
+      cardOff(box.owner);
+      continue;
+    }
+    place(box.node, box.anchor ? spotOf(box.anchor) : box.spot, box.aside);
+  }
+}
+
+/**
  * Gives an element a card, made afresh each time it shows: on resting the mouse there, on keyboard
- * focus, and on a long press with a finger (which then does not count as a tap).
+ * focus, and on a long press with a finger (which then does not count as a tap). A click with the
+ * mouse puts the card away for the click, and it comes back if the mouse stays.
  */
 export function explain(target: HTMLElement, build: () => HTMLElement | null): void {
   let rest = 0;
   let press = 0;
   let swallow = false;
-  const show = (): void => {
+  const open = (): void => {
+    if (!target.isConnected) return;
     const content = build();
-    if (content) cardAt(spotOf(target), content, target);
+    if (content) cardBy(target, content, target);
+  };
+  const soon = (): void => {
+    window.clearTimeout(rest);
+    rest = window.setTimeout(open, 180);
   };
   target.addEventListener("pointerenter", (e) => {
-    if (e.pointerType !== "mouse") return;
-    window.clearTimeout(rest);
-    rest = window.setTimeout(show, 180);
+    if (e.pointerType === "mouse") soon();
   });
   target.addEventListener("pointerleave", () => {
     window.clearTimeout(rest);
     cardOff(target);
   });
   target.addEventListener("focus", () => {
-    if (target.matches(":focus-visible")) show();
+    if (target.matches(":focus-visible")) open();
   });
   target.addEventListener("blur", () => cardOff(target));
   target.addEventListener("pointerdown", (e) => {
@@ -155,11 +268,19 @@ export function explain(target: HTMLElement, build: () => HTMLElement | null): v
     window.clearTimeout(press);
     press = window.setTimeout(() => {
       swallow = true;
-      show();
+      open();
     }, LONG_PRESS);
   });
   const lift = (): void => window.clearTimeout(press);
-  target.addEventListener("pointerup", lift);
+  target.addEventListener("pointerup", (e) => {
+    lift();
+    // The click is over and the mouse is still here: the card comes back, unless something else is showing.
+    if (e.pointerType !== "mouse") return;
+    window.clearTimeout(rest);
+    rest = window.setTimeout(() => {
+      if (!cardUp() && target.matches(":hover")) open();
+    }, 260);
+  });
   target.addEventListener("pointercancel", lift);
   target.addEventListener("pointermove", (e) => {
     if (e.pointerType !== "mouse" && Math.abs(e.movementX) + Math.abs(e.movementY) > 6) lift();
@@ -176,12 +297,67 @@ export function explain(target: HTMLElement, build: () => HTMLElement | null): v
   );
 }
 
-// ---------- what the cards say ----------
+// ---------- trait chips that do something ----------
 
-const head = (art: HTMLElement | null, name: string, under: (Node | string | null)[]): HTMLElement =>
-  el("div", "card-head", {}, art, el("div", "k-col tight", {}, el("b", "k-gold", { text: name }), ...under));
+/** What a trait's chip does when it is pointed at, left, or pressed; and a figure picked from a trait's card. */
+export interface ChipHooks {
+  point: (trait: TraitId, chip: HTMLElement) => void;
+  leave: (trait: TraitId, chip: HTMLElement) => void;
+  press: (trait: TraitId, chip: HTMLElement) => void;
+  figure: (kind: FigureId, from: HTMLElement) => void;
+}
+let chipHooks: ChipHooks | null = null;
+/** Says what trait chips do; `lit.ts` answers. */
+export const hookChips = (hooks: ChipHooks): void => {
+  chipHooks = hooks;
+};
+
+/** Makes an element a trait's chip: pointing lights the trait, pressing (or tapping) keeps it and opens its card. */
+export function wireChip(chip: HTMLElement, trait: TraitId): void {
+  chip.dataset.chip = trait;
+  chip.addEventListener("pointerenter", (e) => {
+    if (e.pointerType === "mouse") chipHooks?.point(trait, chip);
+  });
+  chip.addEventListener("pointerleave", (e) => {
+    if (e.pointerType === "mouse") chipHooks?.leave(trait, chip);
+  });
+  chip.addEventListener("focus", () => {
+    if (chip.matches(":focus-visible")) chipHooks?.point(trait, chip);
+  });
+  chip.addEventListener("blur", () => chipHooks?.leave(trait, chip));
+  chip.addEventListener("click", () => chipHooks?.press(trait, chip));
+}
+
+// ---------- the words on a card ----------
+
+const RICH: Readonly<Record<string, string>> = {
+  number: "n",
+  mend: "n mend",
+  physical: "dmg phys",
+  magic: "dmg magic",
+  true: "dmg true",
+};
+/**
+ * A short form with its numbers bold and gold, heals and shields green, and the kinds of damage
+ * coloured; each fragment on a line of its own.
+ */
+export function rich(text: string, cls = "short"): HTMLElement {
+  const box = el("div", cls);
+  for (const fragment of text.split(/(?<=\.)\s+/)) {
+    const line = el("div", "frag");
+    for (const p of richPieces(fragment)) {
+      const c = RICH[p.tone];
+      line.append(c ? el("b", c, { text: p.text }) : p.text);
+    }
+    box.append(line);
+  }
+  return box;
+}
 
 const line = (text: string, cls = "k-d"): HTMLElement => el("div", cls, { text });
+const label = (text: string): HTMLElement => el("span", "k-label", { text });
+/** A thin rule between the blocks of a card. */
+const block = (cls: string, ...kids: (Node | string | null)[]): HTMLElement => el("div", `blk ${cls}`, {}, ...kids);
 
 /** A trait as a small tag: its sign and its name. */
 export function traitTag(id: TraitId, lit = false): HTMLElement {
@@ -192,9 +368,14 @@ export const acorns = (n: number | string): HTMLElement => el("span", "k-cur", {
 
 const tierName = ["", "one acorn", "two acorns", "three acorns", "four acorns", "five acorns"];
 
-function stat(name: string, value: string): HTMLElement {
-  return el("div", "stat", {}, el("span", "k-dim", { text: name }), el("b", "", { text: value }));
+/** An item's picture in a hollow, with its name and what it does as a tip. */
+function itemSlot(item: ItemId, lit = false, note = ""): HTMLElement {
+  const slot = el("span", `k-slot islot${lit ? " lit" : ""}`, { tabindex: 0 }, pic(itemIcon(item)));
+  tip(slot, itemName(item), () => `${itemShort(item)}${note ? ` ${note}` : ""}`);
+  return slot;
 }
+
+// ---------- a figure ----------
 
 export interface FigureExtras {
   items?: readonly ItemId[];
@@ -204,161 +385,296 @@ export interface FigureExtras {
   actions?: HTMLElement | null;
   /** As it stands in a fight just now. */
   unit?: Unit;
-  /** A line above everything: whose it is. */
+  /** A line under the price: whose it is. */
   whose?: string;
+  /** Its numbers as the next fight would start them, when they are known. */
+  numbers?: Numbers | null;
+  /** The run, for the traits' counts and the rack; none in the almanac. */
+  run?: Run | null;
+  /** The party it belongs to, for the traits' counts, when it is not the member's. */
+  party?: Pick<Party, "figures" | "charms"> | null;
+  /** The almanac's card: the long sentence and the flavour line too. */
+  lore?: boolean;
 }
 
-/** Any figure's card: stars, numbers, its ability in a sentence, its kin and calling, what it holds. */
+/** A trait's chip on a figure's card: a small label over it, and the count as the strip shows it. */
+function cardChip(trait: TraitId, over: string, count: TraitCount | null): HTMLElement {
+  const chip = el(
+    "button",
+    "tchip",
+    { type: "button", "aria-label": `${TRAITS[trait].name}, ${over.toLowerCase()}` },
+    label(over),
+    el(
+      "span",
+      `k-chip${count && count.step > 0 ? " lit" : ""}`,
+      {},
+      pic(traitIcon(trait)),
+      TRAITS[trait].name,
+      count ? el("b", "cnt", { text: `${count.count}/${count.next}` }) : null,
+    ),
+  );
+  wireChip(chip, trait);
+  return chip;
+}
+
+function numberCell(name: string, now: string, raised: number): HTMLElement {
+  return el(
+    "span",
+    "num",
+    {},
+    label(name),
+    el("b", raised > 0 ? "k-leafy" : raised < 0 ? "k-coral" : "", { text: now }),
+  );
+}
+
+/** Any figure's card: its role, its traits, its numbers, its ability in a few words, and the items that suit it. */
 export function figureCard(kind: UnitKind, stars: Stars, extras: FigureExtras = {}): HTMLElement {
   const spec = specOf(kind);
-  const scale = starScale(stars);
   const u = extras.unit;
   const figure = isFigureId(kind) ? FIGURES[kind] : null;
-  const under: (Node | string | null)[] = [
-    el("span", "k-row tight", {}, pic(starsPic(stars)), figure ? acorns(figure.tier) : null),
-  ];
-  if (extras.whose) under.push(line(extras.whose));
-  const card = el("div", "k-col card", {}, head(pic(portrait(kind), 2), spec.name, under));
-  const hp = u ? `${Math.max(0, Math.round(u.hp))}/${u.maxHp}` : String(Math.round(spec.hp * scale));
-  const atk = u ? String(u.attack) : String(Math.round(spec.attack * scale));
+  const card = el("div", "card fig wide");
+
+  // The head: its picture, name, stars and price, and what kind of fighter it is.
+  const right = el(
+    "span",
+    "side",
+    {},
+    figure ? acorns(figure.tier) : null,
+    extras.whose ? el("span", "k-d", { text: extras.whose }) : null,
+  );
   add(
     card,
     el(
       "div",
-      "stats",
+      "fhead",
       {},
-      stat("Health", hp),
-      stat("Attack", atk),
-      stat("Speed", spec.speed > 0 ? `${(u?.speed ?? spec.speed).toFixed(2)}/s` : "none"),
-      stat("Reach", String(u?.range ?? spec.range)),
-      stat("Armour", String(u?.armour ?? spec.armour)),
-      stat("Ward", String(u?.ward ?? spec.ward)),
+      el("span", "k-slot port", {}, pic(portrait(kind), 2)),
+      el(
+        "div",
+        "cwho",
+        {},
+        el("div", "nameline", {}, el("b", "k-gold", { text: spec.name }), pic(starsPic(stars)), right),
+        figure ? line(roleLine(figure.calling)) : null,
+      ),
     ),
   );
-  if (spec.ability) {
-    const mana = spec.mana[1] > 0 ? ` (${spec.mana[1]} mana)` : "";
+
+  // Its traits, each a button that lights the trait.
+  if (figure && isFigureId(kind)) {
+    const count = (t: TraitId): TraitCount | null =>
+      extras.party ? traitCount(extras.party, t) : extras.run ? ownTraitCount(extras.run, t) : null;
+    const [kin, calling, ...more] = traitsOf(kind);
     add(
       card,
-      el(
-        "div",
-        "k-col tight",
-        {},
-        el("b", "", { text: `${spec.ability.name}${mana}` }),
-        line(abilityText(kind, stars)),
+      block(
+        "ftraits",
+        kin ? cardChip(kin, "Kin", count(kin)) : null,
+        calling ? cardChip(calling, "Calling", count(calling)) : null,
+        ...more.map((t) => cardChip(t, "Also", count(t))),
       ),
     );
   }
-  if (isFigureId(kind)) add(card, el("div", "k-wrap", {}, ...traitsOf(kind).map((t) => traitTag(t))));
-  const items = extras.items ?? u?.items ?? [];
-  if (items.length > 0) {
-    add(
-      card,
-      el(
-        "div",
-        "k-col tight",
-        {},
-        ...items.map((item) =>
-          el("div", "held", {}, pic(itemIcon(item)), el("span", "", { text: itemName(item) }), line(itemText(item))),
-        ),
-      ),
-    );
-  }
+
+  // Its numbers: raised by what it holds or belongs to in green, lowered in coral.
+  const plain = plainNumbers(kind, stars);
+  const now: Numbers = u
+    ? { health: u.maxHp, attack: u.attack, speed: u.speed, reach: u.range, armour: u.armour, ward: u.ward }
+    : (extras.numbers ?? plain);
+  const shown = (key: (typeof NUMBER_KEYS)[number]): string => {
+    if (key === "speed") return spec.speed > 0 ? `${now.speed.toFixed(2)}/s` : "none";
+    if (key === "health" && u) return `${Math.max(0, Math.round(u.hp))}/${Math.round(u.maxHp)}`;
+    return String(Math.round(now[key]));
+  };
+  const diff = (key: (typeof NUMBER_KEYS)[number]): number => {
+    const d = now[key] - plain[key];
+    return Math.abs(d) < (key === "speed" ? 0.005 : 0.5) ? 0 : d;
+  };
+  const names = { health: "Health", attack: "Attack", speed: "Speed", reach: "Reach", armour: "Armour", ward: "Ward" };
+  const nums = block("nums", ...NUMBER_KEYS.map((key) => numberCell(names[key], shown(key), diff(key))));
   if (kind === "greg" && (extras.fed ?? 0) > 0)
-    add(card, line(`Has eaten ${extras.fed} times: +${(extras.fed ?? 0) * 3}% health.`));
-  add(card, el("i", "k-dim quip", { text: spec.quip }));
-  if (extras.actions) add(card, extras.actions);
+    add(nums, el("span", "k-d fed", { text: `Has eaten ${extras.fed} times: +${(extras.fed ?? 0) * 3}% health.` }));
+  add(card, nums);
+
+  // Its ability, in a few words.
+  if (spec.ability) {
+    add(
+      card,
+      block(
+        "abil",
+        el(
+          "div",
+          "aname",
+          {},
+          el("b", "", { text: spec.ability.name }),
+          spec.mana[1] > 0 ? el("span", "k-d", { text: `mana ${spec.mana[1]}` }) : null,
+        ),
+        rich(abilityShort(kind, stars)),
+      ),
+    );
+  }
+
+  // What it holds, and what suits it.
+  const items = extras.items ?? u?.items ?? [];
+  const run = extras.run ?? null;
+  if (items.length > 0 || isFigureId(kind)) {
+    const parts: (Node | null)[] = [];
+    if (items.length > 0) parts.push(el("div", "irow", {}, label("Holds"), ...items.map((item) => itemSlot(item))));
+    if (isFigureId(kind)) {
+      const good = GOOD_WITH[kind].map((item: FinishedId) => {
+        const has = run ? rackHas(run, item) : null;
+        const [a, b] = FINISHED[item].made;
+        const note =
+          has === "item"
+            ? "On your rack."
+            : has === "parts"
+              ? `${COMPONENTS[a].name} and ${COMPONENTS[b].name} are on your rack.`
+              : `${COMPONENTS[a].name} and ${COMPONENTS[b].name}.`;
+        return itemSlot(item, has !== null, note);
+      });
+      parts.push(el("div", "irow", {}, label("Good with"), ...good));
+    }
+    add(card, block("fitems", ...parts));
+  }
+
+  if (extras.lore) {
+    add(
+      card,
+      block(
+        "lore",
+        spec.ability ? line(abilityText(kind, stars), "") : null,
+        el("i", "k-dim quip", { text: spec.quip }),
+      ),
+    );
+  }
+  if (extras.actions) add(card, block("acts", extras.actions));
   return card;
 }
-/** One of the party's own figures, with what it holds and a way to sell it. */
-export function pieceCard(piece: Piece, actions: HTMLElement | null): HTMLElement {
-  return figureCard(piece.kind, piece.stars, { items: piece.items, fed: piece.fed, actions });
+
+/** One of the party's own figures, with what it holds, its numbers as they stand, and a way to sell it. */
+export function pieceCard(piece: Piece, actions: HTMLElement | null, run: Run, numbers: Numbers | null): HTMLElement {
+  return figureCard(piece.kind, piece.stars, { items: piece.items, fed: piece.fed, actions, run, numbers });
 }
 
-/** A figure in a list of a trait's members: lit if fielded, plain if owned, dim if not, a dark outline if not opened yet. */
+// ---------- a trait ----------
+
+/** A figure in a trait's card: its picture, name and price; lit if fielded, tagged if on the bench or the stall, dark if not opened yet. */
 function member(id: FigureId, run: Run | null, almanac: Almanac): HTMLElement {
-  const locked = isLocked(id) && !almanac.opened.includes(id);
-  const onBoard = run?.board.some((p) => p?.kind === id) ?? false;
-  const owned = run?.bench.some((p) => p?.kind === id) ?? false;
+  const where = run ? whereIs(run, id) : null;
+  const locked = isLocked(id) && !almanac.opened.includes(id) && where === null;
   const how = MILESTONES.find((m) => m.figure === id)?.text ?? "";
-  const cls = locked ? "member locked" : onBoard ? "member on" : owned ? "member owned" : "member";
   const name = locked && id === "crab40" ? "Uncounted" : FIGURES[id].name;
-  return el(
-    "div",
-    cls,
-    {},
-    pic(portrait(id, { dark: locked })),
-    el("span", "", { text: name }),
-    locked ? el("span", "k-dim how", { text: how }) : null,
+  const slot = el(
+    "button",
+    `k-slot mem${where === "board" ? " lit" : ""}${locked ? " locked" : ""}`,
+    { type: "button", "data-member": id, "aria-label": name, disabled: locked },
+    el("span", "art", {}, pic(portrait(id, { dark: locked }))),
+    el("span", "k-s mname", { text: name }),
+    locked ? el("span", "k-s how", { text: how }) : acorns(FIGURES[id].tier),
+    where === "bench" || where === "stall" ? el("span", "k-s tag", { text: where }) : null,
   );
+  if (!locked) slot.addEventListener("click", () => chipHooks?.figure(id, slot));
+  return slot;
 }
 
-/** A trait's card: what each step does, who carries it, and how many the party fields. */
-export function traitCard(id: TraitId, run: Run | null, almanac: Almanac): HTMLElement {
+/** A trait's card: what it is, its steps, and every figure that carries it. */
+export function traitCard(id: TraitId, run: Run | null, almanac: Almanac, lore = false): HTMLElement {
   const spec = TRAITS[id];
-  const state = run ? traitsNow(run).find((t) => t.trait === id) : undefined;
+  const state = run ? ownTraitCount(run, id) : null;
   const count = state?.count ?? 0;
   const step = state?.step ?? 0;
   const card = el(
     "div",
-    "k-col card",
+    "card trait wide",
     {},
-    head(pic(traitIcon(id), 2), spec.name, [
-      line(
-        spec.sort === "kin"
-          ? "A kin: what a figure is."
-          : spec.sort === "calling"
-            ? "A calling: what a figure does."
-            : "There is one.",
-      ),
-      el("i", "k-dim", { text: spec.gist }),
-    ]),
-  );
-  spec.steps.forEach((need, i) => {
-    add(
-      card,
+    el(
+      "div",
+      "thead",
+      {},
+      el("span", "k-slot port", {}, pic(traitIcon(id), 2)),
       el(
         "div",
-        `step${step === i + 1 ? " on" : ""}`,
+        "cwho",
         {},
-        el("b", "", { text: String(need) }),
-        el("span", "", { text: traitText(id, i + 1) }),
+        el(
+          "div",
+          "nameline",
+          {},
+          el("b", "k-gold", { text: spec.name }),
+          label(spec.sort === "kin" ? "Kin" : spec.sort === "calling" ? "Calling" : "Own"),
+          state ? el("span", "side", {}, el("b", "cnt", { text: `${count}/${state.next}` })) : null,
+        ),
+        line(spec.gist),
+      ),
+    ),
+  );
+  const next = spec.steps.findIndex((need) => need > count);
+  const steps = block("tsteps");
+  spec.steps.forEach((need, i) => {
+    const more = run && i === next ? need - count : 0;
+    add(
+      steps,
+      el(
+        "div",
+        `tstep${step === i + 1 ? " on" : ""}`,
+        {},
+        el("b", "need", { text: String(need) }),
+        rich(traitShort(id, i + 1), "short"),
+        more > 0 ? el("span", "k-label more", { text: `${more} more` }) : null,
       ),
     );
   });
-  const members = Object.keys(FIGURES)
-    .filter(isFigureId)
-    .filter((f) => traitsOf(f).includes(id));
-  add(card, el("div", "members", {}, ...members.map((f) => member(f, run, almanac))));
+  add(card, steps);
+  add(card, block("members", ...membersOf(id).map((f) => member(f, run, almanac))));
+  if (lore) {
+    add(
+      card,
+      block(
+        "lore",
+        ...spec.steps.map((need, i) => el("div", "", {}, el("b", "", { text: `${need}: ` }), traitText(id, i + 1))),
+      ),
+    );
+  }
   if (run) {
     const charms = run.boons.filter((b) => BOONS[b].charm === id).length;
-    const next = spec.steps.find((need) => need > count);
-    const say =
-      count === 0
-        ? "You field none of them."
-        : `You field ${count}${charms > 0 ? ` (a charm counts for ${charms})` : ""}.${next ? ` ${next - count} more for the next step.` : " That is all of it."}`;
-    add(card, line(say));
+    if (charms > 0) add(card, line(`A charm counts as one more.`));
   }
-  if (id === "crab") add(card, el("i", "k-dim quip", { text: "Every roll call, one crab is unaccounted for." }));
   return card;
 }
 
-/** An item's card: what it adds, and what it makes with the other components the party holds. */
-export function itemCard(id: ItemId, run: Run | null, itemAt = -1): HTMLElement {
-  const quip = isComponentId(id) ? COMPONENTS[id].quip : FINISHED[id].quip;
+// ---------- an item, a boon ----------
+
+/** What an item adds, in numbers, on one line. */
+const addsLine = (id: ItemId): HTMLElement => rich(itemAdds(id).join(" · "), "adds");
+
+/** An item's card: what it adds, what it does, and what it is made of or makes. */
+export function itemCard(id: ItemId, run: Run | null, itemAt = -1, lore = false): HTMLElement {
+  const component = isComponentId(id);
   const card = el(
     "div",
-    "k-col card",
+    "card item",
     {},
-    head(pic(itemIcon(id), 2), itemName(id), [line(isComponentId(id) ? "A component." : "A finished item.")]),
-    line(itemText(id), ""),
+    el(
+      "div",
+      "thead",
+      {},
+      el("span", "k-slot port", {}, pic(itemIcon(id), 2)),
+      el(
+        "div",
+        "cwho",
+        {},
+        el("b", "k-gold", { text: itemName(id) }),
+        line(component ? "A component" : "A finished item"),
+      ),
+    ),
   );
-  if (isComponentId(id)) {
+  add(card, block("adds", addsLine(id), component ? null : rich(itemShort(id))));
+  if (component) {
     const held = run ? combosWithHeld(run, id, itemAt) : [];
     const rows = held.length > 0 ? held : recipesOf(id);
-    add(card, el("div", "k-label", { text: held.length > 0 ? "With what you hold" : "Two on one figure make" }));
+    const recipes = block("recipes", label(held.length > 0 ? "With what you hold" : "Two on one figure make"));
     for (const r of rows) {
       add(
-        card,
+        recipes,
         el(
           "div",
           "recipe",
@@ -370,22 +686,36 @@ export function itemCard(id: ItemId, run: Run | null, itemAt = -1): HTMLElement 
         ),
       );
     }
+    add(card, recipes);
   } else {
     const [a, b] = FINISHED[id].made;
     add(
       card,
-      el(
-        "div",
-        "recipe",
-        {},
-        pic(itemIcon(a)),
-        el("span", "k-dim", { text: "and" }),
-        pic(itemIcon(b)),
-        el("span", "k-dim", { text: "made it" }),
+      block(
+        "recipes",
+        el(
+          "div",
+          "recipe",
+          {},
+          label("Made of"),
+          itemSlot(a),
+          el("span", "k-dim", { text: "+" }),
+          itemSlot(b),
+          el("span", "k-d", { text: `${COMPONENTS[a].name} and ${COMPONENTS[b].name}` }),
+        ),
       ),
     );
   }
-  add(card, el("i", "k-dim quip", { text: quip }));
+  if (lore) {
+    add(
+      card,
+      block(
+        "lore",
+        line(itemText(id), ""),
+        el("i", "k-dim quip", { text: component ? COMPONENTS[id].quip : FINISHED[id].quip }),
+      ),
+    );
+  }
   return card;
 }
 
@@ -393,7 +723,7 @@ export function itemCard(id: ItemId, run: Run | null, itemAt = -1): HTMLElement 
 export function forgeCard(holding: ItemId, withItem: ItemId, makes: ItemId): HTMLElement {
   return el(
     "div",
-    "k-col card",
+    "card item",
     {},
     el(
       "div",
@@ -406,7 +736,7 @@ export function forgeCard(holding: ItemId, withItem: ItemId, makes: ItemId): HTM
       pic(itemIcon(makes), 2),
     ),
     el("b", "k-gold", { text: itemName(makes) }),
-    line(itemText(makes)),
+    block("adds", addsLine(makes), isComponentId(makes) ? null : rich(itemShort(makes))),
   );
 }
 
@@ -414,13 +744,23 @@ export function boonCard(id: BoonId): HTMLElement {
   const spec = BOONS[id];
   return el(
     "div",
-    "k-col card",
+    "card boon",
     {},
-    head(pic(boonIcon(id), 2), spec.name, [line(spec.sort === "charm" ? "A charm." : "A boon.")]),
-    line(boonText(id), ""),
-    el("i", "k-dim quip", { text: spec.quip }),
+    el(
+      "div",
+      "thead",
+      {},
+      el("span", "k-slot port", {}, pic(boonIcon(id), 2)),
+      el("div", "cwho", {}, el("b", "k-gold", { text: spec.name }), line(spec.sort === "charm" ? "A charm" : "A boon")),
+    ),
+    block("adds", rich(boonShort(id))),
   );
 }
+
+// ---------- the rest ----------
+
+const head = (art: HTMLElement | null, name: string, under: (Node | string | null)[]): HTMLElement =>
+  el("div", "card-head", {}, art, el("div", "k-col tight", {}, el("b", "k-gold", { text: name }), ...under));
 
 /** A room on the track: what kind it is, who is or was there, and what it gives. */
 export function roomCard(index: number, run: Run): HTMLElement {
