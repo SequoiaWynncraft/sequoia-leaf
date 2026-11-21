@@ -9,12 +9,29 @@ import { bake, type Body, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 
-import { face, hop, makeActor, pushOf, release, say, shove, sit, stepActor, stepMates, walkTo } from "./actors.ts";
+import {
+  face,
+  headOf,
+  hop,
+  makeActor,
+  makeFolk,
+  placeFolk,
+  pushOf,
+  release,
+  rouse,
+  say,
+  shove,
+  sit,
+  stepActor,
+  stepFolk,
+  walkTo,
+} from "./actors.ts";
 import type { CampArt } from "./campart.ts";
-import { GREETS, KEEPER } from "./cast.ts";
 import { drawPicture, drawWords, type Picture, show, sizeBuffers } from "./draw.ts";
 import { beginEvents, stepEvents } from "./events.ts";
 import { flights, stepFlights } from "./flights.ts";
+import { FOLK, folk, KEEPER } from "./folk.ts";
+import { initFolkArt } from "./folkart.ts";
 import { ring, updateFx } from "./fx.ts";
 import { type Actor, after, changed, G, hooks, type PanelId } from "./game.ts";
 import { type GameId, isGame, worksWaiting } from "./games.ts";
@@ -23,6 +40,7 @@ import { guild } from "./guild.ts";
 import { closeCard, closePanel, refreshFace, setFace, setHammer, showCard } from "./hud.ts";
 import { compose, read } from "./letter.ts";
 import { BOX_FULL, post, roomInBox } from "./mail.ts";
+import { inTownLine } from "./news.ts";
 import { camp, kept, remember } from "./record.ts";
 import { dayOf } from "./save.ts";
 import type { Sprites } from "./sprites.ts";
@@ -49,8 +67,8 @@ import {
   twinkleAll,
 } from "./town.ts";
 import { dismissArrival, initUI, openPanel, showArrival, townDock } from "./ui.ts";
-import { isVisitor, stepVisitors } from "./visitors.ts";
-import { H, hedgeY, nearestFree, type Place, place, type PlaceId, PLACES, pondD, SEATS, SPOTS, W } from "./world.ts";
+import { isVisitor, members, stepVisitors } from "./visitors.ts";
+import { H, hedgeY, nearestFree, type Place, place, type PlaceId, PLACES, pondD, SEATS, W } from "./world.ts";
 
 /** Where the view closes in when the member goes into each game, and where they stand to go in. */
 const DOORWAY: Readonly<Record<GameId, Pt>> = {
@@ -61,8 +79,6 @@ const DOORWAY: Readonly<Record<GameId, Pt>> = {
 const THRESHOLD = 121;
 const STROLL = 64;
 const STEP_IN = 15;
-
-const HOW_MANY = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"] as const;
 
 const bodyOf = (look: Look): Body => bake(paintSkin(look));
 
@@ -90,9 +106,10 @@ export interface Town extends Scene {
     inside(id: GameId): void;
     tp(x: number, y: number): void;
     tap(x: number, y: number): void;
+    /** The town's own, where each is and what it is doing. */
     who(): { name: string; x: number; y: number; doing: string }[];
-    /** Real members in town just now, and where they stand. */
-    visitors(): { name: string; x: number; y: number }[];
+    /** Real members in town just now, visiting or dozing, and where each is. */
+    visitors(): { name: string; x: number; y: number; dozing: boolean }[];
     me(): Pt;
     lost(): Pt;
     kept(): unknown;
@@ -124,7 +141,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     nearAt: { x: NEAR.x, y: NEAR.y },
     props,
     others: () => (flights.length > 0 ? [...standing, ...flights] : standing),
-    people: () => [...G.mates, ...G.visitors, player, cinfy],
+    people: () => [...G.folk, ...G.visitors, player, cinfy],
     lights: allLights,
     beyond: () => undefined,
     under: drawWater,
@@ -138,32 +155,14 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   const player = makeActor(me, bodyOf(me.look), 256, 85, true);
   player.alpha = 0;
   G.player = player;
-  const keeper = guild.keeper();
-  const cinfy = makeActor(keeper, bodyOf(keeper.look), 104, 113);
-  cinfy.mode = "led";
+  // The town's own: drawn as themselves, each where its evening finds it.
+  initFolkArt(campArt);
+  const cinfy = makeFolk(folk("cinfy"), 104, 113);
+  placeFolk(cinfy, 0);
   G.cinfy = cinfy;
-  G.mates = guild.roster().map((m, i) => {
-    const a = makeActor(m, bodyOf(m.look), 256, 216);
-    // The evening is already under way: three by the fire, the rest about their errands.
-    const seat = [SEATS[0], SEATS[3], SEATS[4]][i];
-    const spot = SPOTS[(i * 5 + 2) % SPOTS.length];
-    if (seat) {
-      sit(a, seat);
-      a.x = seat.x;
-      a.y = seat.y;
-      a.sat = -9;
-      a.doing = "fire";
-      a.wait = 12 + i * 7;
-    } else if (spot) {
-      spot.taken = true;
-      a.spot = spot;
-      a.x = spot.x;
-      a.y = spot.y;
-      a.dir = spot.dir;
-      a.doing = spot.errand;
-      a.wait = 3 + i * 1.7;
-    }
-    a.mode = "busy";
+  G.folk = FOLK.filter((t) => t.job !== "counter" && t.job !== "calls").map((t, i) => {
+    const a = makeFolk(t, 256, 216);
+    placeFolk(a, i);
     return a;
   });
 
@@ -297,10 +296,10 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   function personAt(wx: number, wy: number): Actor | null {
     let best: Actor | null = null;
-    for (const a of [...G.mates, ...G.visitors, player, cinfy]) {
+    for (const a of [...G.folk, ...G.visitors, player, cinfy]) {
       if (a.away || a.alpha < 0.5) continue;
       const at = a.seat ?? a;
-      if (Math.abs(wx - at.x) > 7 || wy < at.y - 23 || wy > at.y + 3) continue;
+      if (Math.abs(wx - at.x) > 7 || wy < at.y - headOf(a) - 2 || wy > at.y + 3 - a.lift) continue;
       if (!best || at.y > (best.seat ?? best).y) best = a;
     }
     return best;
@@ -311,7 +310,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     const who = personAt(wx, wy);
     if (who) {
       const at = who.seat ?? who;
-      return { box: { x: at.x - 6, y: at.y - 21, w: 12, h: 22 }, tip: null, who };
+      const tall = headOf(who);
+      return { box: { x: at.x - 6, y: at.y - tall, w: 12, h: tall + 1 - who.lift }, tip: null, who };
     }
     const crab = crabAt(wx, wy);
     if (crab) return { box: { x: crab.x - 6, y: crab.y - 8, w: 12, h: 9 }, tip: null, who: null };
@@ -326,22 +326,29 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     const who = personAt(wx, wy);
     if (who) {
       sfx.pop();
+      // Somebody dozing sleeps on; their card says who they are.
+      if (who.dozing !== null) {
+        showCard(who);
+        return false;
+      }
       hop(who);
       if (who.you) {
         say(who, pick(["that's me", "hello, me", "o/"], Math.random()), 1.6);
         return false;
       }
-      // Somebody really here: they look round, and their card says who they are.
+      // A member really here: they look round, and their card says who they are.
       if (isVisitor(who)) {
         if (!who.seat && !who.moving) face(who, player.x, player.y);
         showCard(who);
         return false;
       }
+      const t = who.folk?.t;
       if (who === cinfy) say(who, pick(KEEPER.taps, Math.random()));
-      else {
-        if (!who.seat) face(who, player.x, player.y);
+      else if (t) {
+        rouse(who);
+        if (!who.seat && who.lift === 0) face(who, player.x, player.y);
         who.hold = 2.6;
-        say(who, pick(GREETS, Math.random()), 2);
+        say(who, pick(t.greets, Math.random()), 2);
       }
       showCard(who);
       return false;
@@ -440,7 +447,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       stepActor(player, dt);
       if (awake() && steer) steerBy(dt, steer);
       stepActor(cinfy, dt);
-      stepMates(dt);
+      stepFolk(dt);
       stepVisitors(dt);
       stepTown(dt);
       stepFlights(dt);
@@ -564,15 +571,15 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       setFace(openProfile);
       setHammer(null);
       hooks.toCamp = toCamp;
-      // Whoever is nearest the gate looks up.
-      const nearest = G.mates
-        .filter((a) => !a.away && !a.seat && dist(a.x, a.y, 256, 128) < 90)
+      // Whoever of the town's own is nearest the gate looks up.
+      const nearest = G.folk
+        .filter((a) => !a.away && !a.seat && a.doing !== "asleep" && dist(a.x, a.y, 256, 128) < 90)
         .toSorted((a, b) => dist(a.x, a.y, 256, 128) - dist(b.x, b.y, 256, 128))[0];
       if (nearest)
         after(0.9, () => {
           if (!nearest.moving) face(nearest, player.x, player.y);
           hop(nearest);
-          say(nearest, "back already?", 2);
+          say(nearest, pick(nearest.folk?.t.greets ?? ["hi!"], Math.random()), 2);
         });
     },
 
@@ -588,7 +595,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       });
       const begin = (): void => {
         Object.assign(kept, read(kept, Date.now()));
-        // What guild-mates left while the member was away is in the camp's mailbox, not in this letter;
+        // What the town's own left while the member was away is in the camp's mailbox, not in this letter;
         // what does not fit beside the presents still inside it is not left.
         let turnedAway = false;
         for (const l of mail) {
@@ -599,23 +606,28 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         remember();
         beginEvents();
         twinkleAll();
-        const about = G.mates.filter((a) => !a.away).length;
-        const count = HOW_MANY[about] ?? String(about);
-        hooks.feed(
-          letter.show ? `You are home. ${count} guild-mates are about.` : "Back again. The fire kept your seat.",
-          "leaf",
-        );
-        if (turnedAway) hooks.feed(BOX_FULL, "coral");
-        // Whoever is nearest looks up and says so.
-        const nearest = G.mates
-          .filter((a) => !a.away)
+        // How many real players are in the game, once the guild has said; then the feed says so.
+        const greet = letter.show ? "You are home." : "Back again.";
+        let tries = 0;
+        const tellHowMany = (): void => {
+          if (!guild.heard() && tries++ < 12) {
+            after(0.5, tellHowMany);
+            return;
+          }
+          hooks.feed(`${greet} ${inTownLine(guild.visitors().length)}`, "leaf");
+          if (turnedAway) hooks.feed(BOX_FULL, "coral");
+        };
+        tellHowMany();
+        // Whoever of the town's own is nearest and awake looks up and says so.
+        const nearest = G.folk
+          .filter((a) => !a.away && a.doing !== "asleep")
           .toSorted((a, b) => dist(a.x, a.y, player.x, player.y) - dist(b.x, b.y, player.x, player.y))
           .slice(0, 2);
         nearest.forEach((a, i) => {
           after(0.5 + i * 0.6, () => {
-            if (!a.seat && !a.moving) face(a, player.x, player.y);
+            if (!a.seat && !a.moving && a.lift === 0) face(a, player.x, player.y);
             hop(a);
-            say(a, i === 0 ? "welcome back!" : "you're here!", 2.4);
+            say(a, pick(a.folk?.t.greets ?? ["hi!"], Math.random()), 2.4);
           });
         });
         changed();
@@ -647,11 +659,14 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         tapWorld(x, y);
       },
       who() {
-        return G.mates.map((a) => ({ name: a.who.name, x: Math.round(a.x), y: Math.round(a.y), doing: a.doing }));
+        return [cinfy, ...G.folk].map((a) => ({
+          name: a.who.name,
+          x: Math.round(a.x),
+          y: Math.round(a.y),
+          doing: a.doing,
+        }));
       },
-      visitors() {
-        return G.visitors.map((a) => ({ name: a.who.name, x: Math.round(a.x), y: Math.round(a.y) }));
-      },
+      visitors: members,
       me() {
         return { x: Math.round(player.x), y: Math.round(player.y) };
       },

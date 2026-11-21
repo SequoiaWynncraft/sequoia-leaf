@@ -67,5 +67,15 @@
     "(()=>{const b = document.querySelector('#panel .k-thing[data-ref=\"plan:jigs\"]').getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
   ],
   ["wait", 500],
-  ["shot", "w-06-plan-card"]
+  ["shot", "w-06-plan-card"],
+  [
+    "eval",
+    "(window.works.close(), window.works.fill(0), window.works.fill(2), window.works.skip(16), 'two orders filled; gnomes come to the gate')"
+  ],
+  [
+    "eval",
+    "(()=>{const d=window.works.where('depot')[0]; window.works.zoom(-1); window.works.zoom(-1); window.works.look(d.x, d.y+13); window.works.zoom(1); window.works.skip(0.5); return 'at the gate'})()"
+  ],
+  ["wait", 400],
+  ["shot", "w-07-gnome-at-the-gate"]
 ]

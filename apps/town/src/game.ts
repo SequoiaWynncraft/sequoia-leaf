@@ -3,21 +3,45 @@
 import type { Body, Dir } from "@sequoia-leaf/kit/skin.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
+import type { Doing as FolkDoing, Townsperson } from "./folk.ts";
+import type { FolkArt } from "./folkart.ts";
 import type { GameId } from "./games.ts";
-import type { Member, Tone } from "./guild.ts";
-import type { Errand, PlaceId, Seat, Spot } from "./world.ts";
+import type { Tone } from "./guild.ts";
+import type { PlaceId, Seat, Spot } from "./world.ts";
 
 export type PanelId = PlaceId | "profile";
-/** What somebody is about: an errand in town, sitting somewhere, or (in a camp) calling in or being at home. */
-export type Doing = Errand | "fire" | "bench" | "play" | "walk" | "raid" | "call" | "home";
+/**
+ * What somebody is about: what one of the town's own is doing (`folk.ts`), or for a member where
+ * they are (about the town, by the Works, watching at the stump, at home in a camp).
+ */
+export type Doing = FolkDoing | "table" | "home";
+
+/** Who somebody is, as a name plate and a card say: their name, and a member's rank and level. */
+export interface Who {
+  name: string;
+  /** A member's rank as the town writes it; empty when it is not known. The town's own have none. */
+  rank: string;
+  level: number;
+  /** How high their voice is, for the blips when they speak. */
+  voice: number;
+}
 
 export interface Actor {
-  who: Member;
-  body: Body;
+  who: Who;
+  /** A member's figure, from their own skin (or a made-up one until it arrives); none for the town's own. */
+  body: Body | null;
+  /** One of the town's own: who it is and its own pictures; none for a member. */
+  folk: { t: Townsperson; art: FolkArt } | null;
+  /** Drawn this many pixels above where it stands: on a stool behind a counter, curled up on a stall. */
+  lift: number;
+  /** A member who has gone, dozing where they sat: when the game last saw them, in milliseconds since 1970. */
+  dozing: number | null;
   you: boolean;
   x: number;
   y: number;
   dir: Dir;
+  /** Which way they last went across: -1 left, 1 right (for a sprite that is only drawn side on). */
+  side: -1 | 1;
   speed: number;
   /** Points still to walk to, and what to do on reaching the last. */
   path: Pt[];
@@ -37,7 +61,7 @@ export interface Actor {
   sayFor: number;
   alpha: number;
   away: boolean;
-  /** Guild-mates run themselves unless someone is leading them (`led`). */
+  /** The town's own run themselves unless something is leading them (`led`). */
   mode: "idle" | "going" | "busy" | "led";
   wait: number;
   spot: Spot | null;
@@ -51,7 +75,8 @@ export interface Game {
   t: number;
   player: Actor | null;
   cinfy: Actor | null;
-  mates: Actor[];
+  /** The town's own, about the town: the keepers and the creatures. */
+  folk: Actor[];
   /** Real members who are in the game just now, standing about the town as themselves. */
   visitors: Actor[];
   /** Top-left of what is on screen, in the town's pixels; and the size of the screen in them. */
@@ -86,7 +111,7 @@ export const G: Game = {
   t: 0,
   player: null,
   cinfy: null,
-  mates: [],
+  folk: [],
   visitors: [],
   cam: { x: 96, y: 0 },
   view: { w: 320, h: 190, z: 4, dpr: 1 },

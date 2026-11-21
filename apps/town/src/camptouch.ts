@@ -671,7 +671,7 @@ export function extraOf(l: Live, w: TouchWorld): Extra | null {
         }
       };
     case "fairy-lights": {
-      const wire = slung(l, 1.4);
+      const wire = slung(l, 3);
       l.glow = (g, sx, sy, spark) => {
         wire.forEach((p, i) => {
           if (i % 6 !== 3) return;

@@ -5,6 +5,12 @@
 
 import type { Happening, Person, Tone } from "./guild.ts";
 
+/** How many real players, members and guests together, are in the game besides the member, in a line for the feed. */
+export function inTownLine(n: number): string {
+  if (n <= 0) return "The town is quiet.";
+  return n === 1 ? "1 is in town." : `${n} are in town.`;
+}
+
 /** Names in a line: the member first as "You", then up to three in all, and how many more. */
 export function names(who: readonly Person[]): string {
   const said = who.map((p) => (p.you ? "You" : p.name));
@@ -18,14 +24,6 @@ const one = (p: Person): string => (p.you ? "You" : p.name);
 /** The feed's line for a moment and its colour, or null for one the feed does not tell. */
 export function lineFor(h: Happening): readonly [string, Tone] | null {
   switch (h.kind) {
-    case "raidOut":
-      return [`${h.who[0] ?? "A"}'s party set out for ${h.raid}.`, "coral"];
-    case "raidBack":
-      return [`Raid cleared: ${h.raid}. ${h.leaf} Leaf each.`, "coral"];
-    case "land":
-      return [`The guild has taken ${h.name}.`, "rose"];
-    case "level":
-      return [`${h.who} reached level ${h.level}.`, "leaf"];
     case "quest":
       return [h.text, h.tone];
     case "call":

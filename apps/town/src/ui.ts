@@ -6,6 +6,7 @@
 
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph, replay, shown } from "@sequoia-leaf/kit/dom.ts";
+import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { CREAM, GOLD, GREEN, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { earn, grant } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
@@ -13,13 +14,14 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
 
-import { callToFire, goSit, hop, inTown, release, say, sitters } from "./actors.ts";
+import { callToFire, goSit, hop, inTown, release, rouse, say, sitters } from "./actors.ts";
 import { redrawn } from "./board.ts";
 import { owned } from "./camp.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { named, registerCards, thingRef, wareRef } from "./cards.ts";
-import { KEEPER } from "./cast.ts";
 import { fling } from "./flights.ts";
+import { folk, folkNamed, KEEPER } from "./folk.ts";
+import { folkArt } from "./folkart.ts";
 import { bit, float, flutter, puff, sparkle } from "./fx.ts";
 import { type Actor, after, changed, G, hooks, type PanelId } from "./game.ts";
 import { GAMES } from "./games.ts";
@@ -30,7 +32,9 @@ import {
   button,
   centre,
   closePanel,
+  faceOf,
   fly,
+  nameOf,
   openPanel as openHudPanel,
   pay,
   pic,
@@ -81,7 +85,8 @@ function nearby(p: Actor, words: readonly string[], reach = 70): void {
 }
 
 function cocoa(): void {
-  const at = sitters("fire");
+  // Nobody asleep is woken for it.
+  const at = sitters("fire").filter((a) => a.dozing === null);
   puff(256, 200, 8, CREAM, 16);
   hooks.feed("You stood the fire a round of cocoa.", "leaf");
   const thanks = ["cheers!", "cocoa!!", "thank you!", "you're the best", "\u2665"];
@@ -159,13 +164,11 @@ function wareArt(id: string): HTMLCanvasElement | null {
 }
 
 function treasury(body: HTMLElement): () => void {
-  const keeper = guild.keeper();
+  const keeper = folk("cinfy");
   const line = el("span", "", { text: KEEPER.hello });
-  const face = slot(G.cinfy ? pic(G.cinfy.body.face, 3) : null, 28);
+  const face = slot(G.cinfy ? faceOf(G.cinfy, 3) : null, 28);
   face.classList.add("nod");
-  body.append(
-    el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, el("b", "", { text: keeper.name }), line)),
-  );
+  body.append(el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, folkName(keeper.name, "k-pix"), line)));
   const speak = (long: string, short: string): void => {
     line.textContent = long;
     replay(face, "hop");
@@ -257,6 +260,12 @@ const clock = (ms: number): string => {
 
 /** The quest board: drawn whole again whenever its quests are no longer the ones it shows. */
 function quests(body: HTMLElement): () => void {
+  const note = guild.boardNote();
+  if (note !== null) {
+    // Somebody quests are not for: one note says why, and nothing on the board moves.
+    body.replaceChildren(el("div", "k-paper quest", {}, el("div", "", { text: note })));
+    return () => undefined;
+  }
   return redrawn(
     () => guild.quests().map((q) => q.id),
     () => notes(body),
@@ -409,13 +418,16 @@ function market(body: HTMLElement): () => void {
     [...tabs.children].forEach((tab, k) => {
       tab.setAttribute("aria-selected", k === i ? "true" : "false");
     });
-    const keeper = G.mates.find((a) => a.who.name === stall.by);
-    face.replaceChildren(...(keeper ? [pic(keeper.body.face, 3)] : []));
-    line.replaceChildren(el("b", "", { text: stall.by }), stall.name);
+    const keeper = G.folk.find((a) => a.who.name === stall.by);
+    const keeperFace = keeper ? faceOf(keeper, 3) : null;
+    face.replaceChildren(...(keeperFace ? [keeperFace] : []));
+    line.replaceChildren(folkName(stall.by, "k-pix"), el("span", "", { text: stall.name }));
     list.replaceChildren();
+    if (keeper) rouse(keeper, 12);
     rows = stall.stock.map((s) =>
       shopRow(list, s, "coins", () => {
         if (keeper && !keeper.away) {
+          rouse(keeper, 10);
           hop(keeper, 2);
           say(keeper, pick(stall.words, Math.random()), 2.6);
         }
@@ -530,7 +542,16 @@ function fireside(body: HTMLElement): () => void {
       const at = sitters("fire");
       list.replaceChildren(
         ...(at.length > 0
-          ? at.map((a) => el("span", a.you ? "k-chip lit" : "k-chip", {}, pic(a.body.face, 1), a.who.name))
+          ? at.map((a) =>
+              el(
+                "span",
+                a.you ? "k-chip lit" : a.dozing !== null ? "k-chip k-dim" : "k-chip",
+                {},
+                faceOf(a, 1),
+                nameOf(a),
+                a.dozing !== null ? el("span", "k-dim", { text: "zz" }) : null,
+              ),
+            )
           : [el("span", "k-d", { text: "Nobody yet. It's all yours." })]),
       );
       const p = G.player;
@@ -655,7 +676,7 @@ function profile(body: HTMLElement): null {
   const me = guild.me();
   const p = G.player;
   const portrait = makeCanvas(12, 24);
-  const frame = p?.body.frames[0]?.[0];
+  const frame = p?.body?.frames[0]?.[0];
   if (frame) portrait.g.drawImage(frame, 0, 0);
   if (G.wearing.has("crown") && S) portrait.g.drawImage(S.crown, 2, 0);
   const xp = el("i");
@@ -676,18 +697,27 @@ function profile(body: HTMLElement): null {
         el("div", "k-d", { text: `Level ${me.level}` }),
       ),
     ),
-    el(
-      "div",
-      "k-wrap",
-      {},
-      ...me.ranks.map((r) => {
-        const chip = el("span", r === me.rank ? "k-chip lit" : "k-chip", { text: r, tabindex: 0 });
-        if (r === me.rank)
-          tip(chip, r, `${me.xp.toLocaleString("en")} of ${me.next.toLocaleString("en")} to the next level.`);
-        return chip;
-      }),
-    ),
-    el("div", "k-card", {}, el("div", "k-grow", {}, "This week", el("div", "k-d", { text: me.week.join(", ") }))),
+    // A guest has no place among the guild's ranks, and no week with it to tell.
+    ...(me.ranks.length === 0
+      ? []
+      : [
+          el(
+            "div",
+            "k-wrap",
+            {},
+            ...me.ranks.map((r) => {
+              const chip = el("span", r === me.rank ? "k-chip lit" : "k-chip", { text: r, tabindex: 0 });
+              if (r === me.rank)
+                tip(chip, r, `${me.xp.toLocaleString("en")} of ${me.next.toLocaleString("en")} to the next level.`);
+              return chip;
+            }),
+          ),
+        ]),
+    ...(me.week.length === 0
+      ? []
+      : [
+          el("div", "k-card", {}, el("div", "k-grow", {}, "This week", el("div", "k-d", { text: me.week.join(", ") }))),
+        ]),
     el(
       "div",
       "k-card",
@@ -723,7 +753,7 @@ const BUILD: Record<PanelId, (body: HTMLElement) => (() => void) | null> = {
 
 /** Opens one of the town's panels. */
 export function openPanel(id: PanelId): void {
-  const face = G.player?.body.face;
+  const face = G.player?.body?.face;
   openHudPanel({
     id,
     title: id === "profile" ? "You" : place(id).name,
@@ -740,9 +770,10 @@ function lineArt(l: AwayLine): Node {
   if (l.art === "leaf" || l.art === "coin") return glyph(l.art);
   if (l.art === "banner") return glyph("star");
   if (l.art === "crab" && S?.crab[0]) return pic(S.crab[0].c, 1);
+  // The town's own the line is about, as their own small pictures.
   const faces = (l.who ?? []).flatMap((name) => {
-    const a = G.mates.find((m) => m.who.name === name);
-    return a ? [pic(a.body.face, 1)] : [];
+    const t = folkNamed(name);
+    return t ? [pic(folkArt(t).face, 1)] : [];
   });
   return faces.length > 0 ? el("span", "k-row faces", {}, ...faces) : glyph("heart");
 }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { buyPlan, buyPlot } from "./build.ts";
+import { ASKS } from "./content/asks.ts";
 import { ITEM, type Item, ITEMS } from "./content/items.ts";
 import { workOf } from "./content/recipes.ts";
 import { STORY } from "./content/story.ts";
@@ -14,6 +15,7 @@ import {
   fresh,
   isFilled,
   makeable,
+  reask,
   storyOrder,
   swap,
   SWAP_EVERY,
@@ -270,5 +272,44 @@ describe("the board", () => {
     expect(w.board).toEqual(board);
     for (const o of w.board)
       expect(Object.keys(o).toSorted()).toEqual(["filled", "from", "id", "line", "pay", "title", "want"]);
+  });
+});
+
+/** The made-up members the town once had, who never ask the Works for anything now. */
+const NOT_ASKERS = ["Quillfeather", "Fernwhistle", "Wrenly", "Kestrelle", "Hobbleknot", "Dunmere", "Tansy Fen"];
+/** Who may ask: places in town, the town's own, and the creatures the guild is fond of. */
+const PLACES = /^The (Treasury|campfire|crab pond|market stalls|quest board|raid parties|gate|gnomes|guild|cats|fox)$/;
+const TOWNSFOLK = new Set(["Cinfy", "Pipwick", "Embertoe", "Tindra"]);
+const CREATURES = ["Worm", "Rock", "Greg", "Glorp", "Moth", /^Crab #\d+$/, "The fox"];
+const allowed = (from: string): boolean =>
+  PLACES.test(from) ||
+  TOWNSFOLK.has(from) ||
+  CREATURES.some((c) => (typeof c === "string" ? c === from : c.test(from)));
+
+describe("who asks the Works for things", () => {
+  test("every order, story or standing, comes from a place, one of the town's own, or a creature", () => {
+    const askers = [...STORY.map((o) => o.from), ...Object.values(ASKS).flatMap((l) => l.map((a) => a.from))];
+    for (const from of askers) {
+      expect(allowed(from)).toBe(true);
+      expect(NOT_ASKERS).not.toContain(from);
+    }
+  });
+
+  test("an order kept from one who no longer asks is asked again for the same things; others come back as they were", () => {
+    const old = {
+      id: 7,
+      title: "Glass for Quillfeather",
+      from: "Quillfeather",
+      line: "Jars.",
+      want: { glass: 40 },
+      pay: 90,
+      filled: { glass: 3 },
+    };
+    const again = reask(old);
+    expect(allowed(again.from)).toBe(true);
+    expect(again.title).toBe(`Glass for ${again.from.replace(/^The /, "the ")}`);
+    expect({ ...again, title: "", from: "", line: "" }).toEqual({ ...old, title: "", from: "", line: "" });
+    const today = { ...old, title: "Glass for the market stalls", from: "The market stalls" };
+    expect(reask(today)).toBe(today);
   });
 });

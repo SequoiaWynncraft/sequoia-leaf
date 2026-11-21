@@ -26,6 +26,8 @@ export interface Kept {
    * that the next letter starts after it; null before the first visit there.
    */
   cursor: number | null;
+  /** Whether the member's character stays in town, dozing, for a day after they go (on the guild's server). */
+  stay: boolean;
   /** The member's own camp: what stands where, what is put away, who lives there, the mailbox. */
   camp: Camp;
 }
@@ -40,6 +42,7 @@ export function blank(): Kept {
     chest: "",
     lastSeen: 0,
     cursor: null,
+    stay: true,
     camp: newCamp(),
   };
 }
@@ -93,6 +96,7 @@ export function parse(text: string | null | undefined): Kept | null {
     lastSeen: count(raw.lastSeen, 8.64e15),
     cursor:
       typeof raw.cursor === "number" && Number.isFinite(raw.cursor) && raw.cursor >= 0 ? Math.floor(raw.cursor) : null,
+    stay: raw.stay !== false,
     camp: parseCamp(raw.camp) ?? newCamp(),
   };
 }

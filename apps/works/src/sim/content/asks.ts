@@ -1,6 +1,7 @@
 /**
- * Who asks for what on the board of standing orders, and why. Everybody here is made up: the
- * guild-mates, the places in town, and the small creatures the guild is fond of.
+ * Who asks for what on the board of standing orders, and why: the places in town, the town's own
+ * (Pipwick, Embertoe, Tindra), and the small creatures the guild is fond of. Never a member: a gnome
+ * comes to the gate for whoever asked.
  */
 import type { Item } from "./items.ts";
 
@@ -20,11 +21,11 @@ export const ASKS: Record<Item, readonly Ask[]> = {
   ],
   ore: [
     { from: "Greg", line: "Greg is collecting shiny lumps. Nobody has asked why." },
-    { from: "Embertoe", line: "Embertoe wants ore to practise smelting on. Stand well back." },
+    { from: "The raid parties", line: "The raid parties want ore to practise smelting on. Stand well back." },
   ],
   clay: [
     { from: "Glorp", line: "Glorp sat in the clay and now it is Glorp's clay. Glorp wants more." },
-    { from: "Tindra", line: "Tindra is making little clay moths. There are forty so far." },
+    { from: "The market stalls", line: "A stall is selling little clay moths. There are forty so far." },
   ],
   sand: [
     { from: "Crab #3", line: "Crab #3 is redecorating." },
@@ -32,10 +33,10 @@ export const ASKS: Record<Item, readonly Ask[]> = {
   ],
   resin: [
     { from: "Moth", line: "Moth got stuck in some resin once and has decided it was wonderful." },
-    { from: "Bramblewick", line: "Bramblewick seals letters with resin. There are a great many letters." },
+    { from: "Pipwick", line: "Pipwick seals the town's letters with resin. There are a great many letters." },
   ],
   plank: [
-    { from: "Mossback", line: "The gate squeaks. One more plank would fix it. It is never one more plank." },
+    { from: "The gate", line: "The gate squeaks. One more plank would fix it. It is never one more plank." },
     { from: "The market stalls", line: "A stall has a wobble, and the stallholder has stopped pretending it hasn't." },
   ],
   brick: [
@@ -44,7 +45,7 @@ export const ASKS: Record<Item, readonly Ask[]> = {
   ],
   ingot: [
     { from: "The Treasury", line: "The Treasury scales need counterweights. Cinfy weighs everything twice." },
-    { from: "Sootpaw", line: "Sootpaw bent every spoon in camp. These are for new spoons." },
+    { from: "The campfire", line: "Somebody bent every spoon at the fire. These are for new spoons." },
   ],
   pot: [
     { from: "Crab #4", line: "Crab #4 wants a pot to hide under. It is a private matter." },
@@ -52,14 +53,14 @@ export const ASKS: Record<Item, readonly Ask[]> = {
   ],
   glass: [
     { from: "Moth", line: "Moth would like a window to bump into." },
-    { from: "Quillfeather", line: "Quillfeather is making jars for fireflies, who have not been told." },
+    { from: "The market stalls", line: "The lamp stall is making jars for fireflies, who have not been told." },
   ],
   oil: [
-    { from: "Fernwhistle", line: "The lamps on the pond path are running low, and the crabs dislike the dark." },
-    { from: "The gate", line: "The gate lamp is out and Mossback keeps walking into the gate." },
+    { from: "The crab pond", line: "The lamps on the pond path are running low, and the crabs dislike the dark." },
+    { from: "The gate", line: "The gate lamp is out and Pipwick keeps walking into the gate." },
   ],
   tool: [
-    { from: "The Branchmasters", line: "The raid parties are short of shovels again. Nobody will say why." },
+    { from: "The raid parties", line: "The raid parties are short of shovels again. Nobody will say why." },
     { from: "Pipwick", line: "Pipwick borrowed a hammer, and now nobody can find Pipwick's hammer." },
   ],
   gear: [
@@ -68,10 +69,10 @@ export const ASKS: Record<Item, readonly Ask[]> = {
   ],
   frame: [
     { from: "The market stalls", line: "New stalls for market day. The old ones have been leaning on each other." },
-    { from: "Wrenly", line: "Wrenly paints, and has run out of things to put paintings in." },
+    { from: "The quest board", line: "Somebody painted the quest notes, and now they want frames." },
   ],
   hamper: [
-    { from: "Sootpaw", line: "The patrol is going out past the ridge and would like to eat on the way." },
+    { from: "The raid parties", line: "The patrol is going out past the ridge and would like to eat on the way." },
     { from: "The campfire", line: "Somebody promised everyone a picnic. It was Greg. Greg cannot carry hampers." },
   ],
   shell: [
@@ -79,24 +80,24 @@ export const ASKS: Record<Item, readonly Ask[]> = {
     { from: "Crab #9", line: "Crab #9 has outgrown its shell and is being brave about it." },
   ],
   lantern: [
-    { from: "Fernwhistle", line: "The pond path wants a lantern for every crab that is afraid of the dark." },
+    { from: "The crab pond", line: "The pond path wants a lantern for every crab that is afraid of the dark." },
     { from: "The fox", line: "The fox with the golden antlers left a note. It says 'lanterns'. Foxes cannot write." },
   ],
   engine: [
-    { from: "Mossback", line: "The well-winch gave out again. Mossback has been looking at it and sighing." },
-    { from: "Embertoe", line: "Embertoe wants an engine for the bellows and promises to stand further back." },
+    { from: "The Treasury", line: "The vault's winch gave out again. Cinfy has been looking at it and sighing." },
+    { from: "Embertoe", line: "Embertoe sleeps on the bellows and would like them warmer. An engine, then. Meow." },
   ],
   pole: [
-    { from: "Quillfeather", line: "The guild took another hill and there is nowhere to hang the banner." },
-    { from: "Tindra", line: "Tindra wants a pole by the tent. For a banner. A small one. With a moth on it." },
+    { from: "The quest board", line: "The guild took another hill and there is nowhere to pin that it did." },
+    { from: "Tindra", line: "Tindra wants a pole by her stall. For a banner. A small one. With a moth on it." },
   ],
   kit: [
-    { from: "The Branchmasters", line: "A raid party is mustering at the gate and half of them forgot their packs." },
-    { from: "Bramblewick", line: "Bramblewick is taking the new members out and is packing for all of them." },
+    { from: "The raid parties", line: "A raid party is mustering at the gate and half of them forgot their packs." },
+    { from: "The raid parties", line: "Somebody is taking the new members out and is packing for all of them." },
   ],
   beacon: [
     { from: "The guild", line: "A beacon for the far ridge, so the raid parties can find their way home." },
-    { from: "The gate", line: "Mossback wants a beacon over the gate. For safety. It is for the moths." },
+    { from: "The gate", line: "Pipwick wants a beacon over the gate. For safety. It is for the moths." },
   ],
   crab: [
     { from: "The crab pond", line: "Roll call came up one short again. A clockwork crab would help. It will not." },

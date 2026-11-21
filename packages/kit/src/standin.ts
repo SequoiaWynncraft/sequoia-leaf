@@ -95,11 +95,44 @@ export function standin(
 export const TESTER = {
   player: { id: "10000000-0000-0000-0000-00000000000a", username: "Tester" },
   rank: "captain",
+  guest: false,
   leaf: 2450,
   xp: 5230,
   level: { number: 7, xp_into_level: 230, xp_for_next_level: 1400 },
   event_cursor: 140,
 };
+
+/** A guest, as `/v1/game/me` answers for somebody signed in who is not in the guild. */
+export const GUEST = {
+  player: { id: "10000000-0000-0000-0000-00000000000b", username: "Wanderer" },
+  rank: null,
+  guest: true,
+  leaf: 0,
+  xp: 0,
+  level: { number: 1, xp_into_level: 0, xp_for_next_level: 1000 },
+  event_cursor: 0,
+};
+
+/**
+ * The routes only a member's page may ask for: a guest's page asking any of them is a mistake. As
+ * stand-in routes, each answers 403 as the server would, and writes down that it was asked.
+ */
+export function membersOnly(asked: string[]): Record<string, Route> {
+  const refuse = (s: Sent): Reply => {
+    asked.push(s.path);
+    return { status: 403, body: { code: "not_a_member" } };
+  };
+  return Object.fromEntries(
+    [
+      "GET /v1/me",
+      "GET /v1/me/quests",
+      "GET /v1/me/events",
+      "GET /v1/me/events/stream",
+      "GET /v1/game/guild/events",
+      "GET /v1/game/guild/events/stream",
+    ].map((route) => [route, refuse]),
+  );
+}
 
 export const HELLO = {
   status: 200,

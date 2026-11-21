@@ -2,14 +2,15 @@
 
 The home of the guild's cosy browser game. The member logs in as their own block-game character,
 standing in a small town in a clearing among giant redwoods at dusk, seen from above like an old
-farming or monster-catching RPG. Every part of the game is a place in the town, guild-mates are
-walking about in it, and the other games are doors off it. Behind the town's gate is the member's
-own camp, and down the trail from that, everybody else's.
+farming or monster-catching RPG. Every part of the game is a place in the town, the town's own
+creatures and keepers live in it, real members are about in it when they are in the game (and doze
+in it for a day after), and the other games are doors off it. Behind the town's gate is the
+member's own camp.
 
 ```sh
 bun run dev      # with hot reload
 bun run build    # dist/
-bun test         # the rules: saving, the arrival letter, the made-up guild, the camp, the mailbox, parcels
+bun test         # the rules: saving, the arrival letter, the made-up guild, the town's own, the camp, the mailbox, parcels, strings of lights tied at both ends
 ```
 
 To play as a real skin, put a 64x64 skin sheet at `dist/skins/player.png` after building (it is
@@ -27,22 +28,24 @@ and copies the test skin in one go.
   or the arrow keys, or tap a spot and the character finds a way round things; hold and drag to
   steer. Buildings, trunks and the pond are solid.
 - **Places.** The Treasury (Cinfy behind the counter), the quest board, the market stalls, the
-  Works (chimney, belt, crates), the great stump where The Little Raid is played, the campfire and
-  its log seats, the crab pond, and the gate with the signpost to "Your camp". Tap a place, or walk
+  Works (chimney, belt, crates, and a bench by the door), the great stump where The Little Raid is
+  played, the campfire and its log seats, the crab pond, and the gate with the signpost to "Your
+  camp". Tap a place, or walk
   up and press E, to open its panel; a prompt shows when the member is standing at one. The dock
   along the bottom opens any of them at once, the character walks there meanwhile, and the slot
   for the place they are standing at is lit.
-- **The market.** Three stalls sell things for a camp, for Coins: lamps and oddments, seats, rugs
-  and flags, and plants, fences and paths. Nothing sells out and nothing rotates; each row says how
-  many the member has.
+- **The market.** Three stalls sell things for a camp, for Coins: lamps and oddments (kept by
+  Sootpaw, asleep on the counter until somebody shops), seats, rugs and flags (Bramblewick), and
+  plants, fences and paths (Tindra). Nothing sells out and nothing rotates; each row says how many
+  the member has.
 - **What things are.** A thing for a camp (a market row, the tray, a thing set out in the camp
   while decorating or pointed at in it, a present, a trophy on the shelf) and a ware at the
   Treasury are cards in the kit's one card system (`card.ts`, registered in `cards.ts`): its
   picture, name and kind, what it does when touched, how many the member has, and where it comes
   from (the stall and its price, the Treasury, a present, or what wins it). A stall in a card is a
   card of its own, with everything it sells. Pointing shows the card, clicking the picture or the
-  name pins it, a finger kept on a thing in the camp pins it as a sheet. Guild-mates keep their
-  plaque, and the town's other things their one-line hint. What is bought leaves the stall as a parcel, up the path and out through
+  name pins it, a finger kept on a thing in the camp pins it as a sheet. People keep their own
+  card (below), and the town's other things their one-line hint. What is bought leaves the stall as a parcel, up the path and out through
   the gate, and is waiting at the camp.
 - **The Treasury.** Cinfy sells things to wear and a round of cocoa for Leaf, and a handful of fine
   pieces for a camp. They are as cosmetic as everything else there.
@@ -51,13 +54,27 @@ and copies the test skin in one go.
   sitting down on one of the logs at the stump, goes in without the card. The doors of the Works
   part and the member steps into the light (at the stump the lantern burns up), the view closes
   in on the spot, and the game opens out of it over the whole town. Coming back runs the other way.
-- **Guild-mates.** Nine made-up members go between the places on errands of their own, sit by the
-  fire, mind a stall, stand round the stump watching a game, and say things. Tapping one shows a
-  card. A name shows only over somebody who is near the member, pointed at, or speaking, and no
-  two name plates ever overlap.
-- **The guild, live.** With the made-up guild, every twenty seconds or so: a raid party musters at the gate and leaves,
-  comes back and hangs a lantern in the tree, the guild takes a territory and the banner goes up
-  the pole, somebody levels. The feed in the corner says so in a line.
+- **The town's own** (`folk.ts`). Everybody who lives in the town and is not a member is drawn as
+  one of the town's own sprites, never with a skin: Cinfy the keeper, a gnome in a gold hat behind
+  the Treasury's counter; Sootpaw, a black cat, mostly asleep on the lamp stall; Bramblewick and
+  Tindra, gnomes in red and green hats behind the other two stalls; Pipwick, a gnome in a blue hat,
+  going round the crab pond (counting), the quest board (reading) and the gate (minding it);
+  Mossback, a green glorp on a stump by the fire, who says "glorp."; Embertoe, a ginger cat,
+  curled up by the fire and then on the Works' doorstep; and the crabs in the pond. The cats, the
+  glorp and the fox are the camp's pets in their coats, and the gnomes the Works' gatherer with a
+  two-step waddle (`folkart.ts`). Each one's name plate is the kit's leaf green with the acorn
+  before it (`@sequoia-leaf/kit/mark.ts`); members' plates are cream. Tapping one shows its card:
+  its name with the mark, what it is ("Stallkeeper, and a gnome"), what it is doing, a wave, and
+  the way to its stall or the Treasury. They talk, greet the member, and cheer when the guild does.
+- **Members.** Real members in the game stand about as visitors, and those who have gone in the
+  last day doze in town (both below, and with the made-up guild its stand-ins). A member's card has
+  their name and rank, and for one dozing, how long ago they dozed off. A name shows only over
+  somebody who is near the member, pointed at, or speaking, and no two name plates ever overlap.
+- **The guild, live.** With the made-up guild, every twenty seconds or so: some of its stand-in
+  members come home from a raid and hang a lantern in the tree, win a territory and the banner goes
+  up the pole, reach a level or a milestone. The feed in the corner says so in a line. Coming in,
+  the feed counts everybody else in town, members and guests together: "You are home. 3 are in
+  town.", "1 is in town.", or "The town is quiet."
 - **Touching things.** Lantern posts, mushrooms, flowers, ferns, the great trunks, the fire, the
   water, the crabs, the pieces on the stump's board, the strings of lights and the sky all do
   something when tapped, with a sound. Pointing at a thing whose meaning is not plain (or keeping
@@ -77,10 +94,11 @@ in off the trail. Walking out past the two lantern posts on the camp's east side
   are standing. The member walks, sits on anything that can be sat on, and touches things as in
   town.
 - **Who lives there.** A glorp (Glape), a ginger cat (Erm) and a small white fox with gold antlers
-  (Snowdrop). The member chooses one the first time they come home. The next moves in when sixteen
-  things are set out in the camp, and the other when the member has left a present at three
-  guild-mates' camps; whichever happens first brings the next one in line. They wander, come to
-  see whoever arrives, and answer a touch each in their own way. Nobody is bought.
+  (Snowdrop). The member chooses one the first time they come home. The next moves in when
+  twenty-four things are set out in the camp, and the other when the member has greeted three of
+  the town's own who dropped by (touching one greets it; a member who left presents at three camps
+  before has theirs already); whichever happens first brings the next one in line. They wander,
+  come to see whoever arrives, and answer a touch each in their own way. Nobody is bought.
 - **Decorating.** The hammer in the corner turns it on. Everything in the camp can be dragged
   somewhere else, with the mouse or a finger: it lifts, snaps to a soft grid of eight-pixel
   squares, and shows the ground it would take. Green corners mean it may go there; coral corners
@@ -96,7 +114,7 @@ in off the trail. Walking out past the two lantern posts on the camp's east side
   music box plays its tune, Worm looks out of Worm's pot, and something in the barrel looks back.
   They come from the market for Coins, from the Treasury for Leaf, from the games as trophies that
   cannot be bought (a carved figure for each boss beaten in The Little Raid, a model of each
-  capstone built in the Works), and from guild-mates as small presents. Whatever is bought or won
+  capstone built in the Works), and from the town's own as small presents. Whatever is bought or won
   waits by the trail as a parcel, and the parcels open one after another when the member is in:
   each thing flies to a clear spot and lands. As many as two hundred parcels may wait; with that
   many by the trail the market and the Treasury sell nothing more (and take nothing) until some are
@@ -107,25 +125,28 @@ in off the trail. Walking out past the two lantern posts on the camp's east side
   a parcel or a present opens into the tray instead, until something is put away. A thing is in the
   camp, and kept, the moment its parcel opens; the flight is only how it is seen arriving.
 - **The cabin.** Walking up to its door opens the member's own things: their rank, level and week
-  with the guild, what they are wearing (each thing put on or taken off), the trophies they have
-  won, and who lives with them and what would bring the next. In town the member's face in the
+  with the guild, a switch, "Leave my character in town when I go" (on until turned off, kept in
+  the record and sent to the guild's server as `stay`), what they are wearing (each thing put on or
+  taken off), the trophies they have won, and who lives with them and what would bring the next. In town the member's face in the
   corner shows the rank and the week and points here.
-- **The mailbox.** Notes and small presents from guild-mates who came by while the member was
+- **The mailbox.** Notes and small presents from the town's own who came by while the member was
   away or in town, read as letters on paper. Its flag is up and it glows while there is a letter
   unread or a present not yet taken out. Taking a present out sends it hopping from the box to a
   spot beside it. The town's signpost at the gate has a mark over it while something is waiting.
   It holds twelve letters, and makes room by throwing out the oldest already dealt with, then the
   oldest with nothing inside; a present is never thrown out, so while the box is full of presents
   no more letters are left, and the feed says so.
-- **Guild-mates dropping by.** Now and then one walks in off the trail, says hello, sits on a free
-  seat by the fire, says a thing or two, and leaves, sometimes by way of the mailbox. If the member
-  is not there, they leave what they brought and the feed says so.
-- **Visiting.** The signpost lists the guild-mates and whether each is at home. Choosing one walks
-  the member down the trail to that camp: the same kind of clearing, laid out and furnished from
-  the guild-mate's name and what they like, so it is the same every visit, with their own pets and
-  their own roof. They are there to say hello, or (if they are away on a raid) there is a note on
-  the cabin door. Everything answers a touch, nothing can be moved, and the member may leave one
-  small present at their mailbox, which stays where it lands. Their trail leads home.
+- **The town's own dropping by.** Now and then Pipwick, Embertoe, Mossback or the White Fox walks
+  in off the trail, says hello in its own voice, settles by the fire (the gnome standing, the
+  others curled up), says a thing or two, and leaves, sometimes by way of the mailbox with a note
+  and a present. Touching one greets it, and it answers. If the member is not there, it leaves
+  what it brought and the feed says so.
+- **The signpost.** The way back to town; down the trail, a note that members' camps are not
+  there yet. The camp can still lay out and show somebody else's clearing (furnished from a name
+  and a taste, with its own pets and roof, a note on the door when they are out, and one present to
+  leave at their mailbox): that is `enter(owner)` with the guild's `camp(name)` in `campscene.ts`,
+  `give` there, the `note` and `present` panels in `campui.ts`, and `layout` in `camp.ts`. Nothing
+  reaches it, because the guild has no camp to give for anybody yet.
 - **The guild, live.** The same moments reach a camp: a line in the feed, a paper lantern going up
   beyond the trees (and over the clearing, where the far trees are out of sight) when a raid comes
   home, a pennant on the cabin roof for land taken, and whoever is there, pets included, hopping.
@@ -140,9 +161,11 @@ game in a frame that earns Coins moves the number in the town's corner.
 The town keeps one small record in the browser (`save.ts` says what is in it): what the member
 owns and has on, which quests they have claimed, how often they have spotted the missing crab, the
 day they were last welcomed, the day the chest by the Treasury last had change in it, when they
-were last here, how far their own news has been told (on the guild's server), and their camp (what stands where and which way round, what is in the tray, the
-parcels not yet opened, the letters, who was chosen first, the presents left with guild-mates and
-the trophies already handed over). It has a version; text that is not a record of that version
+were last here, how far their own news has been told (on the guild's server), whether their
+character stays in town after they go, and their camp (what stands where and which way round,
+what is in the tray, the parcels not yet opened, the letters, who was chosen first, how many of
+the town's callers they have greeted, the presents once left at other camps and the trophies
+already handed over). It has a version; text that is not a record of that version
 starts a new one, and inside a record each part that makes no sense is put back to how a new
 member has it. A record from before there were camps keeps what it had and gets a new camp; a
 thing kept where it cannot stand goes into the tray instead of being lost. The sound setting is
@@ -150,12 +173,15 @@ kept by the kit. `?fresh` in the address starts all of it over, once.
 
 ## Where the guild comes from
 
-Everything about the guild is asked for through `guild.ts`: who the member is, who is in town and
-what each has gone off to do, what has just happened out in the guild, the quests and how far
-along they are, what the Treasury and each stall sell and for how much, each guild-mate's camp,
-what a member may leave as a present, the letters left while the member was away, who looks in at
-the camp, and which real members are in the game just now. `madeup.ts` invents all of it, and
-keeps a memory of its own as a server would.
+Everything about the guild is asked for through `guild.ts`: who the member is, what has just
+happened out in the guild, the quests and how far along they are, what the Treasury and each stall
+sell and for how much, somebody's camp (nobody's yet), what a member may leave as a present, the
+letters left while the member was away, which of the town's own looks in at the camp, which real
+members are in the game just now, and which have gone in the last day and doze in town. With no
+server `madeup.ts` invents all of it, and keeps a memory of its own as a server would: so that
+visitors and dozers can be seen, it has four stand-in members with made-up looks (Quillfeather
+and Fernwhistle in the game, Wrenly and Kestrelle gone a while). The town's own are not the
+guild's: they are in `folk.ts`, the same everywhere.
 
 ## On the guild's own server
 
@@ -167,9 +193,9 @@ week's counts, and their news since the town last told them any), and only then 
 If the member is signed out, not a member, or the server is in trouble, the kit's card says so.
 The town is not loaded at all, since it reads what the browser keeps the moment it loads.
 
-From then on `live.ts` answers what is real and `madeup.ts` the rest, quietly: its townsfolk still
-wander, talk, keep their stalls and camps and call at the member's camp, but its own news,
-quests and Leaf stand still.
+From then on `live.ts` answers what is real and `madeup.ts` only what is not guild data (the wares,
+the mail and calls of the town's own); beside the real guild it has no stand-ins, news, quests or
+Leaf. `live.test.ts` holds the live guild to handing the town nobody the server did not name.
 
 - **The member.** Their name, their rank as the guild writes it (capitalised; an unknown one as it
   comes; none at all is "Friend"), their level, and their own skin from `/v1/game/skins/<id>`
@@ -191,16 +217,29 @@ quests and Leaf stand still.
   the banner for that territory; a level or a milestone is a line in the feed. The member is
   "You", and no line says how much Leaf anybody was paid (`news.ts` has every line).
 - **Who is here.** The town says where the member is (the town, the camp, or nowhere while a game
-  is open, which says its own place) and hears who else is in the game. Up to twelve of them stand
-  about as visitors (`visitors.ts`) in their own skins: strolling in town, by the Works' door, or
-  watching at the stump; nobody at their own camp. They come in and go out through the gate,
-  never speak, and their card has only their name and rank.
+  is open, which says its own place) and whether their character stays, and hears who else is in
+  the game and who has gone in the last day and stays. Up to twelve of the first stand about as
+  visitors (`visitors.ts`) in their own skins: strolling in town, by the Works' door, or watching at
+  the stump; nobody at their own camp. They come in through the gate, never speak, and their card
+  has only their name and rank; a guest's says "Guest". Up to twelve of the others, most recent first, doze at a free seat
+  for where they were (a log at the fire for the town, the log at the stump for the table, the bench
+  by the Works' door for the Works, then whatever seat is free; never the member's own; nobody last
+  at their camp): eyes closed, a "z" drifting up, never speaking or moving. A visitor who goes sits
+  down to doze if they stay, and walks out through the gate if not; a dozer who comes back gets up.
 - **What it remembers** goes to the member's account as well as the browser (the kit's
   `cloud.ts`). `?fresh` is ignored there.
 
+- **A guest.** Somebody signed in who is not in the guild plays the same town, with none of the
+  guild's own: `prepare()` fetches nothing, and nothing only a member may ask (`/v1/me...`, the
+  guild's news) is asked. The purse shows only Coins and every Leaf button says "Leaf is earned by
+  raiding with Sequoia."; the board holds one note ("Quests are for members of Sequoia. Raid with
+  the guild and yours appear here."); the letter is the plain welcome with the townsfolk's lines;
+  their card says "Guest of the guild" with no ranks and no week. Visitors and dozers who are
+  guests look like anybody else, with "Guest" for a rank.
+
 `review/live.ts` is a stand-in for the server, for looking at all of this without one: `bun
 review/live.ts 8790` serves the built town and games under `/play/` with a made-up member called
-Tester and five others about; `GET /review/raid` brings a raid party home; `--signed-out`,
+Tester, five others about and three dozing; `GET /review/raid` brings a raid party home; `--signed-out`,
 `--not-a-member` and `--down` show the cards.
 
 What each game says is waiting behind its door, what the Works made while the member was away, and
@@ -227,7 +266,7 @@ buttons, the feed, the dock, the panel's frame, a card for whoever was tapped), 
 camera, the keys and fingers, the loop, the walk from one place to another, and the way into a
 game and back; everything else it asks of a `Scene` (`stage.ts`). A scene is put on with
 `stage.travel(scene, swap)`, which is the walk through the dark, or `stage.put(scene)`, at once.
-One camp scene shows the member's own camp or any guild-mate's.
+One camp scene shows the member's own camp (or, one day, anybody else's).
 
 While a game is open the loop is stopped: nothing is stepped or drawn and nothing makes a sound,
 and it picks up where it was when the game is put away. While the member is in a camp the town is
@@ -242,12 +281,13 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/campscene.ts`                    | A camp as a scene: laying it out, who is there, taps, decorating, parcels, visiting     |
 | `src/grid.ts`                         | Ground to walk on: which squares are solid, and the way round them                      |
 | `src/world.ts`                        | The town's map: paths, pond, what is solid, where places are                            |
-| `src/camp.ts`                         | A camp's rules: what may stand where, the tray, who lives there, a guild-mate's layout  |
+| `src/camp.ts`                         | A camp's rules: what may stand where, the tray, who lives there, somebody else's layout |
 | `src/things.ts`                       | The catalogue of camp things: names, kinds, the ground each takes                       |
 | `src/mail.ts`                         | The mailbox: letters, and when one is still waiting                                     |
 | `src/town.ts`, `src/camptouch.ts`     | What each thing does when touched, and the parts that move                              |
 | `src/props.ts`, `src/flights.ts`      | Things that stand and can be touched; things in the air                                 |
-| `src/actors.ts`, `src/pets.ts`        | Walking, sitting, speaking; guild-mates on their errands; the pets                      |
+| `src/actors.ts`, `src/pets.ts`        | Walking, sitting, speaking; the town's own about their evening; the pets                |
+| `src/folk.ts`, `src/folkart.ts`       | The town's own: who each is, its job and lines; how each is drawn (never a skin)        |
 | `src/events.ts`                       | Staging the guild's moments in the town, or applying them quietly                       |
 | `src/draw.ts`                         | Drawing a frame of any place; name plates and speech; the round hole a door closes to   |
 | `src/hud.ts`                          | The purse, corner, feed, dock, panel and cards, shared by both places                   |
@@ -257,17 +297,18 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/games.ts`                        | The games that are places, what each says is waiting, and what has been won in each     |
 | `src/guild.ts`, `src/madeup.ts`       | The questions asked of the guild, and the made-up guild that answers                    |
 | `src/live.ts`, `src/news.ts`          | The real guild's answers on its own server; the feed's line for each moment             |
-| `src/visitors.ts`                     | Real members in the game, standing about the town                                       |
+| `src/visitors.ts`                     | Real members in the game, standing about the town, and those dozing in it               |
 | `src/save.ts`, `src/keep.ts`          | The kept record and its rules; reading and writing it in the browser                    |
 | `src/record.ts`                       | The one record as it is held while the page is open                                     |
 | `src/letter.ts`                       | Putting the arrival letter together from the time away                                  |
-| `src/cast.ts`, `src/fx.ts`            | What people say; sparks, leaves and rising words                                        |
+| `src/fx.ts`                           | Sparks, leaves and rising words                                                         |
 | `src/sprites.ts`, `src/ground.ts`     | The town's art                                                                          |
 | `src/campart.ts`, `src/campground.ts` | The camp's art: the cabin, every thing, the pets, the clearing's floor                  |
 | `src/campsfx.ts`                      | The camp's own sounds                                                                   |
 
 `grid.ts`, `camp.ts`, `things.ts`, `mail.ts`, `save.ts`, `letter.ts`, `madeup.ts`, `games.ts`,
-`live.ts` and `news.ts` have no page in them, and tests beside them. `record.ts` has tests too,
+`folk.ts`, `live.ts` and `news.ts` have no page in them, and tests beside them; `folk.test.ts` also
+reads every file of the three games to check that nothing but members is drawn from a skin. `record.ts` has tests too,
 for what is sent to the camp.
 
 ## The games beside it
@@ -282,14 +323,16 @@ there, gets a note and a way back; one that says it later opens over the note.
 
 `window.town` has handles for taking pictures of it: `skip(seconds)` runs the clock on, `hold(true)`
 stops the clock so that only `skip` moves it, `enter()` puts the arrival letter away, `visit(place)`
-and `open(panel)` open things in town, `tp(x, y)` moves the member in town, `happen("raidOut" |
-"raidBack" | "land" | "level" | "call")` sets off a guild moment, `inside(game)` goes through a door,
-`door()` says how far that has got, `leave()` comes back, `kept()` shows the record as it would be
-saved, `visitors()` says which real members are in town and where, `where()` says which place is on and how dark the walk has got, `coins(n)` puts Coins in the purse for a tour that buys things (only with the made-up guild), and `page(x, y)` turns a
+and `open(panel)` open things in town, `tp(x, y)` moves the member in town, `happen("raid" | "war" |
+"level" | "milestone" | "call")` sets off one of the made-up guild's moments, `inside(game)` goes
+through a door, `door()` says how far that has got, `leave()` comes back, `kept()` shows the record
+as it would be saved, `who()` says where each of the town's own is and what it is doing,
+`visitors()` says which real members are in town, where, and whether they are dozing, `where()` says which place is on and how dark the walk has got, `coins(n)` puts Coins in the purse for a tour that buys things (only with the made-up guild), and `page(x, y)` turns a
 point in the place that is on into a point on the page.
 
 `window.town.camp` is the same for camps: `go()` walks out of town to the member's camp, `town()`
-and `home()` walk back, `visit(name)` goes to a guild-mate's, `walk("cabin" | "mailbox" |
+and `home()` walk back, `visit(name)` would go to somebody else's (there is none yet), `greet(n)`
+touches the nth of whoever has dropped by, `walk("cabin" | "mailbox" |
 "signpost" | "trail")` walks up to a place and uses it, `decorate(on)`, `take(id)` sets a thing out
 of the tray, `grab(n)`, `dragTo(cx, cy)` and `drop()` move the nth thing by squares, `hand()` says
 what is held and whether it may go where it is, `things()`, `pets()` and `guests()` say what is
@@ -306,10 +349,11 @@ sh review/build.sh standin
 bun ../../packages/kit/tools/drive.ts "http://town.test/?fresh" <out-dir> review/camp.json dist
 ```
 
-`final.json` is the whole town at three sizes, `doors.json` the way into a game and the note when
+`final.json` is the whole town at three sizes (the keepers at their stalls, Pipwick about, a
+townsperson's card, a dozing member's card), `doors.json` the way into a game and the note when
 one is missing, `remember.json` what survives a reload, `reactions.json` the things that answer a
-touch. `camp.json` and `camp-phone.json` are the camp from the market to a guild-mate's camp and
-back, at 1280x760 and 390x844 (the phone's with a finger), `camp-remember.json` the camp across a
+touch. `camp.json` and `camp-phone.json` are the camp from the market to one of the town's own dropping
+by, greeted, the signpost and back, at 1280x760 and 390x844 (the phone's with a finger), `camp-remember.json` the camp across a
 reload, and `camp-things.json` (opened with `?sheet=camp`) the sheet of every thing.
 `review/build.sh standin` puts `review/standin/` (a page that only speaks to the town) where the
 Works would be and leaves The Little Raid out, so both kinds of door can be seen without the

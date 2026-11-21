@@ -92,7 +92,7 @@ export const THINGS: readonly Thing[] = [
       light: 60,
     },
   ),
-  thing("mailbox", "Mailbox", "home", 1, 1, "Notes and small presents from guild-mates.", "Opens your letters.", {
+  thing("mailbox", "Mailbox", "home", 1, 1, "Notes and small presents from the town's own.", "Opens your letters.", {
     rooted: true,
     light: 22,
   }),

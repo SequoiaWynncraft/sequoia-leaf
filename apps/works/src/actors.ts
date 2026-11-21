@@ -1,16 +1,17 @@
 /**
- * Whoever walks about the yard: guild-mates come to the gate for a crate, and the yard's own hand
- * who carries a story order out. They are made up, like everybody in the town, and drawn with the
- * kit's figures.
+ * Whoever walks about the yard: a gnome come to the gate for a crate (Pipwick for his own orders,
+ * in his blue hat; one of the town's gnomes for anybody else's), and the yard's own gnome who
+ * carries a story order out. They are the yard's gnomes (`art/machines.ts`), never a member's
+ * figure.
  */
 
-import { GREEN, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
-import { bake, type Body, type Dir as Facing, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts";
-import { hash, type Pt } from "@sequoia-leaf/kit/util.ts";
+import type { Dir as Facing } from "@sequoia-leaf/kit/skin.ts";
+import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 export interface Walker {
   name: string;
-  body: Body;
+  /** Which hat (`art/machines.ts`): Pipwick's blue, or one of the others. */
+  hat: number;
   x: number;
   y: number;
   dir: Facing;
@@ -33,47 +34,10 @@ export interface Walker {
 
 export const walkers: Walker[] = [];
 
-const SKINS = ["#f0c9a0", "#d9a577", "#b07a52", "#8a5a3c", "#f4d7b5"];
-const HAIR = ["#3b1f19", "#6f3826", "#d49045", "#e9d8b8", "#1a0f1e", "#b84d84", "#525252"];
-const TOPS = [SKY[3], SKY[4], WATER[1], GREEN[2], "#b0483a", "#d49045", WATER[2], GREEN[3], SKY[2]];
-const STYLES: readonly Look["style"][] = ["short", "long", "hood", "cap", "ears"];
-const DETAILS: readonly NonNullable<Look["detail"]>[] = ["belt", "scarf", "apron", "buttons"];
-
-const made = new Map<string, Body>();
-
-/** The same made-up figure every time for the same name. */
-export function bodyOf(name: string): Body {
-  const had = made.get(name);
-  if (had) return had;
-  let seed = 7;
-  for (let i = 0; i < name.length; i++) seed = (seed * 31 + name.charCodeAt(i)) | 0;
-  const pick = <T>(list: readonly T[], k: number): T => {
-    const v = list[Math.floor(hash(seed, k, 5) * list.length)];
-    if (v === undefined) throw new Error("empty list");
-    return v;
-  };
-  const look: Look = {
-    skin: pick(SKINS, 1),
-    hair: pick(HAIR, 2),
-    light: pick(HAIR, 3),
-    eye: "#1a0f1e",
-    top: pick(TOPS, 4),
-    legs: pick(["#3b1f19", "#2a1733", "#243a66", "#24482a"], 5),
-    shoes: "#3b1f19",
-    style: pick(STYLES, 6),
-    sleeves: hash(seed, 7, 5) > 0.5 ? "long" : "short",
-    detail: pick(DETAILS, 8),
-    trim: pick(["#fff3cf", "#f5b95e", "#e67967"], 9),
-  };
-  const body = bake(paintSkin(look));
-  made.set(name, body);
-  return body;
-}
-
-export function walker(name: string, at: Pt, order = -1): Walker {
+export function walker(name: string, hat: number, at: Pt, order = -1): Walker {
   const w: Walker = {
     name,
-    body: bodyOf(name),
+    hat,
     x: at.x,
     y: at.y,
     dir: 0,
@@ -81,7 +45,7 @@ export function walker(name: string, at: Pt, order = -1): Walker {
     walked: 0,
     path: [],
     after: null,
-    speed: 34,
+    speed: 22,
     carrying: false,
     say: "",
     sayFor: 0,

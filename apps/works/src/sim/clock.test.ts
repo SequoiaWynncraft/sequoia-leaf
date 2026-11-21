@@ -231,11 +231,11 @@ describe("away", () => {
     const order = w.board[0];
     if (!order) throw new Error("no board");
     w.board[0] = { ...order, title: "Pots for the campfire", want: { pot: 300 }, pay: 90, filled: {} };
-    w.board[1] = { ...order, id: 98, title: "Engines for Mossback", want: { engine: 100 }, pay: 300, filled: {} };
+    w.board[1] = { ...order, id: 98, title: "Engines for the Treasury", want: { engine: 100 }, pay: 300, filled: {} };
     w.board[2] = { ...order, id: 99, title: "Lanterns for the fox", want: { lantern: 5 }, pay: 8, filled: {} };
     runTo(w, NOW);
     const away = runTo(w, NOW + 8 * HOUR);
-    expect(away?.orders).toEqual(["Engines for Mossback", "Pots for the campfire"]);
+    expect(away?.orders).toEqual(["Engines for the Treasury", "Pots for the campfire"]);
     expect(away?.waiting).toBe(390);
     expect(w.board.map((o) => isFilled(o.want, o.filled))).toEqual([true, true, false]);
     expect(away?.coins).toBeGreaterThan(300);

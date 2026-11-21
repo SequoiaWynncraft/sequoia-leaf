@@ -17,7 +17,7 @@ import { STORY } from "./content/story.ts";
 import { create } from "./create.ts";
 import { isDir } from "./grid.ts";
 import { LAND, type Land } from "./land.ts";
-import { fillBoard } from "./orders.ts";
+import { fillBoard, reask } from "./orders.ts";
 import { repower } from "./power.ts";
 import { type Building, put, reopen, type Standing, WARM, type World } from "./world.ts";
 
@@ -150,7 +150,7 @@ function standing(v: unknown): Standing | null {
   const filled = tally(v.filled, 1e6);
   for (const item of ITEMS)
     if ((filled[item] ?? 0) > 0) filled[item] = Math.min(Math.floor(filled[item] ?? 0), want[item] ?? 0);
-  return { id, title, from, line, want, pay, filled };
+  return reask({ id, title, from, line, want, pay, filled });
 }
 
 /** A yard read back from text, on the guild's land unless another is given; nothing if the text is not a yard. */

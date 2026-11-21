@@ -35,7 +35,7 @@ import * as stage from "./stage.ts";
 import { act, changed, prefsChanged, S, wake } from "./state.ts";
 import { type PageId, showPage } from "./ui/pages.ts";
 
-type Jump = "front" | "boon" | "component" | "boss" | "lastboss" | "end";
+type Jump = "front" | "boon" | "component" | "spar" | "boss" | "lastboss" | "end";
 
 export interface Handle {
   /** Starts a run from a seed on a trail, at its first pick. */
@@ -121,7 +121,11 @@ function settle(): string {
 
 /** Whether the run is at the room a jump is for. */
 const there = (run: Run, where: Jump): boolean =>
-  where === "lastboss" ? run.room === ROOMS.length - 1 : where === "boss" ? ROOMS[run.room]?.kind === "boss" : false;
+  where === "lastboss"
+    ? run.room === ROOMS.length - 1
+    : where === "boss" || where === "spar"
+      ? ROOMS[run.room]?.kind === where
+      : false;
 
 /** The bot plans the room that is up, without fighting it. */
 function plan(): void {

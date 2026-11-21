@@ -20,6 +20,14 @@ export class NotAMember extends Schema.Error<NotAMember>("NotAMember")(answer("n
   httpApiStatus: 403,
 }) {}
 
+/** Something in the game only the guild's members may see, asked for by a guest. */
+export class MembersOnly extends Schema.Error<MembersOnly>("MembersOnly")(answer("members_only"), {
+  httpApiStatus: 403,
+}) {}
+
+/** A save written too soon after the last one to the same slot. Nothing was written: send it again in a moment. */
+export class SlowDown extends Schema.Error<SlowDown>("SlowDown")(answer("slow_down"), { httpApiStatus: 429 }) {}
+
 /**
  * A write signed in with the session cookie that did not come from Leaf's own
  * pages. Another site can make a browser send the cookie, but not that `Origin`.

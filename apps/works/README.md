@@ -3,7 +3,7 @@
 The yard behind the guild's workshop: the building with the chimney in Guild Town, and where Coins
 come from. Gatherers pick things up off the forest floor, belts carry them, machines make goods of
 them, and the depot in the middle takes everything in. The guild's raid parties, the Treasury, the
-crab pond and guild-mates ask for things, and the yard makes them. Nothing here fells a living
+crab pond, the town's own and the guild's creatures ask for things, and the yard makes them. Nothing here fells a living
 tree: wood is deadfall.
 
 The game is in two parts. `src/sim/` is the rules, with no screen in them: plain data and plain
@@ -125,8 +125,12 @@ still wants it: the story's first, then the board's from the top.
 
 - _The story_ is twenty orders, one after another (`content/story.ts`). Filling one pays at once
   and opens machines, plots and plans. Eight of them leave something in the town for good.
-- _The board_ goes up after the fourth story order: three standing orders, each from a made-up
-  guild-mate, a place in town or one of the guild's creatures, asking for one or two things. An
+- _The board_ goes up after the fourth story order: three standing orders, each from a place in
+  town (the crab pond, the Treasury, the campfire, the market stalls, the quest board, the raid
+  parties, the gate), one of the town's own (Pipwick, Embertoe, Tindra) or one of the guild's
+  creatures, asking for one or two things (`content/asks.ts`). An order kept in a yard from before
+  these askers is asked again by one of them for the same things when the yard is read back
+  (`reask`). An
   order is drawn from the yard's seed and how many orders the board has shown before, so the same
   yard is always offered the same orders, reload or no. It asks only for things the yard can make
   as it stands and that the story has already asked for, in numbers sized by the work in them
@@ -245,10 +249,13 @@ hand over), the plans as the small tree they are, what the depot has taken in an
 makes an hour, and the second shift. The power plaque opens a fifth, which says where the power
 comes from and where it goes.
 
-**Moments.** A story order filled: the yard's hand carries a crate out of the depot and through the
-gate, Coins fly to the purse, and a notice says what was paid, what it opened and what is asked for
-next. A standing order filled: a guild-mate comes to the gate and waits; handing over (from the
-panel, or by tapping them) sends the crate across, pays, and they carry it off. A plot bought: the
+**Moments.** A story order filled: the yard's own gnome carries a crate out of the depot and
+through the gate, Coins fly to the purse, and a notice says what was paid, what it opened and what
+is asked for next. A standing order filled: a gnome waddles to the gate and waits (Pipwick in his
+blue hat for his own orders, one of the town's gnomes for anybody else's, saying whom it is for);
+handing over (from the panel, or by tapping him) sends the crate across, pays, and he carries it
+off over his head. Whoever walks about the yard is one of the yard's gnomes (`actors.ts`), drawn
+from the gatherer's pictures with a two-step waddle. A plot bought: the
 cleared ground opens out from its signpost and the undergrowth falls away. A second shift: the
 bell, a green pennant on the depot's roof, and the depot shines green while it lasts. Coming back
 after five minutes or more: a letter on paper says what the yard did, and pays the till into the

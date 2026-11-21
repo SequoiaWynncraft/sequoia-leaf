@@ -1,10 +1,11 @@
 /**
  * The guild, as the town knows it. Everything that comes from the guild's server is asked for here
- * and nowhere else: who the member is, who is in town and what they are up to, what the guild has
- * just done, what is pinned on the board, what is for sale. On the guild's own server the live
- * guild in `live.ts` answers what is real (the member, their quests and news, the guild's news,
- * who else is here) and the made-up guild in `madeup.ts` the rest; anywhere else the made-up
- * guild answers everything.
+ * and nowhere else: who the member is, which real members are in the game or dozing in town, what
+ * the guild has just done, what is pinned on the board, what is for sale. On the guild's own server
+ * the live guild in `live.ts` answers what is real (the member, their quests and news, the guild's
+ * news, who else is here) and the made-up guild in `madeup.ts` the rest; anywhere else the made-up
+ * guild answers everything. The town's own creatures and keepers are not the guild's: they are in
+ * `folk.ts`, the same everywhere.
  */
 
 import { where } from "@sequoia-leaf/kit/live.ts";
@@ -31,9 +32,9 @@ export interface Me extends Member {
   next: number;
   /** Where their own skin sheet is served, if it is. */
   skin: string;
-  /** The ranks of the guild, lowest first; `rank` is one of them. */
+  /** The ranks of the guild, lowest first; `rank` is one of them. None for a guest, who has no rank. */
   ranks: readonly string[];
-  /** What they have done with the guild this week, as a few short counts. */
+  /** What they have done with the guild this week, as a few short counts; nothing for a guest. */
   week: readonly string[];
 }
 
@@ -87,7 +88,7 @@ export interface Pet {
   name: string;
 }
 
-/** A guild-mate's own camp, as a visitor finds it. */
+/** A member's own camp, as a visitor would find it. */
 export interface MateCamp {
   owner: string;
   placed: readonly Placed[];
@@ -115,38 +116,25 @@ export interface Visitor {
   rank: string | null;
   /** About the town, by the Works' door, or watching at the stump. */
   at: "town" | "works" | "table";
-  /** Where their skin sheet is served. */
+  /** Where their skin sheet is served; empty for a made-up member, who keeps a made-up look. */
   skin: string;
 }
 
-/** What a guild-mate in town may be doing: sitting somewhere (`fire`, `bench`, `play`) or about an errand. */
-export type Activity =
-  | "fire"
-  | "bench"
-  | "play"
-  | "treasury"
-  | "quests"
-  | "market"
-  | "stall"
-  | "works"
-  | "table"
-  | "pond"
-  | "tree"
-  | "pole"
-  | "garden";
+/** A real member who has gone, and whose character stays in town for a day, dozing where they were. */
+export interface Rester extends Visitor {
+  /** When the game last saw them, in milliseconds since 1970. */
+  seen: number;
+}
 
 export type Tone = "gold" | "leaf" | "coral" | "rose";
-export type Moment = "level" | "raidOut" | "raidBack" | "land" | "call";
+/** The made-up guild's moments, which a tour can set off at once. */
+export type Moment = "raid" | "war" | "level" | "milestone" | "call";
 
 /** Something that has just happened out in the guild. */
 export type Happening =
-  | { kind: "raidOut"; who: readonly string[]; raid: string }
-  | { kind: "raidBack"; who: readonly string[]; raid: string; leaf: number }
-  | { kind: "land"; name: string }
-  | { kind: "level"; who: string; level: number }
   /** A quest has been finished and waits on the board. */
   | { kind: "quest"; id: string; text: string; tone: Tone }
-  /** A guild-mate has looked in at the member's camp, with a note or a small present, or neither. */
+  /** One of the town's own has looked in at the member's camp, with a note or a small present, or neither. */
   | { kind: "call"; id: string; who: string; note: string; gift: string }
   /** Real members back from a raid together. */
   | { kind: "party"; who: readonly Person[]; raid: string }
@@ -159,13 +147,13 @@ export type Happening =
 
 /** One line of the letter that meets a returning member. */
 export interface AwayLine {
-  art: "leaf" | "coin" | "mates" | "crab" | "banner";
+  art: "leaf" | "coin" | "folk" | "crab" | "banner";
   text: string;
   /** What the line pays into the purse, if anything. */
   pay?: { kind: "leaf" | "coins"; amount: number };
   /** Leaf the guild's ledger has already paid for it: shown, and not paid again. */
   got?: number;
-  /** Guild-mates the line is about. */
+  /** The town's own the line is about, by name. */
   who?: readonly string[];
 }
 
@@ -178,23 +166,22 @@ export interface Away {
 
 export interface Guild {
   me(): Me;
-  /** Who keeps the Treasury. */
-  keeper(): Member;
-  /** The guild-mates who are in town. */
-  roster(): readonly Member[];
-  /** What a guild-mate has gone off to do next. */
-  doing(name: string): Activity;
   /** What is pinned on the board, with how far along each is. */
   quests(): readonly Quest[];
+  /** A note pinned on the board in place of quests, for somebody quests are not for (a guest); null for anybody else. */
+  boardNote(): string | null;
   wares(): readonly Ware[];
   /** The Treasury's fine pieces for a camp, for Leaf. */
   pieces(): readonly Stock[];
   stalls(): readonly Stall[];
   /** The small things a member may leave at somebody else's camp. */
   presents(): readonly string[];
-  /** A guild-mate's camp, by their name; nothing for somebody the guild does not know. */
+  /**
+   * A member's camp, by their name; nothing for somebody whose camp may not be visited. Nobody's
+   * may yet: the camp keeps the way to lay one out and show it for when members' camps can be.
+   */
   camp(name: string): MateCamp | null;
-  /** The letters guild-mates left in the member's mailbox between two moments (as for `away`). */
+  /** The letters the town's own left in the member's mailbox between two moments (as for `away`). */
   mail(from: number, to: number): Letter[];
   /** Which crab is missing from roll call. */
   lostCrab(): number;
@@ -206,8 +193,14 @@ export interface Guild {
   step(dt: number): void;
   /** Real members in the game just now, never the member themself; at most twelve. */
   visitors(): readonly Visitor[];
+  /** Real members who have gone in the last day, dozing in town, most recent first; never anybody in `visitors`. */
+  resting(): readonly Rester[];
+  /** Whether anybody has said yet who is about (on the guild's server the first answer takes a moment). */
+  heard(): boolean;
   /** Where the member is: in town, at their camp, or (null) in a game over the town. */
   here(place: "town" | "camp" | null): void;
+  /** Whether the member's own character stays in town, dozing, for a day after they go. */
+  stay(on: boolean): void;
   /**
    * How far the member's own news has been told, to be kept with the town's record so that the
    * next letter starts after it; null when there is nothing to keep.
@@ -224,7 +217,8 @@ const madeUp = makeGuild({
   keep: (text) => {
     keepText(GUILD_KEY, text);
   },
-  // Beside the real guild, the made-up one keeps only its townsfolk: none of its news, quests or Leaf.
+  // Beside the real guild, the made-up one keeps only the town's own calling at the camp: none of
+  // its members, news, quests or Leaf.
   quiet: ready !== null,
 });
 

@@ -5,7 +5,8 @@
  * It serves the built town and games under `/play/` (from `dist/`, `../works/dist/` and
  * `../battler/dist/`) and answers the routes the game asks, as the spec has them, for a made-up
  * member called Tester: a rank, some Leaf, three quests, a day of news since the town last told
- * them any, five others in the game, and the saves kept in memory. Their skin is the test skin
+ * them any, five others in the game and three gone a while whose characters doze in town (one of
+ * them last at their camp, so not shown), and the saves kept in memory. Their skin is the test skin
  * (`~/.cache/grove-blocks/skins/notes.png`); nobody else's is found. `GET /review/raid` sends the
  * guild's stream a raid party coming home, one of them in town.
  *
@@ -178,6 +179,13 @@ const OTHERS = [
   { id: "20000000-0000-0000-0000-000000000005", username: "Thistledown", place: "camp" },
 ];
 
+/** Those gone a while, whose characters stay in town: how many minutes ago each was seen. */
+const RESTING = [
+  { id: "20000000-0000-0000-0000-000000000006", username: "Fennimore", place: "town", ago: 170 },
+  { id: "20000000-0000-0000-0000-000000000007", username: "Rookwood", place: "works", ago: 35 },
+  { id: "20000000-0000-0000-0000-000000000008", username: "Hazelby", place: "camp", ago: 300 },
+];
+
 // ---------- streams ----------
 
 const encoder = new TextEncoder();
@@ -270,7 +278,13 @@ async function route(req: Request): Promise<Response> {
   if (path === "/v1/game/guild/events/stream") return events(guildStreams, guildId);
   if (path === "/v1/game/presence" && req.method === "PUT") {
     const place = (await sentBody(req)).place;
-    return json({ present: [{ id: ME, username: "Tester", place }, ...OTHERS] });
+    const resting = RESTING.map((r) => ({
+      id: r.id,
+      username: r.username,
+      place: r.place,
+      seen_at: iso(Date.now() - r.ago * 60_000),
+    }));
+    return json({ present: [{ id: ME, username: "Tester", place }, ...OTHERS], resting });
   }
   if (path.startsWith("/v1/game/skins/")) {
     const id = path.split("/").pop() ?? "";

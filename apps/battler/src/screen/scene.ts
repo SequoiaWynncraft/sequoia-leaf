@@ -6,15 +6,13 @@
  */
 import { CREAM, GOLD, INK, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
-import { FOOT_X, FOOT_Y, SIT } from "@sequoia-leaf/kit/skin.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 
-import { isBossId, type UnitKind } from "../game/content/figures.ts";
-import { ROOMS } from "../game/content/rooms.ts";
+import { type FigureId, isBossId, type UnitKind } from "../game/content/figures.ts";
+import { regularNamed, REGULARS, ROOMS } from "../game/content/rooms.ts";
 import { HOME_ROWS, seatCell } from "../game/hex.ts";
 import { fieldCap, fielded, type ItemId, pieceAt, type Run, type Spot, type Stars } from "../game/index.ts";
 import { itemPic } from "./art/icons.ts";
-import { bodyOf, MATE_NAMES } from "./art/mates.ts";
 import { drawBase, drawFigure, drawStars, framesOf } from "./art/sprites.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
 import { drawFight, drawFightAir, fightHeldUnder, fightOn } from "./fightview.ts";
@@ -272,18 +270,18 @@ function drawCap(g: Ctx, run: Run): void {
   }
 }
 
-/** Somebody sitting on a log, facing a way. */
-function drawSitter(g: Ctx, name: string, x: number, y: number, dir: 0 | 1 | 2, bounce: number): void {
-  const frame = bodyOf(name).frames[dir]?.[SIT];
-  if (frame) g.drawImage(frame, Math.round(x) - FOOT_X, Math.round(y - bounce) - FOOT_Y);
+/** The regular who brought the party across the table, if a regular did: the forest's trouble has nobody sat there. */
+function regularOf(run: Run): FigureId | null {
+  return ROOMS[run.room]?.kind === "spar" ? (regularNamed(run.foe.who)?.kind ?? null) : null;
 }
 
-/** The two who watch from the side logs, picked by the run so they stay the same all raid. */
-function watchers(run: Run): [string, string] {
-  const others = MATE_NAMES.filter((n) => n !== run.foe.who);
-  const a = others[run.seed % others.length] ?? "Mossback";
-  const rest = others.filter((n) => n !== a);
-  const b = rest[(run.seed >>> 8) % rest.length] ?? "Wrenly";
+/** The two regulars who watch from the side logs, picked by the run so they stay the same all raid. */
+function watchers(run: Run): [FigureId, FigureId] {
+  const across = regularNamed(run.foe.who)?.kind;
+  const others = REGULARS.map((r) => r.kind).filter((k) => k !== across);
+  const a = others[run.seed % others.length] ?? "moth";
+  const rest = others.filter((k) => k !== a);
+  const b = rest[(run.seed >>> 8) % rest.length] ?? "crab7";
   return [a, b];
 }
 
@@ -293,6 +291,35 @@ export function watchersCheer(): void {
   cheerAt = V.t;
 }
 
+/** How large the regular across the table is drawn, against a figure on the board. */
+const ACROSS = 2;
+
+/**
+ * The regular across the table, drawn large: the upper part of the figure over the stump's far
+ * edge, as if sitting just behind it, breathing.
+ */
+function drawAcross(g: Ctx, kind: FigureId, cx: number, rim: number): void {
+  const f = framesOf(kind, true);
+  const pic = f.idle[Math.floor(V.t * 1.4) % 2 === 0 ? 0 : 1];
+  // As much of it as stands over the edge: most of a small figure, the top of a tall one, and on a
+  // window where the far edge is near the top, as much as there is room for.
+  const shown = Math.min(f.h, Math.max(6, Math.round(f.tall * 0.72) + 1));
+  const top = f.h - (f.tall + 1);
+  const rows = Math.min(f.h - top, shown, Math.floor((rim + 3) / ACROSS));
+  if (rows < 5) return;
+  g.drawImage(
+    pic,
+    0,
+    top,
+    f.w,
+    rows,
+    Math.round(cx) - f.ax * ACROSS,
+    rim - rows * ACROSS + 3,
+    f.w * ACROSS,
+    rows * ACROSS,
+  );
+}
+
 function drawPeople(g: Ctx, run: Run): void {
   const p = place();
   const { cx, cy, rx } = stumpOf(p);
@@ -300,16 +327,15 @@ function drawPeople(g: Ctx, run: Run): void {
   const up = V.t - cheerAt;
   const bounce = (i: number): number =>
     up >= 0 && up < 0.9 ? Math.abs(Math.sin((up + i * 0.1) * 9)) * 3 * (1 - up / 0.9) : 0;
-  if (ROOMS[run.room]?.kind === "spar") {
-    // Whoever brought the party sits across the table: head and shoulders over its far edge.
-    const frame = bodyOf(run.foe.who).frames[0]?.[SIT];
-    if (frame && rim >= 14)
-      g.drawImage(frame, 0, 0, frame.width, 17, Math.round(cx) - FOOT_X, rim - 16, frame.width, 17);
-  }
+  const across = regularOf(run);
+  if (across) drawAcross(g, across, cx, rim);
   if (p.w > 330) {
     const [a, b] = watchers(run);
-    drawSitter(g, a, cx - rx - 34, cy + 5, 2, bounce(0));
-    drawSitter(g, b, cx + rx + 34, cy + 11, 1, bounce(1));
+    drawFigure(g, a, cx - rx - 34, cy + 5 - bounce(0), { beat: Math.floor(V.t * 1.2) % 2 === 0 ? 0 : 1 });
+    drawFigure(g, b, cx + rx + 34, cy + 11 - bounce(1), {
+      left: true,
+      beat: Math.floor(V.t * 1.2 + 0.5) % 2 === 0 ? 0 : 1,
+    });
   }
 }
 

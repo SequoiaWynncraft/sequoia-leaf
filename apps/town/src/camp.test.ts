@@ -201,7 +201,7 @@ describe("who lives in a camp", () => {
     expect(petsOf(camp)).toEqual(["cat"]);
   });
 
-  test("a cosy camp brings a second, and kindness a third", () => {
+  test("a cosy camp brings a second, and greeting three of the town's callers a third", () => {
     const camp = fresh();
     camp.first = "fox";
     while (camp.placed.length < COSY) {
@@ -210,12 +210,28 @@ describe("who lives in a camp", () => {
       camp.placed.push({ id: "stump", ...spot, t: 0, s: 0 });
     }
     expect(petsOf(camp)).toEqual(["fox", "glorp"]);
-    for (let i = 0; i < KIND; i++) camp.gave.push({ to: `Mate${"abc".charAt(i)}`, what: "pinecone" });
+    camp.greeted = KIND - 1;
+    expect(petsOf(camp)).toEqual(["fox", "glorp"]);
+    camp.greeted = KIND;
     expect(petsOf(camp)).toEqual(["fox", "glorp", "cat"]);
+  });
+
+  test("greeting brings the next in line even before the camp is cosy", () => {
+    const camp = fresh();
+    camp.first = "cat";
+    camp.greeted = KIND;
+    expect(petsOf(camp)).toEqual(["cat", "glorp"]);
+  });
+
+  test("whoever left presents at three camps before keeps the pet that followed them home", () => {
+    const camp = fresh();
+    camp.first = "glorp";
+    for (let i = 0; i < KIND; i++) camp.gave.push({ to: `Mate${"abc".charAt(i)}`, what: "pinecone" });
+    expect(petsOf(camp)).toEqual(["glorp", "cat"]);
   });
 });
 
-describe("a guild-mate's camp", () => {
+describe("somebody else's camp, laid out for when it can be visited", () => {
   const taste = ["toadstool", "potted-fern", "gnome", "lantern-post", "rug-woven", "picket"];
 
   test("is the same every visit", () => {
@@ -244,6 +260,7 @@ describe("keeping a camp", () => {
     camp.tray = { well: 1, gnome: 3 };
     camp.parcels = ["barrel"];
     camp.gave = [{ to: "Mossback", what: "pinecone" }];
+    camp.greeted = 2;
     camp.earned = ["trophy-oldbramble"];
     post(camp.letters, letter("m-1", "Tindra", "I left you a mushroom.", "toadstool"));
     expect(parseCamp(JSON.parse(JSON.stringify(camp)))).toEqual(camp);
@@ -302,14 +319,15 @@ describe("keeping a camp", () => {
   });
 
   test("a camp is never kept without its cabin, mailbox and signpost", () => {
-    const back = parseCamp({ placed: [], first: "nobody", tray: { cabin: 4, gnome: -2, well: 2.9 } });
+    const back = parseCamp({ placed: [], first: "nobody", greeted: "lots", tray: { cabin: 4, gnome: -2, well: 2.9 } });
+    expect(back?.greeted).toBe(0);
     expect(back?.placed.map((p) => p.id).toSorted()).toEqual(["cabin", "mailbox", "signpost"]);
     expect(back?.first).toBe("");
     expect(back?.tray).toEqual({ well: 2 });
     expect(back && allReached(back.placed)).toBe(true);
   });
 
-  test("a present is remembered once for each guild-mate", () => {
+  test("a present is remembered once for each camp", () => {
     const back = parseCamp({
       placed: [],
       gave: [
