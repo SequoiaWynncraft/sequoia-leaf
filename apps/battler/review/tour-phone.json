@@ -79,6 +79,9 @@
   ],
   ["wait", 400],
   ["shot", "p-16-takings"],
+  ["eval", "(window.raid.skip(9), window.raid.to('spar'), window.raid.skip(1.5), 'a regular across the table')"],
+  ["wait", 500],
+  ["shot", "p-16b-regular-across"],
   [
     "eval",
     "(window.raid.skip(9), window.raid.to('boss'), window.raid.arrive(), window.raid.skip(1.5), 'the boss is on its way in')"

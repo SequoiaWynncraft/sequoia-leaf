@@ -1,8 +1,12 @@
 /**
- * A camp as a scene: the member's own place behind the town's gate, or a guild-mate's down the
- * trail. It lays the clearing out from its record, moves whoever is in it, answers touches, and
- * (in the member's own) lets everything be picked up and set down somewhere else. `main.ts` drives
- * it through `Scene`; what a camp is and what may stand where are in `camp.ts`.
+ * A camp as a scene: the member's own place behind the town's gate. It lays the clearing out from
+ * its record, moves whoever is in it (the member, their pets, the town's own dropping by), answers
+ * touches, and lets everything be picked up and set down somewhere else. `main.ts` drives it
+ * through `Scene`; what a camp is and what may stand where are in `camp.ts`.
+ *
+ * It can also lay out and show somebody else's camp down the trail (`enter(owner)`, with the
+ * `mate` it is given, `give`, and the note on their door), for when members' camps can be visited.
+ * Nothing reaches that yet: the guild has no camp to give for anybody (`guild.camp`).
  */
 
 import { CREAM, GOLD, GREEN, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
@@ -11,7 +15,20 @@ import type { Dir } from "@sequoia-leaf/kit/skin.ts";
 import { sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, pick, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
 
-import { face, hop, makeActor, pushOf, release, say, shove, sit, stepActor, walkTo } from "./actors.ts";
+import {
+  face,
+  headOf,
+  hop,
+  makeActor,
+  makeFolk,
+  pushOf,
+  release,
+  say,
+  shove,
+  sit,
+  stepActor,
+  walkTo,
+} from "./actors.ts";
 import {
   boxOf,
   campFull,
@@ -56,6 +73,7 @@ import { type CampUi } from "./campui.ts";
 import { thingRef } from "./cards.ts";
 import { drawPicture, drawProp, drawWords, type Picture, type Prompted, show, sizeBuffers } from "./draw.ts";
 import { clearFlights, flights, fling, stepFlights } from "./flights.ts";
+import { AT_CAMP, folkNamed, isCaller } from "./folk.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle, updateFx } from "./fx.ts";
 import { type Actor, after, changed, forgetLater, G, hooks, stepLater } from "./game.ts";
 import { trophies } from "./games.ts";
@@ -67,7 +85,7 @@ import { BOX_FULL, letter, post, roomInBox, waiting } from "./mail.ts";
 import { lineFor } from "./news.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
-import { camp as mine, roomByTrail, roomFor, sendToCamp } from "./record.ts";
+import { camp as mine, greet, roomByTrail, roomFor, sendToCamp } from "./record.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Hover, Scene, Stage } from "./stage.ts";
 import { footprint, thingOf, turnsOf } from "./things.ts";
@@ -103,15 +121,15 @@ export interface Held {
 }
 
 export interface CampScene extends Scene {
-  /** Lays out the member's own camp (`null`) or a guild-mate's, and brings the member in off the trail. */
+  /** Lays out the member's own camp (`null`) or somebody else's, and brings the member in off the trail. */
   enter(owner: string | null): void;
   /** Whose camp is showing: `null` for the member's own. */
   owner(): string | null;
-  /** The guild-mate whose camp this is, as the guild describes it. */
+  /** Whose camp this is, as the guild describes it, when it is not the member's. */
   host(): MateCamp | null;
   /** Walk up to one of the camp's places and use it. */
   go(what: CampPlace): void;
-  /** Leave down the trail: for the town, for home, or for a guild-mate's camp. */
+  /** Leave down the trail: for the town, for home, or for somebody else's camp. */
   leave(to: "town" | "home" | { visit: string }): void;
   decorating(): boolean;
   decorate(on: boolean): void;
@@ -124,7 +142,7 @@ export interface CampScene extends Scene {
   choose(kind: PetId): void;
   /** A present comes out of a letter and into the camp. */
   unwrap(thing: string): void;
-  /** Leaves a small present at the guild-mate's camp the member is visiting. */
+  /** Leaves a small present at the camp the member is visiting. */
   give(thing: string): void;
   /** For looking at the camp from outside. */
   readonly handles: {
@@ -146,25 +164,13 @@ export interface CampScene extends Scene {
     choose(kind: PetId): void;
     owner(): string | null;
     guests(): string[];
+    /** Touches the nth of whoever has dropped by, as the member would: it is greeted. */
+    greet(n: number): void;
   };
 }
 
-const HELLO = ["evening!", "knock knock.", "room by the fire?", "hi hi hi.", "smelled the fire. came over."];
-const BYE = ["leafin'. night!", "back to my camp.", "off I go. be nice to the fox.", "gn. glory to the grove."];
-const CHAT = [
-  "erm. nice camp.",
-  "your crabs are plotting something.",
-  "no gg left behind!",
-  "who let the gnome in?",
-  "this is the best fire. I checked.",
-  "one more story, then leafin'.",
-  "your cabin smells like cedar.",
-  "Cinfy says hi. Cinfy also says pay up.",
-  "raid was a mess. ten out of ten.",
-  "something in that barrel winked at me.",
-];
+/** What a member at home in their own camp might say, for when members' camps can be visited. */
 const THANKS = ["for me? erm. thank you.", "I will treasure it.", "you shouldn't have. (you should.)"];
-const CHEERS = ["gg!", "glory to the grove!", "woo!", "huge"];
 
 const nameSeed = (name: string): number => {
   let h = 2166136261;
@@ -185,8 +191,8 @@ function footOf(p: Placed): Pt | null {
   return { x: (b.x0 + b.x1 + 1) * (CELL / 2), y: (b.y1 + 1) * CELL - 1 };
 }
 
-/** A guild-mate as they are in town, for their figure and their name. */
-const bodyOf = (name: string): Actor | null => G.mates.find((a) => a.who.name === name) ?? null;
+/** A real member as they are in town (visiting, or dozing), for their figure and their name. */
+const memberIn = (name: string): Actor | null => G.visitors.find((a) => a.who.name === name) ?? null;
 
 /** Something green at the clearing's edge is touched. */
 function leafy(p: Prop): void {
@@ -230,7 +236,7 @@ export function makeCamp(
 
   let owner: string | null = null;
   let mate: MateCamp | null = null;
-  /** The layout on show: the member's own record, or a copy of a guild-mate's. */
+  /** The layout on show: the member's own record, or a copy of somebody else's. */
   let placed: Placed[] = mine.placed;
   /**
    * What is set down in the layout but still in the air on its way there: not drawn standing, in
@@ -788,16 +794,22 @@ export function makeCamp(
     };
   }
 
-  /** A guild-mate walks in off the trail, says something, sits a while, and leaves: sometimes with something for the mailbox. */
+  /**
+   * One of the town's own walks in off the trail, says hello, settles by the fire a while, and
+   * leaves: sometimes by way of the mailbox. A touch greets it, and the camp keeps count.
+   */
   function callIn(h: Extract<Happening, { kind: "call" }>): boolean {
-    const from = bodyOf(h.who);
-    if (!from || owner !== null || guests.length >= 2 || guests.some((g) => g.who.name === h.who)) return false;
-    const a = makeActor(from.who, from.body, TRAIL_END.x, TRAIL_END.y);
+    const t = folkNamed(h.who);
+    if (!t || !isCaller(t.id) || owner !== null || guests.length >= 2 || guests.some((g) => g.who.name === h.who))
+      return false;
+    const lines = AT_CAMP[t.id];
+    const a = makeFolk(t, TRAIL_END.x, TRAIL_END.y);
     a.mode = "led";
     a.doing = "call";
     a.alpha = 0;
+    a.side = -1;
     guests.push(a);
-    hooks.feed(`${h.who} has wandered into your camp.`, "leaf");
+    hooks.feed(`${t.name.charAt(0).toUpperCase()}${t.name.slice(1)} has wandered into your camp.`, "leaf");
     const fire = fireAt() ?? { x: CW / 2, y: TRAIL_Y };
     const stay = 16 + Math.random() * 10;
     const here = (): boolean => guests.includes(a);
@@ -807,20 +819,32 @@ export function makeCamp(
       () => {
         if (G.player) face(a, G.player.x, G.player.y);
         hop(a);
-        say(a, pick(HELLO, Math.random()), 2.4);
+        say(a, pick(lines.hello, Math.random()), 2.4);
         for (const p of pets) comeTo(p, a, petWorld);
+        // It settles down by the fire: a gnome stands warming its hands, the others curl up.
         after(1.8, () => {
-          if (here()) sitDown(a);
+          if (!here()) return;
+          walkTo(
+            a,
+            about({ x: fire.x + (Math.random() < 0.5 ? -20 : 20), y: fire.y + 10 }, 10),
+            () => {
+              if (G.player) face(a, fire.x, fire.y);
+              if (t.kind !== "gnome") a.doing = "asleep";
+            },
+            ground,
+          );
         });
         for (const at of [stay * 0.35, stay * 0.7])
           after(at, () => {
-            if (here()) say(a, pick(CHAT, Math.random()), 2.8);
+            if (!here()) return;
+            if (a.doing === "asleep") a.doing = "call";
+            say(a, pick(lines.chat, Math.random()), 2.8);
           });
         after(stay, () => {
           if (!here()) return;
-          release(a);
+          a.doing = "call";
           const bye = (): void => {
-            say(a, pick(BYE, Math.random()), 2.2);
+            say(a, pick(lines.bye, Math.random()), 2.2);
             after(1.2, () => {
               if (here()) walkOff(a);
             });
@@ -847,6 +871,20 @@ export function makeCamp(
     return true;
   }
 
+  /** The member touches one of the town's own who has come by: it is pleased, and has been greeted. */
+  const greetedHere = new WeakSet<Actor>();
+  function greeted(a: Actor): void {
+    const t = a.folk?.t;
+    if (!t || !isCaller(t.id)) return;
+    if (a.doing === "asleep") a.doing = "call";
+    say(a, pick(AT_CAMP[t.id].thanks, Math.random()), 2.4);
+    if (greetedHere.has(a)) return;
+    greetedHere.add(a);
+    float(a.x, a.y - 22, "\u2665", SKY[5], 1.2);
+    // A pet who has been waiting for a welcoming camp may move in.
+    greet();
+  }
+
   /** A letter goes into the member's mailbox: the flag goes up, wherever the member is. */
   function deliver(h: Extract<Happening, { kind: "call" }>): void {
     if (h.note === "" && h.gift === "") return;
@@ -869,8 +907,10 @@ export function makeCamp(
     for (const a of everybody()) hop(a, 2);
     for (const p of pets) p.joy = 1.1;
     guests.forEach((a, i) => {
+      const cheers = a.folk?.t.cheers;
+      if (!cheers) return;
       after(0.3 + i * 0.3, () => {
-        if (guests.includes(a)) say(a, pick(CHEERS, Math.random()), 2.2);
+        if (guests.includes(a)) say(a, pick(cheers, Math.random()), 2.2);
       });
     });
   }
@@ -884,21 +924,6 @@ export function makeCamp(
     }
     if (G.where !== "camp") return;
     switch (h.kind) {
-      case "raidOut": {
-        hooks.feed(`${h.who[0] ?? "A"}'s party set out for ${h.raid}.`, "coral");
-        sfx.horn();
-        // Anybody here who is in the party makes their excuses.
-        for (const a of guests) {
-          if (!h.who.includes(a.who.name)) continue;
-          release(a);
-          say(a, "that's my raid. gotta go!", 2);
-          after(0.9, () => {
-            if (guests.includes(a)) walkOff(a);
-          });
-        }
-        return;
-      }
-      case "raidBack":
       case "party": {
         const line = lineFor(h);
         if (line) hooks.feed(line[0], line[1]);
@@ -912,7 +937,6 @@ export function makeCamp(
         cheer();
         return;
       }
-      case "land":
       case "war": {
         const line = lineFor(h);
         if (line) hooks.feed(line[0], line[1]);
@@ -920,18 +944,6 @@ export function makeCamp(
         const cabin = lives.find((l) => l.thing.id === "cabin");
         if (cabin) burst(cabin.prop.x + 32, cabin.prop.y - 74, 18, [GOLD[1], SKY[4], CREAM, SKY[5]], 52);
         cheer();
-        return;
-      }
-      case "level": {
-        hooks.feed(`${h.who} reached level ${h.level}.`, "leaf");
-        const a = guests.find((g) => g.who.name === h.who);
-        if (!a) return;
-        a.who = { ...a.who, level: h.level };
-        sfx.levelUp();
-        sparkle(a.x, a.y - 10, 20, 7);
-        float(a.x, a.y - 32, `Level ${h.level}!`, GOLD[2], 2.2);
-        hop(a, 3);
-        say(a, "ding!", 2);
         return;
       }
       case "quest":
@@ -1148,8 +1160,8 @@ export function makeCamp(
         addPet(spec.kind, spec.name, 1 + ((seed + i) % 3), about(fire, 120));
       });
       hooks.feed(`${mate.owner}'s camp.`, "leaf");
-      const body = mate.home ? bodyOf(mate.owner) : null;
-      if (body) {
+      const body = mate.home ? memberIn(mate.owner) : null;
+      if (body?.body) {
         const at = about({ x: fire.x - 20, y: fire.y + 16 }, 30);
         const host = makeActor(body.who, body.body, at.x, at.y);
         host.mode = "led";
@@ -1389,7 +1401,7 @@ export function makeCamp(
     for (const a of everybody()) {
       if (a.alpha < 0.5) continue;
       const at = a.seat ?? a;
-      if (Math.abs(wx - at.x) > 7 || wy < at.y - 23 || wy > at.y + 3) continue;
+      if (Math.abs(wx - at.x) > 7 || wy < at.y - headOf(a) - 2 || wy > at.y + 3) continue;
       if (!best || at.y > (best.seat ?? best).y) best = a;
     }
     return best;
@@ -1436,8 +1448,8 @@ export function makeCamp(
         }
         if (!who.seat) face(who, p.x, p.y);
         who.hold = 2.4;
-        const lines = who.doing === "home" && mate ? mate.hello : CHAT;
-        say(who, pick(lines, Math.random()), 2.6);
+        if (who.folk) greeted(who);
+        else if (who.doing === "home" && mate) say(who, pick(mate.hello, Math.random()), 2.6);
         showCard(who);
         return false;
       }
@@ -1500,7 +1512,8 @@ export function makeCamp(
     const who = personAt(wx, wy);
     if (who) {
       const at = who.seat ?? who;
-      return { box: { x: at.x - 6, y: at.y - 21, w: 12, h: 22 }, tip: null, who };
+      const tall = headOf(who);
+      return { box: { x: at.x - 6, y: at.y - tall, w: 12, h: tall + 1 }, tip: null, who };
     }
     const pet = petAt(pets, wx, wy);
     if (pet)
@@ -1913,6 +1926,10 @@ export function makeCamp(
       },
       owner: () => owner,
       guests: () => guests.map((g) => g.who.name),
+      greet(n) {
+        const a = guests[n];
+        if (a) tapWorld(a.x, a.y - 4);
+      },
     },
   };
 

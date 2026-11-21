@@ -493,7 +493,8 @@
       "method": "PUT",
       "path": "/v1/game/presence",
       "body": {
-        "place": "town"
+        "place": "town",
+        "stay": true
       }
     },
     "status": 200,
@@ -503,6 +504,14 @@
           "id": "10000000-0000-0000-0000-000000000001",
           "username": "Alice",
           "place": "town"
+        }
+      ],
+      "resting": [
+        {
+          "id": "10000000-0000-0000-0000-000000000002",
+          "username": "Bob",
+          "place": "works",
+          "seen_at": "2026-11-25T12:40:00.000Z"
         }
       ]
     }

@@ -182,6 +182,22 @@ img.k-px {
 .k-leafy {
   color: var(--k-leaf);
 }
+/* One of the town's own (`mark.ts`): its name in leaf green, after the small acorn. */
+.k-folk,
+.k-title.k-folk,
+.k-name.k-folk {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  color: var(--k-leaf);
+}
+.k-folk > .k-i-acorn {
+  margin-top: calc(var(--u) * -1);
+}
+/* A member's own name: cream, as it is over the world. */
+.k-title.k-member {
+  color: var(--k-cream);
+}
 .k-coral {
   color: var(--k-coral);
 }

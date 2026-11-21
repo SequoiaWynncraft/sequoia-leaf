@@ -1,23 +1,34 @@
 /**
- * Real members who are in the game just now, as visitors to the town (on the guild's own server):
- * each in their own skin and with their own name, standing or strolling where they are (about the
- * town, by the Works' door, watching at the stump), walking in through the gate when they arrive
- * and out through it when they go. They never speak, and their card has only their name and rank.
- * When a raid party of real members comes home, its members walk in as visitors too (`figure`).
+ * Real members, and only real members, in their own skins (on the guild's own server; with the
+ * made-up guild, its stand-ins):
+ *
+ * - **Visitors**, in the game just now: standing or strolling where they are (about the town, by
+ *   the Works' door, watching at the stump), walking in through the gate when they arrive. They
+ *   never speak, and their card has only their name and rank. When a raid party of real members
+ *   comes home, its members walk in as visitors too (`figure`).
+ * - **Dozers**, gone in the last day and happy to be left in town: each sits at a free seat for
+ *   where they were (a log at the fire, the log at the stump, the bench by the Works' door), eyes
+ *   closed, a small "z" drifting up. They never speak or move. A visitor who goes sits down where
+ *   they are to doze, if they may; a dozer who comes back gets up and is a visitor again.
  */
 
-import { bake, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts";
-import type { Pt } from "@sequoia-leaf/kit/util.ts";
+import { where } from "@sequoia-leaf/kit/live.ts";
+import { CREAM } from "@sequoia-leaf/kit/palette.ts";
+import { bake, type Body, type Look, paintSkin, SIT } from "@sequoia-leaf/kit/skin.ts";
+import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 
-import { makeActor, release, stepActor, walkTo } from "./actors.ts";
+import { makeActor, onScreen, release, sit, stand, stepActor, walkTo } from "./actors.ts";
+import { float } from "./fx.ts";
 import { type Actor, after, G } from "./game.ts";
 import { guild, type Person, type Visitor } from "./guild.ts";
 import { skinOf, VISITORS_MOST } from "./live.ts";
-import { nearestFree, place, SPOTS } from "./world.ts";
+import { nearestFree, place, type Seat, SEATS, SPOTS } from "./world.ts";
 
 /** In and out of town: the gateway, just inside the dark. */
 export const GATE: Pt = { x: 256, y: 85 };
 const STROLL = 32;
+/** The most members drawn dozing at once. */
+export const DOZERS_MOST = 12;
 
 interface Visiting {
   a: Actor;
@@ -27,14 +38,18 @@ interface Visiting {
   going: boolean;
   /** Only passing through with a raid party: goes again once it is home. */
   passing: boolean;
-  /** When to wander off somewhere else in town, by the town's clock. */
+  /** Asleep at a seat, or on the way to one: gone from the game, left in town. */
+  dozing: boolean;
+  /** Where their skin sheet is served; empty for a made-up member. */
+  skin: string;
+  /** When to wander off somewhere else in town, by the town's clock; for a dozer, the next "z". */
   next: number;
 }
 
 const here = new Map<string, Visiting>();
 let lookIn = 0;
 
-// ---------- how a visitor looks before their own skin arrives ----------
+// ---------- how a member looks before their own skin arrives ----------
 
 const SKINS = ["#f6dcc2", "#eec39a", "#d9a57c", "#a8714e", "#7a4a30", "#5a3420"] as const;
 const HAIR = ["#2b2530", "#6f3826", "#c2382e", "#e0823a", "#f1e2a6", "#3f6fb0", "#4b8c4a", "#e8e4f0"] as const;
@@ -50,7 +65,7 @@ const seedOf = (name: string): number => {
 const from = <T>(list: readonly T[], seed: number, shift: number, or: T): T =>
   list[(seed >>> shift) % list.length] ?? or;
 
-/** A look of their own, always the same for the same name: what a visitor wears until their skin arrives. */
+/** A look of their own, always the same for the same name: what a member wears until their skin arrives. */
 export function lookFor(name: string): Look {
   const s = seedOf(name);
   const hair = from(HAIR, s, 3, "#6f3826");
@@ -68,20 +83,81 @@ export function lookFor(name: string): Look {
   };
 }
 
-/** Puts a visitor in their own skin once it has arrived. */
-function dress(a: Actor, id: string): void {
+// ---------- eyes closed ----------
+
+/** The colour of one pixel, as four numbers. */
+function pixel(d: Uint8ClampedArray, w: number, x: number, y: number): [number, number, number, number] {
+  const i = (y * w + x) * 4;
+  return [d[i] ?? 0, d[i + 1] ?? 0, d[i + 2] ?? 0, d[i + 3] ?? 0];
+}
+const far = (a: readonly number[], b: readonly number[]): number =>
+  Math.abs((a[0] ?? 0) - (b[0] ?? 0)) + Math.abs((a[1] ?? 0) - (b[1] ?? 0)) + Math.abs((a[2] ?? 0) - (b[2] ?? 0));
+
+/**
+ * A face seen from the front, its eyes closed. On a block-game face the eyes are one of rows three
+ * to five, at columns one, two, five and six; the row taken is the one where those pixels stand out
+ * most, from each other (a white and a pupil) and from the skin under the eye. Each of them is
+ * painted the skin's colour a shade darker, so that each eye is a shut line.
+ */
+function shutEyes(c: HTMLCanvasElement, hx: number, hy: number): HTMLCanvasElement {
+  const out = makeCanvas(c.width, c.height);
+  out.g.drawImage(c, 0, 0);
+  const img = out.g.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  const at = (x: number, y: number): [number, number, number, number] => pixel(d, c.width, hx + x, hy + y);
+  const skin = at(2, 6);
+  let row = 4;
+  let most = -1;
+  for (let r = 3; r <= 5; r++) {
+    const [a, b, e, f] = [at(1, r), at(2, r), at(5, r), at(6, r)];
+    const score = 3 * (far(a, b) + far(e, f)) + far(a, skin) + far(b, skin) + far(e, skin) + far(f, skin);
+    if (score > most) {
+      most = score;
+      row = r;
+    }
+  }
+  const [r, g, b, alpha] = skin;
+  if (alpha < 200) return c;
+  for (const x of [1, 2, 5, 6]) {
+    const i = ((hy + row) * c.width + hx + x) * 4;
+    d[i] = r * 0.6;
+    d[i + 1] = g * 0.55;
+    d[i + 2] = b * 0.6;
+    d[i + 3] = 255;
+  }
+  out.g.putImageData(img, 0, 0);
+  return out.c;
+}
+
+/** A member's figure dozing: sitting facing us with their eyes closed, and their face so on a card. */
+function dozy(body: Body): Body {
+  const frames = body.frames.map((row) => [...row]);
+  const front = frames[0];
+  const sat = front?.[SIT];
+  // Seen from the front and sitting, the head is drawn at (2, 5); the side and back show no eyes.
+  if (front && sat) front[SIT] = shutEyes(sat, 2, 5);
+  return { frames, face: shutEyes(body.face, 0, 0) };
+}
+
+/** Puts a member in their own skin once it has arrived (and keeps their eyes shut if they doze). */
+function dress(v: Visiting): void {
+  if (!v.skin) return;
   const img = new Image();
   img.addEventListener("load", () => {
     try {
-      a.body = bake(img);
+      const body = bake(img);
+      v.a.body = v.dozing ? dozy(body) : body;
+      awake.set(v.a, body);
     } catch {
       // A picture that cannot be read: the look of their own stays.
     }
   });
-  img.src = skinOf(id);
+  img.src = v.skin;
 }
+/** Each member's figure with their eyes open, for when a dozer wakes. */
+const awake = new WeakMap<Actor, Body>();
 
-// ---------- where they stand ----------
+// ---------- where they stand, and where they sit ----------
 
 const near = (x: number, y: number): Pt => nearestFree(x, y);
 
@@ -108,34 +184,66 @@ function spotFor(at: Visitor["at"], n: number): Pt {
   return near(150 + Math.random() * 230, 140 + Math.random() * 150);
 }
 
+/** The seats a dozer may have, by where they were: theirs first, then the fire's logs, then the benches. */
+const SEATS_FOR: Readonly<Record<Visitor["at"], readonly Seat["at"][]>> = {
+  town: ["fire", "bench", "works"],
+  table: ["table", "fire", "bench"],
+  works: ["works", "fire", "bench"],
+};
+
+/** Seats facing us first, so that whoever dozes there is seen to; then side on; then with their back to us. */
+const facing = (s: Seat): number => (s.dir === 0 ? 0 : s.dir === 3 ? 2 : 1);
+
+/** A free seat for somebody dozing off who was last at a place; never one kept for the member. */
+export function seatFor(at: Visitor["at"]): Seat | null {
+  for (const kind of SEATS_FOR[at]) {
+    const s = SEATS.filter((x) => x.at === kind && !x.taken && !x.yours).toSorted((a, b) => facing(a) - facing(b))[0];
+    if (s) return s;
+  }
+  return null;
+}
+
 function count(at: Visitor["at"]): number {
   let n = 0;
-  for (const v of here.values()) if (v.at === at && !v.going) n++;
+  for (const v of here.values()) if (v.at === at && !v.going && !v.dozing) n++;
   return n;
 }
+const dozers = (): number => [...here.values()].filter((v) => v.dozing).length;
 
 // ---------- coming and going ----------
 
-function spawn(id: string, name: string, rank: string | null, at: Visitor["at"]): Visiting {
-  const look = lookFor(name);
-  const a = makeActor({ name, rank: rank ?? "", level: 0, voice: 0, look }, bake(paintSkin(look)), GATE.x, GATE.y);
+function spawn(id: string, name: string, rank: string | null, at: Visitor["at"], skin: string): Visiting {
+  const a = makeActor({ name, rank: rank ?? "", level: 0, voice: 0 }, bake(paintSkin(lookFor(name))), GATE.x, GATE.y);
   a.alpha = 0;
   a.mode = "led";
   a.speed = STROLL;
   a.doing = "walk";
-  dress(a, id);
-  const v: Visiting = { a, id, at, going: false, passing: false, next: G.t + 6 + Math.random() * 8 };
+  const v: Visiting = {
+    a,
+    id,
+    at,
+    going: false,
+    passing: false,
+    dozing: false,
+    skin,
+    next: G.t + 6 + Math.random() * 8,
+  };
   here.set(id, v);
   G.visitors.push(a);
+  dress(v);
   return v;
+}
+
+function forget(v: Visiting): void {
+  here.delete(v.id);
+  G.visitors = G.visitors.filter((a) => a !== v.a);
 }
 
 function goOut(v: Visiting): void {
   v.going = true;
   release(v.a);
   walkTo(v.a, GATE, () => {
-    here.delete(v.id);
-    G.visitors = G.visitors.filter((a) => a !== v.a);
+    forget(v);
   });
 }
 
@@ -146,23 +254,90 @@ function settle(v: Visiting): void {
   });
 }
 
-/** Keeps the visitors in step with who the guild says is here, and walks them about. */
+/** Sits a member down on a seat, asleep. */
+function doze(v: Visiting, s: Seat, seen: number): void {
+  const a = v.a;
+  v.dozing = true;
+  sit(a, s);
+  a.dozing = seen;
+  a.mode = "led";
+  a.doing = "home";
+  a.say = "";
+  const open = awake.get(a) ?? a.body;
+  if (open) {
+    awake.set(a, open);
+    a.body = dozy(open);
+  }
+}
+
+/** A dozer who is in the game again: they get up, eyes open, and go where they are. */
+function wake(v: Visiting, at: Visitor["at"]): void {
+  const a = v.a;
+  v.dozing = false;
+  a.dozing = null;
+  a.body = awake.get(a) ?? a.body;
+  stand(a);
+  release(a);
+  v.at = at;
+  settle(v);
+}
+
+/** Keeps the visitors and dozers in step with who the guild says is here and who has gone. */
 export function stepVisitors(dt: number): void {
-  for (const v of here.values()) stepActor(v.a, dt);
+  for (const v of here.values()) {
+    // Everybody walks, until they are asleep.
+    if (v.a.dozing === null) {
+      stepActor(v.a, dt);
+      continue;
+    }
+    // A dozer breathes out a "z" now and then.
+    if (G.t >= v.next) {
+      v.next = G.t + 1.6 + Math.random() * 0.8;
+      const at = v.a.seat ?? v.a;
+      if (onScreen(at.x, at.y)) float(at.x + 4, at.y - 20, "z", CREAM, 1.4);
+    }
+  }
   lookIn -= dt;
   if (lookIn > 0) return;
   lookIn = 1;
   const want = guild.visitors();
-  const ids = new Set(want.map((w) => w.id));
-  for (const v of here.values()) if (!v.passing && !v.going && !ids.has(v.id)) goOut(v);
+  const rest = guild.resting();
+  const wanted = new Set(want.map((w) => w.id));
+  const resting = new Map(rest.map((r) => [r.id, r]));
+
+  for (const v of here.values()) {
+    if (v.passing || v.going || wanted.has(v.id)) continue;
+    const r = resting.get(v.id);
+    if (v.dozing) {
+      // Gone for more than a day, or would rather not be left: they are simply not here any more.
+      if (!r) forget(v);
+      continue;
+    }
+    // Gone: sits down to doze where they were, if they may and there is a seat; else out through the gate.
+    const s = r && dozers() < DOZERS_MOST ? seatFor(r.at) : null;
+    if (!r || !s) {
+      goOut(v);
+      continue;
+    }
+    release(v.a);
+    v.a.mode = "led";
+    s.taken = true;
+    v.a.goal = s;
+    walkTo(v.a, s.from, () => {
+      doze(v, s, r.seen);
+    });
+    v.dozing = true;
+  }
+
   for (const w of want) {
     const v = here.get(w.id);
     if (!v) {
-      if (here.size < VISITORS_MOST) settle(spawn(w.id, w.name, w.rank, w.at));
+      if (here.size - dozers() < VISITORS_MOST) settle(spawn(w.id, w.name, w.rank, w.at, w.skin));
       continue;
     }
-    v.a.who = { ...v.a.who, rank: w.rank ?? "" };
-    if (v.passing) {
+    v.a.who = { ...v.a.who, rank: w.rank ?? v.a.who.rank };
+    if (v.dozing) wake(v, w.at);
+    else if (v.passing) {
       // Came home with a party, and is in the game after all: stays.
       v.passing = false;
       v.at = w.at;
@@ -172,22 +347,49 @@ export function stepVisitors(dt: number): void {
       settle(v);
     }
   }
+
+  // Those gone a while already, most recent first, sit where they were from the start.
+  for (const r of rest) {
+    if (here.has(r.id) || wanted.has(r.id) || dozers() >= DOZERS_MOST) continue;
+    const s = seatFor(r.at);
+    if (!s) continue;
+    const v = spawn(r.id, r.name, r.rank, r.at, r.skin);
+    v.a.alpha = 1;
+    doze(v, s, r.seen);
+    v.a.x = s.x;
+    v.a.y = s.y;
+    v.a.sat = -9;
+    v.next = G.t + Math.random() * 2;
+  }
+
   for (const v of here.values()) {
-    if (v.at !== "town" || v.going || v.passing || v.a.mode !== "led" || v.a.path.length > 0 || G.t < v.next) continue;
+    if (
+      v.at !== "town" ||
+      v.dozing ||
+      v.going ||
+      v.passing ||
+      v.a.mode !== "led" ||
+      v.a.path.length > 0 ||
+      G.t < v.next
+    )
+      continue;
     v.next = G.t + 8 + Math.random() * 12;
     settle(v);
   }
 }
 
-/** Whether somebody in town is a visitor. */
+/** Whether somebody in town is a real member other than the member themself: visiting, or dozing. */
 export const isVisitor = (a: Actor): boolean => G.visitors.includes(a);
 
 /**
  * A real member to take part in one of the guild's moments: the visitor themself if they are in
- * town, or somebody passing in through the gate who goes again when `done` is called.
+ * town, or somebody passing in through the gate who goes again when `done` is called. Nobody for
+ * somebody dozing in town: they sleep through it.
  */
-export function figure(p: Person): Actor {
-  const v = here.get(p.id) ?? spawn(p.id, p.name, null, "town");
+export function figure(p: Person): Actor | null {
+  const had = here.get(p.id);
+  if (had?.dozing) return null;
+  const v = had ?? spawn(p.id, p.name, null, "town", where().mode === "live" ? skinOf(p.id) : "");
   if (!ids().has(p.id)) v.passing = true;
   v.going = false;
   release(v.a);
@@ -210,5 +412,16 @@ export function done(a: Actor): void {
   else settle(v);
 }
 
-/** The visitor somebody is, if they are in town. */
-export const visitorOf = (p: Person): Actor | null => here.get(p.id)?.a ?? null;
+/** The visitor somebody is, if they are in town and awake. */
+export function visitorOf(p: Person): Actor | null {
+  const v = here.get(p.id);
+  return v && !v.dozing ? v.a : null;
+}
+
+/** Real members in town for looking at it from outside: where each is, and whether they are dozing. */
+export function members(): { name: string; x: number; y: number; dozing: boolean }[] {
+  return [...here.values()].map((v) => {
+    const at = v.a.seat ?? v.a;
+    return { name: v.a.who.name, x: Math.round(at.x), y: Math.round(at.y), dozing: v.dozing };
+  });
+}

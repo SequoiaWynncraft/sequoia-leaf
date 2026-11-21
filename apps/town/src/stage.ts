@@ -1,6 +1,6 @@
 /**
  * The stage: what `main.ts` needs from whatever place is on screen. The town is one such place
- * (`townscene.ts`); a camp, the member's own or a guild-mate's, is another (`campscene.ts`). `main.ts` owns the canvas, the camera, the
+ * (`townscene.ts`); a camp, the member's own (or one day somebody else's), is another (`campscene.ts`). `main.ts` owns the canvas, the camera, the
  * keys and fingers, the loop and the doors into the games, and asks everything else of a scene, so
  * a second scene can be put on without `main.ts` knowing what is in it.
  *

@@ -18,14 +18,6 @@ const one = (p: Person): string => (p.you ? "You" : p.name);
 /** The feed's line for a moment and its colour, or null for one the feed does not tell. */
 export function lineFor(h: Happening): readonly [string, Tone] | null {
   switch (h.kind) {
-    case "raidOut":
-      return [`${h.who[0] ?? "A"}'s party set out for ${h.raid}.`, "coral"];
-    case "raidBack":
-      return [`Raid cleared: ${h.raid}. ${h.leaf} Leaf each.`, "coral"];
-    case "land":
-      return [`The guild has taken ${h.name}.`, "rose"];
-    case "level":
-      return [`${h.who} reached level ${h.level}.`, "leaf"];
     case "quest":
       return [h.text, h.tone];
     case "call":

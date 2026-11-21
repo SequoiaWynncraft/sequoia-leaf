@@ -1,6 +1,7 @@
 /**
  * Guild Town: the member arrives as their own character in a small town in a clearing among giant
- * redwoods, where every part of the game is a place to walk up to and guild-mates are about.
+ * redwoods, where every part of the game is a place to walk up to, the town's own are about, and so are
+ * the guild's real members when they are in the game.
  * Behind its gate is the member's own camp, and down the trail from that, everybody else's.
  *
  * This file is the stage those places stand on: the canvas, the camera, the keys and fingers, the
@@ -24,16 +25,21 @@ import { type CampScene, makeCamp } from "./campscene.ts";
 import { makeCampUi } from "./campui.ts";
 import { goIn, type Visit } from "./doors.ts";
 import { drawIris, show } from "./draw.ts";
+import { FOLK } from "./folk.ts";
+import { folkArt, initFolkArt } from "./folkart.ts";
 import { clearFx } from "./fx.ts";
 import { G, hooks, type PanelId, toPage } from "./game.ts";
 import { type GameId, GAMES } from "./games.ts";
 import { guild, type Moment, stir } from "./guild.ts";
 import { closeCard, closePanel, hush, initHud, panelBox, tickHud } from "./hud.ts";
+import { STANDINS } from "./madeup.ts";
+import { kept } from "./record.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Hover, Scene, Stage, Steer } from "./stage.ts";
 import { makeTown } from "./townscene.ts";
 import { dismissArrival } from "./ui.ts";
+import { lookFor } from "./visitors.ts";
 import type { PlaceId } from "./world.ts";
 
 declare global {
@@ -69,7 +75,7 @@ declare global {
       kept: () => unknown;
       /** Which place is on the stage, and how dark the walk between two has got (0 for not at all). */
       where: () => { where: "town" | "camp"; dark: number };
-      /** The member's camp, and guild-mates': go there, come back, and what `campscene.ts` offers besides. */
+      /** The member's camp: go there, come back, and what `campscene.ts` offers besides. */
       camp: CampScene["handles"] & { go: () => void };
     };
   }
@@ -100,15 +106,23 @@ async function boot(): Promise<void> {
   await fontsReady();
   const sprites = makeSprites();
   if (new URLSearchParams(location.search).has("sheet")) {
-    const looks = [guild.me().look, guild.keeper().look, ...guild.roster().map((m) => m.look)];
+    // The member and the made-up guild's stand-ins in their made-up looks; the town's own as themselves.
+    const looks = [guild.me().look, ...STANDINS.map((m) => lookFor(m.name))];
     for (const id of ["purse", "corner", "dock", "feed"]) document.getElementById(id)?.remove();
+    const campArt = makeCampArt(sprites);
     if (new URLSearchParams(location.search).get("sheet") === "camp") {
-      showCampSheet(makeCampArt(sprites));
+      showCampSheet(campArt);
       return;
     }
+    initFolkArt(campArt);
+    const folk = FOLK.flatMap((t) => {
+      const a = folkArt(t);
+      return [...a.sit, ...a.walkR, a.sleep, a.glad, a.bend, a.lean].flatMap((p) => p ?? []);
+    });
     showSheet(
       sprites,
       looks.map((l) => bake(paintSkin(l))),
+      folk,
     );
     return;
   }
@@ -441,6 +455,8 @@ async function boot(): Promise<void> {
 
   resize();
   town.arrive();
+  // Whether the member's character stays in town after they go, as they last said in their cabin.
+  guild.stay(kept.stay);
   guild.here("town");
   wake();
 

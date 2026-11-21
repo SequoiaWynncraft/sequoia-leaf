@@ -2,7 +2,7 @@
  * Orders. The depot pays a little for everything it takes in; orders are where the Coins are.
  *
  * There is the story, one order after another, and once it is under way there is the board: a few
- * standing orders from guild-mates and places in town, which never run out and never expire. Each
+ * standing orders from places in town and the town's own, which never run out and never expire. Each
  * thing the depot takes in goes toward one order that still wants it, the story's first and then
  * the board's from the top. A story order pays the moment it is filled; a standing order, once
  * filled, waits on the board until it is handed over (`claim`), so the board is never emptied
@@ -173,11 +173,38 @@ export function fresh(w: World): Standing {
   const asks = ASKS[first];
   const ask = asks[Math.floor(roll() * asks.length)] ?? { from: "The guild", line: "" };
   const pay = Math.max(5, Math.round((worth * (second === null ? 1 : 1.15) * (0.9 + roll() * 0.2)) / 5) * 5);
-  const things = second === null ? ITEM[first].many : `${ITEM[first].many} and ${ITEM[second].many}`;
-  // "Planks for the gate": the things lead, and a place loses its capital mid-sentence.
-  const whom = ask.from.startsWith("The ") ? `the ${ask.from.slice(4)}` : ask.from;
-  const title = `${things.charAt(0).toUpperCase()}${things.slice(1)} for ${whom}`;
-  return { id, title, from: ask.from, line: ask.line, want, pay, filled: {} };
+  return {
+    id,
+    title: titled(second === null ? [first] : [first, second], ask.from),
+    from: ask.from,
+    line: ask.line,
+    want,
+    pay,
+    filled: {},
+  };
+}
+
+/** "Planks for the gate": the things lead, and a place loses its capital mid-sentence. */
+function titled(items: readonly Item[], from: string): string {
+  const things = items.map((k) => ITEM[k].many).join(" and ") || "things";
+  const whom = from.startsWith("The ") ? `the ${from.slice(4)}` : from;
+  return `${things.charAt(0).toUpperCase()}${things.slice(1)} for ${whom}`;
+}
+
+/** Everybody (and everywhere) that asks for things on the board today. */
+const ASKERS = new Set(Object.values(ASKS).flatMap((list) => list.map((a) => a.from)));
+
+/**
+ * A standing order kept from before the board's askers changed, asked again by one of today's
+ * for the same things, so that nobody asks who no longer does. Anything else comes back as it was.
+ */
+export function reask(o: Standing): Standing {
+  if (ASKERS.has(o.from)) return o;
+  const first = ITEMS.find((k) => (o.want[k] ?? 0) > 0) ?? "plank";
+  const asks = ASKS[first];
+  const ask = asks[o.id % asks.length] ?? { from: "The guild", line: "" };
+  const items = ITEMS.filter((k) => (o.want[k] ?? 0) > 0);
+  return { ...o, title: titled(items, ask.from), from: ask.from, line: ask.line };
 }
 
 /**

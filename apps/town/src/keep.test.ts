@@ -22,7 +22,7 @@ describe("what the town keeps", () => {
     world = standin({});
     camp.parcels = ["gnome"];
     remember();
-    stir("land");
+    stir("war");
     expect(JSON.parse(world.store.getItem(RECORD) ?? "null")).toMatchObject({ camp: { parcels: ["gnome"] } });
     expect(world.store.getItem(MEMORY)).not.toBeNull();
   });
@@ -34,7 +34,7 @@ describe("what the town keeps", () => {
     stop();
     camp.parcels = ["well"];
     remember();
-    stir("land");
+    stir("war");
     stir("call");
     expect(world.store.getItem(RECORD)).toBe("theirs");
     expect(world.store.getItem(MEMORY)).toBe("theirs too");

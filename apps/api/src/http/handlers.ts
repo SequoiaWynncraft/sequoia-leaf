@@ -254,13 +254,13 @@ export const SaveBodyErrorsLive = Layer.succeed(SaveBodyErrors)((httpEffect) =>
   ),
 );
 
-/** A presence whose body is not `{ "place" }`, with one of the game's places, gets `invalid_place`. */
+/** A presence whose body is not `{ "place" }` (with one of the game's places, and `stay` true or false if any) gets `invalid_place`. */
 export const PresenceBodyErrorsLive = Layer.succeed(PresenceBodyErrors)((httpEffect) =>
   Effect.catchIf(httpEffect, isPayloadError, () =>
     Effect.fail(
       new Invalid({
         code: "invalid_place",
-        message: 'Send where you are as { "place": "town" }, or camp, works or table',
+        message: 'Send where you are as { "place": "town" }, or camp, works or table, and "stay" as true or false',
       }),
     ),
   ),
@@ -633,9 +633,25 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
           Effect.gen(function* () {
             const identity = yield* CurrentIdentity;
             const now = yield* Clock.currentTimeMillis;
-            const here = yield* presence.arrive(identity.playerId, identity.username, payload.place, now);
+            const here = yield* presence.arrive(
+              identity.playerId,
+              identity.username,
+              payload.place,
+              payload.stay ?? true,
+              now,
+            );
             return HttpServerResponse.jsonUnsafe({
-              present: here.map((member) => ({ id: member.playerId, username: member.username, place: member.place })),
+              present: here.present.map((member) => ({
+                id: member.playerId,
+                username: member.username,
+                place: member.place,
+              })),
+              resting: here.resting.map((member) => ({
+                id: member.playerId,
+                username: member.username,
+                place: member.place,
+                seen_at: iso(member.seenAt),
+              })),
             } satisfies typeof Body.Present.Type);
           }),
         )

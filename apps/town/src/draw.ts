@@ -5,6 +5,7 @@
  * whole number of screen pixels to each of the font's.
  */
 
+import { acornPicture, acornScale, FOLK_COLOUR } from "@sequoia-leaf/kit/mark.ts";
 import { CREAM, GOLD, INK, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { bubble, bubbleSize, prompt, promptSize, wrap } from "@sequoia-leaf/kit/signs.ts";
@@ -12,7 +13,7 @@ import { FOOT_X, FOOT_Y, SIT, WALK } from "@sequoia-leaf/kit/skin.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx, dist, lerp, makeCanvas, type Pt, type Rect } from "@sequoia-leaf/kit/util.ts";
 
-import { HOP, onScreen } from "./actors.ts";
+import { headOf, HOP, onScreen } from "./actors.ts";
 import { bits, floaters, rings } from "./fx.ts";
 import { type Actor, G } from "./game.ts";
 import type { Light, Prop, Standing } from "./props.ts";
@@ -147,10 +148,48 @@ function hopOf(a: Actor): number {
   return a.hop > 0 ? Math.abs(Math.sin((1 - a.hop / HOP) * Math.PI)) * 5 : 0;
 }
 
+/** One of the town's own, in the picture for what it is doing: walking, asleep, counting, pleased. */
+function drawFolk(g: Ctx, a: Actor, cx: number, cy: number, s: Sprites): void {
+  const f = a.folk;
+  if (!f) return;
+  const art = f.art;
+  const at = standing(a);
+  const glad = a.hop > 0 || a.hops > 0;
+  let pic = art.sit[0];
+  let flip = false;
+  if (a.moving) {
+    const step = Math.floor(a.walked / 4) % 2;
+    pic = (a.side > 0 ? art.walkR : art.walk)[step] ?? pic;
+  } else if (a.doing === "asleep" || a.doing === "home") pic = art.sleep ?? pic;
+  else if (glad && art.glad) pic = art.glad;
+  else if (a.doing === "crabs" && art.bend) pic = art.bend;
+  else if (a.doing === "board" && art.lean) pic = art.lean;
+  else if (f.t.kind === "glorp" && Math.sin(G.t * 0.9 + a.x) > 0.985) pic = art.sit[1] ?? pic;
+  // Sitting still, a cat and the fox look the way they last went (their pictures face left).
+  if (!a.moving && (f.t.kind === "cat" || f.t.kind === "fox") && a.side > 0) flip = true;
+  if (!pic) return;
+  const x = Math.round(at.x) - cx;
+  const y = Math.round(at.y - hopOf(a) - a.lift) - cy;
+  g.globalAlpha = a.alpha;
+  if (flip) {
+    g.save();
+    g.translate(x * 2, 0);
+    g.scale(-1, 1);
+    g.drawImage(pic.c, x - (pic.c.width - pic.ax), y - pic.ay + 1);
+    g.restore();
+  } else g.drawImage(pic.c, x - pic.ax, y - pic.ay + 1);
+  if (a.mug > 0) g.drawImage(s.mug, x + (a.side > 0 ? 3 : -6), y - 6);
+  g.globalAlpha = 1;
+}
+
 function drawActor(g: Ctx, a: Actor, cx: number, cy: number, s: Sprites): void {
+  if (a.folk) {
+    drawFolk(g, a, cx, cy, s);
+    return;
+  }
   const at = standing(a);
   const pose = a.seat ? SIT : a.moving ? (WALK[Math.floor(a.walked / 5) % 4] ?? 0) : 0;
-  const frame = a.body.frames[a.dir]?.[pose];
+  const frame = a.body?.frames[a.dir]?.[pose];
   if (!frame) return;
   const x = Math.round(at.x) - cx;
   const y = Math.round(at.y - hopOf(a)) - cy;
@@ -226,7 +265,7 @@ export function drawPicture(pic: Picture): HTMLCanvasElement {
   for (const a of people) {
     if (a.away || a.alpha <= 0.02) continue;
     order.push({ z: a.seat ? a.seat.y + 9 : a.y, prop: null, actor: a, other: null });
-    if (!a.seat) {
+    if (!a.seat && a.lift === 0) {
       g.fillStyle = "rgba(20,10,28,0.34)";
       const lift = hopOf(a) > 2 ? 1 : 0;
       g.fillRect(Math.round(a.x) - 4 + lift - cx, Math.round(a.y) - 1 - cy, 8 - lift * 2, 2);
@@ -366,7 +405,7 @@ interface Box {
 const touching = (a: Box, b: Box, pad: number): boolean =>
   a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad;
 
-/** How far from the member a guild-mate's name shows, in the town's pixels. */
+/** How far from the member somebody's name shows, in the town's pixels. */
 const NAME_REACH = 44;
 /** A sentence is broken into lines about this many font pixels wide. */
 const SAY_WIDTH = 100;
@@ -428,11 +467,14 @@ function drawPeople(ctx: Ctx, px: number, taken: readonly Box[], people: readonl
   const pad = 2 * px;
   for (const { a, rank } of wanted) {
     const at = a.seat ?? a;
-    const sunk = a.seat ? (a.dir === 0 ? 2 : 5) : 0;
     const hx = Math.round((at.x - cx) * z);
-    const hy = Math.round((at.y - cy - 21 + sunk - (crowned(a) ? 3 : 0)) * z);
+    const hy = Math.round((at.y - cy - headOf(a) - (crowned(a) ? 3 : 0)) * z);
     const name = a.who.name;
-    const tw = widthOf(ctx, name, px);
+    // One of the town's own has the acorn before its name.
+    const mark = a.folk ? acornScale(px) : 0;
+    const acorn = mark > 0 ? acornPicture() : null;
+    const markW = acorn ? acorn.width * mark + 2 * px : 0;
+    const tw = widthOf(ctx, name, px) + markW;
     const plate: Box = {
       x: clamp(hx - Math.round(tw / 2) - 3 * px, pad, Math.max(pad, wide - tw - 6 * px - pad)),
       y: hy - 14 * px,
@@ -450,8 +492,15 @@ function drawPeople(ctx: Ctx, px: number, taken: readonly Box[], people: readonl
       ctx.fillStyle = INK;
       ctx.fillRect(plate.x, plate.y, plate.w, plate.h);
       ctx.globalAlpha = now * a.alpha;
-      const gold = a.you || a === G.cinfy;
-      write(ctx, name, plate.x + 3 * px, plate.y + 2 * px, { px, colour: gold ? GOLD[2] : CREAM, shadow: false });
+      if (acorn) {
+        const ah = acorn.height * mark;
+        ctx.drawImage(acorn, plate.x + 2 * px, plate.y + Math.round((plate.h - ah) / 2), acorn.width * mark, ah);
+      }
+      write(ctx, name, plate.x + 3 * px + markW, plate.y + 2 * px, {
+        px,
+        colour: a.folk ? FOLK_COLOUR : a.you ? GOLD[2] : CREAM,
+        shadow: false,
+      });
       if (a.you && G.wearing.has("plate")) {
         // The painted plate: gold corners.
         ctx.fillStyle = GOLD[1];

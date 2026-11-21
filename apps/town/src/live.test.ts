@@ -5,7 +5,8 @@ import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { forgetLedger } from "@sequoia-leaf/kit/purse.ts";
 import { HELLO, type Reply, type Standin, standin, TESTER } from "@sequoia-leaf/kit/standin.ts";
 
-import type { Happening } from "./guild.ts";
+import { isFolk } from "./folk.ts";
+import type { Happening, Person } from "./guild.ts";
 import { compose } from "./letter.ts";
 import {
   type Ev,
@@ -19,11 +20,12 @@ import {
   readEvent,
   readEvents,
   readQuests,
+  toResting,
   toVisitors,
   unprepare,
   weekOf,
 } from "./live.ts";
-import { makeGuild } from "./madeup.ts";
+import { makeGuild, STANDINS } from "./madeup.ts";
 import { lineFor } from "./news.ts";
 import { blank } from "./save.ts";
 
@@ -237,6 +239,12 @@ describe("the guild's news, live", () => {
   });
 });
 
+/** A list, or nothing. */
+const listed = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+/** Whoever a moment is about. */
+const people = (h: Happening): readonly Person[] =>
+  h.kind === "party" || h.kind === "war" ? h.who : h.kind === "reached" || h.kind === "milestone" ? [h.who] : [];
+
 describe("the live guild", () => {
   let world: Standin | null = null;
   afterEach(() => {
@@ -311,6 +319,64 @@ describe("the live guild", () => {
     expect(world.sent.some((s) => s.path.includes("after="))).toBe(false);
   });
 
+  test("never hands the town an invented member: only those the server names, and the town's own calling", async () => {
+    const route = isRecord(GAME) ? GAME["PUT /v1/game/presence"] : null;
+    const leaf = isRecord(route) && isRecord(route.body) ? route.body : {};
+    const reply = {
+      present: [
+        { id: TESTER.player.id, username: "Tester", place: "town" },
+        ...listed(leaf.present),
+        { id: "m-1", username: "Mira", place: "table" },
+      ],
+      resting: [
+        ...listed(leaf.resting),
+        { id: "m-2", username: "Odo", place: "camp", seen_at: "2026-11-25T10:00:00.000Z" },
+      ],
+    };
+    world = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/me/quests": { status: 200, body: QUESTS },
+      "GET /v1/me/events": { status: 200, body: EVENTS },
+      "PUT /v1/game/presence": { status: 200, body: reply },
+    });
+    await start();
+    expect(await prepare()).toBe(true);
+    const p = prepared();
+    if (!p) throw new Error("nothing prepared");
+    const madeUp = makeGuild({ quiet: true });
+    const guild = makeLive(madeUp, p);
+    const heard: Happening[] = [];
+    guild.hear((h) => heard.push(h));
+    guild.here("town");
+    await Bun.sleep(20);
+    // The made-up guild is left to run, and asked for everything it can do.
+    for (let i = 0; i < 300 * 30; i++) guild.step(1 / 30);
+    for (const kind of ["raid", "war", "level", "milestone", "call"] as const) madeUp.stir(kind);
+
+    expect(guild.heard()).toBe(true);
+    expect(guild.visitors().map((v) => v.name)).toEqual(["Alice", "Mira"]);
+    expect(guild.resting().map((r) => r.name)).toEqual(["Bob"]);
+    const named = new Set(
+      [...reply.present, ...reply.resting].flatMap((m) => (isRecord(m) && typeof m.id === "string" ? [m.id] : [])),
+    );
+    expect(named.size).toBe(5);
+    const invented = new Set(STANDINS.map((m) => m.name));
+    for (const m of [...guild.visitors(), ...guild.resting()]) {
+      expect(named.has(m.id)).toBe(true);
+      expect(invented.has(m.name)).toBe(false);
+      expect(m.skin).toBe(`/v1/game/skins/${m.id}`);
+    }
+    // All the made-up guild may say beside the real one is that one of the town's own came calling.
+    expect(heard.length).toBeGreaterThan(0);
+    for (const h of heard) {
+      expect(h.kind).toBe("call");
+      if (h.kind === "call") expect(isFolk(h.who)).toBe(true);
+    }
+    for (const who of heard.flatMap(people)) expect(invented.has(who.name)).toBe(false);
+    expect(world.sent.find((s) => s.path === "/v1/game/presence")?.body).toEqual({ place: "town", stay: true });
+  });
+
   test("a board the server cannot give means the town does not open", async () => {
     world = standin({
       "GET /v1/game/hello": HELLO,
@@ -323,7 +389,28 @@ describe("the live guild", () => {
   });
 });
 
-describe("who is here", () => {
+describe("who is here, and who is dozing", () => {
+  test("those resting: never the member, nobody in the game, nobody last at their camp; newest first, at most twelve", () => {
+    const at = Date.UTC(2026, 10, 25, 12);
+    const present = [{ id: "a", name: "Alice", place: "works" as const, rank: null }];
+    const resting = [
+      { id: ME, name: "Tester", place: "town" as const, seen: at - 1 },
+      { id: "a", name: "Alice", place: "town" as const, seen: at - 2 },
+      { id: "b", name: "Bob", place: "camp" as const, seen: at - 3 },
+      ...Array.from({ length: 14 }, (_, i) => ({
+        id: `n${i}`,
+        name: `N${i}`,
+        place: "table" as const,
+        seen: at - 9 + i,
+      })),
+    ];
+    const r = toResting(resting, present, ME);
+    expect(r.length).toBe(12);
+    expect(r[0]).toEqual({ id: "n13", name: "N13", rank: null, at: "table", skin: "/v1/game/skins/n13", seen: at + 4 });
+    expect(r.map((x) => x.seen)).toEqual(r.map((x) => x.seen).toSorted((x, y) => y - x));
+    expect(r.some((x) => x.id === ME || x.id === "a" || x.id === "b")).toBe(false);
+  });
+
   test("everybody but the member, nobody at their own camp, at most twelve", () => {
     const present = [
       { id: ME, name: "Tester", place: "town" as const, rank: "captain" },

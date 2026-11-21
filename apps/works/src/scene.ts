@@ -10,7 +10,6 @@
 import { CORAL, CREAM, GOLD, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { bubble, bubbleSize, wrap } from "@sequoia-leaf/kit/signs.ts";
-import { FOOT_X, FOOT_Y, WALK } from "@sequoia-leaf/kit/skin.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx, hash, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
@@ -662,15 +661,19 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     }
   });
 
+  // The gnomes who come to the gate, and the yard's own: waddling, or standing; arms up under a crate.
   for (const a of walkers) {
-    const pose = a.moving ? (WALK[Math.floor(a.walked / 5) % 4] ?? 0) : 0;
-    const frame = a.body.frames[a.dir]?.[pose];
+    const m = art.m;
+    const hat = a.carrying ? 1 : 0;
+    const frame = a.moving
+      ? m.waddle[a.hat]?.[hat]?.[Math.floor(a.walked / 4) % 2]
+      : m.gnome[a.hat]?.[a.carrying ? 3 : 0];
     if (!frame) continue;
     const up = a.hop > 0 ? Math.abs(Math.sin((1 - a.hop / HOP) * Math.PI)) * 5 : 0;
     const x = Math.round(a.x) - cx;
     const y = Math.round(a.y - up) - cy;
-    put(frame, x - FOOT_X, y - FOOT_Y, a.y, a.alpha);
-    if (a.carrying) stand(art.parcel, x, y - 21, a.y + 0.1, a.alpha);
+    stand(frame, x, y, a.y, a.alpha);
+    if (a.carrying) stand(art.parcel, x, y - 14, a.y + 0.1, a.alpha);
   }
 
   order.length = used;
@@ -927,7 +930,7 @@ export function drawWords(ctx: Ctx, px: number): void {
   for (const a of walkers) {
     if (!a.say) continue;
     const hx = Math.round((a.x - cx) * z);
-    const hy = Math.round((a.y - cy - 26 - (a.carrying ? 6 : 0)) * z);
+    const hy = Math.round((a.y - cy - 18 - (a.carrying ? 7 : 0)) * z);
     const lines = wrap(ctx, a.say, 100 * px, px);
     const size = bubbleSize(ctx, lines, px);
     ctx.globalAlpha = clamp(a.sayFor / 0.25, 0, 1) * a.alpha;

@@ -1119,9 +1119,18 @@ function paddedTo(body: object, bytes: number): string {
   return `${text.slice(0, -1)},"pad":"${"x".repeat(bytes - text.length - 9)}"}`;
 }
 
-function arrive(place: string, sent: Sent = alicesPage) {
-  return send("PUT", "/v1/game/presence", { ...sent, body: { place } });
+/** Writes presence rows straight into the table, as games seen earlier would have left them. */
+function seen(rows: readonly Record<string, string | number>[]) {
+  const [first, ...rest] = rows;
+  if (!first) return Promise.resolve();
+  return services.query((sql) => sql`INSERT INTO presence ${sql.insert([first, ...rest])}`);
 }
+
+function arrive(place: string, sent: Sent = alicesPage, stay?: unknown) {
+  return send("PUT", "/v1/game/presence", { ...sent, body: stay === undefined ? { place } : { place, stay } });
+}
+
+const iso = (at: number) => new Date(at).toISOString();
 
 describe("PUT /v1/game/presence", () => {
   it("lists the caller and everyone else seen in the last 90 seconds, and nobody older", async () => {
@@ -1136,8 +1145,85 @@ describe("PUT /v1/game/presence", () => {
         { id: alice, username: "Alice", place: "town" },
         { id: bob, username: "Bob", place: "works" },
       ],
+      resting: [],
     });
-    expect(await later.json()).toEqual({ present: [{ id: alice, username: "Alice", place: "camp" }] });
+    expect(await later.json()).toEqual({
+      present: [{ id: alice, username: "Alice", place: "camp" }],
+      resting: [{ id: bob, username: "Bob", place: "works", seen_at: iso(T0) }],
+    });
+  });
+
+  it("lists as resting those seen between 90 seconds and a day ago who stay, newest first, at most 24", async () => {
+    const now = T0 + DAY;
+    // Thirty members seen over the last day and a bit: every third would rather not stay.
+    const rows = Array.from({ length: 30 }, (_, n) => ({
+      playerId: `20000000-0000-0000-0000-${String(n).padStart(12, "0")}`,
+      username: `Member${n}`,
+      place: n % 2 === 0 ? "town" : "table",
+      seenAt: now - 60_000 - n * 50 * MINUTE,
+      stay: n % 3 === 2 ? 0 : 1,
+    }));
+    await seen(rows);
+    clock.now = now;
+    const body: unknown = await (await arrive("town")).json();
+
+    const kept = rows
+      .filter((r) => r.stay === 1 && r.seenAt <= now - 90_000 && r.seenAt >= now - DAY)
+      .toSorted((a, b) => b.seenAt - a.seenAt);
+    expect(kept.length).toBeGreaterThan(0);
+    expect(body).toEqual({
+      present: [
+        { id: alice, username: "Alice", place: "town" },
+        { id: rows[0]?.playerId, username: "Member0", place: "town" },
+      ],
+      resting: kept
+        .slice(0, 24)
+        .map((r) => ({ id: r.playerId, username: r.username, place: r.place, seen_at: iso(r.seenAt) })),
+    });
+  });
+
+  it("never lists more than 24 resting", async () => {
+    const rows = Array.from({ length: 40 }, (_, n) => ({
+      playerId: `30000000-0000-0000-0000-${String(n).padStart(12, "0")}`,
+      username: `Sleeper${n}`,
+      place: "town",
+      seenAt: T0 - 5 * MINUTE - n * MINUTE,
+      stay: 1,
+    }));
+    await seen(rows);
+    const body: unknown = await (await arrive("works")).json();
+
+    const resting = typeof body === "object" && body !== null && "resting" in body ? body.resting : null;
+    expect(Array.isArray(resting) ? resting.map((r: { username: string }) => r.username) : null).toEqual(
+      rows.slice(0, 24).map((r) => r.username),
+    );
+  });
+
+  it("keeps a member who says stay false out of the resting, until they say otherwise", async () => {
+    await arrive("works", { bearer: "bob-token" }, false);
+    clock.now = T0 + 5 * MINUTE;
+    const without = await arrive("town");
+    clock.now = T0 + 6 * MINUTE;
+    await arrive("table", { bearer: "bob-token" });
+    clock.now = T0 + 9 * MINUTE;
+    const back = await arrive("town");
+
+    expect(await without.json()).toEqual({ present: [{ id: alice, username: "Alice", place: "town" }], resting: [] });
+    expect(await back.json()).toEqual({
+      present: [{ id: alice, username: "Alice", place: "town" }],
+      resting: [{ id: bob, username: "Bob", place: "table", seen_at: iso(T0 + 6 * MINUTE) }],
+    });
+    expect(await services.query((sql) => sql`SELECT stay FROM presence ORDER BY player_id`)).toEqual([
+      { stay: 1 },
+      { stay: 1 },
+    ]);
+  });
+
+  it("refuses a stay that is not true or false", async () => {
+    const response = await arrive("town", alicesPage, "yes");
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "invalid_place" });
   });
 
   it("forgets anyone not seen for a day", async () => {

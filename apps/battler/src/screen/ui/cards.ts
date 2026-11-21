@@ -21,6 +21,7 @@ import {
 } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 
+import { regularNamed } from "../../game/content/rooms.ts";
 import {
   abilityShort,
   abilityText,
@@ -76,6 +77,7 @@ import {
   membersOf,
   NUMBER_KEYS,
   type Numbers,
+  opening,
   ownTraitCount,
   pieceNumbers,
   plainNumbers,
@@ -413,10 +415,15 @@ function roomDesc(index: number, run: Run): Description | null {
   const here = run.room === index && run.phase !== "over";
   const kind = room.kind === "spar" ? "Sparring" : room.kind === "boss" ? "A boss" : "Trouble";
   const lines: string[] = [];
-  if (here) lines.push(`${run.foe.who}${run.foe.title ? `: ${run.foe.title}` : ""}.`);
+  if (here)
+    lines.push(
+      regularNamed(run.foe.who)
+        ? `${opening(run.foe.who)} ${run.foe.title}.`
+        : `${run.foe.who}${run.foe.title ? `: ${run.foe.title}` : ""}.`,
+    );
   if (record) lines.push(record.result === "win" ? "Won." : record.result === "loss" ? "Lost." : "A draw.");
   else if (room.kind === "spar")
-    lines.push("A guild-mate's party. It pays the same, won or lost, but a win pays an acorn more.");
+    lines.push("A regular's party. It pays the same, won or lost, but a win pays an acorn more.");
   else if (room.kind === "trouble")
     lines.push(
       `The forest's own. Win for a pick of ${ECONOMY.componentsWon} components; lose and it is ${ECONOMY.componentsLost}.`,
@@ -520,7 +527,7 @@ export function registerCards(): void {
     if (!run || !foe) return null;
     return figureDesc(foe.kind, foe.stars, {
       items: foe.items,
-      whose: `${run.foe.who}'s`,
+      whose: `${opening(run.foe.who)}'s`,
       party: run.foe,
       numbers: startNumbers(run.foe, foe.seat),
     });
@@ -531,7 +538,7 @@ export function registerCards(): void {
     if (!run || !u) return null;
     return figureDesc(u.kind, u.stars, {
       unit: u,
-      whose: u.side === 0 ? "Yours" : `${run.foe.who}'s`,
+      whose: u.side === 0 ? "Yours" : `${opening(run.foe.who)}'s`,
       run: u.side === 0 ? run : null,
       party: u.side === 1 ? run.foe : null,
     });

@@ -66,17 +66,14 @@
   ["shot", "13-profile"],
   [
     "eval",
-    "(window.town.close(), window.town.tp(256,150), window.town.happen('raidOut'), window.town.skip(7.6), 'muster')"
+    "(window.town.close(), window.town.tp(256,150), window.town.happen('raid'), window.town.skip(3.2), 'members home from a raid')"
   ],
   ["wait", 700],
-  ["shot", "14-raid-muster"],
-  [
-    "eval",
-    "(window.town.skip(9), window.town.tp(322,236), window.town.happen('raidBack'), window.town.skip(9.4), 'lantern')"
-  ],
+  ["shot", "14-raid-home"],
+  ["eval", "(window.town.tp(322,236), window.town.skip(6), 'lantern')"],
   ["wait", 700],
   ["shot", "15-raid-lantern"],
-  ["eval", "(window.town.tp(290,176), window.town.happen('land'), window.town.skip(1.7), 'land')"],
+  ["eval", "(window.town.tp(290,176), window.town.happen('war'), window.town.skip(1.7), 'land')"],
   ["wait", 700],
   ["shot", "16-banner"],
   [
@@ -92,15 +89,20 @@
   ["shot", "18-crab-bolts"],
   [
     "eval",
-    "(()=>{const w=window.town.who().find(a=>a.doing!=='raid'&&a.doing!=='walk'); window.town.tp(w.x+16,w.y+12); window.town.skip(0.2); return w.name})()"
+    "(()=>{const w=window.town.who().find(a=>a.doing==='stall'); window.town.tp(w.x+16,w.y+20); window.town.skip(0.2); return w.name})()"
   ],
   ["wait", 400],
-  [
-    "tapAt",
-    "(()=>{const w=window.town.who().find(a=>a.doing!=='raid'&&a.doing!=='walk'); return window.town.page(w.x,w.y-10)})()"
-  ],
+  ["tapAt", "(()=>{const w=window.town.who().find(a=>a.doing==='stall'); return window.town.page(w.x,w.y-8)})()"],
   ["wait", 700],
-  ["shot", "19-mate-card"],
+  ["shot", "19-townsperson-card"],
+  [
+    "eval",
+    "(()=>{document.querySelector('#card .k-btn.icon').click(); const w=window.town.visitors().find(v=>v.dozing); window.town.tp(w.x+14,w.y+16); window.town.skip(0.2); return w.name})()"
+  ],
+  ["wait", 400],
+  ["tapAt", "(()=>{const w=window.town.visitors().find(v=>v.dozing); return window.town.page(w.x,w.y-8)})()"],
+  ["wait", 700],
+  ["shot", "19b-resting-member-card"],
   [
     "eval",
     "(document.querySelector('#card .k-btn.icon').click(), document.querySelector('#dock button:nth-child(5)').dispatchEvent(new PointerEvent('pointerenter',{pointerType:'mouse'})), 'a tip on the dock')"
@@ -171,15 +173,12 @@
   ["shot", "39-phone-profile"],
   [
     "eval",
-    "(()=>{window.town.close(); const w=window.town.who().find(a=>a.doing!=='raid'&&a.doing!=='walk'); window.town.tp(w.x+10,w.y+14); window.town.skip(0.2); return w.name})()"
+    "(()=>{window.town.close(); const w=window.town.who().find(a=>a.doing==='stall'); window.town.tp(w.x+10,w.y+20); window.town.skip(0.2); return w.name})()"
   ],
   ["wait", 400],
-  [
-    "tapAt",
-    "(()=>{const w=window.town.who().find(a=>a.doing!=='raid'&&a.doing!=='walk'); return window.town.page(w.x,w.y-10)})()"
-  ],
+  ["tapAt", "(()=>{const w=window.town.who().find(a=>a.doing==='stall'); return window.town.page(w.x,w.y-8)})()"],
   ["wait", 700],
-  ["shot", "40-phone-mate-card"],
+  ["shot", "40-phone-townsperson-card"],
   [
     "eval",
     "(document.querySelector('#card .k-btn.icon').click(), document.querySelector('#purse .k-cur').dispatchEvent(new PointerEvent('pointerenter',{pointerType:'mouse'})), 1)"

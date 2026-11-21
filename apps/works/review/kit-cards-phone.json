@@ -81,5 +81,14 @@
     "eval",
     "'item on a belt: ' + document.querySelector('.k-info .k-name')?.textContent + ', sheet ' + !!document.querySelector('.k-info.sheet')"
   ],
-  ["shot", "wp-03-item-on-belt"]
+  ["shot", "wp-03-item-on-belt"],
+  ["key", "Escape"],
+  ["tap", 200, 360],
+  [
+    "eval",
+    "(window.works.close(), window.works.fill(0), window.works.fill(2), window.works.skip(16), 'two orders filled; gnomes come to the gate')"
+  ],
+  ["eval", "(window.works.open('orders'), window.works.skip(0.5), 'the filled orders, from places in town')"],
+  ["wait", 400],
+  ["shot", "wp-04-orders-filled"]
 ]

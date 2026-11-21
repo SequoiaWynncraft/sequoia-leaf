@@ -12,7 +12,8 @@ import { icon, type Sprite, type Sprites } from "./sprites.ts";
 import { KIND_NAMES, KINDS, THINGS } from "./things.ts";
 import { PLACES } from "./world.ts";
 
-export function showSheet(s: Sprites, bodies: readonly Body[]): void {
+/** The art, with the members' figures (`bodies`) and the town's own in every picture (`folk`). */
+export function showSheet(s: Sprites, bodies: readonly Body[], folk: readonly Sprite[]): void {
   const part = new URLSearchParams(location.search).get("sheet") ?? "";
   const zoom = part === "ground" || part === "sky" ? 2 : 4;
   const { c, g } = makeCanvas(part === "ground" ? 656 : part === "sky" ? 760 : 400, part === "ground" ? 480 : 300);
@@ -79,6 +80,7 @@ export function showSheet(s: Sprites, bodies: readonly Body[]): void {
             ...s.pieces,
             s.jar,
             ...bodies.flatMap((b) => b.frames.flat()),
+            ...folk,
           ]
         : [s.treasury, s.counter, s.works, s.gate, s.board, ...s.stalls, s.tree, s.greatStump];
     for (const sp of groups) put(sp);

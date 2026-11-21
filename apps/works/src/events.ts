@@ -11,6 +11,7 @@ import { hash, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { flights, send, speak, toss, type Walker, walker, walkers } from "./actors.ts";
 import { TILE } from "./art/belts.ts";
 import type { Art } from "./art/index.ts";
+import { PIPWICK_HAT } from "./art/machines.ts";
 import { burst, flutter, sparkle } from "./fx.ts";
 import { layout } from "./layout.ts";
 import { claim, isFilled, ITEM, type News, type Standing, STORY } from "./sim/index.ts";
@@ -19,9 +20,10 @@ import { S, toPage } from "./state.ts";
 import { banner, coinsFrom, feed } from "./ui/notes.ts";
 import { bank } from "./yard.ts";
 
-const MATES = ["Mossback", "Sootpaw", "Quillfeather", "Fernwhistle", "Wrenly", "Pipwick", "Tindra", "Bramblewick"];
-/** The yard's own hand, who carries story orders out to town. */
-const HAND = "Embertoe";
+/** The gnome who comes for an order himself, when it is his. */
+const PIPWICK = "Pipwick";
+/** The yard's own gnome, who carries story orders out to town, and his hat. */
+const HAND = { name: "the yard's gnome", hat: 3 };
 const THANKS = [
   "Thank you!",
   "Lovely. Thank you!",
@@ -43,10 +45,13 @@ function spots(): { door: Pt; inside: Pt; outside: Pt; away: Pt } {
   };
 }
 
-/** Who comes for an order: the guild-mate who asked, or one sent by whoever (or whatever) did. */
-function comer(order: Standing): { name: string; sent: boolean } {
-  if (MATES.includes(order.from) || order.from === HAND) return { name: order.from, sent: false };
-  return { name: MATES[Math.floor(hash(order.id, 7, 3) * MATES.length)] ?? "Mossback", sent: true };
+/**
+ * Who comes for an order: always a gnome. Pipwick for his own, in his blue hat; for anybody (or
+ * anywhere) else, one of the town's gnomes, sent on their behalf.
+ */
+function comer(order: Standing): { name: string; hat: number; sent: boolean } {
+  if (order.from === PIPWICK) return { name: PIPWICK, hat: PIPWICK_HAT, sent: false };
+  return { name: "A gnome", hat: Math.floor(hash(order.id, 7, 3) * 4), sent: true };
 }
 
 /** Where the nth to arrive stands to wait, outside the gate. */
@@ -64,7 +69,7 @@ export function callers(): void {
     const waiting = walkers.filter((p) => p.order >= 0 && !p.gone).length;
     const who = comer(order);
     const s = spots();
-    const p = walker(who.name, { x: s.away.x + (waiting % 2 ? -8 : 8), y: s.away.y }, order.id);
+    const p = walker(who.name, who.hat, { x: s.away.x + (waiting % 2 ? -8 : 8), y: s.away.y }, order.id);
     send(p, [waitAt(waiting)], () => {
       p.dir = 3;
       speak(p, who.sent ? `For ${order.from.replace(/^The /, "the ")}.` : "Is it ready?", 3.2);
@@ -85,7 +90,7 @@ function leaveBy(p: Walker): void {
 
 /** The caller a point in the yard is on, if any. */
 export function callerAt(x: number, y: number): Walker | null {
-  return walkers.find((p) => p.order >= 0 && !p.gone && Math.abs(p.x - x) < 8 && y > p.y - 24 && y < p.y + 4) ?? null;
+  return walkers.find((p) => p.order >= 0 && !p.gone && Math.abs(p.x - x) < 8 && y > p.y - 18 && y < p.y + 4) ?? null;
 }
 
 /**
@@ -109,13 +114,13 @@ export function handOver(slot: number): boolean {
     return true;
   }
   p.order = -1;
-  const hands = { x: p.x, y: p.y - 22 };
+  const hands = { x: p.x, y: p.y - 16 };
   toss({ x: s.door.x, y: s.door.y - 12 }, hands, () => {
     p.carrying = true;
     p.hop = 0.28;
     speak(p, THANKS[Math.floor(hash(order.id, 9, 3) * THANKS.length)] ?? "Thank you!", 2.2);
-    burst(p.x, p.y - 24, 8, [GOLD[2], CREAM], 30);
-    coinsFrom(toPage(p.x, p.y - 20), pay);
+    burst(p.x, p.y - 18, 8, [GOLD[2], CREAM], 30);
+    coinsFrom(toPage(p.x, p.y - 16), pay);
     window.setTimeout(() => {
       p.speed = 30;
       send(p, [{ x: p.x, y: s.away.y }], () => {
@@ -137,7 +142,7 @@ export function onNews(art: Art, news: readonly News[]): void {
       banner(art, done, STORY[n.index + 1] ?? null);
       // The yard's hand carries the last crate out of the door, down the path and through the gate.
       const s = spots();
-      const p = walker(HAND, { x: s.door.x, y: s.door.y - 4 });
+      const p = walker(HAND.name, HAND.hat, { x: s.door.x, y: s.door.y - 4 });
       p.carrying = true;
       p.speed = 42;
       speak(p, "Off it goes!", 1.8);

@@ -67,6 +67,12 @@ export function buyForCamp(thing: string, pay: () => boolean): "sent" | "full" |
   return sendToCamp(thing) ? "sent" : "full";
 }
 
+/** One of the town's own who dropped by has been greeted: the camp counts it, and somebody may move in. */
+export function greet(): void {
+  camp.greeted = Math.min(999, camp.greeted + 1);
+  changed();
+}
+
 hooks.campNews = (): boolean => camp.parcels.length > 0 || waiting(camp.letters) > 0;
 
 if (typeof window !== "undefined") {

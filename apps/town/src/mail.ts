@@ -1,5 +1,5 @@
 /**
- * The mailbox: notes and small presents from guild-mates who came by while the member was out.
+ * The mailbox: notes and small presents from the town's own who came by while the member was out.
  * Who wrote and what they left is the guild's to say; this is only the box they are kept in.
  */
 

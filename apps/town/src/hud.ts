@@ -6,16 +6,18 @@
  */
 
 import { add, el, icon as glyph, type IconName, replay, shown } from "@sequoia-leaf/kit/dom.ts";
+import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, type Currency, spend } from "@sequoia-leaf/kit/purse.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { hop, say } from "./actors.ts";
-import { DOING, KEEPER } from "./cast.ts";
 import { show } from "./draw.ts";
+import { DOING, type Doing } from "./folk.ts";
 import { type Actor, after, G, hooks, watch } from "./game.ts";
 import type { Tone } from "./guild.ts";
+import { span } from "./letter.ts";
 
 export type Kid = Node | string | null;
 
@@ -26,6 +28,20 @@ export function pic(src: HTMLCanvasElement, scale = 1): HTMLCanvasElement {
   const { c, g } = makeCanvas(src.width, src.height);
   g.drawImage(src, 0, 0);
   return shown(c, scale);
+}
+
+/**
+ * Somebody's face for a card, a chip or a letter, `scale` units to each of a member's face pixels:
+ * a member's from their skin, and one of the town's own as its own small picture.
+ */
+export function faceOf(a: Actor, scale = 1): HTMLCanvasElement | null {
+  if (a.folk) return pic(a.folk.art.face, Math.max(1, scale / 2));
+  return a.body ? pic(a.body.face, scale) : null;
+}
+
+/** Somebody's name for a card or a list: one of the town's own with its mark, a member as they are. */
+export function nameOf(a: Actor, classes = ""): HTMLElement {
+  return a.folk ? folkName(a.who.name, classes) : el("span", classes, { text: a.who.name });
 }
 
 /** A hollow `size` units square, holding one thing. */
@@ -311,9 +327,16 @@ export function closeCard(): void {
   $("card").hidden = true;
 }
 
+/** What one of the town's own is doing, in a line for its card. */
+const doingLine = (a: Actor): string => {
+  const d: Doing = a.doing === "table" || a.doing === "home" ? "walk" : a.doing;
+  return DOING[d];
+};
+
 /**
- * A card for somebody who was tapped: their face, their rank, what they are doing, and a wave.
- * `doing` says the middle line, if the usual one for what they are about will not do.
+ * A card for somebody who was tapped. A real member's says only who they are: their name and rank,
+ * and for one dozing in town how long ago they dozed off. One of the town's own says what it is,
+ * what it is doing, and has a wave; `doing` says that middle line, if the usual one will not do.
  */
 export function showCard(a: Actor, doing: (() => string) | null = null): void {
   const c = $("card");
@@ -327,21 +350,26 @@ export function showCard(a: Actor, doing: (() => string) | null = null): void {
   );
   doingEl = el("div", "k-d");
   doingOf = doing;
-  if (G.visitors.includes(a)) {
-    // Somebody really here: their name and rank, and nothing else.
+  const f = a.folk;
+  if (!f) {
+    // A real member: their name and rank, and nothing else.
     doingEl = null;
+    const asleep = a.dozing;
     c.append(
       el(
         "div",
         "k-row top",
         {},
-        slot(pic(a.body.face, 3), 28),
+        slot(faceOf(a, 3), 28),
         el(
           "div",
           "k-grow",
           {},
-          el("div", "k-title", { text: a.who.name }),
+          el("div", "k-title k-member", { text: a.who.name }),
           a.who.rank ? el("div", "k-d", { text: a.who.rank }) : null,
+          asleep === null
+            ? null
+            : el("div", "k-d", { text: `Dozed off ${span(Math.max(0, (Date.now() - asleep) / 60000))} ago.` }),
         ),
         x,
       ),
@@ -352,42 +380,28 @@ export function showCard(a: Actor, doing: (() => string) | null = null): void {
     replay(c, "k-rise");
     return;
   }
-  const shop = a === G.cinfy;
-  c.append(
-    el(
-      "div",
-      "k-row top",
-      {},
-      slot(pic(a.body.face, 3), 28),
-      el(
-        "div",
-        "k-grow",
-        {},
-        el("div", "k-title", { text: a.who.name }),
-        el("div", "k-d", { text: shop ? a.who.rank : `${a.who.rank}, level ${a.who.level}` }),
-      ),
-      x,
-    ),
-    doingEl,
-    el(
-      "div",
-      "k-row",
-      {},
-      button("sm", ["Wave"], () => {
-        keep();
-        const p = G.player;
-        if (p) {
-          say(p, "o/", 1.4);
-          hop(p);
-        }
-        after(0.45, () => {
-          hop(a, 2);
-          say(a, pick(["o/", "hi hi!", "heya!", "\\o/"], Math.random()), 2);
-        });
-      }),
-      shop
-        ? button("wood sm", ["Treasury"], () => {
-            hooks.visit("treasury", true);
+  const job = f.t.job;
+  const wave = button("sm", ["Wave"], () => {
+    keep();
+    const p = G.player;
+    if (p) {
+      say(p, "o/", 1.4);
+      hop(p);
+    }
+    after(0.45, () => {
+      hop(a, 2);
+      say(a, pick(f.t.waves, Math.random()), 2);
+    });
+  });
+  const other =
+    job === "counter"
+      ? button("wood sm", ["Treasury"], () => {
+          hooks.visit("treasury", true);
+        })
+      : typeof job === "object"
+        ? button("wood sm", ["Stall"], () => {
+            G.stall = job.stall;
+            hooks.visit("market", true);
           })
         : button("wood sm", ["Cheer"], () => {
             keep();
@@ -395,10 +409,20 @@ export function showCard(a: Actor, doing: (() => string) | null = null): void {
             if (G.player) hop(G.player, 2);
             after(0.3, () => {
               hop(a, 3);
-              say(a, pick(["woo!", "glory to the grove!", "no gg left behind!"], Math.random()), 2);
+              say(a, pick(f.t.cheers, Math.random()), 2);
             });
-          }),
+          });
+  c.append(
+    el(
+      "div",
+      "k-row top",
+      {},
+      slot(faceOf(a, 3), 28),
+      el("div", "k-grow", {}, folkName(a.who.name, "k-title"), el("div", "k-d", { text: f.t.what })),
+      x,
     ),
+    doingEl,
+    el("div", "k-row", {}, wave, other),
   );
   show.card = a;
   keep();
@@ -415,7 +439,7 @@ let hammerDoes: (() => void) | null = null;
 
 /** The member's face on its button, redrawn once their own skin has loaded. */
 export function refreshFace(): void {
-  const f = G.player?.body.face;
+  const f = G.player?.body?.face;
   if (faceButton && f) faceButton.replaceChildren(pic(f, 1.5));
 }
 
@@ -490,7 +514,7 @@ export function tickHud(dt: number): void {
   refresh?.();
   const of = show.card;
   if (of) {
-    if (doingEl) doingEl.textContent = doingOf ? doingOf() : of === G.cinfy ? KEEPER.doing : DOING[of.doing];
+    if (doingEl) doingEl.textContent = doingOf ? doingOf() : doingLine(of);
     if (performance.now() > cardUntil || of.away) closeCard();
   }
 }

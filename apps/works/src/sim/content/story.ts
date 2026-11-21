@@ -52,7 +52,7 @@ export const STORY: readonly StoryOrder[] = [
   },
   {
     title: "Tools for the raid parties",
-    from: "The Branchmasters",
+    from: "The raid parties",
     say: "They came back with half the shovels they left with. Nobody will say where the other half went.",
     want: { tool: 10 },
     pay: 260,
@@ -68,15 +68,15 @@ export const STORY: readonly StoryOrder[] = [
   },
   {
     title: "Engines for the well-winch",
-    from: "Mossback",
-    say: "The winch has been hauled by hand since spring, and by hand I mean by me.",
+    from: "The gnomes",
+    say: "The winch has been hauled by hand since spring, and by hand they mean by them.",
     want: { engine: 20 },
     pay: 600,
     opens: { plots: ["meadow"], plans: ["waxed", "tunnel"] },
   },
   {
     title: "Poles for the new banners",
-    from: "Quillfeather",
+    from: "The guild",
     say: "The guild took a hill, and then some more hills, and the banners are folded on a shelf. A banner should not be on a shelf.",
     want: { pole: 20 },
     pay: 700,
@@ -85,7 +85,7 @@ export const STORY: readonly StoryOrder[] = [
   },
   {
     title: "Pots for the campfire stew",
-    from: "Sootpaw",
+    from: "The campfire",
     say: "Everybody is bringing a bowl and nobody is bringing a pot. There is clay to the west.",
     want: { pot: 200 },
     pay: 800,
@@ -93,8 +93,8 @@ export const STORY: readonly StoryOrder[] = [
   },
   {
     title: "Hampers for the long patrol",
-    from: "Bramblewick",
-    say: "Three days past the ridge. I have promised them lunch on every one.",
+    from: "The raid parties",
+    say: "Three days past the ridge, and somebody has promised lunch on every one.",
     want: { hamper: 150 },
     pay: 900,
     opens: { plans: ["flywheel", "bigcrates"] },
@@ -109,7 +109,7 @@ export const STORY: readonly StoryOrder[] = [
   },
   {
     title: "Lamp oil before the dark",
-    from: "Fernwhistle",
+    from: "The crab pond",
     say: "The evenings are drawing in and the crabs dislike it. The old stumps to the north weep resin.",
     want: { oil: 300 },
     pay: 1200,
@@ -126,7 +126,7 @@ export const STORY: readonly StoryOrder[] = [
   },
   {
     title: "Raid kits",
-    from: "The Branchmasters",
+    from: "The raid parties",
     say: "A tool, a lantern and a hamper, in one pack, so that nobody forgets two of the three.",
     want: { kit: 150 },
     pay: 2000,
@@ -152,8 +152,8 @@ export const STORY: readonly StoryOrder[] = [
   },
   {
     title: "A lantern for every path",
-    from: "Wrenly",
-    say: "And a hamper under each, because a path is a long way to walk on an empty stomach.",
+    from: "Pipwick",
+    say: "And a hamper under each, because a path is a long way to walk on an empty stomach. I walk all of them.",
     want: { lantern: 300, hamper: 300 },
     pay: 2500,
     opens: { plans: ["rollers"] },
@@ -161,8 +161,8 @@ export const STORY: readonly StoryOrder[] = [
   },
   {
     title: "The Beacon",
-    from: "Tindra",
-    say: "A great lamp on a pole, turned by an engine, so the raid parties can find the way home. And the moths.",
+    from: "The market stalls",
+    say: "A great lamp on a pole, turned by an engine, so the raid parties can find the way home. And the moths. And customers.",
     want: { beacon: 2 },
     pay: 3000,
     opens: { plots: ["hollow"] },
@@ -170,7 +170,7 @@ export const STORY: readonly StoryOrder[] = [
   },
   {
     title: "Kits for the deep raid",
-    from: "The Branchmasters",
+    from: "The raid parties",
     say: "Everyone is going. Everyone. Even Greg has a pack, though Greg cannot wear it.",
     want: { kit: 240 },
     pay: 3500,

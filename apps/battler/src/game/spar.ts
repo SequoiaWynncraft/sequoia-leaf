@@ -1,8 +1,9 @@
 /**
- * Sparring partners. A sparring room is fought against the party a guild-mate brought to the table.
- * Until real members' saved boards exist, this makes one up from a seed: a handle, a taste for one
- * kin and one calling, and a party about as good as a member's would be by that room. What comes
- * out is a plain `Party`, the same shape a real saved board will have.
+ * Sparring partners. A sparring room is fought against the party one of the regulars at the table
+ * brought (`REGULARS`: Greg, the Hearth Cat and the rest, never a member). Until real members'
+ * saved boards exist, this makes one up from a seed: a regular, a taste for one kin and one
+ * calling, and a party about as good as a member's would be by that room. What comes out is a
+ * plain `Party`, the same shape a real saved board will have.
  */
 import { FIGURE_IDS, type FigureId, FIGURES, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
 import { type ComponentId, holdItem, type ItemId } from "./content/items.ts";
@@ -37,7 +38,7 @@ function suits(kind: FigureId): readonly ComponentId[] {
   }
 }
 
-/** The party a made-up guild-mate brings to a sparring room, from a seed. */
+/** The party a regular brings to a sparring room, from a seed. */
 export function sparParty(seed: number, roomIndex: number, trailIndex: number): Party {
   const s: Stream = { rng: seed >>> 0 };
   const strength = ROOMS[roomIndex]?.spar ?? { level: 3, spent: 6, components: 0 };

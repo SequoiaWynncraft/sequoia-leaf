@@ -20,8 +20,10 @@ fight and a run go. Nothing in there touches the page. Everything else here is t
 - **The table.** The top of the stump seen close: its rings, the board in two halves of four rows,
   a bench of nine hollows along the near edge, two lantern posts, moss and ferns at the rim, the
   clearing and the far trunks behind, and dusk over all of it with the lanterns' light cut out. In
-  a sparring room the guild-mate who brought the party sits across the table; two more watch from
-  logs where the window is wide enough.
+  a sparring room the regular who brought the party sits across the table, one of the battler's
+  own figures drawn twice the size (Greg, the Hearth Cat, a Barrow Gnome, Crab #7, the White Fox
+  or a Moth), with a plate beside it that reads "Greg brought Mist Fangs", its name in the kit's
+  leaf green with the acorn; two other regulars watch from logs where the window is wide enough.
 - **The figures.** Every one of the twenty-eight, the forest's trouble and bosses, and the few that
   are only ever summoned, each as its own small picture with a base the colour of what it costs and
   its stars over its head. They breathe, turn to whoever they are fighting, lunge, recoil, strike a
@@ -130,38 +132,38 @@ arrangement for a wide window and another for a phone held upright.
 The clock only moves in the stage's `tick`, and a fight's clock is counted from it, so everything
 timed can be stepped by hand.
 
-| File                                | What it holds                                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `src/main.ts`                       | Puts the parts together; speaks to the town                                                      |
-| `src/game/`                         | The rules (see its README)                                                                       |
-| `src/screen/state.ts`               | The run, the almanac, the prefs and what is on screen; every action goes through `act`           |
-| `src/screen/flow.ts`                | What happens when: sitting down, setting out, the fight, counting out the takings, the end       |
-| `src/screen/stage.ts`               | The canvases, the size of an art pixel, where the board sits, the clock                          |
-| `src/screen/geometry.ts`            | Where hexes, seats and bench hollows are, and which is under a point                             |
-| `src/screen/scene.ts`               | Drawing a frame: the board, lit hexes, who is waiting across it, the party, the fight            |
-| `src/screen/pawns.ts`               | The party's figures on board and bench; buying, selling and three-become-one acted out           |
-| `src/screen/hand.ts`                | Dragging and tapping, and asking what a thing is                                                 |
-| `src/screen/light.ts`               | Which trait is lit (pointed at, or clicked and kept), and how that shows on a figure             |
-| `src/screen/rich.ts`                | The words on a card sorted for colouring: numbers, heals and shields, kinds of damage            |
-| `src/screen/fightview.ts`           | The fight played from the rules' events                                                          |
-| `src/screen/fx.ts`                  | Sparks, rings, rising words, things that fly, "in a moment"                                      |
-| `src/screen/logic.ts`               | Small questions asked of a run: where a figure may go, what an item would make, the next nudge   |
-| `src/screen/keep.ts`                | Prefs and looks, and reading and writing what is kept                                            |
-| `src/screen/sounds.ts`              | The table's sounds, made from the kit's tones                                                    |
-| `src/screen/signals.ts`             | Small happenings more than one part answers: an acorn landing, a star                            |
-| `src/screen/handle.ts`              | `window.raid`, for looking at the game from outside                                              |
-| `src/screen/art/figures.ts`         | Every figure, typed out as rows of letters                                                       |
-| `src/screen/art/sprites.ts`         | Those rows baked into pictures: standing, breathing, casting, tipped over; bases and stars       |
-| `src/screen/art/icons.ts`           | A small picture for every trait, item, boon, kind of room and button                             |
-| `src/screen/art/table.ts`           | The painted table, the halves of the board, the looks                                            |
-| `src/screen/art/mates.ts`, `pal.ts` | The guild-mates at the table; the letters' colours, and the colours that mean something          |
-| `src/screen/ui/table.ts`            | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's count     |
-| `src/screen/held.ts`                | What a figure holds: where the row of small pictures under its base goes, drawing it, hitting it |
-| `src/screen/ui/cards.ts`            | What each thing says about itself, registered with the kit's cards, and the references to them   |
-| `src/screen/ui/lit.ts`              | Which trait the cards have pointed at or pinned, and marking the chips and the stall for it      |
-| `src/screen/ui/picks.ts`            | Three cards to choose from                                                                       |
-| `src/screen/ui/pages.ts`            | The front page, the almanac, how to play, table looks, the end of a run                          |
-| `src/screen/ui/nudge.ts`            | The first-time nudges                                                                            |
+| File                        | What it holds                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `src/main.ts`               | Puts the parts together; speaks to the town                                                      |
+| `src/game/`                 | The rules (see its README)                                                                       |
+| `src/screen/state.ts`       | The run, the almanac, the prefs and what is on screen; every action goes through `act`           |
+| `src/screen/flow.ts`        | What happens when: sitting down, setting out, the fight, counting out the takings, the end       |
+| `src/screen/stage.ts`       | The canvases, the size of an art pixel, where the board sits, the clock                          |
+| `src/screen/geometry.ts`    | Where hexes, seats and bench hollows are, and which is under a point                             |
+| `src/screen/scene.ts`       | Drawing a frame: the board, lit hexes, who is waiting across it, the party, the fight            |
+| `src/screen/pawns.ts`       | The party's figures on board and bench; buying, selling and three-become-one acted out           |
+| `src/screen/hand.ts`        | Dragging and tapping, and asking what a thing is                                                 |
+| `src/screen/light.ts`       | Which trait is lit (pointed at, or clicked and kept), and how that shows on a figure             |
+| `src/screen/rich.ts`        | The words on a card sorted for colouring: numbers, heals and shields, kinds of damage            |
+| `src/screen/fightview.ts`   | The fight played from the rules' events                                                          |
+| `src/screen/fx.ts`          | Sparks, rings, rising words, things that fly, "in a moment"                                      |
+| `src/screen/logic.ts`       | Small questions asked of a run: where a figure may go, what an item would make, the next nudge   |
+| `src/screen/keep.ts`        | Prefs and looks, and reading and writing what is kept                                            |
+| `src/screen/sounds.ts`      | The table's sounds, made from the kit's tones                                                    |
+| `src/screen/signals.ts`     | Small happenings more than one part answers: an acorn landing, a star                            |
+| `src/screen/handle.ts`      | `window.raid`, for looking at the game from outside                                              |
+| `src/screen/art/figures.ts` | Every figure, typed out as rows of letters                                                       |
+| `src/screen/art/sprites.ts` | Those rows baked into pictures: standing, breathing, casting, tipped over; bases and stars       |
+| `src/screen/art/icons.ts`   | A small picture for every trait, item, boon, kind of room and button                             |
+| `src/screen/art/table.ts`   | The painted table, the halves of the board, the looks                                            |
+| `src/screen/art/pal.ts`     | The letters' colours, and the colours that mean something                                        |
+| `src/screen/ui/table.ts`    | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's count     |
+| `src/screen/held.ts`        | What a figure holds: where the row of small pictures under its base goes, drawing it, hitting it |
+| `src/screen/ui/cards.ts`    | What each thing says about itself, registered with the kit's cards, and the references to them   |
+| `src/screen/ui/lit.ts`      | Which trait the cards have pointed at or pinned, and marking the chips and the stall for it      |
+| `src/screen/ui/picks.ts`    | Three cards to choose from                                                                       |
+| `src/screen/ui/pages.ts`    | The front page, the almanac, how to play, table looks, the end of a run                          |
+| `src/screen/ui/nudge.ts`    | The first-time nudges                                                                            |
 
 `geometry.ts`, `logic.ts`, `keep.ts`, `light.ts` and `rich.ts` have tests beside them.
 

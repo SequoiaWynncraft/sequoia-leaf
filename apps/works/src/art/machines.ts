@@ -131,22 +131,30 @@ function fire(g: Ctx, x: number, y: number, w: number, h: number, step: number):
 
 // ---------- the gatherer: a gnome ----------
 
-/** The gnome's hats, by which gatherer it is. */
+/**
+ * The gnome's hats: the first four by which gatherer it is, and all five for the gnomes who come to
+ * the gate (the last, blue, is Pipwick's, as in town).
+ */
 const HATS: readonly (readonly [string, string])[] = [
   [CLAY[2], CLAY[1]],
   [GOLD[1], GOLD[0]],
   [SKY[4], SKY[3]],
   [GREEN[4], GREEN[3]],
+  [WATER[3], WATER[2]],
 ];
+/** Which of `HATS` is Pipwick's. */
+export const PIPWICK_HAT = 4;
 
 /**
  * A gnome, in one of five poses: standing, leaning, bent to the ground, lifting what he has found
  * over his head, and sat down asleep (which is what a gatherer does when no power reaches it and
- * the dusk is too deep to see by).
+ * the dusk is too deep to see by). Standing or with his arms up, `step` 1 or 2 is one foot of a
+ * waddle: that boot lifted, and the rest of him leant a pixel over the other.
  */
-function gnome(hat: readonly [string, string], pose: number): Sprite {
+function gnome(hat: readonly [string, string], pose: number, step = 0): Sprite {
   const { c, g } = makeCanvas(12, 15);
   const [hx, hy] = pose === 1 ? [1, 1] : pose === 2 ? [2, 4] : pose === 4 ? [0, 3] : [0, 0];
+  const lean = step === 1 ? -1 : step === 2 ? 1 : 0;
   const tunic = WATER[1];
   const dark = WATER[0];
   // Boots and body.
@@ -156,19 +164,19 @@ function gnome(hat: readonly [string, string], pose: number): Sprite {
     R(g, 3, 9, 6, 5, tunic);
     R(g, 3, 13, 6, 1, dark);
   } else {
-    R(g, 3, 13, 2, 2, BARK[1]);
-    R(g, 7, 13, 2, 2, BARK[1]);
-    R(g, 3, 8 + (pose === 2 ? 2 : 0), 6, 5 - (pose === 2 ? 2 : 0), tunic);
-    R(g, 3, 12, 6, 1, dark);
-    R(g, 3, 11, 6, 1, BARK[0]);
-    R(g, 5, 11, 2, 1, GOLD[1]);
+    R(g, 3, step === 1 ? 12 : 13, 2, 2, BARK[1]);
+    R(g, 7, step === 2 ? 12 : 13, 2, 2, BARK[1]);
+    R(g, 3 + lean, 8 + (pose === 2 ? 2 : 0), 6, 5 - (pose === 2 ? 2 : 0), tunic);
+    R(g, 3 + lean, 12, 6, 1, dark);
+    R(g, 3 + lean, 11, 6, 1, BARK[0]);
+    R(g, 5 + lean, 11, 2, 1, GOLD[1]);
   }
   // Arms.
   if (pose === 3) {
-    R(g, 2, 3, 1, 5, tunic);
-    R(g, 9, 3, 1, 5, tunic);
-    R(g, 2, 2, 1, 1, "#e9d8b8");
-    R(g, 9, 2, 1, 1, "#e9d8b8");
+    R(g, 2 + lean, 3, 1, 5, tunic);
+    R(g, 9 + lean, 3, 1, 5, tunic);
+    R(g, 2 + lean, 2, 1, 1, "#e9d8b8");
+    R(g, 9 + lean, 2, 1, 1, "#e9d8b8");
   } else if (pose === 2) {
     R(g, 9, 9, 1, 4, tunic);
     R(g, 10, 12, 1, 2, "#e9d8b8");
@@ -176,12 +184,12 @@ function gnome(hat: readonly [string, string], pose: number): Sprite {
     R(g, 2, 10, 1, 3, tunic);
     R(g, 9, 10, 1, 3, tunic);
   } else {
-    R(g, 2, 8 + hy, 1, 3, tunic);
-    R(g, 9, 8 + hy, 1, 3, tunic);
-    R(g, 9 + hx, 11 + hy, 1, 1, "#e9d8b8");
+    R(g, 2 + lean, 8 + hy, 1, 3, tunic);
+    R(g, 9 + lean, 8 + hy, 1, 3, tunic);
+    R(g, 9 + hx + lean, 11 + hy, 1, 1, "#e9d8b8");
   }
   // Head: a nose, a beard, and the hat down over the eyes.
-  const x = 3 + hx;
+  const x = 3 + hx + lean;
   const y = 4 + hy;
   R(g, x + 1, y, 4, 2, "#e9d8b8");
   R(g, x + 2, y + 1, 2, 1, CLAY[3]);
@@ -694,6 +702,8 @@ export interface Machines {
   /** gnome[hat][pose]. */
   gnome: Sprite[][];
   gnomeLeft: Sprite[][];
+  /** waddle[hat][carrying ? 1 : 0][step]: a gnome walking, two steps, empty-handed or with his arms up. */
+  waddle: Sprite[][][];
   rake: Canvas;
   basket: Canvas;
   barrow: Canvas;
@@ -737,6 +747,7 @@ export function makeMachines(): Machines {
   return {
     gnome: gnomes,
     gnomeLeft: gnomes.map((row) => row.map(mirror)),
+    waddle: HATS.map((hat) => [0, 3].map((pose) => [gnome(hat, pose, 1), gnome(hat, pose, 2)])),
     rake: outlined(bitmap(RAKE, PAL), INK),
     basket: outlined(bitmap(BASKET, PAL), INK),
     barrow: outlined(bitmap(BARROW, PAL), INK),
