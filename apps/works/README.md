@@ -143,9 +143,9 @@ costs and how long it runs, 100 Leaf for an hour. It opens nothing.
 run. After a longer one the yard is credited with up to eight hours' work (a second shift counting
 double for as long as it lasted) and an `Away` comes back saying what it did: Coins earned, things
 made, orders filled, Coins waiting on the board. Eight hours is 288,000 ticks, so it is not all
-run: the yard keeps count of what the depot has been taking in since it was last changed, a few
-thousand ticks are run for real to bring that up to date, and the rest is paid out at that pace,
-through the same order book. Where a crate would fill or run dry part-way, the yard is paid up to
+run: a few thousand ticks are run for real, counting only what the depot takes in during them,
+and the rest is paid out at that pace, through the same order book. A line that had already run
+dry is therefore paid nothing. Where a crate would fill or run dry part-way, the yard is paid up to
 that moment, run again for a short while to find its new pace, and paid on. A boiler with nothing
 gathered for it burns what it holds and what the crates and belts behind it hold, and then goes out:
 the yard is paid at the pace with it only until then, it is let go out for real, and the pace

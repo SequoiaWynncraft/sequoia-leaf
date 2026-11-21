@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import largeYard from "../yards/large.json";
 import { setOpen } from "./build.ts";
 import { AWAY_AFTER_MS, AWAY_MOST_MS, awayLine, boost, boosted, boostLeft, forward, runTo, TICK_MS } from "./clock.ts";
 import { ITEMS, type Tally } from "./content/items.ts";
@@ -46,6 +47,22 @@ function fired(mills: number, chains: readonly number[]): World {
       for (let k = 0; k < w.rates.crate; k++) add(crate, "deadfall");
     }
   });
+  return w;
+}
+
+/**
+ * A line that has run dry: a full crate of deadfall feeding a mill that hands its planks to the
+ * depot, run until the crate is long empty. Its pace up to then says planks; it makes none now.
+ */
+function ranDry(w: World): World {
+  if (!w.plans.includes("bigcrates")) w.plans.push("bigcrates");
+  reopen(w);
+  w.open.kinds = new Set(KINDS);
+  const crate = put(w, "crate", 8, 5, 0);
+  for (let k = 0; k < w.rates.crate; k++) add(crate, "deadfall");
+  put(w, "mill", 9, 5, 0);
+  put(w, "belt", 10, 5, 0);
+  steps(w, 2500);
   return w;
 }
 
@@ -308,6 +325,33 @@ describe("away", () => {
     // No more than a short run for real for each boiler and one after the last.
     expect(a.run).toBeLessThan(3 * 6000);
   });
+  test("a line that ran dry before the member left is paid nothing while away", () => {
+    const quick = ranDry(lit(bare()));
+    const exact = ranDry(lit(bare()));
+    expect(on(quick, 8, 5).count).toBe(0);
+    expect(quick.depot.plank).toBe(quick.rates.crate);
+    // What the depot took in before leaving still says planks.
+    expect(quick.pace.made.plank ?? 0).toBeGreaterThan(0);
+    const a = forward(quick, 288_000);
+    const b = forward(exact, 288_000, true);
+    expect(b.made).toEqual({});
+    expect(a.made).toEqual({});
+    expect(a.coins).toBe(0);
+  });
+  test("a line that ran dry is paid nothing in any of the short runs, before a boiler goes out or after", () => {
+    // A boiler behind six crates goes out a good while into the absence, and the yard is measured
+    // afresh: the planks from before leaving are in neither measure.
+    const quick = ranDry(fired(16, [6]));
+    const exact = ranDry(fired(16, [6]));
+    const a = forward(quick, 288_000);
+    const b = forward(exact, 288_000, true);
+    expect(power(quick)).toEqual(power(exact));
+    expect(b.made.plank ?? 0).toBe(0);
+    expect(a.made.plank ?? 0).toBe(0);
+    expect(b.made.ore ?? 0).toBeGreaterThan(5000);
+    expect(apart(a.made.ore ?? 0, b.made.ore ?? 0)).toBeLessThan(0.03);
+    expect(apart(a.coins, b.coins)).toBeLessThan(0.03);
+  });
   test("a yard whose boilers are fed by a gatherer is caught up on just as it was before boilers were looked at", () => {
     // What the quick way gave for this yard before it looked at boilers at all.
     const before = [
@@ -329,5 +373,15 @@ describe("away", () => {
     // Generous, so a busy machine running the tests does not fail it; it measures a few milliseconds.
     expect(performance.now() - started).toBeLessThan(150);
     expect(TICK_MS).toBe(100);
+  });
+  test("eight hours away on the largest kept yard is caught up on well inside a frame or three", () => {
+    const yard = load(JSON.stringify(largeYard));
+    if (!yard) throw new Error("the large yard did not load");
+    const started = performance.now();
+    const away = forward(yard, 288_000);
+    // It measures under 20 milliseconds.
+    expect(performance.now() - started).toBeLessThan(50);
+    expect(away.run).toBeLessThan(288_000 / 20);
+    expect(away.coins).toBeGreaterThan(0);
   });
 });

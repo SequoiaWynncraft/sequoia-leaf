@@ -6,7 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { abilityNumber, type Stars, type UnitKind } from "../content/figures.ts";
-import type { ItemId } from "../content/items.ts";
+import { FINISHED, type ItemId, itemStats } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { cellAt, cone, distance, line, neighbours, rowOf, within } from "../hex.ts";
 import type { Placed } from "../party.ts";
@@ -24,6 +24,8 @@ const THREE = cellAt(3, 1);
 const FOUR = cellAt(3, 0);
 
 const n = (kind: UnitKind, name: string, stars: Stars = 1): number => abilityNumber(kind, name, stars);
+/** An ability's number at some ability power, as it lands on a target with no armour or ward. */
+const at = (amount: number, power: number): number => Math.round((amount * power) / 100);
 function foeAt(f: Fight, cell: number): Unit {
   const u = f.units.find((o) => o.side === 1 && o.cell === cell);
   if (!u) throw new Error(`nobody of theirs on ${cell}`);
@@ -33,10 +35,16 @@ function foeAt(f: Fight, cell: number): Unit {
 function scene(
   caster: UnitKind,
   foes: readonly number[],
-  more: { stars?: Stars; allies?: Placed[]; holding?: Record<number, ItemId[]>; keepAttack?: boolean } = {},
+  more: {
+    stars?: Stars;
+    items?: ItemId[];
+    allies?: Placed[];
+    holding?: Record<number, ItemId[]>;
+    keepAttack?: boolean;
+  } = {},
 ): { f: Fight; u: Unit } {
   const f = fightOf(
-    [onCell(caster, 0, HOME, more.stars ?? 1), ...(more.allies ?? [])],
+    [onCell(caster, 0, HOME, more.stars ?? 1, more.items ?? []), ...(more.allies ?? [])],
     foes.map((cell) => onCell("mud", 1, cell, 1, more.holding?.[cell] ?? [])),
   );
   for (const o of f.units) if (o.side === 1) still(o);
@@ -627,5 +635,135 @@ describe("what an ability says it covers, for whoever draws it", () => {
     const order = f.out.map((e) => e.t);
     expect(order.indexOf("fall")).toBeLessThan(order.indexOf("cast"));
     expect(order.indexOf("cast")).toBeLessThan(order.lastIndexOf("hit"));
+  });
+});
+
+describe("an ability in flight keeps the strength it was used with", () => {
+  // A Fairy Ring makes its holder's ability power grow the moment its ability is used, before
+  // anything the ability sent has landed: the use it grew after keeps the strength it had.
+  const RING: ItemId[] = ["fairyring"];
+  const GROW = FINISHED.fairyring.n.grow ?? 0;
+  /** The caster's ring went off, and only after that did anything the ability sent arrive. */
+  function grewFirst(events: readonly FightEvent[], u: Unit, start: number, arrived: FightEvent["t"]): void {
+    const grew = events.findIndex((e) => e.t === "item" && e.id === u.id && e.item === "fairyring");
+    expect(grew).toBeGreaterThanOrEqual(0);
+    expect(grew).toBeLessThan(events.findIndex((e) => e.t === arrived));
+    expect(u.power).toBe(start + GROW);
+  }
+
+  test("Moth with a Fairy Ring: its first dust lands as strong as it was shaken, and the next is stronger", () => {
+    const { f, u } = scene("moth", [TWO, THREE], { items: RING });
+    u.target = foeAt(f, TWO).id;
+    const start = u.power;
+    expect(start).toBe(100 + itemStats("fairyring").power);
+    const first = stepUntil(f, (e) => e.t === "hit");
+    grewFirst(first, u, start, "hit");
+    for (const cell of [TWO, THREE]) {
+      expect(hitsOn(first, foeAt(f, cell)).map((h) => h.amount)).toEqual([at(n("moth", "damage"), start)]);
+    }
+    ready(u).busyUntil = 0;
+    const second = stepUntil(f, (e) => e.t === "hit");
+    expect(hitsOn(second, foeAt(f, TWO)).map((h) => h.amount)).toEqual([at(n("moth", "damage"), start + GROW)]);
+    expect(at(n("moth", "damage"), start + GROW)).toBeGreaterThan(at(n("moth", "damage"), start));
+  });
+  test("Moth: dust already on its way lands as strong as it was shaken, though the Moth falls meanwhile", () => {
+    const { f, u } = scene("moth", [TWO], { items: RING, allies: [onCell("crab7", 0, cellAt(0, 7))] });
+    still(unitOf(f, "crab7"));
+    u.target = foeAt(f, TWO).id;
+    const start = u.power;
+    expect(only(steps(f, 1), "cast").length).toBe(1);
+    hurt(f, u, 99_999, "true", "item", null);
+    expect(u.alive).toBe(false);
+    const events = stepUntil(f, (e) => e.t === "hit");
+    expect(hitsOn(events, foeAt(f, TWO)).map((h) => h.amount)).toEqual([at(n("moth", "damage"), start)]);
+  });
+  test("Mossmote: the cushion is as thick as when it was tucked", () => {
+    const { f, u } = scene("mossmote", [FOUR], { items: RING, allies: [onCell("crab7", 0, cellAt(1, 5))] });
+    const crab = unitOf(f, "crab7");
+    crab.hp = Math.round(crab.maxHp / 2);
+    const start = u.power;
+    const events = stepUntil(f, (e) => e.t === "shield");
+    grewFirst(events, u, start, "shield");
+    const shield = only(events, "shield")[0];
+    expect(shield?.id).toBe(crab.id);
+    expect(shield?.amount).toBe(at(n("mossmote", "shield"), start));
+  });
+  test("Twig Finch: every seed of a volley is as strong as when it was spat", () => {
+    const { f, u } = scene("finch", [TWO], { items: RING });
+    const start = u.power;
+    const events = steps(f, 30);
+    grewFirst(events, u, start, "hit");
+    const hits = hitsOn(events, foeAt(f, TWO)).map((h) => h.amount);
+    expect(hits).toEqual(Array.from({ length: n("finch", "seeds") }, () => at(n("finch", "damage"), start)));
+  });
+  test("Kettle: the tea heals as much as when it was poured", () => {
+    const { f, u } = scene("kettle", [FOUR], { items: RING, allies: [onCell("crab7", 0, cellAt(1, 5))] });
+    const crab = unitOf(f, "crab7");
+    crab.maxHp = 5000;
+    crab.hp = 1000;
+    const start = u.power;
+    const events = stepUntil(f, (e) => e.t === "heal");
+    grewFirst(events, u, start, "heal");
+    expect(only(events, "heal").map((h) => [h.id, h.amount])).toEqual([[crab.id, at(n("kettle", "heal"), start)]]);
+  });
+  test("Chickaree: the cone lands as hard as when it was lobbed", () => {
+    const { f, u } = scene("chickaree", [NEAR, cellAt(0, 0)], { items: RING });
+    const start = u.power;
+    const events = stepUntil(f, (e) => e.t === "hit");
+    grewFirst(events, u, start, "hit");
+    const far = foeAt(f, cellAt(0, 0));
+    expect(hitsOn(events, far).map((h) => h.amount)).toEqual([at(n("chickaree", "damage"), start)]);
+  });
+  test("Crab #12: every skip of the pebble is as strong as when it was skimmed", () => {
+    const { f, u } = scene("crab12", [TWO, THREE, FOUR], { items: RING });
+    u.target = foeAt(f, TWO).id;
+    const start = u.power;
+    const events = steps(f, 60);
+    grewFirst(events, u, start, "hit");
+    for (const cell of [TWO, THREE, FOUR]) {
+      expect(hitsOn(events, foeAt(f, cell)).map((h) => h.amount)).toEqual([at(n("crab12", "damage"), start)]);
+    }
+  });
+  test("Lantern Gnome: every enemy lit is hurt as much as when the lantern went up", () => {
+    const { f, u } = scene("lanterngnome", [NEAR, TWO, THREE], { items: RING });
+    const start = u.power;
+    const events = steps(f, 40);
+    grewFirst(events, u, start, "hit");
+    for (const cell of [NEAR, TWO, THREE]) {
+      expect(hitsOn(events, foeAt(f, cell)).map((h) => h.amount)).toEqual([at(n("lanterngnome", "damage"), start)]);
+    }
+  });
+  test("Drizzle Frog: the big drop lands as hard as when it was spat", () => {
+    const { f, u } = scene("drizzlefrog", [TWO], { items: RING });
+    const start = u.power;
+    const events = stepUntil(f, (e) => e.t === "hit");
+    grewFirst(events, u, start, "hit");
+    expect(hitsOn(events, foeAt(f, TWO)).map((h) => h.amount)).toEqual([at(n("drizzlefrog", "damage"), start)]);
+  });
+  test("Crab #23: each plaster heals as much as when it was handed out", () => {
+    const { f, u } = scene("crab23", [FOUR], {
+      items: RING,
+      allies: [onCell("crab7", 0, cellAt(2, 4)), onCell("emberkit", 0, cellAt(4, 4))],
+    });
+    for (const kind of ["crab7", "emberkit"] as const) {
+      const o = unitOf(f, kind);
+      o.maxHp = 10_000;
+      o.hp = 2000;
+    }
+    const start = u.power;
+    const events = steps(f, 20);
+    grewFirst(events, u, start, "heal");
+    const healed = only(events, "heal");
+    expect(healed.length).toBe(2);
+    for (const h of healed) expect(h.amount).toBe(at(n("crab23", "heal"), start));
+  });
+  test("Gust: the wind hurts as much as when it was blown", () => {
+    const { f, u } = scene("gust", [TWO], { items: RING });
+    const target = foeAt(f, TWO);
+    target.busyUntil = 10_000;
+    const start = u.power;
+    const events = stepUntil(f, (e) => e.t === "hit");
+    grewFirst(events, u, start, "hit");
+    expect(hitsOn(events, target).map((h) => h.amount)).toEqual([at(n("gust", "damage"), start)]);
   });
 });
