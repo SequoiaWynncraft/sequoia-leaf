@@ -1,15 +1,18 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { followLeaf, restart, start, where } from "./live.ts";
+import { followLeaf, keepLeaf, passLeaf, restart, start, where } from "./live.ts";
 import { isRecord, type Listening } from "./net.ts";
-import { balance, forgetLedger, leafOpen } from "./purse.ts";
+import { balance, earn, forgetLedger, fromLedger, grant, leafOpen } from "./purse.ts";
 import { HELLO, MemoryStore, type Reply, type Sent, type Standin, standin, TESTER } from "./standin.ts";
 
 let world: Standin | null = null;
 let ears: Listening | null = null;
+let page: (() => void) | null = null;
 afterEach(() => {
   ears?.stop();
   ears = null;
+  page?.();
+  page = null;
   world?.done();
   world = null;
   restart();
@@ -148,6 +151,116 @@ describe("following the member's Leaf", () => {
     expect(world.sent.map((s) => s.path)).toContain("/v1/me/events/stream?after=140");
     expect(heard).toEqual([141]);
     expect(balance().leaf).toBe(2560);
+  });
+});
+
+const ORIGIN = "https://leaf.example";
+
+/**
+ * Stands in for a game's page in the town's frame: a window whose parent is the town, on the same
+ * origin, that hears messages. Returns how the town says something to it.
+ */
+function aFramedPage(): (data: unknown) => void {
+  const town = { location: { origin: ORIGIN }, postMessage: (): void => undefined };
+  const win = Object.assign(new EventTarget(), { location: { origin: ORIGIN }, parent: town });
+  Object.defineProperty(globalThis, "window", { value: win, configurable: true });
+  page = () => {
+    Reflect.deleteProperty(globalThis, "window");
+  };
+  return (data) => {
+    win.dispatchEvent(new MessageEvent("message", { data, origin: ORIGIN }));
+  };
+}
+
+describe("the member's Leaf in a game in the town's frame", () => {
+  test("the town's word is taken as a fresh read of the ledger", async () => {
+    world = live({ status: 200, body: TESTER }, { top: false });
+    await start();
+    const town = aFramedPage();
+    const stop = keepLeaf();
+    expect(balance().leaf).toBe(2450);
+    town({ town: "leaf", leaf: 2560 });
+    expect(balance().leaf).toBe(2560);
+    expect(leafOpen()).toBe(false);
+    // In the frame the town listens to the member's news, so the game does not.
+    expect(world.sent.map((s) => s.path)).toEqual(["/v1/game/hello", "/v1/game/me"]);
+    stop();
+    town({ town: "leaf", leaf: 2700 });
+    expect(balance().leaf).toBe(2560);
+  });
+
+  test("nothing but a whole number of Leaf, none below nothing, is taken", async () => {
+    world = live({ status: 200, body: TESTER }, { top: false });
+    await start();
+    const town = aFramedPage();
+    const stop = keepLeaf();
+    for (const leaf of [-1, 2600.5, "2600", Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, null, undefined, [2600]]) {
+      town({ town: "leaf", leaf });
+    }
+    town({ town: "leaf" });
+    town({ town: "purse", leaf: 2600 });
+    expect(balance().leaf).toBe(2450);
+    town({ town: "leaf", leaf: 0 });
+    expect(balance().leaf).toBe(0);
+    stop();
+  });
+
+  test("with the made-up guild, the town's word about Leaf is not taken", async () => {
+    world = standin({ "GET /v1/game/hello": "offline" }, { top: false });
+    await start();
+    const town = aFramedPage();
+    const stop = keepLeaf();
+    const before = balance().leaf;
+    town({ town: "leaf", leaf: before + 500 });
+    expect(balance().leaf).toBe(before);
+    expect(leafOpen()).toBe(true);
+    stop();
+  });
+
+  test("opened on its own, the game listens to the member's news itself", async () => {
+    world = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/me/events/stream": memberStream([], 140),
+    });
+    await start();
+    const stop = keepLeaf();
+    await Bun.sleep(20);
+    expect(world.sent.map((s) => s.path)).toContain("/v1/me/events/stream?after=140");
+    stop();
+  });
+
+  test("the town says each new Leaf the ledger gives, once the game is ready to hear it", async () => {
+    world = live({ status: 200, body: TESTER });
+    await start();
+    const said: number[] = [];
+    const leaf = passLeaf((n) => said.push(n));
+    // Paid while the game is still opening: said when it is ready, and only the newest.
+    fromLedger(2500);
+    fromLedger(2560);
+    expect(said).toEqual([]);
+    leaf.ready();
+    expect(said).toEqual([2560]);
+    // The same Leaf again, or Coins, is nothing to say.
+    fromLedger(2560);
+    earn(40, "a test");
+    expect(said).toEqual([2560]);
+    fromLedger(2670);
+    expect(said).toEqual([2560, 2670]);
+    leaf.stop();
+    fromLedger(2800);
+    expect(said).toEqual([2560, 2670]);
+  });
+
+  test("with the made-up guild, the town says nothing about Leaf", async () => {
+    world = standin({ "GET /v1/game/hello": "offline" });
+    await start();
+    const said: number[] = [];
+    const leaf = passLeaf((n) => said.push(n));
+    leaf.ready();
+    grant(300, "a test");
+    expect(said).toEqual([]);
+    leaf.stop();
   });
 });
 

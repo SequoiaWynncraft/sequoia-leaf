@@ -6,10 +6,10 @@
  * start of that fight, which plays out the same from its seed.
  */
 import { BOON_IDS, type BoonId, boonNumber, isBoonId } from "./content/boons.ts";
-import { type FigureId, FIGURES, isBossId, isFigureId, isStars } from "./content/figures.ts";
-import { HOLDS, isComponentId, isFinishedId, isItemId, type ItemId } from "./content/items.ts";
+import { FIGURE_IDS, type FigureId, FIGURES, isBossId, isFigureId, isStars } from "./content/figures.ts";
+import { FINISHED_IDS, HOLDS, isComponentId, isFinishedId, isItemId, type ItemId } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, ROOMS, TRAIL_COUNT } from "./content/rooms.ts";
-import { isTraitId, traitNumber } from "./content/traits.ts";
+import { isTraitId, TRAIT_IDS, traitNumber } from "./content/traits.ts";
 import { SEATS } from "./hex.ts";
 import { isParty } from "./party.ts";
 import { type Choice, fieldCap, fielded, type Piece, type RoomRecord, type Run } from "./run.ts";
@@ -109,7 +109,7 @@ function readRun(v: unknown): Run {
   if (bench.length !== ECONOMY.bench) bad("the bench");
   const ids = [...board, ...bench].flatMap((p) => (p ? [p.id] : []));
   unique(ids, "the figures' numbers");
-  const open = unique(each(r.open, isFigureId, 64, "the open figures"), "the open figures");
+  const open = unique(each(r.open, isFigureId, FIGURE_IDS.length, "the open figures"), "the open figures");
   if (!open.some((id) => FIGURES[id].tier === 1)) bad("the open figures");
   const seen = record(r.seen, "the almanac notes");
   const foe = one(r.foe, isParty, "who is waiting in the room");
@@ -140,10 +140,13 @@ function readRun(v: unknown): Run {
     won: flag(r.won, "the ending"),
     left: flag(r.left, "the ending"),
     seen: {
-      fielded: unique(each(seen.fielded, isFigureId, 64, "the almanac notes"), "the almanac notes"),
-      threeStars: unique(each(seen.threeStars, isFigureId, 64, "the almanac notes"), "the almanac notes"),
-      forged: unique(each(seen.forged, isFinishedId, 64, "the almanac notes"), "the almanac notes"),
-      topped: unique(each(seen.topped, isTraitId, 64, "the almanac notes"), "the almanac notes"),
+      fielded: unique(each(seen.fielded, isFigureId, FIGURE_IDS.length, "the almanac notes"), "the almanac notes"),
+      threeStars: unique(
+        each(seen.threeStars, isFigureId, FIGURE_IDS.length, "the almanac notes"),
+        "the almanac notes",
+      ),
+      forged: unique(each(seen.forged, isFinishedId, FINISHED_IDS.length, "the almanac notes"), "the almanac notes"),
+      topped: unique(each(seen.topped, isTraitId, TRAIT_IDS.length, "the almanac notes"), "the almanac notes"),
     },
   };
   // The parts have to agree with each other, too.

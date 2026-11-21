@@ -8,7 +8,7 @@
  */
 import { refresh, settle } from "@sequoia-leaf/kit/card.ts";
 import { before, pickUp, pull } from "@sequoia-leaf/kit/cloud.ts";
-import { followLeaf, shutCard, start } from "@sequoia-leaf/kit/live.ts";
+import { keepLeaf, shutCard, start } from "@sequoia-leaf/kit/live.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
 import { fromTown, inTown, tell } from "@sequoia-leaf/kit/shell.ts";
@@ -175,7 +175,8 @@ async function boot(): Promise<void> {
   renderPages();
   stage.layout();
 
-  fromTown(() => {
+  fromTown((msg) => {
+    if (msg.town !== "closing") return;
     unpick();
     saveNow();
     sendCard();
@@ -187,8 +188,8 @@ async function boot(): Promise<void> {
   });
   sendCard();
   here("table");
-  // Opened on its own, nobody else is listening for the member's Leaf.
-  if (live && !inTown()) followLeaf();
+  // In the town, the town says when the member's Leaf changes; opened on its own, the table listens itself.
+  if (live) keepLeaf();
   tell({ town: "ready" });
 }
 

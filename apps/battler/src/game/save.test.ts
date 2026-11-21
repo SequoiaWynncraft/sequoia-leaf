@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { planRoom, SENSIBLE } from "./bot.ts";
+import { FIGURE_IDS } from "./content/figures.ts";
+import { FINISHED_IDS } from "./content/items.ts";
+import { TRAIT_IDS } from "./content/traits.ts";
 import { beginFight, buy, choose, type Run, rustle, startRun, takeTakings } from "./run.ts";
 import { loadRun, SAVE_VERSION, saveRun } from "./save.ts";
 
@@ -87,6 +90,17 @@ describe("saving a run", () => {
     const original = takeTakings(fighting);
     expect(takeTakings(back)).toEqual(original);
     expect(begun.ok).toBe(true);
+  });
+  test("a run that has met every figure, forged every item and topped every trait loads back whole", () => {
+    const run = midRun(31, 6);
+    run.open = [...FIGURE_IDS];
+    run.seen = {
+      fielded: [...FIGURE_IDS],
+      threeStars: [...FIGURE_IDS],
+      forged: [...FINISHED_IDS],
+      topped: [...TRAIT_IDS],
+    };
+    expect(reload(run)).toEqual(run);
   });
   test("a finished run loads as finished", () => {
     const run = midRun(3, 99);

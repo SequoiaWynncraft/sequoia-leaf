@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { TRAIL_COUNT } from "../game/content/rooms.ts";
 import {
   BASES,
   CLOTHS,
@@ -12,6 +13,7 @@ import {
   PREFS_VERSION,
   savePrefs,
 } from "./keep.ts";
+import { NUDGES } from "./logic.ts";
 
 const kept = (prefs: unknown, v: unknown = PREFS_VERSION): string =>
   JSON.stringify({ game: "little-raid-prefs", v, prefs });
@@ -25,6 +27,13 @@ describe("what the table keeps", () => {
     prefs.speed = 4;
     prefs.trail = 1;
     prefs.taught = ["pick", "buy"];
+    expect(loadPrefs(savePrefs(prefs))).toEqual(prefs);
+  });
+
+  test("prefs on the last trail, with every nudge given, come back as they were saved", () => {
+    const prefs = newPrefs();
+    prefs.trail = TRAIL_COUNT - 1;
+    prefs.taught = [...NUDGES];
     expect(loadPrefs(savePrefs(prefs))).toEqual(prefs);
   });
 

@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { leaf, MAX_SAVE_BYTES, type PlayerId, playerId } from "@sequoia-leaf/core";
-import { Layer, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
+import { SqlClient } from "effect/sql";
 
 import { Events, type PlayerEvent } from "../src/events/store.ts";
 import { API_POLICY } from "../src/http/headers.ts";
 import { StreamTuning } from "../src/http/streams.ts";
+import { Ledger } from "../src/ledger/store.ts";
 import type { questJson } from "../src/quests/json.ts";
 import {
   type Backend,
@@ -367,6 +369,97 @@ describe("GET /v1/game/me", () => {
     await raided(bob, 220);
 
     expect(await (await get("/v1/game/me")).json()).toMatchObject({ event_cursor: 0 });
+  });
+
+  it("never gives a cursor past what the Leaf beside it holds, though a raid is paid between its two reads", async () => {
+    /** Alice's raid, paid as the credit sync pays one: its Leaf and its event in one transaction. */
+    const payout = Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const ledger = yield* Ledger;
+      const events = yield* Events;
+      yield* sql.withTransaction(
+        Effect.gen(function* () {
+          yield* ledger.post(
+            { kind: "earn", playerId: alice, amount: leaf(110), source: "raid", idempotencyKey: "raid:2:alice" },
+            clock.now,
+          );
+          yield* events.insert(
+            alice,
+            {
+              type: "leaf_earned",
+              data: {
+                source: "raid",
+                leaf: 110,
+                xp: 110,
+                detail: "The Nameless Anomaly",
+                occurred_at: "2026-11-25T11:58:00.000Z",
+              },
+            },
+            clock.now,
+          );
+        }),
+      );
+    }).pipe(Effect.orDie);
+    const paying = { landed: false, pay: (): Promise<void> => Promise.resolve() };
+    // Whichever of the two reads comes first, the raid is paid, from elsewhere, the moment it has its answer.
+    const thenPaid = <A>(read: Effect.Effect<A>): Effect.Effect<A> =>
+      Effect.tap(read, () => {
+        if (paying.landed) {
+          return Effect.void;
+        }
+        paying.landed = true;
+        return Effect.promise(() => paying.pay());
+      });
+    const raced = testLeaf(
+      clock,
+      fetcher,
+      {},
+      {
+        mojang: mojang.service,
+        ledger: (real) => ({ ...real, account: (player) => thenPaid(real.account(player)) }),
+        events: (real) => ({ ...real, latestIdOf: (player) => thenPaid(real.latestIdOf(player)) }),
+      },
+    );
+    paying.pay = () => raced.run(payout);
+    const racedApp = raced.app();
+    await raced.post(
+      { kind: "earn", playerId: alice, amount: leaf(1300), source: "staff", idempotencyKey: "a" },
+      clock.now,
+    );
+    await raced.run(
+      Events.use((events) =>
+        events.insert(
+          alice,
+          {
+            type: "leaf_earned",
+            data: {
+              source: "raid",
+              leaf: 110,
+              xp: 110,
+              detail: "The Nameless Anomaly",
+              occurred_at: "2026-11-25T11:00:00.000Z",
+            },
+          },
+          clock.now,
+        ),
+      ),
+    );
+
+    const response = await racedApp.request("/v1/game/me", { headers: { Cookie: "seq_session=alice-token" } });
+    const body = Schema.decodeUnknownSync(Schema.Struct({ leaf: Schema.Number, event_cursor: Schema.Number }))(
+      await response.json(),
+    );
+    await racedApp.dispose();
+    await raced.dispose();
+
+    expect(paying.landed).toBe(true);
+    // Event 2 is the raid paid in between, and its 110 Leaf. Up to event 1, the balance is 1300.
+    // The cursor may be older than the balance, which only makes the game ask again; never newer.
+    expect([
+      { event_cursor: 1, leaf: 1300 },
+      { event_cursor: 1, leaf: 1410 },
+      { event_cursor: 2, leaf: 1410 },
+    ]).toContainEqual(body);
   });
 });
 

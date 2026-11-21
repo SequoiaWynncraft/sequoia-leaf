@@ -2,12 +2,14 @@
  * The doors into the games. A game is a page of its own; going through its door puts that page in
  * a frame over the whole town. The frame opens out of the spot the view closed in on, and closes
  * back into it. The game says `ready` when it has drawn, `leave` to come back, and `news` for a
- * line in the town's feed; the town says `closing` before it puts the game away. A game that does
+ * line in the town's feed; the town says `closing` before it puts the game away, and `leaf` each
+ * time the guild's ledger gives the member a new Leaf while the game is open. A game that does
  * not say `ready` (not built, not served) gets a note and a way back instead of an empty frame; one
  * that says it late opens over the note.
  */
 
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { passLeaf } from "@sequoia-leaf/kit/live.ts";
 import { fromGame, toGame } from "@sequoia-leaf/kit/shell.ts";
 import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { must, type Pt } from "@sequoia-leaf/kit/util.ts";
@@ -102,6 +104,7 @@ export function goIn(game: Game, asks: Asks): Visit {
 
   function putAway(): void {
     stop();
+    leaf.stop();
     root.replaceChildren();
     root.hidden = true;
     root.classList.remove("dark");
@@ -131,9 +134,14 @@ export function goIn(game: Game, asks: Asks): Visit {
     }, SAVING);
   }
 
+  // The game took the member's Leaf as it opened; the town, which hears their news, says what changes.
+  const leaf = passLeaf((n) => {
+    toGame(frame, { town: "leaf", leaf: n });
+  });
   const stop = fromGame(frame, (msg) => {
     if (msg.town === "ready") {
       ready = true;
+      leaf.ready();
       open();
     } else if (msg.town === "leave") leave();
     else asks.news(msg.text, msg.tone ?? "gold");

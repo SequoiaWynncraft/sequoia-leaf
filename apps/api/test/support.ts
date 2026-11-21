@@ -9,6 +9,7 @@ import { routerConfig, Routes, Stores } from "../src/app.ts";
 import { AppConfig, type Settings, settings } from "../src/config.ts";
 import { databaseAt } from "../src/db.ts";
 import type { CreditSource } from "../src/earning/sync.ts";
+import { Events } from "../src/events/store.ts";
 import { Mojang, MojangError, type MojangProfile } from "../src/game/mojang.ts";
 import { Ledger } from "../src/ledger/store.ts";
 
@@ -67,6 +68,10 @@ export function testConfig(overrides: Partial<Settings> = {}): Settings {
 export interface Fakes {
   /** Mojang, for skins and names. Without it Leaf asks the network stand-in, as it would ask Mojang. */
   readonly mojang?: Mojang["Service"];
+  /** Steps in between Leaf and its ledger, such as to have something happen between two reads of it. */
+  readonly ledger?: (real: Ledger["Service"]) => Ledger["Service"];
+  /** Steps in between Leaf and its events, the same way. */
+  readonly events?: (real: Events["Service"]) => Events["Service"];
 }
 
 /**
@@ -111,7 +116,19 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     handClock,
     Layer.succeed(References.MinimumLogLevel)("None"),
   );
-  const layer = Stores.pipe(Layer.provideMerge(databaseAt(":memory:")), Layer.provideMerge(outside));
+  const stores = Stores.pipe(Layer.provideMerge(databaseAt(":memory:")), Layer.provideMerge(outside));
+  // The real stores, or whatever the test puts in between; everything built on top sees the same.
+  const between = Layer.mergeAll(
+    Layer.effect(
+      Ledger,
+      Ledger.useSync((real) => fakes.ledger?.(real) ?? real),
+    ),
+    Layer.effect(
+      Events,
+      Events.useSync((real) => fakes.events?.(real) ?? real),
+    ),
+  );
+  const layer = between.pipe(Layer.provideMerge(stores));
   // Layers built through the same memo map are built once, so `run` and `app` see the same database.
   const memoMap = Layer.makeMemoMapUnsafe();
   const runtime = ManagedRuntime.make(layer, { memoMap });

@@ -16,8 +16,8 @@ on("earn", () => {
 on("news", () => {
   tell({ town: "news", text: "The stand-in game says hello.", tone: "leaf" });
 });
-fromTown(() => {
+fromTown((msg) => {
   const heard = document.getElementById("heard");
-  if (heard) heard.textContent = "The town said: closing.";
+  if (heard) heard.textContent = msg.town === "leaf" ? `The town said: ${msg.leaf} Leaf.` : "The town said: closing.";
 });
 if (!new URLSearchParams(location.search).has("silent")) tell({ town: "ready" });

@@ -13,6 +13,9 @@
 
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 
+import { TRAIL_COUNT } from "../game/content/rooms.ts";
+import { NUDGES } from "./logic.ts";
+
 export const PREFS_VERSION = 1;
 export const KEYS = {
   run: "raid.run.v1",
@@ -138,10 +141,16 @@ export function loadPrefs(text: string | null): Prefs {
   if (lantern && owns(prefs, "lantern", lantern)) prefs.lantern = lantern;
   if (bases && owns(prefs, "bases", bases)) prefs.bases = bases;
   if (p.speed === 1 || p.speed === 2 || p.speed === 4) prefs.speed = p.speed;
-  if (typeof p.trail === "number" && Number.isInteger(p.trail) && p.trail >= 0 && p.trail < 3) prefs.trail = p.trail;
+  if (typeof p.trail === "number" && Number.isInteger(p.trail) && p.trail >= 0 && p.trail < TRAIL_COUNT)
+    prefs.trail = p.trail;
   if (Array.isArray(p.taught)) {
     for (const name of p.taught) {
-      if (typeof name === "string" && name.length < 40 && !prefs.taught.includes(name) && prefs.taught.length < 64)
+      if (
+        typeof name === "string" &&
+        // Only nudges the game still has: an old name must not take the place of a real one.
+        NUDGES.some((known) => known === name) &&
+        !prefs.taught.includes(name)
+      )
         prefs.taught.push(name);
     }
   }
