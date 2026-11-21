@@ -4,7 +4,7 @@
  * and the camp both keep their things here (`save.ts` says what is in it).
  */
 
-import { MOST_PARCELS } from "./camp.ts";
+import { MOST_OWNED, MOST_PARCELS, owned } from "./camp.ts";
 import { changed, G, hooks, watch } from "./game.ts";
 import { load, store } from "./keep.ts";
 import { waiting } from "./mail.ts";
@@ -34,23 +34,29 @@ export function remember(): void {
 /** Whether another parcel may wait by the trail: no more than `MOST_PARCELS` may, so that none is lost. */
 export const roomByTrail = (): boolean => camp.parcels.length < MOST_PARCELS;
 
+/** Whether the member may have another of a thing: no more than `MOST_OWNED` of any one, so that none is lost. */
+export const roomFor = (thing: string): boolean => owned(camp, thing) < MOST_OWNED;
+
 /**
  * Something bought or won is on its way to the camp: it waits by the trail to be unpacked there.
- * Says whether it went; while the trail is full it does not.
+ * Says whether it went; while the trail is full, or the member has as many of it as may be had, it
+ * does not.
  */
 export function sendToCamp(thing: string): boolean {
-  if (!roomByTrail()) return false;
+  if (!roomByTrail() || !roomFor(thing)) return false;
   camp.parcels.push(thing);
   changed();
   return true;
 }
 
 /**
- * Buys a thing for the camp. `pay` takes the price, and is not asked while the trail is full, so a
- * thing that cannot be sent costs nothing. Says whether it was sent, or why not.
+ * Buys a thing for the camp. `pay` takes the price, and is not asked while the trail is full or the
+ * member has as many of it as may be had, so a thing that cannot be sent costs nothing. Says
+ * whether it was sent, or why not.
  */
-export function buyForCamp(thing: string, pay: () => boolean): "sent" | "full" | "short" {
+export function buyForCamp(thing: string, pay: () => boolean): "sent" | "full" | "plenty" | "short" {
   if (!roomByTrail()) return "full";
+  if (!roomFor(thing)) return "plenty";
   if (!pay()) return "short";
   return sendToCamp(thing) ? "sent" : "full";
 }

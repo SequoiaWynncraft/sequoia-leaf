@@ -316,11 +316,17 @@ function shopRow(
     [glyph(kind === "leaf" ? "leaf" : "coin"), String(s.price)],
     (b) => {
       const sent = buyForCamp(thing.id, () => pay(kind, b, s.price, thing.name));
-      if (sent === "full") {
-        // Nothing is charged: as many parcels are waiting by the trail as may.
+      if (sent === "full" || sent === "plenty") {
+        // Nothing is charged: as many parcels are waiting by the trail as may, or the member has
+        // as many of this thing as may be had.
         sfx.no();
         replay(b, "shake");
-        hooks.feed("Too many parcels are waiting by the trail. Unpack some first.", "coral");
+        hooks.feed(
+          sent === "full"
+            ? "Too many parcels are waiting by the trail. Unpack some first."
+            : "You have plenty of those.",
+          "coral",
+        );
         return;
       }
       if (sent !== "sent") return;

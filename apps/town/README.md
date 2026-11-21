@@ -92,8 +92,10 @@ in off the trail. Walking out past the two lantern posts on the camp's east side
   waits by the trail as a parcel, and the parcels open one after another when the member is in:
   each thing flies to a clear spot and lands. As many as two hundred parcels may wait; with that
   many by the trail the market and the Treasury sell nothing more (and take nothing) until some are
-  unpacked, and a trophy waits in its game. A thing is in the camp, and kept, the moment its parcel
-  opens; the flight is only how it is seen arriving.
+  unpacked, and a trophy waits in its game. A member may have as many as 999 of any one thing,
+  standing, put away and waiting together; with that many the market and the Treasury sell no more
+  of it (and take nothing), and a present or a trophy of it is not added. A thing is in the camp,
+  and kept, the moment its parcel opens; the flight is only how it is seen arriving.
 - **The cabin.** Walking up to its door opens the member's own things: their rank, level and week
   with the guild, what they are wearing (each thing put on or taken off), the trophies they have
   won, and who lives with them and what would bring the next. In town the member's face in the
