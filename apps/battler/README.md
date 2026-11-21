@@ -28,10 +28,15 @@ nothing to come back for daily. The rules themselves are in the game: tap anyone
 Guild-mates' parties do not exist yet. Until they do, a friendly bout meets the party a plain
 shopper in `sim.ts` would have built from a seed, under a made-up name.
 
-## Looking at it without playing
+## The rebuild
 
-`review/balance.ts` plays hundreds of runs with that plain shopper, each with a taste for one way of
-building a party, and prints how far each got: a rough gauge for tuning the waves.
+`src/game/` is the game being rebuilt as a board-and-shop auto battler: a hex board, a rolling
+stall, traits, three of a kind, items, boons, fifteen rooms. It has no screen in it yet, and its
+own README says how it works and how a screen is meant to drive it. `bun test` runs its tests with
+the old ones. `review/balance.ts` now plays whole runs of the new game with bots of different habits
+and prints how far each gets (`bun review/balance.ts 200 0`).
+
+## Looking at the old page without playing
 
 The page puts a handle on `window.battler` for driving it from a script: headless browsers draw
 about a frame a second, so `battler.tick(ms)` moves the fight's clock by hand, and
