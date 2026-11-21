@@ -127,21 +127,21 @@ describe("events from the credit sync", () => {
         type: "leaf_earned",
         data: {
           source: "raid",
-          leaf: 110,
-          xp: 110,
+          leaf: 100,
+          xp: 100,
           detail: "The Nameless Anomaly",
           occurred_at: "2026-11-04T12:01:00.000Z",
         },
         createdAt: T0 + 5 * MINUTE,
       },
-      { type: "leaf_earned", data: { leaf: 110 } },
+      { type: "leaf_earned", data: { leaf: 100 } },
       {
         type: "quest_completed",
         data: {
           quest: { id: "daily:1", title: "Complete 2 raids", progress: 2, target: 2, reward: { leaf: 200, xp: 100 } },
         },
       },
-      // 110 + 110 + 100 XP passes the 300 the first level takes, and level 2 pays 30 Leaf.
+      // 100 + 100 + 100 XP reaches the 300 the first level takes, and level 2 pays 30 Leaf.
       { type: "level_up", data: { level: 2, leaf: 30 } },
     ]);
   });

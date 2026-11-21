@@ -25,11 +25,22 @@ export interface AchievementAward {
 
 export interface AchievementRules {
   /**
-   * Ladders whose milestones pay Leaf, by the start of their key. Only what
-   * members do for the guild pays: its raids and its wars. Profession, role
-   * and badge ladders pay nothing.
+   * Ladders whose milestones pay Leaf, by the start of their key, each with its
+   * own amounts; the first that matches decides. Only what members do for the
+   * guild pays: its raids and its wars. Profession, role and badge ladders pay
+   * nothing.
    */
-  readonly payingLadders: readonly string[];
+  readonly ladders: readonly PayingLadder[];
+  /**
+   * Whether a milestone's Leaf also counts as XP. Levels measure play, and the
+   * raids or wars on the way to a milestone already gave their XP.
+   */
+  readonly grantsXp: boolean;
+}
+
+export interface PayingLadder {
+  /** The start of the ladder keys this applies to, such as `raid:`. */
+  readonly prefix: string;
   /**
    * Leaf for each milestone, by milestone id. A milestone staff add later has
    * an id of its own and pays nothing until it is listed here.
@@ -39,8 +50,9 @@ export interface AchievementRules {
 
 /** The Leaf a milestone pays: 0 when its ladder or its milestone does not pay. */
 export function leafForAward(award: AchievementAward, rules: AchievementRules): number {
-  if (award.milestoneId === null || !rules.payingLadders.some((prefix) => award.ladder.startsWith(prefix))) {
+  if (award.milestoneId === null) {
     return 0;
   }
-  return rules.leafByMilestone.get(award.milestoneId) ?? 0;
+  const ladder = rules.ladders.find(({ prefix }) => award.ladder.startsWith(prefix));
+  return ladder?.leafByMilestone.get(award.milestoneId) ?? 0;
 }

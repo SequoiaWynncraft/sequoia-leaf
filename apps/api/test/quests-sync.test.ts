@@ -70,7 +70,7 @@ describe("quests in the credit sync", () => {
     await sync(source, T0 + 5 * MINUTE);
 
     expect(await questRows()).toEqual(["daily:1 1", "repeatable:1 1", "weekly:1 1"]);
-    expect(await leaf.account(alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
+    expect(await leaf.account(alice)).toEqual({ playerId: alice, balance: 100, xp: 100 });
   });
 
   it("pays a finished quest's Leaf and XP with the raid that finished it", async () => {
@@ -79,9 +79,9 @@ describe("quests in the credit sync", () => {
 
     const result = await sync(source, T0 + 5 * MINUTE);
 
-    // Two raids at 110, the daily at 200 and the repeatable at 50.
-    expect(result).toEqual({ status: "synced", recorded: 2, leafPaid: 470 });
-    expect(await leaf.account(alice)).toEqual({ playerId: alice, balance: 470, xp: 345 });
+    // Two raids at 100, the daily at 200 and the repeatable at 50.
+    expect(result).toEqual({ status: "synced", recorded: 2, leafPaid: 450 });
+    expect(await leaf.account(alice)).toEqual({ playerId: alice, balance: 450, xp: 325 });
     expect(await questRows()).toEqual(["daily:1 2 done", "repeatable:1 2 done", "repeatable:2 0", "weekly:1 2"]);
     const quests = await leaf.run(Ledger.use((ledger) => ledger.earns(alice, "quest")));
     const paid = quests.map(({ entry }) => entry).toSorted((a, b) => a.idempotencyKey.localeCompare(b.idempotencyKey));
@@ -101,8 +101,8 @@ describe("quests in the credit sync", () => {
     await sync(source, T0 + 10 * MINUTE);
 
     expect(await questRows()).toEqual(["daily:1 2 done", "repeatable:1 2 done", "repeatable:2 1", "weekly:1 3 done"]);
-    // Three raids at 110, the daily at 200, the repeatable at 50 and the weekly at 800.
-    expect((await leaf.account(alice)).balance).toBe(1380);
+    // Three raids at 100, the daily at 200, the repeatable at 50 and the weekly at 800.
+    expect((await leaf.account(alice)).balance).toBe(1350);
     expect((await book(alice))?.dailyCharges).toBe(0);
   });
 
@@ -135,7 +135,7 @@ describe("quests in the credit sync", () => {
     const again = await sync(source, T0 + 6 * MINUTE);
 
     expect(again).toEqual({ status: "synced", recorded: 0, leafPaid: 0 });
-    expect((await leaf.account(alice)).balance).toBe(470);
+    expect((await leaf.account(alice)).balance).toBe(450);
   });
 });
 
@@ -169,8 +169,8 @@ describe("a quest that raids or wars can finish", () => {
     activities.push(war(3, alice, T0 + 6 * MINUTE), war(4, alice, T0 + 7 * MINUTE));
     await leaf.run(syncCredits(source, eitherRules, T0 + 10 * MINUTE, "recent"));
 
-    // One raid at 110, three wars at 40 and the quest at 300.
-    expect((await leaf.account(alice)).balance).toBe(530);
+    // One raid at 100, three wars of 40 war points at 20 and the quest at 300.
+    expect((await leaf.account(alice)).balance).toBe(460);
     const [finished] = await completedSince(alice, T0);
     expect(finished === undefined ? undefined : questJson(finished)).toMatchObject({
       id: "daily:1",
@@ -217,8 +217,8 @@ describe("a season rating quest in the credit sync", () => {
     activities.push(raid(2, alice, T0 + 6 * MINUTE, 220));
     await leaf.run(syncCredits(source, ratingRules, T0 + 10 * MINUTE, "recent"));
 
-    // Two raids at 440 and 220, and the quest at 250.
-    expect((await leaf.account(alice)).balance).toBe(910);
+    // Two raids at 100 each, whatever their season rating, and the quest at 250.
+    expect((await leaf.account(alice)).balance).toBe(450);
     const [finished] = await completedSince(alice, T0);
     expect(finished === undefined ? undefined : questJson(finished)).toMatchObject({
       id: "daily:1",
