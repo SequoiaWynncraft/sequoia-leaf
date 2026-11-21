@@ -127,8 +127,13 @@ function get(path: string, sent: Sent = { cookie: "alice-token" }) {
   return send("GET", path, sent);
 }
 
-function save(slot: string, version: number, data: unknown, sent: Sent = alicesPage) {
-  return send("PUT", `/v1/game/saves/${slot}`, { ...sent, body: { version, data } });
+/** Who each session belongs to. */
+const signedIn: Readonly<Record<string, PlayerId>> = { "alice-token": alice, "bob-token": bob, "carol-token": carol };
+
+/** A save as the game sends it: as the member the page believes it is, by default whoever it is signed in as. */
+function save(slot: string, version: number, data: unknown, sent: Sent = alicesPage, player?: string) {
+  const as = player ?? signedIn[sent.bearer ?? sent.cookie ?? ""] ?? "nobody";
+  return send("PUT", `/v1/game/saves/${slot}`, { ...sent, body: { player: as, version, data } });
 }
 
 function happened(player: PlayerId, event: PlayerEvent): Promise<void> {
@@ -418,12 +423,14 @@ describe("saves", () => {
   it("refuses data that is not an object, and a body that is not a save", async () => {
     const answers = await Promise.all(
       [
-        { version: 0, data: [1, 2] },
-        { version: 0, data: "text" },
-        { version: 0, data: null },
-        { version: 0 },
-        { version: -1, data: {} },
-        { version: 1.5, data: {} },
+        { player: alice, version: 0, data: [1, 2] },
+        { player: alice, version: 0, data: "text" },
+        { player: alice, version: 0, data: null },
+        { player: alice, version: 0 },
+        { player: alice, version: -1, data: {} },
+        { player: alice, version: 1.5, data: {} },
+        { version: 0, data: {} },
+        { player: 1, version: 0, data: {} },
         "{ not json",
       ].map(async (body) => {
         const response = await send("PUT", "/v1/game/saves/town", { ...alicesPage, body });
@@ -431,7 +438,7 @@ describe("saves", () => {
       }),
     );
 
-    expect(answers).toEqual(Array.from({ length: 7 }, () => [400, "invalid_save"]));
+    expect(answers).toEqual(Array.from({ length: 9 }, () => [400, "invalid_save"]));
     expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
   });
 
@@ -451,6 +458,25 @@ describe("saves", () => {
     expect(response.status).toBe(413);
     expect(await response.json()).toMatchObject({ code: "save_too_large" });
     expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
+  });
+
+  it("refuses a save from a page that believes it is someone else with not_you, storing nothing", async () => {
+    await save("purse", 0, { coins: 300 });
+
+    // Alice's page, left open after Bob signed in in another tab: Bob's cookie, Alice's state.
+    const alicesOldPage = await save("purse", 0, { coins: 300 }, { cookie: "bob-token", origin: ORIGIN }, alice);
+    const overAlice = await save("purse", 1, { coins: 5 }, alicesPage, bob);
+    const nobody = await save("works", 0, { coins: 5 }, { bearer: "alice-token" }, "");
+
+    expect([alicesOldPage.status, overAlice.status, nobody.status]).toEqual([409, 409, 409]);
+    expect(await alicesOldPage.json()).toEqual({
+      code: "not_you",
+      message: "This page is signed in as someone else now. Load it again",
+    });
+    expect([await codeOf(overAlice), await codeOf(nobody)]).toEqual(["not_you", "not_you"]);
+    expect(await (await get("/v1/game/saves", { bearer: "bob-token" })).json()).toEqual({ saves: [] });
+    expect(await (await get("/v1/game/saves/purse")).json()).toMatchObject({ version: 1, data: { coins: 300 } });
+    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM saves`)).toEqual([{ n: 1 }]);
   });
 
   it("keeps each member's saves their own", async () => {

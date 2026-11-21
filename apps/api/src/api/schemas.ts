@@ -116,6 +116,8 @@ export const Save = Schema.Struct({ ...SaveInfo.fields, data: Schema.Unknown });
 
 /** A save, written over the version the game last read: 0 when it read none. */
 export const SaveBody = Schema.Struct({
+  /** The member the page sending it believes it is: a save from a page left open as someone else is refused. */
+  player: Schema.String,
   version: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   data: Schema.Unknown,
 });

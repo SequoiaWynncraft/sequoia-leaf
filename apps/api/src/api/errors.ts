@@ -29,8 +29,8 @@ export class BadOrigin extends Schema.Error<BadOrigin>("BadOrigin")(answer("bad_
 /**
  * A request Leaf cannot read: an event id that is not one, a quest id that is
  * not one, a reroll without a cost, a save slot that is not one, a save that is
- * not `{ "version", "data" }` with an object as its data, a player id that is
- * not a UUID, or a place in town that is not one.
+ * not `{ "player", "version", "data" }` with an object as its data, a player id
+ * that is not a UUID, or a place in town that is not one.
  */
 export class Invalid extends Schema.Error<Invalid>("Invalid")(
   answer(
@@ -52,6 +52,12 @@ export class Missing extends Schema.Error<Missing>("Missing")(answer("no_save", 
 export class VersionConflict extends Schema.Error<VersionConflict>("VersionConflict")(answer("version_conflict"), {
   httpApiStatus: 409,
 }) {}
+
+/**
+ * A save from a page that believes it is another member than the session's,
+ * such as one left open after someone else signed in. Nothing was written.
+ */
+export class NotYou extends Schema.Error<NotYou>("NotYou")(answer("not_you"), { httpApiStatus: 409 }) {}
 
 /** A save larger than a slot holds. */
 export class SaveTooLarge extends Schema.Error<SaveTooLarge>("SaveTooLarge")(answer("save_too_large"), {

@@ -113,8 +113,18 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/game/me, signed out", "GET", "/v1/game/me", undefined, "stale-token");
   await call("GET /v1/game/me, not a member", "GET", "/v1/game/me", undefined, "visitor-token");
   await call("GET /v1/game/saves/{slot}, never saved", "GET", "/v1/game/saves/town");
-  await call("PUT /v1/game/saves/{slot}", "PUT", "/v1/game/saves/town", { version: 0, data: saved });
-  await call("PUT /v1/game/saves/{slot}, a stale version", "PUT", "/v1/game/saves/town", { version: 0, data: saved });
+  await call("PUT /v1/game/saves/{slot}", "PUT", "/v1/game/saves/town", { player: alice, version: 0, data: saved });
+  await call("PUT /v1/game/saves/{slot}, a stale version", "PUT", "/v1/game/saves/town", {
+    player: alice,
+    version: 0,
+    data: saved,
+  });
+  // A page left open as Bob, after Alice signed in in another tab.
+  await call("PUT /v1/game/saves/{slot}, not you", "PUT", "/v1/game/saves/town", {
+    player: bob,
+    version: 1,
+    data: saved,
+  });
   await call("GET /v1/game/saves/{slot}", "GET", "/v1/game/saves/town");
   await call("GET /v1/game/saves", "GET", "/v1/game/saves");
   await call("GET /v1/game/guild/events", "GET", "/v1/game/guild/events");

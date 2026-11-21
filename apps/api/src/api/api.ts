@@ -18,6 +18,7 @@ import {
   Invalid,
   Missing,
   NotAMember,
+  NotYou,
   Refused,
   SaveTooLarge,
   Unauthorized,
@@ -87,7 +88,7 @@ export class RerollBodyErrors extends HttpApiMiddleware.Service<RerollBodyErrors
   error: Invalid,
 }) {}
 
-/** Answers a save whose body is not `{ "version", "data" }`, or is too large to read, with `invalid_save` or `save_too_large`. */
+/** Answers a save whose body is not `{ "player", "version", "data" }`, or is too large to read, with `invalid_save` or `save_too_large`. */
 export class SaveBodyErrors extends HttpApiMiddleware.Service<SaveBodyErrors>()("leaf/api/SaveBodyErrors", {
   error: [Invalid, SaveTooLarge],
 }) {}
@@ -138,7 +139,7 @@ export class GameApi extends HttpApiGroup.make("game")
       params: SlotParams,
       payload: SaveBody,
       success: Saved,
-      error: [Invalid, VersionConflict, SaveTooLarge],
+      error: [Invalid, VersionConflict, NotYou, SaveTooLarge],
     }).middleware(SaveBodyErrors),
     HttpApiEndpoint.get("skin", "/skins/:uuid", {
       params: { uuid: Schema.String },

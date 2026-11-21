@@ -41,6 +41,7 @@ import {
   Invalid,
   Missing,
   NotAMember,
+  NotYou,
   Refused,
   SaveTooLarge,
   Unauthorized,
@@ -238,7 +239,12 @@ export const SaveBodyErrorsLive = Layer.succeed(SaveBodyErrors)((httpEffect) =>
   httpEffect.pipe(
     Effect.provideService(HttpServerRequest.MaxBodySize, MAX_SAVE_BODY),
     Effect.catchIf(isPayloadError, () =>
-      Effect.fail(new Invalid({ code: "invalid_save", message: 'Send the save as { "version": n, "data": { ... } }' })),
+      Effect.fail(
+        new Invalid({
+          code: "invalid_save",
+          message: 'Send the save as { "player": "<your id>", "version": n, "data": { ... } }',
+        }),
+      ),
     ),
     Effect.catchDefect((defect) =>
       isBodyTooLarge(defect)
@@ -542,7 +548,8 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
           }),
         )
         // Writes over the version the game last read, so a game with an older copy, such as
-        // one open in another tab, never overwrites a newer save.
+        // one open in another tab, never overwrites a newer save; and only for the member the
+        // page believes it is, so a page left open after someone else signed in writes nothing.
         .handle("write", ({ params, payload }) =>
           Effect.gen(function* () {
             const checked = checkSave(params.slot, payload.data);
@@ -556,6 +563,12 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               return yield* new SaveTooLarge({ code: "save_too_large", message: "A save holds at most 256 KiB" });
             }
             const { playerId } = yield* CurrentIdentity;
+            if (payload.player !== playerId) {
+              return yield* new NotYou({
+                code: "not_you",
+                message: "This page is signed in as someone else now. Load it again",
+              });
+            }
             const now = yield* Clock.currentTimeMillis;
             const written = yield* saves.put(playerId, checked.slot, payload.version, checked.text, now);
             if (written.status === "conflict") {

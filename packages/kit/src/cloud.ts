@@ -4,13 +4,19 @@
  * says which), and a slot travels as `{ saved_at, keys: { <name>: <text> } }`.
  *
  * - `pull(slots, { onReplaced })`, before a page reads anything it keeps: the server's copy of each
- *   slot is written into the browser. If this browser last held somebody else's game, that is
- *   cleared first.
+ *   slot is written into the browser, unless the browser holds a change to it not yet sent. If this
+ *   browser last held somebody else's game, that is cleared first.
+ * - A slot holds a change not yet sent when its text here differs from what was last pulled or
+ *   pushed (a sum of which the slot's record here keeps); never by how long ago anything happened.
  * - After that, any change to a slot's text is pushed, at most once every five seconds, with the
  *   version last read. On a conflict the later `saved_at` is kept. When that is the other copy, the
  *   page holds an older game than the browser now does: this page sends that slot no more, and
  *   `onReplaced` is told, so that the page can open again from that copy (`pickUp`). The purse is
  *   only read again.
+ * - Each push says which member the page started as. When the browser turns out to hold another
+ *   member's game (they signed in in another tab), or the server says the page is not who it thinks,
+ *   the page stops (`stopped()`): it syncs nothing more, writes nothing more of the game into the
+ *   browser (`keep.ts`), even as it goes away, and loads again, as whoever is signed in now.
  * - What changes by itself (`QUIET`: the time the member was last in town) is not a change: it goes
  *   with the next real one, or when the page is put away.
  * - `flush()`, at once: on the town's `closing`, and when the page is put away.
@@ -19,10 +25,13 @@
  */
 
 import { el } from "./dom.ts";
+import { askFirst, forgetStop, keepText, keptText, stop, stopped } from "./keep.ts";
 import { member } from "./live.ts";
-import { ask, isRecord, outside, put, type Store } from "./net.ts";
+import { ask, isRecord, outside, put } from "./net.ts";
 import { KEY as PURSE_KEY, reread } from "./purse.ts";
 import { fromTown } from "./shell.ts";
+
+export { stopped };
 
 export type Slot = "purse" | "town" | "works" | "raid";
 
@@ -52,10 +61,14 @@ const KEEPALIVE_MOST = 60_000;
 interface Known {
   version: number;
   saved: number;
+  /** The sum of the text last pulled or pushed: text here that differs from it has not been sent. */
   sum: string;
   /** The same sum without the quiet parts (`calmSumOf`). */
   calm?: string;
-  /** When the text here was first seen to differ from `sum`. */
+  /**
+   * When the text here was first seen to differ from `sum`: the time a push says it was saved.
+   * Only the sums say whether there is anything to send.
+   */
   changed?: number;
 }
 interface Meta {
@@ -66,11 +79,9 @@ const META = "town.cloud.v1";
 
 type Keys = Record<string, string>;
 
-const store = (): Store | null => outside.store();
-
 function readMeta(): Meta | null {
   try {
-    const raw: unknown = JSON.parse(store()?.getItem(META) ?? "null");
+    const raw: unknown = JSON.parse(keptText(META) ?? "null");
     if (!isRecord(raw) || typeof raw.player !== "string" || !isRecord(raw.slots)) return null;
     const slots: Meta["slots"] = {};
     for (const slot of ALL_SLOTS) {
@@ -88,24 +99,17 @@ function readMeta(): Meta | null {
   }
 }
 
+/** Writes down what is known of the slots. Without storage nothing was kept to be pushed either. */
 function writeMeta(m: Meta): void {
-  try {
-    store()?.setItem(META, JSON.stringify(m));
-  } catch {
-    // Without storage nothing was kept to be pushed either.
-  }
+  keepText(META, JSON.stringify(m));
 }
 
 /** The texts a slot holds in this browser now. */
 export function slotKeys(slot: Slot): Keys {
   const out: Keys = {};
   for (const name of SLOTS[slot]) {
-    try {
-      const text = store()?.getItem(name);
-      if (typeof text === "string") out[name] = text;
-    } catch {
-      // Nothing kept under that name.
-    }
+    const text = keptText(name);
+    if (text !== null) out[name] = text;
   }
   return out;
 }
@@ -136,6 +140,11 @@ export function calmSumOf(keys: Keys): string {
   return sumOf(Object.fromEntries(Object.entries(keys).map(([name, text]) => [name, calm(name, text)])));
 }
 
+/** Whether a slot's texts here hold a change not yet sent: one beyond what changes by itself. */
+function unsent(known: Known, keys: Keys): boolean {
+  return known.calm === undefined ? sumOf(keys) !== known.sum : calmSumOf(keys) !== known.calm;
+}
+
 /** What is known of a slot whose texts are these, saved then, at that version. */
 const knownAs = (version: number, saved: number, keys: Keys): Known => ({
   version,
@@ -144,19 +153,12 @@ const knownAs = (version: number, saved: number, keys: Keys): Known => ({
   calm: calmSumOf(keys),
 });
 
-/** Writes a slot's texts into the browser, and forgets any of its names the copy does not have. */
+/**
+ * Writes a slot's texts into the browser, and forgets any of its names the copy does not have.
+ * What does not get written is pulled again next time.
+ */
 function writeKeys(slot: Slot, keys: Keys): void {
-  const s = store();
-  if (!s) return;
-  for (const name of SLOTS[slot]) {
-    try {
-      const text = keys[name];
-      if (typeof text === "string") s.setItem(name, text);
-      else s.removeItem(name);
-    } catch {
-      // It will be pulled again next time.
-    }
-  }
+  for (const name of SLOTS[slot]) keepText(name, keys[name] ?? null);
   if (slot === "purse") reread();
 }
 
@@ -189,6 +191,31 @@ const savers: (() => void)[] = [];
 let onReplaced: (slot: Slot) => void = () => undefined;
 let listening = false;
 
+/**
+ * This page leaves the browser's game alone from now on, and loads again, as whoever is signed in
+ * now. It stops before anything else: loading again puts the page away, and what the page writes
+ * down as it goes is the member it started as.
+ */
+function letGo(): void {
+  if (stopped()) return;
+  stop();
+  outside.reload();
+}
+
+/**
+ * Whether the browser still holds the game of the member this page started as (`member()`, found
+ * once per page). If another member's page has taken it over since, this page lets go.
+ */
+function stillMine(): boolean {
+  if (stopped()) return false;
+  const me = member();
+  const meta = readMeta();
+  // With no record of whose it is, nothing here is known well enough to be sent anyway.
+  if (!me || !meta || meta.player === me.id) return true;
+  letGo();
+  return false;
+}
+
 /** Something to run before the page's slots are flushed: the page writing down what it holds. */
 export function before(save: () => void): void {
   savers.push(save);
@@ -213,26 +240,35 @@ export async function pull(slots: readonly Slot[], opts: Pulling): Promise<boole
   onReplaced = opts.onReplaced;
   let meta = readMeta();
   if (meta?.player !== me.id) {
-    // Somebody else's game, or nobody's: nothing of it goes onto this member's account.
-    for (const slot of ALL_SLOTS) writeKeys(slot, {});
+    // Somebody else's game, or nobody's: nothing of it goes onto this member's account. Whose it
+    // is now is written first, so that a page of theirs still open stops before anything is cleared.
     meta = { player: me.id, slots: {} };
     writeMeta(meta);
+    for (const slot of ALL_SLOTS) writeKeys(slot, {});
   }
+  // The browser's game is this member's now. From here on, every write first makes sure it still
+  // is, so that nothing this page holds is written over another member's who has taken it since.
+  askFirst(stillMine);
   const answers = await Promise.all(slots.map(async (slot) => ({ slot, a: await ask(path(slot)) })));
+  // Taken over by another member's page meanwhile: none of this is theirs to keep.
+  if (!stillMine()) return false;
   meta = readMeta() ?? meta;
   for (const { slot, a } of answers) {
+    const known = meta.slots[slot];
     if (a.status === 404) {
-      meta.slots[slot] = knownAs(0, 0, {});
+      // Never saved: whatever is here goes up with the first push.
+      if (known?.version !== 0) meta.slots[slot] = knownAs(0, 0, {});
       continue;
     }
     const save = a.status === 200 ? readSave(a.body) : null;
     if (!save) return false;
-    const known = meta.slots[slot];
-    const here = slotKeys(slot);
-    const changedHere = known !== undefined && known.sum !== sumOf(here);
-    if (changedHere && (known.changed ?? known.saved) > save.saved) {
-      // Changed here since it was last sent, and later than the server's copy: this one stays.
-      meta.slots[slot] = { ...known, version: save.version };
+    // The server holds the copy last pulled or pushed here: what is here is that, or newer.
+    if (known?.version === save.version) continue;
+    const now = outside.now();
+    if (known !== undefined && unsent(known, slotKeys(slot)) && save.saved <= now) {
+      // Changed here and not sent, and saved since somewhere else: as on any conflict the later
+      // copy is kept, and the change here counts as made now. It goes over the server's version.
+      meta.slots[slot] = { ...known, version: save.version, changed: now };
     } else {
       writeKeys(slot, save.keys);
       meta.slots[slot] = knownAs(save.version, save.saved, save.keys);
@@ -243,6 +279,10 @@ export async function pull(slots: readonly Slot[], opts: Pulling): Promise<boole
   if (!listening && typeof window !== "undefined") {
     listening = true;
     window.setInterval(tick, 1000);
+    // Another page writing the browser's game: one signed in as somebody else means this one stops.
+    window.addEventListener("storage", () => {
+      stillMine();
+    });
     window.addEventListener("pagehide", flush);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") flush();
@@ -254,7 +294,7 @@ export async function pull(slots: readonly Slot[], opts: Pulling): Promise<boole
 
 /** Looks for changes in the page's slots, and pushes any that are due. */
 export function tick(): void {
-  if (!member()) return;
+  if (!member() || !stillMine()) return;
   const now = outside.now();
   for (const slot of mine) {
     const meta = readMeta();
@@ -264,7 +304,7 @@ export function tick(): void {
     if (sumOf(keys) === known.sum) continue;
     if (known.changed === undefined) {
       // Only what changes by itself has changed: that waits for a real change, or the page going away.
-      if (calmSumOf(keys) === known.calm) continue;
+      if (!unsent(known, keys)) continue;
       known.changed = now;
       writeMeta(meta);
     }
@@ -274,13 +314,18 @@ export function tick(): void {
 
 /** Pushes every one of the page's slots that has changed, at once, so that it survives the page going away. */
 export function flush(): void {
-  if (!member()) return;
+  if (!member() || !stillMine()) return;
   for (const save of savers) save();
   for (const slot of mine) if (!replaced.has(slot)) void push(slot, true);
 }
 
-/** Sends a slot as it is here now, with the version last read. Says whether the server took it. */
+/**
+ * Sends a slot as it is here now, as the member the page started as, with the version last read.
+ * Says whether the server took it.
+ */
 export async function push(slot: Slot, leaving = false, tries = 2): Promise<boolean> {
+  const me = member();
+  if (!me || !stillMine()) return false;
   const meta = readMeta();
   const known = meta?.slots[slot];
   if (!meta || !known || replaced.has(slot)) return false;
@@ -288,13 +333,20 @@ export async function push(slot: Slot, leaving = false, tries = 2): Promise<bool
   const sum = sumOf(keys);
   if (sum === known.sum) return true;
   // Sent with only its quiet parts changed, the slot was last really changed when it was last saved.
-  const quiet = known.changed === undefined && calmSumOf(keys) === known.calm;
+  const quiet = known.changed === undefined && !unsent(known, keys);
   const saved = known.changed ?? (quiet ? known.saved : outside.now());
-  const body = { version: known.version, data: { saved_at: saved, keys } };
+  const body = { player: me.id, version: known.version, data: { saved_at: saved, keys } };
   sending.add(slot);
   lastPush.set(slot, outside.now());
   const a = await put(path(slot), body, leaving && JSON.stringify(body).length < KEEPALIVE_MOST);
   sending.delete(slot);
+  if (a.status === 409 && isRecord(a.body) && a.body.code === "not_you") {
+    // Signed in as somebody else since this page opened: what it holds is not theirs.
+    letGo();
+    return false;
+  }
+  // Taken over by another member's page while this was on its way: their record is not written over.
+  if (!stillMine()) return false;
   const after = readMeta() ?? meta;
   if (a.status === 200 && isRecord(a.body) && typeof a.body.version === "number") {
     after.slots[slot] = knownAs(a.body.version, saved, keys);
@@ -313,6 +365,9 @@ export async function push(slot: Slot, leaving = false, tries = 2): Promise<bool
       writeMeta(after);
       if (slot !== "purse" && !replaced.has(slot)) {
         replaced.add(slot);
+        // The page is about to load again. Until it does, its savers must not write what it still
+        // holds over the copy just taken, or the next load would send the older game back up.
+        stop();
         onReplaced(slot);
       }
       return false;
@@ -354,4 +409,6 @@ export function forget(): void {
   replaced.clear();
   savers.length = 0;
   onReplaced = () => undefined;
+  listening = false;
+  forgetStop();
 }

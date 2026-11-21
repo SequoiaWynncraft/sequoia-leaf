@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { flush, forget, pull, push, PUSH_EVERY, type Slot, SLOTS, sumOf, tick } from "./cloud.ts";
+import { before, flush, forget, pull, push, PUSH_EVERY, type Slot, SLOTS, stopped, sumOf, tick } from "./cloud.ts";
+import { keepText } from "./keep.ts";
 import { restart, start } from "./live.ts";
-import { isRecord } from "./net.ts";
-import { balance, forgetLedger } from "./purse.ts";
+import { isRecord, pretend } from "./net.ts";
+import { post } from "./postcard.ts";
+import { balance, earn, forgetLedger, spend } from "./purse.ts";
 import { HELLO, type MemoryStore, type Sent, type Standin, standin, TESTER } from "./standin.ts";
 
 interface Row {
@@ -13,7 +15,10 @@ interface Row {
 
 const slot = (s: Sent): string => s.path.split("/").pop() ?? "";
 
-/** The server's saves, as the spec has them: one row a slot, written only over the version last read. */
+/**
+ * The server's saves, as the spec has them: one row a slot, written only by the member signed in
+ * (the tester), and only over the version last read.
+ */
 function saves(rows: Record<string, Row>, also: Record<string, (s: Sent) => { status: number; body?: unknown }> = {}) {
   return {
     "GET /v1/game/hello": HELLO,
@@ -37,6 +42,7 @@ function saves(rows: Record<string, Row>, also: Record<string, (s: Sent) => { st
             const data = isRecord(body.data) ? body.data : {};
             const keys = isRecord(data.keys) ? data.keys : {};
             const version = typeof body.version === "number" ? body.version : -1;
+            if (body.player !== TESTER.player.id) return { status: 409, body: { code: "not_you" } };
             if ((row?.version ?? 0) !== version) return { status: 409, body: { code: "version_conflict" } };
             rows[slot(s)] = {
               version: version + 1,
@@ -69,6 +75,11 @@ const meta = (store: MemoryStore): Record<string, unknown> => JSON.parse(store.g
 /** A page that does nothing when another device's copy wins. */
 const page = { onReplaced: (): void => undefined };
 const putsOf = (w: Standin): Sent[] => w.sent.filter((s) => s.method === "PUT");
+/** A page's own savers, as the games have them: the purse and a postcard. */
+const saveAsAGame = (): void => {
+  earn(50, "a test");
+  post("works", { waiting: "mine", trophies: [], till: 1 });
+};
 
 /** The town's record, standing in for `save.ts`'s: what the member owns, and when they were last in town. */
 const record = (lastSeen: number, owned: string[] = []): string => JSON.stringify({ v: 1, owned, lastSeen });
@@ -143,6 +154,7 @@ describe("saves on the member's account", () => {
     const first = world.sent.filter((s) => s.method === "PUT");
     expect(first.length).toBe(1);
     expect(first[0]?.body).toEqual({
+      player: TESTER.player.id,
       version: 7,
       data: { saved_at: world.clock.now, keys: { "raid.almanac.v1": "b" } },
     });
@@ -215,6 +227,10 @@ describe("saves on the member's account", () => {
     expect(putsOf(world).length).toBe(1);
     expect(told).toEqual(["works"]);
     expect(world.store.getItem("works.save.v2")).toBe("phone");
+    // From here the page's own savers write nothing: the copy just taken is what loads next.
+    expect(stopped()).toBe(true);
+    keepText("works.save.v2", "what this page still held");
+    expect(world.store.getItem("works.save.v2")).toBe("phone");
 
     // The page still holds its older yard and writes it down again, while it is still open.
     world.store.setItem("works.save.v2", "changed here, again");
@@ -249,6 +265,175 @@ describe("saves on the member's account", () => {
     world.clock.now += 120_000;
     expect(await push("purse")).toBe(true);
     expect(rows.purse?.data.keys).toEqual({ "town.purse.v1": '{"coins":95}' });
+  });
+
+  test("a change here not yet sent survives another pull of the same version", async () => {
+    const rows: Record<string, Row> = {
+      purse: { version: 1, data: { saved_at: 100, keys: { "town.purse.v1": '{"coins":300}' } } },
+    };
+    world = standin(saves(rows));
+    world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+    await start();
+    await pull(["purse"], page);
+    expect(balance().coins).toBe(300);
+    // Coins spent, and at once into a game, which pulls the purse too: no tick has seen the spend.
+    expect(spend("coins", 50, "a lantern")).toBe(true);
+    expect(await pull(["purse"], page)).toBe(true);
+    expect(world.store.getItem("town.purse.v1")).toBe('{"coins":250}');
+    expect(balance().coins).toBe(250);
+    // And the spend still goes up.
+    tick();
+    await Bun.sleep(5);
+    expect(rows.purse).toMatchObject({ version: 2, data: { keys: { "town.purse.v1": '{"coins":250}' } } });
+  });
+
+  test("a pull of a newer copy takes it when nothing here is unsent, and keeps a change here, made now, when something is", async () => {
+    const rows: Record<string, Row> = {
+      purse: { version: 1, data: { saved_at: 100, keys: { "town.purse.v1": '{"coins":300}' } } },
+      works: { version: 1, data: { saved_at: 100, keys: { "works.save.v2": "a yard" } } },
+    };
+    world = standin(saves(rows));
+    world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+    await start();
+    await pull(["purse", "works"], page);
+    // The phone saved both since; only the yard has changed here meanwhile.
+    rows.purse = { version: 2, data: { saved_at: world.clock.now - 1000, keys: { "town.purse.v1": '{"coins":90}' } } };
+    rows.works = { version: 2, data: { saved_at: world.clock.now - 1000, keys: { "works.save.v2": "phone yard" } } };
+    world.store.setItem("works.save.v2", "a bigger yard");
+    world.clock.now += 1000;
+    expect(await pull(["purse", "works"], page)).toBe(true);
+    expect(balance().coins).toBe(90);
+    expect(world.store.getItem("works.save.v2")).toBe("a bigger yard");
+    expect(await push("works")).toBe(true);
+    expect(putsOf(world).map((s) => s.body)).toEqual([
+      {
+        player: TESTER.player.id,
+        version: 2,
+        data: { saved_at: world.clock.now, keys: { "works.save.v2": "a bigger yard" } },
+      },
+    ]);
+  });
+
+  test("a page whose browser now holds another member's game pushes nothing more, and loads again", async () => {
+    const rows: Record<string, Row> = {
+      purse: { version: 1, data: { saved_at: 100, keys: { "town.purse.v1": '{"coins":300}' } } },
+    };
+    world = standin(saves(rows));
+    world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+    await start();
+    await pull(["purse"], page);
+    // Somebody signs in as another member in another tab, and their page pulls their game.
+    const theirs = JSON.stringify({ player: "somebody-else", slots: { purse: { version: 4, saved: 1, sum: "x" } } });
+    world.store.setItem("town.cloud.v1", theirs);
+    world.store.setItem("town.purse.v1", '{"coins":5}');
+    // This page, still open, writes down what it holds.
+    world.store.setItem("town.purse.v1", '{"coins":250}');
+    world.clock.now += PUSH_EVERY;
+    tick();
+    flush();
+    expect(await push("purse")).toBe(false);
+    await Bun.sleep(5);
+    expect(putsOf(world)).toEqual([]);
+    expect(world.reloaded.count).toBe(1);
+    expect(world.store.getItem("town.cloud.v1")).toBe(theirs);
+  });
+
+  test("the page stops as soon as storage shows another member's game", async () => {
+    const shown = aPage();
+    try {
+      world = standin(saves({}));
+      world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+      await start();
+      await pull(["works"], page);
+      world.store.setItem("town.cloud.v1", JSON.stringify({ player: "somebody-else", slots: {} }));
+      window.dispatchEvent(new Event("storage"));
+      expect(world.reloaded.count).toBe(1);
+      // Even if the meta were written back, the page syncs nothing more.
+      world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+      world.store.setItem("works.save.v2", "a yard");
+      tick();
+      shown.hide();
+      await Bun.sleep(5);
+      expect(putsOf(world)).toEqual([]);
+      expect(world.reloaded.count).toBe(1);
+    } finally {
+      shown.done();
+    }
+  });
+
+  test("a save the server refuses as somebody else's stops the page too", async () => {
+    const rows: Record<string, Row> = {};
+    world = standin(saves(rows, { "PUT /v1/game/saves/works": () => ({ status: 409, body: { code: "not_you" } }) }));
+    await start();
+    await pull(["works", "raid"], page);
+    world.store.setItem("works.save.v2", "a yard");
+    world.store.setItem("raid.run.v1", "a run");
+    expect(await push("works")).toBe(false);
+    expect(world.reloaded.count).toBe(1);
+    expect(await push("raid")).toBe(false);
+    expect(putsOf(world).map((s) => s.path)).toEqual(["/v1/game/saves/works"]);
+    expect(world.sent.filter((s) => s.method === "GET" && s.path.endsWith("/works")).length).toBe(1);
+  });
+
+  test("a page that finds another member's game stops before it loads again, and its savers write none of it", async () => {
+    const shown = aPage();
+    try {
+      const rows: Record<string, Row> = {
+        purse: { version: 1, data: { saved_at: 100, keys: { "town.purse.v1": '{"coins":300}' } } },
+      };
+      world = standin(saves(rows));
+      world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+      // Whether the page had stopped by the time it asked to load again.
+      const stoppedFirst: boolean[] = [];
+      pretend({ reload: () => void stoppedFirst.push(stopped()) });
+      await start();
+      await pull(["purse", "town"], page);
+      // The page's savers run before a flush and as the page goes away, as the games' do.
+      before(saveAsAGame);
+      window.addEventListener("pagehide", saveAsAGame);
+      saveAsAGame();
+      expect(world.store.getItem("town.purse.v1")).toBe('{"coins":350}');
+      expect(world.store.getItem("town.postcard.works.v1")).not.toBeNull();
+
+      // Another member signs in in another tab, and their page pulls their game.
+      const theirs = JSON.stringify({ player: "somebody-else", slots: {} });
+      world.store.setItem("town.cloud.v1", theirs);
+      world.store.setItem("town.purse.v1", '{"coins":5}');
+      world.store.removeItem("town.postcard.works.v1");
+      window.dispatchEvent(new Event("storage"));
+      expect(stoppedFirst).toEqual([true]);
+      expect(stopped()).toBe(true);
+
+      // Loading again puts the page away: everything it does on the way out writes nothing.
+      window.dispatchEvent(new Event("pagehide"));
+      shown.hide();
+      flush();
+      saveAsAGame();
+      await Bun.sleep(5);
+      expect(world.store.getItem("town.purse.v1")).toBe('{"coins":5}');
+      expect(world.store.getItem("town.postcard.works.v1")).toBeNull();
+      expect(world.store.getItem("town.cloud.v1")).toBe(theirs);
+      expect(putsOf(world)).toEqual([]);
+    } finally {
+      shown.done();
+    }
+  });
+
+  test("a write before the page hears of another member's game is refused, and stops the page", async () => {
+    world = standin(saves({}));
+    world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+    await start();
+    await pull(["purse"], page);
+    expect(stopped()).toBe(false);
+    // Their page has written down whose game it is, and this page has not yet heard.
+    const theirs = JSON.stringify({ player: "somebody-else", slots: {} });
+    world.store.setItem("town.cloud.v1", theirs);
+    world.store.setItem("town.purse.v1", '{"coins":5}');
+    earn(50, "a timer firing");
+    expect(world.store.getItem("town.purse.v1")).toBe('{"coins":5}');
+    expect(stopped()).toBe(true);
+    expect(world.reloaded.count).toBe(1);
+    expect(world.store.getItem("town.cloud.v1")).toBe(theirs);
   });
 
   test("the time last seen alone is not sent; it goes with a real change", async () => {

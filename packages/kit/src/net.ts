@@ -23,6 +23,8 @@ export interface Outside {
   top(): boolean;
   /** Leaves the page for another address. */
   go(url: string): void;
+  /** Loads the page again. */
+  reload(): void;
   now(): number;
 }
 
@@ -49,6 +51,9 @@ export const outside: Outside = {
   top: isTop,
   go: (url) => {
     location.assign(url);
+  },
+  reload: () => {
+    location.reload();
   },
   now: () => Date.now(),
 };

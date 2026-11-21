@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { restart, start, where } from "./live.ts";
-import { isRecord } from "./net.ts";
+import { followLeaf, restart, start, where } from "./live.ts";
+import { isRecord, type Listening } from "./net.ts";
 import { balance, forgetLedger, leafOpen } from "./purse.ts";
-import { HELLO, MemoryStore, type Reply, type Standin, standin, TESTER } from "./standin.ts";
+import { HELLO, MemoryStore, type Reply, type Sent, type Standin, standin, TESTER } from "./standin.ts";
 
 let world: Standin | null = null;
+let ears: Listening | null = null;
 afterEach(() => {
+  ears?.stop();
+  ears = null;
   world?.done();
   world = null;
   restart();
@@ -109,6 +112,42 @@ describe("finding out where the game is", () => {
   ] as const)("%s after hello: the guild's books are closed", async (_why, me) => {
     world = live(me);
     expect(await start()).toMatchObject({ mode: "shut", why: "closed" });
+  });
+});
+
+/**
+ * The member's event stream as Leaf sends it: from the position asked (`?after=`), or else from
+ * their newest event; it opens with a frame saying where it starts.
+ */
+function memberStream(events: readonly { id: number; type: string; data: unknown }[], newest: number) {
+  return (s: Sent): Reply => {
+    const asked = /[?&]after=(\d+)/.exec(s.path)?.[1];
+    const from = asked === undefined ? newest : Number(asked);
+    const after = events.filter((e) => e.id > from);
+    const text = `id: ${from}\n\n${after.map((e) => `id: ${e.id}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join("")}`;
+    return new Response(text, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  };
+}
+
+describe("following the member's Leaf", () => {
+  test("Leaf paid between the first look and the stream opening is heard at once, and the purse fetched again", async () => {
+    const raid = { id: 141, type: "leaf_earned", data: { source: "raid", leaf: 110, xp: 110 } };
+    // The member as first looked at (newest event 140), and as they are by the time anything listens.
+    const now = { ...TESTER, leaf: TESTER.leaf + 110, event_cursor: 141 };
+    let asked = 0;
+    world = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": () => ({ status: 200, body: ++asked === 1 ? TESTER : now }),
+      "GET /v1/me/events/stream": memberStream([raid], 141),
+    });
+    await start();
+    expect(balance().leaf).toBe(2450);
+    const heard: number[] = [];
+    ears = followLeaf((_type, _data, id) => heard.push(id));
+    await Bun.sleep(500);
+    expect(world.sent.map((s) => s.path)).toContain("/v1/me/events/stream?after=140");
+    expect(heard).toEqual([141]);
+    expect(balance().leaf).toBe(2560);
   });
 });
 

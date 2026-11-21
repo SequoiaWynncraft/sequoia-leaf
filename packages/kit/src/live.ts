@@ -169,12 +169,15 @@ export function shutCard(why: Shut, signIn: string): void {
 
 /**
  * Listens to what happens to the member and asks the ledger for their Leaf again whenever anything
- * does. `heard` is told each event, and `fresh` the member as the server has them after it.
+ * does. `heard` is told each event, and `fresh` the member as the server has them after it. It
+ * listens from the newest event when the member was first looked at (`cursor`), so anything paid
+ * since, before the stream opened, is heard at once.
  */
 export function followLeaf(
   heard: (type: string, data: unknown, id: number) => void = () => undefined,
   fresh: (me: Member) => void = () => undefined,
 ): Listening {
+  const since = member()?.cursor;
   // A raid paid out to a party arrives as a handful of events at once: one question covers them.
   let asking = false;
   async function again(): Promise<void> {
@@ -185,10 +188,14 @@ export function followLeaf(
     fromLedger(m.leaf);
     fresh(m);
   }
-  return listen("/v1/me/events/stream", (e) => {
-    heard(e.type, e.data, e.id);
-    if (asking) return;
-    asking = true;
-    setTimeout(() => void again(), 400);
-  });
+  return listen(
+    "/v1/me/events/stream",
+    (e) => {
+      heard(e.type, e.data, e.id);
+      if (asking) return;
+      asking = true;
+      setTimeout(() => void again(), 400);
+    },
+    since === undefined ? {} : { after: since },
+  );
 }
