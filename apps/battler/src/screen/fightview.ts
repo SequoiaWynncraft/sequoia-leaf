@@ -33,6 +33,7 @@ import { hexMark } from "./art/table.ts";
 import { burst, motes, ring, say } from "./fx.ts";
 import { cellXY, HEX_H, HEX_W, type Pt } from "./geometry.ts";
 import type { Speed } from "./keep.ts";
+import { DIM, shineOf } from "./light.ts";
 import { snd } from "./sounds.ts";
 import { type Standing, V } from "./stage.ts";
 
@@ -330,7 +331,8 @@ const SHOT_LOOKS: Partial<Record<UnitKind, ShotLook>> = {
   gust: "gust",
 };
 
-const DAMAGE_COL = { physical: CREAM, magic: "#d88ad0", true: "#ffffff" } as const;
+/** The kinds of damage, coloured as the cards colour their words: coral, rose, cream. */
+const DAMAGE_COL = { physical: "#e67967", magic: "#d88ad0", true: CREAM } as const;
 
 /** Makes one thing the rules said happened into something seen and heard. */
 function show(ev: FightEvent): void {
@@ -887,8 +889,9 @@ export function drawFight(g: Ctx, list: Standing[]): void {
       dx += a.hx * k;
       dy += a.hy * k;
     }
+    const shine = shineOf(u.kind, a.x, V.t);
     const x = Math.round(V.bx + a.x + dx);
-    const y = Math.round(V.by + a.y + dy - back - lift);
+    const y = Math.round(V.by + a.y + dy - back - lift - shine.hop);
     const hover = frames.flies && fallen < 0 ? 2 + Math.round(Math.sin(V.t * 4 + a.phase * 6)) : 0;
     const beat: 0 | 1 = Math.floor(V.t * 1.7 + a.phase * 2) % 2 === 0 ? 0 : 1;
     list.push({
@@ -909,13 +912,16 @@ export function drawFight(g: Ctx, list: Standing[]): void {
           g.globalAlpha = 1;
           return;
         }
+        if (shine.dim) g.globalAlpha = DIM;
         drawBase(g, u.kind, x, y);
         drawFigure(g, u.kind, x, y - 2 - hover, {
           pose: c < a.castUntil ? "cast" : "idle",
           beat,
           left: a.left,
           flash: c - a.flashAt >= 0 && c - a.flashAt < 1.5,
+          lit: shine.lit,
         });
+        g.globalAlpha = 1;
       },
       top: () => {
         if (fallen >= 0 || !u.alive) return;

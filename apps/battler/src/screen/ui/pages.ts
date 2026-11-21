@@ -292,7 +292,7 @@ function figureTile(id: FigureId): HTMLElement {
     locked ? el("span", "k-s k-dim how", { text: how }) : null,
     starred ? pic(starsPic(3), 1, "badge") : null,
   );
-  if (met && !locked) explain(tile, () => figureCard(id, starred ? 3 : 1));
+  if (met && !locked) explain(tile, () => figureCard(id, starred ? 3 : 1, { lore: true }));
   return tile;
 }
 
@@ -350,7 +350,7 @@ function almanac(): HTMLElement {
         ),
         a.topped.includes(id) ? icon("check") : null,
       );
-      explain(row, () => traitCard(id, null, S.almanac));
+      explain(row, () => traitCard(id, null, S.almanac, true));
       list.append(row);
     }
     add(page, list);
@@ -365,7 +365,7 @@ function almanac(): HTMLElement {
         pic(itemIcon(id), 2),
         el("span", "k-s", { text: itemName(id) }),
       );
-      explain(tile, () => itemCard(id, null));
+      explain(tile, () => itemCard(id, null, -1, true));
       comps.append(tile);
     }
     const made = el("div", "tiles small", {});
@@ -379,7 +379,7 @@ function almanac(): HTMLElement {
         have ? pic(itemIcon(id), 2) : el("span", "pair", {}, pic(itemIcon(x)), pic(itemIcon(y))),
         el("span", "k-s", { text: have ? itemName(id) : "Not made" }),
       );
-      explain(tile, () => itemCard(id, null));
+      explain(tile, () => itemCard(id, null, -1, true));
       made.append(tile);
     }
     add(page, comps, el("hr", "k-rule"), made);

@@ -229,6 +229,7 @@ all the way on) and Crab #40 (finish a raid). The next trail opens when the last
 | `content/boons.ts`     | The boons                                                                                                            |
 | `content/rooms.ts`     | Acorns, levels, stall odds, the fight's clock, the fifteen rooms and their plans, sparring strength, trails, handles |
 | `content/keepsakes.ts` | The payout and the locked figures                                                                                    |
+| `content/advice.ts`    | What kind of fighter each calling makes and where it stands, and three finished items that suit each figure          |
 | `hex.ts`               | The board: cells and seats, distance, neighbours, lines, cones, rings, finding a way round                           |
 | `rng.ts`               | The seeded random stream                                                                                             |
 | `party.ts`             | A party as plain data, and trait counting                                                                            |
@@ -247,7 +248,16 @@ all the way on) and Crab #40 (finish a raid). The next trail opens when the last
 
 Tuning the game is editing the files in `content/`. The sentences shown to players are built from
 the same numbers the fight reads (`abilityText`, `traitText`, `itemText`, `boonText`), so a changed
-number changes its sentence with it.
+number changes its sentence with it. Every ability, trait step, item and boon is said twice: the
+sentence in the guild's voice, which the almanac shows, and a short form for the cards on the table
+(`abilityShort`, `traitShort`, `itemShort`, `boonShort`): effects and numbers only, a fragment or two
+of at most 48 characters ("Shield 210 for 4s. 70 physical to adjacent enemies."). A test holds every
+short form to that, and to using only numbers its long sentence has for the same stars.
+
+`content/advice.ts` is read by the cards only. Each calling has a role and a place ("Tank · front
+row", "Assassin · leaps to their back row"), and each figure three finished items that suit it,
+chosen by its calling first (tanks Bark and Chestnut, fighters and assassins Thorn with Chestnut or
+Plume, ranged Thorn and Plume, casters and healers Glowcap) and then by its ability.
 
 ## Driving it from a screen
 
@@ -329,7 +339,9 @@ which plays out the same from its seed.
 `review/balance.ts` plays whole runs with the bot under different habits (sensible, a saver who
 levels, a roller who chases stars, one fond of each kin and each calling, and a careless one) and
 prints how far each gets, how every room and every trouble plan goes, and how traits, figures, items
-and boons do against the same rooms without them. The bot is a rough player: it seats by a plain
+and boons do against the same rooms without them. Its `suits` section plays a sample of the fights
+again with each figure given each finished item, and lists for every figure the items that helped it
+most and least beside the three a card recommends; none of those is among a figure's three worst. The bot is a rough player: it seats by a plain
 rule and does not look at what it is about to fight.
 
 Where the numbers stood when this was written, 300 runs a habit:

@@ -6,19 +6,20 @@
 import { add, el } from "@sequoia-leaf/kit/dom.ts";
 
 import {
-  abilityText,
+  abilityShort,
   type BoonId,
   BOONS,
-  boonText,
+  boonShort,
   type Choice,
   choose,
   type ComponentId,
   COMPONENTS,
   type FigureId,
   FIGURES,
+  itemAdds,
   itemName,
-  itemText,
   redraw,
+  roleLine,
   type Run,
   traitsOf,
 } from "../../game/index.ts";
@@ -30,7 +31,7 @@ import { signal } from "../signals.ts";
 import { snd } from "../sounds.ts";
 import { boardSpot } from "../stage.ts";
 import { act, S } from "../state.ts";
-import { pic, traitTag } from "./cards.ts";
+import { pic, rich, traitTag } from "./cards.ts";
 import { holdAcorns } from "./table.ts";
 
 let key = "";
@@ -46,9 +47,10 @@ function starterCard(kind: FigureId): HTMLElement[] {
   return [
     pic(portrait(kind), 3, "art"),
     el("b", "k-gold", { text: spec.name }),
+    el("div", "k-d", { text: roleLine(spec.calling) }),
     el("div", "k-wrap", {}, ...traitsOf(kind).map((t) => traitTag(t))),
-    el("div", "k-d", {}, el("b", "", { text: `${spec.ability?.name ?? ""}. ` }), abilityText(kind, 1)),
-    el("i", "k-dim quip", { text: spec.quip }),
+    el("b", "", { text: spec.ability?.name ?? "" }),
+    rich(abilityShort(kind, 1)),
   ];
 }
 function componentCard(run: Run, item: ComponentId): HTMLElement[] {
@@ -56,7 +58,7 @@ function componentCard(run: Run, item: ComponentId): HTMLElement[] {
   const parts = [
     pic(itemIcon(item), 3, "art"),
     el("b", "k-gold", { text: COMPONENTS[item].name }),
-    el("div", "k-d", { text: itemText(item) }),
+    rich(itemAdds(item).join(" · ")),
   ];
   for (const c of combos.slice(0, 3)) {
     parts.push(
@@ -71,7 +73,6 @@ function componentCard(run: Run, item: ComponentId): HTMLElement[] {
       ),
     );
   }
-  parts.push(el("i", "k-dim quip", { text: COMPONENTS[item].quip }));
   return parts;
 }
 function boonCardParts(boon: BoonId): HTMLElement[] {
@@ -79,8 +80,8 @@ function boonCardParts(boon: BoonId): HTMLElement[] {
   return [
     pic(boonIcon(boon), 3, "art"),
     el("b", "k-gold", { text: spec.name }),
-    el("div", "k-d", { text: boonText(boon) }),
-    el("i", "k-dim quip", { text: spec.quip }),
+    el("div", "k-d", { text: spec.sort === "charm" ? "A charm" : "A boon" }),
+    rich(boonShort(boon)),
   ];
 }
 

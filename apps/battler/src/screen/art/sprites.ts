@@ -144,7 +144,20 @@ export interface Shown {
   flash?: boolean;
   /** Drawn as a dark outline: one not opened yet. */
   dark?: boolean;
+  /** With a gold outline round it: one of the trait that is lit. */
+  lit?: boolean;
   alpha?: number;
+}
+
+const gilt = new Map<HTMLCanvasElement, HTMLCanvasElement>();
+/** A picture with a gold outline round its dark edge, one pixel larger all round. */
+function gilded(pic: HTMLCanvasElement): HTMLCanvasElement {
+  let c = gilt.get(pic);
+  if (!c) {
+    c = outlined(pic, GOLD[2]);
+    gilt.set(pic, c);
+  }
+  return c;
 }
 
 /** Draws a figure with its feet at `x`, `y`. */
@@ -157,7 +170,8 @@ export function drawFigure(g: Ctx, kind: UnitKind, x: number, y: number, o: Show
     g.drawImage(f.fallen, px - Math.round(f.fallen.width / 2), py - f.fallen.height + 2);
   } else {
     const pic = o.dark ? f.dark : o.flash ? f.flash : o.pose === "cast" ? f.cast : f.idle[o.beat ?? 0];
-    g.drawImage(pic, px - f.ax, py - f.ay);
+    if (o.lit) g.drawImage(gilded(pic), px - f.ax - 1, py - f.ay - 1);
+    else g.drawImage(pic, px - f.ax, py - f.ay);
   }
   if (o.alpha !== undefined) g.globalAlpha = 1;
 }

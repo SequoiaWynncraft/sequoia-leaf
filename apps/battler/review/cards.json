@@ -1,0 +1,108 @@
+[
+  ["size", 1280, 800],
+  ["wait", 900],
+  [
+    "eval",
+    "(window.raid.fresh(), window.raid.hold(true), window.raid.start(11, 0), window.raid.taught(), window.raid.bot(5), window.raid.skip(2), JSON.stringify(window.raid.state()))"
+  ],
+  [
+    "eval",
+    "(window.raid.plan(), window.raid.skip(2), window.raid.party().map(p => p.kind + '*' + p.stars + '@' + p.on + p.at).join(' '))"
+  ],
+  [
+    "eval",
+    "(()=>{const id = window.raid.give('kettle', 2); window.raid.item('thorn'); window.raid.item('plume'); window.raid.item('chestnut'); window.raid.item('glowcap'); window.raid.skip(1.2); return 'kettle ' + id})()"
+  ],
+  ["wait", 400],
+  [
+    "eval",
+    "(()=>{const p = window.raid.party().find(p => p.stars === 1 && p.on === 'board'); window.raid.tap(p.id); window.raid.skip(0.2); return 'one star: ' + p.kind})()"
+  ],
+  ["wait", 500],
+  ["shot", "c-01-one-star"],
+  [
+    "eval",
+    "(()=>{window.raid.drop(); const p = window.raid.party().find(p => p.kind === 'kettle'); window.raid.tap(p.id); window.raid.skip(0.2); return 'two stars: ' + p.kind})()"
+  ],
+  ["wait", 500],
+  ["shot", "c-02-two-star"],
+  [
+    "eval",
+    "(()=>{window.raid.drop(); const p = window.raid.party().find(p => p.on === 'board'); window.raid.hand(0, p.id); window.raid.hand(0, p.id); window.raid.skip(0.6); window.raid.tap(p.id); window.raid.skip(0.2); return 'holding: ' + p.kind})()"
+  ],
+  ["wait", 500],
+  ["shot", "c-03-holding-items"],
+  ["eval", "(window.raid.drop(), window.raid.offer(1, 'cindernewt'), window.raid.skip(0.3), 'stall')"],
+  [
+    "moveAt",
+    "(()=>{const r=document.querySelector('[data-offer=\"1\"]').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  ["wait", 600],
+  ["shot", "c-04-stall-figure"],
+  ["move", 640, 120],
+  ["wait", 300],
+  [
+    "moveAt",
+    "(()=>{const r=document.querySelector('#traits .trait').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  ["eval", "(window.raid.skip(0.12), 'pointing at ' + document.querySelector('#traits .trait').dataset.trait)"],
+  ["wait", 600],
+  [
+    "eval",
+    "'card up: ' + !!document.querySelector('.raid-card') + ', lit offers: ' + document.querySelectorAll('.offer.tlit').length + ', dim offers: ' + document.querySelectorAll('.offer.tdim').length"
+  ],
+  ["shot", "c-05-trait-pointed"],
+  [
+    "downAt",
+    "(()=>{const r=document.querySelector('#traits .trait').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  [
+    "upAt",
+    "(()=>{const r=document.querySelector('#traits .trait').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  ["move", 900, 140],
+  ["eval", "(window.raid.skip(0.5), 'kept card: ' + !!document.querySelector('.raid-card.pinned'))"],
+  ["wait", 600],
+  ["shot", "c-06-trait-clicked"],
+  ["click", ".raid-card.pinned [data-member]:not([disabled])"],
+  ["move", 900, 140],
+  [
+    "eval",
+    "(window.raid.skip(0.2), 'figure from trait: ' + document.querySelector('.raid-card.pinned .nameline b').textContent)"
+  ],
+  ["wait", 500],
+  ["shot", "c-07-figure-from-trait"],
+  ["key", "Escape"],
+  [
+    "eval",
+    "(window.raid.skip(0.2), 'after Escape: card ' + !!document.querySelector('.raid-card') + ', lit ' + document.body.classList.contains('trait-lit'))"
+  ],
+  [
+    "moveAt",
+    "(()=>{const r=document.querySelector('#rack [data-item]').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  ["wait", 600],
+  ["shot", "c-08-item-card"],
+  ["move", 640, 120],
+  ["eval", "(()=>{window.raid.item('honeycake'); window.raid.skip(0.3); return 'a finished item on the rack'})()"],
+  [
+    "moveAt",
+    "(()=>{const a=[...document.querySelectorAll('#rack [data-item]')]; const r=a[a.length-1].getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  ["wait", 600],
+  ["shot", "c-09-finished-item-card"],
+  ["move", 640, 120],
+  ["eval", "(window.raid.to('boon'), window.raid.skip(1.5), JSON.stringify(window.raid.state().choice))"],
+  ["wait", 700],
+  ["shot", "c-10-boon-pick"],
+  ["click", "[data-pick='0']"],
+  ["eval", "(window.raid.skip(1.5), window.raid.plan(), window.raid.fight(), window.raid.busy(), 'a fight')"],
+  ["click", "#traits .trait"],
+  ["move", 640, 30],
+  [
+    "eval",
+    "(window.raid.tick(4), 'kept in a fight: ' + document.querySelector('#traits [aria-pressed=\"true\"]')?.dataset.trait)"
+  ],
+  ["wait", 700],
+  ["shot", "c-11-fight-trait-kept"]
+]

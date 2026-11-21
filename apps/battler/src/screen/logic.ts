@@ -8,9 +8,14 @@ import {
   boonNumber,
   COMPONENT_IDS,
   type ComponentId,
+  countTraits,
   ECONOMY,
   fieldCap,
   fielded,
+  FIGURE_IDS,
+  type FigureId,
+  FIGURES,
+  FINISHED,
   type FinishedId,
   forge,
   holdItem,
@@ -18,14 +23,25 @@ import {
   interestNow,
   isComponentId,
   type ItemId,
+  openFight,
+  type Party,
+  partyOf,
   type Piece,
   pieces,
   priceOf,
   type Run,
+  specOf,
   type Spot,
+  type Stars,
+  starScale,
+  stepFor,
   type TraitId,
+  TRAITS,
   traitsNow,
+  traitsOf,
+  type UnitKind,
 } from "../game/index.ts";
+import { charmsOf } from "../game/party.ts";
 
 /** Where a figure picked up from `from` may be put down: free seats, free hollows, and places it would swap into. */
 export interface Reach {
@@ -197,3 +213,108 @@ function hasPair(owned: readonly Piece[]): boolean {
   }
   return false;
 }
+
+// ---------- what a card says about a figure ----------
+
+/** The numbers a card shows for a figure. */
+export interface Numbers {
+  health: number;
+  attack: number;
+  /** Attacks a second. */
+  speed: number;
+  reach: number;
+  armour: number;
+  ward: number;
+}
+export const NUMBER_KEYS = ["health", "attack", "speed", "reach", "armour", "ward"] as const;
+
+/** A figure's own numbers at a number of stars, before anything it holds or belongs to. */
+export function plainNumbers(kind: UnitKind, stars: Stars): Numbers {
+  const spec = specOf(kind);
+  const star = starScale(stars);
+  return {
+    health: Math.round(spec.hp * star),
+    attack: Math.round(spec.attack * star),
+    speed: spec.speed,
+    reach: spec.range,
+    armour: spec.armour,
+    ward: spec.ward,
+  };
+}
+
+const EMPTY: Party = { who: "", title: "", figures: [], charms: [], boons: [], might: 100 };
+
+/**
+ * A figure's numbers as the next fight would start them: its items, its party's boons and, on the
+ * board, the traits its party switches on. Asked of the fight itself, so the card can never say
+ * other than what happens.
+ */
+export function startNumbers(party: Party, seat: number, against: Party = EMPTY): Numbers | null {
+  const fight = openFight({ seed: 1, sides: [party, against] });
+  const u = fight.units.find((x) => x.side === 0 && !x.summoned && x.seat === seat);
+  if (!u) return null;
+  return {
+    health: Math.round(u.maxHp),
+    attack: Math.round(u.attack),
+    speed: u.speed,
+    reach: u.range,
+    armour: u.armour,
+    ward: u.ward,
+  };
+}
+
+/** The numbers of one of the member's own figures: on the board with the party's traits, on the bench with only what it holds. */
+export function pieceNumbers(run: Run, spot: Spot): Numbers | null {
+  if (spot.on === "board") return startNumbers(partyOf(run), spot.at);
+  const piece = run.bench[spot.at];
+  if (!piece) return null;
+  // Alone, in the middle row: nobody to share a trait with, and no row of Tidy Formation's.
+  const alone: Party = {
+    ...partyOf(run),
+    figures: [{ kind: piece.kind, stars: piece.stars, seat: 7, items: piece.items.slice(), fed: piece.fed }],
+    charms: [],
+  };
+  return startNumbers(alone, 7);
+}
+
+/** How a trait stands for a party: how many it fields, and how many the next step needs. */
+export interface TraitCount {
+  count: number;
+  /** The next step's need; the top step's when it is all the way on. */
+  next: number;
+  step: number;
+}
+export function traitCount(party: Pick<Party, "figures" | "charms">, trait: TraitId): TraitCount {
+  const counts = countTraits(
+    party.figures.map((p) => p.kind),
+    party.charms,
+  );
+  const count = counts[trait] ?? 0;
+  const steps = TRAITS[trait].steps;
+  return { count, next: steps.find((need) => need > count) ?? steps.at(-1) ?? 1, step: stepFor(trait, count) };
+}
+/** The same for the member's party as it is fielded now. */
+export const ownTraitCount = (run: Run, trait: TraitId): TraitCount =>
+  traitCount({ figures: partyOf(run).figures, charms: charmsOf(run.boons) }, trait);
+
+/** Where the member has a figure just now: fielded, on the bench, on the stall, or nowhere. */
+export function whereIs(run: Run, kind: FigureId): "board" | "bench" | "stall" | null {
+  if (run.board.some((p) => p?.kind === kind)) return "board";
+  if (run.bench.some((p) => p?.kind === kind)) return "bench";
+  if (run.stall.includes(kind)) return "stall";
+  return null;
+}
+
+/** Whether the rack has a finished item, or both the components that make it. */
+export function rackHas(run: Run, item: FinishedId): "item" | "parts" | null {
+  if (run.items.includes(item)) return "item";
+  const [a, b] = FINISHED[item].made;
+  const loose = run.items.filter(isComponentId);
+  const at = loose.indexOf(a);
+  if (at < 0) return null;
+  return loose.some((c, i) => i !== at && c === b) ? "parts" : null;
+}
+
+/** Every figure of a trait, cheapest first, in the order of the roster within a tier. */
+export const membersOf = (trait: TraitId): FigureId[] =>
+  FIGURE_IDS.filter((id) => traitsOf(id).includes(trait)).toSorted((a, b) => FIGURES[a].tier - FIGURES[b].tier);

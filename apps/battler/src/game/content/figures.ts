@@ -7,6 +7,10 @@
  * Every number is for one star. Two stars multiply health and attack by `STAR[1]`, three by
  * `STAR[2]`; an ability's own numbers are written out for each star. In an ability's sentence,
  * `{name}` is filled from its numbers.
+ *
+ * Every ability is said twice: `text` is the sentence in the guild's voice that the almanac shows,
+ * and `short` is what a card on the table shows: effects and numbers only, in at most two short
+ * fragments.
  */
 import type { CallingId, KinId, TraitId } from "./traits.ts";
 
@@ -23,6 +27,8 @@ export interface AbilitySpec {
   readonly name: string;
   readonly shape: Shape;
   readonly text: string;
+  /** The same in a few words for a card: `Shield {shield} for {lasts}s.` */
+  readonly short: string;
   /** The numbers in the sentence, for one, two and three stars. */
   readonly n: Readonly<Record<string, readonly [number, number, number]>>;
 }
@@ -111,6 +117,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "line",
       text: "A spark jumps from its fire: {damage} magic damage to its target and to whoever is standing behind it.",
       n: { damage: [75, 130, 235] },
+      short: "{damage} magic to target and the one behind.",
     },
     quip: "Asleep in the fire. Do not move the fire.",
   },
@@ -132,6 +139,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "ally",
       text: "Tucks a cushion round whoever in the party is most hurt: a shield of {shield} for {lasts} seconds.",
       n: { shield: [110, 190, 340], lasts: [4, 4, 4] },
+      short: "Shield {shield} on most hurt ally for {lasts}s.",
     },
     quip: "Soft. Very soft.",
   },
@@ -153,6 +161,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "ring",
       text: "Shakes its wings over its target: {damage} magic damage to it and to every enemy touching it.",
       n: { damage: [80, 140, 250] },
+      short: "{damage} magic to target and adjacent enemies.",
     },
     quip: "Drawn to whatever just went out.",
   },
@@ -174,6 +183,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "leap",
       text: "Goes under and comes up beside the enemy furthest away, biting it for {damage} physical damage.",
       n: { damage: [90, 160, 285] },
+      short: "Burrows to furthest enemy. {damage} physical.",
     },
     quip: "Has been underground. Will be again.",
   },
@@ -195,6 +205,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "bolt",
       text: "Spits {seeds} seeds at its target, {damage} physical damage each.",
       n: { seeds: [3, 3, 3], damage: [34, 60, 108] },
+      short: "{seeds} seeds at target, {damage} physical each.",
     },
     quip: "Small. Loud. Has a twig and is not afraid to use it.",
   },
@@ -216,6 +227,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "bolt",
       text: "Pinches its target and does not let go: {damage} physical damage, and it is stunned for {stun} seconds.",
       n: { damage: [85, 150, 265], stun: [1.5, 1.5, 2] },
+      short: "{damage} physical to target. Stuns {stun}s.",
     },
     quip: "Present at roll call. Barely.",
   },
@@ -237,6 +249,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "ring",
       text: "Tips the barrow over and gets behind it: a shield of {shield} for {lasts} seconds, and {damage} physical damage to every enemy touching it.",
       n: { shield: [120, 210, 375], lasts: [4, 4, 4], damage: [40, 70, 125] },
+      short: "Shield {shield} for {lasts}s. {damage} physical to adjacent enemies.",
     },
     quip: "Nobody has seen what is in the barrow.",
   },
@@ -260,6 +273,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "ally",
       text: "Pours a cup for whoever in the party is most hurt: {heal} health back.",
       n: { heal: [150, 260, 465] },
+      short: "Heals most hurt ally for {heal}.",
     },
     quip: "Somebody left it on. It came along.",
   },
@@ -281,6 +295,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "ring",
       text: "Slimes every enemy touching it: {damage} magic damage, and they are {slow}% slower for {lasts} seconds.",
       n: { damage: [60, 105, 190], slow: [30, 40, 50], lasts: [3, 3, 3] },
+      short: "{damage} magic to adjacent enemies. Slows {slow}% for {lasts}s.",
     },
     quip: "In no hurry at all.",
   },
@@ -302,6 +317,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "summon",
       text: "A bit comes off: a Glorplet with {health} health and {attack} attack joins the fight beside it.",
       n: { health: [200, 360, 650], attack: [24, 43, 78] },
+      short: "A Glorplet joins: {health} health, {attack} attack.",
     },
     quip: "Blue. Wobbly. Plural, shortly.",
   },
@@ -323,6 +339,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "bolt",
       text: "Lobs a cone at the enemy furthest away: {damage} physical damage, and it is stunned for {stun} second.",
       n: { damage: [120, 210, 375], stun: [1, 1, 1] },
+      short: "{damage} physical to furthest enemy. Stuns {stun}s.",
     },
     quip: "Buries cones. Forgets where. Finds more.",
   },
@@ -344,6 +361,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "self",
       text: "Loses its temper: attacks {haste}% faster for {lasts} seconds.",
       n: { haste: [60, 90, 130], lasts: [4, 4, 4] },
+      short: "Attacks {haste}% faster for {lasts}s.",
     },
     quip: "Has a complaint. Has several.",
   },
@@ -365,6 +383,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "chain",
       text: "Skims a pebble at its target for {damage} physical damage; it skips on to {skips} more enemies close by.",
       n: { damage: [95, 165, 300], skips: [2, 2, 3] },
+      short: "{damage} physical to target. Skips to {skips} more enemies.",
     },
     quip: "Throws pebbles. Says it was #11.",
   },
@@ -386,6 +405,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "bolt",
       text: "Holds the lantern up at the {count} nearest enemies: {damage} magic damage each.",
       n: { count: [3, 3, 3], damage: [90, 160, 285] },
+      short: "{damage} magic to each of {count} nearest enemies.",
     },
     quip: "Keeps the lantern lit. Will not say for whom.",
   },
@@ -409,6 +429,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "ally",
       text: "Tells the {count} friends nearest it how to do things properly: +{attack}% attack for the rest of the fight.",
       n: { count: [2, 2, 3], attack: [22, 36, 60] },
+      short: "+{attack}% attack to {count} nearest allies. Lasts the fight.",
     },
     quip: "A sprout with opinions.",
   },
@@ -430,6 +451,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "cone",
       text: "Breathes out over its target: {damage} magic damage to every enemy in a cone two hexes deep.",
       n: { damage: [150, 260, 470] },
+      short: "{damage} magic in a cone, 2 hexes deep.",
     },
     quip: "Lives in the embers. Complains about the cold.",
   },
@@ -451,6 +473,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "bolt",
       text: "Spits one big drop at its target: {damage} magic damage, and it is {slow}% slower for {lasts} seconds.",
       n: { damage: [190, 330, 600], slow: [30, 30, 30], lasts: [3, 3, 3] },
+      short: "{damage} magic to target. Slows {slow}% for {lasts}s.",
     },
     quip: "Spits. Apologises. Spits again.",
   },
@@ -473,6 +496,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "self",
       text: "Does nothing, pointedly. For {lasts} seconds it takes {less}% less from every hit, and whoever attacks it up close stubs a toe for {stub} damage.",
       n: { lasts: [4, 4, 4], less: [40, 50, 60], stub: [45, 80, 145] },
+      short: "Takes {less}% less for {lasts}s. Melee attackers take {stub}.",
     },
     quip: "It is a rock. It came anyway.",
   },
@@ -494,6 +518,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "bolt",
       text: "Jumps out at its target: {damage} physical damage, and half as much again if it was busy with somebody else.",
       n: { damage: [160, 280, 500] },
+      short: "{damage} physical to target. Half again if target is busy.",
     },
     quip: "It is a bush. Pay it no mind.",
   },
@@ -515,6 +540,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "ally",
       text: "Hands out plasters to the {count} most hurt in the party: {heal} health back each.",
       n: { count: [2, 2, 3], heal: [140, 240, 430] },
+      short: "{count} most hurt allies: heal {heal} each.",
     },
     quip: "A plaster in each claw. Applies them sideways.",
   },
@@ -538,6 +564,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "ring",
       text: "Turns right round with its claws out: {damage} physical damage to every enemy touching it, and it heals for {leech}% of what lands.",
       n: { damage: [170, 300, 540], leech: [30, 30, 30] },
+      short: "{damage} physical to adjacent enemies. Heals {leech}% of what lands.",
     },
     quip: "Was asleep. Is not now. Blames you.",
   },
@@ -559,6 +586,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "leap",
       text: "Swoops onto the enemy furthest away: {damage} physical damage, and it is stunned for {stun} seconds.",
       n: { damage: [240, 420, 760], stun: [1.5, 1.5, 2] },
+      short: "Leaps to furthest enemy: {damage} physical. Stuns {stun}s.",
     },
     quip: "You will not hear it. It heard you.",
   },
@@ -580,6 +608,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "line",
       text: "Stabs straight through its target: {damage} physical damage to every enemy on a line {length} hexes long.",
       n: { damage: [220, 385, 700], length: [5, 5, 5] },
+      short: "{damage} physical along a {length}-hex line.",
     },
     quip: "Stands on one leg. The other is for emergencies.",
   },
@@ -601,6 +630,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "ring",
       text: "Gets in everybody's way: a shield of {shield} for {lasts} seconds, and every enemy within two hexes has to attack it for {taunt} seconds.",
       n: { shield: [300, 520, 940], lasts: [4, 4, 4], taunt: [3, 3, 4] },
+      short: "Shield {shield} for {lasts}s. Taunts enemies in 2 hexes for {taunt}s.",
     },
     quip: "Wide. Has never once been counted wrong.",
   },
@@ -622,6 +652,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "ring",
       text: "A spoonful each for itself and every friend within two hexes: {heal} health back, and {haste}% faster attacks for {lasts} seconds.",
       n: { heal: [180, 310, 560], haste: [25, 25, 25], lasts: [4, 4, 4] },
+      short: "Heals self and allies in 2 hexes for {heal}. +{haste}% attack speed for {lasts}s.",
     },
     quip: "It is good for you. Do not ask what is in it.",
   },
@@ -645,6 +676,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "ring",
       text: "Greg sits down. Every enemy within two hexes takes {damage} magic damage and is stunned for {stun} seconds.",
       n: { damage: [200, 350, 800], stun: [1.25, 1.75, 2.5] },
+      short: "{damage} magic to enemies in 2 hexes. Stuns {stun}s.",
     },
     quip: "Eats offerings. All of them.",
   },
@@ -666,6 +698,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "ring",
       text: "Its gold antlers ring: {damage} magic damage to every enemy within two hexes, and the whole party attacks {haste}% faster for {lasts} seconds.",
       n: { damage: [160, 280, 640], haste: [20, 35, 60], lasts: [4, 4, 4] },
+      short: "{damage} magic to enemies in 2 hexes. Party attacks {haste}% faster for {lasts}s.",
     },
     quip: "Nobody knows whose it is.",
   },
@@ -687,6 +720,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
       shape: "bolt",
       text: "Looks at its target, then bats it off its hex: {damage} physical damage, knocked back {push} hexes, stunned for {stun} seconds.",
       n: { damage: [280, 490, 1100], push: [2, 2, 3], stun: [1.5, 1.5, 2.5] },
+      short: "{damage} physical to target. Knocks back {push} hexes, stuns {stun}s.",
     },
     quip: "Sits on the board. Things fall off.",
   },
@@ -747,6 +781,7 @@ export const SUMMONS: Record<SummonId, UnitSpec> = {
       shape: "always",
       text: "Whoever attacks it up close takes {thorns} damage.",
       n: { thorns: [8, 14, 25] },
+      short: "Melee attackers take {thorns}.",
     },
     quip: "Where there was one bramble, there are now two.",
   },
@@ -799,6 +834,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
       shape: "always",
       text: "Whoever attacks it up close takes {thorns} damage.",
       n: { thorns: [10, 18, 32] },
+      short: "Melee attackers take {thorns}.",
     },
     quip: "It was here first.",
   },
@@ -816,6 +852,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
       shape: "bolt",
       text: "Stings its target: {damage} damage that no armour stops.",
       n: { damage: [50, 90, 160] },
+      short: "{damage} true to target.",
     },
     quip: "All sting, no patience.",
   },
@@ -833,6 +870,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
       shape: "ring",
       text: "Splashes every enemy touching it: {damage} magic damage, and they are {slow}% slower for {lasts} seconds.",
       n: { damage: [40, 70, 125], slow: [30, 35, 40], lasts: [3, 3, 3] },
+      short: "{damage} magic to adjacent enemies. Slows {slow}% for {lasts}s.",
     },
     quip: "Deeper than it looks.",
   },
@@ -850,6 +888,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
       shape: "always",
       text: "When it falls it puffs spores: {damage} magic damage to every enemy within two hexes.",
       n: { damage: [70, 120, 215] },
+      short: "On falling, {damage} magic within 2 hexes.",
     },
     quip: "Do not sit on it.",
   },
@@ -867,6 +906,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
       shape: "bolt",
       text: "Blows its target back {push} hexes: {damage} magic damage, and it is {slow}% slower for {lasts} seconds. Unless it is a Rock.",
       n: { push: [2, 2, 3], damage: [50, 90, 160], slow: [30, 30, 30], lasts: [2, 2, 2] },
+      short: "Knocks target back {push} hexes, {damage} magic. Slows {slow}% for {lasts}s.",
     },
     quip: "Rearranges things.",
   },
@@ -884,6 +924,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
       shape: "bolt",
       text: "Flies to your back row when the fight starts. Pecks its target for {damage} physical damage, and half as much again if it is holding anything shiny.",
       n: { damage: [90, 160, 285] },
+      short: "Starts in your back row. {damage} physical, half again on holders.",
     },
     quip: "Likes shiny things. You are shiny.",
   },
@@ -901,6 +942,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
       shape: "ring",
       text: "Squelches: {damage} magic damage to every enemy touching it, and they are stuck for {stun} second.",
       n: { damage: [60, 105, 190], stun: [1, 1, 1.5] },
+      short: "{damage} magic to adjacent enemies. Stuns {stun}s.",
     },
     quip: "A great deal of mud.",
   },
@@ -918,6 +960,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
       shape: "always",
       text: "Starts the fight inside its shell: a shield of {shell} that lasts until it is broken.",
       n: { shell: [120, 215, 390] },
+      short: "Shield {shell} until broken.",
     },
     quip: "Present at roll call.",
   },
@@ -936,6 +979,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
       shape: "summon",
       text: "Whoever attacks it up close takes {thorns} damage. Puts out a runner: a Bramble Runner sprouts beside the nearest enemy, at most {most} at a time.",
       n: { thorns: [12, 21, 38], most: [3, 3, 4] },
+      short: "Melee attackers take {thorns}. Sprouts runners by enemies, {most} at most.",
     },
     quip: "It was here first. It will be here last.",
   },
@@ -954,6 +998,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
       shape: "leap",
       text: "Swoops on whoever is holding the most shiny things: {damage} physical damage, and they are stunned for {stun} seconds.",
       n: { damage: [230, 400, 720], stun: [1.5, 1.5, 2] },
+      short: "Leaps to whoever holds most items. {damage} physical, stuns {stun}s.",
     },
     quip: "Everything in the hoard was yours once.",
   },
@@ -972,6 +1017,7 @@ export const TROUBLE: Record<TroubleId, UnitSpec> = {
       shape: "cone",
       text: "Starts inside a shell worth {shell}. Gets crabbier: +{attack}% attack for the rest of the fight, and a pinch of {damage} physical damage across a cone two hexes deep. At half health it calls the roll: {crabs} more crabs nobody counted turn up.",
       n: { shell: [800, 1440, 2600], attack: [15, 15, 15], damage: [320, 560, 1000], crabs: [2, 2, 3] },
+      short: "+{attack}% attack, {damage} physical in a cone. Shield {shell}; {crabs} more crabs at half health.",
     },
     quip: "Every roll call, one crab is unaccounted for. Here it is.",
   },
@@ -1004,14 +1050,22 @@ export const traitsOf = (kind: FigureId): readonly TraitId[] => {
 export function abilityNumber(kind: UnitKind, name: string, stars: Stars): number {
   return specOf(kind).ability?.n[name]?.[stars - 1] ?? 0;
 }
-/** What an ability does at a number of stars, in a sentence. */
-export function abilityText(kind: UnitKind, stars: Stars): string {
-  const ability = specOf(kind).ability;
-  if (!ability) return "";
-  return ability.text.replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
+/** Fills an ability's `{name}` gaps with its numbers at a number of stars. */
+function filled(ability: AbilitySpec, text: string, stars: Stars): string {
+  return text.replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
     const v = ability.n[key]?.[stars - 1];
     return v === undefined ? whole : String(v);
   });
+}
+/** What an ability does at a number of stars, in a sentence. */
+export function abilityText(kind: UnitKind, stars: Stars): string {
+  const ability = specOf(kind).ability;
+  return ability ? filled(ability, ability.text, stars) : "";
+}
+/** What an ability does at a number of stars, in a few words for a card. */
+export function abilityShort(kind: UnitKind, stars: Stars): string {
+  const ability = specOf(kind).ability;
+  return ability ? filled(ability, ability.short, stars) : "";
 }
 /** The figures of a tier, in the order of the table. */
 export const figuresOfTier = (tier: Tier): FigureId[] => FIGURE_IDS.filter((id) => FIGURES[id].tier === tier);

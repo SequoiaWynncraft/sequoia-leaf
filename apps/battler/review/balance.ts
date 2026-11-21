@@ -5,14 +5,19 @@ import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from 
  *
  *     bun review/balance.ts [runs each] [trail 0-2] [section ...]
  *
- * Sections: habits, rooms, traits, figures, items, fights (all of them if none is named). It is a
- * gauge for tuning the tables in `src/game/content`, not a verdict: the bots are rough players.
+ * Sections: habits, rooms, traits, figures, items, suits, fights (all of them if none is named). It
+ * is a gauge for tuning the tables in `src/game/content`, not a verdict: the bots are rough players.
+ * `suits` is each figure with the finished items it held, worst first, beside the three a card
+ * recommends for it.
  */
+import { GOOD_WITH } from "../src/game/content/advice.ts";
 import { BOON_IDS, type BoonId, BOONS } from "../src/game/content/boons.ts";
-import { FIGURE_IDS, type FigureId, FIGURES } from "../src/game/content/figures.ts";
-import { FINISHED, FINISHED_IDS, type FinishedId, isFinishedId } from "../src/game/content/items.ts";
+import { FIGURE_IDS, type FigureId, FIGURES, isFigureId } from "../src/game/content/figures.ts";
+import { FINISHED, FINISHED_IDS, type FinishedId, holdItem, isFinishedId } from "../src/game/content/items.ts";
 import { ROOM_COUNT, ROOMS, TRAILS } from "../src/game/content/rooms.ts";
 import { CALLINGS, KINS, TRAIT_IDS, type TraitId, TRAITS } from "../src/game/content/traits.ts";
+import { resolveFight } from "../src/game/fight/engine.ts";
+import type { FightSetup, FightSummary } from "../src/game/fight/types.ts";
 import { beginFight, startRun, takeTakings, traitsNow } from "../src/game/run.ts";
 
 const args = process.argv.slice(2);
@@ -64,6 +69,45 @@ const byTrait = new Map<string, Tally>();
 const byFigure = tallies<FigureId>(FIGURE_IDS);
 const byFigureStars = new Map<string, Tally>();
 const byItem = tallies<FinishedId>(FINISHED_IDS);
+/**
+ * What a finished item does for a figure, keyed `figure item`: in a sample of real fights, the same
+ * fight played again with that figure holding one more item, and how much better its side ends
+ * (health left on its side minus health left on the other, as shares, so 1 is the whole party).
+ */
+const bySuit = new Map<string, { sum: number; n: number }>();
+/** One fight in this many, among those trying, is played again for every figure and item. */
+const SUIT_EVERY = 24;
+let suitTrials = 0;
+const left = (f: FightSummary, side: 0 | 1): number => {
+  let hp = 0;
+  let max = 0;
+  for (const u of f.units) {
+    if (u.side !== side || u.summoned) continue;
+    hp += u.hp;
+    max += u.maxHp;
+  }
+  return max > 0 ? hp / max : 0;
+};
+const margin = (f: FightSummary): number => left(f, 0) - left(f, 1);
+function trySuits(setup: FightSetup, base: FightSummary): void {
+  const [ours, theirs] = setup.sides;
+  const was = margin(base);
+  ours.figures.forEach((p, i) => {
+    if (!isFigureId(p.kind)) return;
+    for (const item of FINISHED_IDS) {
+      const held = holdItem(p.items, item);
+      if (!held) return;
+      const figures = ours.figures.with(i, { ...p, items: held.held });
+      const now = margin(resolveFight({ seed: setup.seed, sides: [{ ...ours, figures }, theirs] }));
+      const key = `${p.kind} ${item}`;
+      const t = bySuit.get(key) ?? { sum: 0, n: 0 };
+      t.sum += now - was;
+      t.n++;
+      bySuit.set(key, t);
+      suitTrials++;
+    }
+  });
+}
 const byBoon = tallies<BoonId>(BOON_IDS);
 const share = new Map<FigureId, { dealt: number; fights: number }>();
 const all = new Tally();
@@ -97,7 +141,8 @@ for (const habit of HABITS) {
       const board = run.board.flatMap((p) => (p ? [p] : []));
       const boons = run.boons.slice();
       const plan = `${String(room + 1).padStart(2)} ${run.foe.who === "The forest" ? run.foe.title : "sparring"}`;
-      if (!beginFight(run).ok) break;
+      const begun = beginFight(run);
+      if (!begun.ok) break;
       const taken = takeTakings(run);
       if (!taken.ok) break;
       const win = taken.fight.result === "win";
@@ -106,6 +151,7 @@ for (const habit of HABITS) {
       if (taken.fight.dusk) dusks++;
       if (taken.fight.result === "draw") draws++;
       if (!trying(habit)) continue;
+      if (shows("suits") && all.tried % SUIT_EVERY === 0) trySuits(begun.setup, taken.fight);
       all.add(win, room);
       byRoom[room]?.add(win, room);
       const planTally = byPlan.get(plan) ?? new Tally();
@@ -251,4 +297,37 @@ if (shows("items")) {
     "Boons held",
     BOON_IDS.map((id): [BoonId, Tally, string] => [id, byBoon.get(id) ?? new Tally(), BOONS[id].name]),
   );
+}
+/** A change in points of health left, signed, to one place. */
+const points = (n: number): string => (Number.isNaN(n) ? "?" : `${n >= 0 ? "+" : ""}${n.toFixed(1)}`);
+if (shows("suits")) {
+  console.log(
+    `What one more finished item does for each figure, in ${suitTrials} fights played again (every ${SUIT_EVERY}th fight, ` +
+      "each figure given each item): points of health left on the figure's side over the other, the same fight without it.",
+  );
+  console.log("The three a card recommends are named; * marks one among that figure's three worst.");
+  const gain = (id: FigureId, item: FinishedId): number => {
+    const t = bySuit.get(`${id} ${item}`);
+    return t && t.n > 0 ? (t.sum / t.n) * 100 : Number.NaN;
+  };
+  let clashes = 0;
+  for (const id of FIGURE_IDS) {
+    const ranked = FINISHED_IDS.filter((item) => !Number.isNaN(gain(id, item))).toSorted(
+      (a, b) => gain(id, a) - gain(id, b),
+    );
+    const worst = ranked.slice(0, 3);
+    const best = ranked.slice(-3).toReversed();
+    const n = bySuit.get(`${id} ${FINISHED_IDS[0]}`)?.n ?? 0;
+    const named = GOOD_WITH[id].map((item) => {
+      const clash = worst.includes(item);
+      if (clash) clashes++;
+      return `${FINISHED[item].name} ${points(gain(id, item))}${clash ? " *" : ""}`;
+    });
+    const list = (items: readonly FinishedId[]): string =>
+      items.map((item) => `${FINISHED[item].name} ${points(gain(id, item))}`).join(", ");
+    console.log(`  ${FIGURES[id].name} (${n} fights)`);
+    console.log(`      good with: ${named.join(", ")}`);
+    console.log(`      best: ${list(best)}; worst: ${list(worst)}`);
+  }
+  console.log(`\n${clashes} recommended item${clashes === 1 ? "" : "s"} among a figure's three worst.\n`);
 }

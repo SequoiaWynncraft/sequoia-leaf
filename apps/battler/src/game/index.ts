@@ -6,6 +6,7 @@
 // What is in the game: plain tables.
 export {
   abilityNumber,
+  abilityShort,
   abilityText,
   type AbilitySpec,
   BOSS_IDS,
@@ -44,8 +45,10 @@ export {
   traitNumber,
   TRAITS,
   type TraitSpec,
+  traitShort,
   traitText,
 } from "./content/traits.ts";
+export { GOOD_WITH, type Role, roleLine, ROLES, type Three } from "./content/advice.ts";
 export {
   COMPONENT_IDS,
   type ComponentId,
@@ -59,13 +62,15 @@ export {
   isComponentId,
   isFinishedId,
   ITEM_IDS,
+  itemAdds,
   type ItemId,
   itemName,
+  itemShort,
   type ItemStats,
   itemStats,
   itemText,
 } from "./content/items.ts";
-export { BOON_IDS, type BoonId, boonNumber, BOONS, type BoonSpec, boonText } from "./content/boons.ts";
+export { BOON_IDS, type BoonId, boonNumber, BOONS, boonShort, type BoonSpec, boonText } from "./content/boons.ts";
 export {
   BOSS_ROOMS,
   ECONOMY,
