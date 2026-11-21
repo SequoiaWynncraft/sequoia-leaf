@@ -16,17 +16,17 @@ function war(warPoints: number, inClaim?: boolean): Activity {
   return inClaim === undefined ? activity : { ...activity, inClaim };
 }
 
-const rates = { leafPerRaid: 100, leafPerWarPoint: 0.5, leafPerClaimWarPoint: 1 };
+const rates = { leafPerRaidSeasonRating: 1, leafPerWarPoint: 0.5, leafPerClaimWarPoint: 1 };
 
 describe("leafForActivity", () => {
-  it("pays every raid the same, whatever its season rating", () => {
-    expect(leafForActivity(raid(110), DEFAULT_RULES.earning)).toBe(100);
-    expect(leafForActivity(raid(50), DEFAULT_RULES.earning)).toBe(100);
-    expect(leafForActivity(raid(0), DEFAULT_RULES.earning)).toBe(100);
+  it("pays a raid its season rating share in Leaf, so more gambits pay more", () => {
+    expect(leafForActivity(raid(110), DEFAULT_RULES.earning)).toBe(110);
+    expect(leafForActivity(raid(50), DEFAULT_RULES.earning)).toBe(50);
   });
 
-  it("pays a raid the configured amount, rounded down", () => {
-    expect(leafForActivity(raid(110), { ...rates, leafPerRaid: 150.7 })).toBe(150);
+  it("scales a raid by the configured rate and rounds down", () => {
+    expect(leafForActivity(raid(110), { ...rates, leafPerRaidSeasonRating: 1.5 })).toBe(165);
+    expect(leafForActivity(raid(3), { ...rates, leafPerRaidSeasonRating: 0.5 })).toBe(1);
   });
 
   it("pays a war half its war points, rounded down", () => {
