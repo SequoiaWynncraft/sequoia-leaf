@@ -63,9 +63,9 @@ describe("the payout", () => {
     }
     expect(payout({ ...WON, trail: 2 }).coins).toBeGreaterThan(payout({ ...WON, trail: 1 }).coins);
   });
-  test("is modest: a whole raid on the first trail pays a few hundred Coins", () => {
-    expect(payout(WON).coins).toBeGreaterThan(150);
-    expect(payout(WON).coins).toBeLessThan(400);
+  test("is modest: a whole raid on the first trail pays about half an hour's Coins", () => {
+    expect(payout(WON).coins).toBeGreaterThan(300);
+    expect(payout(WON).coins).toBeLessThan(800);
   });
 });
 

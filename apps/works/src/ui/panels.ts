@@ -5,6 +5,7 @@
 
 import { amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { balance, spend } from "@sequoia-leaf/kit/purse.ts";
+import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 
@@ -466,7 +467,8 @@ function shift(_art: Art, body: HTMLElement): () => void {
     panelHooks.shiftOn();
     panelHooks.changed();
   });
-  tip(go, `${SHIFT.leaf} Leaf`, `Double pace for ${SHIFT.minutes} minutes by the clock.`);
+  if (!closeLeaf(go, `${SHIFT.leaf} Leaf`))
+    tip(go, `${SHIFT.leaf} Leaf`, `Double pace for ${SHIFT.minutes} minutes by the clock.`);
   body.append(
     el(
       "div",

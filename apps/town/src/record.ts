@@ -4,8 +4,11 @@
  * and the camp both keep their things here (`save.ts` says what is in it).
  */
 
+import { before } from "@sequoia-leaf/kit/cloud.ts";
+
 import { MOST_OWNED, MOST_PARCELS, owned } from "./camp.ts";
 import { changed, G, hooks, watch } from "./game.ts";
+import { guild } from "./guild.ts";
 import { load, store } from "./keep.ts";
 import { waiting } from "./mail.ts";
 import type { Kept } from "./save.ts";
@@ -26,8 +29,11 @@ export function remember(): void {
   kept.wearing = [...G.wearing].filter((id) => G.owned.has(id));
   kept.claimed = [...G.claimed];
   kept.sightings = G.sightings;
-  // Time spent here is not time away.
-  if (G.home) kept.lastSeen = Date.now();
+  // Time spent here is not time away, and news told here is not told again.
+  if (G.home) {
+    kept.lastSeen = Date.now();
+    kept.cursor = guild.told() ?? kept.cursor;
+  }
   store(kept);
 }
 
@@ -69,6 +75,10 @@ if (typeof window !== "undefined") {
     if (G.home && !document.hidden) remember();
   }, 20000);
   window.addEventListener("pagehide", () => {
+    if (G.home) remember();
+  });
+  // On the guild's server, the record is written down before it is sent.
+  before(() => {
     if (G.home) remember();
   });
 }

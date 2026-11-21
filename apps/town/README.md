@@ -47,7 +47,7 @@ and copies the test skin in one go.
   fire, mind a stall, stand round the stump watching a game, and say things. Tapping one shows a
   card. A name shows only over somebody who is near the member, pointed at, or speaking, and no
   two name plates ever overlap.
-- **The guild, live.** Every twenty seconds or so: a raid party musters at the gate and leaves,
+- **The guild, live.** With the made-up guild, every twenty seconds or so: a raid party musters at the gate and leaves,
   comes back and hangs a lantern in the tree, the guild takes a territory and the banner goes up
   the pole, somebody levels. The feed in the corner says so in a line.
 - **Touching things.** Lantern posts, mushrooms, flowers, ferns, the great trunks, the fire, the
@@ -132,7 +132,7 @@ game in a frame that earns Coins moves the number in the town's corner.
 The town keeps one small record in the browser (`save.ts` says what is in it): what the member
 owns and has on, which quests they have claimed, how often they have spotted the missing crab, the
 day they were last welcomed, the day the chest by the Treasury last had change in it, when they
-were last here, and their camp (what stands where and which way round, what is in the tray, the
+were last here, how far their own news has been told (on the guild's server), and their camp (what stands where and which way round, what is in the tray, the
 parcels not yet opened, the letters, who was chosen first, the presents left with guild-mates and
 the trophies already handed over). It has a version; text that is not a record of that version
 starts a new one, and inside a record each part that makes no sense is put back to how a new
@@ -142,12 +142,58 @@ kept by the kit. `?fresh` in the address starts all of it over, once.
 
 ## Where the guild comes from
 
-Everything that will one day come from the guild's server is asked for through `guild.ts`: who the
-member is, who is in town and what each has gone off to do, what has just happened out in the
-guild, the quests and how far along they are, what the Treasury and each stall sell and for how
-much, each guild-mate's camp, what a member may leave as a present, the letters left while the
-member was away, and who looks in at the camp. `madeup.ts` is the only thing that answers today.
-It invents all of it, and keeps a memory of its own as a server would. Nothing talks to a network.
+Everything about the guild is asked for through `guild.ts`: who the member is, who is in town and
+what each has gone off to do, what has just happened out in the guild, the quests and how far
+along they are, what the Treasury and each stall sell and for how much, each guild-mate's camp,
+what a member may leave as a present, the letters left while the member was away, who looks in at
+the camp, and which real members are in the game just now. `madeup.ts` invents all of it, and
+keeps a memory of its own as a server would.
+
+## On the guild's own server
+
+The town's front door is `open.ts`. It awaits the kit's `start()` before anything is read (the
+kit's README says how it finds out where it is): with no server the town opens with the made-up
+guild, exactly as above. On the guild's server it fetches the member's saved purse and town
+(`purse` and `town` slots), then what `live.ts` needs (their quests, their newest news for the
+week's counts, and their news since the town last told them any), and only then loads the town.
+If the member is signed out, not a member, or the server is in trouble, the kit's card says so.
+The town is not loaded at all, since it reads what the browser keeps the moment it loads.
+
+From then on `live.ts` answers what is real and `madeup.ts` the rest, quietly: its townsfolk still
+wander, talk, keep their stalls and camps and call at the member's camp, but its own news,
+quests and Leaf stand still.
+
+- **The member.** Their name, their rank as the guild writes it (capitalised; an unknown one as it
+  comes; none at all is "Friend"), their level, and their own skin from `/v1/game/skins/<id>`
+  (the made-up look if it will not load). The week's counts come from their newest news.
+- **Leaf.** The purse's Leaf is the guild's ledger's and changes only when the ledger does. The
+  Treasury's things and pieces are shown with closed buttons; nothing in town pays Leaf.
+- **The board.** The member's real quests, those open and those just finished: the title, the
+  nearest goal's progress, the Leaf it pays, and for the timed one when it ends. They pay by
+  themselves, so there is nothing to claim: a finished one says "Paid".
+- **The arrival letter.** Its paying lines are replaced by what happened to the member since the
+  town last told them (raids with their Leaf summed, wars, quests finished, the level reached,
+  milestones), each with the Leaf already paid, and putting it away pays nothing. The townsfolk's
+  lines stay. Where the news was read up to is kept in the record (`cursor`) once the letter is
+  put away, and moves on as the member's own news arrives while they are in town, so that the
+  next letter does not tell it again. On a first visit the letter is a plain welcome.
+- **The guild's news.** The town listens to the guild's events. Members paid for the same raid at
+  the same moment are one party: they walk in through the gate (any of them in town already come
+  over), the first hangs a lantern in the tree, and the feed names them and the raid. A war raises
+  the banner for that territory; a level or a milestone is a line in the feed. The member is
+  "You", and no line says how much Leaf anybody was paid (`news.ts` has every line).
+- **Who is here.** The town says where the member is (the town, the camp, or nowhere while a game
+  is open, which says its own place) and hears who else is in the game. Up to twelve of them stand
+  about as visitors (`visitors.ts`) in their own skins: strolling in town, by the Works' door, or
+  watching at the stump; nobody at their own camp. They come in and go out through the gate,
+  never speak, and their card has only their name and rank.
+- **What it remembers** goes to the member's account as well as the browser (the kit's
+  `cloud.ts`). `?fresh` is ignored there.
+
+`review/live.ts` is a stand-in for the server, for looking at all of this without one: `bun
+review/live.ts 8790` serves the built town and games under `/play/` with a made-up member called
+Tester and five others about; `GET /review/raid` brings a raid party home; `--signed-out`,
+`--not-a-member` and `--down` show the cards.
 
 What each game says is waiting behind its door, what the Works made while the member was away, and
 what the member has won in each game come from `games.ts`: one small function a game, returning a
@@ -181,6 +227,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 
 | File                                  | What it holds                                                                           |
 | ------------------------------------- | --------------------------------------------------------------------------------------- |
+| `src/open.ts`                         | The front door: where the game is, the member's saves, then the town                    |
 | `src/main.ts`                         | The stage: canvas, camera, keys and fingers, the loop, the walk between places          |
 | `src/stage.ts`                        | What the stage asks of a scene, and a scene of the stage                                |
 | `src/townscene.ts`                    | The town as a scene: who is here, taps, getting about, going into games and to the camp |
@@ -200,6 +247,8 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/doors.ts`                        | A game in a frame: opening it, hearing it, the note when it will not open               |
 | `src/games.ts`                        | The games that are places, what each says is waiting, and what has been won in each     |
 | `src/guild.ts`, `src/madeup.ts`       | The questions asked of the guild, and the made-up guild that answers                    |
+| `src/live.ts`, `src/news.ts`          | The real guild's answers on its own server; the feed's line for each moment             |
+| `src/visitors.ts`                     | Real members in the game, standing about the town                                       |
 | `src/save.ts`, `src/keep.ts`          | The kept record and its rules; reading and writing it in the browser                    |
 | `src/record.ts`                       | The one record as it is held while the page is open                                     |
 | `src/letter.ts`                       | Putting the arrival letter together from the time away                                  |
@@ -208,8 +257,9 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/campart.ts`, `src/campground.ts` | The camp's art: the cabin, every thing, the pets, the clearing's floor                  |
 | `src/campsfx.ts`                      | The camp's own sounds                                                                   |
 
-`grid.ts`, `camp.ts`, `things.ts`, `mail.ts`, `save.ts`, `letter.ts`, `madeup.ts` and `games.ts`
-have no page in them, and tests beside them. `record.ts` has tests too, for what is sent to the camp.
+`grid.ts`, `camp.ts`, `things.ts`, `mail.ts`, `save.ts`, `letter.ts`, `madeup.ts`, `games.ts`,
+`live.ts` and `news.ts` have no page in them, and tests beside them. `record.ts` has tests too,
+for what is sent to the camp.
 
 ## The games beside it
 
@@ -217,7 +267,7 @@ The games are pages of their own, served beside the town: `../works/index.html` 
 `../battler/index.html`. A game speaks to the town with the kit's `shell.ts`: `ready` once it has
 drawn, `leave` to come back, `news` for a line in the feed; the town says `closing` just before it
 puts the game away. A game that has not said `ready` within a few seconds, or whose page is not
-there, gets a note and a way back.
+there, gets a note and a way back; one that says it later opens over the note.
 
 ## Looking at it from outside
 
@@ -226,7 +276,7 @@ stops the clock so that only `skip` moves it, `enter()` puts the arrival letter 
 and `open(panel)` open things in town, `tp(x, y)` moves the member in town, `happen("raidOut" |
 "raidBack" | "land" | "level" | "call")` sets off a guild moment, `inside(game)` goes through a door,
 `door()` says how far that has got, `leave()` comes back, `kept()` shows the record as it would be
-saved, `where()` says which place is on and how dark the walk has got, and `page(x, y)` turns a
+saved, `visitors()` says which real members are in town and where, `where()` says which place is on and how dark the walk has got, and `page(x, y)` turns a
 point in the place that is on into a point on the page.
 
 `window.town.camp` is the same for camps: `go()` walks out of town to the member's camp, `town()`

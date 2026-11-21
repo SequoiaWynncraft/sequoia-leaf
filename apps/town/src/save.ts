@@ -21,6 +21,11 @@ export interface Kept {
   chest: string;
   /** When the member was last in town, in milliseconds since 1970; 0 for never. */
   lastSeen: number;
+  /**
+   * On the guild's server: the id of the last of the member's own news the town has told them, so
+   * that the next letter starts after it; null before the first visit there.
+   */
+  cursor: number | null;
   /** The member's own camp: what stands where, what is put away, who lives there, the mailbox. */
   camp: Camp;
 }
@@ -34,6 +39,7 @@ export function blank(): Kept {
     welcomed: "",
     chest: "",
     lastSeen: 0,
+    cursor: null,
     camp: newCamp(),
   };
 }
@@ -85,6 +91,8 @@ export function parse(text: string | null | undefined): Kept | null {
     welcomed: day(raw.welcomed),
     chest: day(raw.chest),
     lastSeen: count(raw.lastSeen, 8.64e15),
+    cursor:
+      typeof raw.cursor === "number" && Number.isFinite(raw.cursor) && raw.cursor >= 0 ? Math.floor(raw.cursor) : null,
     camp: parseCamp(raw.camp) ?? newCamp(),
   };
 }

@@ -5,9 +5,11 @@
  *
  * `?fresh` in the address starts over: the record, the made-up guild's memory, the purse and the
  * sound setting all go back to how a new member finds them. It is taken out of the address again,
- * so that the next reload does not start over a second time.
+ * so that the next reload does not start over a second time. On the guild's own server it is only
+ * taken out.
  */
 
+import { where } from "@sequoia-leaf/kit/live.ts";
 import { reset as resetPurse } from "@sequoia-leaf/kit/purse.ts";
 import { setMuted } from "@sequoia-leaf/kit/sound.ts";
 
@@ -56,11 +58,13 @@ function startOver(): void {
   setMuted(false);
 }
 
-/** Whether this visit began by starting over. */
-export const fresh = typeof location !== "undefined" && new URLSearchParams(location.search).has("fresh");
+const asked = typeof location !== "undefined" && new URLSearchParams(location.search).has("fresh");
 
-if (fresh) {
-  startOver();
+/** Whether this visit began by starting over. On the guild's server it never does: that game is the member's account's. */
+export const fresh = asked && where().mode !== "live";
+
+if (asked) {
+  if (fresh) startOver();
   const url = new URL(location.href);
   url.searchParams.delete("fresh");
   history.replaceState(null, "", url);

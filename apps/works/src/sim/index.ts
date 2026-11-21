@@ -75,6 +75,7 @@ export {
   swapRefusal,
   townGifts,
 } from "./orders.ts";
+export { postcard } from "./postcard.ts";
 export { repower } from "./power.ts";
 export { lay, type Leg, route, runCost } from "./route.ts";
 export { load, oldCoins, save, VERSION } from "./save.ts";

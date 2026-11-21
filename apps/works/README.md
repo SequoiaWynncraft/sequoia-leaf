@@ -171,6 +171,12 @@ this one, was a different map with different machines, so its saves are not read
   line to show (`tree-lanterns`: "Lanterns from the Works hang in the great tree.").
 - `runTo` gives the `Away`, and `awayLine(away)` puts it in a sentence: "While you were away the
   Works made 340 Coins and finished "Lanterns for the great tree"."
+- `postcard(w)` is what the page leaves for the town (the kit's `postcard.ts`) whenever it changes
+  and when the town closes it: what is waiting in the yard, the capstones ever made, the till.
+
+On the guild's own server the page first awaits the kit's `start()` and pulls its saves (the
+`purse` and `works` slots, and `town` too when opened on its own), shows the second shift's button
+closed, and says the member is at the Works; the kit's README says how.
 
 ## The screen
 

@@ -47,6 +47,8 @@ declare global {
       happen: (kind: Moment) => void;
       page: (x: number, y: number) => Pt;
       who: () => { name: string; x: number; y: number; doing: string }[];
+      /** Real members in town just now (on the guild's own server). */
+      visitors: () => { name: string; x: number; y: number }[];
       /** Where the member is, and where the missing crab is hiding. */
       me: () => Pt;
       lost: () => Pt;
@@ -165,6 +167,8 @@ async function boot(): Promise<void> {
     goInside(game, at) {
       if (visit) return;
       inside = game;
+      // The game says where the member is while it is open.
+      guild.here(null);
       iris.at = at;
       iris.goal = 0;
       hush(true);
@@ -179,6 +183,7 @@ async function boot(): Promise<void> {
           hush(false);
           if (inside) scene.cameBack(inside);
           inside = null;
+          guild.here(G.where);
           wake();
         },
       });
@@ -357,6 +362,7 @@ async function boot(): Promise<void> {
         scene = trip.next;
         scene.resize(G.view.w, G.view.h);
         aim(true);
+        guild.here(G.where);
       }
     } else if (trip) {
       G.dark = Math.max(0, G.dark - dt / DAYBREAK);
@@ -414,6 +420,7 @@ async function boot(): Promise<void> {
 
   resize();
   town.arrive();
+  guild.here("town");
   wake();
 
   window.town = {
