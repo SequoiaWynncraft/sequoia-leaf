@@ -1,53 +1,34 @@
 /**
  * Guild Town: the member arrives as their own character in a small town in a clearing among giant
  * redwoods, where every part of the game is a place to walk up to and guild-mates are about.
- * This file puts the pieces together: who is here, what the keys and fingers do, where the camera
- * looks, and the loop that moves it all.
+ *
+ * This file is the stage the town stands on: the canvas, the camera, the keys and fingers, the
+ * loop, and the way through a door into a game and back. Everything about the town itself is in
+ * `townscene.ts`, reached only through `Scene`.
  */
 
-import { GOLD } from "@sequoia-leaf/kit/palette.ts";
+import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { bake, paintSkin } from "@sequoia-leaf/kit/skin.ts";
-import { sfx, unlock } from "@sequoia-leaf/kit/sound.ts";
-import { clamp, dist, must, pick, type Pt, type Rect } from "@sequoia-leaf/kit/util.ts";
+import { unlock } from "@sequoia-leaf/kit/sound.ts";
+import { fontsReady } from "@sequoia-leaf/kit/text.ts";
+import { LONG_PRESS, tipAt, tipOff } from "@sequoia-leaf/kit/tip.ts";
+import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 
-import { face, footfall, hop, makeActor, release, say, sit, stepActor, stepMates, walkTo } from "./actors.ts";
-import { CINFY, GREETS, MATES, YOU } from "./cast.ts";
-import { after, beginEvents, happen, type Moment, stepEvents } from "./events.ts";
-import { ring, updateFx } from "./fx.ts";
-import { type Actor, G, hooks, type PanelId } from "./game.ts";
-import { paintBackdrop, paintGround, paintNear } from "./ground.ts";
-import { drawTown, drawWords, show, sizeBuffers, type Stage } from "./scene.ts";
+import { goIn, type Visit } from "./doors.ts";
+import { drawIris } from "./draw.ts";
+import { G, hooks, type PanelId, toPage } from "./game.ts";
+import { type GameId, GAMES } from "./games.ts";
+import { guild, type Moment, stir } from "./guild.ts";
 import { showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
-import {
-  buildTown,
-  crabAt,
-  crabs,
-  propAt,
-  stepTown,
-  tapCrab,
-  tapSky,
-  tapString,
-  tapWater,
-  twinkleAll,
-} from "./town.ts";
-import {
-  closeCard,
-  closePanel,
-  dismissArrival,
-  initUI,
-  openPanel,
-  panelBox,
-  refreshFace,
-  showArrival,
-  showCard,
-  tickUI,
-} from "./ui.ts";
-import { footBlocked, H, hedgeY, nearestFree, place, type PlaceId, PLACES, pondD, SEATS, SPOTS, W } from "./world.ts";
+import type { Hover, Scene, Stage, Steer } from "./stage.ts";
+import { makeTown } from "./townscene.ts";
+import { dismissArrival, hush, panelBox, tickUI } from "./ui.ts";
+import type { PlaceId } from "./world.ts";
 
 declare global {
   interface Window {
-    /** Handles for looking at the town from outside: jump the clock, open a place, move the player. */
+    /** Handles for looking at the town from outside: jump the clock, open a place, move the member. */
     town?: {
       skip: (seconds: number) => void;
       enter: () => void;
@@ -59,103 +40,55 @@ declare global {
       happen: (kind: Moment) => void;
       page: (x: number, y: number) => Pt;
       who: () => { name: string; x: number; y: number; doing: string }[];
-      /** Where the player is, and where the missing crab is hiding. */
+      /** Where the member is, and where the missing crab is hiding. */
       me: () => Pt;
       lost: () => Pt;
       /** Milliseconds to work out and draw one frame, averaged over a hundred. */
       bench: () => number;
+      /** Goes into a game by its door; says where that has got to; comes back out. */
+      inside: (id: GameId) => void;
+      door: () => "town" | "closing in" | ReturnType<Visit["state"]>;
+      leave: () => void;
+      /** Stops the town's clock (it is still drawn), so that `skip` alone moves it on. */
+      hold: (on: boolean) => void;
+      /** What the town has kept, as it would be saved now. */
+      kept: () => unknown;
     };
   }
 }
 
-/** A point on the page, as a point in the town. */
+/** How long the view takes to close in on a door, and to open out again, in seconds. */
+const CLOSE_IN = 0.55;
+/** How long the pointer rests on a thing before its tip shows, in milliseconds. */
+const REST = 400;
+
+/** A point on the page, as a point in the scene. */
 function toWorld(pageX: number, pageY: number): Pt {
   const k = G.view.dpr / G.view.z;
   return { x: pageX * k + Math.round(G.cam.x), y: pageY * k + Math.round(G.cam.y) };
 }
 
-function boot(): void {
+async function boot(): Promise<void> {
+  await fontsReady();
   const sprites = makeSprites();
-  const bodies = [YOU, CINFY.look, ...MATES.map((m) => m.look)].map((l) => bake(paintSkin(l)));
   if (new URLSearchParams(location.search).has("sheet")) {
-    showSheet(sprites, bodies);
+    const looks = [guild.me().look, guild.keeper().look, ...guild.roster().map((m) => m.look)];
+    for (const id of ["purse", "corner", "dock", "feed"]) document.getElementById(id)?.remove();
+    showSheet(
+      sprites,
+      looks.map((l) => bake(paintSkin(l))),
+    );
     return;
   }
 
   const canvas = must(document.querySelector<HTMLCanvasElement>("#view"), "canvas");
   const ctx = must(canvas.getContext("2d"), "2d context");
-  const ground = paintGround();
-  buildTown(sprites, must(ground.getContext("2d"), "ground"));
-  const stage: Stage = { sprites, ground, near: paintNear(), sky: paintBackdrop() };
+  /** Canvas pixels to one pixel of the font, for the words written over the world. */
+  let wordPx = 2;
 
-  // ---------- who is here ----------
+  // ---------- the camera ----------
 
-  const player = makeActor(
-    { name: "You", rank: "Ranger", level: G.level, voice: 560, look: YOU },
-    must(bodies[0]),
-    256,
-    85,
-    true,
-  );
-  player.alpha = 0;
-  G.player = player;
-  const cinfy = makeActor(CINFY, must(bodies[1]), 104, 113);
-  cinfy.mode = "led";
-  G.cinfy = cinfy;
-  G.mates = MATES.map((m, i) => {
-    const a = makeActor(m, must(bodies[i + 2]), 256, 216);
-    // The evening is already under way: three by the fire, the rest about their errands.
-    const seat = [SEATS[0], SEATS[3], SEATS[4]][i];
-    const spot = SPOTS[(i * 5 + 2) % SPOTS.length];
-    if (seat) {
-      sit(a, seat);
-      a.x = seat.x;
-      a.y = seat.y;
-      a.sat = -9;
-      a.doing = "fire";
-      a.wait = 12 + i * 7;
-    } else if (spot) {
-      spot.taken = true;
-      a.spot = spot;
-      a.x = spot.x;
-      a.y = spot.y;
-      a.dir = spot.dir;
-      a.doing = spot.errand;
-      a.wait = 3 + i * 1.7;
-    }
-    a.mode = "busy";
-    return a;
-  });
-
-  // The member's own skin, if it is there beside the page.
-  const skin = new Image();
-  skin.addEventListener("load", () => {
-    try {
-      player.body = bake(skin);
-      refreshFace();
-    } catch {
-      // A picture the page may not read: the made-up skin stays.
-    }
-  });
-  skin.src = "skins/player.png";
-
-  initUI(sprites);
-
-  // ---------- the screen ----------
-
-  function resize(): void {
-    const dpr = window.devicePixelRatio || 1;
-    const cw = Math.max(1, Math.round(window.innerWidth * dpr));
-    const ch = Math.max(1, Math.round(window.innerHeight * dpr));
-    canvas.width = cw;
-    canvas.height = ch;
-    const z = Math.max(1, Math.floor(Math.min(cw / 160, ch / 176)));
-    G.view = { w: Math.ceil(cw / z), h: Math.ceil(ch / z), z, dpr };
-    sizeBuffers(G.view.w, G.view.h);
-    aim(true);
-  }
-
-  /** Points the camera at the player, keeping them clear of whatever panel is open. */
+  /** Points the camera at what the scene says matters, keeping it clear of whatever panel is open. */
   function aim(snap: boolean): void {
     const k = G.view.dpr / G.view.z;
     const vw = G.view.w;
@@ -167,171 +100,111 @@ function boot(): void {
       if (box.width > window.innerWidth * 0.7) fh = Math.max(40, box.top * k);
       else fw = Math.max(40, box.left * k);
     }
-    const at = player.seat ?? player;
+    const at = scene.focus();
+    const { w, top, bottom } = scene.bounds;
     let tx = at.x - fw / 2;
-    let ty = at.y - 12 - fh / 2;
-    tx = vw > W + (vw - fw) ? (W - vw) / 2 : clamp(tx, 0, W - fw);
-    const top = -72;
-    const bottom = H + 24;
+    let ty = at.y - fh / 2;
+    tx = vw > w + (vw - fw) ? (w - vw) / 2 : clamp(tx, 0, w - fw);
     ty = fh > bottom - top ? top + (bottom - top - fh) / 2 : clamp(ty, top, bottom - fh);
     const ease = snap ? 1 : 0.12;
     G.cam.x += (tx - G.cam.x) * ease;
     G.cam.y += (ty - G.cam.y) * ease;
   }
 
-  // ---------- going places ----------
-
-  /** A place the player is walking to, to be opened on arrival. */
-  let pending: PlaceId | null = null;
-  let throughGate = false;
-
-  function halt(): void {
-    release(player);
-    player.path = [];
-    player.arrive = null;
-    pending = null;
-    show.dest = null;
+  function resize(): void {
+    const dpr = window.devicePixelRatio || 1;
+    const cw = Math.max(1, Math.round(window.innerWidth * dpr));
+    const ch = Math.max(1, Math.round(window.innerHeight * dpr));
+    canvas.width = cw;
+    canvas.height = ch;
+    const z = Math.max(1, Math.floor(Math.min(cw / 160, ch / 176)));
+    G.view = { w: Math.ceil(cw / z), h: Math.ceil(ch / z), z, dpr };
+    // The usual text size; on a sharp screen, the size the kit gives second lines.
+    wordPx = Math.max(1, Math.round(unit() * dpr * (dpr >= 2 ? 0.75 : 1)));
+    scene.resize(G.view.w, G.view.h);
+    aim(true);
+    if (paused) draw();
   }
 
-  function visit(id: PlaceId, now = false): void {
-    const pl = place(id);
-    const there =
-      dist(player.x, player.y, pl.stand.x, pl.stand.y) < 26 || (id === "fire" && player.seat?.at === "fire");
-    if (now || there) openPanel(id);
-    if (there) {
-      if (!player.seat) player.dir = pl.face;
-      return;
-    }
-    halt();
-    pending = now ? null : id;
-    if (!now) show.dest = pl.stand;
-    walkTo(player, pl.stand, () => {
-      player.dir = pl.face;
-      show.dest = null;
-      if (pending === id) {
-        pending = null;
-        openPanel(id);
-      }
-    });
-  }
-  hooks.visit = visit;
+  // ---------- through a door, and back ----------
 
-  function personAt(wx: number, wy: number): Actor | null {
-    let best: Actor | null = null;
-    for (const a of [...G.mates, player, cinfy]) {
-      if (a.away || a.alpha < 0.5) continue;
-      const at = a.seat ?? a;
-      if (Math.abs(wx - at.x) > 7 || wy < at.y - 23 || wy > at.y + 3) continue;
-      if (!best || at.y > (best.seat ?? best).y) best = a;
-    }
-    return best;
-  }
+  /**
+   * The view closes in on a point of the scene before a game opens, and opens out from it after:
+   * `open` runs from 1 (the whole view) down to 0 (shut).
+   */
+  const iris = { at: { x: 0, y: 0 }, open: 1, goal: 1 };
+  let visit: Visit | null = null;
+  let inside: GameId | null = null;
+  /** A game is open over the town: nothing here is stepped or drawn until it is put away. */
+  let paused = false;
+  let running = false;
+  /** The clock is being stepped by hand from outside. */
+  let heldStill = false;
 
-  /** What the mouse is resting on, as the box to put corners round; nothing for bare ground. */
-  function under(wx: number, wy: number): Rect | null {
-    const who = personAt(wx, wy);
-    if (who) {
-      const at = who.seat ?? who;
-      return { x: at.x - 6, y: at.y - 21, w: 12, h: 22 };
-    }
-    const crab = crabAt(wx, wy);
-    if (crab) return { x: crab.x - 6, y: crab.y - 8, w: 12, h: 9 };
-    const prop = propAt(wx, wy);
-    if (!prop?.hit || prop.kind === "trunk") return null;
-    return prop.hit;
-  }
+  const stage: Stage = {
+    goInside(game, at) {
+      if (visit) return;
+      inside = game;
+      iris.at = at;
+      iris.goal = 0;
+      hush(true);
+      visit = goIn(GAMES[game], {
+        news(text, tone) {
+          hooks.feed(text, tone);
+        },
+        back() {
+          visit = null;
+          paused = false;
+          iris.goal = 1;
+          hush(false);
+          if (inside) scene.cameBack(inside);
+          inside = null;
+          wake();
+        },
+      });
+    },
+    snap() {
+      aim(true);
+    },
+    put(next) {
+      scene = next;
+      scene.resize(G.view.w, G.view.h);
+      aim(true);
+    },
+  };
 
-  /** A touch somewhere in the town. Returns whether it was bare ground (so a drag may steer). */
-  function tapWorld(wx: number, wy: number): boolean {
-    closeCard();
-    const who = personAt(wx, wy);
-    if (who) {
-      sfx.pop();
-      hop(who);
-      if (who.you) {
-        say(who, pick(["that's me", "hello, me", "o/"], Math.random()), 1.6);
-        return false;
-      }
-      if (who === cinfy)
-        say(
-          who,
-          pick(["The gold is load-bearing.", "Leaf in, shiny out.", "No, you can't hold the sun."], Math.random()),
-        );
-      else {
-        if (!who.seat) face(who, player.x, player.y);
-        who.hold = 2.6;
-        say(who, pick(GREETS, Math.random()), 2);
-      }
-      showCard(who);
-      return false;
-    }
-    const crab = crabAt(wx, wy);
-    if (crab) {
-      tapCrab(crab);
-      return false;
-    }
-    if (tapString(wx, wy)) return false;
-    const prop = propAt(wx, wy);
-    if (prop?.tap) {
-      prop.tap(prop, wx, wy);
-      return false;
-    }
-    if (wy < hedgeY(wx)) {
-      tapSky(wx, wy);
-      return false;
-    }
-    if (pondD(wx, wy) < 1) {
-      tapWater(wx, wy);
-      visit("pond");
-      return false;
-    }
-    halt();
-    if (G.panel) closePanel();
-    const to = nearestFree(wx, wy);
-    show.dest = to;
-    ring(to.x, to.y, GOLD[2], 6);
-    sfx.tap();
-    walkTo(player, to, () => {
-      show.dest = null;
-    });
-    return true;
-  }
-
-  /** The key by a place: open it; or, sitting down, get up. */
-  function interact(): void {
-    if (show.prompt && show.promptT > 0.4) {
-      openPanel(show.prompt.id);
-      player.dir = show.prompt.face;
-      return;
-    }
-    if (player.seat) {
-      release(player);
-      return;
-    }
-    hop(player);
-    sfx.tap();
-  }
+  const town = makeTown(sprites, stage);
+  /** The place that is on screen. The town is the only one there is yet. */
+  let scene: Scene = town;
 
   // ---------- keys and fingers ----------
 
   const keys = new Set<string>();
   let held: { x: number; y: number; sx: number; sy: number; steer: boolean } | null = null;
+  let mouse: Pt | null = null;
+  /** What the pointer is resting on, since when, and whether its tip is up. */
+  let rest: { hover: Hover; since: number; shown: boolean } | null = null;
+  const TIP = {};
+  let pressed = 0;
 
   window.addEventListener("keydown", (e) => {
     unlock();
+    if (paused) return;
     const k = e.key.toLowerCase();
-    if (!G.home) {
-      if (k === "enter" || k === " " || k === "e") dismissArrival();
+    const onButton = e.target instanceof HTMLButtonElement;
+    if (k === "enter" || k === " " || k === "e") {
+      if (dismissArrival()) {
+        e.preventDefault();
+        return;
+      }
+      // A button that has the keyboard answers Enter and Space itself.
+      if (!e.repeat && (k === "e" || !onButton)) scene.act();
+      if (k === " " && !onButton) e.preventDefault();
       return;
     }
+    if (!scene.awake()) return;
     if (k === "escape") {
-      if (G.panel) closePanel();
-      else closeCard();
-      return;
-    }
-    if (k === "e" || k === " " || k === "enter") {
-      if (!e.repeat && !(e.target instanceof HTMLButtonElement)) interact();
-      if (k === " ") e.preventDefault();
+      scene.back();
       return;
     }
     if (k.startsWith("arrow")) e.preventDefault();
@@ -346,15 +219,32 @@ function boot(): void {
   });
   document.addEventListener("pointerdown", unlock, true);
 
+  function showTip(h: Hover): void {
+    if (!h.tip) return;
+    const a = toPage(h.box.x, h.box.y);
+    const b = toPage(h.box.x + h.box.w, h.box.y + h.box.h);
+    tipAt({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y }, h.tip[0], h.tip[1], TIP);
+  }
+
   canvas.addEventListener("pointerdown", (e) => {
-    show.touch = e.pointerType !== "mouse";
-    if (!G.home) return;
+    tipOff(TIP);
+    window.clearTimeout(pressed);
+    const finger = e.pointerType !== "mouse";
     const at = toWorld(e.clientX, e.clientY);
-    const groundTap = tapWorld(at.x, at.y);
+    const groundTap = scene.tap(at.x, at.y, finger);
     held = groundTap ? { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, steer: false } : null;
     if (held) canvas.setPointerCapture(e.pointerId);
+    // A finger kept on a thing asks what it is.
+    if (finger && !groundTap)
+      pressed = window.setTimeout(() => {
+        const h = scene.point(at);
+        if (h) showTip(h);
+        window.setTimeout(() => {
+          tipOff(TIP);
+          scene.point(null);
+        }, 2200);
+      }, LONG_PRESS);
   });
-  let mouse: Pt | null = null;
   canvas.addEventListener("pointerleave", () => {
     mouse = null;
   });
@@ -367,176 +257,121 @@ function boot(): void {
   });
   const lift = (): void => {
     held = null;
+    window.clearTimeout(pressed);
   };
   canvas.addEventListener("pointerup", lift);
   canvas.addEventListener("pointercancel", lift);
   window.addEventListener("resize", resize);
 
-  /** Walking by hand: the keys, or a finger held down and dragged. */
-  function steer(dt: number): void {
-    let dx = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
-    let dy = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
-    if (dx === 0 && dy === 0 && held?.steer) {
-      const to = toWorld(held.x, held.y);
-      if (dist(to.x, to.y, player.x, player.y) > 5) {
-        dx = to.x - player.x;
-        dy = to.y - player.y;
-      }
-    }
-    if (dx === 0 && dy === 0) return;
-    if (player.seat || player.path.length > 0 || pending) halt();
-    const len = Math.hypot(dx, dy);
-    const go = player.speed * dt;
-    const before = player.walked;
-    const nx = player.x + (dx / len) * go;
-    const ny = player.y + (dy / len) * go;
-    let moved = 0;
-    if (!footBlocked(nx, player.y)) {
-      moved += Math.abs(nx - player.x);
-      player.x = nx;
-    }
-    if (!footBlocked(player.x, ny)) {
-      moved += Math.abs(ny - player.y);
-      player.y = ny;
-    }
-    player.dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0;
-    if (moved > 0) {
-      player.walked += moved;
-      player.moving = true;
-      footfall(player, before);
-    }
+  function steering(): Steer {
+    const dx = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
+    const dy = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
+    return { dx, dy, toward: held?.steer ? toWorld(held.x, held.y) : null };
   }
 
-  /** The place the player is standing at, if any: the prompt hangs by it. */
-  function nearPlace(): PlaceId | null {
-    for (const pl of PLACES) {
-      if (G.panel === pl.id) continue;
-      const d = dist(player.x, player.y, pl.stand.x, pl.stand.y);
-      if (d < 22) return pl.id;
-      if (pl.id === "pond" && pondD(player.x, player.y) < 13) return pl.id;
-      if (pl.id === "fire" && (player.seat?.at === "fire" || dist(player.x, player.y, 256, 214) < 30)) return pl.id;
+  /** The mouse resting on a thing marks it, and after a moment says what it is. */
+  function pointing(): void {
+    const h = mouse ? scene.point(toWorld(mouse.x, mouse.y)) : null;
+    if (!mouse) scene.point(null);
+    canvas.style.cursor = h ? "pointer" : "default";
+    const same = h && rest && h.tip === rest.hover.tip && h.box.x === rest.hover.box.x && h.box.y === rest.hover.box.y;
+    if (same && rest) {
+      if (!rest.shown && performance.now() - rest.since > REST) {
+        rest.shown = true;
+        showTip(rest.hover);
+      }
+      return;
     }
-    return null;
+    if (rest?.shown) tipOff(TIP);
+    rest = h ? { hover: h, since: performance.now(), shown: false } : null;
   }
 
   // ---------- every moment ----------
 
-  function step(dt: number): void {
-    G.t += dt;
-    stepActor(player, dt);
-    if (G.home) steer(dt);
-    stepActor(cinfy, dt);
-    stepMates(dt);
-    stepTown(dt);
-    stepEvents();
-    updateFx(dt);
-
-    const over = mouse && G.home ? toWorld(mouse.x, mouse.y) : null;
-    show.hover = over ? under(over.x, over.y) : null;
-    canvas.style.cursor = show.hover ? "pointer" : "default";
-
-    const near = G.home ? nearPlace() : null;
-    if (near) show.prompt = place(near);
-    show.promptT = clamp(show.promptT + (near ? dt : -dt) * 5, 0, 1);
-
-    // Stepping into the gateway is asking about the camp beyond it.
-    if (G.home && player.y < 92 && !throughGate) {
-      throughGate = true;
-      openPanel("camp");
-    } else if (player.y > 104) throughGate = false;
+  function tick(dt: number): void {
+    scene.step(dt, steering());
+    if (iris.open !== iris.goal) {
+      const d = iris.goal - iris.open;
+      iris.open += Math.sign(d) * Math.min(Math.abs(d), dt / CLOSE_IN);
+    }
+    if (visit && iris.open <= 0 && !paused) {
+      // The view has closed in: the game takes the page from here.
+      paused = true;
+      keys.clear();
+      held = null;
+      const at = toPage(iris.at.x, iris.at.y);
+      visit.arrived(at);
+    }
   }
 
   function draw(): void {
-    const small = drawTown(stage);
+    const small = scene.draw();
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(small, 0, 0, small.width * G.view.z, small.height * G.view.z);
-    drawWords(ctx);
+    scene.words(ctx, wordPx);
+    if (iris.open >= 1) return;
+    const at = toPage(iris.at.x, iris.at.y);
+    const x = at.x * G.view.dpr;
+    const y = at.y * G.view.dpr;
+    const far = Math.hypot(Math.max(x, canvas.width - x), Math.max(y, canvas.height - y));
+    // Slow at the last, so the eye lands on the door.
+    drawIris(ctx, x, y, far * iris.open * iris.open, G.view.z);
   }
 
   let last = performance.now();
   function frame(now: number): void {
-    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    if (paused) {
+      running = false;
+      return;
+    }
+    const dt = heldStill ? 0 : Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
-    step(dt);
+    if (dt > 0) tick(dt);
     aim(false);
+    pointing();
     tickUI(dt);
     draw();
     requestAnimationFrame(frame);
   }
-
-  // ---------- arriving ----------
+  function wake(): void {
+    if (running) return;
+    running = true;
+    last = performance.now();
+    requestAnimationFrame(frame);
+  }
 
   resize();
-  after(0.35, () => {
-    walkTo(player, { x: 256, y: 152 }, () => {
-      player.dir = 0;
-    });
-  });
-  showArrival(() => {
-    beginEvents();
-    twinkleAll();
-    hooks.feed("You are home. The fire is lit and nine guild-mates are about.", "leaf");
-    // Whoever is nearest looks up and says so.
-    const nearest = G.mates
-      .filter((a) => !a.away)
-      .toSorted((a, b) => dist(a.x, a.y, player.x, player.y) - dist(b.x, b.y, player.x, player.y))
-      .slice(0, 2);
-    nearest.forEach((a, i) => {
-      after(0.5 + i * 0.6, () => {
-        if (!a.seat && !a.moving) face(a, player.x, player.y);
-        hop(a);
-        say(a, i === 0 ? "welcome back!" : "you're here!", 2.4);
-      });
-    });
-  });
-  requestAnimationFrame(frame);
+  town.arrive();
+  wake();
 
   window.town = {
+    ...town.handles,
     skip(seconds) {
-      for (let i = 0; i < seconds * 30; i++) step(1 / 30);
+      for (let i = 0; i < seconds * 30 && !paused; i++) tick(1 / 30);
       aim(true);
     },
-    enter() {
-      dismissArrival();
-    },
-    open: openPanel,
-    close: closePanel,
-    visit(id) {
-      visit(id, true);
-    },
-    tp(x, y) {
-      halt();
-      player.x = x;
-      player.y = y;
-      aim(true);
-    },
-    tap(x, y) {
-      tapWorld(x, y);
-    },
-    happen,
+    happen: stir,
     page(x, y) {
-      const k = G.view.z / G.view.dpr;
-      return { x: (x - Math.round(G.cam.x)) * k, y: (y - Math.round(G.cam.y)) * k };
-    },
-    who() {
-      return G.mates.map((a) => ({ name: a.who.name, x: Math.round(a.x), y: Math.round(a.y), doing: a.doing }));
-    },
-    me() {
-      return { x: Math.round(player.x), y: Math.round(player.y) };
-    },
-    lost() {
-      const c = crabs.find((k) => k.lost);
-      return c ? { x: Math.round(c.x), y: Math.round(c.y) } : { x: 0, y: 0 };
+      return toPage(x, y);
     },
     bench() {
       const t0 = performance.now();
       for (let i = 0; i < 100; i++) {
-        step(1 / 60);
+        tick(1 / 60);
         draw();
       }
       return (performance.now() - t0) / 100;
     },
+    door() {
+      return visit ? (paused ? visit.state() : "closing in") : "town";
+    },
+    leave() {
+      visit?.leave();
+    },
+    hold(on) {
+      heldStill = on;
+    },
   };
 }
 
-boot();
+void boot();

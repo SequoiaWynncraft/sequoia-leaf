@@ -223,6 +223,17 @@ const slot = (): Grid =>
     DEEP,
     0,
   );
+/** The same hollow picked out in gold: the one of a row that is chosen, or where you are. */
+const slotLit = (): Grid =>
+  ringed(
+    8,
+    [
+      [GOLD[1], GOLD[0]],
+      [SKY[3], SKY[1]],
+    ],
+    LIT,
+    0,
+  );
 const paper = (): Grid =>
   ringed(
     12,
@@ -469,6 +480,7 @@ const frames: Readonly<Record<string, Grid>> = {
   card: card(),
   "card-lit": cardLit(),
   slot: slot(),
+  "slot-lit": slotLit(),
   paper: paper(),
   bubble: bubble(),
   tail: tail(),

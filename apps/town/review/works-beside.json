@@ -1,9 +1,0 @@
-[
-  ["size", 1280, 760],
-  ["wait", 1600],
-  ["click", "#arrival .btn"],
-  ["wait", 800],
-  ["eval", "(window.town.skip(1.5), window.town.visit('works'), window.town.skip(5), 'works')"],
-  ["wait", 2500],
-  ["shot", "18-works-embedded"]
-]

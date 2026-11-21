@@ -46,6 +46,11 @@ export function fromTown(fn: (msg: FromTown) => void): () => void {
   return () => window.removeEventListener("message", on);
 }
 
+/** In the town: say something to a game in a frame. */
+export function toGame(frame: HTMLIFrameElement, msg: FromTown): void {
+  frame.contentWindow?.postMessage(msg, window.location.origin);
+}
+
 /** In the town: hear a game in a frame. Returns how to stop. */
 export function fromGame(frame: HTMLIFrameElement, fn: (msg: ToTown) => void): () => void {
   const on = (e: MessageEvent): void => {

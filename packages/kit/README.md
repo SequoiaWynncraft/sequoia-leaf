@@ -40,10 +40,10 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
 | `k-panel`, with `k-head` and `k-body`                                 | The big wooden frame; its title sits on a band of roof shingles      |
 | `k-plaque`                                                            | A thin wooden edge for small things over the world (purse, dock)     |
 | `k-card` (`lit`, `done`)                                              | A row or tile standing up from a panel; also works as a button       |
-| `k-slot`                                                              | A hollow that holds one thing                                        |
+| `k-slot` (`lit`)                                                      | A hollow that holds one thing; as a button, one of a row to choose   |
 | `k-paper`                                                             | A page: letters, notes, anything read like a sheet                   |
 | `k-say` (`left`)                                                      | Somebody speaking                                                    |
-| `k-tip`                                                               | What a thing is, shown while pointing at it                          |
+| `k-tip` (`k-float`)                                                   | What a thing is, shown while pointing at it (`tip.ts` places it)     |
 | `k-btn` (`wood`, `plum`, `leaf`, `coral`, `sm`, `icon`, `wide`)       | A button on its lip; gold is the main action                         |
 | `k-tabs`                                                              | A row of buttons where one is chosen (`aria-selected="true"`)        |
 | `k-i k-i-<name>`                                                      | A pixel icon; `--s` makes it larger by whole steps                   |
@@ -65,6 +65,8 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `pix.ts`     | Pixel-art tools: rectangles, pictures typed as rows of letters, outlines, ellipses |
 | `util.ts`    | Canvases, numbers, repeatable noise                                                |
 | `text.ts`    | Words on a canvas in the font                                                      |
+| `signs.ts`   | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines  |
+| `tip.ts`     | Tips: `tip(el, title, text)` shows one on hover, focus and long press              |
 | `skin.ts`    | A walking figure and a face from a block-game skin sheet, or from a made-up look   |
 | `sound.ts`   | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all   |
 | `dom.ts`     | `el`, `icon`, `amount` and a few more for building the interface                   |
