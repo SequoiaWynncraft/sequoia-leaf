@@ -4,6 +4,16 @@
  * and the clock. Every request to the server goes through `ask` or `listen` here.
  */
 
+/** The part of a WebSocket the game uses. */
+export interface LiveSocket {
+  binaryType: BinaryType;
+  send(data: string | Uint8Array<ArrayBuffer>): void;
+  close(code?: number, reason?: string): void;
+  addEventListener(type: "open", fn: (e: Event) => void): void;
+  addEventListener(type: "message", fn: (e: MessageEvent) => void): void;
+  addEventListener(type: "close", fn: (e: CloseEvent) => void): void;
+}
+
 /** The part of the browser's storage the game uses. */
 export interface Store {
   getItem(key: string): string | null;
@@ -26,6 +36,8 @@ export interface Outside {
   /** Loads the page again. */
   reload(): void;
   now(): number;
+  /** Opens a WebSocket to an address. */
+  socket(url: string): LiveSocket;
 }
 
 function browserStore(): Store | null {
@@ -56,6 +68,7 @@ export const outside: Outside = {
     location.reload();
   },
   now: () => Date.now(),
+  socket: (url) => new WebSocket(url),
 };
 
 /** Puts stand-ins in place of parts of the outside world (for tests). Returns how to put them back. */

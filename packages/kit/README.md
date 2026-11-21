@@ -96,6 +96,7 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `cloud.ts`    | Keeping what the games keep on the member's account, when the game is live                         |
 | `keep.ts`     | Writing the game into the browser; a page that has let go of it (`stopped()`) writes none of it    |
 | `presence.ts` | Telling the server where in the game the member is, and hearing who else is about                  |
+| `realtime.ts` | Being in a live room on Leaf: who is there, and where each is to be drawn now (`joinLive`)         |
 | `standin.ts`  | A stand-in server and storage for tests; no page loads it                                          |
 
 `tools/drive.ts` drives a built page in headless Chromium and takes screenshots; its header says how.
@@ -184,6 +185,18 @@ every file in the kit and the games to this.
 until told otherwise), every half minute and at once when either changes; the answer, everybody
 seen lately and those gone in the last day who stay (`Resting`, with when each was last seen),
 goes to whoever `hearPresent`s. Each says whether they are a guest.
+
+**Live** (`realtime.ts`). `joinLive(room, ears)` puts the player in one of Leaf's live rooms (the
+wire and the rooms are in `@sequoia-leaf/core`'s `live.ts`) and keeps them there: after a drop it
+connects again (half a second, doubling to ten, jittered), joins again and says where the player is
+again as a jump; told the player opened the game live elsewhere, it lets go (`status("replaced")`).
+`ears` hear the roster on each `welcome`, who `joined` and `left`, and each `act`. The page says
+where its player is with `move(motion)` as often as it likes: it goes at most 20 times a second and
+only when it changed, starting, stopping and a jump at once, and the last change always. Each frame
+the page asks `sample(id)` where somebody is to be drawn: their motion 100 ms behind Leaf's clock
+(learnt from pings, by the quickest), between the snapshots either side, going on for up to 200 ms
+past the newest while they were moving, and never on the way across a jump. With the made-up guild
+it opens nothing, and nobody is ever there. Drawing the others is the page's.
 
 All of it reaches the server through `net.ts`, which tests replace with `standin.ts`; the tests
 read the server's own contract files (`contracts/leaf-api-v1.json`, `contracts/leaf-game-v1.json`).
