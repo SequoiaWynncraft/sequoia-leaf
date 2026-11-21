@@ -6,6 +6,8 @@
 import type { Dir } from "@sequoia-leaf/kit/skin.ts";
 import { clamp, type Pt, vnoise } from "@sequoia-leaf/kit/util.ts";
 
+import type { Activity } from "./guild.ts";
+
 /** The walkable town, in art pixels. */
 export const W = 512;
 export const H = 352;
@@ -32,6 +34,8 @@ const PATHS: readonly (readonly [number, number, number, number, number])[] = [
   [104, 130, 104, 130, 14], // before the Treasury
   [380, 130, 380, 130, 13], // before the Works
   [352, 214, 352, 214, 11], // under the lantern tree
+  [362, 211, 414, 206, 6], // east to the great stump
+  [444, 205, 444, 205, 27], // round the stump, where people stand to watch
 ];
 
 function segD(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
@@ -235,11 +239,13 @@ export function findPath(from: Pt, to: Pt, straight: boolean): Pt[] {
 
 // ---------- places ----------
 
-export type PlaceId = "treasury" | "quests" | "market" | "works" | "fire" | "pond" | "camp";
+export type PlaceId = "treasury" | "quests" | "market" | "works" | "table" | "fire" | "pond" | "camp";
 
 export interface Place {
   id: PlaceId;
   name: string;
+  /** What it is, in a line, for whoever points at it. */
+  about: string;
   /** Where to stand to use it, and which way to face. */
   stand: Pt;
   face: Dir;
@@ -251,6 +257,7 @@ export const PLACES: readonly Place[] = [
   {
     id: "treasury",
     name: "Treasury",
+    about: "Cinfy sells things for Leaf.",
     stand: { x: 104, y: 128 },
     face: 3,
     prompt: { x: 104, y: 62 },
@@ -258,6 +265,7 @@ export const PLACES: readonly Place[] = [
   {
     id: "quests",
     name: "Quest board",
+    about: "Pinned up by the guild.",
     stand: { x: 198, y: 168 },
     face: 3,
     prompt: { x: 198, y: 116 },
@@ -265,6 +273,7 @@ export const PLACES: readonly Place[] = [
   {
     id: "market",
     name: "Market",
+    about: "Guild-mates selling to guild-mates.",
     stand: { x: 108, y: 257 },
     face: 3,
     prompt: { x: 108, y: 200 },
@@ -272,13 +281,23 @@ export const PLACES: readonly Place[] = [
   {
     id: "works",
     name: "The Works",
-    stand: { x: 380, y: 128 },
+    about: "Your yard. Coins are made here.",
+    stand: { x: 373, y: 127 },
     face: 3,
-    prompt: { x: 380, y: 62 },
+    prompt: { x: 373, y: 62 },
+  },
+  {
+    id: "table",
+    name: "The Little Raid",
+    about: "The guild's board game.",
+    stand: { x: 444, y: 206 },
+    face: 3,
+    prompt: { x: 444, y: 140 },
   },
   {
     id: "fire",
     name: "Campfire",
+    about: "Sit down. Stay a while.",
     stand: { x: 256, y: 205 },
     face: 0,
     prompt: { x: 256, y: 186 },
@@ -286,6 +305,7 @@ export const PLACES: readonly Place[] = [
   {
     id: "pond",
     name: "Crab pond",
+    about: "Nine crabs. Eight at roll call.",
     stand: { x: 380, y: 254 },
     face: 0,
     prompt: { x: 400, y: 270 },
@@ -293,6 +313,7 @@ export const PLACES: readonly Place[] = [
   {
     id: "camp",
     name: "Your camp",
+    about: "Through the gate and down the hill.",
     stand: { x: 256, y: 106 },
     face: 3,
     prompt: { x: 256, y: 44 },
@@ -315,6 +336,7 @@ export const POSTS: readonly Pt[] = [
   { x: 398, y: 246 },
   { x: 230, y: 306 },
   { x: 92, y: 294 },
+  { x: 424, y: 181 }, // over the stump's board
 ];
 
 // ---------- somewhere to sit, somewhere to be ----------
@@ -326,8 +348,10 @@ export interface Seat {
   dir: Dir;
   /** The clear spot they step up from. */
   from: Pt;
-  at: "fire" | "bench";
+  at: "fire" | "bench" | "table";
   taken: boolean;
+  /** Left for the member: guild-mates sit elsewhere. */
+  yours?: boolean;
 }
 
 export const SEATS: Seat[] = [
@@ -339,10 +363,12 @@ export const SEATS: Seat[] = [
   { x: 291, y: 213, dir: 1, from: { x: 300, y: 214 }, at: "fire", taken: false },
   { x: 114, y: 312, dir: 0, from: { x: 114, y: 320 }, at: "bench", taken: false },
   { x: 127, y: 312, dir: 0, from: { x: 127, y: 320 }, at: "bench", taken: false },
+  { x: 431, y: 213, dir: 3, from: { x: 431, y: 224 }, at: "table", taken: false, yours: true },
+  { x: 457, y: 213, dir: 3, from: { x: 457, y: 224 }, at: "table", taken: false },
 ];
 
-export type Errand =
-  "treasury" | "quests" | "market" | "stall" | "works" | "pond" | "tree" | "pole" | "garden" | "gate";
+/** Somewhere to stand and be busy: the guild's errands, and mustering at the gate for a raid. */
+export type Errand = Exclude<Activity, "fire" | "bench" | "play"> | "gate";
 
 export interface Spot {
   x: number;
@@ -364,7 +390,7 @@ export const SPOTS: Spot[] = [
   spot(156, 254, 3, "market"),
   spot(60, 238, 0, "stall"),
   spot(156, 238, 0, "stall"),
-  spot(366, 128, 3, "works"),
+  spot(360, 128, 3, "works"),
   spot(428, 137, 3, "works"),
   spot(342, 280, 2, "pond"),
   spot(404, 254, 0, "pond"),
@@ -373,6 +399,10 @@ export const SPOTS: Spot[] = [
   spot(300, 164, 3, "pole"),
   spot(64, 300, 0, "garden"),
   spot(170, 300, 1, "garden"),
+  spot(414, 197, 2, "table"),
+  spot(474, 197, 1, "table"),
+  spot(437, 171, 0, "table"),
+  spot(457, 171, 0, "table"),
 ];
 
 /** Where a raid party musters before the gate. */
@@ -423,6 +453,9 @@ function build(): void {
   fill(11, 30, 15, 30, 1);
   fill(17, 30, 21, 30, 1);
   fill(13, 38, 16, 38, 1); // garden bench
+  fill(53, 22, 57, 24, 1); // the great stump
+  fill(53, 26, 54, 26, 1); // its two log seats
+  fill(56, 26, 57, 26, 1);
   // A lantern post takes the square its foot is in.
   for (const p of POSTS) {
     const x = Math.floor(p.x / CELL);

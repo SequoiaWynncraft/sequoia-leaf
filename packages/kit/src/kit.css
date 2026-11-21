@@ -263,6 +263,20 @@ button.k-card:active {
   place-items: center;
 }
 
+/* A slot that is pressed: one of a row of places or tools. `lit` marks the one that is chosen. */
+button.k-slot {
+  padding: 0;
+  background: none;
+}
+.k-slot.lit,
+.k-slot[aria-current="true"],
+.k-slot[aria-selected="true"] {
+  border-image-source: var(--k-f-slot-lit);
+}
+button.k-slot:hover {
+  filter: brightness(1.2);
+}
+
 /* Paper: letters, notes on the board, anything meant to be read like a page. */
 .k-paper {
   border: calc(var(--u) * 3) solid transparent;
@@ -324,6 +338,15 @@ button.k-card:active {
   padding: calc(var(--u) * 2) calc(var(--u) * 3);
   color: var(--k-cream);
   box-shadow: 0 calc(var(--u) * 2) 0 #0006;
+}
+/* A tip shown beside whatever it explains (see tip.ts), over everything else on the page. */
+.k-tip.k-float {
+  position: fixed;
+  z-index: 90;
+  left: 0;
+  top: 0;
+  max-width: min(calc(var(--u) * 120), calc(100vw - var(--u) * 8));
+  pointer-events: none;
 }
 
 /* ---------- buttons ---------- */

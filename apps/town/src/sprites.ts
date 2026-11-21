@@ -1,10 +1,11 @@
 /** Everything in the town that is drawn once and kept: the shops, the stalls, the small things, the icons. */
 
-import { BARK, CREAM, GOLD, GREEN, INK, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, ell, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, makeCanvas, vnoise } from "@sequoia-leaf/kit/util.ts";
 
 import { drawFern } from "./ground.ts";
+import type { PlaceId } from "./world.ts";
 
 export interface Sprite {
   c: HTMLCanvasElement;
@@ -585,6 +586,112 @@ function stump(): Sprite {
   return spr(c, 6, 11);
 }
 
+/** A short log to sit on, for one. */
+function shortLog(): Sprite {
+  const { c, g } = makeCanvas(15, 10);
+  R(g, 2, 4, 12, 5, BARK[2]);
+  R(g, 3, 9, 10, 1, BARK[0]);
+  R(g, 2, 0, 12, 4, BARK[3]);
+  for (let i = 0; i < 3; i++) {
+    R(g, 5 + i * 3, 1 + (i % 2), 2, 1, BARK[4]);
+    R(g, 6 + i * 3, 5 + (i % 2), 2, 1, BARK[1]);
+  }
+  R(g, 13, 1, 1, 7, BARK[1]);
+  ell(g, 2.5, 4.5, 2.5, 4.5, GOLD[0]);
+  ell(g, 2.5, 4.5, 1.2, 2.6, BARK[4]);
+  return spr(c, 7, 10);
+}
+
+/** Where the hexes of the stump's board are, in the stump's own pixels: a row of five, four, five. */
+export const BOARD: readonly (readonly [number, number])[] = [
+  [12, 7],
+  [18, 7],
+  [24, 7],
+  [30, 7],
+  [36, 7],
+  [15, 11],
+  [21, 11],
+  [27, 11],
+  [33, 11],
+  [12, 15],
+  [18, 15],
+  [24, 15],
+  [30, 15],
+  [36, 15],
+];
+
+/**
+ * The great stump at the edge of town: wide enough to play on, its rings showing, a board of
+ * hexes cut into the top. The carved figures are drawn on it afresh each frame, because they move.
+ */
+function greatStump(): Sprite {
+  const W = 48;
+  const cx = W / 2;
+  const top = { y: 11, rx: 22.6, ry: 10.6 };
+  const c = paint(W, 34, (x, y) => {
+    const u = (x + 0.5 - cx) / top.rx;
+    if (Math.abs(u) >= 1) return null;
+    const lip = Math.sqrt(1 - u * u) * top.ry;
+    const d = Math.hypot(u, (y + 0.5 - top.y) / top.ry);
+    if (d < 1) {
+      // The cut top: bark round the rim, then the rings.
+      if (d > 0.9) return BARK[3];
+      const ring = (d * 6.2 + vnoise(x / 5, y / 3, 401) * 0.5) % 1;
+      return ring < 0.24 ? BARK[4] : d < 0.14 ? BARK[4] : GOLD[0];
+    }
+    if (y < top.y) return null;
+    // The side: furrowed bark down to a foot that spreads into roots.
+    const foot = top.y + 11 + lip + (hash(x >> 2, 1, 402) > 0.5 ? 1 : 0);
+    if (y > foot) return null;
+    const furrow = hash(x, 3, 403);
+    let idx = 2.4 - u * 1.3 + (furrow > 0.72 ? -1.2 : furrow < 0.2 ? 0.8 : 0);
+    if (y < top.y + lip + 2) idx -= 1;
+    if (y > foot - 2) idx -= 0.8;
+    return at(BARK, idx);
+  });
+  const g = must2d(c);
+  // The board: grooves first, then each hex standing a little proud of them.
+  for (const [hx, hy] of BOARD) {
+    R(g, hx - 2, hy - 2, 5, 5, BARK[1]);
+    R(g, hx - 3, hy - 1, 7, 3, BARK[1]);
+  }
+  BOARD.forEach(([hx, hy], i) => {
+    const pale = (i + (hy === 11 ? 1 : 0)) % 2 === 0;
+    R(g, hx - 1, hy - 1, 3, 3, pale ? PAPER[1] : PAPER[0]);
+    R(g, hx - 2, hy, 5, 1, pale ? PAPER[1] : PAPER[0]);
+    R(g, hx - 1, hy - 1, 3, 1, pale ? CREAM : PAPER[1]);
+  });
+  // Moss on the shaded side, and a mushroom that has moved in.
+  for (const [x, y, w] of [
+    [36, 24, 5],
+    [38, 25, 4],
+    [8, 27, 3],
+  ] as const)
+    R(g, x, y, w, 1, GREEN[3]);
+  R(g, 37, 23, 2, 1, GREEN[4]);
+  R(g, 5, 23, 3, 1, SKY[5]);
+  R(g, 4, 24, 5, 1, "#b0483a");
+  R(g, 6, 25, 1, 2, "#e9d8b8");
+  return spr(c, 24, 32);
+}
+
+function must2d(c: HTMLCanvasElement): Ctx {
+  const g = c.getContext("2d");
+  if (!g) throw new Error("no 2d context");
+  return g;
+}
+
+/** A carved figure for the board: a head, a body, and the dark of its foot. */
+function piece(light: string, body: string, shade: string): HTMLCanvasElement {
+  const { c, g } = makeCanvas(3, 6);
+  R(g, 1, 0, 1, 1, light);
+  R(g, 0, 1, 3, 2, body);
+  R(g, 0, 1, 1, 1, light);
+  R(g, 0, 3, 3, 2, shade);
+  R(g, 0, 5, 3, 1, BARK[0]);
+  return c;
+}
+
 function bench(): Sprite {
   const { c, g } = makeCanvas(28, 14);
   R(g, 1, 0, 26, 5, BARK[2]);
@@ -727,6 +834,7 @@ const CRAB_B = [".........", "rrw...wrr", "rrrrrrrrr", "rrrrrrrrr", ".RrrrrrR.",
 const BANG = ["yy", "yy", "yy", "yy", "yy", "..", "yy", "yy"];
 const CROWN = ["..l..l..", ".lylyyl.", "yyoyyoyy"];
 const MUG = ["www.", "wNww", "wNNw", "www."];
+const JAR = ["..nnnn..", ".UUUUUU.", "U......U", "U..Y...U", "U.....YU", "U.Y....U", "U...Y..U", ".UUUUUU."];
 
 function paperLantern(col: string, core: string): Sprite {
   const { c, g } = makeCanvas(5, 9);
@@ -742,35 +850,7 @@ function paperLantern(col: string, core: string): Sprite {
 
 // ---------- icons for the buttons ----------
 
-const ICON_ROWS: Readonly<Record<string, readonly string[]>> = {
-  leaf: [
-    "........GG..",
-    "......GGllG.",
-    "....GGlllwG.",
-    "...GllllwlG.",
-    "..GlllllwlG.",
-    "..GllllwllG.",
-    ".GllllwlllG.",
-    ".GlllwlllG..",
-    ".GllwlllG...",
-    ".GlwlGGG....",
-    ".Gw.........",
-    "Gd..........",
-  ],
-  coin: [
-    "....oooo....",
-    "..ooyyyyoo..",
-    ".oyyYYYYyyo.",
-    ".oyYwyyoYyo.",
-    "oyYwyyyyoYyo",
-    "oyYyyooyoYyo",
-    "oyYyyooyoYyo",
-    "oyYyyyyyoYyo",
-    ".oyYyyyoYyo.",
-    ".oyyYYYYyyo.",
-    "..ooyyyyoo..",
-    "....oooo....",
-  ],
+const ICON_ROWS: Readonly<Record<PlaceId, readonly string[]>> = {
   treasury: [
     ".....yy.....",
     ".y...yy...y.",
@@ -827,6 +907,20 @@ const ICON_ROWS: Readonly<Record<string, readonly string[]>> = {
     ".yy.yyyy.yy.",
     "....yyyy....",
   ],
+  table: [
+    "...nnnnnn...",
+    "..nccccccn..",
+    ".ncccrrcccn.",
+    "ncccrrrrcccn",
+    "ncccrwwrcccn",
+    "ncccrrrrcccn",
+    "nccCRRRRCccn",
+    "ncccccccyycn",
+    ".ncGGccyyYn.",
+    "..nGGccyyn..",
+    "...nnnnnn...",
+    "....bbbb....",
+  ],
   fire: [
     ".....r......",
     "....rr......",
@@ -869,61 +963,19 @@ const ICON_ROWS: Readonly<Record<string, readonly string[]>> = {
     "GGGGGGGGGGGG",
     ".GG.GGGG.GG.",
   ],
-  sound: [
-    "......w.....",
-    ".....ww..w..",
-    "....www...w.",
-    "wwwwwww.w.w.",
-    "wwwwwww..ww.",
-    "wwwwwww..ww.",
-    "wwwwwww..ww.",
-    "wwwwwww.w.w.",
-    "....www...w.",
-    ".....ww..w..",
-    "......w.....",
-    "............",
-  ],
-  mute: [
-    "......w.....",
-    ".....ww.....",
-    "....www.....",
-    "wwwwwww.r.r.",
-    "wwwwwww.r.r.",
-    "wwwwwww..r..",
-    "wwwwwww..r..",
-    "wwwwwww.r.r.",
-    "....www.r.r.",
-    ".....ww.....",
-    "......w.....",
-    "............",
-  ],
-  visit: [
-    "............",
-    "..ww....ww..",
-    ".wwww..wwww.",
-    ".wwww..wwww.",
-    "..ww....ww..",
-    ".wwww..wwww.",
-    "wwwwwwwwwwww",
-    "wwwwwwwwwwww",
-    "wwwwwwwwwwww",
-    ".www....www.",
-    "............",
-    "............",
-  ],
 };
 
-export type IconName =
-  "leaf" | "coin" | "treasury" | "quests" | "market" | "works" | "fire" | "pond" | "camp" | "sound" | "mute" | "visit";
-
-const icons = new Map<string, HTMLCanvasElement>();
-export function icon(name: IconName): HTMLCanvasElement {
+const icons = new Map<PlaceId, HTMLCanvasElement>();
+/** A place's own picture, for its dock button and the head of its panel. Each call gives a new copy. */
+export function icon(name: PlaceId): HTMLCanvasElement {
   let c = icons.get(name);
   if (!c) {
-    c = outlined(bitmap(ICON_ROWS[name] ?? [], PAL), INK);
+    c = outlined(bitmap(ICON_ROWS[name], PAL), INK);
     icons.set(name, c);
   }
-  return c;
+  const copy = makeCanvas(c.width, c.height);
+  copy.g.drawImage(c, 0, 0);
+  return copy.c;
 }
 
 // ---------- the set ----------
@@ -944,6 +996,10 @@ export interface Sprites {
   ferns: Sprite[];
   log: Sprite;
   stump: Sprite;
+  shortLog: Sprite;
+  greatStump: Sprite;
+  /** The carved figures on the stump's board. */
+  pieces: HTMLCanvasElement[];
   bench: Sprite;
   fireRing: Sprite;
   barrel: Sprite;
@@ -962,6 +1018,7 @@ export interface Sprites {
   bang: Sprite;
   crown: HTMLCanvasElement;
   mug: HTMLCanvasElement;
+  jar: HTMLCanvasElement;
   lanterns: Sprite[];
 }
 
@@ -983,6 +1040,15 @@ export function makeSprites(): Sprites {
     ferns: [fern(8, 321), fern(10, 322), fern(7, 323)],
     log: log(),
     stump: stump(),
+    shortLog: shortLog(),
+    greatStump: greatStump(),
+    pieces: [
+      piece("#f4a08c", SKY[5], "#b0483a"),
+      piece(GOLD[2], GOLD[1], GOLD[0]),
+      piece(GREEN[4], GREEN[3], GREEN[1]),
+      piece(SKY[4], SKY[3], SKY[2]),
+      piece("#ffffff", CREAM, "#cbb894"),
+    ],
     bench: bench(),
     fireRing: fireRing(),
     barrel: barrel(),
@@ -1001,6 +1067,7 @@ export function makeSprites(): Sprites {
     bang: bm(BANG, 1, 8),
     crown: bitmap(CROWN, PAL),
     mug: bitmap(MUG, PAL),
+    jar: bitmap(JAR, PAL),
     lanterns: [paperLantern(GOLD[1], GOLD[2]), paperLantern(SKY[5], GOLD[1]), paperLantern(SKY[4], GOLD[2])],
   };
 }

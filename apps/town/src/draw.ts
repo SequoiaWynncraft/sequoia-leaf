@@ -1,13 +1,16 @@
 /**
- * Drawing a frame. The town is drawn small, one art pixel to a pixel, with dusk laid over it and the
- * lights cut out of the dusk; then it is blown up to the screen, and the words (names, speech, the
- * prompt by a door) are written over it at the screen's own sharpness.
+ * Drawing a frame of the town. It is drawn small, one art pixel to a pixel, with dusk laid over it
+ * and the lights cut out of the dusk; then it is blown up to the screen, and the words (name
+ * plates, speech, the prompt by a door) are written over it in the guild's font, a whole number of
+ * screen pixels to each of the font's.
  */
 
 import { CREAM, GOLD, INK, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
+import { bubble, bubbleSize, prompt, promptSize, wrap } from "@sequoia-leaf/kit/signs.ts";
 import { FOOT_X, FOOT_Y, SIT, WALK } from "@sequoia-leaf/kit/skin.ts";
-import { clamp, type Ctx, lerp, makeCanvas, type Pt, type Rect } from "@sequoia-leaf/kit/util.ts";
+import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
+import { clamp, type Ctx, dist, lerp, makeCanvas, type Pt, type Rect } from "@sequoia-leaf/kit/util.ts";
 
 import { HOP, onScreen } from "./actors.ts";
 import { bits, floaters, rings } from "./fx.ts";
@@ -17,20 +20,33 @@ import type { Sprites } from "./sprites.ts";
 import { allLights, type Crab, crabPic, crabs, drawGlows, drawStrings, drawWater, type Prop, props } from "./town.ts";
 import { type Place, pondD } from "./world.ts";
 
-export interface Stage {
+/** The town's painted pieces, made once. */
+export interface TownArt {
   sprites: Sprites;
   ground: HTMLCanvasElement;
   near: HTMLCanvasElement;
   sky: HTMLCanvasElement;
 }
 
-/** What main asks to be shown besides the town itself. */
-export const show: { prompt: Place | null; promptT: number; dest: Pt | null; touch: boolean; hover: Rect | null } = {
+/** What is to be shown besides the town itself. */
+export const show: {
+  prompt: Place | null;
+  promptT: number;
+  dest: Pt | null;
+  /** The last touch was a finger, so the prompt says "Tap". */
+  touch: boolean;
+  hover: Rect | null;
+  /** Whoever the pointer is resting on, and whoever's card is open: their names show. */
+  pointed: Actor | null;
+  card: Actor | null;
+} = {
   prompt: null,
   promptT: 0,
   dest: null,
   touch: false,
   hover: null,
+  pointed: null,
+  card: null,
 };
 
 const buf = makeCanvas(320, 190);
@@ -114,10 +130,12 @@ function drawActor(g: Ctx, a: Actor, cx: number, cy: number, s: Sprites): void {
   g.globalAlpha = a.alpha;
   g.drawImage(frame, x - FOOT_X, y - FOOT_Y);
   const sunk = pose === SIT ? (a.dir === 0 ? 2 : 5) : 0;
-  if (a.crown) g.drawImage(s.crown, x - 4, y - 21 + sunk);
+  if (crowned(a)) g.drawImage(s.crown, x - 4, y - 21 + sunk);
   if (a.mug > 0 && a.dir !== 3) g.drawImage(s.mug, x + (a.dir === 1 ? -6 : 3), y - 9 + sunk);
   g.globalAlpha = 1;
 }
+
+const crowned = (a: Actor): boolean => a.you && G.wearing.has("crown");
 
 function pixelRing(g: Ctx, x: number, y: number, rx: number, ry: number, col: string): void {
   const n = Math.max(8, Math.round(rx * 3));
@@ -129,7 +147,7 @@ function pixelRing(g: Ctx, x: number, y: number, rx: number, ry: number, col: st
 }
 
 /** The whole town as it is this moment, small. */
-export function drawTown(stage: Stage): HTMLCanvasElement {
+export function drawTown(stage: TownArt): HTMLCanvasElement {
   const g = buf.g;
   const w = buf.c.width;
   const h = buf.c.height;
@@ -226,7 +244,7 @@ export function drawTown(stage: Stage): HTMLCanvasElement {
   d.fillRect(0, 0, w, h);
   d.globalCompositeOperation = "destination-out";
   const lamps = allLights();
-  if (G.player && G.owned.has("jar"))
+  if (G.player && !G.player.away && G.wearing.has("jar"))
     lamps.push({ x: G.player.x, y: G.player.y - 10, r: 24, power: 0.6, boost: 0, phase: 1 });
   for (const l of lamps) {
     const r = l.r * (1 + l.boost * 0.3);
@@ -257,9 +275,9 @@ export function drawTown(stage: Stage): HTMLCanvasElement {
     R(g, Math.round(b.x) - cx, Math.round(b.y) - cy, b.size, b.size, b.col);
   }
   const p = G.player;
-  if (p && !p.away) {
+  if (p && !p.away && p.alpha > 0.5) {
     const at = standing(p);
-    if (G.owned.has("jar")) {
+    if (G.wearing.has("jar")) {
       for (let i = 0; i < 4; i++) {
         const fx = Math.round(at.x + Math.cos(G.t * 1.3 + i * 1.6) * (9 + i)) - cx;
         const fy = Math.round(at.y - 12 + Math.sin(G.t * 1.9 + i * 2.1) * 6) - cy;
@@ -269,7 +287,7 @@ export function drawTown(stage: Stage): HTMLCanvasElement {
         R(g, fx, fy, 1, 1, GOLD[2]);
       }
     }
-    if (G.owned.has("water")) {
+    if (G.wearing.has("water")) {
       const fx = Math.round(at.x - 9 + Math.sin(G.t * 0.9) * 3) - cx;
       const fy = Math.round(at.y - 22 + Math.sin(G.t * 1.6) * 3) - cy;
       g.globalAlpha = 0.3;
@@ -301,114 +319,204 @@ export function drawTown(stage: Stage): HTMLCanvasElement {
   return buf.c;
 }
 
-// ---------- words, at the screen's own sharpness ----------
+// ---------- words, in the guild's font ----------
 
-const FONT = 'ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace';
-
-function outlinedText(ctx: Ctx, text: string, x: number, y: number, fill: string, u: number): void {
-  ctx.lineWidth = 3.2 * u;
-  ctx.lineJoin = "round";
-  ctx.strokeStyle = INK;
-  ctx.strokeText(text, x, y);
-  ctx.fillStyle = fill;
-  ctx.fillText(text, x, y);
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
-function bubble(ctx: Ctx, text: string, x: number, y: number, u: number): void {
-  const pad = 6 * u;
-  const tw = ctx.measureText(text).width;
-  const bw = Math.round(tw + pad * 2);
-  const bh = Math.round(17 * u);
-  const left = Math.round(clamp(x - bw / 2, 4 * u, ctx.canvas.width - bw - 4 * u));
-  const top = Math.round(y - bh);
-  const e = Math.max(1, Math.round(1.5 * u));
-  ctx.fillStyle = INK;
-  ctx.fillRect(left - e, top + e, bw + e * 2, bh - e * 2);
-  ctx.fillRect(left + e, top - e, bw - e * 2, bh + e * 2);
-  ctx.fillRect(Math.round(x) - 3 * e, top + bh, 6 * e, 2 * e);
-  ctx.fillRect(Math.round(x) - e, top + bh + 2 * e, 2 * e, 2 * e);
-  ctx.fillStyle = CREAM;
-  ctx.fillRect(left, top + e, bw, bh - e * 2);
-  ctx.fillRect(left + e, top, bw - e * 2, bh);
-  ctx.fillRect(Math.round(x) - 2 * e, top + bh - e, 4 * e, 2 * e);
-  ctx.fillRect(Math.round(x) - e, top + bh + e, 2 * e, e);
-  ctx.fillStyle = INK;
-  ctx.fillText(text, left + bw / 2, top + bh - 5 * u);
+const touching = (a: Box, b: Box, pad: number): boolean =>
+  a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad;
+
+/** How far from the member a guild-mate's name shows, in the town's pixels. */
+const NAME_REACH = 44;
+/** A sentence is broken into lines about this many font pixels wide. */
+const SAY_WIDTH = 100;
+
+/** How far each name plate has faded in, and the lines of what each person is saying. */
+const plates = new WeakMap<Actor, number>();
+const sayings = new WeakMap<Actor, { text: string; px: number; lines: string[] }>();
+let wordsAt = 0;
+
+function linesOf(ctx: Ctx, a: Actor, px: number): string[] {
+  const had = sayings.get(a);
+  if (had && had.text === a.say && had.px === px) return had.lines;
+  const lines = wrap(ctx, a.say, SAY_WIDTH * px, px);
+  sayings.set(a, { text: a.say, px, lines });
+  return lines;
 }
 
-export function drawWords(ctx: Ctx): void {
+/**
+ * Names and speech. A name shows only for whoever is near the member, pointed at, or speaking,
+ * and no two plates ever overlap: they are placed most wanted first, and one that would cover
+ * another is left out.
+ */
+function drawPeople(ctx: Ctx, px: number, taken: readonly Box[]): void {
   const z = G.view.z;
-  const u = G.view.dpr;
   const cx = Math.round(G.cam.x);
   const cy = Math.round(G.cam.y);
-  const people = [...G.mates];
-  if (G.player) people.push(G.player);
-  if (G.cinfy) people.push(G.cinfy);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
+  const wide = ctx.canvas.width;
+  const dt = clamp(G.t - wordsAt, 0, 1);
+  wordsAt = G.t;
+  const p = G.player;
+  const me = p ? (p.seat ?? p) : null;
 
-  for (const a of people) {
-    if (a.away || a.alpha < 0.5) continue;
-    const at = a.seat ? { x: a.seat.x, y: a.seat.y } : a;
-    if (!onScreen(at.x, at.y, 30)) continue;
+  const wanted: { a: Actor; rank: number }[] = [];
+  for (const a of [...G.mates, ...(p ? [p] : []), ...(G.cinfy ? [G.cinfy] : [])]) {
+    const at = a.seat ?? a;
+    if (a.away || a.alpha < 0.5 || !onScreen(at.x, at.y, 4)) {
+      plates.set(a, 0);
+      continue;
+    }
+    const far = me ? dist(at.x, at.y, me.x, me.y) : 999;
+    // Lower is more wanted; 9 and over is not wanted at all, and only fades out if there is room.
+    const rank =
+      a === show.pointed
+        ? 0
+        : a.say
+          ? 1
+          : a.you
+            ? 2
+            : a === show.card
+              ? 3
+              : far < NAME_REACH && G.home
+                ? 4 + far / 100
+                : 9;
+    wanted.push({ a, rank });
+  }
+  wanted.sort((m, n) => m.rank - n.rank);
+
+  const placed: Box[] = [...taken];
+  const pad = 2 * px;
+  for (const { a, rank } of wanted) {
+    const at = a.seat ?? a;
     const sunk = a.seat ? (a.dir === 0 ? 2 : 5) : 0;
-    const x = (at.x - cx) * z;
-    const y = (at.y - cy - 21 + sunk - (a.crown ? 3 : 0)) * z - 3 * u;
-    ctx.font = `600 ${Math.round(10.5 * u)}px ${FONT}`;
-    ctx.globalAlpha = a.alpha;
-    const plain = a === G.cinfy ? GOLD[1] : CREAM;
-    outlinedText(ctx, a.you ? "You" : a.who.name, x, y, a.you ? GOLD[2] : plain, u);
-    if (a.you && G.owned.has("plate")) {
-      const tw = ctx.measureText("You").width / 2 + 5 * u;
-      ctx.fillStyle = GOLD[1];
-      ctx.fillRect(x - tw - 3 * u, y - 5 * u, 3 * u, 3 * u);
-      ctx.fillRect(x + tw, y - 5 * u, 3 * u, 3 * u);
+    const hx = Math.round((at.x - cx) * z);
+    const hy = Math.round((at.y - cy - 21 + sunk - (crowned(a) ? 3 : 0)) * z);
+    const name = a.who.name;
+    const tw = widthOf(ctx, name, px);
+    const plate: Box = {
+      x: clamp(hx - Math.round(tw / 2) - 3 * px, pad, Math.max(pad, wide - tw - 6 * px - pad)),
+      y: hy - 14 * px,
+      w: tw + 6 * px,
+      h: 12 * px,
+    };
+    const room = !placed.some((b) => touching(plate, b, pad));
+    const now = room ? clamp((plates.get(a) ?? 0) + (rank < 9 ? dt : -dt) * 7, 0, 1) : 0;
+    plates.set(a, now);
+    let top = hy - 2 * px;
+    if (now > 0.02) {
+      placed.push(plate);
+      top = plate.y - 2 * px;
+      ctx.globalAlpha = now * a.alpha * 0.62;
+      ctx.fillStyle = INK;
+      ctx.fillRect(plate.x, plate.y, plate.w, plate.h);
+      ctx.globalAlpha = now * a.alpha;
+      const gold = a.you || a === G.cinfy;
+      write(ctx, name, plate.x + 3 * px, plate.y + 2 * px, { px, colour: gold ? GOLD[2] : CREAM, shadow: false });
+      if (a.you && G.wearing.has("plate")) {
+        // The painted plate: gold corners.
+        ctx.fillStyle = GOLD[1];
+        for (const [fx, fy] of [
+          [0, 0],
+          [1, 0],
+          [0, 1],
+          [1, 1],
+        ] as const) {
+          const x = fx ? plate.x + plate.w - px : plate.x - px;
+          const y = fy ? plate.y + plate.h - px : plate.y - px;
+          ctx.fillRect(x, y, 2 * px, 2 * px);
+        }
+      }
     }
-    if (a.say) {
-      ctx.font = `600 ${Math.round(11 * u)}px ${FONT}`;
-      ctx.globalAlpha = clamp(a.sayFor / 0.25, 0, 1);
-      bubble(ctx, a.say, x, y - 17 * u, u);
-    }
+    if (!a.say) continue;
+    const lines = linesOf(ctx, a, px);
+    const size = bubbleSize(ctx, lines, px);
+    const box: Box = {
+      x: clamp(hx - Math.round(size.w / 2), pad, Math.max(pad, wide - size.w - pad)),
+      y: top - size.h - 3 * px,
+      w: size.w,
+      h: size.h + 3 * px,
+    };
+    // Up out of the way of anything already said or named, as far as it will go.
+    for (let tries = 0; tries < 4 && placed.some((b) => touching(box, b, pad)); tries++) box.y -= size.h + 5 * px;
+    box.y = Math.max(pad, box.y);
+    placed.push(box);
+    ctx.globalAlpha = clamp(a.sayFor / 0.25, 0, 1);
+    bubble(ctx, lines, box.x, box.y, px, hx);
   }
   ctx.globalAlpha = 1;
+}
 
-  ctx.font = `700 ${Math.round(12 * u)}px ${FONT}`;
+export function drawWords(ctx: Ctx, px: number): void {
+  const z = G.view.z;
+  const cx = Math.round(G.cam.x);
+  const cy = Math.round(G.cam.y);
+  const wide = ctx.canvas.width;
+
+  // The soft prompt by a place the member is standing at. Names and speech keep clear of it.
+  const pl = show.promptT > 0.02 ? show.prompt : null;
+  const key = show.touch ? "Tap" : "E";
+  const sign: Box | null = pl
+    ? (() => {
+        const size = promptSize(ctx, key, pl.name, px);
+        const x = clamp(
+          Math.round((pl.prompt.x - cx) * z - size.w / 2),
+          3 * px,
+          Math.max(3 * px, wide - size.w - 3 * px),
+        );
+        return { x, y: Math.max(30 * px, Math.round((pl.prompt.y - cy) * z)), w: size.w, h: size.h };
+      })()
+    : null;
+  drawPeople(ctx, px, sign ? [sign] : []);
+
+  // Words that rise and fade.
   for (const f of floaters) {
+    const lines = wrap(ctx, f.text, wide - 12 * px, px, true);
     ctx.globalAlpha = clamp((f.ttl - f.life) / 0.4, 0, 1);
-    outlinedText(ctx, f.text, clamp((f.x - cx) * z, 60 * u, ctx.canvas.width - 60 * u), (f.y - cy) * z, f.col, u);
+    lines.forEach((line, i) => {
+      const half = Math.round(widthOf(ctx, line, px, true) / 2) + 2 * px;
+      const x = clamp(Math.round((f.x - cx) * z), half, Math.max(half, wide - half));
+      const y = Math.round((f.y - cy) * z) + (i - lines.length) * 11 * px;
+      write(ctx, line, x, y, { px, bold: true, colour: f.col, align: "center", edge: INK });
+    });
   }
   ctx.globalAlpha = 1;
 
-  // The soft prompt by a place the player is standing at.
-  if (show.prompt && show.promptT > 0.02) {
-    const pl = show.prompt;
-    const key = show.touch ? "Tap" : "E";
-    ctx.font = `700 ${Math.round(12 * u)}px ${FONT}`;
-    const kw = ctx.measureText(key).width + 8 * u;
-    const tw = ctx.measureText(pl.name).width;
-    const bw = Math.round(kw + tw + 22 * u);
-    const bh = Math.round(24 * u);
-    const x = Math.round(clamp((pl.prompt.x - cx) * z, bw / 2 + 6 * u, ctx.canvas.width - bw / 2 - 6 * u));
-    const y = Math.round(
-      Math.max(70 * u, (pl.prompt.y - cy) * z) + Math.sin(G.t * 3) * 2 * u - (1 - show.promptT) * 6 * u,
-    );
-    const e = Math.max(1, Math.round(2 * u));
+  if (pl && sign) {
+    const bob = Math.round(Math.sin(G.t * 3)) * px;
     ctx.globalAlpha = show.promptT;
-    ctx.fillStyle = INK;
-    ctx.fillRect(x - bw / 2 - e, y - bh, bw + e * 2, bh);
-    ctx.fillRect(x - bw / 2, y - bh - e, bw, bh + e * 2);
-    ctx.fillStyle = GOLD[1];
-    ctx.fillRect(x - bw / 2, y - bh, bw, bh);
-    ctx.fillStyle = SKY[0];
-    ctx.fillRect(x - bw / 2 + e, y - bh + e, bw - e * 2, bh - e * 2);
-    ctx.fillStyle = CREAM;
-    ctx.fillRect(x - bw / 2 + 6 * u, y - bh + 5 * u, kw, bh - 10 * u);
-    ctx.fillStyle = INK;
-    ctx.textAlign = "left";
-    ctx.fillText(key, x - bw / 2 + 10 * u, y - 8 * u);
-    ctx.fillStyle = GOLD[2];
-    ctx.fillText(pl.name, x - bw / 2 + kw + 13 * u, y - 8 * u);
-    ctx.textAlign = "center";
+    prompt(ctx, key, pl.name, sign.x, sign.y + bob - Math.round((1 - show.promptT) * 3) * px, px);
     ctx.globalAlpha = 1;
+  }
+}
+
+/**
+ * The view closing in on a point, as a round hole in the dark with hard, blocky edges. `r` is the
+ * hole's radius in canvas pixels and `block` the size of one of the scene's pixels.
+ */
+export function drawIris(ctx: Ctx, x: number, y: number, r: number, block: number): void {
+  const wide = ctx.canvas.width;
+  const tall = ctx.canvas.height;
+  for (let y0 = 0; y0 < tall; y0 += block) {
+    const dy = y0 + block / 2 - y;
+    const half = Math.abs(dy) < r ? Math.sqrt(r * r - dy * dy) : 0;
+    if (half <= 0) {
+      ctx.fillStyle = INK;
+      ctx.fillRect(0, y0, wide, block);
+      continue;
+    }
+    const left = Math.floor((x - half) / block) * block;
+    const right = Math.ceil((x + half) / block) * block;
+    ctx.fillStyle = INK;
+    ctx.fillRect(0, y0, left, block);
+    ctx.fillRect(right, y0, wide - right, block);
+    // A rim, like the edge of a doorway.
+    ctx.fillStyle = SKY[1];
+    ctx.fillRect(left, y0, block, block);
+    ctx.fillRect(right - block, y0, block, block);
   }
 }

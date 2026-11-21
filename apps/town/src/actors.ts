@@ -5,9 +5,10 @@ import type { Body } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { dist, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 
-import { CHEERS, GREETS, LINES, type Member } from "./cast.ts";
+import { CHEERS, GREETS, LINES } from "./cast.ts";
 import { puff } from "./fx.ts";
 import { type Actor, G } from "./game.ts";
+import { guild, type Member } from "./guild.ts";
 import { findPath, pathD, type Seat, SEATS, SPOTS } from "./world.ts";
 
 export const HOP = 0.3;
@@ -40,7 +41,6 @@ export function makeActor(who: Member, body: Body, x: number, y: number, you = f
     spot: null,
     doing: "walk",
     greeted: -99,
-    crown: false,
     mug: 0,
   };
 }
@@ -175,10 +175,13 @@ export function stepActor(a: Actor, dt: number): void {
 let chatterAt = 4;
 let greetAt = 0;
 
+/** A guild-mate goes off to do the next thing the guild says they are doing, wherever there is room for it. */
 function choose(a: Actor): void {
   release(a);
-  const seats = SEATS.filter((s) => !s.taken);
-  if (seats.length > 0 && Math.random() < 0.34) {
+  const want = guild.doing(a.who.name);
+  const where = want === "fire" || want === "bench" ? want : want === "play" ? "table" : null;
+  const seats = SEATS.filter((s) => !s.taken && !s.yours && s.at === where);
+  if (where && seats.length > 0) {
     const seat = pick(seats, Math.random());
     a.mode = "going";
     a.doing = "walk";
@@ -186,13 +189,16 @@ function choose(a: Actor): void {
     a.goal = seat;
     walkTo(a, seat.from, () => {
       sit(a, seat);
-      a.doing = seat.at;
+      a.doing = seat.at === "table" ? "play" : seat.at;
       a.mode = "busy";
       a.wait = 14 + Math.random() * 18;
     });
     return;
   }
-  const spots = SPOTS.filter((s) => !s.taken && s.errand !== "gate");
+  // No room there (or nowhere to sit): somewhere else to stand and be busy instead.
+  const open = SPOTS.filter((s) => !s.taken && s.errand !== "gate");
+  const wanted = open.filter((s) => s.errand === want);
+  const spots = wanted.length > 0 ? wanted : open;
   if (spots.length === 0) {
     a.wait = 2;
     return;

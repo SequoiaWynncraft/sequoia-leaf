@@ -4,34 +4,23 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <title>Guild Town</title>
+    <link rel="stylesheet" href="../../packages/kit/src/kit.css" />
     <style>
+      /* Only where the town puts things; how they look is the kit's. */
       :root {
-        --plum: #2a1733;
-        --mid: #3d2050;
-        --edge: #5a296e;
-        --ink: #1a0f1e;
-        --gold: #f5b95e;
-        --cream: #fff3cf;
-        --dim: #cdb6d8;
-        --leaf: #c9ef9a;
-        --coral: #e67967;
+        --edge: max(calc(var(--u) * 4), env(safe-area-inset-left), env(safe-area-inset-right));
+        --top: max(calc(var(--u) * 4), env(safe-area-inset-top));
+        --bottom: max(calc(var(--u) * 4), env(safe-area-inset-bottom));
+        /* The dock: a slot's side, and how tall the whole plank stands off the bottom. */
+        --slot: min(calc(var(--u) * 21), calc((100vw - var(--u) * 26) / 8));
+        --dock: calc(var(--u) * 31 + var(--bottom));
       }
       html,
       body {
-        margin: 0;
         height: 100%;
-        background: var(--ink);
         overflow: hidden;
-        font:
-          600 13px/1.3 ui-monospace,
-          "DejaVu Sans Mono",
-          Menlo,
-          Consolas,
-          monospace;
-        color: var(--cream);
         user-select: none;
         -webkit-user-select: none;
-        -webkit-tap-highlight-color: transparent;
       }
       #view {
         position: fixed;
@@ -41,92 +30,25 @@
         display: block;
         touch-action: none;
         image-rendering: pixelated;
-        cursor: pointer;
-      }
-      canvas.px {
-        image-rendering: pixelated;
-        display: block;
-        flex: none;
-      }
-      [hidden] {
-        display: none !important;
-      }
-      .plum {
-        background: #2a1733f4;
-        border: 2px solid var(--edge);
-        box-shadow:
-          0 0 0 2px var(--ink),
-          0 5px 0 #0007;
-        border-radius: 3px;
-      }
-      button {
-        font: inherit;
-        color: inherit;
-        cursor: pointer;
-        touch-action: manipulation;
       }
 
       /* The purse, top left: Leaf first, because it is the precious one. */
       #purse {
         position: fixed;
         z-index: 5;
-        top: max(8px, env(safe-area-inset-top));
-        left: max(8px, env(safe-area-inset-left));
+        top: var(--top);
+        left: var(--edge);
         display: flex;
-        gap: 14px;
-        padding: 5px 12px 5px 8px;
+        gap: calc(var(--u) * 6);
+        padding: var(--u) calc(var(--u) * 4);
       }
-      .cur {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-      }
-      .cur b {
-        display: block;
-        font-size: 19px;
-        line-height: 1;
-        min-width: 3ch;
-      }
-      .cur small {
-        display: block;
-        font-size: 9px;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--dim);
-      }
-      #leaf b {
-        color: var(--leaf);
-      }
-      #coins b {
-        color: var(--gold);
-      }
-      .cur.bump canvas {
-        animation: bump 0.22s;
-      }
-      @keyframes bump {
-        50% {
-          transform: scale(1.3) rotate(-8deg);
-        }
-      }
-
       #corner {
         position: fixed;
         z-index: 5;
-        top: max(8px, env(safe-area-inset-top));
-        right: max(8px, env(safe-area-inset-right));
+        top: var(--top);
+        right: var(--edge);
         display: flex;
-        gap: 8px;
-      }
-      #corner button {
-        width: 42px;
-        height: 42px;
-        display: grid;
-        place-items: center;
-        padding: 0;
-      }
-      #corner button:active,
-      #dock button:active {
-        transform: translateY(2px);
+        gap: calc(var(--u) * 3);
       }
 
       /* The dock: every place, one touch away. */
@@ -134,346 +56,113 @@
         position: fixed;
         z-index: 6;
         left: 50%;
-        transform: translateX(-50%);
-        bottom: max(8px, env(safe-area-inset-bottom));
+        translate: -50% 0;
+        bottom: var(--bottom);
         display: flex;
-        gap: 5px;
-        padding: 5px;
+        gap: var(--u);
+        padding: var(--u);
       }
       #dock button {
-        width: 58px;
-        height: 54px;
+        width: var(--slot);
+        height: calc(var(--u) * 21);
         padding: 0;
-        display: grid;
-        justify-items: center;
-        align-content: center;
-        gap: 2px;
-        background: var(--mid);
-        border: 2px solid var(--edge);
-        border-radius: 2px;
+        background: none;
       }
-      #dock button small {
-        font-size: 9px;
-        color: var(--dim);
-        letter-spacing: 0.02em;
+      #dock button:hover canvas,
+      #dock button.lit canvas {
+        translate: 0 calc(var(--u) * -1);
       }
-      #dock button.on {
-        border-color: var(--gold);
-        background: #54286a;
-      }
-      #dock button.on small {
-        color: var(--gold);
-      }
-      #dock button:hover canvas {
-        animation: bump 0.22s;
+      #dock button:active {
+        translate: 0 var(--u);
       }
 
       /* A place's panel: beside the town on a wide screen, under it on a tall one. */
       #panel {
         position: fixed;
         z-index: 8;
-        right: max(10px, env(safe-area-inset-right));
-        top: 62px;
-        bottom: 84px;
-        width: min(364px, 46vw);
+        right: var(--edge);
+        top: calc(var(--top) + var(--u) * 30);
+        width: min(calc(var(--u) * 190), 46vw);
+        max-height: calc(100dvh - var(--top) - var(--u) * 34 - var(--dock));
         display: flex;
         flex-direction: column;
+      }
+      #panel > .k-body {
+        flex: 1;
+        min-height: 0;
+      }
+      #panel.slide {
         animation: slide-in 0.18s ease-out;
       }
       @keyframes slide-in {
         from {
-          transform: translateX(26px);
+          translate: calc(var(--u) * 12) 0;
           opacity: 0;
         }
       }
       @keyframes slide-up {
         from {
-          transform: translateY(26px);
+          translate: 0 calc(var(--u) * 12);
           opacity: 0;
         }
       }
-      #panel header {
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        padding: 7px 8px 7px 10px;
-        border-bottom: 2px solid var(--edge);
+      /* The keeper nods while idle and hops when spoken for. */
+      .nod canvas {
+        animation: nod 2.4s steps(2) infinite;
       }
-      #panel h2 {
-        margin: 0;
-        flex: 1;
-        font-size: 16px;
-        color: var(--gold);
-      }
-      #panel .x {
-        width: 34px;
-        height: 34px;
-        background: var(--mid);
-        border: 2px solid var(--edge);
-        border-radius: 2px;
-        font-size: 16px;
-        line-height: 1;
-      }
-      #panel .body {
-        flex: 1;
-        overflow: auto;
-        padding: 10px;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        scrollbar-width: thin;
-        scrollbar-color: var(--edge) transparent;
-      }
-      .row {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        background: var(--mid);
-        border: 2px solid var(--edge);
-        border-radius: 2px;
-        padding: 7px 8px;
-      }
-      .row.done {
-        opacity: 0.7;
-      }
-      .row.lit {
-        border-color: var(--gold);
-        background: #54286a;
-      }
-      .row.missing {
-        border-color: var(--coral);
-        border-style: dashed;
-      }
-      .grow {
-        flex: 1;
-        min-width: 0;
-      }
-      .d {
-        font-size: 11px;
-        font-weight: 500;
-        color: var(--dim);
-      }
-      .note {
-        font-size: 11px;
-        font-weight: 500;
-        color: var(--dim);
-        padding: 0 2px;
-      }
-      .price {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        color: var(--leaf);
-        white-space: nowrap;
-      }
-      .price.coin {
-        color: var(--gold);
-      }
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        min-height: 36px;
-        padding: 5px 11px;
-        white-space: nowrap;
-        color: var(--plum);
-        background: var(--gold);
-        border: 2px solid #ffd98a;
-        border-radius: 2px;
-        box-shadow: 0 3px 0 #a3662a;
-      }
-      .btn:active {
-        transform: translateY(2px);
-        box-shadow: 0 1px 0 #a3662a;
-      }
-      .btn.plain {
-        color: var(--cream);
-        background: var(--edge);
-        border-color: #7a348a;
-        box-shadow: 0 3px 0 var(--ink);
-      }
-      .btn.shake {
-        animation: shake 0.3s;
-      }
-      @keyframes shake {
-        20%,
-        60% {
-          transform: translateX(-4px);
-        }
-        40%,
-        80% {
-          transform: translateX(4px);
-        }
-      }
-      .bar {
-        height: 8px;
-        margin-top: 5px;
-        background: var(--ink);
-        border: 2px solid var(--edge);
-      }
-      .bar i {
-        display: block;
-        height: 100%;
-        background: var(--gold);
-        transition: width 0.4s;
-      }
-      .stamp {
-        color: var(--leaf);
-        border: 2px solid #62a658;
-        border-radius: 2px;
-        padding: 4px 8px;
-        transform: rotate(-4deg);
-        animation: stamp 0.25s cubic-bezier(0.2, 1.6, 0.4, 1);
-      }
-      @keyframes stamp {
-        from {
-          transform: rotate(-4deg) scale(2.2);
-          opacity: 0;
-        }
-      }
-      .keeper {
-        display: flex;
-        gap: 10px;
-        align-items: flex-end;
-      }
-      .keeper canvas {
-        animation: nod 2.4s ease-in-out infinite;
-      }
-      .keeper.hop canvas {
+      .nod.hop canvas {
         animation: hop 0.3s;
       }
       @keyframes nod {
         50% {
-          transform: translateY(2px);
+          translate: 0 var(--u);
         }
       }
       @keyframes hop {
         50% {
-          transform: translateY(-9px);
+          translate: 0 calc(var(--u) * -4);
         }
       }
-      .says {
-        flex: 1;
-        position: relative;
-        background: var(--cream);
-        color: var(--ink);
-        border-radius: 2px;
-        padding: 7px 9px;
-        box-shadow: 0 0 0 2px var(--ink);
-      }
-      .says::before {
-        content: "";
-        position: absolute;
-        left: -8px;
-        bottom: 9px;
-        border: 5px solid transparent;
-        border-right-color: var(--cream);
-      }
-      .says b {
-        display: block;
-        font-size: 10px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: #7a348a;
-      }
-      .wrap {
+      .quest {
         display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
+        flex-direction: column;
+        gap: calc(var(--u) * 2);
       }
-      .who {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: var(--mid);
-        border: 2px solid var(--edge);
-        border-radius: 2px;
-        padding: 4px 8px 4px 4px;
+      .quest.done {
+        opacity: 0.65;
       }
-      .frame {
-        flex: 1;
-        min-height: 230px;
-        border: 2px solid var(--edge);
-        background: #1b1220;
+      .crabs {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: calc(var(--u) * 2);
       }
-      .frame iframe {
-        width: 100%;
-        height: 100%;
-        min-height: 230px;
-        border: 0;
-        display: block;
-      }
-      .big {
-        font-size: 18px;
-        color: var(--gold);
-      }
-      .track {
-        display: flex;
-        gap: 4px;
-      }
-      .track span {
-        flex: 1;
+      .crabs .k-card {
+        flex-direction: column;
+        gap: var(--u);
+        padding: calc(var(--u) * 2) 0;
         text-align: center;
-        font-size: 9px;
-        padding: 4px 0;
-        background: var(--ink);
-        border: 2px solid var(--edge);
-        color: var(--dim);
       }
-      .track span.at {
-        border-color: var(--gold);
-        color: var(--plum);
-        background: var(--gold);
-      }
-      .track span.past {
-        color: var(--cream);
-        background: var(--edge);
+      .crabs .gap {
+        height: calc(var(--u) * 16);
+        font-size: var(--t-l);
+        line-height: calc(var(--u) * 16);
       }
 
       /* The guild feed: what has just happened, said once and then gone. */
       #feed {
         position: fixed;
         z-index: 4;
-        left: max(8px, env(safe-area-inset-left));
-        bottom: 82px;
-        width: min(320px, 76vw);
+        left: var(--edge);
+        bottom: var(--bottom);
+        width: min(calc(var(--u) * 170), calc(50vw - var(--slot) * 4 - var(--u) * 12));
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: calc(var(--u) * 2);
         pointer-events: none;
       }
-      #feed div {
-        background: #1a0f1ee0;
-        border-left: 3px solid var(--gold);
-        padding: 4px 8px;
-        font-size: 11px;
-        font-weight: 500;
-        animation:
-          feed-in 0.3s,
-          feed-out 1s 12s forwards;
-      }
-      #feed .leaf,
-      #feed .level {
-        border-left-color: #62a658;
-      }
-      #feed .crab,
-      #feed .raid {
-        border-left-color: var(--coral);
-      }
-      #feed .land {
-        border-left-color: #b84d84;
-      }
-      @keyframes feed-in {
-        from {
-          transform: translateX(-14px);
-          opacity: 0;
-        }
-      }
-      @keyframes feed-out {
-        to {
-          opacity: 0;
-        }
+      #feed .gone {
+        opacity: 0;
+        transition: opacity 0.9s;
       }
 
       /* A guild-mate's card. */
@@ -481,36 +170,27 @@
         position: fixed;
         z-index: 9;
         left: 50%;
-        transform: translateX(-50%);
-        bottom: 84px;
-        width: min(300px, 86vw);
-        padding: 9px 10px 10px;
-        animation: slide-up 0.16s ease-out;
+        translate: -50% 0;
+        bottom: calc(var(--dock) + var(--u) * 4);
+        width: min(calc(var(--u) * 150), calc(100vw - var(--edge) * 2));
+        box-sizing: border-box;
+        padding: calc(var(--u) * 2);
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 3);
       }
       #card .top {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        margin-bottom: 8px;
-      }
-      #card .x {
-        margin-left: auto;
-        width: 30px;
-        height: 30px;
-        background: var(--mid);
-        border: 2px solid var(--edge);
-        border-radius: 2px;
+        align-items: flex-start;
       }
 
-      /* Arrival: while you were away. */
+      /* Arrival: the letter, to one side so the member can watch themselves walk in through the gate. */
       #arrival {
         position: fixed;
         z-index: 20;
         inset: 0;
         display: grid;
-        /* To one side, so the member can watch themselves walk in through the gate. */
         place-items: center end;
-        padding: 0 max(18px, 5vw);
+        padding: var(--top) max(var(--edge), 5vw) var(--bottom);
         box-sizing: border-box;
         background: linear-gradient(90deg, #1a0f1e22 30%, #1a0f1ea8 100%);
         transition: opacity 0.3s;
@@ -519,120 +199,133 @@
         opacity: 0;
         pointer-events: none;
       }
-      #arrival .sheet {
-        width: min(404px, 92vw);
-        box-sizing: border-box;
-        padding: 14px 16px 16px;
-        animation: rise 0.4s cubic-bezier(0.2, 1.3, 0.4, 1);
+      .letter {
+        width: min(calc(var(--u) * 180), 100%);
       }
-      @keyframes rise {
-        from {
-          transform: translateY(30px) scale(0.96);
-          opacity: 0;
-        }
+      .letter .line {
+        visibility: hidden;
       }
-      #arrival h1 {
-        margin: 0;
-        font-size: 22px;
-        color: var(--gold);
-      }
-      #arrival p {
-        margin: 2px 0 8px;
-        font-weight: 500;
-        color: var(--dim);
-      }
-      #arrival .line {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        padding: 8px 0;
-        border-top: 2px dotted var(--edge);
-        opacity: 0;
-        animation: line-in 0.3s forwards;
+      .letter .line.in {
+        visibility: visible;
+        animation: line-in 0.3s steps(4);
       }
       @keyframes line-in {
         from {
-          transform: translateX(-10px);
+          translate: calc(var(--u) * -6) 0;
           opacity: 0;
         }
-        to {
-          opacity: 1;
-        }
       }
-      #arrival .line b {
-        color: var(--gold);
-      }
-      #arrival .line.leaf b {
-        color: var(--leaf);
-      }
-      #arrival .btn {
-        width: 100%;
-        margin-top: 8px;
-        min-height: 44px;
-        font-size: 15px;
+      .letter .faces {
+        gap: var(--u);
       }
       .fly {
         position: fixed;
-        z-index: 30;
+        z-index: 60;
         left: 0;
         top: 0;
         pointer-events: none;
       }
 
+      /* A game, over the whole town. */
+      #door {
+        position: fixed;
+        z-index: 40;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: var(--edge);
+        box-sizing: border-box;
+      }
+      #door.dark {
+        background: var(--k-ink);
+      }
+      .door-frame {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        visibility: hidden;
+      }
+      .door-frame.open {
+        visibility: visible;
+      }
+      .door-sign {
+        animation: nod 0.8s steps(2) infinite;
+      }
+      .door-note {
+        position: relative;
+        width: min(calc(var(--u) * 170), 100%);
+      }
+      .door-note p {
+        margin: calc(var(--u) * 3) 0 calc(var(--u) * 5);
+      }
+
+      /* Inside a game the town's interface is put away, and comes back after. */
+      #purse,
+      #corner,
+      #dock,
+      #feed {
+        transition: translate 0.25s steps(5);
+      }
+      .inside #purse,
+      .inside #corner {
+        translate: 0 calc(var(--u) * -40);
+      }
+      .inside #dock {
+        translate: -50% calc(var(--u) * 50);
+      }
+      .inside #feed {
+        translate: 0 calc(var(--u) * 50);
+      }
+      .inside #panel,
+      .inside #card {
+        display: none;
+      }
+
+      @media (max-width: 1100px), (orientation: portrait) {
+        #feed {
+          bottom: calc(var(--dock) + var(--u) * 4);
+          width: min(calc(var(--u) * 170), calc(100vw - var(--edge) * 2));
+        }
+      }
       @media (max-width: 700px), (orientation: portrait) {
         #arrival {
           place-items: end center;
-          padding: 0 0 max(16px, env(safe-area-inset-bottom));
+          padding-inline: var(--edge);
           background: linear-gradient(180deg, #1a0f1e11 35%, #1a0f1eb8 100%);
         }
         #panel {
-          left: 8px;
-          right: 8px;
+          left: var(--edge);
+          right: var(--edge);
           width: auto;
           top: auto;
-          bottom: 72px;
-          max-height: min(50dvh, 430px);
+          bottom: calc(var(--dock) + var(--u) * 2);
+          max-height: min(52dvh, calc(100dvh - var(--dock) - var(--top) - var(--u) * 30));
+        }
+        #panel.slide {
           animation-name: slide-up;
         }
-        #dock {
-          gap: 3px;
-          padding: 4px;
+        #purse {
+          gap: calc(var(--u) * 4);
         }
-        #dock button {
-          width: 47px;
-          height: 46px;
-        }
-        #dock button small {
-          display: none;
-        }
-        #feed {
-          bottom: 70px;
-          width: min(300px, 74vw);
-        }
+        #feed > :nth-last-child(n + 3),
         body.panel-open #feed {
           display: none;
-        }
-        #card {
-          bottom: 70px;
-        }
-        .cur small {
-          display: none;
-        }
-        .cur b {
-          min-width: 2ch;
         }
       }
     </style>
   </head>
   <body>
     <canvas id="view"></canvas>
-    <div id="purse" class="plum"></div>
+    <div id="purse" class="k-plaque"></div>
     <div id="corner"></div>
-    <div id="feed"></div>
-    <nav id="dock" class="plum"></nav>
-    <aside id="panel" class="plum" hidden></aside>
-    <div id="card" class="plum" hidden></div>
-    <div id="arrival"></div>
+    <div id="feed" aria-live="polite"></div>
+    <nav id="dock" class="k-plaque" aria-label="Places"></nav>
+    <aside id="panel" class="k-panel" hidden></aside>
+    <div id="card" class="k-plaque" hidden></div>
+    <div id="arrival" hidden></div>
+    <div id="door" hidden></div>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A stand-in game</title>
+    <link rel="stylesheet" href="../../../../packages/kit/src/kit.css" />
+    <style>
+      html body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #24482a;
+      }
+      /* Something always moving, as in a real game, so a page that is being watched keeps drawing. */
+      .k-head > .k-i {
+        animation: turn 2s steps(8) infinite;
+      }
+      @keyframes turn {
+        to {
+          rotate: 1turn;
+        }
+      }
+      section {
+        width: min(calc(var(--u) * 170), calc(100vw - var(--u) * 8));
+      }
+    </style>
+  </head>
+  <body>
+    <section class="k-panel">
+      <header class="k-head">
+        <i class="k-i k-i-gear"></i>
+        <h1 class="k-title">A stand-in game</h1>
+        <button id="leave" class="k-btn wood icon sm" aria-label="Back to town"><i class="k-i k-i-back"></i></button>
+      </header>
+      <div class="k-body">
+        <div>This page only speaks to the town: ready, news, leave.</div>
+        <div id="heard" class="k-d">The town has said nothing yet.</div>
+        <div class="k-row">
+          <button id="earn" class="k-btn"><i class="k-i k-i-coin"></i>Earn 5</button>
+          <button id="news" class="k-btn wood">Send news</button>
+        </div>
+      </div>
+    </section>
+    <script type="module" src="./standin.ts"></script>
+  </body>
+</html>

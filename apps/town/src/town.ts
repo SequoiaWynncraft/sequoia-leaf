@@ -5,15 +5,17 @@
 
 import { BARK, CREAM, EARTH, GOLD, GREEN, INK, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { ell, R } from "@sequoia-leaf/kit/pix.ts";
-import { sfx } from "@sequoia-leaf/kit/sound.ts";
+import { earn } from "@sequoia-leaf/kit/purse.ts";
+import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, lerp, type Pt, type Rect, rng } from "@sequoia-leaf/kit/util.ts";
 
 import { goSit, onScreen } from "./actors.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { changed, G, hooks } from "./game.ts";
 import { GROUND, paintTrunk } from "./ground.ts";
-import type { Sprite, Sprites } from "./sprites.ts";
-import { type PlaceId, pondD, POSTS, SEATS } from "./world.ts";
+import { guild } from "./guild.ts";
+import { BOARD, type Sprite, type Sprites } from "./sprites.ts";
+import { place, type PlaceId, pondD, POSTS, SEATS } from "./world.ts";
 
 export interface Prop {
   kind: string;
@@ -30,6 +32,8 @@ export interface Prop {
   tap: ((p: Prop, wx: number, wy: number) => void) | null;
   /** Anything drawn over the picture each frame, given the picture's foot on screen. */
   extra: ((g: Ctx, sx: number, sy: number) => void) | null;
+  /** What it is, for whoever points at it: a name and a line. */
+  tip: readonly [string, string] | null;
 }
 
 export interface Light {
@@ -61,6 +65,7 @@ function add(kind: string, sprite: Sprite | null, x: number, y: number, o: Parti
     hops: false,
     tap: null,
     extra: null,
+    tip: null,
     ...o,
   };
   props.push(p);
@@ -144,7 +149,26 @@ export const tree = {
   adrift: new Array<{ x: number; y: number; col: number; life: number }>(),
 };
 
-export const chest = { openUntil: 0, looted: false };
+export const chest = { openUntil: 0 };
+
+/** The Works' doorway: how far its inner doors stand open, and how far they are meant to. */
+export const door = { open: 0, goal: 0 };
+
+/**
+ * The board on the great stump: which hex each carved figure stands on, and the one that is in
+ * the middle of a move. `lit` rises when somebody sits down to play.
+ */
+export const table = {
+  x: 444,
+  y: 200,
+  at: [9, 11, 13, 1, 3],
+  moving: -1,
+  from: 0,
+  movedAt: -9,
+  next: 2,
+  lit: 0,
+  goal: 0,
+};
 
 export interface Crab {
   n: number;
@@ -233,6 +257,8 @@ function strung(x1: number, y1: number, x2: number, y2: number, sag: number): vo
 
 // ---------- what touching things does ----------
 
+const tipOf = (id: PlaceId): readonly [string, string] => [place(id).name, place(id).about];
+
 const mid = (p: Prop): Pt => ({ x: p.x, y: p.y - (p.sprite ? p.sprite.c.height * 0.55 : 5) });
 
 function nudge(p: Prop): void {
@@ -311,12 +337,9 @@ function tapChest(p: Prop): void {
   chest.openUntil = G.t + 1.4;
   sparkle(p.x, p.y - 8, 8, 5);
   sfx.coin(2);
-  if (!chest.looted) {
-    chest.looted = true;
-    G.coins += 3;
-    float(p.x, p.y - 16, "+3 Coins", GOLD[1]);
-    changed();
-  }
+  if (hooks.looted()) return;
+  earn(3, "the chest by the Treasury");
+  float(p.x, p.y - 16, "+3 Coins", GOLD[1]);
 }
 
 function tapSeat(wx: number, wy: number): void {
@@ -350,19 +373,46 @@ function tapTree(p: Prop): void {
   flutter(tree.x, tree.y - 52, 14, [GOLD[1], GOLD[0], SKY[5]], 24, 10);
   sfx.twinkle();
   const n = tree.slots.filter((s) => s.lit).length;
-  float(tree.x, tree.y - 70, `${n} lantern${n === 1 ? "" : "s"}: one for every raid today`, GOLD[2], 2.2);
+  float(tree.x, tree.y - 70, `${n} lantern${n === 1 ? "" : "s"}, one a raid`, GOLD[2], 2.2);
 }
 
 function tapPole(): void {
   banner.flutter = 1;
   sfx.pluck(6);
   if (banner.up > 0.5) float(banner.x, banner.y - 78, banner.name, GOLD[2], 2);
-  else float(banner.x, banner.y - 40, "No banner yet tonight", CREAM, 2);
+  else float(banner.x, banner.y - 40, "No banner yet", CREAM, 2);
 }
 
 function tapPlace(p: Prop): void {
   nudge(p);
   if (p.place) hooks.visit(p.place);
+}
+
+/** A knock on the stump: every carved figure jumps. */
+function tapTable(p: Prop): void {
+  table.movedAt = G.t;
+  table.moving = -2;
+  noise(0.03, 1900, { vol: 0.1, q: 5 });
+  tone(330, 0.07, { vol: 0.08, type: "square" });
+  tapPlace(p);
+}
+
+/** The Works' doors swing in and the hearth lights the yard; `false` lets them fall to again. */
+export function openDoor(open: boolean): void {
+  door.goal = open ? 1 : 0;
+  if (!open) return;
+  noise(0.18, 420, { vol: 0.1, slide: 0.5, q: 2 });
+  tone(98, 0.16, { vol: 0.14, type: "sine", slide: 0.7, at: 0.12 });
+  smoke(5);
+}
+
+/** The lantern over the board burns up for a game; `false` lets it settle. */
+export function lightTable(lit: boolean): void {
+  table.goal = lit ? 1 : 0;
+  if (!lit) return;
+  table.movedAt = G.t;
+  table.moving = -2;
+  sfx.twinkle();
 }
 
 /** Touching the water: rings spread from the spot, and the crabs take notice. */
@@ -417,10 +467,24 @@ export function tapCrab(c: Crab): void {
   }
   G.sightings++;
   float(c.x, c.y - 14, QUIPS[G.sightings % QUIPS.length] ?? "", SKY[5], 2.2);
-  hooks.feed(`You spotted crab No. ${c.n}. It got away.`, "crab");
+  hooks.feed(`You spotted crab No. ${c.n}. It got away.`, "coral");
   c.bolt = 0.01;
   puff(c.x, c.y, 5, EARTH[2]);
   changed();
+}
+
+/** A crab picked out by its number: it hops and clacks, if it is at home. Says whether it was. */
+export function nudgeCrab(n: number): boolean {
+  const c = crabs.find((k) => k.n === n);
+  if (!c || c.lost) {
+    sfx.cricket();
+    return false;
+  }
+  c.hop = 0.3;
+  c.clack = 0.5;
+  sfx.clack();
+  float(c.x, c.y - 12, `No. ${c.n}`, CREAM, 1.2);
+  return true;
 }
 
 export function crabAt(wx: number, wy: number): Crab | null {
@@ -495,9 +559,11 @@ export function buildTown(s: Sprites, ground: Ctx): void {
   trunk(520, 348, 46, 8);
 
   // Treasury, with its counter a separate piece in front of where Cinfy stands.
-  add("treasury", s.treasury, 56, 120, { z: 110, place: "treasury", tap: tapPlace });
+  const TREASURY = tipOf("treasury");
+  add("treasury", s.treasury, 56, 120, { z: 110, place: "treasury", tap: tapPlace, tip: TREASURY });
   add("counter", s.counter, 81, 120, {
     place: "treasury",
+    tip: TREASURY,
     tap: (p) => {
       ringBell();
       tapPlace(p);
@@ -510,6 +576,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     hit: { x: 152, y: 107, w: 16, h: 15 },
     tap: tapChest,
     hops: true,
+    tip: ["Cinfy's chest", "Sometimes there is change in it."],
     extra: (g, sx, sy) => {
       const pic = G.t < chest.openUntil ? s.chestOpen : s.chest;
       g.drawImage(pic.c, sx - pic.ax, sy - pic.ay);
@@ -522,58 +589,71 @@ export function buildTown(s: Sprites, ground: Ctx): void {
   add("works", s.works, 344, 120, {
     z: 118,
     place: "works",
+    tip: tipOf("works"),
     tap: (p) => {
       smoke(8);
       sfx.clank();
       tapPlace(p);
     },
+    extra: drawDoor,
   });
-  light(372, 106, 40, 1);
+  doorLight = light(372, 106, 40, 1);
   light(430, 90, 20, 0.7);
   add("belt", null, 402, 134, {
     hit: { x: 400, y: 112, w: 60, h: 22 },
-    place: "works",
+    tip: ["The belt", "Planks out of the Works. Tap to hurry it."],
     tap: (p) => {
+      nudge(p);
       belt.boost = 2.5;
       sfx.clank();
-      tapPlace(p);
     },
     extra: drawBelt,
   });
   add("pile", s.pile, 458, 135, {
-    place: "works",
-    tap: tapPlace,
+    tip: ["Crates", "Stacked up for the depot."],
+    tap: (p) => {
+      nudge(p);
+      sfx.knock();
+    },
+    hops: true,
     extra: (g, sx, sy) => {
       for (let i = 0; i < belt.fresh; i++) g.drawImage(s.box.c, sx + 2 + (i % 2) * 8, sy - 26 - Math.floor(i / 2) * 6);
     },
   });
 
   // The gate out to the member's own camp, and the signpost that says so.
-  add("gate", s.gate, 256, 98, { place: "camp", tap: tapPlace });
+  const CAMP = tipOf("camp");
+  add("gate", s.gate, 256, 98, { place: "camp", tap: tapPlace, tip: CAMP });
   light(237, 65, 24, 0.9);
   light(275, 65, 24, 0.9);
   light(256, 84, 34, 0.85); // the last of the sun, coming up the path
-  add("signpost", s.signpost, 291, 106, { place: "camp", tap: tapPlace, hops: true });
+  add("signpost", s.signpost, 291, 106, { place: "camp", tap: tapPlace, hops: true, tip: CAMP });
 
   add("board", s.board, 176, 160, {
     place: "quests",
+    tip: tipOf("quests"),
     tap: (p) => {
       flutter(198, 140, 5, [CREAM, GOLD[2]], 12, 20);
       sfx.paper();
       tapPlace(p);
     },
     extra: (g, sx, sy) => {
-      if (!G.quests.some((q) => q.have >= q.need && !q.claimed)) return;
+      if (!guild.quests().some((q) => q.have >= q.need && !G.claimed.has(q.id))) return;
       const bob = Math.round(Math.sin(G.t * 4) * 1.5);
       g.drawImage(s.bang.c, sx + 20, sy - 56 + bob);
     },
   });
-  add("pole", s.pole, banner.x, banner.y, { tap: tapPole, extra: drawBanner });
+  add("pole", s.pole, banner.x, banner.y, {
+    tap: tapPole,
+    extra: drawBanner,
+    tip: ["Banner pole", "A banner goes up when the guild takes land."],
+  });
 
   s.stalls.forEach((st, i) => {
     const x = 40 + i * 48;
     add("stall", st, x, 248, {
       place: "market",
+      tip: tipOf("market"),
       tap: (p) => {
         sfx.pluck(2 + i * 2);
         tapPlace(p);
@@ -587,14 +667,33 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     const l = light(p.x + 8, p.y - 26, 36, 0.9);
     lamps.set(add("post", s.post, p.x, p.y, { tap: (q) => tapPost(q, l) }), l);
     shadow(ground, p.x + 1, p.y, 5, 2);
+    if (dist(p.x, p.y, table.x, table.y) < 40) tableLight = l;
   });
 
-  add("tree", s.tree, tree.x, tree.y, { tap: tapTree, extra: drawTreeLanterns });
+  // The great stump with the guild's board game cut into it, and two logs to sit on.
+  add("table", s.greatStump, table.x, table.y, {
+    place: "table",
+    tap: tapTable,
+    extra: drawPieces,
+    tip: tipOf("table"),
+  });
+  shadow(ground, table.x, table.y + 1, 24, 4);
+  for (const x of [431, 457]) {
+    add("seat", s.shortLog, x, 217, { tap: (_p, wx, wy) => tapSeat(wx, wy) });
+    shadow(ground, x, 218, 8, 2);
+  }
+
+  add("tree", s.tree, tree.x, tree.y, {
+    tap: tapTree,
+    extra: drawTreeLanterns,
+    tip: ["Lantern tree", "One lantern for every raid today."],
+  });
   shadow(ground, tree.x, tree.y + 2, 24, 6);
 
   // The fire and its seats.
   add("fire", s.fireRing, 256, 217, {
     place: "fire",
+    tip: tipOf("fire"),
     tap: (p) => {
       flare();
       tapPlace(p);
@@ -643,7 +742,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     [234, 170, 2],
     [44, 140, 1],
     [326, 172, 0],
-    [432, 162, 2],
+    [470, 158, 2],
     [470, 240, 1],
     [300, 316, 0],
     [356, 334, 2],
@@ -655,8 +754,8 @@ export function buildTown(s: Sprites, ground: Ctx): void {
   for (const [x, y, k] of [
     [150, 184, 0],
     [46, 158, 1],
-    [436, 180, 0],
-    [470, 206, 2],
+    [404, 172, 0],
+    [476, 176, 2],
     [286, 334, 1],
     [58, 206, 2],
     [330, 296, 2],
@@ -761,7 +860,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
   strung(284, 50, 292, 54, 2);
   strung(340, 58, 350, 68, 3);
   strung(34, 190, 196, 232, 12);
-  strung(406, 222, 486, 196, 9);
+  strung(433, 144, 488, 154, 7);
   strung(34, 250, 100, 262, 5);
 }
 
@@ -869,22 +968,21 @@ export function stepTown(dt: number): void {
     belt.fly += dt / 0.36;
     if (belt.fly >= 1) {
       belt.fly = -1;
-      belt.fresh = Math.min(4, belt.fresh + 1);
-      G.crates++;
-      G.planks++;
-      const q = G.quests[1];
-      if (q && !q.claimed && q.have < q.need) {
-        q.have++;
-        if (q.have === q.need)
-          hooks.feed("Your Works sent its fortieth plank down the belt. The board has something for you.", "coin");
-      }
-      changed();
+      // The pile is carted off to the depot when it is four high.
+      belt.fresh = belt.fresh >= 4 ? 1 : belt.fresh + 1;
       if (onScreen(466, 118)) {
         puff(466, 118, 3, EARTH[2]);
         if (G.home) sfx.pop();
       }
     }
   }
+
+  // The Works' doors, and the board on the stump.
+  door.open += Math.sign(door.goal - door.open) * Math.min(Math.abs(door.goal - door.open), dt * 4);
+  if (doorLight) doorLight.boost = Math.max(doorLight.boost, door.open);
+  table.lit += Math.sign(table.goal - table.lit) * Math.min(Math.abs(table.goal - table.lit), dt * 3);
+  if (tableLight) tableLight.boost = Math.max(tableLight.boost, table.lit);
+  stepTable(dt);
 
   // The banner.
   banner.flutter = Math.max(0, banner.flutter - dt * 0.5);
@@ -987,7 +1085,82 @@ export function stepTown(dt: number): void {
   }
 }
 
+/** While anybody is at the stump, a figure is moved every couple of seconds. */
+function stepTable(dt: number): void {
+  if (table.moving !== -1 && G.t - table.movedAt > 0.3) table.moving = -1;
+  const all = G.player ? [G.player, ...G.mates] : G.mates;
+  const played = all.some((a) => !a.away && !a.moving && (a.seat?.at === "table" || a.doing === "table"));
+  if (!played) return;
+  table.next -= dt;
+  if (table.next > 0) return;
+  table.next = 1.3 + Math.random() * 1.6;
+  const which = Math.floor(Math.random() * table.at.length);
+  const here = BOARD[table.at[which] ?? 0];
+  if (!here) return;
+  // The hexes beside this one that nobody stands on.
+  const free = BOARD.map((_cell, i) => i).filter((i) => {
+    const there = BOARD[i];
+    return there && !table.at.includes(i) && Math.abs(there[0] - here[0]) <= 6 && Math.abs(there[1] - here[1]) <= 4;
+  });
+  const to = free[Math.floor(Math.random() * free.length)];
+  if (to === undefined) return;
+  table.from = table.at[which] ?? 0;
+  table.at[which] = to;
+  table.moving = which;
+  table.movedAt = G.t;
+  if (G.home && onScreen(table.x, table.y)) {
+    noise(0.025, 2100, { vol: 0.05, q: 5 });
+    tone(392, 0.05, { vol: 0.04, type: "square", at: 0.2 });
+  }
+}
+
 // ---------- drawing the parts that move ----------
+
+let doorLight: Light | null = null;
+let tableLight: Light | null = null;
+
+/** Light through the Works' doorway as its inner doors part, from the middle outwards. */
+function drawDoor(g: Ctx, sx: number, sy: number): void {
+  if (door.open <= 0.02) return;
+  const half = Math.round(13 * door.open);
+  for (let py = 63; py < 98; py++) {
+    const inset = py === 63 ? 5 : py === 64 ? 3 : py === 65 ? 2 : py < 68 ? 1 : 0;
+    const x0 = Math.max(16 + inset, 29 - half);
+    const x1 = Math.min(42 - inset, 29 + half);
+    if (x1 <= x0) continue;
+    R(g, sx + x0, sy - 98 + py, x1 - x0, 1, py > 92 ? GOLD[1] : GOLD[2]);
+    const core = Math.round(half * 0.5);
+    if (core > 0 && py > 66 && py < 93) R(g, sx + 29 - core, sy - 98 + py, core * 2, 1, CREAM);
+  }
+  // The doors themselves, pushed back against the jambs.
+  if (half > 2) {
+    R(g, sx + Math.max(16, 29 - half - 2), sy - 98 + 68, 2, 30, BARK[1]);
+    R(g, sx + Math.min(40, 29 + half), sy - 98 + 68, 2, 30, BARK[1]);
+  }
+}
+
+/** The carved figures on the stump's board, each on its hex; one may be in the air. */
+function drawPieces(g: Ctx, sx: number, sy: number): void {
+  if (!S) return;
+  const since = G.t - table.movedAt;
+  table.at.forEach((cell, i) => {
+    const pic = S?.pieces[i % (S?.pieces.length ?? 1)];
+    const to = BOARD[cell];
+    if (!pic || !to) return;
+    let x = to[0];
+    let y = to[1];
+    let up = 0;
+    if (since < 0.3 && table.moving === -2) up = Math.abs(Math.sin((since / 0.3) * Math.PI)) * (2 + (i % 2));
+    else if (since < 0.3 && table.moving === i) {
+      const from = BOARD[table.from] ?? to;
+      const k = since / 0.3;
+      x = lerp(from[0], to[0], k);
+      y = lerp(from[1], to[1], k);
+      up = Math.sin(k * Math.PI) * 3;
+    }
+    g.drawImage(pic, sx - 24 + Math.round(x) - 1, sy - 32 + Math.round(y - up) - 5);
+  });
+}
 
 function flame(g: Ctx, x: number, y: number, w: number, h: number, col: string, ph: number): void {
   for (let r = 0; r < h; r++) {

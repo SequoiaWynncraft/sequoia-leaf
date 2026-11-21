@@ -5,7 +5,8 @@ import type { Body } from "@sequoia-leaf/kit/skin.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { paintBackdrop, paintGround, paintNear, paintTrunk } from "./ground.ts";
-import { icon, type IconName, type Sprite, type Sprites } from "./sprites.ts";
+import { icon, type Sprite, type Sprites } from "./sprites.ts";
+import { PLACES } from "./world.ts";
 
 export function showSheet(s: Sprites, bodies: readonly Body[]): void {
   const part = new URLSearchParams(location.search).get("sheet") ?? "";
@@ -69,25 +70,13 @@ export function showSheet(s: Sprites, bodies: readonly Body[]): void {
             ...s.rocks,
             ...s.ferns,
             s.signpost,
-            ...(
-              [
-                "leaf",
-                "coin",
-                "treasury",
-                "quests",
-                "market",
-                "works",
-                "fire",
-                "pond",
-                "camp",
-                "sound",
-                "mute",
-                "visit",
-              ] as IconName[]
-            ).map((n) => icon(n)),
+            ...PLACES.map((pl) => icon(pl.id)),
+            s.shortLog,
+            ...s.pieces,
+            s.jar,
             ...bodies.flatMap((b) => b.frames.flat()),
           ]
-        : [s.treasury, s.counter, s.works, s.gate, s.board, ...s.stalls, s.tree];
+        : [s.treasury, s.counter, s.works, s.gate, s.board, ...s.stalls, s.tree, s.greatStump];
     for (const sp of groups) put(sp);
   }
   c.style.cssText = `position:fixed;left:0;top:0;width:${c.width * zoom}px;height:${c.height * zoom}px;image-rendering:pixelated;z-index:99`;
