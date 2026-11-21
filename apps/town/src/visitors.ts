@@ -234,7 +234,9 @@ function spawn(id: string, name: string, rank: string | null, at: Visitor["at"],
   return v;
 }
 
+/** Takes somebody out of town for good, letting go of any seat or spot they held. */
 function forget(v: Visiting): void {
+  release(v.a);
   here.delete(v.id);
   G.visitors = G.visitors.filter((a) => a !== v.a);
 }

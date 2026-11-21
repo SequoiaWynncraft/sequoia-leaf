@@ -1,7 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
+import { restart, start } from "./live.ts";
 import { isRecord } from "./net.ts";
-import { readPresent, readResting } from "./presence.ts";
+import { here, keptStay, readPresent, readResting } from "./presence.ts";
+import { forgetLedger } from "./purse.ts";
+import { HELLO, MemoryStore, type Standin, standin, TESTER } from "./standin.ts";
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
 const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
@@ -50,5 +53,44 @@ describe("who is here", () => {
       }),
     ).toEqual([{ id: "a", name: "Alice", place: "works", rank: "chief", guest: false }]);
     expect(readPresent(null)).toEqual([]);
+  });
+});
+
+describe("staying in town after going", () => {
+  let world: Standin | null = null;
+  afterEach(() => {
+    world?.done();
+    world = null;
+    restart();
+    forgetLedger();
+  });
+
+  test("reads the member's choice from the town's record: stay unless they switched it off", () => {
+    const store = new MemoryStore();
+    world = standin({}, { store });
+    expect(keptStay()).toBe(true);
+    store.setItem("town.save.v1", JSON.stringify({ v: 1, stay: true }));
+    expect(keptStay()).toBe(true);
+    store.setItem("town.save.v1", "not a record");
+    expect(keptStay()).toBe(true);
+    store.setItem("town.save.v1", JSON.stringify({ v: 1, stay: false }));
+    expect(keptStay()).toBe(false);
+  });
+
+  test("a game that never heard the choice says what the town kept, not stay", async () => {
+    const store = new MemoryStore();
+    store.setItem("town.save.v1", JSON.stringify({ v: 1, stay: false }));
+    world = standin(
+      {
+        "GET /v1/game/hello": HELLO,
+        "GET /v1/game/me": { status: 200, body: TESTER },
+        "PUT /v1/game/presence": { status: 200, body: { present: [], resting: [] } },
+      },
+      { store },
+    );
+    await start();
+    here("works");
+    await Bun.sleep(10);
+    expect(world.sent.find((s) => s.path === "/v1/game/presence")?.body).toEqual({ place: "works", stay: false });
   });
 });
