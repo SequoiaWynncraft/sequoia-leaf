@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
 
 import { CLOSE, encodeMove, Flag, LIVE_PATH, LIVE_VERSION, livePath, type Motion, playerId } from "@sequoia-leaf/core";
-import { Deferred, Effect, Schema } from "effect";
-import type { Socket } from "effect/socket";
+import { Deferred, Effect, Fiber, Schema } from "effect";
+import { Socket } from "effect/socket";
 
 import { Live, type LiveTuning } from "../src/live/live.ts";
 import { LiveClient, type Opening } from "./live-client.ts";
@@ -482,6 +482,41 @@ describe("what a connection may send", () => {
   });
 });
 
+/** A socket standing in for Bun's, writing down what Leaf writes to it. It is never read. */
+function standInSocket(written: unknown[]): Socket.Socket {
+  return Socket.make({
+    reader: Effect.succeed({ pull: Effect.never, upgrade: () => Effect.void }),
+    writer: Effect.succeed({
+      write: (chunk) => Effect.sync(() => void written.push(chunk)),
+      writeAll: (chunks) => Effect.sync(() => void written.push(...chunks)),
+    }),
+  });
+}
+
+const alicesIdentity = { playerId: alice, username: "Alice", guildRank: "CAPTAIN", admin: false };
+const signedIn = Effect.succeed(true);
+
+describe("an open interrupted while its socket opens", () => {
+  it("lets go of the player's place, however it was interrupted", async () => {
+    await start();
+    await services?.run(
+      Effect.gen(function* () {
+        const live = yield* Live;
+        const opening = yield* Deferred.make<Socket.Socket, Error>();
+        const fiber = yield* Effect.forkChild(
+          Effect.scoped(live.open(alicesIdentity, "town", Deferred.await(opening), signedIn)),
+        );
+        yield* Effect.sleep("50 millis");
+        yield* Fiber.interrupt(fiber);
+      }),
+    );
+    ahead = 60_000;
+    await Bun.sleep(100);
+
+    expect(await census()).toEqual({ players: 0, connected: 0, rooms: {} });
+  });
+});
+
 describe("when Leaf stops", () => {
   it("closes every connection as restarting, for the game to come back", async () => {
     await start();
@@ -490,5 +525,31 @@ describe("when Leaf stops", () => {
     await server?.close();
 
     expect(await a.ended()).toEqual({ code: CLOSE.restart, reason: "restart" });
+  });
+
+  it("lets nobody in after its farewell, and tells a socket that finishes opening after it to come back", async () => {
+    await start();
+    const written: unknown[] = [];
+    const outcome = await services?.run(
+      Effect.gen(function* () {
+        const live = yield* Live;
+        const opening = yield* Deferred.make<Socket.Socket, Error>();
+        const slow = yield* Effect.forkChild(
+          Effect.scoped(live.open(alicesIdentity, "town", Deferred.await(opening), signedIn)),
+        );
+        yield* Effect.sleep("50 millis");
+        yield* live.farewell;
+        const late = yield* Effect.scoped(
+          live.open({ ...alicesIdentity, playerId: bob, username: "Bob" }, "town", Deferred.await(opening), signedIn),
+        );
+        yield* Deferred.succeed(opening, standInSocket(written));
+        return { late, slow: yield* Fiber.join(slow), census: yield* live.census };
+      }),
+    );
+
+    expect(outcome?.late).toBe("stopping");
+    expect(outcome?.slow).toBe("served");
+    expect(written).toEqual([new Socket.CloseEvent(CLOSE.restart, "restart")]);
+    expect(outcome?.census).toMatchObject({ connected: 0, rooms: {} });
   });
 });
