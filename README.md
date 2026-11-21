@@ -443,8 +443,9 @@ written. Players not seen for a day are forgotten.
 
 ### Live: players in the same place, as it happens
 
-`GET /v1/game/live?v=2` is a WebSocket. Players in the same room see each other
-move as it happens, and see who comes, goes and does what. Anyone the game's
+`GET /v1/game/live?v=2&room=<kind>` (`livePath` in core) is a WebSocket into a
+room. Players in the same room see each other move as it happens, and see who
+comes, goes and does what. Anyone the game's
 routes let in may open it, members and guests alike. The wire is
 `packages/core/src/live.ts`, shared by Leaf and the game; the server is
 `apps/api/src/live`; the game's side is `packages/kit/src/realtime.ts`.
@@ -464,11 +465,13 @@ for the game's routes. With the cookie, the request must carry `Origin` equal to
 `PUBLIC_ORIGIN`, though it is a `GET`: a page on another site can open a
 WebSocket to Leaf, and the browser would send the cookie with it. Before the
 upgrade it is refused as the API refuses: 401 `unauthorized`, 403 `bad_origin`,
-503 `identity_unavailable`, 400 `unsupported_version` (no `v`, or another) or
-`not_websocket`; 429 `slow_down` for a player who opens connections too often
+503 `identity_unavailable`, 400 `unsupported_version` (no `v`, or another),
+`unknown_room` (no `room`, or not one of `ROOMS`) or `not_websocket`; 429 `slow_down` for a player who opens connections too often
 (ten at once, then one every ten seconds, each counted); and 503 `live_full` past
-1000 players. A player's place among them is taken before the socket is opened,
-so that no two can take the last one. A connection lasts only as long as its session: Leaf asks about it
+1000 players. A player's place among them is taken, and held, before the socket
+is opened, so that no two can take the last one. Once it is open, it becomes the
+player's connection and puts them in the room in one step: Leaf's `welcome` is
+the first thing it says, and nothing of any room reaches it before. A connection lasts only as long as its session: Leaf asks about it
 again every 30 seconds (as every request does, through the minute it remembers
 a confirmed session), and closes it as signed out once it has ended.
 
@@ -489,26 +492,27 @@ whenever the game's count changes and at the first move of each new connection
 (which may count from anywhere). The other bits of
 `flags`, `facing` and `pose` are the game's, passed on as they come. Leaf sends
 a room's snapshot once a tick, only when somebody's motion changed, with only
-those who changed, made once and sent to everyone in the room. A move older
-than one already taken is dropped.
+those who changed, made once and sent to everyone in the room.
 
 Text frames are JSON with a `t`:
 
-| From | `t`       | Holds                                                                                                   |
-| ---- | --------- | ------------------------------------------------------------------------------------------------------- |
-| game | `join`    | `room`: a kind of room (`town`). Leaves any other; in a room of that kind already, it is greeted again. |
-| game | `leave`   |                                                                                                         |
-| game | `act`     | `kind` and `arg`, one of `ACTS` in core (an emote: `wave`, `cheer`, ...). Nothing else is passed on.    |
-| game | `ping`    | `c`: the game's clock.                                                                                  |
-| Leaf | `welcome` | `v`, `you` (the player's number in the room), `room` (with its copy: `town/1`), `hz`, `time`, `roster`  |
-| Leaf | `joined`  | `member`: `{ id, player, name, rank, guest }`                                                           |
-| Leaf | `left`    | `id`                                                                                                    |
-| Leaf | `act`     | `id`, `kind`, `arg`                                                                                     |
-| Leaf | `pong`    | `c` as it came, and `s`: Leaf's clock                                                                   |
-| Leaf | `error`   | `code`: `unknown_room`, `not_in_room` or `bad_act`                                                      |
+| From | `t`       | Holds                                                                                                              |
+| ---- | --------- | ------------------------------------------------------------------------------------------------------------------ |
+| game | `join`    | `room`: moves to a room of that kind on the open connection, leaving the other; in one of that kind, greets again. |
+| game | `leave`   |                                                                                                                    |
+| game | `act`     | `kind` and `arg`, one of `ACTS` in core (an emote: `wave`, `cheer`, ...). Nothing else is passed on.               |
+| game | `ping`    | `c`: the game's clock.                                                                                             |
+| Leaf | `welcome` | `v`, `you` (the player's number in the room), `room` (with its copy: `town/1`), `hz`, `time`, `roster`             |
+| Leaf | `joined`  | `member`: `{ id, player, name, rank, guest }`                                                                      |
+| Leaf | `left`    | `id`                                                                                                               |
+| Leaf | `act`     | `id`, `kind`, `arg`                                                                                                |
+| Leaf | `pong`    | `c` as it came, and `s`: Leaf's clock                                                                              |
+| Leaf | `error`   | `code`: `unknown_room`, `not_in_room` or `bad_act`                                                                 |
 
 A `welcome` is followed at once by a snapshot of everybody's motion, so a
-newcomer sees where everyone already is. Actions come only from a list so that
+newcomer sees where everyone already is. A player whose name or rank changed
+since they came in (their new connection says so) leaves and comes back, so that
+everybody sees them as they are. Actions come only from a list so that
 nothing a player types, not even a word spelt out, reaches anybody else.
 
 **Rooms.** `ROOMS` in `packages/core/src/live.ts` lists the kinds, each with its

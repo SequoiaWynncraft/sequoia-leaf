@@ -2,7 +2,8 @@
  * Live: players in the same place see each other move as it happens. This is the wire between the
  * game and Leaf, shared by both so that they cannot disagree about it.
  *
- * One WebSocket at `LIVE_PATH?v=<LIVE_VERSION>`. Two kinds of frame travel on it:
+ * One WebSocket into a room (`livePath`); opening it is entering the room, and Leaf's welcome is the
+ * first thing it says. Two kinds of frame travel on it:
  *
  * - **Binary, the hot path.** A player's motion (`encodeMove`, 23 bytes) from the game, and the
  *   room's changes since the last tick (`encodeSnapshot`, 15 bytes and 24 a player) from Leaf. They
@@ -22,6 +23,9 @@
 export const LIVE_PATH = "/v1/game/live";
 /** The wire's version. Version 1 had no jump count, and no client ever spoke it. */
 export const LIVE_VERSION = 2;
+
+/** Where a game opens its live connection into a room of a kind (`ROOMS`). */
+export const livePath = (room: string): string => `${LIVE_PATH}?v=${LIVE_VERSION}&room=${encodeURIComponent(room)}`;
 
 /** How often Leaf sends a room's changes, a second. */
 export const SERVER_HZ = 30;
@@ -180,7 +184,10 @@ export const isAct = (kind: string, arg: string): boolean =>
 
 /** What the game sends as text. */
 export type ToServer =
-  /** Puts the player in a room of this kind (`ROOMS`), leaving any other. */
+  /**
+   * Moves the player into a room of this kind (`ROOMS`) on a connection already open, leaving any
+   * other; in one of that kind already, they are greeted there again.
+   */
   | { t: "join"; room: string }
   | { t: "leave" }
   /** Something the player did that others in the room see once, one of `ACTS`: an emote, a wave. */

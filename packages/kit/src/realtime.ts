@@ -24,9 +24,8 @@ import {
   encodeMove,
   Flag,
   INTERP_MS,
-  LIVE_PATH,
-  LIVE_VERSION,
   type LiveMember,
+  livePath,
   type Motion,
   readToClient,
   reconnects,
@@ -187,9 +186,9 @@ export const retryAfter = (tries: number, chance: number): number =>
 const PING_FIRST = 1000;
 const PING_EVERY = 10_000;
 
-/** The address of Leaf's live connection, next to the page. */
-const liveUrl = (): string => {
-  const url = new URL(`${LIVE_PATH}?v=${LIVE_VERSION}`, outside.href());
+/** The address of Leaf's live connection into a room, next to the page. */
+const liveUrl = (room: string): string => {
+  const url = new URL(livePath(room), outside.href());
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return url.toString();
 };
@@ -305,7 +304,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
     if (done) return;
     status("connecting");
     const l: Link = {
-      socket: outside.socket(liveUrl()),
+      socket: outside.socket(liveUrl(room)),
       people: new Map(),
       tracks: new Map(),
       clock: null,
@@ -316,9 +315,9 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
     l.socket.binaryType = "arraybuffer";
     l.socket.addEventListener("open", () => {
       if (link !== l) return;
+      // Opening it is entering the room: Leaf's welcome comes first.
       l.open = true;
       status("open");
-      say(l, { t: "join", room });
       ping(l, 0);
     });
     l.socket.addEventListener("message", (e) => {
@@ -332,7 +331,9 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       if (pinger) clearTimeout(pinger);
       if (done) return;
       if (!reconnects(e.code)) {
+        // For good: nothing of the room is shown any more. A drop keeps it until the next welcome.
         done = true;
+        shown = null;
         return status(e.code === CLOSE.replaced ? "replaced" : "signedout");
       }
       status("closed");
@@ -365,6 +366,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       if (link?.open) say(link, { t: "leave" });
       link?.socket.close(CLOSE.done, "bye");
       link = null;
+      shown = null;
     },
   };
 }
