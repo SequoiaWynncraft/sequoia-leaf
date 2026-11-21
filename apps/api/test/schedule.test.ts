@@ -51,7 +51,7 @@ describe("the scheduled run", () => {
     expect(url.origin + url.pathname).toBe("https://backend.test/internal/player-credits");
     expect(url.searchParams.get("to")).toBe("2026-11-02T00:04:30.000Z");
     expect(requests[0]?.headers.get("Authorization")).toBe("Bearer secret-token");
-    expect(await leaf.account(alice)).toEqual({ playerId: alice, balance: 110, xp: 110 });
+    expect(await leaf.account(alice)).toEqual({ playerId: alice, balance: 100, xp: 100 });
   });
 
   it("re-reads the last week at minute 17 of the hour", async () => {
@@ -96,6 +96,6 @@ describe("the scheduled run", () => {
     clock.now = T0 + 6 * MINUTE;
     await leaf.run(runScheduledSync);
 
-    expect((await leaf.account(alice)).balance).toBe(110);
+    expect((await leaf.account(alice)).balance).toBe(100);
   });
 });

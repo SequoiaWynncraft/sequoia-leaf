@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 
-import { type AchievementAward, DEFAULT_RULES, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { type AchievementAward, DEFAULT_RULES, type PlayerId, playerId, type Rules } from "@sequoia-leaf/core";
 import { Effect } from "effect";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
@@ -42,8 +42,8 @@ function feed(awards: AchievementAward[]): AwardSource {
   return (from, to) => Effect.succeed(awards.filter((one) => one.earnedAt >= from && one.earnedAt < to));
 }
 
-function sync(source: AwardSource<Error>, now: number, mode: SyncMode = "recent") {
-  return ledger.run(syncAchievements(source, DEFAULT_RULES, now, mode));
+function sync(source: AwardSource<Error>, now: number, mode: SyncMode = "recent", rules: Rules = DEFAULT_RULES) {
+  return ledger.run(syncAchievements(source, rules, now, mode));
 }
 
 async function events(player: PlayerId): Promise<{ type: string; data: unknown }[]> {
@@ -60,11 +60,11 @@ describe("syncAchievements", () => {
     ]);
 
     expect(await sync(source, T0)).toEqual({ status: "started" });
-    expect(await sync(source, T0 + MINUTE)).toEqual({ status: "synced", recorded: 1, leafPaid: 250 });
+    expect(await sync(source, T0 + MINUTE)).toEqual({ status: "synced", recorded: 1, leafPaid: 1000 });
     expect(await sync(source, T0 + 2 * MINUTE, "deep")).toEqual({ status: "synced", recorded: 0, leafPaid: 0 });
 
     expect((await ledger.account(alice)).balance).toBe(0);
-    expect((await ledger.account(bob)).balance).toBe(250);
+    expect((await ledger.account(bob)).balance).toBe(1000);
   });
 
   it("pays a guild milestone once however often its window is read, and says so", async () => {
@@ -76,8 +76,8 @@ describe("syncAchievements", () => {
     await sync(source, T0 + 2 * MINUTE);
     await sync(source, T0 + 3 * MINUTE, "deep");
 
-    // 5,000 XP reaches level 4, and levels 2 to 4 pay 100, 125 and 150 Leaf, with no XP.
-    expect(await ledger.account(alice)).toMatchObject({ balance: 5375, xp: 5000 });
+    // A milestone's Leaf comes with no XP, so it gains no level.
+    expect(await ledger.account(alice)).toMatchObject({ balance: 15_000, xp: 0 });
     const entries = await ledger.query(
       (sql) =>
         sql`
@@ -85,12 +85,7 @@ describe("syncAchievements", () => {
         WHERE player_id = ${alice} ORDER BY id DESC
       `.values,
     );
-    expect(entries).toEqual([
-      ["level", `level:${alice}:4`, 150, 0],
-      ["level", `level:${alice}:3`, 125, 0],
-      ["level", `level:${alice}:2`, 100, 0],
-      ["achievement", `achievement:${diamond.awardId}`, 5000, 5000],
-    ]);
+    expect(entries).toEqual([["achievement", `achievement:${diamond.awardId}`, 15_000, 0]]);
     expect(await events(alice)).toEqual([
       {
         type: "achievement_paid",
@@ -101,13 +96,24 @@ describe("syncAchievements", () => {
           tier: "diamond",
           threshold: 1000,
           label: "Diamond",
-          leaf: 5000,
-          xp: 5000,
+          leaf: 15_000,
+          xp: 0,
           earned_at: new Date(T0 + 10 * SECOND).toISOString(),
         },
       },
-      { type: "level_up", data: { level: 4, leaf: 375 } },
     ]);
+  });
+
+  it("levels a player with a milestone's Leaf when the rules count it as XP", async () => {
+    const rules: Rules = { ...DEFAULT_RULES, achievements: { ...DEFAULT_RULES.achievements, grantsXp: true } };
+    const source = feed([award(alice, "raid:TNA", "gold", T0 + 10 * SECOND)]);
+
+    await sync(source, T0, "recent", rules);
+    await sync(source, T0 + MINUTE, "recent", rules);
+
+    // 2,500 XP reaches level 3, and levels 2 and 3 pay 100 and 125 Leaf.
+    expect(await ledger.account(alice)).toMatchObject({ balance: 2500 + 225, xp: 2500 });
+    expect((await events(alice)).at(-1)).toEqual({ type: "level_up", data: { level: 3, leaf: 225 } });
   });
 
   it("pays the war ladder and the all-raids ladder, and nothing for professions, roles or badges", async () => {
@@ -120,7 +126,8 @@ describe("syncAchievements", () => {
     ]);
 
     await sync(source, T0);
-    expect(await sync(source, T0 + MINUTE)).toEqual({ status: "synced", recorded: 2, leafPaid: 750 });
+    // A war Silver at 500 and an all-raids Bronze at 1,000.
+    expect(await sync(source, T0 + MINUTE)).toEqual({ status: "synced", recorded: 2, leafPaid: 1500 });
 
     expect((await events(alice)).map((event) => event.type)).toEqual(["achievement_paid", "achievement_paid"]);
   });
@@ -135,7 +142,7 @@ describe("syncAchievements", () => {
     await sync(source, T0 + 61 * MINUTE);
     expect((await ledger.account(alice)).balance).toBe(0);
     await sync(source, T0 + 62 * MINUTE, "deep");
-    expect((await ledger.account(alice)).balance).toBe(500);
+    expect((await ledger.account(alice)).balance).toBe(1500);
   });
 
   it("keeps its place when Sierra cannot be read, and pays on the next run", async () => {
@@ -143,7 +150,7 @@ describe("syncAchievements", () => {
     await sync(source, T0);
 
     expect(await rejection(sync(unreachable, T0 + MINUTE))).toEqual(new Error("Sierra is down"));
-    expect(await sync(source, T0 + 2 * MINUTE)).toEqual({ status: "synced", recorded: 1, leafPaid: 250 });
+    expect(await sync(source, T0 + 2 * MINUTE)).toEqual({ status: "synced", recorded: 1, leafPaid: 1000 });
   });
 
   it("lets one run through at a time", async () => {
