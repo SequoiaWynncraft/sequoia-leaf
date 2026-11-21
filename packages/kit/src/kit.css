@@ -552,6 +552,17 @@ button.k-slot:hover {
 .k-toast.rose {
   box-shadow: inset calc(var(--u) * 2) 0 0 var(--k-rose);
 }
+/* A line on its own over the whole page, at the top: the page is about to open again. */
+.k-toast.alone {
+  position: fixed;
+  z-index: 95;
+  top: calc(var(--u) * 8);
+  left: 50%;
+  translate: -50% 0;
+  max-width: calc(100vw - var(--u) * 16);
+  box-sizing: border-box;
+  pointer-events: none;
+}
 @keyframes k-toast-in {
   from {
     transform: translateX(calc(var(--u) * -7));

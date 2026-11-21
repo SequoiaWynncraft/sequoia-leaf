@@ -8,7 +8,7 @@
  * what the browser keeps.
  */
 
-import { pull } from "@sequoia-leaf/kit/cloud.ts";
+import { pickUp, pull } from "@sequoia-leaf/kit/cloud.ts";
 import { shutCard, start } from "@sequoia-leaf/kit/live.ts";
 
 import { prepare } from "./live.ts";
@@ -19,7 +19,7 @@ async function open(): Promise<void> {
     shutCard(where.why, where.signIn);
     return;
   }
-  if (where.mode === "live" && !((await pull(["purse", "town"])) && (await prepare()))) {
+  if (where.mode === "live" && !((await pull(["purse", "town"], { onReplaced: pickUp })) && (await prepare()))) {
     shutCard("closed", where.signIn);
     return;
   }

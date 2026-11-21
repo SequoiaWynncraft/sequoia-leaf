@@ -50,7 +50,7 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
 | `k-cur` (`leaf`)                                                      | An amount of Leaf or Coins                                           |
 | `k-bar` (`leaf`, `coral`)                                             | How far along something is: `<div class="k-bar"><i style="--v:40%">` |
 | `k-chip` (`lit`)                                                      | A small tag                                                          |
-| `k-toast` (`leaf`, `coral`, `rose`)                                   | A line of news                                                       |
+| `k-toast` (`leaf`, `coral`, `rose`, `alone`)                          | A line of news; `alone`, over the whole page at the top              |
 | `k-title`, `k-label`, `k-d`, `k-dim`, `k-over`                        | Words: titles, small labels, second lines, words over the world      |
 | `k-scrim`, `k-rise`, `k-row`, `k-col`, `k-wrap`, `k-grow`, `k-scroll` | Laying things out                                                    |
 | `k-shut`                                                              | The card a page shows instead of itself when it will not open        |

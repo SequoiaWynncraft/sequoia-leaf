@@ -276,7 +276,7 @@ stops the clock so that only `skip` moves it, `enter()` puts the arrival letter 
 and `open(panel)` open things in town, `tp(x, y)` moves the member in town, `happen("raidOut" |
 "raidBack" | "land" | "level" | "call")` sets off a guild moment, `inside(game)` goes through a door,
 `door()` says how far that has got, `leave()` comes back, `kept()` shows the record as it would be
-saved, `visitors()` says which real members are in town and where, `where()` says which place is on and how dark the walk has got, and `page(x, y)` turns a
+saved, `visitors()` says which real members are in town and where, `where()` says which place is on and how dark the walk has got, `coins(n)` puts Coins in the purse for a tour that buys things (only with the made-up guild), and `page(x, y)` turns a
 point in the place that is on into a point on the page.
 
 `window.town.camp` is the same for camps: `go()` walks out of town to the member's camp, `town()`
