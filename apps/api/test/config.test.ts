@@ -23,6 +23,10 @@ describe("settings", () => {
       ratesWebhook: undefined,
       offsite: undefined,
       offsitePartlySet: [],
+      publicOrigin: "https://leaf.seqwawa.com",
+      publicDir: undefined,
+      gameSignInUrl: "https://api.seqwawa.com/auth/web/start?return_to=",
+      gameLeafSpending: false,
     });
   });
 
@@ -63,6 +67,26 @@ describe("settings", () => {
       offsite: undefined,
       offsitePartlySet: ["BACKUP_S3_ENDPOINT", "BACKUP_S3_BUCKET", "BACKUP_S3_ACCESS_KEY_ID"],
     });
+  });
+
+  it("reads the game's settings", () => {
+    expect(
+      readSettings({
+        PUBLIC_ORIGIN: "http://127.0.0.1:4000/",
+        PUBLIC_DIR: "/app/public",
+        GAME_SIGN_IN_URL: "https://staging.seqwawa.com/auth/web/start?return_to=",
+        GAME_LEAF_SPENDING: "true",
+      }),
+    ).toMatchObject({
+      publicOrigin: "http://127.0.0.1:4000",
+      publicDir: "/app/public",
+      gameSignInUrl: "https://staging.seqwawa.com/auth/web/start?return_to=",
+      gameLeafSpending: true,
+    });
+  });
+
+  it("refuses a public origin that is not an address", () => {
+    expect(() => readSettings({ PUBLIC_ORIGIN: "leaf" })).toThrow("PUBLIC_ORIGIN");
   });
 
   it("refuses a port that is not a port number", () => {

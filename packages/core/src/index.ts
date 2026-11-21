@@ -69,3 +69,4 @@ export {
   RULE_CHANGES,
   type Rules,
 } from "./rules.ts";
+export { checkSave, MAX_SAVE_BYTES, SAVE_SLOTS, type SaveCheck, type SaveSlot, saveSlot } from "./saves.ts";

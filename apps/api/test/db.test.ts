@@ -63,6 +63,7 @@ describe("the database", () => {
     expect(await query(path, (sql) => sql`SELECT migration_id, name FROM effect_sql_migrations`)).toEqual([
       { migration_id: 10, name: "schema" },
       { migration_id: 11, name: "announcements" },
+      { migration_id: 12, name: "game" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -89,6 +90,9 @@ describe("the database", () => {
         yield* sql`DROP TABLE effect_sql_migrations`;
         // Nor had it the tables added since.
         yield* sql`DROP TABLE announcements`;
+        for (const table of ["saves", "skins", "player_names", "presence"]) {
+          yield* sql`DROP TABLE ${sql(table)}`;
+        }
       }),
     );
 
@@ -99,9 +103,10 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 11 },
+      { latest: 12 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
+    expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
   });
 
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {
