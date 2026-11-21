@@ -5,7 +5,7 @@
  */
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { add, amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
-import { balance, has, spend } from "@sequoia-leaf/kit/purse.ts";
+import { balance, has, leafShown, spend } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 
 import {
@@ -487,7 +487,8 @@ function looks(): HTMLElement {
       "k-row",
       {},
       el("span", "k-d k-grow", { text: "They change how the table looks, and nothing else." }),
-      amount("leaf", balance().leaf),
+      // A guest has no Leaf to show.
+      leafShown() ? amount("leaf", balance().leaf) : null,
     ),
   );
   add(body, el("div", "swatch", {}, figPic(paintSwatch(dressed.cloth, dressed.lantern, dressed.bases))));

@@ -32,9 +32,9 @@ export interface Me extends Member {
   next: number;
   /** Where their own skin sheet is served, if it is. */
   skin: string;
-  /** The ranks of the guild, lowest first; `rank` is one of them. */
+  /** The ranks of the guild, lowest first; `rank` is one of them. None for a guest, who has no rank. */
   ranks: readonly string[];
-  /** What they have done with the guild this week, as a few short counts. */
+  /** What they have done with the guild this week, as a few short counts; nothing for a guest. */
   week: readonly string[];
 }
 
@@ -168,6 +168,8 @@ export interface Guild {
   me(): Me;
   /** What is pinned on the board, with how far along each is. */
   quests(): readonly Quest[];
+  /** A note pinned on the board in place of quests, for somebody quests are not for (a guest); null for anybody else. */
+  boardNote(): string | null;
   wares(): readonly Ware[];
   /** The Treasury's fine pieces for a camp, for Leaf. */
   pieces(): readonly Stock[];

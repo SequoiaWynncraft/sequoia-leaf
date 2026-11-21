@@ -15,7 +15,8 @@ export type IdentityResult =
 const TIMEOUT = Duration.seconds(3);
 /** Sessions the backend confirmed this recently are not asked about again. */
 const CONFIRMED_FOR = Duration.minutes(1);
-const REMEMBERED = 500;
+/** How many confirmed sessions are remembered: enough that guests coming and going do not push members' out. */
+const REMEMBERED = 2000;
 
 /** Who a session belongs to, as sequoia-backend's `/auth/web/me` answers. */
 const BackendIdentity = Schema.Struct({

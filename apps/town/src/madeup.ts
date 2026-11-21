@@ -442,6 +442,7 @@ export function makeGuild(o: Opts = {}): MadeUp {
       };
     },
     quests: () => BOARD.map((q) => Object.assign({}, q, { have: mem.progress[q.id] ?? q.have })),
+    boardNote: () => null,
     wares: () => WARES,
     pieces: () => PIECES,
     stalls: () => STALLS,

@@ -7,7 +7,7 @@
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { add, amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
-import { balance, watch } from "@sequoia-leaf/kit/purse.ts";
+import { balance, leafShown, watch } from "@sequoia-leaf/kit/purse.ts";
 import { isMuted } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
@@ -199,7 +199,8 @@ function renderPurse(): void {
   const purse = byId("purse");
   if (!purse) return;
   const p = balance();
-  purse.replaceChildren(amount("leaf", p.leaf), amount("coin", p.coins));
+  // A guest's purse has only the Coins.
+  purse.replaceChildren(...(leafShown() ? [amount("leaf", p.leaf)] : []), amount("coin", p.coins));
 }
 
 /** A line of news at the table: a refusal, in the rules' own words. */

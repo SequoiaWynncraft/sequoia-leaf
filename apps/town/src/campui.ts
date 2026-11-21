@@ -163,7 +163,7 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
           el("div", "k-title big", { text: me.name }),
           el("div", "k-d", { text: `${me.rank} of the guild, level ${me.level}` }),
           el("div", "k-bar", {}, xp),
-          el("div", "k-d", { text: `This week: ${me.week.join(", ")}` }),
+          me.week.length === 0 ? null : el("div", "k-d", { text: `This week: ${me.week.join(", ")}` }),
         ),
       ),
       stayRow,

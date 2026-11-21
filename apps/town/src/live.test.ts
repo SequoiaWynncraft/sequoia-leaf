@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { restart, start } from "@sequoia-leaf/kit/live.ts";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
-import { forgetLedger } from "@sequoia-leaf/kit/purse.ts";
-import { HELLO, type Reply, type Standin, standin, TESTER } from "@sequoia-leaf/kit/standin.ts";
+import { balance, forgetLedger, leafShown } from "@sequoia-leaf/kit/purse.ts";
+import { GUEST, HELLO, membersOnly, type Reply, type Standin, standin, TESTER } from "@sequoia-leaf/kit/standin.ts";
 
 import { isFolk } from "./folk.ts";
 import type { Happening, Person } from "./guild.ts";
@@ -26,7 +26,7 @@ import {
   weekOf,
 } from "./live.ts";
 import { makeGuild, STANDINS } from "./madeup.ts";
-import { lineFor } from "./news.ts";
+import { inTownLine, lineFor } from "./news.ts";
 import { blank } from "./save.ts";
 
 /** What Leaf really sends, from the contract its own tests write. */
@@ -355,12 +355,12 @@ describe("the live guild", () => {
     for (const kind of ["raid", "war", "level", "milestone", "call"] as const) madeUp.stir(kind);
 
     expect(guild.heard()).toBe(true);
-    expect(guild.visitors().map((v) => v.name)).toEqual(["Alice", "Mira"]);
+    expect(guild.visitors().map((v) => v.name)).toEqual(["Alice", "Visitor", "Mira"]);
     expect(guild.resting().map((r) => r.name)).toEqual(["Bob"]);
     const named = new Set(
       [...reply.present, ...reply.resting].flatMap((m) => (isRecord(m) && typeof m.id === "string" ? [m.id] : [])),
     );
-    expect(named.size).toBe(5);
+    expect(named.size).toBe(6);
     const invented = new Set(STANDINS.map((m) => m.name));
     for (const m of [...guild.visitors(), ...guild.resting()]) {
       expect(named.has(m.id)).toBe(true);
@@ -392,16 +392,17 @@ describe("the live guild", () => {
 describe("who is here, and who is dozing", () => {
   test("those resting: never the member, nobody in the game, nobody last at their camp; newest first, at most twelve", () => {
     const at = Date.UTC(2026, 10, 25, 12);
-    const present = [{ id: "a", name: "Alice", place: "works" as const, rank: null }];
+    const present = [{ id: "a", name: "Alice", place: "works" as const, rank: null, guest: false }];
     const resting = [
-      { id: ME, name: "Tester", place: "town" as const, seen: at - 1 },
-      { id: "a", name: "Alice", place: "town" as const, seen: at - 2 },
-      { id: "b", name: "Bob", place: "camp" as const, seen: at - 3 },
+      { id: ME, name: "Tester", place: "town" as const, seen: at - 1, guest: false },
+      { id: "a", name: "Alice", place: "town" as const, seen: at - 2, guest: false },
+      { id: "b", name: "Bob", place: "camp" as const, seen: at - 3, guest: false },
       ...Array.from({ length: 14 }, (_, i) => ({
         id: `n${i}`,
         name: `N${i}`,
         place: "table" as const,
         seen: at - 9 + i,
+        guest: false,
       })),
     ];
     const r = toResting(resting, present, ME);
@@ -413,15 +414,36 @@ describe("who is here, and who is dozing", () => {
 
   test("everybody but the member, nobody at their own camp, at most twelve", () => {
     const present = [
-      { id: ME, name: "Tester", place: "town" as const, rank: "captain" },
-      { id: "a", name: "Alice", place: "works" as const, rank: "chief" },
-      { id: "b", name: "Bob", place: "camp" as const, rank: null },
-      ...Array.from({ length: 14 }, (_, i) => ({ id: `n${i}`, name: `N${i}`, place: "table" as const, rank: null })),
+      { id: ME, name: "Tester", place: "town" as const, rank: "captain", guest: false },
+      { id: "a", name: "Alice", place: "works" as const, rank: "chief", guest: false },
+      { id: "b", name: "Bob", place: "camp" as const, rank: null, guest: false },
+      ...Array.from({ length: 14 }, (_, i) => ({
+        id: `n${i}`,
+        name: `N${i}`,
+        place: "table" as const,
+        rank: null,
+        guest: false,
+      })),
     ];
     const v = toVisitors(present, ME);
     expect(v.length).toBe(12);
     expect(v[0]).toEqual({ id: "a", name: "Alice", rank: "Chief", at: "works", skin: "/v1/game/skins/a" });
     expect(v.some((x) => x.id === ME || x.id === "b")).toBe(false);
+  });
+
+  test("a guest is drawn like any member, their own skin and name, with Guest for a rank, here or dozing", () => {
+    const present = [{ id: "g", name: "Wanderer", place: "town" as const, rank: null, guest: true }];
+    const gone = [{ id: "h", name: "Drifter", place: "works" as const, seen: 5, guest: true }];
+    expect(toVisitors(present, ME)).toEqual([
+      { id: "g", name: "Wanderer", rank: "Guest", at: "town", skin: "/v1/game/skins/g" },
+    ]);
+    expect(toResting(gone, present, ME)).toEqual([
+      { id: "h", name: "Drifter", rank: "Guest", at: "works", skin: "/v1/game/skins/h", seen: 5 },
+    ]);
+  });
+
+  test("the feed counts everybody else in town, members and guests together", () => {
+    expect([0, 1, 3].map(inTownLine)).toEqual(["The town is quiet.", "1 is in town.", "3 are in town."]);
   });
 
   test("ranks as the guild writes them, capitalised; others as they come", () => {
@@ -451,5 +473,102 @@ describe("the guild's news Leaf really sends", () => {
     ]);
     expect(told.map((h) => h.kind).filter((k) => k !== "party")).toEqual(["reached", "milestone", "war"]);
     for (const h of told) expect(lineFor(h)?.[0]).not.toMatch(/Leaf/);
+  });
+});
+
+describe("a guest's town", () => {
+  let world: Standin | null = null;
+  afterEach(() => {
+    world?.done();
+    world = null;
+    restart();
+    forgetLedger();
+    unprepare();
+  });
+
+  /** A guest's town, opened and listening, against a server that refuses (and writes down) anything only a member may ask. */
+  async function guestTown(asked: string[]) {
+    world = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: GUEST },
+      "PUT /v1/game/presence": {
+        status: 200,
+        body: {
+          present: [
+            { id: GUEST.player.id, username: "Wanderer", place: "town", guest: true },
+            { id: "m-1", username: "Mira", place: "town", guest: false },
+            { id: "g-2", username: "Drifter", place: "table", guest: true },
+          ],
+          resting: [],
+        },
+      },
+      ...membersOnly(asked),
+    });
+    await start();
+    expect(await prepare()).toBe(true);
+    const p = prepared();
+    if (!p) throw new Error("nothing prepared");
+    const guild = makeLive(makeGuild({ quiet: true }), p);
+    guild.hear(() => undefined);
+    // Away first, so that arriving in town says so even when an earlier test left this page there.
+    guild.here(null);
+    guild.here("town");
+    await Bun.sleep(20);
+    for (let i = 0; i < 30; i++) guild.step(1 / 30);
+    return guild;
+  }
+
+  test("opens with no call only a member may make: no quests, no news of theirs or the guild's", async () => {
+    const asked: string[] = [];
+    const guild = await guestTown(asked);
+    expect(asked).toEqual([]);
+    expect(world?.sent.map((s) => s.path)).toEqual(["/v1/game/hello", "/v1/game/me", "/v1/game/presence"]);
+    // Others in town, members and guests, are there all the same.
+    expect(guild.visitors()).toEqual([
+      { id: "m-1", name: "Mira", rank: null, at: "town", skin: "/v1/game/skins/m-1" },
+      { id: "g-2", name: "Drifter", rank: "Guest", at: "table", skin: "/v1/game/skins/g-2" },
+    ]);
+  });
+
+  test("their purse has Coins and no Leaf, and they are a Guest where a member has a rank", async () => {
+    const guild = await guestTown([]);
+    expect(balance().leaf).toBe(0);
+    expect(leafShown()).toBe(false);
+    expect(guild.me()).toMatchObject({ name: "Wanderer", rank: "Guest", level: 1, ranks: [], week: [] });
+  });
+
+  test("their quest board is one note saying quests are for members", async () => {
+    const guild = await guestTown([]);
+    expect(guild.quests()).toEqual([]);
+    expect(guild.boardNote()).toBe("Quests are for members of Sequoia. Raid with the guild and yours appear here.");
+    expect(
+      makeLive(makeGuild({ quiet: true }), {
+        me: {
+          id: ME,
+          name: "Tester",
+          rank: "captain",
+          guest: false,
+          leaf: 0,
+          level: { number: 1, into: 0, next: 1 },
+          cursor: 0,
+        },
+        quests: [],
+        since: [],
+        first: true,
+        mark: 0,
+        week: [],
+      }).boardNote(),
+    ).toBeNull();
+  });
+
+  test("their arrival letter is the plain welcome, with only the townsfolk's lines", async () => {
+    const guild = await guestTown([]);
+    const now = Date.UTC(2026, 10, 25, 12);
+    for (const away of [guild.away(0, now), guild.away(now - 30 * 3_600_000, now)]) {
+      expect(
+        away.lines.every((l) => (l.art === "folk" || l.art === "crab") && l.pay === undefined && l.got === undefined),
+      ).toBe(true);
+    }
+    expect(guild.away(0, now).first).toBe(true);
   });
 });

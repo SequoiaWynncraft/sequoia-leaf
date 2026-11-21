@@ -40,6 +40,7 @@ import { guild } from "./guild.ts";
 import { closeCard, closePanel, refreshFace, setFace, setHammer, showCard } from "./hud.ts";
 import { compose, read } from "./letter.ts";
 import { BOX_FULL, post, roomInBox } from "./mail.ts";
+import { inTownLine } from "./news.ts";
 import { camp, kept, remember } from "./record.ts";
 import { dayOf } from "./save.ts";
 import type { Sprites } from "./sprites.ts";
@@ -78,12 +79,6 @@ const DOORWAY: Readonly<Record<GameId, Pt>> = {
 const THRESHOLD = 121;
 const STROLL = 64;
 const STEP_IN = 15;
-
-/** How many real members are in the game besides the member, in a line for the feed. */
-export function inTownLine(n: number): string {
-  if (n <= 0) return "The town is quiet.";
-  return n === 1 ? "1 member is in town." : `${n} members are in town.`;
-}
 
 const bodyOf = (look: Look): Body => bake(paintSkin(look));
 
@@ -611,7 +606,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         remember();
         beginEvents();
         twinkleAll();
-        // How many real members are in the game, once the guild has said; then the feed says so.
+        // How many real players are in the game, once the guild has said; then the feed says so.
         const greet = letter.show ? "You are home." : "Back again.";
         let tries = 0;
         const tellHowMany = (): void => {

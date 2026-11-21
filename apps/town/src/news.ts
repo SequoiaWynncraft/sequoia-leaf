@@ -5,6 +5,12 @@
 
 import type { Happening, Person, Tone } from "./guild.ts";
 
+/** How many real players, members and guests together, are in the game besides the member, in a line for the feed. */
+export function inTownLine(n: number): string {
+  if (n <= 0) return "The town is quiet.";
+  return n === 1 ? "1 is in town." : `${n} are in town.`;
+}
+
 /** Names in a line: the member first as "You", then up to three in all, and how many more. */
 export function names(who: readonly Person[]): string {
   const said = who.map((p) => (p.you ? "You" : p.name));

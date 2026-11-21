@@ -10,10 +10,17 @@ describe("who is here", () => {
   test("reads what Leaf really answers: who is here, and who is resting", () => {
     const r = isRecord(GAME) ? GAME["PUT /v1/game/presence"] : null;
     expect(readPresent(isRecord(r) ? r.body : null)).toEqual([
-      { id: "10000000-0000-0000-0000-000000000001", name: "Alice", place: "town", rank: null },
+      { id: "10000000-0000-0000-0000-000000000001", name: "Alice", place: "town", rank: null, guest: false },
+      { id: "10000000-0000-0000-0000-000000000003", name: "Visitor", place: "town", rank: null, guest: true },
     ]);
     expect(readResting(isRecord(r) ? r.body : null)).toEqual([
-      { id: "10000000-0000-0000-0000-000000000002", name: "Bob", place: "works", seen: Date.UTC(2026, 10, 25, 12, 40) },
+      {
+        id: "10000000-0000-0000-0000-000000000002",
+        name: "Bob",
+        place: "works",
+        seen: Date.UTC(2026, 10, 25, 12, 40),
+        guest: false,
+      },
     ]);
   });
 
@@ -27,7 +34,7 @@ describe("who is here", () => {
           { id: "d", username: "Dan", place: "town" },
         ],
       }),
-    ).toEqual([{ id: "a", name: "Alice", place: "table", seen: Date.UTC(2026, 10, 25, 10) }]);
+    ).toEqual([{ id: "a", name: "Alice", place: "table", seen: Date.UTC(2026, 10, 25, 10), guest: false }]);
     expect(readResting({ present: [] })).toEqual([]);
   });
 
@@ -41,7 +48,7 @@ describe("who is here", () => {
           "nobody",
         ],
       }),
-    ).toEqual([{ id: "a", name: "Alice", place: "works", rank: "chief" }]);
+    ).toEqual([{ id: "a", name: "Alice", place: "works", rank: "chief", guest: false }]);
     expect(readPresent(null)).toEqual([]);
   });
 });
