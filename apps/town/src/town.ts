@@ -7,44 +7,16 @@ import { BARK, CREAM, EARTH, GOLD, GREEN, INK, SKY, STONE, WATER } from "@sequoi
 import { ell, R } from "@sequoia-leaf/kit/pix.ts";
 import { earn } from "@sequoia-leaf/kit/purse.ts";
 import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
-import { clamp, type Ctx, dist, lerp, type Pt, type Rect, rng } from "@sequoia-leaf/kit/util.ts";
+import { clamp, type Ctx, dist, lerp, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
 
 import { goSit, onScreen } from "./actors.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { changed, G, hooks } from "./game.ts";
 import { GROUND, paintTrunk } from "./ground.ts";
 import { guild } from "./guild.ts";
+import { flame, type Light, makeProp, type Prop, propUnder, type Standing } from "./props.ts";
 import { BOARD, type Sprite, type Sprites } from "./sprites.ts";
 import { place, type PlaceId, pondD, POSTS, SEATS } from "./world.ts";
-
-export interface Prop {
-  kind: string;
-  /** Where its picture's foot goes, and where it sorts among the people (lower down is nearer). */
-  x: number;
-  y: number;
-  z: number;
-  sprite: Sprite | null;
-  hit: Rect | null;
-  place: PlaceId | null;
-  /** When it was last touched: things shiver or hop for a moment after. */
-  bumpAt: number;
-  hops: boolean;
-  tap: ((p: Prop, wx: number, wy: number) => void) | null;
-  /** Anything drawn over the picture each frame, given the picture's foot on screen. */
-  extra: ((g: Ctx, sx: number, sy: number) => void) | null;
-  /** What it is, for whoever points at it: a name and a line. */
-  tip: readonly [string, string] | null;
-}
-
-export interface Light {
-  x: number;
-  y: number;
-  r: number;
-  power: number;
-  /** Raised by a touch, and dying away. */
-  boost: number;
-  phase: number;
-}
 
 export const props: Prop[] = [];
 export const lights: Light[] = [];
@@ -53,21 +25,7 @@ let S: Sprites | null = null;
 const random = rng(20261120);
 
 function add(kind: string, sprite: Sprite | null, x: number, y: number, o: Partial<Prop> = {}): Prop {
-  const p: Prop = {
-    kind,
-    x,
-    y,
-    z: y,
-    sprite,
-    hit: sprite ? { x: x - sprite.ax, y: y - sprite.ay, w: sprite.c.width, h: sprite.c.height } : null,
-    place: null,
-    bumpAt: -9,
-    hops: false,
-    tap: null,
-    extra: null,
-    tip: null,
-    ...o,
-  };
+  const p = makeProp(kind, sprite, x, y, o);
   props.push(p);
   return p;
 }
@@ -627,7 +585,18 @@ export function buildTown(s: Sprites, ground: Ctx): void {
   light(237, 65, 24, 0.9);
   light(275, 65, 24, 0.9);
   light(256, 84, 34, 0.85); // the last of the sun, coming up the path
-  add("signpost", s.signpost, 291, 106, { place: "camp", tap: tapPlace, hops: true, tip: CAMP });
+  add("signpost", s.signpost, 291, 106, {
+    place: "camp",
+    tap: tapPlace,
+    hops: true,
+    tip: CAMP,
+    // Something is waiting at the camp: a letter, or a parcel.
+    extra: (g, sx, sy) => {
+      if (!hooks.campNews()) return;
+      const bob = Math.round(Math.sin(G.t * 4) * 1.5);
+      g.drawImage(s.bang.c, sx - 1, sy - 37 + bob);
+    },
+  });
 
   add("board", s.board, 176, 160, {
     place: "quests",
@@ -656,6 +625,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
       tip: tipOf("market"),
       tap: (p) => {
         sfx.pluck(2 + i * 2);
+        G.stall = i;
         tapPlace(p);
       },
     });
@@ -1162,17 +1132,6 @@ function drawPieces(g: Ctx, sx: number, sy: number): void {
   });
 }
 
-function flame(g: Ctx, x: number, y: number, w: number, h: number, col: string, ph: number): void {
-  for (let r = 0; r < h; r++) {
-    const k = r / h;
-    const half = w * (1 - k) ** 0.8 * (0.85 + 0.15 * Math.sin(G.t * 17 + r * 0.9 + ph));
-    const sway = Math.sin(G.t * 9 + r * 0.55 + ph) * k * 2.2;
-    const x0 = Math.round(x + sway - half);
-    const x1 = Math.round(x + sway + half);
-    if (x1 > x0) R(g, x0, Math.round(y - r), x1 - x0, 1, col);
-  }
-}
-
 function drawFire(g: Ctx, sx: number, sy: number): void {
   const b = fire.boost;
   const h = 11 + b * 8 + Math.sin(G.t * 13) * 1.2;
@@ -1281,8 +1240,7 @@ export function drawWater(g: Ctx, cx: number, cy: number): void {
   }
 }
 
-/** The crabs, as things to sort among the people. */
-export function crabPic(c: Crab): HTMLCanvasElement | null {
+function crabPic(c: Crab): HTMLCanvasElement | null {
   if (!S) return null;
   const moving = Math.abs(c.tx - c.x) > 0.3 || c.clack > 0 || c.bolt > 0;
   return (moving && Math.floor(G.t * 9) % 2 === 0 ? S.crab[1] : S.crab[0])?.c ?? null;
@@ -1338,30 +1296,31 @@ export function allLights(): Light[] {
 
 /** The thing under a point, nearest the eye first. */
 export function propAt(wx: number, wy: number): Prop | null {
-  let best: Prop | null = null;
-  for (const p of props) {
-    if (!p.hit || !p.tap) continue;
-    const small = p.hit.w < 16;
-    const pad = small ? 3 : 0;
-    if (wx < p.hit.x - pad || wy < p.hit.y - pad || wx >= p.hit.x + p.hit.w + pad || wy >= p.hit.y + p.hit.h + pad)
-      continue;
-    if (!small && p.sprite && !solidAt(p.sprite, wx - p.hit.x, wy - p.hit.y)) continue;
-    if (!best || p.z > best.z) best = p;
-  }
-  return best;
+  return propUnder(props, wx, wy);
 }
 
-const masks = new Map<HTMLCanvasElement, Uint8ClampedArray>();
-function solidAt(s: Sprite, x: number, y: number): boolean {
-  let m = masks.get(s.c);
-  if (!m) {
-    const g = s.c.getContext("2d");
-    if (!g) return true;
-    m = g.getImageData(0, 0, s.c.width, s.c.height).data;
-    masks.set(s.c, m);
-  }
-  const px = Math.floor(x);
-  const py = Math.floor(y);
-  if (px < 0 || py < 0 || px >= s.c.width || py >= s.c.height) return false;
-  return (m[(py * s.c.width + px) * 4 + 3] ?? 0) > 40;
+/** A crab, drawn where it is: hopping, running off, or up to its middle in the pond. */
+function paintCrab(g: Ctx, c: Crab, cx: number, cy: number): void {
+  const pic = crabPic(c);
+  if (!pic) return;
+  const up = c.hop > 0 ? Math.abs(Math.sin((1 - c.hop / 0.3) * Math.PI)) * 4 : 0;
+  // A crab in the water shows only its top half.
+  const wet = !c.lost && !c.perched && pondD(c.x, c.y) < -3;
+  g.globalAlpha = c.bolt > 0 ? clamp(1 - c.bolt / 1.2, 0, 1) : 1;
+  if (wet && up === 0)
+    g.drawImage(pic, 0, 0, pic.width, 5, Math.round(c.x) - 5 - cx, Math.round(c.y) - 7 - cy, pic.width, 5);
+  else g.drawImage(pic, Math.round(c.x) - 5 - cx, Math.round(c.y - up) - 7 - cy);
+  g.globalAlpha = 1;
+}
+
+/** The crabs, as things to sort among the people. */
+export function crabsStanding(): Standing[] {
+  return crabs.map((c) => ({
+    get z(): number {
+      return c.z;
+    },
+    paint(g: Ctx, cx: number, cy: number): void {
+      paintCrab(g, c, cx, cy);
+    },
+  }));
 }

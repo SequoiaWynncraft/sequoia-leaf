@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
+import { newCamp } from "./camp.ts";
+import { letter } from "./mail.ts";
 import { blank, dayOf, type Kept, minutesAway, parse, VERSION, write } from "./save.ts";
+
+const camp = newCamp();
+camp.first = "cat";
+camp.tray = { gnome: 2 };
+camp.parcels = ["well"];
+camp.letters = [letter("m-1", "Tindra", "A mushroom, for your gate.", "toadstool")];
 
 const full: Kept = {
   owned: ["crown", "jar", "bread"],
@@ -10,6 +18,7 @@ const full: Kept = {
   welcomed: "2026-11-21",
   chest: "2026-11-20",
   lastSeen: 1_795_000_000_000,
+  camp,
 };
 
 describe("the town's kept record", () => {
@@ -56,6 +65,17 @@ describe("the town's kept record", () => {
 
   test("a missing part is a new member's", () => {
     expect(parse(JSON.stringify({ v: VERSION }))).toEqual(blank());
+  });
+
+  test("a record from before there were camps keeps what it had, and gets a new camp", () => {
+    const old = parse(JSON.stringify({ v: VERSION, owned: ["crown"], sightings: 2 }));
+    expect(old?.owned).toEqual(["crown"]);
+    expect(old?.camp).toEqual(newCamp());
+  });
+
+  test("a camp that makes no sense is a new camp, and the rest is kept", () => {
+    const kept = parse(JSON.stringify({ v: VERSION, owned: ["jar"], camp: { placed: 12 } }));
+    expect(kept).toEqual({ ...blank(), owned: ["jar"] });
   });
 
   test("days are written the local way", () => {

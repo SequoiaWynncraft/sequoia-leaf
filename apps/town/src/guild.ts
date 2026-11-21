@@ -7,8 +7,10 @@
 
 import type { Look } from "@sequoia-leaf/kit/skin.ts";
 
+import type { PetId, Placed } from "./camp.ts";
 import { keepText, kept } from "./keep.ts";
 import { makeGuild } from "./madeup.ts";
+import type { Letter } from "./mail.ts";
 
 export interface Member {
   name: string;
@@ -55,16 +57,39 @@ export interface Ware {
   thanks: readonly [string, string];
 }
 
-/** Something a guild-mate is selling at the market for Leaf. */
-export interface Listing {
+/** A camp thing and what it costs: Coins at a stall, Leaf at the Treasury. */
+export interface Stock {
+  thing: string;
+  price: number;
+}
+
+/** One of the market's stalls: who keeps it, and the camp things it sells for Coins. Nothing ever sells out. */
+export interface Stall {
   id: string;
   by: string;
-  what: string;
-  about: string;
-  price: number;
-  worn: boolean;
-  /** What the seller says when it goes. */
-  word: string;
+  name: string;
+  /** What the keeper says when something goes. */
+  words: readonly string[];
+  stock: readonly Stock[];
+}
+
+/** Somebody who lives in a camp. */
+export interface Pet {
+  kind: PetId;
+  name: string;
+}
+
+/** A guild-mate's own camp, as a visitor finds it. */
+export interface MateCamp {
+  owner: string;
+  placed: readonly Placed[];
+  pets: readonly Pet[];
+  /** Whether they are at home just now. */
+  home: boolean;
+  /** The note on their door for when they are out. */
+  note: string;
+  /** What they say to a visitor. */
+  hello: readonly string[];
 }
 
 /** What a guild-mate in town may be doing: sitting somewhere (`fire`, `bench`, `play`) or about an errand. */
@@ -84,7 +109,7 @@ export type Activity =
   | "garden";
 
 export type Tone = "gold" | "leaf" | "coral" | "rose";
-export type Moment = "level" | "raidOut" | "raidBack" | "land";
+export type Moment = "level" | "raidOut" | "raidBack" | "land" | "call";
 
 /** Something that has just happened out in the guild. */
 export type Happening =
@@ -93,7 +118,9 @@ export type Happening =
   | { kind: "land"; name: string }
   | { kind: "level"; who: string; level: number }
   /** A quest has been finished and waits on the board. */
-  | { kind: "quest"; id: string; text: string; tone: Tone };
+  | { kind: "quest"; id: string; text: string; tone: Tone }
+  /** A guild-mate has looked in at the member's camp, with a note or a small present, or neither. */
+  | { kind: "call"; id: string; who: string; note: string; gift: string };
 
 /** One line of the letter that meets a returning member. */
 export interface AwayLine {
@@ -123,7 +150,15 @@ export interface Guild {
   /** What is pinned on the board, with how far along each is. */
   quests(): readonly Quest[];
   wares(): readonly Ware[];
-  stalls(): readonly Listing[];
+  /** The Treasury's fine pieces for a camp, for Leaf. */
+  pieces(): readonly Stock[];
+  stalls(): readonly Stall[];
+  /** The small things a member may leave at somebody else's camp. */
+  presents(): readonly string[];
+  /** A guild-mate's camp, by their name; nothing for somebody the guild does not know. */
+  camp(name: string): MateCamp | null;
+  /** The letters guild-mates left in the member's mailbox between two moments (as for `away`). */
+  mail(from: number, to: number): Letter[];
   /** Which crab is missing from roll call. */
   lostCrab(): number;
   /** What the guild did between two moments (milliseconds since 1970; `from` 0 means never here). */

@@ -1,8 +1,8 @@
 /**
- * Drawing a frame of the town. It is drawn small, one art pixel to a pixel, with dusk laid over it
- * and the lights cut out of the dusk; then it is blown up to the screen, and the words (name
- * plates, speech, the prompt by a door) are written over it in the guild's font, a whole number of
- * screen pixels to each of the font's.
+ * Drawing a frame of a place: the town, or a camp. It is drawn small, one art pixel to a pixel,
+ * with dusk laid over it and the lights cut out of the dusk; then it is blown up to the screen, and
+ * the words (name plates, speech, the prompt by a door) are written over it in the guild's font, a
+ * whole number of screen pixels to each of the font's.
  */
 
 import { CREAM, GOLD, INK, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
@@ -15,22 +15,48 @@ import { clamp, type Ctx, dist, lerp, makeCanvas, type Pt, type Rect } from "@se
 import { HOP, onScreen } from "./actors.ts";
 import { bits, floaters, rings } from "./fx.ts";
 import { type Actor, G } from "./game.ts";
-import { GROUND, NEAR, SKYLINE } from "./ground.ts";
+import type { Light, Prop, Standing } from "./props.ts";
 import type { Sprites } from "./sprites.ts";
-import { allLights, type Crab, crabPic, crabs, drawGlows, drawStrings, drawWater, type Prop, props } from "./town.ts";
-import { type Place, pondD } from "./world.ts";
 
-/** The town's painted pieces, made once. */
-export interface TownArt {
+/**
+ * A place as it is drawn: its painted pieces and where each goes in the world, what stands in it,
+ * who is there, and the parts of it that are its own to draw.
+ */
+export interface Picture {
   sprites: Sprites;
-  ground: HTMLCanvasElement;
-  near: HTMLCanvasElement;
+  /** The sunset behind the far trees: its picture, and where its top-left corner goes. */
   sky: HTMLCanvasElement;
+  skyAt: Pt;
+  ground: HTMLCanvasElement;
+  groundAt: Pt;
+  /** The dark ferns along the near edge, drawn over everything that walks. */
+  near: HTMLCanvasElement;
+  nearAt: Pt;
+  props: readonly Prop[];
+  /** Whatever else stands among the people: crabs, pets, a thing in the air. */
+  others(): readonly Standing[];
+  people(): readonly Actor[];
+  lights(): Light[];
+  /** Beyond the far trees: drawn over the sky and under the ground. */
+  beyond(g: Ctx, cx: number, cy: number): void;
+  /** On the ground, under everything that stands. */
+  under(g: Ctx, cx: number, cy: number): void;
+  /** Over everything that stands, before dusk falls. */
+  over(g: Ctx, cx: number, cy: number): void;
+  /** After dusk has fallen: whatever gives its own light. */
+  glows(g: Ctx, cx: number, cy: number, spark: HTMLCanvasElement): void;
 }
 
-/** What is to be shown besides the town itself. */
+/** Somewhere the member is standing at, as the prompt by it needs to know it. */
+export interface Prompted {
+  name: string;
+  /** Where its prompt floats. */
+  prompt: Pt;
+}
+
+/** What is to be shown besides the place itself. */
 export const show: {
-  prompt: Place | null;
+  prompt: Prompted | null;
   promptT: number;
   dest: Pt | null;
   /** The last touch was a finger, so the prompt says "Tap". */
@@ -90,11 +116,12 @@ interface Item {
   z: number;
   prop: Prop | null;
   actor: Actor | null;
-  crab: Crab | null;
+  other: Standing | null;
 }
 const order: Item[] = [];
 
-function drawProp(g: Ctx, p: Prop, cx: number, cy: number): void {
+/** A thing where it stands, shivering or hopping for a moment if it has just been touched. */
+export function drawProp(g: Ctx, p: Prop, cx: number, cy: number): void {
   const since = G.t - p.bumpAt;
   let dx = 0;
   let dy = 0;
@@ -137,7 +164,7 @@ function drawActor(g: Ctx, a: Actor, cx: number, cy: number, s: Sprites): void {
 
 const crowned = (a: Actor): boolean => a.you && G.wearing.has("crown");
 
-function pixelRing(g: Ctx, x: number, y: number, rx: number, ry: number, col: string): void {
+export function pixelRing(g: Ctx, x: number, y: number, rx: number, ry: number, col: string): void {
   const n = Math.max(8, Math.round(rx * 3));
   g.fillStyle = col;
   for (let i = 0; i < n; i++) {
@@ -146,31 +173,35 @@ function pixelRing(g: Ctx, x: number, y: number, rx: number, ry: number, col: st
   }
 }
 
-/** The whole town as it is this moment, small. */
-export function drawTown(stage: TownArt): HTMLCanvasElement {
+const smooth = (a: number, b: number, v: number): number => {
+  const k = clamp((v - a) / (b - a), 0, 1);
+  return k * k * (3 - 2 * k);
+};
+
+/** A whole place as it is this moment, small. */
+export function drawPicture(pic: Picture): HTMLCanvasElement {
   const g = buf.g;
   const w = buf.c.width;
   const h = buf.c.height;
   const cx = Math.round(G.cam.x);
   const cy = Math.round(G.cam.y);
-  const s = stage.sprites;
-  const people = [...G.mates];
-  if (G.player) people.push(G.player);
-  if (G.cinfy) people.push(G.cinfy);
+  const s = pic.sprites;
+  const people = pic.people();
 
-  // The sunset behind the far trees, with the sun itself straight down the path out of the gate.
+  // The sunset behind the far trees.
   g.fillStyle = "#141f1c";
   g.fillRect(0, 0, w, h);
-  const skyY = SKYLINE.worldY - SKYLINE.horizon - cy;
+  const skyY = pic.skyAt.y - cy;
   if (skyY < h) {
     if (skyY > 0) {
       g.fillStyle = SKY[0];
       g.fillRect(0, 0, w, skyY);
     }
-    g.drawImage(stage.sky, SKYLINE.worldX - cx, skyY);
+    g.drawImage(pic.sky, pic.skyAt.x - cx, skyY);
   }
-  g.drawImage(stage.ground, GROUND.x - cx, GROUND.y - cy);
-  drawWater(g, cx, cy);
+  pic.beyond(g, cx, cy);
+  g.drawImage(pic.ground, pic.groundAt.x - cx, pic.groundAt.y - cy);
+  pic.under(g, cx, cy);
 
   for (const r of rings) {
     const k = r.life / r.ttl;
@@ -186,15 +217,15 @@ export function drawTown(stage: TownArt): HTMLCanvasElement {
 
   // Everything that stands up, far to near.
   order.length = 0;
-  for (const p of props) {
+  for (const p of pic.props) {
     const hit = p.hit;
     if (hit && (hit.x - cx > w + 8 || hit.x + hit.w - cx < -8 || hit.y - cy > h + 8 || hit.y + hit.h - cy < -30))
       continue;
-    order.push({ z: p.z, prop: p, actor: null, crab: null });
+    order.push({ z: p.z, prop: p, actor: null, other: null });
   }
   for (const a of people) {
     if (a.away || a.alpha <= 0.02) continue;
-    order.push({ z: a.seat ? a.seat.y + 9 : a.y, prop: null, actor: a, crab: null });
+    order.push({ z: a.seat ? a.seat.y + 9 : a.y, prop: null, actor: a, other: null });
     if (!a.seat) {
       g.fillStyle = "rgba(20,10,28,0.34)";
       const lift = hopOf(a) > 2 ? 1 : 0;
@@ -202,24 +233,12 @@ export function drawTown(stage: TownArt): HTMLCanvasElement {
       g.fillRect(Math.round(a.x) - 3 + lift - cx, Math.round(a.y) - 2 - cy, 6 - lift * 2, 4);
     }
   }
-  for (const c of crabs) order.push({ z: c.z, prop: null, actor: null, crab: c });
+  for (const o of pic.others()) order.push({ z: o.z, prop: null, actor: null, other: o });
   order.sort((a, b) => a.z - b.z);
   for (const it of order) {
     if (it.prop) drawProp(g, it.prop, cx, cy);
     else if (it.actor) drawActor(g, it.actor, cx, cy, s);
-    else if (it.crab) {
-      const c = it.crab;
-      const pic = crabPic(c);
-      if (!pic) continue;
-      const up = c.hop > 0 ? Math.abs(Math.sin((1 - c.hop / 0.3) * Math.PI)) * 4 : 0;
-      // A crab in the water shows only its top half.
-      const wet = !c.lost && !c.perched && pondD(c.x, c.y) < -3;
-      g.globalAlpha = c.bolt > 0 ? clamp(1 - c.bolt / 1.2, 0, 1) : 1;
-      if (wet && up === 0)
-        g.drawImage(pic, 0, 0, pic.width, 5, Math.round(c.x) - 5 - cx, Math.round(c.y) - 7 - cy, pic.width, 5);
-      else g.drawImage(pic, Math.round(c.x) - 5 - cx, Math.round(c.y - up) - 7 - cy);
-      g.globalAlpha = 1;
-    }
+    else it.other?.paint(g, cx, cy);
   }
 
   for (const b of bits) {
@@ -228,28 +247,37 @@ export function drawTown(stage: TownArt): HTMLCanvasElement {
     R(g, Math.round(b.x) - cx, Math.round(b.y) - cy, b.size, b.size, b.col);
   }
   g.globalAlpha = 1;
-  drawStrings(g, cx, cy);
-  g.drawImage(stage.near, NEAR.x - cx, NEAR.y - cy);
+  pic.over(g, cx, cy);
+  g.drawImage(pic.near, pic.nearAt.x - cx, pic.nearAt.y - cy);
 
   // Dusk: lightest where the sunset comes in over the far hedge, deepest at the near edge; and
-  // every lamp and fire cuts a soft hole in it.
+  // every lamp and fire cuts a soft hole in it. On the walk between two places night closes in
+  // (`G.dark`): first everything the lamps do not reach, and then the lamps.
+  const night = smooth(0, 0.75, G.dark);
+  const out = smooth(0.55, 1, G.dark);
   const d = dusk.g;
   d.globalCompositeOperation = "source-over";
   d.globalAlpha = 1;
   d.clearRect(0, 0, w, h);
   const fall = d.createLinearGradient(0, 40 - cy, 0, 190 - cy);
-  fall.addColorStop(0, "rgba(32,14,50,0.06)");
-  fall.addColorStop(1, "rgba(32,14,50,0.46)");
+  fall.addColorStop(
+    0,
+    `rgba(${lerp(32, 20, night)},${lerp(14, 10, night)},${lerp(50, 26, night)},${lerp(0.06, 0.96, night)})`,
+  );
+  fall.addColorStop(
+    1,
+    `rgba(${lerp(32, 20, night)},${lerp(14, 10, night)},${lerp(50, 26, night)},${lerp(0.46, 0.98, night)})`,
+  );
   d.fillStyle = fall;
   d.fillRect(0, 0, w, h);
   d.globalCompositeOperation = "destination-out";
-  const lamps = allLights();
+  const lamps = pic.lights();
   if (G.player && !G.player.away && G.wearing.has("jar"))
     lamps.push({ x: G.player.x, y: G.player.y - 10, r: 24, power: 0.6, boost: 0, phase: 1 });
   for (const l of lamps) {
-    const r = l.r * (1 + l.boost * 0.3);
+    const r = l.r * (1 + l.boost * 0.3) * (1 - out * 0.6);
     if (l.x - cx + r < 0 || l.x - cx - r > w || l.y - cy + r < 0 || l.y - cy - r > h) continue;
-    d.globalAlpha = clamp(l.power * (0.93 + 0.07 * Math.sin(G.t * 6 + l.phase)) + l.boost * 0.3, 0, 1);
+    d.globalAlpha = clamp(l.power * (0.93 + 0.07 * Math.sin(G.t * 6 + l.phase)) + l.boost * 0.3, 0, 1) * (1 - out);
     d.drawImage(HOLE, l.x - cx - r, l.y - cy - r, r * 2, r * 2);
   }
   d.globalAlpha = 1;
@@ -258,14 +286,14 @@ export function drawTown(stage: TownArt): HTMLCanvasElement {
   for (const l of lamps) {
     const r = l.r * (1 + l.boost * 0.3) * 0.9;
     if (l.x - cx + r < 0 || l.x - cx - r > w || l.y - cy + r < 0 || l.y - cy - r > h) continue;
-    g.globalAlpha = clamp(0.13 * l.power + l.boost * 0.14, 0, 0.5);
+    g.globalAlpha = clamp(0.13 * l.power + l.boost * 0.14, 0, 0.5) * (1 - out);
     g.drawImage(WARM, l.x - cx - r, l.y - cy - r, r * 2, r * 2);
   }
   g.globalCompositeOperation = "source-over";
   g.globalAlpha = 1;
 
   // Things that shine of themselves.
-  drawGlows(g, cx, cy, SPARK);
+  pic.glows(g, cx, cy, SPARK);
   for (const b of bits) {
     if (!b.glow) continue;
     const a = clamp((b.ttl - b.life) / (b.ttl * 0.5), 0, 1);
@@ -316,6 +344,13 @@ export function drawTown(stage: TownArt): HTMLCanvasElement {
       R(g, x, dy > 0 ? y : y - 2, 1, 3, GOLD[2]);
     }
   }
+  // The last of the walk: nothing left but the dark between the trees.
+  if (out > 0) {
+    g.globalAlpha = out;
+    g.fillStyle = INK;
+    g.fillRect(0, 0, w, h);
+    g.globalAlpha = 1;
+  }
   return buf.c;
 }
 
@@ -354,7 +389,7 @@ function linesOf(ctx: Ctx, a: Actor, px: number): string[] {
  * and no two plates ever overlap: they are placed most wanted first, and one that would cover
  * another is left out.
  */
-function drawPeople(ctx: Ctx, px: number, taken: readonly Box[]): void {
+function drawPeople(ctx: Ctx, px: number, taken: readonly Box[], people: readonly Actor[]): void {
   const z = G.view.z;
   const cx = Math.round(G.cam.x);
   const cy = Math.round(G.cam.y);
@@ -365,7 +400,7 @@ function drawPeople(ctx: Ctx, px: number, taken: readonly Box[]): void {
   const me = p ? (p.seat ?? p) : null;
 
   const wanted: { a: Actor; rank: number }[] = [];
-  for (const a of [...G.mates, ...(p ? [p] : []), ...(G.cinfy ? [G.cinfy] : [])]) {
+  for (const a of people) {
     const at = a.seat ?? a;
     if (a.away || a.alpha < 0.5 || !onScreen(at.x, at.y, 4)) {
       plates.set(a, 0);
@@ -451,7 +486,9 @@ function drawPeople(ctx: Ctx, px: number, taken: readonly Box[]): void {
   ctx.globalAlpha = 1;
 }
 
-export function drawWords(ctx: Ctx, px: number): void {
+export function drawWords(ctx: Ctx, px: number, people: readonly Actor[]): void {
+  // Nothing is said in the dark between two places.
+  if (G.dark > 0.5) return;
   const z = G.view.z;
   const cx = Math.round(G.cam.x);
   const cy = Math.round(G.cam.y);
@@ -471,7 +508,7 @@ export function drawWords(ctx: Ctx, px: number): void {
         return { x, y: Math.max(30 * px, Math.round((pl.prompt.y - cy) * z)), w: size.w, h: size.h };
       })()
     : null;
-  drawPeople(ctx, px, sign ? [sign] : []);
+  drawPeople(ctx, px, sign ? [sign] : [], people);
 
   // Words that rise and fade.
   for (const f of floaters) {

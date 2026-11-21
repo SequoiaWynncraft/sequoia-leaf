@@ -8,7 +8,8 @@ import type { Member, Tone } from "./guild.ts";
 import type { Errand, PlaceId, Seat, Spot } from "./world.ts";
 
 export type PanelId = PlaceId | "profile";
-export type Doing = Errand | "fire" | "bench" | "play" | "walk" | "raid";
+/** What somebody is about: an errand in town, sitting somewhere, or (in a camp) calling in or being at home. */
+export type Doing = Errand | "fire" | "bench" | "play" | "walk" | "raid" | "call" | "home";
 
 export interface Actor {
   who: Member;
@@ -54,13 +55,18 @@ export interface Game {
   /** Top-left of what is on screen, in the town's pixels; and the size of the screen in them. */
   cam: Pt;
   view: { w: number; h: number; z: number; dpr: number };
-  panel: PanelId | null;
+  /** The panel that is open, by its name; the town's are named for its places. */
+  panel: string | null;
   /** The arrival letter has been put away; the evening has begun. */
   home: boolean;
-  /** The place the member is standing at, if any. */
-  near: PlaceId | null;
+  /** The place the member is standing at, if any, by the name its dock button has. */
+  near: string | null;
   /** The member is stepping through a door, and whoever is taking them through has their fading in hand. */
   inDoor: boolean;
+  /** Which place is on the stage: the town, or a camp. */
+  where: "town" | "camp";
+  /** How far night has closed in on the walk between two places: 0 for not at all, 1 for dark. */
+  dark: number;
   /** What the member has bought and still has, which of it they have on, and the quests they have claimed. */
   owned: Set<string>;
   wearing: Set<string>;
@@ -70,6 +76,8 @@ export interface Game {
   sightings: number;
   raidsToday: number;
   lands: number;
+  /** Which of the market's stalls the member last looked at. */
+  stall: number;
 }
 
 export const G: Game = {
@@ -83,6 +91,8 @@ export const G: Game = {
   home: false,
   near: null,
   inDoor: false,
+  where: "town",
+  dark: 0,
   owned: new Set(),
   wearing: new Set(),
   claimed: new Set(),
@@ -90,6 +100,7 @@ export const G: Game = {
   sightings: 0,
   raidsToday: 2,
   lands: 0,
+  stall: 0,
 };
 
 /** Things one part of the town asks of another without knowing who answers. */
@@ -102,11 +113,17 @@ export const hooks: {
   goIn: (id: GameId) => void;
   /** The chest's gift for today has been taken. */
   looted: () => boolean;
+  /** Walk out through the gate and down the trail to the member's own camp. */
+  toCamp: () => void;
+  /** Whether anything is waiting at the camp: a letter, a parcel. */
+  campNews: () => boolean;
 } = {
   visit: () => undefined,
   feed: () => undefined,
   goIn: () => undefined,
   looted: () => true,
+  toCamp: () => undefined,
+  campNews: () => false,
 };
 
 /** Listeners for "something the panels show has changed". */
@@ -122,4 +139,36 @@ export function changed(): void {
 export function toPage(x: number, y: number): Pt {
   const k = G.view.z / G.view.dpr;
   return { x: (x - Math.round(G.cam.x)) * k, y: (y - Math.round(G.cam.y)) * k };
+}
+
+// ---------- a little later ----------
+
+interface Later {
+  at: number;
+  where: Game["where"];
+  fn: () => void;
+}
+const later: Later[] = [];
+
+/**
+ * Something to happen a little later, by the clock of the place that is on the stage now. If the
+ * member has gone somewhere else by then, it waits until they are back.
+ */
+export function after(secs: number, fn: () => void): void {
+  later.push({ at: G.t + secs, where: G.where, fn });
+}
+
+/** Does whatever has come due in the place that is on the stage. */
+export function stepLater(): void {
+  for (let i = later.length - 1; i >= 0; i--) {
+    const l = later[i];
+    if (!l || G.t < l.at || l.where !== G.where) continue;
+    later.splice(i, 1);
+    l.fn();
+  }
+}
+
+/** Forgets everything still to happen in a place: it is being cleared away. */
+export function forgetLater(where: Game["where"]): void {
+  for (let i = later.length - 1; i >= 0; i--) if (later[i]?.where === where) later.splice(i, 1);
 }

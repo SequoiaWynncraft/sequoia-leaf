@@ -11,21 +11,10 @@ import { clamp, dist } from "@sequoia-leaf/kit/util.ts";
 
 import { cheerAll, face, hop, inTown, lead, letGo, say, walkTo } from "./actors.ts";
 import { burst, float, sparkle } from "./fx.ts";
-import { type Actor, changed, G, hooks } from "./game.ts";
+import { type Actor, after, changed, G, hooks, stepLater } from "./game.ts";
 import { guild, type Happening } from "./guild.ts";
 import { hangLantern, raiseBanner } from "./town.ts";
 import { MUSTER } from "./world.ts";
-
-interface Later {
-  at: number;
-  fn: () => void;
-}
-const later: Later[] = [];
-
-/** Something to happen a little later, by the town's own clock. */
-export function after(secs: number, fn: () => void): void {
-  later.push({ at: G.t + secs, fn });
-}
 
 const named = (who: readonly string[]): Actor[] =>
   who.flatMap((name) => {
@@ -160,7 +149,54 @@ function levelUp(who: string, level: number): void {
   }
 }
 
+/**
+ * The same moments while the member is away at a camp: nothing is staged, but the town is as they
+ * will expect to find it. The party is gone, or back with its lantern hung; the banner is up.
+ */
+function quietly(h: Happening): void {
+  switch (h.kind) {
+    case "raidOut":
+      for (const a of named(h.who)) {
+        lead(a);
+        a.away = true;
+        a.alpha = 0;
+        a.doing = "raid";
+      }
+      return;
+    case "raidBack":
+      G.raidsToday++;
+      named(h.who).forEach((a, i) => {
+        const at = MUSTER[i] ?? { x: 256, y: 116 };
+        a.away = false;
+        a.alpha = 1;
+        a.x = at.x;
+        a.y = at.y;
+        a.doing = "walk";
+        letGo(a);
+      });
+      hangLantern({ x: 344, y: 206 });
+      return;
+    case "land":
+      raiseBanner(h.name);
+      G.lands++;
+      return;
+    case "level": {
+      const a = G.mates.find((m) => m.who.name === h.who);
+      if (a) a.who = { ...a.who, level: h.level };
+      return;
+    }
+    case "quest":
+      changed();
+      return;
+    case "call":
+  }
+}
+
 function stage(h: Happening): void {
+  if (G.where !== "town") {
+    quietly(h);
+    return;
+  }
   switch (h.kind) {
     case "raidOut":
       raidOut(h.who, h.raid);
@@ -177,6 +213,9 @@ function stage(h: Happening): void {
     case "quest":
       hooks.feed(h.text, h.tone);
       changed();
+      return;
+    case "call":
+    // Somebody has looked in at the camp: the camp sees to its own mailbox.
   }
 }
 
@@ -189,12 +228,7 @@ export function beginEvents(): void {
 }
 
 export function stepEvents(): void {
-  for (let i = later.length - 1; i >= 0; i--) {
-    const l = later[i];
-    if (!l || G.t < l.at) continue;
-    later.splice(i, 1);
-    l.fn();
-  }
+  stepLater();
   // Whoever is in the gateway is half in the dark beyond it.
   const all = G.player ? [G.player, ...G.mates] : G.mates;
   for (const a of all) {

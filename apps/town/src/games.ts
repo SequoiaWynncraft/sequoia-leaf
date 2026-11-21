@@ -69,3 +69,21 @@ export function worksAway(hours: number, first: boolean): AwayLine | null {
     pay: { kind: "coins", amount: planks * COINS_A_PLANK },
   };
 }
+
+/**
+ * What the member has won in The Little Raid: the bosses they have beaten, by the game's own names
+ * for them. Made up until the game can say for itself.
+ */
+export function raidWon(): readonly string[] {
+  return ["oldbramble"];
+}
+
+/** The capstones the member has built in the Works, by the Works' own names for them. Made up for now. */
+export function worksBuilt(): readonly string[] {
+  return ["crab"];
+}
+
+/** The camp things those have earned: a carved figure for each boss, a model of each capstone. */
+export function trophies(): string[] {
+  return [...raidWon().map((boss) => `trophy-${boss}`), ...worksBuilt().map((made) => `model-${made}`)];
+}

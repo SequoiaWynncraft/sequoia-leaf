@@ -1,6 +1,6 @@
 /**
  * The stage: what `main.ts` needs from whatever place is on screen. The town is one such place
- * (`townscene.ts`); the member's camp will be another. `main.ts` owns the canvas, the camera, the
+ * (`townscene.ts`); a camp, the member's own or a guild-mate's, is another (`campscene.ts`). `main.ts` owns the canvas, the camera, the
  * keys and fingers, the loop and the doors into the games, and asks everything else of a scene, so
  * a second scene can be put on without `main.ts` knowing what is in it.
  *
@@ -50,6 +50,12 @@ export interface Scene {
   act(): void;
   /** The key for "put this away". */
   back(): void;
+  /** Any other key, in lower case. Says whether the scene had a use for it. */
+  key(k: string): boolean;
+  /** A finger or the mouse, still down, has moved to a point in the scene. */
+  drag(at: Pt): void;
+  /** It has been lifted, at a point in the scene and over this part of the page. */
+  release(at: Pt, over: Element | null): void;
   /** Whether the member may move about yet. */
   awake(): boolean;
   /** The member has come back out of a game. */
@@ -65,6 +71,11 @@ export interface Stage {
   goInside(game: GameId, at: Pt): void;
   /** Point the camera now, without easing. */
   snap(): void;
-  /** Put another scene on in this one's place: through the gate to the camp, say, and back again. */
+  /** Put another scene on in this one's place, at once. */
   put(next: Scene): void;
+  /**
+   * Walk from this place to another: night closes in on whoever is walking off, at its darkest
+   * `swap` sets the next place up and it is put on, and then the night lifts on them walking in.
+   */
+  travel(next: Scene, swap: () => void): void;
 }

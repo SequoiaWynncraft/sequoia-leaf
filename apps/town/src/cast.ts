@@ -3,7 +3,7 @@
 import type { Doing } from "./game.ts";
 
 /** What people say while about an errand, by where they are. */
-export const LINES: Readonly<Record<Exclude<Doing, "walk" | "raid"> | "any", readonly string[]>> = {
+export const LINES: Readonly<Record<Exclude<Doing, "walk" | "raid" | "call" | "home"> | "any", readonly string[]>> = {
   treasury: ["just looking, Cinfy", "how much for the sun?", "put it on my tab", "ooh, shiny"],
   quests: ["ooh, a new one", "three raids? easy.", "who pinned this upside down", "erm. which one's mine"],
   market: ["is this haunted?", "fresh bread!", "I'll take two", "does it come in gold"],
@@ -48,6 +48,8 @@ export const DOING: Readonly<Record<Doing, string>> = {
   bench: "Resting on the bench",
   walk: "Out for a wander",
   raid: "Away on a raid",
+  call: "Calling in at your camp",
+  home: "At home",
 };
 
 /** What Cinfy says across the counter, and aloud. */

@@ -165,3 +165,10 @@ export function updateFx(dt: number): void {
     if (r.life >= r.ttl) rings.splice(i, 1);
   }
 }
+
+/** Every spark, word and ring is gone: another place is about to be shown. */
+export function clearFx(): void {
+  bits.length = 0;
+  floaters.length = 0;
+  rings.length = 0;
+}

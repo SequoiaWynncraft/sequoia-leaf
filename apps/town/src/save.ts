@@ -4,6 +4,8 @@
  * nothing at all, and `keep.ts` does the reading and writing.
  */
 
+import { type Camp, newCamp, parseCamp } from "./camp.ts";
+
 export const VERSION = 1;
 
 export interface Kept {
@@ -19,10 +21,21 @@ export interface Kept {
   chest: string;
   /** When the member was last in town, in milliseconds since 1970; 0 for never. */
   lastSeen: number;
+  /** The member's own camp: what stands where, what is put away, who lives there, the mailbox. */
+  camp: Camp;
 }
 
 export function blank(): Kept {
-  return { owned: [], wearing: [], claimed: [], sightings: 0, welcomed: "", chest: "", lastSeen: 0 };
+  return {
+    owned: [],
+    wearing: [],
+    claimed: [],
+    sightings: 0,
+    welcomed: "",
+    chest: "",
+    lastSeen: 0,
+    camp: newCamp(),
+  };
 }
 
 const two = (n: number): string => String(n).padStart(2, "0");
@@ -72,6 +85,7 @@ export function parse(text: string | null | undefined): Kept | null {
     welcomed: day(raw.welcomed),
     chest: day(raw.chest),
     lastSeen: count(raw.lastSeen, 8.64e15),
+    camp: parseCamp(raw.camp) ?? newCamp(),
   };
 }
 

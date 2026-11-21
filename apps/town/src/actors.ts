@@ -8,8 +8,10 @@ import { dist, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { CHEERS, GREETS, LINES } from "./cast.ts";
 import { puff } from "./fx.ts";
 import { type Actor, G } from "./game.ts";
+import type { Ground } from "./grid.ts";
 import { guild, type Member } from "./guild.ts";
-import { findPath, pathD, type Seat, SEATS, SPOTS } from "./world.ts";
+import type { Steer } from "./stage.ts";
+import { type Seat, SEATS, SPOTS, TOWN } from "./world.ts";
 
 export const HOP = 0.3;
 
@@ -102,10 +104,13 @@ export function release(a: Actor): void {
   stand(a);
 }
 
-/** Sets someone walking to a point, round whatever is in the way; `then` happens when they get there. */
-export function walkTo(a: Actor, to: Pt, then: (() => void) | null = null): void {
+/**
+ * Sets someone walking to a point, round whatever is in the way; `then` happens when they get
+ * there. The ground is the town's unless another is given.
+ */
+export function walkTo(a: Actor, to: Pt, then: (() => void) | null = null, ground: Ground = TOWN): void {
   stand(a);
-  a.path = findPath(a, to, a.you);
+  a.path = ground.findPath(a, to, a.you);
   a.arrive = then;
   if (a.path.length === 0) {
     a.arrive = null;
@@ -114,14 +119,15 @@ export function walkTo(a: Actor, to: Pt, then: (() => void) | null = null): void
 }
 
 /** A foot coming down: a little dust on the paths, and for the player a soft step. */
-export function footfall(a: Actor, before: number): void {
+export function footfall(a: Actor, before: number, ground: Ground = TOWN): void {
   if (Math.floor(a.walked / 9) === Math.floor(before / 9)) return;
   if (a.you) sfx.step();
-  if (pathD(a.x, a.y) < 0 && (a.you || Math.random() < 0.4) && onScreen(a.x, a.y)) puff(a.x, a.y, 2, EARTH[2], 5);
+  if (ground.pathD(a.x, a.y) < 0 && (a.you || Math.random() < 0.4) && onScreen(a.x, a.y))
+    puff(a.x, a.y, 2, EARTH[2], 5);
 }
 
 /** A moment of anyone's time: finishing a hop, a sentence, a stretch of the way. */
-export function stepActor(a: Actor, dt: number): void {
+export function stepActor(a: Actor, dt: number, ground: Ground = TOWN): void {
   if (a.sayFor > 0) {
     a.sayFor -= dt;
     if (a.sayFor <= 0) a.say = "";
@@ -167,7 +173,41 @@ export function stepActor(a: Actor, dt: number): void {
       left = 0;
     }
   }
-  if (a.moving) footfall(a, before);
+  if (a.moving) footfall(a, before, ground);
+}
+
+/** Which way somebody is being walked by hand, if at all: by the keys, or towards a finger held on the world. */
+export function pushOf(a: Actor, steer: Steer): { dx: number; dy: number } | null {
+  let { dx, dy } = steer;
+  if (dx === 0 && dy === 0 && steer.toward && dist(steer.toward.x, steer.toward.y, a.x, a.y) > 5) {
+    dx = steer.toward.x - a.x;
+    dy = steer.toward.y - a.y;
+  }
+  return dx === 0 && dy === 0 ? null : { dx, dy };
+}
+
+/** Walks somebody a moment's worth that way, sliding along whatever is solid. */
+export function shove(a: Actor, dt: number, dx: number, dy: number, ground: Ground = TOWN): void {
+  const len = Math.hypot(dx, dy);
+  const go = a.speed * dt;
+  const before = a.walked;
+  const nx = a.x + (dx / len) * go;
+  const ny = a.y + (dy / len) * go;
+  let moved = 0;
+  if (!ground.footBlocked(nx, a.y)) {
+    moved += Math.abs(nx - a.x);
+    a.x = nx;
+  }
+  if (!ground.footBlocked(a.x, ny)) {
+    moved += Math.abs(ny - a.y);
+    a.y = ny;
+  }
+  a.dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0;
+  if (moved > 0) {
+    a.walked += moved;
+    a.moving = true;
+    footfall(a, before, ground);
+  }
 }
 
 // ---------- guild-mates, minding their own business ----------
@@ -218,7 +258,8 @@ function choose(a: Actor): void {
 
 function chatter(a: Actor): string {
   if (a.who.name === "Sootpaw" && Math.random() < 0.3) return "meow";
-  const own = a.doing === "walk" || a.doing === "raid" ? LINES.any : LINES[a.doing];
+  const own =
+    a.doing === "walk" || a.doing === "raid" || a.doing === "call" || a.doing === "home" ? LINES.any : LINES[a.doing];
   return pick(Math.random() < 0.72 ? own : LINES.any, Math.random());
 }
 
