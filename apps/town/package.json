@@ -1,0 +1,15 @@
+{
+  "name": "@sequoia-leaf/town",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot index.html",
+    "build": "bun build index.html --outdir dist --minify"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.4"
+  },
+  "dependencies": {
+    "@sequoia-leaf/kit": "workspace:*"
+  }
+}

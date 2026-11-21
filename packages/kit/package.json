@@ -1,0 +1,16 @@
+{
+  "name": "@sequoia-leaf/kit",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./kit.css": "./src/kit.css",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "frames": "bun tools/frames.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.4"
+  }
+}

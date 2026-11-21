@@ -1,0 +1,572 @@
+/*
+ * The guild's look for everything that is not the world itself: the Minecraft font, the dusk
+ * colours, and wooden frames, plaques, buttons and paper drawn as pixel art.
+ *
+ * Sizes are counted in `--u`, one art pixel of the interface (two CSS pixels, three on a very large
+ * window), so frames and letters always land on whole pixels. The font is drawn ten pixels to the
+ * em, which makes ten units the sharp text size.
+ */
+@import "./frames.css";
+
+@font-face {
+  font-family: Minecraft;
+  src: url("./fonts/minecraft-regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: Minecraft;
+  src: url("./fonts/minecraft-bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: Minecraft;
+  src: url("./fonts/minecraft-italic.woff2") format("woff2");
+  font-style: italic;
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: Minecraft;
+  src: url("./fonts/minecraft-bold-italic.woff2") format("woff2");
+  font-style: italic;
+  font-weight: 700;
+  font-display: block;
+}
+
+:root {
+  --u: 2px;
+  /* Text: the usual size, a small one for labels, and two for titles. */
+  --t-m: calc(var(--u) * 10);
+  --t-s: calc((var(--u) - 1px) * 10);
+  --t-d: var(--t-m);
+  --t-l: calc((var(--u) + 1px) * 10);
+  --t-xl: calc((var(--u) + 2px) * 10);
+  --k-font: Minecraft, ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace;
+
+  --k-ink: #1a0f1e;
+  --k-deep: #211228;
+  --k-plum: #2a1733;
+  --k-mid: #3d2050;
+  --k-edge: #5a296e;
+  --k-violet: #7a348a;
+  --k-rose: #b84d84;
+  --k-coral: #e67967;
+  --k-gold: #f5b95e;
+  --k-gold-dk: #d49045;
+  --k-gold-lt: #ffd98a;
+  --k-cream: #fff3cf;
+  --k-dim: #cdb6d8;
+  --k-faint: #9a82a8;
+  --k-leaf: #c9ef9a;
+  --k-green: #62a658;
+  --k-bark: #6f3826;
+  --k-bark-dk: #3b1f19;
+  --k-bark-lt: #a35d3b;
+  --k-paper: #f8e6bd;
+}
+/* Sharper screens can show a size between the two, which suits second lines on a phone. */
+@media (min-resolution: 2dppx) {
+  :root {
+    --t-d: calc(var(--u) * 7.5);
+  }
+}
+@media (min-width: 1800px) and (min-height: 940px) {
+  :root {
+    --u: 3px;
+  }
+}
+
+:where(html, body) {
+  margin: 0;
+  background: var(--k-ink);
+  color: var(--k-cream);
+  font: 400 var(--t-m) / 1.2 var(--k-font);
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  -webkit-tap-highlight-color: transparent;
+}
+:where(button, input, select) {
+  font: inherit;
+  color: inherit;
+}
+:where(button) {
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+[hidden] {
+  display: none !important;
+}
+:focus-visible {
+  outline: var(--u) solid var(--k-gold-lt);
+  outline-offset: var(--u);
+}
+canvas.k-px,
+img.k-px {
+  image-rendering: pixelated;
+  display: block;
+  flex: none;
+}
+
+/* ---------- words ---------- */
+
+.k-title {
+  margin: 0;
+  font-size: var(--t-m);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--k-gold);
+  text-shadow: var(--u) var(--u) 0 var(--k-bark-dk);
+}
+.k-title.big {
+  font-size: var(--t-l);
+  text-shadow: calc(var(--u) * 1.5) calc(var(--u) * 1.5) 0 var(--k-bark-dk);
+}
+.k-s {
+  font-size: var(--t-s);
+}
+/* The second line under a name: what the thing is. */
+.k-d {
+  font-size: var(--t-d);
+  color: var(--k-dim);
+}
+.k-label {
+  font-size: var(--t-s);
+  letter-spacing: calc(var(--t-s) / 10);
+  text-transform: uppercase;
+  color: var(--k-dim);
+}
+.k-dim {
+  color: var(--k-dim);
+}
+.k-gold {
+  color: var(--k-gold);
+}
+.k-leafy {
+  color: var(--k-leaf);
+}
+.k-coral {
+  color: var(--k-coral);
+}
+/* Words written straight over the world need a dark edge to stay readable. */
+.k-over {
+  text-shadow:
+    var(--u) var(--u) 0 var(--k-ink),
+    0 var(--u) 0 var(--k-ink),
+    var(--u) 0 0 var(--k-ink);
+}
+
+/* ---------- frames ---------- */
+
+.k-panel,
+.k-plaque,
+.k-card,
+.k-slot,
+.k-paper,
+.k-say,
+.k-tip,
+.k-btn,
+.k-i {
+  image-rendering: pixelated;
+  box-sizing: border-box;
+}
+
+/* A panel: the big wooden frame with dusk cloth inside. */
+.k-panel {
+  border: calc(var(--u) * 5) solid transparent;
+  border-image: var(--k-f-panel) 5 fill round;
+  box-shadow: 0 calc(var(--u) * 3) 0 #0006;
+  color: var(--k-cream);
+}
+/* The title along the top of a panel, on a band of roof shingles with an eave under it. */
+.k-head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+  min-height: calc(var(--u) * 24);
+  box-sizing: border-box;
+  padding: calc(var(--u) * 2) calc(var(--u) * 3) calc(var(--u) * 2) calc(var(--u) * 5);
+  background: var(--k-f-shingles) 0 0 / calc(var(--u) * 24) calc(var(--u) * 12);
+  image-rendering: pixelated;
+  box-shadow:
+    0 var(--u) 0 var(--k-violet),
+    0 calc(var(--u) * 2) 0 var(--k-ink);
+  margin-bottom: calc(var(--u) * 2);
+}
+.k-head .k-title {
+  flex: 1;
+  min-width: 0;
+  text-shadow: var(--u) var(--u) 0 var(--k-ink);
+}
+.k-body {
+  padding: calc(var(--u) * 4);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 3);
+}
+.k-scroll {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--k-bark) transparent;
+}
+
+/* A thin wooden edge for small things that sit over the world. */
+.k-plaque {
+  border: calc(var(--u) * 4) solid transparent;
+  border-image: var(--k-f-plaque) 4 fill;
+  box-shadow: 0 calc(var(--u) * 2) 0 #0006;
+}
+
+/* A row or tile standing up from the panel. Add `lit` to pick it out. */
+.k-card {
+  border: calc(var(--u) * 2) solid transparent;
+  border-image: var(--k-f-card) 2 fill;
+  padding: calc(var(--u) * 3) calc(var(--u) * 4);
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+  text-align: left;
+}
+button.k-card {
+  background: none;
+  width: 100%;
+}
+.k-card.lit,
+.k-card[aria-selected="true"],
+.k-card[aria-pressed="true"] {
+  border-image-source: var(--k-f-card-lit);
+}
+button.k-card:hover {
+  filter: brightness(1.12);
+}
+button.k-card:active {
+  transform: translateY(var(--u));
+}
+.k-card.done {
+  opacity: 0.6;
+}
+.k-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A hollow that holds one thing. */
+.k-slot {
+  border: calc(var(--u) * 2) solid transparent;
+  border-image: var(--k-f-slot) 2 fill;
+  display: grid;
+  place-items: center;
+}
+
+/* Paper: letters, notes on the board, anything meant to be read like a page. */
+.k-paper {
+  border: calc(var(--u) * 3) solid transparent;
+  border-image: var(--k-f-paper) 3 fill;
+  padding: calc(var(--u) * 3) calc(var(--u) * 4);
+  color: var(--k-ink);
+  box-shadow: 0 calc(var(--u) * 2) 0 #0005;
+}
+.k-paper .k-title {
+  color: #7a348a;
+  text-shadow: none;
+}
+.k-paper .k-dim,
+.k-paper .k-label {
+  color: #7d6551;
+}
+.k-paper hr,
+.k-rule {
+  border: 0;
+  height: var(--u);
+  margin: calc(var(--u) * 3) 0;
+  background: repeating-linear-gradient(90deg, #c9aa72 0 calc(var(--u) * 2), transparent 0 calc(var(--u) * 4));
+}
+
+/* Somebody speaking. */
+.k-say {
+  position: relative;
+  border: calc(var(--u) * 3) solid transparent;
+  border-image: var(--k-f-bubble) 3 fill;
+  padding: var(--u) calc(var(--u) * 3);
+  color: var(--k-ink);
+}
+.k-say::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--u) * 5);
+  bottom: calc(var(--u) * -5);
+  width: calc(var(--u) * 6);
+  height: calc(var(--u) * 3);
+  background: var(--k-f-tail) 0 0 / 100% 100% no-repeat;
+}
+.k-say.left::after {
+  left: calc(var(--u) * -6);
+  bottom: calc(var(--u) * 3);
+  transform: rotate(90deg);
+}
+.k-say b {
+  display: block;
+  font-size: var(--t-s);
+  letter-spacing: calc(var(--t-s) / 10);
+  text-transform: uppercase;
+  color: #7a348a;
+}
+
+/* What a thing is, shown while pointing at it. */
+.k-tip {
+  border: calc(var(--u) * 2) solid transparent;
+  border-image: var(--k-f-tip) 2 fill;
+  padding: calc(var(--u) * 2) calc(var(--u) * 3);
+  color: var(--k-cream);
+  box-shadow: 0 calc(var(--u) * 2) 0 #0006;
+}
+
+/* ---------- buttons ---------- */
+
+.k-btn {
+  --f: var(--k-f-btn-gold);
+  --fd: var(--k-f-btn-gold-down);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 3);
+  min-height: calc(var(--u) * 20);
+  padding: var(--u) calc(var(--u) * 5) 0;
+  border: solid transparent;
+  border-width: calc(var(--u) * 2) calc(var(--u) * 2) calc(var(--u) * 4);
+  border-image: var(--f) 2 2 4 2 fill;
+  background: none;
+  font-weight: 700;
+  white-space: nowrap;
+  color: #3b1f19;
+}
+.k-btn:hover {
+  filter: brightness(1.08);
+}
+.k-btn:active,
+.k-btn.down {
+  border-width: calc(var(--u) * 4) calc(var(--u) * 2) calc(var(--u) * 2);
+  border-image: var(--fd) 4 2 2 2 fill;
+}
+.k-btn.wood {
+  --f: var(--k-f-btn-wood);
+  --fd: var(--k-f-btn-wood-down);
+  color: var(--k-cream);
+  text-shadow: var(--u) var(--u) 0 var(--k-bark-dk);
+}
+.k-btn.plum {
+  --f: var(--k-f-btn-plum);
+  --fd: var(--k-f-btn-plum-down);
+  color: var(--k-cream);
+  text-shadow: var(--u) var(--u) 0 var(--k-ink);
+}
+/* Spending Leaf is always the green button, so the precious thing is never spent by surprise. */
+.k-btn.leaf {
+  --f: var(--k-f-btn-leaf);
+  --fd: var(--k-f-btn-leaf-down);
+  color: #173a1d;
+}
+.k-btn.coral {
+  --f: var(--k-f-btn-coral);
+  --fd: var(--k-f-btn-coral-down);
+  color: #3a1420;
+}
+.k-btn:disabled,
+.k-btn.off {
+  --f: var(--k-f-btn-off);
+  --fd: var(--k-f-btn-off);
+  border-width: calc(var(--u) * 2) calc(var(--u) * 2) calc(var(--u) * 4);
+  border-image: var(--f) 2 2 4 2 fill;
+  color: #2c2a30;
+  text-shadow: none;
+  filter: none;
+  cursor: default;
+}
+.k-btn.sm {
+  min-height: calc(var(--u) * 16);
+  padding-inline: calc(var(--u) * 3);
+}
+.k-btn.wide {
+  display: flex;
+  width: 100%;
+}
+/* A square button holding one icon. */
+.k-btn.icon {
+  width: calc(var(--u) * 20);
+  padding-inline: 0;
+}
+.k-btn.icon.sm {
+  width: calc(var(--u) * 16);
+}
+.k-btn.shake {
+  animation: k-shake 0.3s;
+}
+@keyframes k-shake {
+  20%,
+  60% {
+    transform: translateX(calc(var(--u) * -2));
+  }
+  40%,
+  80% {
+    transform: translateX(calc(var(--u) * 2));
+  }
+}
+
+.k-tabs {
+  display: flex;
+  gap: calc(var(--u) * 2);
+}
+.k-tabs > .k-btn {
+  --f: var(--k-f-btn-wood);
+  --fd: var(--k-f-btn-wood-down);
+  flex: 1;
+  color: var(--k-cream);
+  text-shadow: var(--u) var(--u) 0 var(--k-bark-dk);
+}
+.k-tabs > .k-btn[aria-selected="true"] {
+  --f: var(--k-f-btn-gold);
+  --fd: var(--k-f-btn-gold-down);
+  color: #3b1f19;
+  text-shadow: none;
+}
+
+/* ---------- small parts ---------- */
+
+/* A pixel icon: `<i class="k-i k-i-leaf">`. `--s` makes it larger by whole steps. */
+.k-i {
+  display: inline-block;
+  flex: none;
+  width: calc(var(--w) * var(--u) * var(--s, 1));
+  height: calc(var(--h) * var(--u) * var(--s, 1));
+  background-position: 0 0;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  vertical-align: middle;
+}
+
+/* An amount of Leaf or Coins. */
+.k-cur {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--k-gold);
+}
+.k-cur.leaf {
+  color: var(--k-leaf);
+}
+.k-bump {
+  animation: k-bump 0.22s;
+}
+@keyframes k-bump {
+  50% {
+    transform: scale(1.3) rotate(-8deg);
+  }
+}
+
+/* How far along something is: `<div class="k-bar"><i style="--v: 40%"></i></div>`. */
+.k-bar {
+  height: calc(var(--u) * 8);
+  border: calc(var(--u) * 2) solid transparent;
+  border-image: var(--k-f-slot) 2 fill;
+  box-sizing: border-box;
+  image-rendering: pixelated;
+}
+.k-bar > i {
+  display: block;
+  height: 100%;
+  width: var(--v, 0%);
+  background: linear-gradient(var(--k-gold-lt) 0 var(--u), var(--k-gold) 0 calc(100% - var(--u)), var(--k-gold-dk) 0);
+  transition: width 0.4s;
+}
+.k-bar.leaf > i {
+  background: linear-gradient(var(--k-leaf) 0 var(--u), var(--k-green) 0 calc(100% - var(--u)), #3b7340 0);
+}
+.k-bar.coral > i {
+  background: linear-gradient(#f4a08c 0 var(--u), var(--k-coral) 0 calc(100% - var(--u)), #c4574f 0);
+}
+
+/* A small tag: a trait, a rank, a count. */
+.k-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  padding: 0 calc(var(--u) * 3);
+  min-height: calc(var(--u) * 12);
+  background: var(--k-mid);
+  box-shadow:
+    0 0 0 var(--u) var(--k-ink),
+    inset 0 var(--u) 0 var(--k-edge);
+  white-space: nowrap;
+}
+.k-chip.lit {
+  background: var(--k-gold);
+  color: #3b1f19;
+  box-shadow:
+    0 0 0 var(--u) var(--k-ink),
+    inset 0 var(--u) 0 var(--k-gold-lt);
+}
+
+/* A line of news that says itself once and goes. */
+.k-toast {
+  padding: calc(var(--u) * 2) calc(var(--u) * 4);
+  background: #1a0f1ee6;
+  box-shadow: inset calc(var(--u) * 2) 0 0 var(--k-gold);
+  animation: k-toast-in 0.3s;
+}
+.k-toast.leaf {
+  box-shadow: inset calc(var(--u) * 2) 0 0 var(--k-green);
+}
+.k-toast.coral {
+  box-shadow: inset calc(var(--u) * 2) 0 0 var(--k-coral);
+}
+.k-toast.rose {
+  box-shadow: inset calc(var(--u) * 2) 0 0 var(--k-rose);
+}
+@keyframes k-toast-in {
+  from {
+    transform: translateX(calc(var(--u) * -7));
+    opacity: 0;
+  }
+}
+
+/* The dark behind a notice that must be answered. */
+.k-scrim {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--u) * 8);
+  box-sizing: border-box;
+  background: #1a0f1eb8;
+}
+.k-rise {
+  animation: k-rise 0.32s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+@keyframes k-rise {
+  from {
+    transform: translateY(calc(var(--u) * 14)) scale(0.96);
+    opacity: 0;
+  }
+}
+.k-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+}
+.k-col {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 3);
+}
+.k-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 3);
+}

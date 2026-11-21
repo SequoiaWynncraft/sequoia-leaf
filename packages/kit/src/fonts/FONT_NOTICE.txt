@@ -1,0 +1,14 @@
+Minecraft Regular, Bold, Italic and Bold Italic (minecraft-*.woff2)
+
+Copyright (c) 2017 by Jacob Debono. Designer: Jacob Debono. Vendor: JDGraphics Fonts.
+Version 1.000.
+
+Licence statement embedded in the font files (OpenType name table, licence description, ID 13):
+"Free for Commercial Use"
+
+Provenance: byte-identical copies of the files the Sequoia website ships in sequoia-web
+frontend/static/assets/fonts/. No separate licence text accompanies the fonts in that repository;
+the embedded statement above is the licence information available.
+
+The font is drawn on a grid of ten pixels to the em, so it is sharp at 10px, 20px, 30px and so on
+(and at multiples of 5px on screens with two device pixels to a CSS pixel).
