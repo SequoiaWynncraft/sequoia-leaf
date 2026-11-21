@@ -53,7 +53,8 @@ export function makeLands(t: Terrain) {
       for (let x = 1; x < W - 1; x++) {
         const i = y * W + x;
         if (near[i] !== 9 || landId[i] === 255) continue;
-        if (near[i - 1] === d - 1 || near[i + 1] === d - 1 || near[i - W] === d - 1 || near[i + W] === d - 1) near[i] = d;
+        if (near[i - 1] === d - 1 || near[i + 1] === d - 1 || near[i - W] === d - 1 || near[i + W] === d - 1)
+          near[i] = d;
       }
 
   const ownerAt = (x: number, y: number): number => {
@@ -61,7 +62,8 @@ export function makeLands(t: Terrain) {
     const id = landId[y * W + x] as number;
     if (id === 255) return -1;
     let o: number = owner[id] as Owner;
-    for (const s of spreads) if (s.land === id && (x - s.ox) * (x - s.ox) + (y - s.oy) * (y - s.oy) < s.r * s.r) o = s.to;
+    for (const s of spreads)
+      if (s.land === id && (x - s.ox) * (x - s.ox) + (y - s.oy) * (y - s.oy) < s.r * s.r) o = s.to;
     return o;
   };
 

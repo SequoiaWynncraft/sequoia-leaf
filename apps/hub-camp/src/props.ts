@@ -589,7 +589,8 @@ export function fireArt(): FireArt {
         const hw = Math.round(Math.sqrt(1 - (y * y) / 49) * 14);
         R(g, cx - hw, cy + y, hw * 2, 1, y < -2 ? I.k : I.u);
       }
-      for (let n = 0; n < 16; n++) R(g, cx - 10 + Math.floor(hash(n, 3) * 20), cy - 4 + Math.floor(hash(n, 9) * 8), 1, 1, I.k);
+      for (let n = 0; n < 16; n++)
+        R(g, cx - 10 + Math.floor(hash(n, 3) * 20), cy - 4 + Math.floor(hash(n, 9) * 8), 1, 1, I.k);
       for (let n = 0; n < 12; n++) {
         const x = cx - 8 + n;
         R(g, x, cy - 1 + Math.round(n / 4), 2, 2, I.l);

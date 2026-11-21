@@ -2,7 +2,7 @@
  * The small things, each written out by hand as rows of letters (see `INK` for the colours):
  * pets, crabs, the post box, decorations, and the little marks that float over heads.
  */
-import { flip, sprite, type Spr } from "./gfx.ts";
+import { flip, type Spr, sprite } from "./gfx.ts";
 
 // ---------- glorps (the round ones) ----------
 
@@ -445,7 +445,17 @@ export const SKY_LANTERN = sprite([
 export const HEART = sprite([".MM.MM.", "MNMMMMM", "MMMMMMM", ".MMMMM.", "..MMM..", "...M..."]);
 export const NOTE = sprite(["..jj.", "..j.j", "..j..", "..j..", "jjj..", "jjj.."]);
 export const ZED = sprite(["jjjj", "..j.", ".j..", "jjjj"]);
-export const BANG = sprite([".ggggg.", "ggBBBgg", "ggBBBgg", "gggBggg", "ggggggg", "gggBggg", ".ggggg.", "..ggg..", "...g..."]);
+export const BANG = sprite([
+  ".ggggg.",
+  "ggBBBgg",
+  "ggBBBgg",
+  "gggBggg",
+  "ggggggg",
+  "gggBggg",
+  ".ggggg.",
+  "..ggg..",
+  "...g...",
+]);
 export const STAR = sprite(["..j..", "..j..", "jjijj", "..j..", "..j.."], {}, 2, 2);
 export const STAR_S = sprite([".j.", "jij", ".j."], {}, 1, 1);
 export const LEAF = sprite([
@@ -522,7 +532,17 @@ export const ICON = {
   ]),
   cup: sprite(["hgggggh", "hgiiggh", ".giigg.", ".ggggg.", "..ggg..", "...g...", "...g...", "..ggg..", ".hhhhh."]),
   crab: CRAB.up,
-  gear: sprite(["..h.h.h..", ".hhhhhhh.", "hhgggggh.", ".hgg.ggh.", "hhg...ghh", ".hgg.ggh.", "hhgggggh.", ".hhhhhhh.", "..h.h.h.."]),
+  gear: sprite([
+    "..h.h.h..",
+    ".hhhhhhh.",
+    "hhgggggh.",
+    ".hgg.ggh.",
+    "hhg...ghh",
+    ".hgg.ggh.",
+    "hhgggggh.",
+    ".hhhhhhh.",
+    "..h.h.h..",
+  ]),
   tent: sprite([
     "....j....",
     "...jKj...",

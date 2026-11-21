@@ -54,7 +54,21 @@ import {
   view,
   zoomBy,
 } from "./view.ts";
-import { CAMP, FIRE, GATES, LANDS, LIGHTHOUSE, MILL, type PlaceId, place, POND, RIVAL, ROPE, STONES, WORKS } from "./world.ts";
+import {
+  CAMP,
+  FIRE,
+  GATES,
+  LANDS,
+  LIGHTHOUSE,
+  MILL,
+  place,
+  type PlaceId,
+  POND,
+  RIVAL,
+  ROPE,
+  STONES,
+  WORKS,
+} from "./world.ts";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#map") as HTMLCanvasElement;
 const g = canvas.getContext("2d", { alpha: false }) as Ctx;
@@ -101,7 +115,17 @@ cam.z = Math.max(minZoom(), innerWidth < 720 ? 1.2 : 1.3);
 
 // ---------- while you were away: replayed on the map, then summed up ----------
 
-type Step = { x: number; y: number; z: number; icon: IconId; text: string; col: string; note: string; cols: string[]; sound: () => void };
+type Step = {
+  x: number;
+  y: number;
+  z: number;
+  icon: IconId;
+  text: string;
+  col: string;
+  note: string;
+  cols: string[];
+  sound: () => void;
+};
 const AWAY: Step[] = [
   {
     x: GATES.gateA.x,
@@ -229,7 +253,15 @@ function comeHome(from: { x: number; y: number }): void {
     "Your Works made 24 planks and 6 gears · 340 Coins",
     "<b>Tansyfoot</b> and <b>Pipkin</b> stopped by your camp",
   ];
-  AWAY.forEach((s, i) => hooks.feed({ icon: s.icon === "leaf" ? "lantern" : s.icon === "coin" ? "cog" : s.icon, html: told[i] as string, x: s.x, y: s.y, earlier: true }));
+  AWAY.forEach((s, i) =>
+    hooks.feed({
+      icon: s.icon === "leaf" ? "lantern" : s.icon === "coin" ? "cog" : s.icon,
+      html: told[i] as string,
+      x: s.x,
+      y: s.y,
+      earlier: true,
+    }),
+  );
   // Out of the tent, with a wave.
   setTimeout(() => {
     hop(you);
@@ -387,7 +419,9 @@ function tap(sx: number, sy: number): void {
         lastLandAt = now;
         const l = LANDS[hit.land] as (typeof LANDS)[number];
         const o = lands.owner[hit.land];
-        ui.toast(`${l.name} · ${o === 0 ? "held by the guild" : o === 2 ? `held by ${RIVAL}` : "wild land, nobody's yet"}`);
+        ui.toast(
+          `${l.name} · ${o === 0 ? "held by the guild" : o === 2 ? `held by ${RIVAL}` : "wild land, nobody's yet"}`,
+        );
       }
     }
   }
@@ -446,8 +480,8 @@ canvas.addEventListener("pointermove", (e) => {
     dragBy(dx, dy);
     const now = performance.now();
     const ms = Math.max(1, now - drag.at);
-    drag.vx = drag.vx * 0.5 + ((dx / ms) * 1000) * 0.5;
-    drag.vy = drag.vy * 0.5 + ((dy / ms) * 1000) * 0.5;
+    drag.vx = drag.vx * 0.5 + (dx / ms) * 1000 * 0.5;
+    drag.vy = drag.vy * 0.5 + (dy / ms) * 1000 * 0.5;
     drag.at = now;
   }
 });
@@ -480,7 +514,10 @@ window.addEventListener("keydown", (e: KeyboardEvent) => {
   else if (e.key.startsWith("Arrow") && !away.on) {
     grab();
     const d = 60;
-    dragBy(e.key === "ArrowLeft" ? d : e.key === "ArrowRight" ? -d : 0, e.key === "ArrowUp" ? d : e.key === "ArrowDown" ? -d : 0);
+    dragBy(
+      e.key === "ArrowLeft" ? d : e.key === "ArrowRight" ? -d : 0,
+      e.key === "ArrowUp" ? d : e.key === "ArrowDown" ? -d : 0,
+    );
   }
 });
 
@@ -498,7 +535,10 @@ function tick(dt: number): void {
   if (soundClock > 0.3) {
     soundClock = 0;
     const close = clamp((cam.z - 1.8) / 2, 0, 1);
-    const toFire = Math.min(Math.hypot(cam.x - FIRE.x, cam.y - FIRE.y), Math.hypot(cam.x - CAMP.fireX, cam.y - CAMP.fireY));
+    const toFire = Math.min(
+      Math.hypot(cam.x - FIRE.x, cam.y - FIRE.y),
+      Math.hypot(cam.x - CAMP.fireX, cam.y - CAMP.fireY),
+    );
     const shoreInView = clamp((cam.x + view.w / 2 / cam.z - 850) / 160, 0, 1);
     setSound(close * clamp(1 - toFire / 110, 0, 1), shoreInView * (0.4 + close * 0.6));
   }

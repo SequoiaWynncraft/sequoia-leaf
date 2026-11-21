@@ -35,8 +35,8 @@ import {
   LANDS,
   LIGHTHOUSE,
   MILL,
-  NODES,
   type NodeId,
+  NODES,
   type Place,
   PLACES,
   type Pt,
@@ -48,7 +48,8 @@ import {
 } from "./world.ts";
 
 export const UI_FONT = '"Nunito", ui-rounded, "Segoe UI", "Trebuchet MS", system-ui, sans-serif';
-export const MAP_FONT = '"Iowan Old Style", "Palatino Linotype", Palatino, "URW Palladio L", "Book Antiqua", Georgia, serif';
+export const MAP_FONT =
+  '"Iowan Old Style", "Palatino Linotype", Palatino, "URW Palladio L", "Book Antiqua", Georgia, serif';
 
 // ---------- the camera ----------
 
@@ -81,8 +82,14 @@ export const MAX_ZOOM = 6;
 const midX = (): number => (view.l + view.w - view.r) / 2;
 const midY = (): number => (view.t + view.h - view.b) / 2;
 export const minZoom = (): number => Math.max((view.w - view.coverR) / W, (view.h - view.coverB) / H) * 1.001;
-export const toScreen = (x: number, y: number): Pt => ({ x: (x - cam.x) * cam.z + midX(), y: (y - cam.y) * cam.z + midY() });
-export const toMap = (sx: number, sy: number): Pt => ({ x: (sx - midX()) / cam.z + cam.x, y: (sy - midY()) / cam.z + cam.y });
+export const toScreen = (x: number, y: number): Pt => ({
+  x: (x - cam.x) * cam.z + midX(),
+  y: (y - cam.y) * cam.z + midY(),
+});
+export const toMap = (sx: number, sy: number): Pt => ({
+  x: (sx - midX()) / cam.z + cam.x,
+  y: (sy - midY()) / cam.z + cam.y,
+});
 
 function hold(): void {
   cam.z = clamp(cam.z, minZoom(), MAX_ZOOM);
@@ -100,7 +107,16 @@ export function flyTo(x: number, y: number, z = cam.z, dur?: number): void {
   following = null;
   zoomGoal = null;
   drift.x = drift.y = 0;
-  flight = { x0: cam.x, y0: cam.y, z0: cam.z, x1: x, y1: y, z1: clamp(z, minZoom(), MAX_ZOOM), t: 0, dur: dur ?? clamp(0.5 + d / 700, 0.55, 1.35) };
+  flight = {
+    x0: cam.x,
+    y0: cam.y,
+    z0: cam.z,
+    x1: x,
+    y1: y,
+    z1: clamp(z, minZoom(), MAX_ZOOM),
+    t: 0,
+    dur: dur ?? clamp(0.5 + d / 700, 0.55, 1.35),
+  };
 }
 export function follow(m: Member | null, zoom = 3): void {
   following = m;
@@ -369,7 +385,12 @@ export function pickAt(sx: number, sy: number): Hit {
   if (near) return { kind: "place", p: near };
   for (let i = 0; i < LANDS.length; i++) {
     const l = LANDS[i] as (typeof LANDS)[number];
-    if ((flags[i] as (typeof flags)[number]).h > 0.2 && Math.abs(at.x - l.bx - 3) < reach(6) && Math.abs(at.y - l.by + 8) < reach(9)) return { kind: "flag", land: i };
+    if (
+      (flags[i] as (typeof flags)[number]).h > 0.2 &&
+      Math.abs(at.x - l.bx - 3) < reach(6) &&
+      Math.abs(at.y - l.by + 8) < reach(9)
+    )
+      return { kind: "flag", land: i };
   }
   if (Math.hypot(at.x - MILL.x, at.y - MILL.y + 14) < reach(15)) return { kind: "mill" };
   if (Math.hypot(at.x - LIGHTHOUSE.x, at.y - LIGHTHOUSE.y + 16) < reach(13)) return { kind: "light" };
@@ -377,7 +398,13 @@ export function pickAt(sx: number, sy: number): Hit {
   if (Math.hypot(at.x - boat.x, at.y - boat.y + 4) < reach(8)) return { kind: "boat" };
   const x = clamp(Math.round(at.x), 0, W - 1);
   const y = clamp(Math.round(at.y), 0, H - 1);
-  return { kind: "ground", x: at.x, y: at.y, land: terrain.landId[y * W + x] as number, what: terrain.kind[y * W + x] as number };
+  return {
+    kind: "ground",
+    x: at.x,
+    y: at.y,
+    land: terrain.landId[y * W + x] as number,
+    what: terrain.kind[y * W + x] as number,
+  };
 }
 
 /** What is under the pointer that would answer a tap, for the cursor. */
@@ -400,7 +427,15 @@ function textWidth(g: Ctx, font: string, text: string): number {
   return w;
 }
 
-function plate(g: Ctx, x: number, y: number, text: string, alpha: number, gold: boolean, face: HTMLCanvasElement | null): { x0: number; y0: number; x1: number; y1: number } {
+function plate(
+  g: Ctx,
+  x: number,
+  y: number,
+  text: string,
+  alpha: number,
+  gold: boolean,
+  face: HTMLCanvasElement | null,
+): { x0: number; y0: number; x1: number; y1: number } {
   const font = `italic 600 13px ${MAP_FONT}`;
   const tw = textWidth(g, font, text);
   const extra = face ? 20 : 0;
@@ -477,12 +512,33 @@ export function render(g: Ctx): void {
   const sy1 = clamp(Math.ceil((view.h - oy) / z), 0, H);
   g.fillStyle = P.ink;
   g.fillRect(0, 0, view.w, view.h);
-  g.drawImage(terrain.ground, sx0, sy0, sx1 - sx0, sy1 - sy0, ox + sx0 * z, oy + sy0 * z, (sx1 - sx0) * z, (sy1 - sy0) * z);
-  g.drawImage(lands.canvas, sx0, sy0, sx1 - sx0, sy1 - sy0, ox + sx0 * z, oy + sy0 * z, (sx1 - sx0) * z, (sy1 - sy0) * z);
+  g.drawImage(
+    terrain.ground,
+    sx0,
+    sy0,
+    sx1 - sx0,
+    sy1 - sy0,
+    ox + sx0 * z,
+    oy + sy0 * z,
+    (sx1 - sx0) * z,
+    (sy1 - sy0) * z,
+  );
+  g.drawImage(
+    lands.canvas,
+    sx0,
+    sy0,
+    sx1 - sx0,
+    sy1 - sy0,
+    ox + sx0 * z,
+    oy + sy0 * z,
+    (sx1 - sx0) * z,
+    (sy1 - sy0) * z,
+  );
 
   // ----- in map pixels -----
   g.setTransform(dpr * z, 0, 0, dpr * z, ox * dpr, oy * dpr);
-  const seen = (x: number, y: number, pad = 40): boolean => x > sx0 - pad && x < sx1 + pad && y > sy0 - pad && y < sy1 + pad;
+  const seen = (x: number, y: number, pad = 40): boolean =>
+    x > sx0 - pad && x < sx1 + pad && y > sy0 - pad && y < sy1 + pad;
   const R = (x: number, y: number, w: number, h: number, col: string): void => {
     g.fillStyle = col;
     g.fillRect(Math.round(x), Math.round(y), w, h);
@@ -545,7 +601,10 @@ export function render(g: Ctx): void {
   const flame = (x: number, y: number, size: number, seed: number): void => {
     const shape = [1, 2.2, 3, 2.2, 1];
     for (let dx = -2; dx <= 2; dx++) {
-      const h = Math.max(1, Math.round(size * (shape[dx + 2] as number) * (0.65 + 0.6 * noise(T * 7 + dx * 1.7, seed, 3))));
+      const h = Math.max(
+        1,
+        Math.round(size * (shape[dx + 2] as number) * (0.65 + 0.6 * noise(T * 7 + dx * 1.7, seed, 3))),
+      );
       R(x + dx, y - h, 1, h, P.coral);
       if (Math.abs(dx) <= 1) R(x + dx, y - Math.round(h * 0.62), 1, Math.round(h * 0.62), P.amber);
       if (dx === 0) R(x, y - Math.round(h * 0.36), 1, Math.max(1, Math.round(h * 0.36)), P.gold2);
@@ -654,12 +713,20 @@ export function render(g: Ctx): void {
     if (!seen(c.x, c.y, 8)) continue;
     const moving = Math.hypot(c.tx - c.x, c.ty - c.y) > 0.6;
     const up = c.hop > 0 && c.hop < 0.5 ? Math.round(Math.sin((c.hop / 0.5) * Math.PI) * 4) : 0;
-    g.drawImage(CRAB[moving ? Math.floor(T * 7 + c.n) % 2 : 0] as HTMLCanvasElement, Math.round(c.x) - 3, Math.round(c.y) - 3 - up);
+    g.drawImage(
+      CRAB[moving ? Math.floor(T * 7 + c.n) % 2 : 0] as HTMLCanvasElement,
+      Math.round(c.x) - 3,
+      Math.round(c.y) - 3 - up,
+    );
   }
   if (seen(stray.x, stray.y, 8)) {
     const peek = (T + 2) % 5 < 0.4 ? 2 : 0;
     const up = stray.hop > 0 ? Math.round(Math.sin((stray.hop / 0.5) * Math.PI) * 5) : 0;
-    g.drawImage(CRAB[Math.floor(T * 2) % 2] as HTMLCanvasElement, Math.round(stray.x) - 3, Math.round(stray.y) - 3 - peek - up);
+    g.drawImage(
+      CRAB[Math.floor(T * 2) % 2] as HTMLCanvasElement,
+      Math.round(stray.x) - 3,
+      Math.round(stray.y) - 3 - peek - up,
+    );
   }
 
   // Birds going home across the province, and their shadows.
@@ -686,11 +753,23 @@ export function render(g: Ctx): void {
     if (!seen(f.x, f.y, 10)) return;
     const blink = Math.sin(T * 1.1 + i * 2.4);
     if (blink < 0.2) return;
-    glow(f.x + Math.sin(T * 0.5 + i) * 5 + 0.5, f.y + Math.cos(T * 0.37 + i * 1.7) * 4 + 0.5, 3.5, "amber", Math.min(1, (blink - 0.2) * 1.4));
+    glow(
+      f.x + Math.sin(T * 0.5 + i) * 5 + 0.5,
+      f.y + Math.cos(T * 0.37 + i * 1.7) * 4 + 0.5,
+      3.5,
+      "amber",
+      Math.min(1, (blink - 0.2) * 1.4),
+    );
   });
   for (const l of terrain.lights) {
     if (!seen(l.x, l.y, l.r)) continue;
-    glow(l.x, l.y, l.r, l.hue, l.a * (0.82 + 0.18 * Math.sin(T * 3.1 + l.flick) + 0.06 * Math.sin(T * 11 + l.flick * 3)));
+    glow(
+      l.x,
+      l.y,
+      l.r,
+      l.hue,
+      l.a * (0.82 + 0.18 * Math.sin(T * 3.1 + l.flick) + 0.06 * Math.sin(T * 11 + l.flick * 3)),
+    );
   }
   lanterns.forEach((l, i) => {
     const s = ropeSlot(i);
@@ -765,7 +844,15 @@ export function render(g: Ctx): void {
     g.strokeStyle = r.col;
     g.lineWidth = Math.max(1.5, z * 0.9);
     g.beginPath();
-    g.ellipse(p.x, p.y, r.r * z * (0.15 + 0.85 * (1 - (1 - t) ** 2)), r.r * z * (0.15 + 0.85 * (1 - (1 - t) ** 2)) * (r.water ? 0.5 : 0.62), 0, 0, 6.283);
+    g.ellipse(
+      p.x,
+      p.y,
+      r.r * z * (0.15 + 0.85 * (1 - (1 - t) ** 2)),
+      r.r * z * (0.15 + 0.85 * (1 - (1 - t) ** 2)) * (r.water ? 0.5 : 0.62),
+      0,
+      0,
+      6.283,
+    );
     g.stroke();
   }
   g.globalAlpha = 1;
@@ -838,7 +925,15 @@ export function render(g: Ctx): void {
     g.fillStyle = "rgba(26,15,30,0.34)";
     g.fillRect(Math.round(x - 3 * s), Math.round(y - s * 0.4), Math.round(6 * s), Math.round(s * 1.2));
     if (near > 0.01 || m.npc) {
-      const f = sitting ? FRAME.sit : hopping ? FRAME.cheer : walking ? (Math.floor(m.walk) % 2 === 0 ? FRAME.stepA : FRAME.stepB) : FRAME.stand;
+      const f = sitting
+        ? FRAME.sit
+        : hopping
+          ? FRAME.cheer
+          : walking
+            ? Math.floor(m.walk) % 2 === 0
+              ? FRAME.stepA
+              : FRAME.stepB
+            : FRAME.stand;
       g.globalAlpha = m.npc ? smoothstep(0.15, 0.6, near) : near;
       g.drawImage(m.skin.frames, f * FW, 0, FW, FH, headLeft - 2 * s, headTop - s, FW * s, FH * s);
       g.globalAlpha = 1;
@@ -887,10 +982,26 @@ export function render(g: Ctx): void {
       const sc = 2 * Math.max(0.2, k);
       g.globalAlpha = Math.min(1, m.emoteT * 3);
       g.fillStyle = P.ink;
-      g.fillRect(Math.round(x - (icon.width * sc) / 2) - 3, Math.round(m.top - icon.height * sc) - 3, Math.round(icon.width * sc) + 6, Math.round(icon.height * sc) + 6);
+      g.fillRect(
+        Math.round(x - (icon.width * sc) / 2) - 3,
+        Math.round(m.top - icon.height * sc) - 3,
+        Math.round(icon.width * sc) + 6,
+        Math.round(icon.height * sc) + 6,
+      );
       g.fillStyle = P.cream;
-      g.fillRect(Math.round(x - (icon.width * sc) / 2) - 2, Math.round(m.top - icon.height * sc) - 2, Math.round(icon.width * sc) + 4, Math.round(icon.height * sc) + 4);
-      g.drawImage(icon, Math.round(x - (icon.width * sc) / 2), Math.round(m.top - icon.height * sc), icon.width * sc, icon.height * sc);
+      g.fillRect(
+        Math.round(x - (icon.width * sc) / 2) - 2,
+        Math.round(m.top - icon.height * sc) - 2,
+        Math.round(icon.width * sc) + 4,
+        Math.round(icon.height * sc) + 4,
+      );
+      g.drawImage(
+        icon,
+        Math.round(x - (icon.width * sc) / 2),
+        Math.round(m.top - icon.height * sc),
+        icon.width * sc,
+        icon.height * sc,
+      );
       g.globalAlpha = 1;
     } else if (m.sayT > 0 && m.say) {
       bubble(g, x, m.top - 4, m.say, Math.min(1, m.sayT * 3));
@@ -965,7 +1076,13 @@ export function render(g: Ctx): void {
     const p = toScreen(at.x, at.y);
     const sc = Math.max(3, z) * at.s;
     g.globalAlpha = at.a;
-    g.drawImage(f.icon, Math.round(p.x - (f.icon.width * sc) / 2), Math.round(p.y - (f.icon.height * sc) / 2), f.icon.width * sc, f.icon.height * sc);
+    g.drawImage(
+      f.icon,
+      Math.round(p.x - (f.icon.width * sc) / 2),
+      Math.round(p.y - (f.icon.height * sc) / 2),
+      f.icon.width * sc,
+      f.icon.height * sc,
+    );
   }
   g.globalAlpha = 1;
   // Words that rise and fade.
@@ -981,7 +1098,14 @@ export function render(g: Ctx): void {
     const iw = f.icon ? f.icon.width * 2 + 4 : 0;
     const x0 = p.x - (tw + iw) / 2;
     g.globalAlpha = t > 0.7 ? (1 - t) / 0.3 : 1;
-    if (f.icon) g.drawImage(f.icon, Math.round(x0), Math.round(yy - f.icon.height * pop), f.icon.width * 2 * pop, f.icon.height * 2 * pop);
+    if (f.icon)
+      g.drawImage(
+        f.icon,
+        Math.round(x0),
+        Math.round(yy - f.icon.height * pop),
+        f.icon.width * 2 * pop,
+        f.icon.height * 2 * pop,
+      );
     g.lineWidth = 4;
     g.lineJoin = "round";
     g.strokeStyle = P.ink;
@@ -1008,7 +1132,13 @@ export function renderTop(g: Ctx): boolean {
     const at = fx.flightAt(f);
     if (!at) continue;
     g.globalAlpha = at.a;
-    g.drawImage(f.icon, Math.round(at.x - (f.icon.width * at.s) / 2), Math.round(at.y - (f.icon.height * at.s) / 2), f.icon.width * at.s, f.icon.height * at.s);
+    g.drawImage(
+      f.icon,
+      Math.round(at.x - (f.icon.width * at.s) / 2),
+      Math.round(at.y - (f.icon.height * at.s) / 2),
+      f.icon.width * at.s,
+      f.icon.height * at.s,
+    );
   }
   g.globalAlpha = 1;
   return true;

@@ -34,7 +34,7 @@ import {
 } from "./game.ts";
 import type { Lands } from "./lands.ts";
 import { P } from "./palette.ts";
-import { type IconId, ICONS, iconEl } from "./pix.ts";
+import { iconEl, type IconId, ICONS } from "./pix.ts";
 import { skinEl } from "./skins.ts";
 import { cam, flyTo, poke, toScreen, view } from "./view.ts";
 import { type GateId, GATES, NODES, type PlaceId, PLACES, ROPE, WORKS } from "./world.ts";
@@ -48,7 +48,11 @@ export const act = {
 
 type Kid = Node | string | null | false;
 type Props = { class?: string; text?: string; html?: string; title?: string; style?: string; on?: (e: Event) => void };
-function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: Props | null, ...kids: Kid[]): HTMLElementTagNameMap[K] {
+function h<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  props: Props | null,
+  ...kids: Kid[]
+): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
   if (props?.class) el.className = props.class;
   if (props?.text !== undefined) el.textContent = props.text;
@@ -143,7 +147,8 @@ export function pushFeed(e: FeedEntry): void {
 function ageFeed(): void {
   for (const f of feedItems) {
     const s = state.T - f.at;
-    f.age.textContent = s < 12 ? "just now" : s < 60 ? `${Math.floor(s / 10) * 10} seconds ago` : `${Math.floor(s / 60)} min ago`;
+    f.age.textContent =
+      s < 12 ? "just now" : s < 60 ? `${Math.floor(s / 10) * 10} seconds ago` : `${Math.floor(s / 60)} min ago`;
     f.el.classList.toggle("old", s > 90);
   }
 }
@@ -189,7 +194,10 @@ function markDock(): void {
     b.classList.toggle("here", !!p && you.at === p.node && !you.route);
     b.classList.toggle("going", goingTo === id);
   }
-  dockButtons.get("board")?.classList.toggle("ready", quests.some((q) => !q.claimed && q.have >= q.need));
+  dockButtons.get("board")?.classList.toggle(
+    "ready",
+    quests.some((q) => !q.claimed && q.have >= q.need),
+  );
   dockButtons.get("works")?.classList.toggle("ready", works.ready >= 40);
 }
 
@@ -322,7 +330,11 @@ let buying = false;
 function treasury(body: HTMLElement): void {
   const [says, line] = speaker(
     skinEl(cinfy.skin.face, 7),
-    pick(["Welcome back! It's all still here. I counted. Twice.", "Ah, a customer. Mind the gold, it's been polished.", "Everything is for sale except the door."]),
+    pick([
+      "Welcome back! It's all still here. I counted. Twice.",
+      "Ah, a customer. Mind the gold, it's been polished.",
+      "Everything is for sale except the door.",
+    ]),
   );
   body.append(says);
   for (const item of SHOP) {
@@ -348,10 +360,19 @@ function treasury(body: HTMLElement): void {
       const from = centre(leafEl);
       const to = centre(btn);
       for (let i = 0; i < 5; i++)
-        fx.fly(fx.topFlights, { icon: ICONS.leaf, x0: from.x, y0: from.y, x1: to.x, y1: to.y, dur: 0.5, arc: -40, scale: 2.2, done: null }, i * 0.06);
+        fx.fly(
+          fx.topFlights,
+          { icon: ICONS.leaf, x0: from.x, y0: from.y, x1: to.x, y1: to.y, dur: 0.5, arc: -40, scale: 2.2, done: null },
+          i * 0.06,
+        );
       row.append(h("div", { class: "stamp", text: "SOLD" }));
       btn.disabled = true;
-      tell(line, item.id === "snacks" ? "The crabs thank you. Probably. Off to the pond it goes." : "A fine choice! I'll have it sent straight to your camp.");
+      tell(
+        line,
+        item.id === "snacks"
+          ? "The crabs thank you. Probably. Off to the pond it goes."
+          : "A fine choice! I'll have it sent straight to your camp.",
+      );
       hop(cinfy);
       emote(cinfy, "leaf", 1.6);
       setTimeout(() => {
@@ -362,12 +383,17 @@ function treasury(body: HTMLElement): void {
           deliver(item.id);
           buying = false;
         }, 1050);
-        setTimeout(() => toast(item.id === "snacks" ? "The crabs have their snacks." : `${item.name}: delivered to your camp.`), 1900);
+        setTimeout(
+          () => toast(item.id === "snacks" ? "The crabs have their snacks." : `${item.name}: delivered to your camp.`),
+          1900,
+        );
       }, 1000);
     });
     body.append(row);
   }
-  body.append(h("p", { class: "note", html: "Leaf is earned with the guild, in raids and wars. Spend it slowly, or don't." }));
+  body.append(
+    h("p", { class: "note", html: "Leaf is earned with the guild, in raids and wars. Spend it slowly, or don't." }),
+  );
 }
 
 // ----- the quest board -----
@@ -384,7 +410,13 @@ function board(body: HTMLElement): void {
       "div",
       { class: `row${q.claimed ? " done" : ready ? " glow" : ""}` },
       iconEl(icons[i] as IconId, 3),
-      h("div", null, h("h3", { text: q.title }), h("p", { text: `${q.text} ${Math.min(q.have, q.need)} of ${q.need}.` }), h("div", { class: "bar" }, fill)),
+      h(
+        "div",
+        null,
+        h("h3", { text: q.title }),
+        h("p", { text: `${q.text} ${Math.min(q.have, q.need)} of ${q.need}.` }),
+        h("div", { class: "bar" }, fill),
+      ),
       q.claimed ? h("span", { class: "note", html: "<b>Claimed</b>" }) : btn,
     );
     btn.addEventListener("click", () => {
@@ -400,7 +432,12 @@ function board(body: HTMLElement): void {
     });
     body.append(row);
   });
-  body.append(h("p", { class: "note", html: "Quests fill as the guild plays. The board is checked at dusk, which it always is." }));
+  body.append(
+    h("p", {
+      class: "note",
+      html: "Quests fill as the guild plays. The board is checked at dusk, which it always is.",
+    }),
+  );
 }
 /** A quest has moved on: redraw the board if it is open, and say so if one has just become ready. */
 let readyBefore = quests.filter((q) => !q.claimed && q.have >= q.need).length;
@@ -419,13 +456,25 @@ const LISTINGS = [
   { who: "Bramblewick", item: "Three raid carries", text: "Will carry. Will also narrate.", price: 45, cur: "leaf" },
   { who: "Tansyfoot", item: "A hand-drawn nametag icon", text: "Your face, but rounder.", price: 20, cur: "leaf" },
   { who: "Oakum", item: "A stack of planks", text: "Sixty-four. Counted by Cinfy.", price: 300, cur: "coin" },
-  { who: "Pipkin", item: "A crab trap, slightly used", text: "Has never caught a crab. Mint condition.", price: 5, cur: "leaf" },
+  {
+    who: "Pipkin",
+    item: "A crab trap, slightly used",
+    text: "Has never caught a crab. Mint condition.",
+    price: 5,
+    cur: "leaf",
+  },
 ] as const;
 const asked = new Set<number>();
 function market(body: HTMLElement): void {
   LISTINGS.forEach((l, i) => {
     const seller = members.find((m) => m.name === l.who) as Member;
-    const btn = h("button", { class: "btn quiet" }, asked.has(i) ? "Asked" : "Ask ", !asked.has(i) && iconEl(l.cur, 1.5), asked.has(i) ? "" : String(l.price));
+    const btn = h(
+      "button",
+      { class: "btn quiet" },
+      asked.has(i) ? "Asked" : "Ask ",
+      !asked.has(i) && iconEl(l.cur, 1.5),
+      asked.has(i) ? "" : String(l.price),
+    );
     btn.disabled = asked.has(i);
     btn.addEventListener("click", () => {
       asked.add(i);
@@ -446,7 +495,12 @@ function market(body: HTMLElement): void {
       ),
     );
   });
-  body.append(h("p", { class: "note", html: "Members list things and favours for each other. Nothing here is sold by the guild." }));
+  body.append(
+    h("p", {
+      class: "note",
+      html: "Members list things and favours for each other. Nothing here is sold by the guild.",
+    }),
+  );
 }
 
 // ----- the Works -----
@@ -484,10 +538,25 @@ function worksPanel(body: HTMLElement): void {
   door.addEventListener("click", () => sfx.go());
   body.append(
     says,
-    h("div", { class: "row" }, iconEl("coin", 3), h("div", null, till, h("p", { text: "Made while you were out and about." })), btn),
-    h("div", { class: "row" }, iconEl("scroll", 3), h("div", null, h("h3", { text: "Guild order: planks" }), planks, h("div", { class: "bar" }, fill)), null),
+    h(
+      "div",
+      { class: "row" },
+      iconEl("coin", 3),
+      h("div", null, till, h("p", { text: "Made while you were out and about." })),
+      btn,
+    ),
+    h(
+      "div",
+      { class: "row" },
+      iconEl("scroll", 3),
+      h("div", null, h("h3", { text: "Guild order: planks" }), planks, h("div", { class: "bar" }, fill)),
+      null,
+    ),
     h("div", { style: "display:flex;justify-content:center;padding:4px 0" }, door),
-    h("p", { class: "note", html: "The Works is your own small factory: miners, belts and orders from the guild. It opens in its own tab." }),
+    h("p", {
+      class: "note",
+      html: "The Works is your own small factory: miners, belts and orders from the guild. It opens in its own tab.",
+    }),
   );
 }
 
@@ -500,8 +569,14 @@ function fire(body: HTMLElement): void {
   const sitBtn = h("button", { class: "btn quiet" });
   const update = (): void => {
     const here = members.filter((m) => m.at === "fire" && !m.route);
-    if (here.length === 0) faces.replaceChildren(h("p", { class: "note", text: "Nobody just now. The fire is keeping itself company." }));
-    else faces.replaceChildren(...here.map((m) => h("div", null, skinEl(m.skin.face, 3), m.you ? (you.sit ? "You, sitting" : "You, standing") : m.name)));
+    if (here.length === 0)
+      faces.replaceChildren(h("p", { class: "note", text: "Nobody just now. The fire is keeping itself company." }));
+    else
+      faces.replaceChildren(
+        ...here.map((m) =>
+          h("div", null, skinEl(m.skin.face, 3), m.you ? (you.sit ? "You, sitting" : "You, standing") : m.name),
+        ),
+      );
     sitBtn.textContent = you.sit ? "Stand up" : "Sit down";
   };
   update();
@@ -513,7 +588,8 @@ function fire(body: HTMLElement): void {
     if (you.sit) {
       tell(line, "There. Warm side's the left side.");
       const mate = members.find((m) => !m.you && m.at === "fire" && !m.route);
-      if (mate) setTimeout(() => say(mate, pick(["budge up, budge up", "evening!", "saved you the good log"]), 2.6), 500);
+      if (mate)
+        setTimeout(() => say(mate, pick(["budge up, budge up", "evening!", "saved you the good log"]), 2.6), 500);
     } else tell(line, "Come back any time. It'll still be dusk.");
     update();
   });
@@ -540,7 +616,14 @@ function fire(body: HTMLElement): void {
     });
     row.append(b);
   }
-  body.append(says, h("p", { class: "note", html: "<b>By the fire now</b>" }), faces, h("div", null, sitBtn), h("p", { class: "note", html: "<b>Say it with a picture</b>" }), row);
+  body.append(
+    says,
+    h("p", { class: "note", html: "<b>By the fire now</b>" }),
+    faces,
+    h("div", null, sitBtn),
+    h("p", { class: "note", html: "<b>Say it with a picture</b>" }),
+    row,
+  );
 }
 
 // ----- the crab pond -----
@@ -616,7 +699,9 @@ function camp(body: HTMLElement): void {
     stats,
     h("p", {
       class: "note",
-      html: things.length ? `At your camp: ${things.join(" and ")}, from Cinfy.` : "Your camp is a tent, a fire and a flag with your face on it. Cinfy sells things for it at the Treasury.",
+      html: things.length
+        ? `At your camp: ${things.join(" and ")}, from Cinfy.`
+        : "Your camp is a tent, a fire and a flag with your face on it. Cinfy sells things for it at the Treasury.",
     }),
   );
 }
@@ -639,10 +724,17 @@ function gate(body: HTMLElement, id: GateId): void {
       faces.replaceChildren();
       return;
     }
-    status.textContent = raid.phase === "wait" ? "A party of four is inside" : raid.phase === "out" ? "A party is on its way here" : "Cleared! The party is heading home";
-    sub.textContent = raid.phase === "wait" ? "The ring fills as they go. When it closes, they come out with a lantern." : "";
+    status.textContent =
+      raid.phase === "wait"
+        ? "A party of four is inside"
+        : raid.phase === "out"
+          ? "A party is on its way here"
+          : "Cleared! The party is heading home";
+    sub.textContent =
+      raid.phase === "wait" ? "The ring fills as they go. When it closes, they come out with a lantern." : "";
     fill.style.width = `${Math.round(raid.ring * 100)}%`;
-    if (faces.children.length !== raid.party.length) faces.replaceChildren(...raid.party.map((m) => h("div", null, skinEl(m.skin.face, 3), m.name)));
+    if (faces.children.length !== raid.party.length)
+      faces.replaceChildren(...raid.party.map((m) => h("div", null, skinEl(m.skin.face, 3), m.name)));
   };
   update();
   live.push(update);
@@ -657,7 +749,10 @@ function gate(body: HTMLElement, id: GateId): void {
     says,
     h("div", { class: "row" }, iconEl("star", 3), h("div", null, status, sub, h("div", { class: "bar" }, fill)), null),
     faces,
-    h("p", { class: "note", html: "Raids are run in the big game. Parties leave from here, and every lantern they win is hung on the rope in town." }),
+    h("p", {
+      class: "note",
+      html: "Raids are run in the big game. Parties leave from here, and every lantern they win is hung on the rope in town.",
+    }),
     h("div", null, rope),
   );
 }
@@ -678,7 +773,10 @@ export function openCard(m: Member): void {
     setTimeout(() => {
       emote(m, "hand", 1.6);
       hop(m);
-      setTimeout(() => say(m, pick(["hello!", "oh, hi!", "hey, you", "*waves back, twice*", "good to see you"]), 2.6), 700);
+      setTimeout(
+        () => say(m, pick(["hello!", "oh, hi!", "hey, you", "*waves back, twice*", "good to see you"]), 2.6),
+        700,
+      );
     }, 350);
   });
   const home = h("button", { class: "btn", text: "Go to your camp" });
@@ -721,9 +819,18 @@ function placeCard(): void {
 export function awayNote(text: string): void {
   const el = $("awaynote");
   el.textContent = text;
-  el.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 250, easing: "ease-out" });
+  el.animate(
+    [
+      { opacity: 0, transform: "translateY(6px)" },
+      { opacity: 1, transform: "none" },
+    ],
+    { duration: 250, easing: "ease-out" },
+  );
 }
-export function showAwayCard(rows: { icon: IconId; title: string; sub: string; gain: string }[], onHome: (from: { x: number; y: number }) => void): void {
+export function showAwayCard(
+  rows: { icon: IconId; title: string; sub: string; gain: string }[],
+  onHome: (from: { x: number; y: number }) => void,
+): void {
   const box = $("awaycard");
   const btn = h("button", { class: "btn big", text: "Good to be home" });
   btn.addEventListener("click", () => {
@@ -736,7 +843,15 @@ export function showAwayCard(rows: { icon: IconId; title: string; sub: string; g
     h(
       "ul",
       null,
-      ...rows.map((r, i) => h("li", { style: `--i:${i}` }, iconEl(r.icon, 2), h("div", null, r.title, h("small", { text: r.sub })), h("b", { text: r.gain }))),
+      ...rows.map((r, i) =>
+        h(
+          "li",
+          { style: `--i:${i}` },
+          iconEl(r.icon, 2),
+          h("div", null, r.title, h("small", { text: r.sub })),
+          h("b", { text: r.gain }),
+        ),
+      ),
     ),
     h("div", { class: "go" }, btn),
   );
@@ -760,7 +875,10 @@ function drawMute(): void {
 export function initUI(l: Lands): void {
   lands = l;
   const me = $("me");
-  me.replaceChildren(h("div", { class: "portrait", style: "padding:2px" }, skinEl(you.skin.face, 3.5)), h("div", { class: "who" }, h("b", { text: "You" }), h("small", { text: "Ranger · level 47" })));
+  me.replaceChildren(
+    h("div", { class: "portrait", style: "padding:2px" }, skinEl(you.skin.face, 3.5)),
+    h("div", { class: "who" }, h("b", { text: "You" }), h("small", { text: "Ranger · level 47" })),
+  );
   me.addEventListener("click", () => {
     unlock();
     act.goTo("camp");

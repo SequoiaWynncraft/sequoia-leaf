@@ -9,7 +9,8 @@ import { sfx } from "./sfx.ts";
 import { COIN, ICON, LEAF } from "./sprites.ts";
 import { save } from "./state.ts";
 
-export type PanelId = "mail" | "quests" | "treasury" | "market" | "works" | "fire" | "crabs" | "profile" | "cabin" | "visit";
+export type PanelId =
+  "mail" | "quests" | "treasury" | "market" | "works" | "fire" | "crabs" | "profile" | "cabin" | "visit";
 
 export interface Letter {
   icon: "leaf" | "coin" | "visit" | "gift" | "note";
@@ -282,8 +283,17 @@ export function mateCard(id: string, x: number, y: number): void {
   showCard(
     x,
     y,
-    h("div", "talk", camp.face(id, 4), h("div", "", h("h3", "", m.name), h("span", "note", `${m.rank}, level ${m.level}`))),
-    h("span", "note", home ? "At home, and glad you came." : here ? "Here, by your fire." : `At their camp, ${m.doing}.`),
+    h(
+      "div",
+      "talk",
+      camp.face(id, 4),
+      h("div", "", h("h3", "", m.name), h("span", "note", `${m.rank}, level ${m.level}`)),
+    ),
+    h(
+      "span",
+      "note",
+      home ? "At home, and glad you came." : here ? "Here, by your fire." : `At their camp, ${m.doing}.`,
+    ),
     h(
       "div",
       "two",
@@ -395,7 +405,13 @@ function staggered(rows: HTMLElement[]): HTMLElement[] {
   return rows;
 }
 
-const LETTER_ICON: Record<Letter["icon"], Spr> = { leaf: LEAF, coin: COIN, visit: ICON.fire, gift: ICON.tent, note: ICON.mail };
+const LETTER_ICON: Record<Letter["icon"], Spr> = {
+  leaf: LEAF,
+  coin: COIN,
+  visit: ICON.fire,
+  gift: ICON.tent,
+  note: ICON.mail,
+};
 
 const BUILD: Record<PanelId, () => Kid[]> = {
   mail: () => {
@@ -430,7 +446,14 @@ const BUILD: Record<PanelId, () => Kid[]> = {
           "div",
           "row",
           leafAmt(q.leaf),
-          h("div", "", q.name, h("small", "", `${q.what}: ${got} of ${q.need}`), bar, q.note ? h("small", "", q.note) : null),
+          h(
+            "div",
+            "",
+            q.name,
+            h("small", "", `${q.what}: ${got} of ${q.need}`),
+            bar,
+            q.note ? h("small", "", q.note) : null,
+          ),
           claimed
             ? h("span", "note", "Claimed")
             : btn(done ? "gold" : "", [done ? "Claim" : "..."], (b) => {
@@ -448,7 +471,12 @@ const BUILD: Record<PanelId, () => Kid[]> = {
   treasury: () => {
     const all = SHOP.every((s) => save.owned.includes(s.id));
     return [
-      h("div", "talk", camp.face("cinfy", 5), h("p", "", h("b", "", "Cinfy"), all && cinfySays === TREASURY_LINES.hello ? TREASURY_LINES.all : cinfySays)),
+      h(
+        "div",
+        "talk",
+        camp.face("cinfy", 5),
+        h("p", "", h("b", "", "Cinfy"), all && cinfySays === TREASURY_LINES.hello ? TREASURY_LINES.all : cinfySays),
+      ),
       ...staggered(
         SHOP.map((s) => {
           const owned = save.owned.includes(s.id);
@@ -479,7 +507,11 @@ const BUILD: Record<PanelId, () => Kid[]> = {
           );
         }),
       ),
-      h("span", "note", "Leaf comes from raiding and holding land together. It buys what is nice to have, never what wins."),
+      h(
+        "span",
+        "note",
+        "Leaf comes from raiding and holding land together. It buys what is nice to have, never what wins.",
+      ),
     ];
   },
 
@@ -512,9 +544,19 @@ const BUILD: Record<PanelId, () => Kid[]> = {
 
   works: () => [
     h("p", "note", "Your small factory. It runs while you are out, and what it makes is paid in Coins."),
-    h("div", "row", pic(ICON.gear, 2), h("div", "", "Made since you last looked", h("small", "", "The tray on the bench fills as it runs.")), coinAmt(camp.worksMade())),
+    h(
+      "div",
+      "row",
+      pic(ICON.gear, 2),
+      h("div", "", "Made since you last looked", h("small", "", "The tray on the bench fills as it runs.")),
+      coinAmt(camp.worksMade()),
+    ),
     btn("gold", [pic(ICON.gear, 1), "Step into the Works"], () => openWorks()),
-    Object.assign(h("a", "note", "Or open it in its own tab"), { href: "../works/", target: "_blank", rel: "noopener" }),
+    Object.assign(h("a", "note", "Or open it in its own tab"), {
+      href: "../works/",
+      target: "_blank",
+      rel: "noopener",
+    }),
   ],
 
   fire: () => {
@@ -531,7 +573,16 @@ const BUILD: Record<PanelId, () => Kid[]> = {
         seated ? btn("", ["Stand up"], () => camp.stand()) : btn("gold", ["Sit down"], () => camp.sit()),
         btn("", ["Add a log"], () => camp.addLog()),
       ),
-      h("div", "grid", emote("Wave", "wave"), emote("Cheer", "cheer"), emote("Laugh", "laugh"), emote("Heart", "heart"), emote("Toast", "toast"), emote("erm", "erm")),
+      h(
+        "div",
+        "grid",
+        emote("Wave", "wave"),
+        emote("Cheer", "cheer"),
+        emote("Laugh", "laugh"),
+        emote("Heart", "heart"),
+        emote("Toast", "toast"),
+        emote("erm", "erm"),
+      ),
     ];
   },
 
@@ -562,7 +613,20 @@ const BUILD: Record<PanelId, () => Kid[]> = {
     const name = h("h3", "", save.handle);
     name.style.cssText = "margin:0;color:var(--gold);font-size:16px";
     return [
-      h("div", "talk", pic(camp.body(), 3), h("div", "", name, h("span", "note", `${rank} of the guild`), h("span", "note", "Level 23"), bar, h("small", "note", "640 of 900 to level 24"))),
+      h(
+        "div",
+        "talk",
+        pic(camp.body(), 3),
+        h(
+          "div",
+          "",
+          name,
+          h("span", "note", `${rank} of the guild`),
+          h("span", "note", "Level 23"),
+          bar,
+          h("small", "note", "640 of 900 to level 24"),
+        ),
+      ),
       stat("Leaf", leafAmt(save.leaf)),
       stat("Coins", coinAmt(save.coins)),
       stat("Raids this week", "7"),
@@ -615,7 +679,9 @@ export function showTray(on: boolean): void {
   tray.replaceChildren(
     ...DECOS.map((kind) => {
       const n = save.tray[kind] ?? 0;
-      const b = btn(`slot${n ? "" : " none"}`, [pic(camp.deco(kind), 2), h("i", "", String(n))], () => camp.trayAdd(kind));
+      const b = btn(`slot${n ? "" : " none"}`, [pic(camp.deco(kind), 2), h("i", "", String(n))], () =>
+        camp.trayAdd(kind),
+      );
       b.title = NAMES[kind];
       return b;
     }),

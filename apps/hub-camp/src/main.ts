@@ -1,9 +1,9 @@
+import { MATES } from "./content.ts";
 /**
  * Your Camp: the home screen as one small clearing that belongs to the member. This file starts
  * it, keeps the frames coming, and passes touches to the scene.
  */
 import { inventFigure, loadSkin } from "./figure.ts";
-import { MATES } from "./content.ts";
 import { unlock } from "./sfx.ts";
 import { drawSheet } from "./sheet.ts";
 import { boot, type Debug, decorating, drag, drop, frame, grab, hover, resize, scenePoint, tap } from "./world.ts";

@@ -12,6 +12,21 @@
     },
     {
       "path": "./apps/works"
+    },
+    {
+      "path": "./apps/battler"
+    },
+    {
+      "path": "./apps/hub-camp"
+    },
+    {
+      "path": "./apps/hub-map"
+    },
+    {
+      "path": "./apps/hub-street"
+    },
+    {
+      "path": "./apps/hub-town"
     }
   ]
 }

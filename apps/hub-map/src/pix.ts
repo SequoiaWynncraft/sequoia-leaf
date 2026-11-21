@@ -85,7 +85,18 @@ const PINE_L = [
   "....ba.....",
   "....ba.....",
 ];
-const PINE_S = ["...2...", "..321..", "..321..", ".33210.", ".32210.", "3322100", "2322100", ".2.10.0", "...b...", "...b..."];
+const PINE_S = [
+  "...2...",
+  "..321..",
+  "..321..",
+  ".33210.",
+  ".32210.",
+  "3322100",
+  "2322100",
+  ".2.10.0",
+  "...b...",
+  "...b...",
+];
 const LEAF_L = [
   "....3443....",
   "..33444322..",
@@ -101,7 +112,17 @@ const LEAF_L = [
   ".....ba.....",
   ".....ba.....",
 ];
-const LEAF_S = ["..3443..", ".344322.", "34433211", "34332211", "33322110", ".222110.", "..1100..", "...ba...", "...ba..."];
+const LEAF_S = [
+  "..3443..",
+  ".344322.",
+  "34433211",
+  "34332211",
+  "33322110",
+  ".222110.",
+  "..1100..",
+  "...ba...",
+  "...ba...",
+];
 const BUSH = [".232.", "32211", "22110", ".110."];
 const ROCK_A = [".sr...", "srrq..", "srqqp.", "rqqpp.", ".qpp.."];
 const ROCK_B = ["..sr.", ".srq.", "srqqp", ".qpp."];
@@ -318,10 +339,29 @@ export const ICONS = {
     ".kgggook.",
     "..kkkkk..",
   ]),
-  note: art(["...kkkkk.", "...khhhk.", "...khkkk.", "...khk...", "...khk...", ".kkkhk...", "khhhhk...", "khhhhk...", ".kkkk...."]),
+  note: art([
+    "...kkkkk.",
+    "...khhhk.",
+    "...khkkk.",
+    "...khk...",
+    "...khk...",
+    ".kkkhk...",
+    "khhhhk...",
+    "khhhhk...",
+    ".kkkk....",
+  ]),
   pin: art(["..kkk..", ".kUUUk.", "kUcUUvk", "kUUUUvk", ".kUUvk.", "..kvk..", "...k..."]),
   sound: art(["....k....", "...kck.k.", "kkkcck..k", "kccccck.k", "kccccck.k", "kkkcck..k", "...kck.k.", "....k...."]),
-  mute: art(["....k....", "...kck...", "kkkcck.k.k", "kccccck.k.", "kccccck.k.", "kkkcck.k.k", "...kck...", "....k...."]),
+  mute: art([
+    "....k....",
+    "...kck...",
+    "kkkcck.k.k",
+    "kccccck.k.",
+    "kccccck.k.",
+    "kkkcck.k.k",
+    "...kck...",
+    "....k....",
+  ]),
   face: art(["kkkkkkkk"]),
 };
 export type IconId = keyof typeof ICONS;

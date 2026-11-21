@@ -149,7 +149,17 @@ function fromSheet(sheet: HTMLCanvasElement): Skin {
     }
 
   const [doll, dg] = makeCanvas(16, 32);
-  const part = (sx: number, sy: number, w: number, h: number, dx: number, dy: number, ox: number, oy: number, flip = false): void => {
+  const part = (
+    sx: number,
+    sy: number,
+    w: number,
+    h: number,
+    dx: number,
+    dy: number,
+    ox: number,
+    oy: number,
+    flip = false,
+  ): void => {
     for (let y = 0; y < h; y++)
       for (let x = 0; x < w; x++) {
         const c = at(sx + x, sy + y, ox + x, oy + y);
@@ -171,8 +181,12 @@ function fromSheet(sheet: HTMLCanvasElement): Skin {
   const armRows = [1, 4, 7, 9, 11];
   const legRows = [2, 7, 11];
   const body = (c: number, r: number): string =>
-    at(20 + (bodyCols[c] as number), 20 + (bodyRows[r] as number), 20 + (bodyCols[c] as number), 36 + (bodyRows[r] as number)) ??
-    P.plum2;
+    at(
+      20 + (bodyCols[c] as number),
+      20 + (bodyRows[r] as number),
+      20 + (bodyCols[c] as number),
+      36 + (bodyRows[r] as number),
+    ) ?? P.plum2;
   const arm = (r: number): string => at(45, 20 + (armRows[r] as number), 45, 36 + (armRows[r] as number)) ?? P.plum1;
   const leg = (c: number, r: number): string => at(5 + c, 20 + (legRows[r] as number)) ?? P.bark1;
 
@@ -210,16 +224,20 @@ function fromSheet(sheet: HTMLCanvasElement): Skin {
     } else {
       const liftL = f === FRAME.stepA ? 1 : 0;
       const liftR = f === FRAME.stepB ? 1 : 0;
-      for (let r = 0; r < 3 - liftL; r++) for (let col = 0; col < 2; col++) dot(4 + col, 14 + r, leg(col, r === 2 - liftL ? 2 : r));
-      for (let r = 0; r < 3 - liftR; r++) for (let col = 0; col < 2; col++) dot(6 + col, 14 + r, leg(1 - col, r === 2 - liftR ? 2 : r));
+      for (let r = 0; r < 3 - liftL; r++)
+        for (let col = 0; col < 2; col++) dot(4 + col, 14 + r, leg(col, r === 2 - liftL ? 2 : r));
+      for (let r = 0; r < 3 - liftR; r++)
+        for (let col = 0; col < 2; col++) dot(6 + col, 14 + r, leg(1 - col, r === 2 - liftR ? 2 : r));
     }
     // A dark edge all round, so a figure reads against grass, road or roof.
     const px = cg.getImageData(0, 0, FW, FH).data;
-    const solid = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < FW && y < FH && (px[(y * FW + x) * 4 + 3] as number) > 0;
+    const solid = (x: number, y: number): boolean =>
+      x >= 0 && y >= 0 && x < FW && y < FH && (px[(y * FW + x) * 4 + 3] as number) > 0;
     cg.fillStyle = P.ink;
     for (let y = 0; y < FH; y++)
       for (let x = 0; x < FW; x++)
-        if (!solid(x, y) && (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))) cg.fillRect(x, y, 1, 1);
+        if (!solid(x, y) && (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)))
+          cg.fillRect(x, y, 1, 1);
     g.drawImage(cell, f * FW, 0);
   }
   return { sheet, face, frames, doll };

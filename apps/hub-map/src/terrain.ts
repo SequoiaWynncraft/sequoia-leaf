@@ -120,7 +120,8 @@ export function buildTerrain(): Terrain {
   });
   for (let y = POND.y - POND.ry - 3; y <= POND.y + POND.ry + 3; y++)
     for (let x = POND.x - POND.rx - 3; x <= POND.x + POND.rx + 3; x++) {
-      const d = ((x - POND.x) / POND.rx) ** 2 + ((y - POND.y) / POND.ry) ** 2 + (noise(x * 0.2, y * 0.2, 8) - 0.5) * 0.4;
+      const d =
+        ((x - POND.x) / POND.rx) ** 2 + ((y - POND.y) / POND.ry) ** 2 + (noise(x * 0.2, y * 0.2, 8) - 0.5) * 0.4;
       if (d < 1) riv[y * W + x] = 2;
     }
   disc(block, POND.x, POND.y, 34, 1);
@@ -302,7 +303,11 @@ export function buildTerrain(): Terrain {
       if (water) {
         kind[i] = KIND.river;
         const edge =
-          !riv[i - 1] || !riv[i + 1] || !riv[i - W] || !riv[i + W] ? ((sea[i + 1] as number) > 0 ? false : true) : false;
+          !riv[i - 1] || !riv[i + 1] || !riv[i - W] || !riv[i + W]
+            ? (sea[i + 1] as number) > 0
+              ? false
+              : true
+            : false;
         if (edge) put(i, WATER[1] as number);
         else if (water === 2) put(i, WATER[hash2(x >> 2, y, 3) > 0.8 ? 4 : 3] as number);
         else put(i, WATER[hash2(x >> 1, y >> 2, 3) > 0.78 ? 3 : 2] as number);
@@ -552,7 +557,13 @@ export function buildTerrain(): Terrain {
         R(x0 + 33, y - 11, 4, 4, P.gold2);
         for (let r = 0; r < 14; r++) {
           const inset = Math.max(0, 3 - r);
-          R(x0 - 2 + inset, y - 29 + r, 44 - inset * 2, 1, r === 0 ? P.bark4 : r % 3 === 2 ? P.bark0 : r % 3 === 1 ? P.bark1 : P.bark2);
+          R(
+            x0 - 2 + inset,
+            y - 29 + r,
+            44 - inset * 2,
+            1,
+            r === 0 ? P.bark4 : r % 3 === 2 ? P.bark0 : r % 3 === 1 ? P.bark1 : P.bark2,
+          );
           R(x0 - 2 + inset, y - 29 + r, 1, 1, P.bark4);
         }
         R(x0 - 2, y - 15, 44, 1, P.ink);
@@ -882,7 +893,14 @@ export function buildTerrain(): Terrain {
       R(cx - d, cy + 1, 1, w, P.gold0);
       R(cx + d, cy - w, 1, w + 1, P.gold1);
       R(cx + d, cy + 1, 1, w, P.gold0);
-      if (d <= 5) for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const) R(cx + sx * d, cy + sy * d, 1, 1, P.w4);
+      if (d <= 5)
+        for (const [sx, sy] of [
+          [1, 1],
+          [1, -1],
+          [-1, 1],
+          [-1, -1],
+        ] as const)
+          R(cx + sx * d, cy + sy * d, 1, 1, P.w4);
     }
     R(cx - 1, cy - 1, 3, 3, P.cream);
     R(cx, cy, 1, 1, P.plum2);
@@ -969,7 +987,8 @@ export function buildTerrain(): Terrain {
       let clear = true;
       for (let yy = y - h; yy <= y + 2 && clear; yy += 3) {
         const reach = yy < y - h + 30 ? 12 : 4;
-        for (let xx = x - reach; xx <= x + reach && clear; xx += 4) if (roadNear(xx, yy) || riv[Math.max(0, yy) * W + xx]) clear = false;
+        for (let xx = x - reach; xx <= x + reach && clear; xx += 4)
+          if (roadNear(xx, yy) || riv[Math.max(0, yy) * W + xx]) clear = false;
       }
       if (!clear) continue;
       if (guarded.some((b) => x > b.x0 - 12 && x < b.x1 + 12 && y > b.y0 - 4 && y < b.y1 + h)) continue;

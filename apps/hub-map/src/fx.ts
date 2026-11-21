@@ -18,7 +18,15 @@ export type Part = {
   size: number;
 };
 export type Ring = { x: number; y: number; t: number; life: number; r: number; col: string; water: boolean };
-export type Float = { x: number; y: number; text: string; col: string; t: number; life: number; icon: HTMLCanvasElement | null };
+export type Float = {
+  x: number;
+  y: number;
+  text: string;
+  col: string;
+  t: number;
+  life: number;
+  icon: HTMLCanvasElement | null;
+};
 export type Flight = {
   icon: HTMLCanvasElement;
   x0: number;
@@ -81,7 +89,18 @@ export function leaves(x: number, y: number, n = 6, cols: readonly string[] = [P
 
 export function dust(x: number, y: number, n = 3, col = "#c9a984"): void {
   for (let i = 0; i < n && parts.length < CAP; i++)
-    parts.push({ kind: "dust", x: x + rand(-1.5, 1.5), y, vx: rand(-6, 6), vy: rand(-7, -2), g: 0, t: 0, life: rand(0.35, 0.6), col, size: 1 });
+    parts.push({
+      kind: "dust",
+      x: x + rand(-1.5, 1.5),
+      y,
+      vx: rand(-6, 6),
+      vy: rand(-7, -2),
+      g: 0,
+      t: 0,
+      life: rand(0.35, 0.6),
+      col,
+      size: 1,
+    });
 }
 
 export function smoke(x: number, y: number, col = "#b9a6c4"): void {
@@ -112,7 +131,14 @@ export function ring(x: number, y: number, col: string, r = 16, life = 0.7, wate
   rings.push({ x, y, t: 0, life, r, col, water });
 }
 
-export function float(x: number, y: number, text: string, col: string = P.cream, icon: HTMLCanvasElement | null = null, life = 1.7): void {
+export function float(
+  x: number,
+  y: number,
+  text: string,
+  col: string = P.cream,
+  icon: HTMLCanvasElement | null = null,
+  life = 1.7,
+): void {
   floats.push({ x, y, text, col, t: 0, life, icon });
 }
 

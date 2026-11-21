@@ -36,8 +36,36 @@ import {
   WELCOME,
 } from "./content.ts";
 import { drawFigure, type Face, type Figure, inventFigure, type Pose } from "./figure.ts";
-import { canvas, clamp, type Cv, type G2, glow, INK as I, lerp, noise, outlined, pick, put, R, type Spr, TAU } from "./gfx.ts";
-import { bannerArt, bench as benchArt, board as boardArt, fireArt, gears, type Home, home, pond, ROOFS, rug, shelf as shelfArt, signpost } from "./props.ts";
+import {
+  canvas,
+  clamp,
+  type Cv,
+  type G2,
+  glow,
+  INK as I,
+  lerp,
+  noise,
+  outlined,
+  pick,
+  put,
+  R,
+  type Spr,
+  TAU,
+} from "./gfx.ts";
+import {
+  bannerArt,
+  bench as benchArt,
+  board as boardArt,
+  fireArt,
+  gears,
+  type Home,
+  home,
+  pond,
+  ROOFS,
+  rug,
+  shelf as shelfArt,
+  signpost,
+} from "./props.ts";
 import { setMuted, sfx } from "./sfx.ts";
 import {
   BANG,
@@ -95,7 +123,12 @@ const DECO: Record<DecoKind, Spr> = {
   statue: outlined(CRAB_STATUE),
   flag: outlined(FLAG),
 };
-const CAT_O = { walkA: outlined(CAT.walkA), walkB: outlined(CAT.walkB), sit: outlined(CAT.sit), sleep: outlined(CAT.sleep) };
+const CAT_O = {
+  walkA: outlined(CAT.walkA),
+  walkB: outlined(CAT.walkB),
+  sit: outlined(CAT.sit),
+  sleep: outlined(CAT.sleep),
+};
 const CAT_LO = { walkA: outlined(CAT_L.walkA), walkB: outlined(CAT_L.walkB) };
 const FOX_O = { sit: outlined(FOX.sit), walkA: outlined(FOX.walkA), walkB: outlined(FOX.walkB) };
 const FOX_RO = { sit: outlined(FOX_R.sit), walkA: outlined(FOX_R.walkA), walkB: outlined(FOX_R.walkB) };
@@ -202,7 +235,22 @@ interface Crab {
   state: "home" | "out" | "back";
 }
 
-type PartKind = "spark" | "smoke" | "needle" | "heart" | "note" | "zed" | "star" | "dust" | "loot" | "drop" | "paper" | "steam" | "marsh" | "gift" | "ring";
+type PartKind =
+  | "spark"
+  | "smoke"
+  | "needle"
+  | "heart"
+  | "note"
+  | "zed"
+  | "star"
+  | "dust"
+  | "loot"
+  | "drop"
+  | "paper"
+  | "steam"
+  | "marsh"
+  | "gift"
+  | "ring";
 interface Part {
   k: PartKind;
   x: number;
@@ -297,7 +345,8 @@ const isFixed = (kind: Kind): kind is FixedId => FIXED.some((f) => f === kind);
 // ---------- laying a camp out ----------
 
 function infoOf(th: Thing): Info {
-  if (th.kind === "cabin") return { foot: homeArt.foot, w: homeArt.shut.w - 4, h: homeArt.shut.h - 4, stand: [homeArt.door[0], 13] };
+  if (th.kind === "cabin")
+    return { foot: homeArt.foot, w: homeArt.shut.w - 4, h: homeArt.shut.h - 4, stand: [homeArt.door[0], 13] };
   return INFO[th.kind];
 }
 function place(th: Thing): void {
@@ -343,7 +392,25 @@ function rebuild(): void {
 }
 
 function makeActor(id: string, name: string, x: number, y: number): Actor {
-  return { id, name, fig: figOf(id), x, y, face: "down", pose: "stand", poseT: 0, walk: 0, seat: -1, plan: [], say: "", sayT: 0, hop: 0, idle: 0, gone: false, sat: false };
+  return {
+    id,
+    name,
+    fig: figOf(id),
+    x,
+    y,
+    face: "down",
+    pose: "stand",
+    poseT: 0,
+    walk: 0,
+    seat: -1,
+    plan: [],
+    say: "",
+    sayT: 0,
+    hop: 0,
+    idle: 0,
+    gone: false,
+    sat: false,
+  };
 }
 
 function spot(u: number, v: number): [number, number] {
@@ -386,7 +453,19 @@ function enter(m: Mate | null): void {
   delivery = null;
   pets = spec.pets.map((p, n) => {
     const [x, y] = freeSpot(0.25 + 0.5 * ((n * 0.37) % 1), 0.45 + 0.4 * ((n * 0.61) % 1));
-    return { spec: p, x, y, tx: x, ty: y, state: "idle", t: 1 + n, dir: n % 2 ? 1 : -1, joy: 0, phase: n * 1.7, zed: 0 };
+    return {
+      spec: p,
+      x,
+      y,
+      tx: x,
+      ty: y,
+      state: "idle",
+      t: 1 + n,
+      dir: n % 2 ? 1 : -1,
+      joy: 0,
+      phase: n * 1.7,
+      zed: 0,
+    };
   });
   crabs = [];
   hide = null;
@@ -395,7 +474,16 @@ function enter(m: Mate | null): void {
     const count = m ? 4 : 9;
     for (let n = 1; n <= count; n++) {
       const a = (n / count) * TAU;
-      const c: Crab = { n, x: pool.x + Math.cos(a) * 40, y: pool.y + Math.sin(a) * 19, tx: 0, ty: 0, t: n * 0.6, hop: 0, state: "home" };
+      const c: Crab = {
+        n,
+        x: pool.x + Math.cos(a) * 40,
+        y: pool.y + Math.sin(a) * 19,
+        tx: 0,
+        ty: 0,
+        t: n * 0.6,
+        hop: 0,
+        state: "home",
+      };
       c.tx = c.x;
       c.ty = c.y;
       if (m || n !== save.missing) crabs.push(c);
@@ -405,7 +493,12 @@ function enter(m: Mate | null): void {
   bannerAt = spec.banner >= 0 ? -99 : -99;
   lightsLit = spec.lights ? 9 : 0;
   flies.length = 0;
-  for (let n = 0; n < (view.tall ? 8 : 12); n++) flies.push({ x: view.gx0 + Math.random() * (view.gx1 - view.gx0), y: view.gy0 - 10 + Math.random() * (view.gy1 - view.gy0), ph: Math.random() * 9 });
+  for (let n = 0; n < (view.tall ? 8 : 12); n++)
+    flies.push({
+      x: view.gx0 + Math.random() * (view.gx1 - view.gx0),
+      y: view.gy0 - 10 + Math.random() * (view.gy1 - view.gy0),
+      ph: Math.random() * 9,
+    });
   // people
   const [tx, ty] = view.trail;
   me = makeActor("me", save.handle, tx, ty);
@@ -667,7 +760,10 @@ function go(a: Actor, x: number, y: number, fast: boolean): Step {
 }
 function standBy(th: Thing): [number, number] {
   const inf = infoOf(th);
-  return [clamp(th.x + inf.stand[0], view.gx0 + 2, view.gx1 - 2), clamp(th.y + inf.stand[1], view.gy0 + 6, view.gy1 + 4)];
+  return [
+    clamp(th.x + inf.stand[0], view.gx0 + 2, view.gx1 - 2),
+    clamp(th.y + inf.stand[1], view.gy0 + 6, view.gy1 + 4),
+  ];
 }
 function faceTo(a: Actor, th: Thing): Face {
   const dx = th.x - a.x;
@@ -689,7 +785,11 @@ function wander(): void {
   } else if (r < 0.8 && usable.length) {
     const th = pick(usable);
     const [x, y] = standBy(th);
-    me.plan = [go(me, x, y, false), { do: "call", fn: () => (me.face = faceTo(me, th)) }, { do: "wait", s: 2.5 + Math.random() * 3 }];
+    me.plan = [
+      go(me, x, y, false),
+      { do: "call", fn: () => (me.face = faceTo(me, th)) },
+      { do: "wait", s: 2.5 + Math.random() * 3 },
+    ];
   } else {
     const [x, y] = freeSpot(0.15 + Math.random() * 0.7, 0.35 + Math.random() * 0.6);
     me.plan = [go(me, x, y, false), { do: "face", face: "down" }, { do: "wait", s: 2 + Math.random() * 3 }];
@@ -734,7 +834,12 @@ function arrive(m: Mate, quick = false): void {
   ];
   if (mailbox) {
     const [mx, my] = standBy(mailbox);
-    a.plan.push(go(a, mx, my, false), { do: "face", face: "left" }, { do: "call", fn: () => leaveGift(m) }, { do: "wait", s: 1.2 });
+    a.plan.push(
+      go(a, mx, my, false),
+      { do: "face", face: "left" },
+      { do: "call", fn: () => leaveGift(m) },
+      { do: "wait", s: 1.2 },
+    );
   }
   a.plan.push({ do: "say", text: pick(BYE) }, { do: "wait", s: 1.2 }, { do: "leave" });
   ui.feed(`${m.name} wandered into your camp.`, true);
@@ -752,7 +857,13 @@ function leaveGift(m: Mate): void {
   const mailbox = thing("mailbox");
   if (!mailbox) return;
   const [kind, words] = pick(GIFTS);
-  letters.push({ icon: "gift", title: `From ${m.name}: ${words}`, detail: "It goes in your tray, for decorating.", deco: kind, faces: [m.id] });
+  letters.push({
+    icon: "gift",
+    title: `From ${m.name}: ${words}`,
+    detail: "It goes in your tray, for decorating.",
+    deco: kind,
+    faces: [m.id],
+  });
   mailbox.bump = T;
   burst("gift", mailbox.x + 10, mailbox.y - 14, 1);
   sfx.mail();
@@ -796,7 +907,10 @@ function tickPet(p: Pet, dt: number): void {
     }
     if (r < 0.75) {
       // a wander, sometimes toward whoever is home
-      const near = kind === "fox" && Math.random() < 0.5 ? [me.x + (Math.random() - 0.5) * 30, me.y + 8 + Math.random() * 8] : [p.x + (Math.random() - 0.5) * 70, p.y + (Math.random() - 0.5) * 40];
+      const near =
+        kind === "fox" && Math.random() < 0.5
+          ? [me.x + (Math.random() - 0.5) * 30, me.y + 8 + Math.random() * 8]
+          : [p.x + (Math.random() - 0.5) * 70, p.y + (Math.random() - 0.5) * 40];
       const [x, y] = [clamp(near[0]!, view.gx0 + 8, view.gx1 - 8), clamp(near[1]!, view.gy0 + 12, view.gy1 - 2)];
       if (!things.some((th) => inFoot(th, x, y, 1.2))) {
         p.tx = x;
@@ -840,7 +954,14 @@ function petPleased(p: Pet): void {
   if (kind === "cat") sfx.purr();
   else if (kind === "fox") sfx.yip();
   else sfx.blob();
-  ui.feed(kind === "cat" ? `${p.spec.name} purrs.` : kind === "fox" ? `${p.spec.name} does a small happy spin.` : `${p.spec.name} wobbles, delighted.`, true);
+  ui.feed(
+    kind === "cat"
+      ? `${p.spec.name} purrs.`
+      : kind === "fox"
+        ? `${p.spec.name} does a small happy spin.`
+        : `${p.spec.name} wobbles, delighted.`,
+    true,
+  );
 }
 
 // ---------- crabs ----------
@@ -936,17 +1057,54 @@ function burst(k: PartKind, x: number, y: number, n: number): void {
   for (let i = 0; i < n; i++) {
     const a = Math.random() * TAU;
     const s = 8 + Math.random() * 22;
-    if (k === "heart" || k === "note" || k === "gift") add(k, x + (i - (n - 1) / 2) * 7, y, (Math.random() - 0.5) * 8, -16 - Math.random() * 6, 1.3, i * 0.12);
+    if (k === "heart" || k === "note" || k === "gift")
+      add(k, x + (i - (n - 1) / 2) * 7, y, (Math.random() - 0.5) * 8, -16 - Math.random() * 6, 1.3, i * 0.12);
     else if (k === "star") add(k, x, y, Math.cos(a) * s, Math.sin(a) * s - 6, 0.6 + Math.random() * 0.4, Math.random());
-    else if (k === "spark") add(k, x + (Math.random() - 0.5) * 10, y, (Math.random() - 0.5) * 22, -20 - Math.random() * 34, 0.7 + Math.random() * 0.8, Math.random());
-    else if (k === "drop") add(k, x, y, Math.cos(a) * s * 0.9, -22 - Math.random() * 26, 0.6 + Math.random() * 0.3, Math.random());
-    else if (k === "paper") add(k, x + (Math.random() - 0.5) * 20, y, (Math.random() - 0.5) * 20, -10 - Math.random() * 14, 1.4, Math.random() * 6);
-    else if (k === "needle") add(k, x + (Math.random() - 0.5) * 26, y + Math.random() * 6, (Math.random() - 0.5) * 6, 9 + Math.random() * 10, 2.6 + Math.random() * 1.6, Math.random() * 6);
+    else if (k === "spark")
+      add(
+        k,
+        x + (Math.random() - 0.5) * 10,
+        y,
+        (Math.random() - 0.5) * 22,
+        -20 - Math.random() * 34,
+        0.7 + Math.random() * 0.8,
+        Math.random(),
+      );
+    else if (k === "drop")
+      add(k, x, y, Math.cos(a) * s * 0.9, -22 - Math.random() * 26, 0.6 + Math.random() * 0.3, Math.random());
+    else if (k === "paper")
+      add(
+        k,
+        x + (Math.random() - 0.5) * 20,
+        y,
+        (Math.random() - 0.5) * 20,
+        -10 - Math.random() * 14,
+        1.4,
+        Math.random() * 6,
+      );
+    else if (k === "needle")
+      add(
+        k,
+        x + (Math.random() - 0.5) * 26,
+        y + Math.random() * 6,
+        (Math.random() - 0.5) * 6,
+        9 + Math.random() * 10,
+        2.6 + Math.random() * 1.6,
+        Math.random() * 6,
+      );
     else add(k, x, y, Math.cos(a) * s, Math.sin(a) * s * 0.5, 0.5, Math.random());
   }
 }
 function puff(x: number, y: number, n: number): void {
-  for (let i = 0; i < n; i++) add("dust", x + (Math.random() - 0.5) * 6, y, (Math.random() - 0.5) * 16, -3 - Math.random() * 5, 0.45 + Math.random() * 0.2);
+  for (let i = 0; i < n; i++)
+    add(
+      "dust",
+      x + (Math.random() - 0.5) * 6,
+      y,
+      (Math.random() - 0.5) * 16,
+      -3 - Math.random() * 5,
+      0.45 + Math.random() * 0.2,
+    );
 }
 
 /** Leaf or coins fly from a place in the camp up to the purse, and count there as they land. */
@@ -955,7 +1113,15 @@ function loot(which: "leaf" | "coins", amount: number, x: number, y: number): vo
   const [px, py] = ui.purseSpot(which);
   const each = amount / n;
   for (let i = 0; i < n; i++) {
-    const p = add("loot", x, y, (Math.random() - 0.5) * 70, -30 - Math.random() * 50, 0.75 + i * 0.07, which === "leaf" ? 0 : 1);
+    const p = add(
+      "loot",
+      x,
+      y,
+      (Math.random() - 0.5) * 70,
+      -30 - Math.random() * 50,
+      0.75 + i * 0.07,
+      which === "leaf" ? 0 : 1,
+    );
     p.tx = px / view.k;
     p.ty = py / view.k;
     p.fn = () => {
@@ -1055,7 +1221,10 @@ function liveEvent(kind?: "raid" | "land" | "level"): void {
     ui.refresh();
   } else {
     const here = actors.filter((a) => a !== me && !a.gone);
-    const who = here.length && Math.random() < 0.7 ? MATES.find((m) => m.id === pick(here).id)! : MATES[(eventN * 5) % MATES.length]!;
+    const who =
+      here.length && Math.random() < 0.7
+        ? MATES.find((m) => m.id === pick(here).id)!
+        : MATES[(eventN * 5) % MATES.length]!;
     who.level++;
     const a = actors.find((o) => o.id === who.id);
     if (a) {
@@ -1102,7 +1271,8 @@ function touch(th: Thing): void {
     sfx.gear();
   } else if (k === "cabin") {
     doorT = T + 1.6;
-    for (let i = 0; i < 3; i++) if (homeArt.chimney) add("smoke", th.x + homeArt.chimney[0], th.y + homeArt.chimney[1], 0, -9 - i * 3, 2.6, i);
+    for (let i = 0; i < 3; i++)
+      if (homeArt.chimney) add("smoke", th.x + homeArt.chimney[0], th.y + homeArt.chimney[1], 0, -9 - i * 3, 2.6, i);
     sfx.knock();
   } else if (k === "mailbox") {
     sfx.mail();
@@ -1113,7 +1283,14 @@ function touch(th: Thing): void {
     sfx.pop();
   } else if (k === "gnome") {
     sfx.hop();
-    ui.feed(pick(["The gnome says nothing. It never does.", "The gnome has moved since yesterday. Probably.", "You feel judged by a gnome."]), true);
+    ui.feed(
+      pick([
+        "The gnome says nothing. It never does.",
+        "The gnome has moved since yesterday. Probably.",
+        "You feel judged by a gnome.",
+      ]),
+      true,
+    );
   } else if (k === "statue") {
     sfx.crab();
     ui.feed("A stone crab. It is accounted for.", true);
@@ -1150,7 +1327,12 @@ function useAtHome(th: Thing): void {
   else if (k === "sign")
     send(th, () => {
       const [x, y] = css(th.x, th.y - 44);
-      ui.signCard(x, y, () => panel("treasury"), () => panel("market"));
+      ui.signCard(
+        x,
+        y,
+        () => panel("treasury"),
+        () => panel("market"),
+      );
     });
   else if (k === "stump" || k === "rug") {
     const [x, y] = [th.x, th.y + (k === "rug" ? 1 : 3)];
@@ -1176,7 +1358,9 @@ function useAway(th: Thing, m: Mate): void {
         x,
         y,
         ui.h("h3", "", "Where to?"),
-        Object.assign(ui.h("button", "b arrow left", "Back to your camp"), { onclick: () => (ui.hideCard(), goHome()) }),
+        Object.assign(ui.h("button", "b arrow left", "Back to your camp"), {
+          onclick: () => (ui.hideCard(), goHome()),
+        }),
         Object.assign(ui.h("button", "b arrow", "Another camp"), { onclick: () => panel("visit") }),
       );
     });
@@ -1226,7 +1410,9 @@ function thingAt(x: number, y: number): Thing | null {
   for (const th of things) {
     const inf = infoOf(th);
     const padX = Math.max(inf.w / 2, 10) + 2;
-    const top = inf.flat ? th.y - Math.max(inf.h / 2, 9) - (th.kind === "fire" ? 14 : 0) : th.y - Math.max(inf.h, 18) - 2;
+    const top = inf.flat
+      ? th.y - Math.max(inf.h / 2, 9) - (th.kind === "fire" ? 14 : 0)
+      : th.y - Math.max(inf.h, 18) - 2;
     const bot = inf.flat ? th.y + Math.max(inf.h / 2, 9) : th.y + 3;
     if (Math.abs(x - th.x) > padX || y < top || y > bot) continue;
     // flat things lose to whatever stands on them
@@ -1388,7 +1574,9 @@ export function drag(x: number, y: number, clientX: number, clientY: number): vo
   const inf = infoOf(held);
   const half = inf.w / 2 - 8;
   held.x = Math.round(clamp(x + heldDX, view.gx0 + half - 6, view.gx1 - half + 6));
-  held.y = Math.round(clamp(y + heldDY, view.gy0 + (inf.flat ? inf.h / 2 : 5), view.gy1 - (inf.flat ? inf.h / 2 - 4 : 0)));
+  held.y = Math.round(
+    clamp(y + heldDY, view.gy0 + (inf.flat ? inf.h / 2 : 5), view.gy1 - (inf.flat ? inf.h / 2 - 4 : 0)),
+  );
   const r = ui.trayRect();
   ui.trayHot(!!held.extra && !!r && clientX > r.left && clientX < r.right && clientY > r.top && clientY < r.bottom);
 }
@@ -1488,7 +1676,19 @@ function unpack(d: { id: string; x: number; y: number }): void {
   burst("star", d.x, d.y - 6, 9);
   sfx.sparkle();
   if (d.id === "glorp") {
-    pets.push({ spec: SHOP_PET, x: d.x, y: d.y, tx: d.x + 14, ty: d.y + 10, state: "walk", t: 0, dir: 1, joy: 1.6, phase: 0, zed: 0 });
+    pets.push({
+      spec: SHOP_PET,
+      x: d.x,
+      y: d.y,
+      tx: d.x + 14,
+      ty: d.y + 10,
+      state: "walk",
+      t: 0,
+      dir: 1,
+      joy: 1.6,
+      phase: 0,
+      zed: 0,
+    });
     spec.pets = [...spec.pets, SHOP_PET];
     burst("heart", d.x, d.y - 14, 3);
     sfx.blob();
@@ -1516,7 +1716,9 @@ function unpack(d: { id: string; x: number; y: number }): void {
   everyoneLooks();
 }
 function everyoneLooks(): void {
-  for (const a of actors) if (a !== me && a.pose !== "walk" && Math.random() < 0.5) after(0.4 + Math.random(), () => speak(a, pick(["ooh.", "fancy!", "Cinfy delivers.", "erm. I want one."]), 2.2));
+  for (const a of actors)
+    if (a !== me && a.pose !== "walk" && Math.random() < 0.5)
+      after(0.4 + Math.random(), () => speak(a, pick(["ooh.", "fancy!", "Cinfy delivers.", "erm. I want one."]), 2.2));
 }
 
 // ---------- going visiting ----------
@@ -1544,7 +1746,10 @@ function visit(id: string): void {
   travel(() => {
     enter(m);
     walkIn();
-    ui.feed(`${m.name}'s camp. ${m.camp.home === "tent" ? "A tent, and proud of it." : "Smoke from the chimney."}`, true);
+    ui.feed(
+      `${m.name}'s camp. ${m.camp.home === "tent" ? "A tent, and proud of it." : "Smoke from the chimney."}`,
+      true,
+    );
   });
 }
 function goHome(): void {
@@ -1660,7 +1865,12 @@ const camp: ui.Camp = {
     ui.feed(`Offer sent to ${m.name}. They will write back.`, true);
     keep();
     after(13, () => {
-      letters.push({ icon: "note", title: `${m.name} wrote back`, detail: `"${l.reply}" Leaf changes hands when it is done.`, faces: [m.id] });
+      letters.push({
+        icon: "note",
+        title: `${m.name} wrote back`,
+        detail: `"${l.reply}" Leaf changes hands when it is done.`,
+        faces: [m.id],
+      });
       const mailbox = thing("mailbox");
       if (mailbox) mailbox.bump = T;
       sfx.mail();
@@ -1730,11 +1940,16 @@ const camp: ui.Camp = {
     burst("spark", fire.x, fire.y - 8, 18);
     sfx.thump();
     sfx.whoosh();
-    for (const a of sitters()) if (a !== me && Math.random() < 0.4) after(0.5, () => speak(a, pick(["toasty.", "now THAT is a fire.", "mind the sparks!"]), 2));
+    for (const a of sitters())
+      if (a !== me && Math.random() < 0.4)
+        after(0.5, () => speak(a, pick(["toasty.", "now THAT is a fire.", "mind the sparks!"]), 2));
   },
   roll: () => Array.from({ length: 9 }, (_, i) => ({ n: i + 1, here: i + 1 !== save.missing })),
   rollCall,
-  hideout: () => (hide ? ((isFixed(hide.th.kind) ? CRAB_HIDES[hide.th.kind] : undefined) ?? "somewhere it should not be") : "sneaking off as we speak"),
+  hideout: () =>
+    hide
+      ? ((isFixed(hide.th.kind) ? CRAB_HIDES[hide.th.kind] : undefined) ?? "somewhere it should not be")
+      : "sneaking off as we speak",
   here: (id) => present(id),
   visiting: () => host?.id ?? null,
   visit,
@@ -1811,7 +2026,8 @@ function flame(g: G2, x: number, y: number, t: number, rose: boolean, size: numb
 function hopOf(th: Thing): number {
   const b = T - th.bump;
   if (b < 0 || b > 0.36) return 0;
-  const big = th.kind === "cabin" || th.kind === "bench" || th.kind === "board" || th.kind === "shelf" || th.kind === "pool";
+  const big =
+    th.kind === "cabin" || th.kind === "bench" || th.kind === "board" || th.kind === "shelf" || th.kind === "pool";
   return -Math.round(Math.sin((b / 0.36) * Math.PI) * (big ? 2 : 4));
 }
 
@@ -1829,7 +2045,17 @@ function drawThing(g: G2, th: Thing): void {
         const eased = f < 1 ? 1 - (1 - f) ** 3 + Math.sin(f * 9) * 0.06 * (1 - f) : 1;
         const len = Math.max(3, Math.round(art.height * eased));
         g.drawImage(art, 0, 0, art.width, 2, x + homeArt.banner[0] - 5, y + homeArt.banner[1], art.width, 2);
-        g.drawImage(art, 0, art.height - len + 2, art.width, len - 2, x + homeArt.banner[0] - 5, y + homeArt.banner[1] + 2, art.width, len - 2);
+        g.drawImage(
+          art,
+          0,
+          art.height - len + 2,
+          art.width,
+          len - 2,
+          x + homeArt.banner[0] - 5,
+          y + homeArt.banner[1] + 2,
+          art.width,
+          len - 2,
+        );
       }
       if (lightsLit > 0) {
         const [x0, x1, ey] = homeArt.eave;
@@ -1904,7 +2130,8 @@ function drawFlat(g: G2, th: Thing): void {
   } else if (th.kind === "fire") {
     put(g, FIRE.back, th.x, th.y);
     // embers under the logs
-    for (let i = 0; i < 5; i++) if (noise(i * 3, T * 4, 2) > 0.5) R(g, th.x - 6 + i * 3, th.y + (i % 2), 1, 1, spec.rose ? I.M : I.f);
+    for (let i = 0; i < 5; i++)
+      if (noise(i * 3, T * 4, 2) > 0.5) R(g, th.x - 6 + i * 3, th.y + (i % 2), 1, 1, spec.rose ? I.M : I.f);
   }
 }
 
@@ -1916,7 +2143,14 @@ function drawPet(g: G2, p: Pet): void {
     const moving = p.state === "walk";
     const cyc = Math.sin(p.phase * 7);
     const z = moving && cyc > 0 ? Math.sin(cyc * Math.PI * 0.5) * 5 : 0;
-    const s = joy > 2 || z > 3 ? set.stretch : (moving && cyc <= 0 && cyc > -0.5) || (joy > 0 && joy <= 1) ? set.squash : Math.sin(p.phase * 0.9) > 0.985 ? set.blink : set.idle;
+    const s =
+      joy > 2 || z > 3
+        ? set.stretch
+        : (moving && cyc <= 0 && cyc > -0.5) || (joy > 0 && joy <= 1)
+          ? set.squash
+          : Math.sin(p.phase * 0.9) > 0.985
+            ? set.blink
+            : set.idle;
     const breathe = !moving && joy === 0 && Math.sin(p.phase * 2.2) > 0.6 ? 1 : 0;
     put(g, s, p.x, p.y - z - joy + breathe);
     if (p.spec.sprout) put(g, SPROUT, p.x, p.y - z - joy + breathe - s.h + 1);
@@ -1925,7 +2159,8 @@ function drawPet(g: G2, p: Pet): void {
   const step = Math.floor(p.phase * 7) % 2 === 0;
   if (p.spec.kind === "cat") {
     if (p.state === "sleep") put(g, CAT_O.sleep, p.x, p.y + 1);
-    else if (p.state === "walk") put(g, p.dir > 0 ? (step ? CAT_O.walkA : CAT_O.walkB) : step ? CAT_LO.walkA : CAT_LO.walkB, p.x, p.y + 1 - joy);
+    else if (p.state === "walk")
+      put(g, p.dir > 0 ? (step ? CAT_O.walkA : CAT_O.walkB) : step ? CAT_LO.walkA : CAT_LO.walkB, p.x, p.y + 1 - joy);
     else put(g, CAT_O.sit, p.x, p.y + 1 - joy);
     return;
   }
@@ -1955,7 +2190,15 @@ function drawParts(g: G2, glowing: boolean): void {
   for (const p of parts) {
     if (p.t < 0) continue;
     const f = p.t / p.life;
-    const bright = p.k === "spark" || p.k === "heart" || p.k === "note" || p.k === "zed" || p.k === "star" || p.k === "loot" || p.k === "gift" || p.k === "marsh";
+    const bright =
+      p.k === "spark" ||
+      p.k === "heart" ||
+      p.k === "note" ||
+      p.k === "zed" ||
+      p.k === "star" ||
+      p.k === "loot" ||
+      p.k === "gift" ||
+      p.k === "marsh";
     if (bright !== glowing) continue;
     const x = Math.round(p.x);
     const y = Math.round(p.y);
@@ -1989,7 +2232,8 @@ function drawParts(g: G2, glowing: boolean): void {
       case "ring": {
         const r = 2 + f * 7;
         g.globalAlpha = 0.5 * (1 - f);
-        for (let i = 0; i < 8; i++) R(g, x + Math.cos((i / 8) * TAU) * r, y + Math.sin((i / 8) * TAU) * r * 0.5, 1, 1, I.t);
+        for (let i = 0; i < 8; i++)
+          R(g, x + Math.cos((i / 8) * TAU) * r, y + Math.sin((i / 8) * TAU) * r * 0.5, 1, 1, I.t);
         g.globalAlpha = 1;
         break;
       }
@@ -2093,13 +2337,16 @@ function draw(): void {
     if (doorT > T) lightAt(cabin.x + homeArt.door[0], cabin.y + 2, 30, "#ffc860", 0.7);
     if (lightsLit > 0) {
       const [x0, x1, ey] = homeArt.eave;
-      for (let i = 0; i < Math.min(lightsLit, 9); i += 2) lightAt(cabin.x + lerp(x0 + 4, x1 - 6, i / 8), cabin.y + ey + 5, 16, "#ffb890", 0.5);
+      for (let i = 0; i < Math.min(lightsLit, 9); i += 2)
+        lightAt(cabin.x + lerp(x0 + 4, x1 - 6, i / 8), cabin.y + ey + 5, 16, "#ffb890", 0.5);
     }
   }
   for (const th of things) {
     if (th.kind === "lamp" && !th.off) lightAt(th.x + 4, th.y - 19, 34, "#ffb030", 0.8);
-    else if (th.kind === "bench") lightAt(th.x + BENCH.dome[0], th.y + BENCH.dome[1] + 3, 16, "#60e080", 0.4 + Math.sin(T * 3) * 0.12);
-    else if (th.kind === "mailbox" && letters.length) lightAt(th.x, th.y - 18, 20, "#ffc040", 0.55 + Math.sin(T * 5) * 0.2);
+    else if (th.kind === "bench")
+      lightAt(th.x + BENCH.dome[0], th.y + BENCH.dome[1] + 3, 16, "#60e080", 0.4 + Math.sin(T * 3) * 0.12);
+    else if (th.kind === "mailbox" && letters.length)
+      lightAt(th.x, th.y - 18, 20, "#ffc040", 0.55 + Math.sin(T * 5) * 0.2);
   }
   for (const f of flies) lightAt(f.x, f.y, 7, "#d0ff80", 0.35 + Math.sin(T * 2 + f.ph) * 0.25);
   if (delivery) lightAt(delivery.x, delivery.y - delivery.z - 6, 18, "#ffe0a0", 0.4);
@@ -2125,7 +2372,12 @@ function draw(): void {
   }
   drawParts(g, true);
   for (const th of things) {
-    const mark = (th.kind === "mailbox" && letters.length > 0 && !mailOpen) || (th.kind === "board" && atHome() && QUESTS.some((q) => !save.claimed.includes(q.id) && camp.progress(q.id) >= q.need)) || (th.kind === "bench" && atHome() && stacks >= 3);
+    const mark =
+      (th.kind === "mailbox" && letters.length > 0 && !mailOpen) ||
+      (th.kind === "board" &&
+        atHome() &&
+        QUESTS.some((q) => !save.claimed.includes(q.id) && camp.progress(q.id) >= q.need)) ||
+      (th.kind === "bench" && atHome() && stacks >= 3);
     if (mark) put(g, BANG, th.x, th.y - infoOf(th).h - 3 + Math.round(Math.sin(T * 4) * 1.5));
   }
 
@@ -2169,7 +2421,8 @@ function draw(): void {
           const hw = r - Math.abs(dy);
           R(sg, cx - hw, cy + dy, hw * 2 + 1, 1, (i + j) % 2 ? "#1c3524" : "#213f29");
         }
-        if (r > 6 && (i * 7 + j * 3) % 4 === 0) put(sg, LEAF_S, cx + ((i * 5) % 7) - 3, cy + ((j * 3) % 5) - 2 + Math.round(Math.sin(T * 6 + i) * 1));
+        if (r > 6 && (i * 7 + j * 3) % 4 === 0)
+          put(sg, LEAF_S, cx + ((i * 5) % 7) - 3, cy + ((j * 3) % 5) - 2 + Math.round(Math.sin(T * 6 + i) * 1));
         else if (r > 6) R(sg, cx - 1, cy, 3, 1, I.p);
       }
     }
@@ -2198,15 +2451,35 @@ function update(dt: number): void {
   for (const c of [...crabs]) tickCrab(c, dt);
   tickParts(dt);
   // ---- the member, left to themselves
-  if (!me.plan.length && me.idle > (me.seat >= 0 ? 16 : 5) && !ui.panelOpen() && !ui.cardOpen() && !decor && !wipe) wander();
+  if (!me.plan.length && me.idle > (me.seat >= 0 ? 16 : 5) && !ui.panelOpen() && !ui.cardOpen() && !decor && !wipe)
+    wander();
   // ---- the fire, the chimney, the machine
   const fire = thing("fire");
-  if (fire && Math.random() < dt * (3 + flare * 30)) add("spark", fire.x + (Math.random() - 0.5) * 8, fire.y - 10, (Math.random() - 0.5) * 10, -16 - Math.random() * 22, 0.8 + Math.random() * 0.9, Math.random());
+  if (fire && Math.random() < dt * (3 + flare * 30))
+    add(
+      "spark",
+      fire.x + (Math.random() - 0.5) * 8,
+      fire.y - 10,
+      (Math.random() - 0.5) * 10,
+      -16 - Math.random() * 22,
+      0.8 + Math.random() * 0.9,
+      Math.random(),
+    );
   const cabin = thing("cabin");
-  if (cabin && homeArt.chimney && Math.random() < dt * 1.3) add("smoke", cabin.x + homeArt.chimney[0], cabin.y + homeArt.chimney[1], 0, -7 - Math.random() * 3, 3.2, Math.random() * 6);
+  if (cabin && homeArt.chimney && Math.random() < dt * 1.3)
+    add(
+      "smoke",
+      cabin.x + homeArt.chimney[0],
+      cabin.y + homeArt.chimney[1],
+      0,
+      -7 - Math.random() * 3,
+      3.2,
+      Math.random() * 6,
+    );
   const bench = thing("bench");
   if (bench) {
-    if (Math.random() < dt * 0.55) add("steam", bench.x + BENCH.steam[0], bench.y + BENCH.steam[1], 0, -9, 1.3, Math.random() * 6);
+    if (Math.random() < dt * 0.55)
+      add("steam", bench.x + BENCH.steam[0], bench.y + BENCH.steam[1], 0, -9, 1.3, Math.random() * 6);
     if (atHome() && T > nextStack && stacks < 4) {
       stacks++;
       nextStack = T + 11;
@@ -2258,7 +2531,8 @@ function update(dt: number): void {
   if (atHome() && T > nextVisitor && !wipe) {
     nextVisitor = T + 32 + Math.random() * 16;
     const away = MATES.filter((m) => !present(m.id));
-    if (actors.length < 5 && away.length) arrive(nextVisitor < 80 ? (away.find((m) => m.id === "ember") ?? pick(away)) : pick(away));
+    if (actors.length < 5 && away.length)
+      arrive(nextVisitor < 80 ? (away.find((m) => m.id === "ember") ?? pick(away)) : pick(away));
   }
   if (T > nextChat) {
     nextChat = T + 6 + Math.random() * 5;
@@ -2309,7 +2583,17 @@ function overlays(): void {
       if (!(th.id === hoverId || (fixed && (T < tagsUntil || decor)))) continue;
       const inf = infoOf(th);
       const [x, y] = css(th.x, th.y - (inf.flat ? inf.h / 2 + (th.kind === "fire" ? 20 : 2) : inf.h) - 2);
-      tags.push({ id: th.id, text: th.kind === "cabin" && host ? `${host.name}'s ${spec.home}` : th.kind === "cabin" && spec.home === "tent" ? "Tent" : NAMES[th.kind], x, y });
+      tags.push({
+        id: th.id,
+        text:
+          th.kind === "cabin" && host
+            ? `${host.name}'s ${spec.home}`
+            : th.kind === "cabin" && spec.home === "tent"
+              ? "Tent"
+              : NAMES[th.kind],
+        x,
+        y,
+      });
     }
   }
   ui.syncTags(tags);
@@ -2397,15 +2681,36 @@ function awayLetters(): void {
   const span = hrs ? `${hrs}h ${Math.round(mins % 60)}m` : `${Math.max(1, Math.round(mins))}m`;
   if (leaf) {
     const raids = mins >= 30 ? 3 : 1;
-    letters.push({ icon: "leaf", title: raids > 1 ? "3 raids with the guild" : "A raid with the guild", detail: raids > 1 ? "The Sunken Vault twice, the Thornwarden once." : "The Sunken Vault. Nobody fell in.", leaf });
+    letters.push({
+      icon: "leaf",
+      title: raids > 1 ? "3 raids with the guild" : "A raid with the guild",
+      detail: raids > 1 ? "The Sunken Vault twice, the Thornwarden once." : "The Sunken Vault. Nobody fell in.",
+      leaf,
+    });
   }
   letters.push({ icon: "coin", title: "The Works kept running", detail: `${span} of belts and gears.`, coins });
   worksMade = coins;
   if (mins >= 20) {
-    letters.push({ icon: "visit", title: "Thistlewick and Emberlyn dropped by", detail: "They sat a while and fed the fire.", faces: ["thistle", "ember"] });
-    letters.push({ icon: "gift", title: "From Thistlewick: a potted fern", detail: "It goes in your tray, for decorating.", deco: "fern", faces: ["thistle"] });
+    letters.push({
+      icon: "visit",
+      title: "Thistlewick and Emberlyn dropped by",
+      detail: "They sat a while and fed the fire.",
+      faces: ["thistle", "ember"],
+    });
+    letters.push({
+      icon: "gift",
+      title: "From Thistlewick: a potted fern",
+      detail: "It goes in your tray, for decorating.",
+      deco: "fern",
+      faces: ["thistle"],
+    });
   } else {
-    letters.push({ icon: "visit", title: "Pipkin looked in", detail: "Counted the crabs. Got eight. Left quietly.", faces: ["pipkin"] });
+    letters.push({
+      icon: "visit",
+      title: "Pipkin looked in",
+      detail: "Counted the crabs. Got eight. Left quietly.",
+      faces: ["pipkin"],
+    });
   }
 }
 
@@ -2549,7 +2854,17 @@ export function boot(el: Cv, mine: Figure | null): Debug {
       return (performance.now() - t0) / n;
     },
     pet: (n) => (pets[n] ? { x: pets[n].x * view.k, y: (pets[n].y - 5) * view.k } : null),
-    state: () => ({ T, view, me: { x: me.x, y: me.y, seat: me.seat }, actors: actors.map((a) => a.id), things: things.length, parts: parts.length, letters: letters.length, host: host?.id ?? null, save }),
+    state: () => ({
+      T,
+      view,
+      me: { x: me.x, y: me.y, seat: me.seat },
+      actors: actors.map((a) => a.id),
+      things: things.length,
+      parts: parts.length,
+      letters: letters.length,
+      host: host?.id ?? null,
+      save,
+    }),
   };
 }
 

@@ -2,7 +2,7 @@
  * The review sheet (`?sheet`): every drawn thing side by side and enlarged, on the two grounds it
  * will stand on, so the art can be judged without playing to it.
  */
-import { type Figure, drawFigure, type Face, type Pose } from "./figure.ts";
+import { drawFigure, type Face, type Figure, type Pose } from "./figure.ts";
 import { canvas, put, R, type Spr } from "./gfx.ts";
 import { bannerArt, bench, board, fireArt, gears, home, pond, ROOFS, rug, shelf, signpost } from "./props.ts";
 import { SHEET } from "./sprites.ts";

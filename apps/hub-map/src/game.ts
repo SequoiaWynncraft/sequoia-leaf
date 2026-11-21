@@ -6,19 +6,19 @@ import { sfx } from "./audio.ts";
 import * as fx from "./fx.ts";
 import type { Lands } from "./lands.ts";
 import { P } from "./palette.ts";
-import { ICONS, type IconId, LANTERN } from "./pix.ts";
+import { type IconId, ICONS, LANTERN } from "./pix.ts";
 import { madeUp, type Skin } from "./skins.ts";
 import {
   CAMP,
-  EDGES,
   edgePoint,
+  EDGES,
   type GateId,
   GATES,
   type Hue,
   LANDS,
   type Leg,
-  NODES,
   type NodeId,
+  NODES,
   type Owner,
   POND,
   RIVAL,
@@ -147,7 +147,14 @@ members.push(you);
 ROSTER.forEach(([name, rank, level, at], i) => members.push(member(i + 1, name, rank, level, madeUp(i + 11), at)));
 
 /** Cinfy keeps the Treasury, and does not leave the door. */
-export const cinfy: Member = member(99, "Cinfy", "Treasurer", 99, madeUp(77, { style: 4, cloth: 3, trim: P.plum2, hair: 4, beard: false, tone: 0 }), "treasury");
+export const cinfy: Member = member(
+  99,
+  "Cinfy",
+  "Treasurer",
+  99,
+  madeUp(77, { style: 4, cloth: 3, trim: P.plum2, hair: 4, beard: false, tone: 0 }),
+  "treasury",
+);
 cinfy.npc = true;
 cinfy.x = NODES.treasury.x - 11;
 cinfy.y = NODES.treasury.y - 3;
@@ -219,7 +226,11 @@ function plan(m: Member, dest: NodeId): Plan {
 }
 
 /** Sends someone walking to a node. `seconds` hurries them so the trip takes about that long. */
-export function send(m: Member, dest: NodeId, opts: { delay?: number; seconds?: number; then?: () => void } = {}): number {
+export function send(
+  m: Member,
+  dest: NodeId,
+  opts: { delay?: number; seconds?: number; then?: () => void } = {},
+): number {
   const p = plan(m, dest);
   m.then = opts.then ?? null;
   m.sit = false;
@@ -318,9 +329,17 @@ const names = (list: Member[]): string => {
 
 // ---------- raids: out to a gate, wait while the ring fills, home with a lantern ----------
 
-export type Raid = { gate: GateId; party: Member[]; phase: "out" | "wait" | "back" | "done"; ring: number; leaf: number };
+export type Raid = {
+  gate: GateId;
+  party: Member[];
+  phase: "out" | "wait" | "back" | "done";
+  ring: number;
+  leaf: number;
+};
 export const raids: Raid[] = [];
-export const lanterns: { t: number; hue: Hue; swing: number }[] = (["violet", "teal", "coral", "violet", "teal"] as const).map((hue) => ({
+export const lanterns: { t: number; hue: Hue; swing: number }[] = (
+  ["violet", "teal", "coral", "violet", "teal"] as const
+).map((hue) => ({
   t: -99,
   hue,
   swing: 0,
@@ -424,7 +443,10 @@ function updateRaids(dt: number): void {
 export type Push = { land: number; scouts: Member[]; phase: "out" | "claim" | "spread" | "done"; p: number };
 export const pushes: Push[] = [];
 /** Each land's banner: how far up its pole the cloth is, and whose it is. */
-export const flags: { h: number; col: Owner }[] = LANDS.map((l) => ({ h: l.owner === 1 ? 0 : 1, col: l.owner === 2 ? 2 : 0 }));
+export const flags: { h: number; col: Owner }[] = LANDS.map((l) => ({
+  h: l.owner === 1 ? 0 : 1,
+  col: l.owner === 2 ? 2 : 0,
+}));
 const flagWant: Owner[] = LANDS.map((l) => l.owner);
 let lands: Lands;
 
@@ -446,7 +468,11 @@ function updatePushes(dt: number): void {
       if (p.scouts.every((m) => m.at === land.node)) {
         p.phase = "claim";
         flagWant[p.land] = 0;
-        say(p.scouts[0] as Member, pick(["flag goes here, I think", "pole's in. hold it steady", "nice spot for a banner"]), 2.6);
+        say(
+          p.scouts[0] as Member,
+          pick(["flag goes here, I think", "pole's in. hold it steady", "nice spot for a banner"]),
+          2.6,
+        );
       }
     } else if (p.phase === "claim") {
       // The old colours come down first, then the guild's climb the pole.
@@ -477,7 +503,8 @@ function updatePushes(dt: number): void {
     const a = Math.random() * 6.283;
     const x = s.ox + Math.cos(a) * s.r;
     const y = s.oy + Math.sin(a) * s.r;
-    if (lands.ownerAt(Math.round(x), Math.round(y)) >= 0) fx.sparks(x, y, s.to === 0 ? [P.gold2, P.cream] : [P.coral, P.rose], 1, 6);
+    if (lands.ownerAt(Math.round(x), Math.round(y)) >= 0)
+      fx.sparks(x, y, s.to === 0 ? [P.gold2, P.cream] : [P.coral, P.rose], 1, 6);
   }
   LANDS.forEach((_, i) => {
     if (pushes.some((p) => p.land === i && p.phase === "claim")) return;
@@ -511,7 +538,10 @@ function landChanged(i: number): void {
   } else {
     hooks.feed({
       icon: "banner",
-      html: now === 2 ? `${RIVAL[0]?.toUpperCase()}${RIVAL.slice(1)} raised a flag over <i>${land.name}</i>` : `<i>${land.name}</i> slipped back to the wilds`,
+      html:
+        now === 2
+          ? `${RIVAL[0]?.toUpperCase()}${RIVAL.slice(1)} raised a flag over <i>${land.name}</i>`
+          : `<i>${land.name}</i> slipped back to the wilds`,
       x: land.bx,
       y: land.by,
     });
@@ -530,7 +560,8 @@ function landChanged(i: number): void {
 function drift(): boolean {
   if (lands.held() < 13) return false;
   const options = LANDS.map((l, i) => ({ l, i })).filter(
-    ({ l, i }) => l.node && lands.owner[i] === 0 && !pushes.some((p) => p.land === i) && !lands.spreads.some((s) => s.land === i),
+    ({ l, i }) =>
+      l.node && lands.owner[i] === 0 && !pushes.some((p) => p.land === i) && !lands.spreads.some((s) => s.land === i),
   );
   if (options.length === 0) return false;
   const { l, i } = pick(options);
@@ -545,9 +576,33 @@ function drift(): boolean {
 
 export const works = { ready: 0, planks: 12 };
 export const quests = [
-  { id: "raids", title: "Bring home three lanterns", text: "Clear three raids with guild-mates.", have: 3, need: 3, reward: 30, claimed: false },
-  { id: "lands", title: "Hold fourteen lands at once", text: "The guild's banners, counted at dusk.", have: 13, need: 14, reward: 20, claimed: false },
-  { id: "planks", title: "Ship twenty planks", text: "From your Works to the guild stores.", have: 12, need: 20, reward: 15, claimed: false },
+  {
+    id: "raids",
+    title: "Bring home three lanterns",
+    text: "Clear three raids with guild-mates.",
+    have: 3,
+    need: 3,
+    reward: 30,
+    claimed: false,
+  },
+  {
+    id: "lands",
+    title: "Hold fourteen lands at once",
+    text: "The guild's banners, counted at dusk.",
+    have: 13,
+    need: 14,
+    reward: 20,
+    claimed: false,
+  },
+  {
+    id: "planks",
+    title: "Ship twenty planks",
+    text: "From your Works to the guild stores.",
+    have: 12,
+    need: 20,
+    reward: 15,
+    claimed: false,
+  },
 ];
 export function refreshQuests(): void {
   const held = quests[1] as (typeof quests)[number];
@@ -581,12 +636,22 @@ function worksShip(): void {
   works.planks = Math.min(20, works.planks + 4);
   fx.float(WORKS.x, WORKS.y - 34, "+45", P.gold2, ICONS.coin);
   fx.sparks(WORKS.x, WORKS.y - 10, [P.gold1, P.cream], 8, 20);
-  hooks.feed({ icon: "cog", html: "Your Works shipped a crate of planks · 45 Coins waiting", x: WORKS.x, y: WORKS.y - 12 });
+  hooks.feed({
+    icon: "cog",
+    html: "Your Works shipped a crate of planks · 45 Coins waiting",
+    x: WORKS.x,
+    y: WORKS.y - 12,
+  });
   refreshQuests();
   hooks.quests();
 }
 
-const VISIT = ["left you a pinecone", "nice tent. very striped", "just checking the fire's lit", "I brought moss. For the look."];
+const VISIT = [
+  "left you a pinecone",
+  "nice tent. very striped",
+  "just checking the fire's lit",
+  "I brought moss. For the look.",
+];
 function visit(m: Member, line = pick(VISIT)): void {
   m.busy = "visit";
   send(m, "camp", {
@@ -632,18 +697,34 @@ function tryEvent(kind: (typeof ROTA)[number]): boolean {
       const gate = pick(open);
       const party = [...idle].sort(() => Math.random() - 0.5).slice(0, 4);
       startRaid(gate, party);
-      say(party[0] as Member, pick(["raid time. boots on!", `${GATES[gate].name}, anyone?`, "four of us. perfect"]), 2.8);
-      hooks.feed({ icon: "pin", html: `<b>${names(party)}</b> set out for <i>${GATES[gate].name}</i>`, x: GATES[gate].x, y: GATES[gate].y });
+      say(
+        party[0] as Member,
+        pick(["raid time. boots on!", `${GATES[gate].name}, anyone?`, "four of us. perfect"]),
+        2.8,
+      );
+      hooks.feed({
+        icon: "pin",
+        html: `<b>${names(party)}</b> set out for <i>${GATES[gate].name}</i>`,
+        x: GATES[gate].x,
+        y: GATES[gate].y,
+      });
       return true;
     }
     case "push": {
       if (idle.length < 5 || pushes.length > 0) return false;
-      const options = LANDS.map((l, i) => ({ l, i })).filter(({ l, i }) => l.node && lands.owner[i] !== 0 && !lands.spreads.some((s) => s.land === i));
+      const options = LANDS.map((l, i) => ({ l, i })).filter(
+        ({ l, i }) => l.node && lands.owner[i] !== 0 && !lands.spreads.some((s) => s.land === i),
+      );
       if (options.length === 0) return false;
       const { l, i } = pick(options);
       const scouts = [...idle].sort(() => Math.random() - 0.5).slice(0, 3);
       startPush(i, scouts);
-      hooks.feed({ icon: "pin", html: `Scouts <b>${names(scouts)}</b> set out for <i>${l.name}</i>`, x: l.bx, y: l.by });
+      hooks.feed({
+        icon: "pin",
+        html: `Scouts <b>${names(scouts)}</b> set out for <i>${l.name}</i>`,
+        x: l.bx,
+        y: l.by,
+      });
       return true;
     }
     case "drift":
@@ -676,7 +757,24 @@ const LINES = [
   "I got lost. It was lovely.",
   "tea's on if anyone wants it",
 ];
-const LEISURE: NodeId[] = ["fire", "fire", "fire", "fire", "market", "market", "market", "board", "board", "treasury", "town", "works", "works", "pond", "pond", "mill"];
+const LEISURE: NodeId[] = [
+  "fire",
+  "fire",
+  "fire",
+  "fire",
+  "market",
+  "market",
+  "market",
+  "board",
+  "board",
+  "treasury",
+  "town",
+  "works",
+  "works",
+  "pond",
+  "pond",
+  "mill",
+];
 let nextChat = 4;
 
 // ---------- crabs ----------
@@ -758,9 +856,30 @@ function updateCrabs(dt: number): void {
 
 export type ShopId = "lantern" | "sapling" | "snacks";
 export const SHOP: { id: ShopId; name: string; text: string; cost: number; icon: IconId; once: boolean }[] = [
-  { id: "lantern", name: "A lantern for your camp", text: "Hand-blown. Slightly crooked. Glows all night.", cost: 40, icon: "lantern", once: true },
-  { id: "sapling", name: "A redwood sapling", text: "Plant it by your tent. Check back in a thousand years.", cost: 60, icon: "leaf", once: true },
-  { id: "snacks", name: "A bag of crab snacks", text: "For the pond. The crabs will remember this.", cost: 10, icon: "crab", once: false },
+  {
+    id: "lantern",
+    name: "A lantern for your camp",
+    text: "Hand-blown. Slightly crooked. Glows all night.",
+    cost: 40,
+    icon: "lantern",
+    once: true,
+  },
+  {
+    id: "sapling",
+    name: "A redwood sapling",
+    text: "Plant it by your tent. Check back in a thousand years.",
+    cost: 60,
+    icon: "leaf",
+    once: true,
+  },
+  {
+    id: "snacks",
+    name: "A bag of crab snacks",
+    text: "For the pond. The crabs will remember this.",
+    cost: 10,
+    icon: "crab",
+    once: false,
+  },
 ];
 export const owned = { lantern: false, sapling: false, snacks: 0, saplingAge: 0 };
 export const DROP_AT: Record<ShopId, { x: number; y: number }> = {

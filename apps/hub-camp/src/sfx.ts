@@ -76,7 +76,20 @@ function hiss(dur: number, o: { vol?: number; at?: number; freq?: number; q?: nu
   src.stop(t0 + dur + 0.02);
 }
 
-const N = { c4: 261.6, d4: 293.7, e4: 329.6, g4: 392, a4: 440, c5: 523.3, d5: 587.3, e5: 659.3, g5: 784, a5: 880, c6: 1046.5, e6: 1318.5 };
+const N = {
+  c4: 261.6,
+  d4: 293.7,
+  e4: 329.6,
+  g4: 392,
+  a4: 440,
+  c5: 523.3,
+  d5: 587.3,
+  e5: 659.3,
+  g5: 784,
+  a5: 880,
+  c6: 1046.5,
+  e6: 1318.5,
+};
 
 export const sfx = {
   tap: (): void => tone(520, 0.07, { vol: 0.08, to: 420 }),
@@ -160,7 +173,8 @@ export const sfx = {
   gear: (): void => {
     for (let i = 0; i < 4; i++) tone(240 + i * 30, 0.03, { type: "square", vol: 0.04, at: i * 0.05 });
   },
-  crackle: (): void => hiss(0.02 + Math.random() * 0.03, { vol: 0.02 + Math.random() * 0.03, freq: 1500 + Math.random() * 2500, q: 2 }),
+  crackle: (): void =>
+    hiss(0.02 + Math.random() * 0.03, { vol: 0.02 + Math.random() * 0.03, freq: 1500 + Math.random() * 2500, q: 2 }),
   cricket: (): void => {
     for (let i = 0; i < 3; i++) tone(4100, 0.03, { type: "sine", vol: 0.012, at: i * 0.06 });
   },
