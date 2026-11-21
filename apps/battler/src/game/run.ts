@@ -1,0 +1,756 @@
+/**
+ * A run: one little raid, from the first pick to the last room. It is plain data (so it saves as it
+ * is) and a set of actions on it. Every action either does something and gives back notes on what
+ * happened, for a screen to animate, or changes nothing and gives back a reason in plain words.
+ *
+ * A room goes: plan (buy, sell, move, rustle, level, hand out items; no clock), `beginFight`, the
+ * fight (the screen steps it from the setup it is given, or does not bother), `takeTakings`. The
+ * run works the fight out for itself from the same setup when the takings are taken, so the result
+ * never depends on what the screen did.
+ */
+import { BOON_IDS, type BoonId, boonNumber, BOONS, FIGHT_BOONS } from "./content/boons.ts";
+import { type BossId, FIGURE_IDS, type FigureId, FIGURES, isBossId, type Stars } from "./content/figures.ts";
+import { COMPONENT_IDS, type ComponentId, type FinishedId, holdItem, type ItemId } from "./content/items.ts";
+import {
+  ECONOMY,
+  MAX_LEVEL,
+  ROOM_COUNT,
+  type RoomKind,
+  ROOMS,
+  sellPrice,
+  STALL_ODDS,
+  TRAILS,
+} from "./content/rooms.ts";
+import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
+import { resolveFight } from "./fight/engine.ts";
+import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
+import { COLS, SEATS } from "./hex.ts";
+import { charmsOf, countTraits, type Party, type Placed, type TraitState, traitStates, traitSteps } from "./party.ts";
+import { mix, pick, shuffled, weighted } from "./rng.ts";
+import { sparParty } from "./spar.ts";
+
+// ---------- what a run is ----------
+
+/** One figure the party owns. */
+export interface Piece {
+  /** Its own number in this run, so a screen can follow it about. */
+  id: number;
+  kind: FigureId;
+  stars: Stars;
+  items: ItemId[];
+  /** How many times Greg has eaten. */
+  fed: number;
+}
+/** A place a figure can be: a seat on the party's half of the board (`row * 7 + col`, row 0 the front), or a place on the bench. */
+export interface Spot {
+  on: "board" | "bench";
+  at: number;
+}
+/** Something the player has to choose before anything else happens. */
+export type Choice =
+  | { kind: "starter"; options: FigureId[] }
+  | { kind: "component"; options: ComponentId[] }
+  | { kind: "boon"; options: BoonId[]; redraws: number };
+export type Phase = "plan" | "fight" | "over";
+/** How one room went. */
+export interface RoomRecord {
+  room: number;
+  kind: RoomKind;
+  result: FightResult;
+  standing: [number, number];
+  /** The boss that was in it, beaten or not. */
+  boss: BossId | null;
+}
+export interface Run {
+  seed: number;
+  /** The random stream for the stall and the things on offer. */
+  rng: number;
+  trail: number;
+  /** The room being planned for or fought, counting from 0. */
+  room: number;
+  phase: Phase;
+  resolve: number;
+  acorns: number;
+  level: number;
+  xp: number;
+  board: (Piece | null)[];
+  bench: (Piece | null)[];
+  /** Items nobody is holding. */
+  items: ItemId[];
+  stall: (FigureId | null)[];
+  /** The stall is being kept as it is for the next room. */
+  held: boolean;
+  /** Free rustles left this room, and figures bought in it. */
+  rustles: number;
+  bought: number;
+  boons: BoonId[];
+  /** Waiting to be chosen, first one first. */
+  choices: Choice[];
+  /** Who is waiting in the room. */
+  foe: Party;
+  record: RoomRecord[];
+  nextId: number;
+  /** The figures the stall may offer on this run. */
+  open: FigureId[];
+  won: boolean;
+  /** The player walked home early. */
+  left: boolean;
+  /** Things this run has done that the almanac remembers. */
+  seen: {
+    fielded: FigureId[];
+    threeStars: FigureId[];
+    forged: FinishedId[];
+    topped: TraitId[];
+  };
+}
+
+/** What happened, for a screen to show. Figures are named by `piece`, their own number in the run. */
+export type Note =
+  | { t: "starter"; kind: FigureId; piece: number; to: Spot }
+  | { t: "component"; item: ComponentId }
+  | { t: "boon"; boon: BoonId }
+  | { t: "redrawn"; options: BoonId[] }
+  /** `to` is null when the figure went straight into a merge with no place of its own. */
+  | { t: "bought"; kind: FigureId; piece: number; offer: number; cost: number; to: Spot | null }
+  /** Three became one: `gone` went into `piece`, which now has `stars`. `spilled` items went back to the item bench. */
+  | {
+      t: "merged";
+      kind: FigureId;
+      stars: Stars;
+      piece: number;
+      at: Spot;
+      gone: number[];
+      items: ItemId[];
+      spilled: ItemId[];
+    }
+  | { t: "sold"; kind: FigureId; stars: Stars; piece: number; from: Spot; acorns: number; items: ItemId[] }
+  | { t: "moved"; piece: number; from: Spot; to: Spot; swapped: number | null }
+  | { t: "rustled"; cost: number; stall: (FigureId | null)[] }
+  | { t: "held"; on: boolean }
+  | { t: "xp"; gained: number; cost: number }
+  | { t: "level"; level: number }
+  | { t: "gave"; item: ItemId; piece: number; forged: FinishedId | null; holds: ItemId[] }
+  | { t: "acorns"; why: "room" | "win" | "interest" | "gnomes" | "windfall"; amount: number }
+  | { t: "items"; why: "basket"; items: ItemId[] }
+  | { t: "resolve"; change: number; left: number }
+  | { t: "fight"; room: number; seed: number }
+  | { t: "result"; room: number; result: FightResult; standing: [number, number] }
+  | { t: "fed"; piece: number; fed: number }
+  | { t: "choice"; kind: Choice["kind"] }
+  | { t: "room"; room: number; kind: RoomKind; who: string; title: string }
+  | { t: "over"; won: boolean };
+
+export type Refused = { ok: false; why: string };
+export type Done = { ok: true; notes: Note[] } | Refused;
+export type Begun = { ok: true; notes: Note[]; setup: FightSetup } | Refused;
+export type Taken = { ok: true; notes: Note[]; fight: FightSummary } | Refused;
+
+const no = (why: string): Refused => ({ ok: false, why });
+const yes = (notes: Note[]): Done => ({ ok: true, notes });
+
+// ---------- looking at a run ----------
+
+/** Everyone the party owns, board first. */
+export function pieces(run: Run): Piece[] {
+  const out: Piece[] = [];
+  for (const p of run.board) if (p) out.push(p);
+  for (const p of run.bench) if (p) out.push(p);
+  return out;
+}
+export const fielded = (run: Run): number => run.board.reduce((n, p) => n + (p ? 1 : 0), 0);
+/** How many figures may be fielded: the level, and one more with An Extra Chair. */
+export const fieldCap = (run: Run): number =>
+  run.level + (run.boons.includes("extrachair") ? boonNumber("extrachair", "more") : 0);
+/** Who is at a spot: null for nobody, undefined for no such spot. */
+export function pieceAt(run: Run, spot: Spot): Piece | null | undefined {
+  if (!Number.isInteger(spot.at)) return undefined;
+  return spot.on === "board" ? run.board[spot.at] : run.bench[spot.at];
+}
+/** Where a figure is, by its number. */
+export function spotOf(run: Run, piece: number): Spot | null {
+  const seat = run.board.findIndex((p) => p?.id === piece);
+  if (seat >= 0) return { on: "board", at: seat };
+  const slot = run.bench.findIndex((p) => p?.id === piece);
+  return slot >= 0 ? { on: "bench", at: slot } : null;
+}
+/** Experience still needed for the next level; 0 at the top. */
+export const xpToNext = (run: Run): number =>
+  run.level >= MAX_LEVEL ? 0 : (ECONOMY.levelXp[run.level - 1] ?? 0) - run.xp;
+/** The most interest a room can pay. */
+export const interestCap = (run: Run): number =>
+  run.boons.includes("deeppockets") ? boonNumber("deeppockets", "cap") : ECONOMY.interestMost;
+/** What the acorns now held would earn after the next room. */
+export const interestNow = (run: Run): number => {
+  const per = run.boons.includes("deeppockets") ? boonNumber("deeppockets", "per") : ECONOMY.interestPer;
+  return Math.min(interestCap(run), Math.floor(run.acorns / per));
+};
+/** What an offer on the stall costs right now; 0 for an empty place. */
+export function priceOf(run: Run, offer: number): number {
+  const kind = run.stall[offer];
+  if (!kind) return 0;
+  const off = run.boons.includes("haggler") && run.bought === 0 ? boonNumber("haggler", "off") : 0;
+  return Math.max(0, FIGURES[kind].tier - off);
+}
+export const sellValue = (piece: Piece): number => sellPrice(FIGURES[piece.kind].tier, piece.stars);
+/** What the next rustle costs. */
+export const rustleCost = (run: Run): number => (run.rustles > 0 ? 0 : ECONOMY.rustle);
+/** The party as it would go into a fight now. */
+export function partyOf(run: Run): Party {
+  const figures: Placed[] = [];
+  run.board.forEach((p, seat) => {
+    if (p) figures.push({ kind: p.kind, stars: p.stars, seat, items: p.items.slice(), fed: p.fed });
+  });
+  return {
+    who: "You",
+    title: "",
+    figures,
+    charms: charmsOf(run.boons),
+    boons: run.boons.filter((b) => FIGHT_BOONS.includes(b)),
+    might: 100,
+  };
+}
+/** The traits the fielded party has any of, with counts and steps, switched-on ones first. */
+export function traitsNow(run: Run): TraitState[] {
+  const kinds = run.board.flatMap((p) => (p ? [p.kind] : []));
+  return traitStates(countTraits(kinds, charmsOf(run.boons)));
+}
+/** The room the run is in. */
+export const roomNow = (run: Run) => ROOMS[Math.min(run.room, ROOM_COUNT - 1)];
+/** The fight for the room being fought: the same setup every time it is asked for. Null outside a fight. */
+export function fightSetup(run: Run): FightSetup | null {
+  if (run.phase !== "fight") return null;
+  return { seed: mix(run.seed, 5000 + run.record.length), sides: [partyOf(run), run.foe] };
+}
+
+// ---------- the forest's side ----------
+
+/** Who is waiting in a room: the forest's trouble as planned, or a guild-mate's party for sparring. */
+export function opposition(seed: number, roomIndex: number, trailIndex: number): Party {
+  const room = ROOMS[roomIndex];
+  const trail = TRAILS[trailIndex] ?? TRAILS[0];
+  if (!room || room.kind === "spar") return sparParty(mix(seed, 700 + roomIndex), roomIndex, trailIndex);
+  const plan = pick({ rng: mix(seed, 300 + roomIndex) }, room.plans);
+  const figures: Placed[] = [];
+  for (const [kind, stars, col, row, from] of plan.party) {
+    if ((from ?? 0) > trailIndex) continue;
+    figures.push({ kind, stars, seat: row * COLS + col, items: [], fed: 0 });
+  }
+  return {
+    who: "The forest",
+    title: plan.name,
+    figures,
+    charms: [],
+    boons: [],
+    might: (room.kind === "boss" ? trail?.boss : trail?.trouble) ?? 100,
+  };
+}
+
+// ---------- the stall ----------
+
+const stallSize = (run: Run): number =>
+  run.boons.includes("widestall") ? boonNumber("widestall", "offers") : ECONOMY.stall;
+function drawOffer(run: Run): FigureId | null {
+  const odds = STALL_ODDS[Math.min(run.level, STALL_ODDS.length) - 1] ?? STALL_ODDS[0];
+  if (!odds) return null;
+  const tier =
+    1 +
+    weighted(
+      run,
+      odds.map((w, i) => (run.open.some((id) => FIGURES[id].tier === i + 1) ? w : 0)),
+    );
+  const pool = run.open.filter((id) => FIGURES[id].tier === tier);
+  return pool.length > 0 ? pick(run, pool) : null;
+}
+function restock(run: Run): void {
+  const stall: (FigureId | null)[] = [];
+  for (let i = 0; i < stallSize(run); i++) stall.push(drawOffer(run));
+  run.stall = stall;
+}
+
+// ---------- choices ----------
+
+function boonOptions(run: Run, not: readonly BoonId[]): BoonId[] {
+  const kins = new Set(pieces(run).map((p) => FIGURES[p.kind].kin));
+  const fits = (id: BoonId): boolean => {
+    const charm = BOONS[id].charm;
+    return !run.boons.includes(id) && (charm === undefined || kins.has(charm));
+  };
+  const all = BOON_IDS.filter(fits);
+  const fresh = all.filter((id) => !not.includes(id));
+  const left = fresh.length >= ECONOMY.boonOptions ? fresh : all;
+  const out: BoonId[] = [];
+  // One charm at most in any three, so there is always something else to take.
+  let charm = false;
+  while (out.length < ECONOMY.boonOptions) {
+    const pool = left.filter((id) => !out.includes(id) && !(charm && BOONS[id].sort === "charm"));
+    if (pool.length === 0) break;
+    const id = pick(run, pool);
+    out.push(id);
+    if (BOONS[id].sort === "charm") charm = true;
+  }
+  return out;
+}
+const componentOptions = (run: Run, count: number): ComponentId[] => shuffled(run, COMPONENT_IDS).slice(0, count);
+
+function newPiece(run: Run, kind: FigureId): Piece {
+  return { id: run.nextId++, kind, stars: 1, items: [], fed: 0 };
+}
+function remember<T>(list: T[], v: T): void {
+  if (!list.includes(v)) list.push(v);
+}
+
+// ---------- starting ----------
+
+export interface RunOptions {
+  /** Which trail, counting from 0. */
+  trail?: number;
+  /** The figures the stall may offer: the ones the member has open. Everyone, if not given. */
+  open?: readonly FigureId[];
+}
+/** Starts a run. It begins with a choice waiting: one of three one-acorn figures to set out with. */
+export function startRun(seed: number, options: RunOptions = {}): Run {
+  const trail = Math.min(TRAILS.length - 1, Math.max(0, Math.trunc(options.trail ?? 0)));
+  const open = FIGURE_IDS.filter((id) => options.open === undefined || options.open.includes(id));
+  const board: (Piece | null)[] = [];
+  for (let i = 0; i < SEATS; i++) board.push(null);
+  const bench: (Piece | null)[] = [];
+  for (let i = 0; i < ECONOMY.bench; i++) bench.push(null);
+  const run: Run = {
+    seed: seed >>> 0,
+    rng: mix(seed >>> 0, 1),
+    trail,
+    room: 0,
+    phase: "plan",
+    resolve: ECONOMY.resolve,
+    acorns: ECONOMY.startAcorns,
+    level: 1,
+    xp: 0,
+    board,
+    bench,
+    items: [],
+    stall: [],
+    held: false,
+    rustles: ECONOMY.freeRustles,
+    bought: 0,
+    boons: [],
+    choices: [],
+    foe: opposition(seed >>> 0, 0, trail),
+    record: [],
+    nextId: 1,
+    open: open.length > 0 ? open : [...FIGURE_IDS],
+    won: false,
+    left: false,
+    seen: { fielded: [], threeStars: [], forged: [], topped: [] },
+  };
+  const cheapest = run.open.filter((id) => FIGURES[id].tier === 1);
+  run.choices.push({ kind: "starter", options: shuffled(run, cheapest).slice(0, ECONOMY.starters) });
+  restock(run);
+  return run;
+}
+
+/** Why nothing can be planned just now, or null if it can. */
+function notPlanning(run: Run): string | null {
+  if (run.phase === "over") return "The raid is over.";
+  if (run.phase === "fight") return "The figures are busy fighting.";
+  const choice = run.choices[0];
+  if (!choice) return null;
+  if (choice.kind === "starter") return "Pick who sets out with you first.";
+  return choice.kind === "boon" ? "Pick a boon first." : "Pick a component first.";
+}
+
+/** Settles the choice that is waiting, by taking one of its options. */
+export function choose(run: Run, option: number): Done {
+  if (run.phase === "over") return no("The raid is over.");
+  const choice = run.choices[0];
+  if (!choice) return no("There is nothing to choose.");
+  const notes: Note[] = [];
+  if (choice.kind === "starter") {
+    const kind = choice.options[option];
+    if (kind === undefined) return no("That is not one of the three.");
+    const piece = newPiece(run, kind);
+    // Front row, in the middle.
+    const seat = Math.floor(COLS / 2);
+    run.board[seat] = piece;
+    notes.push({ t: "starter", kind, piece: piece.id, to: { on: "board", at: seat } });
+  } else if (choice.kind === "component") {
+    const item = choice.options[option];
+    if (item === undefined) return no("That is not on offer.");
+    run.items.push(item);
+    notes.push({ t: "component", item });
+  } else {
+    const boon = choice.options[option];
+    if (boon === undefined) return no("That is not on offer.");
+    run.boons.push(boon);
+    notes.push({ t: "boon", boon });
+    if (boon === "windfall") {
+      const amount = boonNumber(boon, "acorns");
+      run.acorns += amount;
+      notes.push({ t: "acorns", why: "windfall", amount });
+    } else if (boon === "basket") {
+      const items: ItemId[] = [];
+      for (let i = 0; i < boonNumber(boon, "components"); i++) items.push(pick(run, COMPONENT_IDS));
+      run.items.push(...items);
+      notes.push({ t: "items", why: "basket", items });
+    } else if (boon === "blanket") {
+      const back = Math.min(boonNumber(boon, "now"), ECONOMY.resolve - run.resolve);
+      run.resolve += back;
+      notes.push({ t: "resolve", change: back, left: run.resolve });
+    } else if (boon === "widestall") {
+      while (run.stall.length < stallSize(run)) run.stall.push(drawOffer(run));
+    } else if (boon === "regular") {
+      run.rustles += boonNumber(boon, "rustles");
+    }
+  }
+  run.choices.shift();
+  const next = run.choices[0];
+  if (next) notes.push({ t: "choice", kind: next.kind });
+  return yes(notes);
+}
+/** Swaps the three boons on offer for three others. Each offer of boons allows it once. */
+export function redraw(run: Run): Done {
+  if (run.phase === "over") return no("The raid is over.");
+  const choice = run.choices[0];
+  if (choice?.kind !== "boon") return no("There are no boons on offer.");
+  if (choice.redraws <= 0) return no("You have already asked for others.");
+  choice.redraws--;
+  choice.options = boonOptions(run, choice.options);
+  return yes([{ t: "redrawn", options: choice.options.slice() }]);
+}
+
+// ---------- three of a kind ----------
+
+/**
+ * Wherever there are three of the same figure with the same stars, makes them one with a star more,
+ * and again if that makes another three. The one furthest forward stays (board before bench); the
+ * items of the other two go to it while it has room, and the rest back to the item bench. `loose`
+ * is a figure just bought that has no place of its own yet.
+ */
+function merge(run: Run, loose: Piece | null, notes: Note[]): void {
+  let spare = loose;
+  for (;;) {
+    const groups = new Map<string, Piece[]>();
+    const all = pieces(run);
+    if (spare) all.push(spare);
+    let trio: Piece[] | undefined;
+    for (const p of all) {
+      if (p.stars >= 3) continue;
+      const key = `${p.kind}:${p.stars}`;
+      const group = groups.get(key) ?? [];
+      group.push(p);
+      groups.set(key, group);
+      if (group.length >= 3) {
+        trio = group;
+        break;
+      }
+    }
+    const [keep, a, b] = trio ?? [];
+    if (!keep || !a || !b) return;
+    const at = spotOf(run, keep.id);
+    if (!at) return;
+    const spilled: ItemId[] = [];
+    for (const gone of [a, b]) {
+      const from = spotOf(run, gone.id);
+      if (from?.on === "board") run.board[from.at] = null;
+      else if (from) run.bench[from.at] = null;
+      else spare = null;
+      for (const item of gone.items) {
+        const got = holdItem(keep.items, item);
+        if (!got) {
+          spilled.push(item);
+          continue;
+        }
+        keep.items = got.held;
+        if (got.forged) remember(run.seen.forged, got.forged);
+      }
+      keep.fed = Math.max(keep.fed, gone.fed);
+    }
+    keep.stars = keep.stars === 1 ? 2 : 3;
+    run.items.push(...spilled);
+    if (keep.stars === 3) remember(run.seen.threeStars, keep.kind);
+    notes.push({
+      t: "merged",
+      kind: keep.kind,
+      stars: keep.stars,
+      piece: keep.id,
+      at,
+      gone: [a.id, b.id],
+      items: keep.items.slice(),
+      spilled,
+    });
+  }
+}
+
+// ---------- planning ----------
+
+/** Buys an offer from the stall onto the bench. With a full bench, only if it completes three of a kind. */
+export function buy(run: Run, offerAt: number): Done {
+  const stop = notPlanning(run);
+  if (stop) return no(stop);
+  const kind = run.stall[offerAt];
+  if (!kind) return no("That place on the stall is empty.");
+  const cost = priceOf(run, offerAt);
+  if (run.acorns < cost) return no("Not enough acorns.");
+  const slot = run.bench.indexOf(null);
+  const twins = pieces(run).filter((p) => p.kind === kind && p.stars === 1).length;
+  if (slot < 0 && twins < 2) return no("The bench is full.");
+  run.acorns -= cost;
+  run.stall[offerAt] = null;
+  run.bought++;
+  const piece = newPiece(run, kind);
+  if (slot >= 0) run.bench[slot] = piece;
+  const notes: Note[] = [
+    { t: "bought", kind, piece: piece.id, offer: offerAt, cost, to: slot >= 0 ? { on: "bench", at: slot } : null },
+  ];
+  merge(run, slot >= 0 ? null : piece, notes);
+  return yes(notes);
+}
+/** Sells a figure for acorns. What it was holding goes back to the item bench. */
+export function sell(run: Run, from: Spot): Done {
+  const stop = notPlanning(run);
+  if (stop) return no(stop);
+  const piece = pieceAt(run, from);
+  if (!piece) return no("Nobody is there.");
+  if (pieces(run).length <= 1) return no("Somebody has to go on the raid.");
+  const acorns = sellValue(piece);
+  run.acorns += acorns;
+  run.items.push(...piece.items);
+  if (from.on === "board") run.board[from.at] = null;
+  else run.bench[from.at] = null;
+  return yes([
+    { t: "sold", kind: piece.kind, stars: piece.stars, piece: piece.id, from, acorns, items: piece.items.slice() },
+  ]);
+}
+/** Moves a figure to another spot, changing places with whoever is there. */
+export function move(run: Run, from: Spot, to: Spot): Done {
+  const stop = notPlanning(run);
+  if (stop) return no(stop);
+  const piece = pieceAt(run, from);
+  const there = pieceAt(run, to);
+  if (piece === undefined || there === undefined) return no("There is no such place.");
+  if (!piece) return no("Nobody is there.");
+  if (from.on === to.on && from.at === to.at) return no("It is already there.");
+  if (!there && to.on === "board" && from.on === "bench" && fielded(run) >= fieldCap(run)) {
+    const cap = fieldCap(run);
+    return no(`You can field ${cap} figure${cap === 1 ? "" : "s"} for now.`);
+  }
+  if (to.on === "board") run.board[to.at] = piece;
+  else run.bench[to.at] = piece;
+  if (from.on === "board") run.board[from.at] = there;
+  else run.bench[from.at] = there;
+  return yes([{ t: "moved", piece: piece.id, from, to, swapped: there?.id ?? null }]);
+}
+/** Takes a figure off the board to the first free place on the bench. */
+export function toBench(run: Run, seat: number): Done {
+  const stop = notPlanning(run);
+  if (stop) return no(stop);
+  if (!run.board[seat]) return no("Nobody is there.");
+  const slot = run.bench.indexOf(null);
+  if (slot < 0) return no("The bench is full.");
+  return move(run, { on: "board", at: seat }, { on: "bench", at: slot });
+}
+/** New offers on the stall: free once a room, then for acorns. */
+export function rustle(run: Run): Done {
+  const stop = notPlanning(run);
+  if (stop) return no(stop);
+  const cost = rustleCost(run);
+  if (run.acorns < cost) return no("Not enough acorns.");
+  if (cost === 0) run.rustles--;
+  run.acorns -= cost;
+  run.held = false;
+  restock(run);
+  return yes([{ t: "rustled", cost, stall: run.stall.slice() }]);
+}
+/** Keeps the stall as it is for the next room, or lets it go again. */
+export function hold(run: Run, on: boolean = !run.held): Done {
+  const stop = notPlanning(run);
+  if (stop) return no(stop);
+  run.held = on;
+  return yes([{ t: "held", on }]);
+}
+function gainXp(run: Run, amount: number, notes: Note[]): void {
+  if (run.level >= MAX_LEVEL) return;
+  run.xp += amount;
+  for (;;) {
+    const need = ECONOMY.levelXp[run.level - 1];
+    if (need === undefined || run.xp < need) break;
+    run.xp -= need;
+    run.level++;
+    notes.push({ t: "level", level: run.level });
+  }
+  if (run.level >= MAX_LEVEL) run.xp = 0;
+}
+/** Buys experience with acorns. */
+export function buyXp(run: Run): Done {
+  const stop = notPlanning(run);
+  if (stop) return no(stop);
+  if (run.level >= MAX_LEVEL) return no("There is no level above this one.");
+  if (run.acorns < ECONOMY.xpCost) return no("Not enough acorns.");
+  run.acorns -= ECONOMY.xpCost;
+  const notes: Note[] = [{ t: "xp", gained: ECONOMY.xpBought, cost: ECONOMY.xpCost }];
+  gainXp(run, ECONOMY.xpBought, notes);
+  return yes(notes);
+}
+/** Hands an item from the item bench to a figure. Two components on one figure become a finished item. */
+export function giveItem(run: Run, itemAt: number, to: Spot): Done {
+  const stop = notPlanning(run);
+  if (stop) return no(stop);
+  const item = run.items[itemAt];
+  if (item === undefined) return no("There is no such item.");
+  const piece = pieceAt(run, to);
+  if (!piece) return no("Nobody is there.");
+  const got = holdItem(piece.items, item);
+  if (!got) return no("It is holding all it can.");
+  piece.items = got.held;
+  run.items.splice(itemAt, 1);
+  if (got.forged) remember(run.seen.forged, got.forged);
+  return yes([{ t: "gave", item, piece: piece.id, forged: got.forged, holds: piece.items.slice() }]);
+}
+
+// ---------- the fight and the takings ----------
+
+/** Sends the party in. The screen gets the fight's setup to play; the run waits for `takeTakings`. */
+export function beginFight(run: Run): Begun {
+  const stop = notPlanning(run);
+  if (stop) return no(stop);
+  if (fielded(run) === 0) return no("Put somebody on the board first.");
+  if (fielded(run) > fieldCap(run)) return no("There are more on the board than you can field.");
+  run.phase = "fight";
+  for (const p of run.board) if (p) remember(run.seen.fielded, p.kind);
+  for (const state of traitsNow(run)) {
+    if (state.step >= topStep(state.trait)) remember(run.seen.topped, state.trait);
+  }
+  const setup = fightSetup(run);
+  if (!setup) return no("The figures are not ready.");
+  return { ok: true, notes: [{ t: "fight", room: run.room, seed: setup.seed }], setup };
+}
+
+/**
+ * Ends the room: works out how the fight went, takes resolve for a loss, pays acorns and
+ * experience, queues what there is to choose, and moves on to the next room (or ends the run).
+ * It may be called at any point after `beginFight`, which is all "skip" is.
+ */
+export function takeTakings(run: Run): Taken {
+  const setup = fightSetup(run);
+  if (!setup) return no(run.phase === "over" ? "The raid is over." : "There has been no fight yet.");
+  const fight = resolveFight(setup);
+  const room = ROOMS[run.room];
+  if (!room) return no("There is no such room.");
+  const won = fight.result === "win";
+  const last = run.room >= ROOM_COUNT - 1;
+  const notes: Note[] = [{ t: "result", room: run.room, result: fight.result, standing: fight.standing }];
+  const boss = run.foe.figures.map((p) => p.kind).find(isBossId) ?? null;
+  run.record.push({ room: run.room, kind: room.kind, result: fight.result, standing: fight.standing, boss });
+
+  if (!won) {
+    // A loss costs a base and one more for each enemy left; a draw only the base.
+    const standing = fight.result === "draw" ? 0 : fight.standing[1];
+    const less = run.boons.includes("blanket") ? boonNumber("blanket", "less") : 0;
+    const cost = Math.max(1, Math.min(ECONOMY.lossMost, ECONOMY.lossBase + standing) - less);
+    run.resolve = Math.max(0, run.resolve - cost);
+    notes.push({ t: "resolve", change: -cost, left: run.resolve });
+  }
+  // Greg has eaten something.
+  for (const p of run.board) {
+    if (p?.kind === "greg" && p.fed < traitNumber("greg", "most", 1)) {
+      p.fed++;
+      notes.push({ t: "fed", piece: p.id, fed: p.fed });
+    }
+  }
+  if (run.resolve <= 0 || (won && last)) {
+    run.phase = "over";
+    run.won = won && last;
+    notes.push({ t: "over", won: run.won });
+    return { ok: true, notes, fight };
+  }
+
+  // Acorns: interest on what was held, then the room's pay.
+  const pay = (why: "room" | "win" | "interest" | "gnomes", amount: number): void => {
+    if (amount <= 0) return;
+    notes.push({ t: "acorns", why, amount });
+  };
+  const interest = interestNow(run);
+  const gnomes = traitNumber("gnome", won ? "win" : "loss", traitSteps(partyOf(run)).gnome ?? 0);
+  pay("room", ECONOMY.roomAcorns);
+  pay("win", won ? ECONOMY.winAcorns : 0);
+  pay("interest", interest);
+  pay("gnomes", gnomes);
+  run.acorns += ECONOMY.roomAcorns + (won ? ECONOMY.winAcorns : 0) + interest + gnomes;
+  const xp = run.boons.includes("quickstudy") ? boonNumber("quickstudy", "xp") : ECONOMY.xpRoom;
+  notes.push({ t: "xp", gained: xp, cost: 0 });
+  gainXp(run, xp, notes);
+
+  // Things to choose: components from trouble and bosses, a boon after some rooms.
+  if (room.kind !== "spar") {
+    const picks = room.kind === "boss" && won ? 2 : 1;
+    for (let i = 0; i < picks; i++) {
+      const count = won ? ECONOMY.componentsWon : ECONOMY.componentsLost;
+      run.choices.push({ kind: "component", options: componentOptions(run, count) });
+    }
+  }
+  const boonDue =
+    ECONOMY.boonRooms.some((r) => r === run.room) && run.record.filter((r) => r.room === run.room).length === 1;
+  if (boonDue) run.choices.push({ kind: "boon", options: boonOptions(run, []), redraws: ECONOMY.boonRedraws });
+
+  // On to the next room. The last one is fought again until it is won or resolve runs out.
+  if (!last) run.room++;
+  run.phase = "plan";
+  run.bought = 0;
+  run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
+  if (run.held) run.held = false;
+  else restock(run);
+  run.foe = opposition(run.seed, run.room, run.trail);
+  const next = ROOMS[run.room];
+  if (next) notes.push({ t: "room", room: run.room, kind: next.kind, who: run.foe.who, title: run.foe.title });
+  const waiting = run.choices[0];
+  if (waiting) notes.push({ t: "choice", kind: waiting.kind });
+  return { ok: true, notes, fight };
+}
+
+/** Walks home early. The run is over, and is still paid for the rooms it cleared. */
+export function abandon(run: Run): Done {
+  if (run.phase === "over") return no("The raid is over.");
+  run.phase = "over";
+  run.left = true;
+  run.choices = [];
+  return yes([{ t: "over", won: false }]);
+}
+
+// ---------- when it is over ----------
+
+/** What a run amounted to: what the payout and the almanac are worked out from. */
+export interface RunSummary {
+  trail: number;
+  won: boolean;
+  left: boolean;
+  /** Rooms won. */
+  cleared: number;
+  /** The furthest room met, counting from 1. */
+  reached: number;
+  /** Bosses beaten. */
+  bosses: BossId[];
+  fielded: FigureId[];
+  threeStars: FigureId[];
+  forged: FinishedId[];
+  /** Traits switched on at their top step. */
+  topped: TraitId[];
+}
+export function summariseRun(run: Run): RunSummary {
+  const wonRooms = new Set(run.record.filter((r) => r.result === "win").map((r) => r.room));
+  const bosses: BossId[] = [];
+  for (const r of run.record) if (r.result === "win" && r.boss && !bosses.includes(r.boss)) bosses.push(r.boss);
+  return {
+    trail: run.trail,
+    won: run.won,
+    left: run.left,
+    cleared: wonRooms.size,
+    reached: Math.min(
+      ROOM_COUNT,
+      run.record.reduce((most, r) => Math.max(most, r.room + 1), run.room + 1),
+    ),
+    bosses,
+    fielded: run.seen.fielded.slice(),
+    threeStars: run.seen.threeStars.slice(),
+    forged: run.seen.forged.slice(),
+    topped: run.seen.topped.slice(),
+  };
+}

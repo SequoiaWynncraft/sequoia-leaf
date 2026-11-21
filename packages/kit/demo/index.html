@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The kit</title>
+    <link rel="stylesheet" href="../src/kit.css" />
+    <style>
+      html body {
+        min-height: 100vh;
+        background: linear-gradient(#b84d84, #e67967 18%, #2f5c34 18%, #3b7340);
+        padding: calc(var(--u) * 8);
+        box-sizing: border-box;
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(var(--u) * 10);
+        align-items: flex-start;
+      }
+      .w {
+        width: calc(var(--u) * 190);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="k-col">
+      <div class="k-plaque k-row" style="padding: var(--u) calc(var(--u) * 4)">
+        <span class="k-cur leaf"><i class="k-i k-i-leaf"></i>69</span>
+        <span class="k-cur"><i class="k-i k-i-coin"></i>752</span>
+      </div>
+      <div class="k-row">
+        <button class="k-btn wood icon"><i class="k-i k-i-sound"></i></button>
+        <button class="k-btn wood icon"><i class="k-i k-i-mute"></i></button>
+        <button class="k-btn plum icon"><i class="k-i k-i-back"></i></button>
+        <button class="k-btn wood icon sm"><i class="k-i k-i-close"></i></button>
+      </div>
+      <div class="k-plaque k-row" style="padding: var(--u); gap: var(--u); align-self: flex-start">
+        <button class="k-slot" style="width: calc(var(--u) * 21); height: calc(var(--u) * 21)">
+          <i class="k-i k-i-acorn"></i>
+        </button>
+        <button class="k-slot lit" style="width: calc(var(--u) * 21); height: calc(var(--u) * 21)">
+          <i class="k-i k-i-star"></i>
+        </button>
+        <button class="k-slot" style="width: calc(var(--u) * 21); height: calc(var(--u) * 21)">
+          <i class="k-i k-i-gear"></i>
+        </button>
+      </div>
+      <div class="k-over">Sootpaw <span class="k-gold">Warden</span></div>
+      <div class="k-say">you're here!</div>
+      <div class="k-tip" style="margin-top: calc(var(--u) * 4)">
+        <b class="k-gold">Jar of fireflies</b><br /><span class="k-dim">They follow whoever<br />opens the lid.</span>
+      </div>
+      <div class="k-toast">The guild has taken Mossgate Crossing.</div>
+      <div class="k-toast leaf">Pipwick reached level 35.</div>
+      <div class="k-row">
+        <i class="k-i k-i-acorn"></i><i class="k-i k-i-star"></i><i class="k-i k-i-heart"></i
+        ><i class="k-i k-i-lock"></i><i class="k-i k-i-check"></i><i class="k-i k-i-gear"></i
+        ><i class="k-i k-i-leaf" style="--s: 2"></i><i class="k-i k-i-coin" style="--s: 2"></i>
+      </div>
+      <div class="k-row">
+        <i class="k-i k-i-hammer"></i><i class="k-i k-i-mail"></i><i class="k-i k-i-gift"></i
+        ><i class="k-i k-i-turn"></i><i class="k-i k-i-tray"></i><i class="k-i k-i-home"></i><i class="k-i k-i-paw"></i>
+      </div>
+    </div>
+
+    <section class="k-panel w">
+      <header class="k-head">
+        <i class="k-i k-i-coin"></i>
+        <h2 class="k-title">Treasury</h2>
+        <button class="k-btn wood icon sm"><i class="k-i k-i-close"></i></button>
+      </header>
+      <div class="k-body">
+        <div class="k-row" style="align-items: flex-end">
+          <div class="k-slot" style="width: calc(var(--u) * 24); height: calc(var(--u) * 24)"></div>
+          <div class="k-say left k-grow"><b>Cinfy</b>Don't shake it. They hold grudges.</div>
+        </div>
+        <div class="k-card">
+          <div class="k-grow">Leaf crown<br /><span class="k-d">A wreath of gold leaves.</span></div>
+          <span class="k-chip">Yours</span>
+        </div>
+        <div class="k-card lit">
+          <div class="k-grow">Jar of fireflies<br /><span class="k-d">They follow you about.</span></div>
+          <button class="k-btn leaf sm"><i class="k-i k-i-leaf"></i>12</button>
+        </div>
+        <div class="k-card">
+          <div class="k-grow">Cocoa for the fire</div>
+          <button class="k-btn sm"><i class="k-i k-i-coin"></i>40</button>
+        </div>
+        <div class="k-bar"><i style="--v: 62%"></i></div>
+        <div class="k-bar leaf"><i style="--v: 30%"></i></div>
+        <div class="k-tabs">
+          <button class="k-btn sm" aria-selected="true">Wares</button>
+          <button class="k-btn sm">Yours</button>
+          <button class="k-btn sm">Guild</button>
+        </div>
+        <div class="k-row">
+          <button class="k-btn">Set out</button>
+          <button class="k-btn wood">Rustle</button>
+          <button class="k-btn plum">Later</button>
+        </div>
+        <div class="k-row">
+          <button class="k-btn down">Pressed</button>
+          <button class="k-btn coral">Leave</button>
+          <button class="k-btn" disabled>Locked</button>
+        </div>
+        <div class="k-wrap">
+          <span class="k-chip lit">2 Ember</span><span class="k-chip">1 Moss</span><span class="k-chip">3 Crab</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="k-paper w k-rise">
+      <h2 class="k-title big">Welcome home</h2>
+      <div class="k-dim">While you were away:</div>
+      <hr />
+      <div class="k-row">
+        <i class="k-i k-i-leaf"></i><span class="k-grow">Two raids with the guild</span><b>+24</b>
+      </div>
+      <hr />
+      <div class="k-row"><i class="k-i k-i-coin"></i><span class="k-grow">The Works kept working</span><b>+310</b></div>
+      <hr />
+      <div class="k-label">Sootpaw left you a note</div>
+      <p style="margin: calc(var(--u) * 2) 0 calc(var(--u) * 4)">The crab count is off again. It is always off.</p>
+      <button class="k-btn wide">Into town</button>
+    </section>
+  </body>
+</html>

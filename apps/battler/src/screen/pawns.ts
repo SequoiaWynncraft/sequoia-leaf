@@ -1,0 +1,339 @@
+/**
+ * The party's figures as they stand on the table while planning: one pawn for every figure the
+ * member owns, on a seat of the board or in a hollow of the bench. A pawn follows its figure about
+ * (hopping to wherever the rules have put it) and acts out what the rules say happened: bought
+ * from the stall, sold back, three hopping together into one with a star more.
+ *
+ * Everything is measured from the board's corner, in art pixels.
+ */
+import { GOLD } from "@sequoia-leaf/kit/palette.ts";
+import { clamp, lerp } from "@sequoia-leaf/kit/util.ts";
+
+import { type FigureId, traitsOf } from "../game/content/figures.ts";
+import type { TraitId } from "../game/content/traits.ts";
+import type { Note, Run, Spot, Stars } from "../game/index.ts";
+import { glyphPic, itemPic } from "./art/icons.ts";
+import { TRAIT_COLOUR } from "./art/pal.ts";
+import { framesOf } from "./art/sprites.ts";
+import { burst, fly, later, ring, say } from "./fx.ts";
+import { type Pt, seatAtPoint, seatXY, slotAtPoint, slotXY } from "./geometry.ts";
+import { signal } from "./signals.ts";
+import { snd } from "./sounds.ts";
+import { boardSpot, V } from "./stage.ts";
+
+/** How far below the middle of its hex a figure's feet are. */
+export const FOOT = 3;
+
+export interface Pawn {
+  id: number;
+  kind: FigureId;
+  /** Its stars as shown, which lag the rules for the moment three are hopping together. */
+  stars: Stars;
+  /** Where it belongs; null for one that is on its way out, or has no place yet. */
+  spot: Spot | null;
+  x: number;
+  y: number;
+  /** How high off the table it is this moment. */
+  lift: number;
+  moving: boolean;
+  fx: number;
+  fy: number;
+  tx: number;
+  ty: number;
+  t0: number;
+  dur: number;
+  arc: number;
+  /** Out of step with the others, so they do not all breathe together. */
+  phase: number;
+  /** When its star last popped, when it last cheered, and until when it wiggles to be noticed. */
+  popAt: number;
+  cheerAt: number;
+  wiggleUntil: number;
+  /** On its way to being gone: into another figure, or back to the stall (fading as it goes). */
+  leaving: boolean;
+  /** On the last hop it will make: it is gone when it lands. */
+  last: boolean;
+  fading: boolean;
+  /** Drawn over the whole interface while it flies, because it is crossing it. */
+  air: boolean;
+  alpha: number;
+  facing: boolean;
+}
+
+export const pawns = new Map<number, Pawn>();
+
+/** Where a figure's feet go for a place on the board or the bench. */
+export function spotXY(spot: Spot): Pt {
+  if (spot.on === "bench") return slotXY(spot.at);
+  const p = seatXY(spot.at);
+  return { x: p.x, y: p.y + FOOT };
+}
+
+function make(id: number, kind: FigureId, stars: Stars, at: Pt, spot: Spot | null): Pawn {
+  const p: Pawn = {
+    id,
+    kind,
+    stars,
+    spot,
+    x: at.x,
+    y: at.y,
+    lift: 0,
+    moving: false,
+    fx: at.x,
+    fy: at.y,
+    tx: at.x,
+    ty: at.y,
+    t0: 0,
+    dur: 0,
+    arc: 0,
+    phase: (id * 0.37) % 1,
+    popAt: -9,
+    cheerAt: -9,
+    wiggleUntil: -9,
+    leaving: false,
+    last: false,
+    fading: false,
+    air: false,
+    alpha: 1,
+    facing: false,
+  };
+  pawns.set(id, p);
+  return p;
+}
+
+/** Sends a pawn hopping to a point. */
+export function hop(p: Pawn, to: Pt, dur = 0.24, arc = 9, air = false): void {
+  p.fx = p.x;
+  p.fy = p.y;
+  p.tx = to.x;
+  p.ty = to.y;
+  p.t0 = V.t;
+  p.dur = dur;
+  p.arc = arc;
+  p.moving = true;
+  p.air = air;
+  if (Math.abs(to.x - p.x) > 1) p.facing = to.x < p.x;
+}
+
+/** Forgets every pawn, as when a run is put down or another is taken up. */
+export function clearPawns(): void {
+  pawns.clear();
+}
+
+/**
+ * Makes the pawns agree with the run: a pawn for every figure, each on its way to where its figure
+ * is. Pawns in the middle of leaving are left to finish.
+ */
+export function syncPawns(run: Run | null, settle = false): void {
+  const seen = new Set<number>();
+  const visit = (piece: Run["board"][number], spot: Spot): void => {
+    if (!piece) return;
+    seen.add(piece.id);
+    const at = spotXY(spot);
+    let p = pawns.get(piece.id);
+    if (!p) {
+      p = make(piece.id, piece.kind, piece.stars, at, spot);
+      return;
+    }
+    const moved = !p.spot || p.spot.on !== spot.on || p.spot.at !== spot.at;
+    p.spot = spot;
+    p.leaving = false;
+    if (settle) {
+      p.x = at.x;
+      p.y = at.y;
+      p.moving = false;
+      p.air = false;
+      p.stars = piece.stars;
+    } else if (moved || (!p.moving && (Math.abs(p.x - at.x) > 0.5 || Math.abs(p.y - at.y) > 0.5))) {
+      hop(p, at, 0.22, 8, p.air);
+    }
+  };
+  if (run) {
+    run.board.forEach((piece, at) => visit(piece, { on: "board", at }));
+    run.bench.forEach((piece, at) => visit(piece, { on: "bench", at }));
+  }
+  for (const [id, p] of pawns) {
+    if (!seen.has(id) && !p.leaving) pawns.delete(id);
+  }
+}
+
+export function stepPawns(): void {
+  for (const [id, p] of pawns) {
+    if (!p.moving) {
+      p.lift = 0;
+      continue;
+    }
+    const k = clamp((V.t - p.t0) / p.dur, 0, 1);
+    const e = k * k * (3 - 2 * k);
+    p.x = lerp(p.fx, p.tx, e);
+    p.y = lerp(p.fy, p.ty, e);
+    p.lift = Math.sin(k * Math.PI) * p.arc;
+    if (p.fading) p.alpha = 1 - k * k;
+    if (k >= 1) {
+      p.moving = false;
+      p.air = false;
+      p.lift = 0;
+      if (p.leaving && p.last) pawns.delete(id);
+    }
+  }
+}
+
+/** The pawn under a point measured from the board's corner: by its body first, then by its seat. */
+export function pawnAt(run: Run, x: number, y: number): Pawn | null {
+  let best: Pawn | null = null;
+  for (const p of pawns.values()) {
+    if (p.leaving || !p.spot) continue;
+    const f = framesOf(p.kind);
+    const half = Math.max(6, f.wide / 2);
+    if (x < p.x - half || x > p.x + half || y > p.y + 3 || y < p.y - f.tall - 1) continue;
+    if (!best || p.y > best.y) best = p;
+  }
+  if (best) return best;
+  const seat = seatAtPoint(x, y);
+  const slot = seat < 0 ? slotAtPoint(x, y) : -1;
+  const piece = seat >= 0 ? run.board[seat] : slot >= 0 ? run.bench[slot] : null;
+  return piece ? (pawns.get(piece.id) ?? null) : null;
+}
+
+/** The place under a point: a seat, a hollow of the bench, or nowhere. */
+export function spotAt(x: number, y: number): Spot | null {
+  const seat = seatAtPoint(x, y);
+  if (seat >= 0) return { on: "board", at: seat };
+  const slot = slotAtPoint(x, y);
+  return slot >= 0 ? { on: "bench", at: slot } : null;
+}
+
+/** Every fielded figure of a trait hops, one after another: the trait answering. */
+export function cheer(run: Run, trait: TraitId): void {
+  let n = 0;
+  for (const piece of run.board) {
+    if (!piece || !traitsOf(piece.kind).includes(trait)) continue;
+    const p = pawns.get(piece.id);
+    if (!p) continue;
+    p.cheerAt = V.t + n * 0.07;
+    const at = { x: p.x, y: p.y };
+    later(n * 0.07, () => burst(at.x, at.y - 8, 5, [TRAIT_COLOUR[trait], GOLD[2]], { speed: 20, ttl: 0.5 }));
+    n++;
+  }
+}
+
+/** A pawn wiggles for a while, to be noticed. */
+export function wiggle(id: number, seconds = 1.2): void {
+  const p = pawns.get(id);
+  if (p) p.wiggleUntil = V.t + seconds;
+}
+
+const STAR_COLS = [GOLD[2], GOLD[1], "#ffffff"];
+
+/** Three become one: the two that go hop onto the one that stays, and its new star pops. */
+function merge(note: Extract<Note, { t: "merged" }>, delay: number): void {
+  const keeper = pawns.get(note.piece);
+  // The two that go are spoken for from this moment, though they have not yet jumped.
+  for (const id of note.gone) {
+    const p = pawns.get(id);
+    if (!p) continue;
+    p.leaving = true;
+    p.spot = null;
+  }
+  later(delay, () => {
+    snd.hopTogether();
+    for (const id of note.gone) {
+      const p = pawns.get(id);
+      if (!p) continue;
+      p.last = true;
+      const to = keeper ? { x: keeper.x, y: keeper.y } : spotXY(note.at);
+      hop(p, to, 0.34, 18, p.air);
+    }
+    // The one that stays jumps to meet them.
+    if (keeper) keeper.cheerAt = V.t + 0.06;
+  });
+  later(delay + 0.35, () => {
+    const at = keeper ? { x: keeper.x, y: keeper.y } : spotXY(note.at);
+    if (keeper) {
+      keeper.stars = note.stars;
+      keeper.popAt = V.t;
+    }
+    const grand = note.stars >= 3;
+    snd.star(note.stars);
+    burst(at.x, at.y - 10, grand ? 40 : 18, STAR_COLS, { speed: grand ? 60 : 42, ttl: grand ? 1 : 0.6, grav: 40 });
+    ring(at.x, at.y, grand ? 40 : 22, GOLD[2], grand ? 0.7 : 0.45);
+    if (grand) {
+      ring(at.x, at.y, 60, GOLD[1], 1);
+      later(0.12, () => burst(at.x, at.y - 14, 24, STAR_COLS, { speed: 30, ttl: 1.2, grav: -10 }));
+    }
+    say(at.x, at.y - 20, grand ? "Three stars!" : "Two stars!", GOLD[2], { big: grand, ttl: grand ? 1.6 : 1.1 });
+    signal("merged", note.stars);
+  });
+}
+
+/** Acts out what the rules said happened, in order. */
+export function hearNotes(notes: readonly Note[]): void {
+  let delay = 0;
+  for (const note of notes) {
+    if (note.t === "bought") {
+      {
+        const from = boardSpot(document.querySelector(`[data-offer="${note.offer}"]`)) ?? slotXY(4);
+        const p = make(note.piece, note.kind, 1, from, note.to);
+        if (note.to) hop(p, spotXY(note.to), 0.3, 12, true);
+        else p.air = true;
+        snd.buy();
+        delay = Math.max(delay, 0.16);
+      }
+    } else if (note.t === "starter") {
+      {
+        const from = boardSpot(document.querySelector("[data-pick].chosen")) ?? spotXY(note.to);
+        const p = make(note.piece, note.kind, 1, from, note.to);
+        hop(p, spotXY(note.to), 0.42, 22, true);
+        later(0.42, () => {
+          snd.place();
+          ring(p.x, p.y, 16, GOLD[2]);
+        });
+      }
+    } else if (note.t === "merged") {
+      merge(note, delay);
+      delay += 0.65;
+    } else if (note.t === "sold") {
+      {
+        const p = pawns.get(note.piece);
+        const to = boardSpot(document.getElementById("stall")) ?? slotXY(4);
+        const from = p ? { x: p.x, y: p.y - 8 } : spotXY(note.from);
+        if (p) {
+          p.leaving = true;
+          p.last = true;
+          p.fading = true;
+          p.spot = null;
+          hop(p, to, 0.3, 10, true);
+        }
+        snd.sell();
+        const purse = boardSpot(document.getElementById("acorns")) ?? to;
+        for (let i = 0; i < note.acorns; i++) {
+          fly(glyphPic("acorn"), from, purse, {
+            delay: 0.08 + i * 0.05,
+            dur: 0.4,
+            arc: 16,
+            land: () => {
+              snd.acorn(i);
+              signal("acorn", 1);
+            },
+          });
+        }
+      }
+    } else if (note.t === "moved") snd.place();
+    else if (note.t === "gave") {
+      const p = pawns.get(note.piece);
+      if (!p) continue;
+      {
+        p.cheerAt = V.t;
+        if (note.forged) {
+          const at = { x: p.x, y: p.y };
+          const made = note.forged;
+          later(0.12, () => {
+            snd.forge();
+            burst(at.x, at.y - 12, 16, STAR_COLS, { speed: 34, ttl: 0.6 });
+            fly(itemPic(made), { x: at.x, y: at.y - 26 }, { x: at.x, y: at.y - 10 }, { dur: 0.5, arc: 8 });
+          });
+        } else snd.give();
+      }
+    }
+  }
+}

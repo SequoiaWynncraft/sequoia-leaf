@@ -21,8 +21,41 @@
         "@types/bun": "1.4.4",
       },
     },
+    "apps/battler": {
+      "name": "@sequoia-leaf/battler",
+      "dependencies": {
+        "@sequoia-leaf/kit": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
+    "apps/town": {
+      "name": "@sequoia-leaf/town",
+      "dependencies": {
+        "@sequoia-leaf/kit": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
+    "apps/works": {
+      "name": "@sequoia-leaf/works",
+      "dependencies": {
+        "@sequoia-leaf/kit": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
     "packages/core": {
       "name": "@sequoia-leaf/core",
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
+    "packages/kit": {
+      "name": "@sequoia-leaf/kit",
       "devDependencies": {
         "@types/bun": "1.4.4",
       },
@@ -87,7 +120,15 @@
 
     "@sequoia-leaf/api": ["@sequoia-leaf/api@workspace:apps/api"],
 
+    "@sequoia-leaf/battler": ["@sequoia-leaf/battler@workspace:apps/battler"],
+
     "@sequoia-leaf/core": ["@sequoia-leaf/core@workspace:packages/core"],
+
+    "@sequoia-leaf/kit": ["@sequoia-leaf/kit@workspace:packages/kit"],
+
+    "@sequoia-leaf/town": ["@sequoia-leaf/town@workspace:apps/town"],
+
+    "@sequoia-leaf/works": ["@sequoia-leaf/works@workspace:apps/works"],
 
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 

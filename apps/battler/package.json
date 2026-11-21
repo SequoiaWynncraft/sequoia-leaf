@@ -1,0 +1,16 @@
+{
+  "name": "@sequoia-leaf/battler",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot index.html",
+    "build": "bun build index.html --outdir dist --minify",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@sequoia-leaf/kit": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.4"
+  }
+}

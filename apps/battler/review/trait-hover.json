@@ -1,0 +1,75 @@
+[
+  ["size", 1280, 800],
+  ["wait", 900],
+  ["eval", "(window.raid.fresh(), window.raid.start(11, 0), window.raid.skip(1.2), 'a new member, first pick')"],
+  ["click", "[data-pick='0']"],
+  [
+    "eval",
+    "(window.raid.skip(1.6), 'first room; nudge up: ' + (document.getElementById('nudge').hidden ? 'none' : document.getElementById('nudge').dataset.id))"
+  ],
+  [
+    "moveAt",
+    "(()=>{const r=document.querySelector('#traits .trait').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  ["wait", 500],
+  ["eval", "'1 first room, nudge up, pointing: ' + (document.querySelector('.raid-card') ? 'card up' : 'NO CARD')"],
+  [
+    "downAt",
+    "(()=>{const r=document.querySelector('#traits .trait').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  [
+    "upAt",
+    "(()=>{const r=document.querySelector('#traits .trait').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  ["wait", 500],
+  ["eval", "'2 after a click on it: ' + (document.querySelector('.raid-card.pinned') ? 'card kept' : 'NO CARD')"],
+  [
+    "downAt",
+    "(()=>{const r=document.querySelector('#traits .trait').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  [
+    "upAt",
+    "(()=>{const r=document.querySelector('#traits .trait').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  ["wait", 500],
+  [
+    "eval",
+    "'3 clicked again, pointer still on it: ' + (document.querySelector('.raid-card.pinned') ? 'STILL KEPT' : document.querySelector('.raid-card') ? 'card up, not kept' : 'NO CARD')"
+  ],
+  [
+    "eval",
+    "(()=>{const b=document.getElementById('bottom').getBoundingClientRect().top; window.raid.offer(0,'apothecary'); window.raid.offer(1,'hearthcat'); window.raid.acorns(40); return '   the stall changes: bottom ' + b + ' -> ' + document.getElementById('bottom').getBoundingClientRect().top})()"
+  ],
+  ["wait", 500],
+  ["eval", "'4 the stall busy while pointing: ' + (document.querySelector('.raid-card') ? 'card up' : 'NO CARD')"],
+  [
+    "eval",
+    "(()=>{const chip=document.querySelector('#traits .trait'); window.__chip=chip; const before=[...document.querySelectorAll('#traits .trait')].map(c=>c.textContent).join(' '); window.raid.plan(); return '   the bot fields more under the pointer: ' + before + ' -> ' + [...document.querySelectorAll('#traits .trait')].map(c=>c.textContent).join(' ')})()"
+  ],
+  ["wait", 500],
+  [
+    "eval",
+    "'5 the strip redrawn while pointing: ' + (document.querySelector('.raid-card') ? 'card up' : 'NO CARD') + (document.querySelector('#traits [data-trait=\"' + window.__chip.dataset.trait + '\"]') === window.__chip ? ', same chip' : ', CHIP REPLACED')"
+  ],
+  [
+    "eval",
+    "(()=>{const p=window.raid.party().find(p=>p.on==='bench'); window.raid.grab(p.id, 95, 96); return '   picked up ' + p.kind})()"
+  ],
+  ["move", 640, 300],
+  ["eval", "(window.raid.drop(), '   and put down')"],
+  ["move", 640, 120],
+  ["wait", 300],
+  [
+    "moveAt",
+    "(()=>{const r=document.querySelector('#traits .trait').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
+  ],
+  ["wait", 500],
+  ["eval", "'6 just after a drag: ' + (document.querySelector('.raid-card') ? 'card up' : 'NO CARD')"],
+  ["key", "Escape"],
+  ["move", 640, 120],
+  ["wait", 300],
+  [
+    "eval",
+    "'7 pointer gone: ' + (document.querySelector('.raid-card') ? 'CARD LEFT UP' : 'no card') + (document.body.classList.contains('trait-lit') ? ', STILL LIT' : ', nothing lit')"
+  ]
+]
