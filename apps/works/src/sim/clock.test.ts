@@ -2,16 +2,17 @@ import { describe, expect, test } from "bun:test";
 
 import { setOpen } from "./build.ts";
 import { AWAY_AFTER_MS, AWAY_MOST_MS, awayLine, boost, boosted, boostLeft, forward, runTo, TICK_MS } from "./clock.ts";
-import { ITEMS } from "./content/items.ts";
+import { ITEMS, type Tally } from "./content/items.ts";
 import { KINDS } from "./content/machines.ts";
 import { PLANS } from "./content/plans.ts";
 import { PLOTS } from "./content/plots.ts";
 import { STORY } from "./content/story.ts";
 import { create } from "./create.ts";
-import { on, put, run, steps, workingYard } from "./fixtures.ts";
+import { bare, lit, on, put, run, steps, workingYard } from "./fixtures.ts";
 import { deliver, isFilled } from "./orders.ts";
 import { load, save } from "./save.ts";
-import type { World } from "./world.ts";
+import { power, step } from "./step.ts";
+import { put as add, reopen, type World } from "./world.ts";
 
 const NOW = 1_800_000_000_000;
 const HOUR = 3600 * 1000;
@@ -22,6 +23,38 @@ const copy = (w: World): World => {
 };
 /** How far apart two numbers are, as a share of the larger. */
 const apart = (a: number, b: number): number => Math.abs(a - b) / Math.max(1, Math.abs(a), Math.abs(b));
+const sum = (t: Tally): number => ITEMS.reduce((n, item) => n + (t[item] ?? 0), 0);
+
+/**
+ * A bare yard with bigger crates: a gatherer sending ore to the depot, `mills` mills standing idle
+ * and drawing power, and for each number in `chains` a boiler fed by that many full crates of
+ * deadfall in a row, and nothing else. A bare yard does not come back from a save, so a test
+ * builds it twice.
+ */
+function fired(mills: number, chains: readonly number[]): World {
+  const w = lit(bare({ "10,6": "ore" }));
+  w.plans.push("bigcrates");
+  reopen(w);
+  w.open.kinds = new Set(KINDS);
+  put(w, "gatherer", 10, 6, 0);
+  for (let k = 0; k < mills; k++) put(w, "mill", k % 24, 1 + Math.floor(k / 24), 0);
+  chains.forEach((n, row) => {
+    const y = 9 + row * 2;
+    put(w, "boiler", 20, y, 0);
+    for (let x = 20 - n; x < 20; x++) {
+      const crate = put(w, "crate", x, y, 0);
+      for (let k = 0; k < w.rates.crate; k++) add(crate, "deadfall");
+    }
+  });
+  return w;
+}
+
+/** One boiler behind one crate, left the moment the crate is empty, with the boiler still burning what it holds. */
+function burntOut(): World {
+  const w = fired(16, [1]);
+  while (on(w, 19, 9).count > 0) step(w);
+  return w;
+}
 
 describe("the clock", () => {
   test("the yard runs a tick for every tenth of a second that passes, and keeps the odd part for next time", () => {
@@ -242,6 +275,51 @@ describe("away", () => {
     const b = forward(exact, 288_000, true);
     expect(apart(a.made.engine ?? 0, b.made.engine ?? 0)).toBeLessThan(0.02);
     expect(apart(a.coins, b.coins)).toBeLessThan(0.02);
+  });
+  test("a boiler that has burnt its last crate goes out while away, and the yard is paid at its new pace from then on", () => {
+    const quick = burntOut();
+    const exact = burntOut();
+    expect(power(quick).pace).toBe(1);
+    const a = forward(quick, 288_000);
+    const b = forward(exact, 288_000, true);
+    // Without the boiler the yard runs at 20 / 49 of its pace.
+    expect(power(exact).pace).toBeCloseTo(20 / 49);
+    expect(power(quick)).toEqual(power(exact));
+    expect(sum(b.made)).toBeGreaterThan(7000);
+    expect(apart(sum(a.made), sum(b.made))).toBeLessThan(0.03);
+    expect(apart(a.coins, b.coins)).toBeLessThan(0.03);
+    expect(a.run).toBeLessThan(288_000 / 20);
+  });
+  test("boilers that go out one after another while away are each let go out, and the pace measured after", () => {
+    // Both boilers lift the yard to its full pace, one to 50 / 79 of it, none to 20 / 79. The first,
+    // behind two crates, goes out before a short run for real would be over; the second, behind
+    // six, a good while after that.
+    const quick = fired(26, [2, 6]);
+    const exact = fired(26, [2, 6]);
+    steps(quick, 500);
+    steps(exact, 500);
+    expect(power(quick).pace).toBe(1);
+    const a = forward(quick, 288_000);
+    const b = forward(exact, 288_000, true);
+    expect(power(exact).pace).toBeCloseTo(20 / 79);
+    expect(power(quick)).toEqual(power(exact));
+    expect(sum(b.made)).toBeGreaterThan(5000);
+    expect(apart(sum(a.made), sum(b.made))).toBeLessThan(0.03);
+    // No more than a short run for real for each boiler and one after the last.
+    expect(a.run).toBeLessThan(3 * 6000);
+  });
+  test("a yard whose boilers are fed by a gatherer is caught up on just as it was before boilers were looked at", () => {
+    // What the quick way gave for this yard before it looked at boilers at all.
+    const before = [
+      { ticks: 36_000, coins: 54, run: 6000, made: { plank: 3000, pot: 3000, engine: 1200 } },
+      { ticks: 288_000, coins: 432, run: 6000, made: { plank: 24_000, pot: 24_000, engine: 9600 } },
+    ];
+    for (const was of before) {
+      const yard = workingYard();
+      steps(yard, 1500);
+      const a = forward(yard, was.ticks);
+      expect({ ticks: was.ticks, coins: a.coins, run: a.run, made: a.made }).toEqual(was);
+    }
   });
   test("catching up on a night away takes a small part of a second", () => {
     const w = workingYard();

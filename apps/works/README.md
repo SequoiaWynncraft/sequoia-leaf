@@ -146,7 +146,10 @@ made, orders filled, Coins waiting on the board. Eight hours is 288,000 ticks, s
 run: the yard keeps count of what the depot has been taking in since it was last changed, a few
 thousand ticks are run for real to bring that up to date, and the rest is paid out at that pace,
 through the same order book. Where a crate would fill or run dry part-way, the yard is paid up to
-that moment, run again for a short while to find its new pace, and paid on. On the largest yard the
+that moment, run again for a short while to find its new pace, and paid on. A boiler with nothing
+gathered for it burns what it holds and what the crates and belts behind it hold, and then goes out:
+the yard is paid at the pace with it only until then, it is let go out for real, and the pace
+without it is found afresh, once for each boiler that goes out. On the largest yard the
 balance script builds this takes about 7 ms and lands within a fifth of a percent of running every
 tick.
 

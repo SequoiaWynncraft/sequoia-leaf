@@ -64,7 +64,7 @@ import { closeCard, closePanel, showCard } from "./hud.ts";
 import { letter, post, waiting } from "./mail.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
-import { camp as mine, roomByTrail, sendToCamp } from "./record.ts";
+import { camp as mine, roomByTrail, roomFor, sendToCamp } from "./record.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Hover, Scene, Stage } from "./stage.ts";
 import { footprint, thingOf, turnsOf } from "./things.ts";
@@ -199,8 +199,9 @@ function winnings(): void {
     // While the trail is full it is not handed over; it comes another time, when there is room.
     if (!thing || mine.earned.includes(id) || !roomByTrail()) continue;
     mine.earned.push(id);
-    sendToCamp(id);
-    hooks.feed(`Won: ${thing.name}. It is waiting by the trail.`, "gold");
+    // One more of a thing the member has as many of as may be had is won, and simply not added.
+    if (sendToCamp(id)) hooks.feed(`Won: ${thing.name}. It is waiting by the trail.`, "gold");
+    else changed();
   }
 }
 
@@ -1014,7 +1015,13 @@ export function makeCamp(
       done?.();
       return;
     }
-    comeDown(id, setDown({ placed, tray: mine.tray }, id, landing(id, near)), from, done);
+    const spot = landing(id, near);
+    // Into the member's own camp, or their tray, it is simply not added if they have as many of it as may be had.
+    if ((owner === null || !spot) && !roomFor(id)) {
+      done?.();
+      return;
+    }
+    comeDown(id, setDown({ placed, tray: mine.tray }, id, spot), from, done);
   }
 
   /** The parcels by the trail open one after another, and what was in each lands in the camp. */

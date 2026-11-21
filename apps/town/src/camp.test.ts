@@ -11,6 +11,7 @@ import {
   freeSpot,
   KIND,
   layout,
+  MOST_OWNED,
   MOST_PARCELS,
   move,
   newCamp,
@@ -243,6 +244,17 @@ describe("keeping a camp", () => {
       const back = parseCamp(JSON.parse(JSON.stringify(camp)));
       expect(back?.parcels).toHaveLength(n);
       expect(back?.parcels).toEqual(camp.parcels);
+    }
+  });
+
+  test("every thing put away comes back, up to as many of one thing as a member may have", () => {
+    expect(MOST_OWNED).toBe(999);
+    const camp = fresh();
+    for (const n of [100, MOST_OWNED]) {
+      camp.tray = { "plank-path": n, picket: 3 };
+      const back = parseCamp(JSON.parse(JSON.stringify(camp)));
+      expect(back?.tray).toEqual(camp.tray);
+      expect(back ? owned(back, "plank-path") : 0).toBe(n);
     }
   });
 

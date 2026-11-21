@@ -320,6 +320,12 @@ export function unpackParcel(
   return { id, at: setDown(camp, id, room(id)) };
 }
 
+/**
+ * How many of any one thing a member may have, standing in the camp, in the tray and waiting by
+ * the trail together: nothing more of it is sent while they have that many.
+ */
+export const MOST_OWNED = 999;
+
 /** How many of a thing the member has, wherever it is. */
 export function owned(camp: Camp, id: string): number {
   return (
@@ -449,7 +455,7 @@ const things = (v: unknown, most: number): string[] => (Array.isArray(v) ? v.fil
 const isHandle = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z][A-Za-z '-]{0,23}$/.test(v);
 
 /** The most of anything a record may hold. */
-const MOST = { placed: 240, each: 99, parcels: MOST_PARCELS, letters: 24, gave: 40 };
+const MOST = { placed: 240, each: MOST_OWNED, parcels: MOST_PARCELS, letters: 24, gave: 40 };
 
 /**
  * Reads a kept camp back. Anything that is not a camp gives `null` (a new camp is made); inside
