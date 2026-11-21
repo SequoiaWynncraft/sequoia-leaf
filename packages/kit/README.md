@@ -59,18 +59,19 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 
 ## The modules (`src/`)
 
-| File         | What it holds                                                                      |
-| ------------ | ---------------------------------------------------------------------------------- |
-| `palette.ts` | The colour ramps                                                                   |
-| `pix.ts`     | Pixel-art tools: rectangles, pictures typed as rows of letters, outlines, ellipses |
-| `util.ts`    | Canvases, numbers, repeatable noise                                                |
-| `text.ts`    | Words on a canvas in the font                                                      |
-| `signs.ts`   | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines  |
-| `tip.ts`     | Tips: `tip(el, title, text)` shows one on hover, focus and long press              |
-| `skin.ts`    | A walking figure and a face from a block-game skin sheet, or from a made-up look   |
-| `sound.ts`   | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all   |
-| `dom.ts`     | `el`, `icon`, `amount` and a few more for building the interface                   |
-| `purse.ts`   | Leaf and Coins, shared by every page of the game and kept in step between them     |
-| `shell.ts`   | How a game that is a place in the town and the town speak to each other            |
+| File          | What it holds                                                                      |
+| ------------- | ---------------------------------------------------------------------------------- |
+| `palette.ts`  | The colour ramps                                                                   |
+| `pix.ts`      | Pixel-art tools: rectangles, pictures typed as rows of letters, outlines, ellipses |
+| `util.ts`     | Canvases, numbers, repeatable noise                                                |
+| `text.ts`     | Words on a canvas in the font                                                      |
+| `signs.ts`    | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines  |
+| `tip.ts`      | Tips: `tip(el, title, text)` shows one on hover, focus and long press              |
+| `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look   |
+| `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all   |
+| `dom.ts`      | `el`, `icon`, `amount` and a few more for building the interface                   |
+| `purse.ts`    | Leaf and Coins, shared by every page of the game and kept in step between them     |
+| `pursebar.ts` | The purse as a page shows it, its numbers rolling; and things that fly across it   |
+| `shell.ts`    | How a game that is a place in the town and the town speak to each other            |
 
 `tools/drive.ts` drives a built page in headless Chromium and takes screenshots; its header says how.

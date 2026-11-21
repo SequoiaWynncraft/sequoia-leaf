@@ -3,7 +3,8 @@
  * bought, the orders in hand, and the Coins the yard has earned and not yet handed over.
  *
  * The yard does not keep the member's purse. Anything that costs Coins is told the balance and says
- * what it took; whatever the yard earns gathers in `till` until `collect` hands it over.
+ * what it took; whatever the yard earns gathers in `till` until `collect` hands it over. A new yard
+ * has no Coins of its own, only a few pieces to hand (`spare`).
  */
 import type { Item, Tally } from "./content/items.ts";
 import { CRATE, KIND, type Kind, START_KINDS } from "./content/machines.ts";
@@ -45,6 +46,10 @@ export interface Building {
   open: boolean;
   /** Ticks a boiler will go on burning what it last took. */
   fuel: number;
+  /** One of the pieces a new yard has to hand: it cost nothing, and gives nothing back. */
+  free: boolean;
+  /** The tile the thing it carries was handed over from, or -1: only so a screen can show it coming round a corner. */
+  via: number;
 }
 
 export const blank = (kind: Kind, dir: Dir): Building => ({
@@ -66,6 +71,8 @@ export const blank = (kind: Kind, dir: Dir): Building => ({
   underProg: [],
   open: true,
   fuel: 0,
+  free: false,
+  via: -1,
 });
 
 /** A standing order on the board. */
@@ -141,6 +148,8 @@ export interface World {
   till: number;
   plots: PlotId[];
   plans: PlanId[];
+  /** The pieces the yard has to hand that are not standing: each costs nothing to stand. */
+  spare: Partial<Record<Kind, number>>;
   /** How many story orders are done, and what has come in toward the one in hand. */
   story: number;
   filled: Tally;
@@ -169,8 +178,6 @@ export interface World {
   news: News[];
 }
 
-/** What a new yard has in its till: enough for a first line. */
-export const START_FLOAT = 140;
 /** Ticks left out of the pace after the yard is changed, while belts fill. */
 export const WARM = 300;
 

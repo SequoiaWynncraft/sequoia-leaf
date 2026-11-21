@@ -1,10 +1,10 @@
 /** Starting a yard. */
-import { CRATE, KIND } from "./content/machines.ts";
+import { CRATE, KIND, STARTERS } from "./content/machines.ts";
 import { STORY } from "./content/story.ts";
 import { LAND, type Land } from "./land.ts";
 import { fillBoard } from "./orders.ts";
 import { repower } from "./power.ts";
-import { blank, type Building, reopen, START_FLOAT, WARM, type World } from "./world.ts";
+import { blank, type Building, reopen, WARM, type World } from "./world.ts";
 
 export interface Fresh {
   readonly seed?: number;
@@ -13,7 +13,7 @@ export interface Fresh {
   readonly story?: number;
 }
 
-/** A new yard: the depot in the middle of the first plot, and nothing else. */
+/** A new yard: the depot in the middle of the first plot, a few pieces to hand, and nothing else. */
 export function create(opts: Fresh = {}): World {
   const land = opts.land ?? LAND;
   const cells: (Building | null)[] = Array.from({ length: land.w * land.h }, () => null);
@@ -28,9 +28,10 @@ export function create(opts: Fresh = {}): World {
     tick: 0,
     seen: 0,
     boostUntil: 0,
-    till: START_FLOAT,
+    till: 0,
     plots: ["yard"],
     plans: [],
+    spare: { ...STARTERS },
     story: Math.max(0, Math.min(STORY.length, Math.floor(opts.story ?? 0))),
     filled: {},
     board: [],

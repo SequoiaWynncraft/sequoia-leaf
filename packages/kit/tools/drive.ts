@@ -11,7 +11,12 @@
  * - `["tap", x, y]` taps a point (CSS pixels); `["tapAt", "expr"]` taps where a page expression
  *   says (`{x, y}` in CSS pixels; with `?debug`, `grove.hudToCss(x, y)` turns HUD art pixels into
  *   CSS pixels); `["click", "selector"]` taps the middle of an element;
- * - `["key", "1"]` presses a key; `["eval", "expr"]` prints an expression's value;
+ * - `["down", x, y]`, `["move", x, y]` and `["up", x, y]` press the mouse, drag it and let it go,
+ *   one step each, so a picture can be taken with something held; `["downAt", "expr"]`,
+ *   `["moveAt", "expr"]` and `["upAt", "expr"]` do the same where a page expression says;
+ * - `["finger", "down" | "move" | "up", "expr"]` does the same with a finger instead of the mouse;
+ * - `["key", "1"]` presses a key (a letter, or a key by its name, such as `"Escape"`);
+ *   `["eval", "expr"]` prints an expression's value;
  * - `["shot", "name"]` saves a screenshot.
  *
  * Uses only Bun's own fetch and WebSocket.
@@ -24,6 +29,9 @@ type Step =
   | ["wait", number]
   | ["tap", number, number]
   | ["tapAt", string]
+  | ["down" | "move" | "up", number, number]
+  | ["downAt" | "moveAt" | "upAt", string]
+  | ["finger", "down" | "move" | "up", string]
   | ["click", string]
   | ["key", string]
   | ["shot", string]
@@ -34,10 +42,19 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 function isStep(v: unknown): v is Step {
   if (!Array.isArray(v)) return false;
   const [kind, a, b] = v as unknown[];
-  if (kind === "size" || kind === "tap") return typeof a === "number" && typeof b === "number";
+  if (kind === "size" || kind === "tap" || kind === "down" || kind === "move" || kind === "up")
+    return typeof a === "number" && typeof b === "number";
   if (kind === "wait") return typeof a === "number";
+  if (kind === "finger") return (a === "down" || a === "move" || a === "up") && typeof b === "string";
   return (
-    (kind === "key" || kind === "shot" || kind === "eval" || kind === "tapAt" || kind === "click") &&
+    (kind === "key" ||
+      kind === "shot" ||
+      kind === "eval" ||
+      kind === "tapAt" ||
+      kind === "click" ||
+      kind === "downAt" ||
+      kind === "moveAt" ||
+      kind === "upAt") &&
     typeof a === "string"
   );
 }
@@ -134,8 +151,43 @@ async function tap(x: number, y: number): Promise<void> {
   await send("Input.dispatchMouseEvent", { type: "mouseReleased", ...at });
 }
 
+const MOUSE = { down: "mousePressed", move: "mouseMoved", up: "mouseReleased" } as const;
+const TOUCH = { down: "touchStart", move: "touchMove", up: "touchEnd" } as const;
+
+/** One part of a drag with the mouse: pressing, moving while pressed, or letting go. */
+async function mouse(part: keyof typeof MOUSE, x: number, y: number): Promise<void> {
+  const at = { x: Math.round(x), y: Math.round(y), button: "left", buttons: part === "up" ? 0 : 1, clickCount: 1 };
+  if (part === "down") await send("Input.dispatchMouseEvent", { type: "mouseMoved", ...at, buttons: 0 });
+  await send("Input.dispatchMouseEvent", { type: MOUSE[part], ...at });
+}
+
+/** Where a page expression says, as a point in CSS pixels. */
+async function where(expression: string): Promise<{ x: number; y: number }> {
+  const res = await send("Runtime.evaluate", { expression, returnByValue: true });
+  const value = isRecord(res) && isRecord(res.result) ? res.result.value : null;
+  if (!isRecord(value) || typeof value.x !== "number" || typeof value.y !== "number")
+    throw new Error(`no point for ${expression}`);
+  return { x: value.x, y: value.y };
+}
+
 async function run(step: Step): Promise<void> {
   switch (step[0]) {
+    case "down":
+    case "move":
+    case "up":
+      return mouse(step[0], step[1], step[2]);
+    case "downAt":
+    case "moveAt":
+    case "upAt": {
+      const at = await where(step[1]);
+      return mouse(step[0] === "downAt" ? "down" : step[0] === "moveAt" ? "move" : "up", at.x, at.y);
+    }
+    case "finger": {
+      const at = await where(step[2]);
+      const point = { x: Math.round(at.x), y: Math.round(at.y), id: 1 };
+      await send("Input.dispatchTouchEvent", { type: TOUCH[step[1]], touchPoints: step[1] === "up" ? [] : [point] });
+      return;
+    }
     case "size":
       await metrics(step[1], step[2]);
       await Bun.sleep(300);
@@ -157,10 +209,17 @@ async function run(step: Step): Promise<void> {
         throw new Error(`nothing to tap for ${step[1]}`);
       return tap(value.x, value.y);
     }
-    case "key":
-      await send("Input.dispatchKeyEvent", { type: "keyDown", key: step[1], text: step[1] });
+    case "key": {
+      // A letter types itself; a named key (Escape, Delete, ArrowLeft) is only pressed.
+      const named = step[1].length > 1;
+      await send("Input.dispatchKeyEvent", {
+        type: named ? "rawKeyDown" : "keyDown",
+        key: step[1],
+        ...(named ? {} : { text: step[1] }),
+      });
       await send("Input.dispatchKeyEvent", { type: "keyUp", key: step[1] });
       return;
+    }
     case "eval": {
       const res = await send("Runtime.evaluate", { expression: step[1], awaitPromise: true, returnByValue: true });
       const value = isRecord(res) && isRecord(res.result) ? res.result.value : res;

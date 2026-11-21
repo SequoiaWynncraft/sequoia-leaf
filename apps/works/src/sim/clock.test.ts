@@ -123,8 +123,8 @@ describe("away", () => {
     const yard = workingYard();
     // A new line of bricks straight to the depot, and then out of the door.
     put(yard, "gatherer", 17, 22, 1);
-    put(yard, "mill", 17, 23, 0);
-    run(yard, [18, 23], [23, 19]);
+    put(yard, "mill", 17, 23, 2);
+    run(yard, [16, 23], [23, 19]);
     steps(yard, 20);
     const quick = copy(yard);
     const exact = copy(yard);

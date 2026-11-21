@@ -45,6 +45,13 @@ export type IconName =
   | "star"
   | "heart"
   | "gear"
+  | "hammer"
+  | "mail"
+  | "gift"
+  | "turn"
+  | "tray"
+  | "home"
+  | "paw"
   | "more"
   | "up"
   | "down";

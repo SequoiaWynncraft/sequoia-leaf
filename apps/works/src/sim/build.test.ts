@@ -4,21 +4,26 @@ import {
   build,
   buyPlan,
   buyPlot,
+  costOf,
   planRefusal,
   planState,
   plotRefusal,
   plotState,
   refusal,
   remove,
+  tipOut,
+  tunnelExit,
   turn,
 } from "./build.ts";
-import { CRATE, KIND, KINDS, REACH, TICKS } from "./content/machines.ts";
+import { CRATE, KIND, KINDS, REACH, STARTERS, TICKS } from "./content/machines.ts";
 import { PLANS } from "./content/plans.ts";
 import { PLOTS } from "./content/plots.ts";
 import { create } from "./create.ts";
 import { bare, belts, lit, on, put, run, steps } from "./fixtures.ts";
+import { DX, DY } from "./grid.ts";
+import { lay, route, runCost } from "./route.ts";
 import { power } from "./step.ts";
-import { at, collect, plotAt, START_FLOAT } from "./world.ts";
+import { at, collect, plotAt, put as hold } from "./world.ts";
 
 const price = (id: string): number => [...PLOTS, ...PLANS].find((p) => p.id === id)?.price ?? -1;
 
@@ -111,18 +116,98 @@ describe("Coins", () => {
   test("the yard keeps no purse: it is told the balance, and says what it took", () => {
     const w = create();
     expect(Object.keys(w)).not.toContain("coins");
-    // A new yard's till holds a float to start on, and handing it over empties it.
-    expect(collect(w)).toBe(START_FLOAT);
+    // A new yard has no Coins of its own to hand over.
     expect(collect(w)).toBe(0);
-    let purse = START_FLOAT;
-    const did = build(w, "gatherer", 20, 15, 0, purse);
+    let purse = 25;
+    const did = build(w, "pylon", 20, 15, 0, purse);
     if (did.ok) purse -= did.cost;
-    expect(purse).toBe(START_FLOAT - KIND.gatherer.cost);
-    expect(build(w, "mill", 21, 15, 0, 3)).toEqual({ ok: false, why: "Not enough Coins" });
+    expect(purse).toBe(25 - KIND.pylon.cost);
+    expect(build(w, "pylon", 21, 15, 0, 3)).toEqual({ ok: false, why: "Not enough Coins" });
     expect(w.cells[at(w, 21, 15)]).toBeNull();
   });
-  test("the float covers a first line with Coins to spare", () => {
-    expect(START_FLOAT).toBeGreaterThanOrEqual(2 * KIND.gatherer.cost + KIND.mill.cost + 12 * KIND.belt.cost);
+  test("a new yard has a gatherer, a mill and a dozen belts to hand, which cost nothing to stand", () => {
+    const w = create();
+    expect(w.spare).toEqual(STARTERS);
+    expect([costOf(w, "gatherer"), costOf(w, "mill"), costOf(w, "belt")]).toEqual([0, 0, 0]);
+    expect(costOf(w, "pylon")).toBe(KIND.pylon.cost);
+    // The first line goes up from an empty purse.
+    expect(build(w, "gatherer", 20, 15, 0, 0)).toEqual({ ok: true, cost: 0 });
+    expect(build(w, "mill", 21, 15, 0, 0)).toEqual({ ok: true, cost: 0 });
+    const legs = route(w, [22, 15], [23, 17]);
+    if (!legs) throw new Error("no way");
+    expect(runCost(w, legs)).toBe(0);
+    expect(lay(w, legs, 0)).toEqual({ ok: true, cost: 0 });
+    steps(w, 400);
+    expect(w.depot.plank ?? 0).toBeGreaterThan(12);
+    expect(w.story).toBe(1);
+    // The second of each is paid for.
+    expect(costOf(w, "gatherer")).toBe(KIND.gatherer.cost);
+    expect(build(w, "gatherer", 19, 16, 0, 0)).toEqual({ ok: false, why: "Not enough Coins" });
+    expect(build(w, "gatherer", 19, 16, 0, 10)).toEqual({ ok: true, cost: KIND.gatherer.cost });
+  });
+  test("a piece that was to hand gives nothing back, and can be stood again for nothing", () => {
+    const w = create();
+    build(w, "gatherer", 20, 15, 0, 0);
+    build(w, "gatherer", 19, 16, 0, 10);
+    expect(on(w, 20, 15).free).toBe(true);
+    expect(on(w, 19, 16).free).toBe(false);
+    expect(remove(w, 19, 16)).toEqual({ ok: true, refund: KIND.gatherer.cost });
+    expect(remove(w, 20, 15)).toEqual({ ok: true, refund: 0 });
+    expect(w.spare.gatherer).toBe(1);
+    expect(build(w, "gatherer", 19, 15, 0, 0)).toEqual({ ok: true, cost: 0 });
+    // Moving the whole first line about never costs a Coin, however often it is done.
+    for (let k = 0; k < 20; k++) {
+      expect(build(w, "belt", 22 + (k % 3), 20, 0, 0)).toEqual({ ok: true, cost: 0 });
+      expect(remove(w, 22 + (k % 3), 20)).toEqual({ ok: true, refund: 0 });
+    }
+    // Belts beyond the dozen are paid for, and a run says what it will come to.
+    const legs = route(w, [17, 21], [31, 21]);
+    if (!legs) throw new Error("no way");
+    expect(legs.length).toBe(15);
+    expect(runCost(w, legs)).toBe(3 * KIND.belt.cost);
+    expect(lay(w, legs, 2)).toEqual({ ok: false, why: "Not enough Coins" });
+    expect(lay(w, legs, 3)).toEqual({ ok: true, cost: 3 });
+    expect(w.spare.belt).toBe(0);
+  });
+  test("a tunnel may not pass under the depot, and the router goes round", () => {
+    const w = bare();
+    // The depot stands on (11..13, 5..7).
+    expect(refusal(w, "tunnel", 10, 6, 99, 0)).toBe("A tunnel cannot go under the depot");
+    expect(tunnelExit(w, 10, 6, 0)).toBeNull();
+    expect(tunnelExit(w, 9, 6, 0, 3)).toBeNull();
+    expect(build(w, "tunnel", 12, 3, 1, 99)).toEqual({ ok: false, why: "A tunnel cannot go under the depot" });
+    // Beside the depot is another matter, and so is stopping short of it.
+    expect(refusal(w, "tunnel", 10, 4, 99, 0)).toBeNull();
+    expect(tunnelExit(w, 8, 6, 0)).toEqual({ x: 10, y: 6, span: 1 });
+    put(w, "pylon", 10, 6);
+    expect(refusal(w, "tunnel", 8, 6, 99, 0)).toBe("A tunnel cannot go under the depot");
+    // A run from one side of the depot to clear ground on the other goes round it, not under.
+    const walled = bare();
+    for (let x = 0; x < 24; x++) if (x < 11 || x > 13) put(walled, "pylon", x, 2);
+    const legs = route(walled, [12, 1], [12, 9]);
+    for (const leg of legs ?? [])
+      if (leg.kind === "tunnel")
+        for (let s = 1; s <= leg.span; s++)
+          expect(walled.cells[at(walled, leg.x + DX[leg.dir] * s, leg.y + DY[leg.dir] * s)]?.kind).not.toBe("depot");
+    if (legs) expect(lay(walled, legs, 999).ok).toBe(true);
+  });
+  test("tipping a machine out empties what it holds, and frees one that filled up with the wrong part", () => {
+    const w = lit(bare());
+    const bench = put(w, "bench", 8, 5, 0);
+    put(w, "belt", 7, 5, 0);
+    for (let k = 0; k < 4; k++) hold(bench, "plank");
+    // The belt in is waiting with a fifth plank, and the ingot behind it cannot get through.
+    Object.assign(on(w, 7, 5), { item: "plank", prog: 1 });
+    steps(w, 10);
+    expect(on(w, 7, 5).item).toBe("plank");
+    expect(tipOut(w, 8, 5, "ingot")).toBe(0);
+    expect(tipOut(w, 8, 5, "plank")).toBe(4);
+    expect(bench.count).toBe(0);
+    steps(w, 2);
+    expect(on(w, 7, 5).item).toBeNull();
+    expect(bench.buf.plank).toBe(1);
+    expect(tipOut(w, 8, 5)).toBe(1);
+    expect(tipOut(w, 1, 1)).toBe(0);
   });
   test("what the yard earns gathers in the till, in whole Coins when it is handed over", () => {
     const w = bare({ "9,6": "ore" });
