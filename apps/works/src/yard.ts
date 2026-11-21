@@ -22,6 +22,7 @@ import {
   type World,
 } from "./sim/index.ts";
 import { hooks, S, touched } from "./state.ts";
+import { ZOOM } from "./zoom.ts";
 
 const KEY = "works.save.v2";
 const OLD = "works.save.v1";
@@ -59,16 +60,24 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 
 export const screen: Screen = { taught: [], zoom: 0 };
 
-function readScreen(): void {
+/** What the screen remembered, from its text; whatever makes no sense is as a new member has it. */
+export function parseScreen(text: string | null): Screen {
+  const out: Screen = { taught: [], zoom: 0 };
   try {
-    const raw: unknown = JSON.parse(read(SCREEN) ?? "null");
-    if (!isRecord(raw)) return;
+    const raw: unknown = JSON.parse(text ?? "null");
+    if (!isRecord(raw)) return out;
     if (Array.isArray(raw.taught))
-      screen.taught = raw.taught.filter((v): v is string => typeof v === "string").slice(0, 60);
-    if (typeof raw.zoom === "number" && Math.abs(raw.zoom) <= 4) screen.zoom = Math.round(raw.zoom);
+      out.taught = raw.taught.filter((v): v is string => typeof v === "string").slice(0, 60);
+    // As far in or out as the camera goes, and no further.
+    if (typeof raw.zoom === "number" && raw.zoom >= -ZOOM.out && raw.zoom <= ZOOM.in) out.zoom = Math.round(raw.zoom);
   } catch {
     // Nonsense in it: start with nothing remembered.
   }
+  return out;
+}
+
+function readScreen(): void {
+  Object.assign(screen, parseScreen(read(SCREEN)));
 }
 
 /** The Coins in the member's purse. */

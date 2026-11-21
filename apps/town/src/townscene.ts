@@ -22,7 +22,7 @@ import { GROUND, NEAR, paintBackdrop, paintGround, paintNear, SKYLINE } from "./
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, refreshFace, setFace, setHammer, showCard } from "./hud.ts";
 import { compose, read } from "./letter.ts";
-import { post } from "./mail.ts";
+import { BOX_FULL, post, roomInBox } from "./mail.ts";
 import { camp, kept, remember } from "./record.ts";
 import { dayOf } from "./save.ts";
 import type { Sprites } from "./sprites.ts";
@@ -573,8 +573,13 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       });
       const begin = (): void => {
         Object.assign(kept, read(kept, Date.now()));
-        // What guild-mates left while the member was away is in the camp's mailbox, not in this letter.
-        for (const l of mail) post(camp.letters, l);
+        // What guild-mates left while the member was away is in the camp's mailbox, not in this letter;
+        // what does not fit beside the presents still inside it is not left.
+        let turnedAway = false;
+        for (const l of mail) {
+          if (roomInBox(camp.letters)) post(camp.letters, l);
+          else if (!camp.letters.some((m) => m.id === l.id)) turnedAway = true;
+        }
         G.home = true;
         remember();
         beginEvents();
@@ -585,6 +590,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
           letter.show ? `You are home. ${count} guild-mates are about.` : "Back again. The fire kept your seat.",
           "leaf",
         );
+        if (turnedAway) hooks.feed(BOX_FULL, "coral");
         // Whoever is nearest looks up and says so.
         const nearest = G.mates
           .filter((a) => !a.away)

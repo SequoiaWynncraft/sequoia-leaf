@@ -250,30 +250,31 @@ clockwork crab is made. Opened alone it plays just the same.
 
 ## How it is put together
 
-| File                              | What it holds                                                              |
-| --------------------------------- | -------------------------------------------------------------------------- |
-| `sim/index.ts`                    | everything a screen needs from the rules, in one import                    |
-| `sim/content/*.ts`                | the tables: things, recipes, machines, plots, plans, the story, the shift  |
-| `sim/land.ts`, `sim/world.ts`     | the ground put together from the plots; the yard as data                   |
-| `sim/build.ts`                    | building, taking away, turning, tipping out; buying plots and plans        |
-| `sim/power.ts`, `sim/step.ts`     | where power reaches; one tick of the yard                                  |
-| `sim/orders.ts`, `sim/clock.ts`   | the depot, the story, the board; the wall clock and catching up            |
-| `sim/route.ts`, `sim/save.ts`     | the shortest clear run for a belt; a yard as text, and back                |
-| `sim/status.ts`                   | what a thing is doing, in a sentence, and whether it is in trouble         |
-| `main.ts`                         | the stage: opening the yard, the canvas, the loop, the handles for review  |
-| `state.ts`                        | what the screen's parts share: the yard, the view, the tool in hand        |
-| `yard.ts`                         | finding and keeping the yard, the clock, Coins to and from the purse       |
-| `scene.ts`, `layout.ts`           | drawing a frame; what is worked out from the layout and kept               |
-| `art/*.ts`                        | the art: ground, nature, belts, machines, things                           |
-| `camera.ts`, `input.ts`           | where the member is looking; mouse, keys and fingers                       |
-| `tools.ts`                        | setting down, runs of belt, turning, taking away, undo, buying land, plans |
-| `teach.ts`                        | the next nudge, worked out from the yard                                   |
-| `events.ts`, `actors.ts`, `fx.ts` | the yard's moments; who walks about; sparks, dust, smoke and rising words  |
-| `sound.ts`                        | the yard's own sounds, and its working murmur                              |
-| `ui/*.ts`                         | the purse and notices, the top bar, the dock, cards, panels, the letter    |
-| `sheet.ts`, `sheets.ts`           | the art laid out with names: `?sheet=machines`, `?sheet=items`             |
-| `yards/*.json`                    | yards kept part-way through the story, for looking at the game at a stage  |
-| `review/balance.ts`               | the story played by script; pacing and payback tables                      |
+| File                              | What it holds                                                               |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| `sim/index.ts`                    | everything a screen needs from the rules, in one import                     |
+| `sim/content/*.ts`                | the tables: things, recipes, machines, plots, plans, the story, the shift   |
+| `sim/land.ts`, `sim/world.ts`     | the ground put together from the plots; the yard as data                    |
+| `sim/build.ts`                    | building, taking away, turning, tipping out; buying plots and plans         |
+| `sim/power.ts`, `sim/step.ts`     | where power reaches; one tick of the yard                                   |
+| `sim/orders.ts`, `sim/clock.ts`   | the depot, the story, the board; the wall clock and catching up             |
+| `sim/route.ts`, `sim/save.ts`     | the shortest clear run for a belt; a yard as text, and back                 |
+| `sim/status.ts`                   | what a thing is doing, in a sentence, and whether it is in trouble          |
+| `main.ts`                         | the stage: opening the yard, the canvas, the loop, the handles for review   |
+| `state.ts`                        | what the screen's parts share: the yard, the view, the tool in hand         |
+| `yard.ts`                         | finding and keeping the yard, the clock, Coins to and from the purse        |
+| `scene.ts`, `layout.ts`           | drawing a frame; what is worked out from the layout and kept                |
+| `art/*.ts`                        | the art: ground, nature, belts, machines, things                            |
+| `camera.ts`, `input.ts`           | where the member is looking; mouse, keys and fingers                        |
+| `zoom.ts`                         | how far the view zooms, for the camera and for the zoom kept between visits |
+| `tools.ts`                        | setting down, runs of belt, turning, taking away, undo, buying land, plans  |
+| `teach.ts`                        | the next nudge, worked out from the yard                                    |
+| `events.ts`, `actors.ts`, `fx.ts` | the yard's moments; who walks about; sparks, dust, smoke and rising words   |
+| `sound.ts`                        | the yard's own sounds, and its working murmur                               |
+| `ui/*.ts`                         | the purse and notices, the top bar, the dock, cards, panels, the letter     |
+| `sheet.ts`, `sheets.ts`           | the art laid out with names: `?sheet=machines`, `?sheet=items`              |
+| `yards/*.json`                    | yards kept part-way through the story, for looking at the game at a stage   |
+| `review/balance.ts`               | the story played by script; pacing and payback tables                       |
 
 A tick has three parts: power is reckoned, then gatherers gather and machines make and things on
 belts move along their tile, then every tile hands on what it has finished with, each tile after

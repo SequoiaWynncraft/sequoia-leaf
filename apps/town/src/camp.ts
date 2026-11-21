@@ -163,14 +163,21 @@ export function allReached(placed: readonly Placed[]): boolean {
 // ---------- setting things down ----------
 
 /** Why a thing may not go somewhere, or that it may. */
-export type Verdict = "ok" | "off" | "trail" | "taken" | "shut";
+export type Verdict = "ok" | "off" | "trail" | "taken" | "shut" | "full";
 
 export const WHY_NOT: Readonly<Record<Exclude<Verdict, "ok">, string>> = {
   off: "Not in the trees.",
   trail: "The trail stays clear.",
   taken: "Something is there already.",
   shut: "That would shut something in.",
+  full: "The camp is full. Put something away first.",
 };
+
+/** How many things may be set out in a camp: with that many standing, more stays in the tray. */
+export const MOST_PLACED = 300;
+
+/** Whether a camp has as many things set out as may be. */
+export const campFull = (placed: readonly Placed[]): boolean => placed.length >= MOST_PLACED;
 
 /** Whether a thing may be set down with its ground starting at a square. `skip` is the thing being moved. */
 export function canPlace(placed: readonly Placed[], id: string, x: number, y: number, t: number, skip = -1): Verdict {
@@ -222,9 +229,13 @@ export function freeSpot(
   return null;
 }
 
-/** Sets a thing out of the tray onto the ground. Says why not if it may not go there. */
+/**
+ * Sets a thing out of the tray onto the ground. Says why not if it may not go there; while the
+ * camp is full it stays in the tray.
+ */
 export function setOut(camp: Camp, id: string, x: number, y: number, t = 0): Verdict {
   if ((camp.tray[id] ?? 0) < 1) return "off";
+  if (campFull(camp.placed)) return "full";
   const v = canPlace(camp.placed, id, x, y, t);
   if (v !== "ok") return v;
   takeFromTray(camp, id);
@@ -288,15 +299,15 @@ function takeFromTray(camp: Camp, id: string): void {
 export const MOST_PARCELS = 200;
 
 /**
- * Sets a thing down at a spot, or puts it in the tray when there is no spot. Gives what was set
- * down, or `null` if it went into the tray.
+ * Sets a thing down at a spot, or puts it in the tray when there is no spot or the camp is full.
+ * Gives what was set down, or `null` if it went into the tray.
  */
 export function setDown(
   camp: Pick<Camp, "placed" | "tray">,
   id: string,
   spot: { x: number; y: number } | null,
 ): Placed | null {
-  if (!spot) {
+  if (!spot || campFull(camp.placed)) {
     camp.tray[id] = (camp.tray[id] ?? 0) + 1;
     return null;
   }
@@ -307,9 +318,9 @@ export function setDown(
 
 /**
  * Opens the first parcel waiting by the trail. What was in it goes from the parcels into the camp
- * in this one step, at the spot `room` finds for it (or into the tray when there is none), before
- * anybody sees it arrive: a reload, or leaving, while it is in the air loses nothing. Gives the
- * thing and what was set down, or `null` when no parcel is waiting.
+ * in this one step, at the spot `room` finds for it (or into the tray when there is none, or the
+ * camp is full), before anybody sees it arrive: a reload, or leaving, while it is in the air loses
+ * nothing. Gives the thing and what was set down, or `null` when no parcel is waiting.
  */
 export function unpackParcel(
   camp: Camp,
@@ -317,7 +328,7 @@ export function unpackParcel(
 ): { id: string; at: Placed | null } | null {
   const id = camp.parcels.shift();
   if (id === undefined) return null;
-  return { id, at: setDown(camp, id, room(id)) };
+  return { id, at: setDown(camp, id, campFull(camp.placed) ? null : room(id)) };
 }
 
 /**
@@ -455,7 +466,7 @@ const things = (v: unknown, most: number): string[] => (Array.isArray(v) ? v.fil
 const isHandle = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z][A-Za-z '-]{0,23}$/.test(v);
 
 /** The most of anything a record may hold. */
-const MOST = { placed: 240, each: MOST_OWNED, parcels: MOST_PARCELS, letters: 24, gave: 40 };
+const MOST = { placed: MOST_PLACED, each: MOST_OWNED, parcels: MOST_PARCELS, letters: 24, gave: 40 };
 
 /**
  * Reads a kept camp back. Anything that is not a camp gives `null` (a new camp is made); inside

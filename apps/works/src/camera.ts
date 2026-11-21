@@ -9,6 +9,7 @@ import { clamp, type Pt } from "@sequoia-leaf/kit/util.ts";
 import type { Ground } from "./art/ground.ts";
 import { sizeBuffers } from "./scene.ts";
 import { S } from "./state.ts";
+import { natural, zoomFor } from "./zoom.ts";
 
 /** How much of the screen the interface covers at each edge, in CSS pixels. */
 export const inset = { top: 0, bottom: 0, left: 0, right: 0 };
@@ -24,9 +25,6 @@ export function setCamera(c: HTMLCanvasElement, g: Ground): void {
   canvas = c;
   ground = g;
 }
-
-/** The size that suits the screen: the town's own scale, so a tile here is as big as a tile there. */
-const natural = (cw: number, ch: number): number => Math.max(1, Math.floor(Math.min(cw / 160, ch / 176)));
 
 function bound(): void {
   if (!ground) return;
@@ -50,7 +48,7 @@ export function resize(): void {
   canvas.width = cw;
   canvas.height = ch;
   const base = natural(cw, ch);
-  const z = clamp(base + steps, Math.max(1, Math.ceil(base / 3)), base + 3);
+  const z = zoomFor(base, steps);
   steps = z - base;
   S.view = { w: Math.ceil(cw / z), h: Math.ceil(ch / z), z, dpr };
   sizeBuffers(S.view.w, S.view.h);
