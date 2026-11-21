@@ -34,7 +34,15 @@ and copies the test skin in one go.
   for the place they are standing at is lit.
 - **The market.** Three stalls sell things for a camp, for Coins: lamps and oddments, seats, rugs
   and flags, and plants, fences and paths. Nothing sells out and nothing rotates; each row says how
-  many the member has. What is bought leaves the stall as a parcel, up the path and out through
+  many the member has.
+- **What things are.** A thing for a camp (a market row, the tray, a thing set out in the camp
+  while decorating or pointed at in it, a present, a trophy on the shelf) and a ware at the
+  Treasury are cards in the kit's one card system (`card.ts`, registered in `cards.ts`): its
+  picture, name and kind, what it does when touched, how many the member has, and where it comes
+  from (the stall and its price, the Treasury, a present, or what wins it). A stall in a card is a
+  card of its own, with everything it sells. Pointing shows the card, clicking the picture or the
+  name pins it, a finger kept on a thing in the camp pins it as a sheet. Guild-mates keep their
+  plaque, and the town's other things their one-line hint. What is bought leaves the stall as a parcel, up the path and out through
   the gate, and is waiting at the camp.
 - **The Treasury.** Cinfy sells things to wear and a round of cocoa for Leaf, and a handful of fine
   pieces for a camp. They are as cosmetic as everything else there.
@@ -244,6 +252,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/draw.ts`                         | Drawing a frame of any place; name plates and speech; the round hole a door closes to   |
 | `src/hud.ts`                          | The purse, corner, feed, dock, panel and cards, shared by both places                   |
 | `src/ui.ts`, `src/campui.ts`          | The town's panels and arrival letter; the camp's panels and tray                        |
+| `src/cards.ts`                        | What camp things, Treasury wares and stalls say about themselves, as kit cards          |
 | `src/doors.ts`                        | A game in a frame: opening it, hearing it, the note when it will not open               |
 | `src/games.ts`                        | The games that are places, what each says is waiting, and what has been won in each     |
 | `src/guild.ts`, `src/madeup.ts`       | The questions asked of the guild, and the made-up guild that answers                    |

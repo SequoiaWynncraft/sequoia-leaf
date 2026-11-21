@@ -6,6 +6,7 @@
  * in `screen/`. Opened alone it plays by itself; inside the town it says when it is ready, sends
  * news worth a line in the town's feed, and saves when the town puts it away.
  */
+import { refresh, settle } from "@sequoia-leaf/kit/card.ts";
 import { before, pickUp, pull } from "@sequoia-leaf/kit/cloud.ts";
 import { followLeaf, shutCard, start } from "@sequoia-leaf/kit/live.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
@@ -42,15 +43,12 @@ import { onSignal } from "./screen/signals.ts";
 import { snd } from "./screen/sounds.ts";
 import * as stage from "./screen/stage.ts";
 import { onChange, onNotes, onRefused, S, saveNow, wake } from "./screen/state.ts";
-import { recard } from "./screen/ui/cards.ts";
+import { registerCards } from "./screen/ui/cards.ts";
 import { openLight } from "./screen/ui/lit.ts";
 import { renderNudge, stepNudge } from "./screen/ui/nudge.ts";
 import { openPages, pagesClick, renderPages, showPage } from "./screen/ui/pages.ts";
 import { renderPicks } from "./screen/ui/picks.ts";
 import { acornLanded, buildTable, placeFoe, renderTable, stepTable, toast, wakeChip } from "./screen/ui/table.ts";
-
-/** The window's size when the page was last laid out. */
-let windowSize = "";
 
 /** What the town was last told about the table, so that it is told only what has changed. */
 let carded = "";
@@ -82,6 +80,7 @@ async function boot(): Promise<void> {
     return;
   }
   wake();
+  registerCards();
   buildTable({
     rustle: doRustle,
     hold: doHold,
@@ -136,6 +135,8 @@ async function boot(): Promise<void> {
     renderPicks();
     renderPages();
     renderNudge();
+    // The card that is up says again what its thing is now (and goes, if the thing has gone).
+    refresh();
   });
   onRefused((why) => {
     snd.no();
@@ -158,11 +159,8 @@ async function boot(): Promise<void> {
     over: drawOver,
     resized() {
       placeFoe();
-      // The stall growing or shrinking lays the page out again too: a card stays beside its thing,
-      // and only a new window size puts away a card shown beside a figure on the table.
-      const size = `${window.innerWidth}x${window.innerHeight}`;
-      recard(size === windowSize);
-      windowSize = size;
+      // The stall growing or shrinking lays the page out again too: a card stays beside its thing.
+      settle();
       renderNudge();
     },
   });

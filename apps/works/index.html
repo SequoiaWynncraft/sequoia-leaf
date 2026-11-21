@@ -314,27 +314,21 @@
       .rows .num {
         text-align: right;
       }
-
-      /* What a thing is and is doing, over the tools. */
-      #card {
-        position: fixed;
-        z-index: 7;
-        left: 50%;
-        translate: -50% 0;
-        bottom: calc(var(--bottom) + var(--dockh, 0px) + var(--handh, 0px) + var(--u) * 4);
-        width: min(calc(var(--u) * 170), calc(100vw - var(--edge) * 2));
-        box-sizing: border-box;
-        padding: calc(var(--u) * 2);
+      /* A thing named in the depot's books takes the picture's column and the name's. */
+      .rows > .k-thing {
+        grid-column: span 2;
+      }
+      .want > .k-thing {
+        flex: none;
+        min-width: calc(var(--u) * 50);
+      }
+      .order .opens {
         display: flex;
-        flex-direction: column;
-        gap: calc(var(--u) * 3);
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--u) calc(var(--u) * 3);
       }
-      #card .top {
-        align-items: flex-start;
-      }
-      #card .trouble {
-        color: var(--k-coral);
-      }
+
       .recipe {
         display: flex;
         align-items: center;
@@ -505,7 +499,6 @@
         }
         #feed > :nth-last-child(n + 3),
         body.panel-open #feed,
-        body.panel-open #card,
         body.panel-open #track {
           display: none;
         }
@@ -525,7 +518,6 @@
     <div id="hand" class="k-plaque"></div>
     <nav id="dock" class="k-plaque" aria-label="Tools"></nav>
     <aside id="panel" class="k-panel" hidden></aside>
-    <div id="card" class="k-plaque" hidden></div>
     <div id="banner" class="k-panel" hidden></div>
     <div id="letter" hidden></div>
     <script type="module" src="./src/main.ts"></script>

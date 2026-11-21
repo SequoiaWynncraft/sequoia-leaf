@@ -1,0 +1,42 @@
+[
+  ["size", 390, 844],
+  ["wait", 2400],
+  ["eval", "(document.querySelector('#arrival .k-btn')?.click(), 'letter put away')"],
+  ["wait", 900],
+  [
+    "eval",
+    "(window.town.coins(4000), window.town.skip(2), window.town.visit('market'), window.town.skip(6), 'the market')"
+  ],
+  ["eval", "'a first touch: the page settles its touch layout before the tap that counts'"],
+  [
+    "finger",
+    "down",
+    "(()=>{const b = document.querySelector(\"#panel .k-title\").getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const b = document.querySelector(\"#panel .k-title\").getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["wait", 300],
+  [
+    "eval",
+    "(document.querySelector('#panel .k-col .k-card:nth-of-type(2) .k-slot').scrollIntoView({block: 'center', behavior: 'instant'}), 'scrolled')"
+  ],
+  [
+    "finger",
+    "down",
+    "(()=>{const b = document.querySelector(\"#panel .k-col .k-card:nth-of-type(2) .k-slot\").getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const b = document.querySelector(\"#panel .k-col .k-card:nth-of-type(2) .k-slot\").getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["wait", 400],
+  [
+    "eval",
+    "'market row: ' + document.querySelector('.k-info .k-name')?.textContent + ', sheet ' + !!document.querySelector('.k-info.sheet')"
+  ],
+  ["shot", "tp-01-market-row"]
+]

@@ -32,6 +32,7 @@ import { drawBase, drawFigure, drawStars, framesOf } from "./art/sprites.ts";
 import { hexMark } from "./art/table.ts";
 import { burst, motes, ring, say } from "./fx.ts";
 import { cellXY, HEX_H, HEX_W, type Pt } from "./geometry.ts";
+import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
 import type { Speed } from "./keep.ts";
 import { DIM, shineOf } from "./light.ts";
 import { snd } from "./sounds.ts";
@@ -921,6 +922,8 @@ export function drawFight(g: Ctx, list: Standing[]): void {
           flash: c - a.flashAt >= 0 && c - a.flashAt < 1.5,
           lit: shine.lit,
         });
+        // What it holds follows it about, under its health bar, and falls with it.
+        if (u.alive) drawHeld(g, heldRow(u.items, x - V.bx, heldTop(y - V.by, true)), V.bx, V.by);
         g.globalAlpha = 1;
       },
       top: () => {
@@ -950,6 +953,20 @@ export function drawFightAir(g: Ctx): void {
     );
   }
   g.globalAlpha = 1;
+}
+
+/** The item a figure in the fight holds under a point measured from the board's corner. */
+export function fightHeldUnder(x: number, y: number): HeldAt | null {
+  const f = FV.fight;
+  if (!f) return null;
+  for (const a of FV.actors) {
+    const u = a.unit;
+    if (!u.alive || FV.clock < a.bornAt || u.hiddenUntil > f.tick) continue;
+    const back = u.side === 1 ? Math.round(V.gap) : 0;
+    const hit = heldAt(heldRow(u.items, a.x, heldTop(a.y - back, true)), x, y);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 /** The figure in the fight under a point measured from the board's corner. */

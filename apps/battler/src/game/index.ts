@@ -40,6 +40,7 @@ export {
   KINS,
   stepFor,
   topStep,
+  isTraitId,
   TRAIT_IDS,
   type TraitId,
   traitNumber,
@@ -60,6 +61,7 @@ export {
   holdItem,
   HOLDS,
   isComponentId,
+  isItemId,
   isFinishedId,
   ITEM_IDS,
   itemAdds,
@@ -70,7 +72,16 @@ export {
   itemStats,
   itemText,
 } from "./content/items.ts";
-export { BOON_IDS, type BoonId, boonNumber, BOONS, boonShort, type BoonSpec, boonText } from "./content/boons.ts";
+export {
+  BOON_IDS,
+  type BoonId,
+  boonNumber,
+  BOONS,
+  boonShort,
+  type BoonSpec,
+  boonText,
+  isBoonId,
+} from "./content/boons.ts";
 export {
   BOSS_ROOMS,
   ECONOMY,

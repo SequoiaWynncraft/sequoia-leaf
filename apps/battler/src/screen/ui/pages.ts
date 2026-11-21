@@ -3,6 +3,7 @@
  * far, how to play, the looks for the table that Leaf buys, and the paper at a run's end. One is up
  * at a time.
  */
+import { link } from "@sequoia-leaf/kit/card.ts";
 import { add, amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { balance, has, spend } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
@@ -47,7 +48,7 @@ import {
 import { snd } from "../sounds.ts";
 import { dress } from "../stage.ts";
 import { prefsChanged, S } from "../state.ts";
-import { explain, figPic, figureCard, itemCard, pic, traitCard } from "./cards.ts";
+import { figPic, pic } from "./cards.ts";
 
 export type PageId = "front" | "almanac" | "howto" | "looks" | "summary";
 
@@ -107,7 +108,9 @@ function partyRow(run: Run): HTMLElement {
   const row = el("div", "party", {});
   const board = run.board.flatMap((p) => (p ? [p] : []));
   for (const p of board.length > 0 ? board : pieces(run)) {
-    row.append(el("div", "who", {}, pic(starsPic(p.stars)), figPic(portrait(p.kind))));
+    const who = el("div", "who", {}, pic(starsPic(p.stars)), figPic(portrait(p.kind)));
+    link(who, `figure:${p.kind}/${p.stars}`);
+    row.append(who);
   }
   return row;
 }
@@ -215,9 +218,9 @@ function front(): HTMLElement {
         el("b", "", { text: t.name }),
         el("span", "k-d", { text: open ? t.text : `Clear ${TRAILS[i - 1]?.name ?? "the one before"} first.` }),
         best > 0
-          ? el("span", "k-s k-dim", { text: `Furthest: room ${best}. Pays ${t.pays}%.` })
+          ? el("span", "k-read k-dim", { text: `Furthest: room ${best}. Pays ${t.pays}%.` })
           : open && t.pays > 100
-            ? el("span", "k-s k-dim", { text: `Pays ${t.pays}%.` })
+            ? el("span", "k-read k-dim", { text: `Pays ${t.pays}%.` })
             : null,
       ),
     );
@@ -234,7 +237,7 @@ function front(): HTMLElement {
       run ? "Set out afresh" : "Set out",
     ),
   );
-  if (run) add(body, el("span", "k-s k-dim", { text: "Setting out afresh puts down the raid that is laid out." }));
+  if (run) add(body, el("span", "k-read k-dim", { text: "Setting out afresh puts down the raid that is laid out." }));
   add(
     body,
     el("hr", "k-rule"),
@@ -290,10 +293,10 @@ function figureTile(id: FigureId): HTMLElement {
     el("span", "k-s", {
       text: locked ? (id === "crab40" ? "Uncounted" : "Not opened") : met ? FIGURES[id].name : "Not met",
     }),
-    locked ? el("span", "k-s k-dim how", { text: how }) : null,
+    locked ? el("span", "k-read k-dim how", { text: how }) : null,
     starred ? pic(starsPic(3), 1, "badge") : null,
   );
-  if (met && !locked) explain(tile, () => figureCard(id, starred ? 3 : 1, { lore: true }));
+  if (met && !locked) link(tile, `figure:${id}/${starred ? 3 : 1}/lore`);
   return tile;
 }
 
@@ -351,7 +354,7 @@ function almanac(): HTMLElement {
         ),
         a.topped.includes(id) ? icon("check") : null,
       );
-      explain(row, () => traitCard(id, null, S.almanac, true));
+      link(row, `trait:${id}/lore`);
       list.append(row);
     }
     add(page, list);
@@ -366,7 +369,7 @@ function almanac(): HTMLElement {
         pic(itemIcon(id), 2),
         el("span", "k-s", { text: itemName(id) }),
       );
-      explain(tile, () => itemCard(id, null, -1, true));
+      link(tile, `item:${id}/lore`);
       comps.append(tile);
     }
     const made = el("div", "tiles small", {});
@@ -380,7 +383,7 @@ function almanac(): HTMLElement {
         have ? pic(itemIcon(id), 2) : el("span", "pair", {}, pic(itemIcon(x)), pic(itemIcon(y))),
         el("span", "k-s", { text: have ? itemName(id) : "Not made" }),
       );
-      explain(tile, () => itemCard(id, null, -1, true));
+      link(tile, `item:${id}/lore`);
       made.append(tile);
     }
     add(page, comps, el("hr", "k-rule"), made);
@@ -440,15 +443,15 @@ const HOW: readonly (readonly [Parameters<typeof glyph>[0], string])[] = [
   ["door", "A lost room costs resolve. There are fifteen rooms, with a boss at the end of each wing."],
   ["pin", "Every ten acorns you keep earns one more each room. Hold the stall to keep what is on it."],
   ["brush", "Two components on one figure make an item. Drag one on, or tap it and tap the figure."],
-  ["help", "Point at anything, or keep a finger on it, and it says what it is."],
+  ["help", "Point at anything for its card; click or tap to keep it open. Names in a card open theirs."],
 ];
 
 function howto(): HTMLElement {
   const paper = el("section", "k-paper page k-rise how", { role: "dialog", "aria-label": "How to play" });
   add(paper, el("div", "k-row", {}, el("h1", "k-title big k-grow", { text: "How to play" }), close()));
   for (const [sign, text] of HOW)
-    add(paper, el("div", "k-row line", {}, pic(glyph(sign), 2), el("span", "k-grow", { text })));
-  add(paper, el("hr", ""), el("i", "", { text: "Nothing here is timed. Take as long as you like over a room." }));
+    add(paper, el("div", "k-row line", {}, pic(glyph(sign), 2), el("span", "k-grow k-read", { text })));
+  add(paper, el("hr", ""), el("i", "k-read", { text: "Nothing here is timed. Take as long as you like over a room." }));
   return paper;
 }
 

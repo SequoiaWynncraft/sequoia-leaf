@@ -1,0 +1,122 @@
+[
+  ["size", 390, 844],
+  ["wait", 900],
+  [
+    "eval",
+    "(window.raid.fresh(), window.raid.hold(true), window.raid.start(11, 0), window.raid.taught(), window.raid.bot(5), window.raid.skip(2), window.raid.plan(), window.raid.skip(2), JSON.stringify(window.raid.state().choice))"
+  ],
+  ["eval", "(window.raid.strip(), window.raid.party().filter(p => p.on === 'board').map(p => p.kind).join(' '))"],
+  [
+    "eval",
+    "(()=>{const r = window.raid; const board = r.party().filter(p => p.on === 'board'); const one = board[0]; const three = board[1]; r.item('thorn'); r.hand(r.rack().length - 1, one.id); for (const k of ['honeycake', 'mothlantern', 'stewpot']) { r.item(k); r.hand(r.rack().length - 1, three.id); } r.skip(0.6); return 'one: ' + one.kind + ', three: ' + three.kind + ', held: ' + JSON.stringify(r.held())})()"
+  ],
+  ["wait", 500],
+  ["shot", "p-01-board-holding"],
+  [
+    "finger",
+    "down",
+    "(()=>{const r = window.raid; const p = r.party().filter(p => p.on === 'board')[1]; return r.at(p.id)})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const r = window.raid; const p = r.party().filter(p => p.on === 'board')[1]; return r.at(p.id)})()"
+  ],
+  [
+    "eval",
+    "(window.raid.skip(0.3), 'sheet: ' + !!document.querySelector('.k-info.sheet') + ' ' + document.querySelector('.k-info .k-name')?.textContent)"
+  ],
+  ["wait", 400],
+  ["shot", "p-02-figure-sheet"],
+  [
+    "finger",
+    "down",
+    "(()=>{const e = document.querySelector(\".k-info .k-info-chip\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const e = document.querySelector(\".k-info .k-info-chip\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "eval",
+    "(window.raid.skip(0.4), 'followed: ' + document.querySelector('.k-info .k-name')?.textContent + ', back ' + !!document.querySelector('.k-info-back') + ', lit ' + document.body.classList.contains('trait-lit'))"
+  ],
+  ["wait", 400],
+  ["shot", "p-03-followed-back"],
+  [
+    "finger",
+    "down",
+    "(()=>{const e = document.querySelector(\".k-info-back\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const e = document.querySelector(\".k-info-back\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["eval", "'back to: ' + document.querySelector('.k-info .k-name')?.textContent"],
+  [
+    "finger",
+    "down",
+    "(()=>{const e = document.querySelector(\".k-info-x\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const e = document.querySelector(\".k-info-x\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["eval", "'closed: ' + !document.querySelector('.k-info')"],
+  [
+    "finger",
+    "down",
+    "(()=>{const e = document.querySelector(\"#traits .trait\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const e = document.querySelector(\"#traits .trait\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "eval",
+    "(window.raid.skip(0.5), 'trait: ' + document.querySelector('.k-info .k-name')?.textContent + ', lit ' + document.body.classList.contains('trait-lit'))"
+  ],
+  ["wait", 400],
+  ["shot", "p-04-trait-pinned"],
+  ["finger", "down", "({x: 200, y: 330})"],
+  ["finger", "up", "({x: 200, y: 330})"],
+  ["eval", "'tap elsewhere closed: ' + !document.querySelector('.k-info')"],
+  [
+    "eval",
+    "(window.raid.to('component'), window.raid.skip(1.5), window.raid.item('glowcap'), window.raid.skip(0.4), JSON.stringify(window.raid.state().choice))"
+  ],
+  [
+    "finger",
+    "down",
+    "(()=>{const e = document.querySelector(\"#picks .makes.lit .k-thing:not(.bare)\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const e = document.querySelector(\"#picks .makes.lit .k-thing:not(.bare)\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "eval",
+    "(window.raid.skip(0.4), 'from makes: ' + document.querySelector('.k-info .k-name')?.textContent + ', still picking: ' + !!document.querySelector('#picks:not([hidden])'))"
+  ],
+  ["wait", 400],
+  ["shot", "p-05-component-pick"],
+  [
+    "finger",
+    "down",
+    "(()=>{const e = document.querySelector(\".k-info-x\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  [
+    "finger",
+    "up",
+    "(()=>{const e = document.querySelector(\".k-info-x\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["eval", "(document.querySelector(\"[data-pick='0']\").click(), 'took the first pick')"],
+  ["eval", "(window.raid.skip(1.5), window.raid.plan(), window.raid.fight(), window.raid.busy(), 'a fight')"],
+  ["wait", 600],
+  ["shot", "p-06-fight-holding"]
+]

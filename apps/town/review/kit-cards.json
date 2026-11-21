@@ -1,0 +1,59 @@
+[
+  ["size", 1280, 760],
+  ["wait", 2200],
+  ["click", "#arrival .k-btn"],
+  ["wait", 900],
+  [
+    "eval",
+    "(window.town.coins(4000), window.town.skip(2), window.town.visit('market'), window.town.skip(6), 'the market')"
+  ],
+  ["move", -30, -30],
+  ["wait", 300],
+  [
+    "moveAt",
+    "(()=>{const b = document.querySelector('#panel .k-col .k-card:nth-of-type(2) .k-slot').getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["wait", 600],
+  ["eval", "'passing: ' + document.querySelector('.k-info .k-name')?.textContent"],
+  ["shot", "t-01-market-row"],
+  ["click", "#panel .k-col .k-card:nth-of-type(2) .k-pix.k-link"],
+  ["move", -30, -30],
+  ["wait", 300],
+  ["eval", "'pinned: ' + document.querySelector('.k-info.pinned .k-name')?.textContent"],
+  ["click", ".k-info.pinned .k-info-row .k-thing"],
+  ["move", -30, -30],
+  ["wait", 300],
+  [
+    "eval",
+    "'followed: ' + document.querySelector('.k-info.pinned .k-name')?.textContent + ', back ' + !!document.querySelector('.k-info-back')"
+  ],
+  ["shot", "t-02-market-stall"],
+  ["key", "Escape"],
+  ["eval", "(window.town.visit('treasury'), window.town.skip(4), 'treasury')"],
+  [
+    "moveAt",
+    "(()=>{const b = document.querySelector('#panel .k-card .k-slot.k-link').getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+  ],
+  ["wait", 600],
+  ["shot", "t-03-treasury-ware"],
+  ["move", -30, -30],
+  [
+    "eval",
+    "(window.town.camp.go(), window.town.skip(8), window.town.camp.decorate(true), window.town.skip(1), JSON.stringify(window.town.camp.things().slice(0, 4)))"
+  ],
+  [
+    "moveAt",
+    "(()=>{const t = window.town.camp.things().find(t => t.id !== 'cabin' && t.id !== 'mailbox' && t.id !== 'signpost') ?? window.town.camp.things()[0]; return window.town.page(t.x, t.y - 6)})()"
+  ],
+  ["eval", "(window.town.skip(0.3), 'decorating')"],
+  ["wait", 700],
+  ["eval", "'camp thing: ' + document.querySelector('.k-info .k-name')?.textContent"],
+  ["shot", "t-04-camp-thing"],
+  ["move", -30, -30],
+  [
+    "moveAt",
+    "(()=>{const b = document.querySelector('#tray .k-slot.k-link'); if (!b) return {x: -30, y: -30}; const r = b.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}})()"
+  ],
+  ["wait", 600],
+  ["shot", "t-05-tray"]
+]

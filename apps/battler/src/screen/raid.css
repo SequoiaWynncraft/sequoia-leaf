@@ -533,86 +533,23 @@ body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
 .pick.chosen {
   border-image-source: var(--k-f-card-lit);
 }
-.recipe {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--u) * 2);
-}
-.recipe.big {
-  gap: calc(var(--u) * 3);
-}
+/* A flavour line: read, so in the reading face, and leaning. */
 .quip {
-  font-size: var(--t-d);
+  font: italic 500 var(--t-r) / 1.4 var(--k-font-read);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* ---------- cards beside things ---------- */
+/* ---------- cards (the kit's card.ts) ---------- */
 
-.k-tip.raid-card {
-  max-width: min(calc(var(--u) * 220), calc(100vw - 8px));
-}
-/* A figure's card and a trait's: one width, so lines rarely wrap. */
-.k-tip.raid-card.wide {
-  width: min(calc(var(--u) * 220), calc(100vw - 8px));
-}
-.k-tip.raid-card.pinned {
-  pointer-events: auto;
-  z-index: 89;
-}
-.card {
-  gap: calc(var(--u) * 2);
-}
-.card.fig,
-.card.trait,
-.card.item,
-.card.boon {
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--u) * 2);
-}
-/* The blocks of a card, a thin rule between them. */
-.card .blk {
-  display: flex;
-  flex-direction: column;
-  gap: var(--u);
-  padding-top: calc(var(--u) * 2);
-  border-top: var(--u) solid var(--k-edge);
-}
-.card-head,
-.fhead,
-.thead {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--u) * 3);
-}
-.card-head {
-  gap: calc(var(--u) * 4);
-}
-.k-slot.port {
-  flex: none;
-  min-width: calc(var(--u) * 26);
-  min-height: calc(var(--u) * 26);
-  padding: var(--u);
-  box-sizing: border-box;
-}
-.cwho {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--u);
-}
-.nameline {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--u) * 2);
-}
-.nameline .side {
-  margin-left: auto;
+/* The head of a figure's card: its stars and price at the right, whose it is under them. */
+.fside {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: var(--u);
-  white-space: nowrap;
+}
+.k-row.tight {
+  gap: calc(var(--u) * 2);
 }
 /* The words on a card: numbers bold and gold, heals and shields green, the kinds of damage their own colour. */
 b.n {
@@ -630,141 +567,38 @@ b.dmg.magic {
 b.dmg.true {
   color: var(--k-cream);
 }
-.card .blk.ftraits {
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: var(--u) calc(var(--u) * 4);
+.k-info .quip {
+  font-style: italic;
 }
-.tchip {
+/* A component on offer: what it makes with each other half, the ones the party can finish first. */
+.makeslist {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   gap: var(--u);
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
+  width: 100%;
+  margin-top: var(--u);
 }
-.tchip .cnt {
-  margin-left: var(--u);
-}
-.tchip:hover .k-chip {
-  filter: brightness(1.2);
-}
-.card .blk.nums {
-  display: grid;
-  grid-template-columns: repeat(3, auto);
-  justify-content: space-between;
-  gap: var(--u) calc(var(--u) * 4);
-}
-.num {
-  display: flex;
-  align-items: baseline;
-  gap: calc(var(--u) * 2);
-  white-space: nowrap;
-}
-.nums .fed {
-  grid-column: 1 / -1;
-}
-.aname {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: calc(var(--u) * 3);
-}
-.card .blk.fitems {
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: calc(var(--u) * 2) calc(var(--u) * 6);
-}
-.irow {
+.makes {
   display: flex;
   align-items: center;
   gap: calc(var(--u) * 2);
+  padding: 0 calc(var(--u) * 2);
+  text-align: left;
 }
-.k-slot.islot {
-  width: calc(var(--u) * 16);
-  height: calc(var(--u) * 16);
-  box-sizing: border-box;
+/* A long name wraps under itself rather than running off the pick. */
+.makes > .k-thing:not(.bare) {
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.05;
 }
-.acts .k-btn {
-  width: 100%;
-}
-.tsteps .tstep {
-  display: grid;
-  grid-template-columns: calc(var(--u) * 7) minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: calc(var(--u) * 2);
-  padding: 0 var(--u);
-  color: var(--k-dim);
-}
-.tstep .need {
-  color: var(--k-faint);
-}
-.tstep:not(.on) .short {
-  opacity: 0.8;
-}
-.tstep.on {
-  color: var(--k-cream);
+.makes.lit {
   background: #f5b95e26;
   box-shadow: inset var(--u) 0 0 var(--k-gold);
 }
-.tstep.on .need {
-  color: var(--k-gold-lt);
-}
-.card .blk.members {
+.pick .art.k-link {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: calc(var(--u) * 2);
-}
-.k-slot.mem {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--u);
-  min-height: calc(var(--u) * 42);
-  padding: calc(var(--u) * 2) var(--u);
-  color: var(--k-cream);
-  font: inherit;
-  text-align: center;
-  cursor: pointer;
-}
-.mem .art {
-  display: grid;
-  place-items: end center;
-  min-height: calc(var(--u) * 22);
-}
-.mem .mname {
-  line-height: 1.1;
-}
-.mem .k-cur {
-  font-size: var(--t-s);
-  gap: var(--u);
-}
-.mem .tag {
-  position: absolute;
-  top: 0;
-  right: 0;
-  padding: 0 var(--u);
-  background: var(--k-mid);
-  color: var(--k-gold-lt);
-}
-.mem.locked {
-  cursor: default;
-}
-.mem.locked .how {
-  color: var(--k-dim);
-  line-height: 1.1;
-}
-.recipes .recipe {
-  flex-wrap: wrap;
-}
-.lore .quip {
-  font-size: var(--t-d);
+  place-items: center;
 }
 
 /* ---------- a trait lit on the table ---------- */
@@ -1137,11 +971,6 @@ b.dmg.true {
   }
   .pick .quip {
     display: none;
-  }
-  .k-tip.raid-card,
-  .k-tip.raid-card.wide {
-    width: calc(100vw - 8px);
-    max-width: none;
   }
   .three {
     flex-wrap: wrap;

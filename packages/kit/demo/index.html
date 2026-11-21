@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>The kit</title>
     <link rel="stylesheet" href="../src/kit.css" />
+    <script type="module" src="./demo.ts"></script>
     <style>
       html body {
         min-height: 100vh;
@@ -47,7 +48,7 @@
       <div class="k-over">Sootpaw <span class="k-gold">Warden</span></div>
       <div class="k-say">you're here!</div>
       <div class="k-tip" style="margin-top: calc(var(--u) * 4)">
-        <b class="k-gold">Jar of fireflies</b><br /><span class="k-dim">They follow whoever<br />opens the lid.</span>
+        <b class="k-name">Jar of fireflies</b><br /><span class="k-dim">They follow whoever<br />opens the lid.</span>
       </div>
       <div class="k-toast">The guild has taken Mossgate Crossing.</div>
       <div class="k-toast leaf">Pipwick reached level 35.</div>
@@ -121,6 +122,40 @@
       <div class="k-label">Sootpaw left you a note</div>
       <p style="margin: calc(var(--u) * 2) 0 calc(var(--u) * 4)">The crab count is off again. It is always off.</p>
       <button class="k-btn wide">Into town</button>
+    </section>
+
+    <section class="k-panel w">
+      <header class="k-head">
+        <i class="k-i k-i-mail"></i>
+        <h2 class="k-title">Letters</h2>
+      </header>
+      <div class="k-body">
+        <div class="k-label">The pixel face: names, titles, numbers, buttons</div>
+        <div class="k-row">
+          <b class="k-name">Jar of fireflies</b><span class="k-cur"><i class="k-i k-i-coin"></i>40</span>
+        </div>
+        <div class="k-label">The reading face: what is read</div>
+        <p class="k-read" style="margin: 0">
+          They follow whoever opens the lid, and settle on the <b>third</b> lantern from the left. Nobody knows why it
+          is always the third.
+        </p>
+        <div class="k-card">
+          <div class="k-grow">
+            Cocoa for the fire<br /><span class="k-d">A second line under a name, in the reading face.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="k-panel w">
+      <header class="k-head">
+        <i class="k-i k-i-more"></i>
+        <h2 class="k-title">Cards</h2>
+      </header>
+      <div class="k-body">
+        <div class="k-d">Every thing named in any game is one of these: point at it for its card, click to pin it.</div>
+        <div id="things" class="k-col"></div>
+      </div>
     </section>
   </body>
 </html>

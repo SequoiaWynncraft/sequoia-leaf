@@ -15,6 +15,8 @@ import {
   isFigureId,
   isFinishedId,
   type ItemId,
+  pieceAt,
+  pieces,
   planRoom,
   ROOMS,
   type Run,
@@ -24,6 +26,7 @@ import {
 import { fightState } from "./fightview.ts";
 import { enterRun, setOut, startNew } from "./flow.ts";
 import { grab, hover, tapPawn, unpick } from "./hand.ts";
+import { heldRow, heldTop } from "./held.ts";
 import { keep, KEYS } from "./keep.ts";
 import { NUDGES } from "./logic.ts";
 import { pawns } from "./pawns.ts";
@@ -67,6 +70,15 @@ export interface Handle {
   grab(id: number | null, x?: number, y?: number): void;
   /** Taps a figure, as a finger would. */
   tap(id: number): void;
+  /** Where on the page one of the party's figures stands (its body), for a pointer or a finger to go to. */
+  at(id: number): { x: number; y: number } | null;
+  /** Where on the page the middle of the picture of the `i`th item a figure holds is. */
+  heldAt(id: number, i: number): { x: number; y: number } | null;
+  /** What is on the rack, and what each of the party's figures holds. */
+  rack(): string[];
+  held(): Record<number, string[]>;
+  /** For staging a moment: every figure lets go of what it holds. */
+  strip(): void;
   /** Holds the item at a place on the rack over a figure; and hands it over. */
   hover(itemAt: number, id: number): void;
   hand(itemAt: number, id: number): void;
@@ -223,6 +235,30 @@ export function openHandle(): void {
       grab(id, x !== undefined && y !== undefined ? { x, y } : undefined);
     },
     tap: tapPawn,
+    at(id) {
+      const p = pawns.get(id);
+      return p ? stage.boardToPage(p.x, p.y - 8) : null;
+    },
+    heldAt(id, i) {
+      const p = pawns.get(id);
+      const piece = S.run && p?.spot ? pieceAt(S.run, p.spot) : null;
+      const at = p && piece ? heldRow(piece.items, p.x, heldTop(p.y, false))[i] : undefined;
+      return at ? stage.boardToPage(at.x + at.w / 2, at.y + at.h / 2) : null;
+    },
+    rack() {
+      return [...(S.run?.items ?? [])];
+    },
+    held() {
+      const out: Record<number, string[]> = {};
+      for (const p of S.run ? pieces(S.run) : []) out[p.id] = [...p.items];
+      return out;
+    },
+    strip() {
+      act((r) => {
+        for (const p of pieces(r)) p.items = [];
+        return { ok: true, notes: [] };
+      });
+    },
     hover,
     hand(itemAt, id) {
       const spot = pawns.get(id)?.spot;

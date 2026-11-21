@@ -29,7 +29,7 @@ export function tipAt(spot: TipSpot, title: string, text = "", by: object | null
   tipOff();
   if (!title && !text) return;
   const node = el("div", "k-tip k-float", { role: "tooltip" });
-  if (title) add(node, el("b", "k-gold", { text: title }));
+  if (title) add(node, el("b", "k-name", { text: title }));
   if (text) add(node, el("div", "k-dim", { text }));
   document.body.append(node);
   const r = node.getBoundingClientRect();
