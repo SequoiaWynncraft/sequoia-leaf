@@ -85,6 +85,10 @@ const browser = Bun.spawn(
   ],
   { stdout: "ignore", stderr: "ignore" },
 );
+// However the run ends, the browser does not outlive it.
+process.on("exit", () => {
+  browser.kill();
+});
 
 /** The new tab's socket address, retried while Chromium starts. */
 async function target(tries = 80): Promise<string> {
@@ -251,9 +255,18 @@ async function run(step: Step): Promise<void> {
   }
 }
 
-// One after another: each step waits for the one before it.
-await steps.reduce<Promise<void>>((prev, step) => prev.then(() => run(step)), Promise.resolve());
+// One after another: each step waits for the one before it. A step that cannot be done stops the
+// run, and the browser and its profile are cleared away before the run says so.
+let failed: unknown = null;
+try {
+  await steps.reduce<Promise<void>>((prev, step) => prev.then(() => run(step)), Promise.resolve());
+} catch (e) {
+  failed = e;
+}
 ws.close();
 browser.kill();
 await browser.exited;
-rmSync(profile, { recursive: true, force: true });
+// Its helpers go on writing for a moment after the browser itself has gone.
+await Bun.sleep(250);
+rmSync(profile, { recursive: true, force: true, maxRetries: 4, retryDelay: 150 });
+if (failed !== null) throw failed;
