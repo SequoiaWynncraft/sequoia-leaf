@@ -1,11 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { buyPlan, setOpen, setRecipe } from "./build.ts";
-import { boost } from "./clock.ts";
 import { create } from "./create.ts";
 import { belts, on, put, steps, workingYard } from "./fixtures.ts";
 import { deliver } from "./orders.ts";
-import { load, oldCoins, save, VERSION } from "./save.ts";
+import { load, save, VERSION } from "./save.ts";
 import { power } from "./step.ts";
 import { at, type World } from "./world.ts";
 
@@ -31,8 +30,8 @@ describe("saving", () => {
     put(w, "crate", 19, 13);
     setOpen(w, 19, 13, false);
     setRecipe(w, 28, 17, "tool");
-    boost(w, 1_800_000_000_000, 60_000);
-    w.seen = 1_800_000_000_000;
+    w.at = 1_800_000_000_000;
+    Object.assign(w, { bank: 12, told: 3, away: { seconds: 900, coins: 41 } });
     steps(w, 777);
     deliver(w, "pot", 40);
     const text = save(w);
@@ -47,9 +46,11 @@ describe("saving", () => {
     for (const k of [
       "seed",
       "tick",
-      "seen",
-      "boostUntil",
+      "at",
       "till",
+      "bank",
+      "told",
+      "away",
       "plots",
       "plans",
       "story",
@@ -89,7 +90,8 @@ describe("saving", () => {
     expect(load(tampered(w, (r) => (r.till = "lots")))).toBeNull();
     expect(load(tampered(w, (r) => (r.tick = 1.5)))).toBeNull();
     expect(load(tampered(w, (r) => (r.story = 99)))).toBeNull();
-    expect(load(tampered(w, (r) => (r.seen = null)))).toBeNull();
+    expect(load(tampered(w, (r) => (r.at = null)))).toBeNull();
+    expect(load(tampered(w, (r) => (r.seed = -1)))).toBeNull();
     expect(load(tampered(w, (r) => (r.cells = "all of them")))).toBeNull();
     expect(load(tampered(w, (r) => (r.cells = Array.from({ length: 5000 }, () => ({})))))).toBeNull();
     expect(load(tampered(w, (r) => delete r.plots))).toBeNull();
@@ -194,24 +196,14 @@ describe("saving", () => {
     const early = create({ story: 1 });
     expect(load(tampered(early, (r) => (r.board = [first])))?.board).toEqual([]);
   });
-  test("a save from the yard before this one is not a yard, but its Coins can be carried over", () => {
-    const old = JSON.stringify({
-      w: 34,
-      h: 22,
-      deposit: [],
-      cells: [null, { kind: "miner", dir: 0, item: null, prog: 0, buf: {}, out: null, work: 0, turn: 0 }],
-      coins: 412.5,
-      tick: 900,
-      depot: { plank: 30 },
-      order: 2,
-      filled: {},
-      unlocked: ["belt", "miner", "refinery", "pylon", "assembler"],
-    });
-    expect(load(old)).toBeNull();
-    expect(oldCoins(old)).toBe(412);
-    expect(oldCoins(save(create()))).toBeNull();
-    expect(oldCoins("{nonsense")).toBeNull();
-    expect(oldCoins(null)).toBeNull();
-    expect(oldCoins(JSON.stringify({ cells: [], order: 1, coins: -9 }))).toBeNull();
+  test("a yard without its seed is kept without one, and hangs no order when read back", () => {
+    const w = create({ seed: 4, story: 6 });
+    w.board.splice(1, 1);
+    const text = save({ ...w, seed: null });
+    expect(JSON.parse(text)).not.toHaveProperty("seed");
+    const back = load(text);
+    expect(back?.seed).toBeNull();
+    expect(back?.board.map((o) => o.id)).toEqual(w.board.map((o) => o.id));
+    expect(load(save(w))?.board).toHaveLength(3);
   });
 });

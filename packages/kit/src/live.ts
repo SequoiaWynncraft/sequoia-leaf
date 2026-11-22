@@ -18,6 +18,7 @@ import { type Device, deviceForWidth } from "@sequoia-leaf/core";
 
 import { el } from "./dom.ts";
 import { ask, isRecord, listen, type Listening, outside } from "./net.ts";
+import type { Trouble } from "./play.ts";
 import {
   asGuest,
   balance,
@@ -241,6 +242,17 @@ export function unreadableCard(): void {
     else location.reload();
   });
   if (inTown()) tell({ town: "ready" });
+}
+
+/**
+ * Puts a game played on Leaf away behind the card for why it cannot go on (`play.ts`'s `Trouble`):
+ * signed out or turned away, the state Leaf keeps not reading, or no Leaf with the play service
+ * answering, which `line` says in the game's words.
+ */
+export function troubleCard(why: Trouble, signIn: string, line: string): void {
+  if (why === "unreadable") unreadableCard();
+  else if (why === "noserver") serverCard(line);
+  else shutCard(why, signIn);
 }
 
 // ---------- the cards for a live room let go of ----------

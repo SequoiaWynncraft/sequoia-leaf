@@ -18,6 +18,9 @@
  *   the page shows the kit's card for it. During a deploy a call can reach the Leaf before this one,
  *   which has no such route (404 `not_found`): that is "not yet", tried again each second for 30
  *   seconds before the page gives up for no server.
+ * - As the page is hidden or put away, or the town closes the game, everything Leaf has not
+ *   answered is sent at once in a request that outlives the page (`flush`), so the last thing done
+ *   before leaving is not lost.
  * - `waitingLook(element, answer)` gives what was asked for the kit's waiting look while Leaf takes
  *   more than a moment to answer.
  *
@@ -27,6 +30,7 @@
 import { type GameId, MOST_COMMANDS, playPath } from "@sequoia-leaf/core";
 
 import { ask, isRecord, outside } from "./net.ts";
+import { fromTown } from "./shell.ts";
 
 /** Reads what Leaf sends into the game's own types; null for anything these rules could not have made. */
 export interface PlayReader<View, Note> {
@@ -59,7 +63,17 @@ export interface Play<View, Command extends object, Note> {
   onTrouble(fn: (why: Trouble) => void): () => void;
   /** Asks Leaf for the state again, when nothing is waiting for it. */
   refresh(): Promise<void>;
+  /**
+   * Sends what Leaf has not answered at once, without waiting for it: for a page about to go. The
+   * client does this itself when the page is hidden or put away, and when the town closes a game.
+   */
+  flush(): void;
 }
+
+/** The most a batch's commands may come to, in characters: Leaf reads a body of at most 16 KiB. */
+const MOST_BYTES = 12_000;
+/** What a command's id and the punctuation round it add to a body. */
+const ID_ROOM = 40;
 
 /** How long to wait before sending a batch again after it failed, doubling each time up to `most`. */
 export interface Retry {
@@ -156,6 +170,26 @@ export async function openPlay<View, Command extends object, Note>(
   /** Leaf's state with every prediction still waiting worked out on top. */
   const rebuild = (): View => [...(flying ?? []), ...queue].reduce((on, p) => predicted(p, on), base);
 
+  /**
+   * As many from the front of a line of commands as one request holds: `MOST_COMMANDS`, and no more
+   * than `MOST_BYTES` of them, so that a few long ones together do not make a body Leaf will not
+   * read. Always at least the first.
+   */
+  function fitting(line: readonly Pending<View, Command, Note>[]): Pending<View, Command, Note>[] {
+    const batch: Pending<View, Command, Note>[] = [];
+    let size = 0;
+    for (const p of line) {
+      size += json(p.command).length + ID_ROOM;
+      if (batch.length > 0 && (batch.length >= MOST_COMMANDS || size > MOST_BYTES)) break;
+      batch.push(p);
+    }
+    return batch;
+  }
+
+  /** A batch as it goes to Leaf: who the page believes it is, and each command with its id. */
+  const bodyOf = (batch: readonly Pending<View, Command, Note>[]): string =>
+    json({ player: options.player, commands: batch.map((p) => ({ ...p.command, id: p.id })) });
+
   function tell(differs: boolean): void {
     for (const fn of hearers) fn(copy, differs);
   }
@@ -209,10 +243,10 @@ export async function openPlay<View, Command extends object, Note>(
 
   async function pump(): Promise<void> {
     if (stopped || flying !== null || queue.length === 0) return;
-    const batch = queue.slice(0, MOST_COMMANDS);
+    const batch = fitting(queue);
     queue = queue.slice(batch.length);
     flying = batch;
-    const body = json({ player: options.player, commands: batch.map((p) => ({ ...p.command, id: p.id })) });
+    const body = bodyOf(batch);
     let notYetTries = 0;
     for (;;) {
       // oxlint-disable-next-line no-await-in-loop -- the same batch, again, until Leaf has it
@@ -236,7 +270,7 @@ export async function openPlay<View, Command extends object, Note>(
         outside.reload();
         return;
       }
-      if (reply.status === 400) {
+      if (reply.status === 400 || reply.status === 413) {
         // Leaf will not take these commands as they are; sending them again would not change that.
         flying = null;
         copy = rebuild();
@@ -274,6 +308,33 @@ export async function openPlay<View, Command extends object, Note>(
     void pump();
   }
 
+  /**
+   * The batch on its way and what is queued behind it (as many as one request holds), in order and
+   * with the ids they have, in a request that outlives the page. Leaf does each once; if the page
+   * stays after all, they go again in turn and are answered as before.
+   */
+  function flush(): void {
+    const left = fitting([...(flying ?? []), ...queue]);
+    if (stopped || left.length === 0) return;
+    void outside.fetch(path, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: bodyOf(left),
+      keepalive: true,
+    });
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", flush);
+    fromTown((msg) => {
+      if (msg.town === "closing") flush();
+    });
+  }
+  if (typeof document !== "undefined")
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flush();
+    });
+
   return {
     get state() {
       return copy;
@@ -302,9 +363,11 @@ export async function openPlay<View, Command extends object, Note>(
       troubled.add(fn);
       return () => troubled.delete(fn);
     },
+    flush,
     async refresh() {
       if (stopped || flying !== null || queue.length > 0) return;
       const reply = await ask(path);
+      if (reply.status === 401) return stop("signedout");
       if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0) {
         took({ ...reply.body, results: [] }, []);
       }

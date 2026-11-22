@@ -4,8 +4,8 @@ import { BARK, CREAM, GOLD, GREEN, INK, PAPER } from "@sequoia-leaf/kit/palette.
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { hash, makeCanvas, must, vnoise } from "@sequoia-leaf/kit/util.ts";
+import type { Kind, Land } from "@sequoia-leaf/yard";
 
-import type { Kind, Land } from "../sim/index.ts";
 import { beltTile, TILE } from "./belts.ts";
 import { type Ground, paintGround } from "./ground.ts";
 import { type ItemArt, makeItems } from "./items.ts";

@@ -7,8 +7,7 @@
 
 import { BARK, GOLD, INK, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { paint } from "@sequoia-leaf/kit/pix.ts";
-
-import type { Dir } from "../sim/index.ts";
+import type { Dir } from "@sequoia-leaf/yard";
 
 export const TILE = 16;
 /** How many steps the march has before it comes round: a chevron every tile, a slat every four pixels. */

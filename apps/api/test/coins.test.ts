@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import { dailyChestKey, PAGE_COINS, playerId, utcDay } from "@sequoia-leaf/core";
+import { dailyChestKey, playerId, utcDay } from "@sequoia-leaf/core";
 import { Schema } from "effect";
 
 import { DAY, fakeBackend, HOUR, MINUTE, sessionOf, testLeaf } from "./support.ts";
@@ -37,7 +37,7 @@ afterEach(async () => {
 const PLAYERS: Readonly<Record<string, string>> = { "alice-token": alice, "carol-token": carol, "dave-token": dave };
 
 /**
- * A page's call, as the town or the Works sends it: the website's cookie, from Leaf's own page, and
+ * A page's call, as the town sends it: the website's cookie, from Leaf's own page, and
  * in a body that is an object, the player the page believes it is (unless the body names one itself).
  */
 function call(body: unknown, token = "alice-token"): Promise<Response> {
@@ -81,28 +81,35 @@ const balance = async (player: string) =>
     ).json(),
   ).coins;
 
+/** An entry as a game's command would have posted it: weighed against what may be earned, or `free`. */
+const played = (player: string, amount: number, key: string, at: number, earned = 1) =>
+  services.query(
+    (sql) => sql`
+      INSERT INTO coin_entries (player_id, amount, reason, game, key, at, earned)
+      VALUES (${player}, ${amount}, 'play', 'raid', ${key}, ${at}, ${earned})
+    `,
+  );
+
 describe("POST /v1/game/coins", () => {
   it("pays or takes the amount as one entry in the ledger, for the reason's game, and answers the balance", async () => {
     // A new player's account opens with the welcome first.
     expect(await done({ id: "chest-2026-11-25", amount: 3, reason: "daily_chest" })).toBe(303);
     clock.now += MINUTE;
     expect(await done({ id: "p-1", amount: -120, reason: "camp_thing" })).toBe(183);
-    expect(await done({ id: "p-2", amount: 40, reason: "works_order" })).toBe(223);
-    expect(await balance(alice)).toBe(223);
+    expect(await balance(alice)).toBe(183);
     expect(await entries(alice)).toEqual([
       { amount: 300, reason: "Welcome to Guild Town", game: null, key: `welcome:${alice}`, at: T0 },
       { amount: 3, reason: "daily_chest", game: "town", key: dailyChestKey(alice, utcDay(T0)), at: T0 },
       { amount: -120, reason: "camp_thing", game: "town", key: `page:${alice}:p-1`, at: T0 + MINUTE },
-      { amount: 40, reason: "works_order", game: "works", key: `page:${alice}:p-2`, at: T0 + MINUTE },
     ]);
   });
 
   it("does a call sent twice once, answering the balance as it stands", async () => {
-    expect(await done({ id: "p-1", amount: 50, reason: "works_depot" })).toBe(350);
-    expect(await done({ id: "p-2", amount: -10, reason: "works_build" })).toBe(340);
+    expect(await done({ id: "p-1", amount: -50, reason: "camp_thing" })).toBe(250);
+    expect(await done({ id: "p-2", amount: -10, reason: "camp_thing" })).toBe(240);
     // Sent again, even with something else in it: nothing more is done.
-    expect(await done({ id: "p-1", amount: 50, reason: "works_depot" })).toBe(340);
-    expect(await done({ id: "p-1", amount: -5000, reason: "works_plot" })).toBe(340);
+    expect(await done({ id: "p-1", amount: -50, reason: "camp_thing" })).toBe(240);
+    expect(await done({ id: "p-1", amount: -5000, reason: "camp_thing" })).toBe(240);
     expect((await entries(alice)).map((e) => e.key)).toEqual([
       `welcome:${alice}`,
       `page:${alice}:p-1`,
@@ -111,49 +118,33 @@ describe("POST /v1/game/coins", () => {
   });
 
   it("refuses a spend the balance does not cover with 409 not_enough_coins, changing nothing", async () => {
-    expect(await done({ id: "p-1", amount: -300, reason: "works_plan" })).toBe(0);
-    expect(await refused({ id: "p-2", amount: -1, reason: "works_build" })).toEqual([409, "not_enough_coins"]);
-    expect(await done({ id: "p-3", amount: 10, reason: "works_order" })).toBe(10);
-    expect(await refused({ id: "p-4", amount: -11, reason: "camp_thing" })).toEqual([409, "not_enough_coins"]);
-    expect(await balance(alice)).toBe(10);
+    expect(await done({ id: "p-1", amount: -300, reason: "camp_thing" })).toBe(0);
+    expect(await refused({ id: "p-2", amount: -1, reason: "camp_thing" })).toEqual([409, "not_enough_coins"]);
+    expect(await done({ id: "p-3", amount: 3, reason: "daily_chest" })).toBe(3);
+    expect(await refused({ id: "p-4", amount: -4, reason: "camp_thing" })).toEqual([409, "not_enough_coins"]);
+    expect(await balance(alice)).toBe(3);
     expect(await entries(alice)).toHaveLength(3);
     // The id of a refused call was not used: the same call is weighed again, and done once it may be.
-    expect(await done({ id: "p-5", amount: 5, reason: "works_depot" })).toBe(15);
-    expect(await done({ id: "p-4", amount: -11, reason: "camp_thing" })).toBe(4);
+    clock.now += DAY;
+    expect(await done({ id: "p-5", amount: 3, reason: "daily_chest" })).toBe(6);
+    expect(await done({ id: "p-4", amount: -4, reason: "camp_thing" })).toBe(2);
   });
 
-  it("refuses earnings past 5,000 in any hour or 20,000 in a UTC day with 429 too_much, changing nothing; spending does not count", async () => {
+  it("refuses the chest past what play may earn in the hour or the UTC day with 429 too_much; what is free does not count", async () => {
     clock.now = Date.UTC(2026, 10, 25, 1);
-    expect(await done({ id: "e-1", amount: 3000, reason: "works_order" })).toBe(3300);
-    clock.now += 20 * MINUTE;
-    expect(await done({ id: "s-1", amount: -2000, reason: "works_plot" })).toBe(1300);
-    expect(await done({ id: "e-2", amount: 1999, reason: "works_order" })).toBe(3299);
-    clock.now += 20 * MINUTE;
-    expect(await done({ id: "e-3", amount: 1, reason: "works_depot" })).toBe(3300);
-    expect(await refused({ id: "e-4", amount: 1, reason: "works_depot" })).toEqual([429, "too_much"]);
-    expect(await balance(alice)).toBe(3300);
-    // An hour after the first, it no longer counts toward the hour.
-    clock.now = Date.UTC(2026, 10, 25, 2) + 1;
-    expect(await refused({ id: "e-5", amount: 5001, reason: "works_order" })).toEqual([400, "invalid_amount"]);
-    expect(await done({ id: "e-5", amount: 3000, reason: "works_order" })).toBe(6300);
-    // The UTC day's 20,000: 8,000 so far, two more hours of 5,000 bring it to 18,000, then 2,000 more and no further.
-    for (const [hour, id] of [
-      [4, "e-6"],
-      [6, "e-7"],
-    ] as const) {
-      clock.now = Date.UTC(2026, 10, 25, hour);
-      // oxlint-disable-next-line no-await-in-loop -- in order
-      expect(await done({ id, amount: PAGE_COINS.most, reason: "works_order" })).toBeGreaterThan(0);
-    }
-    clock.now = Date.UTC(2026, 10, 25, 10);
-    expect(await refused({ id: "e-9", amount: 2001, reason: "works_depot" })).toEqual([429, "too_much"]);
-    expect(await done({ id: "e-9", amount: 2000, reason: "works_depot" })).toBe(18_300);
-    expect(await refused({ id: "e-10", amount: 1, reason: "works_depot" })).toEqual([429, "too_much"]);
-    clock.now = Date.UTC(2026, 10, 25, 23, 59);
-    expect(await refused({ id: "e-10", amount: 1, reason: "works_depot" })).toEqual([429, "too_much"]);
-    // The next UTC day it starts again.
-    clock.now = Date.UTC(2026, 10, 26);
-    expect(await done({ id: "e-10", amount: PAGE_COINS.most, reason: "works_order" })).toBe(23_300);
+    await played(alice, 5000, "raid:a:1", clock.now - 10 * MINUTE);
+    expect(await refused({ id: "c-1", amount: 3, reason: "daily_chest" })).toEqual([429, "too_much"]);
+    expect(await balance(alice)).toBe(5000);
+    // An hour after the play, it no longer counts toward the hour.
+    clock.now = Date.UTC(2026, 10, 25, 2);
+    expect(await done({ id: "c-1", amount: 3, reason: "daily_chest" })).toBe(5003);
+    // The UTC day's 20,000.
+    await played(alice, 14_997, "raid:a:2", Date.UTC(2026, 10, 25, 0, 30));
+    clock.now = Date.UTC(2026, 10, 26) - 1;
+    expect(await done({ id: "c-2", amount: 3, reason: "daily_chest" })).toBe(20_000);
+    // Coins given back, or paid by Leaf's own clock, are not weighed.
+    await played(carol, 5000, "works:c:1", clock.now - MINUTE, 0);
+    expect(await done({ id: "c-3", amount: 3, reason: "daily_chest" }, "carol-token")).toBe(5003);
   });
 
   it("pays the daily chest Leaf's 3 Coins once a UTC day, whatever ids and amounts the page sends", async () => {
@@ -169,33 +160,24 @@ describe("POST /v1/game/coins", () => {
     ]);
   });
 
-  it("gives Coins back for what is taken away in the Works, built before Leaf kept Coins or since, as an earning like any other", async () => {
-    // A building bought before the ledger was there is given back for all the same.
-    expect(await done({ id: "r-1", amount: 120, reason: "works_refund" })).toBe(420);
-    expect(await done({ id: "b-1", amount: -100, reason: "works_build" })).toBe(320);
-    expect(await done({ id: "r-2", amount: 100, reason: "works_refund" })).toBe(420);
-    // It counts toward what a player may earn in the hour, so it cannot be made without end.
-    expect(await done({ id: "e-1", amount: 4780, reason: "works_order" })).toBe(5200);
-    expect(await refused({ id: "r-3", amount: 1, reason: "works_refund" })).toEqual([429, "too_much"]);
-  });
-
   it("refuses an amount or a reason that is not one with 400, and a body that is not a call with invalid_command", async () => {
     const cases: [unknown, string][] = [
-      [{ id: "x-1", amount: 0, reason: "works_order" }, "invalid_amount"],
-      [{ id: "x-1", amount: 2.5, reason: "works_order" }, "invalid_amount"],
-      [{ id: "x-1", amount: 5001, reason: "works_order" }, "invalid_amount"],
+      [{ id: "x-1", amount: 0, reason: "camp_thing" }, "invalid_amount"],
+      [{ id: "x-1", amount: -2.5, reason: "camp_thing" }, "invalid_amount"],
       [{ id: "x-1", amount: -100_001, reason: "camp_thing" }, "invalid_amount"],
-      // An earning sent as a spend, and a spend as an earning.
-      [{ id: "x-1", amount: -3, reason: "works_refund" }, "invalid_amount"],
+      // A spend sent as an earning.
       [{ id: "x-1", amount: 3, reason: "camp_thing" }, "invalid_amount"],
+      // The Works' Coins are Leaf's own now, paid and taken by its commands.
+      [{ id: "x-1", amount: 40, reason: "works_order" }, "invalid_reason"],
+      [{ id: "x-1", amount: -10, reason: "works_build" }, "invalid_reason"],
       [{ id: "x-1", amount: 3, reason: "the raid" }, "invalid_reason"],
       [{ id: "x-1", amount: 3, reason: "" }, "invalid_reason"],
       // Nothing on the guild's server pays these: they were the made-up guild's.
       [{ id: "x-1", amount: 3, reason: "quest" }, "invalid_reason"],
       [{ id: "x-1", amount: 3, reason: "while_away" }, "invalid_reason"],
-      [{ id: "not an id", amount: 3, reason: "works_order" }, "invalid_command"],
-      [{ id: "x-1", amount: "3", reason: "works_order" }, "invalid_command"],
-      [{ amount: 3, reason: "works_order" }, "invalid_command"],
+      [{ id: "not an id", amount: -3, reason: "camp_thing" }, "invalid_command"],
+      [{ id: "x-1", amount: "-3", reason: "camp_thing" }, "invalid_command"],
+      [{ amount: -3, reason: "camp_thing" }, "invalid_command"],
       ["[1, 2, 3]", "invalid_command"],
     ];
     for (const [body, code] of cases) {
@@ -221,25 +203,27 @@ describe("POST /v1/game/coins", () => {
   it("is a guest's too, and needs a session and Leaf's own pages", async () => {
     expect(await done({ id: "g-1", amount: 3, reason: "daily_chest" }, "carol-token")).toBe(303);
     expect(await balance(carol)).toBe(303);
-    const signedOut = await call({ id: "g-2", amount: 3, reason: "works_order" }, "nobody");
+    const signedOut = await call({ id: "g-2", amount: 3, reason: "daily_chest" }, "nobody");
     expect(signedOut.status).toBe(401);
     const elsewhere = await app.request("/v1/game/coins", {
       method: "POST",
       headers: { Cookie: "seq_session=carol-token", Origin: "https://example.com", "Content-Type": "application/json" },
-      body: JSON.stringify({ player: carol, id: "g-3", amount: 3, reason: "works_order" }),
+      body: JSON.stringify({ player: carol, id: "g-3", amount: 3, reason: "daily_chest" }),
     });
     expect([elsewhere.status, await elsewhere.json()]).toMatchObject([403, { code: "bad_origin" }]);
     expect(await balance(carol)).toBe(303);
   });
 
   it("is counted, done and refused, for the staff's report, which reads the ledger's Coins risen in an hour", async () => {
-    await done({ id: "e-1", amount: 4000, reason: "works_order" });
+    await done({ id: "e-1", amount: 3, reason: "daily_chest" });
     clock.now += 10 * MINUTE;
-    await done({ id: "e-2", amount: 1000, reason: "works_depot" });
-    await refused({ id: "s-1", amount: -100_000, reason: "works_plot" });
-    await refused({ id: "s-2", amount: -100_000, reason: "works_plot" });
+    await played(alice, 4000, "raid:a:1", clock.now);
+    await played(alice, 1000, "raid:a:2", clock.now);
+    await done({ id: "s-1", amount: -3, reason: "camp_thing" });
+    await refused({ id: "s-2", amount: -100_000, reason: "camp_thing" });
+    await refused({ id: "s-3", amount: -100_000, reason: "camp_thing" });
     // Answered from before: not counted again.
-    await done({ id: "e-2", amount: 1000, reason: "works_depot" });
+    await done({ id: "e-1", amount: 3, reason: "daily_chest" });
     expect(await services.query((sql) => sql`SELECT player_id, done, refused FROM command_days`)).toEqual([
       { player_id: alice, done: 2, refused: 2 },
     ]);
@@ -250,7 +234,7 @@ describe("POST /v1/game/coins", () => {
         odd: Schema.Array(Schema.Struct({ id: Schema.String, rule: Schema.String, value: Schema.Number })),
       }),
     )(await report.json());
-    // The welcome and the two earnings, within the hour from the welcome.
+    // The welcome, the chest and the two earnings, within the hour from the welcome.
     expect(odd).toEqual([{ id: alice, rule: "coins_in_an_hour", value: 5300 }]);
   });
 });
@@ -259,9 +243,9 @@ describe("the pace of POST /v1/game/coins", () => {
   it("is four calls a second for a player, in bursts of twenty: past it 429 slow_down, nothing done or counted", async () => {
     for (let i = 0; i < 20; i++) {
       // oxlint-disable-next-line no-await-in-loop -- one at a time
-      await done({ id: `b-${i}`, amount: -1, reason: "works_build" });
+      await done({ id: `b-${i}`, amount: -1, reason: "camp_thing" });
     }
-    expect(await refused({ id: "b-20", amount: -1, reason: "works_build" })).toEqual([429, "slow_down"]);
+    expect(await refused({ id: "b-20", amount: -1, reason: "camp_thing" })).toEqual([429, "slow_down"]);
     expect(await balance(alice)).toBe(280);
     expect(await entries(alice)).toHaveLength(21);
     expect(await services.query((sql) => sql`SELECT done, refused FROM command_days`)).toEqual([
@@ -269,9 +253,9 @@ describe("the pace of POST /v1/game/coins", () => {
     ]);
     // A quarter of a second later there is room for one more; another player has their own.
     clock.now += 250;
-    expect(await done({ id: "b-20", amount: -1, reason: "works_build" })).toBe(279);
-    expect(await refused({ id: "b-21", amount: -1, reason: "works_build" })).toEqual([429, "slow_down"]);
-    expect(await done({ id: "g-1", amount: -1, reason: "works_build" }, "carol-token")).toBe(299);
+    expect(await done({ id: "b-20", amount: -1, reason: "camp_thing" })).toBe(279);
+    expect(await refused({ id: "b-21", amount: -1, reason: "camp_thing" })).toEqual([429, "slow_down"]);
+    expect(await done({ id: "g-1", amount: -1, reason: "camp_thing" }, "carol-token")).toBe(299);
   });
 
   it("weighs the cap on a player's entries of the last day alone, by an index on the time", async () => {
@@ -279,7 +263,7 @@ describe("the pace of POST /v1/game/coins", () => {
       (sql) => sql`
         EXPLAIN QUERY PLAN SELECT coalesce(sum(amount), 0) FROM coin_entries
         WHERE player_id = ${alice} AND at > ${T0 - HOUR} AND amount > 0
-          AND game IS NOT NULL AND reason <> 'works_refund'
+          AND game IS NOT NULL AND earned = 1
       `,
     );
     expect(plan.map((row) => String(Object(row).detail))).toEqual([

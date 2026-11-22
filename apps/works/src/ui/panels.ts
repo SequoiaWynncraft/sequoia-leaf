@@ -5,15 +5,10 @@
 
 import { thing } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
-import { balance, spend } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
-
-import type { Art } from "../art/index.ts";
 import {
-  boost,
-  boostLeft,
   DEPOT_SHARE,
   isFilled,
   ITEM,
@@ -30,28 +25,27 @@ import {
   STARTERS,
   STORY,
   storyOrder,
-  swap,
   swapRefusal,
   type Tally,
-} from "../sim/index.ts";
+} from "@sequoia-leaf/yard";
+
+import type { Art } from "../art/index.ts";
 import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
 import { buyIdea } from "../tools.ts";
-import { coins } from "../yard.ts";
+import { coins, doNow } from "../yard.ts";
 import { itemRef, machineRef, planRef, plotRef } from "./card.ts";
-import { feed, leafTo, storyLabel } from "./notes.ts";
-import { $, button, centre, wantWords, when, yardIcon } from "./parts.ts";
+import { feed, storyLabel } from "./notes.ts";
+import { $, button, wantWords, when, yardIcon } from "./parts.ts";
 
 export type PanelId = "orders" | "plans" | "depot" | "power" | "shift";
 
 /** What the panels ask of the rest of the screen. */
 export const panelHooks: {
-  /** Hand a filled standing order over; `from` is the button that was pressed. */
-  handOver: (slot: number) => void;
-  /** A second shift has just been paid for. */
-  shiftOn: () => void;
+  /** Hand a filled standing order over, by its id. */
+  handOver: (order: number) => void;
   changed: () => void;
-} = { handOver: () => {}, shiftOn: () => {}, changed: () => {} };
+} = { handOver: () => {}, changed: () => {} };
 
 const TITLES: Record<PanelId, string> = {
   orders: "Orders",
@@ -146,14 +140,14 @@ function orders(_art: Art, body: HTMLElement): () => void {
       const full = isFilled(s.want, s.filled);
       const rows = wants(s.want, () => S.world.board[slot]?.filled ?? {});
       live.push(rows.update);
-      const why = swapRefusal(w, slot);
+      const why = swapRefusal(w, s.id);
       const act = full
         ? button("sm", ["Hand over"], () => {
-            panelHooks.handOver(slot);
+            panelHooks.handOver(s.id);
           })
         : button(why === null ? "wood sm" : "wood sm off", ["Swap"], (b) => {
-            const no = swapRefusal(S.world, slot);
-            if (no !== null || !swap(S.world, slot)) {
+            const no = swapRefusal(S.world, s.id);
+            if (no !== null || "refused" in doNow({ do: "swap", order: s.id })) {
               yardSfx.no();
               replay(b, "shake");
               feed(`${no ?? "It cannot be swapped"}.`, "coral");
@@ -195,12 +189,16 @@ function orders(_art: Art, body: HTMLElement): () => void {
         ),
       );
     });
+    // A place on the board Leaf has yet to hang an order in.
+    if (w.open.board)
+      for (let n = w.board.length; n < w.rates.slots; n++)
+        kids.push(el("div", "k-card order", {}, el("div", "k-d", { text: "A fresh order is on its way from town." })));
     body.replaceChildren(...kids);
   };
   const shape = when(
     () =>
-      `${S.world.story}|${S.world.open.board}|${S.world.board
-        .map((s, n) => `${s.id}:${isFilled(s.want, s.filled)}:${swapRefusal(S.world, n) === null}`)
+      `${S.world.story}|${S.world.open.board}|${S.world.rates.slots}|${S.world.board
+        .map((s) => `${s.id}:${isFilled(s.want, s.filled)}:${swapRefusal(S.world, s.id) === null}`)
         .join()}`,
     build,
   );
@@ -429,24 +427,16 @@ function powerBook(_art: Art, body: HTMLElement): () => void {
 // ---------- the second shift ----------
 
 function shift(_art: Art, body: HTMLElement): () => void {
-  const left = el("div", "k-d");
-  const fill = el("i");
-  const meter = el("div", "k-bar leaf", {}, fill);
-  const label = el("span", "", { text: "Start a second shift" });
-  const go = button("leaf wide", [icon("leaf"), el("span", "", { text: String(SHIFT.leaf) }), label], (b) => {
-    if (!spend("leaf", SHIFT.leaf)) {
-      sfx.no();
-      replay(b, "shake");
-      feed(`A second shift is ${SHIFT.leaf} Leaf, and the purse holds ${balance().leaf}.`, "coral");
-      return;
-    }
-    leafTo(centre(b), 7);
-    boost(S.world, Date.now(), SHIFT.minutes * 60_000);
-    panelHooks.shiftOn();
-    panelHooks.changed();
-  });
-  if (!closeLeaf(go, `${SHIFT.leaf} Leaf`))
-    tip(go, `${SHIFT.leaf} Leaf`, `Double pace for ${SHIFT.minutes} minutes by the clock.`);
+  // It is bought with Leaf, which nothing in town may spend yet: the button shows itself closed.
+  const go = el(
+    "button",
+    "k-btn leaf wide",
+    { type: "button" },
+    icon("leaf"),
+    el("span", "", { text: String(SHIFT.leaf) }),
+    "Start a second shift",
+  );
+  closeLeaf(go, `${SHIFT.leaf} Leaf`);
   body.append(
     el(
       "div",
@@ -461,19 +451,9 @@ function shift(_art: Art, body: HTMLElement): () => void {
       {},
       `For ${SHIFT.minutes} minutes by the clock, gatherers, machines and belts all go twice as fast, whether you stay to watch or not. It opens nothing: only Coins and the story do that.`,
     ),
-    meter,
-    left,
     go,
   );
-  return () => {
-    const ms = boostLeft(S.world, Date.now());
-    const mins = Math.ceil(ms / 60_000);
-    meter.hidden = ms <= 0;
-    fill.style.setProperty("--v", `${Math.min(100, (ms / (SHIFT.minutes * 60_000)) * 100)}%`);
-    left.textContent =
-      ms > 0 ? `On now: ${mins} minute${mins === 1 ? "" : "s"} left. Another hour can be added to the end of it.` : "";
-    label.textContent = ms > 0 ? "Add another hour" : "Start a second shift";
-  };
+  return () => {};
 }
 
 // ---------- opening and closing ----------

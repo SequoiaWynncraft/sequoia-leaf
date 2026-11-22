@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { at, build, create, deliver, lay, route, step, type World } from "./sim/index.ts";
+import { at, build, create, deliver, lay, route, step, type World } from "@sequoia-leaf/yard";
+
 import { nudge } from "./teach.ts";
 
 const none = new Set<string>();

@@ -12,15 +12,6 @@ import { R } from "@sequoia-leaf/kit/pix.ts";
 import { bubble, bubbleSize, wrap } from "@sequoia-leaf/kit/signs.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx, hash, makeCanvas } from "@sequoia-leaf/kit/util.ts";
-
-import { HOP, walkers } from "./actors.ts";
-import { beltTile, ride, STEPS, TILE } from "./art/belts.ts";
-import { BEYOND, glint } from "./art/ground.ts";
-import type { Art } from "./art/index.ts";
-import { DEPOT } from "./art/machines.ts";
-import type { Sprite } from "./art/pal.ts";
-import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
-import { type Layout, layout, pylonTop } from "./layout.ts";
 import {
   BACK,
   blank,
@@ -41,16 +32,24 @@ import {
   TICKS,
   tunnelExit,
   type World,
-} from "./sim/index.ts";
+} from "@sequoia-leaf/yard";
+
+import { HOP, walkers } from "./actors.ts";
+import { beltTile, ride, STEPS, TILE } from "./art/belts.ts";
+import { BEYOND, glint } from "./art/ground.ts";
+import type { Art } from "./art/index.ts";
+import { DEPOT } from "./art/machines.ts";
+import type { Sprite } from "./art/pal.ts";
+import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
+import { type Layout, layout, pylonTop } from "./layout.ts";
 import { S } from "./state.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
 export interface Moment {
-  /** Ticks since the yard's last, as a share of one (up to two on a second shift). */
+  /** Ticks since the yard's last, as a share of one. */
   lead: number;
   /** The share of its plain pace everything works at: 1, or less when the yard is short of power. */
   pace: number;
-  boosted: boolean;
 }
 
 const buf = makeCanvas(320, 200, true);
@@ -88,12 +87,6 @@ const SPARK = radial(32, [
   [0.5, "rgba(255,200,110,0.35)"],
   [1, "rgba(255,180,90,0)"],
 ]);
-const LEAFY = radial(64, [
-  [0, "rgba(190,255,150,1)"],
-  [0.5, "rgba(150,230,120,0.4)"],
-  [1, "rgba(120,220,110,0)"],
-]);
-
 export function sizeBuffers(w: number, h: number): void {
   for (const b of [buf, dusk]) {
     b.c.width = w;
@@ -235,7 +228,7 @@ function build(art: Art, w: World, b: Building, i: number, x: number, y: number,
   const mem = real ? memOf(w, b, i) : null;
   const st = real ? reading(w, b, i) : null;
   const working = real && st?.state === "working";
-  const t = S.t * (now.boosted ? 2 : 1);
+  const t = S.t;
   let top = foot - 16;
   switch (b.kind) {
     case "gatherer": {
@@ -616,12 +609,8 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
       );
     });
     if (w.plans.includes("flywheel")) {
-      const fly = art.m.fly[Math.floor(S.t * (now.boosted ? 16 : 8)) % 4];
+      const fly = art.m.fly[Math.floor(S.t * 8) % 4];
       if (fly) put(fly, dl + DEPOT.fly.x - 6, dt + DEPOT.fly.y - 6, dz + 0.1);
-    }
-    if (now.boosted) {
-      const flag = art.m.flag[Math.floor(S.t * 4) % 2];
-      if (flag) stand(flag, dl + DEPOT.flag.x, dt + DEPOT.flag.y + 2, dz + 0.1);
     }
   }
   const reach = REACH.depot * TILE;
@@ -754,11 +743,6 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     if (!l || l.reach || l.x + l.r < 0 || l.x - l.r > W || l.y + l.r < 0 || l.y - l.r > H) continue;
     g.globalAlpha = clamp(0.14 * l.power, 0, 0.5);
     g.drawImage(WARM, l.x - l.r * 0.9, l.y - l.r * 0.9, l.r * 1.8, l.r * 1.8);
-  }
-  if (now.boosted) {
-    // A second shift: the depot shines the green of the Leaf that paid for it.
-    g.globalAlpha = 0.16 + 0.05 * Math.sin(S.t * 3);
-    g.drawImage(LEAFY, dx - 70, dfoot - 90, 140, 140);
   }
   g.globalCompositeOperation = "source-over";
   g.globalAlpha = 1;

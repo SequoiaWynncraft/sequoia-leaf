@@ -6,6 +6,9 @@
 import { REACH } from "./content/machines.ts";
 import type { World } from "./world.ts";
 
+/** Whether a whole-tile offset is within `r` tiles: squares of whole numbers, so every host agrees. */
+const within = (dx: number, dy: number, r: number): boolean => dx * dx + dy * dy <= r * r;
+
 /** Works out again which tiles have power, after a pylon is built or taken away or pylons grow taller. */
 export function repower(w: World): void {
   const { land } = w;
@@ -20,9 +23,7 @@ export function repower(w: World): void {
     grew = false;
     for (const p of pylons) {
       if (p.live) continue;
-      p.live =
-        Math.hypot(p.x - cx, p.y - cy) <= link ||
-        pylons.some((q) => q.live && Math.hypot(p.x - q.x, p.y - q.y) <= link);
+      p.live = within(p.x - cx, p.y - cy, link) || pylons.some((q) => q.live && within(p.x - q.x, p.y - q.y, link));
       if (p.live) grew = true;
     }
   }
@@ -30,7 +31,7 @@ export function repower(w: World): void {
   w.power.fill(0);
   for (let y = 0; y < land.h; y++)
     for (let x = 0; x < land.w; x++)
-      if (Math.hypot(x - cx, y - cy) <= REACH.depot || live.some((p) => Math.hypot(x - p.x, y - p.y) <= reach))
+      if (within(x - cx, y - cy, REACH.depot) || live.some((p) => within(x - p.x, y - p.y, reach)))
         w.power[y * land.w + x] = 1;
   w.wire = null;
 }

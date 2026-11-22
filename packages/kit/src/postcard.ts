@@ -4,18 +4,11 @@
  * the town would mention changes, and the town reads the latest one.
  */
 
+import type { Postcard } from "@sequoia-leaf/core";
+
 import { keepText, keptText } from "./keep.ts";
 
 export type Sender = "works" | "raid";
-
-export interface Postcard {
-  /** What is waiting there, in a line, for the card on the game's door. */
-  readonly waiting: string;
-  /** Things won or built there that a camp can show, by the game's own names for them. */
-  readonly trophies: readonly string[];
-  /** Coins earned there and not yet collected. */
-  readonly till: number;
-}
 
 /** Where a game's postcard is kept. */
 const cardKey = (from: Sender): string => `town.postcard.${from}.v1`;

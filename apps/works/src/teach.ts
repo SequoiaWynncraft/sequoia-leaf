@@ -6,7 +6,7 @@
  * Nothing here draws anything or touches the yard.
  */
 
-import { ahead, type Kind, power, refusal, status, type World } from "./sim/index.ts";
+import { ahead, type Kind, power, refusal, status, type World } from "@sequoia-leaf/yard";
 
 export interface Nudge {
   /** Which lesson this is; one that has been taken is not given again. */

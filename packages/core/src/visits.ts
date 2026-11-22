@@ -223,13 +223,18 @@ export interface WorksRow {
  * these names. A raid run is `raid_started` (`trail`), then a `raid_room` for each room fought
  * (`room`, `kind`, `won` true for one won, `resolve` left, the fight's `seconds`), then `raid_ended`
  * (`trail`, `rooms_won`, `ended`: `won`, `lost` or `left`, and the `coins` it paid); the Works logs
- * `order_filled` for each order, with `story` true for a story order.
+ * `works_plot` and `works_plan` for what was bought (`plot` or `plan`, and its `price`),
+ * `works_order` for a standing order handed over (`order`, `title`, `pay`) and `works_story` for each
+ * story order finished (`order`, its number in the story, `title`, `pay`).
  */
 export const LOGGED = {
   raidStarted: "raid_started",
   raidRoom: "raid_room",
   raidEnded: "raid_ended",
-  orderFilled: "order_filled",
+  worksPlot: "works_plot",
+  worksPlan: "works_plan",
+  worksOrder: "works_order",
+  worksStory: "works_story",
 } as const;
 
 /** How many of the last things a player did the report shows. */

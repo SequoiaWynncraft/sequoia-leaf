@@ -40,7 +40,9 @@
  *
  * The games Leaf plays (the play service) are served as in production. For the screenshot tours,
  * `POST /test/play/raid` with `{ "stage": [...] }` stages a moment at Tester's raid table that play
- * does not reach by itself (`stage-raid.ts`); nothing like it is served by the guild's own Leaf.
+ * does not reach by itself (`stage-raid.ts`), and `POST /test/play/works` one in Tester's yard (a
+ * kept yard, a time away, a filled order: `stage-works.ts`); nothing like them is served by the
+ * guild's own Leaf.
  */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -48,11 +50,13 @@ import { resolve } from "node:path";
 import { CLIENT_HZ, Flag, type PlayerId, playerId } from "@sequoia-leaf/core";
 import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import type { SqlClient } from "effect/sql";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
 import { LiveClient } from "./live-client.ts";
 import { stageRaid } from "./stage-raid.ts";
+import { stageWorks } from "./stage-works.ts";
 import {
   DAY,
   fakeBackend,
@@ -552,23 +556,32 @@ const signingRoute = (path: "/sign-in" | "/sign-out") =>
       ),
     ),
   );
-/** Stages a moment at Tester's raid table, for the tours. */
-const stagingRoute = HttpRouter.add(
-  "POST",
-  "/test/play/raid",
-  Effect.gen(function* () {
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    const body: unknown = yield* request.json.pipe(Effect.orElseSucceed(() => null));
-    const ops =
-      typeof body === "object" && body !== null && "stage" in body && Array.isArray(body.stage) ? body.stage : [];
-    // Staged through the same Leaf the routes use, on the same database.
-    const made = yield* Effect.promise(() => leaf.run(stageRaid(tester.id, ops).pipe(Effect.orDie)));
-    return HttpServerResponse.jsonUnsafe({ made });
-  }),
-);
+/** Stages a moment in one of Tester's games, for the tours: `stage` does it, and says what it made. */
+const stagingRoute = (
+  game: string,
+  stage: (ops: readonly unknown[]) => Effect.Effect<unknown, unknown, SqlClient.SqlClient>,
+) =>
+  HttpRouter.add(
+    "POST",
+    `/test/play/${game}`,
+    Effect.gen(function* () {
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      const body: unknown = yield* request.json.pipe(Effect.orElseSucceed(() => null));
+      const ops =
+        typeof body === "object" && body !== null && "stage" in body && Array.isArray(body.stage) ? body.stage : [];
+      // Staged through the same Leaf the routes use, on the same database.
+      const made = yield* Effect.promise(() => leaf.run(stage(ops).pipe(Effect.orDie)));
+      return HttpServerResponse.jsonUnsafe({ made: made ?? null });
+    }),
+  );
 const served = await leaf.serve(
   port,
-  Layer.mergeAll(signingRoute("/sign-in"), signingRoute("/sign-out"), stagingRoute),
+  Layer.mergeAll(
+    signingRoute("/sign-in"),
+    signingRoute("/sign-out"),
+    stagingRoute("raid", (ops) => stageRaid(tester.id, ops)),
+    stagingRoute("works", (ops) => stageWorks(tester.id, ops)),
+  ),
 );
 
 // Stopped as a deploy stops Leaf: every live connection is told Leaf is restarting (1012) before

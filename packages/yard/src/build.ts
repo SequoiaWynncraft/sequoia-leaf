@@ -137,10 +137,16 @@ export function build(w: World, kind: Kind, x: number, y: number, dir: Dir, coin
   return { ok: true, cost };
 }
 
+/** Whether what stands on a tile can be turned: anything but the depot and a tunnel. */
+export function turnable(w: World, x: number, y: number): boolean {
+  const there = w.cells[at(w, x, y)];
+  return there !== null && there !== undefined && there.kind !== "depot" && there.kind !== "tunnel";
+}
+
 /** Turns something to face another way. Costs nothing. A tunnel is not turned: take it away and dig again. */
 export function turn(w: World, x: number, y: number, dir: Dir): boolean {
   const there = w.cells[at(w, x, y)];
-  if (!there || there.kind === "depot" || there.kind === "tunnel") return false;
+  if (!there || !turnable(w, x, y)) return false;
   if (there.dir !== dir) {
     there.dir = dir;
     changed(w);

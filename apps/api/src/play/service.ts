@@ -1,4 +1,4 @@
-import { COMMAND_ID, type Ctx, type Logged, MOST_COMMANDS, type PlayerId } from "@sequoia-leaf/core";
+import { type CoinChange, COMMAND_ID, type Ctx, type Logged, MOST_COMMANDS, type PlayerId } from "@sequoia-leaf/core";
 import { Clock, Context, Effect, Layer, Option, Schema } from "effect";
 import { SecureRandom } from "effect/crypto";
 import { SqlClient } from "effect/sql";
@@ -68,6 +68,25 @@ const ctxOf = (playing: Playing, now: number, seed: number, room: number): Ctx =
   room,
 });
 
+/**
+ * What each of a command's Coins changes comes to, worked out in order from the balance: one that
+ * pays in is cut to what the player may still earn (`room`) unless it is `free`. Null when the
+ * balance would go below nothing at any point: the command cannot be paid for.
+ */
+function payable(changes: readonly CoinChange[], balance: number, room: number): number[] | null {
+  let after = balance;
+  let left = room;
+  const amounts: number[] = [];
+  for (const change of changes) {
+    const amount = change.free === true ? change.amount : Math.min(change.amount, left);
+    if (change.free !== true) left -= Math.max(0, amount);
+    after += amount;
+    if (after < 0) return null;
+    amounts.push(amount);
+  }
+  return amounts;
+}
+
 /** The commands of a batch with their ids, or why the batch is not one. */
 function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] | string {
   if (commands.length > MOST_COMMANDS) {
@@ -95,10 +114,11 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * (`open`), and sends commands (`send`); Leaf does them in order with the game's rules, in one
  * transaction: it reads the state, brings it to now, does each command, and writes the state, the
  * Coins each command paid or took, what it logged, and each command's answer. A command whose id
- * was seen before answers as it did then and changes nothing; one that would take more Coins than
- * the player has is refused with `not_enough_coins`; one that pays is done whatever the player has
- * earned, and paid only as far as they may still earn (`Coins.room`, which each game is told, so
- * that it says what was really paid). A player with no state yet gets a new one,
+ * was seen before answers as it did then and changes nothing; one whose Coins changes, added to the
+ * balance in order, would take it below nothing at any point is refused with `not_enough_coins`;
+ * one that pays is done whatever the player has earned, and paid only as far as they may still earn
+ * (`Coins.room`, which each game is told, so that it says what was really paid), but for a change
+ * that is `free`, which is paid whole and uses none of it. A player with no state yet gets a new one,
  * and their Coins open with the welcome. A stored state that will not read is left as it is: the
  * player and the game are logged, and nothing is done. Leaf's dice for each call come from
  * `SecureRandom`.
@@ -197,20 +217,22 @@ export class Play extends Context.Service<
                       continue;
                     }
                     const attempt = game.attempt(command, ctxOf(playing, now, yield* dice, room));
+                    const amounts = "refused" in attempt ? null : payable(attempt.coins, balance, room);
                     let result: Result;
                     if ("refused" in attempt) {
                       result = { id, refused: attempt.refused };
-                    } else if (balance + attempt.coins.reduce((sum, c) => sum + Math.min(0, c.amount), 0) < 0) {
+                    } else if (amounts === null) {
                       // A command that takes Coins the player does not have is not done at all.
                       result = { id, refused: "not_enough_coins" };
                     } else {
                       attempt.keep();
-                      for (const change of attempt.coins) {
+                      for (const [n, change] of attempt.coins.entries()) {
                         // Past what the player may still earn, the command is done all the same and pays what is left.
-                        const amount = Math.min(change.amount, room);
+                        const amount = amounts[n] ?? 0;
                         if (amount === 0) {
                           continue;
                         }
+                        const free = change.free === true;
                         const posted = yield* coins.post(
                           playing.playerId,
                           {
@@ -218,12 +240,13 @@ export class Play extends Context.Service<
                             reason: change.reason,
                             game: played.id,
                             key: `${played.id}:${playing.playerId}:${change.key}`,
+                            free,
                           },
                           now,
                         );
                         if (posted.status === "posted") {
                           balance += amount;
-                          room -= Math.max(0, amount);
+                          room -= free ? 0 : Math.max(0, amount);
                         }
                       }
                       logs.push(...attempt.log);

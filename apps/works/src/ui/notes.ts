@@ -4,16 +4,18 @@ import { amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { fly, type PurseBar, purseBar } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
+import { KIND, PLANS, STORY, type StoryOrder } from "@sequoia-leaf/yard";
 
 import type { Art } from "../art/index.ts";
-import { KIND, PLANS, STORY, type StoryOrder } from "../sim/index.ts";
 import { S } from "../state.ts";
+import { coins } from "../yard.ts";
 import { $, button, fitted, pic, wantWords, yardIcon } from "./parts.ts";
 
 let bar: PurseBar | null = null;
 
 export function initNotes(): void {
-  bar = purseBar($("purse"));
+  // The Works shows the Coins as Leaf will count them for a price: the purse's, and the till's whole Coins.
+  bar = purseBar($("purse"), coins);
 }
 
 export function tickNotes(dt: number): void {
@@ -28,11 +30,6 @@ export function coinsFrom(from: Pt, pay: number): void {
   fly("coin", from, purseAt("coins"), Math.max(3, Math.min(9, Math.round(pay / 60) + 3)), () => {
     bar?.bump("coins");
   });
-}
-
-/** Leaf flies out of the purse to a spot on the page. */
-export function leafTo(to: Pt, count: number): void {
-  fly("leaf", purseAt("leaf"), to, count);
 }
 
 export type Tone = "gold" | "leaf" | "coral" | "rose";

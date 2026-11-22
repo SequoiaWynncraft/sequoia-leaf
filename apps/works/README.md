@@ -6,186 +6,45 @@ them, and the depot in the middle takes everything in. The guild's raid parties,
 crab pond, the town's own and the guild's creatures ask for things, and the yard makes them. Nothing here fells a living
 tree: wood is deadfall.
 
-The game is in two parts. `src/sim/` is the rules, with no screen in them: plain data and plain
-functions, tested. Everything else in `src/` is the screen: the yard drawn in the town's pixel art,
-and an interface for building it with a mouse or a finger.
+The rules are the package `@sequoia-leaf/yard` (`packages/yard`), with a README of their own that
+says what is in the yard and how it runs. Nothing in there touches the page. Everything here is the
+screen: the yard drawn in the town's pixel art, and an interface for building it with a mouse or a
+finger.
 
 ```sh
 bun run dev                      # with hot reload
 bun run build                    # dist/
-bun test                         # the rules, and the teaching
+bun test                         # the teaching, and the screen's own small questions
 bun review/balance.ts            # plays the whole story by script and prints the pacing
-bun review/balance.ts --yards    # the same, and keeps a few yards part-way through in src/yards/
+bun review/balance.ts --yards    # the same, and keeps a few yards part-way through in packages/yard/src/yards/
 ```
 
-## The rules, as built
+## On Leaf
 
-**Time.** The yard moves in ticks, ten to a second. Everything below that takes time is counted in
-ticks at the plain pace; plans, a shortage of power and a second shift change the pace.
+The yard is Leaf's: its clock, its till and its Coins (the root README's play service). The page
+awaits the kit's `start()`, opens the yard from Leaf (`openPlay("works", …)`) and holds a copy of
+it, a yard with no seed, so that it hangs no order of its own. Without a Leaf it shows the kit's
+cards, as the battler does. It keeps nothing of the game in the browser; only `works.screen.v1`
+(the lessons taken, the zoom) stays.
 
-**Land.** The map is 48 tiles by 36, nine plots of 16 by 12 with the yard in the middle. Each plot
-is drawn in `content/plots.ts` as rows of letters, one a tile: clear ground, six kinds of deposit,
-the stream, and redwoods (nothing is built on water or a redwood). Deposits never run out. A new
-yard owns the middle plot, which has deadfall within the depot's power and ore and stone just
-beyond it. The story puts the other plots up for sale one at a time; a plot can be bought once it
-touches land the yard owns.
+Everything the member does is done to the copy at once with the shared rules (`yard.ts`, `doNow`)
+and sent with the tick the copy stood at; a command the rules refuse is said so and not sent. Each
+frame, if Leaf has answered since the last, the copy becomes Leaf's yard with every command still
+unanswered done again on top, each at its own tick; then the copy is run on to Leaf's tick now: the
+tick Leaf last gave, and one for each tenth of a second since, never earlier than one already
+shown. A copy more than a minute behind (a tab put away) is not run on: the page sends `collect`
+and shows Leaf's yard when it comes. News (a story order done, an order filled) comes from the
+copy's own stepping, and is not told again when the same ticks are stepped once more. Swapping,
+handing over and buying a plan leave a place on the board empty until Leaf hangs the next order
+there; a place the board would have filled sends `collect`, so Leaf does.
 
-| Plot            | Price | What is there                                 |
-| --------------- | ----: | --------------------------------------------- |
-| Long Meadow     |   300 | room, and a drift of deadfall                 |
-| The Clay Bank   |   500 | clay                                          |
-| Stream Bend     |   900 | sand on both banks, and the stream            |
-| Resin Grove     |  1000 | resin                                         |
-| The Old Quarry  |  2200 | a great deal of stone, a little ore           |
-| The Far Seam    |  2600 | the big ore seam and stone, across the stream |
-| Windfall Hollow |  3000 | great drifts of deadfall                      |
-| The Millpond    |  5000 | a long bank for waterwheels, sand and clay    |
-
-**Things.** Twenty-three, in four steps, and every one that is made has exactly one recipe, taking
-one each of its parts.
-
-- From the ground: deadfall, stone, ore, clay, sand, resin.
-- Worked once, at a mill: plank, brick, ingot, pot, glass, lamp oil.
-- Put together: tool (plank, ingot), gear (ingot, brick), frame (plank, brick), hamper (plank, pot),
-  glazed shell (pot, glass) at a bench; lantern (glass, ingot, lamp oil) at a workshop.
-- The guild's goods: engine (tool, gear) and banner pole (frame, gear) at a bench; raid kit (tool,
-  lantern, hamper) at a workshop.
-- The two that take the whole yard, at a workshop: the Beacon (banner pole, lantern, engine) and the
-  clockwork crab (engine, glazed shell, lantern), which has all six things from the ground in it.
-
-**Machines.**
-
-| Machine    | Cost | Power    | What it does                                                             |
-| ---------- | ---: | -------- | ------------------------------------------------------------------------ |
-| Belt       |    1 |          | carries one thing per tile; takes from behind and from both sides        |
-| Gatherer   |   10 | draws 1  | stands on a deposit and gathers one thing every 15 ticks                 |
-| Mill       |   20 | draws 3  | one thing in, one out (12 ticks); saws, fires or presses by what arrives |
-| Bench      |   40 | draws 4  | two different things in, one out (20 or 30 ticks)                        |
-| Workshop   |  120 | draws 8  | three different things in, one out (30 to 80 ticks)                      |
-| Splitter   |    8 |          | in at the back; out ahead, left and right by turns                       |
-| Joiner     |    8 |          | in at the back and both sides, turn about; out ahead                     |
-| Tunnel     |   12 |          | a belt that goes under one to three tiles of anything                    |
-| Crate      |   20 |          | holds 32 things of any kinds; can be shut, and then lets nothing out     |
-| Pylon      |    6 |          | carries power further                                                    |
-| Waterwheel |   60 | gives 10 | only on a tile beside the stream                                         |
-| Boiler     |   90 | gives 30 | while it burns deadfall, a piece every 20 ticks                          |
-| Depot      |      | gives 20 | three tiles square; takes anything from any side                         |
-
-Taking a thing away gives back all it cost, so the yard can be rearranged freely; what the thing
-was holding is lost. Laying a thing over another of its kind only turns it.
-
-A new yard has a few pieces to hand (`STARTERS`: a gatherer, a mill and a dozen belts). Standing one
-costs nothing and taking it away gives nothing back, but it goes back to hand and can be stood again,
-so a first line can be built, and rebuilt, from an empty purse. `costOf(w, kind)` is what the next
-one of a thing would cost.
-
-A machine keeps up to four of each part by it. It makes whatever the parts it holds add up to, and
-takes in a part only if some one recipe uses it together with everything already held, so a mixed
-belt is worked through rather than jammed on. A single belt that brings two parts in the wrong
-proportion can still starve a bench (it fills with one and the other is stuck behind). `setRecipe`
-tells a machine to make one thing only, and `tipOut` empties what a machine holds, which frees one
-that has filled up with the wrong part.
-
-A plain belt takes whichever of its feeders comes first, so one full line can keep another waiting;
-a joiner takes turn about. A tunnel is built as both mouths at once and comes up at the nearest
-clear tile; a thing spends as long under the ground as it would on belts over the same tiles. A
-tunnel goes under belts, roots and the stream, but never under the depot, and the router goes round.
-
-`status(w, i)` says what the thing on a tile is doing in a sentence, and whether it is in trouble
-that will not mend itself: out of reach of power, nowhere to send what it makes, full of one part
-and waiting for another. `rate` is how many it turns out in a minute at the yard's present pace.
-
-**Power.** Reach and supply are separate. Power reaches 6.6 tiles from the depot and 4.6 from every
-pylon that is within 8.1 of the depot or of another joined pylon. A machine out of reach does
-nothing and draws nothing; a waterwheel or boiler out of reach gives nothing. Supply is what the
-depot, the wheels and the burning boilers give; demand is what every gatherer, mill, bench and
-workshop in reach draws, working or not, so both are steady numbers a player can plan by
-(`power(w)`). When demand passes supply every one of those machines works at `supply / demand` of
-its pace, and nothing stops. Belts need no power.
-
-**Plans.** Thirteen, bought with Coins, opened by the story; some want an earlier plan first.
-
-| Plan                                  | Price         | What changes                                    |
-| ------------------------------------- | ------------- | ----------------------------------------------- |
-| Sharper rakes, then Wheelbarrows      | 180, 1200     | gatherers at 1.5 and 2 times their pace         |
-| Second-tier, then Third-tier machines | 1500, 7000    | mills, benches and workshops at 1.5 and 2 times |
-| Waxed belts, then Roller belts        | 350, 3200     | belts and tunnels at 1.5 and 2 times            |
-| The boiler, The tunnel, The workshop  | 220, 300, 900 | each opens its machine                          |
-| A bigger flywheel                     | 450           | the depot gives 40 power                        |
-| Taller pylons                         | 500           | pylons reach and link a third further           |
-| Bigger crates                         | 300           | a crate holds 128                               |
-| A fourth hook                         | 4000          | the board holds four standing orders            |
-
-A gatherer is a little slower than the mill it feeds, so the gatherer plans and the machine plans
-take turns at being what a line is waiting for.
-
-**Orders.** The depot pays a hundredth of a thing's worth for anything that arrives, so nothing is
-wasted, but orders are where the Coins are. Each thing that arrives goes toward one order that
-still wants it: the story's first, then the board's from the top.
-
-- _The story_ is twenty orders, one after another (`content/story.ts`). Filling one pays at once
-  and opens machines, plots and plans. Eight of them leave something in the town for good.
-- _The board_ goes up after the fourth story order: three standing orders, each from a place in
-  town (the crab pond, the Treasury, the campfire, the market stalls, the quest board, the raid
-  parties, the gate), one of the town's own (Pipwick, Embertoe, Tindra) or one of the guild's
-  creatures, asking for one or two things (`content/asks.ts`). An order kept in a yard from before
-  these askers is asked again by one of them for the same things when the yard is read back
-  (`reask`). An
-  order is drawn from the yard's seed and how many orders the board has shown before, so the same
-  yard is always offered the same orders, reload or no. It asks only for things the yard can make
-  as it stands and that the story has already asked for, in numbers sized by the work in them
-  (every tick of gathering and making that goes into one), and pays what those goods are worth.
-  Nothing on the board has a clock. A filled order waits there until it is handed over (`claim`),
-  which pays it and hangs a fresh one; one unfilled order may be swapped for a fresh one, free,
-  every ten minutes of the yard's time.
-
-**A second shift.** `boost(w, now, ms)` makes the yard run two ticks for every one until a moment
-on the wall clock. It is the one thing Leaf buys here: `SHIFT` (in `content/shift.ts`) says what it
-costs and how long it runs, 100 Leaf for an hour. It opens nothing.
-
-**Away.** `runTo(w, now)` brings the yard up to the clock. A gap of under fifteen seconds is simply
-run. After a longer one the yard is credited with up to eight hours' work (a second shift counting
-double for as long as it lasted) and an `Away` comes back saying what it did: Coins earned, things
-made, orders filled, Coins waiting on the board. Eight hours is 288,000 ticks, so it is not all
-run: a few thousand ticks are run for real, counting only what the depot takes in during them,
-and the rest is paid out at that pace, through the same order book. A line that had already run
-dry is therefore paid nothing. Where a crate would fill or run dry part-way, the yard is paid up to
-that moment, run again for a short while to find its new pace, and paid on. A boiler with nothing
-gathered for it burns what it holds and what the crates and belts behind it hold, and then goes out:
-the yard is paid at the pace with it only until then, it is let go out for real, and the pace
-without it is found afresh, once for each boiler that goes out. On the largest yard the
-balance script builds this takes about 7 ms and lands within a fifth of a percent of running every
-tick.
-
-**Coins.** The yard keeps no purse. `build`, `buyPlot` and `buyPlan` are told the balance and say
-what they took; `remove` says what comes back; whatever the yard earns gathers in `w.till` until
-`collect(w)` hands it over in whole Coins. A new yard has no Coins of its own: the screen pays for
-everything out of the member's purse, and pays the till into it, each with its reason (a building
-or a belt, a plot, a plan, what taking one away gives back; from the till, what orders paid since
-it was last paid out, and the rest as the depot's). On the guild's server the purse's Coins are
-Leaf's, and each of those goes to Leaf's ledger.
-
-**Saving.** `save(w)` is JSON with a version (2). `load(text)` gives back a yard it can vouch for or
-nothing: a record of the wrong shape or version is refused whole, and inside a good one any plot,
-plan or building that could not have come about by playing is left out. The first yard, before
-this one, was a different map with different machines, so its saves are not read as yards;
-`oldCoins(text)` finds the Coins in one so a screen can carry them over: with the made-up guild
-only. On the guild's server nothing the browser kept becomes Coins; old Coins are brought over
-by hand (the root README's Moving over).
-
-## What the town can read
-
-- `w.given`: how many of each thing have gone to orders, ever.
-- `townGifts(w)`: what finished story orders have left in town, oldest first, each with an id and a
-  line to show (`tree-lanterns`: "Lanterns from the Works hang in the great tree.").
-- `runTo` gives the `Away`, and `awayLine(away)` puts it in a sentence: "While you were away the
-  Works made 340 Coins and finished "Lanterns for the great tree"."
-- `postcard(w)` is what the page leaves for the town (the kit's `postcard.ts`) whenever it changes
-  and when the town closes it: what is waiting in the yard, the capstones ever made, the till.
-
-On the guild's own server the page first awaits the kit's `start()` and pulls its saves (the
-`purse` and `works` slots, and `town` too when opened on its own), shows the second shift's button
-closed, and says the member is at the Works; the kit's README says how.
+**Coins.** The number the Works shows, and what a price is checked against, is the purse's (Leaf's
+ledger) and the whole Coins in the copy's till, as Leaf will count them. A command that changes
+Coins shows what it expects at once (`heardCoins`), and the purse asks Leaf for the true number
+after the answer (`refreshCoins`). The till is paid in (`collect`) once a minute while it holds a
+whole Coin, when the letter about a time away is put away, and when the member leaves by the back
+button. The second shift's button shows itself closed: it costs Leaf, which nothing in town spends
+yet.
 
 ## The screen
 
@@ -261,19 +120,14 @@ blue hat for his own orders, one of the town's gnomes for anybody else's, saying
 handing over (from the panel, or by tapping him) sends the crate across, pays, and he carries it
 off over his head. Whoever walks about the yard is one of the yard's gnomes (`actors.ts`), drawn
 from the gatherer's pictures with a two-step waddle. A plot bought: the
-cleared ground opens out from its signpost and the undergrowth falls away. A second shift: the
-bell, a green pennant on the depot's roof, and the depot shines green while it lasts. Coming back
-after five minutes or more: a letter on paper says what the yard did, and pays the till into the
-purse as it is put away.
+cleared ground opens out from its signpost and the undergrowth falls away. Coming back after five
+minutes or more: Leaf's yard carries what it worked out while nobody watched (how long, and what
+the till gained), a letter on paper says so, and putting it away pays the till into the purse.
 
 **Teaching.** `teach.ts` looks at the yard and says what the next small thing to try is, and where:
 the first gatherer, the mill, the belt, the first planks arriving, a pylon towards the ore, a
 bench. After that it speaks up once each for the board, a shortage of power, and a jammed machine.
 It has no screen in it and is tested.
-
-**Keeping.** The yard is kept in the browser (`works.save.v2`) a moment after every change, every
-few seconds, and when the page is put away or the town says it is closing. The Coins are the kit's
-one purse. `?fresh` in the address starts the yard over, once.
 
 **In the town.** Inside the town's frame the page says `ready` once it has drawn, `leave` from the
 doorway button in the corner, and `news` when a story order is filled or the first Beacon or
@@ -283,17 +137,9 @@ clockwork crab is made. Opened alone it plays just the same.
 
 | File                              | What it holds                                                               |
 | --------------------------------- | --------------------------------------------------------------------------- |
-| `sim/index.ts`                    | everything a screen needs from the rules, in one import                     |
-| `sim/content/*.ts`                | the tables: things, recipes, machines, plots, plans, the story, the shift   |
-| `sim/land.ts`, `sim/world.ts`     | the ground put together from the plots; the yard as data                    |
-| `sim/build.ts`                    | building, taking away, turning, tipping out; buying plots and plans         |
-| `sim/power.ts`, `sim/step.ts`     | where power reaches; one tick of the yard                                   |
-| `sim/orders.ts`, `sim/clock.ts`   | the depot, the story, the board; the wall clock and catching up             |
-| `sim/route.ts`, `sim/save.ts`     | the shortest clear run for a belt; a yard as text, and back                 |
-| `sim/status.ts`                   | what a thing is doing, in a sentence, and whether it is in trouble          |
 | `main.ts`                         | the stage: opening the yard, the canvas, the loop, the handles for review   |
 | `state.ts`                        | what the screen's parts share: the yard, the view, the tool in hand         |
-| `yard.ts`                         | finding and keeping the yard, the clock, Coins to and from the purse        |
+| `yard.ts`                         | the yard on Leaf: the copy, commands, each frame's catching up, the Coins   |
 | `scene.ts`, `layout.ts`           | drawing a frame; what is worked out from the layout and kept                |
 | `art/*.ts`                        | the art: ground, nature, belts, machines, things                            |
 | `camera.ts`, `input.ts`           | where the member is looking; mouse, keys and fingers                        |
@@ -305,59 +151,29 @@ clockwork crab is made. Opened alone it plays just the same.
 | `ui/card.ts`                      | what every thing, machine, tile, plot, plan and order says, as kit cards    |
 | `ui/*.ts`                         | the purse and notices, the top bar, the dock, panels, the letter            |
 | `sheet.ts`, `sheets.ts`           | the art laid out with names: `?sheet=machines`, `?sheet=items`              |
-| `yards/*.json`                    | yards kept part-way through the story, for looking at the game at a stage   |
 | `review/balance.ts`               | the story played by script; pacing and payback tables                       |
-
-A tick has three parts: power is reckoned, then gatherers gather and machines make and things on
-belts move along their tile, then every tile hands on what it has finished with, each tile after
-the tile it hands to, so a full belt moves as one. Who hands to whom, and in what order, depends
-only on what stands where, so it is worked out once (`rewire`) and kept until the yard is changed.
-
-## Driving the rules from a screen
-
-```ts
-import { build, claim, collect, create, drain, load, power, refusal, runTo, save } from "./sim/index.ts";
-
-const yard = load(kept) ?? create({ seed });
-const away = runTo(yard, Date.now()); // once on opening: an Away after a long gap, else null
-
-// every frame
-runTo(yard, Date.now());
-purse.earn(collect(yard), "the Works");
-for (const news of drain(yard)) celebrate(news); // a story order done, a standing order filled or handed over
-const { supply, demand, pace } = power(yard);
-
-// when the member acts
-const why = refusal(yard, "mill", x, y, purse.coins, dir); // null, or a sentence to show
-const did = build(yard, "mill", x, y, dir, purse.coins);
-if (did.ok) purse.spend("coins", did.cost, "the Works");
-```
-
-What stands on a tile is `yard.cells[at(yard, x, y)]`, the ground under it is in `yard.land`, power
-reaches where `yard.power[i]` is 1, and the orders are `storyOrder(yard)` with `yard.filled`, and
-`yard.board`. `route(yard, from, to)` and `lay` are there for laying a belt from two taps, which
-suits a phone better than dragging. `yard.seen` is the moment the yard has been run up to, so the
-share of the next tick already gone is `(Date.now() - yard.seen) / TICK_MS`.
 
 ## Looking at it from outside
 
-`window.works` has handles for taking pictures of the game and trying it by script. `stage(name)`
-loads a yard: `"new"` (with a number, that many story orders already done), or one of the kept
-yards `"small"`, `"short"`, `"mid"`, `"large"`. `hold(true)` stops the clock so that only `run(ticks)`
-moves the yard and `skip(seconds)` the screen. `pick(tool)`, `aim(x, y)`, `tap(x, y)`, `drag(x0, y0,
-x1, y1)` with `drop()`, `confirm()`, `build`, `remove`, `plot(id)` and `plan(id)` act as a member
-would; `finger(true)` makes the screen behave as for a touch. `open(panel)`, `card(x, y)` and
-`close()` show things; `look(x, y)` and `zoom(by)` move the view. `purse(coins, leaf)` sets the
-purse, `boost(minutes)` starts a second shift, `away(hours)` pretends the member has been gone,
-`fill(slot)` fills a standing order, `taught(ids)` says which lessons are already taken.
-`page(x, y)` is where a tile is on the page, `rider(x, y)` what is riding a belt there, `where(kind)` where a kind of thing stands, `state()`
-a summary, and `bench()` the milliseconds one tick and one frame take, averaged over a hundred.
+`window.works` has handles for taking pictures of the game and trying it by script. `stage(...ops)`
+stages a moment in the yard on the play server on this machine (`apps/api/test/play.ts`, through
+`POST /test/play/works`) and takes it: `{ yard: "new" }` or one of the kept yards `"small"`,
+`"short"`, `"mid"`, `"large"`; `{ away: minutes }`, a time nobody watched; `{ fill: n }`, the nth
+standing order filled. `hold(true)` stops the screen running the yard on, and `skip(seconds)` moves
+only the screen. `pick(tool)`, `aim(x, y)`, `tap(x, y)`, `drag(x0, y0, x1, y1)` with `drop()`,
+`confirm()`, `build`, `remove`, `plot(id)` and `plan(id)` act as a member would, sending to Leaf;
+`finger(true)` makes the screen behave as for a touch. `open(panel)`, `card(x, y)` and `close()`
+show things; `look(x, y)` and `zoom(by)` move the view; `taught(ids)` says which lessons are already
+taken. `page(x, y)` is where a tile is on the page, `rider(x, y)` what is riding a belt there,
+`where(kind)` where a kind of thing stands, and `state()` a summary.
 
-The screenshot driver is the kit's (`packages/kit/tools/drive.ts`):
+The screenshot driver is the kit's (`packages/kit/tools/drive.ts`), against the play server, signed
+in as its Tester:
 
 ```sh
-bun run build
-bun ../../packages/kit/tools/drive.ts "http://works.test/?fresh" <out-dir> <steps.json> dist
+bun build index.html --outdir /tmp/play/works
+bun ../api/test/play.ts 4000 /tmp/play &
+bun ../../packages/kit/tools/drive.ts "http://127.0.0.1:4000/sign-in?return_to=http%3A%2F%2F127.0.0.1%3A4000%2Fplay%2Fworks%2F" <out-dir> <steps.json>
 ```
 
 ## Pacing

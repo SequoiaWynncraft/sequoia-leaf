@@ -265,7 +265,8 @@ describe("signing in with the website's cookie", () => {
 
   it("takes a write with the cookie from Leaf's own pages, and one with a Bearer from anywhere", async () => {
     const fromPage = await save("town", 0, { saved_at: 1 }, alicesPage);
-    const fromMod = await save("works", 0, { saved_at: 1 }, { bearer: "alice-token" });
+    clock.now = T0 + 2000;
+    const fromMod = await save("town", 1, { saved_at: 1 }, { bearer: "alice-token" });
     const bothNoOrigin = await save("town", 0, { saved_at: 1 }, { bearer: "bob-token", cookie: "bob-token" }, bob);
 
     expect([fromPage.status, fromMod.status, bothNoOrigin.status]).toEqual([200, 200, 200]);
@@ -609,19 +610,19 @@ describe("saves", () => {
   });
 
   it("writes over the version last read, and refuses a stale one with version_conflict, changing nothing", async () => {
-    await save("works", 0, { coins: 1 });
+    await save("town", 0, { coins: 1 });
     clock.now = T0 + HOUR;
-    const second = await save("works", 1, { coins: 2 });
-    const stale = await save("works", 1, { coins: 99 });
-    const fresh = await save("works", 0, { coins: 99 });
+    const second = await save("town", 1, { coins: 2 });
+    const stale = await save("town", 1, { coins: 99 });
+    const fresh = await save("town", 0, { coins: 99 });
 
     expect(await second.json()).toEqual({ version: 2, updated_at: "2026-11-25T13:00:00.000Z" });
     expect([stale.status, fresh.status]).toEqual([409, 409]);
     expect(await stale.json()).toMatchObject({ code: "version_conflict" });
-    expect(await (await get("/v1/game/saves/works")).json()).toMatchObject({ version: 2, data: { coins: 2 } });
+    expect(await (await get("/v1/game/saves/town")).json()).toMatchObject({ version: 2, data: { coins: 2 } });
   });
 
-  it("takes no more writes to the battler's slot, whose game Leaf plays now: 410 moved, storing nothing; it can still be read", async () => {
+  it("takes no more writes to the battler's and the Works' slots, whose games Leaf plays now: 410 moved, storing nothing; they can still be read", async () => {
     // What was there before the game moved stays as it was.
     await services.query(
       (sql) => sql`
@@ -631,8 +632,10 @@ describe("saves", () => {
     );
     const written = await save("raid", 3, { saved_at: 2, keys: { "raid.run.v1": "a better run" } });
     const first = await save("raid", 0, { saved_at: 2, keys: {} }, { cookie: "bob-token", origin: ORIGIN });
+    const yard = await save("works", 0, { saved_at: 2, keys: { "works.save.v2": "a yard" } });
 
-    expect([written.status, first.status]).toEqual([410, 410]);
+    expect([written.status, first.status, yard.status]).toEqual([410, 410, 410]);
+    expect(await codeOf(yard)).toBe("moved");
     expect(await written.json()).toEqual({
       code: "moved",
       message: "This game is kept on Leaf now, and its old save takes no more writes",
@@ -677,8 +680,8 @@ describe("saves", () => {
   });
 
   it("refuses a save over 256 KiB", async () => {
-    const over = await save("works", 0, { keys: "a".repeat(MAX_SAVE_BYTES) });
-    const within = await save("works", 0, { keys: "a".repeat(MAX_SAVE_BYTES - 20) });
+    const over = await save("town", 0, { keys: "a".repeat(MAX_SAVE_BYTES) });
+    const within = await save("town", 0, { keys: "a".repeat(MAX_SAVE_BYTES - 20) });
 
     expect([over.status, within.status]).toEqual([413, 200]);
     expect(await over.json()).toMatchObject({ code: "save_too_large" });
@@ -687,7 +690,7 @@ describe("saves", () => {
   it("does not read a body more than twice that long at all, whatever it holds", async () => {
     const padded = `{"version":0,"data":{}}${" ".repeat(2 * MAX_SAVE_BYTES)}`;
 
-    const response = await send("PUT", "/v1/game/saves/works", { ...alicesPage, body: padded });
+    const response = await send("PUT", "/v1/game/saves/town", { ...alicesPage, body: padded });
 
     expect(response.status).toBe(413);
     expect(await response.json()).toMatchObject({ code: "save_too_large" });
@@ -700,7 +703,7 @@ describe("saves", () => {
     // Alice's page, left open after Bob signed in in another tab: Bob's cookie, Alice's state.
     const alicesOldPage = await save("town", 0, { coins: 300 }, { cookie: "bob-token", origin: ORIGIN }, alice);
     const overAlice = await save("town", 1, { coins: 5 }, alicesPage, bob);
-    const nobody = await save("works", 0, { coins: 5 }, { bearer: "alice-token" }, "");
+    const nobody = await save("town", 1, { coins: 5 }, { bearer: "alice-token" }, "");
 
     expect([alicesOldPage.status, overAlice.status, nobody.status]).toEqual([409, 409, 409]);
     expect(await alicesOldPage.json()).toEqual({
@@ -729,7 +732,7 @@ describe("saves", () => {
   it("refuses a write to a slot within 2 seconds of the last with slow_down, changing nothing", async () => {
     await save("town", 0, { n: 1 });
     clock.now = T0 + 1;
-    const otherSlot = await save("works", 0, { n: 1 });
+    const otherSlot = await save("town", 0, { n: 1 }, { bearer: "bob-token" }, bob);
     clock.now = T0 + 1999;
     const soon = await save("town", 1, { n: 2 });
     const stale = await save("town", 0, { n: 2 });
@@ -747,83 +750,79 @@ describe("saves", () => {
   });
 
   it("keeps what each write replaced, at most once a minute a slot, for a week", async () => {
-    await save("works", 0, { n: 1 });
+    await save("town", 0, { n: 1 });
     clock.now = T0 + 3000;
-    await save("works", 1, { n: 2 });
+    await save("town", 1, { n: 2 });
     clock.now = T0 + 6000;
-    await save("works", 2, { n: 3 });
+    await save("town", 2, { n: 3 });
     clock.now = T0 + MINUTE + 5000;
-    await save("works", 3, { n: 4 });
-    // A slot of its own has its own copies.
-    await save("town", 0, { r: 1 });
+    await save("town", 3, { n: 4 });
+    // Another player's slot has its own copies.
+    const bobs = { bearer: "bob-token" };
+    await save("town", 0, { r: 1 }, bobs, bob);
     clock.now = T0 + MINUTE + 8000;
-    await save("town", 1, { r: 2 });
+    await save("town", 1, { r: 2 }, bobs, bob);
 
     expect(await keptCopies()).toEqual([
-      { slot: "works", kind: "earlier", version: 1, data: '{"n":1}', savedAt: T0 },
-      { slot: "works", kind: "earlier", version: 3, data: '{"n":3}', savedAt: T0 + 6000 },
+      { slot: "town", kind: "earlier", version: 1, data: '{"n":1}', savedAt: T0 },
+      { slot: "town", kind: "earlier", version: 3, data: '{"n":3}', savedAt: T0 + 6000 },
       { slot: "town", kind: "earlier", version: 1, data: '{"r":1}', savedAt: T0 + MINUTE + 5000 },
     ]);
 
     clock.now = T0 + 8 * DAY;
-    await save("works", 4, { n: 5 });
-    expect((await keptCopies()).map((k) => [k.slot, k.version])).toEqual([["works", 4]]);
+    await save("town", 4, { n: 5 });
+    expect((await keptCopies()).map((k) => [k.slot, k.version])).toEqual([["town", 4]]);
   });
 
   it("keeps a copy a game sent over an older version, though it was refused", async () => {
-    await save("works", 0, { n: 1 });
+    await save("town", 0, { n: 1 });
     clock.now = T0 + HOUR;
-    await save("works", 1, { n: 2 });
-    // Another device's older yard, sent over the version it last read.
-    const stale = await save("works", 1, { n: "the other yard" });
+    await save("town", 1, { n: 2 });
+    // Another device's older town, sent over the version it last read.
+    const stale = await save("town", 1, { n: "the other town" });
 
     expect(stale.status).toBe(409);
     expect(
       await services.query(
         (sql) => sql`SELECT kind, version, data FROM save_history WHERE kind = 'refused' ORDER BY kept_at`,
       ),
-    ).toEqual([{ kind: "refused", version: 1, data: '{"n":"the other yard"}' }]);
-    expect(await (await get("/v1/game/saves/works")).json()).toMatchObject({ version: 2, data: { n: 2 } });
+    ).toEqual([{ kind: "refused", version: 1, data: '{"n":"the other town"}' }]);
+    expect(await (await get("/v1/game/saves/town")).json()).toMatchObject({ version: 2, data: { n: 2 } });
   });
 
   it("keeps a guest's saves as a member's, and removes guests' left 90 days when anything is saved", async () => {
     const carols = { cookie: "carol-token", origin: ORIGIN };
     await save("town", 0, { mine: "carol" }, carols);
-    await save("works", 0, { mine: "carol" }, carols);
     await save("town", 0, { mine: "alice" });
     clock.now = T0 + 60 * DAY;
-    // Carol plays the Works again: that save is fresh, her town is not.
-    await save("works", 1, { mine: "carol, later" }, carols);
-    const readBack = await get("/v1/game/saves/works", carols);
+    // Carol plays again: her save is fresh.
+    await save("town", 1, { mine: "carol, later" }, carols);
+    const readBack = await get("/v1/game/saves/town", carols);
     clock.now = T0 + 90 * DAY;
     await save("town", 0, {}, { bearer: "bob-token" });
     const before = await services.query(
       (sql) => sql`SELECT player_id, slot, guest FROM saves ORDER BY player_id, slot`,
     );
-    // Two seconds later, so that Bob's town may be saved again; Carol's town is now past 90 days.
-    clock.now = T0 + 90 * DAY + 2000;
-    await save("town", 1, {}, { bearer: "bob-token" });
     clock.now = T0 + 150 * DAY + 1;
     const untouched = await services.query((sql) => sql`SELECT player_id, slot FROM saves ORDER BY player_id, slot`);
-    await save("works", 0, {}, { bearer: "bob-token" });
+    // Carol's save is now past 90 days; Alice's, a member's, is older still.
+    await save("town", 1, {}, { bearer: "bob-token" });
 
     expect(await readBack.json()).toMatchObject({ version: 2, data: { mine: "carol, later" } });
     expect(before).toEqual([
       { player_id: alice, slot: "town", guest: 0 },
       { player_id: bob, slot: "town", guest: 0 },
       { player_id: carol, slot: "town", guest: 1 },
-      { player_id: carol, slot: "works", guest: 1 },
     ]);
     // Nothing is removed until something is saved.
     expect(untouched).toEqual([
       { player_id: alice, slot: "town" },
       { player_id: bob, slot: "town" },
-      { player_id: carol, slot: "works" },
+      { player_id: carol, slot: "town" },
     ]);
     expect(await services.query((sql) => sql`SELECT player_id, slot FROM saves ORDER BY player_id, slot`)).toEqual([
       { player_id: alice, slot: "town" },
       { player_id: bob, slot: "town" },
-      { player_id: bob, slot: "works" },
     ]);
   });
 });

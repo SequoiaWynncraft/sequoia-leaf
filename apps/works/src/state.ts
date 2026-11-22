@@ -4,9 +4,9 @@
  */
 
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
+import { create, type Dir, type Kind, type Leg, type PlotId, type World } from "@sequoia-leaf/yard";
 
 import { TILE } from "./art/belts.ts";
-import { create, type Dir, type Kind, type Leg, type PlotId, type World } from "./sim/index.ts";
 
 /** What is in the member's hand: something to build, the spade that takes things away, or nothing. */
 export type Tool = Kind | "remove" | null;
@@ -31,6 +31,7 @@ export interface Run {
 }
 
 export const S: {
+  /** The page's copy of Leaf's yard (`yard.ts`). */
   world: World;
   /** Counts every change to what stands where, so that what is worked out from it can be kept until the next. */
   rev: number;
@@ -81,13 +82,9 @@ export const S: {
   nudgeTool: null,
 };
 
-/** Things to do whenever the yard is changed by hand; `main.ts` sets it to save. */
-export const hooks: { changed: () => void } = { changed: () => {} };
-
 /** The yard has been built on, cleared or bought for: whatever was worked out from it is stale. */
 export function touched(): void {
   S.rev++;
-  hooks.changed();
 }
 
 /** A point on the page as a point in the yard, in the yard's pixels. */

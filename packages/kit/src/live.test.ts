@@ -108,7 +108,7 @@ describe("finding out where the game is", () => {
     expect(spend("leaf", 0)).toBe(false);
     expect(balance().leaf).toBe(0);
     // Coins are a guest's as a member's.
-    earn(40, "works_order");
+    earn(40, "daily_chest");
     expect(balance().coins).toBeGreaterThanOrEqual(40);
   });
 
@@ -287,7 +287,7 @@ describe("the member's Coins on the guild's server", () => {
     await start();
     const said: number[] = [];
     const coins = passCoins((n) => said.push(n));
-    earn(40, "works_order");
+    earn(40, "daily_chest");
     expect(said).toEqual([]);
     coins.ready();
     expect(said).toEqual([340]);
@@ -299,7 +299,7 @@ describe("the member's Coins on the guild's server", () => {
     await start();
     const quiet = passCoins((n) => said.push(n));
     quiet.ready();
-    earn(40, "works_order");
+    earn(40, "daily_chest");
     expect(said).toEqual([340]);
     quiet.stop();
   });
@@ -376,7 +376,7 @@ describe("the member's Leaf in a game in the town's frame", () => {
     expect(said).toEqual([2560]);
     // The same Leaf again, or Coins, is nothing to say.
     fromLedger(2560);
-    earn(40, "works_order");
+    earn(40, "daily_chest");
     expect(said).toEqual([2560]);
     fromLedger(2670);
     expect(said).toEqual([2560, 2670]);
