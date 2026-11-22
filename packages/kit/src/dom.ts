@@ -1,5 +1,17 @@
 /** Small helpers for building the interface out of the kit's classes. */
 
+// The browser must not take the game for a picture. Under a held press it would drag the canvas
+// away, and a long press or a right click would open its own menu on it; either one takes the press
+// from the game. Every page uses this file, so every page is covered.
+if (typeof document !== "undefined") {
+  document.addEventListener("dragstart", (e) => {
+    e.preventDefault();
+  });
+  document.addEventListener("contextmenu", (e) => {
+    if (e.target instanceof HTMLCanvasElement || e.target instanceof HTMLImageElement) e.preventDefault();
+  });
+}
+
 type Child = Node | string | number | null | undefined | false;
 type Props = Readonly<Record<string, string | number | boolean | ((e: Event) => void) | null | undefined>>;
 
