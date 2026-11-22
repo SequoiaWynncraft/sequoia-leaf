@@ -124,9 +124,9 @@ describe("a touch", () => {
     ]);
   });
 
-  test("on crab No. 7 from the room makes it hop and run there too", () => {
+  test("on crab No. 7 from the room makes it hop there too, and does not scare it off", () => {
     crabs.push({ ...crab(7, 198, 121), lost: true });
     touchThing(thingName("crab", 7), false);
-    expect(crabs.map((c) => [c.hop, c.bolt > 0])).toEqual([[0.3, true]]);
+    expect(crabs.map((c) => [c.hop, c.bolt > 0])).toEqual([[0.3, false]]);
   });
 });

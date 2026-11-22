@@ -428,8 +428,11 @@ function tapCrab(c: Crab, own: boolean): void {
     float(c.x, c.y - 12, `No. ${c.n}`, CREAM, 1.2);
     return;
   }
+  // Each page hides No. 7 in a place of its own, so somebody else's touch on theirs does not
+  // scare this one off from under the member's hand.
+  if (!own) return;
   // Counted once in five seconds, which Leaf keeps: it bolts either way.
-  if (own && ok(doNow({ do: "spotCrab" }))) {
+  if (ok(doNow({ do: "spotCrab" }))) {
     float(c.x, c.y - 14, QUIPS[town().sightings % QUIPS.length] ?? "", SKY[5], 2.2);
     hooks.feed(`You spotted crab No. ${c.n}. It got away.`, "coral");
   }
@@ -503,6 +506,8 @@ export const lastTouches: { name: string; own: boolean }[] = [];
 export function touchThing(name: string, own = true): boolean {
   const t = touchedBy(name);
   if (!t) return false;
+  // A page put away draws nothing: what others touch meanwhile is over before it is looked at again.
+  if (!own && typeof document !== "undefined" && document.hidden) return true;
   if (own || onScreen(t.x, t.y)) t.play(own);
   else hush(() => t.play(own));
   if (own) hooks.tell(name);
