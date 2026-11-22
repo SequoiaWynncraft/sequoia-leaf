@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { paint, setOpen, setRecipe } from "./build.ts";
 import { BLUEPRINT, KIND } from "./content/machines.ts";
-import { bare, belts, on, put, steps, workingYard } from "./fixtures.ts";
+import { bare, belts, lit, on, put, steps, workingYard } from "./fixtures.ts";
 import { WORKS } from "./game.ts";
 import {
   blueprintRefusal,
@@ -221,6 +221,18 @@ describe("a copy", () => {
   });
 });
 
+describe("a gatherer moved", () => {
+  test("to another deposit keeps what it had gathered, and Leaf reads the yard back as it was", () => {
+    const w = lit(bare({ "2,2": "deadfall", "6,2": "ore" }));
+    put(w, "gatherer", 2, 2);
+    steps(w, 40);
+    expect(on(w, 2, 2).out).toBe("deadfall");
+    expect(move(w, [at(w, 2, 2)], 0, 6, 2)).toBeNull();
+    expect(on(w, 6, 2).out).toBe("deadfall");
+    expect(load(save(w), w.land)?.cells[at(w, 6, 2)]?.out).toBe("deadfall");
+  });
+});
+
 describe("an area removed", () => {
   test("gives back what its pieces cost, as taking each away would", () => {
     const w = works();
@@ -354,6 +366,16 @@ describe("colour", () => {
       read("mill", 3),
     ]).toEqual([6, 1, undefined, undefined, undefined, undefined]);
   });
+  test("a copy of a coloured belt beside an uncoloured one keeps both as they were", () => {
+    const w = bare();
+    // A coloured line that runs into an uncoloured one: as when a belt joins two lines, and takes the first's colour.
+    belts(w, 1, 2, 3, 2);
+    paint(w, 1, 2, 4);
+    on(w, 3, 2).tint = 0;
+    expect(tints(w, 1, 2, 3)).toBe("440");
+    expect(stand(w, placed(piecesAt(w, within(w, 2, 2, 3, 2)), 0, 2, 5), Infinity).ok).toBe(true);
+    expect(tints(w, 2, 5, 2)).toBe("40");
+  });
   test("pieces stood beside a coloured line take its colour as a run does, whatever order they come in", () => {
     const w = bare();
     // Between two lines, the last of them first: all take the colour of the line that feeds them.
@@ -361,14 +383,14 @@ describe("colour", () => {
     paint(w, 1, 2, 2);
     belts(w, 6, 2, 7, 2);
     paint(w, 6, 2, 6);
-    expect(stand(w, [belt(5, 2), belt(4, 2), belt(3, 2)], Infinity).ok).toBe(true);
+    expect(stand(w, [belt(5, 2), belt(4, 2), belt(3, 2)], Infinity, true).ok).toBe(true);
     expect(tints(w, 1, 2, 7)).toBe("2222266");
     // Into the start of a line, with nothing coloured feeding them: that line's.
     belts(w, 4, 9, 5, 9);
     paint(w, 4, 9, 4);
-    expect(stand(w, [belt(2, 9), belt(3, 9)], Infinity).ok).toBe(true);
+    expect(stand(w, [belt(2, 9), belt(3, 9)], Infinity, true).ok).toBe(true);
     // One asked for a colour keeps it, and the one it feeds takes that.
-    expect(stand(w, [belt(7, 9), belt(6, 9, 1)], Infinity).ok).toBe(true);
+    expect(stand(w, [belt(7, 9), belt(6, 9, 1)], Infinity, true).ok).toBe(true);
     expect(tints(w, 2, 9, 6)).toBe("444411");
   });
 });

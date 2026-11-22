@@ -177,11 +177,18 @@ export function standRefusal(
 /**
  * Stands a set of pieces, all of them or none, and says what it cost. Each goes down as a single
  * piece does (`build`): over one of its kind it only turns it, and a splitter or a joiner takes a
- * belt's place. One that is new keeps what it was asked to (`Kept`); a new belt or tunnel asked for
- * no colour takes the colour of the line it joins, whatever order the pieces come in. `bend` is a
+ * belt's place. One that is new keeps what it was asked to (`Kept`) and nothing else: a copy of an
+ * uncoloured belt stays uncoloured. With `joins`, as a run of belt is laid, a new belt or tunnel
+ * asked for no colour takes the colour of the line it joins, whatever order the pieces come in. `bend` is a
  * belt already standing where a run starts, turned to meet it.
  */
-export function stand(w: World, pieces: readonly Piece[], coins: number, bend?: Pick<Piece, "x" | "y" | "dir">): Spent {
+export function stand(
+  w: World,
+  pieces: readonly Piece[],
+  coins: number,
+  joins = false,
+  bend?: Pick<Piece, "x" | "y" | "dir">,
+): Spent {
   const why = bend && !turnable(w, bend.x, bend.y) ? "There is nothing there to turn" : standRefusal(w, pieces, coins);
   if (why !== null) return { ok: false, why };
   if (bend) turn(w, bend.x, bend.y, bend.dir);
@@ -197,7 +204,7 @@ export function stand(w: World, pieces: readonly Piece[], coins: number, bend?: 
       const made = w.cells[i];
       // The colour `build` gave a belt came of the pieces stood before it: the whole set is joined below.
       if (made) Object.assign(made, { tint: line ? 0 : made.tint }, keptOf(p, p.kind));
-      if (line) laid.push(i);
+      if (line && joins) laid.push(i);
     }
   }
   join(w, laid);

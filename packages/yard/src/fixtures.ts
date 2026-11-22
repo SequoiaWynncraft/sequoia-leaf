@@ -54,7 +54,7 @@ export function belts(w: World, x0: number, y0: number, x1: number, y1: number):
 /** Lays the shortest run of belt from a tile to a thing, and fails the test if there is no way. */
 export function run(w: World, from: readonly [number, number], to: readonly [number, number]): void {
   const legs = route(w, from, to);
-  if (!legs || !stand(w, legs, Infinity).ok) throw new Error(`no way from ${from.join(",")} to ${to.join(",")}`);
+  if (!legs || !stand(w, legs, Infinity, true).ok) throw new Error(`no way from ${from.join(",")} to ${to.join(",")}`);
 }
 
 export function steps(w: World, ticks: number): void {

@@ -238,18 +238,18 @@ describe("colour", () => {
     paint(w, 1, 9, 5);
     belts(w, 8, 9, 10, 9);
     paint(w, 8, 9, 6);
-    expect(stand(w, route(w, [4, 9], [7, 9]) ?? [], Infinity).ok).toBe(true);
+    expect(stand(w, route(w, [4, 9], [7, 9]) ?? [], Infinity, true).ok).toBe(true);
     expect(row(w, 1, 10, 9)).toBe("5555555666");
     // A run into the start of a line, with nothing coloured feeding it, takes that line's.
     belts(w, 18, 3, 20, 3);
     paint(w, 18, 3, 4);
-    expect(stand(w, route(w, [15, 3], [17, 3]) ?? [], Infinity).ok).toBe(true);
+    expect(stand(w, route(w, [15, 3], [17, 3]) ?? [], Infinity, true).ok).toBe(true);
     expect(row(w, 15, 20, 3)).toBe("444444");
     // A run from a belt turned to meet it takes that belt's colour.
     put(w, "belt", 16, 9, 0);
     paint(w, 16, 9, 3);
     const down = [10, 11].map((y) => ({ kind: "belt", x: 16, y, dir: 1, span: 0 }) as const);
-    expect(stand(w, down, Infinity, { x: 16, y: 9, dir: 1 }).ok).toBe(true);
+    expect(stand(w, down, Infinity, true, { x: 16, y: 9, dir: 1 }).ok).toBe(true);
     expect([on(w, 16, 10).tint, on(w, 16, 11).tint]).toEqual([3, 3]);
   });
   test("a splitter or a joiner set down on a coloured belt keeps its colour", () => {

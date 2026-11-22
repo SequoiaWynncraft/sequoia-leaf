@@ -198,7 +198,7 @@ class Player {
   haul(from: Cell, to: Cell): Leg[] {
     const legs = route(this.w, from, to);
     if (!legs) throw new Error(`no way for a belt from ${from.join(",")} to ${to.join(",")}`);
-    this.spend("a run of belt", (coins) => stand(this.w, legs, coins));
+    this.spend("a run of belt", (coins) => stand(this.w, legs, coins, true));
     this.run(HANDS.run + legs.length * 2);
     return legs;
   }

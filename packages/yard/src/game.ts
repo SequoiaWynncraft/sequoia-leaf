@@ -180,7 +180,7 @@ function act(w: World, c: WorksCommand): Did {
     }
     case "lay":
     case "stand": {
-      const did = c.do === "lay" ? stand(w, c.legs, Infinity, c.turn) : stand(w, c.pieces, Infinity);
+      const did = c.do === "lay" ? stand(w, c.legs, Infinity, true, c.turn) : stand(w, c.pieces, Infinity);
       return did.ok ? done(priced(w, did.cost, c.do === "lay" ? REASON.lay : REASON.build)) : no(c, did.why);
     }
     case "move": {
