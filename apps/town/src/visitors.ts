@@ -326,6 +326,11 @@ export function stepVisitors(dt: number): void {
       if (onScreen(at.x, at.y)) float(at.x + 4, at.y - 20, "z", CREAM, 1.4);
     }
   }
+  // Anybody drawn here as a visitor or a dozer who is now in town live is drawn by `players.ts`,
+  // where they really are: this figure of them goes at once, so that nobody is ever seen twice.
+  const liveNow = live.ids();
+  for (const v of here.values()) if (!v.passing && liveNow.has(v.id)) forget(v);
+
   lookIn -= dt;
   if (lookIn > 0) return;
   lookIn = 1;
