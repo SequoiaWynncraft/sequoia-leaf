@@ -91,11 +91,15 @@ const tell = (differs: boolean): void => {
  * Opens the town from Leaf, for the member the page is signed in as (`player`). Says why it could
  * not; after that, whatever stops the page sending is told to `trouble`.
  */
+/** Who is told what stops the page sending (`openTown`'s `trouble`), for a camp looked at too. */
+let troubled: (why: Trouble) => void = () => {};
+
 export async function openTown(player: string, trouble: (why: Trouble) => void): Promise<Trouble | null> {
   const opened = await openPlay<TownView, TownCommand, TownNote>("town", READER, { player });
   if ("trouble" in opened) return opened.trouble;
   me = player;
   leaf = opened;
+  troubled = trouble;
   opened.onTrouble(trouble);
   opened.onState((_view, differs) => {
     tell(differs);
@@ -113,6 +117,10 @@ export async function openCamp(id: string, name?: string): Promise<Looked | Trou
     name === undefined ? askPerson(id) : null,
   ]);
   if ("trouble" in opened) return opened.trouble;
+  // Signed out, or let go, while looking at this camp: said as for the member's own town.
+  opened.onTrouble((why) => {
+    if (looked?.play === opened) troubled(why);
+  });
   opened.onState((_view, differs) => {
     if (looked?.play === opened) tell(differs);
   });

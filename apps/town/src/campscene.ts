@@ -1078,8 +1078,10 @@ export function makeCamp(
       leave(opened);
       return;
     }
+    // Leaf took a while and the member has gone elsewhere meanwhile (into a game, say): the visit is dropped,
+    // not kept for the next time they set off for their own camp.
     coming = opened;
-    hooks.toCamp();
+    if (!hooks.toCamp()) coming = null;
   }
   hooks.visitCamp = (id, name) => void goTo(id, name);
 

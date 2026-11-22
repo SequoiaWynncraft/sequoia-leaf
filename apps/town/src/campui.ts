@@ -507,9 +507,10 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
             }
           : null,
       );
-      hooks.toCamp = (): void => {
+      hooks.toCamp = (): boolean => {
         if (!home) s.leave("home");
         else closePanel();
+        return true;
       };
       setStrip(host, () => {
         s.leave("home");
