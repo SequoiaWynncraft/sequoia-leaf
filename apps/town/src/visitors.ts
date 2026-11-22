@@ -182,8 +182,7 @@ function spotFor(at: Visitor["at"], n: number): Pt {
     return near(s.x + (off[0] ?? 0), s.y + (off[1] ?? 0));
   }
   if (at === "table") {
-    const free = SPOTS.filter((s) => s.errand === "table" && !s.taken);
-    const s = free[n % Math.max(1, free.length)];
+    const s = SPOTS[n % SPOTS.length];
     return s ? near(s.x, s.y + 2) : near(430 + (n % 4) * 10, 236);
   }
   // About the town: anywhere on the open ground between the places.

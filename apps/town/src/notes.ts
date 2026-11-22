@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "one-town",
+    at: "2026-11-22T23:55Z",
+    title: "Everyone sees the same town",
+    lines: [
+      "Pipwick, Fika, Sootpaw and the crabs are in the same place doing the same thing for everyone in town.",
+      "Crab No. 7 hides in one place for 60 seconds, then in another. If anyone taps it, it runs off for everyone. A sighting counts once for each place it hides.",
+    ],
+  },
+  {
     id: "works-smoother",
     at: "2026-11-22T23:44Z",
     title: "The Works: zoom out further",
