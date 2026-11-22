@@ -34,6 +34,11 @@ and copies the test skin in one go.
   its panel; a prompt shows when the member is standing at one. The dock
   along the bottom opens any of them at once, the character walks there meanwhile, and the slot
   for the place they are standing at is lit.
+- **The quest board.** Two tabs: the quests, and "News", the ten newest notes on what has changed
+  in the game (`notes.ts`, newest first). The board shows a "!" while a quest is ready to claim or
+  there is news the member has not opened; the id of the newest note they opened is kept in the
+  browser under `town.notes.seen`. The panel opens on "News" while there is unread news, and on
+  the quests otherwise.
 - **The market.** Three stalls sell things for a camp, for Coins: lamps and oddments (kept by
   Sootpaw, asleep on the counter until somebody shops), seats, rugs and flags (Bramblewick), and
   plants, fences and paths (Tindra). Nothing sells out and nothing rotates; each row says how many

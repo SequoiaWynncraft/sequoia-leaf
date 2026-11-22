@@ -1,10 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
+import { type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 
-import { redrawn } from "./board.ts";
+import { openingTab, readNews, redrawn, SEEN, shortDay, unread } from "./board.ts";
 import type { Quest } from "./guild.ts";
 import { readQuests } from "./live.ts";
+import { NOTES } from "./notes.ts";
 
 /** The member's quests as Leaf really sends them, from the contract its own tests write. */
 const contract: unknown = await Bun.file(new URL("../../../contracts/leaf-api-v1.json", import.meta.url)).json();
@@ -58,5 +60,42 @@ describe("the quest board keeps in step with the quests", () => {
     expect(board.counts).toEqual({ drawn: 3, updated: 2 });
     board.arrive([...rest.slice(1), { ...gone, id: `${gone.id}:swapped`, have: 1 }]);
     expect(board.counts).toEqual({ drawn: 3, updated: 3 });
+  });
+});
+
+describe("the board's news", () => {
+  let world: Standin | null = null;
+  afterEach(() => {
+    world?.done();
+    world = null;
+  });
+
+  test("every note has an id of its own, a real day, newest first, and one or two lines", () => {
+    const ids = NOTES.map((n) => n.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const days = NOTES.map((n) => n.day);
+    for (const day of days) expect(new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10)).toBe(day);
+    expect(days).toEqual(days.toSorted().toReversed());
+    for (const n of NOTES) expect([1, 2]).toContain(n.lines.length);
+    expect(shortDay("2026-11-22")).toBe("22 Nov");
+    expect(shortDay("2027-01-05")).toBe("5 Jan");
+  });
+
+  test("news is unread, and the board opens on it, until the newest note is opened", () => {
+    world = standin({});
+    expect(unread()).toBe(true);
+    expect(openingTab()).toBe("News");
+    readNews();
+    expect(world.store.getItem(SEEN)).toBe(NOTES[0]?.id ?? "");
+    expect(unread()).toBe(false);
+    expect(openingTab()).toBe("Quests");
+  });
+
+  test("a note newer than the one last opened is unread again", () => {
+    world = standin({});
+    world.store.setItem(SEEN, NOTES[1]?.id ?? "");
+    expect(unread()).toBe(true);
+    world.store.setItem(SEEN, NOTES[0]?.id ?? "");
+    expect(unread()).toBe(false);
   });
 });
