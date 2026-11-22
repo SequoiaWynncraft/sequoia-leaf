@@ -133,8 +133,9 @@ export function layout(): void {
     b.c.height = V.h;
     b.g.imageSmoothingEnabled = false;
   }
-  // Where the middle of the board is on the page, for whatever is laid over it.
+  // Where the middle of the board is on the page, for whatever is laid over it; a card's sheet stops above the stall.
   document.body.style.setProperty("--table-mid", `${Math.round(((V.by + 58) * z) / dpr)}px`);
+  document.body.style.setProperty("--sheet-floor", `${Math.round(window.innerHeight - bottom)}px`);
   repaint();
   hooks?.resized();
   if (stopped) render();

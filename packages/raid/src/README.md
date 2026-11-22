@@ -263,7 +263,7 @@ ended, Coins paid).
 What the page is shown (`TableView`) is the table without its streams, the run's seed, or what the
 picks waiting behind the first will offer. `readView` and `readNotes` (`wire.ts`) read what Leaf
 sends back into these types, field by field. `predict` works out on the page's copy the commands
-that draw nothing (`PREDICTED`: moving, benching, selling, handing over, holding the stall), exactly
+that draw nothing (`PREDICTED`: moving, benching, selling, handing over, holding the stall, buying, experience), exactly
 as Leaf will; `planCommands` has the bot plan a room on the page's copy and gives back the commands
 it would send. `encodeTable` and `decodeTable` are the table as Leaf stores it.
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import { makeActor, stepActor } from "./actors.ts";
+import { HOP, hop, makeActor, stepActor } from "./actors.ts";
 import { G, show } from "./game.ts";
 import { makeGround } from "./grid.ts";
 import { makeProp } from "./props.ts";
@@ -161,5 +161,32 @@ describe("what a touch means", () => {
     expect(used).toEqual(["hello Wrenly"]);
     expect(touch.tap(60, 200, true)).toBe(true);
     expect(show.dest).toEqual({ x: 60, y: 200 });
+  });
+});
+
+/** How long somebody keeps hopping once nothing more is asked of them, in seconds. */
+const hopsOn = (a: typeof me): number => {
+  let t = 0;
+  while ((a.hop > 0 || a.hops > 0) && t < 60) {
+    stepActor(a, 0.05, ground);
+    t += 0.05;
+  }
+  return t;
+};
+
+describe("a hop", () => {
+  test("is not saved up: asked a hundred times while hopping, somebody hops once and stops", () => {
+    const a = makeActor(who("Hopper"), null, 100, 100);
+    for (let k = 0; k < 100; k++) hop(a);
+    expect(hopsOn(a)).toBeLessThanOrEqual(HOP + 0.1);
+  });
+
+  test("three in a row are three, and asking for one more meanwhile adds none", () => {
+    const a = makeActor(who("Hopper"), null, 100, 100);
+    hop(a, 3);
+    hop(a);
+    const t = hopsOn(a);
+    expect(t).toBeGreaterThan(HOP * 2);
+    expect(t).toBeLessThan(HOP * 4);
   });
 });

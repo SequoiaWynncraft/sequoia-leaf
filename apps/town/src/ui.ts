@@ -6,6 +6,7 @@
 
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph, replay, shown } from "@sequoia-leaf/kit/dom.ts";
+import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { CREAM } from "@sequoia-leaf/kit/palette.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
@@ -46,8 +47,9 @@ import {
 import { ask, mine, refusal, town } from "./leaf.ts";
 import type { Letter } from "./letter.ts";
 import { NOTES } from "./notes.ts";
+import { addLog, emote, EMOTE_NAMES } from "./players.ts";
 import { icon, type Sprites } from "./sprites.ts";
-import { flare, nudgeCrab, rollCall } from "./town.ts";
+import { nudgeCrab, rollCall } from "./town.ts";
 import { place, PLACES } from "./world.ts";
 
 let S: Sprites | null = null;
@@ -391,30 +393,13 @@ function doorCard(id: "works" | "table"): (body: HTMLElement) => null {
 
 // ---------- the campfire ----------
 
-const EMOTES: readonly (readonly [string, string, readonly string[]])[] = [
-  ["Wave", "o/", ["o/", "hi hi", "\\o"]],
-  ["Cheer", "woo!", ["woo!", "yeah!", "glory to the grove!"]],
-  ["Laugh", "ha ha!", ["ha!", "pfff", "erm. ha."]],
-  ["Heart", "\u2665", ["\u2665", "aww", "\u2665 \u2665"]],
-  ["Yawn", "*yawn*", ["zzz", "same", "go to bed"]],
-];
-
-function emote(word: string, replies: readonly string[], note: number): void {
-  const p = G.player;
-  if (!p) return;
-  say(p, word, 1.8);
-  hop(p);
-  sfx.pluck(3 + note);
-  let n = 0;
-  for (const a of inTown()) {
-    if (n >= 3 || dist(a.x, a.y, p.x, p.y) > 84) continue;
-    const k = n++;
-    after(0.5 + k * 0.35, () => {
-      hop(a);
-      say(a, replies[k % replies.length] ?? "!", 2);
-    });
-  }
-}
+/** What the townsfolk by the fire say back to an emote. Other players see the emote itself, through the room. */
+const REPLIES: Readonly<Record<Emote, readonly string[]>> = {
+  wave: ["o/", "hi hi", "\\o"],
+  cheer: ["woo!", "yeah!", "glory to the grove!"],
+  laugh: ["ha!", "pfff", "erm. ha."],
+  heart: ["\u2665", "aww", "\u2665 \u2665"],
+};
 
 function fireside(body: HTMLElement): () => void {
   const list = el("div", "k-wrap");
@@ -427,7 +412,7 @@ function fireside(body: HTMLElement): () => void {
       {},
       seat,
       button("wood", ["Add a log"], () => {
-        flare();
+        addLog();
         if (G.player) nearby(G.player, ["toasty", "ooh"], 90);
       }),
     ),
@@ -436,9 +421,10 @@ function fireside(body: HTMLElement): () => void {
       "div",
       "k-wrap",
       {},
-      ...EMOTES.map(([name, word, replies], i) =>
-        button("wood sm", [name], () => {
-          emote(word, replies, i);
+      ...EMOTES.map((kind) =>
+        button("wood sm", [glyph(kind), EMOTE_NAMES[kind]], () => {
+          emote(kind);
+          if (G.player) nearby(G.player, REPLIES[kind], 84);
         }),
       ),
     ),

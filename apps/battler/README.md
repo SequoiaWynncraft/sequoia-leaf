@@ -39,11 +39,12 @@ kit's card: "The table needs the guild's server."
   stall says what it would pay. Everything may be done by tapping instead: tap a figure, then tap
   where it goes; tap an offer to buy it; tap an item, then the figure to hold it. Hexes light for
   where a held figure may go, and a column of pips beside the front line shows how many may be
-  fielded.
+  fielded. Two fingers on the stall at once are two taps, and an offer let go over the offer it was
+  picked from is a tap that slipped, and buys.
 - **What things are.** Every thing on the table is a card in the kit's one card system
   (`card.ts`): resting the mouse on anything shows its card, clicking pins it, and a finger taps it
-  open as a sheet along the bottom (on the stall and the rack, where a tap buys or picks up, a
-  finger kept on it asks instead). A thing named inside a card (a trait chip, an item, a figure in
+  open as a sheet above the stall (on the stall, the rack, a figure of the party's and the pick
+  cards, where a tap buys, picks up or chooses, a finger kept on it asks instead). A thing named inside a card (a trait chip, an item, a figure in
   a trait's roster) opens its own card in the same place, with a back arrow. Cards say things in a
   few words, in the reading face, numbers in bold gold, heals and shields in green, and physical,
   magic and true damage each in a colour of its own. A figure's card has its picture, name, stars and price, what kind of fighter it is and where
@@ -121,12 +122,15 @@ Leaf kept; the last fight's setup is kept too, so "Last fight" plays it again af
 
 Every move is a command (`src/screen/state.ts`):
 
-- Moving, benching, swapping, selling, handing over an item and holding the stall are worked out on
-  the page's copy by the shared rules (the package's `predict`) and shown at once, and sent.
-- Buying, rustling, experience, the picks, setting out and the takings wait for Leaf, which draws
-  what they draw (the stall, the picks, the fight's seed); while Leaf takes more than 150 ms, the
-  thing asked for shows the kit's waiting look. Setting out, Leaf locks both boards and decides the
-  fight; the page plays the same fight from the setup and seed in Leaf's answer.
+- Moving, benching, swapping, selling, handing over an item, holding the stall, buying and
+  experience are worked out on the page's copy by the shared rules (the package's `predict`) and
+  shown at once, and sent. One Leaf turns down is taken back, and the member hears why.
+- Rustling, the picks, setting out and the takings wait for Leaf, which draws what they draw (the
+  stall, the picks, the fight's seed); while Leaf takes more than 150 ms, the thing asked for shows
+  the kit's waiting look. Until Leaf answers, nothing else is done: the stall and its buttons dim,
+  and a tap or a drag gets the refusal sound (a figure hops back). Setting out, Leaf locks both
+  boards and decides the fight; the page plays the same fight from the setup and seed in Leaf's
+  answer.
 - Whenever Leaf's state is not what the page was showing (the member played on in another page, a
   guess was wrong, something was changed by hand), the page takes Leaf's and draws again.
 

@@ -9,6 +9,8 @@ import { ITEM, type Item, ITEMS, type Tally } from "@sequoia-leaf/yard";
 import type { Art } from "../art/index.ts";
 import { PAL } from "../art/pal.ts";
 
+export { when } from "@sequoia-leaf/kit/dom.ts";
+
 export type Kid = Node | string | null;
 
 export const $ = (id: string): HTMLElement => must(document.getElementById(id), id);
@@ -45,17 +47,6 @@ export function button(cls: string, kids: readonly Kid[], on: (b: HTMLButtonElem
     on(b);
   });
   return b;
-}
-
-/** Redraws a part of the interface only when what it shows has changed. */
-export function when(key: () => string, draw: () => void): () => void {
-  let last: string | null = null;
-  return () => {
-    const k = key();
-    if (k === last) return;
-    last = k;
-    draw();
-  };
 }
 
 export const centre = (node: Element): Pt => {

@@ -487,13 +487,13 @@ button.k-slot:hover {
 .k-info:focus {
   outline: none;
 }
-/* Asked for with a finger: a sheet along the bottom, the whole width. */
+/* Asked for with a finger: a sheet along the bottom, the whole width, above the game's own bar (`--sheet-floor`, its height). */
 .k-tip.k-info.sheet {
   top: auto;
-  bottom: 0;
+  bottom: var(--sheet-floor, 0px);
   left: 0;
   width: 100%;
-  max-height: 72vh;
+  max-height: min(72vh, calc(100vh - var(--sheet-floor, 0px) - 8px));
   overflow-y: auto;
   transform: none;
   padding-bottom: calc(var(--u) * 5 + env(safe-area-inset-bottom, 0px));

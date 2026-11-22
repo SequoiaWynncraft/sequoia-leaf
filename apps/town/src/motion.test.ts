@@ -227,6 +227,7 @@ async function inTown() {
   const statuses: LiveStatus[] = [];
   const company = new Company<string>((m) => `figure of ${m.name}`, {
     emote: (f: Fellow<string>, kind: Emote) => emotes.push(`${f.who.name} ${kind}`),
+    log: () => emotes.push("a log on the fire"),
     status: (s) => statuses.push(s),
   });
   const room = joinLive("town", company.ears);
@@ -306,6 +307,18 @@ describe("an emote", () => {
     s.says({ t: "act", id: 2, kind: "point", arg: "heart" });
 
     expect(emotes).toEqual(["Alice cheer"]);
+  });
+
+  test("a log put on the fire goes to the room, and one from somebody else is heard", async () => {
+    const { room, s, emotes, now } = await inTown();
+    s.says(welcome(1, now, [me(1), ALICE]));
+    room.act("fire", "log");
+    expect(s.texts().filter((m) => m.t === "act")).toEqual([{ t: "act", kind: "fire", arg: "log" }]);
+    s.says({ t: "act", id: 2, kind: "fire", arg: "log" });
+    // From nobody in the room, or not a log: nothing.
+    s.says({ t: "act", id: 9, kind: "fire", arg: "log" });
+    s.says({ t: "act", id: 2, kind: "fire", arg: "water" });
+    expect(emotes).toEqual(["a log on the fire"]);
   });
 });
 

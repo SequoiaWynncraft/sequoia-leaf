@@ -176,6 +176,8 @@ export function decodeSnapshot(bytes: Uint8Array): Snapshot | null {
  */
 export const ACTS: Readonly<Record<string, readonly string[]>> = {
   emote: ["wave", "cheer", "bow", "laugh", "heart", "sit", "dance", "crab"],
+  /** A log put on the town's fire: it flares on everybody's page. */
+  fire: ["log"],
 };
 
 /** Whether an action is one there is (`ACTS`). */

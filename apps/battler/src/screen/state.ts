@@ -4,10 +4,11 @@
  * (`S`), taken from Leaf's every answer. Everything the member does is a command to Leaf:
  *
  * - `doNow`, for what the shared rules can work out on the copy without Leaf (moving, benching,
- *   swapping, selling, handing over an item, holding the stall): shown at once, and sent;
- * - `ask`, for what only Leaf can say (buying, rustling, experience, the picks, the fight, the
- *   takings, setting out, walking home, the front page's choices): sent, and shown when Leaf
- *   answers, with the thing asked for in the kit's waiting look meanwhile.
+ *   swapping, selling, handing over an item, holding the stall, buying, experience): shown at once,
+ *   and sent;
+ * - `ask`, for what only Leaf can say (rustling, the picks, the fight, the takings, setting out,
+ *   walking home, the front page's choices): sent, and shown when Leaf answers, with the thing
+ *   asked for in the kit's waiting look meanwhile.
  *
  * Whenever Leaf's state is not what the page was showing (another page of the member's acted, or
  * a guess was wrong, or something here was changed by hand), the page takes Leaf's and draws again.
@@ -76,6 +77,7 @@ type NotesHeard = (notes: readonly RaidNote[]) => void;
 const noteHearers: NotesHeard[] = [];
 const changeHearers: (() => void)[] = [];
 const refusalHearers: ((why: string) => void)[] = [];
+const heldHearers: (() => void)[] = [];
 const endHearers: ((ended: Ended) => void)[] = [];
 const movedHearers: (() => void)[] = [];
 
@@ -85,6 +87,8 @@ export const onNotes = (fn: NotesHeard): void => void noteHearers.push(fn);
 export const onChange = (fn: () => void): void => void changeHearers.push(fn);
 /** Hears why a command was turned down, to say so. */
 export const onRefused = (fn: (why: string) => void): void => void refusalHearers.push(fn);
+/** Hears that a command was held off while Leaf answers another: nothing was done or sent. */
+export const onHeld = (fn: () => void): void => void heldHearers.push(fn);
 /** Hears that a run has ended: what it came to and what it paid. */
 export const onEnded = (fn: (ended: Ended) => void): void => void endHearers.push(fn);
 /** Hears that Leaf's table is not the one the page was showing: the page takes it and draws again. */
@@ -101,15 +105,22 @@ export function refuse(why: string): void {
 }
 
 let table: Play<TableView, RaidCommand, RaidNote> | null = null;
-/** Purchases and the front page's choices, which leave every offer where it is. */
-const STEADY: ReadonlySet<RaidCommand["do"]> = new Set(["buy", "xp", "trail", "look", "buyLook"]);
+/** The front page's choices, which leave every offer where it is. */
+const STEADY: ReadonlySet<RaidCommand["do"]> = new Set(["trail", "look", "buyLook"]);
 /**
  * Commands held off while Leaf answers one only it can answer (the kit's one rule): a command names
  * what it means by its place (an offer, a card, a figure's spot), and that answer may put something
- * else there (other offers, other cards, two figures made one). One purchase may follow another.
+ * else there (other offers, other cards). Nothing is queued: the table shows it is busy (`busy`),
+ * and the member hears that it was not done.
  */
 const hold = makeHold();
-const heldOff = (command: RaidCommand): boolean => hold.held(STEADY.has(command.do));
+function heldOff(command: RaidCommand): boolean {
+  if (!hold.held(STEADY.has(command.do))) return false;
+  for (const fn of heldHearers) fn();
+  return true;
+}
+/** Whether Leaf is answering a rustle, a pick, setting out or the takings: until it has, nothing more is done. */
+export const busy = (): boolean => hold.held(true);
 
 /** What the page shows, as text, to tell whether Leaf's answer changed it. */
 const picture = (): string => JSON.stringify([S.run, S.almanac, S.looks, S.trail, S.runs]);

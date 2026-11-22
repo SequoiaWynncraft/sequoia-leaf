@@ -14,8 +14,26 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "taps-land",
+    at: "2026-11-22T20:20Z",
+    title: "Taps that count",
+    lines: [
+      "In The Little Raid, buying and levelling up happen as you tap, so you can place a figure straight after buying it. While a rustle, a pick or setting out waits on the guild's server, the stall dims and taps on it do nothing.",
+      "Every open card has a close button, and picking up a figure no longer opens its card over the board.",
+    ],
+  },
+  {
+    id: "fire-seen",
+    at: "2026-11-22T20:10Z",
+    title: "The campfire is shared",
+    lines: [
+      "At the campfire, Add a log and the emotes are now seen by everyone in town, not only on your own screen.",
+      "Holding Space no longer saves up hops: a key held down is one press.",
+    ],
+  },
+  {
     id: "one-face",
-    at: "2026-11-22T19:31Z",
+    at: "2026-11-22T19:50Z",
     title: "One font for the game",
     lines: [
       "Names, numbers, labels and lists are now in the Minecraft font everywhere. Only sentences keep the plain font.",

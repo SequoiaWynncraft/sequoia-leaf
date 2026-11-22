@@ -114,7 +114,7 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `mark.ts`     | The mark of the town's own: a name in leaf green after the acorn, on a page or a canvas             |
 | `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look                    |
 | `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all                    |
-| `dom.ts`      | `el`, `icon`, `amount` and a few more for building the interface                                    |
+| `dom.ts`      | `el`, `icon`, `amount`, `when` (draws a part again only when it changes) and a few more             |
 | `purse.ts`    | Leaf and Coins, shared by every page of the game: both Leaf's, only shown                           |
 | `pursebar.ts` | The purse as a page shows it, its numbers rolling; things that fly across it; a closed Leaf button  |
 | `shell.ts`    | How a game that is a place in the town and the town speak to each other                             |
@@ -127,6 +127,10 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `realtime.ts` | Being in a live room on Leaf: who is there, and where each is to be drawn now (`joinLive`)          |
 | `emotes.ts`   | The emotes others see (wave, cheer, laugh, heart): their pictures, for the page and a canvas        |
 | `standin.ts`  | A stand-in server, storage and live connection (`FakeSocket`) for tests; no page loads it           |
+
+With a mouse, Chromium makes no click when what a press began on is replaced before the release, so
+nothing is drawn again under a held mouse button: `when` waits for its next call after the button
+lifts, and `unheld(fn)` (which `refresh()` uses) for the tick after the click.
 
 `tools/drive.ts` drives a built page in headless Chromium and takes screenshots; its header says how.
 
@@ -157,15 +161,17 @@ or tap; `surface(canvas)` tells the cards a press there is the game's to read.
 
 **How it behaves.** With a mouse, resting on a target shows its card beside it (above, else below,
 else to a side, kept on screen); leaving hides it; a click pins it, and a click on it again, a
-click elsewhere or Escape puts it away. With a finger a tap pins it (a long press, on a target
-that acts) as a sheet along the bottom with a close button; a tap elsewhere puts it away. A thing
-named inside an open card is followed instead: its card takes the place, with a back arrow. One
-card is up at a time. The keyboard: a focused target shows its card and Enter pins it. While the
-game drags something it calls `hold(true)`, and no card opens until `hold(false)`; `show(ref)`
-still shows what letting go would do. `watch(fn)` tells a game what is pointed at and what is
-pinned; `refresh()` draws the card again from a fresh description, and `settle()` puts it back
-beside its target after the page has been laid out again. A passing card whose target leaves the
-page goes with it.
+click elsewhere, its close button or Escape puts it away. With a finger a tap pins it (a long
+press, on a target that acts) as a sheet along the bottom, above the game's own bar (each game sets
+`--sheet-floor` to that bar's height); a tap elsewhere puts it away. Every pinned card has a close
+button in its head, and the town puts any card away as it goes through a door. A thing named
+inside an open card is followed instead: its card takes the place, with a back arrow. One card is
+up at a time. The keyboard: a focused target shows its card and Enter pins it. While the game
+drags something it calls `hold(true)`, and no card opens until `hold(false)`; `show(ref)` still
+shows what letting go would do. `watch(fn)` tells a game what is pointed at and what is pinned;
+`refresh()` draws the card again from a fresh description (under a held mouse button, once it
+lifts), and `settle()` puts it back beside its target after the page has been laid out again. A
+passing card whose target leaves the page goes with it.
 
 The rules of all that (`Deck`, `partsOf`) touch no page and are tested in `card.test.ts`.
 
