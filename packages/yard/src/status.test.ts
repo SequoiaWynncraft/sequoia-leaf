@@ -134,5 +134,8 @@ describe("what a thing is doing", () => {
     put(w, "splitter", 4, 4);
     for (const way of [0, 1, 2]) setWay(w, 4, 4, way, false);
     expect(status(w, at(w, 4, 4))).toEqual({ state: "blocked", line: "All 3 ways out are shut.", trouble: true });
+    // There is no fourth way.
+    expect(setWay(w, 4, 4, 3, false)).toBe(false);
+    expect(on(w, 4, 4).shut).toBe(7);
   });
 });

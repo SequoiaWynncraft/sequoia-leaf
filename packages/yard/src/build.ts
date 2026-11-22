@@ -353,7 +353,7 @@ export function setOpen(w: World, x: number, y: number, open: boolean): boolean 
  */
 export function setWay(w: World, x: number, y: number, way: number, open: boolean): boolean {
   const there = w.cells[at(w, x, y)];
-  if (there?.kind !== "splitter") return false;
+  if (there?.kind !== "splitter" || (way !== 0 && way !== 1 && way !== 2)) return false;
   const shut = open ? there.shut & ~(1 << way) : there.shut | (1 << way);
   if (there.shut !== shut) {
     there.shut = shut;
