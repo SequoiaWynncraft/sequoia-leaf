@@ -1008,7 +1008,9 @@ b.dmg.true {
   .offer .name {
     font: var(--f-small);
   }
-  /* Narrower still, a picture is cut at its card's edge and never lies over the next offer. */
+}
+/* Narrower still, but not a phone (whose cards the pictures fit): a picture is cut at its card's edge and never lies over the next offer. */
+@media (min-width: 621px) and (max-width: 1180px) {
   .offer .art {
     width: 100%;
     overflow: hidden;
