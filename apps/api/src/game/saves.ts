@@ -14,6 +14,10 @@ export type StoredSave = typeof StoredSave.Type;
 export const SAVE_EVERY_MS = 2000;
 /** How long a guest's save is kept after it was last written. Members' are kept for good. */
 export const GUEST_SAVES_KEPT_MS = 90 * DAY_MS;
+/** How often, at most, an earlier copy of a slot is kept (and, apart, a refused one). */
+export const HISTORY_EVERY_MS = 60_000;
+/** How long earlier and refused copies are kept. */
+export const HISTORY_KEPT_MS = 7 * DAY_MS;
 
 export type SaveWrite =
   | { readonly status: "saved"; readonly version: number; readonly updatedAt: number }
@@ -29,8 +33,11 @@ const Written = Schema.Struct({ version: Schema.Int, updatedAt: Schema.Int });
  * write names the version it was made over, so a game that read an older save
  * can never overwrite a newer one; and one slot is written at most once every
  * two seconds. Each save says whether a guest wrote it: guests' saves not
- * written for 90 days are removed whenever any save is written. A database
- * failure is a defect.
+ * written for 90 days are removed whenever any save is written. What a write
+ * replaces is kept as an earlier copy, and a write refused for its version as a
+ * refused one, each at most once a minute a slot and for a week
+ * (`save_history`), so that any save can be put back. A database failure is a
+ * defect.
  */
 export class Saves extends Context.Service<
   Saves,
@@ -107,6 +114,28 @@ export class Saves extends Context.Service<
         execute: ({ playerId, slot }) =>
           sql`SELECT version FROM saves WHERE player_id = ${playerId} AND slot = ${slot}`,
       });
+      /** What a slot holds now, before a write: to keep as an earlier copy if the write goes in. */
+      const current = SqlSchema.findOneOption({
+        Request: Schema.Struct({ playerId: Schema.String, slot: Schema.String }),
+        Result: Schema.Struct({ version: Schema.Int, data: Schema.String, updatedAt: Schema.Int }),
+        execute: ({ playerId, slot }) =>
+          sql`SELECT version, data, updated_at AS updatedAt FROM saves WHERE player_id = ${playerId} AND slot = ${slot}`,
+      });
+      /** Keeps a copy of a slot, unless one of that kind was kept in the last minute. */
+      const keepCopy = (
+        playerId: string,
+        slot: string,
+        kind: "earlier" | "refused",
+        copy: { readonly version: number; readonly data: string; readonly savedAt: number },
+        now: number,
+      ) => sql`
+        INSERT INTO save_history (player_id, slot, kind, version, data, saved_at, kept_at)
+        SELECT ${playerId}, ${slot}, ${kind}, ${copy.version}, ${copy.data}, ${copy.savedAt}, ${now}
+        WHERE NOT EXISTS (
+          SELECT 1 FROM save_history
+          WHERE player_id = ${playerId} AND slot = ${slot} AND kind = ${kind} AND kept_at > ${now - HISTORY_EVERY_MS}
+        )
+      `;
       /** Why a write changed nothing: the slot holds another version, or the same one written too recently. */
       const refusal = (playerId: string, slot: string, over: number) =>
         stored({ playerId, slot }).pipe(
@@ -121,10 +150,20 @@ export class Saves extends Context.Service<
           sql
             .withTransaction(
               Effect.gen(function* () {
+                const before = yield* current({ playerId, slot });
                 const written = yield* write({ playerId, slot, over, data, guest, now });
                 if (Option.isNone(written)) {
-                  return yield* refusal(playerId, slot, over);
+                  const why = yield* refusal(playerId, slot, over);
+                  if (why.status === "conflict") {
+                    yield* keepCopy(playerId, slot, "refused", { version: over, data, savedAt: now }, now);
+                  }
+                  return why;
                 }
+                if (Option.isSome(before)) {
+                  const { version, data: was, updatedAt } = before.value;
+                  yield* keepCopy(playerId, slot, "earlier", { version, data: was, savedAt: updatedAt }, now);
+                }
+                yield* sql`DELETE FROM save_history WHERE kept_at < ${now - HISTORY_KEPT_MS}`;
                 yield* sql`DELETE FROM saves WHERE guest = 1 AND updated_at < ${now - GUEST_SAVES_KEPT_MS}`;
                 const { version, updatedAt } = written.value;
                 return { status: "saved", version, updatedAt } satisfies SaveWrite;
