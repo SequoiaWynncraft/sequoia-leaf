@@ -177,6 +177,28 @@ export function stepsOf(run: Run): Map<TraitId, number> {
   return steps;
 }
 
+/**
+ * Keeps one run's trait steps from one look to the next, to tell which have gone up. A run is told
+ * from another by its number at the table (`S.runs`), which lasts across the copies of it the page
+ * is given with every answer from Leaf, and not by which object it is.
+ */
+export class TraitWatch {
+  private steps: Map<TraitId, number> | null = null;
+  private of: number | null = null;
+  /** The traits whose step has gone up since the last look at the same run; none at the first look at a run. */
+  look(run: Run, which: number): { trait: TraitId; step: number }[] {
+    const up = this.steps !== null && this.of === which ? steppedUp(this.steps, run) : [];
+    this.steps = stepsOf(run);
+    this.of = which;
+    return up;
+  }
+  /** Forgets the run, so that the next look tells nothing. */
+  forget(): void {
+    this.steps = null;
+    this.of = null;
+  }
+}
+
 // ---------- teaching by doing ----------
 
 /** The first-time nudges, in the order a new member meets them. */

@@ -225,6 +225,24 @@ export function serverCard(line: string): void {
   if (inTown()) tell({ town: "ready" });
 }
 
+/** What a game says when the state Leaf keeps for the player does not read. */
+export const UNREADABLE = "Your game could not be read. It has been kept; tell the guild.";
+
+/**
+ * Puts a game away behind the card for a state Leaf keeps that does not read (`state_unreadable`):
+ * it has been kept, and the guild is to be told. Nothing more is sent. In a frame, the button goes
+ * back to town.
+ */
+export function unreadableCard(): void {
+  document.body.replaceChildren();
+  const back = !outside.top();
+  card("Could not be read", UNREADABLE, back ? "Back to town" : "Try again", () => {
+    if (back) leave();
+    else location.reload();
+  });
+  if (inTown()) tell({ town: "ready" });
+}
+
 // ---------- the cards for a live room let go of ----------
 
 /** Why a page has let go of its live room for good (`realtime.ts`): the player went live somewhere else, or their session ended. */

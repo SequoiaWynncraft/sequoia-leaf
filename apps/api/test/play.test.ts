@@ -1,8 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { type Game, MOST_COMMANDS, type PlayerId, playerId } from "@sequoia-leaf/core";
-import { planCommands, type RaidCommand, readNotes, readView, SENSIBLE, type TableView } from "@sequoia-leaf/raid";
-import { Effect, Schema } from "effect";
+import {
+  planCommands,
+  RAID,
+  type RaidCommand,
+  readNotes,
+  readView,
+  SENSIBLE,
+  type TableView,
+} from "@sequoia-leaf/raid";
+import { Effect, Logger, References, Schema } from "effect";
 
 import { played } from "../src/play/games.ts";
 import { Play } from "../src/play/service.ts";
@@ -425,6 +433,31 @@ describe("commands", () => {
     );
     expect(answers.map((response) => response.status)).toEqual(answers.map(() => 404));
     expect(await Promise.all(answers.map(codeOf))).toEqual(answers.map(() => "no_such_game"));
+  });
+});
+
+describe("a stored state that does not read", () => {
+  it("answers 409 state_unreadable to the page, changes nothing, and logs whose it is", async () => {
+    await commanded(ided([{ do: "start", trail: 0 }]));
+    // As a rules change that forgot the stored version would leave it.
+    await services.query((sql) => sql`UPDATE play_state SET state = '{"game":"little-raid-table","v":0}'`);
+    const before = await stored(alice);
+    const opening = await send("GET", "/v1/game/play/raid");
+    expect([opening.status, await codeOf(opening)]).toEqual([409, "state_unreadable"]);
+    const batch = await send("POST", "/v1/game/play/raid", { commands: ided([{ do: "rustle" }]) });
+    expect([batch.status, await codeOf(batch)]).toEqual([409, "state_unreadable"]);
+    expect(await stored(alice)).toEqual(before);
+    expect(await services.query((sql) => sql`SELECT count(*) AS n FROM play_commands`)).toEqual([{ n: 1 }]);
+    // What the staff find in the log.
+    const logs: unknown[] = [];
+    const capture = Logger.layer([Logger.make(({ message }) => void logs.push(message))]);
+    const sent = await services.run(
+      Play.use((play) =>
+        play.send({ playerId: alice, guest: false }, played(RAID), [{ id: "u-1", do: "rustle" }]),
+      ).pipe(Effect.provide(capture), Effect.provideService(References.MinimumLogLevel, "All")),
+    );
+    expect(sent).toEqual({ status: "unreadable" });
+    expect(logs).toEqual([[`The raid state stored for ${alice} does not read; it is kept as it is`]]);
   });
 });
 

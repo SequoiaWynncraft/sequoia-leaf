@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { isRecord } from "./net.ts";
-import { type Answer, openPlay, type Play, type PlayReader, waitingLook } from "./play.ts";
+import { type Answer, NOT_YET, openPlay, type Play, type PlayReader, waitingLook } from "./play.ts";
 import { type Reply, type Sent, type Standin, standin } from "./standin.ts";
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
@@ -63,7 +63,11 @@ afterEach(() => {
 
 async function opened(routes: Record<string, (sent: Sent) => Reply>): Promise<Play<Count, Add, string>> {
   world = standin(routes);
-  const play = await openPlay<Count, Add, string>("raid", COUNTER, { player: "p", retry: { first: 1, most: 4 } });
+  const play = await openPlay<Count, Add, string>("raid", COUNTER, {
+    player: "p",
+    retry: { first: 1, most: 4 },
+    notYet: { every: 1, tries: 3 },
+  });
   if ("trouble" in play) throw new Error(play.trouble);
   return play;
 }
@@ -104,6 +108,32 @@ describe("opening a game on Leaf", () => {
     // Asked one after another, each is answered in turn.
     const troubles = await Promise.all(cases.map(() => openPlay("raid", COUNTER, { player: "p" })));
     expect(troubles).toEqual(cases.map(([, trouble]) => ({ trouble })));
+  });
+
+  test("a state Leaf cannot read itself is said so, and the page does not load again", async () => {
+    world = standin({ "GET /v1/game/play/raid": { status: 409, body: { code: "state_unreadable", message: "Kept" } } });
+    expect(await openPlay("raid", COUNTER, { player: "p" })).toEqual({ trouble: "unreadable" });
+    expect(world.reloaded.count).toBe(0);
+    expect(world.sent).toHaveLength(1);
+  });
+
+  test("a Leaf without the play service yet (a deploy half done) is asked again each second, for 30 seconds", async () => {
+    expect(NOT_YET).toEqual({ every: 1000, tries: 30 });
+    const notYet = { status: 404, body: { code: "not_found", message: "No such route" } };
+    const { routes } = counterLeaf(4);
+    let old = 2;
+    world = standin({
+      "GET /v1/game/play/raid": () => (old-- > 0 ? notYet : routes["GET /v1/game/play/raid"]()),
+    });
+    const play = await openPlay<Count, Add, string>("raid", COUNTER, { player: "p", notYet: { every: 1, tries: 3 } });
+    expect("trouble" in play ? play.trouble : play.state).toEqual({ n: 4 });
+    expect(world.sent).toHaveLength(3);
+    world.done();
+    world = standin({ "GET /v1/game/play/raid": notYet });
+    expect(await openPlay("raid", COUNTER, { player: "p", notYet: { every: 1, tries: 3 } })).toEqual({
+      trouble: "noserver",
+    });
+    expect(world.sent).toHaveLength(4);
   });
 
   test("loads the page again when Leaf's state will not read: its rules are newer than the page's", async () => {
@@ -241,6 +271,40 @@ describe("sending commands", () => {
     expect(await b).toEqual({ refused: "signedout" });
     expect(troubles).toEqual(["signedout"]);
     expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "closed" });
+  });
+
+  test("a state Leaf cannot read stops the page at once: nothing is sent again, and the page is told", async () => {
+    const { routes } = counterLeaf(0);
+    const play = await opened({
+      ...routes,
+      "POST /v1/game/play/raid": () => ({ status: 409, body: { code: "state_unreadable", message: "Kept" } }),
+    });
+    const troubles: string[] = [];
+    play.onTrouble((why) => troubles.push(why));
+    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "unreadable" });
+    await Bun.sleep(10);
+    expect(troubles).toEqual(["unreadable"]);
+    expect(world?.sent.filter((s) => s.method === "POST")).toHaveLength(1);
+    expect(world?.reloaded.count).toBe(0);
+  });
+
+  test("a batch that reaches a Leaf without the play service yet goes again in a moment, until it has given up for no server", async () => {
+    const { leaf, routes } = counterLeaf(0);
+    let old = 2;
+    const notYet = { status: 404, body: { code: "not_found", message: "No such route" } };
+    const play = await opened({
+      ...routes,
+      "POST /v1/game/play/raid": (sent) => (old-- > 0 ? notYet : routes["POST /v1/game/play/raid"](sent)),
+    });
+    expect(await play.send({ do: "add", by: 2 })).toEqual({ notes: ["added 2"] });
+    expect(leaf.n).toBe(2);
+    old = 99;
+    const troubles: string[] = [];
+    play.onTrouble((why) => troubles.push(why));
+    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "noserver" });
+    expect(troubles).toEqual(["noserver"]);
+    // The first try and three more.
+    expect(world?.sent.filter((s) => s.method === "POST")).toHaveLength(3 + 4);
   });
 
   test("say who the page believes the member is, with every batch", async () => {
