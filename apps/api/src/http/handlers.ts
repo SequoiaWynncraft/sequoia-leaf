@@ -20,6 +20,7 @@ import {
   type QuestSlot,
   refreshQuests,
   rerollCost,
+  RULE_CHANGES,
   saveSlot,
   timedWindowAt,
   utcDay,
@@ -31,6 +32,7 @@ import { SqlClient } from "effect/sql";
 
 import { ActivityReport } from "../activity/report.ts";
 import { Visits } from "../activity/visits.ts";
+import { rateCard } from "../announce/rate-card.ts";
 import {
   BodyLimit,
   CoinsBodyErrors,
@@ -400,6 +402,21 @@ const SystemHandlers = HttpApiBuilder.group(LeafApi, "system", (handlers) =>
     return handlers.handle("healthz", () => healthy);
   }),
 );
+
+/** The rate card as the website reads it: the same words as Discord's, kept for five minutes. */
+const RatesHandlers = HttpApiBuilder.group(LeafApi, "rates", (handlers) => {
+  const card = rateCard(DEFAULT_RULES, RULE_CHANGES);
+  const rates = HttpServerResponse.jsonUnsafe(
+    {
+      title: card.title,
+      description: card.description,
+      sections: card.fields.map((field) => ({ name: field.name, text: field.value })),
+      changed_at: card.timestamp ?? null,
+    } satisfies typeof Body.Rates.Type,
+    { headers: { "cache-control": "public, max-age=300" } },
+  );
+  return Effect.succeed(handlers.handle("rates", () => Effect.succeed(rates)));
+});
 
 const invalidAfter = new Invalid({ code: "invalid_after", message: "after must be an event id" });
 
@@ -1108,7 +1125,15 @@ const GameAdminHandlers = HttpApiBuilder.group(LeafApi, "gameAdmin", (handlers) 
  * which Leaf's farewell ends when it stops.
  */
 export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.json" }).pipe(
-  Layer.provide([SystemHandlers, MeHandlers, GameHelloHandlers, GameHandlers, GameAdminHandlers, InternalHandlers]),
+  Layer.provide([
+    SystemHandlers,
+    RatesHandlers,
+    MeHandlers,
+    GameHelloHandlers,
+    GameHandlers,
+    GameAdminHandlers,
+    InternalHandlers,
+  ]),
   Layer.provide(GuildFeed.layer),
   Layer.provideMerge(OpenStreams.layer),
   Layer.provide([
