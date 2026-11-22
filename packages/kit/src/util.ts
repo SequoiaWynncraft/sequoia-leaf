@@ -19,11 +19,17 @@ export function must<T>(v: T | null | undefined, what = "value"): T {
   return v;
 }
 
-export function makeCanvas(w: number, h: number): { c: HTMLCanvasElement; g: Ctx } {
+/**
+ * A canvas to draw on. A picture painted once and kept (a sprite, the ground, an icon) is held in
+ * ordinary memory: a phone that takes its graphics memory back (another app in front, memory
+ * short) empties every large canvas kept there, and nothing would paint these again. A canvas
+ * `redrawn` every frame is left to the browser to place.
+ */
+export function makeCanvas(w: number, h: number, redrawn = false): { c: HTMLCanvasElement; g: Ctx } {
   const c = document.createElement("canvas");
   c.width = Math.max(1, Math.round(w));
   c.height = Math.max(1, Math.round(h));
-  const g = must(c.getContext("2d"), "2d context");
+  const g = must(c.getContext("2d", redrawn ? undefined : { willReadFrequently: true }), "2d context");
   g.imageSmoothingEnabled = false;
   return { c, g };
 }
