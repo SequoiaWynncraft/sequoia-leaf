@@ -106,7 +106,7 @@ let asking = 0;
 /** Those of them that are not purchases: after one, what is on offer may be something else. */
 let turning = 0;
 /** Purchases and the front page's choices, which leave every offer where it is. */
-const STEADY: ReadonlySet<RaidCommand["do"]> = new Set(["buy", "xp", "trail", "look"]);
+const STEADY: ReadonlySet<RaidCommand["do"]> = new Set(["buy", "xp", "trail", "look", "buyLook"]);
 /**
  * Whether a command is held off: Leaf is still answering one only it can answer. A command names
  * what it means by its place (an offer, a card, a figure's spot), and that answer may put something

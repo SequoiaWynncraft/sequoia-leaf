@@ -30,6 +30,7 @@ import {
   LOOKS,
   type Looks,
   newLooks,
+  owns,
   readLooks,
   wear,
   wornOf,
@@ -110,8 +111,10 @@ export type RaidCommand =
   | { do: "start"; trail: number }
   /** Pick the trail to set out on next, on the front page. */
   | { do: "trail"; trail: number }
-  /** Put a look on the table. */
-  | { do: "look"; kind: LookKind; id: string }
+  /** Put a look on the table. (A command's `id` on the wire is its own, so the look is `look`.) */
+  | { do: "look"; kind: LookKind; look: string }
+  /** Buy a look with Leaf, and put it on the table. */
+  | { do: "buyLook"; kind: LookKind; look: string }
   /** Take one of the options of the pick waiting. */
   | { do: "choose"; option: number }
   /** Ask for three other boons. */
@@ -138,7 +141,7 @@ export type RaidCommand =
 
 export type RaidCommandName = RaidCommand["do"];
 /** The commands that act on the run in hand. */
-export type RunCommand = Exclude<RaidCommand, { do: "start" | "trail" | "look" }>;
+export type RunCommand = Exclude<RaidCommand, { do: "start" | "trail" | "look" | "buyLook" }>;
 
 /** The commands a page may show before Leaf answers: they draw nothing, so Leaf will do just the same. */
 export const PREDICTED: readonly RaidCommandName[] = ["move", "bench", "sell", "give", "hold"];
@@ -158,6 +161,10 @@ export const TABLE_REFUSALS = {
   trail_closed: "That trail is not open yet.",
   no_such_look: "There is no such look.",
   not_owned: "That look is not yours yet.",
+  owned: "That look is yours already.",
+  // Leaf's own refusals of a command that takes Leaf.
+  not_enough_leaf: "Not enough Leaf.",
+  leaf_closed: "Leaf cannot be spent here.",
 } as const;
 export type TableWhy = keyof typeof TABLE_REFUSALS;
 
@@ -188,8 +195,9 @@ export function readCommand(v: unknown): RaidCommand | null {
     case "trail":
       return whole(v.trail, 0, TRAIL_COUNT - 1) ? { do: v.do, trail: v.trail } : null;
     case "look":
-      return isLookKind(v.kind) && typeof v.id === "string" && v.id.length <= 32
-        ? { do: "look", kind: v.kind, id: v.id }
+    case "buyLook":
+      return isLookKind(v.kind) && typeof v.look === "string" && v.look.length <= 32
+        ? { do: v.do, kind: v.kind, look: v.look }
         : null;
     case "choose":
       return whole(v.option, 0, 15) ? { do: "choose", option: v.option } : null;
@@ -408,9 +416,21 @@ export function applyCommand(state: Table, c: RaidCommand, ctx: Ctx): Answer {
     return { state: s, notes: [{ t: "trail", trail: c.trail }] };
   }
   if (c.do === "look") {
-    if (!LOOKS[c.kind].some((l) => l.id === c.id)) return no("no_such_look");
-    if (!wear(s.looks, c.kind, c.id)) return no("not_owned");
+    if (!LOOKS[c.kind].some((l) => l.id === c.look)) return no("no_such_look");
+    if (!wear(s.looks, c.kind, c.look)) return no("not_owned");
     return { state: s, notes: [{ t: "look", kind: c.kind, id: wornOf(s.looks, c.kind) }] };
+  }
+  if (c.do === "buyLook") {
+    const spec = LOOKS[c.kind].find((l) => l.id === c.look);
+    if (!spec) return no("no_such_look");
+    if (owns(s.looks, c.kind, spec.id)) return no("owned");
+    s.looks.owned.push(spec.id);
+    wear(s.looks, c.kind, spec.id);
+    return {
+      state: s,
+      notes: [{ t: "look", kind: c.kind, id: spec.id }],
+      leaf: [{ amount: spec.leaf, reason: `Raid table look: ${spec.name}`, key: `look:${spec.id}` }],
+    };
   }
   return play(s, c, ctx.room);
 }

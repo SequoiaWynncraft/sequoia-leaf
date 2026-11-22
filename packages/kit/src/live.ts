@@ -27,7 +27,8 @@ import {
   fromLeaf,
   fromLedger,
   heardCoins,
-  leafOpen,
+  leafOnLedger,
+  leafSpending,
   refreshCoins,
   watch,
 } from "./purse.ts";
@@ -104,6 +105,7 @@ async function look(): Promise<Where> {
     }
     if (member.guest) asGuest();
     else fromLedger(member.leaf);
+    leafSpending(isRecord(hello.body) && hello.body.leaf_spending === true);
     // From here on the purse's Coins are Leaf's ledger's, guest or member.
     fromLeaf(readCoins(me.body) ?? 0, member.id);
     signedInOn = deviceForWidth(outside.width());
@@ -305,6 +307,20 @@ export function letGoCard(why: LetGo, signIn: string, again: () => void): () => 
 // ---------- the member's own news ----------
 
 /**
+ * Asks Leaf for the member again, and the purse takes the Leaf the ledger gives them: after the
+ * member's news, or a command that took Leaf. The member as Leaf has them, or null for no answer,
+ * a guest, or the made-up guild (nothing is asked).
+ */
+export async function refreshLeaf(): Promise<Member | null> {
+  if (!member() || isGuest()) return null;
+  const a = await ask("/v1/game/me");
+  const m = a.status === 200 ? readMember(a.body) : null;
+  if (!m || m.guest) return null;
+  fromLedger(m.leaf);
+  return m;
+}
+
+/**
  * Listens to what happens to the member and asks the ledger for their Leaf again whenever anything
  * does. `heard` is told each event, and `fresh` the member as the server has them after it. It
  * listens from the newest event when the member was first looked at (`cursor`), so anything paid
@@ -320,12 +336,9 @@ export function followLeaf(
   // A raid paid out to a party arrives as a handful of events at once: one question covers them.
   let asking = false;
   async function again(): Promise<void> {
-    const a = await ask("/v1/game/me");
+    const m = await refreshLeaf();
     asking = false;
-    const m = a.status === 200 ? readMember(a.body) : null;
-    if (!m) return;
-    fromLedger(m.leaf);
-    fresh(m);
+    if (m) fresh(m);
   }
   return listen(
     "/v1/me/events/stream",
@@ -424,7 +437,7 @@ function pass(kind: "leaf" | "coins", kept: () => boolean, say: (n: number) => v
  * while it is still opening waits for `ready()` and is said then. With the made-up guild there is
  * no ledger, and nothing is said.
  */
-export const passLeaf = (say: (leaf: number) => void): Passing => pass("leaf", () => !leafOpen(), say);
+export const passLeaf = (say: (leaf: number) => void): Passing => pass("leaf", leafOnLedger, say);
 
 /**
  * In the town, while a game is open in its frame: passes each change to the town's Coins, which

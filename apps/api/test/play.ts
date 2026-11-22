@@ -1,7 +1,7 @@
 /**
  * Leaf on this machine, for trying the game against it:
  *
- *   bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--crowd <n>] [--dice <n>]
+ *   bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--spending] [--crowd <n>] [--dice <n>] [--leaf <n>]
  *
  * It runs the real app on a database in memory, seeded with a day of play for
  * a member called Tester and four other members, and serves `<public-dir>`
@@ -37,6 +37,9 @@
  *   then. They say nothing of where they are but by being in the room. Every third is on a phone.
  * - `--dice <n>`: Leaf's dice fall the same way every time from `n`, so that a tour plays the same
  *   game each time it runs. Without it they are the machine's.
+ * - `--spending`: Leaf's spending is on (`GAME_LEAF_SPENDING`): a game's command may take Leaf.
+ * - `--leaf <n>`: after the day, Tester holds `n` Leaf (the rest spent at once), to look at a price
+ *   they cannot pay.
  *
  * The games Leaf plays (the play service) are served as in production. For the screenshot tours,
  * `POST /test/play/raid` with `{ "stage": [...] }` stages a moment at Tester's raid table that play
@@ -47,7 +50,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { CLIENT_HZ, Flag, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { CLIENT_HZ, Flag, leaf as leafOf, type PlayerId, playerId } from "@sequoia-leaf/core";
 import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import type { SqlClient } from "effect/sql";
@@ -72,18 +75,20 @@ import {
 } from "./support.ts";
 
 const USAGE =
-  "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--crowd <n>] [--dice <n>]";
+  "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--spending] [--crowd <n>] [--dice <n>] [--leaf <n>]";
 
 const [portText = "", publicDirText = "", ...given] = process.argv.slice(2);
 const port = Number(portText);
-const known = new Set(["--guest", "--down", "--busy", "--admin"]);
+const known = new Set(["--guest", "--down", "--busy", "--admin", "--spending"]);
 const crowdAt = given.indexOf("--crowd");
 const crowdSize = crowdAt < 0 ? 0 : Number(given[crowdAt + 1]);
 const diceAt = given.indexOf("--dice");
 const diceText = diceAt >= 0 ? given[diceAt + 1] : undefined;
 const steady = diceText === undefined ? undefined : Number(diceText);
+const leafAt = given.indexOf("--leaf");
+const leftLeaf = leafAt < 0 ? undefined : Number(given[leafAt + 1]);
 /** The options with a value, each with its value, taken out. */
-const valued = new Set([crowdAt, diceAt].flatMap((i) => (i >= 0 ? [i, i + 1] : [])));
+const valued = new Set([crowdAt, diceAt, leafAt].flatMap((i) => (i >= 0 ? [i, i + 1] : [])));
 const flags = given.filter((_, i) => !valued.has(i));
 if (
   !Number.isInteger(port) ||
@@ -94,7 +99,8 @@ if (
   crowdSize < 0 ||
   crowdSize > 200 ||
   flags.some((o) => !known.has(o)) ||
-  (diceAt >= 0 && (steady === undefined || !Number.isInteger(steady)))
+  (diceAt >= 0 && (steady === undefined || !Number.isInteger(steady))) ||
+  (leftLeaf !== undefined && (!Number.isInteger(leftLeaf) || leftLeaf < 0))
 ) {
   console.error(USAGE);
   process.exit(2);
@@ -108,6 +114,7 @@ const guest = flags.includes("--guest");
 const down = flags.includes("--down");
 const busy = flags.includes("--busy");
 const admin = flags.includes("--admin");
+const spending = flags.includes("--spending");
 const origin = `http://127.0.0.1:${port}`;
 
 interface Member {
@@ -266,6 +273,7 @@ const leaf = testLeaf(
     publicDir,
     publicOrigin: origin,
     gameSignInUrl: `${origin}/sign-in?return_to=`,
+    gameLeafSpending: spending,
   },
   { mojang: mojang.service, ...(steady === undefined ? {} : { dice: steadyDice(steady) }) },
 );
@@ -466,6 +474,13 @@ async function playTheDay() {
 }
 
 await playTheDay();
+const held = (await leaf.account(tester.id)).balance;
+if (leftLeaf !== undefined && held > leftLeaf) {
+  await leaf.post(
+    { kind: "spend", playerId: tester.id, amount: leafOf(held - leftLeaf), sink: "shop", idempotencyKey: "tour:spent" },
+    clock.now,
+  );
+}
 seeding = false;
 
 /** One of the four, or Pebblefoot, says where they are in the game, as their game would. */
@@ -870,7 +885,7 @@ async function wander(member: Member, phone: boolean) {
 }
 await Promise.all(crowd.map((member, n) => wander(member, n % 3 === 0)));
 
-const state = guest ? " (Tester is a guest)" : down ? " (the backend is down)" : "";
+const state = `${guest ? " (Tester is a guest)" : down ? " (the backend is down)" : ""}${spending ? " (Leaf's spending is on)" : ""}`;
 console.log(
   `Leaf is playing at ${origin}/play/town/${state}${crowd.length > 0 ? `, with a crowd of ${crowd.length}` : ""}`,
 );

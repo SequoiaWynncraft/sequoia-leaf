@@ -4,9 +4,11 @@
  * at a time.
  */
 import { link } from "@sequoia-leaf/kit/card.ts";
-import { add, amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
-import { balance, leafShown } from "@sequoia-leaf/kit/purse.ts";
+import { add, amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
+import { refreshLeaf } from "@sequoia-leaf/kit/live.ts";
+import { balance, leafOpen, leafShown } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
+import { tipAt } from "@sequoia-leaf/kit/tip.ts";
 import {
   baseOf,
   BOSS_IDS,
@@ -26,6 +28,7 @@ import {
   LOOKS,
   owns,
   pieces,
+  type RaidCommand,
   ROOM_COUNT,
   ROOMS,
   type Run,
@@ -474,11 +477,25 @@ function howto(): HTMLElement {
 // ---------- looks for the table ----------
 
 const wearing = (kind: LookKind): LookId => wornOf(S.looks, kind);
-/** Puts a look on the table: Leaf keeps which are worn. */
-async function wear(kind: LookKind, id: LookId, button: Element | null): Promise<void> {
-  const did = await ask({ do: "look", kind, id }, button);
+/**
+ * Puts a look on the table (`look`), or buys it with Leaf and puts it there (`buyLook`): Leaf keeps
+ * which are worn and owned. After a buy the purse asks Leaf for the member's Leaf. A refusal is said
+ * at the button, since the page covers the table's own line.
+ */
+async function wear(c: Extract<RaidCommand, { do: "look" | "buyLook" }>, button: EventTarget | null): Promise<void> {
+  const at = button instanceof HTMLElement ? button : null;
+  const did = await ask(c, at);
+  if (did && !did.ok && at) {
+    replay(at, "shake");
+    const r = at.getBoundingClientRect();
+    tipAt({ x: r.left, y: r.top, w: r.width, h: r.height }, did.why, "", at);
+  }
   if (!did?.ok) return;
   dress(S.looks.cloth, S.looks.lantern);
+  renderPages(true);
+  if (c.do !== "buyLook") return;
+  snd.buy();
+  await refreshLeaf();
   renderPages(true);
 }
 
@@ -497,6 +514,7 @@ function looks(): HTMLElement {
   if (spec) {
     const mine = owns(S.looks, tried.kind, tried.id);
     const on = wearing(tried.kind) === tried.id;
+    const { kind, id: look } = tried;
     const act = on
       ? el("span", "k-chip lit", {}, icon("check"), "On the table")
       : mine
@@ -506,14 +524,23 @@ function looks(): HTMLElement {
             {
               type: "button",
               id: "uselook",
-              onclick: (e: Event) =>
-                void wear(tried.kind, tried.id, e.currentTarget instanceof Element ? e.currentTarget : null),
+              onclick: (e: Event) => void wear({ do: "look", kind, look }, e.currentTarget),
             },
             "Use it",
           )
-        : // Leaf cannot be spent in the game yet: the look is shown, and its Buy button closed.
-          el("button", "k-btn leaf sm", { type: "button", id: "buylook" }, "Buy", amount("leaf", spec.leaf));
-    if (!on && !mine) closeLeaf(act, `${spec.leaf} Leaf`);
+        : el(
+            "button",
+            "k-btn leaf sm",
+            {
+              type: "button",
+              id: "buylook",
+              onclick: (e: Event) => void wear({ do: "buyLook", kind, look }, e.currentTarget),
+            },
+            "Buy",
+            amount("leaf", spec.leaf),
+          );
+    // Where Leaf may not be spent (spending off, or a guest), the look is shown and its Buy button closed.
+    if (!on && !mine && !leafOpen()) closeLeaf(act, `${spec.leaf} Leaf`);
     add(
       body,
       el(
