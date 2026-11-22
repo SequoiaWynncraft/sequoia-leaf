@@ -14,6 +14,14 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "new-look",
+    day: "2026-11-22",
+    title: "A new look",
+    lines: [
+      "Panels, buttons and cards are redrawn so the thing that matters stands out, with a font that is easier to read.",
+    ],
+  },
+  {
     id: "visit-yards",
     day: "2026-11-22",
     title: "Visit other yards",

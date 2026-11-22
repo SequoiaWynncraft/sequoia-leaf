@@ -82,8 +82,7 @@
         right: calc(var(--u) * -3);
         min-width: calc(var(--u) * 9);
         height: calc(var(--u) * 9);
-        line-height: calc(var(--u) * 9);
-        font-size: var(--t-s);
+        font: 700 var(--t-s) / calc(var(--u) * 9) var(--k-font-read);
         text-align: center;
         color: #3b1f19;
         background: var(--k-gold-lt);
@@ -235,11 +234,9 @@
         align-items: center;
         gap: calc(var(--u) * 3);
       }
+      /* With a tool in hand it is the thing that matters: the brass frame. */
       #hand.building {
-        border-image-source: var(--k-f-plaque);
-        box-shadow:
-          0 calc(var(--u) * 2) 0 #0006,
-          0 0 0 var(--u) var(--k-gold);
+        border-image-source: var(--k-f-panel);
       }
 
       /* A panel: beside the yard on a wide screen, under it on a tall one. */

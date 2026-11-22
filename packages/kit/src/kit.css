@@ -1,40 +1,21 @@
 /*
- * The guild's look for everything that is not the world itself: the Minecraft font, the dusk
- * colours, and wooden frames, plaques, buttons and paper drawn as pixel art.
+ * The guild's look for everything that is not the world itself: dark plum surfaces in steps, two
+ * faces, and frames, buttons and paper drawn as pixel art.
  *
  * Sizes are counted in `--u`, one art pixel of the interface (two CSS pixels, three on a very large
- * window), so frames and letters always land on whole pixels. The font is drawn ten pixels to the
- * em, which makes ten units the sharp text size. Words that are read rather than glanced at (a line
- * about a thing, a note, a tip) are in Inter, the reading face, at `--t-r`.
+ * window), so frames land on whole pixels. Titles, names and buttons are in Jersey, a pixel face;
+ * everything read, and every number, is in Inter.
  */
 @import "./frames.css";
 
 @font-face {
-  font-family: Minecraft;
-  src: url("./fonts/minecraft-regular.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 400;
+  font-family: "Jersey 20";
+  src: url("./fonts/jersey-20.woff2") format("woff2");
   font-display: block;
 }
 @font-face {
-  font-family: Minecraft;
-  src: url("./fonts/minecraft-bold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: block;
-}
-@font-face {
-  font-family: Minecraft;
-  src: url("./fonts/minecraft-italic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 400;
-  font-display: block;
-}
-@font-face {
-  font-family: Minecraft;
-  src: url("./fonts/minecraft-bold-italic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 700;
+  font-family: "Jersey 15";
+  src: url("./fonts/jersey-15.woff2") format("woff2");
   font-display: block;
 }
 @font-face {
@@ -44,44 +25,74 @@
   font-weight: 100 900;
   font-display: swap;
 }
+/* Only for words drawn on a canvas in the world (`text.ts`); nothing on the page is set in it. */
+@font-face {
+  font-family: Minecraft;
+  src: url("./fonts/minecraft-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: Minecraft;
+  src: url("./fonts/minecraft-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: block;
+}
 
 :root {
   --u: 2px;
-  /* Text: the usual size, a small one for labels, and two for titles; and the reading size. */
-  --t-m: calc(var(--u) * 10);
-  --t-s: calc((var(--u) - 1px) * 10);
-  --t-l: calc((var(--u) + 1px) * 10);
-  --t-xl: calc((var(--u) + 2px) * 10);
+  /* Inter: a small label, and the usual size. */
+  --t-s: calc(var(--u) * 5.5);
   --t-r: calc(var(--u) * 7);
-  /* The second line under a name is read, so it is the reading size. */
-  --t-d: var(--t-r);
-  --k-font: Minecraft, ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace;
   --k-font-read: Inter, system-ui, sans-serif;
+  /*
+   * Jersey: a name or a button, a title, a large title. Each Jersey is sharp only at whole multiples
+   * of the size it is drawn at: Jersey 15 at 27 pixels (its capitals are 15 tall), Jersey 20 at 34
+   * (capitals 20). `--k-font` is the face for `--t-m` and `--t-xl`, `--k-font-l` the one for `--t-l`.
+   */
+  --t-m: 27px;
+  --t-l: 34px;
+  --t-xl: 54px;
+  --k-font: "Jersey 15", var(--k-font-read);
+  --k-font-l: "Jersey 20", var(--k-font-read);
 
-  --k-ink: #1a0f1e;
-  --k-deep: #211228;
-  --k-plum: #2a1733;
-  --k-mid: #3d2050;
-  --k-edge: #5a296e;
-  --k-violet: #7a348a;
-  --k-rose: #b84d84;
-  --k-coral: #e67967;
-  --k-gold: #f5b95e;
-  --k-gold-dk: #d49045;
-  --k-gold-lt: #ffd98a;
-  --k-cream: #fff3cf;
-  --k-dim: #cdb6d8;
-  --k-faint: #9a82a8;
-  --k-leaf: #c9ef9a;
-  --k-green: #62a658;
-  --k-bark: #6f3826;
-  --k-bark-dk: #3b1f19;
-  --k-bark-lt: #a35d3b;
-  --k-paper: #f8e6bd;
+  /* Darkness in steps: the edge of everything, a well, a panel, a raised thing, a quiet line, a brighter one. */
+  --k-ink: #0b0710;
+  --k-deep: #0f0a19;
+  --k-plum: #171025;
+  --k-mid: #211834;
+  --k-edge: #3a2f52;
+  --k-violet: #74679a;
+  /* Words: the usual, quieter, quietest. */
+  --k-cream: #fff6e2;
+  --k-dim: #cdc3dc;
+  --k-faint: #9488a8;
+  /* Each colour means one thing: gold is Coins and the button that confirms, green is Leaf and growth, coral is health and leaving, blue shows or hides. */
+  --k-gold: #ffc247;
+  --k-gold-lt: #ffe082;
+  --k-gold-dk: #bf6e17;
+  --k-leaf: #a8f07c;
+  --k-green: #3ea852;
+  --k-coral: #ff6b6b;
+  --k-rose: #ff6fb1;
+  --k-blue: #6cc0ff;
+  --k-brass: #c9923c;
+  --k-bark-lt: #b97c48;
+  /* The tiers, as their frames are: stone, jade, sapphire, amethyst, gold. */
+  --k-tier-1: #cfcbdc;
+  --k-tier-2: #6fe06f;
+  --k-tier-3: #5ab4ff;
+  --k-tier-4: #dd7cff;
+  --k-tier-5: #ffc83d;
 }
 @media (min-width: 1800px) and (min-height: 940px) {
   :root {
     --u: 3px;
+    --t-m: 34px;
+    --t-l: 54px;
+    --t-xl: 68px;
+    --k-font: "Jersey 20", var(--k-font-read);
+    --k-font-l: "Jersey 15", var(--k-font-read);
   }
 }
 
@@ -89,9 +100,9 @@
   margin: 0;
   background: var(--k-ink);
   color: var(--k-cream);
-  font: 400 var(--t-m) / 1.2 var(--k-font);
-  -webkit-font-smoothing: none;
-  font-smooth: never;
+  font: 600 var(--t-r) / 1.3 var(--k-font-read);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
 :where(button, input, select) {
@@ -109,6 +120,9 @@
   -webkit-user-drag: none;
   -webkit-touch-callout: none;
 }
+:where(b, strong) {
+  font-weight: 700;
+}
 [hidden] {
   display: none !important;
 }
@@ -125,58 +139,42 @@ img.k-px {
 
 /* ---------- words ---------- */
 
-.k-title {
+.k-title,
+.k-name {
   margin: 0;
-  font-size: var(--t-m);
-  font-weight: 700;
-  line-height: 1.1;
-  color: var(--k-gold);
-  text-shadow: var(--u) var(--u) 0 var(--k-bark-dk);
+  font: 400 var(--t-m) / 1 var(--k-font);
+  color: var(--k-cream);
+  text-shadow: 0 var(--u) 0 var(--k-ink);
 }
-.k-title.big {
-  font-size: var(--t-l);
-  text-shadow: calc(var(--u) * 1.5) calc(var(--u) * 1.5) 0 var(--k-bark-dk);
+.k-title.big,
+.k-head .k-title,
+.k-info-head .k-name {
+  font: 400 var(--t-l) / 1 var(--k-font-l);
 }
 .k-s {
   font-size: var(--t-s);
 }
-/* Words that are read: a line about a thing, a note, a tip. In Inter, smooth, at the reading size. */
+/* Words that are read: a line about a thing, a note, a tip. */
 .k-read,
 .k-d,
 .k-tip,
 .k-say,
 .k-paper p {
   font: 500 var(--t-r) / 1.4 var(--k-font-read);
-  letter-spacing: 0;
-  -webkit-font-smoothing: antialiased;
-  font-smooth: auto;
-}
-:is(.k-read, .k-d, .k-tip, .k-say, .k-paper p) b {
-  font-weight: 700;
 }
 /* The second line under a name: what the thing is. */
 .k-d {
   color: var(--k-dim);
 }
-/* Names, labels, numbers and buttons inside reading text keep the pixel font; `k-pix` asks for it. */
-:is(.k-read, .k-d, .k-tip, .k-say, .k-paper p) :is(.k-title, .k-name, .k-label, .k-chip, .k-btn, .k-cur, .k-pix),
+/* A name or a number among words that are read. */
 .k-pix {
-  font-family: var(--k-font);
-  line-height: 1.2;
-  -webkit-font-smoothing: none;
-  font-smooth: never;
-}
-/* A thing's name: bold and gold, in the pixel font. */
-.k-name {
-  font-size: var(--t-m);
   font-weight: 700;
-  color: var(--k-gold);
 }
 .k-label {
-  font-size: var(--t-s);
-  letter-spacing: calc(var(--t-s) / 10);
+  font: 700 var(--t-s) / 1.3 var(--k-font-read);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--k-dim);
+  color: var(--k-faint);
 }
 .k-dim {
   color: var(--k-dim);
@@ -196,22 +194,14 @@ img.k-px {
   gap: calc(var(--u) * 2);
   color: var(--k-leaf);
 }
-.k-folk > .k-i-acorn {
-  margin-top: calc(var(--u) * -1);
-}
-/* A member's own name: cream, as it is over the world. */
-.k-title.k-member {
-  color: var(--k-cream);
-}
 .k-coral {
   color: var(--k-coral);
 }
 /* Words written straight over the world need a dark edge to stay readable. */
 .k-over {
   text-shadow:
-    var(--u) var(--u) 0 var(--k-ink),
     0 var(--u) 0 var(--k-ink),
-    var(--u) 0 0 var(--k-ink);
+    0 0 calc(var(--u) * 3) var(--k-ink);
 }
 
 /* ---------- frames ---------- */
@@ -229,32 +219,35 @@ img.k-px {
   box-sizing: border-box;
 }
 
-/* A panel: the big wooden frame with dusk cloth inside. */
-.k-panel {
-  border: calc(var(--u) * 5) solid transparent;
-  border-image: var(--k-f-panel) 5 fill round;
-  box-shadow: 0 calc(var(--u) * 3) 0 #0006;
+/*
+ * A panel: a thin brass frame round near-black plum. A plaque: a quiet plum frame, for small things
+ * that sit over the world. Each frame's picture carries its own hard shadow, under its cut corners,
+ * and the two are the same shape, so one can take the other's picture (`border-image-source`).
+ */
+.k-panel,
+.k-plaque,
+.k-tip {
+  border: calc(var(--u) * 4) solid transparent;
+  border-image: var(--k-f-panel) 5 5 7 fill / calc(var(--u) * 5) calc(var(--u) * 5) calc(var(--u) * 7) / 0 0
+    calc(var(--u) * 2) stretch;
   color: var(--k-cream);
 }
-/* The title along the top of a panel, on a band of roof shingles with an eave under it. */
+.k-plaque {
+  border-image-source: var(--k-f-plaque);
+}
+/* The title along the top of a panel, a brass rule under it. */
 .k-head {
   display: flex;
   align-items: center;
   gap: calc(var(--u) * 4);
-  min-height: calc(var(--u) * 24);
+  min-height: calc(var(--u) * 22);
   box-sizing: border-box;
   padding: calc(var(--u) * 2) calc(var(--u) * 3) calc(var(--u) * 2) calc(var(--u) * 5);
-  background: var(--k-f-shingles) 0 0 / calc(var(--u) * 24) calc(var(--u) * 12);
-  image-rendering: pixelated;
-  box-shadow:
-    0 var(--u) 0 var(--k-violet),
-    0 calc(var(--u) * 2) 0 var(--k-ink);
-  margin-bottom: calc(var(--u) * 2);
+  border-bottom: var(--u) solid var(--k-brass);
 }
 .k-head .k-title {
   flex: 1;
   min-width: 0;
-  text-shadow: var(--u) var(--u) 0 var(--k-ink);
 }
 .k-body {
   padding: calc(var(--u) * 4);
@@ -265,17 +258,82 @@ img.k-px {
 .k-scroll {
   overflow: auto;
   scrollbar-width: thin;
-  scrollbar-color: var(--k-bark) transparent;
+  scrollbar-color: var(--k-edge) transparent;
 }
 
-/* A thin wooden edge for small things that sit over the world. */
-.k-plaque {
-  border: calc(var(--u) * 4) solid transparent;
-  border-image: var(--k-f-plaque) 4 fill;
-  box-shadow: 0 calc(var(--u) * 2) 0 #0006;
+/*
+ * A thing with a tier, `k-tier-1` to `k-tier-5`: stone, jade, sapphire, amethyst, gold. The frame
+ * is drawn over what it holds, so nothing inside cuts into its jewels; `--k-fill` is what is behind
+ * it, and `--k-tier` the tier's colour for whatever inside wants it.
+ */
+.k-tier-1 {
+  --k-f: var(--k-f-tier-1);
+  --k-tier: var(--k-tier-1);
+}
+.k-tier-2 {
+  --k-f: var(--k-f-tier-2);
+  --k-tier: var(--k-tier-2);
+}
+.k-tier-3 {
+  --k-f: var(--k-f-tier-3);
+  --k-tier: var(--k-tier-3);
+  --k-crest: var(--k-f-crest-3);
+}
+.k-tier-4 {
+  --k-f: var(--k-f-tier-4);
+  --k-tier: var(--k-tier-4);
+  --k-crest: var(--k-f-crest-4);
+}
+.k-tier-5 {
+  --k-f: var(--k-f-tier-5);
+  --k-tier: var(--k-tier-5);
+  --k-crest: var(--k-f-crest-5);
+}
+:where([class*="k-tier-"]) {
+  position: relative;
+}
+[class*="k-tier-"] {
+  isolation: isolate;
+  box-sizing: border-box;
+  border: calc(var(--u) * 5) solid transparent;
+  border-image: none;
+  background: var(
+      --k-fill,
+      radial-gradient(120% 50% at 50% 0, color-mix(in srgb, var(--k-tier) 30%, transparent), transparent 75%)
+        var(--k-plum)
+    )
+    padding-box;
+}
+[class*="k-tier-"]::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: calc(var(--u) * -5);
+  border: calc(var(--u) * 9) solid transparent;
+  border-image: var(--k-f) 9 stretch;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+/* The crest on top of a frame from the third tier up: `<i class="k-crest">` inside it. */
+[class*="k-tier-"] > .k-crest {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: calc(var(--u) * -8);
+  translate: -50% 0;
+  width: calc(var(--u) * 11);
+  height: calc(var(--u) * 10);
+  background: var(--k-crest) 0 0 / 100% 100% no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.k-tier-5 > .k-crest {
+  top: calc(var(--u) * -9);
+  width: calc(var(--u) * 15);
+  height: calc(var(--u) * 8);
 }
 
-/* A row or tile standing up from the panel. Add `lit` to pick it out. */
+/* A row or tile standing up from the panel: a step lighter, and flat. Add `lit` to pick it out. */
 .k-card {
   border: calc(var(--u) * 2) solid transparent;
   border-image: var(--k-f-card) 2 fill;
@@ -295,7 +353,7 @@ button.k-card {
   border-image-source: var(--k-f-card-lit);
 }
 button.k-card:hover {
-  filter: brightness(1.12);
+  filter: brightness(1.2);
 }
 button.k-card:active {
   transform: translateY(var(--u));
@@ -308,7 +366,7 @@ button.k-card:active {
   min-width: 0;
 }
 
-/* A hollow that holds one thing. */
+/* A hollow that holds one thing: a step darker than the panel. */
 .k-slot {
   border: calc(var(--u) * 2) solid transparent;
   border-image: var(--k-f-slot) 2 fill;
@@ -327,10 +385,10 @@ button.k-slot {
   border-image-source: var(--k-f-slot-lit);
 }
 button.k-slot:hover {
-  filter: brightness(1.2);
+  filter: brightness(1.3);
 }
 
-/* Paper: letters, notes on the board, anything meant to be read like a page. */
+/* Paper: letters, notes on the board, anything a character hands over to be read like a page. */
 .k-paper {
   border: calc(var(--u) * 3) solid transparent;
   border-image: var(--k-f-paper) 3 fill;
@@ -339,12 +397,18 @@ button.k-slot:hover {
   box-shadow: 0 calc(var(--u) * 2) 0 #0005;
 }
 .k-paper .k-title {
-  color: #7a348a;
+  color: #6a2a7c;
   text-shadow: none;
 }
-.k-paper .k-dim,
-.k-paper .k-label {
+.k-paper :is(.k-dim, .k-d, .k-label) {
   color: #7d6551;
+}
+/* Written on paper itself, an amount and a name of the town's own are in ink. */
+:is(.k-paper, .k-say) :is(.k-cur, .k-gold):not(.k-chip *, .k-btn *) {
+  color: #96560a;
+}
+:is(.k-paper, .k-say) :is(.k-cur.leaf, .k-leafy, .k-folk):not(.k-chip *, .k-btn *) {
+  color: #2f6b24;
 }
 .k-paper hr,
 .k-rule {
@@ -378,22 +442,15 @@ button.k-slot:hover {
 }
 .k-say b {
   display: block;
-  font-family: var(--k-font);
-  -webkit-font-smoothing: none;
-  font-smooth: never;
   font-size: var(--t-s);
-  letter-spacing: calc(var(--t-s) / 10);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #7a348a;
+  color: #6a2a7c;
 }
 
-/* What a thing is, shown while pointing at it. */
+/* What a thing is, shown while pointing at it: a small panel. */
 .k-tip {
-  border: calc(var(--u) * 2) solid transparent;
-  border-image: var(--k-f-tip) 2 fill;
   padding: calc(var(--u) * 2) calc(var(--u) * 3);
-  color: var(--k-cream);
-  box-shadow: 0 calc(var(--u) * 2) 0 #0006;
 }
 /* A tip shown beside whatever it explains (see tip.ts), over everything else on the page. */
 .k-tip.k-float {
@@ -411,15 +468,12 @@ button.k-slot:hover {
 .k-tip.k-info {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--u) * 2);
+  gap: calc(var(--u) * 4);
   width: min(calc(var(--u) * 220), calc(100vw - 8px));
   max-width: none;
   box-sizing: border-box;
-  padding: calc(var(--u) * 3) calc(var(--u) * 4);
-  /* Names, labels and numbers are the pixel font; the words read in it are `k-read`. */
-  font: 400 var(--t-m) / 1.2 var(--k-font);
-  -webkit-font-smoothing: none;
-  font-smooth: never;
+  padding: calc(var(--u) * 4) calc(var(--u) * 5);
+  font: 600 var(--t-r) / 1.3 var(--k-font-read);
 }
 .k-tip.k-info.pinned {
   z-index: 89;
@@ -442,7 +496,7 @@ button.k-slot:hover {
 .k-info-head {
   display: flex;
   align-items: center;
-  gap: calc(var(--u) * 3);
+  gap: calc(var(--u) * 4);
 }
 .k-slot.k-info-pic {
   flex: none;
@@ -455,7 +509,7 @@ button.k-slot:hover {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--u);
+  gap: calc(var(--u) * 2);
 }
 .k-info-aside {
   flex: none;
@@ -470,18 +524,16 @@ button.k-slot:hover {
   flex: none;
   align-self: flex-start;
 }
-/* The parts of a card, a thin rule between them. */
+/* The parts of a card, one under another. */
 .k-info-part {
   display: flex;
   flex-direction: column;
-  gap: var(--u);
-  padding-top: calc(var(--u) * 2);
-  border-top: var(--u) solid var(--k-edge);
+  gap: calc(var(--u) * 2);
 }
 .k-info-chips {
   flex-direction: row;
   flex-wrap: wrap;
-  gap: var(--u) calc(var(--u) * 4);
+  gap: calc(var(--u) * 2) calc(var(--u) * 6);
 }
 .k-info-chip {
   display: flex;
@@ -498,7 +550,7 @@ button.k-info-chip:hover .k-chip {
   filter: brightness(1.2);
 }
 .k-info-count {
-  margin-left: var(--u);
+  color: var(--k-dim);
 }
 /* Numbers side by side, and on to the next line where the card is too narrow for them all. */
 .k-info-stats {
@@ -506,7 +558,7 @@ button.k-info-chip:hover .k-chip {
   flex-direction: row;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: var(--u) calc(var(--u) * 4);
+  gap: calc(var(--u) * 2) calc(var(--u) * 4);
 }
 /* A label over the numbers after it, across the whole row. */
 .k-info-over {
@@ -515,15 +567,21 @@ button.k-info-chip:hover .k-chip {
 .k-info-stat {
   display: flex;
   align-items: baseline;
-  gap: 0 calc(var(--u) * 2);
+  gap: 0 calc(var(--u) * 3);
   white-space: nowrap;
 }
 /* On a phone's sheet, a number goes under its label where the row is too narrow for both. */
 .k-info.sheet .k-info-stat {
   flex-wrap: wrap;
 }
-.k-info-blocks {
-  gap: calc(var(--u) * 2);
+/* A block is a well: its title in gold, a note at its right, and its words under them. */
+.k-info-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  padding: calc(var(--u) * 4) calc(var(--u) * 5);
+  background: var(--k-deep);
+  box-shadow: 0 0 0 var(--u) var(--k-ink);
 }
 .k-info-bhead {
   display: flex;
@@ -531,52 +589,58 @@ button.k-info-chip:hover .k-chip {
   justify-content: space-between;
   gap: calc(var(--u) * 3);
 }
+.k-info-title {
+  font-size: calc(var(--u) * 7.5);
+  color: var(--k-gold);
+}
 .k-info-note {
-  color: var(--k-dim);
+  color: var(--k-faint);
   white-space: nowrap;
 }
 .k-info-body {
-  color: var(--k-cream);
-}
-/* A block on one line: a trait's step, its count first and how many more at the end. */
-.k-info-block.line {
-  display: grid;
-  grid-template-columns: calc(var(--u) * 7) minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: calc(var(--u) * 2);
-  padding: 0 var(--u);
   color: var(--k-dim);
 }
-.k-info-block.line .k-info-title {
-  color: var(--k-faint);
-}
-.k-info-block.line .k-info-body {
-  color: inherit;
-}
-.k-info-block.line .k-info-note {
-  font: 400 var(--t-s) / 1.2 var(--k-font);
-  letter-spacing: calc(var(--t-s) / 10);
-  text-transform: uppercase;
-  -webkit-font-smoothing: none;
+.k-info-body b {
+  color: var(--k-cream);
 }
 .k-info-block.lit {
+  box-shadow: 0 0 0 var(--u) var(--k-gold);
+}
+/* A block on one line: a trait's step, its count first and how many more at the end. Reached, it is bright. */
+.k-info-block.line {
+  display: grid;
+  grid-template-columns: calc(var(--u) * 10) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: calc(var(--u) * 2);
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+.k-info-block.line :is(.k-info-title, .k-info-body, .k-info-body b) {
+  font-size: inherit;
+  color: var(--k-faint);
+}
+.k-info-block.line .k-info-note {
+  font: 700 var(--t-s) / 1.3 var(--k-font-read);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.k-info-block.line.lit :is(.k-info-body, .k-info-body b) {
   color: var(--k-cream);
-  background: #f5b95e26;
-  box-shadow: inset var(--u) 0 0 var(--k-gold);
 }
 .k-info-block.line.lit .k-info-title {
-  color: var(--k-gold-lt);
+  color: var(--k-gold);
 }
 .k-info-rows {
   flex-direction: row;
   flex-wrap: wrap;
-  gap: calc(var(--u) * 2) calc(var(--u) * 6);
+  gap: calc(var(--u) * 3) calc(var(--u) * 6);
 }
 .k-info-row {
   flex: 1 1 100%;
   display: flex;
   flex-direction: column;
-  gap: var(--u);
+  gap: calc(var(--u) * 2);
   min-width: 0;
 }
 /* A row of pictures only sits beside the next one where it fits. */
@@ -584,13 +648,13 @@ button.k-info-chip:hover .k-chip {
   flex: 0 1 auto;
   flex-direction: row;
   align-items: center;
-  gap: calc(var(--u) * 2);
+  gap: calc(var(--u) * 3);
 }
 .k-info-things {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--u) calc(var(--u) * 4);
+  gap: calc(var(--u) * 2) calc(var(--u) * 5);
 }
 .k-info-row.k-look-icons .k-info-things {
   gap: calc(var(--u) * 2);
@@ -598,7 +662,7 @@ button.k-info-chip:hover .k-chip {
 .k-info-row.k-look-tiles .k-info-things {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: calc(var(--u) * 2);
+  gap: calc(var(--u) * 3);
 }
 .k-slot.k-info-icon {
   width: calc(var(--u) * 16);
@@ -613,7 +677,7 @@ button.k-info-chip:hover .k-chip {
   padding: 0 var(--u);
 }
 .k-info-make.lit {
-  background: #f5b95e26;
+  background: #ffc24726;
   box-shadow: inset var(--u) 0 0 var(--k-gold);
 }
 .k-info-with {
@@ -648,13 +712,12 @@ button.k-info-chip:hover .k-chip {
 }
 /* A small tag on a thing: "have", "bench", "stall". */
 .k-info-tagged {
-  padding: 0 var(--u);
-  background: var(--k-mid);
+  padding: 0 calc(var(--u) * 2);
+  background: var(--k-edge);
   color: var(--k-gold-lt);
-  font-size: var(--t-s);
-  font-family: var(--k-font);
+  font: 700 var(--t-s) / 1.5 var(--k-font-read);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: calc(var(--t-s) / 10);
 }
 .k-info-tagged.corner {
   position: absolute;
@@ -664,7 +727,7 @@ button.k-info-chip:hover .k-chip {
 .k-info-acts {
   flex-direction: row;
   flex-wrap: wrap;
-  gap: calc(var(--u) * 2);
+  gap: calc(var(--u) * 3);
 }
 .k-info-acts > .k-btn {
   flex: 1 1 auto;
@@ -679,9 +742,8 @@ button.k-info-chip:hover .k-chip {
   display: inline-flex;
   align-items: center;
   gap: calc(var(--u) * 2);
-  font-family: var(--k-font);
+  font-weight: 700;
   white-space: nowrap;
-  -webkit-font-smoothing: none;
 }
 .k-thing-pic {
   display: grid;
@@ -707,6 +769,11 @@ button.k-info-chip:hover .k-chip {
 
 /* ---------- buttons ---------- */
 
+/*
+ * A button's colour says what it does. Gold (no word) confirms; `blue` shows or hides; `green`
+ * buys or grows, and `leaf` is the same green, since spending Leaf is always the green button;
+ * `wood` is the plain button; `coral` leaves or removes; `slate` (and `plum`) is quiet.
+ */
 .k-btn {
   --f: var(--k-f-btn-gold);
   --fd: var(--k-f-btn-gold-down);
@@ -715,53 +782,56 @@ button.k-info-chip:hover .k-chip {
   justify-content: center;
   gap: calc(var(--u) * 3);
   min-height: calc(var(--u) * 20);
-  padding: var(--u) calc(var(--u) * 5) 0;
+  padding: 0 calc(var(--u) * 5);
   border: solid transparent;
-  border-width: calc(var(--u) * 2) calc(var(--u) * 2) calc(var(--u) * 4);
-  border-image: var(--f) 2 2 4 2 fill;
+  border-width: calc(var(--u) * 2) calc(var(--u) * 2) calc(var(--u) * 3);
+  border-image: var(--f) 2 2 5 fill / calc(var(--u) * 2) calc(var(--u) * 2) calc(var(--u) * 5) / 0 0 calc(var(--u) * 2)
+    stretch;
   background: none;
-  font-weight: 700;
+  /* Four units less than the letters' size, so the capitals sit in the middle on whole pixels. */
+  font: 400 var(--t-m) / calc(var(--t-m) - var(--u) * 4) var(--k-font);
   white-space: nowrap;
-  color: #3b1f19;
+  color: #2b1705;
+  text-shadow: 0 1px 0 #fff6;
 }
 .k-btn:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.1);
 }
-.k-btn:active,
+/* Pressed, it sinks onto its foot. */
+.k-btn:active:not(:disabled, .off),
 .k-btn.down {
-  border-width: calc(var(--u) * 4) calc(var(--u) * 2) calc(var(--u) * 2);
-  border-image: var(--fd) 4 2 2 2 fill;
+  border-width: calc(var(--u) * 4) calc(var(--u) * 2) var(--u);
+  border-image: var(--fd) 4 2 1 fill;
+}
+.k-btn:is(.blue, .green, .leaf, .wood, .coral, .slate, .plum) {
+  color: var(--k-cream);
+  text-shadow: 0 var(--u) 0 #0007;
+}
+.k-btn.blue {
+  --f: var(--k-f-btn-blue);
+  --fd: var(--k-f-btn-blue-down);
+}
+.k-btn:is(.green, .leaf) {
+  --f: var(--k-f-btn-green);
+  --fd: var(--k-f-btn-green-down);
 }
 .k-btn.wood {
   --f: var(--k-f-btn-wood);
   --fd: var(--k-f-btn-wood-down);
-  color: var(--k-cream);
-  text-shadow: var(--u) var(--u) 0 var(--k-bark-dk);
-}
-.k-btn.plum {
-  --f: var(--k-f-btn-plum);
-  --fd: var(--k-f-btn-plum-down);
-  color: var(--k-cream);
-  text-shadow: var(--u) var(--u) 0 var(--k-ink);
-}
-/* Spending Leaf is always the green button, so the precious thing is never spent by surprise. */
-.k-btn.leaf {
-  --f: var(--k-f-btn-leaf);
-  --fd: var(--k-f-btn-leaf-down);
-  color: #173a1d;
+  color: #ffe6a8;
 }
 .k-btn.coral {
   --f: var(--k-f-btn-coral);
   --fd: var(--k-f-btn-coral-down);
-  color: #3a1420;
+}
+.k-btn:is(.slate, .plum) {
+  --f: var(--k-f-btn-slate);
+  --fd: var(--k-f-btn-slate-down);
 }
 .k-btn:disabled,
 .k-btn.off {
   --f: var(--k-f-btn-off);
-  --fd: var(--k-f-btn-off);
-  border-width: calc(var(--u) * 2) calc(var(--u) * 2) calc(var(--u) * 4);
-  border-image: var(--f) 2 2 4 2 fill;
-  color: #2c2a30;
+  color: var(--k-faint);
   text-shadow: none;
   filter: none;
   cursor: default;
@@ -782,6 +852,13 @@ button.k-info-chip:hover .k-chip {
 .k-btn.icon.sm {
   width: calc(var(--u) * 16);
 }
+/* What a button costs or pays, written on it. */
+.k-btn .k-cur {
+  padding: calc(var(--u) * 1.5) calc(var(--u) * 3);
+  background: #0000004a;
+  color: inherit;
+  text-shadow: none;
+}
 .k-btn.shake {
   animation: k-shake 0.3s;
 }
@@ -796,22 +873,22 @@ button.k-info-chip:hover .k-chip {
   }
 }
 
+/* A row of buttons where one is chosen: the others are dark and quiet. */
 .k-tabs {
   display: flex;
   gap: calc(var(--u) * 2);
 }
 .k-tabs > .k-btn {
-  --f: var(--k-f-btn-wood);
-  --fd: var(--k-f-btn-wood-down);
+  --f: var(--k-f-btn-off);
+  --fd: var(--k-f-btn-slate-down);
   flex: 1;
-  color: var(--k-cream);
-  text-shadow: var(--u) var(--u) 0 var(--k-bark-dk);
+  color: var(--k-dim);
+  text-shadow: 0 var(--u) 0 #0007;
 }
 .k-tabs > .k-btn[aria-selected="true"] {
-  --f: var(--k-f-btn-gold);
-  --fd: var(--k-f-btn-gold-down);
-  color: #3b1f19;
-  text-shadow: none;
+  --f: var(--k-f-btn-wood);
+  --fd: var(--k-f-btn-wood-down);
+  color: var(--k-cream);
 }
 
 /* ---------- small parts ---------- */
@@ -828,17 +905,21 @@ button.k-info-chip:hover .k-chip {
   vertical-align: middle;
 }
 
-/* An amount of Leaf or Coins. */
+/* An amount of Coins, or of Leaf. */
 .k-cur {
   display: inline-flex;
   align-items: center;
   gap: calc(var(--u) * 3);
-  font-weight: 700;
+  font: 700 var(--t-r) / 1 var(--k-font-read);
   white-space: nowrap;
   color: var(--k-gold);
 }
 .k-cur.leaf {
   color: var(--k-leaf);
+}
+/* The purse: a little larger. */
+.k-plaque > .k-cur {
+  font-size: calc(var(--u) * 8);
 }
 .k-bump {
   animation: k-bump 0.22s;
@@ -865,42 +946,70 @@ button.k-info-chip:hover .k-chip {
   transition: width 0.4s;
 }
 .k-bar.leaf > i {
-  background: linear-gradient(var(--k-leaf) 0 var(--u), var(--k-green) 0 calc(100% - var(--u)), #3b7340 0);
+  background: linear-gradient(var(--k-leaf) 0 var(--u), var(--k-green) 0 calc(100% - var(--u)), #216a34 0);
 }
 .k-bar.coral > i {
-  background: linear-gradient(#f4a08c 0 var(--u), var(--k-coral) 0 calc(100% - var(--u)), #c4574f 0);
+  background: linear-gradient(#ffb0a6 0 var(--u), var(--k-coral) 0 calc(100% - var(--u)), #98302f 0);
 }
 
-/* A small tag: a trait, a rank, a count. */
+/*
+ * A small tag: a trait, a kind, a rank, a count. It is flat, since it is not pressed. One that
+ * starts with a picture of the game's own (a trait's, a kind's) wears it as a hexagon badge with
+ * its name beside it; `--c` is the badge's colour. `lit` picks one out in gold.
+ */
 .k-chip {
+  --c: var(--k-violet);
+  --ring: var(--k-ink);
   display: inline-flex;
   align-items: center;
   gap: calc(var(--u) * 2);
   padding: 0 calc(var(--u) * 3);
-  min-height: calc(var(--u) * 12);
+  min-height: calc(var(--u) * 11);
   background: var(--k-mid);
-  box-shadow:
-    0 0 0 var(--u) var(--k-ink),
-    inset 0 var(--u) 0 var(--k-edge);
+  box-shadow: 0 0 0 var(--u) var(--ring);
+  font-weight: 700;
   white-space: nowrap;
+  color: var(--k-cream);
 }
 .k-chip.lit {
-  background: var(--k-gold);
-  color: #3b1f19;
-  box-shadow:
-    0 0 0 var(--u) var(--k-ink),
-    inset 0 var(--u) 0 var(--k-gold-lt);
+  --c: var(--k-gold);
+  --ring: var(--k-gold);
+  color: var(--k-gold-lt);
+}
+.k-chip:where(:has(> canvas:first-child)) {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 0 calc(var(--u) * 3);
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+.k-chip:where(:has(> canvas:first-child))::before {
+  content: "";
+  grid-area: 1 / 1;
+  width: calc(var(--u) * 14);
+  height: calc(var(--u) * 16);
+  background:
+    var(--k-f-hex-in) 0 0 / 100% 100% no-repeat,
+    var(--c);
+  -webkit-mask: var(--k-f-hex) 0 0 / 100% 100% no-repeat;
+  mask: var(--k-f-hex) 0 0 / 100% 100% no-repeat;
+}
+.k-chip > canvas:first-child {
+  grid-area: 1 / 1;
+  place-self: center;
+  z-index: 1;
 }
 
 /* A line of news that says itself once and goes. */
 .k-toast {
   padding: calc(var(--u) * 2) calc(var(--u) * 4);
-  background: #1a0f1ee6;
+  background: #0b0710e6;
   box-shadow: inset calc(var(--u) * 2) 0 0 var(--k-gold);
   animation: k-toast-in 0.3s;
 }
 .k-toast.leaf {
-  box-shadow: inset calc(var(--u) * 2) 0 0 var(--k-green);
+  box-shadow: inset calc(var(--u) * 2) 0 0 var(--k-leaf);
 }
 .k-toast.coral {
   box-shadow: inset calc(var(--u) * 2) 0 0 var(--k-coral);
@@ -934,7 +1043,7 @@ button.k-info-chip:hover .k-chip {
   place-items: center;
   padding: calc(var(--u) * 8);
   box-sizing: border-box;
-  background: #1a0f1eb8;
+  background: #0b0710cc;
 }
 /* Over everything a page has, for a live room it has let go of: the page goes on beneath it. */
 .k-scrim.k-let-go {

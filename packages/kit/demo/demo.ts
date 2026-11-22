@@ -1,6 +1,6 @@
-/** The demo page's cards: a few made-up things that name each other, and one card pinned open. */
+/** The demo page's cards, tags and tiers: a few made-up things that name each other, and one card pinned open. */
 import { deck, register, thing } from "../src/card.ts";
-import { add, amount, el, icon } from "../src/dom.ts";
+import { add, amount, el, icon, shown } from "../src/dom.ts";
 import { INK } from "../src/palette.ts";
 import { bitmap, outlined } from "../src/pix.ts";
 
@@ -40,6 +40,7 @@ register("item", (id) => {
     icon: pic(art),
     tag: t.tag,
     aside: amount("coin", t.made ? 24 : 3),
+    chips: [{ label: "Kind", text: t.made ? "Light" : "Stock", icon: pic(art), lit: !!t.made }],
     stats: [
       { label: "Pace", value: t.made ? "4.0s" : "1.2s" },
       { label: "Worth", value: t.made ? "24" : "3" },
@@ -58,7 +59,7 @@ register("crab", (id) => ({
   name: `Crab #${id}`,
   icon: pic(ART.crab ?? []),
   tag: "Never at roll call.",
-  chips: [{ label: "Kin", text: "Crab", count: "1/3", lit: true }],
+  chips: [{ label: "Kin", text: "Crab", icon: pic(ART.crab ?? []), count: "1/3", lit: true }],
   blocks: [{ body: "Seen about town, usually holding something it should not be." }],
 }));
 
@@ -71,6 +72,52 @@ if (list) {
     el("span", "k-d", {}, "Point at one; click to pin it.", icon("star")),
   );
 }
+// A trait or a kind is a hexagon badge with its name beside it; `--c` is its colour.
+const tags = document.getElementById("tags");
+if (tags) {
+  const badge = (art: string, text: string, colour?: string): HTMLElement => {
+    const chip = el("span", "k-chip", {}, shown(pic(ART[art] ?? [])), text);
+    if (colour) chip.style.setProperty("--c", colour);
+    return chip;
+  };
+  add(tags, badge("oil", "Ember", "#ff8a6b"), badge("glass", "Mist", "#9fe3e6"), badge("crab", "Crab"));
+  tags.lastElementChild?.classList.add("lit");
+}
+
+// The five tiers side by side: stone, jade, sapphire, amethyst, gold.
+const tiers = document.getElementById("tiers");
+if (tiers) {
+  const TIERS = [
+    ["glass", "Stone", "Glass"],
+    ["ingot", "Jade", "Ingot"],
+    ["oil", "Sapphire", "Lamp oil"],
+    ["lantern", "Amethyst", "Lantern"],
+    ["crab", "Gold", "Crab #7"],
+  ] as const;
+  TIERS.forEach(([art, stone, name], i) => {
+    add(
+      tiers,
+      el(
+        "article",
+        `k-tier-${i + 1} tier`,
+        {},
+        el("i", "k-crest"),
+        shown(pic(ART[art] ?? []), 5),
+        el("b", "k-title big", { text: name }),
+        el("span", "k-d", { text: `Tier ${i + 1} · ${stone}` }),
+        el(
+          "div",
+          "k-info-block",
+          {},
+          el("b", "k-info-title", { text: "What it is" }),
+          el("div", "k-read k-info-body", {}, "Worth ", el("b", "", { text: String((i + 1) * 12) }), " at the depot."),
+        ),
+        el("button", "k-btn wide", { type: "button" }, "Choose"),
+      ),
+    );
+  });
+}
+
 // The page shows a card pinned open, beside the lantern, so a picture of the page has one in it.
 const lantern = document.querySelector<HTMLElement>("#things [data-ref='item:lantern']");
 if (lantern) {

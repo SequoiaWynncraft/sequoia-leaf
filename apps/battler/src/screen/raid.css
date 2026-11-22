@@ -161,8 +161,12 @@ body[data-picking="yes"] #foe {
   overflow: hidden auto;
   scrollbar-width: none;
 }
+/* A trait's badge and count sit straight over the forest, so they have a dark ground of their own. */
 .trait {
   min-height: calc(var(--u) * 14);
+  padding-right: calc(var(--u) * 4);
+  background: #0f0a19db;
+  box-shadow: 0 0 0 var(--u) var(--k-ink);
   cursor: pointer;
 }
 .trait.top {
@@ -689,6 +693,12 @@ body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
 .pick .k-wrap {
   justify-content: center;
 }
+/* What is on the card, as a name. */
+.pick > .k-gold {
+  font: 400 var(--t-m) / 1 var(--k-font);
+  color: var(--k-cream);
+  text-shadow: 0 var(--u) 0 var(--k-ink);
+}
 .pick.chosen {
   border-image-source: var(--k-f-card-lit);
 }
@@ -864,7 +874,7 @@ b.dmg.true {
   flex-direction: column;
   gap: var(--u);
   padding-block: calc(var(--u) * 2);
-  font-size: var(--t-s);
+  font: 700 var(--t-s) / 1.2 var(--k-font-read);
   white-space: normal;
 }
 .party {
