@@ -57,11 +57,15 @@ export function readPresent(v: unknown): Present[] {
   return out;
 }
 
-/** Those resting, from the server's answer, leaving out anything that makes no sense. */
-export function readResting(v: unknown): Resting[] {
-  if (!isRecord(v) || !Array.isArray(v.resting)) return [];
+/**
+ * Those gone in the last day, from the server's answer, leaving out anything that makes no sense:
+ * `resting`, whose characters stay in town, or `gone`, whose do not.
+ */
+export function readResting(v: unknown, list: "resting" | "gone" = "resting"): Resting[] {
+  const rows = isRecord(v) ? v[list] : null;
+  if (!Array.isArray(rows)) return [];
   const out: Resting[] = [];
-  for (const r of v.resting) {
+  for (const r of rows) {
     if (!isRecord(r) || typeof r.id !== "string" || typeof r.username !== "string" || !isPlace(r.place)) continue;
     const seen = typeof r.seen_at === "string" ? Date.parse(r.seen_at) : NaN;
     if (!Number.isFinite(seen)) continue;
@@ -92,7 +96,7 @@ let at: Place | null = null;
 let staying: boolean | null = null;
 const stayingNow = (): boolean => staying ?? keptStay();
 let timer: ReturnType<typeof setInterval> | null = null;
-const ears = new Set<(present: readonly Present[], resting: readonly Resting[]) => void>();
+const ears = new Set<(present: readonly Present[], resting: readonly Resting[], gone: readonly Resting[]) => void>();
 /** The place of the live room this page is in now (`realtime.ts` says), if it is one. */
 let roomed: Place | null = null;
 
@@ -110,7 +114,8 @@ async function send(telling = false): Promise<void> {
   if (a.status !== 200) return;
   const present = readPresent(a.body);
   const resting = readResting(a.body);
-  for (const fn of ears) fn(present, resting);
+  const gone = readResting(a.body, "gone");
+  for (const fn of ears) fn(present, resting, gone);
 }
 
 /** Says where the member is now; `null` while this page is not where they are (a game is open over it). */
@@ -140,8 +145,10 @@ export function inRoom(kind: string | null): void {
   roomed = isPlace(kind) ? kind : null;
 }
 
-/** Hears who is here, and who is resting, each time the server says. Returns how to stop. */
-export function hearPresent(fn: (present: readonly Present[], resting: readonly Resting[]) => void): () => void {
+/** Hears who is here, who is resting, and who is gone and does not stay, each time the server says. Returns how to stop. */
+export function hearPresent(
+  fn: (present: readonly Present[], resting: readonly Resting[], gone: readonly Resting[]) => void,
+): () => void {
   ears.add(fn);
   return () => ears.delete(fn);
 }

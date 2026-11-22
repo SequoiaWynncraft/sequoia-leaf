@@ -1393,6 +1393,7 @@ describe("GET /v1/game/presence", () => {
         { id: bob, username: "Bob", place: "works", guest: false },
       ],
       resting: [],
+      gone: [],
     });
     expect(await services.query((sql) => sql`SELECT * FROM presence ORDER BY player_id`)).toEqual(before);
     expect(await services.query((sql) => sql`SELECT * FROM visits ORDER BY id`)).toEqual(visits);
@@ -1413,10 +1414,12 @@ describe("PUT /v1/game/presence", () => {
         { id: bob, username: "Bob", place: "works", guest: false },
       ],
       resting: [],
+      gone: [],
     });
     expect(await later.json()).toEqual({
       present: [{ id: alice, username: "Alice", place: "camp", guest: false }],
       resting: [{ id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0) }],
+      gone: [],
     });
   });
 
@@ -1434,6 +1437,13 @@ describe("PUT /v1/game/presence", () => {
     clock.now = now;
     const body: unknown = await (await arrive("town")).json();
 
+    const row = (r: (typeof rows)[number]) => ({
+      id: r.playerId,
+      username: r.username,
+      place: r.place,
+      guest: false,
+      seen_at: iso(r.seenAt),
+    });
     const kept = rows
       .filter((r) => r.stay === 1 && r.seenAt <= now - 90_000 && r.seenAt >= now - DAY)
       .toSorted((a, b) => b.seenAt - a.seenAt);
@@ -1443,9 +1453,12 @@ describe("PUT /v1/game/presence", () => {
         { id: alice, username: "Alice", place: "town", guest: false },
         { id: rows[0]?.playerId, username: "Member0", place: "town", guest: false },
       ],
-      resting: kept
-        .slice(0, 24)
-        .map((r) => ({ id: r.playerId, username: r.username, place: r.place, guest: false, seen_at: iso(r.seenAt) })),
+      resting: kept.slice(0, 24).map(row),
+      // Those who would rather not stay are listed apart, so that nobody draws them dozing.
+      gone: rows
+        .filter((r) => r.stay === 0 && r.seenAt <= now - 90_000 && r.seenAt >= now - DAY)
+        .toSorted((a, b) => b.seenAt - a.seenAt)
+        .map(row),
     });
   });
 
@@ -1466,7 +1479,7 @@ describe("PUT /v1/game/presence", () => {
     );
   });
 
-  it("keeps a member who says stay false out of the resting, until they say otherwise", async () => {
+  it("lists a member who says stay false as gone, not resting, until they say otherwise", async () => {
     await arrive("works", { bearer: "bob-token" }, false);
     clock.now = T0 + 5 * MINUTE;
     const without = await arrive("town");
@@ -1478,10 +1491,12 @@ describe("PUT /v1/game/presence", () => {
     expect(await without.json()).toEqual({
       present: [{ id: alice, username: "Alice", place: "town", guest: false }],
       resting: [],
+      gone: [{ id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0) }],
     });
     expect(await back.json()).toEqual({
       present: [{ id: alice, username: "Alice", place: "town", guest: false }],
       resting: [{ id: bob, username: "Bob", place: "table", guest: false, seen_at: iso(T0 + 6 * MINUTE) }],
+      gone: [],
     });
     expect(await services.query((sql) => sql`SELECT stay FROM presence ORDER BY player_id`)).toEqual([
       { stay: 1 },
@@ -1503,12 +1518,14 @@ describe("PUT /v1/game/presence", () => {
         { id: bob, username: "Bob", place: "works", guest: false },
       ],
       resting: [{ id: carol, username: "Carol", place: "table", guest: true, seen_at: iso(T0) }],
+      gone: [],
     });
     expect(await guestGone.json()).toMatchObject({
       resting: [
         { id: bob, guest: false },
         { id: carol, guest: true },
       ],
+      gone: [],
     });
   });
 
@@ -1543,6 +1560,7 @@ describe("PUT /v1/game/presence", () => {
     expect(await soon.json()).toEqual({
       present: [{ id: alice, username: "Alice", place: "town", guest: false }],
       resting: [],
+      gone: [],
     });
     expect(kept).toEqual([{ place: "town", seen_at: T0, stay: 1 }]);
     expect(await presenceRows()).toEqual([{ place: "town", seen_at: T0 + 5000, stay: 1 }]);
