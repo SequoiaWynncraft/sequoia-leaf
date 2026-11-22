@@ -264,7 +264,6 @@ function standingDesc(art: Art, i: number): Description | null {
         things: [{ ref: itemRef(raw), note: per > 0 ? `${Math.round(per)} a minute` : "" }],
       });
   }
-  if (b.item !== null && b.kind !== "crate") rows.push({ label: "Carrying", things: [{ ref: itemRef(b.item) }] });
   rows.push(...(base.rows ?? []));
 
   const actions: Action[] = [];
