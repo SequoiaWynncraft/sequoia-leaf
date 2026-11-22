@@ -181,7 +181,7 @@ const CARDS: Readonly<Record<Exclude<Shut, "signin">, readonly [string, string, 
   closed: ["Just a moment", "The guild's books are closed for a moment. Try again.", "Try again"],
 };
 
-/** Puts a card over the page: a title, a line and one button. */
+/** Puts a card over the page: a title, a line (if not empty) and one button. */
 function card(title: string, line: string, word: string, go: () => void): void {
   const button = el("button", "k-btn wide", { type: "button" }, word);
   button.addEventListener("click", go);
@@ -190,7 +190,7 @@ function card(title: string, line: string, word: string, go: () => void): void {
     "k-paper k-rise k-shut",
     { role: "alertdialog", "aria-label": title },
     el("h1", "k-title big", { text: title }),
-    el("p", "", { text: line }),
+    line === "" ? null : el("p", "", { text: line }),
     button,
   );
   document.body.append(el("div", "k-scrim", {}, paper));

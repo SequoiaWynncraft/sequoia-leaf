@@ -970,20 +970,9 @@ Their yards were brought over the same way the same day: each as the
 player's `works` play state, standing at Leaf's clock, with a new seed. That
 tool is deleted too.
 
-Their towns and camps come over with
-`bun apps/api/tools/once/import-town.ts <database file> [--write] [--force]`,
-run once by the lead and deleted in the change after. Without `--write` it
-writes nothing and prints, for every player with a `town` save (ids masked but
-for their first eight characters), what a person checks: the things set out
-and in the tray by kind, the parcels, letters, pets, callers greeted and crab
-sightings, and any warning (more than 300 set out, more than 999 of one thing,
-a thing the catalogue does not have). With `--write` it stores each as their
-`town` play state, read by the rules' `adopt` (each thing standing given an
-id, the callers and the stream afresh, last here now), unless they have a town
-on Leaf already, or a warning stands and `--force` is not given. It also fills
-in the awards and standings the players' raid and Works states show, where
-Leaf has none. A player who opens the town before it runs gets a new town on
-Leaf, which the tool then leaves alone.
+Their towns and camps were brought over once too: each as the player's `town`
+play state, every thing standing given an id, the callers and the stream
+afresh. That tool is deleted too.
 
 ## Rules the code is built on
 

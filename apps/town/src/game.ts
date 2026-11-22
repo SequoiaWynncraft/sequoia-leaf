@@ -171,13 +171,16 @@ export const hooks: {
   feed: (text: string, tone?: Tone) => void;
   /** Go through a game's door: walk up to it and on inside; for the Works, to `of`'s yard, if given. */
   goIn: (id: GameId, of?: string) => void;
-  /** Walk out through the gate and down the trail to the member's own camp. */
-  toCamp: () => void;
+  /** Walk out through the gate and down the trail to the camp; says whether the member set off. */
+  toCamp: () => boolean;
+  /** Go to somebody's camp (`name`, if known, is theirs), or the member's own for their own id. */
+  visitCamp: (id: string, name?: string) => void;
 } = {
   visit: () => undefined,
   feed: () => undefined,
   goIn: () => undefined,
-  toCamp: () => undefined,
+  toCamp: () => false,
+  visitCamp: () => undefined,
 };
 
 /** Listeners for "something the panels show has changed". */

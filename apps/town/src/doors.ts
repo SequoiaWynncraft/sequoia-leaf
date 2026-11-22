@@ -1,11 +1,11 @@
 /**
  * The doors into the games. A game is a page of its own; going through its door puts that page in
  * a frame over the whole town. The frame opens out of the spot the view closed in on, and closes
- * back into it. The game says `ready` when it has drawn, `leave` to come back, and `news` for a
- * line in the town's feed; the town says `closing` before it puts the game away, and `leaf` each
- * time the guild's ledger gives the member a new Leaf while the game is open. A game that does
- * not say `ready` (not built, not served) gets a note and a way back instead of an empty frame; one
- * that says it late opens over the note.
+ * back into it. The game says `ready` when it has drawn, `leave` to come back (and on to somebody's
+ * camp, if it names one), and `news` for a line in the town's feed; the town says `closing` before
+ * it puts the game away, and `leaf` each time the guild's ledger gives the member a new Leaf while
+ * the game is open. A game that does not say `ready` (not built, not served) gets a note and a way
+ * back instead of an empty frame; one that says it late opens over the note.
  */
 
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
@@ -30,8 +30,8 @@ export interface Visit {
 export interface Asks {
   /** A line for the town's feed. */
   news(text: string, tone: Tone): void;
-  /** The game has been put away: the town may carry on. */
-  back(): void;
+  /** The game has been put away: the town may carry on (with `camp`, on to that player's camp, as the game asked). */
+  back(camp?: string): void;
 }
 
 /** How long the game has to save after it is told the town is closing it, in milliseconds. */
@@ -63,6 +63,8 @@ export function goIn(game: Game, asks: Asks): Visit {
   let spot: Pt | null = null;
   let waited = 0;
   let signIn = 0;
+  /** The camp the game asked to go on to as it left, if any. */
+  let onTo: string | undefined;
 
   function open(): void {
     // A game that was slow to say it is ready (on the guild's server it fetches the member's saves
@@ -113,7 +115,7 @@ export function goIn(game: Game, asks: Asks): Visit {
     root.replaceChildren();
     root.hidden = true;
     root.classList.remove("dark");
-    asks.back();
+    asks.back(onTo);
   }
 
   function leave(): void {
@@ -153,8 +155,10 @@ export function goIn(game: Game, asks: Asks): Visit {
       leaf.ready();
       coins.ready();
       open();
-    } else if (msg.town === "leave") leave();
-    else asks.news(msg.text, msg.tone ?? "gold");
+    } else if (msg.town === "leave") {
+      onTo = msg.camp;
+      leave();
+    } else asks.news(msg.text, msg.tone ?? "gold");
   });
 
   // A page that is not there will never say it is ready: no need to stand at the door waiting.

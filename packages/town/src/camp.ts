@@ -4,8 +4,8 @@
  * its own (`n`), so a command names the thing it means and never a place in a list.
  */
 
-import { isLetter, type Letter } from "./mail.ts";
-import { footprint, isThing, type Thing, thingOf, THINGS, turnsOf } from "./things.ts";
+import type { Letter } from "./mail.ts";
+import { footprint, type Thing, thingOf, THINGS, turnsOf } from "./things.ts";
 
 /** The clearing in squares: fifty-two across and forty down, eight art pixels to the square. */
 export const CGW = 52;
@@ -315,64 +315,10 @@ export const NEW_CAMP: readonly Spot[] = [
 /** A new member's camp, its things numbered from 0. */
 export const newCamp = (): Camp => ({
   first: "",
-  placed: NEW_CAMP.map((p, n) => ({ ...p, n, s: 0 })),
+  placed: NEW_CAMP.map(({ id, x, y, t }, n) => ({ n, id, x, y, t, s: 0 })),
   tray: {},
   parcels: [],
   letters: [],
   greeted: 0,
   earned: [],
 });
-
-// ---------- reading a camp kept by the browser ----------
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-const whole = (v: unknown, most: number): number =>
-  typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.min(most, Math.floor(v)) : 0;
-const things = (v: unknown, most: number): string[] => (Array.isArray(v) ? v.filter(isThing).slice(0, most) : []);
-
-/** The most letters a record may hold. */
-const MOST_LETTERS = 24;
-
-/**
- * Reads a camp the browser kept, trusting nothing: anything that is not a camp gives `null`; inside
- * one, a part that makes no sense is put back to how a new member has it, a thing standing where it
- * cannot stand is put away in the tray instead of lost, the things a camp cannot do without are put
- * back if they are missing, and every thing standing is numbered from 0 in the order it was kept.
- */
-export function readCamp(raw: unknown): Camp | null {
-  if (!isRecord(raw) || !Array.isArray(raw.placed)) return null;
-  const camp: Camp = {
-    first: isPet(raw.first) ? raw.first : "",
-    placed: [],
-    tray: {},
-    parcels: things(raw.parcels, MOST_PARCELS),
-    letters: Array.isArray(raw.letters) ? raw.letters.filter(isLetter).slice(-MOST_LETTERS) : [],
-    greeted: whole(raw.greeted, 999),
-    earned: [...new Set(things(raw.earned, 64))],
-  };
-  const add = (p: Spot, s: number): void => {
-    camp.placed.push({ n: camp.placed.length, id: p.id, x: p.x, y: p.y, t: p.t, s });
-  };
-  if (isRecord(raw.tray))
-    for (const [id, n] of Object.entries(raw.tray))
-      if (isThing(id) && whole(n, MOST_OWNED) > 0) camp.tray[id] = whole(n, MOST_OWNED);
-  for (const p of raw.placed.slice(0, MOST_PLACED)) {
-    if (!isRecord(p) || !isThing(p.id)) continue;
-    const thing = thingOf(p.id);
-    if (!thing) continue;
-    const t = whole(p.t, 3) % turnsOf(thing);
-    const x = whole(p.x, CGW);
-    const y = whole(p.y, CGH);
-    if (canPlace(camp.placed, p.id, x, y, t) === "ok") add({ id: p.id, x, y, t }, whole(p.s, 7));
-    else camp.tray[p.id] = Math.min(MOST_OWNED, (camp.tray[p.id] ?? 0) + 1);
-  }
-  // A camp is never without the things it cannot do without.
-  for (const fresh of NEW_CAMP) {
-    const thing = thingOf(fresh.id);
-    if (!thing?.rooted || camp.placed.some((p) => p.id === fresh.id)) continue;
-    delete camp.tray[fresh.id];
-    const spot = freeSpot(camp.placed, fresh.id, fresh);
-    if (spot) add({ ...fresh, ...spot }, 0);
-  }
-  return camp;
-}

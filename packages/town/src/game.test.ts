@@ -2,11 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import { type Ctx, DAY_MS, type Done, LOGGED, type Refused } from "@sequoia-leaf/core";
 
-import { canPlace, MOST_OWNED, MOST_PARCELS, MOST_PLACED, NEW_CAMP, type Spot, YARD } from "./camp.ts";
+import { canPlace, MOST_OWNED, MOST_PARCELS, MOST_PLACED, NEW_CAMP, YARD } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
 import { CALLERS, folk, GIFTS } from "./folk.ts";
 import {
-  adopt,
   CALLS,
   decodeTown,
   encodeTown,
@@ -405,121 +404,22 @@ describe("commands off the wire", () => {
 
 // ---------- keeping it ----------
 
-/** A record the browser kept (`town.save.v1`), with a camp of the given things standing, put away, waiting and posted. */
-function oldRecord(o: {
-  placed: number;
-  tray: Record<string, number>;
-  parcels: number;
-  letters: number;
-  gave: number;
-  /** How long each letter is, in sentences. */
-  long: number;
-}): string {
-  const placed: (Spot & { s: number })[] = NEW_CAMP.map(({ id, x, y, t }) => ({ id, x, y, t, s: 0 }));
+/** The largest camp there can be: as many things set out as may be, the tray as full as it goes, the trail and the mailbox full. */
+function largest(): Town {
+  const s = fresh();
   const some = ["rock", "flower-pot", "plank-path", "cushion", "pumpkin", "stepping-stones", "glowcap"];
-  for (let y = YARD.y0 + 1; y <= YARD.y1 && placed.length < o.placed; y += 1)
-    for (let x = YARD.x0 + 1; x < YARD.x1 && placed.length < o.placed; x += 2) {
+  for (let y = YARD.y0 + 1; y <= YARD.y1 && s.camp.placed.length < MOST_PLACED; y += 1)
+    for (let x = YARD.x0 + 1; x < YARD.x1 && s.camp.placed.length < MOST_PLACED; x += 2) {
       const id = some[(x + y) % some.length] ?? "rock";
-      if (canPlace(placed, id, x, y, 0) === "ok") placed.push({ id, x, y, t: 0, s: 0 });
+      if (canPlace(s.camp.placed, id, x, y, 0) === "ok") s.camp.placed.push({ n: s.made++, id, x, y, t: 0, s: 0 });
     }
-  return JSON.stringify({
-    v: 1,
-    owned: [],
-    wearing: [],
-    claimed: [],
-    sightings: 4,
-    welcomed: "2026-11-24",
-    chest: "2026-11-24",
-    lastSeen: T0 - 3 * HOUR,
-    cursor: 12,
-    stay: false,
-    camp: {
-      first: "cat",
-      placed,
-      tray: o.tray,
-      parcels: Array.from({ length: o.parcels }, (_v, i) => some[i % some.length]),
-      letters: Array.from({ length: o.letters }, (_v, i) =>
-        letter(
-          `m-${i}`,
-          "Pipwick",
-          "Came by. You were out. I fed the fire. ".repeat(o.long).trim(),
-          i % 2 ? "pinecone" : "",
-        ),
-      ),
-      gave: Array.from({ length: o.gave }, (_v, i) => ({
-        to: `Mate ${String.fromCharCode(65 + (i % 26))}${i}`,
-        what: "pinecone",
-      })),
-      greeted: 2,
-      earned: [],
-    },
-  });
+  s.camp.tray = Object.fromEntries(THINGS.map((t) => [t.id, MOST_OWNED]));
+  s.camp.parcels = Array.from({ length: MOST_PARCELS }, (_v, i) => some[i % some.length] ?? "rock");
+  s.camp.letters = Array.from({ length: BOX }, (_v, i) =>
+    letter(`m-${i}`, "Pipwick", "Came by. You were out. I fed the fire. ".repeat(6).trim(), i % 2 ? "pinecone" : ""),
+  );
+  return s;
 }
-
-const NEW = oldRecord({ placed: 9, tray: {}, parcels: 0, letters: 0, gave: 0, long: 1 });
-const LIVED_IN = oldRecord({
-  placed: 39,
-  tray: Object.fromEntries(THINGS.slice(10, 20).map((t, i) => [t.id, i + 1])),
-  parcels: 3,
-  letters: 6,
-  gave: 0,
-  long: 1,
-});
-const LARGEST = oldRecord({
-  placed: MOST_PLACED,
-  tray: Object.fromEntries(THINGS.map((t) => [t.id, MOST_OWNED])),
-  parcels: MOST_PARCELS,
-  letters: 24,
-  gave: 40,
-  long: 6,
-});
-
-describe("a camp the browser kept", () => {
-  test("is brought over at each size the old record comes in, every thing standing given an id of its own", () => {
-    // About as large as STATE-MAP 2.1 measured: 620 B, 3,099 B and 26,774 B.
-    expect([NEW.length, LIVED_IN.length, LARGEST.length].map((b) => Math.round(b / 1000))).toEqual([1, 3, 26]);
-    for (const [text, placed, parcels, letters] of [
-      [NEW, 9, 0, 0],
-      [LIVED_IN, 39, 3, 6],
-      [LARGEST, MOST_PLACED, MOST_PARCELS, 24],
-    ] as const) {
-      const s = adopt(text, ctx());
-      if (!s) throw new Error("did not read");
-      expect(s.camp.placed.map((p) => p.n)).toEqual(Array.from({ length: placed }, (_v, n) => n));
-      expect([s.made, s.camp.parcels.length, s.camp.letters.length]).toEqual([placed, parcels, letters]);
-      // Here now, by Leaf's clock: the browser's says nothing of time away.
-      expect([s.sightings, s.cursor, s.stay, s.seenAt, s.camp.first, s.camp.greeted]).toEqual([
-        4,
-        12,
-        false,
-        T0,
-        "cat",
-        2,
-      ]);
-      expect(decodeTown(encodeTown(s))).toEqual(s);
-      // And it plays on: the stump moves by its id.
-      expect(
-        did(s, { do: "move", n: nOf(s, "stump"), x: 30, y: 34, t: 0 }).state.camp.placed.find((p) => p.id === "stump"),
-      ).toMatchObject({ x: 30, y: 34 });
-    }
-    expect(adopt(LARGEST, ctx())?.camp.tray).toEqual(Object.fromEntries(THINGS.map((t) => [t.id, MOST_OWNED])));
-  });
-
-  test("is read with every check the page makes: what cannot stand goes in the tray, and a missing mailbox is put back", () => {
-    const raw = JSON.parse(NEW);
-    raw.camp.placed = [
-      ...raw.camp.placed.filter((p: Spot) => p.id !== "mailbox"),
-      { id: "well", x: 7, y: 13, t: 0, s: 0 },
-    ];
-    const s = adopt(JSON.stringify(raw), ctx());
-    expect(s?.camp.tray).toEqual({ well: 1 });
-    expect(s?.camp.placed.find((p) => p.id === "mailbox")?.n).toBe(8);
-    expect(s?.made).toBe(9);
-    expect([adopt("nonsense", ctx()), adopt(JSON.stringify({ v: 2 }), ctx())]).toEqual([null, null]);
-    // A clock set forward in the browser is no time away at all.
-    expect(adopt(JSON.stringify({ ...raw, lastSeen: T0 - DAY_MS }), ctx())?.seenAt).toBe(T0);
-  });
-});
 
 describe("keeping a town", () => {
   test("it comes back as it was kept, and nonsense does not", () => {
@@ -538,8 +438,8 @@ describe("keeping a town", () => {
   });
 
   test("the largest camp is read back in under a millisecond, trusting what Leaf stored", () => {
-    const s = adopt(LARGEST, ctx());
-    if (!s) throw new Error("did not read");
+    const s = largest();
+    expect(s.camp.placed).toHaveLength(MOST_PLACED);
     const text = encodeTown(s);
     for (let k = 0; k < 20; k++) decodeTown(text);
     const runs = 200;
@@ -631,5 +531,38 @@ describe("where a camp stands", () => {
     s.camp.greeted = 2;
     s.sightings = 5;
     expect(TOWN.standing?.(s)).toEqual({ score: 9, also: { greeted: 2, sightings: 5 } });
+  });
+});
+
+describe("a visit", () => {
+  test("is what stands in the camp, each thing in its own state, and the pet, and none of the owner's own", () => {
+    const s = lived();
+    s.camp.first = "fox";
+    s.camp.earned = ["crab-statue"];
+    s.camp.greeted = 2;
+    s.sightings = 5;
+    const lantern = s.camp.placed.find((p) => p.id === "lantern-post");
+    if (lantern) lantern.s = 1;
+    // A caller waiting, a letter, a parcel and something in the tray: the owner's own.
+    expect(s.visit).not.toBeNull();
+    expect([s.camp.letters.length, s.camp.parcels.length, s.camp.tray]).toEqual([1, 1, { stump: 1 }]);
+    const before = encodeTown(s);
+    const seen = TOWN.visit?.(s, ctx()) ?? null;
+    expect(seen).toEqual({
+      sightings: 0,
+      spotAt: 0,
+      chestDay: -1,
+      welcomedDay: -1,
+      seenAt: 0,
+      cursor: null,
+      stay: false,
+      camp: { first: "fox", placed: s.camp.placed, tray: {}, parcels: [], letters: [], greeted: 0, earned: [] },
+      visit: null,
+      made: 0,
+      arrival: { first: false, newDay: false, away: 0, said: [], mail: [] },
+    });
+    expect(seen?.camp.placed.find((p) => p.id === "lantern-post")?.s).toBe(1);
+    expect(encodeTown(s)).toBe(before);
+    expect(readView(JSON.parse(JSON.stringify(seen)))).toEqual(seen);
   });
 });

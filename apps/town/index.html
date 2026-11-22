@@ -53,6 +53,23 @@
       #about {
         padding-inline: calc(var(--u) * 4);
       }
+      /* At somebody else's camp, on a line of its own under the purse: whose camp it is, and the way home. */
+      #visit {
+        flex-basis: 100%;
+      }
+      #visit[hidden] {
+        display: none;
+      }
+      /* Its line has no corner buttons beside it: it may be as wide as the screen. */
+      #visit > .k-plaque {
+        display: inline-flex;
+        align-items: center;
+        gap: calc(var(--u) * 3);
+        width: max-content;
+        max-width: calc(100vw - var(--edge) * 2);
+        box-sizing: border-box;
+        padding: var(--u) calc(var(--u) * 3);
+      }
       /* Who is about: a part for each, a row for each person, their face, name and rank. */
       .about {
         display: flex;
@@ -488,7 +505,10 @@
   </head>
   <body>
     <canvas id="view"></canvas>
-    <div id="top"><div id="purse" class="k-plaque"></div></div>
+    <div id="top">
+      <div id="purse" class="k-plaque"></div>
+      <div id="visit" hidden></div>
+    </div>
     <div id="corner"></div>
     <div id="feed" aria-live="polite"></div>
     <nav id="dock" class="k-plaque" aria-label="Places"></nav>

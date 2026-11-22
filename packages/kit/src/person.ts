@@ -2,7 +2,8 @@
  * A person's card: somebody in a list ("Who is about", "Top yards") as the card shows them, their
  * face, their name and the line the list has for them, and under that their numbers in each game,
  * as Leaf has them (`GET /v1/game/people/{id}`). A page registers the kind once (`people`), says
- * what a list knows of somebody (`known`) before it links a row to `person:<id>`.
+ * what a list knows of somebody (`known`) before it links a row to `person:<id>`. A game's board,
+ * the lists of where people stand, is read here too (`readBoard`).
  *
  * Leaf is asked when the card is first shown, and what it said is kept a minute. Until it answers,
  * or when it cannot be read, the card shows the head alone.
@@ -42,6 +43,34 @@ function placedOf(v: unknown): Placed | null {
   const also = Object.entries(v.also);
   if (!also.every((a): a is [string, number] => typeof a[1] === "number")) return null;
   return { place: v.place, score: v.score, also: Object.fromEntries(also) };
+}
+
+/** Somebody on a game's board (`GET /v1/game/play/{game}/standings`). */
+export type Row = Placed & {
+  readonly id: string;
+  readonly name: string;
+  readonly guest: boolean;
+  readonly you: boolean;
+};
+export interface Board {
+  readonly top: readonly Row[];
+  /** The player's own place among everyone, or null before they have a standing. */
+  readonly you: Placed | null;
+}
+
+function rowOf(v: unknown): Row | null {
+  const placed = placedOf(v);
+  if (!placed || !isRecord(v) || typeof v.id !== "string" || typeof v.name !== "string") return null;
+  return { ...placed, id: v.id, name: v.name, guest: v.guest === true, you: v.you === true };
+}
+
+/** A game's board from Leaf's answer, or null for one that makes no sense. */
+export function readBoard(v: unknown): Board | null {
+  if (!isRecord(v) || !Array.isArray(v.top)) return null;
+  const top = v.top.map(rowOf);
+  const you = v.you === null ? null : placedOf(v.you);
+  if (top.some((r) => r === null) || (v.you !== null && you === null)) return null;
+  return { top: top.filter((r) => r !== null), you };
 }
 
 /** What Leaf says of somebody: their name, and where they stand. */

@@ -146,7 +146,8 @@ export const PLACES: readonly Place[] = [
     name: "Campfire",
     stand: { x: 256, y: 205 },
     face: 0,
-    prompt: { x: 256, y: 186 },
+    // On the fire's own stones, under the flames: over the logs it covered the faces of whoever sat there.
+    prompt: { x: 256, y: 217 },
   },
   {
     id: "pond",

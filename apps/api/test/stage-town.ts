@@ -10,14 +10,18 @@
  * pet chosen; `{ caller: true }` has the next caller set out at the next look; `{ away: minutes }`
  * has the member last here that long ago, on another UTC day; `{ mailbox: "full" }` fills the
  * mailbox with letters that each hold a present; `{ coins: n }` puts n Coins in the purse.
+ * `{ others: [n, ...] }` gives the nth of `others` a camp of their own with that many more things
+ * set out (at most the thirty-one a lived-in camp has) and a pet, on the town's board.
  */
 import { DAY_MS, type PlayerId } from "@sequoia-leaf/core";
 import { TOWN, type Town } from "@sequoia-leaf/town";
-import { freeSpot } from "@sequoia-leaf/town/camp.ts";
+import { freeSpot, PETS } from "@sequoia-leaf/town/camp.ts";
 import { GIFTS } from "@sequoia-leaf/town/folk.ts";
 import { BOX, letter } from "@sequoia-leaf/town/mail.ts";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
+
+import type { Other } from "./stage-works.ts";
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const whole = (v: unknown, most: number): number | null =>
@@ -58,9 +62,9 @@ const LIVED = [
   "stepping-stones",
 ] as const;
 
-/** Sets the things of a lived-in camp out where each fits, from spots spread over the yard. */
-function liveIn(s: Town): void {
-  LIVED.forEach((id, i) => {
+/** Sets the things of a lived-in camp out where each fits (the first `many` of them), from spots spread over the yard. */
+function liveIn(s: Town, many: number = LIVED.length): void {
+  LIVED.slice(0, many).forEach((id, i) => {
     const near = { x: 8 + ((i * 7) % 36), y: 17 + ((i * 5) % 18) };
     const spot = freeSpot(s.camp.placed, id, near);
     if (spot) s.camp.placed.push({ n: s.made++, id, x: spot.x, y: spot.y, t: 0, s: i % 3 === 0 ? 1 : 0 });
@@ -93,10 +97,26 @@ function step(s: Town, op: Record<string, unknown>, now: number): void {
 }
 
 /** Stages each step in order in Tester's town, as one change, and gives back what is waiting at the camp. */
-export const stageTown = (playerId: PlayerId, ops: readonly unknown[]) =>
+export const stageTown = (playerId: PlayerId, ops: readonly unknown[], others: readonly Other[]) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const now = Date.now();
+    for (const op of ops) {
+      if (!isRecord(op) || !Array.isArray(op.others)) continue;
+      for (const [i, other] of others.entries()) {
+        const many = whole(op.others[i], LIVED.length);
+        if (many === null) continue;
+        const s = TOWN.create({ now, player: other, seed: 20_261_122 + i, room: 0, awards: [] });
+        liveIn(s, many);
+        s.camp.first = PETS[i % PETS.length] ?? "cat";
+        const standing = TOWN.standing?.(s) ?? { score: 0, also: {} };
+        yield* sql`INSERT OR REPLACE INTO play_state (player_id, game, rev, state, updated_at) VALUES (${other.id}, 'town', 1, ${TOWN.encode(s)}, ${now})`;
+        yield* sql`
+          INSERT OR REPLACE INTO standings (player_id, game, score, also, guest, updated_at)
+          VALUES (${other.id}, 'town', ${standing.score}, ${JSON.stringify(standing.also)}, ${other.guest ? 1 : 0}, ${now})
+        `;
+      }
+    }
     for (const op of ops) {
       const coins = isRecord(op) ? whole(op.coins, 1e6) : null;
       if (coins === null || coins === 0) continue;
