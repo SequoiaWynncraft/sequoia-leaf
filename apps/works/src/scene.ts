@@ -345,15 +345,29 @@ interface Mem {
   struck: boolean;
   puffAt: number;
 }
+const mems = new WeakMap<Building, Mem>();
+/** The yard last drawn. */
+let drawn: World | null = null;
+
 /**
- * By tile, with the kind of thing it was about: Leaf's yard, taken each time Leaf answers, is all
- * new things, and what the screen knew of each (how long it has been in trouble) must outlast it.
+ * Leaf's yard, taken each time Leaf answers, is all new things. What the screen knew of a piece
+ * (how long it has been in trouble, a mill's face) goes over to the piece of the same kind
+ * standing where it stood. Another yard altogether (a visit, a yard staged) takes nothing over.
  */
-const mems = new Map<number, { kind: Kind; m: Mem }>();
+function carry(to: World): void {
+  const from = drawn;
+  drawn = to;
+  if (!from || from.cells.length !== to.cells.length || Math.abs(to.tick - from.tick) > 600) return;
+  to.cells.forEach((b, i) => {
+    const was = from.cells[i];
+    const m = b && was?.kind === b.kind ? mems.get(was) : undefined;
+    if (b && m) mems.set(b, m);
+  });
+}
 
 function memOf(w: World, b: Building, i: number): Mem {
-  const kept = mems.get(i);
-  if (kept?.kind === b.kind) return kept.m;
+  const kept = mems.get(b);
+  if (kept) return kept;
   // A new mill's face is guessed from the gatherer that points into it, until something arrives.
   let face: Face = "saw";
   if (b.kind === "mill") {
@@ -368,7 +382,7 @@ function memOf(w: World, b: Building, i: number): Mem {
     }
   }
   const m: Mem = { face, readAt: -9, status: null, since: -1, held: null, ready: false, struck: false, puffAt: 0 };
-  mems.set(i, { kind: b.kind, m });
+  mems.set(b, m);
   return m;
 }
 
@@ -797,7 +811,12 @@ function marked(g: Ctx, w: World, m: Mark, cx: number, cy: number): void {
 }
 
 /** The pieces in hand, drawn once for each place they are aimed at and kept: `for` is the aim it was drawn for. */
-const held: { c: HTMLCanvasElement; g: Ctx; for: Group["at"] | null } = { ...makeCanvas(1, 1, true), for: null };
+const held: { c: HTMLCanvasElement; g: Ctx; for: Group["at"] | null; lost: number } = {
+  ...makeCanvas(1, 1, true),
+  for: null,
+  lost: -1,
+};
+held.c.addEventListener("contextrestored", wipe);
 /** Room in that picture round the box of tiles, for what stands taller or leans wider than its tile. */
 const ROOM = { side: 8, top: 40, bottom: 8 } as const;
 
@@ -809,8 +828,9 @@ const ROOM = { side: 8, top: 40, bottom: 8 } as const;
  */
 function inHand(g: Ctx, art: Art, w: World, grp: Group, now: Moment, cx: number, cy: number): void {
   const box = boxOf(grp.at);
-  if (held.for !== grp.at) {
+  if (held.for !== grp.at || held.lost !== lost) {
     held.for = grp.at;
+    held.lost = lost;
     const tiles = tilesOf(w, grp.at);
     // The yard as it would be: for a move without the pieces where they stand now, and with every piece in hand set down.
     const yard: World = { ...w, cells: [...w.cells], wire: null };
@@ -982,6 +1002,7 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
   const cx = (camX = Math.round(S.cam.x) + corner.x);
   const cy = (camY = Math.round(S.cam.y) + corner.y);
   const w = S.world;
+  if (w !== drawn) carry(w);
   const { land } = w;
   const L: Layout = layout(w, S.rev);
   const gr = art.ground;
@@ -1451,7 +1472,7 @@ export function drawWords(ctx: Ctx, px: number, clear: number): void {
   const cx = Math.round(S.cam.x);
   const cy = Math.round(S.cam.y);
   const wide = ctx.canvas.width;
-  let key = "";
+  let key = String(lost);
   todo.length = 0;
 
   for (const a of walkers) {
