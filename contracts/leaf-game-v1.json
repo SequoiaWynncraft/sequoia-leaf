@@ -609,7 +609,8 @@
           "username": "Bob",
           "place": "works",
           "guest": false,
-          "seen_at": "2026-11-25T12:40:00.000Z"
+          "seen_at": "2026-11-25T12:40:00.000Z",
+          "stay": true
         }
       ]
     }
@@ -641,7 +642,8 @@
           "username": "Bob",
           "place": "works",
           "guest": false,
-          "seen_at": "2026-11-25T12:40:00.000Z"
+          "seen_at": "2026-11-25T12:40:00.000Z",
+          "stay": true
         }
       ]
     }

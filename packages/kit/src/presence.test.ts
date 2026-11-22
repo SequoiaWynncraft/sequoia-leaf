@@ -22,6 +22,7 @@ describe("who is here", () => {
         name: "Bob",
         place: "works",
         seen: Date.UTC(2026, 10, 25, 12, 40),
+        stay: true,
         guest: false,
       },
     ]);
@@ -37,7 +38,7 @@ describe("who is here", () => {
           { id: "d", username: "Dan", place: "town" },
         ],
       }),
-    ).toEqual([{ id: "a", name: "Alice", place: "table", seen: Date.UTC(2026, 10, 25, 10), guest: false }]);
+    ).toEqual([{ id: "a", name: "Alice", place: "table", seen: Date.UTC(2026, 10, 25, 10), guest: false, stay: true }]);
     expect(readResting({ present: [] })).toEqual([]);
   });
 

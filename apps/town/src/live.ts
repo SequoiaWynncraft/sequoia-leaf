@@ -292,7 +292,7 @@ const aboutRank = (p: { guest: boolean; rank?: string | null }): string | null =
 
 /**
  * Who is about, for "Who is about": everybody else in the game now, wherever they are, and everybody
- * gone in the last day whose character stays, newest first; never the member, nobody twice. The
+ * gone in the last day, whether or not their character stays, newest first; never the member, nobody twice. The
  * server says no ranks here: a guest is `GUEST`, and a member's rank is left for whoever knows it.
  */
 export function toAbout(
@@ -324,7 +324,7 @@ export function toResting(resting: readonly Resting[], present: readonly Present
   const here = new Set(present.map((p) => p.id));
   const out: Rester[] = [];
   for (const r of resting.toSorted((a, b) => b.seen - a.seen)) {
-    if (r.id === meId || here.has(r.id) || r.place === "camp" || out.some((o) => o.id === r.id)) continue;
+    if (!r.stay || r.id === meId || here.has(r.id) || r.place === "camp" || out.some((o) => o.id === r.id)) continue;
     if (out.length >= RESTING_MOST) break;
     out.push({ id: r.id, name: r.name, rank: r.guest ? GUEST : null, at: r.place, skin: skinOf(r.id), seen: r.seen });
   }

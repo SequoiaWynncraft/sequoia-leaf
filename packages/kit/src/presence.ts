@@ -24,7 +24,7 @@ export interface Present {
   guest: boolean;
 }
 
-/** Somebody gone from the game in the last day whose character stays in town, and when they were last seen. */
+/** Somebody gone from the game in the last day, and when they were last seen. */
 export interface Resting {
   id: string;
   name: string;
@@ -33,6 +33,8 @@ export interface Resting {
   seen: number;
   /** Whether they played as a guest, not in the guild. */
   guest: boolean;
+  /** Whether their character stays in town, dozing, now that they are gone. */
+  stay: boolean;
 }
 
 export const EVERY = 30_000;
@@ -65,7 +67,7 @@ export function readResting(v: unknown): Resting[] {
     if (!isRecord(r) || typeof r.id !== "string" || typeof r.username !== "string" || !isPlace(r.place)) continue;
     const seen = typeof r.seen_at === "string" ? Date.parse(r.seen_at) : NaN;
     if (!Number.isFinite(seen)) continue;
-    out.push({ id: r.id, name: r.username, place: r.place, seen, guest: r.guest === true });
+    out.push({ id: r.id, name: r.username, place: r.place, seen, guest: r.guest === true, stay: r.stay !== false });
   }
   return out;
 }

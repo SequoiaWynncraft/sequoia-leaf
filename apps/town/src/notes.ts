@@ -20,6 +20,15 @@ export const NOTES: readonly Note[] = [
     lines: ["On some phones the ground and the sky could go dark after switching apps. That is fixed."],
   },
   {
+    id: "seen-lately-everyone",
+    day: "2026-11-22",
+    title: "Who is about lists everyone who left",
+    lines: [
+      "Seen lately now shows everybody who was in the game in the last day, not only those whose character stays in town.",
+      "Somebody who has just walked out shows there at once.",
+    ],
+  },
+  {
     id: "works-words",
     day: "2026-11-22",
     title: "Clearer words in the Works",
