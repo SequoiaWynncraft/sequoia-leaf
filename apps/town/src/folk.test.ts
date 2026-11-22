@@ -39,6 +39,8 @@ const MEMBERS_ONLY: Readonly<Record<string, string>> = {
   "apps/town/src/sheet.ts": "the art sheet",
   "apps/town/src/actors.ts": "the type of a member's figure",
   "apps/town/src/aboutui.ts": "the faces of those listed in Who is about, members and guests alone",
+  "apps/town/src/campui.ts": "the faces of the camps' owners at the signpost, members and guests alone",
+  "apps/town/src/hud.ts": "the face of the owner of a camp visited, a member or a guest",
   "apps/town/src/live.ts": "where each player's own skin is served",
   "apps/works/src/ui/board.ts": "the faces of the yards' owners on Top yards, members and guests alone",
   "apps/works/src/ui/hud.ts": "the face of the owner of a yard visited, a member or a guest",
@@ -87,13 +89,7 @@ describe("the town's own", () => {
     // And one of the town's own is only ever made as itself.
     for (const [path, text] of files)
       if (/makeActor\(/.test(text) && !path.endsWith("actors.ts"))
-        expect([
-          "apps/town/src/townscene.ts",
-          "apps/town/src/visitors.ts",
-          "apps/town/src/players.ts",
-          "apps/town/src/campscene.ts",
-        ]).toContain(path);
-    expect(files.get("apps/town/src/campscene.ts")).toMatch(/makeActor\(body\.who, body\.body/);
+        expect(["apps/town/src/townscene.ts", "apps/town/src/visitors.ts", "apps/town/src/players.ts"]).toContain(path);
   });
 
   test("each is a creature or a keeper, says what it is, and is nobody's member", () => {

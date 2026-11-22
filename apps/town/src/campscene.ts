@@ -5,10 +5,12 @@
  * else, each by its id. Everything that changes the camp is a command: the page works out where a
  * thing goes, and the rules (`@sequoia-leaf/town`) check it. `main.ts` drives it through `Scene`.
  *
- * It can also show somebody else's camp it is handed (`enter(mate)`), with the note on their door,
- * and nothing there to act with. Nothing hands it one yet.
+ * It shows somebody else's camp the same way, in a visit (`leaf.ts`'s `visiting()`, which every
+ * part that differs asks): laid out from Leaf's copy of theirs, their pet about, and nothing there
+ * to act with (no cabin, mailbox, tray or decorating; only the signpost, home or to town).
  */
 
+import { member } from "@sequoia-leaf/kit/live.ts";
 import { CREAM, GOLD, GREEN, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import type { Dir } from "@sequoia-leaf/kit/skin.ts";
@@ -37,7 +39,7 @@ import { AT_CAMP, folk } from "@sequoia-leaf/town/folk.ts";
 import { BOX_FULL, waiting } from "@sequoia-leaf/town/mail.ts";
 import { footprint, thingOf, turnsOf } from "@sequoia-leaf/town/things.ts";
 
-import { face, hop, makeActor, makeFolk, release, say, sit, stepActor, walkTo } from "./actors.ts";
+import { face, hop, makeFolk, release, say, sit, stepActor, walkTo } from "./actors.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import {
   CAMP_GROUND,
@@ -62,9 +64,23 @@ import { bit, burst, float, flutter, puff, sparkle, updateFx } from "./fx.ts";
 import { type Actor, after, changed, forgetLater, G, hooks, show, stepLater } from "./game.ts";
 import { CELL, makeGround } from "./grid.ts";
 import { paintTrunk } from "./ground.ts";
-import { guild, type Happening, type MateCamp } from "./guild.ts";
+import { guild, type Happening } from "./guild.ts";
 import { closeCard, closePanel, showCard } from "./hud.ts";
-import { ask, type Did, doNow, mine, ok, onTown, refusal, town as kept } from "./leaf.ts";
+import {
+  ask,
+  type Did,
+  doNow,
+  lookAt,
+  type Looked,
+  mine,
+  ok,
+  onTown,
+  openCamp,
+  refusal,
+  shown,
+  troubleCard,
+  visiting,
+} from "./leaf.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
 import type { Sprites } from "./sprites.ts";
@@ -96,16 +112,14 @@ export interface Held {
 }
 
 export interface CampScene extends Scene {
-  /** Lays out the member's own camp (`null`) or somebody else's it is handed, and brings the member in off the trail. */
-  enter(mate: MateCamp | null): void;
-  /** Whose camp is showing: `null` for the member's own. */
-  owner(): string | null;
-  /** Whose camp this is, as the guild describes it, when it is not the member's. */
-  host(): MateCamp | null;
+  /** Lays out the camp gone to (`visit`), or else the member's own, and brings the member in off the trail. */
+  enter(): void;
+  /** Goes to somebody's camp, or the member's own for their own id: from town through the gate, from a camp down the trail. */
+  visit(id: string, name?: string): Promise<void>;
   /** Walk up to one of the camp's places and use it. */
   go(what: CampPlace): void;
-  /** Leave down the trail: for the town, or for home. */
-  leave(to: "town" | "home"): void;
+  /** Leave down the trail: for the town, for home, or for somebody's camp opened. */
+  leave(to: "town" | "home" | Looked): void;
   decorating(): boolean;
   decorate(on: boolean): void;
   held(): Held | null;
@@ -148,6 +162,10 @@ const nameSeed = (name: string): number => {
   return h >>> 0;
 };
 
+/** The layout on show: Leaf's copy of the camp, the member's own or the one visited. */
+const layout = (): readonly Placed[] => shown().camp.placed;
+const placedAt = (n: number): Placed | null => layout().find((p) => p.n === n) ?? null;
+
 function player(): Actor {
   if (!G.player) throw new Error("nobody to walk about");
   return G.player;
@@ -169,9 +187,6 @@ function footOf(p: Placed): Pt | null {
   const b = boxOf(p, t);
   return { x: (b.x0 + b.x1 + 1) * (CELL / 2), y: (b.y1 + 1) * CELL - 1 };
 }
-
-/** A real member as they are in town (visiting, or dozing), for their figure and their name. */
-const memberIn = (name: string): Actor | null => G.visitors.find((a) => a.who.name === name) ?? null;
 
 /** Something green at the clearing's edge is touched. */
 function leafy(p: Prop): void {
@@ -200,10 +215,8 @@ export function makeCamp(
 ): CampScene {
   // ---------- what is here ----------
 
-  let owner: string | null = null;
-  let mate: MateCamp | null = null;
-  /** The layout on show: Leaf's copy of the member's own camp, or somebody else's camp as handed. */
-  const layout = (): readonly Placed[] => (mate ? mate.placed : mine().placed);
+  /** The camp to show when the camp is next entered: somebody's opened, or null for the member's own. */
+  let coming: Looked | null = null;
   /**
    * What is set down in the layout but still in the air on its way there, by id: not drawn standing,
    * in nobody's way and not to be picked up, until it lands or the flights are cleared away.
@@ -236,16 +249,16 @@ export function makeCamp(
 
   const world: TouchWorld = {
     art,
-    toggle: (l) => owner === null && ok(doNow({ do: "toggle", n: l.placed.n })),
+    toggle: (l) => !visiting() && ok(doNow({ do: "toggle", n: l.placed.n })),
     spot() {
-      const did = owner === null ? doNow({ do: "spotCrab" }) : null;
-      return ok(did) ? kept().sightings : null;
+      const did = visiting() ? null : doNow({ do: "spotCrab" });
+      return ok(did) ? shown().sightings : null;
     },
     sit(l, wx, wy) {
       sitOn(l, wx, wy);
     },
-    mail: () => owner === null && waiting(mine().letters) > 0,
-    trophies: () => (mate ? mate.earned : mine().earned),
+    mail: () => waiting(shown().camp.letters) > 0,
+    trophies: () => shown().camp.earned,
     hedge: (x) => campHedge(x, seed),
   };
   const petWorld: PetWorld = { ground, member: null, fire: null };
@@ -273,9 +286,10 @@ export function makeCamp(
     }
     const me = l;
     me.placed = p;
+    const host = visiting();
     const sprite =
       p.id === "cabin"
-        ? (art.cabins[owner === null ? 0 : nameSeed(owner) % art.cabins.length] ?? null)
+        ? (art.cabins[host ? nameSeed(host.id) % art.cabins.length : 0] ?? null)
         : pictureOf(art, p.id, p.t, stateOf(me));
     const boost = me.light?.boost ?? 0;
     me.prop = makeProp(p.id, sprite, at.x, at.y, {
@@ -451,40 +465,26 @@ export function makeCamp(
       p.path = [];
     }
 
-    // The places somebody can walk up to.
+    // The places somebody can walk up to: at somebody else's camp, only the signpost.
     spots = [];
-    const home = owner === null;
+    const home = !visiting();
     for (const l of lives) {
       const id = l.thing.id;
-      if (id !== "cabin" && id !== "mailbox" && id !== "signpost") continue;
+      if (id !== "signpost" && (!home || (id !== "cabin" && id !== "mailbox"))) continue;
       const stands = standsBy(l.placed, l.thing)
         .map((c) => ({ x: c.x * CELL + 4, y: c.y * CELL + 5 }))
         .filter((c) => !ground.footBlocked(c.x, c.y));
       const stand = stands.find((c) => c.y > l.prop.y) ?? stands[0];
       if (!stand) continue;
       const tall = l.prop.sprite?.c.height ?? 16;
-      const name =
-        id === "cabin"
-          ? home
-            ? "Cabin"
-            : mate?.home
-              ? ""
-              : "Read the note"
-          : id === "mailbox"
-            ? home
-              ? "Mailbox"
-              : ""
-            : "Signpost";
-      if (!name) continue;
-      const panel = home || id !== "cabin" ? id : "note";
       spots.push({
         id,
-        name,
+        name: id === "cabin" ? "Cabin" : id === "mailbox" ? "Mailbox" : "Signpost",
         stand,
         face: stand.y > l.prop.y ? 3 : stand.x < l.prop.x ? 2 : stand.x > l.prop.x ? 1 : 0,
         prompt: { x: l.prop.x, y: l.prop.y - tall - 22 },
         reach: 15,
-        use: () => ui.open(panel),
+        use: () => ui.open(id),
       });
     }
     // The way out: the trail between the two posts and on past them.
@@ -582,7 +582,7 @@ export function makeCamp(
       gateLights.push(l);
       scenery.push(
         makeProp("post", stake, x, y, {
-          tip: ["The trail", owner === null ? "To town, and to everybody else's camp." : "The way home."],
+          tip: ["The trail", visiting() ? "The way home." : "To town, and to everybody else's camp."],
           tap: (p) => {
             p.bumpAt = G.t;
             l.boost = 1;
@@ -631,7 +631,7 @@ export function makeCamp(
   }
 
   /** Off down the trail. Night closes in once they are nearly out of sight, or have walked a while. */
-  function leave(to: "town" | "home"): void {
+  function leave(to: "town" | "home" | Looked): void {
     if (leaving || !G.home) return;
     const p = player();
     halt();
@@ -646,13 +646,13 @@ export function makeCamp(
         stage.travel(town, () => {
           leaving = false;
           clear();
+          lookAt(null);
           town.cameFromCamp();
         });
         return;
       }
-      stage.travel(scene, () => {
-        enter(null);
-      });
+      coming = to === "home" ? null : to;
+      stage.travel(scene, enter);
     };
     const started = G.t;
     const wait = (): void => {
@@ -685,36 +685,6 @@ export function makeCamp(
   /** Somewhere clear to stand about, not far from a point. */
   function about(at: Pt, reach = 40): Pt {
     return ground.nearestFree(at.x + (Math.random() - 0.5) * reach, at.y + (Math.random() - 0.5) * reach * 0.6);
-  }
-
-  function freeSeat(a: Actor): Seat | null {
-    const fire = fireAt();
-    let best: Seat | null = null;
-    let bd = 1e9;
-    for (const s of seats) {
-      if (s.taken) continue;
-      const d = (fire ? dist(s.x, s.y, fire.x, fire.y) : 0) + dist(s.x, s.y, a.x, a.y) * 0.2;
-      if (d < bd) {
-        bd = d;
-        best = s;
-      }
-    }
-    return best;
-  }
-
-  function sitDown(a: Actor): void {
-    const s = freeSeat(a);
-    if (!s) return;
-    s.taken = true;
-    a.goal = s;
-    walkTo(
-      a,
-      s.from,
-      () => {
-        sit(a, s);
-      },
-      ground,
-    );
   }
 
   function gone(a: Actor): void {
@@ -823,8 +793,8 @@ export function makeCamp(
 
   /** Whoever Leaf says is waiting comes in, and whoever it no longer has goes. */
   function meetCaller(): void {
-    if (owner !== null || G.where !== "camp" || !G.home || leaving) return;
-    const visit = kept().visit;
+    if (G.where !== "camp" || !G.home || leaving) return;
+    const visit = shown().visit;
     if (caller && caller.visit.id !== visit?.id) {
       sendOff(caller);
       caller = null;
@@ -850,7 +820,7 @@ export function makeCamp(
       return;
     }
     hooks.feed(`${who} left something in your mailbox.`, "leaf");
-    if (G.where !== "camp" || owner !== null) return;
+    if (G.where !== "camp" || visiting()) return;
     csfx.mail();
     const box = lives.find((l) => l.thing.id === "mailbox");
     if (!box) return;
@@ -995,20 +965,18 @@ export function makeCamp(
 
   /** The parcels by the trail open one after another, and what was in each lands in the camp. */
   function unpack(): void {
-    const camp = mine();
+    const camp = shown().camp;
     // Not until the member is in and looking, and has somebody to watch it with.
-    if (unpacking || owner !== null || camp.parcels.length === 0 || G.where !== "camp" || !camp.first || G.dark > 0)
-      return;
+    if (unpacking || camp.parcels.length === 0 || G.where !== "camp" || !camp.first || G.dark > 0) return;
     unpacking = true;
     // Said once, the first time a parcel opens into the tray because the camp is full.
     let toldFull = false;
     const next = (): void => {
-      const parcels = mine().parcels;
+      const parcels = shown().camp.parcels;
       const first = parcels[0];
       const from = PARCEL_AT[Math.min(PARCEL_AT.length, parcels.length) - 1] ?? { x: CW - 14, y: 246 };
       // Out of the parcels and into the camp in one command; then it is seen flying there.
-      const did =
-        first === undefined || owner !== null ? null : doNow({ do: "unpack", ...landing(first, { x: 37, y: 31 }) });
+      const did = first === undefined ? null : doNow({ do: "unpack", ...landing(first, { x: 37, y: 31 }) });
       if (!did || "refused" in did) {
         unpacking = false;
         return;
@@ -1027,7 +995,7 @@ export function makeCamp(
 
   /** Somebody new moves in when the camp has earned it; they come in off the trail. */
   function movingIn(): void {
-    if (owner !== null) return;
+    if (visiting()) return;
     for (const kind of petsOf(mine())) {
       if (pets.some((p) => p.kind === kind)) continue;
       const p = addPet(kind, MY_PETS[kind], 0, TRAIL_IN);
@@ -1041,12 +1009,13 @@ export function makeCamp(
 
   // ---------- coming in ----------
 
-  function enter(handed: MateCamp | null): void {
+  function enter(): void {
     clear();
+    lookAt(coming);
+    coming = null;
     G.where = "camp";
-    mate = handed;
-    owner = mate ? mate.owner : null;
-    seed = owner === null ? 0 : nameSeed(owner) % 5000;
+    const host = visiting();
+    seed = host ? nameSeed(host.id) % 5000 : 0;
     pets = [];
     lanterns.length = 0;
     sel = null;
@@ -1076,45 +1045,41 @@ export function makeCamp(
     stage.snap();
 
     const fire = fireAt() ?? { x: CW / 2, y: TRAIL_Y };
-    if (mate) {
-      mate.pets.forEach((spec, i) => {
-        addPet(spec.kind, spec.name, 1 + ((seed + i) % 3), about(fire, 120));
-      });
-      hooks.feed(`${mate.owner}'s camp.`, "leaf");
-      const body = mate.home ? memberIn(mate.owner) : null;
-      if (body?.body) {
-        const at = about({ x: fire.x - 20, y: fire.y + 16 }, 30);
-        const host = makeActor(body.who, body.body, at.x, at.y);
-        host.mode = "led";
-        host.doing = "home";
-        guests.push(host);
-        const hello = mate.hello;
-        after(1.5, () => {
-          if (!guests.includes(host)) return;
-          if (G.player) face(host, G.player.x, G.player.y);
-          hop(host, 2);
-          say(host, hello[0] ?? "oh! a visitor. hi.", 3);
-        });
-        after(3.4, () => {
-          if (guests.includes(host)) sitDown(host);
-        });
-      } else
-        after(1.2, () => {
-          float(TRAIL_IN.x - 20, TRAIL_Y - 30, "Nobody home. There is a note on the door.", CREAM, 3);
-        });
-    } else {
-      petsOf(mine()).forEach((kind) => {
-        const pet = addPet(kind, MY_PETS[kind], 0, about(fire, 100));
-        comeTo(pet, TRAIL_IN, petWorld);
-      });
+    // The member's own come to meet them; somebody else's pets are about their camp, in a colour of their own.
+    petsOf(shown().camp).forEach((kind, i) => {
+      const pet = addPet(kind, MY_PETS[kind], host ? 1 + ((seed + i) % 3) : 0, about(fire, host ? 120 : 100));
+      if (!host) comeTo(pet, TRAIL_IN, petWorld);
+    });
+    if (!host) {
       after(1.6, () => {
-        if (!mine().first) ui.open("choose");
+        if (!shown().camp.first) ui.open("choose");
         else for (const pet of pets) pet.joy = 1;
       });
       meetCaller();
     }
     ui.arrived();
   }
+
+  async function goTo(id: string, name?: string): Promise<void> {
+    if (id === member()?.id) {
+      if (G.where === "camp") leave("home");
+      else hooks.toCamp();
+      return;
+    }
+    if (!G.home || leaving) return;
+    const opened = await openCamp(id, name);
+    if (typeof opened === "string") {
+      troubleCard(opened);
+      return;
+    }
+    if (G.where === "camp") {
+      leave(opened);
+      return;
+    }
+    coming = opened;
+    hooks.toCamp();
+  }
+  hooks.visitCamp = (id, name) => void goTo(id, name);
 
   /** Leaf's copy has changed: the camp is laid out from it again, its caller comes or goes, and what it has won is said. */
   let earned = new Set<string>();
@@ -1126,7 +1091,7 @@ export function makeCamp(
         const thing = thingOf(id);
         if (thing) hooks.feed(`Won: ${thing.name}. It is waiting by the trail.`, "gold");
       }
-    if (G.where !== "camp" || owner !== null) return;
+    if (G.where !== "camp") return;
     rebuild();
     meetCaller();
     ui.tray();
@@ -1139,7 +1104,7 @@ export function makeCamp(
   let sel: Hold | null = null;
 
   function decorate(on: boolean): void {
-    if (decor === on || (on && owner !== null)) return;
+    if (decor === on || (on && visiting())) return;
     decor = on;
     if (on) {
       closePanel();
@@ -1158,7 +1123,6 @@ export function makeCamp(
   }
 
   const liveAt = (n: number): Live | null => lives.find((l) => l.placed.n === n) ?? null;
-  const placedAt = (n: number): Placed | null => layout().find((p) => p.n === n) ?? null;
 
   /** Shows the thing in hand where it would go; anything else is where it stands. */
   function showHeld(): void {
@@ -1314,7 +1278,7 @@ export function makeCamp(
     };
     const spot = roomy(id, near) ?? freeSpot(layout(), id, near);
     // What is set out is given the id Leaf will give it: the next of the camp's counter.
-    const n = kept().made;
+    const n = shown().made;
     if (!spot || !ok(doNow({ do: "setOut", thing: id, x: spot.x, y: spot.y, t: 0 }))) {
       sfx.no();
       hooks.feed("No room for that. Put something away first.", "coral");
@@ -1361,7 +1325,6 @@ export function makeCamp(
     if (!who.seat) face(who, player().x, player().y);
     who.hold = 2.4;
     if (who.folk) greeted(who);
-    else if (who.doing === "home" && mate) say(who, pick(mate.hello, Math.random()), 2.6);
     showCard(who);
   }
 
@@ -1457,26 +1420,14 @@ export function makeCamp(
       }
       for (const p of flats) drawProp(g, p, cx, cy);
       // Parcels waiting by the trail.
-      if (owner === null)
-        mine()
-          .parcels.slice(0, PARCEL_AT.length)
-          .forEach((_id, i) => {
-            const at = PARCEL_AT[i];
-            if (at) g.drawImage(art.parcel.c, at.x - art.parcel.ax - cx, at.y - art.parcel.ay - cy);
-          });
-      // A note on the door of somebody who is out.
-      if (mate && !mate.home) {
-        const cabin = lives.find((v) => v.thing.id === "cabin");
-        if (cabin) noteAt = { x: cabin.prop.x + 16, y: cabin.prop.y - 22 };
-      } else noteAt = null;
+      shown()
+        .camp.parcels.slice(0, PARCEL_AT.length)
+        .forEach((_id, i) => {
+          const at = PARCEL_AT[i];
+          if (at) g.drawImage(art.parcel.c, at.x - art.parcel.ax - cx, at.y - art.parcel.ay - cy);
+        });
     },
-    over(g, cx, cy) {
-      if (!noteAt) return;
-      R(g, noteAt.x - 1 - cx, noteAt.y - 1 - cy, 6, 7, "#1a0f1e");
-      R(g, noteAt.x - cx, noteAt.y - cy, 4, 5, CREAM);
-      R(g, noteAt.x + 1 - cx, noteAt.y + 1 - cy, 2, 1, "#8a4a30");
-      R(g, noteAt.x + 1 - cx, noteAt.y + 3 - cy, 2, 1, "#8a4a30");
-    },
+    over: () => undefined,
     glows(g, cx, cy, spark) {
       for (const l of lives) l.glow?.(g, Math.round(l.prop.x) - cx, Math.round(l.prop.y) - cy, spark);
       for (const l of lanterns) {
@@ -1524,7 +1475,6 @@ export function makeCamp(
       }
     },
   };
-  let noteAt: Pt | null = null;
 
   // ---------- the scene ----------
 
@@ -1678,8 +1628,7 @@ export function makeCamp(
     cameBack: () => undefined,
 
     enter,
-    owner: () => owner,
-    host: () => mate,
+    visit: goTo,
     go,
     leave,
     decorating: () => decor,
@@ -1694,7 +1643,7 @@ export function makeCamp(
     stow,
 
     choose(kind) {
-      if (owner !== null || !ok(doNow({ do: "choosePet", pet: kind }))) return;
+      if (!ok(doNow({ do: "choosePet", pet: kind }))) return;
       const cabin = lives.find((l) => l.thing.id === "cabin");
       const from = cabin ? { x: cabin.prop.x + 16, y: cabin.prop.y + 8 } : TRAIL_IN;
       const pet = addPet(kind, MY_PETS[kind], 0, from);
@@ -1707,7 +1656,7 @@ export function makeCamp(
 
     unwrap(letter) {
       const gift = mine().letters.find((l) => l.id === letter)?.gift ?? "";
-      if (owner !== null || !thingOf(gift)) return;
+      if (visiting() || !thingOf(gift)) return;
       const box = lives.find((l) => l.thing.id === "mailbox");
       const from = box ? { x: box.prop.x, y: box.prop.y - 8 } : player();
       if (box) box.prop.bumpAt = G.t;
@@ -1762,7 +1711,7 @@ export function makeCamp(
       choose(kind) {
         scene.choose(kind);
       },
-      owner: () => owner,
+      owner: () => visiting()?.id ?? null,
       guests: () => guests.map((g) => g.who.name),
       greet(n) {
         const a = guests[n];

@@ -1170,12 +1170,12 @@ describe("the Works", () => {
 
     // Bob visits a minute on: he is given the yard as Alice's own page is, and nothing of it is written.
     clock.now += MINUTE;
-    const before = { state: await storedWorks(alice), coins: await entries(alice), stood: await standings() };
+    const before = { state: await storedPlay(alice), coins: await entries(alice), stood: await standings() };
     const visited = Schema.decodeUnknownSync(Shown)(await (await visit(alice, "works", bob)).json());
     const own = Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json());
     expect(visited).toEqual(own);
     expect(yardOf(visited.state).yard.tick).toBeGreaterThan(yardNow.tick);
-    expect({ state: await storedWorks(alice), coins: await entries(alice), stood: await standings() }).toEqual(before);
+    expect({ state: await storedPlay(alice), coins: await entries(alice), stood: await standings() }).toEqual(before);
     // Her card: where her yard stands.
     expect(await personOf(alice, bob)).toEqual({
       id: alice,
@@ -1185,8 +1185,8 @@ describe("the Works", () => {
   });
 });
 
-const storedWorks = (player: PlayerId) =>
-  services.query((sql) => sql`SELECT rev, state FROM play_state WHERE player_id = ${player} AND game = 'works'`);
+const storedPlay = (player: PlayerId, game = "works") =>
+  services.query((sql) => sql`SELECT rev, state FROM play_state WHERE player_id = ${player} AND game = ${game}`);
 /** Somebody's state in a game, as a visitor asks for it. */
 const visit = (player: string, game: string, visitor: PlayerId = alice) =>
   send("GET", `/v1/game/play/${game}/of/${player}`, undefined, visitor);
@@ -1393,6 +1393,27 @@ describe("the town, played by commands through HTTP", () => {
     ]);
     expect([view.visit, view.camp.greeted]).toEqual([null, 1]);
     expect(view.camp.letters.some((l) => l.id === `v-${caller.id}`)).toBe(caller.note !== "" || caller.gift !== "");
+  });
+
+  it("is visited as what stands there, the stored text, the rev and the Coins as before; a player with no camp, 404", async () => {
+    const lantern = nOf(await townNow(), "lantern-post");
+    const { view } = await townDid([
+      { id: "v-1", do: "welcome", cursor: null },
+      { id: "v-2", do: "choosePet", pet: "fox" },
+      { id: "v-3", do: "toggle", n: lantern },
+    ]);
+    // A caller is due: the visit brings the camp to now in memory, and writes nothing of it.
+    clock.now += 80_000;
+    const before = { stored: await storedPlay(alice, "town"), coins: await entries(alice) };
+    const answer = await visit(alice, "town", bob);
+    expect(answer.status).toBe(200);
+    const seen = townOf(Schema.decodeUnknownSync(Shown)(await answer.json()).state);
+    expect(seen.camp).toEqual({ ...view.camp, letters: [], tray: {}, parcels: [], greeted: 0, earned: [] });
+    expect(seen.camp.placed.find((p) => p.id === "lantern-post")?.s).toBe(1);
+    expect([seen.visit, seen.arrival.mail, seen.made]).toEqual([null, [], 0]);
+    expect({ stored: await storedPlay(alice, "town"), coins: await entries(alice) }).toEqual(before);
+    const none = await visit(bob, "town");
+    expect([none.status, await codeOf(none)]).toEqual([404, "nothing_to_visit"]);
   });
 });
 

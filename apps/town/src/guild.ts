@@ -9,7 +9,6 @@
 
 import type { Look } from "@sequoia-leaf/kit/skin.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
-import type { PetId, Placed } from "@sequoia-leaf/town/camp.ts";
 
 import { makeLive, prepared } from "./live.ts";
 
@@ -44,27 +43,6 @@ export interface Quest {
   reward: number;
   /** When it ends, in milliseconds since 1970, if it ends at a set time. */
   ends: number | null;
-}
-
-/** Somebody who lives in a camp. */
-export interface Pet {
-  kind: PetId;
-  name: string;
-}
-
-/** A member's own camp, as a visitor would find it. */
-export interface MateCamp {
-  owner: string;
-  placed: readonly Placed[];
-  /** The trophies on their shelf. */
-  earned: readonly string[];
-  pets: readonly Pet[];
-  /** Whether they are at home just now. */
-  home: boolean;
-  /** The note on their door for when they are out. */
-  note: string;
-  /** What they say to a visitor. */
-  hello: readonly string[];
 }
 
 /** Somebody a piece of the guild's news is about: a real member, or the member themself. */

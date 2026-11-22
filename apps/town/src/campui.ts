@@ -1,13 +1,16 @@
 /**
  * The camp's own part of the interface: the cabin (the member's own things), the mailbox, the
- * signpost, the tray that things are put away into, and the note on the door of somebody else's
- * camp (nothing opens it until members' camps can be visited). The purse, the feed and the panel's
- * frame are shared with the town (`hud.ts`).
+ * signpost (to town, and to everybody else's camp), and the tray that things are put away into. At
+ * somebody else's camp there is only the signpost, home or to town, and the strip that says whose
+ * camp it is. The purse, the feed and the panel's frame are shared with the town (`hud.ts`).
  */
 
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph, shown } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
+import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
+import { readBoard, type Row } from "@sequoia-leaf/kit/person.ts";
+import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { COSY, KIND, type PetId, PETS, petsOf, trayList } from "@sequoia-leaf/town/camp.ts";
@@ -33,14 +36,15 @@ import {
   setDock,
   setFace,
   setHammer,
+  setStrip,
   slot,
   when,
 } from "./hud.ts";
-import { doNow, mine, town } from "./leaf.ts";
+import { doNow, mine, town, visiting } from "./leaf.ts";
 import { MY_PETS, PET_ABOUT, PET_CHOICE } from "./pets.ts";
 import { openPanel as openTownPanel, thingSlot } from "./ui.ts";
 
-export type CampPanel = "cabin" | "mailbox" | "signpost" | "note" | "choose";
+export type CampPanel = "cabin" | "mailbox" | "signpost" | "choose";
 
 export interface CampUi {
   /** Opens one of the camp's panels. */
@@ -59,37 +63,36 @@ const TITLES: Readonly<Record<CampPanel, string>> = {
   cabin: "Your cabin",
   mailbox: "Mailbox",
   signpost: "Signpost",
-  note: "A note",
   choose: "Somebody is waiting",
 };
 const ICONS: Readonly<Record<CampPanel, CampIcon>> = {
   cabin: "cabin",
   mailbox: "mailbox",
   signpost: "signpost",
-  note: "cabin",
   choose: "home",
 };
 
-/** Whoever wrote a letter or keeps a camp: one of the town's own as its own picture, a member by their face. */
+/** Whoever wrote a letter, if it is one of the town's own: its own picture. */
 function face(name: string): HTMLCanvasElement | null {
   const t = folkNamed(name);
-  if (t) return pic(folkArt(t).face, 1);
-  const a = G.visitors.find((m) => m.who.name === name);
-  return a?.body ? pic(a.body.face, 2) : null;
+  return t ? pic(folkArt(t).face, 1) : null;
 }
 
-/** A name on a letter or a note: one of the town's own with its mark. */
+/** A name on a letter: one of the town's own with its mark. */
 const signed = (name: string): HTMLElement =>
   folkNamed(name) ? folkName(name, "k-pix k-grow") : el("b", "k-grow", { text: name });
 
+/** The most camps the signpost lists. */
+const CAMPS_LISTED = 12;
+
 /** A row of the signpost: somewhere to go, and the button that goes there. */
-function way(name: string, art: HTMLCanvasElement, go: () => void): HTMLElement {
+function way(name: string, art: HTMLCanvasElement, go: () => void, line = ""): HTMLElement {
   return el(
     "div",
     "k-card",
     {},
-    slot(shown(art, 1), 20),
-    el("div", "k-grow", {}, name),
+    slot(art, 20),
+    el("div", "k-grow", {}, name, line === "" ? null : el("div", "k-d", { text: line })),
     button("sm", ["Go"], () => {
       closePanel();
       go();
@@ -291,40 +294,47 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
 
   // ---------- the signpost ----------
 
-  function signpost(body: HTMLElement): null {
-    const here = at().owner();
-    if (here !== null)
+  /** Home (at somebody else's camp) and town; and at the member's own, the camps on the town's board. */
+  function signpost(body: HTMLElement): (() => void) | null {
+    const host = visiting();
+    if (host)
       body.append(
-        way("Home", campIcon("home"), () => {
+        way("Home", shown(campIcon("home"), 1), () => {
           at().leave("home");
         }),
       );
     body.append(
-      way("Town", campIcon("town"), () => {
+      way("Town", shown(campIcon("town"), 1), () => {
         at().leave("town");
       }),
-      el("div", "k-label", { text: "Down the trail" }),
-      el("div", "k-paper note", {}, el("div", "", { text: "Members' camps, one day. The trail is not cut yet." })),
     );
-    return null;
-  }
-
-  // ---------- at somebody else's camp (nothing opens these yet) ----------
-
-  function note(body: HTMLElement): null {
-    const host = at().host();
-    body.append(
-      el(
-        "div",
-        "k-paper note",
-        {},
-        el("div", "", { text: host?.note ?? "Back soon." }),
-        el("hr"),
-        el("div", "k-row", {}, face(host?.owner ?? ""), signed(host?.owner ?? "")),
-      ),
-      el("div", "k-d", { text: "Look round. Everything here answers a touch." }),
+    if (host) return null;
+    const list = el("div", "k-col");
+    body.append(list);
+    let camps: readonly Row[] = [];
+    void (async () => {
+      const a = await askLeaf("/v1/game/play/town/standings");
+      const board = a.status === 200 ? readBoard(a.body) : null;
+      camps = board ? board.top.filter((r) => !r.you).slice(0, CAMPS_LISTED) : [];
+      refreshPanel();
+    })();
+    return when(
+      () => `${facesCame()}|${camps.map((r) => `${r.id}/${r.score}`).join()}`,
+      () => {
+        list.replaceChildren(
+          ...camps.map((r) =>
+            way(
+              r.name,
+              pic(faceFor(r.id, r.name, true), 2),
+              () => {
+                hooks.visitCamp(r.id, r.name);
+              },
+              `${r.score} things set out`,
+            ),
+          ),
+        );
+      },
     );
-    return null;
   }
 
   function choose(body: HTMLElement): null {
@@ -362,7 +372,6 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
     cabin,
     mailbox,
     signpost,
-    note,
     choose,
   };
 
@@ -453,7 +462,8 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
 
     arrived() {
       const s = at();
-      const home = s.owner() === null;
+      const host = visiting();
+      const home = host === null;
       const place = (id: "cabin" | "mailbox" | "signpost", name: string, about: string, icon: CampIcon) => ({
         id,
         name,
@@ -501,6 +511,9 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
         if (!home) s.leave("home");
         else closePanel();
       };
+      setStrip(host, () => {
+        s.leave("home");
+      });
       tray.hidden = true;
       document.body.classList.remove("decorating");
     },

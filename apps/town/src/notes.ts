@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "visit-camps",
+    day: "2026-11-22",
+    title: "Visit other camps",
+    lines: [
+      "Choose someone in Who is about and choose Visit camp, or pick a camp at your own camp's signpost.",
+      "You can walk around their camp. You cannot change anything.",
+    ],
+  },
+  {
     id: "stand-apart",
     day: "2026-11-22",
     title: "Room to stand",

@@ -153,10 +153,20 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   gnome standing, the others curled up) and says a thing or two now and then. Touching one greets
   it: it answers, and goes, by way of the mailbox when it brought a note or a present. One who goes
   because the next has come does the same; with the box full of presents the feed says so.
-- **The signpost.** The way back to town; down the trail, a note that members' camps are not
-  there yet. The camp can show somebody else's clearing it is handed (`enter(mate)`, with their
-  own pets and roof, their trophies, and a note on the door when they are out), with nothing there
-  to act with. Nothing hands it one yet.
+- **The signpost.** The way back to town, and under it the camps on the town's board (`GET
+/v1/game/play/town/standings`), the member's own left out, at most 12: each owner's face and
+  name, how many things they have set out, and "Go". With no other camp there is no list.
+- **Somebody else's camp.** Reached from that list, from "Visit camp" on a person's card (in Who
+  is about, or in the Works' Top yards, which leaves for the town with `?camp=<player>`), or by
+  opening the page with `?camp=<player>` (the member's own id opens their own). `leaf.ts` opens
+  it from Leaf as a visitor is given it (`openCamp`, the visit route), beside the member's own
+  town, and from then until the member leaves `visiting()` says whose camp it is and `shown()` is
+  theirs: the same scene draws it, with their pets in a colour of their own and a roof of their
+  own. Everything stands and answers a touch, and a thing's card opens; nothing can be changed:
+  `doNow` and `ask` refuse, and there is no cabin, mailbox, tray, caller or decorating. Under the
+  top bar a strip says whose camp it is, with "My camp"; the signpost offers Home and Town. Their
+  camp is read again every half minute, and as the tab comes back. Nothing to visit puts the page
+  behind the kit's card, "No camp to visit", with "My camp".
 - **The guild, live.** The same moments reach a camp: a line in the feed, a paper lantern going up
   beyond the trees (and over the clearing, where the far trees are out of sight) when a raid comes
   home, a pennant on the cabin roof for land taken, and whoever is there, pets included, hopping.
@@ -274,7 +284,8 @@ card says so and the town is not loaded.
   staying where it is unless they would be out of it, when it glides to them and back. On an
   upright phone the panel is the bottom sheet the others are. The button is there only in town. A
   person's card shows what they stand at in the Works, The Little Raid and their camp (things set
-  out, callers greeted, the crab spotted).
+  out, callers greeted, the crab spotted), and for somebody else "Find in town" (somebody drawn
+  here), "Visit yard" and "Visit camp" (somebody with one).
 
 - **A guest.** Somebody signed in who is not in the guild plays the same town, with none of the
   guild's own: `prepare()` fetches nothing, and nothing only a member may ask (`/v1/me...`, the

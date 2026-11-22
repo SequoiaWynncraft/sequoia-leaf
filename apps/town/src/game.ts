@@ -173,11 +173,14 @@ export const hooks: {
   goIn: (id: GameId, of?: string) => void;
   /** Walk out through the gate and down the trail to the member's own camp. */
   toCamp: () => void;
+  /** Go to somebody's camp (`name`, if known, is theirs), or the member's own for their own id. */
+  visitCamp: (id: string, name?: string) => void;
 } = {
   visit: () => undefined,
   feed: () => undefined,
   goIn: () => undefined,
   toCamp: () => undefined,
+  visitCamp: () => undefined,
 };
 
 /** Listeners for "something the panels show has changed". */

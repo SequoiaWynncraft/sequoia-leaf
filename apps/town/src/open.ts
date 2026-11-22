@@ -8,13 +8,10 @@
  * what was fetched.
  */
 
-import { serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
-import type { Trouble } from "@sequoia-leaf/kit/play.ts";
+import { serverCard, shutCard, start } from "@sequoia-leaf/kit/live.ts";
 
-import { openTown, town } from "./leaf.ts";
+import { NEEDS_LEAF, openTown, town, troubleCard } from "./leaf.ts";
 import { prepare } from "./live.ts";
-
-const NEEDS_LEAF = "The town needs the guild's server.";
 
 async function open(): Promise<void> {
   const where = await start();
@@ -26,10 +23,9 @@ async function open(): Promise<void> {
     serverCard(NEEDS_LEAF);
     return;
   }
-  const card = (why: Trouble): void => troubleCard(why, where.signIn, NEEDS_LEAF);
-  const trouble = await openTown(where.me.id, card);
+  const trouble = await openTown(where.me.id, troubleCard);
   if (trouble) {
-    card(trouble);
+    troubleCard(trouble);
     return;
   }
   if (!(await prepare(town().cursor))) {

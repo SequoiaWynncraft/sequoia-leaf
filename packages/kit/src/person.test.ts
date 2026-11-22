@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { isRecord } from "./net.ts";
-import { type GameStats, numbersOf, readPerson } from "./person.ts";
+import { type GameStats, numbersOf, readBoard, readPerson } from "./person.ts";
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
 const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
@@ -51,4 +51,16 @@ describe("a person's card", () => {
     expect(readPerson({ name: "Wrenly", games: { works: { place: 1, score: "lots", also: {} } } })).toBeNull();
     expect(readPerson({ code: "no_such_player" })).toBeNull();
   });
+});
+
+test("a board reads what Leaf really answers, and nothing from what makes no sense", () => {
+  const standings = isRecord(GAME) ? GAME["GET /v1/game/play/{game}/standings"] : null;
+  const board = readBoard(isRecord(standings) ? standings.body : null);
+  expect(board?.top.map((r) => [r.place, r.name, r.guest, r.score, r.also.story, r.you])).toEqual([
+    [1, "Bob", false, 5120, 7, false],
+    [2, "Alice", false, 1840, 3, true],
+    [3, "Visitor", true, 960, 2, false],
+  ]);
+  expect(board?.you).toEqual({ place: 2, score: 1840, also: { story: 3 } });
+  expect(readBoard({ top: [{ place: 1 }], you: null })).toBeNull();
 });

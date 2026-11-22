@@ -1,13 +1,14 @@
 /**
  * What sits over whichever place is on the stage, built from the kit: the purse, the corner
- * buttons, the guild feed, the dock along the bottom, the one panel that is open, and a card for
- * whoever was tapped. The town and the camp each say what goes in the dock and in a panel
+ * buttons, the guild feed, the dock along the bottom, the one panel that is open, a card for
+ * whoever was tapped, and at somebody else's camp the strip that says whose it is. The town and the camp each say what goes in the dock and in a panel
  * (`ui.ts`, `campui.ts`); everything here is the same for both.
  */
 
 import { add, el, icon as glyph, type IconName, replay, shown } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, type Currency, leafShown } from "@sequoia-leaf/kit/purse.ts";
+import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
@@ -460,6 +461,32 @@ export function setHammer(does: (() => void) | null, on = false): void {
   hammer.setAttribute("aria-pressed", on ? "true" : "false");
 }
 
+let strip: (() => void) | null = null;
+
+/** Under the top bar at somebody else's camp: their face, whose camp it is, and the way to the member's own; `null` puts it away. */
+export function setStrip(host: { readonly id: string; readonly name: string } | null, home: () => void): void {
+  const at = $("visit");
+  at.hidden = host === null;
+  strip =
+    host &&
+    when(
+      () => String(facesCame()),
+      () => {
+        at.replaceChildren(
+          el(
+            "div",
+            "k-plaque",
+            {},
+            el("span", "k-thing-pic", {}, pic(faceFor(host.id, host.name, true), 2)),
+            el("b", "k-name", { text: `${host.name}'s camp` }),
+            button("wood sm", ["My camp"], home),
+          ),
+        );
+      },
+    );
+  strip?.();
+}
+
 export function initHud(): void {
   // A guest has no Leaf, and the purse shows only their Coins.
   if (leafShown()) counters.leaf = counter("leaf", "Leaf", "Earned with the guild, out in the world.");
@@ -513,6 +540,7 @@ export function tickHud(dt: number): void {
   if (slow > 0) return;
   slow = 0.3;
   refresh?.();
+  strip?.();
   const of = show.card;
   if (of) {
     if (doingEl) doingEl.textContent = doingOf ? doingOf() : doingLine(of);

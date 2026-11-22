@@ -146,15 +146,19 @@ function bookButtons(): () => void {
   );
 }
 
+/** Leaves for the town (with `camp`, on to that player's camp): what is in the till goes into the purse on the way out. */
+export function toTown(camp?: string): void {
+  collect();
+  keepScreen();
+  sfx.close();
+  leave(camp);
+}
+
 function corner(): void {
   const host = $("corner");
   const back = el("button", "k-btn wood icon", { type: "button", "aria-label": "Back to town" }, yardIcon("town"));
   back.addEventListener("click", () => {
-    // What is in the till goes into the purse on the way out.
-    collect();
-    keepScreen();
-    sfx.close();
-    leave();
+    toTown();
   });
   tip(back, "Back to town", `The yard keeps working for up to ${AWAY_MOST_MS / 3_600_000} hours while you are away.`);
   const mute = el("button", "k-btn wood icon", { type: "button", "aria-label": "Sound" });

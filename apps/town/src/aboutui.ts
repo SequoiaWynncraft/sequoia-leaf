@@ -4,9 +4,9 @@
  * lately, each with their face, name, and rank or "Guest" (`about.ts` says who goes where, and the
  * words). It keeps itself up to date while it is open: the room's roster as it changes, the guild's
  * lists as they come, every half minute. Choosing somebody shows their card (`person`), with "Find
- * in town" for somebody drawn here, which puts the panel away and shows where they are (`locate`),
- * and "Visit yard" for anybody else with a yard, which goes through the Works' door to it. The
- * button is there only while the town is on the stage.
+ * in town" for somebody drawn here, which puts the panel away and shows where they are (`locate`);
+ * and for anybody else, "Visit yard" if they have a yard, which goes through the Works' door to it,
+ * and "Visit camp" if they have a camp. The button is there only while the town is on the stage.
  */
 
 import { close, link } from "@sequoia-leaf/kit/card.ts";
@@ -113,7 +113,7 @@ const away = (then: () => void) => (): void => {
   then();
 };
 
-/** The card's buttons: "Find in town" for somebody in town and drawn here, "Visit yard" for anybody else with a yard. */
+/** The card's buttons: "Find in town" for somebody in town and drawn here; "Visit yard" and "Visit camp" for anybody else with one. */
 function initPeople(locate: (a: Actor) => void): void {
   people({
     stats: { works: WORKS_STATS, raid: RAID_STATS, town: TOWN_STATS },
@@ -124,6 +124,7 @@ function initPeople(locate: (a: Actor) => void): void {
       return [
         ...(a ? [{ label: "Find in town", on: away(() => locate(a)) }] : []),
         ...(p.games?.works && !you ? [{ label: "Visit yard", on: away(() => hooks.goIn("works", p.id)) }] : []),
+        ...(p.games?.town && !you ? [{ label: "Visit camp", on: away(() => hooks.visitCamp(p.id, p.name)) }] : []),
       ];
     },
   });

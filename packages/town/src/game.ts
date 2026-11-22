@@ -38,7 +38,6 @@ import {
   owned,
   type PetId,
   type Placed,
-  readCamp,
   type Verdict,
 } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
@@ -418,6 +417,33 @@ export const townView = (s: Town, now: number): TownView => ({
   arrival: arrivalOf(s, { rng: s.rng, made: s.made }, now),
 });
 
+/**
+ * What a visitor is given of somebody's camp: what stands there, each thing in its own state, and
+ * the pet they chose; nothing else of theirs (no letters, parcels, tray or caller, every counter at
+ * 0, an arrival letter that says nothing), in the shape the page draws a camp from.
+ */
+export const visitView = (s: Town): TownView => ({
+  sightings: 0,
+  spotAt: 0,
+  chestDay: -1,
+  welcomedDay: -1,
+  seenAt: 0,
+  cursor: null,
+  stay: false,
+  camp: {
+    first: s.camp.first,
+    placed: s.camp.placed.map((p) => ({ ...p })),
+    tray: {},
+    parcels: [],
+    letters: [],
+    greeted: 0,
+    earned: [],
+  },
+  visit: null,
+  made: 0,
+  arrival: { first: false, newDay: false, away: 0, said: [], mail: [] },
+});
+
 /** Commands only Leaf can answer: what they post or cost is Leaf's to say. The page waits for these. */
 export const ASKED: ReadonlySet<TownCommand["do"]> = new Set(["welcome", "greet", "openChest", "buy"]);
 
@@ -658,31 +684,6 @@ export function newTown(ctx: Pick<Ctx, "seed" | "now">): Town {
   return s;
 }
 
-/**
- * A town from the record the browser kept (`town.save.v1`), for bringing a member's camp over once:
- * the camp read with every check the page makes, each thing standing given an id of its own; the
- * crab's sightings, the news told and whether their character stays. They were here now: the
- * browser's clock is not Leaf's, so no time away is made from it. The rest is a new member's (the
- * callers and the stream start afresh). Null for nonsense.
- */
-export function adopt(text: string, ctx: Pick<Ctx, "seed" | "now">): Town | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (!isRecord(raw) || raw.v !== 1) return null;
-  const s = newTown(ctx);
-  s.camp = readCamp(raw.camp) ?? newCamp();
-  s.made = s.camp.placed.length;
-  if (whole(raw.sightings, 0, Infinity)) s.sightings = Math.min(1e6, raw.sightings);
-  s.seenAt = ctx.now;
-  s.cursor = whole(raw.cursor, 0, 1e15) ? raw.cursor : null;
-  s.stay = raw.stay !== false;
-  return s;
-}
-
 /** The town and the camp, for Leaf's play service. */
 export const TOWN: Game<Town, TownCommand, TownView, TownNote> = {
   id: "town",
@@ -690,6 +691,7 @@ export const TOWN: Game<Town, TownCommand, TownView, TownNote> = {
   advance,
   apply,
   view: (s, ctx) => townView(s, ctx.now),
+  visit: visitView,
   decode: decodeTown,
   encode: encodeTown,
   command: readCommand,
