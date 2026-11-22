@@ -64,16 +64,16 @@ export class Presence extends Context.Service<
   Presence,
   {
     /**
-     * Records that a player (a guest, or not) is at `place` now, and whether they would stay,
-     * unless the last write for them was less than `PRESENCE_EVERY_MS` ago and said the same; lists
-     * the 50 seen most recently in the last 90 seconds, them included, and those seen between then
-     * and a day ago who stay.
+     * Records that a player (a guest, or not) is at `place` now, and whether they would stay (null:
+     * as they last said, or yes for a player never seen), unless the last write for them was less
+     * than `PRESENCE_EVERY_MS` ago and said the same; lists the 50 seen most recently in the last 90
+     * seconds, them included, and those seen between then and a day ago who stay.
      */
     readonly arrive: (
       playerId: PlayerId,
       username: string,
       place: string,
-      stay: boolean,
+      stay: boolean | null,
       guest: boolean,
       now: number,
     ) => Effect.Effect<Here>;
@@ -131,14 +131,16 @@ export class Presence extends Context.Service<
           sql
             .withTransaction(
               Effect.gen(function* () {
+                // Not said: a new row stays, and a row there keeps what it had.
+                const said = stay === null ? null : stay ? 1 : 0;
                 const written = yield* sql`
                   INSERT INTO presence (player_id, username, place, seen_at, stay, guest)
-                  VALUES (${playerId}, ${username}, ${place}, ${now}, ${stay ? 1 : 0}, ${guest ? 1 : 0})
+                  VALUES (${playerId}, ${username}, ${place}, ${now}, ${said ?? 1}, ${guest ? 1 : 0})
                   ON CONFLICT (player_id) DO UPDATE SET
                     username = excluded.username, place = excluded.place, seen_at = excluded.seen_at,
-                    stay = excluded.stay, guest = excluded.guest
+                    stay = coalesce(${said}, presence.stay), guest = excluded.guest
                   WHERE presence.seen_at <= ${now - PRESENCE_EVERY_MS}
-                    OR presence.place <> excluded.place OR presence.stay <> excluded.stay
+                    OR presence.place <> excluded.place OR presence.stay <> coalesce(${said}, presence.stay)
                   RETURNING player_id
                 `;
                 if (written.length > 0) yield* forgetOld(now);

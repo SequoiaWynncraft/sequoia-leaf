@@ -2,9 +2,10 @@
 
 The town's and the member's camp's rules (`@sequoia-leaf/town`), with no page in them: plain data
 and plain functions, type-checked without the page's library or Bun's. `TOWN` (`game.ts`) is the
-`Game` Leaf's play service will hold a member's town with; it is not on the service yet. The town's
-page (`apps/town`) imports the catalogue, the mailbox, the town's own and a camp's ground rules
-from here, and still keeps its own record in the browser.
+`Game` Leaf's play service holds each member's town with. The town's page (`apps/town`) reads
+Leaf's view of it (`readView`, `readNotes`), works out with the same rules what a command does to
+its copy (`predict`), and imports the catalogue, the mailbox, the town's own and a camp's rules
+from here.
 
 ```sh
 bun test
@@ -16,8 +17,9 @@ bun test
 | `catalogue.ts` | The stalls and their prices in Coins, the Treasury's wares and fine pieces, presents         |
 | `folk.ts`      | The town's own: who each is and what they say; who calls at a camp, their notes and presents |
 | `mail.ts`      | The mailbox: twelve letters, and which make room for the next                                |
-| `camp.ts`      | What may stand where in a camp, the new camp, and reading a camp the browser kept            |
+| `camp.ts`      | What may stand where in a camp, turning, the tray, who lives there, the new camp, an old one |
 | `game.ts`      | The state, the commands, what happens by itself, what the page is shown, keeping it          |
+| `stats.ts`     | What a person's card says of their camp                                                      |
 
 ## The state
 
@@ -87,13 +89,24 @@ the lines, the letters), worked out by the same function `welcome` posts with.
 
 ## What the page is shown
 
-The state without `rng`, `made` and `nextCall`, and with `arrival`.
+The state without `rng` and `nextCall`, and with `arrival`. The counter (`made`) is shown, so that
+a thing the page sets down is given the id Leaf will give it. `readView` and `readNotes` read what
+Leaf sends back into these types. `predict(view, command, now)` does a command to the page's copy
+with the same rules, and gives the copy after it and its notes, or the refusal; it gives null for
+the four commands only Leaf can answer (`ASKED`: `welcome`, `greet`, `openChest`, `buy`), whose
+letters or Coins are Leaf's to say.
+
+## Where a camp stands
+
+`standing`: the things set out, with the callers greeted and the crab's sightings beside it, for
+a person's card. No page shows a board for it.
 
 ## Keeping it
 
 `encodeTown` and `decodeTown`: Leaf's stored text, read back with every field's type checked but
 trusting that each thing stands where it may (each change was checked when it was made), in
 about 0.04 ms for the largest camp. `adopt` reads the browser's old record (`town.save.v1`) with
-every check the page makes (`readCamp`: a thing that cannot stand goes into the tray, a missing
-cabin, mailbox or signpost is put back) and numbers each thing standing; it takes about 12 ms for
-the largest camp, and is for bringing camps over once.
+every check the page made (`readCamp`: a thing that cannot stand goes into the tray, a missing
+cabin, mailbox or signpost is put back) and numbers each thing standing; the member is here now
+by Leaf's clock, and the callers and the stream start afresh. It takes about 12 ms for the largest
+camp, and is for bringing camps over once (`apps/api/tools/once/import-town.ts`).

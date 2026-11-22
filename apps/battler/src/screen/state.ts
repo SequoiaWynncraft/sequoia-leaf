@@ -13,7 +13,7 @@
  * a guess was wrong, or something here was changed by hand), the page takes Leaf's and draws again.
  * Only the member's view settings stay in the browser (`keep.ts`).
  */
-import { openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
+import { makeHold, openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
 import {
   type Almanac,
   localRun,
@@ -101,19 +101,15 @@ export function refuse(why: string): void {
 }
 
 let table: Play<TableView, RaidCommand, RaidNote> | null = null;
-/** Commands sent with `ask` and not answered yet: their answers draw the table again themselves. */
-let asking = 0;
-/** Those of them that are not purchases: after one, what is on offer may be something else. */
-let turning = 0;
 /** Purchases and the front page's choices, which leave every offer where it is. */
 const STEADY: ReadonlySet<RaidCommand["do"]> = new Set(["buy", "xp", "trail", "look", "buyLook"]);
 /**
- * Whether a command is held off: Leaf is still answering one only it can answer. A command names
+ * Commands held off while Leaf answers one only it can answer (the kit's one rule): a command names
  * what it means by its place (an offer, a card, a figure's spot), and that answer may put something
- * else there (other offers, other cards, two figures made one), so until it comes the page neither
- * asks nor does anything more. One purchase may follow another: buying moves no offer.
+ * else there (other offers, other cards, two figures made one). One purchase may follow another.
  */
-const heldOff = (command: RaidCommand): boolean => asking > 0 && (turning > 0 || !STEADY.has(command.do));
+const hold = makeHold();
+const heldOff = (command: RaidCommand): boolean => hold.held(STEADY.has(command.do));
 
 /** What the page shows, as text, to tell whether Leaf's answer changed it. */
 const picture = (): string => JSON.stringify([S.run, S.almanac, S.looks, S.trail, S.runs]);
@@ -150,7 +146,7 @@ export async function openTable(player: string, trouble: (why: Trouble) => void)
   opened.onState((view) => {
     const before = picture();
     take(view);
-    if (asking > 0 || picture() === before) return;
+    if (hold.asking() || picture() === before) return;
     for (const fn of movedHearers) fn();
     changed();
   });
@@ -209,13 +205,7 @@ export function doNow(command: RaidCommand): Did | null {
 export async function ask(command: RaidCommand, waiting: Element | null = null): Promise<Did | null> {
   const play = table;
   if (!play || heldOff(command)) return null;
-  const turns = STEADY.has(command.do) ? 0 : 1;
-  asking++;
-  turning += turns;
-  const answer = await waitingLook(waiting, play.send(command)).finally(() => {
-    asking--;
-    turning -= turns;
-  });
+  const answer = await hold.until(STEADY.has(command.do), waitingLook(waiting, play.send(command)));
   take(play.state);
   if ("refused" in answer) {
     const why = refusalText(answer.refused, play.state);

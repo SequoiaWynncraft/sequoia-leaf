@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "camp-follows-you",
+    day: "2026-11-22",
+    title: "Your camp follows you",
+    lines: [
+      "Leaf now keeps your camp, your mail and your trophies, so they are the same on every device.",
+      "Callers now come by Leaf's clock, whichever device you are on.",
+    ],
+  },
+  {
     id: "new-look",
     day: "2026-11-22",
     title: "A new look",

@@ -9,6 +9,7 @@ import {
   type Standing,
 } from "@sequoia-leaf/core";
 import { RAID } from "@sequoia-leaf/raid/game.ts";
+import { TOWN } from "@sequoia-leaf/town";
 import { WORKS } from "@sequoia-leaf/yard/game.ts";
 
 /** What one command came to, before Leaf keeps it: a refusal, or what it did and how to keep the state it left. */
@@ -108,5 +109,5 @@ export function played<State, Command, View, Note>(game: Game<State, Command, Vi
   };
 }
 
-/** The games on the play service. The town is not on it yet. */
-export const GAMES: Readonly<Partial<Record<GameId, Played>>> = { raid: played(RAID), works: played(WORKS) };
+/** The games on the play service. */
+export const GAMES: Readonly<Record<GameId, Played>> = { raid: played(RAID), works: played(WORKS), town: played(TOWN) };

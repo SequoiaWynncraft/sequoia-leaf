@@ -21,6 +21,7 @@ export function gameId(name: string): GameId | undefined {
 export interface Ctx {
   /** Leaf's clock, in milliseconds. */
   readonly now: number;
+  /** Who is calling: the state's owner, or in a visit whoever is looking (`awards` are always the owner's). */
   readonly player: { readonly id: string; readonly guest: boolean };
   /**
    * Leaf's dice for this call: a whole number from 0 up to 2^32 that nobody outside Leaf could have

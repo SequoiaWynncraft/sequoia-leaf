@@ -18,24 +18,17 @@ import {
   Invalid,
   MembersOnly,
   Missing,
-  Moved,
   NotAMember,
-  NotEnoughCoins,
   NotYou,
   PurchaseRefused,
   Refused,
-  SaveTooLarge,
   SlowDown,
   StaffOnly,
   StateUnreadable,
-  TooMuch,
   Unauthorized,
-  VersionConflict,
 } from "./errors.ts";
 import {
   ActivityReport,
-  CoinsAnswer,
-  CoinsBody,
   Events,
   GameMe,
   GuildEvents,
@@ -57,10 +50,6 @@ import {
   Rates,
   RerollBody,
   Rerolled,
-  Save,
-  SaveBody,
-  Saved,
-  SaveList,
   Standings,
 } from "./schemas.ts";
 
@@ -115,7 +104,7 @@ export class Unexpected extends HttpApiMiddleware.Service<Unexpected>()("leaf/ap
   error: InternalError,
 }) {}
 
-/** Reads a request's body only up to 16 KiB: a longer one gets 413 `body_too_large` unread. Saves read more. */
+/** Reads a request's body only up to 16 KiB: a longer one gets 413 `body_too_large` unread. */
 export class BodyLimit extends HttpApiMiddleware.Service<BodyLimit>()("leaf/api/BodyLimit", {
   error: BodyTooLarge,
 }) {}
@@ -140,18 +129,8 @@ export class RerollBodyErrors extends HttpApiMiddleware.Service<RerollBodyErrors
   error: Invalid,
 }) {}
 
-/** Answers a save whose body is not `{ "player", "version", "data" }`, or is too large to read, with `invalid_save` or `save_too_large`. */
-export class SaveBodyErrors extends HttpApiMiddleware.Service<SaveBodyErrors>()("leaf/api/SaveBodyErrors", {
-  error: [Invalid, SaveTooLarge],
-}) {}
-
 /** Answers a batch whose body is not `{ "commands": [...] }` with `invalid_command`. */
 export class PlayBodyErrors extends HttpApiMiddleware.Service<PlayBodyErrors>()("leaf/api/PlayBodyErrors", {
-  error: Invalid,
-}) {}
-
-/** Answers a page's call to change Coins whose body is not `{ "id", "amount", "reason" }` with `invalid_command`. */
-export class CoinsBodyErrors extends HttpApiMiddleware.Service<CoinsBodyErrors>()("leaf/api/CoinsBodyErrors", {
   error: Invalid,
 }) {}
 
@@ -194,7 +173,6 @@ export class GameHelloApi extends HttpApiGroup.make("gameHello")
   .add(HttpApiEndpoint.get("hello", "/hello", { success: Hello }))
   .prefix("/v1/game") {}
 
-const SlotParams = { slot: Schema.String };
 const GameParams = { game: Schema.String };
 
 /**
@@ -204,14 +182,6 @@ const GameParams = { game: Schema.String };
 export class GameApi extends HttpApiGroup.make("game")
   .add(
     HttpApiEndpoint.get("me", "/me", { success: GameMe }),
-    HttpApiEndpoint.get("saves", "/saves", { success: SaveList }),
-    HttpApiEndpoint.get("save", "/saves/:slot", { params: SlotParams, success: Save, error: [Invalid, Missing] }),
-    HttpApiEndpoint.put("write", "/saves/:slot", {
-      params: SlotParams,
-      payload: SaveBody,
-      success: Saved,
-      error: [Invalid, VersionConflict, NotYou, SaveTooLarge, SlowDown, Moved],
-    }).middleware(SaveBodyErrors),
     HttpApiEndpoint.get("skin", "/skins/:uuid", {
       params: { uuid: Schema.String },
       success: Png,
@@ -233,6 +203,11 @@ export class GameApi extends HttpApiGroup.make("game")
       error: Invalid,
     }).middleware(PresenceBodyErrors),
     HttpApiEndpoint.get("whoIsAbout", "/presence", { success: Present }),
+    // For a page left open since before the town moved onto Leaf, which still sends its save and its
+    // Coins here: told it is not who it thinks it is, it loads itself again, and so becomes the page
+    // that plays on Leaf. Both go in the change after this one.
+    HttpApiEndpoint.put("oldSave", "/saves/:slot", { params: { slot: Schema.String }, error: NotYou }),
+    HttpApiEndpoint.post("oldCoins", "/coins", { error: NotYou }),
     HttpApiEndpoint.get("play", "/play/:game", {
       params: GameParams,
       success: PlayShown,
@@ -259,12 +234,6 @@ export class GameApi extends HttpApiGroup.make("game")
       success: Person,
       error: Missing,
     }),
-    // For the games not on the play service yet, whose pages still work out what they earn and spend.
-    HttpApiEndpoint.post("coins", "/coins", {
-      payload: CoinsBody,
-      success: CoinsAnswer,
-      error: [Invalid, NotYou, NotEnoughCoins, TooMuch, SlowDown],
-    }).middleware(CoinsBodyErrors),
   )
   .middleware(Player)
   .prefix("/v1/game") {}

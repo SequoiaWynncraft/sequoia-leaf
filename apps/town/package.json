@@ -11,6 +11,7 @@
     "@types/bun": "1.4.4"
   },
   "dependencies": {
+    "@sequoia-leaf/core": "workspace:*",
     "@sequoia-leaf/kit": "workspace:*",
     "@sequoia-leaf/raid": "workspace:*",
     "@sequoia-leaf/town": "workspace:*",

@@ -43,8 +43,10 @@
  *
  * The games Leaf plays (the play service) are served as in production. For the screenshot tours,
  * `POST /test/play/raid` with `{ "stage": [...] }` stages a moment at Tester's raid table that play
- * does not reach by itself (`stage-raid.ts`), and `POST /test/play/works` one in Tester's yard (a
- * kept yard, a time away, a filled order, the others' yards on the board: `stage-works.ts`); nothing like them is served by the
+ * does not reach by itself (`stage-raid.ts`), `POST /test/play/works` one in Tester's yard (a
+ * kept yard, a time away, a filled order, the others' yards on the board: `stage-works.ts`), and
+ * `POST /test/play/town` one in Tester's town and camp (a lived-in camp, a caller waiting, a time
+ * away, a full mailbox, Coins to shop with: `stage-town.ts`); nothing like them is served by the
  * guild's own Leaf.
  */
 import { existsSync } from "node:fs";
@@ -59,6 +61,7 @@ import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
 import { LiveClient } from "./live-client.ts";
 import { stageRaid } from "./stage-raid.ts";
+import { stageTown } from "./stage-town.ts";
 import { stageWorks } from "./stage-works.ts";
 import {
   DAY,
@@ -595,6 +598,7 @@ const served = await leaf.serve(
     signingRoute("/sign-in"),
     signingRoute("/sign-out"),
     stagingRoute("raid", (ops) => stageRaid(tester.id, ops)),
+    stagingRoute("town", (ops) => stageTown(tester.id, ops)),
     stagingRoute("works", (ops) =>
       stageWorks(tester.id, ops, [
         ...mates.map((m) => ({ id: m.id, guest: false })),

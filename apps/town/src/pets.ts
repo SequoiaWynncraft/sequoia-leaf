@@ -6,9 +6,9 @@
 
 import { CREAM, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { type Ctx, dist, type Pt } from "@sequoia-leaf/kit/util.ts";
+import type { PetId } from "@sequoia-leaf/town/camp.ts";
 
 import { onScreen } from "./actors.ts";
-import type { PetId } from "./camp.ts";
 import type { PetArt } from "./campart.ts";
 import { csfx } from "./campsfx.ts";
 import { float } from "./fx.ts";

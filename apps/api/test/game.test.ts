@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import { leaf, MAX_SAVE_BYTES, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { leaf, type PlayerId, playerId } from "@sequoia-leaf/core";
 import { Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
@@ -132,10 +132,10 @@ function get(path: string, sent: Sent = { cookie: "alice-token" }) {
 /** Who each session belongs to. */
 const signedIn: Readonly<Record<string, PlayerId>> = { "alice-token": alice, "bob-token": bob, "carol-token": carol };
 
-/** A save as the game sends it: as the member the page believes it is, by default whoever it is signed in as. */
-function save(slot: string, version: number, data: unknown, sent: Sent = alicesPage, player?: string) {
-  const as = player ?? signedIn[sent.bearer ?? sent.cookie ?? ""] ?? "nobody";
-  return send("PUT", `/v1/game/saves/${slot}`, { ...sent, body: { player: as, version, data } });
+/** A batch of no commands for the town, as the game sends it: as whoever the page is signed in as. */
+function batch(sent: Sent = alicesPage) {
+  const as = signedIn[sent.bearer ?? sent.cookie ?? ""] ?? "nobody";
+  return send("POST", "/v1/game/play/town", { ...sent, body: { player: as, commands: [] } });
 }
 
 function happened(player: PlayerId, event: PlayerEvent): Promise<void> {
@@ -247,8 +247,8 @@ describe("signing in with the website's cookie", () => {
   });
 
   it("refuses a write with the cookie that has no Origin or another one, and changes nothing", async () => {
-    const none = await save("town", 0, { saved_at: 1 }, { cookie: "alice-token" });
-    const elsewhere = await save("town", 0, { saved_at: 1 }, { cookie: "alice-token", origin: "https://seqwawa.com" });
+    const none = await batch({ cookie: "alice-token" });
+    const elsewhere = await batch({ cookie: "alice-token", origin: "https://seqwawa.com" });
     const presence = await send("PUT", "/v1/game/presence", {
       cookie: "alice-token",
       origin: "https://evil.example",
@@ -258,16 +258,15 @@ describe("signing in with the website's cookie", () => {
 
     expect([none.status, elsewhere.status, presence.status, reroll.status]).toEqual([403, 403, 403, 403]);
     expect(await none.json()).toEqual({ code: "bad_origin", message: "Leaf takes this only from its own pages" });
-    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
+    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM play_state`)).toEqual([{ n: 0 }]);
     expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM presence`)).toEqual([{ n: 0 }]);
     expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM quest_rerolls`)).toEqual([{ n: 0 }]);
   });
 
   it("takes a write with the cookie from Leaf's own pages, and one with a Bearer from anywhere", async () => {
-    const fromPage = await save("town", 0, { saved_at: 1 }, alicesPage);
-    clock.now = T0 + 2000;
-    const fromMod = await save("town", 1, { saved_at: 1 }, { bearer: "alice-token" });
-    const bothNoOrigin = await save("town", 0, { saved_at: 1 }, { bearer: "bob-token", cookie: "bob-token" }, bob);
+    const fromPage = await batch(alicesPage);
+    const fromMod = await batch({ bearer: "alice-token" });
+    const bothNoOrigin = await batch({ bearer: "bob-token", cookie: "bob-token" });
 
     expect([fromPage.status, fromMod.status, bothNoOrigin.status]).toEqual([200, 200, 200]);
   });
@@ -307,9 +306,8 @@ async function outcome(
 describe("who may use the game's routes", () => {
   const routes = [
     ["GET", "/v1/game/me"],
-    ["GET", "/v1/game/saves"],
-    ["GET", "/v1/game/saves/town"],
-    ["PUT", "/v1/game/saves/town"],
+    ["GET", "/v1/game/play/town"],
+    ["POST", "/v1/game/play/town"],
     ["GET", `/v1/game/skins/${bob}`],
     ["GET", "/v1/game/guild/events"],
     ["GET", "/v1/game/guild/events/stream"],
@@ -336,9 +334,8 @@ describe("who may use the game's routes", () => {
     // Sent with no body, the two writes are let in and then refused for what they lack.
     const expected = {
       "/v1/game/me": [200, null],
-      "/v1/game/saves": [200, null],
-      "GET /v1/game/saves/town": [404, "no_save"],
-      "PUT /v1/game/saves/town": [400, "invalid_save"],
+      "GET /v1/game/play/town": [200, null],
+      "POST /v1/game/play/town": [400, "invalid_command"],
       [`/v1/game/skins/${bob}`]: [404, "no_skin"],
       "/v1/game/guild/events": [403, "members_only"],
       "/v1/game/guild/events/stream": [403, "members_only"],
@@ -575,255 +572,27 @@ describe("GET /v1/game/me", () => {
   });
 });
 
-/** The earlier and refused copies of saves Leaf keeps, oldest first. */
-const keptCopies = () =>
-  services.query(
-    (sql) => sql`SELECT slot, kind, version, data, saved_at AS savedAt FROM save_history ORDER BY kept_at, slot`,
-  );
-
-describe("saves", () => {
-  it("lists nothing at first, and refuses to read a slot never written", async () => {
-    const list = await get("/v1/game/saves");
-    const one = await get("/v1/game/saves/town");
-
-    expect(await list.json()).toEqual({ saves: [] });
-    expect(one.status).toBe(404);
-    expect(await one.json()).toMatchObject({ code: "no_save" });
-  });
-
-  it("writes a first save over version 0, and reads it back as it was written", async () => {
-    const data = { saved_at: 1_764_072_000_000, keys: { "town.save.v1": '{"v":1}' } };
-
-    const written = await save("town", 0, data);
-
-    expect(written.status).toBe(200);
-    expect(await written.json()).toEqual({ version: 1, updated_at: "2026-11-25T12:00:00.000Z" });
-    expect(await (await get("/v1/game/saves/town")).json()).toEqual({
-      slot: "town",
-      version: 1,
-      updated_at: "2026-11-25T12:00:00.000Z",
-      data,
-    });
-    expect(await (await get("/v1/game/saves")).json()).toEqual({
-      saves: [{ slot: "town", version: 1, updated_at: "2026-11-25T12:00:00.000Z" }],
-    });
-  });
-
-  it("writes over the version last read, and refuses a stale one with version_conflict, changing nothing", async () => {
-    await save("town", 0, { coins: 1 });
-    clock.now = T0 + HOUR;
-    const second = await save("town", 1, { coins: 2 });
-    const stale = await save("town", 1, { coins: 99 });
-    const fresh = await save("town", 0, { coins: 99 });
-
-    expect(await second.json()).toEqual({ version: 2, updated_at: "2026-11-25T13:00:00.000Z" });
-    expect([stale.status, fresh.status]).toEqual([409, 409]);
-    expect(await stale.json()).toMatchObject({ code: "version_conflict" });
-    expect(await (await get("/v1/game/saves/town")).json()).toMatchObject({ version: 2, data: { coins: 2 } });
-  });
-
-  it("takes no more writes to the battler's and the Works' slots, whose games Leaf plays now: 410 moved, storing nothing; they can still be read", async () => {
-    // What was there before the game moved stays as it was.
-    await services.query(
-      (sql) => sql`
-        INSERT INTO saves (player_id, slot, version, data, updated_at, guest)
-        VALUES (${alice}, 'raid', 3, '{"saved_at":1,"keys":{"raid.run.v1":"a run"}}', ${T0 - DAY}, 0)
-      `,
-    );
-    const written = await save("raid", 3, { saved_at: 2, keys: { "raid.run.v1": "a better run" } });
-    const first = await save("raid", 0, { saved_at: 2, keys: {} }, { cookie: "bob-token", origin: ORIGIN });
-    const yard = await save("works", 0, { saved_at: 2, keys: { "works.save.v2": "a yard" } });
-
-    expect([written.status, first.status, yard.status]).toEqual([410, 410, 410]);
-    expect(await codeOf(yard)).toBe("moved");
-    expect(await written.json()).toEqual({
-      code: "moved",
-      message: "This game is kept on Leaf now, and its old save takes no more writes",
-    });
-    expect(await (await get("/v1/game/saves/raid")).json()).toMatchObject({
-      version: 3,
-      data: { keys: { "raid.run.v1": "a run" } },
-    });
-    expect(await services.query((sql) => sql`SELECT player_id FROM saves WHERE player_id = ${bob}`)).toEqual([]);
-    expect(await services.query((sql) => sql`SELECT count(*) AS n FROM save_history`)).toEqual([{ n: 0 }]);
-  });
-
-  it("refuses a slot that is not one, reading or writing", async () => {
-    const read = await get("/v1/game/saves/ledger");
-    const write = await save("ledger", 0, {});
-
-    expect([read.status, write.status]).toEqual([400, 400]);
-    expect(await read.json()).toMatchObject({ code: "invalid_slot" });
-    expect(await write.json()).toMatchObject({ code: "invalid_slot" });
-  });
-
-  it("refuses data that is not an object, and a body that is not a save", async () => {
-    const answers = await Promise.all(
-      [
-        { player: alice, version: 0, data: [1, 2] },
-        { player: alice, version: 0, data: "text" },
-        { player: alice, version: 0, data: null },
-        { player: alice, version: 0 },
-        { player: alice, version: -1, data: {} },
-        { player: alice, version: 1.5, data: {} },
-        { version: 0, data: {} },
-        { player: 1, version: 0, data: {} },
-        "{ not json",
-      ].map(async (body) => {
-        const response = await send("PUT", "/v1/game/saves/town", { ...alicesPage, body });
-        return [response.status, await codeOf(response)];
-      }),
-    );
-
-    expect(answers).toEqual(Array.from({ length: 9 }, () => [400, "invalid_save"]));
-    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
-  });
-
-  it("refuses a save over 256 KiB", async () => {
-    const over = await save("town", 0, { keys: "a".repeat(MAX_SAVE_BYTES) });
-    const within = await save("town", 0, { keys: "a".repeat(MAX_SAVE_BYTES - 20) });
-
-    expect([over.status, within.status]).toEqual([413, 200]);
-    expect(await over.json()).toMatchObject({ code: "save_too_large" });
-  });
-
-  it("does not read a body more than twice that long at all, whatever it holds", async () => {
-    const padded = `{"version":0,"data":{}}${" ".repeat(2 * MAX_SAVE_BYTES)}`;
-
-    const response = await send("PUT", "/v1/game/saves/town", { ...alicesPage, body: padded });
-
-    expect(response.status).toBe(413);
-    expect(await response.json()).toMatchObject({ code: "save_too_large" });
-    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
-  });
-
-  it("refuses a save from a page that believes it is someone else with not_you, storing nothing", async () => {
-    await save("town", 0, { coins: 300 });
-
-    // Alice's page, left open after Bob signed in in another tab: Bob's cookie, Alice's state.
-    const alicesOldPage = await save("town", 0, { coins: 300 }, { cookie: "bob-token", origin: ORIGIN }, alice);
-    const overAlice = await save("town", 1, { coins: 5 }, alicesPage, bob);
-    const nobody = await save("town", 1, { coins: 5 }, { bearer: "alice-token" }, "");
-
-    expect([alicesOldPage.status, overAlice.status, nobody.status]).toEqual([409, 409, 409]);
-    expect(await alicesOldPage.json()).toEqual({
-      code: "not_you",
-      message: "This page is signed in as someone else now. Load it again",
-    });
-    expect([await codeOf(overAlice), await codeOf(nobody)]).toEqual(["not_you", "not_you"]);
-    expect(await (await get("/v1/game/saves", { bearer: "bob-token" })).json()).toEqual({ saves: [] });
-    expect(await (await get("/v1/game/saves/town")).json()).toMatchObject({ version: 1, data: { coins: 300 } });
-    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM saves`)).toEqual([{ n: 1 }]);
-  });
-
-  it("keeps each member's saves their own", async () => {
-    await save("town", 0, { mine: "alice" });
-
-    const bobsList = await get("/v1/game/saves", { bearer: "bob-token" });
-    const bobsRead = await get("/v1/game/saves/town", { bearer: "bob-token" });
-    const bobsWrite = await save("town", 0, { mine: "bob" }, { bearer: "bob-token" });
-
-    expect(await bobsList.json()).toEqual({ saves: [] });
-    expect(bobsRead.status).toBe(404);
-    expect(await bobsWrite.json()).toMatchObject({ version: 1 });
-    expect(await (await get("/v1/game/saves/town")).json()).toMatchObject({ version: 1, data: { mine: "alice" } });
-  });
-
-  it("refuses a write to a slot within 2 seconds of the last with slow_down, changing nothing", async () => {
-    await save("town", 0, { n: 1 });
-    clock.now = T0 + 1;
-    const otherSlot = await save("town", 0, { n: 1 }, { bearer: "bob-token" }, bob);
-    clock.now = T0 + 1999;
-    const soon = await save("town", 1, { n: 2 });
-    const stale = await save("town", 0, { n: 2 });
-    clock.now = T0 + 2000;
-    const later = await save("town", 1, { n: 3 });
-
-    expect([otherSlot.status, soon.status, stale.status, later.status]).toEqual([200, 429, 409, 200]);
-    expect(await soon.json()).toEqual({
-      code: "slow_down",
-      message: "That slot was saved a moment ago. Send it again in a few seconds",
-    });
-    // A write over a version that is not the stored one is stale, however soon it comes.
-    expect(await codeOf(stale)).toBe("version_conflict");
-    expect(await (await get("/v1/game/saves/town")).json()).toMatchObject({ version: 2, data: { n: 3 } });
-  });
-
-  it("keeps what each write replaced, at most once a minute a slot, for a week", async () => {
-    await save("town", 0, { n: 1 });
-    clock.now = T0 + 3000;
-    await save("town", 1, { n: 2 });
-    clock.now = T0 + 6000;
-    await save("town", 2, { n: 3 });
-    clock.now = T0 + MINUTE + 5000;
-    await save("town", 3, { n: 4 });
-    // Another player's slot has its own copies.
-    const bobs = { bearer: "bob-token" };
-    await save("town", 0, { r: 1 }, bobs, bob);
-    clock.now = T0 + MINUTE + 8000;
-    await save("town", 1, { r: 2 }, bobs, bob);
-
-    expect(await keptCopies()).toEqual([
-      { slot: "town", kind: "earlier", version: 1, data: '{"n":1}', savedAt: T0 },
-      { slot: "town", kind: "earlier", version: 3, data: '{"n":3}', savedAt: T0 + 6000 },
-      { slot: "town", kind: "earlier", version: 1, data: '{"r":1}', savedAt: T0 + MINUTE + 5000 },
-    ]);
-
-    clock.now = T0 + 8 * DAY;
-    await save("town", 4, { n: 5 });
-    expect((await keptCopies()).map((k) => [k.slot, k.version])).toEqual([["town", 4]]);
-  });
-
-  it("keeps a copy a game sent over an older version, though it was refused", async () => {
-    await save("town", 0, { n: 1 });
-    clock.now = T0 + HOUR;
-    await save("town", 1, { n: 2 });
-    // Another device's older town, sent over the version it last read.
-    const stale = await save("town", 1, { n: "the other town" });
-
-    expect(stale.status).toBe(409);
-    expect(
-      await services.query(
-        (sql) => sql`SELECT kind, version, data FROM save_history WHERE kind = 'refused' ORDER BY kept_at`,
+describe("the old ways of saving", () => {
+  it("are gone, and nothing is written: reading a save answers 404, and a page from before, still sending its save or its Coins, is told not_you so that it loads itself again", async () => {
+    const answers = await Promise.all([
+      outcome("GET", "/v1/game/saves", alicesPage),
+      outcome("GET", "/v1/game/saves/town", alicesPage),
+      send("PUT", "/v1/game/saves/town", { ...alicesPage, body: { player: alice, version: 0, data: {} } }).then(
+        (r) => r.status,
       ),
-    ).toEqual([{ kind: "refused", version: 1, data: '{"n":"the other town"}' }]);
-    expect(await (await get("/v1/game/saves/town")).json()).toMatchObject({ version: 2, data: { n: 2 } });
-  });
-
-  it("keeps a guest's saves as a member's, and removes guests' left 90 days when anything is saved", async () => {
-    const carols = { cookie: "carol-token", origin: ORIGIN };
-    await save("town", 0, { mine: "carol" }, carols);
-    await save("town", 0, { mine: "alice" });
-    clock.now = T0 + 60 * DAY;
-    // Carol plays again: her save is fresh.
-    await save("town", 1, { mine: "carol, later" }, carols);
-    const readBack = await get("/v1/game/saves/town", carols);
-    clock.now = T0 + 90 * DAY;
-    await save("town", 0, {}, { bearer: "bob-token" });
-    const before = await services.query(
-      (sql) => sql`SELECT player_id, slot, guest FROM saves ORDER BY player_id, slot`,
-    );
-    clock.now = T0 + 150 * DAY + 1;
-    const untouched = await services.query((sql) => sql`SELECT player_id, slot FROM saves ORDER BY player_id, slot`);
-    // Carol's save is now past 90 days; Alice's, a member's, is older still.
-    await save("town", 1, {}, { bearer: "bob-token" });
-
-    expect(await readBack.json()).toMatchObject({ version: 2, data: { mine: "carol, later" } });
-    expect(before).toEqual([
-      { player_id: alice, slot: "town", guest: 0 },
-      { player_id: bob, slot: "town", guest: 0 },
-      { player_id: carol, slot: "town", guest: 1 },
+      send("POST", "/v1/game/coins", {
+        ...alicesPage,
+        body: { player: alice, id: "a-1", amount: 3, reason: "daily_chest" },
+      }).then((r) => r.status),
     ]);
-    // Nothing is removed until something is saved.
-    expect(untouched).toEqual([
-      { player_id: alice, slot: "town" },
-      { player_id: bob, slot: "town" },
-      { player_id: carol, slot: "town" },
+    expect(answers).toEqual([
+      ["GET", "/v1/game/saves", 404, "not_found"],
+      ["GET", "/v1/game/saves/town", 404, "not_found"],
+      409,
+      409,
     ]);
-    expect(await services.query((sql) => sql`SELECT player_id, slot FROM saves ORDER BY player_id, slot`)).toEqual([
-      { player_id: alice, slot: "town" },
-      { player_id: bob, slot: "town" },
-    ]);
+    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
+    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM coin_entries`)).toEqual([{ n: 0 }]);
   });
 });
 
@@ -1478,13 +1247,18 @@ describe("PUT /v1/game/presence", () => {
     );
   });
 
-  it("lists a member who says stay false as gone, not resting, until they say otherwise", async () => {
+  it("lists a member who says stay false as gone, not resting, until they say otherwise; saying nothing changes nothing", async () => {
     await arrive("works", { bearer: "bob-token" }, false);
     clock.now = T0 + 5 * MINUTE;
     const without = await arrive("town");
+    // A page of Bob's that is not the town's says nothing of staying.
     clock.now = T0 + 6 * MINUTE;
     await arrive("table", { bearer: "bob-token" });
     clock.now = T0 + 9 * MINUTE;
+    const still = await arrive("town");
+    clock.now = T0 + 10 * MINUTE;
+    await arrive("camp", { bearer: "bob-token" }, true);
+    clock.now = T0 + 13 * MINUTE;
     const back = await arrive("town");
 
     expect(await without.json()).toEqual({
@@ -1492,9 +1266,13 @@ describe("PUT /v1/game/presence", () => {
       resting: [],
       gone: [{ id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0) }],
     });
+    expect(await still.json()).toMatchObject({
+      resting: [],
+      gone: [{ id: bob, place: "table", seen_at: iso(T0 + 6 * MINUTE) }],
+    });
     expect(await back.json()).toEqual({
       present: [{ id: alice, username: "Alice", place: "town", guest: false }],
-      resting: [{ id: bob, username: "Bob", place: "table", guest: false, seen_at: iso(T0 + 6 * MINUTE) }],
+      resting: [{ id: bob, username: "Bob", place: "camp", guest: false, seen_at: iso(T0 + 10 * MINUTE) }],
       gone: [],
     });
     expect(await services.query((sql) => sql`SELECT stay FROM presence ORDER BY player_id`)).toEqual([
@@ -1600,7 +1378,7 @@ describe("PUT /v1/game/presence", () => {
     expect(await response.json()).toMatchObject({ code: "invalid_place" });
   });
 
-  it("does not read a body over 16 KiB, here or on any route but saves", async () => {
+  it("does not read a body over 16 KiB, here or on any route", async () => {
     const over = paddedTo({ place: "town" }, 17 * 1024);
     const within = paddedTo({ place: "town" }, 16 * 1024);
 

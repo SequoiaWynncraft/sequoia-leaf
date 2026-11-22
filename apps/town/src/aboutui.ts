@@ -11,11 +11,12 @@
 
 import { close, link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph } from "@sequoia-leaf/kit/dom.ts";
-import { member, where } from "@sequoia-leaf/kit/live.ts";
+import { member } from "@sequoia-leaf/kit/live.ts";
 import { known, people } from "@sequoia-leaf/kit/person.ts";
 import { type Body, faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { RAID_STATS } from "@sequoia-leaf/raid/stats.ts";
+import { TOWN_STATS } from "@sequoia-leaf/town/stats.ts";
 import { WORKS_STATS } from "@sequoia-leaf/yard/stats.ts";
 
 import { type About, type AboutRow, ALONE, whoIsAbout } from "./about.ts";
@@ -60,8 +61,7 @@ const bodyNo = (b: Body | null | undefined): number => {
 const figureOf = (r: AboutRow): Actor | null => (r.you ? G.player : drawnAs(r.id));
 
 /** Somebody's face: as they are drawn in town, or else from their skin, fetched once. */
-const faceOf = (r: AboutRow): HTMLCanvasElement =>
-  figureOf(r)?.body?.face ?? faceFor(r.id, r.name, where().mode === "live" && !r.you);
+const faceOf = (r: AboutRow): HTMLCanvasElement => figureOf(r)?.body?.face ?? faceFor(r.id, r.name, !r.you);
 
 // ---------- the panel ----------
 
@@ -116,7 +116,7 @@ const away = (then: () => void) => (): void => {
 /** The card's buttons: "Find in town" for somebody in town and drawn here, "Visit yard" for anybody else with a yard. */
 function initPeople(locate: (a: Actor) => void): void {
   people({
-    stats: { works: WORKS_STATS, raid: RAID_STATS },
+    stats: { works: WORKS_STATS, raid: RAID_STATS, town: TOWN_STATS },
     actions: (p) => {
       const you = p.id === myId();
       const inTown = aboutNow().parts.some((part) => part.title === "In town" && part.rows.some((r) => r.id === p.id));

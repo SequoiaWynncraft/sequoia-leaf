@@ -26,6 +26,7 @@ describe("a person's card", () => {
       name: "Alice",
       games: {
         raid: { place: 1, score: 0, also: { runs: 0, room: 0 } },
+        town: { place: 1, score: 10, also: { greeted: 0, sightings: 0 } },
         works: { place: 2, score: 1840, also: { story: 3 } },
       },
     });

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { forgetStop } from "@sequoia-leaf/kit/keep.ts";
 import { type Reply, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 import { at, LEAD, refusal, WORKS, type WorksAct } from "@sequoia-leaf/yard";
 
@@ -54,7 +53,6 @@ beforeEach(() => {
 afterEach(() => {
   world?.done();
   world = null;
-  forgetStop();
   letGo();
   performance.now = clock;
 });

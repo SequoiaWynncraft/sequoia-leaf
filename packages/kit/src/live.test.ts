@@ -16,19 +16,15 @@ import {
 import { isRecord, type Listening } from "./net.ts";
 import {
   balance,
-  earn,
   forgetLedger,
   fromLedger,
-  grant,
+  heardCoins,
   LEAF_GUEST,
   LEAF_NOT_HERE,
   LEAF_SHUT,
-  leafOnLedger,
   leafOpen,
   leafShown,
   leafShut,
-  settled,
-  spend,
 } from "./purse.ts";
 import {
   GUEST,
@@ -69,11 +65,10 @@ describe("finding out where the game is", () => {
     ["a page", { status: 200, body: "<!doctype html>" }],
     ["something else", { status: 200, body: { leaf_spending: false } }],
     ["a 503", { status: 503, body: null }],
-  ] as const)("%s for hello: the made-up guild, asked nothing more", async (_why, hello) => {
+  ] as const)("%s for hello: no Leaf, asked nothing more", async (_why, hello) => {
     world = standin({ "GET /v1/game/hello": hello });
-    expect(await start()).toEqual({ mode: "madeup" });
+    expect(await start()).toEqual({ mode: "none" });
     expect(world.sent.map((s) => s.path)).toEqual(["/v1/game/hello"]);
-    expect(leafOpen()).toBe(true);
   });
 
   test("200 and 200: live, as the member, and the purse keeps the ledger's Leaf", async () => {
@@ -94,7 +89,6 @@ describe("finding out where the game is", () => {
     });
     expect(where()).toBe(w);
     expect(balance().leaf).toBe(2450);
-    expect(leafOpen()).toBe(false);
   });
 
   test("200 as a guest: live, as them, with no Leaf to show or spend, and every Leaf button says why", async () => {
@@ -103,16 +97,9 @@ describe("finding out where the game is", () => {
     expect(w).toMatchObject({ mode: "live", me: { id: GUEST.player.id, name: "Wanderer", rank: null, guest: true } });
     expect(isGuest()).toBe(true);
     expect(balance().leaf).toBe(0);
-    expect(leafOpen()).toBe(false);
     expect(leafShown()).toBe(false);
     expect(leafShut()).toBe(LEAF_GUEST);
     expect(LEAF_GUEST).toBe("Leaf is earned by raiding with Sequoia.");
-    grant(500, "a stand-in raid");
-    expect(spend("leaf", 0)).toBe(false);
-    expect(balance().leaf).toBe(0);
-    // Coins are a guest's as a member's.
-    earn(40, "daily_chest");
-    expect(balance().coins).toBeGreaterThanOrEqual(40);
   });
 
   test("a member's Leaf buttons keep the play-test's line, and their Leaf shows", async () => {
@@ -184,7 +171,6 @@ describe("finding out where the game is", () => {
   test("403: not one of the guild", async () => {
     world = live({ status: 403, body: { code: "not_a_member" } });
     expect(await start()).toMatchObject({ mode: "shut", why: "member" });
-    expect(leafOpen()).toBe(true);
   });
 
   test.each([
@@ -253,23 +239,13 @@ function aFramedPage(): (data: unknown) => void {
 }
 
 describe("the member's Coins on the guild's server", () => {
-  test("start from what /v1/game/me says, a guest's as a member's, and every change goes to Leaf", async () => {
+  test("start from what /v1/game/me says, a guest's as a member's, and nothing is kept in the browser", async () => {
     world = standin({
       "GET /v1/game/hello": HELLO,
       "GET /v1/game/me": { status: 200, body: { ...GUEST, coins: 812 } },
-      "POST /v1/game/coins": (s) => ({
-        status: 200,
-        body: { coins: 812 + (isRecord(s.body) && typeof s.body.amount === "number" ? s.body.amount : 0) },
-      }),
     });
     await start();
     expect(balance().coins).toBe(812);
-    expect(spend("coins", 12, "camp_thing")).toBe(true);
-    await settled();
-    expect(balance().coins).toBe(800);
-    expect(world.sent.filter((s) => s.method === "POST")).toMatchObject([
-      { path: "/v1/game/coins", body: { amount: -12, reason: "camp_thing" } },
-    ]);
     expect(world.store.length).toBe(0);
   });
 
@@ -285,26 +261,18 @@ describe("the member's Coins on the guild's server", () => {
     stop();
   });
 
-  test("the town says each change to its Coins to a game once it is ready, and nothing with the made-up guild", async () => {
+  test("the town says each change to its Coins to a game once it is ready", async () => {
     world = live({ status: 200, body: TESTER });
     await start();
     const said: number[] = [];
     const coins = passCoins((n) => said.push(n));
-    earn(40, "daily_chest");
+    heardCoins(340);
     expect(said).toEqual([]);
     coins.ready();
     expect(said).toEqual([340]);
     coins.stop();
-    forgetLedger();
-    restart();
-    world.done();
-    world = standin({ "GET /v1/game/hello": "offline" });
-    await start();
-    const quiet = passCoins((n) => said.push(n));
-    quiet.ready();
-    earn(40, "daily_chest");
+    heardCoins(380);
     expect(said).toEqual([340]);
-    quiet.stop();
   });
 });
 
@@ -317,7 +285,6 @@ describe("the member's Leaf in a game in the town's frame", () => {
     expect(balance().leaf).toBe(2450);
     town({ town: "leaf", leaf: 2560 });
     expect(balance().leaf).toBe(2560);
-    expect(leafOpen()).toBe(false);
     // In the frame the town listens to the member's news, so the game does not.
     expect(world.sent.map((s) => s.path)).toEqual(["/v1/game/hello", "/v1/game/me"]);
     stop();
@@ -341,7 +308,7 @@ describe("the member's Leaf in a game in the town's frame", () => {
     stop();
   });
 
-  test("with the made-up guild, the town's word about Leaf is not taken", async () => {
+  test("without Leaf, the town's word about Leaf is not taken", async () => {
     world = standin({ "GET /v1/game/hello": "offline" }, { top: false });
     await start();
     const town = aFramedPage();
@@ -349,7 +316,6 @@ describe("the member's Leaf in a game in the town's frame", () => {
     const before = balance().leaf;
     town({ town: "leaf", leaf: before + 500 });
     expect(balance().leaf).toBe(before);
-    expect(leafOpen()).toBe(true);
     stop();
   });
 
@@ -379,24 +345,13 @@ describe("the member's Leaf in a game in the town's frame", () => {
     expect(said).toEqual([2560]);
     // The same Leaf again, or Coins, is nothing to say.
     fromLedger(2560);
-    earn(40, "daily_chest");
+    heardCoins(40);
     expect(said).toEqual([2560]);
     fromLedger(2670);
     expect(said).toEqual([2560, 2670]);
     leaf.stop();
     fromLedger(2800);
     expect(said).toEqual([2560, 2670]);
-  });
-
-  test("with the made-up guild, the town says nothing about Leaf", async () => {
-    world = standin({ "GET /v1/game/hello": "offline" });
-    await start();
-    const said: number[] = [];
-    const leaf = passLeaf((n) => said.push(n));
-    leaf.ready();
-    grant(300, "a test");
-    expect(said).toEqual([]);
-    leaf.stop();
   });
 });
 
@@ -444,7 +399,7 @@ describe("against what Leaf really answers", () => {
     });
     await start();
     // `closeLeaf` closes every Leaf button beside the ledger; a page passes it one with a command only while `leafOpen()` is false.
-    expect([leafOpen(), leafOnLedger(), leafShut()]).toEqual([true, true, LEAF_NOT_HERE]);
+    expect([leafOpen(), leafShut()]).toEqual([true, LEAF_NOT_HERE]);
     const passed: number[] = [];
     const leaf = passLeaf((n) => passed.push(n));
     leaf.ready();

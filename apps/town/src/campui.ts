@@ -1,8 +1,8 @@
 /**
  * The camp's own part of the interface: the cabin (the member's own things), the mailbox, the
- * signpost, the tray that things are put away into, and the few panels somebody else's camp would
- * have (`note`, `present`; nothing opens them until members' camps can be visited). The purse, the
- * feed and the panel's frame are shared with the town (`hud.ts`).
+ * signpost, the tray that things are put away into, and the note on the door of somebody else's
+ * camp (nothing opens it until members' camps can be visited). The purse, the feed and the panel's
+ * frame are shared with the town (`hud.ts`).
  */
 
 import { link } from "@sequoia-leaf/kit/card.ts";
@@ -10,17 +10,16 @@ import { el, icon as glyph, shown } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { COSY, KIND, type PetId, PETS, petsOf, trayList } from "@sequoia-leaf/town/camp.ts";
 import { folkNamed } from "@sequoia-leaf/town/folk.ts";
 import { tidied } from "@sequoia-leaf/town/mail.ts";
 import { thingOf, THINGS } from "@sequoia-leaf/town/things.ts";
 
-import { hop } from "./actors.ts";
-import { COSY, KIND, type PetId, PETS, petsOf, trayList, welcoming } from "./camp.ts";
 import { type CampArt, type CampIcon, campIcon, pictureOf } from "./campart.ts";
 import type { CampScene } from "./campscene.ts";
-import { named, thingRef } from "./cards.ts";
+import { thingRef } from "./cards.ts";
 import { folkArt } from "./folkart.ts";
-import { changed, G, hooks, toPage } from "./game.ts";
+import { G, hooks, toPage } from "./game.ts";
 import { guild } from "./guild.ts";
 import {
   $,
@@ -37,18 +36,11 @@ import {
   slot,
   when,
 } from "./hud.ts";
+import { doNow, mine, town } from "./leaf.ts";
 import { MY_PETS, PET_ABOUT, PET_CHOICE } from "./pets.ts";
-import { camp, kept } from "./record.ts";
-import type { Sprites } from "./sprites.ts";
 import { openPanel as openTownPanel, thingSlot } from "./ui.ts";
 
-/** An element that stands for a thing: pointing at it shows the thing's card. */
-function linked(target: HTMLElement, ref: string): HTMLElement {
-  link(target, ref);
-  return target;
-}
-
-export type CampPanel = "cabin" | "mailbox" | "signpost" | "note" | "present" | "choose";
+export type CampPanel = "cabin" | "mailbox" | "signpost" | "note" | "choose";
 
 export interface CampUi {
   /** Opens one of the camp's panels. */
@@ -68,7 +60,6 @@ const TITLES: Readonly<Record<CampPanel, string>> = {
   mailbox: "Mailbox",
   signpost: "Signpost",
   note: "A note",
-  present: "A present",
   choose: "Somebody is waiting",
 };
 const ICONS: Readonly<Record<CampPanel, CampIcon>> = {
@@ -76,7 +67,6 @@ const ICONS: Readonly<Record<CampPanel, CampIcon>> = {
   mailbox: "mailbox",
   signpost: "signpost",
   note: "cabin",
-  present: "mailbox",
   choose: "home",
 };
 
@@ -107,7 +97,7 @@ function way(name: string, art: HTMLCanvasElement, go: () => void): HTMLElement 
   );
 }
 
-export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scene: CampScene): void } {
+export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): void } {
   let scene: CampScene | null = null;
   const at = (): CampScene => {
     if (!scene) throw new Error("no camp yet");
@@ -122,18 +112,16 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
     const portrait = makeCanvas(12, 24);
     const frame = p?.body?.frames[0]?.[0];
     if (frame) portrait.g.drawImage(frame, 0, 0);
-    if (G.wearing.has("crown")) portrait.g.drawImage(sprites.crown, 2, 0);
     const xp = el("i");
     xp.style.setProperty("--v", `${Math.min(100, (me.xp / me.next) * 100)}%`);
-    const worn = el("div", "k-col");
     const living = el("div", "k-col");
     const shelf = el("div", "k-wrap");
     // Whether the member's character stays in town, dozing, for a day after they go.
     const stayBtn = button("sm", [], () => {
-      kept.stay = !kept.stay;
-      guild.stay(kept.stay);
+      const on = !town().stay;
+      if (doNow({ do: "stay", on }) === null) return;
+      guild.stay(on);
       sfx.tap();
-      changed();
     });
     stayBtn.setAttribute("role", "switch");
     const stayRow = el(
@@ -166,42 +154,17 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
         ),
       ),
       stayRow,
-      el("div", "k-label", { text: "Wearing" }),
-      worn,
       el("div", "k-label", { text: "Trophy shelf" }),
       shelf,
       el("div", "k-label", { text: "Who lives here" }),
       living,
     );
-    const drawWorn = when(
-      () => `${[...G.owned].join()}|${[...G.wearing].join()}`,
-      () => {
-        const mine = guild.wares().filter((w) => w.worn && G.owned.has(w.id));
-        if (mine.length === 0) {
-          worn.replaceChildren(el("div", "k-d", { text: "Nothing yet. Cinfy sells things to wear, in town." }));
-          return;
-        }
-        worn.replaceChildren(
-          ...mine.map((w) => {
-            const on = G.wearing.has(w.id);
-            const side = button(on ? "sm" : "wood sm", [on ? "On" : "Off"], () => {
-              if (on) G.wearing.delete(w.id);
-              else G.wearing.add(w.id);
-              sfx.tap();
-              if (G.player) hop(G.player);
-              changed();
-            });
-            return el("div", "k-card", {}, el("div", "k-grow", {}, w.name, el("div", "k-d", { text: w.about })), side);
-          }),
-        );
-      },
-    );
     const drawShelf = when(
-      () => camp.earned.join(),
+      () => mine().earned.join(),
       () => {
         shelf.replaceChildren(
           ...THINGS.filter((t) => t.kind === "trophies").map((t) => {
-            const won = camp.earned.includes(t.id);
+            const won = mine().earned.includes(t.id);
             const small = art.small[t.id];
             const s = slot(won && small ? pic(small, 2) : el("span", "k-dim", { text: "?" }), 24);
             if (won) s.classList.add("lit");
@@ -212,8 +175,9 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
       },
     );
     const drawLiving = when(
-      () => `${petsOf(camp).join()}|${camp.placed.length}|${camp.greeted}|${camp.gave.length}`,
+      () => `${petsOf(mine()).join()}|${mine().placed.length}|${mine().greeted}`,
       () => {
+        const camp = mine();
         const here = petsOf(camp);
         const rows: Node[] = here.map((kind) => {
           const sit = art.pets(kind, 0).sit[0];
@@ -228,7 +192,7 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
         if (here.length === 0) rows.push(el("div", "k-d", { text: "Nobody yet." }));
         else if (here.length < PETS.length) {
           const cosy = camp.placed.length >= COSY;
-          const kind = welcoming(camp);
+          const kind = camp.greeted >= KIND;
           rows.push(
             el("div", "k-d", {
               text: "Somebody else moves in when the camp is cosier, and when you have made the town's callers welcome.",
@@ -246,16 +210,16 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
       },
     );
     const drawStay = when(
-      () => String(kept.stay),
+      () => String(town().stay),
       () => {
-        stayBtn.replaceChildren(kept.stay ? "On" : "Off");
-        stayBtn.classList.toggle("wood", !kept.stay);
-        stayBtn.setAttribute("aria-checked", kept.stay ? "true" : "false");
+        const on = town().stay;
+        stayBtn.replaceChildren(on ? "On" : "Off");
+        stayBtn.classList.toggle("wood", !on);
+        stayBtn.setAttribute("aria-checked", on ? "true" : "false");
       },
     );
     return () => {
       drawStay();
-      drawWorn();
       drawShelf();
       drawLiving();
     };
@@ -265,14 +229,21 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
 
   function mailbox(body: HTMLElement): () => void {
     // What had not been read when the box was opened is marked new this once; opening it is reading it.
-    const fresh = new Set(camp.letters.filter((l) => !l.read).map((l) => l.id));
-    for (const l of camp.letters) l.read = true;
-    changed();
+    const fresh = new Set(
+      mine()
+        .letters.filter((l) => !l.read)
+        .map((l) => l.id),
+    );
+    if (fresh.size > 0) doNow({ do: "readMail" });
     const list = el("div", "k-col");
     body.append(list);
     return when(
-      () => camp.letters.map((l) => `${l.id}${l.taken ? "t" : ""}`).join(),
+      () =>
+        mine()
+          .letters.map((l) => `${l.id}${l.taken ? "t" : ""}`)
+          .join(),
       () => {
+        const camp = mine();
         if (camp.letters.length === 0) {
           list.replaceChildren(el("div", "k-d", { text: "Nothing today. The flag goes up when there is." }));
           return;
@@ -295,9 +266,7 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
           );
           if (gift && !l.taken) {
             const take = button("sm", [glyph("gift"), "Take it"], () => {
-              l.taken = true;
-              changed();
-              at().unwrap(gift.id);
+              at().unwrap(l.id);
               refreshPanel();
             });
             paper.append(
@@ -310,9 +279,8 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
         if (tidied(camp.letters).length < camp.letters.length)
           rows.push(
             button("wood sm", ["Clear old letters"], () => {
-              camp.letters.splice(0, camp.letters.length, ...tidied(camp.letters));
+              if (doNow({ do: "clearLetters" }) === null) return;
               sfx.paper();
-              changed();
               refreshPanel();
             }),
           );
@@ -359,53 +327,6 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
     return null;
   }
 
-  function present(body: HTMLElement): () => void {
-    const host = at().host();
-    const who = host?.owner ?? "them";
-    const inside = el("div", "k-col");
-    body.append(inside);
-    return when(
-      () => String(camp.gave.some((g) => g.to === who)),
-      () => {
-        const gave = camp.gave.find((g) => g.to === who);
-        const left = gave ? thingOf(gave.what) : null;
-        if (left) {
-          inside.replaceChildren(
-            el(
-              "div",
-              "k-row",
-              {},
-              linked(thingSlot(art, left.id, 26), thingRef(left.id)),
-              el("div", "k-grow", { text: `You left ${who} ${left.name.toLowerCase()}.` }),
-            ),
-            el("div", "k-d", { text: "One present a camp. It stays where you put it." }),
-          );
-          return;
-        }
-        inside.replaceChildren(
-          el("div", "", { text: `Leave ${who} something small?` }),
-          ...guild.presents().flatMap((id) => {
-            const thing = thingOf(id);
-            if (!thing) return [];
-            return [
-              el(
-                "div",
-                "k-card",
-                {},
-                linked(thingSlot(art, id, 26), thingRef(id)),
-                el("div", "k-grow", {}, named(thing.name, thingRef(id)), el("div", "k-d", { text: thing.about })),
-                button("sm", ["Leave it"], () => {
-                  at().give(id);
-                  refreshPanel();
-                }),
-              ),
-            ];
-          }),
-        );
-      },
-    );
-  }
-
   function choose(body: HTMLElement): null {
     body.append(
       el("div", "", { text: "Three small faces look round the cabin door. One of them would like to stay." }),
@@ -442,7 +363,6 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
     mailbox,
     signpost,
     note,
-    present,
     choose,
   };
 
@@ -498,7 +418,7 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
         : [el("span", "k-d", { text: "Drag a thing to move it. Tap one below to set it out." })]),
     );
     traySlots.clear();
-    const list = trayList(camp);
+    const list = trayList(mine());
     row.replaceChildren(
       ...(list.length > 0
         ? list.map(({ id, n }) => {
@@ -540,7 +460,7 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
         about,
         art: campIcon(icon),
         press: (): void => {
-          if (G.panel === id || (id === "mailbox" && G.panel === "present")) closePanel();
+          if (G.panel === id) closePanel();
           else s.go(id);
         },
       });
@@ -556,16 +476,12 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
       setDock(
         home
           ? [
-              place("cabin", "Cabin", "What you wear, what you have won, who lives here.", "cabin"),
+              place("cabin", "Cabin", "What you have won, and who lives here.", "cabin"),
               place("mailbox", "Mailbox", "Notes and presents from the town's own.", "mailbox"),
               place("signpost", "Signpost", "The way to town.", "signpost"),
               trail("Town", "town"),
             ]
-          : [
-              place("mailbox", "Leave a present", `Something small, for ${s.owner() ?? "them"}.`, "mailbox"),
-              place("signpost", "Signpost", "Home, town, or another camp.", "signpost"),
-              trail("Home", "home"),
-            ],
+          : [place("signpost", "Signpost", "Home, or town.", "signpost"), trail("Home", "home")],
       );
       setFace(() => {
         if (!home) {

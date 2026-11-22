@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { forgetStop } from "@sequoia-leaf/kit/keep.ts";
 import { type Reply, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 import { RAID, type RaidCommand, type Table } from "@sequoia-leaf/raid";
 
@@ -65,7 +64,6 @@ let world: Standin | null = null;
 afterEach(() => {
   world?.done();
   world = null;
-  forgetStop();
   S.run = null;
   S.ended = null;
 });

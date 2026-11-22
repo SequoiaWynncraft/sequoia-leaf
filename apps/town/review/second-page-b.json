@@ -1,0 +1,83 @@
+[
+  ["size", 1280, 760],
+  ["wait", 4000],
+  ["eval", "(document.querySelector('#arrival .k-btn')?.click(), 'in')"],
+  ["wait", 800],
+  [
+    "eval",
+    "(window.town.camp.go(), window.town.skip(4), window.town.camp.walk('cabin'), window.town.skip(6), window.town.close(), window.town.skip(1), 'B in camp')"
+  ],
+  ["eval", "JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s])"],
+  ["shot", "s1-second-page-before"],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.skip(0.2), JSON.stringify([Date.now(), window.town.kept().camp.placed.find(p => p.n === 5).s]))"
+  ],
+  ["shot", "s3-second-page-after"]
+]

@@ -4,9 +4,9 @@ import { CREAM, GOLD, GREEN } from "@sequoia-leaf/kit/palette.ts";
 import type { Body } from "@sequoia-leaf/kit/skin.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
+import { PETS } from "@sequoia-leaf/town/camp.ts";
 import { KIND_NAMES, KINDS, THINGS } from "@sequoia-leaf/town/things.ts";
 
-import { PETS } from "./camp.ts";
 import { type CampArt, campIcon } from "./campart.ts";
 import { paintBackdrop, paintGround, paintNear, paintTrunk } from "./ground.ts";
 import { icon, type Sprite, type Sprites } from "./sprites.ts";

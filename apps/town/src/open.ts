@@ -1,17 +1,20 @@
 /**
- * The town's front door. Before anything is read or drawn it finds out where the game is being
- * played (the kit's `start()`): with the made-up guild the town opens as it always has; on the
- * guild's own server it first fetches the member's saves and what the town needs to know of them
- * (`live.ts`), and then opens. If the game will not open there, a card says why instead.
+ * The town's front door. Before anything is read or drawn it finds out who the member is (the
+ * kit's `start()`), opens their town and camp from Leaf (`leaf.ts`), and fetches what the town
+ * needs to know of the guild (`live.ts`), from how far Leaf's town says their news has been told;
+ * then it opens. Without Leaf there is no town: where it will not open, the kit's card says why.
  *
  * The town itself (`main.ts`) is only loaded after that, because the moment it loads it reads
- * what the browser keeps.
+ * what was fetched.
  */
 
-import { pickUp, pull } from "@sequoia-leaf/kit/cloud.ts";
-import { shutCard, start } from "@sequoia-leaf/kit/live.ts";
+import { serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
+import type { Trouble } from "@sequoia-leaf/kit/play.ts";
 
+import { openTown, town } from "./leaf.ts";
 import { prepare } from "./live.ts";
+
+const NEEDS_LEAF = "The town needs the guild's server.";
 
 async function open(): Promise<void> {
   const where = await start();
@@ -19,7 +22,17 @@ async function open(): Promise<void> {
     shutCard(where.why, where.signIn);
     return;
   }
-  if (where.mode === "live" && !((await pull(["town"], { onReplaced: pickUp })) && (await prepare()))) {
+  if (where.mode !== "live") {
+    serverCard(NEEDS_LEAF);
+    return;
+  }
+  const card = (why: Trouble): void => troubleCard(why, where.signIn, NEEDS_LEAF);
+  const trouble = await openTown(where.me.id, card);
+  if (trouble) {
+    card(trouble);
+    return;
+  }
+  if (!(await prepare(town().cursor))) {
     shutCard("closed", where.signIn);
     return;
   }

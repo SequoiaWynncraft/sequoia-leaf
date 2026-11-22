@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import { agoLine, ALONE, type InRoom, whoIsAbout } from "./about.ts";
 import type { Mate } from "./guild.ts";
 import { GUEST, toAbout } from "./live.ts";
-import { makeGuild } from "./madeup.ts";
 
 const NOW = 1_800_000_000_000;
 const MIN = 60_000;
@@ -191,17 +190,5 @@ describe("who is about, from the guild", () => {
       ["Pebblefoot", "town", GUEST],
     ]);
     expect(about.resting.map((m) => m.name)).toEqual(["Quillon", "Fernhollow"]);
-  });
-
-  test("with the made-up guild, its stand-ins the same way", () => {
-    const madeUp = makeGuild({ now: () => NOW });
-    const { present, resting } = madeUp.about();
-    const about = whoIsAbout({ me: ME, room: null, present, resting, now: NOW });
-    expect(shown(about)).toEqual([
-      ["In town", ["Tester: Strategist (you)", "Quillfeather: Elder"]],
-      ["Elsewhere", ["Fernwhistle: Seedling · at the raid table"]],
-      ["Seen lately", ["Kestrelle: Warden · 40 minutes ago", "Wrenly: Ranger · 3 hours ago"]],
-    ]);
-    expect(about.count).toBe(3);
   });
 });

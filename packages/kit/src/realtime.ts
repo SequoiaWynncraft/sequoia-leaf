@@ -10,7 +10,7 @@
  * (`CLOSE`): told the player opened the game live somewhere else, or that their session ended,
  * this page lets go. A browser cannot see why a connection would not open, so after a few tries
  * that did not, the page asks Leaf whether the player is still signed in, and lets go if not. With
- * the made-up guild there is no server, and it does nothing.
+ * no Leaf there is no server, and it does nothing.
  *
  * What this page knows of the room starts at a welcome, each time: who is in it, where they have
  * been, and Leaf's clock. Nothing heard before a welcome counts, and a new connection's picture
@@ -261,7 +261,7 @@ const stop = (t: ReturnType<typeof setTimeout> | null): null => {
   return null;
 };
 
-/** Puts the player in a room on Leaf, live. With the made-up guild it does nothing, and nobody is ever there. */
+/** Puts the player in a room on Leaf, live. Without Leaf it does nothing, and nobody is ever there. */
 export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
   /** The connection open now, if any; and the one whose picture of the room is shown. */
   let link: Link | null = null;

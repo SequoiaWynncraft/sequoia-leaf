@@ -1,15 +1,14 @@
 /**
  * The town as a scene: who is here, what a touch does, how the member gets about and into the
- * places, and what is kept between visits. `main.ts` drives it through `Scene` and knows nothing
- * else about it.
+ * places, and the letter at the gate. `main.ts` drives it through `Scene` and knows nothing else
+ * about it.
  */
 
 import type { Emote } from "@sequoia-leaf/kit/emotes.ts";
-import { where } from "@sequoia-leaf/kit/live.ts";
 import { bake, type Body, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { clamp, type Ctx, dist, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { FOLK, folk, KEEPER } from "@sequoia-leaf/town/folk.ts";
-import { BOX_FULL, post, roomInBox } from "@sequoia-leaf/town/mail.ts";
+import { BOX_FULL, roomInBox } from "@sequoia-leaf/town/mail.ts";
 
 import { initAbout, openAbout } from "./aboutui.ts";
 import {
@@ -37,7 +36,8 @@ import { type GameId, isGame, worksWaiting } from "./games.ts";
 import { GROUND, NEAR, paintBackdrop, paintGround, paintNear, SKYLINE } from "./ground.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, refreshFace, setFace, setHammer, showCard } from "./hud.ts";
-import { compose, read } from "./letter.ts";
+import { ask, mine, town as kept } from "./leaf.ts";
+import { compose } from "./letter.ts";
 import { inTownLine } from "./news.ts";
 import {
   closeEmotes,
@@ -54,8 +54,6 @@ import {
   townOnStage,
   waveAt,
 } from "./players.ts";
-import { camp, kept, remember } from "./record.ts";
-import { utcDayOf } from "./save.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Scene, Stage } from "./stage.ts";
 import { type Door, makeTouch } from "./touch.ts";
@@ -175,15 +173,6 @@ export interface Town extends Scene {
 }
 
 export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town {
-  G.lostCrab = guild.lostCrab();
-  hooks.looted = (): boolean => {
-    const today = utcDayOf(Date.now());
-    if (kept.chest === today) return true;
-    kept.chest = today;
-    remember();
-    return false;
-  };
-
   // ---------- the place itself ----------
 
   const ground = paintGround();
@@ -573,41 +562,33 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     },
 
     arrive() {
-      const now = Date.now();
-      const away = guild.away(kept.lastSeen, now);
-      const mail = guild.mail(kept.lastSeen, now);
-      const letter = compose(kept, now, away, [worksWaiting()]);
+      const { arrival } = kept();
+      const letter = compose(arrival, guild.news(), [worksWaiting()]);
       after(0.35, () => {
         walkTo(player, { x: 256, y: 152 }, () => {
           player.dir = 0;
         });
       });
       const begin = (): void => {
-        Object.assign(kept, read(kept, Date.now()));
-        // What the town's own left while the member was away is in the camp's mailbox, not in this letter;
-        // what does not fit beside the presents still inside it is not left.
-        let turnedAway = false;
-        for (const l of mail) {
-          if (roomInBox(camp.letters)) post(camp.letters, l);
-          else if (!camp.letters.some((m) => m.id === l.id)) turnedAway = true;
-        }
+        // Put away, Leaf posts what the town's own left while the member was away in the camp's
+        // mailbox (not in this letter), but what does not fit beside the presents still in it.
+        void (async () => {
+          await ask({ do: "welcome", cursor: guild.told() });
+          // Only a box full of presents turns a letter away.
+          if (arrival.mail.length > 0 && !roomInBox(mine().letters)) hooks.feed(BOX_FULL, "coral");
+        })();
         G.home = true;
-        remember();
         beginEvents();
         twinkleAll();
-        // How many others are in town, once the town's room has said (on the guild's own server)
-        // or the guild has (with the made-up one); then the feed says so.
+        // How many others are in town, once the town's room has said; then the feed says so.
         const greet = letter.show ? "You are home." : "Back again.";
-        const live = where().mode === "live";
         let tries = 0;
         const tellHowMany = (): void => {
-          const known = live ? othersInTown() !== null : guild.heard();
-          if (!known && tries++ < 12) {
+          if (othersInTown() === null && tries++ < 12) {
             after(0.5, tellHowMany);
             return;
           }
-          hooks.feed(`${greet} ${inTownLine(live ? (othersInTown() ?? 0) : guild.visitors().length)}`, "leaf");
-          if (turnedAway) hooks.feed(BOX_FULL, "coral");
+          hooks.feed(`${greet} ${inTownLine(othersInTown() ?? 0)}`, "leaf");
         };
         tellHowMany();
         // Whoever of the town's own is nearest and awake looks up and says so.
@@ -670,10 +651,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         const c = crabs.find((k) => k.lost);
         return c ? { x: Math.round(c.x), y: Math.round(c.y) } : { x: 0, y: 0 };
       },
-      kept() {
-        remember();
-        return { ...kept };
-      },
+      kept: () => kept(),
       players: liveHandles.players,
       told: liveHandles.told,
       link: liveHandles.link,
