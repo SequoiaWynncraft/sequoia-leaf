@@ -127,7 +127,7 @@ export function tally(events: readonly FightEvent[], everyone: readonly number[]
     if (ev.t === "hit") {
       if (ev.by >= 0) row(ev.by)[ev.kind] += ev.amount;
       const target = row(ev.id);
-      target.taken += ev.amount - ev.soaked;
+      target.taken += ev.lost;
       target.kept += Math.max(0, ev.before - ev.amount) + ev.soaked;
     } else if (ev.t === "heal") {
       // Healing that nobody gave (regrowing, coming up from a burrow, a bite that heals) is its own.

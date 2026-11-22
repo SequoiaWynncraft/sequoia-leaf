@@ -43,6 +43,19 @@ describe("a hit says what it was before armour and ward", () => {
 });
 
 describe("the tally", () => {
+  test("a hit that fells a figure counts only the health it had left as taken", () => {
+    const f = fightOf([at("crab7", 3, 0)], [at("mud", 3, 0)]);
+    const crab = unitOf(f, "crab7");
+    const mud = still(unitOf(f, "mud", 1), 1000);
+    mud.hp = 7;
+    f.out = [];
+    hurt(f, mud, 100, "true", "attack", crab);
+    expect(only(f.out, "hit")[0]).toMatchObject({ amount: 100, lost: 7 });
+    const rows = tally(sinceStart(f));
+    expect(rowOf(rows, mud.id).taken).toBe(7);
+    expect(rowOf(rows, crab.id).true).toBe(100);
+  });
+
   test("damage is split by kind, and what came at a figure is split into taken and kept off", () => {
     const f = fightOf([at("crab7", 3, 0)], [at("mud", 3, 0)]);
     const crab = unitOf(f, "crab7");

@@ -517,6 +517,7 @@ export function hurt(
     soaked = Math.min(target.shield, n);
     target.shield -= soaked;
   }
+  const had = Math.max(0, target.hp);
   target.hp -= n - soaked;
   target.taken += n;
   if (by) by.dealt += n;
@@ -527,6 +528,7 @@ export function hurt(
     by: by?.id ?? -1,
     amount: n,
     soaked,
+    lost: Math.min(n - soaked, had),
     before: Math.max(n, Math.round(raw)),
     kind,
     source,

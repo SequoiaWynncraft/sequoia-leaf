@@ -209,6 +209,8 @@ export type FightEvent =
       by: number;
       amount: number;
       soaked: number;
+      /** The health the target really lost: never more than it had left. */
+      lost: number;
       before: number;
       kind: DamageKind;
       source: DamageSource;
