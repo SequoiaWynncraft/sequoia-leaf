@@ -495,15 +495,17 @@ button.k-info-chip:hover .k-chip {
 .k-info-count {
   margin-left: var(--u);
 }
+/* Numbers side by side, and on to the next line where the card is too narrow for them all. */
 .k-info-stats {
-  display: grid;
-  grid-template-columns: repeat(3, auto);
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--u) calc(var(--u) * 4);
 }
 /* A label over the numbers after it, across the whole row. */
 .k-info-over {
-  grid-column: 1 / -1;
+  flex-basis: 100%;
 }
 .k-info-stat {
   display: flex;
