@@ -104,6 +104,11 @@
   -webkit-user-select: none;
   user-select: none;
 }
+/* Not a picture to the browser: nothing is dragged away, and a long press opens no menu of its own. */
+:where(canvas, img, a) {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
 [hidden] {
   display: none !important;
 }

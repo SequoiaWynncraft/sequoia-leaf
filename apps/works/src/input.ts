@@ -115,9 +115,6 @@ function lift(e: PointerEvent): void {
 }
 
 export function initInput(canvas: HTMLCanvasElement): void {
-  canvas.addEventListener("contextmenu", (e) => {
-    e.preventDefault();
-  });
   document.addEventListener("pointerdown", unlock, true);
 
   // A press on the yard is read here: the cards do not put themselves away for it.
