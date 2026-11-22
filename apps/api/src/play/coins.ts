@@ -14,6 +14,8 @@ export interface CoinEntry {
   readonly reason: string;
   readonly game: string | null;
   readonly key: string;
+  /** Not weighed against what the player may earn (`CoinChange.free`): posted with `earned` 0. */
+  readonly free?: boolean;
 }
 
 /** What posting an entry did. */
@@ -48,8 +50,8 @@ export class Coins extends Context.Service<
     /**
      * How many more Coins the player's play may pay in now: `EARNINGS.hourly` in any hour and
      * `EARNINGS.daily` in a UTC day at most, whatever the games (worked out from the entries of the
-     * last day alone). Whatever a game pays in counts, Coins given back for something taken away
-     * too; the welcome and Coins brought over do not.
+     * last day alone). Whatever a game pays in counts, but for what is `free` (Coins given back for
+     * something paid for, or paid by Leaf's own clock); the welcome and Coins brought over do not.
      */
     readonly room: (playerId: PlayerId, now: number) => Effect.Effect<number>;
   }
@@ -76,12 +78,12 @@ export class Coins extends Context.Service<
                  coalesce(sum(CASE WHEN at > ${day} THEN amount END), 0) AS in_day
           FROM coin_entries
           WHERE player_id = ${playerId} AND at > ${Math.min(hour, day)} AND amount > 0
-            AND game IS NOT NULL
+            AND game IS NOT NULL AND earned = 1
         `,
       });
       const insert = (playerId: PlayerId, entry: CoinEntry, now: number) => sql`
-        INSERT INTO coin_entries (player_id, amount, reason, game, key, at)
-        VALUES (${playerId}, ${entry.amount}, ${entry.reason}, ${entry.game}, ${entry.key}, ${now})
+        INSERT INTO coin_entries (player_id, amount, reason, game, key, at, earned)
+        VALUES (${playerId}, ${entry.amount}, ${entry.reason}, ${entry.game}, ${entry.key}, ${now}, ${entry.free === true ? 0 : 1})
         ON CONFLICT (key) DO NOTHING
         RETURNING id
       `;

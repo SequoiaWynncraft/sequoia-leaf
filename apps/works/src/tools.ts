@@ -8,28 +8,23 @@ import { CREAM, GOLD, GREEN } from "@sequoia-leaf/kit/palette.ts";
 import {
   ahead,
   at,
-  build,
-  buyPlan,
-  buyPlot,
   costOf,
   type Dir,
   DX,
   DY,
   type Item,
   type Kind,
-  lay,
   type Leg,
   type PlanId,
+  planRefusal,
   PLANS,
   type PlotId,
+  plotRefusal,
   refusal,
-  remove,
   RIGHT,
   route,
   runCost,
-  setOpen,
-  setRecipe,
-  turn,
+  type WorksAct,
 } from "@sequoia-leaf/yard";
 
 import { TILE } from "./art/belts.ts";
@@ -37,7 +32,7 @@ import { float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { layout } from "./layout.ts";
 import { yardSfx } from "./sound.ts";
 import { S, type Tool, touched } from "./state.ts";
-import { coins, pay, repay } from "./yard.ts";
+import { coins, doNow } from "./yard.ts";
 
 const DUST = "#cbb894";
 
@@ -65,6 +60,20 @@ const remember = (d: Done): void => {
 };
 
 const W = (): number => S.world.land.w;
+
+/**
+ * Does something to the yard (on the page's copy at once, and on Leaf), unless `why` (the rules'
+ * reason, worked out with the Coins to hand as Leaf will count them) says it cannot be. Gives back
+ * why it was not done, or null.
+ */
+function attempt(why: string | null, act: WorksAct): string | null {
+  if (why !== null) return why;
+  const did = doNow(act);
+  return "refused" in did ? did.why : null;
+}
+/** What a thing done paid in or took, in all. */
+const coinsOf = (did: ReturnType<typeof doNow>): number =>
+  "refused" in did ? 0 : (did.coins ?? []).reduce((sum, c) => sum + c.amount, 0);
 const xy = (i: number): { x: number; y: number } => ({ x: i % W(), y: Math.floor(i / W()) });
 
 export function setTool(tool: Tool): void {
@@ -119,14 +128,14 @@ export function place(x: number, y: number): boolean {
   const i = at(w, x, y);
   const there = i >= 0 ? w.cells[i] : null;
   const was = there?.dir;
-  const did = build(w, tool, x, y, S.dir, coins());
-  if (!did.ok) {
-    S.aim = { x, y, why: did.why, cost: 0 };
+  const cost = there ? 0 : costOf(w, tool);
+  const no = attempt(refusal(w, tool, x, y, coins(), S.dir), { do: "build", kind: tool, x, y, dir: S.dir });
+  if (no !== null) {
+    S.aim = { x, y, why: no, cost: 0 };
     yardSfx.no();
     toolHooks.changed();
     return false;
   }
-  pay(did, "works_build");
   if (there) {
     if (was !== undefined && was !== S.dir) {
       remember({ did: "turned", i, was });
@@ -142,7 +151,7 @@ export function place(x: number, y: number): boolean {
     }
     remember({ did: "built", cells, turned: [] });
     landed(x, y, tool === "belt");
-    if (did.cost > 0) float(x * TILE + 8, y * TILE - 2, `-${did.cost}`, GOLD[0], 0.9);
+    if (cost > 0) float(x * TILE + 8, y * TILE - 2, `-${cost}`, GOLD[0], 0.9);
   }
   touched();
   aimAt(x, y);
@@ -168,20 +177,20 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   const w = S.world;
   const i = at(w, x, y);
   const was = i >= 0 ? standing(i) : null;
-  const did = remove(w, x, y);
-  if (!did.ok || !was) {
+  const did = doNow({ do: "remove", x, y });
+  if ("refused" in did || !was) {
     if (!quiet) {
-      S.aim = { x, y, why: did.ok ? null : did.why, cost: 0 };
+      S.aim = { x, y, why: "refused" in did ? did.why : null, cost: 0 };
       yardSfx.no();
     }
     return false;
   }
-  repay(did);
   remember({ did: "took", what: [was] });
   const px = x * TILE + 8;
   const py = (y + 1) * TILE - 4;
   puff(px, py, 6, DUST, 9);
-  if (did.refund > 0) float(px, py - 10, `+${did.refund}`, GOLD[2], 1);
+  const refund = coinsOf(did);
+  if (refund > 0) float(px, py - 10, `+${refund}`, GOLD[2], 1);
   yardSfx.take();
   if (S.picked === i) S.picked = -1;
   touched();
@@ -199,7 +208,7 @@ export function turnAt(x: number, y: number): boolean {
     return false;
   }
   const was = b.dir;
-  if (!turn(w, x, y, RIGHT[b.dir])) return false;
+  if (attempt(null, { do: "turn", x, y, dir: RIGHT[b.dir] }) !== null) return false;
   remember({ did: "turned", i, was });
   yardSfx.turn();
   touched();
@@ -242,22 +251,29 @@ export function undo(): boolean {
     for (const i of last.cells.toReversed()) {
       if (!w.cells[i]) continue;
       const { x, y } = xy(i);
-      repay(remove(w, x, y));
+      doNow({ do: "remove", x, y });
       puff(x * TILE + 8, (y + 1) * TILE - 4, 4, DUST, 7);
     }
-    for (const t of last.turned) turn(w, t.i % W(), Math.floor(t.i / W()), t.was);
+    for (const t of last.turned) doNow({ do: "turn", ...xy(t.i), dir: t.was });
   } else if (last.did === "took") {
     for (const s of last.what) {
-      const did = build(w, s.kind, s.x, s.y, s.dir, coins(), s.kind === "tunnel" ? s.span : undefined);
-      if (!pay(did, "works_build")) {
-        toolHooks.said(did.ok ? "" : `It cannot go back: ${did.why.toLowerCase()}.`);
+      // A tunnel goes back as it was, by a run of one tunnel; anything else is built again.
+      const tunnel = s.kind === "tunnel";
+      const no = attempt(
+        refusal(w, s.kind, s.x, s.y, coins(), s.dir, tunnel ? s.span : undefined),
+        tunnel
+          ? { do: "lay", legs: [{ kind: "tunnel", x: s.x, y: s.y, dir: s.dir, span: s.span }] }
+          : { do: "build", kind: s.kind, x: s.x, y: s.y, dir: s.dir },
+      );
+      if (no !== null) {
+        toolHooks.said(`It cannot go back: ${no.toLowerCase()}.`);
         continue;
       }
-      if (s.recipe !== null) setRecipe(w, s.x, s.y, s.recipe);
-      if (!s.open) setOpen(w, s.x, s.y, false);
+      if (s.recipe !== null) doNow({ do: "recipe", x: s.x, y: s.y, item: s.recipe });
+      if (!s.open) doNow({ do: "crate", x: s.x, y: s.y, open: false });
       puff(s.x * TILE + 8, (s.y + 1) * TILE - 2, 4, DUST, 6);
     }
-  } else turn(w, last.i % W(), Math.floor(last.i / W()), last.was);
+  } else doNow({ do: "turn", ...xy(last.i), dir: last.was });
   yardSfx.undo();
   touched();
   if (S.aim) aimAt(S.aim.x, S.aim.y);
@@ -361,18 +377,17 @@ export function commitRun(): boolean {
     toolHooks.changed();
     return false;
   }
-  const turned = run.turns.flatMap((t) => {
-    const i = at(w, t.x, t.y);
-    const was = w.cells[i]?.dir;
-    return was !== undefined && turn(w, t.x, t.y, t.dir) ? [{ i, was }] : [];
-  });
-  const did = lay(w, run.legs, coins());
-  if (!pay(did, "works_build")) {
+  // The first belt, already standing, turned to meet the run: all of it or none, with the run.
+  const [bend] = run.turns;
+  const was = bend ? w.cells[at(w, bend.x, bend.y)]?.dir : undefined;
+  const no = attempt(null, bend ? { do: "lay", legs: run.legs, turn: bend } : { do: "lay", legs: run.legs });
+  if (no !== null) {
     yardSfx.no();
-    if (!did.ok) toolHooks.said(`${did.why}.`);
+    toolHooks.said(`${no}.`);
     toolHooks.changed();
     return false;
   }
+  const turned = bend && was !== undefined ? [{ i: at(w, bend.x, bend.y), was }] : [];
   const cells: number[] = [];
   run.legs.forEach((leg, n) => {
     cells.push(at(w, leg.x, leg.y));
@@ -391,7 +406,7 @@ export function commitRun(): boolean {
   const end = run.legs.at(-1);
   if (end) {
     S.dir = end.dir;
-    if (did.ok && did.cost > 0) float(end.x * TILE + 8, end.y * TILE - 2, `-${did.cost}`, GOLD[0], 0.9);
+    if (run.cost > 0) float(end.x * TILE + 8, end.y * TILE - 2, `-${run.cost}`, GOLD[0], 0.9);
   }
   touched();
   toolHooks.changed();
@@ -469,10 +484,10 @@ export function buyLand(id: PlotId): boolean {
   const w = S.world;
   const plot = w.land.plots.find((p) => p.id === id);
   const sign = layout(w, S.rev).signs.find((s) => s.plot.id === id);
-  const did = buyPlot(w, id, coins());
-  if (!plot || !pay(did, "works_plot")) {
+  const no = plot ? attempt(plotRefusal(w, id, coins()), { do: "buyPlot", plot: id }) : "There is no such plot";
+  if (!plot || no !== null) {
     yardSfx.no();
-    if (!did.ok) toolHooks.said(`${did.why}.`);
+    toolHooks.said(`${no}.`);
     return false;
   }
   const from = sign ?? { x: (plot.x + plot.w / 2) * TILE, y: (plot.y + plot.h / 2) * TILE };
@@ -508,10 +523,10 @@ export function stepClearing(): void {
 export function buyIdea(id: PlanId): boolean {
   const w = S.world;
   const plan = PLANS.find((p) => p.id === id);
-  const did = buyPlan(w, id, coins());
-  if (!plan || !pay(did, "works_plan")) {
+  const no = plan ? attempt(planRefusal(w, id, coins()), { do: "buyPlan", plan: id }) : "There is no such plan";
+  if (!plan || no !== null) {
     yardSfx.no();
-    if (!did.ok) toolHooks.said(`${did.why}.`);
+    toolHooks.said(`${no}.`);
     return false;
   }
   yardSfx.plan();

@@ -31,23 +31,25 @@ const centre = (node: Element): Pt => {
 
 /**
  * Fills `host` (a `k-plaque`, usually) with the two counters, and keeps them in step with the purse.
- * A guest's purse has only the Coins.
+ * A guest's purse has only the Coins. `coins` is the number of Coins to show, when a page counts
+ * more than the purse holds (the Works, with its till).
  */
-export function purseBar(host: HTMLElement): PurseBar {
+export function purseBar(host: HTMLElement, coins: () => number = () => balance().coins): PurseBar {
   const kinds = leafShown() ? (["leaf", "coins"] as const) : (["coins"] as const);
+  const held = (kind: Currency): number => (kind === "coins" ? coins() : balance().leaf);
   const parts = kinds.map((kind) => {
     const art = icon(kind === "leaf" ? "leaf" : "coin");
-    const num = el("span", "", { text: balance()[kind].toLocaleString("en-US") });
+    const num = el("span", "", { text: held(kind).toLocaleString("en-US") });
     const box = el("span", kind === "leaf" ? "k-cur leaf" : "k-cur", { tabindex: 0 }, art, num);
     host.append(box);
     tip(box, ABOUT[kind][0], ABOUT[kind][1]);
-    return { kind, art, num, shown: balance()[kind] };
+    return { kind, art, num, shown: held(kind) };
   });
   let tickAt = 0;
   return {
     tick(dt) {
       for (const c of parts) {
-        const real = balance()[c.kind];
+        const real = held(c.kind);
         if (c.shown === real) continue;
         const d = real - c.shown;
         c.shown += Math.sign(d) * Math.min(Math.abs(d), Math.max(1, Math.ceil(Math.abs(d) * dt * 5)));

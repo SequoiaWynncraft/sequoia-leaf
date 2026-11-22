@@ -215,7 +215,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     player: alice,
     id: "w-1",
     amount: -5000,
-    reason: "works_plot",
+    reason: "camp_thing",
   });
   await call("POST /v1/game/coins, not a reason", "POST", "/v1/game/coins", {
     player: alice,

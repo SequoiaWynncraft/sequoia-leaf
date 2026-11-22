@@ -1,17 +1,17 @@
 /**
- * The letter that says what the yard did while the member was away. It is read on paper, a line at
- * a time; putting it away pays what the yard earned into the purse.
+ * The letter that says what the yard did while the member was away, as Leaf worked it out (the
+ * yard's `away`). It is read on paper, a line at a time; putting it away pays the till into the
+ * purse.
  */
 
-import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
-import { type Away, AWAY_MOST_MS, ITEM, ITEMS } from "@sequoia-leaf/yard";
+import { type Away, AWAY_MOST_MS } from "@sequoia-leaf/yard";
 
-import type { Art } from "../art/index.ts";
 import { yardSfx } from "../sound.ts";
-import { bank, holdTill } from "../yard.ts";
+import { collect } from "../yard.ts";
 import { coinsFrom } from "./notes.ts";
-import { $, centre, pic } from "./parts.ts";
+import { $, centre } from "./parts.ts";
 
 /** How long the yard worked, in words: "3 hours and 20 minutes". */
 function span(seconds: number): string {
@@ -35,12 +35,8 @@ export function putAway(): boolean {
   return true;
 }
 
-export function showLetter(art: Art, away: Away, done: () => void): void {
+export function showLetter(away: Away, done: () => void): void {
   const root = $("letter");
-  holdTill(true);
-  const made = ITEMS.filter((k) => (away.made[k] ?? 0) > 0)
-    .toSorted((a, b) => ITEM[b].step - ITEM[a].step || (away.made[b] ?? 0) - (away.made[a] ?? 0))
-    .slice(0, 8);
   const coinArt = icon("coin");
   const lines: HTMLElement[] = [];
   const line = (...kids: (Node | string | null)[]): void => {
@@ -52,41 +48,19 @@ export function showLetter(art: Art, away: Away, done: () => void): void {
       el("span", "k-grow", { text: "Earned, and waiting in the till" }),
       el("b", "", { text: `+${away.coins.toLocaleString("en-US")}` }),
     );
-  if (made.length > 0)
-    line(
-      el(
-        "div",
-        "k-grow",
-        {},
-        "The depot took in",
-        el(
-          "div",
-          "made",
-          {},
-          ...made.map((k) => el("span", "", {}, pic(art.item(k), 1), (away.made[k] ?? 0).toLocaleString("en-US"))),
-        ),
-      ),
-    );
-  for (const title of away.orders.slice(0, 4)) line(icon("check"), el("span", "k-grow", { text: `Filled: ${title}` }));
-  if (away.orders.length > 4)
-    line(icon("check"), el("span", "k-grow", { text: `and ${away.orders.length - 4} more orders.` }));
-  if (away.waiting > 0)
-    line(
-      icon("star"),
-      el("span", "k-grow", { text: "On the board, waiting to be handed over" }),
-      amount("coin", away.waiting.toLocaleString("en-US")),
-    );
   if (lines.length === 0)
     line(icon("heart"), el("span", "k-grow", { text: "The yard stood quiet. Nothing was coming in when you left." }));
-  const shift = away.boosted > 0 ? ` A second shift ran for ${span(away.boosted)} of it.` : "";
-  const capped = away.capped ? ` It works ${AWAY_MOST_MS / 3_600_000} hours unwatched, and then waits for you.` : "";
+  const capped =
+    away.seconds >= AWAY_MOST_MS / 1000
+      ? ` It works ${AWAY_MOST_MS / 3_600_000} hours unwatched, and then waits for you.`
+      : "";
   const go = el("button", "k-btn wide", { type: "button", text: "Back to work" });
   const paper = el(
     "div",
     "k-paper k-rise letter",
     { role: "dialog", "aria-label": "While you were away" },
     el("h1", "k-title big", { text: "While you were away" }),
-    el("div", "k-dim", { text: `The yard worked on for ${span(away.seconds)}.${shift}${capped}` }),
+    el("div", "k-dim", { text: `The yard worked on for ${span(away.seconds)}.${capped}` }),
     ...lines,
     el("hr"),
     go,
@@ -113,8 +87,8 @@ export function showLetter(art: Art, away: Away, done: () => void): void {
       root.replaceChildren();
     }, 350);
     sfx.open();
-    holdTill(false);
-    const got = bank();
+    const paid = collect();
+    const got = "refused" in paid ? 0 : (paid.coins ?? []).reduce((sum, c) => sum + c.amount, 0);
     if (got > 0) coinsFrom(from, got);
     done();
   };

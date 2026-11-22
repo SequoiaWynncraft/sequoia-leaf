@@ -5,8 +5,9 @@ carry them, machines make goods of them, and the depot in the middle takes every
 
 Everything in this package (`@sequoia-leaf/yard`) is plain data and plain functions, tested. None of
 it touches the page: it is type-checked without the page's library or Bun's, and `pure.test.ts`
-reads its sources for the clock, chance and storage. The Works' page (`apps/works`) imports it
-through `index.ts`.
+reads its sources for the clock, chance and storage. Leaf's play service holds the yard with it
+(`WORKS`, in `game.ts`), and the Works' page (`apps/works`) runs its copy ahead of Leaf with the
+same rules, through `index.ts`.
 
 ```sh
 bun test                                 # the rules
@@ -15,8 +16,8 @@ bun ../../apps/works/review/balance.ts   # plays the whole story by script and p
 
 ## The rules, as built
 
-**Time.** The yard moves in ticks, ten to a second. Everything below that takes time is counted in
-ticks at the plain pace; plans, a shortage of power and a second shift change the pace.
+**Time.** The yard moves in ticks, ten to a second of Leaf's clock. Everything below that takes time
+is counted in ticks at the plain pace; plans and a shortage of power change the pace.
 
 **Land.** The map is 48 tiles by 36, nine plots of 16 by 12 with the yard in the middle. Each plot
 is drawn in `content/plots.ts` as rows of letters, one a tile: clear ground, six kinds of deposit,
@@ -132,49 +133,84 @@ still wants it: the story's first, then the board's from the top.
   (every tick of gathering and making that goes into one), and pays what those goods are worth.
   Nothing on the board has a clock. A filled order waits there until it is handed over (`claim`),
   which pays it and hangs a fresh one; one unfilled order may be swapped for a fresh one, free,
-  every ten minutes of the yard's time.
+  every ten minutes of the yard's time. Both name the order by its id. A yard without its seed (the
+  page's copy) hangs no order: the place stays empty until Leaf's yard, which has the seed, comes.
 
-**A second shift.** `boost(w, now, ms)` makes the yard run two ticks for every one until a moment
-on the wall clock. It is the one thing Leaf buys here: `SHIFT` (in `content/shift.ts`) says what it
-costs and how long it runs, 100 Leaf for an hour. It opens nothing.
+**A second shift** (`SHIFT`, in `content/shift.ts`) would run the yard at double pace for an hour,
+for 100 Leaf. Leaf may not be spent in town yet, so nothing runs it: the page shows its button
+closed.
 
-**Away.** `runTo(w, now)` brings the yard up to the clock. A gap of under fifteen seconds is simply
-run. After a longer one the yard is credited with up to eight hours' work (a second shift counting
-double for as long as it lasted) and an `Away` comes back saying what it did: Coins earned, things
-made, orders filled, Coins waiting on the board. Eight hours is 288,000 ticks, so it is not all
-run: a few thousand ticks are run for real, counting only what the depot takes in during them,
-and the rest is paid out at that pace, through the same order book. A line that had already run
-dry is therefore paid nothing. Where a crate would fill or run dry part-way, the yard is paid up to
-that moment, run again for a short while to find its new pace, and paid on. A boiler with nothing
-gathered for it burns what it holds and what the crates and belts behind it hold, and then goes out:
-the yard is paid at the pace with it only until then, it is let go out for real, and the pace
-without it is found afresh, once for each boiler that goes out. On the largest yard the
+**Away.** `forward(w, ticks)` moves the yard on quickly, for Leaf to catch up on up to eight hours
+nobody watched. A few thousand ticks are run for real, counting only what the depot takes in
+during them, and the rest is paid out at that pace, through the same order book. A line that had
+already run dry is therefore paid nothing. Where a crate would fill or run dry part-way, the yard is
+paid up to that moment, run again for a short while to find its new pace, and paid on. A boiler
+with nothing gathered for it burns what it holds and what the crates and belts behind it hold, and
+then goes out: the yard is paid at the pace with it only until then, it is let go out for real, and
+the pace without it is found afresh, once for each boiler that goes out. On the largest yard the
 balance script builds this takes about 7 ms and lands within a fifth of a percent of running every
 tick.
 
 **Coins.** The yard keeps no purse. `build`, `buyPlot` and `buyPlan` are told the balance and say
-what they took; `remove` says what comes back; whatever the yard earns gathers in `w.till` until
-`collect(w)` hands it over in whole Coins. A new yard has no Coins of its own: the screen pays for
-everything out of the member's purse, and pays the till into it, each with its reason (a building
-or a belt, a plot, a plan, what taking one away gives back; from the till, what orders paid since
-it was last paid out, and the rest as the depot's). On the guild's server the purse's Coins are
-Leaf's, and each of those goes to Leaf's ledger.
+what they took; `remove` says what comes back; whatever the yard earns gathers in `w.till`, and
+`collect(w)` takes its whole Coins out. Leaf's Coins ledger is the only purse (see below).
 
-**Saving.** `save(w)` is JSON with a version (2). `load(text)` gives back a yard it can vouch for or
-nothing: a record of the wrong shape or version is refused whole, and inside a good one any plot,
-plan or building that could not have come about by playing is left out. The first yard, before
-this one, was a different map with different machines, so its saves are not read as yards;
-`oldCoins(text)` finds the Coins in one so a screen can carry them over: with the made-up guild
-only. On the guild's server nothing the browser kept becomes Coins; old Coins are brought over
-by hand (the root README's Moving over).
+**Saving.** `save(w)` is JSON with a version (3), without the seed when the yard has none.
+`load(text)` gives back a yard it can vouch for or nothing: a record of the wrong shape or version is
+refused whole, and inside a good one any plot, plan or building that could not have come about by
+playing is left out.
+
+## The Works on Leaf (`game.ts`)
+
+`WORKS` is the Works as Leaf's play service holds it (`Game` in core): Leaf owns the yard, its clock
+and its Coins, and the page runs a copy ahead of Leaf with the same rules.
+
+**Time is Leaf's.** A yard holds `tick` and `at`, the moment of Leaf's clock that tick stands for,
+so Leaf's tick for it is `tick + floor((now - at) / 100)` (`clockOf`). `create` starts a yard at tick
+0, at Leaf's now, seeded from Leaf's dice. `advance` brings a yard that has fallen behind to `LEAD`
+(30 ticks, three seconds) short of Leaf's clock, so that a command made a moment ago is never in
+its past: a tick at a time up to 3,000 ticks, moving `at` with it (`stepTo`); further behind, with
+`forward`, for at most eight hours, after which `at` is set so that the clock less `LEAD` is the
+yard's tick, and `away` records how long the yard worked and what the till gained, added to any not
+yet put away.
+
+**Commands** each carry `tick`, the tick the page's copy stood at. `apply` runs the yard to that
+tick (one in its past is done now, one more than `LEAD` ahead of the clock at `LEAD`), then does
+the command (`play`), or refuses it with a code (`REFUSED`) and leaves the yard as running on alone
+left it. A plot, a plan and a standing order are named by fields of their own, since the play
+service gives every command an `id`.
+
+| `do`       | fields                                                                     |
+| ---------- | -------------------------------------------------------------------------- |
+| `build`    | `kind, x, y, dir`: a piece; over the same kind it only turns               |
+| `lay`      | `legs: [{kind, x, y, dir, span}]`, `turn?: {x, y, dir}`: all of it or none |
+| `remove`   | `x, y`                                                                     |
+| `turn`     | `x, y, dir`                                                                |
+| `recipe`   | `x, y, item` (or null)                                                     |
+| `tipOut`   | `x, y, item` (or null)                                                     |
+| `crate`    | `x, y, open`                                                               |
+| `buyPlot`  | `plot`                                                                     |
+| `buyPlan`  | `plan`                                                                     |
+| `swap`     | `order`: a standing order, by its id                                       |
+| `handOver` | `order`: a filled standing order, by its id                                |
+| `collect`  | pays the till in, and puts the letter about a time away away               |
+
+**Coins** are the ledger's. A `build`, `lay`, `buyPlot` or `buyPlan` pays the till's whole Coins in
+first and then takes the price; `remove` gives back what the piece cost; `collect` pays the till in;
+an order's pay goes into the till. Each change is keyed by the yard's `bank`, which counts them, so
+none is made twice, and every one paid in is `free` of the earnings cap: a yard cannot earn faster
+than time passes. Each command logs a plot or plan bought, a standing order handed over, and the
+story orders finished since the yard last logged one (`told`).
+
+**What the page is shown** (`view`) is `{ yard, clock }`: the yard as stored but without its seed,
+which foretells every order the board will hang, and Leaf's tick now. The page reads it with
+`readView` and `WORKS.decode`, and holds a yard with no seed.
 
 ## What the town can read
 
 - `w.given`: how many of each thing have gone to orders, ever.
 - `townGifts(w)`: what finished story orders have left in town, oldest first, each with an id and a
   line to show (`tree-lanterns`: "Lanterns from the Works hang in the great tree.").
-- `runTo` gives the `Away`, and `awayLine(away)` puts it in a sentence: "While you were away the
-  Works made 340 Coins and finished "Lanterns for the great tree"."
 - `postcard(w)` is what the page leaves for the town (the kit's `postcard.ts`) whenever it changes
   and when the town closes it: what is waiting in the yard, the capstones ever made, the till.
 
@@ -187,7 +223,8 @@ by hand (the root README's Moving over).
 | `land.ts`, `world.ts`   | the ground put together from the plots; the yard as data                    |
 | `build.ts`              | building, taking away, turning, tipping out; buying plots and plans         |
 | `power.ts`, `step.ts`   | where power reaches; one tick of the yard                                   |
-| `orders.ts`, `clock.ts` | the depot, the story, the board; the wall clock and catching up             |
+| `orders.ts`, `clock.ts` | the depot, the story, the board; catching up on a long time quickly         |
+| `game.ts`               | the Works as Leaf holds it: its clock, its commands, its Coins, the view    |
 | `route.ts`, `save.ts`   | the shortest clear run for a belt; a yard as text, and back                 |
 | `status.ts`             | what a thing is doing, in a sentence, and whether it is in trouble          |
 | `yards/*.json`          | yards kept part-way through the story, for tests and for looking at a stage |
@@ -197,28 +234,24 @@ belts move along their tile, then every tile hands on what it has finished with,
 the tile it hands to, so a full belt moves as one. Who hands to whom, and in what order, depends
 only on what stands where, so it is worked out once (`rewire`) and kept until the yard is changed.
 
-## Driving the rules from a screen
+## Running the yard ahead of Leaf
 
 ```ts
-import { build, claim, collect, create, drain, load, power, refusal, runTo, save } from "@sequoia-leaf/yard";
+import { play, stepTo, WORKS } from "@sequoia-leaf/yard";
 
-const yard = load(kept) ?? create({ seed });
-const away = runTo(yard, Date.now()); // once on opening: an Away after a long gap, else null
+// When Leaf answers: its yard, with every command not yet answered done again on top, each at its tick.
+const copy = WORKS.decode(view.yard);
+for (const c of unanswered) play(copy, c);
 
-// every frame
-runTo(yard, Date.now());
-purse.earn(collect(yard), "the Works");
-for (const news of drain(yard)) celebrate(news); // a story order done, a standing order filled or handed over
-const { supply, demand, pace } = power(yard);
+// Every frame: run the copy on to Leaf's tick now, the view's clock and a tick for each 100 ms since.
+stepTo(copy, view.clock + Math.floor((performance.now() - arrived) / 100));
 
-// when the member acts
-const why = refusal(yard, "mill", x, y, purse.coins, dir); // null, or a sentence to show
-const did = build(yard, "mill", x, y, dir, purse.coins);
-if (did.ok) purse.spend("coins", did.cost, "the Works");
+// When the member acts: done to the copy at once, and sent with the copy's tick.
+const done = play(copy, { do: "build", kind: "mill", x, y, dir, tick: copy.tick });
+if (!("refused" in done)) send({ do: "build", kind: "mill", x, y, dir, tick: copy.tick });
 ```
 
 What stands on a tile is `yard.cells[at(yard, x, y)]`, the ground under it is in `yard.land`, power
 reaches where `yard.power[i]` is 1, and the orders are `storyOrder(yard)` with `yard.filled`, and
 `yard.board`. `route(yard, from, to)` and `lay` are there for laying a belt from two taps, which
-suits a phone better than dragging. `yard.seen` is the moment the yard has been run up to, so the
-share of the next tick already gone is `(Date.now() - yard.seen) / TICK_MS`.
+suits a phone better than dragging.

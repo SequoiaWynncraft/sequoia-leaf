@@ -1,39 +1,28 @@
 /**
- * Coins changed by a page, for the games not on the play service yet (the town and the Works).
- * Their pages still work out what they earn and spend, and tell Leaf each change through
- * `POST /v1/game/coins`; Leaf keeps it in the Coins ledger with the reason the page gives, within
- * the limits here. All of this goes when those games move to the play service, which pays and
- * takes Coins by its own rules.
+ * Coins changed by a page, for the game not on the play service yet (the town). Its page still
+ * works out what it earns and spends, and tells Leaf each change through `POST /v1/game/coins`;
+ * Leaf keeps it in the Coins ledger with the reason the page gives, within the limits here. All of
+ * this goes when the town moves to the play service, which pays and takes Coins by its own rules.
  */
 
 import { COMMAND_ID } from "./play.ts";
 
 /** What a reason is: the game it belongs to, whether it pays Coins in or takes them, and what it is. */
 export interface CoinReasonSpec {
-  readonly game: "town" | "works";
+  readonly game: "town";
   readonly way: "earn" | "spend";
   readonly what: string;
 }
 
 /**
- * Every reason a page on the guild's server changes Coins for, each the one place in the town or
- * the Works that earns or spends them. An entry's amount goes the reason's way: earnings in,
- * spending out. (The made-up guild's quests and its while-away letter pay Coins only in the
- * browser, and never reach Leaf.)
+ * Every reason a page on the guild's server changes Coins for, each the one place in the town that
+ * earns or spends them. An entry's amount goes the reason's way: earnings in, spending out. (The
+ * made-up guild's quests and its while-away letter pay Coins only in the browser, and never reach
+ * Leaf.)
  */
 export const COIN_REASONS = {
   camp_thing: { game: "town", way: "spend", what: "A thing for the camp, bought at a market stall." },
   daily_chest: { game: "town", way: "earn", what: "The chest by the Treasury: Leaf pays its 3 Coins once a UTC day." },
-  works_order: { game: "works", way: "earn", what: "Orders filled in the Works, paid from its till." },
-  works_depot: { game: "works", way: "earn", what: "What the Works' depot pays for what it takes in, from the till." },
-  works_build: {
-    game: "works",
-    way: "spend",
-    what: "A machine or a run of belt built in the yard, or one taken away put back.",
-  },
-  works_refund: { game: "works", way: "earn", what: "What taking a machine or a belt away gives back." },
-  works_plot: { game: "works", way: "spend", what: "A plot of land bought for the yard." },
-  works_plan: { game: "works", way: "spend", what: "A plan bought for the yard." },
 } as const satisfies Readonly<Record<string, CoinReasonSpec>>;
 
 export type CoinReason = keyof typeof COIN_REASONS;
@@ -93,7 +82,8 @@ export function checkPageCoins(call: {
   if (!Number.isSafeInteger(amount) || amount === 0 || amount > PAGE_COINS.most || amount < PAGE_COINS.least) {
     return { ok: false, code: "invalid_amount" };
   }
-  if (amount > 0 !== (COIN_REASONS[reason].way === "earn")) {
+  const spec: CoinReasonSpec = COIN_REASONS[reason];
+  if (amount > 0 !== (spec.way === "earn")) {
     return { ok: false, code: "invalid_amount" };
   }
   return { ok: true, id: call.id, amount, reason };

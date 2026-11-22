@@ -10,8 +10,10 @@ import {
   SENSIBLE,
   type TableView,
 } from "@sequoia-leaf/raid";
+import { readView as readYardView, route, WORKS } from "@sequoia-leaf/yard";
 import { Effect, Logger, References, Schema } from "effect";
 
+import { Coins } from "../src/play/coins.ts";
 import { played } from "../src/play/games.ts";
 import { Play } from "../src/play/service.ts";
 import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
@@ -427,7 +429,7 @@ describe("commands", () => {
   });
 
   it("go only to a game Leaf plays", async () => {
-    const paths = ["/v1/game/play/chess", "/v1/game/play/works", "/v1/game/play/town"];
+    const paths = ["/v1/game/play/chess", "/v1/game/play/town"];
     const answers = await Promise.all(
       paths.flatMap((path) => [send("GET", path), send("POST", path, { commands: [] })]),
     );
@@ -630,7 +632,7 @@ const STALL: typeof SHOP = {
   }),
 };
 
-/** A call to change Coins as a page of the town or the Works makes it. */
+/** A call to change Coins as a page of the town makes it. */
 const page = (id: string, amount: number, reason: string) => send("POST", "/v1/game/coins", { id, amount, reason });
 
 describe("what play pays", () => {
@@ -647,16 +649,19 @@ describe("what play pays", () => {
 
     expect(await sold("s-1", 4000)).toBe(4300);
     // What the pages earn and what the games pay are weighed together.
-    expect((await page("p-1", 600, "works_order")).status).toBe(200);
+    expect((await page("p-1", 3, "daily_chest")).status).toBe(200);
     expect(await sold("s-2", 4000)).toBe(5300);
     expect(await sold("s-3", 50)).toBe(5300);
-    const refused = await page("p-2", 1, "works_depot");
-    expect([refused.status, await codeOf(refused)]).toEqual([429, "too_much"]);
     expect(await entries(alice)).toEqual([
       { amount: 300, reason: "Welcome to Guild Town", game: null, key: `welcome:${alice}` },
       { amount: 4000, reason: "A sale", game: "works", key: `works:${alice}:sale:1` },
-      { amount: 600, reason: "works_order", game: "works", key: `page:${alice}:p-1` },
-      { amount: 400, reason: "A sale", game: "works", key: `works:${alice}:sale:2` },
+      {
+        amount: 3,
+        reason: "daily_chest",
+        game: "town",
+        key: `page:${alice}:daily_chest:${Math.floor(clock.now / DAY)}`,
+      },
+      { amount: 997, reason: "A sale", game: "works", key: `works:${alice}:sale:2` },
     ]);
     // An hour on, the hour's room is back; the day's 20,000 still stands.
     for (const hour of [3, 5, 7]) {
@@ -669,6 +674,91 @@ describe("what play pays", () => {
     expect(await sold("s-4", 9000)).toBe(20_300);
     clock.now = Date.UTC(2026, 10, 26);
     expect(await sold("s-5", 9000)).toBe(25_300);
+    // The day's chest, opened past the hour's room, is refused.
+    const refused = await page("p-2", 3, "daily_chest");
+    expect([refused.status, await codeOf(refused)]).toEqual([429, "too_much"]);
+  });
+});
+
+/**
+ * A till like the Works': each command pays in what it is told, free of the cap or not, and then
+ * takes a price.
+ */
+const TILL: Game<{ bought: number }, { pay: number; price: number; free: boolean }, { bought: number }, string> = {
+  ...SHOP,
+  id: "works",
+  apply: (state, c) => ({
+    state: { bought: state.bought + 1 },
+    notes: ["paid"],
+    coins: [
+      ...(c.pay > 0
+        ? [
+            {
+              amount: c.pay,
+              reason: "The till",
+              key: `till:${state.bought}`,
+              ...(c.free ? { free: true as const } : {}),
+            },
+          ]
+        : []),
+      ...(c.price > 0 ? [{ amount: -c.price, reason: "A price", key: `price:${state.bought}` }] : []),
+    ],
+  }),
+  command: (v) =>
+    typeof v === "object" &&
+    v !== null &&
+    "pay" in v &&
+    typeof v.pay === "number" &&
+    "price" in v &&
+    typeof v.price === "number" &&
+    "free" in v &&
+    typeof v.free === "boolean"
+      ? { pay: v.pay, price: v.price, free: v.free }
+      : null,
+};
+
+describe("a command's Coins", () => {
+  const till = played(TILL);
+  const paid = (id: string, pay: number, price: number, free = true) =>
+    services.run(Play.use((play) => play.send({ playerId: alice, guest: false }, till, [{ id, pay, price, free }])));
+
+  it("are worked out in order from the balance: a till paid in and then a price taken is done; a price without it is refused, and nothing of it kept", async () => {
+    expect(await paid("t-1", 500, 700)).toMatchObject({
+      results: [{ id: "t-1", notes: ["paid"] }],
+      view: { bought: 1 },
+    });
+    expect(await coinsOf(alice)).toBe(100);
+    expect(await paid("t-2", 0, 200)).toMatchObject({ results: [{ id: "t-2", refused: "not_enough_coins" }] });
+    expect(await paid("t-3", 50, 400)).toMatchObject({
+      results: [{ id: "t-3", refused: "not_enough_coins" }],
+      view: { bought: 1 },
+    });
+    expect(await coinsOf(alice)).toBe(100);
+    expect(await entries(alice)).toEqual([
+      { amount: 300, reason: "Welcome to Guild Town", game: null, key: `welcome:${alice}` },
+      { amount: 500, reason: "The till", game: "works", key: `works:${alice}:till:0` },
+      { amount: -700, reason: "A price", game: "works", key: `works:${alice}:price:0` },
+    ]);
+  });
+
+  it("that are free are paid past the cap, and leave what may still be earned as it was", async () => {
+    clock.now = Date.UTC(2026, 10, 25, 1);
+    const room = () => services.run(Coins.use((coins) => coins.room(alice, clock.now)));
+    await paid("t-1", 4000, 0, false);
+    expect(await room()).toBe(1000);
+    await paid("t-2", 3000, 0);
+    expect(await coinsOf(alice)).toBe(7300);
+    expect(await room()).toBe(1000);
+    await paid("t-3", 3000, 0, false);
+    expect(await coinsOf(alice)).toBe(8300);
+    expect(await room()).toBe(0);
+    expect(
+      await services.query((sql) => sql`SELECT amount, earned FROM coin_entries WHERE game = 'works' ORDER BY id`),
+    ).toEqual([
+      { amount: 4000, earned: 1 },
+      { amount: 3000, earned: 0 },
+      { amount: 1000, earned: 1 },
+    ]);
   });
 });
 
@@ -723,5 +813,64 @@ describe("what players did", () => {
       { at: T0 - ACTIVITY_KEPT_MS + DAY },
       { at: T0 },
     ]);
+  });
+});
+
+/** The yard as a page reads it from what Leaf answered. */
+function yardOf(state: unknown) {
+  const view = readYardView(state);
+  const yard = view && WORKS.decode(view.yard);
+  if (!view || !yard) throw new Error(`Not a yard: ${JSON.stringify(state)}`);
+  return { clock: view.clock, yard };
+}
+
+describe("the Works", () => {
+  const MINUTE = 60_000;
+
+  it("is Leaf's: a yard opened, built on, worked a minute by Leaf's clock, and its till paid into the ledger", async () => {
+    const opening = await send("GET", "/v1/game/play/works");
+    const { clock: tick, yard } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
+    expect(yard.seed).toBeNull();
+    // The starter gatherer and mill on the deadfall by the depot, and a run of belt to it.
+    const legs = route(yard, [22, 15], [23, 17]) ?? [];
+    expect(legs.length).toBeGreaterThan(0);
+    const built = await send("POST", "/v1/game/play/works", {
+      commands: [
+        { id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick },
+        { id: "w-2", do: "build", kind: "mill", x: 21, y: 15, dir: 0, tick },
+        { id: "w-3", do: "lay", legs, tick },
+      ],
+    });
+    const after = Schema.decodeUnknownSync(Answered)(await built.json());
+    expect(after.results).toEqual([
+      { id: "w-1", notes: [] },
+      { id: "w-2", notes: [] },
+      { id: "w-3", notes: [] },
+    ]);
+    expect(await coinsOf(alice)).toBe(300);
+    // A minute on Leaf's clock: the first story order (twelve planks) is filled and paid into the till.
+    clock.now += MINUTE;
+    const collected = await send("POST", "/v1/game/play/works", {
+      commands: [{ id: "w-4", do: "collect", tick: tick + 600 }],
+    });
+    const yardNow = yardOf(Schema.decodeUnknownSync(Answered)(await collected.json()).state).yard;
+    expect(yardNow.story).toBe(1);
+    expect(yardNow.till).toBeLessThan(1);
+    expect(await coinsOf(alice)).toBeGreaterThanOrEqual(380);
+    expect(await entries(alice)).toEqual([
+      { amount: 300, reason: "Welcome to Guild Town", game: null, key: `welcome:${alice}` },
+      {
+        amount: (await coinsOf(alice)) - 300,
+        reason: "Earned in the Works",
+        game: "works",
+        key: `works:${alice}:bank:0`,
+      },
+    ]);
+    expect(await services.query((sql) => sql`SELECT kind FROM activity WHERE game = 'works'`)).toEqual([
+      { kind: "works_story" },
+    ]);
+    // The old save slot takes no more writes.
+    const old = await send("PUT", "/v1/game/saves/works", { version: 0, data: { keys: {} } });
+    expect([old.status, await codeOf(old)]).toEqual([410, "moved"]);
   });
 });

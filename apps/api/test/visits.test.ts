@@ -305,10 +305,10 @@ describe("GET /v1/game/admin/activity", () => {
 
     // What the games logged, as the play service writes it.
     const logged = [
-      [alice, day(20, 9), "works", "order_filled", { story: true }],
-      [alice, day(24, 9), "works", "order_filled", { story: false }],
-      [carol, day(24, 12, 30), "works", "order_filled", { story: true }],
-      [carol, day(24, 12, 40), "works", "order_filled", { story: true }],
+      [alice, day(20, 9), "works", "works_story", { order: 1, title: "Planks", pay: 20 }],
+      [alice, day(24, 9), "works", "works_order", { order: 3, title: "Pots", pay: 90 }],
+      [carol, day(24, 12, 30), "works", "works_story", { order: 1, title: "Planks", pay: 20 }],
+      [carol, day(24, 12, 40), "works", "works_story", { order: 2, title: "Bricks", pay: 40 }],
       [alice, day(24, 15), "raid", "raid_started", { trail: 0 }],
       [alice, day(24, 15, 5), "raid", "raid_room", { room: 1, kind: "trouble", won: true, resolve: 3, seconds: 41 }],
       [alice, day(24, 15, 9), "raid", "raid_room", { room: 2, kind: "trouble", won: true, resolve: 3, seconds: 38.5 }],
