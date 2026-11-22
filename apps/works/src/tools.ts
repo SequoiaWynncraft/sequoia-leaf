@@ -225,11 +225,16 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   return true;
 }
 
+/** The lines the drag going on has coloured so far: they are undone together, and no other drag's with them. */
+let stroke: { i: number; was: number }[] | null = null;
+
 /**
  * Colours the line through a tile with the colour on the brush. `more` is a drag going on: its
  * lines are undone together, and passing over what cannot be coloured says nothing.
  */
 export function paintAt(x: number, y: number, more = false): boolean {
+  // A new press starts a stroke of its own, whether or not it colours anything where it lands.
+  if (!more) stroke = null;
   const w = S.world;
   const i = at(w, x, y);
   const line = lineOf(w, i);
@@ -244,9 +249,11 @@ export function paintAt(x: number, y: number, more = false): boolean {
     }
     return false;
   }
-  const last = done.at(-1);
-  if (more && last?.did === "painted") last.lines.push({ i, was });
-  else remember({ did: "painted", lines: [{ i, was }] });
+  if (stroke) stroke.push({ i, was });
+  else {
+    stroke = [{ i, was }];
+    remember({ did: "painted", lines: stroke });
+  }
   const col = PAINTS[S.tint - 1]?.lit ?? DUST;
   for (const j of line.slice(0, 80)) puff((j % W()) * TILE + 8, Math.floor(j / W()) * TILE + 9, 1, col, 5);
   yardSfx.paint();
