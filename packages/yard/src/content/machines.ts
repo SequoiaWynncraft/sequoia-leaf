@@ -105,7 +105,7 @@ export const KIND: Record<Kind, KindInfo> = {
     cost: 0,
     draw: 0,
     gives: 20,
-    what: "Sells every item that reaches it, and fills your orders.",
+    what: "Takes every item that reaches it. Each item counts towards an order that asks for it, and also pays 1% of its worth.",
   },
 };
 
