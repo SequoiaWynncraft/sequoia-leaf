@@ -59,6 +59,9 @@ export interface Here {
 const PUSH = 0.32;
 /** A finger's grace round the prompt, in the place's pixels. */
 const PAD = 3;
+/** How far across from the middle of a figure a touch is still on it, with the mouse and with a finger. */
+const MOUSE = 7;
+const FINGER = 10;
 
 const inside = (r: Rect, x: number, y: number, pad = 0): boolean =>
   x >= r.x - pad && y >= r.y - pad && x < r.x + r.w + pad && y < r.y + r.h + pad;
@@ -116,17 +119,26 @@ export function makeTouch(here: Here) {
     return true;
   }
 
+  /**
+   * Whoever a touch at a point means: of everybody whose figure it is on, in front or behind, the
+   * one whose middle is nearest it. A finger is on a figure from further across than the mouse.
+   */
   function personAt(x: number, y: number): Actor | null {
-    let best: { a: Actor; foot: Pt } | null = null;
+    const across = show.touch ? FINGER : MOUSE;
+    let best: Actor | null = null;
+    let near = Infinity;
     for (const a of here.people()) {
       if (a.away || a.alpha < 0.5) continue;
       const foot = feet(a);
-      if (Math.abs(x - foot.x) > 7 || y < foot.y - headOf(a) - 2 || y > foot.y + 3 - a.lift) continue;
-      // The one in front; of two drawn side by side, the one nearer across.
-      const ahead = best ? Math.round(foot.y) - Math.round(best.foot.y) : 1;
-      if (ahead > 0 || (ahead === 0 && Math.abs(x - foot.x) < Math.abs(x - (best?.foot.x ?? x)))) best = { a, foot };
+      const tall = headOf(a);
+      if (Math.abs(x - foot.x) > across || y < foot.y - tall - 2 || y > foot.y + 3 - a.lift) continue;
+      const far = Math.hypot(x - foot.x, y - (foot.y - (tall + a.lift) / 2));
+      if (far < near) {
+        near = far;
+        best = a;
+      }
     }
-    return best?.a ?? null;
+    return best;
   }
 
   /** A thing standing is touched: it answers, and if it is part of a door the member goes there. */

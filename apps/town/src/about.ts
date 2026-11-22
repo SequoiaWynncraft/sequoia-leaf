@@ -10,7 +10,8 @@
  *   has only just walked out of the town's room.
  *
  * Nobody is in two parts: the room is believed over the guild's lists, which can be half a minute
- * old, and whoever is in the game now is not "seen lately".
+ * old, and whoever is in the game now is not "seen lately". That is the panel as it is opened;
+ * while it stays open its order holds (`held`).
  */
 
 import type { Mate } from "./guild.ts";
@@ -32,6 +33,8 @@ export interface AboutRow {
   line: string;
   /** The member themself. */
   you: boolean;
+  /** No longer in this part, but still listed in it, dimmed, while the panel stays open (`held`). */
+  gone?: true;
 }
 
 export type PartName = "In town" | "Elsewhere" | "Seen lately";
@@ -128,4 +131,23 @@ export function whoIsAbout(o: {
   ].filter((p) => p.rows.length > 0);
   const count = town.length + elsewhere.length;
   return { parts, count, alone: count === 1 && lately.length === 0 };
+}
+
+/**
+ * What the panel shows while it stays open: what it `showed`, in the order it showed it, brought up
+ * to who is about `now`. In each part, whoever is no longer in it stays where they were, marked as
+ * gone, and whoever is new to it goes to the end. Only a panel opened afresh is sorted again.
+ */
+export function held(showed: About, now: About): About {
+  const titles: readonly PartName[] = ["In town", "Elsewhere", "Seen lately"];
+  const parts = titles.flatMap((title): AboutPart[] => {
+    const was = showed.parts.find((p) => p.title === title)?.rows ?? [];
+    const is = now.parts.find((p) => p.title === title)?.rows ?? [];
+    const rows = [
+      ...was.map((r): AboutRow => is.find((n) => n.id === r.id) ?? { ...r, gone: true }),
+      ...is.filter((n) => !was.some((r) => r.id === n.id)),
+    ];
+    return rows.length > 0 ? [{ title, rows }] : [];
+  });
+  return { parts, count: now.count, alone: now.alone && showed.alone };
 }

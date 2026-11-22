@@ -14,8 +14,17 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "seen-in-town",
+    at: "2026-11-22T20:25Z",
+    title: "Nobody hidden in town",
+    lines: [
+      "Someone standing behind the lantern tree, a stall or the quest board now shows through it. Nobody waits behind the tree by the Works any more.",
+      "A tap finds someone walking more easily. Who is about keeps its order while it is open: new people go to the end, and people who left stay listed, dimmed.",
+    ],
+  },
+  {
     id: "nothing-stuck",
-    at: "2026-11-22T20:20Z",
+    at: "2026-11-22T20:12Z",
     title: "Nothing stuck on the screen",
     lines: [
       "A tip or card no longer stays on the screen when the panel under it changes.",
@@ -24,7 +33,7 @@ export const NOTES: readonly Note[] = [
   },
   {
     id: "belt-colours",
-    at: "2026-11-22T20:19Z",
+    at: "2026-11-22T20:11Z",
     title: "The Works: belt colours",
     lines: [
       "The Works has a Paint tool. Click a belt to colour its whole line, in one of six colours.",
