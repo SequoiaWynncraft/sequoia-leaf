@@ -7,6 +7,8 @@ export {
   type CoinReason,
   coinReason,
   type CoinReasonSpec,
+  DAILY_CHEST,
+  dailyChestKey,
   PAGE_COINS,
   type PageCoinsCall,
   type PageCoinsCheck,

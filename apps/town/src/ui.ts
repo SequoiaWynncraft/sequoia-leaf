@@ -8,7 +8,7 @@ import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph, replay, shown } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { CREAM, GOLD, GREEN, WATER } from "@sequoia-leaf/kit/palette.ts";
-import { earn, grant } from "@sequoia-leaf/kit/purse.ts";
+import { earnMadeUp, grant } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
@@ -237,7 +237,8 @@ const paysWhat = (q: Quest): string => (q.pays === "leaf" ? "Leaf" : "Coins");
 function claim(q: Quest, b: HTMLElement): void {
   G.claimed.add(q.id);
   if (q.pays === "leaf") grant(q.reward, `the quest board: ${q.title}`);
-  else earn(q.reward, "quest");
+  // Only the made-up guild has quests that pay Coins; the guild's own pay Leaf, and pay themselves.
+  else earnMadeUp(q.reward, "the quest board");
   fly(q.pays === "leaf" ? "leaf" : "coin", centre(b), purseAt(q.pays), 7, () => {
     bump(q.pays);
   });
@@ -839,7 +840,8 @@ export function showArrival(letter: Letter, done: () => void): void {
     paying.forEach(({ pay: owed }, i) => {
       const at = from[i] ?? centre(paper);
       if (owed.kind === "leaf") grant(owed.amount, "the guild, while you were away");
-      else earn(owed.amount, "while_away");
+      // Only the made-up guild's letter pays Coins; the guild's own shows what Leaf has paid.
+      else earnMadeUp(owed.amount, "while away");
       fly(owed.kind === "leaf" ? "leaf" : "coin", at, purseAt(owed.kind), 7, () => {
         bump(owed.kind);
       });

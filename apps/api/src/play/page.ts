@@ -1,4 +1,14 @@
-import { COIN_REASONS, PAGE_COINS, type PageCoinsCall, pageCoinsKey, type PlayerId } from "@sequoia-leaf/core";
+import {
+  COIN_REASONS,
+  DAILY_CHEST,
+  dailyChestKey,
+  DAY_MS,
+  PAGE_COINS,
+  type PageCoinsCall,
+  pageCoinsKey,
+  type PlayerId,
+  utcDay,
+} from "@sequoia-leaf/core";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/sql";
 
@@ -19,7 +29,9 @@ export type PageCoinsDone =
   | { readonly status: "done"; readonly coins: number }
   /** A spend the balance does not cover. Nothing changed. */
   | { readonly status: "not_enough_coins" }
-  /** More than the player may earn through the pages' calls in an hour. Nothing changed. */
+  /** A refund past what the player has spent building in the Works. Nothing changed. */
+  | { readonly status: "nothing_to_refund" }
+  /** More than the player may earn through the pages' calls in an hour or a UTC day. Nothing changed. */
   | { readonly status: "too_much" }
   /** Calls faster than a player's pages may make them. Nothing was done, nor counted. */
   | { readonly status: "slow" };
@@ -28,12 +40,14 @@ export type PageCoinsDone =
  * Coins changed by the pages of the games not on the play service yet (the town and the Works),
  * which still work out what they earn and spend. Each call is one entry in the Coins ledger, keyed
  * `page:<player>:<id>` so that a call sent twice is done once, and named for the game its reason
- * belongs to. A spend the balance does not cover is refused, and so are earnings past
- * `PAGE_COINS.hourly` in any hour; either changes nothing. A player's pages may call `PAGE_CALLS`
- * a second; past that a call is refused before anything is read or written. A player with no
- * account yet has it opened with the welcome first. Each call done or refused is counted for the
- * staff's report, one answered from before is not. It all goes when those games move to the play
- * service.
+ * belongs to. The daily chest is Leaf's to pay: `DAILY_CHEST`, keyed by the player and the UTC day,
+ * whatever the page sent. Refused, changing nothing: a spend the balance does not cover; a refund
+ * that would give back more than the player has spent building in the Works; earnings past
+ * `PAGE_COINS.hourly` in any hour or `PAGE_COINS.daily` in a UTC day (worked out from the entries
+ * of the last day alone). A player's pages may call `PAGE_CALLS` a second; past that a call is
+ * refused before anything is read or written. A player with no account yet has it opened with the
+ * welcome first. Each call done or refused is counted for the staff's report, one answered from
+ * before is not. It all goes when those games move to the play service.
  */
 export class PageCoins extends Context.Service<
   PageCoins,
@@ -46,6 +60,30 @@ export class PageCoins extends Context.Service<
       const coins = yield* Coins;
       const store = yield* PlayStore;
       const pace = new Allowances([PAGE_CALLS], ALLOWANCES_KEPT);
+
+      /** Why a call that has not been done may not be, or null when it may. */
+      const refusalOf = (playerId: PlayerId, call: PageCoinsCall, balance: number, now: number) =>
+        Effect.gen(function* () {
+          if (balance + call.amount < 0) {
+            return { status: "not_enough_coins" } satisfies PageCoinsDone;
+          }
+          if (call.reason === "works_refund") {
+            const works = yield* coins.works(playerId);
+            if (works.refunded + call.amount > works.built) {
+              return { status: "nothing_to_refund" } satisfies PageCoinsDone;
+            }
+          }
+          if (call.amount > 0) {
+            const prefix = pageCoinsKey(playerId, "");
+            const hour = yield* coins.earnedSince(playerId, prefix, now - HOUR_MS);
+            const day = yield* coins.earnedSince(playerId, prefix, utcDay(now) * DAY_MS - 1);
+            if (hour + call.amount > PAGE_COINS.hourly || day + call.amount > PAGE_COINS.daily) {
+              return { status: "too_much" } satisfies PageCoinsDone;
+            }
+          }
+          return null;
+        });
+
       return PageCoins.of({
         change: (playerId, call, now) =>
           !pace.take(playerId, now, [1])
@@ -54,31 +92,25 @@ export class PageCoins extends Context.Service<
                 .withTransaction(
                   Effect.gen(function* () {
                     yield* coins.open(playerId, now);
-                    const key = pageCoinsKey(playerId, call.id);
+                    const chest = call.reason === "daily_chest";
+                    const key = chest ? dailyChestKey(playerId, utcDay(now)) : pageCoinsKey(playerId, call.id);
+                    const amount = chest ? DAILY_CHEST : call.amount;
                     if (yield* coins.posted(key)) {
                       return { status: "done", coins: yield* coins.balance(playerId) } satisfies PageCoinsDone;
                     }
                     const balance = yield* coins.balance(playerId);
-                    const refusal: PageCoinsDone | null =
-                      balance + call.amount < 0
-                        ? { status: "not_enough_coins" }
-                        : call.amount > 0 &&
-                            (yield* coins.earnedSince(playerId, pageCoinsKey(playerId, ""), now - HOUR_MS)) +
-                              call.amount >
-                              PAGE_COINS.hourly
-                          ? { status: "too_much" }
-                          : null;
+                    const refusal = yield* refusalOf(playerId, { ...call, amount }, balance, now);
                     if (refusal !== null) {
                       yield* store.count(playerId, 0, 1, now);
                       return refusal;
                     }
                     yield* coins.post(
                       playerId,
-                      { amount: call.amount, reason: call.reason, game: COIN_REASONS[call.reason].game, key },
+                      { amount, reason: call.reason, game: COIN_REASONS[call.reason].game, key },
                       now,
                     );
                     yield* store.count(playerId, 1, 0, now);
-                    return { status: "done", coins: balance + call.amount } satisfies PageCoinsDone;
+                    return { status: "done", coins: balance + amount } satisfies PageCoinsDone;
                   }),
                 )
                 .pipe(Effect.orDie),

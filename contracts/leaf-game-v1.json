@@ -1229,7 +1229,7 @@
     "status": 400,
     "body": {
       "code": "invalid_reason",
-      "message": "The reason must be one of: camp_thing, daily_chest, quest, while_away, works_order, works_depot, works_build, works_refund, works_plot, works_plan"
+      "message": "The reason must be one of: camp_thing, daily_chest, works_order, works_depot, works_build, works_refund, works_plot, works_plan"
     }
   },
   "GET /v1/game/admin/activity, a member": {
