@@ -194,9 +194,9 @@ export const FINISHED: Record<FinishedId, FinishedSpec> = {
   stump: {
     name: "Stump Shield",
     made: ["bark", "bark"],
-    text: "No attack lands hard on it, and stuns on it last a quarter as long.",
-    short: "Never hit hard. Stuns last a quarter as long.",
-    n: { steady: 75 },
+    text: "+{draw} draw: enemies pick it as if it stood a hex nearer. No attack lands hard on it, and stuns on it last a quarter as long.",
+    short: "+{draw} draw. Never hit hard; stuns a quarter as long.",
+    n: { steady: 75, draw: 1 },
     quip: "A slice of something that fell over long ago.",
   },
   hollowlog: {

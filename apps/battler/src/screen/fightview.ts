@@ -119,6 +119,8 @@ const FV: {
   doneAt: number;
   done: (() => void) | null;
   told: boolean;
+  /** Everything that has been shown happening so far, the opening first: what the tally is counted from. */
+  seen: FightEvent[];
 } = {
   fight: null,
   actors: [],
@@ -134,6 +136,7 @@ const FV: {
   doneAt: 0,
   done: null,
   told: false,
+  seen: [],
 };
 
 const marksByColour = new Map<string, HTMLCanvasElement>();
@@ -168,6 +171,8 @@ export const fightState = (): {
 });
 /** Everyone who has been in the fight on the table, for whoever keeps count. */
 export const fightUnits = (): readonly Unit[] => FV.fight?.units ?? [];
+/** Everything shown happening in the fight on the table so far, for whoever keeps count. */
+export const fightEvents = (): readonly FightEvent[] => FV.seen;
 export function setSpeed(s: Speed): void {
   FV.speed = s;
 }
@@ -226,6 +231,7 @@ export function startFight(setup: FightSetup, speed: Speed, done: () => void): v
   FV.clacked = false;
   FV.done = done;
   FV.told = false;
+  FV.seen = [];
   // Everyone starts where they were seated; what the opening did to them is acted out in the run-in.
   FV.actors = fight.units.map((u) =>
     actorFor(u, u.summoned ? feetAt(u.cell) : feetAt(seatCell(u.side, u.seat)), u.summoned ? Infinity : -Infinity),
@@ -258,13 +264,16 @@ export function endFight(): void {
   FV.cues = [];
   FV.dusk = 0;
   FV.done = null;
+  FV.seen = [];
 }
 
 /** Goes straight to the end: the fight comes out the same, it is only not watched. */
 export function skipFight(): void {
   const f = FV.fight;
   if (!f || FV.stage === "done") return;
-  while (!f.over) stepFight(f);
+  // What was still to be shown counts all the same.
+  for (const cue of FV.cues) FV.seen.push(cue.ev);
+  while (!f.over) FV.seen.push(...stepFight(f));
   FV.cues = [];
   FV.shots = [];
   FV.flashes = [];
@@ -339,6 +348,7 @@ const DAMAGE_COL = { physical: "#e67967", magic: "#d88ad0", true: CREAM } as con
 function show(ev: FightEvent): void {
   const f = FV.fight;
   if (!f) return;
+  FV.seen.push(ev);
   const now = FV.clock;
   switch (ev.t) {
     case "move": {

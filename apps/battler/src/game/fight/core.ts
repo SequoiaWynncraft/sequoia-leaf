@@ -4,10 +4,18 @@
  * made of these, and each one writes down what it did as an event.
  */
 import { boonNumber } from "../content/boons.ts";
-import { abilityNumber, specOf, type Stars, starScale, type UnitKind } from "../content/figures.ts";
-import type { ItemId } from "../content/items.ts";
+import {
+  abilityNumber,
+  isFigureId,
+  specOf,
+  type Stars,
+  starScale,
+  traitsOf,
+  type UnitKind,
+} from "../content/figures.ts";
+import { FINISHED, isFinishedId, type ItemId } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
-import { TRAITS } from "../content/traits.ts";
+import { traitDraw, TRAITS } from "../content/traits.ts";
 import { distance, line, mirror, neighboursFor, type Side, within } from "../hex.ts";
 import type { DamageKind, DamageSource, Fight, FightEvent, HealSource, LeapWhy, Unit } from "./types.ts";
 
@@ -53,7 +61,51 @@ export function alliesOf(f: Fight, side: Side): Unit[] {
   for (const o of f.units) if (o.side === side && o.alive) out.push(o);
   return out;
 }
-/** The enemy nearest a figure; ties go to the hex that comes first for its side. */
+/**
+ * A figure's draw: what its callings and the items it holds add up to, kept between the fight's
+ * least and most. The forest's own carry no calling, so theirs is 0.
+ */
+export function drawOf(kind: UnitKind, items: readonly ItemId[]): number {
+  let draw = 0;
+  if (isFigureId(kind)) for (const t of traitsOf(kind)) draw += traitDraw(t);
+  for (const item of items) if (isFinishedId(item)) draw += FINISHED[item].n.draw ?? 0;
+  return Math.min(FIGHT.drawMost, Math.max(FIGHT.drawLeast, draw));
+}
+/** How near an enemy seems to a figure picking a target: its distance less its draw. */
+const seems = (from: number, o: Unit): number => distance(from, o.cell) - o.draw;
+/**
+ * The enemy a figure picks when it picks a new target: the one that seems nearest (distance less
+ * draw); ties go to the one really nearer, then to the hex that comes first for its side.
+ */
+export function drawnFoe(f: Fight, u: Unit): Unit | undefined {
+  let best: Unit | undefined;
+  let bestSeems = 99;
+  let bestAway = 99;
+  let bestOrder = 0;
+  for (const o of f.units) {
+    if (o.side === u.side || !o.alive || o.hiddenUntil > f.tick) continue;
+    const away = distance(u.cell, o.cell);
+    const near = away - o.draw;
+    const at = order(u.side, o.cell);
+    if (near < bestSeems || (near === bestSeems && (away < bestAway || (away === bestAway && at < bestOrder)))) {
+      best = o;
+      bestSeems = near;
+      bestAway = away;
+      bestOrder = at;
+    }
+  }
+  return best;
+}
+/** Enemies of a side in the order a figure on a hex would pick them, as `drawnFoe` does. */
+export function foesByDraw(f: Fight, side: Side, cell: number): Unit[] {
+  return foesOf(f, side).toSorted(
+    (a, b) =>
+      seems(cell, a) - seems(cell, b) ||
+      distance(cell, a.cell) - distance(cell, b.cell) ||
+      order(side, a.cell) - order(side, b.cell),
+  );
+}
+/** The enemy nearest a figure, whatever its draw; ties go to the hex that comes first for its side. */
 export function nearestFoe(f: Fight, u: Unit): Unit | undefined {
   let best: Unit | undefined;
   let bestAway = 99;
@@ -322,6 +374,7 @@ export function enter(f: Fight, s: Start): Unit {
     attack0: attack,
     speed: s.speed,
     range: spec.range,
+    draw: 0,
     armour: spec.armour,
     ward: spec.ward,
     power: s.power,
@@ -464,6 +517,7 @@ export function hurt(
     soaked = Math.min(target.shield, n);
     target.shield -= soaked;
   }
+  const had = Math.max(0, target.hp);
   target.hp -= n - soaked;
   target.taken += n;
   if (by) by.dealt += n;
@@ -474,6 +528,8 @@ export function hurt(
     by: by?.id ?? -1,
     amount: n,
     soaked,
+    lost: Math.min(n - soaked, had),
+    before: Math.max(n, Math.round(raw)),
     kind,
     source,
     hard,

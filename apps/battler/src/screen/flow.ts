@@ -3,6 +3,7 @@
  * paid, and going on to the next room or to the end. The rules do all the deciding; this is the
  * order things are shown in.
  */
+import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { GOLD, LEAF } from "@sequoia-leaf/kit/palette.ts";
 import { leave, tell } from "@sequoia-leaf/kit/shell.ts";
 
@@ -22,7 +23,7 @@ import {
 } from "../game/index.ts";
 import { glyphPic } from "./art/icons.ts";
 import { endFight, fightOn, setSpeed, skipFight, startFight } from "./fightview.ts";
-import { clearFx, fly, later, say } from "./fx.ts";
+import { clearFx, fly, forgetLater, later, say } from "./fx.ts";
 import { BOARD_W } from "./geometry.ts";
 import { planning, unpick } from "./hand.ts";
 import type { Speed } from "./keep.ts";
@@ -32,6 +33,8 @@ import { signal } from "./signals.ts";
 import { snd } from "./sounds.ts";
 import { boardSpot, dress } from "./stage.ts";
 import { act, begin, changed, prefsChanged, S } from "./state.ts";
+import { acorns } from "./ui/cards.ts";
+import { closeSheet, openSheet, sheetTaking, sheetUp } from "./ui/fightsheet.ts";
 import { forgetTable, holdAcorns, renderTable, shown, wakeChip } from "./ui/table.ts";
 
 const MIDDLE = { x: BOARD_W / 2, y: 64 };
@@ -41,6 +44,7 @@ export function enterRun(walkIn = true): void {
   const run = S.run;
   if (!run) return;
   unpick();
+  closeSheet(false);
   forgetTable();
   clearPawns();
   clearFx();
@@ -70,6 +74,7 @@ export function startNew(trail: number, seed = Math.floor(Math.random() * 0xffff
 export function toFront(): void {
   if (S.mode === "fight" || S.mode === "after") return;
   unpick();
+  closeSheet(false);
   S.mode = "front";
   changed();
 }
@@ -78,6 +83,7 @@ export function toFront(): void {
 export function goHome(): void {
   if (!S.run || S.run.phase === "over") return;
   unpick();
+  closeSheet(false);
   endFight();
   clearFx();
   act((r) => abandon(r));
@@ -131,6 +137,7 @@ export function traitOn(trait: TraitId, step: number): void {
 export function setOut(): void {
   if (!planning()) return;
   unpick();
+  closeSheet(false);
   const begun = act((r) => beginFight(r));
   if (!begun?.ok) return;
   S.mode = "fight";
@@ -157,7 +164,10 @@ const WHY: Readonly<Record<string, string>> = {
   windfall: "Windfall",
 };
 
-/** The fight is done: the rules settle the room, and what it paid is counted out where it can be seen. */
+/**
+ * The fight is done: the rules settle the room, its sheet rises with the tally, and what it paid is
+ * counted out where it can be seen, a line at a time on the sheet too. The table waits on "Carry on".
+ */
 function takings(): void {
   const run = S.run;
   if (!run || run.phase !== "fight") return;
@@ -171,31 +181,47 @@ function takings(): void {
   const taken = act((r) => takeTakings(r));
   if (!taken?.ok) return;
   signal("fought");
+  openSheet("after");
+  const won = taken.fight.result === "win";
+  // The run has moved on by now: it may be over.
+  const over = S.run?.phase === "over";
+  if (over && run.won)
+    tell({ town: "news", text: "A little raid cleared: The Crab Nobody Counted has been counted.", tone: "gold" });
+  else if (won && boss)
+    tell({ town: "news", text: `${specOf(boss).name} was seen off at the stump, room ${room + 1}.`, tone: "gold" });
   let t = 0.1;
   const levels = taken.notes.some((n) => n.t === "level");
   for (const note of taken.notes) t = count(note, t, levels);
-  later(t + 0.5, () => {
-    shown.resolve = null;
-    shown.xp = null;
-    shown.level = null;
-    shown.acorns = null;
-    endFight();
-    const won = taken.fight.result === "win";
-    if (run.phase === "over") {
-      S.mode = "over";
-      if (run.won)
-        tell({ town: "news", text: "A little raid cleared: The Crab Nobody Counted has been counted.", tone: "gold" });
-    } else {
-      S.mode = "plan";
-      syncPawns(run, true);
-      if (!arrived(run)) arrive(run);
-    }
-    if (won && boss && !(run.phase === "over" && run.won)) {
-      tell({ town: "news", text: `${specOf(boss).name} was seen off at the stump, room ${room + 1}.`, tone: "gold" });
-    }
-    signal("counted");
-    changed();
-  });
+  later(t + 0.5, counted);
+}
+
+/** The takings have all been counted out: the purse, resolve and level show the run's own numbers. */
+function counted(): void {
+  shown.resolve = null;
+  shown.xp = null;
+  shown.level = null;
+  shown.acorns = null;
+  renderTable();
+  signal("counted");
+}
+
+/** Goes on from a fight's sheet: to planning the next room, or to the end of the raid. */
+export function carryOn(): void {
+  const run = S.run;
+  if (S.mode !== "after" || !run || sheetUp() !== "after") return;
+  // Whatever of the count was still to come is shown counted.
+  forgetLater();
+  counted();
+  closeSheet(false);
+  endFight();
+  snd.tap();
+  if (run.phase === "over") S.mode = "over";
+  else {
+    S.mode = "plan";
+    syncPawns(run, true);
+    if (!arrived(run)) arrive(run);
+  }
+  changed();
 }
 
 /** Where the purse of acorns is, from the board's corner. */
@@ -221,6 +247,16 @@ function count(note: Note, at: number, levels: boolean): number {
   if (note.t === "resolve") {
     {
       later(at, () => {
+        sheetTaking(
+          "Resolve",
+          el(
+            "b",
+            note.change > 0 ? "k-leafy" : "k-coral",
+            {},
+            icon("heart"),
+            `${note.change > 0 ? "+" : ""}${note.change}`,
+          ),
+        );
         shown.resolve = null;
         renderTable();
         snd.resolve();
@@ -241,6 +277,7 @@ function count(note: Note, at: number, levels: boolean): number {
     {
       const p = pawns.get(note.piece);
       later(at, () => {
+        sheetTaking("Greg has eaten something.", "");
         if (p) say(p.x, p.y - 22, "Greg has eaten something.", LEAF, { ttl: 1.4 });
       });
       return at + 0.3;
@@ -251,6 +288,7 @@ function count(note: Note, at: number, levels: boolean): number {
       const slow = note.why === "interest";
       const each = slow ? 0.16 : 0.08;
       later(at, () => {
+        sheetTaking(WHY[note.why] ?? "", acorns(`+${note.amount}`));
         say(MIDDLE.x, MIDDLE.y + 12, `${WHY[note.why] ?? ""} +${note.amount}`, GOLD[2], { ttl: 1.1 });
         const to = purse();
         // Savings pay out of the purse's own piles, an acorn at a time; the rest comes off the board.
@@ -274,6 +312,7 @@ function count(note: Note, at: number, levels: boolean): number {
     {
       if (levels) return at;
       later(at, () => {
+        sheetTaking("Experience", el("b", "k-leafy", { text: `+${note.gained}` }));
         shown.xp = null;
         renderTable();
         snd.xp();
@@ -284,6 +323,7 @@ function count(note: Note, at: number, levels: boolean): number {
   if (note.t === "level") {
     {
       later(at, () => {
+        sheetTaking("Level up", el("b", "k-leafy", { text: `Level ${note.level}` }));
         shown.xp = null;
         shown.level = null;
         renderTable();

@@ -10,6 +10,7 @@ import { FIGURE_IDS, type FigureId, FIGURES, isBossId, isFigureId, isStars } fro
 import { FINISHED_IDS, HOLDS, isComponentId, isFinishedId, isItemId, type ItemId } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, ROOMS, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS, traitNumber } from "./content/traits.ts";
+import type { FightSetup } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
 import { isParty } from "./party.ts";
 import { type Choice, fieldCap, fielded, type Piece, type RoomRecord, type Run } from "./run.ts";
@@ -90,6 +91,16 @@ function readRecord(v: unknown, room: number): RoomRecord {
   };
 }
 
+/** The last fight's setup: a seed and two parties. A run saved before it was kept has none. */
+function readLast(v: unknown): FightSetup | null {
+  if (v === undefined || v === null) return null;
+  const r = record(v, "the last fight");
+  const sides = list(r.sides, 2, "the last fight");
+  const ours = one(sides[0], isParty, "the last fight");
+  const theirs = one(sides[1], isParty, "the last fight");
+  return { seed: whole(r.seed, 0, UINT, "the last fight"), sides: [ours, theirs] };
+}
+
 function readRun(v: unknown): Run {
   const r = record(v, "the run");
   const boons: BoonId[] = unique(each(r.boons, isBoonId, BOON_IDS.length, "the boons"), "the boons");
@@ -109,8 +120,7 @@ function readRun(v: unknown): Run {
   if (bench.length !== ECONOMY.bench) bad("the bench");
   const ids = [...board, ...bench].flatMap((p) => (p ? [p.id] : []));
   unique(ids, "the figures' numbers");
-  const open = unique(each(r.open, isFigureId, FIGURE_IDS.length, "the open figures"), "the open figures");
-  if (!open.some((id) => FIGURES[id].tier === 1)) bad("the open figures");
+  // A run saved while some figures were locked lists the ones its stall could offer; every figure can now.
   const seen = record(r.seen, "the almanac notes");
   const foe = one(r.foe, isParty, "who is waiting in the room");
   if (foe.figures.length === 0) bad("who is waiting in the room");
@@ -136,9 +146,9 @@ function readRun(v: unknown): Run {
     foe,
     record: list(r.record, 400, "the record").map((x) => readRecord(x, room)),
     nextId,
-    open,
     won: flag(r.won, "the ending"),
     left: flag(r.left, "the ending"),
+    last: readLast(r.last),
     seen: {
       fielded: unique(each(seen.fielded, isFigureId, FIGURE_IDS.length, "the almanac notes"), "the almanac notes"),
       threeStars: unique(

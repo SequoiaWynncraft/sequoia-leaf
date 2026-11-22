@@ -12,7 +12,6 @@ import {
   newAlmanac,
   type News,
   type Note,
-  openFigures,
   type Payout,
   payout,
   recordRun,
@@ -94,7 +93,7 @@ export function prefsChanged(): void {
 
 /** Starts a new run on a trail, letting go of any run in progress. */
 export function begin(seed: number, trail: number): Run {
-  const run = startRun(seed, { trail, open: openFigures(S.almanac) });
+  const run = startRun(seed, { trail });
   S.run = run;
   S.ended = null;
   S.prefs.trail = run.trail;

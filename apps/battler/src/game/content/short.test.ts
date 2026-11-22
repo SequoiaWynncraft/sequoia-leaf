@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { GOOD_WITH, roleLine, ROLES } from "./advice.ts";
+import { drawName, drawTip, GOOD_WITH, roleLine, ROLES } from "./advice.ts";
 import { BOON_IDS, boonShort, boonText } from "./boons.ts";
 import {
   abilityShort,
@@ -83,8 +83,20 @@ describe("short forms", () => {
 
 describe("advice for the cards", () => {
   test("every calling has a role and a place", () => {
-    for (const calling of CALLINGS) expect(roleLine(calling)).toBe(`${ROLES[calling].role} · ${ROLES[calling].place}`);
-    expect(roleLine("sneak")).toBe("Assassin · leaps to their back row");
+    for (const calling of CALLINGS)
+      expect(roleLine(calling)).toStartWith(`${ROLES[calling].role} · ${ROLES[calling].place}`);
+    expect(roleLine("fang")).toBe("Fighter · front row");
+    expect(roleLine("bulwark")).toBe("Tank · front row · draws fire");
+    expect(roleLine("sneak")).toBe("Assassin · leaps to their back row · slips notice");
+  });
+  test("a draw has a name and a tip", () => {
+    expect(drawName(0)).toBeNull();
+    expect(drawName(1)).toBe("Draws fire");
+    expect(drawName(2)).toBe("Draws fire ×2");
+    expect(drawName(-1)).toBe("Slips notice");
+    expect(drawTip(1)).toBe("Enemies pick their target as if this figure stood one hex nearer.");
+    expect(drawTip(2)).toBe("Enemies pick their target as if this figure stood two hexes nearer.");
+    expect(drawTip(-1)).toBe("Enemies pick their target as if this figure stood one hex further.");
   });
   test("every figure is good with three different finished items", () => {
     for (const id of FIGURE_IDS) {

@@ -1,0 +1,68 @@
+[
+  ["size", 390, 844],
+  ["wait", 900],
+  ["eval", "(window.raid.fresh(), window.raid.hold(true), window.raid.taught(), 'a new member, clock held')"],
+  ["wait", 700],
+  ["shot", "feel-p-01-front-page"],
+  ["eval", "(window.raid.start(11, 0), window.raid.skip(1.2), 'first pick')"],
+  ["wait", 700],
+  [
+    "eval",
+    "(document.querySelector(\"[data-pick='0']\")?.click(), window.raid.skip(0.5), JSON.stringify(window.raid.state().choice))"
+  ],
+  ["eval", "(window.raid.bot(6), window.raid.plan(), window.raid.skip(1.5), 'room 7')"],
+  ["wait", 400],
+  [
+    "eval",
+    "(()=>{const id=window.raid.give('glorp'); window.raid.skip(0.3); window.raid.tap(id); window.raid.skip(0.3); return 'glorp '+id})()"
+  ],
+  ["wait", 400],
+  [
+    "eval",
+    "(()=>{const c=[...document.querySelectorAll('.k-info-chip')].find(c=>c.textContent.includes('Draws fire')); c?.dispatchEvent(new PointerEvent('pointerenter',{pointerType:'mouse'})); return c?c.textContent:'no chip'})()"
+  ],
+  ["wait", 500],
+  ["shot", "feel-p-02-bulwark-card"],
+  [
+    "eval",
+    "(()=>{const c=[...document.querySelectorAll('.k-info-chip')].find(c=>c.textContent.includes('Draws fire')); c?.dispatchEvent(new PointerEvent('pointerleave',{pointerType:'mouse'})); window.raid.drop(); return 'put away'})()"
+  ],
+  ["key", "Escape"],
+  ["eval", "(window.raid.fight(), window.raid.tick(120), window.raid.busy(200))"],
+  ["wait", 400],
+  ["shot", "feel-p-03-fight-damage"],
+  ["eval", "window.raid.tally('tanked')"],
+  ["wait", 300],
+  ["shot", "feel-p-04-fight-tanked"],
+  ["eval", "window.raid.tally('healing')"],
+  ["wait", 300],
+  ["shot", "feel-p-05-fight-healing"],
+  [
+    "eval",
+    "(()=>{window.raid.tally('damage'); for(let i=0;i<4000&&!window.raid.state().fight.over;i++)window.raid.tick(1); window.raid.skip(1); window.raid.skip(3); return JSON.stringify([window.raid.state().mode, window.raid.state().fight.result])})()"
+  ],
+  ["wait", 500],
+  ["shot", "feel-p-06-sheet-lost"],
+  ["eval", "window.raid.tally('damage', 1)"],
+  ["wait", 300],
+  ["shot", "feel-p-06b-sheet-lost-them"],
+  ["eval", "window.raid.tally('damage', 0)"],
+  [
+    "eval",
+    "(window.raid.carry(), window.raid.skip(1.5), document.querySelector(\"[data-pick='0']\")?.click(), window.raid.skip(2), window.raid.last())"
+  ],
+  ["wait", 500],
+  ["shot", "feel-p-07-last-fight"],
+  ["eval", "(window.raid.last(), window.raid.start(5, 0), window.raid.skip(1.2), 'a new raid')"],
+  ["wait", 700],
+  [
+    "eval",
+    "(document.querySelector(\"[data-pick='0']\")?.click(), window.raid.skip(0.5), JSON.stringify(window.raid.state().choice))"
+  ],
+  [
+    "eval",
+    "(()=>{window.raid.skip(1.5); window.raid.fight(); for(let i=0;i<4000&&!window.raid.state().fight.over;i++)window.raid.tick(1); window.raid.skip(1); window.raid.skip(3); return JSON.stringify([window.raid.state().mode, window.raid.state().fight.result])})()"
+  ],
+  ["wait", 500],
+  ["shot", "feel-p-08-sheet-won"]
+]

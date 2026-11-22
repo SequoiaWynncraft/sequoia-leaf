@@ -410,46 +410,195 @@ body[data-picking="yes"] #foe {
   position: absolute;
   inset: 0;
   display: none;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  gap: calc(var(--u) * 8);
-  padding: calc(var(--u) * 3);
+  gap: calc(var(--u) * 6);
+  padding: calc(var(--u) * 3) calc(var(--u) * 4);
 }
 #fightbar .controls {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: calc(var(--u) * 3);
+  justify-content: center;
+  gap: calc(var(--u) * 4);
 }
 #tally {
   flex: 1;
   min-width: 0;
-  max-width: calc(var(--u) * 250);
-  align-self: stretch;
+  display: flex;
+}
+#tally .tallyv {
+  flex: 1;
+}
+
+/* ---------- the tally: what everyone did in a fight ---------- */
+
+.tallyv {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tv-sides {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: min-content;
-  align-content: center;
-  gap: var(--u) calc(var(--u) * 6);
+  gap: 0 calc(var(--u) * 8);
 }
-#tally .row {
-  display: grid;
-  grid-template-columns: calc(var(--u) * 22) minmax(0, 1fr) calc(var(--u) * 20);
+.tv-side {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+}
+.tv-head {
+  display: flex;
   align-items: center;
-  justify-items: center;
-  gap: calc(var(--u) * 2);
+  min-height: calc(var(--u) * 10);
+  padding-left: calc(var(--u) * 20);
+  white-space: nowrap;
+  overflow: hidden;
 }
-#tally .row .k-bar {
-  width: 100%;
+/* Six rows a side show; more scroll. */
+.tv-rows {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(var(--u) * 12 * 6);
+  overflow: hidden auto;
+  scrollbar-width: thin;
 }
-#tally .row.down canvas {
+.tv-row {
+  flex: none;
+  display: grid;
+  grid-template-columns: calc(var(--u) * 18) minmax(0, 1.15fr) minmax(0, 1fr) calc(var(--u) * 27) calc(var(--u) * 13);
+  align-items: center;
+  gap: 0 calc(var(--u) * 2);
+  height: calc(var(--u) * 12);
+  outline-offset: calc(var(--u) * -1);
+}
+.tv-pic {
+  display: grid;
+  place-items: end center;
+  height: calc(var(--u) * 12);
+  overflow: hidden;
+}
+.tv-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1;
+}
+.tv-n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tv-star {
+  visibility: hidden;
+}
+.tv-row.best .tv-star {
+  visibility: visible;
+}
+.tv-row.down .tv-pic {
   opacity: 0.4;
 }
-#sides {
+.tv-row.down .tv-name {
+  color: var(--k-dim);
+}
+.tv-switch {
+  display: none;
+}
+/* A bar in parts, one after another, each its own colour, all on the tab's one scale. */
+.k-bar.parts {
   display: flex;
-  flex-wrap: wrap;
+  height: calc(var(--u) * 7);
+}
+.k-bar.parts > i {
+  flex: none;
+  transition: width 0.3s steps(4, end);
+}
+.k-bar.parts > i.phys,
+.k-bar.parts > i.took {
+  background: linear-gradient(#f4a08c 0 var(--u), var(--k-coral) 0 calc(100% - var(--u)), #c4574f 0);
+}
+.k-bar.parts > i.magic {
+  background: linear-gradient(#ecb0e4 0 var(--u), #d88ad0 0 calc(100% - var(--u)), #a75d9f 0);
+}
+.k-bar.parts > i.true {
+  background: linear-gradient(#ffffff 0 var(--u), var(--k-cream) 0 calc(100% - var(--u)), #d8c9a0 0);
+}
+.k-bar.parts > i.kept {
+  background: linear-gradient(#a6a6a6 0 var(--u), #888788 0 calc(100% - var(--u)), #6e6d6d 0);
+}
+.k-bar.parts > i.mend {
+  background: linear-gradient(var(--k-leaf) 0 var(--u), var(--k-green) 0 calc(100% - var(--u)), #3b7340 0);
+}
+.k-bar.parts > i.ward {
+  background: linear-gradient(var(--k-gold-lt) 0 var(--u), var(--k-gold) 0 calc(100% - var(--u)), var(--k-gold-dk) 0);
+}
+.tv-tabs > .k-btn {
+  min-width: calc(var(--u) * 34);
+}
+
+/* ---------- the sheet of a fight ---------- */
+
+#fsheet {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + var(--u) * 3);
+  translate: -50% 0;
+  z-index: 2;
+  width: min(100%, calc(var(--u) * 440));
+  max-height: var(--room, 70dvh);
+  display: flex;
+  flex-direction: column;
+}
+#fsheet .k-head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+}
+#fsheet .k-title {
+  flex: 1;
+}
+#fsheet .k-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 3);
+  overflow: hidden auto;
+}
+.fs-tabs {
   justify-content: center;
-  gap: 0 calc(var(--u) * 3);
+}
+.fs-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(var(--u) * 6);
+}
+#fsheet.after .fs-main {
+  grid-template-columns: minmax(0, 1fr) calc(var(--u) * 82);
+}
+.fs-aside {
+  justify-content: flex-start;
+  gap: calc(var(--u) * 2);
+  padding-left: calc(var(--u) * 5);
+  border-left: var(--u) solid var(--k-mid);
+}
+.fs-aside .takings {
+  flex: 1;
+  min-height: calc(var(--u) * 20);
+}
+.fs-aside .pay {
+  gap: calc(var(--u) * 2);
+}
+/* However the sheet scrolls, "Carry on" stays in reach. */
+#carry {
+  position: sticky;
+  bottom: 0;
+}
+#lastfight[hidden] {
+  display: none;
 }
 #speeds > .k-btn {
   min-width: calc(var(--u) * 22);
@@ -796,28 +945,6 @@ b.dmg.true {
   align-items: center;
   gap: calc(var(--u) * 2);
 }
-.opened {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--u) * 4);
-  padding: calc(var(--u) * 2);
-}
-.flip {
-  position: relative;
-  display: block;
-}
-.flip .is {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  transition: opacity 0.35s;
-}
-.opened.lit .is {
-  opacity: 1;
-}
-.opened.lit {
-  animation: k-bump 0.3s;
-}
 .pay.total {
   margin-top: calc(var(--u) * 2);
 }
@@ -864,8 +991,11 @@ b.dmg.true {
   #corner {
     order: 3;
   }
-  #track {
+  #lastfight {
     order: 4;
+  }
+  #track {
+    order: 5;
     margin-inline: auto;
   }
   #traits {
@@ -944,17 +1074,87 @@ b.dmg.true {
   #fightbar {
     gap: calc(var(--u) * 2);
     flex-direction: column-reverse;
-    justify-content: space-evenly;
+    justify-content: flex-start;
+    padding: calc(var(--u) * 2);
+  }
+  /* The switch beside the speeds, the tabs under them, so that six rows still show. */
+  #fightbar .controls {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "switch speed"
+      "tabs tabs";
+    gap: calc(var(--u) * 2);
+    align-items: center;
+  }
+  #fightbar .tv-switch {
+    grid-area: switch;
+    width: auto;
+  }
+  #fightbar .tv-tabs {
+    grid-area: tabs;
+  }
+  #fightbar .speedrow {
+    grid-area: speed;
+    justify-content: flex-end;
+    gap: calc(var(--u) * 2);
+  }
+  #fightbar #speeds > .k-btn {
+    min-width: 0;
+    padding-inline: calc(var(--u) * 2);
+  }
+  #fightbar .tv-switch > .k-btn {
+    padding-inline: calc(var(--u) * 2);
   }
   #tally {
-    flex: none;
-    align-self: stretch;
-    max-width: none;
-    gap: 0 calc(var(--u) * 3);
+    flex: 1;
+    min-height: 0;
   }
-  #tally .row:nth-child(n + 7) {
+  /* On an upright phone one party at a time, with a switch above the tabs. */
+  .tv-switch {
+    display: flex;
+  }
+  .tv-sides {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tallyv[data-side="0"] .tv-side[data-side="1"],
+  .tallyv[data-side="1"] .tv-side[data-side="0"] {
     display: none;
   }
+  .tv-head {
+    display: none;
+  }
+  .fs-tabs {
+    flex-direction: column;
+    gap: calc(var(--u) * 2);
+  }
+  .fs-aside > .k-label {
+    display: none;
+  }
+  .tv-tabs > .k-btn {
+    min-width: 0;
+  }
+  .tv-switch,
+  .tv-tabs {
+    width: 100%;
+  }
+  #fsheet {
+    width: 100%;
+  }
+  #fsheet.after .fs-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fs-aside {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .fs-aside .takings {
+    min-height: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--u) calc(var(--u) * 4);
+  }
+
   #picks {
     top: calc(var(--top) + var(--u) * 46);
     translate: -50% 0;

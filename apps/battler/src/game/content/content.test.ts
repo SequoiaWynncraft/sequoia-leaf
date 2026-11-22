@@ -27,7 +27,6 @@ import {
   itemStats,
   itemText,
 } from "./items.ts";
-import { MILESTONES } from "./keepsakes.ts";
 import { BOSS_ROOMS, ECONOMY, MAX_LEVEL, ROOMS, sellPrice, STALL_ODDS, TRAILS, worth } from "./rooms.ts";
 import { CALLINGS, KINS, stepFor, TRAIT_IDS, TRAITS, traitText } from "./traits.ts";
 
@@ -253,11 +252,5 @@ describe("the run's tables", () => {
     expect(ECONOMY.lossMost).toBe(7);
     expect(ECONOMY.lossBase).toBe(2);
     expect(ECONOMY.resolve).toBe(20);
-  });
-  test("four to six figures start locked, and none of them is one of the three cheapest starts needed", () => {
-    expect(MILESTONES.length).toBeGreaterThanOrEqual(4);
-    expect(MILESTONES.length).toBeLessThanOrEqual(6);
-    for (const m of MILESTONES) expect(FIGURES[m.figure].tier).toBeGreaterThan(1);
-    expect(new Set(MILESTONES.map((m) => m.figure)).size).toBe(MILESTONES.length);
   });
 });

@@ -15,6 +15,7 @@ import {
   ECONOMY,
   fieldCap,
   fielded,
+  type FightResult,
   FIGURE_IDS,
   type FigureId,
   FIGURES,
@@ -22,6 +23,7 @@ import {
   type FinishedId,
   forge,
   holdItem,
+  HZ,
   interestCap,
   interestNow,
   isComponentId,
@@ -341,3 +343,9 @@ export function postcard(run: Run | null, almanac: Almanac): Postcard {
 
 /** A name at the start of a sentence or a line: "a Moth" is "A Moth" there. */
 export const opening = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
+
+/** The title of a fight's sheet: how it went and how long it took, "Room won · 14 s". */
+export function fightTitle(result: FightResult, ticks: number): string {
+  const how = result === "win" ? "Room won" : result === "loss" ? "Room lost" : "A draw";
+  return `${how} · ${Math.max(1, Math.round(ticks / HZ))} s`;
+}

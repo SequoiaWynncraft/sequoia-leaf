@@ -41,12 +41,14 @@ fight and a run go. Nothing in there touches the page. Everything else here is t
   a trait's roster) opens its own card in the same place, with a back arrow. Cards say things in a
   few words, in the reading face, numbers in bold gold, heals and shields in green, and physical,
   magic and true damage each in a colour of its own. A figure's card has its picture, name, stars and price, what kind of fighter it is and where
-  it stands ("Tank · front row"), its kin and calling as chips with the party's count, its numbers
+  it stands ("Tank · front row · draws fire"), its kin and calling as chips with the party's count,
+  a chip after them when its draw is not 0 ("Draws fire", "Draws fire ×2", "Slips notice", with a
+  tip saying enemies pick it as if it stood a hex nearer or further), its numbers
   (green where an item, a trait or a boon raises one, coral where something lowers it), its
   ability, what it holds and three finished items that suit it (lit if the rack has one, or both
-  its halves). A trait's card has its steps (the one reached lit, the next saying how many more)
-  and every figure that carries it, cheapest first: lit if fielded, tagged if on the bench or the
-  stall, a dark outline with what opens it if not opened yet. An item's card has what it adds, what
+  its halves). A trait's card has its steps (the one reached lit, the next saying how many more),
+  for the Bulwark and the Sneak first a line saying how they draw, and every figure that carries it,
+  cheapest first: lit if fielded, tagged if on the bench or the stall. An item's card has what it adds, what
   it does and what it is made of; a component's has what it makes with each other half (that
   half's picture, an arrow, the finished item), the ones whose other half the party holds first,
   lit and tagged "have", as on the pick of a component. There are cards for a boon, a room on the track, the
@@ -79,15 +81,26 @@ fight and a run go. Nothing in there touches the page. Everything else here is t
   turn up and Sneaks leap; then each thing the rules say happened is shown on the board: things
   thrown fly (a seed, a pebble, a cone, a cup of tea), the hexes an ability covers light outward
   from the caster, shields settle, burns lick, the stunned see stars, heals rise as motes, numbers
-  rise from whoever is hit. A panel keeps count of who has done most. Afterwards the room's pay is
-  counted out: acorns fly to the purse, savings an acorn at a time.
+  rise from whoever is hit. The lower panel is the tally meanwhile: "You" on the left and the other
+  party on the right, a row for each figure (its small picture, its name, a bar and a number), sorted
+  by the tab chosen and sliding into new places as that changes, six to a side and more scrolling.
+  **Damage** draws each bar in physical coral, magic rose and true cream; **Tanked** in what got
+  through (coral) and what armour, ward and shields kept off (grey); **Healing** in health given
+  back (green) and shields (gold). Every bar on a tab is to one scale and the row with the most
+  carries a star; what a summoned figure did is its summoner's. On an upright phone it shows one
+  party at a time, with a "You / Them" switch beside the speeds.
+- **After the fight** the tally rises over the table as a sheet titled with how it went and how long
+  it took ("Room won · 14 s"), and the room's pay is counted out beside it, a line at a time, while
+  acorns fly to the purse; "Carry on" goes on to planning (or to the end of the raid). While
+  planning, "Last fight" by the room track opens the same sheet again until the next fight.
 - **A boss** is not announced: it walks in from the trees, slowly, before the rest of its party.
-- **The end of a run** is a page of paper: the rooms, the party that got there, anything opened
-  (the dark outline turns into the figure), what is new in the almanac, and the Coins paid into the
-  member's purse. Then again, or back to town.
-- **Round the game.** A front page (carry on, or which way to set out; the almanac; how to play;
-  table looks; leave the table). The almanac shows every figure, trait and item met so far and how
-  far each trail has been walked. Table looks are the one thing Leaf buys here: a cloth under the
+- **The end of a run** is a page of paper: the rooms, the party that got there, what is new in the
+  almanac, and the Coins paid into the member's purse. Then again, or back to town.
+- **Round the game.** A front page (a line saying everyone plays with the same figures here; carry
+  on, or which way to set out; the almanac; how to play; table looks; leave the table). Every one of
+  the twenty-eight figures can be at the stall for everyone from the first run. The almanac shows
+  every figure, trait and item met so far, which figures reached three stars, and how far each trail
+  has been walked. Table looks are the one thing Leaf buys here: a cloth under the
   board, a different lantern, different bases; each is shown before it is bought and changes
   nothing but the picture.
 - **First time.** One nudge at a time, in the place it matters: a hand points, one line says what
@@ -99,7 +112,8 @@ Three texts in the browser, each with a version on it:
 
 - the run in progress (`raid.run.v1`, the rules' own `saveRun`), written after every action and
   offered again on the front page; a run saved in the middle of a fight comes back at the start of
-  that fight, which plays out the same;
+  that fight, which plays out the same; the last fight's setup goes with it, so "Last fight" plays
+  it again after a reload;
 - the almanac (`raid.almanac.v1`, the rules' own `saveAlmanac`);
 - the member's prefs (`raid.prefs.v1`, `src/screen/keep.ts`): the looks bought and worn, the speed
   fights are watched at, the trail last walked, the nudges already given.
@@ -132,38 +146,40 @@ arrangement for a wide window and another for a phone held upright.
 The clock only moves in the stage's `tick`, and a fight's clock is counted from it, so everything
 timed can be stepped by hand.
 
-| File                        | What it holds                                                                                    |
-| --------------------------- | ------------------------------------------------------------------------------------------------ |
-| `src/main.ts`               | Puts the parts together; speaks to the town                                                      |
-| `src/game/`                 | The rules (see its README)                                                                       |
-| `src/screen/state.ts`       | The run, the almanac, the prefs and what is on screen; every action goes through `act`           |
-| `src/screen/flow.ts`        | What happens when: sitting down, setting out, the fight, counting out the takings, the end       |
-| `src/screen/stage.ts`       | The canvases, the size of an art pixel, where the board sits, the clock                          |
-| `src/screen/geometry.ts`    | Where hexes, seats and bench hollows are, and which is under a point                             |
-| `src/screen/scene.ts`       | Drawing a frame: the board, lit hexes, who is waiting across it, the party, the fight            |
-| `src/screen/pawns.ts`       | The party's figures on board and bench; buying, selling and three-become-one acted out           |
-| `src/screen/hand.ts`        | Dragging and tapping, and asking what a thing is                                                 |
-| `src/screen/light.ts`       | Which trait is lit (pointed at, or clicked and kept), and how that shows on a figure             |
-| `src/screen/rich.ts`        | The words on a card sorted for colouring: numbers, heals and shields, kinds of damage            |
-| `src/screen/fightview.ts`   | The fight played from the rules' events                                                          |
-| `src/screen/fx.ts`          | Sparks, rings, rising words, things that fly, "in a moment"                                      |
-| `src/screen/logic.ts`       | Small questions asked of a run: where a figure may go, what an item would make, the next nudge   |
-| `src/screen/keep.ts`        | Prefs and looks, and reading and writing what is kept                                            |
-| `src/screen/sounds.ts`      | The table's sounds, made from the kit's tones                                                    |
-| `src/screen/signals.ts`     | Small happenings more than one part answers: an acorn landing, a star                            |
-| `src/screen/handle.ts`      | `window.raid`, for looking at the game from outside                                              |
-| `src/screen/art/figures.ts` | Every figure, typed out as rows of letters                                                       |
-| `src/screen/art/sprites.ts` | Those rows baked into pictures: standing, breathing, casting, tipped over; bases and stars       |
-| `src/screen/art/icons.ts`   | A small picture for every trait, item, boon, kind of room and button                             |
-| `src/screen/art/table.ts`   | The painted table, the halves of the board, the looks                                            |
-| `src/screen/art/pal.ts`     | The letters' colours, and the colours that mean something                                        |
-| `src/screen/ui/table.ts`    | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's count     |
-| `src/screen/held.ts`        | What a figure holds: where the row of small pictures under its base goes, drawing it, hitting it |
-| `src/screen/ui/cards.ts`    | What each thing says about itself, registered with the kit's cards, and the references to them   |
-| `src/screen/ui/lit.ts`      | Which trait the cards have pointed at or pinned, and marking the chips and the stall for it      |
-| `src/screen/ui/picks.ts`    | Three cards to choose from                                                                       |
-| `src/screen/ui/pages.ts`    | The front page, the almanac, how to play, table looks, the end of a run                          |
-| `src/screen/ui/nudge.ts`    | The first-time nudges                                                                            |
+| File                          | What it holds                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ |
+| `src/main.ts`                 | Puts the parts together; speaks to the town                                                      |
+| `src/game/`                   | The rules (see its README)                                                                       |
+| `src/screen/state.ts`         | The run, the almanac, the prefs and what is on screen; every action goes through `act`           |
+| `src/screen/flow.ts`          | What happens when: sitting down, setting out, the fight, counting out the takings, the end       |
+| `src/screen/stage.ts`         | The canvases, the size of an art pixel, where the board sits, the clock                          |
+| `src/screen/geometry.ts`      | Where hexes, seats and bench hollows are, and which is under a point                             |
+| `src/screen/scene.ts`         | Drawing a frame: the board, lit hexes, who is waiting across it, the party, the fight            |
+| `src/screen/pawns.ts`         | The party's figures on board and bench; buying, selling and three-become-one acted out           |
+| `src/screen/hand.ts`          | Dragging and tapping, and asking what a thing is                                                 |
+| `src/screen/light.ts`         | Which trait is lit (pointed at, or clicked and kept), and how that shows on a figure             |
+| `src/screen/rich.ts`          | The words on a card sorted for colouring: numbers, heals and shields, kinds of damage            |
+| `src/screen/fightview.ts`     | The fight played from the rules' events                                                          |
+| `src/screen/fx.ts`            | Sparks, rings, rising words, things that fly, "in a moment"                                      |
+| `src/screen/logic.ts`         | Small questions asked of a run: where a figure may go, what an item would make, the next nudge   |
+| `src/screen/keep.ts`          | Prefs and looks, and reading and writing what is kept                                            |
+| `src/screen/sounds.ts`        | The table's sounds, made from the kit's tones                                                    |
+| `src/screen/signals.ts`       | Small happenings more than one part answers: an acorn landing, a star                            |
+| `src/screen/handle.ts`        | `window.raid`, for looking at the game from outside                                              |
+| `src/screen/art/figures.ts`   | Every figure, typed out as rows of letters                                                       |
+| `src/screen/art/sprites.ts`   | Those rows baked into pictures: standing, breathing, casting, tipped over; bases and stars       |
+| `src/screen/art/icons.ts`     | A small picture for every trait, item, boon, kind of room and button                             |
+| `src/screen/art/table.ts`     | The painted table, the halves of the board, the looks                                            |
+| `src/screen/art/pal.ts`       | The letters' colours, and the colours that mean something                                        |
+| `src/screen/ui/table.ts`      | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's panel     |
+| `src/screen/ui/tally.ts`      | The tally as rows and bars, two parties side by side (one at a time on a phone), with its tabs   |
+| `src/screen/ui/fightsheet.ts` | The sheet of a fight that is over: after it with the takings and "Carry on", or "Last fight"     |
+| `src/screen/held.ts`          | What a figure holds: where the row of small pictures under its base goes, drawing it, hitting it |
+| `src/screen/ui/cards.ts`      | What each thing says about itself, registered with the kit's cards, and the references to them   |
+| `src/screen/ui/lit.ts`        | Which trait the cards have pointed at or pinned, and marking the chips and the stall for it      |
+| `src/screen/ui/picks.ts`      | Three cards to choose from                                                                       |
+| `src/screen/ui/pages.ts`      | The front page, the almanac, how to play, table looks, the end of a run                          |
+| `src/screen/ui/nudge.ts`      | The first-time nudges                                                                            |
 
 `geometry.ts`, `logic.ts`, `keep.ts`, `light.ts` and `rich.ts` have tests beside them.
 
@@ -179,7 +195,9 @@ figures by number for `grab(id, x, y)`, `tap(id)`, `hover(itemAt, id)`, `hand(it
 `drop()`; `acorns(n)`, `give(kind)`, `offer(at, kind)`, `item(id)` and `strip()` stage a moment (a merge, an
 item to forge, empty hands); `at(id)` and `heldAt(id, i)` say where a figure and what it holds are
 on the page, and `rack()` and `held()` what is on the rack and in every hand; `page(id)` opens a page; `arrive()` has whoever is waiting walk in again;
-`taught()` counts every nudge as given; `state()` says where things stand; `bench()` times a frame.
+`taught()` counts every nudge as given; `state()` says where things stand; `bench()` times a frame;
+`carry()` presses "Carry on", `last()` opens or puts away "Last fight", and `tally(measure, side)`
+chooses a tab of the tally and, on a phone, a party.
 
 `?sheet` in the address shows every figure on one sheet with its name.
 
@@ -191,6 +209,10 @@ bun ../../packages/kit/tools/drive.ts "http://raid.test/" <out-dir> review/tour-
 bun ../../packages/kit/tools/drive.ts "http://raid.test/" <out-dir> review/tour-phone.json dist
 bun ../../packages/kit/tools/drive.ts "http://raid.test/?sheet" <out-dir> review/sheet.json dist
 ```
+
+`review/feel.json` and `review/feel-phone.json` go through who gets hit, what everyone did and the
+open table: the front page, a Bulwark's card with its draw chip and tip, a fight with each of the
+tally's three tabs, the sheet after a lost room and a won one, and "Last fight" while planning.
 
 `review/kit-cards.json` and `review/kit-cards-phone.json` go through what the kit's cards brought:
 a board with figures holding nothing, one component and three items, a held item's card, a card

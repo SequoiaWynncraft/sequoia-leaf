@@ -16,9 +16,7 @@ import {
   FIGURES,
   FINISHED,
   FINISHED_IDS,
-  isLocked,
   itemName,
-  MILESTONES,
   pieces,
   ROOM_COUNT,
   ROOMS,
@@ -33,7 +31,6 @@ import {
 import { glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
 import { portrait, starsPic } from "../art/sprites.ts";
 import { paintSwatch } from "../art/table.ts";
-import { later } from "../fx.ts";
 import {
   baseOf,
   clothOf,
@@ -275,28 +272,25 @@ function front(): HTMLElement {
       "Leave the table",
     ),
   );
+  body.prepend(el("p", "k-read fair", { text: "Everyone plays with the same figures here." }));
   return panel("The Little Raid", pic(glyph("swords")), body, false, "front");
 }
 
 // ---------- the almanac ----------
 
+/** A figure in the almanac: met (fielded) or not yet, and a badge for three stars. */
 function figureTile(id: FigureId): HTMLElement {
   const met = S.almanac.fielded.includes(id);
-  const locked = isLocked(id) && !S.almanac.opened.includes(id);
   const starred = S.almanac.threeStars.includes(id);
-  const how = MILESTONES.find((m) => m.figure === id)?.text ?? "";
   const tile = el(
     "button",
-    `k-card tile${met ? "" : " unmet"}${locked ? " locked" : ""}`,
+    `k-card tile${met ? "" : " unmet"}`,
     { type: "button" },
-    pic(portrait(id, { dark: locked || !met }), 2),
-    el("span", "k-s", {
-      text: locked ? (id === "crab40" ? "Uncounted" : "Not opened") : met ? FIGURES[id].name : "Not met",
-    }),
-    locked ? el("span", "k-read k-dim how", { text: how }) : null,
+    pic(portrait(id, { dark: !met }), 2),
+    el("span", "k-s", { text: met ? FIGURES[id].name : "Not met" }),
     starred ? pic(starsPic(3), 1, "badge") : null,
   );
-  if (met && !locked) link(tile, `figure:${id}/${starred ? 3 : 1}/lore`);
+  if (met) link(tile, `figure:${id}/${starred ? 3 : 1}/lore`);
   return tile;
 }
 
@@ -434,23 +428,33 @@ function almanac(): HTMLElement {
 
 // ---------- how to play ----------
 
-const HOW: readonly (readonly [Parameters<typeof glyph>[0], string])[] = [
-  ["acorn", "Buy figures at the stall with acorns. Drag them onto the board, or tap one and then tap a hex."],
-  ["figure", "Your level is how many you may field. The rest wait on the bench."],
-  ["up", "Three the same become one with a star more. Three of those become one with three."],
-  ["book", "Figures that share a kin or a calling switch a trait on. The chips say how far along each is."],
-  ["swords", "Set out, and they fight by themselves. You win the room if any of yours is left standing."],
-  ["door", "A lost room costs resolve. There are fifteen rooms, with a boss at the end of each wing."],
-  ["pin", "Every ten acorns you keep earns one more each room. Hold the stall to keep what is on it."],
-  ["brush", "Two components on one figure make an item. Drag one on, or tap it and tap the figure."],
-  ["help", "Point at anything for its card; click or tap to keep it open. Names in a card open theirs."],
+const HOW: readonly (readonly [() => HTMLCanvasElement, string])[] = [
+  [
+    () => glyph("acorn"),
+    "Buy figures at the stall with acorns. Drag them onto the board, or tap one and then tap a hex.",
+  ],
+  [() => glyph("figure"), "Your level is how many you may field. The rest wait on the bench."],
+  [() => glyph("up"), "Three the same become one with a star more. Three of those become one with three."],
+  [
+    () => glyph("book"),
+    "Figures that share a kin or a calling switch a trait on. The chips say how far along each is.",
+  ],
+  [() => glyph("swords"), "Set out, and they fight by themselves. You win the room if any of yours is left standing."],
+  [
+    () => traitIcon("bulwark"),
+    "Each goes for the nearest enemy, but tanks draw fire, as if a hex nearer, and assassins slip notice.",
+  ],
+  [() => glyph("door"), "A lost room costs resolve. There are fifteen rooms, with a boss at the end of each wing."],
+  [() => glyph("pin"), "Every ten acorns you keep earns one more each room. Hold the stall to keep what is on it."],
+  [() => glyph("brush"), "Two components on one figure make an item. Drag one on, or tap it and tap the figure."],
+  [() => glyph("help"), "Point at anything for its card; click or tap to keep it open. Names in a card open theirs."],
 ];
 
 function howto(): HTMLElement {
   const paper = el("section", "k-paper page k-rise how", { role: "dialog", "aria-label": "How to play" });
   add(paper, el("div", "k-row", {}, el("h1", "k-title big k-grow", { text: "How to play" }), close()));
   for (const [sign, text] of HOW)
-    add(paper, el("div", "k-row line", {}, pic(glyph(sign), 2), el("span", "k-grow k-read", { text })));
+    add(paper, el("div", "k-row line", {}, pic(sign(), 2), el("span", "k-grow k-read", { text })));
   add(paper, el("hr", ""), el("i", "k-read", { text: "Nothing here is timed. Take as long as you like over a room." }));
   return paper;
 }
@@ -603,32 +607,7 @@ function summary(): HTMLElement | null {
   add(paper, pips, el("div", "cols", {}, left, right));
   add(left, el("div", "k-label", { text: "The party that got there" }), partyRow(run));
 
-  const opened = news.filter((n) => n.t === "opened");
-  if (opened.length > 0) {
-    add(right, el("div", "k-label", { text: "Opened" }));
-    opened.forEach((n, i) => {
-      if (n.t !== "opened") return;
-      const row = el(
-        "div",
-        "opened",
-        {},
-        el("span", "flip", {}, pic(portrait(n.figure, { dark: true }), 2, "was"), pic(portrait(n.figure), 2, "is")),
-        el(
-          "div",
-          "k-col k-grow tight",
-          {},
-          el("b", "", { text: `${FIGURES[n.figure].name} may turn up at the stall now.` }),
-          el("span", "k-dim", { text: n.figure === "crab40" ? "Counted at last." : n.text }),
-        ),
-      );
-      right.append(row);
-      later(0.9 + i * 0.7, () => {
-        row.classList.add("lit");
-        snd.unlock();
-      });
-    });
-  }
-  const fresh = news.filter((n) => n.t !== "opened" && n.t !== "best");
+  const fresh = news.filter((n) => n.t !== "best");
   if (fresh.length > 0) {
     const list = el("div", "news", {});
     for (const n of fresh) {
