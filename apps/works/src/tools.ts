@@ -59,7 +59,7 @@ export const toolHooks: { changed: () => void; said: (text: string) => void } = 
  * the corner that put them back).
  */
 type Done =
-  | { did: "built"; cells: number[]; turned: { i: number; was: Dir }[]; under?: Piece }
+  | { did: "built"; cells: number[]; turned: { i: number; was: Dir }[]; under?: readonly Piece[] }
   | { did: "took"; what: readonly Piece[] }
   | { did: "turned"; i: number; was: Dir }
   | { did: "painted"; lines: { i: number; was: number }[] }
@@ -193,7 +193,7 @@ export function place(x: number, y: number): boolean {
       cells.push(far);
       landed(far % W(), Math.floor(far / W()), false);
     }
-    remember({ did: "built", cells, turned: [], ...(under ? { under } : {}) });
+    remember({ did: "built", cells, turned: [], ...(under ? { under: [under] } : {}) });
     landed(x, y, tool === "belt");
     paid(x, y, cost);
   }
@@ -350,7 +350,7 @@ export function undo(): boolean {
     if (cells.length > 0) doNow({ do: "clear", tiles: cells });
     for (const i of cells) puff((i % W()) * TILE + 8, (Math.floor(i / W()) + 1) * TILE - 4, 4, DUST, 7);
     for (const t of last.turned) doNow({ do: "turn", ...xy(t.i), dir: t.was });
-    if (last.under) putBack([last.under]);
+    if (last.under) putBack(last.under);
   } else if (last.did === "took") putBack(last.what);
   else if (last.did === "painted")
     for (const l of last.lines.toReversed()) doNow({ do: "paint", ...xy(l.i), tint: l.was });
@@ -665,7 +665,9 @@ function setDown(): boolean {
   if (!g || !aim) return false;
   const box = boxOf(g.at);
   const tiles = tilesOf(w, g.at);
-  const fresh = tiles.filter((i) => !w.cells[i]);
+  // What a copy would stand that is not there now, and the pieces some of it would take the place of.
+  const stood = g.at.filter((p) => w.cells[at(w, p.x, p.y)]?.kind !== p.kind);
+  const under = stood.flatMap((p) => standing(at(w, p.x, p.y)) ?? []);
   // Pieces already standing that a copy would only turn, and which way they face now.
   const turned = g.at.flatMap((p) => {
     const i = at(w, p.x, p.y);
@@ -674,7 +676,7 @@ function setDown(): boolean {
   });
   const moving = g.as === "move";
   // A copy over itself, just set down: nothing to stand.
-  if (!moving && aim.why === null && fresh.length === 0 && turned.length === 0 && aim.cost === 0) return false;
+  if (!moving && aim.why === null && stood.length === 0 && turned.length === 0) return false;
   const no =
     aim.why ??
     (moving
@@ -693,7 +695,7 @@ function setDown(): boolean {
     const [x1, y1] = [box.x + box.w - 1, box.y + box.h - 1];
     S.mark = { x0: box.x, y0: box.y, x1, y1, tiles, pieces: g.at, cost: S.mark?.cost ?? 0 };
   } else {
-    remember({ did: "built", cells: fresh, turned });
+    remember({ did: "built", cells: tilesOf(w, stood), turned, under });
     paid(aim.x, aim.y, aim.cost);
   }
   // The pieces land in a wave out from the pointer, each ring of it with one sound.

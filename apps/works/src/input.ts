@@ -184,8 +184,12 @@ export function initInput(canvas: HTMLCanvasElement): void {
       return;
     }
     if (e.button === 2 && !S.visiting) {
-      d.doing = "take";
-      takeAway(t.x, t.y, true);
+      // With pieces in hand it lets them go: taking one away would leave the hand holding what is not there.
+      if (S.group) cancel();
+      else {
+        d.doing = "take";
+        takeAway(t.x, t.y, true);
+      }
       return;
     }
     if (e.button === 1 || S.tool === null) {

@@ -8,7 +8,7 @@
  * reads as a yard with none of either, and the version did not change for them.
  */
 import { build, planState, plotState, refusal } from "./build.ts";
-import { isItem, type Item, ITEMS, type Tally } from "./content/items.ts";
+import { isItem, isRaw, type Item, ITEMS, type Tally } from "./content/items.ts";
 import { BLUEPRINT, BLUEPRINTS, BUFFER, FUEL, isKind, type Kind, SPAN, TICKS } from "./content/machines.ts";
 import { isPlanId, PLANS } from "./content/plans.ts";
 import { isPlotId } from "./content/plots.ts";
@@ -123,7 +123,7 @@ function holds(kind: Kind, item: Item): number {
 }
 
 /** Puts a kept building's parts back onto a building new-made where it stood. */
-function unpack(w: World, b: Building, i: number, o: Rec): void {
+function unpack(w: World, b: Building, o: Rec): void {
   const carries = b.kind === "belt" || b.kind === "splitter" || b.kind === "joiner" || b.kind === "tunnel";
   const makes = b.kind === "mill" || b.kind === "bench" || b.kind === "workshop";
   if (carries && isItem(o.it)) {
@@ -139,7 +139,7 @@ function unpack(w: World, b: Building, i: number, o: Rec): void {
   b.idle = false;
   const out = isItem(o.o) ? o.o : null;
   if (out !== null) {
-    if (b.kind === "crate" || (b.kind === "gatherer" && w.land.deposit[i] === out)) b.out = out;
+    if (b.kind === "crate" || (b.kind === "gatherer" && isRaw(out))) b.out = out;
     if (makes && RECIPE[out]?.by === b.kind) b.out = out;
   }
   if (makes || b.kind === "gatherer") b.work = amount(o.w, 200) ?? 0;
@@ -259,7 +259,7 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
   reopen(w);
 
   // Buildings: everything but the far mouths of tunnels, which come with their near mouths.
-  const kept: [Building, number, Rec][] = [];
+  const kept: [Building, Rec][] = [];
   const far: Rec[] = [];
   for (const o of raw.cells) {
     if (!isRec(o)) continue;
@@ -280,14 +280,14 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
     if (o.g !== 1) w.spare[o.k] = spare;
     if (!did.ok) continue;
     const b = w.cells[i];
-    if (b) kept.push([b, i, o]);
+    if (b) kept.push([b, o]);
   }
   for (const o of far) {
     const i = whole(o.i, land.w * land.h - 1);
     const b = i === null ? null : w.cells[i];
-    if (i !== null && b?.kind === "tunnel" && b.span < 0 && b.span === o.s && b.dir === o.d) kept.push([b, i, o]);
+    if (i !== null && b?.kind === "tunnel" && b.span < 0 && b.span === o.s && b.dir === o.d) kept.push([b, o]);
   }
-  for (const [b, i, o] of kept) unpack(w, b, i, o);
+  for (const [b, o] of kept) unpack(w, b, o);
 
   for (const o of raw.board) {
     const order = standing(o);
