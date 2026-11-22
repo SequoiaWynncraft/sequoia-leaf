@@ -265,7 +265,7 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
       "fside",
       {},
       el("span", "k-row tight", {}, pic(starsPic(stars)), figure ? acorns(figure.tier) : null),
-      extras.whose ? el("span", "k-d", { text: extras.whose }) : null,
+      extras.whose ? el("span", "k-dim", { text: extras.whose }) : null,
     ),
     chips: [chip(kin, "Kin"), chip(calling, "Calling"), ...more.map((t) => chip(t, "Also")), drawChip(draw)].filter(
       (c): c is Chip => c !== null,

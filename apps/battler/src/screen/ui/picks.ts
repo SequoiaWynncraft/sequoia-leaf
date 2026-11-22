@@ -53,7 +53,7 @@ function starterCard(kind: FigureId): HTMLElement[] {
   return [
     art(portrait(kind), figureRef(kind)),
     el("b", "k-gold", { text: spec.name }),
-    el("div", "k-d", { text: roleLine(spec.calling) }),
+    el("div", "k-dim", { text: roleLine(spec.calling) }),
     el(
       "div",
       "k-wrap",
@@ -96,7 +96,7 @@ function boonCardParts(boon: BoonId): HTMLElement[] {
   return [
     art(boonIcon(boon), boonRef(boon)),
     el("b", "k-gold", { text: spec.name }),
-    el("div", "k-d", { text: spec.sort === "charm" ? "A charm" : "A boon" }),
+    el("div", "k-dim", { text: spec.sort === "charm" ? "A charm" : "A boon" }),
     rich(boonShort(boon)),
   ];
 }

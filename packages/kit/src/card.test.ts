@@ -204,3 +204,58 @@ describe("watching", () => {
     expect(deck.open).toBeNull();
   });
 });
+
+/** A deck with somebody whose numbers have not come from Leaf until `come()`. */
+function waiting(): { deck: Deck; drawn: (string | null)[]; come: () => Promise<void> } {
+  const { deck, drawn } = table();
+  const leaf = Promise.withResolvers<void>();
+  let answered = false;
+  deck.register("person", () => ({ name: "Wrenly", ...(answered ? {} : { coming: leaf.promise }) }));
+  const come = async (): Promise<void> => {
+    answered = true;
+    leaf.resolve();
+    await leaf.promise;
+  };
+  return { deck, drawn, come };
+}
+
+describe("a description still on its way", () => {
+  test("its card is drawn once, when the description has come", async () => {
+    const { deck, drawn, come } = waiting();
+    expect(deck.rest("person:w", spot, "mouse", A)).toBe(false);
+    expect(drawn).toEqual([]);
+    await come();
+    expect(drawn).toEqual(["passing Wrenly"]);
+  });
+  test("a click meanwhile pins it when it comes, and a pointer that has left gets no card", async () => {
+    const pinned = waiting();
+    pinned.deck.rest("person:w", spot, "mouse", A);
+    expect(pinned.deck.press("person:w", spot, "mouse", A)).toBe(true);
+    pinned.deck.leave(A);
+    await pinned.come();
+    expect(pinned.drawn).toEqual(["pinned Wrenly"]);
+    const left = waiting();
+    left.deck.rest("person:w", spot, "mouse", A);
+    left.deck.leave(A);
+    await left.come();
+    expect(left.drawn).toEqual([]);
+  });
+  test("put away before it has come, it does not come", async () => {
+    const { deck, drawn, come } = waiting();
+    deck.press("person:w", spot, "mouse", A);
+    expect(deck.waiting()).toBe(true);
+    deck.close();
+    expect(deck.waiting()).toBe(false);
+    await come();
+    expect(drawn).toEqual([]);
+  });
+  test("a click still waiting is not lost to the pointer resting on something else", async () => {
+    const { deck, drawn, come } = waiting();
+    deck.register("item", () => ({ name: "Gear" }));
+    deck.press("person:w", spot, "mouse", A);
+    deck.leave(A);
+    expect(deck.rest("item:gear", spot, "mouse", B)).toBe(false);
+    await come();
+    expect(drawn).toEqual(["pinned Wrenly"]);
+  });
+});

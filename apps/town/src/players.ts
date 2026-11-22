@@ -366,7 +366,7 @@ const downFor = (): number | null => (downAt === null ? null : performance.now()
 function showLink(): void {
   const shown = onStage ? linkShown(status, downFor()) : "none";
   if (shown === "reconnecting" && !link) {
-    link = el("div", "", { id: "link", role: "status" }, el("span", "k-plaque k-d", {}, "Reconnecting…"));
+    link = el("div", "", { id: "link", role: "status" }, el("span", "k-plaque", {}, "Reconnecting…"));
     (document.getElementById("top") ?? document.body).append(link);
   }
   const hidden = shown !== "reconnecting";

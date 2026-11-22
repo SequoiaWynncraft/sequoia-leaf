@@ -104,7 +104,7 @@ if (tiers) {
         el("i", "k-crest"),
         shown(pic(ART[art] ?? []), 5),
         el("b", "k-title big", { text: name }),
-        el("span", "k-d", { text: `Tier ${i + 1} · ${stone}` }),
+        el("span", "k-dim", { text: `Tier ${i + 1} · ${stone}` }),
         el(
           "div",
           "k-info-block",

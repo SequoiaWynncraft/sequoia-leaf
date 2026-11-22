@@ -67,7 +67,7 @@ function buildDock(art: Art): void {
     `k-slot${S.tool === "remove" ? " lit" : ""}`,
     { type: "button", "aria-label": "Remove", "aria-pressed": S.tool === "remove" ? "true" : "false" },
     el("span", "art", {}, yardIcon("spade")),
-    el("span", "k-dim", { text: "remove" }),
+    el("span", "k-dim", { text: "Remove" }),
   );
   spade.addEventListener("click", () => {
     setTool(S.tool === "remove" ? null : "remove");

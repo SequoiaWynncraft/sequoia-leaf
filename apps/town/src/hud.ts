@@ -337,7 +337,7 @@ export function showCard(a: Actor, doing: (() => string) | null = null, waveTo: 
     { type: "button", "aria-label": "Close", onclick: closeCard },
     glyph("close"),
   );
-  doingEl = el("div", "k-d");
+  doingEl = el("div", "k-dim");
   doingOf = doing;
   const f = a.folk;
   if (!f) {
@@ -355,10 +355,10 @@ export function showCard(a: Actor, doing: (() => string) | null = null, waveTo: 
           "k-grow",
           {},
           el("div", "k-title k-member", { text: a.who.name }),
-          a.who.rank ? el("div", "k-d", { text: a.who.rank }) : null,
+          a.who.rank ? el("div", "k-dim", { text: a.who.rank }) : null,
           asleep === null
             ? null
-            : el("div", "k-d", { text: `Dozed off ${span(Math.max(0, (Date.now() - asleep) / 60000))} ago.` }),
+            : el("div", "k-dim", { text: `Dozed off ${span(Math.max(0, (Date.now() - asleep) / 60000))} ago.` }),
         ),
         x,
       ),
@@ -419,7 +419,7 @@ export function showCard(a: Actor, doing: (() => string) | null = null, waveTo: 
       "k-row top",
       {},
       slot(faceOf(a, 3), 28),
-      el("div", "k-grow", {}, folkName(a.who.name, "k-title"), el("div", "k-d", { text: f.t.what })),
+      el("div", "k-grow", {}, folkName(a.who.name, "k-title"), el("div", "k-dim", { text: f.t.what })),
       x,
     ),
     doingEl,

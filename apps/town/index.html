@@ -82,7 +82,7 @@
         gap: var(--u);
         margin-bottom: calc(var(--u) * 2);
       }
-      .about-row {
+      button.about-row {
         display: flex;
         gap: calc(var(--u) * 4);
         width: 100%;
@@ -92,10 +92,8 @@
         background: none;
         border: 0;
         color: inherit;
-        font: inherit;
+        font: var(--f-ui);
         text-align: left;
-      }
-      button.about-row {
         cursor: pointer;
       }
       button.about-row:hover,
@@ -245,7 +243,7 @@
       }
       .crabs .gap {
         height: calc(var(--u) * 16);
-        font-size: var(--t-l);
+        font: var(--f-head);
         line-height: calc(var(--u) * 16);
       }
 
@@ -317,7 +315,7 @@
         position: absolute;
         right: calc(var(--u) * 2);
         bottom: 0;
-        font-weight: 700;
+        font: var(--f-name);
         color: var(--k-gold-lt);
         text-shadow: var(--u) var(--u) 0 var(--k-ink);
       }
@@ -487,6 +485,16 @@
         }
         #panel.slide {
           animation-name: slide-up;
+        }
+        /* A row's button goes under its words where there is no room for a whole name beside it. */
+        #panel .k-card {
+          flex-wrap: wrap;
+        }
+        #panel .k-card > .k-grow {
+          flex-basis: calc(var(--u) * 100);
+        }
+        #panel .k-card > .k-btn {
+          margin-left: auto;
         }
         #purse {
           gap: calc(var(--u) * 4);

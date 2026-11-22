@@ -198,7 +198,7 @@ function newsTab(list: HTMLElement): void {
         "div",
         "k-paper quest",
         {},
-        el("div", "k-read k-dim", { text: noteWhen(n.at) }),
+        el("div", "k-label", { text: noteWhen(n.at) }),
         el("div", "k-title", { text: n.title }),
         ...n.lines.map((text) => el("div", "k-read", { text })),
       ),
@@ -266,7 +266,7 @@ function shopRow(body: HTMLElement, s: Stock, buy: HTMLElement): () => void {
   const thing = thingOf(s.thing);
   if (!thing || !ART) return () => undefined;
   const art = ART;
-  const have = el("div", "k-d");
+  const have = el("div", "k-dim");
   // The picture and the name explain the thing (its card); the button buys it.
   const picture = thingSlot(art, thing.id);
   link(picture, thingRef(thing.id));
@@ -462,7 +462,7 @@ function fireside(body: HTMLElement): () => void {
                 a.dozing !== null ? el("span", "k-dim", { text: "zz" }) : null,
               ),
             )
-          : [el("span", "k-d", { text: "Nobody yet." })]),
+          : [el("span", "k-dim", { text: "Nobody yet." })]),
       );
       const p = G.player;
       seat.replaceChildren(
@@ -498,8 +498,8 @@ const CRAB_NOTES = [
 
 function pond(body: HTMLElement): () => void {
   const tiles: HTMLElement[] = [];
-  const said = el("div", "k-d", { text: "Tap a crab to check on it." });
-  const tally = el("div", "k-d");
+  const said = el("div", "k-dim", { text: "Tap a crab to check on it." });
+  const tally = el("div", "k-dim");
   const grid = el("div", "crabs");
   for (let n = 1; n <= 9; n++) {
     const lost = n === LOST_CRAB;
@@ -601,9 +601,9 @@ function profile(body: HTMLElement): null {
         "k-grow k-col",
         {},
         el("div", "k-title big", { text: me.name }),
-        el("div", "k-d", { text: `${me.rank} of the guild` }),
+        el("div", "k-dim", { text: `${me.rank} of the guild` }),
         el("div", "k-bar", {}, xp),
-        el("div", "k-d", { text: `Level ${me.level}` }),
+        el("div", "k-dim", { text: `Level ${me.level}` }),
       ),
     ),
     // A guest has no place among the guild's ranks, and no week with it to tell.
@@ -625,7 +625,12 @@ function profile(body: HTMLElement): null {
     ...(me.week.length === 0
       ? []
       : [
-          el("div", "k-card", {}, el("div", "k-grow", {}, "This week", el("div", "k-d", { text: me.week.join(", ") }))),
+          el(
+            "div",
+            "k-card",
+            {},
+            el("div", "k-grow", {}, "This week", el("div", "k-dim", { text: me.week.join(", ") })),
+          ),
         ]),
     el(
       "div",

@@ -5,16 +5,15 @@
  * what a list knows of somebody (`known`) before it links a row to `person:<id>`. A game's board,
  * the lists of where people stand, is read here too (`readBoard`).
  *
- * Leaf is asked when the card is first shown, and what it said is kept a minute. Until it answers,
- * or when it cannot be read, the card shows the head alone.
+ * Leaf is asked when the card is first asked for, and the card shows once, whole, when Leaf has
+ * answered (`coming`); if the answer cannot be read, the head alone. What Leaf said is kept a
+ * minute, and shown while it is asked again.
  */
 
 import type { Placed } from "@sequoia-leaf/core";
 
 import { type Action, type Description, refresh, register, type Stat } from "./card.ts";
-import { where } from "./live.ts";
 import { ask, isRecord, outside } from "./net.ts";
-import { faceFor } from "./skin.ts";
 
 /** What a game says of somebody's standing in it: its name, and their numbers. */
 export interface GameStats {
@@ -110,12 +109,20 @@ export function numbersOf(
   return shown.length > 0 ? { stats: shown } : { blocks: [{ body: "Has not played yet." }] };
 }
 
-const heads = new Map<string, { name: string; line: string }>();
+interface Head {
+  readonly name: string;
+  readonly line: string;
+  /** Their face, as the list shows it. */
+  readonly face: HTMLCanvasElement;
+}
+const heads = new Map<string, Head>();
 const asked = new Map<string, { at: number; games: Games | null }>();
+/** Whoever Leaf is being asked about for the first time: their card waits for the answer. */
+const first = new Map<string, Promise<void>>();
 
-/** What a list already knows of somebody, so their card has a head before Leaf answers. */
-export function known(p: { id: string; name: string; line: string }): void {
-  heads.set(p.id, { name: p.name, line: p.line });
+/** What a list knows of somebody: the head of their card. */
+export function known(p: Head & { readonly id: string }): void {
+  heads.set(p.id, p);
 }
 
 /** Asks Leaf where somebody stands, and draws their card again when it answers. */
@@ -124,6 +131,7 @@ async function askFor(id: string): Promise<void> {
   asked.set(id, { at: outside.now(), games: asked.get(id)?.games ?? null });
   const said = await askPerson(id);
   asked.set(id, { at: outside.now(), games: said?.games ?? null });
+  first.delete(id);
   refresh();
 }
 
@@ -138,14 +146,17 @@ export function people(opts: {
     const head = heads.get(id);
     if (!head) return null;
     const had = asked.get(id);
-    if (!had || outside.now() - had.at >= KEPT_MS) void askFor(id);
-    const games = had?.games ?? null;
+    if (!had) first.set(id, askFor(id));
+    else if (outside.now() - had.at >= KEPT_MS) void askFor(id);
+    const games = asked.get(id)?.games ?? null;
+    const coming = first.get(id);
     return {
       name: head.name,
-      icon: faceFor(id, head.name, where().mode === "live"),
+      icon: head.face,
       ...(head.line === "" ? {} : { tag: head.line }),
       ...(games ? numbersOf(games, opts.stats) : {}),
-      actions: opts.actions({ id, ...head, games }),
+      actions: opts.actions({ id, name: head.name, line: head.line, games }),
+      ...(coming ? { coming } : {}),
     };
   });
 }
