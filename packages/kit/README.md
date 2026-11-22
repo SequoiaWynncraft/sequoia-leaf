@@ -16,7 +16,9 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 ```
 
 An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependencies.
-`demo/index.html` shows every piece on one page (`bun build demo/index.html --outdir demo/dist`).
+`demo/index.html` shows every piece on one page (`bun build demo/index.html --outdir demo/dist`), and
+`demo/portraits.html` shows portraits, cards and key art for six skins: those listed in `skins/index.json`
+beside the built page (or `skins/player.png` and `skins/1.png` to `6.png`), then made-up ones.
 
 ## The look, in short
 
@@ -85,6 +87,9 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `card.ts`     | Cards: how anything in any game says what it is (below)                                            |
 | `mark.ts`     | The mark of the town's own: a name in leaf green after the acorn, on a page or a canvas            |
 | `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look                   |
+| `portrait.ts` | A member's skin drawn as character art: its boxes seen a little from the side, in five poses       |
+| `pullart.ts`  | A pull's art from a skin: the member's card in three finishes, and a banner's key art              |
+| `scenery.ts`  | The town's painted sunset, grass, redwood trunks, ferns and lantern tree, for art outside the town |
 | `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all                   |
 | `dom.ts`      | `el`, `icon`, `amount` and a few more for building the interface                                   |
 | `purse.ts`    | Leaf and Coins, shared by every page of the game and kept in step between them                     |
@@ -101,6 +106,23 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `standin.ts`  | A stand-in server, storage and live connection (`FakeSocket`) for tests; no page loads it          |
 
 `tools/drive.ts` drives a built page in headless Chromium and takes screenshots; its header says how.
+
+## Portraits
+
+`portrait(sheet, { s, pose, flip })` draws a member from their 64x64 skin sheet, a canvas exactly as
+large as the figure and its dark edge. Each of the six boxes (head, body, arms, legs) shows its front
+at `s` art pixels to a skin pixel, its left side to the right at half its depth, rising one pixel for
+every two across, and its top above, as tall as the side rises. Tops are lighter, sides darker, the
+head shades the chest and shoulders, and where an arm or leg meets the box beside it there is a
+darker crease. Hat, jacket, sleeves and trousers stand one art pixel proud from `s` 3. The nearest
+face wins each pixel. Poses are small tables of where the boxes stand: `stand`, `wave`, `cheer`,
+`sit` and `bust`. The rules work on plain pixel arrays (`draw`, `paintFigure`, `figure`) and are
+tested in `portrait.test.ts`.
+
+`card(sheet, { name, title, finish, t })` is the member's 64x88 card in a finish (`leaf`, `lantern`,
+`aurora`: the same member in each, nobody rarer than anybody else), and `keyArt(sheet, { w, h,
+finish, pose })` a banner's picture in the dusk clearing. Both are drawn every frame by a page that
+animates them; time 0 is a still.
 
 ## Cards
 

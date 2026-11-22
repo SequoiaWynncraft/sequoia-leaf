@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Portraits</title>
+    <link rel="stylesheet" href="../src/kit.css" />
+    <script type="module" src="./portraits.ts"></script>
+    <style>
+      html body {
+        min-height: 100vh;
+        margin: 0;
+        background: #2a1733;
+        padding: 16px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      /* Every picture here is drawn two CSS pixels to an art pixel, whatever the window. */
+      canvas {
+        image-rendering: pixelated;
+        display: block;
+      }
+      .strip {
+        display: flex;
+        align-items: flex-end;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      .group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .poses {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+      }
+      .note {
+        color: #c9aa72;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="k-row">
+      <h1 class="k-title big">Portraits</h1>
+      <span class="k-read note"
+        >Each skin as the town walks it, then drawn as boxes at s 2, 3 and 5 (stand, wave, cheer, sit, bust), its cards
+        in three finishes, and a key art for each finish.</span
+      >
+    </header>
+    <main id="skins" class="k-col" style="gap: 20px"></main>
+  </body>
+</html>
