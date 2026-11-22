@@ -637,7 +637,7 @@ describe("a guest's town", () => {
   test("their quest board is one note saying quests are for members", async () => {
     const guild = await guestTown([]);
     expect(guild.quests()).toEqual([]);
-    expect(guild.boardNote()).toBe("Quests are for members of Sequoia. Raid with the guild and yours appear here.");
+    expect(guild.boardNote()).toBe("Quests are for members of Sequoia. Join the guild to take part.");
     expect(
       makeLive({
         me: {

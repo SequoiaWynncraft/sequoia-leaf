@@ -451,7 +451,7 @@ function show(ev: FightEvent): void {
       a.hurtAt = now;
       a.hx = a.left ? 4 : -4;
       a.hy = 0;
-      say(a.x, a.y - framesOf(a.unit.kind).tall - 2, "slips", WATER[3], { ttl: 0.6 });
+      say(a.x, a.y - framesOf(a.unit.kind).tall - 2, "dodge", WATER[3], { ttl: 0.6 });
       burst(a.x, a.y - 8, 4, [WATER[3], "#ffffff"], { speed: 20, ttl: 0.3, grav: 0 });
       snd.slip();
       break;

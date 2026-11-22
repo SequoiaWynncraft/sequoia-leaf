@@ -63,10 +63,10 @@ export const TRAITS = {
     steps: [2, 4],
     gist: "Hard to see, harder to hit.",
     text: [
-      "The whole party gains {ward} ward, and {slip} attacks in every hundred slip past it.",
-      "The whole party gains {ward} ward, and {slip} attacks in every hundred slip past it.",
+      "The whole party gains {ward} ward and dodges {slip}% of attacks.",
+      "The whole party gains {ward} ward and dodges {slip}% of attacks.",
     ],
-    short: ["Party +{ward} ward, {slip}% of hits slip.", "Party +{ward} ward, {slip}% of hits slip."],
+    short: ["Party +{ward} ward, dodges {slip}% of attacks.", "Party +{ward} ward, dodges {slip}% of attacks."],
     n: { ward: [20, 45], slip: [12, 25] },
   },
   burrow: {
@@ -78,7 +78,7 @@ export const TRAITS = {
       "Burrow figures dig in: +{armour} armour. The first time one drops under half health it goes to ground for {under} seconds, where nothing can reach it, and comes up with {heal}% of its health back.",
       "Burrow figures dig in deep: +{armour} armour. The first time one drops under half health it goes to ground for {under} seconds, where nothing can reach it, and comes up with {heal}% of its health back.",
     ],
-    short: ["+{armour} armour, hides {under}s when hurt.", "+{armour} armour, hides {under}s when hurt."],
+    short: ["+{armour} armour, hides {under}s at half health.", "+{armour} armour, hides {under}s at half health."],
     n: { armour: [15, 20], under: [2, 4], heal: [15, 15] },
   },
   feather: {
@@ -90,7 +90,10 @@ export const TRAITS = {
       "Feather figures attack {quicken}% faster after every attack, up to {stacks} times over.",
       "Feather figures attack {quicken}% faster after every attack, up to {stacks} times over.",
     ],
-    short: ["+{quicken}% speed a hit, up to {stacks}.", "+{quicken}% speed a hit, up to {stacks}."],
+    short: [
+      "+{quicken}% attack speed per attack, {stacks} times.",
+      "+{quicken}% attack speed per attack, {stacks} times.",
+    ],
     n: { quicken: [5, 8], stacks: [10, 10] },
   },
   crab: {
@@ -99,8 +102,8 @@ export const TRAITS = {
     steps: [2, 4],
     gist: "Roll call. One crab is always uncounted.",
     text: [
-      "Roll call: when the fight starts, an Uncounted Crab turns up beside your crabs, as starry as the best of them.",
-      "Roll call: when the fight starts, a Big Uncounted Crab turns up beside your crabs, as starry as the best of them.",
+      "Roll call: when the fight starts, an Uncounted Crab joins beside your crabs, with as many stars as your best crab.",
+      "Roll call: when the fight starts, a Big Uncounted Crab joins beside your crabs, with as many stars as your best crab.",
     ],
     short: ["An Uncounted Crab joins.", "A Big Uncounted Crab joins."],
     n: { big: [0, 1] },
@@ -140,14 +143,14 @@ export const TRAITS = {
     steps: [2, 4, 6],
     gist: "Fights up close.",
     text: [
-      "Fangs gain {attack}% attack, and {crit} more of their attacks in a hundred land hard, for half as much again.",
-      "Fangs gain {attack}% attack, and {crit} more of their attacks in a hundred land hard, for half as much again.",
-      "Fangs gain {attack}% attack, and {crit} more of their attacks in a hundred land hard, for half as much again.",
+      "Fangs gain {attack}% attack and {crit}% crit chance. A crit does 50% more damage.",
+      "Fangs gain {attack}% attack and {crit}% crit chance. A crit does 50% more damage.",
+      "Fangs gain {attack}% attack and {crit}% crit chance. A crit does 50% more damage.",
     ],
     short: [
-      "+{attack}% attack, +{crit}% hard hits.",
-      "+{attack}% attack, +{crit}% hard hits.",
-      "+{attack}% attack, +{crit}% hard hits.",
+      "+{attack}% attack, +{crit}% crit chance.",
+      "+{attack}% attack, +{crit}% crit chance.",
+      "+{attack}% attack, +{crit}% crit chance.",
     ],
     n: { attack: [12, 25, 45], crit: [10, 15, 30] },
   },
@@ -160,7 +163,7 @@ export const TRAITS = {
       "Slingers reach {reach} hex further, and each attack on the same target does {focus}% more than the last, up to {most} times over.",
       "Slingers reach {reach} hex further, and each attack on the same target does {focus}% more than the last, up to {most} times over.",
     ],
-    short: ["+{reach} reach, repeat hits stack +{focus}%.", "+{reach} reach, repeat hits stack +{focus}%."],
+    short: ["+{reach} reach, +{focus}% per hit on one target.", "+{reach} reach, +{focus}% per hit on one target."],
     n: { reach: [1, 1], focus: [7, 13], most: [6, 6] },
   },
   sage: {
@@ -196,7 +199,7 @@ export const TRAITS = {
       "When the fight starts, Sneaks leap to the enemy's back row, and their first {hits} attacks do {extra}% more.",
       "When the fight starts, Sneaks leap to the enemy's back row, and their first {hits} attacks do {extra}% more.",
     ],
-    short: ["Leap behind, first {hits} hits +{extra}%.", "Leap behind, first {hits} hits +{extra}%."],
+    short: ["Leap to the back, first {hits} hits +{extra}%.", "Leap to the back, first {hits} hits +{extra}%."],
     n: { hits: [2, 3], extra: [40, 70] },
   },
   greg: {
@@ -205,7 +208,7 @@ export const TRAITS = {
     steps: [1],
     gist: "There is one Greg.",
     text: ["After every fight Greg is in, he has eaten something: +{grows}% health for good, up to {most} times."],
-    short: ["+{grows}% health a fight, {most} times."],
+    short: ["+{grows}% health per fight, up to {most} times."],
     n: { grows: [3], most: [10] },
   },
 } as const satisfies Record<TraitId, TraitSpec>;

@@ -603,7 +603,7 @@ function profile(body: HTMLElement): null {
             ...me.ranks.map((r) => {
               const chip = el("span", r === me.rank ? "k-chip lit" : "k-chip", { text: r, tabindex: 0 });
               if (r === me.rank)
-                tip(chip, r, `${me.xp.toLocaleString("en")} of ${me.next.toLocaleString("en")} to the next level.`);
+                tip(chip, r, `${me.xp.toLocaleString("en")} of ${me.next.toLocaleString("en")} XP to the next level.`);
               return chip;
             }),
           ),

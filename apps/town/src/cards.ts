@@ -48,7 +48,7 @@ function whereFrom(id: string): { rows: Entry[]; words: string } {
     };
   if (thing?.kind === "trophies") return { rows: [], words: "Won, never bought." };
   if (PRESENTS.some((p) => p === id))
-    return { rows: [], words: "A present: the town's own leave them when they drop by." };
+    return { rows: [], words: "A present. Townsfolk leave them when they drop by your camp." };
   if (thing?.kind === "home") return { rows: [], words: "Every camp has one." };
   return { rows: [], words: "" };
 }
