@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "top-yards",
+    day: "2026-11-22",
+    title: "Top yards in the Works",
+    lines: [
+      "The cup button beside Orders lists the twenty yards that have earned the most Coins, with your own place.",
+      "A yard is listed once it has earned its first Coin on Leaf.",
+    ],
+  },
+  {
     id: "works-follows-you",
     day: "2026-11-22",
     title: "The Works follows you",

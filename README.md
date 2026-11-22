@@ -959,23 +959,9 @@ keyed `import:<player>`, and their table as their `raid` play state with
 everything drawn afresh. Nothing in the product reads an old save, and an old
 slot takes no more writes once its game has moved.
 
-Their yards are brought over the same way, once, by the lead:
-
-```sh
-bun apps/api/tools/once/import-works.ts <database file> <player id>... [--write] [--force]
-```
-
-It opens the database as it is and runs no migration. For each player named
-it reads the yard their page kept in their old `works` slot, prints what a
-person checks (story orders done, plots and plans owned, pieces standing by
-kind, the till, what the depot has taken in), and turns it into the yard Leaf
-keeps: standing at Leaf's clock now, its tick and board kept, no second shift,
-its Coins and story log counted from nothing, and a new seed from the
-machine's own randomness. A till over 30,000, or anything the rules dropped on
-reading it, is a warning, and that yard is not written without `--force`.
-With `--write` it is stored as the player's `works` play state, unless they
-have played the Works on Leaf since (`rev` above 0), which `--force` writes
-over. The tool is deleted in the change after it has run.
+Their yards were brought over the same way the same day: each as the
+player's `works` play state, standing at Leaf's clock, with a new seed. That
+tool is deleted too.
 
 ## Rules the code is built on
 
