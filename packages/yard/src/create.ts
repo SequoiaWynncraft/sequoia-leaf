@@ -1,5 +1,5 @@
 /** Starting a yard. */
-import { CRATE, KIND, STARTERS } from "./content/machines.ts";
+import { BLUEPRINTS, CRATE, KIND, STARTERS } from "./content/machines.ts";
 import { STORY } from "./content/story.ts";
 import { LAND, type Land } from "./land.ts";
 import { fillBoard } from "./orders.ts";
@@ -34,6 +34,7 @@ export function create(opts: Fresh = {}): World {
     plots: ["yard"],
     plans: [],
     spare: { ...STARTERS },
+    blueprints: Array.from({ length: BLUEPRINTS }, () => null),
     story: Math.max(0, Math.min(STORY.length, Math.floor(opts.story ?? 0))),
     filled: {},
     board: [],

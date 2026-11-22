@@ -1,8 +1,9 @@
 /**
  * Hands on the yard: the mouse, the keys, and fingers. With a mouse, pointing shows what would be
- * built and a click builds it; a drag with the belt lays a run, and a drag with nothing in hand
- * moves the view. With a finger, dragging always moves the view and two fingers zoom, so building
- * is never done by accident: a tap aims, and a second tap (or the Build button) builds.
+ * built and a click builds it; a drag with the belt lays a run, a drag with Select marks out an
+ * area, and a drag with nothing in hand moves the view. With a finger, dragging always moves the
+ * view and two fingers zoom, so building is never done by accident: a tap aims, and a second tap
+ * (or the Build button) builds; an area is marked by tapping two opposite corners.
  */
 
 import { pick, point, shown, surface } from "@sequoia-leaf/kit/card.ts";
@@ -16,7 +17,12 @@ import { S, tileAt, toYard } from "./state.ts";
 import {
   aimAt,
   cancel,
+  clearMark,
   confirm,
+  hold,
+  markEnd,
+  markOver,
+  markStart,
   paintAt,
   pickFrom,
   place,
@@ -52,8 +58,8 @@ interface Down {
   sx: number;
   sy: number;
   moved: boolean;
-  /** What this press is doing: moving the view, laying a run, taking things away, colouring lines, or nothing yet. */
-  doing: "pan" | "run" | "take" | "paint" | "none";
+  /** What this press is doing: moving the view, laying a run, marking out an area, taking things away, colouring lines, or nothing yet. */
+  doing: "pan" | "run" | "mark" | "take" | "paint" | "none";
   finger: boolean;
   last: { x: number; y: number };
 }
@@ -87,13 +93,22 @@ function ask(tx: number, ty: number, pageX: number, pageY: number): void {
 }
 
 /** A finger's tap with a tool in hand: aim first, build on the second tap of the same tile. Paint goes on at the first. */
-function fingerTap(tx: number, ty: number): void {
+export function fingerTap(tx: number, ty: number): void {
   if (S.tool === "belt") {
     tapBelt(tx, ty);
     return;
   }
   if (S.tool === "paint") {
     paintAt(tx, ty);
+    return;
+  }
+  if (S.tool === "select" && !S.group) {
+    // One corner, then the opposite one.
+    if (!S.corner) markStart(tx, ty);
+    else {
+      markOver(tx, ty);
+      markEnd();
+    }
     return;
   }
   if (S.aim && S.aim.x === tx && S.aim.y === ty) {
@@ -119,6 +134,7 @@ function lift(e: PointerEvent): void {
     return;
   }
   if (d.doing === "run") runEnd();
+  else if (d.doing === "mark") markEnd();
   else if (d.doing === "pan" && !d.moved && e.button === 0) ask(t.x, t.y, e.clientX, e.clientY);
 }
 
@@ -185,6 +201,10 @@ export function initInput(canvas: HTMLCanvasElement): void {
     } else if (S.tool === "belt") {
       d.doing = "run";
       runStart(t.x, t.y);
+    } else if (S.tool === "select" && !S.group) {
+      d.doing = "mark";
+      markStart(t.x, t.y);
+      markOver(t.x, t.y);
     } else place(t.x, t.y);
   });
 
@@ -230,6 +250,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
     }
     if (d.doing === "pan" && d.moved) pan(dx, dy);
     else if (d.doing === "run") runOver(t.x, t.y);
+    else if (d.doing === "mark") markOver(t.x, t.y);
     else if (d.doing === "take" && (t.x !== d.last.x || t.y !== d.last.y)) takeAway(t.x, t.y, true);
     else if (d.doing === "paint" && (t.x !== d.last.x || t.y !== d.last.y)) paintAt(t.x, t.y, true);
     d.last = t;
@@ -280,7 +301,12 @@ export function initInput(canvas: HTMLCanvasElement): void {
     }
     if (k === "r") rotate();
     else if (k === "e") setTool(S.tool === "remove" ? null : "remove");
+    else if (k === "f") setTool(S.tool === "select" ? null : "select");
+    else if (k === "m" && S.mark && !S.group) hold("move");
+    // C copies a marked area; with none marked it is the brush.
+    else if (k === "c" && S.mark && !S.group) hold("copy");
     else if (k === "c") setTool(S.tool === "paint" ? null : "paint");
+    else if (k === "delete") clearMark();
     else if (k === "z") undo();
     else if (k === "q") {
       const on =

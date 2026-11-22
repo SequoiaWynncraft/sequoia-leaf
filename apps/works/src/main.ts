@@ -40,7 +40,7 @@ import { makeArt } from "./art/index.ts";
 import { ease, inset, inView, look, pan, resize, setCamera, setZoom, zoom, zoomSteps } from "./camera.ts";
 import { callers, capstones, forget, handOver, onNews } from "./events.ts";
 import { updateFx } from "./fx.ts";
-import { initInput, inputHooks, stepInput } from "./input.ts";
+import { fingerTap, initInput, inputHooks, stepInput } from "./input.ts";
 import { layout } from "./layout.ts";
 import { drawWords, drawYard } from "./scene.ts";
 import { sheets } from "./sheets.ts";
@@ -60,7 +60,6 @@ import {
   setTool,
   stepClearing,
   takeAway,
-  tapBelt,
 } from "./tools.ts";
 import { initBoard } from "./ui/board.ts";
 import { closeCard, followCards, initCard, openCard, refreshCard, riderAt } from "./ui/card.ts";
@@ -85,6 +84,8 @@ declare global {
       stage: (...ops: Staged[]) => Promise<void>;
       hold: (on: boolean) => void;
       skip: (seconds: number) => void;
+      /** Draws so many frames one after another, and says how many milliseconds each took. */
+      time: (frames: number) => number;
       pick: (tool: Tool, dir?: Dir) => void;
       finger: (on: boolean) => void;
       aim: (x: number, y: number) => void;
@@ -385,7 +386,7 @@ async function boot(): Promise<void> {
       heard = { ...S.world.depot };
       screen.taught = ops.some((op) => "yard" in op && op.yard === "new")
         ? []
-        : ["planks", "pylon", "bench", "board", "short", "starved"];
+        : ["planks", "pylon", "bench", "board", "select", "short", "starved"];
       shown = "";
       nudgeAt = 0;
       look(home().x, home().y, true);
@@ -397,6 +398,11 @@ async function boot(): Promise<void> {
     skip(seconds) {
       for (let k = 0; k < seconds * 30; k++) advance(1 / 30, null);
       refreshAll();
+    },
+    time(frames) {
+      const began = performance.now();
+      for (let k = 0; k < frames; k++) draw(began);
+      return (performance.now() - began) / frames;
     },
     pick(tool, dir) {
       if (dir !== undefined) S.dir = dir;
@@ -413,11 +419,8 @@ async function boot(): Promise<void> {
       refreshDock();
     },
     tap(x, y) {
-      if (S.tool === "belt") tapBelt(x, y);
-      else if (S.tool === "paint") paintAt(x, y);
-      else if (S.tool === null) openCard(x, y);
-      else if (S.aim && S.aim.x === x && S.aim.y === y) confirm();
-      else aimAt(x, y);
+      if (S.tool === null) openCard(x, y);
+      else fingerTap(x, y);
       refreshDock();
     },
     build(kind, x, y, dir = 0) {
@@ -479,6 +482,11 @@ async function boot(): Promise<void> {
         tool: S.tool,
         aim: S.aim,
         run: S.run ? { legs: S.run.legs.length, cost: S.run.cost, why: S.run.why } : null,
+        mark: S.mark ? { pieces: S.mark.pieces.length, cost: S.mark.cost } : null,
+        group: S.group
+          ? { as: S.group.as, turns: S.group.turns, bad: S.group.why.filter((r) => r !== null).length }
+          : null,
+        blueprints: w.blueprints.map((b) => b?.length ?? 0),
         panel: S.panel,
         picked: S.picked,
         power: power(w),

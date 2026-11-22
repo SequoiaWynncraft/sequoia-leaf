@@ -15,6 +15,7 @@ import { clamp, type Ctx, hash, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 import {
   BACK,
   blank,
+  boxOf,
   type Building,
   type Dir,
   DX,
@@ -32,6 +33,7 @@ import {
   type Status,
   status,
   TICKS,
+  tilesOf,
   tunnelExit,
   type World,
 } from "@sequoia-leaf/yard";
@@ -43,8 +45,8 @@ import type { Art } from "./art/index.ts";
 import { DEPOT } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
-import { type Layout, layout, pylonTop } from "./layout.ts";
-import { builds, S } from "./state.ts";
+import { armsOf, type Layout, layout, pylonTop } from "./layout.ts";
+import { builds, type Group, type Mark, S } from "./state.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
 export interface Moment {
@@ -477,6 +479,131 @@ function notes(): readonly [HTMLCanvasElement, HTMLCanvasElement] {
   return [note, noteDone];
 }
 
+// ---------- many pieces at once: the area marked, and the pieces in hand ----------
+
+/** The tiles of the mark last drawn, by tile, to find its edges. */
+let masked: { of: Mark["tiles"]; on: Uint8Array } | null = null;
+
+/**
+ * The area marked with Select. Every piece in it is lit gold on its tile, with a gold line where
+ * the marked pieces end, so they read as one shape however far out the view is; the area itself
+ * is a line of dashes that march. While the pieces are in hand to be moved, the tiles they leave
+ * are dimmed instead.
+ */
+function marked(g: Ctx, w: World, m: Mark, cx: number, cy: number): void {
+  const W = w.land.w;
+  if (masked?.of !== m.tiles) {
+    const on = new Uint8Array(w.cells.length);
+    for (const i of m.tiles) on[i] = 1;
+    masked = { of: m.tiles, on };
+  }
+  const { on } = masked;
+  const leaving = S.group?.as === "move";
+  g.globalCompositeOperation = leaving ? "source-over" : "lighter";
+  g.fillStyle = leaving ? "rgba(26,15,30,0.5)" : `rgba(255,176,64,${0.26 + 0.07 * Math.sin(S.t * 5)})`;
+  // Only where a piece still stands: one may have been taken away since.
+  for (const i of m.tiles) if (w.cells[i]) g.fillRect((i % W) * TILE - cx, Math.floor(i / W) * TILE - cy, TILE, TILE);
+  g.globalCompositeOperation = "source-over";
+  g.fillStyle = leaving ? GOLD[0] : GOLD[2];
+  for (const i of m.tiles) {
+    if (!w.cells[i]) continue;
+    const tx = i % W;
+    const x = tx * TILE - cx;
+    const y = Math.floor(i / W) * TILE - cy;
+    if (on[i - W] !== 1) g.fillRect(x, y, TILE, 1);
+    if (on[i + W] !== 1) g.fillRect(x, y + TILE - 1, TILE, 1);
+    if (tx === 0 || on[i - 1] !== 1) g.fillRect(x, y, 1, TILE);
+    if (tx === W - 1 || on[i + 1] !== 1) g.fillRect(x + TILE - 1, y, 1, TILE);
+  }
+  g.strokeStyle = CREAM;
+  g.lineWidth = 1;
+  g.setLineDash([3, 3]);
+  g.lineDashOffset = -Math.floor(S.t * 10);
+  g.strokeRect(
+    m.x0 * TILE - cx - 1.5,
+    m.y0 * TILE - cy - 1.5,
+    (m.x1 - m.x0 + 1) * TILE + 3,
+    (m.y1 - m.y0 + 1) * TILE + 3,
+  );
+  g.setLineDash([]);
+}
+
+/** The pieces in hand, drawn once for each place they are aimed at and kept: `for` is the aim it was drawn for. */
+const held: { c: HTMLCanvasElement; g: Ctx; for: Group["at"] | null } = { ...makeCanvas(1, 1, true), for: null };
+/** Room in that picture round the box of tiles, for what stands taller or leans wider than its tile. */
+const ROOM = { side: 8, top: 40, bottom: 8 } as const;
+
+/**
+ * Draws the pieces in hand where they are aimed, as they would stand: belts joined to each other
+ * and to the lines already there, machines as built. Gold lies over each piece that can go there
+ * and coral over each that cannot. It is drawn afresh only when the aim moves to another tile, so
+ * a frame costs one picture however many pieces are in hand.
+ */
+function inHand(g: Ctx, art: Art, w: World, grp: Group, now: Moment, cx: number, cy: number): void {
+  const box = boxOf(grp.at);
+  if (held.for !== grp.at) {
+    held.for = grp.at;
+    const tiles = tilesOf(w, grp.at);
+    // The yard as it would be: for a move without the pieces where they stand now, and with every piece in hand set down.
+    const yard: World = { ...w, cells: [...w.cells], wire: null };
+    if (grp.as === "move") for (const i of tilesOf(w, grp.pieces)) yard.cells[i] = null;
+    for (const p of grp.at) {
+      const [near = -1, far = -1] = tilesOf(w, [p]);
+      if (near < 0) continue;
+      const tint = p.tint ?? 0;
+      yard.cells[near] = Object.assign(blank(p.kind, p.dir), { span: p.span, open: p.open ?? true, tint });
+      if (far >= 0) yard.cells[far] = Object.assign(blank(p.kind, p.dir), { span: -p.span, tint });
+    }
+    const arms = armsOf(yard);
+    held.c.width = box.w * TILE + ROOM.side * 2;
+    held.c.height = box.h * TILE + ROOM.top + ROOM.bottom;
+    const h = held.g;
+    h.imageSmoothingEnabled = false;
+    const ox = ROOM.side - box.x * TILE;
+    const oy = ROOM.top - box.y * TILE;
+    const tier = w.rates.belt >= 2 ? 2 : w.rates.belt >= 1.5 ? 1 : 0;
+    const mark = used;
+    const before = lit;
+    for (const i of tiles) {
+      const b = yard.cells[i];
+      if (!b) continue;
+      const x = (i % w.land.w) * TILE + ox;
+      const y = Math.floor(i / w.land.w) * TILE + oy;
+      const a = arms[i];
+      if (a) h.drawImage(beltTile(a, b.dir, 0, tier, b.tint), x, y);
+      const top = b.kind === "splitter" ? art.m.splitter[b.dir] : b.kind === "joiner" ? art.m.joiner[b.dir] : undefined;
+      if (top) h.drawImage(top, x, y);
+      build(art, yard, b, i, x, y, now, 1);
+    }
+    for (const d of pool.slice(mark, used).toSorted((p, q) => p.z - q.z)) h.drawImage(d.c, d.x, d.y);
+    used = mark;
+    lit = before;
+    // Gold over each piece that can go and coral over each that cannot, with a line where the pieces end.
+    const own = new Set(tiles);
+    const W = w.land.w;
+    grp.at.forEach((p, k) => {
+      const ok = grp.why[k] === null;
+      for (const i of tilesOf(w, [p])) {
+        if (i < 0) continue;
+        const x = (i % W) * TILE + ox;
+        const y = Math.floor(i / W) * TILE + oy;
+        h.fillStyle = ok ? "rgba(255,196,84,0.34)" : "rgba(238,92,74,0.62)";
+        h.fillRect(x, y, TILE, TILE);
+        h.fillStyle = ok ? GOLD[2] : CORAL;
+        if (!own.has(i - W)) h.fillRect(x, y, TILE, 1);
+        if (!own.has(i + W)) h.fillRect(x, y + TILE - 1, TILE, 1);
+        if (i % W === 0 || !own.has(i - 1)) h.fillRect(x, y, 1, TILE);
+        if (i % W === W - 1 || !own.has(i + 1)) h.fillRect(x + TILE - 1, y, 1, TILE);
+      }
+    });
+  }
+  g.globalAlpha = 0.88;
+  g.drawImage(held.c, box.x * TILE - ROOM.side - cx, box.y * TILE - ROOM.top - cy);
+  g.globalAlpha = 1;
+  const bad = grp.why.some((r) => r !== null);
+  corners(g, box.x * TILE - cx, box.y * TILE - cy, box.w * TILE, box.h * TILE, bad ? CORAL : GOLD[2], true);
+}
+
 /** Whether a tool is one that the reach of power matters to. */
 const wantsPower = (kind: Kind): boolean => KIND[kind].draw > 0 || KIND[kind].gives > 0 || kind === "pylon";
 
@@ -796,6 +923,8 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     if (b?.kind === "depot") corners(g, dx - 24, dfoot - 48, 48, 48, GOLD[2], true);
     else if (b) corners(g, S.hover.x * TILE - cx, S.hover.y * TILE - cy, TILE, TILE, GOLD[2], true);
   }
+  if (S.mark) marked(g, w, S.mark, cx, cy);
+  else if (S.corner) corners(g, S.corner.x * TILE - cx, S.corner.y * TILE - cy, TILE, TILE, GOLD[2], true);
   if (S.run) {
     // A run of belt, shown before it is laid.
     const bad = S.run.why !== null;
@@ -827,6 +956,8 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     else if (tool === "paint") {
       // The brush shows its colour on what it would colour, and nothing elsewhere.
       if (!bad) corners(g, x, y, TILE, TILE, PAINTS[S.tint - 1]?.lit ?? CREAM, true);
+    } else if (tool === "select") {
+      if (S.group) inHand(g, art, w, S.group, now, cx, cy);
     } else if (!S.run) {
       const mark = used;
       const before = lit;
@@ -955,8 +1086,10 @@ export function drawWords(ctx: Ctx, px: number, clear: number): void {
 
   // Why the thing in hand cannot go where it is pointed.
   const why = S.run?.why ?? (S.run ? null : S.aim?.why);
-  const where = S.run ? (S.run.legs.at(-1) ?? S.run.turns.at(-1) ?? S.aim) : S.aim;
-  if (why && where && builds(S.tool))
+  // For pieces in hand, over the first of them that cannot go.
+  const stuck = S.group?.at[S.group.why.findIndex((r) => r !== null)];
+  const where = S.run ? (S.run.legs.at(-1) ?? S.run.turns.at(-1) ?? S.aim) : (stuck ?? S.aim);
+  if (why && where && (builds(S.tool) || S.group))
     plate(ctx, why, (where.x * TILE + 8 - cx) * z, (where.y * TILE - 4 - cy) * z, px, "#f4a08c");
 
   // A nudge keeps quiet while the member is being told why something cannot go where they pointed.

@@ -131,6 +131,21 @@ const ICONS = {
     "........w.",
     "...wwwww..",
   ],
+  // Select: an area marked out in dashes, and the pointer that marks it.
+  select: [
+    "ww.ww.ww..",
+    "w.......w.",
+    "..........",
+    "w.......w.",
+    "w...y.....",
+    "....yy..w.",
+    "w...yyy...",
+    "ww.wyyyy..",
+    "....yy.y..",
+    ".....yy...",
+  ],
+  // Throwing a blueprint away: a bin.
+  bin: ["...ww...", "wwwwwwww", "........", ".wwwwww.", ".w.ww.w.", ".w.ww.w.", ".w.ww.w.", ".wwwwww."],
   // Taking away: a spade.
   spade: [
     ".......nn.",
