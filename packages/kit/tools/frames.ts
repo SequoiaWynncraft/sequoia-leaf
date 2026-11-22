@@ -5,7 +5,7 @@
  */
 import { EMOTE_ART } from "../src/emotes.ts";
 import { ACORN } from "../src/mark.ts";
-import { BARK, CORAL, CREAM, GOLD, GREEN, INK, LEAF, PAPER, SKY, STONE } from "../src/palette.ts";
+import { BARK, CORAL, CREAM, GOLD, GREEN, LEAF, PAPER, SKY, STONE } from "../src/palette.ts";
 
 type Grid = (string | null)[][];
 
@@ -59,11 +59,15 @@ function put(g: Grid, x: number, y: number, c: string): void {
   if (row && x >= 0 && x < row.length) row[x] = c;
 }
 
-/** The picture as an SVG, one path for each colour, made of runs along the rows. */
+/**
+ * The picture as an SVG, one path for each colour, made of rectangles: a run along a row, as tall as
+ * the rows under it that repeat it. A colour of eight digits is see-through by its last two.
+ */
 function svg(g: Grid): string {
   const h = g.length;
   const w = g[0]?.length ?? 0;
-  const paths = new Map<string, string>();
+  const rects: { c: string; x: number; y: number; w: number; h: number }[] = [];
+  const above = new Map<string, number>();
   g.forEach((row, y) => {
     let x = 0;
     while (x < w) {
@@ -74,11 +78,24 @@ function svg(g: Grid): string {
       }
       let run = 1;
       while (x + run < w && row[x + run] === c) run++;
-      paths.set(c, `${paths.get(c) ?? ""}M${x} ${y}h${run}v1h-${run}z`);
+      const key = `${c} ${x} ${run}`;
+      const up = rects[above.get(key) ?? -1];
+      if (up && up.y + up.h === y) up.h++;
+      else {
+        above.set(key, rects.length);
+        rects.push({ c, x, y, w: run, h: 1 });
+      }
       x += run;
     }
   });
-  const body = [...paths].map(([c, d]) => `<path fill='${c}' d='${d}'/>`).join("");
+  const paths = new Map<string, string>();
+  for (const r of rects) paths.set(r.c, `${paths.get(r.c) ?? ""}M${r.x} ${r.y}h${r.w}v${r.h}h-${r.w}z`);
+  const body = [...paths]
+    .map(([c, d]) => {
+      const through = c.length === 9 ? ` fill-opacity='${(parseInt(c.slice(7), 16) / 255).toFixed(2)}'` : "";
+      return `<path fill='${c.slice(0, 7)}'${through} d='${d}'/>`;
+    })
+    .join("");
   return `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}' viewBox='0 0 ${w} ${h}' shape-rendering='crispEdges'>${body}</svg>`;
 }
 
@@ -87,153 +104,166 @@ const url = (g: Grid): string =>
 
 // ---------- frames ----------
 
-const DEEP = "#211228";
-const LIT = "#54286a";
+/** The interface's own colours, as `kit.css` has them: its dark edge, a well, a panel, a raised thing, a quiet line. */
+const INK = "#0b0710";
+const WELL = "#0f0a19";
+const FIELD = "#171025";
+const RAISED = "#211834";
+const LINE = "#3a2f52";
+const SHADE = "#0b071080";
+
+/** A metal, a stone or a gem: its dark, its middle and its light. */
+type Ramp = readonly [lo: string, mid: string, hi: string];
+
+const BRASS: Ramp = ["#8a5a22", "#c9923c", "#f6cf7a"];
+const PLUM: Ramp = ["#3a2f52", "#5a4b7c", "#8a78b3"];
+/** The five tiers: stone, jade, sapphire, amethyst, gold. Each is its band, its jewel, and how large the jewel is. */
+const TIERS = [
+  [["#565267", "#8d899f", "#cfcbdc"], ["#6f6b80", "#a9a5ba", "#e6e3ef"], 1],
+  [["#2c7a3a", "#4dbb58", "#a4f585"], ["#1f8f4a", "#58e07a", "#d2ffc0"], 2],
+  [["#2859a6", "#3d97ee", "#93d6ff"], ["#1c6fd6", "#52b6ff", "#d6f1ff"], 3],
+  [["#7a2ba3", "#b957e6", "#eaa6ff"], ["#a12fd6", "#dc7bff", "#fbe0ff"], 3],
+  [["#a9641a", "#f2ab2e", "#ffe27c"], ["#e0457a", "#ff8fb0", "#ffe3ec"], 3],
+] as const satisfies readonly (readonly [band: Ramp, gem: Ramp, size: number])[];
+
+interface Frame {
+  readonly band: Ramp;
+  /** How many pixels thick the band is, its dark edges included. */
+  readonly thick: 4 | 5;
+  /** How many pixels are cut off each corner. */
+  readonly cut: number;
+  /** How many pixels of corner the picture has each side of its two pixels of plain edge. */
+  readonly corner: number;
+  /** A jewel on each corner, this many pixels from its middle to its points; none without. */
+  readonly gem?: readonly [Ramp, number];
+  /** What is inside it; clear without, for a frame drawn over what it holds. */
+  readonly fill?: string;
+  /** Rows of shadow under it. */
+  readonly drop?: number;
+}
 
 /**
- * The big wooden frame round a panel: five pixels of bark with a brass bracket in each corner. The
- * edges are a plank long and repeat, so there is a joint and a little grain to them.
+ * A frame to stretch round a thing: a bevelled band lit from the top left, with its corners cut and
+ * nothing along its edges, so they stretch without a mark.
  */
-const PLANK = 36;
-function panel(): Grid {
-  const size = PLANK + 10;
-  const g = ringed(
-    size,
-    [
-      [INK, INK],
-      [BARK[4], BARK[1]],
-      [BARK[3], BARK[2]],
-      [BARK[2], BARK[3]],
-      [BARK[0], BARK[0]],
-    ],
-    SKY[0],
-    2,
-  );
-  const last = size - 1;
-  /** A pixel `d` deep into the frame and `t` along it, on each of the four sides. */
-  const sides = (t: number, d: number, c: readonly [string, string]): void => {
-    put(g, 5 + t, d, c[0]);
-    put(g, d, 5 + t, c[0]);
-    put(g, 5 + t, last - d, c[1]);
-    put(g, last - d, 5 + t, c[1]);
-  };
-  // Grain: short darker strokes in the body of the plank.
-  for (const [t, len, d] of [
-    [2, 5, 2],
-    [11, 3, 3],
-    [23, 6, 2],
-    [30, 4, 3],
-  ] as const)
-    for (let i = 0; i < len; i++) sides(t + i, d, d === 2 ? [BARK[2], BARK[1]] : [BARK[1], BARK[2]]);
-  // Where two planks meet.
-  for (let d = 1; d <= 3; d++) {
-    sides(17, d, [BARK[1], BARK[0]]);
-    sides(18, d, d === 1 ? [BARK[4], BARK[2]] : [BARK[3], BARK[3]]);
-  }
-  // Brass brackets.
-  const LIP = "#a3662a";
-  for (const [fx, fy] of [
-    [0, 0],
-    [1, 0],
-    [0, 1],
-    [1, 1],
-  ] as const) {
-    const X = (x: number): number => (fx ? last - x : x);
-    const Y = (y: number): number => (fy ? last - y : y);
-    for (let y = 1; y <= 4; y++)
-      for (let x = 1; x <= 4; x++) {
-        if (x + y <= 2) continue;
-        const arm = y === 1 || x === 1;
-        const plate = x <= 3 && y <= 3;
-        if (!arm && !plate) continue;
-        const lit = (fy ? false : y === 1) || (fx ? false : x === 1);
-        const dark = (fy ? y === 1 : y === 3 && plate) || (fx ? x === 1 : x === 3 && plate);
-        put(g, X(x), Y(y), lit ? GOLD[2] : dark ? LIP : GOLD[1]);
+function frame({ band: [lo, mid, hi], thick, cut, corner, gem, fill, drop = 0 }: Frame): Grid {
+  const n = corner * 2 + 2;
+  const last = n - 1;
+  const g = blank(n, n + drop);
+  const within = (x: number, y: number): boolean =>
+    y >= 0 && y <= last && Math.min(x, last - x) + Math.min(y, last - y) >= cut;
+  for (let y = 0; y < n + drop; y++)
+    for (let x = 0; x < n; x++) {
+      if (!within(x, y)) {
+        if (within(x, y - drop)) put(g, x, y, SHADE);
+        continue;
       }
-    put(g, X(2), Y(2), BARK[0]);
-  }
-  return g;
-}
-
-/** Roof shingles, as on every building in town: the band a panel's title sits on. */
-function shingles(): Grid {
-  const g = blank(24, 12);
-  for (let y = 0; y < 12; y++)
-    for (let x = 0; x < 24; x++) {
-      const rowB = y >= 6;
-      const lx = (x + (rowB ? 6 : 0)) % 12;
-      const ly = y % 6;
-      let c: string = SKY[1];
-      if (ly === 0) c = SKY[2];
-      if (ly === 5 || lx === 11) c = SKY[0];
-      put(g, x, y, c);
+      const dx = Math.min(x, last - x);
+      const dy = Math.min(y, last - y);
+      const d = Math.min(dx, dy, dx + dy - cut);
+      if (d >= thick) {
+        if (fill) put(g, x, y, fill);
+        continue;
+      }
+      // The top and the left are bright outside and dark inside; the bottom and the right the reverse.
+      const lit = d === dy && dy <= dx ? y < n / 2 : d === dx ? x < n / 2 : x < n / 2 && y < n / 2;
+      const across = lit ? [hi, mid, lo] : [lo, mid, hi];
+      const rings = thick === 5 ? [INK, ...across, INK] : [INK, across[0], across[2], INK];
+      put(g, x, y, rings[d] ?? INK);
     }
-  // A few shingles catch the light.
-  for (const [x, y, len] of [
-    [1, 1, 3],
-    [14, 1, 2],
-    [8, 7, 3],
-    [20, 7, 2],
-  ] as const)
-    for (let i = 0; i < len; i++) put(g, x + i, y, SKY[3]);
+  if (!gem) return g;
+  const [[glo, gmid, ghi], r] = gem;
+  for (const cx of [r + 1, last - r - 1])
+    for (const cy of [r + 1, last - r - 1]) {
+      for (let y = cy - r - 1; y <= cy + r + 1; y++)
+        for (let x = cx - r - 1; x <= cx + r + 1; x++) {
+          const far = Math.abs(x - cx) + Math.abs(y - cy);
+          const side = x - cx + y - cy;
+          if (far === r + 1) put(g, x, y, INK);
+          else if (far <= r) put(g, x, y, side < 0 ? ghi : side === 0 ? gmid : glo);
+        }
+      if (r >= 2) put(g, cx - 1, cy - 1, "#ffffff");
+    }
   return g;
 }
 
-/** A thin wooden edge, for the small things that sit over the town: the purse, the dock, a card. */
-const plaque = (): Grid =>
-  ringed(
-    12,
+/** A thin brass frame round a panel, and round a tip. */
+const panel = (): Grid => frame({ band: BRASS, thick: 4, cut: 2, corner: 5, gem: [BRASS, 1], fill: FIELD, drop: 2 });
+/** A quiet plum one, for the small things that sit over the world: the purse, the dock, a counter. */
+const plaque = (): Grid => frame({ band: PLUM, thick: 4, cut: 2, corner: 5, fill: FIELD, drop: 2 });
+/** A tier's frame: the jewel on each corner grows with the tier. It is drawn over what it holds. */
+const tier = ([band, gem, size]: (typeof TIERS)[number]): Grid =>
+  frame({ band, thick: 5, cut: 3, corner: 9, gem: [gem, size] });
+
+/** The jewel that stands on top of a frame of the third or fourth tier. */
+const crest = ([glo, gmid, ghi]: Ramp): Grid =>
+  rows(
     [
-      [INK, INK],
-      [BARK[4], BARK[1]],
-      [BARK[2], BARK[2]],
-      [BARK[0], BARK[0]],
+      "....kkk....",
+      "...kGGgk...",
+      "..kGwGggk..",
+      ".kGGGgggdk.",
+      "kGGGgggdddk",
+      ".kGgggdddk.",
+      "..kggdddk..",
+      "...kgddk...",
+      "....kdk....",
+      ".....k.....",
     ],
-    SKY[0],
-    1,
+    { k: INK, G: ghi, g: gmid, d: glo, w: "#ffffff" },
+  );
+/** The crown that stands on top of a frame of the fifth. */
+const crown = ([lo, mid, hi]: Ramp, [, gmid, ghi]: Ramp): Grid =>
+  rows(
+    [
+      "k......k......k",
+      "kk....kGk....kk",
+      "khk..khGgk..khk",
+      "khhkkhhhgkkhhmk",
+      "khhhhhhmmmmmmlk",
+      "khGhhhGmmmgmmlk",
+      "kmmmmmmmllllllk",
+      ".kkkkkkkkkkkkk.",
+    ],
+    { k: INK, h: hi, m: mid, l: lo, G: ghi, g: gmid },
   );
 
-/** A row or a tile that stands up from the panel, and the same picked out in gold. */
-const card = (): Grid =>
-  ringed(
-    8,
-    [
-      [INK, INK],
-      [SKY[2], DEEP],
-    ],
-    SKY[1],
-    1,
-  );
+/** Whether a pixel is in the hexagon standing on its point, 14 by 16, that the icon of a trait or a kind sits in. */
+const inHex = (x: number, y: number): boolean =>
+  y >= 0 && y < 16 && Math.abs(x - 6.5) < Math.min(7, 1 + 2 * Math.min(y, 15 - y));
+/** That hexagon, or what is left of it `inset` pixels in from its edge: the dark inside of the badge. */
+function hex(inset: number, colour: string): Grid {
+  const g = blank(14, 16);
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 14; x++)
+      if (inHex(x, y - inset) && inHex(x, y + inset) && inHex(x - inset, y) && inHex(x + inset, y))
+        put(g, x, y, colour);
+  return g;
+}
+
+/** A row or a tile that stands up from the panel: flat, a step lighter. And the same picked out in gold. */
+const card = (): Grid => ringed(8, [[INK, INK]], RAISED, 1);
 const cardLit = (): Grid =>
   ringed(
     8,
     [
-      [GOLD[1], GOLD[0]],
-      [SKY[3], SKY[1]],
+      [INK, INK],
+      ["#ffc247", "#f5ad35"],
     ],
-    LIT,
+    "#2b2440",
     1,
   );
 /** A hollow that holds something: a figure on a bench, a thing for sale, the trough of a bar. */
-const slot = (): Grid =>
-  ringed(
-    8,
-    [
-      [INK, SKY[2]],
-      [DEEP, DEEP],
-    ],
-    DEEP,
-    0,
-  );
+const slot = (): Grid => ringed(8, [[INK, LINE]], WELL, 0);
 /** The same hollow picked out in gold: the one of a row that is chosen, or where you are. */
 const slotLit = (): Grid =>
   ringed(
     8,
     [
-      [GOLD[1], GOLD[0]],
-      [SKY[3], SKY[1]],
+      [INK, INK],
+      ["#ffc247", "#f5ad35"],
     ],
-    LIT,
+    RAISED,
     0,
   );
 const paper = (): Grid =>
@@ -247,40 +277,34 @@ const paper = (): Grid =>
     2,
   );
 const bubble = (): Grid => ringed(10, [[INK, INK]], CREAM, 2);
-const tip = (): Grid =>
-  ringed(
-    8,
-    [
-      [INK, INK],
-      [SKY[3], SKY[2]],
-    ],
-    "#1f1226",
-    1,
-  );
 
 interface Tones {
   readonly light: string;
   readonly face: string;
-  readonly shade: string;
-  readonly lip: string;
+  readonly foot: string;
 }
-/** A button standing up on its lip, and the same pushed down onto it. */
+/**
+ * A button: a lit top edge, its face, a darker foot, the corners notched and a hard shadow under
+ * it. Pressed, it has sunk onto its foot: no shadow, and its top edge in shade.
+ */
 function button(t: Tones, down: boolean): Grid {
-  const pal = { k: INK, i: t.light, h: t.face, g: t.shade, l: t.lip };
+  const pal = { k: INK, i: t.light, h: t.face, l: t.foot, s: SHADE };
   return rows(
     down
-      ? ["........", "........", ".kkkkkk.", "kggggggk", "khhhhhhk", "khhhhhhk", "kggggggk", ".kkkkkk."]
-      : [".kkkkkk.", "kiiiiiik", "khhhhhhk", "khhhhhhk", "kggggggk", "kllllllk", "kllllllk", ".kkkkkk."],
+      ? ["........", "........", ".kkkkkk.", "kllllllk", "khhhhhhk", "khhhhhhk", ".kkkkkk."]
+      : [".kkkkkk.", "kiiiiiik", "khhhhhhk", "khhhhhhk", "kllllllk", "kllllllk", "skkkkkks", "ssssssss", ".ssssss."],
     pal,
   );
 }
+/** What a button's colour says: gold confirms, blue shows or hides, green buys or grows, wood is plain, coral leaves or removes, slate is quiet. */
 const TONES: Readonly<Record<string, Tones>> = {
-  gold: { light: GOLD[2], face: GOLD[1], shade: GOLD[0], lip: "#a3662a" },
-  wood: { light: BARK[4], face: BARK[3], shade: BARK[2], lip: BARK[0] },
-  plum: { light: SKY[3], face: SKY[2], shade: SKY[1], lip: DEEP },
-  leaf: { light: LEAF, face: GREEN[4], shade: GREEN[3], lip: GREEN[1] },
-  coral: { light: "#f4a08c", face: CORAL, shade: "#c4574f", lip: "#7d3340" },
-  off: { light: STONE[2], face: STONE[1], shade: STONE[0], lip: "#353338" },
+  gold: { light: "#ffe082", face: "#f5ad35", foot: "#bf6e17" },
+  blue: { light: "#7cc6ff", face: "#2f86e0", foot: "#1a4d99" },
+  green: { light: "#8ae583", face: "#3ea852", foot: "#216a34" },
+  wood: { light: "#b97c48", face: "#84532f", foot: "#54301a" },
+  coral: { light: "#f89785", face: "#d9584d", foot: "#98302f" },
+  slate: { light: "#74679a", face: "#4b4163", foot: "#2b2440" },
+  off: { light: "#453c5c", face: "#332b47", foot: "#221c33" },
 };
 
 /** The little tail under a speech bubble. */
@@ -528,8 +552,11 @@ const lines: string[] = [
 ];
 const frames: Readonly<Record<string, Grid>> = {
   panel: panel(),
-  shingles: shingles(),
   plaque: plaque(),
+  ...Object.fromEntries(TIERS.map((t, i) => [`tier-${i + 1}`, tier(t)])),
+  "crest-3": crest(TIERS[2][1]),
+  "crest-4": crest(TIERS[3][1]),
+  "crest-5": crown(TIERS[4][0], TIERS[4][1]),
   card: card(),
   "card-lit": cardLit(),
   slot: slot(),
@@ -537,12 +564,14 @@ const frames: Readonly<Record<string, Grid>> = {
   paper: paper(),
   bubble: bubble(),
   tail: tail(),
-  tip: tip(),
+  hex: hex(0, INK),
+  "hex-in": hex(1, "#1a1128"),
 };
 for (const [name, g] of Object.entries(frames)) lines.push(`  --k-f-${name}: ${url(g)};`);
 for (const [name, t] of Object.entries(TONES)) {
   lines.push(`  --k-f-btn-${name}: ${url(button(t, false))};`);
-  lines.push(`  --k-f-btn-${name}-down: ${url(button(t, true))};`);
+  // A button that is off is never pressed.
+  if (name !== "off") lines.push(`  --k-f-btn-${name}-down: ${url(button(t, true))};`);
 }
 const sizes: string[] = [];
 for (const [name, art] of Object.entries(ICONS)) {
@@ -554,4 +583,6 @@ for (const [name, art] of Object.entries(ICONS)) {
 }
 lines.push("}", ...sizes, "");
 await Bun.write(new URL("../src/frames.css", import.meta.url), lines.join("\n"));
-console.log(`frames.css: ${Object.keys(frames).length + Object.keys(TONES).length * 2} frames, ${sizes.length} icons`);
+console.log(
+  `frames.css: ${Object.keys(frames).length} frames, ${Object.keys(TONES).length} buttons, ${sizes.length} icons`,
+);
