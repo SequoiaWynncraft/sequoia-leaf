@@ -85,7 +85,12 @@ says so.
   who have gone in the last day doze in town (both below). A member's card has their
   name and rank, and for one dozing, how long ago they dozed off. A name shows only over somebody
   who is near the member, pointed at, speaking, or just arrived, and no two name plates ever
-  overlap. Members standing still within 6 pixels of one another (the member, live players, those
+  overlap. A member behind something tall in town (the lantern tree's canopy, a stall's awning, the
+  quest board) shows through it: when half or more of their head and chest is covered, a window
+  the shape of a figure opens in the thing over a quarter of a second, its edge dithered, and
+  windows near one another run together (`covered`, `hidden` and `parted` in `props.ts`). Of
+  everybody a touch is on, in front or behind, it means the one whose middle is nearest; a finger
+  is on a figure from 10 pixels across, the mouse from 7. Members standing still within 6 pixels of one another (the member, live players, those
   visiting or dozing) are drawn apart (`apart.ts`), the same on every page: the first by account
   keeps the spot and the rest are drawn 7 pixels away, right, left, down, up, then on the
   diagonals, and 14 past nine. Only the drawing moves, over a fifth of a second as they stop or
@@ -287,7 +292,9 @@ card says so and the town is not loaded.
   face, name, and rank or "Guest"; the guild's lists say no ranks, so somebody never seen in the
   room has their rank only if they are a guest. A part with nobody in it is left out; with nobody
   but the member it says "Only you, for now." It keeps up with the room as it changes, and with the
-  guild's lists as they come, every half minute. Choosing somebody in town puts the panel away and
+  guild's lists as they come, every half minute. It is sorted when it is opened, and while it stays
+  open its order holds (`held`): whoever has left a part stays listed in it, dimmed, and whoever is
+  new to a part goes to its end. Choosing somebody in town puts the panel away and
   shows where they are for three seconds: a ring at their feet and their name over them, the view
   staying where it is unless they would be out of it, when it glides to them and back. On an
   upright phone the panel is the bottom sheet the others are. The button is there only in town. A
@@ -372,8 +379,9 @@ The catalogue of camp things (`things.ts`), what is for sale (`catalogue.ts`), t
 there and works out with them what it shows at once. `grid.ts`, `letter.ts`, `games.ts`, `live.ts`,
 `news.ts`, `motion.ts`, `apart.ts` and `about.ts` have no page in them, and tests beside them (`motion.test.ts`
 plays Leaf's side of a live connection with the kit's stand-in socket); `folk.test.ts` also reads
-every file of the three games to check that nothing but members is drawn from a skin, and
-`touch.ts` has tests for what a touch means.
+every file of the three games to check that nothing but members is drawn from a skin,
+`touch.ts` has tests for what a touch means, and `props.ts` for when a member is hidden and what
+is left out of the thing in front.
 
 ## The games beside it
 

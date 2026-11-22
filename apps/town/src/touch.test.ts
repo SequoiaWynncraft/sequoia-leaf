@@ -15,6 +15,7 @@ const who = (name: string): { name: string; rank: string; level: number; voice: 
 });
 const me = makeActor(who("Tester"), null, 0, 0, true);
 const friend = makeActor(who("Wrenly"), null, 200, 200);
+const other = makeActor(who("Pipwick"), null, 206, 206);
 const ground = makeGround(40, 30, () => 0);
 // The counter is solid: walking on into it, the member stays at it.
 ground.fill(11, 9, 13, 11, 1);
@@ -49,7 +50,7 @@ const counter = makeProp("counter", null, 100, 92, {
 const touch = makeTouch({
   ground,
   doors: () => [out, game],
-  people: () => [me, friend],
+  people: () => [me, friend, other],
   greet: (a) => used.push(`hello ${a.who.name}`),
   own: () => false,
   ownAt: () => null,
@@ -161,6 +162,30 @@ describe("what a touch means", () => {
     expect(used).toEqual(["hello Wrenly"]);
     expect(touch.tap(60, 200, true)).toBe(true);
     expect(show.dest).toEqual({ x: 60, y: 200 });
+  });
+
+  test("of two figures a touch is on, it means the one whose middle is nearest, in front or behind", () => {
+    // Pipwick stands in front of Wrenly and 6 across; both touches are on both of them.
+    touch.tap(201, 188, false);
+    touch.tap(205, 198, false);
+    expect(used).toEqual(["hello Wrenly", "hello Pipwick"]);
+  });
+
+  test("a finger is on a figure from 10 across, the mouse from 7; further off, the member walks there", () => {
+    expect(touch.tap(191, 190, false)).toBe(true);
+    expect(touch.tap(191, 190, true)).toBe(false);
+    expect(used).toEqual(["hello Wrenly"]);
+    expect(touch.tap(189, 190, true)).toBe(true);
+    expect(show.dest).toEqual({ x: 189, y: 190 });
+  });
+
+  test("somebody behind a thing is touched before the thing in front of them", () => {
+    friend.x = 100;
+    friend.y = 90;
+    touch.tap(100, 80, false);
+    expect(used).toEqual(["hello Wrenly"]);
+    friend.x = 200;
+    friend.y = 200;
   });
 });
 

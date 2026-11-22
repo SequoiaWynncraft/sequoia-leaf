@@ -155,13 +155,14 @@ const near = (x: number, y: number): Pt => nearestFree(x, y);
 function spotFor(at: Visitor["at"], n: number): Pt {
   if (at === "works") {
     const s = place("works").stand;
+    // Against the wall beside the door and along the road before it, clear of the lantern tree's canopy.
     const off = [
-      [-20, 8],
-      [20, 8],
-      [-32, 14],
-      [32, 14],
-      [-10, 18],
-      [10, 18],
+      [20, 10],
+      [-21, -2],
+      [34, 16],
+      [10, 19],
+      [24, 24],
+      [36, 30],
     ][n % 6] ?? [0, 12];
     return near(s.x + (off[0] ?? 0), s.y + (off[1] ?? 0));
   }

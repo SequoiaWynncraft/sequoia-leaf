@@ -17,7 +17,7 @@ import { clamp, type Ctx, dist, lerp, makeCanvas, type Pt } from "@sequoia-leaf/
 import { feet, headOf, HOP, onScreen } from "./actors.ts";
 import { bits, emoted, floaters, rings } from "./fx.ts";
 import { type Actor, G, show } from "./game.ts";
-import type { Light, Prop, Standing } from "./props.ts";
+import { cover, hidden, type Light, parted, type Prop, type Standing, type Through, WINDOW } from "./props.ts";
 
 /**
  * A place as it is drawn: its painted pieces and where each goes in the world, what stands in it,
@@ -45,10 +45,19 @@ export interface Picture {
   over(g: Ctx, cx: number, cy: number): void;
   /** After dusk has fallen: whatever gives its own light. */
   glows(g: Ctx, cx: number, cy: number, spark: HTMLCanvasElement): void;
+  /** A member behind something tall shows through it. */
+  through?: true;
 }
 
 const buf = makeCanvas(320, 190, true);
 const dusk = makeCanvas(320, 190, true);
+/** Where a thing with a window in it is drawn before it goes into the picture. */
+const cut = makeCanvas(320, 190, true);
+/** How far the window round each member has opened, 0 to 1, and the town's clock when the picture was last drawn. */
+const windows = new WeakMap<Actor, number>();
+let drawnAt = 0;
+/** How long a window takes to open or close, in seconds. */
+const PART = 0.25;
 
 function radial(stops: readonly (readonly [number, string])[]): HTMLCanvasElement {
   const { c, g } = makeCanvas(64, 64);
@@ -77,7 +86,7 @@ const SPARK = radial([
 ]);
 
 export function sizeBuffers(w: number, h: number): void {
-  for (const b of [buf, dusk]) {
+  for (const b of [buf, dusk, cut]) {
     b.c.width = w;
     b.c.height = h;
     b.g.imageSmoothingEnabled = false;
@@ -267,8 +276,49 @@ export function drawPicture(pic: Picture): HTMLCanvasElement {
   }
   for (const o of pic.others()) order.push({ z: o.z, prop: null, actor: null, other: o });
   order.sort((a, b) => a.z - b.z);
+  // A member behind something tall shows through it: a window round them is left out of whatever
+  // covers them (`parted`), opening as they go behind it and closing as they come out.
+  const dt = clamp(G.t - drawnAt, 0, 1);
+  drawnAt = G.t;
+  const parts = new Map<Prop, Through[]>();
+  for (const { actor: a, z } of pic.through ? order : []) {
+    if (!a || a.folk) continue;
+    const foot = feet(a);
+    const tall = headOf(a);
+    const front: Prop[] = [];
+    let most = 0;
+    for (const { prop: p, z: pz } of order) {
+      const share = p && pz > z ? cover(p, foot, tall) : 0;
+      if (!p || share <= 0) continue;
+      front.push(p);
+      most = Math.max(most, share);
+    }
+    const was = windows.get(a) ?? 0;
+    const open = clamp(was + (hidden(most, was > 0) ? dt : -dt) / PART, 0, 1);
+    windows.set(a, open);
+    if (open <= 0) continue;
+    const at = { x: Math.round(foot.x), y: Math.round(foot.y - tall / 2), open };
+    for (const p of front) parts.set(p, [...(parts.get(p) ?? []), at]);
+  }
   for (const it of order) {
-    if (it.prop) drawProp(g, it.prop, cx, cy);
+    const through = it.prop ? parts.get(it.prop) : undefined;
+    if (it.prop && through) {
+      // Drawn aside, the windows cut out of it, and then put into the picture.
+      const c = cut.g;
+      c.globalCompositeOperation = "source-over";
+      c.clearRect(0, 0, w, h);
+      drawProp(c, it.prop, cx, cy);
+      c.globalCompositeOperation = "destination-out";
+      const xs = through.map((t) => t.x);
+      const ys = through.map((t) => t.y);
+      const x1 = Math.max(...xs) + WINDOW.w;
+      const y1 = Math.max(...ys) + WINDOW.h;
+      c.beginPath();
+      for (let y = Math.min(...ys) - WINDOW.h; y <= y1; y++)
+        for (let x = Math.min(...xs) - WINDOW.w; x <= x1; x++) if (parted(x, y, through)) c.rect(x - cx, y - cy, 1, 1);
+      c.fill();
+      g.drawImage(cut.c, 0, 0);
+    } else if (it.prop) drawProp(g, it.prop, cx, cy);
     else if (it.actor) drawActor(g, it.actor, cx, cy);
     else it.other?.paint(g, cx, cy);
   }

@@ -3,7 +3,8 @@
  * now, and the panel it opens, with who is in town, who is elsewhere in the game and who was seen
  * lately, each with their face, name, and rank or "Guest" (`about.ts` says who goes where, and the
  * words). It keeps itself up to date while it is open: the room's roster as it changes, the guild's
- * lists as they come, every half minute. Choosing somebody shows their card (`person`), with "Find
+ * lists as they come, every half minute; its order holds meanwhile, with whoever has gone dimmed
+ * where they were and whoever is new at the end of their part (`held`). Choosing somebody shows their card (`person`), with "Find
  * in town" for somebody drawn here, which puts the panel away and shows where they are (`locate`);
  * and for anybody else, "Visit yard" if they have a yard, which goes through the Works' door to it,
  * and "Visit camp" if they have a camp. The button is there only while the town is on the stage.
@@ -19,7 +20,7 @@ import { RAID_STATS } from "@sequoia-leaf/raid/stats.ts";
 import { TOWN_STATS } from "@sequoia-leaf/town/stats.ts";
 import { WORKS_STATS } from "@sequoia-leaf/yard/stats.ts";
 
-import { type About, type AboutRow, ALONE, whoIsAbout } from "./about.ts";
+import { type About, type AboutRow, ALONE, held, whoIsAbout } from "./about.ts";
 import { type Actor, G, hooks } from "./game.ts";
 import { guild } from "./guild.ts";
 import { $, closePanel, openPanel, pic, when } from "./hud.ts";
@@ -65,8 +66,8 @@ const faceOf = (r: AboutRow): HTMLCanvasElement => figureOf(r)?.body?.face ?? fa
 
 // ---------- the panel ----------
 
-/** Says what a row shows: who, the line under their name, and which picture of their face. */
-const rowKey = (r: AboutRow): string => `${r.id}/${r.name}/${r.line}/${pictureNo(faceOf(r))}`;
+/** Says what a row shows: who, the line under their name, which picture of their face, and whether they have gone. */
+const rowKey = (r: AboutRow): string => `${r.id}/${r.name}/${r.line}/${pictureNo(faceOf(r))}/${r.gone ? "gone" : ""}`;
 
 /** Says what the panel shows, so that it is drawn again only when that changes. */
 const keyOf = (a: About): string => a.parts.flatMap((p) => [p.title, ...p.rows.map(rowKey)]).join("|");
@@ -76,7 +77,7 @@ function rowOf(r: AboutRow): HTMLElement {
   const face = faceOf(r);
   const b = el(
     "button",
-    "k-thing about-row",
+    r.gone ? "k-thing about-row gone" : "k-thing about-row",
     { type: "button" },
     el("span", "k-thing-pic", {}, pic(face, 2)),
     el(
@@ -151,14 +152,15 @@ export function openAbout(): void {
     build(body) {
       const list = el("div", "about");
       body.append(list);
-      let now = aboutNow();
+      // Sorted when it is opened; while it stays open its order holds (`held`).
+      let shown = aboutNow();
       return when(
         () => {
-          now = aboutNow();
-          return keyOf(now);
+          shown = held(shown, aboutNow());
+          return keyOf(shown);
         },
         () => {
-          fill(list, now);
+          fill(list, shown);
         },
       );
     },
