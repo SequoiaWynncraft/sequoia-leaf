@@ -180,16 +180,11 @@ still wants it: the story's first, then the board's from the top.
 for 100 Leaf. Leaf may not be spent in town yet, so nothing runs it: the page shows its button
 closed.
 
-**Away.** `forward(w, ticks)` moves the yard on quickly, for Leaf to catch up on up to eight hours
-nobody watched. A few thousand ticks are run for real, counting only what the depot takes in
-during them, and the rest is paid out at that pace, through the same order book. A line that had
-already run dry is therefore paid nothing. Where a crate would fill or run dry part-way, the yard is
-paid up to that moment, run again for a short while to find its new pace, and paid on. A boiler
-with nothing gathered for it burns what it holds and what the crates and belts behind it hold, and
-then goes out: the yard is paid at the pace with it only until then, it is let go out for real, and
-the pace without it is found afresh, once for each boiler that goes out. On the largest yard the
-balance script builds this takes about 7 ms and lands within a fifth of a percent of running every
-tick.
+**Away.** The yard works for eight hours after its owner's last command, and then stands still
+until their next: `stepTo` runs it no further. At each of their commands it remembers the moment
+(`seen`: the tick, what its till held, and everything its depot had ever taken in), so
+what it did since is the difference (`awayOf`): how long it worked, the whole Coins its till gained, and
+how many of each thing the depot took in. Nothing is estimated: the yard is run every tick.
 
 **Coins.** The yard keeps no purse. `build`, `buyPlot` and `buyPlan` are told the balance and say
 what they took; `remove` says what comes back; whatever the yard earns gathers in `w.till`, and
@@ -213,10 +208,11 @@ and its Coins, and the page runs a copy ahead of Leaf with the same rules.
 so Leaf's tick for it is `tick + floor((now - at) / 100)` (`clockOf`). `create` starts a yard at tick
 0, at Leaf's now, seeded from Leaf's dice. `advance` brings a yard that has fallen behind to `LEAD`
 (30 ticks, three seconds) short of Leaf's clock, so that a command made a moment ago is never in
-its past: a tick at a time up to 3,000 ticks, moving `at` with it (`stepTo`); further behind, with
-`forward`, for at most eight hours, after which `at` is set so that the clock less `LEAD` is the
-yard's tick, and `away` records how long the yard worked and what the till gained, added to any not
-yet put away.
+its past: a tick at a time however far, moving `at` with it (`stepTo`). A yard standing still keeps
+Leaf's clock with it (`at` is set to now), so the hours it stood are let go and it starts again from
+its owner's next command. `tend` does what `advance` does for as long as Leaf says, so that Leaf
+can run a yard on a slice at a time: Leaf runs every yard so, whether or not anyone is looking (the
+root README's play service).
 
 **Commands** each carry `tick`, the tick the page's copy stood at. `apply` runs the yard to that
 tick (one in its past is done now, one more than `LEAD` ahead of the clock at `LEAD`), then does
@@ -258,7 +254,8 @@ than time passes. Each command logs a plot or plan bought, a standing order hand
 story orders finished since the yard last logged one (`told`).
 
 **What the page is shown** (`view`) is `{ yard, clock }`: the yard as stored but without its seed,
-which foretells every order the board will hang, and Leaf's tick now. A visitor is shown the same
+which foretells every order the board will hang, with `away` (what it did since its owner's last
+command, once that was five minutes ago or more), and Leaf's tick now. A visitor is shown the same
 without the blueprints. The page reads it with
 `readView` and `WORKS.decode`, and holds a yard with no seed.
 
@@ -280,7 +277,7 @@ without the blueprints. The page reads it with
 | `build.ts`              | building, taking away, turning, tipping out; buying plots and plans         |
 | `pieces.ts`             | many pieces at once: standing a set, moving one, clearing one; blueprints   |
 | `power.ts`, `step.ts`   | where power reaches; one tick of the yard                                   |
-| `orders.ts`, `clock.ts` | the depot, the story, the board; catching up on a long time quickly         |
+| `orders.ts`, `clock.ts` | the depot, the story, the board; the yard's time, and its owner's           |
 | `game.ts`               | the Works as Leaf holds it: its clock, its commands, its Coins, the view    |
 | `route.ts`, `save.ts`   | the shortest clear run for a belt; a yard as text, and back                 |
 | `status.ts`             | what a thing is doing, in a sentence, and whether it is in trouble          |

@@ -548,7 +548,8 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   among the player's newest 256 to the game answers what it answered then
   (its notes or its refusal, with the state as it stands now) and changes
   nothing, so a page that lost an answer sends the batch again safely. `rev`
-  goes up by one with each batch that changed anything.
+  goes up by one with each batch that changed anything, Leaf's own tending
+  (below) among them.
 - 404 `no_such_game` for a game Leaf does not play; 400 `invalid_command` for a
   body that is not commands, more than 32, a missing or repeated id, or a
   command that is not one of the game's (nothing is done); 413 as elsewhere;
@@ -597,7 +598,7 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   a visit, for the visitor) adds the time since their last call to that game
   to how long they have played it, when that is at most 3 minutes
   (`IDLE_MS`; a page in view calls at least every 75 seconds); a longer gap
-  adds nothing. It is written in the call's
+  adds nothing. Leaf's own tending (below) is not a call. It is written in the call's
   transaction where there is one; a failure to write it is logged, and the
   call goes on. `GET /v1/game/people/{player}` answers `{ "id", "name",
 "games", "played" }`: for each game they stand in or have played a second
@@ -615,7 +616,11 @@ player's commands done and refused, by the UTC day). What commands log goes to
 and 0 for one that is not. Migration 19 made `standings`, where each player's
 state in a game with a board stands; its `updated_at` is when the score was
 last reached. Migration 23 made `played`: each player's time in each game, in
-milliseconds, and when Leaf last heard from them there (`seen_at`).
+milliseconds, and when Leaf last heard from them there (`seen_at`). Migration 24
+gave `play_state` `guest`, whether the player was a guest when it was last
+written (a state from before took it from where it stands, or else from the
+player as last seen), which whatever Leaf writes of it while they are away says
+too.
 
 **Coins** are a ledger like Leaf: a balance per player, changed only by an
 entry, each keyed by the fact it records (`<game>:<player>:<key>` for a
@@ -641,6 +646,46 @@ a game's state, each one the player does not hold yet is written to `awards`
 (`player_id`, `id`, `at`); none is ever taken away. Every call of every game
 is told all the player holds (`Ctx.awards`), so that the town can send each to
 the camp as a trophy.
+
+**Tending.** A game may say that its states go on by themselves for hours
+(`Game.tend`): the Works' yards work while their owners are away. Everything
+asked of one player's state in a game (opened, sent to, visited, tended) waits
+in that state's line and is done one at a time, in the order it came, at the
+moment it came: a batch is done at the moment it arrived, however long it
+waited behind another. A batch is done on a fiber of the service's own, whatever
+becomes of its request; an open or a visit let go of while it waits leaves the
+line. Such a state is read and run on in memory to that moment and no further,
+2 ms of work at a time with as long a rest after each; one slice runs at a time
+for every state and every request together, so tending never has more than
+half the thread, however many ask at once. What one in the line has run on is
+gone on from by the next, while nothing has written the state since and the
+moment it ran to is not past the next one's; nothing of it is kept once the
+line is empty. One no batch has written for two minutes (`TEND_AFTER`; an open
+page sends something more often) is kept on the way as a batch of no commands
+keeps a state: with where it stands and what it has won, and `rev` goes up by
+one. Leaf does so itself every minute for each of them, one after another,
+waiting while any request is in a line and giving way at the next slice to any
+that comes: a request waits behind Leaf's own tending for at most one slice and
+its rest. A state Leaf fails to tend is logged (`Tending the <game> state of
+<player> failed`), and the others are tended all the same. A state is opened
+only as run on from the very state stored, so one written meanwhile by anything
+else is read again and run on again in slices: no request runs more than a
+slice of it at once. A state left two minutes with nothing to run (a yard
+standing still) is not looked at again until a batch changes it. Leaf stopped
+part-way has written nothing of it: the state is only behind, and the next Leaf
+runs it on from there. A minute in which Leaf tended anything logs `tended`:
+how many states, and how long it took. On the development machine, tending the
+largest kept yard (228 pieces) takes 9.5 ms of work two and a half minutes
+behind and 0.9 s eight hours behind, so half a core keeps about 7,900 such
+yards up; `bun apps/api/test/live-load.ts 32 20 50 10` timed the town while
+fifty of them, eight hours behind, were tended and ten players visited one at
+once: 17 ms at the median, 32 ms at the 95th percentile and 37 ms at worst,
+against 16, 32 and 35 ms without; the ten visits were answered within 2.1 s.
+With `32 20 50 0 50`, fifty players visited a large yard written a minute ago
+at once, all answered within 0.07 s, and its owner's command sent behind them
+was answered in 74 ms; their page's commands after, once every half second,
+took 9 ms at the median and 13 ms at worst, against 5 and 8 ms with nothing to
+tend.
 
 **The town and the camp** keep the camp (what stands where, each thing by an
 id of its own, the tray, the parcels by the trail, the letters, the pets),
@@ -668,10 +713,13 @@ keyed by the run's number.
 page is shown and how the page runs the yard ahead of Leaf are in
 `packages/yard/README.md`. Time is Leaf's: a yard holds the ticks it has run
 and the moment of Leaf's clock its last tick stands for, ten ticks a second.
-Opening or sending brings a yard to three seconds short of Leaf's clock, a
-tick at a time up to five minutes behind and quickly past that (at most eight
-hours, written in the yard as a time away for the page's letter); each command
-is done at the tick the page's copy stood at when it was made. Its Coins are
+Leaf runs every yard tick for tick, looked at or not (tending, above), for
+eight hours after its owner's last command; then it stands still until their
+next. Opening or sending brings a yard to three seconds short of Leaf's clock,
+and each command is done at the tick the page's copy stood at when it was
+made. What the yard did since its owner's last command is counted from what it
+remembers of that moment, and shown to the page for its letter once that was
+five minutes ago or more. Its Coins are
 keyed `works:<player>:bank:<n>` by the yard's own count, and every one it pays
 in is `free`: the till paid in before any price is taken and when the page
 collects it, and what a piece cost given back when it is taken away. A plot or
@@ -822,9 +870,9 @@ each copy owned by one of them. A change to the wire goes with a new
 50 ms waiting for the game's next send (starting, stopping and jumping go at
 once), the network there, up to 33 ms waiting for Leaf's tick, the network back,
 and then the 100 ms the game draws others behind Leaf's clock, which absorbs the
-network's unevenness. `bun apps/api/test/live-load.ts [players] [seconds]` runs
-the real app with that many players walking about the town at the game's pace,
-and times every move from its sender to each other player receiving it (not to
+network's unevenness. `bun apps/api/test/live-load.ts [players] [seconds] [yards] [visitors] [fresh]` runs
+the real app with that many players walking about the town at the game's pace
+(and that many large yards for Leaf to tend meanwhile), and times every move from its sender to each other player receiving it (not to
 the screen). On the development machine, with the server and every player in one
 process: 32 players, every move seen by all 31 others, 17 ms at the median and
 35 ms at worst, 15 KiB a second to each player; 128 players in four copies of

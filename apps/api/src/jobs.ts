@@ -10,6 +10,8 @@ import { snapshotIfDue } from "./backup/snapshot.ts";
 import { AppConfig } from "./config.ts";
 import { runCreditSync } from "./earning/run.ts";
 import { payMissedLevels } from "./levels/pay.ts";
+import { GAMES } from "./play/games.ts";
+import { Play } from "./play/service.ts";
 import type { SyncMode, SyncResult } from "./sync/windowed.ts";
 
 /** The minute of each hour whose run re-reads the last week instead of the last few minutes. */
@@ -89,14 +91,21 @@ const silentVisits = step(
   }),
 );
 
+/** Runs on the games' states that go on by themselves, where no page has kept them up for a while (a yard whose owner is away). */
+const tending = step(
+  "Tending the games' states",
+  Play.use((play) => play.tend(Object.values(GAMES))),
+);
+
 /** Runs a job at the start of every minute on its own fiber, so a slow run of one never holds up another. */
 const everyMinute = <R>(job: Effect.Effect<void, never, R>) =>
   job.pipe(Effect.repeat(Schedule.cron("* * * * *")), Effect.forkScoped);
 
 /**
  * What Leaf does every minute, for as long as it runs: the two feed syncs,
- * snapshots and offsite copies, and closing silent visits, each on its own. An offsite copy can take
- * minutes; the syncs, the deep sync at minute 17, and snapshots carry on meanwhile.
+ * snapshots and offsite copies, closing silent visits, and tending the games' states, each on its
+ * own. An offsite copy can take minutes; the syncs, the deep sync at minute 17, and snapshots carry
+ * on meanwhile.
  */
 export const EveryMinute = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -105,6 +114,7 @@ export const EveryMinute = Layer.effectDiscard(
     yield* everyMinute(yield* snapshots);
     yield* everyMinute(yield* offsiteCopies);
     yield* everyMinute(silentVisits);
+    yield* everyMinute(tending);
   }),
 );
 

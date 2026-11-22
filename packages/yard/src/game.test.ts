@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { CoinChange, Ctx, Done, Refused } from "@sequoia-leaf/core";
 
 import { refusal } from "./build.ts";
-import { forward, TICK_MS } from "./clock.ts";
+import { AWAY_MOST_MS, awayOf, here, TICK_MS } from "./clock.ts";
 import { ITEMS } from "./content/items.ts";
 import { STAND_MOST } from "./content/machines.ts";
 import { PLANS } from "./content/plans.ts";
@@ -13,7 +13,6 @@ import { create } from "./create.ts";
 import { steps, workingYard } from "./fixtures.ts";
 import {
   clockOf,
-  EXACT_MOST,
   LEAD,
   play,
   readCommand,
@@ -28,7 +27,7 @@ import { deliver, storyOrder } from "./orders.ts";
 import { route } from "./route.ts";
 import { save } from "./save.ts";
 import { WORKS_STATS } from "./stats.ts";
-import { at, put as add, type Standing, type World } from "./world.ts";
+import { at, collect, put as add, type Standing, type World } from "./world.ts";
 import large from "./yards/large.json";
 import mid from "./yards/mid.json";
 import short from "./yards/short.json";
@@ -94,32 +93,109 @@ describe("advance", () => {
     WORKS.advance(w, ctx(T0 + LEAD * TICK_MS + 99));
     expect(save(w)).toBe(text);
   });
-  test("runs every tick up to 3,000 behind, to three seconds short of the clock", () => {
+  test("runs every tick to three seconds short of the clock, however far behind", () => {
     const w = kept(workingYard());
     const twin = workingYard();
-    WORKS.advance(w, ctx(T0 + (EXACT_MOST + LEAD) * TICK_MS + 50));
-    steps(twin, EXACT_MOST);
-    expect(w.at).toBe(T0 + EXACT_MOST * TICK_MS);
+    WORKS.advance(w, ctx(T0 + HOUR + 50));
+    steps(twin, 36_000 - LEAD);
+    expect(w.at).toBe(T0 + (36_000 - LEAD) * TICK_MS);
     expect(save({ ...w, at: 0 })).toBe(save(twin));
     expect(w.away).toBeNull();
   });
-  test("further behind, moves the yard on quickly, says what it did, and lets go of the rest of the clock", () => {
+  test("run on in slices, the yard is the same to the byte as run on in one go", () => {
+    const sliced = kept(workingYard());
+    const whole = kept(workingYard());
+    const now = ctx(T0 + 2 * HOUR);
+    let slices = 0;
+    for (let left = 0; WORKS.tend?.(sliced, now, () => left-- > 0) === true; left = 777) slices++;
+    WORKS.advance(sliced, now);
+    WORKS.advance(whole, now);
+    expect(slices).toBe(Math.ceil((72_000 - LEAD) / 777));
+    expect(save(sliced)).toBe(save(whole));
+    // Asked not to go on at all, it says how much is left without running any.
+    expect(WORKS.tend?.(kept(workingYard()), now, () => false)).toBe(true);
+    expect(WORKS.tend?.(whole, now, () => false)).toBe(false);
+  });
+  test("stands still eight hours after its owner's last command, and starts again from their next", () => {
     const w = kept(workingYard());
-    const twin = workingYard();
+    const most = AWAY_MOST_MS / TICK_MS;
+    WORKS.advance(w, ctx(T0 + 7 * 24 * HOUR));
+    expect(w.tick).toBe(w.seen.tick + most);
+    // Leaf's clock for it stands still too: the days since are let go.
+    expect(clockOf(w, T0 + 7 * 24 * HOUR)).toBe(w.tick);
+    const still = save(w);
+    WORKS.advance(w, ctx(T0 + 8 * 24 * HOUR));
+    expect(save({ ...w, at: 0 })).toBe(save({ ...decoded(still), at: 0 }));
+    expect(WORKS.tend?.(w, ctx(T0 + 9 * 24 * HOUR), () => true)).toBe(false);
+    // The page's copy stands still with it.
+    stepTo(w, w.tick + 600);
+    expect(w.tick).toBe(w.seen.tick + most);
+    did(w, { do: "collect", tick: w.tick + 600 });
+    expect(w.seen.tick).toBe(w.tick);
+    WORKS.advance(w, ctx(T0 + 8 * 24 * HOUR + HOUR));
+    expect(w.tick).toBe(most + 36_000 - LEAD);
+  });
+  test("its owner's last command is the only thing that moves when they were last there", () => {
+    const w = kept(workingYard());
+    const first = { ...w.seen };
     WORKS.advance(w, ctx(T0 + HOUR));
-    const quick = forward(twin, 36_000 - LEAD);
-    expect(w.tick).toBe(twin.tick);
-    expect(clockOf(w, T0 + HOUR) - LEAD).toBe(w.tick);
-    expect(w.away).toEqual({ seconds: quick.seconds, coins: quick.coins });
-    expect(quick.coins).toBeGreaterThan(0);
-    // Another time away before the letter is put away adds to it.
-    WORKS.advance(w, ctx(T0 + 2 * HOUR));
-    expect(w.away?.seconds).toBe(quick.seconds + 3600);
-    // Eight hours at most, however long the absence, and none of it owed later.
-    const week = kept(workingYard());
-    WORKS.advance(week, ctx(T0 + 7 * 24 * HOUR));
-    expect(week.away?.seconds).toBe(8 * 3600);
-    expect(clockOf(week, T0 + 7 * 24 * HOUR) - LEAD).toBe(week.tick);
+    WORKS.tend?.(w, ctx(T0 + 2 * HOUR), () => true);
+    WORKS.view(w, ctx(T0 + 2 * HOUR));
+    WORKS.visit?.(w, ctx(T0 + 2 * HOUR));
+    expect(w.seen).toEqual(first);
+    // Refused, a command was not done: nobody was there.
+    expect(refused(play(w, { do: "remove", x: 0, y: 0, tick: w.tick }))).toBe("nothing_to_take_away");
+    expect(w.seen).toEqual(first);
+    did(w, { do: "collect", tick: w.tick + 10 });
+    expect(w.seen).toEqual({ tick: w.tick, till: w.till, depot: w.depot });
+  });
+});
+
+/** A yard its owner left at `T0`, by Leaf's clock `ms` later, and what its page is shown. */
+function leftFor(ms: number) {
+  const w = kept(workingYard());
+  const left = { ...w.seen, till: w.till };
+  WORKS.advance(w, ctx(T0 + ms));
+  return { w, left, away: decoded(WORKS.view(w, ctx(T0 + ms)).yard).away };
+}
+
+describe("a time away", () => {
+  test("is what the depot took in and the till gained since its owner's last command, counted", () => {
+    const { w, left, away } = leftFor(HOUR);
+    const made = Object.fromEntries(
+      ITEMS.flatMap((k) =>
+        (w.depot[k] ?? 0) > (left.depot[k] ?? 0) ? [[k, (w.depot[k] ?? 0) - (left.depot[k] ?? 0)]] : [],
+      ),
+    );
+    expect(away).toEqual({ seconds: 3600 - LEAD / 10, coins: Math.floor(w.till) - Math.floor(left.till), made });
+    expect(Object.keys(made).length).toBeGreaterThan(0);
+    expect(away?.coins).toBeGreaterThan(0);
+    // A twin run for the same ticks took in the same: nothing is estimated.
+    const twin = workingYard();
+    steps(twin, w.tick);
+    expect(twin.depot).toEqual(w.depot);
+  });
+  test("says the Coins collecting will pay, however the depot's prices added up", () => {
+    // One Coin earned and collected before, and a thousand deadfall taken in at a thousandth each since.
+    const w = create({ seed: 7 });
+    Object.assign(w, { sold: 1, till: 0 });
+    w.seen = here(w);
+    for (let n = 0; n < 1000; n++) deliver(w, "deadfall", 1);
+    w.tick += 6000;
+    expect(awayOf(w)?.coins).toBe(1);
+    expect(collect(w)).toBe(1);
+  });
+  test("is not told for under five minutes, and is eight hours at most", () => {
+    expect(leftFor(4 * 60 * SECOND + LEAD * TICK_MS).away).toBeNull();
+    expect(leftFor(5 * 60 * SECOND + LEAD * TICK_MS).away?.seconds).toBe(300);
+    expect(leftFor(3 * 24 * HOUR).away?.seconds).toBe(AWAY_MOST_MS / 1000);
+  });
+  test("is put away by the next command, and is not kept in what Leaf stores", () => {
+    const { w } = leftFor(HOUR);
+    expect(decoded(WORKS.encode(w)).away).toBeNull();
+    const page = decoded(WORKS.view(w, ctx(T0 + HOUR)).yard);
+    did(page, { do: "collect", tick: page.tick });
+    expect(page.away).toBeNull();
   });
 });
 
@@ -247,7 +323,7 @@ describe("a command", () => {
       { kind: "works_order", data: { order: second.id, title: second.title, pay: second.pay } },
     ]);
     expect(w.board).toHaveLength(3);
-    w.away = { seconds: 600, coins: 5 };
+    w.away = { seconds: 600, coins: 5, made: { plank: 4 } };
     go({ do: "collect" });
     expect(w.away).toBeNull();
     expect(w.till).toBeLessThan(1);
@@ -395,7 +471,13 @@ describe("what the page is shown", () => {
     for (const yard of Object.values(YARDS)) {
       const w = decoded(JSON.stringify(yard));
       steps(w, 500);
-      Object.assign(w, { at: T0, bank: 9, told: 2, away: { seconds: 300, coins: 2 } });
+      Object.assign(w, {
+        at: T0,
+        bank: 9,
+        told: 2,
+        away: { seconds: 300, coins: 2, made: { plank: 3 } },
+        seen: { tick: w.tick - 9, till: 0.5, depot: { plank: 2 } },
+      });
       const back = decoded(WORKS.encode(w));
       expect(WORKS.encode(back)).toBe(WORKS.encode(w));
       for (const k of [
@@ -406,6 +488,7 @@ describe("what the page is shown", () => {
         "bank",
         "told",
         "away",
+        "seen",
         "story",
         "board",
         "plots",

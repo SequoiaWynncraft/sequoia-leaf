@@ -25,6 +25,7 @@ import {
   readNotes,
   readView,
   stepTo,
+  stillAt,
   TICK_MS,
   WORKS,
   type WorksAct,
@@ -204,7 +205,10 @@ export function runYard(now: number): News[] {
     return [];
   }
   stepTo(w, tick);
-  shown = tick;
+  shown = w.tick;
+  // A yard standing still (its owner away eight hours) holds Leaf's clock with it from the frame it
+  // stops in, as Leaf does, until they act.
+  if (w.tick >= stillAt(w)) base = { clock: w.tick, at: now };
   // What these steps made known is taken before anything is sent: doing a command takes it too.
   const news = drain(w);
   if (S.visiting) {

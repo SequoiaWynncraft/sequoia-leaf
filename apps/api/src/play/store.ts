@@ -20,8 +20,16 @@ export const BOARD_MOST = 20;
  */
 export const IDLE_MS = 3 * 60_000;
 
-/** A player's state in a game, as stored: how many batches have changed it, and the game's own text. */
-const Stored = Schema.Struct({ rev: Schema.Int, state: Schema.String });
+/**
+ * A player's state in a game, as stored: how many batches have changed it, the game's own text,
+ * when it was last written, and whether the player was a guest when it was.
+ */
+const Stored = Schema.Struct({
+  rev: Schema.Int,
+  state: Schema.String,
+  updatedAt: Schema.Int,
+  guest: Schema.BooleanFromBit,
+});
 export type Stored = typeof Stored.Type;
 
 const Answered = Schema.Struct({ result: Schema.String });
@@ -67,14 +75,26 @@ export class PlayStore extends Context.Service<
   {
     /** The player's state in a game, or none yet. */
     readonly read: (playerId: PlayerId, game: string) => Effect.Effect<Option.Option<Stored>>;
+    /** The players whose state in a game was last written before `before`, longest ago first, with each state's `rev`. */
+    readonly unwritten: (
+      game: string,
+      before: number,
+    ) => Effect.Effect<readonly { readonly playerId: PlayerId; readonly rev: number }[]>;
     /** Stores a new player's state, untouched (`rev` 0). Says whether it did: false when one was there already. */
-    readonly create: (playerId: PlayerId, game: string, state: string, now: number) => Effect.Effect<boolean>;
+    readonly create: (
+      playerId: PlayerId,
+      game: string,
+      state: string,
+      guest: boolean,
+      now: number,
+    ) => Effect.Effect<boolean>;
     /** Stores a state over the one at `over`, as `over + 1`. Says whether it did: false when it changed meanwhile. */
     readonly write: (
       playerId: PlayerId,
       game: string,
       over: number,
       state: string,
+      guest: boolean,
       now: number,
     ) => Effect.Effect<boolean>;
     /** What a command answered (its notes or its refusal, as JSON), if it was done before. */
@@ -135,7 +155,14 @@ export class PlayStore extends Context.Service<
         Request: Schema.Struct({ playerId: Schema.String, game: Schema.String }),
         Result: Stored,
         execute: ({ playerId, game }) =>
-          sql`SELECT rev, state FROM play_state WHERE player_id = ${playerId} AND game = ${game}`,
+          sql`SELECT rev, state, updated_at AS updatedAt, guest FROM play_state WHERE player_id = ${playerId} AND game = ${game}`,
+      });
+      const unwritten = SqlSchema.findAll({
+        Request: Schema.Struct({ game: Schema.String, before: Schema.Int }),
+        Result: Schema.Struct({ playerId: PlayerUuid, rev: Schema.Int }),
+        execute: ({ game, before }) => sql`
+          SELECT player_id AS playerId, rev FROM play_state WHERE game = ${game} AND updated_at < ${before} ORDER BY updated_at
+        `,
       });
       const answered = SqlSchema.findOneOption({
         Request: Schema.Struct({ playerId: Schema.String, game: Schema.String, commandId: Schema.String }),
@@ -195,19 +222,20 @@ export class PlayStore extends Context.Service<
       });
       return PlayStore.of({
         read: (playerId, game) => read({ playerId, game }).pipe(Effect.orDie),
-        create: (playerId, game, state, now) =>
+        unwritten: (game, before) => unwritten({ game, before }).pipe(Effect.orDie),
+        create: (playerId, game, state, guest, now) =>
           sql`
-            INSERT INTO play_state (player_id, game, rev, state, updated_at)
-            VALUES (${playerId}, ${game}, 0, ${state}, ${now})
+            INSERT INTO play_state (player_id, game, rev, state, guest, updated_at)
+            VALUES (${playerId}, ${game}, 0, ${state}, ${guest ? 1 : 0}, ${now})
             ON CONFLICT (player_id, game) DO NOTHING
             RETURNING rev
           `.pipe(
             Effect.map((rows) => rows.length > 0),
             Effect.orDie,
           ),
-        write: (playerId, game, over, state, now) =>
+        write: (playerId, game, over, state, guest, now) =>
           sql`
-            UPDATE play_state SET rev = rev + 1, state = ${state}, updated_at = ${now}
+            UPDATE play_state SET rev = rev + 1, state = ${state}, guest = ${guest ? 1 : 0}, updated_at = ${now}
             WHERE player_id = ${playerId} AND game = ${game} AND rev = ${over}
             RETURNING rev
           `.pipe(

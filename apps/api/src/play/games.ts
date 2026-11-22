@@ -40,6 +40,14 @@ export interface Opened {
   readonly awards: () => readonly string[];
 }
 
+/** A stored state of a game that tends its states (`Game.tend`), read, to be run on a slice at a time. */
+export interface Tending {
+  /** Runs it on toward `ctx.now` while `more` says to; says whether there is further to go. */
+  readonly run: (ctx: Ctx, more: () => boolean) => boolean;
+  /** The state as it stands, brought to `ctx.now`, as `Played.open` opens a stored one. */
+  readonly open: (ctx: Ctx) => Opened;
+}
+
 /** A game as the play service handles it: in stored text and JSON, whatever the game's own types. */
 export interface Played {
   readonly id: GameId;
@@ -49,6 +57,8 @@ export interface Played {
   readonly reads: (command: unknown) => boolean;
   /** A stored state brought to `ctx.now`; null when the text is not one the game can read. */
   readonly open: (text: string, ctx: Ctx) => Opened | null;
+  /** A stored state read for tending; null when the text does not read. Null for a game that does not tend. */
+  readonly tend: ((text: string) => Tending | null) | null;
 }
 
 /**
@@ -58,55 +68,64 @@ export interface Played {
  * the service goes on only from a state whose command was done.
  */
 export function played<State, Command, View, Note>(game: Game<State, Command, View, Note>): Played {
+  /** A state brought to `ctx.now`, to have commands done to it. */
+  const opening = (decoded: State, ctx: Ctx): Opened => {
+    let state = game.advance(decoded, ctx);
+    /** The state as it was before a command that has not been kept. */
+    let undo: string | null = null;
+    const current = (): State => {
+      if (undo !== null) {
+        state = game.decode(undo) ?? state;
+        undo = null;
+      }
+      return state;
+    };
+    return {
+      attempt: (raw, at) => {
+        const command = game.command(raw);
+        if (command === null) {
+          return { refused: "invalid_command" };
+        }
+        const before = game.encode(current());
+        const answer = game.apply(state, command, at);
+        undo = before;
+        if (isRefused(answer)) {
+          return { refused: answer.refused };
+        }
+        return {
+          notes: answer.notes,
+          coins: answer.coins ?? [],
+          leaf: answer.leaf ?? [],
+          log: answer.log ?? [],
+          keep: () => {
+            state = answer.state;
+            undo = null;
+          },
+        };
+      },
+      text: () => game.encode(current()),
+      view: (at) => game.view(current(), at),
+      visit: game.visit ? (at) => game.visit?.(current(), at) : null,
+      standing: () => game.standing?.(current()) ?? null,
+      awards: () => game.awards?.(current()) ?? [],
+    };
+  };
   return {
     id: game.id,
     create: (ctx) => game.encode(game.create(ctx)),
     reads: (command) => game.command(command) !== null,
     open: (text, ctx) => {
       const decoded = game.decode(text);
-      if (decoded === null) {
-        return null;
-      }
-      let state = game.advance(decoded, ctx);
-      /** The state as it was before a command that has not been kept. */
-      let undo: string | null = null;
-      const current = (): State => {
-        if (undo !== null) {
-          state = game.decode(undo) ?? state;
-          undo = null;
-        }
-        return state;
-      };
-      return {
-        attempt: (raw, at) => {
-          const command = game.command(raw);
-          if (command === null) {
-            return { refused: "invalid_command" };
-          }
-          const before = game.encode(current());
-          const answer = game.apply(state, command, at);
-          undo = before;
-          if (isRefused(answer)) {
-            return { refused: answer.refused };
-          }
-          return {
-            notes: answer.notes,
-            coins: answer.coins ?? [],
-            leaf: answer.leaf ?? [],
-            log: answer.log ?? [],
-            keep: () => {
-              state = answer.state;
-              undo = null;
-            },
-          };
-        },
-        text: () => game.encode(current()),
-        view: (at) => game.view(current(), at),
-        visit: game.visit ? (at) => game.visit?.(current(), at) : null,
-        standing: () => game.standing?.(current()) ?? null,
-        awards: () => game.awards?.(current()) ?? [],
-      };
+      return decoded === null ? null : opening(decoded, ctx);
     },
+    tend: game.tend
+      ? (text) => {
+          const state = game.decode(text);
+          return state === null
+            ? null
+            : { run: (ctx, more) => game.tend?.(state, ctx, more) ?? false, open: (ctx) => opening(state, ctx) };
+        }
+      : null,
   };
 }
 

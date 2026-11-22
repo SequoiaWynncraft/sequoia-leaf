@@ -1765,7 +1765,7 @@
       "rev": 0,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "yard": "{\"v\":3,\"tick\":0,\"at\":1795611300000,\"till\":0,\"bank\":0,\"told\":0,\"plots\":[\"yard\"],\"plans\":[],\"story\":0,\"filled\":{},\"board\":[],\"serial\":0,\"done\":0,\"swapAt\":0,\"depot\":{},\"given\":{},\"sold\":0,\"paid\":0,\"pace\":{\"ticks\":0,\"warm\":300,\"made\":{}},\"cells\":[]}",
+        "yard": "{\"v\":3,\"tick\":0,\"at\":1795611300000,\"till\":0,\"bank\":0,\"told\":0,\"seen\":{\"tick\":0,\"till\":0,\"depot\":{}},\"plots\":[\"yard\"],\"plans\":[],\"story\":0,\"filled\":{},\"board\":[],\"serial\":0,\"done\":0,\"swapAt\":0,\"depot\":{},\"given\":{},\"sold\":0,\"paid\":0,\"pace\":{\"ticks\":0,\"warm\":300,\"made\":{}},\"cells\":[]}",
         "clock": 0
       }
     }

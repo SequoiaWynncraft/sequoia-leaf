@@ -26,15 +26,10 @@ const ORDER_WORK = { first: 6000, more: 600, deepest: 0.4, ground: 0.3 } as cons
 /** Ticks between free swaps: ten minutes of the yard's time. */
 export const SWAP_EVERY = 6000;
 
-/** The depot takes in `n` of a thing while the yard runs: it counts toward the yard's pace as well. */
+/** The depot takes in `n` of a thing: it counts toward the yard's pace, pays its price, and goes toward whichever orders want it. */
 export function deliver(w: World, item: Item, n: number): void {
-  if (w.pace.warm <= 0) w.pace.made[item] = (w.pace.made[item] ?? 0) + n;
-  takeIn(w, item, n);
-}
-
-/** The depot takes in `n` of a thing: pays its price, and puts it toward whichever orders want it. */
-export function takeIn(w: World, item: Item, n: number): void {
   if (n <= 0) return;
+  if (w.pace.warm <= 0) w.pace.made[item] = (w.pace.made[item] ?? 0) + n;
   w.depot[item] = (w.depot[item] ?? 0) + n;
   const coins = ITEM[item].worth * DEPOT_SHARE * n;
   w.till += coins;

@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { type Game, leaf, MOST_COMMANDS, type PlayerId, playerId } from "@sequoia-leaf/core";
 import { PULLS } from "@sequoia-leaf/pulls";
@@ -12,8 +15,22 @@ import {
   type TableView,
 } from "@sequoia-leaf/raid";
 import { decodeTown, readNotes as readTownNotes, readView as readTownView, type TownView } from "@sequoia-leaf/town";
-import { deliver, readView as readYardView, route, WORKS } from "@sequoia-leaf/yard";
-import { Effect, Exit, Logger, References, Schema } from "effect";
+import {
+  clockOf,
+  deliver,
+  isFilled,
+  ITEMS,
+  LEAD,
+  readView as readYardView,
+  route,
+  stepTo,
+  swapRefusal,
+  TICK_MS,
+  WORKS,
+  type World,
+} from "@sequoia-leaf/yard";
+import mid from "@sequoia-leaf/yard/yards/mid.json";
+import { Effect, Exit, Fiber, Logger, References, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
 import { Banners, Person, Standings } from "../src/api/schemas.ts";
@@ -21,10 +38,10 @@ import type { Settings } from "../src/config.ts";
 import { knownAmong } from "../src/game/known.ts";
 import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
-import { played } from "../src/play/games.ts";
-import { Play } from "../src/play/service.ts";
+import { GAMES, played } from "../src/play/games.ts";
+import { Play, TEND_AFTER } from "../src/play/service.ts";
 import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, IDLE_MS, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
-import { DAY, fakeBackend, fakeMojang, type Fakes, sessionOf, steadyDice, testLeaf } from "./support.ts";
+import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -1186,6 +1203,549 @@ describe("the Works", () => {
   });
 });
 
+/** Leaf's call to a game at a moment of its clock, as Alice's. */
+const ctxAt = (now: number) => ({ now, player: { id: alice, guest: false }, seed: 0, room: 0, awards: [] });
+/** Leaf tending every game's states. */
+const tendAll = Play.use((play) => play.tend(Object.values(GAMES)));
+/** A yard read from its text, or the test fails. */
+function yardIn(text: string) {
+  const w = WORKS.decode(text);
+  if (!w) throw new Error("not a yard");
+  return w;
+}
+/** Puts the kept mid-story yard in Alice's place, or `owner`'s (`shape`d so): standing at Leaf's clock now, written now, its owner there now. */
+async function keepMid(on = services, shape: (w: World) => void = () => undefined, owner: PlayerId = alice) {
+  const w = yardIn(JSON.stringify(mid));
+  shape(w);
+  w.at = clock.now;
+  const text = WORKS.encode(w);
+  await on.query(
+    (sql) => sql`
+      INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${owner}, 'works', 1, ${text}, ${clock.now})
+    `,
+  );
+  return text;
+}
+/** A yard as running every tick to Leaf's clock now, in one go, leaves it. */
+const ranOn = (text: string) => WORKS.encode(WORKS.advance(yardIn(text), ctxAt(clock.now)));
+/** Alice's yard as Leaf stores it. */
+async function storedYard(on = services) {
+  const [found] = await on.query(
+    (sql) =>
+      sql<{
+        rev: number;
+        state: string;
+      }>`SELECT rev, state FROM play_state WHERE player_id = ${alice} AND game = 'works'`,
+  );
+  if (!found) throw new Error("no yard stored");
+  return found;
+}
+/** The yard an answer shows its page. */
+const shownYard = async (response: Response) => yardOf(Schema.decodeUnknownSync(Shown)(await response.json()).state);
+/** Leaf with `then` done, and waited for, after each read of a stored state: something happening while Leaf works on what it read. */
+async function afterEachRead(then: () => Promise<void>) {
+  await app.dispose();
+  start({
+    play: (real) => ({
+      ...real,
+      read: (player, game) => real.read(player, game).pipe(Effect.tap(() => Effect.promise(then))),
+    }),
+  });
+}
+/** Leaf with its first read of a stored state held, once made, until the test lets it go. */
+async function holdingFirstRead() {
+  let reads = 0;
+  const gate = Promise.withResolvers<void>();
+  const held = Promise.withResolvers<void>();
+  await afterEachRead(() => {
+    if (++reads !== 1) return Promise.resolve();
+    held.resolve();
+    return gate.promise;
+  });
+  return { held: held.promise, release: () => gate.resolve() };
+}
+/** Alice's page painting a belt in her yard as its copy stood at Leaf's clock now, and the yard once both that and running on are done. */
+function painting(text: string) {
+  const w = yardIn(text);
+  const belt = w.cells.findIndex((b) => b?.kind === "belt");
+  const paint = {
+    do: "paint",
+    x: belt % w.land.w,
+    y: Math.floor(belt / w.land.w),
+    tint: 3,
+    tick: clockOf(w, clock.now),
+  };
+  const twin = WORKS.advance(yardIn(text), ctxAt(clock.now));
+  const read = WORKS.command(paint);
+  if (!read) throw new Error("not a command");
+  WORKS.apply(twin, read, ctxAt(clock.now));
+  return { paint, after: WORKS.encode(twin) };
+}
+
+/**
+ * The Works as Leaf plays it, counting what Leaf does: each tick it runs a yard on while tending, each
+ * slice that ran any (whose yard, when it began and ended), and each visit it shows. A slice of a
+ * yard whose owner `fails` fails a hundred ticks in.
+ */
+function counted(fails: (owner: string) => boolean = () => false) {
+  const run = { ticks: 0, visits: 0, slices: [] as { owner: string; began: number; ended: number }[] };
+  const game = played({
+    ...WORKS,
+    tend: (w, ctx, more) => {
+      const began = performance.now();
+      let ticks = 0;
+      const further =
+        WORKS.tend?.(w, ctx, () => {
+          if (!more()) return false;
+          if (++ticks === 100 && fails(ctx.player.id)) throw new Error("A yard that cannot be run");
+          run.ticks++;
+          return true;
+        }) ?? false;
+      if (ticks > 0) run.slices.push({ owner: ctx.player.id, began, ended: performance.now() });
+      return further;
+    },
+    visit: (w, ctx) => {
+      run.visits++;
+      return WORKS.visit?.(w, ctx) ?? WORKS.view(w, ctx);
+    },
+  });
+  return { game, run };
+}
+/** The longest the thread was held while `job` ran, in milliseconds, by a timer due every millisecond. */
+async function longestHold(job: () => Promise<unknown>): Promise<number> {
+  let last = performance.now();
+  let longest = 0;
+  const beat = setInterval(() => {
+    const now = performance.now();
+    longest = Math.max(longest, now - last);
+    last = now;
+  }, 1);
+  try {
+    await job();
+  } finally {
+    clearInterval(beat);
+  }
+  return Math.max(longest, performance.now() - last);
+}
+/** Waits until a condition holds, a millisecond at a time. */
+async function until(ok: () => boolean, tries = 5000): Promise<void> {
+  if (ok() || tries === 0) return;
+  await Bun.sleep(1);
+  await until(ok, tries - 1);
+}
+/** The first tick after the moment `from` at which a standing order fills, as a yard runs on from `text` with nobody there, and the order. */
+function nextFill(text: string, from: number) {
+  const w = yardIn(text);
+  stepTo(w, clockOf(w, from));
+  for (let n = 0; n < 36_000; n++) {
+    const open = w.board.filter((o) => !isFilled(o.want, o.filled));
+    stepTo(w, w.tick + 1);
+    const filled = open.find((o) => isFilled(o.want, o.filled));
+    if (filled) return { order: filled.id, tick: w.tick };
+  }
+  throw new Error("No order fills");
+}
+/** Whether an order of a yard run on from `text` can be swapped at a tick. */
+function swapped(text: string, order: number, tick: number) {
+  const w = yardIn(text);
+  stepTo(w, tick);
+  return swapRefusal(w, order) === null;
+}
+
+/** Leaf tends every game's states, as it does once a minute. */
+const tending = () => services.run(tendAll);
+
+describe("Leaf tending the Works", () => {
+  const SECOND = 1000;
+  const MINUTE = 60_000;
+  const HOUR = 60 * MINUTE;
+
+  it("runs a yard no page keeps up tick for tick, and keeps where it stands as a batch would; a watched one is left be", async () => {
+    const kept = await keepMid();
+    clock.now += 10 * MINUTE;
+    await tending();
+    const first = await storedYard();
+    expect(first).toEqual({ rev: 2, state: ranOn(kept) });
+    expect(yardIn(first.state).tick).toBe(yardIn(kept).tick + 6000 - LEAD);
+    const scored = (await boardOf()).you?.score ?? 0;
+    expect(scored).toBe(Math.floor(yardIn(first.state).sold + yardIn(first.state).paid));
+    // Its owner's page would have sent something within the minute: a yard written that lately is the page's.
+    clock.now += MINUTE;
+    await tending();
+    expect((await storedYard()).rev).toBe(2);
+    clock.now += 9 * MINUTE;
+    await tending();
+    expect((await storedYard()).state).toBe(ranOn(first.state));
+    expect((await boardOf()).you?.score).toBeGreaterThan(scored);
+  });
+
+  it("is seen by a visitor: one nobody watches moves, and one left behind is brought up before it is shown", async () => {
+    const kept = await keepMid();
+    const before = (await shownYard(await visit(alice, "works", bob))).yard.tick;
+    clock.now += 10 * MINUTE;
+    const behind = await shownYard(await visit(alice, "works", bob));
+    expect(behind.yard.tick).toBe(before + 6000 - LEAD);
+    expect(await storedYard()).toEqual({ rev: 2, state: ranOn(kept) });
+    clock.now += 10 * MINUTE;
+    await tending();
+    const moved = await storedYard();
+    expect(moved.rev).toBe(3);
+    expect((await shownYard(await visit(alice, "works", bob))).yard.tick).toBe(before + 12_000 - LEAD);
+    // The visit itself wrote nothing.
+    expect(await storedYard()).toEqual(moved);
+  });
+
+  it("tells its owner, back after an hour, what it did, counted; and their next command puts that away", async () => {
+    const kept = yardIn(await keepMid());
+    clock.now += HOUR;
+    const opening = await shownYard(await send("GET", "/v1/game/play/works"));
+    const now = yardIn((await storedYard()).state);
+    const takenIn = Object.fromEntries(
+      ITEMS.flatMap((k) => {
+        const n = (now.depot[k] ?? 0) - (kept.depot[k] ?? 0);
+        return n > 0 ? [[k, n]] : [];
+      }),
+    );
+    expect(Object.keys(takenIn).length).toBeGreaterThan(0);
+    expect(opening.yard.away).toEqual({
+      seconds: 3600 - LEAD / 10,
+      coins: Math.floor(now.till) - Math.floor(kept.till),
+      made: takenIn,
+    });
+    // Opened again, the yard is not run or written again.
+    const rev = (await storedYard()).rev;
+    expect((await shownYard(await send("GET", "/v1/game/play/works"))).yard.away).toEqual(opening.yard.away);
+    expect((await storedYard()).rev).toBe(rev);
+    const back = await send("POST", "/v1/game/play/works", {
+      commands: [{ id: "w-1", do: "collect", tick: opening.clock }],
+    });
+    expect((await shownYard(back)).yard.away).toBeNull();
+    expect(await coinsOf(alice)).toBeGreaterThanOrEqual(opening.yard.away?.coins ?? Infinity);
+  });
+
+  it("gives a page left open while Leaf tended its yard Leaf's yard for its next command, never a refusal", async () => {
+    const kept = await keepMid();
+    const tick = clockOf(yardIn(kept), clock.now);
+    clock.now += 10 * MINUTE;
+    await tending();
+    const late = await send("POST", "/v1/game/play/works", { commands: [{ id: "w-1", do: "collect", tick }] });
+    const body = Schema.decodeUnknownSync(Answered)(await late.json());
+    expect(body.results).toEqual([{ id: "w-1", notes: [] }]);
+    expect(body.rev).toBe(3);
+    expect(yardOf(body.state).yard.tick).toBe(yardIn(kept).tick + 6000 - LEAD);
+  });
+
+  it("and a batch for the same yard: the tend first, the batch waits for it, and both are kept", async () => {
+    const { held, release } = await holdingFirstRead();
+    const kept = await keepMid();
+    clock.now += 10 * MINUTE;
+    const { paint, after } = painting(kept);
+    // Leaf has read the yard to tend it when Alice's page paints a belt: the paint waits.
+    const tend = tending();
+    await held;
+    let answered = false;
+    const sending = send("POST", "/v1/game/play/works", { commands: [{ id: "p-1", ...paint }] }).then((r) => {
+      answered = true;
+      return r;
+    });
+    await Bun.sleep(20);
+    expect(answered).toBe(false);
+    release();
+    await tend;
+    const painted = Schema.decodeUnknownSync(Answered)(await (await sending).json());
+    expect(painted.results).toEqual([{ id: "p-1", notes: [] }]);
+    expect(await storedYard()).toEqual({ rev: 3, state: after });
+  });
+
+  it("and a batch for the same yard: the batch first, the tend waits for it, and both are kept", async () => {
+    const { held, release } = await holdingFirstRead();
+    const kept = await keepMid();
+    clock.now += 10 * MINUTE;
+    const { paint, after } = painting(kept);
+    // Alice's page has sent the paint when Leaf's background tend comes to her yard: the tend waits.
+    const sending = send("POST", "/v1/game/play/works", { commands: [{ id: "p-1", ...paint }] });
+    await held;
+    let tended = false;
+    const tend = (async () => {
+      await tending();
+      tended = true;
+    })();
+    await Bun.sleep(20);
+    expect(tended).toBe(false);
+    release();
+    const painted = Schema.decodeUnknownSync(Answered)(await (await sending).json());
+    expect(painted.results).toEqual([{ id: "p-1", notes: [] }]);
+    await tend;
+    expect(await storedYard()).toEqual({ rev: 3, state: after });
+  });
+
+  it("does a batch at the moment it arrived, however long the yard took to catch up: a swap made just before an order filled stands", async () => {
+    // Five seconds pass on Leaf's clock while it brings the yard up, after it first read it.
+    let reads = 0;
+    await afterEachRead(() => {
+      if (++reads === 1) clock.now += 5 * SECOND;
+      return Promise.resolve();
+    });
+    // A standing order for the kits the yard makes, which it fills by itself some ten minutes on.
+    const kept = await keepMid(services, (w) => {
+      const [first] = w.board;
+      if (first) w.board[0] = { ...first, want: { kit: 40 }, filled: {} };
+    });
+    const { order, tick } = nextFill(kept, clock.now);
+    // The page swaps the order half a second before it would fill: at that tick it may, fifty ticks on it may not.
+    const at = tick - 5;
+    expect(swapped(kept, order, at)).toBe(true);
+    expect(swapped(kept, order, at + 50 - LEAD)).toBe(false);
+    clock.now += (at - yardIn(kept).tick) * TICK_MS;
+    const answer = await send("POST", "/v1/game/play/works", {
+      commands: [{ id: "s-1", do: "swap", order, tick: at }],
+    });
+    const body = Schema.decodeUnknownSync(Answered)(await answer.json());
+    expect(body.results).toEqual([{ id: "s-1", notes: [] }]);
+    expect(yardOf(body.state).yard.tick).toBe(at);
+  });
+
+  it("brings a yard up once however many ask for it at once, in slices each followed by a rest as long", async () => {
+    const { game, run } = counted();
+    await keepMid();
+    clock.now += 8 * HOUR;
+    const visits = await services.run(
+      Play.use((play) =>
+        Effect.all(
+          [bob, carol, dave, bob].map((caller) => play.visit(alice, game, { playerId: caller, guest: false })),
+          { concurrency: "unbounded" },
+        ),
+      ),
+    );
+    expect(run.ticks).toBe(8 * 36_000 - LEAD);
+    expect(visits.map((v) => ("rev" in v ? v.rev : null))).toEqual([2, 2, 2, 2]);
+    expect(run.slices.length).toBeGreaterThan(1);
+    // The thread's own clock, read inside each slice: what is between two is at least as long as the first.
+    const short = run.slices.slice(1).filter((next, n) => {
+      const last = run.slices[n];
+      return last !== undefined && next.began - last.ended < last.ended - last.began;
+    });
+    expect(short).toEqual([]);
+  });
+
+  it("brings a yard written lately up once for its whole line: fifty visitors, and its owner's command behind them", async () => {
+    const { game, run } = counted();
+    await keepMid();
+    // Written a little under two minutes ago, by its owner's page: Leaf has not kept it since.
+    clock.now += TEND_AFTER - 4 * SECOND;
+    const visitors = Array.from({ length: 50 }, (_, n) =>
+      playerId(`30000000-0000-0000-0000-${String(n).padStart(12, "0")}`),
+    );
+    const [visits, sent] = await services.run(
+      Play.use((play) =>
+        Effect.all(
+          [
+            Effect.all(
+              visitors.map((v) => play.visit(alice, game, { playerId: v, guest: false })),
+              { concurrency: "unbounded" },
+            ),
+            play.send({ playerId: alice, guest: false }, game, [{ id: "w-1", do: "collect", tick: 0 }]),
+          ],
+          { concurrency: "unbounded" },
+        ),
+      ),
+    );
+    expect(run.ticks).toBe((TEND_AFTER - 4 * SECOND) / TICK_MS - LEAD);
+    expect(new Set(visits.map((v) => ("rev" in v ? v.rev : v.status)))).toEqual(new Set([1]));
+    expect(sent.status === "done" && sent.rev).toBe(2);
+  });
+
+  it("drops a visit let go of while it waits in the line, and does a batch let go of all the same", async () => {
+    const { held, release } = await holdingFirstRead();
+    const { game, run } = counted();
+    await keepMid();
+    clock.now += 10 * MINUTE;
+    const owner = { playerId: alice, guest: false };
+    // Alice opens her yard, which Leaf has read and not yet brought up, when Bob visits and her page sends a batch.
+    const opening = services.run(Play.use((play) => play.open(owner, game)));
+    await held;
+    const after = await services.run(
+      Play.use((play) =>
+        Effect.gen(function* () {
+          const now = { startImmediately: true } as const;
+          const visit = yield* Effect.forkChild(play.visit(alice, game, { playerId: bob, guest: false }), now);
+          const batch = yield* Effect.forkChild(play.send(owner, game, [{ id: "w-1", do: "collect", tick: 0 }]), now);
+          yield* Effect.yieldNow;
+          // Both pages close.
+          yield* Fiber.interrupt(visit);
+          yield* Fiber.interrupt(batch);
+          yield* Effect.sync(release);
+          // Carol, behind them, finds the batch done and nobody else's visit shown.
+          return yield* play.visit(alice, game, { playerId: carol, guest: false });
+        }),
+      ),
+    );
+    expect(await opening).toEqual(expect.objectContaining({ status: "open", rev: 2 }));
+    expect(after).toEqual(expect.objectContaining({ status: "open", rev: 3 }));
+    expect(run.visits).toBe(1);
+    expect(await services.query((sql) => sql`SELECT command_id AS id FROM play_commands`)).toEqual([{ id: "w-1" }]);
+  });
+
+  it("gives way to every request: a batch for one yard waits behind at most one slice of Leaf tending others", async () => {
+    const { game, run } = counted();
+    // Bob's and Carol's yards left eight hours ago, for Leaf to tend; Alice's half an hour ago, for her page to bring up.
+    clock.now -= 8 * HOUR;
+    await keepMid(services, undefined, bob);
+    await keepMid(services, undefined, carol);
+    clock.now += 8 * HOUR - 30 * MINUTE;
+    await keepMid();
+    clock.now += 30 * MINUTE;
+    const tend = services.run(Play.use((play) => play.tend([game])));
+    await until(() => run.slices.length > 0);
+    const before = run.slices.length;
+    const sent = await services.run(
+      Play.use((play) => play.send({ playerId: alice, guest: false }, game, [{ id: "w-1", do: "collect", tick: 0 }])),
+    );
+    const meanwhile = run.slices.slice(before);
+    await tend;
+    expect(sent.status).toBe("done");
+    expect(meanwhile.filter((s) => s.owner === alice).length).toBeGreaterThan(1);
+    expect(meanwhile.filter((s) => s.owner !== alice).length).toBeLessThanOrEqual(1);
+    // Leaf went on tending the others after.
+    expect(run.slices.length).toBeGreaterThan(before + meanwhile.length);
+  });
+
+  it("logs a yard it cannot tend, whose and of which game, and tends the others all the same", async () => {
+    const { game } = counted((owner) => owner === bob);
+    await keepMid(services, undefined, bob);
+    clock.now += SECOND;
+    await keepMid();
+    clock.now += 10 * MINUTE;
+    const lines: { message: unknown; annotations: unknown }[] = [];
+    const capture = Logger.layer([
+      Logger.map(Logger.formatStructured, ({ message, annotations }) => void lines.push({ message, annotations })),
+    ]);
+    await services.run(
+      Play.use((play) => play.tend([game])).pipe(
+        Effect.provide(capture),
+        Effect.provideService(References.MinimumLogLevel, "All"),
+      ),
+    );
+    expect(await storedPlay(bob)).toEqual([expect.objectContaining({ rev: 1 })]);
+    expect((await storedYard()).rev).toBe(2);
+    const failed = lines.filter((l) => JSON.stringify(l.message).includes("failed"));
+    expect(failed).toEqual([
+      {
+        message: [`Tending the works state of ${bob} failed`, expect.anything()],
+        annotations: { player: bob, game: "works" },
+      },
+    ]);
+    expect(JSON.stringify(failed)).not.toContain('"cells"');
+  });
+
+  it("never holds the thread for more than a moment, however far behind the yard: opened, sent to, visited, tended, or written meanwhile", async () => {
+    let written: (() => Promise<void>) | null = null;
+    await afterEachRead(() => {
+      const write = written;
+      written = null;
+      return write?.() ?? Promise.resolve();
+    });
+    /** Alice's yard put back eight hours behind, as if she left then. */
+    const behind = async () => {
+      await services.query((sql) => sql`DELETE FROM play_state WHERE player_id = ${alice}`);
+      const now = clock.now;
+      clock.now -= 8 * HOUR;
+      await keepMid();
+      clock.now = now;
+    };
+    const paths: Record<string, () => Promise<unknown>> = {
+      opened: () => send("GET", "/v1/game/play/works"),
+      sent: () => send("POST", "/v1/game/play/works", { commands: [{ id: `c-${++made}`, do: "collect", tick: 0 }] }),
+      visited: () => visit(alice, "works", bob),
+      tended: tending,
+    };
+    const holds: Record<string, number> = {};
+    for (const [name, path] of Object.entries(paths)) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another, each timed alone
+      await behind();
+      // oxlint-disable-next-line no-await-in-loop -- one after another, each timed alone
+      holds[name] = await longestHold(path);
+    }
+    // Read, and then written over from elsewhere with a yard eight hours further behind: read again, and run on in slices.
+    await behind();
+    const moved = yardIn((await storedYard()).state);
+    moved.at -= 8 * HOUR;
+    written = () =>
+      services
+        .query(
+          (sql) =>
+            sql`UPDATE play_state SET rev = rev + 1, state = ${WORKS.encode(moved)}, updated_at = ${clock.now - 9 * HOUR} WHERE player_id = ${alice}`,
+        )
+        .then(() => undefined);
+    holds.written = await longestHold(() => send("GET", "/v1/game/play/works"));
+    expect((await storedYard()).rev).toBe(3);
+    // Eight hours of the yard is 270 ms of work on the development machine; a slice is 5.
+    expect(Object.entries(holds).filter(([, ms]) => ms > 60)).toEqual([]);
+  }, 20_000);
+
+  it("keeps a guest's yard a guest's, though they left it before their first command", async () => {
+    // Carol is not in the guild.
+    expect((await send("GET", "/v1/game/play/works", undefined, carol)).status).toBe(200);
+    clock.now += 10 * MINUTE;
+    await tending();
+    expect(await storedPlay(carol)).toEqual([expect.objectContaining({ rev: 1 })]);
+    expect(await services.query((sql) => sql`SELECT guest FROM standings WHERE player_id = ${carol}`)).toEqual([
+      { guest: 1 },
+    ]);
+  });
+
+  it("after a deploy, runs a yard kept before it knew its owner's last command eight hours on from its last tick, once; its owner opening it meanwhile waits", async () => {
+    const { game, run } = counted();
+    const w = yardIn(JSON.stringify(mid));
+    w.at = clock.now;
+    const text = WORKS.encode(w).replace(`,"seen":${JSON.stringify(w.seen)}`, "");
+    expect(text).not.toContain('"seen"');
+    await services.query(
+      (sql) =>
+        sql`INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${alice}, 'works', 1, ${text}, ${clock.now})`,
+    );
+    clock.now += 20 * HOUR;
+    const owner = { playerId: alice, guest: false };
+    const tend = services.run(Play.use((play) => play.tend([game])));
+    await until(() => run.ticks > 0);
+    const opening = await services.run(Play.use((play) => play.open(owner, game)));
+    await tend;
+    expect(run.ticks).toBe(8 * 36_000);
+    if (opening.status !== "open") throw new Error(opening.status);
+    const { yard } = yardOf(opening.view);
+    expect(yard.tick).toBe(w.tick + 8 * 36_000);
+    expect(yard.away?.seconds).toBe(8 * 3600);
+    expect((await storedYard()).rev).toBe(2);
+  });
+
+  it("stopped part-way leaves the yard as it was, only behind, and the next Leaf runs it on from there", async () => {
+    const directory = join(tmpdir(), `leaf-tend-${crypto.randomUUID()}`);
+    const path = `${directory}.db`;
+    try {
+      const first = testLeaf(clock, noNetwork, { databasePath: path });
+      const kept = await keepMid(first);
+      clock.now += 8 * HOUR;
+      // A deploy stops Leaf a moment into eight hours of the yard, and it stops at once.
+      const cut = first.run(tendAll).then(
+        () => "finished",
+        () => "stopped",
+      );
+      await Bun.sleep(100);
+      const stopping = performance.now();
+      await first.dispose();
+      expect(performance.now() - stopping).toBeLessThan(100);
+      expect(await cut).toBe("stopped");
+      const next = testLeaf(clock, noNetwork, { databasePath: path });
+      expect(await storedYard(next)).toEqual({ rev: 1, state: kept });
+      await next.run(tendAll);
+      expect(await storedYard(next)).toEqual({ rev: 2, state: ranOn(kept) });
+      await next.dispose();
+    } finally {
+      for (const end of ["", "-wal", "-shm"]) rmSync(`${path}${end}`, { force: true });
+    }
+  });
+});
+
 const storedPlay = (player: PlayerId, game = "works") =>
   services.query((sql) => sql`SELECT rev, state FROM play_state WHERE player_id = ${player} AND game = ${game}`);
 /** Somebody's state in a game, as a visitor asks for it. */
@@ -1367,6 +1927,19 @@ describe("time played", () => {
     expect(await playedMs()).toEqual({ raid: 3 * MINUTE + 100 });
     await openAfter(MINUTE);
     expect(await playedMs()).toEqual({ raid: 5 * MINUTE + 100 });
+  });
+
+  it("counts nothing for Leaf tending a yard while its owner is away", async () => {
+    await keepMid();
+    await openAfter(0, "works");
+    // Within three minutes of her call, past the two after which Leaf keeps the yard itself.
+    clock.now += TEND_AFTER + 30_000;
+    await tending();
+    expect((await storedYard()).rev).toBe(2);
+    expect(await playedMs()).toEqual({ works: 0 });
+    // Three and a half minutes after her own last call, she was away.
+    await openAfter(MINUTE, "works");
+    expect(await playedMs()).toEqual({ works: 0 });
   });
 });
 

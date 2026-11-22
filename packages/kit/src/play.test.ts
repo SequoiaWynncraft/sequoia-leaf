@@ -2,7 +2,7 @@ import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { isRecord } from "./net.ts";
 import { type Answer, NOT_YET, openPlay, type Play, type PlayReader, STILL_HERE, waitingLook } from "./play.ts";
-import { type Reply, type Sent, type Standin, standin } from "./standin.ts";
+import { type Reply, type Route, type Sent, type Standin, standin } from "./standin.ts";
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
 const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
@@ -68,7 +68,7 @@ afterEach(() => {
   world = null;
 });
 
-async function opened(routes: Record<string, (sent: Sent) => Reply>): Promise<Play<Count, Add, string>> {
+async function opened(routes: Record<string, Route>): Promise<Play<Count, Add, string>> {
   world = standin(routes);
   const play = await openPlay<Count, Add, string>("raid", COUNTER, {
     player: "p",
@@ -348,6 +348,28 @@ describe("sending commands", () => {
     slow.arrive?.();
     await refreshed;
     expect(play.state).toEqual({ n: 7 });
+  });
+
+  test("asking for the state again asks once at a time, and lets go of an answer from before a batch answered since", async () => {
+    const { routes, leaf } = counterLeaf(0);
+    // Once open, Leaf answers a question for the state only when the test says, with the state as it was asked.
+    const held: (() => void)[] = [];
+    let hold = false;
+    const play = await opened({
+      ...routes,
+      "GET /v1/game/play/raid": () => {
+        const reply = { status: 200, body: { rev: leaf.rev, now: "x", state: { n: leaf.n } } };
+        return hold ? new Promise<Reply>((answer) => held.push(() => answer(reply))) : reply;
+      },
+    });
+    hold = true;
+    const first = play.refresh();
+    const again = play.refresh();
+    expect(await play.send({ do: "add", by: 5 }, add(5))).toEqual({ notes: ["added 5"] });
+    expect(world?.sent.filter((s) => s.method === "GET")).toHaveLength(2);
+    for (const answer of held) answer();
+    await Promise.all([first, again]);
+    expect([play.state, play.rev]).toEqual([{ n: 5 }, 1]);
   });
 
   test("a prediction still waiting is worked out again on top of Leaf's newer state", async () => {
