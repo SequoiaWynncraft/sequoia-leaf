@@ -30,6 +30,7 @@ export {
   buyPlan,
   buyPlot,
   costOf,
+  lineOf,
   planRefusal,
   planState,
   plotRefusal,

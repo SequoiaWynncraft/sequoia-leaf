@@ -1,7 +1,7 @@
 /**
  * What the member does to the yard: setting things down, laying runs of belt, turning things,
- * taking them away, picking a tool up off something already built, undoing the last thing, and
- * buying land and plans. Each of these lands in the yard with a movement and a sound.
+ * taking them away, colouring lines, picking a tool up off something already built, undoing the
+ * last thing, and buying land and plans. Each of these lands in the yard with a movement and a sound.
  */
 
 import { CREAM, GOLD, GREEN } from "@sequoia-leaf/kit/palette.ts";
@@ -14,6 +14,7 @@ import {
   type Item,
   type Kind,
   type Leg,
+  lineOf,
   type PlanId,
   planRefusal,
   PLANS,
@@ -28,11 +29,11 @@ import {
   type WorksAct,
 } from "@sequoia-leaf/yard";
 
-import { TILE } from "./art/belts.ts";
+import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { layout } from "./layout.ts";
 import { yardSfx } from "./sound.ts";
-import { S, type Tool, touched } from "./state.ts";
+import { builds, S, type Tool, touched } from "./state.ts";
 import { coins, doNow } from "./yard.ts";
 
 const DUST = "#cbb894";
@@ -49,11 +50,16 @@ interface Stood {
   recipe: Item | null;
   open: boolean;
 }
-/** Something done that can be undone: things built (`under`: the piece one of them took the place of), things taken away, a thing turned. */
+/**
+ * Something done that can be undone: things built (`under`: the piece one of them took the place
+ * of), things taken away, a thing turned, lines coloured (the tile each was coloured by, and the
+ * colour that tile had).
+ */
 type Done =
   | { did: "built"; cells: number[]; turned: { i: number; was: Dir }[]; under?: Stood }
   | { did: "took"; what: Stood[] }
-  | { did: "turned"; i: number; was: Dir };
+  | { did: "turned"; i: number; was: Dir }
+  | { did: "painted"; lines: { i: number; was: number }[] };
 const done: Done[] = [];
 const remember = (d: Done): void => {
   done.push(d);
@@ -79,7 +85,7 @@ const xy = (i: number): { x: number; y: number } => ({ x: i % W(), y: Math.floor
 
 export function setTool(tool: Tool): void {
   const w = S.world;
-  if (tool !== null && tool !== "remove" && !w.open.kinds.has(tool)) return;
+  if (builds(tool) && !w.open.kinds.has(tool)) return;
   S.tool = tool;
   S.aim = null;
   S.run = null;
@@ -108,7 +114,7 @@ export function aimAt(x: number, y: number): void {
   const there = w.cells[at(w, x, y)];
   if (faced !== at(w, x, y)) {
     faced = at(w, x, y);
-    if (there && tool !== "remove" && replaces(tool, there) && S.dir !== there.dir) {
+    if (there && builds(tool) && replaces(tool, there) && S.dir !== there.dir) {
       S.dir = there.dir;
       toolHooks.changed();
     }
@@ -120,6 +126,10 @@ export function aimAt(x: number, y: number): void {
       why: there ? (there.kind === "depot" ? "The depot cannot be removed" : null) : "Nothing to remove here",
       cost: 0,
     };
+    return;
+  }
+  if (tool === "paint") {
+    S.aim = { x, y, why: lineOf(w, at(w, x, y)).length > 0 ? null : "Nothing to paint here", cost: 0 };
     return;
   }
   S.aim = { x, y, why: refusal(w, tool, x, y, coins(), S.dir), cost: priceAt(w, tool, x, y) };
@@ -139,6 +149,7 @@ export function place(x: number, y: number): boolean {
   const tool = S.tool;
   if (tool === null) return false;
   if (tool === "remove") return takeAway(x, y);
+  if (tool === "paint") return paintAt(x, y);
   const w = S.world;
   const i = at(w, x, y);
   const there = i >= 0 ? w.cells[i] : null;
@@ -214,6 +225,42 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   return true;
 }
 
+/** The lines the drag going on has coloured so far: they are undone together, and no other drag's with them. */
+let stroke: { i: number; was: number }[] | null = null;
+
+/**
+ * Colours the line through a tile with the colour on the brush. `more` is a drag going on: its
+ * lines are undone together, and passing over what cannot be coloured says nothing.
+ */
+export function paintAt(x: number, y: number, more = false): boolean {
+  // A new press starts a stroke of its own, whether or not it colours anything where it lands.
+  if (!more) stroke = null;
+  const w = S.world;
+  const i = at(w, x, y);
+  const line = lineOf(w, i);
+  const was = w.cells[i]?.tint ?? 0;
+  // A line that is that colour already is let be: a drag crosses the same line many times.
+  if (line.length > 0 && line.every((j) => w.cells[j]?.tint === S.tint)) return false;
+  const no = attempt(null, { do: "paint", x, y, tint: S.tint });
+  if (no !== null) {
+    if (!more) {
+      yardSfx.no();
+      toolHooks.said(`${no}.`);
+    }
+    return false;
+  }
+  if (stroke) stroke.push({ i, was });
+  else {
+    stroke = [{ i, was }];
+    remember({ did: "painted", lines: stroke });
+  }
+  const col = PAINTS[S.tint - 1]?.lit ?? DUST;
+  for (const j of line.slice(0, 80)) puff((j % W()) * TILE + 8, Math.floor(j / W()) * TILE + 9, 1, col, 5);
+  yardSfx.paint();
+  toolHooks.changed();
+  return true;
+}
+
 /** Turns what stands on a tile a quarter turn to the right. */
 export function turnAt(x: number, y: number): boolean {
   const w = S.world;
@@ -238,7 +285,7 @@ export function rotate(): void {
     if (on) turnAt(on.x, on.y);
     return;
   }
-  if (S.tool === "remove") return;
+  if (!builds(S.tool)) return;
   S.dir = RIGHT[S.dir];
   yardSfx.turn();
   if (S.aim) aimAt(S.aim.x, S.aim.y);
@@ -291,6 +338,8 @@ export function undo(): boolean {
     for (const t of last.turned) doNow({ do: "turn", ...xy(t.i), dir: t.was });
     if (last.under) putBack(last.under);
   } else if (last.did === "took") last.what.forEach(putBack);
+  else if (last.did === "painted")
+    for (const l of last.lines.toReversed()) doNow({ do: "paint", ...xy(l.i), tint: l.was });
   else doNow({ do: "turn", ...xy(last.i), dir: last.was });
   yardSfx.undo();
   touched();

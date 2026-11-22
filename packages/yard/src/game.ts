@@ -15,7 +15,7 @@
  */
 import { type CoinChange, type Ctx, type Done, type Game, LOGGED, type Logged, type Refused } from "@sequoia-leaf/core";
 
-import { build, buyPlan, buyPlot, remove, setOpen, setRecipe, tipOut, turn, turnable } from "./build.ts";
+import { build, buyPlan, buyPlot, paint, remove, setOpen, setRecipe, tipOut, turn } from "./build.ts";
 import { AWAY_MOST_MS, forward, TICK_MS } from "./clock.ts";
 import { isItem, type Item } from "./content/items.ts";
 import { isKind, type Kind, SPAN } from "./content/machines.ts";
@@ -29,7 +29,7 @@ import { postcard } from "./postcard.ts";
 import { lay, type Leg } from "./route.ts";
 import { load, save } from "./save.ts";
 import { step } from "./step.ts";
-import { collect, drain, type News, type World } from "./world.ts";
+import { collect, drain, type News, TINTS, type World } from "./world.ts";
 
 /** How far behind Leaf's clock `advance` leaves a yard, in ticks, so that a command made a moment ago is never in its past; and how far ahead a command may be done. */
 export const LEAD = 30;
@@ -49,6 +49,8 @@ export type WorksAct =
   | { readonly do: "lay"; readonly legs: readonly Leg[]; readonly turn?: At & { readonly dir: Dir } }
   | ({ readonly do: "remove" } & At)
   | ({ readonly do: "turn"; readonly dir: Dir } & At)
+  /** A colour, 1 to 6, for the line through a tile, or 0 to take it off. */
+  | ({ readonly do: "paint"; readonly tint: number } & At)
   | ({ readonly do: "recipe"; readonly item: Item | null } & At)
   | ({ readonly do: "tipOut"; readonly item: Item | null } & At)
   | ({ readonly do: "crate"; readonly open: boolean } & At)
@@ -81,6 +83,7 @@ export const REFUSED = {
   lay: "cannot_lay",
   remove: "nothing_to_take_away",
   turn: "cannot_turn",
+  paint: "nothing_to_paint",
   recipe: "cannot_set_recipe",
   tipOut: "nothing_to_tip_out",
   crate: "not_a_crate",
@@ -162,12 +165,8 @@ function act(w: World, c: WorksCommand): Did {
       return did.ok ? done(priced(w, did.cost, REASON.build)) : no(c, did.why);
     }
     case "lay": {
-      const bend = c.turn;
-      if (bend && !turnable(w, bend.x, bend.y)) return no(c, "There is nothing there to turn");
-      const did = lay(w, c.legs, Infinity);
-      if (!did.ok) return no(c, did.why);
-      if (bend) turn(w, bend.x, bend.y, bend.dir);
-      return done(priced(w, did.cost, REASON.lay));
+      const did = lay(w, c.legs, Infinity, c.turn);
+      return did.ok ? done(priced(w, did.cost, REASON.lay)) : no(c, did.why);
     }
     case "remove": {
       const did = remove(w, c.x, c.y);
@@ -176,6 +175,8 @@ function act(w: World, c: WorksCommand): Did {
     }
     case "turn":
       return turn(w, c.x, c.y, c.dir) ? done() : no(c, "That cannot be turned");
+    case "paint":
+      return paint(w, c.x, c.y, c.tint) ? done() : no(c, "Nothing to paint here");
     case "recipe":
       return setRecipe(w, c.x, c.y, c.item) ? done() : no(c, "That cannot make it");
     case "tipOut":
@@ -266,6 +267,8 @@ function what(v: Record<string, unknown>): WorksAct | null {
       return spot && { do: "remove", ...spot };
     case "turn":
       return spot && isDir(v.dir) ? { do: "turn", dir: v.dir, ...spot } : null;
+    case "paint":
+      return spot && whole(v.tint, TINTS) ? { do: "paint", tint: v.tint, ...spot } : null;
     case "recipe":
     case "tipOut":
       return spot && item !== undefined ? { do: v.do, item, ...spot } : null;

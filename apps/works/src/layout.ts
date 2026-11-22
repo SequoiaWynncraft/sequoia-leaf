@@ -182,9 +182,13 @@ function fences(w: World, owned: readonly boolean[], gateX: number, gateY: numbe
 function signs(w: World, owned: readonly boolean[]): Sign[] {
   const { land } = w;
   const out: Sign[] = [];
+  const on = (tx: number, ty: number): boolean => tx >= 0 && ty >= 0 && tx < land.w && ty < land.h;
+  // Off water, and clear of the redwoods: one stands 40 by 70 pixels over its roots, so none 2 tiles across or 4 below.
   const clear = (tx: number, ty: number): boolean => {
-    const i = ty * land.w + tx;
-    return tx >= 0 && ty >= 0 && tx < land.w && ty < land.h && land.water[i] !== 1 && land.trunk[i] !== 1;
+    if (!on(tx, ty) || land.water[ty * land.w + tx] === 1) return false;
+    for (let y = ty - 1; y <= ty + 4; y++)
+      for (let x = tx - 2; x <= tx + 2; x++) if (on(x, y) && land.trunk[y * land.w + x] === 1) return false;
+    return true;
   };
   land.plots.forEach((plot, n) => {
     if (owned[n] || plotState(w, plot.id).state !== "for sale") return;
@@ -198,8 +202,8 @@ function signs(w: World, owned: readonly boolean[]): Sign[] {
     // The tile of this plot nearest the middle of the shared edge, stepped along it off water and roots.
     const beside = next.x + next.w === plot.x || plot.x + plot.w === next.x;
     // Three tiles along from the middle, to stand clear of the path and the gate.
-    const tx0 = beside ? (next.x < plot.x ? plot.x : plot.x + plot.w - 1) : plot.x + Math.floor(plot.w / 2) + 3;
-    const ty0 = beside ? plot.y + Math.floor(plot.h / 2) : next.y < plot.y ? plot.y : plot.y + plot.h - 1;
+    const tx0 = beside ? (next.x < plot.x ? plot.x + 1 : plot.x + plot.w - 2) : plot.x + Math.floor(plot.w / 2) + 3;
+    const ty0 = beside ? plot.y + Math.floor(plot.h / 2) : next.y < plot.y ? plot.y + 1 : plot.y + plot.h - 2;
     for (let k = 0; k < 8; k++) {
       const step = k % 2 ? -Math.ceil(k / 2) : Math.ceil(k / 2);
       const tx = beside ? tx0 : tx0 + step;

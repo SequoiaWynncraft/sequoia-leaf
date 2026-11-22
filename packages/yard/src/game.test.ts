@@ -158,6 +158,13 @@ describe("a command", () => {
     expect(save(w)).toBe(save(twin));
     expect(refused(play(w, { do: "handOver", order: 999, tick: 40 }))).toBe("not_filled");
     expect(save(w)).toBe(save(twin));
+    // Bare ground, and a machine, have no colour to take.
+    const mill = w.cells.findIndex((b) => b?.kind === "mill");
+    for (const j of [0, mill])
+      expect(refused(play(w, { do: "paint", x: j % w.land.w, y: Math.floor(j / w.land.w), tint: 2, tick: 40 }))).toBe(
+        "nothing_to_paint",
+      );
+    expect(save(w)).toBe(save(twin));
   });
   test("every command does what it says", () => {
     const w = create({ seed: 3, story: 6 });
@@ -193,6 +200,11 @@ describe("a command", () => {
     go({ do: "lay", legs });
     expect(legs.length).toBeGreaterThan(0);
     expect(legs.every((l) => on(l)?.kind === "belt")).toBe(true);
+    // Colouring is free, and pays no till in.
+    w.till = 5;
+    expect(go({ do: "paint", tint: 4, ...c }).coins).toEqual([]);
+    expect(legs.every((l) => on(l)?.tint === 4)).toBe(true);
+    expect(w.till).toBe(5);
     go({ do: "buyPlot", plot: "meadow" });
     expect(w.plots).toContain("meadow");
     go({ do: "buyPlan", plan: "rakes" });
@@ -218,6 +230,8 @@ describe("a command", () => {
       { do: "lay", legs: [] },
       { do: "remove", x: 4, y: 5 },
       { do: "turn", x: 4, y: 5, dir: 2 },
+      { do: "paint", x: 4, y: 5, tint: 6 },
+      { do: "paint", x: 4, y: 5, tint: 0 },
       { do: "recipe", x: 4, y: 5, item: null },
       { do: "tipOut", x: 4, y: 5, item: "plank" },
       { do: "crate", x: 4, y: 5, open: true },
@@ -238,6 +252,8 @@ describe("a command", () => {
       { do: "lay", legs: [{ kind: "belt", x: 1, y: 1, dir: 0, span: 9 }], tick: 0 },
       { do: "lay", legs: "all", tick: 0 },
       { do: "lay", legs: [], turn: { x: 1 }, tick: 0 },
+      { do: "paint", x: 1, y: 1, tint: 7, tick: 0 },
+      { do: "paint", x: 1, y: 1, tick: 0 },
       { do: "recipe", x: 1, y: 1, item: "gold", tick: 0 },
       { do: "crate", x: 1, y: 1, open: "yes", tick: 0 },
       { do: "buyPlot", plot: "moon", tick: 0 },
@@ -374,12 +390,17 @@ describe("Leaf and the page agree", () => {
     if (!a || !b || !c || standing < 0) throw new Error("no room");
     const acts: WorksAct[] = [
       { do: "build", kind: "belt", dir: 1, ...a },
+      { do: "paint", tint: 2, ...a },
+      { do: "paint", tint: 5, x: standing % page.land.w, y: Math.floor(standing / page.land.w) },
       { do: "build", kind: "pylon", dir: 0, ...c },
       { do: "lay", legs: route(page, [b.x, b.y], [b.x + 3, b.y]) ?? [] },
       { do: "turn", x: standing % page.land.w, y: Math.floor(standing / page.land.w), dir: 3 },
+      { do: "paint", tint: 0, ...a },
       { do: "remove", ...a },
       { do: "collect" },
     ];
+    // The colours are in what Leaf keeps and in what it shows a visitor.
+    const coloured = (text: string): number => decoded(text).cells.filter((p) => p?.tint === 5).length;
     let unanswered: WorksCommand[] = [];
     let inbox: { readonly view: string; readonly after: number } | null = null;
     let tick = opened.clock;
@@ -406,6 +427,8 @@ describe("Leaf and the page agree", () => {
       stored = WORKS.encode(leaf);
       inbox = { view: WORKS.view(leaf, ctx(now)).yard, after: tick };
     }
+    expect(coloured(stored)).toBeGreaterThan(0);
+    expect(coloured(WORKS.visit?.(decoded(stored), ctx(leafAt(tick + 5))).yard ?? "")).toBe(coloured(stored));
     const last = decoded(inbox?.view ?? "");
     stepTo(last, page.tick + 100);
     stepTo(page, page.tick + 100);

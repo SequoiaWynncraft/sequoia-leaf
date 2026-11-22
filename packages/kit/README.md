@@ -171,7 +171,9 @@ drags something it calls `hold(true)`, and no card opens until `hold(false)`; `s
 shows what letting go would do. `watch(fn)` tells a game what is pointed at and what is pinned;
 `refresh()` draws the card again from a fresh description (under a held mouse button, once it
 lifts), and `settle()` puts it back beside its target after the page has been laid out again. A
-passing card whose target leaves the page goes with it.
+passing card, like a tip, goes when its target leaves the page or, unless the keyboard's focus
+showed it, when the mouse is on something else, even if the target was drawn again under the mouse
+and never had a `pointerleave` (`goesWith` in `tip.ts`).
 
 The rules of all that (`Deck`, `partsOf`) touch no page and are tested in `card.test.ts`.
 

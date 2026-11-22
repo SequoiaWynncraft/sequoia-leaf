@@ -130,7 +130,7 @@ function treasury(body: HTMLElement): null {
       "div",
       "k-card",
       {},
-      slot(art),
+      slot(art, 28),
       el(
         "div",
         "k-grow k-col",

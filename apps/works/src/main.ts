@@ -52,6 +52,7 @@ import {
   buyIdea,
   buyLand,
   confirm,
+  paintAt,
   place,
   runEnd,
   runOver,
@@ -90,6 +91,7 @@ declare global {
       tap: (x: number, y: number) => void;
       build: (kind: Kind, x: number, y: number, dir?: Dir) => boolean;
       remove: (x: number, y: number) => boolean;
+      paint: (x: number, y: number, tint: number) => boolean;
       drag: (x0: number, y0: number, x1: number, y1: number) => void;
       drop: () => void;
       confirm: () => boolean;
@@ -412,6 +414,7 @@ async function boot(): Promise<void> {
     },
     tap(x, y) {
       if (S.tool === "belt") tapBelt(x, y);
+      else if (S.tool === "paint") paintAt(x, y);
       else if (S.tool === null) openCard(x, y);
       else if (S.aim && S.aim.x === x && S.aim.y === y) confirm();
       else aimAt(x, y);
@@ -425,6 +428,10 @@ async function boot(): Promise<void> {
       return ok;
     },
     remove: (x, y) => takeAway(x, y),
+    paint(x, y, tint) {
+      S.tint = tint;
+      return paintAt(x, y);
+    },
     drag(x0, y0, x1, y1) {
       runStart(x0, y0);
       runOver(x1, y1);
@@ -467,6 +474,7 @@ async function boot(): Promise<void> {
         board: w.board.map((o) => o.id),
         story: w.story,
         built: layout(w, S.rev).built,
+        painted: w.cells.filter((b) => b && b.tint > 0).length,
         nudge: S.nudge?.id ?? null,
         tool: S.tool,
         aim: S.aim,

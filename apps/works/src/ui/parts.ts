@@ -143,6 +143,19 @@ const ICONS = {
     "SSSs......",
     ".ss.......",
   ],
+  // Colouring lines: a brush with paint on it.
+  brush: [
+    "........nN",
+    ".......nNn",
+    "......nNn.",
+    ".....tSn..",
+    "....tSs...",
+    "...cCs....",
+    "..cCCC....",
+    ".rcCC.....",
+    "rrqC......",
+    ".rr.......",
+  ],
   // The way back to town: a doorway with the light on.
   town: [
     "..bbbbbb..",

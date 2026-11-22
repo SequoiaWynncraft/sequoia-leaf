@@ -8,8 +8,10 @@ import { create, type Dir, type Kind, type Leg, type PlotId, type World } from "
 
 import { TILE } from "./art/belts.ts";
 
-/** What is in the member's hand: something to build, the spade that takes things away, or nothing. */
-export type Tool = Kind | "remove" | null;
+/** What is in the member's hand: something to build, the spade that takes things away, the brush that colours lines, or nothing. */
+export type Tool = Kind | "remove" | "paint" | null;
+/** Whether a tool is something to build. */
+export const builds = (tool: Tool): tool is Kind => tool !== null && tool !== "remove" && tool !== "paint";
 
 /** A place being pointed at to build on, and what would come of it. */
 export interface Aim {
@@ -49,6 +51,8 @@ export const S: {
   view: { w: number; h: number; z: number; dpr: number };
   tool: Tool;
   dir: Dir;
+  /** The colour on the brush, 1 to 6, or 0 to take colour off: kept while the page is open. */
+  tint: number;
   /** The tile the mouse is over, if it is over the yard. */
   hover: { x: number; y: number } | null;
   /** The last touch was a finger, so building is aimed first and built on a second tap. */
@@ -76,6 +80,7 @@ export const S: {
   view: { w: 320, h: 200, z: 4, dpr: 1 },
   tool: null,
   dir: 0,
+  tint: 1,
   hover: null,
   finger: false,
   aim: null,
