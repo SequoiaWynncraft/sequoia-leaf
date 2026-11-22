@@ -195,6 +195,26 @@ describe("sending commands", () => {
     expect(leaf.away).toHaveLength(1);
   });
 
+  test("a few long commands go in more than one request, and a body Leaf will not read is not sent for ever", async () => {
+    const { routes, leaf } = counterLeaf();
+    const play = await opened(routes);
+    // Each of these is about 5,000 characters: the first goes alone, and only two more fit a request.
+    const long = { do: "add" as const, by: 1, pad: "x".repeat(5000) };
+    await Promise.all([1, 2, 3, 4].map(() => play.send(long)));
+    expect(leaf.batches.map((b) => b.length)).toEqual([1, 2, 1]);
+    expect(leaf.n).toBe(4);
+    // A body too large all the same: the command is answered as refused, and the next one goes.
+    world?.done();
+    world = standin({
+      ...routes,
+      "POST /v1/game/play/raid": () => ({ status: 413, body: { code: "body_too_large" } }),
+    });
+    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "invalid_command" });
+    world.done();
+    world = standin(routes);
+    expect(await play.send({ do: "add", by: 2 })).toEqual({ notes: ["added 2"] });
+  });
+
   test("are sent again with the same ids after a network failure or trouble, and done once", async () => {
     const { routes, leaf } = counterLeaf();
     let failures = 2;

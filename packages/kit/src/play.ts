@@ -70,6 +70,11 @@ export interface Play<View, Command extends object, Note> {
   flush(): void;
 }
 
+/** The most a batch's commands may come to, in characters: Leaf reads a body of at most 16 KiB. */
+const MOST_BYTES = 12_000;
+/** What a command's id and the punctuation round it add to a body. */
+const ID_ROOM = 40;
+
 /** How long to wait before sending a batch again after it failed, doubling each time up to `most`. */
 export interface Retry {
   first: number;
@@ -165,6 +170,22 @@ export async function openPlay<View, Command extends object, Note>(
   /** Leaf's state with every prediction still waiting worked out on top. */
   const rebuild = (): View => [...(flying ?? []), ...queue].reduce((on, p) => predicted(p, on), base);
 
+  /**
+   * As many from the front of a line of commands as one request holds: `MOST_COMMANDS`, and no more
+   * than `MOST_BYTES` of them, so that a few long ones together do not make a body Leaf will not
+   * read. Always at least the first.
+   */
+  function fitting(line: readonly Pending<View, Command, Note>[]): Pending<View, Command, Note>[] {
+    const batch: Pending<View, Command, Note>[] = [];
+    let size = 0;
+    for (const p of line) {
+      size += json(p.command).length + ID_ROOM;
+      if (batch.length > 0 && (batch.length >= MOST_COMMANDS || size > MOST_BYTES)) break;
+      batch.push(p);
+    }
+    return batch;
+  }
+
   /** A batch as it goes to Leaf: who the page believes it is, and each command with its id. */
   const bodyOf = (batch: readonly Pending<View, Command, Note>[]): string =>
     json({ player: options.player, commands: batch.map((p) => ({ ...p.command, id: p.id })) });
@@ -222,7 +243,7 @@ export async function openPlay<View, Command extends object, Note>(
 
   async function pump(): Promise<void> {
     if (stopped || flying !== null || queue.length === 0) return;
-    const batch = queue.slice(0, MOST_COMMANDS);
+    const batch = fitting(queue);
     queue = queue.slice(batch.length);
     flying = batch;
     const body = bodyOf(batch);
@@ -249,7 +270,7 @@ export async function openPlay<View, Command extends object, Note>(
         outside.reload();
         return;
       }
-      if (reply.status === 400) {
+      if (reply.status === 400 || reply.status === 413) {
         // Leaf will not take these commands as they are; sending them again would not change that.
         flying = null;
         copy = rebuild();
@@ -293,7 +314,7 @@ export async function openPlay<View, Command extends object, Note>(
    * stays after all, they go again in turn and are answered as before.
    */
   function flush(): void {
-    const left = [...(flying ?? []), ...queue].slice(0, MOST_COMMANDS);
+    const left = fitting([...(flying ?? []), ...queue]);
     if (stopped || left.length === 0) return;
     void outside.fetch(path, {
       method: "POST",
