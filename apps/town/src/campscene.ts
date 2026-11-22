@@ -65,7 +65,7 @@ import { type Actor, after, changed, forgetLater, G, hooks, show, stepLater } fr
 import { CELL, makeGround } from "./grid.ts";
 import { paintTrunk } from "./ground.ts";
 import { guild, type Happening } from "./guild.ts";
-import { closeCard, closePanel, showCard } from "./hud.ts";
+import { closeCard, closePanel, setStrip, showCard } from "./hud.ts";
 import {
   ask,
   type Did,
@@ -647,6 +647,8 @@ export function makeCamp(
           leaving = false;
           clear();
           lookAt(null);
+          // Straight to town from somebody's camp: the strip that says whose camp it is goes with the camp.
+          setStrip(null, () => {});
           town.cameFromCamp();
         });
         return;
