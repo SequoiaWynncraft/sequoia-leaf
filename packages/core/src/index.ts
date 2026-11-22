@@ -9,6 +9,7 @@ export {
   type CoinReasonSpec,
   DAILY_CHEST,
   dailyChestKey,
+  EARNINGS,
   PAGE_COINS,
   type PageCoinsCall,
   type PageCoinsCheck,

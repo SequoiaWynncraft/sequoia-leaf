@@ -95,7 +95,8 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * transaction: it reads the state, brings it to now, does each command, and writes the state, the
  * Coins each command paid or took, what it logged, and each command's answer. A command whose id
  * was seen before answers as it did then and changes nothing; one that would take more Coins than
- * the player has is refused with `not_enough_coins`. A player with no state yet gets a new one,
+ * the player has is refused with `not_enough_coins`; one that pays is done whatever the player has
+ * earned, and paid only as far as they may still earn (`Coins.room`). A player with no state yet gets a new one,
  * and their Coins open with the welcome. A stored state that will not read is left as it is: the
  * player and the game are logged, and nothing is done. Leaf's dice for each call come from
  * `SecureRandom`.
@@ -182,6 +183,7 @@ export class Play extends Context.Service<
                   }
                   const { rev, text, game } = open;
                   let balance = yield* coins.balance(playing.playerId);
+                  let room = yield* coins.room(playing.playerId, now);
                   const results: Result[] = [];
                   const answers: { readonly id: string; readonly result: Result }[] = [];
                   const logs: Logged[] = [];
@@ -201,10 +203,15 @@ export class Play extends Context.Service<
                     } else {
                       attempt.keep();
                       for (const change of attempt.coins) {
+                        // Past what the player may still earn, the command is done all the same and pays what is left.
+                        const amount = Math.min(change.amount, room);
+                        if (amount === 0) {
+                          continue;
+                        }
                         const posted = yield* coins.post(
                           playing.playerId,
                           {
-                            amount: change.amount,
+                            amount,
                             reason: change.reason,
                             game: played.id,
                             key: `${played.id}:${playing.playerId}:${change.key}`,
@@ -212,7 +219,8 @@ export class Play extends Context.Service<
                           now,
                         );
                         if (posted.status === "posted") {
-                          balance += change.amount;
+                          balance += amount;
+                          room -= Math.max(0, amount);
                         }
                       }
                       logs.push(...attempt.log);

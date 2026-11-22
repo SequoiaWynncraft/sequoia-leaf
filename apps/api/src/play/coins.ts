@@ -1,6 +1,9 @@
-import type { PlayerId } from "@sequoia-leaf/core";
+import { DAY_MS, EARNINGS, type PlayerId, utcDay } from "@sequoia-leaf/core";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
+
+/** An hour, the shorter span over which a player's earnings are capped. */
+const HOUR_MS = 60 * 60 * 1000;
 
 /** What a new player's Coins open at. */
 export const WELCOME_COINS = 300;
@@ -42,8 +45,13 @@ export class Coins extends Context.Service<
     readonly post: (playerId: PlayerId, entry: CoinEntry, now: number) => Effect.Effect<CoinPost>;
     /** Whether an entry with this key has been posted. */
     readonly posted: (key: string) => Effect.Effect<boolean>;
-    /** What the player's entries whose keys begin with `prefix` paid in after `since`: their earnings, not counting spending. */
-    readonly earnedSince: (playerId: PlayerId, prefix: string, since: number) => Effect.Effect<number>;
+    /**
+     * How many more Coins the player's play may pay in now: `EARNINGS.hourly` in any hour and
+     * `EARNINGS.daily` in a UTC day at most, whatever the games (worked out from the entries of the
+     * last day alone). What a game pays in counts; the welcome, Coins brought over, and Coins given
+     * back for the Works do not.
+     */
+    readonly room: (playerId: PlayerId, now: number) => Effect.Effect<number>;
     /** What the player has spent building in the Works through its page, and been given back for taking things away. */
     readonly works: (playerId: PlayerId) => Effect.Effect<{ readonly built: number; readonly refunded: number }>;
   }
@@ -63,12 +71,14 @@ export class Coins extends Context.Service<
         execute: (key) => sql`SELECT id FROM coin_entries WHERE key = ${key}`,
       });
       const earned = SqlSchema.findOne({
-        Request: Schema.Struct({ playerId: Schema.String, prefix: Schema.String, since: Schema.Int }),
-        Result: Schema.Struct({ earned: Schema.Int }),
-        execute: ({ playerId, prefix, since }) => sql`
-          SELECT coalesce(sum(amount), 0) AS earned FROM coin_entries
-          WHERE player_id = ${playerId} AND amount > 0 AND at > ${since}
-            AND substr(key, 1, ${prefix.length}) = ${prefix}
+        Request: Schema.Struct({ playerId: Schema.String, hour: Schema.Int, day: Schema.Int }),
+        Result: Schema.Struct({ in_hour: Schema.Int, in_day: Schema.Int }),
+        execute: ({ playerId, hour, day }) => sql`
+          SELECT coalesce(sum(CASE WHEN at > ${hour} THEN amount END), 0) AS in_hour,
+                 coalesce(sum(CASE WHEN at > ${day} THEN amount END), 0) AS in_day
+          FROM coin_entries
+          WHERE player_id = ${playerId} AND at > ${Math.min(hour, day)} AND amount > 0
+            AND game IS NOT NULL AND reason <> 'works_refund'
         `,
       });
       const works = SqlSchema.findOneOption({
@@ -116,9 +126,9 @@ export class Coins extends Context.Service<
             Effect.map((rows) => rows.length > 0),
             Effect.orDie,
           ),
-        earnedSince: (playerId, prefix, since) =>
-          earned({ playerId, prefix, since }).pipe(
-            Effect.map((row) => row.earned),
+        room: (playerId, now) =>
+          earned({ playerId, hour: now - HOUR_MS, day: utcDay(now) * DAY_MS - 1 }).pipe(
+            Effect.map((row) => Math.max(0, Math.min(EARNINGS.hourly - row.in_hour, EARNINGS.daily - row.in_day))),
             Effect.orDie,
           ),
         works: (playerId) =>

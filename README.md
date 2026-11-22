@@ -514,6 +514,12 @@ The games on it now: `raid`, The Little Raid (`packages/raid`).
   games: it is refused whole, and nothing is done.
 - A command that takes Coins the player does not have is refused with
   `not_enough_coins`.
+- Play pays a player at most 5,000 Coins in any hour and 20,000 in a UTC day
+  (`EARNINGS` in core), whatever the games, the pages' route below included.
+  Past that a command that pays is done all the same and pays only what is
+  left, so nobody is stopped mid-game and playing faster than a person can
+  earns nothing more. The welcome, Coins brought over and Coins given back for
+  the Works do not count.
 - A stored state that does not read (a rules change that forgot an older
   version, say) answers both routes 409 `state_unreadable`: nothing is done,
   the state is kept as it is, and Leaf logs the player and the game. The page
@@ -575,9 +581,9 @@ It refuses, changing nothing: a call that would take a player past 4 a
 second (bursts of 20), 429 `slow_down`, read and counted for nothing; a spend
 the balance does not cover, 409 `not_enough_coins`; a `works_refund` that
 would take the player's refunds past what they have spent with `works_build`
-(kept in `works_builds`), 409 `nothing_to_refund`; earnings through this route
-past 5,000 in any hour or 20,000 in a UTC day (worked out from the entries of
-the last day alone), 429 `too_much`; 400 `invalid_amount` and
+(kept in `works_builds`), 409 `nothing_to_refund`; an earning past what the
+player may still earn this hour or this UTC day (the one cap on all play,
+above), 429 `too_much`; 400 `invalid_amount` and
 `invalid_reason`, and `invalid_command` for a body that is not such a call or
 an id that is not one. A player with no account yet has it opened with the
 welcome first. Each call done or refused counts toward the staff's report
@@ -586,7 +592,8 @@ welcome first. Each call done or refused counts toward the staff's report
 **What a hostile page can still do through it.** The route takes the page's
 word for what was earned, so a player with curl and their own session can,
 without playing: earn up to 5,000 Coins in any hour and 20,000 in a UTC day
-(about 33 won raids' worth a day, 140,000 a week), under any earning reason;
+(about 33 won raids' worth a day, 140,000 a week; the same cap the raid's own
+payouts count toward), under any earning reason;
 open the daily chest once a day, for 3; spend their own Coins on nothing; and
 make at most 4 calls a second. A refund never gives back more than was spent
 building, so building and taking away again makes nothing. Every earning

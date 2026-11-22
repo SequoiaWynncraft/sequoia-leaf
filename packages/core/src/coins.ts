@@ -44,17 +44,16 @@ export const COIN_REASON_NAMES = Object.keys(COIN_REASONS).filter((name): name i
 /** The reason a name stands for, or undefined when it is not one. */
 export const coinReason = (name: string): CoinReason | undefined => COIN_REASON_NAMES.find((r) => r === name);
 
-/** What one call may change, and what a player may earn through the calls in any hour and any UTC day. */
+/** What one call may change. */
 export const PAGE_COINS = {
   /** The most one call may pay in. */
   most: 5000,
   /** The most one call may take, as a negative amount. */
   least: -100_000,
-  /** The most a player's calls may pay in, together, in any hour. */
-  hourly: 5000,
-  /** The most a player's calls may pay in, together, in a UTC day. */
-  daily: 20_000,
 } as const;
+
+/** The most a player's play may pay in, whatever the games: in any hour, and in a UTC day. */
+export const EARNINGS = { hourly: 5000, daily: 20_000 } as const;
 
 /** What the daily chest pays, whatever the page says: Leaf's amount, once a UTC day. */
 export const DAILY_CHEST = 3;
