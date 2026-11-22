@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "treasury-requests",
+    at: "2026-11-22T20:40Z",
+    title: "Requests at the Treasury",
+    lines: [
+      "The Treasury now sells a paid aspect request and a paid tome request, 3,000 Leaf each, for members with 7 days in the guild.",
+      "A paid request is served before the free ones. The free requests in Discord are as before.",
+    ],
+  },
+  {
     id: "taps-land",
     at: "2026-11-22T20:20Z",
     title: "Taps that count",

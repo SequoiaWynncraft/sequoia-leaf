@@ -13,7 +13,7 @@
 
 import { pick as pickCard, point } from "@sequoia-leaf/kit/card.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
-import { heldAgain } from "@sequoia-leaf/kit/keys.ts";
+import { heldAgain, typing } from "@sequoia-leaf/kit/keys.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { bake, lookFor, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
@@ -279,7 +279,8 @@ async function boot(): Promise<void> {
 
   window.addEventListener("keydown", (e) => {
     unlock();
-    if (paused) return;
+    // Typed into a field (a tome's reason), a key is a letter, not a step or a press.
+    if (paused || typing(e)) return;
     const k = e.key.toLowerCase();
     const onButton = e.target instanceof HTMLButtonElement;
     // A key held down is one press: only walking goes on while its key is held (`keys`).

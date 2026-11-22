@@ -47,16 +47,23 @@ says so.
   plants, fences and paths (Tindra). Nothing sells out and nothing rotates; each row says how many
   the member has. Buying asks Leaf, which takes the price.
 - **What things are.** A thing for a camp (a market row, the tray, a thing set out in the camp
-  while decorating or pointed at in it, a present, a trophy on the shelf) and a ware at the
-  Treasury are cards in the kit's one card system (`card.ts`, registered in `cards.ts`): its
-  picture, name and kind, what it does when touched, how many the member has, and where it comes
-  from (the stall and its price, the Treasury, a present, or what wins it). A stall in a card is a
+  while decorating or pointed at in it, a present, a trophy on the shelf) is a card in the kit's
+  one card system (`card.ts`, registered in `cards.ts`): its picture, name and kind, what it does
+  when touched, how many the member has, and where it comes from (the stall and its price, a
+  present, or what wins it). A stall in a card is a
   card of its own, with everything it sells. Pointing shows the card, clicking the picture or the
   name pins it, a finger kept on a thing in the camp pins it as a sheet. People keep their own
   card (below), and the town's other things their one-line hint. What is bought leaves the stall as a parcel, up the path and out through
   the gate, and is waiting at the camp.
-- **The Treasury.** Cinfy sells things to wear and a round of cocoa for Leaf, and a handful of fine
-  pieces for a camp. Leaf cannot be spent yet, and each button says so.
+- **The Treasury.** Cinfy sells the guild's two paid requests, an aspect request and a tome
+  request, for the Leaf the backend asks (3,000 each). The page asks Leaf
+  (`GET /v1/game/requests`), which asks the backend as the member: each row has its price on a
+  button, or in its place why the member cannot buy it, in the backend's words. The button asks to
+  be pressed again before it buys; a tome's first press opens a field for what the tome is for.
+  `POST /v1/game/requests` buys it: the backend takes the Leaf from the guild's ledger, and the row
+  says where the request stands in the queue and the purse shows the Leaf left. Refused, it says
+  why; with no answer, it says to check the queue in Discord, and does not send it again. A guest
+  sees the two rows without buttons and one line saying who they are for.
 - **Doors into the games.** The Works and The Little Raid are games of their own. Each has a card
   that says what is waiting there and a button to go in; walking on into the Works' doorway, or
   sitting down on one of the logs at the stump, goes in without the card. The doors of the Works
@@ -122,14 +129,14 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
 - **Things.** Seventy-five of them (`things.ts`, in `packages/town`), in eight kinds, each drawn in the town's way and
   nearly all doing something when touched: a lantern goes out and lights, a wind chime rings, the
   music box plays its tune, Worm looks out of Worm's pot, and something in the barrel looks back.
-  They come from the market for Coins, from the Treasury for Leaf, from the games as trophies that
+  They come from the market for Coins, from the games as trophies that
   cannot be bought (a carved figure for each boss beaten in The Little Raid, a model of each
   capstone built in the Works), and from the town's own as small presents. Whatever is bought or won
   waits by the trail as a parcel, and the parcels open one after another when the member is in:
   each thing flies to a clear spot and lands. As many as two hundred parcels may wait; with that
-  many by the trail the market and the Treasury sell nothing more (and take nothing) until some are
+  many by the trail the market sells nothing more (and takes nothing) until some are
   unpacked, and a trophy waits on Leaf. A member may have as many as 999 of any one thing,
-  standing, put away and waiting together; with that many the market and the Treasury sell no more
+  standing, put away and waiting together; with that many the market sells no more
   of it (and take nothing), and a present or a trophy of it is not added. As many as three hundred
   things may be set out in a camp; with that many standing, nothing more comes out of the tray and
   a parcel or a present opens into the tray instead, until something is put away. A thing is in the
@@ -215,8 +222,9 @@ card says so and the town is not loaded.
 - **The member.** Their name, their rank as the guild writes it (capitalised; an unknown one as it
   comes; none at all is "Friend"), their level, and their own skin from `/v1/game/skins/<id>`
   (a made-up look until it loads). The week's counts come from their newest news.
-- **Leaf.** The purse's Leaf is the guild's ledger's and changes only when the ledger does. The
-  Treasury's things and pieces are shown with closed buttons; nothing in town pays Leaf.
+- **Leaf.** The purse's Leaf is the guild's ledger's and changes only when the ledger does: a
+  request bought at the Treasury is paid there, by the backend, and the purse shows the balance
+  Leaf answers with.
 - **The board.** The member's real quests, those open and those just finished: the title, the
   nearest goal's progress, the Leaf it pays, and for the timed one when it ends. They pay by
   themselves, so there is nothing to claim: a finished one says "Paid".
@@ -343,7 +351,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/draw.ts`                         | Drawing a frame of any place; name plates and speech; the round hole a door closes to           |
 | `src/hud.ts`                          | The purse, corner, feed, dock, panel and cards, shared by both places                           |
 | `src/ui.ts`, `src/campui.ts`          | The town's panels and arrival letter; the camp's panels and tray                                |
-| `src/cards.ts`                        | What camp things, Treasury wares and stalls say about themselves, as kit cards                  |
+| `src/cards.ts`                        | What camp things and stalls say about themselves, as kit cards                                  |
 | `src/doors.ts`                        | A game in a frame: opening it, hearing it, the note when it will not open                       |
 | `src/games.ts`                        | The games that are places, and what each says is waiting                                        |
 | `src/guild.ts`, `src/live.ts`         | The questions asked of the guild, and the guild's server answering them                         |

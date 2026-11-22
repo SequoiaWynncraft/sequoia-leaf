@@ -1,5 +1,5 @@
 import type { PlayerId } from "@sequoia-leaf/core";
-import { Context, Schema } from "effect";
+import { Context, type Redacted, Schema } from "effect";
 import {
   HttpApi,
   HttpApiEndpoint,
@@ -22,6 +22,9 @@ import {
   NotYou,
   PurchaseRefused,
   Refused,
+  RequestRefused,
+  RequestsUnavailable,
+  RequestUnknown,
   SlowDown,
   StaffOnly,
   StateUnreadable,
@@ -49,6 +52,9 @@ import {
   Purchased,
   Quests,
   Rates,
+  RequestBody,
+  RequestMade,
+  Requests,
   RerollBody,
   Rerolled,
   Standings,
@@ -64,6 +70,8 @@ export interface Identity {
   /** The player's rank in the guild, or null when they are not a member now. */
   readonly guildRank: string | null;
   readonly admin: boolean;
+  /** The session they came with, to ask the backend something as them (`/v1/game/requests`). */
+  readonly session: Redacted.Redacted;
 }
 
 export class CurrentIdentity extends Context.Service<CurrentIdentity, Identity>()("leaf/api/CurrentIdentity") {}
@@ -132,6 +140,11 @@ export class RerollBodyErrors extends HttpApiMiddleware.Service<RerollBodyErrors
 
 /** Answers a batch whose body is not `{ "commands": [...] }` with `invalid_command`. */
 export class PlayBodyErrors extends HttpApiMiddleware.Service<PlayBodyErrors>()("leaf/api/PlayBodyErrors", {
+  error: Invalid,
+}) {}
+
+/** Answers a guild request whose body is not `{ "type": "aspect" or "tome" }` with `invalid_request`. */
+export class RequestBodyErrors extends HttpApiMiddleware.Service<RequestBodyErrors>()("leaf/api/RequestBodyErrors", {
   error: Invalid,
 }) {}
 
@@ -236,6 +249,15 @@ export class GameApi extends HttpApiGroup.make("game")
       error: Missing,
     }),
     HttpApiEndpoint.get("banners", "/banners", { success: Banners }),
+    HttpApiEndpoint.get("requests", "/requests", {
+      success: Requests,
+      error: [MembersOnly, RequestRefused, RequestsUnavailable],
+    }),
+    HttpApiEndpoint.post("request", "/requests", {
+      payload: RequestBody,
+      success: RequestMade,
+      error: [Invalid, MembersOnly, RequestRefused, RequestUnknown],
+    }).middleware(RequestBodyErrors),
   )
   .middleware(Player)
   .prefix("/v1/game") {}

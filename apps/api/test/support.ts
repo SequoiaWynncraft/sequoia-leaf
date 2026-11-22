@@ -262,6 +262,8 @@ export interface Backend {
   credits: (from: number, to: number) => unknown;
   /** Sierra's awards feed's answer for the window [from, to). */
   awards: (from: number, to: number) => unknown;
+  /** The answer to anything under `/api`, the routes asked with a member's own session. */
+  api: (request: Request) => Response | Promise<Response>;
   /** The path of every request it was sent, in order. */
   readonly calls: string[];
 }
@@ -272,6 +274,7 @@ export function fakeBackend(sessions: Record<string, () => Response> = {}): { ba
     sessions,
     credits: () => ({ raids: [], wars: [] }),
     awards: () => ({ awards: [] }),
+    api: () => new Response("not found", { status: 404 }),
     calls: [],
   };
   const fetcher: Fetcher = (url, init) => {
@@ -292,9 +295,97 @@ export function fakeBackend(sessions: Record<string, () => Response> = {}): { ba
     if (path === "/internal/v1/achievements/awards") {
       return Promise.resolve(Response.json(backend.awards(from, to)));
     }
+    if (path.startsWith("/api/")) {
+      return Promise.resolve(backend.api(request));
+    }
     return Promise.resolve(new Response("not found", { status: 404 }));
   };
   return { backend, fetcher };
+}
+
+/** A refusal from the stand-in reward queue, with the backend's words in it. */
+const no = (status: number, message: string) => Response.json({ status, message }, { status });
+
+/** One member's place with the stand-in reward queue (`rewardQueue`). */
+export interface Queued {
+  /** Days in the guild: paying Leaf for a request takes 7. */
+  days: number;
+  /** The kinds the member has a request waiting for. */
+  readonly waiting: Set<string>;
+  /** Paid requests ahead of the member's next one in its queue. */
+  ahead: number;
+}
+
+/**
+ * A stand-in for the backend's reward queue (`/api/reward-queue`) for one member, signed in as
+ * `token`, as `Backend.api`: it says whether they may pay Leaf for a request as the backend does, and
+ * makes one as the backend does, by buying it from Leaf's own purchase route (`leaf`, as the backend
+ * reaches it) before it answers, and cancelling it there when Leaf refuses. Its refusals carry the
+ * backend's words.
+ */
+export function rewardQueue(
+  token: string,
+  player: PlayerId,
+  leaf: (path: string, init: RequestInit) => Promise<Response>,
+): { readonly queued: Queued; readonly api: (request: Request) => Promise<Response> } {
+  const queued: Queued = { days: 30, waiting: new Set(), ahead: 1 };
+  const PRICE = 3000;
+  const api = async (request: Request): Promise<Response> => {
+    if (request.headers.get("Authorization") !== `Bearer ${token}`) {
+      return Response.json({ code: "token_invalid", message: "Invalid token" }, { status: 401 });
+    }
+    const path = new URL(request.url).pathname;
+    if (path === "/api/reward-queue/eligibility") {
+      return Response.json({
+        eligible: false,
+        has_hq_role: false,
+        raid_count_last_7_days: 3,
+        in_guild_time_in_days: queued.days,
+        required_raids: 40,
+        required_days: 7,
+        message:
+          "You need at least 7 days in the guild and either the HQ Team role or at least 40 guild raids in the past 7 days to use this queue.",
+        in_guild: true,
+        leaf_eligible: queued.days >= 7,
+        leaf_balance: null,
+        prices: { tome: PRICE, aspect: PRICE },
+      });
+    }
+    if (path !== "/api/reward-queue/requests" || request.method !== "POST") {
+      return no(404, "Not found");
+    }
+    const body: unknown = await request.json();
+    const type = typeof body === "object" && body !== null && "type" in body ? body.type : null;
+    if (type !== "aspect" && type !== "tome") {
+      return no(400, `Unknown reward queue type: ${String(type)}`);
+    }
+    if (queued.days < 7) {
+      return no(403, "You need at least 7 days in the guild to use this queue.");
+    }
+    if (queued.waiting.has(type)) {
+      return no(409, `You already have a pending ${type} request in the queue.`);
+    }
+    const key = `request:${crypto.randomUUID()}`;
+    const internal = { Authorization: "Bearer internal-token", "Content-Type": "application/json" };
+    const bought = await leaf(`/internal/v1/purchases/${key}`, {
+      method: "PUT",
+      headers: internal,
+      body: JSON.stringify({ player_id: player, kind: type, leaf: PRICE }),
+    });
+    const paid: unknown = await bought.json();
+    if (bought.status !== 200 || typeof paid !== "object" || paid === null || !("balance" in paid)) {
+      await leaf(`/internal/v1/purchases/${key}`, { method: "DELETE", headers: internal });
+      const kind = type === "aspect" ? "An aspect" : "A tome";
+      return no(403, `${kind} request costs 3,000 Leaf, and you don't have that much.`);
+    }
+    queued.waiting.add(type);
+    queued.ahead += 1;
+    return Response.json(
+      { request_id: 7, type, position: queued.ahead, leaf_paid: PRICE, leaf_balance: paid.balance },
+      { status: 201 },
+    );
+  };
+  return { queued, api };
 }
 
 /** What a stand-in Mojang knows, and what it was asked. */

@@ -12,6 +12,7 @@ import {
   QUEST_SLOTS,
   type QuestSlot,
   refreshQuests,
+  type RequestKind,
   rerollCost,
   RULE_CHANGES,
   timedWindowAt,
@@ -19,7 +20,7 @@ import {
 } from "@sequoia-leaf/core";
 import { BANNERS } from "@sequoia-leaf/pulls";
 import { ByteSize, Clock, Duration, Effect, Layer, Option, Redacted, Ref, Schedule, Schema, Stream } from "effect";
-import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { HttpClient, HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder, HttpApiError, HttpApiSecurity } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 
@@ -35,6 +36,7 @@ import {
   PlayBodyErrors,
   Player,
   PresenceBodyErrors,
+  RequestBodyErrors,
   RerollBodyErrors,
   Session,
   SessionCookie,
@@ -51,6 +53,9 @@ import {
   NotAMember,
   NotYou,
   Refused,
+  RequestRefused,
+  RequestsUnavailable,
+  RequestUnknown,
   SlowDown,
   StaffOnly,
   StateUnreadable,
@@ -58,6 +63,7 @@ import {
 } from "../api/errors.ts";
 import type * as Body from "../api/schemas.ts";
 import { Identities } from "../auth/session.ts";
+import { guildRequests, notEnoughLeaf } from "../backend/requests.ts";
 import { AppConfig } from "../config.ts";
 import { syncOnDemand } from "../earning/run.ts";
 import { eventJsonText, Events } from "../events/store.ts";
@@ -304,6 +310,18 @@ export const PresenceBodyErrorsLive = Layer.succeed(PresenceBodyErrors)((httpEff
         code: "invalid_place",
         message:
           'Send where you are as { "place": "town" }, or camp, works or table, "stay" as true or false, and "device" as phone or desktop',
+      }),
+    ),
+  ),
+);
+
+/** A guild request whose body is not `{ "type": "aspect" or "tome" }` (with `reason` a string if any) gets `invalid_request`. */
+export const RequestBodyErrorsLive = Layer.succeed(RequestBodyErrors)((httpEffect) =>
+  Effect.catchIf(httpEffect, isPayloadError, () =>
+    Effect.fail(
+      new Invalid({
+        code: "invalid_request",
+        message: 'Send a request as { "type": "aspect" }, or { "type": "tome", "reason": "<what it is for>" }',
       }),
     ),
   ),
@@ -608,6 +626,13 @@ const membersOnly = Effect.flatMap(CurrentIdentity, (identity) =>
     : Effect.void,
 );
 
+/** Who may buy the guild's requests: not a guest, whom the backend is never asked about. */
+const requestsFor = Effect.flatMap(CurrentIdentity, (identity) =>
+  isGuest(identity)
+    ? Effect.fail(new MembersOnly({ code: "members_only", message: "For guild members with 7 days in the guild." }))
+    : Effect.succeed(identity),
+);
+
 const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
@@ -622,6 +647,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
     const store = yield* PlayStore;
     const coins = yield* Coins;
     const sql = yield* SqlClient.SqlClient;
+    const requests = guildRequests(yield* HttpClient.HttpClient, (yield* AppConfig).backendUrl);
 
     /** The player's Coins, their account opened with the welcome if they have none yet. */
     const coinsOf = (identity: Identity) =>
@@ -872,6 +898,66 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             } satisfies typeof Body.Banners.Type);
           }),
         )
+        // What the Treasury sells, as the backend answers the member, with what they lack for each.
+        .handle("requests", () =>
+          Effect.gen(function* () {
+            const identity = yield* requestsFor;
+            const looked = yield* requests.look(identity.session);
+            if (looked.status === "unavailable") {
+              return yield* new RequestsUnavailable({
+                code: "requests_unavailable",
+                message: "The guild's requests could not be reached. Try again in a moment.",
+              });
+            }
+            if (looked.status === "refused") {
+              return yield* new RequestRefused({ code: "request_refused", message: looked.message });
+            }
+            const { balance } = yield* ledger.account(identity.playerId);
+            const offer = (kind: RequestKind) => {
+              const price = looked.prices[kind];
+              return {
+                price,
+                why_not: looked.whyNot ?? (balance < price ? notEnoughLeaf(kind, price, balance) : null),
+              };
+            };
+            return HttpServerResponse.jsonUnsafe({
+              aspect: offer("aspect"),
+              tome: offer("tome"),
+            } satisfies typeof Body.Requests.Type);
+          }),
+        )
+        // One bought with the member's Leaf. The backend charges it through Leaf's own purchase route
+        // before it answers, so nothing here holds the database while it waits.
+        .handle("request", ({ payload }) =>
+          Effect.gen(function* () {
+            const identity = yield* requestsFor;
+            const reason = payload.type === "tome" ? (payload.reason ?? "").trim() : null;
+            if (reason !== null && (reason === "" || reason.length > 1000)) {
+              return yield* new Invalid({
+                code: "invalid_reason",
+                message: "A tome request needs what the tome is for, 1 to 1,000 characters",
+              });
+            }
+            const made = yield* requests.make(identity.session, payload.type, reason);
+            if (made.status === "unknown") {
+              return yield* new RequestUnknown({
+                code: "request_unknown",
+                message:
+                  "Could not tell whether the request went through. Check the queue in Discord before trying again.",
+              });
+            }
+            if (made.status === "refused") {
+              return yield* new RequestRefused({ code: "request_refused", message: made.message });
+            }
+            const { balance } = yield* ledger.account(identity.playerId);
+            return HttpServerResponse.jsonUnsafe({
+              type: payload.type,
+              position: made.position,
+              leaf_paid: made.paid,
+              leaf: balance,
+            } satisfies typeof Body.RequestMade.Type);
+          }),
+        )
         // A game's board, its players named as the guild's news names them.
         .handle("standings", ({ params }) =>
           Effect.gen(function* () {
@@ -990,6 +1076,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     RerollBodyErrorsLive,
     PresenceBodyErrorsLive,
     PlayBodyErrorsLive,
+    RequestBodyErrorsLive,
     BackendLive,
     PurchaseBodyErrorsLive,
     UnexpectedLive,

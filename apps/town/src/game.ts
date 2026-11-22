@@ -71,7 +71,6 @@ export interface Actor {
   spot: Spot | null;
   doing: Doing;
   greeted: number;
-  mug: number;
   /** Their name shows until this moment of the town's clock, whatever else: somebody who has just arrived. */
   named: number;
 }
