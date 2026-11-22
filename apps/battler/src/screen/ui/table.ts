@@ -346,6 +346,10 @@ function renderRack(run: Run): void {
 /** How many of a figure the party owns at one star: two means the next one makes three. */
 const twins = (run: Run, kind: FigureId): number => pieces(run).filter((p) => p.kind === kind && p.stars === 1).length;
 
+/** The stall whose width is watched, and the watcher. */
+let stallWatched: HTMLElement | null = null;
+let stallWatcher: ResizeObserver | null = null;
+
 function renderStall(run: Run): void {
   const stall = byId("stall");
   if (!stall) return;
@@ -354,6 +358,14 @@ function renderStall(run: Run): void {
     .join();
   if (key === stallKey) return;
   stallKey = key;
+  if (stallWatched !== stall && typeof ResizeObserver === "function") {
+    // A stall made narrower (the purse beside it grew, the window shrank) asks again whether its names fit.
+    stallWatcher?.disconnect();
+    // On the next frame, outside the watcher's own delivery: fitting can change the stall's height.
+    stallWatcher = new ResizeObserver(() => requestAnimationFrame(() => fitNames(stall)));
+    stallWatcher.observe(stall);
+    stallWatched = stall;
+  }
   stall.replaceChildren();
   stall.style.setProperty("--n", String(run.stall.length));
   run.stall.forEach((kind, i) => {
@@ -386,6 +398,7 @@ function renderStall(run: Run): void {
     link(card, figureRef(kind), { acts: true });
     stall.append(card);
   });
+  fitNames(stall);
   paintLight();
 }
 
@@ -399,8 +412,19 @@ function renderPurseSide(run: Run): void {
   const held = Math.min(s.most, Math.floor(n / s.per));
   for (let i = 0; i < s.most; i++) piles.append(el("i", i < held ? "pile on" : "pile"));
   const was = node.dataset.n;
+  const streak = Math.abs(run.streak) >= 2 ? run.streak : 0;
+  const mark =
+    streak === 0
+      ? null
+      : el(
+          "span",
+          `streak ${streak > 0 ? "won" : "lost"}`,
+          {},
+          pic(glyph(streak > 0 ? "flame" : "frost")),
+          String(Math.abs(streak)),
+        );
   node.replaceChildren(
-    el("span", "k-cur big", {}, icon("acorn"), String(n)),
+    el("span", "count", {}, el("span", "k-cur big", {}, icon("acorn"), String(n)), mark),
     piles,
     el("span", "k-dim interest", { text: held > 0 ? `+${held} a room` : `${s.per - (n % s.per)} to save` }),
   );
@@ -590,4 +614,11 @@ export function stepTable(): void {
 export function wakeChip(trait: string): void {
   const chip = document.querySelector<HTMLElement>(`#traits [data-trait="${trait}"]`);
   if (chip) replay(chip, "woke");
+}
+
+/** When a name has a word wider than its card, every name on the stall is set in the small style, as a phone sets them. */
+function fitNames(stall: HTMLElement): void {
+  stall.classList.remove("tight");
+  const names = [...stall.querySelectorAll<HTMLElement>(".offer .name")];
+  if (names.some((name) => name.scrollWidth > name.clientWidth)) stall.classList.add("tight");
 }

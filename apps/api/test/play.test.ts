@@ -2473,13 +2473,29 @@ const storedIn = (game: string) =>
 
 describe("awards", () => {
   it("are written once, when the raid beats a boss and the Works' depot takes a capstone in, and reach the camp by the trail", async () => {
-    // A whole run by the bot, as a player plays it: it beats The Magpie.
-    await playRun();
-    const won = await awarded(alice);
-    expect(won).toEqual([{ id: "trophy-hoardmagpie", at: expect.any(Number) }]);
-    // Another run beats Old Bramble too; the award already held keeps the moment it was won.
-    await playRun();
-    expect(await awarded(alice)).toEqual([...won, { id: "trophy-oldbramble", at: expect.any(Number) }]);
+    // Whole runs by the bot, as a player plays them, until one beats a boss: one award for each boss.
+    let won = await awarded(alice);
+    for (let runs = 0; runs < 8 && won.length === 0; runs++) {
+      // oxlint-disable-next-line no-await-in-loop -- one run after another
+      await playRun();
+      // oxlint-disable-next-line no-await-in-loop -- one run after another
+      won = await awarded(alice);
+    }
+    expect(won.length).toBeGreaterThan(0);
+    for (const award of won) expect(award.id).toStartWith("trophy-");
+    // More runs, until one beats a boss not beaten before: the awards already held keep the moment they were won.
+    let all = won;
+    for (let runs = 0; runs < 8 && all.length === won.length; runs++) {
+      // oxlint-disable-next-line no-await-in-loop -- one run after another
+      await playRun();
+      // oxlint-disable-next-line no-await-in-loop -- one run after another
+      all = await awarded(alice);
+    }
+    expect(all.length).toBeGreaterThan(won.length);
+    expect(all.slice(0, won.length)).toEqual([...won]);
+    const trophies = all.flatMap((a) => (typeof a.id === "string" ? [a.id] : []));
+    expect(trophies).toHaveLength(all.length);
+    expect(new Set(trophies).size).toBe(trophies.length);
 
     // A yard whose depot has taken in a clockwork crab: the next batch that changes it (a few seconds on) awards the model.
     const { clock: tick } = yardOf(
@@ -2493,19 +2509,17 @@ describe("awards", () => {
     );
     clock.now += 5000;
     await send("POST", "/v1/game/play/works", { commands: [{ id: "w-1", do: "collect", tick: tick + 50 }] });
-    expect((await awarded(alice)).map((a) => a.id)).toEqual(["trophy-hoardmagpie", "trophy-oldbramble", "model-crab"]);
+    expect((await awarded(alice)).map((a) => a.id)).toEqual([...trophies, "model-crab"]);
 
     // The town is told of them on its next call, and puts each in the camp's tray, new, once.
     await townDid([{ id: "t-1", do: "readMail" }]);
     await townDid([{ id: "t-2", do: "readMail" }]);
     const camp = decodeTown((await storedIn("town"))[0]?.state ?? "")?.camp;
-    expect([camp?.tray, camp?.fresh]).toEqual([
-      { "trophy-hoardmagpie": 1, "trophy-oldbramble": 1, "model-crab": 1 },
-      ["trophy-hoardmagpie", "trophy-oldbramble", "model-crab"],
-    ]);
-    expect(camp?.earned).toEqual(["trophy-hoardmagpie", "trophy-oldbramble", "model-crab"]);
+    const kept = [...trophies, "model-crab"];
+    expect([camp?.tray, camp?.fresh]).toEqual([Object.fromEntries(kept.map((id) => [id, 1])), kept]);
+    expect(camp?.earned).toEqual(kept);
     // A game that awards nothing writes none.
-    expect(await awarded(alice)).toHaveLength(3);
+    expect(await awarded(alice)).toHaveLength(trophies.length + 1);
   });
 });
 

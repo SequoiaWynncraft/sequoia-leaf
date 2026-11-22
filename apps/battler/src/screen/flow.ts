@@ -6,7 +6,16 @@
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { GOLD, LEAF } from "@sequoia-leaf/kit/palette.ts";
 import { leave, tell } from "@sequoia-leaf/kit/shell.ts";
-import { type BossId, fightSetup, isBossId, type RaidNote, specOf, type TraitId, TRAITS } from "@sequoia-leaf/raid";
+import {
+  type AcornsWhy,
+  type BossId,
+  fightSetup,
+  isBossId,
+  type RaidNote,
+  specOf,
+  type TraitId,
+  TRAITS,
+} from "@sequoia-leaf/raid";
 
 import { glyphPic } from "./art/icons.ts";
 import { endFight, fightOn, setSpeed, skipFight, startFight } from "./fightview.ts";
@@ -14,6 +23,7 @@ import { clearFx, fly, forgetLater, later, say } from "./fx.ts";
 import { BOARD_W } from "./geometry.ts";
 import { planning, unpick } from "./hand.ts";
 import type { Speed } from "./keep.ts";
+import { streakName } from "./logic.ts";
 import { cheer, clearPawns, pawns, syncPawns } from "./pawns.ts";
 import { arrive, arrived, settleArrival, watchersCheer } from "./scene.ts";
 import { signal } from "./signals.ts";
@@ -164,13 +174,16 @@ export function doSkip(): void {
   if (S.mode === "fight" && fightOn()) skipFight();
 }
 
-const WHY: Readonly<Record<string, string>> = {
+const WHY: Readonly<Record<AcornsWhy, string>> = {
   room: "The room",
   win: "For winning",
   interest: "Savings",
   gnomes: "The gnomes found",
+  streak: "Streak",
   windfall: "Windfall",
 };
+/** What a line of the takings is called. The run has taken the room by then, so its streak is the one paid for. */
+const whyName = (why: AcornsWhy): string => (why === "streak" && S.run ? streakName(S.run.streak) : WHY[why]);
 
 /**
  * The fight is done: Leaf settles the room from the fight it decided, its sheet rises with the
@@ -321,8 +334,8 @@ function count(note: RaidNote, at: number, levels: boolean): number {
       const slow = note.why === "interest";
       const each = slow ? 0.16 : 0.08;
       later(at, () => {
-        sheetTaking(WHY[note.why] ?? "", acorns(`+${note.amount}`));
-        say(MIDDLE.x, MIDDLE.y + 12, `${WHY[note.why] ?? ""} +${note.amount}`, GOLD[2], { ttl: 1.1 });
+        sheetTaking(whyName(note.why), acorns(`+${note.amount}`));
+        say(MIDDLE.x, MIDDLE.y + 12, `${whyName(note.why)} +${note.amount}`, GOLD[2], { ttl: 1.1 });
         const to = purse();
         // Savings pay out of the purse's own piles, an acorn at a time; the rest comes off the board.
         const from = slow ? { x: to.x - 4, y: to.y - 30 } : MIDDLE;
