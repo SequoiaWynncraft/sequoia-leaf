@@ -199,7 +199,7 @@ function treasury(body: HTMLElement): () => void {
           return;
         }
         const buy = button("leaf sm", [glyph("leaf"), String(w.price)], (b) => {
-          if (!pay("leaf", b, w.price, w.name)) {
+          if (!pay(b, w.price, "leaf")) {
             speak(KEEPER.short[0], KEEPER.short[1]);
             return;
           }
@@ -236,9 +236,8 @@ const paysWhat = (q: Quest): string => (q.pays === "leaf" ? "Leaf" : "Coins");
 
 function claim(q: Quest, b: HTMLElement): void {
   G.claimed.add(q.id);
-  const why = `the quest board: ${q.title}`;
-  if (q.pays === "leaf") grant(q.reward, why);
-  else earn(q.reward, why);
+  if (q.pays === "leaf") grant(q.reward, `the quest board: ${q.title}`);
+  else earn(q.reward, "quest");
   fly(q.pays === "leaf" ? "leaf" : "coin", centre(b), purseAt(q.pays), 7, () => {
     bump(q.pays);
   });
@@ -352,7 +351,7 @@ function shopRow(
     kind === "leaf" ? "leaf sm" : "sm",
     [glyph(kind === "leaf" ? "leaf" : "coin"), String(s.price)],
     (b) => {
-      const sent = buyForCamp(thing.id, () => pay(kind, b, s.price, thing.name));
+      const sent = buyForCamp(thing.id, () => pay(b, s.price, kind === "leaf" ? "leaf" : "camp_thing"));
       if (sent === "full" || sent === "plenty") {
         // Nothing is charged: as many parcels are waiting by the trail as may, or the member has
         // as many of this thing as may be had.
@@ -840,7 +839,7 @@ export function showArrival(letter: Letter, done: () => void): void {
     paying.forEach(({ pay: owed }, i) => {
       const at = from[i] ?? centre(paper);
       if (owed.kind === "leaf") grant(owed.amount, "the guild, while you were away");
-      else earn(owed.amount, "the Works, while you were away");
+      else earn(owed.amount, "while_away");
       fly(owed.kind === "leaf" ? "leaf" : "coin", at, purseAt(owed.kind), 7, () => {
         bump(owed.kind);
       });

@@ -20,7 +20,6 @@ import {
   DX,
   DY,
   type Item,
-  KIND,
   type Kind,
   lay,
   type Leg,
@@ -127,7 +126,7 @@ export function place(x: number, y: number): boolean {
     toolHooks.changed();
     return false;
   }
-  pay(did, `the Works: a ${KIND[tool].name.toLowerCase()}`);
+  pay(did, "works_build");
   if (there) {
     if (was !== undefined && was !== S.dir) {
       remember({ did: "turned", i, was });
@@ -177,7 +176,7 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
     }
     return false;
   }
-  repay(did, `the Works: a ${KIND[was.kind].name.toLowerCase()} taken away`);
+  repay(did);
   remember({ did: "took", what: [was] });
   const px = x * TILE + 8;
   const py = (y + 1) * TILE - 4;
@@ -243,14 +242,14 @@ export function undo(): boolean {
     for (const i of last.cells.toReversed()) {
       if (!w.cells[i]) continue;
       const { x, y } = xy(i);
-      repay(remove(w, x, y), "the Works: undone");
+      repay(remove(w, x, y));
       puff(x * TILE + 8, (y + 1) * TILE - 4, 4, DUST, 7);
     }
     for (const t of last.turned) turn(w, t.i % W(), Math.floor(t.i / W()), t.was);
   } else if (last.did === "took") {
     for (const s of last.what) {
       const did = build(w, s.kind, s.x, s.y, s.dir, coins(), s.kind === "tunnel" ? s.span : undefined);
-      if (!pay(did, "the Works: put back")) {
+      if (!pay(did, "works_build")) {
         toolHooks.said(did.ok ? "" : `It cannot go back: ${did.why.toLowerCase()}.`);
         continue;
       }
@@ -368,7 +367,7 @@ export function commitRun(): boolean {
     return was !== undefined && turn(w, t.x, t.y, t.dir) ? [{ i, was }] : [];
   });
   const did = lay(w, run.legs, coins());
-  if (!pay(did, "the Works: a run of belt")) {
+  if (!pay(did, "works_build")) {
     yardSfx.no();
     if (!did.ok) toolHooks.said(`${did.why}.`);
     toolHooks.changed();
@@ -471,7 +470,7 @@ export function buyLand(id: PlotId): boolean {
   const plot = w.land.plots.find((p) => p.id === id);
   const sign = layout(w, S.rev).signs.find((s) => s.plot.id === id);
   const did = buyPlot(w, id, coins());
-  if (!plot || !pay(did, `the Works: ${plot?.name ?? "land"}`)) {
+  if (!plot || !pay(did, "works_plot")) {
     yardSfx.no();
     if (!did.ok) toolHooks.said(`${did.why}.`);
     return false;
@@ -510,7 +509,7 @@ export function buyIdea(id: PlanId): boolean {
   const w = S.world;
   const plan = PLANS.find((p) => p.id === id);
   const did = buyPlan(w, id, coins());
-  if (!plan || !pay(did, `the Works: ${plan?.name ?? "a plan"}`)) {
+  if (!plan || !pay(did, "works_plan")) {
     yardSfx.no();
     if (!did.ok) toolHooks.said(`${did.why}.`);
     return false;

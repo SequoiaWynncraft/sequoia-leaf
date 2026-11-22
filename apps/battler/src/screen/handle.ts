@@ -13,6 +13,7 @@
  * puts it back.
  */
 import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
+import { balance } from "@sequoia-leaf/kit/purse.ts";
 import {
   HZ,
   isBossId,
@@ -299,7 +300,7 @@ export function openHandle(): void {
         resolve: run?.resolve,
         choice: run?.choices[0]?.kind ?? null,
         boss: run?.foe.figures.some((p) => isBossId(p.kind)) ?? false,
-        coins: S.coins,
+        coins: balance().coins,
         fight: fightState(),
         view: { z: stage.V.z, w: stage.V.w, h: stage.V.h, bx: stage.V.bx, by: stage.V.by },
       };

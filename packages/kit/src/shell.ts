@@ -15,7 +15,9 @@ export type FromTown =
   /** The town is about to put the game away; save now. */
   | { readonly town: "closing" }
   /** The guild's ledger says the member holds this much Leaf now (the town heard it from their news). */
-  | { readonly town: "leaf"; readonly leaf: number };
+  | { readonly town: "leaf"; readonly leaf: number }
+  /** Leaf's Coins ledger says the member holds this many Coins now (the town's purse changed). */
+  | { readonly town: "coins"; readonly coins: number };
 
 /** True when this page is running inside the town. */
 export const inTown = (): boolean => {
@@ -37,16 +39,17 @@ export function leave(): void {
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
-/** Leaf as the ledger holds it: a whole number, never below nothing. */
+/** Leaf, or Coins, as a ledger holds them: a whole number, never below nothing. */
 const isLeaf = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
 
 /** In a game: hear the town. Returns how to stop. */
 export function fromTown(fn: (msg: FromTown) => void): () => void {
   const on = (e: MessageEvent): void => {
     if (e.origin !== window.location.origin || !isRecord(e.data)) return;
-    const { town, leaf } = e.data;
+    const { town, leaf, coins } = e.data;
     if (town === "closing") fn({ town: "closing" });
     else if (town === "leaf" && isLeaf(leaf)) fn({ town: "leaf", leaf });
+    else if (town === "coins" && isLeaf(coins)) fn({ town: "coins", coins });
   };
   window.addEventListener("message", on);
   return () => window.removeEventListener("message", on);

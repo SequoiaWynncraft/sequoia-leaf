@@ -159,8 +159,12 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
 
 ## What it remembers
 
-Leaf and Coins are the kit's one purse (`@sequoia-leaf/kit/purse.ts`), shared with every game: a
-game in a frame that earns Coins moves the number in the town's corner.
+Leaf and Coins are the kit's one purse (`@sequoia-leaf/kit/purse.ts`), shared with every game. On
+the guild's server both are Leaf's: every Coin the town earns or spends goes to Leaf's ledger with
+its reason (the daily chest, a camp thing at a stall, a quest's Coins, what the arrival letter
+pays), and the town asks Leaf for the balance when a game in its frame closes and when its page
+comes back into view, so it shows what a game earned there. With the made-up guild the purse is
+kept in the browser, and a game in a frame that earns Coins moves the number in the town's corner.
 
 The town keeps one small record in the browser (`save.ts` says what is in it): what the member
 owns and has on, which quests they have claimed, how often they have spotted the missing crab, the
@@ -191,9 +195,10 @@ guild's: they are in `folk.ts`, the same everywhere.
 
 The town's front door is `open.ts`. It awaits the kit's `start()` before anything is read (the
 kit's README says how it finds out where it is): with no server the town opens with the made-up
-guild, exactly as above. On the guild's server it fetches the member's saved purse and town
-(`purse` and `town` slots), then what `live.ts` needs (their quests, their newest news for the
-week's counts, and their news since the town last told them any), and only then loads the town.
+guild, exactly as above. On the guild's server it fetches the member's saved town (the `town`
+slot; their Coins are Leaf's, from who they are), then what `live.ts` needs (their quests, their
+newest news for the week's counts, and their news since the town last told them any), and only
+then loads the town.
 If the member is signed out, not a member, or the server is in trouble, the kit's card says so.
 The town is not loaded at all, since it reads what the browser keeps the moment it loads.
 

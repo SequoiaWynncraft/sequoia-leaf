@@ -55,7 +55,7 @@ import {
   waveAt,
 } from "./players.ts";
 import { camp, kept, remember } from "./record.ts";
-import { dayOf } from "./save.ts";
+import { utcDayOf } from "./save.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Scene, Stage } from "./stage.ts";
 import { type Door, makeTouch } from "./touch.ts";
@@ -177,7 +177,7 @@ export interface Town extends Scene {
 export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town {
   G.lostCrab = guild.lostCrab();
   hooks.looted = (): boolean => {
-    const today = dayOf(Date.now());
+    const today = utcDayOf(Date.now());
     if (kept.chest === today) return true;
     kept.chest = today;
     remember();

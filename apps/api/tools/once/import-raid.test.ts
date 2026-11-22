@@ -60,7 +60,7 @@ function oldAlmanacText(): string {
 /** An old save slot, as the kit's cloud sent it. */
 const slot = (keys: Record<string, string>) => JSON.stringify({ saved_at: NOW - 86_400_000, keys });
 
-async function saved(player: string, name: "raid" | "purse", keys: Record<string, string>) {
+async function saved(player: string, name: "raid" | "purse" | "works", keys: Record<string, string>) {
   await query(
     (sql) => sql`
       INSERT INTO saves (player_id, slot, version, data, updated_at, guest)
@@ -72,7 +72,12 @@ async function saved(player: string, name: "raid" | "purse", keys: Record<string
 beforeEach(async () => {
   file = join(directory, `leaf-${++made}.db`);
   await saved(good, "raid", { "raid.run.v1": oldRunText(), "raid.almanac.v1": oldAlmanacText() });
-  await saved(good, "purse", { "town.purse.v1": '{"coins":1234}' });
+  // The Works once kept Coins of its own too, under its own keys, which the page carried into the purse.
+  await saved(good, "purse", { "town.purse.v1": '{"coins":1234}', "works.coins.v2": "120" });
+  await saved(good, "works", {
+    "works.save.v2": "{}",
+    "works.save.v1": JSON.stringify({ cells: [], order: 0, coins: 40 }),
+  });
   await saved(greedy, "raid", {
     "raid.run.v1": oldRunText((run) => {
       run.acorns = 500;
@@ -113,7 +118,10 @@ describe("bringing the raid over from the old saves", () => {
     expect(out).toMatch(/run: The Easy Way, room 4 of 15 \(plan\), resolve \d+, level \d+, \d+ acorns/);
     expect(out).toMatch(/board: .+\*/);
     expect(out).toMatch(/almanac: 1 runs, \d+ figures fielded/);
-    expect(out).toContain("coins: 1,234");
+    expect(out).toContain("coins: 1,234 (the purse's: these are brought over)");
+    expect(out).toContain(
+      "the Works' own: 120 (works.coins.v2, purse slot); 40 (works.save.v1, works slot); not brought over",
+    );
     expect(out).toContain("would be brought over (nothing written: give --write to write it)");
     expect(out).toContain("WARNING: 500 acorns; play reaches about 200");
     expect(out).toContain("has 4 stars; play reaches 3");

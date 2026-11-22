@@ -6,7 +6,9 @@
  * For each player it reads their old `raid` slot (the run in progress and the almanac) and their
  * Coins from the old `purse` slot, with the loaders the battler had (`raid-old.ts`), and prints what
  * it found for a person to check: the trail, room, resolve, level and acorns, the figures and their
- * stars, the items, the almanac's counts, and the Coins. Anything play cannot reach (a figure above
+ * stars, the items, the almanac's counts, and the Coins: the purse's, and beside them any the Works
+ * kept under its own old keys (in the `purse` or the `works` slot), which are printed and not
+ * brought over. Anything play cannot reach (a figure above
  * three stars, more figures on the board than the level fields, more than 200 acorns, more than
  * 100,000 Coins) is printed as a warning, and that player is skipped unless `--force` is given too;
  * forced, a figure is brought to three stars and a figure too many goes to the bench, as printed.
@@ -40,7 +42,7 @@ import { SqlClient, SqlSchema } from "effect/sql";
 
 import { databaseAt } from "../../src/db.ts";
 import { WELCOME_COINS } from "../../src/play/coins.ts";
-import { keysOf, OLD_KEYS, oldAlmanac, oldCoins, oldRun, REACH } from "./raid-old.ts";
+import { keysOf, OLD_KEYS, oldAlmanac, oldCoins, oldRun, oldWorksCoins, REACH } from "./raid-old.ts";
 
 export interface ImportOptions {
   /** Store what was found. Without it nothing is written. */
@@ -66,8 +68,24 @@ const stars = (n: number): string => "*".repeat(n);
 const figures = (pieces: readonly (Run["board"][number] | undefined)[]): string =>
   pieces.flatMap((p) => (p ? [`${FIGURES[p.kind].name} ${stars(p.stars)}`] : [])).join(", ") || "nobody";
 
+/** The Coins the Works kept itself under its old keys, among a slot's texts. */
+const worksCoinsIn = (slot: string, texts: Readonly<Record<string, string>>) =>
+  oldWorksCoins(texts).map(({ key, coins }) => ({ slot, key, coins }));
+
+/** The Coins the Works kept itself, found in a slot, as a line. */
+const worksLine = (found: readonly { slot: string; key: string; coins: number }[]): string =>
+  `  the Works' own: ${
+    found.map((f) => `${f.coins.toLocaleString("en-GB")} (${f.key}, ${f.slot} slot)`).join("; ") || "none kept"
+  }; not brought over`;
+
 /** What a person checks: one player's table and Coins, in a few lines. */
-function summary(player: PlayerId, run: Run | null, almanac: Almanac, coins: number | null): string[] {
+function summary(
+  player: PlayerId,
+  run: Run | null,
+  almanac: Almanac,
+  coins: number | null,
+  works: readonly { slot: string; key: string; coins: number }[],
+): string[] {
   const lines = [`${player}:`];
   if (run) {
     lines.push(
@@ -87,7 +105,8 @@ function summary(player: PlayerId, run: Run | null, almanac: Almanac, coins: num
       `${almanac.forged.length} items forged, ${almanac.topped.length} traits topped; bosses ${almanac.bosses
         .map((b) => b.length)
         .join("/")}; furthest ${almanac.best.join("/")}`,
-    `  coins: ${coins === null ? "none kept" : coins.toLocaleString("en-GB")}`,
+    `  coins: ${coins === null ? "none kept" : coins.toLocaleString("en-GB")} (the purse's: these are brought over)`,
+    worksLine(works),
   );
   return lines;
 }
@@ -171,12 +190,17 @@ export async function importRaid(
             }
             const raid = yield* slotOf({ playerId: player, slot: "raid" });
             const purse = yield* slotOf({ playerId: player, slot: "purse" });
-            if (Option.isNone(raid) && Option.isNone(purse)) {
-              print(`${player}: nothing saved; skipped`);
-              return "skipped" satisfies Outcome;
-            }
+            const yard = yield* slotOf({ playerId: player, slot: "works" });
             const keys = Option.isSome(raid) ? keysOf(raid.value.data) : {};
             const purseKeys = Option.isSome(purse) ? keysOf(purse.value.data) : {};
+            const worksKeys = Option.isSome(yard) ? (keysOf(yard.value.data) ?? {}) : {};
+            // Wherever the Works kept Coins of its own: printed beside the purse's, never brought over.
+            const works = [...worksCoinsIn("purse", purseKeys ?? {}), ...worksCoinsIn("works", worksKeys)];
+            if (Option.isNone(raid) && Option.isNone(purse)) {
+              print(`${player}: nothing saved; skipped`);
+              if (works.length > 0) print(worksLine(works));
+              return "skipped" satisfies Outcome;
+            }
             if (keys === null || purseKeys === null) {
               print(`${player}: nonsense: a slot that is not a save; skipped`);
               return "skipped" satisfies Outcome;
@@ -207,7 +231,7 @@ export async function importRaid(
             if (coins !== null && coins > REACH.coins)
               warnings.push(`${coins} Coins; play reaches about ${REACH.coins}`);
             if (run && !trailOpen(almanac, run.trail)) warnings.push(`a run on a trail the almanac has not opened`);
-            for (const line of summary(player, run, almanac, coins)) print(line);
+            for (const line of summary(player, run, almanac, coins, works)) print(line);
             for (const warning of warnings) print(`  WARNING: ${warning}`);
             if (warnings.length > 0 && !options.force) {
               print("  skipped: it holds what play cannot reach. With --force it is brought over as shown above.");

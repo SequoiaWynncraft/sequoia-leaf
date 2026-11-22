@@ -49,6 +49,9 @@ export function blank(): Kept {
 
 const two = (n: number): string => String(n).padStart(2, "0");
 
+/** The UTC day a moment falls on, as `2026-11-21`: the daily chest's day, as Leaf's days are. */
+export const utcDayOf = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+
 /** The local day a moment falls on, as `2026-11-21`. */
 export function dayOf(ms: number): string {
   const d = new Date(ms);

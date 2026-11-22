@@ -8,9 +8,10 @@
  * worth a line in the town's feed.
  */
 import { refresh, settle } from "@sequoia-leaf/kit/card.ts";
-import { askCoins, keepLeaf, serverCard, shutCard, start } from "@sequoia-leaf/kit/live.ts";
+import { keepLeaf, serverCard, shutCard, start } from "@sequoia-leaf/kit/live.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
+import { refreshCoins } from "@sequoia-leaf/kit/purse.ts";
 import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { isMuted, setMuted } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
@@ -51,16 +52,7 @@ import { openLight } from "./screen/ui/lit.ts";
 import { renderNudge, stepNudge } from "./screen/ui/nudge.ts";
 import { openPages, pagesClick, renderPages, showPage } from "./screen/ui/pages.ts";
 import { renderPicks } from "./screen/ui/picks.ts";
-import {
-  acornLanded,
-  buildTable,
-  placeFoe,
-  renderPurse,
-  renderTable,
-  stepTable,
-  toast,
-  wakeChip,
-} from "./screen/ui/table.ts";
+import { acornLanded, buildTable, placeFoe, renderTable, stepTable, toast, wakeChip } from "./screen/ui/table.ts";
 
 /** What the page says where no Leaf answers: the table is the guild's server's. */
 const NEEDS_LEAF = "The table needs the guild's server.";
@@ -81,14 +73,6 @@ async function setOutOn(trail: number): Promise<void> {
   if (await startNew(trail)) showPage(null);
 }
 
-/** A run that ended paid its Coins on Leaf: the purse shows what Leaf now holds. */
-async function coinsAgain(): Promise<void> {
-  const coins = await askCoins();
-  if (coins === null) return;
-  S.coins = coins;
-  renderPurse();
-}
-
 async function boot(): Promise<void> {
   await fontsReady();
   // Every figure on one sheet: a picture of the rules' figures, which needs no table.
@@ -107,7 +91,6 @@ async function boot(): Promise<void> {
     return;
   }
   const { signIn } = where;
-  S.coins = (await askCoins()) ?? 0;
   const trouble = await openTable((why) => shutCard(why === "signedout" ? "signedout" : "closed", signIn));
   if (trouble === "signedout") {
     shutCard("signedout", signIn);
@@ -179,7 +162,8 @@ async function boot(): Promise<void> {
     snd.no();
     toast(why);
   });
-  onEnded(() => void coinsAgain());
+  // A run that ended paid its Coins on Leaf: the purse asks Leaf what it holds now, and shows it.
+  onEnded(refreshCoins);
   // Leaf's table is not what this page was showing (the member played on another page): take it.
   onMoved(rejoin);
   onSignal("acorn", acornLanded);

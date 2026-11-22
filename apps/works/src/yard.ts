@@ -6,7 +6,7 @@
  */
 
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
-import { balance, earn, spend } from "@sequoia-leaf/kit/purse.ts";
+import { balance, type CoinReason, coinsOnLeaf, earn, pretendPurse, spend } from "@sequoia-leaf/kit/purse.ts";
 
 import {
   type Away,
@@ -74,19 +74,22 @@ function readScreen(): void {
 /** The Coins in the member's purse. */
 export const coins = (): number => balance().coins;
 
-/** Takes what something cost from the purse. Says whether the thing was done at all. */
-export function pay(did: Spent, why: string): boolean {
+/** Takes what something cost from the purse, for the reason it cost. Says whether the thing was done at all. */
+export function pay(did: Spent, reason: CoinReason): boolean {
   if (!did.ok) return false;
-  if (did.cost > 0) spend("coins", did.cost, why);
+  if (did.cost > 0) spend("coins", did.cost, reason);
   return true;
 }
 
 /** Pays back what taking something away returned. */
-export function repay(did: Refund, why: string): boolean {
+export function repay(did: Refund): boolean {
   if (!did.ok) return false;
-  if (did.refund > 0) earn(did.refund, why);
+  if (did.refund > 0) earn(did.refund, "works_refund");
   return true;
 }
+
+/** What the orders had paid into the till when it was last paid out: what has come in since is theirs, the rest the depot's. */
+let ordersBanked = 0;
 
 /** While true, what the yard earns stays in its till: the letter about an absence pays it out when it is put away. */
 let holding = false;
@@ -94,10 +97,17 @@ export function holdTill(on: boolean): void {
   holding = on;
 }
 
-/** Pays whatever is in the till into the purse, and says how much that was. */
+/**
+ * Pays whatever is in the till into the purse, and says how much that was: what the orders paid in
+ * since it was last paid out as theirs, and the rest as the depot's.
+ */
 export function bank(): number {
   const got = collect(S.world);
-  if (got > 0) earn(got, "the Works");
+  if (got <= 0) return got;
+  const orders = Math.min(got, Math.max(0, Math.floor(S.world.paid - ordersBanked)));
+  ordersBanked += orders;
+  if (orders > 0) earn(orders, "works_order");
+  if (got > orders) earn(got - orders, "works_depot");
   return got;
 }
 
@@ -108,13 +118,16 @@ export function bank(): number {
 export function openYard(): Away | null {
   readScreen();
   const world = load(read(KEY)) ?? create({ seed: Math.floor(Math.random() * 0xffffffff) });
-  // The yard before this one kept Coins of its own: they come over to the purse, once.
+  // The yard before this one kept Coins of its own: with the made-up guild they come over to the
+  // purse, once. On the guild's server Coins are Leaf's, and nothing the browser kept becomes Coins.
   const carried = oldCoins(read(OLD));
   if (carried !== null) {
-    earn(carried, "the old yard");
+    if (!coinsOnLeaf()) pretendPurse(balance().coins + carried);
     drop(OLD);
   }
   drop(GREYBOX_PURSE);
+  // Only what the orders pay from here on is theirs; anything already in the till is the depot's.
+  ordersBanked = world.paid;
   S.world = world;
   S.rev++;
   const away = runTo(world, Date.now());
@@ -125,6 +138,7 @@ export function openYard(): Away | null {
 /** Puts another yard in this one's place: for looking at the game at some stage of its story. */
 export function swapYard(world: World): void {
   S.world = world;
+  ordersBanked = world.paid;
   S.picked = -1;
   S.aim = null;
   S.run = null;

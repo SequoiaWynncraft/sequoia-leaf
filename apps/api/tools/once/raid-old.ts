@@ -23,6 +23,13 @@ import { mix } from "@sequoia-leaf/raid/rng.ts";
 
 export const OLD_KEYS = { run: "raid.run.v1", almanac: "raid.almanac.v1", purse: "town.purse.v1" } as const;
 
+/**
+ * Where the Works kept Coins of its own before the kit's purse held them: its grey-box purse (a
+ * number, as text) and the yard before this one (`coins` in it). The page carried those into the
+ * purse when it opened, so the purse's are the Coins; these are only printed beside them.
+ */
+export const OLD_WORKS_COINS = { greybox: "works.coins.v2", yard: "works.save.v1" } as const;
+
 /** What play can reach, beyond which an old save is not taken without being asked to. */
 export const REACH = { stars: 3, acorns: 200, coins: 100_000 } as const;
 
@@ -52,6 +59,26 @@ export function oldCoins(text: string): number | null {
   } catch {
     return null;
   }
+}
+
+/** The Coins the Works kept itself under each of its old keys found among `keys`, by key. */
+export function oldWorksCoins(
+  keys: Readonly<Record<string, string>>,
+): { readonly key: string; readonly coins: number }[] {
+  const out: { key: string; coins: number }[] = [];
+  for (const key of [OLD_WORKS_COINS.greybox, OLD_WORKS_COINS.yard]) {
+    const text = keys[key];
+    if (text === undefined) continue;
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      continue;
+    }
+    const coins = key === OLD_WORKS_COINS.greybox ? whole(raw) : isRecord(raw) ? whole(raw.coins) : null;
+    if (coins !== null) out.push({ key, coins });
+  }
+  return out;
 }
 
 /** The almanac as the battler kept it (its form has not changed since). */
