@@ -26,8 +26,8 @@ const LINES: Readonly<Record<NudgeId, string>> = {
   three: "Three the same become one, with a star more.",
   item: "Drag it onto a figure. Two components make an item.",
   trait: "Two of a kin switch a trait on. Tap it to read it.",
-  save: "Every ten acorns you keep earns one more each room.",
-  rustle: "Nothing you want? Rustle the stall. One a room is free.",
+  save: "Every 10 acorns you keep earn 1 more each room.",
+  rustle: "Nothing you want? Reroll the stall. 1 a room is free.",
 };
 /** Nudges that only point something out, and go by themselves after this many seconds. */
 const LINGER: Partial<Record<NudgeId, number>> = { watch: 6, three: 9, trait: 9, save: 9 };

@@ -25,13 +25,13 @@ export const ROLES: Readonly<Record<CallingId, Role>> = {
   slinger: { role: "Ranged", place: "back row" },
   sage: { role: "Caster", place: "back row" },
   mender: { role: "Healer", place: "back row" },
-  sneak: { role: "Assassin", place: "leaps to their back row" },
+  sneak: { role: "Assassin", place: "leaps to the enemy back row" },
 };
 
-/** What a figure's draw is called on its card: "Draws fire", "Draws fire ×2", "Slips notice"; nothing for 0. */
+/** What a figure's draw is called on its card: "Draws fire", "Draws fire ×2", "Avoids fire"; nothing for 0. */
 export function drawName(draw: number): string | null {
   if (draw === 0) return null;
-  if (draw < 0) return draw === -1 ? "Slips notice" : `Slips notice ×${-draw}`;
+  if (draw < 0) return draw === -1 ? "Avoids fire" : `Avoids fire ×${-draw}`;
   return draw === 1 ? "Draws fire" : `Draws fire ×${draw}`;
 }
 const HEXES = ["", "one hex", "two hexes", "three hexes"];

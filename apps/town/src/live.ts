@@ -43,7 +43,7 @@ export function rankName(rank: string | null): string {
 export const GUEST = "Guest";
 
 /** The one note on a guest's quest board, in place of quests. */
-export const GUEST_BOARD = "Quests are for members of Sequoia. Raid with the guild and yours appear here.";
+export const GUEST_BOARD = "Quests are for members of Sequoia. Join the guild to take part.";
 
 // ---------- the quest board ----------
 

@@ -349,7 +349,7 @@ export function showCard(a: Actor, doing: (() => string) | null = null, waveTo: 
           a.who.rank ? el("div", "k-dim", { text: a.who.rank }) : null,
           asleep === null
             ? null
-            : el("div", "k-dim", { text: `Dozed off ${span(Math.max(0, (Date.now() - asleep) / 60000))} ago.` }),
+            : el("div", "k-dim", { text: `Left ${span(Math.max(0, (Date.now() - asleep) / 60000))} ago.` }),
         ),
         x,
       ),
@@ -480,8 +480,9 @@ export function setStrip(host: { readonly id: string; readonly name: string } | 
 
 export function initHud(): void {
   // A guest has no Leaf, and the purse shows only their Coins.
-  if (leafShown()) counters.leaf = counter("leaf", "Leaf", "Earned with the guild, out in the world.");
-  counters.coins = counter("coins", "Coins", "Made in town: the Works, the games.");
+  if (leafShown())
+    counters.leaf = counter("leaf", "Leaf", "Earned with the guild in Wynncraft: raids, wars, quests and milestones.");
+  counters.coins = counter("coins", "Coins", "Earned in town: the Works, The Little Raid and Cinfy's chest.");
 
   const corner = $("corner");
   hammer = el("button", "k-btn wood icon", { type: "button", "aria-label": "Decorate", hidden: true }, glyph("hammer"));
