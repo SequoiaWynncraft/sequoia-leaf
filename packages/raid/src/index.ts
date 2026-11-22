@@ -201,6 +201,7 @@ export {
   type Spot,
   spotOf,
   STALL_POOL,
+  layOutAfresh,
   startRun,
   summariseRun,
   type Taken,

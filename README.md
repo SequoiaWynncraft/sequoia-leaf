@@ -925,18 +925,26 @@ moved. For The Little Raid:
 bun apps/api/tools/once/import-raid.ts <database file> <player id>... [--write] [--force]
 ```
 
-For each player named it reads their old `raid` slot (the run in progress and
-the almanac) and their Coins from the old `purse` slot, with the loaders the
-battler had (`raid-old.ts`), and prints what it found to check by eye: trail,
-room, resolve, level, acorns, the figures and their stars, items, the
-almanac's counts and Coins. Anything play cannot reach (a figure above three
-stars, more figures on the board than the level fields, more than 200 acorns,
-more than 100,000 Coins) is a warning, and that player is skipped unless
-`--force` is given too. Without `--write` nothing is written. With it, the
-table is stored as the player's `raid` state, only while their state is
-untouched (`rev` 0), with its random stream drawn afresh, and their Coins as
-one entry keyed `import:<player>` that brings their balance to what the old
-purse held, in place of the welcome. It has no "everyone". The tool and its
+It opens the database as it is, running no migration, and does nothing if
+Leaf's play tables are not there (or there is no such file). For each player
+named it reads their old `raid` slot (the run in progress and the almanac) and
+their Coins from the old `purse` slot, with the loaders the battler had
+(`raid-old.ts`), and prints, compactly, what it found to check by eye: trail,
+room, resolve, level and experience, acorns, the figures with their stars and
+items, the item bench, boons, picks waiting, the almanac and the old Coins.
+Anything past what play reaches (Coins 20,000, acorns 150, a figure above three
+stars, more figures than the level fields, more than three items on a figure,
+a room past the fifteenth, more picks waiting than a room gives) is a warning
+line, and that part is held back unless `--force` is given too. Nothing drawn
+is trusted from an old save: the run keeps what the player has, and the stall,
+the room's foe, what the picks offer and every seed are drawn afresh from
+Leaf's dice; a run saved mid-fight is back to planning that room. Without
+`--write` nothing is written. With it, the two parts go independently: their
+Coins as one entry keyed `import:<player>`, added once whatever other entries
+they have (the old Coins less the welcome, which stands for the 300 the old
+purse opened with, never taking the balance below nothing); and the table as
+the player's `raid` state, unless that state has been played on Leaf (`rev`
+above 0), which `--force` writes over. It has no "everyone". The tool and its
 loaders are deleted in the change after it has run.
 
 ## Rules the code is built on

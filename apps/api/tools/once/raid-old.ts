@@ -10,16 +10,15 @@
 import {
   type Almanac,
   checkRun,
-  type FightSetup,
   FIGURES,
+  HOLDS,
   isFigureId,
+  layOutAfresh,
   loadAlmanac,
   MAX_LEVEL,
-  partyOf,
-  resolveFight,
+  ROOM_COUNT,
   type Run,
 } from "@sequoia-leaf/raid";
-import { mix } from "@sequoia-leaf/raid/rng.ts";
 
 export const OLD_KEYS = { run: "raid.run.v1", almanac: "raid.almanac.v1", purse: "town.purse.v1" } as const;
 
@@ -30,8 +29,12 @@ export const OLD_KEYS = { run: "raid.run.v1", almanac: "raid.almanac.v1", purse:
  */
 export const OLD_WORKS_COINS = { greybox: "works.coins.v2", yard: "works.save.v1" } as const;
 
-/** What play can reach, beyond which an old save is not taken without being asked to. */
-export const REACH = { stars: 3, acorns: 200, coins: 100_000 } as const;
+/**
+ * What play can reach, beyond which an old save is not taken without being asked to: stars on a
+ * figure, acorns, Coins, items a figure holds, rooms in a raid, and picks waiting at once (a boss
+ * won gives two components and a boon).
+ */
+export const REACH = { stars: 3, acorns: 150, coins: 20_000, items: HOLDS, rooms: ROOM_COUNT, picks: 3 } as const;
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const whole = (v: unknown): number | null =>
@@ -101,9 +104,11 @@ const nameOf = (kind: unknown): string => (isFigureId(kind) ? FIGURES[kind].name
  * A run in progress as the battler saved it (version 1), with whatever in it play cannot reach
  * listed, and brought within reach where the rules could not hold it otherwise: a figure above
  * three stars at three, a figure more than the level fields on the bench (or, with no room there,
- * left out). A run saved mid-fight comes back at that fight, as the battler brought it back.
+ * left out), items more than a figure holds on the item bench, a room past the last at the last,
+ * picks waiting past what a room gives let go of. Nothing the save drew is kept: the room is laid
+ * out afresh from `seed` (`layOutAfresh`), and a run saved mid-fight is back to planning that room.
  */
-export function oldRun(text: string): OldRun {
+export function oldRun(text: string, seed: number): OldRun {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -118,12 +123,33 @@ export function oldRun(text: string): OldRun {
   const changed: string[] = [];
   const board = Array.isArray(r.board) ? r.board : [];
   const bench = Array.isArray(r.bench) ? r.bench : [];
+  const loose: unknown[] = Array.isArray(r.items) ? r.items : [];
   for (const piece of [...board, ...bench]) {
     if (isRecord(piece) && typeof piece.stars === "number" && piece.stars > REACH.stars) {
       warnings.push(`${nameOf(piece.kind)} has ${piece.stars} stars; play reaches ${REACH.stars}`);
       changed.push(`${nameOf(piece.kind)} at ${REACH.stars} stars`);
       piece.stars = REACH.stars;
     }
+    if (isRecord(piece) && Array.isArray(piece.items) && piece.items.length > REACH.items) {
+      warnings.push(`${nameOf(piece.kind)} holds ${piece.items.length} items; a figure holds ${REACH.items}`);
+      const spare: unknown[] = piece.items.slice(REACH.items);
+      piece.items = piece.items.slice(0, REACH.items);
+      loose.push(...spare);
+      changed.push(`${spare.length} of ${nameOf(piece.kind)}'s items to the item bench`);
+    }
+  }
+  r.items = loose;
+  if (typeof r.room === "number" && r.room > REACH.rooms - 1) {
+    warnings.push(`room ${r.room + 1}; a raid has ${REACH.rooms}`);
+    changed.push(`at room ${REACH.rooms}`);
+    r.room = REACH.rooms - 1;
+    if (Array.isArray(r.record))
+      r.record = r.record.filter((x) => isRecord(x) && typeof x.room === "number" && x.room < REACH.rooms);
+  }
+  if (Array.isArray(r.choices) && r.choices.length > REACH.picks) {
+    warnings.push(`${r.choices.length} picks waiting; a room gives at most ${REACH.picks}`);
+    changed.push(`the first ${REACH.picks} picks waiting kept`);
+    r.choices = r.choices.slice(0, REACH.picks);
   }
   const level = typeof r.level === "number" ? r.level : 1;
   const boons = Array.isArray(r.boons) ? r.boons : [];
@@ -145,17 +171,14 @@ export function oldRun(text: string): OldRun {
   if (typeof r.acorns === "number" && r.acorns > REACH.acorns) {
     warnings.push(`${r.acorns} acorns; play reaches about ${REACH.acorns}`);
   }
-  // The battler kept no fight in the save: one in progress was worked out again from the run's seed.
-  const fighting = r.phase === "fight";
+  // Nothing drawn is kept: a fight in progress (whose outcome the save's own seed decides) is
+  // planning again, and the room is laid out afresh below.
   r.fight = null;
-  if (fighting) r.phase = "plan";
+  r.last = null;
+  if (r.phase === "fight") r.phase = "plan";
   const read = checkRun(r);
   if (!read.ok) return { ok: false, why: read.why };
   const run = read.run;
-  if (fighting) {
-    run.phase = "fight";
-    const setup: FightSetup = { seed: mix(run.seed, 5000 + run.record.length), sides: [partyOf(run), run.foe] };
-    run.fight = { setup, outcome: resolveFight(setup) };
-  }
+  layOutAfresh(run, seed);
   return { ok: true, run, warnings, changed };
 }
