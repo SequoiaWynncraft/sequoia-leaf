@@ -542,6 +542,45 @@ function lanternTree(): Sprite {
   return spr(c, 32, 80);
 }
 
+/** A young redwood, its foot at (x, foot): tiers of needles widening downward on a thin trunk. */
+function seedling(g: Ctx, x: number, foot: number, tiers: number): void {
+  R(g, x, foot - 5, 1, 5, BARK[1]);
+  for (let tier = 0; tier < tiers; tier++) {
+    const top = foot - 4 - (tiers - tier) * 4;
+    for (let row = 0; row < 6; row++) {
+      const half = Math.round((row + 1) * (0.5 + tier * 0.18));
+      R(g, x - half, top + row, half * 2 + 1, 1, row > 3 ? GREEN[1] : GREEN[2]);
+      R(g, x - half, top + row, Math.max(1, half - 1), 1, row > 3 ? GREEN[2] : GREEN[3]);
+    }
+  }
+  R(g, x, foot - 6 - tiers * 4, 1, 2, GREEN[3]);
+}
+
+/** The Grove: young redwoods and a ring of stones round a standing stone with a leaf cut in it. */
+function grove(): Sprite {
+  const { c, g } = makeCanvas(56, 50);
+  seedling(g, 28, 38, 7);
+  seedling(g, 9, 44, 4);
+  seedling(g, 47, 45, 5);
+  seedling(g, 18, 40, 3);
+  seedling(g, 38, 41, 3);
+  for (const [x, y, w, h, seed] of [
+    [15, 48, 7, 5, 341],
+    [21, 50, 5, 3, 342],
+    [35, 50, 5, 3, 343],
+    [41, 48, 7, 5, 344],
+  ] as const) {
+    const stone = rock(w, h, seed);
+    g.drawImage(stone.c, x - stone.ax, y - stone.ay);
+  }
+  const stone = rock(12, 19, 345);
+  g.drawImage(stone.c, 28 - stone.ax, 50 - stone.ay);
+  R(g, 27, 36, 2, 6, GOLD[1]);
+  R(g, 26, 37, 4, 3, GOLD[1]);
+  R(g, 28, 42, 1, 2, GOLD[0]);
+  return spr(c, 28, 50);
+}
+
 export function bush(w: number, h: number, seed: number): Sprite {
   const c = paint(w, h, (x, y) => {
     const cx = w / 2;
@@ -903,6 +942,20 @@ const ICON_ROWS: Readonly<Record<PlaceId, readonly string[]>> = {
     ".y...yy...y.",
     ".....yy.....",
   ],
+  grove: [
+    "......w.....",
+    ".....wYw....",
+    "......w.....",
+    "............",
+    ".ll......ll.",
+    "lGGl....lGGl",
+    "lGGGl..lGGGl",
+    ".lGGGllGGGl.",
+    "...lGGGGl...",
+    ".....GG.....",
+    ".....bb.....",
+    "....ssss....",
+  ],
   quests: [
     ".oooooooooo.",
     "owwwwwwwwwwo",
@@ -1023,6 +1076,7 @@ export interface Sprites {
   counter: Sprite;
   works: Sprite;
   gate: Sprite;
+  grove: Sprite;
   signpost: Sprite;
   board: Sprite;
   stalls: Sprite[];
@@ -1066,6 +1120,7 @@ export function makeSprites(): Sprites {
     counter: t.counter,
     works: works(),
     gate: gate(),
+    grove: grove(),
     signpost: signpost(),
     board: board(),
     stalls: [stall(0), stall(1), stall(2)],

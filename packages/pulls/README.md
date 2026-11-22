@@ -8,6 +8,9 @@ service holds each player's pulls with.
 bun test
 ```
 
+`src/wire.ts` reads what Leaf sends a page back into these types: the view, a command's notes, and
+the banners route's answer.
+
 ## What is won
 
 Seven rarities (`RARITIES`), each with its colour, in three tiers: filler (Leafkin, Sapling, Sprite),

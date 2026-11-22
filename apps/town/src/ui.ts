@@ -742,6 +742,27 @@ function campCard(body: HTMLElement): () => void {
   });
 }
 
+function groveCard(body: HTMLElement): () => void {
+  const open = el("div", "k-paper", { hidden: true });
+  const go = button("wide", ["Go in"], () => {
+    hooks.toGrove();
+  });
+  go.dataset.first = "";
+  body.append(
+    el("div", "k-row", {}, slot(shown(icon("grove"), 2), 34), el("div", "k-grow", { text: place("grove").about })),
+    open,
+    go,
+  );
+  return when(
+    () => hooks.groveBanner() ?? "",
+    () => {
+      const line = hooks.groveBanner();
+      open.textContent = line ?? "";
+      open.hidden = line === null;
+    },
+  );
+}
+
 function profile(body: HTMLElement): null {
   const me = guild.me();
   const p = G.player;
@@ -809,6 +830,7 @@ function profile(body: HTMLElement): null {
 
 const BUILD: Record<PanelId, (body: HTMLElement) => (() => void) | null> = {
   treasury,
+  grove: groveCard,
   quests: board,
   market,
   works: doorCard("works"),

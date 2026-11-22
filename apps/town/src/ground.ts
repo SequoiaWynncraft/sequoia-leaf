@@ -12,7 +12,7 @@ import { gateway, H, hedgeY, pathD, pondD, W } from "./world.ts";
 const at = (ramp: readonly string[], i: number): string => ramp[clamp(Math.round(i), 0, ramp.length - 1)] ?? "#000000";
 
 /** Deep forest floor, where nobody walks. */
-const DEEP = ["#141f1c", "#19291f", "#1e3324"] as const;
+export const DEEP = ["#141f1c", "#19291f", "#1e3324"] as const;
 
 /** Where the floor's picture sits in the world. */
 export const GROUND = { x: -72, y: 48, w: 656, h: 376 };

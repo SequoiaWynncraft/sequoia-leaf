@@ -150,6 +150,11 @@ With a mouse, Chromium makes no click when what a press began on is replaced bef
 nothing is drawn again under a held mouse button: `when` waits for its next call after the button
 lifts, and `unheld(fn)` (which `refresh()` uses) for the tick after the click.
 
+A button that spends asks to be pressed again (`pressedTwice(key, redraw)`, drawn with `asking` and
+`asksAgain`). The second press must be a new one: a key that was down at the first and has not come
+up since (a held Enter saying itself again, `keys.ts`) does not make it. `unask()` stops the button
+waiting at once, as four seconds left alone do.
+
 `tools/drive.ts` drives a built page in headless Chromium and takes screenshots; its header says how.
 
 ## Cards
@@ -251,7 +256,8 @@ is read as the page comes back (`outside.wake`). A visit says none of this, nor 
 `predict` is the copy after a command the shared rules can work out
 without Leaf, shown at once; each answer's state takes the copy's place (with what is still waiting
 worked out again on top), and `onState` tells the page when that is not what it was showing.
-A command only Leaf can answer is shown when Leaf answers, and `makeHold()` is the one rule for
+`refresh()` asks for the state again; its answer is let go if a command was sent meanwhile, as
+that command's answer is newer. A command only Leaf can answer is shown when Leaf answers, and `makeHold()` is the one rule for
 holding off meanwhile: its answer may change what a later command means, so nothing more is done
 until it comes, but a purchase may follow a purchase. `waitingLook(element, answer)` gives what was
 asked for the waiting look (`k-wait`) once Leaf has taken more than 150 ms.

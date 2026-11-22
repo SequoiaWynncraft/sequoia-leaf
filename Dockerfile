@@ -13,6 +13,7 @@ COPY packages/core/package.json packages/core/
 COPY packages/raid/package.json packages/raid/
 COPY packages/yard/package.json packages/yard/
 COPY packages/town/package.json packages/town/
+COPY packages/pulls/package.json packages/pulls/
 COPY apps/town/package.json apps/town/
 COPY apps/works/package.json apps/works/
 COPY apps/battler/package.json apps/battler/
@@ -23,6 +24,7 @@ COPY packages/core packages/core
 COPY packages/raid packages/raid
 COPY packages/yard packages/yard
 COPY packages/town packages/town
+COPY packages/pulls packages/pulls
 COPY apps/town apps/town
 COPY apps/works apps/works
 COPY apps/battler apps/battler

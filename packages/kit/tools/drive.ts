@@ -16,7 +16,8 @@
  *   `["moveAt", "expr"]` and `["upAt", "expr"]` do the same where a page expression says;
  * - `["finger", "down" | "move" | "up", "expr"]` does the same with a finger instead of the mouse;
  * - `["key", "1"]` presses a key as a person does (a letter, `" "`, or a key by its name, such as
- *   `"Escape"` or `"Enter"`; Enter and Space press a focused button);
+ *   `"Escape"` or `"Enter"`; Enter and Space press a focused button); `["hold", "Enter", ms]` holds
+ *   one down for `ms`, as a person does: the browser says it again every 33 ms until it comes up;
  *   `["eval", "expr"]` prints an expression's value;
  * - `["shot", "name"]` saves a screenshot.
  *
@@ -36,6 +37,7 @@ type Step =
   | ["finger", "down" | "move" | "up", string]
   | ["click", string]
   | ["key", string]
+  | ["hold", string, number]
   | ["shot", string]
   | ["eval", string];
 
@@ -47,6 +49,7 @@ function isStep(v: unknown): v is Step {
   if (kind === "size" || kind === "tap" || kind === "down" || kind === "move" || kind === "up")
     return typeof a === "number" && typeof b === "number";
   if (kind === "wait") return typeof a === "number";
+  if (kind === "hold") return typeof a === "string" && typeof b === "number";
   if (kind === "finger") return (a === "down" || a === "move" || a === "up") && typeof b === "string";
   return (
     (kind === "key" ||
@@ -229,6 +232,21 @@ async function run(step: Step): Promise<void> {
       const text = step[1] === "Enter" ? "\r" : step[1].length === 1 ? step[1] : "";
       await send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", key: step[1], text });
       await send("Input.dispatchKeyEvent", { type: "keyUp", key: step[1] });
+      return;
+    }
+    case "hold": {
+      const [, key, ms] = step;
+      const text = key === "Enter" ? "\r" : key.length === 1 ? key : "";
+      const code = key === " " ? "Space" : key.length === 1 ? `Key${key.toUpperCase()}` : key;
+      const down = { type: text ? "keyDown" : "rawKeyDown", key, code, text };
+      await send("Input.dispatchKeyEvent", down);
+      for (let held = 33; held < ms; held += 33) {
+        // oxlint-disable-next-line no-await-in-loop -- one repeat after another, as a held key makes them
+        await Bun.sleep(33);
+        // oxlint-disable-next-line no-await-in-loop -- one repeat after another, as a held key makes them
+        await send("Input.dispatchKeyEvent", { ...down, autoRepeat: true });
+      }
+      await send("Input.dispatchKeyEvent", { type: "keyUp", key, code });
       return;
     }
     case "eval": {
