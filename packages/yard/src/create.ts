@@ -31,6 +31,7 @@ export function create(opts: Fresh = {}): World {
     bank: 0,
     told: 0,
     away: null,
+    seen: { tick: 0, till: 0, depot: {} },
     plots: ["yard"],
     plans: [],
     spare: { ...STARTERS },

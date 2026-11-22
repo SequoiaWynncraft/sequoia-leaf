@@ -9,6 +9,7 @@
  * not change for them.
  */
 import { build, planState, plotState, refusal } from "./build.ts";
+import { here } from "./clock.ts";
 import { isItem, isRaw, type Item, ITEMS, type Tally } from "./content/items.ts";
 import { BLUEPRINT, BLUEPRINTS, BUFFER, FUEL, isKind, type Kind, SPAN, TICKS } from "./content/machines.ts";
 import { isPlanId, PLANS } from "./content/plans.ts";
@@ -80,7 +81,8 @@ export function save(w: World): string {
     till: w.till,
     bank: w.bank,
     told: w.told,
-    ...(w.away === null ? {} : { away: w.away }),
+    ...(w.away === null ? {} : { away: { ...w.away, made: tally(w.away.made, Infinity) } }),
+    seen: { ...w.seen, depot: tally(w.seen.depot, Infinity) },
     plots: w.plots,
     plans: w.plans,
     story: w.story,
@@ -180,11 +182,11 @@ function standing(v: unknown): Standing | null {
 }
 
 /** A time away kept in a yard, or nothing. */
-function awayOf(v: unknown): Away | null {
+function keptAway(v: unknown): Away | null {
   if (!isRec(v)) return null;
   const seconds = amount(v.seconds, 1e9);
   const coins = whole(v.coins, 1e12);
-  return seconds === null || coins === null ? null : { seconds, coins };
+  return seconds === null || coins === null ? null : { seconds, coins, made: tally(v.made, 1e12) };
 }
 
 /** A yard read back from text, on the guild's land unless another is given; nothing if the text is not a yard. */
@@ -238,7 +240,7 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
     till,
     bank,
     told: Math.min(told, story),
-    away: awayOf(raw.away),
+    away: keptAway(raw.away),
     serial,
     done,
     swapAt,
@@ -300,6 +302,11 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
   fillBoard(w);
   const pace = isRec(raw.pace) ? raw.pace : {};
   w.pace = { ticks: amount(pace.ticks, 1e9) ?? 0, warm: whole(pace.warm, WARM) ?? WARM, made: tally(pace.made, 1e12) };
+  // A yard kept before it knew its owner's last command is taken as last seen at its last tick.
+  const seen = isRec(raw.seen) ? raw.seen : {};
+  const last = whole(seen.tick, tick);
+  const held = amount(seen.till, 1e12);
+  w.seen = last === null || held === null ? here(w) : { tick: last, till: held, depot: tally(seen.depot, 1e12) };
   w.news = [];
   return w;
 }

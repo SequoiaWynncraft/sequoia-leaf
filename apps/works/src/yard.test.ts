@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { type Reply, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
-import { at, LEAD, refusal, WORKS, type WorksAct } from "@sequoia-leaf/yard";
+import { at, AWAY_MOST_MS, LEAD, refusal, stepTo, TICK_MS, WORKS, type WorksAct } from "@sequoia-leaf/yard";
 
 /** What Leaf tells the game about each call. */
 type Ctx = Parameters<typeof WORKS.apply>[2];
@@ -182,6 +182,61 @@ describe("the yard, on Leaf", () => {
     runYard(back + 2000);
     await Bun.sleep(5);
     expect(asked).toBe(2);
+  });
+
+  test("a frame that runs the yard to where it stands still holds its clock there, and its owner's next command starts it from then", async () => {
+    const fake = await opened();
+    // Leaf answers nothing more: the copy is the page's own.
+    fake.leaf.answers = 0;
+    // Its owner was last there ten seconds short of eight hours ago.
+    S.world.seen = { ...S.world.seen, tick: S.world.tick - AWAY_MOST_MS / TICK_MS + 100 };
+    // A tab back after fifty seconds runs the copy ten, to where it stands still.
+    runYard(1000 + 50_000);
+    expect(S.world.tick).toBe(100);
+    doNow({ do: "collect" });
+    runYard(1000 + 50_016);
+    expect(S.world.tick).toBe(100);
+    runYard(1000 + 51_000);
+    expect(S.world.tick).toBe(110);
+  });
+
+  test("a tab that comes back shows its letter once: an answer from before the collect does not bring it back", async () => {
+    const fake = await opened();
+    // While the tab was away, Leaf ran the yard ten minutes: it has a letter for its owner.
+    stepTo(fake.leaf.yard, 6000);
+    fake.leaf.yard.at = ctx().now;
+    // Leaf takes its time to answer a question for the yard, with the yard as it was asked.
+    const held: (() => void)[] = [];
+    world?.done();
+    world = standin({
+      ...fake.routes,
+      "GET /v1/game/play/works": () => {
+        const reply = {
+          status: 200,
+          body: { rev: fake.leaf.posts, now: "x", state: WORKS.view(fake.leaf.yard, ctx()) },
+        };
+        return new Promise<Reply>((answer) => held.push(() => answer(reply)));
+      },
+    });
+    const back = 1000 + 600_000;
+    performance.now = () => back;
+    runYard(back);
+    runYard(back + 2000);
+    await Bun.sleep(5);
+    expect(held).toHaveLength(1);
+    held.shift()?.();
+    await Bun.sleep(5);
+    runYard(back + 16);
+    expect(S.world.away).not.toBeNull();
+    doNow({ do: "collect" });
+    await until(() => fake.leaf.posts >= 1);
+    await Bun.sleep(5);
+    runYard(back + 32);
+    expect(S.world.away).toBeNull();
+    for (const answer of held) answer();
+    await Bun.sleep(5);
+    runYard(back + 48);
+    expect(S.world.away).toBeNull();
   });
 
   test("runs the copy on by Leaf's clock, and takes a yard put in place of another as it stands", async () => {

@@ -52,11 +52,10 @@ export {
   turn,
   turnable,
 } from "./build.ts";
-export { AWAY_MOST_MS, forward, type Forwarded, pile, TICK_MS } from "./clock.ts";
+export { AWAY_MOST_MS, awayOf, here, stillAt, TICK_MS } from "./clock.ts";
 export { create, type Fresh } from "./create.ts";
 export {
   clockOf,
-  EXACT_MOST,
   LEAD,
   play,
   readCommand,
@@ -125,6 +124,7 @@ export {
   plotAt,
   type Rates,
   reopen,
+  type Seen,
   type Standing,
   WARM,
   type Wire,
