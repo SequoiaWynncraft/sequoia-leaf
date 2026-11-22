@@ -346,6 +346,7 @@ export async function openPlay<View, Command extends object, Note>(
     async refresh() {
       if (stopped || flying !== null || queue.length > 0) return;
       const reply = await ask(path);
+      if (reply.status === 401) return stop("signedout");
       if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0) {
         took({ ...reply.body, results: [] }, []);
       }

@@ -331,6 +331,17 @@ describe("sending commands", () => {
     expect(world?.sent.filter((s) => s.method === "POST")).toHaveLength(3 + 4);
   });
 
+  test("asking for the state again when signed out tells the page so", async () => {
+    const { routes } = counterLeaf();
+    const play = await opened(routes);
+    const told: string[] = [];
+    play.onTrouble((why) => told.push(why));
+    world?.done();
+    world = standin({ "GET /v1/game/play/raid": () => ({ status: 401, body: { code: "unauthorized" } }) });
+    await play.refresh();
+    expect(told).toEqual(["signedout"]);
+  });
+
   test("say who the page believes the member is, with every batch", async () => {
     const { leaf, routes } = counterLeaf(0);
     const play = await opened(routes);
