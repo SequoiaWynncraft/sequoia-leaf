@@ -26,8 +26,8 @@ function ground(w: World, x: number, y: number): string | null {
   if (i < 0) return "That is off the map";
   const plot = w.land.plots[w.land.plot[i] ?? -1];
   if (!plot || !w.plots.includes(plot.id)) return plot ? `${plot.name} is not the yard's yet` : "That is off the map";
-  if (w.land.water[i] === 1) return "The stream runs here";
-  if (w.land.trunk[i] === 1) return "A redwood stands here";
+  if (w.land.water[i] === 1) return "Nothing can be built on the stream";
+  if (w.land.trunk[i] === 1) return "Nothing can be built on a tree";
   return null;
 }
 
@@ -79,19 +79,19 @@ export function refusal(
 ): string | null {
   const bad = ground(w, x, y);
   if (bad !== null) return bad;
-  if (kind === "depot") return "There is only the one depot";
-  if (!w.open.kinds.has(kind)) return `The ${KIND[kind].name.toLowerCase()} has not been opened yet`;
+  if (kind === "depot") return "There is only one depot";
+  if (!w.open.kinds.has(kind)) return `The ${KIND[kind].name.toLowerCase()} is not unlocked yet`;
   const i = at(w, x, y);
   const there = w.cells[i];
   if (there?.kind === "depot") return "The depot stands here";
   // Laying a thing over another of its kind only turns it, and costs nothing.
   if (there) return there.kind === kind && kind !== "tunnel" ? null : "Something is here already";
-  if (kind === "gatherer" && !w.land.deposit[i]) return "A gatherer needs something in the ground under it";
-  if (kind === "wheel" && !besideWater(w.land, x, y)) return "A waterwheel needs the stream beside it";
+  if (kind === "gatherer" && !w.land.deposit[i]) return "A gatherer must be placed on a deposit";
+  if (kind === "wheel" && !besideWater(w.land, x, y)) return "A waterwheel must be beside the stream";
   if (kind === "tunnel" && !tunnelExit(w, x, y, dir, span))
     return depotInTheWay(w, x, y, dir, span)
       ? "A tunnel cannot go under the depot"
-      : "A tunnel needs a clear tile to come up at, one to three tiles on";
+      : "A tunnel needs a free tile to come up on, 1 to 3 tiles ahead";
   if (coins < costOf(w, kind)) return "Not enough Coins";
   return null;
 }
@@ -162,7 +162,7 @@ export function remove(w: World, x: number, y: number): Refund {
   const i = at(w, x, y);
   const there = i < 0 ? null : w.cells[i];
   if (!there) return { ok: false, why: "There is nothing here" };
-  if (there.kind === "depot") return { ok: false, why: "The depot stays" };
+  if (there.kind === "depot") return { ok: false, why: "The depot cannot be removed" };
   w.cells[i] = null;
   if (there.kind === "tunnel") {
     // Both mouths go together.
@@ -251,7 +251,7 @@ export function plotState(w: World, id: PlotId): { state: "owned" | "for sale" |
 /** Why a plot cannot be bought with `coins` in the purse, or nothing if it can. */
 export function plotRefusal(w: World, id: PlotId, coins: number): string | null {
   const { state, why } = plotState(w, id);
-  if (state === "owned") return "That plot is the yard's already";
+  if (state === "owned") return "You already own that plot";
   if (state === "not yet") return why;
   return coins < (plotOf(w, id)?.price ?? 0) ? "Not enough Coins" : null;
 }
@@ -295,7 +295,7 @@ export function planState(w: World, id: PlanId): { state: "owned" | "for sale" |
 /** Why a plan cannot be bought with `coins` in the purse, or nothing if it can. */
 export function planRefusal(w: World, id: PlanId, coins: number): string | null {
   const { state, why } = planState(w, id);
-  if (state === "owned") return "That plan is bought already";
+  if (state === "owned") return "You already have that plan";
   if (state === "not yet") return why;
   return coins < (planOf(id)?.price ?? 0) ? "Not enough Coins" : null;
 }

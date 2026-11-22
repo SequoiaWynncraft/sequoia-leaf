@@ -45,14 +45,17 @@ export function showLetter(away: Away, done: () => void): void {
   if (away.coins > 0)
     line(
       coinArt,
-      el("span", "k-grow", { text: "Earned, and waiting in the till" }),
+      el("span", "k-grow", { text: "Earned while you were away" }),
       el("b", "", { text: `+${away.coins.toLocaleString("en-US")}` }),
     );
   if (lines.length === 0)
-    line(icon("heart"), el("span", "k-grow", { text: "The yard stood quiet. Nothing was coming in when you left." }));
+    line(
+      icon("heart"),
+      el("span", "k-grow", { text: "The yard earned nothing. No items were reaching the depot when you left." }),
+    );
   const capped =
     away.seconds >= AWAY_MOST_MS / 1000
-      ? ` It works ${AWAY_MOST_MS / 3_600_000} hours unwatched, and then waits for you.`
+      ? ` It works for at most ${AWAY_MOST_MS / 3_600_000} hours while you are away.`
       : "";
   const go = el("button", "k-btn wide", { type: "button", text: "Back to work" });
   const paper = el(
@@ -60,7 +63,7 @@ export function showLetter(away: Away, done: () => void): void {
     "k-paper k-rise letter",
     { role: "dialog", "aria-label": "While you were away" },
     el("h1", "k-title big", { text: "While you were away" }),
-    el("div", "k-dim", { text: `The yard worked on for ${span(away.seconds)}.${capped}` }),
+    el("div", "k-dim", { text: `The yard worked for ${span(away.seconds)}.${capped}` }),
     ...lines,
     el("hr"),
     go,

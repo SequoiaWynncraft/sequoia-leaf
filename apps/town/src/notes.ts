@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "works-plain-words",
+    day: "2026-11-22",
+    title: "Plainer words in the Works",
+    lines: [
+      "The Works now uses the same plain words everywhere: place, rotate, remove, power made and power used. Standing orders are now called side orders.",
+      "The Splitter and the Joiner look different now. A Splitter shows three arrows out. A Joiner shows three arrows in and one out.",
+    ],
+  },
+  {
     id: "top-yards",
     day: "2026-11-22",
     title: "Top yards in the Works",

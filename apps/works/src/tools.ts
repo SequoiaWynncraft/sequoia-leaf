@@ -102,7 +102,7 @@ export function aimAt(x: number, y: number): void {
     S.aim = {
       x,
       y,
-      why: there ? (there.kind === "depot" ? "The depot stays" : null) : "Nothing to take away here",
+      why: there ? (there.kind === "depot" ? "The depot cannot be removed" : null) : "Nothing to remove here",
       cost: 0,
     };
     return;
@@ -266,7 +266,7 @@ export function undo(): boolean {
           : { do: "build", kind: s.kind, x: s.x, y: s.y, dir: s.dir },
       );
       if (no !== null) {
-        toolHooks.said(`It cannot go back: ${no.toLowerCase()}.`);
+        toolHooks.said(`Cannot undo: ${no.toLowerCase()}.`);
         continue;
       }
       if (s.recipe !== null) doNow({ do: "recipe", x: s.x, y: s.y, item: s.recipe });
@@ -445,7 +445,7 @@ export function tapBelt(x: number, y: number): void {
     }
   }
   const legs = sx === x && sy === y && w.cells[at(w, x, y)] ? null : route(w, [sx, sy], [x, y]);
-  if (!legs) S.run = { legs: [], turns: [], cost: 0, why: "No clear way for a belt from there to here" };
+  if (!legs) S.run = { legs: [], turns: [], cost: 0, why: "No free path for a belt from there to here" };
   else {
     const cost = runCost(w, legs);
     S.run = { legs, turns: [], cost, why: cost > coins() ? "Not enough Coins" : null };

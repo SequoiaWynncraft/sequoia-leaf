@@ -24,7 +24,7 @@ describe("what a thing is doing", () => {
     put(w, "mill", 2, 1);
     expect(of(w, 1, 1)).toEqual({
       state: "unpowered",
-      line: "No power reaches it. A pylon would carry it here.",
+      line: "No power here. Place a pylon near it.",
       trouble: true,
     });
     expect(of(w, 2, 1)?.state).toBe("unpowered");
@@ -33,7 +33,7 @@ describe("what a thing is doing", () => {
     expect(pylon.kind).toBe("pylon");
     expect(of(w, 0, 3)?.trouble).toBe(true);
     put(w, "pylon", 6, 3);
-    expect(of(w, 0, 3)).toEqual({ state: "giving", line: "Carries power 4 tiles round it.", trouble: false });
+    expect(of(w, 0, 3)).toEqual({ state: "giving", line: "Powers the tiles up to 4 tiles from it.", trouble: false });
     expect(of(w, 1, 1)?.state).toBe("working");
   });
   test("a machine with nowhere to send what it makes says which kind of nowhere", () => {
@@ -42,11 +42,11 @@ describe("what a thing is doing", () => {
     steps(w, 30);
     expect(of(w, 8, 5)).toEqual({
       state: "blocked",
-      line: "Nowhere to send its ore: nothing stands where it points.",
+      line: "Nowhere to send its ore: nothing is on the tile it points at.",
       trouble: true,
     });
     put(w, "pylon", 9, 5);
-    expect(of(w, 8, 5)?.line).toBe("What it points at will not take ore.");
+    expect(of(w, 8, 5)?.line).toBe("The piece it points at does not take ore.");
     w.cells[at(w, 9, 5)] = null;
     w.wire = null;
     // A belt facing back at it will not take from it either; a belt that is only full is just a wait.
@@ -58,7 +58,7 @@ describe("what a thing is doing", () => {
     expect(on(w, 9, 5).item).toBe("ore");
     expect(of(w, 8, 5)).toEqual({
       state: "waiting",
-      line: "Waiting for room ahead to hand on its ore.",
+      line: "Waiting: no room ahead for its ore.",
       trouble: false,
     });
     // And the belt that ends on bare ground is the one in trouble.
@@ -68,7 +68,7 @@ describe("what a thing is doing", () => {
     const w = lit(bare());
     const bench = put(w, "bench", 8, 5, 0);
     put(w, "belt", 9, 5, 0);
-    expect(of(w, 8, 5)).toEqual({ state: "idle", line: "Waiting for something to work on.", trouble: false });
+    expect(of(w, 8, 5)).toEqual({ state: "idle", line: "Waiting for items.", trouble: false });
     expect(aim(bench)).toBeNull();
     hold(bench, "plank");
     expect(aim(bench)?.out).toBe("tool");
@@ -114,7 +114,7 @@ describe("what a thing is doing", () => {
     setOpen(w, 6, 5, false);
     expect(of(w, 6, 5)).toEqual({
       state: "shut",
-      line: "Shut: it lets nothing out. Holds 2 of 32: 2 pots.",
+      line: "Shut: it lets no items out. Holds 2 of 32: 2 pots.",
       trouble: false,
     });
     const boiler = put(w, "boiler", 4, 3);
@@ -122,10 +122,10 @@ describe("what a thing is doing", () => {
     hold(boiler, "deadfall");
     hold(boiler, "deadfall");
     steps(w, 1);
-    expect(of(w, 4, 3)?.line).toBe("Burning. Gives 30 power. Holds 1 of 8 deadfall.");
+    expect(of(w, 4, 3)?.line).toBe("Running. Makes 30 power. Holds 1 of 8 deadfall.");
     put(w, "wheel", 29, 5);
-    expect(of(w, 29, 5)?.line).toBe("Turning. Gives 10 power.");
-    expect(of(w, 20, 6)?.line).toBe("Takes everything in and pays for it. Gives 20 power.");
+    expect(of(w, 29, 5)?.line).toBe("Running. Makes 10 power.");
+    expect(of(w, 20, 6)?.line).toBe("Sells every item that reaches it. Makes 20 power.");
     expect(status(w, at(w, 1, 1))).toBeNull();
     expect(status(w, -1)).toBeNull();
   });

@@ -216,7 +216,7 @@ async function boot(): Promise<void> {
 
   // ---------- the clock ----------
 
-  onRefused((why) => feed(`${why}. The yard is as the guild's books have it.`, "coral"));
+  onRefused((why) => feed(`${why}. The yard is shown as the server has it.`, "coral"));
 
   /** What the depot had taken in a moment ago, to hear each thing arrive. */
   let heard: Tally = { ...S.world.depot };
@@ -301,7 +301,7 @@ async function boot(): Promise<void> {
     const picture = drawYard(art, { lead: S.held ? 0 : leadAt(now), pace: power(w).pace });
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(picture, 0, 0, picture.width * S.view.z, picture.height * S.view.z);
-    drawWords(ctx, wordPx);
+    drawWords(ctx, wordPx, inset.top * S.view.dpr);
   }
 
   let last = performance.now();

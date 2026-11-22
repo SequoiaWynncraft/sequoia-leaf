@@ -66,7 +66,7 @@ describe("building", () => {
     expect(build(w, "gatherer", 2, 2, 0, 50)).toEqual({ ok: true, cost: KIND.gatherer.cost });
     expect(remove(w, 2, 2)).toEqual({ ok: true, refund: KIND.gatherer.cost });
     expect(remove(w, 2, 2)).toEqual({ ok: false, why: "There is nothing here" });
-    expect(remove(w, 12, 6)).toEqual({ ok: false, why: "The depot stays" });
+    expect(remove(w, 12, 6)).toEqual({ ok: false, why: "The depot cannot be removed" });
     for (const kind of KINDS) {
       if (kind === "depot" || kind === "gatherer" || kind === "wheel") continue;
       expect([kind, build(w, kind, 4, 2, 0, 1000)]).toEqual([kind, { ok: true, cost: KIND[kind].cost }]);
@@ -77,11 +77,11 @@ describe("building", () => {
   test("refusals say why in plain words", () => {
     const w = bare({ "2,2": "ore" }, { water: ["6,2"], trunks: ["7,2"] });
     expect(refusal(w, "belt", -1, 2, 99)).toBe("That is off the map");
-    expect(refusal(w, "belt", 6, 2, 99)).toBe("The stream runs here");
-    expect(refusal(w, "belt", 7, 2, 99)).toBe("A redwood stands here");
+    expect(refusal(w, "belt", 6, 2, 99)).toBe("Nothing can be built on the stream");
+    expect(refusal(w, "belt", 7, 2, 99)).toBe("Nothing can be built on a tree");
     expect(refusal(w, "belt", 12, 6, 99)).toBe("The depot stands here");
-    expect(refusal(w, "depot", 3, 3, 99)).toBe("There is only the one depot");
-    expect(refusal(w, "gatherer", 3, 3, 99)).toBe("A gatherer needs something in the ground under it");
+    expect(refusal(w, "depot", 3, 3, 99)).toBe("There is only one depot");
+    expect(refusal(w, "gatherer", 3, 3, 99)).toBe("A gatherer must be placed on a deposit");
     expect(refusal(w, "gatherer", 2, 2, 9)).toBe("Not enough Coins");
     expect(refusal(w, "gatherer", 2, 2, 10)).toBeNull();
     put(w, "pylon", 4, 4);
@@ -90,8 +90,8 @@ describe("building", () => {
   });
   test("what the story has not opened cannot be built, and says so by name", () => {
     const w = create();
-    expect(refusal(w, "bench", 20, 20, 999)).toBe("The bench has not been opened yet");
-    expect(refusal(w, "wheel", 20, 20, 999)).toBe("The waterwheel has not been opened yet");
+    expect(refusal(w, "bench", 20, 20, 999)).toBe("The bench is not unlocked yet");
+    expect(refusal(w, "wheel", 20, 20, 999)).toBe("The waterwheel is not unlocked yet");
     expect(refusal(w, "mill", 20, 20, 999)).toBeNull();
     expect(refusal(create({ story: 2 }), "bench", 20, 20, 999)).toBeNull();
   });
@@ -238,7 +238,7 @@ describe("plots", () => {
   test("a plot is for sale once the story opens it, if it touches the yard's land and the Coins are there", () => {
     const early = create({ story: 4 });
     expect(plotState(early, "yard")).toEqual({ state: "owned", why: null });
-    expect(plotRefusal(early, "yard", 0)).toBe("That plot is the yard's already");
+    expect(plotRefusal(early, "yard", 0)).toBe("You already own that plot");
     expect(plotRefusal(early, "meadow", 99999)).toBe("Long Meadow is not for sale yet");
     const w = create({ story: STORY_DONE });
     expect(plotState(w, "meadow").state).toBe("for sale");
@@ -248,7 +248,7 @@ describe("plots", () => {
     expect(buyPlot(w, "seam", 99999)).toEqual({ ok: false, why: "The Far Seam does not touch the yard's land yet" });
     expect(buyPlot(w, "stream", 99999).ok).toBe(true);
     expect(buyPlot(w, "seam", 99999)).toEqual({ ok: true, cost: price("seam") });
-    expect(buyPlot(w, "seam", 99999)).toEqual({ ok: false, why: "That plot is the yard's already" });
+    expect(buyPlot(w, "seam", 99999)).toEqual({ ok: false, why: "You already own that plot" });
     expect(w.plots).toEqual(["yard", "stream", "seam"]);
   });
   const STORY_DONE = 20;
@@ -263,7 +263,7 @@ describe("plans", () => {
     expect(planRefusal(later, "rakes", price("rakes") - 1)).toBe("Not enough Coins");
     expect(planRefusal(later, "barrows", 99999)).toBe("Wheelbarrows needs Sharper rakes first");
     expect(buyPlan(later, "rakes", price("rakes"))).toEqual({ ok: true, cost: price("rakes") });
-    expect(buyPlan(later, "rakes", 99999)).toEqual({ ok: false, why: "That plan is bought already" });
+    expect(buyPlan(later, "rakes", 99999)).toEqual({ ok: false, why: "You already have that plan" });
     expect(buyPlan(later, "barrows", 99999)).toEqual({ ok: true, cost: price("barrows") });
   });
   test("sharper rakes and wheelbarrows quicken the gatherers", () => {
@@ -305,7 +305,7 @@ describe("plans", () => {
   test("the boiler, the workshop and the tunnel are opened by their plans", () => {
     const w = lit(create({ story: 20 }));
     for (const kind of ["boiler", "workshop", "tunnel"] as const) {
-      expect(refusal(w, kind, 20, 20, 9999)).toBe(`The ${kind} has not been opened yet`);
+      expect(refusal(w, kind, 20, 20, 9999)).toBe(`The ${kind} is not unlocked yet`);
       buyPlan(w, kind, Infinity);
       expect(refusal(w, kind, 20, 20, 9999)).toBeNull();
     }

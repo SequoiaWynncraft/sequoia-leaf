@@ -111,12 +111,12 @@ function stuck(w: World, i: number, item: Item): Status {
   if (there === "nothing")
     return {
       state: "blocked",
-      line: `Nowhere to send its ${many(item)}: nothing stands where it points.`,
+      line: `Nowhere to send its ${many(item)}: nothing is on the tile it points at.`,
       trouble: true,
     };
   if (there === "never")
-    return { state: "blocked", line: `What it points at will not take ${many(item)}.`, trouble: true };
-  return { state: "waiting", line: `Waiting for room ahead to hand on its ${many(item)}.`, trouble: false };
+    return { state: "blocked", line: `The piece it points at does not take ${many(item)}.`, trouble: true };
+  return { state: "waiting", line: `Waiting: no room ahead for its ${many(item)}.`, trouble: false };
 }
 
 /** How many of a thing a gatherer or machine turns out in a minute at the yard's present pace, or 0. */
@@ -140,44 +140,48 @@ export function status(w: World, i: number): Status | null {
     case "depot":
       return {
         state: "giving",
-        line: `Takes everything in and pays for it. Gives ${w.rates.depot} power.`,
+        line: `Sells every item that reaches it. Makes ${w.rates.depot} power.`,
         trouble: false,
       };
     case "pylon":
       return lit
         ? {
             state: "giving",
-            line: `Carries power ${Math.floor(REACH.pylon * w.rates.reach)} tiles round it.`,
+            line: `Powers the tiles up to ${Math.floor(REACH.pylon * w.rates.reach)} tiles from it.`,
             trouble: false,
           }
         : {
             state: "unpowered",
-            line: "Too far from the depot and from every joined pylon, so it carries nothing.",
+            line: "Not connected. It must be within reach of the depot or of a connected pylon.",
             trouble: true,
           };
     case "wheel":
       return lit
-        ? { state: "giving", line: `Turning. Gives ${KIND.wheel.gives} power.`, trouble: false }
+        ? { state: "giving", line: `Running. Makes ${KIND.wheel.gives} power.`, trouble: false }
         : {
             state: "unpowered",
-            line: "No pylon reaches it, so the power it makes goes nowhere.",
+            line: "Not connected to a pylon, so the power it makes is not used.",
             trouble: true,
           };
     case "boiler":
       if (!lit)
-        return { state: "unpowered", line: "No pylon reaches it, so the power it makes goes nowhere.", trouble: true };
+        return {
+          state: "unpowered",
+          line: "Not connected to a pylon, so the power it makes is not used.",
+          trouble: true,
+        };
       return b.fuel > 0
         ? {
             state: "giving",
-            line: `Burning. Gives ${KIND.boiler.gives} power. Holds ${b.buf.deadfall ?? 0} of ${FUEL} deadfall.`,
+            line: `Running. Makes ${KIND.boiler.gives} power. Holds ${b.buf.deadfall ?? 0} of ${FUEL} deadfall.`,
             trouble: false,
           }
-        : { state: "cold", line: "Cold. It gives power only while deadfall is brought to it.", trouble: true };
+        : { state: "cold", line: "Out of fuel. It makes power only while it has deadfall.", trouble: true };
     case "crate": {
       const held = `Holds ${b.count} of ${w.rates.crate}${b.count > 0 ? `: ${holding(b)}` : ""}.`;
       return b.open
         ? { state: b.count > 0 ? "carrying" : "idle", line: held, trouble: false }
-        : { state: "shut", line: `Shut: it lets nothing out. ${held}`, trouble: false };
+        : { state: "shut", line: `Shut: it lets no items out. ${held}`, trouble: false };
     }
     case "belt":
     case "splitter":
@@ -196,7 +200,7 @@ export function status(w: World, i: number): Status | null {
         : { state: "waiting", line: `${cap(many(b.item))} waiting to move on.`, trouble: false };
     }
     case "gatherer": {
-      if (!lit) return { state: "unpowered", line: "No power reaches it. A pylon would carry it here.", trouble: true };
+      if (!lit) return { state: "unpowered", line: "No power here. Place a pylon near it.", trouble: true };
       if (b.out !== null) return stuck(w, i, b.out);
       const what = w.land.deposit[i];
       return {
@@ -208,15 +212,14 @@ export function status(w: World, i: number): Status | null {
     case "mill":
     case "bench":
     case "workshop": {
-      if (!lit) return { state: "unpowered", line: "No power reaches it. A pylon would carry it here.", trouble: true };
+      if (!lit) return { state: "unpowered", line: "No power here. Place a pylon near it.", trouble: true };
       if (b.out !== null) return stuck(w, i, b.out);
       if (b.making !== null) return { state: "working", line: `Making ${many(b.making)}${slow}.`, trouble: false };
       const r = aim(b);
       if (!r)
         return {
           state: "idle",
-          line:
-            b.count === 0 ? "Waiting for something to work on." : `Holds ${holding(b)}, which make nothing together.`,
+          line: b.count === 0 ? "Waiting for items." : `Holds ${holding(b)}. No recipe combines these.`,
           trouble: b.count > 0,
         };
       const missing = r.from.filter((k) => (b.buf[k] ?? 0) === 0);
