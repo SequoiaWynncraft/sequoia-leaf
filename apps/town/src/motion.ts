@@ -219,11 +219,6 @@ export class Company<T> {
     return this.all().find((f) => f.id === id && !f.fig.gone);
   }
 
-  /** The accounts of everybody in the room now. */
-  here(): Set<string> {
-    return new Set(this.all().flatMap((f) => (f.fig.gone ? [] : [f.who.player])));
-  }
-
   /** Somebody is in the room: drawn from their first motion, fading in. */
   private arrive(m: LiveMember): void {
     const f = this.fellows.get(m.player);

@@ -1,7 +1,9 @@
 /**
  * Nobody stands inside anybody: where a page loaded again puts its member back (`stoodAt`, from what
- * `stood` kept), and how members standing on one spot are drawn a step apart (`apart`), the same on
- * every page. Only the drawing steps aside; where a figure is does not change.
+ * `stood` kept); where somebody stops if somebody is there already (`beside`); and how members on
+ * top of one another, standing, sitting or walking along together, are drawn apart (`apart`): the
+ * same on every page once they have stopped. Only the drawing steps aside; where a figure is does
+ * not change.
  */
 
 import type { Dir } from "@sequoia-leaf/kit/skin.ts";
@@ -36,78 +38,99 @@ export function stoodAt(kept: string | null, now: number): Stood | null {
   }
 }
 
-/** Two figures this near, in the town's pixels, stand on one spot; and how far a figure steps aside from it. */
-export const NEAR = 6;
-export const STEP = 7;
-/** How long a step aside, or back, takes, in seconds. */
-export const EASE = 0.2;
-/** Which way each figure after the first steps, in turn: right, left, down, up, then the diagonals. */
-const ASIDE: readonly (readonly [number, number])[] = [
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1],
-  [1, 1],
-  [-1, 1],
-  [1, -1],
-  [-1, -1],
-];
+/** How wide a figure is drawn, in the town's pixels; how tall depends on its pose (`headOf`). */
+const ACROSS = 10;
+/** The furthest a figure is drawn from where it is, and a walk's end from where it was going, in the town's pixels. */
+export const MOST = 21;
+/** How fast a figure steps aside, or back, in pixels a second. */
+export const PACE = 50;
+/** Every place round a point no further than `MOST`, nearest first. */
+const ROUND: readonly Pt[] = Array.from({ length: (2 * MOST + 1) ** 2 }, (_, i) => ({
+  x: (i % (2 * MOST + 1)) - MOST,
+  y: Math.floor(i / (2 * MOST + 1)) - MOST,
+}))
+  .filter((d) => Math.hypot(d.x, d.y) <= MOST)
+  .toSorted((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y));
 
-/** Somebody standing still, by their account. */
-export interface Still extends Pt {
-  id: string;
+/** Somebody's figure where it is drawn: their feet, and how tall it is drawn. */
+export interface Placed extends Pt {
+  tall: number;
 }
 
-const byId = (a: Still, b: Still): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+/** Whether two figures are drawn on top of one another: they overlap by over a third of the smaller. */
+export function crowds(a: Placed, b: Placed): boolean {
+  const across = Math.max(0, ACROSS - Math.abs(a.x - b.x));
+  const high = Math.max(0, Math.min(a.y, b.y) - Math.max(a.y - a.tall, b.y - b.tall));
+  return across * high * 3 > ACROSS * Math.min(a.tall, b.tall);
+}
 
 /**
- * How far from where each stands each is drawn, by their account, for everybody standing still:
- * those within `NEAR` of one another (and of anybody within `NEAR` of them) are on one spot. On
- * each, the first by account keeps the spot. The rest, in turn, take the first place round it that
- * nobody is drawn on: `STEP` aside (`ASIDE`), then twice as far, and so on. Only those who step
- * aside are in the answer.
+ * Where `who` is to be, with others there already (`taken`): the nearest place to where they are,
+ * that place first, that is on top of nobody and `fits`; with none within `MOST`, where they are.
  */
-export function apart(still: readonly Still[]): Map<string, Pt> {
-  const left = new Set(still);
-  const spots: Still[][] = [];
-  for (const first of still.toSorted(byId)) {
-    if (!left.has(first)) continue;
-    const spot = [first];
-    left.delete(first);
-    // Those who join the spot are looked round from in turn, as they join.
-    for (const s of spot)
-      for (const o of left)
-        if (Math.hypot(o.x - s.x, o.y - s.y) <= NEAR) {
-          left.delete(o);
-          spot.push(o);
-        }
-    spots.push(spot.toSorted(byId));
+export function beside(who: Placed, taken: readonly Placed[], fits: (p: Pt) => boolean): Placed {
+  for (const d of ROUND) {
+    const there = { x: who.x + d.x, y: who.y + d.y, tall: who.tall };
+    if (taken.every((t) => !crowds(t, there)) && fits(there)) return there;
   }
-  // Whoever keeps a spot is drawn on it, so nobody steps aside onto them, nor onto one another.
-  const drawn: Pt[] = spots.flatMap(([keeper]) => (keeper ? [keeper] : []));
+  return who;
+}
+
+/** Somebody going slower than this, in pixels a second, has stopped: nobody walks slower than 30. */
+export const SLOW = 24;
+
+/** Somebody drawn, by their account: where, whether they keep their place first (`seated`), and how fast they go each way, in pixels a second. */
+export interface Someone extends Placed {
+  id: string;
+  seated: boolean;
+  vx: number;
+  vy: number;
+}
+
+const stopped = (a: Someone): boolean => Math.hypot(a.vx, a.vy) < SLOW;
+/** Whoever sits first, then by account. */
+const order = (a: Someone, b: Someone): number =>
+  a.seated !== b.seated ? (a.seated ? -1 : 1) : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+/**
+ * Two who are not to be drawn on top of one another: either has stopped (whoever walks goes round
+ * them), or they walk the same way, at any pace. Two walking across or against each other are
+ * through in a moment.
+ */
+const along = (a: Someone, b: Someone): boolean => stopped(a) || stopped(b) || a.vx * b.vx + a.vy * b.vy > 0;
+
+/**
+ * How far from where each is each is drawn, by their account, for everybody: first those who have
+ * stopped, then those walking, who so never move anybody standing. Of each, in turn (`order`):
+ * somebody on top of nobody placed before them stays where they are; each of the rest takes the
+ * nearest place round where they are themselves that is on top of nobody drawn (`beside`), of those
+ * they are `along` with. Only those who step aside are in the answer.
+ */
+export function apart(everybody: readonly Someone[]): Map<string, Pt> {
+  const drawn: Someone[] = [];
   const out = new Map<string, Pt>();
-  for (const [keeper, ...rest] of spots)
-    for (const s of keeper ? rest : []) {
-      let at: Pt = keeper ?? s;
-      for (let k = 0; k < ASIDE.length * (drawn.length + 1); k++) {
-        const [dx, dy] = ASIDE[k % ASIDE.length] ?? [0, 0];
-        const far = STEP * (Math.floor(k / ASIDE.length) + 1);
-        const there = { x: at.x + dx * far, y: at.y + dy * far };
-        if (drawn.every((d) => Math.hypot(d.x - there.x, d.y - there.y) > NEAR)) {
-          at = there;
-          break;
-        }
-      }
-      drawn.push(at);
-      out.set(s.id, { x: at.x - s.x, y: at.y - s.y });
+  for (const walking of [false, true]) {
+    const some = everybody.filter((s) => stopped(s) !== walking).toSorted(order);
+    const on = (o: Someone, s: Someone): boolean => along(o, s) && crowds(o, s);
+    const stay = some.filter((s, i) => [...drawn, ...some.slice(0, i)].every((o) => !on(o, s)));
+    drawn.push(...stay);
+    for (const s of some) {
+      if (stay.includes(s)) continue;
+      const at = beside(
+        s,
+        drawn.filter((d) => along(d, s)),
+        () => true,
+      );
+      drawn.push({ ...s, x: at.x, y: at.y });
+      if (at.x !== s.x || at.y !== s.y) out.set(s.id, { x: at.x - s.x, y: at.y - s.y });
     }
+  }
   return out;
 }
 
-/** Moves a figure's step aside (`at`) towards where it is to be (`to`), `dt` seconds on: a whole `STEP` takes `EASE`. */
+/** Moves a figure's step aside (`at`) towards where it is to be (`to`), `dt` seconds on, at `PACE`. */
 export function ease(at: Pt, to: Pt, dt: number): void {
   const d = Math.hypot(to.x - at.x, to.y - at.y);
-  const k = d <= 0 ? 1 : Math.min(1, ((STEP / EASE) * dt) / d);
+  const k = d <= 0 ? 1 : Math.min(1, (PACE * dt) / d);
   at.x += (to.x - at.x) * k;
   at.y += (to.y - at.y) * k;
 }

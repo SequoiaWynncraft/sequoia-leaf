@@ -282,9 +282,9 @@ export function othersInTown(): number | null {
   return room && you !== null && !alone() ? othersIn(room.members(), you) : null;
 }
 
-// Real members who are live are not visitors or dozers as well.
+// Real members drawn live, fading away too, are not visitors or dozers as well.
 followLive({
-  ids: () => company.here(),
+  ids: () => new Set(company.all().map((f) => f.who.player)),
   actor: (id) => company.all().find((f) => f.who.player === id && !f.fig.gone)?.own.a ?? null,
 });
 
