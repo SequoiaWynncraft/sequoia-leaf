@@ -4,7 +4,7 @@
  * Everything is counted in art pixels and drawn `px` canvas pixels to each, the same number
  * `text.ts` takes, so the letters and the frames stay on one grid.
  */
-import { CREAM, GOLD, INK, SKY } from "./palette.ts";
+import { BARK, CREAM, GOLD, INK } from "./palette.ts";
 import { widthOf, write } from "./text.ts";
 import type { Ctx } from "./util.ts";
 
@@ -75,7 +75,7 @@ export function promptSize(g: Ctx, key: string, label: string, px: number): Size
 }
 
 /**
- * The key to press and what it does, on a dark plate like a tip: `[E] Treasury`. Its top-left
+ * The key to press and what it does, on a dark plate in a wooden rim like a tip: `[E] Treasury`. Its top-left
  * corner goes at `x`, `y`.
  */
 export function prompt(g: Ctx, key: string, label: string, x: number, y: number, px: number): void {
@@ -88,9 +88,9 @@ export function prompt(g: Ctx, key: string, label: string, x: number, y: number,
   const H = h / px;
   r(1, 0, W - 2, H, INK);
   r(0, 1, W, H - 2, INK);
-  r(1, 1, W - 2, H - 2, SKY[2]);
-  r(1, 1, W - 3, 1, SKY[3]);
-  r(1, 1, 1, H - 3, SKY[3]);
+  r(1, 1, W - 2, H - 2, BARK[1]);
+  r(1, 1, W - 3, 1, BARK[3]);
+  r(1, 1, 1, H - 3, BARK[3]);
   r(2, 2, W - 4, H - 4, "#1f1226");
   // The key, as a cap with a lip under it.
   const kw = widthOf(g, key, px, true) / px + 5;

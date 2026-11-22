@@ -106,6 +106,8 @@
         background: none;
         color: inherit;
         text-align: left;
+        /* It hangs under the top bar's signs, on ropes half as long. */
+        --hang: calc(var(--k-hang) / 2);
       }
       /* The line over the order's title keeps to one line: what is to hand over goes under it where both do not fit. */
       #track .k-row {
@@ -228,6 +230,7 @@
         gap: calc(var(--u) * 3);
         padding: var(--u) calc(var(--u) * 2) var(--u) calc(var(--u) * 4);
         box-sizing: border-box;
+        font: var(--f-ui);
       }
       #hand .say {
         min-width: 0;
@@ -265,7 +268,7 @@
       }
       /* With a tool in hand it is the thing that matters: the brass frame. */
       #hand.building {
-        border-image-source: var(--k-f-panel);
+        border-image-source: var(--k-f-brass);
       }
 
       /* A panel: beside the yard on a wide screen, under it on a tall one. */
@@ -274,7 +277,7 @@
         z-index: 8;
         right: var(--edge);
         top: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
-        width: min(calc(var(--u) * 196), 46vw);
+        width: min(calc(var(--u) * 200), 46vw);
         max-height: calc(100dvh - var(--toph, calc(var(--top) + var(--u) * 24)) - var(--bottom) - var(--u) * 7);
         display: flex;
         flex-direction: column;
@@ -330,7 +333,7 @@
         flex-direction: column;
         gap: calc(var(--u) * 3);
       }
-      /* The later plan hangs off the earlier one by a twig. */
+      /* The later plan hangs off the earlier one by a dowel. */
       .branch > .twig {
         display: none;
       }
@@ -341,12 +344,14 @@
       .branch > .twig + .plan::before {
         content: "";
         position: absolute;
-        left: calc(var(--u) * -8);
-        top: calc(var(--u) * -5);
-        width: calc(var(--u) * 4);
-        height: calc(var(--u) * 16);
-        border-left: calc(var(--u) * 2) solid var(--k-bark-lt);
-        border-bottom: calc(var(--u) * 2) solid var(--k-bark-lt);
+        left: calc(var(--u) * -10);
+        top: calc(var(--u) * -7);
+        width: calc(var(--u) * 3);
+        height: calc(var(--u) * 12);
+        border: solid transparent;
+        border-width: 0 0 calc(var(--u) * 5) calc(var(--u) * 5);
+        border-image: var(--k-f-elbow) 0 0 5 5;
+        image-rendering: pixelated;
       }
       .k-card.plan {
         flex-direction: column;
@@ -357,8 +362,12 @@
       .plan .k-thing {
         white-space: normal;
       }
-      .k-card.plan.locked {
-        opacity: 0.62;
+      /* A plan not yet to be had lies flat (the kit's `locked`), its name and picture quieter. */
+      .plan.locked .k-thing {
+        opacity: 0.7;
+      }
+      .plan.locked .k-d:not(.k-gold) {
+        color: var(--k-faint);
       }
       .k-card.plan.owned {
         border-image-source: var(--k-f-card-lit);
@@ -489,7 +498,7 @@
         z-index: 12;
         right: var(--edge);
         top: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
-        width: min(calc(var(--u) * 180), calc(100vw - var(--edge) * 2));
+        width: min(calc(var(--u) * 184), calc(100vw - var(--edge) * 2));
         box-sizing: border-box;
       }
       #banner .k-body {
@@ -624,16 +633,16 @@
   <body>
     <canvas id="view"></canvas>
     <div id="top">
-      <div id="purse" class="k-plaque"></div>
-      <button id="power" class="k-plaque" type="button"></button>
+      <div id="purse" class="k-plaque hung"></div>
+      <button id="power" class="k-plaque hung" type="button"></button>
       <div id="books"></div>
       <div id="corner"></div>
     </div>
-    <button id="track" class="k-plaque" type="button"></button>
+    <button id="track" class="k-plaque hung" type="button"></button>
     <div id="visit" class="k-plaque" hidden></div>
     <div id="feed" aria-live="polite"></div>
-    <div id="hand" class="k-plaque"></div>
-    <nav id="dock" class="k-plaque" aria-label="Tools"></nav>
+    <div id="hand" class="k-tip"></div>
+    <nav id="dock" class="k-shelf" aria-label="Tools"></nav>
     <aside id="panel" class="k-panel" hidden></aside>
     <div id="banner" class="k-panel" hidden></div>
     <div id="letter" hidden></div>

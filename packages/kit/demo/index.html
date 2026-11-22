@@ -18,7 +18,7 @@
         align-items: flex-start;
       }
       .w {
-        width: calc(var(--u) * 190);
+        width: calc(var(--u) * 194);
         max-width: 100%;
       }
       /* The five tiers, side by side. */
@@ -45,14 +45,14 @@
       }
       /* A row of its own, with room beside the list of things for the card the page pins open. */
       #cards {
-        margin-right: calc(100% - var(--u) * 190);
+        margin-right: calc(100% - var(--u) * 194);
         margin-bottom: calc(var(--u) * 60);
       }
     </style>
   </head>
   <body>
     <div class="k-col">
-      <div class="k-plaque k-row" style="padding: var(--u) calc(var(--u) * 4)">
+      <div class="k-plaque hung k-row" style="padding: var(--u) calc(var(--u) * 4)">
         <span class="k-cur leaf"><i class="k-i k-i-leaf"></i>69</span>
         <span class="k-cur"><i class="k-i k-i-coin"></i>1,532</span>
       </div>
@@ -62,7 +62,7 @@
         <button class="k-btn coral icon"><i class="k-i k-i-home"></i></button>
         <button class="k-btn wood icon sm"><i class="k-i k-i-close"></i></button>
       </div>
-      <div class="k-plaque k-row" style="padding: var(--u); gap: var(--u); align-self: flex-start">
+      <div class="k-shelf k-row" style="padding: var(--u); gap: var(--u); align-self: flex-start">
         <button class="k-slot" style="width: calc(var(--u) * 21); height: calc(var(--u) * 21)">
           <i class="k-i k-i-acorn"></i>
         </button>
@@ -122,6 +122,11 @@
             Buy<span class="k-cur"><i class="k-i k-i-coin"></i>40</span>
           </button>
         </div>
+        <div class="k-card locked">
+          <div class="k-grow k-dim">Moth lamp</div>
+          <span class="k-chip"><i class="k-i k-i-lock"></i>900</span>
+        </div>
+        <button class="k-card" aria-pressed="true">Crab No. 7's hat</button>
         <div class="k-label">Level 4</div>
         <div class="k-bar"><i style="--v: 62%"></i></div>
         <div class="k-bar leaf"><i style="--v: 30%"></i></div>
