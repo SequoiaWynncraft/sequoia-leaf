@@ -13,7 +13,7 @@ import { close, link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph } from "@sequoia-leaf/kit/dom.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
 import { known, people } from "@sequoia-leaf/kit/person.ts";
-import { type Body, faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
+import { faceFor } from "@sequoia-leaf/kit/skin.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { RAID_STATS } from "@sequoia-leaf/raid/stats.ts";
 import { TOWN_STATS } from "@sequoia-leaf/town/stats.ts";
@@ -48,12 +48,12 @@ export function aboutNow(): About {
 
 // ---------- faces ----------
 
-const bodies = new WeakMap<Body, number>();
-let bodiesSeen = 0;
-const bodyNo = (b: Body | null | undefined): number => {
-  if (!b) return 0;
-  let n = bodies.get(b);
-  if (n === undefined) bodies.set(b, (n = ++bodiesSeen));
+const pictures = new WeakMap<HTMLCanvasElement, number>();
+let picturesSeen = 0;
+/** A number for a face's picture, so that a row can say which one it shows. */
+const pictureNo = (c: HTMLCanvasElement): number => {
+  let n = pictures.get(c);
+  if (n === undefined) pictures.set(c, (n = ++picturesSeen));
   return n;
 };
 
@@ -65,43 +65,55 @@ const faceOf = (r: AboutRow): HTMLCanvasElement => figureOf(r)?.body?.face ?? fa
 
 // ---------- the panel ----------
 
+/** Says what a row shows: who, the line under their name, and which picture of their face. */
+const rowKey = (r: AboutRow): string => `${r.id}/${r.name}/${r.line}/${pictureNo(faceOf(r))}`;
+
 /** Says what the panel shows, so that it is drawn again only when that changes. */
-const keyOf = (a: About): string =>
-  [
-    facesCame(),
-    ...a.parts.flatMap((p) => [p.title, ...p.rows.map((r) => `${r.id}/${r.line}/${bodyNo(figureOf(r)?.body)}`)]),
-  ].join("|");
+const keyOf = (a: About): string => a.parts.flatMap((p) => [p.title, ...p.rows.map(rowKey)]).join("|");
 
 /** One line of the panel, standing for whoever it is: choosing it shows their card. */
 function rowOf(r: AboutRow): HTMLElement {
+  const face = faceOf(r);
   const b = el(
     "button",
     "k-thing about-row",
     { type: "button" },
-    el("span", "k-thing-pic", {}, pic(faceOf(r), 2)),
+    el("span", "k-thing-pic", {}, pic(face, 2)),
     el(
       "span",
       "about-who",
       {},
-      el("span", "k-thing-name", { text: r.name }),
-      r.line === "" ? null : el("span", "k-d", { text: r.line }),
+      el("b", "k-thing-name", { text: r.name }),
+      r.line === "" ? null : el("span", "k-dim", { text: r.line }),
     ),
-    r.you ? el("span", "k-info-tagged", { text: "you" }) : null,
+    r.you ? el("span", "k-info-tagged", { text: "You" }) : null,
   );
-  known({ id: r.id, name: r.name, line: r.line });
-  link(b, `person:${r.id}`);
+  known({ id: r.id, name: r.name, line: r.line, face });
+  // The card goes beside the list, not over it.
+  link(b, `person:${r.id}`, { side: true });
   return b;
 }
 
+/** The rows on the page, by what each shows. */
+let rows = new Map<string, HTMLElement>();
+
+/** Draws the list. A row that shows what it showed stays as it is, so that a card beside it stays too. */
 function fill(list: HTMLElement, a: About): void {
+  const was = rows;
+  rows = new Map();
   if (a.alone) {
-    list.replaceChildren(el("p", "k-d", { text: ALONE }));
+    list.replaceChildren(el("div", "k-dim", { text: ALONE }));
     return;
   }
+  const row = (r: AboutRow): HTMLElement => {
+    const b = was.get(rowKey(r)) ?? rowOf(r);
+    rows.set(rowKey(r), b);
+    return b;
+  };
   list.replaceChildren(
     ...a.parts.flatMap((p) => [
       el("div", "k-label", { text: p.title }),
-      el("div", "about-part", {}, ...p.rows.map(rowOf)),
+      el("div", "about-part", {}, ...p.rows.map(row)),
     ]),
   );
 }

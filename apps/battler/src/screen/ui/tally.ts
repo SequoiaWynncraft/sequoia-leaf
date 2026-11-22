@@ -197,7 +197,7 @@ export function tallyView(refOf: (id: number) => string, cls = ""): TallyView {
       "tv-row",
       { "data-kind": u.kind, "data-id": u.id, tabindex: "0" },
       el("span", "tv-pic", {}, pic(headOf(u.kind))),
-      el("span", "tv-name k-read", { text: specOf(u.kind).name }),
+      el("span", "tv-name", { text: specOf(u.kind).name }),
       bar,
       n,
       star,

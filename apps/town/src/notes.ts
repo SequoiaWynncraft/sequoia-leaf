@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "one-face",
+    at: "2026-11-22T19:31Z",
+    title: "One font for the game",
+    lines: [
+      "Names, numbers, labels and lists are now in the Minecraft font everywhere. Only sentences keep the plain font.",
+      "A person's card lists their numbers game by game, and no longer flickers when you first point at someone.",
+    ],
+  },
+  {
     id: "visit-camps",
     at: "2026-11-22T19:30Z",
     title: "Visit other camps",

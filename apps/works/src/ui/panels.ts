@@ -91,7 +91,7 @@ function opensThings(o: (typeof STORY)[number]): HTMLElement[] {
     ...(o.opens.kinds ?? []).map((k) => thing(machineRef(k))),
     ...(o.opens.plots ?? []).map((id) => thing(plotRef(id))),
     ...(o.opens.plans ?? []).map((id) => thing(planRef(id))),
-    ...(o.opens.board ? [el("span", "k-read", { text: "side orders" })] : []),
+    ...(o.opens.board ? [el("b", "", { text: "Side orders" })] : []),
   ];
 }
 
@@ -172,7 +172,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
             el("span", "k-grow"),
             el("span", "k-chip", {}, amount("coin", s.pay)),
           ),
-          el("div", "", { text: s.title }),
+          el("div", "k-name", { text: s.title }),
           el("div", "k-d", { text: s.line }),
           ...rows.rows,
           el("div", "k-row", {}, el("span", "k-grow"), act),
@@ -182,7 +182,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
     // A place on the board Leaf has yet to hang an order in.
     if (w.open.board)
       for (let n = w.board.length; n < w.rates.slots; n++)
-        kids.push(el("div", "k-card order", {}, el("div", "k-d", { text: "A new order is on its way." })));
+        kids.push(el("div", "k-card order", {}, el("div", "k-dim", { text: "A new order is on its way." })));
     body.replaceChildren(...kids);
   };
   const shape = when(
@@ -311,7 +311,7 @@ function depot(_art: Art, body: HTMLElement): () => void {
       ),
       rows.length > 0
         ? el("div", "rows", {}, ...rows)
-        : el("div", "k-d", { text: "Nothing has reached the depot yet." }),
+        : el("div", "k-dim", { text: "Nothing has reached the depot yet." }),
       el(
         "div",
         "k-card",
@@ -326,7 +326,7 @@ function depot(_art: Art, body: HTMLElement): () => void {
           }),
         ),
       ),
-      ...(spare.length > 0 ? [el("div", "k-d", { text: `Free pieces left to place: ${spare.join(", ")}.` })] : []),
+      ...(spare.length > 0 ? [el("div", "k-dim", { text: `Free pieces left to place: ${spare.join(", ")}.` })] : []),
     );
   };
   return when(() => `${Math.floor(S.world.tick / 20)}|${S.rev}`, build);
@@ -337,7 +337,7 @@ function depot(_art: Art, body: HTMLElement): () => void {
 /** A line of the power book: what, how many, and the power that comes to. */
 const row = (name: string, about: string, n: number, lit = false): HTMLElement[] => [
   el("span", "", { text: name }),
-  el("span", "k-d", { text: about }),
+  el("span", "k-s k-dim", { text: about }),
   el("span"),
   el("span", lit ? "num k-gold" : "num", { text: String(n) }),
 ];
@@ -385,10 +385,10 @@ function powerBook(_art: Art, body: HTMLElement): () => void {
         {},
         "Lit tiles have power. The depot and every pylon connected to it light the tiles around them. A machine on a dark tile does not work and uses no power.",
       ),
-      el("div", "k-label", { text: `Made: ${p.supply}` }),
+      el("div", "k-dim", { text: `Made: ${p.supply}` }),
       el("div", "rows", {}, ...gives),
-      el("div", "k-label", { text: `Used: ${p.demand}` }),
-      draws.length > 0 ? el("div", "rows", {}, ...draws) : el("div", "k-d", { text: "Nothing is using power yet." }),
+      el("div", "k-dim", { text: `Used: ${p.demand}` }),
+      draws.length > 0 ? el("div", "rows", {}, ...draws) : el("div", "k-dim", { text: "Nothing is using power yet." }),
       el(
         "div",
         p.pace < 1 ? "k-card lit" : "k-card",

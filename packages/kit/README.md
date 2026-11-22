@@ -34,14 +34,21 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
   leaves or removes. Slate is quiet. Only what can be pressed has a bevel: a tag is flat.
 - **Colour means one thing each.** Gold is Coins and the button that confirms, green is Leaf and
   growth, coral is health and leaving. `--k-tier-1` to `--k-tier-5` are the tiers' colours.
-- **Letters.** Two faces. Minecraft, the guild's pixel face, is for titles, names and buttons
-  (`k-title`, `k-name`, `k-btn`), in bold. It is drawn ten pixels to the em and is sharp only at
-  whole multiples of ten, so there are three sizes and no others: `--t-m` (20px) for a name or a
-  button, `--t-l` (30px) for a title, `--t-xl` (40px) for a large one; on a very large window they
-  are 30, 40 and 60. Give it no letter-spacing and no other size. Everything read, and every number, is Inter: the page's own
-  face at `--t-r` (14 pixels), bold for a name or a number (`b`, `k-pix`), lighter for a line that
-  is read (`k-read`, `k-d`), and `--t-s` for a small capital label (`k-label`). Words drawn on a
-  canvas in the world keep the Minecraft face (`text.ts`; wait for `fontsReady()` first).
+- **Letters.** Every text is set in one of five styles, whole `font` values on `:root`, and no rule
+  names a face, a size or a weight of its own (`type.test.ts` holds that). Four are Minecraft, the
+  guild's pixel face and the page's own, for everything that is not a sentence: `--f-head` (bold,
+  30 pixels) for a title (`k-title big`, a panel's or a card's), `--f-name` (bold, 20) for a name,
+  a number, an amount, a chip or a button (`k-name`, `k-title`, `k-pix`, `b`), `--f-ui` (regular, 20) for everything else, and it is what a page has with no class at all: a row of a list, a line
+  somebody says, the feed, a hint of a few words; and `--f-small` (regular, 10) for a word or a
+  number where 20 pixels cannot fit or would shout: a label over a group (`k-label`), the line
+  over a title, a price under a tool, a tag (`k-s`). The fifth, `--f-read`, is Inter at 14 pixels,
+  for a sentence or more that is read: what a thing does, a letter, a note, the how-to (`k-read`,
+  `k-d`, `k-tip`, a `p` on paper). Minecraft is drawn ten pixels to the em and is sharp only at
+  whole multiples of ten, so it has those three sizes and no others (20, 30 and 40 on a very large
+  window). Nothing is written in capitals, and text is not made smaller to fit: the layout changes.
+  What is more important than what is beside it is bold, larger, or brighter (`--k-cream`,
+  `--k-dim`, `--k-faint`, `--k-gold`). Words drawn on a canvas in the world are Minecraft too
+  (`text.ts`; wait for `fontsReady()` first).
 - **Paper stays paper.** A letter, speech and a lesson are cream paper with dark ink (`k-paper`,
   `k-say`): what a character hands over. The frames are the interface.
 - **The town's own are marked.** Whoever lives in the game and is not a member (a keeper, a cat,
@@ -69,7 +76,7 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
 | `k-bar` (`leaf`, `coral`)                                                                        | How far along something is: `<div class="k-bar"><i style="--v:40%">` |
 | `k-chip` (`lit`)                                                                                 | A small flat tag; a trait or a kind is a hexagon badge (below)       |
 | `k-toast` (`leaf`, `coral`, `rose`, `alone`)                                                     | A line of news; `alone`, over the whole page at the top              |
-| `k-title` (`big`), `k-name`, `k-label`, `k-d`, `k-read`, `k-pix`, `k-dim`                        | Words: titles, names, small labels, second lines, reading, bold      |
+| `k-title` (`big`), `k-name`, `k-pix`, `k-label`, `k-s`, `k-d`, `k-read`, `k-dim`                 | Words: titles, names, small labels and words, what a thing does      |
 | `k-folk`                                                                                         | A name of the town's own (leaf green, the acorn first)               |
 | `k-over`                                                                                         | Words written straight over the world, with a dark edge              |
 | `k-scrim`, `k-rise`, `k-row`, `k-col`, `k-wrap`, `k-grow`, `k-scroll`                            | Laying things out                                                    |
@@ -130,11 +137,14 @@ Anything shown or named in any of the games explains itself the same way, in `ca
 **What a game gives it.** Each kind of thing is registered once, `register(kind, describe)`, where
 `describe(id)` gives a description or null; from then on a thing is named by a reference,
 `"kind:id"` (`"item:gear"`, `"trait:ember"`). A description has a `name` and, all optional, an
-`icon` (a canvas, fitted to its slot by whole steps, or a kit icon), a `tag` under the name, an
+`icon` (a canvas, fitted to its slot by whole steps, or a kit icon), a `tag` under the name (read
+as a sentence if it ends with a stop), an
 `aside` at the right of the head (a price, stars), `chips` (labelled, each optionally a
-reference, and optionally a `hint`: a tip on it saying what it means), `stats` (label and value, three to a row, each optionally `raised` or `lowered`),
+reference, and optionally a `hint`: a tip on it saying what it means), `stats` (label and value,
+three to a row, each optionally `raised` or `lowered`; with a text among them, a heading, they
+are a sheet instead, a line each with the number at the right),
 `blocks` (a bold title, a note at its right, words in the reading face; `line` puts them on one
-line, `lit` picks one out), `rows` (a small capital label and things, as icon and name, as
+line, `lit` picks one out), `rows` (a small label and things, as icon and name, as
 pictures only, or as tiles; each may be lit, tagged, counted, given a note, locked with what opens
 it, or drawn as "this, an arrow, that") and `actions` (buttons, shown only on a pinned card).
 

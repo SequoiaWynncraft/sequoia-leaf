@@ -151,7 +151,7 @@ export function openSheet(how: "after" | "again"): void {
 export function sheetTaking(label: string, value: Node | string): void {
   const list = SH.takings;
   if (!list || SH.up !== "after") return;
-  list.append(el("div", "k-row pay k-rise", {}, el("span", "k-grow k-read", { text: label }), value));
+  list.append(el("div", "k-row pay k-rise", {}, el("span", "k-grow", { text: label }), value));
 }
 
 /** Puts the sheet away. */

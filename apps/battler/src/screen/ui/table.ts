@@ -396,7 +396,7 @@ function renderPurseSide(run: Run): void {
   node.replaceChildren(
     el("span", "k-cur big", {}, icon("acorn"), String(n)),
     piles,
-    el("span", "k-d interest", { text: held > 0 ? `+${held} a room` : `${s.per - (n % s.per)} to save` }),
+    el("span", "k-dim interest", { text: held > 0 ? `+${held} a room` : `${s.per - (n % s.per)} to save` }),
   );
   node.dataset.n = String(n);
   if (was !== undefined && Number(was) < n) replay(node, "k-bump");
@@ -414,8 +414,8 @@ function renderPurseSide(run: Run): void {
   level.replaceChildren(
     el("b", "", { text: `Level ${lv}` }),
     bar,
-    el("span", "k-d", { text: need > 0 ? `${xp}/${need}` : "top" }),
-    el("span", "k-d fielded", {}, pic(glyph("figure")), `${fielded(run)}/${fieldCap(run)}`),
+    el("span", "k-dim", { text: need > 0 ? `${xp}/${need}` : "top" }),
+    el("span", "k-dim fielded", {}, pic(glyph("figure")), `${fielded(run)}/${fieldCap(run)}`),
   );
   level.dataset.n = String(lv);
   if (wasLv !== undefined && Number(wasLv) < lv) replay(level, "k-bump");
@@ -458,11 +458,11 @@ function renderFoe(run: Run): void {
   foe.hidden = S.mode === "front" || S.mode === "over" || S.mode === "after";
   if (regularNamed(run.foe.who)) {
     foe.replaceChildren(
-      el("div", "brought", {}, folkName(opening(run.foe.who), "k-pix"), el("span", "k-read", { text: run.foe.title })),
+      el("div", "brought", {}, folkName(opening(run.foe.who), "k-pix"), el("span", "", { text: run.foe.title })),
     );
   } else {
     foe.replaceChildren(el("b", "k-name", { text: run.foe.who }));
-    if (run.foe.title) foe.append(el("span", "k-d", { text: run.foe.title }));
+    if (run.foe.title) foe.append(el("span", "k-dim", { text: run.foe.title }));
   }
   placeFoe();
 }

@@ -134,7 +134,7 @@ function front(): HTMLElement {
         "k-col k-grow tight",
         {},
         el("b", "k-gold", { text: "A raid is laid out" }),
-        el("span", "k-d", {
+        el("span", "k-dim", {
           text: `Room ${run.room + 1} of ${ROOM_COUNT}, ${TRAILS[run.trail]?.name ?? ""}. Health ${run.resolve}.`,
         }),
         partyRow(run),
@@ -228,9 +228,9 @@ function front(): HTMLElement {
         el("b", "", { text: t.name }),
         el("span", "k-d", { text: open ? t.text : `Clear ${TRAILS[i - 1]?.name ?? "the one before"} first.` }),
         best > 0
-          ? el("span", "k-read k-dim", { text: `Furthest: room ${best}. Pays ${t.pays}%.` })
+          ? el("span", "k-dim", { text: `Furthest: room ${best}. Pays ${t.pays}%.` })
           : open && t.pays > 100
-            ? el("span", "k-read k-dim", { text: `Pays ${t.pays}%.` })
+            ? el("span", "k-dim", { text: `Pays ${t.pays}%.` })
             : null,
       ),
     );
@@ -300,9 +300,9 @@ function figureTile(id: FigureId): HTMLElement {
   const tile = el(
     "button",
     `k-card tile${met ? "" : " unmet"}`,
-    { type: "button" },
+    { type: "button", "aria-label": met ? null : "Not met" },
     pic(portrait(id, { dark: !met }), 2),
-    el("span", "k-s", { text: met ? FIGURES[id].name : "Not met" }),
+    met ? el("span", "k-s", { text: FIGURES[id].name }) : null,
     starred ? pic(starsPic(3), 1, "badge") : null,
   );
   if (met) link(tile, `figure:${id}/${starred ? 3 : 1}/lore`);
@@ -340,13 +340,13 @@ function almanac(): HTMLElement {
   if (tab === "figures") {
     add(
       page,
-      el("div", "k-d", {
+      el("div", "k-dim", {
         text: `${a.fielded.length} of ${FIGURE_IDS.length} met. ${a.threeStars.length} taken to three stars.`,
       }),
     );
     add(page, el("div", "tiles", {}, ...FIGURE_IDS.map(figureTile)));
   } else if (tab === "traits") {
-    add(page, el("div", "k-d", { text: `${a.topped.length} switched all the way on.` }));
+    add(page, el("div", "k-dim", { text: `${a.topped.length} switched all the way on.` }));
     const list = el("div", "k-col", {});
     for (const id of TRAIT_IDS) {
       const row = el(
@@ -368,7 +368,7 @@ function almanac(): HTMLElement {
     }
     add(page, list);
   } else if (tab === "items") {
-    add(page, el("div", "k-d", { text: `${a.forged.length} of ${FINISHED_IDS.length} made.` }));
+    add(page, el("div", "k-dim", { text: `${a.forged.length} of ${FINISHED_IDS.length} made.` }));
     const comps = el("div", "tiles small", {});
     for (const id of COMPONENT_IDS) {
       const tile = el(
@@ -388,16 +388,16 @@ function almanac(): HTMLElement {
       const tile = el(
         "button",
         `k-card tile${have ? "" : " unmet"}`,
-        { type: "button" },
+        { type: "button", "aria-label": have ? null : "Not made" },
         have ? pic(itemIcon(id), 2) : el("span", "pair", {}, pic(itemIcon(x)), pic(itemIcon(y))),
-        el("span", "k-s", { text: have ? itemName(id) : "Not made" }),
+        have ? el("span", "k-s", { text: itemName(id) }) : null,
       );
       link(tile, `item:${id}/lore`);
       made.append(tile);
     }
     add(page, comps, el("hr", "k-rule"), made);
   } else {
-    add(page, el("div", "k-d", { text: `${a.runs} raid${a.runs === 1 ? "" : "s"} walked.` }));
+    add(page, el("div", "k-dim", { text: `${a.runs} raid${a.runs === 1 ? "" : "s"} walked.` }));
     for (let i = 0; i < TRAIL_COUNT; i++) {
       const best = a.best[i] ?? 0;
       const beaten = a.bosses[i] ?? [];
@@ -412,7 +412,7 @@ function almanac(): HTMLElement {
             "k-col k-grow tight",
             {},
             el("b", "", { text: TRAILS[i]?.name ?? "" }),
-            el("span", "k-d", {
+            el("span", "k-dim", {
               text:
                 best > 0
                   ? `Furthest: room ${best} of ${ROOM_COUNT}.`
@@ -652,7 +652,11 @@ function summary(): HTMLElement | null {
         : el("div", "k-row pay", {}, el("span", "k-grow", { text: WHY[l.why] }), amount("coin", `+${l.coins}`)),
     );
   if (right.childElementCount === 0)
-    add(right, el("div", "k-label", { text: "New in the almanac" }), el("i", "", { text: "Nothing this time." }));
+    add(
+      right,
+      el("div", "k-label", { text: "New in the almanac" }),
+      el("span", "k-dim", { text: "Nothing this time." }),
+    );
   add(
     left,
     el(

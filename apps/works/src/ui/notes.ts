@@ -105,7 +105,7 @@ export function banner(art: Art, done: StoryOrder, next: StoryOrder | null): voi
           "k-grow",
           {},
           plans.length === 1 ? "A new plan to buy" : "New plans to buy",
-          el("div", "k-d", { text: plans.map((p) => p.name).join(", ") }),
+          el("div", "k-dim", { text: plans.map((p) => p.name).join(", ") }),
         ),
       ),
     );
