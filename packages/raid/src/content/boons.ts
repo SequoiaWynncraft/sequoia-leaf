@@ -102,8 +102,8 @@ export const BOONS: Record<BoonId, BoonSpec> = {
   secondwind: {
     name: "Second Wind",
     sort: "party",
-    text: "The first of your figures to fall each fight gets back up, once, with {health}% of its health.",
-    short: "First to fall gets up with {health}% health.",
+    text: "Each fight, the first of your figures to fall gets back up with {health}% of its health.",
+    short: "Each fight, your first figure to fall gets up. It has {health}% of its health.",
     n: { health: 40 },
     quip: "Was only resting.",
   },
