@@ -110,7 +110,7 @@ Anything shown or named in any of the games explains itself the same way, in `ca
 `"kind:id"` (`"item:gear"`, `"trait:ember"`). A description has a `name` and, all optional, an
 `icon` (a canvas, fitted to its slot by whole steps, or a kit icon), a `tag` under the name, an
 `aside` at the right of the head (a price, stars), `chips` (labelled, each optionally a
-reference), `stats` (label and value, three to a row, each optionally `raised` or `lowered`),
+reference, and optionally a `hint`: a tip on it saying what it means), `stats` (label and value, three to a row, each optionally `raised` or `lowered`),
 `blocks` (a bold title, a note at its right, words in the reading face; `line` puts them on one
 line, `lit` picks one out), `rows` (a small capital label and things, as icon and name, as
 pictures only, or as tiles; each may be lit, tagged, counted, given a note, locked with what opens

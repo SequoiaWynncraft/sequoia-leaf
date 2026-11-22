@@ -46,10 +46,11 @@ export {
   traitNumber,
   TRAITS,
   type TraitSpec,
+  traitDraw,
   traitShort,
   traitText,
 } from "./content/traits.ts";
-export { GOOD_WITH, type Role, roleLine, ROLES, type Three } from "./content/advice.ts";
+export { drawName, drawTip, GOOD_WITH, type Role, roleLine, ROLES, type Three } from "./content/advice.ts";
 export {
   COMPONENT_IDS,
   type ComponentId,
@@ -98,7 +99,7 @@ export {
   TRAIL_COUNT,
   TRAILS,
 } from "./content/rooms.ts";
-export { type Milestone, MILESTONES, PAYOUT } from "./content/keepsakes.ts";
+export { PAYOUT } from "./content/keepsakes.ts";
 
 // The board.
 export {
@@ -141,7 +142,7 @@ export { sparParty } from "./spar.ts";
 
 // The fight.
 export { openFight, recordFight, resolveFight, runFight, speedNow, stepFight, summarise } from "./fight/engine.ts";
-export { HZ } from "./fight/core.ts";
+export { drawOf, HZ } from "./fight/core.ts";
 export type {
   DamageKind,
   DamageSource,
@@ -196,6 +197,7 @@ export {
   sellValue,
   type Spot,
   spotOf,
+  STALL_POOL,
   startRun,
   summariseRun,
   type Taken,
@@ -210,12 +212,9 @@ export { type Loaded, loadRun, SAVE_VERSION, saveRun } from "./save.ts";
 export {
   type Almanac,
   ALMANAC_VERSION,
-  isLocked,
   loadAlmanac,
-  milestones,
   newAlmanac,
   type News,
-  openFigures,
   type Payout,
   payout,
   recordRun,
@@ -226,3 +225,4 @@ export {
 
 // A player with habits, for trying things out.
 export { CARELESS, fondOf, type Habit, planRoom, playRoom, playRun, ROLLER, SAVER, SENSIBLE } from "./bot.ts";
+export { type Did, type Measure, measureOf, MEASURES, partsOf, tally } from "./tally.ts";

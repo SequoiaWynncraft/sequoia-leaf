@@ -81,6 +81,9 @@ export const FIGHT = {
   duskGrows: 3,
   /** A fight still going after this many seconds is a draw. */
   cap: 45,
+  /** The most and least a figure's draw can be, however much it carries and holds. */
+  drawMost: 2,
+  drawLeast: -1,
 } as const;
 
 // ---------- rooms ----------

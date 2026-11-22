@@ -31,6 +31,8 @@ export interface Chip {
   readonly count?: string;
   readonly lit?: boolean;
   readonly ref?: Ref;
+  /** A tip on it: what it means, in a sentence. */
+  readonly hint?: string;
 }
 
 /** A number with its label; raised (green) or lowered (coral) by something. */
@@ -419,6 +421,7 @@ function chipOf(c: Chip): HTMLElement {
     face,
   );
   if (c.ref) link(box, c.ref);
+  if (c.hint) tip(box, c.text, c.hint);
   return box;
 }
 

@@ -132,7 +132,7 @@ export const TRAITS = {
       "+{armour} armour, rest of party +{party}.",
       "+{armour} armour, rest of party +{party}.",
     ],
-    n: { armour: [20, 45, 80], party: [0, 15, 30] },
+    n: { armour: [10, 30, 60], party: [0, 10, 20] },
   },
   fang: {
     name: "Fang",
@@ -197,7 +197,7 @@ export const TRAITS = {
       "When the fight starts, Sneaks leap to the enemy's back row, and their first {hits} attacks do {extra}% more.",
     ],
     short: ["Leap behind, first {hits} hits +{extra}%.", "Leap behind, first {hits} hits +{extra}%."],
-    n: { hits: [2, 3], extra: [50, 80] },
+    n: { hits: [2, 3], extra: [40, 70] },
   },
   greg: {
     name: "Greg",
@@ -243,6 +243,13 @@ function stepWords(id: TraitId, step: number, words: (spec: TraitSpec) => readon
 export const traitText = (id: TraitId, step: number): string => stepWords(id, step, (spec) => spec.text);
 /** What a trait does at a step, in a few words for a card. */
 export const traitShort = (id: TraitId, step: number): string => stepWords(id, step, (spec) => spec.short);
+/**
+ * How much a calling draws: enemies pick their target as if a figure of it stood this many hexes
+ * nearer (fewer, for a negative number). A figure's draw is the sum over what it carries and holds.
+ */
+export const CALLING_DRAW: Readonly<Partial<Record<CallingId, number>>> = { bulwark: 1, sneak: -1 };
 export const isTraitId = (v: unknown): v is TraitId => typeof v === "string" && Object.hasOwn(TRAITS, v);
 export const isKin = (v: TraitId): v is KinId => TRAITS[v].sort === "kin";
 export const isCalling = (v: TraitId): v is CallingId => TRAITS[v].sort === "calling";
+/** What carrying a trait adds to a figure's draw: a calling's own, else 0. */
+export const traitDraw = (id: TraitId): number => (isCalling(id) ? (CALLING_DRAW[id] ?? 0) : 0);

@@ -97,12 +97,12 @@ two, so any kin can be started in the first rooms.
 | Feather | 2, 4    | Feather figures attack 5% faster after every attack, up to 10 times over.                                                                                                            |
 | Crab    | 2, 4    | Roll call: when the fight starts, an Uncounted Crab turns up beside your crabs, as starry as the best of them.                                                                       |
 | Gnome   | 2, 4    | After a room you win, the gnomes find 1 more acorn.                                                                                                                                  |
-| Bulwark | 2, 4, 6 | Bulwarks gain 20 armour.                                                                                                                                                             |
+| Bulwark | 2, 4, 6 | Bulwarks gain 10 armour.                                                                                                                                                             |
 | Fang    | 2, 4, 6 | Fangs gain 12% attack, and 10 more of their attacks in a hundred land hard, for half as much again.                                                                                  |
 | Slinger | 2, 4    | Slingers reach 1 hex further, and each attack on the same target does 7% more than the last, up to 6 times over.                                                                     |
 | Sage    | 2, 4    | Sages' abilities are 25% stronger, and each of their attacks gives 3 more mana.                                                                                                      |
 | Mender  | 2, 4    | Menders' healing and shields count for 20% more.                                                                                                                                     |
-| Sneak   | 2, 4    | When the fight starts, Sneaks leap to the enemy's back row, and their first 2 attacks do 50% more.                                                                                   |
+| Sneak   | 2, 4    | When the fight starts, Sneaks leap to the enemy's back row, and their first 2 attacks do 40% more.                                                                                   |
 | Greg    | 1       | After every fight Greg is in, he has eaten something: +3% health for good, up to 10 times.                                                                                           |
 
 The second steps: Ember burns from the whole party's hits and hotter; Moss regrows more; Mist gives
@@ -114,8 +114,16 @@ and so on. `traitText(id, step)` gives the sentence for any step.
 same setup gives the same fight, event for event. In a step, things in flight land; once a second
 burns, regrowth and dusk tick; then everyone still up has a turn, the two sides alternating: use the
 ability if the mana bar is full, else attack whoever they are after if in reach, else walk one hex
-toward them round whoever is in the way. A figure goes for the nearest enemy and stays on it while
-it is in reach.
+toward them round whoever is in the way.
+
+**Who a figure goes for.** Whoever is taunting it; else whoever it is already on, while that one is
+in reach; else, picking anew, the enemy with the lowest distance less _draw_, ties going to the one
+really nearer and then to the hex that comes first for its side. Every figure has a draw, a whole
+number: +1 for a Bulwark, -1 for a Sneak, +1 for each Stump Shield it holds, never above +2 or below
+-1 (`drawOf`); the forest's own carry no calling and have 0. So a tank one hex further off than
+somebody else is a tie, which the nearer one wins, and at the same distance the tank is picked. An
+ability aimed at "its target" goes for the same one; abilities that say "nearest", "furthest" or
+"most hurt" pick as they say.
 
 - Physical damage meets armour and magic meets ward: damage x 100 / (100 + defence). True damage
   meets nothing. Damage is rounded to whole numbers, never less than 1.
@@ -152,7 +160,7 @@ component from three when won and from two when lost; a beaten boss gives two pi
 | Fairy Ring         | Glowcap + Glowcap   | +40 ability power. Every time it uses its ability, the ones after are 20 ability power stronger.                                                      |
 | Lichen Locket      | Glowcap + Bark      | +20 ability power, +20 armour and +20 ward. When it uses its ability it shields itself for 15% of its health, for 4 seconds.                          |
 | Stewpot            | Glowcap + Chestnut  | +20 ability power, +15% health. Every 3 seconds it serves whoever in the party is most hurt: 5% of their health back.                                 |
-| Stump Shield       | Bark + Bark         | +40 armour and +40 ward. No attack lands hard on it, and stuns on it last a quarter as long.                                                          |
+| Stump Shield       | Bark + Bark         | +40 armour and +40 ward. +1 draw. No attack lands hard on it, and stuns on it last a quarter as long.                                                 |
 | Hollow Log         | Bark + Chestnut     | +20 armour and +20 ward, +15% health. Once a fight, when it drops under 40% health, it climbs inside: a shield worth 30% of its health for 5 seconds. |
 | Winter Hoard       | Chestnut + Chestnut | +30% health. Regrows 2% of its health every second.                                                                                                   |
 
@@ -216,9 +224,9 @@ sparring partners more to spend and more items. The rules do not change.
 won, 50 for every boss beaten, 120 for winning, and a quarter or a half more on the harder trails.
 A whole raid on the first trail is 510. The almanac remembers which figures have been fielded and
 taken to three stars, which items forged, which traits switched all the way on, which bosses beaten
-and the furthest room met on each trail. Four figures start locked and are opened by play: Kettle
-(clear the first wing), Drizzle Frog (clear the second), Gnome In A Bush (switch any kin or calling
-all the way on) and Crab #40 (finish a raid). The next trail opens when the last is cleared.
+and the furthest room met on each trail. None of it changes a fight or the stall: all twenty-eight
+figures can be offered to everyone from their first run (`STALL_POOL`). The next trail opens when the
+last is cleared.
 
 ## What is where
 
@@ -229,7 +237,7 @@ all the way on) and Crab #40 (finish a raid). The next trail opens when the last
 | `content/items.ts`     | Components, finished items, what forges into what, how a figure holds them                                            |
 | `content/boons.ts`     | The boons                                                                                                             |
 | `content/rooms.ts`     | Acorns, levels, stall odds, the fight's clock, the fifteen rooms and their plans, sparring strength, trails, regulars |
-| `content/keepsakes.ts` | The payout and the locked figures                                                                                     |
+| `content/keepsakes.ts` | The payout                                                                                                            |
 | `content/advice.ts`    | What kind of fighter each calling makes and where it stands, and three finished items that suit each figure           |
 | `hex.ts`               | The board: cells and seats, distance, neighbours, lines, cones, rings, finding a way round                            |
 | `rng.ts`               | The seeded random stream                                                                                              |
@@ -242,7 +250,8 @@ all the way on) and Crab #40 (finish a raid). The next trail opens when the last
 | `spar.ts`              | The regulars' parties for sparring                                                                                    |
 | `run.ts`               | The run and every action on it                                                                                        |
 | `save.ts`              | A run as text and back                                                                                                |
-| `outside.ts`           | Payout, almanac, locked figures, trails                                                                               |
+| `outside.ts`           | Payout, almanac, trails                                                                                               |
+| `tally.ts`             | What every figure did in a fight, read from its events                                                                |
 | `bot.ts`               | A player with habits                                                                                                  |
 | `index.ts`             | Everything a screen needs, in one place                                                                               |
 | `testkit.ts`           | Helpers for the tests only                                                                                            |
@@ -255,8 +264,10 @@ sentence in the guild's voice, which the almanac shows, and a short form for the
 of at most 48 characters ("Shield 210 for 4s. 70 physical to adjacent enemies."). A test holds every
 short form to that, and to using only numbers its long sentence has for the same stars.
 
-`content/advice.ts` is read by the cards only. Each calling has a role and a place ("Tank · front
-row", "Assassin · leaps to their back row"), and each figure three finished items that suit it,
+`content/advice.ts` is read by the cards only. Each calling has a role and a place, and its draw if
+it has one ("Tank · front row · draws fire", "Assassin · leaps to their back row · slips notice");
+a figure's draw has a name and a tip for its chip (`drawName`, `drawTip`); and each figure has three
+finished items that suit it,
 chosen by its calling first (tanks Bark and Chestnut, fighters and assassins Thorn with Chestnut or
 Plume, ranged Thorn and Plume, casters and healers Glowcap) and then by its ability.
 
@@ -272,7 +283,7 @@ the player. Notes say what happened, in order, naming figures by their own numbe
 import * as raid from "./game/index.ts";
 
 let almanac = raid.loadAlmanac(localStorage.getItem("almanac") ?? "") ?? raid.newAlmanac();
-const run = raid.startRun(seed, { trail: 0, open: raid.openFigures(almanac) });
+const run = raid.startRun(seed, { trail: 0 });
 
 // A choice is waiting whenever run.choices has anything in it: the first pick, a component, a boon.
 // Nothing else is allowed until it is settled.
@@ -319,8 +330,9 @@ events of a step (`FightEvent` in `fight/types.ts`) are plain objects:
   knocked back)
 - `swing` (an attack up close; its `hit` follows), `shot` (something thrown: from, to, steps in the
   air, whether it is an attack or part of an ability)
-- `hit` (who, by whom, how much, how much of it a shield took, physical, magic or true, where it
-  came from, whether it landed hard, health and shield after), `slip`
+- `hit` (who, by whom, how much, how much of it a shield took, what it was before armour, ward and
+  bracing, physical, magic or true, where it came from, whether it landed hard, health and shield
+  after), `slip`
 - `cast` (whose ability, its name and shape, the hexes it covers, who it is aimed at, steps before
   it lands). An ability that spreads out from its owner names every hex it reaches, its own first;
   a Toadstool's spores are said as a `cast` too, straight after its `fall`
@@ -330,10 +342,19 @@ events of a step (`FightEvent` in `fight/types.ts`) are plain objects:
 Headless Chromium draws about a frame a second, so a screen should keep its own handle for stepping
 by hand; the fight needs nothing for that, since it only moves when `stepFight` is called.
 
+**The tally.** `tally(events, ids)` reads a fight's events (the opening and the steps so far, or a
+whole fight's) and gives back, for every figure, the damage it dealt as physical, magic and true;
+the health it lost and what was kept off it (turned away by armour, ward and bracing, or soaked by
+a shield); the health and shields it gave, to others or itself; how many it felled; and whether it
+still stands. What a summoned figure did counts for whoever summoned it, so a Glorplet has no entry
+of its own. `partsOf(did, "damage" | "tanked" | "healing")` gives the parts a bar is drawn in.
+
 **Saving.** `saveRun(run)` is a string; `loadRun(text)` gives back the identical run, or a reason it
 is refused. It reads the text field by field and turns away anything this version could not have
 made. A fight in progress is not saved: a run saved mid-fight loads at the start of that fight,
-which plays out the same from its seed.
+which plays out the same from its seed. The last fight fought is kept as its setup (`run.last`), so
+it can be played again to be looked back on; a run saved before that was kept loads with none, and
+the list of open figures an older save carries is let go.
 
 ## Trying the numbers
 
@@ -345,33 +366,37 @@ again with each figure given each finished item, and lists for every figure the 
 most and least beside the three a card recommends; none of those is among a figure's three worst. The bot is a rough player: it seats by a plain
 rule and does not look at what it is about to fight.
 
-Where the numbers stood when this was written, 300 runs a habit:
+Where the numbers stood when this was written, 300 runs a habit, with the draw rule in:
 
 | Trail              | Habit                          | Left wing 1 | Left wing 2 | Met the last boss | Beat it   |
 | ------------------ | ------------------------------ | ----------- | ----------- | ----------------- | --------- |
-| The Easy Way       | sensible                       | 100%        | 99%         | 54%               | 25%       |
-|                    | saver who levels               | 100%        | 83%         | 31%               | 13%       |
-|                    | roller who chases stars        | 100%        | 92%         | 59%               | 14%       |
-|                    | fond of one kin (seven bots)   | 100%        | 89 to 99%   | 30 to 63%         | 17 to 41% |
-|                    | fond of one calling (six bots) | 100%        | 88 to 97%   | 38 to 58%         | 20 to 36% |
+| The Easy Way       | sensible                       | 100%        | 99%         | 53%               | 28%       |
+|                    | saver who levels               | 100%        | 85%         | 34%               | 11%       |
+|                    | roller who chases stars        | 100%        | 92%         | 59%               | 16%       |
+|                    | fond of one kin (seven bots)   | 100%        | 89 to 100%  | 31 to 62%         | 17 to 50% |
+|                    | fond of one calling (six bots) | 100%        | 89 to 98%   | 36 to 59%         | 17 to 35% |
 |                    | careless                       | 95%         | 0%          | 0%                | 0%        |
-| The Brambly Way    | sensible                       | 100%        | 82%         | 19%               | 4%        |
-|                    | careless                       | 86%         | 0%          | 0%                | 0%        |
-| The Long Way Round | sensible                       | 100%        | 50%         | 5%                | 0%        |
-|                    | careless                       | 69%         | 0%          | 0%                | 0%        |
+| The Brambly Way    | sensible                       | 100%        | 85%         | 20%               | 5%        |
+|                    | careless                       | 87%         | 0%          | 0%                | 0%        |
+| The Long Way Round | sensible                       | 100%        | 50%         | 6%                | 0%        |
+|                    | careless                       | 65%         | 0%          | 0%                | 0%        |
 
 On the first trail the rooms are won, by everyone who is trying, at 100, 97, 99, 88 and 98% in the
-first wing; 85, 79, 68, 58 and 72% in the second; 46, 47, 53 and 35% in the third; and the last
-boss at 35% a try. A fight lasts 16.6 seconds on average, dusk falls in 9% of them, and draws are
+first wing; 86, 79, 67, 57 and 75% in the second; 43, 45, 56 and 34% in the third; and the last
+boss at 36% a try. A fight lasts 16.2 seconds on average, dusk falls in 7% of them, and draws are
 too rare to show (0% when rounded).
 
-Against the same rooms without regard to them, every one- to four-acorn figure wins within 6 points
-of the rest except Crab #40 (+9); the three five-acorn figures are +11 to +16. Every kin's and
-calling's first step is within 4 points; of the second steps Mender (+14) and Sneak (+14) do best
-and Ember (-4) worst; the third steps of Bulwark and Fang were seen too seldom to judge. Every
-finished item is within 7. The kin whose fond bot does best is Burrow (41% of runs won) and worst
-are Ember and Moss (17%). These figures lean on who chooses what: a party that can afford a
-five-acorn figure is usually already doing well.
+Against the same rooms without regard to them, every one- to four-acorn figure wins within 7 points
+of the rest except Crab #40 (+11); the three five-acorn figures are +12 to +16. Every kin's and
+calling's first step is within 5 points; of the second steps Sneak (+14), Burrow (+13), Crab (+11)
+and Mender (+8) do best and Ember and Slinger (-4) worst; the third steps of Bulwark and Fang were
+seen too seldom to judge. Every finished item is within 6. The kin whose fond bot does best is
+Burrow (50% of runs won) and worst is Ember (17%). These figures lean on who chooses what: a party
+that can afford a five-acorn figure is usually already doing well.
+
+When the draw rule came in, the Bulwark and Sneak bots each gained 6 points of runs won; Bulwark's
+armour went from 20, 45 and 80 (and 15 and 30 for the rest of the party) to 10, 30 and 60 (10 and
+20), and Sneak's first hits from 50% and 80% more to 40% and 70%, which brought each back within 3.
 
 ## Where this differs from the brief
 

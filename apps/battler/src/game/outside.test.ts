@@ -2,16 +2,13 @@ import { describe, expect, test } from "bun:test";
 
 import { BOSS_IDS, FIGURE_IDS, FIGURES } from "./content/figures.ts";
 import { FINISHED_IDS } from "./content/items.ts";
-import { MILESTONES, PAYOUT } from "./content/keepsakes.ts";
+import { PAYOUT } from "./content/keepsakes.ts";
 import { TRAILS } from "./content/rooms.ts";
 import { TRAIT_IDS } from "./content/traits.ts";
 import {
   ALMANAC_VERSION,
-  isLocked,
   loadAlmanac,
-  milestones,
   newAlmanac,
-  openFigures,
   payout,
   recordRun,
   saveAlmanac,
@@ -99,7 +96,7 @@ describe("the almanac", () => {
     expect(almanac.bosses[0]).toEqual(["oldbramble"]);
     expect(almanac.best).toEqual([8, 0, 0]);
     expect(almanac.runs).toBe(1);
-    expect(news.map((n) => n.t)).toEqual(["fielded", "fielded", "threeStars", "forged", "boss", "best", "opened"]);
+    expect(news.map((n) => n.t)).toEqual(["fielded", "fielded", "threeStars", "forged", "boss", "best"]);
   });
   test("only says what is new, and never forgets or goes backwards", () => {
     const first = recordRun(newAlmanac(), summary({ reached: 9, fielded: ["worm"], bosses: ["oldbramble"] }));
@@ -138,54 +135,28 @@ describe("trails", () => {
   });
 });
 
-describe("locked figures", () => {
-  test("a handful start locked; everyone else is open from the first run", () => {
-    const open = openFigures(newAlmanac());
-    expect(open.length).toBe(FIGURE_IDS.length - MILESTONES.length);
-    for (const m of MILESTONES) {
-      expect(open).not.toContain(m.figure);
-      expect(isLocked(m.figure)).toBe(true);
-    }
-    // There is always a full pick of three to set out with.
-    expect(open.filter((id) => FIGURES[id].tier === 1).length).toBeGreaterThanOrEqual(3);
-    expect(milestones(newAlmanac()).every((m) => !m.open)).toBe(true);
+describe("the open table", () => {
+  test("nothing in the almanac changes who the stall may offer: a new member and one who has done everything get the same", () => {
+    const fresh = newAlmanac();
+    const full = {
+      ...newAlmanac(),
+      fielded: [...FIGURE_IDS],
+      threeStars: [...FIGURE_IDS],
+      forged: [...FINISHED_IDS],
+      topped: [...TRAIT_IDS],
+      bosses: TRAILS.map(() => BOSS_IDS.slice()),
+      best: TRAILS.map(() => 15),
+      runs: 99,
+    };
+    expect(loadAlmanac(saveAlmanac(full))).toEqual(full);
+    expect(loadAlmanac(saveAlmanac(fresh))).toEqual(fresh);
+    // A run takes nothing from the almanac: the same seed is the same run, stall and all, for both.
+    expect(startRun(6)).toEqual(startRun(6));
+    expect(startRun(6).stall.every((id) => id === null || FIGURES[id] !== undefined)).toBe(true);
   });
-  test("a run started from the almanac's open figures never sees a locked one", () => {
-    const run = startRun(6, { open: openFigures(newAlmanac()) });
-    for (const m of MILESTONES) expect(run.open).not.toContain(m.figure);
-    expect(run.open.length).toBe(FIGURE_IDS.length - MILESTONES.length);
-  });
-  test("each is opened by its milestone, once, and says so", () => {
-    const wing = recordRun(newAlmanac(), summary({ bosses: ["oldbramble"] }));
-    expect(wing.almanac.opened).toEqual(["kettle"]);
-    expect(wing.news.at(-1)).toMatchObject({ t: "opened", figure: "kettle" });
-    expect(openFigures(wing.almanac)).toContain("kettle");
-    expect(recordRun(wing.almanac, summary({ bosses: ["oldbramble"] })).news.some((n) => n.t === "opened")).toBe(false);
-
-    const topped = recordRun(newAlmanac(), summary({ topped: ["feather"] }));
-    expect(topped.almanac.opened).toEqual(["bushgnome"]);
+  test("a run never opens anything", () => {
     const everything = recordRun(newAlmanac(), { ...WON, topped: ["mender"] });
-    expect(everything.almanac.opened.toSorted((a, b) => a.localeCompare(b))).toEqual([
-      "bushgnome",
-      "crab40",
-      "drizzlefrog",
-      "kettle",
-    ]);
-    expect(openFigures(everything.almanac).length).toBe(FIGURE_IDS.length);
-    expect(milestones(everything.almanac).every((m) => m.open)).toBe(true);
-  });
-  test("fielding Greg, whose trait is his own, does not count as switching a trait all the way on", () => {
-    expect(recordRun(newAlmanac(), summary({ topped: ["greg"] })).almanac.opened).toEqual([]);
-  });
-  test("a boss beaten on any trail counts", () => {
-    const run = recordRun(recordRun(newAlmanac(), WON).almanac, summary({ trail: 1, bosses: ["oldbramble"] }));
-    expect(run.almanac.opened).toContain("kettle");
-  });
-  test("every milestone can be met without the figure it opens", () => {
-    for (const m of MILESTONES) {
-      expect(FIGURES[m.figure]).toBeDefined();
-      expect(m.text.length).toBeGreaterThan(10);
-    }
+    expect(everything.news.map((n) => n.t)).not.toContain("opened");
   });
 });
 
@@ -208,7 +179,6 @@ describe("keeping the almanac", () => {
       threeStars: [...FIGURE_IDS],
       forged: [...FINISHED_IDS],
       topped: [...TRAIT_IDS],
-      opened: FIGURE_IDS.filter(isLocked),
       bosses: TRAILS.map(() => BOSS_IDS.slice()),
     };
     expect(loadAlmanac(saveAlmanac(almanac))).toEqual(almanac);
@@ -236,8 +206,10 @@ describe("keeping the almanac", () => {
     expect(loadAlmanac(change((a) => (a.best = [16, 0, 0])))).toBeNull();
     expect(loadAlmanac(change((a) => (a.best = [3, 0])))).toBeNull();
     expect(loadAlmanac(change((a) => (a.runs = -1)))).toBeNull();
-    // Only figures that were ever locked can have been opened.
-    expect(loadAlmanac(change((a) => (a.opened = ["greg"])))).toBeNull();
+    // An almanac kept while some figures were locked still loads, whatever it says it opened.
+    const kept = loadAlmanac(change((a) => (a.opened = ["kettle", "crab40"])));
+    expect(kept).not.toBeNull();
+    expect(kept && "opened" in kept).toBe(false);
     expect(loadAlmanac(change((a) => delete a.topped))).toBeNull();
   });
 });

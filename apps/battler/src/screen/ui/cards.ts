@@ -25,12 +25,14 @@ import { regularNamed } from "../../game/content/rooms.ts";
 import {
   abilityShort,
   abilityText,
-  type Almanac,
   type BoonId,
   BOONS,
   boonShort,
   type ComponentId,
   COMPONENTS,
+  drawName,
+  drawOf,
+  drawTip,
   ECONOMY,
   type FigureId,
   FIGURES,
@@ -40,14 +42,12 @@ import {
   isComponentId,
   isFigureId,
   isItemId,
-  isLocked,
   isTraitId,
   itemAdds,
   type ItemId,
   itemName,
   itemShort,
   itemText,
-  MILESTONES,
   type Party,
   pieceAt,
   pieces,
@@ -60,6 +60,7 @@ import {
   spotOf,
   STALL_ODDS,
   type Stars,
+  traitDraw,
   type TraitId,
   TRAITS,
   traitShort,
@@ -255,6 +256,7 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
 
   const sale = extras.sellable;
   const piece = sale && run ? pieces(run).find((p) => p.id === sale.id) : undefined;
+  const draw = u ? u.draw : drawOf(kind, items);
   return {
     name: spec.name,
     icon: portrait(kind),
@@ -266,7 +268,7 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
       el("span", "k-row tight", {}, pic(starsPic(stars)), figure ? acorns(figure.tier) : null),
       extras.whose ? el("span", "k-d", { text: extras.whose }) : null,
     ),
-    chips: [chip(kin, "Kin"), chip(calling, "Calling"), ...more.map((t) => chip(t, "Also"))].filter(
+    chips: [chip(kin, "Kin"), chip(calling, "Calling"), ...more.map((t) => chip(t, "Also")), drawChip(draw)].filter(
       (c): c is Chip => c !== null,
     ),
     stats,
@@ -290,27 +292,25 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
   };
 }
 
+/** The chip after a figure's traits saying how it draws enemies' eyes, with a tip; none for a draw of 0. */
+function drawChip(draw: number): Chip | null {
+  const name = drawName(draw);
+  return name ? { text: name, hint: drawTip(draw) } : null;
+}
+
 // ---------- a trait ----------
 
-/** A figure in a trait's roster: lit if fielded, tagged if on the bench or the stall, dark if not opened yet. */
-function member(id: FigureId, run: Run | null, almanac: Almanac): Entry {
+/** A figure in a trait's roster: lit if fielded, tagged if on the bench or the stall. */
+function member(id: FigureId, run: Run | null): Entry {
   const where = run ? whereIs(run, id) : null;
-  const locked = isLocked(id) && !almanac.opened.includes(id) && where === null;
   const own = run
     ? pieces(run)
         .filter((p) => p.kind === id)
         .toSorted((a, b) => b.stars - a.stars)[0]
     : undefined;
-  const base = { ref: own ? pieceRef(own.id) : figureRef(id), lit: where === "board" };
-  if (locked)
-    return {
-      ...base,
-      name: id === "crab40" ? "Uncounted" : FIGURES[id].name,
-      icon: portrait(id, { dark: true }),
-      locked: MILESTONES.find((m) => m.figure === id)?.text ?? "",
-    };
   return {
-    ...base,
+    ref: own ? pieceRef(own.id) : figureRef(id),
+    lit: where === "board",
     name: FIGURES[id].name,
     icon: portrait(id),
     note: acorns(FIGURES[id].tier),
@@ -319,7 +319,7 @@ function member(id: FigureId, run: Run | null, almanac: Almanac): Entry {
 }
 
 /** A trait: what it is, its steps (the one reached lit, the next saying how many more), and every figure that carries it. */
-export function traitDesc(id: TraitId, run: Run | null, almanac: Almanac, lore = false): Description {
+export function traitDesc(id: TraitId, run: Run | null, lore = false): Description {
   const spec = TRAITS[id];
   const state = run ? ownTraitCount(run, id) : null;
   const count = state?.count ?? 0;
@@ -335,6 +335,11 @@ export function traitDesc(id: TraitId, run: Run | null, almanac: Almanac, lore =
       ...(more > 0 ? { note: `${more} more` } : {}),
     };
   });
+  // A calling that draws says so first, whatever its step.
+  const draw = traitDraw(id);
+  const draws = drawName(draw);
+  if (draws)
+    blocks.unshift({ body: rich(`${draws}: enemies pick them as if a hex ${draw > 0 ? "nearer" : "further"}.`) });
   if (lore) spec.steps.forEach((need, i) => blocks.push({ title: `${need}`, body: traitText(id, i + 1) }));
   if (run && run.boons.some((b) => BOONS[b].charm === id)) blocks.push({ body: "A charm counts as one more." });
   return {
@@ -349,7 +354,7 @@ export function traitDesc(id: TraitId, run: Run | null, almanac: Almanac, lore =
       state ? el("b", "", { text: `${count}/${state.next}` }) : null,
     ),
     blocks,
-    rows: [{ label: "Every figure", look: "tiles", things: membersOf(id).map((f) => member(f, run, almanac)) }],
+    rows: [{ label: "Every figure", look: "tiles", things: membersOf(id).map((f) => member(f, run)) }],
   };
 }
 
@@ -547,7 +552,7 @@ export function registerCards(): void {
     const { id, flags } = flagsOf(raw);
     if (!isTraitId(id)) return null;
     const lore = flags.includes("lore");
-    return traitDesc(id, lore ? null : S.run, S.almanac, lore);
+    return traitDesc(id, lore ? null : S.run, lore);
   });
   register("item", (raw) => {
     const { id: head, flags } = flagsOf(raw);

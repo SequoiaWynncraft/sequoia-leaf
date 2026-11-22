@@ -1,13 +1,14 @@
 /**
  * What lasts between runs: what a finished run pays in Coins, the almanac of what the member has
- * seen and done, the few figures that play opens, and which trails are open. All of it is worked
- * out from a run's summary, so nothing here needs the run itself, a clock or a calendar.
+ * seen and done, and which trails are open. All of it is worked out from a run's summary, so
+ * nothing here needs the run itself, a clock or a calendar. None of it changes what the stall
+ * offers: every figure is there for everyone.
  */
 import { BOSS_IDS, type BossId, FIGURE_IDS, type FigureId, isBossId, isFigureId } from "./content/figures.ts";
 import { FINISHED_IDS, type FinishedId, isFinishedId } from "./content/items.ts";
-import { type Milestone, MILESTONES, PAYOUT } from "./content/keepsakes.ts";
+import { PAYOUT } from "./content/keepsakes.ts";
 import { ROOM_COUNT, TRAIL_COUNT, TRAILS } from "./content/rooms.ts";
-import { isTraitId, TRAIT_IDS, type TraitId, TRAITS } from "./content/traits.ts";
+import { isTraitId, TRAIT_IDS, type TraitId } from "./content/traits.ts";
 import type { RunSummary } from "./run.ts";
 
 // ---------- Coins ----------
@@ -46,8 +47,6 @@ export interface Almanac {
   /** For each trail: the bosses beaten on it, and the furthest room met (0 for never set out). */
   bosses: BossId[][];
   best: number[];
-  /** Locked figures that have been opened. */
-  opened: FigureId[];
   /** Runs finished or abandoned. */
   runs: number;
 }
@@ -59,7 +58,6 @@ export function newAlmanac(): Almanac {
     topped: [],
     bosses: TRAILS.map(() => []),
     best: TRAILS.map(() => 0),
-    opened: [],
     runs: 0,
   };
 }
@@ -71,27 +69,6 @@ export const trailCleared = (almanac: Almanac, trail: number): boolean =>
 export const trailOpen = (almanac: Almanac, trail: number): boolean =>
   trail === 0 || (trail > 0 && trail < TRAIL_COUNT && trailCleared(almanac, trail - 1));
 
-const metBy = (almanac: Almanac, m: Milestone): boolean => {
-  switch (m.needs.kind) {
-    case "boss": {
-      const boss = m.needs.boss;
-      return almanac.bosses.some((list) => list.includes(boss));
-    }
-    case "topped":
-      return almanac.topped.some((trait) => TRAITS[trait].sort !== "own");
-    case "threeStars":
-      return almanac.threeStars.length > 0;
-  }
-};
-/** Whether a figure starts out locked away. */
-export const isLocked = (figure: FigureId): boolean => MILESTONES.some((m) => m.figure === figure);
-/** The figures the stall may offer this member: everyone who was never locked, and whoever has been opened. */
-export const openFigures = (almanac: Almanac): FigureId[] =>
-  FIGURE_IDS.filter((id) => !isLocked(id) || almanac.opened.includes(id));
-/** The locked figures, with what opens each and whether it is open yet. */
-export const milestones = (almanac: Almanac): { milestone: Milestone; open: boolean }[] =>
-  MILESTONES.map((milestone) => ({ milestone, open: almanac.opened.includes(milestone.figure) }));
-
 /** Something new in the almanac, for the screen to make a small fuss of. */
 export type News =
   | { t: "fielded"; figure: FigureId }
@@ -100,8 +77,7 @@ export type News =
   | { t: "topped"; trait: TraitId }
   | { t: "boss"; boss: BossId; trail: number }
   | { t: "best"; trail: number; room: number }
-  | { t: "trail"; trail: number }
-  | { t: "opened"; figure: FigureId; text: string };
+  | { t: "trail"; trail: number };
 
 /** Writes a run into the almanac. Gives back a new almanac and what was new in it; the old one is not touched. */
 export function recordRun(old: Almanac, summary: RunSummary): { almanac: Almanac; news: News[] } {
@@ -112,7 +88,6 @@ export function recordRun(old: Almanac, summary: RunSummary): { almanac: Almanac
     topped: old.topped.slice(),
     bosses: TRAILS.map((_, i) => (old.bosses[i] ?? []).slice()),
     best: TRAILS.map((_, i) => old.best[i] ?? 0),
-    opened: old.opened.slice(),
     runs: old.runs + 1,
   };
   const news: News[] = [];
@@ -152,11 +127,6 @@ export function recordRun(old: Almanac, summary: RunSummary): { almanac: Almanac
   TRAILS.forEach((_, i) => {
     if (!wasOpen[i] && trailOpen(almanac, i)) news.push({ t: "trail", trail: i });
   });
-  for (const m of MILESTONES) {
-    if (almanac.opened.includes(m.figure) || !metBy(almanac, m)) continue;
-    almanac.opened.push(m.figure);
-    news.push({ t: "opened", figure: m.figure, text: m.text });
-  }
   return { almanac, news };
 }
 
@@ -193,9 +163,8 @@ export function loadAlmanac(text: string): Almanac | null {
   const threeStars = uniqueList(a.threeStars, isFigureId, FIGURE_IDS.length);
   const forged = uniqueList(a.forged, isFinishedId, FINISHED_IDS.length);
   const topped = uniqueList(a.topped, isTraitId, TRAIT_IDS.length);
-  const opened = uniqueList(a.opened, isFigureId, FIGURE_IDS.length);
-  if (!fielded || !threeStars || !forged || !topped || !opened) return null;
-  if (!opened.every(isLocked)) return null;
+  // An almanac kept while some figures were locked lists those it opened; that list means nothing now.
+  if (!fielded || !threeStars || !forged || !topped) return null;
   if (!Array.isArray(a.bosses) || a.bosses.length !== TRAIL_COUNT) return null;
   const bosses: BossId[][] = [];
   for (const list of a.bosses) {
@@ -211,5 +180,5 @@ export function loadAlmanac(text: string): Almanac | null {
   }
   const runs = a.runs;
   if (typeof runs !== "number" || !Number.isInteger(runs) || runs < 0) return null;
-  return { fielded, threeStars, forged, topped, bosses, best, opened, runs };
+  return { fielded, threeStars, forged, topped, bosses, best, runs };
 }

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { boonNumber } from "./content/boons.ts";
-import { type FigureId, FIGURES, isFigureId, type Stars } from "./content/figures.ts";
+import { FIGURE_IDS, type FigureId, FIGURES, isFigureId, type Stars } from "./content/figures.ts";
 import type { ItemId } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, ROOMS, STALL_ODDS } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
@@ -31,6 +31,7 @@ import {
   rustleCost,
   sell,
   sellValue,
+  STALL_POOL,
   startRun,
   summariseRun,
   takeTakings,
@@ -137,18 +138,18 @@ describe("starting a run", () => {
     expect(startRun(9)).toEqual(startRun(9));
     expect(startRun(9).stall).not.toEqual(startRun(10).stall);
   });
-  test("only figures that are open turn up, in the pick and on the stall", () => {
-    const open: FigureId[] = ["worm", "finch", "moth", "slug"];
-    const run = startRun(3, { open });
-    const choice = run.choices[0];
-    expect(choice?.kind === "starter" && abc(choice.options)).toEqual(["finch", "moth", "worm"]);
+  test("every one of the twenty-eight can turn up at the stall, from the first run", () => {
+    expect(abc(STALL_POOL)).toEqual(abc(FIGURE_IDS));
+    const run = startRun(3);
     choose(run, 0);
     run.level = 8;
-    run.acorns = 1000;
-    for (let i = 0; i < 60; i++) {
+    run.acorns = 100_000;
+    const seen = new Set<FigureId>();
+    for (let i = 0; i < 400; i++) {
       rustle(run);
-      for (const kind of run.stall) expect(kind === null || open.includes(kind)).toBe(true);
+      for (const kind of run.stall) if (kind) seen.add(kind);
     }
+    expect(seen.size).toBe(FIGURE_IDS.length);
   });
 });
 

@@ -56,6 +56,8 @@ export interface Unit {
   /** Attacks a second, before anything timed. */
   speed: number;
   range: number;
+  /** How much nearer than it stands enemies take it to be when they pick a target (fewer hexes for a negative number). */
+  draw: number;
   armour: number;
   ward: number;
   /** Ability power, in percent: 100 is plain. */
@@ -197,13 +199,17 @@ export type FightEvent =
   | { t: "swing"; id: number; target: number }
   /** Something flies from one hex to another and lands in `ticks`: an attack from range, or part of an ability. */
   | { t: "shot"; id: number; target: number; from: number; to: number; ticks: number; what: "attack" | "ability" }
-  /** Damage lands. `amount` is what the target lost, shield and health together; `soaked` is the part its shield took. */
+  /**
+   * Damage lands. `amount` is what the target lost, shield and health together; `soaked` is the
+   * part its shield took; `before` is what the hit was before armour, ward and bracing.
+   */
   | {
       t: "hit";
       id: number;
       by: number;
       amount: number;
       soaked: number;
+      before: number;
       kind: DamageKind;
       source: DamageSource;
       hard: boolean;

@@ -10,7 +10,7 @@
  */
 import type { FigureId } from "./figures.ts";
 import type { FinishedId } from "./items.ts";
-import type { CallingId } from "./traits.ts";
+import { type CallingId, traitDraw } from "./traits.ts";
 
 export interface Role {
   /** The kind of fighter, in a word. */
@@ -28,8 +28,22 @@ export const ROLES: Readonly<Record<CallingId, Role>> = {
   sneak: { role: "Assassin", place: "leaps to their back row" },
 };
 
-/** The line a card shows under a figure's name: `Tank · front row`. */
-export const roleLine = (calling: CallingId): string => `${ROLES[calling].role} · ${ROLES[calling].place}`;
+/** What a figure's draw is called on its card: "Draws fire", "Draws fire ×2", "Slips notice"; nothing for 0. */
+export function drawName(draw: number): string | null {
+  if (draw === 0) return null;
+  if (draw < 0) return draw === -1 ? "Slips notice" : `Slips notice ×${-draw}`;
+  return draw === 1 ? "Draws fire" : `Draws fire ×${draw}`;
+}
+const HEXES = ["", "one hex", "two hexes", "three hexes"];
+/** What a draw means, in a sentence, for the chip's tip. */
+export const drawTip = (draw: number): string =>
+  `Enemies pick their target as if this figure stood ${HEXES[Math.abs(draw)] ?? `${Math.abs(draw)} hexes`} ${draw > 0 ? "nearer" : "further"}.`;
+
+/** The line a card shows under a figure's name: `Tank · front row · draws fire`. */
+export function roleLine(calling: CallingId): string {
+  const draw = drawName(traitDraw(calling));
+  return [ROLES[calling].role, ROLES[calling].place, ...(draw ? [draw.toLowerCase()] : [])].join(" · ");
+}
 
 export type Three = readonly [FinishedId, FinishedId, FinishedId];
 
