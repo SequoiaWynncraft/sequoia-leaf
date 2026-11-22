@@ -78,6 +78,8 @@ let base = { clock: 0, at: 0 };
 /** The latest tick the page has shown. */
 let shown = 0;
 let collectedAt = 0;
+/** Whether Leaf is being asked for its yard, after a tab was put away. */
+let asking = false;
 const refusalHearers: ((why: string) => void)[] = [];
 
 /** Hears why Leaf turned down something the page had already shown done. */
@@ -183,8 +185,14 @@ export function runYard(now: number): News[] {
   const tick = tickAt(now);
   const waiting = leaf.waiting();
   if (tick - w.tick > BEHIND_MOST) {
-    // A tab put away and back: Leaf's yard, not a long run on the page.
-    if (!waiting) collect();
+    // A tab put away and back: Leaf's yard as Leaf has run it, not a long run on the page. It is
+    // asked for, not collected, so that what Leaf says of the time away is still there to show.
+    if (!waiting && !asking) {
+      asking = true;
+      void leaf.refresh().finally(() => {
+        asking = false;
+      });
+    }
     return [];
   }
   stepTo(w, tick);
@@ -195,7 +203,8 @@ export function runYard(now: number): News[] {
   // the page collects whether or not the till holds a Coin: it keeps Leaf's yard in step with one
   // being watched, so that a yard earning nothing is not taken for one its owner left.
   const empty = w.open.board && w.board.length < w.rates.slots;
-  if (!waiting && (empty || now - collectedAt >= COLLECT_EVERY)) collect();
+  // Not while a letter about a time away waits to be read: putting it away is what collects.
+  if (!waiting && !w.away && (empty || now - collectedAt >= COLLECT_EVERY)) collect();
   return news;
 }
 
