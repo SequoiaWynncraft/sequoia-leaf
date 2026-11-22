@@ -74,20 +74,19 @@ import {
   drawGlows,
   drawStrings,
   drawWater,
+  lastTouches,
   lightTable,
   openDoor,
   props,
   stepTown,
   table,
-  tapCrab,
-  tapSky,
-  tapString,
-  tapWater,
+  thingName,
+  touchThing,
   twinkleAll,
 } from "./town.ts";
 import { dismissArrival, initUI, openPanel, showArrival, townDock } from "./ui.ts";
 import { isVisitor, members, stepVisitors } from "./visitors.ts";
-import { H, hedgeY, place, type PlaceId, PLACES, pondD, SEATS, TOWN, W } from "./world.ts";
+import { H, place, type PlaceId, PLACES, pondD, SEATS, TOWN, W } from "./world.ts";
 
 /** Where the view closes in when the member goes into each game, and where they stand to go in. */
 const DOORWAY: Readonly<Record<GameId, Pt>> = {
@@ -186,6 +185,8 @@ export interface Town extends Scene {
     players: (typeof liveHandles)["players"];
     /** What the town's room was last told of the member, and when (milliseconds since 1970). */
     told: (typeof liveHandles)["told"];
+    /** The last touches on things in town played here, and whether each was the member's own. */
+    touches(): { name: string; own: boolean }[];
     /** The live connection: its status, what is shown of it, the member's number, how many others. */
     link: (typeof liveHandles)["link"];
     /** The member makes an emote, as if chosen from the plaque over their head. */
@@ -504,12 +505,10 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     greet: meet,
     own(x, y) {
       const crab = crabAt(x, y);
-      if (crab) tapCrab(crab);
-      else if (pondD(x, y) < 1) {
-        tapWater(x, y);
-        const pond = doors.find((d) => d.id === "pond");
-        if (pond) touch.go(pond);
-      } else return tapString(x, y);
+      if (crab) return touchThing(thingName("crab", crab.n));
+      if (!touchThing(thingName("water", x, y))) return touchThing(thingName("lights", x, y));
+      const pond = doors.find((d) => d.id === "pond");
+      if (pond) touch.go(pond);
       return true;
     },
     ownAt(x, y) {
@@ -517,11 +516,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       return crab ? { box: { x: crab.x - 6, y: crab.y - 8, w: 12, h: 9 }, tip: null } : null;
     },
     props: () => props,
-    sky(x, y) {
-      if (y >= hedgeY(x)) return false;
-      tapSky(x, y);
-      return true;
-    },
+    touch: (p, x, y) => void touchThing(thingName(p.kind, x, y)),
+    sky: (x, y) => touchThing(thingName("sky", x, y)),
     awake,
     halt,
   });
@@ -560,7 +556,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       stepVisitors(dt);
       stepPlayers(dt);
       standApart(dt);
-      stepTown(dt);
+      stepTown(dt, [player, ...livePlayers()]);
       stepFlights(dt);
       stepEvents();
       // Somebody shown where they are, for a few seconds, or until they go.
@@ -768,6 +764,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       kept: () => kept(),
       players: liveHandles.players,
       told: liveHandles.told,
+      touches: () => [...lastTouches],
       link: liveHandles.link,
       emote,
     },

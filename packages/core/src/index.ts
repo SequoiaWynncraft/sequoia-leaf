@@ -132,6 +132,8 @@ export {
   SERVER_HZ,
   type Snapshot,
   SNAPSHOT_HEAD_BYTES,
+  type Thing,
+  THINGS,
   type ToClient,
   type ToServer,
 } from "./live.ts";
