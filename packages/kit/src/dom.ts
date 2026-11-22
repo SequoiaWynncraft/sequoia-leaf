@@ -1,5 +1,45 @@
 /** Small helpers for building the interface out of the kit's classes. */
 
+/** What waits for a held mouse button to lift (`unheld`). */
+const owed = new Set<() => void>();
+let mouseDown = false;
+
+/**
+ * A mouse button goes down (`true`) or comes up on the page. Chromium makes no click when what a
+ * mouse press began on is replaced before the release, so nothing is drawn again under a held
+ * button: `when` waits for the next call after it lifts, and `unheld` for the next tick after the
+ * click it ends in. The kit's own listeners call this; tests may too.
+ */
+export function mouseHeld(down: boolean): void {
+  mouseDown = down;
+  if (down || owed.size === 0) return;
+  setTimeout(() => {
+    const due = [...owed];
+    owed.clear();
+    for (const fn of due) fn();
+  }, 0);
+}
+
+/** `fn`, done now, or under a held mouse button once, on the tick after it lifts. */
+export const unheld =
+  (fn: () => void): (() => void) =>
+  () => {
+    if (mouseDown) owed.add(fn);
+    else fn();
+  };
+
+/** Draws a part of the interface again only when what it shows has changed, and not under a held mouse button. */
+export function when(key: () => string, draw: () => void): () => void {
+  let last: string | null = null;
+  return () => {
+    if (last !== null && mouseDown) return;
+    const k = key();
+    if (k === last) return;
+    last = k;
+    draw();
+  };
+}
+
 // The browser must not take the game for a picture. Under a held press it would drag the canvas
 // away, and a long press or a right click would open its own menu on it; either one takes the press
 // from the game. Every page uses this file, so every page is covered.
@@ -10,6 +50,17 @@ if (typeof document !== "undefined") {
   document.addEventListener("contextmenu", (e) => {
     if (e.target instanceof HTMLCanvasElement || e.target instanceof HTMLImageElement) e.preventDefault();
   });
+  window.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.pointerType === "mouse") mouseHeld(true);
+    },
+    true,
+  );
+  window.addEventListener("pointerup", () => mouseHeld(false), true);
+  window.addEventListener("pointercancel", () => mouseHeld(false), true);
+  // Let go outside the window, the button's lift never arrives here.
+  window.addEventListener("blur", () => mouseHeld(false));
 }
 
 type Child = Node | string | number | null | undefined | false;

@@ -15,7 +15,8 @@
  *   one step each, so a picture can be taken with something held; `["downAt", "expr"]`,
  *   `["moveAt", "expr"]` and `["upAt", "expr"]` do the same where a page expression says;
  * - `["finger", "down" | "move" | "up", "expr"]` does the same with a finger instead of the mouse;
- * - `["key", "1"]` presses a key (a letter, or a key by its name, such as `"Escape"`);
+ * - `["key", "1"]` presses a key as a person does (a letter, `" "`, or a key by its name, such as
+ *   `"Escape"` or `"Enter"`; Enter and Space press a focused button);
  *   `["eval", "expr"]` prints an expression's value;
  * - `["shot", "name"]` saves a screenshot.
  *
@@ -23,6 +24,7 @@
  */
 
 import { mkdirSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 
 type Step =
   | ["size", number, number]
@@ -67,23 +69,32 @@ const steps: Step[] = parsed;
 mkdirSync(outDir, { recursive: true });
 
 const port = 9400 + Math.floor(Math.random() * 400);
-/** Chromium's profile for this run, about 15 MB, under `TMPDIR`: removed when the run ends, so runs do not fill it. */
-const profile = `${process.env["TMPDIR"] ?? "/tmp"}/grove-drive-${port}-${process.pid}`;
+/**
+ * This run's folder, under `TMPDIR` (or `~/.cache`, never `/tmp`), removed when the run ends: Chromium's
+ * profile, about 15 MB, and an empty config folder, so the machine's own Chromium flags and
+ * extensions stay out of it.
+ */
+const home = `${process.env["TMPDIR"] ?? `${homedir()}/.cache`}/grove-drive-${port}-${process.pid}`;
+mkdirSync(`${home}/config`, { recursive: true });
 const browser = Bun.spawn(
   [
     "chromium",
     "--headless=new",
     `--remote-debugging-port=${port}`,
-    `--user-data-dir=${profile}`,
+    `--user-data-dir=${home}/profile`,
     "--hide-scrollbars",
     "--use-angle=gl",
     // Keep animation frames running: a headless tab otherwise counts as hidden and stops drawing.
     "--disable-renderer-backgrounding",
     "--disable-backgrounding-occluded-windows",
     "--disable-background-timer-throttling",
+    // Without these, input waits for frames headless is slow to make: a finger's lift on a page
+    // that moves comes 1 to 2 seconds late, and reads as a long press.
+    "--disable-gpu-vsync",
+    "--disable-frame-rate-limit",
     "about:blank",
   ],
-  { stdout: "ignore", stderr: "ignore" },
+  { stdout: "ignore", stderr: "ignore", env: { ...process.env, XDG_CONFIG_HOME: `${home}/config` } },
 );
 // However the run ends, the browser does not outlive it.
 process.on("exit", () => {
@@ -214,13 +225,9 @@ async function run(step: Step): Promise<void> {
       return tap(value.x, value.y);
     }
     case "key": {
-      // A letter types itself; a named key (Escape, Delete, ArrowLeft) is only pressed.
-      const named = step[1].length > 1;
-      await send("Input.dispatchKeyEvent", {
-        type: named ? "rawKeyDown" : "keyDown",
-        key: step[1],
-        ...(named ? {} : { text: step[1] }),
-      });
+      // A key that types something (a letter, Space, Enter) sends it too, as a keyboard does.
+      const text = step[1] === "Enter" ? "\r" : step[1].length === 1 ? step[1] : "";
+      await send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", key: step[1], text });
       await send("Input.dispatchKeyEvent", { type: "keyUp", key: step[1] });
       return;
     }
@@ -268,5 +275,5 @@ browser.kill();
 await browser.exited;
 // Its helpers go on writing for a moment after the browser itself has gone.
 await Bun.sleep(250);
-rmSync(profile, { recursive: true, force: true, maxRetries: 4, retryDelay: 150 });
+rmSync(home, { recursive: true, force: true, maxRetries: 4, retryDelay: 150 });
 if (failed !== null) throw failed;

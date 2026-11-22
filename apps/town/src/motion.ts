@@ -155,9 +155,10 @@ export interface Fellow<T> {
   own: T;
 }
 
-/** What the page does about what it hears: somebody made an emote, the connection changed. */
+/** What the page does about what it hears: somebody made an emote or put a log on the fire, the connection changed. */
 export interface Heard<T> {
   emote(f: Fellow<T>, kind: Emote): void;
+  log(): void;
   status(s: LiveStatus): void;
 }
 
@@ -201,6 +202,7 @@ export class Company<T> {
     act: (id, kind, arg) => {
       const f = this.byId(id);
       if (kind === "emote" && isEmote(arg) && f && f.fig.alpha > 0) this.heard.emote(f, arg);
+      else if (kind === "fire" && arg === "log" && f) this.heard.log();
     },
     status: (s) => {
       this.heard.status(s);

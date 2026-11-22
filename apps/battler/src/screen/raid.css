@@ -636,6 +636,11 @@ body[data-picking="yes"] #plan {
   opacity: 0.45;
   pointer-events: none;
 }
+/* While Leaf answers a rustle, a pick, setting out or the takings, the stall and its buttons do nothing, and look it after a moment. */
+body[data-busy="yes"] #plan > :not(#acorns, #level) {
+  opacity: 0.45;
+  transition: opacity 0s 0.15s;
+}
 #sellhint {
   position: absolute;
   inset: 0;

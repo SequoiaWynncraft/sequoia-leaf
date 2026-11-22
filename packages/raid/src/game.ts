@@ -144,7 +144,7 @@ export type RaidCommandName = RaidCommand["do"];
 export type RunCommand = Exclude<RaidCommand, { do: "start" | "trail" | "look" | "buyLook" }>;
 
 /** The commands a page may show before Leaf answers: they draw nothing, so Leaf will do just the same. */
-export const PREDICTED: readonly RaidCommandName[] = ["move", "bench", "sell", "give", "hold"];
+export const PREDICTED: readonly RaidCommandName[] = ["move", "bench", "sell", "give", "hold", "buy", "xp"];
 
 /** What a command did, for the page to show. */
 export type RaidNote =
@@ -444,7 +444,16 @@ export function predict(
   view: TableView,
   c: RaidCommand,
 ): { view: TableView; notes: RaidNote[] } | { refused: string } | null {
-  if (c.do !== "move" && c.do !== "bench" && c.do !== "sell" && c.do !== "give" && c.do !== "hold") return null;
+  if (
+    c.do !== "move" &&
+    c.do !== "bench" &&
+    c.do !== "sell" &&
+    c.do !== "give" &&
+    c.do !== "hold" &&
+    c.do !== "buy" &&
+    c.do !== "xp"
+  )
+    return null;
   if (!view.run) return { refused: "no_run" };
   const run = localRun(view.run);
   const done = act(run, c);

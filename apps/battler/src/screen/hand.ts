@@ -21,7 +21,7 @@ import { hop, type Pawn, pawnAt, pawns, spotAt, spotXY } from "./pawns.ts";
 import { foeAt, heldUnder, marks } from "./scene.ts";
 import { snd } from "./sounds.ts";
 import { artPx, boardToPage, toBoard, V } from "./stage.ts";
-import { ask, doNow, S } from "./state.ts";
+import { doNow, S } from "./state.ts";
 import { acorns, dropRef, foeRef, itemRef, pieceRef, unitRef } from "./ui/cards.ts";
 
 type Held =
@@ -40,7 +40,8 @@ interface Press {
   timer: number;
 }
 
-let press: Press | null = null;
+/** What each pointer pressed: two thumbs on the stall at once are two presses. */
+const presses = new Map<number, Press>();
 let dragging: Held | null = null;
 /** Tapped, and waiting to be told where it goes. */
 let picked: Held | null = null;
@@ -115,22 +116,13 @@ export function unpick(): void {
 /** A box on the page round a pawn, for its card. */
 const pawnBox = (p: Pawn): { x: number; y: number; w: number; h: number } => pageBox(p.x, p.y, framesOf(p.kind).tall);
 
-function showPawnCard(run: Run, p: Pawn, pinned: boolean): void {
-  const piece = p.spot ? pieceAt(run, p.spot) : null;
-  if (!piece || !p.spot) return;
-  const b = pawnBox(p);
-  if (pinned) pickCard(pieceRef(p.id), b.x, b.y, b.w, b.h);
-  else point(pieceRef(p.id), b.x, b.y, b.w, b.h);
-}
-
 function pick(run: Run, held: Held): void {
   unpick();
   picked = held;
   light(run, held);
+  // A figure picked up to move pins no card over where it may go: a resting mouse or a finger kept on it shows it.
   if (held.what === "pawn") {
     marks.picked = held.id;
-    const p = pawns.get(held.id);
-    if (p) showPawnCard(run, p, true);
     snd.lift();
   } else if (held.what === "item") {
     const slot = document.querySelector<HTMLElement>(`[data-item="${held.at}"]`);
@@ -194,7 +186,8 @@ function whileDragging(run: Run, e: PointerEvent): void {
 function drop(run: Run, e: PointerEvent): void {
   const held = dragging;
   const b = toBoard(e.clientX, e.clientY);
-  const overShop = document.elementFromPoint(e.clientX, e.clientY)?.closest("#shop") != null;
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const overShop = under?.closest("#shop") != null;
   const spot = overShop ? null : spotAt(b.x, b.y);
   unpick();
   if (!held) return;
@@ -210,18 +203,17 @@ function drop(run: Run, e: PointerEvent): void {
       if (!done?.ok) hop(p, spotXY(from), 0.2, 6);
       return;
     }
-    if (spot && !sameSpot(spot, from)) {
-      const done = doNow({ do: "move", from, to: spot });
-      if (done?.ok) return;
-      if (done && spot.on === "board") marks.fullAt = V.t;
-    }
+    const done = spot && !sameSpot(spot, from) ? doNow({ do: "move", from, to: spot }) : undefined;
+    if (done?.ok) return;
+    if (done && spot?.on === "board") marks.fullAt = V.t;
     hop(p, spotXY(from), 0.2, 6);
-    snd.place();
+    // Held off while Leaf answers (null): the refusal sound has said so.
+    if (done !== null) snd.place();
     return;
   }
   if (held.what === "offer") {
-    if (overShop) return;
-    void buyTo(held.at, spot);
+    // Let go over the stall it goes back, but over its own offer it was a tap that drifted, and buys.
+    if (!overShop || under?.closest(`[data-offer="${held.at}"]`)) buyTo(held.at, spot);
     return;
   }
   const taker = takerAt(run, b.x, b.y) ?? pawnAt(run, b.x, b.y);
@@ -231,12 +223,9 @@ function drop(run: Run, e: PointerEvent): void {
   }
 }
 
-/** The offer at a place on the stall, as the page shows it: what waits while Leaf answers a purchase. */
-const offerAt = (offer: number): Element | null => document.querySelector(`[data-offer="${offer}"]`);
-
-/** Buys an offer (Leaf answers), and if a place was meant, puts the figure there once it is bought. */
-async function buyTo(offer: number, spot: Spot | null): Promise<void> {
-  const done = await ask({ do: "buy", offer }, offerAt(offer));
+/** Buys an offer, and if a place was meant, puts the figure there. */
+function buyTo(offer: number, spot: Spot | null): void {
+  const done = doNow({ do: "buy", offer });
   if (!done?.ok || !spot) return;
   const bought = done.notes.find((n) => n.t === "bought");
   const merged = done.notes.some((n) => n.t === "merged");
@@ -250,7 +239,7 @@ function tap(run: Run, held: Held | null, e: PointerEvent): void {
   const b = toBoard(e.clientX, e.clientY);
   if (held?.what === "offer") {
     unpick();
-    void ask({ do: "buy", offer: held.at }, offerAt(held.at));
+    doNow({ do: "buy", offer: held.at });
     return;
   }
   if (held?.what === "item") {
@@ -387,17 +376,17 @@ function down(e: PointerEvent): void {
     return;
   }
   const touch = e.pointerType !== "mouse";
-  press = { held, x: e.clientX, y: e.clientY, touch, moved: false, asked: false, timer: 0 };
+  const press: Press = { held, x: e.clientX, y: e.clientY, touch, moved: false, asked: false, timer: 0 };
+  presses.set(e.pointerId, press);
   if (touch) {
     // A finger kept still is asking what the thing is, not using it.
-    const mine = press;
     const onTable = target === canvas;
     press.timer = window.setTimeout(() => {
-      if (press !== mine || mine.moved || !S.run) return;
-      mine.asked = true;
+      if (presses.get(e.pointerId) !== press || press.moved || !S.run) return;
+      press.asked = true;
       if (!onTable) return;
       // A finger kept on a thing asks for its card, pinned, without picking it up.
-      const b = toBoard(mine.x, mine.y);
+      const b = toBoard(press.x, press.y);
       const under = cardUnder(S.run, b.x, b.y);
       if (under) pickCard(under.ref, under.box.x, under.box.y, under.box.w, under.box.h);
     }, LONG_PRESS);
@@ -407,6 +396,7 @@ function down(e: PointerEvent): void {
 function moveTo(e: PointerEvent): void {
   const run = S.run;
   if (!run) return;
+  const press = presses.get(e.pointerId);
   if (press && !press.moved) {
     const far = Math.hypot(e.clientX - press.x, e.clientY - press.y);
     if (far > (press.touch ? 9 : 5)) {
@@ -421,8 +411,8 @@ function moveTo(e: PointerEvent): void {
 
 function up(e: PointerEvent): void {
   const run = S.run;
-  const was = press;
-  press = null;
+  const was = presses.get(e.pointerId);
+  presses.delete(e.pointerId);
   if (!was) return;
   window.clearTimeout(was.timer);
   if (!run) return;
@@ -434,9 +424,13 @@ function up(e: PointerEvent): void {
   if (was.held || e.target === canvas) tap(run, was.held, e);
 }
 
-function cancel(): void {
-  if (press) window.clearTimeout(press.timer);
-  press = null;
+/** Calls off one pointer's press, or with none named every one. */
+function cancel(id?: number): void {
+  for (const [at, press] of presses) {
+    if (id !== undefined && id !== at) continue;
+    window.clearTimeout(press.timer);
+    presses.delete(at);
+  }
   if (dragging) unpick();
 }
 
@@ -448,8 +442,8 @@ export function openHand(view: HTMLCanvasElement): void {
   window.addEventListener("pointerdown", down);
   window.addEventListener("pointermove", moveTo);
   window.addEventListener("pointerup", up);
-  window.addEventListener("pointercancel", cancel);
-  window.addEventListener("blur", cancel);
+  window.addEventListener("pointercancel", (e) => cancel(e.pointerId));
+  window.addEventListener("blur", () => cancel());
   window.addEventListener("keydown", (e) => {
     unlock();
     if (e.key === "Escape") {
@@ -461,7 +455,7 @@ export function openHand(view: HTMLCanvasElement): void {
   document.addEventListener("click", (e) => {
     if (e.detail !== 0 || !planning() || !(e.target instanceof Element)) return;
     const offer = e.target.closest<HTMLElement>("[data-offer]");
-    if (offer) void ask({ do: "buy", offer: Number(offer.dataset.offer) }, offer);
+    if (offer) doNow({ do: "buy", offer: Number(offer.dataset.offer) });
   });
 }
 

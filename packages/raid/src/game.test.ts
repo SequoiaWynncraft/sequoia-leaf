@@ -456,28 +456,30 @@ describe("commands off the wire", () => {
 });
 
 describe("what the page may show before Leaf answers", () => {
-  test("moving, benching, selling, handing over and holding come out as Leaf does them", () => {
+  test("moving, benching, selling, handing over, holding, buying and experience come out as Leaf does them", () => {
     let state = planned(started(5));
     state = must(state, { do: "fight" }).state;
     state = must(state, { do: "take" }).state;
     state = must(state, { do: "choose", option: 0 }).state;
     const seat = state.run?.board.findIndex((p) => p !== null) ?? -1;
-    const commands: RaidCommand[] = [
-      { do: "give", item: 0, to: { on: "board", at: seat } },
-      { do: "move", from: { on: "board", at: seat }, to: { on: "board", at: 20 } },
-      { do: "hold", on: true },
-      { do: "bench", seat: 20 },
-      { do: "move", from: { on: "bench", at: 0 }, to: { on: "board", at: 4 } },
-    ];
-    for (const c of commands) {
+    const offer = state.run?.stall.findIndex((k) => k !== null) ?? -1;
+    const same = (c: RaidCommand): void => {
       const guessed = predict(RAID.view(state, ctx()), c);
       const done = must(state, c);
       expect(guessed).toEqual({ view: tableView(done.state), notes: [...done.notes] });
       state = done.state;
-    }
+    };
+    same({ do: "give", item: 0, to: { on: "board", at: seat } });
+    same({ do: "move", from: { on: "board", at: seat }, to: { on: "board", at: 20 } });
+    same({ do: "hold", on: true });
+    same({ do: "bench", seat: 20 });
+    same({ do: "move", from: { on: "bench", at: 0 }, to: { on: "board", at: 4 } });
     const sold = predict(RAID.view(state, ctx()), { do: "sell", from: { on: "board", at: 4 } });
     expect(sold).toEqual({ refused: "last_figure" });
-    expect(predict(RAID.view(state, ctx()), { do: "buy", offer: 0 })).toBeNull();
+    same({ do: "buy", offer });
+    same({ do: "xp" });
+    // The offer just bought has gone from the stall, as Leaf would say.
+    expect(predict(RAID.view(state, ctx()), { do: "buy", offer })).toEqual({ refused: "stall_empty" });
     expect(predict(RAID.view(state, ctx()), { do: "rustle" })).toBeNull();
   });
 });

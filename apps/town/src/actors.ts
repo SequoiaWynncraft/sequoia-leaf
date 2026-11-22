@@ -97,11 +97,13 @@ export function say(a: Actor, text: string, secs = 2.8): void {
   if (G.home && !a.away && onScreen(a.x, a.y)) sfx.talk(a.who.voice, text.split(" ").length);
 }
 
+/**
+ * Somebody hops, `times` in a row. Hops are not saved up: asked again while still hopping, they
+ * finish the hops already owed (or these, if these are more) and stop.
+ */
 export function hop(a: Actor, times = 1): void {
-  if (a.hop <= 0) {
-    a.hop = HOP;
-    a.hops += times - 1;
-  } else a.hops += times;
+  if (a.hop <= 0) a.hop = HOP;
+  a.hops = Math.max(a.hops, times - 1);
 }
 
 export function face(a: Actor, x: number, y: number): void {
