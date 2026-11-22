@@ -9,6 +9,7 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { dist, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { type Errand as FolkErrand, ERRAND_LINES, type Townsperson } from "@sequoia-leaf/town/folk.ts";
 
+import { beside, crowds, type Placed } from "./apart.ts";
 import { folkArt } from "./folkart.ts";
 import { puff } from "./fx.ts";
 import { type Actor, G, type Who } from "./game.ts";
@@ -69,10 +70,13 @@ export function makeFolk(t: Townsperson, x: number, y: number): Actor {
   return a;
 }
 
+/** How tall a member's figure is drawn standing, or sitting (`seat`) facing `dir`, in the town's pixels: as `bake` poses it. */
+export const tallOf = (seat: boolean, dir: number): number => 21 - (seat ? (dir === 0 ? 2 : 5) : 0);
+
 /** How far above where somebody stands their head is, in the town's pixels. */
 export function headOf(a: Actor): number {
   if (a.folk) return a.folk.art.tall + a.lift;
-  return 21 - (a.seat ? (a.dir === 0 ? 2 : 5) : 0);
+  return tallOf(a.seat !== null, a.dir);
 }
 
 /** Where somebody's feet are drawn: on their seat or where they stand, and stepped aside from it. */
@@ -141,13 +145,49 @@ export function release(a: Actor): void {
   stand(a);
 }
 
+/** Everybody on each ground, as whoever draws it says: for where a walk there ends. */
+const peopleOf = new WeakMap<Ground, () => readonly Actor[]>();
+export function peopleOn(ground: Ground, people: () => readonly Actor[]): void {
+  peopleOf.set(ground, people);
+}
+
+/** Whether somebody is standing or sitting still where they can be seen: not walking, gone or faded out. */
+export const isStill = (a: Actor): boolean => !a.away && !a.moving && a.alpha > 0.02;
+
+/** Everybody standing or sitting still on a ground but `a`, where they are drawn. */
+function stillOn(ground: Ground, a: Actor | null): Placed[] {
+  return (peopleOf.get(ground)?.() ?? []).flatMap((o) =>
+    o !== a && isStill(o) ? [{ ...feet(o), tall: headOf(o) }] : [],
+  );
+}
+
 /**
- * Sets someone walking to a point, round whatever is in the way; `then` happens when they get
- * there. The ground is the town's unless another is given.
+ * Where a walk to a point ends: there (or the clear ground nearest it), or, with somebody standing
+ * or sitting still there, the nearest place to it on top of nobody that is a straight walk from it.
+ */
+export function stopAt(a: Actor, to: Pt, ground: Ground = TOWN): Pt {
+  const at = ground.nearestFree(to.x, to.y);
+  return beside({ ...at, tall: headOf(a) }, stillOn(ground, a), (p) => ground.clearLine(at, p));
+}
+
+/** Whether a seat is free for `a`: nobody else has it, and nobody but `a` stands or sits where its sitter would be. */
+export const seatFree = (s: Seat, a: Actor | null): boolean =>
+  (!s.taken || a?.goal === s) &&
+  stillOn(TOWN, a).every((o) => !crowds(o, { x: s.x, y: s.y, tall: tallOf(true, s.dir) }));
+
+/** The last point of each walk `walkTo` sets out on, looked at again on the way there (`stepActor`). */
+const ends = new WeakSet<Pt>();
+
+/**
+ * Sets someone walking to a point, round whatever is in the way, to stop there or beside whoever
+ * is there (`stopAt`, and again on the last stretch); `then` happens when they get there. The ground
+ * is the town's unless another is given.
  */
 export function walkTo(a: Actor, to: Pt, then: (() => void) | null = null, ground: Ground = TOWN): void {
   stand(a);
-  a.path = ground.findPath(a, to, a.you);
+  a.path = ground.findPath(a, stopAt(a, to, ground), a.you);
+  const end = a.path.at(-1);
+  if (end) ends.add(end);
   a.arrive = then;
   if (a.path.length === 0) {
     a.arrive = null;
@@ -184,8 +224,14 @@ export function stepActor(a: Actor, dt: number, ground: Ground = TOWN): void {
   let left = a.speed * dt;
   const before = a.walked;
   while (left > 0 && a.path.length > 0) {
-    const p = a.path[0];
+    let p = a.path[0];
     if (!p) break;
+    // The last stretch of a walk: somebody may have stopped where it ends since it set out.
+    const q = a.path.length === 1 && ends.has(p) ? stopAt(a, p, ground) : p;
+    if (q.x !== p.x || q.y !== p.y) {
+      ends.add(q);
+      a.path[0] = p = q;
+    }
     const d = dist(a.x, a.y, p.x, p.y);
     a.moving = true;
     if (d <= left) {
@@ -196,6 +242,8 @@ export function stepActor(a: Actor, dt: number, ground: Ground = TOWN): void {
       left -= d;
       a.path.shift();
       if (a.path.length === 0) {
+        // Standing still from now on, for whoever looks for a place next.
+        a.moving = false;
         const fn = a.arrive;
         a.arrive = null;
         fn?.();
@@ -471,7 +519,7 @@ export function cheerAll(): void {
 export function freeSeat(a: Actor, where: Seat["at"]): Seat | null {
   let best: Seat | null = null;
   for (const s of SEATS) {
-    if (s.taken || s.at !== where) continue;
+    if (!seatFree(s, a) || s.at !== where) continue;
     if (!best || dist(a.x, a.y, s.x, s.y) < dist(a.x, a.y, best.x, best.y)) best = s;
   }
   return best;
@@ -480,19 +528,36 @@ export function freeSeat(a: Actor, where: Seat["at"]): Seat | null {
 /** The point a stall's keeper stands at, for whoever wants it. */
 export const stallAt = (n: number): Pt => STALL_BEHIND[n] ?? { x: 108, y: 238 };
 
-/** Sends the player to a seat (the nearest free one by the fire, if none is named) to sit down. */
+/**
+ * Walks somebody to a seat to sit on it, keeping it for them on the way. If by then somebody stands
+ * or sits where they would sit (`seatFree`), they let it go for the seat `after` gives, or, with
+ * none, stay standing where the walk ended. `then` is told the seat they sat on, if any.
+ */
+export function goToSeat(a: Actor, s: Seat, after: () => Seat | null, then?: (sat: Seat | null) => void): void {
+  release(a);
+  s.taken = true;
+  a.goal = s;
+  walkTo(a, s.from, () => {
+    if (seatFree(s, a)) {
+      sit(a, s);
+      then?.(s);
+      return;
+    }
+    release(a);
+    const other = after();
+    if (other) goToSeat(a, other, after, then);
+    else then?.(null);
+  });
+}
+
+/** Sends the player to a seat if it is free, else the nearest free one of its kind (by the fire, if none is named), to sit down. */
 export function goSit(seat: Seat | null): boolean {
   const p = G.player;
   if (!p) return false;
   if (p.seat && (!seat || seat === p.seat)) return true;
-  const s = seat && !seat.taken ? seat : freeSeat(p, seat?.at ?? "fire");
+  const s = seat && seatFree(seat, p) ? seat : freeSeat(p, seat?.at ?? "fire");
   if (!s) return false;
-  release(p);
-  s.taken = true;
-  p.goal = s;
-  walkTo(p, s.from, () => {
-    sit(p, s);
-  });
+  goToSeat(p, s, () => freeSeat(p, s.at));
   return true;
 }
 
