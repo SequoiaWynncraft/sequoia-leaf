@@ -324,7 +324,7 @@ export function toResting(resting: readonly Resting[], present: readonly Present
   const here = new Set(present.map((p) => p.id));
   const out: Rester[] = [];
   for (const r of resting.toSorted((a, b) => b.seen - a.seen)) {
-    if (!r.stay || r.id === meId || here.has(r.id) || r.place === "camp" || out.some((o) => o.id === r.id)) continue;
+    if (r.id === meId || here.has(r.id) || r.place === "camp" || out.some((o) => o.id === r.id)) continue;
     if (out.length >= RESTING_MOST) break;
     out.push({ id: r.id, name: r.name, rank: r.guest ? GUEST : null, at: r.place, skin: skinOf(r.id), seen: r.seen });
   }
@@ -446,10 +446,11 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
   function begin(): void {
     if (begun) return;
     begun = true;
-    hearPresent((seen, gone) => {
+    hearPresent((seen, staying, gone) => {
       present = toVisitors(seen, me.id);
-      resting = toResting(gone, seen, me.id);
-      about = toAbout(seen, gone, me.id);
+      resting = toResting(staying, seen, me.id);
+      // The panel lists everybody gone in the last day; only those who stay are drawn dozing.
+      about = toAbout(seen, [...staying, ...gone], me.id);
       heard = true;
     });
     // Back in view, the town asks Leaf for the Coins: a game or another device may have changed them.
