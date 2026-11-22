@@ -232,6 +232,10 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/game/play/{game}/of/{player}, nothing to visit", "GET", `/v1/game/play/raid/of/${bob}`);
   await call("GET /v1/game/people/{player}", "GET", `/v1/game/people/${alice}`, undefined, "bob-token");
   await call("GET /v1/game/people/{player}, unknown", "GET", "/v1/game/people/20000000-0000-0000-0000-000000000009");
+  // The pull banners: before Leaf has a headliner for the first, and once it has Bob.
+  await call("GET /v1/game/banners, no headliner yet", "GET", "/v1/game/banners");
+  await leaf.query((sql) => sql`INSERT INTO banner_people (banner, player_id) VALUES ('banner-1', ${bob})`);
+  await call("GET /v1/game/banners", "GET", "/v1/game/banners");
   // A page left open after someone else signed in.
   await call("POST /v1/game/play/{game}, not you", "POST", "/v1/game/play/raid", { ...firstRoom, player: bob });
   // A raid run of Alice's, as the play service logs it.

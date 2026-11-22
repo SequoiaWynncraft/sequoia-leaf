@@ -15,6 +15,7 @@
         "@effect/platform-bun": "4.1.4",
         "@effect/sql-sqlite-bun": "4.1.4",
         "@sequoia-leaf/core": "workspace:*",
+        "@sequoia-leaf/pulls": "workspace:*",
         "@sequoia-leaf/raid": "workspace:*",
         "@sequoia-leaf/town": "workspace:*",
         "@sequoia-leaf/yard": "workspace:*",
@@ -69,6 +70,17 @@
       "name": "@sequoia-leaf/kit",
       "dependencies": {
         "@sequoia-leaf/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
+    "packages/pulls": {
+      "name": "@sequoia-leaf/pulls",
+      "dependencies": {
+        "@sequoia-leaf/core": "workspace:*",
+        "@sequoia-leaf/raid": "workspace:*",
+        "@sequoia-leaf/town": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "1.4.4",
@@ -166,6 +178,8 @@
     "@sequoia-leaf/core": ["@sequoia-leaf/core@workspace:packages/core"],
 
     "@sequoia-leaf/kit": ["@sequoia-leaf/kit@workspace:packages/kit"],
+
+    "@sequoia-leaf/pulls": ["@sequoia-leaf/pulls@workspace:packages/pulls"],
 
     "@sequoia-leaf/raid": ["@sequoia-leaf/raid@workspace:packages/raid"],
 

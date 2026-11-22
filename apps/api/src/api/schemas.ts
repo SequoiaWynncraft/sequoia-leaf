@@ -235,6 +235,21 @@ export const Person = Schema.Struct({
   games: Schema.Record(Schema.String, Place),
 });
 
+/**
+ * Every pull banner, with its dates and its headliner: the member Leaf's `banner_people` names for
+ * it, named as the boards name players ("Someone" for one Leaf has no name for), or null for none yet.
+ */
+export const Banners = Schema.Struct({
+  banners: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      from: Schema.String,
+      until: Schema.String,
+      headliner: Schema.NullOr(Schema.Struct({ id: Schema.String, name: Schema.String })),
+    }),
+  ),
+});
+
 // The staff's routes, under /v1/game/admin.
 
 /** Seconds, or hours, in each place, by place: `{ "town": 840 }`. */

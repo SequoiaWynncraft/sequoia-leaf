@@ -29,6 +29,12 @@
       "path": "./packages/town/tsconfig.test.json"
     },
     {
+      "path": "./packages/pulls"
+    },
+    {
+      "path": "./packages/pulls/tsconfig.test.json"
+    },
+    {
       "path": "./apps/api"
     },
     {

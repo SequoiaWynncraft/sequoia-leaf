@@ -9,7 +9,7 @@
  */
 
 /** The games Leaf plays. */
-export const GAME_IDS = ["raid", "works", "town"] as const;
+export const GAME_IDS = ["raid", "works", "town", "pulls"] as const;
 export type GameId = (typeof GAME_IDS)[number];
 
 /** The game a name stands for, or undefined when it is not one. */
