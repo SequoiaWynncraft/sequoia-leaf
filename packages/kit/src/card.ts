@@ -22,7 +22,7 @@ import { LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
 /** A thing, named as `"kind:id"`: `"item:gear"`, `"figure:barrow-gnome"`, `"trait:ember"`. */
 export type Ref = string;
 
-/** A small labelled chip, which may stand for a thing: "KIN Gnome 1/2". */
+/** A small labelled chip, which may stand for a thing: "Kin", "Gnome 1/2". */
 export interface Chip {
   readonly label?: string;
   readonly text: string;
@@ -73,7 +73,7 @@ export interface Entry {
   readonly name?: string;
 }
 
-/** A small capital label and a list of things: "MADE FROM", "USED IN", "EVERY FIGURE". */
+/** A small label and a list of things: "Made from", "Used in", "Every figure". */
 export interface Row {
   readonly label: string;
   readonly things: readonly Entry[];
@@ -109,11 +109,13 @@ export interface Description {
   /** At the right of the head: a price, stars. */
   readonly aside?: Node | string | null;
   readonly chips?: readonly Chip[];
-  /** Numbers with their labels; a text among them is a small capital label over the numbers after it. */
+  /** Numbers with their labels; a text among them is a heading over the numbers after it, and makes them a sheet. */
   readonly stats?: readonly (Stat | string)[];
   readonly blocks?: readonly Block[];
   readonly rows?: readonly Row[];
   readonly actions?: readonly Action[];
+  /** Part of it is still on its way (a person's numbers, from Leaf): its card is not shown until this settles, and is then asked for again. */
+  readonly coming?: Promise<unknown>;
 }
 
 export type Describe = (id: string) => Description | null;
@@ -183,6 +185,8 @@ export class Deck {
   readonly view: View;
   readonly #watchers = new Set<Watcher>();
   #told: string = "|";
+  /** Whoever asked for a card whose description is still coming, and whether to pin it. */
+  #awaited: { from: object; pinned: boolean } | null = null;
 
   constructor(view: View) {
     this.view = view;
@@ -226,6 +230,24 @@ export class Deck {
     this.#tell();
   }
 
+  /**
+   * A card asked for while its description is still coming is shown once, whole, when it has come
+   * (`then` asks again), unless something else was asked for meanwhile or the pointer has left.
+   */
+  #wait(d: Description, from: object, pinned: boolean, then: () => void): boolean {
+    this.#awaited = null;
+    if (!d.coming) return false;
+    const mine = (this.#awaited = { from, pinned });
+    const come = async (coming: Promise<unknown>): Promise<void> => {
+      await coming;
+      if (this.#awaited !== mine) return;
+      this.#awaited = null;
+      then();
+    };
+    void come(d.coming);
+    return true;
+  }
+
   /** Something is pointed at now (or nothing): told to watchers at once, card or no card. */
   point(ref: Ref | null): void {
     this.pointed = ref;
@@ -240,12 +262,14 @@ export class Deck {
       if (this.open) this.#set(null, null);
       return false;
     }
+    if (this.#wait(d, from, false, () => this.rest(ref, at, via, from, side))) return false;
     this.#set({ stack: [ref], pinned: false, via, at, from, side, preview: false }, d);
     return true;
   }
 
   /** The pointer has left whatever `from` is: its passing card goes. */
   leave(from: object): void {
+    if (this.#awaited?.from === from && !this.#awaited.pinned) this.#awaited = null;
     if (this.open && !this.open.pinned && this.open.from === from) this.#set(null, null);
   }
 
@@ -262,6 +286,7 @@ export class Deck {
     }
     const d = this.describe(ref);
     if (!d) return false;
+    if (this.#wait(d, from, true, () => this.press(ref, at, via, from, side))) return true;
     // A passing card for the same thing stays where it is and is pinned.
     if (o && !o.pinned && o.from === from && o.stack.at(-1) === ref && via !== "touch") {
       this.#set({ ...o, pinned: true, via, preview: false }, d);
@@ -307,6 +332,7 @@ export class Deck {
 
   /** Puts the card away; with `from`, only if that is who opened it. */
   close(from: object | null = null): void {
+    if (from === null || this.#awaited?.from === from) this.#awaited = null;
     if (!this.open || (from !== null && this.open.from !== from)) return;
     this.#set(null, null);
   }
@@ -314,6 +340,7 @@ export class Deck {
   /** While held, no card opens, and a passing one goes. */
   hold(on: boolean): void {
     this.held = on;
+    if (on) this.#awaited = null;
     if (this.open && (on ? !this.open.pinned : this.open.preview)) this.#set(null, null);
   }
 
@@ -407,6 +434,10 @@ function fit(art: Node, box: number, most = 1): Node {
 const words = (v: string | Node, cls: string): HTMLElement =>
   typeof v === "string" ? el("div", cls, { text: v }) : el("div", cls, {}, v);
 
+/** The class of the line under a card's name: a sentence (it ends with a stop) is read, anything else is in the game's face. */
+const tagLook = (v: string | Node): string =>
+  /[.?!]$/.test(typeof v === "string" ? v : (v.textContent ?? "")) ? "k-d" : "k-dim";
+
 function chipOf(c: Chip): HTMLElement {
   const face = el(
     "span",
@@ -435,7 +466,7 @@ function statOf(s: Stat): HTMLElement {
 
 function blockOf(b: Block): HTMLElement {
   const title = b.title ? el("b", "k-info-title", { text: b.title }) : null;
-  const note = b.note ? el("span", "k-info-note k-read", { text: b.note }) : null;
+  const note = b.note ? el("span", "k-info-note", { text: b.note }) : null;
   const body = b.body === undefined ? null : words(b.body, "k-read k-info-body");
   if (b.line) return el("div", `k-info-block line${b.lit ? " lit" : ""}`, {}, title, body, note);
   return el(
@@ -465,7 +496,7 @@ export function thing(
     opts.note === undefined
       ? null
       : typeof opts.note === "string"
-        ? el("span", "k-read k-dim", { text: opts.note })
+        ? el("span", "k-s k-dim", { text: opts.note })
         : opts.note,
     opts.tag ? el("span", "k-info-tagged", { text: opts.tag }) : null,
   );
@@ -482,7 +513,7 @@ function tileOf(e: Entry): HTMLElement {
     `k-slot k-info-tile${e.lit ? " lit" : ""}${e.locked ? " locked" : ""}`,
     {},
     el("span", "k-info-tile-pic", {}, art ? fit(art, 24) : null),
-    el("span", "k-s k-pix k-info-tile-name", { text: name }),
+    el("span", "k-s k-info-tile-name", { text: name }),
     e.locked
       ? icon("lock")
       : e.note === undefined
@@ -581,7 +612,7 @@ function drawCard(d: Description, o: Open): HTMLElement {
             "k-info-who",
             {},
             el("b", "k-name", { text: d.name }),
-            d.tag === undefined ? null : words(d.tag, "k-d k-info-tag"),
+            d.tag === undefined ? null : words(d.tag, `${tagLook(d.tag)} k-info-tag`),
           ),
           d.aside ? el("span", "k-info-aside", {}, d.aside) : null,
           closeBtn,
@@ -593,7 +624,8 @@ function drawCard(d: Description, o: Open): HTMLElement {
         card,
         el(
           "div",
-          "k-info-part k-info-stats",
+          // Under headings, the numbers are a sheet: a line each.
+          `k-info-part k-info-stats${(d.stats ?? []).some((s) => typeof s === "string") ? " listed" : ""}`,
           {},
           ...(d.stats ?? []).map((s) =>
             typeof s === "string" ? el("span", "k-label k-info-over", { text: s }) : statOf(s),

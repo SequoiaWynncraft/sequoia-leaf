@@ -46,17 +46,19 @@ export function initBoard(myId: string): void {
 /** One line of the board, standing for its owner. */
 function line(r: Row): HTMLElement {
   const said = `${r.guest ? "Guest · " : ""}Story ${r.also.story ?? 0} of ${STORY.length}`;
+  const face = faceFor(r.id, r.name, where().mode === "live");
   const row = el(
     "div",
     r.you ? "k-card lit board-row" : "board-row",
     {},
     el("span", "place", { text: String(r.place) }),
-    el("span", "k-thing-pic", {}, pic(faceFor(r.id, r.name, where().mode === "live"), 2)),
-    el("span", "who", {}, el("span", "k-thing-name", { text: r.name }), el("span", "k-d", { text: said })),
+    el("span", "k-thing-pic", {}, pic(face, 2)),
+    el("span", "who", {}, el("b", "k-thing-name", { text: r.name }), el("span", "k-dim", { text: said })),
     amount("coin", r.score.toLocaleString("en-US")),
   );
-  known({ id: r.id, name: r.name, line: said });
-  link(row, `person:${r.id}`);
+  known({ id: r.id, name: r.name, line: said, face });
+  // The card goes beside the list, not over it.
+  link(row, `person:${r.id}`, { side: true });
   return row;
 }
 
@@ -76,7 +78,7 @@ export function board(_art: Art, body: HTMLElement): () => void {
       if (shown === null) return;
       if (shown === "unread") {
         list.replaceChildren(
-          el("div", "k-d", { text: "The board could not be read." }),
+          el("div", "k-dim", { text: "The board could not be read." }),
           button("wood sm", ["Try again"], () => void read()),
         );
         return;
@@ -85,7 +87,7 @@ export function board(_art: Art, body: HTMLElement): () => void {
       const { top, you } = shown;
       const own =
         you === null
-          ? el("div", "k-d", { text: "Earn your first Coin to be listed." })
+          ? el("div", "k-dim", { text: "Earn your first Coin to be listed." })
           : top.some((r) => r.you) || !me
             ? null
             : line({ ...you, id: me.id, name: me.name, guest: me.guest, you: true });

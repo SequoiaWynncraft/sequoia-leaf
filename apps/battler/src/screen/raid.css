@@ -355,8 +355,7 @@ body[data-picking="yes"] #foe {
   position: absolute;
   top: calc(var(--u) * 3);
   right: calc(var(--u) * 2);
-  font-size: var(--t-s);
-  font-weight: 700;
+  font: var(--f-name);
   color: var(--k-dim);
 }
 .offer .have.ready {
@@ -383,16 +382,29 @@ body[data-picking="yes"] #foe {
 #level {
   grid-area: level;
 }
+/* The level, under it its bar with how far along it is beside it, then how many are fielded. */
+#level {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-content: center;
+  align-items: center;
+  justify-items: center;
+  gap: var(--u) calc(var(--u) * 2);
+}
+#level > b {
+  grid-column: 1 / -1;
+}
 #level .k-bar {
   width: 100%;
 }
-#level .fielded {
+#level > .fielded {
+  grid-column: 1 / -1;
   display: inline-flex;
   align-items: center;
   gap: var(--u);
 }
 .k-cur.big {
-  font-size: var(--t-l);
+  font: var(--f-head);
 }
 .piles {
   display: flex;
@@ -632,8 +644,7 @@ body[data-picking="yes"] #plan {
   place-content: center;
   grid-auto-flow: column;
   gap: calc(var(--u) * 3);
-  font-size: var(--t-l);
-  font-weight: 700;
+  font: var(--f-head);
   background: #1a0f1ed9;
   pointer-events: none;
 }
@@ -695,7 +706,7 @@ body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
 }
 /* What is on the card, as a name. */
 .pick > .k-gold {
-  font: 700 var(--t-m) / 1 var(--k-font);
+  font: var(--f-name);
   color: var(--k-cream);
   text-shadow: 0 var(--u) 0 var(--k-ink);
 }
@@ -704,7 +715,8 @@ body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
 }
 /* A flavour line: read, so in the reading face, and leaning. */
 .quip {
-  font: italic 500 var(--t-r) / 1.4 var(--k-font-read);
+  font: var(--f-read);
+  font-style: italic;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -853,7 +865,7 @@ b.dmg.true {
   min-height: 0;
   overflow: hidden auto;
 }
-.page .leaf {
+.page .leaf.k-scroll {
   display: flex;
   flex-direction: column;
   gap: calc(var(--u) * 3);
@@ -874,8 +886,8 @@ b.dmg.true {
   flex-direction: column;
   gap: var(--u);
   padding-block: calc(var(--u) * 2);
-  font: 700 var(--t-s) / 1.2 var(--k-font-read);
   white-space: normal;
+  line-height: 1;
 }
 .party {
   display: flex;
@@ -1053,15 +1065,17 @@ b.dmg.true {
   .offer.gone {
     min-height: calc(var(--u) * 56);
   }
+  /* Five to a row on a phone: a name is small there, where the usual size cannot fit. */
   .offer .name {
-    font-size: var(--t-s);
-    min-height: calc(var(--t-s) * 2.4);
+    font: var(--f-small);
+    min-height: calc(var(--t-s) * 2);
   }
   .offer .foot {
     justify-content: center;
   }
   #acorns,
   #level {
+    display: flex;
     flex-direction: row;
     flex-wrap: wrap;
     min-width: 0;
@@ -1191,6 +1205,15 @@ b.dmg.true {
   }
   .pick .quip {
     display: none;
+  }
+  /* Three picks one over another: what each is, under its name, is small, so that all three are in view. */
+  .pick > .k-dim {
+    font: var(--f-small);
+  }
+  /* Four tabs do not fit in a row: two rows of two. */
+  .page .k-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
   .three {
     flex-wrap: wrap;

@@ -151,9 +151,9 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
           "k-grow k-col",
           {},
           el("div", "k-title big", { text: me.name }),
-          el("div", "k-d", { text: `${me.rank} of the guild, level ${me.level}` }),
+          el("div", "k-dim", { text: `${me.rank} of the guild, level ${me.level}` }),
           el("div", "k-bar", {}, xp),
-          me.week.length === 0 ? null : el("div", "k-d", { text: `This week: ${me.week.join(", ")}` }),
+          me.week.length === 0 ? null : el("div", "k-dim", { text: `This week: ${me.week.join(", ")}` }),
         ),
       ),
       stayRow,
@@ -192,7 +192,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
             el("div", "k-grow", {}, MY_PETS[kind], el("div", "k-d", { text: PET_ABOUT[kind] })),
           );
         });
-        if (here.length === 0) rows.push(el("div", "k-d", { text: "Nobody yet." }));
+        if (here.length === 0) rows.push(el("div", "k-dim", { text: "Nobody yet." }));
         else if (here.length < PETS.length) {
           const cosy = camp.placed.length >= COSY;
           const kind = camp.greeted >= KIND;
@@ -201,7 +201,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
               text: "Somebody else moves in when the camp is cosier, and when you have made the town's callers welcome.",
             }),
           );
-          if (!cosy) rows.push(el("div", "k-d", { text: `Things set out: ${camp.placed.length} of ${COSY}.` }));
+          if (!cosy) rows.push(el("div", "k-dim", { text: `Things set out: ${camp.placed.length} of ${COSY}.` }));
           if (!kind)
             rows.push(
               el("div", "k-d", {
@@ -265,7 +265,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
               signed(l.from),
               fresh.has(l.id) ? el("span", "k-chip lit", { text: "New" }) : null,
             ),
-            el("div", "", { text: l.text }),
+            el("div", "k-read", { text: l.text }),
           );
           if (gift && !l.taken) {
             const take = button("sm", [glyph("gift"), "Take it"], () => {

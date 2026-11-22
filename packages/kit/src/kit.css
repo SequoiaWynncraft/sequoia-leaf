@@ -3,8 +3,8 @@
  * faces, and frames, buttons and paper drawn as pixel art.
  *
  * Sizes are counted in `--u`, one art pixel of the interface (two CSS pixels, three on a very large
- * window), so frames land on whole pixels. Titles, names and buttons are in Minecraft, the guild's pixel face;
- * everything read, and every number, is in Inter.
+ * window), so frames land on whole pixels. Everything is in Minecraft, the guild's pixel face, but
+ * sentences, which are in Inter.
  */
 @import "./frames.css";
 
@@ -15,7 +15,7 @@
   font-weight: 100 900;
   font-display: swap;
 }
-/* Titles, names and buttons; and the words drawn on a canvas in the world (`text.ts`). */
+/* The face of the game: everything but sentences; and the words drawn on a canvas in the world (`text.ts`). */
 @font-face {
   font-family: Minecraft;
   src: url("./fonts/minecraft-regular.woff2") format("woff2");
@@ -31,18 +31,27 @@
 
 :root {
   --u: 2px;
-  /* Inter: a small label, and the usual size. */
-  --t-s: calc(var(--u) * 5.5);
+  /* Inter, for sentences. */
   --t-r: calc(var(--u) * 7);
   --k-font-read: Inter, system-ui, sans-serif;
-  /*
-   * Minecraft: a name or a button, a title, a large title. It is drawn ten pixels to the em, so it
-   * is sharp only at whole multiples of ten pixels.
-   */
+  /* Minecraft. It is drawn ten pixels to the em, so it is sharp only at whole multiples of ten pixels. */
+  --t-s: 10px;
   --t-m: 20px;
   --t-l: 30px;
-  --t-xl: 40px;
   --k-font: Minecraft, var(--k-font-read);
+  /*
+   * Every text on the site is set in one of these five, and no rule names a face, a size or a
+   * weight of its own (`type.test.ts` holds that). Minecraft is the face of the game: a title
+   * (`head`), a name, a number or a button (`name`), and everything else that is not a sentence
+   * (`ui`): a line somebody says, a row of a list, a hint of a few words. `small` is for a word or
+   * a number where that size cannot fit or would shout: a label over a group, the line over a
+   * title, a price under a tool, a tag. Inter (`read`) is for sentences that are read.
+   */
+  --f-head: 700 var(--t-l) / 1 var(--k-font);
+  --f-name: 700 var(--t-m) / 1 var(--k-font);
+  --f-ui: 400 var(--t-m) / 1.2 var(--k-font);
+  --f-small: 400 var(--t-s) / 1.2 var(--k-font);
+  --f-read: 500 var(--t-r) / 1.4 var(--k-font-read);
 
   /* Darkness in steps: the edge of everything, a well, a panel, a raised thing, a quiet line, a brighter one. */
   --k-ink: #0b0710;
@@ -76,9 +85,9 @@
 @media (min-width: 1800px) and (min-height: 940px) {
   :root {
     --u: 3px;
+    --t-s: 20px;
     --t-m: 30px;
     --t-l: 40px;
-    --t-xl: 60px;
   }
 }
 
@@ -86,7 +95,7 @@
   margin: 0;
   background: var(--k-ink);
   color: var(--k-cream);
-  font: 600 var(--t-r) / 1.3 var(--k-font-read);
+  font: var(--f-ui);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
@@ -128,39 +137,39 @@ img.k-px {
 .k-title,
 .k-name {
   margin: 0;
-  font: 700 var(--t-m) / 1 var(--k-font);
+  font: var(--f-name);
   color: var(--k-cream);
   text-shadow: 0 var(--u) 0 var(--k-ink);
 }
 .k-title.big,
 .k-head .k-title,
 .k-info-head .k-name {
-  font: 700 var(--t-l) / 1 var(--k-font);
+  font: var(--f-head);
 }
-.k-s {
-  font-size: var(--t-s);
-}
-/* Words that are read: a line about a thing, a note, a tip. */
+/* Sentences that are read: what a thing does, a note, a letter, a tip. */
 .k-read,
 .k-d,
 .k-tip,
 .k-paper p {
-  font: 500 var(--t-r) / 1.4 var(--k-font-read);
+  font: var(--f-read);
 }
-/* The second line under a name: what the thing is. */
+/* What a thing does, under its name. */
 .k-d {
   color: var(--k-dim);
 }
 /* Somebody's name among words that are read: in the pixel face, sitting on the same line as the words. */
 .k-pix {
-  font: 700 var(--t-m) / 1 var(--k-font);
+  font: var(--f-name);
   vertical-align: baseline;
 }
+/* A word or a number where the usual size cannot fit or would shout. */
+.k-s,
 .k-label {
-  font: 700 var(--t-s) / 1.3 var(--k-font-read);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--k-faint);
+  font: var(--f-small);
+}
+/* What the things under it are: "Made from", "In town". */
+.k-label {
+  color: var(--k-dim);
 }
 .k-dim {
   color: var(--k-dim);
@@ -413,14 +422,14 @@ button.k-slot:hover {
   border-image: var(--k-f-bubble) 3 fill;
   padding: calc(var(--u) * 2) calc(var(--u) * 4);
   color: var(--k-ink);
-  font: 400 var(--t-m) / 1.2 var(--k-font);
+  font: var(--f-ui);
 }
 .k-say :is(b, .k-pix, .k-folk):first-child {
   display: flex;
   align-items: center;
   gap: calc(var(--u) * 2);
   margin-bottom: var(--u);
-  font-weight: 700;
+  font: var(--f-name);
 }
 .k-say::after {
   content: "";
@@ -438,9 +447,6 @@ button.k-slot:hover {
 }
 .k-say b {
   display: block;
-  font-size: var(--t-s);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: #6a2a7c;
 }
 
@@ -469,7 +475,7 @@ button.k-slot:hover {
   max-width: none;
   box-sizing: border-box;
   padding: calc(var(--u) * 4) calc(var(--u) * 5);
-  font: 600 var(--t-r) / 1.3 var(--k-font-read);
+  font: var(--f-ui);
 }
 .k-tip.k-info.pinned {
   z-index: 89;
@@ -548,31 +554,53 @@ button.k-info-chip:hover .k-chip {
 .k-info-count {
   color: var(--k-dim);
 }
-/* Numbers side by side, and on to the next line where the card is too narrow for them all. */
+/* Numbers in three columns (two on a phone's sheet), each a small label and its number. */
 .k-info-stats {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, auto));
   justify-content: space-between;
   gap: calc(var(--u) * 2) calc(var(--u) * 4);
 }
-/* A label over the numbers after it, across the whole row. */
-.k-info-over {
-  flex-basis: 100%;
+.k-info.sheet .k-info-stats:not(.listed) {
+  grid-template-columns: repeat(2, minmax(0, auto));
 }
 .k-info-stat {
   display: flex;
-  align-items: baseline;
-  gap: 0 calc(var(--u) * 3);
-  white-space: nowrap;
-}
-/* A value is in the pixel face, as an amount of Leaf or Coins is. */
-.k-info-stat > b {
-  font: 700 var(--t-m) / 1 var(--k-font);
-}
-/* On a phone's sheet, a number goes under its label where the row is too narrow for both. */
-.k-info.sheet .k-info-stat {
   flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 calc(var(--u) * 2);
+}
+.k-info-stat > b {
+  font: var(--f-name);
+}
+/*
+ * Numbers under headings (somebody's, game by game) are a sheet: each game's name over a rule,
+ * then a line for each number, its label at the left and the number at the right.
+ */
+.k-info-stats.listed {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+.k-info-over {
+  grid-column: 1 / -1;
+}
+.k-info-stats.listed .k-info-over {
+  margin-top: calc(var(--u) * 5);
+  padding-bottom: calc(var(--u) * 2);
+  border-bottom: var(--u) solid var(--k-edge);
+  font: var(--f-name);
+  color: var(--k-gold);
+}
+.k-info-stats.listed .k-info-over:first-child {
+  margin-top: 0;
+}
+.k-info-stats.listed .k-info-stat {
+  justify-content: space-between;
+  padding-top: calc(var(--u) * 3);
+}
+.k-info-stats.listed .k-info-stat .k-label {
+  font: var(--f-ui);
+  color: var(--k-dim);
 }
 /* A block is a well: its title in gold, a note at its right, and its words under them. */
 .k-info-block {
@@ -590,7 +618,7 @@ button.k-info-chip:hover .k-chip {
   gap: calc(var(--u) * 3);
 }
 .k-info-title {
-  font-size: calc(var(--u) * 7.5);
+  font: var(--f-name);
   color: var(--k-gold);
 }
 .k-info-note {
@@ -617,13 +645,8 @@ button.k-info-chip:hover .k-chip {
   box-shadow: none;
 }
 .k-info-block.line :is(.k-info-title, .k-info-body, .k-info-body b) {
-  font-size: inherit;
+  font: inherit;
   color: var(--k-faint);
-}
-.k-info-block.line .k-info-note {
-  font: 700 var(--t-s) / 1.3 var(--k-font-read);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 .k-info-block.line.lit :is(.k-info-body, .k-info-body b) {
   color: var(--k-cream);
@@ -704,7 +727,6 @@ button.k-info-chip:hover .k-chip {
   line-height: 1.1;
 }
 .k-info-tile .k-cur {
-  font-size: var(--t-s);
   gap: var(--u);
 }
 .k-info-tile.locked {
@@ -712,12 +734,10 @@ button.k-info-chip:hover .k-chip {
 }
 /* A small tag on a thing: "have", "bench", "stall". */
 .k-info-tagged {
-  padding: 0 calc(var(--u) * 2);
+  padding: var(--u) calc(var(--u) * 2);
   background: var(--k-edge);
   color: var(--k-gold-lt);
-  font: 700 var(--t-s) / 1.5 var(--k-font-read);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font: var(--f-small);
 }
 .k-info-tagged.corner {
   position: absolute;
@@ -742,7 +762,7 @@ button.k-info-chip:hover .k-chip {
   display: inline-flex;
   align-items: center;
   gap: calc(var(--u) * 2);
-  font-weight: 700;
+  font: var(--f-name);
   white-space: nowrap;
 }
 .k-thing-pic {
@@ -789,7 +809,8 @@ button.k-info-chip:hover .k-chip {
     stretch;
   background: none;
   /* Four units less than the letters' size, so the capitals sit in the middle on whole pixels. */
-  font: 700 var(--t-m) / calc(var(--t-m) - var(--u) * 4) var(--k-font);
+  font: var(--f-name);
+  line-height: calc(var(--t-m) - var(--u) * 4);
   white-space: nowrap;
   color: #2b1705;
   text-shadow: 0 1px 0 #fff6;
@@ -917,7 +938,7 @@ button.k-info-chip:hover .k-chip {
   display: inline-flex;
   align-items: center;
   gap: calc(var(--u) * 3);
-  font: 700 var(--t-m) / 1 var(--k-font);
+  font: var(--f-name);
   white-space: nowrap;
   color: var(--k-gold);
 }
@@ -970,7 +991,7 @@ button.k-info-chip:hover .k-chip {
   min-height: calc(var(--u) * 11);
   background: var(--k-mid);
   box-shadow: 0 0 0 var(--u) var(--ring);
-  font-weight: 700;
+  font: var(--f-name);
   white-space: nowrap;
   color: var(--k-cream);
 }
@@ -1008,7 +1029,7 @@ button.k-info-chip:hover .k-chip {
 /* A line of what has just happened: in the pixel face, as everything the world says is. */
 .k-toast {
   padding: calc(var(--u) * 2) calc(var(--u) * 4);
-  font: 400 var(--t-m) / 1.2 var(--k-font);
+  font: var(--f-ui);
   background: #0b0710e6;
   box-shadow: inset calc(var(--u) * 2) 0 0 var(--k-gold);
   animation: k-toast-in 0.3s;
