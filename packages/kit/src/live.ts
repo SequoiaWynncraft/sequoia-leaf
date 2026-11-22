@@ -14,6 +14,8 @@
  * The cards (`shutCard`) are the same on every page.
  */
 
+import { type Device, deviceForWidth } from "@sequoia-leaf/core";
+
 import { el } from "./dom.ts";
 import { ask, isRecord, listen, type Listening, outside } from "./net.ts";
 import { asGuest, balance, fromLedger, leafOpen, watch } from "./purse.ts";
@@ -84,6 +86,7 @@ async function look(): Promise<Where> {
     }
     if (member.guest) asGuest();
     else fromLedger(member.leaf);
+    signedInOn = deviceForWidth(outside.width());
     return { mode: "live", me: member, signIn };
   }
   if (me.status === 401) {
@@ -115,6 +118,8 @@ function goSignIn(signIn: string): void {
 
 let finding: Promise<Where> | null = null;
 let found: Where | null = null;
+/** What the page is on, by how wide its window was when it signed in. */
+let signedInOn: Device | null = null;
 
 /** Finds out where the game is, once per page; every later call gives the same answer. */
 export function start(): Promise<Where> {
@@ -134,11 +139,17 @@ export const member = (): Member | null => {
 };
 /** Whether the game is live as a guest, who is not in the guild. */
 export const isGuest = (): boolean => member()?.guest === true;
+/**
+ * What the page is on, a phone (under 700 CSS pixels wide when it signed in) or a desktop, for the
+ * staff's record of who played; null until it is live. It is said with where the player is.
+ */
+export const device = (): Device | null => (member() === null ? null : signedInOn);
 
 /** Forgets what `start()` found (for tests). */
 export function restart(): void {
   finding = null;
   found = null;
+  signedInOn = null;
 }
 
 // ---------- the cards for a game that will not open ----------

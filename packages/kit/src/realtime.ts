@@ -32,8 +32,9 @@ import {
   type ToServer,
 } from "@sequoia-leaf/core";
 
-import { member } from "./live.ts";
+import { device, member } from "./live.ts";
 import { type LiveSocket, outside } from "./net.ts";
+import { inRoom } from "./presence.ts";
 
 // What a page needs of the wire to draw who is in its room.
 export { Flag, type LiveMember, type Motion } from "@sequoia-leaf/core";
@@ -189,10 +190,12 @@ export const retryAfter = (tries: number, chance: number): number =>
 const PING_FIRST = 1000;
 const PING_EVERY = 10_000;
 
-/** The address of Leaf's live connection into a room, next to the page. */
+/** The address of Leaf's live connection into a room, next to the page, saying what the page is on. */
 const liveUrl = (room: string): string => {
   const url = new URL(livePath(room), outside.href());
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const on = device();
+  if (on !== null) url.searchParams.set("device", on);
   return url.toString();
 };
 
@@ -264,6 +267,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         l.tracks.clear();
         for (const r of m.roster) l.people.set(r.id, r);
         shown = l;
+        inRoom(room);
         // Nothing has been sent on this connection yet: whatever the player says next goes at once.
         sent = null;
         ears.welcome?.(m.you, m.room, m.roster);
@@ -336,6 +340,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
     l.socket.addEventListener("close", (e) => {
       if (link !== l) return;
       link = null;
+      // Out of the room until the next welcome: the page says where the player is itself meanwhile.
+      inRoom(null);
       if (pinger) clearTimeout(pinger);
       if (done) return;
       if (!reconnects(e.code)) {
@@ -375,6 +381,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       link?.socket.close(CLOSE.done, "bye");
       link = null;
       shown = null;
+      inRoom(null);
     },
   };
 }

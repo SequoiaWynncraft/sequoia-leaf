@@ -1,4 +1,4 @@
-import { LIVE_PATH, LIVE_VERSION, roomKind } from "@sequoia-leaf/core";
+import { LIVE_PATH, LIVE_VERSION, readDevice, roomKind } from "@sequoia-leaf/core";
 import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
@@ -13,7 +13,8 @@ const refuse = (status: number, code: string, message: string) =>
 /**
  * `GET /v1/game/live?v=2&room=<kind>` (`livePath`): a WebSocket into a room, for anyone the game's
  * routes let in, members and guests, with the session as the cookie (from Leaf's own pages only)
- * or a Bearer header. It is refused, before it is upgraded, as the API refuses: 401
+ * or a Bearer header. `&device=phone` or `desktop` is what the page is on, for the player's visits;
+ * anything else there is taken as nothing said. It is refused, before it is upgraded, as the API refuses: 401
  * `unauthorized`, 403 `bad_origin`, 503 `identity_unavailable`; 400 `unsupported_version`,
  * `unknown_room` or `not_websocket`; 503 `live_full`, or `restarting` while Leaf stops; and 429
  * `slow_down` for a player who opens connections too often.
@@ -42,7 +43,7 @@ export const LiveRoute = Layer.unwrap(
         Effect.catch((e) => Effect.succeed(!(e instanceof Unauthorized))),
         Effect.provideContext(asked),
       );
-      const opened = yield* live.open(identity, kindName, request.upgrade, session);
+      const opened = yield* live.open(identity, kindName, request.upgrade, session, readDevice(query.get("device")));
       if (opened === "full") return refuse(503, "live_full", "Live is full just now. Try again shortly");
       if (opened === "busy") return refuse(429, "slow_down", "Opened too often. Try again in a little while");
       if (opened === "stopping") return refuse(503, "restarting", "Leaf is restarting. Try again in a moment");

@@ -185,11 +185,15 @@ every file in the kit and the games to this.
 "works" | "table")`) and whether their character stays in town after they go (`stay(on)`, true
 until told otherwise), every half minute and at once when either changes; the answer, everybody
 seen lately and those gone in the last day who stay (`Resting`, with when each was last seen),
-goes to whoever `hearPresent`s. Each says whether they are a guest.
+goes to whoever `hearPresent`s. Each says whether they are a guest. Each call says too what the
+page is on (`device()` in `live.ts`: a phone when its window was under 700 CSS pixels wide at
+sign-in, else a desktop), for the staff's record of who played. While the page is in a live room of
+the place it is at (`realtime.ts` says so at each welcome), the room keeps where the member is, and
+the half-minute call only asks who is about (`GET`); a change of staying is still told.
 
 **Live** (`realtime.ts`). `joinLive(room, ears)` puts the player in one of Leaf's live rooms (the
 wire and the rooms are in `@sequoia-leaf/core`'s `live.ts`) and keeps them there: the connection
-is opened into the room (`livePath`), and after a drop it connects again (half a second, doubling
+is opened into the room (`livePath`, with the page's `device`), and after a drop it connects again (half a second, doubling
 to ten, jittered) and says where the player is again. Why a connection closed is its close code
 alone: told the player opened the game live elsewhere, or their session ended, it lets go
 (`status("replaced")`, `"signedout"`) and shows nobody any more. Each

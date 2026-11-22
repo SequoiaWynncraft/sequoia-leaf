@@ -58,7 +58,7 @@ export interface Standin {
  */
 export function standin(
   routes: Record<string, Route | Reply>,
-  opts: { href?: string; top?: boolean; store?: MemoryStore } = {},
+  opts: { href?: string; top?: boolean; store?: MemoryStore; width?: number } = {},
 ): Standin {
   const store = opts.store ?? new MemoryStore();
   const sent: Sent[] = [];
@@ -94,6 +94,7 @@ export function standin(
     socket: () => {
       throw new Error("No live connection in this test");
     },
+    width: () => opts.width ?? 1280,
   });
   return { store, sent, went, reloaded, clock, done };
 }

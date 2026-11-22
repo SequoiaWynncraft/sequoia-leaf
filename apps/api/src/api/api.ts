@@ -23,10 +23,12 @@ import {
   Refused,
   SaveTooLarge,
   SlowDown,
+  StaffOnly,
   Unauthorized,
   VersionConflict,
 } from "./errors.ts";
 import {
+  ActivityReport,
   Events,
   GameMe,
   GuildEvents,
@@ -182,15 +184,32 @@ export class GameApi extends HttpApiGroup.make("game")
       success: Present,
       error: Invalid,
     }).middleware(PresenceBodyErrors),
+    HttpApiEndpoint.get("whoIsAbout", "/presence", { success: Present }),
   )
   .middleware(Player)
   .prefix("/v1/game") {}
+
+/**
+ * The staff's routes: signed in as the game's routes are, but only for a session the guild's
+ * backend marks as a website admin. Nothing here is sent to any other player.
+ */
+export class GameAdminApi extends HttpApiGroup.make("gameAdmin")
+  .add(
+    HttpApiEndpoint.get("activity", "/activity", {
+      query: { days: Schema.optional(Schema.String) },
+      success: ActivityReport,
+      error: [Invalid, StaffOnly],
+    }),
+  )
+  .middleware(Player)
+  .prefix("/v1/game/admin") {}
 
 export class LeafApi extends HttpApi.make("sequoia-leaf")
   .add(SystemApi)
   .add(MeApi)
   .add(GameHelloApi)
   .add(GameApi)
+  .add(GameAdminApi)
   .middleware(BodyLimit)
   .middleware(Unexpected)
   .annotateMerge(OpenApi.annotations({ title: "Leaf", description: "The Sequoia guild currency and its game" })) {}

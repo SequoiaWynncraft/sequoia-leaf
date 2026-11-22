@@ -11,6 +11,7 @@ import { databaseAt } from "../src/db.ts";
 import type { CreditSource } from "../src/earning/sync.ts";
 import { Events } from "../src/events/store.ts";
 import { Mojang, MojangError, type MojangProfile } from "../src/game/mojang.ts";
+import { LeafInstance } from "../src/instance.ts";
 import { Ledger } from "../src/ledger/store.ts";
 import { Live, LiveTuning } from "../src/live/live.ts";
 
@@ -75,14 +76,19 @@ export interface Fakes {
   readonly events?: (real: Events["Service"]) => Events["Service"];
   /** Live's timings and sizes, for tests that cannot wait for the real ones. */
   readonly live?: Partial<LiveTuning>;
+  /** Which Leaf process this is (`LeafInstance`). Each test Leaf is a process of its own unless given one. */
+  readonly instance?: string;
 }
 
 /**
- * Leaf around a fresh, fully migrated database in memory, a hand-set clock and
- * a stand-in network: the layer Leaf's code runs with, `run` to run an effect
- * against it, and `app` for its HTTP API. They all share the one database.
+ * Leaf around a fresh, fully migrated database in memory (or the file
+ * `config.databasePath` names, for two Leafs on one file as in a deploy), a
+ * hand-set clock and a stand-in network: the layer Leaf's code runs with, `run`
+ * to run an effect against it, and `app` for its HTTP API. They all share the
+ * one database.
  */
 export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Settings> = {}, fakes: Fakes = {}) {
+  const configured = testConfig(config);
   const handClock = Layer.effect(
     Clock.Clock,
     Clock.clockWith((real) =>
@@ -113,13 +119,14 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     ),
   );
   const outside = Layer.mergeAll(
-    Layer.succeed(AppConfig)(testConfig(config)),
+    Layer.succeed(AppConfig)(configured),
     fakes.mojang === undefined ? Mojang.layer.pipe(Layer.provideMerge(network)) : Layer.succeed(Mojang)(fakes.mojang),
     network,
     handClock,
+    Layer.succeed(LeafInstance)(fakes.instance ?? crypto.randomUUID()),
     Layer.succeed(References.MinimumLogLevel)("None"),
   );
-  const stores = Stores.pipe(Layer.provideMerge(databaseAt(":memory:")), Layer.provideMerge(outside));
+  const stores = Stores.pipe(Layer.provideMerge(databaseAt(configured.databasePath)), Layer.provideMerge(outside));
   // The real stores, or whatever the test puts in between; everything built on top sees the same.
   const between = Layer.mergeAll(
     Layer.effect(

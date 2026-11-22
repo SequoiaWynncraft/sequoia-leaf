@@ -313,6 +313,8 @@ describe("who may use the game's routes", () => {
     ["GET", "/v1/game/guild/events"],
     ["GET", "/v1/game/guild/events/stream"],
     ["PUT", "/v1/game/presence"],
+    ["GET", "/v1/game/presence"],
+    ["GET", "/v1/game/admin/activity"],
   ] as const;
 
   it("refuses everyone signed out on every route but hello", async () => {
@@ -339,7 +341,9 @@ describe("who may use the game's routes", () => {
       [`/v1/game/skins/${bob}`]: [404, "no_skin"],
       "/v1/game/guild/events": [403, "members_only"],
       "/v1/game/guild/events/stream": [403, "members_only"],
-      "/v1/game/presence": [400, "invalid_place"],
+      "PUT /v1/game/presence": [400, "invalid_place"],
+      "GET /v1/game/presence": [200, null],
+      "/v1/game/admin/activity": [403, "staff_only"],
     } as Record<string, readonly [number, string | null]>;
     expect(answers).toEqual(
       routes.flatMap(([method, path]) => {
@@ -1344,6 +1348,30 @@ function arrive(place: string, sent: Sent = alicesPage, stay?: unknown) {
 
 const iso = (at: number) => new Date(at).toISOString();
 const presenceRows = () => services.query((sql) => sql`SELECT place, seen_at, stay FROM presence`);
+
+describe("GET /v1/game/presence", () => {
+  it("lists who is about as the call that says where one is does, and writes nothing", async () => {
+    await arrive("works", { bearer: "bob-token" });
+    clock.now = T0 + 30_000;
+    await arrive("town");
+    const before = await services.query((sql) => sql`SELECT * FROM presence ORDER BY player_id`);
+    const visits = await services.query((sql) => sql`SELECT * FROM visits ORDER BY id`);
+    clock.now = T0 + 60_000;
+
+    const looked = await send("GET", "/v1/game/presence", alicesPage);
+
+    expect(looked.status).toBe(200);
+    expect(await looked.json()).toEqual({
+      present: [
+        { id: alice, username: "Alice", place: "town", guest: false },
+        { id: bob, username: "Bob", place: "works", guest: false },
+      ],
+      resting: [],
+    });
+    expect(await services.query((sql) => sql`SELECT * FROM presence ORDER BY player_id`)).toEqual(before);
+    expect(await services.query((sql) => sql`SELECT * FROM visits ORDER BY id`)).toEqual(visits);
+  });
+});
 
 describe("PUT /v1/game/presence", () => {
   it("lists the caller and everyone else seen in the last 90 seconds, and nobody older", async () => {
