@@ -12,7 +12,7 @@ import type { Dir } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, dist, must, type Pt, type Rect } from "@sequoia-leaf/kit/util.ts";
 
-import { headOf, hop, pushOf, release, shove, walkTo } from "./actors.ts";
+import { feet, headOf, hop, pushOf, release, shove, walkTo } from "./actors.ts";
 import { ring } from "./fx.ts";
 import { type Actor, G, type Prompted, show } from "./game.ts";
 import type { Ground } from "./grid.ts";
@@ -117,14 +117,16 @@ export function makeTouch(here: Here) {
   }
 
   function personAt(x: number, y: number): Actor | null {
-    let best: Actor | null = null;
+    let best: { a: Actor; foot: Pt } | null = null;
     for (const a of here.people()) {
       if (a.away || a.alpha < 0.5) continue;
-      const foot = a.seat ?? a;
+      const foot = feet(a);
       if (Math.abs(x - foot.x) > 7 || y < foot.y - headOf(a) - 2 || y > foot.y + 3 - a.lift) continue;
-      if (!best || foot.y > (best.seat ?? best).y) best = a;
+      // The one in front; of two drawn side by side, the one nearer across.
+      const ahead = best ? Math.round(foot.y) - Math.round(best.foot.y) : 1;
+      if (ahead > 0 || (ahead === 0 && Math.abs(x - foot.x) < Math.abs(x - (best?.foot.x ?? x)))) best = { a, foot };
     }
-    return best;
+    return best?.a ?? null;
   }
 
   /** A thing standing is touched: it answers, and if it is part of a door the member goes there. */
@@ -139,7 +141,7 @@ export function makeTouch(here: Here) {
     if (onSign(x, y) && show.sign) return { box: show.sign, tip: null };
     const who = personAt(x, y);
     if (who) {
-      const foot = who.seat ?? who;
+      const foot = feet(who);
       const tall = headOf(who);
       return { box: { x: foot.x - 6, y: foot.y - tall, w: 12, h: tall + 1 - who.lift }, tip: null, who };
     }
