@@ -1078,10 +1078,11 @@ export function makeCamp(
       leave(opened);
       return;
     }
-    // Leaf took a while and the member has gone elsewhere meanwhile (into a game, say): the visit is dropped,
-    // not kept for the next time they set off for their own camp.
+    // A visit that cannot set off changes nothing: Leaf took a while and the member has gone into a game
+    // meanwhile, or is already on the way to another camp. It is not kept for the next walk to a camp.
+    const was = coming;
     coming = opened;
-    if (!hooks.toCamp()) coming = null;
+    if (!hooks.toCamp()) coming = was;
   }
   hooks.visitCamp = (id, name) => void goTo(id, name);
 
