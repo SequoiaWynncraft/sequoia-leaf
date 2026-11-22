@@ -16,6 +16,7 @@ import {
   REACH,
   rewire,
   RIGHT,
+  takes,
   type World,
 } from "@sequoia-leaf/yard";
 
@@ -93,10 +94,14 @@ function arms(w: World, i: number, feeds: (from: number, to: number) => boolean)
       }
       return out;
     }
-    case "splitter":
+    case "splitter": {
       out[back] = 1;
-      out[b.dir] = out[LEFT[b.dir]] = out[RIGHT[b.dir]] = 2;
+      // Only the ways out that something takes things from. A splitter nothing takes from shows all three.
+      const ways = [b.dir, LEFT[b.dir], RIGHT[b.dir]] as const;
+      const led = ways.filter((d) => feeds(i, side(d)));
+      for (const d of led.length > 0 ? led : ways) out[d] = 2;
       return out;
+    }
     case "tunnel":
       if (b.span > 0) out[back] = 1;
       else out[b.dir] = 2;
@@ -217,8 +222,12 @@ export function layout(w: World, rev: number): Layout {
     if (from < 0) return false;
     const b = w.cells[from];
     if (!b || b.kind === "depot" || b.kind === "pylon" || b.kind === "wheel" || b.kind === "boiler") return false;
+    // A splitter feeds whatever on one of its three ways out takes things from it.
     if (b.kind === "splitter")
-      return wire.ways[from * 3] === to || wire.ways[from * 3 + 1] === to || wire.ways[from * 3 + 2] === to;
+      return (
+        (wire.ways[from * 3] === to || wire.ways[from * 3 + 1] === to || wire.ways[from * 3 + 2] === to) &&
+        takes(w, wire, to, from)
+      );
     // Two belts facing each other pass nothing, and are not drawn as joined.
     return wire.next[from] === to && wire.next[to] !== from;
   };

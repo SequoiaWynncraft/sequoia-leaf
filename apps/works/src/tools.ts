@@ -8,7 +8,6 @@ import { CREAM, GOLD, GREEN } from "@sequoia-leaf/kit/palette.ts";
 import {
   ahead,
   at,
-  costOf,
   type Dir,
   DX,
   DY,
@@ -20,7 +19,9 @@ import {
   PLANS,
   type PlotId,
   plotRefusal,
+  priceAt,
   refusal,
+  replaces,
   RIGHT,
   route,
   runCost,
@@ -48,9 +49,9 @@ interface Stood {
   recipe: Item | null;
   open: boolean;
 }
-/** Something done that can be undone: things built, things taken away, a thing turned. */
+/** Something done that can be undone: things built (`under`: the piece one of them took the place of), things taken away, a thing turned. */
 type Done =
-  | { did: "built"; cells: number[]; turned: { i: number; was: Dir }[] }
+  | { did: "built"; cells: number[]; turned: { i: number; was: Dir }[]; under?: Stood }
   | { did: "took"; what: Stood[] }
   | { did: "turned"; i: number; was: Dir };
 const done: Done[] = [];
@@ -84,12 +85,19 @@ export function setTool(tool: Tool): void {
   S.run = null;
   S.from = null;
   path = [];
+  faced = -1;
   if (tool !== null) S.picked = -1;
   if (S.hover && tool !== null) aimAt(S.hover.x, S.hover.y);
   toolHooks.changed();
 }
 
-/** Works out what would come of using the tool in hand on a tile. */
+/** The tile the tool in hand last took its facing from. */
+let faced = -1;
+
+/**
+ * Works out what would come of using the tool in hand on a tile. A splitter or a joiner brought
+ * over a belt faces the way the belt runs, until it is turned.
+ */
 export function aimAt(x: number, y: number): void {
   const w = S.world;
   const tool = S.tool;
@@ -98,6 +106,13 @@ export function aimAt(x: number, y: number): void {
     return;
   }
   const there = w.cells[at(w, x, y)];
+  if (faced !== at(w, x, y)) {
+    faced = at(w, x, y);
+    if (there && tool !== "remove" && replaces(tool, there) && S.dir !== there.dir) {
+      S.dir = there.dir;
+      toolHooks.changed();
+    }
+  }
   if (tool === "remove") {
     S.aim = {
       x,
@@ -107,7 +122,7 @@ export function aimAt(x: number, y: number): void {
     };
     return;
   }
-  S.aim = { x, y, why: refusal(w, tool, x, y, coins(), S.dir), cost: there ? 0 : costOf(w, tool) };
+  S.aim = { x, y, why: refusal(w, tool, x, y, coins(), S.dir), cost: priceAt(w, tool, x, y) };
 }
 
 function landed(x: number, y: number, belt: boolean, n = 0): void {
@@ -128,7 +143,8 @@ export function place(x: number, y: number): boolean {
   const i = at(w, x, y);
   const there = i >= 0 ? w.cells[i] : null;
   const was = there?.dir;
-  const cost = there ? 0 : costOf(w, tool);
+  const under = there && replaces(tool, there) ? standing(i) : null;
+  const cost = priceAt(w, tool, x, y);
   const no = attempt(refusal(w, tool, x, y, coins(), S.dir), { do: "build", kind: tool, x, y, dir: S.dir });
   if (no !== null) {
     S.aim = { x, y, why: no, cost: 0 };
@@ -136,7 +152,7 @@ export function place(x: number, y: number): boolean {
     toolHooks.changed();
     return false;
   }
-  if (there) {
+  if (there && !under) {
     if (was !== undefined && was !== S.dir) {
       remember({ did: "turned", i, was });
       yardSfx.turn();
@@ -149,9 +165,9 @@ export function place(x: number, y: number): boolean {
       cells.push(far);
       landed(far % W(), Math.floor(far / W()), false);
     }
-    remember({ did: "built", cells, turned: [] });
+    remember({ did: "built", cells, turned: [], ...(under ? { under } : {}) });
     landed(x, y, tool === "belt");
-    if (cost > 0) float(x * TILE + 8, y * TILE - 2, `-${cost}`, GOLD[0], 0.9);
+    if (cost !== 0) float(x * TILE + 8, y * TILE - 2, cost > 0 ? `-${cost}` : `+${-cost}`, GOLD[cost > 0 ? 0 : 2], 0.9);
   }
   touched();
   aimAt(x, y);
@@ -239,6 +255,24 @@ export function pickFrom(x: number, y: number): boolean {
   return true;
 }
 
+/** Builds again something that was taken away. A tunnel goes back as it was, by a run of one tunnel. */
+function putBack(s: Stood): void {
+  const tunnel = s.kind === "tunnel";
+  const no = attempt(
+    refusal(S.world, s.kind, s.x, s.y, coins(), s.dir, tunnel ? s.span : undefined),
+    tunnel
+      ? { do: "lay", legs: [{ kind: "tunnel", x: s.x, y: s.y, dir: s.dir, span: s.span }] }
+      : { do: "build", kind: s.kind, x: s.x, y: s.y, dir: s.dir },
+  );
+  if (no !== null) {
+    toolHooks.said(`Cannot undo: ${no.toLowerCase()}.`);
+    return;
+  }
+  if (s.recipe !== null) doNow({ do: "recipe", x: s.x, y: s.y, item: s.recipe });
+  if (!s.open) doNow({ do: "crate", x: s.x, y: s.y, open: false });
+  puff(s.x * TILE + 8, (s.y + 1) * TILE - 2, 4, DUST, 6);
+}
+
 /** Undoes the last thing done to the yard, if it still can be. */
 export function undo(): boolean {
   const w = S.world;
@@ -255,25 +289,9 @@ export function undo(): boolean {
       puff(x * TILE + 8, (y + 1) * TILE - 4, 4, DUST, 7);
     }
     for (const t of last.turned) doNow({ do: "turn", ...xy(t.i), dir: t.was });
-  } else if (last.did === "took") {
-    for (const s of last.what) {
-      // A tunnel goes back as it was, by a run of one tunnel; anything else is built again.
-      const tunnel = s.kind === "tunnel";
-      const no = attempt(
-        refusal(w, s.kind, s.x, s.y, coins(), s.dir, tunnel ? s.span : undefined),
-        tunnel
-          ? { do: "lay", legs: [{ kind: "tunnel", x: s.x, y: s.y, dir: s.dir, span: s.span }] }
-          : { do: "build", kind: s.kind, x: s.x, y: s.y, dir: s.dir },
-      );
-      if (no !== null) {
-        toolHooks.said(`Cannot undo: ${no.toLowerCase()}.`);
-        continue;
-      }
-      if (s.recipe !== null) doNow({ do: "recipe", x: s.x, y: s.y, item: s.recipe });
-      if (!s.open) doNow({ do: "crate", x: s.x, y: s.y, open: false });
-      puff(s.x * TILE + 8, (s.y + 1) * TILE - 2, 4, DUST, 6);
-    }
-  } else doNow({ do: "turn", ...xy(last.i), dir: last.was });
+    if (last.under) putBack(last.under);
+  } else if (last.did === "took") last.what.forEach(putBack);
+  else doNow({ do: "turn", ...xy(last.i), dir: last.was });
   yardSfx.undo();
   touched();
   if (S.aim) aimAt(S.aim.x, S.aim.y);

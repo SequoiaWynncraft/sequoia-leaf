@@ -158,24 +158,51 @@ function ready(w: World, wire: Wire, i: number, to: number): boolean {
   }
 }
 
+/**
+ * Whether the tile at `to` is one that takes things from the tile at `from` at all, whatever it
+ * holds just now. A splitter passes a way by when this says no, and the picture leaves that way out.
+ */
+export function takes(w: World, wire: Wire, to: number, from: number): boolean {
+  const b = to < 0 ? null : w.cells[to];
+  if (!b) return false;
+  switch (b.kind) {
+    case "belt":
+    case "crate":
+      // Not from the tile it is itself sending to: two belts facing each other pass nothing.
+      return wire.next[to] !== from;
+    case "splitter":
+      return wire.back[to] === from;
+    case "tunnel":
+      return b.span > 0 && wire.back[to] === from;
+    case "joiner":
+      return wire.ways[to * 3] === from || wire.ways[to * 3 + 1] === from || wire.ways[to * 3 + 2] === from;
+    case "depot":
+    case "mill":
+    case "bench":
+    case "workshop":
+    case "boiler":
+      return true;
+    case "gatherer":
+    case "pylon":
+    case "wheel":
+      return false;
+  }
+}
+
 /** Whether the tile at `to` will take `item` handed to it from the tile at `from`. */
 function accepts(w: World, wire: Wire, to: number, item: Item, from: number): boolean {
   const b = to < 0 ? null : w.cells[to];
-  if (!b) return false;
+  if (!b || !takes(w, wire, to, from)) return false;
   switch (b.kind) {
     case "depot":
       return true;
     case "belt":
-      // Not from the tile it is itself sending to: two belts facing each other pass nothing.
-      return b.item === null && wire.next[to] !== from;
     case "splitter":
-      return b.item === null && wire.back[to] === from;
     case "tunnel":
-      return b.span > 0 && b.item === null && wire.back[to] === from;
+      return b.item === null;
     case "joiner": {
       if (b.item !== null) return false;
       const side = [0, 1, 2].find((k) => wire.ways[to * 3 + k] === from);
-      if (side === undefined) return false;
       // It waits for whoever's turn it is, so long as they have something to give.
       for (let k = b.turn; k !== side; k = (k + 1) % 3)
         if (ready(w, wire, wire.ways[to * 3 + k] ?? -1, to)) return false;
@@ -200,7 +227,7 @@ function accepts(w: World, wire: Wire, to: number, item: Item, from: number): bo
       return false;
     }
     case "crate":
-      return wire.next[to] !== from && b.count + (b.out === null ? 0 : 1) < w.rates.crate;
+      return b.count + (b.out === null ? 0 : 1) < w.rates.crate;
     case "boiler":
       return item === "deadfall" && (b.buf.deadfall ?? 0) < FUEL;
     case "gatherer":

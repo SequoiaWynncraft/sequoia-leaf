@@ -34,9 +34,11 @@ export {
   planState,
   plotRefusal,
   plotState,
+  priceAt,
   refusal,
   type Refund,
   remove,
+  replaces,
   setOpen,
   setRecipe,
   type Spent,
@@ -86,7 +88,7 @@ export { repower } from "./power.ts";
 export { lay, type Leg, route, runCost } from "./route.ts";
 export { load, save, VERSION } from "./save.ts";
 export { ahead, aim, holding, rate, type State, type Status, status } from "./status.ts";
-export { PACE_WINDOW, power, rewire, step } from "./step.ts";
+export { PACE_WINDOW, power, rewire, step, takes } from "./step.ts";
 export {
   at,
   type Away,
