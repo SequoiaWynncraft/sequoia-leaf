@@ -261,11 +261,16 @@ function waysOf(art: Art, i: number): HTMLElement {
     if (head && arms[d] === 2) g?.drawImage(head, 0, 0);
     const shut = ((b.shut >> k) & 1) === 1;
     const led = takes(w, wire, wire.ways[i * 3 + k] ?? -1, i);
+    const state = shut ? "Shut" : led ? "Open" : "No belt";
+    // Seen, a button's place says which way it is; read out, its name has to.
+    const named = { "aria-label": `${["Ahead", "Left", "Right"][k]}: ${state}` };
     const way = el(
       S.visiting ? "span" : "button",
       `k-btn ${shut ? "coral" : led ? "green" : "slate"}`,
-      S.visiting ? {} : { type: "button", onclick: () => wayAt(i % w.land.w, Math.floor(i / w.land.w), k) },
-      shut ? "Shut" : led ? "Open" : "No belt",
+      S.visiting
+        ? named
+        : { ...named, type: "button", onclick: () => wayAt(i % w.land.w, Math.floor(i / w.land.w), k) },
+      state,
     );
     way.style.gridArea = SIDES[d];
     box.append(way);

@@ -700,11 +700,14 @@ const view: View = {
       return;
     }
     const card = drawCard(d, o);
+    const scrolled = was?.scrollTop ?? 0;
     if (was) was.replaceWith(card);
     else document.body.append(card);
     node = card;
     // The same card again (pinned where it was, followed on, refreshed) keeps its corner as far as it fits.
     const same = prev !== null && prev.from === o.from && prev.stack[0] === o.stack[0] && prev.at === o.at;
+    // Drawn again, a card scrolled down stays scrolled: what was under a finger is still under it.
+    if (same) card.scrollTop = scrolled;
     const spot = spotOf(o.at);
     if (card.classList.contains("sheet")) {
       corner = null;

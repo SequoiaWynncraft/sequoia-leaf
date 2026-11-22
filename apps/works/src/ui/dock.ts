@@ -84,8 +84,8 @@ function plain(
     "button",
     `k-slot${S.tool === tool ? " lit" : ""}${S.nudgeTool === tool && S.tool !== tool ? " nudged" : ""}`,
     { type: "button", "aria-label": name, "aria-pressed": S.tool === tool ? "true" : "false" },
+    // No name under it: a name is wider than a slot. Its tip and the line above the toolbar say what it is.
     el("span", "art", {}, yardIcon(pic)),
-    el("span", "k-dim", { text: name }),
   );
   b.addEventListener("click", () => {
     setTool(S.tool === tool ? null : tool);
