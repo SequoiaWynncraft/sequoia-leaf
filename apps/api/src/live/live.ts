@@ -1,8 +1,19 @@
-import { CLOSE, decodeMove, isAct, LIVE_VERSION, roomKind, SERVER_HZ, type ToClient } from "@sequoia-leaf/core";
-import { Clock, Context, Duration, Effect, Layer, Option, Queue, Schedule, Schema, type Scope } from "effect";
+import {
+  CLOSE,
+  decodeMove,
+  isAct,
+  LIVE_VERSION,
+  type PlayerId,
+  roomKind,
+  SERVER_HZ,
+  type ToClient,
+} from "@sequoia-leaf/core";
+import { Cause, Clock, Context, Duration, Effect, Layer, Option, Queue, Schedule, Schema, type Scope } from "effect";
 import { Socket } from "effect/socket";
 
 import { type Identity, isGuest } from "../api/api.ts";
+import { PLACES } from "../api/schemas.ts";
+import { type InRoom, Presence } from "../game/presence.ts";
 import { type Occupant, type Room, Rooms } from "./room.ts";
 
 /**
@@ -26,11 +37,24 @@ export interface LiveTuning {
   readonly graceMs: number;
   /** The most players Live holds at once, connected or in their grace. */
   readonly mostPlayers: number;
+  /**
+   * How often the presence of everybody in a room is written again while they stay, as a game says
+   * where it is every half minute: they count as here for 90 seconds after each.
+   */
+  readonly presenceMs: number;
 }
 
 export const LiveTuning = Context.Reference<LiveTuning>("leaf/LiveTuning", {
-  defaultValue: () => ({ recheckMs: 30_000, graceMs: 10_000, mostPlayers: 1000 }),
+  defaultValue: () => ({ recheckMs: 30_000, graceMs: 10_000, mostPlayers: 1000, presenceMs: 30_000 }),
 });
+
+/** Where a player's presence says they are while they are in a room of a kind, if it is one of the game's places. */
+const placeOf = (kindName: string): string | null => PLACES.find((p) => p === kindName) ?? null;
+
+/** What Live has to write down about where players are, in the order it happened. */
+type Whereabouts =
+  | { readonly kind: "in"; readonly players: readonly InRoom[]; readonly place: string; readonly at: number }
+  | { readonly kind: "left"; readonly playerId: PlayerId; readonly place: string; readonly at: number };
 
 /** The longest text frame Leaf reads, in UTF-16 code units (as JavaScript counts a string's length). Every message the game sends is far shorter. */
 const MOST_TEXT = 512;
@@ -207,6 +231,10 @@ export type Opened = "served" | "full" | "busy" | "stopping";
  * `packages/core/src/live.ts`). Who is in which room is kept here and nowhere else, by player, not
  * by connection. Rooms are in memory, in this process: during a deploy every player is told Leaf is
  * restarting, and reconnects to the new container.
+ *
+ * A player in a room of one of the game's places (the town) is present there as far as `Presence`
+ * knows, as if their game said so: written when they come in, every `presenceMs` while they stay,
+ * and when they go, so that nobody's page need say where they are while it is in a room.
  */
 export class Live extends Context.Service<
   Live,
@@ -238,6 +266,7 @@ export class Live extends Context.Service<
     Live,
     Effect.gen(function* () {
       const tuning = yield* LiveTuning;
+      const presence = yield* Presence;
       const rooms = new Rooms();
       const players = new Map<string, Player>();
       let counts = noCounts();
@@ -245,15 +274,42 @@ export class Live extends Context.Service<
       /** Leaf is stopping: no connection is let in, and one still opening is told to come back. */
       let stopping = false;
 
+      // ---- where players are, as presence has it ----
+
+      // Said here as it happens, without waiting, and written by one fiber in the same order.
+      const whereabouts = yield* Queue.unbounded<Whereabouts>();
+      const inRoom = (p: Player): InRoom => ({
+        playerId: p.identity.playerId,
+        username: p.identity.username,
+        guest: isGuest(p.identity),
+      });
+      const write = (w: Whereabouts) =>
+        (w.kind === "in"
+          ? presence.inRoom(w.players, w.place, w.at)
+          : presence.leftRoom(w.playerId, w.place, w.at)
+        ).pipe(
+          // A write that fails is not tried again: the next one, at most `presenceMs` later, says as much.
+          Effect.catchCause((cause) =>
+            Cause.hasInterruptsOnly(cause) ? Effect.interrupt : Effect.logWarning("live presence", cause),
+          ),
+        );
+      yield* Effect.forkScoped(
+        Effect.forever(
+          Effect.flatMap(Queue.takeAll(whereabouts), (all) => Effect.forEach(all, write, { discard: true })),
+        ),
+      );
+
       // ---- who is in which room: these three alone change it ----
 
-      const leave = (p: Player): void => {
+      const leave = (p: Player, now: number): void => {
         const { room, occupant } = p;
         p.room = null;
         p.occupant = null;
         if (!room || !occupant) return;
         room.leave(occupant.member.id);
         rooms.tidy(room);
+        const place = placeOf(room.kindName);
+        if (place) Queue.offerUnsafe(whereabouts, { kind: "left", playerId: p.identity.playerId, place, at: now });
       };
 
       /**
@@ -275,11 +331,13 @@ export class Live extends Context.Service<
         if (p.room?.kindName === kindName && p.occupant && same) {
           return p.room.greet(p.occupant, now, SERVER_HZ, LIVE_VERSION);
         }
-        leave(p);
+        leave(p, now);
         const room = rooms.place(kindName);
         if (!room) return;
         p.occupant = room.join(who, p, now, SERVER_HZ, LIVE_VERSION);
         p.room = room;
+        const place = placeOf(kindName);
+        if (place) Queue.offerUnsafe(whereabouts, { kind: "in", players: [inRoom(p)], place, at: now });
       };
 
       // ---- what a player sends ----
@@ -294,7 +352,7 @@ export class Live extends Context.Service<
           counts.movesIn++;
           const move = decodeMove(frame);
           if (!move || !p.moves.take(now)) return strike(p, now);
-          if (p.room && p.occupant) p.room.move(p.occupant.member.id, move.seq, move.motion);
+          if (p.room && p.occupant) p.room.move(p.occupant.member.id, move.seq, move.motion, now);
           return;
         }
         counts.textsIn++;
@@ -307,7 +365,7 @@ export class Live extends Context.Service<
           case "join":
             return enter(p, m.room, now);
           case "leave":
-            return leave(p);
+            return leave(p, now);
           case "act":
             if (!isAct(m.kind, m.arg)) {
               p.send(say({ t: "error", code: "bad_act" }));
@@ -329,7 +387,7 @@ export class Live extends Context.Service<
           for (const [id, p] of players) {
             if (p.goneAt !== null && now - p.goneAt >= tuning.graceMs) {
               p.goneAt = null;
-              leave(p);
+              leave(p, now);
             }
             if (p.gone(now)) players.delete(id);
           }
@@ -337,6 +395,23 @@ export class Live extends Context.Service<
         }),
       );
       yield* Effect.forkScoped(Effect.repeat(flush, Schedule.fixed(Duration.millis(1000 / SERVER_HZ))));
+
+      // Everybody in a room of one of the game's places is there still, as their game would say.
+      const stillHere = Effect.flatMap(Clock.currentTimeMillis, (now) =>
+        Effect.sync(() => {
+          const byPlace = new Map<string, InRoom[]>();
+          for (const p of players.values()) {
+            const place = p.room ? placeOf(p.room.kindName) : null;
+            if (!place) continue;
+            const those = byPlace.get(place) ?? [];
+            those.push(inRoom(p));
+            byPlace.set(place, those);
+          }
+          for (const [place, those] of byPlace)
+            Queue.offerUnsafe(whereabouts, { kind: "in", players: those, place, at: now });
+        }),
+      );
+      yield* Effect.forkScoped(Effect.repeat(stillHere, Schedule.spaced(Duration.millis(tuning.presenceMs))));
 
       const census = Effect.sync(() => {
         const inRooms: Record<string, number> = {};
@@ -386,7 +461,7 @@ export class Live extends Context.Service<
                 counts.closed++;
                 if (p.pipe !== pipe) return;
                 p.pipe = null;
-                if (pipe.closedWith === CLOSE.signedOut) return leave(p);
+                if (pipe.closedWith === CLOSE.signedOut) return leave(p, now);
                 p.goneAt = now;
                 if (p.occupant) p.room?.halt(p.occupant.member.id);
               }),

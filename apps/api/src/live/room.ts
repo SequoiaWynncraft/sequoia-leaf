@@ -26,10 +26,25 @@ export interface Occupant {
   jump: number;
   /** The jump count their game last sent, on its present connection; null before it sends one. */
   heard: number | null;
+  /** When the room last took a move of theirs, by Leaf's clock. */
+  movedAt: number;
 }
 
 /** The fastest a motion may say a player moves, in the room's units a second. */
 const MOST_SPEED = 1024;
+/** How much further than the room's pace a move may go before it is a jump: half as far again, and a little. */
+const PACE_SLACK = 1.5;
+const PACE_REACH = 8;
+
+/**
+ * Whether a move from one place to another, `ms` after the last, goes further than somebody can
+ * get at a room's pace (`speed` a second): half as far again as that, and 8 units, allow for moves
+ * that arrive bunched together. A game that says its player is somewhere they could not have
+ * walked to only has them jump there.
+ */
+function outpaced(from: { x: number; y: number }, to: { x: number; y: number }, ms: number, speed: number) {
+  return Math.hypot(to.x - from.x, to.y - from.y) > (speed * Math.max(0, ms) * PACE_SLACK) / 1000 + PACE_REACH;
+}
 
 const clamp = (n: number, low: number, high: number): number => Math.min(high, Math.max(low, n));
 
@@ -72,6 +87,7 @@ export class Room {
       dirty: false,
       jump: 0,
       heard: null,
+      movedAt: time,
     };
     this.occupants.set(id, occupant);
     this.others(id, text({ t: "joined", member: occupant.member }));
@@ -97,23 +113,31 @@ export class Room {
   }
 
   /**
-   * Takes somebody's motion, kept inside the room and below the fastest anybody moves. Moves come
-   * only from the player's present connection, in the order it sent them, so the newest is the one
-   * that counts: it is all of where they are. The room keeps its own count of their jumps: it goes
-   * up whenever their game's count changes, or a new connection of theirs sends its first move (it
-   * may count from anywhere), so nobody is ever drawn sliding from where they were.
+   * Takes somebody's motion at `time` (Leaf's clock), kept inside the room and below the fastest
+   * anybody moves. Moves come only from the player's present connection, in the order it sent
+   * them, so the newest is the one that counts: it is all of where they are. The room keeps its own
+   * count of their jumps: it goes up whenever their game's count changes, or a new connection of
+   * theirs sends its first move (it may count from anywhere), so nobody is ever drawn sliding from
+   * where they were; and whenever a move goes further than the room's pace allows since the last
+   * (`outpaced`), so a game that says its player is anywhere it likes only has them jump there.
    */
-  move(id: number, seq: number, m: Motion): void {
+  move(id: number, seq: number, m: Motion, time: number): void {
     const o = this.occupants.get(id);
     if (!o) return;
+    const x = clamp(m.x, 0, this.kind.width);
+    const y = clamp(m.y, 0, this.kind.height);
+    const was = o.motion;
     if (o.heard !== m.jump) {
       o.heard = m.jump;
       o.jump = (o.jump + 1) & 0xff;
+    } else if (was && outpaced(was, { x, y }, time - o.movedAt, this.kind.speed)) {
+      o.jump = (o.jump + 1) & 0xff;
     }
+    o.movedAt = time;
     o.seq = seq;
     o.motion = {
-      x: clamp(m.x, 0, this.kind.width),
-      y: clamp(m.y, 0, this.kind.height),
+      x,
+      y,
       vx: clamp(m.vx, -MOST_SPEED, MOST_SPEED),
       vy: clamp(m.vy, -MOST_SPEED, MOST_SPEED),
       facing: m.facing,

@@ -4,7 +4,11 @@
  * the page tried to go to, and every time it loaded itself again. Pages never load this.
  */
 
-import { pretend, type Store } from "./net.ts";
+import { CLOSE, decodeMove, encodeSnapshot, type Entry, type ToClient } from "@sequoia-leaf/core";
+
+import { isRecord, type LiveSocket, pretend, type Store } from "./net.ts";
+
+export { CLOSE };
 
 export interface Sent {
   method: string;
@@ -141,3 +145,88 @@ export const HELLO = {
   status: 200,
   body: { sign_in: "https://api.example/auth/web/start?return_to=", leaf_spending: false },
 };
+
+// ---------- Leaf's side of a live connection ----------
+
+/** A WebSocket a test plays Leaf's side of: what the game sent, and Leaf's words and snapshots to it. */
+export class FakeSocket implements LiveSocket {
+  binaryType: BinaryType = "blob";
+  readonly sent: (string | Uint8Array)[] = [];
+  closed: number | null = null;
+  readonly url: string;
+  private readonly opens: ((e: Event) => void)[] = [];
+  private readonly messages: ((e: MessageEvent) => void)[] = [];
+  private readonly closes: ((e: CloseEvent) => void)[] = [];
+
+  constructor(url: string) {
+    this.url = url;
+  }
+
+  addEventListener(
+    ...ear: ["open", (e: Event) => void] | ["message", (e: MessageEvent) => void] | ["close", (e: CloseEvent) => void]
+  ): void {
+    if (ear[0] === "open") this.opens.push(ear[1]);
+    else if (ear[0] === "message") this.messages.push(ear[1]);
+    else this.closes.push(ear[1]);
+  }
+
+  send(data: string | Uint8Array): void {
+    this.sent.push(data);
+  }
+
+  close(code: number = CLOSE.done): void {
+    this.closed = code;
+  }
+
+  /** The connection opens. */
+  open(): void {
+    for (const fn of this.opens) fn(new Event("open"));
+  }
+
+  /** Leaf says something in words. */
+  says(m: ToClient): void {
+    for (const fn of this.messages) fn(new MessageEvent("message", { data: JSON.stringify(m) }));
+  }
+
+  /** Leaf sends a frame as it is. */
+  sends(bytes: Uint8Array<ArrayBuffer>): void {
+    for (const fn of this.messages) fn(new MessageEvent("message", { data: bytes.buffer }));
+  }
+
+  /** Leaf sends a snapshot of everybody's motion that changed, at `time` by its clock. */
+  snapshot(time: number, entries: readonly Entry[], tick = 1): void {
+    this.sends(encodeSnapshot(tick, time, entries));
+  }
+
+  /** The connection closes from Leaf's side, or the network's, with this code. */
+  drop(code = 1006): void {
+    for (const fn of this.closes) fn(new CloseEvent("close", { code }));
+  }
+
+  /** The text frames the game sent, as JSON objects. */
+  texts(): Record<string, unknown>[] {
+    return this.sent.flatMap((s) => {
+      if (typeof s !== "string") return [];
+      const v: unknown = JSON.parse(s);
+      return isRecord(v) ? [v] : [];
+    });
+  }
+
+  /** The moves the game sent, read. */
+  moves() {
+    return this.sent.flatMap((s) => (typeof s === "string" ? [] : [decodeMove(s)]));
+  }
+}
+
+/** Stands in for opening live connections: every one the page opens is a `FakeSocket`, kept in order. Returns them, and how to stop. */
+export function liveSockets(): { sockets: FakeSocket[]; done: () => void } {
+  const sockets: FakeSocket[] = [];
+  const done = pretend({
+    socket: (url) => {
+      const s = new FakeSocket(url);
+      sockets.push(s);
+      return s;
+    },
+  });
+  return { sockets, done };
+}
