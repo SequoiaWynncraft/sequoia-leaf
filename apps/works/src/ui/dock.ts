@@ -65,9 +65,9 @@ function buildDock(art: Art): void {
   const spade = el(
     "button",
     `k-slot${S.tool === "remove" ? " lit" : ""}`,
-    { type: "button", "aria-label": "Take away", "aria-pressed": S.tool === "remove" ? "true" : "false" },
+    { type: "button", "aria-label": "Remove", "aria-pressed": S.tool === "remove" ? "true" : "false" },
     el("span", "art", {}, yardIcon("spade")),
-    el("span", "k-dim", { text: "back" }),
+    el("span", "k-dim", { text: "remove" }),
   );
   spade.addEventListener("click", () => {
     setTool(S.tool === "remove" ? null : "remove");
@@ -101,11 +101,11 @@ function handLine(): { text: string; bad: boolean } {
   }
   if (S.aim?.why) return { text: S.aim.why, bad: true };
   if (tool === "belt") {
-    if (!f) return { text: "Belt: drag to lay a run. R turns it.", bad: false };
-    return { text: S.from ? "Now tap where it ends." : "Tap where the run starts.", bad: false };
+    if (!f) return { text: "Belt: drag to lay a line. R rotates it.", bad: false };
+    return { text: S.from ? "Now tap where it ends." : "Tap where the line starts.", bad: false };
   }
   if (f) return { text: S.aim ? "Tap again, or Build." : `${name}: tap where it goes.`, bad: false };
-  return { text: `${name}: click to set it down. R turns it.`, bad: false };
+  return { text: `${name}: click to place it. R rotates it.`, bad: false };
 }
 
 function buildHand(): void {
@@ -115,16 +115,20 @@ function buildHand(): void {
   const aiming = S.finger && tool !== null && (S.aim !== null || S.run !== null);
   const kids: Node[] = [];
   const turn = button("wood icon sm", [yardIcon("turn")], rotate);
-  tip(turn, "Turn (R)", "Turns what is in hand a quarter turn; with nothing in hand, the thing last pointed at.");
+  tip(
+    turn,
+    "Rotate (R)",
+    "Rotates the piece you are placing. With no tool picked, it rotates the piece you last pointed at.",
+  );
   const back = button("wood icon sm", [yardIcon("undo")], () => {
     undo();
   });
-  tip(back, "Undo (Z)", "Takes back the last thing built, turned or taken away.");
+  tip(back, "Undo (Z)", "Undoes your last build, rotation or removal.");
   if (tool !== null && tool !== "remove") kids.push(turn);
   kids.push(back);
   if (tool !== null) {
     const away = button("wood icon sm", [icon("close")], cancel);
-    tip(away, "Put away (Esc)", "Lets go of what is being aimed, then of the tool.");
+    tip(away, "Cancel (Esc)", "Cancels what you are placing, then puts the tool away.");
     kids.push(away);
   }
   if (aiming) {
