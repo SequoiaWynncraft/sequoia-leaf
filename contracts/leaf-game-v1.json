@@ -1161,6 +1161,57 @@
       "message": "Leaf does not play that game"
     }
   },
+  "GET /v1/game/play/{game}/standings": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/play/works/standings"
+    },
+    "status": 200,
+    "body": {
+      "top": [
+        {
+          "place": 1,
+          "id": "10000000-0000-0000-0000-000000000002",
+          "name": "Bob",
+          "guest": false,
+          "score": 5120,
+          "also": {
+            "story": 7
+          },
+          "you": false
+        },
+        {
+          "place": 2,
+          "id": "10000000-0000-0000-0000-000000000001",
+          "name": "Alice",
+          "guest": false,
+          "score": 1840,
+          "also": {
+            "story": 3
+          },
+          "you": true
+        },
+        {
+          "place": 3,
+          "id": "10000000-0000-0000-0000-000000000003",
+          "name": "Visitor",
+          "guest": true,
+          "score": 960,
+          "also": {
+            "story": 2
+          },
+          "you": false
+        }
+      ],
+      "you": {
+        "place": 2,
+        "score": 1840,
+        "also": {
+          "story": 3
+        }
+      }
+    }
+  },
   "POST /v1/game/coins": {
     "request": {
       "method": "POST",

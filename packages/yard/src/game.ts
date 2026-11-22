@@ -328,4 +328,6 @@ export const WORKS: Game<World, WorksCommand, WorksView, WorksNote> = {
   decode: (text) => load(text),
   encode: save,
   command: readCommand,
+  // The Coins the yard has ever earned, from the depot and from orders, and how many story orders are done.
+  standing: (w) => ({ score: Math.floor(w.sold + w.paid), also: { story: w.story } }),
 };

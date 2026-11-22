@@ -14,7 +14,7 @@ import { pick as pickCard, point } from "@sequoia-leaf/kit/card.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { where } from "@sequoia-leaf/kit/live.ts";
 import { balance, pretendPurse } from "@sequoia-leaf/kit/purse.ts";
-import { bake, paintSkin } from "@sequoia-leaf/kit/skin.ts";
+import { bake, lookFor, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { LONG_PRESS, tipAt, tipOff } from "@sequoia-leaf/kit/tip.ts";
@@ -40,7 +40,6 @@ import { makeSprites } from "./sprites.ts";
 import type { Hover, Scene, Stage, Steer } from "./stage.ts";
 import { makeTown, type Town } from "./townscene.ts";
 import { dismissArrival } from "./ui.ts";
-import { lookFor } from "./visitors.ts";
 import type { PlaceId } from "./world.ts";
 
 declare global {

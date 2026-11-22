@@ -112,8 +112,9 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
 /**
  * Leaf's play service: it owns each player's state in each game. A player's page opens a game
  * (`open`), and sends commands (`send`); Leaf does them in order with the game's rules, in one
- * transaction: it reads the state, brings it to now, does each command, and writes the state, the
- * Coins each command paid or took, what it logged, and each command's answer. A command whose id
+ * transaction: it reads the state, brings it to now, does each command, and writes the state (and,
+ * for a game with a board, where it stands), the Coins each command paid or took, what it logged,
+ * and each command's answer. A command whose id
  * was seen before answers as it did then and changes nothing; one whose Coins changes, added to the
  * balance in order, would take it below nothing at any point is refused with `not_enough_coins`;
  * one that pays is done whatever the player has earned, and paid only as far as they may still earn
@@ -264,6 +265,10 @@ export class Play extends Context.Service<
                       );
                     }
                     next = rev + 1;
+                    const standing = game.standing();
+                    if (standing !== null) {
+                      yield* store.stand(playing.playerId, played.id, standing, playing.guest, now);
+                    }
                   }
                   yield* store.log(playing.playerId, played.id, logs, now);
                   for (const { id, result } of answers) {

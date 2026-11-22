@@ -70,6 +70,7 @@ describe("the database", () => {
       { migration_id: 16, name: "activity" },
       { migration_id: 17, name: "play" },
       { migration_id: 18, name: "earned" },
+      { migration_id: 19, name: "standings" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -111,6 +112,7 @@ describe("the database", () => {
           "coins",
           "command_days",
           "activity",
+          "standings",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
         }
@@ -124,7 +126,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 18 },
+      { latest: 19 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
