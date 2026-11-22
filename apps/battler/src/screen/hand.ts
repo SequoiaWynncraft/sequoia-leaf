@@ -213,7 +213,7 @@ function drop(run: Run, e: PointerEvent): void {
     if (spot && !sameSpot(spot, from)) {
       const done = doNow({ do: "move", from, to: spot });
       if (done?.ok) return;
-      if (spot.on === "board") marks.fullAt = V.t;
+      if (done && spot.on === "board") marks.fullAt = V.t;
     }
     hop(p, spotXY(from), 0.2, 6);
     snd.place();
@@ -242,7 +242,7 @@ async function buyTo(offer: number, spot: Spot | null): Promise<void> {
   const merged = done.notes.some((n) => n.t === "merged");
   if (bought?.t !== "bought" || !bought.to || merged || sameSpot(bought.to, spot)) return;
   const moved = doNow({ do: "move", from: bought.to, to: spot });
-  if (!moved?.ok && spot.on === "board") marks.fullAt = V.t;
+  if (moved && !moved.ok && spot.on === "board") marks.fullAt = V.t;
 }
 
 /** A tap on the thing that was pressed. */
@@ -285,7 +285,7 @@ function tap(run: Run, held: Held | null, e: PointerEvent): void {
     unpick();
     if (from) {
       const done = doNow({ do: "move", from, to: spot });
-      if (!done?.ok && spot.on === "board") marks.fullAt = V.t;
+      if (done && !done.ok && spot.on === "board") marks.fullAt = V.t;
     }
     return;
   }

@@ -103,10 +103,17 @@ export function refuse(why: string): void {
 let table: Play<TableView, RaidCommand, RaidNote> | null = null;
 /** Commands sent with `ask` and not answered yet: their answers draw the table again themselves. */
 let asking = 0;
-/** Those of them after which what is on offer is something else: the stall's figures, a pick's cards, the room. */
+/** Those of them that are not purchases: after one, what is on offer may be something else. */
 let turning = 0;
-/** What may be asked while Leaf answers another, because it leaves everything on offer where it is. */
+/** Purchases and the front page's choices, which leave every offer where it is. */
 const STEADY: ReadonlySet<RaidCommand["do"]> = new Set(["buy", "xp", "trail", "look"]);
+/**
+ * Whether a command is held off: Leaf is still answering one only it can answer. A command names
+ * what it means by its place (an offer, a card, a figure's spot), and that answer may put something
+ * else there (other offers, other cards, two figures made one), so until it comes the page neither
+ * asks nor does anything more. One purchase may follow another: buying moves no offer.
+ */
+const heldOff = (command: RaidCommand): boolean => asking > 0 && (turning > 0 || !STEADY.has(command.do));
 
 /** What the page shows, as text, to tell whether Leaf's answer changed it. */
 const picture = (): string => JSON.stringify([S.run, S.almanac, S.looks, S.trail, S.runs]);
@@ -173,11 +180,12 @@ async function sent(play: Play<TableView, RaidCommand, RaidNote>, command: RaidC
 
 /**
  * Does a command the shared rules work out on the page's copy without Leaf: shows it at once and
- * sends it. A command they turn down is said so here and not sent. Null for one that must `ask`.
+ * sends it. A command they turn down is said so here and not sent. Null for one that must `ask`,
+ * and for one held off while Leaf answers (nothing is done or sent).
  */
 export function doNow(command: RaidCommand): Did | null {
   const play = table;
-  if (!play) return null;
+  if (!play || heldOff(command)) return null;
   const guess = predict(play.state, command);
   if (!guess) return null;
   if ("refused" in guess) {
@@ -196,13 +204,11 @@ export function doNow(command: RaidCommand): Did | null {
  * Sends a command only Leaf can answer, and shows what it did when Leaf answers. `waiting` is the
  * thing asked for: it shows the kit's waiting look while Leaf takes more than a moment.
  *
- * Offers and cards are asked for by their place, so nothing is asked (null) while Leaf is still
- * answering a command that changes what is on offer: a tap on what still shows would land on
- * whatever takes its place.
+ * Null, with nothing asked, for one held off while Leaf answers another.
  */
 export async function ask(command: RaidCommand, waiting: Element | null = null): Promise<Did | null> {
   const play = table;
-  if (!play || turning > 0) return null;
+  if (!play || heldOff(command)) return null;
   const turns = STEADY.has(command.do) ? 0 : 1;
   asking++;
   turning += turns;
