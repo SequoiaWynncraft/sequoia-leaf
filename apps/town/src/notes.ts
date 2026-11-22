@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "works-area",
+    at: "2026-11-22T21:06Z",
+    title: "The Works: Select and blueprints",
+    lines: [
+      "The Works has a Select tool: mark out an area, then move, copy or remove every piece in it at once.",
+      "A yard keeps 3 blueprints. Save a marked area as one, and build it again anywhere for the price of its pieces.",
+    ],
+  },
+  {
     id: "works-orders-list",
     at: "2026-11-22T21:00Z",
     title: "The Works: orders hold still",

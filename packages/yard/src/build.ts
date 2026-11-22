@@ -36,7 +36,7 @@ function ground(w: World, x: number, y: number): string | null {
 export const costOf = (w: World, kind: Kind): number => ((w.spare[kind] ?? 0) > 0 ? 0 : KIND[kind].cost);
 
 /** What comes back for a piece taken away: all it cost, or nothing for one the yard had to hand. */
-const worth = (there: Building): number => (there.free ? 0 : KIND[there.kind].cost);
+export const worth = (there: Building): number => (there.free ? 0 : KIND[there.kind].cost);
 
 /**
  * Whether a thing may be set down on what stands on a tile, in its place: a splitter or a joiner on
@@ -226,20 +226,29 @@ export function paint(w: World, x: number, y: number, tint: number): boolean {
 }
 
 /**
- * Gives tiles just laid, in the order things travel along them, the colour of the line they join:
- * the line that feeds them, or else the line they feed.
+ * Gives tiles just laid, in any order, the colour of the line they join: the line that feeds them,
+ * or else the line they feed.
  */
 export function join(w: World, laid: readonly number[]): void {
   // No colour beside them, none to take: so a yard with no colour in it works nothing out here.
   const W = w.land.w;
   if (!laid.some((i) => [1, -1, W, -W].some((d) => (w.cells[i + d]?.tint ?? 0) > 0))) return;
   const wire = w.wire ?? rewire(w);
-  const takeFrom = (i: number, from: number): void => {
-    const b = w.cells[i];
-    if (b?.tint === 0) b.tint = w.cells[from]?.tint ?? 0;
-  };
-  for (const i of laid) takeFrom(i, before(w, wire, i));
-  for (const i of laid.toReversed()) takeFrom(i, after(w, wire, i));
+  const bare = new Set(laid.filter((i) => w.cells[i]?.tint === 0));
+  for (const step of [before, after]) {
+    // From each, along the tiles just laid to the first with a colour, going over no tile twice.
+    const seen = new Set<number>();
+    for (const i of bare) {
+      const run: number[] = [];
+      let j = i;
+      for (; bare.has(j) && !seen.has(j); j = step(w, wire, j)) run.push(seen.add(j) && j);
+      const tint = w.cells[j]?.tint ?? 0;
+      for (const k of run) {
+        const b = w.cells[k];
+        if (b && tint > 0 && bare.delete(k)) b.tint = tint;
+      }
+    }
+  }
 }
 
 /** Whether what stands on a tile can be turned: anything but the depot and a tunnel. */

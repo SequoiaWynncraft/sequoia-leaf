@@ -75,6 +75,31 @@ costs nothing and taking it away gives nothing back, but it goes back to hand an
 so a first line can be built, and rebuilt, from an empty purse. `costOf(w, kind)` is what the next
 one of a thing would cost.
 
+**Many pieces at once** (`pieces.ts`). A `Piece` is a piece as it is asked for: its kind, its tile,
+which way it faces, a tunnel's span, and what it keeps: a set recipe, a shut crate, a colour (`Kept`
+and `keptOf` are the one list of that). `stand(w, pieces, coins)` stands a set all or none, and is
+what a run of belt, a copy and a blueprint set down all go through: each piece is checked and priced
+as a single one is (`refusal`, `priceAt`), two of a set may not want one tile, and each goes down
+with `build`, so over one of its kind a piece only turns it and a splitter or a joiner takes a belt's
+place. A new belt or tunnel asked for no colour takes the colour of the line it joins, whatever
+order the pieces come in. For a run, `stand` also takes the belt already standing where it starts,
+turned to meet it. `refusals` gives each piece's reason, for a screen to show, and `priceOf` the price, with the
+pieces to hand going down first. A refusal for want of Coins says how many are short.
+
+`move(w, tiles, turns, x, y)` moves the pieces on some tiles as one, turned so many quarter turns to
+the right, with the corner of the box they then fill on a tile (`placed` does the turning, for the
+rules and for a screen alike). The pieces are the same pieces afterwards, holding what they held,
+so it costs nothing; they may land where the set itself stood, but not where anything else stands,
+not even one of their kind. `clear(w, tiles)` takes away every piece on some tiles for the refund
+`remove` gives each. A tunnel named by either mouth is the whole tunnel; `within` gives the tiles of
+the pieces in a rectangle, a tunnel only with both mouths in it, and never the depot.
+
+**Blueprints.** A yard keeps three (`BLUEPRINTS`). `saveBlueprint(w, slot, tiles)` keeps the pieces
+on some tiles in a place, set against the corner of their box: what each is and keeps, not what it
+holds. One holds at most 400 pieces and is at most 32 tiles by 24 (`BLUEPRINT`). It is set down by
+standing its pieces, so at a copy's price and by a copy's rules, and one with a kind of piece the
+yard cannot build is refused by name. `deleteBlueprint` empties a place.
+
 A machine keeps up to four of each part by it. It makes whatever the parts it holds add up to, and
 takes in a part only if some one recipe uses it together with everything already held, so a mixed
 belt is worked through rather than jammed on. A single belt that brings two parts in the wrong
@@ -92,8 +117,8 @@ player gives to tell lines apart. It changes nothing about how the yard runs. `p
 splitter or a joiner by itself, and a belt or a tunnel mouth with its whole line (`lineOf`): every
 belt and tunnel joined end to end with it, as `rewire` hands things on, as far as the next thing
 that is neither. A belt that joins the side of a line running straight on is a line of its own. A
-belt or a run built onto a coloured line takes its colour: the line that feeds it, or else the line
-it feeds.
+belt built onto a coloured line, or pieces stood onto one (`stand`), take its colour: the line that
+feeds them, or else the line they feed.
 
 `status(w, i)` says what the thing on a tile is doing in a sentence, and whether it is in trouble
 that will not mend itself: out of reach of power, nowhere to send what it makes, full of one part
@@ -163,10 +188,12 @@ tick.
 what they took; `remove` says what comes back; whatever the yard earns gathers in `w.till`, and
 `collect(w)` takes its whole Coins out. Leaf's Coins ledger is the only purse (see below).
 
-**Saving.** `save(w)` is JSON with a version (3), without the seed when the yard has none.
-`load(text)` gives back a yard it can vouch for or nothing: a record of the wrong shape or version is
-refused whole, and inside a good one any plot, plan or building that could not have come about by
-playing is left out.
+**Saving.** `save(w)` is JSON with a version (3), without the seed when the yard has none, and
+without `blueprints` when none is kept: the version did not change for them, so a save from before
+there were blueprints reads as a yard with none. `load(text)` gives back a yard it can vouch for or
+nothing: a record of the wrong shape or version is refused whole, and inside a good one any plot,
+plan, building or blueprint that could not have come about by playing is left out. A blueprint is
+read piece by piece with `readPiece`, as a command's pieces are.
 
 ## The Works on Leaf (`game.ts`)
 
@@ -192,7 +219,10 @@ service gives every command an `id`.
 | ---------- | -------------------------------------------------------------------------- |
 | `build`    | `kind, x, y, dir`: a piece; over the same kind it only turns               |
 | `lay`      | `legs: [{kind, x, y, dir, span}]`, `turn?: {x, y, dir}`: all of it or none |
+| `stand`    | `pieces: [{kind, x, y, dir, span, recipe?, open?, tint?}]`: all or none    |
+| `move`     | `tiles, turns, x, y`: the pieces on those tiles, as one, all or none       |
 | `remove`   | `x, y`                                                                     |
+| `clear`    | `tiles`: every piece on them                                               |
 | `turn`     | `x, y, dir`                                                                |
 | `paint`    | `x, y, tint`: the line through a tile, 1 to 6, or 0 for no colour          |
 | `recipe`   | `x, y, item` (or null)                                                     |
@@ -204,15 +234,22 @@ service gives every command an `id`.
 | `handOver` | `order`: a filled standing order, by its id                                |
 | `collect`  | pays the till in, and puts the letter about a time away away               |
 
-**Coins** are the ledger's. A `build`, `lay`, `buyPlot` or `buyPlan` pays the till's whole Coins in
-first and then takes the price; `remove` gives back what the piece cost; `collect` pays the till in;
+`saveBlueprint` (`slot, tiles`) and `deleteBlueprint` (`slot`) keep and empty a blueprint's place.
+`tiles` are tiles of the land by their place in its lists, at most all of them. Leaf reads a command
+of at most 16 KiB, so one `stand` carries at most 160 pieces (`STAND_MOST`): the page sends a larger
+set as several, having first checked the whole of it.
+
+**Coins** are the ledger's. A `build`, `lay`, `stand`, `buyPlot` or `buyPlan` pays the till's whole
+Coins in first and then takes the price, in one change; `remove` and `clear` give back what the
+pieces cost, in one change; a `move` changes none; `collect` pays the till in;
 an order's pay goes into the till. Each change is keyed by the yard's `bank`, which counts them, so
 none is made twice, and every one paid in is `free` of the earnings cap: a yard cannot earn faster
 than time passes. Each command logs a plot or plan bought, a standing order handed over, and the
 story orders finished since the yard last logged one (`told`).
 
 **What the page is shown** (`view`) is `{ yard, clock }`: the yard as stored but without its seed,
-which foretells every order the board will hang, and Leaf's tick now. The page reads it with
+which foretells every order the board will hang, and Leaf's tick now. A visitor is shown the same
+without the blueprints. The page reads it with
 `readView` and `WORKS.decode`, and holds a yard with no seed.
 
 ## What the town can read
@@ -231,6 +268,7 @@ which foretells every order the board will hang, and Leaf's tick now. The page r
 | `content/*.ts`          | the tables: things, recipes, machines, plots, plans, the story, the shift   |
 | `land.ts`, `world.ts`   | the ground put together from the plots; the yard as data                    |
 | `build.ts`              | building, taking away, turning, tipping out; buying plots and plans         |
+| `pieces.ts`             | many pieces at once: standing a set, moving one, clearing one; blueprints   |
 | `power.ts`, `step.ts`   | where power reaches; one tick of the yard                                   |
 | `orders.ts`, `clock.ts` | the depot, the story, the board; catching up on a long time quickly         |
 | `game.ts`               | the Works as Leaf holds it: its clock, its commands, its Coins, the view    |
@@ -262,5 +300,5 @@ if (!("refused" in done)) send({ do: "build", kind: "mill", x, y, dir, tick: cop
 
 What stands on a tile is `yard.cells[at(yard, x, y)]`, the ground under it is in `yard.land`, power
 reaches where `yard.power[i]` is 1, and the orders are `storyOrder(yard)` with `yard.filled`, and
-`yard.board`. `route(yard, from, to)` and `lay` are there for laying a belt from two taps, which
+`yard.board`. `route(yard, from, to)` and `stand` are there for laying a belt from two taps, which
 suits a phone better than dragging.

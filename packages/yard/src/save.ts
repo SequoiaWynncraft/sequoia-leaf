@@ -3,12 +3,13 @@
  * yard it can vouch for or nothing at all. A record whose shape or version is wrong is refused
  * whole; inside a good one, a plot, plan or building that could not have come about by playing is
  * left out and the rest is kept. A yard without its seed (what the page is shown) is written and
- * read without one. A line's colour is one more part kept only when it is not as new, so a save
- * from before there were colours reads as it is, and the version did not change for them.
+ * read without one, and one with no blueprint kept is written without any. A line's colour is one
+ * more part kept only when it is not as new. So a save from before there were colours or blueprints
+ * reads as a yard with none of either, and the version did not change for them.
  */
 import { build, planState, plotState, refusal } from "./build.ts";
-import { isItem, type Item, ITEMS, type Tally } from "./content/items.ts";
-import { BUFFER, FUEL, isKind, type Kind, TICKS } from "./content/machines.ts";
+import { isItem, isRaw, type Item, ITEMS, type Tally } from "./content/items.ts";
+import { BLUEPRINT, BLUEPRINTS, BUFFER, FUEL, isKind, type Kind, SPAN, TICKS } from "./content/machines.ts";
 import { isPlanId, PLANS } from "./content/plans.ts";
 import { isPlotId } from "./content/plots.ts";
 import { MADE_BY, RECIPE } from "./content/recipes.ts";
@@ -17,6 +18,7 @@ import { create } from "./create.ts";
 import { isDir } from "./grid.ts";
 import { LAND, type Land } from "./land.ts";
 import { fillBoard, reask } from "./orders.ts";
+import { blueprintRefusal, keptOf, type Piece, placed } from "./pieces.ts";
 import { repower } from "./power.ts";
 import { type Away, type Building, put, reopen, type Standing, TINTS, WARM, type World } from "./world.ts";
 
@@ -91,7 +93,25 @@ export function save(w: World): string {
     paid: w.paid,
     pace: { ...w.pace, made: tally(w.pace.made, Infinity) },
     cells,
+    ...(w.blueprints.some((b) => b !== null) ? { blueprints: w.blueprints } : {}),
   });
+}
+
+/** A piece read back (off the wire, or out of a kept blueprint), every field checked, on a tile up to (`mx`, `my`); or nothing. */
+export function readPiece(v: unknown, mx = 255, my = 255): Piece | null {
+  if (!isRec(v) || !isKind(v.kind) || v.kind === "depot" || !isDir(v.dir)) return null;
+  const x = whole(v.x, mx);
+  const y = whole(v.y, my);
+  const span = whole(v.span, SPAN);
+  if (x === null || y === null || span === null) return null;
+  return { kind: v.kind, x, y, dir: v.dir, span, ...keptOf(v, v.kind) };
+}
+
+/** A kept blueprint read back: real pieces within a blueprint's limits, or nothing. */
+function blueprint(v: unknown): Piece[] | null {
+  if (!Array.isArray(v)) return null;
+  const pieces = v.map((p) => readPiece(p, BLUEPRINT.w - 1, BLUEPRINT.h - 1)).filter((p) => p !== null);
+  return pieces.length === v.length && blueprintRefusal(pieces) === null ? placed(pieces, 0, 0, 0) : null;
 }
 
 /** What a kept building may hold, by what it is. */
@@ -103,7 +123,7 @@ function holds(kind: Kind, item: Item): number {
 }
 
 /** Puts a kept building's parts back onto a building new-made where it stood. */
-function unpack(w: World, b: Building, i: number, o: Rec): void {
+function unpack(w: World, b: Building, o: Rec): void {
   const carries = b.kind === "belt" || b.kind === "splitter" || b.kind === "joiner" || b.kind === "tunnel";
   const makes = b.kind === "mill" || b.kind === "bench" || b.kind === "workshop";
   if (carries && isItem(o.it)) {
@@ -119,7 +139,7 @@ function unpack(w: World, b: Building, i: number, o: Rec): void {
   b.idle = false;
   const out = isItem(o.o) ? o.o : null;
   if (out !== null) {
-    if (b.kind === "crate" || (b.kind === "gatherer" && w.land.deposit[i] === out)) b.out = out;
+    if (b.kind === "crate" || (b.kind === "gatherer" && isRaw(out))) b.out = out;
     if (makes && RECIPE[out]?.by === b.kind) b.out = out;
   }
   if (makes || b.kind === "gatherer") b.work = amount(o.w, 200) ?? 0;
@@ -223,6 +243,8 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
     paid,
     board: [],
   });
+  const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
+  w.blueprints = Array.from({ length: BLUEPRINTS }, (_, k) => blueprint(prints[k]));
   w.depot = tally(raw.depot, 1e12);
   w.given = tally(raw.given, 1e12);
   const want = STORY[story]?.want ?? {};
@@ -237,7 +259,7 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
   reopen(w);
 
   // Buildings: everything but the far mouths of tunnels, which come with their near mouths.
-  const kept: [Building, number, Rec][] = [];
+  const kept: [Building, Rec][] = [];
   const far: Rec[] = [];
   for (const o of raw.cells) {
     if (!isRec(o)) continue;
@@ -258,14 +280,14 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
     if (o.g !== 1) w.spare[o.k] = spare;
     if (!did.ok) continue;
     const b = w.cells[i];
-    if (b) kept.push([b, i, o]);
+    if (b) kept.push([b, o]);
   }
   for (const o of far) {
     const i = whole(o.i, land.w * land.h - 1);
     const b = i === null ? null : w.cells[i];
-    if (i !== null && b?.kind === "tunnel" && b.span < 0 && b.span === o.s && b.dir === o.d) kept.push([b, i, o]);
+    if (i !== null && b?.kind === "tunnel" && b.span < 0 && b.span === o.s && b.dir === o.d) kept.push([b, o]);
   }
-  for (const [b, i, o] of kept) unpack(w, b, i, o);
+  for (const [b, o] of kept) unpack(w, b, o);
 
   for (const o of raw.board) {
     const order = standing(o);

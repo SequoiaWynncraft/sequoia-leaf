@@ -82,12 +82,28 @@ pointer, with corners in gold where it can go and in coral, with the reason, whe
 click to set it down. A drag with the belt lays a run that follows the pointer and is shown before
 the button is let go; a run that ends beside the depot turns to face it. `R` turns, `E` is the
 spade, a right-click takes away, `Q` takes up the tool from the thing pointed at, `Z` undoes, `Esc`
-puts away. `C` is the brush: with it in hand the line over the dock shows six colours and none, and
+puts away. `C` is the brush (with an area marked, `C` copies it): with it in hand the line over the dock shows six colours and none, and
 a click on a belt (or a drag across the yard) gives its whole line the one chosen. With nothing in hand a drag moves the view, the wheel zooms, and a click asks about a
 thing. With a finger, dragging always moves the view and two fingers zoom, so nothing is built by
 accident: a tap aims, and a second tap or the Build button builds. A belt is laid from two taps,
 start and end, with the router's run shown before it is laid; tapping a machine to start from
 begins the run where that machine hands things on.
+
+**Many pieces at once.** Select (the dock, or `F`) marks out an area: a drag with a mouse, two taps
+on opposite corners with a finger. Every piece in it is lit gold on its tile with a gold line where
+the marked pieces end, and the area itself is a line of dashes; a tunnel is in only with both its
+mouths, and the depot never. The line over the dock then says how many pieces and what they cost,
+with Move (`M`), Copy (`C`), Remove (`Del`) and Save. Move and Copy put the pieces in hand as one
+ghost that follows the pointer, drawn as they would stand, belts joined to each other and to the
+lines already there: gold over each piece that can go, coral over each that cannot, and the reason
+for the first of those over it. `R` turns the whole of it. A click sets it down (a finger aims
+with a tap, then Build), all of it or none, and it lands in a wave of dust out from the pointer.
+Moved pieces stay marked where they now stand; a copy stays in hand for another. A moved, copied
+or kept piece has the colour it had, and the ghost shows it. With nothing
+marked the line shows the yard's three blueprints, each a small picture of its layout with its size
+and its price now; pressing one puts it in hand as a copy is. Save asks which place, and a kept one
+asks to be pressed again before it is replaced; a blueprint in hand has a bin, which asks too.
+`Z` undoes a move, a copy or a removal as one step.
 
 **Asking.** Everything in the yard is a card in the kit's one card system (`card.ts`, registered
 in `ui/card.ts`): resting the mouse on a thing shows its card, clicking pins it, and a tap (or a
@@ -130,7 +146,8 @@ the till gained), a letter on paper says so, and putting it away pays the till i
 
 **Teaching.** `teach.ts` looks at the yard and says what the next small thing to try is, and where:
 the first gatherer, the mill, the belt, the first planks arriving, a pylon towards the ore, a
-bench. After that it speaks up once each for the board, a shortage of power, and a jammed machine.
+bench. After that it speaks up once each for the board, for Select when the yard first holds more
+than 60 pieces, for a shortage of power, and for a jammed machine.
 It has no screen in it and is tested.
 
 **In the town.** Inside the town's frame the page says `ready` once it has drawn, `leave` from the
@@ -148,7 +165,7 @@ clockwork crab is made. Opened alone it plays just the same.
 | `art/*.ts`                        | the art: ground, nature, belts, machines, things                            |
 | `camera.ts`, `input.ts`           | where the member is looking; mouse, keys and fingers                        |
 | `zoom.ts`                         | how far the view zooms, for the camera and for the zoom kept between visits |
-| `tools.ts`                        | setting down, runs of belt, turning, taking away, undo, buying land, plans  |
+| `tools.ts`                        | setting down, runs of belt, many pieces at once, undo, buying land, plans   |
 | `teach.ts`                        | the next nudge, worked out from the yard                                    |
 | `events.ts`, `actors.ts`, `fx.ts` | the yard's moments; who walks about; sparks, dust, smoke and rising words   |
 | `sound.ts`                        | the yard's own sounds, and its working murmur                               |
@@ -163,10 +180,11 @@ clockwork crab is made. Opened alone it plays just the same.
 stages a moment in the yard on the play server on this machine (`apps/api/test/play.ts`, through
 `POST /test/play/works`) and takes it: `{ yard: "new" }` or one of the kept yards `"small"`,
 `"short"`, `"mid"`, `"large"`; `{ away: minutes }`, a time nobody watched; `{ fill: n }`, the nth
-standing order filled. `hold(true)` stops the screen running the yard on, and `skip(seconds)` moves
-only the screen. `pick(tool)`, `aim(x, y)`, `tap(x, y)`, `drag(x0, y0, x1, y1)` with `drop()`,
+standing order filled. `hold(true)` stops the screen running the yard on, `skip(seconds)` moves
+only the screen, and `time(frames)` draws so many frames and says how many milliseconds each took. `pick(tool)`, `aim(x, y)`, `tap(x, y)`, `drag(x0, y0, x1, y1)` with `drop()`,
 `confirm()`, `build`, `remove`, `plot(id)` and `plan(id)` act as a member would, sending to Leaf;
-`finger(true)` makes the screen behave as for a touch. `open(panel)`, `card(x, y)` and `close()`
+`finger(true)` makes the screen behave as for a touch, and `tap` is then a finger's tap, with Select
+in hand too. `open(panel)`, `card(x, y)` and `close()`
 show things; `look(x, y)` and `zoom(by)` move the view; `taught(ids)` says which lessons are already
 taken. `page(x, y)` is where a tile is on the page, `rider(x, y)` what is riding a belt there,
 `where(kind)` where a kind of thing stands, and `state()` a summary.
