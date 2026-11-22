@@ -345,6 +345,9 @@ function pulledOf(v: unknown): Pulled | null {
     : null;
 }
 
+/** Prizes that were won once and are no more: the Treasury's wares. A stored state may still name them. */
+const RETIRED: ReadonlySet<string> = new Set(["ware:water", "ware:plate", "ware:jar", "ware:crown"]);
+
 /**
  * A player's pulls from the text Leaf stored, or null for anything this version could not have made.
  * What was a prize and no longer is (the Treasury's wares) is let go: the pull paid its Seeds.
@@ -367,13 +370,17 @@ export function decodePulls(text: string): Pulls | null {
   const owned: Record<string, number> = {};
   for (const [prize, n] of Object.entries(have)) {
     if (!whole(n, 1)) return null;
-    if (RARITY_OF.has(prize)) owned[prize] = n;
+    if (RETIRED.has(prize)) continue;
+    if (!RARITY_OF.has(prize)) return null;
+    owned[prize] = n;
   }
   const kept: Pulled[] = [];
   for (const v of history) {
     const pulled = pulledOf(v);
     if (!pulled) return null;
-    if (RARITY_OF.has(pulled.prize)) kept.push(pulled);
+    if (RETIRED.has(pulled.prize)) continue;
+    if (!RARITY_OF.has(pulled.prize)) return null;
+    kept.push(pulled);
   }
   return { have: owned, counters: { grove, banner }, seeds, free: { waiting, next }, history: kept, pulls, rng };
 }

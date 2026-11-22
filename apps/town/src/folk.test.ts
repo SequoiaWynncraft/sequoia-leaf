@@ -40,7 +40,8 @@ const MEMBERS_ONLY: Readonly<Record<string, string>> = {
   "apps/town/src/actors.ts": "the type of a member's figure",
   "apps/town/src/aboutui.ts": "the faces of those listed in Who is about, members and guests alone",
   "apps/town/src/campart.ts": "the size of a member's figure, for a banner's statue",
-  "apps/town/src/statues.ts": "a banner's statue, carved from its member's own skin",
+  "apps/town/src/statues.ts":
+    "a banner's statue, carved from its member's own skin, or their made-up look until it loads",
   "apps/town/src/campui.ts": "the faces of the camps' owners at the signpost, members and guests alone",
   "apps/town/src/hud.ts": "the face of the owner of a camp visited, a member or a guest",
   "apps/town/src/live.ts": "where each player's own skin is served",
@@ -87,6 +88,7 @@ describe("the town's own", () => {
           "apps/town/src/players.ts",
           "apps/town/src/main.ts",
           "apps/town/src/aboutui.ts",
+          "apps/town/src/statues.ts",
         ]).toContain(path);
     // And one of the town's own is only ever made as itself.
     for (const [path, text] of files)
