@@ -240,4 +240,13 @@ describe("a description still on its way", () => {
     await left.come();
     expect(left.drawn).toEqual([]);
   });
+  test("a click still waiting is not lost to the pointer resting on something else", async () => {
+    const { deck, drawn, come } = waiting();
+    deck.register("item", () => ({ name: "Gear" }));
+    deck.press("person:w", spot, "mouse", A);
+    deck.leave(A);
+    expect(deck.rest("item:gear", spot, "mouse", B)).toBe(false);
+    await come();
+    expect(drawn).toEqual(["pinned Wrenly"]);
+  });
 });

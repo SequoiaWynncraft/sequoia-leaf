@@ -480,6 +480,9 @@ button.k-slot:hover {
 .k-tip.k-info.pinned {
   z-index: 89;
   pointer-events: auto;
+  /* A long card on a short window scrolls inside itself; none is taller than the window. */
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
 }
 .k-info:focus {
   outline: none;

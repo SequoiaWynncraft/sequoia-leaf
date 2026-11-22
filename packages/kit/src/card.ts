@@ -254,9 +254,9 @@ export class Deck {
     this.#tell();
   }
 
-  /** The pointer has rested on a thing: its card shows beside it, unless one is pinned or cards are held. */
+  /** The pointer has rested on a thing: its card shows beside it, unless one is pinned (or was clicked and is still coming) or cards are held. */
   rest(ref: Ref, at: Spot | object, via: Via, from: object, side = false): boolean {
-    if (this.held || this.open?.pinned) return false;
+    if (this.held || this.open?.pinned || this.#awaited?.pinned) return false;
     const d = this.describe(ref);
     if (!d) {
       if (this.open) this.#set(null, null);
