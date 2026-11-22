@@ -319,19 +319,80 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
     expect(balance().coins).toBe(346);
   });
 
-  test("sends what is still waiting as the page goes away, so it reaches Leaf though the page does not wait", async () => {
+  test("sends everything Leaf has not answered as the page goes away, the change on its way too, each with its own id", async () => {
     leaf.hold();
     earn(5, "works_depot");
     earn(10, "works_order");
     await Promise.resolve();
     await Promise.resolve();
     flushCoins();
+    const [first] = leaf.leaf.calls;
     const away = leaf.leaf.calls.filter((c) => c.keepalive).map((c) => c.body);
-    expect(away).toEqual([{ id: expect.any(String), amount: 10, reason: "works_order" }]);
+    expect(away).toEqual([
+      { id: first?.body?.id, amount: 5, reason: "works_depot" },
+      { id: expect.any(String), amount: 10, reason: "works_order" },
+    ]);
+    expect(away[1]?.id).not.toBe(first?.body?.id);
     leaf.let();
     await idle();
     // The same change, sent twice, is done once.
     expect(leaf.leaf.coins).toBe(315);
+  });
+
+  test("closing with a request on its way sends it again to keep, with the same id, and it is done once", async () => {
+    leaf.hold();
+    earn(5, "works_depot");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(leaf.leaf.calls).toHaveLength(1);
+    flushCoins();
+    const [own, kept] = leaf.leaf.calls;
+    expect(own?.body).toEqual({ id: expect.any(String), amount: 5, reason: "works_depot" });
+    expect([own?.keepalive, kept?.keepalive]).toEqual([false, true]);
+    expect(kept?.body).toEqual(own?.body ?? null);
+    // The page's own request is lost as it closes; the one sent to keep reaches Leaf.
+    leaf.leaf.offline = 1;
+    leaf.let();
+    await idle();
+    expect(leaf.leaf.coins).toBe(305);
+    expect(new Set(leaf.leaf.calls.filter((c) => c.path === "/v1/game/coins").map((c) => c.body?.id)).size).toBe(1);
+  });
+
+  test("closing while a change waits to be sent again sends it, and it is done once", async () => {
+    leaf.leaf.offline = 1;
+    earn(7, "works_order");
+    // Found no answer: it waits a moment before being sent again.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(leaf.leaf.calls).toHaveLength(1);
+    flushCoins();
+    const kept = leaf.leaf.calls.filter((c) => c.keepalive);
+    expect(kept.map((c) => c.body)).toEqual([leaf.leaf.calls[0]?.body ?? null]);
+    expect(leaf.leaf.coins).toBe(307);
+    await idle();
+    expect(leaf.leaf.coins).toBe(307);
+    expect(balance().coins).toBe(307);
+  });
+
+  test("after a flush, more earnings for the same reason are a new change: a sent one never grows", async () => {
+    leaf.hold();
+    earn(5, "works_depot");
+    earn(10, "works_order");
+    await Promise.resolve();
+    flushCoins();
+    earn(5, "works_order");
+    earn(2, "works_order");
+    leaf.let();
+    await idle();
+    // Each id always carried the same amount, and every Coin reached Leaf once.
+    const amounts = new Map<string, Set<number>>();
+    for (const c of leaf.leaf.calls) {
+      if (c.path !== "/v1/game/coins" || c.body?.id === undefined) continue;
+      const seen = amounts.get(c.body.id) ?? new Set<number>();
+      seen.add(c.body.amount ?? 0);
+      amounts.set(c.body.id, seen);
+    }
+    expect([...amounts.values()].map((seen) => Array.from(seen))).toEqual([[5], [10], [7]]);
+    expect([leaf.leaf.coins, balance().coins]).toEqual([322, 322]);
   });
 
   test("every change says who the page believes the member is", async () => {
