@@ -54,6 +54,7 @@ import {
   SaveBody,
   Saved,
   SaveList,
+  Standings,
 } from "./schemas.ts";
 
 // Leaf's HTTP API, declared once: the server implements it, and its OpenAPI
@@ -216,6 +217,11 @@ export class GameApi extends HttpApiGroup.make("game")
       success: Played,
       error: [Invalid, Missing, NotYou, StateUnreadable, SlowDown],
     }).middleware(PlayBodyErrors),
+    HttpApiEndpoint.get("standings", "/play/:game/standings", {
+      params: GameParams,
+      success: Standings,
+      error: Missing,
+    }),
     // For the games not on the play service yet, whose pages still work out what they earn and spend.
     HttpApiEndpoint.post("coins", "/coins", {
       payload: CoinsBody,

@@ -22,6 +22,7 @@ const CONTRACT = join(import.meta.dir, "..", "..", "..", "contracts", "leaf-game
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
+const visitor = playerId("10000000-0000-0000-0000-000000000003");
 /** Wednesday 25 November 2026, 12:30 UTC. */
 const T0 = Date.UTC(2026, 10, 25, 12, 30);
 const ORIGIN = "https://leaf.seqwawa.com";
@@ -80,7 +81,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   const { backend, fetcher } = fakeBackend({
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
     "bob-token": () => Response.json(sessionOf(bob, "Bob", "RECRUIT")),
-    "visitor-token": () => Response.json(sessionOf(playerId("10000000-0000-0000-0000-000000000003"), "Visitor", null)),
+    "visitor-token": () => Response.json(sessionOf(visitor, "Visitor", null)),
     // One of the guild's staff, a website admin.
     "staff-token": () =>
       Response.json({
@@ -90,6 +91,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   });
   const mojang = fakeMojang();
   mojang.profiles.set(bob, { name: "Bob", skin: undefined });
+  mojang.profiles.set(visitor, { name: "Visitor", skin: undefined });
   // Leaf's dice fall the same way every time, so the raid's draws in the file are always the same.
   const leaf = testLeaf(clock, fetcher, {}, { mojang: mojang.service, dice: steadyDice(1) });
   const app = leaf.app();
@@ -200,6 +202,21 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     commands: [{ id: "c-4", do: "win" }],
   });
   await call("GET /v1/game/play/{game}, not a game", "GET", "/v1/game/play/chess");
+  // The Works' board: Bob's yard, Alice's and the guest's, as the play service writes where each stands.
+  for (const [player, score, story, guest] of [
+    [bob, 5120, 7, 0],
+    [alice, 1840, 3, 0],
+    [visitor, 960, 2, 1],
+  ] as const) {
+    // oxlint-disable-next-line no-await-in-loop -- one after another
+    await leaf.query(
+      (sql) => sql`
+        INSERT INTO standings (player_id, game, score, also, guest, updated_at)
+        VALUES (${player}, 'works', ${score}, ${JSON.stringify({ story })}, ${guest}, ${clock.now})
+      `,
+    );
+  }
+  await call("GET /v1/game/play/{game}/standings", "GET", "/v1/game/play/works/standings");
   // Coins the town and the Works work out on their pages, kept in the ledger: the daily chest, a
   // thing for the camp, the same call again, a spend too dear, and a reason that is not one.
   const chest = { player: alice, id: "chest-2026-11-25", amount: 3, reason: "daily_chest" };

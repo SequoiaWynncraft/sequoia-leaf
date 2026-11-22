@@ -79,6 +79,8 @@ const ICONS = {
     ".wwwwwwww.",
     ".CCCCCCCC.",
   ],
+  // Top yards: a cup.
+  board: ["oyyyyyyo", "y.yYYy.y", "y.yYyy.y", ".oyyyyo.", "..oyyo..", "...yy...", "...yy...", "..oyyo.."],
   // Plans: a rolled drawing, blue, with a white line on it.
   plans: [
     ".uuuuuuuu.",

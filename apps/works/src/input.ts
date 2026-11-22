@@ -275,6 +275,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
         S.hover ?? (S.picked >= 0 ? { x: S.picked % S.world.land.w, y: Math.floor(S.picked / S.world.land.w) } : null);
       if (on) pickFrom(on.x, on.y);
     } else if (k === "o") togglePanel("orders");
+    else if (k === "t") togglePanel("board");
     else if (k === "p") togglePanel("plans");
     else if (k === "i") togglePanel("depot");
     else if (k === "l") togglePanel("shift");

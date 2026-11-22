@@ -9,16 +9,15 @@
 
 import { el, icon as glyph } from "@sequoia-leaf/kit/dom.ts";
 import { member, where } from "@sequoia-leaf/kit/live.ts";
-import { bake, type Body, paintSkin } from "@sequoia-leaf/kit/skin.ts";
+import { type Body, faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
 import { type About, type AboutRow, ALONE, whoIsAbout } from "./about.ts";
 import { type Actor, G } from "./game.ts";
 import { guild } from "./guild.ts";
 import { $, closePanel, openPanel, pic, when } from "./hud.ts";
-import { skinOf } from "./live.ts";
 import { knownRanks, roomNow } from "./players.ts";
-import { drawnAs, lookFor, visitorOf } from "./visitors.ts";
+import { drawnAs, visitorOf } from "./visitors.ts";
 
 /** The panel's name, as `G.panel` has it while it is open. */
 export const ABOUT = "about";
@@ -42,10 +41,6 @@ export function aboutNow(): About {
 
 // ---------- faces ----------
 
-/** Faces of those not drawn in town, by id: a look of their own at first, their own skin once it has come. */
-const faces = new Map<string, { face: HTMLCanvasElement }>();
-/** Goes up whenever a face arrives, so that the panel draws it. */
-let facesCame = 0;
 const bodies = new WeakMap<Body, number>();
 let bodiesSeen = 0;
 const bodyNo = (b: Body | null | undefined): number => {
@@ -59,34 +54,15 @@ const bodyNo = (b: Body | null | undefined): number => {
 const figureOf = (r: AboutRow): Actor | null => (r.you ? G.player : drawnAs(r.id));
 
 /** Somebody's face: as they are drawn in town, or else from their skin, fetched once. */
-function faceOf(r: AboutRow): HTMLCanvasElement {
-  const body = figureOf(r)?.body;
-  if (body) return body.face;
-  const had = faces.get(r.id);
-  if (had) return had.face;
-  const got = { face: bake(paintSkin(lookFor(r.name))).face };
-  faces.set(r.id, got);
-  if (where().mode === "live" && !r.you) {
-    const img = new Image();
-    img.addEventListener("load", () => {
-      try {
-        got.face = bake(img).face;
-        facesCame++;
-      } catch {
-        // A picture that cannot be read: the look of their own stays.
-      }
-    });
-    img.src = skinOf(r.id);
-  }
-  return got.face;
-}
+const faceOf = (r: AboutRow): HTMLCanvasElement =>
+  figureOf(r)?.body?.face ?? faceFor(r.id, r.name, where().mode === "live" && !r.you);
 
 // ---------- the panel ----------
 
 /** Says what the panel shows, so that it is drawn again only when that changes. */
 const keyOf = (a: About): string =>
   [
-    facesCame,
+    facesCame(),
     ...a.parts.flatMap((p) => [
       p.title,
       ...p.rows.map((r) => `${r.id}/${r.line}/${bodyNo(figureOf(r)?.body)}/${visitorOf(person(r)) ? 1 : 0}`),

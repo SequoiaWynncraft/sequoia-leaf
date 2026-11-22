@@ -41,7 +41,7 @@
  * The games Leaf plays (the play service) are served as in production. For the screenshot tours,
  * `POST /test/play/raid` with `{ "stage": [...] }` stages a moment at Tester's raid table that play
  * does not reach by itself (`stage-raid.ts`), and `POST /test/play/works` one in Tester's yard (a
- * kept yard, a time away, a filled order: `stage-works.ts`); nothing like them is served by the
+ * kept yard, a time away, a filled order, the others' yards on the board: `stage-works.ts`); nothing like them is served by the
  * guild's own Leaf.
  */
 import { existsSync } from "node:fs";
@@ -580,7 +580,13 @@ const served = await leaf.serve(
     signingRoute("/sign-in"),
     signingRoute("/sign-out"),
     stagingRoute("raid", (ops) => stageRaid(tester.id, ops)),
-    stagingRoute("works", (ops) => stageWorks(tester.id, ops)),
+    stagingRoute("works", (ops) =>
+      stageWorks(tester.id, ops, [
+        ...mates.map((m) => ({ id: m.id, guest: false })),
+        { id: pebblefoot.id, guest: true },
+        ...crowd.map((m) => ({ id: m.id, guest: false })),
+      ]),
+    ),
   ),
 );
 

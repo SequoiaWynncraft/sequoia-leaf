@@ -63,6 +63,12 @@ export interface Done<S, N> {
   readonly log?: readonly Logged[];
 }
 
+/** A whole number players are listed by, highest first, and a few more shown beside it. */
+export interface Standing {
+  readonly score: number;
+  readonly also: Readonly<Record<string, number>>;
+}
+
 /** A command that may not be done, with a code, as API errors have. Nothing changed. */
 export interface Refused {
   readonly refused: string;
@@ -83,6 +89,8 @@ export interface Game<State, Command, View, Note> {
   encode(state: State): string;
   /** Reads a command off the wire, or null. */
   command(v: unknown): Command | null;
+  /** Where a state stands among everyone's, for a game with a board (`GET /v1/game/play/{game}/standings`). */
+  standing?(state: State): Standing;
 }
 
 /** Whether a command's answer is a refusal. */

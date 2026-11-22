@@ -16,7 +16,7 @@ import { coins, collect, keepScreen } from "../yard.ts";
 import { orderRef } from "./card.ts";
 import { storyLabel } from "./notes.ts";
 import { type PanelId, togglePanel } from "./panels.ts";
-import { $, wantRows, when, yardIcon } from "./parts.ts";
+import { $, wantRows, when, type YardIcon, yardIcon } from "./parts.ts";
 
 const books = new Map<PanelId, HTMLElement>();
 
@@ -93,12 +93,18 @@ function tracker(art: Art): () => void {
 
 function bookButtons(): () => void {
   const host = $("books");
-  const make = (id: PanelId, title: string, about: () => string, key: string, green = false): HTMLElement => {
+  const make = (
+    id: PanelId & YardIcon,
+    title: string,
+    about: () => string,
+    key: string,
+    green = false,
+  ): HTMLElement => {
     const b = el(
       "button",
       green ? "k-btn leaf icon pip" : "k-btn wood icon pip",
       { type: "button", "aria-label": title },
-      yardIcon(id === "depot" ? "depot" : id === "shift" ? "shift" : id === "plans" ? "plans" : "orders"),
+      yardIcon(id),
     );
     b.addEventListener("click", () => {
       togglePanel(id);
@@ -109,6 +115,7 @@ function bookButtons(): () => void {
     return b;
   };
   const ordersBtn = make("orders", "Orders", () => "What the guild is asking for, and what it pays.", "O");
+  make("board", "Top yards", () => "The twenty yards that have earned the most Coins, all time.", "T");
   const plansBtn = make("plans", "Plans", () => "Improvements to buy with Coins.", "P");
   make("depot", "The depot", () => "What has come in, and what the yard makes an hour.", "I");
   make(

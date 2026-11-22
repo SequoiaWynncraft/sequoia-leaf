@@ -34,11 +34,12 @@ import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
 import { buyIdea } from "../tools.ts";
 import { coins, doNow } from "../yard.ts";
+import { board } from "./board.ts";
 import { itemRef, machineRef, planRef, plotRef } from "./card.ts";
 import { feed, storyLabel } from "./notes.ts";
 import { $, button, wantWords, when, yardIcon } from "./parts.ts";
 
-export type PanelId = "orders" | "plans" | "depot" | "power" | "shift";
+export type PanelId = "orders" | "board" | "plans" | "depot" | "power" | "shift";
 
 /** What the panels ask of the rest of the screen. */
 export const panelHooks: {
@@ -49,6 +50,7 @@ export const panelHooks: {
 
 const TITLES: Record<PanelId, string> = {
   orders: "Orders",
+  board: "Top yards",
   plans: "Plans",
   depot: "The depot",
   power: "Power",
@@ -460,6 +462,7 @@ function shift(_art: Art, body: HTMLElement): () => void {
 
 const BUILD: Record<PanelId, (art: Art, body: HTMLElement) => () => void> = {
   orders,
+  board,
   plans,
   depot,
   power: powerBook,
@@ -467,6 +470,7 @@ const BUILD: Record<PanelId, (art: Art, body: HTMLElement) => () => void> = {
 };
 const HEAD: Record<PanelId, () => Node> = {
   orders: () => yardIcon("orders"),
+  board: () => yardIcon("board"),
   plans: () => yardIcon("plans"),
   depot: () => yardIcon("depot"),
   power: () => yardIcon("bolt"),

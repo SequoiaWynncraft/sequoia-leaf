@@ -335,22 +335,23 @@ react to `quest_completed`.
 
 ### The game's routes
 
-| Route                              | What it returns                                                       |
-| ---------------------------------- | --------------------------------------------------------------------- |
-| `GET /v1/game/hello`               | Where to sign in, and whether Leaf may be spent. Needs no session.    |
-| `GET /v1/game/me`                  | The player, their rank, Leaf, XP, level, newest event's id and Coins. |
-| `GET /v1/game/saves`               | The player's saves: each slot's version and when it was written.      |
-| `GET /v1/game/saves/{slot}`        | One save, with what it holds.                                         |
-| `PUT /v1/game/saves/{slot}`        | Writes one.                                                           |
-| `GET /v1/game/skins/{uuid}`        | A player's skin sheet, as a PNG.                                      |
-| `GET /v1/game/guild/events`        | What happened across the guild, oldest first.                         |
-| `GET /v1/game/guild/events/stream` | The same as it happens, as server-sent events.                        |
-| `PUT /v1/game/presence`            | Says where in the game the player is; lists who is there and resting. |
-| `GET /v1/game/presence`            | The same lists, saying nothing: for a page in a live room.            |
-| `GET /v1/game/admin/activity`      | For the staff alone: who played, when, where and for how long.        |
-| `GET /v1/game/play/{game}`         | The player's state in a game Leaf plays, as their page is shown it.   |
-| `POST /v1/game/play/{game}`        | Does a batch of commands in that game, and answers what each did.     |
-| `POST /v1/game/coins`              | Pays or takes Coins the town's page worked out.                       |
+| Route                                | What it returns                                                       |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| `GET /v1/game/hello`                 | Where to sign in, and whether Leaf may be spent. Needs no session.    |
+| `GET /v1/game/me`                    | The player, their rank, Leaf, XP, level, newest event's id and Coins. |
+| `GET /v1/game/saves`                 | The player's saves: each slot's version and when it was written.      |
+| `GET /v1/game/saves/{slot}`          | One save, with what it holds.                                         |
+| `PUT /v1/game/saves/{slot}`          | Writes one.                                                           |
+| `GET /v1/game/skins/{uuid}`          | A player's skin sheet, as a PNG.                                      |
+| `GET /v1/game/guild/events`          | What happened across the guild, oldest first.                         |
+| `GET /v1/game/guild/events/stream`   | The same as it happens, as server-sent events.                        |
+| `PUT /v1/game/presence`              | Says where in the game the player is; lists who is there and resting. |
+| `GET /v1/game/presence`              | The same lists, saying nothing: for a page in a live room.            |
+| `GET /v1/game/admin/activity`        | For the staff alone: who played, when, where and for how long.        |
+| `GET /v1/game/play/{game}`           | The player's state in a game Leaf plays, as their page is shown it.   |
+| `POST /v1/game/play/{game}`          | Does a batch of commands in that game, and answers what each did.     |
+| `GET /v1/game/play/{game}/standings` | The game's board: the twenty highest, and the player's own place.     |
+| `POST /v1/game/coins`                | Pays or takes Coins the town's page worked out.                       |
 
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
@@ -531,6 +532,16 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), and `works`, the
   version, say) answers both routes 409 `state_unreadable`: nothing is done,
   the state is kept as it is, and Leaf logs the player and the game. The page
   shows the kit's card for it and sends nothing more.
+- A game may have a board (`Game.standing`: a whole number players are listed
+  by, and a few more shown beside it; the Works' is the Coins a yard has ever
+  earned, and its story orders done). A batch that changed the state writes
+  where it stands in the same transaction. `GET /v1/game/play/{game}/standings`
+  answers `{ "top": [{ "place", "id", "name", "guest", "score", "also", "you" }], "you" }`:
+  the twenty highest scores above 0, a tie going to whoever reached it first;
+  `place` is how many score higher, and one; names as the guild's news has
+  them ("Someone" for one Leaf has none for); the outer `you` is the caller's
+  own `{ "place", "score", "also" }`, or null before they score. Empty for a
+  game with no board.
 
 Tables (migration 17): `play_state` (a player's state in a game, with its
 `rev`; 0 is a state nothing has been done to), `play_commands` (each command's
@@ -540,7 +551,9 @@ player's newest 256 to a game are kept, the older removed once a batch),
 player's commands done and refused, by the UTC day). What commands log goes to
 `activity`, which migration 16 made for the staff's report. Migration 18 gave
 `coin_entries` `earned`, 1 for an entry weighed against what a player may earn
-and 0 for one that is not.
+and 0 for one that is not. Migration 19 made `standings`, where each player's
+state in a game with a board stands; its `updated_at` is when the score was
+last reached.
 
 **Coins** are a ledger like Leaf: a balance per player, changed only by an
 entry, each keyed by the fact it records (`<game>:<player>:<key>` for a

@@ -5,7 +5,7 @@
  * guild's own Leaf has no such route.
  */
 import type { PlayerId } from "@sequoia-leaf/core";
-import { deliver, ITEMS, storyOrder, WORKS, type World } from "@sequoia-leaf/yard";
+import { deliver, ITEMS, STORY, storyOrder, WORKS, type World } from "@sequoia-leaf/yard";
 import large from "@sequoia-leaf/yard/yards/large.json";
 import mid from "@sequoia-leaf/yard/yards/mid.json";
 import short from "@sequoia-leaf/yard/yards/short.json";
@@ -51,8 +51,18 @@ function step(w: World | null, op: Record<string, unknown>, now: number): World 
   return w;
 }
 
-/** Stages each step in order in Tester's yard, as one change. */
-export const stageWorks = (playerId: PlayerId, ops: readonly unknown[]) =>
+/** Somebody else the play server knows, whose yard can be put on the board. */
+export interface Other {
+  readonly id: PlayerId;
+  readonly guest: boolean;
+}
+
+/**
+ * Stages each step in order in Tester's yard, as one change, and writes where it stands as a batch
+ * would. `{ others: [coins, ...] }` puts the yards of `others` on the Works' board instead of any
+ * there before: the nth has earned that many Coins, a little before the one after it.
+ */
+export const stageWorks = (playerId: PlayerId, ops: readonly unknown[], others: readonly Other[]) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const stored = yield* SqlSchema.findOneOption({
@@ -62,12 +72,35 @@ export const stageWorks = (playerId: PlayerId, ops: readonly unknown[]) =>
     })(playerId);
     const now = Date.now();
     let yard = Option.isSome(stored) ? WORKS.decode(stored.value.state) : null;
-    for (const op of ops) if (isRecord(op)) yard = step(yard, op, now);
+    for (const op of ops) {
+      if (!isRecord(op)) continue;
+      if (!Array.isArray(op.others)) {
+        yard = step(yard, op, now);
+        continue;
+      }
+      yield* sql`DELETE FROM standings WHERE game = 'works' AND player_id != ${playerId}`;
+      for (const [n, other] of others.entries()) {
+        const coins = whole(op.others[n], 1e9);
+        if (coins === null) continue;
+        const story = Math.min(STORY.length, Math.floor(coins / 1500));
+        yield* sql`
+          INSERT INTO standings (player_id, game, score, also, guest, updated_at)
+          VALUES (${other.id}, 'works', ${coins}, ${JSON.stringify({ story })}, ${other.guest ? 1 : 0}, ${now - others.length + n})
+        `;
+      }
+    }
     if (!yard) return;
     const text = WORKS.encode(yard);
     if (Option.isSome(stored)) {
       yield* sql`UPDATE play_state SET rev = rev + 1, state = ${text}, updated_at = ${now} WHERE player_id = ${playerId} AND game = 'works'`;
     } else {
       yield* sql`INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${playerId}, 'works', 1, ${text}, ${now})`;
+    }
+    const standing = WORKS.standing?.(yard);
+    if (standing) {
+      yield* sql`
+        INSERT OR REPLACE INTO standings (player_id, game, score, also, guest, updated_at)
+        VALUES (${playerId}, 'works', ${standing.score}, ${JSON.stringify(standing.also)}, 0, ${now})
+      `;
     }
   });
