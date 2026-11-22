@@ -216,8 +216,7 @@ Leaf. `live.test.ts` holds the live guild to handing the town nobody the server 
 - **The guild's news.** The town listens to the guild's events. Members paid for the same raid at
   the same moment are one party: they walk in through the gate (any of them in town already come
   over), the first hangs a lantern in the tree, and the feed names them and the raid. A war raises
-  the banner for that territory, and the feed says only what its events do: "A war party fought at
-  Detlas: You and Alice.", never who won. A milestone is a line in the feed, and so is a level: the
+  the banner for that territory, and the feed says only what its events do: "Alice and Bob fought at Detlas.", never who won. A milestone is a line in the feed, and so is a level: the
   member's own always, anybody else's only at a multiple of five. The member is "You", and no line
   says how much Leaf anybody was paid (`news.ts` has every line). The feed takes these lines one at
   a time, twenty seconds apart, oldest first, and drops one that has waited five minutes; what
