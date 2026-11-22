@@ -695,7 +695,7 @@ body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
 }
 /* What is on the card, as a name. */
 .pick > .k-gold {
-  font: 400 var(--t-m) / 1 var(--k-font);
+  font: 700 var(--t-m) / 1 var(--k-font);
   color: var(--k-cream);
   text-shadow: 0 var(--u) 0 var(--k-ink);
 }

@@ -3,21 +3,11 @@
  * faces, and frames, buttons and paper drawn as pixel art.
  *
  * Sizes are counted in `--u`, one art pixel of the interface (two CSS pixels, three on a very large
- * window), so frames land on whole pixels. Titles, names and buttons are in Jersey, a pixel face;
+ * window), so frames land on whole pixels. Titles, names and buttons are in Minecraft, the guild's pixel face;
  * everything read, and every number, is in Inter.
  */
 @import "./frames.css";
 
-@font-face {
-  font-family: "Jersey 20";
-  src: url("./fonts/jersey-20.woff2") format("woff2");
-  font-display: block;
-}
-@font-face {
-  font-family: "Jersey 15";
-  src: url("./fonts/jersey-15.woff2") format("woff2");
-  font-display: block;
-}
 @font-face {
   font-family: Inter;
   src: url("./fonts/inter-variable.woff2") format("woff2");
@@ -25,7 +15,7 @@
   font-weight: 100 900;
   font-display: swap;
 }
-/* Only for words drawn on a canvas in the world (`text.ts`); nothing on the page is set in it. */
+/* Titles, names and buttons; and the words drawn on a canvas in the world (`text.ts`). */
 @font-face {
   font-family: Minecraft;
   src: url("./fonts/minecraft-regular.woff2") format("woff2");
@@ -46,15 +36,13 @@
   --t-r: calc(var(--u) * 7);
   --k-font-read: Inter, system-ui, sans-serif;
   /*
-   * Jersey: a name or a button, a title, a large title. Each Jersey is sharp only at whole multiples
-   * of the size it is drawn at: Jersey 15 at 27 pixels (its capitals are 15 tall), Jersey 20 at 34
-   * (capitals 20). `--k-font` is the face for `--t-m` and `--t-xl`, `--k-font-l` the one for `--t-l`.
+   * Minecraft: a name or a button, a title, a large title. It is drawn ten pixels to the em, so it
+   * is sharp only at whole multiples of ten pixels.
    */
-  --t-m: 27px;
-  --t-l: 34px;
-  --t-xl: 54px;
-  --k-font: "Jersey 15", var(--k-font-read);
-  --k-font-l: "Jersey 20", var(--k-font-read);
+  --t-m: 20px;
+  --t-l: 30px;
+  --t-xl: 40px;
+  --k-font: Minecraft, var(--k-font-read);
 
   /* Darkness in steps: the edge of everything, a well, a panel, a raised thing, a quiet line, a brighter one. */
   --k-ink: #0b0710;
@@ -88,11 +76,9 @@
 @media (min-width: 1800px) and (min-height: 940px) {
   :root {
     --u: 3px;
-    --t-m: 34px;
-    --t-l: 54px;
-    --t-xl: 68px;
-    --k-font: "Jersey 20", var(--k-font-read);
-    --k-font-l: "Jersey 15", var(--k-font-read);
+    --t-m: 30px;
+    --t-l: 40px;
+    --t-xl: 60px;
   }
 }
 
@@ -142,14 +128,14 @@ img.k-px {
 .k-title,
 .k-name {
   margin: 0;
-  font: 400 var(--t-m) / 1 var(--k-font);
+  font: 700 var(--t-m) / 1 var(--k-font);
   color: var(--k-cream);
   text-shadow: 0 var(--u) 0 var(--k-ink);
 }
 .k-title.big,
 .k-head .k-title,
 .k-info-head .k-name {
-  font: 400 var(--t-l) / 1 var(--k-font-l);
+  font: 700 var(--t-l) / 1 var(--k-font);
 }
 .k-s {
   font-size: var(--t-s);
@@ -243,6 +229,8 @@ img.k-px {
   min-height: calc(var(--u) * 22);
   box-sizing: border-box;
   padding: calc(var(--u) * 2) calc(var(--u) * 3) calc(var(--u) * 2) calc(var(--u) * 5);
+  background: var(--k-f-shingles) 0 0 / calc(var(--u) * 24) calc(var(--u) * 12);
+  image-rendering: pixelated;
   border-bottom: var(--u) solid var(--k-brass);
 }
 .k-head .k-title {
@@ -789,7 +777,7 @@ button.k-info-chip:hover .k-chip {
     stretch;
   background: none;
   /* Four units less than the letters' size, so the capitals sit in the middle on whole pixels. */
-  font: 400 var(--t-m) / calc(var(--t-m) - var(--u) * 4) var(--k-font);
+  font: 700 var(--t-m) / calc(var(--t-m) - var(--u) * 4) var(--k-font);
   white-space: nowrap;
   color: #2b1705;
   text-shadow: 0 1px 0 #fff6;

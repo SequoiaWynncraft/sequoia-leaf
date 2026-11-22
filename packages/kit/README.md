@@ -34,14 +34,11 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
   leaves or removes. Slate is quiet. Only what can be pressed has a bevel: a tag is flat.
 - **Colour means one thing each.** Gold is Coins and the button that confirms, green is Leaf and
   growth, coral is health and leaving. `--k-tier-1` to `--k-tier-5` are the tiers' colours.
-- **Letters.** Two faces. Jersey is for titles, names and buttons (`k-title`, `k-name`, `k-btn`).
-  It is a pixel face, sharp only at whole multiples of the size it is drawn at, and the number in
-  its name is the height of its capitals, not that size: Jersey 15 is 27 pixels to the em and
-  Jersey 20 is 34. So there are three sizes and no others: `--t-m` (27px, Jersey 15) for a name or
-  a button, `--t-l` (34px, Jersey 20) for a title, `--t-xl` (54px, Jersey 15 twice) for a large
-  one; `--k-font` is the face for the first and last and `--k-font-l` the one for `--t-l`, and on a
-  very large window the sizes are 34, 54 and 68 and the two faces change places. Give Jersey no
-  letter-spacing and no other size. Everything read, and every number, is Inter: the page's own
+- **Letters.** Two faces. Minecraft, the guild's pixel face, is for titles, names and buttons
+  (`k-title`, `k-name`, `k-btn`), in bold. It is drawn ten pixels to the em and is sharp only at
+  whole multiples of ten, so there are three sizes and no others: `--t-m` (20px) for a name or a
+  button, `--t-l` (30px) for a title, `--t-xl` (40px) for a large one; on a very large window they
+  are 30, 40 and 60. Give it no letter-spacing and no other size. Everything read, and every number, is Inter: the page's own
   face at `--t-r` (14 pixels), bold for a name or a number (`b`, `k-pix`), lighter for a line that
   is read (`k-read`, `k-d`), and `--t-s` for a small capital label (`k-label`). Words drawn on a
   canvas in the world keep the Minecraft face (`text.ts`; wait for `fontsReady()` first).
