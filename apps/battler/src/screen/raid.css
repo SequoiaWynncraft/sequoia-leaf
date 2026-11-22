@@ -34,6 +34,7 @@ body {
   height: calc(var(--u) * var(--h) * var(--fs));
 }
 button.k-chip {
+  background: none;
   font: inherit;
   color: inherit;
 }
@@ -169,10 +170,13 @@ body[data-picking="yes"] #foe {
   min-height: calc(var(--u) * 18);
   padding: 0 calc(var(--u) * 4) 0 calc(var(--u) * 2);
   border: var(--u) solid transparent;
-  border-image: var(--k-f-chip) 3 fill / calc(var(--u) * 3);
   cursor: pointer;
 }
-.trait.top {
+/* Switched on, a trait's name is gold (the kit's `lit`); only one at its last step wears the gold frame. */
+.k-chip.trait {
+  border-image: var(--k-f-chip) 3 fill / calc(var(--u) * 3);
+}
+.k-chip.trait.top {
   border-image-source: var(--k-f-chip-lit);
 }
 .trait.woke {
