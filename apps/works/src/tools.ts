@@ -44,7 +44,7 @@ import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { layout } from "./layout.ts";
 import { yardSfx } from "./sound.ts";
-import { builds, type Group, S, type Tool, touched } from "./state.ts";
+import { builds, type Group, type Mark, S, type Tool, touched } from "./state.ts";
 import { coins, doNow } from "./yard.ts";
 
 const DUST = "#cbb894";
@@ -227,6 +227,9 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   if (refund > 0) float(px, py - 10, `+${refund}`, GOLD[2], 1);
   yardSfx.take();
   if (S.picked === i) S.picked = -1;
+  // A piece taken out of a marked area is no longer marked: what is moved or copied next is what stands there.
+  if (S.mark) markTiles(S.mark, S.mark.tiles);
+  if (S.mark?.pieces.length === 0) S.mark = null;
   touched();
   toolHooks.changed();
   return true;
@@ -592,13 +595,18 @@ function markArea(a: { x: number; y: number }, b: { x: number; y: number }): voi
   const w = S.world;
   const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
   const [y0, y1] = [Math.min(a.y, b.y), Math.max(a.y, b.y)];
-  const tiles = within(w, x0, y0, x1, y1);
+  markTiles({ x0, y0, x1, y1 }, within(w, x0, y0, x1, y1));
+  S.saving = false;
+  toolHooks.changed();
+}
+
+/** Marks what stands on some tiles, within a box: an area just marked, or one a piece has since been taken out of. */
+function markTiles(box: Pick<Mark, "x0" | "y0" | "x1" | "y1">, tiles: readonly number[]): void {
+  const w = S.world;
   const pieces = piecesAt(w, tiles);
   // What they cost: what taking them away gives back.
   const cost = pieces.reduce((sum, p) => sum + (w.cells[at(w, p.x, p.y)]?.free ? 0 : KIND[p.kind].cost), 0);
-  S.mark = { x0, y0, x1, y1, tiles, pieces, cost };
-  S.saving = false;
-  toolHooks.changed();
+  S.mark = { x0: box.x0, y0: box.y0, x1: box.x1, y1: box.y1, tiles: tiles.filter((i) => w.cells[i]), pieces, cost };
 }
 
 /** One corner of an area: where a mouse's drag begins, or a finger's first tap. Whatever was marked is let go. */
