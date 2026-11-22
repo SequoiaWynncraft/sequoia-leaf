@@ -1,15 +1,17 @@
-import { COMMAND_ID, type Ctx, MOST_COMMANDS, type PlayerId } from "@sequoia-leaf/core";
+import { COMMAND_ID, type Ctx, type Logged, MOST_COMMANDS, type PlayerId } from "@sequoia-leaf/core";
 import { Clock, Context, Effect, Layer, Option, Schema } from "effect";
 import { SecureRandom } from "effect/crypto";
 import { SqlClient } from "effect/sql";
 
-import { Allowance } from "../allowance.ts";
+import { Allowances } from "../allowance.ts";
 import { Coins } from "./coins.ts";
 import type { Opened, Played } from "./games.ts";
 import { PlayStore } from "./store.ts";
 
 /** How often a player may send a batch of commands: ten a second, bursts of twenty. */
 export const BATCHES = { rate: 10, burst: 20 } as const;
+/** How many commands a player may have done, across all games: ten a second, bursts of forty. */
+export const COMMANDS = { rate: 10, burst: 40 } as const;
 /** How many players' allowances are kept before those filled up again are let go. */
 const ALLOWANCES_KEPT = 1000;
 
@@ -20,12 +22,16 @@ export interface Playing {
 }
 
 /** What one command answered: what it did, or the code it was refused with. */
-const Result = Schema.Union([
-  Schema.Struct({ id: Schema.String, notes: Schema.Array(Schema.Unknown) }),
-  Schema.Struct({ id: Schema.String, refused: Schema.String }),
+export type Result =
+  { readonly id: string; readonly notes: readonly unknown[] } | { readonly id: string; readonly refused: string };
+/** A command's answer as it is kept: its notes or its refusal, without its id or any state. */
+const Kept = Schema.Union([
+  Schema.Struct({ notes: Schema.Array(Schema.Unknown) }),
+  Schema.Struct({ refused: Schema.String }),
 ]);
-export type Result = typeof Result.Type;
-const readResult = Schema.decodeUnknownSync(Schema.fromJsonString(Result));
+const readKept = Schema.decodeUnknownSync(Schema.fromJsonString(Kept));
+const keptOf = (result: Result): string =>
+  JSON.stringify("refused" in result ? { refused: result.refused } : { notes: result.notes });
 
 /** A player's state in a game as their page is given it: how many batches changed it, Leaf's clock, and the view. */
 export interface Shown {
@@ -38,7 +44,7 @@ export type Batch =
   | ({ readonly status: "done"; readonly results: readonly Result[] } & Shown)
   /** A command that is not one of the game's, or a batch that is not a list of them. Nothing was done. */
   | { readonly status: "invalid"; readonly why: string }
-  /** The player sent batches faster than they may. Nothing was done. */
+  /** The player sent batches, or commands, faster than they may. Nothing was done. */
   | { readonly status: "slow" };
 
 /** A command as it came, with its id. */
@@ -104,17 +110,8 @@ export class Play extends Context.Service<
       const coins = yield* Coins;
       const random = yield* SecureRandom.SecureRandom;
       const dice = random.intBetween(0, 0xffffffff);
-      const allowances = new Map<string, Allowance>();
-
-      /** Whether the player may send a batch now, and if so, counts it. */
-      function allowed(playerId: PlayerId, now: number): boolean {
-        if (allowances.size > ALLOWANCES_KEPT) {
-          for (const [id, allowance] of allowances) if (allowance.full(now)) allowances.delete(id);
-        }
-        const allowance = allowances.get(playerId) ?? new Allowance(BATCHES, now);
-        allowances.set(playerId, allowance);
-        return allowance.take(now);
-      }
+      // Each player's batches and commands, across all games.
+      const pace = new Allowances([BATCHES, COMMANDS], ALLOWANCES_KEPT);
 
       /** The player's stored state in a game, or a new one made and stored for them, opened at now. */
       const opened = (playing: Playing, played: Played, now: number) =>
@@ -147,12 +144,13 @@ export class Play extends Context.Service<
         send: (playing, played, commands) =>
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
-            if (!allowed(playing.playerId, now)) {
-              return { status: "slow" } satisfies Batch;
-            }
             const sent = sentOf(played, commands);
             if (typeof sent === "string") {
               return { status: "invalid", why: sent } satisfies Batch;
+            }
+            // A batch that would take the player past either allowance is refused whole.
+            if (!pace.take(playing.playerId, now, [1, sent.length])) {
+              return { status: "slow" } satisfies Batch;
             }
             const done = yield* sql
               .withTransaction(
@@ -160,11 +158,12 @@ export class Play extends Context.Service<
                   const { rev, text, game } = yield* opened(playing, played, now);
                   let balance = yield* coins.balance(playing.playerId);
                   const results: Result[] = [];
-                  const answers: { readonly id: string; readonly result: string; readonly refused: boolean }[] = [];
+                  const answers: { readonly id: string; readonly result: Result }[] = [];
+                  const logs: Logged[] = [];
                   for (const { id, command } of sent) {
                     const before = yield* store.answered(playing.playerId, played.id, id);
                     if (Option.isSome(before)) {
-                      results.push(readResult(before.value));
+                      results.push({ id, ...readKept(before.value) });
                       continue;
                     }
                     const attempt = game.attempt(command, ctxOf(playing, now, yield* dice));
@@ -191,13 +190,11 @@ export class Play extends Context.Service<
                           balance += change.amount;
                         }
                       }
-                      for (const logged of attempt.log) {
-                        yield* store.log(playing.playerId, played.id, logged, now);
-                      }
+                      logs.push(...attempt.log);
                       result = { id, notes: attempt.notes };
                     }
                     results.push(result);
-                    answers.push({ id, result: JSON.stringify(result), refused: "refused" in result });
+                    answers.push({ id, result });
                   }
                   const after = game.text();
                   let next = rev;
@@ -209,11 +206,15 @@ export class Play extends Context.Service<
                     }
                     next = rev + 1;
                   }
+                  yield* store.log(playing.playerId, played.id, logs, now);
                   for (const { id, result } of answers) {
-                    yield* store.answer(playing.playerId, played.id, id, next, result, now);
+                    yield* store.answer(playing.playerId, played.id, id, next, keptOf(result));
+                  }
+                  if (answers.length > 0) {
+                    yield* store.keepNewest(playing.playerId, played.id);
                   }
                   // Counted for the staff's report: each command done or refused now, not those answered from before.
-                  const refused = answers.filter((a) => a.refused).length;
+                  const refused = answers.filter((a) => "refused" in a.result).length;
                   yield* store.count(playing.playerId, answers.length - refused, refused, now);
                   return { rev: next, results, view: game.view(ctxOf(playing, now, 0)) };
                 }),

@@ -35,6 +35,7 @@ import {
   TRAILS,
   TRAIT_IDS,
   TRAITS,
+  unfought,
   wornOf,
 } from "@sequoia-leaf/raid";
 
@@ -147,45 +148,51 @@ function front(): HTMLElement {
         "Carry on",
       ),
     );
+    // A raid that has fought no room yet is not put down: it is the one set out on, until its first room.
+    const kept = unfought(run);
     add(
       body,
-      sureHome
-        ? el(
-            "div",
-            "k-row",
-            {},
-            el("span", "k-d k-grow", { text: "Go home now? You are paid for the rooms you won." }),
-            el("button", "k-btn coral sm", { type: "button", onclick: () => asks?.goHome() }, "Go home"),
-            el(
+      kept
+        ? el("span", "k-read k-dim", { text: "A raid is put down only once it has fought its first room." })
+        : sureHome
+          ? el(
+              "div",
+              "k-row",
+              {},
+              el("span", "k-d k-grow", { text: "Go home now? You are paid for the rooms you won." }),
+              el("button", "k-btn coral sm", { type: "button", onclick: () => asks?.goHome() }, "Go home"),
+              el(
+                "button",
+                "k-btn wood sm",
+                {
+                  type: "button",
+                  onclick: () => {
+                    sureHome = false;
+                    renderPages(true);
+                  },
+                },
+                "Stay",
+              ),
+            )
+          : el(
               "button",
               "k-btn wood sm",
               {
                 type: "button",
+                id: "gohome",
                 onclick: () => {
-                  sureHome = false;
+                  sureHome = true;
                   renderPages(true);
                 },
               },
-              "Stay",
+              "Go home early",
             ),
-          )
-        : el(
-            "button",
-            "k-btn wood sm",
-            {
-              type: "button",
-              id: "gohome",
-              onclick: () => {
-                sureHome = true;
-                renderPages(true);
-              },
-            },
-            "Go home early",
-          ),
     );
     add(body, el("hr", "k-rule"));
   }
-  add(body, el("div", "k-label", { text: run ? "Or set out afresh" : "Which way?" }));
+  // The raid laid out, while it has fought no room, stays the one set out on.
+  const keep = run !== null && run.phase !== "over" && unfought(run);
+  add(body, el("div", "k-label", { text: keep ? "Which way, next time?" : run ? "Or set out afresh" : "Which way?" }));
   const trails = el("div", "trails", { role: "radiogroup" });
   for (let i = 0; i < TRAIL_COUNT; i++) {
     const t = TRAILS[i];
@@ -226,18 +233,20 @@ function front(): HTMLElement {
     );
     trails.append(card);
   }
-  add(
-    body,
-    trails,
-    el(
-      "button",
-      `k-btn wide${run ? " wood" : ""}`,
-      { type: "button", id: "start", onclick: () => asks?.start(S.trail) },
-      pic(glyph("swords")),
-      run ? "Set out afresh" : "Set out",
-    ),
-  );
-  if (run) add(body, el("span", "k-read k-dim", { text: "Setting out afresh puts down the raid that is laid out." }));
+  add(body, trails);
+  if (!keep)
+    add(
+      body,
+      el(
+        "button",
+        `k-btn wide${run ? " wood" : ""}`,
+        { type: "button", id: "start", onclick: () => asks?.start(S.trail) },
+        pic(glyph("swords")),
+        run ? "Set out afresh" : "Set out",
+      ),
+    );
+  if (run && !keep)
+    add(body, el("span", "k-read k-dim", { text: "Setting out afresh puts down the raid that is laid out." }));
   add(
     body,
     el("hr", "k-rule"),

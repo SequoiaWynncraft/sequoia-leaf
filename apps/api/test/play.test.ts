@@ -6,8 +6,8 @@ import { Effect, Schema } from "effect";
 
 import { played } from "../src/play/games.ts";
 import { Play } from "../src/play/service.ts";
-import { ANSWERS_KEPT_MS, PlayStore } from "../src/play/store.ts";
-import { fakeBackend, type Fakes, sessionOf, steadyDice, testLeaf } from "./support.ts";
+import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
+import { DAY, fakeBackend, type Fakes, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -82,10 +82,12 @@ let made = 0;
 const ided = (commands: readonly RaidCommand[]) => commands.map(command);
 /** One command with an id of its own. */
 const command = (c: RaidCommand) => ({ id: `c-${++made}`, ...c });
+/** As many rustles as asked, each with an id of its own. */
+const rustles = (n: number) => ided(Array.from({ length: n }, () => ({ do: "rustle" }) as const));
 
 async function commanded(commands: readonly unknown[], player: PlayerId = alice) {
-  // A player at the table sends a batch now and then, well inside what Leaf lets them.
-  clock.now += 100;
+  // A player at the table sends a batch now and then, well inside what Leaf lets them: ten commands a second.
+  clock.now += Math.max(1, commands.length) * 100;
   const response = await send("POST", "/v1/game/play/raid", { commands }, player);
   expect(response.status).toBe(200);
   const body = Schema.decodeUnknownSync(Answered)(await response.json());
@@ -107,6 +109,28 @@ const entries = (player: PlayerId) =>
   );
 const stored = (player: PlayerId) =>
   services.query((sql) => sql`SELECT rev, state FROM play_state WHERE player_id = ${player} AND game = 'raid'`);
+
+/** A shop where each lantern costs what the command says: a game that spends Coins, which the raid never does. */
+const SHOP: Game<{ bought: number }, { price: number }, { bought: number }, string> = {
+  id: "town",
+  create: () => ({ bought: 0 }),
+  advance: (state) => state,
+  apply: (state, bought) => ({
+    state: { bought: state.bought + 1 },
+    notes: ["a lantern"],
+    coins: [{ amount: -bought.price, reason: "A lantern", key: `lantern:${state.bought + 1}` }],
+  }),
+  view: (state) => state,
+  decode: (text) => {
+    const v: unknown = JSON.parse(text);
+    return typeof v === "object" && v !== null && "bought" in v && typeof v.bought === "number"
+      ? { bought: v.bought }
+      : null;
+  },
+  encode: (state) => JSON.stringify(state),
+  command: (v) =>
+    typeof v === "object" && v !== null && "price" in v && typeof v.price === "number" ? { price: v.price } : null,
+};
 
 describe("a new player", () => {
   it("gets a new table, untouched, and 300 Coins, once", async () => {
@@ -291,6 +315,11 @@ describe("commands", () => {
     expect(mixed.results.slice(0, 2)).toEqual([...first.results]);
     expect(mixed.results[2]).toMatchObject({ id: rustle.id, notes: [{ t: "rustled" }] });
     expect(mixed.rev).toBe(2);
+    // Sent again after that, it answers what it did then, with the state as it stands now.
+    const later = await commanded(batch);
+    expect(later.results).toEqual(first.results);
+    expect(later.rev).toBe(2);
+    expect(later.state).toEqual(mixed.state);
   });
 
   it("refused say why and change nothing", async () => {
@@ -308,13 +337,28 @@ describe("commands", () => {
     expect(both.results[1]).toMatchObject({ id: good.id, notes: [{ t: "starter" }] });
   });
 
-  it("are kept two days, and then a command id may be used again", async () => {
-    const batch = ided([{ do: "start", trail: 0 }]);
-    await commanded(batch);
-    clock.now = T0 + ANSWERS_KEPT_MS + 1;
-    await commanded(ided([{ do: "rustle" }]));
-    const again = await commanded(batch);
-    expect(again.results[0]).toMatchObject({ notes: [{ t: "over" }, { t: "ended" }, { t: "started" }] });
+  it("have only each player's newest 256 answers to a game kept, each as its notes or refusal and never the state", async () => {
+    const setOut = command({ do: "start", trail: 0 });
+    const first = [setOut];
+    await commanded(first);
+    // 288 more, each refused (the starter is still to be picked), in batches of 32, at the pace Leaf allows.
+    for (let batch = 0; batch < 9; batch++) {
+      clock.now += 4000;
+      // oxlint-disable-next-line no-await-in-loop -- in order
+      await commanded(rustles(MOST_COMMANDS));
+    }
+    const kept = await services.query(
+      (sql) =>
+        sql`SELECT command_id, result FROM play_commands WHERE player_id = ${alice} AND game = 'raid' ORDER BY id`,
+    );
+    expect(kept).toHaveLength(ANSWERS_KEPT);
+    expect(kept.at(-1)).toEqual({ command_id: `c-${made}`, result: '{"refused":"pick_starter"}' });
+    expect(kept.some((row) => Object(row).command_id === setOut.id)).toBe(false);
+    // The first is no longer known: sent again it is done again (and setting out again, with no room fought, changes nothing).
+    clock.now += 4000;
+    const again = await commanded(first);
+    expect(again.results).toEqual([{ id: setOut.id, notes: [] }]);
+    expect(again.rev).toBe(1);
   });
 
   it("are all done in one transaction: a failure in the middle of a batch leaves nothing half done", async () => {
@@ -326,12 +370,12 @@ describe("commands", () => {
         log: (player, game, logged, now) =>
           Effect.suspend(() => {
             logs += 1;
-            return logs === 2 ? Effect.die(new Error("the disk is full")) : real.log(player, game, logged, now);
+            return logs === 1 ? Effect.die(new Error("the disk is full")) : real.log(player, game, logged, now);
           }),
       }),
     });
-    // Setting out logs, and so does walking home: the second log fails, after the first command was done.
-    const batch = ided([{ do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "abandon" }]);
+    // What setting out logs is written after the commands are done and the state is: and that fails.
+    const batch = ided([{ do: "start", trail: 0 }, { do: "choose", option: 0 }, { do: "rustle" }]);
     const failed = await send("POST", "/v1/game/play/raid", { commands: batch });
     expect(failed.status).toBe(500);
     expect(await codeOf(failed)).toBe("internal_error");
@@ -342,8 +386,9 @@ describe("commands", () => {
     // Sent again once the disk has room, the batch is done whole, as if for the first time.
     const done = await commanded(batch);
     expect(done.results.map((r) => ("notes" in r ? "done" : r.refused))).toEqual(["done", "done", "done"]);
-    expect(done.view.run).toBeNull();
-    expect(done.view.almanac.runs).toBe(1);
+    expect(done.view.runs).toBe(1);
+    expect(done.view.run?.rustles).toBe(0);
+    expect(await services.query((sql) => sql`SELECT kind FROM activity`)).toEqual([{ kind: "raid_started" }]);
   });
 
   it("that are not the game's, or a batch that is not one, are refused whole and do nothing", async () => {
@@ -396,9 +441,10 @@ describe("one player's game", () => {
     const fromAlice = await commanded(shared, alice);
     const fromBob = await commanded(shared, bob);
     expect(fromBob.results[0]).toMatchObject({ notes: [{ t: "started", run: 1 }] });
-    expect(fromAlice.results[0]).toMatchObject({ notes: [{ t: "over" }, { t: "ended" }, { t: "started", run: 2 }] });
-    expect((await opened(alice)).view.runs).toBe(2);
-    expect((await opened(bob)).view.runs).toBe(1);
+    // Alice's raid has fought no room yet, so setting out again leaves it as it is.
+    expect(fromAlice.results[0]).toEqual({ id: "c-shared", notes: [] });
+    expect((await opened(alice)).view.run?.choices).toEqual([]);
+    expect((await opened(bob)).view.run?.choices[0]?.kind).toBe("starter");
   });
 
   it("needs a session, and a write with the cookie must come from Leaf's own pages", async () => {
@@ -437,6 +483,31 @@ describe("the limits", () => {
     expect((await send("POST", "/v1/game/play/raid", { commands: [] }, bob)).status).toBe(200);
   });
 
+  it("are ten commands a second done, in bursts of forty, across all games: a batch past it is refused whole", async () => {
+    await opened();
+    const post = (commands: readonly unknown[], player: PlayerId = alice) =>
+      send("POST", "/v1/game/play/raid", { commands }, player);
+    clock.now += 100;
+    expect((await post(rustles(MOST_COMMANDS))).status).toBe(200);
+    // Eight are left: a batch of nine, setting out first, is refused whole, and nothing is done.
+    const nine = [command({ do: "start", trail: 0 }), ...rustles(8)];
+    const past = await post(nine);
+    expect(past.status).toBe(429);
+    expect(await codeOf(past)).toBe("slow_down");
+    expect(await stored(alice)).toEqual([{ rev: 0, state: expect.any(String) }]);
+    // A tenth of a second later there is room for nine.
+    clock.now += 100;
+    expect((await post(nine)).status).toBe(200);
+    expect(await stored(alice)).toEqual([{ rev: 1, state: expect.any(String) }]);
+    // And none left for another game's command either.
+    const elsewhere = await services.run(
+      Play.use((play) => play.send({ playerId: alice, guest: false }, played(SHOP), [{ id: "l-1", price: 1 }])),
+    );
+    expect(elsewhere).toEqual({ status: "slow" });
+    // Another player has their own.
+    expect((await post(rustles(MOST_COMMANDS), bob)).status).toBe(200);
+  });
+
   it("read no body over 16 KiB", async () => {
     const big = { commands: [{ id: "c-big", do: "start", trail: 0, padding: "x".repeat(17 * 1024) }] };
     const response = await send("POST", "/v1/game/play/raid", big);
@@ -462,28 +533,6 @@ describe("the view", () => {
 });
 
 describe("Coins", () => {
-  /** A shop where each lantern costs what the command says: a game that spends Coins, which the raid never does. */
-  const SHOP: Game<{ bought: number }, { price: number }, { bought: number }, string> = {
-    id: "town",
-    create: () => ({ bought: 0 }),
-    advance: (state) => state,
-    apply: (state, bought) => ({
-      state: { bought: state.bought + 1 },
-      notes: ["a lantern"],
-      coins: [{ amount: -bought.price, reason: "A lantern", key: `lantern:${state.bought + 1}` }],
-    }),
-    view: (state) => state,
-    decode: (text) => {
-      const v: unknown = JSON.parse(text);
-      return typeof v === "object" && v !== null && "bought" in v && typeof v.bought === "number"
-        ? { bought: v.bought }
-        : null;
-    },
-    encode: (state) => JSON.stringify(state),
-    command: (v) =>
-      typeof v === "object" && v !== null && "price" in v && typeof v.price === "number" ? { price: v.price } : null,
-  };
-
   it("are taken by a command only while the balance covers them; otherwise it is refused, in the same transaction", async () => {
     const shop = played(SHOP);
     const batch = await services.run(
@@ -510,6 +559,60 @@ describe("Coins", () => {
       { amount: 300, reason: "Welcome to Guild Town", game: null, key: `welcome:${alice}` },
       { amount: -200, reason: "A lantern", game: "town", key: `town:${alice}:lantern:1` },
       { amount: -100, reason: "A lantern", game: "town", key: `town:${alice}:lantern:2` },
+    ]);
+  });
+});
+
+describe("setting out afresh", () => {
+  it("before a room is fought changes nothing: no new opening, nothing paid, nothing logged", async () => {
+    const begun = await commanded(
+      ided([
+        { do: "start", trail: 0 },
+        { do: "choose", option: 0 },
+      ]),
+    );
+    const again = await commanded(ided([{ do: "start", trail: 0 }, { do: "abandon" }, { do: "start", trail: 0 }]));
+    expect(again.results.map((r) => ("notes" in r ? r.notes : r.refused))).toEqual([[], [], []]);
+    expect(again.rev).toBe(begun.rev);
+    expect(again.state).toEqual(begun.state);
+    expect(await services.query((sql) => sql`SELECT kind FROM activity`)).toEqual([{ kind: "raid_started" }]);
+    expect(await entries(alice)).toHaveLength(1);
+  });
+});
+
+/** As many things done as asked, as a game logs them. */
+const logged = (n: number) => Array.from({ length: n }, (_, i) => ({ kind: "raid_room", data: { room: i } }));
+/** Logs that many things done by Alice, at a time. */
+const log = (n: number, now = clock.now) =>
+  services.run(PlayStore.use((store) => store.log(alice, "raid", logged(n), now)));
+/** How many things a player did are written down. */
+const count = async (player: PlayerId = alice) =>
+  Object((await services.query((sql) => sql`SELECT count(*) AS n FROM activity WHERE player_id = ${player}`))[0]).n;
+
+describe("what players did", () => {
+  it("is logged up to 1,000 a player a UTC day, and past that not, while the play goes on", async () => {
+    await log(LOGGED_A_DAY - 2);
+    await log(5);
+    expect(await count()).toBe(LOGGED_A_DAY);
+    // Setting out is still done; it is only not written down.
+    const begun = await commanded(ided([{ do: "start", trail: 0 }]));
+    expect(begun.view.runs).toBe(1);
+    expect(await count()).toBe(LOGGED_A_DAY);
+    // Another player, and the next UTC day, have their own.
+    await commanded(ided([{ do: "start", trail: 0 }]), bob);
+    expect(await count(bob)).toBe(1);
+    await log(3, Date.UTC(2026, 10, 26));
+    expect(await count()).toBe(LOGGED_A_DAY + 3);
+  });
+
+  it("is kept 180 days: older rows go when new ones are written", async () => {
+    await log(1, T0 - ACTIVITY_KEPT_MS - 1);
+    await log(1, T0 - ACTIVITY_KEPT_MS + DAY);
+    expect(await count()).toBe(2);
+    await log(1);
+    expect(await services.query((sql) => sql`SELECT at FROM activity ORDER BY at`)).toEqual([
+      { at: T0 - ACTIVITY_KEPT_MS + DAY },
+      { at: T0 },
     ]);
   });
 });

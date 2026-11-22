@@ -19,20 +19,21 @@ export default Effect.gen(function* () {
     ) STRICT
   `;
 
-  // What each command answered, kept two days, so that a command sent twice is done once and
-  // answered the same. `command_id` is made by the page; `result` is the answer as JSON.
+  // What each command answered, so that a command sent twice is done once and answered the same:
+  // the player's newest 256 to each game. `command_id` is made by the page; `rev` is the one the
+  // command's batch led to; `result` is its notes or its refusal as JSON, never the state.
   yield* sql`
     CREATE TABLE play_commands (
+      id         INTEGER PRIMARY KEY,
       player_id  TEXT    NOT NULL,
       game       TEXT    NOT NULL,
       command_id TEXT    NOT NULL,
       rev        INTEGER NOT NULL,
       result     TEXT    NOT NULL,
-      at         INTEGER NOT NULL,
-      PRIMARY KEY (player_id, game, command_id)
+      UNIQUE (player_id, game, command_id)
     ) STRICT
   `;
-  yield* sql`CREATE INDEX play_commands_by_time ON play_commands (at)`;
+  yield* sql`CREATE INDEX play_commands_by_player ON play_commands (player_id, game, id)`;
 
   // Coins: a balance per player, changed only by an entry. Each entry has a key naming the fact it
   // records, so that it cannot be made twice.
@@ -55,6 +56,8 @@ export default Effect.gen(function* () {
     ) STRICT
   `;
   yield* sql`CREATE INDEX coin_entries_by_player ON coin_entries (player_id, id)`;
+  // For the Coins a player earned in the last day or hour, reading only those entries.
+  yield* sql`CREATE INDEX coin_entries_by_player_at ON coin_entries (player_id, at)`;
   // Entries are never changed or removed; each is applied to its balance as it is written.
   yield* sql`
     CREATE TRIGGER coin_entries_append_only_update

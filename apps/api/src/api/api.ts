@@ -215,7 +215,7 @@ export class GameApi extends HttpApiGroup.make("game")
     HttpApiEndpoint.post("coins", "/coins", {
       payload: CoinsBody,
       success: CoinsAnswer,
-      error: [Invalid, NotEnoughCoins, TooMuch],
+      error: [Invalid, NotEnoughCoins, TooMuch, SlowDown],
     }).middleware(CoinsBodyErrors),
   )
   .middleware(Player)

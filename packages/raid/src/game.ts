@@ -97,7 +97,7 @@ export interface TableView {
 
 /** Everything a player can do at the table. */
 export type RaidCommand =
-  /** Set out on a trail. A run in hand is put down first, as walking home. */
+  /** Set out on a trail. A run in hand is put down first, as walking home, once it has fought a room. */
   | { do: "start"; trail: number }
   /** Pick the trail to set out on next, on the front page. */
   | { do: "trail"; trail: number }
@@ -124,7 +124,7 @@ export type RaidCommand =
   | { do: "fight" }
   /** Take what the fight paid, and go on to the next room or to the end. */
   | { do: "take" }
-  /** Walk home early. */
+  /** Walk home early, once a room has been fought. */
   | { do: "abandon" };
 
 export type RaidCommandName = RaidCommand["do"];
@@ -331,7 +331,7 @@ function setOut(s: Table, trail: number): Answer {
   const notes: RaidNote[] = [];
   const log: Logged[] = [];
   let coins: CoinChange[] = [];
-  // Setting out afresh puts down the raid that is laid out, as walking home does.
+  // Setting out afresh puts down the raid that is laid out (one that has fought a room), as walking home does.
   if (s.run) {
     const run = s.run;
     const left = abandon(run);
@@ -373,7 +373,16 @@ function play(s: Table, c: RunCommand): Answer {
   return { state: s, notes, coins, log };
 }
 
+/**
+ * Whether the run in hand has fought no room yet. Such a run is not put down: setting out afresh or
+ * walking home leaves it as it is, so that a run's opening cannot be drawn again and again for free.
+ */
+export const unfought = (run: Pick<Run, "record">): boolean => run.record.length === 0;
+
 export function applyCommand(state: Table, c: RaidCommand, ctx: Ctx): Answer {
+  if (c.do === "start" && !trailOpen(state.almanac, c.trail)) return no("trail_closed");
+  // The run in hand as it is: nothing drawn, paid or logged.
+  if ((c.do === "start" || c.do === "abandon") && state.run && unfought(state.run)) return { state, notes: [] };
   const s = structuredClone(state);
   // Leaf's dice, stirred into both streams before anything is drawn.
   s.rng = mix(s.rng, ctx.seed);

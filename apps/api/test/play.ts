@@ -566,7 +566,10 @@ const stagingRoute = HttpRouter.add(
     return HttpServerResponse.jsonUnsafe({ made });
   }),
 );
-const served = await leaf.serve(port, Layer.mergeAll(signingRoute("/sign-in"), signingRoute("/sign-out"), stagingRoute));
+const served = await leaf.serve(
+  port,
+  Layer.mergeAll(signingRoute("/sign-in"), signingRoute("/sign-out"), stagingRoute),
+);
 
 // Stopped as a deploy stops Leaf: every live connection is told Leaf is restarting (1012) before
 // the server goes, so that a page reconnects as it would to the next container.

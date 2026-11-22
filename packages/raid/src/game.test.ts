@@ -467,3 +467,26 @@ describe("what Leaf sends the page", () => {
     expect(readNotes([])).toEqual([]);
   });
 });
+
+// Last, so that the dice it rolls do not change how the tests above fall.
+describe("a run that has fought no room", () => {
+  test("setting out afresh, or walking home, before a room is fought changes nothing: no new opening for free", () => {
+    for (const state of [RAID.create(ctx(5)), started(5)]) {
+      // Laid out, and its starter picked or not: either way no room has been fought.
+      const laid = state.run ? state : must(state, { do: "start", trail: 0 }).state;
+      for (const command of [{ do: "start", trail: 0 }, { do: "abandon" }] as const) {
+        const done = must(laid, command);
+        expect(done.state).toBe(laid);
+        expect(encodeTable(done.state)).toBe(encodeTable(laid));
+        expect(done.notes).toEqual([]);
+        expect(done.coins ?? []).toEqual([]);
+        expect(done.log ?? []).toEqual([]);
+      }
+    }
+    // Nor in the middle of the first fight, once it is decided.
+    const fighting = must(planned(started(5)), { do: "fight" }).state;
+    expect(must(fighting, { do: "start", trail: 0 }).state).toBe(fighting);
+    expect(must(fighting, { do: "abandon" }).state).toBe(fighting);
+    expect(RAID.apply(fighting, { do: "start", trail: 2 }, ctx())).toEqual({ refused: "trail_closed" });
+  });
+});
