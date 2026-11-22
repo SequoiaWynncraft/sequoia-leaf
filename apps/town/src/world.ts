@@ -285,36 +285,12 @@ export const SEATS: Seat[] = [
   { x: 457, y: 213, dir: 3, from: { x: 457, y: 224 }, at: "table", taken: false },
 ];
 
-/**
- * Somewhere to stand and be busy: counting the crabs at the pond, reading the quest board, minding
- * the gate, warming the Works' doorstep, the fire's edge, and watching a game at the stump.
- */
-export type Errand = "crabs" | "board" | "gate" | "works" | "fire" | "table";
-
-export interface Spot {
-  x: number;
-  y: number;
-  dir: Dir;
-  errand: Errand;
-  taken: boolean;
-}
-
-const spot = (x: number, y: number, dir: Dir, errand: Errand): Spot => ({ x, y, dir, errand, taken: false });
-
-export const SPOTS: Spot[] = [
-  spot(404, 254, 0, "crabs"),
-  spot(342, 280, 2, "crabs"),
-  spot(188, 166, 3, "board"),
-  spot(208, 167, 3, "board"),
-  spot(240, 112, 0, "gate"),
-  spot(387, 126, 0, "works"),
-  spot(398, 131, 1, "works"),
-  spot(284, 226, 1, "fire"),
-  spot(230, 230, 2, "fire"),
-  spot(414, 197, 2, "table"),
-  spot(471, 197, 1, "table"),
-  spot(437, 171, 0, "table"),
-  spot(457, 171, 0, "table"),
+/** Where to stand and watch a game at the stump. (Where the town's own go is the clock's: `clock.ts`.) */
+export const SPOTS: readonly Pt[] = [
+  { x: 414, y: 197 },
+  { x: 471, y: 197 },
+  { x: 437, y: 171 },
+  { x: 457, y: 171 },
 ];
 
 /** Where the stallkeepers stand, behind each stall by its place in the row, and in front of each (on the counter). */

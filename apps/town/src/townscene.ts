@@ -14,6 +14,7 @@ import { BOX_FULL, roomInBox } from "@sequoia-leaf/town/mail.ts";
 
 import { initAbout, openAbout } from "./aboutui.ts";
 import {
+  byClock,
   face,
   feet,
   freeSeat,
@@ -53,6 +54,7 @@ import {
   emotesOpen,
   inRoom,
   isLivePlayer,
+  leafNow,
   liveHandles,
   livePlayers,
   openEmotes,
@@ -77,6 +79,7 @@ import {
   lastTouches,
   lightTable,
   openDoor,
+  placeCrabs,
   props,
   stepTown,
   table,
@@ -172,8 +175,10 @@ export interface Town extends Scene {
     tp(x: number, y: number): void;
     /** Walks the member to a point, round whatever is in the way, as a tap on bare ground there would. */
     walk(x: number, y: number): void;
-    /** The town's own, where each is and what it is doing. */
+    /** The town's own, where each is and what it is doing, by Leaf's clock this moment. */
     who(): { name: string; x: number; y: number; doing: string }[];
+    /** The crabs by their numbers, where each is by Leaf's clock this moment, and whether it is running off. */
+    crabs(): { n: number; x: number; y: number; gone: boolean }[];
     /** Real members in town just now, visiting or dozing, and where each is. */
     visitors(): { name: string; x: number; y: number; dozing: boolean }[];
     /** Every member drawn this moment (the member, visitors, dozers, live players): who, where their feet are drawn, how tall, how opaque. */
@@ -200,6 +205,7 @@ const whoIs = (a: Actor): string => (a.folk ? `folk:${a.folk.t.id}` : a.id);
 export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town {
   // ---------- the place itself ----------
 
+  G.now = leafNow();
   const ground = paintGround();
   buildTown(sprites, must(ground.getContext("2d"), "ground"));
   const standing = crabsStanding();
@@ -232,11 +238,11 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   // A walk anybody here is sent on ends beside whoever is standing or sitting there.
   peopleOn(TOWN, () => pic.people());
   const cinfy = makeFolk(folk("cinfy"), 104, 113);
-  placeFolk(cinfy, 0);
+  placeFolk(cinfy);
   G.cinfy = cinfy;
-  G.folk = FOLK.filter((t) => t.job !== "counter" && t.job !== "calls").map((t, i) => {
+  G.folk = FOLK.filter((t) => t.job !== "counter" && t.job !== "calls").map((t) => {
     const a = makeFolk(t, 256, 216);
-    placeFolk(a, i);
+    placeFolk(a);
     return a;
   });
 
@@ -423,7 +429,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     else if (t) {
       rouse(who);
       if (!who.seat && who.lift === 0) face(who, player.x, player.y);
-      who.hold = 2.6;
       say(who, pick(t.greets, Math.random()), 2);
     }
     showCard(who);
@@ -546,17 +551,19 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
     step(dt, steer) {
       G.t += dt;
+      G.now = leafNow();
       stepActor(player, dt);
       touch.step(dt, steer);
       // The room hears where the member is at once, from their own walking; nothing waits for it.
       tellRoom(player, dt, jumped);
       jumped = false;
       stepActor(cinfy, dt);
-      stepFolk(dt);
       stepVisitors(dt);
       stepPlayers(dt);
+      const walkers = [player, ...livePlayers()];
+      stepFolk(dt, walkers);
       standApart(dt);
-      stepTown(dt, [player, ...livePlayers()]);
+      stepTown(dt, walkers);
       stepFlights(dt);
       stepEvents();
       // Somebody shown where they are, for a few seconds, or until they go.
@@ -740,12 +747,16 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         touch.walk(x, y);
       },
       who() {
-        return [cinfy, ...G.folk].map((a) => ({
-          name: a.who.name,
-          x: Math.round(a.x),
-          y: Math.round(a.y),
-          doing: a.doing,
-        }));
+        G.now = leafNow();
+        return [cinfy, ...G.folk].map((a) => {
+          byClock(a);
+          return { name: a.who.name, x: Math.round(a.x), y: Math.round(a.y), doing: a.doing };
+        });
+      },
+      crabs() {
+        G.now = leafNow();
+        placeCrabs();
+        return crabs.map((c) => ({ n: c.n, x: Math.round(c.x), y: Math.round(c.y), gone: c.bolt > 0 }));
       },
       visitors: members,
       drawn: () =>

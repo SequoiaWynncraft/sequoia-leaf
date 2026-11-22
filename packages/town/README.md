@@ -18,6 +18,7 @@ bun test
 | `folk.ts`      | The town's own: who each is and what they say; who calls at a camp, their notes and presents |
 | `mail.ts`      | The mailbox: twelve letters, and which make room for the next                                |
 | `camp.ts`      | What may stand where in a camp, turning, the tray, who lives there, the new camp, an old one |
+| `clock.ts`     | The town by the clock: where the town's own and the crabs are at any moment, from a seed     |
 | `game.ts`      | The state, the commands, what happens by itself, what the page is shown, keeping it          |
 | `stats.ts`     | What a person's card says of their camp                                                      |
 
@@ -59,7 +60,7 @@ square, `x` and `y`, and a turn, `t`) and checked here.
 | `welcome`      | `cursor`          | Posts the mail while away (below); the member is welcomed today and here now; takes `cursor` if it is further on            |                                                                  |
 | `here`         | `cursor`          | The member is here now; takes `cursor` if it is further on                                                                  |                                                                  |
 | `openChest`    |                   | 3 Coins, once a UTC day                                                                                                     | `opened_today`                                                   |
-| `spotCrab`     |                   | One more sighting, at most once in 5 seconds                                                                                | `too_soon`                                                       |
+| `spotCrab`     |                   | One more sighting, once for each place the crab hides (60 seconds of Leaf's clock, `stretchOf`)                             | `too_soon`                                                       |
 | `buy`          | `stall`, `thing`  | The thing goes by the trail; takes the stall's price                                                                        | `not_for_sale`, `trail_full` (200 waiting), `plenty` (999 of it) |
 | `choosePet`    | `pet`             | The first pet                                                                                                               | `pet_chosen`                                                     |
 | `greet`        | `visit`           | The caller waiting, by id: counted, what they brought posted, and gone                                                      | `no_such_visit`                                                  |
@@ -81,6 +82,29 @@ not turn that way). A command refused changes nothing.
 answer no notes. `buy` takes the price (keyed `buy:<n>`) and `openChest` pays 3, `free`, keyed by
 the UTC day. A thing bought, a pet chosen and a trophy unpacked are logged (`town_bought`,
 `town_pet`, `town_trophy`).
+
+## The town by the clock
+
+`clock.ts` answers, for a seed and a moment of Leaf's clock, where each of the town's own and each
+crab is. The seed is the room's name (`seedOf`); every roll stirs in the UTC day its turn is due
+on. Time is cut into turns that begin a few seconds late by their own roll, so nothing is stepped
+and nothing is kept: any page, and Leaf, gets the same answer for the same moment.
+
+- `folkAt(seed, who, now)`: where it set out from, where it is going, when it set out, what it
+  does there, and the line it is saying. Pipwick goes round the crabs, the board and the gate
+  (24, 24 and 17 seconds a turn, up to 3 late); Fika between the Works' door and the fire (32
+  seconds, up to 5 late); each turn is at one of the spots for it (`SPOTS`). Sootpaw naps in turns
+  of 22 seconds (up to 6 late), and 3 naps in 10 end with 5 to 9 seconds awake. The rest keep to
+  their posts. Every 4.5 seconds (up to 1.7 late) one of those at its post and awake says a line
+  for 2.8 seconds.
+- `crabAt(seed, n, now)`: how far from home a crab was and is going, as shares of its reach, and
+  when it set out: every 5.5 seconds, up to 3 late.
+- `hiding(seed, now)`: where the missing crab hides. One place for each 60 seconds (`STRETCH`),
+  never the same place twice running; `stretchOf(now)` is which 60 seconds, and `spotCrab` counts
+  one sighting in each.
+
+The page walks the way between two spots at the figure's pace; its test checks that every walk
+fits its turn on the town's ground.
 
 ## The arrival letter
 
