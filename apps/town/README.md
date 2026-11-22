@@ -70,9 +70,11 @@ and copies the test skin in one go.
   last day doze in town (both below, and with the made-up guild its stand-ins). A member's card has
   their name and rank, and for one dozing, how long ago they dozed off. A name shows only over
   somebody who is near the member, pointed at, or speaking, and no two name plates ever overlap.
-- **The guild, live.** With the made-up guild, every twenty seconds or so: some of its stand-in
-  members come home from a raid and hang a lantern in the tree, win a territory and the banner goes
-  up the pole, reach a level or a milestone. The feed in the corner says so in a line. Coming in,
+- **The guild, live.** With the made-up guild, every minute and a half or more (never sooner, of
+  any kind, the town's own calling at the camp included): some of its stand-in members come home
+  from a raid and hang a lantern in the tree, win a territory and the banner goes up the pole (at
+  most once in five minutes), reach a level (at most once in ten) or a milestone. The feed in the
+  corner says so in a line. Coming in,
   the feed counts everybody else in town, members and guests together: "You are home. 3 are in
   town.", "1 is in town.", or "The town is quiet."
 - **Touching things.** Lantern posts, mushrooms, flowers, ferns, the great trunks, the fire, the
@@ -214,8 +216,11 @@ Leaf. `live.test.ts` holds the live guild to handing the town nobody the server 
 - **The guild's news.** The town listens to the guild's events. Members paid for the same raid at
   the same moment are one party: they walk in through the gate (any of them in town already come
   over), the first hangs a lantern in the tree, and the feed names them and the raid. A war raises
-  the banner for that territory; a level or a milestone is a line in the feed. The member is
-  "You", and no line says how much Leaf anybody was paid (`news.ts` has every line).
+  the banner for that territory, and the feed says only what its events do: "Alice and Bob fought at Detlas.", never who won. A milestone is a line in the feed, and so is a level: the
+  member's own always, anybody else's only at a multiple of five. The member is "You", and no line
+  says how much Leaf anybody was paid (`news.ts` has every line). The feed takes these lines one at
+  a time, twenty seconds apart, oldest first, and drops one that has waited five minutes; what
+  happens in the world for them (the party walking in, the lantern, the banner) does not wait.
 - **Who is here.** The town says where the member is (the town, the camp, or nowhere while a game
   is open, which says its own place) and whether their character stays, and hears who else is in
   the game and who has gone in the last day and stays. Up to twelve of the first stand about as

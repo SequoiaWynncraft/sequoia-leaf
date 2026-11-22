@@ -29,6 +29,7 @@ import type {
   Ware,
 } from "./guild.ts";
 import { type Letter, letter } from "./mail.ts";
+import { lineFor } from "./news.ts";
 
 const RANKS = ["Seedling", "Sapling", "Ranger", "Warden", "Elder"] as const;
 
@@ -258,8 +259,12 @@ const PIECES: readonly Stock[] = stock(
 const PRESENTS = ["pinecone", "painted-pebble", "acorn-jar"] as const;
 
 const LOST_CRAB = 7;
-/** The made-up guild's moments, in turn, every twenty seconds or so. */
+/** The made-up guild's moments, in turn, each skipped while its own limit holds it back. */
 const ORDER: readonly Moment[] = ["level", "raid", "war", "milestone"];
+/** The least time between any two of the made-up guild's moments, of any kind, in seconds. */
+export const GAP = 90;
+/** The least time between two of one kind, in seconds: a stand-in levels at most once in ten minutes, a territory at most once in five. */
+const EVERY: Readonly<Partial<Record<Moment, number>>> = { level: 600, war: 300 };
 
 /** Leaf each for a raid, and the most raids the made-up guild will credit for one absence. */
 const RAID_LEAF = 80;
@@ -341,6 +346,10 @@ export function makeGuild(o: Opts = {}): MadeUp {
   let nextIn = 7;
   let plankIn = 5.5;
   let callIn = 34;
+  /** Seconds the guild has been stepped, and when it last told anything, and each kind of moment last. */
+  let clock = 0;
+  let lastAt = -Infinity;
+  const lastOf = new Map<Moment, number>();
   /** When the stand-ins who have gone were last seen: kept from the first time asked, so that they stay put. */
   const since = now();
 
@@ -348,8 +357,13 @@ export function makeGuild(o: Opts = {}): MadeUp {
     o.keep?.(JSON.stringify({ v: 1, ...mem }));
   };
   const tell = (h: Happening): void => {
+    lastAt = clock;
     for (const fn of ears) fn(h);
   };
+  /** Whether long enough has passed since the last moment for another. */
+  const free = (): boolean => clock - lastAt >= GAP;
+  /** Whether a kind of moment's own limit has passed since the last of it. */
+  const due = (kind: Moment): boolean => clock - (lastOf.get(kind) ?? -Infinity) >= (EVERY[kind] ?? 0);
   const pick = <T>(list: readonly T[]): T | undefined =>
     list[Math.min(list.length - 1, Math.floor(random() * list.length))];
   /** Some of the stand-ins, in a random order. */
@@ -361,6 +375,25 @@ export function makeGuild(o: Opts = {}): MadeUp {
       out.push(...pool.splice(at, 1).map(person));
     }
     return out;
+  }
+
+  /** The next of its moments in turn that its own limit lets through; a raid always may. */
+  function nextInTurn(): Moment {
+    for (let i = 0; i < ORDER.length; i++) {
+      const kind = ORDER[(turn + i) % ORDER.length];
+      if (kind && due(kind)) {
+        turn += i + 1;
+        return kind;
+      }
+    }
+    return "raid";
+  }
+
+  /** Whether moving a quest along by so much would finish it, which is a moment of its own. */
+  function finishes(id: string, by: number): boolean {
+    const q = BOARD.find((b) => b.id === id);
+    const have = mem.progress[id] ?? q?.have ?? 0;
+    return q !== undefined && have < q.need && have + by >= q.need;
   }
 
   /** Moves a quest along; says so once, the moment it is done. */
@@ -375,6 +408,7 @@ export function makeGuild(o: Opts = {}): MadeUp {
   }
 
   function stir(kind: Moment): void {
+    lastOf.set(kind, clock);
     if (kind === "call") {
       const who = pick(CALLERS);
       if (!who) return;
@@ -516,23 +550,37 @@ export function makeGuild(o: Opts = {}): MadeUp {
       ears.add(fn);
       return () => ears.delete(fn);
     },
+    say(h, feed) {
+      const line = lineFor(h);
+      if (line) feed(line[0], line[1]);
+    },
     step(dt) {
+      clock += dt;
       callIn -= dt;
-      if (callIn <= 0) {
+      if (o.quiet) {
+        // Beside the real guild the town's own are all it has, and call in their own time.
+        if (callIn > 0) return;
         callIn = 46 + random() * 30;
         stir("call");
+        return;
       }
-      if (o.quiet) return;
+      // Anything due waits until the last moment is ninety seconds gone: the plank that finishes
+      // the quest, then the guild's own moments, then a call (which is due more often, and so
+      // would otherwise take every turn).
       plankIn -= dt;
-      if (plankIn <= 0) {
+      if (plankIn <= 0 && (free() || !finishes("planks", 1))) {
         plankIn = 5.5;
         progress("planks", 1, "Forty planks down the belt. See the board.");
       }
       nextIn -= dt;
-      if (nextIn > 0) return;
-      nextIn = 18 + random() * 4;
-      stir(ORDER[turn % ORDER.length] ?? "level");
-      turn++;
+      if (nextIn <= 0 && free()) {
+        nextIn = GAP + random() * 30;
+        stir(nextInTurn());
+      }
+      if (callIn <= 0 && free()) {
+        callIn = 46 + random() * 30;
+        stir("call");
+      }
     },
     visitors,
     resting,
