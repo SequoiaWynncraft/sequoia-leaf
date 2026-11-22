@@ -126,18 +126,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
           ),
         ),
       );
-    } else
-      kids.push(
-        el(
-          "div",
-          "k-paper order",
-          {},
-          el("div", "k-title", { text: "Story complete" }),
-          el("div", "k-dim", {
-            text: "You have filled every story order. Side orders keep coming.",
-          }),
-        ),
-      );
+    } else kids.push(el("div", "k-paper order", {}, el("div", "k-title", { text: "Story complete" })));
     kids.push(el("div", "k-label", { text: "Side orders" }));
     if (!w.open.board)
       kids.push(
@@ -163,13 +152,12 @@ function orders(_art: Art, body: HTMLElement): () => void {
             sfx.paper();
             panelHooks.changed();
           });
-      tip(
-        act,
-        full ? "Hand over" : "Swap",
-        full
-          ? `${s.from} is at the gate to collect it. Pays ${s.pay} Coins.`
-          : (why ?? `Replaces this order with a new one. Free, once every ${(SWAP_EVERY * TICK_MS) / 60_000} minutes.`),
-      );
+      if (!full)
+        tip(
+          act,
+          "Swap",
+          why ?? `Replaces this order with a new one. Free, once every ${(SWAP_EVERY * TICK_MS) / 60_000} minutes.`,
+        );
       kids.push(
         el(
           "div",
@@ -186,13 +174,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
           el("div", "", { text: s.title }),
           el("div", "k-d", { text: s.line }),
           ...rows.rows,
-          el(
-            "div",
-            "k-row",
-            {},
-            el("span", "k-grow k-d", { text: full ? "Filled. Hand it over to be paid." : "" }),
-            act,
-          ),
+          el("div", "k-row", {}, el("span", "k-grow"), act),
         ),
       );
     });
@@ -235,11 +217,7 @@ function later(why: string, name: string): string {
 function plans(_art: Art, body: HTMLElement): () => void {
   const build = (): void => {
     const w = S.world;
-    const kids: HTMLElement[] = [
-      el("div", "k-d", {
-        text: "Each plan is bought once and lasts for good. More unlock as you fill story orders.",
-      }),
-    ];
+    const kids: HTMLElement[] = [];
     for (const branch of BRANCHES) {
       kids.push(el("div", "k-label", { text: branch.label }));
       const chained = branch.plans.length === 2;
@@ -327,7 +305,7 @@ function depot(_art: Art, body: HTMLElement): () => void {
       ),
       rows.length > 0
         ? el("div", "rows", {}, ...rows)
-        : el("div", "k-d", { text: "Nothing has reached the depot yet. Run a belt to the depot." }),
+        : el("div", "k-d", { text: "Nothing has reached the depot yet." }),
       el(
         "div",
         "k-card",
@@ -441,13 +419,6 @@ function shift(_art: Art, body: HTMLElement): () => void {
   );
   closeLeaf(go, `${SHIFT.leaf} Leaf`);
   body.append(
-    el(
-      "div",
-      "k-row",
-      {},
-      yardIcon("shift", 2),
-      el("div", "k-grow", { text: "A second shift: everything works twice as fast." }),
-    ),
     el(
       "div",
       "k-d",

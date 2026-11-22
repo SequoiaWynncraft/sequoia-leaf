@@ -221,7 +221,7 @@ function strung(s: Strand): void {
 
 // ---------- what touching things does ----------
 
-const tipOf = (id: PlaceId): readonly [string, string] => [place(id).name, place(id).about];
+const tipOf = (id: PlaceId): readonly [string, string] => [place(id).name, place(id).about ?? ""];
 
 const mid = (p: Prop): Pt => ({ x: p.x, y: p.y - (p.sprite ? p.sprite.c.height * 0.55 : 5) });
 
@@ -564,7 +564,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     extra: drawBelt,
   });
   add("pile", s.pile, 458, 135, {
-    tip: ["Crates", "Stacked up for the depot."],
+    tip: ["Crates", ""],
     tap: (p) => {
       nudge(p);
       sfx.knock();

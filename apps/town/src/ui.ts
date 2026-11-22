@@ -211,7 +211,7 @@ function treasury(body: HTMLElement): () => void {
           changed();
         });
         if (!closeLeaf(buy, `${w.price} Leaf`))
-          tip(buy, `${w.price} Leaf`, w.once ? "Yours to keep." : "As often as you like.");
+          tip(buy, `${w.price} Leaf`, w.once ? undefined : "As often as you like.");
         side.replaceChildren(buy);
       },
     );
@@ -525,13 +525,7 @@ function doorCard(id: "works" | "table"): (body: HTMLElement) => null {
     go.dataset.first = "";
     body.append(
       el("div", "k-row", {}, slot(shown(icon(id), 2), 34), el("div", "k-grow", { text: game.about })),
-      el(
-        "div",
-        "k-paper",
-        {},
-        el("div", "k-label", { text: "Waiting for you" }),
-        el("div", "", { text: game.waiting() }),
-      ),
+      el("div", "k-paper", {}, el("div", "", { text: game.waiting() })),
       go,
     );
     return null;
@@ -569,7 +563,6 @@ function fireside(body: HTMLElement): () => void {
   const list = el("div", "k-wrap");
   const seat = el("span");
   body.append(
-    el("div", "k-label", { text: "By the fire" }),
     list,
     el(
       "div",
@@ -612,7 +605,7 @@ function fireside(body: HTMLElement): () => void {
                 a.dozing !== null ? el("span", "k-dim", { text: "zz" }) : null,
               ),
             )
-          : [el("span", "k-d", { text: "Nobody yet. It's all yours." })]),
+          : [el("span", "k-d", { text: "Nobody yet." })]),
       );
       const p = G.player;
       seat.replaceChildren(
@@ -724,7 +717,7 @@ function campCard(body: HTMLElement): () => void {
       slot(shown(icon("camp"), 2), 34),
       el("div", "k-grow", { text: "Your own clearing, a little way into the trees." }),
     ),
-    el("div", "k-paper", {}, el("div", "k-label", { text: "Waiting for you" }), news),
+    el("div", "k-paper", {}, news),
     go,
   );
   return when(campWaiting, () => {

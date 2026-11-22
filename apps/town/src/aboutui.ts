@@ -151,7 +151,7 @@ export function initAbout(locate: (a: Actor) => void): void {
     if (G.panel === ABOUT) closePanel();
     else openAbout(locate);
   });
-  tip(button, "Who is about", "Who is in town, who is elsewhere in the game, and who was here lately.");
+  tip(button, "Who is about");
   $("purse").after(button);
   stepAbout(1);
 }

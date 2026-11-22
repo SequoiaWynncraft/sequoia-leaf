@@ -1653,7 +1653,7 @@ export function makeCamp(
       const n = sel?.dragging ? -1 : thingAt(at.x, at.y);
       const l = n >= 0 && n !== sel?.index ? liveAt(n) : null;
       const h: Hover | null = l?.prop.hit
-        ? { box: l.prop.hit, tip: [l.thing.name, "Drag it somewhere else."], ref: thingRef(l.thing.id) }
+        ? { box: l.prop.hit, tip: [l.thing.name, ""], ref: thingRef(l.thing.id) }
         : null;
       show.hover = h?.box ?? null;
       show.pointed = null;

@@ -9,7 +9,6 @@ import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph, shown } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
-import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { hop } from "./actors.ts";
@@ -94,13 +93,13 @@ const signed = (name: string): HTMLElement =>
   folkNamed(name) ? folkName(name, "k-pix k-grow") : el("b", "k-grow", { text: name });
 
 /** A row of the signpost: somewhere to go, and the button that goes there. */
-function way(name: string, about: string, art: HTMLCanvasElement, go: () => void): HTMLElement {
+function way(name: string, art: HTMLCanvasElement, go: () => void): HTMLElement {
   return el(
     "div",
     "k-card",
     {},
     slot(shown(art, 1), 20),
-    el("div", "k-grow", {}, name, el("div", "k-d", { text: about })),
+    el("div", "k-grow", {}, name),
     button("sm", ["Go"], () => {
       closePanel();
       go();
@@ -192,7 +191,6 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
               if (G.player) hop(G.player);
               changed();
             });
-            tip(side, w.name, on ? "Showing. Tap to put it away." : "Put away. Tap to show it.");
             return el("div", "k-card", {}, el("div", "k-grow", {}, w.name, el("div", "k-d", { text: w.about })), side);
           }),
         );
@@ -329,12 +327,12 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
     const here = at().owner();
     if (here !== null)
       body.append(
-        way("Home", "Your own camp.", campIcon("home"), () => {
+        way("Home", campIcon("home"), () => {
           at().leave("home");
         }),
       );
     body.append(
-      way("Town", "Back up the hill.", campIcon("town"), () => {
+      way("Town", campIcon("town"), () => {
         at().leave("town");
       }),
       el("div", "k-label", { text: "Down the trail" }),
@@ -546,10 +544,9 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
           else s.go(id);
         },
       });
-      const trail = (name: string, about: string, icon: CampIcon) => ({
+      const trail = (name: string, icon: CampIcon) => ({
         id: "trail",
         name,
-        about,
         art: campIcon(icon),
         press: (): void => {
           closePanel();
@@ -562,12 +559,12 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
               place("cabin", "Cabin", "What you wear, what you have won, who lives here.", "cabin"),
               place("mailbox", "Mailbox", "Notes and presents from the town's own.", "mailbox"),
               place("signpost", "Signpost", "The way to town.", "signpost"),
-              trail("Town", "Back up the hill.", "town"),
+              trail("Town", "town"),
             ]
           : [
               place("mailbox", "Leave a present", `Something small, for ${s.owner() ?? "them"}.`, "mailbox"),
               place("signpost", "Signpost", "Home, town, or another camp.", "signpost"),
-              trail("Home", "Back to your own camp.", "home"),
+              trail("Home", "home"),
             ],
       );
       setFace(() => {

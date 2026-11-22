@@ -127,7 +127,6 @@ export function buildTable(a: Asks): void {
     pic(glyph("swords")),
     el("span", "", { text: "Last fight" }),
   );
-  tip(last, "Last fight", "Who did what in the last fight, again.");
   add(hud, purse, track, last, resolve, el("div", "", { id: "corner" }, help, sound, door));
 
   const rustle = el("button", "k-btn wood", { id: "rustle", type: "button", onclick: a.rustle });

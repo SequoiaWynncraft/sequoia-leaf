@@ -192,7 +192,7 @@ function front(): HTMLElement {
   }
   // The raid laid out, while it has fought no room, stays the one set out on.
   const keep = run !== null && run.phase !== "over" && unfought(run);
-  add(body, el("div", "k-label", { text: keep ? "Which way, next time?" : run ? "Or set out afresh" : "Which way?" }));
+  if (keep) add(body, el("div", "k-label", { text: "Which way, next time?" }));
   const trails = el("div", "trails", { role: "radiogroup" });
   for (let i = 0; i < TRAIL_COUNT; i++) {
     const t = TRAILS[i];
@@ -491,17 +491,8 @@ function looks(): HTMLElement {
     bases: (tried.kind === "bases" ? baseOf(tried.id) : null) ?? S.looks.bases,
   };
   const body = el("div", "k-body k-scroll", {});
-  add(
-    body,
-    el(
-      "div",
-      "k-row",
-      {},
-      el("span", "k-d k-grow", { text: "They change how the table looks, and nothing else." }),
-      // A guest has no Leaf to show.
-      leafShown() ? amount("leaf", balance().leaf) : null,
-    ),
-  );
+  // A guest has no Leaf to show.
+  if (leafShown()) add(body, el("div", "k-row", {}, el("span", "k-grow"), amount("leaf", balance().leaf)));
   add(body, el("div", "swatch", {}, figPic(paintSwatch(dressed.cloth, dressed.lantern, dressed.bases))));
   if (spec) {
     const mine = owns(S.looks, tried.kind, tried.id);
@@ -634,11 +625,7 @@ function summary(): HTMLElement | null {
         : el("div", "k-row pay", {}, el("span", "k-grow", { text: WHY[l.why] }), amount("coin", `+${l.coins}`)),
     );
   if (right.childElementCount === 0)
-    add(
-      right,
-      el("div", "k-label", { text: "New in the almanac" }),
-      el("i", "", { text: "Nothing this time. The almanac has seen it all before." }),
-    );
+    add(right, el("div", "k-label", { text: "New in the almanac" }), el("i", "", { text: "Nothing this time." }));
   add(
     left,
     el(
