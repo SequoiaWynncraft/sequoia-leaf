@@ -294,7 +294,8 @@ async function boot(): Promise<void> {
       }
       // A button that has the keyboard answers Enter and Space itself.
       if (!repeated && (k === "e" || !onButton)) scene.act();
-      if (k === " " && !onButton) e.preventDefault();
+      // Or Enter would go on to press the first button of the card it has just opened.
+      if (k !== "e" && !onButton) e.preventDefault();
       return;
     }
     if (!scene.awake()) return;

@@ -153,7 +153,7 @@ export const FOLK: readonly Townsperson[] = [
   },
   {
     id: "embertoe",
-    name: "Embertoe",
+    name: "Fika",
     what: "The Works' cat",
     kind: "cat",
     hue: COAT.ginger,

@@ -41,7 +41,7 @@ export const GAMES: Readonly<Record<GameId, Game>> = {
     about: "Your yard, behind the workshop. Coins are made here.",
     waiting: () => read("works")?.waiting ?? "The yard is quiet. Somebody should start it up.",
     go: "Go in",
-    shut: ["Door's stuck", "Embertoe has gone to find the key. The Works is not open yet."],
+    shut: ["Door's stuck", "Fika has gone to find the key. The Works is not open yet."],
   },
   table: {
     id: "table",

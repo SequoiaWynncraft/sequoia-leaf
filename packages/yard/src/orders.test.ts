@@ -286,7 +286,7 @@ describe("the board", () => {
 const NOT_ASKERS = ["Quillfeather", "Fernwhistle", "Wrenly", "Kestrelle", "Hobbleknot", "Dunmere", "Tansy Fen"];
 /** Who may ask: places in town, the town's own, and the creatures the guild is fond of. */
 const PLACES = /^The (Treasury|campfire|crab pond|market stalls|quest board|raid parties|gate|gnomes|guild|cats|fox)$/;
-const TOWNSFOLK = new Set(["Cinfy", "Pipwick", "Embertoe", "Tindra"]);
+const TOWNSFOLK = new Set(["Cinfy", "Pipwick", "Fika", "Tindra"]);
 const CREATURES = ["Worm", "Rock", "Greg", "Glorp", "Moth", /^Crab #\d+$/, "The fox"];
 const allowed = (from: string): boolean =>
   PLACES.test(from) ||
