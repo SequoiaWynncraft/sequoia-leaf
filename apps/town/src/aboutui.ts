@@ -136,8 +136,10 @@ function initPeople(locate: (a: Actor) => void): void {
       const a = inTown ? (you ? G.player : visitorOf({ id: p.id, name: p.name, you })) : null;
       return [
         ...(a ? [{ label: "Find in town", on: away(() => locate(a)) }] : []),
-        ...(p.games?.works && !you ? [{ label: "Visit yard", on: away(() => hooks.goIn("works", p.id)) }] : []),
-        ...(p.games?.town && !you ? [{ label: "Visit camp", on: away(() => hooks.visitCamp(p.id, p.name)) }] : []),
+        ...(p.games?.works?.placed && !you ? [{ label: "Visit yard", on: away(() => hooks.goIn("works", p.id)) }] : []),
+        ...(p.games?.town?.placed && !you
+          ? [{ label: "Visit camp", on: away(() => hooks.visitCamp(p.id, p.name)) }]
+          : []),
       ];
     },
   });

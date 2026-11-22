@@ -159,6 +159,10 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  *
  * A visitor reads somebody's state (`visit`) brought to now in memory, and nothing is written: no
  * new state, not the one brought to now, no Coins.
+ *
+ * Each call taken (an opening, a batch that is not refused whole, a visit) counts for the caller the
+ * time since their last call to that game (`PlayStore.heard`), in the call's transaction where it
+ * has one. It is a write like the call's others: if the database fails it, the call fails with it.
  */
 export class Play extends Context.Service<
   Play,
@@ -225,9 +229,16 @@ export class Play extends Context.Service<
           return unseen.reduce((sum, spend) => sum + spend.amount, 0) > balance ? "not_enough_leaf" : unseen;
         });
 
-      /** The player's stored state in a game, or a new one made and stored for them, opened at now (`openAt`). */
+      /** Counts the caller's time in a game up to now (`PlayStore.heard`). */
+      const heard = (playing: Playing, played: Played, now: number) => store.heard(playing.playerId, played.id, now);
+
+      /**
+       * The player's stored state in a game, or a new one made and stored for them, opened at now
+       * (`openAt`); their time in it counted.
+       */
       const opened = (playing: Playing, played: Played, now: number, room: number) =>
         Effect.gen(function* () {
+          yield* heard(playing, played, now);
           const found = yield* store.read(playing.playerId, played.id);
           if (Option.isSome(found)) {
             return yield* openAt(playing.playerId, playing, played, found.value, now, room);
@@ -387,6 +398,7 @@ export class Play extends Context.Service<
             if (!pace.take(caller.playerId, now, [1, 0])) {
               return { status: "slow" } satisfies Visiting;
             }
+            yield* heard(caller, played, now);
             const found = yield* store.read(player, played.id);
             if (Option.isNone(found)) {
               return { status: "nothing" } satisfies Visiting;

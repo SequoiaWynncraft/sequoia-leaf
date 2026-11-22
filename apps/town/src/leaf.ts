@@ -14,7 +14,8 @@
  * caller arrived, a guess was wrong), the page takes Leaf's and draws again. While the member is in
  * their own camp the page asks Leaf for the state every half minute, which is how a caller arrives.
  * It tells Leaf the member is still here (`here`) every five minutes while the page is in view, and
- * as the page is put away.
+ * as the page is put away. While a game is open over the town, the town tells and reads nothing: the
+ * game calls Leaf itself.
  *
  * A visit to somebody else's camp opens theirs beside the member's own (`openCamp`), as Leaf gives
  * a visitor it, and the camp on show is theirs (`shown()`) until the member leaves (`lookAt`). The
@@ -95,7 +96,11 @@ const tell = (differs: boolean): void => {
 let troubled: (why: Trouble) => void = () => {};
 
 export async function openTown(player: string, trouble: (why: Trouble) => void): Promise<Trouble | null> {
-  const opened = await openPlay<TownView, TownCommand, TownNote>("town", READER, { player });
+  // Under a game it opened, the town says nothing of itself: the game calls Leaf.
+  const opened = await openPlay<TownView, TownCommand, TownNote>("town", READER, {
+    player,
+    away: () => told?.inGame() === true,
+  });
   if ("trouble" in opened) return opened.trouble;
   me = player;
   leaf = opened;
@@ -189,32 +194,48 @@ export async function again(): Promise<void> {
   await leaf?.refresh();
 }
 
+interface Told {
+  /** Whether the arrival letter has been put away. */
+  readonly home: () => boolean;
+  /** Whether the member is in their own camp. */
+  readonly inCamp: () => boolean;
+  /** Whether a game is open over the town. */
+  readonly inGame: () => boolean;
+  /** How far the member's news has been told. */
+  readonly cursor: () => number | null;
+}
+let told: Told | null = null;
+
+/** Tells Leaf the member is here, with their news told as far as `cursor()`: once `home()`, and not in a visit. */
+export function here(): void {
+  if (told?.home() && !looked) doNow({ do: "here", cursor: told.cursor() });
+}
+
+/** As the page is put away: the member is said to be here, and everything Leaf has not answered is sent. */
+function goingAway(): void {
+  if (!told?.inGame()) here();
+  leaf?.flush();
+}
+
 /**
  * Keeps Leaf told while the page is open: every half minute, while `inCamp()` (the member's own),
  * the town is asked for; every five minutes while in view, and as the page is put away, the member
- * is said to be here, with their news told as far as `cursor()`, once `home()` (the letter put
- * away). In a visit nothing is told, and the camp looked at is read every half minute, and as the
- * tab comes back.
+ * is said to be `here`. In a visit nothing is told, and the camp looked at is read every half
+ * minute, and as the tab comes back. While `inGame()`, neither is done.
  */
-export function keepTold(o: { home: () => boolean; inCamp: () => boolean; cursor: () => number | null }): void {
+export function keepTold(o: Told): void {
   if (typeof window === "undefined") return;
-  const here = (): void => {
-    if (o.home() && !looked) doNow({ do: "here", cursor: o.cursor() });
-  };
+  told = o;
   const look = (): void => {
     if (looked) void looked.play.refresh();
     else if (o.inCamp()) void again();
   };
   window.setInterval(() => {
-    if (!document.hidden) look();
+    if (!document.hidden && !o.inGame()) look();
   }, LOOK_EVERY);
   window.setInterval(() => {
-    if (!document.hidden) here();
+    if (!document.hidden && !o.inGame()) here();
   }, HERE_EVERY);
-  const goingAway = (): void => {
-    here();
-    leaf?.flush();
-  };
   window.addEventListener("pagehide", goingAway);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") goingAway();

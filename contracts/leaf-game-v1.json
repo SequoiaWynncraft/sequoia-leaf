@@ -1791,13 +1791,17 @@
       "id": "10000000-0000-0000-0000-000000000001",
       "name": "Alice",
       "games": {
+        "pulls": {
+          "played": 60
+        },
         "raid": {
           "place": 1,
           "score": 0,
           "also": {
             "runs": 0,
             "room": 0
-          }
+          },
+          "played": 0
         },
         "town": {
           "place": 1,
@@ -1805,16 +1809,19 @@
           "also": {
             "greeted": 0,
             "sightings": 0
-          }
+          },
+          "played": 180
         },
         "works": {
           "place": 2,
           "score": 1840,
           "also": {
             "story": 3
-          }
+          },
+          "played": 0
         }
-      }
+      },
+      "played": 240
     }
   },
   "GET /v1/game/people/{player}, unknown": {

@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { isRecord } from "./net.ts";
-import { type Answer, NOT_YET, openPlay, type Play, type PlayReader, waitingLook } from "./play.ts";
+import { type Answer, NOT_YET, openPlay, type Play, type PlayReader, STILL_HERE, waitingLook } from "./play.ts";
 import { type Reply, type Sent, type Standin, standin } from "./standin.ts";
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
@@ -164,6 +164,7 @@ describe("visiting somebody's game", () => {
     expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "visiting" });
     expect(play.waiting()).toBe(false);
     play.flush();
+    world.wake();
     await play.refresh();
     expect(world.sent.map((s) => `${s.method} ${s.path}`)).toEqual([`GET ${OF}`, `GET ${OF}`]);
   });
@@ -215,10 +216,17 @@ describe("sending commands", () => {
     const sent = leaf.batches.flat().map((c) => (isRecord(c) ? c.id : null));
     expect(leaf.away.flat().map((c) => (isRecord(c) ? c.id : null))).toEqual(sent);
     expect(leaf.n).toBe(6);
-    // With nothing waiting, nothing is sent.
+    // With nothing waiting, the state is read instead, so that Leaf hears the page until it goes;
+    // and read again as the page comes back.
     play.flush();
     await Bun.sleep(2);
     expect(leaf.away).toHaveLength(1);
+    expect(world?.sent.at(-1)).toMatchObject({ method: "GET", path: "/v1/game/play/raid", keepalive: true });
+    leaf.n = 40;
+    world?.wake();
+    await Bun.sleep(2);
+    expect(world?.sent.at(-1)).toMatchObject({ method: "GET", path: "/v1/game/play/raid", keepalive: false });
+    expect(play.state).toEqual({ n: 40 });
   });
 
   test("a few long commands go in more than one request, and a body Leaf will not read is not sent for ever", async () => {
@@ -446,6 +454,99 @@ describe("sending commands", () => {
     await settled(play);
     await Bun.sleep(5);
     expect(world?.reloaded.count).toBe(1);
+  });
+});
+
+describe("a page in view", () => {
+  test("a read answered after a command sent meanwhile does not undo what the command showed", async () => {
+    const { routes } = counterLeaf();
+    const held: { read: ReadableStreamDefaultController<Uint8Array> | null } = { read: null };
+    let reads = 0;
+    const w = standin({
+      ...routes,
+      // The first read opens the page; the second is held until the test lets it go.
+      "GET /v1/game/play/raid": () => {
+        if (reads++ === 0) return routes["GET /v1/game/play/raid"]();
+        const body = new ReadableStream<Uint8Array>({ start: (c) => void (held.read = c) });
+        return new Response(body, { status: 200, headers: { "Content-Type": "application/json" } });
+      },
+    });
+    world = w;
+    const play = await openPlay<Count, Add, string>("raid", COUNTER, { player: "p" });
+    if ("trouble" in play) throw new Error("not opened");
+    w.wake();
+    await Bun.sleep(1);
+    await play.send({ do: "add", by: 3 });
+    expect(play.state).toEqual({ n: 3 });
+    if (!held.read) throw new Error("no read was held");
+    const old = { rev: 0, now: "2026-11-25T12:00:00.000Z", state: { n: 0 } };
+    held.read.enqueue(new TextEncoder().encode(JSON.stringify(old)));
+    held.read.close();
+    await Bun.sleep(1);
+    expect(play.state).toEqual({ n: 3 });
+  });
+
+  test("reads its state after a minute without a call to Leaf, and not while hidden, put aside, or in a visit", async () => {
+    jest.useFakeTimers();
+    const doc = Object.assign(new EventTarget(), { hidden: false });
+    const win = Object.assign(new EventTarget(), {
+      setInterval: (fn: () => void, ms: number) => setInterval(fn, ms),
+    });
+    Object.defineProperty(globalThis, "window", { value: win, configurable: true });
+    Object.defineProperty(globalThis, "document", { value: doc, configurable: true });
+    try {
+      const { routes } = counterLeaf();
+      const w = standin({
+        ...routes,
+        "GET /v1/game/play/raid/of/bob": { status: 200, body: { rev: 0, state: { n: 1 } } },
+      });
+      world = w;
+      let away = false;
+      const play = await openPlay<Count, Add, string>("raid", COUNTER, { player: "p", away: () => away });
+      const visit = await openPlay<Count, Add, string>("raid", COUNTER, { player: "p", of: "bob" });
+      if ("trouble" in play || "trouble" in visit) throw new Error("not opened");
+      const reads = (): number => w.sent.filter((s) => s.method === "GET").length;
+      /** Whatever was set going settles. */
+      const flushed = async (n = 10): Promise<void> => {
+        if (n === 0) return;
+        await Promise.resolve();
+        await flushed(n - 1);
+      };
+      /** `n` quarters of a minute go by. */
+      const ticks = async (n: number): Promise<void> => {
+        if (n === 0) return;
+        w.clock.now += STILL_HERE / 4;
+        jest.advanceTimersByTime(STILL_HERE / 4);
+        await flushed();
+        await ticks(n - 1);
+      };
+      const before = reads();
+      await ticks(3);
+      expect(reads()).toBe(before);
+      await ticks(1);
+      expect(reads()).toBe(before + 1);
+      // A command is a call: the minute counts from it.
+      await ticks(1);
+      await play.send({ do: "add", by: 1 });
+      await ticks(3);
+      expect(reads()).toBe(before + 1);
+      await ticks(1);
+      expect(reads()).toBe(before + 2);
+      doc.hidden = true;
+      await ticks(8);
+      doc.hidden = false;
+      away = true;
+      await ticks(8);
+      expect(reads()).toBe(before + 2);
+      away = false;
+      await ticks(1);
+      expect(reads()).toBe(before + 3);
+      expect(w.sent.filter((s) => s.path.endsWith("/of/bob"))).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+      Reflect.deleteProperty(globalThis, "window");
+      Reflect.deleteProperty(globalThis, "document");
+    }
   });
 });
 

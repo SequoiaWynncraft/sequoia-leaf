@@ -227,12 +227,18 @@ export const Standings = Schema.Struct({
 
 /**
  * Somebody, as their card shows them: their id, their name ("Someone" for one Leaf has no name for),
- * and their place, score and numbers in each game they have a standing in, by game.
+ * and each game they have a standing or time in, by game: how long they have played it, in whole
+ * seconds (`played`), and with a standing, their place, score and numbers in it; and how long they
+ * have played all games together.
  */
 export const Person = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
-  games: Schema.Record(Schema.String, Place),
+  games: Schema.Record(
+    Schema.String,
+    Schema.Union([Schema.Struct({ ...Place.fields, played: Schema.Number }), Schema.Struct({ played: Schema.Number })]),
+  ),
+  played: Schema.Number,
 });
 
 /**
