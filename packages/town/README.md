@@ -99,14 +99,16 @@ letters or Coins are Leaf's to say.
 ## Where a camp stands
 
 `standing`: the things set out, with the callers greeted and the crab's sightings beside it, for
-a person's card. No page shows a board for it.
+a person's card and the camps a signpost lists.
+
+## A visit
+
+`visit` (`visitView`): what another player is given of a camp, in the page's own shape. It holds
+what stands there, each thing in its own state, and the pet chosen first; the letters, parcels,
+tray, caller and counters are left out (empty, or 0), and the arrival letter says nothing.
 
 ## Keeping it
 
 `encodeTown` and `decodeTown`: Leaf's stored text, read back with every field's type checked but
 trusting that each thing stands where it may (each change was checked when it was made), in
-about 0.04 ms for the largest camp. `adopt` reads the browser's old record (`town.save.v1`) with
-every check the page made (`readCamp`: a thing that cannot stand goes into the tray, a missing
-cabin, mailbox or signpost is put back) and numbers each thing standing; the member is here now
-by Leaf's clock, and the callers and the stream start afresh. It takes about 12 ms for the largest
-camp, and is for bringing camps over once (`apps/api/tools/once/import-town.ts`).
+about 0.04 ms for the largest camp.

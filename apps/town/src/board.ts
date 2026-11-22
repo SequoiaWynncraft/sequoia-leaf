@@ -51,8 +51,20 @@ export const openingTab = (): (typeof TABS)[number] => (unread() ? "News" : "Que
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
-/** A note's day as the board shows it: `2026-11-22` is "22 Nov". */
-export function shortDay(day: string): string {
-  const [, month, date] = day.split("-");
+/**
+ * When a note went live as the board shows it, in the reader's own time: "22 Nov, 20:09". An old
+ * note has only its day: "22 Nov". `zone` is for the tests.
+ */
+export function noteWhen(at: string, zone?: string): string {
+  if (at.includes("T"))
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZone: zone,
+    }).format(new Date(at));
+  const [, month, date] = at.split("-");
   return `${Number(date)} ${MONTHS[Number(month) - 1] ?? ""}`;
 }

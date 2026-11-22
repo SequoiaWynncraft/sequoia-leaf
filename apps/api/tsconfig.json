@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["bun"]
   },
-  "include": ["src", "scripts", "test", "tools"]
+  "include": ["src", "scripts", "test"]
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { newCamp, readCamp } from "./camp.ts";
+import { newCamp } from "./camp.ts";
 import { BOX, isLetter, letter, open, post, roomInBox, tidied, waiting } from "./mail.ts";
 
 describe("the mailbox", () => {
@@ -34,15 +34,13 @@ describe("the mailbox", () => {
     expect(box[0]?.id).toBe("l1");
   });
 
-  test("a box full of presents throws none away: the next letter is not left, and every one comes back", () => {
+  test("a box full of presents throws none away: the next letter is not left", () => {
     const camp = newCamp();
     camp.letters = Array.from({ length: BOX }, (_v, i) => letter(`g${i}`, "Tindra", "for you", "toadstool"));
     const ids = camp.letters.map((l) => l.id);
     expect(roomInBox(camp.letters)).toBe(false);
     expect(post(camp.letters, letter("late", "Pipwick", "and this", "cushion"))).toBe(false);
     expect(camp.letters.map((l) => l.id)).toEqual(ids);
-    const back = readCamp(JSON.parse(JSON.stringify(camp)));
-    expect(back?.letters.filter(open)).toHaveLength(BOX);
     // Reading one is not enough; taking its present out makes room.
     const first = camp.letters[0];
     if (first) first.read = true;

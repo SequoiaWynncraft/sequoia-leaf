@@ -3,14 +3,14 @@
  * (`GET /v1/game/play/works/standings`), and the member's own place if they are not among them.
  * Each owner is shown as "Who is about" shows them: their face, their name, and "Guest" for a guest.
  * Read when the panel opens, and each minute while it is open. Choosing one shows their card
- * (`person`), with "Visit yard" for anybody else's.
+ * (`person`), with "Visit yard" and "Visit camp" for anybody else's.
  */
 
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { amount, el } from "@sequoia-leaf/kit/dom.ts";
 import { member, where } from "@sequoia-leaf/kit/live.ts";
-import { ask, isRecord, outside } from "@sequoia-leaf/kit/net.ts";
-import { known, people } from "@sequoia-leaf/kit/person.ts";
+import { ask, outside } from "@sequoia-leaf/kit/net.ts";
+import { type Board, known, people, readBoard, type Row } from "@sequoia-leaf/kit/person.ts";
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { RAID_STATS } from "@sequoia-leaf/raid/stats.ts";
@@ -18,61 +18,34 @@ import { STORY } from "@sequoia-leaf/yard";
 import { WORKS_STATS } from "@sequoia-leaf/yard/stats.ts";
 
 import type { Art } from "../art/index.ts";
+import { toTown } from "./hud.ts";
 import { button, pic, when } from "./parts.ts";
-
-/** A yard on the board: its place, its owner, the Coins it has earned and the story orders done. */
-export interface Placed {
-  place: number;
-  score: number;
-  story: number;
-}
-export type Row = Placed & { id: string; name: string; guest: boolean; you: boolean };
-export interface Board {
-  top: Row[];
-  /** The member's own place among everyone, or null before their yard has earned a Coin. */
-  you: Placed | null;
-}
 
 /** How often the board is read again while it is open. */
 const EVERY_MS = 60_000;
 
-const whole = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
-
-function placedOf(v: unknown): Placed | null {
-  if (!isRecord(v) || !whole(v.place) || !whole(v.score) || !isRecord(v.also)) return null;
-  const story = v.also.story;
-  return whole(story) ? { place: v.place, score: v.score, story } : null;
-}
-
-function rowOf(v: unknown): Row | null {
-  const placed = placedOf(v);
-  if (!placed || !isRecord(v) || typeof v.id !== "string" || typeof v.name !== "string") return null;
-  return { ...placed, id: v.id, name: v.name, guest: v.guest === true, you: v.you === true };
-}
-
-/** The board from Leaf's answer, or null for one that makes no sense. */
-export function readBoard(v: unknown): Board | null {
-  if (!isRecord(v) || !Array.isArray(v.top)) return null;
-  const top = v.top.map(rowOf);
-  const you = v.you === null ? null : placedOf(v.you);
-  if (top.some((r) => r === null) || (v.you !== null && you === null)) return null;
-  return { top: top.filter((r) => r !== null), you };
-}
-
-/** Registers the cards of the people on the board: "Visit yard" opens anybody else's yard who has one. */
+/**
+ * Registers the cards of the people on the board: "Visit yard" opens anybody else's yard who has
+ * one, and "Visit camp" leaves for the town on to anybody else's camp.
+ */
 export function initBoard(myId: string): void {
   people({
     stats: { works: WORKS_STATS, raid: RAID_STATS },
     actions: (p) =>
-      p.games?.works && p.id !== myId
-        ? [{ label: "Visit yard", on: () => outside.go(`?of=${encodeURIComponent(p.id)}`) }]
-        : [],
+      p.id === myId
+        ? []
+        : [
+            ...(p.games?.works
+              ? [{ label: "Visit yard", on: () => outside.go(`?of=${encodeURIComponent(p.id)}`) }]
+              : []),
+            ...(p.games?.town ? [{ label: "Visit camp", on: () => toTown(p.id) }] : []),
+          ],
   });
 }
 
 /** One line of the board, standing for its owner. */
 function line(r: Row): HTMLElement {
-  const said = `${r.guest ? "Guest · " : ""}Story ${r.story} of ${STORY.length}`;
+  const said = `${r.guest ? "Guest · " : ""}Story ${r.also.story ?? 0} of ${STORY.length}`;
   const row = el(
     "div",
     r.you ? "k-card lit board-row" : "board-row",

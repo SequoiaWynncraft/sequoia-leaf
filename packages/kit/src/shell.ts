@@ -5,7 +5,8 @@
  */
 
 export type ToTown =
-  | { readonly town: "leave" }
+  /** Back to the town; with `camp`, on to that player's camp. */
+  | { readonly town: "leave"; readonly camp?: string }
   /** Something worth a line in the town's feed. */
   | { readonly town: "news"; readonly text: string; readonly tone?: "gold" | "leaf" | "coral" | "rose" }
   /** The game is on screen and ready, so the town can stop covering for it. */
@@ -32,10 +33,10 @@ export function tell(msg: ToTown): void {
   if (inTown()) window.parent.postMessage(msg, window.location.origin);
 }
 
-/** Go back to the town; opened alone, go to where the town lives beside this game. */
-export function leave(): void {
-  if (inTown()) tell({ town: "leave" });
-  else window.location.href = "../town/";
+/** Go back to the town (with `camp`, on to that player's camp); opened alone, go to where the town lives beside this game. */
+export function leave(camp?: string): void {
+  if (inTown()) tell(camp === undefined ? { town: "leave" } : { town: "leave", camp });
+  else window.location.href = camp === undefined ? "../town/" : `../town/?camp=${encodeURIComponent(camp)}`;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
@@ -65,7 +66,8 @@ export function fromGame(frame: HTMLIFrameElement, fn: (msg: ToTown) => void): (
   const on = (e: MessageEvent): void => {
     if (e.origin !== window.location.origin || e.source !== frame.contentWindow || !isRecord(e.data)) return;
     const d = e.data;
-    if (d.town === "leave" || d.town === "ready") fn({ town: d.town });
+    if (d.town === "leave") fn(typeof d.camp === "string" ? { town: "leave", camp: d.camp } : { town: "leave" });
+    else if (d.town === "ready") fn({ town: "ready" });
     else if (d.town === "news" && typeof d.text === "string") {
       const tone = d.tone === "leaf" || d.tone === "coral" || d.tone === "rose" || d.tone === "gold" ? d.tone : "gold";
       fn({ town: "news", text: d.text, tone });

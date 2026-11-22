@@ -330,8 +330,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   /** Out through the gate and down the trail to the member's own camp. */
   let leaving = false;
-  function toCamp(): void {
-    if (!G.home || going || leaving || !town.toCamp) return;
+  function toCamp(): boolean {
+    if (!G.home || going || leaving || !town.toCamp) return false;
     halt();
     closePanel();
     closeCard();
@@ -344,6 +344,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       else after(0.1, wait);
     };
     wait();
+    return true;
   }
   hooks.toCamp = toCamp;
 

@@ -2,7 +2,8 @@
  * Guild Town: the member arrives as their own character in a small town in a clearing among giant
  * redwoods, where every part of the game is a place to walk up to, the town's own are about, and so are
  * the guild's real members when they are in the game.
- * Behind its gate is the member's own camp, and down the trail from that, everybody else's.
+ * Behind its gate is the member's own camp, and down the trail from that, everybody else's: the page
+ * opened with `?camp=<player>` goes to theirs once the member is home.
  *
  * This file is the stage those places stand on: the canvas, the camera, the keys and fingers, the
  * loop, the walk from one place to another, and the way through a door into a game and back.
@@ -218,7 +219,7 @@ async function boot(): Promise<void> {
         news(text, tone) {
           hooks.feed(text, tone);
         },
-        back() {
+        back(onTo) {
           visit = null;
           paused = false;
           iris.goal = 1;
@@ -228,6 +229,7 @@ async function boot(): Promise<void> {
           guild.here(G.where);
           if (scene === town) town.onStage(true);
           wake();
+          if (onTo !== undefined) hooks.visitCamp(onTo);
         },
       });
     },
@@ -256,7 +258,7 @@ async function boot(): Promise<void> {
   campUi.bind(camp);
   town.toCamp = (): void => {
     stage.travel(camp, () => {
-      camp.enter(null);
+      camp.enter();
     });
   };
   /** The place that is on screen: the town to begin with. */
@@ -497,9 +499,16 @@ async function boot(): Promise<void> {
     if (differs) guild.stay(kept().stay);
   });
   guild.here("town");
-  keepTold({ home: () => G.home, inCamp: () => scene === camp && camp.owner() === null, cursor: () => guild.told() });
+  keepTold({ home: () => G.home, inCamp: () => scene === camp, cursor: () => guild.told() });
   town.onStage(true);
   wake();
+  const asked = new URLSearchParams(location.search).get("camp");
+  const goAsked = (): void => {
+    if (asked === null) return;
+    if (G.home) hooks.visitCamp(asked);
+    else window.setTimeout(goAsked, 250);
+  };
+  goAsked();
 
   window.town = {
     ...town.handles,
