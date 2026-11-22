@@ -409,8 +409,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   }
 
   /**
-   * The places, as doors: each opens its panel, the gate sets off for the camp, and walking on into
-   * a game's doorway or up to its table goes in. At the fire, sitting by it or anywhere round it is
+   * The places, as doors: each opens its panel, and walking on into a game's doorway, up to its
+   * table or out through the gate goes in. At the fire, sitting by it or anywhere round it is
    * being at it; at the pond, anywhere along the shore; at the stump, sitting at it.
    */
   const AT: Partial<Record<PlaceId, (m: Actor) => boolean>> = {
@@ -425,8 +425,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       // The way through the gate, and on up the trail beyond it.
       box: pl.id === "camp" ? { x: 242, y: 72, w: 28, h: 28 } : undefined,
       at: AT[pl.id],
-      use: pl.id === "camp" ? toCamp : () => openPanel(pl.id),
-      enter: game ? () => goIn(game) : undefined,
+      use: () => openPanel(pl.id),
+      enter: game ? () => goIn(game) : pl.id === "camp" ? () => void toCamp() : undefined,
     });
   });
 

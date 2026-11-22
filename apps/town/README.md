@@ -74,7 +74,7 @@ says so.
   the Treasury's counter; Sootpaw, a black cat, mostly asleep on the lamp stall; Bramblewick and
   Tindra, gnomes in red and green hats behind the other two stalls; Pipwick, a gnome in a blue hat,
   going round the crab pond (counting), the quest board (reading) and the gate (minding it);
-  Mossback, a green glorp on a stump by the fire, who says "glorp."; Embertoe, a ginger cat,
+  Mossback, a green glorp on a stump by the fire, who says "glorp."; Fika, a ginger cat,
   curled up by the fire and then on the Works' doorstep; and the crabs in the pond. The cats, the
   glorp and the fox are the camp's pets in their coats, and the gnomes the Works' gatherer with a
   two-step waddle (`folkart.ts`). Each one's name plate is the kit's leaf green with the acorn
@@ -103,7 +103,8 @@ says so.
 
 ## What is in the camp
 
-The town's gate goes to the member's own camp, any of the four ways (or "Go home" on the camp's card).
+The town's gate and its signpost open the camp's card, as any place does, and "Go home" on it goes; a
+touch on the way through the gate, or walking on into it, goes without the card.
 Night closes in on them as they walk off, everything the lamps do not reach first and then the
 lamps; the camp's lamps and fire come up out of the dark first, and the night lifts on them walking
 in off the trail. The trail between the two lantern posts on the camp's east side goes back, the same four ways.
@@ -160,7 +161,7 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   It holds twelve letters, and makes room by throwing out the oldest already dealt with, then the
   oldest with nothing inside; a present is never thrown out, so while the box is full of presents
   no more letters are left, and the feed says so.
-- **The town's own dropping by.** Leaf sends them: every 46 to 76 seconds Pipwick, Embertoe,
+- **The town's own dropping by.** Leaf sends them: every 46 to 76 seconds Pipwick, Fika,
   Mossback or Orphion sets out for the camp and waits there (`visit`), until greeted or until
   the next one comes. While the member is in their camp the page asks Leaf for the town every half
   minute, so a caller walks in off the trail, says hello in its own voice, settles by the fire (the

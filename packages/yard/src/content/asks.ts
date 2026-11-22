@@ -1,6 +1,6 @@
 /**
  * Who asks for what on the board of standing orders, and why: the places in town, the town's own
- * (Pipwick, Embertoe, Tindra), and the small creatures the guild is fond of. Never a member: a gnome
+ * (Pipwick, Fika, Tindra), and the small creatures the guild is fond of. Never a member: a gnome
  * comes to the gate for whoever asked.
  */
 import type { Item } from "./items.ts";
@@ -85,7 +85,7 @@ export const ASKS: Record<Item, readonly Ask[]> = {
   ],
   engine: [
     { from: "The Treasury", line: "The vault's winch gave out again. Cinfy has been looking at it and sighing." },
-    { from: "Embertoe", line: "Embertoe sleeps on the bellows and would like them warmer. An engine, then. Meow." },
+    { from: "Fika", line: "Fika sleeps on the bellows and would like them warmer. An engine, then. Meow." },
   ],
   pole: [
     { from: "The quest board", line: "The guild took another hill and there is nowhere to pin that it did." },

@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "gate-card",
+    at: "2026-11-22T21:52Z",
+    title: "The signpost to your camp",
+    lines: [
+      "In town, the signpost and the gate now open your camp's card, with Go home on it. Walking on through the gate still goes straight there.",
+      "The Works' cat is called Fika.",
+    ],
+  },
+  {
     id: "splitter-ways",
     at: "2026-11-22T21:45Z",
     title: "The Works: shut a splitter's way",
