@@ -7,7 +7,14 @@
 import { GOLD, GREEN, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, flipped, outlined, rgb } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
-import { FIGURES, isBossId, isFigureId, isSummonId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
+import {
+  FIGURE_IDS,
+  FIGURES,
+  isBossId,
+  isFigureId,
+  isSummonId,
+  type UnitKind,
+} from "@sequoia-leaf/raid/content/figures.ts";
 
 import { ART } from "./figures.ts";
 import { FOREST_TONES, PAL, SUMMON_TONES, TIER_TONES, type Tones } from "./pal.ts";
@@ -29,6 +36,8 @@ export interface Frames {
   readonly tall: number;
   /** How wide it is on the ground. */
   readonly wide: number;
+  /** The row its head starts at, for a small picture of it. */
+  readonly head: number;
   readonly flies: boolean;
 }
 
@@ -108,6 +117,7 @@ function bake(kind: UnitKind): { right: Frames; left: Frames } {
     ay: h + 1,
     tall: lists.a.length,
     wide: widthOf(lists.a),
+    head: art.head ?? 0,
     flies: art.flies === true,
   };
   const right: Frames = { ...base, fallen: tipped(idleA, false) };
@@ -179,10 +189,13 @@ export function drawFigure(g: Ctx, kind: UnitKind, x: number, y: number, o: Show
 /** A figure standing still on a small canvas of its own, for a card or a button. */
 export function portrait(kind: UnitKind, o: Shown = {}): HTMLCanvasElement {
   const f = framesOf(kind, o.left);
-  const { c, g } = makeCanvas(f.w, f.h);
-  drawFigure(g, kind, f.ax, f.ay, o);
+  // As tall as it stands: a pose that reaches higher would leave the picture empty at the top.
+  const { c, g } = makeCanvas(f.w, f.tall + 2);
+  drawFigure(g, kind, f.ax, f.tall + 1, o);
   return c;
 }
+/** How tall the tallest portrait of a figure a member can own is, for a place that shows any of them. */
+export const portraitRoom = (): number => Math.max(...FIGURE_IDS.map((kind) => framesOf(kind).tall + 2));
 
 // ---------- bases ----------
 
@@ -190,12 +203,12 @@ export function portrait(kind: UnitKind, o: Shown = {}): HTMLCanvasElement {
 export type BaseLook = "plain" | "gilt" | "moss";
 
 const BASE_ROWS = [
-  "..11111111111..",
-  ".1222222222221.",
-  "122222222222223",
-  "322222222222223",
-  ".3333333333333.",
-  "..33333333333..",
+  "...11111111111...",
+  ".122222222222221.",
+  "12222222222222223",
+  "32222222222222223",
+  ".333333333333333.",
+  "..3333333333333..",
 ];
 const BIG_BASE_ROWS = [
   "....1111111111111111111....",

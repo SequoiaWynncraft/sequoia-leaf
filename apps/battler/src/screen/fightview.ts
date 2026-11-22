@@ -396,8 +396,8 @@ function show(ev: FightEvent): void {
       const look: ShotLook = SHOT_LOOKS[a.unit.kind] ?? "pellet";
       const lobbed = look === "cone" || look === "cushion" || look === "tea" || look === "plaster" || look === "pebble";
       FV.shots.push({
-        from: { x: from.x, y: from.y - 8 },
-        to: { x: to.x, y: to.y - 7 },
+        from: { x: from.x, y: from.y - 11 },
+        to: { x: to.x, y: to.y - 10 },
         t0: now,
         dur: Math.max(1, ev.ticks),
         arc: lobbed ? 8 + distance(ev.from, ev.to) * 2.5 : look === "beam" ? 0 : 3,
@@ -424,7 +424,7 @@ function show(ev: FightEvent): void {
         a.hx = (dx / d) * (ev.hard ? 4 : 2.5);
         a.hy = (dy / d) * (ev.hard ? 3 : 2);
         const col = ev.soaked >= ev.amount ? WATER[3] : DAMAGE_COL[ev.kind];
-        burst(a.x, a.y - 8, ev.hard ? 9 : 4, [col, "#ffffff"], { speed: ev.hard ? 46 : 30, ttl: 0.3 });
+        burst(a.x, a.y - 11, ev.hard ? 9 : 4, [col, "#ffffff"], { speed: ev.hard ? 46 : 30, ttl: 0.3 });
         say(
           a.x + (Math.random() - 0.5) * 8,
           a.y - framesOf(a.unit.kind).tall - 2,
@@ -773,11 +773,12 @@ function drawShot(g: Ctx, s: Shot): void {
 function drawStatus(g: Ctx, a: Actor, x: number, y: number, tall: number, tick: number): void {
   const u = a.unit;
   const c = FV.clock;
+  /** Just clear of its sides. */
+  const half = Math.max(8, Math.round(framesOf(u.kind).wide / 2) + 2);
   if (u.shield > 0) {
     // A shield settles over it: a pale arc that drops into place.
     const drop = clamp(3 - (c - a.shieldAt), 0, 3);
     const top = y - tall - 4 - drop * 2;
-    const half = Math.max(8, Math.round(framesOf(u.kind).wide / 2) + 2);
     g.globalAlpha = 0.85;
     R(g, x - half + 2, top, half * 2 - 4, 1, WATER[3]);
     R(g, x - half + 1, top + 1, 1, 1, WATER[3]);
@@ -806,8 +807,8 @@ function drawStatus(g: Ctx, a: Actor, x: number, y: number, tall: number, tick: 
   }
   if (u.slowUntil > tick) {
     const d = Math.floor(c * 0.4) % 3;
-    R(g, x - 6, y + 1 + d, 1, 2, WATER[3]);
-    R(g, x + 5, y + 1 + ((d + 1) % 3), 1, 2, WATER[2]);
+    R(g, x - half + 2, y + 1 + d, 1, 2, WATER[3]);
+    R(g, x + half - 3, y + 1 + ((d + 1) % 3), 1, 2, WATER[2]);
   }
   if (u.tauntUntil > tick) {
     R(g, x - 1, y - tall - 10, 2, 4, "#e67967");
@@ -815,16 +816,16 @@ function drawStatus(g: Ctx, a: Actor, x: number, y: number, tall: number, tick: 
   }
   if (u.hasteUntil > tick) {
     const d = Math.floor(c * 0.9) % 3;
-    const back = a.left ? 8 : -9;
+    const back = a.left ? half : -half - 1;
     R(g, x + back, y - 5 - d * 3, 2, 1, CREAM);
     R(g, x + back + (a.left ? 2 : -2), y - 9 + d * 2, 2, 1, GOLD[2]);
   }
   if (u.bracedUntil > tick) {
     for (const [dx, dy] of [
-      [-8, -tall - 2],
-      [7, -tall - 2],
-      [-8, 1],
-      [7, 1],
+      [-half, -tall - 2],
+      [half - 1, -tall - 2],
+      [-half, 1],
+      [half - 1, 1],
     ] as const)
       R(g, x + dx, y + dy, 2, 2, STONE[3]);
   }

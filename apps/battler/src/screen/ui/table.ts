@@ -34,7 +34,7 @@ import {
 import { regularNamed } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
-import { portrait } from "../art/sprites.ts";
+import { portrait, portraitRoom } from "../art/sprites.ts";
 import { rimTop, stumpOf } from "../art/table.ts";
 import { fightEvents, fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
@@ -369,7 +369,7 @@ function renderStall(run: Run): void {
       "button",
       `k-card offer t${spec.tier}${canBuy(run, i) ? "" : " cant"}${have >= 2 ? " lit" : ""}`,
       { type: "button", "data-offer": i, "aria-label": `${spec.name}, ${price} acorns` },
-      el("div", "art", {}, figPic(portrait(kind))),
+      el("div", "art", { style: `height: calc(var(--u) * ${portraitRoom()} * var(--fs))` }, figPic(portrait(kind))),
       el("div", "name", { text: spec.name }),
       el(
         "div",
