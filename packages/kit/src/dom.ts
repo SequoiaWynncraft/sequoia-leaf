@@ -122,7 +122,12 @@ export function pressedTwice(key: string, redraw: () => void): boolean {
           redraw();
         }, 4000),
       };
-  if (!second) redraw();
+  if (!second) {
+    // Drawn again, the button is a new one: whoever pressed it with a key is put back on it.
+    const keyed = typeof document !== "undefined" && document.activeElement instanceof HTMLButtonElement;
+    redraw();
+    if (keyed) document.querySelector<HTMLElement>(".k-btn.asking")?.focus();
+  }
   return second;
 }
 
