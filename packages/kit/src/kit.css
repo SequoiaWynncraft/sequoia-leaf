@@ -766,12 +766,13 @@ button.k-info-chip:hover .k-chip {
 }
 
 /* A thing named anywhere: its picture and name, which explains itself when pointed at. */
+/* A name too long for its place goes onto a second line: it is never cut off. */
 .k-thing {
   display: inline-flex;
   align-items: center;
   gap: calc(var(--u) * 2);
+  min-width: 0;
   font: var(--f-name);
-  white-space: nowrap;
 }
 .k-thing-pic {
   display: grid;
@@ -780,6 +781,7 @@ button.k-info-chip:hover .k-chip {
 }
 .k-thing-count {
   color: var(--k-gold);
+  white-space: nowrap;
 }
 .k-thing.lit .k-thing-name {
   color: var(--k-gold-lt);
