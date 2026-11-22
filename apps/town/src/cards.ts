@@ -47,7 +47,7 @@ function whereFrom(id: string): { rows: Entry[]; words: string } {
       rows: stalls,
       words: piece ? `Cinfy sells it at the Treasury, for ${piece.price.toLocaleString("en-US")} Leaf.` : "",
     };
-  if (thing?.kind === "trophies") return { rows: [], words: `Won, never bought. ${thing.about}` };
+  if (thing?.kind === "trophies") return { rows: [], words: "Won, never bought." };
   if (guild.presents().includes(id))
     return { rows: [], words: "A present: the town's own leave them when they drop by." };
   if (thing?.kind === "home") return { rows: [], words: "Every camp has one." };
@@ -88,13 +88,7 @@ function wareDesc(sprites: Sprites, id: string): Description | null {
     tag: w.worn ? "Something to wear" : "For everybody at the fire",
     aside: amount("leaf", w.price),
     stats: [{ label: "You have", value: w.once ? (yours ? "it" : "none") : "as many as you like" }],
-    blocks: [
-      { body: w.about },
-      {
-        title: "From",
-        body: `Cinfy sells it at the Treasury, for ${w.price} Leaf. ${w.once ? "Yours to keep." : "As often as you like."}`,
-      },
-    ],
+    blocks: [{ body: w.about }],
   };
 }
 
@@ -105,7 +99,7 @@ function stallDesc(id: string): Description | null {
   return {
     name: s.name,
     icon: keeper ? folkArt(keeper).face : icon("home"),
-    tag: `Kept by ${s.by}, in the market. Nothing sells out.`,
+    tag: `Kept by ${s.by}, in the market.`,
     rows: [
       {
         label: "Sells",

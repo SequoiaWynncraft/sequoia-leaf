@@ -77,7 +77,7 @@ export function board(_art: Art, body: HTMLElement): () => void {
   let shown: Board | "unread" | null = null;
   let readAt = -Infinity;
   const list = el("div", "board");
-  body.append(el("div", "k-d", { text: "Coins each yard has earned, all time." }), list);
+  body.append(list);
   const read = async (): Promise<void> => {
     readAt = Date.now();
     const a = await waitingLook(list, ask("/v1/game/play/works/standings"));

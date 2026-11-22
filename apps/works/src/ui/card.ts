@@ -334,7 +334,6 @@ function standingDesc(art: Art, i: number): Description | null {
       actions.push({
         label: "Rotate",
         hint: "Rotate (R)",
-        about: "Rotates it a quarter turn to the right.",
         on: () => turnAt(x, y),
       });
     actions.push({
@@ -349,7 +348,7 @@ function standingDesc(art: Art, i: number): Description | null {
       look: "coral sm",
       after: refund > 0 ? amount("coin", `+${refund}`) : null,
       hint: "Remove",
-      about: b.free ? "It goes back to your free pieces." : "Any items inside it are lost.",
+      ...(b.free ? {} : { about: "Any items inside it are lost." }),
       on: () => takeAway(x, y),
     });
   }

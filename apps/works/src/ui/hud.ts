@@ -96,8 +96,8 @@ function bookButtons(): () => void {
   const make = (
     id: PanelId & YardIcon,
     title: string,
-    about: () => string,
     key: string,
+    about?: () => string,
     green = false,
   ): HTMLElement => {
     const b = el(
@@ -114,15 +114,15 @@ function bookButtons(): () => void {
     host.append(b);
     return b;
   };
-  const ordersBtn = make("orders", "Orders", () => "What the guild is asking for, and what it pays.", "O");
-  make("board", "Top yards", () => "The twenty yards that have earned the most Coins, all time.", "T");
-  const plansBtn = make("plans", "Plans", () => "Improvements to buy with Coins.", "P");
-  make("depot", "The depot", () => "What the depot has taken in, and what the yard earns per hour.", "I");
+  const ordersBtn = make("orders", "Orders", "O");
+  make("board", "Top yards", "T");
+  const plansBtn = make("plans", "Plans", "P", () => "Improvements to buy with Coins.");
+  make("depot", "The depot", "I", () => "What the depot has taken in, and what the yard earns per hour.");
   make(
     "shift",
     "A second shift",
-    () => `Everything works twice as fast for ${SHIFT.minutes} minutes. Costs ${SHIFT.leaf} Leaf.`,
     "L",
+    () => `Everything works twice as fast for ${SHIFT.minutes} minutes. Costs ${SHIFT.leaf} Leaf.`,
     true,
   );
   return when(
@@ -163,7 +163,7 @@ function corner(): void {
     draw();
     sfx.tap();
   });
-  tip(mute, "Sound", () => (isMuted() ? "Off. Tap to turn it on." : "On. Tap to turn it off."));
+  tip(mute, "Sound");
   draw();
   host.append(back, mute);
 }
