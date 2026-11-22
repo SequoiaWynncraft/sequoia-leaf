@@ -9,6 +9,18 @@ const Time = Schema.String;
 
 export const Health = Schema.Struct({ status: Schema.Literal("ok") });
 
+/**
+ * What Leaf pays and costs right now, as the rate card Leaf keeps in Discord says it: one section a
+ * kind of earning or spending, in order. `text` keeps the rate card's Discord `**` bold markers.
+ * `changed_at` is when the rates last changed.
+ */
+export const Rates = Schema.Struct({
+  title: Schema.String,
+  description: Schema.String,
+  sections: Schema.Array(Schema.Struct({ name: Schema.String, text: Schema.String })),
+  changed_at: Schema.NullOr(Time),
+});
+
 export const Me = Schema.Struct({
   player: Schema.Struct({ id: Schema.String, username: Schema.String }),
   leaf: Schema.Number,

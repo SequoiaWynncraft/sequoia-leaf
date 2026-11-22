@@ -54,6 +54,7 @@ import {
   PurchaseCancelled,
   Purchased,
   Quests,
+  Rates,
   RerollBody,
   Rerolled,
   Save,
@@ -166,6 +167,11 @@ const EventStream = Schema.String.pipe(HttpApiSchema.asText({ contentType: "text
 export class SystemApi extends HttpApiGroup.make("system", { topLevel: true }).add(
   HttpApiEndpoint.get("healthz", "/healthz", { success: Health }),
 ) {}
+
+/** What Leaf pays and costs, open to anyone: the website's guide to Leaf reads it. */
+export class RatesApi extends HttpApiGroup.make("rates")
+  .add(HttpApiEndpoint.get("rates", "/rates", { success: Rates }))
+  .prefix("/v1") {}
 
 export class MeApi extends HttpApiGroup.make("me")
   .add(
@@ -308,6 +314,7 @@ export class InternalApi extends HttpApiGroup.make("internal")
 
 export class LeafApi extends HttpApi.make("sequoia-leaf")
   .add(SystemApi)
+  .add(RatesApi)
   .add(MeApi)
   .add(GameHelloApi)
   .add(GameApi)
