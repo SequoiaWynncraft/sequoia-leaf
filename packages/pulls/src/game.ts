@@ -88,15 +88,16 @@ const market = (least: number, most: number): string[] =>
 const looks = (...ids: LookId[]): string[] => ids.map((id) => `look:${id}`);
 
 /**
- * Every prize, by rarity. `thing:` is one of the town's things, `look:` one of the raid table's
- * looks, `ware:` one of the Treasury's wares, and `headliner:` a banner's headliner.
+ * Every prize, by rarity. `thing:` is one of the town's things, which the camp is sent once;
+ * `look:` one of the raid table's looks, owned there as if bought; and `headliner:` a banner's
+ * headliner, whose statue (the town's `statue-<banner>`) the camp is sent.
  */
 export const PRIZES: Readonly<Record<Rarity, readonly string[]>> = {
   Leafkin: [...market(0, 60), ...PRESENTS.map((id) => `thing:${id}`)],
   Sapling: market(61, 200),
   Sprite: market(201, Infinity),
-  Dryad: [...looks("baize", "gingham", "paper", "moss"), "ware:water", "ware:plate", "thing:glass-lantern"],
-  Druid: [...looks("plum", "jar", "gilt"), "ware:jar", "ware:crown", "thing:sun-banner"],
+  Dryad: [...looks("baize", "gingham", "paper", "moss"), "thing:glass-lantern"],
+  Druid: [...looks("plum", "jar", "gilt"), "thing:sun-banner"],
   Treant: ["thing:crab-throne", "thing:fox-statue", "thing:fountain"],
   Yggdrasil: BANNERS.map(({ id }) => headliner(id)),
 };
@@ -337,7 +338,6 @@ function countersOf(v: unknown): Counters | null {
 function pulledOf(v: unknown): Pulled | null {
   return isRecord(v) &&
     typeof v.prize === "string" &&
-    RARITY_OF.has(v.prize) &&
     isPool(v.pool) &&
     whole(v.at, 0) &&
     whole(v.top, 1, RATES.top.certainAt)
@@ -345,7 +345,10 @@ function pulledOf(v: unknown): Pulled | null {
     : null;
 }
 
-/** A player's pulls from the text Leaf stored, or null for anything this version could not have made. */
+/**
+ * A player's pulls from the text Leaf stored, or null for anything this version could not have made.
+ * What was a prize and no longer is (the Treasury's wares) is let go: the pull paid its Seeds.
+ */
 export function decodePulls(text: string): Pulls | null {
   let raw: unknown;
   try {
@@ -363,14 +366,14 @@ export function decodePulls(text: string): Pulls | null {
   if (!whole(waiting, 0, RATES.free.most) || !whole(next, 0) || !grove || !banner || grove.owed) return null;
   const owned: Record<string, number> = {};
   for (const [prize, n] of Object.entries(have)) {
-    if (!RARITY_OF.has(prize) || !whole(n, 1)) return null;
-    owned[prize] = n;
+    if (!whole(n, 1)) return null;
+    if (RARITY_OF.has(prize)) owned[prize] = n;
   }
   const kept: Pulled[] = [];
   for (const v of history) {
     const pulled = pulledOf(v);
     if (!pulled) return null;
-    kept.push(pulled);
+    if (RARITY_OF.has(pulled.prize)) kept.push(pulled);
   }
   return { have: owned, counters: { grove, banner }, seeds, free: { waiting, next }, history: kept, pulls, rng };
 }
@@ -407,6 +410,6 @@ export const PULLS: Game<Pulls, PullsCommand, PullsView, PullsNote> = {
       }, 0),
     },
   }),
-  // Each prize the player has, for the town and the raid to turn into things and looks.
+  // Each prize the player has: the town sends a thing or a statue to the camp, the raid's table owns a look.
   awards: (s) => Object.keys(s.have).map((prize) => `pull:${prize}`),
 };

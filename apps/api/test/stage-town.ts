@@ -12,6 +12,8 @@
  * mailbox with letters that each hold a present; `{ coins: n }` puts n Coins in the purse.
  * `{ others: [n, ...] }` gives the nth of `others` a camp of their own with that many more things
  * set out (at most the thirty-one a lived-in camp has) and a pet, on the town's board.
+ * `{ won: [award, ...] }` gives Tester awards as another game would have (`pull:thing:fountain`), and
+ * `{ headliner: n }` makes the nth of `others` the person of the pull game's first banner.
  */
 import { DAY_MS, type PlayerId } from "@sequoia-leaf/core";
 import { TOWN, type Town } from "@sequoia-leaf/town";
@@ -115,6 +117,17 @@ export const stageTown = (playerId: PlayerId, ops: readonly unknown[], others: r
           INSERT OR REPLACE INTO standings (player_id, game, score, also, guest, updated_at)
           VALUES (${other.id}, 'town', ${standing.score}, ${JSON.stringify(standing.also)}, ${other.guest ? 1 : 0}, ${now})
         `;
+      }
+    }
+    for (const op of ops) {
+      if (!isRecord(op)) continue;
+      for (const id of Array.isArray(op.won) ? op.won : []) {
+        if (typeof id !== "string") continue;
+        yield* sql`INSERT INTO awards (player_id, id, at) VALUES (${playerId}, ${id}, ${now}) ON CONFLICT DO NOTHING`;
+      }
+      const person = others[whole(op.headliner, others.length) ?? -1];
+      if (person) {
+        yield* sql`INSERT OR REPLACE INTO banner_people (banner, player_id) VALUES ('banner-1', ${person.id})`;
       }
     }
     for (const op of ops) {

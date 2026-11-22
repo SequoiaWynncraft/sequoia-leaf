@@ -134,7 +134,11 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   music box plays its tune, Worm looks out of Worm's pot, and something in the barrel looks back.
   They come from the market for Coins, from the games as trophies that
   cannot be bought (a carved figure for each boss beaten in The Little Raid, a model of each
-  capstone built in the Works), and from the town's own as small presents. Whatever is bought or won
+  capstone built in the Works), from pulls as prizes, and from the town's own as small presents.
+  A banner's headliner brings a statue of that member (`statues.ts`): Leaf says who
+  (`GET /v1/game/banners`), the thing is called "Statue of NAME", and its picture is their own
+  figure facing us, every colour turned to marble by its lightness, on the fox statue's plinth
+  (`carve` in `campart.ts`). Every page asks, so a visitor sees whose it is. Whatever is bought or won
   waits by the trail as a parcel, and the parcels open one after another when the member is in:
   each thing flies to a clear spot and lands. As many as two hundred parcels may wait; with that
   many by the trail the market sells nothing more (and takes nothing) until some are
@@ -369,6 +373,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/fx.ts`                           | Sparks, leaves and rising words                                                                 |
 | `src/sprites.ts`, `src/ground.ts`     | The town's art                                                                                  |
 | `src/campart.ts`, `src/campground.ts` | The camp's art: the cabin, every thing, the pets, the clearing's floor                          |
+| `src/statues.ts`                      | Whose statue each banner's is: its name and its figure, from Leaf                               |
 | `src/campsfx.ts`                      | The camp's own sounds                                                                           |
 
 The catalogue of camp things (`things.ts`), what is for sale (`catalogue.ts`), the mailbox

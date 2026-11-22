@@ -1,18 +1,8 @@
 /**
  * What is for sale, and for how much: the market's stalls (camp things for Coins), and what a
  * member may leave at somebody else's camp. Leaf takes a stall's price when a thing is bought
- * (`game.ts`); the town page shows the same table. And the wares, things to wear that the pull
- * game gives as prizes.
+ * (`game.ts`); the town page shows the same table.
  */
-
-/** Something to wear, given as a pull's prize. */
-export interface Ware {
-  id: string;
-  name: string;
-  about: string;
-  /** Had once and kept. */
-  once: boolean;
-}
 
 /** A camp thing and what it costs at a stall, in Coins. */
 export interface Stock {
@@ -29,13 +19,6 @@ export interface Stall {
   words: readonly string[];
   stock: readonly Stock[];
 }
-
-export const WARES: readonly Ware[] = [
-  { id: "crown", name: "Leaf crown", about: "A wreath of gold leaves.", once: true },
-  { id: "jar", name: "Jar of fireflies", about: "They follow you about.", once: true },
-  { id: "plate", name: "Name plate", about: "Hand-painted, gold corners.", once: true },
-  { id: "water", name: "Jar of pond water", about: "Probably haunted.", once: true },
-];
 
 /** What each stall sells, as a thing and its price in Coins. Everything is always on sale. */
 const stock = (...list: readonly (readonly [string, number])[]): Stock[] =>
