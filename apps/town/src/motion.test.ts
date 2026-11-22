@@ -31,6 +31,7 @@ import {
   othersIn,
   type Placed,
   Pose,
+  QUIET_FOR,
   stepOf,
 } from "./motion.ts";
 import { inTownLine } from "./news.ts";
@@ -309,21 +310,26 @@ describe("an emote", () => {
 });
 
 describe("the connection, shown", () => {
-  test("says Reconnecting from a drop until the room welcomes the page again", async () => {
+  test("says Reconnecting once it has been down two seconds, until the room welcomes the page again", async () => {
     const { s, statuses, now, world } = await inTown();
-    let dropped = false;
-    const shown = (): string => linkShown(statuses.at(-1) ?? null, dropped);
+    let down: number | null = null;
+    const shown = (): string => linkShown(statuses.at(-1) ?? null, down);
     s.says(welcome(1, now, [me(1)]));
     expect(shown()).toBe("none");
     s.drop();
-    dropped = statuses.at(-1) === "closed";
+    down = statuses.at(-1) === "closed" ? 0 : null;
+    // A blip is not announced.
+    expect(shown()).toBe("none");
+    down = 1999;
+    expect(shown()).toBe("none");
+    down = QUIET_FOR;
     expect(shown()).toBe("reconnecting");
-    await Bun.sleep(800);
+    await Bun.sleep(400);
     const again = socket(world, 1);
     again.open();
     expect(shown()).toBe("reconnecting");
     again.says(welcome(1, now, [me(1)]));
-    dropped = false;
+    down = null;
     expect(shown()).toBe("none");
   });
 
@@ -340,7 +346,7 @@ describe("the connection, shown", () => {
     s.drop(code);
 
     expect(statuses.at(-1)).toBe(card);
-    expect(linkShown(statuses.at(-1) ?? null, true)).toBe(card);
+    expect(linkShown(statuses.at(-1) ?? null, 0)).toBe(card);
     expect(LET_GO[card]).toEqual(words);
   });
 });

@@ -20,6 +20,7 @@ import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { LONG_PRESS, tipAt, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 
+import { stepAbout } from "./aboutui.ts";
 import { makeCampArt } from "./campart.ts";
 import { type CampScene, makeCamp } from "./campscene.ts";
 import { makeCampUi } from "./campui.ts";
@@ -48,6 +49,10 @@ declare global {
     town?: {
       skip: (seconds: number) => void;
       enter: () => void;
+      /** Opens "Who is about". */
+      about: () => void;
+      /** Whoever was chosen in "Who is about" and is being shown, whether the view went to them, and the seconds left. */
+      found: Town["handles"]["found"];
       open: (id: PanelId) => void;
       close: () => void;
       visit: (id: PlaceId) => void;
@@ -457,6 +462,7 @@ async function boot(): Promise<void> {
     aim(false);
     pointing();
     tickHud(dt);
+    stepAbout(dt);
     draw();
     requestAnimationFrame(frame);
   }

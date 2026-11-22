@@ -102,8 +102,9 @@ describe("a fight is decided by the two boards and a seed", () => {
     const count = 300;
     for (let i = 0; i < count; i++) resolveFight({ ...setup, seed: i });
     const perSecond = (count / (performance.now() - started)) * 1000;
-    // Seven a side with abilities, summons and items. The bar is set low so a busy machine does not fail it.
-    expect(perSecond).toBeGreaterThan(1000);
+    // Seven a side with abilities, summons and items. It measures about ten thousand here; a shared
+    // test machine has done under a thousand, so the bar only catches a fight gone badly slow.
+    expect(perSecond).toBeGreaterThan(150);
   });
 });
 

@@ -122,6 +122,22 @@ describe("opening a live connection", () => {
     expect([plain.status, await codeOf(plain)]).toEqual([400, "not_websocket"]);
   });
 
+  it("counts every opening it turns away, by its code, for the minute's log line", async () => {
+    await start();
+    await refused(LIVE, {});
+    await refused(LIVE, { Cookie: "seq_session=stale", Origin: ORIGIN });
+    await refused(LIVE, { Cookie: "seq_session=alice-token" });
+    await refused(livePath("hall"), { Authorization: "Bearer alice-token" });
+    const tabs = await Promise.all(Array.from({ length: 10 }, () => connect(page("alice"))));
+    await refused(LIVE, { Authorization: "Bearer alice-token" });
+    for (const tab of tabs) tab.close();
+
+    expect(await services?.run(Live.use((live) => live.line))).toMatchObject({
+      opened: 10,
+      refused: { unauthorized: 2, bad_origin: 1, unknown_room: 1, slow_down: 1 },
+    });
+  });
+
   it("opens for a member or a guest by the cookie from Leaf's page, and by a Bearer from anywhere", async () => {
     await start();
     const byCookie = await connect(page("alice"));

@@ -11,6 +11,7 @@ import { bake, type Body, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 
+import { initAbout, openAbout } from "./aboutui.ts";
 import {
   face,
   headOf,
@@ -99,6 +100,33 @@ const STEP_IN = 15;
 
 const bodyOf = (look: Look): Body => bake(paintSkin(look));
 
+/** How far the camera may go: the town, a little of the forest above it, and a strip below. */
+const BOUNDS = { w: W, top: -72, bottom: H + 24 } as const;
+/** How long somebody chosen in "Who is about" is shown where they are, in seconds. */
+export const FOUND_FOR = 3;
+
+/**
+ * Somebody chosen in "Who is about": a ring at their feet and their name over them for a few
+ * seconds. The view stays where it is, unless they would be out of it once it is back on the
+ * member; then it glides to them, and back when the time is up.
+ */
+function locate(a: Actor): void {
+  // Whether the view goes to them is decided at the next step, with everybody where they are then.
+  show.found = { a, until: G.t + FOUND_FOR, glide: null };
+}
+
+/**
+ * Whether a point of the town would be in view, a little way inside its edges (more at the bottom,
+ * where the dock is), with the camera settled on `focus` and no panel open.
+ */
+function inView(p: Pt, focus: Pt): boolean {
+  const { w: vw, h: vh } = G.view;
+  const { w, top, bottom } = BOUNDS;
+  const x = vw > w ? (w - vw) / 2 : clamp(focus.x - vw / 2, 0, w - vw);
+  const y = vh > bottom - top ? top + (bottom - top - vh) / 2 : clamp(focus.y - vh / 2, top, bottom - vh);
+  return p.x > x + 10 && p.x < x + vw - 10 && p.y > y + 16 && p.y < y + vh - 28;
+}
+
 /** The member's face in the corner opens what the town knows of them, and shuts it again. */
 function openProfile(): void {
   if (G.panel === "profile") closePanel();
@@ -122,6 +150,10 @@ export interface Town extends Scene {
   /** The town's own handles for looking at it from outside. */
   readonly handles: {
     enter(): void;
+    /** Opens "Who is about". */
+    about(): void;
+    /** Whoever was chosen in "Who is about" and is being shown, whether the view went to them, and the seconds left. */
+    found(): { name: string; glide: boolean; left: number } | null;
     open(id: PanelId): void;
     close(): void;
     visit(id: PlaceId): void;
@@ -212,6 +244,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   initUI(sprites, campArt);
   setFace(openProfile);
+
+  initAbout(locate);
 
   // ---------- going places ----------
 
@@ -485,7 +519,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     backdrop: { sky: pic.sky, near: pic.near },
     toCamp: null,
     onStage: townOnStage,
-    bounds: { w: W, top: -72, bottom: H + 24 },
+    bounds: BOUNDS,
 
     resize(w, h) {
       sizeBuffers(w, h);
@@ -493,6 +527,11 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
     focus() {
       if (going?.through) return DOORWAY[going.id];
+      const found = show.found;
+      if (found?.glide === true) {
+        const there = found.a.seat ?? found.a;
+        return { x: there.x, y: there.y - 12 };
+      }
       const at = player.seat ?? player;
       return { x: at.x, y: at.y - 12 };
     },
@@ -511,6 +550,13 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       stepTown(dt);
       stepFlights(dt);
       stepEvents();
+      // Somebody shown where they are, for a few seconds, or until they go.
+      const found = show.found;
+      if (found && (G.t >= found.until || found.a.away)) show.found = null;
+      else if (found && found.glide === null) {
+        const feet = player.seat ?? player;
+        found.glide = !inView(found.a.seat ?? found.a, { x: feet.x, y: feet.y - 12 });
+      }
       if (G.home) guild.step(dt);
       updateFx(dt);
 
@@ -703,6 +749,13 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     handles: {
       enter() {
         dismissArrival();
+      },
+      about() {
+        openAbout(locate);
+      },
+      found() {
+        const f = show.found;
+        return f ? { name: f.a.who.name, glide: f.glide === true, left: Math.round((f.until - G.t) * 10) / 10 } : null;
       },
       open: openPanel,
       close: closePanel,

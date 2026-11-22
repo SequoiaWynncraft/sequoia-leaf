@@ -1,22 +1,25 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { CLOSE, encodeSnapshot, Flag, livePath, type Motion, type ToClient } from "@sequoia-leaf/core";
 
 import { restart, start } from "./live.ts";
-import { pretend } from "./net.ts";
+import { onWake, pretend } from "./net.ts";
 import { here } from "./presence.ts";
 import { forgetLedger } from "./purse.ts";
 import {
+  askWhy,
   ClockSync,
+  firstTry,
   joinLive,
   type LiveRoom,
   type LiveStatus,
   retryAfter,
   sendIn,
+  silent,
   type Step,
   Track,
 } from "./realtime.ts";
-import { FakeSocket, HELLO, type Standin, standin, TESTER } from "./standin.ts";
+import { FakeSocket, HELLO, type Reply, type Standin, standin, TESTER } from "./standin.ts";
 
 const step = (x: number, y: number, flags = 0, vx = 0): Step => ({ x, y, vx, vy: 0, facing: 1, pose: 0, flags });
 const at = (x: number, y: number, flags = 0, jump = 0, vx = 0): Motion => ({ ...step(x, y, flags, vx), jump });
@@ -91,9 +94,46 @@ describe("sending the player's motion", () => {
 });
 
 describe("trying again", () => {
-  test("waits half a second, doubling to ten, with up to half again by chance", () => {
-    expect([0, 1, 2, 3, 4, 5, 9].map((n) => retryAfter(n, 0))).toEqual([500, 1000, 2000, 4000, 8000, 10_000, 10_000]);
-    expect(retryAfter(0, 1)).toBe(750);
+  test("waits a quarter second, then half, then a second for thirty seconds, two for a minute, then five", () => {
+    const waits = (
+      [
+        [0, 0],
+        [1, 300],
+        [2, 900],
+        [20, 29_999],
+        [21, 30_000],
+        [40, 89_999],
+        [41, 90_000],
+        [99, 3_600_000],
+      ] as const
+    ).map(([tries, down]) => retryAfter(tries, down, 0));
+    expect(waits).toEqual([250, 500, 1000, 1000, 2000, 2000, 5000, 5000]);
+  });
+
+  test("each with up to a quarter more by chance", () => {
+    expect([retryAfter(0, 0, 1), retryAfter(2, 0, 0.5), retryAfter(9, 100_000, 1)]).toEqual([312.5, 1125, 6250]);
+  });
+
+  test("starts at half a second when Leaf said it is restarting", () => {
+    expect(retryAfter(firstTry(CLOSE.restart), 0, 0)).toBe(500);
+    expect([1006, CLOSE.done, CLOSE.policy].map((code) => retryAfter(firstTry(code), 0, 0))).toEqual([250, 250, 250]);
+  });
+
+  test("asks why after three tries in a row that did not open, and every fifth after", () => {
+    const asked = Array.from({ length: 20 }, (_, n) => n + 1).filter(askWhy);
+    expect(asked).toEqual([3, 8, 13, 18]);
+  });
+
+  test("counts a connection dead after fifteen seconds of quiet, only with a ping unanswered for five", () => {
+    // Pinged ten seconds in, nothing back: dead at fifteen.
+    expect(silent(0, 10_000, 14_999)).toBe(false);
+    expect(silent(0, 10_000, 15_000)).toBe(true);
+    // The ping was answered (something came after it): quiet since then is the page's own.
+    expect(silent(60_000, 59_990, 120_000)).toBe(false);
+    // A page back from the background asks at once, and gives the answer five seconds.
+    expect(silent(60_000, 120_000, 124_999)).toBe(false);
+    expect(silent(60_000, 120_000, 125_000)).toBe(true);
+    expect(silent(0, null, 60_000)).toBe(false);
   });
 });
 
@@ -378,5 +418,321 @@ describe("a live room", () => {
     room.close();
     expect(s.texts().at(-1)).toEqual({ t: "leave" });
     expect(s.closed).toBe(CLOSE.done);
+  });
+});
+
+describe("the page coming back", () => {
+  test("is the page shown again, focused, or back on the network, until told to stop", () => {
+    const win = new EventTarget();
+    const doc = Object.assign(new EventTarget(), { visibilityState: "hidden" });
+    Object.defineProperty(globalThis, "window", { value: win, configurable: true });
+    Object.defineProperty(globalThis, "document", { value: doc, configurable: true });
+    try {
+      const heard: string[] = [];
+      let now = "";
+      const stop = onWake(() => heard.push(now));
+      const say = (on: EventTarget, type: string): void => {
+        now = type;
+        on.dispatchEvent(new Event(type));
+      };
+      // Hidden is not back.
+      say(doc, "visibilitychange");
+      doc.visibilityState = "visible";
+      say(doc, "visibilitychange");
+      say(win, "focus");
+      say(win, "online");
+      stop();
+      say(win, "focus");
+      expect(heard).toEqual(["visibilitychange", "focus", "online"]);
+    } finally {
+      Reflect.deleteProperty(globalThis, "window");
+      Reflect.deleteProperty(globalThis, "document");
+    }
+  });
+});
+
+/** Lets what the page is waiting for from the server arrive: a few turns of promises, as the timers are not real. */
+async function settle(): Promise<void> {
+  // oxlint-disable-next-line no-await-in-loop -- one turn after another
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+}
+
+/** The wait after a drop, by how long the connection has been down, before chance adds to it. */
+const baseWait = (since: number): number => (since < 30_000 ? 1000 : since < 90_000 ? 2000 : 5000);
+
+describe("coming back after a drop", () => {
+  let world: Standin | null = null;
+  let room: LiveRoom | null = null;
+  let undo: (() => void) | null = null;
+  /** Every socket the page opened, with the page's clock when it did. */
+  const made: { s: FakeSocket; at: number }[] = [];
+  afterEach(() => {
+    jest.useRealTimers();
+    room?.close();
+    room = null;
+    undo?.();
+    undo = null;
+    world?.done();
+    world = null;
+    made.length = 0;
+    restart();
+    forgetLedger();
+  });
+
+  /** A live game on a clock of its own, whose `/v1/game/me` answers as `me` says once the page has started. */
+  async function live(me: () => Reply = () => ({ status: 200, body: TESTER })): Promise<Standin> {
+    let started = false;
+    const w = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": () => (started ? me() : { status: 200, body: TESTER }),
+    });
+    world = w;
+    await start();
+    started = true;
+    undo = pretend({
+      socket: (url) => {
+        const s = new FakeSocket(url);
+        made.push({ s, at: w.clock.now });
+        return s;
+      },
+    });
+    jest.useFakeTimers();
+    return w;
+  }
+
+  /** Moves the page's clock and its timers on together, ten milliseconds at a time. */
+  function pass(ms: number): void {
+    const w = world;
+    if (!w) throw new Error("no world");
+    for (let t = 0; t < ms; t += 10) {
+      const by = Math.min(10, ms - t);
+      w.clock.now += by;
+      jest.advanceTimersByTime(by);
+    }
+  }
+
+  const last = (): FakeSocket => {
+    const s = made.at(-1)?.s;
+    if (!s) throw new Error("no socket");
+    return s;
+  };
+
+  /** How long, from now, until the page opens another socket (at most a minute). */
+  function nextTry(): number {
+    const w = world;
+    if (!w) throw new Error("no world");
+    const from = w.clock.now;
+    const had = made.length;
+    while (made.length === had && w.clock.now - from < 60_000) pass(10);
+    return w.clock.now - from;
+  }
+
+  /** Into the room: the socket opens and Leaf welcomes the page. */
+  function welcomed(s: FakeSocket): void {
+    s.open();
+    s.says(welcome(1, world?.clock.now ?? 0));
+  }
+
+  test("tries again after a quarter second, then half, then every second, with up to a quarter more", async () => {
+    await live();
+    room = joinLive("town");
+    welcomed(last());
+    last().drop();
+    const waits: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      waits.push(nextTry());
+      last().drop();
+    }
+    const [a = 0, b = 0, ...rest] = waits;
+    expect(a).toBeGreaterThanOrEqual(250);
+    expect(a).toBeLessThanOrEqual(320);
+    expect(b).toBeGreaterThanOrEqual(500);
+    expect(b).toBeLessThanOrEqual(630);
+    for (const w of rest) {
+      expect(w).toBeGreaterThanOrEqual(1000);
+      expect(w).toBeLessThanOrEqual(1260);
+    }
+  });
+
+  test("every two seconds after the first thirty, every five after ninety, and from the start again after a welcome", async () => {
+    const w = await live();
+    room = joinLive("town");
+    welcomed(last());
+    const down = w.clock.now;
+    last().drop();
+    const seen: [number, number][] = [];
+    while (w.clock.now - down < 120_000) {
+      const since = w.clock.now - down;
+      seen.push([since, nextTry()]);
+      last().drop();
+    }
+    for (const [since, wait] of seen.slice(2)) {
+      expect(wait).toBeGreaterThanOrEqual(baseWait(since));
+      expect(wait).toBeLessThanOrEqual(baseWait(since) * 1.25 + 10);
+    }
+    expect(seen.some(([since]) => since >= 90_000)).toBe(true);
+
+    nextTry();
+    welcomed(last());
+    last().drop();
+    expect(nextTry()).toBeLessThanOrEqual(320);
+  });
+
+  test("after Leaf says it is restarting, the first try waits half a second", async () => {
+    await live();
+    room = joinLive("town");
+    welcomed(last());
+    last().drop(CLOSE.restart);
+    const wait = nextTry();
+    expect(wait).toBeGreaterThanOrEqual(500);
+    expect(wait).toBeLessThanOrEqual(630);
+  });
+
+  test("tries at once when the page comes back, but not twice within a second, and never later than it would have", async () => {
+    const w = await live();
+    room = joinLive("town");
+    welcomed(last());
+    last().drop();
+    // Away from the page for two minutes: the waits have grown to five seconds.
+    while (made.length < 60) {
+      nextTry();
+      last().drop();
+    }
+    pass(1000);
+    const had = made.length;
+    w.wake();
+    expect(made.length).toBe(had + 1);
+    // Back again while that one is still opening: nothing more.
+    w.wake();
+    expect(made.length).toBe(had + 1);
+    // It did not open; back again at once: the next goes a second after the last, not five.
+    last().drop();
+    w.wake();
+    expect(nextTry()).toBeLessThanOrEqual(1000);
+
+    // Early on, a try already due within the second is left as it is.
+    welcomed(last());
+    last().drop();
+    expect(nextTry()).toBeLessThanOrEqual(320);
+    last().drop();
+    pass(100);
+    w.wake();
+    const wait = nextTry();
+    expect(wait).toBeGreaterThanOrEqual(400);
+    expect(wait).toBeLessThanOrEqual(530);
+  });
+
+  test("an open connection is asked at once when the page comes back", async () => {
+    const w = await live();
+    room = joinLive("town");
+    welcomed(last());
+    // Five quick pings to learn the clock; the next is not due for ten seconds.
+    pass(5000);
+    last().says({ t: "pong", c: 0, s: 0 });
+    pass(1500);
+    expect(made.length).toBe(1);
+    const pings = (): number =>
+      last()
+        .texts()
+        .filter((m) => m.t === "ping").length;
+    const before = pings();
+    w.wake();
+    expect(pings()).toBe(before + 1);
+    // Not again within the second.
+    w.wake();
+    expect(pings()).toBe(before + 1);
+  });
+
+  test("closes a connection Leaf has said nothing on for fifteen seconds, and connects again", async () => {
+    const seen: LiveStatus[] = [];
+    await live();
+    room = joinLive("town", { status: (s) => seen.push(s) });
+    const first = last();
+    welcomed(first);
+    // Something heard ten seconds in: quiet counts from then.
+    pass(10_000);
+    first.snapshot(0, []);
+    pass(14_900);
+    expect([first.closed, made.length]).toEqual([null, 1]);
+    pass(200);
+    expect(first.closed).toBe(CLOSE.done);
+    expect(seen.at(-1)).toBe("closed");
+    expect(nextTry()).toBeLessThanOrEqual(320);
+    // Whenever the browser gets round to saying the old one closed, it is nothing to this page.
+    first.drop();
+    expect(made.length).toBe(2);
+    expect(seen.filter((s) => s === "closed").length).toBe(1);
+  });
+
+  test("keeps a quiet connection whose pings are answered", async () => {
+    await live();
+    room = joinLive("town");
+    const s = last();
+    welcomed(s);
+    for (let i = 0; i < 12; i++) {
+      pass(5000);
+      s.says({ t: "pong", c: 0, s: 0 });
+    }
+    expect([s.closed, made.length]).toEqual([null, 1]);
+  });
+
+  test("after three tries that did not open, asks Leaf why, and lets go once signed out", async () => {
+    let me: Reply = "offline";
+    const seen: LiveStatus[] = [];
+    const w = await live(() => me);
+    room = joinLive("town", { status: (s) => seen.push(s) });
+    welcomed(last());
+    last().drop();
+    const asked = (): number => w.sent.filter((x) => x.path === "/v1/game/me").length - 1;
+    for (let i = 0; i < 2; i++) {
+      nextTry();
+      last().drop();
+    }
+    await settle();
+    expect(asked()).toBe(0);
+    // The third: no answer at all, as while Leaf is away; the page keeps trying.
+    nextTry();
+    last().drop();
+    await settle();
+    expect(asked()).toBe(1);
+    // Signed in still (200): the page keeps trying, and asks again at the eighth.
+    me = { status: 200, body: TESTER };
+    for (let i = 0; i < 4; i++) {
+      nextTry();
+      last().drop();
+      // oxlint-disable-next-line no-await-in-loop -- each try's question, if any, answered before the next
+      await settle();
+    }
+    expect(asked()).toBe(1);
+    me = { status: 401, body: { code: "unauthorized" } };
+    nextTry();
+    last().drop();
+    await settle();
+    expect(asked()).toBe(2);
+    expect(seen.at(-1)).toBe("signedout");
+    const had = made.length;
+    pass(60_000);
+    expect(made.length).toBe(had);
+  });
+
+  test("a try that opened starts the count of tries that did not again", async () => {
+    const w = await live(() => ({ status: 401, body: { code: "unauthorized" } }));
+    room = joinLive("town");
+    welcomed(last());
+    last().drop();
+    for (let i = 0; i < 2; i++) {
+      nextTry();
+      last().drop();
+    }
+    // The third opens, and drops before any welcome.
+    nextTry();
+    last().open();
+    last().drop();
+    for (let i = 0; i < 2; i++) {
+      nextTry();
+      last().drop();
+    }
+    await settle();
+    expect(w.sent.filter((x) => x.path === "/v1/game/me").length).toBe(1);
   });
 });
