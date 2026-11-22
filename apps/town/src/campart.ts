@@ -5,7 +5,8 @@
  */
 
 import { BARK, CREAM, EARTH, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
-import { bitmap, ell, flipped, outlined, R } from "@sequoia-leaf/kit/pix.ts";
+import { bitmap, ell, flipped, outlined, outlineInPlace, R, rgb } from "@sequoia-leaf/kit/pix.ts";
+import { FOOT_Y, FRAME_W } from "@sequoia-leaf/kit/skin.ts";
 import { type Ctx, hash, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
 import type { PetId } from "@sequoia-leaf/town/camp.ts";
 import { THINGS } from "@sequoia-leaf/town/things.ts";
@@ -1052,6 +1053,9 @@ function woodpile(): Sprite {
   return stood(c);
 }
 
+/** What a statue stands on. */
+const STATUE_PLINTH = ["..tttttttt..", ".tSSSSSSSSs.", ".SSSSSSSSss."];
+
 const FOX_STATUE = [
   "..y....y....",
   "...y..y.....",
@@ -1066,10 +1070,48 @@ const FOX_STATUE = [
   "...jjjJjjjj.",
   "...jjJJjjJj.",
   "...jj.jj.JJ.",
-  "..tttttttt..",
-  ".tSSSSSSSSs.",
-  ".SSSSSSSSss.",
+  ...STATUE_PLINTH,
 ];
+
+/**
+ * A statue's stone, lightest first: the fox statue's lit marble, its shaded marble (the third), a
+ * tone between the two, and three deeper ones for what a face needs.
+ */
+const MARBLE = [must(P.j, "marble"), "#e1dadb", must(P.J, "marble"), "#b9b0c5", "#a199b1", "#7f778f"];
+/** How far a figure's darks are lifted towards the light (1 is not at all), so that dark clothes are marble too. */
+const LIFT = 0.6;
+/** A statue's picture: a figure's frame down to its feet, the plinth under them, and the plinth's dark edge. */
+const STATUE_H = FOOT_Y + STATUE_PLINTH.length + 1;
+
+/**
+ * Paints the statue of a figure (the kit's `bake`: facing us, standing) on a picture: every colour
+ * in stone by its lightness, from the figure's darkest (the deepest stone) to its lightest (lit
+ * marble), its dark edge kept, on the fox statue's plinth.
+ */
+function carve(c: HTMLCanvasElement, figure: HTMLCanvasElement): void {
+  const g = g2(c);
+  g.clearRect(0, 0, c.width, c.height);
+  g.drawImage(bitmap(STATUE_PLINTH, P), 0, FOOT_Y);
+  outlineInPlace(c, g, INK);
+  const stone = makeCanvas(FRAME_W, FOOT_Y);
+  const img = g2(figure).getImageData(0, 0, FRAME_W, FOOT_Y);
+  const d = img.data;
+  const [ir, ig, ib] = rgb(INK);
+  /** How light each pixel of the figure is; -1 for what is clear or its edge. */
+  const light = Array.from({ length: FRAME_W * FOOT_Y }, (_, n) => {
+    const [r = 0, gg = 0, b = 0, a = 0] = d.subarray(n * 4, n * 4 + 4);
+    return a === 0 || (r === ir && gg === ig && b === ib) ? -1 : 0.299 * r + 0.587 * gg + 0.114 * b;
+  });
+  const seen = light.filter((l) => l >= 0);
+  const lo = Math.min(...seen);
+  const span = Math.max(1, Math.max(...seen) - lo);
+  light.forEach((l, n) => {
+    const tone = MARBLE[Math.round((1 - ((l - lo) / span) ** LIFT) * (MARBLE.length - 1))];
+    if (l >= 0 && tone) d.set(rgb(tone), n * 4);
+  });
+  stone.g.putImageData(img, 0, 0);
+  g.drawImage(stone.c, 0, 0);
+}
 
 function fountain(): Sprite {
   const { c, g } = makeCanvas(18, 22);
@@ -1378,6 +1420,8 @@ export interface CampArt {
   /** Each trophy small enough to stand on the shelf. */
   small: Readonly<Record<string, HTMLCanvasElement>>;
   pets: (kind: PetId, hue: number) => PetArt;
+  /** Makes a banner's statue (`statue-<banner>`) the statue of a figure, wherever it already stands. */
+  carve: (id: string, figure: HTMLCanvasElement) => void;
   /** Things in the catalogue that have no picture of their own yet. */
   undrawn: readonly string[];
   /** A parcel waiting to be opened, and the posts either side of the trail. */
@@ -1483,6 +1527,26 @@ export function makeCampArt(s: Sprites): CampArt {
     "crab-drawing": one(rows(CRAB_DRAWING)),
   };
   for (const [id, t] of trophies) things[id] = one(t.whole);
+  // A statue's two pictures are painted on again when whose it is comes (`carve`), so what stands shows it.
+  const statues = new Map<string, (figure: HTMLCanvasElement) => void>();
+  for (const { id } of THINGS.filter((t) => t.id.startsWith("statue-"))) {
+    const [front, turned] = [makeCanvas(FRAME_W, STATUE_H), makeCanvas(FRAME_W, STATUE_H)];
+    const stands = (c: HTMLCanvasElement): Sprite => ({ c, ax: FRAME_W / 2, ay: STATUE_H - 1 });
+    things[id] = [[stands(front.c)], [stands(turned.c)]];
+    const paint = (figure: HTMLCanvasElement): void => {
+      carve(front.c, figure);
+      turned.g.clearRect(0, 0, FRAME_W, STATUE_H);
+      turned.g.drawImage(flipped(front.c), 0, 0);
+    };
+    statues.set(id, paint);
+    // Nobody's yet: a block of the marble as tall as a figure, lit from the left, with the first cut made at the neck.
+    const block = makeCanvas(FRAME_W, FOOT_Y);
+    R(block.g, 2, 3, 8, FOOT_Y - 3, "#ffffff");
+    R(block.g, 7, 3, 3, FOOT_Y - 3, "#707070");
+    R(block.g, 2, 11, 8, 1, "#000000");
+    outlineInPlace(block.c, block.g, INK);
+    paint(block.c);
+  }
   // Anything the catalogue has that has no picture yet stands in as a crate, so nothing is ever unseen.
   const undrawn = THINGS.filter((t) => !things[t.id]).map((t) => t.id);
   for (const id of undrawn) things[id] = one(s.crate);
@@ -1490,6 +1554,7 @@ export function makeCampArt(s: Sprites): CampArt {
   const pets = new Map<string, PetArt>();
   return {
     things,
+    carve: (id, figure) => statues.get(id)?.(figure),
     undrawn,
     cabins,
     small: Object.fromEntries(trophies.map(([id, t]) => [id, t.small])),

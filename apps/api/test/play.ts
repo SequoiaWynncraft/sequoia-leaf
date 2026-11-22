@@ -48,7 +48,8 @@
  * does not reach by itself (`stage-raid.ts`), `POST /test/play/works` one in Tester's yard (a
  * kept yard, a time away, a filled order, the others' yards on the board: `stage-works.ts`), and
  * `POST /test/play/town` one in Tester's town and camp (a lived-in camp, a caller waiting, a time
- * away, a full mailbox, Coins to shop with, the others' camps on the board: `stage-town.ts`);
+ * away, a full mailbox, Coins to shop with, the others' camps on the board, prizes won and a
+ * banner's person: `stage-town.ts`);
  * nothing like them is served by the guild's own Leaf.
  */
 import { existsSync } from "node:fs";

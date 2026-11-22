@@ -557,6 +557,28 @@ describe("a table's numbers on its player's card", () => {
   });
 });
 
+/** A table as Leaf opens it for a player who holds these awards. */
+const won = (state: Table, ...awards: string[]): Table => RAID.advance(state, { ...ctx(1), awards });
+
+describe("a look won as a pull's prize", () => {
+  test("is owned at the table, costs nothing, and may be put on", () => {
+    const state = RAID.create(ctx(1));
+    expect(won(state, "trophy-oldbramble", "pull:thing:rock", "pull:look:bare", "pull:look:nothing")).toBe(state);
+    const owner = won(state, "pull:look:gilt", "pull:look:baize");
+    expect(owner.looks).toEqual({ cloth: "bare", lantern: "iron", bases: "plain", owned: ["gilt", "baize"] });
+    expect(state.looks.owned).toEqual([]);
+    expect(RAID.apply(owner, { do: "buyLook", kind: "bases", look: "gilt" }, ctx(1))).toEqual({ refused: "owned" });
+    const worn = must(owner, { do: "look", kind: "bases", look: "gilt" }, ctx(1));
+    expect(worn.state.looks.bases).toBe("gilt");
+    expect(worn.leaf).toBeUndefined();
+    expect(RAID.decode(RAID.encode(worn.state))?.looks).toEqual(worn.state.looks);
+  });
+  test("changes nothing when it was bought before", () => {
+    const bought = must(RAID.create(ctx(1)), { do: "buyLook", kind: "lantern", look: "jar" }, ctx(1)).state;
+    expect(won(bought, "pull:look:jar")).toBe(bought);
+  });
+});
+
 describe("awards", () => {
   test("are a carved figure of each boss the almanac has beaten, on any trail, once", () => {
     const state = RAID.create(ctx(1));

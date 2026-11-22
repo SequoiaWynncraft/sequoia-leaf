@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
 import { isBoughtLook } from "@sequoia-leaf/raid/content/looks.ts";
-import { WARES } from "@sequoia-leaf/town/catalogue.ts";
 import { isThing } from "@sequoia-leaf/town/things.ts";
 
 import {
@@ -62,7 +61,6 @@ function known(prize: string): boolean {
   const [kind = "", id = ""] = prize.split(/:(.*)/);
   if (kind === "thing") return isThing(id);
   if (kind === "look") return isBoughtLook(id);
-  if (kind === "ware") return WARES.some((ware) => ware.id === id && ware.once);
   return kind === "headliner" && BANNERS.some((banner) => banner.id === id);
 }
 
@@ -79,6 +77,9 @@ describe("the prizes", () => {
     expect(PRIZES.Sapling).toContain("thing:sunflower");
     expect(PRIZES.Sprite).toContain("thing:toadstool");
     expect(PRIZES.Yggdrasil).toEqual(["headliner:banner-1"]);
+    // The town has a statue to send for each banner's headliner, and nothing is a ware any more.
+    expect(BANNERS.filter(({ id }) => !isThing(`statue-${id}`))).toEqual([]);
+    expect(all.filter((prize) => prize.startsWith("ware:"))).toEqual([]);
     expect(rarityOf("look:plum")).toBe("Druid");
     expect(rarityOf("look:bare")).toBeUndefined();
   });
@@ -222,9 +223,10 @@ describe("Seeds", () => {
     expect(dryad.notes).toEqual([{ t: "exchange", prize: "look:baize", rarity: "Dryad", have: 1 }]);
     expect(dryad.state.seeds).toBe(140);
     expect(refused(dryad.state, exchange("look:baize"))).toBe("owned");
-    expect(refused(dryad.state, exchange("ware:crown"))).toBe("not_enough_seeds");
-    const druid = done({ ...dryad.state, seeds: 150 }, exchange("ware:crown"));
-    expect([druid.state.seeds, druid.state.have["ware:crown"], druid.state.pulls]).toEqual([0, 1, 0]);
+    expect(refused(dryad.state, exchange("look:plum"))).toBe("not_enough_seeds");
+    expect(refused(dryad.state, exchange("ware:crown"))).toBe("not_for_seeds");
+    const druid = done({ ...dryad.state, seeds: 150 }, exchange("look:plum"));
+    expect([druid.state.seeds, druid.state.have["look:plum"], druid.state.pulls]).toEqual([0, 1, 0]);
   });
 });
 
@@ -235,7 +237,11 @@ describe("keeping it", () => {
     expect([s.pulls, s.history.length]).toEqual([210, HISTORY]);
     expect(PULLS.decode(PULLS.encode(s))).toEqual(s);
     expect(PULLS.decode("{")).toBeNull();
-    expect(PULLS.decode(PULLS.encode({ ...s, have: { "thing:nothing": 1 } }))).toBeNull();
+    // A ware won before the wares went is let go, from what is held and from the history.
+    const past = { prize: "ware:jar", pool: "grove", at: T0, top: 3 };
+    const held = { ...s, have: { ...s.have, "ware:jar": 2 }, history: [past, ...s.history.slice(1)] };
+    expect(PULLS.decode(PULLS.encode(held))).toEqual({ ...s, history: s.history.slice(1) });
+    expect(PULLS.decode(PULLS.encode({ ...s, have: { "thing:rock": 0 } }))).toBeNull();
     expect(PULLS.decode(PULLS.encode({ ...s, counters: { ...s.counters, banner: counters(80) } }))).toBeNull();
     const { rng, ...shown } = s;
     expect(rng).toBeNumber();

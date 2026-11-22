@@ -14,7 +14,7 @@ bun test
 | File           | What it is                                                                                   |
 | -------------- | -------------------------------------------------------------------------------------------- |
 | `things.ts`    | Every thing a camp can hold: name, kind, the ground it takes, how it turns                   |
-| `catalogue.ts` | The stalls and their prices in Coins, the Treasury's wares and fine pieces, presents         |
+| `catalogue.ts` | The stalls and their prices in Coins, and the presents                                       |
 | `folk.ts`      | The town's own: who each is and what they say; who calls at a camp, their notes and presents |
 | `mail.ts`      | The mailbox: twelve letters, and which make room for the next                                |
 | `camp.ts`      | What may stand where in a camp, turning, the tray, who lives there, the new camp, an old one |
@@ -36,9 +36,11 @@ A new member's camp is the one every member starts with (`NEW_CAMP`), and the fi
 
 ## What happens by itself
 
-`advance` does two things at Leaf's clock. Each award the member holds (`Ctx.awards`) that is a
-camp thing and that the camp has not had goes by the trail as a parcel and is noted in `earned`,
-while the trail has room. When `nextCall` has come, the caller still waiting leaves (what they
+`advance` does two things at Leaf's clock. Each award the member holds (`Ctx.awards`) that brings
+a camp thing the camp has not had goes by the trail as a parcel and is noted in `earned`, while the
+trail has room: a trophy (the award is the thing's id), a pull's thing (`pull:thing:<id>`), and a
+banner's headliner (`pull:headliner:<banner>`), which brings that banner's statue
+(`statue-<banner>`). Each comes once, however many copies a pull gave. When `nextCall` has come, the caller still waiting leaves (what they
 brought is posted if the box has room), and the next sets out: one of four, bringing a present
 two times in five and a note seven times in ten; `nextCall` is drawn again, 46 to 76 seconds on.
 One caller at most each call, however long nobody was here.

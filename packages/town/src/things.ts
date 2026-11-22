@@ -266,6 +266,9 @@ export const THINGS: readonly Thing[] = [
   }),
   thing("crab-throne", "Crab throne", "seats", 2, 1, "A seat with claws for arms.", "Sit down.", { seats: 1 }),
 
+  // A banner's headliner, in marble: one for each of the pull game's banners. The page names and draws whose it is.
+  thing("statue-banner-1", "A statue", "oddments", 1, 1, "Marble, on a plinth.", "", { light: 22, turns: "flip" }),
+
   // Small presents, which cannot be bought.
   thing("pinecone", "A very good pinecone", "oddments", 1, 1, "Chosen with care.", "Rolls a little."),
   thing("painted-pebble", "Painted pebble", "oddments", 1, 1, "Somebody painted a crab on it.", "Clicks."),

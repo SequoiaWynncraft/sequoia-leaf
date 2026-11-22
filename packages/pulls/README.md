@@ -12,10 +12,15 @@ bun test
 
 Seven rarities (`RARITIES`), each with its colour, in three tiers: filler (Leafkin, Sapling, Sprite),
 mid (Dryad, Druid) and top (Treant, Yggdrasil). Every prize (`PRIZES`) is something another game
-already has, named by kind: `thing:` (the town's), `look:` (the raid table's), `ware:` (the
-Treasury's), or `headliner:<banner>`. Filler is the market's stall stock by price, read from the
-town's catalogue, so it follows the catalogue. Which member a banner's headliner is, Leaf reads from
-its `banner_people` table; nothing about them is in this package.
+already has, named by kind: `thing:` (the town's), `look:` (the raid table's), or
+`headliner:<banner>`. Filler is the market's stall stock by price, read from the town's catalogue,
+so it follows the catalogue. Which member a banner's headliner is, Leaf reads from its
+`banner_people` table; nothing about them is in this package.
+
+What a prize is, once won, is the other games' to say, from the award (`pull:<prize>`): the town
+sends a `thing:` to the camp once, as a parcel, and for a `headliner:` the banner's statue
+(`statue-<banner>`); the raid's table owns a `look:` as if it were bought. A second copy of a prize
+brings nothing but its Seeds.
 
 ## Pools
 
@@ -36,5 +41,6 @@ due), `history` (the last 200 pulls), `pulls` (ever) and `rng`. `advance` adds t
 fallen due, one every 24 hours, at most 7 waiting; nothing else changes with time. The page is
 shown everything but `rng`, and the banners open now.
 
-`awards` is `pull:<prize>` for each prize held; `standing` is the number of different prizes, with
+A stored prize that is no longer one (the Treasury's wares, which went) is dropped when the state is
+read. `awards` is `pull:<prize>` for each prize held; `standing` is the number of different prizes, with
 pulls ever and top-tier prizes won; each top-tier prize is logged as `pulls_top`.
