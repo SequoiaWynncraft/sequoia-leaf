@@ -10,6 +10,7 @@ import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, lerp, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
 
 import { goSit, onScreen } from "./actors.ts";
+import { unread } from "./board.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { changed, G, hooks } from "./game.ts";
 import { GROUND, paintTrunk } from "./ground.ts";
@@ -601,8 +602,9 @@ export function buildTown(s: Sprites, ground: Ctx): void {
       sfx.paper();
       nudge(p);
     },
+    // A quest is ready to claim, or there is news the member has not opened.
     extra: (g, sx, sy) => {
-      if (!guild.quests().some((q) => q.claim && q.have >= q.need && !G.claimed.has(q.id))) return;
+      if (!unread() && !guild.quests().some((q) => q.claim && q.have >= q.need && !G.claimed.has(q.id))) return;
       const bob = Math.round(Math.sin(G.t * 4) * 1.5);
       g.drawImage(s.bang.c, sx + 20, sy - 56 + bob);
     },
