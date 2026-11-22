@@ -95,9 +95,9 @@ export function buildTable(a: Asks): void {
   const resolve = el("button", "k-plaque", { id: "resolve", type: "button" });
   tip(
     resolve,
-    "Resolve",
+    "Health",
     () =>
-      `A lost room costs ${ECONOMY.lossBase}, and 1 more for each enemy left standing, up to ${ECONOMY.lossMost}. At 0 the raid is over.`,
+      `A lost room costs ${ECONOMY.lossBase} health, and 1 more for each enemy left standing, up to ${ECONOMY.lossMost}. At 0 the raid is over.`,
   );
   const help = el(
     "button",

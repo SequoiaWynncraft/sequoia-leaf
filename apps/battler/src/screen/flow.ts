@@ -281,7 +281,7 @@ function count(note: RaidNote, at: number, levels: boolean): number {
     {
       later(at, () => {
         sheetTaking(
-          "Resolve",
+          "Health",
           el(
             "b",
             note.change > 0 ? "k-leafy" : "k-coral",
@@ -298,7 +298,7 @@ function count(note: RaidNote, at: number, levels: boolean): number {
           say(
             spot.x,
             spot.y + 16,
-            `${note.change > 0 ? "+" : ""}${note.change} resolve`,
+            `${note.change > 0 ? "+" : ""}${note.change} health`,
             note.change > 0 ? LEAF : "#e67967",
             { ttl: 1.4, rise: -6 },
           );
