@@ -593,6 +593,16 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   them ("Someone" for one Leaf has none for); the outer `you` is the caller's
   own `{ "place", "score", "also" }`, or null before they score. Empty for a
   game with no board.
+- Each call a player makes to a game (an opening, a batch not refused whole,
+  a visit, for the visitor) adds the time since their last call to that game
+  to how long they have played it, when that is at most 3 minutes
+  (`IDLE_MS`; a page in view calls at least every 75 seconds); a longer gap
+  adds nothing. It is written in the call's
+  transaction where there is one; a failure to write it is logged, and the
+  call goes on. `GET /v1/game/people/{player}` answers `{ "id", "name",
+"games", "played" }`: for each game they stand in or have played a second
+  of, `played` in whole seconds and, with a standing, its `place`, `score`
+  and `also`; and `played` for all games together.
 
 Tables (migration 17): `play_state` (a player's state in a game, with its
 `rev`; 0 is a state nothing has been done to), `play_commands` (each command's
@@ -604,7 +614,8 @@ player's commands done and refused, by the UTC day). What commands log goes to
 `coin_entries` `earned`, 1 for an entry weighed against what a player may earn
 and 0 for one that is not. Migration 19 made `standings`, where each player's
 state in a game with a board stands; its `updated_at` is when the score was
-last reached.
+last reached. Migration 23 made `played`: each player's time in each game, in
+milliseconds, and when Leaf last heard from them there (`seen_at`).
 
 **Coins** are a ledger like Leaf: a balance per player, changed only by an
 entry, each keyed by the fact it records (`<game>:<player>:<key>` for a

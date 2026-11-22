@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "time-played",
+    at: "2026-11-22T22:41Z",
+    title: "Time played",
+    lines: [
+      "A person's card shows how long they have played each game, and all games together.",
+      "It counts from this update on. Play before it is not counted.",
+    ],
+  },
+  {
     id: "nobody-inside",
     at: "2026-11-22T22:36Z",
     title: "Nobody inside anybody",

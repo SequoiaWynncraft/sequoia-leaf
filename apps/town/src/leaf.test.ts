@@ -28,7 +28,7 @@ test("a camp visited is opened beside the member's own and shown, and nothing bu
   const w = standin({
     "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
     "GET /v1/game/play/town/of/bob": { status: 200, body: { rev: 4, now: "x", state: visitView(theirs) } },
-    "GET /v1/game/people/bob": { status: 200, body: { id: "bob", name: "Bob", games: {} } },
+    "GET /v1/game/people/bob": { status: 200, body: { id: "bob", name: "Bob", games: {}, played: 0 } },
   });
   world = w;
   expect(await openTown("me", () => undefined)).toBeNull();

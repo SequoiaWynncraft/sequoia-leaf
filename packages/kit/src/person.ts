@@ -1,9 +1,9 @@
 /**
  * A person's card: somebody in a list ("Who is about", "Top yards") as the card shows them, their
- * face, their name and the line the list has for them, and under that their numbers in each game,
- * as Leaf has them (`GET /v1/game/people/{id}`). A page registers the kind once (`people`), says
- * what a list knows of somebody (`known`) before it links a row to `person:<id>`. A game's board,
- * the lists of where people stand, is read here too (`readBoard`).
+ * face, their name and the line the list has for them, and under that how long they have played,
+ * and their numbers in each game, as Leaf has them (`GET /v1/game/people/{id}`). A page registers
+ * the kind once (`people`), says what a list knows of somebody (`known`) before it links a row to
+ * `person:<id>`. A game's board, the lists of where people stand, is read here too (`readBoard`).
  *
  * Leaf is asked when the card is first asked for, and the card shows once, whole, when Leaf has
  * answered (`coming`); if the answer cannot be read, the head alone. What Leaf said is kept a
@@ -21,10 +21,16 @@ export interface GameStats {
   readonly numbers: (placed: Placed) => readonly Stat[];
 }
 
-/** Where somebody stands in each game, by game. */
-export type Games = Readonly<Record<string, Placed>>;
+/** Somebody in a game: where they stand, if they do, and how long they have played it, in seconds. */
+export interface InGame {
+  readonly placed: Placed | null;
+  readonly played: number;
+}
 
-/** Somebody, as a list knows them, and where they stand once Leaf has said (null until then, or if it could not be read). */
+/** Each game somebody stands in or has played, by game. */
+export type Games = Readonly<Record<string, InGame>>;
+
+/** Somebody, as a list knows them, and their games once Leaf has said (null until then, or if it could not be read). */
 export interface Person {
   readonly id: string;
   readonly name: string;
@@ -72,18 +78,25 @@ export function readBoard(v: unknown): Board | null {
   return { top: top.filter((r) => r !== null), you };
 }
 
-/** What Leaf says of somebody: their name, and where they stand. */
+/** What Leaf says of somebody: their name, their games, and how long they have played all games, in seconds. */
 export interface Said {
   readonly name: string;
   readonly games: Games;
+  readonly played: number;
+}
+
+function inGameOf(v: unknown): InGame | null {
+  if (!isRecord(v) || !whole(v.played)) return null;
+  const placed = v.place === undefined ? null : placedOf(v);
+  return v.place !== undefined && placed === null ? null : { placed, played: v.played };
 }
 
 /** What Leaf said of somebody, read back; null for an answer that makes no sense. */
 export function readPerson(v: unknown): Said | null {
-  if (!isRecord(v) || typeof v.name !== "string" || !isRecord(v.games)) return null;
-  const games = Object.entries(v.games).map(([game, placed]): [string, Placed | null] => [game, placedOf(placed)]);
-  return games.every((g): g is [string, Placed] => g[1] !== null)
-    ? { name: v.name, games: Object.fromEntries(games) }
+  if (!isRecord(v) || typeof v.name !== "string" || !isRecord(v.games) || !whole(v.played)) return null;
+  const games = Object.entries(v.games).map(([game, g]): [string, InGame | null] => [game, inGameOf(g)]);
+  return games.every((g): g is [string, InGame] => g[1] !== null)
+    ? { name: v.name, games: Object.fromEntries(games), played: v.played }
     : null;
 }
 
@@ -93,18 +106,32 @@ export async function askPerson(id: string): Promise<Said | null> {
   return a.status === 200 ? readPerson(a.body) : null;
 }
 
+/** A time played, as the card writes it: "under 1 min", "42 min", "3 h 20 min" ("3 h" on the hour), and from 100 hours "132 h". */
+export function duration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  if (minutes < 1) return "under 1 min";
+  if (hours < 1) return `${minutes} min`;
+  if (hours >= 100 || minutes % 60 === 0) return `${hours.toLocaleString("en-US")} h`;
+  return `${hours} h ${minutes % 60} min`;
+}
+
+/** "Time played", for a time above none. */
+const timeOf = (seconds: number): Stat[] => (seconds > 0 ? [{ label: "Time played", value: duration(seconds) }] : []);
+
 /**
- * The card's numbers: for each game in `stats` that somebody stands in, in that order, its name as
- * a label and then its numbers; for somebody who stands in none, one line.
+ * The card's numbers: how long somebody has played all games together; then for each game in
+ * `stats` they stand in or have played, in that order, its name as a label, its numbers and how
+ * long they have played it. For somebody with none of these, one line.
  */
 export function numbersOf(
-  games: Games,
+  said: Said,
   stats: Readonly<Record<string, GameStats>>,
 ): Pick<Description, "stats" | "blocks"> {
-  const shown: (Stat | string)[] = [];
-  for (const [game, said] of Object.entries(stats)) {
-    const placed = games[game];
-    if (placed) shown.push(said.name, ...said.numbers(placed));
+  const shown: (Stat | string)[] = timeOf(said.played);
+  for (const [game, says] of Object.entries(stats)) {
+    const g = said.games[game];
+    if (g) shown.push(says.name, ...(g.placed ? says.numbers(g.placed) : []), ...timeOf(g.played));
   }
   return shown.length > 0 ? { stats: shown } : { blocks: [{ body: "Has not played yet." }] };
 }
@@ -116,7 +143,7 @@ interface Head {
   readonly face: HTMLCanvasElement;
 }
 const heads = new Map<string, Head>();
-const asked = new Map<string, { at: number; games: Games | null }>();
+const asked = new Map<string, { at: number; said: Said | null }>();
 /** Whoever Leaf is being asked about for the first time: their card waits for the answer. */
 const first = new Map<string, Promise<void>>();
 
@@ -128,9 +155,9 @@ export function known(p: Head & { readonly id: string }): void {
 /** Asks Leaf where somebody stands, and draws their card again when it answers. */
 async function askFor(id: string): Promise<void> {
   // What it said last is shown meanwhile.
-  asked.set(id, { at: outside.now(), games: asked.get(id)?.games ?? null });
+  asked.set(id, { at: outside.now(), said: asked.get(id)?.said ?? null });
   const said = await askPerson(id);
-  asked.set(id, { at: outside.now(), games: said?.games ?? null });
+  asked.set(id, { at: outside.now(), said });
   first.delete(id);
   refresh();
 }
@@ -148,14 +175,14 @@ export function people(opts: {
     const had = asked.get(id);
     if (!had) first.set(id, askFor(id));
     else if (outside.now() - had.at >= KEPT_MS) void askFor(id);
-    const games = asked.get(id)?.games ?? null;
+    const said = asked.get(id)?.said ?? null;
     const coming = first.get(id);
     return {
       name: head.name,
       icon: head.face,
       ...(head.line === "" ? {} : { tag: head.line }),
-      ...(games ? numbersOf(games, opts.stats) : {}),
-      actions: opts.actions({ id, name: head.name, line: head.line, games }),
+      ...(said ? numbersOf(said, opts.stats) : {}),
+      actions: opts.actions({ id, name: head.name, line: head.line, games: said?.games ?? null }),
       ...(coming ? { coming } : {}),
     };
   });

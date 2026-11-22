@@ -23,7 +23,7 @@ import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { played } from "../src/play/games.ts";
 import { Play } from "../src/play/service.ts";
-import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
+import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, IDLE_MS, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
 import { DAY, fakeBackend, fakeMojang, type Fakes, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -1176,11 +1176,12 @@ describe("the Works", () => {
     expect(visited).toEqual(own);
     expect(yardOf(visited.state).yard.tick).toBeGreaterThan(yardNow.tick);
     expect({ state: await storedPlay(alice), coins: await entries(alice), stood: await standings() }).toEqual(before);
-    // Her card: where her yard stands.
+    // Her card: where her yard stands, and the two minutes she has had it open.
     expect(await personOf(alice, bob)).toEqual({
       id: alice,
       name: "Alice",
-      games: { works: { place: 1, score: earned, also: { story: 1 } } },
+      games: { works: { place: 1, score: earned, also: { story: 1 }, played: 120 } },
+      played: 120,
     });
   });
 });
@@ -1233,7 +1234,9 @@ describe("a visit", () => {
 describe("a person's numbers", () => {
   it("are where they stand in each game, placed as the board places them, the raid's written as their table changes", async () => {
     await named(bob, "Bob");
+    const from = clock.now;
     const { view } = await playRun(bob);
+    const seconds = Math.floor((clock.now - from) / 1000);
     await stand(stranger(1), 900, T0);
     await stand(bob, 500, T0);
     const bosses = view.almanac.bosses.flat().length;
@@ -1241,9 +1244,11 @@ describe("a person's numbers", () => {
       id: bob,
       name: "Bob",
       games: {
-        raid: { place: 1, score: bosses, also: { runs: 1, room: Math.max(...view.almanac.best) } },
-        works: { place: 2, score: 500, also: { story: 500 % 16 } },
+        raid: { place: 1, score: bosses, also: { runs: 1, room: Math.max(...view.almanac.best) }, played: seconds },
+        // A standing from before Leaf counted time.
+        works: { place: 2, score: 500, also: { story: 500 % 16 }, played: 0 },
       },
+      played: seconds,
     });
   });
 
@@ -1252,10 +1257,11 @@ describe("a person's numbers", () => {
     expect(await personOf(stranger(4))).toEqual({
       id: stranger(4),
       name: "Someone",
-      games: { works: { place: 1, score: 0, also: { story: 0 } } },
+      games: { works: { place: 1, score: 0, also: { story: 0 }, played: 0 } },
+      played: 0,
     });
     // Carol, a guest, asks about herself before she has played.
-    expect(await personOf(carol, carol)).toEqual({ id: carol, name: "Someone", games: {} });
+    expect(await personOf(carol, carol)).toEqual({ id: carol, name: "Someone", games: {}, played: 0 });
   });
 
   it("are not given of a player Leaf does not know", async () => {
@@ -1265,6 +1271,121 @@ describe("a person's numbers", () => {
       // oxlint-disable-next-line no-await-in-loop -- one after another
       expect([answer.status, await codeOf(answer)]).toEqual([404, "no_such_player"]);
     }
+  });
+});
+
+/** Alice's time in each game, in milliseconds, as Leaf keeps it. */
+const playedMs = () =>
+  services.run(PlayStore.use((store) => store.playedOf(alice))).then((games) => Object.fromEntries(games));
+/** A call of Alice's to a game `after` milliseconds on: opening it. */
+async function openAfter(after: number, game = "raid") {
+  clock.now += after;
+  expect((await send("GET", `/v1/game/play/${game}`)).status).toBe(200);
+}
+
+describe("time played", () => {
+  const MINUTE = 60_000;
+
+  it(`adds up the gaps between a player's calls to a game of up to ${IDLE_MS / MINUTE} minutes, from the second call`, async () => {
+    await openAfter(0);
+    expect(await playedMs()).toEqual({ raid: 0 });
+    // A clock that does not move adds nothing.
+    await openAfter(0);
+    expect(await playedMs()).toEqual({ raid: 0 });
+    // A batch is a call, as an opening is.
+    clock.now += 2 * MINUTE;
+    await commanded(ided([{ do: "start", trail: 0 }]));
+    expect(await playedMs()).toEqual({ raid: 2 * MINUTE + 100 });
+    await openAfter(IDLE_MS);
+    expect(await playedMs()).toEqual({ raid: 2 * MINUTE + 100 + IDLE_MS });
+    // Longer, and they were away: nothing, and the time counts again from there.
+    await openAfter(IDLE_MS + 1);
+    await openAfter(30_000);
+    expect(await playedMs()).toEqual({ raid: 2 * MINUTE + 100 + IDLE_MS + 30_000 });
+  });
+
+  it("is each game's apart, and all games' together on the card, in whole seconds; a game with time and no standing has its entry", async () => {
+    await openAfter(0, "raid");
+    await openAfter(10_000, "town");
+    await openAfter(50_000, "raid");
+    await openAfter(MINUTE + 10_999, "town");
+    expect(await playedMs()).toEqual({ raid: MINUTE, town: 2 * MINUTE + 999 });
+    expect(await personOf(alice)).toEqual({
+      id: alice,
+      name: "Someone",
+      games: { raid: { played: 60 }, town: { played: 120 } },
+      played: 180,
+    });
+  });
+
+  it("counts a visit for the visitor, in that game, and nothing for whoever is visited", async () => {
+    await send("GET", "/v1/game/play/works", undefined, bob);
+    await openAfter(0, "raid");
+    for (const after of [MINUTE, 30_000, 30_000]) {
+      clock.now += after;
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      expect((await visit(bob, "works")).status).toBe(200);
+    }
+    expect(await playedMs()).toEqual({ raid: 0, works: MINUTE });
+    expect(Object.fromEntries(await services.run(PlayStore.use((store) => store.playedOf(bob))))).toEqual({
+      works: 0,
+    });
+    // On her card, the raid she has opened and not played for a second is not listed.
+    expect(await personOf(alice)).toEqual({
+      id: alice,
+      name: "Someone",
+      games: { works: { played: 60 } },
+      played: 60,
+    });
+  });
+
+  it("loses nothing to a batch refused or one that fails: the next call counts from the last one taken", async () => {
+    await app.dispose();
+    let logs = 0;
+    start({
+      play: (real) => ({
+        ...real,
+        log: (player, game, what, now) =>
+          Effect.suspend(() => {
+            logs += 1;
+            return logs === 2 ? Effect.die(new Error("the disk is full")) : real.log(player, game, what, now);
+          }),
+      }),
+    });
+    await openAfter(0);
+    await openAfter(MINUTE);
+    clock.now += MINUTE;
+    const refused = await send("POST", "/v1/game/play/raid", { commands: [{ id: "x-1", do: "win" }] });
+    expect(refused.status).toBe(400);
+    // A command the rules refuse is in a batch taken: it counts.
+    clock.now += MINUTE;
+    expect((await commanded(ided([{ do: "take" }]))).results).toMatchObject([{ refused: expect.any(String) }]);
+    expect(await playedMs()).toEqual({ raid: 3 * MINUTE + 100 });
+    clock.now += MINUTE;
+    const failed = await send("POST", "/v1/game/play/raid", { commands: ided([{ do: "start", trail: 0 }]) });
+    expect(failed.status).toBe(500);
+    expect(await playedMs()).toEqual({ raid: 3 * MINUTE + 100 });
+    await openAfter(MINUTE);
+    expect(await playedMs()).toEqual({ raid: 5 * MINUTE + 100 });
+  });
+
+  it("that cannot be written stops no call, and is logged", async () => {
+    await app.dispose();
+    start({ play: (real) => ({ ...real, heard: () => Effect.die(new Error("the disk is full")) }) });
+    await openAfter(0);
+    await commanded(ided([{ do: "start", trail: 0 }]));
+    await send("GET", "/v1/game/play/works", undefined, bob);
+    expect((await visit(bob, "works")).status).toBe(200);
+    const logs: unknown[] = [];
+    const capture = Logger.layer([Logger.make(({ message }) => void logs.push(message))]);
+    const opening = await services.run(
+      Play.use((play) => play.open({ playerId: alice, guest: false }, played(RAID))).pipe(
+        Effect.provide(capture),
+        Effect.provideService(References.MinimumLogLevel, "All"),
+      ),
+    );
+    expect(opening.status).toBe("open");
+    expect(logs).toEqual([[`The time ${alice} played raid was not counted`, expect.anything()]]);
   });
 });
 

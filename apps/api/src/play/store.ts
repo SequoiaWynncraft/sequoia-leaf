@@ -12,6 +12,13 @@ export const LOGGED_A_DAY = 1000;
 export const ACTIVITY_KEPT_MS = 180 * DAY_MS;
 /** How many are listed at the top of a game's board. */
 export const BOARD_MOST = 20;
+/**
+ * The longest gap between a player's calls to a game that counts as playing it. A page open and in
+ * view calls at least every 75 seconds (the kit's `STILL_HERE`, a minute, checked every 15
+ * seconds), and a visit every 30; this is twice that and more, for a slow network. A longer gap is
+ * time away.
+ */
+export const IDLE_MS = 3 * 60_000;
 
 /** A player's state in a game, as stored: how many batches have changed it, and the game's own text. */
 const Stored = Schema.Struct({ rev: Schema.Int, state: Schema.String });
@@ -50,9 +57,10 @@ export interface Board {
  * answered (`play_commands`, each player's newest 256 to each game), the things players did that
  * are worth remembering (`activity`, up to 1,000 a player a UTC day, for 180 days), and how many of
  * each player's commands were done and refused each UTC day (`command_days`, for the staff's
- * report), where each player's state stands in a game with a board (`standings`), and what each
- * player has won for good in any game (`awards`, never taken away). Every method
- * but `board` is meant to run inside the play service's transaction. A database failure is a defect.
+ * report), where each player's state stands in a game with a board (`standings`), what each
+ * player has won for good in any game (`awards`, never taken away), and how long each player has
+ * played each game (`played`). Every method but `board` is meant to run inside the play service's
+ * transaction. A database failure is a defect.
  */
 export class PlayStore extends Context.Service<
   PlayStore,
@@ -109,6 +117,14 @@ export class PlayStore extends Context.Service<
     readonly awards: (playerId: PlayerId) => Effect.Effect<readonly string[]>;
     /** Keeps each of these the player does not hold yet, as won now. */
     readonly award: (playerId: PlayerId, ids: readonly string[], now: number) => Effect.Effect<void>;
+    /**
+     * A call of the player's to a game at `now`: the time since their last one there is added to
+     * what they have played, if it is no more than `IDLE_MS`. The first adds nothing, and so does
+     * one at or before the last.
+     */
+    readonly heard: (playerId: PlayerId, game: string, now: number) => Effect.Effect<void>;
+    /** How long a player has played each game, in milliseconds, by game. */
+    readonly playedOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, number>>;
   }
 >()("leaf/PlayStore") {
   static readonly layer = Layer.effect(
@@ -171,6 +187,11 @@ export class PlayStore extends Context.Service<
         Request: Schema.String,
         Result: Schema.Struct({ id: Schema.String }),
         execute: (playerId) => sql`SELECT id FROM awards WHERE player_id = ${playerId} ORDER BY at, id`,
+      });
+      const playedOf = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: Schema.Struct({ game: Schema.String, ms: Schema.Int }),
+        execute: (playerId) => sql`SELECT game, ms FROM played WHERE player_id = ${playerId} ORDER BY game`,
       });
       return PlayStore.of({
         read: (playerId, game) => read({ playerId, game }).pipe(Effect.orDie),
@@ -257,6 +278,18 @@ export class PlayStore extends Context.Service<
               sql`INSERT INTO awards (player_id, id, at) VALUES (${playerId}, ${id}, ${now}) ON CONFLICT DO NOTHING`,
             { discard: true },
           ).pipe(Effect.orDie),
+        heard: (playerId, game, now) =>
+          sql`
+            INSERT INTO played (player_id, game, ms, seen_at) VALUES (${playerId}, ${game}, 0, ${now})
+            ON CONFLICT (player_id, game) DO UPDATE SET
+              ms = ms + CASE WHEN excluded.seen_at - seen_at BETWEEN 1 AND ${IDLE_MS} THEN excluded.seen_at - seen_at ELSE 0 END,
+              seen_at = max(seen_at, excluded.seen_at)
+          `.pipe(Effect.asVoid, Effect.orDie),
+        playedOf: (playerId) =>
+          playedOf(playerId).pipe(
+            Effect.map((rows) => new Map(rows.map((row) => [row.game, row.ms]))),
+            Effect.orDie,
+          ),
       });
     }),
   );
