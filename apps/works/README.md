@@ -230,15 +230,18 @@ taken. `page(x, y)` is where a tile is on the page, `rider(x, y)` what is riding
 as if the screen showed `hz` of them a second (60 unless said), and gives back what one took:
 `{ ms, picture, pieces }`. `ms` is milliseconds by part: `page` (the page's own bookkeeping, and the
 yard's ticks), `floor`, `belts`, `standing`, `dusk`, `marks` (the parts of `drawYard`), `words`, and
-`browser`: a browser may put off the drawing it was asked for, and `bench` takes the picture after
-each frame to have it done and counted. `picture` is the picture's size in the yard's pixels and
+`flush`: a browser may put off the drawing it was asked for, and `bench` takes the picture after
+each frame to have it done and counted (the words' picture and the scaling to the screen are not in
+it). Each run goes on from where the last one's clock stopped. `picture` is the picture's size in the yard's pixels and
 `pieces` how many pieces are on screen. Nothing is timed while nobody asks.
 
     works.zoom(-40); works.look(24, 18); works.bench(300)
 
 With `?meter` in the address, a corner of the page says, each second: the frames a second the
-screen reaches, the longest frame, and the same parts as milliseconds a frame. There `browser` is
-what the browser does with a frame before the page is free again. A browser shows no more frames a
+screen reaches, the longest frame, and the same parts as milliseconds a frame. There `until free`
+is how long after a frame's work the page next gets a turn: the browser's own work on the frame,
+and anything else it had waiting. The frames a second say how it looks; the parts say where the
+page's own time goes. A browser shows no more frames a
 second than the screen has, so the parts say how much room is left.
 
 The screenshot driver is the kit's (`packages/kit/tools/drive.ts`), against the play server, signed

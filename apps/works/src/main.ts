@@ -310,6 +310,8 @@ async function boot(): Promise<void> {
   let slow = 0;
   /** How far into its next tick a yard held still is shown. */
   let heldLead = 0;
+  /** The moment the bench's own clock has reached. */
+  let benched = 0;
   /** A moment of the screen: `now`, the page's clock, runs the yard on to Leaf's tick; without it only the screen moves. */
   function advance(dt: number, now: number | null): void {
     S.t += dt;
@@ -354,14 +356,15 @@ async function boot(): Promise<void> {
 
   // With `?meter` in the address, a corner says how the screen is keeping up: the frames a second
   // it reaches, the longest of the last second, and the milliseconds of a frame's work by part
-  // (`browser` is what the browser itself does with the frame before the page is free again).
+  // (`until free` is how long after the frame's work the page next gets a turn: the browser's own
+  // work on the frame, and anything else it had waiting).
   const meter = params.has("meter") ? document.body.appendChild(document.createElement("pre")) : null;
   const after = meter ? new MessageChannel() : null;
   if (meter && after) {
     meter.id = "meter";
     meter.className = "k-plaque k-s";
     spent.on = true;
-    after.port1.addEventListener("message", () => lap("browser"));
+    after.port1.addEventListener("message", () => lap("until free"));
     after.port1.start();
   }
   let metered = { at: performance.now(), frames: 0, longest: 0 };
@@ -463,7 +466,9 @@ async function boot(): Promise<void> {
       const kept = spent.ms;
       spent.on = true;
       spent.ms = {};
-      const began = performance.now();
+      // On from where the last run's clock stopped, so that every run steps the yard as much as the first.
+      const began = Math.max(performance.now(), benched);
+      benched = began + (frames * 1000) / hz;
       for (let k = 0; k < frames; k++) {
         lap();
         advance(1 / hz, began + (k * 1000) / hz);
@@ -471,7 +476,7 @@ async function boot(): Promise<void> {
         draw(began + (k * 1000) / hz);
         // A browser may put off the drawing it was asked for: taking the picture makes it do it now.
         taken.drawImage(picture, 0, 0);
-        lap("browser");
+        lap("flush");
       }
       const ms = Object.fromEntries(Object.entries(spent.ms).map(([part, sum]) => [part, sum / frames]));
       spent.on = was;
