@@ -4,6 +4,7 @@ import {
   type Game,
   type GameId,
   isRefused,
+  type LeafSpend,
   type Logged,
   type Standing,
 } from "@sequoia-leaf/core";
@@ -16,6 +17,7 @@ export type Attempt =
   | {
       readonly notes: readonly unknown[];
       readonly coins: readonly CoinChange[];
+      readonly leaf: readonly LeafSpend[];
       readonly log: readonly Logged[];
       /** Makes the state the command left the open state. Until then, nothing has changed. */
       readonly keep: () => void;
@@ -50,7 +52,7 @@ export interface Played {
 /**
  * Wraps a game for the service, keeping its own types inside. A game's rules may change the state
  * they are given in place (the Works' do), so the state is kept as text before each command, and a
- * command that is not kept (refused by the rules, or by the service for Coins) is undone from it:
+ * command that is not kept (refused by the rules, or by the service for Coins or Leaf) is undone from it:
  * the service goes on only from a state whose command was done.
  */
 export function played<State, Command, View, Note>(game: Game<State, Command, View, Note>): Played {
@@ -88,6 +90,7 @@ export function played<State, Command, View, Note>(game: Game<State, Command, Vi
           return {
             notes: answer.notes,
             coins: answer.coins ?? [],
+            leaf: answer.leaf ?? [],
             log: answer.log ?? [],
             keep: () => {
               state = answer.state;

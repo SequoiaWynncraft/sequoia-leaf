@@ -149,10 +149,13 @@ and nothing below happens. With a server it asks `GET /v1/game/me`:
 
 - **Known.** The game is live, as that member. The purse keeps a ledger from then on
   (`fromLedger`): its Leaf is the number the server gives and nothing else, `grant` does nothing,
-  `spend("leaf", …)` refuses, and `leafOpen()` is false. Every Leaf button is passed to
-  `closeLeaf`, which shows it closed with the tip "Leaf spending opens after the play-test." A
-  page that is the whole window listens to the member's own events (`followLeaf`) and asks for
-  the Leaf number again whenever one arrives.
+  and `spend("leaf", …)` refuses. Only a game's command on Leaf takes Leaf: `leafOpen()` is true
+  while hello's `leaf_spending` is (`leafSpending`), and a page offers such a command only then;
+  after one, it asks for the Leaf number again (`refreshLeaf`). Every other Leaf button is passed
+  to `closeLeaf`, which beside the ledger always shows it closed, with the tip "Leaf spending
+  opens after the play-test." while spending is off and "Leaf cannot be spent here yet." while it
+  is on. A page that is the whole window listens to the member's own events (`followLeaf`) and
+  asks for the Leaf number again whenever one arrives; the town asks too when a framed game closes.
 - **Coins**, for a member or a guest alike, are Leaf's Coins ledger's from then on (`fromLeaf`,
   with `/v1/game/me`'s `coins`), and nothing of them is kept in the browser. `earn(n, reason)` and
   `spend("coins", n, reason)` change the page's number at once and send the change to Leaf behind

@@ -2,10 +2,10 @@
  * The purse as every page of the game shows it: Leaf first, because it is the precious one, then
  * Coins, each a number that rolls to what the purse holds with a small sound. And `fly`, for the
  * little pictures that travel across the page when something is paid or earned. And `closeLeaf`,
- * for a Leaf button where Leaf may not be spent.
+ * for a Leaf button that may not take Leaf.
  */
 import { el, icon, type IconName, replay } from "./dom.ts";
-import { balance, type Currency, leafOpen, leafShown, leafShut } from "./purse.ts";
+import { balance, type Currency, leafOnLedger, leafShown, leafShut } from "./purse.ts";
 import { sfx } from "./sound.ts";
 import { tip, tipAt } from "./tip.ts";
 import type { Pt } from "./util.ts";
@@ -103,13 +103,15 @@ export function fly(what: IconName, from: Pt, to: Pt, count: number, each: ((i: 
 }
 
 /**
- * Shows a Leaf button closed where Leaf may not be spent (beside the guild's ledger, for now, and
- * always for a guest): it looks shut, says why when pointed at or touched, and pressing it only
- * shakes it and says why again. Says whether it closed it; if not, the button is the caller's as
- * before. Call it after the button's own listeners are on, in place of giving it a tip.
+ * Shows a Leaf button closed beside the guild's ledger, where only a game's command takes Leaf
+ * (with the made-up guild it is left open): it looks shut, says why when pointed at or touched
+ * (`leafShut`), and pressing it only shakes it and says why again. A button with no command to take
+ * its Leaf is closed whatever Leaf's spending is; one with a command is passed here only while
+ * `leafOpen()` is false. Says whether it closed it; if not, the button is the caller's as before.
+ * Call it after the button's own listeners are on, in place of giving it a tip.
  */
 export function closeLeaf(b: HTMLElement, title = "Leaf"): boolean {
-  if (leafOpen()) return false;
+  if (!leafOnLedger()) return false;
   const why = leafShut();
   b.classList.add("off");
   b.setAttribute("aria-disabled", "true");

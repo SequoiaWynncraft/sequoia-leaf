@@ -7,7 +7,7 @@
     "status": 200,
     "body": {
       "sign_in": "https://api.seqwawa.com/auth/web/start?return_to=",
-      "leaf_spending": false
+      "leaf_spending": true
     }
   },
   "GET /v1/game/me": {
@@ -23,12 +23,12 @@
       },
       "rank": "CAPTAIN",
       "guest": false,
-      "leaf": 2163,
-      "xp": 1063,
+      "leaf": 32163,
+      "xp": 31063,
       "level": {
-        "number": 2,
-        "xp_into_level": 63,
-        "xp_for_next_level": 1250
+        "number": 13,
+        "xp_into_level": 2563,
+        "xp_for_next_level": 4000
       },
       "event_cursor": 14,
       "coins": 300
@@ -1161,6 +1161,360 @@
       "message": "Leaf does not play that game"
     }
   },
+  "POST /v1/game/play/{game}, a look bought with Leaf": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "c-5",
+            "do": "buyLook",
+            "kind": "cloth",
+            "look": "plum"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 2,
+      "now": "2026-11-25T12:55:00.000Z",
+      "results": [
+        {
+          "id": "c-5",
+          "notes": [
+            {
+              "t": "look",
+              "kind": "cloth",
+              "id": "plum"
+            }
+          ]
+        }
+      ],
+      "state": {
+        "runs": 1,
+        "run": {
+          "trail": 0,
+          "room": 0,
+          "phase": "plan",
+          "resolve": 20,
+          "acorns": 2,
+          "level": 1,
+          "xp": 0,
+          "board": [
+            null,
+            null,
+            null,
+            {
+              "id": 1,
+              "kind": "barrowgnome",
+              "stars": 1,
+              "items": [],
+              "fed": 0
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
+          "items": [],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+          "held": false,
+          "rustles": 1,
+          "bought": 0,
+          "boons": [],
+          "choices": [],
+          "foe": {
+            "who": "The forest",
+            "title": "A few gnats",
+            "figures": [
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 2,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 4,
+                "items": [],
+                "fed": 0
+              }
+            ],
+            "charms": [],
+            "boons": [],
+            "might": 100
+          },
+          "record": [],
+          "nextId": 2,
+          "won": false,
+          "left": false,
+          "last": null,
+          "fight": null,
+          "seen": {
+            "fielded": [],
+            "threeStars": [],
+            "forged": [],
+            "topped": []
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0
+        },
+        "trail": 0,
+        "looks": {
+          "cloth": "plum",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": ["plum"]
+        }
+      }
+    }
+  },
+  "POST /v1/game/play/{game}, a look bought, sent again": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "c-5",
+            "do": "buyLook",
+            "kind": "cloth",
+            "look": "plum"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 2,
+      "now": "2026-11-25T12:55:00.000Z",
+      "results": [
+        {
+          "id": "c-5",
+          "notes": [
+            {
+              "t": "look",
+              "kind": "cloth",
+              "id": "plum"
+            }
+          ]
+        }
+      ],
+      "state": {
+        "runs": 1,
+        "run": {
+          "trail": 0,
+          "room": 0,
+          "phase": "plan",
+          "resolve": 20,
+          "acorns": 2,
+          "level": 1,
+          "xp": 0,
+          "board": [
+            null,
+            null,
+            null,
+            {
+              "id": 1,
+              "kind": "barrowgnome",
+              "stars": 1,
+              "items": [],
+              "fed": 0
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
+          "items": [],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+          "held": false,
+          "rustles": 1,
+          "bought": 0,
+          "boons": [],
+          "choices": [],
+          "foe": {
+            "who": "The forest",
+            "title": "A few gnats",
+            "figures": [
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 2,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 4,
+                "items": [],
+                "fed": 0
+              }
+            ],
+            "charms": [],
+            "boons": [],
+            "might": 100
+          },
+          "record": [],
+          "nextId": 2,
+          "won": false,
+          "left": false,
+          "last": null,
+          "fight": null,
+          "seen": {
+            "fielded": [],
+            "threeStars": [],
+            "forged": [],
+            "topped": []
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0
+        },
+        "trail": 0,
+        "looks": {
+          "cloth": "plum",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": ["plum"]
+        }
+      }
+    }
+  },
+  "POST /v1/game/play/{game}, Leaf a guest cannot spend": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000003",
+        "commands": [
+          {
+            "id": "v-1",
+            "do": "buyLook",
+            "kind": "cloth",
+            "look": "plum"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 0,
+      "now": "2026-11-25T12:55:00.000Z",
+      "results": [
+        {
+          "id": "v-1",
+          "refused": "leaf_closed"
+        }
+      ],
+      "state": {
+        "runs": 0,
+        "run": null,
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0
+        },
+        "trail": 0,
+        "looks": {
+          "cloth": "bare",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": []
+        }
+      }
+    }
+  },
+  "GET /v1/game/me, after a look bought": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/me"
+    },
+    "status": 200,
+    "body": {
+      "player": {
+        "id": "10000000-0000-0000-0000-000000000001",
+        "username": "Alice"
+      },
+      "rank": "CAPTAIN",
+      "guest": false,
+      "leaf": 4163,
+      "xp": 31063,
+      "level": {
+        "number": 13,
+        "xp_into_level": 2563,
+        "xp_for_next_level": 4000
+      },
+      "event_cursor": 14,
+      "coins": 300
+    }
+  },
   "GET /v1/game/play/{game}/standings": {
     "request": {
       "method": "GET",
@@ -1454,6 +1808,15 @@
             {
               "at": "2026-11-25T12:55:00.000Z",
               "game": "raid",
+              "kind": "leaf_spent",
+              "data": {
+                "leaf": 28000,
+                "reason": "Raid table look: Dusk velvet"
+              }
+            },
+            {
+              "at": "2026-11-25T12:55:00.000Z",
+              "game": "raid",
               "kind": "raid_started",
               "data": {
                 "trail": 0
@@ -1492,14 +1855,6 @@
                 "won": true,
                 "resolve": 3,
                 "seconds": 41
-              }
-            },
-            {
-              "at": "2026-11-25T12:35:00.000Z",
-              "game": "raid",
-              "kind": "raid_started",
-              "data": {
-                "trail": 0
               }
             }
           ]
@@ -1570,7 +1925,15 @@
         "began": 0,
         "players": []
       },
-      "odd": []
+      "odd": [
+        {
+          "id": "10000000-0000-0000-0000-000000000003",
+          "name": "Visitor",
+          "rule": "refused_in_a_day",
+          "at": "2026-11-25T00:00:00.000Z",
+          "value": 1
+        }
+      ]
     }
   }
 }

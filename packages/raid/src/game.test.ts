@@ -284,13 +284,28 @@ describe("every command a player has", () => {
     expect(RAID.apply(state, { do: "trail", trail: 1 }, ctx())).toEqual({ refused: "trail_closed" });
     expect(RAID.apply(state, { do: "start", trail: 2 }, ctx())).toEqual({ refused: "trail_closed" });
     expect(must(state, { do: "trail", trail: 0 }).notes).toEqual([{ t: "trail", trail: 0 }]);
-    expect(RAID.apply(state, { do: "look", kind: "cloth", id: "baize" }, ctx())).toEqual({ refused: "not_owned" });
-    expect(RAID.apply(state, { do: "look", kind: "cloth", id: "jar" }, ctx())).toEqual({ refused: "no_such_look" });
+    expect(RAID.apply(state, { do: "look", kind: "cloth", look: "baize" }, ctx())).toEqual({ refused: "not_owned" });
+    expect(RAID.apply(state, { do: "look", kind: "cloth", look: "jar" }, ctx())).toEqual({ refused: "no_such_look" });
     const owner = structuredClone(state);
     owner.looks.owned = ["baize"];
-    const worn = must(owner, { do: "look", kind: "cloth", id: "baize" });
+    const worn = must(owner, { do: "look", kind: "cloth", look: "baize" });
     expect(worn.state.looks.cloth).toBe("baize");
     expect(worn.notes).toEqual([{ t: "look", kind: "cloth", id: "baize" }]);
+    // A look bought is owned, on the table, and takes its price in Leaf; once owned it is not sold again.
+    // (Dice of their own, so that the draws of the tests after are as they were.)
+    expect(RAID.apply(state, { do: "buyLook", kind: "cloth", look: "bare" }, ctx(1))).toEqual({ refused: "owned" });
+    expect(RAID.apply(state, { do: "buyLook", kind: "cloth", look: "jar" }, ctx(1))).toEqual({
+      refused: "no_such_look",
+    });
+    const bought = must(state, { do: "buyLook", kind: "lantern", look: "jar" }, ctx(1));
+    expect(bought.state.looks).toEqual({ cloth: "bare", lantern: "jar", bases: "plain", owned: ["jar"] });
+    expect(bought.notes).toEqual([{ t: "look", kind: "lantern", id: "jar" }]);
+    expect(bought.leaf).toEqual([{ amount: 28_000, reason: "Raid table look: Jar of fireflies", key: "look:jar" }]);
+    expect(state.looks.owned).toEqual([]);
+    expect(RAID.apply(bought.state, { do: "buyLook", kind: "lantern", look: "jar" }, ctx(1))).toEqual({
+      refused: "owned",
+    });
+    expect(refusalText("not_enough_leaf")).toBe("Not enough Leaf.");
     // Once the first trail is cleared, the second may be picked.
     const cleared = structuredClone(state);
     cleared.almanac.bosses[0] = ["bigcrab"];
@@ -411,6 +426,12 @@ describe("commands off the wire", () => {
     });
     expect(readCommand({ do: "hold", on: false })).toEqual({ do: "hold", on: false });
     expect(readCommand({ do: "fight", seed: 7 })).toEqual({ do: "fight" });
+    // A command's id is its own: the look it names is `look`.
+    expect(readCommand({ id: "c2", do: "buyLook", kind: "bases", look: "gilt" })).toEqual({
+      do: "buyLook",
+      kind: "bases",
+      look: "gilt",
+    });
     for (const bad of [
       null,
       "buy",
@@ -425,7 +446,8 @@ describe("commands off the wire", () => {
       { do: "move", from: { on: "bench", at: 0 } },
       { do: "start", trail: 3 },
       { do: "hold" },
-      { do: "look", kind: "hat", id: "bare" },
+      { do: "look", kind: "hat", look: "bare" },
+      { do: "buyLook", kind: "bases", id: "gilt" },
       { do: "give", item: 0 },
     ]) {
       expect(readCommand(bad)).toBeNull();

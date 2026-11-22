@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import { type Game, MOST_COMMANDS, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { type Game, leaf, MOST_COMMANDS, type PlayerId, playerId } from "@sequoia-leaf/core";
 import {
   planCommands,
   RAID,
@@ -12,10 +12,11 @@ import {
 } from "@sequoia-leaf/raid";
 import { decodeTown, TOWN } from "@sequoia-leaf/town";
 import { deliver, readView as readYardView, route, WORKS } from "@sequoia-leaf/yard";
-import { Effect, Logger, References, Schema } from "effect";
+import { Effect, Exit, Logger, References, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
 import { Person, Standings } from "../src/api/schemas.ts";
+import type { Settings } from "../src/config.ts";
 import { knownAmong } from "../src/game/known.ts";
 import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
@@ -37,7 +38,7 @@ const clock = { now: T0 };
 let services: ReturnType<typeof testLeaf>;
 let app: ReturnType<(typeof services)["app"]>;
 
-function start(fakes: Fakes = {}) {
+function start(fakes: Fakes = {}, config: Partial<Settings> = {}) {
   clock.now = T0;
   const fake = fakeBackend({
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
@@ -46,7 +47,7 @@ function start(fakes: Fakes = {}) {
     // A website admin, the guild's staff, for the report of who played.
     "dave-token": () => Response.json({ ...sessionOf(dave, "Dave", null), website_admin: true }),
   });
-  services = testLeaf(clock, fake.fetcher, {}, { dice: steadyDice(7), ...fakes });
+  services = testLeaf(clock, fake.fetcher, config, { dice: steadyDice(7), ...fakes });
   app = services.app();
 }
 
@@ -764,6 +765,183 @@ describe("a command's Coins", () => {
       { amount: 3000, earned: 0 },
       { amount: 1000, earned: 1 },
     ]);
+  });
+});
+
+/** A player's entries on the Leaf ledger. */
+const ledgerOf = (player: PlayerId) =>
+  services.query(
+    (sql) => sql`
+      SELECT kind, origin, idempotency_key AS key, balance_delta AS delta, xp_delta AS xp, memo
+      FROM ledger_entries WHERE player_id = ${player} ORDER BY id
+    `,
+  );
+/** Leaf earned by a player, as a raid would pay it. */
+const raided = (player: PlayerId, amount: number) =>
+  services.post(
+    { kind: "earn", playerId: player, amount: leaf(amount), source: "raid", idempotencyKey: `raid:${player}` },
+    clock.now,
+  );
+/** Leaf with its spending on, as `GAME_LEAF_SPENDING` sets it. */
+async function spending() {
+  await app.dispose();
+  start({}, { gameLeafSpending: true });
+}
+/** What a refused command must leave as it was: the state, the ledger and the Coins. */
+const untouched = async (player: PlayerId) => [await stored(player), await ledgerOf(player), await entries(player)];
+const buyCloth = (look: string) => command({ do: "buyLook", kind: "cloth", look });
+
+describe("Leaf a command takes", () => {
+  it("buys a look through HTTP once: taken from the ledger as a spend on the shop sink, logged, with no XP or Coins", async () => {
+    await spending();
+    await raided(alice, 30_000);
+    await opened();
+    const buy = buyCloth("plum");
+    const done = await commanded([buy]);
+    expect(done.results).toEqual([{ id: buy.id, notes: [{ t: "look", kind: "cloth", id: "plum" }] }]);
+    expect(done.view.looks).toEqual({ cloth: "plum", lantern: "iron", bases: "plain", owned: ["plum"] });
+    expect(await services.account(alice)).toEqual({ playerId: alice, balance: 2000, xp: 30_000 });
+    const spent = {
+      kind: "spend",
+      origin: "shop",
+      key: `play:raid:${alice}:look:plum`,
+      delta: -28_000,
+      xp: 0,
+      memo: "Raid table look: Dusk velvet",
+    };
+    expect(await ledgerOf(alice)).toEqual([
+      { kind: "earn", origin: "raid", key: `raid:${alice}`, delta: 30_000, xp: 30_000, memo: null },
+      spent,
+    ]);
+    // The same command sent again answers as before and takes nothing; buying it again is refused.
+    expect((await commanded([buy])).results).toEqual(done.results);
+    const again = buyCloth("plum");
+    expect((await commanded([again])).results).toEqual([{ id: again.id, refused: "owned" }]);
+    expect((await ledgerOf(alice)).slice(1)).toEqual([spent]);
+    expect(await coinsOf(alice)).toBe(300);
+    expect(await services.run(Coins.use((coins) => coins.room(alice, clock.now)))).toBe(5000);
+    const activity = await services.run(PlayStore.use((store) => store.activity(alice)));
+    expect(activity.map((a) => [a.kind, JSON.parse(a.data)])).toEqual([
+      ["leaf_spent", { leaf: 28_000, reason: "Raid table look: Dusk velvet" }],
+    ]);
+  });
+
+  it("is refused, changing nothing, for too little Leaf, for a guest, and while spending is off", async () => {
+    await spending();
+    await raided(alice, 20);
+    await opened();
+    const before = await untouched(alice);
+    const dear = command({ do: "buyLook", kind: "bases", look: "gilt" });
+    expect((await commanded([dear])).results).toEqual([{ id: dear.id, refused: "not_enough_leaf" }]);
+    expect(await untouched(alice)).toEqual(before);
+    expect(await services.account(alice)).toMatchObject({ balance: 20 });
+
+    // Carol is signed in but not in the guild: a guest has no Leaf to spend.
+    await opened(carol);
+    const guest = await untouched(carol);
+    const theirs = buyCloth("baize");
+    expect((await commanded([theirs], carol)).results).toEqual([{ id: theirs.id, refused: "leaf_closed" }]);
+    expect(await untouched(carol)).toEqual(guest);
+
+    await app.dispose();
+    start();
+    await raided(alice, 100);
+    await opened();
+    const off = await untouched(alice);
+    const shut = buyCloth("baize");
+    expect((await commanded([shut])).results).toEqual([{ id: shut.id, refused: "leaf_closed" }]);
+    expect(await untouched(alice)).toEqual(off);
+  });
+});
+
+/**
+ * A market whose every sale takes Leaf and pays Coins, each as the command says, with keys the
+ * command names: a game that takes Leaf, which the raid does only for its looks.
+ */
+const MARKET: Game<
+  { bought: number },
+  { leaf: readonly number[]; keys: readonly string[]; pay: number },
+  { bought: number },
+  string
+> = {
+  ...SHOP,
+  id: "works",
+  apply: (state, c) => ({
+    state: { bought: state.bought + 1 },
+    notes: ["sold"],
+    leaf: c.leaf.map((amount, i) => ({ amount, reason: "A stall", key: c.keys[i] ?? `stall:${i}` })),
+    coins: c.pay > 0 ? [{ amount: c.pay, reason: "A sale", key: `sale:${state.bought}` }] : [],
+  }),
+  command: (v) =>
+    typeof v === "object" &&
+    v !== null &&
+    "leaf" in v &&
+    Array.isArray(v.leaf) &&
+    v.leaf.every((n) => typeof n === "number") &&
+    "keys" in v &&
+    Array.isArray(v.keys) &&
+    v.keys.every((k) => typeof k === "string") &&
+    "pay" in v &&
+    typeof v.pay === "number"
+      ? { leaf: v.leaf, keys: v.keys, pay: v.pay }
+      : null,
+};
+
+describe("a command's Leaf", () => {
+  const market = played(MARKET);
+  const sold = (id: string, leafTaken: readonly number[], keys: readonly string[], pay = 0) =>
+    services.run(
+      Play.use((play) => play.send({ playerId: alice, guest: false }, market, [{ id, leaf: leafTaken, keys, pay }])),
+    );
+
+  it("is weighed with the Coins in the batch's transaction: taken and paid together, added up against the balance", async () => {
+    await spending();
+    await raided(alice, 100);
+    expect(await sold("m-1", [30, 20], ["a", "b"], 500)).toMatchObject({
+      results: [{ id: "m-1", notes: ["sold"] }],
+      view: { bought: 1 },
+    });
+    expect(await services.account(alice)).toEqual({ playerId: alice, balance: 50, xp: 100 });
+    expect(await coinsOf(alice)).toBe(800);
+    // Two spends that come to more than the balance, though each alone would not.
+    expect(await sold("m-2", [30, 30], ["c", "d"], 500)).toMatchObject({
+      results: [{ id: "m-2", refused: "not_enough_leaf" }],
+      view: { bought: 1 },
+    });
+    expect(await coinsOf(alice)).toBe(800);
+    // A key the ledger has seen is not taken again, and the command stands.
+    expect(await sold("m-3", [30], ["a"])).toMatchObject({
+      results: [{ id: "m-3", notes: ["sold"] }],
+      view: { bought: 2 },
+    });
+    expect(await services.account(alice)).toMatchObject({ balance: 50 });
+    expect((await ledgerOf(alice)).map((e) => [e.key, e.delta])).toEqual([
+      [`raid:${alice}`, 100],
+      [`play:works:${alice}:a`, -30],
+      [`play:works:${alice}:b`, -20],
+    ]);
+  });
+
+  it("that is not a whole number above 0 is the game's defect: the batch is undone whole, and nothing credited", async () => {
+    await spending();
+    await raided(alice, 100);
+    await sold("m-1", [10], ["a"]);
+    const before = [await ledgerOf(alice), await entries(alice)];
+    for (const [n, bad] of [-50, 0, 2.5].entries()) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      const exit = await services.run(
+        Effect.exit(
+          Play.use((play) =>
+            play.send({ playerId: alice, guest: false }, market, [
+              { id: `x-${n}`, leaf: [bad], keys: [`x-${n}`], pay: 100 },
+            ]),
+          ),
+        ),
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+    }
+    expect([await ledgerOf(alice), await entries(alice)]).toEqual(before);
+    expect(await services.account(alice)).toMatchObject({ balance: 90 });
   });
 });
 
