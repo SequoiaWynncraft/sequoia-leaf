@@ -15,7 +15,7 @@ export interface Note {
 export const NOTES: readonly Note[] = [
   {
     id: "nothing-stuck",
-    at: "2026-11-22T21:00Z",
+    at: "2026-11-22T20:20Z",
     title: "Nothing stuck on the screen",
     lines: [
       "A tip or card no longer stays on the screen when the panel under it changes.",
@@ -24,7 +24,7 @@ export const NOTES: readonly Note[] = [
   },
   {
     id: "belt-colours",
-    at: "2026-11-22T20:50Z",
+    at: "2026-11-22T20:19Z",
     title: "The Works: belt colours",
     lines: [
       "The Works has a Paint tool. Click a belt to colour its whole line, in one of six colours.",
@@ -33,7 +33,7 @@ export const NOTES: readonly Note[] = [
   },
   {
     id: "treasury-requests",
-    at: "2026-11-22T20:40Z",
+    at: "2026-11-22T20:03Z",
     title: "Requests at the Treasury",
     lines: [
       "The Treasury now sells a paid aspect request and a paid tome request, 3,000 Leaf each, for members with 7 days in the guild.",
@@ -42,7 +42,7 @@ export const NOTES: readonly Note[] = [
   },
   {
     id: "taps-land",
-    at: "2026-11-22T20:20Z",
+    at: "2026-11-22T19:55Z",
     title: "Taps that count",
     lines: [
       "In The Little Raid, buying and levelling up happen as you tap, so you can place a figure straight after buying it. While a reroll, a pick or setting out waits on the guild's server, the stall dims and taps on it do nothing.",
@@ -51,7 +51,7 @@ export const NOTES: readonly Note[] = [
   },
   {
     id: "fire-seen",
-    at: "2026-11-22T20:10Z",
+    at: "2026-11-22T19:54Z",
     title: "The campfire is shared",
     lines: [
       "At the campfire, Add a log and the emotes are now seen by everyone in town, not only on your own screen.",
@@ -60,7 +60,7 @@ export const NOTES: readonly Note[] = [
   },
   {
     id: "one-face",
-    at: "2026-11-22T19:50Z",
+    at: "2026-11-22T19:47Z",
     title: "One font for the game",
     lines: [
       "Names, numbers, labels and lists are now in the Minecraft font everywhere. Only sentences keep the plain font.",
@@ -69,7 +69,7 @@ export const NOTES: readonly Note[] = [
   },
   {
     id: "visit-camps",
-    at: "2026-11-22T19:30Z",
+    at: "2026-11-22T19:35Z",
     title: "Visit other camps",
     lines: [
       "Choose someone in Who is about and choose Visit camp, or pick a camp at your own camp's signpost.",
