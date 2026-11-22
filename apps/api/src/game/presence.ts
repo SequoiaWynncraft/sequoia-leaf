@@ -8,7 +8,10 @@ export const PRESENT_FOR_MS = 90_000;
 export const RESTING_MOST = 24;
 /** The most players listed as here in one answer: those seen most recently. */
 export const PRESENT_MOST = 50;
-/** A player's game saying where they are sooner than this after the last time it did is answered, but not written down. */
+/**
+ * A player's game saying it is where it last said, sooner than this after the last time anything was
+ * written for them, is answered, but not written down.
+ */
 export const PRESENCE_EVERY_MS = 5000;
 
 const Present = Schema.Struct({
@@ -34,21 +37,32 @@ export interface Here {
   readonly resting: readonly Resting[];
 }
 
+/** Somebody in one of Live's rooms, as their presence is written. */
+export interface InRoom {
+  readonly playerId: PlayerId;
+  readonly username: string;
+  readonly guest: boolean;
+}
+
 /**
  * Who has the game open, and where they are in it. Each player, member or
  * guest, has one row, written whenever their game says where they are (and
- * whether their character may stay in town after they go), but at most once
- * every five seconds; rows a day old are removed then. It is in the database
- * rather than in memory because during a deploy two containers answer side by
- * side. A database failure is a defect.
+ * whether their character may stay in town after they go), but no sooner than
+ * five seconds after the last write unless they say somewhere else, or other
+ * about staying. Live writes it too, for a player in one of its rooms: when
+ * they come in, now and then while they are there, and when they go. Rows a
+ * day old are removed whenever one is written. It is in the database rather
+ * than in memory because during a deploy two containers answer side by side. A
+ * database failure is a defect.
  */
 export class Presence extends Context.Service<
   Presence,
   {
     /**
      * Records that a player (a guest, or not) is at `place` now, and whether they would stay,
-     * unless they last said so less than `PRESENCE_EVERY_MS` ago; lists the 50 seen most recently
-     * in the last 90 seconds, them included, and those seen between then and a day ago who stay.
+     * unless the last write for them was less than `PRESENCE_EVERY_MS` ago and said the same; lists
+     * the 50 seen most recently in the last 90 seconds, them included, and those seen between then
+     * and a day ago who stay.
      */
     readonly arrive: (
       playerId: PlayerId,
@@ -58,6 +72,17 @@ export class Presence extends Context.Service<
       guest: boolean,
       now: number,
     ) => Effect.Effect<Here>;
+    /**
+     * Records that players in a live room are at its `place` now, as `arrive` would, keeping what
+     * each last said about staying (a player never seen stays, as `arrive` has it when nothing is
+     * said). Written whatever was written last.
+     */
+    readonly inRoom: (players: readonly InRoom[], place: string, now: number) => Effect.Effect<void>;
+    /**
+     * A player has left a live room's `place`: they were last seen there now. Nothing is written if
+     * their game has said since that they are somewhere else.
+     */
+    readonly leftRoom: (playerId: PlayerId, place: string, now: number) => Effect.Effect<void>;
   }
 >()("leaf/Presence") {
   static readonly layer = Layer.effect(
@@ -86,6 +111,7 @@ export class Presence extends Context.Service<
           LIMIT ${RESTING_MOST}
         `,
       });
+      const forgetOld = (now: number) => sql`DELETE FROM presence WHERE seen_at < ${now - DAY_MS}`;
       return Presence.of({
         arrive: (playerId, username, place, stay, guest, now) =>
           sql
@@ -98,11 +124,10 @@ export class Presence extends Context.Service<
                     username = excluded.username, place = excluded.place, seen_at = excluded.seen_at,
                     stay = excluded.stay, guest = excluded.guest
                   WHERE presence.seen_at <= ${now - PRESENCE_EVERY_MS}
+                    OR presence.place <> excluded.place OR presence.stay <> excluded.stay
                   RETURNING player_id
                 `;
-                if (written.length > 0) {
-                  yield* sql`DELETE FROM presence WHERE seen_at < ${now - DAY_MS}`;
-                }
+                if (written.length > 0) yield* forgetOld(now);
                 return {
                   present: yield* present(now - PRESENT_FOR_MS),
                   resting: yield* resting({ before: now - PRESENT_FOR_MS, since: now - DAY_MS }),
@@ -110,6 +135,30 @@ export class Presence extends Context.Service<
               }),
             )
             .pipe(Effect.orDie),
+        inRoom: (players, place, now) =>
+          players.length === 0
+            ? Effect.void
+            : sql
+                .withTransaction(
+                  Effect.gen(function* () {
+                    for (const p of players) {
+                      yield* sql`
+                        INSERT INTO presence (player_id, username, place, seen_at, stay, guest)
+                        VALUES (${p.playerId}, ${p.username}, ${place}, ${now}, 1, ${p.guest ? 1 : 0})
+                        ON CONFLICT (player_id) DO UPDATE SET
+                          username = excluded.username, place = excluded.place, seen_at = excluded.seen_at,
+                          guest = excluded.guest
+                      `;
+                    }
+                    yield* forgetOld(now);
+                  }),
+                )
+                .pipe(Effect.orDie),
+        leftRoom: (playerId, place, now) =>
+          sql`
+            UPDATE presence SET seen_at = ${now}
+            WHERE player_id = ${playerId} AND place = ${place} AND seen_at < ${now}
+          `.pipe(Effect.asVoid, Effect.orDie),
       });
     }),
   );

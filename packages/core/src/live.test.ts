@@ -79,7 +79,7 @@ describe("a snapshot", () => {
 
 describe("rooms", () => {
   test("only the kinds there are, and none of an object's own names", () => {
-    expect(roomKind("town")).toEqual({ width: 512, height: 352, capacity: 32 });
+    expect(roomKind("town")).toEqual({ width: 512, height: 352, capacity: 32, speed: 160 });
     expect([roomKind("hall"), roomKind("toString"), roomKind("__proto__")]).toEqual([undefined, undefined, undefined]);
   });
 });

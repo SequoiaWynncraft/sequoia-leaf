@@ -35,6 +35,9 @@ import {
 import { member } from "./live.ts";
 import { type LiveSocket, outside } from "./net.ts";
 
+// What a page needs of the wire to draw who is in its room.
+export { Flag, type LiveMember, type Motion } from "@sequoia-leaf/core";
+
 // ---------- Leaf's clock ----------
 
 /**

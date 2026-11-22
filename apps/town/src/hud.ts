@@ -335,10 +335,11 @@ const doingLine = (a: Actor): string => {
 
 /**
  * A card for somebody who was tapped. A real member's says only who they are: their name and rank,
- * and for one dozing in town how long ago they dozed off. One of the town's own says what it is,
- * what it is doing, and has a wave; `doing` says that middle line, if the usual one will not do.
+ * and for one dozing in town how long ago they dozed off; another player live in town has a wave
+ * (`waveTo`). One of the town's own says what it is, what it is doing, and has a wave; `doing` says
+ * that middle line, if the usual one will not do.
  */
-export function showCard(a: Actor, doing: (() => string) | null = null): void {
+export function showCard(a: Actor, doing: (() => string) | null = null, waveTo: (() => void) | null = null): void {
   const c = $("card");
   c.hidden = true;
   c.replaceChildren();
@@ -374,6 +375,18 @@ export function showCard(a: Actor, doing: (() => string) | null = null): void {
         x,
       ),
     );
+    if (waveTo)
+      c.append(
+        el(
+          "div",
+          "k-row",
+          {},
+          button("sm", ["Wave"], () => {
+            keep();
+            waveTo();
+          }),
+        ),
+      );
     show.card = a;
     keep();
     c.hidden = false;

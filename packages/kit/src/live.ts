@@ -181,6 +181,47 @@ export function shutCard(why: Shut, signIn: string): void {
   if (inTown()) tell({ town: "ready" });
 }
 
+// ---------- the cards for a live room let go of ----------
+
+/** Why a page has let go of its live room for good (`realtime.ts`): the player went live somewhere else, or their session ended. */
+export type LetGo = "replaced" | "signedout";
+
+/** What each card says: a title, a line, and its one button. */
+export const LET_GO: Readonly<Record<LetGo, readonly [string, string, string]>> = {
+  replaced: ["Playing somewhere else", "This page has let go of the town.", "Play here"],
+  signedout: CARDS.signedout,
+};
+
+/**
+ * Puts the card for a live room let go of over the page, which plays on beneath it: a title, a line
+ * and one button. Playing somewhere else, the button is `again` (taking the room back); signed out,
+ * it goes to the guild's sign-in and comes back. Returns how to take the card away.
+ */
+export function letGoCard(why: LetGo, signIn: string, again: () => void): () => void {
+  const [title, line, word] = LET_GO[why];
+  const go = el("button", "k-btn wide", { type: "button" }, word);
+  const card = el(
+    "section",
+    "k-paper k-rise k-shut",
+    { role: "alertdialog", "aria-label": title },
+    el("h1", "k-title big", { text: title }),
+    el("p", "", { text: line }),
+    go,
+  );
+  const scrim = el("div", "k-scrim k-let-go", {}, card);
+  const away = (): void => {
+    scrim.remove();
+  };
+  go.addEventListener("click", () => {
+    if (why === "signedout") return goSignIn(signIn);
+    away();
+    again();
+  });
+  document.body.append(scrim);
+  go.focus();
+  return away;
+}
+
 // ---------- the member's own news ----------
 
 /**

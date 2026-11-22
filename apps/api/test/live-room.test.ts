@@ -23,7 +23,7 @@ function inbox() {
   };
 }
 
-const TOWN = { width: 512, height: 352, capacity: 3 };
+const TOWN = { width: 512, height: 352, capacity: 3, speed: 160 };
 const person = (name: string, guest = false) => ({ player: `id-${name}`, name, rank: guest ? null : "Captain", guest });
 const at = (x: number, y: number, flags = 0, jump = 0): Motion => ({
   x,
@@ -63,7 +63,7 @@ describe("a room", () => {
   it("shows whoever comes in where everybody already is, at once", () => {
     const room = new Room("town", 1, TOWN);
     const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
-    room.move(alice.member.id, 1, at(100, 50));
+    room.move(alice.member.id, 1, at(100, 50), 0);
     const b = inbox();
     room.join(person("Bob"), b.outbox, 0, 30, 1);
 
@@ -76,12 +76,12 @@ describe("a room", () => {
     const b = inbox();
     const alice = room.join(person("Alice"), a.outbox, 0, 30, 1);
     const bob = room.join(person("Bob"), b.outbox, 0, 30, 1);
-    room.move(alice.member.id, 1, at(10, 10));
-    room.move(alice.member.id, 2, at(12, 10, Flag.Moving));
+    room.move(alice.member.id, 1, at(10, 10), 0);
+    room.move(alice.member.id, 2, at(12, 10, Flag.Moving), 0);
 
     expect(room.flush(1, 5000)).toBe(true);
     expect(room.flush(2, 5033)).toBe(false);
-    room.move(bob.member.id, 1, at(300, 200));
+    room.move(bob.member.id, 1, at(300, 200), 0);
     room.flush(3, 5066);
 
     expect(a.frames.length).toBe(2);
@@ -99,7 +99,7 @@ describe("a room", () => {
     const room = new Room("town", 1, TOWN);
     const a = inbox();
     const alice = room.join(person("Alice"), a.outbox, 0, 30, 1);
-    room.move(alice.member.id, 1, { x: -40, y: 9000, vx: 1e9, vy: -1e9, facing: 3, pose: 2, flags: 0, jump: 4 });
+    room.move(alice.member.id, 1, { x: -40, y: 9000, vx: 1e9, vy: -1e9, facing: 3, pose: 2, flags: 0, jump: 4 }, 0);
 
     expect(alice.motion).toEqual({ x: 0, y: 352, vx: 1024, vy: -1024, facing: 3, pose: 2, flags: 0, jump: 1 });
   });
@@ -108,10 +108,10 @@ describe("a room", () => {
     const room = new Room("town", 1, TOWN);
     const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
     const id = alice.member.id;
-    room.move(id, 1200, at(1, 1));
+    room.move(id, 1200, at(1, 1), 0);
     // A new tab numbers its moves from the start again.
     room.reconnected(id);
-    room.move(id, 1, at(2, 2));
+    room.move(id, 1, at(2, 2), 0);
 
     expect([alice.seq, alice.motion?.x]).toEqual([1, 2]);
   });
@@ -122,7 +122,7 @@ describe("a room", () => {
     const id = alice.member.id;
     const shown: number[] = [];
     const move = (jump: number) => {
-      room.move(id, 1, at(0, 0, 0, jump));
+      room.move(id, 1, at(0, 0, 0, jump), 0);
       shown.push(alice.motion?.jump ?? -1);
     };
     move(0);
@@ -140,13 +140,48 @@ describe("a room", () => {
     expect(shown).toEqual([1, 1, 2, 2, 3, 4, 4]);
   });
 
+  it("shows a move further than the room's pace allows as a jump, though the game did not count one", () => {
+    const room = new Room("town", 1, TOWN);
+    const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    const id = alice.member.id;
+    const shown: number[] = [];
+    const move = (x: number, time: number, jump = 0) => {
+      room.move(id, 1, at(x, 100, Flag.Moving, jump), time);
+      shown.push(alice.motion?.jump ?? -1);
+    };
+    move(100, 1000);
+    // Walking at the town's pace, 64 a second, twenty moves a second: never a jump.
+    for (let n = 1; n <= 20; n++) move(100 + n * 3.2, 1000 + n * 50);
+    // 50 ms after the last, the pace allows 160 x 0.05 x 1.5 + 8 = 20 units: 19 is a walk, 21 more is not.
+    move(183, 2050);
+    move(204, 2100);
+    // Half a second standing, then 128 units in one move: within 160 x 0.5 x 1.5 + 8.
+    move(332, 2600);
+    // Across the town at once: a jump, however long it has been since.
+    move(20, 2700);
+    // A jump the game counted is one jump, not two, however far it goes.
+    move(500, 2750, 1);
+
+    expect(shown).toEqual([1, ...Array.from({ length: 20 }, () => 1), 1, 2, 2, 3, 4]);
+  });
+
+  it("measures the pace between the places as the room keeps them, inside it", () => {
+    const room = new Room("town", 1, TOWN);
+    const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    room.move(alice.member.id, 1, at(0, 100), 1000);
+    // Far outside the room on its left: kept at its edge, where Alice already is.
+    room.move(alice.member.id, 2, at(-5000, 100), 1050);
+
+    expect(alice.motion).toMatchObject({ x: 0, jump: 1 });
+  });
+
   it("keeps a jump through a later move before the tick, since only the newest motion counts", () => {
     const room = new Room("town", 1, TOWN);
     const a = inbox();
     const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
     room.join(person("Bob"), a.outbox, 0, 30, 1);
-    room.move(alice.member.id, 1, at(400, 300, 0, 1));
-    room.move(alice.member.id, 2, at(401, 300, Flag.Moving, 1));
+    room.move(alice.member.id, 1, at(400, 300, 0, 1), 0);
+    room.move(alice.member.id, 2, at(401, 300, Flag.Moving, 1), 0);
     room.flush(1, 0);
 
     expect(decodeSnapshot(a.frames.at(-1) ?? new Uint8Array())?.entries.map((e) => [e.x, e.jump])).toEqual([[401, 1]]);
@@ -158,7 +193,7 @@ describe("a room", () => {
     const b = inbox();
     const alice = room.join(person("Alice"), a.outbox, 0, 30, 1);
     room.join(person("Bob"), b.outbox, 0, 30, 1);
-    room.move(alice.member.id, 1, at(5, 6));
+    room.move(alice.member.id, 1, at(5, 6), 0);
     const before = b.texts.length;
     room.greet(alice, 9, 30, 1);
 
@@ -175,7 +210,7 @@ describe("a room", () => {
     const b = inbox();
     const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
     room.join(person("Bob"), b.outbox, 0, 30, 1);
-    room.move(alice.member.id, 1, { ...at(50, 60, Flag.Moving | 4), vx: 30 });
+    room.move(alice.member.id, 1, { ...at(50, 60, Flag.Moving | 4), vx: 30 }, 0);
     room.flush(1, 0);
     room.halt(alice.member.id);
     room.flush(2, 0);

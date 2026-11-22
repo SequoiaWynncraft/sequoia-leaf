@@ -3,6 +3,7 @@
  * pictures the stylesheet can use (`bun run frames`). Each is a tiny SVG of whole-pixel squares, so
  * it stays sharp at any size and needs no script on the page.
  */
+import { EMOTE_ART } from "../src/emotes.ts";
 import { ACORN } from "../src/mark.ts";
 import { BARK, CORAL, CREAM, GOLD, GREEN, INK, LEAF, PAPER, SKY, STONE } from "../src/palette.ts";
 
@@ -425,17 +426,7 @@ const ICONS: Readonly<Record<string, readonly string[]>> = {
     ".yYy...yYy.",
     "yy.......yy",
   ],
-  heart: [
-    ".rr...rr..",
-    "rwrr.rrrr.",
-    "rwrrrrrrr.",
-    "rrrrrrrrr.",
-    "rrrrrrrrr.",
-    ".rrrrrrr..",
-    "..rrrrr...",
-    "...rrr....",
-    "....r.....",
-  ],
+  heart: EMOTE_ART.heart,
   gear: [
     "....yyyy....",
     ".yy.yyyy.yy.",
@@ -511,6 +502,10 @@ const ICONS: Readonly<Record<string, readonly string[]>> = {
   more: ["ww..ww..ww", "ww..ww..ww"],
   up: ["....ww....", "...wwww...", "..wwwwww..", ".wwwwwwww.", "wwwwwwwwww"],
   down: ["wwwwwwwwww", ".wwwwwwww.", "..wwwwww..", "...wwww...", "....ww...."],
+  // The emotes besides the heart, drawn once for the page and the canvas alike (`emotes.ts`).
+  wave: EMOTE_ART.wave,
+  cheer: EMOTE_ART.cheer,
+  laugh: EMOTE_ART.laugh,
 };
 
 // ---------- the stylesheet ----------

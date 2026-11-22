@@ -4,6 +4,8 @@
  * else about it.
  */
 
+import type { Emote } from "@sequoia-leaf/kit/emotes.ts";
+import { where } from "@sequoia-leaf/kit/live.ts";
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { bake, type Body, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
@@ -41,6 +43,21 @@ import { closeCard, closePanel, refreshFace, setFace, setHammer, showCard } from
 import { compose, read } from "./letter.ts";
 import { BOX_FULL, post, roomInBox } from "./mail.ts";
 import { inTownLine } from "./news.ts";
+import {
+  closeEmotes,
+  emote,
+  emotesOpen,
+  inRoom,
+  isLivePlayer,
+  liveHandles,
+  livePlayers,
+  openEmotes,
+  othersInTown,
+  stepPlayers,
+  tellRoom,
+  townOnStage,
+  waveAt,
+} from "./players.ts";
 import { camp, kept, remember } from "./record.ts";
 import { dayOf } from "./save.ts";
 import type { Sprites } from "./sprites.ts";
@@ -97,6 +114,11 @@ export interface Town extends Scene {
   readonly backdrop: { sky: HTMLCanvasElement; near: HTMLCanvasElement };
   /** How the stage is told the way to the camp, once there is one. */
   toCamp: (() => void) | null;
+  /**
+   * The town is on the stage, or off it (the camp, or a game open over it): only while it is on is
+   * the page in the town's live room.
+   */
+  onStage(on: boolean): void;
   /** The town's own handles for looking at it from outside. */
   readonly handles: {
     enter(): void;
@@ -105,6 +127,8 @@ export interface Town extends Scene {
     visit(id: PlaceId): void;
     inside(id: GameId): void;
     tp(x: number, y: number): void;
+    /** Walks the member to a point, round whatever is in the way, as a tap on bare ground there would. */
+    walk(x: number, y: number): void;
     tap(x: number, y: number): void;
     /** The town's own, where each is and what it is doing. */
     who(): { name: string; x: number; y: number; doing: string }[];
@@ -113,6 +137,14 @@ export interface Town extends Scene {
     me(): Pt;
     lost(): Pt;
     kept(): unknown;
+    /** Everybody else in town live, as they would be drawn this moment. */
+    players: (typeof liveHandles)["players"];
+    /** What the town's room was last told of the member, and when (milliseconds since 1970). */
+    told: (typeof liveHandles)["told"];
+    /** The live connection: its status, what is shown of it, the member's number, how many others. */
+    link: (typeof liveHandles)["link"];
+    /** The member makes an emote, as if chosen from the plaque over their head. */
+    emote(kind: Emote): void;
   };
 }
 
@@ -141,7 +173,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     nearAt: { x: NEAR.x, y: NEAR.y },
     props,
     others: () => (flights.length > 0 ? [...standing, ...flights] : standing),
-    people: () => [...G.folk, ...G.visitors, player, cinfy],
+    people: () => [...G.folk, ...G.visitors, ...livePlayers(), player, cinfy],
     lights: allLights,
     beyond: () => undefined,
     under: drawWater,
@@ -189,6 +221,14 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   let going: { id: GameId; through: boolean } | null = null;
   let pushing = 0;
   let seatWas = player.seat;
+  /** The member was put somewhere without walking there since the room was last told: a jump. */
+  let jumped = false;
+  /** Puts the member somewhere at once, which the room is told is a jump. */
+  function putAt(x: number, y: number): void {
+    player.x = x;
+    player.y = y;
+    jumped = true;
+  }
 
   function halt(): void {
     release(player);
@@ -296,7 +336,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   function personAt(wx: number, wy: number): Actor | null {
     let best: Actor | null = null;
-    for (const a of [...G.folk, ...G.visitors, player, cinfy]) {
+    for (const a of [...G.folk, ...G.visitors, ...livePlayers(), player, cinfy]) {
       if (a.away || a.alpha < 0.5) continue;
       const at = a.seat ?? a;
       if (Math.abs(wx - at.x) > 7 || wy < at.y - headOf(a) - 2 || wy > at.y + 3 - a.lift) continue;
@@ -323,12 +363,26 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   /** A touch somewhere in the town. Says whether it was bare ground (so a drag may steer). */
   function tapWorld(wx: number, wy: number): boolean {
     closeCard();
+    const plaqueWasOpen = emotesOpen();
+    closeEmotes();
     const who = personAt(wx, wy);
     if (who) {
       sfx.pop();
       // Somebody dozing sleeps on; their card says who they are.
       if (who.dozing !== null) {
         showCard(who);
+        return false;
+      }
+      // In the live room, the member's own figure offers its emotes; a second tap puts them away.
+      if (who.you && inRoom()) {
+        if (!plaqueWasOpen) openEmotes();
+        return false;
+      }
+      // Another player, live: drawn where they really are, so they do not turn; their card has a wave.
+      if (isLivePlayer(who)) {
+        showCard(who, null, () => {
+          waveAt(who);
+        });
         return false;
       }
       hop(who);
@@ -430,6 +484,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   const town: Town = {
     backdrop: { sky: pic.sky, near: pic.near },
     toCamp: null,
+    onStage: townOnStage,
     bounds: { w: W, top: -72, bottom: H + 24 },
 
     resize(w, h) {
@@ -446,9 +501,13 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       G.t += dt;
       stepActor(player, dt);
       if (awake() && steer) steerBy(dt, steer);
+      // The room hears where the member is at once, from their own walking; nothing waits for it.
+      tellRoom(player, dt, jumped);
+      jumped = false;
       stepActor(cinfy, dt);
       stepFolk(dt);
       stepVisitors(dt);
+      stepPlayers(dt);
       stepTown(dt);
       stepFlights(dt);
       stepEvents();
@@ -520,7 +579,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     },
 
     back() {
-      if (G.panel) closePanel();
+      if (emotesOpen()) closeEmotes();
+      else if (G.panel) closePanel();
       else closeCard();
     },
 
@@ -538,8 +598,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         return;
       }
       // Out of the dark of the doorway and back to where they stood.
-      player.x = place("works").stand.x;
-      player.y = THRESHOLD;
+      putAt(place("works").stand.x, THRESHOLD);
       player.dir = 0;
       player.path = [{ ...place("works").stand }];
       player.arrive = null;
@@ -557,8 +616,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       show.pointed = null;
       show.dest = null;
       release(player);
-      player.x = 256;
-      player.y = 84;
+      putAt(256, 84);
       entered = false;
       player.dir = 0;
       player.alpha = 0;
@@ -606,15 +664,18 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         remember();
         beginEvents();
         twinkleAll();
-        // How many real players are in the game, once the guild has said; then the feed says so.
+        // How many others are in town, once the town's room has said (on the guild's own server)
+        // or the guild has (with the made-up one); then the feed says so.
         const greet = letter.show ? "You are home." : "Back again.";
+        const live = where().mode === "live";
         let tries = 0;
         const tellHowMany = (): void => {
-          if (!guild.heard() && tries++ < 12) {
+          const known = live ? othersInTown() !== null : guild.heard();
+          if (!known && tries++ < 12) {
             after(0.5, tellHowMany);
             return;
           }
-          hooks.feed(`${greet} ${inTownLine(guild.visitors().length)}`, "leaf");
+          hooks.feed(`${greet} ${inTownLine(live ? (othersInTown() ?? 0) : guild.visitors().length)}`, "leaf");
           if (turnedAway) hooks.feed(BOX_FULL, "coral");
         };
         tellHowMany();
@@ -651,9 +712,12 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       inside: goIn,
       tp(x, y) {
         halt();
-        player.x = x;
-        player.y = y;
+        putAt(x, y);
         stage.snap();
+      },
+      walk(x, y) {
+        halt();
+        walkTo(player, nearestFree(x, y));
       },
       tap(x, y) {
         tapWorld(x, y);
@@ -678,6 +742,10 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         remember();
         return { ...kept };
       },
+      players: liveHandles.players,
+      told: liveHandles.told,
+      link: liveHandles.link,
+      emote,
     },
   };
   return town;

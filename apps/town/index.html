@@ -42,6 +42,28 @@
         gap: calc(var(--u) * 6);
         padding: var(--u) calc(var(--u) * 4);
       }
+      /* By the purse while the town's live connection is down. */
+      #link {
+        position: fixed;
+        z-index: 5;
+        top: calc(var(--top) + var(--u) * 21);
+        left: var(--edge);
+        padding: 0 calc(var(--u) * 3);
+        pointer-events: none;
+      }
+      /* The member's emotes, over their own head, the picture of each one to choose. */
+      #emotes {
+        position: fixed;
+        z-index: 9;
+        translate: -50% -100%;
+        display: flex;
+        gap: var(--u);
+        padding: var(--u);
+      }
+      #emotes .k-btn {
+        min-width: calc(var(--u) * 20);
+        min-height: calc(var(--u) * 20);
+      }
       #corner {
         position: fixed;
         z-index: 5;
