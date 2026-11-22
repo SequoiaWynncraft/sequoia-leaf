@@ -5,6 +5,8 @@
 export { ASKS } from "./content/asks.ts";
 export { isItem, isRaw, type Item, ITEM, type ItemInfo, ITEMS, RAW, type Raw, type Tally } from "./content/items.ts";
 export {
+  BLUEPRINT,
+  BLUEPRINTS,
   BUFFER,
   CRATE,
   FUEL,
@@ -15,6 +17,7 @@ export {
   KINDS,
   REACH,
   SPAN,
+  STAND_MOST,
   START_KINDS,
   STARTERS,
   TICKS,
@@ -86,8 +89,26 @@ export {
 } from "./orders.ts";
 export { postcard } from "./postcard.ts";
 export { repower } from "./power.ts";
-export { lay, type Leg, route, runCost } from "./route.ts";
-export { load, save, VERSION } from "./save.ts";
+export {
+  blueprintRefusal,
+  boxOf,
+  clear,
+  deleteBlueprint,
+  type Kept,
+  move,
+  type Piece,
+  piecesAt,
+  placed,
+  priceOf,
+  refusals,
+  saveBlueprint,
+  stand,
+  standRefusal,
+  tilesOf,
+  within,
+} from "./pieces.ts";
+export { type Leg, route } from "./route.ts";
+export { load, readPiece, save, VERSION } from "./save.ts";
 export { ahead, aim, holding, rate, type State, type Status, status } from "./status.ts";
 export { PACE_WINDOW, power, rewire, step, takes } from "./step.ts";
 export {

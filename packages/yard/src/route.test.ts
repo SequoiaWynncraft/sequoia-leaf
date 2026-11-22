@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { KIND } from "./content/machines.ts";
 import { bare, belts, lit, on, put, steps } from "./fixtures.ts";
-import { lay, route, runCost } from "./route.ts";
+import { priceOf, stand } from "./pieces.ts";
+import { route } from "./route.ts";
 import { at, type World } from "./world.ts";
 
 /** A bare patch where tunnels have not been opened. */
@@ -27,7 +28,7 @@ describe("finding a way for a belt", () => {
     const legs = route(w, [4, 6], [12, 6]);
     if (!legs) throw new Error("no way");
     expect(legs.length).toBe(10);
-    expect(lay(w, legs, 100)).toEqual({ ok: true, cost: 10 * KIND.belt.cost });
+    expect(stand(w, legs, 100)).toEqual({ ok: true, cost: 10 * KIND.belt.cost });
     steps(w, 300);
     expect(w.depot.ore ?? 0).toBeGreaterThan(15);
   });
@@ -79,10 +80,10 @@ describe("finding a way for a belt", () => {
     const legs = route(w, [3, 6], [12, 6]);
     if (!legs) throw new Error("no way");
     expect(legs.filter((l) => l.kind === "tunnel")).toEqual([{ kind: "tunnel", x: 6, y: 6, dir: 0, span: 1 }]);
-    expect(runCost(w, legs)).toBe(5 * KIND.belt.cost + KIND.tunnel.cost);
-    expect(lay(w, legs, 4)).toEqual({ ok: false, why: "Not enough Coins" });
+    expect(priceOf(w, legs)).toBe(5 * KIND.belt.cost + KIND.tunnel.cost);
+    expect(stand(w, legs, 4)).toEqual({ ok: false, why: "Not enough Coins: 13 short" });
     expect(w.cells[at(w, 3, 6)]).toBeNull();
-    expect(lay(w, legs, 99).ok).toBe(true);
+    expect(stand(w, legs, 99).ok).toBe(true);
     expect(on(w, 8, 6).span).toBe(-1);
     steps(w, 300);
     expect(w.depot.ore ?? 0).toBeGreaterThan(15);
@@ -108,7 +109,7 @@ describe("finding a way for a belt", () => {
     const tiles = (legs ?? []).map((l) => `${l.x},${l.y}`);
     expect(new Set(tiles).size).toBe(tiles.length);
     if (legs) {
-      expect(lay(w, legs, 999).ok).toBe(true);
+      expect(stand(w, legs, 999).ok).toBe(true);
       // Everything it said it would build is there.
       for (const l of legs) expect(on(w, l.x, l.y).kind).toBe(l.kind);
     }
@@ -117,14 +118,14 @@ describe("finding a way for a belt", () => {
       { kind: "belt", x: 12, y: 1, dir: 0, span: 0 },
       { kind: "belt", x: 12, y: 1, dir: 1, span: 0 },
     ] as const;
-    expect(lay(w, twice, 999)).toEqual({ ok: false, why: "That line crosses itself" });
+    expect(stand(w, twice, 999)).toEqual({ ok: false, why: "Two pieces cannot stand on one tile" });
   });
   test("laying is all or nothing", () => {
     const w = flat();
     const legs = route(w, [2, 2], [12, 6]);
     if (!legs) throw new Error("no way");
     put(w, "pylon", legs[3]?.x ?? 0, legs[3]?.y ?? 0);
-    expect(lay(w, legs, 999)).toEqual({ ok: false, why: "Something is here already" });
+    expect(stand(w, legs, 999)).toEqual({ ok: false, why: "Something is here already" });
     expect(w.cells.filter((b) => b?.kind === "belt").length).toBe(0);
   });
 });

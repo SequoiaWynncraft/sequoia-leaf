@@ -4,14 +4,18 @@
  */
 
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
-import { create, type Dir, type Kind, type Leg, type PlotId, type World } from "@sequoia-leaf/yard";
+import { create, type Dir, type Kind, type Leg, type Piece, type PlotId, type World } from "@sequoia-leaf/yard";
 
 import { TILE } from "./art/belts.ts";
 
-/** What is in the member's hand: something to build, the spade that takes things away, the brush that colours lines, or nothing. */
-export type Tool = Kind | "remove" | "paint" | null;
+/**
+ * What is in the member's hand: something to build, the spade that takes things away, Select for
+ * many pieces at once, the brush that colours lines, or nothing.
+ */
+export type Tool = Kind | "remove" | "select" | "paint" | null;
 /** Whether a tool is something to build. */
-export const builds = (tool: Tool): tool is Kind => tool !== null && tool !== "remove" && tool !== "paint";
+export const builds = (tool: Tool): tool is Kind =>
+  tool !== null && tool !== "remove" && tool !== "select" && tool !== "paint";
 
 /** A place being pointed at to build on, and what would come of it. */
 export interface Aim {
@@ -30,6 +34,29 @@ export interface Run {
   turns: { x: number; y: number; dir: Dir }[];
   cost: number;
   why: string | null;
+}
+
+/** An area marked with Select: its corners, the tiles of the pieces in it, the pieces, and what they cost. */
+export interface Mark {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  tiles: number[];
+  pieces: Piece[];
+  cost: number;
+}
+
+/** A set of pieces in hand, to be set down as one. */
+export interface Group {
+  /** The marked pieces being moved, a copy of them, or the blueprint in a place (by its number). */
+  as: "move" | "copy" | number;
+  pieces: readonly Piece[];
+  /** Quarter turns to the right it has been given. */
+  turns: Dir;
+  /** Where it is aimed (`S.aim`): the pieces as they would stand, and why each cannot. */
+  at: Piece[];
+  why: (string | null)[];
 }
 
 export const S: {
@@ -61,6 +88,12 @@ export const S: {
   aim: Aim | null;
   from: { x: number; y: number } | null;
   run: Run | null;
+  /** With Select in hand: the area marked, the first corner of one being marked, and the pieces in hand. */
+  mark: Mark | null;
+  corner: { x: number; y: number } | null;
+  group: Group | null;
+  /** Save was pressed: the line over the dock is asking which place to keep the marked pieces in. */
+  saving: boolean;
   /** The tile whose card is open. */
   picked: number;
   /** Plots being cleared before the member's eyes: when each began, in screen seconds, and where from. */
@@ -86,6 +119,10 @@ export const S: {
   aim: null,
   from: null,
   run: null,
+  mark: null,
+  corner: null,
+  group: null,
+  saving: false,
   picked: -1,
   clearing: new Map(),
   panel: null,

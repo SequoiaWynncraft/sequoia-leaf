@@ -16,7 +16,7 @@ export interface Nudge {
   x: number;
   y: number;
   /** The tool it wants picked up, if any. */
-  tool: Kind | null;
+  tool: Kind | "select" | null;
   /** Lessons that are learnt by doing stay until done; the rest are said for a while and then count as taken. */
   lasting: boolean;
 }
@@ -153,6 +153,16 @@ export function nudge(w: World, taught: ReadonlySet<string>, finger: boolean): N
       x: cx + 1,
       y: cy,
       tool: null,
+      lasting: false,
+    };
+
+  if (!told("select") && w.cells.reduce((n, b) => n + (b && b.kind !== "depot" ? 1 : 0), 0) > 60)
+    return {
+      id: "select",
+      text: "Select moves, copies or removes many pieces at once, and saves them as a blueprint.",
+      x: cx,
+      y: cy - 1,
+      tool: "select",
       lasting: false,
     };
 

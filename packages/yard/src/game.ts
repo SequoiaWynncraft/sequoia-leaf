@@ -18,16 +18,16 @@ import { type CoinChange, type Ctx, type Done, type Game, LOGGED, type Logged, t
 import { build, buyPlan, buyPlot, paint, remove, setOpen, setRecipe, tipOut, turn } from "./build.ts";
 import { AWAY_MOST_MS, forward, TICK_MS } from "./clock.ts";
 import { isItem, type Item } from "./content/items.ts";
-import { isKind, type Kind, SPAN } from "./content/machines.ts";
+import { BLUEPRINTS, isKind, type Kind, STAND_MOST } from "./content/machines.ts";
 import { isPlanId, type PlanId, PLANS } from "./content/plans.ts";
 import { isPlotId, type PlotId, PLOTS } from "./content/plots.ts";
 import { STORY } from "./content/story.ts";
 import { create } from "./create.ts";
 import { type Dir, isDir } from "./grid.ts";
 import { claim, swap } from "./orders.ts";
+import { clear, deleteBlueprint, move, type Piece, saveBlueprint, stand } from "./pieces.ts";
 import { postcard } from "./postcard.ts";
-import { lay, type Leg } from "./route.ts";
-import { load, save } from "./save.ts";
+import { load, readPiece, save } from "./save.ts";
 import { step } from "./step.ts";
 import { collect, drain, type News, TINTS, type World } from "./world.ts";
 
@@ -46,8 +46,17 @@ export type WorksAct =
   /** A piece; over the same kind it only turns. */
   | ({ readonly do: "build"; readonly kind: Kind; readonly dir: Dir } & At)
   /** A run, all of it or none, with the first belt already standing turned to meet it. */
-  | { readonly do: "lay"; readonly legs: readonly Leg[]; readonly turn?: At & { readonly dir: Dir } }
+  | { readonly do: "lay"; readonly legs: readonly Piece[]; readonly turn?: At & { readonly dir: Dir } }
+  /** A set of pieces (a copy, a blueprint set down), all of it or none. */
+  | { readonly do: "stand"; readonly pieces: readonly Piece[] }
+  /** The pieces on some tiles moved as one: turned so many quarter turns, the corner of their box set on a tile. */
+  | ({ readonly do: "move"; readonly tiles: readonly number[]; readonly turns: Dir } & At)
   | ({ readonly do: "remove" } & At)
+  /** Every piece on some tiles taken away. */
+  | { readonly do: "clear"; readonly tiles: readonly number[] }
+  /** The pieces on some tiles kept as the blueprint in a place; and the blueprint in a place thrown away. */
+  | { readonly do: "saveBlueprint"; readonly slot: number; readonly tiles: readonly number[] }
+  | { readonly do: "deleteBlueprint"; readonly slot: number }
   | ({ readonly do: "turn"; readonly dir: Dir } & At)
   /** A colour, 1 to 6, for the line through a tile, or 0 to take it off. */
   | ({ readonly do: "paint"; readonly tint: number } & At)
@@ -81,7 +90,12 @@ export type Turned = Refused & { readonly why: string };
 export const REFUSED = {
   build: "cannot_build",
   lay: "cannot_lay",
+  stand: "cannot_stand",
+  move: "cannot_move",
   remove: "nothing_to_take_away",
+  clear: "nothing_to_clear",
+  saveBlueprint: "cannot_save_blueprint",
+  deleteBlueprint: "no_blueprint",
   turn: "cannot_turn",
   paint: "nothing_to_paint",
   recipe: "cannot_set_recipe",
@@ -164,15 +178,27 @@ function act(w: World, c: WorksCommand): Did {
       const did = build(w, c.kind, c.x, c.y, c.dir, Infinity);
       return did.ok ? done(priced(w, did.cost, REASON.build)) : no(c, did.why);
     }
-    case "lay": {
-      const did = lay(w, c.legs, Infinity, c.turn);
-      return did.ok ? done(priced(w, did.cost, REASON.lay)) : no(c, did.why);
+    case "lay":
+    case "stand": {
+      const did = c.do === "lay" ? stand(w, c.legs, Infinity, true, c.turn) : stand(w, c.pieces, Infinity);
+      return did.ok ? done(priced(w, did.cost, c.do === "lay" ? REASON.lay : REASON.build)) : no(c, did.why);
     }
-    case "remove": {
-      const did = remove(w, c.x, c.y);
+    case "move": {
+      const why = move(w, c.tiles, c.turns, c.x, c.y);
+      return why === null ? done() : no(c, why);
+    }
+    case "remove":
+    case "clear": {
+      const did = c.do === "remove" ? remove(w, c.x, c.y) : clear(w, c.tiles);
       if (!did.ok) return no(c, did.why);
       return done(did.refund > 0 ? [change(w, did.refund, REASON.remove, true)] : []);
     }
+    case "saveBlueprint": {
+      const why = saveBlueprint(w, c.slot, c.tiles);
+      return why === null ? done() : no(c, why);
+    }
+    case "deleteBlueprint":
+      return deleteBlueprint(w, c.slot) ? done() : no(c, "There is no blueprint there");
     case "turn":
       return turn(w, c.x, c.y, c.dir) ? done() : no(c, "That cannot be turned");
     case "paint":
@@ -238,33 +264,50 @@ export function play(w: World, c: WorksCommand): Done<World, WorksNote> | Turned
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const whole = (v: unknown, most: number): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= most;
-/** The most legs a run may have: every tile of the land. */
-const MOST_LEGS = 48 * 36;
+/** The most legs a run may have, and the most tiles a command may name: every tile of the land. */
+const TILES = 48 * 36;
 
-function legOf(v: unknown): Leg | null {
-  if (!isRecord(v) || (v.kind !== "belt" && v.kind !== "tunnel") || !isDir(v.dir)) return null;
-  if (!whole(v.x, 255) || !whole(v.y, 255) || !whole(v.span, SPAN)) return null;
-  return { kind: v.kind, x: v.x, y: v.y, dir: v.dir, span: v.span };
+/** A list of at most `most` pieces off the wire, or null. */
+function piecesOf(v: unknown, most: number): Piece[] | null {
+  if (!Array.isArray(v) || v.length > most) return null;
+  const pieces = v.map((p) => readPiece(p)).filter((p) => p !== null);
+  return pieces.length === v.length ? pieces : null;
 }
 
 /** What a command off the wire does, or null. */
 function what(v: Record<string, unknown>): WorksAct | null {
   const spot = whole(v.x, 255) && whole(v.y, 255) ? { x: v.x, y: v.y } : null;
   const item = v.item === null ? null : isItem(v.item) ? v.item : undefined;
+  const tiles =
+    Array.isArray(v.tiles) && v.tiles.length <= TILES && v.tiles.every((t): t is number => whole(t, TILES - 1))
+      ? v.tiles
+      : null;
+  const slot = whole(v.slot, BLUEPRINTS - 1) ? v.slot : null;
   switch (v.do) {
     case "build":
       return spot && isKind(v.kind) && isDir(v.dir) ? { do: "build", kind: v.kind, dir: v.dir, ...spot } : null;
     case "lay": {
-      if (!Array.isArray(v.legs) || v.legs.length > MOST_LEGS) return null;
-      const legs = v.legs.map(legOf);
-      if (legs.some((l) => l === null)) return null;
+      const legs = piecesOf(v.legs, TILES);
+      if (!legs) return null;
       const t = v.turn;
-      if (t === undefined) return { do: "lay", legs: legs.filter((l) => l !== null) };
+      if (t === undefined) return { do: "lay", legs };
       if (!isRecord(t) || !whole(t.x, 255) || !whole(t.y, 255) || !isDir(t.dir)) return null;
-      return { do: "lay", legs: legs.filter((l) => l !== null), turn: { x: t.x, y: t.y, dir: t.dir } };
+      return { do: "lay", legs, turn: { x: t.x, y: t.y, dir: t.dir } };
     }
+    case "stand": {
+      const pieces = piecesOf(v.pieces, STAND_MOST);
+      return pieces && { do: "stand", pieces };
+    }
+    case "move":
+      return spot && tiles && isDir(v.turns) ? { do: "move", tiles, turns: v.turns, ...spot } : null;
     case "remove":
       return spot && { do: "remove", ...spot };
+    case "clear":
+      return tiles && { do: "clear", tiles };
+    case "saveBlueprint":
+      return tiles && slot !== null ? { do: "saveBlueprint", slot, tiles } : null;
+    case "deleteBlueprint":
+      return slot === null ? null : { do: "deleteBlueprint", slot };
     case "turn":
       return spot && isDir(v.dir) ? { do: "turn", dir: v.dir, ...spot } : null;
     case "paint":
@@ -336,8 +379,8 @@ export const WORKS: Game<World, WorksCommand, WorksView, WorksNote> = {
   // A tick further ahead than `LEAD` past Leaf's clock is done at `LEAD`.
   apply: (w, c, ctx) => play(w, { ...c, tick: Math.min(c.tick, clockOf(w, ctx.now) + LEAD) }),
   view,
-  // A visitor is given what the owner is.
-  visit: view,
+  // A visitor is given what the owner is, but for the blueprints.
+  visit: (w, ctx) => view({ ...w, blueprints: [] }, ctx),
   decode: (text) => load(text),
   encode: save,
   command: readCommand,

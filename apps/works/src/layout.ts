@@ -216,11 +216,8 @@ function signs(w: World, owned: readonly boolean[]): Sign[] {
   return out;
 }
 
-let kept: Layout | null = null;
-
-/** The layout for the yard as it stands, worked out afresh only when the yard has changed. */
-export function layout(w: World, rev: number): Layout {
-  if (kept && kept.world === w && kept.rev === rev) return kept;
+/** The arms of every tile of a yard that carries: for the yard as it stands, and for one made up to show pieces not yet built. */
+export function armsOf(w: World): (Arms | null)[] {
   const wire = w.wire ?? rewire(w);
   const feeds = (from: number, to: number): boolean => {
     if (from < 0) return false;
@@ -235,6 +232,15 @@ export function layout(w: World, rev: number): Layout {
     // Two belts facing each other pass nothing, and are not drawn as joined.
     return wire.next[from] === to && wire.next[to] !== from;
   };
+  return w.cells.map((_, i) => arms(w, i, feeds));
+}
+
+let kept: Layout | null = null;
+
+/** The layout for the yard as it stands, worked out afresh only when the yard has changed. */
+export function layout(w: World, rev: number): Layout {
+  if (kept && kept.world === w && kept.rev === rev) return kept;
+  const wire = w.wire ?? rewire(w);
   const owned = w.land.plots.map((p) => w.plots.includes(p.id));
   // The gate stands where the path from the depot's door meets the yard's southern fence.
   const [cx, cy] = w.land.depot;
@@ -257,7 +263,7 @@ export function layout(w: World, rev: number): Layout {
   kept = {
     world: w,
     rev,
-    arms: w.cells.map((_, i) => arms(w, i, feeds)),
+    arms: armsOf(w),
     intoDepot,
     wires: wires(w),
     fences: fences(w, owned, gate.x, gate.y),

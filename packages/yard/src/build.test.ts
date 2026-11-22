@@ -23,7 +23,8 @@ import { PLOTS } from "./content/plots.ts";
 import { create } from "./create.ts";
 import { bare, belts, lit, on, put, run, steps } from "./fixtures.ts";
 import { DX, DY } from "./grid.ts";
-import { lay, route, runCost } from "./route.ts";
+import { priceOf, stand } from "./pieces.ts";
+import { route } from "./route.ts";
 import { power } from "./step.ts";
 import { at, collect, plotAt, put as hold, type World } from "./world.ts";
 
@@ -237,18 +238,18 @@ describe("colour", () => {
     paint(w, 1, 9, 5);
     belts(w, 8, 9, 10, 9);
     paint(w, 8, 9, 6);
-    expect(lay(w, route(w, [4, 9], [7, 9]) ?? [], Infinity).ok).toBe(true);
+    expect(stand(w, route(w, [4, 9], [7, 9]) ?? [], Infinity, true).ok).toBe(true);
     expect(row(w, 1, 10, 9)).toBe("5555555666");
     // A run into the start of a line, with nothing coloured feeding it, takes that line's.
     belts(w, 18, 3, 20, 3);
     paint(w, 18, 3, 4);
-    expect(lay(w, route(w, [15, 3], [17, 3]) ?? [], Infinity).ok).toBe(true);
+    expect(stand(w, route(w, [15, 3], [17, 3]) ?? [], Infinity, true).ok).toBe(true);
     expect(row(w, 15, 20, 3)).toBe("444444");
     // A run from a belt turned to meet it takes that belt's colour.
     put(w, "belt", 16, 9, 0);
     paint(w, 16, 9, 3);
     const down = [10, 11].map((y) => ({ kind: "belt", x: 16, y, dir: 1, span: 0 }) as const);
-    expect(lay(w, down, Infinity, { x: 16, y: 9, dir: 1 }).ok).toBe(true);
+    expect(stand(w, down, Infinity, true, { x: 16, y: 9, dir: 1 }).ok).toBe(true);
     expect([on(w, 16, 10).tint, on(w, 16, 11).tint]).toEqual([3, 3]);
   });
   test("a splitter or a joiner set down on a coloured belt keeps its colour", () => {
@@ -285,8 +286,8 @@ describe("Coins", () => {
     expect(build(w, "mill", 21, 15, 0, 0)).toEqual({ ok: true, cost: 0 });
     const legs = route(w, [22, 15], [23, 17]);
     if (!legs) throw new Error("no way");
-    expect(runCost(w, legs)).toBe(0);
-    expect(lay(w, legs, 0)).toEqual({ ok: true, cost: 0 });
+    expect(priceOf(w, legs)).toBe(0);
+    expect(stand(w, legs, 0)).toEqual({ ok: true, cost: 0 });
     steps(w, 400);
     expect(w.depot.plank ?? 0).toBeGreaterThan(12);
     expect(w.story).toBe(1);
@@ -314,9 +315,9 @@ describe("Coins", () => {
     const legs = route(w, [17, 21], [31, 21]);
     if (!legs) throw new Error("no way");
     expect(legs.length).toBe(15);
-    expect(runCost(w, legs)).toBe(3 * KIND.belt.cost);
-    expect(lay(w, legs, 2)).toEqual({ ok: false, why: "Not enough Coins" });
-    expect(lay(w, legs, 3)).toEqual({ ok: true, cost: 3 });
+    expect(priceOf(w, legs)).toBe(3 * KIND.belt.cost);
+    expect(stand(w, legs, 2)).toEqual({ ok: false, why: "Not enough Coins: 1 short" });
+    expect(stand(w, legs, 3)).toEqual({ ok: true, cost: 3 });
     expect(w.spare.belt).toBe(0);
   });
   test("a tunnel may not pass under the depot, and the router goes round", () => {
@@ -339,7 +340,7 @@ describe("Coins", () => {
       if (leg.kind === "tunnel")
         for (let s = 1; s <= leg.span; s++)
           expect(walled.cells[at(walled, leg.x + DX[leg.dir] * s, leg.y + DY[leg.dir] * s)]?.kind).not.toBe("depot");
-    if (legs) expect(lay(walled, legs, 999).ok).toBe(true);
+    if (legs) expect(stand(walled, legs, 999).ok).toBe(true);
   });
   test("tipping a machine out empties what it holds, and frees one that filled up with the wrong part", () => {
     const w = lit(bare());

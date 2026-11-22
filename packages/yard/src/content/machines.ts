@@ -136,3 +136,8 @@ export const FUEL = 8;
 export const CRATE = 32;
 /** The longest a tunnel can be once tunnels are open, in tiles passed under. */
 export const SPAN = 3;
+/** How many blueprints a yard keeps, and the most one holds: pieces, and tiles across and down. */
+export const BLUEPRINTS = 3;
+export const BLUEPRINT = { pieces: 400, w: 32, h: 24 } as const;
+/** The most pieces one `stand` command carries: Leaf reads a command of at most 16 KiB. */
+export const STAND_MOST = 160;

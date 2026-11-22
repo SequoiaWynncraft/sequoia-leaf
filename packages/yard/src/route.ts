@@ -2,9 +2,10 @@
  * Finding a way for a belt. Given a tile to start on and a thing to reach, it finds the shortest
  * clear run of belt between them, going under what is in the way by tunnel where tunnels are open.
  * A screen can use it to lay a belt from two taps; the balance script lays its whole yards with it.
+ * A run is stood all or none, as any set of pieces is (`stand`, in `pieces.ts`).
  */
-import { build, digsUnder, join, refusal, type Spent, tunnelExit, turn, turnable } from "./build.ts";
-import { KIND, SPAN } from "./content/machines.ts";
+import { digsUnder, refusal } from "./build.ts";
+import { SPAN } from "./content/machines.ts";
 import { type Dir, DIRS, DX, DY } from "./grid.ts";
 import { at, type World } from "./world.ts";
 
@@ -178,48 +179,4 @@ function wayBetween(W: number, a: number, b: number): Dir {
   const dx = (b % W) - (a % W);
   const dy = Math.floor(b / W) - Math.floor(a / W);
   return dx > 0 ? 0 : dx < 0 ? 2 : dy > 0 ? 1 : 3;
-}
-
-/** What a run would cost to lay: the belts the yard has to hand go down first, for nothing. */
-export function runCost(w: World, legs: readonly Leg[]): number {
-  const spare = { belt: w.spare.belt ?? 0, tunnel: w.spare.tunnel ?? 0 };
-  let cost = 0;
-  for (const leg of legs) {
-    if (spare[leg.kind] > 0) spare[leg.kind]--;
-    else cost += KIND[leg.kind].cost;
-  }
-  return cost;
-}
-
-/**
- * Lays a run found by `route`, all of it or none, and says what it cost. `bend` is a belt already
- * standing where the run starts, turned to meet it. The run takes the colour of the line it joins.
- */
-export function lay(
-  w: World,
-  legs: readonly Leg[],
-  coins: number,
-  bend?: { readonly x: number; readonly y: number; readonly dir: Dir },
-): Spent {
-  if (bend && !turnable(w, bend.x, bend.y)) return { ok: false, why: "There is nothing there to turn" };
-  const cost = runCost(w, legs);
-  const tiles = new Set<number>();
-  for (const leg of legs) {
-    const mouth = leg.kind === "tunnel" ? tunnelExit(w, leg.x, leg.y, leg.dir, leg.span) : null;
-    for (const i of [at(w, leg.x, leg.y), ...(mouth ? [at(w, mouth.x, mouth.y)] : [])]) {
-      if (tiles.has(i)) return { ok: false, why: "That line crosses itself" };
-      tiles.add(i);
-    }
-    const why =
-      leg.kind === "tunnel" && !tunnelExit(w, leg.x, leg.y, leg.dir, leg.span)
-        ? "A tunnel needs a free tile to come up on, 1 to 3 tiles ahead"
-        : refusal(w, leg.kind, leg.x, leg.y, Infinity, leg.dir, leg.kind === "tunnel" ? leg.span : undefined);
-    if (why !== null) return { ok: false, why };
-  }
-  if (coins < cost) return { ok: false, why: "Not enough Coins" };
-  if (bend) turn(w, bend.x, bend.y, bend.dir);
-  for (const leg of legs)
-    build(w, leg.kind, leg.x, leg.y, leg.dir, Infinity, leg.kind === "tunnel" ? leg.span : undefined);
-  join(w, [...tiles]);
-  return { ok: true, cost };
 }

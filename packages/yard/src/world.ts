@@ -13,6 +13,7 @@ import type { PlotId } from "./content/plots.ts";
 import { STORY } from "./content/story.ts";
 import type { Dir } from "./grid.ts";
 import type { Land } from "./land.ts";
+import type { Piece } from "./pieces.ts";
 
 export interface Building {
   kind: Kind;
@@ -168,6 +169,8 @@ export interface World {
   plans: PlanId[];
   /** The pieces the yard has to hand that are not standing: each costs nothing to stand. */
   spare: Partial<Record<Kind, number>>;
+  /** The yard's blueprints, a place each: the pieces of one, set against its top-left corner, or nothing. */
+  blueprints: (readonly Piece[] | null)[];
   /** How many story orders are done, and what has come in toward the one in hand. */
   story: number;
   filled: Tally;
