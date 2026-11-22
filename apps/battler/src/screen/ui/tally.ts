@@ -25,7 +25,7 @@ import {
 } from "@sequoia-leaf/raid";
 import { regularNamed } from "@sequoia-leaf/raid/content/rooms.ts";
 
-import { portrait } from "../art/sprites.ts";
+import { framesOf, portrait } from "../art/sprites.ts";
 import { opening } from "../logic.ts";
 import { snd } from "../sounds.ts";
 import { pic } from "./cards.ts";
@@ -67,7 +67,7 @@ export const partyName = (who: string): HTMLElement =>
 
 /**
  * A figure's small picture for a row, at most 18 by 12 of its pixels: small figures whole, taller
- * ones from the top (their heads), and the biggest at half size, so every row is the same height.
+ * ones from the top (their heads), and the bosses at half size, so every row is the same height.
  */
 const heads = new Map<UnitKind, HTMLCanvasElement>();
 function headOf(kind: UnitKind): HTMLCanvasElement {
@@ -101,9 +101,11 @@ function cutHead(kind: UnitKind): HTMLCanvasElement {
     x1 = src.width - 1;
     y1 = src.height - 1;
   }
+  // A tall figure's picture starts at its head, leaving out what it wears over it.
+  y0 += Math.min(framesOf(kind).head, Math.max(0, y1 - y0 + 1 - 12));
   const w = x1 - x0 + 1;
   const h = y1 - y0 + 1;
-  const half = h > 20 || w > 22;
+  const half = h > 28 || w > 26;
   const k = half ? 2 : 1;
   const out = Math.min(18, Math.ceil(w / k));
   const tall = Math.min(12, Math.ceil(h / k));

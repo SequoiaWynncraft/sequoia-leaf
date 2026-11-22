@@ -910,6 +910,10 @@ b.dmg.true {
   grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 46), 1fr));
   gap: calc(var(--u) * 2);
 }
+/* A figure's picture is up to 48 units wide: its tile always has room for it. */
+.tiles:not(.small) {
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 54), 1fr));
+}
 .tile {
   position: relative;
   flex-direction: column;
@@ -994,6 +998,23 @@ b.dmg.true {
 }
 .look[aria-pressed="true"] {
   filter: brightness(1.25);
+}
+
+/* A stall too narrow for five large pictures and names shows both small, each inside its own card. */
+@media (max-width: 1180px) {
+  .offer {
+    --fs: 1;
+  }
+  .offer .name {
+    font: var(--f-small);
+  }
+}
+/* Narrower still, but not a phone (whose cards the pictures fit): a picture is cut at its card's edge and never lies over the next offer. */
+@media (min-width: 621px) and (max-width: 1180px) {
+  .offer .art {
+    width: 100%;
+    overflow: hidden;
+  }
 }
 
 /* ---------- a phone held upright: its own arrangement ---------- */
