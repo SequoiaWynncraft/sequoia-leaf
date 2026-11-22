@@ -14,8 +14,20 @@
  * set out (at most the thirty-one a lived-in camp has) and a pet, on the town's board.
  * `{ won: [award, ...] }` gives Tester awards as another game would have (`pull:thing:fountain`), and
  * `{ headliner: n }` makes the nth of `others` the person of the pull game's first banner.
+ * `{ timed: true }`, between the guild's timed windows, hands Tester the next window's timed quest
+ * now, open for a window's length, so the quest board has one of each kind at any hour; in a window
+ * Tester has one already.
  */
-import { DAY_MS, type PlayerId } from "@sequoia-leaf/core";
+import {
+  DAY_MS,
+  DEFAULT_RULES,
+  nextTimedWindowAt,
+  openQuestBook,
+  type PlayerId,
+  type Quest,
+  timedTemplateFor,
+  timedWindowAt,
+} from "@sequoia-leaf/core";
 import { TOWN, type Town } from "@sequoia-leaf/town";
 import { freeSpot, PETS } from "@sequoia-leaf/town/camp.ts";
 import { GIFTS } from "@sequoia-leaf/town/folk.ts";
@@ -23,6 +35,7 @@ import { BOX, letter } from "@sequoia-leaf/town/mail.ts";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
+import { Quests } from "../src/quests/store.ts";
 import type { Other } from "./stage-works.ts";
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -98,6 +111,29 @@ function step(s: Town, op: Record<string, unknown>, now: number): void {
       );
 }
 
+/** Hands a player the next timed window's quest now, if no window is open (`{ timed: true }`). */
+const timedEarly = (playerId: PlayerId, now: number) =>
+  Effect.gen(function* () {
+    const rules = DEFAULT_RULES.quests;
+    const timed = rules.timed;
+    if (timed === undefined || timedWindowAt(now, timed) !== undefined) return;
+    const template = timedTemplateFor(rules, Math.floor(nextTimedWindowAt(now, timed) / timed.everyMs));
+    if (template === undefined) return;
+    const quests = yield* Quests;
+    const book = (yield* quests.book(playerId)) ?? openQuestBook(now);
+    const quest: Quest = {
+      slot: "timed",
+      sequence: (book.latest.timed?.sequence ?? 0) + 1,
+      templateId: template.id,
+      goals: template.objectives.map((objective) => ({ objective, progress: 0 })),
+      reward: template.reward,
+      startedAt: now,
+      expiresAt: now + timed.openMs,
+      completedAt: null,
+    };
+    yield* quests.saveStep(playerId, { book, written: [quest], completed: [] }, now);
+  });
+
 /** Stages each step in order in Tester's town, as one change, and gives back what is waiting at the camp. */
 export const stageTown = (playerId: PlayerId, ops: readonly unknown[], others: readonly Other[]) =>
   Effect.gen(function* () {
@@ -125,6 +161,7 @@ export const stageTown = (playerId: PlayerId, ops: readonly unknown[], others: r
         if (typeof id !== "string") continue;
         yield* sql`INSERT INTO awards (player_id, id, at) VALUES (${playerId}, ${id}, ${now}) ON CONFLICT DO NOTHING`;
       }
+      if (op.timed === true) yield* timedEarly(playerId, now);
       const person = others[whole(op.headliner, others.length) ?? -1];
       if (person) {
         yield* sql`INSERT OR REPLACE INTO banner_people (banner, player_id) VALUES ('banner-1', ${person.id})`;

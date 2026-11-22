@@ -48,20 +48,21 @@
  * does not reach by itself (`stage-raid.ts`), `POST /test/play/works` one in Tester's yard (a
  * kept yard, a time away, a filled order, the others' yards on the board: `stage-works.ts`), and
  * `POST /test/play/town` one in Tester's town and camp (a lived-in camp, a caller waiting, a time
- * away, a full mailbox, Coins to shop with, the others' camps on the board, prizes won and a
- * banner's person: `stage-town.ts`);
+ * away, a full mailbox, Coins to shop with, the others' camps on the board, prizes won, a
+ * banner's person and a timed quest at any hour: `stage-town.ts`);
  * nothing like them is served by the guild's own Leaf.
  */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { CLIENT_HZ, Flag, leaf as leafOf, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { CLIENT_HZ, Flag, leaf as leafOf, type PlayerId, playerId, utcDay } from "@sequoia-leaf/core";
 import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import type { SqlClient } from "effect/sql";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
+import type { Quests } from "../src/quests/store.ts";
 import { LiveClient } from "./live-client.ts";
 import { stageRaid } from "./stage-raid.ts";
 import { stageTown } from "./stage-town.ts";
@@ -459,8 +460,12 @@ async function reroll(slot: "daily" | "weekly") {
 
 /**
  * Plays the day: the feeds are read every ten minutes, as they happen, and
- * Tester rerolls now and then. Tester first swapped a daily two days before,
- * so they have dailies banked, as a member who plays every few days does.
+ * Tester rerolls now and then, never on today's UTC day, so a daily's and a
+ * weekly's free reroll are still there to try. Tester first swapped a daily two
+ * days before, so they have dailies banked, as a member who plays every few days
+ * does. A timed quest is on Tester's board while one of the guild's windows is
+ * open (two hours from 00:00, 04:00, 08:00 UTC and so on), or once the town's
+ * `{ timed: true }` stage hands one out early.
  */
 async function playTheDay() {
   clock.now = dayStart - 2 * DAY;
@@ -473,7 +478,7 @@ async function playTheDay() {
     clock.now = Math.min(dayStart + step * 10 * MINUTE, end);
     // oxlint-disable-next-line no-await-in-loop -- the feeds are read in order, as time passes
     await leaf.run(Effect.all([runCreditSync("recent"), runAchievementSync("recent")]));
-    if (rerollAt.has(step)) {
+    if (rerollAt.has(step) && utcDay(clock.now) < utcDay(end)) {
       // oxlint-disable-next-line no-await-in-loop -- after the feeds, at that moment
       await reroll(step === 70 ? "weekly" : "daily");
     }
@@ -582,7 +587,7 @@ const signingRoute = (path: "/sign-in" | "/sign-out") =>
 /** Stages a moment in one of Tester's games, for the tours: `stage` does it, and says what it made. */
 const stagingRoute = (
   game: string,
-  stage: (ops: readonly unknown[]) => Effect.Effect<unknown, unknown, SqlClient.SqlClient>,
+  stage: (ops: readonly unknown[]) => Effect.Effect<unknown, unknown, SqlClient.SqlClient | Quests>,
 ) =>
   HttpRouter.add(
     "POST",
