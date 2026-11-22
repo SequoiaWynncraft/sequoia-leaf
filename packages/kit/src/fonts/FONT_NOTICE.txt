@@ -1,4 +1,28 @@
-Minecraft Regular, Bold, Italic and Bold Italic (minecraft-*.woff2)
+Jersey 20 and Jersey 15 (jersey-20.woff2, jersey-15.woff2), the face of titles, names and buttons.
+
+Copyright 2023 The Soft Type Project Authors (https://github.com/scfried/soft-type-jersey).
+Version 1.001. Licensed under the SIL Open Font License, Version 1.1; the licence travels with
+them as OFL-Jersey.txt.
+
+Provenance: the Latin files Google Fonts serves for the two families (fonts.gstatic.com,
+jersey20/v4 and jersey15/v4), unchanged.
+
+Each is drawn on a grid of its own and is sharp only at whole multiples of that size. The number
+in a name is how many pixels tall its capitals are, not its size: Jersey 15 is 27 pixels to the em
+(sharp at 27px, 54px, 81px) and Jersey 20 is 34 (sharp at 34px, 68px). Between those sizes its
+pixels blur.
+
+Inter (inter-variable.woff2), the face of everything read and of every number: one variable file,
+weights 100 to 900.
+
+Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter). Licensed under the
+SIL Open Font License, Version 1.1; the licence travels with it as OFL-Inter.txt.
+
+Provenance: a byte-identical copy of the file the Sequoia website ships in sequoia-web
+frontend/static/assets/fonts/, where it sets the site's body text.
+
+Minecraft Regular and Bold (minecraft-regular.woff2, minecraft-bold.woff2), only for words drawn
+on a canvas in the world: names over heads, speech, signs. Nothing on the page is set in it.
 
 Copyright (c) 2017 by Jacob Debono. Designer: Jacob Debono. Vendor: JDGraphics Fonts.
 Version 1.000.
@@ -10,13 +34,4 @@ Provenance: byte-identical copies of the files the Sequoia website ships in sequ
 frontend/static/assets/fonts/. No separate licence text accompanies the fonts in that repository;
 the embedded statement above is the licence information available.
 
-The font is drawn on a grid of ten pixels to the em, so it is sharp at 10px, 20px, 30px and so on
-(and at multiples of 5px on screens with two device pixels to a CSS pixel).
-
-Inter (inter-variable.woff2), the reading face: one variable file, weights 100 to 900.
-
-Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter). Licensed under the
-SIL Open Font License, Version 1.1; the licence travels with it as OFL-Inter.txt.
-
-Provenance: a byte-identical copy of the file the Sequoia website ships in sequoia-web
-frontend/static/assets/fonts/, where it sets the site's body text.
+It is drawn on a grid of ten pixels to the em, so it is sharp at 10px, 20px, 30px and so on.

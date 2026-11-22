@@ -19,6 +19,34 @@
       }
       .w {
         width: calc(var(--u) * 190);
+        max-width: 100%;
+      }
+      /* The five tiers, side by side. */
+      #tiers {
+        flex: 1 1 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(var(--u) * 8);
+        padding-top: calc(var(--u) * 6);
+      }
+      .tier {
+        flex: 1 1 calc(var(--u) * 80);
+        max-width: calc(var(--u) * 110);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: calc(var(--u) * 4);
+        padding: calc(var(--u) * 6) calc(var(--u) * 5) calc(var(--u) * 5);
+        text-align: center;
+      }
+      .tier .k-info-block {
+        align-self: stretch;
+        text-align: left;
+      }
+      /* A row of its own, with room beside the list of things for the card the page pins open. */
+      #cards {
+        margin-right: calc(100% - var(--u) * 190);
+        margin-bottom: calc(var(--u) * 60);
       }
     </style>
   </head>
@@ -26,12 +54,12 @@
     <div class="k-col">
       <div class="k-plaque k-row" style="padding: var(--u) calc(var(--u) * 4)">
         <span class="k-cur leaf"><i class="k-i k-i-leaf"></i>69</span>
-        <span class="k-cur"><i class="k-i k-i-coin"></i>752</span>
+        <span class="k-cur"><i class="k-i k-i-coin"></i>1,532</span>
       </div>
       <div class="k-row">
         <button class="k-btn wood icon"><i class="k-i k-i-sound"></i></button>
-        <button class="k-btn wood icon"><i class="k-i k-i-mute"></i></button>
-        <button class="k-btn plum icon"><i class="k-i k-i-back"></i></button>
+        <button class="k-btn slate icon"><i class="k-i k-i-back"></i></button>
+        <button class="k-btn coral icon"><i class="k-i k-i-home"></i></button>
         <button class="k-btn wood icon sm"><i class="k-i k-i-close"></i></button>
       </div>
       <div class="k-plaque k-row" style="padding: var(--u); gap: var(--u); align-self: flex-start">
@@ -48,7 +76,8 @@
       <div class="k-over">Sootpaw <span class="k-gold">Warden</span></div>
       <div class="k-say">you're here!</div>
       <div class="k-tip" style="margin-top: calc(var(--u) * 4)">
-        <b class="k-name">Jar of fireflies</b><br /><span class="k-dim">They follow whoever<br />opens the lid.</span>
+        <b class="k-name">Jar of fireflies</b>
+        <div class="k-dim">They follow whoever<br />opens the lid.</div>
       </div>
       <div class="k-toast">The guild has taken Mossgate Crossing.</div>
       <div class="k-toast leaf">Pipwick reached level 35.</div>
@@ -74,9 +103,14 @@
           <div class="k-slot" style="width: calc(var(--u) * 24); height: calc(var(--u) * 24)"></div>
           <div class="k-say left k-grow"><b>Cinfy</b>Don't shake it. They hold grudges.</div>
         </div>
+        <div class="k-tabs">
+          <button class="k-btn sm" aria-selected="true">Wares</button>
+          <button class="k-btn sm">Yours</button>
+          <button class="k-btn sm">Guild</button>
+        </div>
         <div class="k-card">
           <div class="k-grow">Leaf crown<br /><span class="k-d">A wreath of gold leaves.</span></div>
-          <span class="k-chip">Yours</span>
+          <span class="k-chip"><i class="k-i k-i-check"></i>Yours</span>
         </div>
         <div class="k-card lit">
           <div class="k-grow">Jar of fireflies<br /><span class="k-d">They follow you about.</span></div>
@@ -84,40 +118,67 @@
         </div>
         <div class="k-card">
           <div class="k-grow">Cocoa for the fire</div>
-          <button class="k-btn sm"><i class="k-i k-i-coin"></i>40</button>
+          <button class="k-btn green sm">
+            Buy<span class="k-cur"><i class="k-i k-i-coin"></i>40</span>
+          </button>
         </div>
+        <div class="k-label">Level 4</div>
         <div class="k-bar"><i style="--v: 62%"></i></div>
         <div class="k-bar leaf"><i style="--v: 30%"></i></div>
-        <div class="k-tabs">
-          <button class="k-btn sm" aria-selected="true">Wares</button>
-          <button class="k-btn sm">Yours</button>
-          <button class="k-btn sm">Guild</button>
-        </div>
-        <div class="k-row">
+        <div class="k-bar coral"><i style="--v: 80%"></i></div>
+      </div>
+    </section>
+
+    <section class="k-panel w">
+      <header class="k-head">
+        <i class="k-i k-i-star"></i>
+        <h2 class="k-title">Buttons and tags</h2>
+      </header>
+      <div class="k-body">
+        <div class="k-label">A button's colour says what it does</div>
+        <div class="k-wrap">
           <button class="k-btn">Set out</button>
-          <button class="k-btn wood">Rustle</button>
-          <button class="k-btn plum">Later</button>
-        </div>
-        <div class="k-row">
-          <button class="k-btn down">Pressed</button>
+          <button class="k-btn blue">Hide</button>
+          <button class="k-btn green">
+            Buy XP<span class="k-cur"><i class="k-i k-i-acorn"></i>4</span>
+          </button>
+          <button class="k-btn wood">
+            Reroll<span class="k-cur"><i class="k-i k-i-acorn"></i>1</span>
+          </button>
           <button class="k-btn coral">Leave</button>
-          <button class="k-btn" disabled>Locked</button>
+          <button class="k-btn slate">Later</button>
         </div>
         <div class="k-wrap">
-          <span class="k-chip lit">2 Ember</span><span class="k-chip">1 Moss</span><span class="k-chip">3 Crab</span>
+          <button class="k-btn down">Pressed</button>
+          <button class="k-btn" disabled>Locked</button>
+          <button class="k-btn sm">Small</button>
+          <button class="k-btn wood sm">Small</button>
+          <button class="k-btn slate icon sm"><i class="k-i k-i-more"></i></button>
+        </div>
+        <button class="k-btn wide">Choose</button>
+        <div class="k-label">A tag is flat</div>
+        <div id="tags" class="k-wrap" style="align-items: center"></div>
+        <div class="k-wrap" style="align-items: center">
+          <span class="k-chip">Recruit</span><span class="k-chip lit">Captain</span
+          ><span class="k-chip"><i class="k-i k-i-lock"></i>1,200</span>
         </div>
       </div>
     </section>
+
+    <section id="tiers"></section>
 
     <section class="k-paper w k-rise">
       <h2 class="k-title big">Welcome home</h2>
       <div class="k-dim">While you were away:</div>
       <hr />
       <div class="k-row">
-        <i class="k-i k-i-leaf"></i><span class="k-grow">Two raids with the guild</span><b>+24</b>
+        <i class="k-i k-i-leaf"></i><span class="k-grow">Two raids with the guild</span
+        ><span class="k-cur leaf">+24</span>
       </div>
       <hr />
-      <div class="k-row"><i class="k-i k-i-coin"></i><span class="k-grow">The Works kept working</span><b>+310</b></div>
+      <div class="k-row">
+        <i class="k-i k-i-coin"></i><span class="k-grow">The Works kept working</span><span class="k-cur">+310</span>
+      </div>
       <hr />
       <div class="k-label">Sootpaw left you a note</div>
       <p style="margin: calc(var(--u) * 2) 0 calc(var(--u) * 4)">The crab count is off again. It is always off.</p>
@@ -130,24 +191,24 @@
         <h2 class="k-title">Letters</h2>
       </header>
       <div class="k-body">
-        <div class="k-label">The pixel face: names, titles, numbers, buttons</div>
+        <div class="k-label">Jersey: titles, names, buttons</div>
         <div class="k-row">
-          <b class="k-name">Jar of fireflies</b><span class="k-cur"><i class="k-i k-i-coin"></i>40</span>
+          <b class="k-name">Jar of fireflies</b>
+          <h3 class="k-title big">Quest board</h3>
         </div>
-        <div class="k-label">The reading face: what is read</div>
+        <div class="k-label">Inter: everything read, and every number</div>
         <p class="k-read" style="margin: 0">
           They follow whoever opens the lid, and settle on the <b>third</b> lantern from the left. Nobody knows why it
           is always the third.
         </p>
         <div class="k-card">
-          <div class="k-grow">
-            Cocoa for the fire<br /><span class="k-d">A second line under a name, in the reading face.</span>
-          </div>
+          <div class="k-grow">Cocoa for the fire<br /><span class="k-d">A second line under a name.</span></div>
+          <span class="k-cur"><i class="k-i k-i-coin"></i>40</span>
         </div>
       </div>
     </section>
 
-    <section class="k-panel w">
+    <section id="cards" class="k-panel w">
       <header class="k-head">
         <i class="k-i k-i-more"></i>
         <h2 class="k-title">Cards</h2>

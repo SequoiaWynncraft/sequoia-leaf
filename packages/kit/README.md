@@ -1,10 +1,10 @@
 # The kit
 
 The look and the plumbing every part of the guild's game shares, so the town and the games in it
-read as one thing: the Minecraft font and a reading face beside it, the dusk palette, one card for
-anything to explain itself, wooden frames and buttons drawn as pixel
-art, the tools for drawing sprites in code, the member's character from their skin, the sounds, the
-one purse, and finding out whether the game is being played on the guild's own server.
+read as one thing: dark plum surfaces in steps, pixel-art frames that say what a thing is, buttons
+whose colour says what they do, two faces, one card for anything to explain itself, the tools for
+drawing sprites in code, the member's character from their skin, the sounds, the one purse, and
+finding out whether the game is being played on the guild's own server.
 
 ```html
 <link rel="stylesheet" href="../../packages/kit/src/kit.css" />
@@ -21,54 +21,77 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
 ## The look, in short
 
 - **Units.** Everything is sized in `--u`, one art pixel of the interface: two CSS pixels, three on
-  a very large window. Write sizes as `calc(var(--u) * n)` and frames and letters stay on whole
-  pixels.
-- **Letters.** Two faces. The Minecraft font is for names, titles, numbers, buttons, chips and
-  small capital labels: it is drawn ten pixels to the em, so it is sharp at ten units and soft at
-  anything in between. Use `--t-m` (the usual size) for nearly everything, `--t-l` and `--t-xl`
-  for titles and `--t-s` for small capital labels (`k-label`); `k-name` is a thing's name, bold
-  and gold. Words that are read (a line about a thing, a role, a tip, a note) are in Inter, the
-  face the guild's website sets its body text in, at `--t-r` (14 pixels at the usual size):
-  class `k-read`, with `b` inside it bold. The second line under a name (`k-d`), a tip's words,
-  somebody speaking (`k-say`) and a page's paragraphs (`k-paper p`) are in it already; inside
-  them a title, label, chip, button or amount keeps the pixel font, and `k-pix` asks for it.
-  Avoid other sizes. On a canvas, `text.ts` writes in the pixel font; wait for `fontsReady()`
-  first.
-- **Colours.** `palette.ts` holds the ramps, and the stylesheet has the same colours as `--k-…`
-  variables. Art is drawn from these and nothing else; light comes from the upper left, and every
-  sprite has a one-pixel dark edge.
-- **Leaf is green.** Spending Leaf is always the green button (`k-btn leaf`) and Leaf amounts are
-  always the pale green, so the precious currency is never spent by surprise.
+  a very large window. Write sizes as `calc(var(--u) * n)` and frames stay on whole pixels.
+- **Darkness has steps.** The world is the picture. Over it a panel is near-black plum
+  (`--k-plum`), a well inside it darker (`--k-deep`), a raised thing lighter (`--k-mid`), and
+  `--k-ink` is the edge of everything. The brightest things on a screen are the frame of what
+  matters, the button to press and the title: a screenshot turned grey still shows those three.
+- **Frames say what a thing is.** A thin brass frame is a panel, a quiet plum one a plaque, and
+  five tier frames are for things that have a tier: stone, jade, sapphire, amethyst, gold, with a
+  jewel on each corner that grows with the tier and a crest on top from the third.
+- **A button's colour says what it does.** Gold confirms. Blue shows or hides. Green buys or
+  grows, and spending Leaf is always the green button (`leaf`). Wood is the plain button. Coral
+  leaves or removes. Slate is quiet. Only what can be pressed has a bevel: a tag is flat.
+- **Colour means one thing each.** Gold is Coins and the button that confirms, green is Leaf and
+  growth, coral is health and leaving. `--k-tier-1` to `--k-tier-5` are the tiers' colours.
+- **Letters.** Two faces. Jersey is for titles, names and buttons (`k-title`, `k-name`, `k-btn`).
+  It is a pixel face, sharp only at whole multiples of the size it is drawn at, and the number in
+  its name is the height of its capitals, not that size: Jersey 15 is 27 pixels to the em and
+  Jersey 20 is 34. So there are three sizes and no others: `--t-m` (27px, Jersey 15) for a name or
+  a button, `--t-l` (34px, Jersey 20) for a title, `--t-xl` (54px, Jersey 15 twice) for a large
+  one; `--k-font` is the face for the first and last and `--k-font-l` the one for `--t-l`, and on a
+  very large window the sizes are 34, 54 and 68 and the two faces change places. Give Jersey no
+  letter-spacing and no other size. Everything read, and every number, is Inter: the page's own
+  face at `--t-r` (14 pixels), bold for a name or a number (`b`, `k-pix`), lighter for a line that
+  is read (`k-read`, `k-d`), and `--t-s` for a small capital label (`k-label`). Words drawn on a
+  canvas in the world keep the Minecraft face (`text.ts`; wait for `fontsReady()` first).
+- **Paper stays paper.** A letter, speech and a lesson are cream paper with dark ink (`k-paper`,
+  `k-say`): what a character hands over. The frames are the interface.
 - **The town's own are marked.** Whoever lives in the game and is not a member (a keeper, a cat,
-  a gnome, a regular at the battler's table) has its name in that pale green with the small acorn
+  a gnome, a regular at the battler's table) has its name in pale green with the small acorn
   before it: `folkName(name)` on a page, `acornPicture()` and `FOLK_COLOUR` beside letters on a
-  canvas (`mark.ts`). A member's name is cream (`k-member` on a title).
+  canvas (`mark.ts`). A member's name is cream.
 
 ## The pieces (`src/kit.css`)
 
-| Class                                                                 | What it is                                                           |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `k-panel`, with `k-head` and `k-body`                                 | The big wooden frame; its title sits on a band of roof shingles      |
-| `k-plaque`                                                            | A thin wooden edge for small things over the world (purse, dock)     |
-| `k-card` (`lit`, `done`)                                              | A row or tile standing up from a panel; also works as a button       |
-| `k-slot` (`lit`)                                                      | A hollow that holds one thing; as a button, one of a row to choose   |
-| `k-paper`                                                             | A page: letters, notes, anything read like a sheet                   |
-| `k-say` (`left`)                                                      | Somebody speaking                                                    |
-| `k-tip` (`k-float`)                                                   | A one-line hint while pointing at a thing (`tip.ts` places it)       |
-| `k-info` (`pinned`, `sheet`), `k-thing`                               | A thing's card, and the small picture of a thing (`card.ts`)         |
-| `k-btn` (`wood`, `plum`, `leaf`, `coral`, `sm`, `icon`, `wide`)       | A button on its lip; gold is the main action                         |
-| `k-tabs`                                                              | A row of buttons where one is chosen (`aria-selected="true"`)        |
-| `k-i k-i-<name>`                                                      | A pixel icon; `--s` makes it larger by whole steps                   |
-| `k-cur` (`leaf`)                                                      | An amount of Leaf or Coins                                           |
-| `k-bar` (`leaf`, `coral`)                                             | How far along something is: `<div class="k-bar"><i style="--v:40%">` |
-| `k-chip` (`lit`)                                                      | A small tag                                                          |
-| `k-toast` (`leaf`, `coral`, `rose`, `alone`)                          | A line of news; `alone`, over the whole page at the top              |
-| `k-title`, `k-name`, `k-label`, `k-d`, `k-read`, `k-pix`, `k-dim`     | Words: titles, names, small labels, second lines, reading, pixel     |
-| `k-folk`, `k-member`                                                  | A name of the town's own (leaf green, the acorn first); a member's   |
-| `k-over`                                                              | Words written straight over the world, with a dark edge              |
-| `k-scrim`, `k-rise`, `k-row`, `k-col`, `k-wrap`, `k-grow`, `k-scroll` | Laying things out                                                    |
-| `k-shut`                                                              | The card a page shows instead of itself when it will not open        |
-| `k-wait`                                                              | Asked of Leaf, which is taking more than a moment (`waitingLook`)    |
+| Class                                                                                            | What it is                                                           |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `k-panel`, with `k-head` and `k-body`                                                            | The brass frame; its title has a brass rule under it                 |
+| `k-plaque`                                                                                       | The quiet plum frame for small things over the world (purse, dock)   |
+| `k-tier-1` to `k-tier-5`, with `k-crest` inside                                                  | A thing with a tier, in its tier's frame (below)                     |
+| `k-card` (`lit`, `done`)                                                                         | A row or tile standing up from a panel; also works as a button       |
+| `k-slot` (`lit`)                                                                                 | A hollow that holds one thing; as a button, one of a row to choose   |
+| `k-paper`                                                                                        | A page: letters, notes, anything read like a sheet                   |
+| `k-say` (`left`)                                                                                 | Somebody speaking                                                    |
+| `k-tip` (`k-float`)                                                                              | A one-line hint while pointing at a thing (`tip.ts` places it)       |
+| `k-info` (`pinned`, `sheet`), `k-thing`                                                          | A thing's card, and the small picture of a thing (`card.ts`)         |
+| `k-btn` (`blue`, `green`, `leaf`, `wood`, `coral`, `slate`, `plum`; `sm`, `icon`, `wide`, `off`) | A button; with no colour named it is gold                            |
+| `k-tabs`                                                                                         | A row of buttons where one is chosen (`aria-selected="true"`)        |
+| `k-i k-i-<name>`                                                                                 | A pixel icon; `--s` makes it larger by whole steps                   |
+| `k-cur` (`leaf`)                                                                                 | An amount of Coins or Leaf; on a button, what it costs               |
+| `k-bar` (`leaf`, `coral`)                                                                        | How far along something is: `<div class="k-bar"><i style="--v:40%">` |
+| `k-chip` (`lit`)                                                                                 | A small flat tag; a trait or a kind is a hexagon badge (below)       |
+| `k-toast` (`leaf`, `coral`, `rose`, `alone`)                                                     | A line of news; `alone`, over the whole page at the top              |
+| `k-title` (`big`), `k-name`, `k-label`, `k-d`, `k-read`, `k-pix`, `k-dim`                        | Words: titles, names, small labels, second lines, reading, bold      |
+| `k-folk`                                                                                         | A name of the town's own (leaf green, the acorn first)               |
+| `k-over`                                                                                         | Words written straight over the world, with a dark edge              |
+| `k-scrim`, `k-rise`, `k-row`, `k-col`, `k-wrap`, `k-grow`, `k-scroll`                            | Laying things out                                                    |
+| `k-shut`                                                                                         | The card a page shows instead of itself when it will not open        |
+| `k-wait`                                                                                         | Asked of Leaf, which is taking more than a moment (`waitingLook`)    |
+
+**A tier's frame** is drawn over what it holds, so a picture that fills the thing does not cut into
+its jewels; that takes the thing's `::after`, so the thing must not scroll itself (put what scrolls
+inside it) and is at least 18 units each way. `--k-fill` is what is behind it (the panel's plum with
+a glow of the tier's colour at the top, unless said), and `--k-tier` is the tier's colour for
+whatever inside wants it. `<i class="k-crest"></i>` inside a thing of the third tier or above is
+its crest; in the first two it shows nothing.
+
+**A panel's frame and a plaque's** are the same shape, so a plaque that is to be picked out can
+take the panel's picture: `border-image-source: var(--k-f-panel)`.
+
+**A chip** that starts with a canvas (a trait's or a kind's own picture) wears it as a hexagon
+badge with its name beside it; `--c` on the chip is the badge's colour. Any other chip is a flat
+tag.
 
 The frames and icons are drawn in `tools/frames.ts` as rows of letters and written into
 `src/frames.css` as small pictures (`bun run frames`); add a frame or an icon there.
