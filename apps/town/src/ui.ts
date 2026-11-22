@@ -156,14 +156,10 @@ function treasury(body: HTMLElement): null {
           ? ""
           : button(
               `leaf sm${asking(key) ? " asking" : ""}`,
-              // With what it is for written, a tome's button says what pressing it does.
-              [
-                asksAgain(
-                  key,
-                  kind === "tome" && writing ? ["Buy", glyph("leaf"), leafText(cost)] : [glyph("leaf"), leafText(cost)],
-                  "Buy?",
-                ),
-              ],
+              // A tome is not asked for twice: with what it is for written, its button says what pressing it does.
+              kind === "tome"
+                ? [writing ? "Buy" : null, glyph("leaf"), leafText(cost)]
+                : [asksAgain(key, [glyph("leaf"), leafText(cost)], "Buy?")],
               (b) => {
                 press(kind, b);
               },
