@@ -550,8 +550,29 @@ const lines: string[] = [
   "/* Made by tools/frames.ts (bun run frames). Change the drawings there, not here. */",
   ":root {",
 ];
+/** Roof shingles, as on every building in town: the band a panel's title sits on. */
+function shingles(): Grid {
+  const g = blank(24, 12);
+  for (let y = 0; y < 12; y++)
+    for (let x = 0; x < 24; x++) {
+      const lx = (x + (y >= 6 ? 6 : 0)) % 12;
+      const ly = y % 6;
+      put(g, x, y, ly === 5 || lx === 11 ? SKY[0] : ly === 0 ? SKY[2] : SKY[1]);
+    }
+  // A few shingles catch the light.
+  for (const [x, y, len] of [
+    [1, 1, 3],
+    [14, 1, 2],
+    [8, 7, 3],
+    [20, 7, 2],
+  ] as const)
+    for (let i = 0; i < len; i++) put(g, x + i, y, SKY[3]);
+  return g;
+}
+
 const frames: Readonly<Record<string, Grid>> = {
   panel: panel(),
+  shingles: shingles(),
   plaque: plaque(),
   ...Object.fromEntries(TIERS.map((t, i) => [`tier-${i + 1}`, tier(t)])),
   "crest-3": crest(TIERS[2][1]),
