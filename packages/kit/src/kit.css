@@ -144,7 +144,6 @@ img.k-px {
 .k-read,
 .k-d,
 .k-tip,
-.k-say,
 .k-paper p {
   font: 500 var(--t-r) / 1.4 var(--k-font-read);
 }
@@ -152,9 +151,10 @@ img.k-px {
 .k-d {
   color: var(--k-dim);
 }
-/* A name or a number among words that are read. */
+/* Somebody's name among words that are read: in the pixel face, sitting on the same line as the words. */
 .k-pix {
-  font-weight: 700;
+  font: 700 var(--t-m) / 1 var(--k-font);
+  vertical-align: baseline;
 }
 .k-label {
   font: 700 var(--t-s) / 1.3 var(--k-font-read);
@@ -406,13 +406,21 @@ button.k-slot:hover {
   background: repeating-linear-gradient(90deg, #c9aa72 0 calc(var(--u) * 2), transparent 0 calc(var(--u) * 4));
 }
 
-/* Somebody speaking. */
+/* Somebody speaking: in the pixel face, as speech over a head in the world is. Who it is comes first, on a line of its own. */
 .k-say {
   position: relative;
   border: calc(var(--u) * 3) solid transparent;
   border-image: var(--k-f-bubble) 3 fill;
-  padding: var(--u) calc(var(--u) * 3);
+  padding: calc(var(--u) * 2) calc(var(--u) * 4);
   color: var(--k-ink);
+  font: 400 var(--t-m) / 1.2 var(--k-font);
+}
+.k-say :is(b, .k-pix, .k-folk):first-child {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  margin-bottom: var(--u);
+  font-weight: 700;
 }
 .k-say::after {
   content: "";
@@ -990,8 +998,10 @@ button.k-info-chip:hover .k-chip {
 }
 
 /* A line of news that says itself once and goes. */
+/* A line of what has just happened: in the pixel face, as everything the world says is. */
 .k-toast {
   padding: calc(var(--u) * 2) calc(var(--u) * 4);
+  font: 400 var(--t-m) / 1.2 var(--k-font);
   background: #0b0710e6;
   box-shadow: inset calc(var(--u) * 2) 0 0 var(--k-gold);
   animation: k-toast-in 0.3s;
