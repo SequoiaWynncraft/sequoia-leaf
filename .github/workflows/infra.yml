@@ -1,7 +1,7 @@
 name: Infrastructure
 
 # infra/ is what production should be. A pull request shows what merging it
-# would change, a merge to main makes the change, and once a day a plan checks
+# would change, a merge to main makes the change, and once a week a plan checks
 # that nobody changed production by hand. Running it by hand on main applies
 # main again, which undoes such a change.
 on:
@@ -11,7 +11,7 @@ on:
     branches: [main]
     paths: ["infra/**", ".github/workflows/infra.yml", "mise.toml"]
   schedule:
-    - cron: "41 5 * * *"
+    - cron: "41 5 * * 1"
   workflow_dispatch:
 
 permissions:

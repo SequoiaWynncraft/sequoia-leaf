@@ -25,7 +25,7 @@ The `Infrastructure` workflow (`.github/workflows/infra.yml`) runs OpenTofu:
   applying would change in the run's summary. Read it before merging.
 - **On a merge to `main`**, it plans again and applies that plan. Applies run
   one at a time.
-- **Every day at 05:41 UTC**, it plans `main`. When production differs, for
+- **Every Monday at 05:41 UTC**, it plans `main`. When production differs, for
   example after a change made by hand in Coolify, the run fails and the plan
   shows the difference. Either put the change into `infra/` through a pull
   request, or undo it by running the workflow by hand on `main`, which applies
