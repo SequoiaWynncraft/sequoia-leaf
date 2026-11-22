@@ -47,6 +47,8 @@ export interface Here {
   own(x: number, y: number): boolean;
   ownAt(x: number, y: number): Hover | null;
   props(): readonly Prop[];
+  /** How a thing standing is touched, if not by its own `tap`. */
+  touch?(p: Prop, x: number, y: number): void;
   /** A touch above the far hedge: says whether the point was sky. */
   sky(x: number, y: number): boolean;
   /** Whether the member may move about. */
@@ -143,7 +145,8 @@ export function makeTouch(here: Here) {
 
   /** A thing standing is touched: it answers, and if it is part of a door the member goes there. */
   function touched(p: Prop, x: number, y: number): false {
-    p.tap?.(p, x, y);
+    if (here.touch) here.touch(p, x, y);
+    else p.tap?.(p, x, y, true);
     const d = here.doors().find((o) => o.id === p.place);
     if (d) go(d);
     return false;

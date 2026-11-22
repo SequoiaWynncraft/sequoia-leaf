@@ -743,7 +743,7 @@ Text frames are JSON with a `t`:
 | ---- | --------- | ------------------------------------------------------------------------------------------------------------------ |
 | game | `join`    | `room`: moves to a room of that kind on the open connection, leaving the other; in one of that kind, greets again. |
 | game | `leave`   |                                                                                                                    |
-| game | `act`     | `kind` and `arg`, one of `ACTS` in core (an emote: `wave`, `cheer`, ...). Nothing else is passed on.               |
+| game | `act`     | `kind` and `arg`, one of `ACTS` in core (an emote: `wave`, ...; a touch on a thing in town: `post:174,100`).       |
 | game | `ping`    | `c`: the game's clock.                                                                                             |
 | Leaf | `welcome` | `v`, `you` (the player's number in the room), `room` (with its copy: `town/1`), `hz`, `time`, `roster`             |
 | Leaf | `joined`  | `member`: `{ id, player, name, rank, guest }`                                                                      |

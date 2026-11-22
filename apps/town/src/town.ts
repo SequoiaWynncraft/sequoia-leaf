@@ -3,10 +3,10 @@
  * touched, and the parts that never keep still (the fire, the belt, the banner, the lanterns, the crabs).
  */
 
-import { DAILY_CHEST } from "@sequoia-leaf/core";
+import { DAILY_CHEST, type Thing } from "@sequoia-leaf/core";
 import { BARK, CREAM, EARTH, GOLD, GREEN, INK, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { ell, R } from "@sequoia-leaf/kit/pix.ts";
-import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
+import { hush, noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, lerp, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
 import { LOST_CRAB } from "@sequoia-leaf/town/catalogue.ts";
 import { waiting } from "@sequoia-leaf/town/mail.ts";
@@ -14,15 +14,16 @@ import { waiting } from "@sequoia-leaf/town/mail.ts";
 import { goSit, onScreen } from "./actors.ts";
 import { unread } from "./board.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
-import { G, hooks } from "./game.ts";
+import { type Actor, G, hooks } from "./game.ts";
 import { GROUND, paintTrunk } from "./ground.ts";
 import { ask, doNow, mine, ok, town } from "./leaf.ts";
-import { flame, type Light, makeProp, type Prop, type Standing } from "./props.ts";
+import { flame, type Light, makeProp, type Prop, propUnder, type Standing } from "./props.ts";
 import { BOARD, type Sprite, type Sprites } from "./sprites.ts";
 import { type Strand, STRINGS, wire } from "./strings.ts";
 import {
   BUILDINGS,
   GROVE,
+  hedgeY,
   place,
   type PlaceId,
   pondD,
@@ -40,7 +41,7 @@ export const lights: Light[] = [];
 let S: Sprites | null = null;
 const random = rng(20261120);
 
-function add(kind: string, sprite: Sprite | null, x: number, y: number, o: Partial<Prop> = {}): Prop {
+function add(kind: Thing, sprite: Sprite | null, x: number, y: number, o: Partial<Prop> = {}): Prop {
   const p = makeProp(kind, sprite, x, y, o);
   props.push(p);
   return p;
@@ -211,15 +212,16 @@ interface Str {
   bulbs: { x: number; y: number; c: number }[];
   chase: number;
 }
-const strings: Str[] = [];
 const BULBS = [GOLD[2], SKY[5], CREAM, SKY[4]] as const;
 
-/** Hangs a string of lights, with a bulb on every seventh pixel of its wire from the fourth. */
-function strung(s: Strand): void {
+/** A string of lights, with a bulb on every seventh pixel of its wire from the fourth. */
+function strung(s: Strand): Str {
   const w = wire(s);
   const bulbs = w.filter((_, i) => i % 7 === 3).map((p, k) => ({ x: p.x, y: p.y + 1, c: k % BULBS.length }));
-  strings.push({ wire: w, bulbs, chase: -9 });
+  return { wire: w, bulbs, chase: -9 };
 }
+/** The strings of lights, slung between the shops, the gate, the posts and the great trunks. */
+const strings: Str[] = STRINGS.map(strung);
 
 // ---------- what touching things does ----------
 
@@ -298,18 +300,21 @@ function tapPost(p: Prop, l: Light): void {
   burst(l.x, l.y, 5, [GOLD[2], CREAM], 26);
 }
 
-function tapChest(p: Prop): void {
+function tapChest(p: Prop, _x: number, _y: number, own: boolean): void {
   nudge(p);
   chest.openUntil = G.t + 1.4;
   sparkle(p.x, p.y - 8, 8, 5);
   sfx.coin(2);
-  // Once a UTC day, which Leaf keeps: opened again, it is only a chest.
-  void (async () => {
-    if (ok(await ask({ do: "openChest" }))) float(p.x, p.y - 16, `+${DAILY_CHEST} Coins`, GOLD[1]);
-  })();
+  // The member's present, once a UTC day, which Leaf keeps: opened again, it is only a chest.
+  if (own)
+    void (async () => {
+      if (ok(await ask({ do: "openChest" }))) float(p.x, p.y - 16, `+${DAILY_CHEST} Coins`, GOLD[1]);
+    })();
 }
 
-function tapSeat(wx: number, wy: number): void {
+/** The member sits on the free seat nearest the point, if there is one; nobody else sees a touch on a seat. */
+function tapSeat(_p: Prop, wx: number, wy: number, own: boolean): void {
+  if (!own) return;
   let best = null;
   let bd = 20;
   for (const s of SEATS) {
@@ -378,14 +383,14 @@ export function lightTable(lit: boolean): void {
 }
 
 /** Touching the water: rings spread from the spot, and the crabs take notice. */
-export function tapWater(wx: number, wy: number): void {
+function tapWater(wx: number, wy: number): void {
   ring(wx, wy, WATER[3], 13, true);
   ring(wx, wy, WATER[2], 8, true);
   sfx.plop();
   for (const c of crabs) if (!c.lost && dist(c.x, c.y, wx, wy) < 44) c.hop = 0.3;
 }
 
-export function tapSky(wx: number, wy: number): void {
+function tapSky(wx: number, wy: number): void {
   sfx.star();
   for (let i = 0; i < 14; i++)
     bit({
@@ -408,18 +413,14 @@ export function twinkleAll(): void {
   for (const l of lights) l.boost = Math.max(l.boost, 0.6);
 }
 
-/** Lights the string nearest a point, if one hangs there. */
-export function tapString(wx: number, wy: number): boolean {
-  for (const s of strings) {
-    if (!s.bulbs.some((b) => dist(b.x, b.y, wx, wy) < 5)) continue;
-    s.chase = G.t;
-    sfx.twinkle();
-    return true;
-  }
-  return false;
-}
+/** The string of lights with a bulb by a point, if one hangs there. */
+const stringAt = (wx: number, wy: number): Str | undefined =>
+  strings.find((s) => s.bulbs.some((b) => dist(b.x, b.y, wx, wy) < 5));
 
-export function tapCrab(c: Crab): void {
+/** A crab hops and clacks; crab No. 7 bolts, and is counted only for the member who found it. */
+function tapCrab(c: Crab, own: boolean): void {
+  // Running off already: it runs on.
+  if (c.bolt > 0) return;
   c.hop = 0.3;
   c.clack = 0.5;
   sfx.clack();
@@ -427,6 +428,9 @@ export function tapCrab(c: Crab): void {
     float(c.x, c.y - 12, `No. ${c.n}`, CREAM, 1.2);
     return;
   }
+  // Each page hides No. 7 in a place of its own, so somebody else's touch on theirs does not
+  // scare this one off from under the member's hand.
+  if (!own) return;
   // Counted once in five seconds, which Leaf keeps: it bolts either way.
   if (ok(doNow({ do: "spotCrab" }))) {
     float(c.x, c.y - 14, QUIPS[town().sightings % QUIPS.length] ?? "", SKY[5], 2.2);
@@ -436,23 +440,80 @@ export function tapCrab(c: Crab): void {
   puff(c.x, c.y, 5, EARTH[2]);
 }
 
-/** A crab picked out by its number: it hops and clacks, if it is at home. Says whether it was. */
-export function nudgeCrab(n: number): boolean {
-  const c = crabs.find((k) => k.n === n);
-  if (!c || c.lost) {
-    sfx.cricket();
-    return false;
-  }
-  c.hop = 0.3;
-  c.clack = 0.5;
-  sfx.clack();
-  float(c.x, c.y - 12, `No. ${c.n}`, CREAM, 1.2);
-  return true;
-}
-
 export function crabAt(wx: number, wy: number): Crab | null {
   for (const c of crabs) if (c.bolt === 0 && Math.abs(wx - c.x) < 8 && wy > c.y - 11 && wy < c.y + 4) return c;
   return null;
+}
+
+// ---------- a touch, by its name ----------
+
+/**
+ * A touch's name: what was touched (core's `THINGS`) and the point on it in whole pixels, as
+ * `post:96,150`, or its number, as `crab:3`, or neither, as `roll`.
+ */
+export const thingName = (what: string, ...at: readonly number[]): string =>
+  at.length > 0 ? `${what}:${at.map(Math.floor).join(",")}` : what;
+
+/** A log on the fire is a touch on it. */
+export const LOG = thingName("fire", fire.x, fire.y - 6);
+
+/** The thing a touch's name means: where it is, and what it does, told whether the touch was the member's own. */
+export interface Touched {
+  x: number;
+  y: number;
+  play(own: boolean): void;
+}
+
+/**
+ * What a touch's name means: the thing standing of that kind under its point, the water, the sky or
+ * a string of lights at its point, a crab by its number, or the roll call. Everything here stands
+ * where it does on every page, so a name means the same on each. Null for a name that means
+ * nothing here.
+ */
+export function touchedBy(name: string): Touched | null {
+  const [what = "", where = ""] = name.split(":");
+  if (what === "roll") return { x: 400, y: 290, play: rollCall };
+  const [x = NaN, y = NaN] = where.split(",").map(Number);
+  const c = what === "crab" ? crabs.find((k) => k.n === x) : undefined;
+  if (c) return { x: c.x, y: c.y, play: (own) => tapCrab(c, own) };
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return null;
+  const at = (play: () => void): Touched => ({ x, y, play });
+  const s = what === "lights" ? stringAt(x, y) : undefined;
+  if (s)
+    return at(() => {
+      s.chase = G.t;
+      sfx.twinkle();
+    });
+  if (what === "water") return pondD(x, y) < 1 ? at(() => tapWater(x, y)) : null;
+  if (what === "sky") return y < hedgeY(x) ? at(() => tapSky(x, y)) : null;
+  const p = propUnder(
+    props.filter((q) => q.kind === what),
+    x,
+    y,
+  );
+  return p ? { x, y, play: (own) => p.tap?.(p, x, y, own) } : null;
+}
+
+/** The last touches played here, for `window.town`: each thing's name, and whether the member touched it. */
+export const lastTouches: { name: string; own: boolean }[] = [];
+
+/**
+ * Every touch on a thing in town comes here, by the thing's name (`touchedBy`): it answers on this
+ * page, and the member's own (`own`) is told to the room, so that it answers on every page there.
+ * One from the room is not told again, and is heard only if the thing is on the screen. Says
+ * whether the name meant anything here.
+ */
+export function touchThing(name: string, own = true): boolean {
+  const t = touchedBy(name);
+  if (!t) return false;
+  // A page put away draws nothing: what others touch meanwhile is over before it is looked at again.
+  if (!own && typeof document !== "undefined" && document.hidden) return true;
+  if (own || onScreen(t.x, t.y)) t.play(own);
+  else hush(() => t.play(own));
+  if (own) hooks.tell(name);
+  lastTouches.push({ name, own });
+  if (lastTouches.length > 20) lastTouches.shift();
+  return true;
 }
 
 // ---------- the guild's moments ----------
@@ -484,19 +545,14 @@ export function raiseBanner(name: string): void {
   banner.flutter = 1;
 }
 
-/** Every crab in the pond answers in turn; one does not. Returns how long the roll takes. */
-export function rollCall(): number {
-  let at = 0;
-  for (let n = 1; n <= 9; n++) {
-    const c = crabs.find((k) => k.n === n);
-    if (!c) continue;
-    const when = at;
-    calls.push({ at: G.t + when, n });
-    at += 0.38;
-  }
-  return at;
+/**
+ * Every crab in the pond answers in turn; one does not. Called by another player, each is heard
+ * only if it is on the screen.
+ */
+function rollCall(own: boolean): void {
+  crabs.forEach((c, i) => calls.push({ at: G.t + i * 0.38, n: c.n, own }));
 }
-const calls: { at: number; n: number }[] = [];
+const calls: { at: number; n: number; own: boolean }[] = [];
 
 // ---------- building it ----------
 
@@ -641,9 +697,9 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     add("stall", st, x, y, {
       place: "market",
       tip: tipOf("market"),
-      tap: (p) => {
+      tap: (p, _x, _y, own) => {
         sfx.pluck(2 + i * 2);
-        G.stall = i;
+        if (own) G.stall = i;
         nudge(p);
       },
     });
@@ -667,7 +723,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
   });
   shadow(ground, table.x, table.y + 1, 24, 4);
   for (const x of [431, 457]) {
-    add("seat", s.shortLog, x, 217, { tap: (_p, wx, wy) => tapSeat(wx, wy) });
+    add("seat", s.shortLog, x, 217, { tap: tapSeat });
     shadow(ground, x, 218, 8, 2);
   }
 
@@ -689,12 +745,12 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     hit: { x: 244, y: 196, w: 24, h: 24 },
     extra: drawFire,
   });
-  add("seat", s.log, 256, 200, { tap: (_p, wx, wy) => tapSeat(wx, wy) });
-  add("seat", s.log, 256, 240, { tap: (_p, wx, wy) => tapSeat(wx, wy) });
-  add("seat", s.stump, 220, 216, { tap: (_p, wx, wy) => tapSeat(wx, wy) });
-  add("seat", s.stump, 292, 216, { tap: (_p, wx, wy) => tapSeat(wx, wy) });
-  add("seat", s.bench, 120, 312, { tap: (_p, wx, wy) => tapSeat(wx, wy) });
-  add("seat", s.bench, WORKS_BENCH.x, WORKS_BENCH.y, { tap: (_p, wx, wy) => tapSeat(wx, wy) });
+  add("seat", s.log, 256, 200, { tap: tapSeat });
+  add("seat", s.log, 256, 240, { tap: tapSeat });
+  add("seat", s.stump, 220, 216, { tap: tapSeat });
+  add("seat", s.stump, 292, 216, { tap: tapSeat });
+  add("seat", s.bench, 120, 312, { tap: tapSeat });
+  add("seat", s.bench, WORKS_BENCH.x, WORKS_BENCH.y, { tap: tapSeat });
   shadow(ground, 256, 201, 18, 3);
   shadow(ground, 256, 241, 18, 3);
   shadow(ground, 120, 313, 15, 2);
@@ -842,9 +898,6 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     const y = 262 + random() * 64;
     if (pondD(x, y) < -5) glints.push({ x: Math.round(x), y: Math.round(y), ph: random() * 6.28 });
   }
-
-  // Strings of lights, slung between the shops, the gate, the posts and the great trunks.
-  for (const st of STRINGS) strung(st);
 }
 
 function hideCrab(i: number): void {
@@ -882,30 +935,32 @@ let emberIn = 0;
 let driftIn = 2;
 let cricketIn = 5;
 
-/** Small things stir as the player goes by: flowers nod, crabs edge away, a lamp brightens. */
-function brushPast(): void {
-  const p = G.player;
-  if (!p || !p.moving) return;
-  for (const q of props) {
-    if (Math.abs(q.x - p.x) > 16 || Math.abs(q.y - p.y) > 30) continue;
-    if (q.kind === "post") {
-      const l = lamps.get(q);
-      if (l) l.boost = Math.max(l.boost, 0.4);
-    } else if ((q.kind === "flower" || q.kind === "fern" || q.kind === "reeds") && G.t - q.bumpAt > 1.2) {
-      if (Math.abs(q.x - p.x) < 5 && Math.abs(q.y - p.y) < 4) q.bumpAt = G.t;
+/** Small things stir as anybody goes by (`walkers`): flowers nod, crabs edge away, a lamp brightens. */
+function brushPast(walkers: readonly Actor[]): void {
+  for (const p of walkers) {
+    if (!p.moving || p.away) continue;
+    for (const q of props) {
+      if (Math.abs(q.x - p.x) > 16 || Math.abs(q.y - p.y) > 30) continue;
+      if (q.kind === "post") {
+        const l = lamps.get(q);
+        if (l) l.boost = Math.max(l.boost, 0.4);
+      } else if ((q.kind === "flower" || q.kind === "fern" || q.kind === "reeds") && G.t - q.bumpAt > 1.2) {
+        if (Math.abs(q.x - p.x) < 5 && Math.abs(q.y - p.y) < 4) q.bumpAt = G.t;
+      }
     }
-  }
-  for (const c of crabs) {
-    if (c.lost || c.bolt > 0 || dist(c.x, c.y, p.x, p.y) > 18) continue;
-    c.tx = c.hx + (c.hx >= p.x ? 1 : -1) * (c.perched ? 2 : 9);
-    c.wait = 2.2;
+    for (const c of crabs) {
+      if (c.lost || c.bolt > 0 || dist(c.x, c.y, p.x, p.y) > 18) continue;
+      c.tx = c.hx + (c.hx >= p.x ? 1 : -1) * (c.perched ? 2 : 9);
+      c.wait = 2.2;
+    }
   }
 }
 const lamps = new Map<Prop, Light>();
 
-export function stepTown(dt: number): void {
+/** The town, `dt` seconds on; `walkers` are everybody walking about: the member and the other players. */
+export function stepTown(dt: number, walkers: readonly Actor[]): void {
   for (const l of lights) l.boost = Math.max(0, l.boost - dt * 1.4);
-  brushPast();
+  brushPast(walkers);
 
   // The fire.
   fire.boost = Math.max(0, fire.boost - dt * 0.7);
@@ -1010,13 +1065,14 @@ export function stepTown(dt: number): void {
     calls.splice(i, 1);
     const c = crabs.find((k) => k.n === call.n);
     if (!c) continue;
+    const loud = call.own || onScreen(c.x, c.y);
     if (c.lost) {
-      sfx.cricket();
+      if (loud) sfx.cricket();
       float(400, 272, `No. ${c.n}?  ...`, SKY[5], 1.6);
     } else {
       c.hop = 0.3;
       c.clack = 0.35;
-      sfx.clack();
+      if (loud) sfx.clack();
       float(c.x, c.y - 10, `${c.n}`, CREAM, 0.9);
     }
   }

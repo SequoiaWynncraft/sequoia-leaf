@@ -120,6 +120,15 @@ says so.
   something when tapped, with a sound. Pointing at a thing whose meaning is not plain (or keeping
   a finger on it) says what it is. One crab is never at roll call; it is hiding somewhere in town,
   and runs when found. Leaf counts a sighting at most once in five seconds.
+- **Every touch is seen** (`touchThing` in `town.ts`). Each touch on a thing, a tap on a crab's tile
+  or the roll called at the pond, a log on the fire, goes through one place by the thing's name:
+  its kind and the point on it (`post:174,100`, `water:404,295`), a crab's number (`crab:3`), or
+  `roll`. It answers on the member's page and is told to the room, which passes it to every other
+  page there; each plays the same answer from the name, and its sound only if the thing is on the
+  screen. The town stands the same on every page, so a name means the same thing on each. What a
+  touch does for the member alone stays theirs: the walk to a door and its card, the chest's
+  present, a seat, the stall chosen, crab No. 7 counted. Lamps, flowers and crabs stir as any
+  player walks by.
 
 ## What is in the camp
 

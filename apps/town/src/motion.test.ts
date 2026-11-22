@@ -227,7 +227,7 @@ async function inTown() {
   const statuses: LiveStatus[] = [];
   const company = new Company<string>((m) => `figure of ${m.name}`, {
     emote: (f: Fellow<string>, kind: Emote) => emotes.push(`${f.who.name} ${kind}`),
-    log: () => emotes.push("a log on the fire"),
+    touch: (name) => emotes.push(`a touch on ${name}`),
     status: (s) => statuses.push(s),
   });
   const room = joinLive("town", company.ears);
@@ -309,16 +309,16 @@ describe("an emote", () => {
     expect(emotes).toEqual(["Alice cheer"]);
   });
 
-  test("a log put on the fire goes to the room, and one from somebody else is heard", async () => {
+  test("a touch goes to the room by the thing's name, and one from somebody else in it is heard", async () => {
     const { room, s, emotes, now } = await inTown();
     s.says(welcome(1, now, [me(1), ALICE]));
-    room.act("fire", "log");
-    expect(s.texts().filter((m) => m.t === "act")).toEqual([{ t: "act", kind: "fire", arg: "log" }]);
-    s.says({ t: "act", id: 2, kind: "fire", arg: "log" });
-    // From nobody in the room, or not a log: nothing.
-    s.says({ t: "act", id: 9, kind: "fire", arg: "log" });
-    s.says({ t: "act", id: 2, kind: "fire", arg: "water" });
-    expect(emotes).toEqual(["a log on the fire"]);
+    room.act("touch", "post:174,110");
+    expect(s.texts().filter((m) => m.t === "act")).toEqual([{ t: "act", kind: "touch", arg: "post:174,110" }]);
+    // Heard before Alice is drawn: a touch needs nobody to see hop.
+    s.says({ t: "act", id: 2, kind: "touch", arg: "crab:3" });
+    // From nobody in the room: nothing.
+    s.says({ t: "act", id: 9, kind: "touch", arg: "roll" });
+    expect(emotes).toEqual(["a touch on crab:3"]);
   });
 });
 

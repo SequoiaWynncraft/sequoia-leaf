@@ -144,4 +144,11 @@ describe("actions", () => {
       false,
     ]);
   });
+
+  test("a touch names one of the town's things, and the point on it, its number, or neither", () => {
+    const good = ["post:174,100", "sky:256,-41", "crab:3", "roll", "fire:256,206"];
+    expect(good.map((n) => isAct("touch", n))).toEqual([true, true, true, true, true]);
+    const bad = ["", "you_are_dumb:1,2", "post:", "post:1,2,3", "post:1000,5", "post: 1,2", "crab:3e2", "roll\n"];
+    expect(bad.map((n) => isAct("touch", n))).toEqual(bad.map(() => false));
+  });
 });

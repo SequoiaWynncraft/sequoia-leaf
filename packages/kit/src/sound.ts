@@ -7,6 +7,8 @@ let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let hiss: AudioBuffer | null = null;
 let muted = false;
+/** Inside `hush`: nothing plays. */
+let hushed = false;
 
 try {
   muted = localStorage.getItem("town.muted") === "1";
@@ -46,6 +48,17 @@ export function setMuted(m: boolean): void {
   }
 }
 
+/** Does `f` without a sound: whatever it plays is not heard. */
+export function hush(f: () => void): void {
+  const was = hushed;
+  hushed = true;
+  try {
+    f();
+  } finally {
+    hushed = was;
+  }
+}
+
 export interface Tone {
   type?: OscillatorType;
   vol?: number;
@@ -57,7 +70,7 @@ export interface Tone {
 }
 
 export function tone(freq: number, dur: number, o: Tone = {}): void {
-  if (!ctx || !master || muted) return;
+  if (!ctx || !master || muted || hushed) return;
   const t0 = ctx.currentTime + (o.at ?? 0);
   const osc = ctx.createOscillator();
   const g = ctx.createGain();
@@ -79,7 +92,7 @@ export function noise(
   freq: number,
   o: { vol?: number; at?: number; slide?: number; q?: number } = {},
 ): void {
-  if (!ctx || !master || !hiss || muted) return;
+  if (!ctx || !master || !hiss || muted || hushed) return;
   const t0 = ctx.currentTime + (o.at ?? 0);
   const src = ctx.createBufferSource();
   src.buffer = hiss;

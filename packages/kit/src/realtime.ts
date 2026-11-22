@@ -267,6 +267,9 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
   let link: Link | null = null;
   let shown: Link | null = null;
   let done = member() === null;
+  /** How many acts may be sent now, and when that was last counted. */
+  let acts = 5;
+  let actedAt = outside.now();
   // Since the last welcome: when the connection went down, how many tries since, how many in a row
   // did not open, and when the last one began.
   let downSince: number | null = null;
@@ -514,7 +517,14 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       want({ ...step, jump: jumped ? (jump + 1) & 0xff : jump });
     },
     act(kind, arg) {
-      if (link && shown === link) say(link, { t: "act", kind, arg });
+      // Held a little under what Leaf allows (3 a second, 6 at once): one it would refuse is not
+      // sent, so tapping away at a thing costs the player nothing with Leaf.
+      const now = outside.now();
+      acts = Math.min(5, acts + ((now - actedAt) / 1000) * 2.5);
+      actedAt = now;
+      if (acts < 1 || !link || shown !== link) return;
+      acts--;
+      say(link, { t: "act", kind, arg });
     },
     sample(id) {
       const l = shown;
