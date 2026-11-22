@@ -10,6 +10,7 @@ import { isFilled, ITEM, type News, type Standing, STORY } from "@sequoia-leaf/y
 
 import { flights, send, speak, toss, type Walker, walker, walkers } from "./actors.ts";
 import { TILE } from "./art/belts.ts";
+import { MARGIN } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { PIPWICK_HAT } from "./art/machines.ts";
 import { burst, sparkle } from "./fx.ts";
@@ -40,7 +41,8 @@ function spots(): { door: Pt; inside: Pt; outside: Pt; away: Pt } {
     door,
     inside: { x: L.gate.x, y: L.gate.y - 5 },
     outside: { x: L.gate.x, y: L.gate.y + 9 },
-    away: { x: L.gate.x, y: L.gate.y + 60 },
+    // Not past the edge of the picture, when the gate stands at the map's southern edge.
+    away: { x: L.gate.x, y: L.gate.y + MARGIN.b - 8 },
   };
 }
 
