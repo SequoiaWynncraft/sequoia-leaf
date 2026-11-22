@@ -15,7 +15,7 @@ export interface Note {
 export const NOTES: readonly Note[] = [
   {
     id: "works-area",
-    at: "2026-11-22T20:45Z",
+    at: "2026-11-22T20:59Z",
     title: "The Works: Select and blueprints",
     lines: [
       "The Works has a Select tool: mark out an area, then move, copy or remove every piece in it at once.",
