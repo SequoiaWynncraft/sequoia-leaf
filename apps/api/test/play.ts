@@ -24,7 +24,7 @@
  * script walks about the town takes their place there, and they stop.
  *
  * SIGTERM or Ctrl-C stops it as a deploy stops Leaf: live connections are told Leaf is
- * restarting (1012) before the server goes.
+ * restarting (1012), and event streams end, before the server goes.
  *
  * - `--guest`: Tester is signed in but not in the guild (any more), so they play as a guest.
  * - `--down`: the backend can't be asked who Tester is, so they answer 503.

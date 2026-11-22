@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { draftEntry, leaf, playerId } from "@sequoia-leaf/core";
-import { Effect, Layer } from "effect";
+import { Deferred, Effect, Fiber, Layer } from "effect";
 import { SqlClient } from "effect/sql";
 
 import { databaseAt } from "../src/db.ts";
@@ -89,6 +89,42 @@ describe("windowedSync", () => {
     expect(other.query("SELECT idempotency_key FROM ledger_entries").all()).toEqual([
       { idempotency_key: `raid:2:${alice}` },
     ]);
+  });
+
+  it("leaves nothing half written when Leaf's stop interrupts it mid-write: it rolls back and lets go of its lease", async () => {
+    await server(
+      Effect.gen(function* () {
+        yield* windowedSync("credits", T0, "recent", nothing, writeNothing);
+        const writing = yield* Deferred.make<void>();
+        const sync = yield* Effect.forkChild(
+          windowedSync("credits", T0 + MINUTE, "recent", nothing, () =>
+            Effect.gen(function* () {
+              const ledger = yield* Ledger;
+              yield* ledger.insert(
+                draftEntry({
+                  kind: "earn",
+                  playerId: alice,
+                  amount: leaf(110),
+                  source: "raid",
+                  idempotencyKey: `raid:1:${alice}`,
+                }),
+                T0 + MINUTE,
+              );
+              yield* Deferred.succeed(writing, undefined);
+              return yield* Effect.never;
+            }),
+          ),
+        );
+        yield* Deferred.await(writing);
+        yield* Fiber.interrupt(sync);
+      }),
+    );
+
+    expect(other.query("SELECT COUNT(*) AS n FROM ledger_entries").get()).toEqual({ n: 0 });
+    expect(other.query("SELECT cursor, locked_until FROM sync_state WHERE name = 'credits'").get()).toEqual({
+      cursor: T0,
+      locked_until: 0,
+    });
   });
 
   it("catches up after a gap longer than the feeds answer a window for, a window per run", async () => {

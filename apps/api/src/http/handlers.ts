@@ -854,10 +854,14 @@ const GameAdminHandlers = HttpApiBuilder.group(LeafApi, "gameAdmin", (handlers) 
   }),
 );
 
-/** The API's routes and the implementations of its middleware. */
+/**
+ * The API's routes and the implementations of its middleware, with the event streams they hold open,
+ * which Leaf's farewell ends when it stops.
+ */
 export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.json" }).pipe(
   Layer.provide([SystemHandlers, MeHandlers, GameHelloHandlers, GameHandlers, GameAdminHandlers]),
-  Layer.provide([OpenStreams.layer, GuildFeed.layer]),
+  Layer.provide(GuildFeed.layer),
+  Layer.provideMerge(OpenStreams.layer),
   Layer.provide([
     SessionLive,
     PlayerLive,
