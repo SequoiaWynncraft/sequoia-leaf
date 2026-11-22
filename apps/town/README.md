@@ -10,7 +10,7 @@ member's own camp.
 ```sh
 bun run dev      # with hot reload
 bun run build    # dist/
-bun test         # the rules: saving, the arrival letter, the made-up guild, the town's own, the camp, the mailbox, parcels, strings of lights tied at both ends, the town live
+bun test         # the rules: saving, the arrival letter, the made-up guild, the town's own, the camp, the mailbox, parcels, strings of lights tied at both ends, the town live, what a touch means
 ```
 
 To play as a real skin, put a 64x64 skin sheet at `dist/skins/player.png` after building (it is
@@ -30,8 +30,8 @@ and copies the test skin in one go.
 - **Places.** The Treasury (Cinfy behind the counter), the quest board, the market stalls, the
   Works (chimney, belt, crates, and a bench by the door), the great stump where The Little Raid is
   played, the campfire and its log seats, the crab pond, and the gate with the signpost to "Your
-  camp". Tap a place, or walk
-  up and press E, to open its panel; a prompt shows when the member is standing at one. The dock
+  camp". Tap a place or its prompt, walk on into it, or walk up and press E (or Enter), to open
+  its panel; a prompt shows when the member is standing at one. The dock
   along the bottom opens any of them at once, the character walks there meanwhile, and the slot
   for the place they are standing at is lit.
 - **The market.** Three stalls sell things for a camp, for Coins: lamps and oddments (kept by
@@ -87,10 +87,10 @@ and copies the test skin in one go.
 
 ## What is in the camp
 
-Walking on through the town's gate (or "Go home" on the gate's card) goes to the member's own camp.
+The town's gate goes to the member's own camp, any of the four ways (or "Go home" on the camp's card).
 Night closes in on them as they walk off, everything the lamps do not reach first and then the
 lamps; the camp's lamps and fire come up out of the dark first, and the night lifts on them walking
-in off the trail. Walking out past the two lantern posts on the camp's east side goes back.
+in off the trail. The trail between the two lantern posts on the camp's east side goes back, the same four ways.
 
 - **The place.** A small clearing at the same dusk, a little larger than a screen: a cabin, a fire
   ring with two log seats, a mailbox, a signpost, a trophy shelf, a lantern post, and room. The
@@ -326,6 +326,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/open.ts`                         | The front door: where the game is, the member's saves, then the town                    |
 | `src/main.ts`                         | The stage: canvas, camera, keys and fingers, the loop, the walk between places          |
 | `src/stage.ts`                        | What the stage asks of a scene, and a scene of the stage                                |
+| `src/touch.ts`                        | What a tap, the pointer, the key and the member's feet mean, in the town and in a camp  |
 | `src/townscene.ts`                    | The town as a scene: who is here, taps, getting about, going into games and to the camp |
 | `src/campscene.ts`                    | A camp as a scene: laying it out, who is there, taps, decorating, parcels, visiting     |
 | `src/grid.ts`                         | Ground to walk on: which squares are solid, and the way round them                      |
@@ -361,7 +362,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 `folk.ts`, `live.ts`, `news.ts`, `motion.ts` and `about.ts` have no page in them, and tests beside them
 (`motion.test.ts` plays Leaf's side of a live connection with the kit's stand-in socket); `folk.test.ts` also
 reads every file of the three games to check that nothing but members is drawn from a skin. `record.ts` has tests too,
-for what is sent to the camp.
+for what is sent to the camp, and so has `touch.ts`, for what a touch means.
 
 ## The games beside it
 
@@ -384,7 +385,7 @@ how the live connection is, `happen("raid" | "war" |
 through a door, `door()` says how far that has got, `leave()` comes back, `kept()` shows the record
 as it would be saved, `who()` says where each of the town's own is and what it is doing,
 `visitors()` says which real members are in town, where, and whether they are dozing, `where()` says which place is on and how dark the walk has got, `coins(n)` puts Coins in the purse for a tour that buys things (only with the made-up guild), and `page(x, y)` turns a
-point in the place that is on into a point on the page.
+point in the place that is on into a point on the page, and `prompt()` says where the prompt is on the page while it is up.
 
 `window.town.camp` is the same for camps: `go()` walks out of town to the member's camp, `town()`
 and `home()` walk back, `visit(name)` would go to somebody else's (there is none yet), `greet(n)`
@@ -411,6 +412,8 @@ one is missing, `remember.json` what survives a reload, `reactions.json` the thi
 touch. `camp.json` and `camp-phone.json` are the camp from the market to one of the town's own dropping
 by, greeted, the signpost and back, at 1280x760 and 390x844 (the phone's with a finger), `camp-remember.json` the camp across a
 reload, and `camp-things.json` (opened with `?sheet=camp`) the sheet of every thing.
+`gate.json` goes from the town to the camp and back each of the four ways (the prompt, the gate or the trail
+itself, walking on into it, the key), with a finger at 390x844 and the mouse and keys at 1280x760.
 `about.json` and `about-phone.json` are "Who is about" at 1280x760 and 390x844, on Leaf on this
 machine (`bun apps/api/test/play.ts 4000 /tmp/play --crowd 6`, opened at
 `http://127.0.0.1:4000/sign-in?return_to=http%3A%2F%2F127.0.0.1%3A4000%2Fplay%2Ftown%2F`): the

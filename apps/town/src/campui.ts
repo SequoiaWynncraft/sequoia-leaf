@@ -546,8 +546,8 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
           else s.go(id);
         },
       });
-      const trail = (id: string, name: string, about: string, icon: CampIcon) => ({
-        id,
+      const trail = (name: string, about: string, icon: CampIcon) => ({
+        id: "trail",
         name,
         about,
         art: campIcon(icon),
@@ -562,12 +562,12 @@ export function makeCampUi(art: CampArt, sprites: Sprites): CampUi & { bind(scen
               place("cabin", "Cabin", "What you wear, what you have won, who lives here.", "cabin"),
               place("mailbox", "Mailbox", "Notes and presents from the town's own.", "mailbox"),
               place("signpost", "Signpost", "The way to town.", "signpost"),
-              trail("town", "Town", "Back up the hill.", "town"),
+              trail("Town", "Back up the hill.", "town"),
             ]
           : [
               place("mailbox", "Leave a present", `Something small, for ${s.owner() ?? "them"}.`, "mailbox"),
               place("signpost", "Signpost", "Home, town, or another camp.", "signpost"),
-              trail("home", "Home", "Back to your own camp.", "home"),
+              trail("Home", "Back to your own camp.", "home"),
             ],
       );
       setFace(() => {

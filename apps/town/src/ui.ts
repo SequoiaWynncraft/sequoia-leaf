@@ -870,7 +870,7 @@ export function townDock(): void {
       art: icon(pl.id),
       press: (): void => {
         if (G.panel === pl.id) closePanel();
-        else hooks.visit(pl.id, true);
+        else hooks.visit(pl.id);
       },
     })),
   );

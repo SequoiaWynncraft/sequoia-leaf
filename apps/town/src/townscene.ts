@@ -6,37 +6,32 @@
 
 import type { Emote } from "@sequoia-leaf/kit/emotes.ts";
 import { where } from "@sequoia-leaf/kit/live.ts";
-import { GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { bake, type Body, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts";
-import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { initAbout, openAbout } from "./aboutui.ts";
 import {
   face,
-  headOf,
   hop,
   makeActor,
   makeFolk,
   placeFolk,
-  pushOf,
   release,
   rouse,
   say,
-  shove,
   sit,
   stepActor,
   stepFolk,
   walkTo,
 } from "./actors.ts";
 import type { CampArt } from "./campart.ts";
-import { drawPicture, drawWords, type Picture, show, sizeBuffers } from "./draw.ts";
+import { drawPicture, drawWords, type Picture, sizeBuffers } from "./draw.ts";
 import { beginEvents, stepEvents } from "./events.ts";
 import { flights, stepFlights } from "./flights.ts";
 import { FOLK, folk, KEEPER } from "./folk.ts";
 import { initFolkArt } from "./folkart.ts";
-import { ring, updateFx } from "./fx.ts";
-import { type Actor, after, changed, G, hooks, type PanelId } from "./game.ts";
+import { updateFx } from "./fx.ts";
+import { type Actor, after, changed, G, hooks, type PanelId, show } from "./game.ts";
 import { type GameId, isGame, worksWaiting } from "./games.ts";
 import { GROUND, NEAR, paintBackdrop, paintGround, paintNear, SKYLINE } from "./ground.ts";
 import { guild } from "./guild.ts";
@@ -62,7 +57,8 @@ import {
 import { camp, kept, remember } from "./record.ts";
 import { dayOf } from "./save.ts";
 import type { Sprites } from "./sprites.ts";
-import type { Hover, Scene, Stage, Steer } from "./stage.ts";
+import type { Scene, Stage } from "./stage.ts";
+import { type Door, makeTouch } from "./touch.ts";
 import {
   allLights,
   buildTown,
@@ -74,7 +70,6 @@ import {
   drawWater,
   lightTable,
   openDoor,
-  propAt,
   props,
   stepTown,
   table,
@@ -86,7 +81,7 @@ import {
 } from "./town.ts";
 import { dismissArrival, initUI, openPanel, showArrival, townDock } from "./ui.ts";
 import { isVisitor, members, stepVisitors } from "./visitors.ts";
-import { H, hedgeY, nearestFree, type Place, place, type PlaceId, PLACES, pondD, SEATS, W } from "./world.ts";
+import { H, hedgeY, place, type PlaceId, PLACES, pondD, SEATS, TOWN, W } from "./world.ts";
 
 /** Where the view closes in when the member goes into each game, and where they stand to go in. */
 const DOORWAY: Readonly<Record<GameId, Pt>> = {
@@ -161,7 +156,6 @@ export interface Town extends Scene {
     tp(x: number, y: number): void;
     /** Walks the member to a point, round whatever is in the way, as a tap on bare ground there would. */
     walk(x: number, y: number): void;
-    tap(x: number, y: number): void;
     /** The town's own, where each is and what it is doing. */
     who(): { name: string; x: number; y: number; doing: string }[];
     /** Real members in town just now, visiting or dozing, and where each is. */
@@ -249,11 +243,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   // ---------- going places ----------
 
-  /** A place the member is walking to, to be opened on arrival. */
-  let pending: PlaceId | null = null;
   /** A game the member is on the way into: still walking to its door, or going through it. */
   let going: { id: GameId; through: boolean } | null = null;
-  let pushing = 0;
   let seatWas = player.seat;
   /** The member was put somewhere without walking there since the room was last told: a jump. */
   let jumped = false;
@@ -268,30 +259,21 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     release(player);
     player.path = [];
     player.arrive = null;
-    pending = null;
     going = null;
     show.dest = null;
   }
 
-  function visit(id: PlaceId, now = false): void {
+  /** Opens a place at once and walks the member there meanwhile: its dock button, or a card's way there. */
+  function visit(id: PlaceId): void {
+    openPanel(id);
     const pl = place(id);
-    const there =
-      dist(player.x, player.y, pl.stand.x, pl.stand.y) < 26 || (id === "fire" && player.seat?.at === "fire");
-    if (now || there) openPanel(id);
-    if (there || (id === "table" && player.seat?.at === "table")) {
+    if (G.near === id) {
       if (!player.seat) player.dir = pl.face;
       return;
     }
     halt();
-    pending = now ? null : id;
-    if (!now) show.dest = pl.stand;
     walkTo(player, pl.stand, () => {
       player.dir = pl.face;
-      show.dest = null;
-      if (pending === id) {
-        pending = null;
-        openPanel(id);
-      }
     });
   }
   hooks.visit = visit;
@@ -299,7 +281,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   /** Through the door: the Works' doors part and the member steps in; at the stump the lantern burns up. */
   function through(id: GameId): void {
     going = { id, through: true };
-    pending = null;
     show.dest = null;
     closePanel();
     closeCard();
@@ -349,8 +330,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   /** Out through the gate and down the trail to the member's own camp. */
   let leaving = false;
-  /** The member has come in through the gate since arriving. */
-  let entered = false;
   function toCamp(): void {
     if (!G.home || going || leaving || !town.toCamp) return;
     halt();
@@ -368,152 +347,101 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   }
   hooks.toCamp = toCamp;
 
-  function personAt(wx: number, wy: number): Actor | null {
-    let best: Actor | null = null;
-    for (const a of [...G.folk, ...G.visitors, ...livePlayers(), player, cinfy]) {
-      if (a.away || a.alpha < 0.5) continue;
-      const at = a.seat ?? a;
-      if (Math.abs(wx - at.x) > 7 || wy < at.y - headOf(a) - 2 || wy > at.y + 3 - a.lift) continue;
-      if (!best || at.y > (best.seat ?? best).y) best = a;
-    }
-    return best;
-  }
-
-  /** What is under a point, as the box to put corners round; nothing for bare ground. */
-  function under(wx: number, wy: number): (Hover & { who: Actor | null }) | null {
-    const who = personAt(wx, wy);
-    if (who) {
-      const at = who.seat ?? who;
-      const tall = headOf(who);
-      return { box: { x: at.x - 6, y: at.y - tall, w: 12, h: tall + 1 - who.lift }, tip: null, who };
-    }
-    const crab = crabAt(wx, wy);
-    if (crab) return { box: { x: crab.x - 6, y: crab.y - 8, w: 12, h: 9 }, tip: null, who: null };
-    const prop = propAt(wx, wy);
-    if (!prop?.hit || prop.kind === "trunk") return null;
-    return { box: prop.hit, tip: prop.tip, who: null };
-  }
-
-  /** A touch somewhere in the town. Says whether it was bare ground (so a drag may steer). */
-  function tapWorld(wx: number, wy: number): boolean {
-    closeCard();
-    const plaqueWasOpen = emotesOpen();
-    closeEmotes();
-    const who = personAt(wx, wy);
-    if (who) {
-      sfx.pop();
-      // Somebody dozing sleeps on; their card says who they are.
-      if (who.dozing !== null) {
-        showCard(who);
-        return false;
-      }
-      // In the live room, the member's own figure offers its emotes; a second tap puts them away.
-      if (who.you && inRoom()) {
-        if (!plaqueWasOpen) openEmotes();
-        return false;
-      }
-      // Another player, live: drawn where they really are, so they do not turn; their card has a wave.
-      if (isLivePlayer(who)) {
-        showCard(who, null, () => {
-          waveAt(who);
-        });
-        return false;
-      }
-      hop(who);
-      if (who.you) {
-        say(who, pick(["that's me", "hello, me", "o/"], Math.random()), 1.6);
-        return false;
-      }
-      // A member really here: they look round, and their card says who they are.
-      if (isVisitor(who)) {
-        if (!who.seat && !who.moving) face(who, player.x, player.y);
-        showCard(who);
-        return false;
-      }
-      const t = who.folk?.t;
-      if (who === cinfy) say(who, pick(KEEPER.taps, Math.random()));
-      else if (t) {
-        rouse(who);
-        if (!who.seat && who.lift === 0) face(who, player.x, player.y);
-        who.hold = 2.6;
-        say(who, pick(t.greets, Math.random()), 2);
-      }
+  /** The member's own figure had its emotes up when the touch came. */
+  let plaque = false;
+  /** Somebody in town is touched. */
+  function meet(who: Actor): void {
+    // Somebody dozing sleeps on; their card says who they are.
+    if (who.dozing !== null) {
       showCard(who);
-      return false;
-    }
-    const crab = crabAt(wx, wy);
-    if (crab) {
-      tapCrab(crab);
-      return false;
-    }
-    if (tapString(wx, wy)) return false;
-    const prop = propAt(wx, wy);
-    if (prop?.tap) {
-      prop.tap(prop, wx, wy);
-      return false;
-    }
-    if (wy < hedgeY(wx)) {
-      tapSky(wx, wy);
-      return false;
-    }
-    if (pondD(wx, wy) < 1) {
-      tapWater(wx, wy);
-      visit("pond");
-      return false;
-    }
-    halt();
-    if (G.panel) closePanel();
-    const to = nearestFree(wx, wy);
-    show.dest = to;
-    ring(to.x, to.y, GOLD[2], 6);
-    sfx.tap();
-    walkTo(player, to, () => {
-      show.dest = null;
-    });
-    return true;
-  }
-
-  /** Walking by hand: the keys, or a finger held down and dragged. */
-  function steerBy(dt: number, steer: Steer): void {
-    const push = pushOf(player, steer);
-    if (!push) {
-      pushing = 0;
       return;
     }
-    const { dx, dy } = push;
-    if (player.seat || player.path.length > 0 || pending || going) halt();
-    shove(player, dt, dx, dy);
-    // Walking on into a game's doorway, or up against its table, is going in.
-    const up = dy < 0 && Math.abs(dy) >= Math.abs(dx);
-    const door: GameId | null = !up
-      ? null
-      : Math.abs(player.x - place("works").stand.x) < 13 && player.y < 126
-        ? "works"
-        : Math.abs(player.x - table.x) < 22 && player.y > table.y && player.y < table.y + 9
-          ? "table"
-          : null;
-    pushing = door ? pushing + dt : 0;
-    if (door && pushing > 0.32) {
-      pushing = 0;
-      goIn(door);
+    // In the live room, the member's own figure offers its emotes; a second tap puts them away.
+    if (who.you && inRoom()) {
+      if (!plaque) openEmotes();
+      return;
     }
-  }
-
-  /** The place the member is standing at, if any: the prompt hangs by it. */
-  function nearPlace(): PlaceId | null {
-    for (const pl of PLACES) {
-      const d = dist(player.x, player.y, pl.stand.x, pl.stand.y);
-      if (d < 22) return pl.id;
-      if (pl.id === "pond" && pondD(player.x, player.y) < 13) return pl.id;
-      if (pl.id === "fire" && (player.seat?.at === "fire" || dist(player.x, player.y, 256, 214) < 30)) return pl.id;
-      if (pl.id === "table" && player.seat?.at === "table") return pl.id;
+    // Another player, live: drawn where they really are, so they do not turn; their card has a wave.
+    if (isLivePlayer(who)) {
+      showCard(who, null, () => {
+        waveAt(who);
+      });
+      return;
     }
-    return null;
+    hop(who);
+    if (who.you) {
+      say(who, pick(["that's me", "hello, me", "o/"], Math.random()), 1.6);
+      return;
+    }
+    // A member really here: they look round, and their card says who they are.
+    if (isVisitor(who)) {
+      if (!who.seat && !who.moving) face(who, player.x, player.y);
+      showCard(who);
+      return;
+    }
+    const t = who.folk?.t;
+    if (who === cinfy) say(who, pick(KEEPER.taps, Math.random()));
+    else if (t) {
+      rouse(who);
+      if (!who.seat && who.lift === 0) face(who, player.x, player.y);
+      who.hold = 2.6;
+      say(who, pick(t.greets, Math.random()), 2);
+    }
+    showCard(who);
   }
 
   const awake = (): boolean => G.home && !going?.through && !leaving && G.dark < 0.35;
-  /** The place the prompt is hanging by. */
-  let prompted: Place | null = null;
+
+  /**
+   * The places, as doors: each opens its panel, the gate sets off for the camp, and walking on into
+   * a game's doorway or up to its table goes in. At the fire, sitting by it or anywhere round it is
+   * being at it; at the pond, anywhere along the shore; at the stump, sitting at it.
+   */
+  const AT: Partial<Record<PlaceId, (m: Actor) => boolean>> = {
+    fire: (m) => m.seat?.at === "fire" || dist(m.x, m.y, 256, 214) < 30,
+    pond: (m) => pondD(m.x, m.y) < 13,
+    table: (m) => m.seat?.at === "table",
+  };
+  const doors: readonly Door[] = PLACES.map((pl) => {
+    const game = isGame(pl.id) ? pl.id : null;
+    return Object.assign({}, pl, {
+      reach: pl.id === "fire" ? 10 : 22,
+      // The way through the gate, and on up the trail beyond it.
+      box: pl.id === "camp" ? { x: 242, y: 72, w: 28, h: 28 } : undefined,
+      at: AT[pl.id],
+      use: pl.id === "camp" ? toCamp : () => openPanel(pl.id),
+      enter: game ? () => goIn(game) : undefined,
+    });
+  });
+
+  const touch = makeTouch({
+    ground: TOWN,
+    doors: () => doors,
+    people: () => pic.people(),
+    greet: meet,
+    own(x, y) {
+      const crab = crabAt(x, y);
+      if (crab) tapCrab(crab);
+      else if (pondD(x, y) < 1) {
+        tapWater(x, y);
+        const pond = doors.find((d) => d.id === "pond");
+        if (pond) touch.go(pond);
+      } else return tapString(x, y);
+      return true;
+    },
+    ownAt(x, y) {
+      const crab = crabAt(x, y);
+      return crab ? { box: { x: crab.x - 6, y: crab.y - 8, w: 12, h: 9 }, tip: null } : null;
+    },
+    props: () => props,
+    sky(x, y) {
+      if (y >= hedgeY(x)) return false;
+      tapSky(x, y);
+      return true;
+    },
+    awake,
+    halt,
+  });
 
   const town: Town = {
     backdrop: { sky: pic.sky, near: pic.near },
@@ -539,7 +467,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     step(dt, steer) {
       G.t += dt;
       stepActor(player, dt);
-      if (awake() && steer) steerBy(dt, steer);
+      touch.step(dt, steer);
       // The room hears where the member is at once, from their own walking; nothing waits for it.
       tellRoom(player, dt, jumped);
       jumped = false;
@@ -572,20 +500,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       // Sitting down at the stump is sitting down to play.
       if (awake() && player.seat !== seatWas && player.seat?.at === "table") through("table");
       seatWas = player.seat;
-
-      const near = G.home ? nearPlace() : null;
-      G.near = near;
-      const on = near !== null && G.panel !== near && awake();
-      if (near && on) {
-        prompted = place(near);
-        show.prompt = prompted;
-      }
-      show.promptT = clamp(show.promptT + (on ? dt : -dt) * 5, 0, 1);
-
-      // Stepping on into the gateway is setting off for the camp beyond it; but only once the
-      // member has come in through it, or a visit with no letter would send them straight back out.
-      if (player.y > 100) entered = true;
-      if (awake() && entered && player.y < 92) toCamp();
     },
 
     draw: () => drawPicture(pic),
@@ -594,34 +508,14 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     },
 
     tap(x, y, finger) {
-      show.touch = finger;
-      return awake() ? tapWorld(x, y) : false;
+      plaque = emotesOpen();
+      closeEmotes();
+      return touch.tap(x, y, finger);
     },
-
-    point(at) {
-      const h = at && awake() ? under(at.x, at.y) : null;
-      show.hover = h ? h.box : null;
-      show.pointed = h ? h.who : null;
-      return h;
-    },
-
+    point: touch.point,
     act() {
-      if (!awake()) return;
-      if (G.panel && isGame(G.panel)) {
-        goIn(G.panel);
-        return;
-      }
-      if (prompted && show.promptT > 0.4) {
-        openPanel(prompted.id);
-        player.dir = prompted.face;
-        return;
-      }
-      if (player.seat) {
-        release(player);
-        return;
-      }
-      hop(player);
-      sfx.tap();
+      if (G.panel && isGame(G.panel)) goIn(G.panel);
+      else touch.act();
     },
 
     back() {
@@ -638,7 +532,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
     cameBack(id) {
       going = null;
-      pushing = 0;
       if (id === "table") {
         lightTable(false);
         return;
@@ -654,16 +547,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       G.where = "town";
       leaving = false;
       going = null;
-      pending = null;
-      pushing = 0;
-      show.prompt = null;
-      show.promptT = 0;
-      show.hover = null;
-      show.pointed = null;
-      show.dest = null;
       release(player);
       putAt(256, 84);
-      entered = false;
       player.dir = 0;
       player.alpha = 0;
       player.say = "";
@@ -759,9 +644,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       },
       open: openPanel,
       close: closePanel,
-      visit(id) {
-        visit(id, true);
-      },
+      visit,
       inside: goIn,
       tp(x, y) {
         halt();
@@ -769,11 +652,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         stage.snap();
       },
       walk(x, y) {
-        halt();
-        walkTo(player, nearestFree(x, y));
-      },
-      tap(x, y) {
-        tapWorld(x, y);
+        touch.walk(x, y);
       },
       who() {
         return [cinfy, ...G.folk].map((a) => ({
