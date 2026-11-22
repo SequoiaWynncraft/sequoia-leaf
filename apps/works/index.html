@@ -16,17 +16,40 @@
       body {
         height: 100%;
         overflow: hidden;
+        /* Past the forest there is only dusk, and the yard's picture stops where nothing more can be seen in it. */
+        background: #1a1627;
         user-select: none;
         -webkit-user-select: none;
       }
+      /* The yard, drawn small: the page enlarges each of its pixels to a whole number of the screen's. */
       #view {
+        position: fixed;
+        left: 0;
+        top: 0;
+        display: block;
+        transform-origin: 0 0;
+        image-rendering: pixelated;
+        pointer-events: none;
+      }
+      /* The words over the yard, at the screen's own size. Every press on the yard lands here. */
+      #words {
         position: fixed;
         inset: 0;
         width: 100vw;
         height: 100dvh;
         display: block;
         touch-action: none;
-        image-rendering: pixelated;
+      }
+
+      /* What `?meter` shows: how the screen is keeping up, in a corner over the dock. */
+      #meter {
+        position: fixed;
+        z-index: 20;
+        right: var(--edge);
+        bottom: calc(var(--bottom) + var(--dockh, 0px) + var(--handh, 0px) + var(--u) * 4);
+        margin: 0;
+        padding: calc(var(--u) * 2) calc(var(--u) * 3);
+        pointer-events: none;
       }
 
       /* Along the top: the purse and the power on the left, the yard's books and the way out on the right. */
@@ -631,7 +654,7 @@
     </style>
   </head>
   <body>
-    <canvas id="view"></canvas>
+    <canvas id="words"></canvas>
     <div id="top">
       <div id="purse" class="k-plaque hung"></div>
       <button id="power" class="k-plaque hung" type="button"></button>

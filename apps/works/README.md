@@ -49,8 +49,15 @@ yet.
 ## The screen
 
 **The picture.** The yard is drawn the way the town is: small, one art pixel to a pixel, sixteen to
-a tile, then blown up to the screen by a whole number (the same number the town would use in the
-same window, so a tile here is as big as a tile there). All of the art is drawn in code when the
+a tile. The page shows that small canvas itself, and its styles enlarge each of its pixels to a
+whole number of the screen's (the same number the town would use in the same window, so a tile here
+is as big as a tile there), on a screen of any pixel ratio. The view zooms in three steps from that
+size and out as far as one screen pixel for each of the yard's, where any screen shows the whole
+map. Zoomed out past the forest there is only dusk, which is the page's own background, so the
+picture is never bigger than the ground and the lamplight that falls past it. The words over the
+yard (what someone says, a nudge, why a piece cannot go, what rises from a spot) are on a second
+canvas the size of the screen, written again only when they change; every press on the yard lands
+on it. All of the art is drawn in code when the
 page opens, from the kit's palette: `art/ground.ts` paints the floor a pixel at a time, once as the
 yard keeps it and once as the forest left it, and the frame shows the first wherever the yard owns
 the land; `art/machines.ts` builds every machine in every pose its work puts it in; `art/belts.ts`
@@ -68,6 +75,28 @@ whoever is walking about), then the lines between pylons, the dusk, and last wha
 pointed at or is about to be built. Only tiles on screen are looked at; every sprite is made once
 and kept; what is worked out from the yard's layout (belt shapes, lines, fences, signposts) is
 worked out once for each change to the yard (`layout.ts`).
+
+Most of a frame is what the last one showed, and a browser charges for each thing drawn, so
+`scene.ts` keeps what stays and draws what moved:
+
+- _The floor_ is one picture as big as the ground, painted again when a plot is cleared.
+- _Belts_ of one shape, way and colour are one outline, and the tile for this step of the march
+  fills all of them in one go. The splitters' arrowheads and the joiners' tops are laid the same way
+  over what is carried.
+- _What stands up_ is listed every frame as before, but drawn on a kept picture as big as the
+  ground. Each tile's worth of it has a sum of what stands over it; where the sum is not last
+  frame's (another pose, a step, something come or gone), that tile is wiped and the parts of the
+  things over it are drawn again, far to near. A still yard draws nothing; a busy one, a few tiles.
+- _The lines between pylons_ are kept as dark pixels and laid faint in one go. A line's glint is
+  cut out of the kept line where it is now and put back where it was.
+- _Pools of light_ are kept at each size they are laid down at, and not enlarged every frame.
+
+What is carried, the dusk and the lights are drawn every frame. The kept pictures are made again if
+the browser took their memory back, or when the page comes back from being put away.
+
+**Zoomed far out.** A trouble mark is its own size down to a third of the natural size, where the
+view used to stop, and is enlarged beyond that (`markSize` in `zoom.ts`), so that it is as big on
+the screen as it was there.
 
 **What things look like.** A gatherer is a gnome who bends and lifts, and sits down asleep when no
 power reaches him. A mill shows the face of its work: a saw, a kiln or a press. A machine in
@@ -186,14 +215,35 @@ clockwork crab is made. Opened alone it plays just the same.
 stages a moment in the yard on the play server on this machine (`apps/api/test/play.ts`, through
 `POST /test/play/works`) and takes it: `{ yard: "new" }` or one of the kept yards `"small"`,
 `"short"`, `"mid"`, `"large"`; `{ away: minutes }`, a time nobody watched; `{ fill: n }`, the nth
-standing order filled. `hold(true)` stops the screen running the yard on, `skip(seconds)` moves
-only the screen, and `time(frames)` draws so many frames and says how many milliseconds each took. `pick(tool)`, `aim(x, y)`, `tap(x, y)`, `drag(x0, y0, x1, y1)` with `drop()`,
+standing order filled; `{ text: "..." }`, any yard as its save's text. `hold(true)` stops the screen
+running the yard on, and `hold(true, lead, at)` shows it `lead` of the way into its next tick with
+the screen's clock at `at` seconds, so a picture can be taken twice the same; `skip(seconds)` moves
+only the screen. `pick(tool)`, `aim(x, y)`, `tap(x, y)`, `drag(x0, y0, x1, y1)` with `drop()`,
 `confirm()`, `build`, `remove`, `plot(id)` and `plan(id)` act as a member would, sending to Leaf;
 `finger(true)` makes the screen behave as for a touch, and `tap` is then a finger's tap, with Select
 in hand too. `open(panel)`, `card(x, y)` and `close()`
 show things; `look(x, y)` and `zoom(by)` move the view; `taught(ids)` says which lessons are already
 taken. `page(x, y)` is where a tile is on the page, `rider(x, y)` what is riding a belt there,
 `where(kind)` where a kind of thing stands, and `state()` a summary.
+
+**How long a frame takes.** `works.bench(frames, hz)` does that many frames' work one after another,
+as if the screen showed `hz` of them a second (60 unless said), and gives back what one took:
+`{ ms, picture, pieces }`. `ms` is milliseconds by part: `page` (the page's own bookkeeping, and the
+yard's ticks), `floor`, `belts`, `standing`, `dusk`, `marks` (the parts of `drawYard`), `words`, and
+`flush`: a browser may put off the drawing it was asked for, and `bench` takes the picture after
+each frame to have it done and counted (the words' picture and the scaling to the screen are not in
+it). It runs a copy of the yard on a clock of its own, so every run begins alike and the yard is as it
+was afterwards. `picture` is the picture's size in the yard's pixels and
+`pieces` how many pieces are on screen. Nothing is timed while nobody asks.
+
+    works.zoom(-40); works.look(24, 18); works.bench(300)
+
+With `?meter` in the address, a corner of the page says, each second: the frames a second the
+screen reaches, the longest frame, and the same parts as milliseconds a frame. There `until free`
+is how long after a frame's work the page next gets a turn: the browser's own work on the frame,
+and anything else it had waiting. The frames a second say how it looks; the parts say where the
+page's own time goes. A browser shows no more frames a
+second than the screen has, so the parts say how much room is left.
 
 The screenshot driver is the kit's (`packages/kit/tools/drive.ts`), against the play server, signed
 in as its Tester:
