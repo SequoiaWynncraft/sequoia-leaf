@@ -6,7 +6,7 @@
  *   depot pays, and the orders asking for it (or, for one from the ground, where it lies);
  * - `machine:<kind>` a kind of machine: what it does, what it can make, its draw, pace and price;
  * - `tile:<index>` whatever stands on a tile of the yard: its machine's card with what this one is
- *   doing and holds, and what can be done with it;
+ *   doing and holds, and what can be done with it (a splitter's three ways out, each to shut or open);
  * - `plot:<id>`, `plan:<id>`, and `order:story` or `order:<slot>` for the board's orders.
  *
  * Pointing at a thing on the yard says what it is; clicking or tapping pins its card.
@@ -44,6 +44,7 @@ import {
   ITEMS,
   KIND,
   type Kind,
+  LEFT,
   MADE_BY,
   type PlanId,
   PLANS,
@@ -54,22 +55,26 @@ import {
   type Raw,
   RECIPE,
   RECIPES,
+  rewire,
+  RIGHT,
   status,
   STORY,
   storyOrder,
+  takes,
   type Tally,
   TICKS,
 } from "@sequoia-leaf/yard";
 
-import { TILE } from "../art/belts.ts";
+import { beltTile, TILE } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
+import { layout } from "../layout.ts";
 import { yardSfx } from "../sound.ts";
 import { S, toPage, touched } from "../state.ts";
-import { buyIdea, buyLand, pickFrom, takeAway, turnAt } from "../tools.ts";
+import { buyIdea, buyLand, pickFrom, takeAway, turnAt, wayAt } from "../tools.ts";
 import { coins, doNow } from "../yard.ts";
 import { KEYS, openTools } from "./dock.ts";
 import { togglePanel } from "./panels.ts";
-import { fitted, yardIcon } from "./parts.ts";
+import { fitted, pic, yardIcon } from "./parts.ts";
 
 const GROUND: Record<Raw, readonly [string, string]> = {
   deadfall: ["Deadfall", "Fallen branches. A gatherer here picks them up; a mill saws them into planks."],
@@ -234,6 +239,41 @@ function machineDesc(art: Art, kind: Kind): Description {
   };
 }
 
+/** Where on a card each side of a splitter is, round its picture: east, south, west, north. */
+const SIDES = ["2 / 3", "3 / 2", "2 / 1", "1 / 2"] as const;
+
+/**
+ * A splitter's three ways out round its picture, as they lie in the yard: each says whether it is
+ * open, shut, or open with nothing to take from it, and a press shuts or opens it. A visitor is
+ * shown the same, with nothing to press.
+ */
+function waysOf(art: Art, i: number): HTMLElement {
+  const w = S.world;
+  const b = w.cells[i];
+  const box = el("div", "ways");
+  if (!b) return box;
+  const wire = w.wire ?? rewire(w);
+  const arms = layout(w, S.rev).arms[i] ?? [0, 0, 0, 0];
+  const here = pic(beltTile(arms, b.dir, 5, w.rates.belt >= 2 ? 2 : w.rates.belt >= 1.5 ? 1 : 0, b.tint), 3);
+  const g = here.getContext("2d");
+  [b.dir, LEFT[b.dir], RIGHT[b.dir]].forEach((d, k) => {
+    const head = art.m.heads[k]?.[b.dir];
+    if (head && arms[d] === 2) g?.drawImage(head, 0, 0);
+    const shut = ((b.shut >> k) & 1) === 1;
+    const led = takes(w, wire, wire.ways[i * 3 + k] ?? -1, i);
+    const way = el(
+      S.visiting ? "span" : "button",
+      `k-btn ${shut ? "coral" : led ? "green" : "slate"}`,
+      S.visiting ? {} : { type: "button", onclick: () => wayAt(i % w.land.w, Math.floor(i / w.land.w), k) },
+      shut ? "Shut" : led ? "Open" : "No belt",
+    );
+    way.style.gridArea = SIDES[d];
+    box.append(way);
+  });
+  box.append(here);
+  return box;
+}
+
 /** A machine standing in the yard: its kind's card, with what this one is doing and holds, and what can be done with it. */
 function standingDesc(art: Art, i: number): Description | null {
   const w = S.world;
@@ -359,7 +399,11 @@ function standingDesc(art: Art, i: number): Description | null {
   return {
     ...base,
     tag: el("span", st?.trouble ? "k-coral" : "", { text: st?.line ?? KIND[b.kind].what }),
-    blocks: [...(base.blocks ?? []), ...(advice ? [{ body: advice }] : [])],
+    blocks: [
+      ...(base.blocks ?? []),
+      ...(advice ? [{ body: advice }] : []),
+      ...(b.kind === "splitter" ? [{ title: "Ways out", body: waysOf(art, i) }] : []),
+    ],
     rows,
     actions,
   };
@@ -577,7 +621,7 @@ export function cardKey(ref: string | null): string {
     const b = w.cells[i];
     const st = b ? status(w, i) : null;
     const held = b ? ITEMS.map((k) => b.buf[k] ?? 0).join("") : "";
-    return `${ref}|${S.rev}|${b?.kind}|${st?.line}|${held}|${b?.recipe}|${b?.open}|${b?.item}|${Math.floor(coins() / 50)}`;
+    return `${ref}|${S.rev}|${b?.kind}|${st?.line}|${held}|${b?.recipe}|${b?.open}|${b?.shut}|${b?.item}|${Math.floor(coins() / 50)}`;
   }
   const filled = [w.filled, ...w.board.map((o) => o.filled)]
     .map((f) => ITEMS.map((k) => f[k] ?? 0).join(","))

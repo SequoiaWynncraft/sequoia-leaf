@@ -551,7 +551,8 @@ function inHand(g: Ctx, art: Art, w: World, grp: Group, now: Moment, cx: number,
       const [near = -1, far = -1] = tilesOf(w, [p]);
       if (near < 0) continue;
       const tint = p.tint ?? 0;
-      yard.cells[near] = Object.assign(blank(p.kind, p.dir), { span: p.span, open: p.open ?? true, tint });
+      const shut = p.shut ?? 0;
+      yard.cells[near] = Object.assign(blank(p.kind, p.dir), { span: p.span, open: p.open ?? true, tint, shut });
       if (far >= 0) yard.cells[far] = Object.assign(blank(p.kind, p.dir), { span: -p.span, tint });
     }
     const arms = armsOf(yard);

@@ -3,9 +3,10 @@
  * yard it can vouch for or nothing at all. A record whose shape or version is wrong is refused
  * whole; inside a good one, a plot, plan or building that could not have come about by playing is
  * left out and the rest is kept. A yard without its seed (what the page is shown) is written and
- * read without one, and one with no blueprint kept is written without any. A line's colour is one
- * more part kept only when it is not as new. So a save from before there were colours or blueprints
- * reads as a yard with none of either, and the version did not change for them.
+ * read without one, and one with no blueprint kept is written without any. A line's colour and a
+ * splitter's shut ways are two more parts kept only when they are not as new. So a save from before
+ * there were colours, blueprints or shut ways reads as a yard with none of them, and the version did
+ * not change for them.
  */
 import { build, planState, plotState, refusal } from "./build.ts";
 import { isItem, isRaw, type Item, ITEMS, type Tally } from "./content/items.ts";
@@ -61,6 +62,7 @@ function pack(b: Building, i: number): Rec {
   if (b.fuel !== 0) o.f = b.fuel;
   if (b.free) o.g = 1;
   if (b.tint !== 0) o.h = b.tint;
+  if (b.shut !== 0) o.x = b.shut;
   return o;
 }
 
@@ -149,6 +151,7 @@ function unpack(w: World, b: Building, o: Rec): void {
     if (r?.by === b.kind && r.from.every((k) => (b.buf[k] ?? 0) > 0)) b.making = o.m;
   }
   if (b.kind === "splitter" || b.kind === "joiner") b.turn = whole(o.t, 2) ?? 0;
+  if (b.kind === "splitter") b.shut = whole(o.x, 7) ?? 0;
   if (b.kind === "crate") b.open = o.c !== 1;
   if (b.kind === "boiler") b.fuel = whole(o.f, TICKS.burn) ?? 0;
   if (b.span > 0 && Array.isArray(o.u) && Array.isArray(o.up))

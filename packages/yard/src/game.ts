@@ -15,7 +15,7 @@
  */
 import { type CoinChange, type Ctx, type Done, type Game, LOGGED, type Logged, type Refused } from "@sequoia-leaf/core";
 
-import { build, buyPlan, buyPlot, paint, remove, setOpen, setRecipe, tipOut, turn } from "./build.ts";
+import { build, buyPlan, buyPlot, paint, remove, setOpen, setRecipe, setWay, tipOut, turn } from "./build.ts";
 import { AWAY_MOST_MS, forward, TICK_MS } from "./clock.ts";
 import { isItem, type Item } from "./content/items.ts";
 import { BLUEPRINTS, isKind, type Kind, STAND_MOST } from "./content/machines.ts";
@@ -63,6 +63,8 @@ export type WorksAct =
   | ({ readonly do: "recipe"; readonly item: Item | null } & At)
   | ({ readonly do: "tipOut"; readonly item: Item | null } & At)
   | ({ readonly do: "crate"; readonly open: boolean } & At)
+  /** One of a splitter's ways out, 0 for ahead, 1 for left, 2 for right, opened or shut. */
+  | ({ readonly do: "way"; readonly way: number; readonly open: boolean } & At)
   | { readonly do: "buyPlot"; readonly plot: PlotId }
   | { readonly do: "buyPlan"; readonly plan: PlanId }
   /** A standing order, by its own id. */
@@ -101,6 +103,7 @@ export const REFUSED = {
   recipe: "cannot_set_recipe",
   tipOut: "nothing_to_tip_out",
   crate: "not_a_crate",
+  way: "not_a_splitter",
   buyPlot: "plot_not_for_sale",
   buyPlan: "plan_not_for_sale",
   swap: "cannot_swap",
@@ -209,6 +212,8 @@ function act(w: World, c: WorksCommand): Did {
       return tipOut(w, c.x, c.y, c.item) > 0 ? done() : no(c, "There is nothing to tip out");
     case "crate":
       return setOpen(w, c.x, c.y, c.open) ? done() : no(c, "There is no crate there");
+    case "way":
+      return setWay(w, c.x, c.y, c.way, c.open) ? done() : no(c, "There is no splitter there");
     case "buyPlot": {
       const did = buyPlot(w, c.plot, Infinity);
       if (!did.ok) return no(c, did.why);
@@ -317,6 +322,10 @@ function what(v: Record<string, unknown>): WorksAct | null {
       return spot && item !== undefined ? { do: v.do, item, ...spot } : null;
     case "crate":
       return spot && typeof v.open === "boolean" ? { do: "crate", open: v.open, ...spot } : null;
+    case "way":
+      return spot && whole(v.way, 2) && typeof v.open === "boolean"
+        ? { do: "way", way: v.way, open: v.open, ...spot }
+        : null;
     case "buyPlot":
       return isPlotId(v.plot) && PLOTS.some((p) => p.id === v.plot) ? { do: "buyPlot", plot: v.plot } : null;
     case "buyPlan":

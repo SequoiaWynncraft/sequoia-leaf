@@ -47,7 +47,11 @@ export function rewire(w: World): Wire {
         carry.push(i);
         break;
       case "splitter":
-        ways.set([ahead, left, right], i * 3);
+        // A shut way leads nowhere: nothing is sent there, drawn as going there, or looked for there.
+        ways.set(
+          [ahead, left, right].map((to, k) => ((b.shut >> k) & 1 ? -1 : to)),
+          i * 3,
+        );
         carry.push(i);
         break;
       case "joiner":
@@ -402,15 +406,16 @@ export function step(w: World): void {
         break;
       case "splitter": {
         if (b.item === null || b.prog < 1) break;
-        // Ahead, then left, then right, starting a turn further each time it sends something.
+        // Ahead, then left, then right, starting from the way after the one it last sent something.
         for (let k = 0; k < 3; k++) {
-          const to = wire.ways[i * 3 + ((k + b.turn) % 3)] ?? -1;
+          const way = (k + b.turn) % 3;
+          const to = wire.ways[i * 3 + way] ?? -1;
           if (!accepts(w, wire, to, b.item, i)) continue;
           give(w, wire, to, b.item, i, b.prog - 1);
           b.item = null;
           b.prog = 0;
           b.via = -1;
-          b.turn = (b.turn + 1) % 3;
+          b.turn = (way + 1) % 3;
           break;
         }
         break;
