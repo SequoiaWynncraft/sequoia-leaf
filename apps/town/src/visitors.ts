@@ -20,7 +20,7 @@ import { CREAM } from "@sequoia-leaf/kit/palette.ts";
 import { bake, type Body, lookFor, paintSkin, SIT, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 
-import { makeActor, onScreen, release, sit, stand, stepActor, walkTo } from "./actors.ts";
+import { feet, makeActor, onScreen, release, sit, stand, stepActor, walkTo } from "./actors.ts";
 import { float } from "./fx.ts";
 import { type Actor, after, G } from "./game.ts";
 import { guild, type Person, type Rester, type Visitor } from "./guild.ts";
@@ -204,6 +204,7 @@ const dozers = (): number => [...here.values()].filter((v) => v.dozing).length;
 
 function spawn(id: string, name: string, rank: string | null, at: Visitor["at"], skin: string): Visiting {
   const a = makeActor({ name, rank: rank ?? "", level: 0, voice: 0 }, bake(paintSkin(lookFor(name))), GATE.x, GATE.y);
+  a.id = id;
   a.alpha = 0;
   a.mode = "led";
   a.speed = STROLL;
@@ -285,7 +286,7 @@ export function stepVisitors(dt: number): void {
     // A dozer breathes out a "z" now and then.
     if (G.t >= v.next) {
       v.next = G.t + 1.6 + Math.random() * 0.8;
-      const at = v.a.seat ?? v.a;
+      const at = feet(v.a);
       if (onScreen(at.x, at.y)) float(at.x + 4, at.y - 20, "z", CREAM, 1.4);
     }
   }

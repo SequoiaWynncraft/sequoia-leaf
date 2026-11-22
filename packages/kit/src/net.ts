@@ -27,6 +27,8 @@ export interface Outside {
   fetch(path: string, init?: RequestInit): Promise<Response>;
   /** The browser's storage, or null where there is none. */
   store(): Store | null;
+  /** The tab's own storage, gone when the tab closes, or null where there is none. */
+  tab(): Store | null;
   /** The page's own address. */
   href(): string;
   /** Whether the page is the whole window, rather than in a frame. */
@@ -63,9 +65,9 @@ export function onWake(fn: () => void): () => void {
   };
 }
 
-function browserStore(): Store | null {
+function browserStore(kind: "localStorage" | "sessionStorage"): Store | null {
   try {
-    return typeof localStorage === "undefined" ? null : localStorage;
+    return typeof globalThis[kind] === "undefined" ? null : globalThis[kind];
   } catch {
     return null;
   }
@@ -81,7 +83,8 @@ function isTop(): boolean {
 
 export const outside: Outside = {
   fetch: (path, init) => fetch(path, init),
-  store: browserStore,
+  store: () => browserStore("localStorage"),
+  tab: () => browserStore("sessionStorage"),
   href: () => (typeof location === "undefined" ? "" : location.href),
   top: isTop,
   go: (url) => {

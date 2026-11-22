@@ -5,6 +5,8 @@
  */
 
 import type { Emote } from "@sequoia-leaf/kit/emotes.ts";
+import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
+import { member } from "@sequoia-leaf/kit/live.ts";
 import { bake, type Body, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { clamp, type Ctx, dist, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { FOLK, folk, KEEPER } from "@sequoia-leaf/town/folk.ts";
@@ -25,6 +27,7 @@ import {
   stepFolk,
   walkTo,
 } from "./actors.ts";
+import { apart, ease, stood, stoodAt } from "./apart.ts";
 import type { CampArt } from "./campart.ts";
 import { drawPicture, drawWords, type Picture, sizeBuffers } from "./draw.ts";
 import { beginEvents, stepEvents } from "./events.ts";
@@ -95,6 +98,10 @@ const bodyOf = (look: Look): Body => bake(paintSkin(look));
 
 /** How far the camera may go: the town, a little of the forest above it, and a strip below. */
 const BOUNDS = { w: W, top: -72, bottom: H + 24 } as const;
+/** Where in this tab the town keeps where the member stood, for the next page (`stoodAt`). */
+const STOOD = "town.stood.v1";
+const HOME: Pt = { x: 0, y: 0 };
+
 /** How long somebody chosen in "Who is about" is shown where they are, in seconds. */
 export const FOUND_FOR = 3;
 
@@ -127,7 +134,10 @@ function openProfile(): void {
 }
 
 export interface Town extends Scene {
-  /** Begins the visit: the member walks in through the gate, to a letter if there is one to read. */
+  /**
+   * Begins the visit: the member walks in through the gate (or, soon after a page in the same tab
+   * went, is back where they stood), to a letter if there is one to read.
+   */
   arrive(): void;
   /** The member is back from a camp: they walk in through the gate, and the town's own buttons are put back. */
   cameFromCamp(): void;
@@ -200,6 +210,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   const me = guild.me();
   const player = makeActor(me, bodyOf(me.look), 256, 85, true);
+  player.id = member()?.id ?? "";
   player.alpha = 0;
   G.player = player;
   // The town's own: drawn as themselves, each where its evening finds it.
@@ -381,6 +392,22 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   const awake = (): boolean => G.home && !going?.through && !leaving && G.dark < 0.35;
 
+  // The page going (a reload, a deploy's reload) keeps where the member stands in town for the next page in this tab.
+  addEventListener("pagehide", () => {
+    keepText(STOOD, G.where === "town" && !going?.through && !leaving ? stood(player, Date.now()) : null, "tab");
+  });
+
+  /** Members standing still on one spot are drawn a step apart (`apart`), stepping aside and back as they stop and set off. */
+  function standApart(dt: number): void {
+    const everybody = [player, ...G.visitors, ...livePlayers()];
+    const still = everybody.flatMap((a) => {
+      const at = a.seat ?? a;
+      return a.away || a.moving || a.alpha <= 0.02 ? [] : [{ id: a.id, x: at.x, y: at.y }];
+    });
+    const to = apart(still);
+    for (const a of everybody) ease(a.aside, to.get(a.id) ?? HOME, dt);
+  }
+
   /**
    * The places, as doors: each opens its panel, the gate sets off for the camp, and walking on into
    * a game's doorway or up to its table goes in. At the fire, sitting by it or anywhere round it is
@@ -464,6 +491,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       stepFolk(dt);
       stepVisitors(dt);
       stepPlayers(dt);
+      standApart(dt);
       stepTown(dt);
       stepFlights(dt);
       stepEvents();
@@ -564,11 +592,18 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     arrive() {
       const { arrival } = kept();
       const letter = compose(arrival, guild.news(), [worksWaiting()]);
-      after(0.35, () => {
-        walkTo(player, { x: 256, y: 152 }, () => {
-          player.dir = 0;
+      // Loaded again in this tab a little after the last page: back where they stood. Otherwise in through the gate.
+      const was = stoodAt(keptText(STOOD, "tab"), Date.now());
+      if (was && !TOWN.footBlocked(was.x, was.y)) {
+        putAt(was.x, was.y);
+        player.dir = was.dir;
+        stage.snap();
+      } else
+        after(0.35, () => {
+          walkTo(player, { x: 256, y: 152 }, () => {
+            player.dir = 0;
+          });
         });
-      });
       const begin = (): void => {
         // Put away, Leaf posts what the town's own left while the member was away in the camp's
         // mailbox (not in this letter), but what does not fit beside the presents still in it.

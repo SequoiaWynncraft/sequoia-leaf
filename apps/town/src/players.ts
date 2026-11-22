@@ -25,7 +25,7 @@ import { bake, lookFor, paintSkin, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Pt } from "@sequoia-leaf/kit/util.ts";
 
-import { face, footfall, headOf, hop, makeActor, onScreen, stepActor } from "./actors.ts";
+import { face, feet, footfall, headOf, hop, makeActor, onScreen, stepActor } from "./actors.ts";
 import { emoteOver } from "./fx.ts";
 import { type Actor, G, toPage } from "./game.ts";
 import { GUEST, rankName } from "./live.ts";
@@ -134,6 +134,7 @@ const seatAt = (x: number, y: number, dir: Actor["dir"]): Seat => ({
 /** Somebody's figure: a look of their own at first, and their own skin once it has arrived. */
 function figureOf(m: LiveMember): Actor {
   const a = makeActor({ name: m.name, rank: rankOf(m), level: 0, voice: 0 }, bake(paintSkin(lookFor(m.name))), 0, 0);
+  a.id = m.player;
   a.alpha = 0;
   a.mode = "led";
   a.doing = "walk";
@@ -344,7 +345,7 @@ export const emotesOpen = (): boolean => plaque !== null;
 function placeEmotes(): void {
   const p = G.player;
   if (!plaque || !p) return;
-  const at = p.seat ?? p;
+  const at = feet(p);
   const top = toPage(at.x, at.y - headOf(p) - 3);
   const half = plaque.offsetWidth / 2 + 4;
   plaque.style.left = `${Math.round(clamp(top.x, half, Math.max(half, window.innerWidth - half)))}px`;

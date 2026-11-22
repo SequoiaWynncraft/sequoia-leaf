@@ -115,7 +115,7 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `net.ts`      | Everything asked of the world outside the page: the server, storage, the address                    |
 | `live.ts`     | Where the game is being played, who the member is, and the cards for when it is shut or let go of   |
 | `play.ts`     | A game Leaf owns: its state from Leaf, commands to it, holding off, a waiting look while it answers |
-| `keep.ts`     | Keeping view settings in the browser                                                                |
+| `keep.ts`     | Keeping view settings in the browser, or in the tab only                                            |
 | `presence.ts` | Telling the server where in the game the member is, and hearing who else is about                   |
 | `realtime.ts` | Being in a live room on Leaf: who is there, and where each is to be drawn now (`joinLive`)          |
 | `emotes.ts`   | The emotes others see (wave, cheer, laugh, heart): their pictures, for the page and a canvas        |

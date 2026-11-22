@@ -20,6 +20,7 @@ export const HOP = 0.3;
 
 function blank(who: Who, body: Body | null, x: number, y: number, you: boolean): Actor {
   return {
+    id: "",
     who,
     body,
     folk: null,
@@ -28,6 +29,7 @@ function blank(who: Who, body: Body | null, x: number, y: number, you: boolean):
     you,
     x,
     y,
+    aside: { x: 0, y: 0 },
     dir: 0,
     side: -1,
     speed: you ? 64 : 30 + Math.random() * 10,
@@ -72,6 +74,12 @@ export function makeFolk(t: Townsperson, x: number, y: number): Actor {
 export function headOf(a: Actor): number {
   if (a.folk) return a.folk.art.tall + a.lift;
   return 21 - (a.seat ? (a.dir === 0 ? 2 : 5) : 0);
+}
+
+/** Where somebody's feet are drawn: on their seat or where they stand, and stepped aside from it. */
+export function feet(a: Actor): Pt {
+  const at = a.seat ?? a;
+  return { x: at.x + a.aside.x, y: at.y + a.aside.y };
 }
 
 export function onScreen(x: number, y: number, margin = 12): boolean {

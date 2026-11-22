@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "stand-apart",
+    day: "2026-11-22",
+    title: "Room to stand",
+    lines: [
+      "If the page reloads within 10 minutes, you start where you stood, not at the gate.",
+      "Players standing on the same spot are drawn a step apart, so you can see and tap each one.",
+    ],
+  },
+  {
     id: "works-splitters",
     day: "2026-11-22",
     title: "The Works: Splitters and buying",

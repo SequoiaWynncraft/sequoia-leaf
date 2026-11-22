@@ -27,6 +27,8 @@ export interface Who {
 }
 
 export interface Actor {
+  /** A member's account, the same on every page; empty for the town's own. */
+  id: string;
   who: Who;
   /** A member's figure, from their own skin (or a made-up one until it arrives); none for the town's own. */
   body: Body | null;
@@ -39,6 +41,8 @@ export interface Actor {
   you: boolean;
   x: number;
   y: number;
+  /** How far from where they stand they are drawn, to stand apart from others on one spot (`apart.ts`). */
+  aside: Pt;
   dir: Dir;
   /** Which way they last went across: -1 left, 1 right (for a sprite that is only drawn side on). */
   side: -1 | 1;
