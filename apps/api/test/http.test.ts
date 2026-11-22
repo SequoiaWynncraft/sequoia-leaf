@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
+import { DEFAULT_RULES, RULE_CHANGES } from "@sequoia-leaf/core";
 import { Schema } from "effect";
 
+import { rateCard } from "../src/announce/rate-card.ts";
 import { testLeaf } from "./support.ts";
 
 /** The parts of an OpenAPI document these tests read. */
@@ -23,6 +25,20 @@ describe("HTTP", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: "ok" });
+  });
+
+  it("tells anyone, signed in or not, what Leaf pays, in the rate card's own words", async () => {
+    const response = await app.request("/v1/rates");
+    const card = rateCard(DEFAULT_RULES, RULE_CHANGES);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(await response.json()).toEqual({
+      title: card.title,
+      description: card.description,
+      sections: card.fields.map((field) => ({ name: field.name, text: field.value })),
+      changed_at: card.timestamp ?? null,
+    });
   });
 
   it("answers an unknown route with the standard error shape", async () => {
@@ -90,6 +106,7 @@ describe("HTTP", () => {
       "/v1/me/events/stream",
       "/v1/me/quests",
       "/v1/me/quests/{id}/reroll",
+      "/v1/rates",
     ]);
     expect(Object.values(document.components.securitySchemes)).toEqual([
       expect.objectContaining({ type: "http", scheme: "Bearer" }),

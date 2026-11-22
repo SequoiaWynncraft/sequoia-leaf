@@ -197,6 +197,7 @@ and `GET /openapi.json` serves the OpenAPI document generated from it.
 | Route                            | What it returns                                            |
 | -------------------------------- | ---------------------------------------------------------- |
 | `GET /healthz`                   | `{ "status": "ok" }`                                       |
+| `GET /v1/rates`                  | What Leaf pays and costs now. Needs no session.            |
 | `GET /v1/me`                     | The signed-in member's Leaf, XP and level.                 |
 | `GET /v1/me/quests`              | Their quests, banked dailies and recently finished quests. |
 | `POST /v1/me/quests/{id}/reroll` | Swaps one of their quests for another.                     |
@@ -205,6 +206,12 @@ and `GET /openapi.json` serves the OpenAPI document generated from it.
 | `GET /openapi.json`              | This API as an OpenAPI document.                           |
 
 The game has routes of its own under `/v1/game/`; see [The game's routes](#the-games-routes).
+
+`GET /v1/rates` is the rate card Leaf keeps in Discord, in the same words, for
+seqwawa.com's guide to Leaf: `{ "title", "description", "sections": [{ "name",
+"text" }], "changed_at" }`, one section a kind of earning or spending, its
+`text` keeping the rate card's Discord `**` bold markers. It is made from the rules
+Leaf runs with, so it changes only with a deploy, and may be kept five minutes.
 
 `/v1/me` and `/v1/game` routes take a Sequoia session, the token
 sequoia-backend issued, in one of two ways:
