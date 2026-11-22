@@ -907,9 +907,12 @@ b.dmg.true {
 }
 .tiles {
   display: grid;
-  /* A figure's picture is up to 48 units wide: a tile always has room for it. */
-  grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 54), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 46), 1fr));
   gap: calc(var(--u) * 2);
+}
+/* A figure's picture is up to 48 units wide: its tile always has room for it. */
+.tiles:not(.small) {
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 54), 1fr));
 }
 .tile {
   position: relative;
@@ -1004,6 +1007,11 @@ b.dmg.true {
   }
   .offer .name {
     font: var(--f-small);
+  }
+  /* Narrower still, a picture is cut at its card's edge and never lies over the next offer. */
+  .offer .art {
+    width: 100%;
+    overflow: hidden;
   }
 }
 
