@@ -998,6 +998,10 @@ button.k-info-chip:hover .k-chip {
   min-height: calc(var(--u) * 16);
   padding-inline: calc(var(--u) * 3);
 }
+/* A picture beside a button's words never makes the button taller than one with words alone. */
+.k-btn:not(.icon) .k-i {
+  margin-block: calc(var(--u) * -4);
+}
 .k-btn.wide {
   display: flex;
   width: 100%;

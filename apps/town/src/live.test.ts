@@ -3,7 +3,16 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { restart, start } from "@sequoia-leaf/kit/live.ts";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { balance, forgetLedger, leafShown } from "@sequoia-leaf/kit/purse.ts";
-import { GUEST, HELLO, membersOnly, type Reply, type Standin, standin, TESTER } from "@sequoia-leaf/kit/standin.ts";
+import {
+  GUEST,
+  HELLO,
+  membersOnly,
+  type Reply,
+  type Route,
+  type Standin,
+  standin,
+  TESTER,
+} from "@sequoia-leaf/kit/standin.ts";
 
 import type { Happening } from "./guild.ts";
 import {
@@ -12,6 +21,7 @@ import {
   letterLines,
   makeLive,
   makeNews,
+  NO_REROLL,
   prepare,
   prepared,
   rankName,
@@ -33,6 +43,8 @@ const answer = (route: string): unknown => {
 };
 const QUESTS = answer("GET /v1/me/quests");
 const EVENTS = answer("GET /v1/me/events");
+/** A list, or nothing. */
+const listed = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
 const ME = "10000000-0000-0000-0000-00000000000a";
 
@@ -60,52 +72,74 @@ const raid = (id: number, who: string, at = "2026-11-25T12:31:00.000Z", detail =
   guildEvent(id, who, "leaf_earned", { source: "raid", detail, occurred_at: at });
 
 describe("the quest board, live", () => {
-  test("the member's quests are notes, each paying its Leaf by itself", () => {
+  test("the member's quests are notes, each with its kind, its ways to finish it and what a reroll costs", () => {
     const notes = readQuests(QUESTS);
     expect(notes.length).toBeGreaterThan(1);
     for (const q of notes) expect(q.reward).toBeGreaterThan(0);
-    const weekly = notes.find((q) => q.id === "weekly:2");
-    expect(weekly).toMatchObject({
+    expect(notes.find((q) => q.id === "weekly:2")).toEqual({
+      id: "weekly:2",
+      slot: "weekly",
       title: "Complete 12 TCC raids or 60 wars",
-      have: 0,
-      need: 12,
-      unit: "TCC raids",
+      goals: [
+        { have: 0, need: 12, unit: "TCC raids" },
+        { have: 0, need: 60, unit: "wars" },
+      ],
       reward: 800,
-      ends: null,
+      ends: Date.parse("2026-11-30T00:00:00.000Z"),
+      reroll: 100,
     });
   });
 
-  test("a finished quest is full and paid; an open timed quest says when it ends", () => {
+  test("a finished quest is full and paid by the goal that did it, and cannot be rerolled", () => {
     const notes = readQuests(QUESTS);
-    const timed = notes.find((q) => q.id === "timed:1");
-    expect(timed?.have).toBe(timed?.need);
-    expect(timed?.ends).toBeNull();
-    const open = readQuests({
-      quests: [
-        {
-          id: "timed:9",
-          slot: "timed",
-          title: "Take part in 6 wars",
-          objective: { type: "wars", raid: null },
-          progress: 2,
-          target: 6,
-          reward: { leaf: 500, xp: 250 },
-          expires_at: "2026-11-25T16:00:00.000Z",
-          completed_at: null,
-        },
-      ],
+    expect(notes.find((q) => q.id === "timed:1")).toMatchObject({
+      goals: [{ have: 2, need: 2, unit: "TNA raids" }],
+      ends: null,
+      reroll: null,
     });
-    expect(open).toEqual([
+    expect(notes.find((q) => q.id === "daily:1")?.goals).toEqual([{ have: 3, need: 3, unit: "TNA raids" }]);
+  });
+
+  test("an either-or quest shows each way's own count; with only one count from Leaf, it shows that one", () => {
+    const open = {
+      id: "daily:9",
+      slot: "daily",
+      title: "Complete 3 NOL raids or 9 wars",
+      objective: { type: "wars", raid: null },
+      progress: 4,
+      target: 9,
+      goals: [
+        { type: "raids", raid: "nol", progress: 1, target: 3 },
+        { type: "wars", raid: null, progress: 4, target: 9 },
+      ],
+      reward: { leaf: 300, xp: 150 },
+      expires_at: null,
+      completed_at: null,
+      reroll_leaf: 0,
+    };
+    const { goals, ...alone } = open;
+    expect(readQuests({ quests: [open] })).toEqual([
       {
-        id: "timed:9",
-        title: "Take part in 6 wars",
-        have: 2,
-        need: 6,
-        unit: "wars",
-        reward: 500,
-        ends: Date.parse("2026-11-25T16:00:00.000Z"),
+        id: "daily:9",
+        slot: "daily",
+        title: "Complete 3 NOL raids or 9 wars",
+        goals: [
+          { have: 1, need: 3, unit: "NOL raids" },
+          { have: 4, need: 9, unit: "wars" },
+        ],
+        reward: 300,
+        ends: null,
+        reroll: 0,
       },
     ]);
+    for (const one of [alone, { ...open, goals: goals.slice(1) }, { ...open, goals: [goals[0], { type: "wars" }] }])
+      expect(readQuests({ quests: [one] })[0]?.goals).toEqual([{ have: 4, need: 9, unit: "wars" }]);
+  });
+
+  test("every quest is listed, however many", () => {
+    const weekly = listed(isRecord(QUESTS) ? QUESTS.quests : null)[0];
+    const many = Array.from({ length: 8 }, (_, n) => ({ ...(isRecord(weekly) ? weekly : {}), id: `weekly:${n}` }));
+    expect(readQuests({ quests: many })).toHaveLength(8);
   });
 
   test("the same quest open and just finished is one note", () => {
@@ -306,9 +340,6 @@ describe("the feed's pace, live", () => {
   });
 });
 
-/** A list, or nothing. */
-const listed = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-
 describe("the live guild", () => {
   let world: Standin | null = null;
   afterEach(() => {
@@ -378,6 +409,80 @@ describe("the live guild", () => {
     expect(p).toMatchObject({ first: true, mark: TESTER.event_cursor, since: [] });
     expect(makeLive(p).news()).toEqual([]);
     expect(world.sent.some((s) => s.path.includes("after="))).toBe(false);
+  });
+
+  /** The guild over Leaf's quests with the weekly as `weekly:1`, free to reroll, its reroll answered by `reroll`. */
+  async function onTheBoard(reroll: Route | Reply) {
+    world = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/me/quests": { status: 200, body: QUESTS },
+      "GET /v1/me/events": { status: 200, body: EVENTS },
+      "POST /v1/me/quests/weekly:1/reroll": reroll,
+    });
+    await start();
+    await prepare(null);
+    const p = prepared();
+    if (!p) throw new Error("nothing prepared");
+    const quests = p.quests.map((q) => (q.id === "weekly:2" ? { ...q, id: "weekly:1", reroll: 0 } : q));
+    return { guild: makeLive({ ...p, quests }), posted: () => (world?.sent ?? []).filter((s) => s.method === "POST") };
+  }
+  const REROLLED = answer("POST /v1/me/quests/{id}/reroll");
+
+  test("a reroll's new quest takes the old one's place at once, and the purse shows the Leaf left", async () => {
+    const { guild, posted } = await onTheBoard({ status: 200, body: REROLLED });
+    expect(guild.quests().map((q) => q.id)).toEqual(["weekly:1", "timed:1", "daily:1"]);
+    expect(await guild.reroll("weekly:1", 0)).toEqual({ spent: 0 });
+    expect(posted().map((s) => [s.path, s.body])).toEqual([["/v1/me/quests/weekly:1/reroll", { leaf: 0 }]]);
+    expect(guild.quests().map((q) => q.id)).toEqual(["weekly:2", "timed:1", "daily:1"]);
+    // The next one costs Leaf.
+    expect(guild.quests()[0]?.reroll).toBe(100);
+    expect(balance().leaf).toBe(5135);
+  });
+
+  test("a paid reroll sends the Leaf the member was shown", async () => {
+    const paid = isRecord(REROLLED) ? { ...REROLLED, leaf: 2350, spent: 100 } : {};
+    const { guild, posted } = await onTheBoard({ status: 200, body: paid });
+    expect(await guild.reroll("weekly:1", 100)).toEqual({ spent: 100 });
+    expect(posted().map((s) => s.body)).toEqual([{ leaf: 100 }]);
+    expect(balance().leaf).toBe(2350);
+  });
+
+  test("each refusal is said in Leaf's own words, and nothing else changes", async () => {
+    const replies: Reply[] = [
+      { status: 409, body: answer("POST /v1/me/quests/{id}/reroll, the cost changed") },
+      { status: 409, body: answer("POST /v1/me/quests/{id}/reroll, the same quest again") },
+      // Leaf's words for the other two.
+      { status: 409, body: { code: "insufficient_leaf", message: "You don't have enough Leaf to reroll it" } },
+      { status: 409, body: { code: "not_rerollable", message: "That quest can't be rerolled" } },
+      { status: 500 },
+      "offline",
+    ];
+    const { guild } = await onTheBoard(() => replies.shift() ?? "offline");
+    const board = guild.quests();
+    const leaf = balance().leaf;
+    // One after another: while one is on its way, the next is not sent.
+    const again = () => guild.reroll("weekly:1", 0);
+    const said = [await again(), await again(), await again(), await again(), await again(), await again()];
+    expect(said).toEqual([
+      { said: "Rerolling it costs something else now. Refresh your quests" },
+      { said: "That quest is no longer in its slot. Refresh your quests" },
+      { said: "You don't have enough Leaf to reroll it" },
+      { said: "That quest can't be rerolled" },
+      { said: NO_REROLL },
+      { said: NO_REROLL },
+    ]);
+    expect(guild.quests()).toBe(board);
+    expect(balance().leaf).toBe(leaf);
+  });
+
+  test("a reroll is sent once, however often it is pressed", async () => {
+    const { guild, posted } = await onTheBoard({ status: 200, body: REROLLED });
+    const twice = await Promise.all([guild.reroll("weekly:1", 0), guild.reroll("weekly:1", 0)]);
+    expect(twice).toEqual([{ spent: 0 }, null]);
+    // Pressed on the note just swapped away, before the board is drawn again.
+    expect(await guild.reroll("weekly:1", 0)).toBeNull();
+    expect(posted()).toHaveLength(1);
   });
 
   test("hands the town only those the server names, each in their own skin", async () => {

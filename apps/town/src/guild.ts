@@ -33,16 +33,26 @@ export interface Me extends Member {
   week: readonly string[];
 }
 
-/** A quest on the board: it pays its Leaf by itself once done. */
-export interface Quest {
-  id: string;
-  title: string;
+/** One way to finish a quest, and how far along it is. */
+export interface Goal {
   have: number;
   need: number;
   unit: string;
+}
+
+/** A quest on the board: it pays its Leaf by itself once done. */
+export interface Quest {
+  id: string;
+  /** Its kind, as Leaf's slots are: `daily`, `weekly`, `timed` or `repeatable`. */
+  slot: string;
+  title: string;
+  /** Every way to finish it while it is open, when Leaf sends each; otherwise the nearest, and for a quest done, the one that did it. */
+  goals: readonly Goal[];
   reward: number;
-  /** When it ends, in milliseconds since 1970, if it ends at a set time. */
+  /** When an open quest ends, in milliseconds since 1970, if it ends at a set time. */
   ends: number | null;
+  /** What rerolling it costs now: 0 when free, null when it cannot be rerolled. */
+  reroll: number | null;
 }
 
 /** Somebody a piece of the guild's news is about: a real member, or the member themself. */
@@ -109,6 +119,13 @@ export interface Guild {
   me(): Me;
   /** What is pinned on the board, with how far along each is. */
   quests(): readonly Quest[];
+  /**
+   * Swaps a quest on the board for another, for the Leaf the member was shown (`leaf`, 0 when
+   * free); the new one takes its place at once. Gives back the Leaf it took, or Leaf's words for why
+   * it did not happen; null, sending nothing, while another is on its way or for a quest no longer
+   * on the board.
+   */
+  reroll(id: string, leaf: number): Promise<{ spent: number } | { said: string } | null>;
   /** A note pinned on the board in place of quests, for somebody quests are not for (a guest); null for anybody else. */
   boardNote(): string | null;
   /** The arrival letter's lines from the member's own news since the town last told them any. */

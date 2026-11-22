@@ -10,6 +10,7 @@
 
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 
+import type { Quest } from "./guild.ts";
 import { NOTES } from "./notes.ts";
 
 /** Quest ids as a set, written out the same whatever order they came in. */
@@ -48,6 +49,30 @@ export const TABS = ["Quests", "News"] as const;
 
 /** The tab the board opens on: News while there is news unread, and Quests otherwise. */
 export const openingTab = (): (typeof TABS)[number] => (unread() ? "News" : "Quests");
+
+/** What each kind of quest is called, by Leaf's slot, as the mod calls them. */
+const KINDS: Readonly<Record<string, string>> = {
+  daily: "Daily",
+  weekly: "Weekly",
+  timed: "Timed",
+  repeatable: "Endless",
+};
+
+/**
+ * A quest's kind and, if it ends at a set time, when, in the reader's own time: "Daily", "Timed ·
+ * Until 14:00" on the day it ends, "Weekly · Until Monday" at the midnight it ends, "Weekly · Until
+ * Monday 01:00" otherwise. `zone` is for the tests.
+ */
+export function kindLine(q: Pick<Quest, "slot" | "ends">, now: number, zone?: string): string {
+  const kind = KINDS[q.slot] ?? q.slot;
+  if (q.ends === null) return kind;
+  const as = (o: Intl.DateTimeFormatOptions, at: number): string =>
+    new Intl.DateTimeFormat("en-GB", { ...o, timeZone: zone }).format(at);
+  const time = as({ hour: "2-digit", minute: "2-digit", hourCycle: "h23" }, q.ends);
+  const day = as({ weekday: "long" }, q.ends);
+  const today = as({ dateStyle: "short" }, q.ends) === as({ dateStyle: "short" }, now);
+  return `${kind} · Until ${today ? time : time === "00:00" ? day : `${day} ${time}`}`;
+}
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
