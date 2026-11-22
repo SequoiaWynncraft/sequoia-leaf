@@ -160,7 +160,7 @@ export class Play extends Context.Service<
                   const { rev, text, game } = yield* opened(playing, played, now);
                   let balance = yield* coins.balance(playing.playerId);
                   const results: Result[] = [];
-                  const answers: { readonly id: string; readonly result: string }[] = [];
+                  const answers: { readonly id: string; readonly result: string; readonly refused: boolean }[] = [];
                   for (const { id, command } of sent) {
                     const before = yield* store.answered(playing.playerId, played.id, id);
                     if (Option.isSome(before)) {
@@ -197,7 +197,7 @@ export class Play extends Context.Service<
                       result = { id, notes: attempt.notes };
                     }
                     results.push(result);
-                    answers.push({ id, result: JSON.stringify(result) });
+                    answers.push({ id, result: JSON.stringify(result), refused: "refused" in result });
                   }
                   const after = game.text();
                   let next = rev;
@@ -212,6 +212,9 @@ export class Play extends Context.Service<
                   for (const { id, result } of answers) {
                     yield* store.answer(playing.playerId, played.id, id, next, result, now);
                   }
+                  // Counted for the staff's report: each command done or refused now, not those answered from before.
+                  const refused = answers.filter((a) => a.refused).length;
+                  yield* store.count(playing.playerId, answers.length - refused, refused, now);
                   return { rev: next, results, view: game.view(ctxOf(playing, now, 0)) };
                 }),
               )

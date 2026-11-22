@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { SqlClient } from "effect/sql";
 
 // The play service: Leaf owns each game's state, and a player's page sends commands. Coins become a
-// ledger like Leaf's, and what players did in the games is kept as activity.
+// ledger like Leaf's, and each player's commands are counted by the day, done and refused.
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
 
@@ -79,17 +79,16 @@ export default Effect.gen(function* () {
     END
   `;
 
-  // Things worth remembering that players did in the games: a run begun or ended, a room won or lost.
+  // What each player's commands came to on each UTC day (`day` is its first moment): how many were
+  // done and how many refused, for the staff's report. Commands sent again and answered from before
+  // count once. What a game's commands log is written to `activity` (migration 16).
   yield* sql`
-    CREATE TABLE activity (
-      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    CREATE TABLE command_days (
       player_id TEXT    NOT NULL,
-      at        INTEGER NOT NULL,
-      game      TEXT    NOT NULL,
-      kind      TEXT    NOT NULL,
-      -- What happened, as a JSON object.
-      data      TEXT    NOT NULL
-    ) STRICT
+      day       INTEGER NOT NULL,
+      done      INTEGER NOT NULL DEFAULT 0 CHECK (done >= 0),
+      refused   INTEGER NOT NULL DEFAULT 0 CHECK (refused >= 0),
+      PRIMARY KEY (player_id, day)
+    ) STRICT, WITHOUT ROWID
   `;
-  yield* sql`CREATE INDEX activity_by_player ON activity (player_id, at)`;
 });

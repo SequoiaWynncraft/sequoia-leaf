@@ -1,4 +1,4 @@
-import { DAY_MS, type Logged, type PlayerId } from "@sequoia-leaf/core";
+import { DAY_MS, type Logged, type PlayerId, utcDay } from "@sequoia-leaf/core";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
@@ -24,9 +24,10 @@ export type ActivityRow = typeof Activity.Type;
 
 /**
  * What the play service keeps: each player's state in each game (`play_state`), what each command
- * answered (`play_commands`, two days), and the things players did that are worth remembering
- * (`activity`, for good). Every method is meant to run inside the play service's transaction. A
- * database failure is a defect.
+ * answered (`play_commands`, two days), the things players did that are worth remembering
+ * (`activity`, for good), and how many of each player's commands were done and refused each UTC
+ * day (`command_days`, for the staff's report). Every method is meant to run inside the play
+ * service's transaction. A database failure is a defect.
  */
 export class PlayStore extends Context.Service<
   PlayStore,
@@ -58,6 +59,8 @@ export class PlayStore extends Context.Service<
     readonly log: (playerId: PlayerId, game: string, logged: Logged, now: number) => Effect.Effect<void>;
     /** A player's activity, oldest first. */
     readonly activity: (playerId: PlayerId) => Effect.Effect<readonly ActivityRow[]>;
+    /** Counts a player's commands on the UTC day of `now`: how many were done and how many refused. */
+    readonly count: (playerId: PlayerId, done: number, refused: number, now: number) => Effect.Effect<void>;
   }
 >()("leaf/PlayStore") {
   static readonly layer = Layer.effect(
@@ -121,6 +124,14 @@ export class PlayStore extends Context.Service<
             VALUES (${playerId}, ${now}, ${game}, ${logged.kind}, ${JSON.stringify(logged.data)})
           `.pipe(Effect.asVoid, Effect.orDie),
         activity: (playerId) => activity(playerId).pipe(Effect.orDie),
+        count: (playerId, done, refused, now) =>
+          done === 0 && refused === 0
+            ? Effect.void
+            : sql`
+                INSERT INTO command_days (player_id, day, done, refused)
+                VALUES (${playerId}, ${utcDay(now) * DAY_MS}, ${done}, ${refused})
+                ON CONFLICT (player_id, day) DO UPDATE SET done = done + excluded.done, refused = refused + excluded.refused
+              `.pipe(Effect.asVoid, Effect.orDie),
       });
     }),
   );

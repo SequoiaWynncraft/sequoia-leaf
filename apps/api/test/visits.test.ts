@@ -309,13 +309,13 @@ describe("GET /v1/game/admin/activity", () => {
       [alice, day(24, 9), "works", "order_filled", { story: false }],
       [carol, day(24, 12, 30), "works", "order_filled", { story: true }],
       [carol, day(24, 12, 40), "works", "order_filled", { story: true }],
-      [alice, day(24, 15), "raid", "raid_started", { trail: "moss" }],
-      [alice, day(24, 15, 5), "raid", "raid_room", { room: 1, won: true }],
-      [alice, day(24, 15, 9), "raid", "raid_room", { room: 2, won: true }],
-      [alice, day(24, 15, 14), "raid", "raid_room", { room: 3, won: false }],
-      [alice, day(24, 15, 15), "raid", "raid_ended", { trail: "moss", rooms_won: 2, how: "lost", coins: 40 }],
-      [bob, day(25, 6), "raid", "raid_started", { trail: "fen" }],
-      [bob, day(25, 6, 4), "raid", "raid_room", { room: 1, won: true }],
+      [alice, day(24, 15), "raid", "raid_started", { trail: 0 }],
+      [alice, day(24, 15, 5), "raid", "raid_room", { room: 1, kind: "trouble", won: true, resolve: 3, seconds: 41 }],
+      [alice, day(24, 15, 9), "raid", "raid_room", { room: 2, kind: "trouble", won: true, resolve: 3, seconds: 38.5 }],
+      [alice, day(24, 15, 14), "raid", "raid_room", { room: 3, kind: "boss", won: false, resolve: 0, seconds: 63 }],
+      [alice, day(24, 15, 15), "raid", "raid_ended", { trail: 0, rooms_won: 2, ended: "lost", coins: 40 }],
+      [bob, day(25, 6), "raid", "raid_started", { trail: 1 }],
+      [bob, day(25, 6, 4), "raid", "raid_room", { room: 1, kind: "trouble", won: true, resolve: 3, seconds: 30 }],
     ] as const;
     for (const [player, at, game, kind, data] of logged) {
       // oxlint-disable-next-line no-await-in-loop -- in order
@@ -327,14 +327,6 @@ describe("GET /v1/game/admin/activity", () => {
       );
     }
     // The Coins ledger, as the play service keeps it.
-    await services.query(
-      (sql) => sql`
-        CREATE TABLE coin_entries (
-          id INTEGER PRIMARY KEY AUTOINCREMENT, player_id TEXT NOT NULL, amount INTEGER NOT NULL,
-          reason TEXT NOT NULL, game TEXT NOT NULL, key TEXT NOT NULL UNIQUE, at INTEGER NOT NULL
-        ) STRICT
-      `,
-    );
     const coins: readonly (readonly [PlayerId, number, number])[] = [
       [alice, day(25, 9), 3000],
       [alice, day(25, 9, 40), 2500],

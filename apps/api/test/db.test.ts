@@ -108,6 +108,7 @@ describe("the database", () => {
           "play_commands",
           "coin_entries",
           "coins",
+          "command_days",
           "activity",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
@@ -122,7 +123,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 16 },
+      { latest: 17 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
