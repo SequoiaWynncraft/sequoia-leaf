@@ -157,6 +157,15 @@ let asked: { key: string; timer: ReturnType<typeof setTimeout> } | null = null;
 export const asking = (key: string): boolean => asked?.key === key;
 
 /**
+ * What a button that asks is drawn with: its label, or the question in the label's place. Both are
+ * in the button, one over the other and only one seen, so asking never changes the button's size.
+ */
+export function asksAgain(key: string, label: readonly Child[], question: string): HTMLElement {
+  const on = asking(key);
+  return el("span", "k-asks", {}, el("span", on ? "hid" : "", {}, ...label), el("span", on ? "" : "hid", {}, question));
+}
+
+/**
  * A press on a button that spends. The first press only notes it and gives false: `redraw` is
  * called so the button asks, and again if four seconds pass without a second press. The second
  * press gives true.

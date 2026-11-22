@@ -857,6 +857,20 @@ button.k-info-chip:hover .k-chip {
   --f: var(--k-f-btn-slate);
   --fd: var(--k-f-btn-slate-down);
 }
+/* Its label and its question, one over the other: asking does not change the button's size. */
+.k-asks {
+  display: inline-grid;
+}
+.k-asks > span {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 3);
+}
+.k-asks > .hid {
+  visibility: hidden;
+}
 /* Pressed once, a button that spends asks to be pressed again. */
 .k-btn.asking {
   --f: var(--k-f-btn-green);
