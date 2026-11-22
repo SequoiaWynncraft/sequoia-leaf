@@ -363,9 +363,11 @@ not shown to them while they are a guest.
 `works` and `raid` (`SAVE_SLOTS` in `packages/core/src/saves.ts`). A save is a
 JSON object of at most 256 KiB as JSON text; Leaf stores it as it comes and
 reads nothing in it. It is not the ledger: one row per slot, overwritten in
-place, with no history. Each save records whether a guest wrote it; whenever
-any save is written, guests' saves not written for 90 days are removed.
-Members' saves are never removed.
+place. Each save records whether a guest wrote it; whenever any save is
+written, guests' saves not written for 90 days are removed. Members' saves are
+never removed. So that a save written over can be put back by hand, Leaf keeps
+what each write replaced, and what a page sent that was refused for its
+version, each at most once a minute a slot, for a week (`save_history`).
 
 - `GET /v1/game/saves/{slot}` answers `{ "slot", "version", "updated_at", "data" }`,
   or 404 `no_save` for a slot never written.
