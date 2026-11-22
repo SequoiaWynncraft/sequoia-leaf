@@ -907,7 +907,8 @@ b.dmg.true {
 }
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 46), 1fr));
+  /* A figure's picture is up to 48 units wide: a tile always has room for it. */
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 54), 1fr));
   gap: calc(var(--u) * 2);
 }
 .tile {
@@ -994,6 +995,16 @@ b.dmg.true {
 }
 .look[aria-pressed="true"] {
   filter: brightness(1.25);
+}
+
+/* A stall too narrow for five large pictures and names shows both small, each inside its own card. */
+@media (max-width: 1180px) {
+  .offer {
+    --fs: 1;
+  }
+  .offer .name {
+    font: var(--f-small);
+  }
 }
 
 /* ---------- a phone held upright: its own arrangement ---------- */

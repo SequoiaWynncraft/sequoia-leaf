@@ -941,7 +941,9 @@ export function drawFight(g: Ctx, list: Standing[]): void {
         if (fallen >= 0 || !u.alive) return;
         if (hidden || sunk) return;
         drawStatus(g, a, x, y - hover, frames.tall, f.tick);
-        if (u.stars > 1) drawStars(g, u.stars, x, y - 3 - hover - frames.tall);
+        // Over the figure's head as it is drawn now: casting, some rear up taller than they stand.
+        const tall = c < a.castUntil ? Math.max(frames.tall, frames.castTall) : frames.tall;
+        if (u.stars > 1) drawStars(g, u.stars, x, y - 3 - hover - tall);
         drawBars(g, a, x, y);
       },
     });

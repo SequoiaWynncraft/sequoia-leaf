@@ -191,7 +191,8 @@ export function pawnAt(run: Run, x: number, y: number): Pawn | null {
     const f = framesOf(p.kind);
     const half = Math.max(6, f.wide / 2);
     if (x < p.x - half || x > p.x + half || y > p.y + 3 || y < p.y - f.tall - 1) continue;
-    if (!best || p.y > best.y) best = p;
+    // The one in front; of two side by side (bench figures are a little wider than their hollows), the nearer.
+    if (!best || p.y > best.y || (p.y === best.y && Math.abs(x - p.x) < Math.abs(x - best.x))) best = p;
   }
   if (best) return best;
   const seat = seatAtPoint(x, y);

@@ -32,8 +32,9 @@ export interface Frames {
   readonly h: number;
   readonly ax: number;
   readonly ay: number;
-  /** How tall the figure itself stands above its feet when idle. */
+  /** How tall the figure itself stands above its feet when idle, and when it rears up to cast. */
   readonly tall: number;
+  readonly castTall: number;
   /** How wide it is on the ground. */
   readonly wide: number;
   /** The row its head starts at, for a small picture of it. */
@@ -116,6 +117,7 @@ function bake(kind: UnitKind): { right: Frames; left: Frames } {
     ax: 1 + Math.round(widthOf(lists.a) / 2),
     ay: h + 1,
     tall: lists.a.length,
+    castTall: lists.cast.length,
     wide: widthOf(lists.a),
     head: art.head ?? 0,
     flies: art.flies === true,
