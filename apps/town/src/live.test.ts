@@ -533,15 +533,18 @@ describe("who is here, and who is dozing", () => {
     const at = Date.UTC(2026, 10, 25, 12);
     const present = [{ id: "a", name: "Alice", place: "works" as const, rank: null, guest: false }];
     const resting = [
-      { id: ME, name: "Tester", place: "town" as const, seen: at - 1, guest: false },
-      { id: "a", name: "Alice", place: "town" as const, seen: at - 2, guest: false },
-      { id: "b", name: "Bob", place: "camp" as const, seen: at - 3, guest: false },
+      { id: ME, name: "Tester", place: "town" as const, seen: at - 1, guest: false, stay: true },
+      { id: "a", name: "Alice", place: "town" as const, seen: at - 2, guest: false, stay: true },
+      { id: "b", name: "Bob", place: "camp" as const, seen: at - 3, guest: false, stay: true },
+      // Newest of all, but their character does not stay: listed as seen lately, never drawn dozing.
+      { id: "x", name: "Xan", place: "town" as const, seen: at + 9, guest: false, stay: false },
       ...Array.from({ length: 14 }, (_, i) => ({
         id: `n${i}`,
         name: `N${i}`,
         place: "table" as const,
         seen: at - 9 + i,
         guest: false,
+        stay: true,
       })),
     ];
     const r = toResting(resting, present, ME);
@@ -572,7 +575,7 @@ describe("who is here, and who is dozing", () => {
 
   test("a guest is drawn like any member, their own skin and name, with Guest for a rank, here or dozing", () => {
     const present = [{ id: "g", name: "Wanderer", place: "town" as const, rank: null, guest: true }];
-    const gone = [{ id: "h", name: "Drifter", place: "works" as const, seen: 5, guest: true }];
+    const gone = [{ id: "h", name: "Drifter", place: "works" as const, seen: 5, guest: true, stay: true }];
     expect(toVisitors(present, ME)).toEqual([
       { id: "g", name: "Wanderer", rank: "Guest", at: "town", skin: "/v1/game/skins/g" },
     ]);

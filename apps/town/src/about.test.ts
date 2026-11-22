@@ -125,7 +125,7 @@ describe("who is about", () => {
       present: [
         // Still at the Works as far as the guild's half-minute-old list knows, but in the room now.
         mate("b", "Birchwood", "works"),
-        // The guild still has them in town, but the room does not: just gone, or in another copy.
+        // The guild still has them in town, but the room does not: they have only just walked out.
         mate("q", "Quillon", "town"),
         mate("me", "Tester", "town"),
       ],
@@ -134,7 +134,7 @@ describe("who is about", () => {
     });
     expect(shown(about)).toEqual([
       ["In town", ["Tester: Strategist (you)", "Birchwood: Captain"]],
-      ["Seen lately", ["Fernhollow: 1 minute ago"]],
+      ["Seen lately", ["Quillon: just now", "Fernhollow: 1 minute ago"]],
     ]);
   });
 
@@ -180,9 +180,10 @@ describe("who is about, from the guild", () => {
         { id: "g", name: "Pebblefoot", place: "town", rank: null, guest: true },
       ],
       [
-        { id: "f", name: "Fernhollow", place: "town", seen: NOW - 180 * MIN, guest: false },
-        { id: "q", name: "Quillon", place: "works", seen: NOW - 40 * MIN, guest: false },
-        { id: "c", name: "Campfellow", place: "camp", seen: NOW - MIN, guest: false },
+        { id: "f", name: "Fernhollow", place: "town", seen: NOW - 180 * MIN, guest: false, stay: true },
+        // Somebody whose character does not stay in town is seen lately all the same.
+        { id: "q", name: "Quillon", place: "works", seen: NOW - 40 * MIN, guest: false, stay: false },
+        { id: "c", name: "Campfellow", place: "camp", seen: NOW - MIN, guest: false, stay: true },
       ],
       "me",
     );

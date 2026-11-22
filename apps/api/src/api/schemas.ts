@@ -177,6 +177,7 @@ export const Present = Schema.Struct({
       place: Schema.String,
       guest: Schema.Boolean,
       seen_at: Time,
+      stay: Schema.Boolean,
     }),
   ),
 });

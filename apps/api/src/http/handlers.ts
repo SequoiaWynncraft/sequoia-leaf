@@ -607,6 +607,7 @@ const presentJson = (here: Here) =>
       place: player.place,
       guest: player.guest,
       seen_at: iso(player.seenAt),
+      stay: player.stay,
     })),
   }) satisfies typeof Body.Present.Type;
 

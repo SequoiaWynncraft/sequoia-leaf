@@ -28,10 +28,12 @@ const Resting = Schema.Struct({
   place: Schema.String,
   guest: Schema.BooleanFromBit,
   seenAt: Schema.Number,
+  /** Whether their character stays in town, dozing, now that they are gone. */
+  stay: Schema.BooleanFromBit,
 });
 export type Resting = typeof Resting.Type;
 
-/** Who is about: those here now, and those gone in the last day whose characters stay in town. */
+/** Who is about: those here now, and those gone in the last day, with whether their characters stay in town. */
 export interface Here {
   readonly present: readonly Present[];
   readonly resting: readonly Resting[];
@@ -107,8 +109,8 @@ export class Presence extends Context.Service<
         Request: Schema.Struct({ before: Schema.Int, since: Schema.Int }),
         Result: Resting,
         execute: ({ before, since }) => sql`
-          SELECT player_id AS playerId, username, place, guest, seen_at AS seenAt FROM presence
-          WHERE seen_at <= ${before} AND seen_at >= ${since} AND stay = 1
+          SELECT player_id AS playerId, username, place, guest, seen_at AS seenAt, stay FROM presence
+          WHERE seen_at <= ${before} AND seen_at >= ${since}
           ORDER BY seen_at DESC, player_id
           LIMIT ${RESTING_MOST}
         `,
