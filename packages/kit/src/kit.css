@@ -828,6 +828,13 @@ button.k-info-chip:hover .k-chip {
   --f: var(--k-f-btn-slate);
   --fd: var(--k-f-btn-slate-down);
 }
+/* Pressed once, a button that spends asks to be pressed again. */
+.k-btn.asking {
+  --f: var(--k-f-btn-green);
+  --fd: var(--k-f-btn-green-down);
+  color: var(--k-cream);
+  text-shadow: 0 var(--u) 0 #0007;
+}
 .k-btn:disabled,
 .k-btn.off {
   --f: var(--k-f-btn-off);

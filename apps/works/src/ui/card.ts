@@ -13,6 +13,7 @@
  */
 import {
   type Action,
+  type Block,
   close,
   type Description,
   type Entry,
@@ -377,6 +378,13 @@ function inTheGround(id: PlotId): Entry[] {
   return [...counts].map(([raw, count]) => ({ ref: itemRef(raw), note: `${count} tiles` }));
 }
 
+/** What a button that buys says once it has been pressed: the second press buys. */
+const AGAIN = "Press again to buy";
+
+/** For something that costs more Coins than there are: how many more it takes. */
+const short = (price: number): Block[] =>
+  coins() >= price ? [] : [{ body: `You need ${(price - coins()).toLocaleString("en-US")} more Coins.` }];
+
 function plotDesc(id: PlotId): Description | null {
   const w = S.world;
   const plot = w.land.plots.find((p) => p.id === id);
@@ -395,6 +403,7 @@ function plotDesc(id: PlotId): Description | null {
     blocks: [
       ...(bank ? [{ body: "The stream runs through it. A waterwheel must be beside the stream." }] : []),
       ...(state === "not yet" ? [{ body: `${why ?? "Not for sale yet"}.` }] : []),
+      ...(state === "for sale" ? short(plot.price) : []),
     ],
     rows: [{ label: "In the ground", things: inTheGround(id) }],
     actions:
@@ -404,6 +413,7 @@ function plotDesc(id: PlotId): Description | null {
               label: `Buy for ${plot.price.toLocaleString("en-US")}`,
               look: coins() >= plot.price ? "sm wide" : "sm wide off",
               icon: icon("coin"),
+              ...(coins() >= plot.price ? { ask: AGAIN } : {}),
               on: () => {
                 // Bought, the card has nothing more to offer: it is put away, so it does not sit over the new land.
                 if (buyLand(id)) close();
@@ -427,7 +437,7 @@ function planDesc(art: Art, id: PlanId): Description | null {
       state === "owned"
         ? el("span", "k-chip lit", {}, icon("check"), "Yours")
         : amount("coin", plan.price.toLocaleString("en-US")),
-    blocks: state === "not yet" && why ? [{ body: `${why}.` }] : [],
+    blocks: state === "not yet" && why ? [{ body: `${why}.` }] : state === "for sale" ? short(plan.price) : [],
     rows: [
       { label: "Opens", things: opens.map((k) => ({ ref: machineRef(k) })) },
       {
@@ -442,9 +452,10 @@ function planDesc(art: Art, id: PlanId): Description | null {
       state === "for sale"
         ? [
             {
-              label: plan.price.toLocaleString("en-US"),
+              label: `Buy for ${plan.price.toLocaleString("en-US")}`,
               look: coins() >= plan.price ? "sm wide" : "sm wide off",
               icon: icon("coin"),
+              ...(coins() >= plan.price ? { ask: AGAIN } : {}),
               on: () => {
                 buyIdea(id);
               },

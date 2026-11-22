@@ -24,9 +24,11 @@ import {
   ITEMS,
   KIND,
   type Kind,
+  LEFT,
   MILLED,
   REACH,
   RECIPE,
+  RIGHT,
   type Status,
   status,
   TICKS,
@@ -35,7 +37,7 @@ import {
 } from "@sequoia-leaf/yard";
 
 import { HOP, walkers } from "./actors.ts";
-import { beltTile, ride, STEPS, TILE } from "./art/belts.ts";
+import { type Arms, beltTile, ride, STEPS, TILE } from "./art/belts.ts";
 import { BEYOND, glint } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { DEPOT } from "./art/machines.ts";
@@ -544,7 +546,8 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     for (let tx = tx0; tx <= tx1; tx++) {
       const i = ty * land.w + tx;
       const b = w.cells[i];
-      if (!b || !L.arms[i]) continue;
+      const arms = L.arms[i];
+      if (!b || !arms) continue;
       const x = tx * TILE - cx;
       const y = ty * TILE - cy;
       if (b.item !== null) {
@@ -561,8 +564,7 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
                 : vx === 0 && vy === -1
                   ? 3
                   : BACK[b.dir];
-        const to: number =
-          b.kind === "splitter" ? ([b.dir, (b.dir + 3) % 4, (b.dir + 1) % 4][b.turn % 3] ?? b.dir) : b.dir;
+        const to: number = b.kind === "splitter" ? sendWay(b, arms) : b.dir;
         const prog = Math.min(1, b.prog + (b.prog < 1 ? now.lead * along : 0));
         const [rx, ry] = ride(from, to, prog);
         const pic = art.item(b.item);
@@ -576,9 +578,12 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
           stand(art.bang, x + 8, y - 4 - Math.round(Math.abs(Math.sin(S.t * 4 + i)) * 2), (ty + 1) * TILE + 0.6);
       }
       if (b.kind === "splitter") {
-        const top = art.m.splitter[b.dir];
-        if (top) g.drawImage(top, x, y);
-        const v = art.m.vane[[b.dir, (b.dir + 3) % 4, (b.dir + 1) % 4][b.turn % 3] ?? b.dir];
+        // An arrowhead on each way out that leads somewhere.
+        [b.dir, LEFT[b.dir], RIGHT[b.dir]].forEach((d, k) => {
+          const head = art.m.heads[k]?.[b.dir];
+          if (head && arms[d] === 2) g.drawImage(head, x, y);
+        });
+        const v = art.m.vane[sendWay(b, arms)];
         if (v && b.item === null) g.drawImage(v, x + 5, y + 5);
       } else if (b.kind === "joiner") {
         const top = art.m.joiner[b.dir];
@@ -868,6 +873,16 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     pixelRing(g, x, y, r + 1, r + 1, GOLD[0], 2);
   }
   return buf.c;
+}
+
+/** The way a splitter sends its next thing: the first, from the one whose turn it is, that leads somewhere. */
+function sendWay(b: Building, arms: Arms): Dir {
+  const ways = [b.dir, LEFT[b.dir], RIGHT[b.dir]] as const;
+  for (let k = 0; k < 3; k++) {
+    const d = ways[(b.turn + k) % 3] ?? b.dir;
+    if (arms[d] === 2) return d;
+  }
+  return b.dir;
 }
 
 const armsFor = (dir: Dir): readonly [0 | 1 | 2, 0 | 1 | 2, 0 | 1 | 2, 0 | 1 | 2] => {

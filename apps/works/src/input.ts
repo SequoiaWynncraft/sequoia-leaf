@@ -60,11 +60,14 @@ const downs = new Map<number, Down>();
 let pinch: { d: number; cx: number; cy: number } | null = null;
 let pressTimer = 0;
 
-/** What the mouse is on says what it is, after a moment: something riding a belt, or else the tile. */
+/**
+ * What the mouse is on says what it is, after a moment: something riding a belt, or else the tile.
+ * Land not bought yet says nothing until it is clicked: the mouse crosses a great deal of it.
+ */
 function pointAt(tx: number, ty: number): void {
   const ref = S.tool === null && downs.size === 0 ? (riderAt(tx, ty) ?? refAt(tx, ty)) : null;
   const b = tileBox(tx, ty);
-  point(ref, b.x, b.y, b.w, b.h);
+  point(ref?.startsWith("plot:") ? null : ref, b.x, b.y, b.w, b.h);
 }
 
 /** A tap or click on a tile with nothing in hand: ask about what is there. */
