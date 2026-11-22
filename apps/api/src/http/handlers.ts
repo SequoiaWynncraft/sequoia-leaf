@@ -902,6 +902,12 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             if (done.status === "not_enough_coins") {
               return yield* new NotEnoughCoins({ code: "not_enough_coins", message: "There are not that many Coins" });
             }
+            if (done.status === "slow") {
+              return yield* new SlowDown({
+                code: "slow_down",
+                message: "Coins are coming faster than Leaf takes them. Send them again in a moment",
+              });
+            }
             if (done.status === "too_much") {
               return yield* new TooMuch({
                 code: "too_much",

@@ -498,20 +498,25 @@ The games on it now: `raid`, The Little Raid (`packages/raid`).
   One refused does not stop the rest. The whole batch is one transaction: the
   state is read, brought to now, each command done, and the state, the Coins
   each paid or took, what each logged and each command's answer written
-  together; a failure anywhere leaves nothing of it. A command whose id was
-  seen in the last two days answers what it answered then and changes nothing,
-  so a page that lost an answer sends the batch again safely. `rev` goes up by
-  one with each batch that changed anything.
+  together; a failure anywhere leaves nothing of it. A command whose id is
+  among the player's newest 256 to the game answers what it answered then
+  (its notes or its refusal, with the state as it stands now) and changes
+  nothing, so a page that lost an answer sends the batch again safely. `rev`
+  goes up by one with each batch that changed anything.
 - 404 `no_such_game` for a game Leaf does not play; 400 `invalid_command` for a
   body that is not commands, more than 32, a missing or repeated id, or a
   command that is not one of the game's (nothing is done); 413 as elsewhere;
-  429 `slow_down` past 10 batches a second (bursts of 20) for one player.
+  429 `slow_down` for a batch that would take one player past 10 batches a
+  second (bursts of 20) or 10 commands a second (bursts of 40), across all
+  games: it is refused whole, and nothing is done.
 - A command that takes Coins the player does not have is refused with
   `not_enough_coins`.
 
 Tables (migration 17): `play_state` (a player's state in a game, with its
 `rev`; 0 is a state nothing has been done to), `play_commands` (each command's
-answer, kept two days), `coins` and `coin_entries`, and `command_days` (each
+id, the `rev` it led to and its notes or refusal, never the state; only each
+player's newest 256 to a game are kept, the older removed once a batch),
+`coins` and `coin_entries`, and `command_days` (each
 player's commands done and refused, by the UTC day). What commands log goes to
 `activity`, which migration 16 made for the staff's report.
 
@@ -551,16 +556,19 @@ This route is for them alone, and goes when they move.
 | `works_plot`   | works | spend | A plot of land bought for the yard.                             |
 | `works_plan`   | works | spend | A plan bought for the yard.                                     |
 
-It refuses, changing nothing: a spend the balance does not cover, 409
-`not_enough_coins`; earnings through this route past 10,000 in any hour, 429
-`too_much`; 400 `invalid_amount` and `invalid_reason`, and `invalid_command`
+It refuses, changing nothing: a call that would take a player past 4 a
+second (bursts of 20), 429 `slow_down`, read and counted for nothing; a spend
+the balance does not cover, 409 `not_enough_coins`; earnings through this
+route past 10,000 in any hour, 429 `too_much`; 400 `invalid_amount` and `invalid_reason`, and `invalid_command`
 for a body that is not such a call or an id that is not one. A player with no
 account yet has it opened with the welcome first. Each call done or refused
 counts toward the staff's report (`command_days`).
 
 **Activity.** What a game's commands log (a raid begun, a room won or lost, a
 raid ended and what it paid) is written to `activity` (`player_id`, `at`,
-`game`, `kind`, `data` as JSON) in the same transaction, and kept; so is the
+`game`, `kind`, `data` as JSON) in the same transaction: up to 1,000 of a
+player's a UTC day (past that they are not logged, and the play goes on), and
+kept 180 days, older rows being removed as new ones are written. So is the
 count of the batch's commands done and refused, in `command_days`. Both are
 for the staff's report (see [Who played](#who-played-the-staffs-view)).
 
@@ -840,7 +848,8 @@ rules are `packages/core/src/visits.ts`; the store is `apps/api/src/activity`.
   from before is not counted again.
 
 Visits and sessions that ended 180 days ago are removed whenever a visit is
-opened; players and the things done are kept for good. Every minute Leaf
+opened, and the things done 180 days ago whenever new ones are written (at
+most 1,000 of a player's are written a UTC day); players are kept for good. Every minute Leaf
 closes the visits gone silent, and so does a read of the report.
 
 `GET /v1/game/admin/activity?days=<n>` lets in only a session the backend marks

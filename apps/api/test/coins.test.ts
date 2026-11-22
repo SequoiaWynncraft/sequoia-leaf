@@ -188,6 +188,38 @@ describe("POST /v1/game/coins", () => {
   });
 });
 
+describe("the pace of POST /v1/game/coins", () => {
+  it("is four calls a second for a player, in bursts of twenty: past it 429 slow_down, nothing done or counted", async () => {
+    for (let i = 0; i < 20; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- one at a time
+      await done({ id: `b-${i}`, amount: -1, reason: "works_build" });
+    }
+    expect(await refused({ id: "b-20", amount: -1, reason: "works_build" })).toEqual([429, "slow_down"]);
+    expect(await balance(alice)).toBe(280);
+    expect(await entries(alice)).toHaveLength(21);
+    expect(await services.query((sql) => sql`SELECT done, refused FROM command_days`)).toEqual([
+      { done: 20, refused: 0 },
+    ]);
+    // A quarter of a second later there is room for one more; another player has their own.
+    clock.now += 250;
+    expect(await done({ id: "b-20", amount: -1, reason: "works_build" })).toBe(279);
+    expect(await refused({ id: "b-21", amount: -1, reason: "works_build" })).toEqual([429, "slow_down"]);
+    expect(await done({ id: "g-1", amount: -1, reason: "works_build" }, "carol-token")).toBe(299);
+  });
+
+  it("weighs the cap on a player's entries of the last day alone, by an index on the time", async () => {
+    const plan = await services.query(
+      (sql) => sql`
+        EXPLAIN QUERY PLAN SELECT coalesce(sum(amount), 0) FROM coin_entries
+        WHERE player_id = ${alice} AND amount > 0 AND at > ${T0 - HOUR} AND substr(key, 1, 5) = 'page:'
+      `,
+    );
+    expect(plan.map((row) => String(Object(row).detail))).toEqual([
+      "SEARCH coin_entries USING INDEX coin_entries_by_player_at (player_id=? AND at>?)",
+    ]);
+  });
+});
+
 describe("PUT /v1/game/saves/purse", () => {
   it("answers 410 moved and stores nothing: Coins are the ledger's now; what was there can still be read", async () => {
     await services.query(

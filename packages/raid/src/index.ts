@@ -295,5 +295,6 @@ export {
   type TableView,
   type TableWhy,
   tableView,
+  unfought,
 } from "./game.ts";
 export { readNotes, readView } from "./wire.ts";
