@@ -445,8 +445,11 @@ export function makeLive(p: Prepared): Guild {
     const before = swapped;
     const a = await ask("/v1/me/quests");
     asking = false;
-    // A reroll sent or answered while this was on its way knows more than this does.
-    if (a.status === 200 && !swapping && swapped === before) quests = readQuests(a.body);
+    if (a.status !== 200) return;
+    // A reroll sent or answered while this was on its way knows more than this does: once the
+    // reroll is answered, the board is read again.
+    if (!swapping && swapped === before) quests = readQuests(a.body);
+    else if (!swapping) void fetchBoard();
   }
 
   /** From the first moment anybody listens: the member's news, the guild's, and who is here. A guest hears only who is here. */
@@ -516,6 +519,8 @@ export function makeLive(p: Prepared): Guild {
         fromLedger(left);
         return { spent: num(body.spent) ?? leaf };
       }
+      // What Leaf found on the way to refusing (the quest finished meanwhile) is read.
+      void fetchBoard();
       // Refused, Leaf says why; with no answer it can read, the board says so.
       const message = a.status >= 400 && a.status < 500 && typeof body.message === "string" ? body.message : null;
       return { said: message ?? NO_REROLL };
