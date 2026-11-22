@@ -34,7 +34,7 @@ body {
   height: calc(var(--u) * var(--h) * var(--fs));
 }
 button.k-chip {
-  border: 0;
+  background: none;
   font: inherit;
   color: inherit;
 }
@@ -109,6 +109,10 @@ button.k-chip {
     translate: 0 calc(var(--u) * -1);
   }
 }
+/* Beside the hung signs, level with them. */
+#lastfight {
+  margin-top: var(--k-hang);
+}
 #resolve {
   margin-left: auto;
   display: flex;
@@ -151,7 +155,7 @@ body[data-picking="yes"] #foe {
   position: fixed;
   z-index: 5;
   left: var(--edge);
-  top: calc(var(--top) + var(--u) * 26);
+  top: calc(var(--top) + var(--k-hang) + var(--u) * 26);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -161,18 +165,19 @@ body[data-picking="yes"] #foe {
   overflow: hidden auto;
   scrollbar-width: none;
 }
-/* A trait's badge and count sit straight over the forest, so they have a dark ground of their own. */
+/* A trait's badge and count sit straight over the forest, so they are on the kit's wooden tag. */
 .trait {
-  min-height: calc(var(--u) * 14);
-  padding-right: calc(var(--u) * 4);
-  background: #0f0a19db;
-  box-shadow: 0 0 0 var(--u) var(--k-ink);
+  min-height: calc(var(--u) * 18);
+  padding: 0 calc(var(--u) * 4) 0 calc(var(--u) * 2);
+  border: var(--u) solid transparent;
   cursor: pointer;
 }
-.trait.top {
-  box-shadow:
-    0 0 0 var(--u) var(--k-ink),
-    0 0 0 calc(var(--u) * 2) var(--k-gold-lt);
+/* Switched on, a trait's name is gold (the kit's `lit`); only one at its last step wears the gold frame. */
+.k-chip.trait {
+  border-image: var(--k-f-chip) 3 fill / calc(var(--u) * 3);
+}
+.k-chip.trait.top {
+  border-image-source: var(--k-f-chip-lit);
 }
 .trait.woke {
   animation: woke 0.7s;
@@ -715,9 +720,6 @@ body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
   color: var(--k-cream);
   text-shadow: 0 var(--u) 0 var(--k-ink);
 }
-.pick.chosen {
-  border-image-source: var(--k-f-card-lit);
-}
 /* A flavour line: read, so in the reading face, and leaning. */
 .quip {
   font: var(--f-read);
@@ -857,14 +859,14 @@ b.dmg.true {
   background: #1a0f1e59;
 }
 .page {
-  width: min(100%, calc(var(--u) * 190));
+  width: min(100%, calc(var(--u) * 194));
   max-height: calc(100dvh - var(--u) * 8);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
 }
 .page.wide {
-  width: min(100%, calc(var(--u) * 300));
+  width: min(100%, calc(var(--u) * 304));
 }
 .page > .k-body {
   min-height: 0;

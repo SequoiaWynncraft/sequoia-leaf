@@ -31,22 +31,23 @@ function outlined(src: Grid, colour: string): Grid {
   );
 }
 
+type Ring = readonly [lit: string, shade: string];
+
 /**
- * A square frame built from the outside in: each ring is a pair of colours, the first for its top
- * and left edges (where the light falls) and the second for its bottom and right. `cut` clips the
- * corners; the first ring follows the clipped corner so the outline stays whole.
+ * A box built from the outside in: each ring is a pair of colours, the first for its top and left
+ * edges (where the light falls) and the second for its bottom and right. `cut` clips the corners;
+ * the first ring follows the clipped corner so the outline stays whole. With no `fill` it is hollow.
  */
-function ringed(size: number, rings: readonly (readonly [string, string])[], fill: string, cut: number): Grid {
-  const g = blank(size, size);
-  const last = size - 1;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const cx = Math.min(x, last - x);
-      const cy = Math.min(y, last - y);
+function ringed(w: number, h: number, rings: readonly Ring[], fill: string | null, cut: number): Grid {
+  const g = blank(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const cx = Math.min(x, w - 1 - x);
+      const cy = Math.min(y, h - 1 - y);
       if (cx + cy < cut) continue;
       const d = cx + cy === cut ? 0 : Math.min(cx, cy);
       const ring = rings[d];
-      const lit = d === x ? y <= last - d : y === d && x < last - d;
+      const lit = d === x ? y <= h - 1 - d : y === d && x < w - 1 - d;
       const row = g[y];
       if (row) row[x] = ring ? (lit ? ring[0] : ring[1]) : fill;
     }
@@ -57,6 +58,17 @@ function ringed(size: number, rings: readonly (readonly [string, string])[], fil
 function put(g: Grid, x: number, y: number, c: string): void {
   const row = g[y];
   if (row && x >= 0 && x < row.length) row[x] = c;
+}
+
+/** The picture with a hard shadow two pixels deep under it, in the clear pixels beneath whatever is drawn. */
+function shadowed(src: Grid): Grid {
+  const g = [...src.map((row) => [...row]), ...blank(src[0]?.length ?? 0, 2)];
+  g.forEach((row, y) =>
+    row.forEach((c, x) => {
+      if (!c && (src[y - 1]?.[x] || src[y - 2]?.[x])) row[x] = SHADE;
+    }),
+  );
+  return g;
 }
 
 /**
@@ -116,7 +128,6 @@ const SHADE = "#0b071080";
 type Ramp = readonly [lo: string, mid: string, hi: string];
 
 const BRASS: Ramp = ["#8a5a22", "#c9923c", "#f6cf7a"];
-const PLUM: Ramp = ["#3a2f52", "#5a4b7c", "#8a78b3"];
 /** The five tiers: stone, jade, sapphire, amethyst, gold. Each is its band, its jewel, and how large the jewel is. */
 const TIERS = [
   [["#565267", "#8d899f", "#cfcbdc"], ["#6f6b80", "#a9a5ba", "#e6e3ef"], 1],
@@ -187,10 +198,8 @@ function frame({ band: [lo, mid, hi], thick, cut, corner, gem, fill, drop = 0 }:
   return g;
 }
 
-/** A thin brass frame round a panel, and round a tip. */
-const panel = (): Grid => frame({ band: BRASS, thick: 4, cut: 2, corner: 5, gem: [BRASS, 1], fill: FIELD, drop: 2 });
-/** A quiet plum one, for the small things that sit over the world: the purse, the dock, a counter. */
-const plaque = (): Grid => frame({ band: PLUM, thick: 4, cut: 2, corner: 5, fill: FIELD, drop: 2 });
+/** The brass frame: a sign or a tip that is picked out wears it in place of its own. */
+const brass = (): Grid => frame({ band: BRASS, thick: 4, cut: 2, corner: 5, gem: [BRASS, 1], fill: FIELD, drop: 2 });
 /** A tier's frame: the jewel on each corner grows with the tier. It is drawn over what it holds. */
 const tier = ([band, gem, size]: (typeof TIERS)[number]): Grid =>
   frame({ band, thick: 5, cut: 3, corner: 9, gem: [gem, size] });
@@ -241,42 +250,166 @@ function hex(inset: number, colour: string): Grid {
   return g;
 }
 
-/** A row or a tile that stands up from the panel: flat, a step lighter. And the same picked out in gold. */
-const card = (): Grid => ringed(8, [[INK, INK]], RAISED, 1);
-const cardLit = (): Grid =>
-  ringed(
-    8,
-    [
-      [INK, INK],
-      ["#ffc247", "#f5ad35"],
-    ],
-    "#2b2440",
-    1,
+// ---------- timber, brass and parchment ----------
+
+/** Timber, darkest first and its lit edge last; the brass of a bracket; and a board behind a row of tools. */
+const WOOD = [...BARK, "#c98a58"] as const;
+const BRACKET: Ramp = ["#a3662a", GOLD[1], GOLD[2]];
+const BOARD = "#24130f";
+const INKED: Ring = [INK, INK];
+
+/** A flat shape made to stand up: its top and left edges catch the light, its bottom and right are in shade. */
+function emboss(g: Grid, cells: readonly (readonly [number, number])[], [lo, mid, hi]: Ramp): void {
+  const has = new Set(cells.map(([x, y]) => `${x} ${y}`));
+  for (const [x, y] of cells)
+    put(
+      g,
+      x,
+      y,
+      !has.has(`${x} ${y - 1}`) || !has.has(`${x - 1} ${y}`)
+        ? hi
+        : !has.has(`${x} ${y + 1}`) || !has.has(`${x + 1} ${y}`)
+          ? lo
+          : mid,
+    );
+}
+
+/**
+ * A panel's frame as a sample to cut up, corners and one length of each edge: timber, each length a
+ * plank with a joint at its start and a peg either side of it, and a brass bracket over each
+ * corner. `thin`, for a small screen, it is two pixels thinner, without pegs, its brackets smaller.
+ */
+function panel(thin: boolean): Grid {
+  const [tile, corner, reach, plate] = thin ? [24, 6, 5, 3] : [48, 9, 8, 5];
+  const grain: Ring[] = thin
+    ? []
+    : [
+        [WOOD[3], WOOD[2]],
+        [WOOD[2], WOOD[3]],
+      ];
+  const rings = [INKED, [WOOD[4], WOOD[1]], [WOOD[3], WOOD[2]], ...grain, [WOOD[0], WOOD[0]]] as const;
+  const far = corner * 2 + tile - 1;
+  const g = ringed(far + 1, far + 1, rings, null, 2);
+  /** A pixel `a` along each of the four sides and `d` deep. */
+  const sides = (a: number, d: number, lit: string, shade: string): void => {
+    put(g, corner + a, d, lit);
+    put(g, d, corner + a, lit);
+    put(g, corner + a, far - d, shade);
+    put(g, far - d, corner + a, shade);
+  };
+  for (const [a, length, d] of [
+    [6, 7, 2],
+    [17, 4, 3],
+    [26, 9, 2],
+    [37, 5, 3],
+    [9, 3, 3],
+    [30, 3, 3],
+  ] as const)
+    if (a + length < tile - 5 && d <= rings.length - 3)
+      for (let i = 0; i < length; i++) sides(a + i, d, WOOD[2], WOOD[1]);
+  if (!thin) {
+    for (let d = 1; d < rings.length - 1; d++) {
+      sides(0, d, WOOD[0], WOOD[0]);
+      sides(1, d, d === 1 ? WOOD[4] : WOOD[3], d === 1 ? WOOD[2] : WOOD[3]);
+    }
+    for (const a of [3, tile - 4]) {
+      sides(a, 2, WOOD[5], WOOD[5]);
+      sides(a + 1, 2, WOOD[1], WOOD[1]);
+      sides(a, 3, WOOD[1], WOOD[1]);
+      sides(a + 1, 3, WOOD[0], WOOD[0]);
+    }
+  }
+  for (const fx of [false, true])
+    for (const fy of [false, true]) {
+      const cells: [number, number][] = [];
+      for (let y = 1; y <= reach; y++)
+        for (let x = 1; x <= reach; x++)
+          if (x + y >= 3 && ((x <= plate && y <= plate) || x <= 2 || y <= 2))
+            cells.push([fx ? far - x : x, fy ? far - y : y]);
+      emboss(g, cells, BRACKET);
+      // The rivet that holds the plate.
+      if (!thin) put(g, fx ? far - 3 : 3, fy ? far - 3 : 3, "#5e3a16");
+    }
+  return shadowed(g);
+}
+
+/** A shelf, for a row of tools or places: thin sides, and a thick board along the bottom that sticks out at each end. */
+function shelf(): Grid {
+  const g = blank(40, 24);
+  ringed(34, 20, [INKED, [WOOD[4], WOOD[1]], [WOOD[0], WOOD[0]]], BOARD, 1).forEach((row, y) =>
+    row.forEach((c, x) => c && put(g, x + 3, y, c)),
   );
+  [INK, WOOD[5], WOOD[4], WOOD[3], WOOD[2], WOOD[1], INK].forEach((c, i) => {
+    for (let x = 1; x < 39; x++) put(g, x, 17 + i, c);
+  });
+  // The board's ends, cut across the grain.
+  for (let y = 18; y < 23; y++) {
+    put(g, 0, y, INK);
+    put(g, 39, y, INK);
+    put(g, 1, y, y < 20 ? WOOD[5] : WOOD[4]);
+    put(g, 38, y, y < 21 ? WOOD[2] : WOOD[1]);
+  }
+  for (const x of [11, 12, 13, 14, 15, 25, 26, 27]) put(g, x, 20, WOOD[2]);
+  return shadowed(g);
+}
+
+/** A sign, for the small things that sit over the world (the purse, a counter): a thin board, a brass nail in each corner. */
+function plaque(): Grid {
+  const g = ringed(14, 14, [INKED, [WOOD[4], WOOD[1]], [WOOD[3], WOOD[2]], [WOOD[0], WOOD[0]]], FIELD, 1);
+  for (const x of [2, 11]) for (const y of [2, 11]) put(g, x, y, x + y === 4 ? GOLD[2] : GOLD[1]);
+  return shadowed(g);
+}
+/** A tip, and a thing's card: a thin wooden rim. */
+const tipFrame = (): Grid => shadowed(ringed(12, 12, [INKED, [WOOD[3], WOOD[1]], [WOOD[0], WOOD[0]]], FIELD, 1));
+
+/** The beam under a panel's shingles, a peg at each end. */
+const eave = (): Grid =>
+  rows(["hhhhhhhhhhhhhh", "mmmmhdmmhdmmmm", "mmmmdkmmdkmmmm", "dddddddddddddd", "kkkkkkkkkkkkkk"], {
+    h: WOOD[5],
+    m: WOOD[3],
+    d: WOOD[1],
+    k: INK,
+  });
+/** The rope a sign hangs on, and its knot on the sign. */
+const rope = (): Grid => rows(["kabk", "kbck"], { k: INK, a: PAPER[1], b: PAPER[0], c: "#8a6a3c" });
+const knot = (): Grid => rows([".kkkk.", "kyYyok", "kyoook", ".kkkk."], { k: INK, y: PAPER[1], Y: CREAM, o: PAPER[0] });
+/** The brass nail a note hangs on. */
+const nail = (): Grid => outlined(rows(["hy.", "yyo", ".oo"], { h: GOLD[3], y: GOLD[1], o: BRACKET[0] }), INK);
+/** A dowel down and round to the right, pegged at the turn: it ties a thing to the one it follows from. */
+const elbow = (): Grid =>
+  rows(["kiwdk..", "kiwdk..", "kiwdkkk", "kiwwiii", "kipwwww", "kwddddd", ".kkkkkk"], {
+    k: INK,
+    i: WOOD[4],
+    w: WOOD[3],
+    d: WOOD[1],
+    p: WOOD[5],
+  });
+
+/** A row or a tile that stands up from the panel: a plum board, a step lighter. */
+const card = (): Grid => ringed(10, 10, [INKED, ["#30264a", "#181126"]], RAISED, 1);
+/** Picked out, it glows warm in a gold edge; chosen, the gold is doubled; locked, it lies flat and dark. */
+const cardLit = (): Grid => ringed(10, 10, [INKED, [GOLD[2], GOLD[0]], ["#5a2f66", SKY[0]]], "#3a1f47", 1);
+const cardChosen = (): Grid => ringed(10, 10, [INKED, [GOLD[3], GOLD[1]], [GOLD[1], GOLD[0]]], "#3a1f47", 1);
+const cardLocked = (): Grid => ringed(10, 10, [INKED], "#1b142b", 1);
 /** A hollow that holds something: a figure on a bench, a thing for sale, the trough of a bar. */
-const slot = (): Grid => ringed(8, [[INK, LINE]], WELL, 0);
+const slot = (): Grid => ringed(8, 8, [[INK, LINE]], WELL, 0);
 /** The same hollow picked out in gold: the one of a row that is chosen, or where you are. */
-const slotLit = (): Grid =>
-  ringed(
-    8,
-    [
-      [INK, INK],
-      ["#ffc247", "#f5ad35"],
-    ],
-    RAISED,
-    0,
-  );
-const paper = (): Grid =>
-  ringed(
-    12,
-    [
-      [INK, INK],
-      [CREAM, PAPER[1]],
-    ],
-    PAPER[2],
-    2,
-  );
-const bubble = (): Grid => ringed(10, [[INK, INK]], CREAM, 2);
+const slotLit = (): Grid => ringed(8, 8, [INKED, ["#ffc247", "#f5ad35"]], RAISED, 0);
+/** A note: parchment with a corner turned up. */
+function paper(): Grid {
+  const g = ringed(18, 18, [INKED, [CREAM, PAPER[1]]], PAPER[2], 2);
+  for (let y = 12; y < 18; y++)
+    for (let x = 12; x < 18; x++) {
+      const k = x + y - 24;
+      const row = g[y];
+      if (row && k >= 5) row[x] = k > 8 ? null : k === 8 ? INK : k >= 6 ? PAPER[0] : "#a98a58";
+    }
+  return shadowed(g);
+}
+const bubble = (): Grid => ringed(10, 10, [INKED], CREAM, 2);
+/** A small tag: a wooden one, and one picked out in gold. */
+const chip = (): Grid => ringed(8, 8, [INKED, [WOOD[3], WOOD[1]]], "#2b1712", 1);
+const chipLit = (): Grid => ringed(8, 8, [INKED, [GOLD[2], GOLD[0]]], "#3a1f47", 1);
 
 interface Tones {
   readonly light: string;
@@ -296,8 +429,28 @@ function button(t: Tones, down: boolean): Grid {
     pal,
   );
 }
+/**
+ * A tab standing on a rail: its top corners cut, no foot. The chosen one (`rise`) stands two pixels
+ * taller; pressed (`down`), it has sunk a pixel and is in shade. The rail runs a pixel past it each
+ * side, so the rails of tabs in a row meet.
+ */
+function tab(t: Tones, rise: number, down: boolean): Grid {
+  const body = ".kihhlk.";
+  const top = down ? ["........", "...kk...", "..kllk.."] : ["...kk...", "..kiik..", body];
+  return rows(
+    [...top, ...Array.from({ length: rise + 1 }, () => (down ? ".kllllk." : body)), "rrrrrrrr", "mmmmmmmm", "kkkkkkkk"],
+    {
+      k: INK,
+      i: t.light,
+      h: t.face,
+      l: t.foot,
+      r: WOOD[5],
+      m: WOOD[3],
+    },
+  );
+}
 /** What a button's colour says: gold confirms, blue shows or hides, green buys or grows, wood is plain, coral leaves or removes, slate is quiet. */
-const TONES: Readonly<Record<string, Tones>> = {
+const TONES = {
   gold: { light: "#ffe082", face: "#f5ad35", foot: "#bf6e17" },
   blue: { light: "#7cc6ff", face: "#2f86e0", foot: "#1a4d99" },
   green: { light: "#8ae583", face: "#3ea852", foot: "#216a34" },
@@ -305,7 +458,7 @@ const TONES: Readonly<Record<string, Tones>> = {
   coral: { light: "#f89785", face: "#d9584d", foot: "#98302f" },
   slate: { light: "#74679a", face: "#4b4163", foot: "#2b2440" },
   off: { light: "#453c5c", face: "#332b47", foot: "#221c33" },
-};
+} satisfies Readonly<Record<string, Tones>>;
 
 /** The little tail under a speech bubble. */
 const tail = (): Grid => rows(["kwwwwk", ".kwwk.", "..kk.."], { k: INK, w: CREAM });
@@ -571,20 +724,33 @@ function shingles(): Grid {
 }
 
 const frames: Readonly<Record<string, Grid>> = {
-  panel: panel(),
   shingles: shingles(),
+  eave: eave(),
   plaque: plaque(),
+  tip: tipFrame(),
+  brass: brass(),
+  rope: rope(),
+  knot: knot(),
+  nail: nail(),
+  elbow: elbow(),
   ...Object.fromEntries(TIERS.map((t, i) => [`tier-${i + 1}`, tier(t)])),
   "crest-3": crest(TIERS[2][1]),
   "crest-4": crest(TIERS[3][1]),
   "crest-5": crown(TIERS[4][0], TIERS[4][1]),
   card: card(),
   "card-lit": cardLit(),
+  "card-chosen": cardChosen(),
+  "card-locked": cardLocked(),
   slot: slot(),
   "slot-lit": slotLit(),
   paper: paper(),
   bubble: bubble(),
   tail: tail(),
+  chip: chip(),
+  "chip-lit": chipLit(),
+  tab: tab(TONES.wood, 0, false),
+  "tab-on": tab(TONES.gold, 2, false),
+  "tab-down": tab(TONES.wood, 0, true),
   hex: hex(0, INK),
   "hex-in": hex(1, "#1a1128"),
 };
@@ -602,7 +768,54 @@ for (const [name, art] of Object.entries(ICONS)) {
     `.k-i-${name} {\n  --w: ${g[0]?.length ?? 0};\n  --h: ${g.length};\n  background-image: var(--k-i-${name});\n}`,
   );
 }
-lines.push("}", ...sizes, "");
+lines.push("}", ...sizes);
+
+type Sides = readonly [top: number, right: number, bottom: number, left: number];
+const units = (n: number): string => (n === 0 ? "0" : `calc(var(--u) * ${n})`);
+const sides = (s: readonly number[]): string => s.map(units).join(" ");
+
+/**
+ * A frame whose edges repeat, as timber must: cut from a sample into four corners and a length of
+ * each edge, and laid behind the thing by its two pseudo-elements (one cannot clip both ways), so
+ * that corners are fixed pieces and edges tile from the top left on the art's own grid, never
+ * stretched. `cut` is the size of the corner pieces, `pad` how thick the frame is inside the thing's
+ * own box, `out` how far the picture reaches outside it.
+ */
+function repeating(sel: string, g: Grid, cut: Sides, pad: Sides, out: Sides, fill: string): string[] {
+  const [T, R, B, L] = cut;
+  const w = g[0]?.length ?? 0;
+  const [tw, th] = [w - L - R, g.length - T - B];
+  const piece = (x: number, y: number, pw: number, ph: number, at: string, how: string): string =>
+    `    ${url(g.slice(y, y + ph).map((row) => row.slice(x, x + pw)))}\n      ${at} / ${units(pw)} ${units(ph)} ${how}`;
+  const inset = `  inset: ${sides(pad.map((p, i) => -p - (out[i] ?? 0)))};`;
+  return [
+    `${sel} {\n  border-width: ${sides(pad)};\n  background: ${fill} padding-box;\n}`,
+    `${sel}::before {\n${inset}\n  border-width: ${sides([0, R, 0, L])};\n  background:\n${[
+      piece(L, 0, tw, T, "0 0", "repeat-x padding-box"),
+      piece(L, g.length - B, tw, B, "0 100%", "repeat-x padding-box"),
+    ].join(",\n")};\n}`,
+    `${sel}::after {\n${inset}\n  border-width: ${sides([T, 0, B, 0])};\n  background:\n${[
+      piece(0, 0, L, T, "0 0", "no-repeat border-box"),
+      piece(w - R, 0, R, T, "100% 0", "no-repeat border-box"),
+      piece(0, g.length - B, L, B, "0 100%", "no-repeat border-box"),
+      piece(w - R, g.length - B, R, B, "100% 100%", "no-repeat border-box"),
+      piece(0, T, L, th, "0 0", "repeat-y padding-box"),
+      piece(w - R, T, R, th, "100% 0", "repeat-y padding-box"),
+    ].join(",\n")};\n}`,
+  ];
+}
+/** Where a screen is small (a phone, either way up), ornament thins; `kit.css` says the same of its own. */
+const SMALL = "@media (max-width: 760px), (max-height: 500px)";
+lines.push(
+  ...repeating(".k-panel", panel(false), [9, 9, 11, 9], [6, 6, 6, 6], [0, 0, 2, 0], FIELD),
+  `${SMALL} {`,
+  ...repeating(".k-panel", panel(true), [6, 6, 8, 6], [4, 4, 4, 4], [0, 0, 2, 0], FIELD).map((rule) =>
+    rule.replace(/^/gm, "  "),
+  ),
+  "}",
+  ...repeating(".k-shelf", shelf(), [8, 8, 11, 8], [3, 3, 7, 3], [0, 3, 2, 3], BOARD),
+  "",
+);
 await Bun.write(new URL("../src/frames.css", import.meta.url), lines.join("\n"));
 console.log(
   `frames.css: ${Object.keys(frames).length} frames, ${Object.keys(TONES).length} buttons, ${sizes.length} icons`,

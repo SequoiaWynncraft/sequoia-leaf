@@ -26,9 +26,14 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
   (`--k-plum`), a well inside it darker (`--k-deep`), a raised thing lighter (`--k-mid`), and
   `--k-ink` is the edge of everything. The brightest things on a screen are the frame of what
   matters, the button to press and the title: a screenshot turned grey still shows those three.
-- **Frames say what a thing is.** A thin brass frame is a panel, a quiet plum one a plaque, and
-  five tier frames are for things that have a tier: stone, jade, sapphire, amethyst, gold, with a
-  jewel on each corner that grows with the tier and a crest on top from the third.
+- **Frames say what a thing is,** and are made of the town's own materials. A timber frame, pegged
+  at its joints, with a brass bracket on each corner is a panel, its title on shingles over an
+  eave. A thin board with a brass nail in each corner is a sign, hung on ropes in the top bar. A
+  board under a row of tools is a shelf, parchment with a turned-up corner a note, a thin wooden
+  rim a tip. Five tier frames are for things that have a tier: stone, jade, sapphire, amethyst,
+  gold, with a jewel on each corner that grows with the tier and a crest on top from the third.
+  On a small screen (760 pixels wide or less, or 500 high) ornament thins before what it holds
+  does: a panel's frame is two units thinner, without pegs, and signs hang on no ropes.
 - **A button's colour says what it does.** Gold confirms. Blue shows or hides. Green buys or
   grows, and spending Leaf is always the green button (`leaf`). Wood is the plain button. Coral
   leaves or removes. Slate is quiet. Only what can be pressed has a bevel: a tag is flat.
@@ -60,17 +65,18 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
 
 | Class                                                                                            | What it is                                                           |
 | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `k-panel`, with `k-head` and `k-body`                                                            | The brass frame; its title has a brass rule under it                 |
-| `k-plaque`                                                                                       | The quiet plum frame for small things over the world (purse, dock)   |
+| `k-panel`, with `k-head` and `k-body`                                                            | The timber frame; its title is on shingles, an eave under them       |
+| `k-plaque` (`hung`)                                                                              | A sign, for small things over the world; `hung`, on ropes (below)    |
+| `k-shelf`                                                                                        | A row of tools or places standing on a board (a dock)                |
 | `k-tier-1` to `k-tier-5`, with `k-crest` inside                                                  | A thing with a tier, in its tier's frame (below)                     |
-| `k-card` (`lit`, `done`)                                                                         | A row or tile standing up from a panel; also works as a button       |
+| `k-card` (`lit`, `chosen`, `locked`, `done`)                                                     | A row or tile standing up from a panel; also works as a button       |
 | `k-slot` (`lit`)                                                                                 | A hollow that holds one thing; as a button, one of a row to choose   |
-| `k-paper`                                                                                        | A page: letters, notes, anything read like a sheet                   |
+| `k-paper`                                                                                        | A page: letters, notes; in a panel it hangs on a brass nail          |
 | `k-say` (`left`)                                                                                 | Somebody speaking                                                    |
 | `k-tip` (`k-float`)                                                                              | A one-line hint while pointing at a thing (`tip.ts` places it)       |
 | `k-info` (`pinned`, `sheet`), `k-thing`                                                          | A thing's card, and the small picture of a thing (`card.ts`)         |
 | `k-btn` (`blue`, `green`, `leaf`, `wood`, `coral`, `slate`, `plum`; `sm`, `icon`, `wide`, `off`) | A button; with no colour named it is gold                            |
-| `k-tabs`                                                                                         | A row of buttons where one is chosen (`aria-selected="true"`)        |
+| `k-tabs`                                                                                         | Wooden tabs on a rail; one is chosen (`aria-selected="true"`)        |
 | `k-i k-i-<name>`                                                                                 | A pixel icon; `--s` makes it larger by whole steps                   |
 | `k-cur` (`leaf`)                                                                                 | An amount of Coins or Leaf; on a button, what it costs               |
 | `k-bar` (`leaf`, `coral`)                                                                        | How far along something is: `<div class="k-bar"><i style="--v:40%">` |
@@ -90,15 +96,27 @@ a glow of the tier's colour at the top, unless said), and `--k-tier` is the tier
 whatever inside wants it. `<i class="k-crest"></i>` inside a thing of the third tier or above is
 its crest; in the first two it shows nothing.
 
-**A panel's frame and a plaque's** are the same shape, so a plaque that is to be picked out can
-take the panel's picture: `border-image-source: var(--k-f-panel)`.
+**A panel's frame and a shelf's** are timber, which cannot stretch: each is laid behind the thing by
+its two pseudo-elements, corners as fixed pieces and edges repeating from the top left
+(`repeating` in `tools/frames.ts` writes those rules). So neither has a pseudo-element to spare,
+and neither may scroll itself: put what scrolls inside it.
+
+**A sign's frame and a tip's** are the same shape as the brass frame, which either wears when it is
+to be picked out: `border-image-source: var(--k-f-brass)`. A sign with `hung` hangs from the top of
+the window on two ropes and makes room for them above itself: `--k-hang` long (nothing on a small
+screen), or `--hang` where a sign hangs under another. A sign that is a button dips when pressed.
+
+**A card** that is `lit` glows warm in a gold edge (owned, ready); the one `chosen` of several (or
+`aria-selected`, `aria-pressed`) has the gold doubled; `locked` lies flat and dark. A `div` with
+`k-label` is a label over a group in a list and sits on a brass rule; a `span` is only small words.
 
 **A chip** that starts with a canvas (a trait's or a kind's own picture) wears it as a hexagon
 badge with its name beside it; `--c` on the chip is the badge's colour. Any other chip is a flat
 tag.
 
 The frames and icons are drawn in `tools/frames.ts` as rows of letters and written into
-`src/frames.css` as small pictures (`bun run frames`); add a frame or an icon there.
+`src/frames.css` as small pictures (`bun run frames`); add a frame or an icon there. Nothing is a
+picture file.
 
 ## The modules (`src/`)
 

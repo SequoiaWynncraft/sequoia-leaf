@@ -77,6 +77,9 @@
   --k-blue: #6cc0ff;
   --k-brass: #c9923c;
   --k-bark-lt: #b97c48;
+  --k-bark: #84532f;
+  /* How long the ropes are that a sign in the top bar hangs on. */
+  --k-hang: calc(var(--u) * 6);
   /* The tiers, as their frames are: stone, jade, sapphire, amethyst, gold. */
   --k-tier-1: #cfcbdc;
   --k-tier-2: #6fe06f;
@@ -173,6 +176,25 @@ img.k-px {
 .k-label {
   color: var(--k-dim);
 }
+/* Over a group in a list, it sits on a brass rule that ends in a stud. */
+div.k-label {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+}
+/* The line over a paper's title is not over a group. */
+.k-paper > .k-label:first-child::after {
+  content: none;
+}
+div.k-label::after {
+  content: "";
+  flex: 1;
+  min-width: calc(var(--u) * 6);
+  height: calc(var(--u) * 3);
+  background:
+    linear-gradient(var(--k-brass) 0 0) 100% 0 / calc(var(--u) * 3) 100% no-repeat,
+    linear-gradient(#8a5a22 0 0) 0 50% / 100% var(--u) no-repeat;
+}
 .k-dim {
   color: var(--k-dim);
 }
@@ -204,12 +226,14 @@ img.k-px {
 /* ---------- frames ---------- */
 
 .k-panel,
+.k-shelf,
 .k-plaque,
 .k-card,
 .k-slot,
 .k-paper,
 .k-say,
 .k-tip,
+.k-chip,
 .k-btn,
 .k-i {
   image-rendering: pixelated;
@@ -217,32 +241,86 @@ img.k-px {
 }
 
 /*
- * A panel: a thin brass frame round near-black plum. A plaque: a quiet plum frame, for small things
- * that sit over the world. Each frame's picture carries its own hard shadow, under its cut corners,
- * and the two are the same shape, so one can take the other's picture (`border-image-source`).
+ * A panel: a timber frame round near-black plum, pegged at its joints, a brass bracket on each
+ * corner. A shelf: a row of tools or places standing on a board. Timber cannot stretch, so each is
+ * drawn behind the thing by its two pseudo-elements, its edges repeating (`frames.css` has their
+ * pictures and sizes); neither may scroll itself: put what scrolls inside it.
  */
+:where(.k-panel, .k-shelf, .k-plaque.hung, .k-panel .k-paper) {
+  position: relative;
+}
 .k-panel,
+.k-shelf {
+  isolation: isolate;
+  border-style: solid;
+  border-color: transparent;
+  color: var(--k-cream);
+}
+:is(.k-panel, .k-shelf)::before,
+:is(.k-panel, .k-shelf)::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  border-style: solid;
+  border-color: transparent;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+/*
+ * A sign: a thin board with a brass nail in each corner, for small things that sit over the world.
+ * A tip: a thin wooden rim. Each picture carries its own hard shadow, and the two are the same
+ * shape as the brass frame, which either wears when it is to be picked out
+ * (`border-image-source: var(--k-f-brass)`).
+ */
 .k-plaque,
 .k-tip {
   border: calc(var(--u) * 4) solid transparent;
-  border-image: var(--k-f-panel) 5 5 7 fill / calc(var(--u) * 5) calc(var(--u) * 5) calc(var(--u) * 7) / 0 0
+  border-image: var(--k-f-plaque) 5 5 7 fill / calc(var(--u) * 5) calc(var(--u) * 5) calc(var(--u) * 7) / 0 0
     calc(var(--u) * 2) stretch;
   color: var(--k-cream);
 }
-.k-plaque {
-  border-image-source: var(--k-f-plaque);
+.k-tip {
+  border-image-source: var(--k-f-tip);
 }
-/* The title along the top of a panel, a brass rule under it. */
+/* A sign in the top bar hangs from the top of the window on two ropes, `--hang` long (`--k-hang`, unless said). */
+.k-plaque.hung {
+  margin-top: var(--hang, var(--k-hang));
+}
+.k-plaque.hung::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--u) * -12 - var(--hang, var(--k-hang))) calc(var(--u) * 2) calc(100% + var(--u));
+  background:
+    var(--k-f-knot) 0 100% / calc(var(--u) * 6) calc(var(--u) * 4) no-repeat,
+    var(--k-f-knot) 100% 100% / calc(var(--u) * 6) calc(var(--u) * 4) no-repeat,
+    var(--k-f-rope) var(--u) 0 / calc(var(--u) * 4) calc(var(--u) * 2) repeat-y,
+    var(--k-f-rope) calc(100% - var(--u)) 0 / calc(var(--u) * 4) calc(var(--u) * 2) repeat-y;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+/* A sign that is pressed dips on its ropes. */
+button.k-plaque:hover {
+  filter: brightness(1.15);
+}
+button.k-plaque:active {
+  translate: 0 var(--u);
+}
+/* The title along the top of a panel, on shingles; under them the eave, a beam pegged at each end, whose shadow falls on what scrolls beneath. */
 .k-head {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: calc(var(--u) * 4);
-  min-height: calc(var(--u) * 22);
+  min-height: calc(var(--u) * 26);
   box-sizing: border-box;
   padding: calc(var(--u) * 2) calc(var(--u) * 3) calc(var(--u) * 2) calc(var(--u) * 5);
   background: var(--k-f-shingles) 0 0 / calc(var(--u) * 24) calc(var(--u) * 12);
   image-rendering: pixelated;
-  border-bottom: var(--u) solid var(--k-brass);
+  border: 0 solid transparent;
+  border-bottom-width: calc(var(--u) * 5);
+  border-image: var(--k-f-eave) 0 6 5 / 0 calc(var(--u) * 6) calc(var(--u) * 5);
+  box-shadow: 0 calc(var(--u) * 2) 0 #0b071066;
 }
 .k-head .k-title {
   flex: 1;
@@ -332,10 +410,13 @@ img.k-px {
   height: calc(var(--u) * 8);
 }
 
-/* A row or tile standing up from the panel: a step lighter, and flat. Add `lit` to pick it out. */
+/*
+ * A row or tile standing up from the panel: a plum board, a step lighter. `lit` picks it out, warm
+ * in a gold edge; the one chosen of several has the gold doubled; `locked`, it lies flat and dark.
+ */
 .k-card {
   border: calc(var(--u) * 2) solid transparent;
-  border-image: var(--k-f-card) 2 fill;
+  border-image: var(--k-f-card) 4 fill / calc(var(--u) * 4);
   padding: calc(var(--u) * 3) calc(var(--u) * 4);
   display: flex;
   align-items: center;
@@ -346,10 +427,14 @@ button.k-card {
   background: none;
   width: 100%;
 }
-.k-card.lit,
-.k-card[aria-selected="true"],
-.k-card[aria-pressed="true"] {
+.k-card.lit {
   border-image-source: var(--k-f-card-lit);
+}
+.k-card:is(.chosen, [aria-selected="true"], [aria-pressed="true"]) {
+  border-image-source: var(--k-f-card-chosen);
+}
+.k-card.locked {
+  border-image-source: var(--k-f-card-locked);
 }
 button.k-card:hover {
   filter: brightness(1.2);
@@ -387,13 +472,27 @@ button.k-slot:hover {
   filter: brightness(1.3);
 }
 
-/* Paper: letters, notes on the board, anything a character hands over to be read like a page. */
+/*
+ * Paper: letters, notes on the board, anything a character hands over to be read like a page. Its
+ * bottom right corner is turned up, inside its padding. A note in a panel hangs there on a brass nail.
+ */
 .k-paper {
   border: calc(var(--u) * 3) solid transparent;
-  border-image: var(--k-f-paper) 3 fill;
+  border-image: var(--k-f-paper) 4 7 9 4 fill / calc(var(--u) * 4) calc(var(--u) * 7) calc(var(--u) * 9)
+    calc(var(--u) * 4) / 0 0 calc(var(--u) * 2);
   padding: calc(var(--u) * 3) calc(var(--u) * 4);
   color: var(--k-ink);
-  box-shadow: 0 calc(var(--u) * 2) 0 #0005;
+}
+.k-panel .k-paper::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: calc(var(--u) * -5);
+  width: calc(var(--u) * 5);
+  height: calc(var(--u) * 5);
+  margin-left: calc(var(--u) * -3);
+  background: var(--k-f-nail) 0 0 / 100% 100%;
+  image-rendering: pixelated;
 }
 .k-paper .k-title {
   color: #6a2a7c;
@@ -489,8 +588,15 @@ button.k-slot:hover {
 .k-info:focus {
   outline: none;
 }
-/* Asked for with a finger: a sheet along the bottom, the whole width, above the game's own bar (`--sheet-floor`, its height). */
+/*
+ * Asked for with a finger: a sheet along the bottom, the whole width, above the game's own bar
+ * (`--sheet-floor`, its height). It has no rim at its sides: a beam along its top, pegged at each end.
+ */
 .k-tip.k-info.sheet {
+  border-width: calc(var(--u) * 5) 0 0;
+  border-image: var(--k-f-eave) 5 6 0 / calc(var(--u) * 5) calc(var(--u) * 6) 0;
+  background: var(--k-plum);
+  box-shadow: 0 calc(var(--u) * -1) 0 var(--k-ink);
   top: auto;
   bottom: var(--sheet-floor, 0px);
   left: 0;
@@ -592,7 +698,7 @@ button.k-info-chip:hover .k-chip {
 .k-info-stats.listed .k-info-over {
   margin-top: calc(var(--u) * 5);
   padding-bottom: calc(var(--u) * 2);
-  border-bottom: var(--u) solid var(--k-edge);
+  border-bottom: var(--u) solid var(--k-bark);
   font: var(--f-name);
   color: var(--k-gold);
 }
@@ -925,22 +1031,34 @@ button.k-info-chip:hover .k-chip {
   }
 }
 
-/* A row of buttons where one is chosen: the others are dark and quiet. */
+/*
+ * A row of buttons where one is chosen: wooden tabs standing on a rail. The chosen one is gold and
+ * stands taller; pressed, a tab sinks. Each tab carries its own length of rail, a unit past it each
+ * side, so the rails of a row meet however the row is laid out: in rows one over another, each
+ * row has room for its rail and for the chosen tab of the row under it.
+ */
 .k-tabs {
   display: flex;
-  gap: calc(var(--u) * 2);
+  gap: calc(var(--u) * 5) calc(var(--u) * 2);
+  padding: calc(var(--u) * 2) var(--u) calc(var(--u) * 3);
 }
-.k-tabs > .k-btn {
-  --f: var(--k-f-btn-off);
-  --fd: var(--k-f-btn-slate-down);
+.k-tabs > .k-btn,
+.k-tabs > .k-btn:active {
   flex: 1;
-  color: var(--k-dim);
+  border-width: calc(var(--u) * 2) calc(var(--u) * 2) 0;
+  border-image: var(--k-f-tab) 3 fill / calc(var(--u) * 3) / 0 var(--u) calc(var(--u) * 3);
+  color: #ffe6a8;
   text-shadow: 0 var(--u) 0 #0007;
 }
+.k-tabs > .k-btn:active {
+  border-image-source: var(--k-f-tab-down);
+}
 .k-tabs > .k-btn[aria-selected="true"] {
-  --f: var(--k-f-btn-wood);
-  --fd: var(--k-f-btn-wood-down);
-  color: var(--k-cream);
+  border-image: var(--k-f-tab-on) 5 3 3 fill / calc(var(--u) * 5) calc(var(--u) * 3) calc(var(--u) * 3) /
+    calc(var(--u) * 2) var(--u) calc(var(--u) * 3);
+  padding-bottom: calc(var(--u) * 2);
+  color: #2b1705;
+  text-shadow: 0 1px 0 #fff6;
 }
 
 /* ---------- small parts ---------- */
@@ -1001,27 +1119,26 @@ button.k-info-chip:hover .k-chip {
 }
 
 /*
- * A small tag: a trait, a kind, a rank, a count. It is flat, since it is not pressed. One that
+ * A small tag: a trait, a kind, a rank, a count: a wooden one, flat, since it is not pressed. One that
  * starts with a picture of the game's own (a trait's, a kind's) wears it as a hexagon badge with
  * its name beside it; `--c` is the badge's colour. `lit` picks one out in gold.
  */
 .k-chip {
   --c: var(--k-violet);
-  --ring: var(--k-ink);
   display: inline-flex;
   align-items: center;
   gap: calc(var(--u) * 2);
   padding: 0 calc(var(--u) * 3);
-  min-height: calc(var(--u) * 11);
-  background: var(--k-mid);
-  box-shadow: 0 0 0 var(--u) var(--ring);
+  min-height: calc(var(--u) * 13);
+  border: var(--u) solid transparent;
+  border-image: var(--k-f-chip) 3 fill / calc(var(--u) * 3);
   font: var(--f-name);
   white-space: nowrap;
   color: var(--k-cream);
 }
 .k-chip.lit {
   --c: var(--k-gold);
-  --ring: var(--k-gold);
+  border-image-source: var(--k-f-chip-lit);
   color: var(--k-gold-lt);
 }
 .k-chip:where(:has(> canvas:first-child)) {
@@ -1029,8 +1146,8 @@ button.k-info-chip:hover .k-chip {
   grid-auto-flow: column;
   gap: 0 calc(var(--u) * 3);
   padding: 0;
-  background: none;
-  box-shadow: none;
+  min-height: 0;
+  border: 0;
 }
 .k-chip:where(:has(> canvas:first-child))::before {
   content: "";
@@ -1143,4 +1260,17 @@ button.k-info-chip:hover .k-chip {
   display: flex;
   flex-wrap: wrap;
   gap: calc(var(--u) * 3);
+}
+
+/*
+ * A small screen (a phone, either way up): ornament thins before what it holds does. A panel's
+ * frame is two units thinner, without its pegs (`frames.css`), and signs hang on no ropes.
+ */
+@media (max-width: 760px), (max-height: 500px) {
+  :root {
+    --k-hang: 0px;
+  }
+  .k-plaque.hung::before {
+    display: none;
+  }
 }
