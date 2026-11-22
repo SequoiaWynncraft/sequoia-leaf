@@ -163,7 +163,7 @@ still wants it: the story's first, then the board's from the top.
   and opens machines, plots and plans. Eight of them leave something in the town for good.
 - _The board_ goes up after the fourth story order: three standing orders, each from a place in
   town (the crab pond, the Treasury, the campfire, the market stalls, the quest board, the raid
-  parties, the gate), one of the town's own (Pipwick, Embertoe, Tindra) or one of the guild's
+  parties, the gate), one of the town's own (Pipwick, Fika, Tindra) or one of the guild's
   creatures, asking for one or two things (`content/asks.ts`). An order kept in a yard from before
   these askers is asked again by one of them for the same things when the yard is read back
   (`reask`). An
