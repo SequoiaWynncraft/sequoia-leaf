@@ -229,8 +229,8 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   if (refund > 0) float(px, py - 10, `+${refund}`, GOLD[2], 1);
   yardSfx.take();
   if (S.picked === i) S.picked = -1;
-  // A piece taken out of a marked area is no longer marked: what is moved or copied next is what stands there.
-  if (S.mark) markTiles(S.mark, S.mark.tiles);
+  // A piece taken out of a marked area is no longer marked.
+  remark();
   if (S.mark?.pieces.length === 0) S.mark = null;
   touched();
   toolHooks.changed();
@@ -622,6 +622,11 @@ function markArea(a: { x: number; y: number }, b: { x: number; y: number }): voi
   toolHooks.changed();
 }
 
+/** Marks afresh what stands on the marked tiles now: a piece of it may have been taken away, or changed from its card. */
+function remark(): void {
+  if (S.mark) markTiles(S.mark, S.mark.tiles);
+}
+
 /** Marks what stands on some tiles, within a box: an area just marked, or one a piece has since been taken out of. */
 function markTiles(box: Pick<Mark, "x0" | "y0" | "x1" | "y1">, tiles: readonly number[]): void {
   const w = S.world;
@@ -654,6 +659,7 @@ export function markEnd(): void {
 
 /** Takes in hand the marked pieces, to move them or to stand a copy of them, or the blueprint kept in a place. */
 export function hold(as: Group["as"]): void {
+  remark();
   const pieces = typeof as === "number" ? S.world.blueprints[as] : S.mark?.pieces;
   if (!pieces || pieces.length === 0) return;
   if (typeof as === "number") S.mark = null;
@@ -748,6 +754,7 @@ function setDown(): boolean {
 
 /** Takes away everything marked, at once. */
 export function clearMark(): boolean {
+  remark();
   const m = S.mark;
   if (!m || S.group) return false;
   const did = doNow({ do: "clear", tiles: m.tiles });
