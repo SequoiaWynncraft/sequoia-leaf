@@ -47,8 +47,9 @@ export class BadOrigin extends Schema.Error<BadOrigin>("BadOrigin")(answer("bad_
  * not one, a reroll without a cost, a save slot that is not one, a save that is
  * not `{ "player", "version", "data" }` with an object as its data, a player id
  * that is not a UUID, a place in town that is not one, a number of days that is
- * not one, a batch of commands that is not one of the game's, or a page's call to
- * change Coins with an amount or a reason that is not one.
+ * not one, a batch of commands that is not one of the game's, a page's call to
+ * change Coins with an amount or a reason that is not one, or a purchase from
+ * sequoia-backend that is not one, or has a key that is not one.
  */
 export class Invalid extends Schema.Error<Invalid>("Invalid")(
   answer(
@@ -63,6 +64,8 @@ export class Invalid extends Schema.Error<Invalid>("Invalid")(
     "invalid_command",
     "invalid_amount",
     "invalid_reason",
+    "invalid_purchase",
+    "invalid_key",
   ),
   { httpApiStatus: 400 },
 ) {}
@@ -115,6 +118,15 @@ export class BodyTooLarge extends Schema.Error<BodyTooLarge>("BodyTooLarge")(ans
 /** A reroll Leaf refuses, changing nothing. */
 export class Refused extends Schema.Error<Refused>("Refused")(
   answer("not_current", "not_rerollable", "cost_changed", "insufficient_leaf"),
+  { httpApiStatus: 409 },
+) {}
+
+/**
+ * A purchase from sequoia-backend Leaf refuses, charging nothing: the player's balance does not
+ * cover it, its key was used for another purchase, or its key was cancelled.
+ */
+export class PurchaseRefused extends Schema.Error<PurchaseRefused>("PurchaseRefused")(
+  answer("insufficient_leaf", "key_in_use", "purchase_cancelled"),
   { httpApiStatus: 409 },
 ) {}
 
