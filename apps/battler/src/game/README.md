@@ -93,7 +93,7 @@ two, so any kin can be started in the first rooms.
 | Ember   | 2, 4    | Ember figures' attacks and abilities leave a burn: 2% of health a second for 4 seconds. Healing on the burning is 40% weaker.                                                        |
 | Moss    | 2, 4    | The whole party regrows 1.2% of its health every second.                                                                                                                             |
 | Mist    | 2, 4    | The whole party gains 20 ward, and 12 attacks in every hundred slip past it.                                                                                                         |
-| Burrow  | 2, 4    | Burrow figures dig in: +15 armour. The first time one drops under half health it goes to ground for 2 seconds, where nothing can reach it, and comes up with 20% of its health back. |
+| Burrow  | 2, 4    | Burrow figures dig in: +15 armour. The first time one drops under half health it goes to ground for 2 seconds, where nothing can reach it, and comes up with 15% of its health back. |
 | Feather | 2, 4    | Feather figures attack 5% faster after every attack, up to 10 times over.                                                                                                            |
 | Crab    | 2, 4    | Roll call: when the fight starts, an Uncounted Crab turns up beside your crabs, as starry as the best of them.                                                                       |
 | Gnome   | 2, 4    | After a room you win, the gnomes find 1 more acorn.                                                                                                                                  |
@@ -370,33 +370,38 @@ Where the numbers stood when this was written, 300 runs a habit, with the draw r
 
 | Trail              | Habit                          | Left wing 1 | Left wing 2 | Met the last boss | Beat it   |
 | ------------------ | ------------------------------ | ----------- | ----------- | ----------------- | --------- |
-| The Easy Way       | sensible                       | 100%        | 99%         | 53%               | 28%       |
-|                    | saver who levels               | 100%        | 85%         | 34%               | 11%       |
+| The Easy Way       | sensible                       | 100%        | 99%         | 52%               | 29%       |
+|                    | saver who levels               | 100%        | 85%         | 33%               | 11%       |
 |                    | roller who chases stars        | 100%        | 92%         | 59%               | 16%       |
-|                    | fond of one kin (seven bots)   | 100%        | 89 to 100%  | 31 to 62%         | 17 to 50% |
-|                    | fond of one calling (six bots) | 100%        | 89 to 98%   | 36 to 59%         | 17 to 35% |
+|                    | fond of one kin (seven bots)   | 100%        | 90 to 100%  | 31 to 59%         | 17 to 39% |
+|                    | fond of one calling (six bots) | 100%        | 89 to 98%   | 36 to 59%         | 18 to 34% |
 |                    | careless                       | 95%         | 0%          | 0%                | 0%        |
-| The Brambly Way    | sensible                       | 100%        | 85%         | 20%               | 5%        |
+| The Brambly Way    | sensible                       | 100%        | 84%         | 21%               | 5%        |
 |                    | careless                       | 87%         | 0%          | 0%                | 0%        |
-| The Long Way Round | sensible                       | 100%        | 50%         | 6%                | 0%        |
+| The Long Way Round | sensible                       | 100%        | 47%         | 6%                | 0%        |
 |                    | careless                       | 65%         | 0%          | 0%                | 0%        |
 
 On the first trail the rooms are won, by everyone who is trying, at 100, 97, 99, 88 and 98% in the
-first wing; 86, 79, 67, 57 and 75% in the second; 43, 45, 56 and 34% in the third; and the last
-boss at 36% a try. A fight lasts 16.2 seconds on average, dusk falls in 7% of them, and draws are
+first wing; 86, 79, 67, 57 and 74% in the second; 43, 45, 54 and 33% in the third; and the last
+boss at 35% a try. A fight lasts 16.1 seconds on average, dusk falls in 7% of them, and draws are
 too rare to show (0% when rounded).
 
-Against the same rooms without regard to them, every one- to four-acorn figure wins within 7 points
-of the rest except Crab #40 (+11); the three five-acorn figures are +12 to +16. Every kin's and
-calling's first step is within 5 points; of the second steps Sneak (+14), Burrow (+13), Crab (+11)
-and Mender (+8) do best and Ember and Slinger (-4) worst; the third steps of Bulwark and Fang were
+Against the same rooms without regard to them, every one- to four-acorn figure wins within 6 points
+of the rest except Crab #40 (+11); the three five-acorn figures are +12 to +17. Every kin's and
+calling's first step is within 4 points; of the second steps Sneak (+13), Crab (+11) and Mender
+(+9) do best and Ember and Slinger (-4) worst; the third steps of Bulwark and Fang were
 seen too seldom to judge. Every finished item is within 6. The kin whose fond bot does best is
-Burrow (50% of runs won) and worst is Ember (17%). These figures lean on who chooses what: a party
+Crab (39% of runs won) and worst is Ember (17%). These figures lean on who chooses what: a party
 that can afford a five-acorn figure is usually already doing well.
 
 When the draw rule came in, the Bulwark and Sneak bots each gained 6 points of runs won; Bulwark's
 armour went from 20, 45 and 80 (and 15 and 30 for the rest of the party) to 10, 30 and 60 (10 and
 20), and Sneak's first hits from 50% and 80% more to 40% and 70%, which brought each back within 3.
+The Burrow bot then won 50% of its runs, behind a Rock that took every hit. Burrow's armour went
+from 15 and 25 to 15 and 20, and what a figure comes up with from 20% and 30% of its health to 15%
+at both steps, while the second step keeps it under for 4 seconds rather than 2 (which cuts both
+ways: a Rock underground stands in front of nobody). That brought it to 34%, and moved no other bot
+by more than 1.
 
 ## Where this differs from the brief
 

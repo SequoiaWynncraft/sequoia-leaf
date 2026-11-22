@@ -79,7 +79,7 @@ export const TRAITS = {
       "Burrow figures dig in deep: +{armour} armour. The first time one drops under half health it goes to ground for {under} seconds, where nothing can reach it, and comes up with {heal}% of its health back.",
     ],
     short: ["+{armour} armour, hides {under}s when hurt.", "+{armour} armour, hides {under}s when hurt."],
-    n: { armour: [15, 25], under: [2, 2], heal: [20, 30] },
+    n: { armour: [15, 20], under: [2, 4], heal: [15, 15] },
   },
   feather: {
     name: "Feather",
