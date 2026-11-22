@@ -10,6 +10,8 @@ import {
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
+import { LeafInstance } from "../instance.ts";
+
 /** Somebody whose stay in a place Leaf records: who they are now, and what their page said it is on, if it did. */
 export interface Visitor {
   readonly playerId: PlayerId;
@@ -29,6 +31,8 @@ const OpenVisit = Schema.Struct({
   source: Schema.Literals(["room", "call"]),
   enteredAt: Schema.Int,
   heardAt: Schema.Int,
+  /** The Leaf that heard of it last. */
+  instance: Schema.String,
 });
 type OpenVisit = typeof OpenVisit.Type;
 
@@ -42,9 +46,11 @@ type OpenVisit = typeof OpenVisit.Type;
  * minute, and by each of the page's calls. It closes when they leave the room (or their grace runs
  * out), when they go somewhere else, or, not heard of for 90 seconds, at the last time it was. A
  * player has one open visit at most: coming somewhere closes the one anywhere else. Sessions and
- * players are kept up to date as visits open and close, in the same transaction. Whenever a visit
- * is opened, visits and sessions that ended 180 days ago are removed. A database failure is a
- * defect.
+ * players are kept up to date as visits open and close, in the same transaction, and a player's
+ * name and whether a guest each time Leaf hears of them. A visit belongs to the Leaf process
+ * (`LeafInstance`) that last heard of it, so that a player who moves to the new container in a
+ * deploy takes their open visit with them. Whenever a visit is opened, visits and sessions that
+ * ended 180 days ago are removed. A database failure is a defect.
  */
 export class Visits extends Context.Service<
   Visits,
@@ -55,7 +61,10 @@ export class Visits extends Context.Service<
     readonly inRoom: (who: readonly Visitor[], place: string, now: number) => Effect.Effect<void>;
     /** A player has left a live room of `place`. Nothing changes if Leaf has heard since that they are somewhere else. */
     readonly leftRoom: (playerId: PlayerId, place: string, now: number) => Effect.Effect<void>;
-    /** Leaf is stopping: every open visit closes now (those gone silent, at the last time they were heard of). */
+    /**
+     * Leaf is stopping: every open visit this Leaf was the last to hear of closes now (those gone
+     * silent, at the last time they were heard of). One another Leaf has heard of since stays open.
+     */
     readonly closeAll: (now: number) => Effect.Effect<void>;
     /** Closes every open visit not heard of for 90 seconds, at the last time it was. */
     readonly closeSilent: (now: number) => Effect.Effect<void>;
@@ -65,13 +74,14 @@ export class Visits extends Context.Service<
     Visits,
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const instance = yield* LeafInstance;
       const rules = VISIT_RULES;
       const openOf = SqlSchema.findOneOption({
         Request: Schema.String,
         Result: OpenVisit,
         execute: (playerId) => sql`
           SELECT id, session_id AS sessionId, player_id AS playerId, place, source, entered_at AS enteredAt,
-                 heard_at AS heardAt
+                 heard_at AS heardAt, instance
           FROM visits WHERE player_id = ${playerId} AND left_at IS NULL
         `,
       });
@@ -80,8 +90,17 @@ export class Visits extends Context.Service<
         Result: OpenVisit,
         execute: () => sql`
           SELECT id, session_id AS sessionId, player_id AS playerId, place, source, entered_at AS enteredAt,
-                 heard_at AS heardAt
+                 heard_at AS heardAt, instance
           FROM visits WHERE left_at IS NULL ORDER BY id
+        `,
+      });
+      const ownOpen = SqlSchema.findAll({
+        Request: Schema.Void,
+        Result: OpenVisit,
+        execute: () => sql`
+          SELECT id, session_id AS sessionId, player_id AS playerId, place, source, entered_at AS enteredAt,
+                 heard_at AS heardAt, instance
+          FROM visits WHERE left_at IS NULL AND instance = ${instance} ORDER BY id
         `,
       });
       const lastSession = SqlSchema.findOneOption({
@@ -144,8 +163,8 @@ export class Visits extends Context.Service<
             ? joined.value.id
             : (yield* beginSession({ playerId: who.playerId, guest: who.guest, at, device: who.device })).id;
           yield* sql`
-            INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at)
-            VALUES (${sessionId}, ${who.playerId}, ${guest}, ${place}, ${source}, ${at}, ${at})
+            INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, instance)
+            VALUES (${sessionId}, ${who.playerId}, ${guest}, ${place}, ${source}, ${at}, ${at}, ${instance})
           `;
           yield* sql`
             INSERT INTO players_seen (player_id, name, guest, first_seen_at, last_seen_at, sessions)
@@ -161,17 +180,24 @@ export class Visits extends Context.Service<
         });
 
       /**
-       * A player is at `place` now: their open visit there is heard of again (and is the room's, if
-       * this is the room), or the one they have elsewhere closes and one opens here.
+       * A player is at `place` now: their open visit there is heard of again, by this Leaf (and is
+       * the room's, if this is the room), with their name and whether a guest as they are now; or
+       * the one they have elsewhere closes and one opens here.
        */
       const arrive = (who: Visitor, place: string, source: Source, now: number) =>
         Effect.gen(function* () {
           const current = yield* openOf(who.playerId);
           if (Option.isSome(current) && current.value.place === place) {
             const kept = source === "room" ? "room" : current.value.source;
+            const guest = who.guest ? 1 : 0;
             yield* sql`
-              UPDATE visits SET heard_at = max(heard_at, ${now}), source = ${kept}, guest = ${who.guest ? 1 : 0}
+              UPDATE visits SET heard_at = max(heard_at, ${now}), source = ${kept}, guest = ${guest},
+                instance = ${instance}
               WHERE id = ${current.value.id}
+            `;
+            yield* sql`
+              UPDATE players_seen SET name = ${who.username}, guest = ${guest}
+              WHERE player_id = ${who.playerId} AND (name <> ${who.username} OR guest <> ${guest})
             `;
             return;
           }
@@ -204,7 +230,11 @@ export class Visits extends Context.Service<
         leftRoom: (playerId, place, now) =>
           write(
             Effect.flatMap(openOf(playerId), (current) =>
-              Option.isSome(current) && current.value.place === place && current.value.source === "room"
+              // Only this Leaf's to close: a player who has moved to another Leaf (a deploy) is still there.
+              Option.isSome(current) &&
+              current.value.place === place &&
+              current.value.source === "room" &&
+              current.value.instance === instance
                 ? close(current.value, now)
                 : Effect.void,
             ),
@@ -212,7 +242,7 @@ export class Visits extends Context.Service<
           ),
         closeAll: (now) =>
           write(
-            Effect.flatMap(allOpen(undefined), (visits) =>
+            Effect.flatMap(ownOpen(undefined), (visits) =>
               Effect.forEach(visits, (v) => close(v, now), { discard: true }),
             ),
             now,
