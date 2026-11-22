@@ -162,7 +162,7 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  *
  * Each call taken (an opening, a batch that is not refused whole, a visit) counts for the caller the
  * time since their last call to that game (`PlayStore.heard`), in the call's transaction where it
- * has one. Time that cannot be counted is logged, and the call goes on.
+ * has one. It is a write like the call's others: if the database fails it, the call fails with it.
  */
 export class Play extends Context.Service<
   Play,
@@ -230,14 +230,7 @@ export class Play extends Context.Service<
         });
 
       /** Counts the caller's time in a game up to now (`PlayStore.heard`). */
-      const heard = (playing: Playing, played: Played, now: number) =>
-        store
-          .heard(playing.playerId, played.id, now)
-          .pipe(
-            Effect.catchDefect((defect) =>
-              Effect.logError(`The time ${playing.playerId} played ${played.id} was not counted`, defect),
-            ),
-          );
+      const heard = (playing: Playing, played: Played, now: number) => store.heard(playing.playerId, played.id, now);
 
       /**
        * The player's stored state in a game, or a new one made and stored for them, opened at now

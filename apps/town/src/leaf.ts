@@ -213,7 +213,7 @@ export function here(): void {
 
 /** As the page is put away: the member is said to be here, and everything Leaf has not answered is sent. */
 function goingAway(): void {
-  here();
+  if (!told?.inGame()) here();
   leaf?.flush();
 }
 

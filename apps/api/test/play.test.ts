@@ -1368,25 +1368,6 @@ describe("time played", () => {
     await openAfter(MINUTE);
     expect(await playedMs()).toEqual({ raid: 5 * MINUTE + 100 });
   });
-
-  it("that cannot be written stops no call, and is logged", async () => {
-    await app.dispose();
-    start({ play: (real) => ({ ...real, heard: () => Effect.die(new Error("the disk is full")) }) });
-    await openAfter(0);
-    await commanded(ided([{ do: "start", trail: 0 }]));
-    await send("GET", "/v1/game/play/works", undefined, bob);
-    expect((await visit(bob, "works")).status).toBe(200);
-    const logs: unknown[] = [];
-    const capture = Logger.layer([Logger.make(({ message }) => void logs.push(message))]);
-    const opening = await services.run(
-      Play.use((play) => play.open({ playerId: alice, guest: false }, played(RAID))).pipe(
-        Effect.provide(capture),
-        Effect.provideService(References.MinimumLogLevel, "All"),
-      ),
-    );
-    expect(opening.status).toBe("open");
-    expect(logs).toEqual([[`The time ${alice} played raid was not counted`, expect.anything()]]);
-  });
 });
 
 /** What a player has won for good, in the order Leaf saw it. */
