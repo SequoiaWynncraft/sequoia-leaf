@@ -25,6 +25,7 @@
     "apps/battler": {
       "name": "@sequoia-leaf/battler",
       "dependencies": {
+        "@sequoia-leaf/core": "workspace:*",
         "@sequoia-leaf/kit": "workspace:*",
         "@sequoia-leaf/raid": "workspace:*",
       },
@@ -45,6 +46,7 @@
       "name": "@sequoia-leaf/works",
       "dependencies": {
         "@sequoia-leaf/kit": "workspace:*",
+        "@sequoia-leaf/yard": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "1.4.4",
@@ -67,6 +69,15 @@
     },
     "packages/raid": {
       "name": "@sequoia-leaf/raid",
+      "dependencies": {
+        "@sequoia-leaf/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
+    "packages/yard": {
+      "name": "@sequoia-leaf/yard",
       "dependencies": {
         "@sequoia-leaf/core": "workspace:*",
       },
@@ -145,6 +156,8 @@
     "@sequoia-leaf/town": ["@sequoia-leaf/town@workspace:apps/town"],
 
     "@sequoia-leaf/works": ["@sequoia-leaf/works@workspace:apps/works"],
+
+    "@sequoia-leaf/yard": ["@sequoia-leaf/yard@workspace:packages/yard"],
 
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 

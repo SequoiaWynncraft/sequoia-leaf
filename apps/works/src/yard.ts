@@ -7,7 +7,6 @@
 
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { balance, type CoinReason, coinsOnLeaf, earn, pretendPurse, spend } from "@sequoia-leaf/kit/purse.ts";
-
 import {
   type Away,
   collect,
@@ -21,7 +20,8 @@ import {
   save,
   type Spent,
   type World,
-} from "./sim/index.ts";
+} from "@sequoia-leaf/yard";
+
 import { hooks, S, touched } from "./state.ts";
 import { ZOOM } from "./zoom.ts";
 

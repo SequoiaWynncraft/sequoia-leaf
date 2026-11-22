@@ -9,8 +9,6 @@ import { balance, spend } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
-
-import type { Art } from "../art/index.ts";
 import {
   boost,
   boostLeft,
@@ -33,7 +31,9 @@ import {
   swap,
   swapRefusal,
   type Tally,
-} from "../sim/index.ts";
+} from "@sequoia-leaf/yard";
+
+import type { Art } from "../art/index.ts";
 import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
 import { buyIdea } from "../tools.ts";

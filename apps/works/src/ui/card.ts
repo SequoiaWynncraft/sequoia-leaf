@@ -26,9 +26,6 @@ import {
 } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
-
-import { TILE } from "../art/belts.ts";
-import type { Art } from "../art/index.ts";
 import {
   aim,
   at,
@@ -64,7 +61,10 @@ import {
   type Tally,
   TICKS,
   tipOut,
-} from "../sim/index.ts";
+} from "@sequoia-leaf/yard";
+
+import { TILE } from "../art/belts.ts";
+import type { Art } from "../art/index.ts";
 import { yardSfx } from "../sound.ts";
 import { S, toPage, touched } from "../state.ts";
 import { buyIdea, buyLand, pickFrom, takeAway, turnAt } from "../tools.ts";

@@ -4,9 +4,9 @@ import { amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { fly, type PurseBar, purseBar } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
+import { KIND, PLANS, STORY, type StoryOrder } from "@sequoia-leaf/yard";
 
 import type { Art } from "../art/index.ts";
-import { KIND, PLANS, STORY, type StoryOrder } from "../sim/index.ts";
 import { S } from "../state.ts";
 import { $, button, fitted, pic, wantWords, yardIcon } from "./parts.ts";
 

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import largeYard from "../yards/large.json";
 import { setOpen } from "./build.ts";
 import { AWAY_AFTER_MS, AWAY_MOST_MS, awayLine, boost, boosted, boostLeft, forward, runTo, TICK_MS } from "./clock.ts";
 import { ITEMS, type Tally } from "./content/items.ts";
@@ -14,6 +13,7 @@ import { deliver, isFilled } from "./orders.ts";
 import { load, save } from "./save.ts";
 import { power, step } from "./step.ts";
 import { put as add, reopen, type World } from "./world.ts";
+import largeYard from "./yards/large.json";
 
 const NOW = 1_800_000_000_000;
 const HOUR = 3600 * 1000;
