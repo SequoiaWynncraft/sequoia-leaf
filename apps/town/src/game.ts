@@ -177,8 +177,8 @@ export const hooks: {
   visit: (id: PlaceId) => void;
   /** A line for the guild feed. */
   feed: (text: string, tone?: Tone) => void;
-  /** Go through a game's door: walk up to it and on inside. */
-  goIn: (id: GameId) => void;
+  /** Go through a game's door: walk up to it and on inside; for the Works, to `of`'s yard, if given. */
+  goIn: (id: GameId, of?: string) => void;
   /** The chest's gift for today has been taken. */
   looted: () => boolean;
   /** Walk out through the gate and down the trail to the member's own camp. */

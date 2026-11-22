@@ -211,7 +211,7 @@ function machineDesc(art: Art, kind: Kind): Description {
   const pace = paceOf(kind);
   if (pace) stats.push({ label: "Pace", value: pace });
   const key = KEYS[openTools().indexOf(kind)];
-  if (key) stats.push({ label: "Key", value: key });
+  if (key && !S.visiting) stats.push({ label: "Key", value: key });
   const rows: Row[] = [];
   if (kind === "mill" || kind === "bench" || kind === "workshop")
     rows.push({ label: "Can make", things: MADE_BY[kind].map((r) => ({ ref: itemRef(r.out) })) });
@@ -543,14 +543,17 @@ function tileDesc(art: Art, i: number): Description | null {
   return null;
 }
 
+/** In a visit, nothing on a card does anything: its buttons are left off. */
+const looked = (d: Description | null): Description | null => (d && S.visiting ? { ...d, actions: [] } : d);
+
 /** Says what every kind of thing in the yard is. */
 export function initCard(art: Art): void {
   theArt = art;
   register("item", (k) => (isItem(k) ? itemDesc(art, k) : null));
   register("machine", (k) => (isKind(k) ? machineDesc(art, k) : null));
-  register("tile", (i) => tileDesc(art, Number(i)));
-  register("plot", (id) => (isPlotId(id) ? plotDesc(id) : null));
-  register("plan", (id) => (isPlanId(id) ? planDesc(art, id) : null));
+  register("tile", (i) => looked(tileDesc(art, Number(i))));
+  register("plot", (id) => looked(isPlotId(id) ? plotDesc(id) : null));
+  register("plan", (id) => looked(isPlanId(id) ? planDesc(art, id) : null));
   register("order", (slot) => orderDesc(slot));
 }
 

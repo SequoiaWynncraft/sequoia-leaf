@@ -517,4 +517,9 @@ export const RAID: Game<Table, RaidCommand, TableView, RaidNote> = {
   decode: decodeTable,
   encode: encodeTable,
   command: readCommand,
+  // The bosses beaten on every trail, the runs finished or abandoned, and the furthest room met on any trail.
+  standing: ({ almanac }) => ({
+    score: almanac.bosses.reduce((sum, beaten) => sum + beaten.length, 0),
+    also: { runs: almanac.runs, room: Math.max(0, ...almanac.best) },
+  }),
 };

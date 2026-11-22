@@ -170,7 +170,9 @@ export {
   isRefused,
   type Logged,
   MOST_COMMANDS,
+  type Placed,
   playPath,
   type Refused,
   type Standing,
+  visitPath,
 } from "./play.ts";

@@ -501,11 +501,19 @@ button.k-info-chip:hover .k-chip {
   justify-content: space-between;
   gap: var(--u) calc(var(--u) * 4);
 }
+/* A label over the numbers after it, across the whole row. */
+.k-info-over {
+  grid-column: 1 / -1;
+}
 .k-info-stat {
   display: flex;
   align-items: baseline;
-  gap: calc(var(--u) * 2);
+  gap: 0 calc(var(--u) * 2);
   white-space: nowrap;
+}
+/* On a phone's sheet, a number goes under its label where the row is too narrow for both. */
+.k-info.sheet .k-info-stat {
+  flex-wrap: wrap;
 }
 .k-info-blocks {
   gap: calc(var(--u) * 2);

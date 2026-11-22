@@ -107,7 +107,8 @@ export interface Description {
   /** At the right of the head: a price, stars. */
   readonly aside?: Node | string | null;
   readonly chips?: readonly Chip[];
-  readonly stats?: readonly Stat[];
+  /** Numbers with their labels; a text among them is a small capital label over the numbers after it. */
+  readonly stats?: readonly (Stat | string)[];
   readonly blocks?: readonly Block[];
   readonly rows?: readonly Row[];
   readonly actions?: readonly Action[];
@@ -578,7 +579,18 @@ function drawCard(d: Description, o: Open): HTMLElement {
         ),
       );
     } else if (part === "chips") add(card, el("div", "k-info-part k-info-chips", {}, ...(d.chips ?? []).map(chipOf)));
-    else if (part === "stats") add(card, el("div", "k-info-part k-info-stats", {}, ...(d.stats ?? []).map(statOf)));
+    else if (part === "stats")
+      add(
+        card,
+        el(
+          "div",
+          "k-info-part k-info-stats",
+          {},
+          ...(d.stats ?? []).map((s) =>
+            typeof s === "string" ? el("span", "k-label k-info-over", { text: s }) : statOf(s),
+          ),
+        ),
+      );
     else if (part === "blocks") add(card, el("div", "k-info-part k-info-blocks", {}, ...(d.blocks ?? []).map(blockOf)));
     else if (part === "rows")
       add(

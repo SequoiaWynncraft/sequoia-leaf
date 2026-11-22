@@ -9,6 +9,9 @@
  * Leaf's tick now, which is the tick Leaf last gave plus one for each tenth of a second since, never
  * earlier than one already shown. Coins are Leaf's ledger's: the number the Works shows is the
  * purse's and the whole Coins in the copy's till. Only the screen's own settings stay in the browser.
+ *
+ * A visit (`S.visiting`) opens somebody else's yard as Leaf gives a visitor it, runs it on the same
+ * way, and reads it again every half minute. It sends nothing: `doNow` refuses.
  */
 
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
@@ -40,6 +43,8 @@ const BEHIND_MOST = 600;
 const COLLECT_EVERY = 60_000;
 /** How often a tab that came back asks Leaf for its yard, until it has it. */
 const ASK_EVERY = 2000;
+/** How often a visit reads the yard from Leaf again. */
+const VISIT_EVERY = 30_000;
 
 /** What the screen itself remembers between visits: nudges already taken, and the zoom. */
 export interface Screen {
@@ -87,22 +92,22 @@ const refusalHearers: ((why: string) => void)[] = [];
 /** Hears why Leaf turned down something the page had already shown done. */
 export const onRefused = (fn: (why: string) => void): void => void refusalHearers.push(fn);
 
-/** The Coins the member has to spend in the Works, as Leaf will count them: the purse's, and the till's whole Coins. */
-export const coins = (): number => balance().coins + Math.floor(S.world.till);
+/** The Coins the member has to spend in the Works, as Leaf will count them: the purse's, and the till's whole Coins (not in a visit). */
+export const coins = (): number => balance().coins + (S.visiting ? 0 : Math.floor(S.world.till));
 
 /** Leaf's tick now, as the page reckons it. */
 const tickAt = (now: number): number => Math.max(shown, base.clock + Math.floor((now - base.at) / TICK_MS));
 
 /**
- * Opens the yard from Leaf, for the member the page is signed in as (`player`). Says why it could
- * not; after that, whatever stops the page sending is told to `trouble`.
+ * Opens the yard from Leaf, for the member the page is signed in as (`player`), or in a visit the
+ * yard visited. Says why it could not; after that, whatever stops the page sending is told to `trouble`.
  */
 export async function openYard(player: string, trouble: (why: Trouble) => void): Promise<Trouble | null> {
   Object.assign(screen, parseScreen(keptText(SCREEN)));
   const opened = await openPlay<WorksView, WorksCommand, WorksNote>(
     "works",
     { view: readView, notes: readNotes },
-    { player },
+    { player, ...(S.visiting ? { of: S.visiting.id } : {}) },
   );
   if ("trouble" in opened) return opened.trouble;
   leaf = opened;
@@ -115,6 +120,7 @@ export async function openYard(player: string, trouble: (why: Trouble) => void):
   });
   arrived = performance.now();
   collectedAt = arrived;
+  askedAt = arrived;
   if (!take()) return "closed";
   return null;
 }
@@ -147,6 +153,7 @@ function take(): boolean {
  * given back, and nothing is sent.
  */
 export function doNow(act: WorksAct): ReturnType<typeof play> {
+  if (S.visiting) return { refused: "visiting", why: "This yard is somebody else's" };
   const command: WorksCommand = { ...act, tick: S.world.tick };
   const done: ReturnType<typeof play> = leaf
     ? play(S.world, command)
@@ -200,6 +207,13 @@ export function runYard(now: number): News[] {
   shown = tick;
   // What these steps made known is taken before anything is sent: doing a command takes it too.
   const news = drain(w);
+  if (S.visiting) {
+    if (!waiting && now - askedAt >= VISIT_EVERY) {
+      askedAt = now;
+      void leaf.refresh();
+    }
+    return news;
+  }
   // A slot the board would have filled (a story order done) is filled by Leaf. And once a minute
   // the page collects whether or not the till holds a Coin: it keeps Leaf's yard in step with one
   // being watched, so that a yard earning nothing is not taken for one its owner left.

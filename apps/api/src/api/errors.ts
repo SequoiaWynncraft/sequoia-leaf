@@ -70,10 +70,14 @@ export class Invalid extends Schema.Error<Invalid>("Invalid")(
   { httpApiStatus: 400 },
 ) {}
 
-/** Nothing there: a slot the member has never saved to, a player with no skin Leaf can find, or a game Leaf does not play. */
-export class Missing extends Schema.Error<Missing>("Missing")(answer("no_save", "no_skin", "no_such_game"), {
-  httpApiStatus: 404,
-}) {}
+/**
+ * Nothing there: a slot the member has never saved to, a player with no skin Leaf can find, a game
+ * Leaf does not play, a game or a player's state in it that cannot be visited, or a player Leaf does not know.
+ */
+export class Missing extends Schema.Error<Missing>("Missing")(
+  answer("no_save", "no_skin", "no_such_game", "nothing_to_visit", "no_such_player"),
+  { httpApiStatus: 404 },
+) {}
 
 /** A save written over a version other than the one stored, changing nothing. */
 export class VersionConflict extends Schema.Error<VersionConflict>("VersionConflict")(answer("version_conflict"), {

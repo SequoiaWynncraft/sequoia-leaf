@@ -5,10 +5,15 @@
  * This file is the stage: it opens the yard, owns the canvas and the loop, and joins the parts
  * together. The rules are `@sequoia-leaf/yard`, the picture in `scene.ts` and `art/`, what the
  * member does in `tools.ts` and `input.ts`, and everything that sits over the yard in `ui/`.
+ *
+ * Opened with `?of=<player>`, it is a visit to that player's yard (`S.visiting`): the same yard,
+ * with nothing to act with, no lessons or letters, and nothing told to the town.
  */
 
 import { unit } from "@sequoia-leaf/kit/dom.ts";
-import { keepLeaf, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
+import { keepLeaf, pageCard, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
+import { askPerson } from "@sequoia-leaf/kit/person.ts";
+import type { Trouble } from "@sequoia-leaf/kit/play.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
@@ -56,9 +61,10 @@ import {
   takeAway,
   tapBelt,
 } from "./tools.ts";
+import { initBoard } from "./ui/board.ts";
 import { closeCard, followCards, initCard, openCard, refreshCard, riderAt } from "./ui/card.ts";
 import { initDock, refreshDock } from "./ui/dock.ts";
-import { initHud, refreshHud } from "./ui/hud.ts";
+import { initHud, myYard, refreshHud } from "./ui/hud.ts";
 import { putAway, reading, showLetter } from "./ui/letter.ts";
 import { closeBanner, feed, initNotes, tickNotes } from "./ui/notes.ts";
 import { closePanel, initPanels, openPanel, panelHooks, type PanelId, refreshPanel } from "./ui/panels.ts";
@@ -115,12 +121,14 @@ function refreshAll(): void {
 /** How much of the screen the interface covers, so the camera can keep the yard clear of it. */
 function measure(): void {
   const top = $("top").getBoundingClientRect();
-  const track = $("track").getBoundingClientRect();
+  // Under the top bar: the order in hand, or in a visit whose yard it is.
+  const track = $(S.visiting ? "visit" : "track").getBoundingClientRect();
   const hand = $("hand").getBoundingClientRect();
   const dock = $("dock").getBoundingClientRect();
   // On a narrow screen the order in hand runs the width of it, and the yard is clear only below.
   inset.top = track.width > window.innerWidth * 0.6 ? Math.max(top.bottom, track.bottom) : top.bottom;
-  inset.bottom = Math.max(0, window.innerHeight - hand.top);
+  // A visit has nothing along the bottom.
+  inset.bottom = S.visiting ? 0 : Math.max(0, window.innerHeight - hand.top);
   document.documentElement.style.setProperty("--toph", `${Math.round(top.bottom)}px`);
   document.documentElement.style.setProperty("--dockh", `${Math.round(dock.height)}px`);
   document.documentElement.style.setProperty("--handh", `${Math.round(hand.height)}px`);
@@ -137,8 +145,9 @@ const keepSettings = (): void => {
 
 /** What the town was last told about the yard, so that it is told only what has changed. */
 let carded = "";
-/** Leaves the town a postcard about the yard, if anything on it has changed. */
+/** Leaves the town a postcard about the yard, if anything on it has changed. Not of somebody else's. */
 function sendCard(): void {
+  if (S.visiting) return;
   const card = postcard(S.world);
   const text = JSON.stringify(card);
   if (text === carded) return;
@@ -165,12 +174,20 @@ async function boot(): Promise<void> {
     return;
   }
   const { signIn, me } = where;
-  const card = (why: Parameters<typeof troubleCard>[0]): void => troubleCard(why, signIn, NEEDS_LEAF);
-  const trouble = await openYard(me.id, card);
+  const of = params.get("of");
+  if (of !== null && of !== me.id) S.visiting = { id: of, name: "Someone" };
+  document.body.classList.toggle("visiting", S.visiting !== null);
+  const card = (why: Trouble): void => {
+    if (why === "nothing") pageCard("No yard to visit", "They have not started one yet.", "My yard", myYard);
+    else troubleCard(why, signIn, NEEDS_LEAF);
+  };
+  // In a visit, the owner's name is asked of Leaf meanwhile.
+  const [trouble, owner] = await Promise.all([openYard(me.id, card), S.visiting && askPerson(S.visiting.id)]);
   if (trouble) {
     card(trouble);
     return;
   }
+  if (S.visiting && owner) S.visiting.name = owner.name;
   const art = makeArt(S.world.land);
 
   const canvas = must(document.querySelector<HTMLCanvasElement>("#view"), "canvas");
@@ -179,6 +196,7 @@ async function boot(): Promise<void> {
 
   initNotes();
   initPanels(art);
+  initBoard(me.id);
   initCard(art);
   initHud(art);
   initDock(art);
@@ -212,7 +230,7 @@ async function boot(): Promise<void> {
   window.addEventListener("resize", fit);
   // The dock grows a row when the story opens more tools than fit: everything over it moves up.
   const watch = new ResizeObserver(measure);
-  for (const id of ["top", "dock", "hand", "track"]) watch.observe($(id));
+  for (const id of ["top", "dock", "hand", "track", "visit"]) watch.observe($(id));
 
   // ---------- the clock ----------
 
@@ -240,7 +258,7 @@ async function boot(): Promise<void> {
   function nudges(): void {
     if (S.t < nudgeAt) return;
     nudgeAt = S.t + 0.4;
-    const n = reading() ? null : nudge(S.world, new Set(screen.taught), S.finger);
+    const n = reading() || S.visiting ? null : nudge(S.world, new Set(screen.taught), S.finger);
     if (!n) {
       S.nudge = null;
       S.nudgeTool = null;
@@ -269,9 +287,10 @@ async function boot(): Promise<void> {
     S.t += dt;
     if (now !== null) {
       const news = runYard(now);
-      // Leaf worked the yard on while nobody watched: its letter says what it did.
-      if (S.world.away && !reading()) showLetter(S.world.away, refreshAll);
-      if (news.length > 0) {
+      // Leaf worked the yard on while nobody watched: its letter says what it did, to its owner.
+      if (S.world.away && !reading() && !S.visiting) showLetter(S.world.away, refreshAll);
+      // What a visited yard does is its owner's news: the visitor's purse and town are not told.
+      if (news.length > 0 && !S.visiting) {
         onNews(art, news);
         refreshAll();
       }
@@ -290,7 +309,7 @@ async function boot(): Promise<void> {
     slow -= dt;
     if (slow > 0) return;
     slow = 0.25;
-    capstones();
+    if (!S.visiting) capstones();
     callers();
     sendCard();
     refreshAll();

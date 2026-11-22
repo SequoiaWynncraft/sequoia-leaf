@@ -19,6 +19,7 @@ import {
 } from "./game.ts";
 import { payout } from "./outside.ts";
 import { pieces, summariseRun } from "./run.ts";
+import { RAID_STATS } from "./stats.ts";
 import { readNotes, readView } from "./wire.ts";
 
 const PLAYER = { id: "10000000-0000-0000-0000-000000000001", guest: false };
@@ -357,6 +358,12 @@ describe("a whole run, played by commands", () => {
     });
     expect(state.almanac.runs).toBe(1);
     expect(state.almanac.best[0]).toBe(ended.summary.reached);
+    // Where the table stands, for the player's card: the bosses beaten, the runs done, the furthest room.
+    expect(RAID.standing?.(RAID.create(ctx(42)))).toEqual({ score: 0, also: { runs: 0, room: 0 } });
+    expect(RAID.standing?.(state)).toEqual({
+      score: state.almanac.bosses.flat().length,
+      also: { runs: 1, room: ended.summary.reached },
+    });
   });
 });
 
@@ -512,5 +519,15 @@ describe("a run that has fought no room", () => {
     expect(must(fighting, { do: "start", trail: 0 }).state).toBe(fighting);
     expect(must(fighting, { do: "abandon" }).state).toBe(fighting);
     expect(RAID.apply(fighting, { do: "start", trail: 2 }, ctx())).toEqual({ refused: "trail_closed" });
+  });
+});
+
+describe("a table's numbers on its player's card", () => {
+  test("are the bosses beaten, the runs and the furthest room", () => {
+    expect(RAID_STATS.numbers({ place: 1, score: 3, also: { runs: 1200, room: 14 } })).toEqual([
+      { label: "Bosses beaten", value: "3" },
+      { label: "Runs", value: "1,200" },
+      { label: "Furthest room", value: "14" },
+    ]);
   });
 });

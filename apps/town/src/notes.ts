@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "visit-yards",
+    day: "2026-11-22",
+    title: "Visit other yards",
+    lines: [
+      "Choose someone in Who is about or in Top yards to see their card: what their yard has earned, and how far they are in The Little Raid.",
+      "Visit yard opens their yard. You can look around. You cannot change anything.",
+    ],
+  },
+  {
     id: "works-plain-words",
     day: "2026-11-22",
     title: "Plainer words in the Works",

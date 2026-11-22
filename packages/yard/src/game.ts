@@ -313,6 +313,9 @@ export function readNotes(v: unknown): WorksNote[] | null {
   return notes.every((n) => n !== null) ? notes.filter((n) => n !== null) : null;
 }
 
+/** What the page is given of a yard: all of it but its stream, and Leaf's tick now. */
+const view = (w: World, ctx: Ctx): WorksView => ({ yard: save({ ...w, seed: null }), clock: clockOf(w, ctx.now) });
+
 /** The Works, for Leaf's play service. */
 export const WORKS: Game<World, WorksCommand, WorksView, WorksNote> = {
   id: "works",
@@ -324,7 +327,9 @@ export const WORKS: Game<World, WorksCommand, WorksView, WorksNote> = {
   advance,
   // A tick further ahead than `LEAD` past Leaf's clock is done at `LEAD`.
   apply: (w, c, ctx) => play(w, { ...c, tick: Math.min(c.tick, clockOf(w, ctx.now) + LEAD) }),
-  view: (w, ctx) => ({ yard: save({ ...w, seed: null }), clock: clockOf(w, ctx.now) }),
+  view,
+  // A visitor is given what the owner is.
+  visit: view,
   decode: (text) => load(text),
   encode: save,
   command: readCommand,

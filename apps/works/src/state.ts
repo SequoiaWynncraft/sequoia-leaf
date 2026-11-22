@@ -33,6 +33,11 @@ export interface Run {
 export const S: {
   /** The page's copy of Leaf's yard (`yard.ts`). */
   world: World;
+  /**
+   * Whose yard it is when it is not the member's own: a visit, where they look about and change
+   * nothing. Each part of the screen that acts on the yard asks this.
+   */
+  visiting: { readonly id: string; name: string } | null;
   /** Counts every change to what stands where, so that what is worked out from it can be kept until the next. */
   rev: number;
   /** Seconds the screen has been running, and whether its clock is being stepped by hand from outside. */
@@ -63,6 +68,7 @@ export const S: {
   nudgeTool: Tool;
 } = {
   world: create(),
+  visiting: null,
   rev: 0,
   t: 0,
   held: false,

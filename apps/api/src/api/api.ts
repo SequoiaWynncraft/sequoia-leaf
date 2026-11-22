@@ -42,6 +42,7 @@ import {
   Health,
   Hello,
   Me,
+  Person,
   PlayBody,
   Played,
   PlayerLeaf,
@@ -240,6 +241,16 @@ export class GameApi extends HttpApiGroup.make("game")
     HttpApiEndpoint.get("standings", "/play/:game/standings", {
       params: GameParams,
       success: Standings,
+      error: Missing,
+    }),
+    HttpApiEndpoint.get("visit", "/play/:game/of/:player", {
+      params: { ...GameParams, player: Schema.String },
+      success: PlayShown,
+      error: [Missing, StateUnreadable, SlowDown],
+    }),
+    HttpApiEndpoint.get("person", "/people/:player", {
+      params: { player: Schema.String },
+      success: Person,
       error: Missing,
     }),
     // For the games not on the play service yet, whose pages still work out what they earn and spend.
