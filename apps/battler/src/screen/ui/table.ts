@@ -26,6 +26,7 @@ import {
   ROOMS,
   type Run,
   rustleCost,
+  tally,
   topStep,
   type TraitId,
   TRAITS,
@@ -35,7 +36,7 @@ import {
 import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
 import { portrait } from "../art/sprites.ts";
 import { rimTop, stumpOf } from "../art/table.ts";
-import { fightUnits } from "../fightview.ts";
+import { fightEvents, fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
 import { light } from "../light.ts";
 import { canBuy, opening, savings, steppedUp, stepsOf } from "../logic.ts";
@@ -43,6 +44,7 @@ import { artPx, place, V } from "../stage.ts";
 import { S } from "../state.ts";
 import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } from "./cards.ts";
 import { forgetLight, paintLight } from "./lit.ts";
+import { type TallyView, tallyView } from "./tally.ts";
 
 /** What the buttons ask for. The table only asks; whoever built it answers. */
 export interface Asks {
@@ -55,6 +57,8 @@ export interface Asks {
   help: () => void;
   sound: () => void;
   frontPage: () => void;
+  /** Opens the last fight's sheet again, or puts it away. */
+  lastFight: () => void;
   /** A trait has just switched on, or on harder. */
   traitOn: (trait: TraitId, step: number) => void;
 }
@@ -116,7 +120,15 @@ export function buildTable(a: Asks): void {
     pic(glyph("door")),
   );
   tip(door, "Step back from the board", "Your raid is kept as it is.");
-  add(hud, purse, track, resolve, el("div", "", { id: "corner" }, help, sound, door));
+  const last = el(
+    "button",
+    "k-btn wood sm",
+    { id: "lastfight", type: "button", onclick: a.lastFight, hidden: true },
+    pic(glyph("swords")),
+    el("span", "", { text: "Last fight" }),
+  );
+  tip(last, "Last fight", "Who did what in the last fight, again.");
+  add(hud, purse, track, last, resolve, el("div", "", { id: "corner" }, help, sound, door));
 
   const rustle = el("button", "k-btn wood", { id: "rustle", type: "button", onclick: a.rustle });
   tip(rustle, "Rustle", () => `New figures on the stall. One a room is free; after that it costs ${ECONOMY.rustle}.`);
@@ -164,17 +176,18 @@ export function buildTable(a: Asks): void {
   const skip = el(
     "button",
     "k-btn wood",
-    { id: "skip", type: "button", onclick: a.skipFight },
+    { id: "skip", type: "button", "aria-label": "Skip", onclick: a.skipFight },
     pic(glyph("skip")),
-    "Skip",
+    el("span", "wide-only", { text: "Skip" }),
   );
   tip(skip, "Skip to the end", "The fight comes out the same.");
+  panelTally = tallyView(unitRef, "panel");
   const fightbar = el(
     "div",
     "",
     { id: "fightbar" },
-    el("div", "", { id: "tally" }),
-    el("div", "controls", {}, el("div", "", { id: "sides" }), el("div", "k-row", {}, speeds, skip)),
+    el("div", "", { id: "tally" }, panelTally.el),
+    el("div", "controls", {}, panelTally.switcher, panelTally.tabs, el("div", "k-row speedrow", {}, speeds, skip)),
   );
 
   add(
@@ -431,13 +444,7 @@ function renderActs(run: Run): void {
 }
 
 function renderFightBar(run: Run): void {
-  const sides = byId("sides");
-  if (!sides) return;
-  sides.replaceChildren(
-    el("b", "k-leafy", { text: "You" }),
-    el("span", "k-dim", { text: "against" }),
-    regularNamed(run.foe.who) ? folkName(run.foe.who, "k-pix") : el("b", "k-coral", { text: run.foe.who }),
-  );
+  panelTally?.across(run.foe.who);
   for (const tab of document.querySelectorAll<HTMLElement>("#speeds [data-speed]")) {
     tab.setAttribute("aria-selected", String(Number(tab.dataset.speed) === S.prefs.speed));
   }
@@ -450,7 +457,8 @@ function renderFightBar(run: Run): void {
 function renderFoe(run: Run): void {
   const foe = byId("foe");
   if (!foe) return;
-  foe.hidden = S.mode === "front" || S.mode === "over";
+  // While a fight's sheet is up the room that is over is what is talked about, not the one coming.
+  foe.hidden = S.mode === "front" || S.mode === "over" || S.mode === "after";
   if (regularNamed(run.foe.who)) {
     foe.replaceChildren(
       el("div", "brought", {}, folkName(opening(run.foe.who), "k-pix"), el("span", "k-read", { text: run.foe.title })),
@@ -494,6 +502,8 @@ export function renderTable(): void {
   if (!run) return;
   document.body.dataset.picking = run.choices.length > 0 && S.mode === "plan" ? "yes" : "no";
   renderTrack(run);
+  const last = byId("lastfight");
+  if (last) last.hidden = S.mode !== "plan" || run.last === null || run.choices.length > 0;
   renderResolve(run);
   renderTraits(run);
   renderRack(run);
@@ -532,39 +542,17 @@ export function holdAcorns(at: number, seconds = 2.4): void {
   shown.acorns = at;
   shown.settleAt = V.t + seconds;
 }
-/** The tally's rows, one for each of the party's fighters, kept from one count to the next so a card on one stays up. */
-const tallyRows = new Map<number, { row: HTMLElement; bar: HTMLElement; n: HTMLElement }>();
-/** Who of the party has done most in the fight so far: a row each, the busiest first. */
+/** The tally of the fight on the table, in the lower panel while it plays. */
+let panelTally: TallyView | null = null;
 function renderTally(): void {
-  const box = byId("tally");
-  if (!box) return;
-  const mine = fightUnits()
-    .filter((u) => u.side === 0)
-    .toSorted((a, b) => b.dealt - a.dealt || a.id - b.id)
-    .slice(0, 8);
-  const most = Math.max(1, ...mine.map((u) => u.dealt));
-  const keep = new Set(mine.map((u) => u.id));
-  for (const [id, r] of tallyRows) {
-    if (keep.has(id)) continue;
-    r.row.remove();
-    tallyRows.delete(id);
-  }
-  mine.forEach((u, i) => {
-    let r = tallyRows.get(u.id);
-    if (!r || r.row.dataset.kind !== u.kind) {
-      r?.row.remove();
-      const art = el("span", "who", {}, pic(portrait(u.kind)));
-      link(art, unitRef(u.id));
-      const bar = el("i");
-      const n = el("span", "k-s");
-      r = { row: el("div", "row", { "data-kind": u.kind }, art, el("div", "k-bar coral", {}, bar), n), bar, n };
-      tallyRows.set(u.id, r);
-    }
-    r.row.classList.toggle("down", !u.alive);
-    r.bar.style.setProperty("--v", `${Math.round((u.dealt / most) * 100)}%`);
-    r.n.textContent = String(u.dealt);
-    if (box.children[i] !== r.row) box.insertBefore(r.row, box.children[i] ?? null);
-  });
+  const units = fightUnits();
+  panelTally?.show(
+    units,
+    tally(
+      fightEvents(),
+      units.map((u) => u.id),
+    ),
+  );
 }
 let talliedAt = -9;
 
@@ -574,7 +562,7 @@ export function stepTable(): void {
     shown.acorns = null;
     if (S.run) renderPurseSide(S.run);
   }
-  if ((S.mode === "fight" || S.mode === "after") && V.t - talliedAt > 0.35) {
+  if (S.mode === "fight" && V.t - talliedAt > 0.35) {
     talliedAt = V.t;
     renderTally();
   }

@@ -53,6 +53,19 @@ describe("saving a run", () => {
       expect(saveRun(reload(run))).toBe(text);
     }
   });
+  test("a run saved while some figures were locked still loads, and its stall may offer anyone", () => {
+    const run = midRun(19, 2);
+    const old = loadRun(tampered(run, (raw) => (raw.open = ["worm", "finch", "moth"])));
+    expect(old.ok && old.run).toEqual(run);
+  });
+  test("the last fight comes back, and a run saved before it was kept loads without one", () => {
+    const run = midRun(12, 3);
+    expect(run.last).not.toBeNull();
+    expect(reload(run).last).toEqual(run.last);
+    const old = loadRun(tampered(run, (raw) => delete raw.last));
+    expect(old.ok && old.run.last).toBeNull();
+    expect(refused(tampered(run, (raw) => (raw.last = { seed: 1, sides: [] })))).toContain("the last fight");
+  });
   test("the stall, the random stream and the next room all come back", () => {
     const run = midRun(8, 5);
     const back = reload(run);
@@ -93,7 +106,6 @@ describe("saving a run", () => {
   });
   test("a run that has met every figure, forged every item and topped every trait loads back whole", () => {
     const run = midRun(31, 6);
-    run.open = [...FIGURE_IDS];
     run.seen = {
       fielded: [...FIGURE_IDS],
       threeStars: [...FIGURE_IDS],
@@ -146,7 +158,6 @@ describe("loading refuses nonsense", () => {
     expect(refused(tampered(run, (raw) => (raw.stall = ["dragon", null, null, null, null])))).toContain("the stall");
     expect(refused(tampered(run, (raw) => (raw.boons = ["godmode"])))).toContain("the boons");
     expect(refused(tampered(run, (raw) => (raw.items = ["thorn", "excalibur"])))).toContain("the item bench");
-    expect(refused(tampered(run, (raw) => (raw.open = ["worm", "gnat"])))).toContain("the open figures");
     const withPiece = (piece: unknown): string =>
       refused(
         tampered(run, (raw) => {

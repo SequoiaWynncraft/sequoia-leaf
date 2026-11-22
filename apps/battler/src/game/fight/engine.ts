@@ -18,10 +18,12 @@ import { type Party, type Placed, traitSteps } from "../party.ts";
 import { chance, mix } from "../rng.ts";
 import { cast } from "./abilities.ts";
 import {
+  drawnFoe,
+  drawOf,
   emit,
   enter,
   flight,
-  foesByDistance,
+  foesByDraw,
   foesWithin,
   freeNear,
   gainMana,
@@ -31,7 +33,6 @@ import {
   later,
   leap,
   mostHurt,
-  nearestFoe,
   otherSide,
   powered,
   secs,
@@ -152,6 +153,7 @@ function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
   });
   u.armour += armour;
   u.ward += ward;
+  u.draw = drawOf(p.kind, p.items);
   for (const item of p.items) equip(u, item);
   if (party.boons.includes("headstart")) gainMana(u, boonNumber("headstart", "mana"));
   if (party.boons.includes("formation")) {
@@ -414,7 +416,10 @@ function strike(f: Fight, u: Unit, t: Unit): void {
   if (u.quicken > 0 && u.quick < u.quickMost) u.quick++;
 }
 
-/** Who a figure goes for: whoever is making it, then whoever it is already on if they are still in reach, then the nearest. */
+/**
+ * Who a figure goes for: whoever is making it, then whoever it is already on if they are still in
+ * reach, then the enemy that seems nearest once draw is counted (`drawnFoe`).
+ */
 function choose(f: Fight, u: Unit): Unit | undefined {
   if (u.tauntUntil > f.tick) {
     const by = f.units[u.tauntBy];
@@ -424,15 +429,15 @@ function choose(f: Fight, u: Unit): Unit | undefined {
   if (current && current.side !== u.side && targetable(f, current) && distance(u.cell, current.cell) <= u.range) {
     return current;
   }
-  return nearestFoe(f, u);
+  return drawnFoe(f, u);
 }
 
 function walk(f: Fight, u: Unit, t: Unit): void {
   if (u.rooted) return;
   let step = stepToward(u.side, f.taken, u.cell, t.cell, u.range);
   if (step < 0) {
-    // Boxed in: see whether anyone else can be got at.
-    for (const o of foesByDistance(f, u.side, u.cell)) {
+    // Boxed in: see whether anyone else can be got at, in the order it would pick them.
+    for (const o of foesByDraw(f, u.side, u.cell)) {
       if (o.id === t.id) continue;
       step = stepToward(u.side, f.taken, u.cell, o.cell, u.range);
       if (step >= 0) {

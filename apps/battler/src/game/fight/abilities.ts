@@ -13,6 +13,7 @@ import { cone, distance, line, neighbours, within } from "../hex.ts";
 import {
   alliesOf,
   brace,
+  drawnFoe,
   emit,
   farthestFoe,
   flight,
@@ -45,14 +46,17 @@ export type Cast = (f: Fight, u: Unit, n: (name: string) => number) => boolean;
 
 const ids = (units: readonly Unit[]): number[] => units.map((o) => o.id);
 
-/** Who a figure's ability is aimed at when the sentence says "its target": whoever it is attacking, if in reach, else the nearest enemy in reach. */
+/**
+ * Who a figure's ability is aimed at when the sentence says "its target": whoever it is attacking,
+ * if in reach, else whoever it would pick to attack (draw counted), if that one is in reach.
+ */
 export function aim(f: Fight, u: Unit): Unit | undefined {
   const current = u.target >= 0 ? f.units[u.target] : undefined;
   if (current && current.side !== u.side && targetable(f, current) && distance(u.cell, current.cell) <= u.range) {
     return current;
   }
-  const near = nearestFoe(f, u);
-  return near && distance(u.cell, near.cell) <= u.range ? near : undefined;
+  const picked = drawnFoe(f, u);
+  return picked && distance(u.cell, picked.cell) <= u.range ? picked : undefined;
 }
 /** Announces an ability: the hexes it covers, who it is aimed at, and how long before it lands. */
 function say(f: Fight, u: Unit, cells: number[], targets: number[], ticks: number): void {

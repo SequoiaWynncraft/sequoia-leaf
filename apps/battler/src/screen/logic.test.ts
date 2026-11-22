@@ -11,10 +11,12 @@ import {
   type Piece,
   type Run,
   startRun,
+  traitNumber,
 } from "../game/index.ts";
 import {
   canBuy,
   combosWithHeld,
+  fightTitle,
   handing,
   looseComponents,
   membersOf,
@@ -285,8 +287,8 @@ describe("what a card says about a figure", () => {
     run.board[1] = { id: 2, kind: "slug", stars: 1, items: [], fed: 0 };
     const plain = plainNumbers("barrowgnome", 1);
     const now = pieceNumbers(run, { on: "board", at: 0 });
-    // Stump Shield's 40 armour and two Bulwarks' 20.
-    expect(now?.armour).toBe(plain.armour + 40 + 20);
+    // Stump Shield's 40 armour and two Bulwarks' own.
+    expect(now?.armour).toBe(plain.armour + 40 + traitNumber("bulwark", "armour", 1));
     expect(now?.health).toBe(plain.health);
     // On the bench the trait does not count, the item still does.
     run.bench[0] = run.board[0];
@@ -346,5 +348,14 @@ describe("the postcard for the town", () => {
       till: 0,
     });
     expect(postcard(null, almanac).waiting).toBe("The board is set out for another raid.");
+  });
+});
+
+describe("a fight's sheet", () => {
+  test("is titled with how the fight went and how long it took", () => {
+    expect(fightTitle("win", 280)).toBe("Room won · 14 s");
+    expect(fightTitle("loss", 411)).toBe("Room lost · 21 s");
+    expect(fightTitle("draw", 900)).toBe("A draw · 45 s");
+    expect(fightTitle("win", 0)).toBe("Room won · 1 s");
   });
 });

@@ -78,7 +78,14 @@
     "(()=>{for(let i=0;i<4000&&!window.raid.state().fight.over;i++)window.raid.tick(1); window.raid.skip(1.9); return window.raid.state().mode})()"
   ],
   ["wait", 400],
-  ["shot", "d-16-takings"],
+  ["shot", "d-16-takings-sheet"],
+  [
+    "eval",
+    "(window.raid.skip(3), window.raid.carry(), window.raid.skip(1.5), document.querySelector(\"[data-pick='0']\")?.click(), window.raid.skip(1.5), window.raid.last())"
+  ],
+  ["wait", 500],
+  ["shot", "d-16a-last-fight"],
+  ["eval", "(window.raid.last(), window.raid.state().mode)"],
   ["eval", "(window.raid.skip(9), window.raid.to('spar'), window.raid.skip(1.5), 'a regular across the table')"],
   ["wait", 500],
   ["shot", "d-16b-regular-across"],

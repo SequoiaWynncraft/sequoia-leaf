@@ -15,6 +15,7 @@ import {
   isFigureId,
   isFinishedId,
   type ItemId,
+  MEASURES,
   pieceAt,
   pieces,
   planRoom,
@@ -24,7 +25,7 @@ import {
   takeTakings,
 } from "../game/index.ts";
 import { fightState } from "./fightview.ts";
-import { enterRun, setOut, startNew } from "./flow.ts";
+import { carryOn, enterRun, setOut, startNew } from "./flow.ts";
 import { grab, hover, tapPawn, unpick } from "./hand.ts";
 import { heldRow, heldTop } from "./held.ts";
 import { keep, KEYS } from "./keep.ts";
@@ -33,7 +34,9 @@ import { pawns } from "./pawns.ts";
 import { arrive } from "./scene.ts";
 import * as stage from "./stage.ts";
 import { act, changed, prefsChanged, S, wake } from "./state.ts";
+import { closeSheet, sheetUp, toggleLastFight } from "./ui/fightsheet.ts";
 import { type PageId, showPage } from "./ui/pages.ts";
+import { redrawTallies, TV } from "./ui/tally.ts";
 
 type Jump = "front" | "boon" | "component" | "spar" | "boss" | "lastboss" | "end";
 
@@ -84,6 +87,12 @@ export interface Handle {
   hand(itemAt: number, id: number): void;
   drop(): void;
   page(id: PageId | null): void;
+  /** Goes on from a fight's sheet, as "Carry on" does. */
+  carry(): string;
+  /** Opens the last fight's sheet while planning, as "Last fight" does, or puts it away. */
+  last(): string;
+  /** Shows a tab of the tally ("damage", "tanked", "healing"), and on a phone one party (0 for yours, 1 for theirs). */
+  tally(measure: string, side?: number): string;
   /** For staging a moment: more acorns, a figure onto the bench, a figure onto the stall, an item onto the rack. */
   acorns(n: number): void;
   give(kind: string, stars?: number): number;
@@ -111,6 +120,7 @@ function settle(): string {
   const run = S.run;
   if (!run) return "no run";
   if (run.phase === "over") {
+    closeSheet(false);
     S.mode = "over";
     changed();
     return "over";
@@ -270,6 +280,21 @@ export function openHandle(): void {
     },
     drop: unpick,
     page: showPage,
+    carry() {
+      carryOn();
+      return S.mode;
+    },
+    last() {
+      toggleLastFight();
+      return sheetUp() ?? "none";
+    },
+    tally(measure, side) {
+      const m = MEASURES.find((x) => x === measure);
+      if (m) TV.measure = m;
+      if (side === 0 || side === 1) TV.side = side;
+      redrawTallies();
+      return `${TV.measure} ${TV.side}`;
+    },
     acorns(n) {
       act((r) => {
         r.acorns = Math.max(0, n);

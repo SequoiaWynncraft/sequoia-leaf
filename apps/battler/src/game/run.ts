@@ -90,11 +90,11 @@ export interface Run {
   foe: Party;
   record: RoomRecord[];
   nextId: number;
-  /** The figures the stall may offer on this run. */
-  open: FigureId[];
   won: boolean;
   /** The player walked home early. */
   left: boolean;
+  /** The last fight fought, as it was set up, so that it can be played again to be looked back on. */
+  last: FightSetup | null;
   /** Things this run has done that the almanac remembers. */
   seen: {
     fielded: FigureId[];
@@ -247,18 +247,16 @@ export function opposition(seed: number, roomIndex: number, trailIndex: number):
 
 // ---------- the stall ----------
 
+/** Who the stall may offer: every figure, to everyone, from the first run. Nothing won or bought anywhere changes it. */
+export const STALL_POOL: readonly FigureId[] = FIGURE_IDS;
+
 const stallSize = (run: Run): number =>
   run.boons.includes("widestall") ? boonNumber("widestall", "offers") : ECONOMY.stall;
 function drawOffer(run: Run): FigureId | null {
   const odds = STALL_ODDS[Math.min(run.level, STALL_ODDS.length) - 1] ?? STALL_ODDS[0];
   if (!odds) return null;
-  const tier =
-    1 +
-    weighted(
-      run,
-      odds.map((w, i) => (run.open.some((id) => FIGURES[id].tier === i + 1) ? w : 0)),
-    );
-  const pool = run.open.filter((id) => FIGURES[id].tier === tier);
+  const tier = 1 + weighted(run, odds);
+  const pool = STALL_POOL.filter((id) => FIGURES[id].tier === tier);
   return pool.length > 0 ? pick(run, pool) : null;
 }
 function restock(run: Run): void {
@@ -304,13 +302,10 @@ function remember<T>(list: T[], v: T): void {
 export interface RunOptions {
   /** Which trail, counting from 0. */
   trail?: number;
-  /** The figures the stall may offer: the ones the member has open. Everyone, if not given. */
-  open?: readonly FigureId[];
 }
 /** Starts a run. It begins with a choice waiting: one of three one-acorn figures to set out with. */
 export function startRun(seed: number, options: RunOptions = {}): Run {
   const trail = Math.min(TRAILS.length - 1, Math.max(0, Math.trunc(options.trail ?? 0)));
-  const open = FIGURE_IDS.filter((id) => options.open === undefined || options.open.includes(id));
   const board: (Piece | null)[] = [];
   for (let i = 0; i < SEATS; i++) board.push(null);
   const bench: (Piece | null)[] = [];
@@ -337,12 +332,12 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
     foe: opposition(seed >>> 0, 0, trail),
     record: [],
     nextId: 1,
-    open: open.length > 0 ? open : [...FIGURE_IDS],
     won: false,
     left: false,
+    last: null,
     seen: { fielded: [], threeStars: [], forged: [], topped: [] },
   };
-  const cheapest = run.open.filter((id) => FIGURES[id].tier === 1);
+  const cheapest = STALL_POOL.filter((id) => FIGURES[id].tier === 1);
   run.choices.push({ kind: "starter", options: shuffled(run, cheapest).slice(0, ECONOMY.starters) });
   restock(run);
   return run;
@@ -640,6 +635,7 @@ export function takeTakings(run: Run): Taken {
   const notes: Note[] = [{ t: "result", room: run.room, result: fight.result, standing: fight.standing }];
   const boss = run.foe.figures.map((p) => p.kind).find(isBossId) ?? null;
   run.record.push({ room: run.room, kind: room.kind, result: fight.result, standing: fight.standing, boss });
+  run.last = setup;
 
   if (!won) {
     // A loss costs a base and one more for each enemy left; a draw only the base.

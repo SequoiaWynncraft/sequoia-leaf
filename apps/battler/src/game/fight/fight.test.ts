@@ -4,11 +4,12 @@ import { boonNumber } from "../content/boons.ts";
 import { FIGURES, specOf, starScale } from "../content/figures.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { traitNumber } from "../content/traits.ts";
-import { backRow, distance, rowOf, seatCell } from "../hex.ts";
+import { backRow, CELLS, cellSeat, distance, rowOf, seatCell } from "../hex.ts";
 import {
   at,
   fightOf,
   inOrder,
+  onCell,
   only,
   partyOfFigures,
   ready,
@@ -19,9 +20,9 @@ import {
   unitOf,
   unitsOf,
 } from "../testkit.ts";
-import { burn, heal, hurt, HZ, shieldUp, slow, stun, taunt } from "./core.ts";
+import { burn, drawOf, heal, hurt, HZ, shieldUp, slow, stun, taunt } from "./core.ts";
 import { openFight, recordFight, resolveFight, runFight, speedNow, stepFight } from "./engine.ts";
-import type { FightSetup } from "./types.ts";
+import type { Fight, FightSetup } from "./types.ts";
 
 const brawl = (seed: number): FightSetup => ({
   seed,
@@ -375,6 +376,139 @@ describe("statuses", () => {
       "shot",
     ).at(-1);
     expect(next?.target).toBe(puddle.id);
+  });
+});
+
+/** Whoever a fight's next attack goes at, thrown or up close. */
+const nextAttack = (f: Fight): number | undefined => {
+  const ev = stepUntil(f, (e) => e.t === "shot" || e.t === "swing").findLast((e) => e.t === "shot" || e.t === "swing");
+  return ev?.t === "shot" || ev?.t === "swing" ? ev.target : undefined;
+};
+
+describe("draw: who a figure goes for", () => {
+  /** A Twig Finch on our front line that only throws, and reaches everywhere, so its first shot is its pick. */
+  const FINCH = seatCell(0, 3);
+  /** Hexes on the far half a number of hexes from the finch, in the order its side breaks ties (the first wins). */
+  const away = (hexes: number): number[] => {
+    const out: number[] = [];
+    for (let cell = 0; cell < CELLS; cell++)
+      if (cellSeat(1, cell) >= 0 && distance(FINCH, cell) === hexes) out.push(cell);
+    return out;
+  };
+  const cellAt = (hexes: number, i: number): number => {
+    const cell = away(hexes)[i];
+    if (cell === undefined) throw new Error(`no hex ${hexes} away, number ${i}`);
+    return cell;
+  };
+  /** The finch against some figures standing still; the id of whoever it first attacks. */
+  function firstPick(foes: Parameters<typeof onCell>[]): { picked: number | undefined; f: Fight } {
+    const f = fightOf(
+      [onCell("finch", 0, FINCH)],
+      foes.map((args) => onCell(...args)),
+    );
+    stillSide(f, 1);
+    const finch = unitOf(f, "finch");
+    finch.manaFull = 0;
+    finch.range = 9;
+    return { picked: nextAttack(f), f };
+  }
+
+  test("a figure's draw is its callings and items, from -1 to +2", () => {
+    expect(drawOf("crab7", [])).toBe(0);
+    expect(drawOf("barrowgnome", [])).toBe(1);
+    expect(drawOf("greg", [])).toBe(1);
+    expect(drawOf("worm", [])).toBe(-1);
+    expect(drawOf("hearthcat", [])).toBe(-1);
+    expect(drawOf("whitefox", [])).toBe(0);
+    expect(drawOf("crab7", ["stump"])).toBe(1);
+    expect(drawOf("crab7", ["stump", "bark"])).toBe(1);
+    expect(drawOf("barrowgnome", ["stump"])).toBe(2);
+    expect(drawOf("worm", ["stump"])).toBe(0);
+    // Never above +2, however much it holds.
+    expect(drawOf("barrowgnome", ["stump", "stump"])).toBe(FIGHT.drawMost);
+    expect(drawOf("barrowgnome", ["stump", "stump", "stump"])).toBe(FIGHT.drawMost);
+    // The forest's own and the summoned carry no calling.
+    expect(drawOf("gnat", [])).toBe(0);
+    expect(drawOf("bigcrab", [])).toBe(0);
+    expect(drawOf("glorplet", [])).toBe(0);
+    const f = fightOf([at("barrowgnome", 3, 0, 1, ["stump"]), at("worm", 2, 0)], [at("gnat", 3, 0)]);
+    expect(unitOf(f, "barrowgnome").draw).toBe(2);
+    expect(unitOf(f, "worm").draw).toBe(-1);
+    expect(unitOf(f, "gnat", 1).draw).toBe(0);
+  });
+  test("a Bulwark two hexes away does not draw it from an enemy one hex away: a tie, and the nearer wins", () => {
+    const { picked, f } = firstPick([
+      ["barrowgnome", 1, cellAt(2, 0)],
+      ["gnat", 1, cellAt(1, 0)],
+    ]);
+    expect(picked).toBe(unitOf(f, "gnat", 1).id);
+  });
+  test("at the same distance the Bulwark is picked, even where the other would have come first", () => {
+    const { picked, f } = firstPick([
+      ["gnat", 1, cellAt(2, 0)],
+      ["barrowgnome", 1, cellAt(2, 1)],
+    ]);
+    expect(picked).toBe(unitOf(f, "barrowgnome", 1).id);
+    // Without its draw the gnat would have been picked.
+    const plain = firstPick([
+      ["gnat", 1, cellAt(2, 0)],
+      ["crab7", 1, cellAt(2, 1)],
+    ]);
+    expect(plain.picked).toBe(unitOf(plain.f, "gnat", 1).id);
+  });
+  test("a Sneak at the same distance is passed over", () => {
+    const { picked, f } = firstPick([
+      ["worm", 1, cellAt(2, 0)],
+      ["gnat", 1, cellAt(2, 1)],
+    ]);
+    expect(picked).toBe(unitOf(f, "gnat", 1).id);
+  });
+  test("two draws reach a hex further than one, and no further than two", () => {
+    // +2 three hexes away seems as near as one hex: it beats a figure two hexes away...
+    const two = firstPick([
+      ["barrowgnome", 1, cellAt(3, 0), 1, ["stump"]],
+      ["gnat", 1, cellAt(2, 0)],
+    ]);
+    expect(two.picked).toBe(unitOf(two.f, "barrowgnome", 1).id);
+    // ...but held to +2, three Stump Shields still tie with one hex away, and the nearer wins.
+    const capped = firstPick([
+      ["barrowgnome", 1, cellAt(3, 0), 1, ["stump", "stump", "stump"]],
+      ["gnat", 1, cellAt(1, 0)],
+    ]);
+    expect(unitOf(capped.f, "barrowgnome", 1).draw).toBe(2);
+    expect(capped.picked).toBe(unitOf(capped.f, "gnat", 1).id);
+  });
+  test("taunting still wins over draw, and staying on a target in reach is unchanged", () => {
+    const f = fightOf(
+      [onCell("finch", 0, FINCH)],
+      [onCell("gnat", 1, cellAt(1, 0)), onCell("puddle", 1, cellAt(4, 0))],
+    );
+    stillSide(f, 1);
+    const finch = unitOf(f, "finch");
+    finch.manaFull = 0;
+    finch.range = 9;
+    const gnat = unitOf(f, "gnat", 1);
+    const puddle = unitOf(f, "puddle", 1);
+    expect(nextAttack(f)).toBe(gnat.id);
+    // Once on the gnat, it stays on it while it is in reach, however much the puddle draws.
+    puddle.draw = 9;
+    expect(nextAttack(f)).toBe(gnat.id);
+    // Taunted, it goes for the puddle, however much the gnat draws.
+    taunt(f, finch, 3, puddle);
+    puddle.draw = 0;
+    gnat.draw = FIGHT.drawMost;
+    expect(nextAttack(f)).toBe(puddle.id);
+  });
+  test("an ability aimed at its target follows the pick", () => {
+    const f = fightOf([onCell("crab7", 0, FINCH)], [onCell("gnat", 1, cellAt(1, 0)), onCell("slug", 1, cellAt(1, 1))]);
+    stillSide(f, 1);
+    const crab = ready(unitOf(f, "crab7"));
+    const cast = only(
+      stepUntil(f, (e) => e.t === "cast"),
+      "cast",
+    )[0];
+    expect(crab.target).toBe(-1);
+    expect(cast?.targets).toEqual([unitOf(f, "slug", 1).id]);
   });
 });
 

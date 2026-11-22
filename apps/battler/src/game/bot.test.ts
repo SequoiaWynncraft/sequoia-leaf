@@ -5,13 +5,14 @@ import { FIGURES } from "./content/figures.ts";
 import { HOLDS, isComponentId } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT } from "./content/rooms.ts";
 import { KINS } from "./content/traits.ts";
-import { newAlmanac, openFigures, payout, recordRun } from "./outside.ts";
+import { newAlmanac, payout, recordRun } from "./outside.ts";
 import {
   beginFight,
   fieldCap,
   fielded,
   pieces,
   type Run,
+  STALL_POOL,
   startRun,
   summariseRun,
   takeTakings,
@@ -33,7 +34,7 @@ function expectSound(run: Run): void {
   for (const p of own) {
     expect(p.items.length).toBeLessThanOrEqual(HOLDS);
     expect(p.items.filter(isComponentId).length).toBeLessThanOrEqual(1);
-    expect(run.open).toContain(p.kind);
+    expect(STALL_POOL).toContain(p.kind);
   }
   // Three of a kind never sit unmerged.
   const counts = new Map<string, number>();
@@ -140,11 +141,11 @@ describe("the bot plays by the rules", () => {
 });
 
 describe("a whole life of raids", () => {
-  test("runs feed the almanac, the almanac opens figures, and the next run can meet them", () => {
+  test("runs feed the almanac, raid after raid", () => {
     let almanac = newAlmanac();
     let coins = 0;
     for (let seed = 1; seed <= 8; seed++) {
-      const run = playRun(seed * 7, SENSIBLE, { open: openFigures(almanac) });
+      const run = playRun(seed * 7, SENSIBLE);
       const summary = summariseRun(run);
       coins += payout(summary).coins;
       almanac = recordRun(almanac, summary).almanac;
@@ -152,7 +153,7 @@ describe("a whole life of raids", () => {
     expect(almanac.runs).toBe(8);
     expect(almanac.fielded.length).toBeGreaterThan(15);
     expect(almanac.best[0]).toBeGreaterThan(5);
-    expect(almanac.opened).toContain("kettle");
+    expect(almanac.bosses[0]).toContain("oldbramble");
     expect(coins).toBeGreaterThan(8 * 80);
     expect(coins).toBeLessThan(8 * 600);
   });

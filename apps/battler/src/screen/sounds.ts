@@ -218,10 +218,6 @@ export const snd = {
     sfx.leaf(2);
     sfx.twinkle();
   },
-  unlock(): void {
-    sfx.clack();
-    sfx.twinkle();
-  },
   nudge(): void {
     sfx.pop();
   },
