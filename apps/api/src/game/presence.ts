@@ -72,6 +72,8 @@ export class Presence extends Context.Service<
       guest: boolean,
       now: number,
     ) => Effect.Effect<Here>;
+    /** Lists who is about now, as `arrive` does, writing nothing: for a page in a live room, whose place the room keeps. */
+    readonly look: (now: number) => Effect.Effect<Here>;
     /**
      * Records that players in a live room are at its `place` now, as `arrive` would, keeping what
      * each last said about staying (a player never seen stays, as `arrive` has it when nothing is
@@ -112,7 +114,13 @@ export class Presence extends Context.Service<
         `,
       });
       const forgetOld = (now: number) => sql`DELETE FROM presence WHERE seen_at < ${now - DAY_MS}`;
+      const lists = (now: number) =>
+        Effect.all({
+          present: present(now - PRESENT_FOR_MS),
+          resting: resting({ before: now - PRESENT_FOR_MS, since: now - DAY_MS }),
+        });
       return Presence.of({
+        look: (now) => sql.withTransaction(lists(now)).pipe(Effect.orDie),
         arrive: (playerId, username, place, stay, guest, now) =>
           sql
             .withTransaction(
@@ -128,10 +136,7 @@ export class Presence extends Context.Service<
                   RETURNING player_id
                 `;
                 if (written.length > 0) yield* forgetOld(now);
-                return {
-                  present: yield* present(now - PRESENT_FOR_MS),
-                  resting: yield* resting({ before: now - PRESENT_FOR_MS, since: now - DAY_MS }),
-                };
+                return yield* lists(now);
               }),
             )
             .pipe(Effect.orDie),

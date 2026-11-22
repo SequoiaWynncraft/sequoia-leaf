@@ -18,6 +18,8 @@ export interface Opening {
   readonly cookie?: string;
   readonly bearer?: string;
   readonly origin?: string;
+  /** What the page says it is on, as `&device=` in the address. */
+  readonly device?: string;
 }
 
 type Of<T extends ToClient["t"]> = Extract<ToClient, { t: T }>;
@@ -75,7 +77,8 @@ export class LiveClient {
     if (sent.cookie !== undefined) headers["Cookie"] = `seq_session=${sent.cookie}`;
     if (sent.bearer !== undefined) headers["Authorization"] = `Bearer ${sent.bearer}`;
     if (sent.origin !== undefined) headers["Origin"] = sent.origin;
-    const ws = new WebSocket(`${origin.replace(/^http/, "ws")}${path}`, { headers });
+    const device = sent.device === undefined ? "" : `&device=${encodeURIComponent(sent.device)}`;
+    const ws = new WebSocket(`${origin.replace(/^http/, "ws")}${path}${device}`, { headers });
     const client = new LiveClient(ws);
     return new Promise((resolve, reject) => {
       ws.addEventListener("open", () => resolve(client), { once: true });

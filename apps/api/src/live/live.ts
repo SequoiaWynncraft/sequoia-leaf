@@ -1,6 +1,7 @@
 import {
   CLOSE,
   decodeMove,
+  type Device,
   isAct,
   LIVE_VERSION,
   type PlayerId,
@@ -8,12 +9,26 @@ import {
   SERVER_HZ,
   type ToClient,
 } from "@sequoia-leaf/core";
-import { Cause, Clock, Context, Duration, Effect, Layer, Option, Queue, Schedule, Schema, type Scope } from "effect";
+import {
+  Cause,
+  Clock,
+  Context,
+  Deferred,
+  Duration,
+  Effect,
+  Layer,
+  Option,
+  Queue,
+  Schedule,
+  Schema,
+  type Scope,
+} from "effect";
 import { Socket } from "effect/socket";
 
+import { type Visitor, Visits } from "../activity/visits.ts";
 import { type Identity, isGuest } from "../api/api.ts";
 import { PLACES } from "../api/schemas.ts";
-import { type InRoom, Presence } from "../game/presence.ts";
+import { Presence } from "../game/presence.ts";
 import { type Occupant, type Room, Rooms } from "./room.ts";
 
 /**
@@ -51,10 +66,23 @@ export const LiveTuning = Context.Reference<LiveTuning>("leaf/LiveTuning", {
 /** Where a player's presence says they are while they are in a room of a kind, if it is one of the game's places. */
 const placeOf = (kindName: string): string | null => PLACES.find((p) => p === kindName) ?? null;
 
-/** What Live has to write down about where players are, in the order it happened. */
+/**
+ * What Live has to write down about where players are, in the order it happened: players in a room
+ * (come in, or still there), one gone from it, and Leaf's farewell, when every open visit closes.
+ */
 type Whereabouts =
-  | { readonly kind: "in"; readonly players: readonly InRoom[]; readonly place: string; readonly at: number }
-  | { readonly kind: "left"; readonly playerId: PlayerId; readonly place: string; readonly at: number };
+  | { readonly kind: "in"; readonly players: readonly Visitor[]; readonly place: string; readonly at: number }
+  | { readonly kind: "left"; readonly playerId: PlayerId; readonly place: string; readonly at: number }
+  | { readonly kind: "farewell"; readonly at: number; readonly done: Deferred.Deferred<void> };
+
+/** A write of where players are that fails is logged, not tried again: the next one, at most `presenceMs` later, says as much. */
+const quietly = (what: string, effect: Effect.Effect<void>) =>
+  effect.pipe(
+    Effect.catchCause((cause) => (Cause.hasInterruptsOnly(cause) ? Effect.interrupt : Effect.logWarning(what, cause))),
+  );
+
+/** How long Leaf's farewell waits for the open visits to be closed before it closes the connections anyway. */
+const FAREWELL_WAIT = Duration.seconds(2);
 
 /** The longest text frame Leaf reads, in UTF-16 code units (as JavaScript counts a string's length). Every message the game sends is far shorter. */
 const MOST_TEXT = 512;
@@ -181,6 +209,8 @@ class Player {
   goneAt: number | null = null;
   /** Connections of theirs let in and not yet open: while there are any, the record is theirs. */
   opening = 0;
+  /** What their connection's page said it is on, if it did. */
+  device: Device | null = null;
   readonly moves: Allowance;
   readonly texts: Allowance;
   readonly acts: Allowance;
@@ -234,7 +264,9 @@ export type Opened = "served" | "full" | "busy" | "stopping";
  *
  * A player in a room of one of the game's places (the town) is present there as far as `Presence`
  * knows, as if their game said so: written when they come in, every `presenceMs` while they stay,
- * and when they go, so that nobody's page need say where they are while it is in a room.
+ * and when they go, so that nobody's page need say where they are while it is in a room. The same
+ * moments open, keep and close their visit there (`Visits`); and Leaf's farewell closes every open
+ * visit before it closes any connection.
  */
 export class Live extends Context.Service<
   Live,
@@ -244,13 +276,15 @@ export class Live extends Context.Service<
      * open them too fast (`busy`). Their place among the players is taken, and held, before
      * `upgrade` opens the socket, so that nobody can slip in between. Once it is open it is theirs,
      * and they are in the room, greeted, in one step. Then it is served until it closes, Leaf stops,
-     * or `session` (asked every `recheckMs`) says the player's session has ended.
+     * or `session` (asked every `recheckMs`) says the player's session has ended. `device` is what
+     * the page said it is on, if it did, for the player's visits.
      */
     readonly open: (
       identity: Identity,
       kindName: string,
       upgrade: Effect.Effect<Socket.Socket, unknown>,
       session: Effect.Effect<boolean>,
+      device?: Device | null,
     ) => Effect.Effect<Opened, never, Scope.Scope>;
     /** How many players there are, how many connected, and who is in which room (for tests and the log). */
     readonly census: Effect.Effect<{
@@ -258,7 +292,10 @@ export class Live extends Context.Service<
       readonly connected: number;
       readonly rooms: Readonly<Record<string, number>>;
     }>;
-    /** Tells every player Leaf is restarting, and closes their connections, so that they come back to the next one. */
+    /**
+     * Closes every open visit, then tells every player Leaf is restarting and closes their
+     * connections, so that they come back to the next one.
+     */
     readonly farewell: Effect.Effect<void>;
   }
 >()("leaf/Live") {
@@ -267,6 +304,7 @@ export class Live extends Context.Service<
     Effect.gen(function* () {
       const tuning = yield* LiveTuning;
       const presence = yield* Presence;
+      const visits = yield* Visits;
       const rooms = new Rooms();
       const players = new Map<string, Player>();
       let counts = noCounts();
@@ -276,23 +314,46 @@ export class Live extends Context.Service<
 
       // ---- where players are, as presence has it ----
 
-      // Said here as it happens, without waiting, and written by one fiber in the same order.
+      // Said here as it happens, without waiting, and written by one fiber in the same order: where
+      // everybody else sees them (presence), and their visits.
       const whereabouts = yield* Queue.unbounded<Whereabouts>();
-      const inRoom = (p: Player): InRoom => ({
+      const inRoom = (p: Player): Visitor => ({
         playerId: p.identity.playerId,
         username: p.identity.username,
         guest: isGuest(p.identity),
+        device: p.device,
       });
-      const write = (w: Whereabouts) =>
-        (w.kind === "in"
-          ? presence.inRoom(w.players, w.place, w.at)
-          : presence.leftRoom(w.playerId, w.place, w.at)
-        ).pipe(
-          // A write that fails is not tried again: the next one, at most `presenceMs` later, says as much.
-          Effect.catchCause((cause) =>
-            Cause.hasInterruptsOnly(cause) ? Effect.interrupt : Effect.logWarning("live presence", cause),
-          ),
-        );
+      /**
+       * Once every open visit was closed for Leaf's farewell, nothing more of visits is written: a
+       * player who left as the connections closed may be back in the next Leaf already, in a visit
+       * of its own.
+       */
+      let visitsClosed = false;
+      const ofVisits = (effect: Effect.Effect<void>) =>
+        Effect.suspend(() => (visitsClosed ? Effect.void : quietly("live visits", effect)));
+      const write = (w: Whereabouts): Effect.Effect<void> => {
+        switch (w.kind) {
+          case "in":
+            return Effect.andThen(
+              quietly("live presence", presence.inRoom(w.players, w.place, w.at)),
+              ofVisits(visits.inRoom(w.players, w.place, w.at)),
+            );
+          case "left":
+            return Effect.andThen(
+              quietly("live presence", presence.leftRoom(w.playerId, w.place, w.at)),
+              ofVisits(visits.leftRoom(w.playerId, w.place, w.at)),
+            );
+          case "farewell":
+            return ofVisits(visits.closeAll(w.at)).pipe(
+              Effect.andThen(
+                Effect.sync(() => {
+                  visitsClosed = true;
+                }),
+              ),
+              Effect.ensuring(Deferred.succeed(w.done, undefined)),
+            );
+        }
+      };
       yield* Effect.forkScoped(
         Effect.forever(
           Effect.flatMap(Queue.takeAll(whereabouts), (all) => Effect.forEach(all, write, { discard: true })),
@@ -399,7 +460,7 @@ export class Live extends Context.Service<
       // Everybody in a room of one of the game's places is there still, as their game would say.
       const stillHere = Effect.flatMap(Clock.currentTimeMillis, (now) =>
         Effect.sync(() => {
-          const byPlace = new Map<string, InRoom[]>();
+          const byPlace = new Map<string, Visitor[]>();
           for (const p of players.values()) {
             const place = p.room ? placeOf(p.room.kindName) : null;
             if (!place) continue;
@@ -449,6 +510,7 @@ export class Live extends Context.Service<
         identity: Identity,
         kindName: string,
         upgrade: Effect.Effect<Socket.Socket, unknown>,
+        device: Device | null,
       ) =>
         Effect.gen(function* () {
           const socket = yield* Effect.orDie(upgrade);
@@ -478,6 +540,7 @@ export class Live extends Context.Service<
           p.pipe?.close(CLOSE.replaced, "replaced");
           p.pipe = pipe;
           p.identity = identity;
+          p.device = device;
           p.goneAt = null;
           if (p.occupant) p.room?.reconnected(p.occupant.member.id);
           enter(p, kindName, now);
@@ -516,6 +579,7 @@ export class Live extends Context.Service<
         kindName: string,
         upgrade: Effect.Effect<Socket.Socket, unknown>,
         session: Effect.Effect<boolean>,
+        device: Device | null = null,
       ) =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
@@ -534,7 +598,7 @@ export class Live extends Context.Service<
             Effect.sync(() => {
               p.opening++;
             }),
-            () => attach(p, identity, kindName, upgrade),
+            () => attach(p, identity, kindName, upgrade, device),
             () =>
               Effect.sync(() => {
                 p.opening--;
@@ -544,9 +608,17 @@ export class Live extends Context.Service<
           return "served" as const;
         });
 
-      const farewell = Effect.suspend(() => {
+      // Every open visit is closed first, after everything said before it, so that none a player
+      // opens in the next Leaf, once their connection here has closed, is closed with them.
+      const farewell = Effect.gen(function* () {
+        const first = !stopping;
         stopping = true;
-        return Effect.forEach([...players.values()], (p) => p.pipe?.closeNow(CLOSE.restart, "restart") ?? Effect.void, {
+        if (first) {
+          const done = yield* Deferred.make<void>();
+          Queue.offerUnsafe(whereabouts, { kind: "farewell", at: yield* Clock.currentTimeMillis, done });
+          yield* Deferred.await(done).pipe(Effect.timeout(FAREWELL_WAIT), Effect.ignore);
+        }
+        yield* Effect.forEach([...players.values()], (p) => p.pipe?.closeNow(CLOSE.restart, "restart") ?? Effect.void, {
           discard: true,
         });
       });

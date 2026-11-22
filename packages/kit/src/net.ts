@@ -38,6 +38,8 @@ export interface Outside {
   now(): number;
   /** Opens a WebSocket to an address. */
   socket(url: string): LiveSocket;
+  /** How wide the window is, in CSS pixels (0 where there is none). */
+  width(): number;
 }
 
 function browserStore(): Store | null {
@@ -69,6 +71,7 @@ export const outside: Outside = {
   },
   now: () => Date.now(),
   socket: (url) => new WebSocket(url),
+  width: () => (typeof innerWidth === "number" ? innerWidth : 0),
 };
 
 /** Puts stand-ins in place of parts of the outside world (for tests). Returns how to put them back. */
