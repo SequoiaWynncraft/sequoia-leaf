@@ -78,6 +78,7 @@ export interface Stage {
   /**
    * Walk from this place to another: night closes in on whoever is walking off, at its darkest
    * `swap` sets the next place up and it is put on, and then the night lifts on them walking in.
+   * Says whether the member set off: not while another walk is under way.
    */
-  travel(next: Scene, swap: () => void): void;
+  travel(next: Scene, swap: () => void): boolean;
 }

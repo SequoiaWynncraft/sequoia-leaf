@@ -207,7 +207,7 @@ export function readCommand(v: unknown): PullsCommand | null {
 // ---------- doing things ----------
 
 /** Whether a pool is open at a moment of Leaf's clock: `grove` always, a banner between its dates. */
-function isOpen(pool: string, now: number): boolean {
+export function isOpen(pool: string, now: number): boolean {
   const banner = BANNERS.find(({ id }) => id === pool);
   return pool === "grove" || (banner !== undefined && banner.from <= now && now < banner.until);
 }

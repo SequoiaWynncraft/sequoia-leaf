@@ -107,11 +107,11 @@ export function fly(what: IconName, from: Pt, to: Pt, count: number, each: ((i: 
  * (with the made-up guild it is left open): it looks shut, says why when pointed at or touched
  * (`leafShut`), and pressing it only shakes it and says why again. A button with no command to take
  * its Leaf is closed whatever Leaf's spending is; one with a command is passed here only while
- * `leafOpen()` is false. Says whether it closed it; if not, the button is the caller's as before.
+ * `leafOpen()` is false, or with its own `why` (too little Leaf for it). Says whether it closed it;
+ * if not, the button is the caller's as before.
  * Call it after the button's own listeners are on, in place of giving it a tip.
  */
-export function closeLeaf(b: HTMLElement, title = "Leaf"): boolean {
-  const why = leafShut();
+export function closeLeaf(b: HTMLElement, title = "Leaf", why = leafShut()): boolean {
   b.classList.add("off");
   b.setAttribute("aria-disabled", "true");
   tip(b, title, why);

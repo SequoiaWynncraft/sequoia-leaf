@@ -150,6 +150,10 @@ export interface Town extends Scene {
   readonly backdrop: { sky: HTMLCanvasElement; near: HTMLCanvasElement };
   /** How the stage is told the way to the camp, once there is one. */
   toCamp: (() => void) | null;
+  /** The member is back from the Grove, where they stood. */
+  cameFromGrove(): void;
+  /** How the stage is asked into the Grove, once Leaf has opened it if the member is `free` still: it says whether they went. */
+  toGrove: ((free: () => boolean) => Promise<boolean>) | null;
   /**
    * The town is on the stage, or off it (the camp, or a game open over it): only while it is on is
    * the page in the town's live room.
@@ -362,6 +366,25 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   }
   hooks.toCamp = toCamp;
 
+  /**
+   * Into the Grove from where the member stands: night closes in on the town once Leaf has opened
+   * the pulls, if the member has not set off for anywhere else meanwhile.
+   */
+  let asking = false;
+  function toGrove(): void {
+    if (!G.home || going || leaving || asking || !town.toGrove) return;
+    halt();
+    closePanel();
+    closeCard();
+    asking = true;
+    void (async () => {
+      const went = await town.toGrove?.(() => !going && !leaving);
+      asking = false;
+      if (went) leaving = true;
+    })();
+  }
+  hooks.toGrove = toGrove;
+
   /** The member's own figure had its emotes up when the touch came. */
   let plaque = false;
   /** Somebody in town is touched. */
@@ -470,7 +493,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       box: pl.id === "camp" ? { x: 242, y: 72, w: 28, h: 28 } : undefined,
       at: AT[pl.id],
       use: () => openPanel(pl.id),
-      enter: game ? () => goIn(game) : pl.id === "camp" ? () => void toCamp() : undefined,
+      enter: game ? () => goIn(game) : pl.id === "camp" ? () => void toCamp() : pl.id === "grove" ? toGrove : undefined,
     });
   });
 
@@ -506,6 +529,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   const town: Town = {
     backdrop: { sky: pic.sky, near: pic.near },
     toCamp: null,
+    toGrove: null,
     onStage: townOnStage,
     bounds: BOUNDS,
 
@@ -602,6 +626,11 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       player.dir = 0;
       player.path = [{ ...place("works").stand }];
       player.arrive = null;
+    },
+
+    cameFromGrove() {
+      G.where = "town";
+      leaving = false;
     },
 
     cameFromCamp() {

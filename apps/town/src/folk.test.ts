@@ -29,6 +29,7 @@ function sources(): Map<string, string> {
  */
 const MEMBERS_ONLY: Readonly<Record<string, string>> = {
   "apps/town/src/townscene.ts": "the member themself",
+  "apps/town/src/grovescene.ts": "a pull banner's headliner, a member, in the Grove",
   "apps/town/src/visitors.ts": "real members visiting or dozing",
   "apps/town/src/players.ts": "other players in town, live, in their own skins",
   "apps/town/src/draw.ts": "where a member's figure stands in its frame",
@@ -89,6 +90,7 @@ describe("the town's own", () => {
           "apps/town/src/main.ts",
           "apps/town/src/aboutui.ts",
           "apps/town/src/statues.ts",
+          "apps/town/src/grovescene.ts",
         ]).toContain(path);
     // And one of the town's own is only ever made as itself.
     for (const [path, text] of files)

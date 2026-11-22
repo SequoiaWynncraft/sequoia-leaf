@@ -95,8 +95,8 @@ export interface Game {
   near: string | null;
   /** The member is stepping through a door, and whoever is taking them through has their fading in hand. */
   inDoor: boolean;
-  /** Which place is on the stage: the town, or a camp. */
-  where: "town" | "camp";
+  /** Which place is on the stage: the town, a camp, or the Grove. */
+  where: "town" | "camp" | "grove";
   /** How far night has closed in on the walk between two places: 0 for not at all, 1 for dark. */
   dark: number;
   raidsToday: number;
@@ -172,6 +172,10 @@ export const hooks: {
   goIn: (id: GameId, of?: string) => void;
   /** Walk out through the gate and down the trail to the camp; says whether the member set off. */
   toCamp: () => boolean;
+  /** Into the Grove, where the pulls are made. */
+  toGrove: () => void;
+  /** The banner open in the Grove, whose it is and until when, in a line; null while there is none or Leaf has not said whose. */
+  groveBanner: () => string | null;
   /** Go to somebody's camp (`name`, if known, is theirs), or the member's own for their own id. */
   visitCamp: (id: string, name?: string) => void;
 } = {
@@ -179,6 +183,8 @@ export const hooks: {
   feed: () => undefined,
   goIn: () => undefined,
   toCamp: () => false,
+  toGrove: () => undefined,
+  groveBanner: () => null,
   visitCamp: () => undefined,
 };
 
