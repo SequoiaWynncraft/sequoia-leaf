@@ -22,6 +22,7 @@ import {
   NotAMember,
   NotEnoughCoins,
   NotYou,
+  PurchaseRefused,
   Refused,
   SaveTooLarge,
   SlowDown,
@@ -43,10 +44,14 @@ import {
   Me,
   PlayBody,
   Played,
+  PlayerLeaf,
   PlayShown,
   Png,
   PresenceBody,
   Present,
+  PurchaseBody,
+  PurchaseCancelled,
+  Purchased,
   Quests,
   RerollBody,
   Rerolled,
@@ -111,6 +116,21 @@ export class Unexpected extends HttpApiMiddleware.Service<Unexpected>()("leaf/ap
 /** Reads a request's body only up to 16 KiB: a longer one gets 413 `body_too_large` unread. Saves read more. */
 export class BodyLimit extends HttpApiMiddleware.Service<BodyLimit>()("leaf/api/BodyLimit", {
   error: BodyTooLarge,
+}) {}
+
+/**
+ * Lets in sequoia-backend, by the internal token the two share (`BACKEND_INTERNAL_TOKEN`, the
+ * backend's `APP_INTERNAL_API_TOKEN`), sent as `Authorization: Bearer`, and only over the server's
+ * private network: a request that came through the public proxy is refused, token or not.
+ */
+export class Backend extends HttpApiMiddleware.Service<Backend>()("leaf/api/Backend", {
+  security: { bearer: HttpApiSecurity.bearer },
+  error: Unauthorized,
+}) {}
+
+/** Answers a purchase whose body is not `{ "player_id", "kind", "leaf" }` with `invalid_purchase`. */
+export class PurchaseBodyErrors extends HttpApiMiddleware.Service<PurchaseBodyErrors>()("leaf/api/PurchaseBodyErrors", {
+  error: Invalid,
 }) {}
 
 /** Answers a reroll whose body is not `{ "leaf": n }` with `invalid_cost`. */
@@ -247,12 +267,41 @@ export class GameAdminApi extends HttpApiGroup.make("gameAdmin")
   .middleware(Player)
   .prefix("/v1/game/admin") {}
 
+const KeyParams = { key: Schema.String };
+
+/**
+ * sequoia-backend's routes: a member's Leaf, and the guild requests (tomes, aspects) it buys for
+ * them with it, each by a key of the backend's. Not for browsers or the mod.
+ */
+export class InternalApi extends HttpApiGroup.make("internal")
+  .add(
+    HttpApiEndpoint.get("leaf", "/players/:player/leaf", {
+      params: { player: Schema.String },
+      success: PlayerLeaf,
+      error: Invalid,
+    }),
+    HttpApiEndpoint.put("buy", "/purchases/:key", {
+      params: KeyParams,
+      payload: PurchaseBody,
+      success: Purchased,
+      error: [Invalid, PurchaseRefused],
+    }).middleware(PurchaseBodyErrors),
+    HttpApiEndpoint.delete("cancel", "/purchases/:key", {
+      params: KeyParams,
+      success: PurchaseCancelled,
+      error: Invalid,
+    }),
+  )
+  .middleware(Backend)
+  .prefix("/internal/v1") {}
+
 export class LeafApi extends HttpApi.make("sequoia-leaf")
   .add(SystemApi)
   .add(MeApi)
   .add(GameHelloApi)
   .add(GameApi)
   .add(GameAdminApi)
+  .add(InternalApi)
   .middleware(BodyLimit)
   .middleware(Unexpected)
   .annotateMerge(OpenApi.annotations({ title: "Leaf", description: "The Sequoia guild currency and its game" })) {}

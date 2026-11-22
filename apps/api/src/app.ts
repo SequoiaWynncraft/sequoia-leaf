@@ -25,6 +25,7 @@ import { Coins } from "./play/coins.ts";
 import { PageCoins } from "./play/page.ts";
 import { Play } from "./play/service.ts";
 import { PlayStore } from "./play/store.ts";
+import { Purchases } from "./purchases/store.ts";
 import { Quests } from "./quests/store.ts";
 
 /**
@@ -94,7 +95,8 @@ export const serveLeaf = (options: {
 
 /**
  * Leaf's stores: the ledger, the events and the quests, what the game keeps (the games' states and
- * Coins among them), and who played it, on whichever database is provided. Skins and names come
+ * Coins among them), who played it, and the requests the backend buys with Leaf, on whichever
+ * database is provided. Skins and names come
  * from whichever Mojang is.
  */
 export const Stores = Layer.mergeAll(
@@ -106,6 +108,7 @@ export const Stores = Layer.mergeAll(
   Skins.layer.pipe(Layer.provideMerge(PlayerNames.layer)),
   PlayStore.layer,
   Coins.layer,
+  Purchases.layer,
 ).pipe(Layer.provideMerge(Ledger.layer));
 
 /**
