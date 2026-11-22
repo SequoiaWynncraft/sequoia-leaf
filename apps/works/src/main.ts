@@ -20,7 +20,7 @@ import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { tipOff } from "@sequoia-leaf/kit/tip.ts";
-import { must, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 import {
   type Dir,
   ITEM,
@@ -42,7 +42,7 @@ import { callers, capstones, forget, handOver, onNews } from "./events.ts";
 import { updateFx } from "./fx.ts";
 import { fingerTap, initInput, inputHooks, stepInput } from "./input.ts";
 import { layout } from "./layout.ts";
-import { drawWords, drawYard } from "./scene.ts";
+import { drawWords, drawYard, lap, picture, spent, wipe } from "./scene.ts";
 import { sheets } from "./sheets.ts";
 import { murmur, yardSfx } from "./sound.ts";
 import { S, type Tool, toPage } from "./state.ts";
@@ -75,17 +75,27 @@ import { again, keepScreen, leadAt, onRefused, openYard, runYard, screen } from 
 const NEEDS_LEAF = "The Works needs the guild's server.";
 
 /** A moment staged in the yard by the play server on a developer's machine (`apps/api/test/play.ts`), for the tours. */
-type Staged = { yard: "small" | "short" | "mid" | "large" | "new" } | { away: number } | { fill: number };
+type Staged =
+  { yard: "small" | "short" | "mid" | "large" | "new" } | { text: string } | { away: number } | { fill: number };
 
 declare global {
   interface Window {
     /** Handles for looking at the yard from outside: stage a moment on the test Leaf, open things, act as a player would. */
     works?: {
       stage: (...ops: Staged[]) => Promise<void>;
-      hold: (on: boolean) => void;
+      /**
+       * Stops the screen running the yard on, and shows it so far (`lead`, 0 to 1) into its next
+       * tick; with `at`, the screen's own clock stands at that many seconds, so a picture can be
+       * taken twice the same.
+       */
+      hold: (on: boolean, lead?: number, at?: number) => void;
       skip: (seconds: number) => void;
-      /** Draws so many frames one after another, and says how many milliseconds each took. */
-      time: (frames: number) => number;
+      /**
+       * Does so many frames' work one after another, as if the screen showed `hz` of them a second,
+       * and says what one took: milliseconds by part, the picture's size in the yard's pixels, and
+       * how many pieces are on it. The yard is run that far ahead of Leaf, and waits there for it.
+       */
+      bench: (frames: number, hz?: number) => { ms: Record<string, number>; picture: Pt; pieces: number };
       pick: (tool: Tool, dir?: Dir) => void;
       finger: (on: boolean) => void;
       aim: (x: number, y: number) => void;
@@ -196,7 +206,10 @@ async function boot(): Promise<void> {
   if (S.visiting && owner) S.visiting.name = owner.name;
   const art = makeArt(S.world.land);
 
-  const canvas = must(document.querySelector<HTMLCanvasElement>("#view"), "canvas");
+  // The yard's picture, shown small and enlarged by the page; over it, the words, which also take every press.
+  picture.id = "view";
+  document.body.prepend(picture);
+  const canvas = must(document.querySelector<HTMLCanvasElement>("#words"), "canvas");
   const ctx = must(canvas.getContext("2d"), "2d context");
   let wordPx = 2;
 
@@ -223,11 +236,15 @@ async function boot(): Promise<void> {
     measure();
     resize();
     const dpr = window.devicePixelRatio || 1;
+    const cw = Math.max(1, Math.round(window.innerWidth * dpr));
+    const ch = Math.max(1, Math.round(window.innerHeight * dpr));
+    if (canvas.width !== cw) canvas.width = cw;
+    if (canvas.height !== ch) canvas.height = ch;
     // The usual text size; on a sharp screen, the size the kit gives second lines.
     wordPx = Math.max(1, Math.round(unit() * dpr * (dpr >= 2 ? 0.75 : 1)));
   }
 
-  setCamera(canvas, art.ground);
+  setCamera(picture, art.ground);
   setZoom(screen.zoom);
   fit();
   // The dock's height is only known once it has been laid out with its tools in it.
@@ -287,7 +304,11 @@ async function boot(): Promise<void> {
     S.nudgeTool = n.tool;
   }
 
+  /** A single pixel to take the picture onto, for `bench`. */
+  const taken = makeCanvas(1, 1).g;
   let slow = 0;
+  /** How far into its next tick a yard held still is shown. */
+  let heldLead = 0;
   /** A moment of the screen: `now`, the page's clock, runs the yard on to Leaf's tick; without it only the screen moves. */
   function advance(dt: number, now: number | null): void {
     S.t += dt;
@@ -323,18 +344,49 @@ async function boot(): Promise<void> {
 
   function draw(now: number): void {
     const w = S.world;
-    const picture = drawYard(art, { lead: S.held ? 0 : leadAt(now), pace: power(w).pace });
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(picture, 0, 0, picture.width * S.view.z, picture.height * S.view.z);
+    drawYard(art, { lead: S.held ? heldLead : leadAt(now), pace: power(w).pace });
     drawWords(ctx, wordPx, inset.top * S.view.dpr);
+    lap("words");
+  }
+
+  // With `?meter` in the address, a corner says how the screen is keeping up: the frames a second
+  // it reaches, the longest of the last second, and the milliseconds of a frame's work by part
+  // (`browser` is what the browser itself does with the frame before the page is free again).
+  const meter = params.has("meter") ? document.body.appendChild(document.createElement("pre")) : null;
+  const after = meter ? new MessageChannel() : null;
+  if (meter && after) {
+    meter.id = "meter";
+    meter.className = "k-plaque k-s";
+    spent.on = true;
+    after.port1.addEventListener("message", () => lap("browser"));
+    after.port1.start();
+  }
+  let metered = { at: performance.now(), frames: 0, longest: 0 };
+  function count(now: number, gap: number): void {
+    if (!meter || !after) return;
+    after.port2.postMessage(0);
+    metered.frames++;
+    metered.longest = Math.max(metered.longest, gap);
+    if (now - metered.at < 1000) return;
+    const { frames } = metered;
+    meter.textContent = [
+      `${Math.round((frames * 1000) / (now - metered.at))} frames a second`,
+      `longest ${metered.longest.toFixed(1)} ms`,
+      ...Object.entries(spent.ms).map(([part, ms]) => `${part} ${(ms / frames).toFixed(2)}`),
+    ].join("\n");
+    metered = { at: now, frames: 0, longest: 0 };
+    spent.ms = {};
   }
 
   let last = performance.now();
   let told = false;
   function frame(now: number): void {
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    count(now, now - last);
     last = now;
+    lap();
     if (!S.held) advance(dt, now);
+    lap("page");
     draw(now);
     if (!told) {
       told = true;
@@ -357,6 +409,8 @@ async function boot(): Promise<void> {
   keepLeaf();
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") keepSettings();
+    // A phone may empty the pictures the frame keeps while the page is put away.
+    else wipe();
   });
 
   callers();
@@ -392,17 +446,42 @@ async function boot(): Promise<void> {
       look(home().x, home().y, true);
       refreshAll();
     },
-    hold(on) {
+    hold(on, lead = 0, at) {
       S.held = on;
+      heldLead = lead;
+      if (at !== undefined) S.t = at;
     },
     skip(seconds) {
       for (let k = 0; k < seconds * 30; k++) advance(1 / 30, null);
       refreshAll();
     },
-    time(frames) {
+    bench(frames, hz = 60) {
+      const was = spent.on;
+      const kept = spent.ms;
+      spent.on = true;
+      spent.ms = {};
       const began = performance.now();
-      for (let k = 0; k < frames; k++) draw(began);
-      return (performance.now() - began) / frames;
+      for (let k = 0; k < frames; k++) {
+        lap();
+        advance(1 / hz, began + (k * 1000) / hz);
+        lap("page");
+        draw(began + (k * 1000) / hz);
+        // A browser may put off the drawing it was asked for: taking the picture makes it do it now.
+        taken.drawImage(picture, 0, 0);
+        lap("browser");
+      }
+      const ms = Object.fromEntries(Object.entries(spent.ms).map(([part, sum]) => [part, sum / frames]));
+      spent.on = was;
+      spent.ms = kept;
+      const { land, cells } = S.world;
+      const x0 = S.cam.x / TILE;
+      const y0 = S.cam.y / TILE;
+      const pieces = cells.filter((b, i) => {
+        const x = i % land.w;
+        const y = Math.floor(i / land.w);
+        return b && x + 1 > x0 && x < x0 + S.view.w / TILE && y + 1 > y0 && y < y0 + S.view.h / TILE;
+      }).length;
+      return { ms, picture: { x: picture.width, y: picture.height }, pieces };
     },
     pick(tool, dir) {
       if (dir !== undefined) S.dir = dir;

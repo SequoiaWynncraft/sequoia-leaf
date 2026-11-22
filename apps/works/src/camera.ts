@@ -7,12 +7,18 @@
 import { clamp, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import type { Ground } from "./art/ground.ts";
-import { sizeBuffers } from "./scene.ts";
+import { corner, sizeBuffers } from "./scene.ts";
 import { S } from "./state.ts";
-import { natural, zoomFor } from "./zoom.ts";
+import { markSize, natural, zoomFor } from "./zoom.ts";
 
 /** How much of the screen the interface covers at each edge, in CSS pixels. */
 export const inset = { top: 0, bottom: 0, left: 0, right: 0 };
+/**
+ * How far past the forest's edge lamplight can fall, in the yard's pixels. Zoomed out past the
+ * forest there is nothing further out than this but dusk, which the page's own background is, so
+ * the picture is never made wider.
+ */
+const SPILL = 96;
 
 let ground: Ground | null = null;
 /** Steps of zoom the member has asked for, over or under the size that suits the screen. */
@@ -35,23 +41,27 @@ function bound(): void {
   const y1 = ground.y + ground.h + inset.bottom * k - S.view.h;
   S.cam.x = x1 < x0 ? (x0 + x1) / 2 : clamp(S.cam.x, x0, x1);
   S.cam.y = y1 < y0 ? (y0 + y1) / 2 : clamp(S.cam.y, y0, y1);
+  if (!canvas) return;
+  // The picture lies over the part of the view that can have anything in it.
+  corner.x = clamp(ground.x - SPILL - Math.round(S.cam.x), 0, S.view.w - canvas.width);
+  corner.y = clamp(ground.y - SPILL - Math.round(S.cam.y), 0, S.view.h - canvas.height);
+  // Enlarged by the page, each of its pixels to `z` of the screen's: a whole number, on a screen of any pixel ratio.
+  canvas.style.transform = `translate(${corner.x / k}px, ${corner.y / k}px) scale(${1 / k})`;
 }
 
 /** Fits the picture to the window, keeping the middle of the view where it was. */
 export function resize(): void {
-  if (!canvas) return;
+  if (!canvas || !ground) return;
   const dpr = window.devicePixelRatio || 1;
   const cw = Math.max(1, Math.round(window.innerWidth * dpr));
   const ch = Math.max(1, Math.round(window.innerHeight * dpr));
   const mx = S.cam.x + S.view.w / 2;
   const my = S.cam.y + S.view.h / 2;
-  canvas.width = cw;
-  canvas.height = ch;
   const base = natural(cw, ch);
   const z = zoomFor(base, steps);
   steps = z - base;
   S.view = { w: Math.ceil(cw / z), h: Math.ceil(ch / z), z, dpr };
-  sizeBuffers(S.view.w, S.view.h);
+  sizeBuffers(Math.min(S.view.w, ground.w + SPILL * 2), Math.min(S.view.h, ground.h + SPILL * 2), markSize(base, z));
   S.cam.x = mx - S.view.w / 2;
   S.cam.y = my - S.view.h / 2;
   bound();
