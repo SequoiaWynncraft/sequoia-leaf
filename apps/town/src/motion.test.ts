@@ -247,7 +247,7 @@ describe("everybody else in the room", () => {
       ["Bob", 3, "figure of Bob"],
     ]);
     s.says({ t: "left", id: 3 });
-    expect([...company.here()]).toEqual(["alice-uuid"]);
+    expect(company.byId(3)).toBeUndefined();
 
     // A new connection: Leaf numbers the member and Alice afresh. She is the same figure.
     const alice = company.all()[0];

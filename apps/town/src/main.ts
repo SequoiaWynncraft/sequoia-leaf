@@ -66,6 +66,8 @@ declare global {
       who: () => { name: string; x: number; y: number; doing: string }[];
       /** Real members in town just now (on the guild's own server). */
       visitors: () => { name: string; x: number; y: number }[];
+      /** Every member drawn this moment: who, where their feet are drawn, how opaque. */
+      drawn: Town["handles"]["drawn"];
       /** Where the member is, and where the missing crab is hiding. */
       me: () => Pt;
       lost: () => Pt;

@@ -3,9 +3,10 @@
  * made-up guild, its stand-ins):
  *
  * - **Visitors**, in the game just now: standing or strolling where they are (about the town, by
- *   the Works' door, watching at the stump), walking in through the gate when they arrive. They
- *   never speak, and their card has only their name and rank. When a raid party of real members
- *   comes home, its members walk in as visitors too (`figure`).
+ *   the Works' door, watching at the stump), there from the start if they were when the page
+ *   opened, or walking in through the gate when they arrive. They never speak, and their card has
+ *   only their name and rank. When a raid party of real members comes home, its members walk in as
+ *   visitors too (`figure`).
  * - **Dozers**, gone in the last day and happy to be left in town: each sits at a free seat for
  *   where they were (a log at the fire, the log at the stump, the bench by the Works' door), eyes
  *   closed, a small "z" drifting up. They never speak or move. A visitor who goes sits down where
@@ -20,7 +21,19 @@ import { CREAM } from "@sequoia-leaf/kit/palette.ts";
 import { bake, type Body, lookFor, paintSkin, SIT, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 
-import { feet, makeActor, onScreen, release, sit, stand, stepActor, walkTo } from "./actors.ts";
+import {
+  feet,
+  goToSeat,
+  makeActor,
+  onScreen,
+  release,
+  seatFree,
+  sit,
+  stand,
+  stepActor,
+  stopAt,
+  walkTo,
+} from "./actors.ts";
 import { float } from "./fx.ts";
 import { type Actor, after, G } from "./game.ts";
 import { guild, type Person, type Rester, type Visitor } from "./guild.ts";
@@ -51,8 +64,10 @@ interface Visiting {
 
 const here = new Map<string, Visiting>();
 let lookIn = 0;
+/** The guild has said who is about: whoever it said first was here before the page was. */
+let heard = false;
 
-/** Who is in town live, by their account, and their figure: told by `players.ts`; nobody until it does. */
+/** Who is drawn in town live (fading away too), by their account, and their figure: told by `players.ts`; nobody until it does. */
 let live: { ids(): ReadonlySet<string>; actor(id: string): Actor | null } = {
   ids: () => new Set(),
   actor: () => null,
@@ -185,10 +200,12 @@ const SEATS_FOR: Readonly<Record<Visitor["at"], readonly Seat["at"][]>> = {
 /** Seats facing us first, so that whoever dozes there is seen to; then side on; then with their back to us. */
 const facing = (s: Seat): number => (s.dir === 0 ? 0 : s.dir === 3 ? 2 : 1);
 
-/** A free seat for somebody dozing off who was last at a place; never one kept for the member. */
-export function seatFor(at: Visitor["at"]): Seat | null {
+/** A free seat for somebody (`who`, if they are in town) dozing off who was last at a place; never one kept for the member. */
+export function seatFor(at: Visitor["at"], who: Actor | null = null): Seat | null {
   for (const kind of SEATS_FOR[at]) {
-    const s = SEATS.filter((x) => x.at === kind && !x.taken && !x.yours).toSorted((a, b) => facing(a) - facing(b))[0];
+    const s = SEATS.filter((x) => x.at === kind && seatFree(x, who) && !x.yours).toSorted(
+      (a, b) => facing(a) - facing(b),
+    )[0];
     if (s) return s;
   }
   return null;
@@ -241,18 +258,30 @@ function goOut(v: Visiting): void {
   });
 }
 
-function settle(v: Visiting): void {
-  walkTo(v.a, spotFor(v.at, count(v.at)), () => {
+/** Somebody goes to a spot for where they are: walking there, or (`now`) standing there already. */
+function settle(v: Visiting, now = false): void {
+  const to = spotFor(v.at, count(v.at));
+  const there = (): void => {
     v.a.dir = v.at === "town" ? v.a.dir : 3;
     v.a.doing = v.at === "works" ? "works" : v.at === "table" ? "table" : "walk";
-  });
+  };
+  if (!now) {
+    walkTo(v.a, to, there);
+    return;
+  }
+  const at = stopAt(v.a, to);
+  v.a.x = at.x;
+  v.a.y = at.y;
+  v.a.alpha = 1;
+  there();
 }
 
-/** Sits a member down on a seat, asleep. */
-function doze(v: Visiting, s: Seat, seen: number): void {
+/** Sits a member down on a seat, asleep; with no seat, they doze where they stand. */
+function doze(v: Visiting, s: Seat | null, seen: number): void {
   const a = v.a;
   v.dozing = true;
-  sit(a, s);
+  if (s) sit(a, s);
+  a.moving = false;
   a.dozing = seen;
   a.mode = "led";
   a.doing = "home";
@@ -294,13 +323,15 @@ export function stepVisitors(dt: number): void {
   // Anybody drawn here as a visitor or a dozer who is now in town live is drawn by `players.ts`,
   // where they really are: this figure of them goes at once, so that nobody is ever seen twice.
   const liveNow = live.ids();
-  for (const v of here.values()) if (!v.passing && liveNow.has(v.id)) forget(v);
+  for (const v of here.values()) if (liveNow.has(v.id)) forget(v);
 
   lookIn -= dt;
   if (lookIn > 0) return;
   lookIn = 1;
   const want = wantedNow();
   const rest = restingNow();
+  const already = !heard;
+  heard = guild.heard();
   const wantedIds = new Set(want.map((w) => w.id));
   const resting = new Map(rest.map((r) => [r.id, r]));
 
@@ -313,25 +344,26 @@ export function stepVisitors(dt: number): void {
       continue;
     }
     // Gone: sits down to doze where they were, if they may and there is a seat; else out through the gate.
-    const s = r && dozers() < DOZERS_MOST ? seatFor(r.at) : null;
+    const s = r && dozers() < DOZERS_MOST ? seatFor(r.at, v.a) : null;
     if (!r || !s) {
       goOut(v);
       continue;
     }
-    release(v.a);
     v.a.mode = "led";
-    s.taken = true;
-    v.a.goal = s;
-    walkTo(v.a, s.from, () => {
-      doze(v, s, r.seen);
-    });
+    goToSeat(
+      v.a,
+      s,
+      () => seatFor(r.at, v.a),
+      (sat) => doze(v, sat, r.seen),
+    );
     v.dozing = true;
   }
 
   for (const w of want) {
     const v = here.get(w.id);
     if (!v) {
-      if (here.size - dozers() < VISITORS_MOST) settle(spawn(w.id, w.name, w.rank, w.at, w.skin));
+      // In through the gate; but those about when the page opened stand where they are from the start.
+      if (here.size - dozers() < VISITORS_MOST) settle(spawn(w.id, w.name, w.rank, w.at, w.skin), already);
       continue;
     }
     v.a.who = { ...v.a.who, rank: w.rank ?? v.a.who.rank };
@@ -414,7 +446,7 @@ export const isVisitor = (a: Actor): boolean => G.visitors.includes(a);
 export function figure(p: Person): Actor | null {
   const had = here.get(p.id);
   // Somebody live is where they really are, and goes nowhere the town leads them.
-  if (had?.dozing || live.actor(p.id)) return null;
+  if (had?.dozing || live.ids().has(p.id)) return null;
   const v = had ?? spawn(p.id, p.name, null, "town", skinOf(p.id));
   if (!ids().has(p.id)) v.passing = true;
   v.going = false;

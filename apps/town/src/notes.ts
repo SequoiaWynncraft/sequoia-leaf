@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "nobody-inside",
+    at: "2026-11-22T22:36Z",
+    title: "Nobody inside anybody",
+    lines: [
+      "After a reload, members at the Works or the raid table are already standing there. They no longer all walk in through the gate on top of each other.",
+      "Members walking the same way walk side by side, and whoever walks goes round whoever is standing. Tap a spot where someone stands or sits and you stop beside them.",
+    ],
+  },
+  {
     id: "timber-and-shingle",
     at: "2026-11-22T22:20Z",
     title: "Timber and shingle",
