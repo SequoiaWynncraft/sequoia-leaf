@@ -17,7 +17,7 @@
  * The rules of that (`Deck`, `partsOf`) touch no page and are tested; the rest draws them.
  */
 import { add, asking, el, icon, pressedTwice, unheld } from "./dom.ts";
-import { LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
+import { goesWith, LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
 
 /** A thing, named as `"kind:id"`: `"item:gear"`, `"figure:barrow-gnome"`, `"trait:ember"`. */
 export type Ref = string;
@@ -944,9 +944,9 @@ if (typeof window !== "undefined") {
     if (from instanceof HTMLElement && from.isConnected) from.focus({ preventScroll: true });
   });
   window.addEventListener("resize", settle);
-  // A thing taken off the page under the pointer (a pick chosen, a list drawn again) takes its passing card with it.
-  new MutationObserver(() => {
+  // A passing card goes with the thing it was shown for, as a tip does: taken off the page (a pick chosen, a list drawn again) or left by the mouse.
+  goesWith(() => {
     const o = deck.open;
-    if (o && !o.pinned && o.at instanceof Element && !o.at.isConnected) deck.close();
-  }).observe(document.documentElement, { childList: true, subtree: true });
+    return o && !o.pinned ? { by: o.from, key: o.via === "key", off: () => deck.close(o.from) } : null;
+  });
 }

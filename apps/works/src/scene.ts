@@ -640,7 +640,8 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
   }
   stand(art.m.gate, L.gate.x - cx, L.gate.y - cy + 1, L.gate.y + 1);
   light(L.gate.x - 6, L.gate.y - 14, 26, 0.75);
-  for (const sign of L.signs) stand(art.sign(sign.plot.price), sign.x - cx, sign.y - cy, sign.y);
+  // A sign is drawn at the foot of its tile, in front of any undergrowth on the same tile.
+  for (const sign of L.signs) stand(art.sign(sign.plot.price), sign.x - cx, sign.y - cy, sign.y + 2);
 
   // Undergrowth over land that is not the yard's, falling away where a plot has just been bought.
   land.plots.forEach((plot, n) => {

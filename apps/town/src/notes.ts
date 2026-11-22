@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "nothing-stuck",
+    at: "2026-11-22T21:00Z",
+    title: "Nothing stuck on the screen",
+    lines: [
+      "A tip or card no longer stays on the screen when the panel under it changes.",
+      "The price signs in the Works stand clear of the fences, so no post goes through them.",
+    ],
+  },
+  {
     id: "belt-colours",
     at: "2026-11-22T20:50Z",
     title: "The Works: belt colours",
