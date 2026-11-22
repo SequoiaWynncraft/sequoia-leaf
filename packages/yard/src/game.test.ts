@@ -192,10 +192,17 @@ describe("a command", () => {
     go({ do: "build", kind: "belt", dir: 0, ...b });
     expect(go({ do: "build", kind: "splitter", dir: 0, ...b }).coins?.map((paid) => paid.amount)).toEqual([1]);
     expect(on(b)?.kind).toBe("splitter");
+    go({ do: "way", way: 2, open: false, ...b });
+    expect(on(b)?.shut).toBe(4);
+    go({ do: "way", way: 2, open: true, ...b });
+    expect(on(b)?.shut).toBe(0);
     go({ do: "remove", ...b });
     go({ do: "build", kind: "crate", dir: 0, ...b });
     go({ do: "crate", open: false, ...b });
     expect(on(b)?.open).toBe(false);
+    // A way is a splitter's: on a crate, or on nothing, it is refused.
+    for (const p of [b, c])
+      expect(refused(play(w, { do: "way", way: 0, open: false, ...p, tick: w.tick }))).toBe("not_a_splitter");
     go({ do: "remove", ...b });
     expect(on(b)).toBeNull();
     const legs = route(w, [c.x, c.y], [c.x, c.y + 2]) ?? [];
@@ -262,6 +269,7 @@ describe("a command", () => {
       { do: "recipe", x: 4, y: 5, item: null },
       { do: "tipOut", x: 4, y: 5, item: "plank" },
       { do: "crate", x: 4, y: 5, open: true },
+      { do: "way", x: 4, y: 5, way: 2, open: false },
       { do: "buyPlot", plot: "meadow" },
       { do: "buyPlan", plan: "rakes" },
       { do: "swap", order: 3 },
@@ -297,6 +305,8 @@ describe("a command", () => {
       { do: "deleteBlueprint", slot: -1, tick: 0 },
       { do: "recipe", x: 1, y: 1, item: "gold", tick: 0 },
       { do: "crate", x: 1, y: 1, open: "yes", tick: 0 },
+      { do: "way", x: 1, y: 1, way: 3, open: false, tick: 0 },
+      { do: "way", x: 1, y: 1, way: 0, tick: 0 },
       { do: "buyPlot", plot: "moon", tick: 0 },
       { do: "buyPlan", plan: "shift", tick: 0 },
       { do: "swap", order: "first", tick: 0 },
@@ -440,6 +450,11 @@ describe("Leaf and the page agree", () => {
       { do: "remove", ...a },
       { do: "collect" },
       { do: "stand", pieces: [{ kind: "belt", ...a, dir: 0, span: 0 }] },
+      // A splitter in the belt's place, with its way ahead shut, opened, and its left way shut.
+      { do: "build", kind: "splitter", dir: 0, ...a },
+      { do: "way", way: 0, open: false, ...a },
+      { do: "way", way: 0, open: true, ...a },
+      { do: "way", way: 1, open: false, ...a },
       { do: "saveBlueprint", slot: 1, tiles: [at(page, a.x, a.y), at(page, c.x, c.y)] },
       { do: "move", tiles: [at(page, a.x, a.y)], turns: 1, ...a },
       { do: "clear", tiles: [at(page, a.x, a.y), at(page, c.x, c.y)] },
@@ -447,6 +462,8 @@ describe("Leaf and the page agree", () => {
     ];
     // The colours are in what Leaf keeps and in what it shows a visitor.
     const coloured = (text: string): number => decoded(text).cells.filter((p) => p?.tint === 5).length;
+    /** The splitter's shut ways after each command, as Leaf shows a visitor them. */
+    const shut: number[] = [];
     let unanswered: WorksCommand[] = [];
     let inbox: { readonly view: string; readonly after: number } | null = null;
     let tick = opened.clock;
@@ -472,7 +489,9 @@ describe("Leaf and the page agree", () => {
       expect(refused(WORKS.apply(leaf, command, ctx(now)))).toBeNull();
       stored = WORKS.encode(leaf);
       inbox = { view: WORKS.view(leaf, ctx(now)).yard, after: tick };
+      shut.push(decoded(WORKS.visit?.(leaf, ctx(now)).yard ?? "").cells[at(page, a.x, a.y)]?.shut ?? 0);
     }
+    expect(shut.filter((s, k) => s !== shut[k - 1])).toEqual([0, 1, 0, 2, 0]);
     expect(coloured(stored)).toBeGreaterThan(0);
     expect(coloured(WORKS.visit?.(decoded(stored), ctx(leafAt(tick + 5))).yard ?? "")).toBe(coloured(stored));
     const last = decoded(inbox?.view ?? "");

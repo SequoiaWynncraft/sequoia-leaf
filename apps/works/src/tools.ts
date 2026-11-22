@@ -16,6 +16,7 @@ import {
   DY,
   KIND,
   type Kind,
+  LEFT,
   type Leg,
   lineOf,
   type Piece,
@@ -56,12 +57,13 @@ export const toolHooks: { changed: () => void; said: (text: string) => void } = 
  * Something done that can be undone: things built (`under`: the piece one of them took the place
  * of), things taken away, a thing turned, lines coloured (the tile each was coloured by, and the
  * colour that tile had), pieces moved as one (`tiles`: where they stand now, with the turns and
- * the corner that put them back).
+ * the corner that put them back), a splitter's way shut or opened (`was`: whether it was open).
  */
 type Done =
   | { did: "built"; cells: number[]; turned: { i: number; was: Dir }[]; under?: readonly Piece[] }
   | { did: "took"; what: readonly Piece[] }
   | { did: "turned"; i: number; was: Dir }
+  | { did: "way"; i: number; way: number; was: boolean }
   | { did: "painted"; lines: { i: number; was: number }[] }
   | { did: "moved"; tiles: number[]; turns: Dir; x: number; y: number };
 const done: Done[] = [];
@@ -288,6 +290,25 @@ export function turnAt(x: number, y: number): boolean {
   return true;
 }
 
+/** Shuts one of the ways out of the splitter on a tile (0 ahead, 1 left, 2 right), or opens it if it was shut. */
+export function wayAt(x: number, y: number, way: number): boolean {
+  const i = at(S.world, x, y);
+  const b = S.world.cells[i];
+  const was = (((b?.shut ?? 0) >> way) & 1) === 0;
+  if (!b || attempt(null, { do: "way", x, y, way, open: !was }) !== null) {
+    yardSfx.no();
+    return false;
+  }
+  remember({ did: "way", i, way, was });
+  // Dust where the bar drops across the way, or lifts off it.
+  const d = [b.dir, LEFT[b.dir], RIGHT[b.dir]][way] ?? b.dir;
+  puff(x * TILE + 8 + DX[d] * 7, y * TILE + 9 + DY[d] * 7, 3, DUST, 5);
+  if (was) yardSfx.belt();
+  else yardSfx.turn();
+  touched();
+  return true;
+}
+
 /** R: turns the thing in hand, or with nothing in hand the thing pointed at. */
 export function rotate(): void {
   if (S.tool === null) {
@@ -357,6 +378,7 @@ export function undo(): boolean {
   } else if (last.did === "took") putBack(last.what);
   else if (last.did === "painted")
     for (const l of last.lines.toReversed()) doNow({ do: "paint", ...xy(l.i), tint: l.was });
+  else if (last.did === "way") doNow({ do: "way", ...xy(last.i), way: last.way, open: last.was });
   else if (last.did === "moved") {
     const no = attempt(null, { do: "move", tiles: last.tiles, turns: last.turns, x: last.x, y: last.y });
     if (no !== null) cannotUndo(no);

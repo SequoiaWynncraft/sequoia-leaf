@@ -13,26 +13,30 @@ import { at, changed, TINTS, type World } from "./world.ts";
 
 /**
  * What a piece keeps when it is copied or kept in a blueprint, besides what it is, where it stands
- * and which way it faces: a set recipe, a shut crate, a colour. One more is a field here and a line
- * in `keptOf`.
+ * and which way it faces: a set recipe, a shut crate, a colour, a splitter's shut ways. One more is
+ * a field here and a line in `keptOf`.
  */
 export interface Kept {
   readonly recipe?: Item;
   readonly open?: false;
   readonly tint?: number;
+  readonly shut?: number;
 }
 
 /** The kinds of piece that can be coloured. */
 const tinted = (kind: Kind): boolean =>
   kind === "belt" || kind === "tunnel" || kind === "splitter" || kind === "joiner";
 
+/** A whole number from 1 up to `most`. */
+const upTo = (v: unknown, most: number): v is number =>
+  typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= most;
+
 /** What a building, or a record read back, has of these, if that kind of piece may keep it. */
 export const keptOf = (v: { readonly [K in keyof Kept]?: unknown }, kind: Kind): Kept => ({
   ...(isItem(v.recipe) && RECIPE[v.recipe]?.by === kind ? { recipe: v.recipe } : {}),
   ...(v.open === false && kind === "crate" ? { open: v.open } : {}),
-  ...(typeof v.tint === "number" && Number.isInteger(v.tint) && v.tint >= 1 && v.tint <= TINTS && tinted(kind)
-    ? { tint: v.tint }
-    : {}),
+  ...(upTo(v.tint, TINTS) && tinted(kind) ? { tint: v.tint } : {}),
+  ...(upTo(v.shut, 7) && kind === "splitter" ? { shut: v.shut } : {}),
 });
 
 /** A piece as it is asked for: what, on which tile, which way, and what it keeps. */

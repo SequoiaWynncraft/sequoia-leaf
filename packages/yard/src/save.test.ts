@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buyPlan, paint, setOpen, setRecipe } from "./build.ts";
+import { buyPlan, paint, setOpen, setRecipe, setWay } from "./build.ts";
 import { create } from "./create.ts";
 import { belts, on, put, steps, workingYard } from "./fixtures.ts";
 import { deliver } from "./orders.ts";
@@ -86,6 +86,29 @@ describe("saving", () => {
     // The fifth is the mill, which has no colour to keep.
     expect(odd?.cells.filter((b) => b && b.tint !== 0)).toEqual([]);
     expect(load(save(w))?.cells.filter((b) => b?.tint === 4)).toHaveLength(4);
+  });
+  test("a save from before a splitter's ways could be shut reads with all open, at the same version", () => {
+    const w = create({ story: 12 });
+    put(w, "splitter", 20, 20);
+    put(w, "joiner", 21, 22);
+    const old = save(w);
+    expect(old).not.toContain('"x"');
+    expect(load(old)?.cells[at(w, 20, 20)]?.shut).toBe(0);
+    setWay(w, 20, 20, 0, false);
+    setWay(w, 20, 20, 2, false);
+    expect(load(save(w))?.cells[at(w, 20, 20)]?.shut).toBe(5);
+    expect(save(load(save(w)) ?? w)).toBe(save(w));
+    // Shut ways that make no sense are none, and only a splitter has any.
+    const odd = (x: unknown): (number | undefined)[] => {
+      const back = load(tampered(w, (r) => cellsOf(r).forEach((c) => Object.assign(c ?? {}, { x }))));
+      return [back?.cells[at(w, 20, 20)]?.shut, back?.cells[at(w, 21, 22)]?.shut];
+    };
+    expect([odd(8), odd("all"), odd(1.5), odd(3)]).toEqual([
+      [0, 0],
+      [0, 0],
+      [0, 0],
+      [3, 0],
+    ]);
   });
   test("a save carries its version, and a small yard is a small save", () => {
     const w = create();

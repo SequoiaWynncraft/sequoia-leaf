@@ -45,6 +45,7 @@ export {
   replaces,
   setOpen,
   setRecipe,
+  setWay,
   type Spent,
   tipOut,
   tunnelExit,

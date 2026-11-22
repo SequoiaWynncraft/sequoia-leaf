@@ -3,7 +3,8 @@
  * of the tile out to each side it joins. Slats march along every arm the way things travel on it,
  * and a chevron rides the main run, so a belt says which way it goes even when it is empty. A line
  * a player has coloured wears the paint on its rails and along the edge of its bed, where nothing
- * else is said. Each tile is drawn once for every step of the march and kept.
+ * else is said. A way out that a player has shut has no arm, and a bar across that side of the tile.
+ * Each tile is drawn once for every step of the march and kept.
  */
 
 import { BARK, CREAM, GOLD, INK, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
@@ -17,8 +18,8 @@ export const TILE = 16;
 /** How many steps the march has before it comes round: a chevron every tile, a slat every four pixels. */
 export const STEPS = 16;
 
-/** For each side of a tile (east, south, west, north): no arm, an arm things come in along, or one they leave by. */
-export type Arm = 0 | 1 | 2;
+/** For each side of a tile (east, south, west, north): no arm, an arm things come in along, one they leave by, or a way out that is shut. */
+export type Arm = 0 | 1 | 2 | 3;
 export type Arms = readonly [Arm, Arm, Arm, Arm];
 
 interface Wood {
@@ -63,24 +64,41 @@ const cache = new Map<number, HTMLCanvasElement>();
 /**
  * A belt tile. `main` is the way the middle of the tile carries things; `step` is how far the
  * march has come, 0 to 15; `tier` is 0, 1 or 2 for plain, waxed and roller belts; `tint` is the
- * line's colour, or 0. The tiles kept are at most seven times those of a yard with no colour in it.
+ * line's colour, or 0. The tiles kept are at most seven times those of a yard with no colour in it,
+ * and a splitter's are at most eight times those of one with no way shut.
  */
 export function beltTile(arms: Arms, main: Dir, step: number, tier: number, tint = 0): HTMLCanvasElement {
   const key =
-    ((((((arms[0] * 3 + arms[1]) * 3 + arms[2]) * 3 + arms[3]) * 4 + main) * STEPS + step) * 3 + tier) * 7 + tint;
+    ((((((arms[0] * 4 + arms[1]) * 4 + arms[2]) * 4 + arms[3]) * 4 + main) * STEPS + step) * 3 + tier) * 7 + tint;
   const had = cache.get(key);
   if (had) return had;
   const wood = WOODS[tier] ?? WOODS[0];
   if (!wood) throw new Error("no belt wood");
   const hue = PAINTS[tint - 1];
+  const arm = (side: number): boolean => arms[side] === 1 || arms[side] === 2;
   // Which arm, if any, a pixel's bed belongs to: 0 to 3 for a side, 4 for the middle, -1 for none.
   const part = (x: number, y: number): number => {
     const u = x - 7.5;
     const v = y - 7.5;
     if (Math.abs(u) <= HALF && Math.abs(v) <= HALF) return 4;
-    if (Math.abs(v) <= HALF) return u > 0 ? (arms[0] ? 0 : -1) : arms[2] ? 2 : -1;
-    if (Math.abs(u) <= HALF) return v > 0 ? (arms[1] ? 1 : -1) : arms[3] ? 3 : -1;
+    if (Math.abs(v) <= HALF) return u > 0 ? (arm(0) ? 0 : -1) : arm(2) ? 2 : -1;
+    if (Math.abs(u) <= HALF) return v > 0 ? (arm(1) ? 1 : -1) : arm(3) ? 3 : -1;
     return -1;
+  };
+  /**
+   * The bar across a side that is shut: as long as the bed is wide, two pixels thick, inked all
+   * round, with red ends and a pale middle so that no paint on the rails beside it is its colour.
+   */
+  const bar = (x: number, y: number): string | null => {
+    for (let side = 0; side < 4; side++) {
+      if (arms[side] !== 3) continue;
+      const depth = side === 0 ? 15 - x : side === 1 ? 15 - y : side === 2 ? x : y;
+      const across = Math.abs((side % 2 === 0 ? y : x) - 7.5);
+      if (depth > 3 || across > HALF) continue;
+      if (depth === 0 || depth === 3 || across > HALF - 1) return INK;
+      return across > 2 ? CLAY[2] : CREAM;
+    }
+    return null;
   };
   const bed = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < TILE && y < TILE && part(x, y) >= 0;
   const near = (x: number, y: number, r: number): boolean => {
@@ -94,6 +112,8 @@ export function beltTile(arms: Arms, main: Dir, step: number, tier: number, tint
     return false;
   };
   const tile = paint(TILE, TILE, (x, y) => {
+    const shut = bar(x, y);
+    if (shut) return shut;
     const p = part(x, y);
     if (p < 0) {
       if (near(x, y, 1)) {
