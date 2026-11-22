@@ -19,7 +19,7 @@ export const NOTES: readonly Note[] = [
     title: "Everyone sees the same town",
     lines: [
       "Pipwick, Fika, Sootpaw and the crabs are in the same place doing the same thing for everyone in town.",
-      "Crab No. 7 hides in one place for 60 seconds, then in another. If anyone taps it, it runs off for everyone. A sighting counts once for each place it hides.",
+      "Crab No. 7 hides in one place for 60 seconds, then in another. Everyone in town can find it there, once each: it runs off from whoever taps it.",
     ],
   },
   {

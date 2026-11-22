@@ -129,10 +129,10 @@ describe("a touch", () => {
     ]);
   });
 
-  test("on crab No. 7 from the room makes it bolt here too", () => {
+  test("on crab No. 7 from the room makes it hop here too, and it stays to be found", () => {
     crabs.push({ ...crab(7, 198, 121), lost: true });
     touchThing(thingName("crab", 7), false);
-    expect(crabs.map((c) => [c.hop, c.bolt > 0])).toEqual([[0.3, true]]);
+    expect(crabs.map((c) => [c.hop, c.bolt > 0])).toEqual([[0.3, false]]);
   });
 });
 
@@ -167,7 +167,7 @@ describe("the crabs, by Leaf's clock", () => {
     const [c] = at(from + 20_000);
     expect([c?.x, c?.y, c?.z, c?.bolt]).toEqual([here.x, here.y, here.z, 0]);
 
-    touchThing(thingName("crab", 7), false);
+    touchThing(thingName("crab", 7));
     expect(at(from + 20_500)[0]?.bolt).toBe(0.5);
     expect(Math.abs((c?.x ?? 0) - here.x)).toBeCloseTo(45);
     // Gone, and a second touch finds nothing.
