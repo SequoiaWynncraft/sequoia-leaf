@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "the-grove",
+    at: "2026-11-22T23:07Z",
+    title: "The Grove: pulls",
+    lines: [
+      "The Grove stands on the lawn between the Treasury and the market. A pull costs 1,000 Leaf and draws a prize: a thing for your camp or a look for the raid's table.",
+      "A free pull arrives every 24 hours. Prizes lists every prize and its chance, and the Seeds each pull gives buy a prize you choose.",
+    ],
+  },
+  {
     id: "board-rerolls",
     at: "2026-11-22T22:52Z",
     title: "Quest board: kinds and rerolls",

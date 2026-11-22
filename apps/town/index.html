@@ -12,7 +12,7 @@
         --top: max(calc(var(--u) * 4), env(safe-area-inset-top));
         --bottom: max(calc(var(--u) * 4), env(safe-area-inset-bottom));
         /* The dock: a slot's side, and how tall the whole plank stands off the bottom. */
-        --slot: min(calc(var(--u) * 21), calc((100vw - var(--u) * 26) / 8));
+        --slot: min(calc(var(--u) * 21), calc((100vw - var(--u) * 27) / 9));
         --dock: calc(var(--u) * 33 + var(--bottom));
         --sheet-floor: var(--dock);
       }
@@ -263,7 +263,7 @@
         z-index: 4;
         left: var(--edge);
         bottom: var(--bottom);
-        width: min(calc(var(--u) * 170), calc(50vw - var(--slot) * 4 - var(--u) * 12));
+        width: min(calc(var(--u) * 170), calc(50vw - var(--slot) * 4.5 - var(--u) * 12));
         display: flex;
         flex-direction: column;
         gap: calc(var(--u) * 2);
@@ -441,6 +441,244 @@
         margin: calc(var(--u) * 3) 0 calc(var(--u) * 5);
       }
 
+      /*
+       * The Grove: its own picture over the town's, centred, and its words and buttons over that.
+       * What is tied to the picture is placed in the picture's own pixels (--g, set with its size).
+       */
+      #grove {
+        position: fixed;
+        z-index: 12;
+        inset: 0;
+        background: #1a0f1e;
+        touch-action: manipulation;
+      }
+      .grove-stage {
+        position: absolute;
+        overflow: hidden;
+        --rim: calc(var(--g) * 8);
+      }
+      .grove-stage > canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        image-rendering: pixelated;
+      }
+      .grove-banner {
+        position: absolute;
+        inset: 0;
+        will-change: transform;
+      }
+      .grove-banner > *,
+      .grove-skip,
+      .grove-end,
+      .grove-name,
+      .grove-said,
+      .grove-panel {
+        position: absolute;
+      }
+      /* What Leaf refused, under the pools, in the one place that stays whatever is drawn again. */
+      .grove-said {
+        left: 50%;
+        translate: -50% 0;
+        top: calc(var(--g) * 30);
+        max-width: 90%;
+        text-align: center;
+      }
+      .tall .grove-said {
+        top: calc(var(--g) * 82);
+      }
+      .grove-back {
+        left: var(--rim);
+        top: var(--rim);
+      }
+      #grove .grove-leaf {
+        right: var(--rim);
+        top: var(--rim);
+        padding: var(--u) calc(var(--u) * 4);
+      }
+      .grove-skip {
+        right: var(--rim);
+        top: var(--rim);
+      }
+      .grove-pools {
+        left: 50%;
+        translate: -50% 0;
+        top: var(--rim);
+      }
+      /* The pool's words and buttons: one column, the pulls at its foot. */
+      .grove-words {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 3);
+      }
+      #grove .grove-words .k-row {
+        flex: none;
+      }
+      /* The pulls towards a top prize, a bar beside the count; under them, who is owed. */
+      #grove .grove-pity {
+        display: grid;
+        grid-template-columns: auto calc(var(--u) * 40);
+        align-items: center;
+        gap: var(--u) calc(var(--u) * 4);
+        padding: var(--u) calc(var(--u) * 4);
+        white-space: nowrap;
+      }
+      .grove-pity .k-read {
+        grid-column: 1 / -1;
+      }
+      .grove-pity b {
+        color: var(--k-gold);
+      }
+      #grove .grove-pity .k-bar {
+        height: calc(var(--u) * 6);
+      }
+      .grove-pulls {
+        margin-top: auto;
+      }
+      /* A pull's button: what it is over what it costs, and its question in the same room. */
+      .grove-pull,
+      .grove-pull .k-asks > span {
+        flex-direction: column;
+        gap: var(--u);
+      }
+      #grove .grove-pull {
+        min-width: calc(var(--u) * 62);
+        padding-block: calc(var(--u) * 4) calc(var(--u) * 2);
+      }
+      #grove .grove-pull .k-cur,
+      #grove .grove-pull .k-sub {
+        padding: 0;
+        background: none;
+        font: var(--f-ui);
+      }
+      .grove-pulls {
+        align-items: stretch;
+      }
+      /* At the end of a ceremony the same pull again is one line, to leave the picture its room. */
+      #grove .grove-end .grove-pull,
+      .grove-end .grove-pull .k-asks > span {
+        flex-direction: row;
+        gap: calc(var(--u) * 3);
+        padding-block: 0;
+      }
+      .grove-end {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 4);
+        left: 50%;
+        translate: -50% 0;
+        bottom: var(--rim);
+        will-change: transform;
+      }
+      /* A prize's name in the end picture, under it or over it, with its rarity's colour before it. */
+      .grove-name {
+        translate: -50% 0;
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 2);
+        padding: var(--u) calc(var(--u) * 2);
+        max-width: calc(var(--g) * 96);
+        box-sizing: border-box;
+        text-align: center;
+        color: var(--k-cream);
+        background: #1a0f1ecc;
+        font: var(--f-ui);
+      }
+      /* On an upright screen the names are a column's width apart, and smaller. */
+      .tall .grove-name {
+        max-width: calc(var(--g) * 84);
+        font: var(--f-small);
+      }
+      .grove-name.above {
+        translate: -50% -100%;
+      }
+      .grove-name i {
+        flex: none;
+        width: calc(var(--u) * 3);
+        height: calc(var(--u) * 3);
+        background: var(--c);
+      }
+      .grove-rarity {
+        flex: none;
+        padding: var(--u) calc(var(--u) * 3);
+        background: var(--c);
+        color: #1a0f1e;
+        font: var(--f-name);
+      }
+      .grove-panel {
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+      }
+      .grove-panel > .k-body {
+        flex: 1;
+        min-height: 0;
+      }
+      .grove-tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 48), 1fr));
+        gap: var(--u);
+      }
+      .grove-past {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--u) calc(var(--u) * 3);
+      }
+      .grove-past > .k-read {
+        flex-basis: 100%;
+      }
+      /* A wide screen: the words down the right of the picture, on its plum field. */
+      .desk .grove-words {
+        right: calc(var(--g) * 16);
+        top: calc(var(--g) * 140);
+        bottom: calc(var(--g) * 12);
+        align-items: flex-end;
+        text-align: right;
+      }
+      .desk .grove-panel {
+        left: 50%;
+        translate: -50% 0;
+        top: calc(var(--g) * 26);
+        bottom: calc(var(--g) * 10);
+        width: min(calc(var(--u) * 270), 94%);
+      }
+      /* An upright screen: the words across its lower third. */
+      .tall .grove-pools {
+        top: calc(var(--g) * 60);
+      }
+      .tall .grove-words {
+        left: 0;
+        right: 0;
+        top: calc(var(--g) * 416);
+        bottom: calc(var(--g) * 8);
+        align-items: center;
+        text-align: center;
+        gap: calc(var(--u) * 2);
+      }
+      #grove .tall .grove-pulls .grove-pull {
+        padding-block: calc(var(--u) * 3) var(--u);
+      }
+      .tall .grove-panel {
+        inset: calc(var(--g) * 44) calc(var(--g) * 2) calc(var(--g) * 6);
+      }
+      /* Three tabs and the way out fit its head with nothing to spare. */
+      #grove .tall .grove-panel .k-head {
+        gap: calc(var(--u) * 2);
+        padding-inline: calc(var(--u) * 2);
+      }
+      #grove .tall .grove-panel .k-tabs > .k-btn {
+        padding-inline: 0;
+      }
+      /* A row's button goes under its words where there is no room beside them. */
+      .tall .grove-panel .k-card {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .tall .grove-panel .k-card > .k-grow {
+        flex-basis: calc(var(--u) * 100);
+      }
+
       /* Inside a game the town's interface is put away, and comes back after. */
       #top,
       #corner,
@@ -573,6 +811,7 @@
     <div id="card" class="k-plaque" hidden></div>
     <div id="arrival" hidden></div>
     <div id="door" hidden></div>
+    <div id="grove" hidden></div>
     <script type="module" src="./src/open.ts"></script>
   </body>
 </html>

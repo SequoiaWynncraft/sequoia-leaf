@@ -22,6 +22,7 @@ import { BOARD, type Sprite, type Sprites } from "./sprites.ts";
 import { type Strand, STRINGS, wire } from "./strings.ts";
 import {
   BUILDINGS,
+  GROVE,
   place,
   type PlaceId,
   pondD,
@@ -595,6 +596,23 @@ export function buildTown(s: Sprites, ground: Ctx): void {
       g.drawImage(s.bang.c, sx - 1, sy - 37 + bob);
     },
   });
+
+  // The Grove: a light hangs over its stone, where the pulls are made.
+  add("grove", s.grove, GROVE.x, GROVE.y, {
+    place: "grove",
+    tip: tipOf("grove"),
+    tap: (p) => {
+      sfx.twinkle();
+      nudge(p);
+    },
+    extra: (g, sx, sy) => {
+      const y = sy - 26 + Math.round(Math.sin(G.t * 2.2) * 1.5);
+      R(g, sx - 2, y, 5, 1, GOLD[2]);
+      R(g, sx, y - 2, 1, 5, GOLD[2]);
+      R(g, sx, y, 1, 1, CREAM);
+    },
+  });
+  light(GROVE.x, GROVE.y - 26, 30, 0.9);
 
   add("board", s.board, 176, 160, {
     place: "quests",

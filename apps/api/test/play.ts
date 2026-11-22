@@ -49,8 +49,9 @@
  * kept yard, a time away, a filled order, the others' yards on the board: `stage-works.ts`), and
  * `POST /test/play/town` one in Tester's town and camp (a lived-in camp, a caller waiting, a time
  * away, a full mailbox, Coins to shop with, the others' camps on the board, prizes won, a
- * banner's person and a timed quest at any hour: `stage-town.ts`);
- * nothing like them is served by the guild's own Leaf.
+ * banner's person and a timed quest at any hour: `stage-town.ts`), and `POST /test/play/pulls` one
+ * in Tester's pulls (a banner's headliner, Leaf's clock on a day the banner is open, Leaf,
+ * counters, Seeds and prizes: `stage-pulls.ts`); nothing like them is served by the guild's own Leaf.
  */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -64,6 +65,7 @@ import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
 import type { Quests } from "../src/quests/store.ts";
 import { LiveClient } from "./live-client.ts";
+import { stagePulls } from "./stage-pulls.ts";
 import { stageRaid } from "./stage-raid.ts";
 import { stageTown } from "./stage-town.ts";
 import { stageWorks } from "./stage-works.ts";
@@ -221,11 +223,13 @@ const crowd: readonly Member[] = Array.from({ length: crowdSize }, (_, n) => ({
   look: { skin: shade(n, 0), hair: shade(n, 1), shirt: shade(n, 2), legs: shade(n, 3) },
 }));
 
-// The clock is the real one, except while the past day is being played.
+// The clock is the real one, except while the past day is being played, and as far ahead as a tour
+// of the pulls has moved it (to a day when a banner is open).
 let playingAt: number | undefined;
+let ahead = 0;
 const clock: TestClock = {
   get now() {
-    return playingAt ?? Date.now();
+    return playingAt ?? Date.now() + ahead;
   },
   set now(at: number) {
     playingAt = at;
@@ -602,6 +606,35 @@ const stagingRoute = (
       return HttpServerResponse.jsonUnsafe({ made: made ?? null });
     }),
   );
+/**
+ * Stages Tester's pulls (`stage-pulls.ts`), and what only this script can do for them:
+ * `{ ahead: days }` has Leaf's clock that many days ahead of the machine's from now on, and
+ * `{ leaf: n }` has Tester hold n Leaf.
+ */
+const stageThePulls = (ops: readonly unknown[]) =>
+  Effect.gen(function* () {
+    for (const op of ops) {
+      if (typeof op !== "object" || op === null) continue;
+      if ("ahead" in op && typeof op.ahead === "number") ahead = op.ahead * DAY;
+      if ("leaf" in op && typeof op.leaf === "number" && Number.isInteger(op.leaf) && op.leaf >= 0) {
+        const want = op.leaf;
+        const key = `tour:leaf:${Date.now()}:${want}`;
+        const has = yield* Effect.promise(async () => (await leaf.account(tester.id)).balance);
+        if (has > want) {
+          const amount = leafOf(has - want);
+          yield* Effect.promise(() =>
+            leaf.post({ kind: "spend", playerId: tester.id, amount, sink: "shop", idempotencyKey: key }, clock.now),
+          );
+        } else if (has < want) {
+          const amount = leafOf(want - has);
+          yield* Effect.promise(() =>
+            leaf.post({ kind: "earn", playerId: tester.id, amount, source: "staff", idempotencyKey: key }, clock.now),
+          );
+        }
+      }
+    }
+    return yield* stagePulls(tester.id, ops, others, clock.now);
+  });
 /** Everybody but Tester whose yard or camp a tour may stage. */
 const others = [
   ...mates.map((m) => ({ id: m.id, guest: false })),
@@ -616,6 +649,7 @@ const served = await leaf.serve(
     stagingRoute("raid", (ops) => stageRaid(tester.id, ops)),
     stagingRoute("town", (ops) => stageTown(tester.id, ops, others)),
     stagingRoute("works", (ops) => stageWorks(tester.id, ops, others)),
+    stagingRoute("pulls", (ops) => stageThePulls(ops)),
   ),
 );
 

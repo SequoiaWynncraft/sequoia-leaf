@@ -12,4 +12,5 @@ test("a key held down is one press, whether or not the browser marks its repeats
   expect(heldAgain({ code: "KeyE", repeat: false })).toBe(false);
   noKeysHeld();
   expect(heldAgain({ code: "Space", repeat: false })).toBe(false);
+  noKeysHeld();
 });
