@@ -45,6 +45,8 @@ export interface Building {
   underProg: number[];
   /** Whether a crate is letting things out. */
   open: boolean;
+  /** Which of a splitter's ways out are shut, a bit each: 1 for ahead, 2 for left, 4 for right. */
+  shut: number;
   /** Ticks a boiler will go on burning what it last took. */
   fuel: number;
   /** One of the pieces a new yard has to hand: it cost nothing, and gives nothing back. */
@@ -76,6 +78,7 @@ export const blank = (kind: Kind, dir: Dir): Building => ({
   under: [],
   underProg: [],
   open: true,
+  shut: 0,
   fuel: 0,
   free: false,
   via: -1,

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { setOpen, setRecipe, tipOut } from "./build.ts";
+import { setOpen, setRecipe, setWay, tipOut } from "./build.ts";
 import { bare, lit, on, put, steps } from "./fixtures.ts";
 import { aim, holding, rate, status } from "./status.ts";
 import { at, put as hold, type World } from "./world.ts";
@@ -128,5 +128,14 @@ describe("what a thing is doing", () => {
     expect(of(w, 20, 6)?.line).toBe("Sells every item that reaches it. Makes 20 power.");
     expect(status(w, at(w, 1, 1))).toBeNull();
     expect(status(w, -1)).toBeNull();
+  });
+  test("a splitter with every way out shut says so before anything reaches it", () => {
+    const w = lit(bare());
+    put(w, "splitter", 4, 4);
+    for (const way of [0, 1, 2]) setWay(w, 4, 4, way, false);
+    expect(status(w, at(w, 4, 4))).toEqual({ state: "blocked", line: "All 3 ways out are shut.", trouble: true });
+    // There is no fourth way.
+    expect(setWay(w, 4, 4, 3, false)).toBe(false);
+    expect(on(w, 4, 4).shut).toBe(7);
   });
 });

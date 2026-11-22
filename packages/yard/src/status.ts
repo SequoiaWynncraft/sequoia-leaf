@@ -108,12 +108,13 @@ function takenAhead(w: World, i: number, item: Item): "yes" | "nothing" | "never
 
 function stuck(w: World, i: number, item: Item): Status {
   const there = takenAhead(w, i, item);
-  if (there === "nothing")
-    return {
-      state: "blocked",
-      line: `Nowhere to send its ${many(item)}: nothing is on the tile it points at.`,
-      trouble: true,
-    };
+  if (there === "nothing") {
+    // Only a splitter has ways to shut.
+    const shut = w.cells[i]?.shut ?? 0;
+    const why =
+      shut === 7 ? "all 3 ways are shut" : `nothing is on ${shut ? "any way that is open" : "the tile it points at"}`;
+    return { state: "blocked", line: `Nowhere to send its ${many(item)}: ${why}.`, trouble: true };
+  }
   if (there === "never")
     return { state: "blocked", line: `The piece it points at does not take ${many(item)}.`, trouble: true };
   return { state: "waiting", line: `Waiting: no room ahead for its ${many(item)}.`, trouble: false };
@@ -187,6 +188,12 @@ export function status(w: World, i: number): Status | null {
     case "splitter":
     case "joiner":
     case "tunnel": {
+      // A splitter with every way shut can send nothing on, whether or not it holds anything yet.
+      if (b.kind === "splitter" && b.shut === 7) {
+        const line =
+          b.item === null ? "All 3 ways out are shut." : `Nowhere to send its ${many(b.item)}: all 3 ways are shut.`;
+        return { state: "blocked", line, trouble: true };
+      }
       if (b.item === null) {
         const under = b.under.filter((k) => k !== null).length;
         return under > 0

@@ -16,6 +16,7 @@ import {
   DY,
   KIND,
   type Kind,
+  LEFT,
   type Leg,
   lineOf,
   type Piece,
@@ -56,12 +57,13 @@ export const toolHooks: { changed: () => void; said: (text: string) => void } = 
  * Something done that can be undone: things built (`under`: the piece one of them took the place
  * of), things taken away, a thing turned, lines coloured (the tile each was coloured by, and the
  * colour that tile had), pieces moved as one (`tiles`: where they stand now, with the turns and
- * the corner that put them back).
+ * the corner that put them back), a splitter's way shut or opened (`was`: whether it was open).
  */
 type Done =
   | { did: "built"; cells: number[]; turned: { i: number; was: Dir }[]; under?: readonly Piece[] }
   | { did: "took"; what: readonly Piece[] }
   | { did: "turned"; i: number; was: Dir }
+  | { did: "way"; i: number; way: number; was: boolean }
   | { did: "painted"; lines: { i: number; was: number }[] }
   | { did: "moved"; tiles: number[]; turns: Dir; x: number; y: number };
 const done: Done[] = [];
@@ -227,8 +229,8 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   if (refund > 0) float(px, py - 10, `+${refund}`, GOLD[2], 1);
   yardSfx.take();
   if (S.picked === i) S.picked = -1;
-  // A piece taken out of a marked area is no longer marked: what is moved or copied next is what stands there.
-  if (S.mark) markTiles(S.mark, S.mark.tiles);
+  // A piece taken out of a marked area is no longer marked.
+  remark();
   if (S.mark?.pieces.length === 0) S.mark = null;
   touched();
   toolHooks.changed();
@@ -284,6 +286,25 @@ export function turnAt(x: number, y: number): boolean {
   if (attempt(null, { do: "turn", x, y, dir: RIGHT[b.dir] }) !== null) return false;
   remember({ did: "turned", i, was });
   yardSfx.turn();
+  touched();
+  return true;
+}
+
+/** Shuts one of the ways out of the splitter on a tile (0 ahead, 1 left, 2 right), or opens it if it was shut. */
+export function wayAt(x: number, y: number, way: number): boolean {
+  const i = at(S.world, x, y);
+  const b = S.world.cells[i];
+  const was = (((b?.shut ?? 0) >> way) & 1) === 0;
+  if (!b || attempt(null, { do: "way", x, y, way, open: !was }) !== null) {
+    yardSfx.no();
+    return false;
+  }
+  remember({ did: "way", i, way, was });
+  // Dust where the bar drops across the way, or lifts off it.
+  const d = [b.dir, LEFT[b.dir], RIGHT[b.dir]][way] ?? b.dir;
+  puff(x * TILE + 8 + DX[d] * 7, y * TILE + 9 + DY[d] * 7, 3, DUST, 5);
+  if (was) yardSfx.belt();
+  else yardSfx.turn();
   touched();
   return true;
 }
@@ -357,6 +378,7 @@ export function undo(): boolean {
   } else if (last.did === "took") putBack(last.what);
   else if (last.did === "painted")
     for (const l of last.lines.toReversed()) doNow({ do: "paint", ...xy(l.i), tint: l.was });
+  else if (last.did === "way") doNow({ do: "way", ...xy(last.i), way: last.way, open: last.was });
   else if (last.did === "moved") {
     const no = attempt(null, { do: "move", tiles: last.tiles, turns: last.turns, x: last.x, y: last.y });
     if (no !== null) cannotUndo(no);
@@ -600,6 +622,11 @@ function markArea(a: { x: number; y: number }, b: { x: number; y: number }): voi
   toolHooks.changed();
 }
 
+/** Marks afresh what stands on the marked tiles now: a piece of it may have been taken away, or changed from its card. */
+function remark(): void {
+  if (S.mark) markTiles(S.mark, S.mark.tiles);
+}
+
 /** Marks what stands on some tiles, within a box: an area just marked, or one a piece has since been taken out of. */
 function markTiles(box: Pick<Mark, "x0" | "y0" | "x1" | "y1">, tiles: readonly number[]): void {
   const w = S.world;
@@ -632,6 +659,7 @@ export function markEnd(): void {
 
 /** Takes in hand the marked pieces, to move them or to stand a copy of them, or the blueprint kept in a place. */
 export function hold(as: Group["as"]): void {
+  remark();
   const pieces = typeof as === "number" ? S.world.blueprints[as] : S.mark?.pieces;
   if (!pieces || pieces.length === 0) return;
   if (typeof as === "number") S.mark = null;
@@ -726,6 +754,7 @@ function setDown(): boolean {
 
 /** Takes away everything marked, at once. */
 export function clearMark(): boolean {
+  remark();
   const m = S.mark;
   if (!m || S.group) return false;
   const did = doNow({ do: "clear", tiles: m.tiles });

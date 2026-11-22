@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { build, remove, setOpen, setRecipe } from "./build.ts";
+import { build, remove, setOpen, setRecipe, setWay } from "./build.ts";
 import { ITEM, type Item, ITEMS } from "./content/items.ts";
 import { BUFFER, CRATE, FUEL, KIND, TICKS } from "./content/machines.ts";
 import { RECIPES } from "./content/recipes.ts";
 import { bare, belts, lit, on, put, steps } from "./fixtures.ts";
 import { DEPOT_SHARE } from "./orders.ts";
+import { status } from "./status.ts";
 import { power, rewire, takes } from "./step.ts";
 import { at, put as hold, type World } from "./world.ts";
 
@@ -128,6 +129,67 @@ describe("carrying", () => {
     steps(w, 1);
     expect(on(w, 4, 5).item).toBeNull();
     expect(on(w, 4, 6).item).toBe("ore");
+  });
+  test("a splitter sends nothing to a way that is shut, and takes turns among the rest", () => {
+    // Ore from the west into a splitter at (4, 5), with a belt and a crate on each way out: ahead, left, right.
+    const w = bare({ "2,5": "ore" });
+    lit(w);
+    w.rates.crate = 1000;
+    put(w, "gatherer", 2, 5);
+    put(w, "belt", 3, 5);
+    put(w, "splitter", 4, 5);
+    const outs = [
+      [5, 5, 6, 5, 0],
+      [4, 4, 4, 3, 3],
+      [4, 6, 4, 7, 1],
+    ] as const;
+    for (const [bx, by, cx, cy, dir] of outs) {
+      put(w, "belt", bx, by, dir);
+      put(w, "crate", cx, cy, dir);
+      setOpen(w, cx, cy, false);
+    }
+    /** How many more items each way has had after so many ticks. */
+    const sent = (ticks: number): number[] => {
+      const was = outs.map(([, , cx, cy]) => on(w, cx, cy).count);
+      steps(w, ticks);
+      return outs.map(([, , cx, cy], k) => on(w, cx, cy).count - (was[k] ?? 0));
+    };
+    const [a = 0, l = 0, r = 0] = sent(450);
+    expect(a + l + r).toBeGreaterThan(24);
+    expect(Math.max(a, l, r) - Math.min(a, l, r)).toBeLessThanOrEqual(1);
+    // Left shut: the other two get one each in turn.
+    expect(setWay(w, 4, 5, 1, false)).toBe(true);
+    const two = sent(450);
+    expect(two[1]).toBe(0);
+    expect((two[0] ?? 0) + (two[2] ?? 0)).toBeGreaterThan(24);
+    expect(Math.abs((two[0] ?? 0) - (two[2] ?? 0))).toBeLessThanOrEqual(1);
+    // Ahead shut too: all of it goes right.
+    setWay(w, 4, 5, 0, false);
+    const one = sent(450);
+    expect(one.slice(0, 2)).toEqual([0, 0]);
+    expect(one[2]).toBeGreaterThan(24);
+    // All three shut: it holds what it has, and says it is blocked.
+    setWay(w, 4, 5, 2, false);
+    expect(sent(450).slice(0, 2)).toEqual([0, 0]);
+    expect(sent(100)).toEqual([0, 0, 0]);
+    expect(on(w, 4, 5).item).toBe("ore");
+    expect(status(w, at(w, 4, 5))).toEqual({
+      state: "blocked",
+      line: "Nowhere to send its ore: all 3 ways are shut.",
+      trouble: true,
+    });
+    // One opened again, onto a tile with nothing on it: still nowhere, and it says which kind.
+    w.cells[at(w, 4, 4)] = null;
+    setWay(w, 4, 5, 1, true);
+    expect(status(w, at(w, 4, 5))?.line).toBe("Nowhere to send its ore: nothing is on any way that is open.");
+    // Ahead opened again: it goes that way, and only that way.
+    setWay(w, 4, 5, 0, true);
+    const again = sent(450);
+    expect(again[0]).toBeGreaterThan(24);
+    expect(again.slice(1)).toEqual([0, 0]);
+    // Only a splitter has ways.
+    expect(setWay(w, 3, 5, 0, false)).toBe(false);
+    expect(setWay(w, 9, 9, 0, false)).toBe(false);
   });
   test("a splitter takes nothing in at its sides", () => {
     const w = bare();

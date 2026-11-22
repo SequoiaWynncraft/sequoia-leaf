@@ -78,6 +78,10 @@ export function sheets(art: Art, which: string): void {
       pics: SPLITS.map((arms, dir) => onBelt(beltTile(arms, WAYS[dir] ?? 0, 5, 0), m.splitter[dir] ?? null)),
     },
     {
+      name: "its left way shut: bare, and in each paint",
+      pics: [0, 1, 2, 3, 4, 5, 6].map((tint) => onBelt(beltTile([2, 2, 1, 3], 0, 5, 0, tint), m.heads[0]?.[0] ?? null)),
+    },
+    {
       name: `${KIND.joiner.name}: east, south, west, north`,
       pics: JOINS.map((arms, dir) => onBelt(beltTile(arms, WAYS[dir] ?? 0, 5, 0), m.joiner[dir] ?? null)),
     },
