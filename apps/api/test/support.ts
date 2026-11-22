@@ -2,6 +2,7 @@ import { deflateSync } from "node:zlib";
 
 import type { Activity, PlayerId, Posting } from "@sequoia-leaf/core";
 import { Clock, ConfigProvider, Duration, Effect, Layer, ManagedRuntime, Option, Redacted, References } from "effect";
+import { SecureRandom } from "effect/crypto";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import { SqlClient } from "effect/sql";
 
@@ -14,6 +15,9 @@ import { Mojang, MojangError, type MojangProfile } from "../src/game/mojang.ts";
 import { LeafInstance } from "../src/instance.ts";
 import { Ledger } from "../src/ledger/store.ts";
 import { Live, LiveTuning } from "../src/live/live.ts";
+import { PageCoins } from "../src/play/page.ts";
+import { Play } from "../src/play/service.ts";
+import { PlayStore } from "../src/play/store.ts";
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
@@ -74,10 +78,30 @@ export interface Fakes {
   readonly ledger?: (real: Ledger["Service"]) => Ledger["Service"];
   /** Steps in between Leaf and its events, the same way. */
   readonly events?: (real: Events["Service"]) => Events["Service"];
+  /** Steps in between the play service and what it keeps, the same way. */
+  readonly play?: (real: PlayStore["Service"]) => PlayStore["Service"];
   /** Live's timings and sizes, for tests that cannot wait for the real ones. */
   readonly live?: Partial<LiveTuning>;
   /** Which Leaf process this is (`LeafInstance`). Each test Leaf is a process of its own unless given one. */
   readonly instance?: string;
+  /** Leaf's dice, for tests that need them to fall the same way every time. Without it they are the machine's. */
+  readonly dice?: SecureRandom.SecureRandom["Service"];
+}
+
+/** Dice that fall the same way every time from the same seed: a counter, mixed (for tests and play only). */
+export function steadyDice(seed: number): SecureRandom.SecureRandom["Service"] {
+  let n = seed >>> 0;
+  return SecureRandom.make((size) => {
+    const bytes = new Uint8Array(size);
+    for (let i = 0; i < size; i++) {
+      n = (n + 0x6d2b79f5) >>> 0;
+      let t = n;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      bytes[i] = (t ^ (t >>> 14)) & 0xff;
+    }
+    return bytes;
+  });
 }
 
 /**
@@ -124,6 +148,7 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     network,
     handClock,
     Layer.succeed(LeafInstance)(fakes.instance ?? crypto.randomUUID()),
+    fakes.dice === undefined ? SecureRandom.layerWebCrypto : Layer.succeed(SecureRandom.SecureRandom)(fakes.dice),
     Layer.succeed(References.MinimumLogLevel)("None"),
   );
   const stores = Stores.pipe(Layer.provideMerge(databaseAt(configured.databasePath)), Layer.provideMerge(outside));
@@ -136,6 +161,10 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     Layer.effect(
       Events,
       Events.useSync((real) => fakes.events?.(real) ?? real),
+    ),
+    Layer.effect(
+      PlayStore,
+      PlayStore.useSync((real) => fakes.play?.(real) ?? real),
     ),
   );
   const live = Live.layer.pipe(
@@ -150,7 +179,10 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
       }),
     ),
   );
-  const layer = Layer.merge(between.pipe(Layer.provideMerge(stores)), live);
+  const layer = Layer.merge(
+    Layer.merge(Play.layer, PageCoins.layer).pipe(Layer.provideMerge(between.pipe(Layer.provideMerge(stores)))),
+    live,
+  );
   // Layers built through the same memo map are built once, so `run` and `app` see the same database.
   const memoMap = Layer.makeMemoMapUnsafe();
   const runtime = ManagedRuntime.make(layer, { memoMap });

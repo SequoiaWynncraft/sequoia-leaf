@@ -10,10 +10,10 @@
  */
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
+import type { ClothId, LanternId } from "@sequoia-leaf/raid";
 
 import { paintHalf, paintTable, type Place } from "./art/table.ts";
 import { BENCH_H, BENCH_Y, BOARD_W, GAP, type Pt } from "./geometry.ts";
-import type { ClothId, LanternId } from "./keep.ts";
 
 export const V = {
   /** Screen pixels to one art pixel, and screen pixels to one CSS pixel. */

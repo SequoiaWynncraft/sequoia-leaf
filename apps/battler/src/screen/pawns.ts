@@ -8,10 +8,10 @@
  */
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { clamp, lerp } from "@sequoia-leaf/kit/util.ts";
+import type { Note, RaidNote, Run, Spot, Stars } from "@sequoia-leaf/raid";
+import { type FigureId, traitsOf } from "@sequoia-leaf/raid/content/figures.ts";
+import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
 
-import { type FigureId, traitsOf } from "../game/content/figures.ts";
-import type { TraitId } from "../game/content/traits.ts";
-import type { Note, Run, Spot, Stars } from "../game/index.ts";
 import { glyphPic, itemPic } from "./art/icons.ts";
 import { TRAIT_COLOUR } from "./art/pal.ts";
 import { framesOf } from "./art/sprites.ts";
@@ -29,6 +29,8 @@ export interface Pawn {
   kind: FigureId;
   /** Its stars as shown, which lag the rules for the moment three are hopping together. */
   stars: Stars;
+  /** Three are hopping together into it: its stars wait for the hop. */
+  starring: boolean;
   /** Where it belongs; null for one that is on its way out, or has no place yet. */
   spot: Spot | null;
   x: number;
@@ -87,6 +89,7 @@ function make(id: number, kind: FigureId, stars: Stars, at: Pt, spot: Spot | nul
     dur: 0,
     arc: 0,
     phase: (id * 0.37) % 1,
+    starring: false,
     popAt: -9,
     cheerAt: -9,
     wiggleUntil: -9,
@@ -138,6 +141,8 @@ export function syncPawns(run: Run | null, settle = false): void {
     const moved = !p.spot || p.spot.on !== spot.on || p.spot.at !== spot.at;
     p.spot = spot;
     p.leaving = false;
+    // The rules' stars, unless three are hopping together into it and its new star is still to pop.
+    if (!p.starring) p.stars = piece.stars;
     if (settle) {
       p.x = at.x;
       p.y = at.y;
@@ -228,6 +233,7 @@ const STAR_COLS = [GOLD[2], GOLD[1], "#ffffff"];
 /** Three become one: the two that go hop onto the one that stays, and its new star pops. */
 function merge(note: Extract<Note, { t: "merged" }>, delay: number): void {
   const keeper = pawns.get(note.piece);
+  if (keeper) keeper.starring = true;
   // The two that go are spoken for from this moment, though they have not yet jumped.
   for (const id of note.gone) {
     const p = pawns.get(id);
@@ -251,6 +257,7 @@ function merge(note: Extract<Note, { t: "merged" }>, delay: number): void {
     const at = keeper ? { x: keeper.x, y: keeper.y } : spotXY(note.at);
     if (keeper) {
       keeper.stars = note.stars;
+      keeper.starring = false;
       keeper.popAt = V.t;
     }
     const grand = note.stars >= 3;
@@ -267,7 +274,7 @@ function merge(note: Extract<Note, { t: "merged" }>, delay: number): void {
 }
 
 /** Acts out what the rules said happened, in order. */
-export function hearNotes(notes: readonly Note[]): void {
+export function hearNotes(notes: readonly RaidNote[]): void {
   let delay = 0;
   for (const note of notes) {
     if (note.t === "bought") {

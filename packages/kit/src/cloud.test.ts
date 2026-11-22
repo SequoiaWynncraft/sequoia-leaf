@@ -5,7 +5,7 @@ import { keepText } from "./keep.ts";
 import { restart, start } from "./live.ts";
 import { isRecord, pretend } from "./net.ts";
 import { post } from "./postcard.ts";
-import { balance, earn, forgetLedger, spend } from "./purse.ts";
+import { balance, earn, forgetLedger, KEY as PURSE_KEY } from "./purse.ts";
 import { HELLO, type MemoryStore, type Sent, type Standin, standin, TESTER } from "./standin.ts";
 
 interface Row {
@@ -75,9 +75,9 @@ const meta = (store: MemoryStore): Record<string, unknown> => JSON.parse(store.g
 /** A page that does nothing when another device's copy wins. */
 const page = { onReplaced: (): void => undefined };
 const putsOf = (w: Standin): Sent[] => w.sent.filter((s) => s.method === "PUT");
-/** A page's own savers, as the games have them: the purse and a postcard. */
+/** A page's own savers, as the games have them: the yard and a postcard. */
 const saveAsAGame = (): void => {
-  earn(50, "a test");
+  keepText("works.save.v2", "this page's yard");
   post("works", { waiting: "mine", trophies: [], till: 1 });
 };
 
@@ -108,7 +108,6 @@ function aPage(): { hide: () => void; done: () => void } {
 describe("saves on the member's account", () => {
   test("pull writes the server's texts into the browser before the page reads them", async () => {
     const rows: Record<string, Row> = {
-      purse: { version: 4, data: { saved_at: 100, keys: { "town.purse.v1": '{"coins":812}' } } },
       town: { version: 2, data: { saved_at: 100, keys: { "town.save.v1": '{"v":1,"town":"yes"}' } } },
     };
     world = standin(saves(rows));
@@ -117,11 +116,12 @@ describe("saves on the member's account", () => {
     world.store.setItem("town.save.v1", "old");
     world.store.setItem("town.postcard.raid.v1", "old card");
     await start();
-    expect(await pull(["purse", "town"], page)).toBe(true);
+    expect(await pull(["town"], page)).toBe(true);
     expect(world.store.getItem("town.save.v1")).toBe('{"v":1,"town":"yes"}');
     expect(world.store.getItem("town.postcard.raid.v1")).toBeNull();
-    expect(balance()).toEqual({ leaf: TESTER.leaf, coins: 812 });
-    expect(meta(world.store)).toMatchObject({ player: TESTER.player.id, slots: { purse: { version: 4 } } });
+    // The Coins are Leaf's, from who the member is; no slot holds any.
+    expect(balance()).toEqual({ leaf: TESTER.leaf, coins: TESTER.coins });
+    expect(meta(world.store)).toMatchObject({ player: TESTER.player.id, slots: { town: { version: 2 } } });
   });
 
   test("a slot the server has never had starts at version 0", async () => {
@@ -138,16 +138,16 @@ describe("saves on the member's account", () => {
 
   test("a change is pushed with the version last read, and no oftener than every five seconds", async () => {
     const rows: Record<string, Row> = {
-      raid: { version: 7, data: { saved_at: 100, keys: { "raid.almanac.v1": "a" } } },
+      town: { version: 7, data: { saved_at: 100, keys: { "town.guild.v1": "a" } } },
     };
     world = standin(saves(rows));
     world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
     await start();
-    await pull(["raid"], page);
+    await pull(["town"], page);
     tick();
     expect(world.sent.filter((s) => s.method === "PUT")).toEqual([]);
 
-    world.store.setItem("raid.almanac.v1", "b");
+    world.store.setItem("town.guild.v1", "b");
     world.clock.now += 1000;
     tick();
     await Bun.sleep(1);
@@ -156,11 +156,11 @@ describe("saves on the member's account", () => {
     expect(first[0]?.body).toEqual({
       player: TESTER.player.id,
       version: 7,
-      data: { saved_at: world.clock.now, keys: { "raid.almanac.v1": "b" } },
+      data: { saved_at: world.clock.now, keys: { "town.guild.v1": "b" } },
     });
-    expect(rows.raid?.version).toBe(8);
+    expect(rows.town?.version).toBe(8);
 
-    world.store.setItem("raid.almanac.v1", "c");
+    world.store.setItem("town.guild.v1", "c");
     world.clock.now += 1000;
     tick();
     await Bun.sleep(1);
@@ -244,65 +244,55 @@ describe("saves on the member's account", () => {
     expect(rows.works).toEqual(phone);
   });
 
-  test("the purse is only read again when another device's copy wins, and is still sent", async () => {
-    const rows: Record<string, Row> = {
-      purse: { version: 1, data: { saved_at: 100, keys: { "town.purse.v1": '{"coins":300}' } } },
-    };
-    world = standin(saves(rows));
-    world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+  test("Coins are no slot's: nothing of them is pulled into the browser or sent from it", async () => {
+    world = standin(saves({}, { "POST /v1/game/coins": () => ({ status: 200, body: { coins: 350 } }) }));
     await start();
-    const told: Slot[] = [];
-    await pull(["purse"], { onReplaced: (s) => told.push(s) });
-    rows.purse = {
-      version: 2,
-      data: { saved_at: world.clock.now + 60_000, keys: { "town.purse.v1": '{"coins":90}' } },
-    };
-    world.store.setItem("town.purse.v1", '{"coins":250}');
-    expect(await push("purse")).toBe(false);
-    expect(told).toEqual([]);
-    expect(balance().coins).toBe(90);
-    world.store.setItem("town.purse.v1", '{"coins":95}');
-    world.clock.now += 120_000;
-    expect(await push("purse")).toBe(true);
-    expect(rows.purse?.data.keys).toEqual({ "town.purse.v1": '{"coins":95}' });
+    expect(Object.keys(SLOTS)).toEqual(["town", "works"]);
+    expect(Object.values(SLOTS).flat()).not.toContain(PURSE_KEY);
+    await pull(["town", "works"], page);
+    earn(50, "works_order");
+    world.clock.now += PUSH_EVERY;
+    tick();
+    await Bun.sleep(5);
+    expect(world.store.getItem(PURSE_KEY)).toBeNull();
+    expect(world.sent.some((s) => s.path.endsWith("/purse"))).toBe(false);
+    expect(world.sent.filter((s) => s.method === "POST").map((s) => s.path)).toEqual(["/v1/game/coins"]);
   });
 
   test("a change here not yet sent survives another pull of the same version", async () => {
     const rows: Record<string, Row> = {
-      purse: { version: 1, data: { saved_at: 100, keys: { "town.purse.v1": '{"coins":300}' } } },
-    };
-    world = standin(saves(rows));
-    world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
-    await start();
-    await pull(["purse"], page);
-    expect(balance().coins).toBe(300);
-    // Coins spent, and at once into a game, which pulls the purse too: no tick has seen the spend.
-    expect(spend("coins", 50, "a lantern")).toBe(true);
-    expect(await pull(["purse"], page)).toBe(true);
-    expect(world.store.getItem("town.purse.v1")).toBe('{"coins":250}');
-    expect(balance().coins).toBe(250);
-    // And the spend still goes up.
-    tick();
-    await Bun.sleep(5);
-    expect(rows.purse).toMatchObject({ version: 2, data: { keys: { "town.purse.v1": '{"coins":250}' } } });
-  });
-
-  test("a pull of a newer copy takes it when nothing here is unsent, and keeps a change here, made now, when something is", async () => {
-    const rows: Record<string, Row> = {
-      purse: { version: 1, data: { saved_at: 100, keys: { "town.purse.v1": '{"coins":300}' } } },
       works: { version: 1, data: { saved_at: 100, keys: { "works.save.v2": "a yard" } } },
     };
     world = standin(saves(rows));
     world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
     await start();
-    await pull(["purse", "works"], page);
+    await pull(["works"], page);
+    // The yard changed, and at once the page pulls it again: no tick has seen the change.
+    world.store.setItem("works.save.v2", "a bigger yard");
+    expect(await pull(["works"], page)).toBe(true);
+    expect(world.store.getItem("works.save.v2")).toBe("a bigger yard");
+    // And the change still goes up.
+    tick();
+    await Bun.sleep(5);
+    expect(rows.works).toMatchObject({ version: 2, data: { keys: { "works.save.v2": "a bigger yard" } } });
+  });
+
+  test("a pull of a newer copy takes it when nothing here is unsent, and keeps a change here, made now, when something is", async () => {
+    const rows: Record<string, Row> = {
+      town: { version: 1, data: { saved_at: 100, keys: { "town.guild.v1": "a guild" } } },
+      works: { version: 1, data: { saved_at: 100, keys: { "works.save.v2": "a yard" } } },
+    };
+    world = standin(saves(rows));
+    world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
+    await start();
+    await pull(["town", "works"], page);
     // The phone saved both since; only the yard has changed here meanwhile.
-    rows.purse = { version: 2, data: { saved_at: world.clock.now - 1000, keys: { "town.purse.v1": '{"coins":90}' } } };
+    rows.town = { version: 2, data: { saved_at: world.clock.now - 1000, keys: { "town.guild.v1": "phone guild" } } };
     rows.works = { version: 2, data: { saved_at: world.clock.now - 1000, keys: { "works.save.v2": "phone yard" } } };
     world.store.setItem("works.save.v2", "a bigger yard");
     world.clock.now += 1000;
-    expect(await pull(["purse", "works"], page)).toBe(true);
-    expect(balance().coins).toBe(90);
+    expect(await pull(["town", "works"], page)).toBe(true);
+    expect(world.store.getItem("town.guild.v1")).toBe("phone guild");
     expect(world.store.getItem("works.save.v2")).toBe("a bigger yard");
     expect(await push("works")).toBe(true);
     expect(putsOf(world).map((s) => s.body)).toEqual([
@@ -316,22 +306,22 @@ describe("saves on the member's account", () => {
 
   test("a page whose browser now holds another member's game pushes nothing more, and loads again", async () => {
     const rows: Record<string, Row> = {
-      purse: { version: 1, data: { saved_at: 100, keys: { "town.purse.v1": '{"coins":300}' } } },
+      works: { version: 1, data: { saved_at: 100, keys: { "works.save.v2": "a yard" } } },
     };
     world = standin(saves(rows));
     world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
     await start();
-    await pull(["purse"], page);
+    await pull(["works"], page);
     // Somebody signs in as another member in another tab, and their page pulls their game.
-    const theirs = JSON.stringify({ player: "somebody-else", slots: { purse: { version: 4, saved: 1, sum: "x" } } });
+    const theirs = JSON.stringify({ player: "somebody-else", slots: { works: { version: 4, saved: 1, sum: "x" } } });
     world.store.setItem("town.cloud.v1", theirs);
-    world.store.setItem("town.purse.v1", '{"coins":5}');
+    world.store.setItem("works.save.v2", "their yard");
     // This page, still open, writes down what it holds.
-    world.store.setItem("town.purse.v1", '{"coins":250}');
+    world.store.setItem("works.save.v2", "this page's yard");
     world.clock.now += PUSH_EVERY;
     tick();
     flush();
-    expect(await push("purse")).toBe(false);
+    expect(await push("works")).toBe(false);
     await Bun.sleep(5);
     expect(putsOf(world)).toEqual([]);
     expect(world.reloaded.count).toBe(1);
@@ -365,12 +355,12 @@ describe("saves on the member's account", () => {
     const rows: Record<string, Row> = {};
     world = standin(saves(rows, { "PUT /v1/game/saves/works": () => ({ status: 409, body: { code: "not_you" } }) }));
     await start();
-    await pull(["works", "raid"], page);
+    await pull(["works", "town"], page);
     world.store.setItem("works.save.v2", "a yard");
-    world.store.setItem("raid.run.v1", "a run");
+    world.store.setItem("town.guild.v1", "a guild");
     expect(await push("works")).toBe(false);
     expect(world.reloaded.count).toBe(1);
-    expect(await push("raid")).toBe(false);
+    expect(await push("town")).toBe(false);
     expect(putsOf(world).map((s) => s.path)).toEqual(["/v1/game/saves/works"]);
     expect(world.sent.filter((s) => s.method === "GET" && s.path.endsWith("/works")).length).toBe(1);
   });
@@ -379,7 +369,7 @@ describe("saves on the member's account", () => {
     const shown = aPage();
     try {
       const rows: Record<string, Row> = {
-        purse: { version: 1, data: { saved_at: 100, keys: { "town.purse.v1": '{"coins":300}' } } },
+        works: { version: 1, data: { saved_at: 100, keys: { "works.save.v2": "a yard" } } },
       };
       world = standin(saves(rows));
       world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
@@ -387,18 +377,18 @@ describe("saves on the member's account", () => {
       const stoppedFirst: boolean[] = [];
       pretend({ reload: () => void stoppedFirst.push(stopped()) });
       await start();
-      await pull(["purse", "town"], page);
+      await pull(["works", "town"], page);
       // The page's savers run before a flush and as the page goes away, as the games' do.
       before(saveAsAGame);
       window.addEventListener("pagehide", saveAsAGame);
       saveAsAGame();
-      expect(world.store.getItem("town.purse.v1")).toBe('{"coins":350}');
+      expect(world.store.getItem("works.save.v2")).toBe("this page's yard");
       expect(world.store.getItem("town.postcard.works.v1")).not.toBeNull();
 
       // Another member signs in in another tab, and their page pulls their game.
       const theirs = JSON.stringify({ player: "somebody-else", slots: {} });
       world.store.setItem("town.cloud.v1", theirs);
-      world.store.setItem("town.purse.v1", '{"coins":5}');
+      world.store.setItem("works.save.v2", "their yard");
       world.store.removeItem("town.postcard.works.v1");
       window.dispatchEvent(new Event("storage"));
       expect(stoppedFirst).toEqual([true]);
@@ -410,7 +400,7 @@ describe("saves on the member's account", () => {
       flush();
       saveAsAGame();
       await Bun.sleep(5);
-      expect(world.store.getItem("town.purse.v1")).toBe('{"coins":5}');
+      expect(world.store.getItem("works.save.v2")).toBe("their yard");
       expect(world.store.getItem("town.postcard.works.v1")).toBeNull();
       expect(world.store.getItem("town.cloud.v1")).toBe(theirs);
       expect(putsOf(world)).toEqual([]);
@@ -423,14 +413,14 @@ describe("saves on the member's account", () => {
     world = standin(saves({}));
     world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
     await start();
-    await pull(["purse"], page);
+    await pull(["works"], page);
     expect(stopped()).toBe(false);
     // Their page has written down whose game it is, and this page has not yet heard.
     const theirs = JSON.stringify({ player: "somebody-else", slots: {} });
     world.store.setItem("town.cloud.v1", theirs);
-    world.store.setItem("town.purse.v1", '{"coins":5}');
-    earn(50, "a timer firing");
-    expect(world.store.getItem("town.purse.v1")).toBe('{"coins":5}');
+    world.store.setItem("works.save.v2", "their yard");
+    expect(keepText("works.save.v2", "a timer firing")).toBe(false);
+    expect(world.store.getItem("works.save.v2")).toBe("their yard");
     expect(stopped()).toBe(true);
     expect(world.reloaded.count).toBe(1);
     expect(world.store.getItem("town.cloud.v1")).toBe(theirs);
@@ -497,7 +487,7 @@ describe("saves on the member's account", () => {
     world.store.setItem("raid.prefs.v1", "a view setting");
     world.store.setItem("town.muted", "1");
     await start();
-    await pull(["purse"], page);
+    await pull(["works"], page);
     for (const names of Object.values(SLOTS)) for (const name of names) expect(world.store.getItem(name)).toBeNull();
     expect(world.store.getItem("raid.prefs.v1")).toBe("a view setting");
     expect(world.store.getItem("town.muted")).toBe("1");
@@ -518,14 +508,14 @@ describe("saves on the member's account", () => {
   test("a pull the server cannot answer says so", async () => {
     world = standin(saves({}, { "GET /v1/game/saves/town": () => ({ status: 503 }) }));
     await start();
-    expect(await pull(["purse", "town"], page)).toBe(false);
+    expect(await pull(["town"], page)).toBe(false);
   });
 
   test("with the made-up guild nothing is fetched", async () => {
     world = standin({ "GET /v1/game/hello": "offline" });
     await start();
     world.store.setItem("works.save.v2", "a yard");
-    expect(await pull(["purse", "works"], page)).toBe(true);
+    expect(await pull(["works"], page)).toBe(true);
     tick();
     expect(await push("works")).toBe(false);
     expect(world.sent.map((s) => s.path)).toEqual(["/v1/game/hello"]);

@@ -6,8 +6,15 @@
 import { BARK, CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import { write } from "@sequoia-leaf/kit/text.ts";
 import { makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
+import {
+  FIGURE_IDS,
+  FIGURES,
+  specOf,
+  SUMMON_IDS,
+  TROUBLE_IDS,
+  type UnitKind,
+} from "@sequoia-leaf/raid/content/figures.ts";
 
-import { FIGURE_IDS, FIGURES, specOf, SUMMON_IDS, TROUBLE_IDS, type UnitKind } from "../game/content/figures.ts";
 import { drawBase, drawFigure, drawStars, framesOf } from "./art/sprites.ts";
 
 export function showSheet(): void {

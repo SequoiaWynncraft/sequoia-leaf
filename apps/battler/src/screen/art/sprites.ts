@@ -7,8 +7,8 @@
 import { GOLD, GREEN, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, flipped, outlined, rgb } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
+import { FIGURES, isBossId, isFigureId, isSummonId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 
-import { FIGURES, isBossId, isFigureId, isSummonId, type UnitKind } from "../../game/content/figures.ts";
 import { ART } from "./figures.ts";
 import { FOREST_TONES, PAL, SUMMON_TONES, TIER_TONES, type Tones } from "./pal.ts";
 

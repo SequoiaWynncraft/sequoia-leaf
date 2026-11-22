@@ -9,9 +9,10 @@
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, ell, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, makeCanvas, vnoise } from "@sequoia-leaf/kit/util.ts";
+import type { ClothId, LanternId } from "@sequoia-leaf/raid";
+import type { UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
+import { COLS, HOME_ROWS } from "@sequoia-leaf/raid/hex.ts";
 
-import type { UnitKind } from "../../game/content/figures.ts";
-import { COLS, HOME_ROWS } from "../../game/hex.ts";
 import {
   BENCH_H,
   BENCH_SLOTS,
@@ -28,7 +29,6 @@ import {
   SLOPE,
   SLOT_W,
 } from "../geometry.ts";
-import type { ClothId, LanternId } from "../keep.ts";
 import { PAL } from "./pal.ts";
 import { type BaseLook, drawBase, drawFigure } from "./sprites.ts";
 

@@ -434,7 +434,7 @@ function shift(_art: Art, body: HTMLElement): () => void {
   const meter = el("div", "k-bar leaf", {}, fill);
   const label = el("span", "", { text: "Start a second shift" });
   const go = button("leaf wide", [icon("leaf"), el("span", "", { text: String(SHIFT.leaf) }), label], (b) => {
-    if (!spend("leaf", SHIFT.leaf, "the Works: a second shift")) {
+    if (!spend("leaf", SHIFT.leaf)) {
       sfx.no();
       replay(b, "shake");
       feed(`A second shift is ${SHIFT.leaf} Leaf, and the purse holds ${balance().leaf}.`, "coral");

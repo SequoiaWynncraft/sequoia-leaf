@@ -15,8 +15,8 @@ import type { RunSummary } from "./run.ts";
 
 export interface Payout {
   coins: number;
-  /** How it adds up, for showing. */
-  lines: { why: "rooms" | "bosses" | "win" | "trail"; coins: number }[];
+  /** How it adds up, for showing. A last line `full`, of nothing, when the purse could not take it all. */
+  lines: { why: "rooms" | "bosses" | "win" | "trail" | "full"; coins: number }[];
 }
 /** What a run pays, finished or abandoned: for the rooms it won and the bosses it beat, a bonus for winning, and the trail's share on top. */
 export function payout(summary: RunSummary): Payout {
@@ -155,10 +155,13 @@ export function loadAlmanac(text: string): Almanac | null {
   } catch {
     return null;
   }
-  if (!isRecord(raw) || raw.game !== "little-raid-almanac" || raw.v !== ALMANAC_VERSION || !isRecord(raw.almanac)) {
-    return null;
-  }
-  const a = raw.almanac;
+  if (!isRecord(raw) || raw.game !== "little-raid-almanac" || raw.v !== ALMANAC_VERSION) return null;
+  return readAlmanac(raw.almanac);
+}
+
+/** An almanac from plain data, as `JSON.parse` gives it back. Anything that is not a whole almanac is none. */
+export function readAlmanac(a: unknown): Almanac | null {
+  if (!isRecord(a)) return null;
   const fielded = uniqueList(a.fielded, isFigureId, FIGURE_IDS.length);
   const threeStars = uniqueList(a.threeStars, isFigureId, FIGURE_IDS.length);
   const forged = uniqueList(a.forged, isFinishedId, FINISHED_IDS.length);

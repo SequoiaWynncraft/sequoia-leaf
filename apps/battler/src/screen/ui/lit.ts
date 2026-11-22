@@ -9,8 +9,8 @@
  */
 import { close, deck, watch } from "@sequoia-leaf/kit/card.ts";
 import { replay } from "@sequoia-leaf/kit/dom.ts";
+import { type TraitId, traitsOf } from "@sequoia-leaf/raid";
 
-import { type TraitId, traitsOf } from "../../game/index.ts";
 import { forget, light, lightUp, litTrait } from "../light.ts";
 import { snd } from "../sounds.ts";
 import { V } from "../stage.ts";

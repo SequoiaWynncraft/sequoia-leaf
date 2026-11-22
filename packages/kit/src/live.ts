@@ -4,9 +4,9 @@
  * else. It asks the page's own server `GET /v1/game/hello`; no answer, or anything but that answer,
  * is no server, and the game plays as it always has. With a server it asks who the member is:
  *
- * - known: the game is live, as them, and the purse keeps the ledger's Leaf;
- * - known as a guest (signed in, not in the guild): the game is live, as them, with no Leaf, and
- *   the page asks nothing that is only for members (`/v1/me...`, the guild's news);
+ * - known: the game is live, as them, and the purse keeps the ledger's Leaf and Leaf's Coins;
+ * - known as a guest (signed in, not in the guild): the game is live, as them, with no Leaf but
+ *   Leaf's Coins, and the page asks nothing that is only for members (`/v1/me...`, the guild's news);
  * - signed out: the whole window goes to the guild's sign-in and comes back, once; refused again
  *   within a minute, or in a frame, it says so on a card instead;
  * - not a member (a server that lets in only members), or the server is having trouble: a card says so.
@@ -18,7 +18,18 @@ import { type Device, deviceForWidth } from "@sequoia-leaf/core";
 
 import { el } from "./dom.ts";
 import { ask, isRecord, listen, type Listening, outside } from "./net.ts";
-import { asGuest, balance, fromLedger, leafOpen, watch } from "./purse.ts";
+import {
+  asGuest,
+  balance,
+  coinsOnLeaf,
+  flushCoins,
+  fromLeaf,
+  fromLedger,
+  heardCoins,
+  leafOpen,
+  refreshCoins,
+  watch,
+} from "./purse.ts";
 import { fromTown, inTown, leave, tell } from "./shell.ts";
 
 export interface Member {
@@ -70,6 +81,12 @@ export function readMember(v: unknown): Member | null {
   };
 }
 
+/** The member's Coins as `/v1/game/me` says them, or null for anything that does not say. */
+export function readCoins(v: unknown): number | null {
+  const coins = isRecord(v) ? num(v.coins) : null;
+  return coins === null ? null : Math.max(0, Math.floor(coins));
+}
+
 async function look(): Promise<Where> {
   const hello = await ask("/v1/game/hello");
   const signIn = hello.status === 200 && isRecord(hello.body) ? str(hello.body.sign_in) : null;
@@ -86,6 +103,8 @@ async function look(): Promise<Where> {
     }
     if (member.guest) asGuest();
     else fromLedger(member.leaf);
+    // From here on the purse's Coins are Leaf's ledger's, guest or member.
+    fromLeaf(readCoins(me.body) ?? 0, member.id);
     signedInOn = deviceForWidth(outside.width());
     return { mode: "live", me: member, signIn };
   }
@@ -161,6 +180,22 @@ const CARDS: Readonly<Record<Exclude<Shut, "signin">, readonly [string, string, 
   closed: ["Just a moment", "The guild's books are closed for a moment. Try again.", "Try again"],
 };
 
+/** Puts the page away behind a card: a title, a line and one button. */
+function card(title: string, line: string, word: string, go: () => void): void {
+  const button = el("button", "k-btn wide", { type: "button" }, word);
+  button.addEventListener("click", go);
+  const paper = el(
+    "section",
+    "k-paper k-rise k-shut",
+    { role: "alertdialog", "aria-label": title },
+    el("h1", "k-title big", { text: title }),
+    el("p", "", { text: line }),
+    button,
+  );
+  document.body.append(el("div", "k-scrim", {}, paper));
+  button.focus();
+}
+
 /**
  * Puts the page away behind the card for why it will not open: a title, a line and one button.
  * In a frame, signed out goes back to town instead of to the sign-in. On its way to sign in, the
@@ -169,26 +204,42 @@ const CARDS: Readonly<Record<Exclude<Shut, "signin">, readonly [string, string, 
 export function shutCard(why: Shut, signIn: string): void {
   document.body.replaceChildren();
   if (why !== "signin") {
-    const framed = !outside.top();
     const [title, line, word] = CARDS[why];
-    const back = why === "signedout" && framed;
-    const go = el("button", "k-btn wide", { type: "button" }, back ? "Back to town" : word);
-    go.addEventListener("click", () => {
+    const back = why === "signedout" && !outside.top();
+    card(title, line, back ? "Back to town" : word, () => {
       if (back) leave();
       else if (why === "signedout") goSignIn(signIn);
       else location.reload();
     });
-    const card = el(
-      "section",
-      "k-paper k-rise k-shut",
-      { role: "alertdialog", "aria-label": title },
-      el("h1", "k-title big", { text: title }),
-      el("p", "", { text: line }),
-      go,
-    );
-    document.body.append(el("div", "k-scrim", {}, card));
-    go.focus();
   }
+  if (inTown()) tell({ town: "ready" });
+}
+
+/**
+ * Puts a game away behind the card for a page opened where no Leaf answers: a game played on Leaf
+ * needs the guild's server. `line` says so in the game's words.
+ */
+export function serverCard(line: string): void {
+  document.body.replaceChildren();
+  card("No server here", line, "Try again", () => location.reload());
+  if (inTown()) tell({ town: "ready" });
+}
+
+/** What a game says when the state Leaf keeps for the player does not read. */
+export const UNREADABLE = "Your game could not be read. It has been kept; tell the guild.";
+
+/**
+ * Puts a game away behind the card for a state Leaf keeps that does not read (`state_unreadable`):
+ * it has been kept, and the guild is to be told. Nothing more is sent. In a frame, the button goes
+ * back to town.
+ */
+export function unreadableCard(): void {
+  document.body.replaceChildren();
+  const back = !outside.top();
+  card("Could not be read", UNREADABLE, back ? "Back to town" : "Try again", () => {
+    if (back) leave();
+    else location.reload();
+  });
   if (inTown()) tell({ town: "ready" });
 }
 
@@ -211,7 +262,7 @@ export const LET_GO: Readonly<Record<LetGo, readonly [string, string, string]>> 
 export function letGoCard(why: LetGo, signIn: string, again: () => void): () => void {
   const [title, line, word] = LET_GO[why];
   const go = el("button", "k-btn wide", { type: "button" }, word);
-  const card = el(
+  const paper = el(
     "section",
     "k-paper k-rise k-shut",
     { role: "alertdialog", "aria-label": title },
@@ -219,7 +270,7 @@ export function letGoCard(why: LetGo, signIn: string, again: () => void): () => 
     el("p", "", { text: line }),
     go,
   );
-  const scrim = el("div", "k-scrim k-let-go", {}, card);
+  const scrim = el("div", "k-scrim k-let-go", {}, paper);
   const away = (): void => {
     scrim.remove();
   };
@@ -273,23 +324,79 @@ export function followLeaf(
 // ---------- the member's Leaf in a game in the town ----------
 
 /**
- * Keeps the member's Leaf up to date in a game for as long as it is open. A game takes its Leaf
- * once, as it starts. In the town's frame the town hears the member's news, and says each new
- * number the ledger gives (`passLeaf`); the purse takes it as it takes a fresh read of the ledger.
- * Opened on its own, the game listens to the member's news itself, as the town does. With the
- * made-up guild there is no ledger, and nothing the town says about Leaf is taken. Returns how to
- * stop.
+ * Keeps the member's Leaf and Coins up to date in a game for as long as it is open. A game takes
+ * them once, as it starts. In the town's frame the town hears the member's news, and says each new
+ * number the ledger gives (`passLeaf`), and each change to its Coins (`passCoins`); the purse takes
+ * the Leaf as it takes a fresh read of the ledger, and the Coins as Leaf's when nothing of its own
+ * is on its way. Opened on its own, the game listens to the member's news itself, as the town does,
+ * and asks Leaf for the Coins whenever it comes back into view (`followCoins`). With the made-up
+ * guild there is no ledger, and nothing the town says about either is taken. Returns how to stop.
  */
 export function keepLeaf(): () => void {
   if (inTown()) {
     return fromTown((msg) => {
       if (msg.town === "leaf" && member() && !isGuest()) fromLedger(msg.leaf);
+      else if (msg.town === "coins" && member()) heardCoins(msg.coins);
+      // Put away in a moment: what the game earned or spent goes to Leaf now, not after.
+      else if (msg.town === "closing") flushCoins();
     });
   }
-  if (!member() || isGuest()) return () => undefined;
+  if (!member()) return () => undefined;
+  const away = followCoins();
+  if (isGuest()) return away;
   const ears = followLeaf();
   return () => {
+    away();
     ears.stop();
+  };
+}
+
+/** The page came back into view, or went out of it: back in view, the purse asks Leaf for the Coins. */
+function inViewAgain(): void {
+  if (document.visibilityState === "visible") refreshCoins();
+}
+
+/**
+ * On the guild's server, asks Leaf for the member's Coins whenever the page comes back into view:
+ * another page of the game, or another device, may have earned or spent some meanwhile. Returns
+ * how to stop.
+ */
+export function followCoins(): () => void {
+  if (typeof document === "undefined" || !coinsOnLeaf()) return () => undefined;
+  document.addEventListener("visibilitychange", inViewAgain);
+  return () => document.removeEventListener("visibilitychange", inViewAgain);
+}
+
+/** What `passLeaf` and `passCoins` give the town: say what is owed once the game is ready, and stop. */
+export interface Passing {
+  ready(): void;
+  stop(): void;
+}
+
+/**
+ * Passes each new number the purse holds of one kind to `say`, from when the game is ready: a change
+ * while it is still opening waits for `ready()` and is said then. Only while `kept()` holds.
+ */
+function pass(kind: "leaf" | "coins", kept: () => boolean, say: (n: number) => void): Passing {
+  let n = balance()[kind];
+  let heard = false;
+  let owed = false;
+  const stop = watch((p) => {
+    if (!kept() || p[kind] === n) return;
+    n = p[kind];
+    if (heard) say(n);
+    else owed = true;
+  });
+  return {
+    ready() {
+      heard = true;
+      if (!owed) return;
+      owed = false;
+      say(n);
+    },
+    stop() {
+      stop();
+    },
   };
 }
 
@@ -299,25 +406,11 @@ export function keepLeaf(): () => void {
  * while it is still opening waits for `ready()` and is said then. With the made-up guild there is
  * no ledger, and nothing is said.
  */
-export function passLeaf(say: (leaf: number) => void): { ready(): void; stop(): void } {
-  let leaf = balance().leaf;
-  let heard = false;
-  let owed = false;
-  const stop = watch((p) => {
-    if (leafOpen() || p.leaf === leaf) return;
-    leaf = p.leaf;
-    if (heard) say(leaf);
-    else owed = true;
-  });
-  return {
-    ready() {
-      heard = true;
-      if (!owed) return;
-      owed = false;
-      say(leaf);
-    },
-    stop() {
-      stop();
-    },
-  };
-}
+export const passLeaf = (say: (leaf: number) => void): Passing => pass("leaf", () => !leafOpen(), say);
+
+/**
+ * In the town, while a game is open in its frame: passes each change to the town's Coins, which
+ * are Leaf's, to `say`, which tells the game, as `passLeaf` does Leaf. With the made-up guild, whose
+ * Coins every page keeps in the browser and hears change, nothing is said.
+ */
+export const passCoins = (say: (coins: number) => void): Passing => pass("coins", coinsOnLeaf, say);

@@ -9,8 +9,8 @@
  */
 import { register } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { type Fight, type FightEvent, type FightSetup, openFight, stepFight, tally } from "@sequoia-leaf/raid";
 
-import { type Fight, type FightEvent, type FightSetup, openFight, stepFight, tally } from "../../game/index.ts";
 import { fightTitle, opening } from "../logic.ts";
 import { snd } from "../sounds.ts";
 import { S } from "../state.ts";

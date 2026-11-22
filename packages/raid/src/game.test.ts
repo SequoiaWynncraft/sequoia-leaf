@@ -1,0 +1,516 @@
+import { describe, expect, test } from "bun:test";
+
+import type { CoinChange, Ctx, Done, Logged, Refused } from "@sequoia-leaf/core";
+
+import { SENSIBLE } from "./bot.ts";
+import { resolveFight } from "./fight/engine.ts";
+import {
+  decodeTable,
+  encodeTable,
+  planCommands,
+  predict,
+  RAID,
+  type RaidCommand,
+  type RaidNote,
+  readCommand,
+  refusalText,
+  type Table,
+  tableView,
+} from "./game.ts";
+import { payout } from "./outside.ts";
+import { pieces, summariseRun } from "./run.ts";
+import { readNotes, readView } from "./wire.ts";
+
+const PLAYER = { id: "10000000-0000-0000-0000-000000000001", guest: false };
+let rolls = 0;
+/** Leaf's word on each call: its clock, the player, and fresh dice (counted, so a test can repeat them). */
+const ctx = (seed = (rolls += 0x9e3779b1) >>> 0): Ctx => ({
+  now: 1_800_000_000_000,
+  player: PLAYER,
+  seed,
+  room: 1e9,
+});
+
+type Answer = Done<Table, RaidNote> | Refused;
+const isDone = (a: Answer): a is Done<Table, RaidNote> => !("refused" in a);
+
+/** Does a command that must be done, and gives back what it did. */
+function must(state: Table, command: RaidCommand, at: Ctx = ctx()): Done<Table, RaidNote> {
+  const done = RAID.apply(state, command, at);
+  if (!isDone(done)) throw new Error(`${command.do} was refused: ${done.refused}`);
+  return done;
+}
+/** A table with a run laid out and its first figure picked. */
+function started(seed = 7, trail = 0): Table {
+  let state = RAID.create(ctx(seed));
+  state = must(state, { do: "start", trail }).state;
+  return must(state, { do: "choose", option: 0 }).state;
+}
+/** Plans the room that is up as the bot would, through commands, until there is nothing left to plan. */
+function planned(state: Table): Table {
+  let s = state;
+  for (let guard = 0; guard < 40; guard++) {
+    const commands = planCommands(RAID.view(s, ctx()), SENSIBLE);
+    if (commands.length === 0) return s;
+    for (const c of commands) {
+      const done = RAID.apply(s, c, ctx());
+      if (isDone(done)) s = done.state;
+    }
+  }
+  return s;
+}
+
+describe("a new player's table", () => {
+  test("has nothing laid out, an empty almanac and the plain looks", () => {
+    const state = RAID.create(ctx(1));
+    expect(state.run).toBeNull();
+    expect(state.runs).toBe(0);
+    expect(state.looks).toEqual({ cloth: "bare", lantern: "iron", bases: "plain", owned: [] });
+    expect(RAID.view(state, ctx())).toEqual({
+      runs: 0,
+      run: null,
+      almanac: state.almanac,
+      trail: 0,
+      looks: state.looks,
+    });
+  });
+  test("has its own stream from Leaf's dice", () => {
+    expect(RAID.create(ctx(1)).rng).not.toBe(RAID.create(ctx(2)).rng);
+    expect(RAID.create(ctx(1))).toEqual(RAID.create(ctx(1)));
+  });
+  test("waits for the player however long they are away", () => {
+    const state = started();
+    expect(RAID.advance(state, { ...ctx(), now: ctx().now + 30 * 86_400_000 })).toEqual(state);
+  });
+});
+
+describe("the view", () => {
+  test("never holds a stream, nor the run's seed", () => {
+    const state = planned(started());
+    const view = RAID.view(state, ctx());
+    expect(Object.keys(view)).not.toContain("rng");
+    expect(view.run).not.toBeNull();
+    expect(Object.keys(view.run ?? {})).not.toContain("rng");
+    expect(Object.keys(view.run ?? {})).not.toContain("seed");
+  });
+  test("shows only the first of the picks waiting; what the rest will offer is not shown", () => {
+    const state = started();
+    const run = state.run;
+    if (!run) throw new Error("no run");
+    run.choices = [
+      { kind: "component", options: ["thorn", "bark", "plume"] },
+      { kind: "component", options: ["glowcap", "chestnut", "thorn"] },
+      { kind: "boon", options: ["windfall", "regular", "quickstudy"], redraws: 1 },
+    ];
+    const shown = RAID.view(state, ctx()).run?.choices;
+    expect(shown).toEqual([
+      { kind: "component", options: ["thorn", "bark", "plume"] },
+      { kind: "component", options: [] },
+      { kind: "boon", options: [], redraws: 1 },
+    ]);
+  });
+});
+
+describe("every command a player has", () => {
+  test("setting out lays a run out on the trail picked, with the first pick waiting", () => {
+    const done = must(RAID.create(ctx(3)), { do: "start", trail: 0 });
+    expect(done.state.runs).toBe(1);
+    expect(done.state.run?.choices[0]?.kind).toBe("starter");
+    expect(done.notes).toEqual([{ t: "started", trail: 0, run: 1 }]);
+    expect(done.log).toEqual([{ kind: "raid_started", data: { trail: 0 } }]);
+    expect(done.coins).toEqual([]);
+  });
+  test("picking, buying, selling, moving, benching, holding, rustling and experience", () => {
+    let state = started(11);
+    const run = (): NonNullable<Table["run"]> => {
+      if (!state.run) throw new Error("no run");
+      return state.run;
+    };
+    expect(pieces(run()).length).toBe(1);
+    const offer = run().stall.findIndex((k) => k !== null);
+    let done = must(state, { do: "buy", offer });
+    expect(done.notes[0]).toMatchObject({ t: "bought", offer, to: { on: "bench", at: 0 } });
+    state = done.state;
+    // One may be fielded at level 1: the one bought changes places with the first.
+    expect(RAID.apply(state, { do: "move", from: { on: "bench", at: 0 }, to: { on: "board", at: 2 } }, ctx())).toEqual({
+      refused: "field_full",
+    });
+    done = must(state, { do: "move", from: { on: "bench", at: 0 }, to: { on: "board", at: 3 } });
+    expect(done.notes[0]).toMatchObject({ t: "moved", from: { on: "bench", at: 0 }, to: { on: "board", at: 3 } });
+    expect(
+      RAID.apply(done.state, { do: "move", from: { on: "bench", at: 1 }, to: { on: "board", at: 1 } }, ctx()),
+    ).toEqual({
+      refused: "nobody_there",
+    });
+    state = done.state;
+    done = must(state, { do: "bench", seat: 3 });
+    expect(done.state.run?.board[3]).toBeNull();
+    expect(done.state.run?.bench[1]).not.toBeNull();
+    state = done.state;
+    done = must(state, { do: "sell", from: { on: "bench", at: 1 } });
+    expect(done.notes[0]).toMatchObject({ t: "sold" });
+    state = done.state;
+    done = must(state, { do: "hold", on: true });
+    expect(done.state.run?.held).toBe(true);
+    state = must(done.state, { do: "hold", on: false }).state;
+    const before = state.run?.stall;
+    done = must(state, { do: "rustle" });
+    expect(done.notes[0]).toMatchObject({ t: "rustled", cost: 0 });
+    expect(done.state.run?.stall).not.toEqual(before);
+    state = done.state;
+    if (state.run) state.run.acorns = 10;
+    done = must(state, { do: "xp" });
+    expect(done.notes[0]).toEqual({ t: "xp", gained: 4, cost: 4 });
+  });
+  test("a fight is decided when the party sets out, and its note carries both boards, the seed and the outcome", () => {
+    const state = planned(started(5));
+    const done = must(state, { do: "fight" });
+    const note = done.notes[0];
+    if (note?.t !== "fight") throw new Error("no fight note");
+    expect(note.setup.sides[0].figures.length).toBeGreaterThan(0);
+    expect(note.setup.sides[1]).toEqual(state.run?.foe ?? note.setup.sides[0]);
+    expect(note.outcome).toEqual(resolveFight(note.setup));
+    expect(done.state.run?.fight).toEqual({ setup: note.setup, outcome: note.outcome });
+    // The boards are locked.
+    expect(RAID.apply(done.state, { do: "buy", offer: 0 }, ctx())).toEqual({ refused: "fighting" });
+    expect(RAID.apply(done.state, { do: "fight" }, ctx())).toEqual({ refused: "fighting" });
+  });
+  test("the takings are paid from the outcome Leaf kept, not from anything else", () => {
+    const fighting = must(planned(started(5)), { do: "fight" }).state;
+    const kept = fighting.run?.fight?.outcome.result;
+    const taken = must(fighting, { do: "take" });
+    expect(taken.notes[0]).toMatchObject({ t: "result", result: kept });
+    // Had Leaf kept another outcome, that is what would be paid.
+    const other = structuredClone(fighting);
+    const fight = other.run?.fight;
+    if (!fight) throw new Error("no fight");
+    fight.outcome.result = kept === "win" ? "loss" : "win";
+    expect(must(other, { do: "take" }).notes[0]).toMatchObject({ t: "result", result: fight.outcome.result });
+  });
+  test("a room taken is logged: which, what kind, won or not, resolve left, how long the fight took", () => {
+    const fighting = must(planned(started(5)), { do: "fight" }).state;
+    const seconds = fighting.run?.fight?.outcome.seconds ?? -1;
+    const won = fighting.run?.fight?.outcome.result === "win";
+    const taken = must(fighting, { do: "take" });
+    expect(taken.log).toEqual([
+      {
+        kind: "raid_room",
+        data: {
+          room: 1,
+          kind: "trouble",
+          won,
+          resolve: taken.state.run?.resolve ?? 0,
+          seconds: Math.round(seconds * 10) / 10,
+        },
+      },
+    ]);
+  });
+  test("handing over an item, and picking a component and a boon, with one redraw", () => {
+    let state = planned(started(5));
+    state = must(state, { do: "fight" }).state;
+    state = must(state, { do: "take" }).state;
+    // The first room is trouble: a component pick follows it.
+    expect(state.run?.choices[0]?.kind).toBe("component");
+    let done = must(state, { do: "choose", option: 0 });
+    expect(done.notes[0]).toMatchObject({ t: "component" });
+    state = done.state;
+    const seat = state.run?.board.findIndex((p) => p !== null) ?? -1;
+    done = must(state, { do: "give", item: 0, to: { on: "board", at: seat } });
+    expect(done.notes[0]).toMatchObject({ t: "gave", forged: null });
+    state = done.state;
+    // Play on to the boon after the second room.
+    for (let guard = 0; guard < 6 && state.run?.choices[0]?.kind !== "boon"; guard++) {
+      state = planned(state);
+      state = must(state, { do: "fight" }).state;
+      state = must(state, { do: "take" }).state;
+      if (state.run?.choices[0]?.kind === "component") state = must(state, { do: "choose", option: 0 }).state;
+    }
+    expect(state.run?.choices[0]?.kind).toBe("boon");
+    const offered = state.run?.choices[0]?.options;
+    done = must(state, { do: "redraw" });
+    expect(done.notes[0]).toMatchObject({ t: "redrawn" });
+    expect(done.state.run?.choices[0]?.options).not.toEqual(offered);
+    expect(RAID.apply(done.state, { do: "redraw" }, ctx())).toEqual({ refused: "redrawn" });
+    expect(must(done.state, { do: "choose", option: 0 }).notes[0]).toMatchObject({ t: "boon" });
+  });
+  test("walking home ends the run, pays for the rooms won under the run's number, and writes the almanac", () => {
+    let state = planned(started(5));
+    state = must(state, { do: "fight" }).state;
+    state = must(state, { do: "take" }).state;
+    const run = state.run;
+    if (!run) throw new Error("no run");
+    const paid = payout(summariseRun({ ...structuredClone(run), phase: "over", left: true })).coins;
+    const done = must(state, { do: "abandon" });
+    expect(done.state.run).toBeNull();
+    expect(done.state.almanac.runs).toBe(1);
+    expect(done.notes.map((n) => n.t)).toEqual(["over", "ended"]);
+    expect(done.coins).toEqual(paid > 0 ? [{ amount: paid, reason: "The Little Raid", key: "run:1" }] : []);
+    expect(done.log?.[0]).toMatchObject({ kind: "raid_ended", data: { trail: 0, ended: "left", coins: paid } });
+    expect(RAID.apply(done.state, { do: "abandon" }, ctx())).toEqual({ refused: "no_run" });
+  });
+  test("a run worth more than the player may still earn is paid what is left, and says the purse is full", () => {
+    let state = planned(started(5));
+    state = must(state, { do: "fight" }).state;
+    state = must(state, { do: "take" }).state;
+    const run = state.run;
+    if (!run) throw new Error("no run");
+    const worth = payout(summariseRun({ ...structuredClone(run), phase: "over", left: true }));
+    expect(worth.coins).toBeGreaterThan(3);
+    const done = must(state, { do: "abandon" }, { ...ctx(), room: 3 });
+    const paid = { coins: 3, lines: [...worth.lines, { why: "full", coins: 0 }] };
+    expect(done.notes.find((n) => n.t === "ended")).toMatchObject({ paid });
+    expect(readNotes(structuredClone(done.notes))?.find((n) => n.t === "ended")).toMatchObject({ paid });
+    expect(done.coins).toEqual([{ amount: 3, reason: "The Little Raid", key: "run:1" }]);
+    expect(done.log?.[0]).toMatchObject({ kind: "raid_ended", data: { coins: 3 } });
+    // With no room at all nothing is paid, and the run ends all the same.
+    const none = must(state, { do: "abandon" }, { ...ctx(), room: 0 });
+    expect(none.coins).toEqual([]);
+    expect(none.state.run).toBeNull();
+  });
+  test("setting out afresh puts down the run laid out, as walking home does", () => {
+    let state = planned(started(5));
+    state = must(state, { do: "fight" }).state;
+    state = must(state, { do: "take" }).state;
+    const done = must(state, { do: "start", trail: 0 });
+    expect(done.state.runs).toBe(2);
+    expect(done.notes.map((n) => n.t)).toEqual(["over", "ended", "started"]);
+    expect(done.log?.map((l) => l.kind)).toEqual(["raid_ended", "raid_started"]);
+    expect(done.coins?.every((c) => c.key === "run:1")).toBe(true);
+  });
+  test("the front page: a trail is picked only once open, and only owned looks go on the table", () => {
+    const state = RAID.create(ctx(1));
+    expect(RAID.apply(state, { do: "trail", trail: 1 }, ctx())).toEqual({ refused: "trail_closed" });
+    expect(RAID.apply(state, { do: "start", trail: 2 }, ctx())).toEqual({ refused: "trail_closed" });
+    expect(must(state, { do: "trail", trail: 0 }).notes).toEqual([{ t: "trail", trail: 0 }]);
+    expect(RAID.apply(state, { do: "look", kind: "cloth", id: "baize" }, ctx())).toEqual({ refused: "not_owned" });
+    expect(RAID.apply(state, { do: "look", kind: "cloth", id: "jar" }, ctx())).toEqual({ refused: "no_such_look" });
+    const owner = structuredClone(state);
+    owner.looks.owned = ["baize"];
+    const worn = must(owner, { do: "look", kind: "cloth", id: "baize" });
+    expect(worn.state.looks.cloth).toBe("baize");
+    expect(worn.notes).toEqual([{ t: "look", kind: "cloth", id: "baize" }]);
+    // Once the first trail is cleared, the second may be picked.
+    const cleared = structuredClone(state);
+    cleared.almanac.bosses[0] = ["bigcrab"];
+    expect(must(cleared, { do: "trail", trail: 1 }).state.trail).toBe(1);
+  });
+  test("a refused command says why and changes nothing", () => {
+    const state = started(9);
+    const copy = structuredClone(state);
+    expect(RAID.apply(state, { do: "buy", offer: 14 }, ctx())).toEqual({ refused: "stall_empty" });
+    expect(RAID.apply(state, { do: "take" }, ctx())).toEqual({ refused: "no_fight" });
+    expect(RAID.apply(RAID.create(ctx(1)), { do: "rustle" }, ctx())).toEqual({ refused: "no_run" });
+    expect(state).toEqual(copy);
+    expect(refusalText("stall_empty")).toBe("That place on the stall is empty.");
+    expect(refusalText("no_run")).toBe("There is no raid laid out.");
+    expect(refusalText("field_full", RAID.view(state, ctx()))).toBe("You can field 1 figure for now.");
+  });
+});
+
+describe("Leaf's dice", () => {
+  test("decide what a command draws: the same dice draw the same, other dice draw otherwise", () => {
+    const state = started(21);
+    const a = must(state, { do: "rustle" }, ctx(1000)).state.run?.stall;
+    const b = must(state, { do: "rustle" }, ctx(1000)).state.run?.stall;
+    const others = [2000, 3000, 4000, 5000].map((seed) => must(state, { do: "rustle" }, ctx(seed)).state.run?.stall);
+    expect(a).toEqual(b);
+    expect(others.some((stall) => JSON.stringify(stall) !== JSON.stringify(a))).toBe(true);
+  });
+  test("decide each fight's seed, so a fight cannot be known before the party sets out", () => {
+    const state = planned(started(21));
+    const seeds = new Set(
+      [1, 2, 3, 4].map((seed) => must(state, { do: "fight" }, ctx(seed)).state.run?.fight?.setup.seed),
+    );
+    expect(seeds.size).toBe(4);
+  });
+});
+
+describe("a whole run, played by commands", () => {
+  test("from a new table to its end, paying its Coins once, keyed by the run, and logging what happened", () => {
+    let state = RAID.create(ctx(42));
+    state = must(state, { do: "start", trail: 0 }).state;
+    const coins: CoinChange[] = [];
+    const log: Logged[] = [];
+    const take = (done: Done<Table, RaidNote>) => {
+      coins.push(...(done.coins ?? []));
+      log.push(...(done.log ?? []));
+      state = done.state;
+    };
+    let ended: RaidNote | undefined;
+    for (let guard = 0; guard < 40 && state.run; guard++) {
+      state = planned(state);
+      take(must(state, { do: "fight" }));
+      const taken = must(state, { do: "take" });
+      ended = taken.notes.find((n) => n.t === "ended");
+      take(taken);
+    }
+    expect(state.run).toBeNull();
+    if (ended?.t !== "ended") throw new Error("the run did not end");
+    const paid = payout(ended.summary).coins;
+    expect(paid).toBeGreaterThan(0);
+    expect(coins).toEqual([{ amount: paid, reason: "The Little Raid", key: "run:1" }]);
+    const rooms = log.filter((l) => l.kind === "raid_room");
+    expect(rooms.length).toBe(ended.run.record.length);
+    expect(log.at(-1)).toEqual({
+      kind: "raid_ended",
+      data: { trail: 0, rooms_won: ended.summary.cleared, ended: ended.summary.won ? "won" : "lost", coins: paid },
+    });
+    expect(state.almanac.runs).toBe(1);
+    expect(state.almanac.best[0]).toBe(ended.summary.reached);
+  });
+});
+
+describe("keeping a table", () => {
+  test("it is stored as text and read back the same, at any point of a run", () => {
+    let state = RAID.create(ctx(4));
+    expect(RAID.decode(RAID.encode(state))).toEqual(state);
+    state = planned(must(state, { do: "start", trail: 0 }).state);
+    expect(RAID.decode(RAID.encode(state))).toEqual(state);
+    state = must(state, { do: "fight" }).state;
+    expect(RAID.decode(RAID.encode(state))).toEqual(state);
+    expect(encodeTable(decodeTable(encodeTable(state)) ?? RAID.create(ctx(1)))).toBe(encodeTable(state));
+  });
+  test("nonsense is no table", () => {
+    const good = JSON.parse(RAID.encode(started())) as unknown;
+    const changed = (change: (raw: Record<string, unknown>) => void): string => {
+      const raw = structuredClone(good);
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new Error("not a table");
+      const record: Record<string, unknown> = Object.fromEntries(Object.entries(raw));
+      change(record);
+      return JSON.stringify(record);
+    };
+    for (const text of ["", "nope", "{}", "[]", "null", changed((r) => (r.v = 2)), changed((r) => (r.game = "x"))]) {
+      expect(RAID.decode(text)).toBeNull();
+    }
+    expect(RAID.decode(changed((r) => (r.rng = -1)))).toBeNull();
+    expect(RAID.decode(changed((r) => (r.trail = 2)))).toBeNull();
+    expect(RAID.decode(changed((r) => (r.runs = 0)))).toBeNull();
+    expect(
+      RAID.decode(changed((r) => (r.looks = { cloth: "plum", lantern: "iron", bases: "plain", owned: [] }))),
+    ).toBeNull();
+    expect(RAID.decode(changed((r) => (r.run = { phase: "plan" })))).toBeNull();
+    expect(RAID.decode(changed(() => undefined))).not.toBeNull();
+  });
+});
+
+describe("commands off the wire", () => {
+  test("are read with their fields checked, and anything else is no command", () => {
+    expect(readCommand({ id: "c1", do: "buy", offer: 2 })).toEqual({ do: "buy", offer: 2 });
+    expect(readCommand({ do: "move", from: { on: "bench", at: 0 }, to: { on: "board", at: 3 } })).toEqual({
+      do: "move",
+      from: { on: "bench", at: 0 },
+      to: { on: "board", at: 3 },
+    });
+    expect(readCommand({ do: "hold", on: false })).toEqual({ do: "hold", on: false });
+    expect(readCommand({ do: "fight", seed: 7 })).toEqual({ do: "fight" });
+    for (const bad of [
+      null,
+      "buy",
+      [],
+      {},
+      { do: "cheat" },
+      { do: "buy" },
+      { do: "buy", offer: -1 },
+      { do: "buy", offer: 1.5 },
+      { do: "buy", offer: "1" },
+      { do: "move", from: { on: "shelf", at: 0 }, to: { on: "board", at: 0 } },
+      { do: "move", from: { on: "bench", at: 0 } },
+      { do: "start", trail: 3 },
+      { do: "hold" },
+      { do: "look", kind: "hat", id: "bare" },
+      { do: "give", item: 0 },
+    ]) {
+      expect(readCommand(bad)).toBeNull();
+    }
+  });
+});
+
+describe("what the page may show before Leaf answers", () => {
+  test("moving, benching, selling, handing over and holding come out as Leaf does them", () => {
+    let state = planned(started(5));
+    state = must(state, { do: "fight" }).state;
+    state = must(state, { do: "take" }).state;
+    state = must(state, { do: "choose", option: 0 }).state;
+    const seat = state.run?.board.findIndex((p) => p !== null) ?? -1;
+    const commands: RaidCommand[] = [
+      { do: "give", item: 0, to: { on: "board", at: seat } },
+      { do: "move", from: { on: "board", at: seat }, to: { on: "board", at: 20 } },
+      { do: "hold", on: true },
+      { do: "bench", seat: 20 },
+      { do: "move", from: { on: "bench", at: 0 }, to: { on: "board", at: 4 } },
+    ];
+    for (const c of commands) {
+      const guessed = predict(RAID.view(state, ctx()), c);
+      const done = must(state, c);
+      expect(guessed).toEqual({ view: tableView(done.state), notes: [...done.notes] });
+      state = done.state;
+    }
+    const sold = predict(RAID.view(state, ctx()), { do: "sell", from: { on: "board", at: 4 } });
+    expect(sold).toEqual({ refused: "last_figure" });
+    expect(predict(RAID.view(state, ctx()), { do: "buy", offer: 0 })).toBeNull();
+    expect(predict(RAID.view(state, ctx()), { do: "rustle" })).toBeNull();
+  });
+});
+
+/** Plain data as it comes off the wire. */
+const wire = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
+
+describe("what Leaf sends the page", () => {
+  test("every view and every note of a whole run reads back as it was", () => {
+    let state = RAID.create(ctx(77));
+    const check = (done: Done<Table, RaidNote>) => {
+      expect(readNotes(wire(done.notes))).toEqual([...done.notes]);
+      const view = RAID.view(done.state, ctx());
+      expect(readView(wire(view))).toEqual(view);
+      state = done.state;
+    };
+    check(must(state, { do: "start", trail: 0 }));
+    for (let guard = 0; guard < 40 && state.run; guard++) {
+      for (let again = 0; again < 40; again++) {
+        const commands = planCommands(RAID.view(state, ctx()), SENSIBLE);
+        if (commands.length === 0) break;
+        for (const c of commands) {
+          const done = RAID.apply(state, c, ctx());
+          if (isDone(done)) check(done);
+        }
+      }
+      check(must(state, { do: "fight" }));
+      check(must(state, { do: "take" }));
+    }
+    expect(state.run).toBeNull();
+  });
+  test("anything else is not read", () => {
+    const view = wire(RAID.view(started(), ctx()));
+    expect(readView(view)).not.toBeNull();
+    for (const bad of [null, {}, [], { ...Object(view), trail: 9 }, { ...Object(view), run: { phase: "plan" } }]) {
+      expect(readView(bad)).toBeNull();
+    }
+    expect(readNotes([{ t: "bought", kind: "dragon", piece: 1, offer: 0, cost: 1, to: null }])).toBeNull();
+    expect(readNotes([{ t: "teleported" }])).toBeNull();
+    expect(readNotes("notes")).toBeNull();
+    expect(readNotes([])).toEqual([]);
+  });
+});
+
+// Last, so that the dice it rolls do not change how the tests above fall.
+describe("a run that has fought no room", () => {
+  test("setting out afresh, or walking home, before a room is fought changes nothing: no new opening for free", () => {
+    for (const state of [RAID.create(ctx(5)), started(5)]) {
+      // Laid out, and its starter picked or not: either way no room has been fought.
+      const laid = state.run ? state : must(state, { do: "start", trail: 0 }).state;
+      for (const command of [{ do: "start", trail: 0 }, { do: "abandon" }] as const) {
+        const done = must(laid, command);
+        expect(done.state).toBe(laid);
+        expect(encodeTable(done.state)).toBe(encodeTable(laid));
+        expect(done.notes).toEqual([]);
+        expect(done.coins ?? []).toEqual([]);
+        expect(done.log ?? []).toEqual([]);
+      }
+    }
+    // Nor in the middle of the first fight, once it is decided.
+    const fighting = must(planned(started(5)), { do: "fight" }).state;
+    expect(must(fighting, { do: "start", trail: 0 }).state).toBe(fighting);
+    expect(must(fighting, { do: "abandon" }).state).toBe(fighting);
+    expect(RAID.apply(fighting, { do: "start", trail: 2 }, ctx())).toEqual({ refused: "trail_closed" });
+  });
+});

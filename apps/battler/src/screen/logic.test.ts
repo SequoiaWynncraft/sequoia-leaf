@@ -12,7 +12,8 @@ import {
   type Run,
   startRun,
   traitNumber,
-} from "../game/index.ts";
+} from "@sequoia-leaf/raid";
+
 import {
   canBuy,
   combosWithHeld,
@@ -33,6 +34,7 @@ import {
   savings,
   steppedUp,
   stepsOf,
+  TraitWatch,
   whereIs,
 } from "./logic.ts";
 
@@ -194,6 +196,28 @@ describe("a trait switching on", () => {
     // Emberkit and Crab #7 are both Fangs: that is two.
     expect(steppedUp(before, run)).toEqual([{ trait: "fang", step: 1 }]);
     expect(steppedUp(stepsOf(run), run)).toEqual([]);
+  });
+
+  test("a second Fang moved onto the board switches Fang on, though every answer from Leaf is a fresh copy of the run", () => {
+    const run = begun();
+    run.level = 4;
+    run.board.fill(null);
+    put(run, "emberkit", "board", 0);
+    put(run, "crab7", "bench", 0);
+    const watch = new TraitWatch();
+    // The page's copy as Leaf last gave it, and as the move left it: another object, the same run.
+    const before = structuredClone(run);
+    expect(watch.look(before, 1)).toEqual([]);
+    const after = structuredClone(before);
+    expect(move(after, { on: "bench", at: 0 }, { on: "board", at: 1 }).ok).toBe(true);
+    expect(after).not.toBe(before);
+    expect(watch.look(after, 1)).toEqual([{ trait: "fang", step: 1 }]);
+    // Seen once, it is not told again on the next copy.
+    expect(watch.look(structuredClone(after), 1)).toEqual([]);
+    // Another run, by its number, starts afresh; so does a run forgotten.
+    expect(watch.look(structuredClone(before), 2)).toEqual([]);
+    watch.forget();
+    expect(watch.look(after, 2)).toEqual([]);
   });
 });
 

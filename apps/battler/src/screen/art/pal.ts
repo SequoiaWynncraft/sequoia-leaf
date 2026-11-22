@@ -4,8 +4,7 @@
  * something: a figure's price, and each trait.
  */
 import { BARK, CORAL, CREAM, EARTH, GOLD, GREEN, INK, LEAF, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
-
-import type { TraitId } from "../../game/content/traits.ts";
+import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
 
 export const PAL: Readonly<Record<string, string>> = {
   k: INK,

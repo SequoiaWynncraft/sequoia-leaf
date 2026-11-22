@@ -10,8 +10,6 @@ import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, leafShown, watch } from "@sequoia-leaf/kit/purse.ts";
 import { isMuted } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
-
-import { regularNamed } from "../../game/content/rooms.ts";
 import {
   BOONS,
   ECONOMY,
@@ -32,14 +30,16 @@ import {
   TRAITS,
   traitsNow,
   traitsOf,
-} from "../../game/index.ts";
+} from "@sequoia-leaf/raid";
+import { regularNamed } from "@sequoia-leaf/raid/content/rooms.ts";
+
 import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
 import { portrait } from "../art/sprites.ts";
 import { rimTop, stumpOf } from "../art/table.ts";
 import { fightEvents, fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
 import { light } from "../light.ts";
-import { canBuy, opening, savings, steppedUp, stepsOf } from "../logic.ts";
+import { canBuy, opening, savings, TraitWatch } from "../logic.ts";
 import { artPx, place, V } from "../stage.ts";
 import { S } from "../state.ts";
 import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } from "./cards.ts";
@@ -81,8 +81,8 @@ let stallKey = "";
 let rackKey = "";
 let traitKey = "";
 let trackKey = "";
-let steps: Map<TraitId, number> | null = null;
-let stepsFor: Run | null = null;
+/** The run's trait steps from the last drawing, by the run's number, to tell one that has just gone up. */
+const traitSteps = new TraitWatch();
 
 const byId = (id: string): HTMLElement | null => document.getElementById(id);
 
@@ -208,12 +208,11 @@ export function buildTable(a: Asks): void {
   renderPurse();
 }
 
-function renderPurse(): void {
+/** Leaf from the guild's ledger, and the Coins Leaf holds for the member (the kit's purse). A guest's purse has only the Coins. */
+export function renderPurse(): void {
   const purse = byId("purse");
   if (!purse) return;
-  const p = balance();
-  // A guest's purse has only the Coins.
-  purse.replaceChildren(...(leafShown() ? [amount("leaf", p.leaf)] : []), amount("coin", p.coins));
+  purse.replaceChildren(...(leafShown() ? [amount("leaf", balance().leaf)] : []), amount("coin", balance().coins));
 }
 
 /** A line of news at the table: a refusal, in the rules' own words. */
@@ -277,12 +276,11 @@ function renderTraits(run: Run): void {
   const states = traitsNow(run);
   const key = states.map((t) => `${t.trait}${t.count}`).join();
   // A step that has gone up since the last look is an event: the chip lights and the figures answer.
-  if (stepsFor === run && steps && S.mode === "plan") {
-    for (const up of steppedUp(steps, run)) asks?.traitOn(up.trait, up.step);
+  const ups = traitSteps.look(run, S.runs);
+  if (S.mode === "plan") {
+    for (const up of ups) asks?.traitOn(up.trait, up.step);
   }
-  const lit = stepsFor === run && steps ? steppedUp(steps, run).map((u) => u.trait) : [];
-  steps = stepsOf(run);
-  stepsFor = run;
+  const lit = ups.map((u) => u.trait);
   if (key === traitKey && lit.length === 0) return;
   traitKey = key;
   const wanted = new Set(states.map((t) => t.trait));
@@ -521,8 +519,7 @@ export function forgetTable(): void {
   traitKey = "";
   trackKey = "";
   forgetLight();
-  steps = null;
-  stepsFor = null;
+  traitSteps.forget();
   shown.acorns = null;
   shown.resolve = null;
   shown.xp = null;

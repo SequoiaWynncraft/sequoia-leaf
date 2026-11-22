@@ -11,20 +11,8 @@
 import { canvasCard, close, hold, onCard, pick as pickCard, point, show, surface } from "@sequoia-leaf/kit/card.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/tip.ts";
+import { type FigureId, isComponentId, type ItemId, pieceAt, type Run, sellValue, type Spot } from "@sequoia-leaf/raid";
 
-import {
-  buy,
-  type FigureId,
-  giveItem,
-  isComponentId,
-  type ItemId,
-  move,
-  pieceAt,
-  type Run,
-  sell,
-  sellValue,
-  type Spot,
-} from "../game/index.ts";
 import { itemPic } from "./art/icons.ts";
 import { framesOf } from "./art/sprites.ts";
 import { unitUnder } from "./fightview.ts";
@@ -33,7 +21,7 @@ import { hop, type Pawn, pawnAt, pawns, spotAt, spotXY } from "./pawns.ts";
 import { foeAt, heldUnder, marks } from "./scene.ts";
 import { snd } from "./sounds.ts";
 import { artPx, boardToPage, toBoard, V } from "./stage.ts";
-import { act, S } from "./state.ts";
+import { ask, doNow, S } from "./state.ts";
 import { acorns, dropRef, foeRef, itemRef, pieceRef, unitRef } from "./ui/cards.ts";
 
 type Held =
@@ -218,14 +206,14 @@ function drop(run: Run, e: PointerEvent): void {
     p.x = b.x;
     p.y = b.y + 6;
     if (overShop) {
-      const done = act((r) => sell(r, from));
+      const done = doNow({ do: "sell", from });
       if (!done?.ok) hop(p, spotXY(from), 0.2, 6);
       return;
     }
     if (spot && !sameSpot(spot, from)) {
-      const done = act((r) => move(r, from, spot));
+      const done = doNow({ do: "move", from, to: spot });
       if (done?.ok) return;
-      if (spot.on === "board") marks.fullAt = V.t;
+      if (done && spot.on === "board") marks.fullAt = V.t;
     }
     hop(p, spotXY(from), 0.2, 6);
     snd.place();
@@ -233,26 +221,28 @@ function drop(run: Run, e: PointerEvent): void {
   }
   if (held.what === "offer") {
     if (overShop) return;
-    buyTo(held.at, spot);
+    void buyTo(held.at, spot);
     return;
   }
   const taker = takerAt(run, b.x, b.y) ?? pawnAt(run, b.x, b.y);
   if (taker?.spot) {
     const to = taker.spot;
-    act((r) => giveItem(r, held.at, to));
+    doNow({ do: "give", item: held.at, to });
   }
 }
 
-/** Buys an offer, and if a place was meant, puts the figure there. */
-function buyTo(offer: number, spot: Spot | null): void {
-  const done = act((r) => buy(r, offer));
+/** The offer at a place on the stall, as the page shows it: what waits while Leaf answers a purchase. */
+const offerAt = (offer: number): Element | null => document.querySelector(`[data-offer="${offer}"]`);
+
+/** Buys an offer (Leaf answers), and if a place was meant, puts the figure there once it is bought. */
+async function buyTo(offer: number, spot: Spot | null): Promise<void> {
+  const done = await ask({ do: "buy", offer }, offerAt(offer));
   if (!done?.ok || !spot) return;
   const bought = done.notes.find((n) => n.t === "bought");
   const merged = done.notes.some((n) => n.t === "merged");
   if (bought?.t !== "bought" || !bought.to || merged || sameSpot(bought.to, spot)) return;
-  const from = bought.to;
-  const moved = act((r) => move(r, from, spot));
-  if (!moved?.ok && spot.on === "board") marks.fullAt = V.t;
+  const moved = doNow({ do: "move", from: bought.to, to: spot });
+  if (moved && !moved.ok && spot.on === "board") marks.fullAt = V.t;
 }
 
 /** A tap on the thing that was pressed. */
@@ -260,7 +250,7 @@ function tap(run: Run, held: Held | null, e: PointerEvent): void {
   const b = toBoard(e.clientX, e.clientY);
   if (held?.what === "offer") {
     unpick();
-    act((r) => buy(r, held.at));
+    void ask({ do: "buy", offer: held.at }, offerAt(held.at));
     return;
   }
   if (held?.what === "item") {
@@ -275,14 +265,14 @@ function tap(run: Run, held: Held | null, e: PointerEvent): void {
     if (picked?.what === "item") {
       const item = picked.at;
       unpick();
-      act((r) => giveItem(r, item, here));
+      doNow({ do: "give", item, to: here });
       return;
     }
     if (picked?.what === "pawn") {
       const from = spotOfPawn(picked.id);
       const same = picked.id === held.id;
       unpick();
-      if (!same && from) act((r) => move(r, from, here));
+      if (!same && from) doNow({ do: "move", from, to: here });
       return;
     }
     pick(run, held);
@@ -294,8 +284,8 @@ function tap(run: Run, held: Held | null, e: PointerEvent): void {
     const from = spotOfPawn(picked.id);
     unpick();
     if (from) {
-      const done = act((r) => move(r, from, spot));
-      if (!done?.ok && spot.on === "board") marks.fullAt = V.t;
+      const done = doNow({ do: "move", from, to: spot });
+      if (done && !done.ok && spot.on === "board") marks.fullAt = V.t;
     }
     return;
   }
@@ -471,7 +461,7 @@ export function openHand(view: HTMLCanvasElement): void {
   document.addEventListener("click", (e) => {
     if (e.detail !== 0 || !planning() || !(e.target instanceof Element)) return;
     const offer = e.target.closest<HTMLElement>("[data-offer]");
-    if (offer) act((r) => buy(r, Number(offer.dataset.offer)));
+    if (offer) void ask({ do: "buy", offer: Number(offer.dataset.offer) }, offer);
   });
 }
 

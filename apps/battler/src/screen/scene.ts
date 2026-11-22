@@ -7,11 +7,11 @@
 import { CREAM, GOLD, INK, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
+import { fieldCap, fielded, type ItemId, pieceAt, type Run, type Spot, type Stars } from "@sequoia-leaf/raid";
+import { type FigureId, isBossId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
+import { regularNamed, REGULARS, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
+import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
-import { type FigureId, isBossId, type UnitKind } from "../game/content/figures.ts";
-import { regularNamed, REGULARS, ROOMS } from "../game/content/rooms.ts";
-import { HOME_ROWS, seatCell } from "../game/hex.ts";
-import { fieldCap, fielded, type ItemId, pieceAt, type Run, type Spot, type Stars } from "../game/index.ts";
 import { itemPic } from "./art/icons.ts";
 import { drawBase, drawFigure, drawStars, framesOf } from "./art/sprites.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
@@ -165,7 +165,7 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
       }
       const alpha = p.alpha * (shine.dim ? DIM : 1);
       if (alpha < 1) g.globalAlpha = alpha;
-      drawBase(g, p.kind, x, y, S.prefs.bases);
+      drawBase(g, p.kind, x, y, S.looks.bases);
       drawFigure(g, p.kind, x, y - 2 - hover, {
         beat: beatOf(p.phase),
         left: p.facing,
@@ -430,7 +430,7 @@ export function drawOver(g: Ctx): boolean {
       const y = V.by + marks.at.y + 6;
       g.fillStyle = "rgba(26,15,30,0.25)";
       g.fillRect(Math.round(x) - 6, Math.round(y) + 3, 12, 2);
-      drawBase(g, p.kind, x, y - 4, S.prefs.bases);
+      drawBase(g, p.kind, x, y - 4, S.looks.bases);
       drawFigure(g, p.kind, x, y - 6, { beat: 1 });
       drawStars(g, p.stars, x, y - 7 - framesOf(p.kind).tall);
     } else {

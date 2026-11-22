@@ -120,6 +120,7 @@ export const TESTER = {
   xp: 5230,
   level: { number: 7, xp_into_level: 230, xp_for_next_level: 1400 },
   event_cursor: 140,
+  coins: 300,
 };
 
 /** A guest, as `/v1/game/me` answers for somebody signed in who is not in the guild. */
@@ -131,6 +132,7 @@ export const GUEST = {
   xp: 0,
   level: { number: 1, xp_into_level: 0, xp_for_next_level: 1000 },
   event_cursor: 0,
+  coins: 300,
 };
 
 /**

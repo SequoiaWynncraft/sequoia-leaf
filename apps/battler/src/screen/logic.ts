@@ -5,7 +5,6 @@
  * the drawing, so that they can be checked by tests.
  */
 import type { Postcard } from "@sequoia-leaf/kit/postcard.ts";
-
 import {
   type Almanac,
   boonNumber,
@@ -46,8 +45,8 @@ import {
   traitsNow,
   traitsOf,
   type UnitKind,
-} from "../game/index.ts";
-import { charmsOf } from "../game/party.ts";
+} from "@sequoia-leaf/raid";
+import { charmsOf } from "@sequoia-leaf/raid/party.ts";
 
 /** Where a figure picked up from `from` may be put down: free seats, free hollows, and places it would swap into. */
 export interface Reach {
@@ -176,6 +175,28 @@ export function stepsOf(run: Run): Map<TraitId, number> {
   const steps = new Map<TraitId, number>();
   for (const state of traitsNow(run)) steps.set(state.trait, state.step);
   return steps;
+}
+
+/**
+ * Keeps one run's trait steps from one look to the next, to tell which have gone up. A run is told
+ * from another by its number at the table (`S.runs`), which lasts across the copies of it the page
+ * is given with every answer from Leaf, and not by which object it is.
+ */
+export class TraitWatch {
+  private steps: Map<TraitId, number> | null = null;
+  private of: number | null = null;
+  /** The traits whose step has gone up since the last look at the same run; none at the first look at a run. */
+  look(run: Run, which: number): { trait: TraitId; step: number }[] {
+    const up = this.steps !== null && this.of === which ? steppedUp(this.steps, run) : [];
+    this.steps = stepsOf(run);
+    this.of = which;
+    return up;
+  }
+  /** Forgets the run, so that the next look tells nothing. */
+  forget(): void {
+    this.steps = null;
+    this.of = null;
+  }
 }
 
 // ---------- teaching by doing ----------

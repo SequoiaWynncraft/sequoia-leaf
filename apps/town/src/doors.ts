@@ -9,7 +9,8 @@
  */
 
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
-import { passLeaf } from "@sequoia-leaf/kit/live.ts";
+import { passCoins, passLeaf } from "@sequoia-leaf/kit/live.ts";
+import { refreshCoins } from "@sequoia-leaf/kit/purse.ts";
 import { fromGame, toGame } from "@sequoia-leaf/kit/shell.ts";
 import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { must, type Pt } from "@sequoia-leaf/kit/util.ts";
@@ -105,6 +106,9 @@ export function goIn(game: Game, asks: Asks): Visit {
   function putAway(): void {
     stop();
     leaf.stop();
+    coins.stop();
+    // The game may have earned or spent Coins of Leaf's: the town shows what Leaf holds now.
+    refreshCoins();
     root.replaceChildren();
     root.hidden = true;
     root.classList.remove("dark");
@@ -134,14 +138,19 @@ export function goIn(game: Game, asks: Asks): Visit {
     }, SAVING);
   }
 
-  // The game took the member's Leaf as it opened; the town, which hears their news, says what changes.
+  // The game took the member's Leaf and Coins as it opened; the town, which hears their news and
+  // whose own Coins change as it plays, says what changes.
   const leaf = passLeaf((n) => {
     toGame(frame, { town: "leaf", leaf: n });
+  });
+  const coins = passCoins((n) => {
+    toGame(frame, { town: "coins", coins: n });
   });
   const stop = fromGame(frame, (msg) => {
     if (msg.town === "ready") {
       ready = true;
       leaf.ready();
+      coins.ready();
       open();
     } else if (msg.town === "leave") leave();
     else asks.news(msg.text, msg.tone ?? "gold");

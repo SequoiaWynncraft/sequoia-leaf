@@ -30,7 +30,8 @@
         "xp_into_level": 63,
         "xp_for_next_level": 1250
       },
-      "event_cursor": 14
+      "event_cursor": 14,
+      "coins": 300
     }
   },
   "GET /v1/game/me, signed out": {
@@ -64,7 +65,8 @@
         "xp_into_level": 0,
         "xp_for_next_level": 1000
       },
-      "event_cursor": 0
+      "event_cursor": 0,
+      "coins": 300
     }
   },
   "GET /v1/game/saves/{slot}, never saved": {
@@ -160,6 +162,48 @@
     "body": {
       "code": "slow_down",
       "message": "That slot was saved a moment ago. Send it again in a few seconds"
+    }
+  },
+  "PUT /v1/game/saves/{slot}, a game that moved": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/saves/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "version": 0,
+        "data": {
+          "saved_at": 1795610400000,
+          "keys": {
+            "raid.run.v1": "{}"
+          }
+        }
+      }
+    },
+    "status": 410,
+    "body": {
+      "code": "moved",
+      "message": "This game is kept on Leaf now, and its old save takes no more writes"
+    }
+  },
+  "PUT /v1/game/saves/{slot}, the purse": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/saves/purse",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "version": 0,
+        "data": {
+          "saved_at": 1795610400000,
+          "keys": {
+            "town.purse.v1": "{\"coins\":5000}"
+          }
+        }
+      }
+    },
+    "status": 410,
+    "body": {
+      "code": "moved",
+      "message": "Coins are kept in Leaf's ledger now, and the old purse takes no more writes"
     }
   },
   "GET /v1/game/saves/{slot}": {
@@ -602,6 +646,644 @@
       ]
     }
   },
+  "GET /v1/game/play/{game}": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/play/raid"
+    },
+    "status": 200,
+    "body": {
+      "rev": 0,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "runs": 0,
+        "run": null,
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0
+        },
+        "trail": 0,
+        "looks": {
+          "cloth": "bare",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": []
+        }
+      }
+    }
+  },
+  "POST /v1/game/play/{game}": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "c-1",
+            "do": "start",
+            "trail": 0
+          },
+          {
+            "id": "c-2",
+            "do": "choose",
+            "option": 0
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 1,
+      "now": "2026-11-25T12:55:00.000Z",
+      "results": [
+        {
+          "id": "c-1",
+          "notes": [
+            {
+              "t": "started",
+              "trail": 0,
+              "run": 1
+            }
+          ]
+        },
+        {
+          "id": "c-2",
+          "notes": [
+            {
+              "t": "starter",
+              "kind": "barrowgnome",
+              "piece": 1,
+              "to": {
+                "on": "board",
+                "at": 3
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "runs": 1,
+        "run": {
+          "trail": 0,
+          "room": 0,
+          "phase": "plan",
+          "resolve": 20,
+          "acorns": 2,
+          "level": 1,
+          "xp": 0,
+          "board": [
+            null,
+            null,
+            null,
+            {
+              "id": 1,
+              "kind": "barrowgnome",
+              "stars": 1,
+              "items": [],
+              "fed": 0
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
+          "items": [],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+          "held": false,
+          "rustles": 1,
+          "bought": 0,
+          "boons": [],
+          "choices": [],
+          "foe": {
+            "who": "The forest",
+            "title": "A few gnats",
+            "figures": [
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 2,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 4,
+                "items": [],
+                "fed": 0
+              }
+            ],
+            "charms": [],
+            "boons": [],
+            "might": 100
+          },
+          "record": [],
+          "nextId": 2,
+          "won": false,
+          "left": false,
+          "last": null,
+          "fight": null,
+          "seen": {
+            "fielded": [],
+            "threeStars": [],
+            "forged": [],
+            "topped": []
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0
+        },
+        "trail": 0,
+        "looks": {
+          "cloth": "bare",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": []
+        }
+      }
+    }
+  },
+  "POST /v1/game/play/{game}, a refusal": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "c-3",
+            "do": "take"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 1,
+      "now": "2026-11-25T12:55:00.000Z",
+      "results": [
+        {
+          "id": "c-3",
+          "refused": "no_fight"
+        }
+      ],
+      "state": {
+        "runs": 1,
+        "run": {
+          "trail": 0,
+          "room": 0,
+          "phase": "plan",
+          "resolve": 20,
+          "acorns": 2,
+          "level": 1,
+          "xp": 0,
+          "board": [
+            null,
+            null,
+            null,
+            {
+              "id": 1,
+              "kind": "barrowgnome",
+              "stars": 1,
+              "items": [],
+              "fed": 0
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
+          "items": [],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+          "held": false,
+          "rustles": 1,
+          "bought": 0,
+          "boons": [],
+          "choices": [],
+          "foe": {
+            "who": "The forest",
+            "title": "A few gnats",
+            "figures": [
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 2,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 4,
+                "items": [],
+                "fed": 0
+              }
+            ],
+            "charms": [],
+            "boons": [],
+            "might": 100
+          },
+          "record": [],
+          "nextId": 2,
+          "won": false,
+          "left": false,
+          "last": null,
+          "fight": null,
+          "seen": {
+            "fielded": [],
+            "threeStars": [],
+            "forged": [],
+            "topped": []
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0
+        },
+        "trail": 0,
+        "looks": {
+          "cloth": "bare",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": []
+        }
+      }
+    }
+  },
+  "POST /v1/game/play/{game}, sent again": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "c-1",
+            "do": "start",
+            "trail": 0
+          },
+          {
+            "id": "c-2",
+            "do": "choose",
+            "option": 0
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 1,
+      "now": "2026-11-25T12:55:00.000Z",
+      "results": [
+        {
+          "id": "c-1",
+          "notes": [
+            {
+              "t": "started",
+              "trail": 0,
+              "run": 1
+            }
+          ]
+        },
+        {
+          "id": "c-2",
+          "notes": [
+            {
+              "t": "starter",
+              "kind": "barrowgnome",
+              "piece": 1,
+              "to": {
+                "on": "board",
+                "at": 3
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "runs": 1,
+        "run": {
+          "trail": 0,
+          "room": 0,
+          "phase": "plan",
+          "resolve": 20,
+          "acorns": 2,
+          "level": 1,
+          "xp": 0,
+          "board": [
+            null,
+            null,
+            null,
+            {
+              "id": 1,
+              "kind": "barrowgnome",
+              "stars": 1,
+              "items": [],
+              "fed": 0
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
+          "items": [],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+          "held": false,
+          "rustles": 1,
+          "bought": 0,
+          "boons": [],
+          "choices": [],
+          "foe": {
+            "who": "The forest",
+            "title": "A few gnats",
+            "figures": [
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 2,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 4,
+                "items": [],
+                "fed": 0
+              }
+            ],
+            "charms": [],
+            "boons": [],
+            "might": 100
+          },
+          "record": [],
+          "nextId": 2,
+          "won": false,
+          "left": false,
+          "last": null,
+          "fight": null,
+          "seen": {
+            "fielded": [],
+            "threeStars": [],
+            "forged": [],
+            "topped": []
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0
+        },
+        "trail": 0,
+        "looks": {
+          "cloth": "bare",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": []
+        }
+      }
+    }
+  },
+  "POST /v1/game/play/{game}, not a command": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "c-4",
+            "do": "win"
+          }
+        ]
+      }
+    },
+    "status": 400,
+    "body": {
+      "code": "invalid_command",
+      "message": "Command c-4 is not one of the game's"
+    }
+  },
+  "GET /v1/game/play/{game}, not a game": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/play/chess"
+    },
+    "status": 404,
+    "body": {
+      "code": "no_such_game",
+      "message": "Leaf does not play that game"
+    }
+  },
+  "POST /v1/game/coins": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "id": "chest-2026-11-25",
+        "amount": 3,
+        "reason": "daily_chest"
+      }
+    },
+    "status": 200,
+    "body": {
+      "coins": 303
+    }
+  },
+  "POST /v1/game/coins, a spend": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "id": "t-1",
+        "amount": -120,
+        "reason": "camp_thing"
+      }
+    },
+    "status": 200,
+    "body": {
+      "coins": 183
+    }
+  },
+  "POST /v1/game/coins, sent again": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "id": "chest-2026-11-25",
+        "amount": 3,
+        "reason": "daily_chest"
+      }
+    },
+    "status": 200,
+    "body": {
+      "coins": 183
+    }
+  },
+  "POST /v1/game/coins, not enough": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "id": "w-1",
+        "amount": -5000,
+        "reason": "works_plot"
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "not_enough_coins",
+      "message": "There are not that many Coins"
+    }
+  },
+  "POST /v1/game/coins, not a reason": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "id": "w-2",
+        "amount": 5,
+        "reason": "luck"
+      }
+    },
+    "status": 400,
+    "body": {
+      "code": "invalid_reason",
+      "message": "The reason must be one of: camp_thing, daily_chest, works_order, works_depot, works_build, works_refund, works_plot, works_plan"
+    }
+  },
+  "POST /v1/game/coins, not you": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "id": "chest-2026-11-25",
+        "amount": 3,
+        "reason": "daily_chest"
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "not_you",
+      "message": "This page is signed in as someone else now. Load it again"
+    }
+  },
+  "POST /v1/game/play/{game}, not you": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "commands": [
+          {
+            "id": "c-1",
+            "do": "start",
+            "trail": 0
+          },
+          {
+            "id": "c-2",
+            "do": "choose",
+            "option": 0
+          }
+        ]
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "not_you",
+      "message": "This page is signed in as someone else now. Load it again"
+    }
+  },
   "GET /v1/game/admin/activity, a member": {
     "request": {
       "method": "GET",
@@ -652,13 +1334,21 @@
           },
           "done": [
             {
+              "at": "2026-11-25T12:55:00.000Z",
+              "game": "raid",
+              "kind": "raid_started",
+              "data": {
+                "trail": 0
+              }
+            },
+            {
               "at": "2026-11-25T12:42:00.000Z",
               "game": "raid",
               "kind": "raid_ended",
               "data": {
-                "trail": "moss",
+                "trail": 0,
                 "rooms_won": 1,
-                "how": "lost",
+                "ended": "lost",
                 "coins": 20
               }
             },
@@ -668,7 +1358,7 @@
               "kind": "raid_room",
               "data": {
                 "room": 2,
-                "kind": "fight",
+                "kind": "trouble",
                 "won": false,
                 "resolve": 0,
                 "seconds": 63
@@ -680,9 +1370,9 @@
               "kind": "raid_room",
               "data": {
                 "room": 1,
-                "kind": "fight",
+                "kind": "trouble",
                 "won": true,
-                "resolve": 9,
+                "resolve": 3,
                 "seconds": 41
               }
             },
@@ -691,7 +1381,7 @@
               "game": "raid",
               "kind": "raid_started",
               "data": {
-                "trail": "moss"
+                "trail": 0
               }
             }
           ]
@@ -746,8 +1436,12 @@
         }
       ],
       "raid": {
-        "began": 1,
+        "began": 2,
         "runs": [
+          {
+            "rooms_won": 0,
+            "runs": 1
+          },
           {
             "rooms_won": 1,
             "runs": 1

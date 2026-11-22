@@ -3,11 +3,11 @@
   ["wait", 900],
   [
     "eval",
-    "(window.raid.fresh(), window.raid.hold(true), window.raid.start(11, 0), window.raid.taught(), window.raid.bot(5), window.raid.skip(2), window.raid.plan(), window.raid.skip(2), 'planning')"
+    "(async () => { await window.raid.fresh(); await window.raid.hold(true); await window.raid.start(11, 0); await window.raid.taught(); await window.raid.bot(5); await window.raid.skip(2); await window.raid.plan(); await window.raid.skip(2); return await 'planning'; })()"
   ],
   [
     "eval",
-    "(()=>{const id = window.raid.give('kettle', 2); window.raid.item('thorn'); window.raid.item('plume'); window.raid.item('chestnut'); window.raid.item('glowcap'); window.raid.skip(1.2); return 'kettle ' + id})()"
+    "(async () => {const id = await window.raid.give('kettle', 2); await window.raid.item('thorn'); await window.raid.item('plume'); await window.raid.item('chestnut'); await window.raid.item('glowcap'); window.raid.skip(1.2); return 'kettle ' + id})()"
   ],
   ["wait", 400],
   [
@@ -28,7 +28,10 @@
   ],
   ["wait", 500],
   ["shot", "p-03-holding-items"],
-  ["eval", "(window.raid.drop(), window.raid.offer(1, 'cindernewt'), window.raid.skip(0.3), 'stall')"],
+  [
+    "eval",
+    "(async () => { await window.raid.drop(); await window.raid.offer(1, 'cindernewt'); await window.raid.skip(0.3); return await 'stall'; })()"
+  ],
   [
     "finger",
     "down",
@@ -112,7 +115,7 @@
   ["shot", "p-08-item-card"],
   [
     "eval",
-    "(window.raid.drop(), window.raid.to('boon'), window.raid.skip(1.5), JSON.stringify(window.raid.state().choice))"
+    "(async () => { await window.raid.drop(); await window.raid.to('boon'); await window.raid.skip(1.5); return await JSON.stringify(window.raid.state().choice); })()"
   ],
   ["wait", 700],
   ["shot", "p-09-boon-pick"]

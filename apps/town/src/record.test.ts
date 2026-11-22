@@ -13,11 +13,11 @@ describe("sending things to the camp", () => {
   });
 
   test("the 201st purchase is refused and costs nothing, and the 200 waiting are all kept", () => {
-    earn(1000, "a test");
+    earn(1000, "works_order");
     let asked = 0;
     const pay = (): boolean => {
       asked++;
-      return spend("coins", 3, "a gnome");
+      return spend("coins", 3, "camp_thing");
     };
     for (let i = 0; i < MOST_PARCELS; i++) expect(buyForCamp("gnome", pay)).toBe("sent");
     expect(roomByTrail()).toBe(false);
@@ -39,7 +39,7 @@ describe("sending things to the camp", () => {
   });
 
   test("the purchase that would make a thousand of one thing is refused and costs nothing", () => {
-    earn(100, "a test");
+    earn(100, "works_order");
     // Counted wherever they are: standing by the fire, waiting by the trail, and in the tray.
     const standing = camp.placed.filter((p) => p.id === "log-seat").length;
     expect(standing).toBeGreaterThan(0);
@@ -48,7 +48,7 @@ describe("sending things to the camp", () => {
     let asked = 0;
     const pay = (): boolean => {
       asked++;
-      return spend("coins", 3, "a log seat");
+      return spend("coins", 3, "camp_thing");
     };
     expect(buyForCamp("log-seat", pay)).toBe("sent");
     expect(owned(camp, "log-seat")).toBe(MOST_OWNED);

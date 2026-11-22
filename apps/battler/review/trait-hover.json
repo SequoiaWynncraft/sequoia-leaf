@@ -1,8 +1,12 @@
 [
   ["size", 1280, 800],
   ["wait", 900],
-  ["eval", "(window.raid.fresh(), window.raid.start(11, 0), window.raid.skip(1.2), 'a new member, first pick')"],
+  [
+    "eval",
+    "(async () => { await window.raid.fresh(); await window.raid.start(11, 0); await window.raid.skip(1.2); return await 'a new member, first pick'; })()"
+  ],
   ["click", "[data-pick='0']"],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
   [
     "eval",
     "(window.raid.skip(1.6), 'first room; nudge up: ' + (document.getElementById('nudge').hidden ? 'none' : document.getElementById('nudge').dataset.id))"
@@ -38,13 +42,13 @@
   ],
   [
     "eval",
-    "(()=>{const b=document.getElementById('bottom').getBoundingClientRect().top; window.raid.offer(0,'apothecary'); window.raid.offer(1,'hearthcat'); window.raid.acorns(40); return '   the stall changes: bottom ' + b + ' -> ' + document.getElementById('bottom').getBoundingClientRect().top})()"
+    "(async () => {const b=document.getElementById('bottom').getBoundingClientRect().top; await window.raid.offer(0,'apothecary'); await window.raid.offer(1,'hearthcat'); await window.raid.acorns(40); return '   the stall changes: bottom ' + b + ' -> ' + document.getElementById('bottom').getBoundingClientRect().top})()"
   ],
   ["wait", 500],
   ["eval", "'4 the stall busy while pointing: ' + (document.querySelector('.k-info') ? 'card up' : 'NO CARD')"],
   [
     "eval",
-    "(()=>{const chip=document.querySelector('#traits .trait'); window.__chip=chip; const before=[...document.querySelectorAll('#traits .trait')].map(c=>c.textContent).join(' '); window.raid.plan(); return '   the bot fields more under the pointer: ' + before + ' -> ' + [...document.querySelectorAll('#traits .trait')].map(c=>c.textContent).join(' ')})()"
+    "(async () => {const chip=document.querySelector('#traits .trait'); window.__chip=chip; const before=[...document.querySelectorAll('#traits .trait')].map(c=>c.textContent).join(' '); await window.raid.plan(); return '   the bot fields more under the pointer: ' + before + ' -> ' + [...document.querySelectorAll('#traits .trait')].map(c=>c.textContent).join(' ')})()"
   ],
   ["wait", 500],
   [
@@ -53,7 +57,7 @@
   ],
   [
     "eval",
-    "(()=>{const p=window.raid.party().find(p=>p.on==='bench'); window.raid.grab(p.id, 95, 96); return '   picked up ' + p.kind})()"
+    "(()=>{const p=(window.raid.party().find(p=>p.on==='bench') ?? window.raid.party().find(p=>p.on==='board')); window.raid.grab(p.id, 95, 96); return '   picked up ' + p.kind})()"
   ],
   ["move", 640, 300],
   ["eval", "(window.raid.drop(), '   and put down')"],

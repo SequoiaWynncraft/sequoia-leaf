@@ -3,18 +3,22 @@
   ["wait", 900],
   [
     "eval",
-    "(window.raid.fresh(), window.raid.hold(true), window.raid.start(11, 0), window.raid.taught(), window.raid.skip(1), 'a run')"
+    "(async () => { await window.raid.fresh(); await window.raid.hold(true); await window.raid.start(11, 0); await window.raid.taught(); await window.raid.skip(1); return await 'a run'; })()"
   ],
   ["click", "[data-pick='0']"],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
   [
     "eval",
-    "(window.raid.skip(1.5), window.raid.bot(7), window.raid.plan(), window.raid.skip(2), JSON.stringify(window.raid.state().view))"
+    "(async () => { await window.raid.skip(1.5); await window.raid.bot(7); await window.raid.plan(); await window.raid.skip(2); return await JSON.stringify(window.raid.state().view); })()"
   ],
   ["wait", 900],
   ["eval", "(window.raid.skip(0.3), JSON.stringify(window.raid.state().view))"],
   ["wait", 500],
   ["shot", "l-01-planning"],
-  ["eval", "(window.raid.fight(), window.raid.tick(40), window.raid.busy(400))"],
+  [
+    "eval",
+    "(async () => { await window.raid.fight(); await window.raid.tick(40); return await window.raid.busy(400); })()"
+  ],
   ["wait", 500],
   ["shot", "l-02-fight"]
 ]

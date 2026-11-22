@@ -1,13 +1,19 @@
 import {
+  checkPageCoins,
   checkSave,
+  COIN_REASON_NAMES,
   currentQuests,
   DAY_MS,
   DEFAULT_RULES,
+  EARNINGS,
+  gameId,
+  isMoved,
   levelForXp,
   MAX_SAVE_BYTES,
   nextDailyChargeAt,
   nextTimedWindowAt,
   openQuestBook,
+  PAGE_COINS,
   parsePlayerId,
   type Quest,
   QUEST_SLOTS,
@@ -27,10 +33,12 @@ import { ActivityReport } from "../activity/report.ts";
 import { Visits } from "../activity/visits.ts";
 import {
   BodyLimit,
+  CoinsBodyErrors,
   CurrentIdentity,
   type Identity,
   isGuest,
   LeafApi,
+  PlayBodyErrors,
   Player,
   PresenceBodyErrors,
   RerollBodyErrors,
@@ -47,12 +55,16 @@ import {
   Invalid,
   MembersOnly,
   Missing,
+  Moved,
   NotAMember,
+  NotEnoughCoins,
   NotYou,
   Refused,
   SaveTooLarge,
   SlowDown,
   StaffOnly,
+  StateUnreadable,
+  TooMuch,
   Unauthorized,
   VersionConflict,
 } from "../api/errors.ts";
@@ -67,6 +79,10 @@ import { type Here, Presence } from "../game/presence.ts";
 import { Saves } from "../game/saves.ts";
 import { Skins } from "../game/skins.ts";
 import { Ledger } from "../ledger/store.ts";
+import { Coins } from "../play/coins.ts";
+import { GAMES, type Played } from "../play/games.ts";
+import { PageCoins } from "../play/page.ts";
+import { Play } from "../play/service.ts";
 import { questJson } from "../quests/json.ts";
 import { rerollQuestFor } from "../quests/reroll.ts";
 import { Quests } from "../quests/store.ts";
@@ -332,6 +348,30 @@ export const PresenceBodyErrorsLive = Layer.succeed(PresenceBodyErrors)((httpEff
   ),
 );
 
+/** A batch whose body is not `{ "commands": [...] }` gets `invalid_command`. */
+export const PlayBodyErrorsLive = Layer.succeed(PlayBodyErrors)((httpEffect) =>
+  Effect.catchIf(httpEffect, isPayloadError, () =>
+    Effect.fail(
+      new Invalid({
+        code: "invalid_command",
+        message: 'Send commands as { "player": "<your id>", "commands": [{ "id": "<yours>", ... }] }',
+      }),
+    ),
+  ),
+);
+
+export const CoinsBodyErrorsLive = Layer.succeed(CoinsBodyErrors)((httpEffect) =>
+  Effect.catchIf(httpEffect, isPayloadError, () =>
+    Effect.fail(
+      new Invalid({
+        code: "invalid_command",
+        message:
+          'Send Coins as { "player": "<your id>", "id": "<yours>", "amount": <whole number>, "reason": "<one of the reasons>" }',
+      }),
+    ),
+  ),
+);
+
 /** Logs a defect, anything thrown rather than failed with a declared error, and answers `internal_error`. */
 export const UnexpectedLive = Layer.succeed(Unexpected)((httpEffect) =>
   Effect.catchDefect(httpEffect, (defect) =>
@@ -572,6 +612,27 @@ const presentJson = (here: Here) =>
 
 const invalidSlot = new Invalid({ code: "invalid_slot", message: "That is not a save slot" });
 
+/**
+ * A write from a page that believes it is another player than the session's, such as one left open
+ * after someone else signed in: nothing is done.
+ */
+const notYou = new NotYou({ code: "not_you", message: "This page is signed in as someone else now. Load it again" });
+
+/** A player's stored state that does not read: nothing is done, and it is kept. */
+const unreadable = new StateUnreadable({
+  code: "state_unreadable",
+  message: "Your game could not be read. It has been kept; tell the guild",
+});
+
+/** The game a route names, if Leaf plays it. */
+const playedGame = (name: string): Effect.Effect<Played, Missing> => {
+  const id = gameId(name);
+  const played = id === undefined ? undefined : GAMES[id];
+  return played === undefined
+    ? Effect.fail(new Missing({ code: "no_such_game", message: "Leaf does not play that game" }))
+    : Effect.succeed(played);
+};
+
 /** Refuses a guest what only the guild's members may see: the guild's news, with members' names. */
 const membersOnly = Effect.flatMap(CurrentIdentity, (identity) =>
   isGuest(identity)
@@ -590,6 +651,16 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
     const visits = yield* Visits;
     const guild = yield* GuildFeed;
     const streams = yield* OpenStreams;
+    const play = yield* Play;
+    const coins = yield* Coins;
+    const pageCoins = yield* PageCoins;
+
+    /** The player's Coins, their account opened with the welcome if they have none yet. */
+    const coinsOf = (identity: Identity) =>
+      Effect.gen(function* () {
+        yield* coins.open(identity.playerId, yield* Clock.currentTimeMillis);
+        return yield* coins.balance(identity.playerId);
+      });
 
     return (
       handlers
@@ -607,6 +678,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
                 xp: 0,
                 level: levelJson(0),
                 event_cursor: 0,
+                coins: yield* coinsOf(identity),
               } satisfies typeof Body.GameMe.Type);
             }
             // The backend vouches for the name, so the guild's news can show it.
@@ -625,6 +697,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               xp: account.xp,
               level: levelJson(account.xp),
               event_cursor: cursor,
+              coins: yield* coinsOf(identity),
             } satisfies typeof Body.GameMe.Type);
           }),
         )
@@ -673,13 +746,21 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               }
               return yield* new SaveTooLarge({ code: "save_too_large", message: "A save holds at most 256 KiB" });
             }
+            // The game in this slot is played on Leaf now, or its Coins are Leaf's ledger's: the slot is
+            // kept as it is, to be brought over by hand.
+            if (isMoved(checked.slot)) {
+              return yield* new Moved({
+                code: "moved",
+                message:
+                  checked.slot === "purse"
+                    ? "Coins are kept in Leaf's ledger now, and the old purse takes no more writes"
+                    : "This game is kept on Leaf now, and its old save takes no more writes",
+              });
+            }
             const identity = yield* CurrentIdentity;
             const { playerId } = identity;
             if (payload.player !== playerId) {
-              return yield* new NotYou({
-                code: "not_you",
-                message: "This page is signed in as someone else now. Load it again",
-              });
+              return yield* notYou;
             }
             const now = yield* Clock.currentTimeMillis;
             const written = yield* saves.put(
@@ -780,9 +861,96 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             Effect.map((here) => HttpServerResponse.jsonUnsafe(presentJson(here))),
           ),
         )
+        .handle("play", ({ params }) =>
+          Effect.gen(function* () {
+            const played = yield* playedGame(params.game);
+            const identity = yield* CurrentIdentity;
+            const shown = yield* play.open({ playerId: identity.playerId, guest: isGuest(identity) }, played);
+            if (shown.status === "unreadable") {
+              return yield* unreadable;
+            }
+            return HttpServerResponse.jsonUnsafe({
+              rev: shown.rev,
+              now: iso(shown.now),
+              state: shown.view,
+            } satisfies typeof Body.PlayShown.Type);
+          }),
+        )
+        // Commands, done in order in one transaction. A command whose id was seen before answers as
+        // it did then, so a page that sends a batch again after losing the answer changes nothing.
+        .handle("command", ({ params, payload }) =>
+          Effect.gen(function* () {
+            const played = yield* playedGame(params.game);
+            const identity = yield* CurrentIdentity;
+            if (payload.player !== identity.playerId) {
+              return yield* notYou;
+            }
+            const batch = yield* play.send(
+              { playerId: identity.playerId, guest: isGuest(identity) },
+              played,
+              payload.commands,
+            );
+            if (batch.status === "invalid") {
+              return yield* new Invalid({ code: "invalid_command", message: batch.why });
+            }
+            if (batch.status === "unreadable") {
+              return yield* unreadable;
+            }
+            if (batch.status === "slow") {
+              return yield* new SlowDown({
+                code: "slow_down",
+                message: "Commands are coming faster than Leaf takes them. Send them again in a moment",
+              });
+            }
+            return HttpServerResponse.jsonUnsafe({
+              rev: batch.rev,
+              now: iso(batch.now),
+              results: batch.results,
+              state: batch.view,
+            } satisfies typeof Body.Played.Type);
+          }),
+        )
+        // Coins a page of the town or the Works earned or spent, as it worked them out: done once
+        // for each id, never below nothing, and with earnings capped by the hour.
+        .handle("coins", ({ payload }) =>
+          Effect.gen(function* () {
+            const call = checkPageCoins(payload);
+            if (!call.ok) {
+              return yield* new Invalid({ code: call.code, message: PAGE_COINS_REFUSED[call.code] });
+            }
+            const identity = yield* CurrentIdentity;
+            if (payload.player !== identity.playerId) {
+              return yield* notYou;
+            }
+            const done = yield* pageCoins.change(identity.playerId, call, yield* Clock.currentTimeMillis);
+            if (done.status === "not_enough_coins") {
+              return yield* new NotEnoughCoins({ code: "not_enough_coins", message: "There are not that many Coins" });
+            }
+            if (done.status === "slow") {
+              return yield* new SlowDown({
+                code: "slow_down",
+                message: "Coins are coming faster than Leaf takes them. Send them again in a moment",
+              });
+            }
+            if (done.status === "too_much") {
+              return yield* new TooMuch({
+                code: "too_much",
+                message: `Coins earned by play come to at most ${EARNINGS.hourly} in an hour and ${EARNINGS.daily} in a UTC day`,
+              });
+            }
+            return HttpServerResponse.jsonUnsafe({ coins: done.coins } satisfies typeof Body.CoinsAnswer.Type);
+          }),
+        )
     );
   }),
 );
+
+/** What a page's call to change Coins is told when it is not one. */
+const PAGE_COINS_REFUSED = {
+  invalid_command: "The id must be up to 64 letters, digits and _ . : -",
+  invalid_amount: `The amount must be a whole number, not 0, from ${PAGE_COINS.least} to ${PAGE_COINS.most}, earned for an earning and spent for a spending`,
+  invalid_reason: `The reason must be one of: ${COIN_REASON_NAMES.join(", ")}`,
+} as const;
 
 /** How many UTC days the staff's report covers when not told, and at most. */
 const REPORT_DAYS = 7;
@@ -869,6 +1037,8 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     RerollBodyErrorsLive,
     SaveBodyErrorsLive,
     PresenceBodyErrorsLive,
+    PlayBodyErrorsLive,
+    CoinsBodyErrorsLive,
     UnexpectedLive,
   ]),
 );

@@ -7,7 +7,7 @@
 
 import { add, el, icon as glyph, type IconName, replay, shown } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
-import { balance, type Currency, leafShown, spend } from "@sequoia-leaf/kit/purse.ts";
+import { balance, type CoinReason, type Currency, leafShown, spend } from "@sequoia-leaf/kit/purse.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
@@ -154,9 +154,13 @@ export function fly(
   }
 }
 
-/** Takes a price if the purse holds it, with Leaf or Coins flying from the purse to the button. */
-export function pay(kind: Currency, b: HTMLElement, price: number, why: string): boolean {
-  if (!spend(kind, price, why)) {
+/**
+ * Takes a price if the purse holds it, with Leaf or Coins flying from the purse to the button:
+ * `as` is `"leaf"`, or the reason Coins are spent for.
+ */
+export function pay(b: HTMLElement, price: number, as: "leaf" | CoinReason): boolean {
+  const kind: Currency = as === "leaf" ? "leaf" : "coins";
+  if (!(as === "leaf" ? spend("leaf", price) : spend("coins", price, as))) {
     sfx.no();
     replay(b, "shake");
     return false;
