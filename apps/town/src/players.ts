@@ -6,8 +6,8 @@
  * for the camp or into a game, leaves the room; coming back joins it again.
  *
  * Here too: the member's emotes (the plaque over their own figure, and what everybody sees of
- * them), the wave on a live player's card, the small "Reconnecting…" while the connection is down,
- * and the kit's cards for a connection Leaf has let go of. The rules are in `motion.ts`.
+ * them), the wave on a live player's card, the small "Reconnecting…" once the connection has been
+ * down a couple of seconds, and the kit's cards for a connection Leaf has let go of. The rules are in `motion.ts`.
  */
 
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
@@ -83,15 +83,37 @@ const rankOf = (m: LiveMember): string => (m.guest ? GUEST : m.rank === null ? "
 
 // ---------- the room ----------
 
+/** Everybody's rank as the room last showed it, by their account, for those other lists do not say it of. */
+export const knownRanks = new Map<string, string>();
+const learn = (m: LiveMember): void => {
+  const rank = rankOf(m);
+  if (rank === "") knownRanks.delete(m.player);
+  else knownRanks.set(m.player, rank);
+};
+
 /** What the page hears from the room: the company's, and the welcome ends any drop. */
 const ears: LiveEars = {
   ...company.ears,
   welcome(you, name, roster) {
     company.ears.welcome?.(you, name, roster);
+    for (const m of roster) learn(m);
     downAt = null;
     showLink();
   },
+  joined(m) {
+    company.ears.joined?.(m);
+    learn(m);
+  },
 };
+
+/** Everybody in the room with the member, the member too, with their rank as the town shows it; null while the page is in no room. */
+export function roomNow(): { id: string; name: string; rank: string | null }[] | null {
+  if (!room || room.you() === null) return null;
+  return [...room.members().values()].map((m) => {
+    const rank = rankOf(m);
+    return { id: m.player, name: m.name, rank: rank === "" ? null : rank };
+  });
+}
 
 const seatAt = (x: number, y: number, dir: Actor["dir"]): Seat => ({
   x,
@@ -185,6 +207,7 @@ export function tellRoom(a: Actor, dt: number, jumped: boolean): void {
 export function stepPlayers(dt: number): void {
   // Down a while: the others go, and the town plays on alone until the room welcomes the page again.
   if (downAt !== null && performance.now() - downAt > ALONE_AFTER) company.goAll();
+  if (downAt !== null) showLink();
   const walked = new Map(company.all().map((f) => [f, f.own.a.walked]));
   const { came, went } = company.step((id) => room?.sample(id) ?? null, dt);
   for (const f of company.all()) {
@@ -325,14 +348,21 @@ function placeEmotes(): void {
 
 let link: HTMLElement | null = null;
 
-/** The small "Reconnecting…" by the purse, while the connection is down and the page is not let go of. */
+/** How long the connection has been down, in milliseconds; null while it is not. */
+const downFor = (): number | null => (downAt === null ? null : performance.now() - downAt);
+
+/**
+ * The small "Reconnecting…" under the purse, once the connection has been down a couple of seconds and
+ * the page is not let go of. Looked at again each frame while it is down.
+ */
 function showLink(): void {
-  const shown = onStage ? linkShown(status, downAt !== null) : "none";
+  const shown = onStage ? linkShown(status, downFor()) : "none";
   if (shown === "reconnecting" && !link) {
-    link = el("div", "k-plaque k-d", { id: "link", role: "status" }, "Reconnecting…");
-    document.body.append(link);
+    link = el("div", "", { id: "link", role: "status" }, el("span", "k-plaque k-d", {}, "Reconnecting…"));
+    (document.getElementById("top") ?? document.body).append(link);
   }
-  if (link) link.hidden = shown !== "reconnecting";
+  const hidden = shown !== "reconnecting";
+  if (link && link.hidden !== hidden) link.hidden = hidden;
 }
 
 // ---------- looking at it from outside ----------
@@ -369,7 +399,7 @@ export const liveHandles = {
   told: (): { step: Step; at: number } | null => told,
   link: () => ({
     status,
-    shown: onStage ? linkShown(status, downAt !== null) : "none",
+    shown: onStage ? linkShown(status, downFor()) : "none",
     you: room?.you() ?? null,
     others: othersInTown(),
     rtt: room?.rtt() ?? null,

@@ -52,6 +52,7 @@ export type IconName =
   | "tray"
   | "home"
   | "paw"
+  | "visit"
   | "more"
   | "up"
   | "down"

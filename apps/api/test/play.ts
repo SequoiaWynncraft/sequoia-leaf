@@ -23,6 +23,9 @@
  * `/sign-in?as=quillon&return_to=<address>` sets it. A page as somebody the
  * script walks about the town takes their place there, and they stop.
  *
+ * SIGTERM or Ctrl-C stops it as a deploy stops Leaf: live connections are told Leaf is
+ * restarting (1012) before the server goes.
+ *
  * - `--guest`: Tester is signed in but not in the guild (any more), so they play as a guest.
  * - `--down`: the backend can't be asked who Tester is, so they answer 503.
  * - `--busy`: every minute, a few of the four finish a raid together, for the guild's news.
@@ -535,7 +538,18 @@ const signingRoute = (path: "/sign-in" | "/sign-out") =>
       ),
     ),
   );
-await leaf.serve(port, Layer.mergeAll(signingRoute("/sign-in"), signingRoute("/sign-out")));
+const served = await leaf.serve(port, Layer.mergeAll(signingRoute("/sign-in"), signingRoute("/sign-out")));
+
+// Stopped as a deploy stops Leaf: every live connection is told Leaf is restarting (1012) before
+// the server goes, so that a page reconnects as it would to the next container.
+let stopping = false;
+const stop = (): void => {
+  if (stopping) return;
+  stopping = true;
+  void served.close().finally(() => process.exit(0));
+};
+process.on("SIGTERM", stop);
+process.on("SIGINT", stop);
 
 /**
  * Two of those in town walk about it live, as a player's game would say they do: Birchwood round

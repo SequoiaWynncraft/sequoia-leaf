@@ -1,0 +1,30 @@
+[
+  ["size", 1280, 760],
+  ["wait", 2500],
+  ["eval", "(window.town.enter(), 1)"],
+  ["wait", 3000],
+  ["eval", "(window.town.hold(true), window.town.skip(0.5), 1)"],
+  ["shot", "ui-01-about-button"],
+  ["click", "#about"],
+  ["wait", 500],
+  ["shot", "ui-02-about-panel"],
+  ["eval", "(document.querySelector('#panel .k-body').scrollTop = 9999, 1)"],
+  ["wait", 300],
+  ["shot", "ui-03-about-panel-end"],
+  ["eval", "document.querySelector('#panel').innerText"],
+  [
+    "eval",
+    "(() => { const me = window.town.me(); const by = window.town.players().map((p) => ({ p, d: Math.hypot(p.x - me.x, p.y - me.y) })).sort((a, b) => a.d - b.d); const who = by.at(0)?.p; if (!who) return 'nobody'; document.querySelector(`button[aria-label=\"Show where ${who.name} is\"]`).click(); window.town.skip(0.4); return JSON.stringify(window.town.found()); })()"
+  ],
+  ["shot", "ui-04-about-on-screen"],
+  ["eval", "(window.town.skip(3), JSON.stringify(window.town.found()))"],
+  ["click", "#about"],
+  ["wait", 400],
+  [
+    "eval",
+    "(() => { const me = window.town.me(); const by = window.town.players().map((p) => ({ p, d: Math.hypot(p.x - me.x, p.y - me.y) })).sort((a, b) => a.d - b.d); const who = by.at(-1)?.p; if (!who) return 'nobody'; document.querySelector(`button[aria-label=\"Show where ${who.name} is\"]`).click(); window.town.skip(0.6); return JSON.stringify(window.town.found()); })()"
+  ],
+  ["shot", "ui-05-about-glided"],
+  ["eval", "(window.town.skip(3), JSON.stringify(window.town.found()))"],
+  ["shot", "ui-06-about-back"]
+]

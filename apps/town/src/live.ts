@@ -24,7 +24,7 @@ import {
   stay as sayStay,
 } from "@sequoia-leaf/kit/presence.ts";
 
-import type { Away, AwayLine, Guild, Happening, Me, Person, Quest, Rester, Tone, Visitor } from "./guild.ts";
+import type { Away, AwayLine, Guild, Happening, Mate, Me, Person, Quest, Rester, Tone, Visitor } from "./guild.ts";
 import type { MadeUp } from "./madeup.ts";
 import { type Line, liveLineFor, makePace } from "./news.ts";
 import { parse } from "./save.ts";
@@ -286,6 +286,33 @@ export function toVisitors(present: readonly Present[], meId: string): Visitor[]
   return out;
 }
 
+/** Somebody's rank as "Who is about" shows it: `GUEST` for a guest, a member's if the server said it. */
+const aboutRank = (p: { guest: boolean; rank?: string | null }): string | null =>
+  p.guest ? GUEST : p.rank === null || p.rank === undefined ? null : rankName(p.rank);
+
+/**
+ * Who is about, for "Who is about": everybody else in the game now, wherever they are, and everybody
+ * gone in the last day whose character stays, newest first; never the member, nobody twice. The
+ * server says no ranks here: a guest is `GUEST`, and a member's rank is left for whoever knows it.
+ */
+export function toAbout(
+  present: readonly Present[],
+  resting: readonly Resting[],
+  meId: string,
+): { present: Mate[]; resting: Mate[] } {
+  const now: Mate[] = [];
+  for (const p of present) {
+    if (p.id === meId || now.some((o) => o.id === p.id)) continue;
+    now.push({ id: p.id, name: p.name, rank: aboutRank(p), at: p.place, seen: null });
+  }
+  const gone: Mate[] = [];
+  for (const r of resting.toSorted((a, b) => b.seen - a.seen)) {
+    if (r.id === meId || now.some((o) => o.id === r.id) || gone.some((o) => o.id === r.id)) continue;
+    gone.push({ id: r.id, name: r.name, rank: aboutRank(r), at: r.place, seen: r.seen });
+  }
+  return { present: now, resting: gone };
+}
+
 /** The most members the town draws dozing at once. */
 export const RESTING_MOST = 12;
 
@@ -388,6 +415,7 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
   let told = p.mark;
   let present: Visitor[] = [];
   let resting: Rester[] = [];
+  let about: { present: Mate[]; resting: Mate[] } = { present: [], resting: [] };
   let heard = false;
   let begun = false;
   const ears = new Set<(h: Happening) => void>();
@@ -421,6 +449,7 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
     hearPresent((seen, gone) => {
       present = toVisitors(seen, me.id);
       resting = toResting(gone, seen, me.id);
+      about = toAbout(seen, gone, me.id);
       heard = true;
     });
     if (me.guest) return;
@@ -490,6 +519,7 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
     },
     visitors: () => present,
     resting: () => resting,
+    about: () => about,
     heard: () => heard,
     here(place) {
       sayHere(place);
