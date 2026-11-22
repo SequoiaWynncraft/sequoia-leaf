@@ -328,3 +328,73 @@ export function paintSkin(l: Look): HTMLCanvasElement {
   R(g, 0, 29, 16, 3, l.shoes);
   return c;
 }
+
+// ---------- how a member looks before their own skin arrives ----------
+
+const SKINS = ["#f6dcc2", "#eec39a", "#d9a57c", "#a8714e", "#7a4a30", "#5a3420"] as const;
+const HAIR = ["#2b2530", "#6f3826", "#c2382e", "#e0823a", "#f1e2a6", "#3f6fb0", "#4b8c4a", "#e8e4f0"] as const;
+const TOPS = ["#b84d84", "#2f8a8a", "#5a296e", "#4b8c4a", "#6f3826", "#3a3340", "#efe2c0", "#243a66"] as const;
+const LEGS = ["#3d2050", "#2f5c34", "#593d29", "#2e2e36", "#243a66"] as const;
+const STYLES = ["short", "long", "hood", "cap"] as const;
+
+const seedOf = (name: string): number => {
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619);
+  return h >>> 0;
+};
+const from = <T>(list: readonly T[], seed: number, shift: number, or: T): T =>
+  list[(seed >>> shift) % list.length] ?? or;
+
+/** A look of their own, always the same for the same name: what a member wears until their skin arrives. */
+export function lookFor(name: string): Look {
+  const s = seedOf(name);
+  const hair = from(HAIR, s, 3, "#6f3826");
+  return {
+    skin: from(SKINS, s, 0, "#eec39a"),
+    hair,
+    light: hair,
+    eye: "#3b1f19",
+    top: from(TOPS, s, 7, "#b84d84"),
+    legs: from(LEGS, s, 11, "#3d2050"),
+    shoes: "#3b1f19",
+    style: from(STYLES, s, 14, "short"),
+    sleeves: (s >>> 17) % 2 ? "long" : "short",
+    trim: "#f5b95e",
+  };
+}
+
+// ---------- faces in a list ----------
+
+/** Where a player's skin sheet is served. */
+export const skinOf = (id: string): string => `/v1/game/skins/${encodeURIComponent(id)}`;
+
+/** Faces given by `faceFor`, by player. */
+const faces = new Map<string, { face: HTMLCanvasElement }>();
+let facesCome = 0;
+
+/**
+ * Somebody's face, for a list of people: a look of their own at once (`lookFor`), and if `fetch`,
+ * their own skin once it has come, asked for once.
+ */
+export function faceFor(id: string, name: string, fetch: boolean): HTMLCanvasElement {
+  const had = faces.get(id);
+  if (had) return had.face;
+  const got = { face: bake(paintSkin(lookFor(name))).face };
+  faces.set(id, got);
+  if (fetch) {
+    const img = new Image();
+    img.addEventListener("load", () => {
+      try {
+        got.face = bake(img).face;
+        facesCome++;
+      } catch {
+        // A picture that cannot be read: the look of their own stays.
+      }
+    });
+    img.src = skinOf(id);
+  }
+  return got.face;
+}
+
+/** How many faces `faceFor` has had come so far: a list draws again when it goes up. */
+export const facesCame = (): number => facesCome;

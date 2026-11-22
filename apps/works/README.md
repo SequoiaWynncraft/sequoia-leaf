@@ -111,7 +111,10 @@ The orders panel's lines, the depot's books and the plans tree are built from th
 order in hand. Four panels: the orders (the story's, and the board's standing orders with swap and
 hand over), the plans as the small tree they are, what the depot has taken in and what the yard
 makes an hour, and the second shift. The power plaque opens a fifth, which says where the power
-comes from and where it goes.
+comes from and where it goes. "Top yards" (`ui/board.ts`) reads Leaf's board for the Works when it
+opens and each minute while it is open: the twenty yards that have earned the most Coins, each
+owner with their face and name as "Who is about" shows them (the kit's `faceFor`), and the
+member's own row lit, or after a divider when they are not among the twenty.
 
 **Moments.** A story order filled: the yard's own gnome carries a crate out of the depot and
 through the gate, Coins fly to the purse, and a notice says what was paid, what it opened and what

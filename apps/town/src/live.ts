@@ -23,6 +23,7 @@ import {
   type Resting,
   stay as sayStay,
 } from "@sequoia-leaf/kit/presence.ts";
+import { skinOf } from "@sequoia-leaf/kit/skin.ts";
 
 import type { Away, AwayLine, Guild, Happening, Mate, Me, Person, Quest, Rester, Tone, Visitor } from "./guild.ts";
 import type { MadeUp } from "./madeup.ts";
@@ -47,9 +48,6 @@ export const GUEST = "Guest";
 
 /** The one note on a guest's quest board, in place of quests. */
 export const GUEST_BOARD = "Quests are for members of Sequoia. Raid with the guild and yours appear here.";
-
-/** Where a member's skin sheet is served. */
-export const skinOf = (id: string): string => `/v1/game/skins/${encodeURIComponent(id)}`;
 
 // ---------- the quest board ----------
 

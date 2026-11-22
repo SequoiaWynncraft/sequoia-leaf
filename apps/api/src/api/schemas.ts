@@ -208,6 +208,29 @@ export const PlayResult = Schema.Union([
 /** A batch done: each command's result, in the order they came, and the state after them all. */
 export const Played = Schema.Struct({ ...PlayShown.fields, results: Schema.Array(PlayResult) });
 
+/** A score, and the few numbers the game shows beside it. */
+const Stood = { score: Schema.Number, also: Schema.Record(Schema.String, Schema.Number) };
+
+/**
+ * A game's board: the twenty highest scores (a tie going to whoever reached it first), each with
+ * its place (how many score higher, and one), its player's id (for their face) and name ("Someone"
+ * for one Leaf has no name for), and whether it is the caller's own (`you`); and the caller's own
+ * place among everyone, or null before they score.
+ */
+export const Standings = Schema.Struct({
+  top: Schema.Array(
+    Schema.Struct({
+      place: Schema.Number,
+      id: Schema.String,
+      name: Schema.String,
+      guest: Schema.Boolean,
+      ...Stood,
+      you: Schema.Boolean,
+    }),
+  ),
+  you: Schema.NullOr(Schema.Struct({ place: Schema.Number, ...Stood })),
+});
+
 /**
  * Coins changed by a page of a game not on the play service yet, for the player the page believes
  * it is (`player`): `id` is the page's own, unique for the change, `amount` a whole number (negative

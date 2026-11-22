@@ -76,6 +76,7 @@ describe("HTTP", () => {
       "/v1/game/hello",
       "/v1/game/me",
       "/v1/game/play/{game}",
+      "/v1/game/play/{game}/standings",
       "/v1/game/presence",
       "/v1/game/saves",
       "/v1/game/saves/{slot}",

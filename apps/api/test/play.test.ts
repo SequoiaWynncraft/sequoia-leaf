@@ -12,11 +12,15 @@ import {
 } from "@sequoia-leaf/raid";
 import { readView as readYardView, route, WORKS } from "@sequoia-leaf/yard";
 import { Effect, Logger, References, Schema } from "effect";
+import { SqlClient } from "effect/sql";
 
+import { Standings } from "../src/api/schemas.ts";
+import { knownAmong } from "../src/game/known.ts";
+import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { played } from "../src/play/games.ts";
 import { Play } from "../src/play/service.ts";
-import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
+import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
 import { DAY, fakeBackend, type Fakes, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -762,6 +766,124 @@ describe("a command's Coins", () => {
   });
 });
 
+const standings = () => services.query((sql) => sql`SELECT * FROM standings`);
+
+describe("a standing", () => {
+  // The till, with a board: ten points for each thing bought.
+  const till = played({ ...TILL, standing: (state) => ({ score: state.bought * 10, also: { bought: state.bought } }) });
+  const paid = (id: string, price: number, playing = { playerId: alice, guest: false }) =>
+    services.run(Play.use((play) => play.send(playing, till, [{ id, pay: 0, price, free: true }])));
+
+  it("is written in the transaction of a batch that changed the state, and not by one that changed nothing", async () => {
+    expect(await paid("t-1", 1000)).toMatchObject({ results: [{ id: "t-1", refused: "not_enough_coins" }] });
+    expect(await standings()).toEqual([]);
+    clock.now += 1000;
+    await paid("t-2", 100);
+    const written = {
+      player_id: alice,
+      game: "works",
+      score: 10,
+      also: '{"bought":1}',
+      guest: 0,
+      updated_at: clock.now,
+    };
+    expect(await standings()).toEqual([written]);
+    clock.now += 1000;
+    await paid("t-3", 1000);
+    expect(await standings()).toEqual([written]);
+    // A guest's says so.
+    await paid("t-4", 100, { playerId: carol, guest: true });
+    expect(await standings()).toContainEqual({ ...written, player_id: carol, guest: 1, updated_at: clock.now });
+  });
+});
+
+/** Writes where a player's yard stands, as the play service would have at `at`. */
+const stand = (player: PlayerId, score: number, at: number, guest = false) =>
+  services.run(
+    PlayStore.use((store) => store.stand(player, "works", { score, also: { story: score % 16 } }, guest, at)),
+  );
+const named = (player: PlayerId, name: string) =>
+  services.run(PlayerNames.use((names) => names.remember(player, name, clock.now)));
+const boardOf = async (game = "works", player: PlayerId = alice) => {
+  const response = await send("GET", `/v1/game/play/${game}/standings`, undefined, player);
+  expect(response.status).toBe(200);
+  return Schema.decodeUnknownSync(Standings)(await response.json());
+};
+/** A player nobody has named, nor Leaf knows. */
+const stranger = (n: number) => playerId(`20000000-0000-0000-0000-${String(n).padStart(12, "0")}`);
+/** A line of the Works' board, as the route answers it. */
+const row = (place: number, id: PlayerId, name: string, score: number, more: object = {}) => ({
+  place,
+  id,
+  name,
+  guest: false,
+  score,
+  also: { story: score % 16 },
+  you: false,
+  ...more,
+});
+
+describe("the board", () => {
+  it("lists the highest scores first, a tie going to whoever reached it first, guests too, with each place and the caller's own", async () => {
+    await named(alice, "Alice");
+    await named(bob, "Bob");
+    await named(carol, "Carol");
+    await stand(bob, 500, T0 + 2);
+    await stand(carol, 500, T0 + 1, true);
+    await stand(alice, 200, T0);
+    await stand(stranger(1), 300, T0);
+    // Nothing earned yet: not listed.
+    await stand(dave, 0, T0);
+    expect(await boardOf()).toEqual({
+      top: [
+        row(1, carol, "Carol", 500, { guest: true }),
+        row(1, bob, "Bob", 500),
+        row(3, stranger(1), "Someone", 300),
+        row(4, alice, "Alice", 200, { you: true }),
+      ],
+      you: { place: 4, score: 200, also: { story: 8 } },
+    });
+    // Bob's yard changed without earning: he reached 500 when he did, and stays second.
+    await stand(bob, 500, T0 + 9);
+    expect((await boardOf()).top.map((r) => r.name)).toEqual(["Carol", "Bob", "Someone", "Alice"]);
+  });
+
+  it("keeps whoever is on a board known to Leaf, so a guest long gone still has their name and face looked up", async () => {
+    await stand(stranger(2), 700, T0, true);
+    const known = await services.run(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        return yield* knownAmong(sql, [stranger(2), stranger(3)], T0 + 3 * DAY);
+      }),
+    );
+    expect([...known]).toEqual([stranger(2)]);
+  });
+
+  it(`shows only the top ${BOARD_MOST}, and the caller's place among everyone when they are not in it`, async () => {
+    for (let n = 1; n <= BOARD_MOST + 2; n++) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      await stand(stranger(n), 1000 - n * 10, T0);
+    }
+    // Level with the twentieth, but later.
+    await stand(alice, 1000 - BOARD_MOST * 10, T0 + 1);
+    const board = await boardOf();
+    expect(board.top).toHaveLength(BOARD_MOST);
+    expect(board.top.at(-1)).toMatchObject({ place: BOARD_MOST, score: 1000 - BOARD_MOST * 10, you: false });
+    expect(board.top.some((r) => r.you)).toBe(false);
+    expect(board.you).toMatchObject({ place: BOARD_MOST, score: 1000 - BOARD_MOST * 10 });
+  });
+
+  it("is empty for a game with no board, has no place for a player not on it, and is only for a game Leaf plays", async () => {
+    await stand(bob, 500, T0);
+    expect(await boardOf("raid")).toEqual({ top: [], you: null });
+    expect((await boardOf()).you).toBeNull();
+    const chess = await send("GET", "/v1/game/play/chess/standings");
+    expect([chess.status, await codeOf(chess)]).toEqual([404, "no_such_game"]);
+    const signedOut = await app.request("/v1/game/play/works/standings");
+    expect(signedOut.status).toBe(401);
+  });
+});
+
 describe("setting out afresh", () => {
   it("before a room is fought changes nothing: no new opening, nothing paid, nothing logged", async () => {
     const begun = await commanded(
@@ -869,6 +991,12 @@ describe("the Works", () => {
     expect(await services.query((sql) => sql`SELECT kind FROM activity WHERE game = 'works'`)).toEqual([
       { kind: "works_story" },
     ]);
+    // On the board: what the yard has earned, and the story order done.
+    const earned = (await coinsOf(alice)) - 300;
+    expect(await boardOf()).toEqual({
+      top: [{ place: 1, id: alice, name: "Alice", guest: false, score: earned, also: { story: 1 }, you: true }],
+      you: { place: 1, score: earned, also: { story: 1 } },
+    });
     // The old save slot takes no more writes.
     const old = await send("PUT", "/v1/game/saves/works", { version: 0, data: { keys: {} } });
     expect([old.status, await codeOf(old)]).toEqual([410, "moved"]);

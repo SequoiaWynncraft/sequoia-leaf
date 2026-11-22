@@ -21,16 +21,16 @@ import {
   type LiveStatus,
   type Step,
 } from "@sequoia-leaf/kit/realtime.ts";
-import { bake, paintSkin } from "@sequoia-leaf/kit/skin.ts";
+import { bake, lookFor, paintSkin, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { face, footfall, headOf, hop, makeActor, onScreen, stepActor } from "./actors.ts";
 import { emoteOver } from "./fx.ts";
 import { type Actor, G, toPage } from "./game.ts";
-import { GUEST, rankName, skinOf } from "./live.ts";
+import { GUEST, rankName } from "./live.ts";
 import { Company, type Fellow, linkShown, NAMED_FOR, othersIn, stepOf } from "./motion.ts";
-import { followLive, lookFor, takeSeat } from "./visitors.ts";
+import { followLive, takeSeat } from "./visitors.ts";
 import { type Seat, SEATS } from "./world.ts";
 
 /** After this many milliseconds with the connection down, the others fade away and the town plays on alone. */

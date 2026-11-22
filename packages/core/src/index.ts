@@ -169,4 +169,5 @@ export {
   MOST_COMMANDS,
   playPath,
   type Refused,
+  type Standing,
 } from "./play.ts";
