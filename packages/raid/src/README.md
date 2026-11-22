@@ -83,7 +83,7 @@ the three dearest carry a third trait.
 | 4    | Crab #40         | Crab    | Bulwark        | 850    | 40     | 1     | **Hold The Line.** Gets in everybody's way: a shield of 300 for 4 seconds, and every enemy within two hexes has to attack it for 3 seconds.           |
 | 4    | Apothecary Gnome | Gnome   | Mender         | 540    | 34     | 3     | **Tonic For Everyone.** A spoonful each for itself and every friend within two hexes: 180 health back, and 25% faster attacks for 4 seconds.          |
 | 5    | Greg             | Moss    | Bulwark + Greg | 880    | 54     | 1     | **Greg Sits Down.** Greg sits down. Every enemy within two hexes takes 200 magic damage and is stunned for 1.25 seconds.                              |
-| 5    | White Fox        | Mist    | Fang + Sage    | 760    | 72     | 1     | **Antlers Ring.** Its gold antlers ring: 160 magic damage to every enemy within two hexes, and the whole party attacks 20% faster for 4 seconds.      |
+| 5    | Orphion          | Mist    | Fang + Sage    | 760    | 72     | 1     | **Antlers Ring.** Its gold antlers ring: 160 magic damage to every enemy within two hexes, and the whole party attacks 20% faster for 4 seconds.      |
 | 5    | Hearth Cat       | Ember   | Sneak + Fang   | 700    | 76     | 1     | **Off The Table.** Looks at its target, then bats it off its hex: 280 physical damage, knocked back 2 hexes, stunned for 1.5 seconds.                 |
 
 **Traits.** A trait switches on when the party fields enough _different_ figures that carry it;
@@ -195,7 +195,7 @@ A charm is only offered for a kin the party owns one of, and never more than one
 | Spare Hat             | Counts as one more Gnome.                                                                                        |
 
 **Sparring.** A sparring room is fought against a party one of the regulars at the table brought
-(`REGULARS` in `content/rooms.ts`: Greg, the Hearth Cat, a Barrow Gnome, Crab #7, the White Fox
+(`REGULARS` in `content/rooms.ts`: Greg, the Hearth Cat, a Barrow Gnome, Crab #7, Orphion
 and a Moth, each one of the battler's own figures). For now `sparParty(seed, room, trail)` makes
 one up: a regular, a taste for one kin and one calling, a level and a number of acorns to have spent by that room, stars bought with what is left,
 and items. It gives back a `Party`, which is plain data (`isParty` checks one that has been stored

@@ -191,9 +191,16 @@ describe("buying a request", () => {
     // Leaf or Discord out of reach for the backend: 503, in its words.
     const unreachable = "Leaf can't be reached right now, so the request wasn't made. Try again in a moment.";
     backend.api = () => Response.json({ message: unreachable }, { status: 503 });
+    // It may be tried again, so it is not a refusal: 503, as the backend answered.
+    expect(await call("POST", { type: "tome", reason: "A tower" })).toEqual({
+      status: 503,
+      body: { code: "requests_unavailable", message: unreachable },
+    });
+    // The same with no words in the body: Leaf says nothing was taken and to try again.
+    backend.api = () => Response.json({ status: 503, error: "Service Unavailable" }, { status: 503 });
     expect((await call("POST", { type: "tome", reason: "A tower" })).body).toEqual({
-      code: "request_refused",
-      message: unreachable,
+      code: "requests_unavailable",
+      message: "The guild's server could not take the Leaf just now. No Leaf was taken. Try again in a minute.",
     });
     // A refusal whose body has no words: the backend's words for that answer.
     backend.api = () => Response.json({ status: 409, error: "Conflict" }, { status: 409 });

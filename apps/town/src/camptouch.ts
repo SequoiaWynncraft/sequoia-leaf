@@ -123,7 +123,7 @@ const top = (l: Live): number => l.prop.y - (l.prop.sprite ? l.prop.sprite.c.hei
 
 // ---------- what touching each thing does ----------
 
-const STARS = ["The Lost Crab", "Greg Major", "The Big Gnome", "Worm, probably", "The Fox's Antlers", "Cinfy's Coin"];
+const STARS = ["The Lost Crab", "Greg Major", "The Big Gnome", "Worm, probably", "Orphion's Antlers", "Cinfy's Coin"];
 const STALL_NEWS = ["Open for business.", "Nobody is buying.", "A crab is browsing.", "Sold: nothing. Proud anyway."];
 const BARREL_NEWS = ["Something looked at you.", "Just a barrel. Probably.", "The lid moved. You saw it."];
 const CRAB_QUIPS = ["It was in the barrel!", "Gone again. Classic.", "It waved. Rudely."];

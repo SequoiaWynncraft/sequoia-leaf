@@ -173,7 +173,7 @@ export const FOLK: readonly Townsperson[] = [
   },
   {
     id: "fox",
-    name: "the White Fox",
+    name: "Orphion",
     what: "A white fox with golden antlers",
     kind: "fox",
     hue: 0,
@@ -259,7 +259,7 @@ export const AT_CAMP: Readonly<
       "who let the gnome in? oh. me.",
       "something in that barrel winked at me.",
     ],
-    bye: ["more errands. night!", "off I go. be nice to the fox.", "gn. glory to the grove."],
+    bye: ["more errands. night!", "off I go. be nice to Orphion.", "gn. glory to the grove."],
     thanks: ["oh! hello to you too.", "hi hi hi!", "a wave! for me!"],
   },
   embertoe: {

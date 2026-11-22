@@ -681,7 +681,7 @@ export const FIGURES: Record<FigureId, FigureSpec> = {
     quip: "Eats offerings. All of them.",
   },
   whitefox: {
-    name: "White Fox",
+    name: "Orphion",
     tier: 5,
     kin: "mist",
     calling: "fang",

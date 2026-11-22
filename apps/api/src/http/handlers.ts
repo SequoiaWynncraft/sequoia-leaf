@@ -949,6 +949,9 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             if (made.status === "refused") {
               return yield* new RequestRefused({ code: "request_refused", message: made.message });
             }
+            if (made.status === "busy") {
+              return yield* new RequestsUnavailable({ code: "requests_unavailable", message: made.message });
+            }
             const { balance } = yield* ledger.account(identity.playerId);
             return HttpServerResponse.jsonUnsafe({
               type: payload.type,
