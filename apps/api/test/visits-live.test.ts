@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { playerId } from "@sequoia-leaf/core";
 import { Schema } from "effect";
@@ -19,18 +22,35 @@ const clock = {
   },
   set now(_: number) {},
 };
+type Served = Awaited<ReturnType<ReturnType<typeof testLeaf>["serve"]>>;
 let services: ReturnType<typeof testLeaf> | null = null;
-let server: Awaited<ReturnType<ReturnType<typeof testLeaf>["serve"]>> | null = null;
+let server: Served | null = null;
 const open: LiveClient[] = [];
+/** A second Leaf, beside the first on its database file, as in a deploy; and that file's directory. */
+let beside: { readonly services: ReturnType<typeof testLeaf>; readonly server: Served } | null = null;
+let directory: string | null = null;
 
-/** Leaf on a free port, with Live tuned as the test needs. */
-async function start(live: Partial<LiveTuning> = {}): Promise<void> {
-  const fake = fakeBackend({
+const sessions = () =>
+  fakeBackend({
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
     "bob-token": () => Response.json(sessionOf(bob, "Bob", "RECRUIT")),
   });
-  services = testLeaf(clock, fake.fetcher, {}, { live });
+
+/** Leaf on a free port, with Live tuned as the test needs. */
+async function start(live: Partial<LiveTuning> = {}): Promise<void> {
+  services = testLeaf(clock, sessions().fetcher, {}, { live });
   server = await services.serve();
+}
+
+/** The old Leaf and the new, each on a free port and both on one database file, as during a deploy. */
+async function deploying(): Promise<{ readonly old: Served; readonly next: Served }> {
+  directory = mkdtempSync(join(tmpdir(), "leaf-visits-"));
+  const databasePath = join(directory, "leaf.db");
+  services = testLeaf(clock, sessions().fetcher, { databasePath }, { instance: "old" });
+  server = await services.serve();
+  const next = testLeaf(clock, sessions().fetcher, { databasePath }, { instance: "new" });
+  beside = { services: next, server: await next.serve() };
+  return { old: server, next: beside.server };
 }
 
 afterEach(async () => {
@@ -38,19 +58,24 @@ afterEach(async () => {
   for (const c of open.splice(0)) c.close();
   await server?.close();
   await services?.dispose();
+  await beside?.server.close();
+  await beside?.services.dispose();
+  if (directory !== null) rmSync(directory, { recursive: true, force: true });
   server = null;
   services = null;
+  beside = null;
+  directory = null;
 });
 
-async function connect(sent: Opening): Promise<LiveClient> {
-  const client = await LiveClient.open(server?.origin ?? "", sent);
+async function connect(sent: Opening, to: Served | null = server): Promise<LiveClient> {
+  const client = await LiveClient.open(to?.origin ?? "", sent);
   open.push(client);
   return client;
 }
 
 /** A player's page saying where they are, as `PUT /v1/game/presence`. */
-const sayHere = (token: string, place: string) =>
-  fetch(`${server?.origin ?? ""}/v1/game/presence`, {
+const sayHere = (token: string, place: string, to: Served | null = server) =>
+  fetch(`${to?.origin ?? ""}/v1/game/presence`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ place }),
@@ -61,6 +86,7 @@ const Visit = Schema.Struct({
   place: Schema.String,
   source: Schema.String,
   entered_at: Schema.Number,
+  heard_at: Schema.Number,
   left_at: Schema.NullOr(Schema.Number),
   seconds: Schema.Number,
   session_id: Schema.Number,
@@ -69,7 +95,8 @@ type Visit = typeof Visit.Type;
 const visits = async (): Promise<readonly Visit[]> =>
   Schema.decodeUnknownSync(Schema.Array(Visit))(
     (await services?.query(
-      (sql) => sql`SELECT player_id, place, source, entered_at, left_at, seconds, session_id FROM visits ORDER BY id`,
+      (sql) =>
+        sql`SELECT player_id, place, source, entered_at, heard_at, left_at, seconds, session_id FROM visits ORDER BY id`,
     )) ?? [],
   );
 /** The visits once they pass `which`, waiting a little for Live to write them. */
@@ -176,5 +203,29 @@ describe("when Leaf stops", () => {
       ["camp", true],
     ]);
     expect((await a.ended()).code).toBe(1012);
+  });
+
+  it("in a deploy, closes only the visits the new Leaf has not heard of since, and leaves the others open as they began", async () => {
+    const { old, next } = await deploying();
+    // Alice in the old Leaf's town, Bob's page in the camp: both heard of by the old Leaf alone.
+    const a = await connect({ bearer: "alice-token" }, old);
+    await a.welcome();
+    expect((await sayHere("bob-token", "camp", old)).status).toBe(200);
+    const came = (await visitsWhen((r) => r.length === 2)).find((v) => v.player_id === alice);
+    ahead = 20_000;
+    // Alice's game comes into the new Leaf's town as well; Bob's page still talks to the old one.
+    const again = await connect({ bearer: "alice-token" }, next);
+    await again.welcome();
+    await visitsWhen((r) => r.some((v) => v.player_id === alice && v.heard_at >= (came?.entered_at ?? 0) + 20_000));
+    ahead = 30_000;
+    await old.close();
+
+    const after = await visits();
+    expect(after.find((v) => v.player_id === alice)).toMatchObject({
+      place: "town",
+      entered_at: came?.entered_at,
+      left_at: null,
+    });
+    expect(closed(after.find((v) => v.player_id === bob))).toBe(true);
   });
 });

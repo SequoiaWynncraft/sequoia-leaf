@@ -28,8 +28,9 @@ export default Effect.gen(function* () {
 
   // One stay in a place. `source` is how Leaf knows of it: a live room, or the page's presence
   // calls. `heard_at` is the last time Leaf heard the player was there; a visit not heard of for
-  // 90 seconds is closed then. `left_at` is null while they are there. A player has at most one
-  // open visit.
+  // 90 seconds is closed then. `instance` is the Leaf process that last heard of it: during a
+  // deploy two run on this file, and the one stopping closes only the open visits still its own.
+  // `left_at` is null while they are there. A player has at most one open visit.
   yield* sql`
     CREATE TABLE visits (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,6 +41,7 @@ export default Effect.gen(function* () {
       source     TEXT    NOT NULL CHECK (source IN ('room', 'call')),
       entered_at INTEGER NOT NULL,
       heard_at   INTEGER NOT NULL,
+      instance   TEXT    NOT NULL,
       left_at    INTEGER CHECK (left_at >= entered_at),
       seconds    INTEGER NOT NULL DEFAULT 0 CHECK (seconds >= 0)
     ) STRICT

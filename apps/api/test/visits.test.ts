@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { type PlayerId, playerId } from "@sequoia-leaf/core";
 import { Schema } from "effect";
 
-import { DAY, fakeBackend, HOUR, MINUTE, sessionOf, testLeaf } from "./support.ts";
+import { type Backend, DAY, fakeBackend, HOUR, MINUTE, sessionOf, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -14,19 +14,21 @@ const T0 = Date.UTC(2026, 10, 25, 12);
 const SECOND = 1000;
 
 const clock = { now: T0 };
+let backend: Backend;
 let services: ReturnType<typeof testLeaf>;
 let app: ReturnType<(typeof services)["app"]>;
 
 beforeEach(() => {
   clock.now = T0;
-  const { fetcher } = fakeBackend({
+  const fake = fakeBackend({
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
     "bob-token": () => Response.json(sessionOf(bob, "Bob", "RECRUIT")),
     "carol-token": () => Response.json(sessionOf(carol, "Carol", null)),
     // A website admin, the guild's staff, though not in the guild.
     "dave-token": () => Response.json({ ...sessionOf(dave, "Dave", null), website_admin: true }),
   });
-  services = testLeaf(clock, fetcher);
+  backend = fake.backend;
+  services = testLeaf(clock, fake.fetcher);
   app = services.app();
 });
 
@@ -252,6 +254,22 @@ describe("GET /v1/game/admin/activity", () => {
       [401, { code: "unauthorized", message: "Your session has expired. Sign in again" }],
     ]);
     expect((await report()).status).toBe(200);
+  });
+
+  it("names a player as they are now, and says whether a guest, when that changes while they stay in one place", async () => {
+    await stay("carol", "town", T0, 1, 30 * SECOND);
+    // Carol joins the guild and takes another name while her page is still in town.
+    backend.sessions["carol-token"] = () => Response.json(sessionOf(carol, "Caroline", "RECRUIT"));
+    await stay("carol", "town", T0 + 90 * SECOND, 1, 30 * SECOND);
+    clock.now = T0 + 160 * SECOND;
+
+    const { body } = await report();
+
+    expect(await visits()).toMatchObject([{ player_id: carol, place: "town", entered_at: T0, left_at: null }]);
+    expect(body).toMatchObject({
+      here: [{ id: carol, name: "Caroline", guest: false, place: "town", since: iso(T0) }],
+      players: [{ id: carol, name: "Caroline", guest: false }],
+    });
   });
 
   it("covers the last 7 UTC days unless told, at most 90, and refuses a number of days that is not one", async () => {

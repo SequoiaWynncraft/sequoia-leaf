@@ -684,15 +684,19 @@ rules are `packages/core/src/visits.ts`; the store is `apps/api/src/activity`.
   closes when they leave the room or their grace runs out, when they come to
   another place (a player has one open visit at most), or, not heard of for 90
   seconds, at the last time it was. A page's call in the place of the room a
-  player then comes into is the same visit, the room's from then on. Leaf
-  stopping closes every open visit at that moment, before any connection.
+  player then comes into is the same visit, the room's from then on. Each Leaf
+  process has an id of its own (`instance`), and a visit is the one's that last
+  heard of it: Leaf stopping closes its own open visits at that moment, before
+  any connection, and leaves open those the other container in a deploy has
+  heard of since, with the time they began.
 - **Sessions** (`sessions`): visits by one player less than five minutes apart
   are one sitting: its start and end (null while a visit of it is open), its
   seconds, the seconds in each place (`places`, JSON) and `device`, `phone` or
   `desktop` as the page said when the session began (null when it said
   nothing), all kept up to date as its visits open and close.
 - **Players** (`players_seen`): one row a player: first and last seen, all
-  their seconds, their sessions, and their name and whether a guest as last known.
+  their seconds, their sessions, and their name and whether a guest as last
+  known, written each time Leaf hears of them.
 - **Things done** (`activity`): what each game's commands log through the play
   service (`Done.log`), as JSON. The report reads a raid run as
   `raid_started`, a `raid_room` for each room (`won` true for one won) and
