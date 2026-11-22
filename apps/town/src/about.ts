@@ -6,7 +6,8 @@
  *   them. Out of the room (the made-up guild, or a connection let go of), whoever the guild says is
  *   in town.
  * - **Elsewhere**: in the game, but not in town: at the Works, at the raid table, in their camp.
- * - **Seen lately**: gone in the last day and left in town, newest first, with how long ago.
+ * - **Seen lately**: gone in the last day, newest first, with how long ago; first of all whoever
+ *   has only just walked out of the town's room.
  *
  * Nobody is in two parts: the room is believed over the guild's lists, which can be half a minute
  * old, and whoever is in the game now is not "seen lately".
@@ -60,6 +61,9 @@ export const WHERE: Readonly<Record<Mate["at"], string>> = {
   camp: "in their camp",
 };
 
+/** The line for somebody who walked out of town within the last minute or so. */
+export const JUST_NOW = "just now";
+
 /** How long ago somebody was last seen, in the words the dozers' cards use: "3 hours ago". */
 export const agoLine = (seen: number, now: number): string => `${span(Math.max(0, (now - seen) / 60_000))} ago`;
 
@@ -101,21 +105,21 @@ export function whoIsAbout(o: {
       .map((m) => ({ id: m.id, name: m.name, line: line(rankOf(m)), you: false })),
   ];
   // In the room, the room says who is in town: anybody the guild still has in town has just left
-  // it, or is in another copy of it, and is not shown in town here.
+  // it, and heads "Seen lately" until the guild's lists say so themselves.
   const elsewhere = o.present
     .filter((m) => m.at !== "town" && take(m))
     .toSorted(byName)
     .map((m) => ({ id: m.id, name: m.name, line: line(rankOf(m), WHERE[m.at]), you: false }));
+  const justLeft = o.room === null ? [] : o.present.filter((m) => m.at === "town" && take(m)).toSorted(byName);
   for (const m of o.present) seen.add(m.id);
-  const lately = o.resting
-    .filter(take)
-    .toSorted((a, b) => (b.seen ?? 0) - (a.seen ?? 0))
-    .map((m) => ({
+  const lately = [...justLeft, ...o.resting.filter(take).toSorted((a, b) => (b.seen ?? 0) - (a.seen ?? 0))].map(
+    (m) => ({
       id: m.id,
       name: m.name,
-      line: line(rankOf(m), m.seen === null ? null : agoLine(m.seen, o.now)),
+      line: line(rankOf(m), m.seen === null ? JUST_NOW : agoLine(m.seen, o.now)),
       you: false,
-    }));
+    }),
+  );
 
   const parts: AboutPart[] = [
     { title: "In town" as const, rows: town },

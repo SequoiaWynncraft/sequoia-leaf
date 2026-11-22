@@ -292,7 +292,7 @@ const aboutRank = (p: { guest: boolean; rank?: string | null }): string | null =
 
 /**
  * Who is about, for "Who is about": everybody else in the game now, wherever they are, and everybody
- * gone in the last day whose character stays, newest first; never the member, nobody twice. The
+ * gone in the last day, whether or not their character stays, newest first; never the member, nobody twice. The
  * server says no ranks here: a guest is `GUEST`, and a member's rank is left for whoever knows it.
  */
 export function toAbout(
@@ -446,10 +446,11 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
   function begin(): void {
     if (begun) return;
     begun = true;
-    hearPresent((seen, gone) => {
+    hearPresent((seen, staying, gone) => {
       present = toVisitors(seen, me.id);
-      resting = toResting(gone, seen, me.id);
-      about = toAbout(seen, gone, me.id);
+      resting = toResting(staying, seen, me.id);
+      // The panel lists everybody gone in the last day; only those who stay are drawn dozing.
+      about = toAbout(seen, [...staying, ...gone], me.id);
       heard = true;
     });
     // Back in view, the town asks Leaf for the Coins: a game or another device may have changed them.
