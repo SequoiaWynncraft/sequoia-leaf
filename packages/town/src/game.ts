@@ -75,9 +75,15 @@ export interface Town {
   visit: Visit | null;
   /** When the next caller sets out, by Leaf's clock. */
   nextCall: number;
-  /** Leaf's stream, and the counter every id and key is made from. */
+  /** Leaf's stream, and the counter every id and key a command makes is made from. */
   rng: number;
   made: number;
+  /**
+   * How many callers have set out: a caller's id. It is a counter of its own because a caller sets
+   * out by Leaf's clock, between a page's commands: if it took from `made`, the id the page gave a
+   * thing it set out would not be the one Leaf gives it.
+   */
+  called: number;
 }
 
 /** What the arrival letter says and brings if it is put away now. */
@@ -99,7 +105,7 @@ export interface Arrival {
  * the arrival letter. The counter is shown, so that the page gives a thing it sets down the id Leaf
  * will give it.
  */
-export type TownView = Omit<Town, "rng" | "nextCall"> & { arrival: Arrival };
+export type TownView = Omit<Town, "rng" | "nextCall" | "called"> & { arrival: Arrival };
 
 // ---------- commands ----------
 
@@ -194,7 +200,7 @@ function call(s: Town, now: number): void {
   if (s.visit) leave(s, s.visit);
   const who = pick(s, CALLERS);
   const r = chance(s);
-  s.visit = { id: next(s), who, note: r < 0.7 ? pick(s, NOTES[who]) : "", gift: r < 0.4 ? pick(s, GIFTS) : "" };
+  s.visit = { id: s.called++, who, note: r < 0.7 ? pick(s, NOTES[who]) : "", gift: r < 0.4 ? pick(s, GIFTS) : "" };
   s.nextCall = now + CALLS.least + Math.floor(chance(s) * CALLS.more);
 }
 
@@ -393,7 +399,7 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
 // ---------- what the page is shown ----------
 
 /** The state as the member's page is given it, but the arrival letter. Each field is named, so nothing new is shown by accident. */
-const shown = (s: Omit<Town, "rng" | "nextCall">): Omit<TownView, "arrival"> => ({
+const shown = (s: Omit<Town, "rng" | "nextCall" | "called">): Omit<TownView, "arrival"> => ({
   sightings: s.sightings,
   spotAt: s.spotAt,
   chestDay: s.chestDay,
@@ -427,7 +433,7 @@ export function predict(
   if (ASKED.has(c.do)) return null;
   const { arrival, ...rest } = view;
   // Nothing done here draws from the stream, or reads when the next caller comes.
-  const answer = apply({ ...rest, rng: 0, nextCall: 0 }, c, {
+  const answer = apply({ ...rest, rng: 0, nextCall: 0, called: 0 }, c, {
     now,
     player: { id: "", guest: false },
     seed: 0,
@@ -520,6 +526,7 @@ export const encodeTown = (s: Town): string =>
     nextCall: s.nextCall,
     rng: s.rng,
     made: s.made,
+    called: s.called,
   });
 
 const TIME = 8.64e15;
@@ -597,9 +604,9 @@ export function decodeTown(text: string): Town | null {
   }
   if (!isRecord(raw) || raw.game !== GAME || raw.v !== TOWN_VERSION) return null;
   const held = heldIn(raw);
-  const { nextCall, rng } = raw;
-  if (!held || !whole(nextCall, 0, TIME) || !whole(rng, 0, 0xffffffff)) return null;
-  return { ...held, nextCall, rng };
+  const { nextCall, rng, called } = raw;
+  if (!held || !whole(nextCall, 0, TIME) || !whole(rng, 0, 0xffffffff) || !whole(called, 0, 1e9)) return null;
+  return { ...held, nextCall, rng, called };
 }
 
 const lines = (v: unknown): string[] | null =>
@@ -644,6 +651,7 @@ export function newTown(ctx: Pick<Ctx, "seed" | "now">): Town {
     nextCall: 0,
     rng: mix(ctx.seed >>> 0, 0x70a1),
     made: 0,
+    called: 0,
   };
   s.made = s.camp.placed.length;
   s.nextCall = ctx.now + CALLS.least + Math.floor(chance(s) * CALLS.more);

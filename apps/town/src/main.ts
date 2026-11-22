@@ -32,7 +32,7 @@ import { G, hooks, type PanelId, show, toPage } from "./game.ts";
 import { type GameId, GAMES } from "./games.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, hush, initHud, panelBox, tickHud } from "./hud.ts";
-import { again, keepTold, town as kept } from "./leaf.ts";
+import { again, keepTold, onTown, town as kept } from "./leaf.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Hover, Scene, Stage, Steer } from "./stage.ts";
@@ -492,6 +492,10 @@ async function boot(): Promise<void> {
   town.arrive();
   // Whether the member's character stays in town after they go, as they last said in their cabin.
   guild.stay(kept().stay);
+  // Another page of the member's may change it: presence is told again whenever Leaf's town is not what this page showed.
+  onTown((differs) => {
+    if (differs) guild.stay(kept().stay);
+  });
   guild.here("town");
   keepTold({ home: () => G.home, inCamp: () => scene === camp && camp.owner() === null, cursor: () => guild.told() });
   town.onStage(true);

@@ -188,7 +188,9 @@ describe("callers", () => {
     expect(TOWN.advance(s, ctx(s.nextCall - 1))).toBe(s);
     const week = s.nextCall + 7 * DAY_MS;
     const one = TOWN.advance(s, ctx(week));
-    expect(one.visit).toMatchObject({ id: 9 });
+    expect(one.visit).toMatchObject({ id: 0 });
+    // A caller takes no id from the counter the page gives its own things from: what the page set out keeps its id.
+    expect(one.made).toBe(s.made);
     expect(CALLERS).toContain(one.visit?.who ?? "pipwick");
     expect(one.nextCall).toBeGreaterThanOrEqual(week + CALLS.least);
     expect(one.nextCall).toBeLessThan(week + CALLS.least + CALLS.more);
