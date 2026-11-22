@@ -32,24 +32,86 @@
         image-rendering: pixelated;
       }
 
-      /* The purse, top left: Leaf first, because it is the precious one. */
-      #purse {
+      /* Top left: the purse, Leaf first, because it is the precious one; beside it, who is about. */
+      /* Where there is no room beside the purse for the corner's buttons too, who is about goes under it. */
+      #top {
         position: fixed;
         z-index: 5;
         top: var(--top);
         left: var(--edge);
+        max-width: calc(100vw - var(--edge) * 2 - var(--u) * 50);
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: calc(var(--u) * 2) calc(var(--u) * 3);
+      }
+      #purse {
         display: flex;
         gap: calc(var(--u) * 6);
         padding: var(--u) calc(var(--u) * 4);
       }
-      /* By the purse while the town's live connection is down. */
+      #about {
+        padding-inline: calc(var(--u) * 4);
+      }
+      /* Who is about: a part for each, a row for each person, their face, name and rank. */
+      .about {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 2);
+      }
+      .about-part {
+        display: flex;
+        flex-direction: column;
+        gap: var(--u);
+        margin-bottom: calc(var(--u) * 2);
+      }
+      .about-row {
+        display: flex;
+        gap: calc(var(--u) * 4);
+        width: 100%;
+        min-height: calc(var(--u) * 20);
+        padding: var(--u) calc(var(--u) * 2);
+        box-sizing: border-box;
+        background: none;
+        border: 0;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+      }
+      button.about-row {
+        cursor: pointer;
+      }
+      button.about-row:hover,
+      button.about-row:focus-visible {
+        background: #f5b95e1f;
+      }
+      button.about-row:active {
+        translate: 0 var(--u);
+      }
+      .about-row .k-thing-pic {
+        min-width: calc(var(--u) * 18);
+      }
+      .about-who {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .about-who .k-thing-name {
+        color: var(--k-cream);
+      }
+      .about-who > * {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* Under the purse while the town's live connection is down, on a line of its own. */
       #link {
-        position: fixed;
-        z-index: 5;
-        top: calc(var(--top) + var(--u) * 21);
-        left: var(--edge);
-        padding: 0 calc(var(--u) * 3);
+        flex-basis: 100%;
         pointer-events: none;
+      }
+      #link > span {
+        display: inline-block;
+        padding: 0 calc(var(--u) * 3);
       }
       /* The member's emotes, over their own head, the picture of each one to choose. */
       #emotes {
@@ -355,13 +417,13 @@
       }
 
       /* Inside a game the town's interface is put away, and comes back after. */
-      #purse,
+      #top,
       #corner,
       #dock,
       #feed {
         transition: translate 0.25s steps(5);
       }
-      .inside #purse,
+      .inside #top,
       .inside #corner {
         translate: 0 calc(var(--u) * -40);
       }
@@ -426,7 +488,7 @@
   </head>
   <body>
     <canvas id="view"></canvas>
-    <div id="purse" class="k-plaque"></div>
+    <div id="top"><div id="purse" class="k-plaque"></div></div>
     <div id="corner"></div>
     <div id="feed" aria-live="polite"></div>
     <nav id="dock" class="k-plaque" aria-label="Places"></nav>

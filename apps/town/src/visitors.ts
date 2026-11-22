@@ -479,6 +479,11 @@ export function visitorOf(p: Person): Actor | null {
   return live.actor(p.id) ?? (v && !v.dozing ? v.a : null);
 }
 
+/** Whoever somebody is drawn as in town, if anybody: their figure if they are there live, or the visitor they are, awake or dozing. */
+export function drawnAs(id: string): Actor | null {
+  return live.actor(id) ?? here.get(id)?.a ?? null;
+}
+
 /** Real members in town for looking at it from outside: where each is, and whether they are dozing. */
 export function members(): { name: string; x: number; y: number; dozing: boolean }[] {
   return [...here.values()].map((v) => {

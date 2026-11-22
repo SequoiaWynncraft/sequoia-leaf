@@ -2,10 +2,14 @@
  * Live, the game's side: being in a room on Leaf with other players, and seeing them move as it
  * happens (the wire is `@sequoia-leaf/core`'s `live.ts`; the server is `apps/api/src/live`).
  *
- * `joinLive(room, ears)` opens the connection and keeps it open: after a drop it connects again with
- * a growing, jittered wait, joins the room again, and says where the player is again (Leaf shows
- * others that as a jump). Why a connection closed is its close code alone (`CLOSE`): told the
- * player opened the game live somewhere else, or that their session ended, this page lets go. With
+ * `joinLive(room, ears)` opens the connection and keeps it open: after a drop it connects again
+ * within a moment, and keeps trying every second or so while Leaf is away (`retryAfter`), at once
+ * when the page comes back to the front or the network returns; then it joins the room again, and
+ * says where the player is again (Leaf shows others that as a jump). An open connection that has
+ * gone silent is closed and opened again. Why a connection closed is its close code alone
+ * (`CLOSE`): told the player opened the game live somewhere else, or that their session ended,
+ * this page lets go. A browser cannot see why a connection would not open, so after a few tries
+ * that did not, the page asks Leaf whether the player is still signed in, and lets go if not. With
  * the made-up guild there is no server, and it does nothing.
  *
  * What this page knows of the room starts at a welcome, each time: who is in it, where they have
@@ -33,7 +37,7 @@ import {
 } from "@sequoia-leaf/core";
 
 import { device, member } from "./live.ts";
-import { type LiveSocket, outside } from "./net.ts";
+import { ask, type LiveSocket, outside } from "./net.ts";
 import { inRoom } from "./presence.ts";
 
 // What a page needs of the wire to draw who is in its room.
@@ -182,13 +186,50 @@ export interface LiveRoom {
   close(): void;
 }
 
-/** Waits before trying again after a drop: half a second, doubling to ten, each with up to half again by chance. */
-export const retryAfter = (tries: number, chance: number): number =>
-  Math.min(10_000, 500 * 2 ** Math.min(tries, 5)) * (1 + chance / 2);
+// ---------- trying again ----------
+
+/**
+ * How long to wait before the next try after a drop, by how many tries there have been since it
+ * (`tries`, 0 before the first) and how long the connection has been down (`down`, ms): a quarter
+ * of a second, then half, then a second each time for the first thirty seconds, two for the next
+ * minute, and five after that; each with up to a quarter more by `chance` (0 to 1), so that pages
+ * dropped together do not all come back in the same instant. A drop because Leaf is restarting
+ * starts at the second wait (`firstTry`).
+ */
+export function retryAfter(tries: number, down: number, chance: number): number {
+  const wait = tries <= 0 ? 250 : tries === 1 ? 500 : down < 30_000 ? 1000 : down < 90_000 ? 2000 : 5000;
+  return wait * (1 + chance / 4);
+}
+
+/** The first try's number after a drop with this close code: Leaf restarting is given half a second, not a quarter. */
+export const firstTry = (code: number): number => (code === CLOSE.restart ? 1 : 0);
+
+/** The soonest the page tries again of its own accord (`wake`) after its last try, in milliseconds. */
+export const SOONEST = 1000;
+
+/**
+ * Whether to ask Leaf why, after this many tries in a row that did not open: after the third, and
+ * every fifth after that.
+ */
+export const askWhy = (failed: number): boolean => failed >= 3 && (failed - 3) % 5 === 0;
 
 /** Pings: quickly at first, to learn the clock, then now and then, to keep it. */
 const PING_FIRST = 1000;
 const PING_EVERY = 10_000;
+
+/** Nothing from Leaf for this long on an open connection, the page asking all the while, and it is dead. */
+export const SILENT_MS = 15_000;
+/** How long a ping goes unanswered before the quiet counts against the connection. */
+const ANSWER_MS = 5000;
+
+/**
+ * Whether an open connection has gone dead: nothing has come from Leaf for `SILENT_MS` (`heard` is
+ * when anything last came), and a ping went out after that at least `ANSWER_MS` ago. The page pings
+ * every ten seconds, so on a page in front that is fifteen seconds of quiet; a page whose timers
+ * were held in the background was not asking, and its own quiet is not counted against Leaf.
+ */
+export const silent = (heard: number, pinged: number | null, now: number): boolean =>
+  pinged !== null && pinged >= heard && now - heard >= SILENT_MS && now - pinged >= ANSWER_MS;
 
 /** The address of Leaf's live connection into a room, next to the page, saying what the page is on. */
 const liveUrl = (room: string): string => {
@@ -207,9 +248,18 @@ interface Link {
   clock: ClockSync | null;
   you: number | null;
   open: boolean;
+  /** When anything last came from Leaf on it, and when it last sent a ping (this page's clock). */
+  heard: number;
+  pinged: number | null;
 }
 
 const NOBODY: ReadonlyMap<number, LiveMember> = new Map();
+
+/** Stops a timer, if there is one; says there is none now. */
+const stop = (t: ReturnType<typeof setTimeout> | null): null => {
+  if (t) clearTimeout(t);
+  return null;
+};
 
 /** Puts the player in a room on Leaf, live. With the made-up guild it does nothing, and nobody is ever there. */
 export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
@@ -217,9 +267,17 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
   let link: Link | null = null;
   let shown: Link | null = null;
   let done = member() === null;
+  // Since the last welcome: when the connection went down, how many tries since, how many in a row
+  // did not open, and when the last one began.
+  let downSince: number | null = null;
   let tries = 0;
+  let failed = 0;
+  let lastTry = 0;
+  /** The try waiting its turn, and when it is due. */
   let retry: ReturnType<typeof setTimeout> | null = null;
+  let retryAt = 0;
   let pinger: ReturnType<typeof setTimeout> | null = null;
+  let watcher: ReturnType<typeof setTimeout> | null = null;
   // The player's motion: as the page last said it, as last sent, and when, and a send waiting its turn.
   let motion: Motion | null = null;
   let sent: Motion | null = null;
@@ -231,8 +289,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
   const say = (l: Link, m: ToServer): void => l.socket.send(JSON.stringify(m));
 
   function sendNow(): void {
-    if (later) clearTimeout(later);
-    later = null;
+    later = stop(later);
     const l = shown;
     if (!l || l !== link || !motion) return;
     seq = (seq + 1) & 0xffff;
@@ -249,10 +306,33 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
     later = setTimeout(sendNow, wait);
   }
 
+  function pingOnce(l: Link): void {
+    l.pinged = outside.now();
+    say(l, { t: "ping", c: l.pinged });
+  }
+
   function ping(l: Link, n: number): void {
     if (link !== l) return;
-    say(l, { t: "ping", c: outside.now() });
+    pingOnce(l);
     pinger = setTimeout(() => ping(l, n + 1), n < 5 ? PING_FIRST : PING_EVERY);
+  }
+
+  /**
+   * Keeps an eye on an open connection: gone silent, it is closed, and the page connects again. Quiet
+   * with no ping out (the page's timers were held), it asks now, and looks again once the answer is due.
+   */
+  function watch(l: Link): void {
+    watcher = stop(watcher);
+    if (link !== l || !l.open) return;
+    const now = outside.now();
+    if (silent(l.heard, l.pinged, now)) {
+      // The browser may take a long while to notice; this page stops waiting for it.
+      l.socket.close(CLOSE.done, "silent");
+      return dropped(l, CLOSE.done);
+    }
+    if (now - l.heard >= SILENT_MS && (l.pinged === null || l.pinged < l.heard)) pingOnce(l);
+    const due = Math.max(l.heard + SILENT_MS, (l.pinged ?? 0) + ANSWER_MS);
+    watcher = setTimeout(() => watch(l), Math.max(50, due - now));
   }
 
   function heard(l: Link, text: string): void {
@@ -260,6 +340,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
     if (!m) return;
     switch (m.t) {
       case "welcome": {
+        downSince = null;
         tries = 0;
         l.you = m.you;
         l.clock = new ClockSync(m.time, outside.now());
@@ -312,8 +393,83 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
   // Whoever hears the status may close the room from inside it: each is said only once the change
   // it tells of is complete, and nothing is done after it that a close would undo.
 
-  function connect(): void {
+  /** Lets go of the room for good: nothing of it is shown any more, and nothing is tried again. */
+  function letGo(why: "replaced" | "signedout"): void {
+    done = true;
+    shown = null;
+    retry = stop(retry);
+    pinger = stop(pinger);
+    watcher = stop(watcher);
+    unwake();
+    const l = link;
+    link = null;
+    l?.socket.close(CLOSE.done, "bye");
+    inRoom(null);
+    status(why);
+  }
+
+  /** The connection is gone: tried again after a wait, or let go of for good, by why it closed. */
+  function dropped(l: Link, code: number): void {
+    link = null;
+    // Out of the room until the next welcome: the page says where the player is itself meanwhile.
+    inRoom(null);
+    pinger = stop(pinger);
+    watcher = stop(watcher);
     if (done) return;
+    if (!reconnects(code)) return letGo(code === CLOSE.replaced ? "replaced" : "signedout");
+    const now = outside.now();
+    if (downSince === null) {
+      downSince = now;
+      tries = firstTry(code);
+    }
+    if (!l.open) failed++;
+    const wait = retryAfter(tries++, now - downSince, Math.random());
+    retryAt = now + wait;
+    retry = setTimeout(connect, wait);
+    if (askWhy(failed)) void findOutWhy();
+    status("closed");
+  }
+
+  /**
+   * The connection keeps not opening, and a browser cannot see why: Leaf is asked whether the player
+   * is still signed in. Signed out, the page lets go as Leaf would have told it to; anything else,
+   * or no answer, and it keeps trying.
+   */
+  async function findOutWhy(): Promise<void> {
+    const a = await ask("/v1/game/me");
+    if (done || link?.open || a.status !== 401) return;
+    letGo("signedout");
+  }
+
+  /**
+   * The page is back, or the network is: a waiting try goes now, or as soon after the last as
+   * `SOONEST` allows, if that is sooner than it would have.
+   */
+  function wake(): void {
+    if (done) return;
+    const now = outside.now();
+    const l = link;
+    if (l?.open) {
+      // Open as far as the browser knows: asked at once, it is seen to be alive, or to be dead soon.
+      if (now - (l.pinged ?? 0) >= SOONEST) {
+        pingOnce(l);
+        watch(l);
+      }
+      return;
+    }
+    const soonest = lastTry + SOONEST;
+    if (retry === null || retryAt <= soonest) return;
+    retry = stop(retry);
+    if (soonest <= now) return connect();
+    retryAt = soonest;
+    retry = setTimeout(connect, soonest - now);
+  }
+  const unwake = done ? () => undefined : outside.wake(wake);
+
+  function connect(): void {
+    retry = null;
+    if (done) return;
+    lastTry = outside.now();
     const l: Link = {
       socket: outside.socket(liveUrl(room)),
       people: new Map(),
@@ -321,6 +477,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       clock: null,
       you: null,
       open: false,
+      heard: lastTry,
+      pinged: null,
     };
     link = l;
     l.socket.binaryType = "arraybuffer";
@@ -328,31 +486,22 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       if (link !== l) return;
       // Opening it is entering the room: Leaf's welcome comes first.
       l.open = true;
-      status("open");
+      l.heard = outside.now();
+      failed = 0;
       ping(l, 0);
+      watch(l);
+      status("open");
     });
     l.socket.addEventListener("message", (e) => {
       if (link !== l) return;
+      l.heard = outside.now();
       if (typeof e.data === "string") heard(l, e.data);
       else if (e.data instanceof ArrayBuffer) snapshot(l, e.data);
     });
-    status("connecting");
     l.socket.addEventListener("close", (e) => {
-      if (link !== l) return;
-      link = null;
-      // Out of the room until the next welcome: the page says where the player is itself meanwhile.
-      inRoom(null);
-      if (pinger) clearTimeout(pinger);
-      if (done) return;
-      if (!reconnects(e.code)) {
-        // For good: nothing of the room is shown any more. A drop keeps it until the next welcome.
-        done = true;
-        shown = null;
-        return status(e.code === CLOSE.replaced ? "replaced" : "signedout");
-      }
-      retry = setTimeout(connect, retryAfter(tries++, Math.random()));
-      status("closed");
+      if (link === l) dropped(l, e.code);
     });
+    status("connecting");
   }
 
   connect();
@@ -376,7 +525,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
     rtt: () => shown?.clock?.rtt() ?? null,
     close() {
       done = true;
-      for (const t of [retry, pinger, later]) if (t) clearTimeout(t);
+      for (const t of [retry, pinger, watcher, later]) stop(t);
+      unwake();
       if (link?.open) say(link, { t: "leave" });
       link?.socket.close(CLOSE.done, "bye");
       link = null;

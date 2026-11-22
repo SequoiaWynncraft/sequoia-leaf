@@ -242,16 +242,30 @@ class Player {
   }
 }
 
-/** What Live has done in the last minute, for its log line. */
+/**
+ * What Live has done in the last minute, for its log line: connections opened and closed, frames in
+ * and dropped, and openings turned away before their upgrade, by the code they were refused with.
+ */
 interface Counts {
   opened: number;
   closed: number;
   movesIn: number;
   textsIn: number;
   dropped: number;
+  refused: Record<string, number>;
 }
 
-const noCounts = (): Counts => ({ opened: 0, closed: 0, movesIn: 0, textsIn: 0, dropped: 0 });
+const noCounts = (): Counts => ({ opened: 0, closed: 0, movesIn: 0, textsIn: 0, dropped: 0, refused: {} });
+
+/** The census of who is here now. */
+interface Census {
+  readonly players: number;
+  readonly connected: number;
+  readonly rooms: Readonly<Record<string, number>>;
+}
+
+/** What a `live` log line says: who is here now, and what happened since the last line. */
+export type LiveLine = Census & Readonly<Counts>;
 
 /** What came of a player's asking to open a connection: served until it closed, or turned away. */
 export type Opened = "served" | "full" | "busy" | "stopping";
@@ -287,11 +301,11 @@ export class Live extends Context.Service<
       device?: Device | null,
     ) => Effect.Effect<Opened, never, Scope.Scope>;
     /** How many players there are, how many connected, and who is in which room (for tests and the log). */
-    readonly census: Effect.Effect<{
-      readonly players: number;
-      readonly connected: number;
-      readonly rooms: Readonly<Record<string, number>>;
-    }>;
+    readonly census: Effect.Effect<Census>;
+    /** Counts an opening turned away before its upgrade, by the code it was refused with, for the log line. */
+    readonly refused: (code: string) => Effect.Effect<void>;
+    /** What the next `live` log line would say, so far. */
+    readonly line: Effect.Effect<LiveLine>;
     /**
      * Closes every open visit, then tells every player Leaf is restarting and closes their
      * connections, so that they come back to the next one.
@@ -482,12 +496,17 @@ export class Live extends Context.Service<
         return { players: players.size, connected, rooms: inRooms };
       });
 
-      // A line a minute while anybody is about, or anything happened.
-      const report = Effect.flatMap(census, (now) => {
-        const was = counts;
+      const refused = (code: string) =>
+        Effect.sync(() => {
+          counts.refused[code] = (counts.refused[code] ?? 0) + 1;
+        });
+      const line = Effect.map(census, (now): LiveLine => ({ ...now, ...counts, refused: { ...counts.refused } }));
+
+      // A line a minute while anybody is about, or anything happened, refusals included.
+      const report = Effect.flatMap(line, (said) => {
         counts = noCounts();
-        if (now.players === 0 && was.opened === 0) return Effect.void;
-        return Effect.logInfo("live").pipe(Effect.annotateLogs({ ...now, ...was }));
+        if (said.players === 0 && said.opened === 0 && Object.keys(said.refused).length === 0) return Effect.void;
+        return Effect.logInfo("live").pipe(Effect.annotateLogs({ ...said }));
       });
       yield* Effect.forkScoped(Effect.repeat(report, Schedule.spaced(Duration.minutes(1))));
 
@@ -623,7 +642,7 @@ export class Live extends Context.Service<
         });
       });
 
-      return Live.of({ open, census, farewell });
+      return Live.of({ open, census, refused, line, farewell });
     }),
   );
 }

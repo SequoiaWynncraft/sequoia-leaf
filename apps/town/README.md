@@ -239,8 +239,9 @@ Leaf. `live.test.ts` holds the live guild to handing the town nobody the server 
   head with four emotes (wave, cheer, laugh, heart, the kit's `emotes.ts`); choosing one, the
   member hops once and its picture floats up from over their name for a moment and a half, and so
   does everybody's picture of them when the room tells them. Nothing typed is sent.
-- **The connection.** While it is down, the town plays on and a small "Reconnecting…" sits by the
-  purse; after five seconds the others fade away until the room welcomes the page again. Told the
+- **The connection.** While it is down, the town plays on; once it has been down two seconds a
+  small "Reconnecting…" sits by the purse, so that a blip is not announced, and after five seconds
+  the others fade away until the room welcomes the page again. Told the
   member opened the game live somewhere else, the kit's card "Playing somewhere else" says this
   page has let go of the town, with "Play here", which takes the room back; told their session has
   ended, the kit's "Signed out" card.
@@ -258,6 +259,20 @@ Leaf. `live.test.ts` holds the live guild to handing the town nobody the server 
   by the Works' door for the Works, then whatever seat is free; never the member's own; nobody last
   at their camp): eyes closed, a "z" drifting up, never speaking or moving. A visitor who goes sits
   down to doze if they stay, and walks out through the gate if not; a dozer who comes back gets up.
+- **Who is about** (`aboutui.ts`, its rules in `about.ts`). A small wooden button beside the purse
+  (under it where the screen is too narrow) with two heads and how many are in the game now, the
+  member too, opens a panel that lists them: **In town**, everybody in the live room with the
+  member, the member first and marked "you" (with the made-up guild, or out of the room, whoever
+  the guild says is in town); **Elsewhere**, in the game but not in town, "at the Works", "at the
+  raid table" or "in their camp"; and **Seen lately**, those gone in the last day who stay, newest
+  first, with how long ago in the words the dozers' cards use ("3 hours ago"). Each has their
+  face, name, and rank or "Guest"; the guild's lists say no ranks, so somebody never seen in the
+  room has their rank only if they are a guest. A part with nobody in it is left out; with nobody
+  but the member it says "Only you, for now." It keeps up with the room as it changes, and with the
+  guild's lists as they come, every half minute. Choosing somebody in town puts the panel away and
+  shows where they are for three seconds: a ring at their feet and their name over them, the view
+  staying where it is unless they would be out of it, when it glides to them and back. On an
+  upright phone the panel is the bottom sheet the others are. The button is there only in town.
 - **What it remembers** goes to the member's account as well as the browser (the kit's
   `cloud.ts`). `?fresh` is ignored there.
 
@@ -333,6 +348,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/live.ts`, `src/news.ts`          | The real guild's answers on its own server; the feed's line for each moment             |
 | `src/visitors.ts`                     | Real members in the game, standing about the town, and those dozing in it               |
 | `src/players.ts`, `src/motion.ts`     | The town live: in the room, everybody else drawn from it, emotes; its rules             |
+| `src/aboutui.ts`, `src/about.ts`      | Who is about: the button and its panel; who goes in which part, and the words           |
 | `src/save.ts`, `src/keep.ts`          | The kept record and its rules; reading and writing it in the browser                    |
 | `src/record.ts`                       | The one record as it is held while the page is open                                     |
 | `src/letter.ts`                       | Putting the arrival letter together from the time away                                  |
@@ -342,7 +358,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/campsfx.ts`                      | The camp's own sounds                                                                   |
 
 `grid.ts`, `camp.ts`, `things.ts`, `mail.ts`, `save.ts`, `letter.ts`, `madeup.ts`, `games.ts`,
-`folk.ts`, `live.ts`, `news.ts` and `motion.ts` have no page in them, and tests beside them
+`folk.ts`, `live.ts`, `news.ts`, `motion.ts` and `about.ts` have no page in them, and tests beside them
 (`motion.test.ts` plays Leaf's side of a live connection with the kit's stand-in socket); `folk.test.ts` also
 reads every file of the three games to check that nothing but members is drawn from a skin. `record.ts` has tests too,
 for what is sent to the camp.
@@ -357,7 +373,8 @@ there, gets a note and a way back; one that says it later opens over the note.
 
 ## Looking at it from outside
 
-`window.town` has handles for taking pictures of it: `skip(seconds)` runs the clock on, `hold(true)`
+`window.town` has handles for taking pictures of it: `about()` opens "Who is about", `found()` says
+who chosen there is being shown, `skip(seconds)` runs the clock on, `hold(true)`
 stops the clock so that only `skip` moves it, `enter()` puts the arrival letter away, `visit(place)`
 and `open(panel)` open things in town, `tp(x, y)` moves the member in town, `walk(x, y)` walks them
 to a point, `emote(kind)` makes an emote, `players()` says where everybody else in the live room
@@ -394,6 +411,12 @@ one is missing, `remember.json` what survives a reload, `reactions.json` the thi
 touch. `camp.json` and `camp-phone.json` are the camp from the market to one of the town's own dropping
 by, greeted, the signpost and back, at 1280x760 and 390x844 (the phone's with a finger), `camp-remember.json` the camp across a
 reload, and `camp-things.json` (opened with `?sheet=camp`) the sheet of every thing.
+`about.json` and `about-phone.json` are "Who is about" at 1280x760 and 390x844, on Leaf on this
+machine (`bun apps/api/test/play.ts 4000 /tmp/play --crowd 6`, opened at
+`http://127.0.0.1:4000/sign-in?return_to=http%3A%2F%2F127.0.0.1%3A4000%2Fplay%2Ftown%2F`): the
+button, the panel, somebody on the screen chosen, and somebody off it, the view there and back.
+`reconnect.ts` (from the repository's root, `bun apps/town/review/reconnect.ts`) times the town's
+page coming back into its room after Leaf restarts.
 `review/build.sh standin` puts `review/standin/` (a page that only speaks to the town) where the
 Works would be and leaves The Little Raid out, so both kinds of door can be seen without the
 games; without `standin` it copies the games' own builds in beside the town when they exist.

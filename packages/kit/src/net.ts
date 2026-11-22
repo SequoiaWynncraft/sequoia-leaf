@@ -40,6 +40,27 @@ export interface Outside {
   socket(url: string): LiveSocket;
   /** How wide the window is, in CSS pixels (0 where there is none). */
   width(): number;
+  /**
+   * Calls `fn` whenever the page may have been away and is back: it becomes visible again, it gains
+   * focus, or the browser says the network is back. Returns how to stop.
+   */
+  wake(fn: () => void): () => void;
+}
+
+/** The browser's `wake`: the page shown again, focused, or back on the network. */
+export function onWake(fn: () => void): () => void {
+  if (typeof window === "undefined" || typeof document === "undefined") return () => undefined;
+  const shown = (): void => {
+    if (document.visibilityState === "visible") fn();
+  };
+  document.addEventListener("visibilitychange", shown);
+  window.addEventListener("focus", fn);
+  window.addEventListener("online", fn);
+  return () => {
+    document.removeEventListener("visibilitychange", shown);
+    window.removeEventListener("focus", fn);
+    window.removeEventListener("online", fn);
+  };
 }
 
 function browserStore(): Store | null {
@@ -72,6 +93,7 @@ export const outside: Outside = {
   now: () => Date.now(),
   socket: (url) => new WebSocket(url),
   width: () => (typeof innerWidth === "number" ? innerWidth : 0),
+  wake: onWake,
 };
 
 /** Puts stand-ins in place of parts of the outside world (for tests). Returns how to put them back. */

@@ -131,13 +131,17 @@ export const othersIn = (roster: ReadonlyMap<number, unknown>, you: number | nul
 /** What the town shows of its connection to the room: nothing, the small "Reconnecting…", or one of the kit's two cards. */
 export type LinkShown = "none" | "reconnecting" | "replaced" | "signedout";
 
+/** How long the connection is down before "Reconnecting…" shows, in milliseconds: a blip is not announced. */
+export const QUIET_FOR = 2000;
+
 /**
  * What the town shows for the connection's latest `status`: a card once it has let go for good;
- * otherwise "Reconnecting…" from a drop until the room welcomes the page again (`dropped`).
+ * otherwise "Reconnecting…" once it has been down `QUIET_FOR` (`down`, milliseconds since the drop,
+ * null while it is not down), until the room welcomes the page again.
  */
-export function linkShown(status: LiveStatus | null, dropped: boolean): LinkShown {
+export function linkShown(status: LiveStatus | null, down: number | null): LinkShown {
   if (status === "replaced" || status === "signedout") return status;
-  return dropped ? "reconnecting" : "none";
+  return down !== null && down >= QUIET_FOR ? "reconnecting" : "none";
 }
 
 // ---------- who is in the room ----------

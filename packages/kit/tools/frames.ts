@@ -499,6 +499,18 @@ const ICONS: Readonly<Record<string, readonly string[]>> = {
     ".www..www.",
   ],
   paw: ["..ww..ww..", "..ww..ww..", "ww......ww", "ww.wwww.ww", "..wwwwww..", ".wwwwwwww.", ".wwwwwwww.", "..ww..ww.."],
+  // Two heads, one a step behind the other: who is about.
+  visit: [
+    "........ww..",
+    "..ww...wwww.",
+    ".wwww..wwww.",
+    ".wwww...ww..",
+    "..ww........",
+    "........www.",
+    ".wwww..wwwww",
+    "wwwwww.wwwww",
+    "wwwwww......",
+  ],
   more: ["ww..ww..ww", "ww..ww..ww"],
   up: ["....ww....", "...wwww...", "..wwwwww..", ".wwwwwwww.", "wwwwwwwwww"],
   down: ["wwwwwwwwww", ".wwwwwwww.", "..wwwwww..", "...wwww...", "....ww...."],

@@ -17,6 +17,7 @@ import type {
   AwayLine,
   Guild,
   Happening,
+  Mate,
   MateCamp,
   Me,
   Moment,
@@ -459,6 +460,10 @@ export function makeGuild(o: Opts = {}): MadeUp {
           : [{ id: standinId(s.name), name: s.name, rank: s.rank, at: s.at, skin: "", seen: since - s.gone * 60_000 }],
       )
       .toSorted((a, b) => b.seen - a.seen);
+  const about = (): { present: Mate[]; resting: Mate[] } => ({
+    present: visitors().map((v) => ({ id: v.id, name: v.name, rank: v.rank, at: v.at, seen: null })),
+    resting: resting().map((r) => ({ id: r.id, name: r.name, rank: r.rank, at: r.at, seen: r.seen })),
+  });
 
   return {
     me(): Me {
@@ -584,6 +589,7 @@ export function makeGuild(o: Opts = {}): MadeUp {
     },
     visitors,
     resting,
+    about,
     heard: () => true,
     here: () => undefined,
     stay: () => undefined,
