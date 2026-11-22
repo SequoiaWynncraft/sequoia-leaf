@@ -240,6 +240,15 @@ describe("a description still on its way", () => {
     await left.come();
     expect(left.drawn).toEqual([]);
   });
+  test("put away before it has come, it does not come", async () => {
+    const { deck, drawn, come } = waiting();
+    deck.press("person:w", spot, "mouse", A);
+    expect(deck.waiting()).toBe(true);
+    deck.close();
+    expect(deck.waiting()).toBe(false);
+    await come();
+    expect(drawn).toEqual([]);
+  });
   test("a click still waiting is not lost to the pointer resting on something else", async () => {
     const { deck, drawn, come } = waiting();
     deck.register("item", () => ({ name: "Gear" }));

@@ -248,6 +248,11 @@ export class Deck {
     return true;
   }
 
+  /** Whether a card was asked for and is still coming: putting cards away (`close`) drops it. */
+  waiting(): boolean {
+    return this.#awaited !== null;
+  }
+
   /** Something is pointed at now (or nothing): told to watchers at once, card or no card. */
   point(ref: Ref | null): void {
     this.pointed = ref;
@@ -922,8 +927,7 @@ if (typeof window !== "undefined") {
     "pointerdown",
     (e) => {
       lastVia = e.pointerType === "mouse" ? "mouse" : "touch";
-      const o = deck.open;
-      if (!o) return;
+      if (!deck.open && !deck.waiting()) return;
       const t = e.target instanceof Element ? e.target : null;
       if (t && node?.contains(t)) return;
       // A thing that is a link, or a canvas a game points into, says for itself what a press means.
@@ -933,10 +937,10 @@ if (typeof window !== "undefined") {
     true,
   );
   window.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || !deck.open) return;
+    if (e.key !== "Escape" || (!deck.open && !deck.waiting())) return;
     // The card took this Escape: a page listening after it should not put anything else away too.
     e.preventDefault();
-    const from = deck.open.from;
+    const from = deck.open?.from;
     deck.close();
     if (from instanceof HTMLElement && from.isConnected) from.focus({ preventScroll: true });
   });
