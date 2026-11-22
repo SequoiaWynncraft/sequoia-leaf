@@ -4,17 +4,21 @@
  * the camp (`hud.ts`). What a button does still lands in the town behind it.
  */
 
+import { type RequestKind, REQUESTS } from "@sequoia-leaf/core";
 import { link } from "@sequoia-leaf/kit/card.ts";
-import { el, icon as glyph, replay, shown } from "@sequoia-leaf/kit/dom.ts";
+import { asking, el, icon as glyph, pressedTwice, replay, shown } from "@sequoia-leaf/kit/dom.ts";
 import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
+import { isGuest } from "@sequoia-leaf/kit/live.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
+import { ask as askLeaf, isRecord } from "@sequoia-leaf/kit/net.ts";
 import { CREAM } from "@sequoia-leaf/kit/palette.ts";
-import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
+import { waitingLook } from "@sequoia-leaf/kit/play.ts";
+import { fromLedger } from "@sequoia-leaf/kit/purse.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
 import { owned } from "@sequoia-leaf/town/camp.ts";
-import { LOST_CRAB, PIECES, STALLS, type Stock, WARES } from "@sequoia-leaf/town/catalogue.ts";
+import { LOST_CRAB, STALLS, type Stock } from "@sequoia-leaf/town/catalogue.ts";
 import { folk, folkNamed, KEEPER } from "@sequoia-leaf/town/folk.ts";
 import { waiting } from "@sequoia-leaf/town/mail.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
@@ -22,7 +26,7 @@ import { thingOf } from "@sequoia-leaf/town/things.ts";
 import { goSit, hop, inTown, release, rouse, say, sitters } from "./actors.ts";
 import { noteWhen, openingTab, readNews, redrawn, TABS } from "./board.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
-import { named, registerCards, thingRef, wareRef } from "./cards.ts";
+import { named, registerCards, thingRef } from "./cards.ts";
 import { fling } from "./flights.ts";
 import { folkArt } from "./folkart.ts";
 import { puff } from "./fx.ts";
@@ -87,48 +91,153 @@ function nearby(p: Actor, words: readonly string[], reach = 70): void {
 
 // ---------- the Treasury ----------
 
-function wareArt(id: string): HTMLCanvasElement | null {
-  if (!S) return null;
-  if (id === "crown") return pic(S.crown, 2);
-  if (id === "jar") return pic(S.jar, 2);
-  if (id === "cocoa") return pic(S.mug, 3);
-  return null;
+/** The guild's requests the Treasury sells, in the order it lists them. The backend makes them and takes the Leaf. */
+const KINDS: readonly RequestKind[] = ["aspect", "tome"];
+const LOST = "Could not tell whether the request went through. Check the queue in Discord before trying again.";
+const UNREACHED = "The guild's requests could not be reached. Try again in a moment.";
+
+/** A number of Leaf as the backend writes it: 3,000. */
+const leafText = (n: number): string => n.toLocaleString("en-US");
+
+/** A request's line where its button would be: why it cannot be bought, or what buying it did. */
+interface Said {
+  text: string;
+  tone: "k-gold" | "k-coral" | "k-dim";
 }
 
-/** A button for something Cinfy sells: it is for Leaf, which may not be spent yet, and says so. */
-function leafButton(price: number): HTMLElement {
-  const b = button("leaf sm", [glyph("leaf"), String(price)], () => undefined);
-  closeLeaf(b, `${price} Leaf`);
-  return b;
-}
-
-function treasury(body: HTMLElement): () => void {
+function treasury(body: HTMLElement): null {
   const keeper = folk("cinfy");
   const line = el("span", "", { text: KEEPER.hello });
   const face = slot(G.cinfy ? faceOf(G.cinfy, 3) : null, 28);
   face.classList.add("nod");
   body.append(el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, folkName(keeper.name, "k-pix"), line)));
-  body.append(el("div", "k-label", { text: "To wear" }));
-  for (const w of WARES) {
-    const art = slot(wareArt(w.id) ?? glyph("star"));
-    link(art, wareRef(w.id));
-    body.append(
+  const reason = el("textarea", "k-field", {
+    maxLength: 1000,
+    rows: 2,
+    placeholder: "What is the tome for?",
+    "aria-label": "What is the tome for?",
+  });
+  /** What Leaf says each costs, while the member may buy it; what to say in place of its button otherwise. */
+  const price: Partial<Record<RequestKind, number>> = {};
+  const said: Partial<Record<RequestKind, Said>> = {};
+  let busy = false;
+  let writing = false;
+  const rows = KINDS.map((kind) => {
+    const side = el("div", "k-row");
+    const under = el("div", "k-col");
+    const art = S ? pic(kind === "tome" ? S.tome : S.aspect, 2) : glyph("star");
+    const card = el(
+      "div",
+      "k-card",
+      {},
+      slot(art),
       el(
         "div",
-        "k-card",
+        "k-grow k-col",
         {},
-        art,
-        el("div", "k-grow", {}, named(w.name, wareRef(w.id)), el("div", "k-d", { text: w.about })),
-        leafButton(w.price),
+        el("span", "k-pix", { text: REQUESTS[kind] }),
+        el("div", "k-d", { text: "A paid request is served before the free ones." }),
+        under,
       ),
+      side,
     );
-  }
-  // The fine pieces: things for a camp that are sold for Leaf, and are as cosmetic as the rest.
-  body.append(el("div", "k-label", { text: "For your camp" }));
-  const parts = PIECES.map((piece) => shopRow(body, piece, leafButton(piece.price)));
-  return () => {
-    for (const f of parts) f();
+    body.append(card);
+    return { kind, card, side, under };
+  });
+  const draw = (): void => {
+    for (const { kind, card, side, under } of rows) {
+      const cost = price[kind];
+      const words = said[kind];
+      const key = `request:${kind}`;
+      side.replaceChildren(
+        words || cost === undefined
+          ? ""
+          : button(
+              `leaf sm${asking(key) ? " asking" : ""}`,
+              asking(key) ? ["Buy?"] : [glyph("leaf"), leafText(cost)],
+              (b) => {
+                press(kind, b);
+              },
+            ),
+      );
+      under.replaceChildren(words ? el("div", `k-read ${words.tone}`, { text: words.text }) : "");
+      if (kind === "tome" && writing && !words) card.append(reason);
+      else if (kind === "tome") reason.remove();
+    }
   };
+  const press = (kind: RequestKind, b: HTMLButtonElement): void => {
+    if (busy) return;
+    if (kind === "tome" && (!writing || reason.value.trim() === "")) {
+      // A tome needs what it is for: the field first, then the button buys.
+      if (writing) replay(b, "shake");
+      writing = true;
+      draw();
+      reason.focus();
+      sfx.tap();
+      return;
+    }
+    sfx.tap();
+    if (pressedTwice(`request:${kind}`, draw)) void buy(kind, b);
+  };
+  const look = async (): Promise<void> => {
+    const answer = await askLeaf("/v1/game/requests");
+    for (const kind of KINDS) {
+      const offer = answer.status === 200 && isRecord(answer.body) ? answer.body[kind] : null;
+      const message =
+        isRecord(answer.body) && typeof answer.body.message === "string" ? answer.body.message : UNREACHED;
+      if (isRecord(offer) && typeof offer.price === "number") {
+        price[kind] = offer.price;
+        if (typeof offer.why_not === "string") said[kind] ??= { text: offer.why_not, tone: "k-dim" };
+      } else said[kind] ??= { text: message, tone: "k-dim" };
+    }
+    draw();
+  };
+  const buy = async (kind: RequestKind, b: HTMLButtonElement): Promise<void> => {
+    busy = true;
+    const answer = await waitingLook(
+      b,
+      askLeaf("/v1/game/requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: kind, ...(kind === "tome" ? { reason: reason.value.trim() } : {}) }),
+      }),
+    );
+    busy = false;
+    const made = answer.status === 200 && isRecord(answer.body) ? answer.body : null;
+    if (
+      made &&
+      typeof made.position === "number" &&
+      typeof made.leaf_paid === "number" &&
+      typeof made.leaf === "number"
+    ) {
+      fromLedger(made.leaf);
+      said[kind] = {
+        text: `Added your ${kind} request to the queue at position #${made.position}. ${leafText(made.leaf_paid)} Leaf paid; you have ${leafText(made.leaf)} left.`,
+        tone: "k-gold",
+      };
+      sfx.buy();
+      fly("leaf", purseAt("leaf"), centre(b), 5);
+      line.textContent = KEEPER.filed[0];
+      replay(face, "k-bump");
+      if (G.cinfy) {
+        hop(G.cinfy, 2);
+        say(G.cinfy, KEEPER.filed[1], 2.4);
+      }
+      // What the rest costs against the Leaf left.
+      void look();
+    } else {
+      // Refused, nothing was taken, and the backend says why; anything else may have gone through.
+      const message = isRecord(answer.body) ? answer.body.message : null;
+      const refused = answer.status >= 400 && answer.status < 500 && typeof message === "string";
+      said[kind] = { text: refused ? message : LOST, tone: "k-coral" };
+      sfx.no();
+      replay(b, "shake");
+    }
+    draw();
+  };
+  if (isGuest()) body.append(el("div", "k-d", { text: "For guild members with 7 days in the guild." }));
+  else void look();
+  return null;
 }
 
 // ---------- the quest board ----------
@@ -759,6 +868,6 @@ export function townDock(): void {
 export function initUI(sprites: Sprites, art: CampArt): void {
   S = sprites;
   ART = art;
-  registerCards(sprites, art);
+  registerCards(art);
   townDock();
 }

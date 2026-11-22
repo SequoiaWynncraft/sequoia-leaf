@@ -52,7 +52,6 @@ function blank(who: Who, body: Body | null, x: number, y: number, you: boolean):
     spot: null,
     doing: "walk",
     greeted: -99,
-    mug: 0,
     named: -99,
   };
 }
@@ -170,7 +169,6 @@ export function stepActor(a: Actor, dt: number, ground: Ground = TOWN): void {
     a.sayFor -= dt;
     if (a.sayFor <= 0) a.say = "";
   }
-  if (a.mug > 0) a.mug -= dt;
   if (a.hop > 0) {
     a.hop -= dt;
     if (a.hop <= 0 && a.hops > 0) {

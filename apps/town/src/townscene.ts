@@ -189,7 +189,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   buildTown(sprites, must(ground.getContext("2d"), "ground"));
   const standing = crabsStanding();
   const pic: Picture = {
-    sprites,
     sky: paintBackdrop(),
     skyAt: { x: SKYLINE.worldX, y: SKYLINE.worldY - SKYLINE.horizon },
     ground,

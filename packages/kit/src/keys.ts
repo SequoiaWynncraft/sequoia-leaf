@@ -25,6 +25,12 @@ export function heldAgain(e: Pick<KeyboardEvent, "repeat" | "code">): boolean {
   return again;
 }
 
+/** Whether a key is going into a field the player is typing in: the game leaves those keys alone. */
+export const typing = (e: Pick<KeyboardEvent, "target">): boolean =>
+  typeof HTMLElement !== "undefined" &&
+  e.target instanceof HTMLElement &&
+  (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement || e.target.isContentEditable);
+
 /** Forgets every key held: for the tests. */
 export const noKeysHeld = (): void => {
   down.clear();

@@ -1,4 +1,4 @@
-import { Cache, Context, Duration, Effect, Exit, Layer, Schema } from "effect";
+import { Cache, Context, Duration, Effect, Exit, Layer, Redacted, Schema } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import type { Identity } from "../api/api.ts";
@@ -59,7 +59,7 @@ export class Identities extends Context.Service<
               }
               return HttpClientResponse.filterStatusOk(response).pipe(
                 Effect.flatMap(HttpClientResponse.schemaBodyJson(BackendIdentity)),
-                Effect.map(toResult),
+                Effect.map((body) => toResult(token, body)),
               );
             }),
             Effect.timeout(TIMEOUT),
@@ -76,7 +76,7 @@ export class Identities extends Context.Service<
   );
 }
 
-function toResult(body: typeof BackendIdentity.Type): IdentityResult {
+function toResult(token: string, body: typeof BackendIdentity.Type): IdentityResult {
   const rank = body.guild_rank;
   return {
     status: "ok",
@@ -85,6 +85,7 @@ function toResult(body: typeof BackendIdentity.Type): IdentityResult {
       username: body.minecraft_username,
       guildRank: typeof rank === "string" && rank !== "" ? rank : null,
       admin: body.website_admin === true,
+      session: Redacted.make(token),
     },
   };
 }

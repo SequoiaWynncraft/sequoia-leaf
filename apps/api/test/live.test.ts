@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 
 import { CLOSE, encodeMove, Flag, LIVE_PATH, LIVE_VERSION, livePath, type Motion, playerId } from "@sequoia-leaf/core";
-import { Deferred, Effect, Fiber, Schema } from "effect";
+import { Deferred, Effect, Fiber, Redacted, Schema } from "effect";
 import { Socket } from "effect/socket";
 
 import { Live, type LiveTuning } from "../src/live/live.ts";
@@ -523,8 +523,9 @@ describe("opening a connection", () => {
   it("holds a player's place among the players while their socket opens, however long that takes", async () => {
     await start({ mostPlayers: 1 });
     const sessionOk = Effect.succeed(true);
-    const alicesIdentity = { playerId: alice, username: "Alice", guildRank: "CAPTAIN", admin: false };
-    const bobsIdentity = { playerId: bob, username: "Bob", guildRank: "RECRUIT", admin: false };
+    const session = Redacted.make("a session");
+    const alicesIdentity = { playerId: alice, username: "Alice", guildRank: "CAPTAIN", admin: false, session };
+    const bobsIdentity = { playerId: bob, username: "Bob", guildRank: "RECRUIT", admin: false, session };
     const opening = await Effect.runPromise(Deferred.make<Socket.Socket, Error>());
     // Alice's socket is slow to open: past the time her open's charge refills.
     const pending = services?.run(
@@ -619,7 +620,13 @@ function standInSocket(written: unknown[]): Socket.Socket {
   });
 }
 
-const alicesIdentity = { playerId: alice, username: "Alice", guildRank: "CAPTAIN", admin: false };
+const alicesIdentity = {
+  playerId: alice,
+  username: "Alice",
+  guildRank: "CAPTAIN",
+  admin: false,
+  session: Redacted.make("alice"),
+};
 const signedIn = Effect.succeed(true);
 
 describe("an open interrupted while its socket opens", () => {

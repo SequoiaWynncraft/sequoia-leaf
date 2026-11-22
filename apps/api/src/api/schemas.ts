@@ -1,4 +1,4 @@
-import { DEVICES, ODD_KINDS } from "@sequoia-leaf/core";
+import { DEVICES, ODD_KINDS, REQUEST_KINDS } from "@sequoia-leaf/core";
 import { Schema } from "effect";
 import { HttpApiSchema } from "effect/http-api";
 
@@ -248,6 +248,29 @@ export const Banners = Schema.Struct({
       headliner: Schema.NullOr(Schema.Struct({ id: Schema.String, name: Schema.String })),
     }),
   ),
+});
+
+/**
+ * What the Treasury sells, a paid aspect request and a paid tome request: for each, its price in Leaf,
+ * and why the member cannot buy it now, in the backend's words where it has them, or null when they can.
+ */
+export const Requests = Schema.Struct({
+  aspect: Schema.Struct({ price: Schema.Number, why_not: Schema.NullOr(Schema.String) }),
+  tome: Schema.Struct({ price: Schema.Number, why_not: Schema.NullOr(Schema.String) }),
+});
+
+/** A guild request to buy with Leaf: an aspect, or a tome with what it is for (`reason`, 1 to 1,000 characters). */
+export const RequestBody = Schema.Struct({
+  type: Schema.Literals(REQUEST_KINDS),
+  reason: Schema.optional(Schema.String),
+});
+
+/** A request made: its place in its queue, what it cost, and the member's Leaf after it. */
+export const RequestMade = Schema.Struct({
+  type: Schema.Literals(REQUEST_KINDS),
+  position: Schema.Number,
+  leaf_paid: Schema.Number,
+  leaf: Schema.Number,
 });
 
 // The staff's routes, under /v1/game/admin.

@@ -1,24 +1,20 @@
 /**
- * What is for sale, and for how much: the market's stalls (camp things for Coins), the Treasury's
- * wares and fine pieces (for Leaf), and what a member may leave at somebody else's camp. Leaf takes
- * a stall's price when a thing is bought (`game.ts`); the town page shows the same table.
+ * What is for sale, and for how much: the market's stalls (camp things for Coins), and what a
+ * member may leave at somebody else's camp. Leaf takes a stall's price when a thing is bought
+ * (`game.ts`); the town page shows the same table. And the wares, things to wear that the pull
+ * game gives as prizes.
  */
 
-/** Something the Treasury sells for Leaf. */
+/** Something to wear, given as a pull's prize. */
 export interface Ware {
   id: string;
   name: string;
   about: string;
-  price: number;
-  /** Bought once and kept, or as often as wanted. */
+  /** Had once and kept. */
   once: boolean;
-  /** Something that shows on the member, and so can be taken off again. */
-  worn: boolean;
-  /** What the keeper says when it is bought: at the counter, and out loud. */
-  thanks: readonly [string, string];
 }
 
-/** A camp thing and what it costs: Coins at a stall, Leaf at the Treasury. */
+/** A camp thing and what it costs at a stall, in Coins. */
 export interface Stock {
   thing: string;
   price: number;
@@ -35,51 +31,10 @@ export interface Stall {
 }
 
 export const WARES: readonly Ware[] = [
-  {
-    id: "crown",
-    name: "Leaf crown",
-    about: "A wreath of gold leaves.",
-    price: 1200,
-    once: true,
-    worn: true,
-    thanks: ["It suits you. Everything suits gold.", "it suits you"],
-  },
-  {
-    id: "jar",
-    name: "Jar of fireflies",
-    about: "They follow you about.",
-    price: 800,
-    once: true,
-    worn: true,
-    thanks: ["Don't shake it. They hold grudges.", "don't shake it"],
-  },
-  {
-    id: "cocoa",
-    name: "Fireside cocoa",
-    about: "A round for everyone there.",
-    price: 60,
-    once: false,
-    worn: false,
-    thanks: ["Sent over. They had better say thanks.", "cocoa's up!"],
-  },
-  {
-    id: "plate",
-    name: "Name plate",
-    about: "Hand-painted, gold corners.",
-    price: 600,
-    once: true,
-    worn: true,
-    thanks: ["Tindra did the corners twice.", "very smart"],
-  },
-  {
-    id: "water",
-    name: "Jar of pond water",
-    about: "Probably haunted.",
-    price: 100,
-    once: true,
-    worn: true,
-    thanks: ["No refunds. It knows where you live.", "no refunds"],
-  },
+  { id: "crown", name: "Leaf crown", about: "A wreath of gold leaves.", once: true },
+  { id: "jar", name: "Jar of fireflies", about: "They follow you about.", once: true },
+  { id: "plate", name: "Name plate", about: "Hand-painted, gold corners.", once: true },
+  { id: "water", name: "Jar of pond water", about: "Probably haunted.", once: true },
 ];
 
 /** What each stall sells, as a thing and its price in Coins. Everything is always on sale. */
@@ -167,15 +122,6 @@ export const STALLS: readonly Stall[] = [
     ),
   },
 ];
-
-/** The Treasury's fine pieces, for Leaf: as cosmetic as everything else in a camp. */
-export const PIECES: readonly Stock[] = stock(
-  ["glass-lantern", 600],
-  ["sun-banner", 800],
-  ["crab-throne", 1500],
-  ["fox-statue", 2000],
-  ["fountain", 3000],
-);
 
 /** What a member may leave at somebody's camp. */
 export const PRESENTS = ["pinecone", "painted-pebble", "acorn-jar"] as const;

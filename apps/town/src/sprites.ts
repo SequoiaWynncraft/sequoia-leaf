@@ -845,9 +845,34 @@ const LILY_BLOOM = [".GGpG..", "GGpwpG.", "GGGp.GG", ".GGGGG."];
 const CRAB_A = ["rr.....rr", "r.w...w.r", ".rrrrrrr.", "rrrrrrrrr", ".RrrrrrR.", "R.R...R.R"];
 const CRAB_B = [".........", "rrw...wrr", "rrrrrrrrr", "rrrrrrrrr", ".RrrrrrR.", ".R.R.R.R."];
 const BANG = ["yy", "yy", "yy", "yy", "yy", "..", "yy", "yy"];
-const CROWN = ["..l..l..", ".lylyyl.", "yyoyyoyy"];
-const MUG = ["www.", "wNww", "wNNw", "www."];
-const JAR = ["..nnnn..", ".UUUUUU.", "U......U", "U..Y...U", "U.....YU", "U.Y....U", "U...Y..U", ".UUUUUU."];
+/** The Treasury's two requests: a tome, plum with a gold clasp, and an aspect, a shard of blue light. */
+const TOME = [
+  ".kkkkkkkk.",
+  "kVvvvvvvvk",
+  "kVvyyyyyvk",
+  "kVvvvvvvvk",
+  "kVvvvYvvvk",
+  "kVvvYoYvvo",
+  "kVvvvYvvvo",
+  "kVvvvvvvvk",
+  "kVvvvvvvvk",
+  "kVkkkkkkkk",
+  "kVwcwcwcwk",
+  ".kkkkkkkk.",
+];
+const ASPECT = [
+  "....kk..y.",
+  "...kwuk...",
+  "..kwuuUk..",
+  "..kwuUUk..",
+  ".kwuuUUUk.",
+  ".kwuUUUUk.",
+  "y.kuuUUk..",
+  "..kuUUUk..",
+  "...kuUk...",
+  "...kUUk..y",
+  "....kk....",
+];
 
 function paperLantern(col: string, core: string): Sprite {
   const { c, g } = makeCanvas(5, 9);
@@ -1029,9 +1054,8 @@ export interface Sprites {
   lilyBloom: Sprite;
   crab: Sprite[];
   bang: Sprite;
-  crown: HTMLCanvasElement;
-  mug: HTMLCanvasElement;
-  jar: HTMLCanvasElement;
+  tome: HTMLCanvasElement;
+  aspect: HTMLCanvasElement;
   lanterns: Sprite[];
 }
 
@@ -1078,9 +1102,8 @@ export function makeSprites(): Sprites {
     lilyBloom: { c: bitmap(LILY_BLOOM, PAL), ax: 3, ay: 2 },
     crab: [bm(CRAB_A, 4, 6), bm(CRAB_B, 4, 6)],
     bang: bm(BANG, 1, 8),
-    crown: bitmap(CROWN, PAL),
-    mug: bitmap(MUG, PAL),
-    jar: bitmap(JAR, PAL),
+    tome: bitmap(TOME, PAL),
+    aspect: bitmap(ASPECT, PAL),
     lanterns: [paperLantern(GOLD[1], GOLD[2]), paperLantern(SKY[5], GOLD[1]), paperLantern(SKY[4], GOLD[2])],
   };
 }
