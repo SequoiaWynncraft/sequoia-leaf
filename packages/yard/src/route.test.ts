@@ -117,7 +117,7 @@ describe("finding a way for a belt", () => {
       { kind: "belt", x: 12, y: 1, dir: 0, span: 0 },
       { kind: "belt", x: 12, y: 1, dir: 1, span: 0 },
     ] as const;
-    expect(lay(w, twice, 999)).toEqual({ ok: false, why: "That run crosses itself" });
+    expect(lay(w, twice, 999)).toEqual({ ok: false, why: "That line crosses itself" });
   });
   test("laying is all or nothing", () => {
     const w = flat();

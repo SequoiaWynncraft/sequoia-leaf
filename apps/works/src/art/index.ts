@@ -105,11 +105,11 @@ function signMaker(): (price: number) => Sprite {
 
 const bare = (): HTMLCanvasElement => beltTile([2, 0, 1, 0], 0, 5, 1);
 
-/** A length of belt with something standing on it. */
-const onBelt = (top: HTMLCanvasElement): HTMLCanvasElement => {
+/** A tile where belts meet, pointing east, with what marks it: `arms` as `beltTile` takes them. */
+const meeting = (arms: Parameters<typeof beltTile>[0], top: HTMLCanvasElement | undefined): HTMLCanvasElement => {
   const { c, g } = makeCanvas(16, 16);
-  g.drawImage(bare(), 0, 0);
-  g.drawImage(top, 0, 0);
+  g.drawImage(beltTile(arms, 0, 5, 1), 0, 0);
+  if (top) g.drawImage(top, 0, 0);
   return c;
 };
 
@@ -136,8 +136,8 @@ function icons(m: Machines, item: ItemArt): (kind: Kind) => HTMLCanvasElement {
     mill: () => must(m.saw[0], "saw").c,
     bench: () => must(m.bench[0], "bench").c,
     workshop: () => must(m.workshop[1]?.[0], "workshop").c,
-    splitter: () => onBelt(m.splitter),
-    joiner: () => onBelt(m.joiner),
+    splitter: () => meeting([2, 2, 1, 2], m.splitter[0]),
+    joiner: () => meeting([2, 1, 1, 1], m.joiner[0]),
     tunnel,
     crate: () => must(m.crate[0]?.[0], "crate").c,
     pylon: () => must(m.pylon[0]?.[2], "pylon").c,

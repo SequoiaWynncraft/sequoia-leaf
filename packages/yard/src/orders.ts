@@ -237,11 +237,11 @@ export function claim(w: World, id: number): number | null {
 /** Why an order on the board, by its id, cannot be swapped just now, or nothing if it can. */
 export function swapRefusal(w: World, id: number): string | null {
   const order = w.board[slotOf(w, id)];
-  if (!order) return "There is no such order on the board";
-  if (isFilled(order.want, order.filled)) return "That one is filled and waiting to be handed over";
+  if (!order) return "There is no such order";
+  if (isFilled(order.want, order.filled)) return "That order is filled. Hand it over instead";
   if (w.tick < w.swapAt) {
     const minutes = Math.ceil((w.swapAt - w.tick) / 600);
-    return `A fresh order can be had in ${minutes} minute${minutes === 1 ? "" : "s"}`;
+    return `You can replace an order again in ${minutes} minute${minutes === 1 ? "" : "s"}`;
   }
   return null;
 }
