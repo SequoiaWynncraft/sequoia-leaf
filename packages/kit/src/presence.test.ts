@@ -22,7 +22,6 @@ describe("who is here", () => {
         name: "Bob",
         place: "works",
         seen: Date.UTC(2026, 10, 25, 12, 40),
-        stay: true,
         guest: false,
       },
     ]);
@@ -38,8 +37,12 @@ describe("who is here", () => {
           { id: "d", username: "Dan", place: "town" },
         ],
       }),
-    ).toEqual([{ id: "a", name: "Alice", place: "table", seen: Date.UTC(2026, 10, 25, 10), guest: false, stay: true }]);
+    ).toEqual([{ id: "a", name: "Alice", place: "table", seen: Date.UTC(2026, 10, 25, 10), guest: false }]);
     expect(readResting({ present: [] })).toEqual([]);
+    // Those whose characters do not stay come in a list of their own, read the same way.
+    expect(
+      readResting({ gone: [{ id: "z", username: "Zed", place: "town", seen_at: "2026-11-25T10:00:00.000Z" }] }, "gone"),
+    ).toEqual([{ id: "z", name: "Zed", place: "town", seen: Date.UTC(2026, 10, 25, 10), guest: false }]);
   });
 
   test("leaves out anybody who makes no sense", () => {

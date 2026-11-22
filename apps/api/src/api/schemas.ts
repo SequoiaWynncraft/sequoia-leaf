@@ -166,20 +166,21 @@ export const PresenceBody = Schema.Struct({
  * recently; and those who were seen between 90 seconds and a day ago and are happy to be left in
  * town, newest first, at most 24. Each says whether they play as a guest.
  */
+/** Somebody gone from the game in the last day, and when they were last seen. */
+const Left = Schema.Struct({
+  id: Schema.String,
+  username: Schema.String,
+  place: Schema.String,
+  guest: Schema.Boolean,
+  seen_at: Time,
+});
+
 export const Present = Schema.Struct({
   present: Schema.Array(
     Schema.Struct({ id: Schema.String, username: Schema.String, place: Schema.String, guest: Schema.Boolean }),
   ),
-  resting: Schema.Array(
-    Schema.Struct({
-      id: Schema.String,
-      username: Schema.String,
-      place: Schema.String,
-      guest: Schema.Boolean,
-      seen_at: Time,
-      stay: Schema.Boolean,
-    }),
-  ),
+  resting: Schema.Array(Left),
+  gone: Schema.Array(Left),
 });
 
 /** A player's state in a game, as their page is given it. */

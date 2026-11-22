@@ -593,6 +593,14 @@ const GameHelloHandlers = HttpApiBuilder.group(LeafApi, "gameHello", (handlers) 
 );
 
 /** Who is about, as the presence routes answer it. */
+const leftJson = (player: Here["resting"][number]) => ({
+  id: player.playerId,
+  username: player.username,
+  place: player.place,
+  guest: player.guest,
+  seen_at: iso(player.seenAt),
+});
+
 const presentJson = (here: Here) =>
   ({
     present: here.present.map((player) => ({
@@ -601,14 +609,8 @@ const presentJson = (here: Here) =>
       place: player.place,
       guest: player.guest,
     })),
-    resting: here.resting.map((player) => ({
-      id: player.playerId,
-      username: player.username,
-      place: player.place,
-      guest: player.guest,
-      seen_at: iso(player.seenAt),
-      stay: player.stay,
-    })),
+    resting: here.resting.map(leftJson),
+    gone: here.gone.map(leftJson),
   }) satisfies typeof Body.Present.Type;
 
 const invalidSlot = new Invalid({ code: "invalid_slot", message: "That is not a save slot" });

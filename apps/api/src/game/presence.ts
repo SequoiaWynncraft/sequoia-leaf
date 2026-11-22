@@ -28,15 +28,18 @@ const Resting = Schema.Struct({
   place: Schema.String,
   guest: Schema.BooleanFromBit,
   seenAt: Schema.Number,
-  /** Whether their character stays in town, dozing, now that they are gone. */
-  stay: Schema.BooleanFromBit,
 });
 export type Resting = typeof Resting.Type;
 
-/** Who is about: those here now, and those gone in the last day, with whether their characters stay in town. */
+/**
+ * Who is about: those here now, and those gone in the last day, in two lists: `resting`, whose
+ * characters stay in town, and `gone`, whose do not. They are apart so that a page which draws
+ * everybody resting as dozing never draws somebody who would rather not stay.
+ */
 export interface Here {
   readonly present: readonly Present[];
   readonly resting: readonly Resting[];
+  readonly gone: readonly Resting[];
 }
 
 /** Somebody in one of Live's rooms, as their presence is written. */
@@ -105,12 +108,12 @@ export class Presence extends Context.Service<
           ORDER BY username, playerId
         `,
       });
-      const resting = SqlSchema.findAll({
-        Request: Schema.Struct({ before: Schema.Int, since: Schema.Int }),
+      const left = SqlSchema.findAll({
+        Request: Schema.Struct({ before: Schema.Int, since: Schema.Int, stay: Schema.Int }),
         Result: Resting,
-        execute: ({ before, since }) => sql`
-          SELECT player_id AS playerId, username, place, guest, seen_at AS seenAt, stay FROM presence
-          WHERE seen_at <= ${before} AND seen_at >= ${since}
+        execute: ({ before, since, stay }) => sql`
+          SELECT player_id AS playerId, username, place, guest, seen_at AS seenAt FROM presence
+          WHERE seen_at <= ${before} AND seen_at >= ${since} AND stay = ${stay}
           ORDER BY seen_at DESC, player_id
           LIMIT ${RESTING_MOST}
         `,
@@ -119,7 +122,8 @@ export class Presence extends Context.Service<
       const lists = (now: number) =>
         Effect.all({
           present: present(now - PRESENT_FOR_MS),
-          resting: resting({ before: now - PRESENT_FOR_MS, since: now - DAY_MS }),
+          resting: left({ before: now - PRESENT_FOR_MS, since: now - DAY_MS, stay: 1 }),
+          gone: left({ before: now - PRESENT_FOR_MS, since: now - DAY_MS, stay: 0 }),
         });
       return Presence.of({
         look: (now) => sql.withTransaction(lists(now)).pipe(Effect.orDie),
