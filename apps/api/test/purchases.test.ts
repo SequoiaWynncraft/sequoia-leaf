@@ -174,7 +174,7 @@ describe("cancelling a purchase", () => {
     expect(await balance()).toBe(5000);
     expect((await entries()).map((e) => [e.kind, e.delta, e.key])).toEqual([
       ["spend", -3000, "purchase:tome-1"],
-      ["reversal", 3000, "purchase:tome-1:refund"],
+      ["reversal", 3000, "purchase-refund:tome-1"],
     ]);
   });
 
@@ -186,6 +186,18 @@ describe("cancelling a purchase", () => {
     });
     expect(await balance()).toBe(5000);
     expect(await entries()).toEqual([]);
+  });
+
+  it("refunds a purchase whatever other purchases' keys are", async () => {
+    // Keys that would be each other's refund key, were the two kept in the same names.
+    await buy("k", { player_id: alice, kind: "tome", leaf: 1000 });
+    await buy("k:refund", { player_id: alice, kind: "aspect", leaf: 1000 });
+    await buy("purchase-refund:k", { player_id: alice, kind: "aspect", leaf: 1000 });
+    expect(await balance()).toBe(2000);
+
+    expect((await cancel("k")).body).toEqual({ key: "k", status: "refunded" });
+    expect((await cancel("k:refund")).body).toEqual({ key: "k:refund", status: "refunded" });
+    expect(await balance()).toBe(4000);
   });
 
   it("does not charge a refunded purchase sent again", async () => {
