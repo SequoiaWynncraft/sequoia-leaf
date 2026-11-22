@@ -186,6 +186,10 @@ export const FOLK: readonly Townsperson[] = [
   },
 ];
 
+/** What a letter kept from before one of the town's own was renamed is signed, and who that is now. */
+const WAS: Readonly<Record<string, string>> = { Embertoe: "Fika", "the White Fox": "Orphion" };
+export const nowNamed = (name: string): string => WAS[name] ?? name;
+
 /** One of the town's own, by its name; nothing for anybody else. */
 export const folkNamed = (name: string): Townsperson | null => FOLK.find((t) => t.name === name) ?? null;
 
