@@ -21,9 +21,13 @@ export type Bought =
 /** What a cancel did: gave a paid purchase's Leaf back, or kept the key from ever being paid. */
 export type Cancelled = { readonly status: "refunded" | "cancelled" };
 
-/** The ledger's key for a purchase's spend, and for its refund. */
+/**
+ * The ledger's key for a purchase's spend, and for its refund. No purchase's key can make another
+ * purchase's refund key, or the other way about: every spend key starts `purchase:` and every
+ * refund key `purchase-refund:`.
+ */
 const spendKey = (key: string) => `purchase:${key}`;
-const refundKey = (key: string) => `purchase:${key}:refund`;
+const refundKey = (key: string) => `purchase-refund:${key}`;
 
 /**
  * Guild requests sequoia-backend buys for members with their Leaf (a tome or an aspect request), each
@@ -94,8 +98,11 @@ export class Purchases extends Context.Service<
               Effect.gen(function* () {
                 const spend = yield* ledger.entry(spendKey(key));
                 if (Option.isSome(spend)) {
+                  if (spend.value.kind !== "spend" || spend.value.origin !== "request") {
+                    return yield* Effect.die(new Error(`The ledger entry of purchase ${key} is not a request bought`));
+                  }
                   // Posting the refund again, or after it was posted, changes nothing.
-                  yield* ledger.post(
+                  const refunded = yield* ledger.post(
                     {
                       kind: "reversal",
                       playerId: spend.value.playerId,
@@ -104,6 +111,11 @@ export class Purchases extends Context.Service<
                     },
                     now,
                   );
+                  if (refunded.status === "rejected") {
+                    return yield* Effect.die(
+                      new Error(`The refund of purchase ${key} was refused: ${refunded.reason}`),
+                    );
+                  }
                 }
                 yield* sql`INSERT INTO cancelled_purchases (key, cancelled_at) VALUES (${key}, ${now}) ON CONFLICT (key) DO NOTHING`;
                 return { status: Option.isSome(spend) ? "refunded" : "cancelled" } satisfies Cancelled;

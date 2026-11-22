@@ -320,7 +320,8 @@ always adds `X-Forwarded-For`, gets 401 `unauthorized`, token or not.
   key was used for another purchase (another player, kind or price), and
   `purchase_cancelled` when it was cancelled; 400 `invalid_purchase` or
   `invalid_key`. Nothing is charged with any of them.
-- **Cancelling** a paid purchase reverses its spend (`refunded`): staff denied
+- **Cancelling** a paid purchase reverses its spend (`refunded`), as an entry
+  keyed `purchase-refund:<key>`, which no purchase's key can take: staff denied
   the request, or the backend could not record it. A key never paid is kept
   from ever being paid (`cancelled`, in `cancelled_purchases`): the backend
   cancels a purchase whose answer it did not hear, so one that reaches Leaf late
