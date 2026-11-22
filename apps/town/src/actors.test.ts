@@ -108,7 +108,8 @@ describe("where a walk ends", () => {
     walkTo(a, { x: 256, y: 160 });
     run(0.5);
     const b = member("Wrenly", 256, 160);
-    run(4);
+    // The way round is 136 pixels, and the slowest walker goes 30 a second.
+    run(6);
     expect(dist(b.x, b.y, 256, 160)).toBe(0);
     expect(onTop(a, b)).toBe(false);
   });
