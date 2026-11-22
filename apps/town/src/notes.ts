@@ -15,7 +15,7 @@ export interface Note {
 export const NOTES: readonly Note[] = [
   {
     id: "splitter-ways",
-    at: "2026-11-22T21:33Z",
+    at: "2026-11-22T21:45Z",
     title: "The Works: shut a splitter's way",
     lines: [
       "A splitter's card shows its 3 ways out. Click or tap one to shut it or open it. A splitter sends no items to a shut way.",
