@@ -439,9 +439,12 @@ both, with whether the player is a guest, and answers `{ "present": [{ "id",
 "guest", "seen_at" }] }`: `present` is the 50 seen most recently of everyone
 whose game said where they were in the last 90 seconds, the player included,
 in name order; `resting` is those last seen between 90 seconds and a day ago
-whose `stay` was true, newest first, at most 24. A game that says where it is
-less than 5 seconds after it last did is answered the lists, but nothing is
-written. Players not seen for a day are forgotten.
+whose `stay` was true, newest first, at most 24. A game that says the same place
+and `stay` less than 5 seconds after anything was last written for its player is
+answered the lists, but nothing is written; somewhere else, or other about
+staying, is written at once. A player in one of Live's rooms of the game's
+places (the town) is written there by Live itself, as if their game had said so
+(below). Players not seen for a day are forgotten.
 
 ### Live: players in the same place, as it happens
 
@@ -486,7 +489,12 @@ a confirmed session), and closes it as signed out once it has ended.
 
 Motion is state: each frame is all of where a player is, and only the newest
 counts. Positions are in the room's units and kept inside it; speeds are kept
-below 1024 a second. `flags` bit 0 says the player is moving. `jump` counts the
+below 1024 a second. Each kind of room has a pace (`speed` in `ROOMS`: the
+town's is 160 a second, its walk 64): a move further from the player's last
+place than the pace allows in the time since, half as far again and 8 units
+more, is shown to everybody else as a jump, though the game's count did not
+change, so a page that says its player is anywhere it likes only has them jump
+there. `flags` bit 0 says the player is moving. `jump` counts the
 times they did not walk where they are, so that the game draws them there at
 once, not on the way, whenever it changes: the game counts its own player's
 (a door, being set down), and Leaf counts what everybody else is shown, one up
@@ -518,7 +526,7 @@ everybody sees them as they are. Actions come only from a list so that
 nothing a player types, not even a word spelt out, reaches anybody else.
 
 **Rooms.** `ROOMS` in `packages/core/src/live.ts` lists the kinds, each with its
-size and how many fit in one copy (the town: 512 by 352, 32). A player is put in
+size, how many fit in one copy and its pace (the town: 512 by 352, 32, 160). A player is put in
 the first copy with space, or a new one (`town/2`); a copy closes when its last
 player leaves. Rooms live in memory, in the one process.
 
@@ -551,8 +559,19 @@ its player is again, as a jump.
 Once a minute while anybody is about, Leaf logs a `live` line: players, how many
 are connected, who is in which room, and how many frames came in and were dropped.
 
-**What it is not, yet.** Positions are the game's to say, inside the room:
-right for walking about together, never for anything that pays or wins. Fights
+**Where they are, for everybody else.** A player in a room whose kind is one of
+the game's places (`town`) is present there as `PUT /v1/game/presence` has it,
+written by Live: when they come into the room (keeping what they last said
+about staying, and staying if they never said), again every 30 seconds while
+they are in it, and when they leave it (their connection's grace run out, a
+`leave`, or another room), as last seen there then, unless their game has said
+since that they are somewhere else. So pages that ask who is about count them
+right, and they rest in town after they go, though their page never says where
+it is.
+
+**What it is not, yet.** Positions are the game's to say, inside the room and
+at its pace: right for walking about together, never for anything that pays or
+wins. Fights
 and rewards will need commands Leaf checks and outcomes Leaf decides. A room is
 found by its kind; camps and tables will need copies addressed by who they
 belong to, and a moment the whole town sees (a pull at the tree) will need to
@@ -570,7 +589,11 @@ and times every move from its sender to each other player receiving it (not to
 the screen). On the development machine, with the server and every player in one
 process: 32 players, every move seen by all 31 others, 17 ms at the median and
 35 ms at worst, 15 KiB a second to each player; 128 players in four copies of
-the town, 19 ms and 38 ms, 19% of one core for everything.
+the town, 19 ms and 38 ms, 19% of one core for everything. Measured on the
+screen, with `play.ts --crowd 6` and two pages as two members on the same
+machine, one walking about the town and the other read every 100 ms for 24
+seconds: the second draws the first where the first said it was 125 to 135 ms
+before, and so at most 10 of the town's pixels behind it at the town's walk.
 
 ## The game's pages
 
@@ -597,7 +620,7 @@ each into `/app/public/<app>`, in a stage of its own, and the image sets
 
 ```sh
 for app in town works battler; do (cd apps/$app && bun build index.html --outdir /tmp/play/$app --minify); done
-bun apps/api/test/play.ts 4000 /tmp/play
+bun apps/api/test/play.ts 4000 /tmp/play --crowd 6
 ```
 
 This runs the real app at `http://127.0.0.1:4000/play/town/`, on a database in
@@ -615,11 +638,21 @@ Pebblefoot from spot to spot.
 - The cookie `seq_session=tester` is Tester's session; any other, or none, is
   signed out. `/sign-in?return_to=<address>` sets it and goes back, as the
   website's sign-in does, and it is the `sign_in` that `hello` gives.
-  `/sign-out?return_to=<address>` clears it.
+  `/sign-out?return_to=<address>` clears it and ends the session, as the
+  website's does, until Tester signs in again: a live connection of theirs is
+  closed as signed out once Leaf asks again.
+- Each of the others has a session of their own, `as-<name>` in small letters:
+  `/sign-in?as=quillon&return_to=<address>` sets it, for a second page as
+  somebody else.
 - `PUBLIC_ORIGIN` is `http://127.0.0.1:4000`.
 - `--guest`: Tester is signed in but not in the guild, so they play as a guest.
 - `--down`: the backend can't be asked who Tester is, so they answer 503.
 - `--busy`: every minute a few of the four finish a raid together, for the guild's news.
+- `--crowd <n>`: n more members, each in a skin of their own, in the town's live
+  room and walking about it along its paths: stopping a few seconds at each
+  spot, now and then sitting on a log by the fire a while, and now and then
+  waving, cheering, laughing or sending a heart. They say where they are only
+  by being in the room.
 
 ## Rules the code is built on
 

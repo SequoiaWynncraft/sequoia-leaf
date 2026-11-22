@@ -51,6 +51,7 @@ function blank(who: Who, body: Body | null, x: number, y: number, you: boolean):
     doing: "walk",
     greeted: -99,
     mug: 0,
+    named: -99,
   };
 }
 

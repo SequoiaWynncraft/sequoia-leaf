@@ -1,6 +1,9 @@
 /** The small reactions: sparks, leaves, dust, rings on the ground and on the water, and words that rise and fade. */
 
+import type { Emote } from "@sequoia-leaf/kit/emotes.ts";
 import { CREAM, GOLD } from "@sequoia-leaf/kit/palette.ts";
+
+import type { Actor } from "./game.ts";
 
 export interface Bit {
   x: number;
@@ -40,9 +43,28 @@ export interface Ring {
   flat: boolean;
 }
 
+/** An emote's picture floating up from somebody's head. */
+export interface Emoted {
+  a: Actor;
+  kind: Emote;
+  life: number;
+  ttl: number;
+}
+
 export const bits: Bit[] = [];
 export const floaters: Floater[] = [];
 export const rings: Ring[] = [];
+export const emoted: Emoted[] = [];
+
+/** How long an emote's picture floats over somebody, in seconds. */
+export const EMOTE_FOR = 1.5;
+
+/** An emote's picture floats up from somebody's head for a moment and a half; a new one takes the place of theirs. */
+export function emoteOver(a: Actor, kind: Emote): void {
+  const i = emoted.findIndex((e) => e.a === a);
+  if (i >= 0) emoted.splice(i, 1);
+  emoted.push({ a, kind, life: 0, ttl: EMOTE_FOR });
+}
 
 const MAX_BITS = 420;
 
@@ -164,6 +186,12 @@ export function updateFx(dt: number): void {
     r.life += dt;
     if (r.life >= r.ttl) rings.splice(i, 1);
   }
+  for (let i = emoted.length - 1; i >= 0; i--) {
+    const e = emoted[i];
+    if (!e) continue;
+    e.life += dt;
+    if (e.life >= e.ttl || e.a.away) emoted.splice(i, 1);
+  }
 }
 
 /** Every spark, word and ring is gone: another place is about to be shown. */
@@ -171,4 +199,5 @@ export function clearFx(): void {
   bits.length = 0;
   floaters.length = 0;
   rings.length = 0;
+  emoted.length = 0;
 }

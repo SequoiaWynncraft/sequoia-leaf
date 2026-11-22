@@ -92,12 +92,13 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `shell.ts`    | How a game that is a place in the town and the town speak to each other                            |
 | `postcard.ts` | What a game leaves for the town to read about it while nobody is in it                             |
 | `net.ts`      | Everything asked of the world outside the page: the server, storage, the address                   |
-| `live.ts`     | Where the game is being played, who the member is, and the cards for when it is shut               |
+| `live.ts`     | Where the game is being played, who the member is, and the cards for when it is shut or let go of  |
 | `cloud.ts`    | Keeping what the games keep on the member's account, when the game is live                         |
 | `keep.ts`     | Writing the game into the browser; a page that has let go of it (`stopped()`) writes none of it    |
 | `presence.ts` | Telling the server where in the game the member is, and hearing who else is about                  |
 | `realtime.ts` | Being in a live room on Leaf: who is there, and where each is to be drawn now (`joinLive`)         |
-| `standin.ts`  | A stand-in server and storage for tests; no page loads it                                          |
+| `emotes.ts`   | The emotes others see (wave, cheer, laugh, heart): their pictures, for the page and a canvas       |
+| `standin.ts`  | A stand-in server, storage and live connection (`FakeSocket`) for tests; no page loads it          |
 
 `tools/drive.ts` drives a built page in headless Chromium and takes screenshots; its header says how.
 
@@ -202,6 +203,10 @@ with a move waiting its turn (`sendIn`), and the last change always. Each frame 
 pings, by the quickest), between the snapshots either side, going on for up to 200 ms past the
 newest while they were moving, and never on the way across a jump. With the made-up guild it
 opens nothing, and nobody is ever there. Drawing the others is the page's.
+Once a connection has let go for good, `letGoCard(why, signIn, again)` puts the
+kit's card for it over the page, which plays on beneath: "Playing somewhere
+else" with "Play here" (`again`, to take the room back), or the "Signed out"
+card, whose button goes to sign in.
 
 All of it reaches the server through `net.ts`, which tests replace with `standin.ts`; the tests
 read the server's own contract files (`contracts/leaf-api-v1.json`, `contracts/leaf-game-v1.json`).

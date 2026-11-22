@@ -381,6 +381,116 @@ describe("a player, whatever their connection", () => {
   });
 });
 
+interface Row {
+  player_id: string;
+  username: string;
+  place: string;
+  seen_at: number;
+  stay: number;
+  guest: number;
+}
+const rows = () =>
+  services?.query<Row>(
+    (sql) => sql`SELECT player_id, username, place, seen_at, stay, guest FROM presence ORDER BY username`,
+  ) ?? Promise.resolve([]);
+/** The presence rows once they pass `which`, waiting a little for Live to write them. */
+async function rowsWhen(which: (rows: readonly Row[]) => boolean, ms = 2000): Promise<readonly Row[]> {
+  const until = Date.now() + ms;
+  for (;;) {
+    // oxlint-disable-next-line no-await-in-loop -- looking again until Live has written
+    const now = await rows();
+    if (which(now)) return now;
+    if (Date.now() > until) throw new Error(`Waited ${ms} ms in vain: ${JSON.stringify(now)}`);
+    // oxlint-disable-next-line no-await-in-loop -- as above
+    await Bun.sleep(20);
+  }
+}
+/** A player's page saying where they are, as `PUT /v1/game/presence`. */
+const sayHere = (token: string, place: string, stay?: boolean) =>
+  fetch(`${server?.origin ?? ""}/v1/game/presence`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(stay === undefined ? { place } : { place, stay }),
+  });
+
+describe("where players are, from the room", () => {
+  it("writes a player into the town as they come in, as their game would, keeping what they said about staying", async () => {
+    await start();
+    expect((await sayHere("alice-token", "camp", false)).status).toBe(200);
+    ahead = 60_000;
+    const from = Date.now() + ahead;
+    const a = await connect(page("alice"));
+    await a.welcome();
+    const c = await connect(page("carol"));
+    await c.welcome();
+
+    const written = await rowsWhen((r) => r.length === 2 && r.every((row) => row.place === "town"));
+    expect(written.map((row) => [row.player_id, row.username, row.place, row.stay, row.guest])).toEqual([
+      [alice, "Alice", "town", 0, 0],
+      // Never seen before: they stay, as a game that says nothing about it has them.
+      [carol, "Carol", "town", 1, 1],
+    ]);
+    expect(written.every((row) => row.seen_at >= from)).toBe(true);
+    // Another page asking who is here hears them there, though neither page has said so.
+    const heard: unknown = await (await sayHere("bob-token", "works")).json();
+    expect(heard).toMatchObject({
+      present: [
+        { username: "Alice", place: "town" },
+        { username: "Bob", place: "works" },
+        { username: "Carol", place: "town", guest: true },
+      ],
+    });
+  });
+
+  it("writes them again while they stay, so they are never taken to have gone", async () => {
+    await start({ presenceMs: 100 });
+    const a = await connect(page("alice"));
+    await a.welcome();
+    const first = (await rowsWhen((r) => r.length === 1))[0]?.seen_at ?? 0;
+    ahead = 80_000;
+
+    const again = await rowsWhen((r) => (r[0]?.seen_at ?? 0) >= first + 80_000);
+    expect(again.map((row) => row.place)).toEqual(["town"]);
+  });
+
+  it("writes when they go that they were last seen there then, unless their game has said since where else they are", async () => {
+    await start({ graceMs: 100 });
+    const a = await connect(page("alice"));
+    await a.welcome();
+    const b = await connect(page("bob"));
+    await b.welcome();
+    await rowsWhen((r) => r.length === 2);
+    ahead = 40_000;
+    const left = Date.now() + ahead;
+    // Alice's page leaves the room and closes; Bob's game says he has gone to the Works, then closes.
+    a.send({ t: "leave" });
+    a.close();
+    expect((await sayHere("bob-token", "works")).status).toBe(200);
+    b.close();
+
+    const after = await rowsWhen((r) => (r[0]?.seen_at ?? 0) >= left);
+    await Bun.sleep(300);
+    expect((await rows()).map((row) => [row.username, row.place])).toEqual([
+      ["Alice", "town"],
+      ["Bob", "works"],
+    ]);
+    expect(after[0]?.seen_at).toBeLessThan(left + 1000);
+  });
+
+  it("writes them gone at the end of their grace when the connection drops", async () => {
+    await start({ graceMs: 150 });
+    const a = await connect(page("alice"));
+    await a.welcome();
+    const first = (await rowsWhen((r) => r.length === 1))[0]?.seen_at ?? 0;
+    a.close();
+    ahead = 30_000;
+
+    const gone = await rowsWhen((r) => (r[0]?.seen_at ?? 0) >= first + 30_000);
+    expect(gone.map((row) => row.place)).toEqual(["town"]);
+    expect(await census()).toMatchObject({ connected: 0, rooms: {} });
+  });
+});
+
 describe("opening a connection", () => {
   it("is entering the room: the welcome is the first thing it says, before anything of the room", async () => {
     await start();

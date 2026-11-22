@@ -54,7 +54,10 @@ export type IconName =
   | "paw"
   | "more"
   | "up"
-  | "down";
+  | "down"
+  | "wave"
+  | "cheer"
+  | "laugh";
 
 /** One of the kit's pixel icons, `scale` whole steps large. */
 export function icon(name: IconName, scale = 1): HTMLElement {

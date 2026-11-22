@@ -1343,6 +1343,7 @@ function arrive(place: string, sent: Sent = alicesPage, stay?: unknown) {
 }
 
 const iso = (at: number) => new Date(at).toISOString();
+const presenceRows = () => services.query((sql) => sql`SELECT place, seen_at, stay FROM presence`);
 
 describe("PUT /v1/game/presence", () => {
   it("lists the caller and everyone else seen in the last 90 seconds, and nobody older", async () => {
@@ -1476,13 +1477,13 @@ describe("PUT /v1/game/presence", () => {
     );
   });
 
-  it("answers a game saying where it is again within 5 seconds, without writing it down", async () => {
+  it("answers a game saying the same again within 5 seconds, without writing it down", async () => {
     await arrive("town");
     clock.now = T0 + 4999;
-    const soon = await arrive("works", alicesPage, false);
-    const kept = await services.query((sql) => sql`SELECT place, seen_at, stay FROM presence`);
+    const soon = await arrive("town");
+    const kept = await presenceRows();
     clock.now = T0 + 5000;
-    const later = await arrive("works", alicesPage, false);
+    await arrive("town");
 
     expect(soon.status).toBe(200);
     expect(await soon.json()).toEqual({
@@ -1490,10 +1491,20 @@ describe("PUT /v1/game/presence", () => {
       resting: [],
     });
     expect(kept).toEqual([{ place: "town", seen_at: T0, stay: 1 }]);
-    expect(await later.json()).toMatchObject({ present: [{ id: alice, place: "works" }] });
-    expect(await services.query((sql) => sql`SELECT place, seen_at, stay FROM presence`)).toEqual([
-      { place: "works", seen_at: T0 + 5000, stay: 0 },
-    ]);
+    expect(await presenceRows()).toEqual([{ place: "town", seen_at: T0 + 5000, stay: 1 }]);
+  });
+
+  it("writes at once a game saying it is somewhere else, or other about staying, however soon", async () => {
+    await arrive("town");
+    clock.now = T0 + 1000;
+    const moved = await arrive("works");
+    const there = await presenceRows();
+    clock.now = T0 + 2000;
+    await arrive("works", alicesPage, false);
+
+    expect(await moved.json()).toMatchObject({ present: [{ id: alice, place: "works" }] });
+    expect(there).toEqual([{ place: "works", seen_at: T0 + 1000, stay: 1 }]);
+    expect(await presenceRows()).toEqual([{ place: "works", seen_at: T0 + 2000, stay: 0 }]);
   });
 
   it("refuses a stay that is not true or false", async () => {
