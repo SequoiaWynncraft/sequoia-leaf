@@ -19,6 +19,7 @@ import { must } from "@sequoia-leaf/kit/util.ts";
 import { FIGURES } from "./game/index.ts";
 import { onTraitWoke, stepFightView } from "./screen/fightview.ts";
 import {
+  carryOn,
   doHold,
   doLevelUp,
   doRustle,
@@ -44,6 +45,7 @@ import { snd } from "./screen/sounds.ts";
 import * as stage from "./screen/stage.ts";
 import { onChange, onNotes, onRefused, S, saveNow, wake } from "./screen/state.ts";
 import { registerCards } from "./screen/ui/cards.ts";
+import { closeSheet, onCarry, placeSheet, registerFought, sheetUp, toggleLastFight } from "./screen/ui/fightsheet.ts";
 import { openLight } from "./screen/ui/lit.ts";
 import { renderNudge, stepNudge } from "./screen/ui/nudge.ts";
 import { openPages, pagesClick, renderPages, showPage } from "./screen/ui/pages.ts";
@@ -81,6 +83,8 @@ async function boot(): Promise<void> {
   }
   wake();
   registerCards();
+  registerFought();
+  onCarry(carryOn);
   buildTable({
     rustle: doRustle,
     hold: doHold,
@@ -94,7 +98,11 @@ async function boot(): Promise<void> {
       renderTable();
     },
     frontPage: toFront,
+    lastFight: toggleLastFight,
     traitOn,
+  });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && sheetUp() === "again") closeSheet();
   });
   openPages({
     carryOn: () => {
@@ -159,6 +167,7 @@ async function boot(): Promise<void> {
     over: drawOver,
     resized() {
       placeFoe();
+      placeSheet();
       // The stall growing or shrinking lays the page out again too: a card stays beside its thing.
       settle();
       renderNudge();
