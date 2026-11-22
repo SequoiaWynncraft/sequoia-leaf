@@ -49,6 +49,8 @@ export type Made =
   | { readonly status: "made"; readonly position: number; readonly paid: number }
   /** Not made, and nothing taken. */
   | { readonly status: "refused"; readonly message: string }
+  /** Not made, and nothing taken, for a reason that passes (the backend could not reach Leaf or Discord): it may be tried again. */
+  | { readonly status: "busy"; readonly message: string }
   /** No answer that says: it may have been made, and must not be sent again. */
   | { readonly status: "unknown" };
 
@@ -56,6 +58,7 @@ export type Made =
 const NOT_A_MEMBER = "Paying Leaf for a request is for current Sequoia members.";
 const NOT_LINKED = "This queue requires a linked Minecraft account. Use /link with your Minecraft username first.";
 const SIGN_IN = "Your session has expired. Sign in again";
+const BUSY = "The guild's server could not take the Leaf just now. No Leaf was taken. Try again in a minute.";
 
 /** A number as the backend writes Leaf: 3,000. */
 const leafText = (n: number): string => n.toLocaleString("en-US");
@@ -128,14 +131,18 @@ export function guildRequests(client: HttpClient.HttpClient, backendUrl: string)
         session,
       ).pipe(
         Effect.flatMap((response): Effect.Effect<Made, unknown> => {
-          // A refusal, or nothing there to make it (503): nothing was made or taken.
-          if ((response.status >= 400 && response.status < 500) || response.status === 503) {
+          // Nothing there to make it just now (503): nothing was made or taken, and it may be tried again.
+          if (response.status === 503) {
+            return Effect.map(reasonOf(response, BUSY), (message) => ({ status: "busy", message }));
+          }
+          // A refusal: nothing was made or taken.
+          if (response.status >= 400 && response.status < 500) {
             const otherwise =
               response.status === 401
                 ? SIGN_IN
                 : response.status === 409
                   ? `You already have a pending ${kind} request in the queue.`
-                  : "The request was not made.";
+                  : "The request was not made. No Leaf was taken.";
             return Effect.map(reasonOf(response, otherwise), (message) => ({ status: "refused", message }));
           }
           if (response.status !== 201) {

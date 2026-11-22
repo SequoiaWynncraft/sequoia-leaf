@@ -251,7 +251,7 @@ export const THINGS: readonly Thing[] = [
   thing("woodpile", "Woodpile", "oddments", 2, 1, "Stacked by somebody who cares.", "Knocks."),
 
   // The Treasury's fine pieces.
-  thing("fox-statue", "The white fox", "oddments", 1, 1, "Marble, with gold on the antlers.", "The antlers shine.", {
+  thing("fox-statue", "Orphion", "oddments", 1, 1, "Marble, with gold on the antlers.", "The antlers shine.", {
     light: 22,
     turns: "flip",
   }),

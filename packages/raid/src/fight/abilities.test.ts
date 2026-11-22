@@ -430,7 +430,7 @@ describe("five-acorn figures", () => {
     }
     expect(hitsOn(events, foeAt(f, THREE)).length).toBe(0);
   });
-  test("White Fox: magic damage within two hexes, and the whole party attacks faster", () => {
+  test("Orphion: magic damage within two hexes, and the whole party attacks faster", () => {
     const { f, u } = scene("whitefox", [NEAR, THREE], { allies: [onCell("finch", 0, cellAt(0, 7))] });
     const finch = unitOf(f, "finch");
     const events = steps(f, 1);

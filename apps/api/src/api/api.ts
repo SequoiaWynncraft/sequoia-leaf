@@ -256,7 +256,7 @@ export class GameApi extends HttpApiGroup.make("game")
     HttpApiEndpoint.post("request", "/requests", {
       payload: RequestBody,
       success: RequestMade,
-      error: [Invalid, MembersOnly, RequestRefused, RequestUnknown],
+      error: [Invalid, MembersOnly, RequestRefused, RequestsUnavailable, RequestUnknown],
     }).middleware(RequestBodyErrors),
   )
   .middleware(Player)
