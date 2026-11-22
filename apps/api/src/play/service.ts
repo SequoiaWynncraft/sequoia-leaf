@@ -1,9 +1,22 @@
-import { type CoinChange, COMMAND_ID, type Ctx, type Logged, MOST_COMMANDS, type PlayerId } from "@sequoia-leaf/core";
+import {
+  type CoinChange,
+  COMMAND_ID,
+  type Ctx,
+  isLeaf,
+  type Leaf,
+  type LeafSpend,
+  LOGGED,
+  type Logged,
+  MOST_COMMANDS,
+  type PlayerId,
+} from "@sequoia-leaf/core";
 import { Clock, Context, Effect, Layer, Option, Schema } from "effect";
 import { SecureRandom } from "effect/crypto";
 import { SqlClient } from "effect/sql";
 
 import { Allowances } from "../allowance.ts";
+import { AppConfig } from "../config.ts";
+import { Ledger } from "../ledger/store.ts";
 import { Coins } from "./coins.ts";
 import type { Opened, Played } from "./games.ts";
 import { PlayStore, type Stored } from "./store.ts";
@@ -94,6 +107,13 @@ function payable(changes: readonly CoinChange[], balance: number, room: number):
   return amounts;
 }
 
+/** A spend of a command's as the ledger takes it: its amount checked, and keyed for the player and the game. */
+interface Taken {
+  readonly amount: Leaf;
+  readonly reason: string;
+  readonly key: string;
+}
+
 /** The commands of a batch with their ids, or why the batch is not one. */
 function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] | string {
   if (commands.length > MOST_COMMANDS) {
@@ -127,7 +147,12 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * balance in order, would take it below nothing at any point is refused with `not_enough_coins`;
  * one that pays is done whatever the player has earned, and paid only as far as they may still earn
  * (`Coins.room`, which each game is told, so that it says what was really paid), but for a change
- * that is `free`, which is paid whole and uses none of it. A player with no state yet gets a new one,
+ * that is `free`, which is paid whole and uses none of it. A command may take Leaf (`Done.leaf`), never
+ * pay it in: it is refused `leaf_closed` while `GAME_LEAF_SPENDING` is off or the player is a guest,
+ * and `not_enough_leaf` when its spends come to more than the ledger's balance; otherwise each is
+ * posted to the ledger as a spend on the `shop` sink, keyed `play:<game>:<player>:<key>`, and logged
+ * (`leaf_spent`). A key the ledger has seen is not taken again, and the command stands. Leaf earns no
+ * XP and uses none of the Coins' room. A player with no state yet gets a new one,
  * and their Coins open with the welcome. A stored state that will not read is left as it is: the
  * player and the game are logged, and nothing is done. Leaf's dice for each call come from
  * `SecureRandom`.
@@ -152,6 +177,8 @@ export class Play extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const store = yield* PlayStore;
       const coins = yield* Coins;
+      const ledger = yield* Ledger;
+      const { gameLeafSpending } = yield* AppConfig;
       const random = yield* SecureRandom.SecureRandom;
       const dice = random.intBetween(0, 0xffffffff);
       // Each player's batches and commands, across all games.
@@ -175,6 +202,27 @@ export class Play extends Context.Service<
             return null;
           }
           return { rev, text, game, awards, ctx };
+        });
+
+      /**
+       * What of a command's Leaf the ledger is to take (the spends whose keys it has not seen), or
+       * why none may be: `leaf_closed` or `not_enough_leaf`. A spend that is not a whole number of
+       * Leaf above 0 is the game's defect.
+       */
+      const leafOf = (playing: Playing, played: Played, spends: readonly LeafSpend[]) =>
+        Effect.gen(function* () {
+          if (spends.length === 0) return [];
+          if (!gameLeafSpending || playing.guest) return "leaf_closed";
+          const unseen: Taken[] = [];
+          for (const { amount, reason, key } of spends) {
+            if (!isLeaf(amount)) {
+              return yield* Effect.die(new Error(`A ${played.id} command took ${amount} Leaf`));
+            }
+            const taken = { amount, reason, key: `play:${played.id}:${playing.playerId}:${key}` };
+            if (!(yield* ledger.isRecorded(taken.key))) unseen.push(taken);
+          }
+          const { balance } = yield* ledger.account(playing.playerId);
+          return unseen.reduce((sum, spend) => sum + spend.amount, 0) > balance ? "not_enough_leaf" : unseen;
         });
 
       /** The player's stored state in a game, or a new one made and stored for them, opened at now (`openAt`). */
@@ -238,15 +286,37 @@ export class Play extends Context.Service<
                       continue;
                     }
                     const attempt = game.attempt(command, ctx(yield* dice, room));
+                    const leaf = "refused" in attempt ? [] : yield* leafOf(playing, played, attempt.leaf);
                     const amounts = "refused" in attempt ? null : payable(attempt.coins, balance, room);
                     let result: Result;
                     if ("refused" in attempt) {
                       result = { id, refused: attempt.refused };
+                    } else if (typeof leaf === "string") {
+                      // Leaf that may not be taken: the command is not done at all.
+                      result = { id, refused: leaf };
                     } else if (amounts === null) {
                       // A command that takes Coins the player does not have is not done at all.
                       result = { id, refused: "not_enough_coins" };
                     } else {
                       attempt.keep();
+                      for (const { amount, reason, key } of leaf) {
+                        const posted = yield* ledger.post(
+                          {
+                            kind: "spend",
+                            playerId: playing.playerId,
+                            amount,
+                            sink: "shop",
+                            idempotencyKey: key,
+                            memo: reason,
+                          },
+                          now,
+                        );
+                        if (posted.status === "rejected") {
+                          // Weighed in this transaction: the batch is undone whole.
+                          return yield* Effect.die(new Error(`The ledger refused ${key}: ${posted.reason}`));
+                        }
+                        logs.push({ kind: LOGGED.leafSpent, data: { leaf: amount, reason } });
+                      }
                       for (const [n, change] of attempt.coins.entries()) {
                         // Past what the player may still earn, the command is done all the same and pays what is left.
                         const amount = amounts[n] ?? 0;

@@ -8,6 +8,7 @@ import {
   passLeaf,
   readCoins,
   readMember,
+  refreshLeaf,
   restart,
   start,
   where,
@@ -20,7 +21,9 @@ import {
   fromLedger,
   grant,
   LEAF_GUEST,
+  LEAF_NOT_HERE,
   LEAF_SHUT,
+  leafOnLedger,
   leafOpen,
   leafShown,
   leafShut,
@@ -410,7 +413,7 @@ describe("against what Leaf really answers", () => {
     expect(w.mode).toBe("live");
     if (w.mode !== "live") return;
     expect(w.signIn.endsWith("return_to=")).toBe(true);
-    expect(w.me).toMatchObject({ name: "Alice", rank: "CAPTAIN", level: { number: 2 } });
+    expect(w.me).toMatchObject({ name: "Alice", rank: "CAPTAIN", level: { number: 13 } });
     expect(balance().leaf).toBe(w.me.leaf);
   });
 
@@ -428,6 +431,29 @@ describe("against what Leaf really answers", () => {
     });
     expect(await start()).toMatchObject({ mode: "live", me: { name: "Visitor", guest: true } });
     expect(leafShown()).toBe(false);
+    // Leaf's spending is on, but a guest has no Leaf to spend.
+    expect([leafOpen(), leafShut()]).toEqual([false, LEAF_GUEST]);
+    expect(await refreshLeaf()).toBeNull();
+  });
+
+  test("spending on: a command may take a member's Leaf, any other Leaf button stays closed, and the purse asks again after", async () => {
+    let asked = 0;
+    world = standin({
+      "GET /v1/game/hello": said("GET /v1/game/hello"),
+      "GET /v1/game/me": () => said(asked++ === 0 ? "GET /v1/game/me" : "GET /v1/game/me, after a look bought"),
+    });
+    await start();
+    // `closeLeaf` closes every Leaf button beside the ledger; a page passes it one with a command only while `leafOpen()` is false.
+    expect([leafOpen(), leafOnLedger(), leafShut()]).toEqual([true, true, LEAF_NOT_HERE]);
+    const passed: number[] = [];
+    const leaf = passLeaf((n) => passed.push(n));
+    leaf.ready();
+    const before = balance().leaf;
+    expect(await refreshLeaf()).toMatchObject({ name: "Alice", leaf: before - 28_000 });
+    expect(balance().leaf).toBe(before - 28_000);
+    // The town still passes the ledger's number on to a game in its frame.
+    expect(passed).toEqual([before - 28_000]);
+    leaf.stop();
   });
 });
 

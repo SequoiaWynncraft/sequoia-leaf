@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { playerId } from "@sequoia-leaf/core";
+import { leaf as leafOf, playerId } from "@sequoia-leaf/core";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
@@ -93,7 +93,8 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   mojang.profiles.set(bob, { name: "Bob", skin: undefined });
   mojang.profiles.set(visitor, { name: "Visitor", skin: undefined });
   // Leaf's dice fall the same way every time, so the raid's draws in the file are always the same.
-  const leaf = testLeaf(clock, fetcher, {}, { mojang: mojang.service, dice: steadyDice(1) });
+  // Leaf's spending is on, so that a look is bought.
+  const leaf = testLeaf(clock, fetcher, { gameLeafSpending: true }, { mojang: mojang.service, dice: steadyDice(1) });
   const app = leaf.app();
   await leaf.run(runCreditSync("recent"));
   await leaf.run(runAchievementSync("recent"));
@@ -119,6 +120,11 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   }
   const saved = { saved_at: T0 + 10 * MINUTE, keys: { "town.save.v1": '{"v":1,"lanterns":3}' } };
   await call("GET /v1/game/hello", "GET", "/v1/game/hello");
+  // A look costs more than the day's raids paid her: the guild's staff grant her the rest.
+  await leaf.post(
+    { kind: "earn", playerId: alice, amount: leafOf(30_000), source: "staff", idempotencyKey: "staff:look" },
+    clock.now,
+  );
   await call("GET /v1/game/me", "GET", "/v1/game/me");
   await call("GET /v1/game/me, signed out", "GET", "/v1/game/me", undefined, "stale-token");
   await call("GET /v1/game/me, a guest", "GET", "/v1/game/me", undefined, "visitor-token");
@@ -202,6 +208,18 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     commands: [{ id: "c-4", do: "win" }],
   });
   await call("GET /v1/game/play/{game}, not a game", "GET", "/v1/game/play/chess");
+  // A look for the table bought with Leaf, the same command sent again, and a guest, who has no Leaf.
+  const buyLook = { player: alice, commands: [{ id: "c-5", do: "buyLook", kind: "cloth", look: "plum" }] };
+  await call("POST /v1/game/play/{game}, a look bought with Leaf", "POST", "/v1/game/play/raid", buyLook);
+  await call("POST /v1/game/play/{game}, a look bought, sent again", "POST", "/v1/game/play/raid", buyLook);
+  await call(
+    "POST /v1/game/play/{game}, Leaf a guest cannot spend",
+    "POST",
+    "/v1/game/play/raid",
+    { player: visitor, commands: [{ id: "v-1", do: "buyLook", kind: "cloth", look: "plum" }] },
+    "visitor-token",
+  );
+  await call("GET /v1/game/me, after a look bought", "GET", "/v1/game/me");
   // The Works' board: Bob's yard, Alice's and the guest's, as the play service writes where each stands.
   for (const [player, score, story, guest] of [
     [bob, 5120, 7, 0],

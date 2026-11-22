@@ -9,7 +9,7 @@
  */
 
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
-import { passCoins, passLeaf } from "@sequoia-leaf/kit/live.ts";
+import { passCoins, passLeaf, refreshLeaf } from "@sequoia-leaf/kit/live.ts";
 import { refreshCoins } from "@sequoia-leaf/kit/purse.ts";
 import { fromGame, toGame } from "@sequoia-leaf/kit/shell.ts";
 import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
@@ -107,8 +107,9 @@ export function goIn(game: Game, asks: Asks): Visit {
     stop();
     leaf.stop();
     coins.stop();
-    // The game may have earned or spent Coins of Leaf's: the town shows what Leaf holds now.
+    // The game may have earned or spent Coins of Leaf's, or spent Leaf: the town shows what Leaf holds now.
     refreshCoins();
+    void refreshLeaf();
     root.replaceChildren();
     root.hidden = true;
     root.classList.remove("dark");

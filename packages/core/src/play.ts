@@ -50,6 +50,16 @@ export interface CoinChange {
   readonly free?: true;
 }
 
+/** Leaf a command takes. No game ever pays Leaf in. */
+export interface LeafSpend {
+  /** A whole number of Leaf, above 0. */
+  readonly amount: number;
+  /** What it was for, as the ledger and the staff are shown it. */
+  readonly reason: string;
+  /** Unique among the game's spends for this player, such as `look:plum`. */
+  readonly key: string;
+}
+
 /** Something worth remembering that a player did, for the `activity` table. */
 export interface Logged {
   readonly kind: string;
@@ -61,6 +71,7 @@ export interface Done<S, N> {
   readonly state: S;
   readonly notes: readonly N[];
   readonly coins?: readonly CoinChange[];
+  readonly leaf?: readonly LeafSpend[];
   /** Things worth remembering that the player did (a run begun or ended, an order filled). */
   readonly log?: readonly Logged[];
 }

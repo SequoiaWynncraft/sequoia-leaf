@@ -57,7 +57,7 @@ The server is configured with environment variables:
 | `PUBLIC_ORIGIN`               | `https://leaf.seqwawa.com` | The origin Leaf's own pages are served from.            |
 | `PUBLIC_DIR`                  | none                       | The built game pages to serve under `/play`.            |
 | `GAME_SIGN_IN_URL`            | see below                  | Where the game sends a member to sign in.               |
-| `GAME_LEAF_SPENDING`          | `false`                    | Whether the game may offer to spend Leaf.               |
+| `GAME_LEAF_SPENDING`          | `false`                    | Whether a game's command may spend Leaf.                |
 
 Without `BACKEND_INTERNAL_TOKEN` the server answers requests but does not read
 the credit feed, which is what local development wants. Without `SIERRA_URL` it
@@ -72,7 +72,8 @@ server at start with an error that names the variable but not its value.
 
 `GAME_SIGN_IN_URL` defaults to the website's sign-in,
 `https://api.seqwawa.com/auth/web/start?return_to=`; the game adds its own
-address after `return_to=`. Only `GET /v1/game/hello` reads `GAME_LEAF_SPENDING`.
+address after `return_to=`. `GAME_LEAF_SPENDING` is said by `GET /v1/game/hello`
+and lets a game's command take Leaf (see the play service).
 
 ## Layout
 
@@ -568,6 +569,16 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), and `works`, the
   back for something paid for, or paid by Leaf's own clock, such as the Works'
   till. Such a change is paid whole and uses none of what may still be earned;
   its entry has `earned` 0.
+- A command may take Leaf (`Done.leaf`: a whole number above 0, what it was
+  for, and a key unique among the game's spends for the player); no game pays
+  Leaf in. While `GAME_LEAF_SPENDING` is off, or for a guest, such a command is
+  refused with `leaf_closed`; when its spends come to more than the ledger's
+  balance, with `not_enough_leaf`. Otherwise each spend is posted to the ledger
+  in the batch's transaction, as a `spend` on the `shop` sink keyed
+  `play:<game>:<player>:<key>` with what it was for as its memo, and logged as
+  `leaf_spent` for the staff's report. A key the ledger has seen is not taken
+  again, and the command stands. A spend earns no XP and uses none of the
+  Coins' room. The raid's `buyLook` is the one command that takes Leaf.
 - A stored state that does not read (a rules change that forgot an older
   version, say) answers both routes 409 `state_unreadable`: nothing is done,
   the state is kept as it is, and Leaf logs the player and the game. The page

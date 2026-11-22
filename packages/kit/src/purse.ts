@@ -4,10 +4,12 @@
  *
  * On the guild's own server both numbers are Leaf's:
  *
- * - **Leaf** is the guild's ledger's (`fromLedger`), and nothing else: `grant` does nothing, Leaf
- *   cannot be spent, and every Leaf button shows itself closed (`leafOpen`). A guest, who is not in
- *   the guild, has no Leaf at all (`asGuest`): no page shows a Leaf number (`leafShown`), and every
- *   Leaf button is closed with the guest's own line (`leafShut`).
+ * - **Leaf** is the guild's ledger's (`fromLedger`), and nothing else: `grant` does nothing, and a page
+ *   never takes Leaf itself (`spend` refuses). A game's command on Leaf may take it, while Leaf says
+ *   spending is on (`leafSpending`) and the member is not a guest (`leafOpen`); every other Leaf button
+ *   shows itself closed. A guest, who is not in the guild, has no Leaf at all (`asGuest`): no page
+ *   shows a Leaf number (`leafShown`), and every Leaf button is closed with the guest's own line
+ *   (`leafShut`).
  * - **Coins** are the Coins ledger's (`fromLeaf`, with what `/v1/game/me` says). `earn` and `spend`
  *   change the page's number at once, giving the reason (one of `COIN_REASONS`), and send the
  *   change to Leaf behind it (`POST /v1/game/coins`): in order, one at a time, and sent again with
@@ -47,6 +49,8 @@ let purse: Purse | null = null;
 let ledger: number | null = null;
 /** Whether the purse is a guest's, with no Leaf to show. */
 let guest = false;
+/** Whether Leaf says a game's command may take Leaf (`/v1/game/hello`'s `leaf_spending`). */
+let spending = false;
 
 const whole = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;
@@ -436,25 +440,39 @@ export function settled(): Promise<void> {
   });
 }
 
-/** Whether Leaf may be spent here at all: not beside the guild's ledger, for now. */
-export const leafOpen = (): boolean => ledger === null;
+/** Leaf says whether a game's command may take Leaf. */
+export function leafSpending(on: boolean): void {
+  spending = on;
+}
+
+/**
+ * Whether Leaf may be spent here: from the browser's purse with the made-up guild; beside the
+ * guild's ledger, by a game's command, while Leaf's spending is on and the member is not a guest.
+ */
+export const leafOpen = (): boolean => ledger === null || (spending && !guest);
+
+/** Whether the purse's Leaf is the guild's ledger's: the page is on the guild's server. */
+export const leafOnLedger = (): boolean => ledger !== null;
 
 /** Whether a page shows the purse's Leaf: not to a guest, who has none. */
 export const leafShown = (): boolean => !guest;
 
-/** What every closed Leaf button says to a member. */
+/** What every closed Leaf button says to a member while Leaf's spending is off. */
 export const LEAF_SHUT = "Leaf spending opens after the play-test.";
+/** What a Leaf button with no command to take it says to a member while Leaf's spending is on. */
+export const LEAF_NOT_HERE = "Leaf cannot be spent here yet.";
 /** What every Leaf button says to a guest. */
 export const LEAF_GUEST = "Leaf is earned by raiding with Sequoia.";
 
 /** What a closed Leaf button says, to whoever is playing. */
-export const leafShut = (): string => (guest ? LEAF_GUEST : LEAF_SHUT);
+export const leafShut = (): string => (guest ? LEAF_GUEST : spending ? LEAF_NOT_HERE : LEAF_SHUT);
 
 /** Lets the ledgers go again, and anything still on its way (for tests). */
 export function forgetLedger(): void {
   round++;
   ledger = null;
   guest = false;
+  spending = false;
   purse = null;
   held = null;
   owed = [];
