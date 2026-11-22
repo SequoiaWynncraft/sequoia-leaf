@@ -19,7 +19,7 @@ async function open(): Promise<void> {
     shutCard(where.why, where.signIn);
     return;
   }
-  if (where.mode === "live" && !((await pull(["purse", "town"], { onReplaced: pickUp })) && (await prepare()))) {
+  if (where.mode === "live" && !((await pull(["town"], { onReplaced: pickUp })) && (await prepare()))) {
     shutCard("closed", where.signIn);
     return;
   }

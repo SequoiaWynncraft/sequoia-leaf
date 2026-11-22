@@ -208,11 +208,11 @@ export function buildTable(a: Asks): void {
   renderPurse();
 }
 
-/** Leaf from the guild's ledger, and the Coins Leaf holds for the member. A guest's purse has only the Coins. */
+/** Leaf from the guild's ledger, and the Coins Leaf holds for the member (the kit's purse). A guest's purse has only the Coins. */
 export function renderPurse(): void {
   const purse = byId("purse");
   if (!purse) return;
-  purse.replaceChildren(...(leafShown() ? [amount("leaf", balance().leaf)] : []), amount("coin", S.coins));
+  purse.replaceChildren(...(leafShown() ? [amount("leaf", balance().leaf)] : []), amount("coin", balance().coins));
 }
 
 /** A line of news at the table: a refusal, in the rules' own words. */

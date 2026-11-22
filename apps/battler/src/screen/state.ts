@@ -55,8 +55,6 @@ export const S: {
   trail: number;
   /** Runs begun at this table. */
   runs: number;
-  /** The member's Coins, as Leaf's ledger holds them. */
-  coins: number;
   prefs: Prefs;
   mode: Mode;
   ended: Ended | null;
@@ -66,7 +64,6 @@ export const S: {
   looks: newLooks(),
   trail: 0,
   runs: 0,
-  coins: 0,
   prefs: newPrefs(),
   mode: "front",
   ended: null,

@@ -88,7 +88,7 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look                   |
 | `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all                   |
 | `dom.ts`      | `el`, `icon`, `amount` and a few more for building the interface                                   |
-| `purse.ts`    | Leaf and Coins, shared by every page of the game and kept in step between them                     |
+| `purse.ts`    | Leaf and Coins, shared by every page of the game: on the guild's server both are Leaf's            |
 | `pursebar.ts` | The purse as a page shows it, its numbers rolling; things that fly across it; a closed Leaf button |
 | `shell.ts`    | How a game that is a place in the town and the town speak to each other                            |
 | `postcard.ts` | What a game leaves for the town to read about it while nobody is in it                             |
@@ -153,6 +153,19 @@ and nothing below happens. With a server it asks `GET /v1/game/me`:
   `closeLeaf`, which shows it closed with the tip "Leaf spending opens after the play-test." A
   page that is the whole window listens to the member's own events (`followLeaf`) and asks for
   the Leaf number again whenever one arrives.
+- **Coins**, for a member or a guest alike, are Leaf's Coins ledger's from then on (`fromLeaf`,
+  with `/v1/game/me`'s `coins`), and nothing of them is kept in the browser. `earn(n, reason)` and
+  `spend("coins", n, reason)` change the page's number at once and send the change to Leaf behind
+  (`POST /v1/game/coins`, with one of core's `COIN_REASONS`): in order, one at a time, sent again
+  with the same id after a network failure, earnings for one reason waiting together sent as one.
+  `spend` answers at once from the page's number. A change Leaf refuses sets the page's number to
+  Leaf's and tells the watchers (`"refused"`). `refreshCoins()` asks Leaf for the balance again:
+  the town does when a framed game closes and when its page comes back into view (`followCoins`),
+  and a game does when it knows Leaf paid it (a raid's run ended). The town tells a game in its
+  frame of a change to its Coins (`passCoins`, the shell's `{ town: "coins", coins }`), which the
+  game takes as Leaf's while nothing of its own is on its way (`heardCoins`). As a page goes away,
+  or the town puts it away, whatever is still waiting is sent at once (`flushCoins`). With the
+  made-up guild the purse is kept in the browser as before, and `pretendPurse` sets it for tours.
 - **Known as a guest** (`guest: true`: signed in, not in the guild). The game is live, as them,
   with no Leaf (`asGuest`): `leafShown()` is false, so no page shows a Leaf number, and every Leaf
   button's tip is "Leaf is earned by raiding with Sequoia." (`leafShut()`). `followLeaf` and
@@ -166,8 +179,9 @@ and nothing below happens. With a server it asks `GET /v1/game/me`:
 The cards are `shutCard`: a `k-paper` with a title, a line and one button, in place of the page.
 
 **Saves** (`cloud.ts`). What the games keep is text in the browser under a few names; `SLOTS`
-says which slot on the server each name belongs to (`purse`, `town`, `works`). The Little Raid's
-game is Leaf's own now (below), and its old slot takes no more writes. The
+says which slot on the server each name belongs to (`town`, `works`). The Little Raid's game is
+Leaf's own now (below), and so are Coins (above): their old slots, `raid` and `purse`, take no
+more writes. The
 sound setting and each game's view settings are in none, and stay in the browser. Before a page
 reads anything it `pull`s its slots, which writes the server's copy into the browser; if the
 browser last held another member's game (or nobody's), the names in every slot are cleared
@@ -195,8 +209,8 @@ ids, so nothing is done twice. `predict` is the copy after a command the shared 
 without Leaf, shown at once; each answer's state takes the copy's place (with what is still waiting
 worked out again on top), and `onState` tells the page when that is not what it was showing.
 `waitingLook(element, answer)` gives what was asked for the waiting look (`k-wait`) once Leaf has
-taken more than 150 ms. `askCoins()` asks Leaf for the member's Coins, which its ledger holds; and a
-game played on Leaf, opened where no Leaf answers, shows `serverCard(line)` instead of itself.
+taken more than 150 ms. A game played on Leaf, opened where no Leaf answers, shows
+`serverCard(line)` instead of itself.
 
 **Who is here** (`presence.ts`). A live page says where the member is (`here("town" | "camp" |
 "works" | "table")`) and whether their character stays in town after they go (`stay(on)`, true

@@ -130,9 +130,10 @@ Every move is a command (`src/screen/state.ts`):
 - Whenever Leaf's state is not what the page was showing (the member played on in another page, a
   guess was wrong, something was changed by hand), the page takes Leaf's and draws again.
 
-Coins shown are Leaf's (`/v1/game/me`), asked again when a run has paid. A finished or abandoned
-run pays them on Leaf. Leaf is the kit's purse, from the guild's ledger; a look's Buy button is
-closed, since Leaf cannot be spent in the game yet.
+Coins shown are the kit's purse's, which are Leaf's, the same number the town and the Works show;
+the purse asks Leaf again when a run has paid. A finished or abandoned run pays them on Leaf. Leaf
+is the kit's purse too, from the guild's ledger; a look's Buy button is closed, since Leaf cannot
+be spent in the game yet.
 
 The browser keeps only the member's view settings (`raid.prefs.v1`, `src/screen/keep.ts`): the
 speed fights are watched at and the first-time nudges already given.

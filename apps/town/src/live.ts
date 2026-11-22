@@ -14,7 +14,7 @@
  * rank, and other guests in town are marked the same way.
  */
 
-import { followLeaf, type Member, member } from "@sequoia-leaf/kit/live.ts";
+import { followCoins, followLeaf, type Member, member } from "@sequoia-leaf/kit/live.ts";
 import { ask, isRecord, listen, outside } from "@sequoia-leaf/kit/net.ts";
 import {
   hearPresent,
@@ -452,6 +452,8 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
       about = toAbout(seen, gone, me.id);
       heard = true;
     });
+    // Back in view, the town asks Leaf for the Coins: a game or another device may have changed them.
+    followCoins();
     if (me.guest) return;
     followLeaf(
       (type, _data, id) => {

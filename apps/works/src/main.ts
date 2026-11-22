@@ -12,7 +12,7 @@ import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepLeaf, shutCard, start } from "@sequoia-leaf/kit/live.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
-import { balance, earn, grant, spend } from "@sequoia-leaf/kit/purse.ts";
+import { balance, pretendPurse } from "@sequoia-leaf/kit/purse.ts";
 import { fromTown, inTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { tipOff } from "@sequoia-leaf/kit/tip.ts";
@@ -156,14 +156,9 @@ const save = (): void => {
   keep();
 };
 
-/** Sets the purse to exact amounts, for looking at the game with more or less to spend. */
+/** Sets the made-up guild's purse to exact amounts, for looking at the game with more or less to spend. */
 const setPurse = (coins: number, leaf?: number): void => {
-  const now = balance();
-  if (coins > now.coins) earn(coins - now.coins, "review");
-  else spend("coins", now.coins - coins, "review");
-  if (leaf === undefined) return;
-  if (leaf > now.leaf) grant(leaf - now.leaf, "review");
-  else spend("leaf", now.leaf - leaf, "review");
+  pretendPurse(coins, leaf);
 };
 
 /** What the town was last told about the yard, so that it is told only what has changed. */
@@ -186,7 +181,7 @@ async function boot(): Promise<void> {
   }
   const live = where.mode === "live";
   // Opened on its own, the yard also keeps the town's slot, where its postcard is.
-  if (live && !(await pull(inTown() ? ["purse", "works"] : ["purse", "works", "town"], { onReplaced: pickUp }))) {
+  if (live && !(await pull(inTown() ? ["works"] : ["works", "town"], { onReplaced: pickUp }))) {
     shutCard("closed", where.signIn);
     return;
   }
