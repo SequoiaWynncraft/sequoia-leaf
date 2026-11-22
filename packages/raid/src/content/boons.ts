@@ -126,8 +126,8 @@ export const BOONS: Record<BoonId, BoonSpec> = {
   blanket: {
     name: "Warm Blanket",
     sort: "party",
-    text: "{now} resolve back now, and every room you lose costs {less} less.",
-    short: "+{now} resolve now. Lost rooms cost {less} less.",
+    text: "{now} health back now, and every room you lose costs {less} less.",
+    short: "+{now} health now. Lost rooms cost {less} less.",
     n: { now: 4, less: 1 },
     quip: "It is hard to be downhearted under it.",
   },

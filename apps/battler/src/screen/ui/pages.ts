@@ -135,7 +135,7 @@ function front(): HTMLElement {
         {},
         el("b", "k-gold", { text: "A raid is laid out" }),
         el("span", "k-d", {
-          text: `Room ${run.room + 1} of ${ROOM_COUNT}, ${TRAILS[run.trail]?.name ?? ""}. Resolve ${run.resolve}.`,
+          text: `Room ${run.room + 1} of ${ROOM_COUNT}, ${TRAILS[run.trail]?.name ?? ""}. Health ${run.resolve}.`,
         }),
         partyRow(run),
       ),
@@ -459,7 +459,7 @@ const HOW: readonly (readonly [() => HTMLCanvasElement, string])[] = [
     () => traitIcon("bulwark"),
     "Each goes for the nearest enemy, but tanks draw fire, as if a hex nearer, and assassins slip notice.",
   ],
-  [() => glyph("door"), "A lost room costs resolve. There are fifteen rooms, with a boss at the end of each wing."],
+  [() => glyph("door"), "A lost room costs health. There are fifteen rooms, with a boss at the end of each wing."],
   [() => glyph("pin"), "Every ten acorns you keep earns one more each room. Hold the stall to keep what is on it."],
   [() => glyph("brush"), "Two components on one figure make an item. Drag one on, or tap it and tap the figure."],
   [() => glyph("help"), "Point at anything for its card; click or tap to keep it open. Names in a card open theirs."],
