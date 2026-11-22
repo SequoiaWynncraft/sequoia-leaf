@@ -8,9 +8,9 @@
 import { BARK, CREAM, GOLD, GREEN, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { flipped, R } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
+import type { Townsperson } from "@sequoia-leaf/town/folk.ts";
 
 import type { CampArt, PetArt } from "./campart.ts";
-import type { Townsperson } from "./folk.ts";
 import { spr, type Sprite } from "./sprites.ts";
 
 /** A townsperson's pictures: the camp's pets' set, and for a gnome a few poses more. */

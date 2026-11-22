@@ -32,6 +32,8 @@ export interface Opened {
   readonly visit: ((ctx: Ctx) => unknown) | null;
   /** Where it stands among everyone's, or null for a game with no board. */
   readonly standing: () => Standing | null;
+  /** What it shows was won for good (`Game.awards`); none for a game that awards nothing. */
+  readonly awards: () => readonly string[];
 }
 
 /** A game as the play service handles it: in stored text and JSON, whatever the game's own types. */
@@ -97,6 +99,7 @@ export function played<State, Command, View, Note>(game: Game<State, Command, Vi
         view: (at) => game.view(current(), at),
         visit: game.visit ? (at) => game.visit?.(current(), at) : null,
         standing: () => game.standing?.(current()) ?? null,
+        awards: () => game.awards?.(current()) ?? [],
       };
     },
   };

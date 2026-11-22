@@ -10,7 +10,8 @@ import {
   SENSIBLE,
   type TableView,
 } from "@sequoia-leaf/raid";
-import { readView as readYardView, route, WORKS } from "@sequoia-leaf/yard";
+import { decodeTown, TOWN } from "@sequoia-leaf/town";
+import { deliver, readView as readYardView, route, WORKS } from "@sequoia-leaf/yard";
 import { Effect, Logger, References, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
@@ -1098,5 +1099,52 @@ describe("a person's numbers", () => {
       // oxlint-disable-next-line no-await-in-loop -- one after another
       expect([answer.status, await codeOf(answer)]).toEqual([404, "no_such_player"]);
     }
+  });
+});
+
+/** What a player has won for good, in the order Leaf saw it. */
+const awarded = (player: PlayerId) =>
+  services.query((sql) => sql`SELECT id, at FROM awards WHERE player_id = ${player} ORDER BY at, id`);
+/** Alice's state in a game, as stored. */
+const storedIn = (game: string) =>
+  services.query<{ state: string }>(
+    (sql) => sql`SELECT state FROM play_state WHERE player_id = ${alice} AND game = ${game}`,
+  );
+
+describe("awards", () => {
+  it("are written once, when the raid beats a boss and the Works' depot takes a capstone in, and reach the camp by the trail", async () => {
+    // A whole run by the bot, as a player plays it: it beats The Magpie.
+    await playRun();
+    const won = await awarded(alice);
+    expect(won).toEqual([{ id: "trophy-hoardmagpie", at: expect.any(Number) }]);
+    // Another run beats Old Bramble too; the award already held keeps the moment it was won.
+    await playRun();
+    expect(await awarded(alice)).toEqual([...won, { id: "trophy-oldbramble", at: expect.any(Number) }]);
+
+    // A yard whose depot has taken in a clockwork crab: the next batch that changes it (a few seconds on) awards the model.
+    const { clock: tick } = yardOf(
+      Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state,
+    );
+    const yard = WORKS.decode((await storedIn("works"))[0]?.state ?? "");
+    if (!yard) throw new Error("no yard");
+    deliver(yard, "crab", 1);
+    await services.query(
+      (sql) => sql`UPDATE play_state SET state = ${WORKS.encode(yard)} WHERE player_id = ${alice} AND game = 'works'`,
+    );
+    clock.now += 5000;
+    await send("POST", "/v1/game/play/works", { commands: [{ id: "w-1", do: "collect", tick: tick + 50 }] });
+    expect((await awarded(alice)).map((a) => a.id)).toEqual(["trophy-hoardmagpie", "trophy-oldbramble", "model-crab"]);
+
+    // The town is told of them on its next call, and sends each by the trail to the camp, once.
+    const town = played(TOWN);
+    const inTown = (id: string) =>
+      services.run(Play.use((play) => play.send({ playerId: alice, guest: false }, town, [{ id, do: "readMail" }])));
+    await inTown("t-1");
+    await inTown("t-2");
+    const camp = decodeTown((await storedIn("town"))[0]?.state ?? "")?.camp;
+    expect(camp?.parcels).toEqual(["trophy-hoardmagpie", "trophy-oldbramble", "model-crab"]);
+    expect(camp?.earned).toEqual(["trophy-hoardmagpie", "trophy-oldbramble", "model-crab"]);
+    // A game that awards nothing writes none.
+    expect(await awarded(alice)).toHaveLength(3);
   });
 });

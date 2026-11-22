@@ -38,6 +38,7 @@ export {
   type SpendSink,
 } from "./ledger.ts";
 export { parsePlayerId, type PlayerId, playerId } from "./player.ts";
+export { below, chance, draw32, mix, pick, shuffled, type Stream, weighted } from "./rng.ts";
 export type { Postcard } from "./postcard.ts";
 export {
   applyActivityToQuests,

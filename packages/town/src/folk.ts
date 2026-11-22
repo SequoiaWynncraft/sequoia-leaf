@@ -2,8 +2,9 @@
  * Who lives in the town: its creatures and its keepers. None of them is a member and none is ever
  * drawn in a player's skin. Each is one of the town's own sprites (a cat, a glorp, the fox, a gnome
  * in a coloured hat), says what it is where a member's card says a rank, and wherever it is named
- * carries the town's mark (the kit's `mark.ts`). Real members come only from the guild
- * (`guild.ts`), and the crabs live in the pond (`town.ts`).
+ * carries the town's mark (the kit's `mark.ts`). Real members come only from the guild, and the
+ * crabs live in the pond (both the town page's). Who calls at a camp and what they bring is here
+ * too, for the rules (`game.ts`).
  */
 
 /** Which of the town's own sprites somebody is drawn as. */
@@ -313,7 +314,23 @@ export const GIFTS = [
  * What somebody of the town did while the member was away: a line for the arrival letter, and the
  * letter (and present, if any) it left in the mailbox, in its own voice.
  */
-export const WHILE_AWAY: readonly { who: FolkId; did: string; note: string; gift: string }[] = [
+export interface AwayCall {
+  who: FolkId;
+  /** The line for the arrival letter, after the name. */
+  did: string;
+  note: string;
+  gift: string;
+}
+
+/** Who calls before the member's first visit, and what they leave. */
+export const FIRST_CALL: AwayCall = {
+  who: "tindra",
+  did: "left a mushroom by your gate.",
+  note: "A mushroom for your gate. It's the good kind. Welcome home!",
+  gift: "toadstool",
+};
+
+export const WHILE_AWAY: readonly AwayCall[] = [
   {
     who: "sootpaw",
     did: "left a mushroom by your gate.",

@@ -235,6 +235,9 @@ export const LOGGED = {
   worksPlan: "works_plan",
   worksOrder: "works_order",
   worksStory: "works_story",
+  townBought: "town_bought",
+  townPet: "town_pet",
+  townTrophy: "town_trophy",
 } as const;
 
 /** How many of the last things a player did the report shows. */

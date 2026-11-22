@@ -25,6 +25,7 @@ import { STORY } from "./content/story.ts";
 import { create } from "./create.ts";
 import { type Dir, isDir } from "./grid.ts";
 import { claim, swap } from "./orders.ts";
+import { postcard } from "./postcard.ts";
 import { lay, type Leg } from "./route.ts";
 import { load, save } from "./save.ts";
 import { step } from "./step.ts";
@@ -335,4 +336,6 @@ export const WORKS: Game<World, WorksCommand, WorksView, WorksNote> = {
   command: readCommand,
   // The Coins the yard has ever earned, from the depot and from orders, and how many story orders are done.
   standing: (w) => ({ score: Math.floor(w.sold + w.paid), also: { story: w.story } }),
+  // A model of each capstone the depot has taken in, for the member's camp.
+  awards: (w) => postcard(w).trophies.map((k) => `model-${k}`),
 };

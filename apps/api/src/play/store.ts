@@ -50,7 +50,8 @@ export interface Board {
  * answered (`play_commands`, each player's newest 256 to each game), the things players did that
  * are worth remembering (`activity`, up to 1,000 a player a UTC day, for 180 days), and how many of
  * each player's commands were done and refused each UTC day (`command_days`, for the staff's
- * report), and where each player's state stands in a game with a board (`standings`). Every method
+ * report), where each player's state stands in a game with a board (`standings`), and what each
+ * player has won for good in any game (`awards`, never taken away). Every method
  * but `board` is meant to run inside the play service's transaction. A database failure is a defect.
  */
 export class PlayStore extends Context.Service<
@@ -104,6 +105,10 @@ export class PlayStore extends Context.Service<
     readonly board: (game: string, playerId: PlayerId) => Effect.Effect<Board>;
     /** Where a player stands in each game they have a standing in, by game, each place worked out as `board`'s own. */
     readonly standingsOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, Placed>>;
+    /** Everything a player has won for good, in the order Leaf first saw it. */
+    readonly awards: (playerId: PlayerId) => Effect.Effect<readonly string[]>;
+    /** Keeps each of these the player does not hold yet, as won now. */
+    readonly award: (playerId: PlayerId, ids: readonly string[], now: number) => Effect.Effect<void>;
   }
 >()("leaf/PlayStore") {
   static readonly layer = Layer.effect(
@@ -161,6 +166,11 @@ export class PlayStore extends Context.Service<
         execute: (playerId) => sql`
           SELECT game, ${place} AS place, score, also FROM standings AS s WHERE player_id = ${playerId} ORDER BY game
         `,
+      });
+      const awards = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: Schema.Struct({ id: Schema.String }),
+        execute: (playerId) => sql`SELECT id FROM awards WHERE player_id = ${playerId} ORDER BY at, id`,
       });
       return PlayStore.of({
         read: (playerId, game) => read({ playerId, game }).pipe(Effect.orDie),
@@ -235,6 +245,18 @@ export class PlayStore extends Context.Service<
             Effect.map((rows) => new Map(rows.map(({ game, ...placed }) => [game, placed]))),
             Effect.orDie,
           ),
+        awards: (playerId) =>
+          awards(playerId).pipe(
+            Effect.map((rows) => rows.map((row) => row.id)),
+            Effect.orDie,
+          ),
+        award: (playerId, ids, now) =>
+          Effect.forEach(
+            ids,
+            (id) =>
+              sql`INSERT INTO awards (player_id, id, at) VALUES (${playerId}, ${id}, ${now}) ON CONFLICT DO NOTHING`,
+            { discard: true },
+          ).pipe(Effect.orDie),
       });
     }),
   );

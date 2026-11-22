@@ -16,6 +16,7 @@
         "@effect/sql-sqlite-bun": "4.1.4",
         "@sequoia-leaf/core": "workspace:*",
         "@sequoia-leaf/raid": "workspace:*",
+        "@sequoia-leaf/town": "workspace:*",
         "@sequoia-leaf/yard": "workspace:*",
         "effect": "4.1.4",
       },
@@ -35,10 +36,11 @@
       },
     },
     "apps/town": {
-      "name": "@sequoia-leaf/town",
+      "name": "@sequoia-leaf/town-page",
       "dependencies": {
         "@sequoia-leaf/kit": "workspace:*",
         "@sequoia-leaf/raid": "workspace:*",
+        "@sequoia-leaf/town": "workspace:*",
         "@sequoia-leaf/yard": "workspace:*",
       },
       "devDependencies": {
@@ -73,6 +75,15 @@
     },
     "packages/raid": {
       "name": "@sequoia-leaf/raid",
+      "dependencies": {
+        "@sequoia-leaf/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
+    "packages/town": {
+      "name": "@sequoia-leaf/town",
       "dependencies": {
         "@sequoia-leaf/core": "workspace:*",
       },
@@ -157,7 +168,9 @@
 
     "@sequoia-leaf/raid": ["@sequoia-leaf/raid@workspace:packages/raid"],
 
-    "@sequoia-leaf/town": ["@sequoia-leaf/town@workspace:apps/town"],
+    "@sequoia-leaf/town": ["@sequoia-leaf/town@workspace:packages/town"],
+
+    "@sequoia-leaf/town-page": ["@sequoia-leaf/town-page@workspace:apps/town"],
 
     "@sequoia-leaf/works": ["@sequoia-leaf/works@workspace:apps/works"],
 

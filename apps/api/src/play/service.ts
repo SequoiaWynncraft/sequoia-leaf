@@ -67,11 +67,12 @@ interface Sent {
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /** What Leaf tells a game about a call. */
-const ctxOf = (playing: Playing, now: number, seed: number, room: number): Ctx => ({
+const ctxOf = (playing: Playing, now: number, seed: number, room: number, awards: readonly string[]): Ctx => ({
   now,
   player: { id: playing.playerId, guest: playing.guest },
   seed,
   room,
+  awards,
 });
 
 /**
@@ -120,7 +121,8 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * (`open`), and sends commands (`send`); Leaf does them in order with the game's rules, in one
  * transaction: it reads the state, brings it to now, does each command, and writes the state (and,
  * for a game with a board, where it stands), the Coins each command paid or took, what it logged,
- * and each command's answer. A command whose id
+ * each command's answer, and what the state shows the player has won for good (`Game.awards`), which
+ * every game is told on every call. A command whose id
  * was seen before answers as it did then and changes nothing; one whose Coins changes, added to the
  * balance in order, would take it below nothing at any point is refused with `not_enough_coins`;
  * one that pays is done whatever the player has earned, and paid only as far as they may still earn
@@ -156,20 +158,23 @@ export class Play extends Context.Service<
       const pace = new Allowances([BATCHES, COMMANDS], ALLOWANCES_KEPT);
 
       /**
-       * A player's stored state in a game opened at now, for a call of `playing`'s. Null for one that
-       * does not read, which is logged and left as it is.
+       * A player's stored state in a game opened at now, for a call of `playing`'s, and what the game
+       * is told about each call: who is calling, and what the state's owner (`player`) has won. Null
+       * for a stored state that does not read, which is logged and left as it is.
        */
       const openAt = (player: PlayerId, playing: Playing, played: Played, stored: Stored, now: number, room: number) =>
         Effect.gen(function* () {
+          const awards = yield* store.awards(player);
+          const ctx = (seed: number, left: number): Ctx => ctxOf(playing, now, seed, left, awards);
           const { rev, state: text } = stored;
-          const game: Opened | null = played.open(text, ctxOf(playing, now, yield* dice, room));
+          const game: Opened | null = played.open(text, ctx(yield* dice, room));
           if (game === null) {
             yield* Effect.logError(
               `The ${played.id} state stored for ${player} does not read; it is kept as it is`,
             ).pipe(Effect.annotateLogs({ player, game: played.id, rev }));
             return null;
           }
-          return { rev, text, game };
+          return { rev, text, game, awards, ctx };
         });
 
       /** The player's stored state in a game, or a new one made and stored for them, opened at now (`openAt`). */
@@ -179,7 +184,8 @@ export class Play extends Context.Service<
           if (Option.isSome(found)) {
             return yield* openAt(playing.playerId, playing, played, found.value, now, room);
           }
-          const text = played.create(ctxOf(playing, now, yield* dice, room));
+          const awards = yield* store.awards(playing.playerId);
+          const text = played.create(ctxOf(playing, now, yield* dice, room, awards));
           yield* store.create(playing.playerId, played.id, text, now);
           yield* coins.open(playing.playerId, now);
           return yield* openAt(playing.playerId, playing, played, { rev: 0, state: text }, now, room);
@@ -198,7 +204,7 @@ export class Play extends Context.Service<
               status: "open",
               rev: open.rev,
               now,
-              view: open.game.view(ctxOf(playing, now, 0, room)),
+              view: open.game.view(open.ctx(0, room)),
             } satisfies Opening;
           }),
         send: (playing, played, commands) =>
@@ -220,7 +226,7 @@ export class Play extends Context.Service<
                   if (open === null) {
                     return null;
                   }
-                  const { rev, text, game } = open;
+                  const { rev, text, game, awards, ctx } = open;
                   let balance = yield* coins.balance(playing.playerId);
                   const results: Result[] = [];
                   const answers: { readonly id: string; readonly result: Result }[] = [];
@@ -231,7 +237,7 @@ export class Play extends Context.Service<
                       results.push({ id, ...readKept(before.value) });
                       continue;
                     }
-                    const attempt = game.attempt(command, ctxOf(playing, now, yield* dice, room));
+                    const attempt = game.attempt(command, ctx(yield* dice, room));
                     const amounts = "refused" in attempt ? null : payable(attempt.coins, balance, room);
                     let result: Result;
                     if ("refused" in attempt) {
@@ -283,6 +289,8 @@ export class Play extends Context.Service<
                     if (standing !== null) {
                       yield* store.stand(playing.playerId, played.id, standing, playing.guest, now);
                     }
+                    const won = game.awards().filter((id) => !awards.includes(id));
+                    yield* store.award(playing.playerId, won, now);
                   }
                   yield* store.log(playing.playerId, played.id, logs, now);
                   for (const { id, result } of answers) {
@@ -294,7 +302,7 @@ export class Play extends Context.Service<
                   // Counted for the staff's report: each command done or refused now, not those answered from before.
                   const refused = answers.filter((a) => "refused" in a.result).length;
                   yield* store.count(playing.playerId, answers.length - refused, refused, now);
-                  return { rev: next, results, view: game.view(ctxOf(playing, now, 0, room)) };
+                  return { rev: next, results, view: game.view(ctx(0, room)) };
                 }),
               )
               .pipe(Effect.orDie);
@@ -322,7 +330,7 @@ export class Play extends Context.Service<
             if (visit === null) {
               return { status: "nothing" } satisfies Visiting;
             }
-            return { status: "open", rev: open.rev, now, view: visit(ctxOf(caller, now, 0, 0)) } satisfies Visiting;
+            return { status: "open", rev: open.rev, now, view: visit(open.ctx(0, 0)) } satisfies Visiting;
           }),
       });
     }),
