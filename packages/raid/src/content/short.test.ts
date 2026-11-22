@@ -75,7 +75,7 @@ describe("short forms", () => {
   test("the numbers are the ones for the stars asked for", () => {
     expect(abilityShort("barrowgnome", 2)).toBe("Shield 210 for 4s. 70 physical to adjacent enemies.");
     expect(abilityShort("kettle", 1)).toBe("Heals most hurt ally for 150.");
-    expect(abilityShort("rock", 1)).toBe("Takes 40% less for 4s. Melee attackers take 45.");
+    expect(abilityShort("rock", 1)).toBe("Takes 40% less damage for 4s. Enemies hitting it up close take 45.");
     expect(traitShort("ember", 1)).toBe("Ember hits burn, 2% health/s for 4s.");
     expect(traitShort("ember", 2)).toBe("Whole party's hits burn, 4%/s.");
   });
@@ -87,13 +87,13 @@ describe("advice for the cards", () => {
       expect(roleLine(calling)).toStartWith(`${ROLES[calling].role} · ${ROLES[calling].place}`);
     expect(roleLine("fang")).toBe("Fighter · front row");
     expect(roleLine("bulwark")).toBe("Tank · front row · draws fire");
-    expect(roleLine("sneak")).toBe("Assassin · leaps to their back row · slips notice");
+    expect(roleLine("sneak")).toBe("Assassin · leaps to the enemy back row · avoids fire");
   });
   test("a draw has a name and a tip", () => {
     expect(drawName(0)).toBeNull();
     expect(drawName(1)).toBe("Draws fire");
     expect(drawName(2)).toBe("Draws fire ×2");
-    expect(drawName(-1)).toBe("Slips notice");
+    expect(drawName(-1)).toBe("Avoids fire");
     expect(drawTip(1)).toBe("Enemies pick their target as if this figure stood one hex nearer.");
     expect(drawTip(2)).toBe("Enemies pick their target as if this figure stood two hexes nearer.");
     expect(drawTip(-1)).toBe("Enemies pick their target as if this figure stood one hex further.");

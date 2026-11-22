@@ -1224,7 +1224,7 @@ export function makeCamp(
         float(
           at.x,
           at.y - 18,
-          thing && turnsOf(thing) > 1 ? "No room to turn it." : "It only goes one way.",
+          thing && turnsOf(thing) > 1 ? "No room to rotate it." : "It cannot be rotated.",
           SKY[5],
           1.6,
         );
@@ -1255,7 +1255,7 @@ export function makeCamp(
     if (!did || "refused" in did) {
       sfx.no();
       if (at && did?.refused === "rooted")
-        float(at.x, at.y - 22, `The ${thing.name.toLowerCase()} stays out.`, SKY[5], 1.8);
+        float(at.x, at.y - 22, `The ${thing.name.toLowerCase()} cannot be put away.`, SKY[5], 1.8);
       return;
     }
     if (at && sprite) ui.toTray(sprite.c, { x: at.x, y: at.y - sprite.c.height / 2 }, thing.id);

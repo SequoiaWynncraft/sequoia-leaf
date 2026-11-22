@@ -156,7 +156,7 @@ function front(): HTMLElement {
     add(
       body,
       kept
-        ? el("span", "k-read k-dim", { text: "A raid is put down only once it has fought its first room." })
+        ? el("span", "k-read k-dim", { text: "You can go home once the first room is fought." })
         : sureHome
           ? el(
               "div",
@@ -245,11 +245,10 @@ function front(): HTMLElement {
         `k-btn wide${run ? " wood" : ""}`,
         { type: "button", id: "start", onclick: () => asks?.start(S.trail) },
         pic(glyph("swords")),
-        run ? "Set out afresh" : "Set out",
+        run ? "New raid" : "Set out",
       ),
     );
-  if (run && !keep)
-    add(body, el("span", "k-read k-dim", { text: "Setting out afresh puts down the raid that is laid out." }));
+  if (run && !keep) add(body, el("span", "k-read k-dim", { text: "A new raid ends the one you are on." }));
   add(
     body,
     el("hr", "k-rule"),
@@ -449,7 +448,7 @@ const HOW: readonly (readonly [() => HTMLCanvasElement, string])[] = [
     "Buy figures at the stall with acorns. Drag them onto the board, or tap one and then tap a hex.",
   ],
   [() => glyph("figure"), "Your level is how many you may field. The rest wait on the bench."],
-  [() => glyph("up"), "Three the same become one with a star more. Three of those become one with three."],
+  [() => glyph("up"), "3 of the same figure become 1 with 2 stars. 3 of those become 1 with 3 stars."],
   [
     () => glyph("book"),
     "Figures that share a kin or a calling switch a trait on. The chips say how far along each is.",
@@ -457,10 +456,10 @@ const HOW: readonly (readonly [() => HTMLCanvasElement, string])[] = [
   [() => glyph("swords"), "Set out, and they fight by themselves. You win the room if any of yours is left standing."],
   [
     () => traitIcon("bulwark"),
-    "Each goes for the nearest enemy, but tanks draw fire, as if a hex nearer, and assassins slip notice.",
+    "Each attacks the nearest enemy. Tanks count as 1 hex nearer, assassins as 1 hex further.",
   ],
   [() => glyph("door"), "A lost room costs health. There are fifteen rooms, with a boss at the end of each wing."],
-  [() => glyph("pin"), "Every ten acorns you keep earns one more each room. Hold the stall to keep what is on it."],
+  [() => glyph("pin"), "Every 10 acorns you keep earn 1 more each room. Hold keeps the stall as it is."],
   [() => glyph("brush"), "Two components on one figure make an item. Drag one on, or tap it and tap the figure."],
   [() => glyph("help"), "Point at anything for its card; click or tap to keep it open. Names in a card open theirs."],
 ];

@@ -130,7 +130,7 @@ export function buildTable(a: Asks): void {
   add(hud, purse, track, last, resolve, el("div", "", { id: "corner" }, help, sound, door));
 
   const rustle = el("button", "k-btn wood", { id: "rustle", type: "button", onclick: a.rustle });
-  tip(rustle, "Rustle", () => `New figures on the stall. One a room is free; after that it costs ${ECONOMY.rustle}.`);
+  tip(rustle, "Reroll", () => `New figures on the stall. 1 a room is free; after that each costs ${ECONOMY.rustle}.`);
   const hold = el(
     "button",
     "k-btn wood",
@@ -449,6 +449,7 @@ function renderActs(run: Run): void {
     rustle,
     cost === 0 ? free : String(cost),
     pic(glyph("rustle")),
+    el("span", "wide-only", { text: "Reroll" }),
     cost === 0 ? el("span", "", { text: free }) : acorns(cost),
   );
   rustle.classList.toggle("off", run.acorns < cost);
