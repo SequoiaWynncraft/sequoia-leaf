@@ -558,6 +558,10 @@ button.k-info-chip:hover .k-chip {
   gap: 0 calc(var(--u) * 3);
   white-space: nowrap;
 }
+/* A value is in the pixel face, as an amount of Leaf or Coins is. */
+.k-info-stat > b {
+  font: 700 var(--t-m) / 1 var(--k-font);
+}
 /* On a phone's sheet, a number goes under its label where the row is too narrow for both. */
 .k-info.sheet .k-info-stat {
   flex-wrap: wrap;
@@ -898,16 +902,12 @@ button.k-info-chip:hover .k-chip {
   display: inline-flex;
   align-items: center;
   gap: calc(var(--u) * 3);
-  font: 700 var(--t-r) / 1 var(--k-font-read);
+  font: 700 var(--t-m) / 1 var(--k-font);
   white-space: nowrap;
   color: var(--k-gold);
 }
 .k-cur.leaf {
   color: var(--k-leaf);
-}
-/* The purse: a little larger. */
-.k-plaque > .k-cur {
-  font-size: calc(var(--u) * 8);
 }
 .k-bump {
   animation: k-bump 0.22s;
