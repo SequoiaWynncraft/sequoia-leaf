@@ -190,7 +190,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
         el(
           "div",
           full ? "k-card order ready" : "k-card order",
-          {},
+          { "data-order": s.id },
           el("div", "from", {}, el("span", "k-label", { text: s.from }), el("span", "k-grow"), act),
           el(
             "div",
@@ -211,7 +211,11 @@ function orders(_art: Art, body: HTMLElement): () => void {
     // A list shorter than it is scrolled would slide down: it keeps that much room at its end.
     const top = body.scrollTop;
     const need = top + body.clientHeight;
+    // Whoever is on an order's button with the keyboard is put back on that order's button, drawn again.
+    const on = document.activeElement?.closest<HTMLElement>("[data-order]")?.dataset.order;
     body.replaceChildren(...kids);
+    if (on !== undefined)
+      body.querySelector<HTMLElement>(`[data-order="${on}"] .k-btn`)?.focus({ preventScroll: true });
     if (top > 0 && need > body.scrollHeight)
       body.append(el("div", "", { style: `flex: none; height: ${need - body.scrollHeight}px` }));
     body.scrollTop = top;
