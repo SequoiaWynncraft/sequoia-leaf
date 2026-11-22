@@ -131,10 +131,10 @@ says so.
   water, the crabs, the pieces on the stump's board, the strings of lights and the sky all do
   something when tapped, with a sound. Pointing at a thing whose meaning is not plain (or keeping
   a finger on it) says what it is. One crab is never at roll call; it hides in one of nine places
-  in town for 60 seconds by Leaf's clock, the same place on every page, and then in another. Touched
-  by anybody, it runs off on every page and is gone until the 60 seconds are up. A touch counts as
-  a sighting for the member who made it, once for each place it hides: Leaf works out which
-  60 seconds it is from its own clock.
+  in town for 60 seconds by Leaf's clock, the same place on every page, and then in another. Each
+  member can find it there once: touched, it runs off on that member's page and is gone for them
+  until the 60 seconds are up, and is counted as their sighting; on the others' pages it only hops
+  and stays to be found. Leaf works out which 60 seconds it is from its own clock.
 - **Every touch is seen** (`touchThing` in `town.ts`). Each touch on a thing, a tap on a crab's tile
   or the roll called at the pond, a log on the fire, goes through one place by the thing's name:
   its kind and the point on it (`post:174,100`, `water:404,295`), a crab's number (`crab:3`), or
