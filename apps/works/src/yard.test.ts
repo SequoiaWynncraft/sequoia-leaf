@@ -165,6 +165,27 @@ describe("the yard, on Leaf", () => {
     await until(() => fake.leaf.posts >= 1);
   });
 
+  test("a tab that comes back asks Leaf for its yard once every two seconds, however often it draws", async () => {
+    const fake = await opened();
+    let asked = 0;
+    world?.done();
+    world = standin({
+      ...fake.routes,
+      "GET /v1/game/play/works": () => {
+        asked += 1;
+        return "offline";
+      },
+    });
+    // Ten minutes on, with no network: ten frames in a row ask once, and a frame two seconds later asks again.
+    const back = 1000 + 600_000;
+    for (let frame = 0; frame < 10; frame++) runYard(back + frame * 16);
+    await Bun.sleep(5);
+    expect(asked).toBe(1);
+    runYard(back + 2000);
+    await Bun.sleep(5);
+    expect(asked).toBe(2);
+  });
+
   test("runs the copy on by Leaf's clock, and takes a yard put in place of another as it stands", async () => {
     const fake = await opened();
     // Fifty seconds, and fifty more: the copy runs on by itself, five hundred ticks each time.

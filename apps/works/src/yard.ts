@@ -38,6 +38,8 @@ const SCREEN = "works.screen.v1";
 const BEHIND_MOST = 600;
 /** How often the till is paid in while it holds a whole Coin. */
 const COLLECT_EVERY = 60_000;
+/** How often a tab that came back asks Leaf for its yard, until it has it. */
+const ASK_EVERY = 2000;
 
 /** What the screen itself remembers between visits: nudges already taken, and the zoom. */
 export interface Screen {
@@ -78,8 +80,8 @@ let base = { clock: 0, at: 0 };
 /** The latest tick the page has shown. */
 let shown = 0;
 let collectedAt = 0;
-/** Whether Leaf is being asked for its yard, after a tab was put away. */
-let asking = false;
+/** When Leaf was last asked for its yard, after a tab was put away. */
+let askedAt = -Infinity;
 const refusalHearers: ((why: string) => void)[] = [];
 
 /** Hears why Leaf turned down something the page had already shown done. */
@@ -187,11 +189,10 @@ export function runYard(now: number): News[] {
   if (tick - w.tick > BEHIND_MOST) {
     // A tab put away and back: Leaf's yard as Leaf has run it, not a long run on the page. It is
     // asked for, not collected, so that what Leaf says of the time away is still there to show.
-    if (!waiting && !asking) {
-      asking = true;
-      void leaf.refresh().finally(() => {
-        asking = false;
-      });
+    // Asked again every couple of seconds until it comes: no faster, whatever Leaf or the network says.
+    if (!waiting && now - askedAt >= ASK_EVERY) {
+      askedAt = now;
+      void leaf.refresh();
     }
     return [];
   }
