@@ -253,6 +253,30 @@ describe("a live room", () => {
     expect(b.texts.filter((m) => m.t === "act")).toEqual([]);
   });
 
+  it("passes on a touch to everybody else and not back, refuses a name there is not, and holds the rate", async () => {
+    await start();
+    const a = await connect(page("alice"));
+    const b = await connect(page("bob"));
+    const { you } = await a.welcome();
+    await b.welcome();
+    a.send({ t: "act", kind: "touch", arg: "post:174,100" });
+    a.send({ t: "act", kind: "touch", arg: "dragon:1,2" });
+
+    expect(await b.next("act")).toEqual({ t: "act", id: you, kind: "touch", arg: "post:174,100" });
+    expect(await a.next("error")).toEqual({ t: "error", code: "bad_act" });
+    // Six at once, then three a second: after the post, five of eight sent together pass.
+    for (let i = 0; i < 8; i++) a.send({ t: "act", kind: "touch", arg: `crab:${i + 1}` });
+    await Bun.sleep(200);
+    expect(b.texts.filter((m) => m.t === "act").map((m) => m.arg)).toEqual([
+      "crab:1",
+      "crab:2",
+      "crab:3",
+      "crab:4",
+      "crab:5",
+    ]);
+    expect(a.texts.filter((m) => m.t === "act")).toEqual([]);
+  });
+
   it("answers a ping with the game's clock and its own, and says what it cannot do", async () => {
     await start();
     const a = await connect(page("alice"));

@@ -51,9 +51,9 @@ import {
 import { ask, mine, refusal, town } from "./leaf.ts";
 import type { Letter } from "./letter.ts";
 import { NOTES } from "./notes.ts";
-import { addLog, emote, EMOTE_NAMES } from "./players.ts";
+import { emote, EMOTE_NAMES } from "./players.ts";
 import { icon, type Sprites } from "./sprites.ts";
-import { nudgeCrab, rollCall } from "./town.ts";
+import { LOG, thingName, touchThing } from "./town.ts";
 import { place, PLACES } from "./world.ts";
 
 let S: Sprites | null = null;
@@ -586,7 +586,7 @@ function fireside(body: HTMLElement): () => void {
       {},
       seat,
       button("wood", ["Add a log"], () => {
-        addLog();
+        touchThing(LOG);
         if (G.player) nearby(G.player, ["toasty", "ooh"], 90);
       }),
     ),
@@ -667,7 +667,8 @@ function pond(body: HTMLElement): () => void {
     const art = S?.crab[0] && !lost ? pic(S.crab[0].c, 2) : el("span", "k-coral gap", { text: "?" });
     const tile = el("button", lost ? "k-card done" : "k-card", { type: "button" }, art, `No. ${n}`);
     tile.addEventListener("click", () => {
-      nudgeCrab(n);
+      if (lost) sfx.cricket();
+      else touchThing(thingName("crab", n));
       said.textContent = `No. ${n} is ${note}.`;
       replay(tile, "k-bump");
     });
@@ -677,7 +678,7 @@ function pond(body: HTMLElement): () => void {
   }
   body.append(
     button("", ["Call the roll"], () => {
-      rollCall();
+      touchThing(thingName("roll"));
       said.textContent = `Eight answer. No. ${LOST_CRAB} does not.`;
       tiles.forEach((tile, i) => {
         setTimeout(() => {

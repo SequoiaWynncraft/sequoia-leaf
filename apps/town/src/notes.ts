@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "touches-seen",
+    at: "2026-11-22T23:15Z",
+    title: "Everyone sees what you tap",
+    lines: [
+      "Tap a lamp post, a sign, a trunk, a mushroom, the water, a crab, the lights or the fire, and everyone in town sees it. They hear it too if it is on their screen.",
+      "Lamps, flowers and crabs stir when other players walk past them, not only you.",
+    ],
+  },
+  {
     id: "the-grove",
     at: "2026-11-22T23:07Z",
     title: "The Grove: pulls",
