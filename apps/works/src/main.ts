@@ -211,6 +211,7 @@ async function boot(): Promise<void> {
   document.body.prepend(picture);
   const canvas = must(document.querySelector<HTMLCanvasElement>("#words"), "canvas");
   const ctx = must(canvas.getContext("2d"), "2d context");
+  canvas.addEventListener("contextrestored", wipe);
   let wordPx = 2;
 
   initNotes();
@@ -343,6 +344,8 @@ async function boot(): Promise<void> {
   }
 
   function draw(now: number): void {
+    // A window carried to a screen with another pixel ratio is not always told it was resized.
+    if ((window.devicePixelRatio || 1) !== S.view.dpr) fit();
     const w = S.world;
     drawYard(art, { lead: S.held ? heldLead : leadAt(now), pace: power(w).pace });
     drawWords(ctx, wordPx, inset.top * S.view.dpr);
