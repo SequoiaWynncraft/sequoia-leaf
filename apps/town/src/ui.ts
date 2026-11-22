@@ -120,6 +120,8 @@ function treasury(body: HTMLElement): null {
   /** What Leaf says each costs, while the member may buy it; what to say in place of its button otherwise. */
   const price: Partial<Record<RequestKind, number>> = {};
   const said: Partial<Record<RequestKind, Said>> = {};
+  /** Why the last try did not go through, when it may be tried again: said under the row, with its button still there. */
+  const again: Partial<Record<RequestKind, string>> = {};
   let busy = false;
   let writing = false;
   const rows = KINDS.map((kind) => {
@@ -154,13 +156,19 @@ function treasury(body: HTMLElement): null {
           ? ""
           : button(
               `leaf sm${asking(key) ? " asking" : ""}`,
-              asking(key) ? ["Buy?"] : [glyph("leaf"), leafText(cost)],
+              // With what it is for written, a tome's button says what pressing it does.
+              asking(key)
+                ? ["Buy?"]
+                : kind === "tome" && writing
+                  ? ["Buy", glyph("leaf"), leafText(cost)]
+                  : [glyph("leaf"), leafText(cost)],
               (b) => {
                 press(kind, b);
               },
             ),
       );
-      under.replaceChildren(words ? el("div", `k-read ${words.tone}`, { text: words.text }) : "");
+      const note = words ?? (again[kind] === undefined ? null : { text: again[kind], tone: "k-coral" });
+      under.replaceChildren(note ? el("div", `k-read ${note.tone}`, { text: note.text }) : "");
       if (kind === "tome" && writing && !words) card.append(reason);
       else if (kind === "tome") reason.remove();
     }
@@ -177,7 +185,8 @@ function treasury(body: HTMLElement): null {
       return;
     }
     sfx.tap();
-    if (pressedTwice(`request:${kind}`, draw)) void buy(kind, b);
+    // Writing what a tome is for and pressing "Buy 3,000" is asking enough; an aspect is asked once more.
+    if (kind === "tome" || pressedTwice(`request:${kind}`, draw)) void buy(kind, b);
   };
   const look = async (): Promise<void> => {
     const answer = await askLeaf("/v1/game/requests");
@@ -194,6 +203,7 @@ function treasury(body: HTMLElement): null {
   };
   const buy = async (kind: RequestKind, b: HTMLButtonElement): Promise<void> => {
     busy = true;
+    delete again[kind];
     const answer = await waitingLook(
       b,
       askLeaf("/v1/game/requests", {
@@ -229,7 +239,9 @@ function treasury(body: HTMLElement): null {
       // Refused, nothing was taken, and the backend says why; anything else may have gone through.
       const message = isRecord(answer.body) ? answer.body.message : null;
       const refused = answer.status >= 400 && answer.status < 500 && typeof message === "string";
-      said[kind] = { text: refused ? message : LOST, tone: "k-coral" };
+      // Nothing was taken and it may be tried again (the guild's server was busy): the button and what was written stay.
+      if (answer.status === 503 && typeof message === "string") again[kind] = message;
+      else said[kind] = { text: refused ? message : LOST, tone: "k-coral" };
       sfx.no();
       replay(b, "shake");
     }

@@ -338,7 +338,7 @@ export const REGULARS = [
   { name: "the Hearth Cat", kind: "hearthcat" },
   { name: "a Barrow Gnome", kind: "barrowgnome" },
   { name: "Crab #7", kind: "crab7" },
-  { name: "the White Fox", kind: "whitefox" },
+  { name: "Orphion", kind: "whitefox" },
   { name: "a Moth", kind: "moth" },
 ] as const satisfies readonly { name: string; kind: FigureId }[];
 

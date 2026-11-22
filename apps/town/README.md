@@ -159,7 +159,7 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   oldest with nothing inside; a present is never thrown out, so while the box is full of presents
   no more letters are left, and the feed says so.
 - **The town's own dropping by.** Leaf sends them: every 46 to 76 seconds Pipwick, Embertoe,
-  Mossback or the White Fox sets out for the camp and waits there (`visit`), until greeted or until
+  Mossback or Orphion sets out for the camp and waits there (`visit`), until greeted or until
   the next one comes. While the member is in their camp the page asks Leaf for the town every half
   minute, so a caller walks in off the trail, says hello in its own voice, settles by the fire (the
   gnome standing, the others curled up) and says a thing or two now and then. Touching one greets
