@@ -13,6 +13,7 @@
 
 import { pick as pickCard, point } from "@sequoia-leaf/kit/card.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
+import { heldAgain } from "@sequoia-leaf/kit/keys.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { bake, lookFor, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
@@ -281,17 +282,25 @@ async function boot(): Promise<void> {
     if (paused) return;
     const k = e.key.toLowerCase();
     const onButton = e.target instanceof HTMLButtonElement;
+    // A key held down is one press: only walking goes on while its key is held (`keys`).
+    const repeated = heldAgain(e);
     if (k === "enter" || k === " " || k === "e") {
-      if (dismissArrival()) {
+      if (!repeated && dismissArrival()) {
         e.preventDefault();
         return;
       }
       // A button that has the keyboard answers Enter and Space itself.
-      if (!e.repeat && (k === "e" || !onButton)) scene.act();
+      if (!repeated && (k === "e" || !onButton)) scene.act();
       if (k === " " && !onButton) e.preventDefault();
       return;
     }
     if (!scene.awake()) return;
+    if (repeated) {
+      if (k.startsWith("arrow")) e.preventDefault();
+      // Still held when the town woke: the member walks on.
+      keys.add(k);
+      return;
+    }
     if (k === "escape") {
       scene.back();
       return;

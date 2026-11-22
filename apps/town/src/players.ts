@@ -30,6 +30,7 @@ import { emoteOver } from "./fx.ts";
 import { type Actor, G, toPage } from "./game.ts";
 import { GUEST, rankName } from "./live.ts";
 import { Company, type Fellow, linkShown, NAMED_FOR, othersIn, stepOf } from "./motion.ts";
+import { flare } from "./town.ts";
 import { followLive, takeSeat } from "./visitors.ts";
 import { type Seat, SEATS } from "./world.ts";
 
@@ -37,7 +38,7 @@ import { type Seat, SEATS } from "./world.ts";
 const ALONE_AFTER = 5000;
 
 /** What each emote is called, for whoever cannot see its picture. */
-const EMOTE_NAMES: Readonly<Record<Emote, string>> = {
+export const EMOTE_NAMES: Readonly<Record<Emote, string>> = {
   wave: "Wave",
   cheer: "Cheer",
   laugh: "Laugh",
@@ -57,6 +58,7 @@ const company = new Company<Drawn>((m) => ({ a: figureOf(m), seat: seatAt(0, 0, 
   emote: (f, kind) => {
     express(f.own.a, kind);
   },
+  log: flare,
   status: (s) => {
     status = s;
     if (s === "closed") downAt ??= performance.now();
@@ -297,6 +299,12 @@ function express(a: Actor, kind: Emote): void {
   else if (kind === "laugh") sfx.boing();
   else if (kind === "heart") sfx.twinkle();
   else sfx.pop();
+}
+
+/** The member puts a log on the fire, and it flares on everybody's page. */
+export function addLog(): void {
+  flare();
+  room?.act("fire", "log");
 }
 
 /** The member makes an emote, and everybody in the room sees them make it. */
