@@ -72,7 +72,7 @@ function buildDock(art: Art): void {
   spade.addEventListener("click", () => {
     setTool(S.tool === "remove" ? null : "remove");
   });
-  tip(spade, "Take away (E)", "Takes a thing out of the yard and gives back all it cost. Right-click does the same.");
+  tip(spade, "Remove (E)", "Removes a piece. Right-click does the same.");
   dock.replaceChildren(...kids, spade);
   // On a narrow screen, more than eight tools go in two even rows.
   const n = kids.length + 1;
@@ -85,11 +85,14 @@ function handLine(): { text: string; bad: boolean } {
   const tool = S.tool;
   const f = S.finger;
   if (tool === null)
-    return { text: f ? "Drag to move, tap to ask." : "Pick a tool, or click a thing to ask about it.", bad: false };
-  if (tool === "remove") {
-    if (S.aim?.why && (f || S.aim.why !== "Nothing to take away here")) return { text: S.aim.why, bad: true };
     return {
-      text: f ? (S.aim ? "Tap again, or Take." : "Tap what is to go.") : "Click a thing to take it away.",
+      text: f ? "Tap a piece for its card." : "Pick a tool, or click a piece for its card.",
+      bad: false,
+    };
+  if (tool === "remove") {
+    if (S.aim?.why && (f || S.aim.why !== "Nothing to remove here")) return { text: S.aim.why, bad: true };
+    return {
+      text: f ? (S.aim ? "Tap again, or Remove." : "Tap a piece to remove it.") : "Click a piece to remove it.",
       bad: false,
     };
   }
@@ -101,7 +104,7 @@ function handLine(): { text: string; bad: boolean } {
   }
   if (S.aim?.why) return { text: S.aim.why, bad: true };
   if (tool === "belt") {
-    if (!f) return { text: "Belt: drag to lay a line. R rotates it.", bad: false };
+    if (!f) return { text: "Belt: drag to place a line. R rotates it.", bad: false };
     return { text: S.from ? "Now tap where it ends." : "Tap where the line starts.", bad: false };
   }
   if (f) return { text: S.aim ? "Tap again, or Build." : `${name}: tap where it goes.`, bad: false };
@@ -133,7 +136,7 @@ function buildHand(): void {
   }
   if (aiming) {
     const bad = (S.run?.why ?? (S.run ? null : S.aim?.why)) != null;
-    const go = button(bad ? "sm off" : "sm", [icon("check"), tool === "remove" ? "Take" : "Build"], () => {
+    const go = button(bad ? "sm off" : "sm", [icon("check"), tool === "remove" ? "Remove" : "Build"], () => {
       confirm();
     });
     kids.push(go);

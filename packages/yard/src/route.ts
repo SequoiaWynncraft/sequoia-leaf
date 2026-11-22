@@ -198,12 +198,12 @@ export function lay(w: World, legs: readonly Leg[], coins: number): Spent {
   for (const leg of legs) {
     const mouth = leg.kind === "tunnel" ? tunnelExit(w, leg.x, leg.y, leg.dir, leg.span) : null;
     for (const i of [at(w, leg.x, leg.y), ...(mouth ? [at(w, mouth.x, mouth.y)] : [])]) {
-      if (tiles.has(i)) return { ok: false, why: "That run crosses itself" };
+      if (tiles.has(i)) return { ok: false, why: "That line crosses itself" };
       tiles.add(i);
     }
     const why =
       leg.kind === "tunnel" && !tunnelExit(w, leg.x, leg.y, leg.dir, leg.span)
-        ? "A tunnel needs a clear tile to come up at, one to three tiles on"
+        ? "A tunnel needs a free tile to come up on, 1 to 3 tiles ahead"
         : refusal(w, leg.kind, leg.x, leg.y, Infinity, leg.dir, leg.kind === "tunnel" ? leg.span : undefined);
     if (why !== null) return { ok: false, why };
   }

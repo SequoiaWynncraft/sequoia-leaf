@@ -61,7 +61,7 @@ export function nudge(w: World, taught: ReadonlySet<string>, finger: boolean): N
       if (spot)
         return {
           id: "gatherer",
-          text: "Start here. Pick the Gatherer, and stand it on the deadfall.",
+          text: "Start here. Pick the Gatherer and place it on the deadfall.",
           ...spot,
           tool: "gatherer",
           lasting: true,
@@ -73,7 +73,7 @@ export function nudge(w: World, taught: ReadonlySet<string>, finger: boolean): N
       if (to >= 0 && !w.cells[to])
         return {
           id: "mill",
-          text: "Now a Mill, where the gatherer hands on. It saws deadfall into planks.",
+          text: "Now place a Mill here, where the Gatherer puts out its items. A Mill turns deadfall into planks.",
           x: to % w.land.w,
           y: Math.floor(to / w.land.w),
           tool: "mill",
@@ -86,8 +86,8 @@ export function nudge(w: World, taught: ReadonlySet<string>, finger: boolean): N
         return {
           id: "belt",
           text: finger
-            ? "A Belt carries the planks in. Tap here, then tap the depot, then Build."
-            : "A Belt carries the planks in. Drag from here to the depot.",
+            ? "A Belt carries the planks to the depot. Tap here, then tap the depot, then Build."
+            : "A Belt carries the planks to the depot. Drag from here to the depot.",
           x: to % w.land.w,
           y: Math.floor(to / w.land.w),
           tool: "belt",
@@ -97,7 +97,7 @@ export function nudge(w: World, taught: ReadonlySet<string>, finger: boolean): N
     if ((w.depot.plank ?? 0) > 0 && !told("planks"))
       return {
         id: "planks",
-        text: "Planks are going in. Twelve fill Cinfy's order: the bar up top counts them.",
+        text: "The depot is taking planks. Cinfy's order needs 12. The bar at the top counts them.",
         x: cx,
         y: cy - 1,
         tool: null,
@@ -117,7 +117,7 @@ export function nudge(w: World, taught: ReadonlySet<string>, finger: boolean): N
         if (refusal(w, "pylon", x, y, Infinity) === null)
           return {
             id: "pylon",
-            text: "Ore and stone lie in the dark, past the lamplight. A Pylon carries the light, and the power, further.",
+            text: "Ore and stone are on dark tiles, and machines work only on lit tiles. Place a Pylon here: it lights the tiles around it.",
             x,
             y,
             tool: "pylon",
@@ -139,7 +139,7 @@ export function nudge(w: World, taught: ReadonlySet<string>, finger: boolean): N
     if (spot)
       return {
         id: "bench",
-        text: "A Bench puts two things together, and takes them in at its back and both sides: planks one way, ingots another.",
+        text: "A Bench combines two different items into one. It takes items in at its back and at both sides. Bring planks in on one side and ingots on another.",
         ...spot,
         tool: "bench",
         lasting: true,
@@ -149,7 +149,7 @@ export function nudge(w: World, taught: ReadonlySet<string>, finger: boolean): N
   if (w.open.board && !told("board"))
     return {
       id: "board",
-      text: "The board is up on the depot's wall: standing orders from the guild. Fill one, and somebody comes to the gate for it.",
+      text: "Side orders are unlocked. Each asks for items and pays Coins. Fill one, then hand it over in Orders.",
       x: cx + 1,
       y: cy,
       tool: null,
@@ -160,7 +160,7 @@ export function nudge(w: World, taught: ReadonlySet<string>, finger: boolean): N
   if (!told("short") && power(w).pace < 1)
     return {
       id: "short",
-      text: "The lamps are burning low: the yard is short of power, and everything slows together. The plaque up top says by how much.",
+      text: "The yard uses more power than it makes, so every machine works slower. The power bar at the top shows the speed.",
       x: cx,
       y: cy - 1,
       tool: null,
@@ -173,7 +173,7 @@ export function nudge(w: World, taught: ReadonlySet<string>, finger: boolean): N
     if (stuck >= 0)
       return {
         id: "starved",
-        text: "This one has filled up with one part and is waiting for another. Tap it.",
+        text: "This machine is full of one item and is waiting for another. Tap it to see which.",
         x: stuck % w.land.w,
         y: Math.floor(stuck / w.land.w),
         tool: null,

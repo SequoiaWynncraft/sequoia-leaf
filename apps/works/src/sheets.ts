@@ -18,6 +18,21 @@ function onBelt(tile: HTMLCanvasElement, top: HTMLCanvasElement | null): HTMLCan
   return c;
 }
 
+const WAYS = [0, 1, 2, 3] as const;
+/** The arms of a splitter and of a joiner pointing each way (east, south, west, north), as `beltTile` takes them. */
+const SPLITS = [
+  [2, 2, 1, 2],
+  [2, 2, 2, 1],
+  [1, 2, 2, 2],
+  [2, 1, 2, 2],
+] as const;
+const JOINS = [
+  [2, 1, 1, 1],
+  [1, 2, 1, 1],
+  [1, 1, 2, 1],
+  [1, 1, 1, 2],
+] as const;
+
 export function sheets(art: Art, which: string): void {
   for (const id of ["top", "track", "feed", "hand", "dock", "panel", "card", "banner", "letter"])
     document.getElementById(id)?.remove();
@@ -58,8 +73,14 @@ export function sheets(art: Art, which: string): void {
       name: "a corner, a join",
       pics: [beltTile([2, 1, 0, 0], 0, 5, 0), beltTile([2, 1, 1, 0], 0, 5, 0), beltTile([0, 2, 0, 1], 1, 5, 0)],
     },
-    { name: KIND.splitter.name, pics: [onBelt(beltTile([2, 2, 1, 2], 0, 5, 0), m.splitter)] },
-    { name: KIND.joiner.name, pics: [onBelt(beltTile([2, 1, 1, 1], 0, 5, 0), m.joiner)] },
+    {
+      name: `${KIND.splitter.name}: east, south, west, north`,
+      pics: SPLITS.map((arms, dir) => onBelt(beltTile(arms, WAYS[dir] ?? 0, 5, 0), m.splitter[dir] ?? null)),
+    },
+    {
+      name: `${KIND.joiner.name}: east, south, west, north`,
+      pics: JOINS.map((arms, dir) => onBelt(beltTile(arms, WAYS[dir] ?? 0, 5, 0), m.joiner[dir] ?? null)),
+    },
     { name: `${KIND.tunnel.name}: its four mouths`, pics: pics(m.hood) },
     { name: `${KIND.crate.name}: shut, open, and bigger`, pics: pics([...(m.crate[0] ?? []), ...(m.crate[1] ?? [])]) },
     { name: "Power", pics: [], head: true },

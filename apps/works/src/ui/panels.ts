@@ -25,8 +25,10 @@ import {
   STARTERS,
   STORY,
   storyOrder,
+  SWAP_EVERY,
   swapRefusal,
   type Tally,
+  TICK_MS,
 } from "@sequoia-leaf/yard";
 
 import type { Art } from "../art/index.ts";
@@ -88,9 +90,12 @@ function opensThings(o: (typeof STORY)[number]): HTMLElement[] {
     ...(o.opens.kinds ?? []).map((k) => thing(machineRef(k))),
     ...(o.opens.plots ?? []).map((id) => thing(plotRef(id))),
     ...(o.opens.plans ?? []).map((id) => thing(planRef(id))),
-    ...(o.opens.board ? [el("span", "k-read", { text: "the board of standing orders" })] : []),
+    ...(o.opens.board ? [el("span", "k-read", { text: "side orders" })] : []),
   ];
 }
+
+/** The story order that unlocks side orders, counted from 0. */
+const BOARD_AT = STORY.findIndex((o) => o.opens.board);
 
 function orders(_art: Art, body: HTMLElement): () => void {
   let live: (() => void)[] = [];
@@ -127,16 +132,16 @@ function orders(_art: Art, body: HTMLElement): () => void {
           "div",
           "k-paper order",
           {},
-          el("div", "k-title", { text: "The story is told" }),
+          el("div", "k-title", { text: "Story complete" }),
           el("div", "k-dim", {
-            text: "Every order the guild had is filled. The board goes on for as long as you like.",
+            text: "You have filled every story order. Side orders keep coming.",
           }),
         ),
       );
-    kids.push(el("div", "k-label", { text: "The board" }));
+    kids.push(el("div", "k-label", { text: "Side orders" }));
     if (!w.open.board)
       kids.push(
-        el("div", "k-d", { text: "Standing orders from the guild go up on the depot's wall after the fourth order." }),
+        el("div", "k-d", { text: `Unlock when you fill story order ${BOARD_AT + 1}: ${STORY[BOARD_AT]?.title}.` }),
       );
     w.board.forEach((s: Standing, slot) => {
       const full = isFilled(s.want, s.filled);
@@ -162,8 +167,8 @@ function orders(_art: Art, body: HTMLElement): () => void {
         act,
         full ? "Hand over" : "Swap",
         full
-          ? `${s.from} is at the gate for it. Pays ${s.pay} Coins.`
-          : (why ?? "Take this one down and hang a fresh order in its place. Free, once every ten minutes."),
+          ? `${s.from} is at the gate to collect it. Pays ${s.pay} Coins.`
+          : (why ?? `Replaces this order with a new one. Free, once every ${(SWAP_EVERY * TICK_MS) / 60_000} minutes.`),
       );
       kids.push(
         el(
@@ -185,7 +190,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
             "div",
             "k-row",
             {},
-            el("span", "k-grow k-d", { text: full ? "Filled, and waiting to be handed over." : "" }),
+            el("span", "k-grow k-d", { text: full ? "Filled. Hand it over to be paid." : "" }),
             act,
           ),
         ),
@@ -194,7 +199,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
     // A place on the board Leaf has yet to hang an order in.
     if (w.open.board)
       for (let n = w.board.length; n < w.rates.slots; n++)
-        kids.push(el("div", "k-card order", {}, el("div", "k-d", { text: "A fresh order is on its way from town." })));
+        kids.push(el("div", "k-card order", {}, el("div", "k-d", { text: "A new order is on its way." })));
     body.replaceChildren(...kids);
   };
   const shape = when(
@@ -218,7 +223,7 @@ const BRANCHES: readonly { label: string; plans: readonly PlanId[] }[] = [
   { label: "Machines", plans: ["tooling", "jigs"] },
   { label: "Belts", plans: ["waxed", "rollers"] },
   { label: "New things to build", plans: ["boiler", "tunnel", "workshop"] },
-  { label: "The yard itself", plans: ["flywheel", "tallpylons", "bigcrates", "fourth"] },
+  { label: "The yard", plans: ["flywheel", "tallpylons", "bigcrates", "fourth"] },
 ];
 
 /** Why a plan cannot be had yet, without its own name on the front: "Unlocks when you fill order 3: Gears and frames." */
@@ -232,7 +237,7 @@ function plans(_art: Art, body: HTMLElement): () => void {
     const w = S.world;
     const kids: HTMLElement[] = [
       el("div", "k-d", {
-        text: "Bought once with Coins, and the yard keeps them. Each comes up for sale as the story goes.",
+        text: "Each plan is bought once and lasts for good. More unlock as you fill story orders.",
       }),
     ];
     for (const branch of BRANCHES) {
@@ -301,7 +306,7 @@ function depot(_art: Art, body: HTMLElement): () => void {
         "div",
         "k-d",
         {},
-        "Everything that comes in goes to an order that wants it. The depot pays a little for whatever it takes, wanted or not.",
+        `Every item that reaches the depot counts towards an order that asks for it. The depot also pays ${DEPOT_SHARE * 100}% of the item's worth when it arrives.`,
       ),
       el(
         "div",
@@ -315,14 +320,14 @@ function depot(_art: Art, body: HTMLElement): () => void {
           el("div", "k-d", {
             text:
               w.pace.warm > 0 || ticks < 200
-                ? "Still counting: the yard was changed a moment ago."
-                : `Worth ${Math.round(hourly).toLocaleString("en-US")} Coins an hour to orders, ${Math.max(0, Math.round(hourly * DEPOT_SHARE))} to the depot alone.`,
+                ? "Still measuring: the yard changed a moment ago."
+                : `Worth ${Math.round(hourly).toLocaleString("en-US")} Coins per hour when it fills orders. The depot alone pays ${Math.max(0, Math.round(hourly * DEPOT_SHARE))} per hour.`,
           }),
         ),
       ),
       rows.length > 0
         ? el("div", "rows", {}, ...rows)
-        : el("div", "k-d", { text: "Nothing has come in yet. A belt that ends at the depot's wall will see to that." }),
+        : el("div", "k-d", { text: "Nothing has reached the depot yet. Run a belt to the depot." }),
       el(
         "div",
         "k-card",
@@ -331,17 +336,13 @@ function depot(_art: Art, body: HTMLElement): () => void {
           "div",
           "k-grow",
           {},
-          "All told",
+          "In total",
           el("div", "k-d", {
-            text: `${Math.floor(w.paid).toLocaleString("en-US")} Coins from orders, ${Math.floor(w.sold).toLocaleString("en-US")} from the depot. ${w.story} of ${STORY.length} story orders, ${w.done} from the board.`,
+            text: `${Math.floor(w.paid).toLocaleString("en-US")} Coins from orders, ${Math.floor(w.sold).toLocaleString("en-US")} from the depot. ${w.story} of ${STORY.length} story orders, ${w.done} side orders.`,
           }),
         ),
       ),
-      spare.length > 0
-        ? el("div", "k-d", { text: `Still to hand, and free to stand: ${spare.join(", ")}.` })
-        : el("div", "k-d", {
-            text: "Taking a thing away gives back all it cost, so the yard can be laid out again as often as you like.",
-          }),
+      ...(spare.length > 0 ? [el("div", "k-d", { text: `Free pieces left to place: ${spare.join(", ")}.` })] : []),
     );
   };
   return when(() => `${Math.floor(S.world.tick / 20)}|${S.rev}`, build);
@@ -398,12 +399,12 @@ function powerBook(_art: Art, body: HTMLElement): () => void {
         "div",
         "k-d",
         {},
-        "The lamplight is the power: it reaches as far as the depot's lamps and every joined pylon's. A machine in the dark does nothing and draws nothing.",
+        "Lit tiles have power. The depot and every pylon connected to it light the tiles around them. A machine on a dark tile does not work and uses no power.",
       ),
-      el("div", "k-label", { text: `Given: ${p.supply}` }),
+      el("div", "k-label", { text: `Made: ${p.supply}` }),
       el("div", "rows", {}, ...gives),
-      el("div", "k-label", { text: `Drawn: ${p.demand}` }),
-      draws.length > 0 ? el("div", "rows", {}, ...draws) : el("div", "k-d", { text: "Nothing is drawing power yet." }),
+      el("div", "k-label", { text: `Used: ${p.demand}` }),
+      draws.length > 0 ? el("div", "rows", {}, ...draws) : el("div", "k-d", { text: "Nothing is using power yet." }),
       el(
         "div",
         p.pace < 1 ? "k-card lit" : "k-card",
@@ -412,12 +413,12 @@ function powerBook(_art: Art, body: HTMLElement): () => void {
           "div",
           "k-grow",
           {},
-          p.pace < 1 ? `Short: everything works at ${Math.round(p.pace * 100)}% of its pace` : "Enough to go round",
+          p.pace < 1 ? `Not enough power: every machine works at ${Math.round(p.pace * 100)}% speed` : "Enough power",
           el("div", "k-d", {
             text:
               p.pace < 1
-                ? "Nothing stops, it all slows together. A waterwheel by the stream or a boiler fed deadfall gives more; taking an idle machine away draws less."
-                : `${p.supply - p.demand} to spare before anything slows.`,
+                ? "To make more power, build a waterwheel beside the stream or a boiler fed with deadfall. To use less, remove machines that are doing nothing."
+                : `${p.supply - p.demand} power to spare.`,
           }),
         ),
       ),
@@ -445,13 +446,13 @@ function shift(_art: Art, body: HTMLElement): () => void {
       "k-row",
       {},
       yardIcon("shift", 2),
-      el("div", "k-grow", { text: "The night shift comes in, and the yard works on at double pace." }),
+      el("div", "k-grow", { text: "A second shift: everything works twice as fast." }),
     ),
     el(
       "div",
       "k-d",
       {},
-      `For ${SHIFT.minutes} minutes by the clock, gatherers, machines and belts all go twice as fast, whether you stay to watch or not. It opens nothing: only Coins and the story do that.`,
+      `For ${SHIFT.minutes} minutes, gatherers, machines and belts all work twice as fast, whether or not the page is open. It unlocks nothing.`,
     ),
     go,
   );

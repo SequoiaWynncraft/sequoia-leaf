@@ -120,8 +120,10 @@ export function banner(art: Art, done: StoryOrder, next: StoryOrder | null): voi
           "div",
           "k-grow",
           {},
-          "The board is up",
-          el("div", "k-d", { text: "Standing orders from the guild, three at a time. They never run out." }),
+          "Side orders unlocked",
+          el("div", "k-d", {
+            text: "Extra orders from the guild, 3 at a time. A new one comes when you hand one over.",
+          }),
         ),
       ),
     );
@@ -153,7 +155,7 @@ export function banner(art: Art, done: StoryOrder, next: StoryOrder | null): voi
             "k-say",
             {},
             el("b", "", { text: "The guild" }),
-            "That was the last of the story. The board is yours for good.",
+            "That was the last story order. Side orders keep coming.",
           ),
       button("wide", ["Back to work"], closeBanner),
     ),

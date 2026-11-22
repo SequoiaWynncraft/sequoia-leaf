@@ -576,10 +576,14 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
           stand(art.bang, x + 8, y - 4 - Math.round(Math.abs(Math.sin(S.t * 4 + i)) * 2), (ty + 1) * TILE + 0.6);
       }
       if (b.kind === "splitter") {
-        g.drawImage(art.m.splitter, x, y);
+        const top = art.m.splitter[b.dir];
+        if (top) g.drawImage(top, x, y);
         const v = art.m.vane[[b.dir, (b.dir + 3) % 4, (b.dir + 1) % 4][b.turn % 3] ?? b.dir];
         if (v && b.item === null) g.drawImage(v, x + 5, y + 5);
-      } else if (b.kind === "joiner") g.drawImage(art.m.joiner, x, y);
+      } else if (b.kind === "joiner") {
+        const top = art.m.joiner[b.dir];
+        if (top) g.drawImage(top, x, y);
+      }
     }
 
   // ---------- everything that stands up ----------
@@ -821,8 +825,8 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
         g.globalAlpha = 0.8;
         const arms = tool === "splitter" ? splitArms(S.dir) : tool === "tunnel" ? tunnelArms(S.dir) : armsFor(S.dir);
         g.drawImage(beltTile(arms, S.dir, step, tier), x, y);
-        if (tool === "splitter") g.drawImage(art.m.splitter, x, y);
-        if (tool === "joiner") g.drawImage(art.m.joiner, x, y);
+        const top = tool === "splitter" ? art.m.splitter[S.dir] : tool === "joiner" ? art.m.joiner[S.dir] : undefined;
+        if (top) g.drawImage(top, x, y);
         g.globalAlpha = 1;
       }
       const ghost = blank(tool, S.dir);
@@ -905,7 +909,8 @@ function plate(ctx: Ctx, text: string, x: number, y: number, px: number, colour:
   });
 }
 
-export function drawWords(ctx: Ctx, px: number): void {
+/** The words over the yard. `clear` is how far down the interface covers the top of the screen, in the canvas's pixels. */
+export function drawWords(ctx: Ctx, px: number, clear: number): void {
   const z = S.view.z;
   const cx = Math.round(S.cam.x);
   const cy = Math.round(S.cam.y);
@@ -948,7 +953,7 @@ export function drawWords(ctx: Ctx, px: number): void {
       ctx,
       lines,
       clamp(hx - Math.round(size.w / 2), 2 * px, Math.max(2 * px, wide - size.w - 2 * px)),
-      top < 40 * px ? hy + 34 * z + bob : top,
+      top < clear + 2 * px ? hy + 34 * z + bob : top,
       px,
       hx,
     );

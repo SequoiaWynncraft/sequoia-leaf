@@ -8,7 +8,7 @@ import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { leave } from "@sequoia-leaf/kit/shell.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
-import { isFilled, PLANS, planState, power, SHIFT, storyOrder } from "@sequoia-leaf/yard";
+import { AWAY_MOST_MS, isFilled, PLANS, planState, power, SHIFT, storyOrder } from "@sequoia-leaf/yard";
 
 import type { Art } from "../art/index.ts";
 import { S } from "../state.ts";
@@ -38,8 +38,8 @@ function powerPlaque(): () => void {
   tip(host, "Power", () => {
     const p = power(S.world);
     return p.pace < 1
-      ? `The yard draws ${p.demand} and has ${p.supply}: everything works at ${Math.round(p.pace * 100)}% of its pace.`
-      : `The yard draws ${p.demand} of the ${p.supply} it has.`;
+      ? `The yard uses ${p.demand} power and makes ${p.supply}. Every machine works at ${Math.round(p.pace * 100)}% speed.`
+      : `The yard uses ${p.demand} of the ${p.supply} power it makes.`;
   });
   return when(
     () => {
@@ -84,7 +84,7 @@ function tracker(art: Art): () => void {
           el("span", "k-label k-grow", { text: o ? `${storyLabel()} · ${o.from}` : storyLabel() }),
           ready > 0 ? el("span", "k-chip lit", { text: `${ready} to hand over` }) : null,
         ),
-        el("div", "", { text: o ? o.title : "The board is yours" }),
+        el("div", "", { text: o ? o.title : "Story complete" }),
         ...(o ? wantRows(art, o.want, w.filled) : []),
       );
     },
@@ -117,11 +117,11 @@ function bookButtons(): () => void {
   const ordersBtn = make("orders", "Orders", () => "What the guild is asking for, and what it pays.", "O");
   make("board", "Top yards", () => "The twenty yards that have earned the most Coins, all time.", "T");
   const plansBtn = make("plans", "Plans", () => "Improvements to buy with Coins.", "P");
-  make("depot", "The depot", () => "What has come in, and what the yard makes an hour.", "I");
+  make("depot", "The depot", () => "What the depot has taken in, and what the yard earns per hour.", "I");
   make(
     "shift",
     "A second shift",
-    () => `Double pace for ${SHIFT.minutes} minutes, for ${SHIFT.leaf} Leaf. The one thing Leaf buys here.`,
+    () => `Everything works twice as fast for ${SHIFT.minutes} minutes. Costs ${SHIFT.leaf} Leaf.`,
     "L",
     true,
   );
@@ -153,7 +153,7 @@ function corner(): void {
     sfx.close();
     leave();
   });
-  tip(back, "Back to town", "The yard keeps working while you are away.");
+  tip(back, "Back to town", `The yard keeps working for up to ${AWAY_MOST_MS / 3_600_000} hours while you are away.`);
   const mute = el("button", "k-btn wood icon", { type: "button", "aria-label": "Sound" });
   const draw = (): void => {
     mute.replaceChildren(icon(isMuted() ? "mute" : "sound"));

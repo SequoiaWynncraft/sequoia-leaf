@@ -259,18 +259,18 @@ describe("the board", () => {
     expect(swapRefusal(w, 0)).toBeNull();
     expect(swap(w, 0)).toBe(true);
     expect(w.board.map((o) => o.id)).toEqual([3, was[1] ?? -1, was[2] ?? -1]);
-    expect(swapRefusal(w, 1)).toBe("A fresh order can be had in 10 minutes");
+    expect(swapRefusal(w, 1)).toBe("You can replace an order again in 10 minutes");
     expect(swap(w, 1)).toBe(false);
     steps(w, SWAP_EVERY - 600);
-    expect(swapRefusal(w, 1)).toBe("A fresh order can be had in 1 minute");
+    expect(swapRefusal(w, 1)).toBe("You can replace an order again in 1 minute");
     steps(w, 600);
     expect(swap(w, 1)).toBe(true);
-    expect(swapRefusal(w, 0)).toBe("There is no such order on the board");
+    expect(swapRefusal(w, 0)).toBe("There is no such order");
     // A filled one is handed over, not swapped away.
     const order = w.board[2];
     for (const item of ITEMS) deliver(w, item, order?.want[item] ?? 0);
     steps(w, SWAP_EVERY);
-    expect(swapRefusal(w, order?.id ?? -1)).toBe("That one is filled and waiting to be handed over");
+    expect(swapRefusal(w, order?.id ?? -1)).toBe("That order is filled. Hand it over instead");
   });
   test("nothing on the board has a clock on it", () => {
     const w = create({ seed: 5, story: 6 });

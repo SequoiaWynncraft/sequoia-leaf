@@ -204,8 +204,8 @@ describe("tunnels", () => {
   test("a tunnel goes under the stream and under a redwood, where nothing else can be built", () => {
     const w = bare({ "1,2": "ore" }, { h: 8, water: ["5,2", "6,2"], trunks: ["5,4"] });
     lit(w);
-    expect(build(w, "belt", 5, 2, 0, 99)).toEqual({ ok: false, why: "The stream runs here" });
-    expect(build(w, "belt", 5, 4, 0, 99)).toEqual({ ok: false, why: "A redwood stands here" });
+    expect(build(w, "belt", 5, 2, 0, 99)).toEqual({ ok: false, why: "Nothing can be built on the stream" });
+    expect(build(w, "belt", 5, 4, 0, 99)).toEqual({ ok: false, why: "Nothing can be built on a tree" });
     put(w, "gatherer", 1, 2);
     belts(w, 2, 2, 3, 2);
     // It comes up at the first clear tile past the water.
@@ -220,7 +220,7 @@ describe("tunnels", () => {
     const w = bare({}, { h: 8, water: ["4,2", "5,2", "6,2", "7,2"] });
     expect(build(w, "tunnel", 3, 2, 0, 99)).toEqual({
       ok: false,
-      why: "A tunnel needs a clear tile to come up at, one to three tiles on",
+      why: "A tunnel needs a free tile to come up on, 1 to 3 tiles ahead",
     });
     expect(build(w, "tunnel", 3, 4, 0, 99, 3)).toEqual({ ok: true, cost: KIND.tunnel.cost });
     expect(on(w, 7, 4).span).toBe(-3);
@@ -417,7 +417,7 @@ describe("power", () => {
   });
   test("a waterwheel stands only beside the stream, and gives steady power once power reaches it", () => {
     const w = bare({}, { w: 40, water: ["30,5", "30,6", "30,7"] });
-    expect(build(w, "wheel", 10, 6, 0, 999)).toEqual({ ok: false, why: "A waterwheel needs the stream beside it" });
+    expect(build(w, "wheel", 10, 6, 0, 999)).toEqual({ ok: false, why: "A waterwheel must be beside the stream" });
     put(w, "wheel", 29, 6);
     expect(power(w).supply).toBe(KIND.depot.gives);
     put(w, "pylon", 26, 6);

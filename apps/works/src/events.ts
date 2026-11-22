@@ -153,7 +153,10 @@ export function onNews(art: Art, news: readonly News[]): void {
     } else if (n.kind === "filled") {
       yardSfx.ready();
       const order = w.board.find((o) => o.id === n.id);
-      feed(`${n.title}: filled. ${order ? comer(order).name : "Somebody"} is coming to the gate for it.`, "gold");
+      feed(
+        `${n.title}: filled. ${order ? comer(order).name : "Somebody"} is coming to the gate to collect it.`,
+        "gold",
+      );
       callers();
     }
   }

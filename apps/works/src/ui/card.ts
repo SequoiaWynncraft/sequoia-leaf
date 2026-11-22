@@ -71,10 +71,7 @@ import { togglePanel } from "./panels.ts";
 import { fitted, yardIcon } from "./parts.ts";
 
 const GROUND: Record<Raw, readonly [string, string]> = {
-  deadfall: [
-    "Deadfall",
-    "Fallen branches off the forest floor. A gatherer here picks them up; a mill saws them into planks.",
-  ],
+  deadfall: ["Deadfall", "Fallen branches. A gatherer here picks them up; a mill saws them into planks."],
   stone: ["A stone outcrop", "A gatherer here picks up stone; a mill fires it into bricks."],
   ore: ["An ore seam", "A gatherer here picks up ore; a mill smelts it into ingots."],
   clay: ["A clay bank", "A gatherer here digs clay; a mill fires it into pots."],
@@ -274,12 +271,12 @@ function standingDesc(art: Art, i: number): Description | null {
   const maker = b.kind === "mill" || b.kind === "bench" || b.kind === "workshop" ? b.kind : null;
   if (maker) {
     actions.push({
-      label: "Whatever arrives",
+      label: "Any recipe",
       look: "slot",
       icon: icon("more"),
       lit: b.recipe === null,
-      hint: "Whatever arrives",
-      about: "It makes whatever the things it is brought add up to.",
+      hint: "Any recipe",
+      about: "It makes whichever item its inputs combine into.",
       on: () => {
         doNow({ do: "recipe", x, y, item: null });
         sfx.tap();
@@ -293,7 +290,7 @@ function standingDesc(art: Art, i: number): Description | null {
         icon: art.item(rec.out),
         lit: b.recipe === rec.out,
         hint: `Only ${ITEM[rec.out].many}`,
-        about: `From ${rec.from.map((k) => ITEM[k].many).join(" and ")}. It will take in nothing else.`,
+        about: `From ${rec.from.map((k) => ITEM[k].many).join(" and ")}. It takes in no other item.`,
         on: () => {
           doNow({ do: "recipe", x, y, item: b.recipe === rec.out ? null : rec.out });
           sfx.tap();
@@ -304,12 +301,12 @@ function standingDesc(art: Art, i: number): Description | null {
   const spare = st?.spare ?? null;
   if (b.count > 0 && (b.kind === "crate" || spare !== null || st?.state === "idle"))
     actions.push({
-      label: spare ? `Tip out the ${ITEM[spare].many}` : "Tip it out",
+      label: spare ? `Empty the ${ITEM[spare].many}` : "Empty it",
       look: spare ? "sm" : "wood sm",
-      hint: "Tip out",
+      hint: "Empty",
       about: spare
-        ? `It is full of ${ITEM[spare].many} and can take no more, so nothing behind them can get in. Tipping them out frees it; giving each part its own belt keeps it free.`
-        : "Empties what it holds. What is tipped out is lost.",
+        ? `It is full of ${ITEM[spare].many}, so the other item it needs cannot get in. Emptying them clears it. To stop this, bring each input in on its own belt.`
+        : "Removes the items inside. They are lost.",
       on: () => {
         if (!("refused" in doNow({ do: "tipOut", x, y, item: spare }))) yardSfx.take();
         touched();
@@ -319,7 +316,7 @@ function standingDesc(art: Art, i: number): Description | null {
     actions.push({
       label: b.open ? "Shut it" : "Open it",
       hint: b.open ? "Shut" : "Open",
-      about: "Shut, it takes things in and lets nothing out, and so saves them up.",
+      about: "While shut, it takes items in and lets none out.",
       on: () => {
         doNow({ do: "crate", x, y, open: !b.open });
         sfx.clack();
@@ -330,31 +327,29 @@ function standingDesc(art: Art, i: number): Description | null {
     actions.push(
       { label: "Orders", on: () => togglePanel("orders") },
       { label: "Plans", on: () => togglePanel("plans") },
-      { label: "Books", on: () => togglePanel("depot") },
+      { label: "Stats", on: () => togglePanel("depot") },
     );
   } else {
     if (b.kind !== "tunnel" && b.kind !== "pylon" && b.kind !== "wheel" && b.kind !== "boiler")
       actions.push({
-        label: "Turn",
-        hint: "Turn (R)",
-        about: "A quarter turn to the right. It costs nothing.",
+        label: "Rotate",
+        hint: "Rotate (R)",
+        about: "Rotates it a quarter turn to the right.",
         on: () => turnAt(x, y),
       });
     actions.push({
       label: "Another",
       hint: "Another (Q)",
-      about: `Takes up the ${KIND[b.kind].name.toLowerCase()} as the tool in hand, facing the same way.`,
+      about: `Picks the ${KIND[b.kind].name.toLowerCase()} as your tool, facing the same way.`,
       on: () => pickFrom(x, y),
     });
     const refund = b.free ? 0 : KIND[b.kind].cost;
     actions.push({
-      label: "Take away",
+      label: "Remove",
       look: "coral sm",
       after: refund > 0 ? amount("coin", `+${refund}`) : null,
-      hint: "Take away",
-      about: b.free
-        ? "It goes back to hand, and can be stood again for nothing."
-        : "All it cost comes back. What it is holding is lost.",
+      hint: "Remove",
+      about: b.free ? "It goes back to your free pieces." : "Any items inside it are lost.",
       on: () => takeAway(x, y),
     });
   }
@@ -400,7 +395,7 @@ function plotDesc(id: PlotId): Description | null {
         ? el("span", "k-chip lit", {}, icon("check"), "Yours")
         : amount("coin", plot.price.toLocaleString("en-US")),
     blocks: [
-      ...(bank ? [{ body: "The stream runs through it: room for waterwheels." }] : []),
+      ...(bank ? [{ body: "The stream runs through it. A waterwheel must be beside the stream." }] : []),
       ...(state === "not yet" ? [{ body: `${why ?? "Not for sale yet"}.` }] : []),
     ],
     rows: [{ label: "In the ground", things: inTheGround(id) }],
@@ -484,7 +479,7 @@ function orderDesc(slot: string): Description | null {
       icon: yardIcon("orders"),
       tag: `Order ${w.story + 1} of ${STORY.length}, from ${o.from}`,
       aside: amount("coin", o.pay.toLocaleString("en-US")),
-      blocks: [{ body: o.say }, ...(opens.board ? [{ body: "Puts up the board of standing orders." }] : [])],
+      blocks: [{ body: o.say }, ...(opens.board ? [{ body: "Unlocks side orders." }] : [])],
       rows: [
         { label: "Wants", things: wantsOf(o.want, w.filled) },
         { label: "Opens", things },
@@ -539,12 +534,12 @@ function tileDesc(art: Art, i: number): Description | null {
   if (w.land.water[i] === 1)
     return {
       name: "The stream",
-      tag: "Nothing is built on it. A waterwheel on its bank turns for nothing, and a tunnel goes under.",
+      tag: "Nothing can be built on it. A waterwheel beside it makes power, and a tunnel can go under it.",
     };
   if (w.land.trunk[i] === 1)
     return {
       name: "A redwood",
-      tag: "Nothing here fells a living tree. Belts go round it, or under its roots by tunnel.",
+      tag: "Nothing can be built on it. Belts go round it, or under it by tunnel.",
     };
   return null;
 }

@@ -479,20 +479,57 @@ function hood(side: number): Sprite {
   return spr(c, 8, 18);
 }
 
-/** The four studs that mark a tile where belts meet: brass for a splitter, wood for a joiner. */
-function studs(body: string, lit: string): Canvas {
-  const { c, g } = makeCanvas(16, 16);
-  for (const [x, y] of [
-    [1, 1],
-    [12, 1],
-    [1, 12],
-    [12, 12],
-  ] as const) {
-    R(g, x, y, 3, 3, INK);
-    R(g, x, y, 2, 2, body);
-    R(g, x, y, 1, 1, lit);
-  }
-  return c;
+/**
+ * What marks a tile where belts meet, typed pointing east. A splitter has a brass arrowhead on each
+ * of its three ways out. A joiner has a pale arrowhead on each of its three ways in, and one brass
+ * arrowhead on its way out.
+ */
+const SPLITTER = [
+  "......kyk.......",
+  ".....kyyyk......",
+  "....kyyyyyk.....",
+  "....kkkkkkk.....",
+  "...........kk...",
+  "...........kyk..",
+  "...........kyyk.",
+  "...........kyyyk",
+  "...........kyyk.",
+  "...........kyk..",
+  "...........kk...",
+  "................",
+  "....kkkkkkk.....",
+  "....kyyyyyk.....",
+  ".....kyyyk......",
+  "......kyk.......",
+];
+const JOINER = [
+  "....kccccck.....",
+  ".....kccck......",
+  "......kck.......",
+  ".......k........",
+  "kk.........kk...",
+  "cck........kyk..",
+  "ccck.......kyyk.",
+  "cccck......kyyyk",
+  "ccck.......kyyk.",
+  "cck........kyk..",
+  "kk.........kk...",
+  "................",
+  ".......k........",
+  "......kck.......",
+  ".....kccck......",
+  "....kccccck.....",
+];
+
+/** A square picture typed in rows, turned a quarter to the right. */
+const quarter = (r: readonly string[]): string[] =>
+  r.map((_, y) => r.map((_row, x) => r[r.length - 1 - x]?.charAt(y) ?? ".").join(""));
+
+/** A square picture typed pointing east, turned to point each way: east, south, west, north. */
+function eachWay(rows: readonly string[]): Canvas[] {
+  const south = quarter(rows);
+  const west = quarter(south);
+  return [rows, south, west, quarter(west)].map((r) => bitmap(r, PAL));
 }
 
 /** A splitter's vane: a small brass arrow showing which way the next thing will go. */
@@ -720,8 +757,9 @@ export interface Machines {
   boiler: Sprite[];
   /** hood[side]. */
   hood: Sprite[];
-  splitter: Canvas;
-  joiner: Canvas;
+  /** splitter[dir] and joiner[dir]: what marks the tile, pointing each way. */
+  splitter: Canvas[];
+  joiner: Canvas[];
   vane: Canvas[];
   /** pointer[dir], dim and bright. */
   pointer: Canvas[];
@@ -760,8 +798,8 @@ export function makeMachines(): Machines {
     wheel: [0, 1, 2, 3].map(wheel),
     boiler: [0, 1, 2].map(boiler),
     hood: [0, 1, 2, 3].map(hood),
-    splitter: studs(GOLD[1], CREAM),
-    joiner: studs(BARK[3], BARK[4]),
+    splitter: eachWay(SPLITTER),
+    joiner: eachWay(JOINER),
     vane: [0, 1, 2, 3].map(vane),
     pointer: [0, 1, 2, 3].map((d) => pointer(d, GOLD[0])),
     pointerLit: [0, 1, 2, 3].map((d) => pointer(d, GOLD[2])),
