@@ -4,7 +4,7 @@
  */
 
 import { thing } from "@sequoia-leaf/kit/card.ts";
-import { amount, asking, el, icon, pressedTwice, replay } from "@sequoia-leaf/kit/dom.ts";
+import { amount, asking, asksAgain, el, icon, pressedTwice, replay } from "@sequoia-leaf/kit/dom.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
@@ -164,7 +164,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
           })
         : button(
             `wood sm${why === null ? "" : " off"}${asking(ask) ? " asking" : ""}`,
-            [asking(ask) ? "Swap?" : "Swap"],
+            [asksAgain(ask, ["Swap"], "Swap?")],
             (b) => {
               const no = swapRefusal(S.world, s.id);
               // The list moves up under the pointer after a hand over: what has been delivered is not lost to one press.
@@ -263,7 +263,7 @@ function plans(_art: Art, body: HTMLElement): () => void {
             : state === "for sale"
               ? button(
                   `${coins() >= plan.price ? "sm" : "sm off"}${asking(planRef(id)) ? " asking" : ""}`,
-                  asking(planRef(id)) ? ["Buy?"] : [icon("coin"), plan.price.toLocaleString("en-US")],
+                  [asksAgain(planRef(id), [icon("coin"), plan.price.toLocaleString("en-US")], "Buy?")],
                   (b) => {
                     // What spends is asked once more, when the Coins are there to spend.
                     if (coins() >= plan.price && !pressedTwice(planRef(id), build)) return;
