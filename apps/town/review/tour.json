@@ -1,0 +1,92 @@
+[
+  ["size", 1280, 760],
+  ["wait", 3000],
+  [
+    "eval",
+    "fetch('/test/play/town', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stage: [{ fresh: true }, { coins: 3000 }] }) }).then(() => (setTimeout(() => location.reload(), 30), 'staged'))"
+  ],
+  ["wait", 4000],
+  ["shot", "d01-arrival-letter"],
+  ["click", "#arrival .k-btn"],
+  ["wait", 1500],
+  ["eval", "(window.town.visit('market'), window.town.skip(6), 'market')"],
+  ["wait", 600],
+  ["click", "#panel .k-col .k-card:nth-of-type(1) .k-btn"],
+  ["wait", 1200],
+  ["eval", "(window.town.skip(0.4), JSON.stringify([window.town.purse(), window.town.kept().camp.parcels]))"],
+  ["shot", "d02-bought-at-a-stall"],
+  ["eval", "(window.town.close(), window.town.camp.go(), window.town.skip(4), JSON.stringify(window.town.where()))"],
+  ["wait", 400],
+  ["eval", "(window.town.skip(2), window.town.camp.choose('cat'), window.town.close(), 'cat')"],
+  ["eval", "(window.town.skip(5), JSON.stringify(window.town.kept().camp.parcels))"],
+  ["wait", 800],
+  ["eval", "(window.town.skip(2), JSON.stringify(window.town.camp.things().filter(t => t.id === 'lantern-post')))"],
+  ["shot", "d03-unpacked"],
+  [
+    "eval",
+    "(window.town.camp.decorate(true), window.town.camp.grab(window.town.camp.things().filter(t => t.id === 'lantern-post').at(-1).n), 'grab')"
+  ],
+  [
+    "eval",
+    "(() => { const t = window.town.camp.things().filter(t => t.id === 'lantern-post').at(-1); window.town.camp.dragTo(t.cx - 4, t.cy + 2); window.town.camp.drop(); return 'moved'; })()"
+  ],
+  ["key", "r"],
+  ["wait", 900],
+  [
+    "eval",
+    "(window.town.skip(0.3), JSON.stringify(window.town.camp.things().filter(t => t.id === 'lantern-post')), JSON.stringify(window.town.kept().camp.placed.filter(p => p.id === 'lantern-post')))"
+  ],
+  ["shot", "d04-moved-and-turned"],
+  ["eval", "(window.town.camp.decorate(false), 'done decorating')"],
+  [
+    "eval",
+    "(() => { const t = window.town.camp.things().find(t => t.n === 5); window.town.tap(t.x, t.y - 10); return JSON.stringify(window.town.kept().camp.placed.find(p => p.n === 5)); })()"
+  ],
+  ["wait", 900],
+  ["eval", "(window.town.skip(0.5), JSON.stringify(window.town.kept().camp.placed.find(p => p.n === 5)))"],
+  ["shot", "d05-lantern-put-out"],
+  [
+    "eval",
+    "(() => { const t = window.town.camp.things().find(t => t.n === 5); window.town.tap(t.x, t.y - 10); window.town.skip(0.5); return JSON.stringify(window.town.kept().camp.placed.find(p => p.n === 5)); })()"
+  ],
+  ["wait", 900],
+  [
+    "eval",
+    "fetch('/test/play/town', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stage: [{ caller: true }] }) }).then(() => window.town.again()).then(() => JSON.stringify(window.town.kept().visit))"
+  ],
+  ["eval", "(window.town.skip(6), JSON.stringify(window.town.camp.guests()))"],
+  ["wait", 500],
+  ["shot", "d06-a-caller"],
+  ["eval", "(window.town.camp.greet(0), 'greeted')"],
+  ["wait", 1000],
+  ["eval", "(window.town.skip(1), JSON.stringify([window.town.kept().visit, window.town.kept().camp.greeted]))"],
+  ["shot", "d07-caller-greeted"],
+  ["eval", "(window.town.skip(8), JSON.stringify(window.town.kept().camp.letters.map(l => l.id)))"],
+  ["eval", "(window.town.camp.walk('mailbox'), window.town.skip(5), 'mailbox')"],
+  ["wait", 900],
+  ["shot", "d08-mail"],
+  ["click", "#panel .k-paper .k-row .k-btn"],
+  ["wait", 1200],
+  [
+    "eval",
+    "(window.town.skip(0.4), JSON.stringify(window.town.kept().camp.letters.map(l => [l.id, l.gift, l.taken])))"
+  ],
+  ["shot", "d09-present-taken"],
+  [
+    "eval",
+    "(window.town.close(), window.town.skip(2), window.town.camp.town(), window.town.skip(5), JSON.stringify(window.town.where()))"
+  ],
+  ["wait", 500],
+  ["eval", "(window.town.tp(176, 132), window.town.tap(160, 114), 'chest')"],
+  ["wait", 1200],
+  ["eval", "(window.town.skip(0.3), JSON.stringify([window.town.purse(), window.town.kept().chestDay]))"],
+  ["shot", "d10-chest"],
+  ["eval", "(setTimeout(() => location.reload(), 30), 'reload')"],
+  ["wait", 5000],
+  [
+    "eval",
+    "(window.town.camp.go(), window.town.skip(5), JSON.stringify([window.town.where(), window.town.kept().camp.placed.length]))"
+  ],
+  ["wait", 600],
+  ["shot", "d11-after-reload-same-camp"]
+]

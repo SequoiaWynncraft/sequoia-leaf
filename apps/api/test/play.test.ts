@@ -10,7 +10,7 @@ import {
   SENSIBLE,
   type TableView,
 } from "@sequoia-leaf/raid";
-import { decodeTown, TOWN } from "@sequoia-leaf/town";
+import { decodeTown, readNotes as readTownNotes, readView as readTownView, type TownView } from "@sequoia-leaf/town";
 import { deliver, readView as readYardView, route, WORKS } from "@sequoia-leaf/yard";
 import { Effect, Exit, Logger, References, Schema } from "effect";
 import { SqlClient } from "effect/sql";
@@ -435,7 +435,7 @@ describe("commands", () => {
   });
 
   it("go only to a game Leaf plays", async () => {
-    const paths = ["/v1/game/play/chess", "/v1/game/play/town"];
+    const paths = ["/v1/game/play/chess", "/v1/game/play/lobby"];
     const answers = await Promise.all(
       paths.flatMap((path) => [send("GET", path), send("POST", path, { commands: [] })]),
     );
@@ -638,9 +638,6 @@ const STALL: typeof SHOP = {
   }),
 };
 
-/** A call to change Coins as a page of the town makes it. */
-const page = (id: string, amount: number, reason: string) => send("POST", "/v1/game/coins", { id, amount, reason });
-
 describe("what play pays", () => {
   it("is at most 5,000 Coins in any hour and 20,000 in a UTC day, whatever the games: past it a command is done all the same and pays what is left", async () => {
     clock.now = Date.UTC(2026, 10, 25, 1);
@@ -654,20 +651,12 @@ describe("what play pays", () => {
     };
 
     expect(await sold("s-1", 4000)).toBe(4300);
-    // What the pages earn and what the games pay are weighed together.
-    expect((await page("p-1", 3, "daily_chest")).status).toBe(200);
     expect(await sold("s-2", 4000)).toBe(5300);
     expect(await sold("s-3", 50)).toBe(5300);
     expect(await entries(alice)).toEqual([
       { amount: 300, reason: "Welcome to Guild Town", game: null, key: `welcome:${alice}` },
       { amount: 4000, reason: "A sale", game: "works", key: `works:${alice}:sale:1` },
-      {
-        amount: 3,
-        reason: "daily_chest",
-        game: "town",
-        key: `page:${alice}:daily_chest:${Math.floor(clock.now / DAY)}`,
-      },
-      { amount: 997, reason: "A sale", game: "works", key: `works:${alice}:sale:2` },
+      { amount: 1000, reason: "A sale", game: "works", key: `works:${alice}:sale:2` },
     ]);
     // An hour on, the hour's room is back; the day's 20,000 still stands.
     for (const hour of [3, 5, 7]) {
@@ -680,9 +669,6 @@ describe("what play pays", () => {
     expect(await sold("s-4", 9000)).toBe(20_300);
     clock.now = Date.UTC(2026, 10, 26);
     expect(await sold("s-5", 9000)).toBe(25_300);
-    // The day's chest, opened past the hour's room, is refused.
-    const refused = await page("p-2", 3, "daily_chest");
-    expect([refused.status, await codeOf(refused)]).toEqual([429, "too_much"]);
   });
 });
 
@@ -1176,9 +1162,6 @@ describe("the Works", () => {
       top: [{ place: 1, id: alice, name: "Alice", guest: false, score: earned, also: { story: 1 }, you: true }],
       you: { place: 1, score: earned, also: { story: 1 } },
     });
-    // The old save slot takes no more writes.
-    const old = await send("PUT", "/v1/game/saves/works", { version: 0, data: { keys: {} } });
-    expect([old.status, await codeOf(old)]).toEqual([410, "moved"]);
 
     // Bob visits a minute on: he is given the yard as Alice's own page is, and nothing of it is written.
     clock.now += MINUTE;
@@ -1314,15 +1297,96 @@ describe("awards", () => {
     expect((await awarded(alice)).map((a) => a.id)).toEqual(["trophy-hoardmagpie", "trophy-oldbramble", "model-crab"]);
 
     // The town is told of them on its next call, and sends each by the trail to the camp, once.
-    const town = played(TOWN);
-    const inTown = (id: string) =>
-      services.run(Play.use((play) => play.send({ playerId: alice, guest: false }, town, [{ id, do: "readMail" }])));
-    await inTown("t-1");
-    await inTown("t-2");
+    await townDid([{ id: "t-1", do: "readMail" }]);
+    await townDid([{ id: "t-2", do: "readMail" }]);
     const camp = decodeTown((await storedIn("town"))[0]?.state ?? "")?.camp;
     expect(camp?.parcels).toEqual(["trophy-hoardmagpie", "trophy-oldbramble", "model-crab"]);
     expect(camp?.earned).toEqual(["trophy-hoardmagpie", "trophy-oldbramble", "model-crab"]);
     // A game that awards nothing writes none.
     expect(await awarded(alice)).toHaveLength(3);
+  });
+});
+
+/** Alice's town as her page is shown it, after a batch of commands. */
+async function townDid(commands: readonly unknown[]) {
+  clock.now += 200;
+  const response = await send("POST", "/v1/game/play/town", { commands });
+  expect(response.status).toBe(200);
+  const body = Schema.decodeUnknownSync(Answered)(await response.json());
+  return { results: body.results, view: townOf(body.state) };
+}
+function townOf(state: unknown): TownView {
+  const view = readTownView(state);
+  if (!view) throw new Error(`Not a town: ${JSON.stringify(state)}`);
+  return view;
+}
+const townNow = async () =>
+  townOf(Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/town")).json()).state);
+const nOf = (view: TownView, id: string) => view.camp.placed.find((p) => p.id === id)?.n ?? -1;
+
+describe("the town, played by commands through HTTP", () => {
+  it("opens a new member's camp, welcomes them, sells, unpacks, moves and puts away by id, and pays the chest once a day", async () => {
+    const first = await townNow();
+    expect([first.arrival.first, first.camp.placed.length, first.camp.letters]).toEqual([true, 9, []]);
+
+    const { results, view } = await townDid([
+      { id: "a-1", do: "welcome", cursor: null },
+      { id: "a-2", do: "buy", stall: "plants", thing: "pumpkin" },
+      { id: "a-3", do: "unpack", x: 30, y: 20, t: 0 },
+    ]);
+    const landed = readTownNotes(results.flatMap((r) => ("notes" in r ? r.notes : [])));
+    expect(landed).toEqual([{ t: "landed", thing: "pumpkin", n: nOf(view, "pumpkin") }]);
+    expect(view.camp.letters.map((l) => [l.from, l.gift])).toEqual([["Tindra", "toadstool"]]);
+    expect(await coinsOf(alice)).toBe(300 - 180);
+
+    const pumpkin = nOf(view, "pumpkin");
+    const moved = await townDid([
+      { id: "a-4", do: "move", n: pumpkin, x: 31, y: 33, t: 0 },
+      { id: "a-5", do: "toggle", n: nOf(view, "lantern-post") },
+    ]);
+    expect(moved.view.camp.placed.find((p) => p.n === pumpkin)).toMatchObject({ x: 31, y: 33 });
+    expect(moved.view.camp.placed.find((p) => p.id === "lantern-post")?.s).toBe(1);
+    const away = await townDid([
+      { id: "a-6", do: "putAway", n: pumpkin },
+      { id: "a-7", do: "putAway", n: nOf(view, "cabin") },
+      { id: "a-8", do: "buy", stall: "lamps", thing: "well" },
+    ]);
+    expect(away.results).toEqual([
+      { id: "a-6", notes: [] },
+      { id: "a-7", refused: "rooted" },
+      { id: "a-8", refused: "not_enough_coins" },
+    ]);
+    expect([away.view.camp.tray, away.view.camp.parcels]).toEqual([{ pumpkin: 1 }, []]);
+
+    const chest = await townDid([
+      { id: "c-1", do: "openChest" },
+      { id: "c-2", do: "openChest" },
+    ]);
+    expect(chest.results).toEqual([
+      { id: "c-1", notes: [] },
+      { id: "c-2", refused: "opened_today" },
+    ]);
+    expect(await coinsOf(alice)).toBe(300 - 180 + 3);
+  });
+
+  it("sends a caller by Leaf's clock, who is greeted by id and leaves what they brought in the mailbox", async () => {
+    await townDid([{ id: "w-1", do: "welcome", cursor: null }]);
+    expect((await townNow()).visit).toBeNull();
+    clock.now += 80_000;
+    const waiting = await townNow();
+    const caller = waiting.visit;
+    if (!caller) throw new Error("nobody called");
+    // Looked at again, it is the same caller: nothing is drawn again for a page asking.
+    expect((await townNow()).visit).toEqual(caller);
+    const { results, view } = await townDid([
+      { id: "g-1", do: "greet", visit: caller.id },
+      { id: "g-2", do: "greet", visit: caller.id },
+    ]);
+    expect(results).toEqual([
+      { id: "g-1", notes: [] },
+      { id: "g-2", refused: "no_such_visit" },
+    ]);
+    expect([view.visit, view.camp.greeted]).toEqual([null, 1]);
+    expect(view.camp.letters.some((l) => l.id === `v-${caller.id}`)).toBe(caller.note !== "" || caller.gift !== "");
   });
 });

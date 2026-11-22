@@ -15,7 +15,6 @@ import { Mojang, MojangError, type MojangProfile } from "../src/game/mojang.ts";
 import { LeafInstance } from "../src/instance.ts";
 import { Ledger } from "../src/ledger/store.ts";
 import { Live, LiveTuning } from "../src/live/live.ts";
-import { PageCoins } from "../src/play/page.ts";
 import { Play } from "../src/play/service.ts";
 import { PlayStore } from "../src/play/store.ts";
 
@@ -179,10 +178,7 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
       }),
     ),
   );
-  const layer = Layer.merge(
-    Layer.merge(Play.layer, PageCoins.layer).pipe(Layer.provideMerge(between.pipe(Layer.provideMerge(stores)))),
-    live,
-  );
+  const layer = Layer.merge(Play.layer.pipe(Layer.provideMerge(between.pipe(Layer.provideMerge(stores)))), live);
   // Layers built through the same memo map are built once, so `run` and `app` see the same database.
   const memoMap = Layer.makeMemoMapUnsafe();
   const runtime = ManagedRuntime.make(layer, { memoMap });

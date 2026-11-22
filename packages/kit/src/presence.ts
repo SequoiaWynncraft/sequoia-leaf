@@ -1,13 +1,13 @@
 /**
  * Who is here: when the game is live, each page tells the server where in the game the member is
- * (the town, their camp, the Works, the table), whether their character may stay in town after
- * they go, and what the page is on, every half minute and at once when where or staying changes;
- * and hears back everybody seen in the last little while, and those gone in the last day whose
- * characters stay. While the page is in a live room of the place it is at, the room says where the
- * member is, and the page only asks who is about. With the made-up guild it does nothing.
+ * (the town, their camp, the Works, the table) and what the page is on, every half minute and at
+ * once when where changes; and hears back everybody seen in the last little while, and those gone in
+ * the last day whose characters stay. Whether the member's character may stay in town after they go
+ * is the town's to say (`stay`, from Leaf's town): a page that has not been told says nothing of it,
+ * and Leaf keeps what it had. While the page is in a live room of the place it is at, the room says
+ * where the member is, and the page only asks who is about. Without Leaf it does nothing.
  */
 
-import { keptText } from "./keep.ts";
 import { device, member } from "./live.ts";
 import { ask, isRecord, put } from "./net.ts";
 
@@ -74,27 +74,9 @@ export function readResting(v: unknown, list: "resting" | "gone" = "resting"): R
   return out;
 }
 
-/** The town's record, where the member's choice to stay or not is kept (its `stay`, true unless false). */
-const TOWN_RECORD = "town.save.v1";
-
-/**
- * Whether the member would stay, as the town last wrote it down. Every page of the game reads it,
- * so that a game opened in the town's frame, or on its own, does not say "stay" for a member who
- * switched it off in their cabin.
- */
-export function keptStay(): boolean {
-  try {
-    const raw: unknown = JSON.parse(keptText(TOWN_RECORD) ?? "null");
-    return !(isRecord(raw) && raw.stay === false);
-  } catch {
-    return true;
-  }
-}
-
 let at: Place | null = null;
-/** What this page last said about staying; until it says, what the town kept. */
+/** Whether the member's character stays, as the town said; null on a page that has not been told. */
 let staying: boolean | null = null;
-const stayingNow = (): boolean => staying ?? keptStay();
 let timer: ReturnType<typeof setInterval> | null = null;
 const ears = new Set<(present: readonly Present[], resting: readonly Resting[], gone: readonly Resting[]) => void>();
 /** The place of the live room this page is in now (`realtime.ts` says), if it is one. */
@@ -110,7 +92,11 @@ async function send(telling = false): Promise<void> {
   const a =
     at === roomed && !telling
       ? await ask("/v1/game/presence")
-      : await put("/v1/game/presence", { place: at, stay: stayingNow(), ...(on === null ? {} : { device: on }) });
+      : await put("/v1/game/presence", {
+          place: at,
+          ...(staying === null ? {} : { stay: staying }),
+          ...(on === null ? {} : { device: on }),
+        });
   if (a.status !== 200) return;
   const present = readPresent(a.body);
   const resting = readResting(a.body);
@@ -127,12 +113,12 @@ export function here(place: Place | null): void {
   if (moved && place !== null) void send();
 }
 
-/** Says whether the member's character stays in town, dozing, for a day after they go; tells the server at once. */
+/**
+ * Says whether the member's character stays in town, dozing, for a day after they go (the town's
+ * page, from Leaf's town); tells the server at once when it is news.
+ */
 export function stay(on: boolean): void {
-  if (on === stayingNow()) {
-    staying = on;
-    return;
-  }
+  if (on === staying) return;
   staying = on;
   if (member() && at !== null) void send(true);
 }
@@ -143,6 +129,15 @@ export function stay(on: boolean): void {
  */
 export function inRoom(kind: string | null): void {
   roomed = isPlace(kind) ? kind : null;
+}
+
+/** Forgets where the member is and what the town said of staying (for tests). */
+export function forgetPresence(): void {
+  at = null;
+  staying = null;
+  roomed = null;
+  if (timer !== null) clearInterval(timer);
+  timer = null;
 }
 
 /** Hears who is here, who is resting, and who is gone and does not stay, each time the server says. Returns how to stop. */

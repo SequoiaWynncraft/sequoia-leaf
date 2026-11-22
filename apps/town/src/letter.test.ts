@@ -1,76 +1,59 @@
 import { describe, expect, test } from "bun:test";
 
+import type { Ctx } from "@sequoia-leaf/core";
+import { TOWN, type Town } from "@sequoia-leaf/town";
+
 import { worksWaiting } from "./games.ts";
-import { compose, read, span } from "./letter.ts";
-import { makeGuild } from "./madeup.ts";
-import { blank, dayOf, type Kept } from "./save.ts";
+import type { AwayLine } from "./guild.ts";
+import { compose, span } from "./letter.ts";
 
 const HOUR = 3_600_000;
-const NOW = new Date(2026, 10, 21, 18, 0).getTime();
-const g = makeGuild();
+/** Wednesday 25 November 2026, 18:00 UTC. */
+const NOW = Date.UTC(2026, 10, 25, 18);
+const ctx = (now = NOW): Ctx => ({ now, player: { id: "p", guest: false }, seed: 3, room: 0, awards: [] });
 
-/** The letter a member finds, having last been in town at `lastSeen`, with `till` Coins waiting in the Works. */
-function letter(kept: Kept, now = NOW, till = 0): ReturnType<typeof compose> {
-  const away = g.away(kept.lastSeen, now);
-  return compose(kept, now, away, [worksWaiting(till)]);
+/** The arrival Leaf shows a town at `now`. */
+const arrivalOf = (s: Town, now = NOW) => TOWN.view(s, ctx(now)).arrival;
+/** A town last here `ago` ago, welcomed on the day of `welcomed`. */
+function back(ago: number, welcomed = NOW - ago): Town {
+  const s = TOWN.create(ctx());
+  s.seenAt = NOW - ago;
+  s.welcomedDay = Math.floor(welcomed / (24 * HOUR));
+  return s;
 }
+const raids: AwayLine = { art: "leaf", text: "3 raids with the guild", got: 240 };
 
 describe("the arrival letter", () => {
-  test("a first visit is welcomed and paid", () => {
-    const l = letter(blank());
-    expect(l.show).toBe(true);
-    expect(l.title).toBe("Welcome home");
-    expect(l.leaf).toBeGreaterThan(0);
+  test("a first visit is welcomed, with what Tindra left, and the crab still missing", () => {
+    const l = compose(arrivalOf(TOWN.create(ctx())), [], []);
+    expect([l.show, l.title, l.sub]).toEqual([true, "Welcome home", "The guild kept these for you:"]);
+    expect(l.lines.map((x) => [x.art, x.text, x.who])).toEqual([
+      ["folk", "Tindra left a mushroom by your gate.", ["Tindra"]],
+      ["crab", "Crab No. 7 is still missing.", undefined],
+    ]);
   });
 
-  test("once read, a reload finds nothing to pay and no letter", () => {
-    const after = read(blank(), NOW);
-    const again = letter(after, NOW + 4000);
-    expect(again.leaf + again.coins).toBe(0);
-    expect(again.show).toBe(false);
+  test("later the same UTC day there is a letter only if the member's news paid Leaf", () => {
+    expect(compose(arrivalOf(back(2 * 60_000)), [], []).show).toBe(false);
+    const paid = compose(arrivalOf(back(5 * HOUR)), [raids], []);
+    expect(paid.show).toBe(true);
+    expect(paid.lines[0]).toEqual(raids);
   });
 
-  test("not read, a reload finds the same letter", () => {
-    const kept = { ...blank(), lastSeen: NOW - 9 * HOUR, welcomed: dayOf(NOW - 9 * HOUR) };
-    const first = letter(kept, NOW);
-    const second = letter(kept, NOW + 5000);
-    expect(second.lines).toEqual(first.lines);
-    expect(second.leaf).toBe(first.leaf);
-    expect(second.coins).toBe(first.coins);
+  test("the UTC day's first visit is welcomed, saying how long the member was gone", () => {
+    const l = compose(arrivalOf(back(20 * 60_000, NOW - 24 * HOUR)), [], []);
+    expect([l.show, l.sub]).toEqual([true, "Gone 20 minutes. Meanwhile:"]);
   });
 
-  test("the day's first visit is welcomed even with nothing to pay", () => {
-    const kept = { ...blank(), lastSeen: NOW - 20 * 60_000, welcomed: dayOf(NOW - 24 * HOUR) };
-    const l = letter(kept);
-    expect(l.leaf).toBe(0);
-    expect(l.show).toBe(true);
-    expect(l.sub).toBe("Gone 20 minutes. Meanwhile:");
-  });
-
-  test("later the same day there is a letter only if something is owed", () => {
-    const today = dayOf(NOW);
-    expect(letter({ ...blank(), lastSeen: NOW - 2 * 60_000, welcomed: today }).show).toBe(false);
-    const owed = letter({ ...blank(), lastSeen: NOW - 5 * HOUR, welcomed: today });
-    expect(owed.show).toBe(true);
-    expect(owed.leaf).toBe(80);
-    expect(owed.coins).toBe(0);
-  });
-
-  test("what pays comes first", () => {
-    const l = letter({ ...blank(), lastSeen: NOW - 30 * HOUR }, NOW, 340);
-    expect(l.lines[0]?.pay?.kind).toBe("leaf");
-    expect(l.lines.slice(1).every((x) => !x.pay)).toBe(true);
+  test("the member's news comes first, then the town's own, then what is waiting, and the crab last", () => {
+    const l = compose(arrivalOf(back(7 * HOUR, NOW - 24 * HOUR)), [raids], [worksWaiting(340)]);
+    expect(l.lines.map((x) => x.art)).toEqual(["leaf", "folk", "coin", "crab"]);
   });
 
   test("the Works' till is mentioned and not paid: the yard pays it itself", () => {
     expect(worksWaiting(0)).toBeNull();
     expect(worksWaiting(1)?.text).toBe("1 Coin is waiting in the Works' till");
-    const line = worksWaiting(340);
-    expect(line?.text).toBe("340 Coins are waiting in the Works' till");
-    expect(line?.pay).toBeUndefined();
-    const l = letter({ ...blank(), lastSeen: NOW - 30 * HOUR }, NOW, 340);
-    expect(l.coins).toBe(0);
-    expect(l.lines.some((x) => x.text.includes("340 Coins"))).toBe(true);
+    expect(worksWaiting(340)).toEqual({ art: "coin", text: "340 Coins are waiting in the Works' till" });
   });
 
   test("time away, in plain words", () => {

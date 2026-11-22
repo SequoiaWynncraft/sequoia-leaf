@@ -1,21 +1,21 @@
 /**
- * The letter that meets the member at the gate: what happened while they were away, and what it
- * pays (or, on the guild's server, what the guild's ledger has already paid, which it only shows). It is put together from the time they were last in town and the time now, so it says the
- * same thing however often the page is reloaded before it is put away, and pays nothing for no
- * time at all.
+ * The letter that meets the member at the gate: what happened while they were away. Leaf's town
+ * says what its own did and what putting the letter away will post (`arrival`); the guild's ledger
+ * has already paid the Leaf the member's news shows, and the letter only shows it.
  */
 
-import type { Away, AwayLine } from "./guild.ts";
-import { dayOf, type Kept, minutesAway } from "./save.ts";
+import type { Arrival } from "@sequoia-leaf/town";
+import { LOST_CRAB } from "@sequoia-leaf/town/catalogue.ts";
+import { capital, FOLK } from "@sequoia-leaf/town/folk.ts";
+
+import type { AwayLine } from "./guild.ts";
 
 export interface Letter {
-  /** Whether there is anything to say: a first visit, the day's first, or something to pay. */
+  /** Whether there is anything to say: a first visit, the UTC day's first, or Leaf the ledger paid. */
   show: boolean;
   title: string;
   sub: string;
   lines: readonly AwayLine[];
-  leaf: number;
-  coins: number;
 }
 
 /** How long somebody was gone, in plain words. */
@@ -27,30 +27,22 @@ export function span(minutes: number): string {
   return `${Math.floor(hours / 24)} days`;
 }
 
-export function compose(kept: Kept, now: number, away: Away, extra: readonly (AwayLine | null)[]): Letter {
-  const lines: AwayLine[] = [];
-  // What pays (or has paid) goes first, Leaf before Coins; then the news.
-  const all = [...away.lines, ...extra.filter((l) => l !== null)];
-  for (const l of all) if (l.pay?.kind === "leaf" || (!l.pay && l.got !== undefined)) lines.push(l);
-  for (const l of all) if (l.pay?.kind === "coins") lines.push(l);
-  for (const l of all) if (!l.pay && l.got === undefined) lines.push(l);
-  let leaf = 0;
-  let coins = 0;
-  for (const l of lines) {
-    if (l.pay?.kind === "leaf") leaf += l.pay.amount;
-    else if (l.pay) coins += l.pay.amount;
-  }
+/**
+ * The letter from Leaf's arrival and the member's own news (`news`, each line with the Leaf it
+ * paid), and anything else waiting (`extra`): the news first, then the town's own, then the rest.
+ */
+export function compose(arrival: Arrival, news: readonly AwayLine[], extra: readonly (AwayLine | null)[]): Letter {
+  const townsfolk = arrival.said.map((text): AwayLine => {
+    // Each line begins with who it is about, for their face beside it.
+    const who = FOLK.find((f) => text.startsWith(capital(f.name)));
+    return who ? { art: "folk", text, who: [who.name] } : { art: "folk", text };
+  });
+  const crab: AwayLine = { art: "crab", text: `Crab No. ${LOST_CRAB} is still missing.` };
+  const lines = [...news, ...townsfolk, ...extra.filter((l) => l !== null), crab];
   return {
-    show: away.first || kept.welcomed !== dayOf(now) || leaf + coins > 0 || lines.some((l) => l.got !== undefined),
-    title: away.first ? "Welcome home" : "Welcome back",
-    sub: away.first ? "The guild kept these for you:" : `Gone ${span(minutesAway(kept, now))}. Meanwhile:`,
+    show: arrival.first || arrival.newDay || news.some((l) => l.got !== undefined),
+    title: arrival.first ? "Welcome home" : "Welcome back",
+    sub: arrival.first ? "The guild kept these for you:" : `Gone ${span(arrival.away / 60_000)}. Meanwhile:`,
     lines,
-    leaf,
-    coins,
   };
-}
-
-/** The record as it stands once the letter has been read and paid: welcomed today, seen now. */
-export function read(kept: Kept, now: number): Kept {
-  return { ...kept, welcomed: dayOf(now), lastSeen: now };
 }

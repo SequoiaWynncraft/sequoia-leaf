@@ -11,15 +11,14 @@
  */
 import { type Description, type Entry, link, register, type Stat } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { owned } from "@sequoia-leaf/town/camp.ts";
+import { PIECES, PRESENTS, STALLS, WARES } from "@sequoia-leaf/town/catalogue.ts";
 import { folkNamed } from "@sequoia-leaf/town/folk.ts";
 import { KIND_NAMES, thingOf } from "@sequoia-leaf/town/things.ts";
 
-import { owned } from "./camp.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { folkArt } from "./folkart.ts";
-import { G } from "./game.ts";
-import { guild } from "./guild.ts";
-import { camp } from "./record.ts";
+import { mine } from "./leaf.ts";
 import type { Sprites } from "./sprites.ts";
 
 export const thingRef = (id: string): string => `thing:${id}`;
@@ -37,18 +36,18 @@ function pictureFor(art: CampArt, id: string): HTMLCanvasElement | null {
 /** Where a camp thing comes from: the stalls that sell it, the Treasury, or how it is had. */
 function whereFrom(id: string): { rows: Entry[]; words: string } {
   const thing = thingOf(id);
-  const stalls = guild.stalls().flatMap((s) => {
+  const stalls = STALLS.flatMap((s) => {
     const stock = s.stock.find((k) => k.thing === id);
     return stock ? [{ ref: stallRef(s.id), note: `${stock.price.toLocaleString("en-US")} Coins` }] : [];
   });
-  const piece = guild.pieces().find((k) => k.thing === id);
+  const piece = PIECES.find((k) => k.thing === id);
   if (stalls.length > 0 || piece)
     return {
       rows: stalls,
       words: piece ? `Cinfy sells it at the Treasury, for ${piece.price.toLocaleString("en-US")} Leaf.` : "",
     };
   if (thing?.kind === "trophies") return { rows: [], words: "Won, never bought." };
-  if (guild.presents().includes(id))
+  if (PRESENTS.some((p) => p === id))
     return { rows: [], words: "A present: the town's own leave them when they drop by." };
   if (thing?.kind === "home") return { rows: [], words: "Every camp has one." };
   return { rows: [], words: "" };
@@ -57,8 +56,8 @@ function whereFrom(id: string): { rows: Entry[]; words: string } {
 function thingDesc(art: CampArt, id: string): Description | null {
   const thing = thingOf(id);
   if (!thing) return null;
-  const have = owned(camp, id);
-  const won = thing.kind !== "trophies" || camp.earned.includes(id);
+  const have = owned(mine(), id);
+  const won = thing.kind !== "trophies" || mine().earned.includes(id);
   const from = whereFrom(id);
   const stats: Stat[] = [{ label: "You have", value: have > 0 ? String(have) : "none" }];
   if (thing.seats > 0) stats.push({ label: "Seats", value: String(thing.seats) });
@@ -78,22 +77,20 @@ function thingDesc(art: CampArt, id: string): Description | null {
 }
 
 function wareDesc(sprites: Sprites, id: string): Description | null {
-  const w = guild.wares().find((x) => x.id === id);
+  const w = WARES.find((x) => x.id === id);
   if (!w) return null;
   const pic = id === "crown" ? sprites.crown : id === "jar" ? sprites.jar : id === "cocoa" ? sprites.mug : null;
-  const yours = w.once && G.owned.has(id);
   return {
     name: w.name,
     icon: pic,
     tag: w.worn ? "Something to wear" : "For everybody at the fire",
     aside: amount("leaf", w.price),
-    stats: [{ label: "You have", value: w.once ? (yours ? "it" : "none") : "as many as you like" }],
     blocks: [{ body: w.about }],
   };
 }
 
 function stallDesc(id: string): Description | null {
-  const s = guild.stalls().find((x) => x.id === id);
+  const s = STALLS.find((x) => x.id === id);
   if (!s) return null;
   const keeper = folkNamed(s.by);
   return {

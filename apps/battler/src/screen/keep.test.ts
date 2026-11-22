@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { forgetStop, stop } from "@sequoia-leaf/kit/keep.ts";
 import { type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 
-import { keepPrefs, loadPrefs, newPrefs, PREFS_KEY, PREFS_VERSION, readPrefs, savePrefs } from "./keep.ts";
+import { keepPrefs, loadPrefs, newPrefs, PREFS_VERSION, readPrefs, savePrefs } from "./keep.ts";
 import { NUDGES } from "./logic.ts";
 
 const kept = (prefs: unknown, v: unknown = PREFS_VERSION): string =>
@@ -13,7 +12,6 @@ let world: Standin | null = null;
 afterEach(() => {
   world?.done();
   world = null;
-  forgetStop();
 });
 
 describe("what the table keeps in the browser", () => {
@@ -59,14 +57,10 @@ describe("what the table keeps in the browser", () => {
     expect(loadPrefs(kept({ taught: ["pick", "pick", 4, "buy", "x".repeat(80)] })).taught).toEqual(["pick", "buy"]);
   });
 
-  test("they are written into the browser, and read back; a page that has stopped writes none", () => {
+  test("they are written into the browser, and read back", () => {
     world = standin({});
     const prefs = { speed: 2 as const, taught: ["pick"] };
     keepPrefs(prefs);
     expect(readPrefs()).toEqual(prefs);
-    world.store.setItem(PREFS_KEY, "theirs");
-    stop();
-    keepPrefs(newPrefs());
-    expect(world.store.getItem(PREFS_KEY)).toBe("theirs");
   });
 });

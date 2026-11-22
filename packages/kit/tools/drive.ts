@@ -67,8 +67,8 @@ const steps: Step[] = parsed;
 mkdirSync(outDir, { recursive: true });
 
 const port = 9400 + Math.floor(Math.random() * 400);
-/** Chromium's profile for this run, about 15 MB: removed when the run ends, so runs do not fill /tmp. */
-const profile = `/tmp/grove-drive-${port}-${process.pid}`;
+/** Chromium's profile for this run, about 15 MB, under `TMPDIR`: removed when the run ends, so runs do not fill it. */
+const profile = `${process.env["TMPDIR"] ?? "/tmp"}/grove-drive-${port}-${process.pid}`;
 const browser = Bun.spawn(
   [
     "chromium",

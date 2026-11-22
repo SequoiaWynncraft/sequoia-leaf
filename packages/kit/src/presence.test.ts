@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { restart, start } from "./live.ts";
 import { isRecord } from "./net.ts";
-import { here, inRoom, keptStay, readPresent, readResting, stay } from "./presence.ts";
+import { forgetPresence, here, inRoom, readPresent, readResting, stay } from "./presence.ts";
 import { forgetLedger } from "./purse.ts";
-import { HELLO, MemoryStore, type Standin, standin, TESTER } from "./standin.ts";
+import { HELLO, type Standin, standin, TESTER } from "./standin.ts";
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
 const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
@@ -60,55 +60,52 @@ describe("who is here", () => {
   });
 });
 
+const said = (w: Standin) => w.sent.filter((s) => s.path === "/v1/game/presence").map((s) => s.body);
+
 describe("staying in town after going", () => {
   let world: Standin | null = null;
   afterEach(() => {
+    forgetPresence();
     world?.done();
     world = null;
     restart();
     forgetLedger();
   });
 
-  test("reads the member's choice from the town's record: stay unless they switched it off", () => {
-    const store = new MemoryStore();
-    world = standin({}, { store });
-    expect(keptStay()).toBe(true);
-    store.setItem("town.save.v1", JSON.stringify({ v: 1, stay: true }));
-    expect(keptStay()).toBe(true);
-    store.setItem("town.save.v1", "not a record");
-    expect(keptStay()).toBe(true);
-    store.setItem("town.save.v1", JSON.stringify({ v: 1, stay: false }));
-    expect(keptStay()).toBe(false);
-  });
+  const routes = {
+    "GET /v1/game/hello": HELLO,
+    "GET /v1/game/me": { status: 200, body: TESTER },
+    "PUT /v1/game/presence": { status: 200, body: { present: [], resting: [] } },
+  };
 
-  test("a game that never heard the choice says what the town kept, not stay", async () => {
-    const store = new MemoryStore();
-    store.setItem("town.save.v1", JSON.stringify({ v: 1, stay: false }));
-    world = standin(
-      {
-        "GET /v1/game/hello": HELLO,
-        "GET /v1/game/me": { status: 200, body: TESTER },
-        "PUT /v1/game/presence": { status: 200, body: { present: [], resting: [] } },
-      },
-      { store },
-    );
+  test("a page the town has not told says nothing of it, and Leaf keeps what it had", async () => {
+    world = standin(routes);
     await start();
     here("works");
     await Bun.sleep(10);
-    expect(world.sent.find((s) => s.path === "/v1/game/presence")?.body).toEqual({
-      place: "works",
-      stay: false,
-      device: "desktop",
-    });
+    expect(said(world)).toEqual([{ place: "works", device: "desktop" }]);
+  });
+
+  test("the town's page says it as Leaf's town has it, at once when it changes, and with each saying after", async () => {
+    world = standin(routes);
+    await start();
+    stay(false);
+    here("town");
+    await Bun.sleep(10);
+    stay(false);
+    stay(true);
+    await Bun.sleep(10);
+    expect(said(world)).toEqual([
+      { place: "town", stay: false, device: "desktop" },
+      { place: "town", stay: true, device: "desktop" },
+    ]);
   });
 });
 
 describe("saying where the member is", () => {
   let world: Standin | null = null;
   afterEach(() => {
-    here(null);
-    stay(true);
-    inRoom(null);
+    forgetPresence();
     world?.done();
     world = null;
     restart();
@@ -129,7 +126,7 @@ describe("saying where the member is", () => {
     await Bun.sleep(10);
 
     expect(world.sent.filter((s) => s.path === "/v1/game/presence").map((s) => [s.method, s.body])).toEqual([
-      ["PUT", { place: "camp", stay: true, device: "phone" }],
+      ["PUT", { place: "camp", device: "phone" }],
     ]);
   });
 

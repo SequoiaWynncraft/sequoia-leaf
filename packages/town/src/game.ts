@@ -21,6 +21,7 @@ import {
   mix,
   pick,
   type Refused,
+  type Standing,
   utcDay,
 } from "@sequoia-leaf/core";
 
@@ -74,9 +75,15 @@ export interface Town {
   visit: Visit | null;
   /** When the next caller sets out, by Leaf's clock. */
   nextCall: number;
-  /** Leaf's stream, and the counter every id and key is made from. */
+  /** Leaf's stream, and the counter every id and key a command makes is made from. */
   rng: number;
   made: number;
+  /**
+   * How many callers have set out: a caller's id. It is a counter of its own because a caller sets
+   * out by Leaf's clock, between a page's commands: if it took from `made`, the id the page gave a
+   * thing it set out would not be the one Leaf gives it.
+   */
+  called: number;
 }
 
 /** What the arrival letter says and brings if it is put away now. */
@@ -93,8 +100,12 @@ export interface Arrival {
   mail: Letter[];
 }
 
-/** What the member's page is given: the state without its stream, its counter or when the next caller comes, and the arrival letter. */
-export type TownView = Omit<Town, "rng" | "made" | "nextCall"> & { arrival: Arrival };
+/**
+ * What the member's page is given: the state without its stream or when the next caller comes, and
+ * the arrival letter. The counter is shown, so that the page gives a thing it sets down the id Leaf
+ * will give it.
+ */
+export type TownView = Omit<Town, "rng" | "nextCall" | "called"> & { arrival: Arrival };
 
 // ---------- commands ----------
 
@@ -158,8 +169,8 @@ export const SPOT_EVERY = 5000;
 const HOUR = 3_600_000;
 /** How many colours a paper lantern, a pane of glass or a pennant comes in. */
 export const COLOURS = 5;
-/** What a touch changes, and keeps, for the things that keep a state: lit or dark, a colour, which way round. */
-const TOGGLES: Readonly<Record<string, "lit" | "colour" | "turn">> = {
+/** What a touch changes, and keeps, for the things that keep a state: lit or dark (lit at 0), a colour, which way round. */
+export const TOGGLES: Readonly<Record<string, "lit" | "colour" | "turn">> = {
   "lantern-post": "lit",
   "candle-stump": "lit",
   "paper-lantern": "colour",
@@ -189,7 +200,7 @@ function call(s: Town, now: number): void {
   if (s.visit) leave(s, s.visit);
   const who = pick(s, CALLERS);
   const r = chance(s);
-  s.visit = { id: next(s), who, note: r < 0.7 ? pick(s, NOTES[who]) : "", gift: r < 0.4 ? pick(s, GIFTS) : "" };
+  s.visit = { id: s.called++, who, note: r < 0.7 ? pick(s, NOTES[who]) : "", gift: r < 0.4 ? pick(s, GIFTS) : "" };
   s.nextCall = now + CALLS.least + Math.floor(chance(s) * CALLS.more);
 }
 
@@ -387,8 +398,8 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
 
 // ---------- what the page is shown ----------
 
-/** The state as the member's page is given it. Each field is named, so nothing new is shown by accident. */
-export const townView = (s: Town, now: number): TownView => ({
+/** The state as the member's page is given it, but the arrival letter. Each field is named, so nothing new is shown by accident. */
+const shown = (s: Omit<Town, "rng" | "nextCall" | "called">): Omit<TownView, "arrival"> => ({
   sightings: s.sightings,
   spotAt: s.spotAt,
   chestDay: s.chestDay,
@@ -398,8 +409,45 @@ export const townView = (s: Town, now: number): TownView => ({
   stay: s.stay,
   camp: s.camp,
   visit: s.visit,
+  made: s.made,
+});
+
+export const townView = (s: Town, now: number): TownView => ({
+  ...shown(s),
   // Drawn from a copy of the stream: what `welcome` will post, without moving it on.
   arrival: arrivalOf(s, { rng: s.rng, made: s.made }, now),
+});
+
+/** Commands only Leaf can answer: what they post or cost is Leaf's to say. The page waits for these. */
+export const ASKED: ReadonlySet<TownCommand["do"]> = new Set(["welcome", "greet", "openChest", "buy"]);
+
+/**
+ * A command done to the page's copy with the same rules Leaf uses, at the page's reckoning of Leaf's
+ * clock: the copy after it and its notes, or the refusal. Null for a command only Leaf can answer.
+ */
+export function predict(
+  view: TownView,
+  c: TownCommand,
+  now: number,
+): { view: TownView; notes: TownNote[] } | Refused | null {
+  if (ASKED.has(c.do)) return null;
+  const { arrival, ...rest } = view;
+  // Nothing done here draws from the stream, or reads when the next caller comes.
+  const answer = apply({ ...rest, rng: 0, nextCall: 0, called: 0 }, c, {
+    now,
+    player: { id: "", guest: false },
+    seed: 0,
+    room: 0,
+    awards: [],
+  });
+  if ("refused" in answer) return answer;
+  return { view: { ...shown(answer.state), arrival }, notes: [...answer.notes] };
+}
+
+/** Where a camp stands among everyone's: the things set out, with how many callers were greeted and how often the crab was spotted. */
+const standingOf = (s: Town): Standing => ({
+  score: s.camp.placed.length,
+  also: { greeted: s.camp.greeted, sightings: s.sightings },
 });
 
 // ---------- off the wire ----------
@@ -478,6 +526,7 @@ export const encodeTown = (s: Town): string =>
     nextCall: s.nextCall,
     rng: s.rng,
     made: s.made,
+    called: s.called,
   });
 
 const TIME = 8.64e15;
@@ -523,16 +572,9 @@ function visitOf(v: unknown): Visit | null {
   return who && (v.gift === "" || isThing(v.gift)) ? { id: v.id, who, note: v.note, gift: v.gift } : null;
 }
 
-/** A town from the text Leaf stored, or null for anything this version could not have made. */
-export function decodeTown(text: string): Town | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (!isRecord(raw) || raw.game !== GAME || raw.v !== TOWN_VERSION) return null;
-  const { sightings, spotAt, chestDay, welcomedDay, seenAt, stay, nextCall, rng, made } = raw;
+/** What the stored state and the page's view both hold, every field's type checked; null if any does not read. */
+function heldIn(raw: Record<string, unknown>): Omit<TownView, "arrival"> | null {
+  const { sightings, spotAt, chestDay, welcomedDay, seenAt, stay, made } = raw;
   const cursor = cursorOf(raw.cursor);
   const camp = storedCamp(raw.camp);
   const visit = raw.visit === null ? null : visitOf(raw.visit);
@@ -543,16 +585,56 @@ export function decodeTown(text: string): Town | null {
     !whole(welcomedDay, -1, 1e9) ||
     !whole(seenAt, 0, TIME) ||
     typeof stay !== "boolean" ||
-    !whole(nextCall, 0, TIME) ||
-    !whole(rng, 0, 0xffffffff) ||
     !whole(made, 0, 1e9) ||
     cursor === undefined ||
     !camp ||
     (raw.visit !== null && !visit)
   )
     return null;
-  return { sightings, spotAt, chestDay, welcomedDay, seenAt, cursor, stay, camp, visit, nextCall, rng, made };
+  return { sightings, spotAt, chestDay, welcomedDay, seenAt, cursor, stay, camp, visit, made };
 }
+
+/** A town from the text Leaf stored, or null for anything this version could not have made. */
+export function decodeTown(text: string): Town | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!isRecord(raw) || raw.game !== GAME || raw.v !== TOWN_VERSION) return null;
+  const held = heldIn(raw);
+  const { nextCall, rng, called } = raw;
+  if (!held || !whole(nextCall, 0, TIME) || !whole(rng, 0, 0xffffffff) || !whole(called, 0, 1e9)) return null;
+  return { ...held, nextCall, rng, called };
+}
+
+const lines = (v: unknown): string[] | null =>
+  Array.isArray(v) && v.length <= 8 && v.every((l) => typeof l === "string" && l.length <= 240) ? v : null;
+
+/** The page's view off the wire, or null for anything these rules could not have made. */
+export function readView(v: unknown): TownView | null {
+  if (!isRecord(v) || !isRecord(v.arrival)) return null;
+  const held = heldIn(v);
+  const { first, newDay, away } = v.arrival;
+  const said = lines(v.arrival.said);
+  const mail = all(v.arrival.mail, (l) => (isLetter(l) ? l : null));
+  if (!held || typeof first !== "boolean" || typeof newDay !== "boolean" || !whole(away, 0, TIME) || !said || !mail)
+    return null;
+  return { ...held, arrival: { first, newDay, away, said, mail } };
+}
+
+/** What a command answered off the wire, or null. */
+export const readNotes = (v: unknown): TownNote[] | null =>
+  all(v, (n) =>
+    isRecord(n) && isThing(n.thing)
+      ? n.t === "tray"
+        ? { t: "tray", thing: n.thing }
+        : n.t === "landed" && whole(n.n, 0, 1e9)
+          ? { t: "landed", thing: n.thing, n: n.n }
+          : null
+      : null,
+  );
 
 /** A new member's town: the camp every member starts with, nothing welcomed, and the first caller on the way. */
 export function newTown(ctx: Pick<Ctx, "seed" | "now">): Town {
@@ -569,6 +651,7 @@ export function newTown(ctx: Pick<Ctx, "seed" | "now">): Town {
     nextCall: 0,
     rng: mix(ctx.seed >>> 0, 0x70a1),
     made: 0,
+    called: 0,
   };
   s.made = s.camp.placed.length;
   s.nextCall = ctx.now + CALLS.least + Math.floor(chance(s) * CALLS.more);
@@ -578,8 +661,9 @@ export function newTown(ctx: Pick<Ctx, "seed" | "now">): Town {
 /**
  * A town from the record the browser kept (`town.save.v1`), for bringing a member's camp over once:
  * the camp read with every check the page makes, each thing standing given an id of its own; the
- * crab's sightings, the news told and whether their character stays; and when they were last here,
- * by the browser's clock (never after `ctx.now`). The rest is a new member's. Null for nonsense.
+ * crab's sightings, the news told and whether their character stays. They were here now: the
+ * browser's clock is not Leaf's, so no time away is made from it. The rest is a new member's (the
+ * callers and the stream start afresh). Null for nonsense.
  */
 export function adopt(text: string, ctx: Pick<Ctx, "seed" | "now">): Town | null {
   let raw: unknown;
@@ -593,7 +677,7 @@ export function adopt(text: string, ctx: Pick<Ctx, "seed" | "now">): Town | null
   s.camp = readCamp(raw.camp) ?? newCamp();
   s.made = s.camp.placed.length;
   if (whole(raw.sightings, 0, Infinity)) s.sightings = Math.min(1e6, raw.sightings);
-  if (whole(raw.lastSeen, 1, Infinity)) s.seenAt = Math.min(ctx.now, raw.lastSeen);
+  s.seenAt = ctx.now;
   s.cursor = whole(raw.cursor, 0, 1e15) ? raw.cursor : null;
   s.stay = raw.stay !== false;
   return s;
@@ -609,4 +693,5 @@ export const TOWN: Game<Town, TownCommand, TownView, TownNote> = {
   decode: decodeTown,
   encode: encodeTown,
   command: readCommand,
+  standing: standingOf,
 };

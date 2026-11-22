@@ -1,4 +1,4 @@
-/** What the whole town shares: the clock, who is about, what the member has, and where the camera is looking. */
+/** What the whole town shares: the clock, who is about, and where the camera is looking. The member's town is Leaf's (`leaf.ts`). */
 
 import type { Body, Dir } from "@sequoia-leaf/kit/skin.ts";
 import type { Pt, Rect } from "@sequoia-leaf/kit/util.ts";
@@ -96,13 +96,6 @@ export interface Game {
   where: "town" | "camp";
   /** How far night has closed in on the walk between two places: 0 for not at all, 1 for dark. */
   dark: number;
-  /** What the member has bought and still has, which of it they have on, and the quests they have claimed. */
-  owned: Set<string>;
-  wearing: Set<string>;
-  claimed: Set<string>;
-  /** Which crab is missing, and how often it has been spotted. */
-  lostCrab: number;
-  sightings: number;
   raidsToday: number;
   lands: number;
   /** Which of the market's stalls the member last looked at. */
@@ -123,11 +116,6 @@ export const G: Game = {
   inDoor: false,
   where: "town",
   dark: 0,
-  owned: new Set(),
-  wearing: new Set(),
-  claimed: new Set(),
-  lostCrab: 7,
-  sightings: 0,
   raidsToday: 2,
   lands: 0,
   stall: 0,
@@ -179,19 +167,13 @@ export const hooks: {
   feed: (text: string, tone?: Tone) => void;
   /** Go through a game's door: walk up to it and on inside; for the Works, to `of`'s yard, if given. */
   goIn: (id: GameId, of?: string) => void;
-  /** The chest's gift for today has been taken. */
-  looted: () => boolean;
   /** Walk out through the gate and down the trail to the member's own camp. */
   toCamp: () => void;
-  /** Whether anything is waiting at the camp: a letter, a parcel. */
-  campNews: () => boolean;
 } = {
   visit: () => undefined,
   feed: () => undefined,
   goIn: () => undefined,
-  looted: () => true,
   toCamp: () => undefined,
-  campNews: () => false,
 };
 
 /** Listeners for "something the panels show has changed". */

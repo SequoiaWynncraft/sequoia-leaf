@@ -5,9 +5,6 @@
  * it; text that is not this version's starts over, and inside it each part that makes no sense is
  * put back to how a new member has it. (An older page kept more under the same name; only these
  * two parts of it are read.)
- *
- * Everything is written through the kit's `keepText`, so a page that has let go of the browser's
- * game (`stopped()`) writes none of it.
  */
 
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";

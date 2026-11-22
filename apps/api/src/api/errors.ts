@@ -31,8 +31,8 @@ export class StaffOnly extends Schema.Error<StaffOnly>("StaffOnly")(answer("staf
 }) {}
 
 /**
- * A save written too soon after the last one to the same slot, or a batch of commands sent faster
- * than a player may send them. Nothing was written: send it again in a moment.
+ * A batch of commands, or a visit, sent faster than a player may send them. Nothing was done: send
+ * it again in a moment.
  */
 export class SlowDown extends Schema.Error<SlowDown>("SlowDown")(answer("slow_down"), { httpApiStatus: 429 }) {}
 
@@ -44,26 +44,20 @@ export class BadOrigin extends Schema.Error<BadOrigin>("BadOrigin")(answer("bad_
 
 /**
  * A request Leaf cannot read: an event id that is not one, a quest id that is
- * not one, a reroll without a cost, a save slot that is not one, a save that is
- * not `{ "player", "version", "data" }` with an object as its data, a player id
- * that is not a UUID, a place in town that is not one, a number of days that is
- * not one, a batch of commands that is not one of the game's, a page's call to
- * change Coins with an amount or a reason that is not one, or a purchase from
- * sequoia-backend that is not one, or has a key that is not one.
+ * not one, a reroll without a cost, a player id that is not a UUID, a place in
+ * town that is not one, a number of days that is not one, a batch of commands
+ * that is not one of the game's, or a purchase from sequoia-backend that is not
+ * one, or has a key that is not one.
  */
 export class Invalid extends Schema.Error<Invalid>("Invalid")(
   answer(
     "invalid_after",
     "invalid_quest",
     "invalid_cost",
-    "invalid_slot",
-    "invalid_save",
     "invalid_uuid",
     "invalid_place",
     "invalid_days",
     "invalid_command",
-    "invalid_amount",
-    "invalid_reason",
     "invalid_purchase",
     "invalid_key",
   ),
@@ -71,22 +65,17 @@ export class Invalid extends Schema.Error<Invalid>("Invalid")(
 ) {}
 
 /**
- * Nothing there: a slot the member has never saved to, a player with no skin Leaf can find, a game
- * Leaf does not play, a game or a player's state in it that cannot be visited, or a player Leaf does not know.
+ * Nothing there: a player with no skin Leaf can find, a game Leaf does not play, a game or a
+ * player's state in it that cannot be visited, or a player Leaf does not know.
  */
 export class Missing extends Schema.Error<Missing>("Missing")(
-  answer("no_save", "no_skin", "no_such_game", "nothing_to_visit", "no_such_player"),
+  answer("no_skin", "no_such_game", "nothing_to_visit", "no_such_player"),
   { httpApiStatus: 404 },
 ) {}
 
-/** A save written over a version other than the one stored, changing nothing. */
-export class VersionConflict extends Schema.Error<VersionConflict>("VersionConflict")(answer("version_conflict"), {
-  httpApiStatus: 409,
-}) {}
-
 /**
- * A save from a page that believes it is another member than the session's,
- * such as one left open after someone else signed in. Nothing was written.
+ * Commands from a page that believes it is another player than the session's,
+ * such as one left open after someone else signed in. Nothing was done.
  */
 export class NotYou extends Schema.Error<NotYou>("NotYou")(answer("not_you"), { httpApiStatus: 409 }) {}
 
@@ -98,23 +87,7 @@ export class StateUnreadable extends Schema.Error<StateUnreadable>("StateUnreada
   httpApiStatus: 409,
 }) {}
 
-/** Coins a page asked to spend that the player does not have: nothing was changed. */
-export class NotEnoughCoins extends Schema.Error<NotEnoughCoins>("NotEnoughCoins")(answer("not_enough_coins"), {
-  httpApiStatus: 409,
-}) {}
-
-/** More Coins than a player may earn through a page's calls in an hour or a UTC day: nothing was changed. */
-export class TooMuch extends Schema.Error<TooMuch>("TooMuch")(answer("too_much"), { httpApiStatus: 429 }) {}
-
-/** A save to a slot whose game Leaf now plays itself, or whose numbers Leaf keeps: nothing was written. */
-export class Moved extends Schema.Error<Moved>("Moved")(answer("moved"), { httpApiStatus: 410 }) {}
-
-/** A save larger than a slot holds. */
-export class SaveTooLarge extends Schema.Error<SaveTooLarge>("SaveTooLarge")(answer("save_too_large"), {
-  httpApiStatus: 413,
-}) {}
-
-/** A request body longer than Leaf reads, refused unread. A save may be longer (`SaveTooLarge`). */
+/** A request body longer than Leaf reads, refused unread. */
 export class BodyTooLarge extends Schema.Error<BodyTooLarge>("BodyTooLarge")(answer("body_too_large"), {
   httpApiStatus: 413,
 }) {}
