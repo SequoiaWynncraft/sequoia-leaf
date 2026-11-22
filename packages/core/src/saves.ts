@@ -9,6 +9,16 @@ export const SAVE_SLOTS = ["purse", "town", "works", "raid"] as const;
 
 export type SaveSlot = (typeof SAVE_SLOTS)[number];
 
+/**
+ * Slots whose game Leaf now plays itself (the play service), or whose numbers it keeps itself (the
+ * purse's Coins, in the Coins ledger): nothing more is written to them, and what is there is read
+ * only to be brought over once, by hand.
+ */
+export const MOVED_SLOTS: readonly SaveSlot[] = ["purse", "raid"];
+
+/** Whether a slot's game has moved to the play service, so that the slot takes no more writes. */
+export const isMoved = (slot: SaveSlot): boolean => MOVED_SLOTS.includes(slot);
+
 /** The most a save may hold, as the bytes of its JSON text. */
 export const MAX_SAVE_BYTES = 256 * 1024;
 

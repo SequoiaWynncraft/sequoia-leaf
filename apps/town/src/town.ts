@@ -15,6 +15,7 @@ import { changed, G, hooks } from "./game.ts";
 import { GROUND, paintTrunk } from "./ground.ts";
 import { guild } from "./guild.ts";
 import { flame, type Light, makeProp, type Prop, type Standing } from "./props.ts";
+import { utcDayOf } from "./save.ts";
 import { BOARD, type Sprite, type Sprites } from "./sprites.ts";
 import { type Strand, STRINGS, wire } from "./strings.ts";
 import {
@@ -300,7 +301,8 @@ function tapChest(p: Prop): void {
   sparkle(p.x, p.y - 8, 8, 5);
   sfx.coin(2);
   if (hooks.looted()) return;
-  earn(3, "the chest by the Treasury");
+  // Once a UTC day: on the guild's server the day names the change, so a second page pays nothing.
+  earn(3, "daily_chest", `chest-${utcDayOf(Date.now())}`);
   float(p.x, p.y - 16, "+3 Coins", GOLD[1]);
 }
 

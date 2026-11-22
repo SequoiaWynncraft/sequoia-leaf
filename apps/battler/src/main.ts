@@ -2,21 +2,22 @@
  * The Little Raid: the guild's board-and-shop auto battler, played with carved figures on a hex
  * board cut into a great stump at the edge of Guild Town.
  *
- * This file only puts the parts together: the rules are in `game/`, the table and everything on it
- * in `screen/`. Opened alone it plays by itself; inside the town it says when it is ready, sends
- * news worth a line in the town's feed, and saves when the town puts it away.
+ * This file only puts the parts together: the rules are `@sequoia-leaf/raid`, the table and
+ * everything on it is in `screen/`. The table is Leaf's: the page opens it from the guild's server
+ * and sends every move there as a command. Inside the town it says when it is ready, and sends news
+ * worth a line in the town's feed.
  */
 import { refresh, settle } from "@sequoia-leaf/kit/card.ts";
-import { before, pickUp, pull } from "@sequoia-leaf/kit/cloud.ts";
-import { keepLeaf, shutCard, start } from "@sequoia-leaf/kit/live.ts";
+import { keepLeaf, serverCard, shutCard, start, unreadableCard } from "@sequoia-leaf/kit/live.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
-import { fromTown, inTown, tell } from "@sequoia-leaf/kit/shell.ts";
+import { refreshCoins } from "@sequoia-leaf/kit/purse.ts";
+import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { isMuted, setMuted } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
+import { FIGURES } from "@sequoia-leaf/raid";
 
-import { FIGURES } from "./game/index.ts";
 import { onTraitWoke, stepFightView } from "./screen/fightview.ts";
 import {
   carryOn,
@@ -28,6 +29,7 @@ import {
   enterRun,
   goHome,
   leaveTable,
+  rejoin,
   setOut,
   startNew,
   toFront,
@@ -43,7 +45,7 @@ import { showSheet } from "./screen/sheet.ts";
 import { onSignal } from "./screen/signals.ts";
 import { snd } from "./screen/sounds.ts";
 import * as stage from "./screen/stage.ts";
-import { onChange, onNotes, onRefused, S, saveNow, wake } from "./screen/state.ts";
+import { onChange, onEnded, onMoved, onNotes, onRefused, openTable, S } from "./screen/state.ts";
 import { registerCards } from "./screen/ui/cards.ts";
 import { closeSheet, onCarry, placeSheet, registerFought, sheetUp, toggleLastFight } from "./screen/ui/fightsheet.ts";
 import { openLight } from "./screen/ui/lit.ts";
@@ -51,6 +53,9 @@ import { renderNudge, stepNudge } from "./screen/ui/nudge.ts";
 import { openPages, pagesClick, renderPages, showPage } from "./screen/ui/pages.ts";
 import { renderPicks } from "./screen/ui/picks.ts";
 import { acornLanded, buildTable, placeFoe, renderTable, stepTable, toast, wakeChip } from "./screen/ui/table.ts";
+
+/** What the page says where no Leaf answers: the table is the guild's server's. */
+const NEEDS_LEAF = "The table needs the guild's server.";
 
 /** What the town was last told about the table, so that it is told only what has changed. */
 let carded = "";
@@ -63,33 +68,54 @@ function sendCard(): void {
   post("raid", card);
 }
 
+/** Sets out from the front page, which goes once Leaf has laid the run out. */
+async function setOutOn(trail: number): Promise<void> {
+  if (await startNew(trail)) showPage(null);
+}
+
 async function boot(): Promise<void> {
-  // Where the game is, and on the guild's server the member's saves, before anything kept is read.
+  await fontsReady();
+  // Every figure on one sheet: a picture of the rules' figures, which needs no table.
+  if (new URLSearchParams(location.search).has("sheet")) {
+    showSheet();
+    return;
+  }
+  // Who the member is, and then the table as Leaf has it. Without Leaf there is no table.
   const where = await start();
   if (where.mode === "shut") {
     shutCard(where.why, where.signIn);
     return;
   }
-  const live = where.mode === "live";
-  // Opened on its own, the table also keeps the town's slot, where its postcard is.
-  if (live && !(await pull(inTown() ? ["purse", "raid"] : ["purse", "raid", "town"], { onReplaced: pickUp }))) {
-    shutCard("closed", where.signIn);
+  if (where.mode !== "live") {
+    serverCard(NEEDS_LEAF);
     return;
   }
-  await fontsReady();
-  if (new URLSearchParams(location.search).has("sheet")) {
-    showSheet();
+  const { signIn, me } = where;
+  const trouble = await openTable(me.id, (why) => {
+    if (why === "unreadable") unreadableCard();
+    else if (why === "noserver") serverCard(NEEDS_LEAF);
+    else shutCard(why, signIn);
+  });
+  if (trouble === "signedout") {
+    shutCard("signedout", signIn);
     return;
   }
-  wake();
+  if (trouble === "unreadable") {
+    unreadableCard();
+    return;
+  }
+  if (trouble) {
+    serverCard(NEEDS_LEAF);
+    return;
+  }
   registerCards();
   registerFought();
   onCarry(carryOn);
   buildTable({
-    rustle: doRustle,
+    rustle: () => void doRustle(),
     hold: doHold,
-    levelUp: doLevelUp,
-    setOut,
+    levelUp: () => void doLevelUp(),
+    setOut: () => void setOut(),
     speed: doSpeed,
     skipFight: doSkip,
     help: () => showPage("howto"),
@@ -109,15 +135,9 @@ async function boot(): Promise<void> {
       showPage(null);
       enterRun();
     },
-    start: (trail) => {
-      showPage(null);
-      startNew(trail);
-    },
-    goHome,
-    leave: () => {
-      saveNow();
-      leaveTable();
-    },
+    start: (trail) => void setOutOn(trail),
+    goHome: () => void goHome(),
+    leave: leaveTable,
   });
   document.getElementById("modal")?.addEventListener("click", pagesClick);
 
@@ -150,6 +170,10 @@ async function boot(): Promise<void> {
     snd.no();
     toast(why);
   });
+  // A run that ended paid its Coins on Leaf: the purse asks Leaf what it holds now, and shows it.
+  onEnded(refreshCoins);
+  // Leaf's table is not what this page was showing (the member played on another page): take it.
+  onMoved(rejoin);
   onSignal("acorn", acornLanded);
   onTraitWoke((trait) => wakeChip(trait));
 
@@ -187,18 +211,12 @@ async function boot(): Promise<void> {
   fromTown((msg) => {
     if (msg.town !== "closing") return;
     unpick();
-    saveNow();
-    sendCard();
-  });
-  window.addEventListener("pagehide", saveNow);
-  before(() => {
-    saveNow();
     sendCard();
   });
   sendCard();
   here("table");
   // In the town, the town says when the member's Leaf changes; opened on its own, the table listens itself.
-  if (live) keepLeaf();
+  keepLeaf();
   tell({ town: "ready" });
 }
 

@@ -6,7 +6,7 @@
  *
  * All of them face right. A dark edge is added when they are baked (`sprites.ts`).
  */
-import type { UnitKind } from "../../game/content/figures.ts";
+import type { UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 
 export interface FigureArt {
   readonly rows: readonly string[];

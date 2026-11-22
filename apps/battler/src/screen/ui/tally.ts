@@ -13,8 +13,6 @@ import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
-
-import { regularNamed } from "../../game/content/rooms.ts";
 import {
   type Did,
   type Measure,
@@ -24,7 +22,9 @@ import {
   specOf,
   type Unit,
   type UnitKind,
-} from "../../game/index.ts";
+} from "@sequoia-leaf/raid";
+import { regularNamed } from "@sequoia-leaf/raid/content/rooms.ts";
+
 import { portrait } from "../art/sprites.ts";
 import { opening } from "../logic.ts";
 import { snd } from "../sounds.ts";

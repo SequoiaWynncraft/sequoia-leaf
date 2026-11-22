@@ -1,6 +1,17 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { followLeaf, isGuest, keepLeaf, passLeaf, readMember, restart, start, where } from "./live.ts";
+import {
+  followLeaf,
+  isGuest,
+  keepLeaf,
+  passCoins,
+  passLeaf,
+  readCoins,
+  readMember,
+  restart,
+  start,
+  where,
+} from "./live.ts";
 import { isRecord, type Listening } from "./net.ts";
 import {
   balance,
@@ -13,6 +24,7 @@ import {
   leafOpen,
   leafShown,
   leafShut,
+  settled,
   spend,
 } from "./purse.ts";
 import {
@@ -93,10 +105,10 @@ describe("finding out where the game is", () => {
     expect(leafShut()).toBe(LEAF_GUEST);
     expect(LEAF_GUEST).toBe("Leaf is earned by raiding with Sequoia.");
     grant(500, "a stand-in raid");
-    expect(spend("leaf", 0, "nothing")).toBe(false);
+    expect(spend("leaf", 0)).toBe(false);
     expect(balance().leaf).toBe(0);
     // Coins are a guest's as a member's.
-    earn(40, "the Works");
+    earn(40, "works_order");
     expect(balance().coins).toBeGreaterThanOrEqual(40);
   });
 
@@ -117,6 +129,8 @@ describe("finding out where the game is", () => {
       level: { number: 1, into: 0, next: 1000 },
       cursor: 0,
     });
+    expect(readCoins(isRecord(r) ? r.body : null)).toBe(300);
+    expect(readCoins({ coins: "lots" })).toBeNull();
   });
 
   test("it asks once per page", async () => {
@@ -235,6 +249,62 @@ function aFramedPage(): (data: unknown) => void {
   };
 }
 
+describe("the member's Coins on the guild's server", () => {
+  test("start from what /v1/game/me says, a guest's as a member's, and every change goes to Leaf", async () => {
+    world = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: { ...GUEST, coins: 812 } },
+      "POST /v1/game/coins": (s) => ({
+        status: 200,
+        body: { coins: 812 + (isRecord(s.body) && typeof s.body.amount === "number" ? s.body.amount : 0) },
+      }),
+    });
+    await start();
+    expect(balance().coins).toBe(812);
+    expect(spend("coins", 12, "camp_thing")).toBe(true);
+    await settled();
+    expect(balance().coins).toBe(800);
+    expect(world.sent.filter((s) => s.method === "POST")).toMatchObject([
+      { path: "/v1/game/coins", body: { amount: -12, reason: "camp_thing" } },
+    ]);
+    expect(world.store.length).toBe(0);
+  });
+
+  test("in the town's frame, the town's word about Coins is taken while nothing of the game's is on its way", async () => {
+    world = live({ status: 200, body: TESTER }, { top: false });
+    await start();
+    const town = aFramedPage();
+    const stop = keepLeaf();
+    town({ town: "coins", coins: 420 });
+    expect(balance().coins).toBe(420);
+    for (const coins of [-1, 3.5, "9", null]) town({ town: "coins", coins });
+    expect(balance().coins).toBe(420);
+    stop();
+  });
+
+  test("the town says each change to its Coins to a game once it is ready, and nothing with the made-up guild", async () => {
+    world = live({ status: 200, body: TESTER });
+    await start();
+    const said: number[] = [];
+    const coins = passCoins((n) => said.push(n));
+    earn(40, "works_order");
+    expect(said).toEqual([]);
+    coins.ready();
+    expect(said).toEqual([340]);
+    coins.stop();
+    forgetLedger();
+    restart();
+    world.done();
+    world = standin({ "GET /v1/game/hello": "offline" });
+    await start();
+    const quiet = passCoins((n) => said.push(n));
+    quiet.ready();
+    earn(40, "works_order");
+    expect(said).toEqual([340]);
+    quiet.stop();
+  });
+});
+
 describe("the member's Leaf in a game in the town's frame", () => {
   test("the town's word is taken as a fresh read of the ledger", async () => {
     world = live({ status: 200, body: TESTER }, { top: false });
@@ -306,7 +376,7 @@ describe("the member's Leaf in a game in the town's frame", () => {
     expect(said).toEqual([2560]);
     // The same Leaf again, or Coins, is nothing to say.
     fromLedger(2560);
-    earn(40, "a test");
+    earn(40, "works_order");
     expect(said).toEqual([2560]);
     fromLedger(2670);
     expect(said).toEqual([2560, 2670]);

@@ -45,12 +45,12 @@ describe("keeping the game in the browser", () => {
   test("the purse is kept as it changes, until the page stops", () => {
     world = standin({});
     reset();
-    earn(40, "a test");
+    earn(40, "works_order");
     expect(JSON.parse(world.store.getItem(PURSE_KEY) ?? "null")).toEqual(balance());
     world.store.setItem(PURSE_KEY, '{"leaf":1,"coins":5}');
     stop();
-    earn(40, "a test");
-    spend("coins", 3, "a test");
+    earn(40, "works_order");
+    spend("coins", 3, "camp_thing");
     grant(10, "a test");
     reset();
     expect(world.store.getItem(PURSE_KEY)).toBe('{"leaf":1,"coins":5}');

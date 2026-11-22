@@ -1,5 +1,6 @@
 import { BunHttpServer } from "@effect/platform-bun";
 import { Duration, Effect, Layer } from "effect";
+import { SecureRandom } from "effect/crypto";
 import { FetchHttpClient, HttpRouter } from "effect/http";
 
 import { ActivityReport } from "./activity/report.ts";
@@ -20,6 +21,10 @@ import { OpenStreams } from "./http/streams.ts";
 import { Ledger } from "./ledger/store.ts";
 import { Live, LIVE_SOCKETS } from "./live/live.ts";
 import { LiveRoute } from "./live/route.ts";
+import { Coins } from "./play/coins.ts";
+import { PageCoins } from "./play/page.ts";
+import { Play } from "./play/service.ts";
+import { PlayStore } from "./play/store.ts";
 import { Quests } from "./quests/store.ts";
 
 /**
@@ -88,8 +93,9 @@ export const serveLeaf = (options: {
   );
 
 /**
- * Leaf's stores: the ledger, the events and the quests, what the game keeps, and who played it,
- * on whichever database is provided. Skins and names come from whichever Mojang is.
+ * Leaf's stores: the ledger, the events and the quests, what the game keeps (the games' states and
+ * Coins among them), and who played it, on whichever database is provided. Skins and names come
+ * from whichever Mojang is.
  */
 export const Stores = Layer.mergeAll(
   Events.layer,
@@ -98,17 +104,20 @@ export const Stores = Layer.mergeAll(
   Presence.layer,
   ActivityReport.layer.pipe(Layer.provideMerge(Visits.layer)),
   Skins.layer.pipe(Layer.provideMerge(PlayerNames.layer)),
+  PlayStore.layer,
+  Coins.layer,
 ).pipe(Layer.provideMerge(Ledger.layer));
 
 /**
- * What Leaf reaches outside its own code (its settings, its database, Mojang and the network), and
- * the live rooms, which the routes serve and the server's farewell closes, and which write who is
- * in them into the stores' presence and visits.
+ * What Leaf reaches outside its own code (its settings, its database, Mojang, the network and the
+ * machine's dice), the play service and the pages' Coins on the stores, and the live rooms, which the routes serve and
+ * the server's farewell closes, and which write who is in them into the stores' presence and visits.
  */
-export const Services = Live.layer.pipe(
+export const Services = Layer.mergeAll(Play.layer, PageCoins.layer, Live.layer).pipe(
   Layer.provideMerge(Stores),
   Layer.provideMerge(Database),
   Layer.provide(Mojang.layer),
+  Layer.provide(SecureRandom.layerWebCrypto),
   Layer.provideMerge(FetchHttpClient.layer),
   Layer.provideMerge(AppConfig.layer),
 );

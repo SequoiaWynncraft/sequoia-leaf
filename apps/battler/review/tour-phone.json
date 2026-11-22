@@ -1,25 +1,38 @@
 [
   ["size", 390, 844],
   ["wait", 900],
-  ["eval", "(window.raid.fresh(), window.raid.hold(true), 'a new member, clock held')"],
+  [
+    "eval",
+    "(async () => { await window.raid.fresh(); await window.raid.hold(true); return await 'a new member, clock held'; })()"
+  ],
   ["wait", 700],
   ["shot", "p-01-front-page"],
-  ["eval", "(window.raid.start(11, 0), window.raid.skip(1.2), 'first pick')"],
+  [
+    "eval",
+    "(async () => { await window.raid.start(11, 0); await window.raid.skip(1.2); return await 'first pick'; })()"
+  ],
   ["wait", 700],
   ["shot", "p-02-first-pick"],
   ["click", "[data-pick='0']"],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
   ["tap", 3, 3],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
   ["eval", "(window.raid.skip(1.6), 'first room, first nudge')"],
   ["wait", 500],
   ["shot", "p-03-first-room"],
-  ["eval", "(window.raid.taught(), window.raid.to('boon'), window.raid.skip(1.5))"],
+  [
+    "eval",
+    "(async () => { await window.raid.taught(); await window.raid.to('boon'); return await window.raid.skip(1.5); })()"
+  ],
   ["wait", 700],
   ["shot", "p-04-boon-pick"],
   ["click", "[data-pick='1']"],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
   ["tap", 3, 3],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
   [
     "eval",
-    "(window.raid.skip(1.5), window.raid.plan(), window.raid.acorns(24), window.raid.give('glorp'), window.raid.give('glorp'), window.raid.offer(0,'glorp'), window.raid.item('thorn'), window.raid.item('plume'), window.raid.skip(1.5), 'planning, staged for a merge and an item')"
+    "(async () => { await window.raid.skip(1.5); await window.raid.plan(); await window.raid.acorns(24); await window.raid.give('glorp'); await window.raid.give('glorp'); await window.raid.offer(0,'glorp'); await window.raid.item('thorn'); await window.raid.item('plume'); await window.raid.skip(1.5); return await 'planning, staged for a merge and an item'; })()"
   ],
   ["wait", 800],
   ["eval", "(window.raid.skip(0.3), JSON.stringify(window.raid.state().view))"],
@@ -57,14 +70,19 @@
   ["shot", "p-10-item-forged"],
   ["eval", "(window.raid.skip(1.5), 'before the merge')"],
   ["click", "[data-offer='0']"],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
   ["tap", 3, 3],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
   ["eval", "(window.raid.skip(0.4), 'three hopping together')"],
   ["wait", 400],
   ["shot", "p-11-merge-hop"],
   ["eval", "(window.raid.skip(0.2), 'the star pops')"],
   ["wait", 400],
   ["shot", "p-12-merge-star"],
-  ["eval", "(window.raid.skip(2), window.raid.plan(), window.raid.skip(1), window.raid.fight(), window.raid.tick(10))"],
+  [
+    "eval",
+    "(async () => { await window.raid.skip(2); await window.raid.plan(); await window.raid.skip(1); await window.raid.fight(); return await window.raid.tick(10); })()"
+  ],
   ["wait", 400],
   ["shot", "p-13-halves-meet"],
   ["eval", "window.raid.busy(500)"],
@@ -81,37 +99,45 @@
   ["shot", "p-16-takings-sheet"],
   [
     "eval",
-    "(window.raid.skip(3), window.raid.carry(), window.raid.skip(1.5), document.querySelector(\"[data-pick='0']\")?.click(), window.raid.skip(1.5), window.raid.last())"
+    "(async () => { await window.raid.skip(3); await window.raid.carry(); await window.raid.skip(1.5); await document.querySelector(\"[data-pick='0']\")?.click(); await window.raid.settled(); await window.raid.skip(1.5); return await window.raid.last(); })()"
   ],
   ["wait", 500],
   ["shot", "p-16a-last-fight"],
   ["eval", "(window.raid.last(), window.raid.state().mode)"],
-  ["eval", "(window.raid.skip(9), window.raid.to('spar'), window.raid.skip(1.5), 'a regular across the table')"],
+  [
+    "eval",
+    "(async () => { await window.raid.skip(9); await window.raid.to('spar'); await window.raid.skip(1.5); return await 'a regular across the table'; })()"
+  ],
   ["wait", 500],
   ["shot", "p-16b-regular-across"],
   [
     "eval",
-    "(window.raid.skip(9), window.raid.to('boss'), window.raid.arrive(), window.raid.skip(1.5), 'the boss is on its way in')"
+    "(async () => { await window.raid.skip(9); await window.raid.to('boss'); await window.raid.arrive(); await window.raid.skip(1.5); return await 'the boss is on its way in'; })()"
   ],
   ["wait", 400],
   ["shot", "p-17-boss-arriving"],
   ["eval", "(window.raid.skip(3.5), 'the boss')"],
   ["wait", 400],
   ["shot", "p-18-boss"],
-  ["eval", "(window.raid.fight(), window.raid.tick(40), window.raid.busy(400))"],
+  [
+    "eval",
+    "(async () => { await window.raid.fight(); await window.raid.tick(40); return await window.raid.busy(400); })()"
+  ],
   ["wait", 400],
   ["shot", "p-19-boss-fight"],
   [
     "eval",
-    "(window.raid.tick(3000), window.raid.skip(10), window.raid.to('end'), window.raid.skip(4), JSON.stringify(window.raid.state().mode))"
+    "(async () => { await window.raid.tick(3000); await window.raid.skip(10); await window.raid.to('end'); await window.raid.skip(4); return await JSON.stringify(window.raid.state().mode); })()"
   ],
   ["wait", 900],
   ["shot", "p-20-end-summary"],
   ["click", "#again"],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
   ["tap", 3, 3],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
   [
     "eval",
-    "(window.raid.skip(1), window.raid.to('front'), window.raid.skip(0.2), 'the front page with a raid laid out')"
+    "(async () => { await window.raid.skip(1); await window.raid.to('front'); await window.raid.skip(0.2); return await 'the front page with a raid laid out'; })()"
   ],
   ["wait", 800],
   ["shot", "p-21-front-page-again"],

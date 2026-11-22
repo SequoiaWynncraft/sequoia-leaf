@@ -3,12 +3,15 @@
   ["wait", 900],
   [
     "eval",
-    "(window.raid.fresh(), window.raid.hold(true), window.raid.start(11, 0), window.raid.taught(), window.raid.bot(5), window.raid.skip(2), window.raid.plan(), window.raid.skip(2), JSON.stringify(window.raid.state().choice))"
+    "(async () => { await window.raid.fresh(); await window.raid.hold(true); await window.raid.start(11, 0); await window.raid.taught(); await window.raid.bot(5); await window.raid.skip(2); await window.raid.plan(); await window.raid.skip(2); return await JSON.stringify(window.raid.state().choice); })()"
   ],
-  ["eval", "(window.raid.strip(), window.raid.party().filter(p => p.on === 'board').map(p => p.kind).join(' '))"],
   [
     "eval",
-    "(()=>{const r = window.raid; const board = r.party().filter(p => p.on === 'board'); const one = board[0]; const three = board[1]; r.item('thorn'); r.hand(r.rack().length - 1, one.id); for (const k of ['honeycake', 'mothlantern', 'stewpot']) { r.item(k); r.hand(r.rack().length - 1, three.id); } r.skip(0.6); return 'one: ' + one.kind + ', three: ' + three.kind + ', held: ' + JSON.stringify(r.held())})()"
+    "(async () => { await window.raid.strip(); return await window.raid.party().filter(p => p.on === 'board').map(p => p.kind).join(' '); })()"
+  ],
+  [
+    "eval",
+    "(async ()=>{const r = window.raid; const board = r.party().filter(p => p.on === 'board'); const one = board[0]; const three = board[1]; await r.item('thorn'); r.hand(r.rack().length - 1, one.id); await r.settled(); for (const k of ['honeycake', 'mothlantern', 'stewpot']) { await r.item(k); r.hand(r.rack().length - 1, three.id); await r.settled(); } r.skip(0.6); return 'one: ' + one.kind + ', three: ' + three.kind + ', held: ' + JSON.stringify(r.held())})()"
   ],
   ["wait", 500],
   ["shot", "p-01-board-holding"],
@@ -87,7 +90,7 @@
   ["eval", "'tap elsewhere closed: ' + !document.querySelector('.k-info')"],
   [
     "eval",
-    "(window.raid.to('component'), window.raid.skip(1.5), window.raid.item('glowcap'), window.raid.skip(0.4), JSON.stringify(window.raid.state().choice))"
+    "(async () => { await window.raid.to('component'); await window.raid.skip(1.5); await window.raid.item('glowcap'); await window.raid.skip(0.4); return await JSON.stringify(window.raid.state().choice); })()"
   ],
   [
     "finger",
@@ -115,8 +118,14 @@
     "up",
     "(()=>{const e = document.querySelector(\".k-info-x\"); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
   ],
-  ["eval", "(document.querySelector(\"[data-pick='0']\").click(), 'took the first pick')"],
-  ["eval", "(window.raid.skip(1.5), window.raid.plan(), window.raid.fight(), window.raid.busy(), 'a fight')"],
+  [
+    "eval",
+    "(async () => { await document.querySelector(\"[data-pick='0']\").click(); await window.raid.settled(); return await 'took the first pick'; })()"
+  ],
+  [
+    "eval",
+    "(async () => { await window.raid.skip(1.5); await window.raid.plan(); await window.raid.fight(); await window.raid.busy(); return await 'a fight'; })()"
+  ],
   ["wait", 600],
   ["shot", "p-06-fight-holding"]
 ]

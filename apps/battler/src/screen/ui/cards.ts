@@ -20,8 +20,6 @@ import {
   type Stat,
 } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
-
-import { regularNamed } from "../../game/content/rooms.ts";
 import {
   abilityShort,
   abilityText,
@@ -54,7 +52,6 @@ import {
   roleLine,
   ROOMS,
   type Run,
-  sell,
   sellValue,
   specOf,
   spotOf,
@@ -68,7 +65,9 @@ import {
   traitText,
   type Unit,
   type UnitKind,
-} from "../../game/index.ts";
+} from "@sequoia-leaf/raid";
+import { regularNamed } from "@sequoia-leaf/raid/content/rooms.ts";
+
 import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
 import { portrait, starsPic } from "../art/sprites.ts";
 import { fightUnits } from "../fightview.ts";
@@ -91,7 +90,7 @@ import {
   whereIs,
 } from "../logic.ts";
 import { pieces as richPieces } from "../rich.ts";
-import { act, S } from "../state.ts";
+import { doNow, S } from "../state.ts";
 
 /** A drawn picture on the page, `scale` interface units to each of its pixels. */
 export function pic(c: HTMLCanvasElement, scale = 1, cls = ""): HTMLCanvasElement {
@@ -284,7 +283,7 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
               on: () => {
                 const spot = spotOf(S.run ?? run, sale.id);
                 // Sold from its card: the card goes with it.
-                if (spot) act((r) => sell(r, spot));
+                if (spot) doNow({ do: "sell", from: spot });
               },
             },
           ]

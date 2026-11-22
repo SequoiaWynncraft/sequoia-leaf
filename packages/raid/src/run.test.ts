@@ -19,6 +19,7 @@ import {
   giveItem,
   hold,
   interestNow,
+  layOutAfresh,
   move,
   opposition,
   type Piece,
@@ -112,9 +113,9 @@ describe("starting a run", () => {
     expect(choice.options.length).toBe(3);
     expect(new Set(choice.options).size).toBe(3);
     for (const kind of choice.options) expect(FIGURES[kind].tier).toBe(1);
-    expect(buy(run, 0)).toEqual({ ok: false, why: "Pick who sets out with you first." });
+    expect(buy(run, 0)).toMatchObject({ ok: false, why: "Pick who sets out with you first." });
     expect(beginFight(run).ok).toBe(false);
-    expect(choose(run, 7)).toEqual({ ok: false, why: "That is not one of the three." });
+    expect(choose(run, 7)).toMatchObject({ ok: false, why: "That is not one of the three." });
     const picked = choose(run, 1);
     expect(picked.ok).toBe(true);
     expect(run.board[3]?.kind).toBe(choice.options[1] ?? "worm");
@@ -169,14 +170,14 @@ describe("the stall", () => {
     const run = started();
     run.acorns = 1;
     stock(run, 0, "badger");
-    expect(buy(run, 0)).toEqual({ ok: false, why: "Not enough acorns." });
+    expect(buy(run, 0)).toMatchObject({ ok: false, why: "Not enough acorns." });
     run.stall[1] = null;
-    expect(buy(run, 1)).toEqual({ ok: false, why: "That place on the stall is empty." });
-    expect(buy(run, 99)).toEqual({ ok: false, why: "That place on the stall is empty." });
+    expect(buy(run, 1)).toMatchObject({ ok: false, why: "That place on the stall is empty." });
+    expect(buy(run, 99)).toMatchObject({ ok: false, why: "That place on the stall is empty." });
     run.acorns = 50;
     const kinds: FigureId[] = ["worm", "finch", "moth", "slug", "glorp", "jay", "rock", "kettle", "heron"];
     kinds.forEach((kind, slot) => onBench(run, kind, slot));
-    expect(buy(run, 0)).toEqual({ ok: false, why: "The bench is full." });
+    expect(buy(run, 0)).toMatchObject({ ok: false, why: "The bench is full." });
     expect(run.acorns).toBe(50);
   });
   test("one rustle a room is free, the rest cost two acorns", () => {
@@ -191,7 +192,7 @@ describe("the stall", () => {
     expect(rustle(run).ok).toBe(true);
     expect(run.acorns).toBe(3);
     run.acorns = 1;
-    expect(rustle(run)).toEqual({ ok: false, why: "Not enough acorns." });
+    expect(rustle(run)).toMatchObject({ ok: false, why: "Not enough acorns." });
   });
   test("a held stall is still there next room, and then lets go", () => {
     const run = winning();
@@ -255,22 +256,22 @@ describe("selling and moving", () => {
   });
   test("nobody is nowhere, and the last figure stays", () => {
     const run = started();
-    expect(sell(run, { on: "bench", at: 3 })).toEqual({ ok: false, why: "Nobody is there." });
-    expect(sell(run, { on: "board", at: 3 })).toEqual({ ok: false, why: "Somebody has to go on the raid." });
+    expect(sell(run, { on: "bench", at: 3 })).toMatchObject({ ok: false, why: "Nobody is there." });
+    expect(sell(run, { on: "board", at: 3 })).toMatchObject({ ok: false, why: "Somebody has to go on the raid." });
   });
   test("the level is how many may be fielded", () => {
     const run = started();
     onBench(run, "worm", 0);
     onBench(run, "finch", 1);
     expect(fieldCap(run)).toBe(1);
-    expect(move(run, { on: "bench", at: 0 }, { on: "board", at: 10 })).toEqual({
+    expect(move(run, { on: "bench", at: 0 }, { on: "board", at: 10 })).toMatchObject({
       ok: false,
       why: "You can field 1 figure for now.",
     });
     run.level = 2;
     expect(move(run, { on: "bench", at: 0 }, { on: "board", at: 10 }).ok).toBe(true);
     expect(fielded(run)).toBe(2);
-    expect(move(run, { on: "bench", at: 1 }, { on: "board", at: 11 })).toEqual({
+    expect(move(run, { on: "bench", at: 1 }, { on: "board", at: 11 })).toMatchObject({
       ok: false,
       why: "You can field 2 figures for now.",
     });
@@ -287,24 +288,27 @@ describe("selling and moving", () => {
     expect(move(run, { on: "board", at: 3 }, { on: "board", at: 27 }).ok).toBe(true);
     expect(run.board[27]?.id).toBe(who?.id ?? -1);
     expect(run.board[3]).toBeNull();
-    expect(move(run, { on: "board", at: 27 }, { on: "board", at: 27 })).toEqual({
+    expect(move(run, { on: "board", at: 27 }, { on: "board", at: 27 })).toMatchObject({
       ok: false,
       why: "It is already there.",
     });
-    expect(move(run, { on: "board", at: 27 }, { on: "board", at: 28 })).toEqual({
+    expect(move(run, { on: "board", at: 27 }, { on: "board", at: 28 })).toMatchObject({
       ok: false,
       why: "There is no such place.",
     });
-    expect(move(run, { on: "board", at: 27 }, { on: "bench", at: 9 })).toEqual({
+    expect(move(run, { on: "board", at: 27 }, { on: "bench", at: 9 })).toMatchObject({
       ok: false,
       why: "There is no such place.",
     });
-    expect(move(run, { on: "board", at: 5 }, { on: "board", at: 6 })).toEqual({ ok: false, why: "Nobody is there." });
+    expect(move(run, { on: "board", at: 5 }, { on: "board", at: 6 })).toMatchObject({
+      ok: false,
+      why: "Nobody is there.",
+    });
     expect(toBench(run, 27).ok).toBe(true);
     expect(run.bench[0]?.id).toBe(who?.id ?? -1);
-    expect(toBench(run, 27)).toEqual({ ok: false, why: "Nobody is there." });
+    expect(toBench(run, 27)).toMatchObject({ ok: false, why: "Nobody is there." });
     expect(pieceAt(run, { on: "bench", at: 0 })?.id).toBe(who?.id ?? -1);
-    expect(beginFight(run)).toEqual({ ok: false, why: "Put somebody on the board first." });
+    expect(beginFight(run)).toMatchObject({ ok: false, why: "Put somebody on the board first." });
   });
 });
 
@@ -367,7 +371,7 @@ describe("three of a kind", () => {
     run.acorns = 5;
     stock(run, 0, "worm");
     stock(run, 1, "finch");
-    expect(buy(run, 1)).toEqual({ ok: false, why: "The bench is full." });
+    expect(buy(run, 1)).toMatchObject({ ok: false, why: "The bench is full." });
     const done = buy(run, 0);
     expect(done.ok).toBe(true);
     expect(keeper.stars).toBe(2);
@@ -419,13 +423,13 @@ describe("levels", () => {
     expect(run.level).toBe(MAX_LEVEL);
     expect(run.acorns).toBe(400 - bought);
     expect(bought % 4).toBe(0);
-    expect(buyXp(run)).toEqual({ ok: false, why: "There is no level above this one." });
+    expect(buyXp(run)).toMatchObject({ ok: false, why: "There is no level above this one." });
     expect(xpToNext(run)).toBe(0);
   });
   test("it is refused without the acorns", () => {
     const run = started();
     run.acorns = 3;
-    expect(buyXp(run)).toEqual({ ok: false, why: "Not enough acorns." });
+    expect(buyXp(run)).toMatchObject({ ok: false, why: "Not enough acorns." });
   });
   test("every room gives two experience for nothing", () => {
     const run = winning();
@@ -460,9 +464,9 @@ describe("items", () => {
     const piece = run.board[3];
     if (piece) piece.items = ["stump", "hoard", "quilt"];
     run.items = ["thorn"];
-    expect(giveItem(run, 0, { on: "board", at: 3 })).toEqual({ ok: false, why: "It is holding all it can." });
-    expect(giveItem(run, 4, { on: "board", at: 3 })).toEqual({ ok: false, why: "There is no such item." });
-    expect(giveItem(run, 0, { on: "board", at: 9 })).toEqual({ ok: false, why: "Nobody is there." });
+    expect(giveItem(run, 0, { on: "board", at: 3 })).toMatchObject({ ok: false, why: "It is holding all it can." });
+    expect(giveItem(run, 4, { on: "board", at: 3 })).toMatchObject({ ok: false, why: "There is no such item." });
+    expect(giveItem(run, 0, { on: "board", at: 9 })).toMatchObject({ ok: false, why: "Nobody is there." });
     expect(run.items).toEqual(["thorn"]);
   });
 });
@@ -595,21 +599,21 @@ describe("resolve", () => {
     expect(run.won).toBe(false);
     expect(taken.notes.at(-1)).toEqual({ t: "over", won: false });
     expect(summariseRun(run)).toMatchObject({ cleared: 1, won: false, left: false, reached: 2 });
-    expect(buy(run, 0)).toEqual({ ok: false, why: "The raid is over." });
-    expect(takeTakings(run)).toEqual({ ok: false, why: "The raid is over." });
+    expect(buy(run, 0)).toMatchObject({ ok: false, why: "The raid is over." });
+    expect(takeTakings(run)).toMatchObject({ ok: false, why: "The raid is over." });
   });
 });
 
 describe("the rooms", () => {
   test("a room is planned, fought and paid for, in that order", () => {
     const run = winning();
-    expect(takeTakings(run)).toEqual({ ok: false, why: "There has been no fight yet." });
+    expect(takeTakings(run)).toMatchObject({ ok: false, why: "There has been no fight yet." });
     expect(fightSetup(run)).toBeNull();
     const begun = beginFight(run);
     expect(begun.ok).toBe(true);
     expect(run.phase).toBe("fight");
     for (const refused of [buy(run, 0), rustle(run), buyXp(run), sell(run, { on: "board", at: 3 }), hold(run)]) {
-      expect(refused).toEqual({ ok: false, why: "The figures are busy fighting." });
+      expect(refused).toMatchObject({ ok: false, why: "The figures are busy fighting." });
     }
     expect(beginFight(run).ok).toBe(false);
     expect(takeTakings(run).ok).toBe(true);
@@ -676,7 +680,7 @@ describe("the rooms", () => {
     expect(abandon(run).ok).toBe(true);
     expect(run.phase).toBe("over");
     expect(summariseRun(run)).toMatchObject({ left: true, won: false, cleared: 1 });
-    expect(abandon(run)).toEqual({ ok: false, why: "The raid is over." });
+    expect(abandon(run)).toMatchObject({ ok: false, why: "The raid is over." });
   });
   test("Greg eats after every fight he is in, up to a point", () => {
     const run = winning();
@@ -699,7 +703,7 @@ describe("choices after a room", () => {
     expect(pick?.kind).toBe("component");
     expect(pick?.options.length).toBe(3);
     expect(new Set(pick?.options).size).toBe(3);
-    expect(buy(won, 0)).toEqual({ ok: false, why: "Pick a component first." });
+    expect(buy(won, 0)).toMatchObject({ ok: false, why: "Pick a component first." });
     const item = pick?.kind === "component" ? pick.options[2] : undefined;
     expect(choose(won, 2).ok).toBe(true);
     expect(won.items).toEqual(item ? [item] : []);
@@ -733,11 +737,11 @@ describe("choices after a room", () => {
     expect(redraw(run).ok).toBe(true);
     expect(offer.options.length).toBe(3);
     for (const boon of offer.options) expect(first).not.toContain(boon);
-    expect(redraw(run)).toEqual({ ok: false, why: "You have already asked for others." });
+    expect(redraw(run)).toMatchObject({ ok: false, why: "You have already asked for others." });
     const taking = offer.options[1];
     expect(choose(run, 1).ok).toBe(true);
     expect(run.boons).toEqual(taking ? [taking] : []);
-    expect(redraw(run)).toEqual({ ok: false, why: "There are no boons on offer." });
+    expect(redraw(run)).toMatchObject({ ok: false, why: "There are no boons on offer." });
   });
   test("boons already held are not offered again, and charms only for a kin the party has", () => {
     const run = winning();
@@ -906,5 +910,57 @@ describe("who is waiting", () => {
     }
     // By chance about a quarter of the roster shares the kin or the calling.
     expect(matching / total).toBeGreaterThan(0.45);
+  });
+});
+
+describe("a room laid out afresh", () => {
+  test("keeps what the player has and draws everything else again: the stall, the foe, the picks, the seed", () => {
+    const run = startRun(31, { trail: 0 });
+    choose(run, 0);
+    buy(
+      run,
+      run.stall.findIndex((k) => k !== null),
+    );
+    beginFight(run);
+    takeTakings(run);
+    // In the middle of the next fight, with a pick waiting.
+    run.choices = [
+      { kind: "component", options: ["thorn", "bark"] },
+      { kind: "boon", options: [], redraws: 9 },
+    ];
+    run.phase = "fight";
+    const before = structuredClone(run);
+    layOutAfresh(run, 0xdecaf);
+    for (const kept of [
+      "trail",
+      "room",
+      "resolve",
+      "acorns",
+      "level",
+      "xp",
+      "board",
+      "bench",
+      "items",
+      "boons",
+      "record",
+    ] as const) {
+      expect([kept, run[kept]]).toEqual([kept, before[kept]]);
+    }
+    expect(run).toMatchObject({ phase: "plan", fight: null, seed: 0xdecaf });
+    expect(run.stall).toHaveLength(ECONOMY.stall);
+    expect(run.foe.figures.length).toBeGreaterThan(0);
+    expect(run.choices.map((c) => [c.kind, c.options.length])).toEqual([
+      ["component", ECONOMY.componentsLost],
+      ["boon", ECONOMY.boonOptions],
+    ]);
+    expect(run.choices[1]).toMatchObject({ redraws: ECONOMY.boonRedraws });
+    expect(run.rustles).toBe(ECONOMY.freeRustles);
+    // Laid out from another seed, it comes out otherwise; from the same, the same.
+    const again = structuredClone(before);
+    layOutAfresh(again, 0xdecaf);
+    expect(again).toEqual(run);
+    const other = structuredClone(before);
+    layOutAfresh(other, 7);
+    expect([other.stall, other.foe]).not.toEqual([run.stall, run.foe]);
   });
 });

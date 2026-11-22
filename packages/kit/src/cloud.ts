@@ -11,8 +11,7 @@
  * - After that, any change to a slot's text is pushed, at most once every five seconds, with the
  *   version last read. On a conflict the later `saved_at` is kept. When that is the other copy, the
  *   page holds an older game than the browser now does: this page sends that slot no more, and
- *   `onReplaced` is told, so that the page can open again from that copy (`pickUp`). The purse is
- *   only read again.
+ *   `onReplaced` is told, so that the page can open again from that copy (`pickUp`).
  * - Each push says which member the page started as. When the browser turns out to hold another
  *   member's game (they signed in in another tab), or the server says the page is not who it thinks,
  *   the page stops (`stopped()`): it syncs nothing more, writes nothing more of the game into the
@@ -28,19 +27,20 @@ import { el } from "./dom.ts";
 import { askFirst, forgetStop, keepText, keptText, stop, stopped } from "./keep.ts";
 import { member } from "./live.ts";
 import { ask, isRecord, outside, put } from "./net.ts";
-import { KEY as PURSE_KEY, reread } from "./purse.ts";
 import { fromTown } from "./shell.ts";
 
 export { stopped };
 
-export type Slot = "purse" | "town" | "works" | "raid";
+/**
+ * The slots pages still keep their games in. The Little Raid's game is Leaf's own now (`play.ts`),
+ * and so are Coins (the purse, `purse.ts`): their old slots are closed.
+ */
+export type Slot = "town" | "works";
 
 /** Which kept names belong to which slot. What is not here (view settings, the sound) stays in the browser. */
 export const SLOTS: Readonly<Record<Slot, readonly string[]>> = {
-  purse: [PURSE_KEY],
   town: ["town.save.v1", "town.guild.v1", "town.postcard.works.v1", "town.postcard.raid.v1"],
   works: ["works.save.v2"],
-  raid: ["raid.run.v1", "raid.almanac.v1"],
 };
 const ALL_SLOTS = Object.keys(SLOTS).filter((s): s is Slot => s in SLOTS);
 
@@ -159,7 +159,6 @@ const knownAs = (version: number, saved: number, keys: Keys): Known => ({
  */
 function writeKeys(slot: Slot, keys: Keys): void {
   for (const name of SLOTS[slot]) keepText(name, keys[name] ?? null);
-  if (slot === "purse") reread();
 }
 
 /** A save as the server sends it, or null for anything that is not one. */
@@ -187,7 +186,7 @@ const sending = new Set<Slot>();
 const replaced = new Set<Slot>();
 /** Saves the page's own state into the browser; run before a flush. */
 const savers: (() => void)[] = [];
-/** Told when another device's copy of one of the page's slots (other than the purse) has won. */
+/** Told when another device's copy of one of the page's slots has won. */
 let onReplaced: (slot: Slot) => void = () => undefined;
 let listening = false;
 
@@ -365,7 +364,7 @@ export async function push(slot: Slot, leaving = false, tries = 2): Promise<bool
       writeKeys(slot, save.keys);
       after.slots[slot] = knownAs(save.version, save.saved, save.keys);
       writeMeta(after);
-      if (slot !== "purse" && !replaced.has(slot)) {
+      if (!replaced.has(slot)) {
         replaced.add(slot);
         // The page is about to load again. Until it does, its savers must not write what it still
         // holds over the copy just taken, or the next load would send the older game back up.

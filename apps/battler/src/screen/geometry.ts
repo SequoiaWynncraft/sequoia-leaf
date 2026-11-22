@@ -7,7 +7,7 @@
  * While planning, the far half (rows 0 to 3) sits `gap` pixels further away; the near half, the
  * member's own, never moves. The bench is a plank of nine hollows under the near half.
  */
-import { COLS, HOME_ROWS, ROWS, SEATS } from "../game/hex.ts";
+import { COLS, HOME_ROWS, ROWS, SEATS } from "@sequoia-leaf/raid/hex.ts";
 
 /** A hex is this wide and this tall, point to point; its slanted edges rise `SLOPE` pixels. */
 export const HEX_W = 20;

@@ -6,7 +6,7 @@ import { playerId } from "@sequoia-leaf/core";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
-import { fakeBackend, fakeMojang, MINUTE, sessionOf, testLeaf } from "./support.ts";
+import { fakeBackend, fakeMojang, MINUTE, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 /**
  * The game's routes as the game sees them, from the real routes:
@@ -90,7 +90,8 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   });
   const mojang = fakeMojang();
   mojang.profiles.set(bob, { name: "Bob", skin: undefined });
-  const leaf = testLeaf(clock, fetcher, {}, { mojang: mojang.service });
+  // Leaf's dice fall the same way every time, so the raid's draws in the file are always the same.
+  const leaf = testLeaf(clock, fetcher, {}, { mojang: mojang.service, dice: steadyDice(1) });
   const app = leaf.app();
   await leaf.run(runCreditSync("recent"));
   await leaf.run(runAchievementSync("recent"));
@@ -138,6 +139,18 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     version: 1,
     data: saved,
   });
+  // The battler's game is played on Leaf now, and its old slot takes no more writes.
+  await call("PUT /v1/game/saves/{slot}, a game that moved", "PUT", "/v1/game/saves/raid", {
+    player: alice,
+    version: 0,
+    data: { saved_at: T0 + 10 * MINUTE, keys: { "raid.run.v1": "{}" } },
+  });
+  // The purse's Coins are the ledger's now, and its old slot takes no more writes either.
+  await call("PUT /v1/game/saves/{slot}, the purse", "PUT", "/v1/game/saves/purse", {
+    player: alice,
+    version: 0,
+    data: { saved_at: T0 + 10 * MINUTE, keys: { "town.purse.v1": '{"coins":5000}' } },
+  });
   await call("GET /v1/game/saves/{slot}", "GET", "/v1/game/saves/town");
   await call("GET /v1/game/saves", "GET", "/v1/game/saves");
   await call("GET /v1/game/guild/events", "GET", "/v1/game/guild/events");
@@ -166,12 +179,59 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   clock.now = T0 + 25 * MINUTE;
   await call("PUT /v1/game/presence", "PUT", "/v1/game/presence", { place: "town", stay: true, device: "desktop" });
   await call("GET /v1/game/presence", "GET", "/v1/game/presence");
+  // The Little Raid on the play service: a new table, setting out and the first pick, a refusal, the
+  // same batch sent again, and what is not a command or not a game.
+  await call("GET /v1/game/play/{game}", "GET", "/v1/game/play/raid");
+  const firstRoom = {
+    player: alice,
+    commands: [
+      { id: "c-1", do: "start", trail: 0 },
+      { id: "c-2", do: "choose", option: 0 },
+    ],
+  };
+  await call("POST /v1/game/play/{game}", "POST", "/v1/game/play/raid", firstRoom);
+  await call("POST /v1/game/play/{game}, a refusal", "POST", "/v1/game/play/raid", {
+    player: alice,
+    commands: [{ id: "c-3", do: "take" }],
+  });
+  await call("POST /v1/game/play/{game}, sent again", "POST", "/v1/game/play/raid", firstRoom);
+  await call("POST /v1/game/play/{game}, not a command", "POST", "/v1/game/play/raid", {
+    player: alice,
+    commands: [{ id: "c-4", do: "win" }],
+  });
+  await call("GET /v1/game/play/{game}, not a game", "GET", "/v1/game/play/chess");
+  // Coins the town and the Works work out on their pages, kept in the ledger: the daily chest, a
+  // thing for the camp, the same call again, a spend too dear, and a reason that is not one.
+  const chest = { player: alice, id: "chest-2026-11-25", amount: 3, reason: "daily_chest" };
+  await call("POST /v1/game/coins", "POST", "/v1/game/coins", chest);
+  await call("POST /v1/game/coins, a spend", "POST", "/v1/game/coins", {
+    player: alice,
+    id: "t-1",
+    amount: -120,
+    reason: "camp_thing",
+  });
+  await call("POST /v1/game/coins, sent again", "POST", "/v1/game/coins", chest);
+  await call("POST /v1/game/coins, not enough", "POST", "/v1/game/coins", {
+    player: alice,
+    id: "w-1",
+    amount: -5000,
+    reason: "works_plot",
+  });
+  await call("POST /v1/game/coins, not a reason", "POST", "/v1/game/coins", {
+    player: alice,
+    id: "w-2",
+    amount: 5,
+    reason: "luck",
+  });
+  // A page left open after someone else signed in.
+  await call("POST /v1/game/coins, not you", "POST", "/v1/game/coins", { ...chest, player: bob });
+  await call("POST /v1/game/play/{game}, not you", "POST", "/v1/game/play/raid", { ...firstRoom, player: bob });
   // A raid run of Alice's, as the play service logs it.
   for (const [minute, kind, data] of [
-    [5, "raid_started", { trail: "moss" }],
-    [8, "raid_room", { room: 1, kind: "fight", won: true, resolve: 9, seconds: 41 }],
-    [12, "raid_room", { room: 2, kind: "fight", won: false, resolve: 0, seconds: 63 }],
-    [12, "raid_ended", { trail: "moss", rooms_won: 1, how: "lost", coins: 20 }],
+    [5, "raid_started", { trail: 0 }],
+    [8, "raid_room", { room: 1, kind: "trouble", won: true, resolve: 3, seconds: 41 }],
+    [12, "raid_room", { room: 2, kind: "trouble", won: false, resolve: 0, seconds: 63 }],
+    [12, "raid_ended", { trail: 0, rooms_won: 1, ended: "lost", coins: 20 }],
   ] as const) {
     // oxlint-disable-next-line no-await-in-loop -- in order
     await leaf.query(

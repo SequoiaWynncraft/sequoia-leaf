@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { checkSave, MAX_SAVE_BYTES, SAVE_SLOTS, saveSlot } from "./saves.ts";
+import { checkSave, isMoved, MAX_SAVE_BYTES, SAVE_SLOTS, saveSlot } from "./saves.ts";
 
 /** A save whose JSON text is exactly `bytes` long. */
 function saveOf(bytes: number, filler = "a") {
@@ -11,6 +11,10 @@ function saveOf(bytes: number, filler = "a") {
 describe("save slots", () => {
   it("are the purse, the town, the Works and the battler", () => {
     expect(SAVE_SLOTS).toEqual(["purse", "town", "works", "raid"]);
+  });
+
+  it("has closed the battler's, now the play service's, and the purse's, now the Coins ledger's", () => {
+    expect(SAVE_SLOTS.filter(isMoved)).toEqual(["purse", "raid"]);
   });
 
   it("knows each slot by name and nothing else", () => {

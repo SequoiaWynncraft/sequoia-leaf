@@ -160,13 +160,18 @@ tick.
 **Coins.** The yard keeps no purse. `build`, `buyPlot` and `buyPlan` are told the balance and say
 what they took; `remove` says what comes back; whatever the yard earns gathers in `w.till` until
 `collect(w)` hands it over in whole Coins. A new yard has no Coins of its own: the screen pays for
-everything out of the member's purse, and pays the till into it.
+everything out of the member's purse, and pays the till into it, each with its reason (a building
+or a belt, a plot, a plan, what taking one away gives back; from the till, what orders paid since
+it was last paid out, and the rest as the depot's). On the guild's server the purse's Coins are
+Leaf's, and each of those goes to Leaf's ledger.
 
 **Saving.** `save(w)` is JSON with a version (2). `load(text)` gives back a yard it can vouch for or
 nothing: a record of the wrong shape or version is refused whole, and inside a good one any plot,
 plan or building that could not have come about by playing is left out. The first yard, before
 this one, was a different map with different machines, so its saves are not read as yards;
-`oldCoins(text)` finds the Coins in one so a screen can carry them over.
+`oldCoins(text)` finds the Coins in one so a screen can carry them over: with the made-up guild
+only. On the guild's server nothing the browser kept becomes Coins; old Coins are brought over
+by hand (the root README's Moving over).
 
 ## What the town can read
 

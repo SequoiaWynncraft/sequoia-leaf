@@ -15,6 +15,9 @@ export function chance(o: Stream): number {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
+/** A whole number from 0 up to 2^32, for a seed of its own: a room's party, a fight, a new run. */
+export const draw32 = (o: Stream): number => Math.floor(chance(o) * 4294967296) >>> 0;
+
 /** A whole number from 0 up to, not including, `n`. */
 export const below = (o: Stream, n: number): number => Math.floor(chance(o) * n);
 

@@ -1,7 +1,7 @@
 /**
  * Leaf on this machine, for trying the game against it:
  *
- *   bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--crowd <n>]
+ *   bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--crowd <n>] [--dice <n>]
  *
  * It runs the real app on a database in memory, seeded with a day of play for
  * a member called Tester and four other members, and serves `<public-dir>`
@@ -35,6 +35,12 @@
  * - `--crowd <n>`: n more members, each in their own skin, in the town's live room and walking
  *   about it along its paths: stopping, sitting on a log by the fire a while, and waving now and
  *   then. They say nothing of where they are but by being in the room. Every third is on a phone.
+ * - `--dice <n>`: Leaf's dice fall the same way every time from `n`, so that a tour plays the same
+ *   game each time it runs. Without it they are the machine's.
+ *
+ * The games Leaf plays (the play service) are served as in production. For the screenshot tours,
+ * `POST /test/play/raid` with `{ "stage": [...] }` stages a moment at Tester's raid table that play
+ * does not reach by itself (`stage-raid.ts`); nothing like it is served by the guild's own Leaf.
  */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -46,6 +52,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
 import { LiveClient } from "./live-client.ts";
+import { stageRaid } from "./stage-raid.ts";
 import {
   DAY,
   fakeBackend,
@@ -55,19 +62,25 @@ import {
   type Rgba,
   sessionOf,
   skinPng,
+  steadyDice,
   type TestClock,
   testLeaf,
 } from "./support.ts";
 
 const USAGE =
-  "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--crowd <n>]";
+  "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--crowd <n>] [--dice <n>]";
 
-const [portText = "", publicDirText = "", ...options] = process.argv.slice(2);
+const [portText = "", publicDirText = "", ...given] = process.argv.slice(2);
 const port = Number(portText);
 const known = new Set(["--guest", "--down", "--busy", "--admin"]);
-const crowdAt = options.indexOf("--crowd");
-const crowdSize = crowdAt < 0 ? 0 : Number(options[crowdAt + 1]);
-const flags = crowdAt < 0 ? options : options.filter((_, i) => i !== crowdAt && i !== crowdAt + 1);
+const crowdAt = given.indexOf("--crowd");
+const crowdSize = crowdAt < 0 ? 0 : Number(given[crowdAt + 1]);
+const diceAt = given.indexOf("--dice");
+const diceText = diceAt >= 0 ? given[diceAt + 1] : undefined;
+const steady = diceText === undefined ? undefined : Number(diceText);
+/** The options with a value, each with its value, taken out. */
+const valued = new Set([crowdAt, diceAt].flatMap((i) => (i >= 0 ? [i, i + 1] : [])));
+const flags = given.filter((_, i) => !valued.has(i));
 if (
   !Number.isInteger(port) ||
   port <= 0 ||
@@ -76,7 +89,8 @@ if (
   !Number.isInteger(crowdSize) ||
   crowdSize < 0 ||
   crowdSize > 200 ||
-  flags.some((o) => !known.has(o))
+  flags.some((o) => !known.has(o)) ||
+  (diceAt >= 0 && (steady === undefined || !Number.isInteger(steady)))
 ) {
   console.error(USAGE);
   process.exit(2);
@@ -249,7 +263,7 @@ const leaf = testLeaf(
     publicOrigin: origin,
     gameSignInUrl: `${origin}/sign-in?return_to=`,
   },
-  { mojang: mojang.service },
+  { mojang: mojang.service, ...(steady === undefined ? {} : { dice: steadyDice(steady) }) },
 );
 const app = leaf.app();
 
@@ -538,7 +552,24 @@ const signingRoute = (path: "/sign-in" | "/sign-out") =>
       ),
     ),
   );
-const served = await leaf.serve(port, Layer.mergeAll(signingRoute("/sign-in"), signingRoute("/sign-out")));
+/** Stages a moment at Tester's raid table, for the tours. */
+const stagingRoute = HttpRouter.add(
+  "POST",
+  "/test/play/raid",
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const body: unknown = yield* request.json.pipe(Effect.orElseSucceed(() => null));
+    const ops =
+      typeof body === "object" && body !== null && "stage" in body && Array.isArray(body.stage) ? body.stage : [];
+    // Staged through the same Leaf the routes use, on the same database.
+    const made = yield* Effect.promise(() => leaf.run(stageRaid(tester.id, ops).pipe(Effect.orDie)));
+    return HttpServerResponse.jsonUnsafe({ made });
+  }),
+);
+const served = await leaf.serve(
+  port,
+  Layer.mergeAll(signingRoute("/sign-in"), signingRoute("/sign-out"), stagingRoute),
+);
 
 // Stopped as a deploy stops Leaf: every live connection is told Leaf is restarting (1012) before
 // the server goes, so that a page reconnects as it would to the next container.

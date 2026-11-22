@@ -1,5 +1,20 @@
 export { type AchievementAward, type AchievementRules, leafForAward, type PayingLadder } from "./achievements.ts";
 export { type Activity, type ActivityKind, RAID_KEYS, type RaidKey, raidKeyForName, RAIDS } from "./activity.ts";
+export {
+  checkPageCoins,
+  COIN_REASON_NAMES,
+  COIN_REASONS,
+  type CoinReason,
+  coinReason,
+  type CoinReasonSpec,
+  DAILY_CHEST,
+  dailyChestKey,
+  EARNINGS,
+  PAGE_COINS,
+  type PageCoinsCall,
+  type PageCoinsCheck,
+  pageCoinsKey,
+} from "./coins.ts";
 export { isLeaf, type Leaf, leaf, MAX_LEAF } from "./leaf.ts";
 export {
   type Account,
@@ -69,7 +84,16 @@ export {
   RULE_CHANGES,
   type Rules,
 } from "./rules.ts";
-export { checkSave, MAX_SAVE_BYTES, SAVE_SLOTS, type SaveCheck, type SaveSlot, saveSlot } from "./saves.ts";
+export {
+  checkSave,
+  isMoved,
+  MAX_SAVE_BYTES,
+  MOVED_SLOTS,
+  SAVE_SLOTS,
+  type SaveCheck,
+  type SaveSlot,
+  saveSlot,
+} from "./saves.ts";
 export {
   activityReport,
   type CoinMove,
@@ -130,3 +154,18 @@ export {
   type ToClient,
   type ToServer,
 } from "./live.ts";
+export {
+  type CoinChange,
+  COMMAND_ID,
+  type Ctx,
+  type Done,
+  GAME_IDS,
+  type Game,
+  type GameId,
+  gameId,
+  isRefused,
+  type Logged,
+  MOST_COMMANDS,
+  playPath,
+  type Refused,
+} from "./play.ts";

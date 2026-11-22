@@ -12,8 +12,14 @@ bun run build    # dist/
 bun test         # the rules, and the screen's own small questions
 ```
 
-The rules are in `src/game/`, with a README of their own that says what is in the game and how a
-fight and a run go. Nothing in there touches the page. Everything else here is the screen.
+The rules are the package `@sequoia-leaf/raid` (`packages/raid`), with a README of their own that
+says what is in the game and how a fight and a run go; Leaf plays the same package. Nothing in there
+touches the page. Everything here is the screen.
+
+The table is Leaf's. The run in hand, the almanac, the looks and the trail picked live on the
+guild's server, in its play service (see the repository's README), and the page holds a copy to
+draw from and sends every move there as a command. Opened where no Leaf answers, the page shows the
+kit's card: "The table needs the guild's server."
 
 ## What is on the screen
 
@@ -106,31 +112,41 @@ fight and a run go. Nothing in there touches the page. Everything else here is t
 - **First time.** One nudge at a time, in the place it matters: a hand points, one line says what
   to do, and it is gone for good once the thing has been done.
 
-## What it keeps
+## What Leaf keeps, and what the browser keeps
 
-Three texts in the browser, each with a version on it:
+Leaf keeps the table (`GET` and `POST /v1/game/play/raid`, through the kit's `play.ts`). The page
+opens it as Leaf has it, and a run in hand is offered again on the front page, on any device; a run
+left in the middle of a fight comes back at that fight, which plays out the same from the setup
+Leaf kept; the last fight's setup is kept too, so "Last fight" plays it again after a reload.
 
-- the run in progress (`raid.run.v1`, the rules' own `saveRun`), written after every action and
-  offered again on the front page; a run saved in the middle of a fight comes back at the start of
-  that fight, which plays out the same; the last fight's setup goes with it, so "Last fight" plays
-  it again after a reload;
-- the almanac (`raid.almanac.v1`, the rules' own `saveAlmanac`);
-- the member's prefs (`raid.prefs.v1`, `src/screen/keep.ts`): the looks bought and worn, the speed
-  fights are watched at, the trail last walked, the nudges already given.
+Every move is a command (`src/screen/state.ts`):
 
-Leaf and Coins are the kit's one purse. A finished run pays its Coins in with `earn`; a look takes
-its Leaf with `spend`, where Leaf may be spent.
+- Moving, benching, swapping, selling, handing over an item and holding the stall are worked out on
+  the page's copy by the shared rules (the package's `predict`) and shown at once, and sent.
+- Buying, rustling, experience, the picks, setting out and the takings wait for Leaf, which draws
+  what they draw (the stall, the picks, the fight's seed); while Leaf takes more than 150 ms, the
+  thing asked for shows the kit's waiting look. Setting out, Leaf locks both boards and decides the
+  fight; the page plays the same fight from the setup and seed in Leaf's answer.
+- Whenever Leaf's state is not what the page was showing (the member played on in another page, a
+  guess was wrong, something was changed by hand), the page takes Leaf's and draws again.
+
+Coins shown are the kit's purse's, which are Leaf's, the same number the town and the Works show;
+the purse asks Leaf again when a run has paid. A finished or abandoned run pays them on Leaf. Leaf
+is the kit's purse too, from the guild's ledger; a look's Buy button is closed, since Leaf cannot
+be spent in the game yet.
+
+The browser keeps only the member's view settings (`raid.prefs.v1`, `src/screen/keep.ts`): the
+speed fights are watched at and the first-time nudges already given.
 
 ## In the town's frame
 
 The page says `ready` once it has drawn, sends `news` for a boss seen off, a raid cleared and a
-first three-star figure, asks to `leave` from "Leave the table" and "Back to town", and saves when
-the town says `closing`. It leaves the town a postcard (`postcard` in `src/screen/logic.ts`: a raid
-under way, and every boss ever beaten) whenever that changes.
+first three-star figure, and asks to `leave` from "Leave the table" and "Back to town". It leaves
+the town a postcard (`postcard` in `src/screen/logic.ts`: a raid under way, and every boss ever
+beaten) whenever that changes.
 
-On the guild's own server the page first awaits the kit's `start()` and pulls its saves (the
-`purse` and `raid` slots, and `town` too when opened on its own), shows the looks' Buy buttons
-closed, and says the member is at the table; the kit's README says how.
+The page first awaits the kit's `start()` (who the member is), then opens the table from Leaf, and
+says the member is at the table; signed out, it shows the kit's card for that.
 
 ## How it is put together
 
@@ -149,8 +165,8 @@ timed can be stepped by hand.
 | File                          | What it holds                                                                                    |
 | ----------------------------- | ------------------------------------------------------------------------------------------------ |
 | `src/main.ts`                 | Puts the parts together; speaks to the town                                                      |
-| `src/game/`                   | The rules (see its README)                                                                       |
-| `src/screen/state.ts`         | The run, the almanac, the prefs and what is on screen; every action goes through `act`           |
+| `@sequoia-leaf/raid`          | The rules, and the table as Leaf plays it (`packages/raid`, with its README)                     |
+| `src/screen/state.ts`         | The page's copy of Leaf's table and what is on screen; every move is a command (`doNow`, `ask`)  |
 | `src/screen/flow.ts`          | What happens when: sitting down, setting out, the fight, counting out the takings, the end       |
 | `src/screen/stage.ts`         | The canvases, the size of an art pixel, where the board sits, the clock                          |
 | `src/screen/geometry.ts`      | Where hexes, seats and bench hollows are, and which is under a point                             |
@@ -162,7 +178,7 @@ timed can be stepped by hand.
 | `src/screen/fightview.ts`     | The fight played from the rules' events                                                          |
 | `src/screen/fx.ts`            | Sparks, rings, rising words, things that fly, "in a moment"                                      |
 | `src/screen/logic.ts`         | Small questions asked of a run: where a figure may go, what an item would make, the next nudge   |
-| `src/screen/keep.ts`          | Prefs and looks, and reading and writing what is kept                                            |
+| `src/screen/keep.ts`          | The view settings kept in the browser                                                            |
 | `src/screen/sounds.ts`        | The table's sounds, made from the kit's tones                                                    |
 | `src/screen/signals.ts`       | Small happenings more than one part answers: an acorn landing, a star                            |
 | `src/screen/handle.ts`        | `window.raid`, for looking at the game from outside                                              |
@@ -186,28 +202,38 @@ timed can be stepped by hand.
 ## Looking at it from outside
 
 A headless browser draws about a frame a second, so the page puts a handle on `window.raid`:
-`hold(true)` stops the clock so that only `skip(seconds)` and `tick(steps)` move it; `fresh()` is a
-new member; `start(seed, trail)` begins a run; `bot(rooms)` has the rules' bot play whole rooms
-unseen and `plan()` has it plan the room that is up; `to("boon" | "component" | "boss" | "lastboss"
-| "end" | "front")` plays on to a moment worth looking at; `fight()` sets out; `busy()` runs a fight
-on to a moment with an ability's hexes lit and something in the air; `party()` lists the party's
-figures by number for `grab(id, x, y)`, `tap(id)`, `hover(itemAt, id)`, `hand(itemAt, id)` and
-`drop()`; `acorns(n)`, `give(kind)`, `offer(at, kind)`, `item(id)` and `strip()` stage a moment (a merge, an
-item to forge, empty hands); `at(id)` and `heldAt(id, i)` say where a figure and what it holds are
-on the page, and `rack()` and `held()` what is on the rack and in every hand; `page(id)` opens a page; `arrive()` has whoever is waiting walk in again;
-`taught()` counts every nudge as given; `state()` says where things stand; `bench()` times a frame;
-`carry()` presses "Carry on", `last()` opens or puts away "Last fight", and `tally(measure, side)`
-chooses a tab of the tally and, on a phone, a party.
+`hold(true)` stops the clock so that only `skip(seconds)` and `tick(steps)` move it. Whatever plays
+goes to Leaf as commands, so these give back promises: `start(seed, trail)` begins a run; `bot(rooms)`
+has the rules' bot play whole rooms unseen and `plan()` has it plan the room that is up (the bot plans
+on the page's copy and sends what it would do, `planCommands`); `to("boon" | "component" | "boss" |
+"lastboss" | "end" | "front")` plays on to a moment worth looking at; `fight()` sets out;
+`settled()` waits until Leaf has answered everything sent; `send(command)` sends one as the page
+would. `fresh()` (a new member), `start` from a chosen seed, `acorns(n)`, `give(kind)`, `offer(at,
+kind)`, `item(id)` and `strip()` stage a moment play does not reach (a merge, an item to forge,
+empty hands): they ask the play server the tours run against (`apps/api/test/play.ts`, at
+`/test/play/raid`), and on the guild's own Leaf, which has no such route, do nothing. `busy()` runs
+a fight on to a moment with an ability's hexes lit and something in the air; `party()` lists the
+party's figures by number for `grab(id, x, y)`, `tap(id)`, `hover(itemAt, id)`, `hand(itemAt, id)`
+and `drop()`; `at(id)` and `heldAt(id, i)` say where a figure and what it holds are on the page,
+and `rack()` and `held()` what is on the rack and in every hand; `page(id)` opens a page;
+`arrive()` has whoever is waiting walk in again; `taught()` counts every nudge as given; `state()`
+says where things stand (the Coins too); `bench()` times a frame; `carry()` presses "Carry on",
+`last()` opens or puts away "Last fight", and `tally(measure, side)` chooses a tab of the tally and,
+on a phone, a party. `copy()` is the page's own copy of the run and `leaf()` the copy of Leaf's
+table it draws from, to change by hand and see Leaf's next answer put it back; `redraw()` draws the
+table from them.
 
 `?sheet` in the address shows every figure on one sheet with its name.
 
-The lists in `review/` are the tours the screenshots came from, for the kit's driver:
+The lists in `review/` are the tours the screenshots came from. `review/tour.ts` runs one against a
+play server of its own: it builds the page, starts `apps/api/test/play.ts` on a free port with
+`--dice 1` (so the tour plays the same game every time), signs in as its Tester and has the kit's
+driver go through the steps:
 
 ```sh
-bun run build
-bun ../../packages/kit/tools/drive.ts "http://raid.test/" <out-dir> review/tour-desktop.json dist
-bun ../../packages/kit/tools/drive.ts "http://raid.test/" <out-dir> review/tour-phone.json dist
-bun ../../packages/kit/tools/drive.ts "http://raid.test/?sheet" <out-dir> review/sheet.json dist
+bun review/tour.ts review/tour-desktop.json <out-dir>
+bun review/tour.ts review/tour-phone.json <out-dir>
+bun review/tour.ts review/sheet.json <out-dir> sheet
 ```
 
 `review/feel.json` and `review/feel-phone.json` go through who gets hit, what everyone did and the

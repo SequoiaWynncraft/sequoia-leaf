@@ -1,40 +1,47 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
-import { TRAIL_COUNT } from "../game/content/rooms.ts";
-import {
-  BASES,
-  CLOTHS,
-  LANTERNS,
-  loadPrefs,
-  LOOK_KINDS,
-  LOOKS,
-  newPrefs,
-  owns,
-  PREFS_VERSION,
-  savePrefs,
-} from "./keep.ts";
+import { forgetStop, stop } from "@sequoia-leaf/kit/keep.ts";
+import { type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
+
+import { keepPrefs, loadPrefs, newPrefs, PREFS_KEY, PREFS_VERSION, readPrefs, savePrefs } from "./keep.ts";
 import { NUDGES } from "./logic.ts";
 
 const kept = (prefs: unknown, v: unknown = PREFS_VERSION): string =>
   JSON.stringify({ game: "little-raid-prefs", v, prefs });
 
-describe("what the table keeps", () => {
-  test("prefs come back as they were saved", () => {
+let world: Standin | null = null;
+afterEach(() => {
+  world?.done();
+  world = null;
+  forgetStop();
+});
+
+describe("what the table keeps in the browser", () => {
+  test("only how fast fights are watched and the nudges given, as they were saved", () => {
     const prefs = newPrefs();
-    prefs.owned = ["baize", "jar"];
-    prefs.cloth = "baize";
-    prefs.lantern = "jar";
     prefs.speed = 4;
-    prefs.trail = 1;
     prefs.taught = ["pick", "buy"];
+    expect(loadPrefs(savePrefs(prefs))).toEqual(prefs);
+    expect(Object.keys(prefs).toSorted()).toEqual(["speed", "taught"]);
+  });
+
+  test("every nudge given comes back", () => {
+    const prefs = newPrefs();
+    prefs.taught = [...NUDGES];
     expect(loadPrefs(savePrefs(prefs))).toEqual(prefs);
   });
 
-  test("prefs on the last trail, with every nudge given, come back as they were saved", () => {
-    const prefs = newPrefs();
-    prefs.trail = TRAIL_COUNT - 1;
-    prefs.taught = [...NUDGES];
-    expect(loadPrefs(savePrefs(prefs))).toEqual(prefs);
+  test("of what an older page kept under the same name, only those two are read: the table is Leaf's", () => {
+    const old = kept({
+      cloth: "plum",
+      lantern: "jar",
+      bases: "gilt",
+      owned: ["plum", "jar", "gilt"],
+      speed: 2,
+      trail: 2,
+      taught: ["pick"],
+    });
+    expect(loadPrefs(old)).toEqual({ speed: 2, taught: ["pick"] });
   });
 
   test("text that is not this version's prefs starts over", () => {
@@ -46,52 +53,20 @@ describe("what the table keeps", () => {
     expect(loadPrefs(kept([]))).toEqual(newPrefs());
   });
 
-  test("each part that makes no sense is put back to a new member's", () => {
-    const prefs = loadPrefs(
-      kept({ cloth: 7, lantern: "disco", bases: null, owned: "all", speed: 3, trail: 9, taught: "yes" }),
-    );
-    expect(prefs).toEqual(newPrefs());
-    expect(loadPrefs(kept({ speed: 2, trail: 2 })).speed).toBe(2);
-    expect(loadPrefs(kept({ speed: 2, trail: 2 })).trail).toBe(2);
+  test("each part that makes no sense is put back to a new member's, and nudges without repeats or nonsense", () => {
+    expect(loadPrefs(kept({ speed: 3, taught: "yes" }))).toEqual(newPrefs());
+    expect(loadPrefs(kept({ speed: 2 })).speed).toBe(2);
+    expect(loadPrefs(kept({ taught: ["pick", "pick", 4, "buy", "x".repeat(80)] })).taught).toEqual(["pick", "buy"]);
   });
 
-  test("a look that was never bought is not worn, whatever the text says", () => {
-    const sneaky = loadPrefs(kept({ cloth: "plum", lantern: "jar", bases: "gilt", owned: [] }));
-    expect([sneaky.cloth, sneaky.lantern, sneaky.bases]).toEqual(["bare", "iron", "plain"]);
-    const bought = loadPrefs(kept({ cloth: "plum", lantern: "jar", bases: "gilt", owned: ["plum", "gilt"] }));
-    expect([bought.cloth, bought.lantern, bought.bases]).toEqual(["plum", "iron", "gilt"]);
-  });
-
-  test("only looks that are for sale can be owned, and each once", () => {
-    const prefs = loadPrefs(kept({ owned: ["baize", "baize", "bare", "a crown", 3, "moss"] }));
-    expect(prefs.owned).toEqual(["baize", "moss"]);
-  });
-
-  test("the nudges given are kept, without repeats or nonsense", () => {
-    const prefs = loadPrefs(kept({ taught: ["pick", "pick", 4, "buy", "x".repeat(80)] }));
-    expect(prefs.taught).toEqual(["pick", "buy"]);
-  });
-
-  test("everybody has the first look of each kind, and the rest cost Leaf", () => {
-    const prefs = newPrefs();
-    for (const kind of LOOK_KINDS) {
-      const [first, ...rest] = LOOKS[kind];
-      expect(first?.leaf).toBe(0);
-      expect(first ? owns(prefs, kind, first.id) : false).toBe(true);
-      expect(rest.length).toBeGreaterThan(0);
-      for (const look of rest) {
-        expect(look.leaf).toBeGreaterThan(0);
-        expect(owns(prefs, kind, look.id)).toBe(false);
-      }
-    }
-    prefs.owned.push("gingham");
-    expect(owns(prefs, "cloth", "gingham")).toBe(true);
-    // A cloth is not a lantern.
-    expect(owns(prefs, "lantern", "gingham")).toBe(false);
-  });
-
-  test("every look has a name of its own", () => {
-    const ids = [...CLOTHS, ...LANTERNS, ...BASES].map((l) => l.id);
-    expect(new Set(ids).size).toBe(ids.length);
+  test("they are written into the browser, and read back; a page that has stopped writes none", () => {
+    world = standin({});
+    const prefs = { speed: 2 as const, taught: ["pick"] };
+    keepPrefs(prefs);
+    expect(readPrefs()).toEqual(prefs);
+    world.store.setItem(PREFS_KEY, "theirs");
+    stop();
+    keepPrefs(newPrefs());
+    expect(world.store.getItem(PREFS_KEY)).toBe("theirs");
   });
 });

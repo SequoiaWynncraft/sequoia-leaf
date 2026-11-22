@@ -1,4 +1,4 @@
-import { activityReport, type CommandDay, DONE_SHOWN, LOGGED, type Report } from "@sequoia-leaf/core";
+import { activityReport, DAY_MS, DONE_SHOWN, LOGGED, type Report } from "@sequoia-leaf/core";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
@@ -28,6 +28,12 @@ const DoneRow = Schema.Struct({
 });
 const WorksRow = Schema.Struct({ playerId: Schema.String, firstAt: Schema.Int, storyOrders: Schema.Int });
 const CoinRow = Schema.Struct({ playerId: Schema.String, at: Schema.Int, amount: Schema.Int });
+const CommandDayRow = Schema.Struct({
+  playerId: Schema.String,
+  day: Schema.Int,
+  done: Schema.Int,
+  refused: Schema.Int,
+});
 
 /** What a game logged, as it was stored: JSON, or the text itself if it is not. */
 const readData = (text: string): unknown =>
@@ -39,9 +45,9 @@ const readAll = (rows: readonly (typeof DoneRow.Type)[]) =>
 
 /**
  * The staff's report of who played (`GET /v1/game/admin/activity`): read from the visits, sessions
- * and players Leaf records, what the games logged (`activity`), and the Coins ledger
- * (`coin_entries`) once the play service keeps one. Reading it first closes every visit gone silent,
- * so that the report is as of now. A database failure is a defect.
+ * and players Leaf records, what the games logged (`activity`), the Coins ledger (`coin_entries`),
+ * and the commands done and refused each day (`command_days`). Reading it first closes every visit
+ * gone silent, so that the report is as of now. A database failure is a defect.
  */
 export class ActivityReport extends Context.Service<
   ActivityReport,
@@ -118,23 +124,31 @@ export class ActivityReport extends Context.Service<
           GROUP BY player_id
         `,
       });
-      const hasCoins = sql`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'coin_entries'`;
+      // Coins brought over by hand from the old saves (`import:<player>`) are the lead's doing, not play.
       const coinRows = SqlSchema.findAll({
         Request: Schema.Int,
         Result: CoinRow,
         execute: (from) => sql`
-          SELECT player_id AS playerId, at, amount FROM coin_entries WHERE at >= ${from} ORDER BY player_id, at, id
+          SELECT player_id AS playerId, at, amount FROM coin_entries
+          WHERE at >= ${from} AND key NOT LIKE 'import:%'
+          ORDER BY player_id, at, id
         `,
       });
-      /** The play service does not count its players' refused commands yet; until it does, no day has any. */
-      const commandDays: readonly CommandDay[] = [];
+      const commandRows = SqlSchema.findAll({
+        Request: Schema.Int,
+        Result: CommandDayRow,
+        execute: (from) => sql`
+          SELECT player_id AS playerId, day, done, refused FROM command_days
+          WHERE day > ${from - DAY_MS}
+          ORDER BY player_id, day
+        `,
+      });
 
       return ActivityReport.of({
         // Read in one transaction, so that every part is of the same moment.
         report: (from, now) =>
           Effect.gen(function* () {
             yield* visits.closeSilent(now);
-            const coins = (yield* hasCoins).length > 0 ? yield* coinRows(from) : [];
             return activityReport({
               now,
               from,
@@ -144,8 +158,8 @@ export class ActivityReport extends Context.Service<
               done: readAll(yield* doneRows(from)),
               raid: readAll(yield* raidRows(from)),
               works: yield* worksRows(from),
-              coins,
-              commands: commandDays,
+              coins: yield* coinRows(from),
+              commands: yield* commandRows(from),
             });
           }).pipe(sql.withTransaction, Effect.orDie),
       });
