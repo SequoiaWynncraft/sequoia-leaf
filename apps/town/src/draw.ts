@@ -67,6 +67,12 @@ export const show: {
   /** Whoever the pointer is resting on, and whoever's card is open: their names show. */
   pointed: Actor | null;
   card: Actor | null;
+  /**
+   * Somebody chosen in "Who is about", until when (the town's clock): a ring at their feet and their
+   * name over them; `glide` while the view goes to them, because they were out of it (null until
+   * the next step decides).
+   */
+  found: { a: Actor; until: number; glide: boolean | null } | null;
 } = {
   prompt: null,
   promptT: 0,
@@ -75,6 +81,7 @@ export const show: {
   hover: null,
   pointed: null,
   card: null,
+  found: null,
 };
 
 const buf = makeCanvas(320, 190);
@@ -213,6 +220,28 @@ export function pixelRing(g: Ctx, x: number, y: number, rx: number, ry: number, 
   }
 }
 
+/** Half a ring of whole pixels, close together: the half towards the viewer (`front`), or the half away. */
+function halfRing(g: Ctx, x: number, y: number, rx: number, ry: number, col: string, front: boolean): void {
+  const n = Math.ceil(rx * 10);
+  g.fillStyle = col;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    if (Math.sin(a) >= 0 !== front) continue;
+    g.fillRect(Math.round(x + Math.cos(a) * rx), Math.round(y + Math.sin(a) * ry), 1, 1);
+  }
+}
+
+/** The ring round the feet of somebody chosen in "Who is about", gently pulsing, gold round cream; one half of it. */
+function foundRing(g: Ctx, cx: number, cy: number, front: boolean): void {
+  const found = show.found;
+  if (!found || G.t >= found.until) return;
+  const at = found.a.seat ?? found.a;
+  const r = 9 + Math.sin(G.t * 6);
+  halfRing(g, at.x - cx, at.y - cy, r + 1, (r + 1) * 0.45, GOLD[2], front);
+  halfRing(g, at.x - cx, at.y - cy, r, r * 0.45, GOLD[2], front);
+  halfRing(g, at.x - cx, at.y - cy, r - 1, (r - 1) * 0.45, CREAM, front);
+}
+
 const smooth = (a: number, b: number, v: number): number => {
   const k = clamp((v - a) / (b - a), 0, 1);
   return k * k * (3 - 2 * k);
@@ -254,6 +283,8 @@ export function drawPicture(pic: Picture): HTMLCanvasElement {
     pixelRing(g, show.dest.x - cx, show.dest.y - cy, pulse, pulse * 0.55, GOLD[2]);
     R(g, Math.round(show.dest.x) - cx, Math.round(show.dest.y) - cy, 1, 1, CREAM);
   }
+  // Somebody chosen in "Who is about": the back of the ring round their feet, on the ground.
+  foundRing(g, cx, cy, false);
 
   // Everything that stands up, far to near.
   order.length = 0;
@@ -280,6 +311,9 @@ export function drawPicture(pic: Picture): HTMLCanvasElement {
     else if (it.actor) drawActor(g, it.actor, cx, cy, s);
     else it.other?.paint(g, cx, cy);
   }
+
+  // And its front, over anything in front of them, a log they sit on or a post, so it is always seen.
+  foundRing(g, cx, cy, true);
 
   for (const b of bits) {
     if (b.glow) continue;
@@ -451,7 +485,7 @@ function drawPeople(ctx: Ctx, px: number, taken: readonly Box[], people: readonl
     const far = me ? dist(at.x, at.y, me.x, me.y) : 999;
     // Lower is more wanted; 9 and over is not wanted at all, and only fades out if there is room.
     const rank =
-      a === show.pointed
+      a === show.pointed || a === show.found?.a
         ? 0
         : a.say
           ? 1

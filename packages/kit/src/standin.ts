@@ -48,6 +48,8 @@ export interface Standin {
   reloaded: { count: number };
   /** Sets the time the page sees. */
   clock: { now: number };
+  /** The page comes back: visible again, focused, or back on the network. */
+  wake(): void;
   /** Puts the real world back. */
   done(): void;
 }
@@ -65,6 +67,7 @@ export function standin(
   const went: string[] = [];
   const reloaded = { count: 0 };
   const clock = { now: 1_800_000_000_000 };
+  const woken = new Set<() => void>();
   const done = pretend({
     async fetch(path, init = {}) {
       await Promise.resolve();
@@ -95,8 +98,17 @@ export function standin(
       throw new Error("No live connection in this test");
     },
     width: () => opts.width ?? 1280,
+    wake: (fn) => {
+      woken.add(fn);
+      return () => {
+        woken.delete(fn);
+      };
+    },
   });
-  return { store, sent, went, reloaded, clock, done };
+  const wake = (): void => {
+    for (const fn of woken) fn();
+  };
+  return { store, sent, went, reloaded, clock, wake, done };
 }
 
 /** The member `/v1/game/me` answers with in tests. */

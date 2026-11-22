@@ -126,6 +126,18 @@ export interface Rester extends Visitor {
   seen: number;
 }
 
+/** Somebody else in the game now, or gone in the last day and staying, as "Who is about" lists them. */
+export interface Mate {
+  id: string;
+  name: string;
+  /** Their rank as the town shows it, `GUEST` for a guest, or null when nobody has said. */
+  rank: string | null;
+  /** Where they are, or were last. */
+  at: "town" | "camp" | "works" | "table";
+  /** When the game last saw them, in milliseconds since 1970: for somebody gone; null for somebody in the game now. */
+  seen: number | null;
+}
+
 export type Tone = "gold" | "leaf" | "coral" | "rose";
 /** The made-up guild's moments, which a tour can set off at once. */
 export type Moment = "raid" | "war" | "level" | "milestone" | "call";
@@ -203,6 +215,12 @@ export interface Guild {
   visitors(): readonly Visitor[];
   /** Real members who have gone in the last day, dozing in town, most recent first; never anybody in `visitors`. */
   resting(): readonly Rester[];
+  /**
+   * Everybody else in the game now, wherever they are (their own camp too), and everybody gone in the
+   * last day whose character stays, newest first, wherever they were last: as many as the guild
+   * says, for "Who is about".
+   */
+  about(): { present: readonly Mate[]; resting: readonly Mate[] };
   /** Whether anybody has said yet who is about (on the guild's server the first answer takes a moment). */
   heard(): boolean;
   /** Where the member is: in town, at their camp, or (null) in a game over the town. */

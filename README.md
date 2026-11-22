@@ -563,12 +563,18 @@ closed. Nothing is compressed.
 
 When Leaf stops, every open visit is closed, and then every connection with
 1012, before the HTTP server stops: production and the tests both serve Leaf with `serveLeaf` in `app.ts`,
-which puts the live rooms' farewell on top of the server. The game reconnects to
-the new container after half a second or so, joins its room again, and says where
-its player is again, as a jump.
+which puts the live rooms' farewell on top of the server. The game tries again
+half a second later, and then every second or so until Leaf is back (`retryAfter`
+in the kit's `realtime.ts`), at once when the page comes back to the front or the
+network returns; then it joins its room again, and says where its player is again,
+as a jump. `bun apps/town/review/reconnect.ts` measures it: stopped as a deploy
+stops it and started again 15 seconds later, `play.ts` answered `/healthz` and the
+town's page was back in its room 0.02 to 1.17 seconds after, in five rounds.
 
-Once a minute while anybody is about, Leaf logs a `live` line: players, how many
-are connected, who is in which room, and how many frames came in and were dropped.
+Once a minute while anybody is about, or anything was refused, Leaf logs a `live`
+line: players, how many are connected, who is in which room, how many connections
+opened and closed, how many frames came in and were dropped, and `refused`, how
+many openings were turned away before the upgrade, by code (`unauthorized: 3`).
 
 **Where they are, for everybody else.** A player in a room whose kind is one of
 the game's places (`town`) is present there as `PUT /v1/game/presence` has it,
@@ -656,6 +662,8 @@ Pebblefoot from spot to spot.
   `/sign-in?as=quillon&return_to=<address>` sets it, for a second page as
   somebody else.
 - `PUBLIC_ORIGIN` is `http://127.0.0.1:4000`.
+- Ctrl-C, or SIGTERM, stops it as a deploy stops Leaf: live connections are told
+  Leaf is restarting (1012) before the server goes.
 - `--guest`: Tester is signed in but not in the guild, so they play as a guest.
 - `--down`: the backend can't be asked who Tester is, so they answer 503.
 - `--busy`: every minute a few of the four finish a raid together, for the guild's news.

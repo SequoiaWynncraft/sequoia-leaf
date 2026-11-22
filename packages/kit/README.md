@@ -193,10 +193,19 @@ the half-minute call only asks who is about (`GET`); a change of staying is stil
 
 **Live** (`realtime.ts`). `joinLive(room, ears)` puts the player in one of Leaf's live rooms (the
 wire and the rooms are in `@sequoia-leaf/core`'s `live.ts`) and keeps them there: the connection
-is opened into the room (`livePath`, with the page's `device`), and after a drop it connects again (half a second, doubling
-to ten, jittered) and says where the player is again. Why a connection closed is its close code
-alone: told the player opened the game live elsewhere, or their session ended, it lets go
-(`status("replaced")`, `"signedout"`) and shows nobody any more. Each
+is opened into the room (`livePath`, with the page's `device`), and after a drop it connects again
+and says where the player is again. It waits a quarter of a second, then half (half to begin with
+when Leaf said it is restarting, 1012), then a second each time for the first thirty seconds, two
+for the next minute and five after that, each with up to a quarter more by chance (`retryAfter`).
+When the page is shown again, gains focus or the network comes back (`wake` in `net.ts`), a try
+waiting its turn goes at once, though never within a second of the last; an open connection is
+pinged at once instead. An open connection on which nothing has come from Leaf for fifteen seconds,
+with a ping out unanswered for five (`silent`), is closed and opened again. A browser cannot see why
+a connection would not open, so after three tries in a row that did not, and every fifth after
+that, it asks `GET /v1/game/me`: signed out (401), it lets go as below; anything else, or no
+answer, and it keeps trying. Why a connection closed is its close code alone: told the player
+opened the game live elsewhere, or their session ended, it lets go (`status("replaced")`,
+`"signedout"`) and shows nobody any more. Each
 connection learns the room afresh (who is there, their tracks, Leaf's clock), and its picture
 replaces the old one only at its welcome, so nothing of one connection is mixed with another's.
 `ears` hear the roster on each `welcome`, who `joined` and `left`, and each `act` (one of core's
