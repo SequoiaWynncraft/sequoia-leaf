@@ -15,7 +15,7 @@ import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
 
 import { callToFire, goSit, hop, inTown, release, rouse, say, sitters } from "./actors.ts";
-import { redrawn } from "./board.ts";
+import { openingTab, readNews, redrawn, shortDay, TABS } from "./board.ts";
 import { owned } from "./camp.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { named, registerCards, thingRef, wareRef } from "./cards.ts";
@@ -45,6 +45,7 @@ import {
 } from "./hud.ts";
 import type { Letter } from "./letter.ts";
 import { waiting } from "./mail.ts";
+import { NOTES } from "./notes.ts";
 import { buyForCamp, camp } from "./record.ts";
 import { icon, type Sprites } from "./sprites.ts";
 import { thingOf } from "./things.ts";
@@ -258,7 +259,7 @@ const clock = (ms: number): string => {
   return `${two(d.getHours())}:${two(d.getMinutes())}`;
 };
 
-/** The quest board: drawn whole again whenever its quests are no longer the ones it shows. */
+/** The quest board's quests: drawn whole again whenever they are no longer the ones it shows. */
 function quests(body: HTMLElement): () => void {
   const note = guild.boardNote();
   if (note !== null) {
@@ -329,6 +330,72 @@ function notes(body: HTMLElement): () => void {
   return () => {
     for (const f of parts) f();
   };
+}
+
+/** What has changed in the game: the ten newest notes. */
+function newsTab(list: HTMLElement): void {
+  list.replaceChildren(
+    ...NOTES.slice(0, 10).map((n) =>
+      el(
+        "div",
+        "k-paper quest",
+        {},
+        el("div", "k-read k-dim", { text: shortDay(n.day) }),
+        el("div", "k-title", { text: n.title }),
+        ...n.lines.map((text) => el("div", "k-read", { text })),
+      ),
+    ),
+  );
+}
+
+/** The quest board: its quests on one tab, and on the other what has changed in the game. */
+function board(body: HTMLElement): () => void {
+  const list = el("div", "k-col");
+  let update: (() => void) | null = null;
+  const { row, show } = tabs(
+    TABS.map((label) => ({ label })),
+    (i) => {
+      if (TABS[i] === "News") {
+        readNews();
+        update = null;
+        newsTab(list);
+      } else {
+        update = quests(list);
+        update();
+      }
+    },
+  );
+  body.append(row, list);
+  show(TABS.indexOf(openingTab()));
+  return () => {
+    update?.();
+  };
+}
+
+// ---------- tabs ----------
+
+/** Tabs along the top of a panel, one lit at a time: tapping one, or `show`, lights it and opens what it is for. */
+function tabs(
+  each: readonly { label: string; tip?: readonly [string, string] }[],
+  open: (i: number) => void,
+): { row: HTMLElement; show: (i: number) => void } {
+  const row = el("div", "k-tabs", { role: "tablist" });
+  const show = (i: number): void => {
+    [...row.children].forEach((tab, k) => {
+      tab.setAttribute("aria-selected", k === i ? "true" : "false");
+    });
+    open(i);
+  };
+  each.forEach(({ label, tip: about }, i) => {
+    const tab = button("sm", [label], () => {
+      sfx.tap();
+      show(i);
+    });
+    tab.setAttribute("role", "tab");
+    if (about) tip(tab, ...about);
+    row.append(tab);
+  });
+  return { row, show };
 }
 
 // ---------- camp things, wherever they are sold ----------
@@ -405,19 +472,14 @@ const STALL_AT = [60, 108, 156] as const;
 
 function market(body: HTMLElement): () => void {
   const stalls = guild.stalls();
-  const tabs = el("div", "k-tabs", { role: "tablist" });
   const list = el("div", "k-col");
   const line = el("span");
   const face = slot(null, 28);
-  body.append(tabs, el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, line)), list);
   let rows: (() => void)[] = [];
   const pickStall = (i: number): void => {
     const stall = stalls[i];
     if (!stall) return;
     G.stall = i;
-    [...tabs.children].forEach((tab, k) => {
-      tab.setAttribute("aria-selected", k === i ? "true" : "false");
-    });
     const keeper = G.folk.find((a) => a.who.name === stall.by);
     const keeperFace = keeper ? faceOf(keeper, 3) : null;
     face.replaceChildren(...(keeperFace ? [keeperFace] : []));
@@ -437,17 +499,15 @@ function market(body: HTMLElement): () => void {
     );
     for (const f of rows) f();
   };
-  stalls.forEach((stall, i) => {
-    const first = stall.name.split(/[ ,]/)[0] ?? stall.name;
-    const tab = button("sm", [first], () => {
-      sfx.tap();
-      pickStall(i);
-    });
-    tab.setAttribute("role", "tab");
-    tip(tab, stall.name, `Kept by ${stall.by}.`);
-    tabs.append(tab);
-  });
-  pickStall(G.stall);
+  const { row, show } = tabs(
+    stalls.map((stall) => ({
+      label: stall.name.split(/[ ,]/)[0] ?? stall.name,
+      tip: [stall.name, `Kept by ${stall.by}.`],
+    })),
+    pickStall,
+  );
+  body.append(row, el("div", "k-row", {}, face, el("div", "k-say left k-grow", {}, line)), list);
+  show(G.stall);
   return () => {
     for (const f of rows) f();
   };
@@ -741,7 +801,7 @@ function profile(body: HTMLElement): null {
 
 const BUILD: Record<PanelId, (body: HTMLElement) => (() => void) | null> = {
   treasury,
-  quests,
+  quests: board,
   market,
   works: doorCard("works"),
   table: doorCard("table"),

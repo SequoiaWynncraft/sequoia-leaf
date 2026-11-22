@@ -3,7 +3,14 @@
  * date in place as it moves. When the quests themselves are no longer the ones on the board (one
  * expired, or was swapped from another page, and another took its slot), the board is drawn again
  * whole, so that no note is left up for a quest that is gone.
+ *
+ * The board's news (`notes.ts`) is unread while its newest note is not the one the member last
+ * opened, which the browser keeps under `town.notes.seen`.
  */
+
+import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
+
+import { NOTES } from "./notes.ts";
 
 /** Quest ids as a set, written out the same whatever order they came in. */
 const setOf = (ids: readonly string[]): string => [...new Set(ids)].toSorted((a, b) => a.localeCompare(b)).join("\n");
@@ -24,4 +31,28 @@ export function redrawn(ids: () => readonly string[], draw: () => () => void): (
     }
     update();
   };
+}
+
+export const SEEN = "town.notes.seen";
+
+/** Whether there is news on the board the member has not opened. */
+export const unread = (): boolean => NOTES[0] !== undefined && NOTES[0].id !== keptText(SEEN);
+
+/** The member has opened the news: all of it is read. */
+export function readNews(): void {
+  if (unread()) keepText(SEEN, NOTES[0]?.id ?? null);
+}
+
+/** The board's tabs, in order. */
+export const TABS = ["Quests", "News"] as const;
+
+/** The tab the board opens on: News while there is news unread, and Quests otherwise. */
+export const openingTab = (): (typeof TABS)[number] => (unread() ? "News" : "Quests");
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+
+/** A note's day as the board shows it: `2026-11-22` is "22 Nov". */
+export function shortDay(day: string): string {
+  const [, month, date] = day.split("-");
+  return `${Number(date)} ${MONTHS[Number(month) - 1] ?? ""}`;
 }
