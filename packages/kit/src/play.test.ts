@@ -26,10 +26,17 @@ const add =
 
 /** A stand-in Leaf for the counter: it adds what it is asked to, refusing anything over 100. */
 function counterLeaf(start = 0) {
-  const leaf = { n: start, rev: 0, seen: new Map<string, unknown>(), batches: [] as unknown[][] };
+  const leaf = {
+    n: start,
+    rev: 0,
+    seen: new Map<string, unknown>(),
+    batches: [] as unknown[][],
+    /** The batches that came in a request that outlives its page. */
+    away: [] as unknown[][],
+  };
   const post = (sent: Sent): Reply => {
     const commands = isRecord(sent.body) && Array.isArray(sent.body.commands) ? sent.body.commands : [];
-    leaf.batches.push(commands);
+    (sent.keepalive ? leaf.away : leaf.batches).push(commands);
     let changed = false;
     const results = commands.map((c: unknown) => {
       if (!isRecord(c) || typeof c.id !== "string" || typeof c.by !== "number") return { id: "?", refused: "bad" };
@@ -169,6 +176,23 @@ describe("sending commands", () => {
     expect(new Set(ids).size).toBe(4);
     expect(leaf.batches.flat().map((c) => (isRecord(c) ? c.by : null))).toEqual([1, 2, 3, 4]);
     expect(play.state).toEqual({ n: 10 });
+  });
+
+  test("as the page goes, everything Leaf has not answered is sent at once, in order, and done once", async () => {
+    const { routes, leaf } = counterLeaf();
+    const play = await opened(routes);
+    const answers = [1, 2, 3].map((by) => play.send({ do: "add", by }));
+    // The first is on its way and two wait behind it: all three go in the one request that outlives the page.
+    play.flush();
+    await Promise.all(answers);
+    expect(leaf.away.map((b) => b.map((c) => (isRecord(c) ? c.by : null)))).toEqual([[1, 2, 3]]);
+    const sent = leaf.batches.flat().map((c) => (isRecord(c) ? c.id : null));
+    expect(leaf.away.flat().map((c) => (isRecord(c) ? c.id : null))).toEqual(sent);
+    expect(leaf.n).toBe(6);
+    // With nothing waiting, nothing is sent.
+    play.flush();
+    await Bun.sleep(2);
+    expect(leaf.away).toHaveLength(1);
   });
 
   test("are sent again with the same ids after a network failure or trouble, and done once", async () => {
