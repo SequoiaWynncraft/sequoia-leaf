@@ -9,7 +9,6 @@ import { type Ctx, type Rect } from "@sequoia-leaf/kit/util.ts";
 
 import { G } from "./game.ts";
 import type { Sprite } from "./sprites.ts";
-import type { PlaceId } from "./world.ts";
 
 export interface Prop {
   kind: string;
@@ -19,15 +18,17 @@ export interface Prop {
   z: number;
   sprite: Sprite | null;
   hit: Rect | null;
-  place: PlaceId | null;
+  /** The door it is part of: touching it goes there (`touch.ts`). */
+  place: string | null;
   /** When it was last touched: things shiver or hop for a moment after. */
   bumpAt: number;
   hops: boolean;
   tap: ((p: Prop, wx: number, wy: number) => void) | null;
   /** Anything drawn over the picture each frame, given the picture's foot on screen. */
   extra: ((g: Ctx, sx: number, sy: number) => void) | null;
-  /** What it is, for whoever points at it: a name and a line. */
+  /** What it is, for whoever points at it: a name and a line, or a card of its own. */
   tip: readonly [string, string] | null;
+  ref: string | null;
 }
 
 export interface Light {
@@ -61,6 +62,7 @@ export function makeProp(kind: string, sprite: Sprite | null, x: number, y: numb
     tap: null,
     extra: null,
     tip: null,
+    ref: null,
     ...o,
   };
 }

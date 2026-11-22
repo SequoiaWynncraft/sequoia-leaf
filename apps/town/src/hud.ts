@@ -13,9 +13,8 @@ import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { hop, say } from "./actors.ts";
-import { show } from "./draw.ts";
 import { DOING, type Doing } from "./folk.ts";
-import { type Actor, after, G, hooks, watch } from "./game.ts";
+import { type Actor, after, G, hooks, show, watch } from "./game.ts";
 import type { Tone } from "./guild.ts";
 import { span } from "./letter.ts";
 
@@ -323,6 +322,7 @@ function keep(): void {
 }
 
 export function closeCard(): void {
+  if (!show.card) return;
   show.card = null;
   $("card").hidden = true;
 }
@@ -409,12 +409,12 @@ export function showCard(a: Actor, doing: (() => string) | null = null, waveTo: 
   const other =
     job === "counter"
       ? button("wood sm", ["Treasury"], () => {
-          hooks.visit("treasury", true);
+          hooks.visit("treasury");
         })
       : typeof job === "object"
         ? button("wood sm", ["Stall"], () => {
             G.stall = job.stall;
-            hooks.visit("market", true);
+            hooks.visit("market");
           })
         : button("wood sm", ["Cheer"], () => {
             keep();

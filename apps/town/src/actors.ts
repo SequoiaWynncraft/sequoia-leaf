@@ -55,8 +55,8 @@ function blank(who: Who, body: Body | null, x: number, y: number, you: boolean):
   };
 }
 
-/** A member: the player, or a real member about the town, drawn from their skin. */
-export function makeActor(who: Who, body: Body, x: number, y: number, you = false): Actor {
+/** A member: the player, or a real member about the town, drawn from their skin (none: not drawn yet). */
+export function makeActor(who: Who, body: Body | null, x: number, y: number, you = false): Actor {
   return blank(who, body, x, y, you);
 }
 

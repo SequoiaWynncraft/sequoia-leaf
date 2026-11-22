@@ -15,20 +15,7 @@ import type { Dir } from "@sequoia-leaf/kit/skin.ts";
 import { sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, pick, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
 
-import {
-  face,
-  headOf,
-  hop,
-  makeActor,
-  makeFolk,
-  pushOf,
-  release,
-  say,
-  shove,
-  sit,
-  stepActor,
-  walkTo,
-} from "./actors.ts";
+import { face, hop, makeActor, makeFolk, release, say, sit, stepActor, walkTo } from "./actors.ts";
 import {
   boxOf,
   campFull,
@@ -68,14 +55,14 @@ import {
   wornPaths,
 } from "./campground.ts";
 import { csfx } from "./campsfx.ts";
-import { extraOf, lightOf, type Live, stepLive, touch, type TouchWorld } from "./camptouch.ts";
+import { extraOf, lightOf, type Live, stepLive, touch as touchThing, type TouchWorld } from "./camptouch.ts";
 import { type CampUi } from "./campui.ts";
 import { thingRef } from "./cards.ts";
-import { drawPicture, drawProp, drawWords, type Picture, type Prompted, show, sizeBuffers } from "./draw.ts";
+import { drawPicture, drawProp, drawWords, type Picture, sizeBuffers } from "./draw.ts";
 import { clearFlights, flights, fling, stepFlights } from "./flights.ts";
 import { AT_CAMP, folkNamed, isCaller } from "./folk.ts";
-import { bit, burst, float, flutter, puff, ring, sparkle, updateFx } from "./fx.ts";
-import { type Actor, after, changed, forgetLater, G, hooks, stepLater } from "./game.ts";
+import { bit, burst, float, flutter, puff, sparkle, updateFx } from "./fx.ts";
+import { type Actor, after, changed, forgetLater, G, hooks, show, stepLater } from "./game.ts";
 import { trophies } from "./games.ts";
 import { CELL, makeGround } from "./grid.ts";
 import { paintTrunk } from "./ground.ts";
@@ -88,16 +75,11 @@ import { camp as mine, greet, roomByTrail, roomFor, sendToCamp } from "./record.
 import type { Sprites } from "./sprites.ts";
 import type { Hover, Scene, Stage } from "./stage.ts";
 import { footprint, thingOf, turnsOf } from "./things.ts";
+import { type Door, makeTouch } from "./touch.ts";
 import type { Seat } from "./world.ts";
 
 /** The camp's own places: things that open something when the member walks up to them. */
 export type CampPlace = "cabin" | "mailbox" | "signpost" | "trail";
-
-interface Spot extends Prompted {
-  id: CampPlace;
-  stand: Pt;
-  face: Dir;
-}
 
 /** A thing in the member's hand while decorating: which, where it would go, and whether it may. */
 interface Hold {
@@ -182,6 +164,15 @@ function player(): Actor {
   return G.player;
 }
 
+/** The member stops whatever they are doing: walking somewhere, sitting. */
+function halt(): void {
+  const p = player();
+  release(p);
+  p.path = [];
+  p.arrive = null;
+  show.dest = null;
+}
+
 /** Where a thing's picture stands: the middle of the near edge of the ground it takes. */
 function footOf(p: Placed): Pt | null {
   const t = thingOf(p.id);
@@ -250,7 +241,7 @@ export function makeCamp(
   let gateLights: Light[] = [];
   let seats: Seat[] = [];
   const seatsOf = new WeakMap<Placed, { key: string; seats: Seat[] }>();
-  let spots: Spot[] = [];
+  let spots: Door[] = [];
   let pets: PetLive[] = [];
   let guests: Actor[] = [];
   /** Lanterns going up beyond the far trees, one for each raid the guild finishes. */
@@ -270,9 +261,6 @@ export function makeCamp(
     mine: true,
     sit(l, wx, wy) {
       sitOn(l, wx, wy);
-    },
-    open(what) {
-      go(what);
     },
     mail: () => owner === null && waiting(mine.letters) > 0,
     trophies: () => (owner === null ? mine.earned : theirTrophies),
@@ -312,8 +300,10 @@ export function makeCamp(
       bumpAt: me.prop.bumpAt,
       hops: me.prop.hops,
       tip: [thing.name, thing.about],
+      ref: thingRef(thing.id),
+      place: p.id,
       tap: (_p, wx, wy) => {
-        touch(me, world, wx, wy);
+        touchThing(me, world, wx, wy);
       },
     });
     me.glow = null;
@@ -503,20 +493,27 @@ export function makeCamp(
               : "Leave a present"
             : "Signpost";
       if (!name) continue;
+      const panel = home ? id : id === "cabin" ? "note" : id === "mailbox" ? "present" : id;
       spots.push({
         id,
         name,
         stand,
         face: stand.y > l.prop.y ? 3 : stand.x < l.prop.x ? 2 : stand.x > l.prop.x ? 1 : 0,
         prompt: { x: l.prop.x, y: l.prop.y - tall - 22 },
+        reach: 15,
+        use: () => ui.open(panel),
       });
     }
+    // The way out: the trail between the two posts and on past them.
     spots.push({
       id: "trail",
       name: home ? "Town" : "Home",
       stand: { x: CW - 22, y: TRAIL_Y + 2 },
       face: 2,
       prompt: { x: CW - 30, y: TRAIL_Y - 44 },
+      reach: 26,
+      box: { x: CW - 34, y: TRAIL.y0 * CELL - 4, w: 48, h: (TRAIL.y1 - TRAIL.y0 + 1) * CELL + 12 },
+      use: () => leave(home ? "town" : "home"),
     });
     petWorld.fire = fire;
   }
@@ -616,58 +613,15 @@ export function makeCamp(
 
   // ---------- getting about ----------
 
-  let pending: CampPlace | null = null;
   let leaving = false;
   /** How far the view has been pushed off the member while something is dragged near an edge. */
   const pan = { x: 0, y: 0 };
 
-  function halt(): void {
-    const p = player();
-    release(p);
-    p.path = [];
-    p.arrive = null;
-    pending = null;
-    show.dest = null;
-  }
-
   const awake = (): boolean => G.home && G.dark < 0.35 && !leaving;
 
-  function use(what: CampPlace): void {
-    const p = player();
-    if (what === "trail") {
-      leave(owner === null ? "town" : "home");
-      return;
-    }
-    const spot = spots.find((s) => s.id === what);
-    if (spot) p.dir = spot.face;
-    if (what === "cabin" && owner !== null) ui.open("note");
-    else if (what === "mailbox" && owner !== null) ui.open("present");
-    else ui.open(what);
-  }
-
   function go(what: CampPlace): void {
-    if (!awake()) return;
-    const p = player();
     const spot = spots.find((s) => s.id === what);
-    if (!spot) return;
-    if (dist(p.x, p.y, spot.stand.x, spot.stand.y) < 14) {
-      use(what);
-      return;
-    }
-    halt();
-    pending = what;
-    show.dest = spot.stand;
-    walkTo(
-      p,
-      spot.stand,
-      () => {
-        show.dest = null;
-        if (pending !== what) return;
-        pending = null;
-        use(what);
-      },
-      ground,
-    );
+    if (spot && awake()) touch.go(spot);
   }
 
   function sitOn(l: Live, wx: number, wy: number): void {
@@ -1109,14 +1063,8 @@ export function makeCamp(
     sel = null;
     decor = false;
     leaving = false;
-    pending = null;
     pan.x = 0;
     pan.y = 0;
-    show.prompt = null;
-    show.promptT = 0;
-    show.hover = null;
-    show.pointed = null;
-    show.dest = null;
 
     const p = player();
     release(p);
@@ -1392,17 +1340,6 @@ export function makeCamp(
 
   // ---------- touches ----------
 
-  function personAt(wx: number, wy: number): Actor | null {
-    let best: Actor | null = null;
-    for (const a of everybody()) {
-      if (a.alpha < 0.5) continue;
-      const at = a.seat ?? a;
-      if (Math.abs(wx - at.x) > 7 || wy < at.y - headOf(a) - 2 || wy > at.y + 3) continue;
-      if (!best || at.y > (best.seat ?? best).y) best = a;
-    }
-    return best;
-  }
-
   /** The thing of the camp's under a point, as its number in the record; -1 for none. */
   function thingAt(wx: number, wy: number): number {
     const all = lives.map((l) => l.prop);
@@ -1417,107 +1354,55 @@ export function makeCamp(
     return l ? placed.indexOf(l.placed) : -1;
   }
 
-  function tapWorld(wx: number, wy: number): boolean {
-    closeCard();
-    const p = player();
-    if (decor) {
-      const n = thingAt(wx, wy);
-      if (n >= 0) {
-        if (sel && sel.index !== n) settle();
-        const l = liveAt(n);
-        pickUp(n, l ? { x: wx - l.prop.x, y: wy - l.prop.y } : { x: 0, y: 0 });
-        return false;
-      }
-      if (sel) {
-        settle();
-        sel = null;
-        ui.tray();
-      }
-    } else {
-      const who = personAt(wx, wy);
-      if (who) {
-        sfx.pop();
-        hop(who);
-        if (who.you) {
-          say(who, pick(["that's me", "hello, me", "o/"], Math.random()), 1.6);
-          return false;
-        }
-        if (!who.seat) face(who, p.x, p.y);
-        who.hold = 2.4;
-        if (who.folk) greeted(who);
-        else if (who.doing === "home" && mate) say(who, pick(mate.hello, Math.random()), 2.6);
-        showCard(who);
-        return false;
-      }
-      const pet = petAt(pets, wx, wy);
-      if (pet) {
-        pleased(pet);
-        return false;
-      }
-      const prop = propUnder([...pic.props, ...flats], wx, wy);
-      if (prop?.tap && prop.kind !== "trunk") {
-        prop.tap(prop, wx, wy);
-        return false;
-      }
-      if (wy < campHedge(wx, seed)) {
-        sfx.star();
-        for (let i = 0; i < 14; i++)
-          bit({
-            x: wx - i * 2.2,
-            y: wy - i * 1.1,
-            vx: 70,
-            vy: 34,
-            ttl: 0.5 + i * 0.03,
-            life: i * 0.012,
-            col: i < 3 ? CREAM : GOLD[2],
-            glow: true,
-          });
-        return false;
-      }
-      if (prop?.tap) {
-        prop.tap(prop, wx, wy);
-        return false;
-      }
+  /** Somebody in the camp is touched. */
+  function meet(who: Actor): void {
+    hop(who);
+    if (who.you) {
+      say(who, pick(["that's me", "hello, me", "o/"], Math.random()), 1.6);
+      return;
     }
-    halt();
-    if (G.panel) closePanel();
-    const to = ground.nearestFree(clamp(wx, 0, CW - 1), clamp(wy, 0, CH - 1));
-    show.dest = to;
-    ring(to.x, to.y, GOLD[2], 6);
-    sfx.tap();
-    walkTo(
-      p,
-      to,
-      () => {
-        show.dest = null;
-      },
-      ground,
-    );
-    return true;
+    if (!who.seat) face(who, player().x, player().y);
+    who.hold = 2.4;
+    if (who.folk) greeted(who);
+    else if (who.doing === "home" && mate) say(who, pick(mate.hello, Math.random()), 2.6);
+    showCard(who);
   }
 
-  function under(wx: number, wy: number): (Hover & { who: Actor | null }) | null {
-    if (decor) {
-      // The thing in hand has its own corners.
-      const n = sel?.dragging ? -1 : thingAt(wx, wy);
-      const l = n >= 0 && n !== sel?.index ? liveAt(n) : null;
-      return l?.prop.hit
-        ? { box: l.prop.hit, tip: [l.thing.name, "Drag it somewhere else."], ref: thingRef(l.thing.id), who: null }
-        : null;
-    }
-    const who = personAt(wx, wy);
-    if (who) {
-      const at = who.seat ?? who;
-      const tall = headOf(who);
-      return { box: { x: at.x - 6, y: at.y - tall, w: 12, h: tall + 1 }, tip: null, who };
-    }
-    const pet = petAt(pets, wx, wy);
-    if (pet)
-      return { box: { x: pet.x - 6, y: pet.y - 10, w: 12, h: 11 }, tip: [pet.name, PET_ABOUT[pet.kind]], who: null };
-    const prop = propUnder([...pic.props, ...flats], wx, wy);
-    if (!prop?.hit || prop.kind === "trunk") return null;
-    return { box: prop.hit, tip: prop.tip, ref: thingOf(prop.kind) ? thingRef(prop.kind) : null, who: null };
-  }
+  const touch = makeTouch({
+    ground,
+    // While decorating, nothing is walked up to and used.
+    doors: () => (decor ? [] : spots),
+    people: everybody,
+    greet: meet,
+    own(x, y) {
+      const pet = petAt(pets, x, y);
+      if (pet) pleased(pet);
+      return pet !== null;
+    },
+    ownAt(x, y) {
+      const pet = petAt(pets, x, y);
+      return pet ? { box: { x: pet.x - 6, y: pet.y - 10, w: 12, h: 11 }, tip: [pet.name, PET_ABOUT[pet.kind]] } : null;
+    },
+    props: () => [...pic.props, ...flats],
+    sky(x, y) {
+      if (y >= campHedge(x, seed)) return false;
+      sfx.star();
+      for (let i = 0; i < 14; i++)
+        bit({
+          x: x - i * 2.2,
+          y: y - i * 1.1,
+          vx: 70,
+          vy: 34,
+          ttl: 0.5 + i * 0.03,
+          life: i * 0.012,
+          col: i < 3 ? CREAM : GOLD[2],
+          glow: true,
+        });
+      return true;
+    },
+    awake,
+    halt,
+  });
 
   // ---------- drawing ----------
 
@@ -1644,12 +1529,6 @@ export function makeCamp(
 
   // ---------- the scene ----------
 
-  function nearSpot(): Spot | null {
-    const p = player();
-    for (const s of spots) if (dist(p.x, p.y, s.stand.x, s.stand.y) < (s.id === "trail" ? 26 : 15)) return s;
-    return null;
-  }
-  let prompted: Spot | null = null;
   let lastDrag: Pt | null = null;
   let tick = 0;
 
@@ -1670,15 +1549,7 @@ export function makeCamp(
       G.t += dt;
       const p = player();
       stepActor(p, dt, ground);
-      if (awake() && steer) {
-        const push = pushOf(p, steer);
-        if (push && !sel?.dragging) {
-          if (p.seat || p.path.length > 0 || pending) halt();
-          shove(p, dt, push.dx, push.dy, ground);
-          // Walking on out past the posts is leaving.
-          if (p.x > CW - 12 && push.dx > 0) leave(owner === null ? "town" : "home");
-        }
-      }
+      touch.step(dt, sel?.dragging ? null : steer);
       for (const a of guests) stepActor(a, dt, ground);
       // Whoever is out past the posts is behind the great tree, and then gone.
       for (const a of everybody()) a.alpha = clamp((CW + 12 - a.x) / 6, 0, 1);
@@ -1736,15 +1607,6 @@ export function makeCamp(
         pan.y *= Math.max(0, 1 - dt * 4);
       }
       showHeld();
-
-      const near = G.home && !decor ? nearSpot() : null;
-      G.near = near ? (near.id === "trail" ? (owner === null ? "town" : "home") : near.id) : null;
-      const on = near !== null && awake() && G.panel === null && !(near.id === "trail" && p.path.length > 0);
-      if (near && on) {
-        prompted = near;
-        show.prompt = near;
-      }
-      show.promptT = clamp(show.promptT + (on ? dt : -dt) * 5, 0, 1);
     },
 
     draw: () => drawPicture(pic),
@@ -1753,9 +1615,24 @@ export function makeCamp(
     },
 
     tap(x, y, finger) {
-      show.touch = finger;
       lastDrag = { x, y };
-      return awake() ? tapWorld(x, y) : false;
+      if (!decor || !awake()) return touch.tap(x, y, finger);
+      // Decorating, a touch takes hold of a thing, or puts down what is in hand and walks.
+      show.touch = finger;
+      closeCard();
+      const n = thingAt(x, y);
+      if (n >= 0) {
+        if (sel && sel.index !== n) settle();
+        const l = liveAt(n);
+        pickUp(n, l ? { x: x - l.prop.x, y: y - l.prop.y } : { x: 0, y: 0 });
+        return false;
+      }
+      if (sel) {
+        settle();
+        sel = null;
+        ui.tray();
+      }
+      return touch.walk(x, y);
     },
 
     drag(at) {
@@ -1771,30 +1648,18 @@ export function makeCamp(
     },
 
     point(at) {
-      const h = at && awake() ? under(at.x, at.y) : null;
-      show.hover = h ? h.box : null;
-      show.pointed = h ? h.who : null;
+      if (!decor || !at || !awake()) return touch.point(at);
+      // The thing in hand has its own corners.
+      const n = sel?.dragging ? -1 : thingAt(at.x, at.y);
+      const l = n >= 0 && n !== sel?.index ? liveAt(n) : null;
+      const h: Hover | null = l?.prop.hit
+        ? { box: l.prop.hit, tip: [l.thing.name, "Drag it somewhere else."], ref: thingRef(l.thing.id) }
+        : null;
+      show.hover = h?.box ?? null;
+      show.pointed = null;
       return h;
     },
-
-    act() {
-      if (!awake()) return;
-      const p = player();
-      if (decor) {
-        turn();
-        return;
-      }
-      if (prompted && show.promptT > 0.4) {
-        use(prompted.id);
-        return;
-      }
-      if (p.seat) {
-        release(p);
-        return;
-      }
-      hop(p);
-      sfx.tap();
-    },
+    act: () => (decor ? turn() : touch.act()),
 
     back() {
       if (G.panel) closePanel();
@@ -1924,7 +1789,7 @@ export function makeCamp(
       guests: () => guests.map((g) => g.who.name),
       greet(n) {
         const a = guests[n];
-        if (a) tapWorld(a.x, a.y - 4);
+        if (a) touch.tap(a.x, a.y - 4, false);
       },
     },
   };

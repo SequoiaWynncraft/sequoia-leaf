@@ -1,7 +1,7 @@
 /** What the whole town shares: the clock, who is about, what the member has, and where the camera is looking. */
 
 import type { Body, Dir } from "@sequoia-leaf/kit/skin.ts";
-import type { Pt } from "@sequoia-leaf/kit/util.ts";
+import type { Pt, Rect } from "@sequoia-leaf/kit/util.ts";
 
 import type { Doing as FolkDoing, Townsperson } from "./folk.ts";
 import type { FolkArt } from "./folkart.ts";
@@ -133,10 +133,48 @@ export const G: Game = {
   stall: 0,
 };
 
+/** Somewhere the member is standing at, as the prompt by it needs to know it. */
+export interface Prompted {
+  name: string;
+  /** Where its prompt floats. */
+  prompt: Pt;
+}
+
+/** What is to be shown besides the place itself. */
+export const show: {
+  prompt: Prompted | null;
+  promptT: number;
+  dest: Pt | null;
+  /** The last touch was a finger, so the prompt says "Tap". */
+  touch: boolean;
+  /** Where the prompt was last written, in the place's pixels: a touch there is a touch on it. */
+  sign: Rect | null;
+  hover: Rect | null;
+  /** Whoever the pointer is resting on, and whoever's card is open: their names show. */
+  pointed: Actor | null;
+  card: Actor | null;
+  /**
+   * Somebody chosen in "Who is about", until when (the town's clock): a ring at their feet and their
+   * name over them; `glide` while the view goes to them, because they were out of it (null until
+   * the next step decides).
+   */
+  found: { a: Actor; until: number; glide: boolean | null } | null;
+} = {
+  prompt: null,
+  promptT: 0,
+  dest: null,
+  touch: false,
+  sign: null,
+  hover: null,
+  pointed: null,
+  card: null,
+  found: null,
+};
+
 /** Things one part of the town asks of another without knowing who answers. */
 export const hooks: {
-  /** Go to a place and open it; `now` opens it at once and walks there meanwhile. */
-  visit: (id: PlaceId, now?: boolean) => void;
+  /** Open a place at once, and walk there meanwhile. */
+  visit: (id: PlaceId) => void;
   /** A line for the guild feed. */
   feed: (text: string, tone?: Tone) => void;
   /** Go through a game's door: walk up to it and on inside. */

@@ -12,11 +12,11 @@ import { R } from "@sequoia-leaf/kit/pix.ts";
 import { bubble, bubbleSize, prompt, promptSize, wrap } from "@sequoia-leaf/kit/signs.ts";
 import { FOOT_X, FOOT_Y, SIT, WALK } from "@sequoia-leaf/kit/skin.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
-import { clamp, type Ctx, dist, lerp, makeCanvas, type Pt, type Rect } from "@sequoia-leaf/kit/util.ts";
+import { clamp, type Ctx, dist, lerp, makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { headOf, HOP, onScreen } from "./actors.ts";
 import { bits, emoted, floaters, rings } from "./fx.ts";
-import { type Actor, G } from "./game.ts";
+import { type Actor, G, show } from "./game.ts";
 import type { Light, Prop, Standing } from "./props.ts";
 import type { Sprites } from "./sprites.ts";
 
@@ -48,41 +48,6 @@ export interface Picture {
   /** After dusk has fallen: whatever gives its own light. */
   glows(g: Ctx, cx: number, cy: number, spark: HTMLCanvasElement): void;
 }
-
-/** Somewhere the member is standing at, as the prompt by it needs to know it. */
-export interface Prompted {
-  name: string;
-  /** Where its prompt floats. */
-  prompt: Pt;
-}
-
-/** What is to be shown besides the place itself. */
-export const show: {
-  prompt: Prompted | null;
-  promptT: number;
-  dest: Pt | null;
-  /** The last touch was a finger, so the prompt says "Tap". */
-  touch: boolean;
-  hover: Rect | null;
-  /** Whoever the pointer is resting on, and whoever's card is open: their names show. */
-  pointed: Actor | null;
-  card: Actor | null;
-  /**
-   * Somebody chosen in "Who is about", until when (the town's clock): a ring at their feet and their
-   * name over them; `glide` while the view goes to them, because they were out of it (null until
-   * the next step decides).
-   */
-  found: { a: Actor; until: number; glide: boolean | null } | null;
-} = {
-  prompt: null,
-  promptT: 0,
-  dest: null,
-  touch: false,
-  hover: null,
-  pointed: null,
-  card: null,
-  found: null,
-};
 
 const buf = makeCanvas(320, 190);
 const dusk = makeCanvas(320, 190);
@@ -577,6 +542,7 @@ function drawPeople(ctx: Ctx, px: number, taken: readonly Box[], people: readonl
 }
 
 export function drawWords(ctx: Ctx, px: number, people: readonly Actor[]): void {
+  show.sign = null;
   // Nothing is said in the dark between two places.
   if (G.dark > 0.5) return;
   const z = G.view.z;
@@ -598,6 +564,7 @@ export function drawWords(ctx: Ctx, px: number, people: readonly Actor[]): void 
         return { x, y: Math.max(30 * px, Math.round((pl.prompt.y - cy) * z)), w: size.w, h: size.h };
       })()
     : null;
+  if (sign) show.sign = { x: cx + sign.x / z, y: cy + sign.y / z, w: sign.w / z, h: sign.h / z };
   drawPeople(ctx, px, sign ? [sign] : [], people);
 
   // Emotes, floating up from whoever made them, over their name if it shows, and fading as they go:

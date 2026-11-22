@@ -25,11 +25,11 @@ import { makeCampArt } from "./campart.ts";
 import { type CampScene, makeCamp } from "./campscene.ts";
 import { makeCampUi } from "./campui.ts";
 import { goIn, type Visit } from "./doors.ts";
-import { drawIris, show } from "./draw.ts";
+import { drawIris } from "./draw.ts";
 import { FOLK } from "./folk.ts";
 import { folkArt, initFolkArt } from "./folkart.ts";
 import { clearFx } from "./fx.ts";
-import { G, hooks, type PanelId, toPage } from "./game.ts";
+import { G, hooks, type PanelId, show, toPage } from "./game.ts";
 import { type GameId, GAMES } from "./games.ts";
 import { guild, type Moment, stir } from "./guild.ts";
 import { closeCard, closePanel, hush, initHud, panelBox, tickHud } from "./hud.ts";
@@ -62,6 +62,8 @@ declare global {
       tap: (x: number, y: number) => void;
       happen: (kind: Moment) => void;
       page: (x: number, y: number) => Pt;
+      /** Where the prompt by a door is on the page, while it is up. */
+      prompt: () => Pt | null;
       who: () => { name: string; x: number; y: number; doing: string }[];
       /** Real members in town just now (on the guild's own server). */
       visitors: () => { name: string; x: number; y: number }[];
@@ -340,6 +342,20 @@ async function boot(): Promise<void> {
         }, 2200);
       }, LONG_PRESS);
   });
+  // A touch on the world is the world's: the click it ends in never lands on a panel that opened under it.
+  let worldDown = false;
+  window.addEventListener("pointerdown", (e) => (worldDown = e.target === canvas), true);
+  window.addEventListener(
+    "click",
+    (e) => {
+      if (worldDown && e.detail > 0 && e.target !== canvas) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      worldDown = false;
+    },
+    true,
+  );
   canvas.addEventListener("pointerleave", () => {
     mouse = null;
   });
@@ -491,6 +507,7 @@ async function boot(): Promise<void> {
     page(x, y) {
       return toPage(x, y);
     },
+    prompt: () => (show.sign ? toPage(show.sign.x + show.sign.w / 2, show.sign.y + show.sign.h / 2) : null),
     bench() {
       const t0 = performance.now();
       for (let i = 0; i < 100; i++) {
@@ -512,6 +529,10 @@ async function boot(): Promise<void> {
       if (where().mode !== "live") earn(n, "a tour's pocket money");
     },
     where: () => ({ where: G.where, dark: Math.round(G.dark * 100) / 100 }),
+    tap(x, y) {
+      scene.tap(x, y, false);
+      scene.release({ x, y }, null);
+    },
     camp: {
       ...camp.handles,
       go() {
@@ -521,10 +542,6 @@ async function boot(): Promise<void> {
   };
   // In whichever place is on the stage: the member, a touch, and the point on the page.
   const outside = window.town;
-  outside.tap = (x, y): void => {
-    scene.tap(x, y, false);
-    scene.release({ x, y }, null);
-  };
   outside.me = (): Pt => (G.player ? { x: Math.round(G.player.x), y: Math.round(G.player.y) } : { x: 0, y: 0 });
 }
 
