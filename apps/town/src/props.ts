@@ -5,7 +5,7 @@
  */
 
 import { R } from "@sequoia-leaf/kit/pix.ts";
-import { type Ctx, type Rect } from "@sequoia-leaf/kit/util.ts";
+import { type Ctx, type Pt, type Rect } from "@sequoia-leaf/kit/util.ts";
 
 import { G } from "./game.ts";
 import type { Sprite } from "./sprites.ts";
@@ -80,6 +80,64 @@ function solidAt(s: Sprite, x: number, y: number): boolean {
   const py = Math.floor(y);
   if (px < 0 || py < 0 || px >= s.c.width || py >= s.c.height) return false;
   return (m[(py * s.c.width + px) * 4 + 3] ?? 0) > 40;
+}
+
+/** How wide a member's head is, and how far down from the top of it their head and chest go, in a place's pixels. */
+const HEAD_W = 8;
+const CHEST = 12;
+
+/**
+ * How much of a member's head and chest something in front covers, 0 to 1: `solid` says where the
+ * thing is, `foot` is the middle of the member's feet and `tall` how far above them their head
+ * tops out. Legs behind a bush are none of it; a head and chest behind a canopy are all of it.
+ */
+export function covered(solid: (x: number, y: number) => boolean, foot: Pt, tall: number): number {
+  let n = 0;
+  for (let dy = 0; dy < CHEST; dy++)
+    for (let dx = 0; dx < HEAD_W; dx++) if (solid(foot.x - HEAD_W / 2 + dx, foot.y - tall + dy)) n++;
+  return n / (HEAD_W * CHEST);
+}
+
+/** How much of a member a thing's picture covers (`covered`). */
+export function cover(p: Prop, foot: Pt, tall: number): number {
+  const s = p.sprite;
+  if (!s) return 0;
+  const x = p.x - s.ax;
+  const y = p.y - s.ay;
+  // Nowhere near them: not looked at pixel by pixel.
+  if (foot.x + HEAD_W <= x || foot.x - HEAD_W >= x + s.c.width || foot.y <= y || foot.y - tall >= y + s.c.height)
+    return 0;
+  return covered((wx, wy) => solidAt(s, wx - x, wy - y), foot, tall);
+}
+
+/**
+ * Whether a member is hidden, by how much of their head and chest is covered: half or more. One
+ * who was hidden a moment ago stays so down to a quarter, so that walking along an edge does not
+ * open and close their window over and over.
+ */
+export const hidden = (share: number, was: boolean): boolean => share >= (was ? 0.25 : 0.5);
+
+/** A member showing through what stands in front: the middle of their figure, and how far the window round them has opened, 0 to 1. */
+export interface Through extends Pt {
+  open: number;
+}
+
+/** How far a window reaches from the middle of a figure, across and up and down, to the outside of its edge. */
+export const WINDOW = { w: 9, h: 16 } as const;
+
+/**
+ * Whether a pixel of something in front of members is left out of it, so that they show: a window
+ * round each, the shape of a figure, with an edge dithered in the place's own pixels (every other
+ * pixel, then every fourth). Windows that are near one another run together into one.
+ */
+export function parted(x: number, y: number, through: readonly Through[]): boolean {
+  let f = 0;
+  for (const t of through) {
+    const dx = (x - t.x) / WINDOW.w;
+    const dy = (y - t.y) / WINDOW.h;
+    if (dx * dx + dy * dy < t.open * t.open) f += t.open - Math.sqrt(dx * dx + dy * dy);
+  }
+  return f > 0.26 || (f > 0.12 && (x + y) % 2 === 0) || (f > 0 && x % 2 === 0 && y % 2 === 0);
 }
 
 /** The thing under a point, nearest the eye first. Only what can be touched counts. */

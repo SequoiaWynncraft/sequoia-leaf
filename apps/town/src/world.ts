@@ -298,7 +298,7 @@ export const SPOTS: Spot[] = [
   spot(284, 226, 1, "fire"),
   spot(230, 230, 2, "fire"),
   spot(414, 197, 2, "table"),
-  spot(474, 197, 1, "table"),
+  spot(471, 197, 1, "table"),
   spot(437, 171, 0, "table"),
   spot(457, 171, 0, "table"),
 ];

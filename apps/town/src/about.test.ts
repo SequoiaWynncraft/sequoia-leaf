@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { agoLine, ALONE, type InRoom, whoIsAbout } from "./about.ts";
+import { agoLine, ALONE, held, type InRoom, whoIsAbout } from "./about.ts";
 import type { Mate } from "./guild.ts";
 import { GUEST, toAbout } from "./live.ts";
 
@@ -190,5 +190,52 @@ describe("who is about, from the guild", () => {
       ["Pebblefoot", "town", GUEST],
     ]);
     expect(about.resting.map((m) => m.name)).toEqual(["Quillon", "Fernhollow"]);
+  });
+});
+
+/** The room with the member and these others in it, and who is about with them there. */
+const inRoom = (...others: string[]): InRoom[] => [ME, ...others.map((n) => ({ id: n, name: n, rank: null }))];
+const about = (room: InRoom[], present: Mate[] = []): ReturnType<typeof whoIsAbout> =>
+  whoIsAbout({ me: ME, room, present, resting: [], now: NOW });
+/** Each part's title and its rows' names, with "(gone)" for those no longer in it. */
+const names = (a: ReturnType<typeof whoIsAbout>): [string, string[]][] =>
+  a.parts.map((p) => [p.title, p.rows.map((r) => `${r.name}${r.gone ? " (gone)" : ""}`)]);
+
+describe("the panel while it stays open", () => {
+  test("its order holds: somebody arriving goes to the end of their part, not where their name sorts", () => {
+    const opened = about(inRoom("Birchwood", "Nettlebrook"));
+    const arrived = about(inRoom("Birchwood", "Mossling", "Nettlebrook"));
+    expect(names(held(opened, arrived))).toEqual([["In town", ["Tester", "Birchwood", "Nettlebrook", "Mossling"]]]);
+    // Opened afresh, it is sorted by name as ever.
+    expect(names(arrived)).toEqual([["In town", ["Tester", "Birchwood", "Mossling", "Nettlebrook"]]]);
+  });
+
+  test("somebody leaving stays listed where they were, marked as gone, until it is opened again", () => {
+    const opened = about(inRoom("Birchwood", "Mossling", "Nettlebrook"));
+    const left = held(opened, about(inRoom("Birchwood", "Nettlebrook")));
+    expect(names(left)).toEqual([["In town", ["Tester", "Birchwood", "Mossling (gone)", "Nettlebrook"]]]);
+    // Still gone a moment later; and back in the room, they are where they were, and not gone.
+    expect(names(held(left, about(inRoom("Nettlebrook"))))).toEqual([
+      ["In town", ["Tester", "Birchwood (gone)", "Mossling (gone)", "Nettlebrook"]],
+    ]);
+    expect(names(held(left, opened))).toEqual(names(opened));
+  });
+
+  test("somebody who goes from town into the Works is gone from the one part and at the end of the other", () => {
+    const works = [mate("Wrenly", "Wrenly", "works")];
+    const opened = about(inRoom("Birchwood", "Nettlebrook"), works);
+    const went = about(inRoom("Nettlebrook"), [...works, mate("Birchwood", "Birchwood", "works")]);
+    expect(names(held(opened, went))).toEqual([
+      ["In town", ["Tester", "Birchwood (gone)", "Nettlebrook"]],
+      ["Elsewhere", ["Wrenly", "Birchwood"]],
+    ]);
+  });
+
+  test("the count is of who is about now; and it says nobody is about only if nobody was when it opened", () => {
+    const alone = about(inRoom());
+    const two = about(inRoom("Birchwood"));
+    expect(held(two, alone)).toMatchObject({ count: 1, alone: false });
+    expect(held(alone, alone).alone).toBe(true);
+    expect(held(alone, two)).toMatchObject({ count: 2, alone: false });
   });
 });
