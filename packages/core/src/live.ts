@@ -177,7 +177,8 @@ export function decodeSnapshot(bytes: Uint8Array): Snapshot | null {
 // prettier-ignore
 export const THINGS = [
   "trunk", "treasury", "counter", "chest", "barrel", "works", "belt", "pile", "gate", "signpost", "board",
-  "pole", "stall", "post", "table", "seat", "tree", "fire", "mushroom", "flower", "bush", "fern", "rock",
+  "pole", "stall", "post", "table", "seat", "tree", "fire", "grove", "mushroom", "flower", "bush", "fern",
+  "rock",
   "reeds", "water", "sky", "lights", "crab", "roll",
 ] as const;
 export type Thing = (typeof THINGS)[number];
