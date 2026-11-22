@@ -444,6 +444,9 @@ describe("keeping a town", () => {
     s = TOWN.advance(s, ctx(s.nextCall));
     s = did(s, { do: "welcome", cursor: 3 }).state;
     expect(decodeTown(encodeTown(s))).toEqual(s);
+    // A letter kept from before the Works' cat was renamed is signed with the cat's name now.
+    s.camp.letters = [letter("a", "Embertoe", "Meow.")];
+    expect(decodeTown(encodeTown(s))?.camp.letters[0]?.from).toBe("Fika");
     for (const bad of [
       "",
       "{}",

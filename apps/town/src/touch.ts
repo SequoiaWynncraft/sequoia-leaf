@@ -103,10 +103,10 @@ export function makeTouch(here: Here) {
     walkTo(me(), to, done, here.ground);
   }
 
-  /** Walks the member up to a door and uses it; at once if they are there. */
-  function go(d: Door): void {
-    if (at(d)) use(d);
-    else head(d.stand, () => use(d));
+  /** Walks the member up to a door and uses it, or goes on in through it; at once if they are there. */
+  function go(d: Door, then: () => void = () => use(d)): void {
+    if (at(d)) then();
+    else head(d.stand, then);
   }
 
   /** Off to a point on bare ground, as a touch there sends the member. */
@@ -188,7 +188,7 @@ export function makeTouch(here: Here) {
     // Ground that is a door: the way through it.
     const door = boxAt(x, y);
     if (door) {
-      go(door);
+      go(door, door.enter);
       return false;
     }
     // The great trunks reach up into the sky; what is sky there is sky.

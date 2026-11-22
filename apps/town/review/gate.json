@@ -10,6 +10,8 @@
   ["shot", "p1-town-prompt"],
   ["finger", "down", "window.town.prompt()"],
   ["finger", "up", "window.town.prompt()"],
+  ["eval", "(window.town.skip(0.3), 'the card')"],
+  ["click", "#panel [data-first]"],
   [
     "eval",
     "(window.town.skip(4), window.town.camp.choose('cat'), window.town.close(), JSON.stringify(window.town.where()))"
@@ -51,10 +53,10 @@
   ["finger", "up", "window.town.page(412, 218)"],
   ["eval", "(window.town.skip(4), JSON.stringify(window.town.where()))"],
   ["eval", "'the key'"],
-  ["finger", "down", "(window.town.skip(0.05), window.town.page(246, 110))"],
-  ["finger", "up", "window.town.page(246, 110)"],
-  ["eval", "(window.town.skip(1), 'at the gate')"],
+  ["eval", "(window.town.tp(256, 110), window.town.skip(1), 'at the gate')"],
   ["key", "Enter"],
+  ["eval", "(window.town.skip(0.3), 'the card')"],
+  ["click", "#panel [data-first]"],
   ["eval", "(window.town.skip(4), JSON.stringify(window.town.where()))"],
   ["finger", "down", "(window.town.skip(0.05), window.town.page(376, 222))"],
   ["finger", "up", "window.town.page(376, 222)"],
@@ -88,6 +90,8 @@
   ["wait", 1200],
   ["shot", "d1-town-prompt"],
   ["tapAt", "window.town.prompt()"],
+  ["eval", "(window.town.skip(0.3), 'the card')"],
+  ["click", "#panel [data-first]"],
   ["eval", "(window.town.skip(4), JSON.stringify(window.town.where()))"],
   ["tapAt", "(window.town.skip(0.05), window.town.page(376, 222))"],
   ["eval", "(window.town.skip(1.5), 'at the way out')"],
@@ -121,13 +125,23 @@
   ["upAt", "window.town.page(412, 218)"],
   ["eval", "(window.town.skip(4), JSON.stringify(window.town.where()))"],
   ["eval", "'the key'"],
-  ["tapAt", "(window.town.skip(0.05), window.town.page(246, 110))"],
-  ["eval", "(window.town.skip(1), 'at the gate')"],
+  ["eval", "(window.town.tp(256, 110), window.town.skip(1), 'at the gate')"],
   ["key", "e"],
+  ["eval", "(window.town.skip(0.3), 'the card')"],
+  ["click", "#panel [data-first]"],
   ["eval", "(window.town.skip(4), JSON.stringify(window.town.where()))"],
   ["tapAt", "(window.town.skip(0.05), window.town.page(376, 222))"],
   ["eval", "(window.town.skip(1.5), 'at the way out')"],
   ["key", "e"],
   ["eval", "(window.town.skip(4), JSON.stringify(window.town.where()))"],
-  ["shot", "d7-back-in-town"]
+  ["shot", "d7-back-in-town"],
+  ["eval", "'the signpost'"],
+  ["tapAt", "(window.town.skip(0.05), window.town.page(284, 98))"],
+  [
+    "eval",
+    "(window.town.skip(2), JSON.stringify({ ...window.town.where(), card: !document.querySelector('#panel').hidden }))"
+  ],
+  ["shot", "d8-the-signpost-opens-the-card"],
+  ["click", "#panel [data-first]"],
+  ["eval", "(window.town.skip(4), JSON.stringify(window.town.where()))"]
 ]

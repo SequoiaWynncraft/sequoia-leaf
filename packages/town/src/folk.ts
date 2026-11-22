@@ -153,7 +153,7 @@ export const FOLK: readonly Townsperson[] = [
   },
   {
     id: "embertoe",
-    name: "Embertoe",
+    name: "Fika",
     what: "The Works' cat",
     kind: "cat",
     hue: COAT.ginger,
@@ -185,6 +185,13 @@ export const FOLK: readonly Townsperson[] = [
     waves: ["*a small bow*"],
   },
 ];
+
+/** What a letter kept from before one of the town's own was renamed is signed, and who that is now. */
+const WAS: ReadonlyMap<string, string> = new Map([
+  ["Embertoe", "Fika"],
+  ["the White Fox", "Orphion"],
+]);
+export const nowNamed = (name: string): string => WAS.get(name) ?? name;
 
 /** One of the town's own, by its name; nothing for anybody else. */
 export const folkNamed = (name: string): Townsperson | null => FOLK.find((t) => t.name === name) ?? null;
