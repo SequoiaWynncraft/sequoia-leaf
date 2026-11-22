@@ -214,7 +214,7 @@ export function hush(on: boolean): void {
 export interface DockEntry {
   id: string;
   name: string;
-  about: string;
+  about?: string | undefined;
   art: HTMLCanvasElement;
   press: () => void;
 }
@@ -487,12 +487,12 @@ export function initHud(): void {
   hammer.addEventListener("click", () => {
     hammerDoes?.();
   });
-  tip(hammer, "Decorate", "Move your things about, or put them away.");
+  tip(hammer, "Decorate");
   faceButton = el("button", "k-btn wood icon", { type: "button", "aria-label": "You" });
   faceButton.addEventListener("click", () => {
     faceDoes();
   });
-  tip(faceButton, "You", "Your rank, and this week with the guild.");
+  tip(faceButton, "You");
   const mute = el("button", "k-btn wood icon", { type: "button", "aria-label": "Sound" });
   const drawMute = (): void => {
     mute.replaceChildren(glyph(isMuted() ? "mute" : "sound"));
@@ -502,7 +502,7 @@ export function initHud(): void {
     drawMute();
     sfx.tap();
   });
-  tip(mute, "Sound", () => (isMuted() ? "Off. Tap to turn it on." : "On. Tap to turn it off."));
+  tip(mute, "Sound");
   drawMute();
   corner.append(hammer, faceButton, mute);
   refreshFace();

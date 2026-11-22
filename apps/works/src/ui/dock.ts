@@ -72,7 +72,7 @@ function buildDock(art: Art): void {
   spade.addEventListener("click", () => {
     setTool(S.tool === "remove" ? null : "remove");
   });
-  tip(spade, "Remove (E)", "Removes a piece. Right-click does the same.");
+  tip(spade, "Remove (E)", "Right-click does the same.");
   dock.replaceChildren(...kids, spade);
   // On a narrow screen, more than eight tools go in two even rows.
   const n = kids.length + 1;
@@ -118,20 +118,16 @@ function buildHand(): void {
   const aiming = S.finger && tool !== null && (S.aim !== null || S.run !== null);
   const kids: Node[] = [];
   const turn = button("wood icon sm", [yardIcon("turn")], rotate);
-  tip(
-    turn,
-    "Rotate (R)",
-    "Rotates the piece you are placing. With no tool picked, it rotates the piece you last pointed at.",
-  );
+  tip(turn, "Rotate (R)", "With no tool picked, it rotates the piece you last pointed at.");
   const back = button("wood icon sm", [yardIcon("undo")], () => {
     undo();
   });
-  tip(back, "Undo (Z)", "Undoes your last build, rotation or removal.");
+  tip(back, "Undo (Z)");
   if (tool !== null && tool !== "remove") kids.push(turn);
   kids.push(back);
   if (tool !== null) {
     const away = button("wood icon sm", [icon("close")], cancel);
-    tip(away, "Cancel (Esc)", "Cancels what you are placing, then puts the tool away.");
+    tip(away, "Cancel (Esc)");
     kids.push(away);
   }
   if (aiming) {

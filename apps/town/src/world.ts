@@ -92,8 +92,8 @@ export type PlaceId = "treasury" | "quests" | "market" | "works" | "table" | "fi
 export interface Place {
   id: PlaceId;
   name: string;
-  /** What it is, in a line, for whoever points at it. */
-  about: string;
+  /** What it is, in a line, for whoever points at it, where its name does not say. */
+  about?: string;
   /** Where to stand to use it, and which way to face. */
   stand: Pt;
   face: Dir;
@@ -113,7 +113,6 @@ export const PLACES: readonly Place[] = [
   {
     id: "quests",
     name: "Quest board",
-    about: "Pinned up by the guild.",
     stand: { x: 198, y: 168 },
     face: 3,
     prompt: { x: 198, y: 116 },
@@ -145,7 +144,6 @@ export const PLACES: readonly Place[] = [
   {
     id: "fire",
     name: "Campfire",
-    about: "Sit down. Stay a while.",
     stand: { x: 256, y: 205 },
     face: 0,
     prompt: { x: 256, y: 186 },
