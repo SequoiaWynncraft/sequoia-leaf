@@ -436,14 +436,18 @@ export function makeLive(p: Prepared): Guild {
     for (const { line, feed } of pace.due(outside.now())) feed(line[0], line[1]);
   };
   let asking = false;
+  /** A reroll is on its way; and how many have been answered. */
+  let swapping = false;
+  let swapped = 0;
   async function fetchBoard(): Promise<void> {
     if (asking) return;
     asking = true;
+    const before = swapped;
     const a = await ask("/v1/me/quests");
     asking = false;
-    if (a.status === 200) quests = readQuests(a.body);
+    // A reroll sent or answered while this was on its way knows more than this does.
+    if (a.status === 200 && !swapping && swapped === before) quests = readQuests(a.body);
   }
-  let swapping = false;
 
   /** From the first moment anybody listens: the member's news, the guild's, and who is here. A guest hears only who is here. */
   function begin(): void {
@@ -503,6 +507,7 @@ export function makeLive(p: Prepared): Guild {
         body: JSON.stringify({ leaf }),
       });
       swapping = false;
+      swapped++;
       const body = isRecord(a.body) ? a.body : {};
       const fresh = a.status === 200 ? readQuest(body.quest) : null;
       const left = num(body.leaf);
