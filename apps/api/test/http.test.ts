@@ -98,7 +98,6 @@ describe("HTTP", () => {
       "/v1/game/play/{game}/of/{player}",
       "/v1/game/play/{game}/standings",
       "/v1/game/presence",
-      "/v1/game/saves",
       "/v1/game/saves/{slot}",
       "/v1/game/skins/{uuid}",
       "/v1/me",

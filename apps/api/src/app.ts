@@ -12,7 +12,6 @@ import { Events } from "./events/store.ts";
 import { Mojang } from "./game/mojang.ts";
 import { PlayerNames } from "./game/names.ts";
 import { Presence } from "./game/presence.ts";
-import { Saves } from "./game/saves.ts";
 import { Skins } from "./game/skins.ts";
 import { ApiRoutes, NotFound } from "./http/handlers.ts";
 import { SafetyHeaders } from "./http/headers.ts";
@@ -22,7 +21,6 @@ import { Ledger } from "./ledger/store.ts";
 import { Live, LIVE_SOCKETS } from "./live/live.ts";
 import { LiveRoute } from "./live/route.ts";
 import { Coins } from "./play/coins.ts";
-import { PageCoins } from "./play/page.ts";
 import { Play } from "./play/service.ts";
 import { PlayStore } from "./play/store.ts";
 import { Purchases } from "./purchases/store.ts";
@@ -102,7 +100,6 @@ export const serveLeaf = (options: {
 export const Stores = Layer.mergeAll(
   Events.layer,
   Quests.layer,
-  Saves.layer,
   Presence.layer,
   ActivityReport.layer.pipe(Layer.provideMerge(Visits.layer)),
   Skins.layer.pipe(Layer.provideMerge(PlayerNames.layer)),
@@ -113,10 +110,10 @@ export const Stores = Layer.mergeAll(
 
 /**
  * What Leaf reaches outside its own code (its settings, its database, Mojang, the network and the
- * machine's dice), the play service and the pages' Coins on the stores, and the live rooms, which the routes serve and
+ * machine's dice), the play service on the stores, and the live rooms, which the routes serve and
  * the server's farewell closes, and which write who is in them into the stores' presence and visits.
  */
-export const Services = Layer.mergeAll(Play.layer, PageCoins.layer, Live.layer).pipe(
+export const Services = Layer.mergeAll(Play.layer, Live.layer).pipe(
   Layer.provideMerge(Stores),
   Layer.provideMerge(Database),
   Layer.provide(Mojang.layer),

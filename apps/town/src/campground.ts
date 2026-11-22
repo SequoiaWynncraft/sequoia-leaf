@@ -8,8 +8,8 @@
 import { EARTH, GREEN, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { paint } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, hash, type Pt, vnoise } from "@sequoia-leaf/kit/util.ts";
+import { CGH, CGW, TRAIL, YARD } from "@sequoia-leaf/town/camp.ts";
 
-import { CGH, CGW, TRAIL, YARD } from "./camp.ts";
 import { CELL } from "./grid.ts";
 
 /** The clearing, in art pixels. */

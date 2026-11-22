@@ -4,10 +4,8 @@ import { restart, start } from "@sequoia-leaf/kit/live.ts";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { balance, forgetLedger, leafShown } from "@sequoia-leaf/kit/purse.ts";
 import { GUEST, HELLO, membersOnly, type Reply, type Standin, standin, TESTER } from "@sequoia-leaf/kit/standin.ts";
-import { isFolk } from "@sequoia-leaf/town/folk.ts";
 
-import type { Happening, Person } from "./guild.ts";
-import { compose } from "./letter.ts";
+import type { Happening } from "./guild.ts";
 import {
   type Ev,
   GATHER,
@@ -25,9 +23,7 @@ import {
   unprepare,
   weekOf,
 } from "./live.ts";
-import { makeGuild, STANDINS } from "./madeup.ts";
-import { inTownLine, liveLineFor, makePace, PACE, STALE } from "./news.ts";
-import { blank } from "./save.ts";
+import { inTownLine, lineFor, makePace, PACE, STALE } from "./news.ts";
 
 /** What Leaf really sends, from the contract its own tests write. */
 const contract: unknown = await Bun.file(new URL("../../../contracts/leaf-api-v1.json", import.meta.url)).json();
@@ -64,14 +60,10 @@ const raid = (id: number, who: string, at = "2026-11-25T12:31:00.000Z", detail =
   guildEvent(id, who, "leaf_earned", { source: "raid", detail, occurred_at: at });
 
 describe("the quest board, live", () => {
-  test("the member's quests are notes, with nothing to claim", () => {
+  test("the member's quests are notes, each paying its Leaf by itself", () => {
     const notes = readQuests(QUESTS);
     expect(notes.length).toBeGreaterThan(1);
-    for (const q of notes) {
-      expect(q.claim).toBe(false);
-      expect(q.pays).toBe("leaf");
-      expect(q.reward).toBeGreaterThan(0);
-    }
+    for (const q of notes) expect(q.reward).toBeGreaterThan(0);
     const weekly = notes.find((q) => q.id === "weekly:2");
     expect(weekly).toMatchObject({
       title: "Complete 12 TCC raids or 60 wars",
@@ -111,8 +103,6 @@ describe("the quest board, live", () => {
         need: 6,
         unit: "wars",
         reward: 500,
-        pays: "leaf",
-        claim: false,
         ends: Date.parse("2026-11-25T16:00:00.000Z"),
       },
     ]);
@@ -135,17 +125,6 @@ describe("the arrival letter, live", () => {
       { art: "leaf", text: "You reached level 2", got: 100 },
       { art: "leaf", text: "A milestone reached: Gold", got: 2500 },
     ]);
-  });
-
-  test("it pays nothing: the ledger already has", () => {
-    const madeUp = makeGuild();
-    const away = { first: false, hours: 5, lines: letterLines(events) };
-    const letter = compose({ ...blank(), lastSeen: 1, welcomed: "2026-11-25" }, Date.now(), away, []);
-    expect(letter.leaf).toBe(0);
-    expect(letter.coins).toBe(0);
-    expect(letter.show).toBe(true);
-    expect(letter.lines.every((l) => l.pay === undefined)).toBe(true);
-    expect(madeUp.away(0, 1).lines.some((l) => l.pay)).toBe(true);
   });
 
   test("nothing new is no lines", () => {
@@ -202,7 +181,7 @@ describe("the guild's news, live", () => {
     news.add(guildEvent(3, "Cleo", "achievement_paid", { label: "Gold", tier: "gold" }), 0);
     const told = news.due(GATHER);
     expect(told.map((h) => h.kind)).toEqual(["reached", "milestone", "war"]);
-    expect(told.map((h) => liveLineFor(h)?.[0])).toEqual([
+    expect(told.map((h) => lineFor(h)?.[0])).toEqual([
       "Bob reached level 10.",
       "Cleo reached a milestone: Gold.",
       "Alice fought at Detlas.",
@@ -222,16 +201,15 @@ describe("the guild's news, live", () => {
       const told = news.due(GATHER);
       const war = told.find((h) => h.kind === "war");
       const party = told.find((h) => h.kind === "party");
-      expect(war?.kind === "war" && war.held).toBeNull();
-      expect(party && liveLineFor(party)?.[0]).toBe("Alice, Bob and Cleo came back from TNA.");
-      expect(war && liveLineFor(war)).toEqual(["Alice, Bob and 2 more fought at Ragni.", "rose"]);
+      expect(party && lineFor(party)?.[0]).toBe("Alice, Bob and Cleo came back from TNA.");
+      expect(war && lineFor(war)).toEqual(["Alice, Bob and 2 more fought at Ragni.", "rose"]);
     }
     // The member is "You", first, as in a raid party's line.
     const news = makeNews("id-Alice");
     news.add(guildEvent(1, "Bob", "leaf_earned", { source: "war", detail: "Detlas", occurred_at: "t" }), 0);
     news.add(guildEvent(2, "Alice", "leaf_earned", { source: "war", detail: "Detlas", occurred_at: "t" }), 0);
     const [war] = news.due(GATHER);
-    expect(war && liveLineFor(war)?.[0]).toBe("You and Bob fought at Detlas.");
+    expect(war && lineFor(war)?.[0]).toBe("You and Bob fought at Detlas.");
   });
 
   test("another member's level is a line only at a multiple of five; the member's own always is", () => {
@@ -255,7 +233,7 @@ describe("the guild's news, live", () => {
     const told = news.due(0);
     // Every level still reaches the town, for whatever it does in the world; only the feed is choosy.
     expect(told.length).toBe(9);
-    expect(told.flatMap((h) => liveLineFor(h)?.[0] ?? [])).toEqual([
+    expect(told.flatMap((h) => lineFor(h)?.[0] ?? [])).toEqual([
       "Wrenly reached level 75.",
       "Wrenly reached level 80.",
       "Wrenly reached level 100.",
@@ -271,7 +249,7 @@ describe("the guild's news, live", () => {
     news.add(guildEvent(2, "Bob", "leaf_earned", { source: "war", detail: "Ragni", occurred_at: "b", ...amounts }), 0);
     news.add(guildEvent(3, "Cleo", "level_up", { level: 5, leaf: 100 }), 0);
     news.add(guildEvent(4, "Dara", "achievement_paid", { label: "Silver", tier: "silver", leaf: 1000 }), 0);
-    const lines = news.due(GATHER).flatMap((h) => liveLineFor(h)?.[0] ?? []);
+    const lines = news.due(GATHER).flatMap((h) => lineFor(h)?.[0] ?? []);
     expect(lines.length).toBe(4);
     for (const line of lines) {
       expect(line).not.toMatch(/Leaf|110|100|1000/);
@@ -293,7 +271,7 @@ describe("the guild's news, live", () => {
     news.add(mine, 10);
     const told = news.due(10 + GATHER);
     expect(told.length).toBe(1);
-    expect(told.map((h) => liveLineFor(h)?.[0])).toEqual(["You and Alice came back from TNA."]);
+    expect(told.map((h) => lineFor(h)?.[0])).toEqual(["You and Alice came back from TNA."]);
   });
 });
 
@@ -330,9 +308,6 @@ describe("the feed's pace, live", () => {
 
 /** A list, or nothing. */
 const listed = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-/** Whoever a moment is about. */
-const people = (h: Happening): readonly Person[] =>
-  h.kind === "party" || h.kind === "war" ? h.who : h.kind === "reached" || h.kind === "milestone" ? [h.who] : [];
 
 describe("the live guild", () => {
   let world: Standin | null = null;
@@ -364,15 +339,15 @@ describe("the live guild", () => {
         }).repeat(2),
       ),
     });
-    world.store.setItem("town.save.v1", JSON.stringify({ v: 1, cursor: 120 }));
     await start();
-    expect(await prepare()).toBe(true);
+    // How far Leaf's town says the member's news has been told.
+    expect(await prepare(120)).toBe(true);
     const p = prepared();
     if (!p) throw new Error("nothing prepared");
     expect(p.first).toBe(false);
     expect(world.sent.some((s) => s.path === "/v1/me/events?after=120")).toBe(true);
 
-    const guild = makeLive(makeGuild({ quiet: true }), p);
+    const guild = makeLive(p);
     const heard: Happening[] = [];
     guild.hear((h) => heard.push(h));
     await Bun.sleep(20);
@@ -381,7 +356,6 @@ describe("the live guild", () => {
     guild.step(0.1);
     expect(heard.filter((h) => h.kind === "party").length).toBe(1);
     expect(guild.told()).toBe(141);
-    expect(guild.quests().every((q) => !q.claim)).toBe(true);
     expect(guild.me()).toMatchObject({
       name: "Tester",
       rank: "Captain",
@@ -390,7 +364,7 @@ describe("the live guild", () => {
     });
   });
 
-  test("the first visit here starts from the member's newest news, and the letter is a plain welcome", async () => {
+  test("the first visit here starts from the member's newest news, and the letter has none of it", async () => {
     world = standin({
       "GET /v1/game/hello": HELLO,
       "GET /v1/game/me": { status: 200, body: TESTER },
@@ -398,17 +372,15 @@ describe("the live guild", () => {
       "GET /v1/me/events": { status: 200, body: EVENTS },
     });
     await start();
-    await prepare();
+    await prepare(null);
     const p = prepared();
     if (!p) throw new Error("nothing prepared");
     expect(p).toMatchObject({ first: true, mark: TESTER.event_cursor, since: [] });
-    const away = makeLive(makeGuild({ quiet: true }), p).away(0, Date.now());
-    expect(away.first).toBe(true);
-    expect(away.lines.every((l) => l.pay === undefined && l.got === undefined)).toBe(true);
+    expect(makeLive(p).news()).toEqual([]);
     expect(world.sent.some((s) => s.path.includes("after="))).toBe(false);
   });
 
-  test("never hands the town an invented member: only those the server names, and the town's own calling", async () => {
+  test("hands the town only those the server names, each in their own skin", async () => {
     const route = isRecord(GAME) ? GAME["PUT /v1/game/presence"] : null;
     const leaf = isRecord(route) && isRecord(route.body) ? route.body : {};
     const reply = {
@@ -430,18 +402,15 @@ describe("the live guild", () => {
       "PUT /v1/game/presence": { status: 200, body: reply },
     });
     await start();
-    expect(await prepare()).toBe(true);
+    expect(await prepare(null)).toBe(true);
     const p = prepared();
     if (!p) throw new Error("nothing prepared");
-    const madeUp = makeGuild({ quiet: true });
-    const guild = makeLive(madeUp, p);
+    const guild = makeLive(p);
     const heard: Happening[] = [];
     guild.hear((h) => heard.push(h));
     guild.here("town");
     await Bun.sleep(20);
-    // The made-up guild is left to run, and asked for everything it can do.
-    for (let i = 0; i < 300 * 30; i++) guild.step(1 / 30);
-    for (const kind of ["raid", "war", "level", "milestone", "call"] as const) madeUp.stir(kind);
+    for (let i = 0; i < 300; i++) guild.step(1);
 
     expect(guild.heard()).toBe(true);
     expect(guild.visitors().map((v) => v.name)).toEqual(["Alice", "Visitor", "Mira"]);
@@ -450,24 +419,12 @@ describe("the live guild", () => {
       [...reply.present, ...reply.resting].flatMap((m) => (isRecord(m) && typeof m.id === "string" ? [m.id] : [])),
     );
     expect(named.size).toBe(6);
-    const invented = new Set(STANDINS.map((m) => m.name));
     for (const m of [...guild.visitors(), ...guild.resting()]) {
       expect(named.has(m.id)).toBe(true);
-      expect(invented.has(m.name)).toBe(false);
       expect(m.skin).toBe(`/v1/game/skins/${m.id}`);
     }
-    // All the made-up guild may say beside the real one is that one of the town's own came calling.
-    expect(heard.length).toBeGreaterThan(0);
-    for (const h of heard) {
-      expect(h.kind).toBe("call");
-      if (h.kind === "call") expect(isFolk(h.who)).toBe(true);
-    }
-    for (const who of heard.flatMap(people)) expect(invented.has(who.name)).toBe(false);
-    expect(world.sent.find((s) => s.path === "/v1/game/presence")?.body).toEqual({
-      place: "town",
-      stay: true,
-      device: "desktop",
-    });
+    // Nothing of the guild's happened, so nothing is told.
+    expect(heard).toEqual([]);
   });
 
   test("the world does not wait for the feed: a party and a war come in at once, their lines in turn", async () => {
@@ -484,16 +441,15 @@ describe("the live guild", () => {
       ),
     });
     await start();
-    expect(await prepare()).toBe(true);
+    expect(await prepare(null)).toBe(true);
     const p = prepared();
     if (!p) throw new Error("nothing prepared");
-    const guild = makeLive(makeGuild({ quiet: true }), p);
+    const guild = makeLive(p);
     const heard: string[] = [];
     const said: [number, string][] = [];
     const t0 = world.clock.now;
     // As the town stages it: whatever happens in the world at once, and the line handed to the feed.
     guild.hear((h) => {
-      if (h.kind === "call") return;
       heard.push(h.kind);
       guild.say(h, (text) => said.push([(world?.clock.now ?? 0) - t0, text]));
     });
@@ -524,7 +480,7 @@ describe("the live guild", () => {
       "GET /v1/me/events": { status: 200, body: EVENTS },
     });
     await start();
-    expect(await prepare()).toBe(false);
+    expect(await prepare(null)).toBe(false);
   });
 });
 
@@ -611,9 +567,9 @@ describe("the guild's news Leaf really sends", () => {
       ["Alice", "Bob"],
     ]);
     expect(told.map((h) => h.kind).filter((k) => k !== "party")).toEqual(["reached", "milestone", "war"]);
-    for (const h of told) expect(liveLineFor(h)?.[0] ?? "").not.toMatch(/Leaf/);
+    for (const h of told) expect(lineFor(h)?.[0] ?? "").not.toMatch(/Leaf/);
     const war = told.find((h) => h.kind === "war");
-    expect(war && liveLineFor(war)?.[0]).toMatch(/ fought at Detlas\.$/);
+    expect(war && lineFor(war)?.[0]).toMatch(/ fought at Detlas\.$/);
   });
 });
 
@@ -646,10 +602,10 @@ describe("a guest's town", () => {
       ...membersOnly(asked),
     });
     await start();
-    expect(await prepare()).toBe(true);
+    expect(await prepare(null)).toBe(true);
     const p = prepared();
     if (!p) throw new Error("nothing prepared");
-    const guild = makeLive(makeGuild({ quiet: true }), p);
+    const guild = makeLive(p);
     guild.hear(() => undefined);
     // Away first, so that arriving in town says so even when an earlier test left this page there.
     guild.here(null);
@@ -683,7 +639,7 @@ describe("a guest's town", () => {
     expect(guild.quests()).toEqual([]);
     expect(guild.boardNote()).toBe("Quests are for members of Sequoia. Raid with the guild and yours appear here.");
     expect(
-      makeLive(makeGuild({ quiet: true }), {
+      makeLive({
         me: {
           id: ME,
           name: "Tester",
@@ -702,14 +658,8 @@ describe("a guest's town", () => {
     ).toBeNull();
   });
 
-  test("their arrival letter is the plain welcome, with only the townsfolk's lines", async () => {
+  test("their arrival letter has no news of theirs: a guest has none", async () => {
     const guild = await guestTown([]);
-    const now = Date.UTC(2026, 10, 25, 12);
-    for (const away of [guild.away(0, now), guild.away(now - 30 * 3_600_000, now)]) {
-      expect(
-        away.lines.every((l) => (l.art === "folk" || l.art === "crab") && l.pay === undefined && l.got === undefined),
-      ).toBe(true);
-    }
-    expect(guild.away(0, now).first).toBe(true);
+    expect(guild.news()).toEqual([]);
   });
 });

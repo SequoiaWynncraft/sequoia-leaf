@@ -10,7 +10,10 @@ import {
   CALLS,
   decodeTown,
   encodeTown,
+  predict,
   readCommand,
+  readNotes,
+  readView,
   TOWN,
   type Town,
   type TownCommand,
@@ -61,7 +64,7 @@ describe("a new member's town", () => {
     expect(TOWN.create({ ...ctx(), seed: 8 }).rng).not.toBe(s.rng);
   });
 
-  test("is shown without its stream, its counter or when the next caller comes, and with the letter Leaf would post", () => {
+  test("is shown without its stream or when the next caller comes, and with the letter Leaf would post", () => {
     const view = TOWN.view(fresh(), ctx());
     expect(Object.keys(view).toSorted()).toEqual(
       [
@@ -74,6 +77,7 @@ describe("a new member's town", () => {
         "stay",
         "camp",
         "visit",
+        "made",
         "arrival",
       ].toSorted(),
     );
@@ -481,11 +485,12 @@ describe("a camp the browser kept", () => {
       if (!s) throw new Error("did not read");
       expect(s.camp.placed.map((p) => p.n)).toEqual(Array.from({ length: placed }, (_v, n) => n));
       expect([s.made, s.camp.parcels.length, s.camp.letters.length]).toEqual([placed, parcels, letters]);
+      // Here now, by Leaf's clock: the browser's says nothing of time away.
       expect([s.sightings, s.cursor, s.stay, s.seenAt, s.camp.first, s.camp.greeted]).toEqual([
         4,
         12,
         false,
-        T0 - 3 * HOUR,
+        T0,
         "cat",
         2,
       ]);
@@ -510,7 +515,7 @@ describe("a camp the browser kept", () => {
     expect(s?.made).toBe(9);
     expect([adopt("nonsense", ctx()), adopt(JSON.stringify({ v: 2 }), ctx())]).toEqual([null, null]);
     // A clock set forward in the browser is no time away at all.
-    expect(adopt(JSON.stringify({ ...raw, lastSeen: T0 + DAY_MS }), ctx())?.seenAt).toBe(T0);
+    expect(adopt(JSON.stringify({ ...raw, lastSeen: T0 - DAY_MS }), ctx())?.seenAt).toBe(T0);
   });
 });
 
@@ -539,5 +544,90 @@ describe("keeping a town", () => {
     const start = performance.now();
     for (let k = 0; k < runs; k++) decodeTown(text);
     expect((performance.now() - start) / runs).toBeLessThan(1);
+  });
+});
+
+/** A town with a caller, a parcel, a present and something in the tray. */
+function lived(): Town {
+  const s = TOWN.advance(fresh(), ctx(fresh().nextCall));
+  s.camp.parcels = ["rock"];
+  s.camp.tray = { stump: 1 };
+  s.camp.letters = [letter("w-1", "Tindra", "For you.", "toadstool")];
+  return s;
+}
+
+describe("the page's copy", () => {
+  test("is read back from the wire as it was shown, and nonsense is not", () => {
+    const view = TOWN.view(lived(), ctx());
+    expect(readView(JSON.parse(JSON.stringify(view)))).toEqual(view);
+    expect([readView(null), readView({ ...view, arrival: null }), readView({ ...view, made: -1 })]).toEqual([
+      null,
+      null,
+      null,
+    ]);
+    expect(
+      readNotes([
+        { t: "landed", thing: "rock", n: 9 },
+        { t: "tray", thing: "rock" },
+      ]),
+    ).toEqual([
+      { t: "landed", thing: "rock", n: 9 },
+      { t: "tray", thing: "rock" },
+    ]);
+    expect([readNotes([{ t: "landed", thing: "rock" }]), readNotes({})]).toEqual([null, null]);
+  });
+
+  test("comes to what Leaf comes to for every command the page works out itself, ids and all", () => {
+    const s = lived();
+    const stump = nOf(s, "stump");
+    const lantern = nOf(s, "lantern-post");
+    const commands: TownCommand[] = [
+      { do: "unpack", x: 30, y: 20, t: 0 },
+      { do: "setOut", thing: "stump", x: 33, y: 20, t: 0 },
+      { do: "takePresent", letter: "w-1", x: 36, y: 20, t: 0 },
+      { do: "move", n: stump, x: 30, y: 33, t: 0 },
+      { do: "toggle", n: lantern },
+      { do: "putAway", n: stump },
+      { do: "readMail" },
+      { do: "clearLetters" },
+      { do: "spotCrab" },
+      { do: "choosePet", pet: "fox" },
+      { do: "stay", on: false },
+      { do: "here", cursor: 4 },
+    ];
+    let leaf = s;
+    let view = TOWN.view(s, ctx());
+    for (const c of commands) {
+      const done = did(leaf, c);
+      const guess = predict(view, c, T0);
+      if (!guess || "refused" in guess) throw new Error(`${c.do} was not worked out`);
+      expect(guess.notes).toEqual([...done.notes]);
+      leaf = done.state;
+      view = guess.view;
+      expect({ ...view, arrival: null }).toEqual({ ...TOWN.view(leaf, ctx()), arrival: null });
+    }
+    // Refused the same way, and the letter is the one Leaf showed until Leaf says otherwise.
+    expect(predict(view, { do: "choosePet", pet: "cat" }, T0)).toEqual({ refused: "pet_chosen" });
+    expect(view.arrival).toEqual(TOWN.view(s, ctx()).arrival);
+  });
+
+  test("is not guessed for what only Leaf can say", () => {
+    const view = TOWN.view(lived(), ctx());
+    for (const c of [
+      { do: "welcome", cursor: null },
+      { do: "greet", visit: 0 },
+      { do: "openChest" },
+      { do: "buy", stall: "lamps", thing: "rock" },
+    ] satisfies TownCommand[])
+      expect(predict(view, c, T0)).toBeNull();
+  });
+});
+
+describe("where a camp stands", () => {
+  test("is the things set out, with the callers greeted and the crab's sightings beside it", () => {
+    const s = fresh();
+    s.camp.greeted = 2;
+    s.sightings = 5;
+    expect(TOWN.standing?.(s)).toEqual({ score: 9, also: { greeted: 2, sightings: 5 } });
   });
 });

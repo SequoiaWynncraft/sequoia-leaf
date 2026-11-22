@@ -385,6 +385,38 @@ export async function openPlay<View, Command extends object, Note>(
   };
 }
 
+/**
+ * The one rule for holding off while Leaf answers a command only it can answer: that answer may
+ * change what a later command means (another offer in the same place, a parcel that was not there),
+ * so until it comes the page neither asks nor does anything more; but one that leaves everything a
+ * command names where it is (`steady`, such as a purchase) may follow another such.
+ */
+export interface Hold {
+  /** Whether a command is held off now. */
+  held(steady: boolean): boolean;
+  /** Whether Leaf is answering any such command. */
+  asking(): boolean;
+  /** Holds commands off until `answer` comes, and gives it. */
+  until<T>(steady: boolean, answer: Promise<T>): Promise<T>;
+}
+
+export function makeHold(): Hold {
+  let asking = 0;
+  let turning = 0;
+  return {
+    held: (steady) => asking > 0 && (turning > 0 || !steady),
+    asking: () => asking > 0,
+    until(steady, answer) {
+      asking++;
+      if (!steady) turning++;
+      return answer.finally(() => {
+        asking--;
+        if (!steady) turning--;
+      });
+    },
+  };
+}
+
 /** How long Leaf may take before what was asked for shows that it is waiting. */
 export const WAITING_AFTER = 150;
 

@@ -1,8 +1,9 @@
 /**
  * The games that are places in the town. Each is a page of its own beside the town's; the town
- * shows it in a frame over itself (see `doors.ts`). What a game's card says is waiting there, and
- * what the member has won there, come from the postcard each game leaves for the town (the kit's
- * `postcard.ts`); a game that has never been opened has sent none, and gets a line of the town's.
+ * shows it in a frame over itself (see `doors.ts`). What a game's card says is waiting there comes
+ * from the postcard each game leaves for the town (the kit's `postcard.ts`); a game that has never
+ * been opened has sent none, and gets a line of the town's. What the member has won there reaches
+ * the camp through Leaf (its awards).
  */
 
 import { read } from "@sequoia-leaf/kit/postcard.ts";
@@ -62,19 +63,4 @@ export const isGame = (id: string): id is GameId => id === "works" || id === "ta
 export function worksWaiting(till = read("works")?.till ?? 0): AwayLine | null {
   if (till < 1) return null;
   return { art: "coin", text: `${till} Coin${till === 1 ? " is" : "s are"} waiting in the Works' till` };
-}
-
-/** The bosses the member has beaten in The Little Raid, by the game's own names for them. */
-export function raidWon(): readonly string[] {
-  return read("raid")?.trophies ?? [];
-}
-
-/** The capstones the member has built in the Works, by the Works' own names for them. */
-export function worksBuilt(): readonly string[] {
-  return read("works")?.trophies ?? [];
-}
-
-/** The camp things those have earned: a carved figure for each boss, a model of each capstone. */
-export function trophies(): string[] {
-  return [...raidWon().map((boss) => `trophy-${boss}`), ...worksBuilt().map((made) => `model-${made}`)];
 }

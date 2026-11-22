@@ -5,7 +5,7 @@
  * for a Leaf button that may not take Leaf.
  */
 import { el, icon, type IconName, replay } from "./dom.ts";
-import { balance, type Currency, leafOnLedger, leafShown, leafShut } from "./purse.ts";
+import { balance, type Currency, leafShown, leafShut } from "./purse.ts";
 import { sfx } from "./sound.ts";
 import { tip, tipAt } from "./tip.ts";
 import type { Pt } from "./util.ts";
@@ -111,7 +111,6 @@ export function fly(what: IconName, from: Pt, to: Pt, count: number, each: ((i: 
  * Call it after the button's own listeners are on, in place of giving it a tip.
  */
 export function closeLeaf(b: HTMLElement, title = "Leaf"): boolean {
-  if (!leafOnLedger()) return false;
   const why = leafShut();
   b.classList.add("off");
   b.setAttribute("aria-disabled", "true");

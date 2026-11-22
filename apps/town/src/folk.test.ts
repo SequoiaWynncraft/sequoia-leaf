@@ -2,9 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
-import { CALLERS, FOLK, folk, isFolk } from "@sequoia-leaf/town/folk.ts";
-
-import { STANDINS } from "./madeup.ts";
+import { CALLERS, FOLK, folk } from "@sequoia-leaf/town/folk.ts";
 
 const ROOT = join(import.meta.dir, "..", "..", "..");
 
@@ -108,7 +106,6 @@ describe("the town's own", () => {
     }
     const names = FOLK.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    for (const s of STANDINS) expect(isFolk(s.name)).toBe(false);
     // Whoever calls at a camp is about the town, or only ever calling; never a keeper away from its post.
     for (const id of CALLERS) expect(folk(id).job === "counter" || typeof folk(id).job === "object").toBe(false);
   });

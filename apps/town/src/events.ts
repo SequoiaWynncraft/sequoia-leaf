@@ -1,9 +1,9 @@
 /**
  * The guild's moments, staged in the town: real members home from a raid hang a lantern in the
  * tree, a war raises the banner, a level or a milestone is a line in the feed and a flourish over
- * whoever it is. What happens and to whom comes from `guild.ts` (the real guild, or the made-up
- * one's stand-ins), and so do the feed's lines and when they are said; this is only the staging,
- * which never waits on a line. The town's own cheer along.
+ * whoever it is. What happens and to whom comes from `guild.ts`, and so do the feed's lines and
+ * when they are said; this is only the staging, which never waits on a line. The town's own cheer
+ * along.
  */
 
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
@@ -12,7 +12,7 @@ import { clamp } from "@sequoia-leaf/kit/util.ts";
 
 import { cheerAll, hop, walkTo } from "./actors.ts";
 import { float, sparkle } from "./fx.ts";
-import { after, changed, G, hooks, stepLater } from "./game.ts";
+import { after, G, hooks, stepLater } from "./game.ts";
 import { guild, type Happening, type Person } from "./guild.ts";
 import { hangLantern, raiseBanner } from "./town.ts";
 import { done, figure, GATE, visitorOf } from "./visitors.ts";
@@ -105,9 +105,6 @@ function realNews(who: Person, h: Happening): void {
  */
 function quietly(h: Happening): void {
   switch (h.kind) {
-    case "quest":
-      changed();
-      return;
     case "party":
       G.raidsToday++;
       hangLantern({ x: 344, y: 206 });
@@ -118,7 +115,6 @@ function quietly(h: Happening): void {
       return;
     case "reached":
     case "milestone":
-    case "call":
   }
 }
 
@@ -137,13 +133,6 @@ function stage(h: Happening): void {
     case "reached":
     case "milestone":
       realNews(h.who, h);
-      return;
-    case "quest":
-      hooks.feed(h.text, h.tone);
-      changed();
-      return;
-    case "call":
-    // One of the town's own has looked in at the camp: the camp sees to its own mailbox.
   }
 }
 

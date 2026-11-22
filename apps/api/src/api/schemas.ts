@@ -123,27 +123,6 @@ export const GameMe = Schema.Struct({
   coins: Schema.Number,
 });
 
-const SaveInfo = Schema.Struct({
-  slot: Schema.String,
-  /** How many times the slot was written. */
-  version: Schema.Number,
-  updated_at: Time,
-});
-
-export const SaveList = Schema.Struct({ saves: Schema.Array(SaveInfo) });
-
-export const Save = Schema.Struct({ ...SaveInfo.fields, data: Schema.Unknown });
-
-/** A save, written over the version the game last read: 0 when it read none. */
-export const SaveBody = Schema.Struct({
-  /** The member the page sending it believes it is: a save from a page left open as someone else is refused. */
-  player: Schema.String,
-  version: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  data: Schema.Unknown,
-});
-
-export const Saved = Schema.Struct({ version: Schema.Number, updated_at: Time });
-
 /** A skin sheet, the 64 by 64 PNG Minecraft wraps around a character. */
 export const Png = Schema.Uint8Array.pipe(HttpApiSchema.asUint8Array({ contentType: "image/png" }));
 
@@ -164,8 +143,9 @@ export const GuildEvents = Schema.Struct({
 export const PLACES = ["town", "camp", "works", "table"] as const;
 
 /**
- * Where the member is, and whether their character may stay in town, dozing, after they go (true
- * when left out); and what the page is on, by its width when it signed in, when it says.
+ * Where the member is; whether their character may stay in town, dozing, after they go, when the
+ * page says (left out, it is as it was: on for somebody Leaf has never been told about); and what the
+ * page is on, by its width when it signed in, when it says.
  */
 export const PresenceBody = Schema.Struct({
   place: Schema.Literals(PLACES),
@@ -254,21 +234,6 @@ export const Person = Schema.Struct({
   name: Schema.String,
   games: Schema.Record(Schema.String, Place),
 });
-
-/**
- * Coins changed by a page of a game not on the play service yet, for the player the page believes
- * it is (`player`): `id` is the page's own, unique for the change, `amount` a whole number (negative
- * to spend), and `reason` one of `COIN_REASONS`.
- */
-export const CoinsBody = Schema.Struct({
-  player: Schema.String,
-  id: Schema.String,
-  amount: Schema.Number,
-  reason: Schema.String,
-});
-
-/** The player's Coins after a change. */
-export const CoinsAnswer = Schema.Struct({ coins: Schema.Number });
 
 // The staff's routes, under /v1/game/admin.
 

@@ -16,7 +16,6 @@
  * or a dozer as well. Those by the Works' door and at the stump still are.
  */
 
-import { where } from "@sequoia-leaf/kit/live.ts";
 import { CREAM } from "@sequoia-leaf/kit/palette.ts";
 import { bake, type Body, lookFor, paintSkin, SIT, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
@@ -63,12 +62,10 @@ export function followLive(l: typeof live): void {
   live = l;
 }
 
-/** Who the guild says is in the game, as visitors: on its own server, nobody in town (they are there live) and nobody live. */
+/** Who the guild says is in the game, as visitors: nobody in town (they are there live) and nobody live. */
 function wantedNow(): readonly Visitor[] {
   const now = live.ids();
-  const all = guild.visitors();
-  if (where().mode !== "live") return all;
-  return all.filter((w) => w.at !== "town" && !now.has(w.id));
+  return guild.visitors().filter((w) => w.at !== "town" && !now.has(w.id));
 }
 /** Who the guild says has gone and stays, as dozers: never anybody live. */
 function restingNow(): readonly Rester[] {
@@ -416,7 +413,7 @@ export function figure(p: Person): Actor | null {
   const had = here.get(p.id);
   // Somebody live is where they really are, and goes nowhere the town leads them.
   if (had?.dozing || live.actor(p.id)) return null;
-  const v = had ?? spawn(p.id, p.name, null, "town", where().mode === "live" ? skinOf(p.id) : "");
+  const v = had ?? spawn(p.id, p.name, null, "town", skinOf(p.id));
   if (!ids().has(p.id)) v.passing = true;
   v.going = false;
   release(v.a);

@@ -118,7 +118,6 @@ async function exchanges(): Promise<Record<string, Exchange>> {
       body: await response.json(),
     };
   }
-  const saved = { saved_at: T0 + 10 * MINUTE, keys: { "town.save.v1": '{"v":1,"lanterns":3}' } };
   await call("GET /v1/game/hello", "GET", "/v1/game/hello");
   // A look costs more than the day's raids paid her: the guild's staff grant her the rest.
   await leaf.post(
@@ -128,39 +127,6 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/game/me", "GET", "/v1/game/me");
   await call("GET /v1/game/me, signed out", "GET", "/v1/game/me", undefined, "stale-token");
   await call("GET /v1/game/me, a guest", "GET", "/v1/game/me", undefined, "visitor-token");
-  await call("GET /v1/game/saves/{slot}, never saved", "GET", "/v1/game/saves/town");
-  await call("PUT /v1/game/saves/{slot}", "PUT", "/v1/game/saves/town", { player: alice, version: 0, data: saved });
-  await call("PUT /v1/game/saves/{slot}, a stale version", "PUT", "/v1/game/saves/town", {
-    player: alice,
-    version: 0,
-    data: saved,
-  });
-  // A page left open as Bob, after Alice signed in in another tab.
-  await call("PUT /v1/game/saves/{slot}, not you", "PUT", "/v1/game/saves/town", {
-    player: bob,
-    version: 1,
-    data: saved,
-  });
-  // The same slot again, at once.
-  await call("PUT /v1/game/saves/{slot}, too soon", "PUT", "/v1/game/saves/town", {
-    player: alice,
-    version: 1,
-    data: saved,
-  });
-  // The battler's game is played on Leaf now, and its old slot takes no more writes.
-  await call("PUT /v1/game/saves/{slot}, a game that moved", "PUT", "/v1/game/saves/raid", {
-    player: alice,
-    version: 0,
-    data: { saved_at: T0 + 10 * MINUTE, keys: { "raid.run.v1": "{}" } },
-  });
-  // The purse's Coins are the ledger's now, and its old slot takes no more writes either.
-  await call("PUT /v1/game/saves/{slot}, the purse", "PUT", "/v1/game/saves/purse", {
-    player: alice,
-    version: 0,
-    data: { saved_at: T0 + 10 * MINUTE, keys: { "town.purse.v1": '{"coins":5000}' } },
-  });
-  await call("GET /v1/game/saves/{slot}", "GET", "/v1/game/saves/town");
-  await call("GET /v1/game/saves", "GET", "/v1/game/saves");
   await call("GET /v1/game/guild/events", "GET", "/v1/game/guild/events");
   await call("GET /v1/game/guild/events?after=", "GET", "/v1/game/guild/events?after=6");
   await call("GET /v1/game/guild/events, a guest", "GET", "/v1/game/guild/events", undefined, "visitor-token");
@@ -187,6 +153,8 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   clock.now = T0 + 25 * MINUTE;
   await call("PUT /v1/game/presence", "PUT", "/v1/game/presence", { place: "town", stay: true, device: "desktop" });
   await call("GET /v1/game/presence", "GET", "/v1/game/presence");
+  // A page that is not the town's says nothing of staying, and Leaf keeps what the town said.
+  await call("PUT /v1/game/presence, without stay", "PUT", "/v1/game/presence", { place: "table" });
   // The Little Raid on the play service: a new table, setting out and the first pick, a refusal, the
   // same batch sent again, and what is not a command or not a game.
   await call("GET /v1/game/play/{game}", "GET", "/v1/game/play/raid");
@@ -220,6 +188,29 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     "visitor-token",
   );
   await call("GET /v1/game/me, after a look bought", "GET", "/v1/game/me");
+  // A page left open since before the town moved onto Leaf is told to load itself again.
+  await call("PUT /v1/game/saves/{slot}, a page from before the town moved", "PUT", "/v1/game/saves/town", {
+    player: alice,
+    version: 1,
+    data: {},
+  });
+  await call("POST /v1/game/coins, a page from before the town moved", "POST", "/v1/game/coins", {
+    player: alice,
+    id: "old-1",
+    amount: 3,
+    reason: "chest",
+  });
+  // The town on the play service: a new member's camp and the letter at the gate; the letter put
+  // away, a thing bought at a stall, and the parcel unpacked where the page proposes.
+  await call("GET /v1/game/play/{game}, the town", "GET", "/v1/game/play/town");
+  await call("POST /v1/game/play/{game}, the town", "POST", "/v1/game/play/town", {
+    player: alice,
+    commands: [
+      { id: "t-1", do: "welcome", cursor: null },
+      { id: "t-2", do: "buy", stall: "lamps", thing: "rock" },
+      { id: "t-3", do: "unpack", x: 30, y: 20, t: 0 },
+    ],
+  });
   // The Works' board: Bob's yard, Alice's and the guest's, as the play service writes where each stands.
   for (const [player, score, story, guest] of [
     [bob, 5120, 7, 0],
@@ -241,31 +232,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/game/play/{game}/of/{player}, nothing to visit", "GET", `/v1/game/play/raid/of/${bob}`);
   await call("GET /v1/game/people/{player}", "GET", `/v1/game/people/${alice}`, undefined, "bob-token");
   await call("GET /v1/game/people/{player}, unknown", "GET", "/v1/game/people/20000000-0000-0000-0000-000000000009");
-  // Coins the town and the Works work out on their pages, kept in the ledger: the daily chest, a
-  // thing for the camp, the same call again, a spend too dear, and a reason that is not one.
-  const chest = { player: alice, id: "chest-2026-11-25", amount: 3, reason: "daily_chest" };
-  await call("POST /v1/game/coins", "POST", "/v1/game/coins", chest);
-  await call("POST /v1/game/coins, a spend", "POST", "/v1/game/coins", {
-    player: alice,
-    id: "t-1",
-    amount: -120,
-    reason: "camp_thing",
-  });
-  await call("POST /v1/game/coins, sent again", "POST", "/v1/game/coins", chest);
-  await call("POST /v1/game/coins, not enough", "POST", "/v1/game/coins", {
-    player: alice,
-    id: "w-1",
-    amount: -5000,
-    reason: "camp_thing",
-  });
-  await call("POST /v1/game/coins, not a reason", "POST", "/v1/game/coins", {
-    player: alice,
-    id: "w-2",
-    amount: 5,
-    reason: "luck",
-  });
   // A page left open after someone else signed in.
-  await call("POST /v1/game/coins, not you", "POST", "/v1/game/coins", { ...chest, player: bob });
   await call("POST /v1/game/play/{game}, not you", "POST", "/v1/game/play/raid", { ...firstRoom, player: bob });
   // A raid run of Alice's, as the play service logs it.
   for (const [minute, kind, data] of [

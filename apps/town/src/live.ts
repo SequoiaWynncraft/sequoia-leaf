@@ -1,12 +1,10 @@
 /**
- * The live guild: the town's questions (`guild.ts`) answered from the guild's own server, for a
- * real member. What is real comes from here: who the member is, their quests, what happened to
- * them since they were last in town, the guild's news as it happens, and who else is in the game.
- * Nothing invented comes from here: the made-up guild only lends what is not guild data (the stalls'
- * and the Treasury's wares, the mail and calls of the town's own), and has no members, news, quests
- * or Leaf of its own beside the real guild. The town's own creatures and keepers are in `folk.ts`.
+ * The live guild: the town's questions (`guild.ts`) answered from the guild's own server. Who the
+ * member is, their quests, what happened to them since the town last told them, the guild's news as
+ * it happens, and who else is in the game all come from here.
  *
- * `prepare()` fetches what the town needs before it opens; `makeLive` is the guild from then on.
+ * `prepare(cursor)` fetches what the town needs before it opens, from how far Leaf's town says the
+ * member's news has been told; `makeLive` is the guild from then on.
  *
  * A guest (signed in, not in the guild) gets the same town with none of the guild's own: no Leaf,
  * quests or news, and nothing is asked of the server that is only for members (`/v1/me...`, the
@@ -23,12 +21,10 @@ import {
   type Resting,
   stay as sayStay,
 } from "@sequoia-leaf/kit/presence.ts";
-import { skinOf } from "@sequoia-leaf/kit/skin.ts";
+import { lookFor, skinOf } from "@sequoia-leaf/kit/skin.ts";
 
-import type { Away, AwayLine, Guild, Happening, Mate, Me, Person, Quest, Rester, Tone, Visitor } from "./guild.ts";
-import type { MadeUp } from "./madeup.ts";
-import { type Line, liveLineFor, makePace } from "./news.ts";
-import { parse } from "./save.ts";
+import type { AwayLine, Guild, Happening, Mate, Me, Person, Quest, Rester, Tone, Visitor } from "./guild.ts";
+import { type Line, lineFor, makePace } from "./news.ts";
 
 // ---------- who the member is ----------
 
@@ -89,8 +85,6 @@ export function readQuests(body: unknown): Quest[] {
       need: target,
       unit: unitOf(q.objective),
       reward: isRecord(q.reward) ? (num(q.reward.leaf) ?? 0) : 0,
-      pays: "leaf",
-      claim: false,
       ends: Number.isFinite(ends) ? ends : null,
     });
   }
@@ -254,7 +248,7 @@ export function makeNews(meId: string): { add(e: Ev, now: number): void; due(now
         ready.push(
           g.kind === "party"
             ? { kind: "party", who, raid: g.what || "a raid" }
-            : { kind: "war", who, land: g.what || "new ground", held: null },
+            : { kind: "war", who, land: g.what || "new ground" },
         );
       }
       for (const [key, at] of told) if (now - at > REMEMBER) told.delete(key);
@@ -362,19 +356,13 @@ async function newsAfter(after: number, pages: number): Promise<Ev[] | null> {
 }
 
 /**
- * Fetches the member's quests, their newest news (for the week) and their news since the cursor
- * the town kept. Says whether it could; with the made-up guild there is nothing to fetch, and for a
- * guest there is nothing that is theirs to fetch.
+ * Fetches the member's quests, their newest news (for the week) and their news since `cursor`, how
+ * far Leaf's town says it has been told (null: never). Says whether it could; for a guest there is
+ * nothing that is theirs to fetch.
  */
-export async function prepare(): Promise<boolean> {
+export async function prepare(cursor: number | null): Promise<boolean> {
   const me = member();
-  if (!me) return true;
-  let cursor: number | null = null;
-  try {
-    cursor = parse(outside.store()?.getItem("town.save.v1"))?.cursor ?? null;
-  } catch {
-    cursor = null;
-  }
+  if (!me) return false;
   if (me.guest) {
     // The cursor stays where a member left it, for if they are one again.
     ready = { me, quests: [], since: [], first: cursor === null, mark: cursor ?? 0, week: [] };
@@ -407,7 +395,7 @@ export function unprepare(): void {
 /** How often the board is fetched again besides when a quest moves, in milliseconds. */
 const BOARD_EVERY = 5 * 60_000;
 
-export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
+export function makeLive(p: Prepared): Guild {
   let me = p.me;
   let quests = p.quests;
   let told = p.mark;
@@ -426,11 +414,6 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
   const sayDue = (): void => {
     for (const { line, feed } of pace.due(outside.now())) feed(line[0], line[1]);
   };
-  // The townsfolk still call at the member's camp; that is all the made-up guild says.
-  madeUp.hear((h) => {
-    if (h.kind === "call") tell(h);
-  });
-
   let asking = false;
   async function fetchBoard(): Promise<void> {
     if (asking) return;
@@ -478,7 +461,8 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
         rank: me.guest ? GUEST : rankName(me.rank),
         level: me.level.number,
         voice: 560,
-        look: madeUp.me().look,
+        // Until their own skin arrives.
+        look: lookFor(me.name),
         xp: me.level.into,
         next: Math.max(1, me.level.next),
         skin: skinOf(me.id),
@@ -489,32 +473,19 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
     },
     quests: () => quests,
     boardNote: () => (me.guest ? GUEST_BOARD : null),
-    wares: () => madeUp.wares(),
-    pieces: () => madeUp.pieces(),
-    stalls: () => madeUp.stalls(),
-    presents: () => madeUp.presents(),
-    camp: (name) => madeUp.camp(name),
-    mail: (from, to) => madeUp.mail(from, to),
-    lostCrab: () => madeUp.lostCrab(),
-    away(from, to): Away {
-      const made = madeUp.away(from, to);
-      // The town's own lines stay; what the made-up guild says it paid, or did, does not.
-      const townsfolk = made.lines.filter((l) => l.art === "folk" || l.art === "crab");
-      return { first: made.first, hours: made.hours, lines: [...letterLines(p.since), ...townsfolk] };
-    },
+    news: () => letterLines(p.since),
     hear(fn) {
       ears.add(fn);
       begin();
       return () => ears.delete(fn);
     },
     say(h, feed) {
-      const line = liveLineFor(h);
+      const line = lineFor(h);
       if (!line) return;
       pace.add({ line, feed }, outside.now());
       sayDue();
     },
-    step(dt) {
-      madeUp.step(dt);
+    step() {
       for (const h of news.due(outside.now())) tell(h);
       sayDue();
     },

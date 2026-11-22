@@ -1,12 +1,11 @@
 /**
  * A camp, as rules: the clearing's squares, what stands where, what may be set down and what may
- * not, and the tray of things put away. Each thing standing in a camp has an id of its own (`n`),
- * so a command names the thing it means and never a place in a list. The town page draws a camp
- * with the ground rules here (`apps/town/src/camp.ts`).
+ * not, the tray of things put away, and who lives there. Each thing standing in a camp has an id of
+ * its own (`n`), so a command names the thing it means and never a place in a list.
  */
 
 import { isLetter, type Letter } from "./mail.ts";
-import { footprint, isThing, type Thing, thingOf, turnsOf } from "./things.ts";
+import { footprint, isThing, type Thing, thingOf, THINGS, turnsOf } from "./things.ts";
 
 /** The clearing in squares: fifty-two across and forty down, eight art pixels to the square. */
 export const CGW = 52;
@@ -229,6 +228,48 @@ export function freeSpot(
     if (best) return best;
   }
   return null;
+}
+
+/**
+ * Where a thing goes turned the next way round: about its middle, or else the nearest spot within
+ * 3 squares; null if it does not turn, or fits nowhere near. The page sends it as a `move`.
+ */
+export function turned(placed: readonly Placed[], n: number): { x: number; y: number; t: number } | null {
+  const i = placed.findIndex((p) => p.n === n);
+  const p = placed[i];
+  const thing = p ? thingOf(p.id) : null;
+  if (!p || !thing || turnsOf(thing) < 2) return null;
+  const t = (p.t + 1) % turnsOf(thing);
+  const [w, d] = footprint(thing, p.t);
+  const [nw, nd] = footprint(thing, t);
+  const x = p.x + Math.floor((w - nw) / 2);
+  const y = p.y + (d - nd);
+  if (canPlace(placed, p.id, x, y, t, i) === "ok") return { x, y, t };
+  const spot = freeSpot(placed, p.id, { x: p.x + Math.floor(w / 2), y: p.y + Math.floor(d / 2) }, t, i);
+  return spot && (spot.x - x) ** 2 + (spot.y - y) ** 2 <= 9 ? { ...spot, t } : null;
+}
+
+/** The tray as a list, in the catalogue's order. */
+export function trayList(camp: Pick<Camp, "tray">): { id: string; n: number }[] {
+  return THINGS.flatMap((t) => {
+    const n = camp.tray[t.id] ?? 0;
+    return n > 0 ? [{ id: t.id, n }] : [];
+  });
+}
+
+// ---------- who lives there ----------
+
+/** How many things must be set out before somebody else moves in: a new camp starts with nine. */
+export const COSY = 24;
+/** How many of the town's own who drop by must be greeted before somebody follows them in to stay. */
+export const KIND = 3;
+
+/** The pets that live in the camp, in the order they came: the first chosen, then one for each thing done. */
+export function petsOf(camp: Pick<Camp, "first" | "placed" | "greeted">): PetId[] {
+  if (!camp.first) return [];
+  const rest = PETS.filter((p) => p !== camp.first);
+  const more = (camp.placed.length >= COSY ? 1 : 0) + (camp.greeted >= KIND ? 1 : 0);
+  return [camp.first, ...rest.slice(0, more)];
 }
 
 /** How many parcels may wait by the trail at once: nothing more is sent while that many are there. */

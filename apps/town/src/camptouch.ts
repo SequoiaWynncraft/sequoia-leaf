@@ -7,14 +7,16 @@ import { BARK, CREAM, EARTH, GOLD, GREEN, SKY, STONE, WATER } from "@sequoia-lea
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, lerp, pick } from "@sequoia-leaf/kit/util.ts";
+import { TOGGLES } from "@sequoia-leaf/town";
+import type { Placed } from "@sequoia-leaf/town/camp.ts";
+import { LOST_CRAB } from "@sequoia-leaf/town/catalogue.ts";
 import { footprint, type Thing } from "@sequoia-leaf/town/things.ts";
 
 import { onScreen } from "./actors.ts";
-import type { Placed } from "./camp.ts";
 import { type CampArt, HUES, pictureOf, SHELF_SLOTS, TUBES, WICKS } from "./campart.ts";
 import { csfx } from "./campsfx.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
-import { changed, G, hooks } from "./game.ts";
+import { G, hooks } from "./game.ts";
 import { flame, type Light, type Prop } from "./props.ts";
 
 /** A thing as it stands in a camp: its record, its picture, its light, and a little state of its own. */
@@ -27,6 +29,11 @@ export interface Live {
   at: number;
   /** How often it has been touched this visit. */
   taps: number;
+  /**
+   * What it shows for a moment in place of its own state (a lid up, a worm out, a vane round), or
+   * null: only the page knows it, and it is never sent.
+   */
+  moment: number | null;
   /** When to put its picture back as it was (a worm gone in, a wren come back); 0 for never. */
   backAt: number;
   /** Drawn after dusk has fallen, for what shines. */
@@ -36,8 +43,10 @@ export interface Live {
 /** What a thing asks of the camp it stands in. */
 export interface TouchWorld {
   art: CampArt;
-  /** Whether this is the member's own camp: only there is anything kept. */
-  mine: boolean;
+  /** Lights, colours or turns a thing that keeps its state (`toggle`); false where nothing is kept (somebody else's camp). */
+  toggle: (live: Live) => boolean;
+  /** The missing crab is spotted: how often it has been now, or null when that does not count (too soon, or not here). */
+  spot: () => number | null;
   /** Sit down on a seat, nearest the point touched. */
   sit: (live: Live, wx: number, wy: number) => void;
   /** Whether there is mail waiting. */
@@ -70,9 +79,8 @@ const GLOW_AT: Readonly<Record<string, readonly [number, number]>> = {
   "sun-banner": [0, -22],
 };
 
-/** Things whose light is put out and lit again by a touch. */
-const TOGGLES = new Set(["lantern-post", "candle-stump"]);
-const isLit = (l: Live): boolean => !TOGGLES.has(l.thing.id) || l.placed.s === 0;
+/** Whether a thing's light is on: one that a touch puts out and lights again is lit at 0. */
+const isLit = (l: Live): boolean => TOGGLES[l.thing.id] !== "lit" || l.placed.s === 0;
 
 export function lightOf(l: Live): Light | null {
   if (l.thing.light <= 0) return null;
@@ -90,9 +98,12 @@ export function lightOf(l: Live): Light | null {
 
 // ---------- pictures ----------
 
+/** The state a thing is drawn in: its moment's, or its own. */
+export const stateOf = (l: Live): number => l.moment ?? l.placed.s;
+
 /** Shows a thing in the state it is in now. */
 function repaint(l: Live, w: TouchWorld): void {
-  const s = pictureOf(w.art, l.thing.id, l.placed.t, l.placed.s);
+  const s = pictureOf(w.art, l.thing.id, l.placed.t, stateOf(l));
   if (!s) return;
   l.prop.sprite = s;
   if (l.prop.hit) l.prop.hit = { x: l.prop.x - s.ax, y: l.prop.y - s.ay, w: s.c.width, h: s.c.height };
@@ -100,7 +111,7 @@ function repaint(l: Live, w: TouchWorld): void {
 
 /** Puts a thing in another state for a moment: something looks out, and goes back in. */
 function forAWhile(l: Live, w: TouchWorld, state: number, secs: number): void {
-  l.placed.s = state;
+  l.moment = state;
   l.backAt = G.t + secs;
   repaint(l, w);
 }
@@ -109,9 +120,6 @@ const nudge = (l: Live): void => {
   l.prop.bumpAt = G.t;
 };
 const top = (l: Live): number => l.prop.y - (l.prop.sprite ? l.prop.sprite.c.height : 8);
-const kept = (w: TouchWorld): void => {
-  if (w.mine) changed();
-};
 
 // ---------- what touching each thing does ----------
 
@@ -147,13 +155,11 @@ const flare: Touch = (l) => {
   burst(l.prop.x, l.prop.y - 9, 14, [GOLD[1], SKY[5], CREAM], 42);
 };
 const colour: Touch = (l, w) => {
-  l.placed.s = (l.placed.s + 1) % HUES.length;
-  repaint(l, w);
   nudge(l);
+  if (!w.toggle(l)) return;
   sfx.pluck(3 + l.placed.s);
   const hue = HUES[l.placed.s % HUES.length];
   if (hue) burst(l.prop.x, top(l) + 6, 6, [hue[0], hue[1]], 22);
-  kept(w);
 };
 const ripple: Touch = (l) => {
   l.at = G.t;
@@ -208,25 +214,19 @@ const TOUCH: Readonly<Record<string, Touch>> = {
 
   "lantern-post": (l, w) => {
     nudge(l);
-    l.placed.s = l.placed.s === 0 ? 1 : 0;
-    if (l.light) {
-      l.light.power = isLit(l) ? 0.9 : 0;
-      l.light.boost = isLit(l) ? 1 : 0;
-    }
+    if (!w.toggle(l)) return;
+    if (l.light) l.light.boost = isLit(l) ? 1 : 0;
     sfx.pluck(isLit(l) ? 7 : 2);
     if (isLit(l) && l.light) burst(l.light.x, l.light.y, 5, [GOLD[2], CREAM], 24);
-    kept(w);
   },
   "candle-stump": (l, w) => {
     nudge(l);
-    l.placed.s = l.placed.s === 0 ? 1 : 0;
-    if (l.light) l.light.power = isLit(l) ? 0.9 : 0;
+    if (!w.toggle(l)) return;
     if (isLit(l)) sfx.pluck(8);
     else {
       noise(0.1, 2200, { vol: 0.05, slide: 0.4 });
       puff(l.prop.x, top(l), 3, STONE[2], 10);
     }
-    kept(w);
   },
   "paper-lantern": colour,
   "glass-lantern": colour,
@@ -387,10 +387,7 @@ const TOUCH: Readonly<Record<string, Touch>> = {
   gnome: (l, w) => {
     l.prop.hops = true;
     nudge(l);
-    l.placed.t = (l.placed.t + 1) % 2;
-    repaint(l, w);
-    sfx.pop();
-    kept(w);
+    if (w.toggle(l)) sfx.pop();
   },
   "gnome-fishing": (l) => {
     nudge(l);
@@ -415,13 +412,12 @@ const TOUCH: Readonly<Record<string, Touch>> = {
     forAWhile(l, w, 1, 1.3);
     sfx.knock();
     // Every third look, it is the crab that is never at roll call. It runs.
-    if (l.taps % 3 === 0) {
-      G.sightings++;
+    const seen = l.taps % 3 === 0 ? w.spot() : null;
+    if (seen !== null) {
       sfx.clack();
-      float(l.prop.x, top(l) - 4, CRAB_QUIPS[G.sightings % CRAB_QUIPS.length] ?? "", SKY[5], 2.2);
-      hooks.feed(`You spotted crab No. ${G.lostCrab} in a barrel. It got away.`, "coral");
+      float(l.prop.x, top(l) - 4, CRAB_QUIPS[seen % CRAB_QUIPS.length] ?? "", SKY[5], 2.2);
+      hooks.feed(`You spotted crab No. ${LOST_CRAB} in a barrel. It got away.`, "coral");
       puff(l.prop.x, l.prop.y, 5, EARTH[2]);
-      changed();
     } else float(l.prop.x, top(l) - 4, BARREL_NEWS[l.taps % BARREL_NEWS.length] ?? "", CREAM, 1.8);
   },
   "wind-chime": (l) => {
@@ -439,7 +435,7 @@ const TOUCH: Readonly<Record<string, Touch>> = {
     nudge(l);
     sfx.plop();
     ring(l.prop.x, top(l) + 4, WATER[3], 5, true);
-    if (l.placed.s === 0) {
+    if (l.moment === null) {
       csfx.chirp();
       forAWhile(l, w, 1, 4);
       flutter(l.prop.x - 5, top(l), 3, [BARK[3], BARK[4]], 3, 40);
@@ -523,16 +519,13 @@ export function stepLive(l: Live, w: TouchWorld, dt: number): void {
   const id = l.thing.id;
   if (l.backAt > 0 && G.t >= l.backAt) {
     l.backAt = 0;
-    if (id === "weathervane") l.placed.s = 0;
-    else {
-      l.placed.s = 0;
-      if (id === "tiny-cairn" || id === "bird-bath") sfx.pop();
-    }
+    l.moment = null;
+    if (id === "tiny-cairn" || id === "bird-bath") sfx.pop();
     repaint(l, w);
   } else if (id === "weathervane" && l.backAt > 0) {
     const s = Math.floor((G.t - l.at) * 9) % 2;
-    if (s !== l.placed.s) {
-      l.placed.s = s;
+    if (s !== stateOf(l)) {
+      l.moment = s;
       repaint(l, w);
     }
   }

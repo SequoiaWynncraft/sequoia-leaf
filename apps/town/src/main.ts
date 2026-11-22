@@ -12,8 +12,7 @@
 
 import { pick as pickCard, point } from "@sequoia-leaf/kit/card.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
-import { where } from "@sequoia-leaf/kit/live.ts";
-import { balance, pretendPurse } from "@sequoia-leaf/kit/purse.ts";
+import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { bake, lookFor, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
@@ -31,10 +30,9 @@ import { folkArt, initFolkArt } from "./folkart.ts";
 import { clearFx } from "./fx.ts";
 import { G, hooks, type PanelId, show, toPage } from "./game.ts";
 import { type GameId, GAMES } from "./games.ts";
-import { guild, type Moment, stir } from "./guild.ts";
+import { guild } from "./guild.ts";
 import { closeCard, closePanel, hush, initHud, panelBox, tickHud } from "./hud.ts";
-import { STANDINS } from "./madeup.ts";
-import { kept } from "./record.ts";
+import { again, keepTold, town as kept } from "./leaf.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Hover, Scene, Stage, Steer } from "./stage.ts";
@@ -59,7 +57,6 @@ declare global {
       /** Walks the member to a point in town, round whatever is in the way. */
       walk: (x: number, y: number) => void;
       tap: (x: number, y: number) => void;
-      happen: (kind: Moment) => void;
       page: (x: number, y: number) => Pt;
       /** Where the prompt by a door is on the page, while it is up. */
       prompt: () => Pt | null;
@@ -77,12 +74,12 @@ declare global {
       leave: () => void;
       /** Stops the town's clock (it is still drawn), so that `skip` alone moves it on. */
       hold: (on: boolean) => void;
-      /** Puts `n` Coins in the purse, for a tour that buys things; only with the made-up guild, never live. */
-      coins: (n: number) => void;
-      /** What the purse holds as the page shows it (on the guild's server, Leaf's Coins with what is on its way). */
+      /** What the purse holds as the page shows it: Leaf's numbers. */
       purse: () => { leaf: number; coins: number };
-      /** What the town has kept, as it would be saved now. */
+      /** The member's town as the page shows it: Leaf's copy. */
       kept: () => unknown;
+      /** Asks Leaf for the town again: for after a tour has staged something. */
+      again: () => Promise<void>;
       /** Which place is on the stage, and how dark the walk between two has got (0 for not at all). */
       where: () => { where: "town" | "camp"; dark: number };
       /** The member's camp: go there, come back, and what `campscene.ts` offers besides. */
@@ -124,8 +121,8 @@ async function boot(): Promise<void> {
   await fontsReady();
   const sprites = makeSprites();
   if (new URLSearchParams(location.search).has("sheet")) {
-    // The member and the made-up guild's stand-ins in their made-up looks; the town's own as themselves.
-    const looks = [guild.me().look, ...STANDINS.map((m) => lookFor(m.name))];
+    // The member and a few others in made-up looks; the town's own as themselves.
+    const looks = [guild.me().look, ...["Quillfeather", "Fernwhistle", "Wrenly", "Bramblewick"].map(lookFor)];
     for (const id of ["purse", "corner", "dock", "feed"]) document.getElementById(id)?.remove();
     const campArt = makeCampArt(sprites);
     if (new URLSearchParams(location.search).get("sheet") === "camp") {
@@ -254,7 +251,7 @@ async function boot(): Promise<void> {
   initHud();
   const art = makeCampArt(sprites);
   const town = makeTown(sprites, art, stage);
-  const campUi = makeCampUi(art, sprites);
+  const campUi = makeCampUi(art);
   const camp = makeCamp(sprites, art, stage, town, town.backdrop, campUi);
   campUi.bind(camp);
   town.toCamp = (): void => {
@@ -494,8 +491,9 @@ async function boot(): Promise<void> {
   resize();
   town.arrive();
   // Whether the member's character stays in town after they go, as they last said in their cabin.
-  guild.stay(kept.stay);
+  guild.stay(kept().stay);
   guild.here("town");
+  keepTold({ home: () => G.home, inCamp: () => scene === camp && camp.owner() === null, cursor: () => guild.told() });
   town.onStage(true);
   wake();
 
@@ -505,7 +503,6 @@ async function boot(): Promise<void> {
       for (let i = 0; i < seconds * 30 && !paused; i++) tick(1 / 30);
       aim(true);
     },
-    happen: stir,
     page(x, y) {
       return toPage(x, y);
     },
@@ -527,10 +524,8 @@ async function boot(): Promise<void> {
     hold(on) {
       heldStill = on;
     },
-    coins(n) {
-      if (where().mode !== "live") pretendPurse(balance().coins + Math.max(0, Math.floor(n)));
-    },
     purse: () => ({ ...balance() }),
+    again,
     where: () => ({ where: G.where, dark: Math.round(G.dark * 100) / 100 }),
     tap(x, y) {
       scene.tap(x, y, false);

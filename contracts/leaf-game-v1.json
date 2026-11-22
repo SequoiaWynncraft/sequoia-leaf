@@ -69,177 +69,6 @@
       "coins": 300
     }
   },
-  "GET /v1/game/saves/{slot}, never saved": {
-    "request": {
-      "method": "GET",
-      "path": "/v1/game/saves/town"
-    },
-    "status": 404,
-    "body": {
-      "code": "no_save",
-      "message": "Nothing is saved in that slot"
-    }
-  },
-  "PUT /v1/game/saves/{slot}": {
-    "request": {
-      "method": "PUT",
-      "path": "/v1/game/saves/town",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000001",
-        "version": 0,
-        "data": {
-          "saved_at": 1795610400000,
-          "keys": {
-            "town.save.v1": "{\"v\":1,\"lanterns\":3}"
-          }
-        }
-      }
-    },
-    "status": 200,
-    "body": {
-      "version": 1,
-      "updated_at": "2026-11-25T12:40:00.000Z"
-    }
-  },
-  "PUT /v1/game/saves/{slot}, a stale version": {
-    "request": {
-      "method": "PUT",
-      "path": "/v1/game/saves/town",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000001",
-        "version": 0,
-        "data": {
-          "saved_at": 1795610400000,
-          "keys": {
-            "town.save.v1": "{\"v\":1,\"lanterns\":3}"
-          }
-        }
-      }
-    },
-    "status": 409,
-    "body": {
-      "code": "version_conflict",
-      "message": "The save changed since it was read. Read it again"
-    }
-  },
-  "PUT /v1/game/saves/{slot}, not you": {
-    "request": {
-      "method": "PUT",
-      "path": "/v1/game/saves/town",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000002",
-        "version": 1,
-        "data": {
-          "saved_at": 1795610400000,
-          "keys": {
-            "town.save.v1": "{\"v\":1,\"lanterns\":3}"
-          }
-        }
-      }
-    },
-    "status": 409,
-    "body": {
-      "code": "not_you",
-      "message": "This page is signed in as someone else now. Load it again"
-    }
-  },
-  "PUT /v1/game/saves/{slot}, too soon": {
-    "request": {
-      "method": "PUT",
-      "path": "/v1/game/saves/town",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000001",
-        "version": 1,
-        "data": {
-          "saved_at": 1795610400000,
-          "keys": {
-            "town.save.v1": "{\"v\":1,\"lanterns\":3}"
-          }
-        }
-      }
-    },
-    "status": 429,
-    "body": {
-      "code": "slow_down",
-      "message": "That slot was saved a moment ago. Send it again in a few seconds"
-    }
-  },
-  "PUT /v1/game/saves/{slot}, a game that moved": {
-    "request": {
-      "method": "PUT",
-      "path": "/v1/game/saves/raid",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000001",
-        "version": 0,
-        "data": {
-          "saved_at": 1795610400000,
-          "keys": {
-            "raid.run.v1": "{}"
-          }
-        }
-      }
-    },
-    "status": 410,
-    "body": {
-      "code": "moved",
-      "message": "This game is kept on Leaf now, and its old save takes no more writes"
-    }
-  },
-  "PUT /v1/game/saves/{slot}, the purse": {
-    "request": {
-      "method": "PUT",
-      "path": "/v1/game/saves/purse",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000001",
-        "version": 0,
-        "data": {
-          "saved_at": 1795610400000,
-          "keys": {
-            "town.purse.v1": "{\"coins\":5000}"
-          }
-        }
-      }
-    },
-    "status": 410,
-    "body": {
-      "code": "moved",
-      "message": "Coins are kept in Leaf's ledger now, and the old purse takes no more writes"
-    }
-  },
-  "GET /v1/game/saves/{slot}": {
-    "request": {
-      "method": "GET",
-      "path": "/v1/game/saves/town"
-    },
-    "status": 200,
-    "body": {
-      "slot": "town",
-      "version": 1,
-      "updated_at": "2026-11-25T12:40:00.000Z",
-      "data": {
-        "saved_at": 1795610400000,
-        "keys": {
-          "town.save.v1": "{\"v\":1,\"lanterns\":3}"
-        }
-      }
-    }
-  },
-  "GET /v1/game/saves": {
-    "request": {
-      "method": "GET",
-      "path": "/v1/game/saves"
-    },
-    "status": 200,
-    "body": {
-      "saves": [
-        {
-          "slot": "town",
-          "version": 1,
-          "updated_at": "2026-11-25T12:40:00.000Z"
-        }
-      ]
-    }
-  },
   "GET /v1/game/guild/events": {
     "request": {
       "method": "GET",
@@ -627,6 +456,42 @@
           "id": "10000000-0000-0000-0000-000000000001",
           "username": "Alice",
           "place": "town",
+          "guest": false
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000003",
+          "username": "Visitor",
+          "place": "town",
+          "guest": true
+        }
+      ],
+      "resting": [
+        {
+          "id": "10000000-0000-0000-0000-000000000002",
+          "username": "Bob",
+          "place": "works",
+          "guest": false,
+          "seen_at": "2026-11-25T12:40:00.000Z"
+        }
+      ],
+      "gone": []
+    }
+  },
+  "PUT /v1/game/presence, without stay": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/presence",
+      "body": {
+        "place": "table"
+      }
+    },
+    "status": 200,
+    "body": {
+      "present": [
+        {
+          "id": "10000000-0000-0000-0000-000000000001",
+          "username": "Alice",
+          "place": "table",
           "guest": false
         },
         {
@@ -1515,6 +1380,330 @@
       "coins": 300
     }
   },
+  "PUT /v1/game/saves/{slot}, a page from before the town moved": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/saves/town",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "version": 1,
+        "data": {}
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "not_you",
+      "message": "This page is signed in as someone else now. Load it again"
+    }
+  },
+  "POST /v1/game/coins, a page from before the town moved": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "id": "old-1",
+        "amount": 3,
+        "reason": "chest"
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "not_you",
+      "message": "This page is signed in as someone else now. Load it again"
+    }
+  },
+  "GET /v1/game/play/{game}, the town": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/play/town"
+    },
+    "status": 200,
+    "body": {
+      "rev": 0,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "sightings": 0,
+        "spotAt": 0,
+        "chestDay": -1,
+        "welcomedDay": -1,
+        "seenAt": 0,
+        "cursor": null,
+        "stay": true,
+        "camp": {
+          "first": "",
+          "placed": [
+            {
+              "n": 0,
+              "id": "cabin",
+              "x": 7,
+              "y": 13,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 1,
+              "id": "trophy-shelf",
+              "x": 18,
+              "y": 15,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 2,
+              "id": "fire-ring",
+              "x": 23,
+              "y": 24,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 3,
+              "id": "log-seat",
+              "x": 22,
+              "y": 22,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 4,
+              "id": "log-seat",
+              "x": 22,
+              "y": 27,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 5,
+              "id": "lantern-post",
+              "x": 13,
+              "y": 18,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 6,
+              "id": "mailbox",
+              "x": 41,
+              "y": 23,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 7,
+              "id": "signpost",
+              "x": 41,
+              "y": 30,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 8,
+              "id": "stump",
+              "x": 28,
+              "y": 25,
+              "t": 0,
+              "s": 0
+            }
+          ],
+          "tray": {},
+          "parcels": [],
+          "letters": [],
+          "greeted": 0,
+          "earned": []
+        },
+        "visit": null,
+        "made": 9,
+        "arrival": {
+          "first": true,
+          "newDay": true,
+          "away": 0,
+          "said": ["Tindra left a mushroom by your gate."],
+          "mail": [
+            {
+              "id": "w-9",
+              "from": "Tindra",
+              "text": "A mushroom for your gate. It's the good kind. Welcome home!",
+              "gift": "toadstool",
+              "read": false,
+              "taken": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "POST /v1/game/play/{game}, the town": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/town",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "t-1",
+            "do": "welcome",
+            "cursor": null
+          },
+          {
+            "id": "t-2",
+            "do": "buy",
+            "stall": "lamps",
+            "thing": "rock"
+          },
+          {
+            "id": "t-3",
+            "do": "unpack",
+            "x": 30,
+            "y": 20,
+            "t": 0
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 1,
+      "now": "2026-11-25T12:55:00.000Z",
+      "results": [
+        {
+          "id": "t-1",
+          "notes": []
+        },
+        {
+          "id": "t-2",
+          "notes": []
+        },
+        {
+          "id": "t-3",
+          "notes": [
+            {
+              "t": "landed",
+              "thing": "rock",
+              "n": 11
+            }
+          ]
+        }
+      ],
+      "state": {
+        "sightings": 0,
+        "spotAt": 0,
+        "chestDay": -1,
+        "welcomedDay": 20782,
+        "seenAt": 1795611300000,
+        "cursor": null,
+        "stay": true,
+        "camp": {
+          "first": "",
+          "placed": [
+            {
+              "n": 0,
+              "id": "cabin",
+              "x": 7,
+              "y": 13,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 1,
+              "id": "trophy-shelf",
+              "x": 18,
+              "y": 15,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 2,
+              "id": "fire-ring",
+              "x": 23,
+              "y": 24,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 3,
+              "id": "log-seat",
+              "x": 22,
+              "y": 22,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 4,
+              "id": "log-seat",
+              "x": 22,
+              "y": 27,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 5,
+              "id": "lantern-post",
+              "x": 13,
+              "y": 18,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 6,
+              "id": "mailbox",
+              "x": 41,
+              "y": 23,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 7,
+              "id": "signpost",
+              "x": 41,
+              "y": 30,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 8,
+              "id": "stump",
+              "x": 28,
+              "y": 25,
+              "t": 0,
+              "s": 0
+            },
+            {
+              "n": 11,
+              "id": "rock",
+              "x": 30,
+              "y": 20,
+              "t": 0,
+              "s": 0
+            }
+          ],
+          "tray": {},
+          "parcels": [],
+          "letters": [
+            {
+              "id": "w-9",
+              "from": "Tindra",
+              "text": "A mushroom for your gate. It's the good kind. Welcome home!",
+              "gift": "toadstool",
+              "read": false,
+              "taken": false
+            }
+          ],
+          "greeted": 0,
+          "earned": []
+        },
+        "visit": null,
+        "made": 12,
+        "arrival": {
+          "first": false,
+          "newDay": false,
+          "away": 0,
+          "said": [],
+          "mail": []
+        }
+      }
+    }
+  },
   "GET /v1/game/play/{game}/standings": {
     "request": {
       "method": "GET",
@@ -1610,6 +1799,14 @@
             "room": 0
           }
         },
+        "town": {
+          "place": 1,
+          "score": 10,
+          "also": {
+            "greeted": 0,
+            "sightings": 0
+          }
+        },
         "works": {
           "place": 2,
           "score": 1840,
@@ -1629,105 +1826,6 @@
     "body": {
       "code": "no_such_player",
       "message": "Leaf does not know that player"
-    }
-  },
-  "POST /v1/game/coins": {
-    "request": {
-      "method": "POST",
-      "path": "/v1/game/coins",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000001",
-        "id": "chest-2026-11-25",
-        "amount": 3,
-        "reason": "daily_chest"
-      }
-    },
-    "status": 200,
-    "body": {
-      "coins": 303
-    }
-  },
-  "POST /v1/game/coins, a spend": {
-    "request": {
-      "method": "POST",
-      "path": "/v1/game/coins",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000001",
-        "id": "t-1",
-        "amount": -120,
-        "reason": "camp_thing"
-      }
-    },
-    "status": 200,
-    "body": {
-      "coins": 183
-    }
-  },
-  "POST /v1/game/coins, sent again": {
-    "request": {
-      "method": "POST",
-      "path": "/v1/game/coins",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000001",
-        "id": "chest-2026-11-25",
-        "amount": 3,
-        "reason": "daily_chest"
-      }
-    },
-    "status": 200,
-    "body": {
-      "coins": 183
-    }
-  },
-  "POST /v1/game/coins, not enough": {
-    "request": {
-      "method": "POST",
-      "path": "/v1/game/coins",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000001",
-        "id": "w-1",
-        "amount": -5000,
-        "reason": "camp_thing"
-      }
-    },
-    "status": 409,
-    "body": {
-      "code": "not_enough_coins",
-      "message": "There are not that many Coins"
-    }
-  },
-  "POST /v1/game/coins, not a reason": {
-    "request": {
-      "method": "POST",
-      "path": "/v1/game/coins",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000001",
-        "id": "w-2",
-        "amount": 5,
-        "reason": "luck"
-      }
-    },
-    "status": 400,
-    "body": {
-      "code": "invalid_reason",
-      "message": "The reason must be one of: camp_thing, daily_chest"
-    }
-  },
-  "POST /v1/game/coins, not you": {
-    "request": {
-      "method": "POST",
-      "path": "/v1/game/coins",
-      "body": {
-        "player": "10000000-0000-0000-0000-000000000002",
-        "id": "chest-2026-11-25",
-        "amount": 3,
-        "reason": "daily_chest"
-      }
-    },
-    "status": 409,
-    "body": {
-      "code": "not_you",
-      "message": "This page is signed in as someone else now. Load it again"
     }
   },
   "POST /v1/game/play/{game}, not you": {
@@ -1780,8 +1878,8 @@
           "id": "10000000-0000-0000-0000-000000000001",
           "name": "Alice",
           "guest": false,
-          "place": "town",
-          "since": "2026-11-25T12:54:30.000Z"
+          "place": "table",
+          "since": "2026-11-25T12:55:00.000Z"
         },
         {
           "id": "10000000-0000-0000-0000-000000000003",
@@ -1802,9 +1900,19 @@
           "sessions": 1,
           "seconds": 30,
           "places": {
-            "town": 30
+            "town": 30,
+            "table": 0
           },
           "done": [
+            {
+              "at": "2026-11-25T12:55:00.000Z",
+              "game": "town",
+              "kind": "town_bought",
+              "data": {
+                "thing": "rock",
+                "price": 25
+              }
+            },
             {
               "at": "2026-11-25T12:55:00.000Z",
               "game": "raid",
@@ -1843,18 +1951,6 @@
                 "won": false,
                 "resolve": 0,
                 "seconds": 63
-              }
-            },
-            {
-              "at": "2026-11-25T12:38:00.000Z",
-              "game": "raid",
-              "kind": "raid_room",
-              "data": {
-                "room": 1,
-                "kind": "trouble",
-                "won": true,
-                "resolve": 3,
-                "seconds": 41
               }
             }
           ]

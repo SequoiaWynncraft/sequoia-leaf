@@ -3,20 +3,21 @@
  * touched, and the parts that never keep still (the fire, the belt, the banner, the lanterns, the crabs).
  */
 
+import { DAILY_CHEST } from "@sequoia-leaf/core";
 import { BARK, CREAM, EARTH, GOLD, GREEN, INK, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { ell, R } from "@sequoia-leaf/kit/pix.ts";
-import { earn } from "@sequoia-leaf/kit/purse.ts";
 import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, lerp, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
+import { LOST_CRAB } from "@sequoia-leaf/town/catalogue.ts";
+import { waiting } from "@sequoia-leaf/town/mail.ts";
 
 import { goSit, onScreen } from "./actors.ts";
 import { unread } from "./board.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
-import { changed, G, hooks } from "./game.ts";
+import { G, hooks } from "./game.ts";
 import { GROUND, paintTrunk } from "./ground.ts";
-import { guild } from "./guild.ts";
+import { ask, doNow, mine, ok, town } from "./leaf.ts";
 import { flame, type Light, makeProp, type Prop, type Standing } from "./props.ts";
-import { utcDayOf } from "./save.ts";
 import { BOARD, type Sprite, type Sprites } from "./sprites.ts";
 import { type Strand, STRINGS, wire } from "./strings.ts";
 import {
@@ -301,10 +302,10 @@ function tapChest(p: Prop): void {
   chest.openUntil = G.t + 1.4;
   sparkle(p.x, p.y - 8, 8, 5);
   sfx.coin(2);
-  if (hooks.looted()) return;
-  // Once a UTC day: on the guild's server the day names the change, so a second page pays nothing.
-  earn(3, "daily_chest", `chest-${utcDayOf(Date.now())}`);
-  float(p.x, p.y - 16, "+3 Coins", GOLD[1]);
+  // Once a UTC day, which Leaf keeps: opened again, it is only a chest.
+  void (async () => {
+    if (ok(await ask({ do: "openChest" }))) float(p.x, p.y - 16, `+${DAILY_CHEST} Coins`, GOLD[1]);
+  })();
 }
 
 function tapSeat(wx: number, wy: number): void {
@@ -425,12 +426,13 @@ export function tapCrab(c: Crab): void {
     float(c.x, c.y - 12, `No. ${c.n}`, CREAM, 1.2);
     return;
   }
-  G.sightings++;
-  float(c.x, c.y - 14, QUIPS[G.sightings % QUIPS.length] ?? "", SKY[5], 2.2);
-  hooks.feed(`You spotted crab No. ${c.n}. It got away.`, "coral");
+  // Counted once in five seconds, which Leaf keeps: it bolts either way.
+  if (ok(doNow({ do: "spotCrab" }))) {
+    float(c.x, c.y - 14, QUIPS[town().sightings % QUIPS.length] ?? "", SKY[5], 2.2);
+    hooks.feed(`You spotted crab No. ${c.n}. It got away.`, "coral");
+  }
   c.bolt = 0.01;
   puff(c.x, c.y, 5, EARTH[2]);
-  changed();
 }
 
 /** A crab picked out by its number: it hops and clacks, if it is at home. Says whether it was. */
@@ -588,7 +590,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     tip: CAMP,
     // Something is waiting at the camp: a letter, or a parcel.
     extra: (g, sx, sy) => {
-      if (!hooks.campNews()) return;
+      if (mine().parcels.length === 0 && waiting(mine().letters) === 0) return;
       const bob = Math.round(Math.sin(G.t * 4) * 1.5);
       g.drawImage(s.bang.c, sx - 1, sy - 37 + bob);
     },
@@ -604,7 +606,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     },
     // A quest is ready to claim, or there is news the member has not opened.
     extra: (g, sx, sy) => {
-      if (!unread() && !guild.quests().some((q) => q.claim && q.have >= q.need && !G.claimed.has(q.id))) return;
+      if (!unread()) return;
       const bob = Math.round(Math.sin(G.t * 4) * 1.5);
       g.drawImage(s.bang.c, sx + 20, sy - 56 + bob);
     },
@@ -794,7 +796,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
   // Crabs: eight at home round the pond, and the one that is never there.
   let home = 0;
   for (let n = 1; n <= 9; n++) {
-    const lost = n === G.lostCrab;
+    const lost = n === LOST_CRAB;
     const [hx, hy, rock] = lost ? [0, 0, 0] : (CRAB_HOMES[home++] ?? [400, 300, 0]);
     crabs.push({
       n,

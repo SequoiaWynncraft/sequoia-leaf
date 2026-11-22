@@ -22,12 +22,10 @@ The one staff route is the record of who played the game
 It also serves the guild's browser game, Guild Town, at `/play/town/`, and the
 routes only the game uses. Anyone signed in may play it: members, and guests
 who are not in the guild. The game shows a member's Leaf; no route lets it
-spend or pay any, and a guest has none. The Little Raid and the Works are
-played on Leaf's play service, which owns their state. Coins are a ledger of
-their own, the only Coins there are: the raid and the Works pay into it and
-take from it, and the town, whose page still works out what it earns and
-spends, changes it through `POST /v1/game/coins` until it moves to the play
-service too.
+spend or pay any, and a guest has none. The Little Raid, the Works and the
+town with its camp are played on Leaf's play service, which owns their state.
+Coins are a ledger of their own, the only Coins there are: the games' commands
+pay into it and take from it.
 
 ## Getting started
 
@@ -178,9 +176,8 @@ cause. The one exception is a body sent with a `Content-Type` other than JSON,
 which gets a plain 415.
 
 A route reads at most 16 KiB of a request's body, and answers a longer one
-with 413 `body_too_large` without reading it; only saves may be longer (see
-[The game's routes](#the-games-routes)). The server itself takes no body over
-1 MiB.
+with 413 `body_too_large` without reading it. The server itself takes no body
+over 1 MiB.
 
 Every answer carries `X-Content-Type-Options: nosniff`, so browsers never take
 it for another type than the one it was sent as. Every answer but the game's
@@ -387,9 +384,6 @@ react to `quest_completed`.
 | ------------------------------------ | --------------------------------------------------------------------- |
 | `GET /v1/game/hello`                 | Where to sign in, and whether Leaf may be spent. Needs no session.    |
 | `GET /v1/game/me`                    | The player, their rank, Leaf, XP, level, newest event's id and Coins. |
-| `GET /v1/game/saves`                 | The player's saves: each slot's version and when it was written.      |
-| `GET /v1/game/saves/{slot}`          | One save, with what it holds.                                         |
-| `PUT /v1/game/saves/{slot}`          | Writes one.                                                           |
 | `GET /v1/game/skins/{uuid}`          | A player's skin sheet, as a PNG.                                      |
 | `GET /v1/game/guild/events`          | What happened across the guild, oldest first.                         |
 | `GET /v1/game/guild/events/stream`   | The same as it happens, as server-sent events.                        |
@@ -399,11 +393,10 @@ react to `quest_completed`.
 | `GET /v1/game/play/{game}`           | The player's state in a game Leaf plays, as their page is shown it.   |
 | `POST /v1/game/play/{game}`          | Does a batch of commands in that game, and answers what each did.     |
 | `GET /v1/game/play/{game}/standings` | The game's board: the twenty highest, and the player's own place.     |
-| `POST /v1/game/coins`                | Pays or takes Coins the town's page worked out.                       |
 
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
-plays as a **guest**: they have saves, skins and presence like a member, but no
+plays as a **guest**: they have games, skins and presence like a member, but no
 Leaf, XP, quests or news, and the guild's events (and their stream) refuse them
 with 403 `members_only`. The mod's routes, `/v1/me` and those under it, still
 let in only members.
@@ -423,37 +416,11 @@ not shown to them while they are a guest. `coins` is the player's Coins, guest
 or member (see [The play service](#the-play-service)); asking opens a new
 player's account with the welcome.
 
-**Saves.** Each player has a save in each of four slots, `purse`, `town`,
-`works` and `raid` (`SAVE_SLOTS` in `packages/core/src/saves.ts`). A save is a
-JSON object of at most 256 KiB as JSON text; Leaf stores it as it comes and
-reads nothing in it. It is not the ledger: one row per slot, overwritten in
-place. Each save records whether a guest wrote it; whenever any save is
-written, guests' saves not written for 90 days are removed. Members' saves are
-never removed. So that a save written over can be put back by hand, Leaf keeps
-what each write replaced, and what a page sent that was refused for its
-version, each at most once a minute a slot, for a week (`save_history`).
-
-- `GET /v1/game/saves/{slot}` answers `{ "slot", "version", "updated_at", "data" }`,
-  or 404 `no_save` for a slot never written.
-- `PUT /v1/game/saves/{slot}` takes `{ "player", "version", "data" }`, where
-  `player` is the id of the member the page believes it is (from
-  `/v1/game/me`), and `version` is the version last read, 0 for none. A save
-  whose `player` is not the session's member gets 409 `not_you` and changes
-  nothing: the page was left open as someone else, and should load again. It is
-  written only while `version` is still the stored version, as the next one,
-  and answers `{ "version", "updated_at" }`. Otherwise it gets 409
-  `version_conflict` and changes nothing: read the save again. A write that
-  would be taken, but comes less than 2 seconds after the slot was last
-  written, gets 429 `slow_down` and changes nothing: send it again in a few
-  seconds. A slot that is
-  not one gets 400 `invalid_slot`; a body that is not a save, or `data` that is
-  not an object, 400 `invalid_save`; a save over 256 KiB, 413 `save_too_large`.
-  A body over twice that is not read at all.
-- A slot whose game Leaf now plays itself, or whose numbers Leaf keeps itself
-  (`MOVED_SLOTS` in core: `raid` and `works`, and `purse`, whose Coins are the ledger's),
-  takes no more writes: `PUT` answers 410 `moved` and stores nothing, so what
-  is there stays as it was, to be brought over by hand (see Moving over). It
-  can still be read.
+**The old saves.** Before the games were Leaf's, each page kept its game in
+the browser and copied it to a save per slot (`saves`, with earlier copies in
+`save_history`). No route reads or writes them any more; the tables stay for
+bringing the last of them over (see [Moving over](#moving-over)), and a later
+migration drops them.
 
 **Skins.** `GET /v1/game/skins/{uuid}` takes a Minecraft UUID with or without
 dashes, or gets 400 `invalid_uuid`. It serves only the skins of players Leaf
@@ -501,8 +468,9 @@ member no one can name yet, because Mojang can't be reached, is left out.
 
 **Presence.** `PUT /v1/game/presence` takes `{ "place", "stay", "device" }`:
 `place` is one of `town`, `camp`, `works` and `table`; `stay`, true or false and
-true when left out, says whether the player's character may stay in town,
-dozing, for a day after they go; and `device`, `phone` or `desktop` and
+optional, says whether the player's character may stay in town, dozing, for a
+day after they go (the town's page says it, from its own state; left out, it is
+as it was, and on for a player Leaf has never been told about); and `device`, `phone` or `desktop` and
 optional, is what the page is on, by its window's width when it signed in
 (under 700 CSS pixels is a phone), for the staff's record of who played.
 Anything else gets 400 `invalid_place`. It records
@@ -621,55 +589,6 @@ entries are never changed or removed. A new player's account opens with 300,
 as one entry keyed `welcome:<player>`. They are the only Coins there are:
 every page shows the ledger's number, and the browser keeps none.
 
-**Coins from a page.** The town is not on the play service yet: its page still
-works out what it earns and spends, and tells Leaf each change. This route is
-for it alone, and goes when it moves.
-`POST /v1/game/coins` takes `{ "player", "id", "amount", "reason" }` and
-answers `{ "coins" }`, the balance after it:
-
-- `player` is the id the page believes it is: when it is not the session's
-  player, 409 `not_you` and nothing is done (the kit's purse then sends nothing
-  more and loads the page again).
-
-- `id` is the page's own, made for the change (as a command's id is), and the
-  entry's key is `page:<player>:<id>`: a call sent twice is done once, and
-  answered the balance as it stands. The daily chest is Leaf's to pay: its
-  entry is keyed `page:<player>:daily_chest:<UTC day>` and pays 3, whatever id
-  and amount the page sends, so it is paid once a day.
-- `amount` is a whole number, not 0, from -100,000 to 5,000 (`PAGE_COINS` in
-  core): what the page earned, or the negative of what it spent.
-- `reason` is one of `COIN_REASONS` in `packages/core/src/coins.ts`, each the
-  one place in the town that earns or spends Coins. `amount` goes the reason's
-  way, in or out.
-
-| `reason`      | Way   | What                                                    |
-| ------------- | ----- | ------------------------------------------------------- |
-| `camp_thing`  | spend | A thing for the camp, bought at a market stall.         |
-| `daily_chest` | earn  | The chest by the Treasury: Leaf pays 3, once a UTC day. |
-
-(The made-up guild's quests and its while-away letter pay Coins only in the
-browser, `earnMadeUp` in the kit's purse; nothing on the guild's server pays
-them, so they are not reasons.)
-
-It refuses, changing nothing: a call that would take a player past 4 a
-second (bursts of 20), 429 `slow_down`, read and counted for nothing; a spend
-the balance does not cover, 409 `not_enough_coins`; an earning past what the
-player may still earn this hour or this UTC day (the one cap on all play,
-above), 429 `too_much`; 400 `invalid_amount` and
-`invalid_reason`, and `invalid_command` for a body that is not such a call or
-an id that is not one. A player with no account yet has it opened with the
-welcome first. Each call done or refused counts toward the staff's report
-(`command_days`).
-
-**What a hostile page can still do through it.** The route earns nothing but
-the daily chest, whose 3 Coins Leaf pays once a day whatever the page says, so
-a player with curl and their own session can, without playing: open the chest
-once a day; spend their own Coins on nothing; and make at most 4 calls a
-second. Every spend needs Coins, so the route writes few entries. Coins buy
-only decorations, and Leaf is never touched. The staff's report lists anyone
-whose Coins rose more than 5,000 in an hour (`coins_in_an_hour`). All of this
-goes when the town moves to the play service, whose rules pay Coins.
-
 **Activity.** What a game's commands log (a raid begun, a room won or lost, a
 raid ended and what it paid) is written to `activity` (`player_id`, `at`,
 `game`, `kind`, `data` as JSON) in the same transaction: up to 1,000 of a
@@ -687,9 +606,16 @@ a game's state, each one the player does not hold yet is written to `awards`
 is told all the player holds (`Ctx.awards`), so that the town can send each to
 the camp as a trophy.
 
-**The town and the camp** have their rules as a `Game` (`TOWN`, in
-`packages/town`, with its README), which is not on the service yet: the town's
-page still keeps its own record in the browser.
+**The town and the camp** keep the camp (what stands where, each thing by an
+id of its own, the tray, the parcels by the trail, the letters, the pets),
+the caller waiting at it and when the next sets out, the chest's and the
+welcome's UTC days, when the member was last here, how far their news has been
+told and whether their character stays. Its commands, what happens by itself
+and what its page is shown are in `packages/town/README.md`. Buying at a stall
+takes the price; the chest pays 3 Coins once a UTC day, free of the cap; where
+a camp stands (things set out, callers greeted, the crab's sightings) is shown
+on a person's card. Each trophy the player holds (an award) goes by the trail
+as a parcel.
 
 **The Little Raid** keeps the run in hand, the almanac, the looks and the trail
 picked. Its commands, notes, refusals and what its page is shown are in
@@ -941,8 +867,10 @@ which stages a moment at Tester's raid table that play does not reach by
 itself (a run from a chosen seed, more acorns, a figure handed over, a new
 member; `apps/api/test/stage-raid.ts`), and `POST /test/play/works`, which
 does the same in Tester's yard (a yard kept part-way through the story or a new
-one, a time away, a standing order filled; `apps/api/test/stage-works.ts`). The
-guild's own Leaf has no such route.
+one, a time away, a standing order filled; `apps/api/test/stage-works.ts`), and
+`POST /test/play/town`, in Tester's town and camp (a new member's town, a
+lived-in camp, a caller waiting, a time away, a full mailbox, Coins to shop
+with; `apps/api/test/stage-town.ts`). The guild's own Leaf has no such route.
 
 ## Who played: the staff's view
 
@@ -982,9 +910,8 @@ rules are `packages/core/src/visits.ts`; the store is `apps/api/src/activity`.
   `pay`) and `works_story` for each story order finished (`order`, its number
   in the story, `title`, `pay`).
 - **Commands** (`command_days`): how many of each player's commands the play
-  service did and how many it refused, and of their pages' calls to change
-  Coins (`POST /v1/game/coins`), by the UTC day. One sent again and answered
-  from before is not counted again.
+  service did and how many it refused, by the UTC day. One sent again and
+  answered from before is not counted again.
 
 Visits and sessions that ended 180 days ago are removed whenever a visit is
 opened, and the things done 180 days ago whenever new ones are written (at
@@ -1033,6 +960,21 @@ slot takes no more writes once its game has moved.
 Their yards were brought over the same way the same day: each as the
 player's `works` play state, standing at Leaf's clock, with a new seed. That
 tool is deleted too.
+
+Their towns and camps come over with
+`bun apps/api/tools/once/import-town.ts <database file> [--write] [--force]`,
+run once by the lead and deleted in the change after. Without `--write` it
+writes nothing and prints, for every player with a `town` save (ids masked but
+for their first eight characters), what a person checks: the things set out
+and in the tray by kind, the parcels, letters, pets, callers greeted and crab
+sightings, and any warning (more than 300 set out, more than 999 of one thing,
+a thing the catalogue does not have). With `--write` it stores each as their
+`town` play state, read by the rules' `adopt` (each thing standing given an
+id, the callers and the stream afresh, last here now), unless they have a town
+on Leaf already, or a warning stands and `--force` is not given. It also fills
+in the awards and standings the players' raid and Works states show, where
+Leaf has none. A player who opens the town before it runs gets a new town on
+Leaf, which the tool then leaves alone.
 
 ## Rules the code is built on
 

@@ -7,7 +7,7 @@
 
 import { emotePicture } from "@sequoia-leaf/kit/emotes.ts";
 import { acornPicture, acornScale, FOLK_COLOUR } from "@sequoia-leaf/kit/mark.ts";
-import { CREAM, GOLD, INK, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { CREAM, GOLD, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { bubble, bubbleSize, prompt, promptSize, wrap } from "@sequoia-leaf/kit/signs.ts";
 import { FOOT_X, FOOT_Y, SIT, WALK } from "@sequoia-leaf/kit/skin.ts";
@@ -169,12 +169,9 @@ function drawActor(g: Ctx, a: Actor, cx: number, cy: number, s: Sprites): void {
   g.globalAlpha = a.alpha;
   g.drawImage(frame, x - FOOT_X, y - FOOT_Y);
   const sunk = pose === SIT ? (a.dir === 0 ? 2 : 5) : 0;
-  if (crowned(a)) g.drawImage(s.crown, x - 4, y - 21 + sunk);
   if (a.mug > 0 && a.dir !== 3) g.drawImage(s.mug, x + (a.dir === 1 ? -6 : 3), y - 9 + sunk);
   g.globalAlpha = 1;
 }
-
-const crowned = (a: Actor): boolean => a.you && G.wearing.has("crown");
 
 export function pixelRing(g: Ctx, x: number, y: number, rx: number, ry: number, col: string): void {
   const n = Math.max(8, Math.round(rx * 3));
@@ -311,8 +308,6 @@ export function drawPicture(pic: Picture): HTMLCanvasElement {
   d.fillRect(0, 0, w, h);
   d.globalCompositeOperation = "destination-out";
   const lamps = pic.lights();
-  if (G.player && !G.player.away && G.wearing.has("jar"))
-    lamps.push({ x: G.player.x, y: G.player.y - 10, r: 24, power: 0.6, boost: 0, phase: 1 });
   for (const l of lamps) {
     const r = l.r * (1 + l.boost * 0.3) * (1 - out * 0.6);
     if (l.x - cx + r < 0 || l.x - cx - r > w || l.y - cy + r < 0 || l.y - cy - r > h) continue;
@@ -340,28 +335,6 @@ export function drawPicture(pic: Picture): HTMLCanvasElement {
     g.drawImage(SPARK, Math.round(b.x) - cx - 3, Math.round(b.y) - cy - 3, 7, 7);
     g.globalAlpha = a;
     R(g, Math.round(b.x) - cx, Math.round(b.y) - cy, b.size, b.size, b.col);
-  }
-  const p = G.player;
-  if (p && !p.away && p.alpha > 0.5) {
-    const at = standing(p);
-    if (G.wearing.has("jar")) {
-      for (let i = 0; i < 4; i++) {
-        const fx = Math.round(at.x + Math.cos(G.t * 1.3 + i * 1.6) * (9 + i)) - cx;
-        const fy = Math.round(at.y - 12 + Math.sin(G.t * 1.9 + i * 2.1) * 6) - cy;
-        g.globalAlpha = 0.35;
-        g.drawImage(SPARK, fx - 4, fy - 4, 9, 9);
-        g.globalAlpha = 0.7 + 0.3 * Math.sin(G.t * 5 + i);
-        R(g, fx, fy, 1, 1, GOLD[2]);
-      }
-    }
-    if (G.wearing.has("water")) {
-      const fx = Math.round(at.x - 9 + Math.sin(G.t * 0.9) * 3) - cx;
-      const fy = Math.round(at.y - 22 + Math.sin(G.t * 1.6) * 3) - cy;
-      g.globalAlpha = 0.3;
-      g.drawImage(SPARK, fx - 5, fy - 5, 11, 11);
-      g.globalAlpha = 0.8;
-      R(g, fx, fy, 2, 2, WATER[3]);
-    }
   }
   g.globalAlpha = 1;
 
@@ -473,7 +446,7 @@ function drawPeople(ctx: Ctx, px: number, taken: readonly Box[], people: readonl
   for (const { a, rank } of wanted) {
     const at = a.seat ?? a;
     const hx = Math.round((at.x - cx) * z);
-    const hy = Math.round((at.y - cy - headOf(a) - (crowned(a) ? 3 : 0)) * z);
+    const hy = Math.round((at.y - cy - headOf(a)) * z);
     const name = a.who.name;
     // One of the town's own has the acorn before its name.
     const mark = a.folk ? acornScale(px) : 0;
@@ -507,20 +480,6 @@ function drawPeople(ctx: Ctx, px: number, taken: readonly Box[], people: readonl
         colour: a.folk ? FOLK_COLOUR : a.you ? GOLD[2] : CREAM,
         shadow: false,
       });
-      if (a.you && G.wearing.has("plate")) {
-        // The painted plate: gold corners.
-        ctx.fillStyle = GOLD[1];
-        for (const [fx, fy] of [
-          [0, 0],
-          [1, 0],
-          [0, 1],
-          [1, 1],
-        ] as const) {
-          const x = fx ? plate.x + plate.w - px : plate.x - px;
-          const y = fy ? plate.y + plate.h - px : plate.y - px;
-          ctx.fillRect(x, y, 2 * px, 2 * px);
-        }
-      }
     }
     if (!a.say) continue;
     const lines = linesOf(ctx, a, px);

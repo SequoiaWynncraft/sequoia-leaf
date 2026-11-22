@@ -1,22 +1,17 @@
 /**
- * The guild, as the town knows it. Everything that comes from the guild's server is asked for here
- * and nowhere else: who the member is, which real members are in the game or dozing in town, what
- * the guild has just done, what is pinned on the board, what is for sale. On the guild's own server
- * the live guild in `live.ts` answers what is real (the member, their quests and news, the guild's
- * news, who else is here) and the made-up guild in `madeup.ts` the rest; anywhere else the made-up
- * guild answers everything. The town's own creatures and keepers are not the guild's: they are in
- * `folk.ts`, the same everywhere.
+ * The guild, as the town knows it. Everything of the guild's that comes from its server is asked
+ * for here and nowhere else (`live.ts` asks): who the member is, which real members are in the game
+ * or dozing in town, what the guild has just done, what is pinned on the board, and the member's
+ * own news since the town last told them any. The member's town and camp are Leaf's play service's
+ * (`leaf.ts`); the town's own creatures and keepers, and what is for sale, are the town's rules'
+ * (`@sequoia-leaf/town`).
  */
 
-import { where } from "@sequoia-leaf/kit/live.ts";
 import type { Look } from "@sequoia-leaf/kit/skin.ts";
-import type { Stall, Stock, Ware } from "@sequoia-leaf/town/catalogue.ts";
-import type { Letter } from "@sequoia-leaf/town/mail.ts";
+import { must } from "@sequoia-leaf/kit/util.ts";
+import type { PetId, Placed } from "@sequoia-leaf/town/camp.ts";
 
-import type { PetId, Placed } from "./camp.ts";
-import { keepText, kept } from "./keep.ts";
 import { makeLive, prepared } from "./live.ts";
-import { makeGuild } from "./madeup.ts";
 
 export interface Member {
   name: string;
@@ -39,6 +34,7 @@ export interface Me extends Member {
   week: readonly string[];
 }
 
+/** A quest on the board: it pays its Leaf by itself once done. */
 export interface Quest {
   id: string;
   title: string;
@@ -46,9 +42,6 @@ export interface Quest {
   need: number;
   unit: string;
   reward: number;
-  pays: "leaf" | "coins";
-  /** Whether the board pays it when it is claimed; if not, it has paid by itself once done. */
-  claim: boolean;
   /** When it ends, in milliseconds since 1970, if it ends at a set time. */
   ends: number | null;
 }
@@ -63,6 +56,8 @@ export interface Pet {
 export interface MateCamp {
   owner: string;
   placed: readonly Placed[];
+  /** The trophies on their shelf. */
+  earned: readonly string[];
   pets: readonly Pet[];
   /** Whether they are at home just now. */
   home: boolean;
@@ -87,7 +82,7 @@ export interface Visitor {
   rank: string | null;
   /** About the town, by the Works' door, or watching at the stump. */
   at: "town" | "works" | "table";
-  /** Where their skin sheet is served; empty for a made-up member, who keeps a made-up look. */
+  /** Where their skin sheet is served. */
   skin: string;
 }
 
@@ -110,22 +105,13 @@ export interface Mate {
 }
 
 export type Tone = "gold" | "leaf" | "coral" | "rose";
-/** The made-up guild's moments, which a tour can set off at once. */
-export type Moment = "raid" | "war" | "level" | "milestone" | "call";
 
 /** Something that has just happened out in the guild. */
 export type Happening =
-  /** A quest has been finished and waits on the board. */
-  | { kind: "quest"; id: string; text: string; tone: Tone }
-  /** One of the town's own has looked in at the member's camp, with a note or a small present, or neither. */
-  | { kind: "call"; id: string; who: string; note: string; gift: string }
   /** Real members back from a raid together. */
   | { kind: "party"; who: readonly Person[]; raid: string }
-  /**
-   * Real members fought a war over a territory; `held` when it was the guild's own to defend. Only
-   * the made-up guild says so: the server's events say who fought where, not how it went (null).
-   */
-  | { kind: "war"; who: readonly Person[]; land: string; held: boolean | null }
+  /** Real members fought a war over a territory: the server's events say who fought where, not how it went. */
+  | { kind: "war"; who: readonly Person[]; land: string }
   /** A real member reached a level of their own with the guild. */
   | { kind: "reached"; who: Person; level: number }
   /** A real member reached one of the guild's milestones. */
@@ -135,19 +121,10 @@ export type Happening =
 export interface AwayLine {
   art: "leaf" | "coin" | "folk" | "crab" | "banner";
   text: string;
-  /** What the line pays into the purse, if anything. */
-  pay?: { kind: "leaf" | "coins"; amount: number };
   /** Leaf the guild's ledger has already paid for it: shown, and not paid again. */
   got?: number;
   /** The town's own the line is about, by name. */
   who?: readonly string[];
-}
-
-export interface Away {
-  /** Whether this is the member's first time in town. */
-  first: boolean;
-  hours: number;
-  lines: readonly AwayLine[];
 }
 
 export interface Guild {
@@ -156,29 +133,11 @@ export interface Guild {
   quests(): readonly Quest[];
   /** A note pinned on the board in place of quests, for somebody quests are not for (a guest); null for anybody else. */
   boardNote(): string | null;
-  wares(): readonly Ware[];
-  /** The Treasury's fine pieces for a camp, for Leaf. */
-  pieces(): readonly Stock[];
-  stalls(): readonly Stall[];
-  /** The small things a member may leave at somebody else's camp. */
-  presents(): readonly string[];
-  /**
-   * A member's camp, by their name; nothing for somebody whose camp may not be visited. Nobody's
-   * may yet: the camp keeps the way to lay one out and show it for when members' camps can be.
-   */
-  camp(name: string): MateCamp | null;
-  /** The letters the town's own left in the member's mailbox between two moments (as for `away`). */
-  mail(from: number, to: number): Letter[];
-  /** Which crab is missing from roll call. */
-  lostCrab(): number;
-  /** What the guild did between two moments (milliseconds since 1970; `from` 0 means never here). */
-  away(from: number, to: number): Away;
+  /** The arrival letter's lines from the member's own news since the town last told them any. */
+  news(): readonly AwayLine[];
   /** Hears each thing as it happens. Returns how to stop. */
   hear(fn: (h: Happening) => void): () => void;
-  /**
-   * Puts the feed's line for one of the guild's moments in the feed, if the feed tells it: with the
-   * made-up guild at once; on the guild's own server when its turn comes (`news.ts`).
-   */
+  /** Puts the feed's line for one of the guild's moments in the feed, if the feed tells it, when its turn comes (`news.ts`). */
   say(h: Happening, feed: (text: string, tone: Tone) => void): void;
   /** Time passing in town, in seconds. */
   step(dt: number): void;
@@ -192,36 +151,15 @@ export interface Guild {
    * says, for "Who is about".
    */
   about(): { present: readonly Mate[]; resting: readonly Mate[] };
-  /** Whether anybody has said yet who is about (on the guild's server the first answer takes a moment). */
+  /** Whether anybody has said yet who is about: the first answer takes a moment. */
   heard(): boolean;
   /** Where the member is: in town, at their camp, or (null) in a game over the town. */
   here(place: "town" | "camp" | null): void;
   /** Whether the member's own character stays in town, dozing, for a day after they go. */
   stay(on: boolean): void;
-  /**
-   * How far the member's own news has been told, to be kept with the town's record so that the
-   * next letter starts after it; null when there is nothing to keep.
-   */
-  told(): number | null;
+  /** How far the member's own news has been told, for Leaf's town to keep so that the next letter starts after it. */
+  told(): number;
 }
 
-const GUILD_KEY = "town.guild.v1";
-
-const ready = prepared();
-
-const madeUp = makeGuild({
-  memory: kept(GUILD_KEY),
-  keep: (text) => {
-    keepText(GUILD_KEY, text);
-  },
-  // Beside the real guild, the made-up one keeps only the town's own calling at the camp: none of
-  // its members, news, quests or Leaf.
-  quiet: ready !== null,
-});
-
-export const guild: Guild = where().mode === "live" && ready ? makeLive(madeUp, ready) : madeUp;
-
-/** Sets off one of the guild's moments now. Only the made-up guild can; it is for looking at the town. */
-export const stir = (kind: Moment): void => {
-  madeUp.stir(kind);
-};
+/** The guild, from what the town fetched before it opened (`open.ts`). */
+export const guild: Guild = makeLive(must(prepared(), "the guild's news"));

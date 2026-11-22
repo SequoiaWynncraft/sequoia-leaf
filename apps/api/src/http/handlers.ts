@@ -1,19 +1,12 @@
 import {
-  checkPageCoins,
-  checkSave,
-  COIN_REASON_NAMES,
   currentQuests,
   DAY_MS,
   DEFAULT_RULES,
-  EARNINGS,
   gameId,
-  isMoved,
   levelForXp,
-  MAX_SAVE_BYTES,
   nextDailyChargeAt,
   nextTimedWindowAt,
   openQuestBook,
-  PAGE_COINS,
   parsePlayerId,
   type Quest,
   QUEST_SLOTS,
@@ -21,7 +14,6 @@ import {
   refreshQuests,
   rerollCost,
   RULE_CHANGES,
-  saveSlot,
   timedWindowAt,
   utcDay,
 } from "@sequoia-leaf/core";
@@ -35,7 +27,6 @@ import { Visits } from "../activity/visits.ts";
 import { rateCard } from "../announce/rate-card.ts";
 import {
   BodyLimit,
-  CoinsBodyErrors,
   CurrentIdentity,
   type Identity,
   isGuest,
@@ -44,7 +35,6 @@ import {
   Player,
   PresenceBodyErrors,
   RerollBodyErrors,
-  SaveBodyErrors,
   Session,
   SessionCookie,
   Unexpected,
@@ -57,18 +47,13 @@ import {
   Invalid,
   MembersOnly,
   Missing,
-  Moved,
   NotAMember,
-  NotEnoughCoins,
   NotYou,
   Refused,
-  SaveTooLarge,
   SlowDown,
   StaffOnly,
   StateUnreadable,
-  TooMuch,
   Unauthorized,
-  VersionConflict,
 } from "../api/errors.ts";
 import type * as Body from "../api/schemas.ts";
 import { Identities } from "../auth/session.ts";
@@ -79,12 +64,10 @@ import { GUILD_EVENT_TYPES, guildEvents } from "../game/guild.ts";
 import { knownAmong } from "../game/known.ts";
 import { PlayerNames } from "../game/names.ts";
 import { type Here, Presence } from "../game/presence.ts";
-import { Saves } from "../game/saves.ts";
 import { Skins } from "../game/skins.ts";
 import { Ledger } from "../ledger/store.ts";
 import { Coins } from "../play/coins.ts";
 import { GAMES, type Played } from "../play/games.ts";
-import { PageCoins } from "../play/page.ts";
 import { Play } from "../play/service.ts";
 import { PlayStore } from "../play/store.ts";
 import { questJson } from "../quests/json.ts";
@@ -99,10 +82,8 @@ const RECENTLY_COMPLETED_MS = 2 * DAY_MS;
 const EVENT_PAGE = 100;
 /** How many events `GET /events` returns when the client does not say where it is. */
 const LATEST_EVENTS = 50;
-/** The largest body Leaf reads, but for a save's. */
+/** The largest body Leaf reads. */
 const MAX_BODY = ByteSize.kibibytes(16);
-/** The largest save body Leaf reads at all. The save itself is checked against `MAX_SAVE_BYTES`. */
-const MAX_SAVE_BODY = ByteSize.bytes(2 * MAX_SAVE_BYTES);
 
 /** What a member is told when Leaf refuses a reroll, by the refusal's code. */
 const REFUSALS = {
@@ -302,39 +283,13 @@ const isBodyTooLarge = (defect: unknown) =>
   defect.reason instanceof HttpServerError.RequestParseError &&
   defect.reason.reason === "BodyTooLarge";
 
-/**
- * A body is read only up to 16 KiB: one larger gets `body_too_large` unread.
- * Saves read up to their own limit, which `SaveBodyErrorsLive` sets inside this one.
- */
+/** A body is read only up to 16 KiB: one larger gets `body_too_large` unread. */
 export const BodyLimitLive = Layer.succeed(BodyLimit)((httpEffect) =>
   httpEffect.pipe(
     Effect.provideService(HttpServerRequest.MaxBodySize, MAX_BODY),
     Effect.catchDefect((defect) =>
       isBodyTooLarge(defect)
         ? Effect.fail(new BodyTooLarge({ code: "body_too_large", message: "Leaf reads a body of at most 16 KiB" }))
-        : Effect.die(defect),
-    ),
-  ),
-);
-
-/**
- * A save body is read only up to twice what a save may hold: one larger gets
- * `save_too_large` unread. One that does not decode as `{ "version", "data" }` gets `invalid_save`.
- */
-export const SaveBodyErrorsLive = Layer.succeed(SaveBodyErrors)((httpEffect) =>
-  httpEffect.pipe(
-    Effect.provideService(HttpServerRequest.MaxBodySize, MAX_SAVE_BODY),
-    Effect.catchIf(isPayloadError, () =>
-      Effect.fail(
-        new Invalid({
-          code: "invalid_save",
-          message: 'Send the save as { "player": "<your id>", "version": n, "data": { ... } }',
-        }),
-      ),
-    ),
-    Effect.catchDefect((defect) =>
-      isBodyTooLarge(defect)
-        ? Effect.fail(new SaveTooLarge({ code: "save_too_large", message: "A save holds at most 256 KiB" }))
         : Effect.die(defect),
     ),
   ),
@@ -360,18 +315,6 @@ export const PlayBodyErrorsLive = Layer.succeed(PlayBodyErrors)((httpEffect) =>
       new Invalid({
         code: "invalid_command",
         message: 'Send commands as { "player": "<your id>", "commands": [{ "id": "<yours>", ... }] }',
-      }),
-    ),
-  ),
-);
-
-export const CoinsBodyErrorsLive = Layer.succeed(CoinsBodyErrors)((httpEffect) =>
-  Effect.catchIf(httpEffect, isPayloadError, () =>
-    Effect.fail(
-      new Invalid({
-        code: "invalid_command",
-        message:
-          'Send Coins as { "player": "<your id>", "id": "<yours>", "amount": <whole number>, "reason": "<one of the reasons>" }',
       }),
     ),
   ),
@@ -633,8 +576,6 @@ const presentJson = (here: Here) =>
     gone: here.gone.map(leftJson),
   }) satisfies typeof Body.Present.Type;
 
-const invalidSlot = new Invalid({ code: "invalid_slot", message: "That is not a save slot" });
-
 /**
  * A write from a page that believes it is another player than the session's, such as one left open
  * after someone else signed in: nothing is done.
@@ -667,7 +608,6 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
     const events = yield* Events;
-    const saves = yield* Saves;
     const skins = yield* Skins;
     const names = yield* PlayerNames;
     const presence = yield* Presence;
@@ -677,7 +617,6 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
     const play = yield* Play;
     const store = yield* PlayStore;
     const coins = yield* Coins;
-    const pageCoins = yield* PageCoins;
     const sql = yield* SqlClient.SqlClient;
 
     /** The player's Coins, their account opened with the welcome if they have none yet. */
@@ -724,94 +663,6 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               event_cursor: cursor,
               coins: yield* coinsOf(identity),
             } satisfies typeof Body.GameMe.Type);
-          }),
-        )
-        .handle("saves", () =>
-          Effect.gen(function* () {
-            const { playerId } = yield* CurrentIdentity;
-            const stored = yield* saves.list(playerId);
-            return HttpServerResponse.jsonUnsafe({
-              saves: stored.map((save) => ({
-                slot: save.slot,
-                version: save.version,
-                updated_at: iso(save.updatedAt),
-              })),
-            } satisfies typeof Body.SaveList.Type);
-          }),
-        )
-        .handle("save", ({ params }) =>
-          Effect.gen(function* () {
-            const slot = saveSlot(params.slot);
-            if (slot === undefined) {
-              return yield* invalidSlot;
-            }
-            const { playerId } = yield* CurrentIdentity;
-            const stored = yield* saves.get(playerId, slot);
-            if (Option.isNone(stored)) {
-              return yield* new Missing({ code: "no_save", message: "Nothing is saved in that slot" });
-            }
-            const { version, updatedAt, data } = stored.value;
-            // The save is stored as the JSON text it is sent as, so it is spliced in, not parsed.
-            const head = JSON.stringify({ slot, version, updated_at: iso(updatedAt) });
-            return HttpServerResponse.text(`${head.slice(0, -1)},"data":${data}}`, { contentType: "application/json" });
-          }),
-        )
-        // Writes over the version the game last read, so a game with an older copy, such as
-        // one open in another tab, never overwrites a newer save; and only for the member the
-        // page believes it is, so a page left open after someone else signed in writes nothing.
-        .handle("write", ({ params, payload }) =>
-          Effect.gen(function* () {
-            const checked = checkSave(params.slot, payload.data);
-            if (!checked.ok) {
-              if (checked.reason === "invalid_slot") {
-                return yield* invalidSlot;
-              }
-              if (checked.reason === "invalid_save") {
-                return yield* new Invalid({ code: "invalid_save", message: "A save's data must be a JSON object" });
-              }
-              return yield* new SaveTooLarge({ code: "save_too_large", message: "A save holds at most 256 KiB" });
-            }
-            // The game in this slot is played on Leaf now, or its Coins are Leaf's ledger's: the slot is
-            // kept as it is, to be brought over by hand.
-            if (isMoved(checked.slot)) {
-              return yield* new Moved({
-                code: "moved",
-                message:
-                  checked.slot === "purse"
-                    ? "Coins are kept in Leaf's ledger now, and the old purse takes no more writes"
-                    : "This game is kept on Leaf now, and its old save takes no more writes",
-              });
-            }
-            const identity = yield* CurrentIdentity;
-            const { playerId } = identity;
-            if (payload.player !== playerId) {
-              return yield* notYou;
-            }
-            const now = yield* Clock.currentTimeMillis;
-            const written = yield* saves.put(
-              playerId,
-              checked.slot,
-              payload.version,
-              checked.text,
-              isGuest(identity),
-              now,
-            );
-            if (written.status === "conflict") {
-              return yield* new VersionConflict({
-                code: "version_conflict",
-                message: "The save changed since it was read. Read it again",
-              });
-            }
-            if (written.status === "slow") {
-              return yield* new SlowDown({
-                code: "slow_down",
-                message: "That slot was saved a moment ago. Send it again in a few seconds",
-              });
-            }
-            return HttpServerResponse.jsonUnsafe({
-              version: written.version,
-              updated_at: iso(written.updatedAt),
-            } satisfies typeof Body.Saved.Type);
           }),
         )
         .handle("skin", ({ params }) =>
@@ -867,7 +718,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               identity.playerId,
               identity.username,
               payload.place,
-              payload.stay ?? true,
+              payload.stay ?? null,
               guest,
               now,
             );
@@ -886,6 +737,8 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             Effect.map((here) => HttpServerResponse.jsonUnsafe(presentJson(here))),
           ),
         )
+        .handle("oldSave", () => Effect.fail(notYou))
+        .handle("oldCoins", () => Effect.fail(notYou))
         .handle("play", ({ params }) =>
           Effect.gen(function* () {
             const played = yield* playedGame(params.game);
@@ -1008,47 +861,9 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             } satisfies typeof Body.Standings.Type);
           }),
         )
-        // Coins a page of the town or the Works earned or spent, as it worked them out: done once
-        // for each id, never below nothing, and with earnings capped by the hour.
-        .handle("coins", ({ payload }) =>
-          Effect.gen(function* () {
-            const call = checkPageCoins(payload);
-            if (!call.ok) {
-              return yield* new Invalid({ code: call.code, message: PAGE_COINS_REFUSED[call.code] });
-            }
-            const identity = yield* CurrentIdentity;
-            if (payload.player !== identity.playerId) {
-              return yield* notYou;
-            }
-            const done = yield* pageCoins.change(identity.playerId, call, yield* Clock.currentTimeMillis);
-            if (done.status === "not_enough_coins") {
-              return yield* new NotEnoughCoins({ code: "not_enough_coins", message: "There are not that many Coins" });
-            }
-            if (done.status === "slow") {
-              return yield* new SlowDown({
-                code: "slow_down",
-                message: "Coins are coming faster than Leaf takes them. Send them again in a moment",
-              });
-            }
-            if (done.status === "too_much") {
-              return yield* new TooMuch({
-                code: "too_much",
-                message: `Coins earned by play come to at most ${EARNINGS.hourly} in an hour and ${EARNINGS.daily} in a UTC day`,
-              });
-            }
-            return HttpServerResponse.jsonUnsafe({ coins: done.coins } satisfies typeof Body.CoinsAnswer.Type);
-          }),
-        )
     );
   }),
 );
-
-/** What a page's call to change Coins is told when it is not one. */
-const PAGE_COINS_REFUSED = {
-  invalid_command: "The id must be up to 64 letters, digits and _ . : -",
-  invalid_amount: `The amount must be a whole number, not 0, from ${PAGE_COINS.least} to ${PAGE_COINS.most}, earned for an earning and spent for a spending`,
-  invalid_reason: `The reason must be one of: ${COIN_REASON_NAMES.join(", ")}`,
-} as const;
 
 /** How many UTC days the staff's report covers when not told, and at most. */
 const REPORT_DAYS = 7;
@@ -1141,10 +956,8 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     PlayerLive,
     BodyLimitLive,
     RerollBodyErrorsLive,
-    SaveBodyErrorsLive,
     PresenceBodyErrorsLive,
     PlayBodyErrorsLive,
-    CoinsBodyErrorsLive,
     BackendLive,
     PurchaseBodyErrorsLive,
     UnexpectedLive,

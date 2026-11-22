@@ -38,6 +38,7 @@
     "apps/town": {
       "name": "@sequoia-leaf/town-page",
       "dependencies": {
+        "@sequoia-leaf/core": "workspace:*",
         "@sequoia-leaf/kit": "workspace:*",
         "@sequoia-leaf/raid": "workspace:*",
         "@sequoia-leaf/town": "workspace:*",
