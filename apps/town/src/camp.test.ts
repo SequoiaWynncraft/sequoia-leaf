@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { letter, post } from "@sequoia-leaf/town/mail.ts";
+import { isThing, thingOf, THINGS, turnsOf } from "@sequoia-leaf/town/things.ts";
+
 import {
   allReached,
   boxOf,
@@ -31,8 +34,6 @@ import {
   YARD,
 } from "./camp.ts";
 import { clearFlights, flights } from "./flights.ts";
-import { BOX, isLetter, letter, open, post, roomInBox, tidied, waiting } from "./mail.ts";
-import { footprint, isThing, KINDS, thingOf, THINGS, turnsOf } from "./things.ts";
 
 const fresh = (): Camp => structuredClone(newCamp());
 const at = (camp: Camp, id: string): number => camp.placed.findIndex((p) => p.id === id);
@@ -46,45 +47,6 @@ function crowded(n: number): Camp {
         camp.placed.push({ id: "plank-path", x, y, t: 0, s: 0 });
   return camp;
 }
-
-describe("the catalogue", () => {
-  test("there are forty things and more, each with a name of its own", () => {
-    expect(THINGS.length).toBeGreaterThanOrEqual(40);
-    expect(new Set(THINGS.map((t) => t.id)).size).toBe(THINGS.length);
-    expect(new Set(THINGS.map((t) => t.name)).size).toBe(THINGS.length);
-  });
-
-  test("every name can be kept in a record, and every thing takes some ground", () => {
-    for (const t of THINGS) {
-      expect(t.id).toMatch(/^[a-z0-9-]{1,32}$/);
-      expect(t.w).toBeGreaterThan(0);
-      expect(t.d).toBeGreaterThan(0);
-      expect(t.name.length).toBeGreaterThan(0);
-      expect(t.about.length).toBeGreaterThan(0);
-    }
-  });
-
-  test("every kind has something in it", () => {
-    for (const k of KINDS) expect(THINGS.some((t) => t.kind === k)).toBe(true);
-  });
-
-  test("most things do something when touched", () => {
-    const doing = THINGS.filter((t) => t.does !== "").length;
-    expect(doing / THINGS.length).toBeGreaterThan(0.9);
-  });
-
-  test("what lies flat stops nobody", () => {
-    for (const t of THINGS) if (t.flat) expect(t.solid).toBe("none");
-  });
-
-  test("a thing laid the other way takes the same ground turned", () => {
-    const fence = thingOf("picket");
-    expect(fence && footprint(fence, 0)).toEqual([2, 1]);
-    expect(fence && footprint(fence, 1)).toEqual([1, 2]);
-    const gnome = thingOf("gnome");
-    expect(gnome && footprint(gnome, 1)).toEqual([1, 1]);
-  });
-});
 
 describe("a new camp", () => {
   test("has a cabin, a fire with two logs, a mailbox, a signpost and a shelf", () => {
@@ -156,7 +118,7 @@ describe("setting things down", () => {
   test("an arch and a string of lights stop a walker only at their ends", () => {
     const arch = thingOf("arch");
     if (!arch) throw new Error("no arch");
-    const on = taken([{ id: "arch", x: 20, y: 30, t: 0, s: 0 }]);
+    const on = taken([{ id: "arch", x: 20, y: 30, t: 0 }]);
     expect([20, 21, 22].map((x) => on.solid[30 * CGW + x])).toEqual([1, 0, 1]);
     expect([20, 21, 22].map((x) => on.stand[30 * CGW + x])).toEqual([0, 0, 0]);
   });
@@ -412,73 +374,5 @@ describe("a full camp", () => {
     expect(setOut(camp, "gnome", spot.x, spot.y)).toBe("ok");
     expect(camp.placed).toHaveLength(MOST_PLACED);
     expect(camp.tray).toEqual({ barrel: 1, "plank-path": 1 });
-  });
-});
-
-describe("the mailbox", () => {
-  test("a letter waits until it is read and its present taken", () => {
-    const box = [letter("a", "Pipwick", "hello"), letter("b", "Tindra", "for you", "flower-pot")];
-    expect(waiting(box)).toBe(2);
-    for (const l of box) l.read = true;
-    expect(waiting(box)).toBe(1);
-    const [, second] = box;
-    if (second) second.taken = true;
-    expect(waiting(box)).toBe(0);
-    expect(tidied(box)).toEqual([]);
-  });
-
-  test("the same letter is not delivered twice", () => {
-    const box = [letter("a", "Pipwick", "hello")];
-    expect(post(box, letter("a", "Pipwick", "hello again"))).toBe(false);
-    expect(post(box, letter("b", "Pipwick", "hello again"))).toBe(true);
-    expect(box.length).toBe(2);
-  });
-
-  test("a full box makes room by dropping what has been dealt with, oldest first", () => {
-    const box = Array.from({ length: 12 }, (_v, i) => letter(`l${i}`, "Wrenly", "a note"));
-    const third = box[3];
-    if (third) third.read = true;
-    post(box, letter("new", "Wrenly", "another"));
-    expect(box.length).toBe(12);
-    expect(box.some((l) => l.id === "l3")).toBe(false);
-    expect(box.every(open)).toBe(true);
-    post(box, letter("newer", "Wrenly", "and another"));
-    expect(box[0]?.id).toBe("l1");
-  });
-
-  test("a box full of presents throws none away: the next letter is not left, and every one comes back", () => {
-    const camp = fresh();
-    camp.letters = Array.from({ length: BOX }, (_v, i) => letter(`g${i}`, "Tindra", "for you", "toadstool"));
-    const ids = camp.letters.map((l) => l.id);
-    expect(roomInBox(camp.letters)).toBe(false);
-    expect(post(camp.letters, letter("late", "Pipwick", "and this", "cushion"))).toBe(false);
-    expect(camp.letters.map((l) => l.id)).toEqual(ids);
-    const back = parseCamp(JSON.parse(JSON.stringify(camp)));
-    expect(back?.letters.filter(open)).toHaveLength(BOX);
-    // Reading one is not enough; taking its present out makes room.
-    const first = camp.letters[0];
-    if (first) first.read = true;
-    expect(roomInBox(camp.letters)).toBe(false);
-    if (first) first.taken = true;
-    expect(post(camp.letters, letter("late", "Pipwick", "and this", "cushion"))).toBe(true);
-    expect(camp.letters).toHaveLength(BOX);
-    expect(camp.letters.filter((l) => l.gift !== "" && !l.taken)).toHaveLength(BOX);
-  });
-
-  test("an unread note with nothing inside makes room before any present", () => {
-    const box = Array.from({ length: BOX }, (_v, i) =>
-      letter(`g${i}`, "Tindra", "for you", i === 5 ? "" : "acorn-jar"),
-    );
-    expect(post(box, letter("late", "Pipwick", "hello"))).toBe(true);
-    expect(box.some((l) => l.id === "g5")).toBe(false);
-    expect(box.filter((l) => l.gift !== "")).toHaveLength(BOX - 1);
-  });
-
-  test("only a real letter is a letter", () => {
-    expect(isLetter(letter("a", "Old Barkley", "sit. the fire likes company."))).toBe(true);
-    expect(isLetter({ ...letter("a", "Pipwick", "x"), gift: "the moon" })).toBe(false);
-    expect(isLetter({ ...letter("a", "Pipwick", "x"), from: "<b>" })).toBe(false);
-    expect(isLetter({ id: "a" })).toBe(false);
-    expect(CGH).toBe(40);
   });
 });

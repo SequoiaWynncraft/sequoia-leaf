@@ -10,7 +10,7 @@ member's own camp.
 ```sh
 bun run dev      # with hot reload
 bun run build    # dist/
-bun test         # the rules: saving, the arrival letter, the made-up guild, the town's own, the camp, the mailbox, parcels, strings of lights tied at both ends, the town live, what a touch means
+bun test         # the rules: saving, the arrival letter, the made-up guild, the town's own, the camp, parcels, strings of lights tied at both ends, the town live, what a touch means
 ```
 
 To play as a real skin, put a 64x64 skin sheet at `dist/skins/player.png` after building (it is
@@ -59,7 +59,7 @@ and copies the test skin in one go.
   sitting down on one of the logs at the stump, goes in without the card. The doors of the Works
   part and the member steps into the light (at the stump the lantern burns up), the view closes
   in on the spot, and the game opens out of it over the whole town. Coming back runs the other way.
-- **The town's own** (`folk.ts`). Everybody who lives in the town and is not a member is drawn as
+- **The town's own** (`folk.ts`, in `packages/town`). Everybody who lives in the town and is not a member is drawn as
   one of the town's own sprites, never with a skin: Cinfy the keeper, a gnome in a gold hat behind
   the Treasury's counter; Sootpaw, a black cat, mostly asleep on the lamp stall; Bramblewick and
   Tindra, gnomes in red and green hats behind the other two stalls; Pipwick, a gnome in a blue hat,
@@ -118,7 +118,7 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   (with Turn, for things that turn, and Put away) and everything put away; tapping one sets it out
   near the member, in hand. The cabin, the mailbox and the signpost may be moved but stay out. R
   turns, Delete puts away, Escape is done. Every change is kept.
-- **Things.** Seventy-five of them (`things.ts`), in eight kinds, each drawn in the town's way and
+- **Things.** Seventy-five of them (`things.ts`, in `packages/town`), in eight kinds, each drawn in the town's way and
   nearly all doing something when touched: a lantern goes out and lights, a wind chime rings, the
   music box plays its tune, Worm looks out of Worm's pot, and something in the barrel looks back.
   They come from the market for Coins, from the Treasury for Leaf, from the games as trophies that
@@ -194,7 +194,7 @@ members are in the game just now, and which have gone in the last day and doze i
 server `madeup.ts` invents all of it, and keeps a memory of its own as a server would: so that
 visitors and dozers can be seen, it has four stand-in members with made-up looks (Quillfeather
 and Fernwhistle in the game, Wrenly and Kestrelle gone a while). The town's own are not the
-guild's: they are in `folk.ts`, the same everywhere.
+guild's: they are in `folk.ts` (in `packages/town`), the same everywhere.
 
 ## On the guild's own server
 
@@ -331,45 +331,46 @@ While a game is open the loop is stopped: nothing is stepped or drawn and nothin
 and it picks up where it was when the game is put away. While the member is in a camp the town is
 not stepped either; what the guild does meanwhile is applied to it without ceremony.
 
-| File                                  | What it holds                                                                           |
-| ------------------------------------- | --------------------------------------------------------------------------------------- |
-| `src/open.ts`                         | The front door: where the game is, the member's saves, then the town                    |
-| `src/main.ts`                         | The stage: canvas, camera, keys and fingers, the loop, the walk between places          |
-| `src/stage.ts`                        | What the stage asks of a scene, and a scene of the stage                                |
-| `src/touch.ts`                        | What a tap, the pointer, the key and the member's feet mean, in the town and in a camp  |
-| `src/townscene.ts`                    | The town as a scene: who is here, taps, getting about, going into games and to the camp |
-| `src/campscene.ts`                    | A camp as a scene: laying it out, who is there, taps, decorating, parcels, visiting     |
-| `src/grid.ts`                         | Ground to walk on: which squares are solid, and the way round them                      |
-| `src/world.ts`                        | The town's map: paths, pond, what is solid, where places are                            |
-| `src/camp.ts`                         | A camp's rules: what may stand where, the tray, who lives there, somebody else's layout |
-| `src/things.ts`                       | The catalogue of camp things: names, kinds, the ground each takes                       |
-| `src/mail.ts`                         | The mailbox: letters, and when one is still waiting                                     |
-| `src/town.ts`, `src/camptouch.ts`     | What each thing does when touched, and the parts that move                              |
-| `src/props.ts`, `src/flights.ts`      | Things that stand and can be touched; things in the air                                 |
-| `src/actors.ts`, `src/pets.ts`        | Walking, sitting, speaking; the town's own about their evening; the pets                |
-| `src/folk.ts`, `src/folkart.ts`       | The town's own: who each is, its job and lines; how each is drawn (never a skin)        |
-| `src/events.ts`                       | Staging the guild's moments in the town, or applying them quietly                       |
-| `src/draw.ts`                         | Drawing a frame of any place; name plates and speech; the round hole a door closes to   |
-| `src/hud.ts`                          | The purse, corner, feed, dock, panel and cards, shared by both places                   |
-| `src/ui.ts`, `src/campui.ts`          | The town's panels and arrival letter; the camp's panels and tray                        |
-| `src/cards.ts`                        | What camp things, Treasury wares and stalls say about themselves, as kit cards          |
-| `src/doors.ts`                        | A game in a frame: opening it, hearing it, the note when it will not open               |
-| `src/games.ts`                        | The games that are places, what each says is waiting, and what has been won in each     |
-| `src/guild.ts`, `src/madeup.ts`       | The questions asked of the guild, and the made-up guild that answers                    |
-| `src/live.ts`, `src/news.ts`          | The real guild's answers on its own server; the feed's line for each moment             |
-| `src/visitors.ts`                     | Real members in the game, standing about the town, and those dozing in it               |
-| `src/players.ts`, `src/motion.ts`     | The town live: in the room, everybody else drawn from it, emotes; its rules             |
-| `src/aboutui.ts`, `src/about.ts`      | Who is about: the button and its panel; who goes in which part, and the words           |
-| `src/save.ts`, `src/keep.ts`          | The kept record and its rules; reading and writing it in the browser                    |
-| `src/record.ts`                       | The one record as it is held while the page is open                                     |
-| `src/letter.ts`                       | Putting the arrival letter together from the time away                                  |
-| `src/fx.ts`                           | Sparks, leaves and rising words                                                         |
-| `src/sprites.ts`, `src/ground.ts`     | The town's art                                                                          |
-| `src/campart.ts`, `src/campground.ts` | The camp's art: the cabin, every thing, the pets, the clearing's floor                  |
-| `src/campsfx.ts`                      | The camp's own sounds                                                                   |
+| File                                  | What it holds                                                                                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/open.ts`                         | The front door: where the game is, the member's saves, then the town                                                                  |
+| `src/main.ts`                         | The stage: canvas, camera, keys and fingers, the loop, the walk between places                                                        |
+| `src/stage.ts`                        | What the stage asks of a scene, and a scene of the stage                                                                              |
+| `src/touch.ts`                        | What a tap, the pointer, the key and the member's feet mean, in the town and in a camp                                                |
+| `src/townscene.ts`                    | The town as a scene: who is here, taps, getting about, going into games and to the camp                                               |
+| `src/campscene.ts`                    | A camp as a scene: laying it out, who is there, taps, decorating, parcels, visiting                                                   |
+| `src/grid.ts`                         | Ground to walk on: which squares are solid, and the way round them                                                                    |
+| `src/world.ts`                        | The town's map: paths, pond, what is solid, where places are                                                                          |
+| `src/camp.ts`                         | The camp as kept here, by places in a list: the tray, who lives there, somebody else's layout; the ground rules are `packages/town`'s |
+| `src/town.ts`, `src/camptouch.ts`     | What each thing does when touched, and the parts that move                                                                            |
+| `src/props.ts`, `src/flights.ts`      | Things that stand and can be touched; things in the air                                                                               |
+| `src/actors.ts`, `src/pets.ts`        | Walking, sitting, speaking; the town's own about their evening; the pets                                                              |
+| `src/folkart.ts`                      | How each of the town's own is drawn (never a skin)                                                                                    |
+| `src/events.ts`                       | Staging the guild's moments in the town, or applying them quietly                                                                     |
+| `src/draw.ts`                         | Drawing a frame of any place; name plates and speech; the round hole a door closes to                                                 |
+| `src/hud.ts`                          | The purse, corner, feed, dock, panel and cards, shared by both places                                                                 |
+| `src/ui.ts`, `src/campui.ts`          | The town's panels and arrival letter; the camp's panels and tray                                                                      |
+| `src/cards.ts`                        | What camp things, Treasury wares and stalls say about themselves, as kit cards                                                        |
+| `src/doors.ts`                        | A game in a frame: opening it, hearing it, the note when it will not open                                                             |
+| `src/games.ts`                        | The games that are places, what each says is waiting, and what has been won in each                                                   |
+| `src/guild.ts`, `src/madeup.ts`       | The questions asked of the guild, and the made-up guild that answers                                                                  |
+| `src/live.ts`, `src/news.ts`          | The real guild's answers on its own server; the feed's line for each moment                                                           |
+| `src/visitors.ts`                     | Real members in the game, standing about the town, and those dozing in it                                                             |
+| `src/players.ts`, `src/motion.ts`     | The town live: in the room, everybody else drawn from it, emotes; its rules                                                           |
+| `src/aboutui.ts`, `src/about.ts`      | Who is about: the button and its panel; who goes in which part, and the words                                                         |
+| `src/save.ts`, `src/keep.ts`          | The kept record and its rules; reading and writing it in the browser                                                                  |
+| `src/record.ts`                       | The one record as it is held while the page is open                                                                                   |
+| `src/letter.ts`                       | Putting the arrival letter together from the time away                                                                                |
+| `src/fx.ts`                           | Sparks, leaves and rising words                                                                                                       |
+| `src/sprites.ts`, `src/ground.ts`     | The town's art                                                                                                                        |
+| `src/campart.ts`, `src/campground.ts` | The camp's art: the cabin, every thing, the pets, the clearing's floor                                                                |
+| `src/campsfx.ts`                      | The camp's own sounds                                                                                                                 |
 
-`grid.ts`, `camp.ts`, `things.ts`, `mail.ts`, `save.ts`, `letter.ts`, `madeup.ts`, `games.ts`,
-`folk.ts`, `live.ts`, `news.ts`, `motion.ts` and `about.ts` have no page in them, and tests beside them
+The catalogue of camp things (`things.ts`), what is for sale (`catalogue.ts`), the mailbox
+(`mail.ts`), the town's own (`folk.ts`) and the ground rules of a camp (`camp.ts`) are in
+`packages/town`, with the rules Leaf will play the town by; the page imports them from there.
+`grid.ts`, `camp.ts`, `save.ts`, `letter.ts`, `madeup.ts`, `games.ts`,
+`live.ts`, `news.ts`, `motion.ts` and `about.ts` have no page in them, and tests beside them
 (`motion.test.ts` plays Leaf's side of a live connection with the kit's stand-in socket); `folk.test.ts` also
 reads every file of the three games to check that nothing but members is drawn from a skin. `record.ts` has tests too,
 for what is sent to the camp, and so has `touch.ts`, for what a touch means.

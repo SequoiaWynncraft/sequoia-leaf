@@ -76,18 +76,19 @@ address after `return_to=`. Only `GET /v1/game/hello` reads `GAME_LEAF_SPENDING`
 
 ## Layout
 
-| Path                  | What it is                                                            |
-| --------------------- | --------------------------------------------------------------------- |
-| `packages/core`       | The rules of the game as pure functions and types. No I/O.            |
-| `packages/raid`       | The Little Raid's rules, which Leaf and the battler's page share.     |
-| `packages/yard`       | The Works' rules, with no screen in them; Leaf and the page use them. |
-| `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.         |
-| `apps/api/migrations` | The database schema, as Effect migrations applied in order at start.  |
-| `apps/town`           | Guild Town, the browser game's home screen.                           |
-| `apps/works`          | The Works, a game in the town.                                        |
-| `apps/battler`        | The Little Raid, a game in the town.                                  |
-| `packages/kit`        | What the town and its games share: look, sound and plumbing.          |
-| `Dockerfile`          | The production image, with the game's pages built into it.            |
+| Path                  | What it is                                                              |
+| --------------------- | ----------------------------------------------------------------------- |
+| `packages/core`       | The rules of the game as pure functions and types. No I/O.              |
+| `packages/raid`       | The Little Raid's rules, which Leaf and the battler's page share.       |
+| `packages/yard`       | The Works' rules, with no screen in them; Leaf and the page use them.   |
+| `packages/town`       | The town's and the camp's rules and catalogue; the town page uses them. |
+| `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.           |
+| `apps/api/migrations` | The database schema, as Effect migrations applied in order at start.    |
+| `apps/town`           | Guild Town, the browser game's home screen.                             |
+| `apps/works`          | The Works, a game in the town.                                          |
+| `apps/battler`        | The Little Raid, a game in the town.                                    |
+| `packages/kit`        | What the town and its games share: look, sound and plumbing.            |
+| `Dockerfile`          | The production image, with the game's pages built into it.              |
 
 ## How Leaf is earned
 
@@ -658,6 +659,19 @@ player's a UTC day (past that they are not logged, and the play goes on), and
 kept 180 days, older rows being removed as new ones are written. So is the
 count of the batch's commands done and refused, in `command_days`. Both are
 for the staff's report (see [Who played](#who-played-the-staffs-view)).
+
+**Awards.** A game may say what a state shows was won for good
+(`Game.awards`): The Little Raid a carved figure of each boss its almanac has
+beaten (`trophy-<boss>`), the Works a model of each capstone its depot has
+taken in (`model-<capstone>`). In the transaction of a batch that changed such
+a game's state, each one the player does not hold yet is written to `awards`
+(`player_id`, `id`, `at`); none is ever taken away. Every call of every game
+is told all the player holds (`Ctx.awards`), so that the town can send each to
+the camp as a trophy.
+
+**The town and the camp** have their rules as a `Game` (`TOWN`, in
+`packages/town`, with its README), which is not on the service yet: the town's
+page still keeps its own record in the browser.
 
 **The Little Raid** keeps the run in hand, the almanac, the looks and the trail
 picked. Its commands, notes, refusals and what its page is shown are in

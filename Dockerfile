@@ -1,8 +1,8 @@
 # The game's pages, built from the three apps, the kit they share, the core
 # rules the kit shares with Leaf (the live wire), and the games' rules
-# (packages/raid and packages/yard, which the pages share with Leaf's play
-# service). Each build is plain files, so only /app/public goes on to the
-# image.
+# (packages/raid, packages/yard and packages/town, which the pages share with
+# Leaf's play service). Each build is plain files, so only /app/public goes on
+# to the image.
 FROM docker.io/oven/bun:1.4.4-slim AS pages
 
 WORKDIR /app
@@ -12,6 +12,7 @@ COPY packages/kit/package.json packages/kit/
 COPY packages/core/package.json packages/core/
 COPY packages/raid/package.json packages/raid/
 COPY packages/yard/package.json packages/yard/
+COPY packages/town/package.json packages/town/
 COPY apps/town/package.json apps/town/
 COPY apps/works/package.json apps/works/
 COPY apps/battler/package.json apps/battler/
@@ -21,6 +22,7 @@ COPY packages/kit packages/kit
 COPY packages/core packages/core
 COPY packages/raid packages/raid
 COPY packages/yard packages/yard
+COPY packages/town packages/town
 COPY apps/town apps/town
 COPY apps/works apps/works
 COPY apps/battler apps/battler
@@ -38,12 +40,14 @@ COPY apps/api/package.json apps/api/
 COPY packages/core/package.json packages/core/
 COPY packages/raid/package.json packages/raid/
 COPY packages/yard/package.json packages/yard/
+COPY packages/town/package.json packages/town/
 RUN bun install --frozen-lockfile --production
 
 COPY apps/api apps/api
 COPY packages/core packages/core
 COPY packages/raid packages/raid
 COPY packages/yard packages/yard
+COPY packages/town packages/town
 COPY --from=pages /app/public /app/public
 
 # The database lives in /data, which production mounts as a volume. Creating

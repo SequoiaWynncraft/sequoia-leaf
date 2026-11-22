@@ -2,8 +2,8 @@
 
 import type { Body, Dir } from "@sequoia-leaf/kit/skin.ts";
 import type { Pt, Rect } from "@sequoia-leaf/kit/util.ts";
+import type { Doing as FolkDoing, Townsperson } from "@sequoia-leaf/town/folk.ts";
 
-import type { Doing as FolkDoing, Townsperson } from "./folk.ts";
 import type { FolkArt } from "./folkart.ts";
 import type { GameId } from "./games.ts";
 import type { Tone } from "./guild.ts";

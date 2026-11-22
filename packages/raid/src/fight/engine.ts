@@ -1,3 +1,5 @@
+import { chance, mix } from "@sequoia-leaf/core";
+
 /**
  * The fight itself: two parties sit down, and a clock of small steps runs until one side is gone.
  * Everything is decided by the two parties and a seed. `openFight` seats everyone and switches the
@@ -15,7 +17,6 @@ import { FIGHT } from "../content/rooms.ts";
 import { TRAIT_IDS, type TraitId, traitNumber } from "../content/traits.ts";
 import { backRow, cellAt, CELLS, colOf, distance, HOME_ROWS, seatCell, type Side, stepToward } from "../hex.ts";
 import { type Party, type Placed, traitSteps } from "../party.ts";
-import { chance, mix } from "../rng.ts";
 import { cast } from "./abilities.ts";
 import {
   drawnFoe,

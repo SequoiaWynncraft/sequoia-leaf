@@ -1,6 +1,6 @@
 /**
  * The mailbox: notes and small presents from the town's own who came by while the member was out.
- * Who wrote and what they left is the guild's to say; this is only the box they are kept in.
+ * Who wrote and what they left is the game's to say (`game.ts`); this is only the box they are kept in.
  */
 
 import { isThing } from "./things.ts";

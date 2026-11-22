@@ -10,13 +10,15 @@ import { el, icon as glyph, shown } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { folkNamed } from "@sequoia-leaf/town/folk.ts";
+import { tidied } from "@sequoia-leaf/town/mail.ts";
+import { thingOf, THINGS } from "@sequoia-leaf/town/things.ts";
 
 import { hop } from "./actors.ts";
 import { COSY, KIND, type PetId, PETS, petsOf, trayList, welcoming } from "./camp.ts";
 import { type CampArt, type CampIcon, campIcon, pictureOf } from "./campart.ts";
 import type { CampScene } from "./campscene.ts";
 import { named, thingRef } from "./cards.ts";
-import { folkNamed } from "./folk.ts";
 import { folkArt } from "./folkart.ts";
 import { changed, G, hooks, toPage } from "./game.ts";
 import { guild } from "./guild.ts";
@@ -35,11 +37,9 @@ import {
   slot,
   when,
 } from "./hud.ts";
-import { tidied } from "./mail.ts";
 import { MY_PETS, PET_ABOUT, PET_CHOICE } from "./pets.ts";
 import { camp, kept } from "./record.ts";
 import type { Sprites } from "./sprites.ts";
-import { thingOf, THINGS } from "./things.ts";
 import { openPanel as openTownPanel, thingSlot } from "./ui.ts";
 
 /** An element that stands for a thing: pointing at it shows the thing's card. */

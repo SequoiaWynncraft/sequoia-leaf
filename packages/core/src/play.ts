@@ -33,6 +33,8 @@ export interface Ctx {
    * says (but for a change that is `free`), so a game that pays past it says what was really paid.
    */
   readonly room: number;
+  /** Everything the player has won for good, in any game (`Game.awards`): Leaf keeps each, and never takes one away. */
+  readonly awards: readonly string[];
 }
 
 /** Coins a command pays (or, negative, takes), each keyed by the fact it records so it is paid once. */
@@ -98,6 +100,8 @@ export interface Game<State, Command, View, Note> {
   command(v: unknown): Command | null;
   /** Where a state stands among everyone's, for a game with a board (`GET /v1/game/play/{game}/standings`). */
   standing?(state: State): Standing;
+  /** What this state shows was won for good (a boss beaten, a capstone built), by names other games know it by. */
+  awards?(state: State): readonly string[];
 }
 
 /** Whether a command's answer is a refusal. */

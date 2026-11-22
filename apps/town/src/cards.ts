@@ -11,16 +11,16 @@
  */
 import { type Description, type Entry, link, register, type Stat } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { folkNamed } from "@sequoia-leaf/town/folk.ts";
+import { KIND_NAMES, thingOf } from "@sequoia-leaf/town/things.ts";
 
 import { owned } from "./camp.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
-import { folkNamed } from "./folk.ts";
 import { folkArt } from "./folkart.ts";
 import { G } from "./game.ts";
 import { guild } from "./guild.ts";
 import { camp } from "./record.ts";
 import type { Sprites } from "./sprites.ts";
-import { KIND_NAMES, thingOf } from "./things.ts";
 
 export const thingRef = (id: string): string => `thing:${id}`;
 export const wareRef = (id: string): string => `ware:${id}`;

@@ -8,6 +8,8 @@ import type { Emote } from "@sequoia-leaf/kit/emotes.ts";
 import { where } from "@sequoia-leaf/kit/live.ts";
 import { bake, type Body, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { clamp, type Ctx, dist, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { FOLK, folk, KEEPER } from "@sequoia-leaf/town/folk.ts";
+import { BOX_FULL, post, roomInBox } from "@sequoia-leaf/town/mail.ts";
 
 import { initAbout, openAbout } from "./aboutui.ts";
 import {
@@ -28,7 +30,6 @@ import type { CampArt } from "./campart.ts";
 import { drawPicture, drawWords, type Picture, sizeBuffers } from "./draw.ts";
 import { beginEvents, stepEvents } from "./events.ts";
 import { flights, stepFlights } from "./flights.ts";
-import { FOLK, folk, KEEPER } from "./folk.ts";
 import { initFolkArt } from "./folkart.ts";
 import { updateFx } from "./fx.ts";
 import { type Actor, after, changed, G, hooks, type PanelId, show } from "./game.ts";
@@ -37,7 +38,6 @@ import { GROUND, NEAR, paintBackdrop, paintGround, paintNear, SKYLINE } from "./
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, refreshFace, setFace, setHammer, showCard } from "./hud.ts";
 import { compose, read } from "./letter.ts";
-import { BOX_FULL, post, roomInBox } from "./mail.ts";
 import { inTownLine } from "./news.ts";
 import {
   closeEmotes,

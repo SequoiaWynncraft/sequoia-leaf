@@ -19,6 +19,7 @@ import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { LONG_PRESS, tipAt, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { FOLK } from "@sequoia-leaf/town/folk.ts";
 
 import { stepAbout } from "./aboutui.ts";
 import { makeCampArt } from "./campart.ts";
@@ -26,7 +27,6 @@ import { type CampScene, makeCamp } from "./campscene.ts";
 import { makeCampUi } from "./campui.ts";
 import { goIn, type Visit } from "./doors.ts";
 import { drawIris } from "./draw.ts";
-import { FOLK } from "./folk.ts";
 import { folkArt, initFolkArt } from "./folkart.ts";
 import { clearFx } from "./fx.ts";
 import { G, hooks, type PanelId, show, toPage } from "./game.ts";

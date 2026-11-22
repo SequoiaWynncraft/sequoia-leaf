@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { letter } from "@sequoia-leaf/town/mail.ts";
+
 import { newCamp } from "./camp.ts";
-import { letter } from "./mail.ts";
 import { blank, dayOf, type Kept, minutesAway, parse, VERSION, write } from "./save.ts";
 
 const camp = newCamp();

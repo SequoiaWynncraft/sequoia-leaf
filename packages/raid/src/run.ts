@@ -1,3 +1,5 @@
+import { draw32, mix, pick, shuffled, weighted } from "@sequoia-leaf/core";
+
 /**
  * A run: one little raid, from the first pick to the last room. It is plain data (so it saves as it
  * is) and a set of actions on it. Every action either does something and gives back notes on what
@@ -31,7 +33,6 @@ import { resolveFight } from "./fight/engine.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
 import { COLS, SEATS } from "./hex.ts";
 import { charmsOf, countTraits, type Party, type Placed, type TraitState, traitStates, traitSteps } from "./party.ts";
-import { draw32, mix, pick, shuffled, weighted } from "./rng.ts";
 import { sparParty } from "./spar.ts";
 
 // ---------- what a run is ----------

@@ -1,7 +1,7 @@
 /**
  * Everything a camp can hold: what each thing is called, what kind it is, how much ground it
- * takes and what it does. How each is drawn is in `campart.ts`, what happens when it is touched is
- * in `campscene.ts`, and where it is sold and for how much is the guild's to say (`guild.ts`).
+ * takes and what it does. Where it is sold and for how much is in `catalogue.ts`; how each is drawn
+ * and what touching it shows are the town page's (`campart.ts`, `camptouch.ts`).
  */
 
 export const KINDS = ["home", "seats", "lights", "flags", "plants", "fences", "oddments", "trophies"] as const;

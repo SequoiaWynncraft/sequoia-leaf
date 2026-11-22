@@ -234,7 +234,7 @@ last is cleared.
 
 ## Chance
 
-Every draw a run makes comes from its stream (`run.rng`, `rng.ts`): the first picks, the stall, who
+Every draw a run makes comes from its stream (`run.rng`, core's `rng.ts`): the first picks, the stall, who
 waits in each room (a trouble plan, or a regular's party), the components and boons on offer, each
 fight's seed. `run.seed` is only where the stream started (the bot's own habits are drawn from it).
 At Leaf's table there is a stream of the table's own too, from which each new run's seed is drawn,
@@ -279,7 +279,6 @@ it would send. `encodeTable` and `decodeTable` are the table as Leaf stores it.
 | `content/keepsakes.ts` | The payout                                                                                                            |
 | `content/advice.ts`    | What kind of fighter each calling makes and where it stands, and three finished items that suit each figure           |
 | `hex.ts`               | The board: cells and seats, distance, neighbours, lines, cones, rings, finding a way round                            |
-| `rng.ts`               | The seeded random stream                                                                                              |
 | `party.ts`             | A party as plain data, and trait counting                                                                             |
 | `fight/types.ts`       | What a figure in a fight looks like, and the events a step gives back                                                 |
 | `fight/core.ts`        | The verbs: hurt, heal, shield, stun, slow, burn, taunt, hide, leap, knock back, summon                                |

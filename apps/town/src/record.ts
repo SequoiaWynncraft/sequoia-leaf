@@ -5,12 +5,12 @@
  */
 
 import { before } from "@sequoia-leaf/kit/cloud.ts";
+import { waiting } from "@sequoia-leaf/town/mail.ts";
 
 import { MOST_OWNED, MOST_PARCELS, owned } from "./camp.ts";
 import { changed, G, hooks, watch } from "./game.ts";
 import { guild } from "./guild.ts";
 import { load, store } from "./keep.ts";
-import { waiting } from "./mail.ts";
 import type { Kept } from "./save.ts";
 
 export const kept: Kept = load();

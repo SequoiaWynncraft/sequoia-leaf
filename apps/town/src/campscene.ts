@@ -14,6 +14,9 @@ import { R } from "@sequoia-leaf/kit/pix.ts";
 import type { Dir } from "@sequoia-leaf/kit/skin.ts";
 import { sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, dist, pick, type Pt, rng } from "@sequoia-leaf/kit/util.ts";
+import { AT_CAMP, folkNamed, isCaller } from "@sequoia-leaf/town/folk.ts";
+import { BOX_FULL, letter, post, roomInBox, waiting } from "@sequoia-leaf/town/mail.ts";
+import { footprint, thingOf, turnsOf } from "@sequoia-leaf/town/things.ts";
 
 import { face, hop, makeActor, makeFolk, release, say, sit, stepActor, walkTo } from "./actors.ts";
 import {
@@ -60,7 +63,6 @@ import { type CampUi } from "./campui.ts";
 import { thingRef } from "./cards.ts";
 import { drawPicture, drawProp, drawWords, type Picture, sizeBuffers } from "./draw.ts";
 import { clearFlights, flights, fling, stepFlights } from "./flights.ts";
-import { AT_CAMP, folkNamed, isCaller } from "./folk.ts";
 import { bit, burst, float, flutter, puff, sparkle, updateFx } from "./fx.ts";
 import { type Actor, after, changed, forgetLater, G, hooks, show, stepLater } from "./game.ts";
 import { trophies } from "./games.ts";
@@ -68,13 +70,11 @@ import { CELL, makeGround } from "./grid.ts";
 import { paintTrunk } from "./ground.ts";
 import { guild, type Happening, type MateCamp } from "./guild.ts";
 import { closeCard, closePanel, showCard } from "./hud.ts";
-import { BOX_FULL, letter, post, roomInBox, waiting } from "./mail.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
 import { camp as mine, greet, roomByTrail, roomFor, sendToCamp } from "./record.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Hover, Scene, Stage } from "./stage.ts";
-import { footprint, thingOf, turnsOf } from "./things.ts";
 import { type Door, makeTouch } from "./touch.ts";
 import type { Seat } from "./world.ts";
 

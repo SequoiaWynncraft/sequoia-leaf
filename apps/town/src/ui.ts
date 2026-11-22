@@ -13,6 +13,10 @@ import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
+import type { Stock, Ware } from "@sequoia-leaf/town/catalogue.ts";
+import { folk, folkNamed, KEEPER } from "@sequoia-leaf/town/folk.ts";
+import { waiting } from "@sequoia-leaf/town/mail.ts";
+import { thingOf } from "@sequoia-leaf/town/things.ts";
 
 import { callToFire, goSit, hop, inTown, release, rouse, say, sitters } from "./actors.ts";
 import { openingTab, readNews, redrawn, shortDay, TABS } from "./board.ts";
@@ -20,12 +24,11 @@ import { owned } from "./camp.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { named, registerCards, thingRef, wareRef } from "./cards.ts";
 import { fling } from "./flights.ts";
-import { folk, folkNamed, KEEPER } from "./folk.ts";
 import { folkArt } from "./folkart.ts";
 import { bit, float, flutter, puff, sparkle } from "./fx.ts";
 import { type Actor, after, changed, G, hooks, type PanelId } from "./game.ts";
 import { GAMES } from "./games.ts";
-import { type AwayLine, guild, type Quest, type Stock, type Ware } from "./guild.ts";
+import { type AwayLine, guild, type Quest } from "./guild.ts";
 import {
   $,
   bump,
@@ -44,11 +47,9 @@ import {
   when,
 } from "./hud.ts";
 import type { Letter } from "./letter.ts";
-import { waiting } from "./mail.ts";
 import { NOTES } from "./notes.ts";
 import { buyForCamp, camp } from "./record.ts";
 import { icon, type Sprites } from "./sprites.ts";
-import { thingOf } from "./things.ts";
 import { flare, nudgeCrab, ringBell, rollCall } from "./town.ts";
 import { place, PLACES } from "./world.ts";
 

@@ -35,7 +35,7 @@ import small from "./yards/small.json";
 const T0 = 1_800_000_000_000;
 const SECOND = 1000;
 const HOUR = 3600 * SECOND;
-const ctx = (now: number, seed = 7): Ctx => ({ now, player: { id: "p", guest: false }, seed, room: 0 });
+const ctx = (now: number, seed = 7): Ctx => ({ now, player: { id: "p", guest: false }, seed, room: 0, awards: [] });
 const YARDS = { small, short, mid, large } as const;
 
 /** A yard as Leaf would keep it, standing at `T0`. */
@@ -417,5 +417,16 @@ describe("a yard's numbers on its owner's card", () => {
       "Coins earned",
       "Story",
     ]);
+  });
+});
+
+describe("awards", () => {
+  test("are a model of each capstone the depot has ever taken in", () => {
+    const w = kept(create({ seed: 1 }));
+    expect(WORKS.awards?.(w)).toEqual([]);
+    w.depot.beacon = 1;
+    expect(WORKS.awards?.(w)).toEqual(["model-beacon"]);
+    w.depot.crab = 2;
+    expect(WORKS.awards?.(w)).toEqual(["model-crab", "model-beacon"]);
   });
 });

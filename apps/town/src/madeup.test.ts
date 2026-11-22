@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { CALLERS, FOLK, folk, isFolk } from "./folk.ts";
+import { CALLERS, FOLK, folk, isFolk } from "@sequoia-leaf/town/folk.ts";
+import { isLetter } from "@sequoia-leaf/town/mail.ts";
+import { isThing, thingOf, THINGS } from "@sequoia-leaf/town/things.ts";
+
 import { trophies } from "./games.ts";
 import type { Happening, Person } from "./guild.ts";
 import { GAP, type MadeUp, makeGuild, STANDINS } from "./madeup.ts";
-import { isLetter } from "./mail.ts";
 import { lineFor } from "./news.ts";
-import { isThing, thingOf, THINGS } from "./things.ts";
 
 /** Things that only ever come as presents from the town's own. */
 const GIVEN = ["pinecone", "painted-pebble", "acorn-jar", "tiny-cairn", "crab-drawing", "gnome-traveller"];
