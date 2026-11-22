@@ -8,6 +8,7 @@ import {
   type Logged,
   type Standing,
 } from "@sequoia-leaf/core";
+import { PULLS } from "@sequoia-leaf/pulls";
 import { RAID } from "@sequoia-leaf/raid/game.ts";
 import { TOWN } from "@sequoia-leaf/town";
 import { WORKS } from "@sequoia-leaf/yard/game.ts";
@@ -110,4 +111,9 @@ export function played<State, Command, View, Note>(game: Game<State, Command, Vi
 }
 
 /** The games on the play service. */
-export const GAMES: Readonly<Record<GameId, Played>> = { raid: played(RAID), works: played(WORKS), town: played(TOWN) };
+export const GAMES: Readonly<Record<GameId, Played>> = {
+  raid: played(RAID),
+  works: played(WORKS),
+  town: played(TOWN),
+  pulls: played(PULLS),
+};

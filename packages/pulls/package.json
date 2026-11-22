@@ -1,0 +1,19 @@
+{
+  "name": "@sequoia-leaf/pulls",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/game.ts"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@sequoia-leaf/core": "workspace:*",
+    "@sequoia-leaf/raid": "workspace:*",
+    "@sequoia-leaf/town": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.4"
+  }
+}

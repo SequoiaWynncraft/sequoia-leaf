@@ -41,6 +41,7 @@ COPY packages/core/package.json packages/core/
 COPY packages/raid/package.json packages/raid/
 COPY packages/yard/package.json packages/yard/
 COPY packages/town/package.json packages/town/
+COPY packages/pulls/package.json packages/pulls/
 RUN bun install --frozen-lockfile --production
 
 COPY apps/api apps/api
@@ -48,6 +49,7 @@ COPY packages/core packages/core
 COPY packages/raid packages/raid
 COPY packages/yard packages/yard
 COPY packages/town packages/town
+COPY packages/pulls packages/pulls
 COPY --from=pages /app/public /app/public
 
 # The database lives in /data, which production mounts as a volume. Creating

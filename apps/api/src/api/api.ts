@@ -29,6 +29,7 @@ import {
 } from "./errors.ts";
 import {
   ActivityReport,
+  Banners,
   Events,
   GameMe,
   GuildEvents,
@@ -234,6 +235,7 @@ export class GameApi extends HttpApiGroup.make("game")
       success: Person,
       error: Missing,
     }),
+    HttpApiEndpoint.get("banners", "/banners", { success: Banners }),
   )
   .middleware(Player)
   .prefix("/v1/game") {}
