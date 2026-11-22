@@ -139,13 +139,13 @@ export function beltTile(arms: Arms, main: Dir, step: number, tier: number, tint
   return tile;
 }
 
-/** Where on a tile a carried thing is, in the tile's own pixels: in from one side to the middle, then out by another. */
-export function ride(from: number, to: number, prog: number): readonly [number, number] {
+/**
+ * Where on a tile a carried thing is, in the tile's own pixels: in from one side to the middle,
+ * then out by another. It says how far across the tile, or with `down` how far down it.
+ */
+export function ride(from: number, to: number, prog: number, down: boolean): number {
   const p = prog < 0 ? 0 : prog > 1 ? 1 : prog;
-  if (p < 0.5) {
-    const k = 1 - p * 2;
-    return [8 + edge(from, k), 8 + edgeY(from, k)];
-  }
-  const k = (p - 0.5) * 2;
-  return [8 + edge(to, k), 8 + edgeY(to, k)];
+  const side = p < 0.5 ? from : to;
+  const k = p < 0.5 ? 1 - p * 2 : (p - 0.5) * 2;
+  return 8 + (down ? edgeY(side, k) : edge(side, k));
 }

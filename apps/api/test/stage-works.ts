@@ -22,18 +22,20 @@ const whole = (v: unknown, most: number): number | null =>
 
 /**
  * Does one staging step to a yard: `{ yard: "mid" }` puts a kept yard (or `"new"`, a new one) in
- * its place, counting its Coins on from the one it replaces; `{ away: minutes }` has Leaf's clock
- * pass that long unwatched; `{ fill: n }` sends the depot what the nth standing order still wants,
- * and the story order first.
+ * its place, and `{ text: "..." }` any yard as its save's text, counting its Coins on from the one
+ * it replaces; `{ away: minutes }` has Leaf's clock pass that long unwatched; `{ fill: n }` sends
+ * the depot what the nth standing order still wants, and the story order first.
  */
 function step(w: World | null, op: Record<string, unknown>, now: number): World | null {
   const named = Object.entries(YARDS).find(([name]) => name === op.yard)?.[1];
   const next =
     op.yard === "new"
       ? WORKS.create({ now, player: { id: "tester", guest: false }, seed: 20_261_122, room: 0, awards: [] })
-      : named
-        ? WORKS.decode(JSON.stringify(named))
-        : undefined;
+      : typeof op.text === "string"
+        ? WORKS.decode(op.text)
+        : named
+          ? WORKS.decode(JSON.stringify(named))
+          : undefined;
   if (next !== undefined) {
     // It counts its Coins on from the yard it replaces, so that no Coins key is made twice.
     if (next) Object.assign(next, { at: now, bank: w?.bank ?? 0 });
