@@ -85,10 +85,8 @@ says so.
   who have gone in the last day doze in town (both below). A member's card has their
   name and rank, and for one dozing, how long ago they dozed off. A name shows only over somebody
   who is near the member, pointed at, speaking, or just arrived, and no two name plates ever
-  overlap. A member behind something tall in town (the lantern tree's canopy, a stall's awning, the
-  quest board) shows through it: when half or more of their head and chest is covered, a window
-  the shape of a figure opens in the thing over a quarter of a second, its edge dithered, and
-  windows near one another run together (`covered`, `hidden` and `parted` in `props.ts`). Of
+  overlap. A member can stand behind something tall and be hidden by it: that is how the town is
+  drawn, and a place to hide. Of
   everybody a touch is on, in front or behind, it means the one whose middle is nearest; a finger
   is on a figure from 10 pixels across, the mouse from 7. Members standing still within 6 pixels of one another (the member, live players, those
   visiting or dozing) are drawn apart (`apart.ts`), the same on every page: the first by account

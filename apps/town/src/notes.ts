@@ -34,9 +34,9 @@ export const NOTES: readonly Note[] = [
   {
     id: "seen-in-town",
     at: "2026-11-22T20:25Z",
-    title: "Nobody hidden in town",
+    title: "Easier to find people in town",
     lines: [
-      "Someone standing behind the lantern tree, a stall or the quest board now shows through it. Nobody waits behind the tree by the Works any more.",
+      "Nobody waits behind the tree by the Works any more.",
       "A tap finds someone walking more easily. Who is about keeps its order while it is open: new people go to the end, and people who left stay listed, dimmed.",
     ],
   },

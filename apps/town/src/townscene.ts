@@ -203,7 +203,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     under: drawWater,
     over: drawStrings,
     glows: drawGlows,
-    through: true,
   };
 
   // ---------- who is here ----------
