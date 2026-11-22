@@ -28,16 +28,16 @@ describe("the purse", () => {
 
   test("Coins are earned and Leaf is granted, in whole amounts", () => {
     const before = { ...balance() };
-    earn(12.9, "works_depot");
+    earn(12.9, "daily_chest");
     grant(3.2, "a test");
     expect(balance()).toEqual({ leaf: before.leaf + 3, coins: before.coins + 12 });
   });
 
   test("nothing, or less than nothing, changes nothing", () => {
     const before = { ...balance() };
-    earn(0, "works_depot");
-    earn(-5, "works_depot");
-    earn(0.5, "works_depot");
+    earn(0, "daily_chest");
+    earn(-5, "daily_chest");
+    earn(0.5, "daily_chest");
     grant(-1, "a test");
     grant(Number.NaN, "a test");
     expect(balance()).toEqual(before);
@@ -57,12 +57,12 @@ describe("the purse", () => {
   test("whoever is watching hears each change, and why", () => {
     const heard: string[] = [];
     const stop = watch((_p, why) => heard.push(why));
-    earn(5, "works_order");
+    earn(5, "daily_chest");
     spend("coins", 2, "camp_thing");
-    spend("coins", 1e9, "works_plot");
+    spend("coins", 1e9, "camp_thing");
     stop();
-    earn(5, "works_order");
-    expect(heard).toEqual(["works_order", "camp_thing"]);
+    earn(5, "daily_chest");
+    expect(heard).toEqual(["daily_chest", "camp_thing"]);
   });
 
   test("a tour may set the made-up purse to what it likes", () => {
@@ -121,7 +121,7 @@ describe("the purse beside the guild's ledger, with the made-up guild's Coins", 
 
   test("Coins still come and go, and are kept without any Leaf beside them", () => {
     const coins = balance().coins;
-    earn(40, "works_order");
+    earn(40, "daily_chest");
     expect(spend("coins", 15, "camp_thing")).toBe(true);
     expect(balance()).toEqual({ leaf: 2450, coins: coins + 25 });
     expect(JSON.parse(store.getItem(KEY) ?? "null")).toEqual({ coins: coins + 25 });
@@ -244,30 +244,30 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
 
   test("go to Leaf in order, one at a time; earnings for one reason waiting together go as one", async () => {
     leaf.hold();
-    earn(5, "works_depot");
-    earn(2, "works_depot");
-    earn(4, "works_depot");
-    earn(10, "works_order");
-    expect(spend("coins", 300, "works_plot")).toBe(true);
+    earn(5, "daily_chest");
+    earn(2, "daily_chest");
+    earn(4, "daily_chest");
+    earn(10, "daily_chest");
+    expect(spend("coins", 300, "camp_thing")).toBe(true);
     // Spent from the page's number, at once: what is on its way counts.
-    expect(spend("coins", 22, "works_build")).toBe(false);
+    expect(spend("coins", 22, "camp_thing")).toBe(false);
     expect(balance().coins).toBe(21);
     await Promise.resolve();
     await Promise.resolve();
     expect(leaf.leaf.calls).toHaveLength(1);
     leaf.let();
     await idle();
+    // The town has one reason to earn by, so all that waited goes together.
     expect(leaf.leaf.calls.map((c) => [c.body?.amount, c.body?.reason])).toEqual([
-      [5, "works_depot"],
-      [6, "works_depot"],
-      [10, "works_order"],
-      [-300, "works_plot"],
+      [5, "daily_chest"],
+      [16, "daily_chest"],
+      [-300, "camp_thing"],
     ]);
     expect([leaf.leaf.coins, balance().coins]).toEqual([21, 21]);
   });
 
   test("an earning larger than one change may be goes as several", async () => {
-    earn(12_000, "works_order");
+    earn(12_000, "daily_chest");
     expect(balance().coins).toBe(12_300);
     await idle();
     expect(leaf.leaf.calls.map((c) => c.body?.amount)).toEqual([5000, 5000, 2000]);
@@ -275,7 +275,7 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
 
   test("is sent again with the same id after a network failure", async () => {
     leaf.leaf.offline = 2;
-    earn(7, "works_order");
+    earn(7, "daily_chest");
     await idle();
     const ids = leaf.leaf.calls.map((c) => c.body?.id);
     expect(ids).toHaveLength(3);
@@ -299,7 +299,7 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
 
   test("asks Leaf again when told to, after what is on its way, and takes another page's number when nothing is", async () => {
     leaf.hold();
-    earn(5, "works_refund");
+    earn(5, "daily_chest");
     refreshCoins();
     // Another page earned meanwhile.
     leaf.leaf.coins += 40;
@@ -311,7 +311,7 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
     expect(balance().coins).toBe(400);
     // With something on its way, it asks Leaf rather than take the number.
     leaf.hold();
-    earn(1, "works_depot");
+    earn(1, "daily_chest");
     heardCoins(999);
     expect(balance().coins).toBe(401);
     leaf.let();
@@ -321,16 +321,16 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
 
   test("sends everything Leaf has not answered as the page goes away, the change on its way too, each with its own id", async () => {
     leaf.hold();
-    earn(5, "works_depot");
-    earn(10, "works_order");
+    earn(5, "daily_chest");
+    earn(10, "daily_chest");
     await Promise.resolve();
     await Promise.resolve();
     flushCoins();
     const [first] = leaf.leaf.calls;
     const away = leaf.leaf.calls.filter((c) => c.keepalive).map((c) => c.body);
     expect(away).toEqual([
-      { id: first?.body?.id, amount: 5, reason: "works_depot" },
-      { id: expect.any(String), amount: 10, reason: "works_order" },
+      { id: first?.body?.id, amount: 5, reason: "daily_chest" },
+      { id: expect.any(String), amount: 10, reason: "daily_chest" },
     ]);
     expect(away[1]?.id).not.toBe(first?.body?.id);
     leaf.let();
@@ -341,13 +341,13 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
 
   test("closing with a request on its way sends it again to keep, with the same id, and it is done once", async () => {
     leaf.hold();
-    earn(5, "works_depot");
+    earn(5, "daily_chest");
     await Promise.resolve();
     await Promise.resolve();
     expect(leaf.leaf.calls).toHaveLength(1);
     flushCoins();
     const [own, kept] = leaf.leaf.calls;
-    expect(own?.body).toEqual({ id: expect.any(String), amount: 5, reason: "works_depot" });
+    expect(own?.body).toEqual({ id: expect.any(String), amount: 5, reason: "daily_chest" });
     expect([own?.keepalive, kept?.keepalive]).toEqual([false, true]);
     expect(kept?.body).toEqual(own?.body ?? null);
     // The page's own request is lost as it closes; the one sent to keep reaches Leaf.
@@ -360,7 +360,7 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
 
   test("closing while a change waits to be sent again sends it, and it is done once", async () => {
     leaf.leaf.offline = 1;
-    earn(7, "works_order");
+    earn(7, "daily_chest");
     // Found no answer: it waits a moment before being sent again.
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(leaf.leaf.calls).toHaveLength(1);
@@ -375,12 +375,12 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
 
   test("after a flush, more earnings for the same reason are a new change: a sent one never grows", async () => {
     leaf.hold();
-    earn(5, "works_depot");
-    earn(10, "works_order");
+    earn(5, "daily_chest");
+    earn(10, "daily_chest");
     await Promise.resolve();
     flushCoins();
-    earn(5, "works_order");
-    earn(2, "works_order");
+    earn(5, "daily_chest");
+    earn(2, "daily_chest");
     leaf.let();
     await idle();
     // Each id always carried the same amount, and every Coin reached Leaf once.
@@ -396,13 +396,13 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
   });
 
   test("every change says who the page believes the member is", async () => {
-    earn(3, "works_order");
+    earn(3, "daily_chest");
     spend("coins", 1, "camp_thing");
     await idle();
     leaf.hold();
-    earn(4, "works_order");
+    earn(4, "daily_chest");
     await Promise.resolve();
-    earn(5, "works_depot");
+    earn(5, "daily_chest");
     flushCoins();
     expect(new Set(leaf.leaf.calls.filter((c) => c.path === "/v1/game/coins").map((c) => c.player))).toEqual(
       new Set(["p"]),
@@ -414,14 +414,14 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
     done?.();
     done = pretend({ store: () => store, fetch: leaf.fetch, reload: () => void reloaded++ });
     leaf.leaf.me = "q";
-    earn(5, "works_order");
-    earn(6, "works_depot");
+    earn(5, "daily_chest");
+    earn(6, "daily_chest");
     await idle();
     expect(reloaded).toBe(1);
     expect(leaf.leaf.calls.map((c) => c.body?.amount)).toEqual([5]);
     expect(leaf.leaf.coins).toBe(300);
     // Nothing more goes, however much the page earns or spends, nor as it goes away.
-    earn(7, "works_order");
+    earn(7, "daily_chest");
     expect(spend("coins", 1, "camp_thing")).toBe(true);
     flushCoins();
     await idle();

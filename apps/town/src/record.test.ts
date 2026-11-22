@@ -13,7 +13,7 @@ describe("sending things to the camp", () => {
   });
 
   test("the 201st purchase is refused and costs nothing, and the 200 waiting are all kept", () => {
-    earn(1000, "works_order");
+    earn(1000, "daily_chest");
     let asked = 0;
     const pay = (): boolean => {
       asked++;
@@ -39,7 +39,7 @@ describe("sending things to the camp", () => {
   });
 
   test("the purchase that would make a thousand of one thing is refused and costs nothing", () => {
-    earn(100, "works_order");
+    earn(100, "daily_chest");
     // Counted wherever they are: standing by the fire, waiting by the trail, and in the tray.
     const standing = camp.placed.filter((p) => p.id === "log-seat").length;
     expect(standing).toBeGreaterThan(0);

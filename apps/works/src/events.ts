@@ -1,24 +1,23 @@
 /**
- * The yard's moments: what happens in the yard itself when an order is filled, when a standing
- * order is handed over, when a second shift comes on. Things in the world move; nothing is only a
- * notice.
+ * The yard's moments: what happens in the yard itself when an order is filled, and when a standing
+ * order is handed over. Things in the world move; nothing is only a notice.
  */
 
-import { CREAM, GOLD, GREEN } from "@sequoia-leaf/kit/palette.ts";
+import { CREAM, GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { tell } from "@sequoia-leaf/kit/shell.ts";
 import { hash, type Pt } from "@sequoia-leaf/kit/util.ts";
-import { claim, isFilled, ITEM, type News, type Standing, STORY } from "@sequoia-leaf/yard";
+import { isFilled, ITEM, type News, type Standing, STORY } from "@sequoia-leaf/yard";
 
 import { flights, send, speak, toss, type Walker, walker, walkers } from "./actors.ts";
 import { TILE } from "./art/belts.ts";
 import type { Art } from "./art/index.ts";
 import { PIPWICK_HAT } from "./art/machines.ts";
-import { burst, flutter, sparkle } from "./fx.ts";
+import { burst, sparkle } from "./fx.ts";
 import { layout } from "./layout.ts";
 import { yardSfx } from "./sound.ts";
 import { S, toPage } from "./state.ts";
 import { banner, coinsFrom, feed } from "./ui/notes.ts";
-import { bank } from "./yard.ts";
+import { doNow } from "./yard.ts";
 
 /** The gnome who comes for an order himself, when it is his. */
 const PIPWICK = "Pipwick";
@@ -94,18 +93,17 @@ export function callerAt(x: number, y: number): Walker | null {
 }
 
 /**
- * Hands a filled standing order over: a crate comes out of the depot's door to whoever is waiting,
- * they are glad of it, the Coins fly to the purse, and they carry it off through the gate.
+ * Hands a filled standing order over, by its id: a crate comes out of the depot's door to whoever
+ * is waiting, they are glad of it, the Coins fly to the purse, and they carry it off through the gate.
  */
-export function handOver(slot: number): boolean {
+export function handOver(id: number): boolean {
   const w = S.world;
-  const order = w.board[slot];
+  const order = w.board.find((o) => o.id === id);
   if (!order || !isFilled(order.want, order.filled)) return false;
   callers();
   const p = walkers.find((q) => q.order === order.id);
-  const pay = claim(w, slot);
-  if (pay === null) return false;
-  bank();
+  if ("refused" in doNow({ do: "handOver", order: id })) return false;
+  const pay = order.pay;
   yardSfx.handOver();
   feed(`Handed over: ${order.title}.`, "gold");
   const s = spots();
@@ -185,13 +183,4 @@ export function forget(): void {
   firsts = null;
   walkers.length = 0;
   flights.length = 0;
-}
-
-/** A second shift comes on: the bell, a flourish at the depot, and the flag goes up. */
-export function shiftOn(): void {
-  const s = spots();
-  yardSfx.shift();
-  flutter(s.door.x, s.door.y - 46, 16, [GREEN[4], GREEN[3], "#c9ef9a"], 18, 40);
-  sparkle(s.door.x, s.door.y - 30, 12, 14);
-  feed("The night shift is in. Double pace for the next hour.", "leaf");
 }

@@ -115,9 +115,7 @@ export class ActivityReport extends Context.Service<
         Request: Schema.Int,
         Result: WorksRow,
         execute: (from) => sql`
-          SELECT player_id AS playerId, min(at) AS firstAt,
-                 sum(kind = ${LOGGED.orderFilled}
-                     AND CASE WHEN json_valid(data) THEN json_extract(data, '$.story') END = 1) AS storyOrders
+          SELECT player_id AS playerId, min(at) AS firstAt, sum(kind = ${LOGGED.worksStory}) AS storyOrders
           FROM activity
           WHERE game = 'works'
             AND player_id IN (SELECT player_id FROM activity WHERE game = 'works' AND at >= ${from})

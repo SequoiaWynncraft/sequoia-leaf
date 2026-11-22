@@ -53,14 +53,11 @@ import {
   type Raw,
   RECIPE,
   RECIPES,
-  setOpen,
-  setRecipe,
   status,
   STORY,
   storyOrder,
   type Tally,
   TICKS,
-  tipOut,
 } from "@sequoia-leaf/yard";
 
 import { TILE } from "../art/belts.ts";
@@ -68,7 +65,7 @@ import type { Art } from "../art/index.ts";
 import { yardSfx } from "../sound.ts";
 import { S, toPage, touched } from "../state.ts";
 import { buyIdea, buyLand, pickFrom, takeAway, turnAt } from "../tools.ts";
-import { coins } from "../yard.ts";
+import { coins, doNow } from "../yard.ts";
 import { KEYS, openTools } from "./dock.ts";
 import { togglePanel } from "./panels.ts";
 import { fitted, yardIcon } from "./parts.ts";
@@ -284,7 +281,7 @@ function standingDesc(art: Art, i: number): Description | null {
       hint: "Whatever arrives",
       about: "It makes whatever the things it is brought add up to.",
       on: () => {
-        setRecipe(S.world, x, y, null);
+        doNow({ do: "recipe", x, y, item: null });
         sfx.tap();
         touched();
       },
@@ -298,7 +295,7 @@ function standingDesc(art: Art, i: number): Description | null {
         hint: `Only ${ITEM[rec.out].many}`,
         about: `From ${rec.from.map((k) => ITEM[k].many).join(" and ")}. It will take in nothing else.`,
         on: () => {
-          setRecipe(S.world, x, y, b.recipe === rec.out ? null : rec.out);
+          doNow({ do: "recipe", x, y, item: b.recipe === rec.out ? null : rec.out });
           sfx.tap();
           touched();
         },
@@ -314,7 +311,7 @@ function standingDesc(art: Art, i: number): Description | null {
         ? `It is full of ${ITEM[spare].many} and can take no more, so nothing behind them can get in. Tipping them out frees it; giving each part its own belt keeps it free.`
         : "Empties what it holds. What is tipped out is lost.",
       on: () => {
-        if (tipOut(S.world, x, y, spare) > 0) yardSfx.take();
+        if (!("refused" in doNow({ do: "tipOut", x, y, item: spare }))) yardSfx.take();
         touched();
       },
     });
@@ -324,7 +321,7 @@ function standingDesc(art: Art, i: number): Description | null {
       hint: b.open ? "Shut" : "Open",
       about: "Shut, it takes things in and lets nothing out, and so saves them up.",
       on: () => {
-        setOpen(S.world, x, y, !b.open);
+        doNow({ do: "crate", x, y, open: !b.open });
         sfx.clack();
         touched();
       },

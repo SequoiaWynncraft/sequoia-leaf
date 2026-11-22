@@ -134,8 +134,8 @@ class Player {
     for (let k = 0; k < ticks; k++) step(this.w);
     this.ticks += ticks;
     this.purse += collect(this.w);
-    this.w.board.forEach((o, slot) => {
-      if (isFilled(o.want, o.filled)) this.fromBoard += claim(this.w, slot) ?? 0;
+    this.w.board.forEach((o) => {
+      if (isFilled(o.want, o.filled)) this.fromBoard += claim(this.w, o.id) ?? 0;
     });
     this.purse += collect(this.w);
   }
@@ -680,7 +680,7 @@ for (const story of [4, 8, 12, 16, 20]) {
   for (const plot of PLOTS) if (plotState(w, plot.id).state === "for sale") buyPlot(w, plot.id, Infinity);
   for (const plan of PLANS)
     if (planState(w, plan.id).state === "for sale" && plan.effect.opens) buyPlan(w, plan.id, Infinity);
-  const orders = Array.from({ length: 200 }, () => fresh(w)).toSorted((a, b) => a.pay - b.pay);
+  const orders = Array.from({ length: 200 }, () => fresh(w, 5)).toSorted((a, b) => a.pay - b.pay);
   const fill = (o: (typeof orders)[number]): number =>
     Math.max(...ITEMS.map((k) => ((o.want[k] ?? 0) * (RECIPE[k]?.ticks ?? TICKS.gather)) / 600));
   const mean = orders.reduce((sum, o) => sum + fill(o), 0) / orders.length;
@@ -696,8 +696,9 @@ for (const n of [5, 11, 19]) {
   let tender = stages.get(n)?.twin();
   if (!tender) continue;
   // The board as it would be hung at this point in the story, not as it was when it first went up.
-  tender.w.board = [];
-  tender.w.board = Array.from({ length: tender.w.rates.slots }, () => fresh(tender?.w ?? create()));
+  const yard = tender.w;
+  yard.board = [];
+  yard.board = Array.from({ length: yard.rates.slots }, () => fresh(yard, yard.seed ?? 0));
   const began = tender.ticks;
   let thinking = 0;
   let filled = 0;
@@ -712,7 +713,7 @@ for (const n of [5, 11, 19]) {
     );
     if (!laid) {
       // No tidy way to lay it out: a person would swap it for another, and so does this.
-      tender.w.board[0] = fresh(tender.w);
+      tender.w.board[0] = fresh(tender.w, tender.w.seed ?? 0);
       continue;
     }
     tender = laid;

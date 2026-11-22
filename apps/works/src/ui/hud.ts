@@ -8,11 +8,11 @@ import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { leave } from "@sequoia-leaf/kit/shell.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
-import { boostLeft, isFilled, PLANS, planState, power, SHIFT, storyOrder } from "@sequoia-leaf/yard";
+import { isFilled, PLANS, planState, power, SHIFT, storyOrder } from "@sequoia-leaf/yard";
 
 import type { Art } from "../art/index.ts";
 import { S } from "../state.ts";
-import { coins, keep } from "../yard.ts";
+import { coins, collect, keepScreen } from "../yard.ts";
 import { orderRef } from "./card.ts";
 import { storyLabel } from "./notes.ts";
 import { type PanelId, togglePanel } from "./panels.ts";
@@ -25,7 +25,6 @@ function set(b: HTMLElement, n: string | null): void {
   if (n) b.dataset.n = n;
   else delete b.dataset.n;
 }
-let shiftLabel: HTMLElement | null = null;
 
 function powerPlaque(): () => void {
   const host = $("power");
@@ -112,29 +111,26 @@ function bookButtons(): () => void {
   const ordersBtn = make("orders", "Orders", () => "What the guild is asking for, and what it pays.", "O");
   const plansBtn = make("plans", "Plans", () => "Improvements to buy with Coins.", "P");
   make("depot", "The depot", () => "What has come in, and what the yard makes an hour.", "I");
-  const shiftBtn = make(
+  make(
     "shift",
     "A second shift",
     () => `Double pace for ${SHIFT.minutes} minutes, for ${SHIFT.leaf} Leaf. The one thing Leaf buys here.`,
     "L",
     true,
   );
-  shiftLabel = shiftBtn;
   return when(
     () => {
       const w = S.world;
       const ready = w.board.filter((s) => isFilled(s.want, s.filled)).length;
       const buyable = PLANS.filter((p) => planState(w, p.id).state === "for sale" && coins() >= p.price).length;
-      return `${ready}|${buyable}|${S.panel}|${Math.ceil(boostLeft(w, Date.now()) / 60_000)}`;
+      return `${ready}|${buyable}|${S.panel}`;
     },
     () => {
       const w = S.world;
       const ready = w.board.filter((s) => isFilled(s.want, s.filled)).length;
       const buyable = PLANS.filter((p) => planState(w, p.id).state === "for sale" && coins() >= p.price).length;
-      const mins = Math.ceil(boostLeft(w, Date.now()) / 60_000);
       set(ordersBtn, ready > 0 ? String(ready) : null);
       set(plansBtn, buyable > 0 ? String(buyable) : null);
-      set(shiftBtn, mins > 0 ? `${mins}m` : null);
       for (const [id, b] of books) b.classList.toggle("down", S.panel === id);
     },
   );
@@ -144,7 +140,9 @@ function corner(): void {
   const host = $("corner");
   const back = el("button", "k-btn wood icon", { type: "button", "aria-label": "Back to town" }, yardIcon("town"));
   back.addEventListener("click", () => {
-    keep();
+    // What is in the till goes into the purse on the way out.
+    collect();
+    keepScreen();
     sfx.close();
     leave();
   });
@@ -173,6 +171,3 @@ export function initHud(art: Art): void {
 export function refreshHud(): void {
   for (const f of parts) f();
 }
-
-/** The second shift's button, for Leaf to fly to. */
-export const shiftButton = (): HTMLElement | null => shiftLabel;

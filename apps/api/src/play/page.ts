@@ -31,16 +31,16 @@ export type PageCoinsDone =
   | { readonly status: "slow" };
 
 /**
- * Coins changed by the pages of the games not on the play service yet (the town and the Works),
- * which still work out what they earn and spend. Each call is one entry in the Coins ledger, keyed
+ * Coins changed by the page of the game not on the play service yet (the town), which still works
+ * out what it earns and spends. Each call is one entry in the Coins ledger, keyed
  * `page:<player>:<id>` so that a call sent twice is done once, and named for the game its reason
  * belongs to. The daily chest is Leaf's to pay: `DAILY_CHEST`, keyed by the player and the UTC day,
  * whatever the page sent. Refused, changing nothing: a spend the balance does not cover; an earning
- * past what the player may still earn (`Coins.room`, the one cap on all play), which Coins given
- * back for something taken away in the Works are too. A player's pages may call `PAGE_CALLS` a second; past that a call is
- * refused before anything is read or written. A player with no account yet has it opened with the
- * welcome first. Each call done or refused is counted for the staff's report, one answered from
- * before is not. It all goes when those games move to the play service.
+ * past what the player may still earn (`Coins.room`, the one cap on all play). A player's pages may
+ * call `PAGE_CALLS` a second; past that a call is refused before anything is read or written. A
+ * player with no account yet has it opened with the welcome first. Each call done or refused is
+ * counted for the staff's report, one answered from before is not. It all goes when the town moves
+ * to the play service.
  */
 export class PageCoins extends Context.Service<
   PageCoins,

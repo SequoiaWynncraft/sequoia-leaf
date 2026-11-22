@@ -16,6 +16,7 @@
         "@effect/sql-sqlite-bun": "4.1.4",
         "@sequoia-leaf/core": "workspace:*",
         "@sequoia-leaf/raid": "workspace:*",
+        "@sequoia-leaf/yard": "workspace:*",
         "effect": "4.1.4",
       },
       "devDependencies": {

@@ -3,8 +3,8 @@
  * bought, the orders in hand, and the Coins the yard has earned and not yet handed over.
  *
  * The yard does not keep the member's purse. Anything that costs Coins is told the balance and says
- * what it took; whatever the yard earns gathers in `till` until `collect` hands it over. A new yard
- * has no Coins of its own, only a few pieces to hand (`spare`).
+ * what it took; whatever the yard earns gathers in `till` until `collect` takes its whole Coins out
+ * for the Coins ledger (`game.ts`). A new yard has no Coins of its own, only a few pieces to hand (`spare`).
  */
 import type { Item, Tally } from "./content/items.ts";
 import { CRATE, KIND, type Kind, START_KINDS } from "./content/machines.ts";
@@ -96,6 +96,12 @@ export type News =
   | { readonly kind: "filled"; readonly id: number; readonly title: string; readonly pay: number }
   | { readonly kind: "standing"; readonly id: number; readonly title: string; readonly pay: number };
 
+/** A time the yard worked on unwatched: for how long, and what it earned into the till meanwhile. */
+export interface Away {
+  readonly seconds: number;
+  readonly coins: number;
+}
+
 /** How fast things go and how far things reach, with the plans that have been bought counted in. */
 export interface Rates {
   gather: number;
@@ -137,15 +143,21 @@ export interface World {
   readonly cells: (Building | null)[];
   /** Which tiles power reaches; worked out again whenever a pylon is built or taken away. */
   power: Uint8Array;
-  /** What the board's orders are drawn from. */
-  seed: number;
-  /** How many ticks the yard has been run. */
+  /**
+   * What the board's orders are drawn from. It foretells every order the board will hang, so only
+   * Leaf holds it: a yard read from what the page is shown has none, and hangs no order.
+   */
+  seed: number | null;
+  /** How many ticks the yard has been run, and the moment of Leaf's clock that tick stands for. */
   tick: number;
-  /** The moment the yard has been run up to, and the moment a second shift ends, as the clock on the wall has them. */
-  seen: number;
-  boostUntil: number;
+  at: number;
   /** Coins earned and not yet handed over. */
   till: number;
+  /** How many changes to Coins the yard has made, each keyed by its number; and how many story orders it has logged. */
+  bank: number;
+  told: number;
+  /** What the yard did while nobody watched, caught up on by Leaf's clock, until it is put away. */
+  away: Away | null;
   plots: PlotId[];
   plans: PlanId[];
   /** The pieces the yard has to hand that are not standing: each costs nothing to stand. */
@@ -227,7 +239,7 @@ export function plotAt(w: World, x: number, y: number): { id: PlotId; owned: boo
   return plot ? { id: plot.id, owned: w.plots.includes(plot.id) } : null;
 }
 
-/** Hands over what the yard has earned since it was last asked, and empties the till. */
+/** Takes the whole Coins out of the till, and says how many. */
 export function collect(w: World): number {
   const coins = Math.floor(w.till);
   w.till -= coins;

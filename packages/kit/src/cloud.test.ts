@@ -250,7 +250,7 @@ describe("saves on the member's account", () => {
     expect(Object.keys(SLOTS)).toEqual(["town", "works"]);
     expect(Object.values(SLOTS).flat()).not.toContain(PURSE_KEY);
     await pull(["town", "works"], page);
-    earn(50, "works_order");
+    earn(50, "daily_chest");
     world.clock.now += PUSH_EVERY;
     tick();
     await Bun.sleep(5);

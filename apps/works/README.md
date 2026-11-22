@@ -19,11 +19,32 @@ bun review/balance.ts            # plays the whole story by script and prints th
 bun review/balance.ts --yards    # the same, and keeps a few yards part-way through in packages/yard/src/yards/
 ```
 
-## On the guild's server
+## On Leaf
 
-On the guild's own server the page first awaits the kit's `start()` and pulls its saves (the
-`purse` and `works` slots, and `town` too when opened on its own), shows the second shift's button
-closed, and says the member is at the Works; the kit's README says how.
+The yard is Leaf's: its clock, its till and its Coins (the root README's play service). The page
+awaits the kit's `start()`, opens the yard from Leaf (`openPlay("works", …)`) and holds a copy of
+it, a yard with no seed, so that it hangs no order of its own. Without a Leaf it shows the kit's
+cards, as the battler does. It keeps nothing of the game in the browser; only `works.screen.v1`
+(the lessons taken, the zoom) stays.
+
+Everything the member does is done to the copy at once with the shared rules (`yard.ts`, `doNow`)
+and sent with the tick the copy stood at; a command the rules refuse is said so and not sent. Each
+frame, if Leaf has answered since the last, the copy becomes Leaf's yard with every command still
+unanswered done again on top, each at its own tick; then the copy is run on to Leaf's tick now: the
+tick Leaf last gave, and one for each tenth of a second since, never earlier than one already
+shown. A copy more than a minute behind (a tab put away) is not run on: the page sends `collect`
+and shows Leaf's yard when it comes. News (a story order done, an order filled) comes from the
+copy's own stepping, and is not told again when the same ticks are stepped once more. Swapping,
+handing over and buying a plan leave a place on the board empty until Leaf hangs the next order
+there; a place the board would have filled sends `collect`, so Leaf does.
+
+**Coins.** The number the Works shows, and what a price is checked against, is the purse's (Leaf's
+ledger) and the whole Coins in the copy's till, as Leaf will count them. A command that changes
+Coins shows what it expects at once (`heardCoins`), and the purse asks Leaf for the true number
+after the answer (`refreshCoins`). The till is paid in (`collect`) once a minute while it holds a
+whole Coin, when the letter about a time away is put away, and when the member leaves by the back
+button. The second shift's button shows itself closed: it costs Leaf, which nothing in town spends
+yet.
 
 ## The screen
 
@@ -99,19 +120,14 @@ blue hat for his own orders, one of the town's gnomes for anybody else's, saying
 handing over (from the panel, or by tapping him) sends the crate across, pays, and he carries it
 off over his head. Whoever walks about the yard is one of the yard's gnomes (`actors.ts`), drawn
 from the gatherer's pictures with a two-step waddle. A plot bought: the
-cleared ground opens out from its signpost and the undergrowth falls away. A second shift: the
-bell, a green pennant on the depot's roof, and the depot shines green while it lasts. Coming back
-after five minutes or more: a letter on paper says what the yard did, and pays the till into the
-purse as it is put away.
+cleared ground opens out from its signpost and the undergrowth falls away. Coming back after five
+minutes or more: Leaf's yard carries what it worked out while nobody watched (how long, and what
+the till gained), a letter on paper says so, and putting it away pays the till into the purse.
 
 **Teaching.** `teach.ts` looks at the yard and says what the next small thing to try is, and where:
 the first gatherer, the mill, the belt, the first planks arriving, a pylon towards the ore, a
 bench. After that it speaks up once each for the board, a shortage of power, and a jammed machine.
 It has no screen in it and is tested.
-
-**Keeping.** The yard is kept in the browser (`works.save.v2`) a moment after every change, every
-few seconds, and when the page is put away or the town says it is closing. The Coins are the kit's
-one purse. `?fresh` in the address starts the yard over, once.
 
 **In the town.** Inside the town's frame the page says `ready` once it has drawn, `leave` from the
 doorway button in the corner, and `news` when a story order is filled or the first Beacon or
@@ -123,7 +139,7 @@ clockwork crab is made. Opened alone it plays just the same.
 | --------------------------------- | --------------------------------------------------------------------------- |
 | `main.ts`                         | the stage: opening the yard, the canvas, the loop, the handles for review   |
 | `state.ts`                        | what the screen's parts share: the yard, the view, the tool in hand         |
-| `yard.ts`                         | finding and keeping the yard, the clock, Coins to and from the purse        |
+| `yard.ts`                         | the yard on Leaf: the copy, commands, each frame's catching up, the Coins   |
 | `scene.ts`, `layout.ts`           | drawing a frame; what is worked out from the layout and kept                |
 | `art/*.ts`                        | the art: ground, nature, belts, machines, things                            |
 | `camera.ts`, `input.ts`           | where the member is looking; mouse, keys and fingers                        |
@@ -139,23 +155,25 @@ clockwork crab is made. Opened alone it plays just the same.
 
 ## Looking at it from outside
 
-`window.works` has handles for taking pictures of the game and trying it by script. `stage(name)`
-loads a yard: `"new"` (with a number, that many story orders already done), or one of the kept
-yards `"small"`, `"short"`, `"mid"`, `"large"`. `hold(true)` stops the clock so that only `run(ticks)`
-moves the yard and `skip(seconds)` the screen. `pick(tool)`, `aim(x, y)`, `tap(x, y)`, `drag(x0, y0,
-x1, y1)` with `drop()`, `confirm()`, `build`, `remove`, `plot(id)` and `plan(id)` act as a member
-would; `finger(true)` makes the screen behave as for a touch. `open(panel)`, `card(x, y)` and
-`close()` show things; `look(x, y)` and `zoom(by)` move the view. `purse(coins, leaf)` sets the
-purse, `boost(minutes)` starts a second shift, `away(hours)` pretends the member has been gone,
-`fill(slot)` fills a standing order, `taught(ids)` says which lessons are already taken.
-`page(x, y)` is where a tile is on the page, `rider(x, y)` what is riding a belt there, `where(kind)` where a kind of thing stands, `state()`
-a summary, and `bench()` the milliseconds one tick and one frame take, averaged over a hundred.
+`window.works` has handles for taking pictures of the game and trying it by script. `stage(...ops)`
+stages a moment in the yard on the play server on this machine (`apps/api/test/play.ts`, through
+`POST /test/play/works`) and takes it: `{ yard: "new" }` or one of the kept yards `"small"`,
+`"short"`, `"mid"`, `"large"`; `{ away: minutes }`, a time nobody watched; `{ fill: n }`, the nth
+standing order filled. `hold(true)` stops the screen running the yard on, and `skip(seconds)` moves
+only the screen. `pick(tool)`, `aim(x, y)`, `tap(x, y)`, `drag(x0, y0, x1, y1)` with `drop()`,
+`confirm()`, `build`, `remove`, `plot(id)` and `plan(id)` act as a member would, sending to Leaf;
+`finger(true)` makes the screen behave as for a touch. `open(panel)`, `card(x, y)` and `close()`
+show things; `look(x, y)` and `zoom(by)` move the view; `taught(ids)` says which lessons are already
+taken. `page(x, y)` is where a tile is on the page, `rider(x, y)` what is riding a belt there,
+`where(kind)` where a kind of thing stands, and `state()` a summary.
 
-The screenshot driver is the kit's (`packages/kit/tools/drive.ts`):
+The screenshot driver is the kit's (`packages/kit/tools/drive.ts`), against the play server, signed
+in as its Tester:
 
 ```sh
-bun run build
-bun ../../packages/kit/tools/drive.ts "http://works.test/?fresh" <out-dir> <steps.json> dist
+bun build index.html --outdir /tmp/play/works
+bun ../api/test/play.ts 4000 /tmp/play &
+bun ../../packages/kit/tools/drive.ts "http://127.0.0.1:4000/sign-in?return_to=http%3A%2F%2F127.0.0.1%3A4000%2Fplay%2Fworks%2F" <out-dir> <steps.json>
 ```
 
 ## Pacing

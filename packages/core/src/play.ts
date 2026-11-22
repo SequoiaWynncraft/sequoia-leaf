@@ -30,7 +30,7 @@ export interface Ctx {
   readonly seed: number;
   /**
    * How many more Coins the player may earn now. Leaf pays in no more than this whatever a command
-   * says, so a game that pays past it says what was really paid.
+   * says (but for a change that is `free`), so a game that pays past it says what was really paid.
    */
   readonly room: number;
 }
@@ -41,6 +41,11 @@ export interface CoinChange {
   readonly reason: string;
   /** Unique among the game's payments to this player, such as `run:7`. */
   readonly key: string;
+  /**
+   * Not weighed against what a player may earn: Coins given back for something paid for, or paid by
+   * Leaf's own clock. Such a change is never cut to `Ctx.room`, and does not use any of it up.
+   */
+  readonly free?: true;
 }
 
 /** Something worth remembering that a player did, for the `activity` table. */

@@ -1,7 +1,7 @@
 # The game's pages, built from the three apps, the kit they share, the core
 # rules the kit shares with Leaf (the live wire), and the games' rules
-# (packages/raid, which the pages share with Leaf's play service, and
-# packages/yard). Each build is plain files, so only /app/public goes on to the
+# (packages/raid and packages/yard, which the pages share with Leaf's play
+# service). Each build is plain files, so only /app/public goes on to the
 # image.
 FROM docker.io/oven/bun:1.4.4-slim AS pages
 
@@ -37,11 +37,13 @@ COPY package.json bun.lock bunfig.toml ./
 COPY apps/api/package.json apps/api/
 COPY packages/core/package.json packages/core/
 COPY packages/raid/package.json packages/raid/
+COPY packages/yard/package.json packages/yard/
 RUN bun install --frozen-lockfile --production
 
 COPY apps/api apps/api
 COPY packages/core packages/core
 COPY packages/raid packages/raid
+COPY packages/yard packages/yard
 COPY --from=pages /app/public /app/public
 
 # The database lives in /data, which production mounts as a volume. Creating
