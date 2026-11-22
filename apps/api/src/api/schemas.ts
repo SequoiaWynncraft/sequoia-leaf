@@ -1,3 +1,4 @@
+import { DEVICES, ODD_KINDS } from "@sequoia-leaf/core";
 import { Schema } from "effect";
 import { HttpApiSchema } from "effect/http-api";
 
@@ -148,8 +149,15 @@ export const GuildEvents = Schema.Struct({
 /** The places in the game a member can be. */
 export const PLACES = ["town", "camp", "works", "table"] as const;
 
-/** Where the member is, and whether their character may stay in town, dozing, after they go (true when left out). */
-export const PresenceBody = Schema.Struct({ place: Schema.Literals(PLACES), stay: Schema.optional(Schema.Boolean) });
+/**
+ * Where the member is, and whether their character may stay in town, dozing, after they go (true
+ * when left out); and what the page is on, by its width when it signed in, when it says.
+ */
+export const PresenceBody = Schema.Struct({
+  place: Schema.Literals(PLACES),
+  stay: Schema.optional(Schema.Boolean),
+  device: Schema.optional(Schema.Literals(DEVICES)),
+});
 
 /**
  * Everyone seen in the game in the last 90 seconds, the caller included, at most the 50 seen most
@@ -167,6 +175,69 @@ export const Present = Schema.Struct({
       place: Schema.String,
       guest: Schema.Boolean,
       seen_at: Time,
+    }),
+  ),
+});
+
+// The staff's routes, under /v1/game/admin.
+
+/** Seconds, or hours, in each place, by place: `{ "town": 840 }`. */
+const ByPlace = Schema.Record(Schema.String, Schema.Number);
+
+/** Who played, when, where and for how long, over the last `days` UTC days (see the README). */
+export const ActivityReport = Schema.Struct({
+  now: Time,
+  /** Who is in which place now, and since when. */
+  here: Schema.Array(
+    Schema.Struct({ id: Schema.String, name: Schema.String, guest: Schema.Boolean, place: Schema.String, since: Time }),
+  ),
+  /** Everyone with time in the game in the period, most time first. */
+  players: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      guest: Schema.Boolean,
+      first_seen_at: Time,
+      last_seen_at: Time,
+      /** All their time, ever. */
+      seconds_total: Schema.Number,
+      /** Their sessions and seconds in the period, and their seconds there by place. */
+      sessions: Schema.Number,
+      seconds: Schema.Number,
+      places: ByPlace,
+      /** The last few things they did in the games, newest first, with what the game logged. */
+      done: Schema.Array(Schema.Struct({ at: Time, game: Schema.String, kind: Schema.String, data: Schema.Unknown })),
+    }),
+  ),
+  /** Each UTC day of the period, oldest first, with its hours to two places. */
+  days: Schema.Array(
+    Schema.Struct({
+      day: Schema.String,
+      players: Schema.Number,
+      new_players: Schema.Number,
+      sessions: Schema.Number,
+      hours: Schema.Number,
+      places: ByPlace,
+    }),
+  ),
+  /** Raid runs begun in the period, by how many rooms each won. */
+  raid: Schema.Struct({
+    began: Schema.Number,
+    runs: Schema.Array(Schema.Struct({ rooms_won: Schema.Number, runs: Schema.Number })),
+  }),
+  /** Players who first went to the Works in the period, and everyone there in it by the story orders they have filled. */
+  works: Schema.Struct({
+    began: Schema.Number,
+    players: Schema.Array(Schema.Struct({ story_orders: Schema.Number, players: Schema.Number })),
+  }),
+  /** Anything out of the ordinary, newest first: a list to look at, nothing done about it. */
+  odd: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      rule: Schema.Literals(ODD_KINDS),
+      at: Time,
+      value: Schema.Number,
     }),
   ),
 });

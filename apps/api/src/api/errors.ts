@@ -25,6 +25,11 @@ export class MembersOnly extends Schema.Error<MembersOnly>("MembersOnly")(answer
   httpApiStatus: 403,
 }) {}
 
+/** The staff's view of who played, asked for by somebody who is not a website admin. */
+export class StaffOnly extends Schema.Error<StaffOnly>("StaffOnly")(answer("staff_only"), {
+  httpApiStatus: 403,
+}) {}
+
 /** A save written too soon after the last one to the same slot. Nothing was written: send it again in a moment. */
 export class SlowDown extends Schema.Error<SlowDown>("SlowDown")(answer("slow_down"), { httpApiStatus: 429 }) {}
 
@@ -38,7 +43,7 @@ export class BadOrigin extends Schema.Error<BadOrigin>("BadOrigin")(answer("bad_
  * A request Leaf cannot read: an event id that is not one, a quest id that is
  * not one, a reroll without a cost, a save slot that is not one, a save that is
  * not `{ "player", "version", "data" }` with an object as its data, a player id
- * that is not a UUID, or a place in town that is not one.
+ * that is not a UUID, a place in town that is not one, or a number of days that is not one.
  */
 export class Invalid extends Schema.Error<Invalid>("Invalid")(
   answer(
@@ -49,6 +54,7 @@ export class Invalid extends Schema.Error<Invalid>("Invalid")(
     "invalid_save",
     "invalid_uuid",
     "invalid_place",
+    "invalid_days",
   ),
   { httpApiStatus: 400 },
 ) {}

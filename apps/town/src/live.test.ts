@@ -463,7 +463,11 @@ describe("the live guild", () => {
       if (h.kind === "call") expect(isFolk(h.who)).toBe(true);
     }
     for (const who of heard.flatMap(people)) expect(invented.has(who.name)).toBe(false);
-    expect(world.sent.find((s) => s.path === "/v1/game/presence")?.body).toEqual({ place: "town", stay: true });
+    expect(world.sent.find((s) => s.path === "/v1/game/presence")?.body).toEqual({
+      place: "town",
+      stay: true,
+      device: "desktop",
+    });
   });
 
   test("the world does not wait for the feed: a party and a war come in at once, their lines in turn", async () => {

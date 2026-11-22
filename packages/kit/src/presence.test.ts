@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { restart, start } from "./live.ts";
 import { isRecord } from "./net.ts";
-import { here, keptStay, readPresent, readResting } from "./presence.ts";
+import { here, inRoom, keptStay, readPresent, readResting, stay } from "./presence.ts";
 import { forgetLedger } from "./purse.ts";
 import { HELLO, MemoryStore, type Standin, standin, TESTER } from "./standin.ts";
 
@@ -91,6 +91,61 @@ describe("staying in town after going", () => {
     await start();
     here("works");
     await Bun.sleep(10);
-    expect(world.sent.find((s) => s.path === "/v1/game/presence")?.body).toEqual({ place: "works", stay: false });
+    expect(world.sent.find((s) => s.path === "/v1/game/presence")?.body).toEqual({
+      place: "works",
+      stay: false,
+      device: "desktop",
+    });
+  });
+});
+
+describe("saying where the member is", () => {
+  let world: Standin | null = null;
+  afterEach(() => {
+    here(null);
+    stay(true);
+    inRoom(null);
+    world?.done();
+    world = null;
+    restart();
+    forgetLedger();
+  });
+
+  const routes = {
+    "GET /v1/game/hello": HELLO,
+    "GET /v1/game/me": { status: 200, body: TESTER },
+    "PUT /v1/game/presence": { status: 200, body: { present: [], resting: [] } },
+    "GET /v1/game/presence": { status: 200, body: { present: [], resting: [] } },
+  };
+
+  test("says the page is a phone's when its window was under 700 CSS pixels wide at sign-in", async () => {
+    world = standin(routes, { width: 390 });
+    await start();
+    here("camp");
+    await Bun.sleep(10);
+
+    expect(world.sent.filter((s) => s.path === "/v1/game/presence").map((s) => [s.method, s.body])).toEqual([
+      ["PUT", { place: "camp", stay: true, device: "phone" }],
+    ]);
+  });
+
+  test("in a live room of the place, only asks who is about, but still tells a change of staying", async () => {
+    world = standin(routes);
+    await start();
+    inRoom("town");
+    here("town");
+    await Bun.sleep(10);
+    stay(false);
+    await Bun.sleep(10);
+    // Out of the room, for the camp: said, as before.
+    inRoom(null);
+    here("camp");
+    await Bun.sleep(10);
+
+    expect(world.sent.filter((s) => s.path === "/v1/game/presence").map((s) => [s.method, s.body])).toEqual([
+      ["GET", null],
+      ["PUT", { place: "town", stay: false, device: "desktop" }],
+      ["PUT", { place: "camp", stay: false, device: "desktop" }],
+    ]);
   });
 });

@@ -2,6 +2,8 @@ import { BunHttpServer } from "@effect/platform-bun";
 import { type Duration, Layer } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/http";
 
+import { ActivityReport } from "./activity/report.ts";
+import { Visits } from "./activity/visits.ts";
 import { Identities } from "./auth/session.ts";
 import { AppConfig } from "./config.ts";
 import { Database } from "./db.ts";
@@ -65,7 +67,7 @@ export const serveLeaf = (options: {
   );
 
 /**
- * Leaf's stores: the ledger, the events and the quests, and what the game keeps,
+ * Leaf's stores: the ledger, the events and the quests, what the game keeps, and who played it,
  * on whichever database is provided. Skins and names come from whichever Mojang is.
  */
 export const Stores = Layer.mergeAll(
@@ -73,13 +75,14 @@ export const Stores = Layer.mergeAll(
   Quests.layer,
   Saves.layer,
   Presence.layer,
+  ActivityReport.layer.pipe(Layer.provideMerge(Visits.layer)),
   Skins.layer.pipe(Layer.provideMerge(PlayerNames.layer)),
 ).pipe(Layer.provideMerge(Ledger.layer));
 
 /**
  * What Leaf reaches outside its own code (its settings, its database, Mojang and the network), and
  * the live rooms, which the routes serve and the server's farewell closes, and which write who is
- * in them into the stores' presence.
+ * in them into the stores' presence and visits.
  */
 export const Services = Live.layer.pipe(
   Layer.provideMerge(Stores),

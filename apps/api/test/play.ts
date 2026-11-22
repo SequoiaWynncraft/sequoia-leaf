@@ -1,7 +1,7 @@
 /**
  * Leaf on this machine, for trying the game against it:
  *
- *   bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--crowd <n>]
+ *   bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--crowd <n>]
  *
  * It runs the real app on a database in memory, seeded with a day of play for
  * a member called Tester and four other members, and serves `<public-dir>`
@@ -26,9 +26,12 @@
  * - `--guest`: Tester is signed in but not in the guild (any more), so they play as a guest.
  * - `--down`: the backend can't be asked who Tester is, so they answer 503.
  * - `--busy`: every minute, a few of the four finish a raid together, for the guild's news.
+ * - `--admin`: the backend knows one more session, `staff`, of Warden, a website admin who is not
+ *   in the guild, for the staff's view of who played (`GET /v1/game/admin/activity`);
+ *   `/sign-in?as=warden` signs a page in as them.
  * - `--crowd <n>`: n more members, each in their own skin, in the town's live room and walking
  *   about it along its paths: stopping, sitting on a log by the fire a while, and waving now and
- *   then. They say nothing of where they are but by being in the room.
+ *   then. They say nothing of where they are but by being in the room. Every third is on a phone.
  */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -53,11 +56,12 @@ import {
   testLeaf,
 } from "./support.ts";
 
-const USAGE = "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--crowd <n>]";
+const USAGE =
+  "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--crowd <n>]";
 
 const [portText = "", publicDirText = "", ...options] = process.argv.slice(2);
 const port = Number(portText);
-const known = new Set(["--guest", "--down", "--busy"]);
+const known = new Set(["--guest", "--down", "--busy", "--admin"]);
 const crowdAt = options.indexOf("--crowd");
 const crowdSize = crowdAt < 0 ? 0 : Number(options[crowdAt + 1]);
 const flags = crowdAt < 0 ? options : options.filter((_, i) => i !== crowdAt && i !== crowdAt + 1);
@@ -82,6 +86,7 @@ if (!existsSync(publicDir)) {
 const guest = flags.includes("--guest");
 const down = flags.includes("--down");
 const busy = flags.includes("--busy");
+const admin = flags.includes("--admin");
 const origin = `http://127.0.0.1:${port}`;
 
 interface Member {
@@ -133,6 +138,11 @@ const pebblefoot = {
   name: "Pebblefoot",
   look: { skin: [240, 200, 170, 255], hair: [200, 200, 205, 255], shirt: [180, 130, 60, 255], legs: [90, 70, 50, 255] },
 } as const;
+
+/** With `--admin`: one of the guild's staff, a website admin, not in the guild. */
+const warden = { id: playerId("7e570000-0000-4000-8000-000000000007"), name: "Warden" } as const;
+/** Warden's session, for asking `GET /v1/game/admin/activity` with a Bearer header. */
+const STAFF = "staff";
 
 /** Invented handles for `--crowd`: none of them the town's own, the four, or the made-up guild's stand-ins. */
 const CROWD_NAMES = [
@@ -211,6 +221,14 @@ const { backend, fetcher } = fakeBackend({
     ]),
   ),
   [sessionFor(pebblefoot)]: () => Response.json(sessionOf(pebblefoot.id, pebblefoot.name, null)),
+  ...(admin
+    ? Object.fromEntries(
+        [STAFF, sessionFor(warden)].map((token) => [
+          token,
+          () => Response.json({ ...sessionOf(warden.id, warden.name, null), website_admin: true }),
+        ]),
+      )
+    : {}),
 });
 
 const mojang = fakeMojang();
@@ -495,7 +513,7 @@ function signing(request: Request): Response | undefined {
   }
   // `?as=<name>`: one of the others, for a second page as somebody else; otherwise Tester.
   const as = url.searchParams.get("as")?.toLowerCase();
-  const other = [...mates, pebblefoot, ...crowd].find((m) => m.name.toLowerCase() === as);
+  const other = [...mates, pebblefoot, ...crowd, ...(admin ? [warden] : [])].find((m) => m.name.toLowerCase() === as);
   if (as !== undefined && !other) return new Response("There is nobody of that name here", { status: 404 });
   if (!other) signedOut = false;
   const session = other ? sessionFor(other) : "tester";
@@ -524,7 +542,7 @@ await leaf.serve(port, Layer.mergeAll(signingRoute("/sign-in"), signingRoute("/s
  * the square, and Pebblefoot, the guest, from spot to spot with a pause at each.
  */
 async function walk(who: { readonly name: string }, path: readonly (readonly [number, number])[], pause: number) {
-  const client = await LiveClient.open(origin, { bearer: sessionFor(who) });
+  const client = await LiveClient.open(origin, { bearer: sessionFor(who), device: "desktop" });
   await client.welcome();
   const speed = 30;
   let leg = 0;
@@ -696,8 +714,8 @@ const WANDER = Object.keys(SPOTS).filter((name) => !name.startsWith("log"));
  * they stop; standing a few seconds at each, now and then sitting on a free log by the fire for a
  * while, and waving (or cheering, laughing, sending a heart) now and then.
  */
-async function wander(member: Member) {
-  const client = await LiveClient.open(origin, { bearer: sessionFor(member) });
+async function wander(member: Member, phone: boolean) {
+  const client = await LiveClient.open(origin, { bearer: sessionFor(member), device: phone ? "phone" : "desktop" });
   await client.welcome();
   // Only the walking is wanted; what Leaf says back would pile up.
   client.onSnapshot = () => {
@@ -786,7 +804,7 @@ async function wander(member: Member) {
     emote(0.3);
   }, 1000 / CLIENT_HZ);
 }
-await Promise.all(crowd.map((member) => wander(member)));
+await Promise.all(crowd.map((member, n) => wander(member, n % 3 === 0)));
 
 const state = guest ? " (Tester is a guest)" : down ? " (the backend is down)" : "";
 console.log(
@@ -795,3 +813,6 @@ console.log(
 console.log(
   `Sign in: ${origin}/sign-in?return_to=${encodeURIComponent(`${origin}/play/town/`)}, or send the cookie seq_session=tester`,
 );
+if (admin) {
+  console.log(`Who played: curl -H 'Authorization: Bearer ${STAFF}' ${origin}/v1/game/admin/activity`);
+}

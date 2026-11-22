@@ -16,12 +16,15 @@ import {
   rerollCost,
   saveSlot,
   timedWindowAt,
+  utcDay,
 } from "@sequoia-leaf/core";
 import { ByteSize, Clock, Duration, Effect, Layer, Option, Redacted, Ref, Schedule, Stream } from "effect";
 import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder, HttpApiError, HttpApiSecurity } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 
+import { ActivityReport } from "../activity/report.ts";
+import { Visits } from "../activity/visits.ts";
 import {
   BodyLimit,
   CurrentIdentity,
@@ -49,6 +52,7 @@ import {
   Refused,
   SaveTooLarge,
   SlowDown,
+  StaffOnly,
   Unauthorized,
   VersionConflict,
 } from "../api/errors.ts";
@@ -59,7 +63,7 @@ import { syncOnDemand } from "../earning/run.ts";
 import { eventJsonText, Events } from "../events/store.ts";
 import { GUILD_EVENT_TYPES, guildEvents } from "../game/guild.ts";
 import { PlayerNames } from "../game/names.ts";
-import { Presence } from "../game/presence.ts";
+import { type Here, Presence } from "../game/presence.ts";
 import { Saves } from "../game/saves.ts";
 import { Skins } from "../game/skins.ts";
 import { Ledger } from "../ledger/store.ts";
@@ -321,7 +325,8 @@ export const PresenceBodyErrorsLive = Layer.succeed(PresenceBodyErrors)((httpEff
     Effect.fail(
       new Invalid({
         code: "invalid_place",
-        message: 'Send where you are as { "place": "town" }, or camp, works or table, and "stay" as true or false',
+        message:
+          'Send where you are as { "place": "town" }, or camp, works or table, "stay" as true or false, and "device" as phone or desktop',
       }),
     ),
   ),
@@ -547,6 +552,24 @@ const GameHelloHandlers = HttpApiBuilder.group(LeafApi, "gameHello", (handlers) 
   }),
 );
 
+/** Who is about, as the presence routes answer it. */
+const presentJson = (here: Here) =>
+  ({
+    present: here.present.map((player) => ({
+      id: player.playerId,
+      username: player.username,
+      place: player.place,
+      guest: player.guest,
+    })),
+    resting: here.resting.map((player) => ({
+      id: player.playerId,
+      username: player.username,
+      place: player.place,
+      guest: player.guest,
+      seen_at: iso(player.seenAt),
+    })),
+  }) satisfies typeof Body.Present.Type;
+
 const invalidSlot = new Invalid({ code: "invalid_slot", message: "That is not a save slot" });
 
 /** Refuses a guest what only the guild's members may see: the guild's news, with members' names. */
@@ -564,6 +587,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
     const skins = yield* Skins;
     const names = yield* PlayerNames;
     const presence = yield* Presence;
+    const visits = yield* Visits;
     const guild = yield* GuildFeed;
     const streams = yield* OpenStreams;
 
@@ -732,38 +756,107 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
           Effect.gen(function* () {
             const identity = yield* CurrentIdentity;
             const now = yield* Clock.currentTimeMillis;
+            const guest = isGuest(identity);
             const here = yield* presence.arrive(
               identity.playerId,
               identity.username,
               payload.place,
               payload.stay ?? true,
-              isGuest(identity),
+              guest,
               now,
             );
-            return HttpServerResponse.jsonUnsafe({
-              present: here.present.map((player) => ({
-                id: player.playerId,
-                username: player.username,
-                place: player.place,
-                guest: player.guest,
-              })),
-              resting: here.resting.map((player) => ({
-                id: player.playerId,
-                username: player.username,
-                place: player.place,
-                guest: player.guest,
-                seen_at: iso(player.seenAt),
-              })),
-            } satisfies typeof Body.Present.Type);
+            yield* visits.called(
+              { playerId: identity.playerId, username: identity.username, guest, device: payload.device ?? null },
+              payload.place,
+              now,
+            );
+            return HttpServerResponse.jsonUnsafe(presentJson(here));
           }),
         )
+        // The same lists, writing nothing: for a page in a live room, where the room keeps the player's place.
+        .handle("whoIsAbout", () =>
+          Clock.currentTimeMillis.pipe(
+            Effect.flatMap(presence.look),
+            Effect.map((here) => HttpServerResponse.jsonUnsafe(presentJson(here))),
+          ),
+        )
+    );
+  }),
+);
+
+/** How many UTC days the staff's report covers when not told, and at most. */
+const REPORT_DAYS = 7;
+const REPORT_MOST_DAYS = 90;
+
+/** The UTC day a time falls on, as `2026-11-25`. */
+const dayName = (at: number) => iso(at).slice(0, 10);
+
+const GameAdminHandlers = HttpApiBuilder.group(LeafApi, "gameAdmin", (handlers) =>
+  Effect.gen(function* () {
+    const reports = yield* ActivityReport;
+    return handlers.handle("activity", ({ query }) =>
+      Effect.gen(function* () {
+        const identity = yield* CurrentIdentity;
+        if (!identity.admin) {
+          return yield* new StaffOnly({ code: "staff_only", message: "This is for the guild's staff" });
+        }
+        const asked = query.days === undefined ? REPORT_DAYS : /^\d{1,9}$/.test(query.days) ? Number(query.days) : 0;
+        if (asked < 1) {
+          return yield* new Invalid({
+            code: "invalid_days",
+            message: "days must be a whole number of days, 1 or more",
+          });
+        }
+        const days = Math.min(asked, REPORT_MOST_DAYS);
+        const now = yield* Clock.currentTimeMillis;
+        const r = yield* reports.report((utcDay(now) - days + 1) * DAY_MS, now);
+        return HttpServerResponse.jsonUnsafe({
+          now: iso(r.now),
+          here: r.here.map((h) => ({
+            id: h.playerId,
+            name: h.name,
+            guest: h.guest,
+            place: h.place,
+            since: iso(h.since),
+          })),
+          players: r.players.map((p) => ({
+            id: p.playerId,
+            name: p.name,
+            guest: p.guest,
+            first_seen_at: iso(p.firstSeenAt),
+            last_seen_at: iso(p.lastSeenAt),
+            seconds_total: p.secondsTotal,
+            sessions: p.sessions,
+            seconds: p.seconds,
+            places: p.places,
+            done: p.done.map((d) => ({ at: iso(d.at), game: d.game, kind: d.kind, data: d.data })),
+          })),
+          days: r.days.map((d) => ({
+            day: dayName(d.day),
+            players: d.players,
+            new_players: d.newPlayers,
+            sessions: d.sessions,
+            hours: d.hours,
+            places: d.places,
+          })),
+          raid: {
+            began: r.raid.began,
+            runs: r.raid.byRoomsWon.map((b) => ({ rooms_won: b.roomsWon, runs: b.runs })),
+          },
+          works: {
+            began: r.works.began,
+            players: r.works.byStoryOrders.map((b) => ({ story_orders: b.storyOrders, players: b.players })),
+          },
+          odd: r.odd.map((o) => ({ id: o.playerId, name: o.name, rule: o.kind, at: iso(o.at), value: o.value })),
+        } satisfies typeof Body.ActivityReport.Type);
+      }),
     );
   }),
 );
 
 /** The API's routes and the implementations of its middleware. */
 export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.json" }).pipe(
-  Layer.provide([SystemHandlers, MeHandlers, GameHelloHandlers, GameHandlers]),
+  Layer.provide([SystemHandlers, MeHandlers, GameHelloHandlers, GameHandlers, GameAdminHandlers]),
   Layer.provide([OpenStreams.layer, GuildFeed.layer]),
   Layer.provide([
     SessionLive,

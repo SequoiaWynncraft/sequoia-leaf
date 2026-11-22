@@ -539,7 +539,8 @@
       "path": "/v1/game/presence",
       "body": {
         "place": "town",
-        "stay": true
+        "stay": true,
+        "device": "desktop"
       }
     },
     "status": 200,
@@ -567,6 +568,197 @@
           "seen_at": "2026-11-25T12:40:00.000Z"
         }
       ]
+    }
+  },
+  "GET /v1/game/presence": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/presence"
+    },
+    "status": 200,
+    "body": {
+      "present": [
+        {
+          "id": "10000000-0000-0000-0000-000000000001",
+          "username": "Alice",
+          "place": "town",
+          "guest": false
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000003",
+          "username": "Visitor",
+          "place": "town",
+          "guest": true
+        }
+      ],
+      "resting": [
+        {
+          "id": "10000000-0000-0000-0000-000000000002",
+          "username": "Bob",
+          "place": "works",
+          "guest": false,
+          "seen_at": "2026-11-25T12:40:00.000Z"
+        }
+      ]
+    }
+  },
+  "GET /v1/game/admin/activity, a member": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/admin/activity"
+    },
+    "status": 403,
+    "body": {
+      "code": "staff_only",
+      "message": "This is for the guild's staff"
+    }
+  },
+  "GET /v1/game/admin/activity": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/admin/activity?days=2"
+    },
+    "status": 200,
+    "body": {
+      "now": "2026-11-25T12:55:00.000Z",
+      "here": [
+        {
+          "id": "10000000-0000-0000-0000-000000000001",
+          "name": "Alice",
+          "guest": false,
+          "place": "town",
+          "since": "2026-11-25T12:54:30.000Z"
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000003",
+          "name": "Visitor",
+          "guest": true,
+          "place": "town",
+          "since": "2026-11-25T12:55:00.000Z"
+        }
+      ],
+      "players": [
+        {
+          "id": "10000000-0000-0000-0000-000000000001",
+          "name": "Alice",
+          "guest": false,
+          "first_seen_at": "2026-11-25T12:54:30.000Z",
+          "last_seen_at": "2026-11-25T12:55:00.000Z",
+          "seconds_total": 30,
+          "sessions": 1,
+          "seconds": 30,
+          "places": {
+            "town": 30
+          },
+          "done": [
+            {
+              "at": "2026-11-25T12:42:00.000Z",
+              "game": "raid",
+              "kind": "raid_ended",
+              "data": {
+                "trail": "moss",
+                "rooms_won": 1,
+                "how": "lost",
+                "coins": 20
+              }
+            },
+            {
+              "at": "2026-11-25T12:42:00.000Z",
+              "game": "raid",
+              "kind": "raid_room",
+              "data": {
+                "room": 2,
+                "kind": "fight",
+                "won": false,
+                "resolve": 0,
+                "seconds": 63
+              }
+            },
+            {
+              "at": "2026-11-25T12:38:00.000Z",
+              "game": "raid",
+              "kind": "raid_room",
+              "data": {
+                "room": 1,
+                "kind": "fight",
+                "won": true,
+                "resolve": 9,
+                "seconds": 41
+              }
+            },
+            {
+              "at": "2026-11-25T12:35:00.000Z",
+              "game": "raid",
+              "kind": "raid_started",
+              "data": {
+                "trail": "moss"
+              }
+            }
+          ]
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000002",
+          "name": "Bob",
+          "guest": false,
+          "first_seen_at": "2026-11-25T12:40:00.000Z",
+          "last_seen_at": "2026-11-25T12:40:00.000Z",
+          "seconds_total": 0,
+          "sessions": 1,
+          "seconds": 0,
+          "places": {
+            "works": 0
+          },
+          "done": []
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000003",
+          "name": "Visitor",
+          "guest": true,
+          "first_seen_at": "2026-11-25T12:55:00.000Z",
+          "last_seen_at": "2026-11-25T12:55:00.000Z",
+          "seconds_total": 0,
+          "sessions": 1,
+          "seconds": 0,
+          "places": {
+            "town": 0
+          },
+          "done": []
+        }
+      ],
+      "days": [
+        {
+          "day": "2026-11-24",
+          "players": 0,
+          "new_players": 0,
+          "sessions": 0,
+          "hours": 0,
+          "places": {}
+        },
+        {
+          "day": "2026-11-25",
+          "players": 3,
+          "new_players": 3,
+          "sessions": 3,
+          "hours": 0.01,
+          "places": {
+            "town": 0.01
+          }
+        }
+      ],
+      "raid": {
+        "began": 1,
+        "runs": [
+          {
+            "rooms_won": 1,
+            "runs": 1
+          }
+        ]
+      },
+      "works": {
+        "began": 0,
+        "players": []
+      },
+      "odd": []
     }
   }
 }

@@ -1,0 +1,420 @@
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+
+import { type PlayerId, playerId } from "@sequoia-leaf/core";
+import { Schema } from "effect";
+
+import { DAY, fakeBackend, HOUR, MINUTE, sessionOf, testLeaf } from "./support.ts";
+
+const alice = playerId("10000000-0000-0000-0000-000000000001");
+const bob = playerId("10000000-0000-0000-0000-000000000002");
+const carol = playerId("10000000-0000-0000-0000-000000000003");
+const dave = playerId("10000000-0000-0000-0000-000000000004");
+/** Wednesday 25 November 2026, 12:00 UTC. */
+const T0 = Date.UTC(2026, 10, 25, 12);
+const SECOND = 1000;
+
+const clock = { now: T0 };
+let services: ReturnType<typeof testLeaf>;
+let app: ReturnType<(typeof services)["app"]>;
+
+beforeEach(() => {
+  clock.now = T0;
+  const { fetcher } = fakeBackend({
+    "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
+    "bob-token": () => Response.json(sessionOf(bob, "Bob", "RECRUIT")),
+    "carol-token": () => Response.json(sessionOf(carol, "Carol", null)),
+    // A website admin, the guild's staff, though not in the guild.
+    "dave-token": () => Response.json({ ...sessionOf(dave, "Dave", null), website_admin: true }),
+  });
+  services = testLeaf(clock, fetcher);
+  app = services.app();
+});
+
+afterEach(async () => {
+  await app.dispose();
+  await services.dispose();
+});
+
+type Who = "alice" | "bob" | "carol" | "dave";
+
+/** A player's page saying where they are, at the clock's time. */
+async function call(who: Who, place: string, device?: string) {
+  const response = await app.request("/v1/game/presence", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${who}-token`, "Content-Type": "application/json" },
+    body: JSON.stringify(device === undefined ? { place } : { place, device }),
+  });
+  expect(response.status).toBe(200);
+}
+
+/** A page saying where its player is every `every` from `from`, for `minutes`, as a page left open does. */
+async function stay(who: Who, place: string, from: number, minutes: number, every = MINUTE, device?: string) {
+  for (let at = from; at <= from + minutes * MINUTE; at += every) {
+    clock.now = at;
+    // oxlint-disable-next-line no-await-in-loop -- one call after another, as time passes
+    await call(who, place, device);
+  }
+}
+
+const VisitRow = Schema.Struct({
+  player_id: Schema.String,
+  place: Schema.String,
+  source: Schema.String,
+  entered_at: Schema.Number,
+  left_at: Schema.NullOr(Schema.Number),
+  seconds: Schema.Number,
+  session_id: Schema.Number,
+});
+const visits = async () =>
+  Schema.decodeUnknownSync(Schema.Array(VisitRow))(
+    await services.query(
+      (sql) => sql`SELECT player_id, place, source, entered_at, left_at, seconds, session_id FROM visits ORDER BY id`,
+    ),
+  );
+const SessionRow = Schema.Struct({
+  id: Schema.Number,
+  player_id: Schema.String,
+  guest: Schema.Number,
+  started_at: Schema.Number,
+  ended_at: Schema.NullOr(Schema.Number),
+  seconds: Schema.Number,
+  device: Schema.NullOr(Schema.String),
+  places: Schema.fromJsonString(Schema.Record(Schema.String, Schema.Number)),
+});
+const sessions = async () =>
+  Schema.decodeUnknownSync(Schema.Array(SessionRow))(
+    await services.query(
+      (sql) =>
+        sql`SELECT id, player_id, guest, started_at, ended_at, seconds, device, places FROM sessions ORDER BY id`,
+    ),
+  );
+const playersSeen = () =>
+  services.query(
+    (sql) => sql`
+      SELECT player_id, name, guest, first_seen_at, last_seen_at, seconds_total, sessions FROM players_seen
+      ORDER BY player_id
+    `,
+  );
+
+/** The staff's report, as Dave asks for it. */
+async function report(query = "") {
+  const response = await app.request(`/v1/game/admin/activity${query}`, {
+    headers: { Authorization: "Bearer dave-token" },
+  });
+  const body: unknown = await response.json();
+  return { status: response.status, body };
+}
+
+describe("visits from the presence calls", () => {
+  it("opens a visit at the first call, moves it on with each, and closes it at the last after 90 silent seconds", async () => {
+    await call("alice", "camp");
+    clock.now = T0 + 30 * SECOND;
+    await call("alice", "camp");
+    clock.now = T0 + 60 * SECOND;
+    await call("alice", "camp");
+    expect(await visits()).toMatchObject([{ place: "camp", source: "call", entered_at: T0, left_at: null }]);
+
+    // Someone else's call, 89 seconds after Alice's last, finds hers still open; at 90 it is closed at that last call.
+    clock.now = T0 + 149 * SECOND;
+    await call("bob", "town");
+    expect((await visits())[0]?.left_at).toBeNull();
+    clock.now = T0 + 150 * SECOND;
+    await call("bob", "town");
+
+    expect((await visits())[0]).toMatchObject({ place: "camp", left_at: T0 + 60 * SECOND, seconds: 60 });
+  });
+
+  it("closes the visit in one place when the player comes to another, in the same session", async () => {
+    await call("alice", "camp");
+    clock.now = T0 + 40 * SECOND;
+    await call("alice", "works");
+
+    const [camp, works] = await visits();
+    expect(camp).toMatchObject({ place: "camp", left_at: T0 + 40 * SECOND, seconds: 40 });
+    expect(works).toMatchObject({ place: "works", entered_at: T0 + 40 * SECOND, left_at: null });
+    expect(works?.session_id).toBe(camp?.session_id ?? -1);
+  });
+
+  it("joins visits less than five minutes apart into one session, and begins another at five", async () => {
+    await stay("bob", "camp", T0, 1, 30 * SECOND, "desktop");
+    // 4 minutes 59 seconds after the last call: the same sitting.
+    await stay("bob", "table", T0 + MINUTE + 4 * MINUTE + 59 * SECOND, 1, 30 * SECOND);
+    const lastCall = T0 + MINUTE + 4 * MINUTE + 59 * SECOND + MINUTE;
+    // Exactly five minutes after: a new one, on a phone this time.
+    await stay("bob", "camp", lastCall + 5 * MINUTE, 2, MINUTE, "phone");
+    clock.now = lastCall + 5 * MINUTE + 2 * MINUTE + 90 * SECOND;
+    await call("alice", "town");
+
+    expect(await visits()).toMatchObject([
+      { player_id: bob, place: "camp", seconds: 60, session_id: 1 },
+      { player_id: bob, place: "table", seconds: 60, session_id: 1 },
+      { player_id: bob, place: "camp", seconds: 120, session_id: 2 },
+      { player_id: alice, place: "town", left_at: null, session_id: 3 },
+    ]);
+    expect((await sessions()).slice(0, 2)).toEqual([
+      {
+        id: 1,
+        player_id: bob,
+        guest: 0,
+        started_at: T0,
+        ended_at: lastCall,
+        seconds: 120,
+        device: "desktop",
+        places: { camp: 60, table: 60 },
+      },
+      {
+        id: 2,
+        player_id: bob,
+        guest: 0,
+        started_at: lastCall + 5 * MINUTE,
+        ended_at: lastCall + 7 * MINUTE,
+        seconds: 120,
+        device: "phone",
+        places: { camp: 120 },
+      },
+    ]);
+  });
+
+  it("keeps one row a player: first and last seen, all their time, their sessions, and their name and guest as last known", async () => {
+    await stay("carol", "town", T0, 3);
+    await stay("carol", "works", T0 + HOUR, 2, MINUTE, "phone");
+    clock.now = T0 + 2 * HOUR;
+    await call("alice", "town");
+
+    expect(await playersSeen()).toEqual([
+      {
+        player_id: alice,
+        name: "Alice",
+        guest: 0,
+        first_seen_at: T0 + 2 * HOUR,
+        last_seen_at: T0 + 2 * HOUR,
+        seconds_total: 0,
+        sessions: 1,
+      },
+      {
+        player_id: carol,
+        name: "Carol",
+        guest: 1,
+        first_seen_at: T0,
+        last_seen_at: T0 + HOUR + 2 * MINUTE,
+        seconds_total: 5 * 60,
+        sessions: 2,
+      },
+    ]);
+  });
+
+  it("removes visits and sessions that ended 180 days ago when a new visit is written, and keeps the players", async () => {
+    clock.now = T0 - 181 * DAY;
+    await call("bob", "camp");
+    clock.now = T0 - 179 * DAY;
+    await call("carol", "camp");
+    clock.now = T0;
+    await call("alice", "town");
+
+    expect((await visits()).map((v) => v.player_id)).toEqual([carol, alice]);
+    expect((await sessions()).map((s) => s.player_id)).toEqual([carol, alice]);
+    expect((await playersSeen()).map((p) => p.player_id)).toEqual([alice, bob, carol]);
+  });
+
+  it("takes a device only as phone or desktop", async () => {
+    const response = await app.request("/v1/game/presence", {
+      method: "PUT",
+      headers: { Authorization: "Bearer alice-token", "Content-Type": "application/json" },
+      body: JSON.stringify({ place: "town", device: "tablet" }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await visits()).toEqual([]);
+  });
+});
+
+/** How many days a report covers. */
+const daysOf = (body: unknown) =>
+  typeof body === "object" && body !== null && "days" in body && Array.isArray(body.days) ? body.days.length : -1;
+/** A time in November 2026, UTC. */
+const day = (d: number, h: number, m = 0) => Date.UTC(2026, 10, d, h, m);
+const iso = (at: number) => new Date(at).toISOString();
+
+describe("GET /v1/game/admin/activity", () => {
+  it("is for website admins alone: a guest and an ordinary member are refused, and nothing is sent", async () => {
+    const asks = await Promise.all(
+      ["carol-token", "alice-token", "stale-token"].map(async (token) => {
+        const response = await app.request("/v1/game/admin/activity", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        return [response.status, await response.json()];
+      }),
+    );
+
+    expect(asks).toEqual([
+      [403, { code: "staff_only", message: "This is for the guild's staff" }],
+      [403, { code: "staff_only", message: "This is for the guild's staff" }],
+      [401, { code: "unauthorized", message: "Your session has expired. Sign in again" }],
+    ]);
+    expect((await report()).status).toBe(200);
+  });
+
+  it("covers the last 7 UTC days unless told, at most 90, and refuses a number of days that is not one", async () => {
+    expect(daysOf((await report()).body)).toBe(7);
+    expect(daysOf((await report("?days=1")).body)).toBe(1);
+    expect(daysOf((await report("?days=500")).body)).toBe(90);
+    for (const bad of ["0", "-3", "two", "1.5"]) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      expect(await report(`?days=${bad}`)).toEqual({
+        status: 400,
+        body: { code: "invalid_days", message: "days must be a whole number of days, 1 or more" },
+      });
+    }
+  });
+
+  it("reports who is where, each player's times, the days, how far players get, and what is odd, over a few days", async () => {
+    // Before the period: Alice's first evening in town.
+    await stay("alice", "town", day(22, 20), 30);
+    // Alice in her camp across midnight into the period's second day.
+    await stay("alice", "camp", day(23, 23, 30), 60);
+    // Bob: the Works, then the town two minutes later, in one sitting.
+    await stay("bob", "works", day(24, 10), 20, MINUTE, "desktop");
+    await stay("bob", "town", day(24, 10, 22), 10);
+    // Carol, a guest on a phone, sits down at the table 21 times in a day, a minute each.
+    for (let n = 0; n < 21; n++) {
+      // oxlint-disable-next-line no-await-in-loop -- in order, as time passes
+      await stay("carol", "table", day(24, 12) + n * 6 * MINUTE, 1, MINUTE, "phone");
+    }
+    // Bob in town twelve and a half hours, his page saying so every 75 seconds.
+    await stay("bob", "town", day(25, 5), 12 * 60 + 30, 75 * SECOND);
+    // Alice is in town now.
+    await stay("alice", "town", day(25, 17, 59) + 30 * SECOND, 0);
+
+    // What the games logged, as the play service writes it.
+    const logged = [
+      [alice, day(20, 9), "works", "order_filled", { story: true }],
+      [alice, day(24, 9), "works", "order_filled", { story: false }],
+      [carol, day(24, 12, 30), "works", "order_filled", { story: true }],
+      [carol, day(24, 12, 40), "works", "order_filled", { story: true }],
+      [alice, day(24, 15), "raid", "raid_started", { trail: "moss" }],
+      [alice, day(24, 15, 5), "raid", "raid_room", { room: 1, won: true }],
+      [alice, day(24, 15, 9), "raid", "raid_room", { room: 2, won: true }],
+      [alice, day(24, 15, 14), "raid", "raid_room", { room: 3, won: false }],
+      [alice, day(24, 15, 15), "raid", "raid_ended", { trail: "moss", rooms_won: 2, how: "lost", coins: 40 }],
+      [bob, day(25, 6), "raid", "raid_started", { trail: "fen" }],
+      [bob, day(25, 6, 4), "raid", "raid_room", { room: 1, won: true }],
+    ] as const;
+    for (const [player, at, game, kind, data] of logged) {
+      // oxlint-disable-next-line no-await-in-loop -- in order
+      await services.query(
+        (sql) => sql`
+          INSERT INTO activity (player_id, at, game, kind, data)
+          VALUES (${player}, ${at}, ${game}, ${kind}, ${JSON.stringify(data)})
+        `,
+      );
+    }
+    // The Coins ledger, as the play service keeps it.
+    await services.query(
+      (sql) => sql`
+        CREATE TABLE coin_entries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, player_id TEXT NOT NULL, amount INTEGER NOT NULL,
+          reason TEXT NOT NULL, game TEXT NOT NULL, key TEXT NOT NULL UNIQUE, at INTEGER NOT NULL
+        ) STRICT
+      `,
+    );
+    const coins: readonly (readonly [PlayerId, number, number])[] = [
+      [alice, day(25, 9), 3000],
+      [alice, day(25, 9, 40), 2500],
+      [bob, day(25, 9), 4000],
+    ];
+    for (const [n, [player, at, amount]] of coins.entries()) {
+      // oxlint-disable-next-line no-await-in-loop -- in order
+      await services.query(
+        (sql) => sql`
+          INSERT INTO coin_entries (player_id, amount, reason, game, key, at)
+          VALUES (${player}, ${amount}, 'takings', 'raid', ${`k${n}`}, ${at})
+        `,
+      );
+    }
+    clock.now = day(25, 18);
+
+    const { status, body } = await report("?days=3");
+
+    const done = (player: PlayerId) =>
+      logged
+        .filter(([p]) => p === player)
+        .toSorted((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([, at, game, kind, data]) => ({ at: iso(at), game, kind, data }));
+    expect(status).toBe(200);
+    expect(body).toEqual({
+      now: iso(day(25, 18)),
+      here: [{ id: alice, name: "Alice", guest: false, place: "town", since: iso(day(25, 17, 59) + 30 * SECOND) }],
+      players: [
+        {
+          id: bob,
+          name: "Bob",
+          guest: false,
+          first_seen_at: iso(day(24, 10)),
+          last_seen_at: iso(day(25, 17, 30)),
+          seconds_total: 20 * 60 + 10 * 60 + 12.5 * 3600,
+          sessions: 2,
+          seconds: 20 * 60 + 10 * 60 + 12.5 * 3600,
+          places: { works: 20 * 60, town: 10 * 60 + 12.5 * 3600 },
+          done: done(bob),
+        },
+        {
+          id: alice,
+          name: "Alice",
+          guest: false,
+          first_seen_at: iso(day(22, 20)),
+          last_seen_at: iso(day(25, 18)),
+          // Her evening before the period counts toward all her time, and her half minute in town now.
+          seconds_total: 30 * 60 + 60 * 60 + 30,
+          sessions: 2,
+          seconds: 60 * 60 + 30,
+          places: { camp: 60 * 60, town: 30 },
+          done: done(alice),
+        },
+        {
+          id: carol,
+          name: "Carol",
+          guest: true,
+          first_seen_at: iso(day(24, 12)),
+          last_seen_at: iso(day(24, 14, 1)),
+          seconds_total: 21 * 60,
+          sessions: 21,
+          seconds: 21 * 60,
+          places: { table: 21 * 60 },
+          done: done(carol),
+        },
+      ],
+      days: [
+        { day: "2026-11-23", players: 1, new_players: 0, sessions: 1, hours: 0.5, places: { camp: 0.5 } },
+        {
+          day: "2026-11-24",
+          players: 3,
+          new_players: 2,
+          sessions: 22,
+          hours: 1.35,
+          places: { camp: 0.5, works: 0.33, town: 0.17, table: 0.35 },
+        },
+        { day: "2026-11-25", players: 2, new_players: 0, sessions: 2, hours: 12.51, places: { town: 12.51 } },
+      ],
+      raid: {
+        began: 2,
+        runs: [
+          { rooms_won: 1, runs: 1 },
+          { rooms_won: 2, runs: 1 },
+        ],
+      },
+      works: {
+        began: 1,
+        players: [
+          { story_orders: 1, players: 1 },
+          { story_orders: 2, players: 1 },
+        ],
+      },
+      odd: [
+        { id: alice, name: "Alice", rule: "coins_in_an_hour", at: iso(day(25, 9)), value: 5500 },
+        { id: bob, name: "Bob", rule: "long_visit", at: iso(day(25, 5)), value: 12.5 * 3600 },
+        { id: carol, name: "Carol", rule: "sessions_in_a_day", at: iso(day(24, 0)), value: 21 },
+      ],
+    });
+  });
+});

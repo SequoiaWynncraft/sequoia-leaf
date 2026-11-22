@@ -1,14 +1,15 @@
 /**
  * Who is here: when the game is live, each page tells the server where in the game the member is
- * (the town, their camp, the Works, the table) and whether their character may stay in town after
- * they go, every half minute and at once when either changes; and hears back everybody seen in the
- * last little while, and those gone in the last day whose characters stay. With the made-up guild
- * it does nothing.
+ * (the town, their camp, the Works, the table), whether their character may stay in town after
+ * they go, and what the page is on, every half minute and at once when where or staying changes;
+ * and hears back everybody seen in the last little while, and those gone in the last day whose
+ * characters stay. While the page is in a live room of the place it is at, the room says where the
+ * member is, and the page only asks who is about. With the made-up guild it does nothing.
  */
 
 import { keptText } from "./keep.ts";
-import { member } from "./live.ts";
-import { isRecord, put } from "./net.ts";
+import { device, member } from "./live.ts";
+import { ask, isRecord, put } from "./net.ts";
 
 export type Place = "town" | "camp" | "works" | "table";
 
@@ -37,7 +38,7 @@ export interface Resting {
 export const EVERY = 30_000;
 
 const PLACES: readonly Place[] = ["town", "camp", "works", "table"];
-const isPlace = (v: unknown): v is Place => PLACES.some((p) => p === v);
+export const isPlace = (v: unknown): v is Place => PLACES.some((p) => p === v);
 
 /** The list from the server's answer, leaving out anything that makes no sense. */
 export function readPresent(v: unknown): Present[] {
@@ -92,10 +93,20 @@ let staying: boolean | null = null;
 const stayingNow = (): boolean => staying ?? keptStay();
 let timer: ReturnType<typeof setInterval> | null = null;
 const ears = new Set<(present: readonly Present[], resting: readonly Resting[]) => void>();
+/** The place of the live room this page is in now (`realtime.ts` says), if it is one. */
+let roomed: Place | null = null;
 
-async function send(): Promise<void> {
+/**
+ * Tells the server where the member is and hears who is about; only asks who is about while the
+ * page is in a live room of that place, unless what the member said about staying is to be told.
+ */
+async function send(telling = false): Promise<void> {
   if (at === null || !member()) return;
-  const a = await put("/v1/game/presence", { place: at, stay: stayingNow() });
+  const on = device();
+  const a =
+    at === roomed && !telling
+      ? await ask("/v1/game/presence")
+      : await put("/v1/game/presence", { place: at, stay: stayingNow(), ...(on === null ? {} : { device: on }) });
   if (a.status !== 200) return;
   const present = readPresent(a.body);
   const resting = readResting(a.body);
@@ -118,7 +129,15 @@ export function stay(on: boolean): void {
     return;
   }
   staying = on;
-  if (member() && at !== null) void send();
+  if (member() && at !== null) void send(true);
+}
+
+/**
+ * The page is in a live room of a kind now (`realtime.ts` says so at each welcome), or in none
+ * (`null`): while it is in one of the place it is at, the room keeps where the member is.
+ */
+export function inRoom(kind: string | null): void {
+  roomed = isPlace(kind) ? kind : null;
 }
 
 /** Hears who is here, and who is resting, each time the server says. Returns how to stop. */
