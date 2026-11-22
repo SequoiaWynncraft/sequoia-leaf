@@ -178,6 +178,8 @@ export const hooks: {
   groveBanner: () => string | null;
   /** Go to somebody's camp (`name`, if known, is theirs), or the member's own for their own id. */
   visitCamp: (id: string, name?: string) => void;
+  /** Tell the town's room that the member touched a thing in town, by its name. */
+  tell: (name: string) => void;
 } = {
   visit: () => undefined,
   feed: () => undefined,
@@ -186,6 +188,7 @@ export const hooks: {
   toGrove: () => undefined,
   groveBanner: () => null,
   visitCamp: () => undefined,
+  tell: () => undefined,
 };
 
 /** Listeners for "something the panels show has changed". */

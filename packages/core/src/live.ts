@@ -170,19 +170,38 @@ export function decodeSnapshot(bytes: Uint8Array): Snapshot | null {
 // ---------- the cold path ----------
 
 /**
- * The actions there are: each kind, and the arguments it takes. Only these are passed on, so that
- * nothing a player types, not even a word spelt out in a token, reaches anybody else. A place that
- * wants a new action adds it here.
+ * What in town answers a touch: each kind of thing standing there, the water, the sky, a string of
+ * lights, a crab, and the roll call.
  */
-export const ACTS: Readonly<Record<string, readonly string[]>> = {
+// One line each would be thirty.
+// prettier-ignore
+export const THINGS = [
+  "trunk", "treasury", "counter", "chest", "barrel", "works", "belt", "pile", "gate", "signpost", "board",
+  "pole", "stall", "post", "table", "seat", "tree", "fire", "grove", "mushroom", "flower", "bush", "fern",
+  "rock",
+  "reeds", "water", "sky", "lights", "crab", "roll",
+] as const;
+export type Thing = (typeof THINGS)[number];
+
+/**
+ * The actions there are: each kind, and the arguments it takes, or the shape they have. Only these
+ * are passed on, so that nothing a player types, not even a word spelt out in a token, reaches
+ * anybody else. A place that wants a new action adds it here.
+ */
+export const ACTS: Readonly<Record<string, readonly string[] | RegExp>> = {
   emote: ["wave", "cheer", "bow", "laugh", "heart", "sit", "dance", "crab"],
-  /** A log put on the town's fire: it flares on everybody's page. */
-  fire: ["log"],
+  /**
+   * A touch on a thing in town, which answers on everybody's page: one of `THINGS`, and the point
+   * on it (`post:96,150`), its number (`crab:3`), or neither (`roll`).
+   */
+  touch: new RegExp(`^(?:${THINGS.join("|")})(?::-?\\d{1,3}(?:,-?\\d{1,3})?)?$`),
 };
 
 /** Whether an action is one there is (`ACTS`). */
-export const isAct = (kind: string, arg: string): boolean =>
-  Object.hasOwn(ACTS, kind) && (ACTS[kind] ?? []).includes(arg);
+export function isAct(kind: string, arg: string): boolean {
+  const args = Object.hasOwn(ACTS, kind) ? ACTS[kind] : undefined;
+  return args instanceof RegExp ? args.test(arg) : (args?.includes(arg) ?? false);
+}
 
 /** What the game sends as text. */
 export type ToServer =

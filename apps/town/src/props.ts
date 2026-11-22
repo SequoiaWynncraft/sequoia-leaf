@@ -23,7 +23,8 @@ export interface Prop {
   /** When it was last touched: things shiver or hop for a moment after. */
   bumpAt: number;
   hops: boolean;
-  tap: ((p: Prop, wx: number, wy: number) => void) | null;
+  /** What it does when touched at a point: `own` when the member touched it, not another player in the room. */
+  tap: ((p: Prop, wx: number, wy: number, own: boolean) => void) | null;
   /** Anything drawn over the picture each frame, given the picture's foot on screen. */
   extra: ((g: Ctx, sx: number, sy: number) => void) | null;
   /** What it is, for whoever points at it: a name and a line, or a card of its own. */

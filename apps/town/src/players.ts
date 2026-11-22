@@ -5,9 +5,11 @@
  * where the room says they are, each in their own skin. They are never solid. Leaving the scene,
  * for the camp or into a game, leaves the room; coming back joins it again.
  *
- * Here too: the member's emotes (the plaque over their own figure, and what everybody sees of
- * them), the wave on a live player's card, the small "Reconnecting…" once the connection has been
- * down a couple of seconds, and the kit's cards for a connection Leaf has let go of. The rules are in `motion.ts`.
+ * Here too: telling the room of the member's touches on things in town (`town.ts`'s
+ * `touchThing`) and playing everybody else's, the member's emotes (the plaque over their own
+ * figure, and what everybody sees of them), the wave on a live player's card, the small
+ * "Reconnecting…" once the connection has been down a couple of seconds, and the kit's cards for
+ * a connection Leaf has let go of. The rules are in `motion.ts`.
  */
 
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
@@ -27,10 +29,10 @@ import { clamp, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { face, feet, footfall, headOf, hop, makeActor, onScreen, stepActor } from "./actors.ts";
 import { emoteOver } from "./fx.ts";
-import { type Actor, G, toPage } from "./game.ts";
+import { type Actor, G, hooks, toPage } from "./game.ts";
 import { GUEST, rankName } from "./live.ts";
 import { Company, type Fellow, linkShown, NAMED_FOR, othersIn, stepOf } from "./motion.ts";
-import { flare } from "./town.ts";
+import { touchThing } from "./town.ts";
 import { followLive, takeSeat } from "./visitors.ts";
 import { type Seat, SEATS } from "./world.ts";
 
@@ -58,7 +60,9 @@ const company = new Company<Drawn>((m) => ({ a: figureOf(m), seat: seatAt(0, 0, 
   emote: (f, kind) => {
     express(f.own.a, kind);
   },
-  log: flare,
+  touch: (name) => {
+    touchThing(name, false);
+  },
   status: (s) => {
     status = s;
     if (s === "closed") downAt ??= performance.now();
@@ -301,11 +305,7 @@ function express(a: Actor, kind: Emote): void {
   else sfx.pop();
 }
 
-/** The member puts a log on the fire, and it flares on everybody's page. */
-export function addLog(): void {
-  flare();
-  room?.act("fire", "log");
-}
+hooks.tell = (name) => room?.act("touch", name);
 
 /** The member makes an emote, and everybody in the room sees them make it. */
 export function emote(kind: Emote): void {
