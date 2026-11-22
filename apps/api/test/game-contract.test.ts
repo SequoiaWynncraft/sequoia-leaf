@@ -81,6 +81,12 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
     "bob-token": () => Response.json(sessionOf(bob, "Bob", "RECRUIT")),
     "visitor-token": () => Response.json(sessionOf(playerId("10000000-0000-0000-0000-000000000003"), "Visitor", null)),
+    // One of the guild's staff, a website admin.
+    "staff-token": () =>
+      Response.json({
+        ...sessionOf(playerId("10000000-0000-0000-0000-000000000004"), "Steward", null),
+        website_admin: true,
+      }),
   });
   const mojang = fakeMojang();
   mojang.profiles.set(bob, { name: "Bob", skin: undefined });
@@ -150,7 +156,33 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     headers: { Authorization: "Bearer visitor-token", "Content-Type": "application/json" },
     body: JSON.stringify({ place: "town" }),
   });
-  await call("PUT /v1/game/presence", "PUT", "/v1/game/presence", { place: "town", stay: true });
+  // Alice has had the town open half a minute, on a desktop.
+  clock.now = T0 + 24 * MINUTE + 30_000;
+  await app.request("/v1/game/presence", {
+    method: "PUT",
+    headers: { Authorization: "Bearer alice-token", "Content-Type": "application/json" },
+    body: JSON.stringify({ place: "town", device: "desktop" }),
+  });
+  clock.now = T0 + 25 * MINUTE;
+  await call("PUT /v1/game/presence", "PUT", "/v1/game/presence", { place: "town", stay: true, device: "desktop" });
+  await call("GET /v1/game/presence", "GET", "/v1/game/presence");
+  // A raid run of Alice's, as the play service logs it.
+  for (const [minute, kind, data] of [
+    [5, "raid_started", { trail: "moss" }],
+    [8, "raid_room", { room: 1, kind: "fight", won: true, resolve: 9, seconds: 41 }],
+    [12, "raid_room", { room: 2, kind: "fight", won: false, resolve: 0, seconds: 63 }],
+    [12, "raid_ended", { trail: "moss", rooms_won: 1, how: "lost", coins: 20 }],
+  ] as const) {
+    // oxlint-disable-next-line no-await-in-loop -- in order
+    await leaf.query(
+      (sql) => sql`
+        INSERT INTO activity (player_id, at, game, kind, data)
+        VALUES (${alice}, ${T0 + minute * MINUTE}, 'raid', ${kind}, ${JSON.stringify(data)})
+      `,
+    );
+  }
+  await call("GET /v1/game/admin/activity, a member", "GET", "/v1/game/admin/activity");
+  await call("GET /v1/game/admin/activity", "GET", "/v1/game/admin/activity?days=2", undefined, "staff-token");
   await app.dispose();
   return recorded;
 }

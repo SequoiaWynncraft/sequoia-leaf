@@ -15,8 +15,9 @@ Live at `https://leaf.seqwawa.com` since 16 November 2026, on the Sequoia
 server. It reads sequoia-backend's player credit feed every minute, pays Leaf
 and XP for raids and wars, runs quests on top of them, and pays Leaf for each
 level a member reaches: a tenth of the XP the level took. Signed-in members
-can read their balance, level and quests. There is no way to spend Leaf yet
-and there are no staff endpoints.
+can read their balance, level and quests. There is no way to spend Leaf yet.
+The one staff route is the record of who played the game
+([below](#who-played-the-staffs-view)).
 
 It also serves the guild's browser game, Guild Town, at `/play/town/`, and the
 routes only the game uses. Anyone signed in may play it: members, and guests
@@ -338,6 +339,8 @@ react to `quest_completed`.
 | `GET /v1/game/guild/events`        | What happened across the guild, oldest first.                         |
 | `GET /v1/game/guild/events/stream` | The same as it happens, as server-sent events.                        |
 | `PUT /v1/game/presence`            | Says where in the game the player is; lists who is there and resting. |
+| `GET /v1/game/presence`            | The same lists, saying nothing: for a page in a live room.            |
+| `GET /v1/game/admin/activity`      | For the staff alone: who played, when, where and for how long.        |
 
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
@@ -430,10 +433,13 @@ players it knows, as for skins. It keeps the names it learns, and each time it
 learns a new one, removes those nobody asked for in 30 days. An event whose
 member no one can name yet, because Mojang can't be reached, is left out.
 
-**Presence.** `PUT /v1/game/presence` takes `{ "place", "stay" }`: `place` is
-one of `town`, `camp`, `works` and `table`, and `stay`, true or false and true
-when left out, says whether the player's character may stay in town, dozing,
-for a day after they go. Anything else gets 400 `invalid_place`. It records
+**Presence.** `PUT /v1/game/presence` takes `{ "place", "stay", "device" }`:
+`place` is one of `town`, `camp`, `works` and `table`; `stay`, true or false and
+true when left out, says whether the player's character may stay in town,
+dozing, for a day after they go; and `device`, `phone` or `desktop` and
+optional, is what the page is on, by its window's width when it signed in
+(under 700 CSS pixels is a phone), for the staff's record of who played.
+Anything else gets 400 `invalid_place`. It records
 both, with whether the player is a guest, and answers `{ "present": [{ "id",
 "username", "place", "guest" }], "resting": [{ "id", "username", "place",
 "guest", "seen_at" }] }`: `present` is the 50 seen most recently of everyone
@@ -445,11 +451,16 @@ answered the lists, but nothing is written; somewhere else, or other about
 staying, is written at once. A player in one of Live's rooms of the game's
 places (the town) is written there by Live itself, as if their game had said so
 (below). Players not seen for a day are forgotten.
+`GET /v1/game/presence` answers the same lists and writes nothing: a page in
+one of Live's rooms asks it every 30 seconds, since the room keeps where its
+player is. Each `PUT` is also a visit's call (see
+[Who played](#who-played-the-staffs-view)); a `GET` is not.
 
 ### Live: players in the same place, as it happens
 
 `GET /v1/game/live?v=2&room=<kind>` (`livePath` in core) is a WebSocket into a
-room. Players in the same room see each other move as it happens, and see who
+room; the game adds `&device=phone` or `desktop`, what the page is on, for the
+player's visits (anything else there is taken as nothing said). Players in the same room see each other move as it happens, and see who
 comes, goes and does what. Anyone the game's
 routes let in may open it, members and guests alike. The wire is
 `packages/core/src/live.ts`, shared by Leaf and the game; the server is
@@ -550,8 +561,8 @@ closed. Nothing is compressed.
 | 4001 | The player opened the game live somewhere else.             | Does not reconnect.        |
 | 4003 | The player's session ended.                                 | Does not, until signed in. |
 
-When Leaf stops, every connection is closed with 1012 before the HTTP server
-stops: production and the tests both serve Leaf with `serveLeaf` in `app.ts`,
+When Leaf stops, every open visit is closed, and then every connection with
+1012, before the HTTP server stops: production and the tests both serve Leaf with `serveLeaf` in `app.ts`,
 which puts the live rooms' farewell on top of the server. The game reconnects to
 the new container after half a second or so, joins its room again, and says where
 its player is again, as a jump.
@@ -567,7 +578,7 @@ they are in it, and when they leave it (their connection's grace run out, a
 `leave`, or another room), as last seen there then, unless their game has said
 since that they are somewhere else. So pages that ask who is about count them
 right, and they rest in town after they go, though their page never says where
-it is.
+it is. The same moments open, keep and close their visit there.
 
 **What it is not, yet.** Positions are the game's to say, inside the room and
 at its pace: right for walking about together, never for anything that pays or
@@ -648,11 +659,83 @@ Pebblefoot from spot to spot.
 - `--guest`: Tester is signed in but not in the guild, so they play as a guest.
 - `--down`: the backend can't be asked who Tester is, so they answer 503.
 - `--busy`: every minute a few of the four finish a raid together, for the guild's news.
+- `--admin`: the backend knows one more session, `staff`, of Warden, a website
+  admin not in the guild, so that
+  `curl -H 'Authorization: Bearer staff' http://127.0.0.1:4000/v1/game/admin/activity`
+  shows who played; `/sign-in?as=warden` signs a page in as them.
 - `--crowd <n>`: n more members, each in a skin of their own, in the town's live
   room and walking about it along its paths: stopping a few seconds at each
   spot, now and then sitting on a log by the fire a while, and now and then
   waving, cheering, laughing or sending a heart. They say where they are only
-  by being in the room.
+  by being in the room. Every third is on a phone.
+
+## Who played: the staff's view
+
+Leaf records when players come, where they go in the game and for how long,
+for the staff alone, to see how the game is played, to answer "what happened
+to my game", and to notice anything out of the ordinary. It keeps no IP
+address, browser string, where a player walks or what they point at. The
+rules are `packages/core/src/visits.ts`; the store is `apps/api/src/activity`.
+
+- **Visits** (`visits`): each stay in a place (`town`, `camp`, `works`,
+  `table`). One opens when a player comes into one of Live's rooms of a place,
+  or when their page says it is there (`PUT /v1/game/presence`), and is heard
+  of again while they stay: by the room every 30 seconds, and by each call. It
+  closes when they leave the room or their grace runs out, when they come to
+  another place (a player has one open visit at most), or, not heard of for 90
+  seconds, at the last time it was. A page's call in the place of the room a
+  player then comes into is the same visit, the room's from then on. Each Leaf
+  process has an id of its own (`instance`), and a visit is the one's that last
+  heard of it: Leaf stopping closes its own open visits at that moment, before
+  any connection, and leaves open those the other container in a deploy has
+  heard of since, with the time they began.
+- **Sessions** (`sessions`): visits by one player less than five minutes apart
+  are one sitting: its start and end (null while a visit of it is open), its
+  seconds, the seconds in each place (`places`, JSON) and `device`, `phone` or
+  `desktop` as the page said when the session began (null when it said
+  nothing), all kept up to date as its visits open and close.
+- **Players** (`players_seen`): one row a player: first and last seen, all
+  their seconds, their sessions, and their name and whether a guest as last
+  known, written each time Leaf hears of them.
+- **Things done** (`activity`): what each game's commands log through the play
+  service (`Done.log`), as JSON. The report reads a raid run as
+  `raid_started`, a `raid_room` for each room (`won` true for one won) and
+  `raid_ended`; and the Works' `order_filled`, with `story` true for a story
+  order (`LOGGED` in core).
+
+Visits and sessions that ended 180 days ago are removed whenever a visit is
+opened; players and the things done are kept for good. Every minute Leaf
+closes the visits gone silent, and so does a read of the report.
+
+`GET /v1/game/admin/activity?days=<n>` lets in only a session the backend marks
+as a website admin, and refuses anyone else with 403 `staff_only`. It covers
+the last `n` UTC days, today the last (7 when left out, at most 90; one that is
+not a whole number of 1 or more gets 400 `invalid_days`), and answers:
+
+| Field     | What it holds                                                                                                                                                                                          |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `now`     | Leaf's clock.                                                                                                                                                                                          |
+| `here`    | Who is in which place now: `id`, `name`, `guest`, `place`, `since`.                                                                                                                                    |
+| `players` | Everyone with time in the period, most first: `first_seen_at`, `last_seen_at`, `seconds_total` (ever), `sessions` and `seconds` in the period, `places` (seconds), and `done`, their last five things. |
+| `days`    | Each day, oldest first: `players`, `new_players`, `sessions` begun, `hours`, and `places` (hours), to two places; a visit across midnight counts on both days.                                         |
+| `raid`    | `began`: runs begun in the period; `runs`: how many runs won how many rooms (so far, for one still going).                                                                                             |
+| `works`   | `began`: players who first went to the Works in the period; `players`: how many of those there in it have filled how many story orders.                                                                |
+| `odd`     | What is out of the ordinary, newest first: `id`, `name`, `rule`, `at` and `value`.                                                                                                                     |
+
+The rules of `odd` (`ODD_RULES` in core) are a list to look at; nothing is done
+about them:
+
+| `rule`              | When                                                                  | `at`                   | `value`     |
+| ------------------- | --------------------------------------------------------------------- | ---------------------- | ----------- |
+| `coins_in_an_hour`  | A player's Coins rose more than 5,000 in an hour (the most each day). | The hour's first entry | Coins risen |
+| `sessions_in_a_day` | More than 20 sessions begun in a UTC day.                             | The day                | Sessions    |
+| `long_visit`        | A visit longer than 12 hours, ended or not.                           | When it began          | Its seconds |
+| `refused_in_a_day`  | More commands refused than done in a day.                             | The day                | Refused     |
+
+Coins are read from the play service's `coin_entries` when there is one; it
+does not count refused commands yet, so until it does the last rule finds
+nothing. What other players see of someone stays what it was: in town now, or
+dozed off a while ago.
 
 ## Rules the code is built on
 

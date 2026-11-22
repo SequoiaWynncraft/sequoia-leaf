@@ -2,6 +2,7 @@ import { DEFAULT_RULES, RULE_CHANGES } from "@sequoia-leaf/core";
 import { Cause, Clock, Effect, Layer, Schedule } from "effect";
 
 import { runAchievementSync } from "./achievements/run.ts";
+import { Visits } from "./activity/visits.ts";
 import { announce } from "./announce/publish.ts";
 import { rateCard } from "./announce/rate-card.ts";
 import { bucketOffsite, offsiteCopier } from "./backup/offsite.ts";
@@ -79,13 +80,22 @@ const offsiteCopies = Effect.gen(function* () {
   );
 });
 
+/** Closes the visits gone silent, so that what is kept of sessions and players is as of the minute. */
+const silentVisits = step(
+  "Closing silent visits",
+  Effect.gen(function* () {
+    const visits = yield* Visits;
+    yield* visits.closeSilent(yield* Clock.currentTimeMillis);
+  }),
+);
+
 /** Runs a job at the start of every minute on its own fiber, so a slow run of one never holds up another. */
 const everyMinute = <R>(job: Effect.Effect<void, never, R>) =>
   job.pipe(Effect.repeat(Schedule.cron("* * * * *")), Effect.forkScoped);
 
 /**
  * What Leaf does every minute, for as long as it runs: the two feed syncs,
- * snapshots and offsite copies, each on its own. An offsite copy can take
+ * snapshots and offsite copies, and closing silent visits, each on its own. An offsite copy can take
  * minutes; the syncs, the deep sync at minute 17, and snapshots carry on meanwhile.
  */
 export const EveryMinute = Layer.effectDiscard(
@@ -94,6 +104,7 @@ export const EveryMinute = Layer.effectDiscard(
     yield* everyMinute(scheduledSync("achievement", runAchievementSync));
     yield* everyMinute(yield* snapshots);
     yield* everyMinute(yield* offsiteCopies);
+    yield* everyMinute(silentVisits);
   }),
 );
 

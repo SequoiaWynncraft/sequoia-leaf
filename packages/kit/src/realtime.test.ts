@@ -4,6 +4,7 @@ import { CLOSE, encodeSnapshot, Flag, livePath, type Motion, type ToClient } fro
 
 import { restart, start } from "./live.ts";
 import { pretend } from "./net.ts";
+import { here } from "./presence.ts";
 import { forgetLedger } from "./purse.ts";
 import {
   ClockSync,
@@ -172,7 +173,8 @@ describe("a live room", () => {
     });
     const s = socket(0);
     // Opening it is entering the room: the room is in the address, and nothing need be said to join.
-    expect(s.url).toBe(`wss://leaf.example${livePath("town")}`);
+    // With what the page is on, by its width when it signed in.
+    expect(s.url).toBe(`wss://leaf.example${livePath("town")}&device=desktop`);
     s.open();
     expect(s.texts().map((m) => m.t)).toEqual(["ping"]);
 
@@ -199,6 +201,37 @@ describe("a live room", () => {
     s.says({ t: "left", id: 2 });
     expect(room.sample(2)).toBeNull();
     expect(heard).toEqual(["welcome 1 town/1 1", "joined Alice", "act 2 emote wave", "left 2"]);
+  });
+
+  test("while welcomed into the town's room, the page only asks who is about; dropped, it says where the player is", async () => {
+    const w = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/game/presence": { status: 200, body: { present: [], resting: [] } },
+      "PUT /v1/game/presence": { status: 200, body: { present: [], resting: [] } },
+    });
+    world = w;
+    await start();
+    undo = pretend({
+      socket: (url) => {
+        const s = new FakeSocket(url);
+        sockets.push(s);
+        return s;
+      },
+    });
+    room = joinLive("town");
+    const s = socket(0);
+    s.open();
+    s.says(welcome(1, w.clock.now));
+    here("town");
+    await Bun.sleep(10);
+    s.drop();
+    here(null);
+    here("town");
+    await Bun.sleep(10);
+    here(null);
+
+    expect(w.sent.filter((x) => x.path === "/v1/game/presence").map((x) => x.method)).toEqual(["GET", "PUT"]);
   });
 
   test("sends a stop or a jump at once, even with a move still waiting its turn", async () => {
