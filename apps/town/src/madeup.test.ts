@@ -3,8 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { CALLERS, FOLK, folk, isFolk } from "./folk.ts";
 import { trophies } from "./games.ts";
 import type { Happening, Person } from "./guild.ts";
-import { makeGuild, STANDINS } from "./madeup.ts";
+import { GAP, type MadeUp, makeGuild, STANDINS } from "./madeup.ts";
 import { isLetter } from "./mail.ts";
+import { lineFor } from "./news.ts";
 import { isThing, thingOf, THINGS } from "./things.ts";
 
 /** Things that only ever come as presents from the town's own. */
@@ -21,6 +22,25 @@ function steady(seed = 7): () => number {
 
 const HOUR = 3_600_000;
 const THEN = 1_795_000_000_000;
+
+/** Runs a guild's clock on for so many seconds, a quarter of a second at a time; what it told, and when. */
+function evening(g: MadeUp, seconds: number): { at: number; h: Happening }[] {
+  const heard: { at: number; h: Happening }[] = [];
+  let at = 0;
+  const stop = g.hear((h) => heard.push({ at, h }));
+  for (let i = 0; i < seconds * 4; i++) {
+    at = (i + 1) / 4;
+    g.step(0.25);
+  }
+  stop();
+  return heard;
+}
+
+/** The gaps between one moment and the next, in seconds; things told at the same moment are one. */
+const gaps = (times: readonly number[]): number[] => {
+  const moments = [...new Set(times)];
+  return moments.slice(1).map((t, i) => t - (moments[i] ?? 0));
+};
 
 describe("the made-up guild while the member is away", () => {
   const g = makeGuild({ random: steady() });
@@ -128,8 +148,72 @@ describe("the made-up guild's evening", () => {
     g.hear((h) => kinds.push(h.kind));
     for (let i = 0; i < 8 * 30; i++) g.step(1 / 30);
     expect(kinds.length).toBeGreaterThan(0);
-    for (let i = 0; i < 100 * 30; i++) g.step(1 / 30);
+    for (let i = 0; i < 30 * 60 * 30; i++) g.step(1 / 30);
     expect(new Set(kinds)).toEqual(new Set(["reached", "party", "war", "milestone", "quest", "call"]));
+  });
+
+  test("its moments, of any kind, are at least ninety seconds apart", () => {
+    for (const seed of [1, 11, 42]) {
+      const heard = evening(makeGuild({ random: steady(seed) }), 2 * 3600);
+      expect(new Set(heard.map((x) => x.h.kind))).toEqual(
+        new Set(["reached", "party", "war", "milestone", "quest", "call"]),
+      );
+      const between = gaps(heard.map((x) => x.at));
+      expect(between.length).toBeGreaterThan(40);
+      expect(Math.min(...between)).toBeGreaterThanOrEqual(GAP);
+    }
+  });
+
+  test("a moment set off from outside is ninety seconds from the next the guild has of its own", () => {
+    const g = makeGuild({ random: steady(4) });
+    evening(g, 60);
+    const heard: Happening[] = [];
+    g.hear((h) => heard.push(h));
+    g.stir("raid");
+    expect(heard.map((h) => h.kind)).toEqual(["party"]);
+    expect(evening(g, GAP - 1)).toEqual([]);
+  });
+
+  test("a stand-in levels up at most once in ten minutes", () => {
+    for (const seed of [2, 13, 77]) {
+      const heard = evening(makeGuild({ random: steady(seed) }), 3 * 3600);
+      const levels = heard.filter((x) => x.h.kind === "reached").map((x) => x.at);
+      expect(levels.length).toBeGreaterThan(5);
+      expect(Math.min(...gaps(levels))).toBeGreaterThanOrEqual(600);
+    }
+  });
+
+  test("a territory comes at most once in five minutes", () => {
+    for (const seed of [3, 21, 64]) {
+      const heard = evening(makeGuild({ random: steady(seed) }), 3 * 3600);
+      const wars = heard.filter((x) => x.h.kind === "war").map((x) => x.at);
+      expect(wars.length).toBeGreaterThan(10);
+      expect(Math.min(...gaps(wars))).toBeGreaterThanOrEqual(300);
+    }
+  });
+
+  test("its lines are said at once, worded as they always were", () => {
+    const g = makeGuild({ random: steady(6) });
+    const said: string[] = [];
+    const who = STANDINS.slice(0, 2).map((s) => ({ id: s.name, name: s.name, you: false }));
+    const land = "the Lantern Shallows";
+    for (const h of [
+      { kind: "war", who, land, held: true },
+      { kind: "war", who, land, held: false },
+      { kind: "reached", who: { id: "w", name: "Wrenly", you: false }, level: 73 },
+    ] as const)
+      g.say(h, (text) => said.push(text));
+    expect(said).toEqual([
+      "Quillfeather and Fernwhistle held the Lantern Shallows for the guild.",
+      "Quillfeather and Fernwhistle fought for the Lantern Shallows.",
+      "Wrenly reached level 73.",
+    ]);
+    // Everything it tells of its own is said in the same words.
+    for (const { h } of evening(g, 3600)) {
+      const line: string[] = [];
+      g.say(h, (text) => line.push(text));
+      expect(line).toEqual(h.kind === "call" ? [] : [lineFor(h)?.[0] ?? ""]);
+    }
   });
 
   test("a quest is finished once, and says so once", () => {

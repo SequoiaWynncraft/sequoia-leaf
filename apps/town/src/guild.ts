@@ -138,7 +138,10 @@ export type Happening =
   | { kind: "call"; id: string; who: string; note: string; gift: string }
   /** Real members back from a raid together. */
   | { kind: "party"; who: readonly Person[]; raid: string }
-  /** Real members fought a war over a territory; `held` when it was the guild's own to defend. */
+  /**
+   * Real members fought a war over a territory; `held` when it was the guild's own to defend. Only
+   * the made-up guild says so: the server's events say who fought where, not how it went (null).
+   */
   | { kind: "war"; who: readonly Person[]; land: string; held: boolean | null }
   /** A real member reached a level of their own with the guild. */
   | { kind: "reached"; who: Person; level: number }
@@ -189,6 +192,11 @@ export interface Guild {
   away(from: number, to: number): Away;
   /** Hears each thing as it happens. Returns how to stop. */
   hear(fn: (h: Happening) => void): () => void;
+  /**
+   * Puts the feed's line for one of the guild's moments in the feed, if the feed tells it: with the
+   * made-up guild at once; on the guild's own server when its turn comes (`news.ts`).
+   */
+  say(h: Happening, feed: (text: string, tone: Tone) => void): void;
   /** Time passing in town, in seconds. */
   step(dt: number): void;
   /** Real members in the game just now, never the member themself; at most twelve. */
