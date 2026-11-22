@@ -26,7 +26,7 @@ import {
   weekOf,
 } from "./live.ts";
 import { makeGuild, STANDINS } from "./madeup.ts";
-import { inTownLine, lineFor } from "./news.ts";
+import { inTownLine, liveLineFor, makePace, PACE, STALE } from "./news.ts";
 import { blank } from "./save.ts";
 
 /** What Leaf really sends, from the contract its own tests write. */
@@ -56,6 +56,9 @@ const sse = (text: string): Reply =>
   new Response(text, { status: 200, headers: { "Content-Type": "text/event-stream" } });
 const frame = (id: number, type: string, data: unknown): string =>
   `id: ${id}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
+/** One of the guild's events as a frame of the guild's stream. */
+const ev = (id: number, who: string, type: string, data: Record<string, unknown>): string =>
+  frame(id, type, { id, type, created_at: "x", player: { id: `id-${who}`, username: who }, data });
 
 const raid = (id: number, who: string, at = "2026-11-25T12:31:00.000Z", detail = "Nest of the Grootslangs"): Ev =>
   guildEvent(id, who, "leaf_earned", { source: "raid", detail, occurred_at: at });
@@ -195,14 +198,69 @@ describe("the guild's news, live", () => {
       }),
       0,
     );
-    news.add(guildEvent(2, "Bob", "level_up", { level: 9 }), 0);
+    news.add(guildEvent(2, "Bob", "level_up", { level: 10 }), 0);
     news.add(guildEvent(3, "Cleo", "achievement_paid", { label: "Gold", tier: "gold" }), 0);
     const told = news.due(GATHER);
     expect(told.map((h) => h.kind)).toEqual(["reached", "milestone", "war"]);
-    expect(told.map((h) => lineFor(h)?.[0])).toEqual([
-      "Bob reached level 9.",
+    expect(told.map((h) => liveLineFor(h)?.[0])).toEqual([
+      "Bob reached level 10.",
       "Cleo reached a milestone: Gold.",
-      "Alice held Detlas for the guild.",
+      "Alice fought at Detlas.",
+    ]);
+  });
+
+  test("a war says only who fought there, named as a raid party is, in the guild's claim or not", () => {
+    const fought = ["Alice", "Bob", "Cleo"];
+    for (const claim of [{ in_claim: true }, { in_claim: false }, {}]) {
+      const news = makeNews(ME);
+      const at = { occurred_at: "2026-11-25T12:37:00.000Z", ...claim };
+      fought.forEach((who, i) => {
+        news.add(guildEvent(i + 1, who, "leaf_earned", { source: "war", detail: "Ragni", ...at }), 0);
+        news.add(guildEvent(i + 10, who, "leaf_earned", { source: "raid", detail: "TNA", ...at }), 0);
+      });
+      news.add(guildEvent(20, "Tester", "leaf_earned", { source: "war", detail: "Ragni", ...at }), 0);
+      const told = news.due(GATHER);
+      const war = told.find((h) => h.kind === "war");
+      const party = told.find((h) => h.kind === "party");
+      expect(war?.kind === "war" && war.held).toBeNull();
+      expect(party && liveLineFor(party)?.[0]).toBe("Alice, Bob and Cleo came back from TNA.");
+      expect(war && liveLineFor(war)).toEqual(["Alice, Bob and 2 more fought at Ragni.", "rose"]);
+    }
+    // The member is "You", first, as in a raid party's line.
+    const news = makeNews("id-Alice");
+    news.add(guildEvent(1, "Bob", "leaf_earned", { source: "war", detail: "Detlas", occurred_at: "t" }), 0);
+    news.add(guildEvent(2, "Alice", "leaf_earned", { source: "war", detail: "Detlas", occurred_at: "t" }), 0);
+    const [war] = news.due(GATHER);
+    expect(war && liveLineFor(war)?.[0]).toBe("You and Bob fought at Detlas.");
+  });
+
+  test("another member's level is a line only at a multiple of five; the member's own always is", () => {
+    const news = makeNews(ME);
+    const mine = (id: number, level: number): Ev => {
+      const e = readEvent({
+        id,
+        type: "level_up",
+        created_at: "x",
+        player: { id: ME, username: "Tester" },
+        data: { level },
+      });
+      if (!e) throw new Error("not an event");
+      return e;
+    };
+    [71, 74, 75, 76, 80, 100, 103].forEach((level, i) => {
+      news.add(guildEvent(i + 1, "Wrenly", "level_up", { level }), 0);
+    });
+    news.add(mine(20, 74), 0);
+    news.add(mine(21, 75), 0);
+    const told = news.due(0);
+    // Every level still reaches the town, for whatever it does in the world; only the feed is choosy.
+    expect(told.length).toBe(9);
+    expect(told.flatMap((h) => liveLineFor(h)?.[0] ?? [])).toEqual([
+      "Wrenly reached level 75.",
+      "Wrenly reached level 80.",
+      "Wrenly reached level 100.",
+      "You reached level 74.",
+      "You reached level 75.",
     ]);
   });
 
@@ -211,9 +269,9 @@ describe("the guild's news, live", () => {
     const amounts = { leaf: 110, xp: 110 };
     news.add(guildEvent(1, "Alice", "leaf_earned", { source: "raid", detail: "TNA", occurred_at: "a", ...amounts }), 0);
     news.add(guildEvent(2, "Bob", "leaf_earned", { source: "war", detail: "Ragni", occurred_at: "b", ...amounts }), 0);
-    news.add(guildEvent(3, "Cleo", "level_up", { level: 4, leaf: 100 }), 0);
+    news.add(guildEvent(3, "Cleo", "level_up", { level: 5, leaf: 100 }), 0);
     news.add(guildEvent(4, "Dara", "achievement_paid", { label: "Silver", tier: "silver", leaf: 1000 }), 0);
-    const lines = news.due(GATHER).map((h) => lineFor(h)?.[0] ?? "");
+    const lines = news.due(GATHER).flatMap((h) => liveLineFor(h)?.[0] ?? []);
     expect(lines.length).toBe(4);
     for (const line of lines) {
       expect(line).not.toMatch(/Leaf|110|100|1000/);
@@ -235,7 +293,38 @@ describe("the guild's news, live", () => {
     news.add(mine, 10);
     const told = news.due(10 + GATHER);
     expect(told.length).toBe(1);
-    expect(told.map((h) => lineFor(h)?.[0])).toEqual(["You and Alice came back from TNA."]);
+    expect(told.map((h) => liveLineFor(h)?.[0])).toEqual(["You and Alice came back from TNA."]);
+  });
+});
+
+describe("the feed's pace, live", () => {
+  test("at most one line every twenty seconds; the others wait their turn, oldest first", () => {
+    const pace = makePace<string>();
+    for (const line of ["first", "second", "third"]) pace.add(line, 1000);
+    const said: [number, string][] = [];
+    for (let t = 1000; t <= 1000 + 3 * PACE; t += 500) for (const line of pace.due(t)) said.push([t, line]);
+    expect(said).toEqual([
+      [1000, "first"],
+      [1000 + PACE, "second"],
+      [1000 + 2 * PACE, "third"],
+    ]);
+    // A line after a quiet spell is said at once.
+    pace.add("fourth", 1000 + 5 * PACE);
+    expect(pace.due(1000 + 5 * PACE)).toEqual(["fourth"]);
+    pace.add("fifth", 1000 + 5 * PACE + 1);
+    expect(pace.due(1000 + 6 * PACE - 1)).toEqual([]);
+    expect(pace.due(1000 + 6 * PACE)).toEqual(["fifth"]);
+  });
+
+  test("a line that has waited more than five minutes is dropped", () => {
+    const pace = makePace<number>();
+    for (let n = 0; n < 20; n++) pace.add(n, 0);
+    const said: number[] = [];
+    for (let t = 0; t <= 20 * PACE; t += 1000) said.push(...pace.due(t));
+    // Each waits twenty seconds more than the last: those whose turn came within five minutes are said.
+    expect(said).toEqual(Array.from({ length: STALE / PACE + 1 }, (_, n) => n));
+    pace.add(99, 20 * PACE);
+    expect(pace.due(20 * PACE)).toEqual([99]);
   });
 });
 
@@ -377,6 +466,52 @@ describe("the live guild", () => {
     expect(world.sent.find((s) => s.path === "/v1/game/presence")?.body).toEqual({ place: "town", stay: true });
   });
 
+  test("the world does not wait for the feed: a party and a war come in at once, their lines in turn", async () => {
+    world = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/me/quests": { status: 200, body: QUESTS },
+      "GET /v1/me/events": { status: 200, body: EVENTS },
+      "GET /v1/game/guild/events/stream": sse(
+        ev(900, "Alice", "leaf_earned", { source: "raid", detail: "TNA", occurred_at: "t" }) +
+          ev(901, "Bob", "leaf_earned", { source: "war", detail: "Detlas", occurred_at: "t", in_claim: true }) +
+          ev(902, "Cleo", "level_up", { level: 74 }) +
+          ev(903, "Dara", "achievement_paid", { label: "Gold", tier: "gold" }),
+      ),
+    });
+    await start();
+    expect(await prepare()).toBe(true);
+    const p = prepared();
+    if (!p) throw new Error("nothing prepared");
+    const guild = makeLive(makeGuild({ quiet: true }), p);
+    const heard: string[] = [];
+    const said: [number, string][] = [];
+    const t0 = world.clock.now;
+    // As the town stages it: whatever happens in the world at once, and the line handed to the feed.
+    guild.hear((h) => {
+      if (h.kind === "call") return;
+      heard.push(h.kind);
+      guild.say(h, (text) => said.push([(world?.clock.now ?? 0) - t0, text]));
+    });
+    await Bun.sleep(20);
+    guild.step(0.1);
+    expect(heard.toSorted()).toEqual(["milestone", "reached"]);
+    expect(said).toEqual([[0, "Dara reached a milestone: Gold."]]);
+    world.clock.now += GATHER;
+    guild.step(0.1);
+    expect(heard.toSorted()).toEqual(["milestone", "party", "reached", "war"]);
+    expect(said.length).toBe(1);
+    for (let s = 0; s < 60; s++) {
+      world.clock.now += 1000;
+      guild.step(1);
+    }
+    expect(said).toEqual([
+      [0, "Dara reached a milestone: Gold."],
+      [PACE, "Alice came back from TNA."],
+      [2 * PACE, "Bob fought at Detlas."],
+    ]);
+  });
+
   test("a board the server cannot give means the town does not open", async () => {
     world = standin({
       "GET /v1/game/hello": HELLO,
@@ -472,7 +607,9 @@ describe("the guild's news Leaf really sends", () => {
       ["Alice", "Bob"],
     ]);
     expect(told.map((h) => h.kind).filter((k) => k !== "party")).toEqual(["reached", "milestone", "war"]);
-    for (const h of told) expect(lineFor(h)?.[0]).not.toMatch(/Leaf/);
+    for (const h of told) expect(liveLineFor(h)?.[0] ?? "").not.toMatch(/Leaf/);
+    const war = told.find((h) => h.kind === "war");
+    expect(war && liveLineFor(war)?.[0]).toMatch(/ fought at Detlas\.$/);
   });
 });
 

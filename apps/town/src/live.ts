@@ -24,8 +24,9 @@ import {
   stay as sayStay,
 } from "@sequoia-leaf/kit/presence.ts";
 
-import type { Away, AwayLine, Guild, Happening, Me, Person, Quest, Rester, Visitor } from "./guild.ts";
+import type { Away, AwayLine, Guild, Happening, Me, Person, Quest, Rester, Tone, Visitor } from "./guild.ts";
 import type { MadeUp } from "./madeup.ts";
+import { type Line, liveLineFor, makePace } from "./news.ts";
 import { parse } from "./save.ts";
 
 // ---------- who the member is ----------
@@ -217,10 +218,7 @@ const REMEMBER = 10 * 60_000;
 export function makeNews(meId: string): { add(e: Ev, now: number): void; due(now: number): Happening[] } {
   const heard = new Set<number>();
   const told = new Map<string, number>();
-  const gathering = new Map<
-    string,
-    { kind: "party" | "war"; what: string; held: boolean | null; who: Person[]; due: number }
-  >();
+  const gathering = new Map<string, { kind: "party" | "war"; what: string; who: Person[]; due: number }>();
   const ready: Happening[] = [];
   const person = (e: Ev): Person | null => (e.who ? { id: e.who.id, name: e.who.name, you: e.who.id === meId } : null);
   return {
@@ -236,7 +234,6 @@ export function makeNews(meId: string): { add(e: Ev, now: number): void; due(now
         const g = gathering.get(key) ?? {
           kind: e.data.source === "raid" ? "party" : "war",
           what,
-          held: typeof e.data.in_claim === "boolean" ? e.data.in_claim : null,
           who: [],
           due: 0,
         };
@@ -255,10 +252,11 @@ export function makeNews(meId: string): { add(e: Ev, now: number): void; due(now
         told.set(key, now);
         // The member first, if they were there.
         const who = g.who.toSorted((a, b) => Number(b.you) - Number(a.you));
+        // A war's events say who fought where (and whether it was in the guild's claim), not how it went.
         ready.push(
           g.kind === "party"
             ? { kind: "party", who, raid: g.what || "a raid" }
-            : { kind: "war", who, land: g.what || "new ground", held: g.held },
+            : { kind: "war", who, land: g.what || "new ground", held: null },
         );
       }
       for (const [key, at] of told) if (now - at > REMEMBER) told.delete(key);
@@ -394,8 +392,13 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
   let begun = false;
   const ears = new Set<(h: Happening) => void>();
   const news = makeNews(me.id);
+  const pace = makePace<{ line: Line; feed: (text: string, tone: Tone) => void }>();
   const tell = (h: Happening): void => {
     for (const fn of ears) fn(h);
+  };
+  /** Says whichever of the news's lines has its turn now. */
+  const sayDue = (): void => {
+    for (const { line, feed } of pace.due(outside.now())) feed(line[0], line[1]);
   };
   // The townsfolk still call at the member's camp; that is all the made-up guild says.
   madeUp.hear((h) => {
@@ -474,9 +477,16 @@ export function makeLive(madeUp: MadeUp, p: Prepared): Guild {
       begin();
       return () => ears.delete(fn);
     },
+    say(h, feed) {
+      const line = liveLineFor(h);
+      if (!line) return;
+      pace.add({ line, feed }, outside.now());
+      sayDue();
+    },
     step(dt) {
       madeUp.step(dt);
       for (const h of news.due(outside.now())) tell(h);
+      sayDue();
     },
     visitors: () => present,
     resting: () => resting,

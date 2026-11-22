@@ -82,7 +82,6 @@ import { paintTrunk } from "./ground.ts";
 import { guild, type Happening, type MateCamp } from "./guild.ts";
 import { closeCard, closePanel, showCard } from "./hud.ts";
 import { BOX_FULL, letter, post, roomInBox, waiting } from "./mail.ts";
-import { lineFor } from "./news.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
 import { camp as mine, greet, roomByTrail, roomFor, sendToCamp } from "./record.ts";
@@ -925,8 +924,7 @@ export function makeCamp(
     if (G.where !== "camp") return;
     switch (h.kind) {
       case "party": {
-        const line = lineFor(h);
-        if (line) hooks.feed(line[0], line[1]);
+        guild.say(h, hooks.feed);
         sfx.fanfare();
         const x = clamp(G.cam.x + G.view.w * (0.25 + Math.random() * 0.5), 30, CW - 30);
         const col = G.raidsToday % sprites.lanterns.length;
@@ -938,8 +936,7 @@ export function makeCamp(
         return;
       }
       case "war": {
-        const line = lineFor(h);
-        if (line) hooks.feed(line[0], line[1]);
+        guild.say(h, hooks.feed);
         sfx.fanfare();
         const cabin = lives.find((l) => l.thing.id === "cabin");
         if (cabin) burst(cabin.prop.x + 32, cabin.prop.y - 74, 18, [GOLD[1], SKY[4], CREAM, SKY[5]], 52);
@@ -951,8 +948,7 @@ export function makeCamp(
         return;
       case "reached":
       case "milestone": {
-        const line = lineFor(h);
-        if (line) hooks.feed(line[0], line[1]);
+        guild.say(h, hooks.feed);
       }
     }
   }
