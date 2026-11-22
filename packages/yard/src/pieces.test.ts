@@ -375,6 +375,10 @@ describe("colour", () => {
     expect(tints(w, 1, 2, 3)).toBe("440");
     expect(stand(w, placed(piecesAt(w, within(w, 2, 2, 3, 2)), 0, 2, 5), Infinity).ok).toBe(true);
     expect(tints(w, 2, 5, 2)).toBe("40");
+    // An uncoloured splitter copied onto a coloured belt is still uncoloured.
+    put(w, "splitter", 8, 8);
+    expect(stand(w, placed(piecesAt(w, [at(w, 8, 8)]), 0, 1, 2), Infinity).ok).toBe(true);
+    expect(tints(w, 1, 2, 2)).toBe("04");
   });
   test("pieces stood beside a coloured line take its colour as a run does, whatever order they come in", () => {
     const w = bare();
