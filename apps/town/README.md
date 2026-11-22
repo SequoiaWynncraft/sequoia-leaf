@@ -31,7 +31,7 @@ says so.
 - **The town.** A map a little larger than the screen, with a camera that follows. Walk with WASD
   or the arrow keys, or tap a spot and the character finds a way round things; hold and drag to
   steer. Buildings, trunks and the pond are solid.
-- **Places.** The Treasury (Cinfy behind the counter), the quest board, the market stalls, the
+- **Places.** The Treasury (Cinfy behind the counter), the Grove (below), the quest board, the market stalls, the
   Works (chimney, belt, crates, and a bench by the door), the great stump where The Little Raid is
   played, the campfire and its log seats, the crab pond, and the gate with the signpost to "Your
   camp". Tap a place or its prompt, walk on into it, or walk up and press E (or Enter), to open
@@ -208,6 +208,47 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   The town carries on quietly meanwhile, so the party is gone or back and the banner is up when
   the member returns.
 
+## What is in the Grove
+
+The Grove (the standing stone among young redwoods, west of the quest board) is where the guild's
+pulls are made. A tap on it, its E prompt and its dock button open its card ("Go in", and whose
+banner is open until when); walking on into it goes straight in. Night closes in as on the way to
+the camp, and lifts on the Grove's own picture, which takes the whole page; "Back to town" or
+Escape goes back the same way. The pulls are Leaf's (`@sequoia-leaf/pulls`): the page reads them on
+each way in, draws Leaf's view, and sends `pull` and `exchange`. Who headlines the banners is asked
+on each way in while Leaf has named nobody, and the pulls again when a banner is due to open or end.
+
+- **The banner.** The first thing seen is the pool on show: a banner that is open and has a
+  headliner (their figure from their own skin, their name, and when it ends), with the always-open
+  pool, "Evergreen", on a tab beside it; with no such banner, Evergreen alone, with its three top
+  prizes standing in the clearing. Who a banner's headliner is comes from Leaf
+  (`GET /v1/game/banners`), and nothing about them is in the page.
+- **Pulling.** "Pull 1" and "Pull 10" say their price in Leaf and ask to be pressed twice. While a
+  free pull waits, one pull is "Free pull". With too little Leaf, with Leaf's spending off, or for
+  a guest, a button is shut and a press says why. Leaf takes the Leaf; the page only asks for the
+  number again.
+- **The ceremony** plays what Leaf answered. Night falls on the clearing, a drop of light lands on
+  the path, a light for each pull rises among the trees and flares in its prize's colour, and the
+  sky shows the best tier: green by day for filler, gold for mid, an aurora for top. Then each
+  prize is shown in its tier's light: its own picture (a headliner walks in as the town's people
+  walk), its name, its rarity in the rarity's colour, what it is for, whether it is new, the
+  Seeds it gave, and for a banner's top prize how its 50/50 fell. Ten pulls end on all ten set out
+  in the clearing, the rarest in front. Skip (or a tap, Space or the right arrow) goes on to the
+  next prize; held, to the end. Every beat has its sound.
+- **The count towards a top prize** is on the banner ("34 of 80"), and after a lost 50/50 the line
+  under it names who the next top prize is.
+- **The panel** has three tabs: every prize of the pool by rarity with its chance, the rules in
+  numbers written from the rules' own table (`RATES`) and how many of each the member has; the
+  Seeds and each mid-tier prize they buy; and the last 200 pulls.
+
+The Grove is in one state at a time (`groveState` in `pulls.ts`): arriving, at the banner, a
+command sent and not yet answered, a ceremony, a ceremony's end, or leaving. A pull or an exchange is
+sent only at the banner and at a ceremony's end, one at a time; whatever cannot be used in the state
+is inert, and leaving is only from the banner, once the stage takes the walk. A button asking to be
+pressed again asks for its own pool and count, and stops asking when the pool or the state changes.
+What Leaf refuses is said in one line under the pools. A pull whose answer was lost on the way is
+sent again with the same id (the kit's `play.ts`), so it is made once and shown when Leaf is reached.
+
 ## What Leaf keeps
 
 The member's town and camp are Leaf's (`leaf.ts`, its rules in `packages/town`): the camp, its
@@ -373,6 +414,10 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/touch.ts`                        | What a tap, the pointer, the key and the member's feet mean, in the town and in a camp          |
 | `src/townscene.ts`                    | The town as a scene: who is here, taps, getting about, going into games and to the camp         |
 | `src/campscene.ts`                    | A camp as a scene: laying it out, who is there, taps, decorating, parcels, visiting             |
+| `src/grovescene.ts`                   | The Grove as a scene: Leaf's pulls, and the ceremony drawn from its time alone                  |
+| `src/grovestage.ts`                   | The Grove's clearing, painted with the town's painters in three lights                          |
+| `src/groveui.ts`                      | The Grove's words and buttons, and its panel of prizes, Seeds and history                       |
+| `src/pulls.ts`                        | What the Grove says and counts: a prize's name, a reveal's words, the chances, the rules        |
 | `src/grid.ts`                         | Ground to walk on: which squares are solid, and the way round them                              |
 | `src/world.ts`                        | The town's map: paths, pond, what is solid, where places are                                    |
 | `src/leaf.ts`                         | The member's town and camp on Leaf: the copy, commands done at once or asked, keeping Leaf told |
@@ -441,6 +486,11 @@ a thing out of the tray, `grab(n)`, `dragTo(cx, cy)` and `drop()` move a thing b
 squares, `hand()` says what is held and whether it may go where it is, `things()` (each with its
 id), `pets()` and `guests()` say what is there, `pet(n)` touches one, and `choose(kind)` picks who
 lives there first.
+
+`window.town.grove` is the same for the Grove: `go()` goes in, `state()` says its state, the
+ceremony's time and beats and Leaf's view, `jump(t)` moves the ceremony's
+clock (with `hold(true)`, a still of any moment), `pool(id)` shows a pool, and `again()` asks Leaf
+for the pulls again.
 
 `?sheet=big`, `?sheet=small`, `?sheet=ground` and `?sheet=sky` show the town's art on its own, and
 `?sheet=camp` every camp thing with its name. `?zoom=2` draws a place smaller, to see more of it.

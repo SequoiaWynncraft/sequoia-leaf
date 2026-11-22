@@ -35,6 +35,9 @@ const PATHS: readonly (readonly [number, number, number, number, number])[] = [
   [352, 214, 352, 214, 11], // under the lantern tree
   [362, 211, 414, 206, 6], // east to the great stump
   [444, 205, 444, 205, 27], // round the stump, where people stand to watch
+  [104, 144, 126, 166, 5], // down from the Treasury, round the Grove's stones
+  [126, 166, 118, 190, 5],
+  [104, 195, 104, 195, 12], // before the Grove
 ];
 
 function segD(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
@@ -87,7 +90,10 @@ export const { cellBlocked, footBlocked, nearestFree, findPath } = TOWN;
 
 // ---------- places ----------
 
-export type PlaceId = "treasury" | "quests" | "market" | "works" | "table" | "fire" | "pond" | "camp";
+/** The Grove's standing stone, by its foot: on the lawn between the Treasury and the market. */
+export const GROVE: Pt = { x: 104, y: 180 };
+
+export type PlaceId = "treasury" | "grove" | "quests" | "market" | "works" | "table" | "fire" | "pond" | "camp";
 
 export interface Place {
   id: PlaceId;
@@ -109,6 +115,14 @@ export const PLACES: readonly Place[] = [
     stand: { x: 104, y: 128 },
     face: 3,
     prompt: { x: 104, y: 62 },
+  },
+  {
+    id: "grove",
+    name: "The Grove",
+    about: "Pull prizes for Leaf.",
+    stand: { x: GROVE.x, y: GROVE.y + 15 },
+    face: 3,
+    prompt: { x: GROVE.x, y: GROVE.y - 50 },
   },
   {
     id: "quests",
@@ -351,6 +365,9 @@ function build(): void {
   fill(58, 39, 63, 43, 1);
   fill(0, 42, GW - 1, 43, 1); // the ferns along the bottom
   fill(22, 19, 26, 19, 1); // quest board
+  fill(12, 21, 13, 22, 1); // the Grove's standing stone
+  fill(10, 22, 10, 22, 1); // and the young trees either side of it
+  fill(15, 22, 15, 22, 1);
   fill(37, 18, 37, 18, 1); // banner pole
   fill(31, 26, 32, 27, 1); // the fire
   fill(30, 24, 33, 24, 1); // its logs and stumps

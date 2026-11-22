@@ -320,6 +320,36 @@ describe("sending commands", () => {
     expect(play.state).toEqual({ n: 42 });
   });
 
+  test("a refresh asked before a command, answered after it, does not take the page back", async () => {
+    const { routes, leaf } = counterLeaf(5);
+    const slow: { arrive?: () => void } = {};
+    let reads = 0;
+    const play = await opened({
+      ...routes,
+      // After the first, Leaf reads the state at once, but its answer is slow to arrive.
+      "GET /v1/game/play/raid": () => {
+        if (reads++ === 0) return routes["GET /v1/game/play/raid"]();
+        const body = new TextEncoder().encode(JSON.stringify({ rev: leaf.rev, now: "x", state: { n: leaf.n } }));
+        const stream = new ReadableStream({
+          start(c) {
+            slow.arrive = (): void => {
+              c.enqueue(body);
+              c.close();
+            };
+          },
+        });
+        return new Response(stream, { status: 200 });
+      },
+    });
+    const refreshed = play.refresh();
+    await Bun.sleep(1);
+    await play.send({ do: "add", by: 2 });
+    expect(play.state).toEqual({ n: 7 });
+    slow.arrive?.();
+    await refreshed;
+    expect(play.state).toEqual({ n: 7 });
+  });
+
   test("a prediction still waiting is worked out again on top of Leaf's newer state", async () => {
     const { routes, leaf } = counterLeaf(0);
     const play = await opened(routes);

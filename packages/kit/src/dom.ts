@@ -1,5 +1,7 @@
 /** Small helpers for building the interface out of the kit's classes. */
 
+import { pressKeysHeld, stillHeld } from "./keys.ts";
+
 /** What waits for a held mouse button to lift (`unheld`). */
 const owed = new Set<() => void>();
 let mouseDown = false;
@@ -150,8 +152,13 @@ export function replay(node: HTMLElement, cls: string): void {
   node.classList.add(cls);
 }
 
-/** The button that has been pressed once and is waiting to be pressed again. */
-let asked: { key: string; timer: ReturnType<typeof setTimeout> } | null = null;
+/** The button that has been pressed once and is waiting to be pressed again, and the keys down when it was. */
+let asked: {
+  key: string;
+  timer: ReturnType<typeof setTimeout>;
+  redraw: () => void;
+  keys: ReadonlyMap<string, number>;
+} | null = null;
 
 /** Whether the button `key` has been pressed once and is waiting: it is drawn asking. */
 export const asking = (key: string): boolean => asked?.key === key;
@@ -168,20 +175,14 @@ export function asksAgain(key: string, label: readonly Child[], question: string
 /**
  * A press on a button that spends. The first press only notes it and gives false: `redraw` is
  * called so the button asks, and again if four seconds pass without a second press. The second
- * press gives true.
+ * press gives true. A key that was down at the first press and has not come up since is not a
+ * second press (a held Enter says itself again): it gives false and changes nothing.
  */
 export function pressedTwice(key: string, redraw: () => void): boolean {
   const second = asking(key);
+  if (second && asked && stillHeld(asked.keys)) return false;
   clearTimeout(asked?.timer);
-  asked = second
-    ? null
-    : {
-        key,
-        timer: setTimeout(() => {
-          asked = null;
-          redraw();
-        }, 4000),
-      };
+  asked = second ? null : { key, timer: setTimeout(unask, 4000), redraw, keys: pressKeysHeld() };
   if (!second) {
     // Drawn again, the button is a new one: whoever pressed it with a key is put back on it.
     const keyed = typeof document !== "undefined" && document.activeElement instanceof HTMLButtonElement;
@@ -189,6 +190,15 @@ export function pressedTwice(key: string, redraw: () => void): boolean {
     if (keyed) document.querySelector<HTMLElement>(".k-btn.asking")?.focus();
   }
   return second;
+}
+
+/** The button waiting for its second press stops waiting, now, and is drawn as it was. */
+export function unask(): void {
+  if (!asked) return;
+  clearTimeout(asked.timer);
+  const { redraw } = asked;
+  asked = null;
+  redraw();
 }
 
 /** One interface unit in CSS pixels, as the stylesheet has it now. */

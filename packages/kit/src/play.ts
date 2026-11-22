@@ -69,7 +69,7 @@ export interface Play<View, Command extends object, Note> {
   onState(fn: (state: View, differs: boolean) => void): () => void;
   /** Hears when the page cannot send any more: signed out, or Leaf will not take it. */
   onTrouble(fn: (why: Trouble) => void): () => void;
-  /** Asks Leaf for the state again, when nothing is waiting for it. */
+  /** Asks Leaf for the state again, when nothing is waiting for it; the answer is let go if a command was sent meanwhile. */
   refresh(): Promise<void>;
   /**
    * Sends what Leaf has not answered at once, without waiting for it: for a page about to go. The

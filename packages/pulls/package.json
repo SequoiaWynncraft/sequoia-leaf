@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/game.ts"
+    ".": "./src/game.ts",
+    "./*": "./src/*"
   },
   "scripts": {
     "test": "bun test"

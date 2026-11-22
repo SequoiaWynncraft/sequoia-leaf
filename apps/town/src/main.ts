@@ -32,9 +32,10 @@ import { folkArt, initFolkArt } from "./folkart.ts";
 import { clearFx } from "./fx.ts";
 import { G, hooks, type PanelId, show, toPage } from "./game.ts";
 import { type GameId, GAMES } from "./games.ts";
+import { type Grove, makeGrove } from "./grovescene.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, hush, initHud, panelBox, tickHud } from "./hud.ts";
-import { again, here, keepTold, onTown, town as kept } from "./leaf.ts";
+import { again, here, keepTold, onTown, town as kept, troubleCard } from "./leaf.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Hover, Scene, Stage, Steer } from "./stage.ts";
@@ -86,9 +87,11 @@ declare global {
       /** Asks Leaf for the town again: for after a tour has staged something. */
       again: () => Promise<void>;
       /** Which place is on the stage, and how dark the walk between two has got (0 for not at all). */
-      where: () => { where: "town" | "camp"; dark: number };
+      where: () => { where: "town" | "camp" | "grove"; dark: number };
       /** The member's camp: go there, come back, and what `campscene.ts` offers besides. */
       camp: CampScene["handles"] & { go: () => void };
+      /** The Grove: go there, and what `grovescene.ts` offers besides. */
+      grove: Grove["handles"] & { go: () => void };
       /** Everybody else in town live (on the guild's own server), as they would be drawn this moment. */
       players: Town["handles"]["players"];
       /** What the town's live room was last told of the member, and when. */
@@ -231,7 +234,7 @@ async function boot(): Promise<void> {
           hush(false);
           if (inside) scene.cameBack(inside);
           inside = null;
-          guild.here(G.where);
+          guild.here(G.where === "camp" ? "camp" : "town");
           here();
           if (scene === town) town.onStage(true);
           wake();
@@ -248,9 +251,10 @@ async function boot(): Promise<void> {
       aim(true);
     },
     travel(next, swap) {
-      if (trip) return;
+      if (trip) return false;
       trip = { next, swap, there: false };
       tipOff(TIP);
+      return true;
     },
   };
   /** A walk from one place to another, part-way through: night closing in, or lifting. */
@@ -267,6 +271,22 @@ async function boot(): Promise<void> {
     stage.travel(camp, () => {
       camp.enter();
     });
+  };
+  const grove = makeGrove(sprites, art, stage, town);
+  town.toGrove = async (free): Promise<boolean> => {
+    const trouble = await grove.open();
+    if (trouble === "signedout" || trouble === "unreadable") troubleCard(trouble);
+    else if (trouble) hooks.feed("The Grove could not be opened. Try again in a moment.", "coral");
+    // While Leaf answered, the member may have set off somewhere else, or gone into a game.
+    return (
+      !trouble &&
+      free() &&
+      scene === town &&
+      !visit &&
+      stage.travel(grove, () => {
+        grove.enter();
+      })
+    );
   };
   /** The place that is on screen: the town to begin with. */
   let scene: Scene = town;
@@ -447,7 +467,8 @@ async function boot(): Promise<void> {
         scene = trip.next;
         scene.resize(G.view.w, G.view.h);
         aim(true);
-        guild.here(G.where);
+        // In the Grove the member is still in town, to whoever asks.
+        guild.here(G.where === "camp" ? "camp" : "town");
         // The town's live room is only for while the town is on the stage.
         town.onStage(scene === town);
       }
@@ -570,6 +591,12 @@ async function boot(): Promise<void> {
       ...camp.handles,
       go() {
         hooks.toCamp();
+      },
+    },
+    grove: {
+      ...grove.handles,
+      go() {
+        hooks.toGrove();
       },
     },
   };
