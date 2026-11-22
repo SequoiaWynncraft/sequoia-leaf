@@ -9,6 +9,7 @@ import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import {
+  AWAY_MOST_MS,
   DEPOT_SHARE,
   isFilled,
   ITEM,
@@ -280,12 +281,15 @@ function depot(_art: Art, body: HTMLElement): () => void {
       return left > 0 && STARTERS[kind] ? [`${left} ${KIND[kind].name.toLowerCase()}${left === 1 ? "" : "s"}`] : [];
     });
     body.replaceChildren(
-      el(
-        "div",
-        "k-d",
-        {},
-        `Every item that reaches the depot counts towards an order that asks for it. The depot also pays ${DEPOT_SHARE * 100}% of the item's worth when it arrives.`,
-      ),
+      el("div", "k-label", { text: "How you are paid" }),
+      el("div", "k-d", { text: "A story order pays when it is filled." }),
+      el("div", "k-d", { text: "A side order pays when you hand it over." }),
+      el("div", "k-d", {
+        text: `Every item the depot takes also pays ${DEPOT_SHARE * 100}% of its worth, whether or not an order asks for it.`,
+      }),
+      el("div", "k-d", {
+        text: `The yard keeps working and paying for up to ${AWAY_MOST_MS / 3_600_000} hours while you are away.`,
+      }),
       el(
         "div",
         "k-card",
