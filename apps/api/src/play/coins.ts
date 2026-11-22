@@ -44,6 +44,8 @@ export class Coins extends Context.Service<
     readonly posted: (key: string) => Effect.Effect<boolean>;
     /** What the player's entries whose keys begin with `prefix` paid in after `since`: their earnings, not counting spending. */
     readonly earnedSince: (playerId: PlayerId, prefix: string, since: number) => Effect.Effect<number>;
+    /** What the player has spent building in the Works through its page, and been given back for taking things away. */
+    readonly works: (playerId: PlayerId) => Effect.Effect<{ readonly built: number; readonly refunded: number }>;
   }
 >()("leaf/Coins") {
   static readonly layer = Layer.effect(
@@ -68,6 +70,11 @@ export class Coins extends Context.Service<
           WHERE player_id = ${playerId} AND amount > 0 AND at > ${since}
             AND substr(key, 1, ${prefix.length}) = ${prefix}
         `,
+      });
+      const works = SqlSchema.findOneOption({
+        Request: Schema.String,
+        Result: Schema.Struct({ built: Schema.Int, refunded: Schema.Int }),
+        execute: (playerId) => sql`SELECT built, refunded FROM works_builds WHERE player_id = ${playerId}`,
       });
       const insert = (playerId: PlayerId, entry: CoinEntry, now: number) => sql`
         INSERT INTO coin_entries (player_id, amount, reason, game, key, at)
@@ -114,6 +121,8 @@ export class Coins extends Context.Service<
             Effect.map((row) => row.earned),
             Effect.orDie,
           ),
+        works: (playerId) =>
+          works(playerId).pipe(Effect.map(Option.getOrElse(() => ({ built: 0, refunded: 0 }))), Effect.orDie),
       });
     }),
   );

@@ -57,6 +57,7 @@ import {
   Moved,
   NotAMember,
   NotEnoughCoins,
+  NothingToRefund,
   NotYou,
   Refused,
   SaveTooLarge,
@@ -908,10 +909,16 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
                 message: "Coins are coming faster than Leaf takes them. Send them again in a moment",
               });
             }
+            if (done.status === "nothing_to_refund") {
+              return yield* new NothingToRefund({
+                code: "nothing_to_refund",
+                message: "The Works gives back no more than was spent building there",
+              });
+            }
             if (done.status === "too_much") {
               return yield* new TooMuch({
                 code: "too_much",
-                message: `Coins earned in a game's page come to at most ${PAGE_COINS.hourly} in an hour`,
+                message: `Coins earned in a game's page come to at most ${PAGE_COINS.hourly} in an hour and ${PAGE_COINS.daily} in a UTC day`,
               });
             }
             return HttpServerResponse.jsonUnsafe({ coins: done.coins } satisfies typeof Body.CoinsAnswer.Type);

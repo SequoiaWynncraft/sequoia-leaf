@@ -4,6 +4,7 @@ import { isRecord, pretend } from "./net.ts";
 import {
   balance,
   earn,
+  earnMadeUp,
   flushCoins,
   forgetLedger,
   fromLeaf,
@@ -67,6 +68,17 @@ describe("the purse", () => {
   test("a tour may set the made-up purse to what it likes", () => {
     pretendPurse(4000, 12);
     expect(balance()).toEqual({ coins: 4000, leaf: 12 });
+  });
+
+  test("the made-up guild's own Coins (its quests, its letter) are paid into it", () => {
+    const heard: string[] = [];
+    const stop = watch((_p, why) => heard.push(why));
+    const before = balance().coins;
+    earnMadeUp(40.7, "the quest board");
+    earnMadeUp(0, "nothing");
+    stop();
+    expect(balance().coins).toBe(before + 40);
+    expect(heard).toEqual(["the quest board"]);
   });
 });
 
@@ -247,7 +259,7 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
   });
 
   test("an earning larger than one change may be goes as several", async () => {
-    earn(12_000, "while_away");
+    earn(12_000, "works_order");
     expect(balance().coins).toBe(12_300);
     await idle();
     expect(leaf.leaf.calls.map((c) => c.body?.amount)).toEqual([5000, 5000, 2000]);
@@ -255,7 +267,7 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
 
   test("is sent again with the same id after a network failure", async () => {
     leaf.leaf.offline = 2;
-    earn(7, "quest");
+    earn(7, "works_order");
     await idle();
     const ids = leaf.leaf.calls.map((c) => c.body?.id);
     expect(ids).toHaveLength(3);
@@ -317,6 +329,7 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
   test("the made-up guild's tools leave Leaf's Coins alone", () => {
     pretendPurse(99_999);
     reset();
+    earnMadeUp(50, "the quest board");
     expect(balance().coins).toBe(300);
     expect(leaf.leaf.calls).toEqual([]);
   });

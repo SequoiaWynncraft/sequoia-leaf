@@ -277,6 +277,18 @@ export function earn(coins: number, reason: CoinReason, once?: string): void {
 }
 
 /**
+ * Pays Coins that only the made-up guild pays (its quests that pay Coins, the letter's Coins for
+ * time away) into the purse kept in the browser. On the guild's server nothing pays these, and it
+ * does nothing.
+ */
+export function earnMadeUp(coins: number, why: string): void {
+  if (held !== null || !(coins >= 1)) return;
+  const p = now();
+  purse = { ...p, coins: p.coins + Math.floor(coins) };
+  write(why);
+}
+
+/**
  * Takes the price if the purse holds it, and says whether it did, at once. Coins are spent for a
  * reason, and on the guild's server Leaf is told. Beside a ledger, Leaf is never taken.
  */

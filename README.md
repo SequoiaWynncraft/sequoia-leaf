@@ -536,7 +536,9 @@ This route is for them alone, and goes when they move.
 
 - `id` is the page's own, made for the change (as a command's id is), and the
   entry's key is `page:<player>:<id>`: a call sent twice is done once, and
-  answered the balance as it stands.
+  answered the balance as it stands. The daily chest is Leaf's to pay: its
+  entry is keyed `page:<player>:daily_chest:<UTC day>` and pays 3, whatever id
+  and amount the page sends, so it is paid once a day.
 - `amount` is a whole number, not 0, from -100,000 to 5,000 (`PAGE_COINS` in
   core): what the page earned, or the negative of what it spent.
 - `reason` is one of `COIN_REASONS` in `packages/core/src/coins.ts`, each the
@@ -546,9 +548,7 @@ This route is for them alone, and goes when they move.
 | `reason`       | Game  | Way   | What                                                            |
 | -------------- | ----- | ----- | --------------------------------------------------------------- |
 | `camp_thing`   | town  | spend | A thing for the camp, bought at a market stall.                 |
-| `daily_chest`  | town  | earn  | The chest by the Treasury, once a UTC day.                      |
-| `quest`        | town  | earn  | A quest on the board that pays Coins, claimed.                  |
-| `while_away`   | town  | earn  | Coins the letter that meets a returning member pays out.        |
+| `daily_chest`  | town  | earn  | The chest by the Treasury: Leaf pays 3, once a UTC day.         |
 | `works_order`  | works | earn  | Orders filled in the Works, paid from its till.                 |
 | `works_depot`  | works | earn  | What the Works' depot pays for what it takes in, from the till. |
 | `works_build`  | works | spend | A machine or a run of belt built, or one taken away put back.   |
@@ -556,13 +556,34 @@ This route is for them alone, and goes when they move.
 | `works_plot`   | works | spend | A plot of land bought for the yard.                             |
 | `works_plan`   | works | spend | A plan bought for the yard.                                     |
 
+(The made-up guild's quests and its while-away letter pay Coins only in the
+browser, `earnMadeUp` in the kit's purse; nothing on the guild's server pays
+them, so they are not reasons.)
+
 It refuses, changing nothing: a call that would take a player past 4 a
 second (bursts of 20), 429 `slow_down`, read and counted for nothing; a spend
-the balance does not cover, 409 `not_enough_coins`; earnings through this
-route past 10,000 in any hour, 429 `too_much`; 400 `invalid_amount` and `invalid_reason`, and `invalid_command`
-for a body that is not such a call or an id that is not one. A player with no
-account yet has it opened with the welcome first. Each call done or refused
-counts toward the staff's report (`command_days`).
+the balance does not cover, 409 `not_enough_coins`; a `works_refund` that
+would take the player's refunds past what they have spent with `works_build`
+(kept in `works_builds`), 409 `nothing_to_refund`; earnings through this route
+past 5,000 in any hour or 20,000 in a UTC day (worked out from the entries of
+the last day alone), 429 `too_much`; 400 `invalid_amount` and
+`invalid_reason`, and `invalid_command` for a body that is not such a call or
+an id that is not one. A player with no account yet has it opened with the
+welcome first. Each call done or refused counts toward the staff's report
+(`command_days`).
+
+**What a hostile page can still do through it.** The route takes the page's
+word for what was earned, so a player with curl and their own session can,
+without playing: earn up to 5,000 Coins in any hour and 20,000 in a UTC day
+(about 33 won raids' worth a day, 140,000 a week), under any earning reason;
+open the daily chest once a day, for 3; spend their own Coins on nothing; and
+make at most 4 calls a second. A refund never gives back more than was spent
+building, so building and taking away again makes nothing. Every earning
+counts toward the cap and every spend needs Coins, so one player writes at
+most about 40,000 entries a day. Coins buy only decorations, and Leaf is never
+touched. The staff's report lists anyone whose Coins rose more than 5,000 in
+an hour (`coins_in_an_hour`). All of this goes when the town and the Works
+move to the play service, whose rules pay Coins.
 
 **Activity.** What a game's commands log (a raid begun, a room won or lost, a
 raid ended and what it paid) is written to `activity` (`player_id`, `at`,
