@@ -185,6 +185,27 @@
       "message": "This game is kept on Leaf now, and its old save takes no more writes"
     }
   },
+  "PUT /v1/game/saves/{slot}, the purse": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/saves/purse",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "version": 0,
+        "data": {
+          "saved_at": 1795610400000,
+          "keys": {
+            "town.purse.v1": "{\"coins\":5000}"
+          }
+        }
+      }
+    },
+    "status": 410,
+    "body": {
+      "code": "moved",
+      "message": "Coins are kept in Leaf's ledger now, and the old purse takes no more writes"
+    }
+  },
   "GET /v1/game/saves/{slot}": {
     "request": {
       "method": "GET",
@@ -1132,6 +1153,83 @@
     "body": {
       "code": "no_such_game",
       "message": "Leaf does not play that game"
+    }
+  },
+  "POST /v1/game/coins": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "id": "chest-2026-11-25",
+        "amount": 3,
+        "reason": "daily_chest"
+      }
+    },
+    "status": 200,
+    "body": {
+      "coins": 303
+    }
+  },
+  "POST /v1/game/coins, a spend": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "id": "t-1",
+        "amount": -120,
+        "reason": "camp_thing"
+      }
+    },
+    "status": 200,
+    "body": {
+      "coins": 183
+    }
+  },
+  "POST /v1/game/coins, sent again": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "id": "chest-2026-11-25",
+        "amount": 3,
+        "reason": "daily_chest"
+      }
+    },
+    "status": 200,
+    "body": {
+      "coins": 183
+    }
+  },
+  "POST /v1/game/coins, not enough": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "id": "w-1",
+        "amount": -5000,
+        "reason": "works_plot"
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "not_enough_coins",
+      "message": "There are not that many Coins"
+    }
+  },
+  "POST /v1/game/coins, not a reason": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "id": "w-2",
+        "amount": 5,
+        "reason": "luck"
+      }
+    },
+    "status": 400,
+    "body": {
+      "code": "invalid_reason",
+      "message": "The reason must be one of: camp_thing, daily_chest, quest, while_away, works_order, works_depot, works_build, works_refund, works_plot, works_plan"
     }
   },
   "GET /v1/game/admin/activity, a member": {

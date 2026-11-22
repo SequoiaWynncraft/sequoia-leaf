@@ -145,6 +145,12 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     version: 0,
     data: { saved_at: T0 + 10 * MINUTE, keys: { "raid.run.v1": "{}" } },
   });
+  // The purse's Coins are the ledger's now, and its old slot takes no more writes either.
+  await call("PUT /v1/game/saves/{slot}, the purse", "PUT", "/v1/game/saves/purse", {
+    player: alice,
+    version: 0,
+    data: { saved_at: T0 + 10 * MINUTE, keys: { "town.purse.v1": '{"coins":5000}' } },
+  });
   await call("GET /v1/game/saves/{slot}", "GET", "/v1/game/saves/town");
   await call("GET /v1/game/saves", "GET", "/v1/game/saves");
   await call("GET /v1/game/guild/events", "GET", "/v1/game/guild/events");
@@ -191,6 +197,22 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     commands: [{ id: "c-4", do: "win" }],
   });
   await call("GET /v1/game/play/{game}, not a game", "GET", "/v1/game/play/chess");
+  // Coins the town and the Works work out on their pages, kept in the ledger: the daily chest, a
+  // thing for the camp, the same call again, a spend too dear, and a reason that is not one.
+  const chest = { id: "chest-2026-11-25", amount: 3, reason: "daily_chest" };
+  await call("POST /v1/game/coins", "POST", "/v1/game/coins", chest);
+  await call("POST /v1/game/coins, a spend", "POST", "/v1/game/coins", {
+    id: "t-1",
+    amount: -120,
+    reason: "camp_thing",
+  });
+  await call("POST /v1/game/coins, sent again", "POST", "/v1/game/coins", chest);
+  await call("POST /v1/game/coins, not enough", "POST", "/v1/game/coins", {
+    id: "w-1",
+    amount: -5000,
+    reason: "works_plot",
+  });
+  await call("POST /v1/game/coins, not a reason", "POST", "/v1/game/coins", { id: "w-2", amount: 5, reason: "luck" });
   // A raid run of Alice's, as the play service logs it.
   for (const [minute, kind, data] of [
     [5, "raid_started", { trail: 0 }],

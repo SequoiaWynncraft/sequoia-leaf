@@ -40,6 +40,10 @@ export class Coins extends Context.Service<
     readonly open: (playerId: PlayerId, now: number) => Effect.Effect<boolean>;
     /** Posts one entry, unless its key was posted before. The caller makes sure a balance covers what it takes. */
     readonly post: (playerId: PlayerId, entry: CoinEntry, now: number) => Effect.Effect<CoinPost>;
+    /** Whether an entry with this key has been posted. */
+    readonly posted: (key: string) => Effect.Effect<boolean>;
+    /** What the player's entries whose keys begin with `prefix` paid in after `since`: their earnings, not counting spending. */
+    readonly earnedSince: (playerId: PlayerId, prefix: string, since: number) => Effect.Effect<number>;
   }
 >()("leaf/Coins") {
   static readonly layer = Layer.effect(
@@ -50,6 +54,20 @@ export class Coins extends Context.Service<
         Request: Schema.String,
         Result: Balance,
         execute: (playerId) => sql`SELECT balance FROM coins WHERE player_id = ${playerId}`,
+      });
+      const posted = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: Schema.Struct({ id: Schema.Int }),
+        execute: (key) => sql`SELECT id FROM coin_entries WHERE key = ${key}`,
+      });
+      const earned = SqlSchema.findOne({
+        Request: Schema.Struct({ playerId: Schema.String, prefix: Schema.String, since: Schema.Int }),
+        Result: Schema.Struct({ earned: Schema.Int }),
+        execute: ({ playerId, prefix, since }) => sql`
+          SELECT coalesce(sum(amount), 0) AS earned FROM coin_entries
+          WHERE player_id = ${playerId} AND amount > 0 AND at > ${since}
+            AND substr(key, 1, ${prefix.length}) = ${prefix}
+        `,
       });
       const insert = (playerId: PlayerId, entry: CoinEntry, now: number) => sql`
         INSERT INTO coin_entries (player_id, amount, reason, game, key, at)
@@ -84,6 +102,16 @@ export class Coins extends Context.Service<
         post: (playerId, entry, now) =>
           insert(playerId, entry, now).pipe(
             Effect.map((rows): CoinPost => (rows.length > 0 ? { status: "posted" } : { status: "duplicate" })),
+            Effect.orDie,
+          ),
+        posted: (key) =>
+          posted(key).pipe(
+            Effect.map((rows) => rows.length > 0),
+            Effect.orDie,
+          ),
+        earnedSince: (playerId, prefix, since) =>
+          earned({ playerId, prefix, since }).pipe(
+            Effect.map((row) => row.earned),
             Effect.orDie,
           ),
       });

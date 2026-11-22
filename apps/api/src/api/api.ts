@@ -20,16 +20,20 @@ import {
   Missing,
   Moved,
   NotAMember,
+  NotEnoughCoins,
   NotYou,
   Refused,
   SaveTooLarge,
   SlowDown,
   StaffOnly,
+  TooMuch,
   Unauthorized,
   VersionConflict,
 } from "./errors.ts";
 import {
   ActivityReport,
+  CoinsAnswer,
+  CoinsBody,
   Events,
   GameMe,
   GuildEvents,
@@ -122,6 +126,11 @@ export class PlayBodyErrors extends HttpApiMiddleware.Service<PlayBodyErrors>()(
   error: Invalid,
 }) {}
 
+/** Answers a page's call to change Coins whose body is not `{ "id", "amount", "reason" }` with `invalid_command`. */
+export class CoinsBodyErrors extends HttpApiMiddleware.Service<CoinsBodyErrors>()("leaf/api/CoinsBodyErrors", {
+  error: Invalid,
+}) {}
+
 /** Answers a presence whose body is not `{ "place" }` with one of the places with `invalid_place`. */
 export class PresenceBodyErrors extends HttpApiMiddleware.Service<PresenceBodyErrors>()("leaf/api/PresenceBodyErrors", {
   error: Invalid,
@@ -202,6 +211,12 @@ export class GameApi extends HttpApiGroup.make("game")
       success: Played,
       error: [Invalid, Missing, SlowDown],
     }).middleware(PlayBodyErrors),
+    // For the games not on the play service yet, whose pages still work out what they earn and spend.
+    HttpApiEndpoint.post("coins", "/coins", {
+      payload: CoinsBody,
+      success: CoinsAnswer,
+      error: [Invalid, NotEnoughCoins, TooMuch],
+    }).middleware(CoinsBodyErrors),
   )
   .middleware(Player)
   .prefix("/v1/game") {}

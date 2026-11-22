@@ -1,0 +1,53 @@
+import { describe, expect, it } from "bun:test";
+
+import { checkPageCoins, COIN_REASON_NAMES, COIN_REASONS, PAGE_COINS, pageCoinsKey } from "./coins.ts";
+
+/** A call with this amount, for an earning or a spending as the amount goes. */
+const amount = (n: number, reason = n > 0 ? "works_order" : "works_build") =>
+  checkPageCoins({ id: "a-1", amount: n, reason });
+
+describe("a page's call to change Coins", () => {
+  it("names one of the reasons, every one the town's or the Works'", () => {
+    expect(COIN_REASON_NAMES).toEqual([
+      "camp_thing",
+      "daily_chest",
+      "quest",
+      "while_away",
+      "works_order",
+      "works_depot",
+      "works_build",
+      "works_refund",
+      "works_plot",
+      "works_plan",
+    ]);
+    for (const name of COIN_REASON_NAMES) expect(["town", "works"]).toContain(COIN_REASONS[name].game);
+    expect(checkPageCoins({ id: "a-1", amount: 3, reason: "daily_chest" })).toEqual({
+      ok: true,
+      id: "a-1",
+      amount: 3,
+      reason: "daily_chest",
+    });
+    expect(checkPageCoins({ id: "a-1", amount: 3, reason: "the chest" })).toEqual({
+      ok: false,
+      code: "invalid_reason",
+    });
+  });
+
+  it("is a whole number, not 0, from -100,000 to 5,000, going the reason's way", () => {
+    expect(amount(PAGE_COINS.most)).toMatchObject({ ok: true });
+    expect(amount(PAGE_COINS.least)).toMatchObject({ ok: true });
+    for (const n of [0, 1.5, PAGE_COINS.most + 1, PAGE_COINS.least - 1, Number.NaN, Infinity]) {
+      expect(amount(n)).toEqual({ ok: false, code: "invalid_amount" });
+    }
+    // An earning paid as a spend, or a spend as an earning.
+    expect(amount(5, "camp_thing")).toEqual({ ok: false, code: "invalid_amount" });
+    expect(amount(-5, "daily_chest")).toEqual({ ok: false, code: "invalid_amount" });
+  });
+
+  it("has an id as a command has, and is keyed by it for the player", () => {
+    for (const id of ["", "a b", "x".repeat(65), "é"]) {
+      expect(checkPageCoins({ id, amount: 3, reason: "daily_chest" })).toEqual({ ok: false, code: "invalid_command" });
+    }
+    expect(pageCoinsKey("p", "chest-2026-11-22")).toBe("page:p:chest-2026-11-22");
+  });
+});
