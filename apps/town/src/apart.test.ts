@@ -63,6 +63,21 @@ describe("apart", () => {
     expect(closest([...at.values()])).toBeGreaterThanOrEqual(STEP);
   });
 
+  test("nobody steps aside onto somebody standing just beside the spot", () => {
+    // `c` stands a step to the right of where `a` and `b` are: `b` takes the next place round.
+    const at = drawn([
+      { id: "a", x: 100, y: 100 },
+      { id: "b", x: 100, y: 100 },
+      { id: "c", x: 100 + STEP, y: 100 },
+    ]);
+    expect(at.get("c")).toEqual({ x: 100 + STEP, y: 100 });
+    expect(at.get("b")).toEqual({ x: 100 - STEP, y: 100 });
+    expect(closest([...at.values()])).toBeGreaterThanOrEqual(STEP);
+    // Two spots side by side do not step into each other either.
+    const two = drawn(["a", "b", "c", "d"].map((id, n) => ({ id, x: n < 2 ? 100 : 100 + 2 * STEP, y: 100 })));
+    expect(closest([...two.values()])).toBeGreaterThanOrEqual(STEP);
+  });
+
   test("nine on one spot fill the eight places round it; the tenth steps twice as far", () => {
     const nine = [...drawn(onOneSpot(9)).values()];
     expect(closest(nine)).toBeGreaterThanOrEqual(STEP);

@@ -63,12 +63,13 @@ const byId = (a: Still, b: Still): number => (a.id < b.id ? -1 : a.id > b.id ? 1
 /**
  * How far from where each stands each is drawn, by their account, for everybody standing still:
  * those within `NEAR` of one another (and of anybody within `NEAR` of them) are on one spot. On
- * each, the first by account keeps the spot and the rest stand `STEP` aside from it in turn
- * (`ASIDE`), past nine the same again twice as far, and so on. Only those who step aside are in the answer.
+ * each, the first by account keeps the spot. The rest, in turn, take the first place round it that
+ * nobody is drawn on: `STEP` aside (`ASIDE`), then twice as far, and so on. Only those who step
+ * aside are in the answer.
  */
 export function apart(still: readonly Still[]): Map<string, Pt> {
-  const out = new Map<string, Pt>();
   const left = new Set(still);
+  const spots: Still[][] = [];
   for (const first of still.toSorted(byId)) {
     if (!left.has(first)) continue;
     const spot = [first];
@@ -80,13 +81,26 @@ export function apart(still: readonly Still[]): Map<string, Pt> {
           left.delete(o);
           spot.push(o);
         }
-    spot.toSorted(byId).forEach((s, n) => {
-      if (n === 0) return;
-      const [dx, dy] = ASIDE[(n - 1) % ASIDE.length] ?? [0, 0];
-      const far = STEP * Math.ceil(n / ASIDE.length);
-      out.set(s.id, { x: first.x + dx * far - s.x, y: first.y + dy * far - s.y });
-    });
+    spots.push(spot.toSorted(byId));
   }
+  // Whoever keeps a spot is drawn on it, so nobody steps aside onto them, nor onto one another.
+  const drawn: Pt[] = spots.flatMap(([keeper]) => (keeper ? [keeper] : []));
+  const out = new Map<string, Pt>();
+  for (const [keeper, ...rest] of spots)
+    for (const s of keeper ? rest : []) {
+      let at: Pt = keeper ?? s;
+      for (let k = 0; k < ASIDE.length * (drawn.length + 1); k++) {
+        const [dx, dy] = ASIDE[k % ASIDE.length] ?? [0, 0];
+        const far = STEP * (Math.floor(k / ASIDE.length) + 1);
+        const there = { x: at.x + dx * far, y: at.y + dy * far };
+        if (drawn.every((d) => Math.hypot(d.x - there.x, d.y - there.y) > NEAR)) {
+          at = there;
+          break;
+        }
+      }
+      drawn.push(at);
+      out.set(s.id, { x: at.x - s.x, y: at.y - s.y });
+    }
   return out;
 }
 
