@@ -226,21 +226,12 @@ function machineDesc(art: Art, kind: Kind): Description {
   if (kind === "boiler") rows.push({ label: "Burns", things: [{ ref: itemRef("deadfall") }] });
   const open = kind === "depot" || w.open.kinds.has(kind);
   const spare = w.spare[kind] ?? 0;
-  const blocks =
-    kind === "depot"
-      ? []
-      : [
-          {
-            body:
-              spare > 0
-                ? `${spare} to hand, free to stand.`
-                : `${info.cost} Coin${info.cost === 1 ? "" : "s"}, and all of it back when it is taken away.`,
-          },
-        ];
+  // A price needs no sentence: the card shows it, and taking a piece away gives all of it back.
+  const blocks = spare > 0 ? [{ body: `${spare} free to place.` }] : [];
   return {
     name: info.name,
     icon: machinePic(art, kind),
-    tag: open ? info.what : `${info.what} Not to be had yet.`,
+    tag: open ? info.what : `${info.what} Not unlocked yet.`,
     blocks,
     ...(kind === "depot" ? {} : { aside: amount("coin", price === 0 ? "free" : price) }),
     stats,
