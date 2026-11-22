@@ -10,7 +10,7 @@
  * command is done, so nothing a command draws could have been worked out before it was sent. The
  * page is never shown either stream, nor any pick drawn but not yet offered.
  */
-import type { CoinChange, Ctx, Done, Game, Logged, Refused } from "@sequoia-leaf/core";
+import { type CoinChange, type Ctx, type Done, type Game, LOGGED, type Logged, type Refused } from "@sequoia-leaf/core";
 
 import { DIRECT, type Habit, type Hands, planRoom } from "./bot.ts";
 import {
@@ -315,7 +315,7 @@ function finish(s: Table, run: Run, notes: RaidNote[], log: Logged[]): CoinChang
   s.run = null;
   notes.push({ t: "ended", run: runView(run), summary, paid, news: recorded.news });
   log.push({
-    kind: "raid_ended",
+    kind: LOGGED.raidEnded,
     data: {
       trail: run.trail,
       rooms_won: summary.cleared,
@@ -342,7 +342,7 @@ function setOut(s: Table, trail: number): Answer {
   s.run = startRun(draw32(s), { trail });
   s.trail = trail;
   notes.push({ t: "started", trail, run: s.runs });
-  log.push({ kind: "raid_started", data: { trail } });
+  log.push({ kind: LOGGED.raidStarted, data: { trail } });
   return { state: s, notes, coins, log };
 }
 
@@ -359,7 +359,7 @@ function play(s: Table, c: RunCommand): Answer {
   const fought = run.record[room];
   if (c.do === "take" && fought) {
     log.push({
-      kind: "raid_room",
+      kind: LOGGED.raidRoom,
       data: {
         room: fought.room + 1,
         kind: fought.kind,

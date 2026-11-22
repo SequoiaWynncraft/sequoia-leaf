@@ -505,9 +505,11 @@ The games on it now: `raid`, The Little Raid (`packages/raid`).
 - A command that takes Coins the player does not have is refused with
   `not_enough_coins`.
 
-Tables (migration 16): `play_state` (a player's state in a game, with its
+Tables (migration 17): `play_state` (a player's state in a game, with its
 `rev`; 0 is a state nothing has been done to), `play_commands` (each command's
-answer, kept two days), `coins` and `coin_entries`, and `activity`.
+answer, kept two days), `coins` and `coin_entries`, and `command_days` (each
+player's commands done and refused, by the UTC day). What commands log goes to
+`activity`, which migration 16 made for the staff's report.
 
 **Coins** are a ledger like Leaf: a balance per player, changed only by an
 entry, each keyed by the fact it records (`<game>:<player>:<key>` for a
@@ -520,7 +522,9 @@ move.
 
 **Activity.** What a game's commands log (a raid begun, a room won or lost, a
 raid ended and what it paid) is written to `activity` (`player_id`, `at`,
-`game`, `kind`, `data` as JSON) in the same transaction, and kept.
+`game`, `kind`, `data` as JSON) in the same transaction, and kept; so is the
+count of the batch's commands done and refused, in `command_days`. Both are
+for the staff's report (see [Who played](#who-played-the-staffs-view)).
 
 **The Little Raid** keeps the run in hand, the almanac, the looks and the trail
 picked. Its commands, notes, refusals and what its page is shown are in
@@ -787,10 +791,14 @@ rules are `packages/core/src/visits.ts`; the store is `apps/api/src/activity`.
   their seconds, their sessions, and their name and whether a guest as last
   known, written each time Leaf hears of them.
 - **Things done** (`activity`): what each game's commands log through the play
-  service (`Done.log`), as JSON. The report reads a raid run as
-  `raid_started`, a `raid_room` for each room (`won` true for one won) and
-  `raid_ended`; and the Works' `order_filled`, with `story` true for a story
-  order (`LOGGED` in core).
+  service (`Done.log`), as JSON, by the names in `LOGGED` in core. A raid run
+  is `raid_started` (`trail`), a `raid_room` for each room fought (`room`,
+  `kind`, `won`, `resolve` left, the fight's `seconds`) and `raid_ended`
+  (`trail`, `rooms_won`, `ended`: `won`, `lost` or `left`, and the `coins` it
+  paid); the Works will log `order_filled`, with `story` true for a story order.
+- **Commands** (`command_days`): how many of each player's commands the play
+  service did and how many it refused, by the UTC day. A command sent again
+  and answered from before is not counted again.
 
 Visits and sessions that ended 180 days ago are removed whenever a visit is
 opened; players and the things done are kept for good. Every minute Leaf
@@ -821,10 +829,11 @@ about them:
 | `long_visit`        | A visit longer than 12 hours, ended or not.                           | When it began          | Its seconds |
 | `refused_in_a_day`  | More commands refused than done in a day.                             | The day                | Refused     |
 
-Coins are read from the play service's `coin_entries` when there is one; it
-does not count refused commands yet, so until it does the last rule finds
-nothing. What other players see of someone stays what it was: in town now, or
-dozed off a while ago.
+Coins are read from the ledger (`coin_entries`), leaving out Coins brought over
+by hand from the old saves (`import:<player>`); refused commands from
+`command_days`. What other players see of someone stays what it was: in town
+now, or dozed off a while ago.
+
 ## Moving over
 
 A few players have progress in the old saves (the `saves` table). It is

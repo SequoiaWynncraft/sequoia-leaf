@@ -12,6 +12,7 @@ import { fakeBackend, type Fakes, sessionOf, steadyDice, testLeaf } from "./supp
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
 const carol = playerId("10000000-0000-0000-0000-000000000003");
+const dave = playerId("10000000-0000-0000-0000-000000000004");
 /** Wednesday 25 November 2026, 12:00 UTC. */
 const T0 = Date.UTC(2026, 10, 25, 12);
 const ORIGIN = "https://leaf.seqwawa.com";
@@ -27,6 +28,8 @@ function start(fakes: Fakes = {}) {
     "alice-token": () => Response.json(sessionOf(alice, "Alice", "CAPTAIN")),
     "bob-token": () => Response.json(sessionOf(bob, "Bob", "RECRUIT")),
     "carol-token": () => Response.json(sessionOf(carol, "Carol", null)),
+    // A website admin, the guild's staff, for the report of who played.
+    "dave-token": () => Response.json({ ...sessionOf(dave, "Dave", null), website_admin: true }),
   });
   services = testLeaf(clock, fake.fetcher, {}, { dice: steadyDice(7), ...fakes });
   app = services.app();
@@ -130,32 +133,41 @@ describe("a new player", () => {
   });
 });
 
+/**
+ * Plays a whole run by commands, from setting out to its end, each batch planned from Leaf's answer
+ * to the last. Answers the Coins it paid, the last batch sent, the table after it and its `rev`.
+ */
+async function playRun(player: PlayerId = alice) {
+  let view = (await opened(player)).view;
+  let rev = 0;
+  const take = (answer: Awaited<ReturnType<typeof commanded>>) => {
+    expect(answer.rev).toBeGreaterThan(rev);
+    rev = answer.rev;
+    view = answer.view;
+    return answer;
+  };
+  take(await commanded(ided([{ do: "start", trail: 0 }]), player));
+  let paid = 0;
+  let last: unknown[] = [];
+  for (let room = 0; room < 40 && view.run; room++) {
+    for (let again = 0; again < 30; again++) {
+      const commands = planCommands(view, SENSIBLE);
+      if (commands.length === 0) break;
+      // oxlint-disable-next-line no-await-in-loop -- each batch is planned from Leaf's answer to the last
+      take(await commanded(ided(commands), player));
+    }
+    last = ided([{ do: "fight" }, { do: "take" }]);
+    // oxlint-disable-next-line no-await-in-loop -- the next room is planned from Leaf's answer
+    const answer = take(await commanded(last, player));
+    const notes = answer.results.flatMap((r) => ("notes" in r ? (readNotes(r.notes) ?? []) : []));
+    for (const note of notes) if (note.t === "ended") paid = note.paid.coins;
+  }
+  return { paid, last, view, rev };
+}
+
 describe("a whole run, played by commands through HTTP", () => {
   it("goes from a new table to its end, paying its Coins once and logging what happened", async () => {
-    let view = (await opened()).view;
-    let rev = 0;
-    const take = (answer: Awaited<ReturnType<typeof commanded>>) => {
-      expect(answer.rev).toBeGreaterThan(rev);
-      rev = answer.rev;
-      view = answer.view;
-      return answer;
-    };
-    take(await commanded(ided([{ do: "start", trail: 0 }])));
-    let paid = 0;
-    let last: unknown[] = [];
-    for (let room = 0; room < 40 && view.run; room++) {
-      for (let again = 0; again < 30; again++) {
-        const commands = planCommands(view, SENSIBLE);
-        if (commands.length === 0) break;
-        // oxlint-disable-next-line no-await-in-loop -- each batch is planned from Leaf's answer to the last
-        take(await commanded(ided(commands)));
-      }
-      last = ided([{ do: "fight" }, { do: "take" }]);
-      // oxlint-disable-next-line no-await-in-loop -- the next room is planned from Leaf's answer
-      const answer = take(await commanded(last));
-      const notes = answer.results.flatMap((r) => ("notes" in r ? (readNotes(r.notes) ?? []) : []));
-      for (const note of notes) if (note.t === "ended") paid = note.paid.coins;
-    }
+    const { paid, last, view, rev } = await playRun();
     expect(view.run).toBeNull();
     expect(paid).toBeGreaterThan(0);
     expect(await coinsOf(alice)).toBe(300 + paid);
@@ -191,6 +203,73 @@ describe("a whole run, played by commands through HTTP", () => {
       coins: paid,
     });
     expect(JSON.parse(activity[0]?.data ?? "{}")).toEqual({ trail: 0 });
+  });
+});
+
+/** The report of who played, as the staff read it. */
+async function report() {
+  const response = await app.request("/v1/game/admin/activity", { headers: { Authorization: "Bearer dave-token" } });
+  expect(response.status).toBe(200);
+  return Schema.decodeUnknownSync(
+    Schema.Struct({
+      raid: Schema.Struct({
+        began: Schema.Number,
+        runs: Schema.Array(Schema.Struct({ rooms_won: Schema.Number, runs: Schema.Number })),
+      }),
+      odd: Schema.Array(
+        Schema.Struct({ id: Schema.String, rule: Schema.String, at: Schema.String, value: Schema.Number }),
+      ),
+    }),
+  )(await response.json());
+}
+
+describe("the staff's report", () => {
+  it("shows the runs begun and how far they got, from what a played run logged", async () => {
+    await playRun();
+    // A second run, set out on and one room fought, still going.
+    let view = (await commanded(ided([{ do: "start", trail: 0 }]))).view;
+    for (let again = 0; again < 30; again++) {
+      const commands = planCommands(view, SENSIBLE);
+      if (commands.length === 0) break;
+      // oxlint-disable-next-line no-await-in-loop -- each batch is planned from Leaf's answer to the last
+      view = (await commanded(ided(commands))).view;
+    }
+    await commanded(ided([{ do: "fight" }, { do: "take" }]));
+
+    // How many rooms each run won, as the raid logged them.
+    const activity = await services.run(PlayStore.use((store) => store.activity(alice)));
+    const won: number[] = [];
+    for (const a of activity) {
+      if (a.kind === "raid_started") won.push(0);
+      else if (a.kind === "raid_room" && JSON.parse(a.data).won === true) won[won.length - 1] = (won.at(-1) ?? 0) + 1;
+    }
+    const ended = activity.find((a) => a.kind === "raid_ended");
+    expect(won).toHaveLength(2);
+    expect(JSON.parse(ended?.data ?? "{}").rooms_won).toBe(won[0]);
+    const runs = [...new Set(won)]
+      .toSorted((a, b) => a - b)
+      .map((n) => ({ rooms_won: n, runs: won.filter((w) => w === n).length }));
+    expect((await report()).raid).toEqual({ began: 2, runs });
+  });
+
+  it("counts each player's commands done and refused by the day, once each, and lists a day with more refused", async () => {
+    await commanded(ided([{ do: "start", trail: 0 }]));
+    const refusals = ided([{ do: "take" }, { do: "take" }, { do: "fight" }]);
+    const refused = await commanded(refusals);
+    expect(refused.results.every((r) => "refused" in r)).toBe(true);
+    // Sent again, they are answered from before and not counted again; a batch that is not commands counts nothing.
+    await commanded(refusals);
+    clock.now += 100;
+    expect((await send("POST", "/v1/game/play/raid", { commands: [{ id: "x-1", do: "win" }] })).status).toBe(400);
+    expect(
+      await services.query((sql) => sql`SELECT player_id, day, done, refused FROM command_days ORDER BY player_id`),
+    ).toEqual([{ player_id: alice, day: Date.UTC(2026, 10, 25), done: 1, refused: 3 }]);
+    expect((await report()).odd).toEqual([
+      { id: alice, rule: "refused_in_a_day", at: new Date(Date.UTC(2026, 10, 25)).toISOString(), value: 3 },
+    ]);
+    // Done as often as refused is not worth a look.
+    await commanded(ided([{ do: "choose", option: 0 }, { do: "rustle" }]));
+    expect((await report()).odd).toEqual([]);
   });
 });
 

@@ -193,10 +193,10 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/game/play/{game}, not a game", "GET", "/v1/game/play/chess");
   // A raid run of Alice's, as the play service logs it.
   for (const [minute, kind, data] of [
-    [5, "raid_started", { trail: "moss" }],
-    [8, "raid_room", { room: 1, kind: "fight", won: true, resolve: 9, seconds: 41 }],
-    [12, "raid_room", { room: 2, kind: "fight", won: false, resolve: 0, seconds: 63 }],
-    [12, "raid_ended", { trail: "moss", rooms_won: 1, how: "lost", coins: 20 }],
+    [5, "raid_started", { trail: 0 }],
+    [8, "raid_room", { room: 1, kind: "trouble", won: true, resolve: 3, seconds: 41 }],
+    [12, "raid_room", { room: 2, kind: "trouble", won: false, resolve: 0, seconds: 63 }],
+    [12, "raid_ended", { trail: 0, rooms_won: 1, ended: "lost", coins: 20 }],
   ] as const) {
     // oxlint-disable-next-line no-await-in-loop -- in order
     await leaf.query(

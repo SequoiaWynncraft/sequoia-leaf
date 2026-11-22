@@ -171,7 +171,7 @@ describe("the report", () => {
       { playerId: "alice", at: DAY0 + 2, game: "raid", kind: "raid_room", data: { won: true } },
       { playerId: "alice", at: DAY0 + 3, game: "raid", kind: "raid_room", data: { won: true } },
       { playerId: "alice", at: DAY0 + 4, game: "raid", kind: "raid_room", data: { won: false } },
-      { playerId: "alice", at: DAY0 + 5, game: "raid", kind: "raid_ended", data: { how: "lost" } },
+      { playerId: "alice", at: DAY0 + 5, game: "raid", kind: "raid_ended", data: { ended: "lost" } },
       // A room won after the run ended, and one of a run begun before the period, count for none.
       { playerId: "alice", at: DAY0 + 6, game: "raid", kind: "raid_room", data: { won: true } },
       { playerId: "bob", at: DAY0 + 7, game: "raid", kind: "raid_room", data: { won: true } },

@@ -79,7 +79,7 @@ const diceAt = given.indexOf("--dice");
 const diceText = diceAt >= 0 ? given[diceAt + 1] : undefined;
 const steady = diceText === undefined ? undefined : Number(diceText);
 /** The options with a value, each with its value, taken out. */
-const valued = new Set([crowdAt, diceAt].filter((i) => i >= 0).flatMap((i) => [i, i + 1]));
+const valued = new Set([crowdAt, diceAt].flatMap((i) => (i >= 0 ? [i, i + 1] : [])));
 const flags = given.filter((_, i) => !valued.has(i));
 if (
   !Number.isInteger(port) ||

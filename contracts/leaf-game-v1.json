@@ -642,16 +642,8 @@
           "threeStars": [],
           "forged": [],
           "topped": [],
-          "bosses": [
-            [],
-            [],
-            []
-          ],
-          "best": [
-            0,
-            0,
-            0
-          ],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
           "runs": 0
         },
         "trail": 0,
@@ -759,25 +751,9 @@
             null,
             null
           ],
-          "bench": [
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": [
-            "worm",
-            "finch",
-            "mossmote",
-            "worm",
-            "crab7"
-          ],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
           "held": false,
           "rustles": 1,
           "bought": 0,
@@ -824,16 +800,8 @@
           "threeStars": [],
           "forged": [],
           "topped": [],
-          "bosses": [
-            [],
-            [],
-            []
-          ],
-          "best": [
-            0,
-            0,
-            0
-          ],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
           "runs": 0
         },
         "trail": 0,
@@ -915,25 +883,9 @@
             null,
             null
           ],
-          "bench": [
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": [
-            "worm",
-            "finch",
-            "mossmote",
-            "worm",
-            "crab7"
-          ],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
           "held": false,
           "rustles": 1,
           "bought": 0,
@@ -980,16 +932,8 @@
           "threeStars": [],
           "forged": [],
           "topped": [],
-          "bosses": [
-            [],
-            [],
-            []
-          ],
-          "best": [
-            0,
-            0,
-            0
-          ],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
           "runs": 0
         },
         "trail": 0,
@@ -1097,25 +1041,9 @@
             null,
             null
           ],
-          "bench": [
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": [
-            "worm",
-            "finch",
-            "mossmote",
-            "worm",
-            "crab7"
-          ],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
           "held": false,
           "rustles": 1,
           "bought": 0,
@@ -1162,16 +1090,8 @@
           "threeStars": [],
           "forged": [],
           "topped": [],
-          "bosses": [
-            [],
-            [],
-            []
-          ],
-          "best": [
-            0,
-            0,
-            0
-          ],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
           "runs": 0
         },
         "trail": 0,
@@ -1264,13 +1184,21 @@
           },
           "done": [
             {
+              "at": "2026-11-25T12:55:00.000Z",
+              "game": "raid",
+              "kind": "raid_started",
+              "data": {
+                "trail": 0
+              }
+            },
+            {
               "at": "2026-11-25T12:42:00.000Z",
               "game": "raid",
               "kind": "raid_ended",
               "data": {
-                "trail": "moss",
+                "trail": 0,
                 "rooms_won": 1,
-                "how": "lost",
+                "ended": "lost",
                 "coins": 20
               }
             },
@@ -1280,7 +1208,7 @@
               "kind": "raid_room",
               "data": {
                 "room": 2,
-                "kind": "fight",
+                "kind": "trouble",
                 "won": false,
                 "resolve": 0,
                 "seconds": 63
@@ -1292,9 +1220,9 @@
               "kind": "raid_room",
               "data": {
                 "room": 1,
-                "kind": "fight",
+                "kind": "trouble",
                 "won": true,
-                "resolve": 9,
+                "resolve": 3,
                 "seconds": 41
               }
             },
@@ -1303,7 +1231,7 @@
               "game": "raid",
               "kind": "raid_started",
               "data": {
-                "trail": "moss"
+                "trail": 0
               }
             }
           ]
@@ -1358,8 +1286,12 @@
         }
       ],
       "raid": {
-        "began": 1,
+        "began": 2,
         "runs": [
+          {
+            "rooms_won": 0,
+            "runs": 1
+          },
           {
             "rooms_won": 1,
             "runs": 1

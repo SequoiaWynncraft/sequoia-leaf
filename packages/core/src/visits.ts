@@ -219,9 +219,11 @@ export interface WorksRow {
 }
 
 /**
- * What the games log that the report reads (`Done.log` in the play service). A raid run is
- * `raid_started`, then a `raid_room` for each room (`won` true for one won), then `raid_ended`; the
- * Works logs `order_filled` for each order, with `story` true for a story order.
+ * What the games log that the report reads (`Done.log` in the play service); the games log them by
+ * these names. A raid run is `raid_started` (`trail`), then a `raid_room` for each room fought
+ * (`room`, `kind`, `won` true for one won, `resolve` left, the fight's `seconds`), then `raid_ended`
+ * (`trail`, `rooms_won`, `ended`: `won`, `lost` or `left`, and the `coins` it paid); the Works logs
+ * `order_filled` for each order, with `story` true for a story order.
  */
 export const LOGGED = {
   raidStarted: "raid_started",
