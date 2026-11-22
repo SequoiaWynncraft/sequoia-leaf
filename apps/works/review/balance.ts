@@ -60,11 +60,11 @@ import {
   TICKS,
   workOf,
   type World,
-} from "../src/sim/index.ts";
+} from "@sequoia-leaf/yard";
 
 const SHOW_MAP = process.argv.includes("--map");
 /**
- * `--yards` keeps the yard as it stood part-way through a few of the orders, in `src/yards/`: the
+ * `--yards` keeps the yard as it stood part-way through a few of the orders, in the rules' `yards/`: the
  * screen loads them to show the game at different stages of its story.
  */
 const KEEP_YARDS = process.argv.includes("--yards");
@@ -603,7 +603,7 @@ for (const [n, order] of STORY.entries()) {
     const all = ITEMS.reduce((sum, k) => sum + (order.want[k] ?? 0), 0);
     if (KEEP_YARDS && name && !keptYard && (got >= all * 0.4 || guard >= 40)) {
       keptYard = true;
-      writeFileSync(`${import.meta.dir}/../src/yards/${name}.json`, `${save(p.w)}\n`);
+      writeFileSync(`${import.meta.dir}/../../../packages/yard/src/yards/${name}.json`, `${save(p.w)}\n`);
     }
     if (guard > 4000) {
       console.log(`\n${p.map()}\n`);

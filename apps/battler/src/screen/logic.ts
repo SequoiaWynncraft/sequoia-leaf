@@ -4,7 +4,7 @@
  * next nudge for a new member is, what the postcard for the town says. They are here, apart from
  * the drawing, so that they can be checked by tests.
  */
-import type { Postcard } from "@sequoia-leaf/kit/postcard.ts";
+import type { Postcard } from "@sequoia-leaf/core";
 import {
   type Almanac,
   boonNumber,

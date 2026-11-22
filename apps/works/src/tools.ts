@@ -5,10 +5,6 @@
  */
 
 import { CREAM, GOLD, GREEN } from "@sequoia-leaf/kit/palette.ts";
-
-import { TILE } from "./art/belts.ts";
-import { float, flutter, puff, ring, sparkle } from "./fx.ts";
-import { layout } from "./layout.ts";
 import {
   ahead,
   at,
@@ -34,7 +30,11 @@ import {
   setOpen,
   setRecipe,
   turn,
-} from "./sim/index.ts";
+} from "@sequoia-leaf/yard";
+
+import { TILE } from "./art/belts.ts";
+import { float, flutter, puff, ring, sparkle } from "./fx.ts";
+import { layout } from "./layout.ts";
 import { yardSfx } from "./sound.ts";
 import { S, type Tool, touched } from "./state.ts";
 import { coins, pay, repay } from "./yard.ts";

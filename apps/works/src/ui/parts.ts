@@ -4,10 +4,10 @@ import { add, el, shown } from "@sequoia-leaf/kit/dom.ts";
 import { INK } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { ITEM, type Item, ITEMS, type Tally } from "@sequoia-leaf/yard";
 
 import type { Art } from "../art/index.ts";
 import { PAL } from "../art/pal.ts";
-import { ITEM, type Item, ITEMS, type Tally } from "../sim/index.ts";
 
 export type Kid = Node | string | null;
 

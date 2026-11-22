@@ -1,12 +1,12 @@
 /** The yard's art laid out with names, for looking at it large: `?sheet=machines`, `?sheet=items`. */
 
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
+import { ITEM, ITEMS, KIND } from "@sequoia-leaf/yard";
 
 import { beltTile } from "./art/belts.ts";
 import type { Art } from "./art/index.ts";
 import type { Sprite } from "./art/pal.ts";
 import { type Entry, showSheet } from "./sheet.ts";
-import { ITEM, ITEMS, KIND } from "./sim/index.ts";
 
 const pics = (list: readonly (Sprite | undefined)[]): HTMLCanvasElement[] => list.flatMap((s) => (s ? [s.c] : []));
 

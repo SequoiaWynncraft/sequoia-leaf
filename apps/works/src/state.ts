@@ -4,9 +4,9 @@
  */
 
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
+import { create, type Dir, type Kind, type Leg, type PlotId, type World } from "@sequoia-leaf/yard";
 
 import { TILE } from "./art/belts.ts";
-import { create, type Dir, type Kind, type Leg, type PlotId, type World } from "./sim/index.ts";
 
 /** What is in the member's hand: something to build, the spade that takes things away, or nothing. */
 export type Tool = Kind | "remove" | null;

@@ -4,7 +4,7 @@
  * camp; and the Coins in its till.
  */
 
-import type { Postcard } from "@sequoia-leaf/kit/postcard.ts";
+import type { Postcard } from "@sequoia-leaf/core";
 
 import { isFilled, storyOrder } from "./orders.ts";
 import type { World } from "./world.ts";

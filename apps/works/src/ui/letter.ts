@@ -5,9 +5,9 @@
 
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
+import { type Away, AWAY_MOST_MS, ITEM, ITEMS } from "@sequoia-leaf/yard";
 
 import type { Art } from "../art/index.ts";
-import { type Away, AWAY_MOST_MS, ITEM, ITEMS } from "../sim/index.ts";
 import { yardSfx } from "../sound.ts";
 import { bank, holdTill } from "../yard.ts";
 import { coinsFrom } from "./notes.ts";

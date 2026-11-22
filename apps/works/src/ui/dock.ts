@@ -6,9 +6,9 @@
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
+import { costOf, KIND, type Kind } from "@sequoia-leaf/yard";
 
 import type { Art } from "../art/index.ts";
-import { costOf, KIND, type Kind } from "../sim/index.ts";
 import { S, type Tool } from "../state.ts";
 import { cancel, confirm, rotate, setTool, toolHooks, undo } from "../tools.ts";
 import { machineRef } from "./card.ts";

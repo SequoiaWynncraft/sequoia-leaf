@@ -3,8 +3,8 @@
  * lies on the forest floor into what the guild has asked for.
  *
  * This file is the stage: it opens the yard, owns the canvas and the loop, and joins the parts
- * together. The rules are in `sim/`, the picture in `scene.ts` and `art/`, what the member does in
- * `tools.ts` and `input.ts`, and everything that sits over the yard in `ui/`.
+ * together. The rules are `@sequoia-leaf/yard`, the picture in `scene.ts` and `art/`, what the
+ * member does in `tools.ts` and `input.ts`, and everything that sits over the yard in `ui/`.
  */
 
 import { before, pickUp, pull } from "@sequoia-leaf/kit/cloud.ts";
@@ -17,17 +17,6 @@ import { fromTown, inTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
-
-import { stepFlights, stepWalkers } from "./actors.ts";
-import { TILE } from "./art/belts.ts";
-import { makeArt } from "./art/index.ts";
-import { ease, inset, inView, look, pan, resize, setCamera, setZoom, zoom, zoomSteps } from "./camera.ts";
-import { callers, capstones, forget, handOver, onNews, shiftOn } from "./events.ts";
-import { updateFx } from "./fx.ts";
-import { initInput, inputHooks, stepInput } from "./input.ts";
-import { layout } from "./layout.ts";
-import { drawWords, drawYard } from "./scene.ts";
-import { sheets } from "./sheets.ts";
 import {
   type Away,
   boost,
@@ -47,7 +36,22 @@ import {
   storyOrder,
   type Tally,
   TICK_MS,
-} from "./sim/index.ts";
+} from "@sequoia-leaf/yard";
+import large from "@sequoia-leaf/yard/yards/large.json";
+import mid from "@sequoia-leaf/yard/yards/mid.json";
+import short from "@sequoia-leaf/yard/yards/short.json";
+import small from "@sequoia-leaf/yard/yards/small.json";
+
+import { stepFlights, stepWalkers } from "./actors.ts";
+import { TILE } from "./art/belts.ts";
+import { makeArt } from "./art/index.ts";
+import { ease, inset, inView, look, pan, resize, setCamera, setZoom, zoom, zoomSteps } from "./camera.ts";
+import { callers, capstones, forget, handOver, onNews, shiftOn } from "./events.ts";
+import { updateFx } from "./fx.ts";
+import { initInput, inputHooks, stepInput } from "./input.ts";
+import { layout } from "./layout.ts";
+import { drawWords, drawYard } from "./scene.ts";
+import { sheets } from "./sheets.ts";
 import { murmur, yardSfx } from "./sound.ts";
 import { S, type Tool, toPage, touched } from "./state.ts";
 import { nudge } from "./teach.ts";
@@ -73,10 +77,6 @@ import { closeBanner, feed, initNotes, tickNotes } from "./ui/notes.ts";
 import { closePanel, initPanels, openPanel, panelHooks, type PanelId, refreshPanel } from "./ui/panels.ts";
 import { $ } from "./ui/parts.ts";
 import { forgetYard, keep, openYard, screen, swapYard, tick } from "./yard.ts";
-import large from "./yards/large.json";
-import mid from "./yards/mid.json";
-import short from "./yards/short.json";
-import small from "./yards/small.json";
 
 /** Yards kept part-way through the story by `review/balance.ts --yards`, for looking at the game at each stage. */
 const STAGES = { small, short, mid, large } as const;

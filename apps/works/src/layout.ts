@@ -5,9 +5,21 @@
  */
 
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
+import {
+  BACK,
+  type Dir,
+  DX,
+  DY,
+  LEFT,
+  type Plot,
+  plotState,
+  REACH,
+  rewire,
+  RIGHT,
+  type World,
+} from "@sequoia-leaf/yard";
 
 import { type Arm, type Arms, TILE } from "./art/belts.ts";
-import { BACK, type Dir, DX, DY, LEFT, type Plot, plotState, REACH, rewire, RIGHT, type World } from "./sim/index.ts";
 
 export interface Wire {
   a: Pt;

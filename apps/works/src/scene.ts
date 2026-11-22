@@ -12,15 +12,6 @@ import { R } from "@sequoia-leaf/kit/pix.ts";
 import { bubble, bubbleSize, wrap } from "@sequoia-leaf/kit/signs.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx, hash, makeCanvas } from "@sequoia-leaf/kit/util.ts";
-
-import { HOP, walkers } from "./actors.ts";
-import { beltTile, ride, STEPS, TILE } from "./art/belts.ts";
-import { BEYOND, glint } from "./art/ground.ts";
-import type { Art } from "./art/index.ts";
-import { DEPOT } from "./art/machines.ts";
-import type { Sprite } from "./art/pal.ts";
-import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
-import { type Layout, layout, pylonTop } from "./layout.ts";
 import {
   BACK,
   blank,
@@ -41,7 +32,16 @@ import {
   TICKS,
   tunnelExit,
   type World,
-} from "./sim/index.ts";
+} from "@sequoia-leaf/yard";
+
+import { HOP, walkers } from "./actors.ts";
+import { beltTile, ride, STEPS, TILE } from "./art/belts.ts";
+import { BEYOND, glint } from "./art/ground.ts";
+import type { Art } from "./art/index.ts";
+import { DEPOT } from "./art/machines.ts";
+import type { Sprite } from "./art/pal.ts";
+import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
+import { type Layout, layout, pylonTop } from "./layout.ts";
 import { S } from "./state.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */

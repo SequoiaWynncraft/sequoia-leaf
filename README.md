@@ -79,6 +79,7 @@ address after `return_to=`. Only `GET /v1/game/hello` reads `GAME_LEAF_SPENDING`
 | --------------------- | -------------------------------------------------------------------- |
 | `packages/core`       | The rules of the game as pure functions and types. No I/O.           |
 | `packages/raid`       | The Little Raid's rules, which Leaf and the battler's page share.    |
+| `packages/yard`       | The Works' rules, with no screen in them; the Works' page uses them. |
 | `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.        |
 | `apps/api/migrations` | The database schema, as Effect migrations applied in order at start. |
 | `apps/town`           | Guild Town, the browser game's home screen.                          |

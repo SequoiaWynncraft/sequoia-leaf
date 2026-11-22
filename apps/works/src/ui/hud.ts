@@ -8,9 +8,9 @@ import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { leave } from "@sequoia-leaf/kit/shell.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
+import { boostLeft, isFilled, PLANS, planState, power, SHIFT, storyOrder } from "@sequoia-leaf/yard";
 
 import type { Art } from "../art/index.ts";
-import { boostLeft, isFilled, PLANS, planState, power, SHIFT, storyOrder } from "../sim/index.ts";
 import { S } from "../state.ts";
 import { coins, keep } from "../yard.ts";
 import { orderRef } from "./card.ts";

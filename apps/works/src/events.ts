@@ -7,6 +7,7 @@
 import { CREAM, GOLD, GREEN } from "@sequoia-leaf/kit/palette.ts";
 import { tell } from "@sequoia-leaf/kit/shell.ts";
 import { hash, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { claim, isFilled, ITEM, type News, type Standing, STORY } from "@sequoia-leaf/yard";
 
 import { flights, send, speak, toss, type Walker, walker, walkers } from "./actors.ts";
 import { TILE } from "./art/belts.ts";
@@ -14,7 +15,6 @@ import type { Art } from "./art/index.ts";
 import { PIPWICK_HAT } from "./art/machines.ts";
 import { burst, flutter, sparkle } from "./fx.ts";
 import { layout } from "./layout.ts";
-import { claim, isFilled, ITEM, type News, type Standing, STORY } from "./sim/index.ts";
 import { yardSfx } from "./sound.ts";
 import { S, toPage } from "./state.ts";
 import { banner, coinsFrom, feed } from "./ui/notes.ts";
