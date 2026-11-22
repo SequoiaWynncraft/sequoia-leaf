@@ -10,23 +10,16 @@ import {
   pageCoinsKey,
 } from "./coins.ts";
 
-/** A call with this amount, for an earning or a spending as the amount goes. */
-const amount = (n: number, reason = n > 0 ? "works_order" : "works_build") =>
-  checkPageCoins({ id: "a-1", amount: n, reason });
+/** A call to spend this amount at a market stall. */
+const amount = (n: number, reason = "camp_thing") => checkPageCoins({ id: "a-1", amount: n, reason });
 
 describe("a page's call to change Coins", () => {
-  it("names one of the reasons, every one the town's or the Works'", () => {
-    expect(COIN_REASON_NAMES).toEqual([
-      "camp_thing",
-      "daily_chest",
-      "works_order",
-      "works_depot",
-      "works_build",
-      "works_refund",
-      "works_plot",
-      "works_plan",
-    ]);
-    for (const name of COIN_REASON_NAMES) expect(["town", "works"]).toContain(COIN_REASONS[name].game);
+  it("names one of the reasons, every one the town's: the Works' Coins are Leaf's own", () => {
+    expect(COIN_REASON_NAMES).toEqual(["camp_thing", "daily_chest"]);
+    for (const name of COIN_REASON_NAMES) expect(COIN_REASONS[name].game).toBe("town");
+    for (const reason of ["works_order", "works_depot", "works_build", "works_refund", "works_plot", "works_plan"]) {
+      expect(checkPageCoins({ id: "a-1", amount: -3, reason })).toEqual({ ok: false, code: "invalid_reason" });
+    }
     // Nothing on the guild's server pays these: the made-up guild's quests and while-away letter.
     for (const reason of ["quest", "while_away"]) {
       expect(checkPageCoins({ id: "a-1", amount: 3, reason })).toEqual({ ok: false, code: "invalid_reason" });
@@ -37,15 +30,14 @@ describe("a page's call to change Coins", () => {
     });
   });
 
-  it("is a whole number, not 0, from -100,000 to 5,000, going the reason's way", () => {
-    expect(amount(PAGE_COINS.most)).toMatchObject({ ok: true });
+  it("is a whole number, not 0, down to -100,000, going the reason's way", () => {
+    expect(amount(-5)).toMatchObject({ ok: true, amount: -5 });
     expect(amount(PAGE_COINS.least)).toMatchObject({ ok: true });
-    for (const n of [0, 1.5, PAGE_COINS.most + 1, PAGE_COINS.least - 1, Number.NaN, Infinity]) {
+    for (const n of [0, -1.5, PAGE_COINS.least - 1, Number.NaN, -Infinity]) {
       expect(amount(n)).toEqual({ ok: false, code: "invalid_amount" });
     }
-    // An earning paid as a spend, or a spend as an earning.
-    expect(amount(5, "camp_thing")).toEqual({ ok: false, code: "invalid_amount" });
-    expect(amount(-5, "works_refund")).toEqual({ ok: false, code: "invalid_amount" });
+    // A spend paid as an earning.
+    expect(amount(5)).toEqual({ ok: false, code: "invalid_amount" });
   });
 
   it("for the daily chest takes no amount from the page: Leaf pays its own, keyed by the UTC day", () => {

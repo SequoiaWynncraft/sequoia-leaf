@@ -14,7 +14,7 @@ export type SaveSlot = (typeof SAVE_SLOTS)[number];
  * purse's Coins, in the Coins ledger): nothing more is written to them, and what is there is read
  * only to be brought over once, by hand.
  */
-export const MOVED_SLOTS: readonly SaveSlot[] = ["purse", "raid"];
+export const MOVED_SLOTS: readonly SaveSlot[] = ["purse", "raid", "works"];
 
 /** Whether a slot's game has moved to the play service, so that the slot takes no more writes. */
 export const isMoved = (slot: SaveSlot): boolean => MOVED_SLOTS.includes(slot);

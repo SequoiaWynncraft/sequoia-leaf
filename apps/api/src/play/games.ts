@@ -1,5 +1,6 @@
 import { type CoinChange, type Ctx, type Game, type GameId, isRefused, type Logged } from "@sequoia-leaf/core";
 import { RAID } from "@sequoia-leaf/raid/game.ts";
+import { WORKS } from "@sequoia-leaf/yard/game.ts";
 
 /** What one command came to, before Leaf keeps it: a refusal, or what it did and how to keep the state it left. */
 export type Attempt =
@@ -32,7 +33,12 @@ export interface Played {
   readonly open: (text: string, ctx: Ctx) => Opened | null;
 }
 
-/** Wraps a game for the service, keeping its own types inside. */
+/**
+ * Wraps a game for the service, keeping its own types inside. A game's rules may change the state
+ * they are given in place (the Works' do), so the state is kept as text before each command, and a
+ * command that is not kept (refused by the rules, or by the service for Coins) is undone from it:
+ * the service goes on only from a state whose command was done.
+ */
 export function played<State, Command, View, Note>(game: Game<State, Command, View, Note>): Played {
   return {
     id: game.id,
@@ -44,13 +50,24 @@ export function played<State, Command, View, Note>(game: Game<State, Command, Vi
         return null;
       }
       let state = game.advance(decoded, ctx);
+      /** The state as it was before a command that has not been kept. */
+      let undo: string | null = null;
+      const current = (): State => {
+        if (undo !== null) {
+          state = game.decode(undo) ?? state;
+          undo = null;
+        }
+        return state;
+      };
       return {
         attempt: (raw, at) => {
           const command = game.command(raw);
           if (command === null) {
             return { refused: "invalid_command" };
           }
+          const before = game.encode(current());
           const answer = game.apply(state, command, at);
+          undo = before;
           if (isRefused(answer)) {
             return { refused: answer.refused };
           }
@@ -60,15 +77,16 @@ export function played<State, Command, View, Note>(game: Game<State, Command, Vi
             log: answer.log ?? [],
             keep: () => {
               state = answer.state;
+              undo = null;
             },
           };
         },
-        text: () => game.encode(state),
-        view: (at) => game.view(state, at),
+        text: () => game.encode(current()),
+        view: (at) => game.view(current(), at),
       };
     },
   };
 }
 
-/** The games on the play service. The Works and the town are not on it yet. */
-export const GAMES: Readonly<Partial<Record<GameId, Played>>> = { raid: played(RAID) };
+/** The games on the play service. The town is not on it yet. */
+export const GAMES: Readonly<Partial<Record<GameId, Played>>> = { raid: played(RAID), works: played(WORKS) };

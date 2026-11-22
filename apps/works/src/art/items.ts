@@ -3,9 +3,9 @@
 import { INK } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
+import type { Item } from "@sequoia-leaf/yard";
+import { ITEMS } from "@sequoia-leaf/yard";
 
-import type { Item } from "../sim/index.ts";
-import { ITEMS } from "../sim/index.ts";
 import { PAL } from "./pal.ts";
 
 const ROWS: Record<Item, readonly string[]> = {

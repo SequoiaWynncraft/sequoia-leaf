@@ -22,11 +22,12 @@ The one staff route is the record of who played the game
 It also serves the guild's browser game, Guild Town, at `/play/town/`, and the
 routes only the game uses. Anyone signed in may play it: members, and guests
 who are not in the guild. The game shows a member's Leaf; no route lets it
-spend or pay any, and a guest has none. The Little Raid is played on Leaf's
-play service, which owns its state. Coins are a ledger of their own, the only
-Coins there are: the raid pays into it, and the town and the Works, whose
-pages still work out what they earn and spend, change it through
-`POST /v1/game/coins` until they move to the play service too.
+spend or pay any, and a guest has none. The Little Raid and the Works are
+played on Leaf's play service, which owns their state. Coins are a ledger of
+their own, the only Coins there are: the raid and the Works pay into it and
+take from it, and the town, whose page still works out what it earns and
+spends, changes it through `POST /v1/game/coins` until it moves to the play
+service too.
 
 ## Getting started
 
@@ -75,17 +76,18 @@ address after `return_to=`. Only `GET /v1/game/hello` reads `GAME_LEAF_SPENDING`
 
 ## Layout
 
-| Path                  | What it is                                                           |
-| --------------------- | -------------------------------------------------------------------- |
-| `packages/core`       | The rules of the game as pure functions and types. No I/O.           |
-| `packages/raid`       | The Little Raid's rules, which Leaf and the battler's page share.    |
-| `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.        |
-| `apps/api/migrations` | The database schema, as Effect migrations applied in order at start. |
-| `apps/town`           | Guild Town, the browser game's home screen.                          |
-| `apps/works`          | The Works, a game in the town.                                       |
-| `apps/battler`        | The Little Raid, a game in the town.                                 |
-| `packages/kit`        | What the town and its games share: look, sound and plumbing.         |
-| `Dockerfile`          | The production image, with the game's pages built into it.           |
+| Path                  | What it is                                                            |
+| --------------------- | --------------------------------------------------------------------- |
+| `packages/core`       | The rules of the game as pure functions and types. No I/O.            |
+| `packages/raid`       | The Little Raid's rules, which Leaf and the battler's page share.     |
+| `packages/yard`       | The Works' rules, with no screen in them; Leaf and the page use them. |
+| `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.         |
+| `apps/api/migrations` | The database schema, as Effect migrations applied in order at start.  |
+| `apps/town`           | Guild Town, the browser game's home screen.                           |
+| `apps/works`          | The Works, a game in the town.                                        |
+| `apps/battler`        | The Little Raid, a game in the town.                                  |
+| `packages/kit`        | What the town and its games share: look, sound and plumbing.          |
+| `Dockerfile`          | The production image, with the game's pages built into it.            |
 
 ## How Leaf is earned
 
@@ -348,7 +350,7 @@ react to `quest_completed`.
 | `GET /v1/game/admin/activity`      | For the staff alone: who played, when, where and for how long.        |
 | `GET /v1/game/play/{game}`         | The player's state in a game Leaf plays, as their page is shown it.   |
 | `POST /v1/game/play/{game}`        | Does a batch of commands in that game, and answers what each did.     |
-| `POST /v1/game/coins`              | Pays or takes Coins a page of the town or the Works worked out.       |
+| `POST /v1/game/coins`              | Pays or takes Coins the town's page worked out.                       |
 
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
@@ -399,7 +401,7 @@ version, each at most once a minute a slot, for a week (`save_history`).
   not an object, 400 `invalid_save`; a save over 256 KiB, 413 `save_too_large`.
   A body over twice that is not read at all.
 - A slot whose game Leaf now plays itself, or whose numbers Leaf keeps itself
-  (`MOVED_SLOTS` in core: `raid`, and `purse`, whose Coins are the ledger's),
+  (`MOVED_SLOTS` in core: `raid` and `works`, and `purse`, whose Coins are the ledger's),
   takes no more writes: `PUT` answers 410 `moved` and stores nothing, so what
   is there stays as it was, to be brought over by hand (see Moving over). It
   can still be read.
@@ -483,7 +485,7 @@ refused, what the page is shown of a state (nothing that tells the future),
 and the state as stored text. Time is Leaf's, and so are the dice: each call
 gets a fresh number from the machine's secure randomness (`Ctx.seed`), which
 the game stirs into the stream its state keeps; the stream is never shown.
-The games on it now: `raid`, The Little Raid (`packages/raid`).
+The games on it now: `raid`, The Little Raid (`packages/raid`), and `works`, the Works (`packages/yard`).
 
 - `GET /v1/game/play/{game}` answers `{ "rev", "now", "state" }`: how many
   batches have changed the state, Leaf's clock, and the game's view of it. A
@@ -511,13 +513,20 @@ The games on it now: `raid`, The Little Raid (`packages/raid`).
   429 `slow_down` for a batch that would take one player past 10 batches a
   second (bursts of 20) or 10 commands a second (bursts of 40), across all
   games: it is refused whole, and nothing is done.
-- A command that takes Coins the player does not have is refused with
-  `not_enough_coins`.
+- A command's Coins are worked out in order, starting from the balance: each
+  change it pays or takes is added in turn, and if the balance would go below
+  nothing at any point the command is refused with `not_enough_coins` and
+  nothing of it is kept. So a command may pay something in and then take a
+  price from it (the Works pays its till in before taking a price).
 - Play pays a player at most 5,000 Coins in any hour and 20,000 in a UTC day
   (`EARNINGS` in core), whatever the games, the pages' route below included.
   Past that a command that pays is done all the same and pays only what is
   left, so nobody is stopped mid-game and playing faster than a person can
-  earns nothing more. The welcome and Coins brought over do not count.
+  earns nothing more. The welcome and Coins brought over do not count, and
+  neither does a change a game marks `free` (`CoinChange.free`): Coins given
+  back for something paid for, or paid by Leaf's own clock, such as the Works'
+  till. Such a change is paid whole and uses none of what may still be earned;
+  its entry has `earned` 0.
 - A stored state that does not read (a rules change that forgot an older
   version, say) answers both routes 409 `state_unreadable`: nothing is done,
   the state is kept as it is, and Leaf logs the player and the game. The page
@@ -529,7 +538,9 @@ id, the `rev` it led to and its notes or refusal, never the state; only each
 player's newest 256 to a game are kept, the older removed once a batch),
 `coins` and `coin_entries`, and `command_days` (each
 player's commands done and refused, by the UTC day). What commands log goes to
-`activity`, which migration 16 made for the staff's report.
+`activity`, which migration 16 made for the staff's report. Migration 18 gave
+`coin_entries` `earned`, 1 for an entry weighed against what a player may earn
+and 0 for one that is not.
 
 **Coins** are a ledger like Leaf: a balance per player, changed only by an
 entry, each keyed by the fact it records (`<game>:<player>:<key>` for a
@@ -539,9 +550,9 @@ entries are never changed or removed. A new player's account opens with 300,
 as one entry keyed `welcome:<player>`. They are the only Coins there are:
 every page shows the ledger's number, and the browser keeps none.
 
-**Coins from a page.** The town and the Works are not on the play service yet:
-their pages still work out what they earn and spend, and tell Leaf each change.
-This route is for them alone, and goes when they move.
+**Coins from a page.** The town is not on the play service yet: its page still
+works out what it earns and spends, and tells Leaf each change. This route is
+for it alone, and goes when it moves.
 `POST /v1/game/coins` takes `{ "player", "id", "amount", "reason" }` and
 answers `{ "coins" }`, the balance after it:
 
@@ -557,19 +568,13 @@ answers `{ "coins" }`, the balance after it:
 - `amount` is a whole number, not 0, from -100,000 to 5,000 (`PAGE_COINS` in
   core): what the page earned, or the negative of what it spent.
 - `reason` is one of `COIN_REASONS` in `packages/core/src/coins.ts`, each the
-  one place in the town or the Works that earns or spends Coins, and the entry
-  is the game's it names. `amount` goes the reason's way, in or out.
+  one place in the town that earns or spends Coins. `amount` goes the reason's
+  way, in or out.
 
-| `reason`       | Game  | Way   | What                                                            |
-| -------------- | ----- | ----- | --------------------------------------------------------------- |
-| `camp_thing`   | town  | spend | A thing for the camp, bought at a market stall.                 |
-| `daily_chest`  | town  | earn  | The chest by the Treasury: Leaf pays 3, once a UTC day.         |
-| `works_order`  | works | earn  | Orders filled in the Works, paid from its till.                 |
-| `works_depot`  | works | earn  | What the Works' depot pays for what it takes in, from the till. |
-| `works_build`  | works | spend | A machine or a run of belt built, or one taken away put back.   |
-| `works_refund` | works | earn  | What taking a machine or a belt away gives back.                |
-| `works_plot`   | works | spend | A plot of land bought for the yard.                             |
-| `works_plan`   | works | spend | A plan bought for the yard.                                     |
+| `reason`      | Way   | What                                                    |
+| ------------- | ----- | ------------------------------------------------------- |
+| `camp_thing`  | spend | A thing for the camp, bought at a market stall.         |
+| `daily_chest` | earn  | The chest by the Treasury: Leaf pays 3, once a UTC day. |
 
 (The made-up guild's quests and its while-away letter pay Coins only in the
 browser, `earnMadeUp` in the kit's purse; nothing on the guild's server pays
@@ -579,26 +584,20 @@ It refuses, changing nothing: a call that would take a player past 4 a
 second (bursts of 20), 429 `slow_down`, read and counted for nothing; a spend
 the balance does not cover, 409 `not_enough_coins`; an earning past what the
 player may still earn this hour or this UTC day (the one cap on all play,
-above), which a `works_refund` is too, 429 `too_much`; 400 `invalid_amount` and
+above), 429 `too_much`; 400 `invalid_amount` and
 `invalid_reason`, and `invalid_command` for a body that is not such a call or
 an id that is not one. A player with no account yet has it opened with the
 welcome first. Each call done or refused counts toward the staff's report
 (`command_days`).
 
-**What a hostile page can still do through it.** The route takes the page's
-word for what was earned, so a player with curl and their own session can,
-without playing: earn up to 5,000 Coins in any hour and 20,000 in a UTC day
-(about 33 won raids' worth a day, 140,000 a week; the same cap the raid's own
-payouts count toward), under any earning reason;
-open the daily chest once a day, for 3; spend their own Coins on nothing; and
-make at most 4 calls a second. Leaf cannot see what stands in a yard, so a
-refund is weighed as an earning: it counts toward the same cap, and a page
-that makes them up gains nothing it could not claim as an order. Every earning
-counts toward the cap and every spend needs Coins, so one player writes at
-most about 40,000 entries a day. Coins buy only decorations, and Leaf is never
-touched. The staff's report lists anyone whose Coins rose more than 5,000 in
-an hour (`coins_in_an_hour`). All of this goes when the town and the Works
-move to the play service, whose rules pay Coins.
+**What a hostile page can still do through it.** The route earns nothing but
+the daily chest, whose 3 Coins Leaf pays once a day whatever the page says, so
+a player with curl and their own session can, without playing: open the chest
+once a day; spend their own Coins on nothing; and make at most 4 calls a
+second. Every spend needs Coins, so the route writes few entries. Coins buy
+only decorations, and Leaf is never touched. The staff's report lists anyone
+whose Coins rose more than 5,000 in an hour (`coins_in_an_hour`). All of this
+goes when the town moves to the play service, whose rules pay Coins.
 
 **Activity.** What a game's commands log (a raid begun, a room won or lost, a
 raid ended and what it paid) is written to `activity` (`player_id`, `at`,
@@ -612,6 +611,20 @@ for the staff's report (see [Who played](#who-played-the-staffs-view)).
 picked. Its commands, notes, refusals and what its page is shown are in
 `packages/raid/src/README.md`. A run that ends pays its Coins as one entry
 keyed by the run's number.
+
+**The Works** keeps the yard, its clock and its till; its commands, what its
+page is shown and how the page runs the yard ahead of Leaf are in
+`packages/yard/README.md`. Time is Leaf's: a yard holds the ticks it has run
+and the moment of Leaf's clock its last tick stands for, ten ticks a second.
+Opening or sending brings a yard to three seconds short of Leaf's clock, a
+tick at a time up to five minutes behind and quickly past that (at most eight
+hours, written in the yard as a time away for the page's letter); each command
+is done at the tick the page's copy stood at when it was made. Its Coins are
+keyed `works:<player>:bank:<n>` by the yard's own count, and every one it pays
+in is `free`: the till paid in before any price is taken and when the page
+collects it, and what a piece cost given back when it is taken away. A plot or
+a plan bought, a standing order handed over and each story order finished are
+logged.
 
 ### Live: players in the same place, as it happens
 
@@ -842,7 +855,10 @@ Pebblefoot from spot to spot.
 For the tours it also serves `POST /test/play/raid` with `{ "stage": [...] }`,
 which stages a moment at Tester's raid table that play does not reach by
 itself (a run from a chosen seed, more acorns, a figure handed over, a new
-member; `apps/api/test/stage-raid.ts`). The guild's own Leaf has no such route.
+member; `apps/api/test/stage-raid.ts`), and `POST /test/play/works`, which
+does the same in Tester's yard (a yard kept part-way through the story or a new
+one, a time away, a standing order filled; `apps/api/test/stage-works.ts`). The
+guild's own Leaf has no such route.
 
 ## Who played: the staff's view
 
@@ -877,7 +893,10 @@ rules are `packages/core/src/visits.ts`; the store is `apps/api/src/activity`.
   is `raid_started` (`trail`), a `raid_room` for each room fought (`room`,
   `kind`, `won`, `resolve` left, the fight's `seconds`) and `raid_ended`
   (`trail`, `rooms_won`, `ended`: `won`, `lost` or `left`, and the `coins` it
-  paid); the Works will log `order_filled`, with `story` true for a story order.
+  paid); the Works logs `works_plot` and `works_plan` (what was bought, and its
+  `price`), `works_order` for a standing order handed over (`order`, `title`,
+  `pay`) and `works_story` for each story order finished (`order`, its number
+  in the story, `title`, `pay`).
 - **Commands** (`command_days`): how many of each player's commands the play
   service did and how many it refused, and of their pages' calls to change
   Coins (`POST /v1/game/coins`), by the UTC day. One sent again and answered
@@ -926,6 +945,24 @@ with a tool that has since been deleted: each one's Coins as one ledger entry
 keyed `import:<player>`, and their table as their `raid` play state with
 everything drawn afresh. Nothing in the product reads an old save, and an old
 slot takes no more writes once its game has moved.
+
+Their yards are brought over the same way, once, by the lead:
+
+```sh
+bun apps/api/tools/once/import-works.ts <database file> <player id>... [--write] [--force]
+```
+
+It opens the database as it is and runs no migration. For each player named
+it reads the yard their page kept in their old `works` slot, prints what a
+person checks (story orders done, plots and plans owned, pieces standing by
+kind, the till, what the depot has taken in), and turns it into the yard Leaf
+keeps: standing at Leaf's clock now, its tick and board kept, no second shift,
+its Coins and story log counted from nothing, and a new seed from the
+machine's own randomness. A till over 30,000, or anything the rules dropped on
+reading it, is a warning, and that yard is not written without `--force`.
+With `--write` it is stored as the player's `works` play state, unless they
+have played the Works on Leaf since (`rev` above 0), which `--force` writes
+over. The tool is deleted in the change after it has run.
 
 ## Rules the code is built on
 

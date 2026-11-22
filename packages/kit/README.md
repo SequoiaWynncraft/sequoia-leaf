@@ -184,9 +184,9 @@ and nothing below happens. With a server it asks `GET /v1/game/me`:
 The cards are `shutCard`: a `k-paper` with a title, a line and one button, in place of the page.
 
 **Saves** (`cloud.ts`). What the games keep is text in the browser under a few names; `SLOTS`
-says which slot on the server each name belongs to (`town`, `works`). The Little Raid's game is
-Leaf's own now (below), and so are Coins (above): their old slots, `raid` and `purse`, take no
-more writes. The
+says which slot on the server each name belongs to (`town`, `works`). The Little Raid's game and
+the Works are Leaf's own now (below), and so are Coins (above): their old slots, `raid`, `works`
+and `purse`, take no more writes. The
 sound setting and each game's view settings are in none, and stay in the browser. Before a page
 reads anything it `pull`s its slots, which writes the server's copy into the browser; if the
 browser last held another member's game (or nobody's), the names in every slot are cleared

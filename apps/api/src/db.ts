@@ -66,6 +66,18 @@ export const databaseAt = (filename: string) =>
     Layer.provideMerge(SqliteClient.layer({ filename, transformQueryNames: Str.camelToSnake })),
   );
 
+/**
+ * A SQLite database file that exists, opened as it is: no migration is run, so a tool pointed at the
+ * live file changes its schema in no way. For the one-off tools under `tools/once`.
+ */
+export const databaseAsItIs = (filename: string) =>
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`PRAGMA foreign_keys = ON`;
+    }),
+  ).pipe(Layer.provideMerge(SqliteClient.layer({ filename, create: false, transformQueryNames: Str.camelToSnake })));
+
 /** The database file the settings name, its directory created when missing. */
 export const Database = Layer.unwrap(
   Effect.gen(function* () {

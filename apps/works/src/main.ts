@@ -3,53 +3,44 @@
  * lies on the forest floor into what the guild has asked for.
  *
  * This file is the stage: it opens the yard, owns the canvas and the loop, and joins the parts
- * together. The rules are in `sim/`, the picture in `scene.ts` and `art/`, what the member does in
- * `tools.ts` and `input.ts`, and everything that sits over the yard in `ui/`.
+ * together. The rules are `@sequoia-leaf/yard`, the picture in `scene.ts` and `art/`, what the
+ * member does in `tools.ts` and `input.ts`, and everything that sits over the yard in `ui/`.
  */
 
-import { before, pickUp, pull } from "@sequoia-leaf/kit/cloud.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
-import { keepLeaf, shutCard, start } from "@sequoia-leaf/kit/live.ts";
+import { keepLeaf, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
-import { balance, pretendPurse } from "@sequoia-leaf/kit/purse.ts";
-import { fromTown, inTown, tell } from "@sequoia-leaf/kit/shell.ts";
+import { balance } from "@sequoia-leaf/kit/purse.ts";
+import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { tipOff } from "@sequoia-leaf/kit/tip.ts";
-import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { must, type Pt } from "@sequoia-leaf/kit/util.ts";
+import {
+  type Dir,
+  ITEM,
+  ITEMS,
+  type Kind,
+  LAND,
+  type PlanId,
+  type PlotId,
+  postcard,
+  power,
+  type Tally,
+} from "@sequoia-leaf/yard";
 
 import { stepFlights, stepWalkers } from "./actors.ts";
 import { TILE } from "./art/belts.ts";
 import { makeArt } from "./art/index.ts";
 import { ease, inset, inView, look, pan, resize, setCamera, setZoom, zoom, zoomSteps } from "./camera.ts";
-import { callers, capstones, forget, handOver, onNews, shiftOn } from "./events.ts";
+import { callers, capstones, forget, handOver, onNews } from "./events.ts";
 import { updateFx } from "./fx.ts";
 import { initInput, inputHooks, stepInput } from "./input.ts";
 import { layout } from "./layout.ts";
 import { drawWords, drawYard } from "./scene.ts";
 import { sheets } from "./sheets.ts";
-import {
-  type Away,
-  boost,
-  boosted,
-  create,
-  deliver,
-  type Dir,
-  ITEM,
-  ITEMS,
-  type Kind,
-  load,
-  type PlanId,
-  type PlotId,
-  postcard,
-  power,
-  step,
-  storyOrder,
-  type Tally,
-  TICK_MS,
-} from "./sim/index.ts";
 import { murmur, yardSfx } from "./sound.ts";
-import { S, type Tool, toPage, touched } from "./state.ts";
+import { S, type Tool, toPage } from "./state.ts";
 import { nudge } from "./teach.ts";
 import {
   aimAt,
@@ -72,23 +63,20 @@ import { putAway, reading, showLetter } from "./ui/letter.ts";
 import { closeBanner, feed, initNotes, tickNotes } from "./ui/notes.ts";
 import { closePanel, initPanels, openPanel, panelHooks, type PanelId, refreshPanel } from "./ui/panels.ts";
 import { $ } from "./ui/parts.ts";
-import { forgetYard, keep, openYard, screen, swapYard, tick } from "./yard.ts";
-import large from "./yards/large.json";
-import mid from "./yards/mid.json";
-import short from "./yards/short.json";
-import small from "./yards/small.json";
+import { again, keepScreen, leadAt, onRefused, openYard, runYard, screen } from "./yard.ts";
 
-/** Yards kept part-way through the story by `review/balance.ts --yards`, for looking at the game at each stage. */
-const STAGES = { small, short, mid, large } as const;
-type Stage = keyof typeof STAGES | "new";
+/** What the page says where no Leaf answers: the yard is the guild's server's. */
+const NEEDS_LEAF = "The Works needs the guild's server.";
+
+/** A moment staged in the yard by the play server on a developer's machine (`apps/api/test/play.ts`), for the tours. */
+type Staged = { yard: "small" | "short" | "mid" | "large" | "new" } | { away: number } | { fill: number };
 
 declare global {
   interface Window {
-    /** Handles for looking at the yard from outside: load a yard, run the clock, open things, act as a player would. */
+    /** Handles for looking at the yard from outside: stage a moment on the test Leaf, open things, act as a player would. */
     works?: {
-      stage: (name: Stage, story?: number) => void;
+      stage: (...ops: Staged[]) => Promise<void>;
       hold: (on: boolean) => void;
-      run: (ticks: number) => void;
       skip: (seconds: number) => void;
       pick: (tool: Tool, dir?: Dir) => void;
       finger: (on: boolean) => void;
@@ -104,27 +92,18 @@ declare global {
       card: (x: number, y: number) => boolean;
       look: (x: number, y: number) => void;
       zoom: (by: number) => void;
-      purse: (coins: number, leaf?: number) => void;
-      boost: (minutes: number) => void;
-      away: (hours: number) => void;
       plot: (id: PlotId) => boolean;
       plan: (id: PlanId) => boolean;
       taught: (ids: string[]) => void;
-      /** Sends the depot everything a standing order still wants, as if the yard had made it. */
-      fill: (slot: number) => void;
       page: (x: number, y: number) => Pt;
       /** What is riding a belt on a tile, as a card's reference, if anything. */
       rider: (x: number, y: number) => string | null;
       /** The tiles where a kind of thing stands. */
       where: (kind: Kind) => Pt[];
-      bench: () => number;
       state: () => Record<string, unknown>;
     };
   }
 }
-
-/** A long enough absence gets a letter; a short one, a line. */
-const LETTER_AFTER = 300;
 
 function refreshAll(): void {
   refreshHud();
@@ -150,15 +129,10 @@ function measure(): void {
 /** The middle of the depot, in the yard's pixels: where the camera starts. */
 const home = (): Pt => ({ x: S.world.land.depot[0] * TILE + 8, y: S.world.land.depot[1] * TILE + 8 });
 
-/** Keeps the yard, and how the member had it zoomed. */
-const save = (): void => {
+/** Keeps how the member had the screen. */
+const keepSettings = (): void => {
   screen.zoom = zoomSteps();
-  keep();
-};
-
-/** Sets the made-up guild's purse to exact amounts, for looking at the game with more or less to spend. */
-const setPurse = (coins: number, leaf?: number): void => {
-  pretendPurse(coins, leaf);
+  keepScreen();
 };
 
 /** What the town was last told about the yard, so that it is told only what has changed. */
@@ -173,34 +147,31 @@ function sendCard(): void {
 }
 
 async function boot(): Promise<void> {
-  // Where the game is, and on the guild's server the member's saves, before anything kept is read.
+  await fontsReady();
+  // Every sprite on sheets: a picture of the art, which needs no yard.
+  const params = new URLSearchParams(location.search);
+  if (params.has("sheet")) {
+    sheets(makeArt(LAND), params.get("sheet") ?? "");
+    return;
+  }
+  // Who the member is, and then the yard as Leaf has it. Without Leaf there is no yard.
   const where = await start();
   if (where.mode === "shut") {
     shutCard(where.why, where.signIn);
     return;
   }
-  const live = where.mode === "live";
-  // Opened on its own, the yard also keeps the town's slot, where its postcard is.
-  if (live && !(await pull(inTown() ? ["works"] : ["works", "town"], { onReplaced: pickUp }))) {
-    shutCard("closed", where.signIn);
+  if (where.mode !== "live") {
+    serverCard(NEEDS_LEAF);
     return;
   }
-  await fontsReady();
-  const params = new URLSearchParams(location.search);
-  if (params.has("fresh")) {
-    // Start the yard over, once: the address is put right so that a reload does not do it again.
-    // On the guild's server the yard is the member's account's, and is not thrown away from an address.
-    if (!live) forgetYard();
-    params.delete("fresh");
-    const rest = params.toString();
-    history.replaceState(null, "", `${location.pathname}${rest ? `?${rest}` : ""}${location.hash}`);
+  const { signIn, me } = where;
+  const card = (why: Parameters<typeof troubleCard>[0]): void => troubleCard(why, signIn, NEEDS_LEAF);
+  const trouble = await openYard(me.id, card);
+  if (trouble) {
+    card(trouble);
+    return;
   }
-  const away = openYard();
   const art = makeArt(S.world.land);
-  if (params.has("sheet")) {
-    sheets(art, params.get("sheet") ?? "");
-    return;
-  }
 
   const canvas = must(document.querySelector<HTMLCanvasElement>("#view"), "canvas");
   const ctx = must(canvas.getContext("2d"), "2d context");
@@ -212,15 +183,13 @@ async function boot(): Promise<void> {
   initHud(art);
   initDock(art);
   initInput(canvas);
-  panelHooks.handOver = (slot): void => {
-    handOver(slot);
+  panelHooks.handOver = (order): void => {
+    handOver(order);
     refreshAll();
   };
-  panelHooks.shiftOn = shiftOn;
   panelHooks.changed = refreshAll;
   inputHooks.caller = (order): void => {
-    const slot = S.world.board.findIndex((o) => o.id === order);
-    if (slot >= 0) handOver(slot);
+    handOver(order);
     refreshAll();
   };
   inputHooks.letter = putAway;
@@ -247,10 +216,7 @@ async function boot(): Promise<void> {
 
   // ---------- the clock ----------
 
-  function absent(a: Away): void {
-    if (a.seconds >= LETTER_AFTER && !reading()) showLetter(art, a, refreshAll);
-    else if (a.coins > 0) feed(`While you were away the yard made ${a.coins.toLocaleString("en-US")} Coins.`, "gold");
-  }
+  onRefused((why) => feed(`${why}. The yard is as the guild's books have it.`, "coral"));
 
   /** What the depot had taken in a moment ago, to hear each thing arrive. */
   let heard: Tally = { ...S.world.depot };
@@ -298,11 +264,13 @@ async function boot(): Promise<void> {
   }
 
   let slow = 0;
-  function advance(dt: number, clock: boolean): void {
+  /** A moment of the screen: `now`, the page's clock, runs the yard on to Leaf's tick; without it only the screen moves. */
+  function advance(dt: number, now: number | null): void {
     S.t += dt;
-    if (clock) {
-      const { away: gone, news } = tick(Date.now());
-      if (gone) absent(gone);
+    if (now !== null) {
+      const news = runYard(now);
+      // Leaf worked the yard on while nobody watched: its letter says what it did.
+      if (S.world.away && !reading()) showLetter(S.world.away, refreshAll);
       if (news.length > 0) {
         onNews(art, news);
         refreshAll();
@@ -318,7 +286,7 @@ async function boot(): Promise<void> {
     nudges();
     tickNotes(dt);
     const p = power(S.world);
-    murmur(S.t, Math.min(1, p.demand / 45) * p.pace * (boosted(S.world, Date.now()) ? 1.3 : 1));
+    murmur(S.t, Math.min(1, p.demand / 45) * p.pace);
     slow -= dt;
     if (slow > 0) return;
     slow = 0.25;
@@ -328,11 +296,9 @@ async function boot(): Promise<void> {
     refreshAll();
   }
 
-  function draw(): void {
+  function draw(now: number): void {
     const w = S.world;
-    const fast = boosted(w, Date.now());
-    const lead = S.held ? 0 : clamp((Date.now() - w.seen) / TICK_MS, 0, 1) * (fast ? 2 : 1);
-    const picture = drawYard(art, { lead, pace: power(w).pace, boosted: fast });
+    const picture = drawYard(art, { lead: S.held ? 0 : leadAt(now), pace: power(w).pace });
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(picture, 0, 0, picture.width * S.view.z, picture.height * S.view.z);
     drawWords(ctx, wordPx);
@@ -343,8 +309,8 @@ async function boot(): Promise<void> {
   function frame(now: number): void {
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
-    if (!S.held) advance(dt, true);
-    draw();
+    if (!S.held) advance(dt, now);
+    draw(now);
     if (!told) {
       told = true;
       tell({ town: "ready" });
@@ -356,23 +322,18 @@ async function boot(): Promise<void> {
 
   fromTown((msg) => {
     if (msg.town === "closing") {
-      save();
+      keepSettings();
       sendCard();
     }
   });
-  window.addEventListener("pagehide", save);
-  before(() => {
-    save();
-    sendCard();
-  });
+  window.addEventListener("pagehide", keepSettings);
   here("works");
   // In the town, the town says when the member's Leaf changes; opened on its own, the yard listens itself.
-  if (live) keepLeaf();
+  keepLeaf();
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") save();
+    if (document.visibilityState === "hidden") keepSettings();
   });
 
-  if (away) absent(away);
   callers();
   refreshAll();
   requestAnimationFrame(frame);
@@ -380,9 +341,14 @@ async function boot(): Promise<void> {
   // ---------- handles for looking at it from outside ----------
 
   window.works = {
-    stage(name, story = 0) {
-      const world = name === "new" ? create({ seed: 20261121, story }) : load(JSON.stringify(STAGES[name]));
-      if (!world) throw new Error(`the ${name} yard would not load`);
+    async stage(...ops) {
+      await fetch("/test/play/works", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: ops }),
+      });
+      await again();
+      advance(0, performance.now());
       forget();
       tipOff();
       $("feed").replaceChildren();
@@ -390,9 +356,12 @@ async function boot(): Promise<void> {
       closeCard();
       closePanel();
       setTool(null);
-      swapYard(world);
-      heard = { ...world.depot };
-      screen.taught = name === "new" && story === 0 ? [] : ["planks", "pylon", "bench", "board", "short", "starved"];
+      S.picked = -1;
+      S.clearing.clear();
+      heard = { ...S.world.depot };
+      screen.taught = ops.some((op) => "yard" in op && op.yard === "new")
+        ? []
+        : ["planks", "pylon", "bench", "board", "short", "starved"];
       shown = "";
       nudgeAt = 0;
       look(home().x, home().y, true);
@@ -400,21 +369,9 @@ async function boot(): Promise<void> {
     },
     hold(on) {
       S.held = on;
-      S.world.seen = Date.now();
-    },
-    run(ticks) {
-      S.held = true;
-      for (let k = 0; k < ticks; k++) {
-        step(S.world);
-        if (k % 3 === 0) advance(0.3, false);
-      }
-      const news = tick(Date.now()).news;
-      if (news.length > 0) onNews(art, news);
-      S.world.seen = Date.now();
-      refreshAll();
     },
     skip(seconds) {
-      for (let k = 0; k < seconds * 30; k++) advance(1 / 30, false);
+      for (let k = 0; k < seconds * 30; k++) advance(1 / 30, null);
       refreshAll();
     },
     pick(tool, dir) {
@@ -464,40 +421,11 @@ async function boot(): Promise<void> {
     zoom(by) {
       zoom(by, window.innerWidth / 2, window.innerHeight / 2);
     },
-    purse: setPurse,
-    boost(minutes) {
-      boost(S.world, Date.now(), minutes * 60_000);
-      shiftOn();
-      refreshAll();
-    },
-    away(hours) {
-      S.world.seen = Date.now() - hours * 3_600_000;
-      S.held = false;
-      const { away: gone, news } = tick(Date.now());
-      if (gone) absent(gone);
-      if (news.length > 0) onNews(art, news);
-      S.held = true;
-      touched();
-      refreshAll();
-    },
     plot: buyLand,
     plan: buyIdea,
     taught(ids) {
       screen.taught = ids;
       nudgeAt = 0;
-    },
-    fill(slot) {
-      const order = S.world.board[slot];
-      if (!order) return;
-      for (const k of ITEMS) {
-        const n = (order.want[k] ?? 0) - (order.filled[k] ?? 0);
-        // Whatever the story order wants of it first, and then the board's.
-        if (n > 0) deliver(S.world, k, n + Math.max(0, (storyOrder(S.world)?.want[k] ?? 0) - (S.world.filled[k] ?? 0)));
-      }
-      const news = tick(Date.now()).news;
-      if (news.length > 0) onNews(art, news);
-      S.world.seen = Date.now();
-      refreshAll();
     },
     rider: riderAt,
     page(x, y) {
@@ -507,20 +435,14 @@ async function boot(): Promise<void> {
       const w = S.world;
       return w.cells.flatMap((b, i) => (b?.kind === kind ? [{ x: i % w.land.w, y: Math.floor(i / w.land.w) }] : []));
     },
-    bench() {
-      const t0 = performance.now();
-      for (let i = 0; i < 100; i++) {
-        step(S.world);
-        advance(1 / 60, false);
-        draw();
-      }
-      return (performance.now() - t0) / 100;
-    },
     state() {
       const w = S.world;
       return {
         coins: balance().coins,
         leaf: balance().leaf,
+        tick: w.tick,
+        till: w.till,
+        board: w.board.map((o) => o.id),
         story: w.story,
         built: layout(w, S.rev).built,
         nudge: S.nudge?.id ?? null,

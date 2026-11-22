@@ -1,13 +1,11 @@
-import { build, planState, plotState, refusal } from "./build.ts";
 /**
  * Keeping a yard as text, and reading it back. The text carries a version; reading gives back a
  * yard it can vouch for or nothing at all. A record whose shape or version is wrong is refused
  * whole; inside a good one, a plot, plan or building that could not have come about by playing is
- * left out and the rest is kept.
- *
- * The yard before this one was a different map with different machines, so its saves are not read
- * as yards: `oldCoins` only finds the Coins in one, so a screen can carry them over.
+ * left out and the rest is kept. A yard without its seed (what the page is shown) is written and
+ * read without one.
  */
+import { build, planState, plotState, refusal } from "./build.ts";
 import { isItem, type Item, ITEMS, type Tally } from "./content/items.ts";
 import { BUFFER, FUEL, isKind, type Kind, TICKS } from "./content/machines.ts";
 import { isPlanId, PLANS } from "./content/plans.ts";
@@ -19,9 +17,9 @@ import { isDir } from "./grid.ts";
 import { LAND, type Land } from "./land.ts";
 import { fillBoard, reask } from "./orders.ts";
 import { repower } from "./power.ts";
-import { type Building, put, reopen, type Standing, WARM, type World } from "./world.ts";
+import { type Away, type Building, put, reopen, type Standing, WARM, type World } from "./world.ts";
 
-export const VERSION = 2;
+export const VERSION = 3;
 
 type Rec = Record<string, unknown>;
 const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -70,11 +68,13 @@ export function save(w: World): string {
   });
   return JSON.stringify({
     v: VERSION,
-    seed: w.seed,
+    ...(w.seed === null ? {} : { seed: w.seed }),
     tick: w.tick,
-    seen: w.seen,
-    boostUntil: w.boostUntil,
+    at: w.at,
     till: w.till,
+    bank: w.bank,
+    told: w.told,
+    ...(w.away === null ? {} : { away: w.away }),
     plots: w.plots,
     plans: w.plans,
     story: w.story,
@@ -153,6 +153,14 @@ function standing(v: unknown): Standing | null {
   return reask({ id, title, from, line, want, pay, filled });
 }
 
+/** A time away kept in a yard, or nothing. */
+function awayOf(v: unknown): Away | null {
+  if (!isRec(v)) return null;
+  const seconds = amount(v.seconds, 1e9);
+  const coins = whole(v.coins, 1e12);
+  return seconds === null || coins === null ? null : { seconds, coins };
+}
+
 /** A yard read back from text, on the guild's land unless another is given; nothing if the text is not a yard. */
 export function load(text: string | null | undefined, land: Land = LAND): World | null {
   if (!text) return null;
@@ -163,11 +171,12 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
     return null;
   }
   if (!isRec(raw) || raw.v !== VERSION) return null;
-  const seed = whole(raw.seed, 0xffffffff);
+  const seed = "seed" in raw ? whole(raw.seed, 0xffffffff) : null;
   const tick = whole(raw.tick, 1e12);
-  const seen = amount(raw.seen, 8.64e15);
-  const boostUntil = amount(raw.boostUntil, 8.64e15);
+  const at = amount(raw.at, 8.64e15);
   const till = amount(raw.till, 1e12);
+  const bank = whole(raw.bank, 1e12);
+  const told = whole(raw.told, STORY.length);
   const story = whole(raw.story, STORY.length);
   const serial = whole(raw.serial, 1e9);
   const done = whole(raw.done, 1e9);
@@ -175,11 +184,12 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
   const sold = amount(raw.sold, 1e15);
   const paid = amount(raw.paid, 1e15);
   if (
-    seed === null ||
+    ("seed" in raw && seed === null) ||
     tick === null ||
-    seen === null ||
-    boostUntil === null ||
+    at === null ||
     till === null ||
+    bank === null ||
+    told === null ||
     story === null ||
     serial === null ||
     done === null ||
@@ -194,8 +204,22 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
   )
     return null;
 
-  const w = create({ seed, land, story });
-  Object.assign(w, { tick, seen, boostUntil, till, serial, done, swapAt, sold, paid, board: [] });
+  const w = create({ land, story });
+  Object.assign(w, {
+    seed,
+    tick,
+    at,
+    till,
+    bank,
+    told: Math.min(told, story),
+    away: awayOf(raw.away),
+    serial,
+    done,
+    swapAt,
+    sold,
+    paid,
+    board: [],
+  });
   w.depot = tally(raw.depot, 1e12);
   w.given = tally(raw.given, 1e12);
   const want = STORY[story]?.want ?? {};
@@ -250,16 +274,4 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
   w.pace = { ticks: amount(pace.ticks, 1e9) ?? 0, warm: whole(pace.warm, WARM) ?? WARM, made: tally(pace.made, 1e12) };
   w.news = [];
   return w;
-}
-
-/** The Coins in a save from the yard before this one, or nothing if the text is not one. */
-export function oldCoins(text: string | null | undefined): number | null {
-  if (!text) return null;
-  try {
-    const raw: unknown = JSON.parse(text);
-    if (!isRec(raw) || raw.v !== undefined || !Array.isArray(raw.cells) || typeof raw.order !== "number") return null;
-    return amount(raw.coins, 1e12) === null ? null : Math.floor(amount(raw.coins, 1e12) ?? 0);
-  } catch {
-    return null;
-  }
 }

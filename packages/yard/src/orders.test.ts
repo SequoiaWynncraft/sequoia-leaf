@@ -111,7 +111,7 @@ describe("the board", () => {
         const can = askable(w);
         const budget = 6000 + 600 * story;
         for (let k = 0; k < 6; k++) {
-          const o = fresh(w);
+          const o = fresh(w, seed);
           const items = ITEMS.filter((item) => (o.want[item] ?? 0) > 0);
           expect(items.length === 1 || items.length === 2).toBe(true);
           for (const item of items) expect(can).toContain(item);
@@ -134,7 +134,7 @@ describe("the board", () => {
     buyPlan(w, "workshop", Infinity);
     let seen = 0;
     for (let k = 0; k < 300; k++) {
-      const o = fresh(w);
+      const o = fresh(w, 9);
       for (const item of ["crab", "beacon"] as const) {
         if (o.want[item] === undefined) continue;
         seen++;
@@ -196,7 +196,7 @@ describe("the board", () => {
     const back = load(save(a), a.land);
     expect(back?.board).toEqual(a.board);
     // And the orders that follow are the same whether or not the yard was put away in between.
-    expect(back ? [fresh(back), fresh(back)] : []).toEqual([fresh(a), fresh(a)]);
+    expect(back ? [fresh(back, 11), fresh(back, 11)] : []).toEqual([fresh(a, 11), fresh(a, 11)]);
   });
   test("rarely asks twice for the same thing at once", () => {
     let doubled = 0;
@@ -231,7 +231,7 @@ describe("the board", () => {
     collect(w);
     const order = w.board[1];
     if (!order) throw new Error("no board");
-    expect(claim(w, 1)).toBeNull();
+    expect(claim(w, order.id)).toBeNull();
     for (const item of ITEMS) deliver(w, item, order.want[item] ?? 0);
     expect(isFilled(order.want, order.filled)).toBe(true);
     expect(drain(w).some((n) => n.kind === "filled" && n.id === order.id)).toBe(true);
@@ -239,12 +239,19 @@ describe("the board", () => {
     steps(w, 100_000);
     expect(w.board[1]).toBe(order);
     expect(w.till).toBe(before);
-    expect(claim(w, 1)).toBe(order.pay);
+    expect(claim(w, order.id)).toBe(order.pay);
     expect(w.till).toBe(before + order.pay);
     expect(w.done).toBe(1);
     expect(w.board[1]?.id).toBe(3);
     expect(drain(w)).toEqual([{ kind: "standing", id: order.id, title: order.title, pay: order.pay }]);
-    expect(claim(w, 7)).toBeNull();
+    expect(claim(w, order.id)).toBeNull();
+    // A yard with no seed (the page's copy) leaves the place empty, for Leaf to hang the next.
+    const copy = create({ seed: 5, story: 6 });
+    const first = copy.board[0];
+    copy.seed = null;
+    for (const item of ITEMS) deliver(copy, item, first?.want[item] ?? 0);
+    expect(claim(copy, first?.id ?? -1)).toBe(first?.pay ?? -1);
+    expect(copy.board.map((o) => o.id)).toEqual([1, 2]);
   });
   test("one order may be swapped for a fresh one, free, every ten minutes of the yard's time", () => {
     const w = create({ seed: 5, story: 6 });
@@ -258,12 +265,12 @@ describe("the board", () => {
     expect(swapRefusal(w, 1)).toBe("A fresh order can be had in 1 minute");
     steps(w, 600);
     expect(swap(w, 1)).toBe(true);
-    expect(swapRefusal(w, 9)).toBe("There is no order there");
+    expect(swapRefusal(w, 0)).toBe("There is no such order on the board");
     // A filled one is handed over, not swapped away.
     const order = w.board[2];
     for (const item of ITEMS) deliver(w, item, order?.want[item] ?? 0);
     steps(w, SWAP_EVERY);
-    expect(swapRefusal(w, 2)).toBe("That one is filled and waiting to be handed over");
+    expect(swapRefusal(w, order?.id ?? -1)).toBe("That one is filled and waiting to be handed over");
   });
   test("nothing on the board has a clock on it", () => {
     const w = create({ seed: 5, story: 6 });

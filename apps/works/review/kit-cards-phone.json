@@ -3,7 +3,7 @@
   ["wait", 1200],
   [
     "eval",
-    "(window.works.stage('mid'), window.works.hold(true), window.works.run(300), window.works.open('orders'), window.works.skip(0.5), 'orders open')"
+    "window.works.stage({ yard: 'mid' }).then(() => (window.works.hold(true), window.works.open('orders'), window.works.skip(0.5), 'orders open'))"
   ],
   ["eval", "'a first touch: the page settles its touch layout (dvh) before the tap that counts'"],
   [
@@ -86,7 +86,7 @@
   ["tap", 200, 360],
   [
     "eval",
-    "(window.works.close(), window.works.fill(0), window.works.fill(2), window.works.skip(16), 'two orders filled; gnomes come to the gate')"
+    "(window.works.close(), window.works.stage({ fill: 0 }, { fill: 2 }).then(() => (window.works.skip(16), 'two orders filled; gnomes come to the gate')))"
   ],
   ["eval", "(window.works.open('orders'), window.works.skip(0.5), 'the filled orders, from places in town')"],
   ["wait", 400],

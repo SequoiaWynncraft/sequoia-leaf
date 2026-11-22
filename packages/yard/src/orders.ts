@@ -85,11 +85,18 @@ function finishStory(w: World, order: StoryOrder): void {
   fillBoard(w);
 }
 
-/** Hangs orders on the board until it is full, once the story has put the board up. */
+/** Hangs orders on the board until it is full, once the story has put the board up. A yard with no seed hangs none. */
 export function fillBoard(w: World): void {
-  if (!w.open.board) return;
-  while (w.board.length < w.rates.slots) w.board.push(fresh(w));
+  const seed = w.seed;
+  if (!w.open.board || seed === null) return;
+  while (w.board.length < w.rates.slots) w.board.push(fresh(w, seed));
   if (w.news.length > 200) w.news.splice(0, w.news.length - 200);
+}
+
+/** Takes an order down and hangs a fresh one in its place; a yard with no seed leaves the place empty. */
+function rehang(w: World, slot: number): void {
+  if (w.seed === null) w.board.splice(slot, 1);
+  else w.board[slot] = fresh(w, w.seed);
 }
 
 /** Everything the yard could make as it stands: what lies in its plots, and whatever its machines make of that. */
@@ -144,9 +151,9 @@ const round = (n: number): number =>
  * could make as it stands and has met in the story, and for more of them the further the story has
  * come.
  */
-export function fresh(w: World): Standing {
+export function fresh(w: World, seed: number): Standing {
   const id = w.serial++;
-  const roll = dice(Math.imul(w.seed ^ 0x9e3779b9, 0x85ebca6b) + Math.imul(id + 1, 0xc2b2ae35));
+  const roll = dice(Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) + Math.imul(id + 1, 0xc2b2ae35));
   const pool = askable(w);
   const taken = new Set(w.board.flatMap((o) => ITEMS.filter((k) => (o.want[k] ?? 0) > 0)));
   // Things from deeper in the yard are asked for more often, and what is already on the board less.
@@ -207,26 +214,30 @@ export function reask(o: Standing): Standing {
   return { ...o, title: titled(items, ask.from), from: ask.from, line: ask.line };
 }
 
+/** Where an order hangs on the board, by its id, or -1. */
+const slotOf = (w: World, id: number): number => w.board.findIndex((o) => o.id === id);
+
 /**
- * Hands a filled standing order over: it pays into the till and a fresh order takes its place.
- * A filled order waits for this for as long as it takes; nothing on the board ever runs out.
- * Gives back what it paid, or nothing if the order there is not filled.
+ * Hands a filled standing order over, by its id: it pays into the till and a fresh order takes its
+ * place. A filled order waits for this for as long as it takes; nothing on the board ever runs out.
+ * Gives back what it paid, or nothing if that order is not on the board filled.
  */
-export function claim(w: World, slot: number): number | null {
+export function claim(w: World, id: number): number | null {
+  const slot = slotOf(w, id);
   const order = w.board[slot];
   if (!order || !isFilled(order.want, order.filled)) return null;
   w.till += order.pay;
   w.paid += order.pay;
   w.done++;
   w.news.push({ kind: "standing", id: order.id, title: order.title, pay: order.pay });
-  w.board[slot] = fresh(w);
+  rehang(w, slot);
   return order.pay;
 }
 
-/** Why an order on the board cannot be swapped just now, or nothing if it can. */
-export function swapRefusal(w: World, slot: number): string | null {
-  const order = w.board[slot];
-  if (!order) return "There is no order there";
+/** Why an order on the board, by its id, cannot be swapped just now, or nothing if it can. */
+export function swapRefusal(w: World, id: number): string | null {
+  const order = w.board[slotOf(w, id)];
+  if (!order) return "There is no such order on the board";
   if (isFilled(order.want, order.filled)) return "That one is filled and waiting to be handed over";
   if (w.tick < w.swapAt) {
     const minutes = Math.ceil((w.swapAt - w.tick) / 600);
@@ -235,10 +246,10 @@ export function swapRefusal(w: World, slot: number): string | null {
   return null;
 }
 
-/** Swaps an order on the board for a fresh one, free, once every so often. Says whether it did. */
-export function swap(w: World, slot: number): boolean {
-  if (swapRefusal(w, slot) !== null) return false;
-  w.board[slot] = fresh(w);
+/** Swaps an order on the board, by its id, for a fresh one, free, once every so often. Says whether it did. */
+export function swap(w: World, id: number): boolean {
+  if (swapRefusal(w, id) !== null) return false;
+  rehang(w, slotOf(w, id));
   w.swapAt = w.tick + SWAP_EVERY;
   return true;
 }

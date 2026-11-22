@@ -26,10 +26,17 @@ const add =
 
 /** A stand-in Leaf for the counter: it adds what it is asked to, refusing anything over 100. */
 function counterLeaf(start = 0) {
-  const leaf = { n: start, rev: 0, seen: new Map<string, unknown>(), batches: [] as unknown[][] };
+  const leaf = {
+    n: start,
+    rev: 0,
+    seen: new Map<string, unknown>(),
+    batches: [] as unknown[][],
+    /** The batches that came in a request that outlives its page. */
+    away: [] as unknown[][],
+  };
   const post = (sent: Sent): Reply => {
     const commands = isRecord(sent.body) && Array.isArray(sent.body.commands) ? sent.body.commands : [];
-    leaf.batches.push(commands);
+    (sent.keepalive ? leaf.away : leaf.batches).push(commands);
     let changed = false;
     const results = commands.map((c: unknown) => {
       if (!isRecord(c) || typeof c.id !== "string" || typeof c.by !== "number") return { id: "?", refused: "bad" };
@@ -171,6 +178,43 @@ describe("sending commands", () => {
     expect(play.state).toEqual({ n: 10 });
   });
 
+  test("as the page goes, everything Leaf has not answered is sent at once, in order, and done once", async () => {
+    const { routes, leaf } = counterLeaf();
+    const play = await opened(routes);
+    const answers = [1, 2, 3].map((by) => play.send({ do: "add", by }));
+    // The first is on its way and two wait behind it: all three go in the one request that outlives the page.
+    play.flush();
+    await Promise.all(answers);
+    expect(leaf.away.map((b) => b.map((c) => (isRecord(c) ? c.by : null)))).toEqual([[1, 2, 3]]);
+    const sent = leaf.batches.flat().map((c) => (isRecord(c) ? c.id : null));
+    expect(leaf.away.flat().map((c) => (isRecord(c) ? c.id : null))).toEqual(sent);
+    expect(leaf.n).toBe(6);
+    // With nothing waiting, nothing is sent.
+    play.flush();
+    await Bun.sleep(2);
+    expect(leaf.away).toHaveLength(1);
+  });
+
+  test("a few long commands go in more than one request, and a body Leaf will not read is not sent for ever", async () => {
+    const { routes, leaf } = counterLeaf();
+    const play = await opened(routes);
+    // Each of these is about 5,000 characters: the first goes alone, and only two more fit a request.
+    const long = { do: "add" as const, by: 1, pad: "x".repeat(5000) };
+    await Promise.all([1, 2, 3, 4].map(() => play.send(long)));
+    expect(leaf.batches.map((b) => b.length)).toEqual([1, 2, 1]);
+    expect(leaf.n).toBe(4);
+    // A body too large all the same: the command is answered as refused, and the next one goes.
+    world?.done();
+    world = standin({
+      ...routes,
+      "POST /v1/game/play/raid": () => ({ status: 413, body: { code: "body_too_large" } }),
+    });
+    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "invalid_command" });
+    world.done();
+    world = standin(routes);
+    expect(await play.send({ do: "add", by: 2 })).toEqual({ notes: ["added 2"] });
+  });
+
   test("are sent again with the same ids after a network failure or trouble, and done once", async () => {
     const { routes, leaf } = counterLeaf();
     let failures = 2;
@@ -305,6 +349,17 @@ describe("sending commands", () => {
     expect(troubles).toEqual(["noserver"]);
     // The first try and three more.
     expect(world?.sent.filter((s) => s.method === "POST")).toHaveLength(3 + 4);
+  });
+
+  test("asking for the state again when signed out tells the page so", async () => {
+    const { routes } = counterLeaf();
+    const play = await opened(routes);
+    const told: string[] = [];
+    play.onTrouble((why) => told.push(why));
+    world?.done();
+    world = standin({ "GET /v1/game/play/raid": () => ({ status: 401, body: { code: "unauthorized" } }) });
+    await play.refresh();
+    expect(told).toEqual(["signedout"]);
   });
 
   test("say who the page believes the member is, with every batch", async () => {

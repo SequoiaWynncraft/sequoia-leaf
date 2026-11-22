@@ -43,21 +43,27 @@ export {
   tipOut,
   tunnelExit,
   turn,
+  turnable,
 } from "./build.ts";
-export {
-  type Away,
-  AWAY_AFTER_MS,
-  AWAY_MOST_MS,
-  awayLine,
-  boost,
-  boosted,
-  boostLeft,
-  forward,
-  pile,
-  runTo,
-  TICK_MS,
-} from "./clock.ts";
+export { AWAY_MOST_MS, forward, type Forwarded, pile, TICK_MS } from "./clock.ts";
 export { create, type Fresh } from "./create.ts";
+export {
+  clockOf,
+  EXACT_MOST,
+  LEAD,
+  play,
+  readCommand,
+  readNotes,
+  readView,
+  REFUSED,
+  stepTo,
+  type Turned,
+  type WorksAct,
+  type WorksCommand,
+  type WorksNote,
+  type WorksView,
+  WORKS,
+} from "./game.ts";
 export { BACK, type Dir, DIRS, DX, DY, isDir, LEFT, RIGHT } from "./grid.ts";
 export { bareLand, besideWater, cellOf, type Land, LAND, landFrom, type Plot, touching } from "./land.ts";
 export {
@@ -78,11 +84,12 @@ export {
 export { postcard } from "./postcard.ts";
 export { repower } from "./power.ts";
 export { lay, type Leg, route, runCost } from "./route.ts";
-export { load, oldCoins, save, VERSION } from "./save.ts";
+export { load, save, VERSION } from "./save.ts";
 export { ahead, aim, holding, rate, type State, type Status, status } from "./status.ts";
 export { PACE_WINDOW, power, rewire, step } from "./step.ts";
 export {
   at,
+  type Away,
   blank,
   type Building,
   changed,

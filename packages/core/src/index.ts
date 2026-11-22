@@ -35,6 +35,7 @@ export {
   type SpendSink,
 } from "./ledger.ts";
 export { parsePlayerId, type PlayerId, playerId } from "./player.ts";
+export type { Postcard } from "./postcard.ts";
 export {
   applyActivityToQuests,
   currentQuests,

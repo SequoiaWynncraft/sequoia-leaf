@@ -8,8 +8,8 @@
 import { BARK, CREAM, EARTH, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, ell, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, must, vnoise } from "@sequoia-leaf/kit/util.ts";
+import type { Land, Raw } from "@sequoia-leaf/yard";
 
-import type { Land, Raw } from "../sim/index.ts";
 import { TILE } from "./belts.ts";
 import { nearFerns, rock, stump, trunk } from "./nature.ts";
 import { CLAY, DEEP, PAL, tone } from "./pal.ts";

@@ -8,10 +8,10 @@
 import { pick, point, shown, surface } from "@sequoia-leaf/kit/card.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/tip.ts";
+import { at } from "@sequoia-leaf/yard";
 
 import { pan, zoom } from "./camera.ts";
 import { callerAt } from "./events.ts";
-import { at } from "./sim/index.ts";
 import { S, tileAt, toYard } from "./state.ts";
 import {
   aimAt,

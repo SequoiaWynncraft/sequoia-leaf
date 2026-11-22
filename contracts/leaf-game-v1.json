@@ -1217,7 +1217,7 @@
         "player": "10000000-0000-0000-0000-000000000001",
         "id": "w-1",
         "amount": -5000,
-        "reason": "works_plot"
+        "reason": "camp_thing"
       }
     },
     "status": 409,
@@ -1240,7 +1240,7 @@
     "status": 400,
     "body": {
       "code": "invalid_reason",
-      "message": "The reason must be one of: camp_thing, daily_chest, works_order, works_depot, works_build, works_refund, works_plot, works_plan"
+      "message": "The reason must be one of: camp_thing, daily_chest"
     }
   },
   "POST /v1/game/coins, not you": {
