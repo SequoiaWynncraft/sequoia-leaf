@@ -5,9 +5,17 @@ import type { PlayerId } from "./player.ts";
 export const EARN_SOURCES = ["raid", "war", "quest", "achievement", "level", "event", "staff"] as const;
 export type EarnSource = (typeof EARN_SOURCES)[number];
 
-/** What Leaf is spent on. */
-export const SPEND_SINKS = ["shop", "reroll"] as const;
+/** What Leaf is spent on. `request` is a guild request bought through sequoia-backend (`REQUESTS`). */
+export const SPEND_SINKS = ["shop", "reroll", "request"] as const;
 export type SpendSink = (typeof SPEND_SINKS)[number];
+
+/**
+ * The guild requests a member can buy with Leaf, through sequoia-backend, which runs their queues
+ * and sets their price; each is named in the ledger as it is here.
+ */
+export const REQUESTS = { tome: "Tome request", aspect: "Aspect request" } as const;
+export type RequestKind = keyof typeof REQUESTS;
+export const REQUEST_KINDS = ["tome", "aspect"] as const satisfies readonly RequestKind[];
 
 export type EntryOrigin = EarnSource | SpendSink;
 

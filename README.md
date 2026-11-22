@@ -288,6 +288,45 @@ needs no change elsewhere first: `cd apps/api && WRITE_CONTRACTS=1 bun test
 test/game-contract.test.ts` writes it again. It has every answer except the
 skin, which is a picture.
 
+sequoia-backend's routes (below) have `contracts/leaf-internal-v1.json`, written
+by `apps/api/test/purchases.test.ts` the same way; the backend's tests read its
+copy, `src/test/resources/contracts/leaf-internal-v1.json`, so copy it there
+when it changes.
+
+### sequoia-backend's routes: tome and aspect requests
+
+Members buy tome and aspect requests with Leaf in the guild's request channel
+(and on the website). sequoia-backend runs those queues and sets their price;
+Leaf keeps the Leaf. These routes, under `/internal/v1`, are for the backend
+alone: they take the internal token the two already share
+(`BACKEND_INTERNAL_TOKEN`, the backend's `APP_INTERNAL_API_TOKEN`) as
+`Authorization: Bearer`, and only from the server's private network
+(`http://sequoia-leaf:3000`): a request that came through the public proxy, which
+always adds `X-Forwarded-For`, gets 401 `unauthorized`, token or not.
+
+| Route                                    | What it does                                                   |
+| ---------------------------------------- | -------------------------------------------------------------- |
+| `GET /internal/v1/players/{player}/leaf` | `{ "player_id", "balance" }`: a member's Leaf, 0 for none yet. |
+| `PUT /internal/v1/purchases/{key}`       | Buys a request: `{ "player_id", "kind", "leaf" }`.             |
+| `DELETE /internal/v1/purchases/{key}`    | Cancels one: refunds it if paid, and keeps it from being paid. |
+
+- **Buying** takes `kind` `tome` or `aspect` and its price in Leaf, and answers
+  `{ "key", "status": "paid", "balance" }` with the balance after it. The key is
+  the backend's own (1 to 100 letters, digits and `_ . : -`), one per request,
+  and makes the purchase happen once: sent again, it answers as before and
+  charges nothing. It is one `request` spend in the ledger, keyed
+  `purchase:<key>`, with "Tome request" or "Aspect request" as its memo. 409
+  `insufficient_leaf` when the balance does not cover it, `key_in_use` when the
+  key was used for another purchase (another player, kind or price), and
+  `purchase_cancelled` when it was cancelled; 400 `invalid_purchase` or
+  `invalid_key`. Nothing is charged with any of them.
+- **Cancelling** a paid purchase reverses its spend (`refunded`), as an entry
+  keyed `purchase-refund:<key>`, which no purchase's key can take: staff denied
+  the request, or the backend could not record it. A key never paid is kept
+  from ever being paid (`cancelled`, in `cancelled_purchases`): the backend
+  cancels a purchase whose answer it did not hear, so one that reaches Leaf late
+  is refused, not charged. Cancelling again changes nothing.
+
 ### Events
 
 An event is something a client would want to show when it happens. Each one is

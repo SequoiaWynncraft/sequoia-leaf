@@ -308,3 +308,23 @@ export const ActivityReport = Schema.Struct({
     }),
   ),
 });
+
+// sequoia-backend's routes, under /internal/v1.
+
+/** A player's Leaf, as sequoia-backend asks for it to show what they can buy. */
+export const PlayerLeaf = Schema.Struct({ player_id: Schema.String, balance: Schema.Number });
+
+/**
+ * A guild request sequoia-backend buys for a member: who (`player_id`, their Minecraft UUID), which
+ * kind (`tome` or `aspect`), and its price in Leaf (`leaf`, a whole number of 1 or more).
+ */
+export const PurchaseBody = Schema.Struct({ player_id: Schema.String, kind: Schema.String, leaf: Schema.Number });
+
+/** A purchase paid, now or before, and the player's balance after it. */
+export const Purchased = Schema.Struct({ key: Schema.String, status: Schema.Literal("paid"), balance: Schema.Number });
+
+/** A purchase cancelled: its Leaf given back (`refunded`), or never to be paid (`cancelled`). */
+export const PurchaseCancelled = Schema.Struct({
+  key: Schema.String,
+  status: Schema.Literals(["refunded", "cancelled"]),
+});

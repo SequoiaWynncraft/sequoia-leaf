@@ -1,0 +1,116 @@
+{
+  "GET /internal/v1/players/{player}/leaf": {
+    "request": {
+      "method": "GET",
+      "path": "/internal/v1/players/10000000-0000-0000-0000-000000000001/leaf"
+    },
+    "status": 200,
+    "body": {
+      "player_id": "10000000-0000-0000-0000-000000000001",
+      "balance": 5000
+    }
+  },
+  "PUT /internal/v1/purchases/{key}": {
+    "request": {
+      "method": "PUT",
+      "path": "/internal/v1/purchases/request:1",
+      "body": {
+        "player_id": "10000000-0000-0000-0000-000000000001",
+        "kind": "tome",
+        "leaf": 3000
+      }
+    },
+    "status": 200,
+    "body": {
+      "key": "request:1",
+      "status": "paid",
+      "balance": 2000
+    }
+  },
+  "PUT /internal/v1/purchases/{key}, the same again": {
+    "request": {
+      "method": "PUT",
+      "path": "/internal/v1/purchases/request:1",
+      "body": {
+        "player_id": "10000000-0000-0000-0000-000000000001",
+        "kind": "tome",
+        "leaf": 3000
+      }
+    },
+    "status": 200,
+    "body": {
+      "key": "request:1",
+      "status": "paid",
+      "balance": 2000
+    }
+  },
+  "PUT /internal/v1/purchases/{key}, not enough Leaf": {
+    "request": {
+      "method": "PUT",
+      "path": "/internal/v1/purchases/request:2",
+      "body": {
+        "player_id": "10000000-0000-0000-0000-000000000001",
+        "kind": "aspect",
+        "leaf": 3000
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "insufficient_leaf",
+      "message": "The player does not have that much Leaf"
+    }
+  },
+  "DELETE /internal/v1/purchases/{key}, paid": {
+    "request": {
+      "method": "DELETE",
+      "path": "/internal/v1/purchases/request:1"
+    },
+    "status": 200,
+    "body": {
+      "key": "request:1",
+      "status": "refunded"
+    }
+  },
+  "DELETE /internal/v1/purchases/{key}, never paid": {
+    "request": {
+      "method": "DELETE",
+      "path": "/internal/v1/purchases/request:3"
+    },
+    "status": 200,
+    "body": {
+      "key": "request:3",
+      "status": "cancelled"
+    }
+  },
+  "PUT /internal/v1/purchases/{key}, cancelled": {
+    "request": {
+      "method": "PUT",
+      "path": "/internal/v1/purchases/request:3",
+      "body": {
+        "player_id": "10000000-0000-0000-0000-000000000001",
+        "kind": "tome",
+        "leaf": 3000
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "purchase_cancelled",
+      "message": "That purchase was cancelled"
+    }
+  },
+  "PUT /internal/v1/purchases/{key}, unread": {
+    "request": {
+      "method": "PUT",
+      "path": "/internal/v1/purchases/request:4",
+      "body": {
+        "player_id": "10000000-0000-0000-0000-000000000001",
+        "kind": "tome"
+      }
+    },
+    "status": 400,
+    "body": {
+      "code": "invalid_purchase",
+      "message": "Send a purchase as { \"player_id\": \"<uuid>\", \"kind\": \"tome\" or \"aspect\", \"leaf\": <whole number, 1 or more> }"
+    }
+  }
+}
