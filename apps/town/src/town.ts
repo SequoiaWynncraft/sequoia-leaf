@@ -532,7 +532,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     hit: { x: 152, y: 107, w: 16, h: 15 },
     tap: tapChest,
     hops: true,
-    tip: ["Cinfy's chest", "Sometimes there is change in it."],
+    tip: ["Cinfy's chest", `Tap it for ${DAILY_CHEST} Coins, once a day. The day starts at 00:00 UTC.`],
     extra: (g, sx, sy) => {
       const pic = G.t < chest.openUntil ? s.chestOpen : s.chest;
       g.drawImage(pic.c, sx - pic.ax, sy - pic.ay);
@@ -614,7 +614,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
   add("pole", s.pole, banner.x, banner.y, {
     tap: tapPole,
     extra: drawBanner,
-    tip: ["Banner pole", "A banner goes up when the guild takes land."],
+    tip: ["Banner pole", "A banner goes up when the guild captures a territory."],
   });
 
   STALL_FEET.forEach(({ x, y }, i) => {

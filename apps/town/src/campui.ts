@@ -136,7 +136,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
         "k-grow",
         {},
         "Leave my character in town when I go",
-        el("div", "k-d", { text: "For a day it dozes where you were, so others see you were about." }),
+        el("div", "k-d", { text: "For 24 hours after you leave, it sleeps where you stood, and others can see it." }),
       ),
       stayBtn,
     );
@@ -198,14 +198,14 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
           const kind = camp.greeted >= KIND;
           rows.push(
             el("div", "k-d", {
-              text: "Somebody else moves in when the camp is cosier, and when you have made the town's callers welcome.",
+              text: `One more moves in when ${COSY} things are placed in your camp, and one more when you have greeted ${KIND} townsfolk.`,
             }),
           );
-          if (!cosy) rows.push(el("div", "k-dim", { text: `Things set out: ${camp.placed.length} of ${COSY}.` }));
+          if (!cosy) rows.push(el("div", "k-dim", { text: `Things placed: ${camp.placed.length} of ${COSY}.` }));
           if (!kind)
             rows.push(
               el("div", "k-d", {
-                text: `Callers greeted (touch one while it is here): ${Math.min(camp.greeted, KIND)} of ${KIND}.`,
+                text: `Townsfolk greeted: ${Math.min(camp.greeted, KIND)} of ${KIND}. When somebody from town drops by your camp, tap them.`,
               }),
             );
         }
@@ -248,7 +248,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
       () => {
         const camp = mine();
         if (camp.letters.length === 0) {
-          list.replaceChildren(el("div", "k-d", { text: "Nothing today. The flag goes up when there is." }));
+          list.replaceChildren(el("div", "k-d", { text: "No letters. The flag goes up when one arrives." }));
           return;
         }
         const rows: Node[] = camp.letters.toReversed().map((l) => {
@@ -358,7 +358,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
     }
     body.append(
       el("div", "k-d", {
-        text: "The other two come along later, when the camp is cosier and you have been a kind neighbour.",
+        text: `The other two move in later: one when ${COSY} things are placed in your camp, one when you have greeted ${KIND} townsfolk.`,
       }),
     );
     return null;
@@ -411,7 +411,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
             el("span", "k-gold name", { text: held.name }),
             ...(held.turns
               ? [
-                  button("wood sm", [glyph("turn"), el("span", "t", { text: "Turn" })], () => {
+                  button("wood sm", [glyph("turn"), el("span", "t", { text: "Rotate" })], () => {
                     s.turn();
                   }),
                 ]
@@ -424,7 +424,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
                   }),
                 ]),
           ]
-        : [el("span", "k-d", { text: "Drag a thing to move it. Tap one below to set it out." })]),
+        : [el("span", "k-d", { text: "Drag a thing to move it. Tap one below to place it." })]),
     );
     traySlots.clear();
     const list = trayList(mine());
@@ -487,7 +487,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
         home
           ? [
               place("cabin", "Cabin", "What you have won, and who lives here.", "cabin"),
-              place("mailbox", "Mailbox", "Notes and presents from the town's own.", "mailbox"),
+              place("mailbox", "Mailbox", "Letters and presents from townsfolk.", "mailbox"),
               place("signpost", "Signpost", "The way to town.", "signpost"),
               trail("Town", "town"),
             ]

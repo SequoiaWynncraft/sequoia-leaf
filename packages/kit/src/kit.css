@@ -726,8 +726,11 @@ button.k-info-chip:hover .k-chip {
   place-items: end center;
   min-height: calc(var(--u) * 22);
 }
+/* A long name breaks inside its tile and never widens it. */
 .k-info-tile-name {
+  max-width: 100%;
   line-height: 1.1;
+  overflow-wrap: break-word;
 }
 .k-info-tile .k-cur {
   gap: var(--u);
