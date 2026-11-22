@@ -54,7 +54,7 @@ export const PLANS: readonly PlanInfo[] = [
   {
     id: "rakes",
     name: "Sharper rakes",
-    what: "Gatherers work half again as fast.",
+    what: "Gatherers work 50% faster.",
     price: 180,
     needs: [],
     effect: { gather: 1.5 },
@@ -62,7 +62,7 @@ export const PLANS: readonly PlanInfo[] = [
   {
     id: "boiler",
     name: "The boiler",
-    what: "Opens the boiler: a lot of power for as long as it is fed deadfall.",
+    what: "Unlocks the boiler: a lot of power, as long as it has deadfall to burn.",
     price: 220,
     needs: [],
     effect: { opens: ["boiler"] },
@@ -70,7 +70,7 @@ export const PLANS: readonly PlanInfo[] = [
   {
     id: "waxed",
     name: "Waxed belts",
-    what: "Belts and tunnels carry half again as fast.",
+    what: "Belts and tunnels move items 50% faster.",
     price: 350,
     needs: [],
     effect: { belt: 1.5 },
@@ -78,7 +78,7 @@ export const PLANS: readonly PlanInfo[] = [
   {
     id: "flywheel",
     name: "A bigger flywheel",
-    what: "The depot gives twice the power.",
+    what: "The depot makes twice as much power.",
     price: 450,
     needs: [],
     effect: { depot: 40 },
@@ -94,7 +94,7 @@ export const PLANS: readonly PlanInfo[] = [
   {
     id: "tallpylons",
     name: "Taller pylons",
-    what: "A pylon reaches a third further, and links to pylons a third further off.",
+    what: "Pylons reach a third further, and can stand a third further apart.",
     price: 500,
     needs: [],
     effect: { reach: 1.35 },
@@ -102,7 +102,7 @@ export const PLANS: readonly PlanInfo[] = [
   {
     id: "workshop",
     name: "The workshop",
-    what: "Opens the workshop, which puts three things together.",
+    what: "Unlocks the workshop, which combines three items into one.",
     price: 900,
     needs: [],
     effect: { opens: ["workshop"] },
@@ -110,7 +110,7 @@ export const PLANS: readonly PlanInfo[] = [
   {
     id: "tooling",
     name: "Second-tier machines",
-    what: "Mills, benches and workshops work half again as fast.",
+    what: "Mills, benches and workshops work 50% faster.",
     price: 1500,
     needs: [],
     effect: { craft: 1.5 },
@@ -118,7 +118,7 @@ export const PLANS: readonly PlanInfo[] = [
   {
     id: "tunnel",
     name: "The tunnel",
-    what: "Opens the tunnel: a belt that goes under other belts, a redwood's roots, or the stream.",
+    what: "Unlocks the tunnel: a belt that runs under other belts, a redwood's roots or the stream.",
     price: 300,
     needs: [],
     effect: { opens: ["tunnel"] },
@@ -126,7 +126,7 @@ export const PLANS: readonly PlanInfo[] = [
   {
     id: "barrows",
     name: "Wheelbarrows",
-    what: "Gatherers work twice as fast as they began.",
+    what: "Gatherers now work at twice their starting speed.",
     price: 1200,
     needs: ["rakes"],
     effect: { gather: 2 },
@@ -134,7 +134,7 @@ export const PLANS: readonly PlanInfo[] = [
   {
     id: "rollers",
     name: "Roller belts",
-    what: "Belts and tunnels carry twice as fast as they began.",
+    what: "Belts and tunnels now move items at twice their starting speed.",
     price: 3200,
     needs: ["waxed"],
     effect: { belt: 2 },
@@ -142,7 +142,7 @@ export const PLANS: readonly PlanInfo[] = [
   {
     id: "jigs",
     name: "Third-tier machines",
-    what: "Mills, benches and workshops work twice as fast as they began.",
+    what: "Mills, benches and workshops now work at twice their starting speed.",
     price: 7000,
     needs: ["tooling"],
     effect: { craft: 2 },
@@ -150,7 +150,7 @@ export const PLANS: readonly PlanInfo[] = [
   {
     id: "fourth",
     name: "A fourth hook",
-    what: "The board holds four standing orders at a time.",
+    what: "The order board holds four orders at a time, up from three.",
     price: 4000,
     needs: [],
     effect: { slots: 4 },
