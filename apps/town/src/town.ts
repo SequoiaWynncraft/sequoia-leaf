@@ -414,7 +414,10 @@ export function twinkleAll(): void {
 const stringAt = (wx: number, wy: number): Str | undefined =>
   strings.find((s) => s.bulbs.some((b) => dist(b.x, b.y, wx, wy) < 5));
 
-/** A crab hops and clacks; crab No. 7 bolts for everybody, and is counted only for the member who found it. */
+/**
+ * A crab hops and clacks. Crab No. 7 runs off from the member who found it, and is counted for
+ * them; for everybody else it is still where it hides, to be found by each of them in turn.
+ */
 function tapCrab(c: Crab, own: boolean): void {
   // Running off already: it runs on.
   if (c.bolt > 0) return;
@@ -425,8 +428,9 @@ function tapCrab(c: Crab, own: boolean): void {
     float(c.x, c.y - 12, `No. ${c.n}`, CREAM, 1.2);
     return;
   }
-  // Counted once for each place it hides, which Leaf keeps: it bolts either way.
-  if (own && ok(doNow({ do: "spotCrab" }))) {
+  if (!own) return;
+  // Counted once for each place it hides, which Leaf keeps, by Leaf's clock: it bolts either way.
+  if (ok(doNow({ do: "spotCrab" }, G.now))) {
     float(c.x, c.y - 14, QUIPS[town().sightings % QUIPS.length] ?? "", SKY[5], 2.2);
     hooks.feed(`You spotted crab No. ${c.n}. It got away.`, "coral");
   }

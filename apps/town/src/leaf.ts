@@ -155,11 +155,11 @@ export function troubleCard(why: Trouble): void {
  * they turn down is not sent, and its refusal is given back. Null for one that must be asked, and
  * for one held off while Leaf answers another (nothing is done or sent). In a visit, refused.
  */
-export function doNow(command: TownCommand): Did | null {
+export function doNow(command: TownCommand, now = Date.now()): Did | null {
   if (looked) return { refused: "visiting" };
   const play = leaf;
   if (!play || hold.held(false)) return null;
-  const guess = predict(play.state, command, Date.now());
+  const guess = predict(play.state, command, now);
   if (!guess) return null;
   if ("refused" in guess) return guess;
   void play.send(command, (copy) => {

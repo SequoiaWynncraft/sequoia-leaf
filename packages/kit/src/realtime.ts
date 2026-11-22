@@ -267,6 +267,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
   let link: Link | null = null;
   let shown: Link | null = null;
   let done = member() === null;
+  /** How far Leaf's clock is ahead of this page's, as last heard. */
+  let ahead = 0;
   /** How many acts may be sent now, and when that was last counted. */
   let acts = 5;
   let actedAt = outside.now();
@@ -531,7 +533,11 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       if (!l?.clock) return null;
       return l.tracks.get(id)?.at(l.clock.server(outside.now()) - INTERP_MS) ?? null;
     },
-    serverNow: () => shown?.clock?.server(outside.now()) ?? outside.now(),
+    serverNow() {
+      // Between connections the last word on Leaf's clock stands, so nothing timed by it jumps.
+      if (shown?.clock) ahead = shown.clock.server(0);
+      return outside.now() + ahead;
+    },
     rtt: () => shown?.clock?.rtt() ?? null,
     close() {
       done = true;
