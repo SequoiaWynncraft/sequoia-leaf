@@ -40,8 +40,13 @@ export interface Shown {
   readonly view: unknown;
 }
 
+/** A player's state opened for their page, or none: the one stored does not read. */
+export type Opening = ({ readonly status: "open" } & Shown) | { readonly status: "unreadable" };
+
 export type Batch =
   | ({ readonly status: "done"; readonly results: readonly Result[] } & Shown)
+  /** The state stored does not read. Nothing was done, and it is kept as it is. */
+  | { readonly status: "unreadable" }
   /** A command that is not one of the game's, or a batch that is not a list of them. Nothing was done. */
   | { readonly status: "invalid"; readonly why: string }
   /** The player sent batches, or commands, faster than they may. Nothing was done. */
@@ -91,13 +96,15 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * Coins each command paid or took, what it logged, and each command's answer. A command whose id
  * was seen before answers as it did then and changes nothing; one that would take more Coins than
  * the player has is refused with `not_enough_coins`. A player with no state yet gets a new one,
- * and their Coins open with the welcome. Leaf's dice for each call come from `SecureRandom`.
+ * and their Coins open with the welcome. A stored state that will not read is left as it is: the
+ * player and the game are logged, and nothing is done. Leaf's dice for each call come from
+ * `SecureRandom`.
  */
 export class Play extends Context.Service<
   Play,
   {
     /** The player's state in a game, made for them if they have none. */
-    readonly open: (playing: Playing, played: Played) => Effect.Effect<Shown>;
+    readonly open: (playing: Playing, played: Played) => Effect.Effect<Opening>;
     /** Does a batch of commands, as they came off the wire. */
     readonly send: (playing: Playing, played: Played, commands: readonly unknown[]) => Effect.Effect<Batch>;
   }
@@ -113,7 +120,10 @@ export class Play extends Context.Service<
       // Each player's batches and commands, across all games.
       const pace = new Allowances([BATCHES, COMMANDS], ALLOWANCES_KEPT);
 
-      /** The player's stored state in a game, or a new one made and stored for them, opened at now. */
+      /**
+       * The player's stored state in a game, or a new one made and stored for them, opened at now.
+       * Null for a stored state that does not read, which is logged and left as it is.
+       */
       const opened = (playing: Playing, played: Played, now: number) =>
         Effect.gen(function* () {
           const found = yield* store.read(playing.playerId, played.id);
@@ -129,7 +139,10 @@ export class Play extends Context.Service<
           }
           const game: Opened | null = played.open(text, ctxOf(playing, now, yield* dice));
           if (game === null) {
-            return yield* Effect.die(new Error(`The ${played.id} state stored for ${playing.playerId} does not read`));
+            yield* Effect.logError(
+              `The ${played.id} state stored for ${playing.playerId} does not read; it is kept as it is`,
+            ).pipe(Effect.annotateLogs({ player: playing.playerId, game: played.id, rev }));
+            return null;
           }
           return { rev, text, game };
         });
@@ -138,8 +151,16 @@ export class Play extends Context.Service<
         open: (playing, played) =>
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
-            const { rev, game } = yield* sql.withTransaction(opened(playing, played, now)).pipe(Effect.orDie);
-            return { rev, now, view: game.view(ctxOf(playing, now, 0)) };
+            const open = yield* sql.withTransaction(opened(playing, played, now)).pipe(Effect.orDie);
+            if (open === null) {
+              return { status: "unreadable" } satisfies Opening;
+            }
+            return {
+              status: "open",
+              rev: open.rev,
+              now,
+              view: open.game.view(ctxOf(playing, now, 0)),
+            } satisfies Opening;
           }),
         send: (playing, played, commands) =>
           Effect.gen(function* () {
@@ -155,7 +176,11 @@ export class Play extends Context.Service<
             const done = yield* sql
               .withTransaction(
                 Effect.gen(function* () {
-                  const { rev, text, game } = yield* opened(playing, played, now);
+                  const open = yield* opened(playing, played, now);
+                  if (open === null) {
+                    return null;
+                  }
+                  const { rev, text, game } = open;
                   let balance = yield* coins.balance(playing.playerId);
                   const results: Result[] = [];
                   const answers: { readonly id: string; readonly result: Result }[] = [];
@@ -220,6 +245,9 @@ export class Play extends Context.Service<
                 }),
               )
               .pipe(Effect.orDie);
+            if (done === null) {
+              return { status: "unreadable" } satisfies Batch;
+            }
             return { status: "done", now, ...done } satisfies Batch;
           }),
       });

@@ -100,7 +100,7 @@ describe("the table, on Leaf", () => {
   });
 
   test("with no Leaf answering, there is no table", async () => {
-    world = standin({});
+    world = standin({ "GET /v1/game/play/raid": "offline" });
     expect(await openTable("p", () => undefined)).toBe("closed");
   });
 

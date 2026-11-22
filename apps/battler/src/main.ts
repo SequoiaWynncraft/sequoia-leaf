@@ -8,7 +8,7 @@
  * worth a line in the town's feed.
  */
 import { refresh, settle } from "@sequoia-leaf/kit/card.ts";
-import { keepLeaf, serverCard, shutCard, start } from "@sequoia-leaf/kit/live.ts";
+import { keepLeaf, serverCard, shutCard, start, unreadableCard } from "@sequoia-leaf/kit/live.ts";
 import { post } from "@sequoia-leaf/kit/postcard.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
 import { refreshCoins } from "@sequoia-leaf/kit/purse.ts";
@@ -91,9 +91,17 @@ async function boot(): Promise<void> {
     return;
   }
   const { signIn, me } = where;
-  const trouble = await openTable(me.id, (why) => shutCard(why === "signedout" ? "signedout" : "closed", signIn));
+  const trouble = await openTable(me.id, (why) => {
+    if (why === "unreadable") unreadableCard();
+    else if (why === "noserver") serverCard(NEEDS_LEAF);
+    else shutCard(why, signIn);
+  });
   if (trouble === "signedout") {
     shutCard("signedout", signIn);
+    return;
+  }
+  if (trouble === "unreadable") {
+    unreadableCard();
     return;
   }
   if (trouble) {

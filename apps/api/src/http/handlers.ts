@@ -63,6 +63,7 @@ import {
   SaveTooLarge,
   SlowDown,
   StaffOnly,
+  StateUnreadable,
   TooMuch,
   Unauthorized,
   VersionConflict,
@@ -617,6 +618,12 @@ const invalidSlot = new Invalid({ code: "invalid_slot", message: "That is not a 
  */
 const notYou = new NotYou({ code: "not_you", message: "This page is signed in as someone else now. Load it again" });
 
+/** A player's stored state that does not read: nothing is done, and it is kept. */
+const unreadable = new StateUnreadable({
+  code: "state_unreadable",
+  message: "Your game could not be read. It has been kept; tell the guild",
+});
+
 /** The game a route names, if Leaf plays it. */
 const playedGame = (name: string): Effect.Effect<Played, Missing> => {
   const id = gameId(name);
@@ -859,6 +866,9 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             const played = yield* playedGame(params.game);
             const identity = yield* CurrentIdentity;
             const shown = yield* play.open({ playerId: identity.playerId, guest: isGuest(identity) }, played);
+            if (shown.status === "unreadable") {
+              return yield* unreadable;
+            }
             return HttpServerResponse.jsonUnsafe({
               rev: shown.rev,
               now: iso(shown.now),
@@ -882,6 +892,9 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             );
             if (batch.status === "invalid") {
               return yield* new Invalid({ code: "invalid_command", message: batch.why });
+            }
+            if (batch.status === "unreadable") {
+              return yield* unreadable;
             }
             if (batch.status === "slow") {
               return yield* new SlowDown({

@@ -27,6 +27,7 @@ import {
   SaveTooLarge,
   SlowDown,
   StaffOnly,
+  StateUnreadable,
   TooMuch,
   Unauthorized,
   VersionConflict,
@@ -205,12 +206,16 @@ export class GameApi extends HttpApiGroup.make("game")
       error: Invalid,
     }).middleware(PresenceBodyErrors),
     HttpApiEndpoint.get("whoIsAbout", "/presence", { success: Present }),
-    HttpApiEndpoint.get("play", "/play/:game", { params: GameParams, success: PlayShown, error: Missing }),
+    HttpApiEndpoint.get("play", "/play/:game", {
+      params: GameParams,
+      success: PlayShown,
+      error: [Missing, StateUnreadable],
+    }),
     HttpApiEndpoint.post("command", "/play/:game", {
       params: GameParams,
       payload: PlayBody,
       success: Played,
-      error: [Invalid, Missing, NotYou, SlowDown],
+      error: [Invalid, Missing, NotYou, StateUnreadable, SlowDown],
     }).middleware(PlayBodyErrors),
     // For the games not on the play service yet, whose pages still work out what they earn and spend.
     HttpApiEndpoint.post("coins", "/coins", {

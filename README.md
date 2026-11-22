@@ -514,6 +514,10 @@ The games on it now: `raid`, The Little Raid (`packages/raid`).
   games: it is refused whole, and nothing is done.
 - A command that takes Coins the player does not have is refused with
   `not_enough_coins`.
+- A stored state that does not read (a rules change that forgot an older
+  version, say) answers both routes 409 `state_unreadable`: nothing is done,
+  the state is kept as it is, and Leaf logs the player and the game. The page
+  shows the kit's card for it and sends nothing more.
 
 Tables (migration 17): `play_state` (a player's state in a game, with its
 `rev`; 0 is a state nothing has been done to), `play_commands` (each command's

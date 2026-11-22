@@ -211,7 +211,11 @@ Leaf's answer: what it did (the game's notes) or the code it was refused with. C
 order, one request at a time, as many as are waiting in each (up to 32), and after a network
 failure, or Leaf having trouble or asking to slow down, the same request goes again with the same
 ids, so nothing is done twice. Each batch carries `player`, who the page believes it is; on
-`not_you` (signed in as somebody else since) nothing more is sent and the page loads again.
+`not_you` (signed in as somebody else since) nothing more is sent and the page loads again. A state
+Leaf cannot read (`state_unreadable`) stops the page with `unreadableCard()` ("Your game could not
+be read. It has been kept; tell the guild."), sending nothing again. A 404 `not_found`, from a Leaf
+without the play service during a deploy, is "not yet": the call goes again each second for 30
+seconds (`NOT_YET`) before the page gives up for no server.
 `predict` is the copy after a command the shared rules can work out
 without Leaf, shown at once; each answer's state takes the copy's place (with what is still waiting
 worked out again on top), and `onState` tells the page when that is not what it was showing.

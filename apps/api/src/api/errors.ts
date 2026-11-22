@@ -83,6 +83,14 @@ export class VersionConflict extends Schema.Error<VersionConflict>("VersionConfl
  */
 export class NotYou extends Schema.Error<NotYou>("NotYou")(answer("not_you"), { httpApiStatus: 409 }) {}
 
+/**
+ * The player's state in a game, as Leaf stored it, does not read (a rules change that forgot an
+ * older state, say). Nothing was done; it is kept as it is, and Leaf has logged whose it is.
+ */
+export class StateUnreadable extends Schema.Error<StateUnreadable>("StateUnreadable")(answer("state_unreadable"), {
+  httpApiStatus: 409,
+}) {}
+
 /** Coins a page asked to spend that the player does not have: nothing was changed. */
 export class NotEnoughCoins extends Schema.Error<NotEnoughCoins>("NotEnoughCoins")(answer("not_enough_coins"), {
   httpApiStatus: 409,
