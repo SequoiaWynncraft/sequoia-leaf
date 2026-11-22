@@ -279,7 +279,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   hooks.visit = visit;
 
   /** Through the door: the Works' doors part and the member steps in; at the stump the lantern burns up. */
-  function through(id: GameId): void {
+  function through(id: GameId, of?: string): void {
     going = { id, through: true };
     show.dest = null;
     closePanel();
@@ -292,11 +292,11 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       player.path = [{ x: player.x, y: THRESHOLD }];
       player.arrive = null;
     } else lightTable(true);
-    stage.goInside(id, DOORWAY[id]);
+    stage.goInside(id, DOORWAY[id], of);
   }
 
-  /** Walks the member to a game's door and on through it. */
-  function goIn(id: GameId): void {
+  /** Walks the member to a game's door and on through it (for the Works, to `of`'s yard, if given). */
+  function goIn(id: GameId, of?: string): void {
     if (!G.home || going?.through) return;
     if (id === "table") {
       if (player.seat?.at === "table") {
@@ -323,7 +323,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     going = { id, through: false };
     walkTo(player, pl.stand, () => {
       player.dir = pl.face;
-      through(id);
+      through(id, of);
     });
   }
   hooks.goIn = goIn;
@@ -636,7 +636,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         dismissArrival();
       },
       about() {
-        openAbout(locate);
+        openAbout();
       },
       found() {
         const f = show.found;

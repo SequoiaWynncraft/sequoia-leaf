@@ -6,6 +6,8 @@
  */
 
 import { read } from "@sequoia-leaf/kit/postcard.ts";
+import { RAID_STATS } from "@sequoia-leaf/raid/stats.ts";
+import { WORKS_STATS } from "@sequoia-leaf/yard/stats.ts";
 
 import type { AwayLine } from "./guild.ts";
 
@@ -33,7 +35,7 @@ export const READY_WAIT = 4500;
 export const GAMES: Readonly<Record<GameId, Game>> = {
   works: {
     id: "works",
-    name: "The Works",
+    name: WORKS_STATS.name,
     url: "../works/index.html",
     about: "Your yard, behind the workshop. Coins are made here.",
     waiting: () => read("works")?.waiting ?? "The yard is quiet. Somebody should start it up.",
@@ -42,7 +44,7 @@ export const GAMES: Readonly<Record<GameId, Game>> = {
   },
   table: {
     id: "table",
-    name: "The Little Raid",
+    name: RAID_STATS.name,
     url: "../battler/index.html",
     about: "The guild's board game, cut into a great stump.",
     waiting: () => read("raid")?.waiting ?? "The board is set out. One crab is uncounted.",

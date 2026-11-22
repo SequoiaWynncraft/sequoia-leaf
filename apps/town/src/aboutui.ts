@@ -3,17 +3,23 @@
  * now, and the panel it opens, with who is in town, who is elsewhere in the game and who was seen
  * lately, each with their face, name, and rank or "Guest" (`about.ts` says who goes where, and the
  * words). It keeps itself up to date while it is open: the room's roster as it changes, the guild's
- * lists as they come, every half minute. Choosing somebody in town puts the panel away and shows
- * where they are (`locate`). The button is there only while the town is on the stage.
+ * lists as they come, every half minute. Choosing somebody shows their card (`person`), with "Find
+ * in town" for somebody drawn here, which puts the panel away and shows where they are (`locate`),
+ * and "Visit yard" for anybody else with a yard, which goes through the Works' door to it. The
+ * button is there only while the town is on the stage.
  */
 
+import { close, link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph } from "@sequoia-leaf/kit/dom.ts";
 import { member, where } from "@sequoia-leaf/kit/live.ts";
+import { known, people } from "@sequoia-leaf/kit/person.ts";
 import { type Body, faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
+import { RAID_STATS } from "@sequoia-leaf/raid/stats.ts";
+import { WORKS_STATS } from "@sequoia-leaf/yard/stats.ts";
 
 import { type About, type AboutRow, ALONE, whoIsAbout } from "./about.ts";
-import { type Actor, G } from "./game.ts";
+import { type Actor, G, hooks } from "./game.ts";
 import { guild } from "./guild.ts";
 import { $, closePanel, openPanel, pic, when } from "./hud.ts";
 import { knownRanks, roomNow } from "./players.ts";
@@ -63,17 +69,15 @@ const faceOf = (r: AboutRow): HTMLCanvasElement =>
 const keyOf = (a: About): string =>
   [
     facesCame(),
-    ...a.parts.flatMap((p) => [
-      p.title,
-      ...p.rows.map((r) => `${r.id}/${r.line}/${bodyNo(figureOf(r)?.body)}/${visitorOf(person(r)) ? 1 : 0}`),
-    ]),
+    ...a.parts.flatMap((p) => [p.title, ...p.rows.map((r) => `${r.id}/${r.line}/${bodyNo(figureOf(r)?.body)}`)]),
   ].join("|");
 
-const person = (r: AboutRow): { id: string; name: string; you: boolean } => ({ id: r.id, name: r.name, you: r.you });
-
-/** One line of the panel. In town, a button: choosing them shows where they are, if they are drawn here. */
-function rowOf(r: AboutRow, inTown: boolean, locate: (a: Actor) => void): HTMLElement {
-  const kids = [
+/** One line of the panel, standing for whoever it is: choosing it shows their card. */
+function rowOf(r: AboutRow): HTMLElement {
+  const b = el(
+    "button",
+    "k-thing about-row",
+    { type: "button" },
     el("span", "k-thing-pic", {}, pic(faceOf(r), 2)),
     el(
       "span",
@@ -83,18 +87,13 @@ function rowOf(r: AboutRow, inTown: boolean, locate: (a: Actor) => void): HTMLEl
       r.line === "" ? null : el("span", "k-d", { text: r.line }),
     ),
     r.you ? el("span", "k-info-tagged", { text: "you" }) : null,
-  ];
-  const a = inTown ? (r.you ? G.player : visitorOf(person(r))) : null;
-  if (!a) return el("div", "k-thing about-row", {}, ...kids);
-  const b = el("button", "k-thing about-row", { type: "button", "aria-label": `Show where ${r.name} is` }, ...kids);
-  b.addEventListener("click", () => {
-    closePanel();
-    locate(a);
-  });
+  );
+  known({ id: r.id, name: r.name, line: r.line });
+  link(b, `person:${r.id}`);
   return b;
 }
 
-function fill(list: HTMLElement, a: About, locate: (a: Actor) => void): void {
+function fill(list: HTMLElement, a: About): void {
   if (a.alone) {
     list.replaceChildren(el("p", "k-d", { text: ALONE }));
     return;
@@ -102,13 +101,36 @@ function fill(list: HTMLElement, a: About, locate: (a: Actor) => void): void {
   list.replaceChildren(
     ...a.parts.flatMap((p) => [
       el("div", "k-label", { text: p.title }),
-      el("div", "about-part", {}, ...p.rows.map((r) => rowOf(r, p.title === "In town", locate))),
+      el("div", "about-part", {}, ...p.rows.map(rowOf)),
     ]),
   );
 }
 
+/** Puts the card and the panel away, and then does `then`. */
+const away = (then: () => void) => (): void => {
+  close();
+  closePanel();
+  then();
+};
+
+/** The card's buttons: "Find in town" for somebody in town and drawn here, "Visit yard" for anybody else with a yard. */
+function initPeople(locate: (a: Actor) => void): void {
+  people({
+    stats: { works: WORKS_STATS, raid: RAID_STATS },
+    actions: (p) => {
+      const you = p.id === myId();
+      const inTown = aboutNow().parts.some((part) => part.title === "In town" && part.rows.some((r) => r.id === p.id));
+      const a = inTown ? (you ? G.player : visitorOf({ id: p.id, name: p.name, you })) : null;
+      return [
+        ...(a ? [{ label: "Find in town", on: away(() => locate(a)) }] : []),
+        ...(p.games?.works && !you ? [{ label: "Visit yard", on: away(() => hooks.goIn("works", p.id)) }] : []),
+      ];
+    },
+  });
+}
+
 /** Opens "Who is about". */
-export function openAbout(locate: (a: Actor) => void): void {
+export function openAbout(): void {
   openPanel({
     id: ABOUT,
     title: "Who is about",
@@ -123,7 +145,7 @@ export function openAbout(locate: (a: Actor) => void): void {
           return keyOf(now);
         },
         () => {
-          fill(list, now, locate);
+          fill(list, now);
         },
       );
     },
@@ -137,8 +159,9 @@ let count: HTMLElement | null = null;
 /** Seconds until the number is counted again. */
 let recount = 0;
 
-/** Puts the button beside the purse. `locate` shows where somebody chosen in town is. */
+/** Puts the button beside the purse. `locate` shows where somebody found in town is. */
 export function initAbout(locate: (a: Actor) => void): void {
+  initPeople(locate);
   count = el("span", "", { text: "1" });
   button = el(
     "button",
@@ -149,7 +172,7 @@ export function initAbout(locate: (a: Actor) => void): void {
   );
   button.addEventListener("click", () => {
     if (G.panel === ABOUT) closePanel();
-    else openAbout(locate);
+    else openAbout();
   });
   tip(button, "Who is about");
   $("purse").after(button);

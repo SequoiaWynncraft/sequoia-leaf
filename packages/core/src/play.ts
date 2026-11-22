@@ -69,6 +69,11 @@ export interface Standing {
   readonly also: Readonly<Record<string, number>>;
 }
 
+/** A standing with its place among everyone's: how many score higher, and one. */
+export interface Placed extends Standing {
+  readonly place: number;
+}
+
 /** A command that may not be done, with a code, as API errors have. Nothing changed. */
 export interface Refused {
   readonly refused: string;
@@ -84,6 +89,8 @@ export interface Game<State, Command, View, Note> {
   apply(state: State, command: Command, ctx: Ctx): Done<State, Note> | Refused;
   /** What the player's browser is given: the state without anything that tells the future. */
   view(state: State, ctx: Ctx): View;
+  /** What a visitor is given of somebody's state (`ctx.player` is the visitor); a game without it cannot be visited. */
+  visit?(state: State, ctx: Ctx): View;
   /** Reads stored text back, of this or an older version, or null for nonsense. */
   decode(text: string): State | null;
   encode(state: State): string;
@@ -104,3 +111,5 @@ export const COMMAND_ID = /^[A-Za-z0-9_.:-]{1,64}$/;
 
 /** The play service's routes, by game. */
 export const playPath = (game: GameId): string => `/v1/game/play/${game}`;
+/** Where a visitor reads a player's state in a game. */
+export const visitPath = (game: GameId, player: string): string => `${playPath(game)}/of/${encodeURIComponent(player)}`;

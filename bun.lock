@@ -38,6 +38,8 @@
       "name": "@sequoia-leaf/town",
       "dependencies": {
         "@sequoia-leaf/kit": "workspace:*",
+        "@sequoia-leaf/raid": "workspace:*",
+        "@sequoia-leaf/yard": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "1.4.4",
@@ -47,6 +49,7 @@
       "name": "@sequoia-leaf/works",
       "dependencies": {
         "@sequoia-leaf/kit": "workspace:*",
+        "@sequoia-leaf/raid": "workspace:*",
         "@sequoia-leaf/yard": "workspace:*",
       },
       "devDependencies": {

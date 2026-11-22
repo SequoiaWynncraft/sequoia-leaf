@@ -25,6 +25,7 @@ import {
 import { deliver, storyOrder } from "./orders.ts";
 import { route } from "./route.ts";
 import { save } from "./save.ts";
+import { WORKS_STATS } from "./stats.ts";
 import { at, put as add, type Standing, type World } from "./world.ts";
 import large from "./yards/large.json";
 import mid from "./yards/mid.json";
@@ -402,5 +403,19 @@ describe("Leaf and the page agree", () => {
     stepTo(last, page.tick + 100);
     stepTo(page, page.tick + 100);
     expect(save(last)).toBe(save(page));
+  });
+});
+
+describe("a yard's numbers on its owner's card", () => {
+  test("are the Coins it has earned, the story done of its length, and its place, once it is on the board", () => {
+    expect(WORKS_STATS.numbers({ place: 1, score: 38_556, also: { story: 18 } })).toEqual([
+      { label: "Coins earned", value: "38,556" },
+      { label: "Story", value: `18 of ${STORY.length}` },
+      { label: "Top yards", value: "#1" },
+    ]);
+    expect(WORKS_STATS.numbers({ place: 4, score: 0, also: { story: 0 } }).map((s) => s.label)).toEqual([
+      "Coins earned",
+      "Story",
+    ]);
   });
 });

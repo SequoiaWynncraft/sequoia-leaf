@@ -1,11 +1,14 @@
 /**
  * What is always in view over the yard: the power as two numbers and a bar, the order in hand, the
- * buttons for the yard's books, and the way back to town.
+ * buttons for the yard's books, and the way back to town. In a visit, only "Top yards" of the books,
+ * and in the order's place a strip that says whose yard it is.
  */
 
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { outside } from "@sequoia-leaf/kit/net.ts";
 import { leave } from "@sequoia-leaf/kit/shell.ts";
+import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { AWAY_MOST_MS, isFilled, PLANS, planState, power, SHIFT, storyOrder } from "@sequoia-leaf/yard";
@@ -16,7 +19,7 @@ import { coins, collect, keepScreen } from "../yard.ts";
 import { orderRef } from "./card.ts";
 import { storyLabel } from "./notes.ts";
 import { type PanelId, togglePanel } from "./panels.ts";
-import { $, wantRows, when, type YardIcon, yardIcon } from "./parts.ts";
+import { $, button, pic, wantRows, when, type YardIcon, yardIcon } from "./parts.ts";
 
 const books = new Map<PanelId, HTMLElement>();
 
@@ -111,7 +114,7 @@ function bookButtons(): () => void {
     });
     tip(b, `${title} (${key})`, about);
     books.set(id, b);
-    host.append(b);
+    if (!S.visiting || id === "board") host.append(b);
     return b;
   };
   const ordersBtn = make("orders", "Orders", "O");
@@ -168,10 +171,30 @@ function corner(): void {
   host.append(back, mute);
 }
 
+/** Opens the member's own yard, from a visit. */
+export const myYard = (): void => outside.go(location.pathname);
+
+/** In a visit: the owner's face, whose yard it is, and the way to the member's own. The yard's numbers are on its owner's card. */
+function visitStrip(who: { readonly id: string; readonly name: string }): () => void {
+  const host = $("visit");
+  host.hidden = false;
+  const mine = button("wood sm", ["My yard"], myYard);
+  return when(
+    () => String(facesCame()),
+    () => {
+      host.replaceChildren(
+        el("span", "k-thing-pic", {}, pic(faceFor(who.id, who.name, true), 2)),
+        el("b", "k-name who", { text: `${who.name}'s yard` }),
+        mine,
+      );
+    },
+  );
+}
+
 let parts: (() => void)[] = [];
 
 export function initHud(art: Art): void {
-  parts = [powerPlaque(), tracker(art), bookButtons()];
+  parts = S.visiting ? [visitStrip(S.visiting), bookButtons()] : [powerPlaque(), tracker(art), bookButtons()];
   corner();
 }
 

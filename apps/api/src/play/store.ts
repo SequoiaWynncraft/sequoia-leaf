@@ -1,4 +1,4 @@
-import { DAY_MS, type Logged, type PlayerId, type Standing, utcDay } from "@sequoia-leaf/core";
+import { DAY_MS, type Logged, type Placed, type PlayerId, type Standing, utcDay } from "@sequoia-leaf/core";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
@@ -38,13 +38,6 @@ const Own = Schema.Struct({
 });
 /** Somebody on a game's board, as read back. */
 const Stood = Schema.Struct({ ...Own.fields, playerId: PlayerUuid, guest: Schema.BooleanFromBit });
-
-/** Where somebody is on a game's board: their place (how many score higher, and one), their score and what is shown beside it. */
-export interface Placed {
-  readonly place: number;
-  readonly score: number;
-  readonly also: Readonly<Record<string, number>>;
-}
 
 /** A game's board: the top `BOARD_MOST`, and the player's own place among everyone, if they are on it. */
 export interface Board {
@@ -109,6 +102,8 @@ export class PlayStore extends Context.Service<
      * reached it first, and the player's own place.
      */
     readonly board: (game: string, playerId: PlayerId) => Effect.Effect<Board>;
+    /** Where a player stands in each game they have a standing in, by game, each place worked out as `board`'s own. */
+    readonly standingsOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, Placed>>;
   }
 >()("leaf/PlayStore") {
   static readonly layer = Layer.effect(
@@ -158,6 +153,13 @@ export class PlayStore extends Context.Service<
         execute: ({ playerId, game }) => sql`
           SELECT ${place} AS place, score, also FROM standings AS s
           WHERE player_id = ${playerId} AND game = ${game} AND score > 0
+        `,
+      });
+      const standingsOf = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: Schema.Struct({ ...Own.fields, game: Schema.String }),
+        execute: (playerId) => sql`
+          SELECT game, ${place} AS place, score, also FROM standings AS s WHERE player_id = ${playerId} ORDER BY game
         `,
       });
       return PlayStore.of({
@@ -228,6 +230,11 @@ export class PlayStore extends Context.Service<
               updated_at = CASE WHEN score = excluded.score THEN updated_at ELSE excluded.updated_at END
           `.pipe(Effect.asVoid, Effect.orDie),
         board: (game, playerId) => Effect.all({ top: top(game), you: own({ playerId, game }) }).pipe(Effect.orDie),
+        standingsOf: (playerId) =>
+          standingsOf(playerId).pipe(
+            Effect.map((rows) => new Map(rows.map(({ game, ...placed }) => [game, placed]))),
+            Effect.orDie,
+          ),
       });
     }),
   );

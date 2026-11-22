@@ -68,9 +68,9 @@ export interface Scene {
 export interface Stage {
   /**
    * Take the member into a game: the view closes in on `at` (a point in the scene), and the game
-   * opens out of it.
+   * opens out of it; for the Works, on `of`'s yard, if given.
    */
-  goInside(game: GameId, at: Pt): void;
+  goInside(game: GameId, at: Pt, of?: string): void;
   /** Point the camera now, without easing. */
   snap(): void;
   /** Put another scene on in this one's place, at once. */

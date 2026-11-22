@@ -2,15 +2,20 @@
  * "Top yards": the twenty yards that have earned the most Coins, all time, as Leaf keeps them
  * (`GET /v1/game/play/works/standings`), and the member's own place if they are not among them.
  * Each owner is shown as "Who is about" shows them: their face, their name, and "Guest" for a guest.
- * Read when the panel opens, and each minute while it is open.
+ * Read when the panel opens, and each minute while it is open. Choosing one shows their card
+ * (`person`), with "Visit yard" for anybody else's.
  */
 
+import { link } from "@sequoia-leaf/kit/card.ts";
 import { amount, el } from "@sequoia-leaf/kit/dom.ts";
 import { member, where } from "@sequoia-leaf/kit/live.ts";
-import { ask, isRecord } from "@sequoia-leaf/kit/net.ts";
+import { ask, isRecord, outside } from "@sequoia-leaf/kit/net.ts";
+import { known, people } from "@sequoia-leaf/kit/person.ts";
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
+import { RAID_STATS } from "@sequoia-leaf/raid/stats.ts";
 import { STORY } from "@sequoia-leaf/yard";
+import { WORKS_STATS } from "@sequoia-leaf/yard/stats.ts";
 
 import type { Art } from "../art/index.ts";
 import { button, pic, when } from "./parts.ts";
@@ -54,23 +59,32 @@ export function readBoard(v: unknown): Board | null {
   return { top: top.filter((r) => r !== null), you };
 }
 
-/** One line of the board. */
+/** Registers the cards of the people on the board: "Visit yard" opens anybody else's yard who has one. */
+export function initBoard(myId: string): void {
+  people({
+    stats: { works: WORKS_STATS, raid: RAID_STATS },
+    actions: (p) =>
+      p.games?.works && p.id !== myId
+        ? [{ label: "Visit yard", on: () => outside.go(`?of=${encodeURIComponent(p.id)}`) }]
+        : [],
+  });
+}
+
+/** One line of the board, standing for its owner. */
 function line(r: Row): HTMLElement {
-  return el(
+  const said = `${r.guest ? "Guest · " : ""}Story ${r.story} of ${STORY.length}`;
+  const row = el(
     "div",
     r.you ? "k-card lit board-row" : "board-row",
     {},
     el("span", "place", { text: String(r.place) }),
     el("span", "k-thing-pic", {}, pic(faceFor(r.id, r.name, where().mode === "live"), 2)),
-    el(
-      "span",
-      "who",
-      {},
-      el("span", "k-thing-name", { text: r.name }),
-      el("span", "k-d", { text: `${r.guest ? "Guest · " : ""}Story ${r.story} of ${STORY.length}` }),
-    ),
+    el("span", "who", {}, el("span", "k-thing-name", { text: r.name }), el("span", "k-d", { text: said })),
     amount("coin", r.score.toLocaleString("en-US")),
   );
+  known({ id: r.id, name: r.name, line: said });
+  link(row, `person:${r.id}`);
+  return row;
 }
 
 export function board(_art: Art, body: HTMLElement): () => void {
@@ -96,16 +110,13 @@ export function board(_art: Art, body: HTMLElement): () => void {
       }
       const me = member();
       const { top, you } = shown;
-      const outside =
+      const own =
         you === null
           ? el("div", "k-d", { text: "Earn your first Coin to be listed." })
           : top.some((r) => r.you) || !me
             ? null
             : line({ ...you, id: me.id, name: me.name, guest: me.guest, you: true });
-      list.replaceChildren(
-        ...top.map(line),
-        ...(outside ? [...(top.length > 0 ? [el("div", "k-rule")] : []), outside] : []),
-      );
+      list.replaceChildren(...top.map(line), ...(own ? [...(top.length > 0 ? [el("div", "k-rule")] : []), own] : []));
     },
   );
   return () => {

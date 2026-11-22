@@ -6,7 +6,7 @@ import { SqlClient } from "effect/sql";
 import { Allowances } from "../allowance.ts";
 import { Coins } from "./coins.ts";
 import type { Opened, Played } from "./games.ts";
-import { PlayStore } from "./store.ts";
+import { PlayStore, type Stored } from "./store.ts";
 
 /** How often a player may send a batch of commands: ten a second, bursts of twenty. */
 export const BATCHES = { rate: 10, burst: 20 } as const;
@@ -42,6 +42,12 @@ export interface Shown {
 
 /** A player's state opened for their page, or none: the one stored does not read. */
 export type Opening = ({ readonly status: "open" } & Shown) | { readonly status: "unreadable" };
+
+/**
+ * Somebody's state opened for a visitor; or nothing to visit (no state, or a game that cannot be
+ * visited); or none, the one stored does not read; or the visitor asked faster than they may.
+ */
+export type Visiting = Opening | { readonly status: "nothing" } | { readonly status: "slow" };
 
 export type Batch =
   | ({ readonly status: "done"; readonly results: readonly Result[] } & Shown)
@@ -123,6 +129,9 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * and their Coins open with the welcome. A stored state that will not read is left as it is: the
  * player and the game are logged, and nothing is done. Leaf's dice for each call come from
  * `SecureRandom`.
+ *
+ * A visitor reads somebody's state (`visit`) brought to now in memory, and nothing is written: no
+ * new state, not the one brought to now, no Coins.
  */
 export class Play extends Context.Service<
   Play,
@@ -131,6 +140,8 @@ export class Play extends Context.Service<
     readonly open: (playing: Playing, played: Played) => Effect.Effect<Opening>;
     /** Does a batch of commands, as they came off the wire. */
     readonly send: (playing: Playing, played: Played, commands: readonly unknown[]) => Effect.Effect<Batch>;
+    /** Another player's state in a game, as a visitor (`caller`) is given it. Takes one of the caller's batches. */
+    readonly visit: (player: PlayerId, played: Played, caller: Playing) => Effect.Effect<Visiting>;
   }
 >()("leaf/Play") {
   static readonly layer = Layer.effect(
@@ -145,30 +156,33 @@ export class Play extends Context.Service<
       const pace = new Allowances([BATCHES, COMMANDS], ALLOWANCES_KEPT);
 
       /**
-       * The player's stored state in a game, or a new one made and stored for them, opened at now.
-       * Null for a stored state that does not read, which is logged and left as it is.
+       * A player's stored state in a game opened at now, for a call of `playing`'s. Null for one that
+       * does not read, which is logged and left as it is.
        */
-      const opened = (playing: Playing, played: Played, now: number, room: number) =>
+      const openAt = (player: PlayerId, playing: Playing, played: Played, stored: Stored, now: number, room: number) =>
         Effect.gen(function* () {
-          const found = yield* store.read(playing.playerId, played.id);
-          let rev = 0;
-          let text: string;
-          if (Option.isSome(found)) {
-            ({ rev } = found.value);
-            text = found.value.state;
-          } else {
-            text = played.create(ctxOf(playing, now, yield* dice, room));
-            yield* store.create(playing.playerId, played.id, text, now);
-            yield* coins.open(playing.playerId, now);
-          }
+          const { rev, state: text } = stored;
           const game: Opened | null = played.open(text, ctxOf(playing, now, yield* dice, room));
           if (game === null) {
             yield* Effect.logError(
-              `The ${played.id} state stored for ${playing.playerId} does not read; it is kept as it is`,
-            ).pipe(Effect.annotateLogs({ player: playing.playerId, game: played.id, rev }));
+              `The ${played.id} state stored for ${player} does not read; it is kept as it is`,
+            ).pipe(Effect.annotateLogs({ player, game: played.id, rev }));
             return null;
           }
           return { rev, text, game };
+        });
+
+      /** The player's stored state in a game, or a new one made and stored for them, opened at now (`openAt`). */
+      const opened = (playing: Playing, played: Played, now: number, room: number) =>
+        Effect.gen(function* () {
+          const found = yield* store.read(playing.playerId, played.id);
+          if (Option.isSome(found)) {
+            return yield* openAt(playing.playerId, playing, played, found.value, now, room);
+          }
+          const text = played.create(ctxOf(playing, now, yield* dice, room));
+          yield* store.create(playing.playerId, played.id, text, now);
+          yield* coins.open(playing.playerId, now);
+          return yield* openAt(playing.playerId, playing, played, { rev: 0, state: text }, now, room);
         });
 
       return Play.of({
@@ -288,6 +302,27 @@ export class Play extends Context.Service<
               return { status: "unreadable" } satisfies Batch;
             }
             return { status: "done", now, ...done } satisfies Batch;
+          }),
+        visit: (player, played, caller) =>
+          Effect.gen(function* () {
+            const now = yield* Clock.currentTimeMillis;
+            if (!pace.take(caller.playerId, now, [1, 0])) {
+              return { status: "slow" } satisfies Visiting;
+            }
+            const found = yield* store.read(player, played.id);
+            if (Option.isNone(found)) {
+              return { status: "nothing" } satisfies Visiting;
+            }
+            // Nothing is earned by a visit: the call may pay none.
+            const open = yield* openAt(player, caller, played, found.value, now, 0);
+            if (open === null) {
+              return { status: "unreadable" } satisfies Visiting;
+            }
+            const visit = open.game.visit;
+            if (visit === null) {
+              return { status: "nothing" } satisfies Visiting;
+            }
+            return { status: "open", rev: open.rev, now, view: visit(ctxOf(caller, now, 0, 0)) } satisfies Visiting;
           }),
       });
     }),

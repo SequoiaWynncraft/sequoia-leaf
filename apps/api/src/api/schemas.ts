@@ -210,6 +210,8 @@ export const Played = Schema.Struct({ ...PlayShown.fields, results: Schema.Array
 
 /** A score, and the few numbers the game shows beside it. */
 const Stood = { score: Schema.Number, also: Schema.Record(Schema.String, Schema.Number) };
+/** Somebody's place among everyone in a game (how many score higher, and one), with their score. */
+const Place = Schema.Struct({ place: Schema.Number, ...Stood });
 
 /**
  * A game's board: the twenty highest scores (a tie going to whoever reached it first), each with
@@ -228,7 +230,17 @@ export const Standings = Schema.Struct({
       you: Schema.Boolean,
     }),
   ),
-  you: Schema.NullOr(Schema.Struct({ place: Schema.Number, ...Stood })),
+  you: Schema.NullOr(Place),
+});
+
+/**
+ * Somebody, as their card shows them: their id, their name ("Someone" for one Leaf has no name for),
+ * and their place, score and numbers in each game they have a standing in, by game.
+ */
+export const Person = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  games: Schema.Record(Schema.String, Place),
 });
 
 /**
