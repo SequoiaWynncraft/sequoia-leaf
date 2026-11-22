@@ -56,7 +56,7 @@ export const KIND: Record<Kind, KindInfo> = {
     cost: 8,
     draw: 0,
     gives: 0,
-    what: "Splits one line into up to three: ahead, left and right, an item each way in turn. A side with no belt, or a full one, is skipped. Nothing is lost.",
+    what: "Splits one line into up to three: ahead, left and right, an item each way in turn. A side with no belt, or a full one, is skipped. Each way can be shut on its card. Nothing is lost.",
   },
   joiner: {
     name: "Joiner",

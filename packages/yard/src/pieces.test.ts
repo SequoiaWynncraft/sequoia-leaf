@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { paint, setOpen, setRecipe } from "./build.ts";
+import { paint, setOpen, setRecipe, setWay, turn } from "./build.ts";
 import { BLUEPRINT, KIND } from "./content/machines.ts";
 import { bare, belts, lit, on, put, steps, workingYard } from "./fixtures.ts";
 import { WORKS } from "./game.ts";
@@ -20,6 +20,7 @@ import {
   within,
 } from "./pieces.ts";
 import { load, readPiece, save } from "./save.ts";
+import { rewire } from "./step.ts";
 import { at, put as add, type World } from "./world.ts";
 
 /** A small works west of the depot: a mill that saws, a shut crate, a tunnel under a pylon, and belts between. */
@@ -365,6 +366,54 @@ describe("colour", () => {
       read("belt", 1.5),
       read("mill", 3),
     ]).toEqual([6, 1, undefined, undefined, undefined, undefined]);
+  });
+  test("a splitter turned, moved, copied, kept as a blueprint and taken away and put back keeps its shut ways", () => {
+    const w = bare();
+    put(w, "splitter", 3, 3, 0);
+    // Left and right shut: north and south of one facing east.
+    setWay(w, 3, 3, 1, false);
+    setWay(w, 3, 3, 2, false);
+    /** The tiles a splitter on a tile hands to: ahead, left, right, with -1 for a way that is shut. */
+    const ways = (x: number, y: number): number[] =>
+      Array.from(rewire(w).ways.subarray(at(w, x, y) * 3, at(w, x, y) * 3 + 3));
+    expect(ways(3, 3)).toEqual([at(w, 4, 3), -1, -1]);
+    // Turned to face south, the shut ways turn with it: east and west now.
+    turn(w, 3, 3, 1);
+    expect(on(w, 3, 3).shut).toBe(6);
+    expect(ways(3, 3)).toEqual([at(w, 3, 4), -1, -1]);
+    // Moved, with a quarter turn.
+    expect(move(w, [at(w, 3, 3)], 1, 8, 8)).toBeNull();
+    expect(on(w, 8, 8)).toMatchObject({ dir: 2, shut: 6 });
+    // Copied.
+    const piece = piecesAt(w, [at(w, 8, 8)]);
+    expect(piece).toEqual([{ kind: "splitter", x: 8, y: 8, dir: 2, span: 0, shut: 6 }]);
+    expect(stand(w, placed(piece, 0, 2, 9), Infinity).ok).toBe(true);
+    expect(on(w, 2, 9).shut).toBe(6);
+    expect(ways(2, 9)).toEqual([at(w, 1, 9), -1, -1]);
+    // Kept as a blueprint, saved with the yard, read back and set down.
+    expect(saveBlueprint(w, 1, [at(w, 8, 8)])).toBeNull();
+    expect(stand(w, placed(load(save(w))?.blueprints[1] ?? [], 0, 5, 1), Infinity).ok).toBe(true);
+    expect(on(w, 5, 1).shut).toBe(6);
+    // Taken away and put back, as undoing a removal does.
+    clear(w, [at(w, 5, 1)]);
+    expect(stand(w, placed(piece, 0, 5, 1), Infinity).ok).toBe(true);
+    expect(on(w, 5, 1).shut).toBe(6);
+    // A new one has all three open, and only a splitter keeps shut ways, of 1 to 7.
+    expect(put(w, "splitter", 20, 1).shut).toBe(0);
+    const kept = [
+      ["splitter", 7],
+      ["splitter", 0],
+      ["splitter", 8],
+      ["splitter", 1.5],
+      ["joiner", 3],
+    ] as const;
+    expect(kept.map(([kind, shut]) => readPiece({ kind, x: 1, y: 1, dir: 0, span: 0, shut })?.shut)).toEqual([
+      7,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
   });
   test("a copy of a coloured belt beside an uncoloured one keeps both as they were", () => {
     const w = bare();

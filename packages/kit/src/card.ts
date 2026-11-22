@@ -700,11 +700,19 @@ const view: View = {
       return;
     }
     const card = drawCard(d, o);
+    const scrolled = was?.scrollTop ?? 0;
+    const held = was ? [...was.querySelectorAll("button")].findIndex((b) => b === document.activeElement) : -1;
     if (was) was.replaceWith(card);
     else document.body.append(card);
     node = card;
     // The same card again (pinned where it was, followed on, refreshed) keeps its corner as far as it fits.
     const same = prev !== null && prev.from === o.from && prev.stack[0] === o.stack[0] && prev.at === o.at;
+    // The very card that was up, drawn again (not one followed to from it): it stays scrolled where it was,
+    // so what was under a finger is still under it, and whoever was on one of its buttons is still on it.
+    if (same && prev.stack.length === o.stack.length && prev.stack.at(-1) === o.stack.at(-1)) {
+      card.scrollTop = scrolled;
+      card.querySelectorAll("button")[held]?.focus({ preventScroll: true });
+    }
     const spot = spotOf(o.at);
     if (card.classList.contains("sheet")) {
       corner = null;

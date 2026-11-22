@@ -58,7 +58,7 @@ one each of its parts.
 | Mill       |   20 | draws 3  | one thing in, one out (12 ticks); saws, fires or presses by what arrives |
 | Bench      |   40 | draws 4  | two different things in, one out (20 or 30 ticks)                        |
 | Workshop   |  120 | draws 8  | three different things in, one out (30 to 80 ticks)                      |
-| Splitter   |    8 |          | in at the back; out ahead, left and right by turns                       |
+| Splitter   |    8 |          | in at the back; out ahead, left and right by turns; a way can be shut    |
 | Joiner     |    8 |          | in at the back and both sides, turn about; out ahead                     |
 | Tunnel     |   12 |          | a belt that goes under one to three tiles of anything                    |
 | Crate      |   20 |          | holds 32 things of any kinds; can be shut, and then lets nothing out     |
@@ -76,8 +76,9 @@ so a first line can be built, and rebuilt, from an empty purse. `costOf(w, kind)
 one of a thing would cost.
 
 **Many pieces at once** (`pieces.ts`). A `Piece` is a piece as it is asked for: its kind, its tile,
-which way it faces, a tunnel's span, and what it keeps: a set recipe, a shut crate, a colour (`Kept`
-and `keptOf` are the one list of that). `stand(w, pieces, coins)` stands a set all or none, and is
+which way it faces, a tunnel's span, and what it keeps: a set recipe, a shut crate, a colour, a
+splitter's shut ways (`Kept` and `keptOf` are the one list of that). `stand(w, pieces, coins)` stands
+a set all or none, and is
 what a run of belt, a copy and a blueprint set down all go through: each piece is checked and priced
 as a single one is (`refusal`, `priceAt`), two of a set may not want one tile, and each goes down
 with `build`, so over one of its kind a piece only turns it and a splitter or a joiner takes a belt's
@@ -108,7 +109,13 @@ tells a machine to make one thing only, and `tipOut` empties what a machine hold
 that has filled up with the wrong part.
 
 A plain belt takes whichever of its feeders comes first, so one full line can keep another waiting;
-a joiner takes turn about. A tunnel is built as both mouths at once and comes up at the nearest
+a joiner takes turn about. A splitter sends one thing to each of its ways out in turn, starting after
+the way it last sent to, and passes by a way that nothing takes from, one that is full, and one that
+is shut. `setWay` shuts or opens a way (`shut` on the building: a bit each for ahead, left and right,
+so they turn with it); a shut way hands to nothing in `rewire`, which is the one place that says so.
+With all three shut a splitter holds what it has, and `status` says it is blocked.
+
+A tunnel is built as both mouths at once and comes up at the nearest
 clear tile; a thing spends as long under the ground as it would on belts over the same tiles. A
 tunnel goes under belts, roots and the stream, but never under the depot, and the router goes round.
 
@@ -190,7 +197,9 @@ what they took; `remove` says what comes back; whatever the yard earns gathers i
 
 **Saving.** `save(w)` is JSON with a version (3), without the seed when the yard has none, and
 without `blueprints` when none is kept: the version did not change for them, so a save from before
-there were blueprints reads as a yard with none. `load(text)` gives back a yard it can vouch for or
+there were blueprints reads as a yard with none. A splitter's shut ways are written only where one is
+shut, the same way: an older save reads with every way open. `load(text)` gives back a yard it can
+vouch for or
 nothing: a record of the wrong shape or version is refused whole, and inside a good one any plot,
 plan, building or blueprint that could not have come about by playing is left out. A blueprint is
 read piece by piece with `readPiece`, as a command's pieces are.
@@ -215,24 +224,25 @@ the command (`play`), or refuses it with a code (`REFUSED`) and leaves the yard 
 left it. A plot, a plan and a standing order are named by fields of their own, since the play
 service gives every command an `id`.
 
-| `do`       | fields                                                                     |
-| ---------- | -------------------------------------------------------------------------- |
-| `build`    | `kind, x, y, dir`: a piece; over the same kind it only turns               |
-| `lay`      | `legs: [{kind, x, y, dir, span}]`, `turn?: {x, y, dir}`: all of it or none |
-| `stand`    | `pieces: [{kind, x, y, dir, span, recipe?, open?, tint?}]`: all or none    |
-| `move`     | `tiles, turns, x, y`: the pieces on those tiles, as one, all or none       |
-| `remove`   | `x, y`                                                                     |
-| `clear`    | `tiles`: every piece on them                                               |
-| `turn`     | `x, y, dir`                                                                |
-| `paint`    | `x, y, tint`: the line through a tile, 1 to 6, or 0 for no colour          |
-| `recipe`   | `x, y, item` (or null)                                                     |
-| `tipOut`   | `x, y, item` (or null)                                                     |
-| `crate`    | `x, y, open`                                                               |
-| `buyPlot`  | `plot`                                                                     |
-| `buyPlan`  | `plan`                                                                     |
-| `swap`     | `order`: a standing order, by its id                                       |
-| `handOver` | `order`: a filled standing order, by its id                                |
-| `collect`  | pays the till in, and puts the letter about a time away away               |
+| `do`       | fields                                                                         |
+| ---------- | ------------------------------------------------------------------------------ |
+| `build`    | `kind, x, y, dir`: a piece; over the same kind it only turns                   |
+| `lay`      | `legs: [{kind, x, y, dir, span}]`, `turn?: {x, y, dir}`: all of it or none     |
+| `stand`    | `pieces: [{kind, x, y, dir, span, recipe?, open?, tint?, shut?}]`: all or none |
+| `move`     | `tiles, turns, x, y`: the pieces on those tiles, as one, all or none           |
+| `remove`   | `x, y`                                                                         |
+| `clear`    | `tiles`: every piece on them                                                   |
+| `turn`     | `x, y, dir`                                                                    |
+| `paint`    | `x, y, tint`: the line through a tile, 1 to 6, or 0 for no colour              |
+| `recipe`   | `x, y, item` (or null)                                                         |
+| `tipOut`   | `x, y, item` (or null)                                                         |
+| `crate`    | `x, y, open`                                                                   |
+| `way`      | `x, y, way, open`: a splitter's way out: 0 ahead, 1 left, 2 right              |
+| `buyPlot`  | `plot`                                                                         |
+| `buyPlan`  | `plan`                                                                         |
+| `swap`     | `order`: a standing order, by its id                                           |
+| `handOver` | `order`: a filled standing order, by its id                                    |
+| `collect`  | pays the till in, and puts the letter about a time away away                   |
 
 `saveBlueprint` (`slot, tiles`) and `deleteBlueprint` (`slot`) keep and empty a blueprint's place.
 `tiles` are tiles of the land by their place in its lists, at most all of them. Leaf reads a command

@@ -262,6 +262,9 @@ export function initInput(canvas: HTMLCanvasElement): void {
 
   canvas.addEventListener("pointerup", lift);
   canvas.addEventListener("pointercancel", lift);
+  // A finger's tap is all told by now. The click a browser makes of it afterwards would land on
+  // whatever the tap put under the finger: a button of the card it opened.
+  canvas.addEventListener("touchend", (e) => e.preventDefault());
   canvas.addEventListener("pointerleave", (e) => {
     if (e.pointerType !== "mouse") return;
     S.hover = null;

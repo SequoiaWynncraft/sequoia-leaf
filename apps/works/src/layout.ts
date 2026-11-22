@@ -96,10 +96,15 @@ function arms(w: World, i: number, feeds: (from: number, to: number) => boolean)
     }
     case "splitter": {
       out[back] = 1;
-      // Only the ways out that something takes things from. A splitter nothing takes from shows all three.
+      // A shut way wears its bar. Of the rest, only the ways out that something takes things from;
+      // a splitter nothing takes from shows every way that is open.
       const ways = [b.dir, LEFT[b.dir], RIGHT[b.dir]] as const;
-      const led = ways.filter((d) => feeds(i, side(d)));
-      for (const d of led.length > 0 ? led : ways) out[d] = 2;
+      ways.forEach((d, k) => {
+        if ((b.shut >> k) & 1) out[d] = 3;
+      });
+      const open = ways.filter((d) => out[d] === 0);
+      const led = open.filter((d) => feeds(i, side(d)));
+      for (const d of led.length > 0 ? led : open) out[d] = 2;
       return out;
     }
     case "tunnel":

@@ -55,7 +55,7 @@ page opens, from the kit's palette: `art/ground.ts` paints the floor a pixel at 
 yard keeps it and once as the forest left it, and the frame shows the first wherever the yard owns
 the land; `art/machines.ts` builds every machine in every pose its work puts it in; `art/belts.ts`
 makes a belt tile out of arms, one to each side it joins, with slats that march the way things
-travel; `art/items.ts` types out the twenty-three things as tiny pictures.
+travel, and a bar across a way out that is shut; `art/items.ts` types out the twenty-three things as tiny pictures.
 
 Dusk is laid over the picture and the lamps cut holes in it, as in the town. Here the lamplight is
 also the power: the depot's lamps and every joined pylon's light the ground exactly as far as power
@@ -72,7 +72,9 @@ worked out once for each change to the yard (`layout.ts`).
 **What things look like.** A gatherer is a gnome who bends and lifts, and sits down asleep when no
 power reaches him. A mill shows the face of its work: a saw, a kiln or a press. A machine in
 trouble that has lasted wears a mark over its head, and so does a belt whose load has nowhere to
-go. Plans change how things look as well as how they run: gatherers get rakes and then barrows,
+go. A splitter has a brass arrowhead on each way out that leads somewhere, and on a way that is shut
+a short bar across that edge, red at its ends and pale in the middle, so that it is told from every
+colour a line can be given. Plans change how things look as well as how they run: gatherers get rakes and then barrows,
 second- and third-tier machines wear brass, belts are waxed and then turn to rollers, pylons grow,
 crates grow, the depot gains a flywheel. The depot is the back of the workshop the town sees from
 the front: the same planks, stone foot, chimney and brass wheel.
@@ -85,7 +87,8 @@ spade, a right-click takes away, `Q` takes up the tool from the thing pointed at
 puts away. `C` is the brush (with an area marked, `C` copies it): with it in hand the line over the dock shows six colours and none, and
 a click on a belt (or a drag across the yard) gives its whole line the one chosen. With nothing in hand a drag moves the view, the wheel zooms, and a click asks about a
 thing. With a finger, dragging always moves the view and two fingers zoom, so nothing is built by
-accident: a tap aims, and a second tap or the Build button builds. A belt is laid from two taps,
+accident: a tap aims, and a second tap or the Build button builds. The click a browser makes after
+a finger's tap on the yard is stopped, so the tap that opens a card presses nothing on it. A belt is laid from two taps,
 start and end, with the router's run shown before it is laid; tapping a machine to start from
 begins the run where that machine hands things on.
 
@@ -103,7 +106,7 @@ or kept piece has the colour it had, and the ghost shows it. With nothing
 marked the line shows the yard's three blueprints, each a small picture of its layout with its size
 and its price now; pressing one puts it in hand as a copy is. Save asks which place, and a kept one
 asks to be pressed again before it is replaced; a blueprint in hand has a bin, which asks too.
-`Z` undoes a move, a copy or a removal as one step.
+`Z` undoes a move, a copy or a removal as one step, and a splitter's way shut or opened.
 
 **Asking.** Everything in the yard is a card in the kit's one card system (`card.ts`, registered
 in `ui/card.ts`): resting the mouse on a thing shows its card, clicking pins it, and a tap (or a
@@ -118,7 +121,10 @@ with a back arrow.
   which plots have it.
 - _A machine_ (in the dock, a plan, a recipe): what it does, what it can make, its draw, pace,
   price and key. One standing in the yard adds what it is doing and holds, and what can be done:
-  pin a recipe, tip out, shut a crate, turn, take up another, take away.
+  pin a recipe, tip out, shut a crate, turn, take up another, take away. A splitter's card has its
+  three ways out round its picture, as they lie in the yard: each says Open, Shut, or No belt (open,
+  with nothing to take from it), and a press shuts or opens it. A visitor sees them and has nothing
+  to press.
 - _A plot, a plan, an order_: what it holds, changes or wants, every thing and machine in it a
   thing. Land that is not the yard's is a plot's card, and sells itself from it.
 

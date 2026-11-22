@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "splitter-ways",
+    at: "2026-11-22T21:45Z",
+    title: "The Works: shut a splitter's way",
+    lines: [
+      "A splitter's card shows its 3 ways out. Click or tap one to shut it or open it. A splitter sends no items to a shut way.",
+      "A splitter with 2 ways out now sends 1 item to each in turn. Before, one way got 2 of every 3.",
+    ],
+  },
+  {
     id: "works-area",
     at: "2026-11-22T21:06Z",
     title: "The Works: Select and blueprints",
