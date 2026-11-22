@@ -205,7 +205,8 @@ export const capital = (s: string): string => s.charAt(0).toUpperCase() + s.slic
 export const KEEPER = {
   hello: "Mind the gold. It's load-bearing.",
   doing: "Minding the gold. It is load-bearing.",
-  short: ["More Leaf first. I'll be here.", "more Leaf, please"],
+  /** What Cinfy says when a request is bought: at the counter, and out loud. */
+  filed: ["Into the ledger it goes.", "filed!"],
   taps: ["The gold is load-bearing.", "Leaf in, shiny out.", "No, you can't hold the sun."],
 } as const;
 

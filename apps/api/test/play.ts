@@ -12,7 +12,9 @@
  * is not in the guild, is in town too, as a guest. Birchwood and Pebblefoot
  * are in the town's live room as well, walking about it (`/v1/game/live`).
  * The backend, Sierra and Mojang are the tests' stand-ins, so nothing leaves
- * the machine.
+ * the machine. The Treasury's requests go to the tests' stand-in reward queue
+ * (`rewardQueue`), where Tester has 30 days in the guild: it charges Tester
+ * through Leaf's own purchase route, as the backend does.
  *
  * The cookie `seq_session=tester` is Tester's session; any other, or none, is
  * signed out. `/sign-in?return_to=<address>` sets it and goes back, as the
@@ -69,6 +71,7 @@ import {
   fakeMojang,
   HOUR,
   MINUTE,
+  rewardQueue,
   type Rgba,
   sessionOf,
   skinPng,
@@ -281,6 +284,7 @@ const leaf = testLeaf(
   { mojang: mojang.service, ...(steady === undefined ? {} : { dice: steadyDice(steady) }) },
 );
 const app = leaf.app();
+backend.api = rewardQueue("tester", tester.id, (path, init) => app.request(path, init)).api;
 
 // The day's play, as the backend and Sierra would report it.
 

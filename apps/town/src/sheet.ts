@@ -68,8 +68,8 @@ export function showSheet(s: Sprites, bodies: readonly Body[], folk: readonly Sp
             s.lilyBloom,
             ...s.crab,
             s.bang,
-            s.crown,
-            s.mug,
+            s.tome,
+            s.aspect,
             ...s.lanterns,
             ...s.bushes,
             ...s.rocks,
@@ -78,7 +78,6 @@ export function showSheet(s: Sprites, bodies: readonly Body[], folk: readonly Sp
             ...PLACES.map((pl) => icon(pl.id)),
             s.shortLog,
             ...s.pieces,
-            s.jar,
             ...bodies.flatMap((b) => b.frames.flat()),
             ...folk,
           ]

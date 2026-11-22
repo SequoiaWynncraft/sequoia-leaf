@@ -3,26 +3,23 @@
  *
  * - `thing:<id>` a thing for a camp (in the market, the tray, set out in the camp, a present, a
  *   trophy): its picture, name and kind, what it does when touched, how many the member has, and
- *   where it comes from (a stall and its price, the Treasury, a present, or what earns it);
- * - `ware:<id>` something Cinfy sells at the Treasury to wear or to share;
+ *   where it comes from (a stall and its price, a present, or what earns it);
  * - `stall:<id>` a market stall: who keeps it and what it sells.
  *
  * People keep the card they have (`hud.ts`).
  */
 import { type Description, type Entry, link, register, type Stat } from "@sequoia-leaf/kit/card.ts";
-import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { owned } from "@sequoia-leaf/town/camp.ts";
-import { PIECES, PRESENTS, STALLS, WARES } from "@sequoia-leaf/town/catalogue.ts";
+import { PRESENTS, STALLS } from "@sequoia-leaf/town/catalogue.ts";
 import { folkNamed } from "@sequoia-leaf/town/folk.ts";
 import { KIND_NAMES, thingOf } from "@sequoia-leaf/town/things.ts";
 
 import { type CampArt, pictureOf } from "./campart.ts";
 import { folkArt } from "./folkart.ts";
 import { mine } from "./leaf.ts";
-import type { Sprites } from "./sprites.ts";
 
 export const thingRef = (id: string): string => `thing:${id}`;
-export const wareRef = (id: string): string => `ware:${id}`;
 export const stallRef = (id: string): string => `stall:${id}`;
 
 /** What is said of a trophy not yet won, before what wins it. */
@@ -33,19 +30,14 @@ function pictureFor(art: CampArt, id: string): HTMLCanvasElement | null {
   return art.small[id] ?? pictureOf(art, id, 0, 0)?.c ?? null;
 }
 
-/** Where a camp thing comes from: the stalls that sell it, the Treasury, or how it is had. */
+/** Where a camp thing comes from: the stalls that sell it, or how it is had. */
 function whereFrom(id: string): { rows: Entry[]; words: string } {
   const thing = thingOf(id);
   const stalls = STALLS.flatMap((s) => {
     const stock = s.stock.find((k) => k.thing === id);
     return stock ? [{ ref: stallRef(s.id), note: `${stock.price.toLocaleString("en-US")} Coins` }] : [];
   });
-  const piece = PIECES.find((k) => k.thing === id);
-  if (stalls.length > 0 || piece)
-    return {
-      rows: stalls,
-      words: piece ? `Cinfy sells it at the Treasury, for ${piece.price.toLocaleString("en-US")} Leaf.` : "",
-    };
+  if (stalls.length > 0) return { rows: stalls, words: "" };
   if (thing?.kind === "trophies") return { rows: [], words: "Won, never bought." };
   if (PRESENTS.some((p) => p === id))
     return { rows: [], words: "A present: the town's own leave them when they drop by." };
@@ -76,19 +68,6 @@ function thingDesc(art: CampArt, id: string): Description | null {
   };
 }
 
-function wareDesc(sprites: Sprites, id: string): Description | null {
-  const w = WARES.find((x) => x.id === id);
-  if (!w) return null;
-  const pic = id === "crown" ? sprites.crown : id === "jar" ? sprites.jar : id === "cocoa" ? sprites.mug : null;
-  return {
-    name: w.name,
-    icon: pic,
-    tag: w.worn ? "Something to wear" : "For everybody at the fire",
-    aside: amount("leaf", w.price),
-    blocks: [{ body: w.about }],
-  };
-}
-
 function stallDesc(id: string): Description | null {
   const s = STALLS.find((x) => x.id === id);
   if (!s) return null;
@@ -107,9 +86,8 @@ function stallDesc(id: string): Description | null {
 }
 
 /** Says what the town's things are. */
-export function registerCards(sprites: Sprites, art: CampArt): void {
+export function registerCards(art: CampArt): void {
   register("thing", (id) => thingDesc(art, id));
-  register("ware", (id) => wareDesc(sprites, id));
   register("stall", (id) => stallDesc(id));
 }
 

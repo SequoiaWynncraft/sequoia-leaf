@@ -1372,7 +1372,6 @@ export function makeCamp(
   // ---------- drawing ----------
 
   const pic: Picture = {
-    sprites,
     sky: backdrop.sky,
     skyAt: { x: -210, y: 86 - 252 },
     ground: paintCampGround(0, paths),

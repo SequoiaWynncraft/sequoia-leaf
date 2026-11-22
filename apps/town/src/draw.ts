@@ -18,14 +18,12 @@ import { feet, headOf, HOP, onScreen } from "./actors.ts";
 import { bits, emoted, floaters, rings } from "./fx.ts";
 import { type Actor, G, show } from "./game.ts";
 import type { Light, Prop, Standing } from "./props.ts";
-import type { Sprites } from "./sprites.ts";
 
 /**
  * A place as it is drawn: its painted pieces and where each goes in the world, what stands in it,
  * who is there, and the parts of it that are its own to draw.
  */
 export interface Picture {
-  sprites: Sprites;
   /** The sunset behind the far trees: its picture, and where its top-left corner goes. */
   sky: HTMLCanvasElement;
   skyAt: Pt;
@@ -126,7 +124,7 @@ function hopOf(a: Actor): number {
 }
 
 /** One of the town's own, in the picture for what it is doing: walking, asleep, counting, pleased. */
-function drawFolk(g: Ctx, a: Actor, cx: number, cy: number, s: Sprites): void {
+function drawFolk(g: Ctx, a: Actor, cx: number, cy: number): void {
   const f = a.folk;
   if (!f) return;
   const art = f.art;
@@ -155,13 +153,12 @@ function drawFolk(g: Ctx, a: Actor, cx: number, cy: number, s: Sprites): void {
     g.drawImage(pic.c, x - (pic.c.width - pic.ax), y - pic.ay + 1);
     g.restore();
   } else g.drawImage(pic.c, x - pic.ax, y - pic.ay + 1);
-  if (a.mug > 0) g.drawImage(s.mug, x + (a.side > 0 ? 3 : -6), y - 6);
   g.globalAlpha = 1;
 }
 
-function drawActor(g: Ctx, a: Actor, cx: number, cy: number, s: Sprites): void {
+function drawActor(g: Ctx, a: Actor, cx: number, cy: number): void {
   if (a.folk) {
-    drawFolk(g, a, cx, cy, s);
+    drawFolk(g, a, cx, cy);
     return;
   }
   const at = standing(a);
@@ -172,8 +169,6 @@ function drawActor(g: Ctx, a: Actor, cx: number, cy: number, s: Sprites): void {
   const y = Math.round(at.y - hopOf(a)) - cy;
   g.globalAlpha = a.alpha;
   g.drawImage(frame, x - FOOT_X, y - FOOT_Y);
-  const sunk = pose === SIT ? (a.dir === 0 ? 2 : 5) : 0;
-  if (a.mug > 0 && a.dir !== 3) g.drawImage(s.mug, x + (a.dir === 1 ? -6 : 3), y - 9 + sunk);
   g.globalAlpha = 1;
 }
 
@@ -220,7 +215,6 @@ export function drawPicture(pic: Picture): HTMLCanvasElement {
   const h = buf.c.height;
   const cx = Math.round(G.cam.x);
   const cy = Math.round(G.cam.y);
-  const s = pic.sprites;
   const people = pic.people();
 
   // The sunset behind the far trees.
@@ -275,7 +269,7 @@ export function drawPicture(pic: Picture): HTMLCanvasElement {
   order.sort((a, b) => a.z - b.z);
   for (const it of order) {
     if (it.prop) drawProp(g, it.prop, cx, cy);
-    else if (it.actor) drawActor(g, it.actor, cx, cy, s);
+    else if (it.actor) drawActor(g, it.actor, cx, cy);
     else it.other?.paint(g, cx, cy);
   }
 

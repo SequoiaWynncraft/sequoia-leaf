@@ -6,7 +6,7 @@ import { leaf as leafOf, playerId } from "@sequoia-leaf/core";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
-import { fakeBackend, fakeMojang, MINUTE, sessionOf, steadyDice, testLeaf } from "./support.ts";
+import { fakeBackend, fakeMojang, MINUTE, rewardQueue, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 /**
  * The game's routes as the game sees them, from the real routes:
@@ -255,6 +255,13 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   }
   await call("GET /v1/game/admin/activity, a member", "GET", "/v1/game/admin/activity");
   await call("GET /v1/game/admin/activity", "GET", "/v1/game/admin/activity?days=2", undefined, "staff-token");
+  // The Treasury: a tome request bought (the backend charges it through Leaf), the same again, and a guest.
+  backend.api = rewardQueue("alice-token", alice, (path, init) => app.request(path, init)).api;
+  await call("GET /v1/game/requests", "GET", "/v1/game/requests");
+  const tome = { type: "tome", reason: "For the war tower" };
+  await call("POST /v1/game/requests", "POST", "/v1/game/requests", tome);
+  await call("POST /v1/game/requests, refused", "POST", "/v1/game/requests", tome);
+  await call("GET /v1/game/requests, a guest", "GET", "/v1/game/requests", undefined, "visitor-token");
   await app.dispose();
   return recorded;
 }

@@ -455,6 +455,28 @@
         display: none;
       }
 
+      /* What a tome request is for, typed at the Treasury, across its row. 16px at least, or a phone zooms in on it. */
+      .k-card:has(> .k-field) {
+        flex-wrap: wrap;
+      }
+      .k-field {
+        box-sizing: border-box;
+        flex-basis: 100%;
+        padding: calc(var(--u) * 2) calc(var(--u) * 3);
+        border: var(--u) solid var(--k-faint);
+        background: var(--k-ink);
+        color: var(--k-cream);
+        font: var(--f-typed);
+        resize: none;
+      }
+      .k-field:focus {
+        outline: none;
+        border-color: var(--k-gold);
+      }
+      .k-field::placeholder {
+        color: var(--k-faint);
+      }
+
       @media (max-width: 1100px), (orientation: portrait) {
         #feed {
           bottom: calc(var(--dock) + var(--u) * 4);

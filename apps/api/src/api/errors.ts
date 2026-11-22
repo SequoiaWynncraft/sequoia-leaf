@@ -20,7 +20,7 @@ export class NotAMember extends Schema.Error<NotAMember>("NotAMember")(answer("n
   httpApiStatus: 403,
 }) {}
 
-/** Something in the game only the guild's members may see, asked for by a guest. */
+/** Something in the game only the guild's members may see or do, asked for by a guest. */
 export class MembersOnly extends Schema.Error<MembersOnly>("MembersOnly")(answer("members_only"), {
   httpApiStatus: 403,
 }) {}
@@ -46,7 +46,8 @@ export class BadOrigin extends Schema.Error<BadOrigin>("BadOrigin")(answer("bad_
  * A request Leaf cannot read: an event id that is not one, a quest id that is
  * not one, a reroll without a cost, a player id that is not a UUID, a place in
  * town that is not one, a number of days that is not one, a batch of commands
- * that is not one of the game's, or a purchase from sequoia-backend that is not
+ * that is not one of the game's, a guild request that is not one or a tome
+ * request without its reason, or a purchase from sequoia-backend that is not
  * one, or has a key that is not one.
  */
 export class Invalid extends Schema.Error<Invalid>("Invalid")(
@@ -58,6 +59,8 @@ export class Invalid extends Schema.Error<Invalid>("Invalid")(
     "invalid_place",
     "invalid_days",
     "invalid_command",
+    "invalid_request",
+    "invalid_reason",
     "invalid_purchase",
     "invalid_key",
   ),
@@ -106,6 +109,22 @@ export class PurchaseRefused extends Schema.Error<PurchaseRefused>("PurchaseRefu
   answer("insufficient_leaf", "key_in_use", "purchase_cancelled"),
   { httpApiStatus: 409 },
 ) {}
+
+/** A guild request the backend would not make, and took nothing for, with its reason. */
+export class RequestRefused extends Schema.Error<RequestRefused>("RequestRefused")(answer("request_refused"), {
+  httpApiStatus: 409,
+}) {}
+
+/** The backend could not be asked about the guild's requests. */
+export class RequestsUnavailable extends Schema.Error<RequestsUnavailable>("RequestsUnavailable")(
+  answer("requests_unavailable"),
+  { httpApiStatus: 503 },
+) {}
+
+/** A guild request sent to the backend with no answer that says whether it was made: it must not be sent again. */
+export class RequestUnknown extends Schema.Error<RequestUnknown>("RequestUnknown")(answer("request_unknown"), {
+  httpApiStatus: 504,
+}) {}
 
 /** Something nothing expected went wrong. It is logged with its cause. */
 export class InternalError extends Schema.Error<InternalError>("InternalError")(answer("internal_error"), {

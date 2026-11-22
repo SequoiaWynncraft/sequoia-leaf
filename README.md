@@ -395,6 +395,8 @@ react to `quest_completed`.
 | `POST /v1/game/play/{game}`          | Does a batch of commands in that game, and answers what each did.     |
 | `GET /v1/game/play/{game}/standings` | The game's board: the twenty highest, and the player's own place.     |
 | `GET /v1/game/banners`               | Every pull banner, its dates, and its headliner's id and name.        |
+| `GET /v1/game/requests`              | The Treasury's aspect and tome requests: their price, or why not.     |
+| `POST /v1/game/requests`             | Buys one with Leaf, through the backend.                              |
 
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
@@ -402,6 +404,19 @@ plays as a **guest**: they have games, skins and presence like a member, but no
 Leaf, XP, quests or news, and the guild's events (and their stream) refuse them
 with 403 `members_only`. The mod's routes, `/v1/me` and those under it, still
 let in only members.
+
+The Treasury's routes ask sequoia-backend's reward queue (`/api/reward-queue`) as
+the member, with their own session and the website's mod version. A guest gets
+403 `members_only` and the backend is not asked. `GET /v1/game/requests` answers
+`{ "aspect": { "price", "why_not" }, "tome": { ... } }`, `why_not` null when the
+member may buy it now; the backend refusing them answers 409 `request_refused`,
+and the backend not answering 503 `requests_unavailable`. `POST /v1/game/requests`
+takes `{ "type": "aspect" }` or `{ "type": "tome", "reason" }` (1 to 1,000
+characters) and answers `{ "type", "position", "leaf_paid", "leaf" }`; the
+backend charges the member through `PUT /internal/v1/purchases/{key}` before it
+answers. Refused, it answers 409 `request_refused` with the backend's reason and
+nothing taken. With no answer that says, 504 `request_unknown`: it may have been
+made, and is not to be sent again. Leaf waits 30 seconds for it.
 
 `GET /v1/game/hello` answers `{ "sign_in", "leaf_spending" }`: `GAME_SIGN_IN_URL`
 and `GAME_LEAF_SPENDING`. A page that gets it knows it is on a live server.

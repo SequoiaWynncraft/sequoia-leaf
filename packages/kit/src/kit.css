@@ -52,6 +52,8 @@
   --f-ui: 400 var(--t-m) / 1.2 var(--k-font);
   --f-small: 400 var(--t-s) / 1.2 var(--k-font);
   --f-read: 500 var(--t-r) / 1.4 var(--k-font-read);
+  /* What is typed into a field: never under 16 pixels, or a phone zooms the page to it. */
+  --f-typed: 500 max(16px, var(--t-r)) / 1.4 var(--k-font-read);
 
   /* Darkness in steps: the edge of everything, a well, a panel, a raised thing, a quiet line, a brighter one. */
   --k-ink: #0b0710;
