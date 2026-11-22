@@ -38,7 +38,8 @@ export function sseFrame(id: number, type: string, json: string): string {
  * The event streams members have open. A member may have six open, their
  * own and the guild's together; opening a seventh closes their oldest, whose
  * client may reconnect, which closes the next oldest. Kept in memory: during a
- * deploy, a member's streams on the old container are closed with it.
+ * deploy, Leaf's farewell ends every stream on the old container, and their
+ * clients reconnect, to the new one.
  */
 export class OpenStreams extends Context.Service<
   OpenStreams,
@@ -47,14 +48,20 @@ export class OpenStreams extends Context.Service<
      * A member's stream of `frames` as server-sent events from position `from`:
      * first a frame with only that id, so a client whose stream ends before any
      * event still knows where to resume, then the frames with a comment between
-     * them now and then. It closes after `maxMs`, or when the member opens too
-     * many others.
+     * them now and then. It closes after `maxMs`, when the member opens too
+     * many others, or when Leaf stops (`end`).
      */
     readonly open: <E, R>(
       playerId: PlayerId,
       from: number,
       frames: Stream.Stream<string, E, R>,
     ) => Stream.Stream<Uint8Array, E, R>;
+    /**
+     * Ends every open stream, and any opened after it as soon as it opens: Leaf
+     * is stopping. A stream never ends by itself before `maxMs`, so the server
+     * would otherwise wait for it.
+     */
+    readonly end: Effect.Effect<void>;
   }
 >()("leaf/OpenStreams") {
   static readonly layer = Layer.effect(
@@ -63,6 +70,8 @@ export class OpenStreams extends Context.Service<
       const tuning = yield* StreamTuning;
       /** Each member's open streams, oldest first, as what closes each one. */
       const open = new Map<PlayerId, Deferred.Deferred<void>[]>();
+      /** Done once Leaf is stopping, which ends every stream. */
+      const stopping = yield* Deferred.make<void>();
 
       /** Counts a new stream of the member's, closing their oldest past the limit. It is uncounted when it ends. */
       const counted = (playerId: PlayerId) =>
@@ -101,10 +110,12 @@ export class OpenStreams extends Context.Service<
                 Stream.concat(Stream.merge(frames, keepAlive)),
                 Stream.interruptWhen(Effect.sleep(Duration.millis(tuning.maxMs))),
                 Stream.interruptWhen(Deferred.await(closed)),
+                Stream.interruptWhen(Deferred.await(stopping)),
                 Stream.encodeText,
               ),
             ),
           ),
+        end: Effect.asVoid(Deferred.succeed(stopping, undefined)),
       });
     }),
   );

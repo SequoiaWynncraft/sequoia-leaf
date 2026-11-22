@@ -81,8 +81,12 @@ const quietly = (what: string, effect: Effect.Effect<void>) =>
     Effect.catchCause((cause) => (Cause.hasInterruptsOnly(cause) ? Effect.interrupt : Effect.logWarning(what, cause))),
   );
 
-/** How long Leaf's farewell waits for the open visits to be closed before it closes the connections anyway. */
-const FAREWELL_WAIT = Duration.seconds(2);
+/**
+ * How long Leaf's farewell waits for the open visits to be closed before it closes the connections
+ * anyway. Closing them takes a few milliseconds; a deploy waits on the whole stop, which has half a
+ * second.
+ */
+const FAREWELL_WAIT = Duration.millis(200);
 
 /** The longest text frame Leaf reads, in UTF-16 code units (as JavaScript counts a string's length). Every message the game sends is far shorter. */
 const MOST_TEXT = 512;
@@ -646,15 +650,3 @@ export class Live extends Context.Service<
     }),
   );
 }
-
-/**
- * Says farewell to every live player before the HTTP server underneath it stops. Put it on top of the
- * server (`LiveFarewell.pipe(Layer.provideMerge(server))`) so that it is taken down first: the
- * server's own stop closes WebSockets with no word of why.
- */
-export const LiveFarewell = Layer.effectDiscard(
-  Effect.gen(function* () {
-    const live = yield* Live;
-    yield* Effect.addFinalizer(() => live.farewell);
-  }),
-);
