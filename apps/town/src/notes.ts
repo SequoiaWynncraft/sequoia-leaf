@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "works-orders-list",
+    at: "2026-11-22T21:00Z",
+    title: "The Works: orders hold still",
+    lines: [
+      "Filled side orders are listed first, with Hand over at the top of each. After you hand one over, the next filled order's button is in the same spot.",
+      "The list no longer jumps: a new order takes the last place. Swap asks you to press again if items were already delivered to the order.",
+    ],
+  },
+  {
     id: "seen-in-town",
     at: "2026-11-22T20:25Z",
     title: "Nobody hidden in town",
