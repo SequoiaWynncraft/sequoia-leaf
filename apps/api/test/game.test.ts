@@ -568,6 +568,12 @@ describe("GET /v1/game/me", () => {
   });
 });
 
+/** The earlier and refused copies of saves Leaf keeps, oldest first. */
+const keptCopies = () =>
+  services.query(
+    (sql) => sql`SELECT slot, kind, version, data, saved_at AS savedAt FROM save_history ORDER BY kept_at, slot`,
+  );
+
 describe("saves", () => {
   it("lists nothing at first, and refuses to read a slot never written", async () => {
     const list = await get("/v1/game/saves");
@@ -708,6 +714,46 @@ describe("saves", () => {
     // A write over a version that is not the stored one is stale, however soon it comes.
     expect(await codeOf(stale)).toBe("version_conflict");
     expect(await (await get("/v1/game/saves/town")).json()).toMatchObject({ version: 2, data: { n: 3 } });
+  });
+
+  it("keeps what each write replaced, at most once a minute a slot, for a week", async () => {
+    await save("works", 0, { n: 1 });
+    clock.now = T0 + 3000;
+    await save("works", 1, { n: 2 });
+    clock.now = T0 + 6000;
+    await save("works", 2, { n: 3 });
+    clock.now = T0 + MINUTE + 5000;
+    await save("works", 3, { n: 4 });
+    // A slot of its own has its own copies.
+    await save("raid", 0, { r: 1 });
+    clock.now = T0 + MINUTE + 8000;
+    await save("raid", 1, { r: 2 });
+
+    expect(await keptCopies()).toEqual([
+      { slot: "works", kind: "earlier", version: 1, data: '{"n":1}', savedAt: T0 },
+      { slot: "works", kind: "earlier", version: 3, data: '{"n":3}', savedAt: T0 + 6000 },
+      { slot: "raid", kind: "earlier", version: 1, data: '{"r":1}', savedAt: T0 + MINUTE + 5000 },
+    ]);
+
+    clock.now = T0 + 8 * DAY;
+    await save("works", 4, { n: 5 });
+    expect((await keptCopies()).map((k) => [k.slot, k.version])).toEqual([["works", 4]]);
+  });
+
+  it("keeps a copy a game sent over an older version, though it was refused", async () => {
+    await save("works", 0, { n: 1 });
+    clock.now = T0 + HOUR;
+    await save("works", 1, { n: 2 });
+    // Another device's older yard, sent over the version it last read.
+    const stale = await save("works", 1, { n: "the other yard" });
+
+    expect(stale.status).toBe(409);
+    expect(
+      await services.query(
+        (sql) => sql`SELECT kind, version, data FROM save_history WHERE kind = 'refused' ORDER BY kept_at`,
+      ),
+    ).toEqual([{ kind: "refused", version: 1, data: '{"n":"the other yard"}' }]);
+    expect(await (await get("/v1/game/saves/works")).json()).toMatchObject({ version: 2, data: { n: 2 } });
   });
 
   it("keeps a guest's saves as a member's, and removes guests' left 90 days when anything is saved", async () => {
