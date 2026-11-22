@@ -283,7 +283,8 @@ describe("the pace of POST /v1/game/coins", () => {
     const plan = await services.query(
       (sql) => sql`
         EXPLAIN QUERY PLAN SELECT coalesce(sum(amount), 0) FROM coin_entries
-        WHERE player_id = ${alice} AND amount > 0 AND at > ${T0 - HOUR} AND substr(key, 1, 5) = 'page:'
+        WHERE player_id = ${alice} AND at > ${T0 - HOUR} AND amount > 0
+          AND game IS NOT NULL AND reason <> 'works_refund'
       `,
     );
     expect(plan.map((row) => String(Object(row).detail))).toEqual([

@@ -5,6 +5,7 @@ import {
   currentQuests,
   DAY_MS,
   DEFAULT_RULES,
+  EARNINGS,
   gameId,
   isMoved,
   levelForXp,
@@ -941,7 +942,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             if (done.status === "too_much") {
               return yield* new TooMuch({
                 code: "too_much",
-                message: `Coins earned in a game's page come to at most ${PAGE_COINS.hourly} in an hour and ${PAGE_COINS.daily} in a UTC day`,
+                message: `Coins earned by play come to at most ${EARNINGS.hourly} in an hour and ${EARNINGS.daily} in a UTC day`,
               });
             }
             return HttpServerResponse.jsonUnsafe({ coins: done.coins } satisfies typeof Body.CoinsAnswer.Type);

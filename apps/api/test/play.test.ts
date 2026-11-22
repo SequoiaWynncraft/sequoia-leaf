@@ -619,6 +619,63 @@ describe("Coins", () => {
   });
 });
 
+/** A stall that sells for what the command says: a game that pays Coins in, as much as it is told to. */
+const STALL: typeof SHOP = {
+  ...SHOP,
+  id: "works",
+  apply: (state, sold) => ({
+    state: { bought: state.bought + 1 },
+    notes: ["sold"],
+    coins: [{ amount: sold.price, reason: "A sale", key: `sale:${state.bought + 1}` }],
+  }),
+};
+
+/** A call to change Coins as a page of the town or the Works makes it. */
+const page = (id: string, amount: number, reason: string) => send("POST", "/v1/game/coins", { id, amount, reason });
+
+describe("what play pays", () => {
+  it("is at most 5,000 Coins in any hour and 20,000 in a UTC day, whatever the games: past it a command is done all the same and pays what is left", async () => {
+    clock.now = Date.UTC(2026, 10, 25, 1);
+    const stall = played(STALL);
+    const sold = async (id: string, price: number) => {
+      const batch = await services.run(
+        Play.use((play) => play.send({ playerId: alice, guest: false }, stall, [{ id, price }])),
+      );
+      expect(batch).toMatchObject({ status: "done", results: [{ id, notes: ["sold"] }] });
+      return coinsOf(alice);
+    };
+
+    expect(await sold("s-1", 4000)).toBe(4300);
+    // What the pages earn and what the games pay are weighed together.
+    expect((await page("p-1", 600, "works_order")).status).toBe(200);
+    expect(await sold("s-2", 4000)).toBe(5300);
+    expect(await sold("s-3", 50)).toBe(5300);
+    const refused = await page("p-2", 1, "works_depot");
+    expect([refused.status, await codeOf(refused)]).toEqual([429, "too_much"]);
+    expect(await entries(alice)).toEqual([
+      { amount: 300, reason: "Welcome to Guild Town", game: null, key: `welcome:${alice}` },
+      { amount: 4000, reason: "A sale", game: "works", key: `works:${alice}:sale:1` },
+      { amount: 600, reason: "works_order", game: "works", key: `page:${alice}:p-1` },
+      { amount: 400, reason: "A sale", game: "works", key: `works:${alice}:sale:2` },
+    ]);
+    // Coins given back for the Works are not earnings: they are paid whatever was earned.
+    expect((await page("p-3", -1000, "works_build")).status).toBe(200);
+    expect((await page("p-4", 1000, "works_refund")).status).toBe(200);
+    expect(await coinsOf(alice)).toBe(5300);
+    // An hour on, the hour's room is back; the day's 20,000 still stands.
+    for (const hour of [3, 5, 7]) {
+      clock.now = Date.UTC(2026, 10, 25, hour);
+      // oxlint-disable-next-line no-await-in-loop -- in order
+      await sold(`h-${hour}`, 9000);
+    }
+    expect(await coinsOf(alice)).toBe(20_300);
+    clock.now = Date.UTC(2026, 10, 25, 23);
+    expect(await sold("s-4", 9000)).toBe(20_300);
+    clock.now = Date.UTC(2026, 10, 26);
+    expect(await sold("s-5", 9000)).toBe(25_300);
+  });
+});
+
 describe("setting out afresh", () => {
   it("before a room is fought changes nothing: no new opening, nothing paid, nothing logged", async () => {
     const begun = await commanded(
