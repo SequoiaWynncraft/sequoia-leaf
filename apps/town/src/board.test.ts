@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 
-import { noteWhen, openingTab, readNews, redrawn, SEEN, unread } from "./board.ts";
+import { kindLine, noteWhen, openingTab, readNews, redrawn, SEEN, unread } from "./board.ts";
 import type { Quest } from "./guild.ts";
 import { readQuests } from "./live.ts";
 import { NOTES } from "./notes.ts";
@@ -42,7 +42,9 @@ describe("the quest board keeps in step with the quests", () => {
     const board = aBoard(QUESTS);
     expect(board.counts).toEqual({ drawn: 1, updated: 0 });
     board.arrive(QUESTS);
-    board.arrive(QUESTS.map((q) => ({ ...q, have: Math.min(q.need, q.have + 1) })));
+    board.arrive(
+      QUESTS.map((q) => ({ ...q, goals: q.goals.map((g) => ({ ...g, have: Math.min(g.need, g.have + 1) })) })),
+    );
     // In another order, they are still the same quests.
     board.arrive(QUESTS.toReversed());
     expect(board.counts).toEqual({ drawn: 1, updated: 3 });
@@ -58,8 +60,36 @@ describe("the quest board keeps in step with the quests", () => {
     // From another page, one was swapped for another in its slot: as many as before, but not the same.
     board.arrive([...rest.slice(1), { ...gone, id: `${gone.id}:swapped`, title: "Take part in 3 wars" }]);
     expect(board.counts).toEqual({ drawn: 3, updated: 2 });
-    board.arrive([...rest.slice(1), { ...gone, id: `${gone.id}:swapped`, have: 1 }]);
+    board.arrive([
+      ...rest.slice(1),
+      { ...gone, id: `${gone.id}:swapped`, goals: [{ have: 1, need: 3, unit: "wars" }] },
+    ]);
     expect(board.counts).toEqual({ drawn: 3, updated: 3 });
+  });
+});
+
+describe("what a quest's note says it is", () => {
+  // A Wednesday.
+  const now = Date.parse("2026-11-25T12:40:00Z");
+
+  test("each kind by Leaf's and the mod's name, with no time for one that does not end at a set time", () => {
+    expect(kindLine({ slot: "daily", ends: null }, now, "UTC")).toBe("Daily");
+    expect(kindLine({ slot: "repeatable", ends: null }, now, "UTC")).toBe("Endless");
+  });
+
+  test("when it ends, in the reader's own time: the hour today, the day at midnight, both otherwise", () => {
+    const weekly = QUESTS.find((q) => q.slot === "weekly");
+    if (!weekly) throw new Error("no weekly in the contract");
+    // Monday 00:00 UTC.
+    expect(kindLine(weekly, now, "UTC")).toBe("Weekly · Until Monday");
+    expect(kindLine(weekly, now, "Europe/Stockholm")).toBe("Weekly · Until Monday 01:00");
+    expect(kindLine(weekly, now, "America/New_York")).toBe("Weekly · Until Sunday 19:00");
+    const timed = { slot: "timed", ends: Date.parse("2026-11-25T14:00:00Z") };
+    expect(kindLine(timed, now, "UTC")).toBe("Timed · Until 14:00");
+    expect(kindLine(timed, now, "Europe/Stockholm")).toBe("Timed · Until 15:00");
+    // 23:30 on Wednesday in Tokyo, for a window that closes at 01:00 there.
+    const late = { slot: "timed", ends: Date.parse("2026-11-25T16:00:00Z") };
+    expect(kindLine(late, Date.parse("2026-11-25T14:30:00Z"), "Asia/Tokyo")).toBe("Timed · Until Thursday 01:00");
   });
 });
 
