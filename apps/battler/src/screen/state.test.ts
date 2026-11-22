@@ -86,6 +86,9 @@ async function seated() {
   return fake;
 }
 
+/** The places on the stall that hold a figure, as the page shows it. */
+const offers = (): number[] => (S.run?.stall ?? []).flatMap((kind, i) => (kind === null ? [] : [i]));
+
 describe("the table, on Leaf", () => {
   test("opens as Leaf has it, and nothing of the game is kept in the browser", async () => {
     const fake = await seated();
@@ -121,6 +124,20 @@ describe("the table, on Leaf", () => {
     expect((await buying)?.ok).toBe(true);
     expect(S.run?.acorns).toBeLessThan(acorns);
     expect(fake.leaf.state.run?.board[20]).not.toBeNull();
+  });
+
+  test("while Leaf answers a rustle, a tap on an offer still showing asks nothing; two purchases may be on their way together", async () => {
+    const fake = await seated();
+    const [offer = 0] = offers();
+    // The stall is about to hold other figures: the purchase is dropped, not sent to land on whoever comes next.
+    const rustled = ask({ do: "rustle" });
+    expect(await ask({ do: "buy", offer })).toBeNull();
+    expect((await rustled)?.ok).toBe(true);
+    expect(fake.leaf.state.run?.bought).toBe(0);
+    // Buying leaves the other offers where they are, so a second purchase need not wait for the first.
+    const [first = 0, second = 1] = offers();
+    const both = await Promise.all([ask({ do: "buy", offer: first }), ask({ do: "buy", offer: second })]);
+    expect(both).not.toContain(null);
   });
 
   test("a move the rules turn down is said so, and not sent", async () => {
