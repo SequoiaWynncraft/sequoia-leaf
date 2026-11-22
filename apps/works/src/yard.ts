@@ -152,7 +152,8 @@ export function doNow(act: WorksAct): ReturnType<typeof play> {
   if (change !== 0) heardCoins(balance().coins + change);
   if (act.do === "collect") collectedAt = performance.now();
   unanswered.push(command);
-  void sent(leaf, command, change !== 0);
+  // A collection may pay what only Leaf knows of (a tab put away earns on Leaf, not on the copy).
+  void sent(leaf, command, change !== 0 || act.do === "collect");
   return done;
 }
 
@@ -188,12 +189,14 @@ export function runYard(now: number): News[] {
   }
   stepTo(w, tick);
   shown = tick;
+  // What these steps made known is taken before anything is sent: doing a command takes it too.
+  const news = drain(w);
   // A slot the board would have filled (a story order done) is filled by Leaf. And once a minute
   // the page collects whether or not the till holds a Coin: it keeps Leaf's yard in step with one
   // being watched, so that a yard earning nothing is not taken for one its owner left.
   const empty = w.open.board && w.board.length < w.rates.slots;
   if (!waiting && (empty || now - collectedAt >= COLLECT_EVERY)) collect();
-  return drain(w);
+  return news;
 }
 
 /** How far into the next tick the copy is at `now`, from 0 to 1: for drawing things part-way across a tile. */
