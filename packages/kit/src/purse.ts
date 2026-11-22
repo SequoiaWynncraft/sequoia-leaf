@@ -11,7 +11,9 @@
  * - **Coins** are the Coins ledger's (`fromLeaf`, with what `/v1/game/me` says). `earn` and `spend`
  *   change the page's number at once, giving the reason (one of `COIN_REASONS`), and send the
  *   change to Leaf behind it (`POST /v1/game/coins`): in order, one at a time, and sent again with
- *   the same id after a network failure. `spend` still answers at once, from the page's number. A
+ *   the same id after a network failure. A change keeps its id and its amount from the first time
+ *   it is sent; as the page is hidden or closed, every change not yet answered goes at once
+ *   (`flushCoins`), and Leaf does each id once. `spend` still answers at once, from the page's number. A
  *   change Leaf refuses sets the page's number to Leaf's, and the watchers are told.
  *   `refreshCoins` asks Leaf for the balance again (a framed game closed, the page came back into view), and
  *   `heardCoins` takes the number another page of the game heard. Nothing of Coins is kept in the
@@ -51,8 +53,13 @@ const whole = (v: unknown): number | null =>
 
 // ---------- Coins on the guild's server ----------
 
-/** A change to Coins on its way to Leaf, or a question for the balance as it stands. */
-type Owed = { readonly id: string; amount: number; readonly reason: CoinReason; readonly once: boolean } | "ask";
+/**
+ * A change to Coins on its way to Leaf, or a question for the balance as it stands. A change gets
+ * its id when it is made, and is `sent` once any request has carried it: from then on it never
+ * changes, so that each id always means the same amount.
+ */
+type Owed =
+  { readonly id: string; amount: number; readonly reason: CoinReason; readonly once: boolean; sent: boolean } | "ask";
 
 /** The Coins Leaf last said the member holds; null with the made-up guild, whose Coins are the browser's. */
 let held: number | null = null;
@@ -135,16 +142,19 @@ if (typeof window !== "undefined")
     tell("elsewhere");
   });
 
-/** Queues a change to Leaf: within what one change may be, and added to the last one waiting for the same reason. */
+/**
+ * Queues a change to Leaf: within what one change may be, and added to the last one waiting for the
+ * same reason while no request has carried it yet.
+ */
 function owe(amount: number, reason: CoinReason, once: string | undefined): void {
   if (once !== undefined) {
-    owed.push({ id: once, amount, reason, once: true });
+    owed.push({ id: once, amount, reason, once: true, sent: false });
     return;
   }
   let left = amount;
   while (left !== 0) {
     const last = owed.at(-1);
-    const waiting = last !== undefined && last !== "ask" && !(sending && owed.length === 1) ? last : null;
+    const waiting = last !== undefined && last !== "ask" && !last.sent ? last : null;
     if (waiting && !waiting.once && waiting.reason === reason) {
       const room = left > 0 ? PAGE_COINS.most - waiting.amount : PAGE_COINS.least - waiting.amount;
       const add = left > 0 ? Math.min(left, room) : Math.max(left, room);
@@ -155,7 +165,7 @@ function owe(amount: number, reason: CoinReason, once: string | undefined): void
       }
     }
     const part = left > 0 ? Math.min(left, PAGE_COINS.most) : Math.max(left, PAGE_COINS.least);
-    owed.push({ id: `${page}-${++made}`, amount: part, reason, once: false });
+    owed.push({ id: `${page}-${++made}`, amount: part, reason, once: false, sent: false });
     left -= part;
   }
 }
@@ -180,6 +190,7 @@ async function pump(): Promise<void> {
     return;
   }
   sending = true;
+  if (next !== "ask") next.sent = true;
   const mine = round;
   let pause: number = RETRY.first;
   for (;;) {
@@ -238,14 +249,16 @@ async function pump(): Promise<void> {
 }
 
 /**
- * Sends everything still owed at once, as the page goes away (or the town puts the game away), so
- * that it reaches Leaf though the page does not wait. What is sent stays owed: if the page stays
- * after all, it is sent again in turn with the same ids, and done once.
+ * Sends every change Leaf has not answered yet at once, as the page is hidden or goes away (or the
+ * town puts the game away), so that it reaches Leaf though the page does not wait: the one on its
+ * way and one waiting to be sent again too, each with its own id. What is sent stays owed and never
+ * changes: if the page stays after all, it is sent again in turn with the same ids, and done once.
  */
 export function flushCoins(): void {
   if (held === null || halted) return;
-  for (const [i, o] of owed.entries()) {
-    if (o === "ask" || (i === 0 && sending)) continue;
+  for (const o of owed) {
+    if (o === "ask") continue;
+    o.sent = true;
     void outside.fetch("/v1/game/coins", {
       method: "POST",
       credentials: "same-origin",
@@ -257,6 +270,10 @@ export function flushCoins(): void {
 }
 
 if (typeof window !== "undefined") window.addEventListener("pagehide", flushCoins);
+if (typeof document !== "undefined")
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushCoins();
+  });
 
 // ---------- what pages use ----------
 

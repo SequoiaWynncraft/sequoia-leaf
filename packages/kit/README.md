@@ -157,14 +157,19 @@ and nothing below happens. With a server it asks `GET /v1/game/me`:
   with `/v1/game/me`'s `coins`), and nothing of them is kept in the browser. `earn(n, reason)` and
   `spend("coins", n, reason)` change the page's number at once and send the change to Leaf behind
   (`POST /v1/game/coins`, with one of core's `COIN_REASONS`): in order, one at a time, sent again
-  with the same id after a network failure, earnings for one reason waiting together sent as one.
+  with the same id after a network failure, earnings for one reason waiting together sent as one
+  until a request has carried it (from then on a change never grows: more earnings are a new one).
   `spend` answers at once from the page's number. A change Leaf refuses sets the page's number to
   Leaf's and tells the watchers (`"refused"`). `refreshCoins()` asks Leaf for the balance again:
   the town does when a framed game closes and when its page comes back into view (`followCoins`),
   and a game does when it knows Leaf paid it (a raid's run ended). The town tells a game in its
   frame of a change to its Coins (`passCoins`, the shell's `{ town: "coins", coins }`), which the
-  game takes as Leaf's while nothing of its own is on its way (`heardCoins`). As a page goes away,
-  or the town puts it away, whatever is still waiting is sent at once (`flushCoins`). With the
+  game takes as Leaf's while nothing of its own is on its way (`heardCoins`). As a page is hidden or
+  goes away, or the town puts it away, every change Leaf has not answered (the one on its way and
+  one waiting to be sent again included) is sent at once with `keepalive`, each with its own id
+  (`flushCoins`). Every change carries the member's id (`fromLeaf(coins, player)`); when Leaf
+  answers `not_you` (signed in as somebody else since), nothing more is sent and the page loads
+  again. With the
   made-up guild the purse is kept in the browser as before, and `pretendPurse` sets it for tours.
 - **Known as a guest** (`guest: true`: signed in, not in the guild). The game is live, as them,
   with no Leaf (`asGuest`): `leafShown()` is false, so no page shows a Leaf number, and every Leaf
@@ -199,13 +204,15 @@ nothing it still holds lands under the other member's names. A test in `keep.tes
 every file in the kit and the games to this.
 
 **Games Leaf owns** (`play.ts`). A game on Leaf's play service keeps nothing of itself in the
-browser: `openPlay(game, reader)` fetches its state (`GET /v1/game/play/<game>`), read into the
-game's own types by `reader` (a page built for older rules than Leaf's loads again), and
+browser: `openPlay(game, reader, { player })` fetches its state (`GET /v1/game/play/<game>`), read
+into the game's own types by `reader` (a page built for older rules than Leaf's loads again), and
 `send(command, predict)` gives the command an id, queues it and returns at once, with a promise of
 Leaf's answer: what it did (the game's notes) or the code it was refused with. Commands go in
 order, one request at a time, as many as are waiting in each (up to 32), and after a network
 failure, or Leaf having trouble or asking to slow down, the same request goes again with the same
-ids, so nothing is done twice. `predict` is the copy after a command the shared rules can work out
+ids, so nothing is done twice. Each batch carries `player`, who the page believes it is; on
+`not_you` (signed in as somebody else since) nothing more is sent and the page loads again.
+`predict` is the copy after a command the shared rules can work out
 without Leaf, shown at once; each answer's state takes the copy's place (with what is still waiting
 worked out again on top), and `onState` tells the page when that is not what it was showing.
 `waitingLook(element, answer)` gives what was asked for the waiting look (`k-wait`) once Leaf has
