@@ -106,9 +106,16 @@ const ears: LiveEars = {
   },
 };
 
+/**
+ * Whether the connection has been down long enough that the room's last roster is no longer who is
+ * here: the same moment everybody's figure goes (`ALONE_AFTER`). The room keeps its old roster
+ * until its next welcome, so nothing may read it as current after this.
+ */
+const alone = (): boolean => downAt !== null && performance.now() - downAt > ALONE_AFTER;
+
 /** Everybody in the room with the member, the member too, with their rank as the town shows it; null while the page is in no room. */
 export function roomNow(): { id: string; name: string; rank: string | null }[] | null {
-  if (!room || room.you() === null) return null;
+  if (!room || room.you() === null || alone()) return null;
   return [...room.members().values()].map((m) => {
     const rank = rankOf(m);
     return { id: m.player, name: m.name, rank: rank === "" ? null : rank };
@@ -269,7 +276,7 @@ export const isLivePlayer = (a: Actor): boolean => company.all().some((f) => f.o
 /** How many others are in the room, once it has said; null before it has welcomed the page. */
 export function othersInTown(): number | null {
   const you = room?.you() ?? null;
-  return room && you !== null ? othersIn(room.members(), you) : null;
+  return room && you !== null && !alone() ? othersIn(room.members(), you) : null;
 }
 
 // Real members who are live are not visitors or dozers as well.
