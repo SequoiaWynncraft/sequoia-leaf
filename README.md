@@ -33,9 +33,16 @@ pay into it and take from it.
 mise install     # install the pinned bun
 bun install
 bun run verify   # format check, lint, typecheck and test
+bun run ci       # CI's workflow, on this machine (see below)
 bun fmt          # format everything
 bun run dev      # run the server at http://localhost:3000, restarting on changes
 ```
+
+`bun run ci` runs `.github/workflows/ci.yml` under [act](https://github.com/nektos/act), every
+check in it, in about a minute. It needs `act` (pinned in `mise.toml`) and Docker or podman: it
+uses `DOCKER_HOST` when set, else Docker's socket when you may write to it, else podman's
+(`systemctl --user enable --now podman.socket`). On GitHub the workflow runs for pull requests
+only, and checks only what the pull request changes.
 
 The server is configured with environment variables:
 
@@ -284,9 +291,9 @@ first. After changing what a route sends:
 2. Copy it to the mod's `src/test/resources/contracts/leaf-api-v1.json` and run
    the mod's tests, which read it.
 
-CI's `contract-copies` job compares the file with the copy on Sequoia-mod's
-`main` and fails while they differ, so merge the mod's copy with or before the
-change here.
+CI compares the file with the copy on Sequoia-mod's `main` when a pull request
+changes it, and fails while they differ, so merge the mod's copy with or before
+the change here.
 
 The game's routes have their own file, `contracts/leaf-game-v1.json`, written
 by `apps/api/test/game-contract.test.ts` from one member's day of play with

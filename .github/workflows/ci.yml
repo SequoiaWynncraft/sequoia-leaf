@@ -1,54 +1,63 @@
 name: CI
 
+# Pull requests only, in one job that checks only what the change can break: GitHub bills each job
+# by the started minute. A squash-merge puts on main the tree its pull request was checked as,
+# merged with main as it was then, so main is not checked again. Two pull requests that clash only
+# once both are merged show it in the next pull request's run, which merges with main as it is.
 on:
   pull_request:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  check:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
-        with:
-          version: "2026.10.17"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          install_args: bun
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-      - name: Format
-        run: bun fmt --check
-      - name: Lint
-        run: bun run lint
-      - name: Typecheck
-        run: bun check --build
-      - name: Test
-        run: bun run test
-
-  # Checks that the infrastructure configuration is well-formed. It does not
-  # compare it with production: that needs credentials.
-  # Clients test against a copy of contracts/leaf-api-v1.json. A copy that drifts from ours tests
-  # nothing true, as when the mod read GET /v1/me/events backwards. The mod is public, so this
-  # compares ours with the copy on its main branch; change the mod's copy with or before ours.
-  contract-copies:
+  ci:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The merge commit and the base branch it merges into, its first parent.
+          fetch-depth: 2
+      # What the merge commit changes from the base branch is what the pull request changes. Under
+      # act (`bun run ci`) there is no merge commit, and everything is checked.
+      - name: Decide what to check
+        id: changed
+        run: |
+          if [ -n "$ACT" ]; then printf '%s=true\n' code infra contract | tee -a "$GITHUB_OUTPUT"; exit; fi
+          files=$(git diff --name-only HEAD^1 HEAD)
+          has() { grep -q "$@" <<< "$files" && echo true || echo false; }
+          tee -a "$GITHUB_OUTPUT" <<EOF
+          code=$(has -vE '\.md$|^infra/|^\.github/workflows/infra\.yml$')
+          infra=$(has -E '^(infra/|mise\.toml$|\.github/workflows/ci\.yml$)')
+          contract=$(has -E '^(contracts/leaf-api-v1\.json|\.github/workflows/ci\.yml)$')
+          EOF
+      # The image builds while the checks below run, and the last step starts it. It keeps Docker's
+      # media types, without which podman drops its health check, and so has no provenance, which
+      # needs OCI's. A failed build writes no image file.
+      - name: Start building the image
+        if: &code ${{ !cancelled() && steps.changed.outputs.code == 'true' }}
+        run: |
+          (docker build --provenance=false --output type=docker,oci-mediatypes=false --iidfile "$RUNNER_TEMP/image" . || true
+            touch "$RUNNER_TEMP/built") > "$RUNNER_TEMP/build.log" 2>&1 &
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          version: "2026.10.17"
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          install_args: bun${{ steps.changed.outputs.infra == 'true' && ' opentofu' || '' }}
+      # Each check below runs even when one before it failed, so that one run reports them all.
+      - name: Format
+        run: bun fmt --check
+      # Clients test against a copy of contracts/leaf-api-v1.json. A copy that drifts from ours tests
+      # nothing true, as when the mod read GET /v1/me/events backwards. The mod is public, so this
+      # compares ours with the copy on its main branch; change the mod's copy with or before ours.
       - name: Compare the contract with Sequoia-mod's copy
+        if: ${{ !cancelled() && steps.changed.outputs.contract == 'true' }}
         run: |
           copy="$RUNNER_TEMP/leaf-api-v1.json"
           curl --fail --silent --show-error --location --retry 3 --output "$copy" \
@@ -59,44 +68,40 @@ jobs:
             exit 1
           fi
           echo "Sequoia-mod's copy matches ($(sha256sum < contracts/leaf-api-v1.json | cut -c1-16))"
-
-  infra:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
-        with:
-          version: "2026.10.17"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          install_args: opentofu
-      - name: Format
-        run: tofu -chdir=infra fmt -check -diff
-      - name: Validate
+      # That the infrastructure configuration is well-formed. Comparing it with production needs
+      # credentials; the Infrastructure workflow does that.
+      - name: Check infra/
+        if: ${{ !cancelled() && steps.changed.outputs.infra == 'true' }}
         run: |
+          tofu -chdir=infra fmt -check -diff
           tofu -chdir=infra init -backend=false -input=false -lockfile=readonly
           tofu -chdir=infra validate
-
-  image:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Build the image
-        run: docker build --tag sequoia-leaf .
-      # The image's own health check asks /healthz, which reads the database.
-      - name: Start it and wait until it reports healthy
+      - name: Install dependencies
+        if: *code
+        run: bun install --frozen-lockfile
+      - name: Lint
+        if: *code
+        run: bun run lint
+      - name: Typecheck
+        if: *code
+        run: bun check --build
+      - name: Test
+        if: *code
+        run: bun run test
+      # The image's own health check asks /healthz, which reads the database. It is asked every
+      # second, not every 5 or 10: Docker reads the start interval, podman the interval. The
+      # container and image are removed by id, so nothing else on a developer's machine is touched.
+      - name: Start the image and wait until it reports healthy
+        if: *code
         run: |
-          docker run --detach --name leaf sequoia-leaf
+          until [ -e "$RUNNER_TEMP/built" ]; do sleep 1; done
+          cat "$RUNNER_TEMP/build.log"
+          image=$(cat "$RUNNER_TEMP/image")
+          id=$(docker run --detach --health-interval 1s --health-start-interval 1s "$image")
+          trap 'docker rm --force "$id" > /dev/null; docker rmi "$image" > /dev/null || true' EXIT
           for _ in $(seq 30); do
-            if [ "$(docker inspect --format '{{.State.Health.Status}}' leaf)" = healthy ]; then
-              exit 0
-            fi
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' "$id")" = healthy ]; then exit 0; fi
             sleep 1
           done
-          docker logs leaf
+          docker logs "$id"
           exit 1
