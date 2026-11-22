@@ -53,8 +53,8 @@ export interface Moment {
   boosted: boolean;
 }
 
-const buf = makeCanvas(320, 200);
-const dusk = makeCanvas(320, 200);
+const buf = makeCanvas(320, 200, true);
+const dusk = makeCanvas(320, 200, true);
 
 function radial(size: number, stops: readonly (readonly [number, string])[]): HTMLCanvasElement {
   const { c, g } = makeCanvas(size, size);

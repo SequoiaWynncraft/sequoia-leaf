@@ -49,8 +49,8 @@ export interface Picture {
   glows(g: Ctx, cx: number, cy: number, spark: HTMLCanvasElement): void;
 }
 
-const buf = makeCanvas(320, 190);
-const dusk = makeCanvas(320, 190);
+const buf = makeCanvas(320, 190, true);
+const dusk = makeCanvas(320, 190, true);
 
 function radial(stops: readonly (readonly [number, string])[]): HTMLCanvasElement {
   const { c, g } = makeCanvas(64, 64);
