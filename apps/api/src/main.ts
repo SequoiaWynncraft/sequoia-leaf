@@ -4,21 +4,31 @@ import { Cause, Effect, Exit, Layer, Logger, References, Runtime } from "effect"
 import { serveLeaf, Services } from "./app.ts";
 import { AppConfig } from "./config.ts";
 import { EveryMinute, Startup } from "./jobs.ts";
+import { Stop } from "./stop.ts";
 
 const Server = Layer.unwrap(
   Effect.gen(function* () {
     const { port } = yield* AppConfig;
-    // A deploy stops the old container with SIGTERM and kills it ten seconds later. Requests in
-    // flight finish first; an event stream is cut, and its client reconnects to the new one; a live
-    // connection is told Leaf is restarting, and reconnects too.
-    return serveLeaf({ port, gracefulShutdownTimeout: "8 seconds" });
+    return serveLeaf({ port });
   }),
 );
 
-// The services are provided underneath the server and the jobs, so the database
-// is closed, folding its write-ahead log back in, only after both have stopped.
-Layer.mergeAll(Startup, Server, EveryMinute).pipe(
-  Layer.provide(Services),
+// A deploy stops the old container with SIGTERM once the new one is healthy, and the proxy in front
+// sends the old one requests until it has exited, so Leaf stops at once, from the top down, each part
+// once everything above it has: the server (live players are told Leaf is restarting, event streams
+// end, requests in flight have a moment to finish and are then cut), the scheduled work (a sync cut
+// short rolls back), and the services underneath them all, the database last, folding its write-ahead
+// log back in. Should that take over two seconds, the process exits anyway.
+Layer.mergeAll(
+  Startup,
+  Stop.begins("server").pipe(
+    Layer.provideMerge(Server),
+    Layer.provideMerge(Stop.begins("scheduled_work")),
+    Layer.provideMerge(EveryMinute),
+  ),
+).pipe(
+  Layer.provide(Stop.begins("services").pipe(Layer.provideMerge(Services))),
+  Layer.provide(Stop.layer({ deadline: "2 seconds", overdue: Effect.sync(() => process.exit(1)) })),
   Layer.provide(Logger.layer([Logger.consoleJson])),
   // Nothing collects traces, so spans would only cost time on every request.
   Layer.provide(Layer.succeed(References.TracerEnabled)(false)),

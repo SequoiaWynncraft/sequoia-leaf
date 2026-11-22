@@ -184,9 +184,7 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
      * all, with any routes of the caller's beside its own. Port 0 takes any free one.
      */
     serve: async (port = 0, extra: Layer.Layer<never, never, HttpRouter.HttpRouter> = Layer.empty) => {
-      const server = serveLeaf({ port, hostname: "127.0.0.1", gracefulShutdownTimeout: "1 second", extra }).pipe(
-        Layer.provide(layer),
-      );
+      const server = serveLeaf({ port, hostname: "127.0.0.1", extra }).pipe(Layer.provide(layer));
       const served = ManagedRuntime.make(server, { memoMap });
       const address = await served.runPromise(
         Effect.gen(function* () {
@@ -198,7 +196,7 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
       return {
         port: at,
         origin: `http://127.0.0.1:${at}`,
-        /** Stops serving: live connections are told Leaf is restarting. */
+        /** Stops serving as production stops: live connections are told Leaf is restarting, event streams end. */
         close: () => served.dispose(),
       };
     },

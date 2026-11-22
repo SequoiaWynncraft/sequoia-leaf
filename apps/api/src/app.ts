@@ -1,5 +1,5 @@
 import { BunHttpServer } from "@effect/platform-bun";
-import { type Duration, Layer } from "effect";
+import { Duration, Effect, Layer } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/http";
 
 import { ActivityReport } from "./activity/report.ts";
@@ -16,8 +16,9 @@ import { Skins } from "./game/skins.ts";
 import { ApiRoutes, NotFound } from "./http/handlers.ts";
 import { SafetyHeaders } from "./http/headers.ts";
 import { Pages } from "./http/pages.ts";
+import { OpenStreams } from "./http/streams.ts";
 import { Ledger } from "./ledger/store.ts";
-import { Live, LIVE_SOCKETS, LiveFarewell } from "./live/live.ts";
+import { Live, LIVE_SOCKETS } from "./live/live.ts";
 import { LiveRoute } from "./live/route.ts";
 import { Quests } from "./quests/store.ts";
 
@@ -33,18 +34,38 @@ export const Routes = Layer.mergeAll(ApiRoutes, LiveRoute, Pages, NotFound, Safe
 export const routerConfig = { ignoreTrailingSlash: false };
 
 /**
+ * How long a request already being answered has to finish once Leaf stops; whatever is still open
+ * then is closed. The server stops listening at once, and a proxy that sends this process a request
+ * before it has exited gets no answer, so Leaf does not linger.
+ */
+const STOP_GRACE = Duration.millis(200);
+
+/**
+ * Leaf's farewell, when it stops, before the HTTP server underneath it does: every live player is
+ * told Leaf is restarting (the server's own stop closes WebSockets with no word of why), and every
+ * event stream ends, which would otherwise hold the server's stop up for all of `STOP_GRACE`. Their
+ * clients reconnect, to the next Leaf.
+ */
+const Farewell = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const live = yield* Live;
+    const streams = yield* OpenStreams;
+    yield* Effect.addFinalizer(() => Effect.andThen(live.farewell, streams.end));
+  }),
+);
+
+/**
  * Leaf served by Bun, as production and the tests both serve it: its routes and any `extra`, live
- * connections and all. The live rooms sit on top of the server, so that when it stops they say
- * farewell first (the server's own stop closes WebSockets with no word of why).
+ * connections and all. The farewell sits on top of the server, so that when it stops, live players
+ * and event streams are seen off first, and the server's own stop has only requests in flight to
+ * wait for, for at most `STOP_GRACE`.
  */
 export const serveLeaf = (options: {
   readonly port: number;
   readonly hostname?: string;
-  /** How long requests in flight have to finish when Leaf stops. */
-  readonly gracefulShutdownTimeout: Duration.Input;
   readonly extra?: Layer.Layer<never, never, HttpRouter.HttpRouter>;
 }) =>
-  LiveFarewell.pipe(
+  Farewell.pipe(
     Layer.provideMerge(
       HttpRouter.serve(Layer.mergeAll(Routes, options.extra ?? Layer.empty), {
         routerConfig,
@@ -58,7 +79,7 @@ export const serveLeaf = (options: {
             maxRequestBodySize: 1024 * 1024,
             // Seconds. An event stream writes a keep-alive every 20, well inside this.
             idleTimeout: 60,
-            gracefulShutdownTimeout: options.gracefulShutdownTimeout,
+            gracefulShutdownTimeout: STOP_GRACE,
             websocket: LIVE_SOCKETS,
           }),
         ),

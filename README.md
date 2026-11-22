@@ -562,8 +562,8 @@ closed. Nothing is compressed.
 | 4003 | The player's session ended.                                 | Does not, until signed in. |
 
 When Leaf stops, every open visit is closed, and then every connection with
-1012, before the HTTP server stops: production and the tests both serve Leaf with `serveLeaf` in `app.ts`,
-which puts the live rooms' farewell on top of the server. The game tries again
+1012, and every event stream ends, before the HTTP server stops: production and the tests both serve Leaf with `serveLeaf` in `app.ts`,
+which puts Leaf's farewell on top of the server (see [Deploying](#deploying)). The game tries again
 half a second later, and then every second or so until Leaf is back (`retryAfter`
 in the kit's `realtime.ts`), at once when the page comes back to the front or the
 network returns; then it joins its room again, and says where its player is again,
@@ -663,7 +663,7 @@ Pebblefoot from spot to spot.
   somebody else.
 - `PUBLIC_ORIGIN` is `http://127.0.0.1:4000`.
 - Ctrl-C, or SIGTERM, stops it as a deploy stops Leaf: live connections are told
-  Leaf is restarting (1012) before the server goes.
+  Leaf is restarting (1012), and event streams end, before the server goes.
 - `--guest`: Tester is signed in but not in the guild, so they play as a guest.
 - `--down`: the backend can't be asked who Tester is, so they answer 503.
 - `--busy`: every minute a few of the four finish a raid together, for the guild's news.
@@ -818,14 +818,63 @@ as OpenTofu configuration. What the Coolify app is set up with:
 
 The server logs one JSON object per line to stdout, which Coolify shows as the
 app's logs: `started`, each run of a feed sync with what it recorded
-(`credit_sync`, `achievement_sync`), each `snapshot`, and every error with its
-cause. On SIGTERM it finishes the requests in flight, for up to eight seconds,
-closes the database and exits 0.
+(`credit_sync`, `achievement_sync`), each `snapshot`, every error with its
+cause, and `stopped`, with how long each part of its stop took.
 
 During a deploy the old and the new container run side by side for a few
 seconds on the same database file. That is safe: SQLite locks the file between
 them, and the credit sync's lease lets only one of them read the feed.
 Otherwise the service is built to run as a single instance.
+
+A deploy starts the new container, waits for it to answer `/healthz`, and then
+stops the old one with SIGTERM. The proxy in front (Traefik) shares requests
+between every running container of the app and drops one only once it has
+exited, so until the old process has exited, it is sent about half of all
+requests, and the ones it can no longer answer fail with 502. So Leaf stops at
+once, from the top down (`main.ts`, `serveLeaf` in `app.ts`):
+
+1. Live closes this process's open visits and tells every player Leaf is
+   restarting (1012). Their pages reconnect, to the new container.
+2. Every event stream ends (`OpenStreams.end`). Its client reconnects too.
+3. The HTTP server stops listening. A request already being answered has 200 ms
+   to finish; whatever is still open then is closed.
+4. The scheduled work is interrupted. A sync cut short rolls back its
+   transaction and lets go of its lease, so nothing is left half written.
+5. The database is closed, folding its write-ahead log back in, and the process
+   exits 0, logging `stopped`.
+
+Should that take longer than two seconds, the process exits anyway, with 1,
+having logged `stop_overdue` and the part it was waiting for.
+
+It used to linger. Bun's graceful stop waited up to eight seconds for open
+responses to finish, and an event stream never finishes by itself, so the old
+process stopped listening at once and then ran on, answering nothing. A deploy
+measured from outside (`/healthz` four times a second) and on the server (the
+containers' states twice a second):
+
+```text
++15.8 s  the new container starts
++21.0 s  the new container is healthy; both are up
++26.6 s  the first 502; from here 12 of about 33 requests fail
++34.8 s  the last 502
++35.2 s  the old container is gone
+```
+
+From SIGTERM to exit, on this machine, with the real server and each kind of
+connection players hold open:
+
+| Open when it is told to stop                 | Before | Now    |
+| -------------------------------------------- | ------ | ------ |
+| Nothing                                      | 24 ms  | 23 ms  |
+| A member's event stream                      | 8.0 s  | 17 ms  |
+| The guild's event stream                     | 8.0 s  | 18 ms  |
+| A live connection                            | 21 ms  | 20 ms  |
+| A request in flight (waiting on the backend) | 2.5 s  | 215 ms |
+| All four                                     | 8.0 s  | 230 ms |
+
+On a deploy, that should leave only the requests the proxy sends the old
+container in that fraction of a second to fail, where it was half of them for
+eight seconds.
 
 To run the image anywhere else:
 
