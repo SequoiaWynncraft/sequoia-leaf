@@ -242,7 +242,12 @@ ids, so nothing is done twice. Each batch carries `player`, who the page believe
 Leaf cannot read (`state_unreadable`) stops the page with `unreadableCard()` ("Your game could not
 be read. It has been kept; tell the guild."), sending nothing again. A 404 `not_found`, from a Leaf
 without the play service during a deploy, is "not yet": the call goes again each second for 30
-seconds (`NOT_YET`) before the page gives up for no server.
+seconds (`NOT_YET`) before the page gives up for no server. As the page is hidden or put away,
+what Leaf has not answered goes in a request that outlives the page. Leaf counts the time played
+from the calls it hears, so a page says it is open: in view, a minute without a call reads the
+state (`STILL_HERE`); with nothing waiting as it is hidden or put away, the state is read; and it
+is read as the page comes back (`outside.wake`). A visit says none of this, nor does a page while
+`away()` (the town, while a game is open over it).
 `predict` is the copy after a command the shared rules can work out
 without Leaf, shown at once; each answer's state takes the copy's place (with what is still waiting
 worked out again on top), and `onState` tells the page when that is not what it was showing.

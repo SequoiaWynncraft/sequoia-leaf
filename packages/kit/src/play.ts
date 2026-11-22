@@ -24,6 +24,11 @@
  * - As the page is hidden or put away, or the town closes the game, everything Leaf has not
  *   answered is sent at once in a request that outlives the page (`flush`), so the last thing done
  *   before leaving is not lost.
+ * - Leaf counts the time played from the calls it hears, so a page says it is open: while it is in
+ *   view, a minute without a call to Leaf reads the state (`STILL_HERE`); with nothing waiting as it
+ *   is hidden or put away, the state is read in a request that outlives it; and it is read as the
+ *   page comes back (`outside.wake`). A visit says none of this, nor does a page while `away()` (the
+ *   town, while a game is open over it).
  * - `waitingLook(element, answer)` gives what was asked for the kit's waiting look while Leaf takes
  *   more than a moment to answer.
  *
@@ -93,6 +98,9 @@ export interface NotYet {
 /** Each second, for 30 seconds. */
 export const NOT_YET: NotYet = { every: 1000, tries: 30 };
 
+/** How long a page in view goes without a call to Leaf before it reads its state, checked every quarter of it. */
+export const STILL_HERE = 60_000;
+
 /** Whether an answer is the 404 of a Leaf that has no play service yet, rather than one about the game. */
 const notYet = (reply: { status: number; body: unknown }): boolean =>
   reply.status === 404 && isRecord(reply.body) && reply.body.code === "not_found";
@@ -126,7 +134,14 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 export async function openPlay<View, Command extends object, Note>(
   game: GameId,
   reader: PlayReader<View, Note>,
-  options: { readonly player: string; readonly of?: string; readonly retry?: Retry; readonly notYet?: NotYet },
+  options: {
+    readonly player: string;
+    readonly of?: string;
+    /** Whether the page is put aside for now and says nothing of itself (the town, under a game). */
+    readonly away?: () => boolean;
+    readonly retry?: Retry;
+    readonly notYet?: NotYet;
+  },
 ): Promise<Play<View, Command, Note> | { trouble: Trouble }> {
   const path = playPath(game);
   const visiting = options.of !== undefined;
@@ -163,6 +178,13 @@ export async function openPlay<View, Command extends object, Note>(
   let queue: Pending<View, Command, Note>[] = [];
   let flying: Pending<View, Command, Note>[] | null = null;
   let stopped = false;
+  /** When the page last called Leaf, and whether it says nothing of itself (a visit, or a page put aside). */
+  let calledAt = outside.now();
+  const call: typeof ask = (to, init) => {
+    calledAt = outside.now();
+    return ask(to, init);
+  };
+  const quiet = (): boolean => visiting || options.away?.() === true;
   let pause = retry.first;
   const hearers = new Set<(state: View, differs: boolean) => void>();
   const troubled = new Set<(why: Trouble) => void>();
@@ -259,7 +281,7 @@ export async function openPlay<View, Command extends object, Note>(
     let notYetTries = 0;
     for (;;) {
       // oxlint-disable-next-line no-await-in-loop -- the same batch, again, until Leaf has it
-      const reply = await ask(path, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      const reply = await call(path, { method: "POST", headers: { "Content-Type": "application/json" }, body });
       if (stopped) return;
       if (reply.status === 200 && isRecord(reply.body)) {
         pause = retry.first;
@@ -319,20 +341,26 @@ export async function openPlay<View, Command extends object, Note>(
 
   /**
    * The batch on its way and what is queued behind it (as many as one request holds), in order and
-   * with the ids they have, in a request that outlives the page. Leaf does each once; if the page
-   * stays after all, they go again in turn and are answered as before.
+   * with the ids they have, in a request that outlives the page; with none, a read of the state.
+   * Leaf does each command once; if the page stays after all, they go again in turn and are
+   * answered as before.
    */
   function flush(): void {
     const left = fitting([...(flying ?? []), ...queue]);
-    if (stopped || left.length === 0) return;
-    void outside.fetch(path, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: bodyOf(left),
-      keepalive: true,
-    });
+    if (stopped || (left.length === 0 && quiet())) return;
+    const post = { method: "POST", headers: { "Content-Type": "application/json" }, body: bodyOf(left) };
+    void outside.fetch(path, { ...(left.length > 0 ? post : {}), credentials: "same-origin", keepalive: true });
   }
+
+  async function refresh(): Promise<void> {
+    if (stopped || flying !== null || queue.length > 0) return;
+    const reply = await call(read);
+    if (reply.status === 401) return stop("signedout");
+    if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0) {
+      took({ ...reply.body, results: [] }, []);
+    }
+  }
+
   if (typeof window !== "undefined") {
     window.addEventListener("pagehide", flush);
     fromTown((msg) => {
@@ -343,6 +371,15 @@ export async function openPlay<View, Command extends object, Note>(
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") flush();
     });
+  if (!visiting) {
+    outside.wake(() => {
+      if (!quiet()) void refresh();
+    });
+    if (typeof window !== "undefined")
+      window.setInterval(() => {
+        if (!document.hidden && !quiet() && outside.now() - calledAt >= STILL_HERE) void refresh();
+      }, STILL_HERE / 4);
+  }
 
   return {
     get state() {
@@ -374,14 +411,7 @@ export async function openPlay<View, Command extends object, Note>(
       return () => troubled.delete(fn);
     },
     flush,
-    async refresh() {
-      if (stopped || flying !== null || queue.length > 0) return;
-      const reply = await ask(read);
-      if (reply.status === 401) return stop("signedout");
-      if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0) {
-        took({ ...reply.body, results: [] }, []);
-      }
-    },
+    refresh,
   };
 }
 
