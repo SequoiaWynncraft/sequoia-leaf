@@ -396,6 +396,39 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
   return run;
 }
 
+/**
+ * Lays the room a run is in out afresh from a new seed, keeping what the player has (the trail, the
+ * room, resolve, level and experience, acorns, the figures with their stars and items, the item
+ * bench, the boons, what the run has done): the stall, who waits in the room and what each pick
+ * waiting offers are drawn again, the room's rustles and buying start again, and a run in the
+ * middle of a fight is put back to planning for that room. For a run that comes from outside the
+ * rules (the one-off import of the old saves), whose draws cannot be trusted.
+ */
+export function layOutAfresh(run: Run, seed: number): void {
+  run.seed = seed >>> 0;
+  run.rng = mix(run.seed, 1);
+  run.phase = "plan";
+  run.fight = null;
+  run.last = null;
+  run.won = false;
+  run.left = false;
+  run.held = false;
+  run.bought = 0;
+  run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
+  const cheapest = STALL_POOL.filter((id) => FIGURES[id].tier === 1);
+  run.choices = run.choices.map((choice): Choice => {
+    if (choice.kind === "starter")
+      return { kind: "starter", options: shuffled(run, cheapest).slice(0, ECONOMY.starters) };
+    if (choice.kind === "component") {
+      const count = Math.min(ECONOMY.componentsWon, Math.max(ECONOMY.componentsLost, choice.options.length));
+      return { kind: "component", options: componentOptions(run, count) };
+    }
+    return { kind: "boon", options: boonOptions(run, []), redraws: Math.min(choice.redraws, ECONOMY.boonRedraws) };
+  });
+  restock(run);
+  run.foe = opposition(draw32(run), run.room, run.trail);
+}
+
 /** Why nothing can be planned just now, or null if it can. */
 function notPlanning(run: Run): Why | null {
   if (run.phase === "over") return "raid_over";

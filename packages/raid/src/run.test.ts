@@ -19,6 +19,7 @@ import {
   giveItem,
   hold,
   interestNow,
+  layOutAfresh,
   move,
   opposition,
   type Piece,
@@ -909,5 +910,57 @@ describe("who is waiting", () => {
     }
     // By chance about a quarter of the roster shares the kin or the calling.
     expect(matching / total).toBeGreaterThan(0.45);
+  });
+});
+
+describe("a room laid out afresh", () => {
+  test("keeps what the player has and draws everything else again: the stall, the foe, the picks, the seed", () => {
+    const run = startRun(31, { trail: 0 });
+    choose(run, 0);
+    buy(
+      run,
+      run.stall.findIndex((k) => k !== null),
+    );
+    beginFight(run);
+    takeTakings(run);
+    // In the middle of the next fight, with a pick waiting.
+    run.choices = [
+      { kind: "component", options: ["thorn", "bark"] },
+      { kind: "boon", options: [], redraws: 9 },
+    ];
+    run.phase = "fight";
+    const before = structuredClone(run);
+    layOutAfresh(run, 0xdecaf);
+    for (const kept of [
+      "trail",
+      "room",
+      "resolve",
+      "acorns",
+      "level",
+      "xp",
+      "board",
+      "bench",
+      "items",
+      "boons",
+      "record",
+    ] as const) {
+      expect([kept, run[kept]]).toEqual([kept, before[kept]]);
+    }
+    expect(run).toMatchObject({ phase: "plan", fight: null, seed: 0xdecaf });
+    expect(run.stall).toHaveLength(ECONOMY.stall);
+    expect(run.foe.figures.length).toBeGreaterThan(0);
+    expect(run.choices.map((c) => [c.kind, c.options.length])).toEqual([
+      ["component", ECONOMY.componentsLost],
+      ["boon", ECONOMY.boonOptions],
+    ]);
+    expect(run.choices[1]).toMatchObject({ redraws: ECONOMY.boonRedraws });
+    expect(run.rustles).toBe(ECONOMY.freeRustles);
+    // Laid out from another seed, it comes out otherwise; from the same, the same.
+    const again = structuredClone(before);
+    layOutAfresh(again, 0xdecaf);
+    expect(again).toEqual(run);
+    const other = structuredClone(before);
+    layOutAfresh(other, 7);
+    expect([other.stall, other.foe]).not.toEqual([run.stall, run.foe]);
   });
 });
