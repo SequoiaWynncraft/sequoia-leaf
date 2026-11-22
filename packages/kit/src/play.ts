@@ -180,8 +180,11 @@ export async function openPlay<View, Command extends object, Note>(
   let stopped = false;
   /** When the page last called Leaf, and whether it says nothing of itself (a visit, or a page put aside). */
   let calledAt = outside.now();
+  /** How many calls have set off: an answer to one that is no longer the last is out of date. */
+  let calls = 0;
   const call: typeof ask = (to, init) => {
     calledAt = outside.now();
+    calls++;
     return ask(to, init);
   };
   const quiet = (): boolean => visiting || options.away?.() === true;
@@ -354,9 +357,12 @@ export async function openPlay<View, Command extends object, Note>(
 
   async function refresh(): Promise<void> {
     if (stopped || flying !== null || queue.length > 0) return;
-    const reply = await call(read);
+    const asked = call(read);
+    const mine = calls;
+    const reply = await asked;
     if (reply.status === 401) return stop("signedout");
-    if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0) {
+    // A command sent and answered while this was on its way has told the page more than this has.
+    if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0 && calls === mine) {
       took({ ...reply.body, results: [] }, []);
     }
   }

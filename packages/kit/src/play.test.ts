@@ -458,6 +458,34 @@ describe("sending commands", () => {
 });
 
 describe("a page in view", () => {
+  test("a read answered after a command sent meanwhile does not undo what the command showed", async () => {
+    const { routes } = counterLeaf();
+    const held: { read: ReadableStreamDefaultController<Uint8Array> | null } = { read: null };
+    let reads = 0;
+    const w = standin({
+      ...routes,
+      // The first read opens the page; the second is held until the test lets it go.
+      "GET /v1/game/play/raid": () => {
+        if (reads++ === 0) return routes["GET /v1/game/play/raid"]();
+        const body = new ReadableStream<Uint8Array>({ start: (c) => void (held.read = c) });
+        return new Response(body, { status: 200, headers: { "Content-Type": "application/json" } });
+      },
+    });
+    world = w;
+    const play = await openPlay<Count, Add, string>("raid", COUNTER, { player: "p" });
+    if ("trouble" in play) throw new Error("not opened");
+    w.wake();
+    await Bun.sleep(1);
+    await play.send({ do: "add", by: 3 });
+    expect(play.state).toEqual({ n: 3 });
+    if (!held.read) throw new Error("no read was held");
+    const old = { rev: 0, now: "2026-11-25T12:00:00.000Z", state: { n: 0 } };
+    held.read.enqueue(new TextEncoder().encode(JSON.stringify(old)));
+    held.read.close();
+    await Bun.sleep(1);
+    expect(play.state).toEqual({ n: 3 });
+  });
+
   test("reads its state after a minute without a call to Leaf, and not while hidden, put aside, or in a visit", async () => {
     jest.useFakeTimers();
     const doc = Object.assign(new EventTarget(), { hidden: false });

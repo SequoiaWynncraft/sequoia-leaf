@@ -35,10 +35,10 @@ export function initBoard(myId: string): void {
       p.id === myId
         ? []
         : [
-            ...(p.games?.works
+            ...(p.games?.works?.placed
               ? [{ label: "Visit yard", on: () => outside.go(`?of=${encodeURIComponent(p.id)}`) }]
               : []),
-            ...(p.games?.town ? [{ label: "Visit camp", on: () => toTown(p.id) }] : []),
+            ...(p.games?.town?.placed ? [{ label: "Visit camp", on: () => toTown(p.id) }] : []),
           ],
   });
 }
