@@ -90,9 +90,9 @@ const byId = (id: string): HTMLElement | null => document.getElementById(id);
 export function buildTable(a: Asks): void {
   asks = a;
   const hud = el("div", "", { id: "hud" });
-  const purse = el("div", "k-plaque", { id: "purse" });
-  const track = el("div", "k-plaque", { id: "track" });
-  const resolve = el("button", "k-plaque", { id: "resolve", type: "button" });
+  const purse = el("div", "k-plaque hung", { id: "purse" });
+  const track = el("div", "k-plaque hung", { id: "track" });
+  const resolve = el("button", "k-plaque hung", { id: "resolve", type: "button" });
   tip(
     resolve,
     "Health",

@@ -13,7 +13,7 @@
         --bottom: max(calc(var(--u) * 4), env(safe-area-inset-bottom));
         /* The dock: a slot's side, and how tall the whole plank stands off the bottom. */
         --slot: min(calc(var(--u) * 21), calc((100vw - var(--u) * 26) / 8));
-        --dock: calc(var(--u) * 31 + var(--bottom));
+        --dock: calc(var(--u) * 33 + var(--bottom));
         --sheet-floor: var(--dock);
       }
       html,
@@ -43,7 +43,7 @@
         max-width: calc(100vw - var(--edge) * 2 - var(--u) * 50);
         display: flex;
         flex-wrap: wrap;
-        align-items: center;
+        align-items: flex-end;
         gap: calc(var(--u) * 2) calc(var(--u) * 3);
       }
       #purse {
@@ -185,7 +185,7 @@
         z-index: 8;
         right: var(--edge);
         top: calc(var(--top) + var(--u) * 30);
-        width: min(calc(var(--u) * 230), 46vw);
+        width: min(calc(var(--u) * 234), 46vw);
         max-height: calc(100dvh - var(--top) - var(--u) * 34 - var(--dock));
         display: flex;
         flex-direction: column;
@@ -540,13 +540,13 @@
   <body>
     <canvas id="view"></canvas>
     <div id="top">
-      <div id="purse" class="k-plaque"></div>
+      <div id="purse" class="k-plaque hung"></div>
       <div id="visit" hidden></div>
     </div>
     <div id="corner"></div>
     <div id="feed" aria-live="polite"></div>
-    <nav id="dock" class="k-plaque" aria-label="Places"></nav>
-    <div id="tray" class="k-plaque" aria-label="Things put away" hidden></div>
+    <nav id="dock" class="k-shelf" aria-label="Places"></nav>
+    <div id="tray" class="k-shelf" aria-label="Things put away" hidden></div>
     <aside id="panel" class="k-panel" hidden></aside>
     <div id="card" class="k-plaque" hidden></div>
     <div id="arrival" hidden></div>
