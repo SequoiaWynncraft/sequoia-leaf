@@ -557,7 +557,7 @@ function show(ev: FightEvent): void {
       if (!a) break;
       a.down = false;
       a.hopAt = now;
-      say(a.x, a.y - framesOf(a.unit.kind).tall - 6, "Was only resting.", GOLD[2], { ttl: 1.4 });
+      say(a.x, a.y - framesOf(a.unit.kind).tall - 6, "Second Wind!", GOLD[2], { ttl: 1.4 });
       motes(a.x, a.y - 6, 10, [GOLD[2], CREAM]);
       snd.rise();
       break;
