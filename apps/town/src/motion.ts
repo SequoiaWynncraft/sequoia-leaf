@@ -86,7 +86,8 @@ export const newFigure = (): Figure => ({
 });
 
 const DIRS: readonly Dir[] = [0, 1, 2, 3];
-const dirOf = (facing: number, or: Dir): Dir => DIRS.find((d) => d === facing) ?? or;
+/** The facing a number says, or `or` where it says none. */
+export const dirOf = (facing: number, or: Dir): Dir => DIRS.find((d) => d === facing) ?? or;
 
 /**
  * Draws somebody where the room says they are now (`m`, from `sample`), `dt` seconds after the

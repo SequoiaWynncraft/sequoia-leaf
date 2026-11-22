@@ -14,7 +14,7 @@ import { FOOT_X, FOOT_Y, SIT, WALK } from "@sequoia-leaf/kit/skin.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx, dist, lerp, makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 
-import { headOf, HOP, onScreen } from "./actors.ts";
+import { feet, headOf, HOP, onScreen } from "./actors.ts";
 import { bits, emoted, floaters, rings } from "./fx.ts";
 import { type Actor, G, show } from "./game.ts";
 import type { Light, Prop, Standing } from "./props.ts";
@@ -110,11 +110,15 @@ export function drawProp(g: Ctx, p: Prop, cx: number, cy: number): void {
   p.extra?.(g, sx, sy);
 }
 
-/** Where someone is drawn this moment: on their feet, or part-way into a seat. */
+/** Where someone is drawn this moment: on their feet, or part-way into a seat; and stepped aside. */
 function standing(a: Actor): Pt {
-  if (!a.seat) return { x: a.x, y: a.y };
+  const { x, y } = a.aside;
+  if (!a.seat) return { x: a.x + x, y: a.y + y };
   const k = clamp((G.t - a.sat) / 0.22, 0, 1);
-  return { x: lerp(a.seat.from.x, a.seat.x, k), y: lerp(a.seat.from.y, a.seat.y, k) - Math.sin(k * Math.PI) * 5 };
+  return {
+    x: lerp(a.seat.from.x, a.seat.x, k) + x,
+    y: lerp(a.seat.from.y, a.seat.y, k) - Math.sin(k * Math.PI) * 5 + y,
+  };
 }
 
 function hopOf(a: Actor): number {
@@ -197,7 +201,7 @@ function halfRing(g: Ctx, x: number, y: number, rx: number, ry: number, col: str
 function foundRing(g: Ctx, cx: number, cy: number, front: boolean): void {
   const found = show.found;
   if (!found || G.t >= found.until) return;
-  const at = found.a.seat ?? found.a;
+  const at = feet(found.a);
   const r = 9 + Math.sin(G.t * 6);
   halfRing(g, at.x - cx, at.y - cy, r + 1, (r + 1) * 0.45, GOLD[2], front);
   halfRing(g, at.x - cx, at.y - cy, r, r * 0.45, GOLD[2], front);
@@ -258,12 +262,13 @@ export function drawPicture(pic: Picture): HTMLCanvasElement {
   }
   for (const a of people) {
     if (a.away || a.alpha <= 0.02) continue;
-    order.push({ z: a.seat ? a.seat.y + 9 : a.y, prop: null, actor: a, other: null });
+    const at = feet(a);
+    order.push({ z: a.seat ? at.y + 9 : at.y, prop: null, actor: a, other: null });
     if (!a.seat && a.lift === 0) {
       g.fillStyle = "rgba(20,10,28,0.34)";
       const lift = hopOf(a) > 2 ? 1 : 0;
-      g.fillRect(Math.round(a.x) - 4 + lift - cx, Math.round(a.y) - 1 - cy, 8 - lift * 2, 2);
-      g.fillRect(Math.round(a.x) - 3 + lift - cx, Math.round(a.y) - 2 - cy, 6 - lift * 2, 4);
+      g.fillRect(Math.round(at.x) - 4 + lift - cx, Math.round(at.y) - 1 - cy, 8 - lift * 2, 2);
+      g.fillRect(Math.round(at.x) - 3 + lift - cx, Math.round(at.y) - 2 - cy, 6 - lift * 2, 4);
     }
   }
   for (const o of pic.others()) order.push({ z: o.z, prop: null, actor: null, other: o });
@@ -411,11 +416,11 @@ function drawPeople(ctx: Ctx, px: number, taken: readonly Box[], people: readonl
   const dt = clamp(G.t - wordsAt, 0, 1);
   wordsAt = G.t;
   const p = G.player;
-  const me = p ? (p.seat ?? p) : null;
+  const me = p ? feet(p) : null;
 
   const wanted: { a: Actor; rank: number }[] = [];
   for (const a of people) {
-    const at = a.seat ?? a;
+    const at = feet(a);
     if (a.away || a.alpha < 0.5 || !onScreen(at.x, at.y, 4)) {
       plates.set(a, 0);
       continue;
@@ -444,7 +449,7 @@ function drawPeople(ctx: Ctx, px: number, taken: readonly Box[], people: readonl
   const pad = 2 * px;
   tops.clear();
   for (const { a, rank } of wanted) {
-    const at = a.seat ?? a;
+    const at = feet(a);
     const hx = Math.round((at.x - cx) * z);
     const hy = Math.round((at.y - cy - headOf(a)) * z);
     const name = a.who.name;

@@ -25,7 +25,9 @@ says so.
   is waiting in the Works' till, and the crab still missing. Putting it away is Leaf's `welcome`,
   which posts what the town's own left in the camp's mailbox. There is a letter on a first visit,
   on the first visit of a UTC day, and otherwise only if the member's news paid Leaf; a reload
-  before it is put away shows the same letter.
+  before it is put away shows the same letter. A page loaded again in the same tab within ten
+  minutes of the last one going puts the member back where they stood in town, facing as they
+  were, instead of at the gate (`town.stood.v1` in the tab's own storage, written as the page goes).
 - **The town.** A map a little larger than the screen, with a camera that follows. Walk with WASD
   or the arrow keys, or tap a spot and the character finds a way round things; hold and drag to
   steer. Buildings, trunks and the pond are solid.
@@ -76,7 +78,11 @@ says so.
   who have gone in the last day doze in town (both below). A member's card has their
   name and rank, and for one dozing, how long ago they dozed off. A name shows only over somebody
   who is near the member, pointed at, speaking, or just arrived, and no two name plates ever
-  overlap.
+  overlap. Members standing still within 6 pixels of one another (the member, live players, those
+  visiting or dozing) are drawn apart (`apart.ts`), the same on every page: the first by account
+  keeps the spot and the rest are drawn 7 pixels away, right, left, down, up, then on the
+  diagonals, and 14 past nine. Only the drawing moves, over a fifth of a second as they stop or
+  set off; a touch finds them where they are drawn.
 - **Coming in**, the feed counts everybody else in town, members and guests together: "You are
   home. 3 are in town.", "1 is in town.", or "The town is quiet."
 - **Touching things.** Lantern posts, mushrooms, flowers, ferns, the great trunks, the fire, the
@@ -333,6 +339,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/news.ts`                         | The feed's line for each of the guild's moments, and their pace                                 |
 | `src/visitors.ts`                     | Real members in the game, standing about the town, and those dozing in it                       |
 | `src/players.ts`, `src/motion.ts`     | The town live: in the room, everybody else drawn from it, emotes; its rules                     |
+| `src/apart.ts`                        | Back where the member stood after a reload; members on one spot drawn a step apart              |
 | `src/aboutui.ts`, `src/about.ts`      | Who is about: the button and its panel; who goes in which part, and the words                   |
 | `src/letter.ts`                       | Putting the arrival letter together from Leaf's arrival and the member's news                   |
 | `src/fx.ts`                           | Sparks, leaves and rising words                                                                 |
@@ -344,7 +351,7 @@ The catalogue of camp things (`things.ts`), what is for sale (`catalogue.ts`), t
 (`mail.ts`), the town's own (`folk.ts`), a camp's rules (`camp.ts`) and the town's commands
 (`game.ts`) are in `packages/town`, the rules Leaf plays the town by; the page imports them from
 there and works out with them what it shows at once. `grid.ts`, `letter.ts`, `games.ts`, `live.ts`,
-`news.ts`, `motion.ts` and `about.ts` have no page in them, and tests beside them (`motion.test.ts`
+`news.ts`, `motion.ts`, `apart.ts` and `about.ts` have no page in them, and tests beside them (`motion.test.ts`
 plays Leaf's side of a live connection with the kit's stand-in socket); `folk.test.ts` also reads
 every file of the three games to check that nothing but members is drawn from a skin, and
 `touch.ts` has tests for what a touch means.
