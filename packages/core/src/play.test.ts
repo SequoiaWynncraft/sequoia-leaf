@@ -3,8 +3,8 @@ import { describe, expect, it } from "bun:test";
 import { COMMAND_ID, GAME_IDS, gameId, isRefused, playPath } from "./play.ts";
 
 describe("the games Leaf plays", () => {
-  it("are the raid, the Works and the town, known by name and nothing else", () => {
-    expect(GAME_IDS).toEqual(["raid", "works", "town"]);
+  it("are the raid, the Works, the town and the pulls, known by name and nothing else", () => {
+    expect(GAME_IDS).toEqual(["raid", "works", "town", "pulls"]);
     expect(gameId("raid")).toBe("raid");
     expect(gameId("Raid")).toBeUndefined();
     expect(gameId("saves")).toBeUndefined();

@@ -17,7 +17,8 @@ import {
   timedWindowAt,
   utcDay,
 } from "@sequoia-leaf/core";
-import { ByteSize, Clock, Duration, Effect, Layer, Option, Redacted, Ref, Schedule, Stream } from "effect";
+import { BANNERS } from "@sequoia-leaf/pulls";
+import { ByteSize, Clock, Duration, Effect, Layer, Option, Redacted, Ref, Schedule, Schema, Stream } from "effect";
 import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder, HttpApiError, HttpApiSecurity } from "effect/http-api";
 import { SqlClient } from "effect/sql";
@@ -588,6 +589,9 @@ const unreadable = new StateUnreadable({
   message: "Your game could not be read. It has been kept; tell the guild",
 });
 
+/** A row of `banner_people`: a banner, and the player who is its headliner. */
+const BannerPerson = Schema.Struct({ banner: Schema.String, playerId: Schema.String });
+
 /** The game a route names, if Leaf plays it. */
 const playedGame = (name: string): Effect.Effect<Played, Missing> => {
   const id = gameId(name);
@@ -838,6 +842,34 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               name: named.get(player) ?? "Someone",
               games: Object.fromEntries(games),
             } satisfies typeof Body.Person.Type);
+          }),
+        )
+        // Every pull banner and its headliner, named as the boards name players.
+        .handle("banners", () =>
+          Effect.gen(function* () {
+            const rows = yield* sql`SELECT banner, player_id AS playerId FROM banner_people`.pipe(
+              Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(BannerPerson))),
+              Effect.orDie,
+            );
+            // Put in by hand: a row whose id is not a player's names nobody.
+            const people = new Map(
+              rows.flatMap(({ banner, playerId }) => {
+                const id = parsePlayerId(playerId);
+                return id === undefined ? [] : [[banner, id] as const];
+              }),
+            );
+            const named = yield* names.of([...people.values()]);
+            return HttpServerResponse.jsonUnsafe({
+              banners: BANNERS.map(({ id, from, until }) => {
+                const person = people.get(id);
+                return {
+                  id,
+                  from: iso(from),
+                  until: iso(until),
+                  headliner: person === undefined ? null : { id: person, name: named.get(person) ?? "Someone" },
+                };
+              }),
+            } satisfies typeof Body.Banners.Type);
           }),
         )
         // A game's board, its players named as the guild's news names them.

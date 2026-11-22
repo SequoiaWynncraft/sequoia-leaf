@@ -81,6 +81,7 @@ and lets a game's command take Leaf (see the play service).
 | `packages/raid`       | The Little Raid's rules, which Leaf and the battler's page share.       |
 | `packages/yard`       | The Works' rules, with no screen in them; Leaf and the page use them.   |
 | `packages/town`       | The town's and the camp's rules and catalogue; the town page uses them. |
+| `packages/pulls`      | The pulls' rules: prizes, banners, odds and Seeds.                      |
 | `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.           |
 | `apps/api/migrations` | The database schema, as Effect migrations applied in order at start.    |
 | `apps/town`           | Guild Town, the browser game's home screen.                             |
@@ -393,6 +394,7 @@ react to `quest_completed`.
 | `GET /v1/game/play/{game}`           | The player's state in a game Leaf plays, as their page is shown it.   |
 | `POST /v1/game/play/{game}`          | Does a batch of commands in that game, and answers what each did.     |
 | `GET /v1/game/play/{game}/standings` | The game's board: the twenty highest, and the player's own place.     |
+| `GET /v1/game/banners`               | Every pull banner, its dates, and its headliner's id and name.        |
 
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
@@ -502,7 +504,8 @@ refused, what the page is shown of a state (nothing that tells the future),
 and the state as stored text. Time is Leaf's, and so are the dice: each call
 gets a fresh number from the machine's secure randomness (`Ctx.seed`), which
 the game stirs into the stream its state keeps; the stream is never shown.
-The games on it now: `raid`, The Little Raid (`packages/raid`), and `works`, the Works (`packages/yard`).
+The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Works (`packages/yard`), and
+`pulls` (`packages/pulls`).
 
 - `GET /v1/game/play/{game}` answers `{ "rev", "now", "state" }`: how many
   batches have changed the state, Leaf's clock, and the game's view of it. A
@@ -616,6 +619,12 @@ takes the price; the chest pays 3 Coins once a UTC day, free of the cap; where
 a camp stands (things set out, callers greeted, the crab's sightings) is shown
 on a person's card. Each trophy the player holds (an award) goes by the trail
 as a parcel.
+
+**The pulls** keep what each player has won, their counters, Seeds and free
+pulls; the rules and odds are in `packages/pulls/README.md`. Pulls paid with
+Leaf take it as one spend per command, keyed `pull:<pulls before it>`. Who a
+banner's headliner is, is the `banner_people` table (`banner`, `player_id`),
+put in by hand; Leaf counts them as known, so their name and skin are looked up.
 
 **The Little Raid** keeps the run in hand, the almanac, the looks and the trail
 picked. Its commands, notes, refusals and what its page is shown are in

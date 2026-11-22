@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { type Game, leaf, MOST_COMMANDS, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { PULLS } from "@sequoia-leaf/pulls";
 import {
   planCommands,
   RAID,
@@ -15,7 +16,7 @@ import { deliver, readView as readYardView, route, WORKS } from "@sequoia-leaf/y
 import { Effect, Exit, Logger, References, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
-import { Person, Standings } from "../src/api/schemas.ts";
+import { Banners, Person, Standings } from "../src/api/schemas.ts";
 import type { Settings } from "../src/config.ts";
 import { knownAmong } from "../src/game/known.ts";
 import { PlayerNames } from "../src/game/names.ts";
@@ -23,7 +24,7 @@ import { Coins } from "../src/play/coins.ts";
 import { played } from "../src/play/games.ts";
 import { Play } from "../src/play/service.ts";
 import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
-import { DAY, fakeBackend, type Fakes, sessionOf, steadyDice, testLeaf } from "./support.ts";
+import { DAY, fakeBackend, fakeMojang, type Fakes, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -127,8 +128,8 @@ const entries = (player: PlayerId) =>
   services.query(
     (sql) => sql`SELECT amount, reason, game, key FROM coin_entries WHERE player_id = ${player} ORDER BY id`,
   );
-const stored = (player: PlayerId) =>
-  services.query((sql) => sql`SELECT rev, state FROM play_state WHERE player_id = ${player} AND game = 'raid'`);
+const stored = (player: PlayerId, game = "raid") =>
+  services.query((sql) => sql`SELECT rev, state FROM play_state WHERE player_id = ${player} AND game = ${game}`);
 
 /** A shop where each lantern costs what the command says: a game that spends Coins, which the raid never does. */
 const SHOP: Game<{ bought: number }, { price: number }, { bought: number }, string> = {
@@ -774,7 +775,11 @@ async function spending() {
   start({}, { gameLeafSpending: true });
 }
 /** What a refused command must leave as it was: the state, the ledger and the Coins. */
-const untouched = async (player: PlayerId) => [await stored(player), await ledgerOf(player), await entries(player)];
+const untouched = async (player: PlayerId, game = "raid") => [
+  await stored(player, game),
+  await ledgerOf(player),
+  await entries(player),
+];
 const buyCloth = (look: string) => command({ do: "buyLook", kind: "cloth", look });
 
 describe("Leaf a command takes", () => {
@@ -1388,5 +1393,90 @@ describe("the town, played by commands through HTTP", () => {
     ]);
     expect([view.visit, view.camp.greeted]).toEqual([null, 1]);
     expect(view.camp.letters.some((l) => l.id === `v-${caller.id}`)).toBe(caller.note !== "" || caller.gift !== "");
+  });
+});
+
+/** A batch of commands to the pulls, as a player's page sends it, and Leaf's answer. */
+async function pulled(commands: readonly unknown[], player: PlayerId = alice) {
+  clock.now += Math.max(1, commands.length) * 100;
+  const response = await send("POST", "/v1/game/play/pulls", { commands }, player);
+  expect(response.status).toBe(200);
+  return Schema.decodeUnknownSync(Answered)(await response.json());
+}
+const tenPulls = (id: string) => ({ id, do: "pull", pool: "grove", n: 10, with: "leaf" });
+
+describe("pulls", () => {
+  it("ten take 10,000 Leaf once, as one spend; sent again, they take nothing; and each prize won is awarded", async () => {
+    await spending();
+    await raided(alice, 25_000);
+    const ten = tenPulls("p-1");
+    const done = await pulled([ten]);
+    expect(done.results.map((r) => ("notes" in r ? r.notes.length : r.refused))).toEqual([10]);
+    expect(await services.account(alice)).toEqual({ playerId: alice, balance: 15_000, xp: 25_000 });
+    const spent = {
+      kind: "spend",
+      origin: "shop",
+      key: `play:pulls:${alice}:pull:0`,
+      delta: -10_000,
+      xp: 0,
+      memo: "Pulls: 10 in grove",
+    };
+    expect((await ledgerOf(alice)).slice(1)).toEqual([spent]);
+    expect((await pulled([ten])).results).toEqual(done.results);
+    expect((await ledgerOf(alice)).slice(1)).toEqual([spent]);
+    const have = PULLS.decode((await storedIn("pulls"))[0]?.state ?? "")?.have ?? {};
+    expect(Object.values(have).reduce((sum, n) => sum + n, 0)).toBe(10);
+    expect(new Set((await awarded(alice)).map((a) => a.id))).toEqual(
+      new Set(Object.keys(have).map((id) => `pull:${id}`)),
+    );
+  });
+
+  it("are refused, changing nothing, for too little Leaf and while spending is off", async () => {
+    await spending();
+    await raided(alice, 9_999);
+    await send("GET", "/v1/game/play/pulls");
+    const before = await untouched(alice, "pulls");
+    expect((await pulled([tenPulls("p-1")])).results).toEqual([{ id: "p-1", refused: "not_enough_leaf" }]);
+    expect(await untouched(alice, "pulls")).toEqual(before);
+
+    await app.dispose();
+    start();
+    await raided(alice, 20_000);
+    await send("GET", "/v1/game/play/pulls");
+    const off = await untouched(alice, "pulls");
+    expect((await pulled([tenPulls("p-2")])).results).toEqual([{ id: "p-2", refused: "leaf_closed" }]);
+    expect(await untouched(alice, "pulls")).toEqual(off);
+  });
+});
+
+/** The pull banners, as Leaf lists them. */
+async function banners() {
+  const response = await send("GET", "/v1/game/banners");
+  expect(response.status).toBe(200);
+  return Schema.decodeUnknownSync(Banners)(await response.json());
+}
+
+describe("the banners", () => {
+  it("are listed with their dates and headliner, who Leaf then knows, so their name and face are looked up", async () => {
+    await app.dispose();
+    const mojang = fakeMojang();
+    const headliner = stranger(5);
+    mojang.profiles.set(headliner, { name: "Fernwhistle", skin: undefined });
+    start({ mojang: mojang.service });
+    const dates = { id: "banner-1", from: "2026-11-24T00:00:00.000Z", until: "2026-12-08T00:00:00.000Z" };
+    expect(await banners()).toEqual({ banners: [{ ...dates, headliner: null }] });
+    const known = () =>
+      services.run(
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          return [...(yield* knownAmong(sql, [headliner], clock.now))];
+        }),
+      );
+    expect(await known()).toEqual([]);
+
+    await services.query((sql) => sql`INSERT INTO banner_people (banner, player_id) VALUES ('banner-1', ${headliner})`);
+    expect(await banners()).toEqual({ banners: [{ ...dates, headliner: { id: headliner, name: "Fernwhistle" } }] });
+    expect(await known()).toEqual([headliner]);
+    expect((await app.request("/v1/game/banners")).status).toBe(401);
   });
 });
