@@ -131,6 +131,9 @@ function measure(): void {
   inset.bottom = S.visiting ? 0 : Math.max(0, window.innerHeight - hand.top);
   document.documentElement.style.setProperty("--toph", `${Math.round(top.bottom)}px`);
   document.documentElement.style.setProperty("--dockh", `${Math.round(dock.height)}px`);
+  // A card's sheet stops above the dock.
+  const floor = dock.height > 0 ? window.innerHeight - dock.top : 0;
+  document.documentElement.style.setProperty("--sheet-floor", `${Math.round(floor)}px`);
   document.documentElement.style.setProperty("--handh", `${Math.round(hand.height)}px`);
 }
 

@@ -115,9 +115,9 @@ export function doHold(): void {
   const note = done?.ok ? done.notes[0] : undefined;
   if (note?.t === "held") snd.hold(note.on);
 }
-export async function doLevelUp(): Promise<void> {
+export function doLevelUp(): void {
   if (!planning()) return;
-  const done = await ask({ do: "xp" }, document.getElementById("levelup"));
+  const done = doNow({ do: "xp" });
   if (!done?.ok) return;
   if (done.notes.some((n) => n.t === "level")) {
     snd.level();

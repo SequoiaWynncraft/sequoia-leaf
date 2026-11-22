@@ -41,7 +41,7 @@ import type { Speed } from "../keep.ts";
 import { light } from "../light.ts";
 import { canBuy, opening, savings, TraitWatch } from "../logic.ts";
 import { artPx, place, V } from "../stage.ts";
-import { S } from "../state.ts";
+import { busy, S } from "../state.ts";
 import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } from "./cards.ts";
 import { forgetLight, paintLight } from "./lit.ts";
 import { type TallyView, tallyView } from "./tally.ts";
@@ -143,7 +143,13 @@ export function buildTable(a: Asks): void {
   link(acornsBtn, "acorns:");
   const level = el("button", "", { id: "level", type: "button" });
   link(level, "level:");
-  const levelUp = el("button", "k-btn wood", { id: "levelup", type: "button", onclick: a.levelUp });
+  const levelUp = el(
+    "button",
+    "k-btn wood",
+    { id: "levelup", type: "button", onclick: a.levelUp },
+    pic(glyph("up")),
+    acorns(ECONOMY.xpCost),
+  );
   tip(levelUp, "Level up", () => `${ECONOMY.xpCost} acorns for ${ECONOMY.xpBought} experience.`);
   const setOut = el(
     "button",
@@ -421,6 +427,16 @@ function renderPurseSide(run: Run): void {
   if (wasLv !== undefined && Number(wasLv) < lv) replay(level, "k-bump");
 }
 
+/**
+ * Fills a button again only when what it says has changed: with a mouse, a press on a button whose
+ * insides are replaced before it is let go makes no click.
+ */
+function face(node: HTMLElement, says: string, ...kids: Node[]): void {
+  if (node.dataset.says === says) return;
+  node.dataset.says = says;
+  node.replaceChildren(...kids);
+}
+
 function renderActs(run: Run): void {
   const rustle = byId("rustle");
   const hold = byId("holdbtn");
@@ -428,14 +444,16 @@ function renderActs(run: Run): void {
   const setOut = byId("setout");
   if (!rustle || !hold || !levelUp || !setOut) return;
   const cost = rustleCost(run);
-  rustle.replaceChildren(
+  const free = run.rustles > 1 ? `Free x${run.rustles}` : "Free";
+  face(
+    rustle,
+    cost === 0 ? free : String(cost),
     pic(glyph("rustle")),
-    cost === 0 ? el("span", "", { text: run.rustles > 1 ? `Free x${run.rustles}` : "Free" }) : acorns(cost),
+    cost === 0 ? el("span", "", { text: free }) : acorns(cost),
   );
   rustle.classList.toggle("off", run.acorns < cost);
   hold.setAttribute("aria-pressed", String(run.held));
   hold.classList.toggle("down", run.held);
-  levelUp.replaceChildren(pic(glyph("up")), acorns(ECONOMY.xpCost));
   levelUp.classList.toggle("off", run.level >= MAX_LEVEL || run.acorns < ECONOMY.xpCost);
   setOut.classList.toggle("off", fielded(run) === 0);
 }
@@ -491,7 +509,8 @@ export function placeFoe(): void {
 export function renderTable(): void {
   document.body.dataset.mode = S.mode;
   const sound = byId("sound");
-  sound?.replaceChildren(icon(isMuted() ? "mute" : "sound"));
+  const muted = isMuted() ? "mute" : "sound";
+  if (sound) face(sound, muted, icon(muted));
   const run = S.run;
   document.body.classList.toggle("no-run", !run);
   if ((!run || S.mode === "front" || S.mode === "over") && (light.kept !== null || light.pointed !== null))
@@ -552,8 +571,10 @@ function renderTally(): void {
 }
 let talliedAt = -9;
 
-/** Every moment: gives up waiting for acorns that never landed, and keeps the fight's count fresh. */
+/** Every moment: gives up waiting for acorns that never landed, keeps the fight's count fresh, and dims the stall while Leaf is busy. */
 export function stepTable(): void {
+  const waiting = busy() ? "yes" : "no";
+  if (document.body.dataset.busy !== waiting) document.body.dataset.busy = waiting;
   if (shown.acorns !== null && V.t > shown.settleAt) {
     shown.acorns = null;
     if (S.run) renderPurseSide(S.run);

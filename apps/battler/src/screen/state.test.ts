@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { type Reply, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 import { RAID, type RaidCommand, type Table } from "@sequoia-leaf/raid";
 
-import { ask, doNow, openTable, S } from "./state.ts";
+import { ask, busy, doNow, onHeld, onRefused, openTable, S, waitingForLeaf } from "./state.ts";
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 /** What Leaf tells the game about each call. */
@@ -94,7 +94,7 @@ describe("the table, on Leaf", () => {
     expect(S.run?.phase).toBe("plan");
     expect(S.runs).toBe(1);
     const offer = S.run?.stall.findIndex((k) => k !== null) ?? 0;
-    expect((await ask({ do: "buy", offer }))?.ok).toBe(true);
+    expect(doNow({ do: "buy", offer })?.ok).toBe(true);
     doNow({ do: "hold", on: true });
     await until(() => fake.leaf.posts >= 4);
     const kept = [...(world?.store.map.keys() ?? [])];
@@ -107,59 +107,58 @@ describe("the table, on Leaf", () => {
     expect(await openTable("p", () => undefined)).toBe("closed");
   });
 
-  test("moving and holding the stall show at once, from the rules; buying waits for Leaf", async () => {
+  test("moving, holding the stall and buying show at once, from the rules", async () => {
     const fake = await seated();
     const seat = S.run?.board.findIndex((p) => p !== null) ?? -1;
     const posts = fake.leaf.posts;
-    const moved = doNow({ do: "move", from: { on: "board", at: seat }, to: { on: "board", at: 20 } });
-    // Shown before Leaf has even been asked.
-    expect(moved?.ok).toBe(true);
-    expect(S.run?.board[20]).not.toBeNull();
-    expect(fake.leaf.posts).toBe(posts);
     const acorns = S.run?.acorns ?? 0;
-    const offer = S.run?.stall.findIndex((k) => k !== null) ?? 0;
-    const buying = ask({ do: "buy", offer });
-    expect(S.run?.acorns).toBe(acorns);
-    expect((await buying)?.ok).toBe(true);
+    const [offer = 0] = offers();
+    expect(doNow({ do: "move", from: { on: "board", at: seat }, to: { on: "board", at: 20 } })?.ok).toBe(true);
+    expect(doNow({ do: "buy", offer })?.ok).toBe(true);
+    // Shown before Leaf has even been asked.
+    expect(S.run?.board[20]).not.toBeNull();
     expect(S.run?.acorns).toBeLessThan(acorns);
+    expect(fake.leaf.posts).toBe(posts);
+    await until(() => !waitingForLeaf());
     expect(fake.leaf.state.run?.board[20]).not.toBeNull();
+    expect(fake.leaf.state.run?.acorns).toBe(S.run?.acorns ?? -1);
   });
 
-  test("while Leaf answers a rustle, a tap on an offer still showing asks nothing; two purchases may be on their way together", async () => {
+  test("while Leaf answers a rustle, the table is busy: a tap on an offer still showing is turned away, not queued", async () => {
     const fake = await seated();
+    let held = 0;
+    onHeld(() => held++);
     const [offer = 0] = offers();
     // The stall is about to hold other figures: the purchase is dropped, not sent to land on whoever comes next.
     const rustled = ask({ do: "rustle" });
-    expect(await ask({ do: "buy", offer })).toBeNull();
+    expect(busy()).toBe(true);
+    expect(doNow({ do: "buy", offer })).toBeNull();
+    expect(held).toBe(1);
     expect((await rustled)?.ok).toBe(true);
+    expect(busy()).toBe(false);
     expect(fake.leaf.state.run?.bought).toBe(0);
-    // Buying leaves the other offers where they are, so a second purchase need not wait for the first.
-    const [first = 0, second = 1] = offers();
-    const both = await Promise.all([ask({ do: "buy", offer: first }), ask({ do: "buy", offer: second })]);
-    expect(both).not.toContain(null);
   });
 
-  test("while Leaf answers a purchase, nothing is done with the party: buying may make two figures one where they stand", async () => {
+  test("a purchase Leaf turns down is taken back, and the member hears why", async () => {
     const fake = await seated();
-    const from = { on: "board", at: S.run?.board.findIndex((p) => p !== null) ?? -1 } as const;
+    const refusals: string[] = [];
+    onRefused((why) => refusals.push(why));
+    const acorns = S.run?.acorns ?? 0;
     const [offer = 0] = offers();
-    const posts = fake.leaf.posts;
-    const buying = ask({ do: "buy", offer });
-    // Neither shown nor sent: the sale would land on whoever stands there once the purchase is done.
-    expect(doNow({ do: "sell", from })).toBeNull();
-    expect(doNow({ do: "move", from, to: { on: "board", at: 20 } })).toBeNull();
-    expect(S.run?.board[from.at]).not.toBeNull();
-    expect((await buying)?.ok).toBe(true);
-    expect(fake.leaf.posts).toBe(posts + 1);
-    expect(fake.leaf.state.run?.board[from.at]).not.toBeNull();
-    // Once Leaf has answered, the party is the member's to move again.
-    expect(doNow({ do: "move", from, to: { on: "board", at: 20 } })?.ok).toBe(true);
+    // Another page of the member's has sent the party in: Leaf sells nothing now.
+    fake.elsewhere({ do: "fight" });
+    expect(doNow({ do: "buy", offer })?.ok).toBe(true);
+    expect(S.run?.bench.some((p) => p !== null)).toBe(true);
+    await until(() => !waitingForLeaf());
+    expect(refusals).toHaveLength(1);
+    expect(S.run?.phase).toBe("fight");
+    expect(S.run?.acorns).toBe(acorns);
+    expect(S.run?.bench.some((p) => p !== null)).toBe(false);
   });
 
   test("a move the rules turn down is said so, and not sent", async () => {
     const fake = await seated();
     const refusals: string[] = [];
-    const { onRefused } = await import("./state.ts");
     onRefused((why) => refusals.push(why));
     const posts = fake.leaf.posts;
     expect(doNow({ do: "move", from: { on: "bench", at: 0 }, to: { on: "board", at: 1 } })).toEqual({

@@ -8,6 +8,7 @@
  * back instead of an empty frame; one that says it late opens over the note.
  */
 
+import { close as closeCard } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { passCoins, passLeaf, refreshLeaf } from "@sequoia-leaf/kit/live.ts";
 import { refreshCoins } from "@sequoia-leaf/kit/purse.ts";
@@ -48,6 +49,8 @@ function reach(at: Pt): number {
 
 /** Begins going into a game. The frame starts loading at once, out of sight, while the view closes in. */
 export function goIn(game: Game, asks: Asks): Visit {
+  // A card pinned in town would sit over the game, out of reach of its keys and taps.
+  closeCard();
   const root = must(document.getElementById("door"), "door");
   const frame = el("iframe", "door-frame", { title: game.name, src: game.url });
   const sign = el("div", "door-sign k-over", { text: "Knocking..." });

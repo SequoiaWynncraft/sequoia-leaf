@@ -41,10 +41,10 @@ const TITLES: Readonly<Record<Choice["kind"], readonly [string, string]>> = {
   boon: ["A boon", "One of these, for the rest of the raid."],
 };
 
-/** A picture on a pick that explains itself when pointed at. */
+/** A picture on a pick that explains itself when pointed at; a tap on it chooses, as anywhere on the card. */
 function art(c: HTMLCanvasElement, ref: string): HTMLElement {
   const box = el("span", "art", {}, pic(c, 3));
-  link(box, ref);
+  link(box, ref, { acts: true });
   return box;
 }
 
@@ -60,7 +60,7 @@ function starterCard(kind: FigureId): HTMLElement[] {
       {},
       ...traitsOf(kind).map((t) => {
         const chip = el("span", "k-chip", {}, pic(traitIcon(t)), TRAITS[t].name);
-        link(chip, traitRef(t));
+        link(chip, traitRef(t), { acts: true });
         return chip;
       }),
     ),

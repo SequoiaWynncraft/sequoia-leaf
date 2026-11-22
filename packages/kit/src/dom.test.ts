@@ -1,6 +1,6 @@
-import { expect, jest, test } from "bun:test";
+import { describe, expect, jest, test } from "bun:test";
 
-import { asking, pressedTwice } from "./dom.ts";
+import { asking, mouseHeld, pressedTwice, unheld, when } from "./dom.ts";
 
 test("a button that spends is done on its second press, and goes back if it is left alone", () => {
   jest.useFakeTimers();
@@ -21,4 +21,40 @@ test("a button that spends is done on its second press, and goes back if it is l
   expect(asking("plan:rakes")).toBe(false);
   expect(drawn).toBe(before + 1);
   jest.useRealTimers();
+});
+
+describe("nothing is drawn again under a held mouse button", () => {
+  test("a part and a card wait for the button to lift, the card until after the click it ends in", async () => {
+    let says = "a";
+    const drawn: string[] = [];
+    const part = when(
+      () => says,
+      () => drawn.push(says),
+    );
+    const card = unheld(() => drawn.push("card"));
+    part();
+    mouseHeld(true);
+    says = "b";
+    part();
+    card();
+    card();
+    expect(drawn).toEqual(["a"]);
+    mouseHeld(false);
+    expect(drawn).toEqual(["a"]);
+    await Bun.sleep(1);
+    expect(drawn).toEqual(["a", "card"]);
+    part();
+    expect(drawn).toEqual(["a", "card", "b"]);
+  });
+
+  test("a part's first drawing does not wait: nothing was under the button", () => {
+    const drawn: number[] = [];
+    mouseHeld(true);
+    when(
+      () => "x",
+      () => drawn.push(1),
+    )();
+    mouseHeld(false);
+    expect(drawn).toEqual([1]);
+  });
 });

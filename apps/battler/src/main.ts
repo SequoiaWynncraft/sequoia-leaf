@@ -45,7 +45,7 @@ import { showSheet } from "./screen/sheet.ts";
 import { onSignal } from "./screen/signals.ts";
 import { snd } from "./screen/sounds.ts";
 import * as stage from "./screen/stage.ts";
-import { onChange, onEnded, onMoved, onNotes, onRefused, openTable, S } from "./screen/state.ts";
+import { onChange, onEnded, onHeld, onMoved, onNotes, onRefused, openTable, S } from "./screen/state.ts";
 import { registerCards } from "./screen/ui/cards.ts";
 import { closeSheet, onCarry, placeSheet, registerFought, sheetUp, toggleLastFight } from "./screen/ui/fightsheet.ts";
 import { openLight } from "./screen/ui/lit.ts";
@@ -103,7 +103,7 @@ async function boot(): Promise<void> {
   buildTable({
     rustle: () => void doRustle(),
     hold: doHold,
-    levelUp: () => void doLevelUp(),
+    levelUp: doLevelUp,
     setOut: () => void setOut(),
     speed: doSpeed,
     skipFight: doSkip,
@@ -159,6 +159,8 @@ async function boot(): Promise<void> {
     snd.no();
     toast(why);
   });
+  // A tap or a drag while Leaf answers a rustle, a pick, setting out or the takings does nothing, and says so.
+  onHeld(() => snd.no());
   // A run that ended paid its Coins on Leaf: the purse asks Leaf what it holds now, and shows it.
   onEnded(refreshCoins);
   // Leaf's table is not what this page was showing (the member played on another page): take it.

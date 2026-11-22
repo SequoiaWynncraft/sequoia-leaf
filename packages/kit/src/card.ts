@@ -8,15 +8,15 @@
  * hit-testing.
  *
  * It behaves the same everywhere. With a mouse, resting on a thing for a moment shows its card
- * beside it; clicking pins it open, and clicking the thing again, clicking elsewhere or Escape puts
- * it away. With a finger a tap pins it, as a sheet along the bottom with a close button. A thing
- * named inside an open card is itself a link: following it shows its card in the same place with a
- * back arrow. One card is up at a time. `hold(true)` keeps every card shut while the game is
+ * beside it; clicking pins it open, and clicking the thing again, clicking elsewhere, its close
+ * button or Escape puts it away. With a finger a tap pins it, as a sheet along the bottom (above the
+ * game's bar: `--sheet-floor`). A thing named inside an open card is itself a link: following it
+ * shows its card in the same place with a back arrow. One card is up at a time. `hold(true)` keeps every card shut while the game is
  * dragging something, and `watch` tells a game which thing is pointed at or pinned.
  *
  * The rules of that (`Deck`, `partsOf`) touch no page and are tested; the rest draws them.
  */
-import { add, asking, el, icon, pressedTwice } from "./dom.ts";
+import { add, asking, el, icon, pressedTwice, unheld } from "./dom.ts";
 import { LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
 
 /** A thing, named as `"kind:id"`: `"item:gear"`, `"figure:barrow-gnome"`, `"trait:ember"`. */
@@ -594,7 +594,7 @@ function drawCard(d: Description, o: Open): HTMLElement {
           icon("back"),
         )
       : null;
-  const closeBtn = sheet
+  const closeBtn = o.pinned
     ? el(
         "button",
         "k-btn wood icon sm k-info-x",
@@ -678,7 +678,6 @@ function drawCard(d: Description, o: Open): HTMLElement {
         el("div", "k-info-part k-info-acts", {}, ...(d.actions ?? []).map((a) => actionOf(a, o.stack.at(-1) ?? ""))),
       );
   }
-  if (sheet && !partsOf(d, true).includes("head")) add(card, closeBtn);
   return card;
 }
 
@@ -733,8 +732,8 @@ export const hold = (on: boolean): void => deck.hold(on);
 export const close = (from: object | null = null): void => deck.close(from);
 /** Back to the card before, if this one was followed to. */
 export const back = (): boolean => deck.back();
-/** The card is drawn again from a fresh description: the thing has changed. */
-export const refresh = (): void => deck.refresh();
+/** The card is drawn again from a fresh description: the thing has changed. Under a held mouse button, once it lifts. */
+export const refresh: () => void = unheld(() => deck.refresh());
 /** The thing whose card is up, and whether it is pinned. */
 export const shown = (): { ref: Ref; pinned: boolean } | null => {
   const ref = deck.shown();

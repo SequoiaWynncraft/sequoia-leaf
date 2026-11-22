@@ -5,7 +5,7 @@
  * (`ui.ts`, `campui.ts`); everything here is the same for both.
  */
 
-import { add, el, icon as glyph, type IconName, replay, shown } from "@sequoia-leaf/kit/dom.ts";
+import { add, el, icon as glyph, type IconName, replay, shown, when } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, type Currency, leafShown } from "@sequoia-leaf/kit/purse.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
@@ -18,6 +18,8 @@ import { hop, say } from "./actors.ts";
 import { type Actor, after, G, hooks, show, watch } from "./game.ts";
 import type { Tone } from "./guild.ts";
 import { span } from "./letter.ts";
+
+export { when };
 
 export type Kid = Node | string | null;
 
@@ -60,17 +62,6 @@ export function button(cls: string, kids: readonly Kid[], on: (b: HTMLButtonElem
     on(b);
   });
   return b;
-}
-
-/** Redraws a part of a panel only when what it shows has changed. */
-export function when(key: () => string, draw: () => void): () => void {
-  let last: string | null = null;
-  return () => {
-    const k = key();
-    if (k === last) return;
-    last = k;
-    draw();
-  };
 }
 
 export const centre = (node: Element): Pt => {
