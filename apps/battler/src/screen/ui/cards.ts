@@ -85,6 +85,8 @@ import {
   recipesOf,
   savings,
   startNumbers,
+  streakNow,
+  streakRule,
   type TraitCount,
   traitCount,
   whereIs,
@@ -464,6 +466,7 @@ function purseDesc(run: Run): Description {
         body: `Every room pays ${ECONOMY.roomAcorns}, and 1 more for a win. Every ${s.per} you keep earns 1 more each room, up to ${s.most}.`,
       },
       { body: s.toNext > 0 ? `${s.toNext} more for the next pile.` : "Every pile is full." },
+      { body: [streakRule(), streakNow(run)].filter((line) => line !== null).join(" ") },
     ],
   };
 }

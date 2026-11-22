@@ -562,7 +562,9 @@ export type Glyph =
   | "figure"
   | "brush"
   | "leaf"
-  | "coin";
+  | "coin"
+  | "flame"
+  | "frost";
 
 const GLYPH_ROWS: Readonly<Record<Glyph, readonly string[]>> = {
   acorn: [
@@ -710,6 +712,18 @@ const GLYPH_ROWS: Readonly<Record<Glyph, readonly string[]>> = {
     ".oyyYYYYyyo.",
     "..ooyyyyoo..",
     "....oooo....",
+  ],
+  flame: ["...r...", "...rr..", "..rrr.r", ".rryrrr", ".ryyyrr", "rryYyyr", "ryYYYyr", "ryYYYyr", ".rrrrr."],
+  frost: [
+    "....u....",
+    ".u..W..u.",
+    "..W.W.W..",
+    "...WWW...",
+    "uWWWUWWWu",
+    "...WWW...",
+    "..W.W.W..",
+    ".u..W..u.",
+    "....u....",
   ],
 };
 

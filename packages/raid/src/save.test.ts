@@ -66,6 +66,18 @@ describe("saving a run", () => {
     expect(old.ok && old.run.last).toBeNull();
     expect(refused(tampered(run, (raw) => (raw.last = { seed: 1, sides: [] })))).toContain("the last fight");
   });
+  test("the streak comes back, and a run saved before streaks were kept loads with none", () => {
+    const run = midRun(31, 4);
+    run.streak = run.record.at(-1)?.result === "loss" ? -2 : 2;
+    expect(reload(run).streak).toBe(run.streak);
+    const old = loadRun(tampered(run, (raw) => delete raw.streak));
+    expect(old.ok && old.run.streak).toBe(0);
+    expect(old.ok && { ...old.run, streak: run.streak }).toEqual(run);
+    expect(refused(tampered(run, (raw) => (raw.streak = 1.5)))).toContain("the streak");
+    expect(refused(tampered(run, (raw) => (raw.streak = run.record.length + 1)))).toContain("the streak");
+    expect(refused(tampered(run, (raw) => (raw.streak = -run.streak)))).toContain("the streak");
+    expect(refused(tampered(startRun(3), (raw) => (raw.streak = 1)))).toContain("the streak");
+  });
   test("the stall, the random stream and the next room all come back", () => {
     const run = midRun(8, 5);
     const back = reload(run);

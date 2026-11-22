@@ -15,10 +15,12 @@ export const ECONOMY = {
   /** Acorns in hand when the run starts. */
   startAcorns: 2,
   /** After every room: this much, this much more for a win, and one for every `interestPer` held, up to `interestMost`. */
-  roomAcorns: 5,
+  roomAcorns: 4,
   winAcorns: 1,
   interestPer: 10,
   interestMost: 5,
+  /** After every room, by how many rooms in a row have now been won, or lost: this much more. A draw ends a streak; a streak longer than the list pays the last. */
+  streakAcorns: [0, 0, 0, 1, 1, 2],
   /** Places on the stall and on the bench. */
   stall: 5,
   bench: 9,
