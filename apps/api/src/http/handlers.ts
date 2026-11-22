@@ -87,6 +87,7 @@ import { PlayStore } from "../play/store.ts";
 import { questJson } from "../quests/json.ts";
 import { rerollQuestFor } from "../quests/reroll.ts";
 import { Quests } from "../quests/store.ts";
+import { BackendLive, InternalHandlers, PurchaseBodyErrorsLive } from "./internal.ts";
 import { GuildFeed, OpenStreams, sseFrame, StreamTuning } from "./streams.ts";
 
 /** How far back the list of finished quests reaches. */
@@ -1053,7 +1054,7 @@ const GameAdminHandlers = HttpApiBuilder.group(LeafApi, "gameAdmin", (handlers) 
  * which Leaf's farewell ends when it stops.
  */
 export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.json" }).pipe(
-  Layer.provide([SystemHandlers, MeHandlers, GameHelloHandlers, GameHandlers, GameAdminHandlers]),
+  Layer.provide([SystemHandlers, MeHandlers, GameHelloHandlers, GameHandlers, GameAdminHandlers, InternalHandlers]),
   Layer.provide(GuildFeed.layer),
   Layer.provideMerge(OpenStreams.layer),
   Layer.provide([
@@ -1065,6 +1066,8 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     PresenceBodyErrorsLive,
     PlayBodyErrorsLive,
     CoinsBodyErrorsLive,
+    BackendLive,
+    PurchaseBodyErrorsLive,
     UnexpectedLive,
   ]),
 );
