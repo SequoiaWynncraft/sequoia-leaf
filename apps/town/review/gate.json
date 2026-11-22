@@ -125,8 +125,7 @@
   ["upAt", "window.town.page(412, 218)"],
   ["eval", "(window.town.skip(4), JSON.stringify(window.town.where()))"],
   ["eval", "'the key'"],
-  ["tapAt", "(window.town.skip(0.05), window.town.page(246, 110))"],
-  ["eval", "(window.town.skip(1), 'at the gate')"],
+  ["eval", "(window.town.tp(256, 110), window.town.skip(1), 'at the gate')"],
   ["key", "e"],
   ["eval", "(window.town.skip(0.3), 'the card')"],
   ["click", "#panel [data-first]"],
@@ -135,5 +134,14 @@
   ["eval", "(window.town.skip(1.5), 'at the way out')"],
   ["key", "e"],
   ["eval", "(window.town.skip(4), JSON.stringify(window.town.where()))"],
-  ["shot", "d7-back-in-town"]
+  ["shot", "d7-back-in-town"],
+  ["eval", "'the signpost'"],
+  ["tapAt", "(window.town.skip(0.05), window.town.page(284, 98))"],
+  [
+    "eval",
+    "(window.town.skip(2), JSON.stringify({ ...window.town.where(), card: !document.querySelector('#panel').hidden }))"
+  ],
+  ["shot", "d8-the-signpost-opens-the-card"],
+  ["click", "#panel [data-first]"],
+  ["eval", "(window.town.skip(4), JSON.stringify(window.town.where()))"]
 ]

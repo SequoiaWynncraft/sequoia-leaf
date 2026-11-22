@@ -41,7 +41,18 @@ import {
   type Verdict,
 } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
-import { type AwayCall, type Caller, CALLERS, capital, FIRST_CALL, folk, GIFTS, NOTES, WHILE_AWAY } from "./folk.ts";
+import {
+  type AwayCall,
+  type Caller,
+  CALLERS,
+  capital,
+  FIRST_CALL,
+  folk,
+  GIFTS,
+  NOTES,
+  nowNamed,
+  WHILE_AWAY,
+} from "./folk.ts";
 import { isLetter, type Letter, letter, post, tidied } from "./mail.ts";
 import { isThing, thingOf, turnsOf } from "./things.ts";
 
@@ -588,7 +599,7 @@ function storedCamp(v: unknown): Camp | null {
     return null;
   const placed = all(v.placed, placedOf);
   const parcels = all(v.parcels, (p) => (isThing(p) ? p : null));
-  const letters = all(v.letters, (l) => (isLetter(l) ? l : null));
+  const letters = all(v.letters, (l) => (isLetter(l) ? { ...l, from: nowNamed(l.from) } : null));
   const earned = all(v.earned, (p) => (isThing(p) ? p : null));
   const tray: Record<string, number> = {};
   for (const [id, n] of Object.entries(v.tray)) {
