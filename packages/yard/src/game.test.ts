@@ -5,6 +5,7 @@ import type { CoinChange, Ctx, Done, Refused } from "@sequoia-leaf/core";
 import { refusal } from "./build.ts";
 import { forward, TICK_MS } from "./clock.ts";
 import { ITEMS } from "./content/items.ts";
+import { STAND_MOST } from "./content/machines.ts";
 import { PLANS } from "./content/plans.ts";
 import { PLOTS } from "./content/plots.ts";
 import { STORY } from "./content/story.ts";
@@ -16,6 +17,7 @@ import {
   LEAD,
   play,
   readCommand,
+  REFUSED,
   stepTo,
   WORKS,
   type WorksAct,
@@ -205,6 +207,26 @@ describe("a command", () => {
     expect(go({ do: "paint", tint: 4, ...c }).coins).toEqual([]);
     expect(legs.every((l) => on(l)?.tint === 4)).toBe(true);
     expect(w.till).toBe(5);
+    // A set of pieces stood, moved as one, kept as a blueprint, and taken away.
+    const tile = (p: { x: number; y: number }): number => at(w, p.x, p.y);
+    go({ do: "stand", pieces: [{ kind: "mill", ...b, dir: 1, span: 0, recipe: "plank" }] });
+    expect(on(b)).toMatchObject({ kind: "mill", dir: 1, recipe: "plank" });
+    go({ do: "move", tiles: [tile(b)], turns: 1, ...b });
+    expect(on(b)?.dir).toBe(2);
+    go({ do: "saveBlueprint", slot: 2, tiles: [tile(a), tile(b)] });
+    expect(w.blueprints[2]).toHaveLength(2);
+    go({ do: "deleteBlueprint", slot: 2 });
+    expect(w.blueprints[2]).toBeNull();
+    expect(go({ do: "clear", tiles: [tile(a), tile(b)] }).coins?.map((paid) => paid.amount)).toEqual([20]);
+    expect([on(a), on(b)]).toEqual([null, null]);
+    for (const act of [
+      { do: "stand", pieces: [{ kind: "depot", ...b, dir: 0, span: 0 }] },
+      { do: "move", tiles: [tile(a)], turns: 0, ...b },
+      { do: "clear", tiles: [tile(a)] },
+      { do: "saveBlueprint", slot: 0, tiles: [tile(a)] },
+      { do: "deleteBlueprint", slot: 0 },
+    ] as const)
+      expect(refused(play(w, { ...act, tick: w.tick }))).toBe(REFUSED[act.do]);
     go({ do: "buyPlot", plot: "meadow" });
     expect(w.plots).toContain("meadow");
     go({ do: "buyPlan", plan: "rakes" });
@@ -228,6 +250,11 @@ describe("a command", () => {
       { do: "build", kind: "belt", dir: 3, x: 1, y: 2 },
       { do: "lay", legs: [{ kind: "tunnel", x: 1, y: 2, dir: 0, span: 2 }], turn: { x: 0, y: 2, dir: 0 } },
       { do: "lay", legs: [] },
+      { do: "stand", pieces: [{ kind: "crate", x: 1, y: 2, dir: 0, span: 0, open: false }] },
+      { do: "move", tiles: [5, 1727], turns: 3, x: 1, y: 2 },
+      { do: "clear", tiles: [] },
+      { do: "saveBlueprint", slot: 2, tiles: [7] },
+      { do: "deleteBlueprint", slot: 0 },
       { do: "remove", x: 4, y: 5 },
       { do: "turn", x: 4, y: 5, dir: 2 },
       { do: "paint", x: 4, y: 5, tint: 6 },
@@ -254,6 +281,20 @@ describe("a command", () => {
       { do: "lay", legs: [], turn: { x: 1 }, tick: 0 },
       { do: "paint", x: 1, y: 1, tint: 7, tick: 0 },
       { do: "paint", x: 1, y: 1, tick: 0 },
+      {
+        do: "stand",
+        pieces: Array.from({ length: STAND_MOST + 1 }, () => ({ kind: "belt", x: 1, y: 1, dir: 0, span: 0 })),
+        tick: 0,
+      },
+      { do: "stand", pieces: [{ kind: "depot", x: 1, y: 1, dir: 0, span: 0 }], tick: 0 },
+      { do: "stand", pieces: [{ kind: "belt", x: 256, y: 1, dir: 0, span: 0 }], tick: 0 },
+      { do: "move", tiles: [1728], turns: 0, x: 1, y: 1, tick: 0 },
+      { do: "move", tiles: [1], turns: 4, x: 1, y: 1, tick: 0 },
+      { do: "move", tiles: [1.5], turns: 0, x: 1, y: 1, tick: 0 },
+      { do: "clear", tiles: Array.from({ length: 1729 }, () => 0), tick: 0 },
+      { do: "clear", tick: 0 },
+      { do: "saveBlueprint", slot: 3, tiles: [1], tick: 0 },
+      { do: "deleteBlueprint", slot: -1, tick: 0 },
       { do: "recipe", x: 1, y: 1, item: "gold", tick: 0 },
       { do: "crate", x: 1, y: 1, open: "yes", tick: 0 },
       { do: "buyPlot", plot: "moon", tick: 0 },
@@ -398,6 +439,11 @@ describe("Leaf and the page agree", () => {
       { do: "paint", tint: 0, ...a },
       { do: "remove", ...a },
       { do: "collect" },
+      { do: "stand", pieces: [{ kind: "belt", ...a, dir: 0, span: 0 }] },
+      { do: "saveBlueprint", slot: 1, tiles: [at(page, a.x, a.y), at(page, c.x, c.y)] },
+      { do: "move", tiles: [at(page, a.x, a.y)], turns: 1, ...a },
+      { do: "clear", tiles: [at(page, a.x, a.y), at(page, c.x, c.y)] },
+      { do: "deleteBlueprint", slot: 1 },
     ];
     // The colours are in what Leaf keeps and in what it shows a visitor.
     const coloured = (text: string): number => decoded(text).cells.filter((p) => p?.tint === 5).length;

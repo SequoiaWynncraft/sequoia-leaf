@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { at, build, create, deliver, lay, route, step, type World } from "@sequoia-leaf/yard";
+import { at, build, create, deliver, refusal, route, stand, step, type World } from "@sequoia-leaf/yard";
 
 import { nudge } from "./teach.ts";
 
@@ -34,7 +34,7 @@ describe("teaching", () => {
 
     const legs = route(w, [third?.x ?? 0, third?.y ?? 0], w.land.depot);
     if (!legs) throw new Error("no way to the depot");
-    expect(lay(w, legs, 0).ok).toBe(true);
+    expect(stand(w, legs, 0).ok).toBe(true);
     // Until a plank has arrived the belt lesson has nothing more to point at, and says nothing.
     expect(nudge(w, none, false)).toBeNull();
     run(w, 120);
@@ -81,5 +81,18 @@ describe("teaching", () => {
     expect(nudge(w, taught, false)).toBeNull();
     deliver(w, "plank", 1);
     expect(nudge(w, taught, false)).toBeNull();
+  });
+  test("once the yard passes 60 pieces it says, once, what Select is for", () => {
+    const w = create({ story: 4 });
+    const taught = new Set(["board"]);
+    const free = w.cells.flatMap((_, i) => {
+      const [x, y] = [i % w.land.w, Math.floor(i / w.land.w)];
+      return refusal(w, "belt", x, y, 999) === null ? [{ x, y }] : [];
+    });
+    for (const t of free.slice(0, 60)) build(w, "belt", t.x, t.y, 0, 999);
+    expect(nudge(w, taught, false)).toBeNull();
+    build(w, "belt", free[60]?.x ?? 0, free[60]?.y ?? 0, 0, 999);
+    expect(nudge(w, taught, false)).toMatchObject({ id: "select", tool: "select", lasting: false });
+    expect(nudge(w, new Set(["board", "select"]), false)).toBeNull();
   });
 });

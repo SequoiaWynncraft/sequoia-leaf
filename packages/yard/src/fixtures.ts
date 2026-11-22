@@ -5,7 +5,8 @@ import { type Kind, KINDS } from "./content/machines.ts";
 import { create } from "./create.ts";
 import type { Dir } from "./grid.ts";
 import { bareLand } from "./land.ts";
-import { lay, route } from "./route.ts";
+import { stand } from "./pieces.ts";
+import { route } from "./route.ts";
 import { step } from "./step.ts";
 import { at, type Building, type World } from "./world.ts";
 
@@ -53,7 +54,7 @@ export function belts(w: World, x0: number, y0: number, x1: number, y1: number):
 /** Lays the shortest run of belt from a tile to a thing, and fails the test if there is no way. */
 export function run(w: World, from: readonly [number, number], to: readonly [number, number]): void {
   const legs = route(w, from, to);
-  if (!legs || !lay(w, legs, Infinity).ok) throw new Error(`no way from ${from.join(",")} to ${to.join(",")}`);
+  if (!legs || !stand(w, legs, Infinity).ok) throw new Error(`no way from ${from.join(",")} to ${to.join(",")}`);
 }
 
 export function steps(w: World, ticks: number): void {

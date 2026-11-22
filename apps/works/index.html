@@ -247,6 +247,22 @@
         align-items: center;
         gap: calc(var(--u) * 3);
       }
+      /* A blueprint's place: its layout as a small picture, and beside it its size over its price. */
+      #hand .print {
+        gap: calc(var(--u) * 2);
+        padding-inline: calc(var(--u) * 2);
+      }
+      #hand .print canvas {
+        margin-block: calc(var(--u) * -1);
+      }
+      #hand .facts {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--u);
+        font: var(--f-small);
+        line-height: 1;
+      }
       /* With a tool in hand it is the thing that matters: the brass frame. */
       #hand.building {
         border-image-source: var(--k-f-panel);
@@ -530,6 +546,16 @@
         }
         #hand .say {
           flex: 1 1 11em;
+        }
+        /* Move, Copy, Remove, Save and cancel in one row: undo is in the line again once the area is let go. */
+        #hand .acts.tight {
+          gap: calc(var(--u) * 2);
+        }
+        #hand .acts.tight .k-btn:not(.icon) {
+          padding-inline: var(--u);
+        }
+        #hand .acts.tight .undo {
+          display: none;
         }
         #top {
           gap: calc(var(--u) * 2);
