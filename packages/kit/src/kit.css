@@ -726,10 +726,9 @@ button.k-info-chip:hover .k-chip {
   place-items: end center;
   min-height: calc(var(--u) * 22);
 }
-/* The small size: .k-pix comes later and would otherwise set the name at title size, too wide for a tile. */
+/* A long name breaks inside its tile and never widens it. */
 .k-info-tile-name {
   max-width: 100%;
-  font-size: var(--t-s);
   line-height: 1.1;
   overflow-wrap: break-word;
 }
