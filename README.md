@@ -81,7 +81,6 @@ address after `return_to=`. Only `GET /v1/game/hello` reads `GAME_LEAF_SPENDING`
 | `packages/raid`       | The Little Raid's rules, which Leaf and the battler's page share.    |
 | `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.        |
 | `apps/api/migrations` | The database schema, as Effect migrations applied in order at start. |
-| `apps/api/tools/once` | A tool run once, by hand, and deleted after (see Moving over).       |
 | `apps/town`           | Guild Town, the browser game's home screen.                          |
 | `apps/works`          | The Works, a game in the town.                                       |
 | `apps/battler`        | The Little Raid, a game in the town.                                 |
@@ -921,36 +920,12 @@ now, or dozed off a while ago.
 
 ## Moving over
 
-A few players have progress in the old saves (the `saves` table). It is
-brought over once, by hand, by nothing in the product: the play service never
-reads an old save, and an old slot takes no more writes once its game has
-moved. For The Little Raid:
-
-```sh
-bun apps/api/tools/once/import-raid.ts <database file> <player id>... [--write] [--force]
-```
-
-It opens the database as it is, running no migration, and does nothing if
-Leaf's play tables are not there (or there is no such file). For each player
-named it reads their old `raid` slot (the run in progress and the almanac) and
-their Coins from the old `purse` slot, with the loaders the battler had
-(`raid-old.ts`), and prints, compactly, what it found to check by eye: trail,
-room, resolve, level and experience, acorns, the figures with their stars and
-items, the item bench, boons, picks waiting, the almanac and the old Coins.
-Anything past what play reaches (Coins 20,000, acorns 150, a figure above three
-stars, more figures than the level fields, more than three items on a figure,
-a room past the fifteenth, more picks waiting than a room gives) is a warning
-line, and that part is held back unless `--force` is given too. Nothing drawn
-is trusted from an old save: the run keeps what the player has, and the stall,
-the room's foe, what the picks offer and every seed are drawn afresh from
-Leaf's dice; a run saved mid-fight is back to planning that room. Without
-`--write` nothing is written. With it, the two parts go independently: their
-Coins as one entry keyed `import:<player>`, added once whatever other entries
-they have (the old Coins less the welcome, which stands for the 300 the old
-purse opened with, never taking the balance below nothing); and the table as
-the player's `raid` state, unless that state has been played on Leaf (`rev`
-above 0), which `--force` writes over. It has no "everyone". The tool and its
-loaders are deleted in the change after it has run.
+The few players with progress in the old saves (the `saves` table) had their
+Little Raid and their Coins brought over once, by hand, on 22 November 2026,
+with a tool that has since been deleted: each one's Coins as one ledger entry
+keyed `import:<player>`, and their table as their `raid` play state with
+everything drawn afresh. Nothing in the product reads an old save, and an old
+slot takes no more writes once its game has moved.
 
 ## Rules the code is built on
 
