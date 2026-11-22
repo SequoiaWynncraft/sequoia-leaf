@@ -16,7 +16,7 @@
  *
  * The rules of that (`Deck`, `partsOf`) touch no page and are tested; the rest draws them.
  */
-import { add, asking, el, icon, pressedTwice, unheld } from "./dom.ts";
+import { add, asking, asksAgain, el, icon, pressedTwice, unheld } from "./dom.ts";
 import { goesWith, LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
 
 /** A thing, named as `"kind:id"`: `"item:gear"`, `"figure:barrow-gnome"`, `"trait:ember"`. */
@@ -563,9 +563,13 @@ function actionOf(a: Action, card: Ref): HTMLElement {
       ? `k-slot k-info-pin${a.lit ? " lit" : ""}`
       : `k-btn ${a.look ?? "wood sm"}${a.off ? " off" : ""}${ask ? " asking" : ""}`,
     { type: "button", "aria-label": a.label && slot ? a.label : null },
-    a.icon && !ask ? (slot ? fit(a.icon, 12) : a.icon) : null,
-    ask ?? (a.label && !slot ? a.label : null),
-    slot || ask ? null : (a.after ?? null),
+    ...(a.ask !== undefined && !slot
+      ? [asksAgain(key, [a.icon ?? null, a.label || null, a.after ?? null], a.ask)]
+      : [
+          a.icon && !ask ? (slot ? fit(a.icon, 12) : a.icon) : null,
+          ask ?? (a.label && !slot ? a.label : null),
+          slot || ask ? null : (a.after ?? null),
+        ]),
   );
   b.addEventListener("click", () => {
     if (a.ask !== undefined && !pressedTwice(key, () => deck.refresh())) return;

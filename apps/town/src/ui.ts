@@ -6,7 +6,7 @@
 
 import { type RequestKind, REQUESTS } from "@sequoia-leaf/core";
 import { link } from "@sequoia-leaf/kit/card.ts";
-import { asking, el, icon as glyph, pressedTwice, replay, shown } from "@sequoia-leaf/kit/dom.ts";
+import { asking, asksAgain, el, icon as glyph, pressedTwice, replay, shown } from "@sequoia-leaf/kit/dom.ts";
 import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
 import { isGuest } from "@sequoia-leaf/kit/live.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
@@ -156,12 +156,10 @@ function treasury(body: HTMLElement): null {
           ? ""
           : button(
               `leaf sm${asking(key) ? " asking" : ""}`,
-              // With what it is for written, a tome's button says what pressing it does.
-              asking(key)
-                ? ["Buy?"]
-                : kind === "tome" && writing
-                  ? ["Buy", glyph("leaf"), leafText(cost)]
-                  : [glyph("leaf"), leafText(cost)],
+              // A tome is not asked for twice: with what it is for written, its button says what pressing it does.
+              kind === "tome"
+                ? [writing ? "Buy" : null, glyph("leaf"), leafText(cost)]
+                : [asksAgain(key, [glyph("leaf"), leafText(cost)], "Buy?")],
               (b) => {
                 press(kind, b);
               },

@@ -766,12 +766,13 @@ button.k-info-chip:hover .k-chip {
 }
 
 /* A thing named anywhere: its picture and name, which explains itself when pointed at. */
+/* A name too long for its place goes onto a second line: it is never cut off. */
 .k-thing {
   display: inline-flex;
   align-items: center;
   gap: calc(var(--u) * 2);
+  min-width: 0;
   font: var(--f-name);
-  white-space: nowrap;
 }
 .k-thing-pic {
   display: grid;
@@ -780,6 +781,7 @@ button.k-info-chip:hover .k-chip {
 }
 .k-thing-count {
   color: var(--k-gold);
+  white-space: nowrap;
 }
 .k-thing.lit .k-thing-name {
   color: var(--k-gold-lt);
@@ -856,6 +858,20 @@ button.k-info-chip:hover .k-chip {
 .k-btn:is(.slate, .plum) {
   --f: var(--k-f-btn-slate);
   --fd: var(--k-f-btn-slate-down);
+}
+/* Its label and its question, one over the other: asking does not change the button's size. */
+.k-asks {
+  display: inline-grid;
+}
+.k-asks > span {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 3);
+}
+.k-asks > .hid {
+  visibility: hidden;
 }
 /* Pressed once, a button that spends asks to be pressed again. */
 .k-btn.asking {

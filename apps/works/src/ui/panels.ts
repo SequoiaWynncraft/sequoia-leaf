@@ -4,7 +4,7 @@
  */
 
 import { thing } from "@sequoia-leaf/kit/card.ts";
-import { amount, asking, el, icon, pressedTwice, replay } from "@sequoia-leaf/kit/dom.ts";
+import { amount, asking, asksAgain, el, icon, pressedTwice, replay } from "@sequoia-leaf/kit/dom.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
@@ -98,8 +98,24 @@ function opensThings(o: (typeof STORY)[number]): HTMLElement[] {
 /** The story order that unlocks side orders, counted from 0. */
 const BOARD_AT = STORY.findIndex((o) => o.opens.board);
 
+const filledFirst = (list: readonly Standing[]): Standing[] =>
+  list.toSorted((a, b) => Number(isFilled(b.want, b.filled)) - Number(isFilled(a.want, a.filled)));
+
+/**
+ * The side orders in the places the list shows them, given the places it showed them in (by id).
+ * An order still on the board keeps its place, so one that fills does not move. When one has left
+ * (handed over or swapped), those that stay are put filled first. An order new to the list goes
+ * last, where the place waiting for it was; when the list opens, every order is new to it.
+ */
+export function placed(places: readonly number[], hung: readonly Standing[]): Standing[] {
+  const kept = places.flatMap((id) => hung.find((s) => s.id === id) ?? []);
+  const fresh = hung.filter((s) => !places.includes(s.id));
+  return [...(kept.length < places.length ? filledFirst(kept) : kept), ...filledFirst(fresh)];
+}
+
 function orders(_art: Art, body: HTMLElement): () => void {
   let live: (() => void)[] = [];
+  let places: number[] = [];
   const build = (): void => {
     const w = S.world;
     live = [];
@@ -133,57 +149,76 @@ function orders(_art: Art, body: HTMLElement): () => void {
       kids.push(
         el("div", "k-d", { text: `Unlock when you fill story order ${BOARD_AT + 1}: ${STORY[BOARD_AT]?.title}.` }),
       );
-    w.board.forEach((s: Standing, slot) => {
+    const shown = placed(places, w.board);
+    places = shown.map((s) => s.id);
+    for (const s of shown) {
       const full = isFilled(s.want, s.filled);
-      const rows = wants(s.want, () => S.world.board[slot]?.filled ?? {});
+      const filled = (): Tally => S.world.board.find((b) => b.id === s.id)?.filled ?? {};
+      const rows = wants(s.want, filled);
       live.push(rows.update);
       const why = swapRefusal(w, s.id);
+      const ask = `swap:${s.id}`;
       const act = full
         ? button("sm", ["Hand over"], () => {
             panelHooks.handOver(s.id);
           })
-        : button(why === null ? "wood sm" : "wood sm off", ["Swap"], (b) => {
-            const no = swapRefusal(S.world, s.id);
-            if (no !== null || "refused" in doNow({ do: "swap", order: s.id })) {
-              yardSfx.no();
-              replay(b, "shake");
-              feed(`${no ?? "It cannot be swapped"}.`, "coral");
-              return;
-            }
-            sfx.paper();
-            panelHooks.changed();
-          });
+        : button(
+            `wood sm${why === null ? "" : " off"}${asking(ask) ? " asking" : ""}`,
+            [asksAgain(ask, ["Swap"], "Swap?")],
+            (b) => {
+              const no = swapRefusal(S.world, s.id);
+              // The list moves up under the pointer after a hand over: what has been delivered is not lost to one press.
+              if (no === null && Object.values(filled()).some((n) => n > 0) && !pressedTwice(ask, build)) return;
+              if (no !== null || "refused" in doNow({ do: "swap", order: s.id })) {
+                yardSfx.no();
+                replay(b, "shake");
+                feed(`${no ?? "It cannot be swapped"}.`, "coral");
+                return;
+              }
+              sfx.paper();
+              panelHooks.changed();
+            },
+          );
       if (!full)
         tip(
           act,
           "Swap",
           why ?? `Replaces this order with a new one. Free, once every ${(SWAP_EVERY * TICK_MS) / 60_000} minutes.`,
         );
+      // The button is in the card's first line, so it is in the same spot whatever the card's height.
       kids.push(
         el(
           "div",
           full ? "k-card order ready" : "k-card order",
-          {},
+          { "data-order": s.id },
+          el("div", "from", {}, el("span", "k-label", { text: s.from }), el("span", "k-grow"), act),
           el(
             "div",
-            "from",
+            "k-row",
             {},
-            el("span", "k-label", { text: s.from }),
-            el("span", "k-grow"),
+            el("div", "k-grow k-name", { text: s.title }),
             el("span", "k-chip", {}, amount("coin", s.pay)),
           ),
-          el("div", "k-name", { text: s.title }),
           el("div", "k-d", { text: s.line }),
           ...rows.rows,
-          el("div", "k-row", {}, el("span", "k-grow"), act),
         ),
       );
-    });
-    // A place on the board Leaf has yet to hang an order in.
+    }
+    // A place on the board Leaf has yet to hang an order in: last, and the order takes this place.
     if (w.open.board)
       for (let n = w.board.length; n < w.rates.slots; n++)
-        kids.push(el("div", "k-card order", {}, el("div", "k-dim", { text: "A new order is on its way." })));
+        kids.push(el("div", "k-card order waiting", {}, el("div", "k-dim", { text: "A new order is on its way." })));
+    // A list shorter than it is scrolled would slide down: it keeps that much room at its end.
+    const top = body.scrollTop;
+    const need = top + body.clientHeight;
+    // Whoever is on an order's button with the keyboard is put back on that order's button, drawn again.
+    const on = document.activeElement?.closest<HTMLElement>("[data-order]")?.dataset.order;
     body.replaceChildren(...kids);
+    if (on !== undefined)
+      body.querySelector<HTMLElement>(`[data-order="${on}"] .k-btn`)?.focus({ preventScroll: true });
+    if (top > 0 && need > body.scrollHeight)
+      body.append(el("div", "", { style: `flex: none; height: ${need - body.scrollHeight}px` }));
+    body.scrollTop = top;
   };
   const shape = when(
     () =>
@@ -232,7 +267,7 @@ function plans(_art: Art, body: HTMLElement): () => void {
             : state === "for sale"
               ? button(
                   `${coins() >= plan.price ? "sm" : "sm off"}${asking(planRef(id)) ? " asking" : ""}`,
-                  asking(planRef(id)) ? ["Buy?"] : [icon("coin"), plan.price.toLocaleString("en-US")],
+                  [asksAgain(planRef(id), [icon("coin"), plan.price.toLocaleString("en-US")], "Buy?")],
                   (b) => {
                     // What spends is asked once more, when the Coins are there to spend.
                     if (coins() >= plan.price && !pressedTwice(planRef(id), build)) return;
