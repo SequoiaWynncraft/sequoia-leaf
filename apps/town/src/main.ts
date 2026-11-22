@@ -80,6 +80,8 @@ declare global {
       hold: (on: boolean) => void;
       /** Puts `n` Coins in the purse, for a tour that buys things; only with the made-up guild, never live. */
       coins: (n: number) => void;
+      /** What the purse holds as the page shows it (on the guild's server, Leaf's Coins with what is on its way). */
+      purse: () => { leaf: number; coins: number };
       /** What the town has kept, as it would be saved now. */
       kept: () => unknown;
       /** Which place is on the stage, and how dark the walk between two has got (0 for not at all). */
@@ -528,6 +530,7 @@ async function boot(): Promise<void> {
     coins(n) {
       if (where().mode !== "live") pretendPurse(balance().coins + Math.max(0, Math.floor(n)));
     },
+    purse: () => ({ ...balance() }),
     where: () => ({ where: G.where, dark: Math.round(G.dark * 100) / 100 }),
     tap(x, y) {
       scene.tap(x, y, false);
