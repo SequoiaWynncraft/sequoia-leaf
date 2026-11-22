@@ -132,12 +132,14 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     ),
   );
   const live = Live.layer.pipe(
+    Layer.provide(stores),
     Layer.provide(outside),
     Layer.provide(
       Layer.succeed(LiveTuning)({
         recheckMs: fakes.live?.recheckMs ?? LiveTuning.defaultValue().recheckMs,
         graceMs: fakes.live?.graceMs ?? LiveTuning.defaultValue().graceMs,
         mostPlayers: fakes.live?.mostPlayers ?? LiveTuning.defaultValue().mostPlayers,
+        presenceMs: fakes.live?.presenceMs ?? LiveTuning.defaultValue().presenceMs,
       }),
     ),
   );

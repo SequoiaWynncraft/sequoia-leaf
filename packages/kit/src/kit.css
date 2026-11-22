@@ -921,6 +921,10 @@ button.k-info-chip:hover .k-chip {
   box-sizing: border-box;
   background: #1a0f1eb8;
 }
+/* Over everything a page has, for a live room it has let go of: the page goes on beneath it. */
+.k-scrim.k-let-go {
+  z-index: 50;
+}
 /* The card a page shows instead of itself when it will not open: a title, a line, one button. */
 .k-shut {
   width: min(calc(var(--u) * 170), 100%);

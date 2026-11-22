@@ -31,6 +31,7 @@ function sources(): Map<string, string> {
 const MEMBERS_ONLY: Readonly<Record<string, string>> = {
   "apps/town/src/townscene.ts": "the member themself",
   "apps/town/src/visitors.ts": "real members visiting or dozing",
+  "apps/town/src/players.ts": "other players in town, live, in their own skins",
   "apps/town/src/draw.ts": "where a member's figure stands in its frame",
   "apps/town/src/game.ts": "the type of a member's figure",
   "apps/town/src/guild.ts": "the member's made-up look, until their skin loads",
@@ -73,13 +74,21 @@ describe("the town's own", () => {
     // A figure from a made-up look is only ever made where members are.
     for (const [path, text] of files)
       if (/paintSkin\(/.test(text))
-        expect(["apps/town/src/townscene.ts", "apps/town/src/visitors.ts", "apps/town/src/main.ts"]).toContain(path);
+        expect([
+          "apps/town/src/townscene.ts",
+          "apps/town/src/visitors.ts",
+          "apps/town/src/players.ts",
+          "apps/town/src/main.ts",
+        ]).toContain(path);
     // And one of the town's own is only ever made as itself.
     for (const [path, text] of files)
       if (/makeActor\(/.test(text) && !path.endsWith("actors.ts"))
-        expect(["apps/town/src/townscene.ts", "apps/town/src/visitors.ts", "apps/town/src/campscene.ts"]).toContain(
-          path,
-        );
+        expect([
+          "apps/town/src/townscene.ts",
+          "apps/town/src/visitors.ts",
+          "apps/town/src/players.ts",
+          "apps/town/src/campscene.ts",
+        ]).toContain(path);
     expect(files.get("apps/town/src/campscene.ts")).toMatch(/makeActor\(body\.who, body\.body/);
   });
 

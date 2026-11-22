@@ -246,16 +246,22 @@ export type ToClient =
   | { t: "pong"; c: number; s: number }
   | { t: "error"; code: "unknown_room" | "not_in_room" | "bad_act" };
 
-/** What a kind of room is: how far it reaches, and how many fit in one copy of it before another is opened. */
+/**
+ * What a kind of room is: how far it reaches, how many fit in one copy of it before another is
+ * opened, and its pace: the fastest anybody gets about in it, in its units a second. Leaf shows a
+ * move further than that pace allows as a jump.
+ */
 export interface RoomKind {
   width: number;
   height: number;
   capacity: number;
+  speed: number;
 }
 
 /** The rooms there are. Each place that wants its players live adds itself here. */
 export const ROOMS: Readonly<Record<string, RoomKind>> = {
-  town: { width: 512, height: 352, capacity: 32 },
+  // The town's walk is 64 a second.
+  town: { width: 512, height: 352, capacity: 32, speed: 160 },
 };
 
 /** The kind of room a name asks for, if there is one. */

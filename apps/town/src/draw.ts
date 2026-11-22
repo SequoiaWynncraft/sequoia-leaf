@@ -5,6 +5,7 @@
  * whole number of screen pixels to each of the font's.
  */
 
+import { emotePicture } from "@sequoia-leaf/kit/emotes.ts";
 import { acornPicture, acornScale, FOLK_COLOUR } from "@sequoia-leaf/kit/mark.ts";
 import { CREAM, GOLD, INK, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
@@ -14,7 +15,7 @@ import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx, dist, lerp, makeCanvas, type Pt, type Rect } from "@sequoia-leaf/kit/util.ts";
 
 import { headOf, HOP, onScreen } from "./actors.ts";
-import { bits, floaters, rings } from "./fx.ts";
+import { bits, emoted, floaters, rings } from "./fx.ts";
 import { type Actor, G } from "./game.ts";
 import type { Light, Prop, Standing } from "./props.ts";
 import type { Sprites } from "./sprites.ts";
@@ -412,6 +413,8 @@ const SAY_WIDTH = 100;
 
 /** How far each name plate has faded in, and the lines of what each person is saying. */
 const plates = new WeakMap<Actor, number>();
+/** Where above each person's head the words end this frame, on the canvas: the top of their plate, if it shows. */
+const tops = new Map<Actor, number>();
 const sayings = new WeakMap<Actor, { text: string; px: number; lines: string[] }>();
 let wordsAt = 0;
 
@@ -424,8 +427,8 @@ function linesOf(ctx: Ctx, a: Actor, px: number): string[] {
 }
 
 /**
- * Names and speech. A name shows only for whoever is near the member, pointed at, or speaking,
- * and no two plates ever overlap: they are placed most wanted first, and one that would cover
+ * Names and speech. A name shows only for whoever is near the member, pointed at, speaking, or
+ * just arrived, and no two plates ever overlap: they are placed most wanted first, and one that would cover
  * another is left out.
  */
 function drawPeople(ctx: Ctx, px: number, taken: readonly Box[], people: readonly Actor[]): void {
@@ -456,15 +459,18 @@ function drawPeople(ctx: Ctx, px: number, taken: readonly Box[], people: readonl
             ? 2
             : a === show.card
               ? 3
-              : far < NAME_REACH && G.home
-                ? 4 + far / 100
-                : 9;
+              : G.t < a.named
+                ? 3.5
+                : far < NAME_REACH && G.home
+                  ? 4 + far / 100
+                  : 9;
     wanted.push({ a, rank });
   }
   wanted.sort((m, n) => m.rank - n.rank);
 
   const placed: Box[] = [...taken];
   const pad = 2 * px;
+  tops.clear();
   for (const { a, rank } of wanted) {
     const at = a.seat ?? a;
     const hx = Math.round((at.x - cx) * z);
@@ -488,6 +494,7 @@ function drawPeople(ctx: Ctx, px: number, taken: readonly Box[], people: readonl
     if (now > 0.02) {
       placed.push(plate);
       top = plate.y - 2 * px;
+      tops.set(a, top);
       ctx.globalAlpha = now * a.alpha * 0.62;
       ctx.fillStyle = INK;
       ctx.fillRect(plate.x, plate.y, plate.w, plate.h);
@@ -558,6 +565,22 @@ export function drawWords(ctx: Ctx, px: number, people: readonly Actor[]): void 
       })()
     : null;
   drawPeople(ctx, px, sign ? [sign] : [], people);
+
+  // Emotes, floating up from whoever made them, over their name if it shows, and fading as they go:
+  // drawn a scene pixel to each of theirs, in the light.
+  ctx.imageSmoothingEnabled = false;
+  for (const e of emoted) {
+    if (e.a.away || e.a.alpha < 0.05) continue;
+    const at = standing(e.a);
+    const k = e.life / e.ttl;
+    const icon = emotePicture(e.kind);
+    const hx = Math.round((at.x - cx) * z);
+    const head = Math.round((at.y - cy - hopOf(e.a) - headOf(e.a) - 3) * z);
+    const y = Math.min(head, (tops.get(e.a) ?? head) - z) - (icon.height + Math.round(10 * k)) * z;
+    ctx.globalAlpha = e.a.alpha * clamp((1 - k) / 0.3, 0, 1) * clamp(k / 0.08, 0, 1);
+    ctx.drawImage(icon, hx - Math.floor(icon.width / 2) * z, y, icon.width * z, icon.height * z);
+  }
+  ctx.globalAlpha = 1;
 
   // Words that rise and fade.
   for (const f of floaters) {

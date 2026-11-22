@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { CLOSE, decodeMove, encodeSnapshot, Flag, livePath, type Motion, type ToClient } from "@sequoia-leaf/core";
+import { CLOSE, encodeSnapshot, Flag, livePath, type Motion, type ToClient } from "@sequoia-leaf/core";
 
 import { restart, start } from "./live.ts";
-import { isRecord, type LiveSocket, pretend } from "./net.ts";
+import { pretend } from "./net.ts";
 import { forgetLedger } from "./purse.ts";
 import {
   ClockSync,
@@ -15,7 +15,7 @@ import {
   type Step,
   Track,
 } from "./realtime.ts";
-import { HELLO, type Standin, standin, TESTER } from "./standin.ts";
+import { FakeSocket, HELLO, type Standin, standin, TESTER } from "./standin.ts";
 
 const step = (x: number, y: number, flags = 0, vx = 0): Step => ({ x, y, vx, vy: 0, facing: 1, pose: 0, flags });
 const at = (x: number, y: number, flags = 0, jump = 0, vx = 0): Motion => ({ ...step(x, y, flags, vx), jump });
@@ -95,56 +95,6 @@ describe("trying again", () => {
     expect(retryAfter(0, 1)).toBe(750);
   });
 });
-
-/** A WebSocket the test plays Leaf's side of. */
-class FakeSocket implements LiveSocket {
-  binaryType: BinaryType = "blob";
-  readonly sent: (string | Uint8Array)[] = [];
-  closed: number | null = null;
-  private readonly opens: ((e: Event) => void)[] = [];
-  private readonly messages: ((e: MessageEvent) => void)[] = [];
-  private readonly closes: ((e: CloseEvent) => void)[] = [];
-  readonly url: string;
-  constructor(url: string) {
-    this.url = url;
-  }
-  addEventListener(
-    ...ear: ["open", (e: Event) => void] | ["message", (e: MessageEvent) => void] | ["close", (e: CloseEvent) => void]
-  ): void {
-    if (ear[0] === "open") this.opens.push(ear[1]);
-    else if (ear[0] === "message") this.messages.push(ear[1]);
-    else this.closes.push(ear[1]);
-  }
-  send(data: string | Uint8Array): void {
-    this.sent.push(data);
-  }
-  close(code: number = CLOSE.done): void {
-    this.closed = code;
-  }
-  open(): void {
-    for (const fn of this.opens) fn(new Event("open"));
-  }
-  says(m: ToClient): void {
-    for (const fn of this.messages) fn(new MessageEvent("message", { data: JSON.stringify(m) }));
-  }
-  sends(bytes: Uint8Array<ArrayBuffer>): void {
-    for (const fn of this.messages) fn(new MessageEvent("message", { data: bytes.buffer }));
-  }
-  drop(code = 1006): void {
-    for (const fn of this.closes) fn(new CloseEvent("close", { code }));
-  }
-  /** The text frames the game sent, as JSON objects. */
-  texts(): Record<string, unknown>[] {
-    return this.sent.flatMap((s) => {
-      if (typeof s !== "string") return [];
-      const v: unknown = JSON.parse(s);
-      return isRecord(v) ? [v] : [];
-    });
-  }
-  moves() {
-    return this.sent.flatMap((s) => (typeof s === "string" ? [] : [decodeMove(s)]));
-  }
-}
 
 const ALICE = { id: 2, player: "a", name: "Alice", rank: "Captain", guest: false };
 const welcome = (you: number, time: number, roster = [{ ...ALICE, id: you }]): ToClient => ({

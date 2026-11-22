@@ -78,10 +78,11 @@ export const Stores = Layer.mergeAll(
 
 /**
  * What Leaf reaches outside its own code (its settings, its database, Mojang and the network), and
- * the live rooms, which the routes serve and the server's farewell closes.
+ * the live rooms, which the routes serve and the server's farewell closes, and which write who is
+ * in them into the stores' presence.
  */
-export const Services = Stores.pipe(
-  Layer.merge(Live.layer),
+export const Services = Live.layer.pipe(
+  Layer.provideMerge(Stores),
   Layer.provideMerge(Database),
   Layer.provide(Mojang.layer),
   Layer.provideMerge(FetchHttpClient.layer),

@@ -10,7 +10,7 @@ member's own camp.
 ```sh
 bun run dev      # with hot reload
 bun run build    # dist/
-bun test         # the rules: saving, the arrival letter, the made-up guild, the town's own, the camp, the mailbox, parcels, strings of lights tied at both ends
+bun test         # the rules: saving, the arrival letter, the made-up guild, the town's own, the camp, the mailbox, parcels, strings of lights tied at both ends, the town live
 ```
 
 To play as a real skin, put a 64x64 skin sheet at `dist/skins/player.png` after building (it is
@@ -66,10 +66,12 @@ and copies the test skin in one go.
   before it (`@sequoia-leaf/kit/mark.ts`); members' plates are cream. Tapping one shows its card:
   its name with the mark, what it is ("Stallkeeper, and a gnome"), what it is doing, a wave, and
   the way to its stall or the Treasury. They talk, greet the member, and cheer when the guild does.
-- **Members.** Real members in the game stand about as visitors, and those who have gone in the
-  last day doze in town (both below, and with the made-up guild its stand-ins). A member's card has
-  their name and rank, and for one dozing, how long ago they dozed off. A name shows only over
-  somebody who is near the member, pointed at, or speaking, and no two name plates ever overlap.
+- **Members.** Real members in the game are about the town (on the guild's own server, live,
+  where they really are; below), and those who have gone in the last day doze in town (both below,
+  and with the made-up guild its stand-ins, who stand about as visitors). A member's card has their
+  name and rank, and for one dozing, how long ago they dozed off. A name shows only over somebody
+  who is near the member, pointed at, speaking, or just arrived, and no two name plates ever
+  overlap.
 - **The guild, live.** With the made-up guild, every minute and a half or more (never sooner, of
   any kind, the town's own calling at the camp included): some of its stand-in members come home
   from a raid and hang a lantern in the tree, win a territory and the banner goes up the pole (at
@@ -221,12 +223,37 @@ Leaf. `live.test.ts` holds the live guild to handing the town nobody the server 
   says how much Leaf anybody was paid (`news.ts` has every line). The feed takes these lines one at
   a time, twenty seconds apart, oldest first, and drops one that has waited five minutes; what
   happens in the world for them (the party walking in, the lantern, the banner) does not wait.
+- **The town, live** (`players.ts`, its rules in `motion.ts`). While the town is on the stage the
+  page is in Leaf's live room `town` (the kit's `joinLive`); in the camp, or with a game open, it is
+  not, and coming back joins again. The member's figure moves from their own input at once, as
+  ever, and the room is told where it is as it goes: its feet, its speed, which way it faces,
+  whether it walks or sits, and a jump whenever it is put somewhere without walking (back through
+  the gate, out of the Works' doorway, `tp`). Everybody else in the room is drawn in their own
+  skin exactly where the room says they are (`sample`), never walked anywhere by the town: legs
+  going only while they move, seated where they sit (keeping that seat from anybody dozing or
+  sitting down on top of them), put at a new place at once when they jump. Somebody who comes fades
+  in at their first motion, and somebody who goes fades out, then dozes as below if the guild says
+  they rest. Nobody is solid to anybody. Their card has their name, their rank or "Guest", and a
+  "Wave", which turns the member to them and waves. The feed's "N are in town" counts the room.
+- **Emotes.** In the live room, tapping the member's own figure opens a small plaque over their
+  head with four emotes (wave, cheer, laugh, heart, the kit's `emotes.ts`); choosing one, the
+  member hops once and its picture floats up from over their name for a moment and a half, and so
+  does everybody's picture of them when the room tells them. Nothing typed is sent.
+- **The connection.** While it is down, the town plays on and a small "Reconnecting…" sits by the
+  purse; after five seconds the others fade away until the room welcomes the page again. Told the
+  member opened the game live somewhere else, the kit's card "Playing somewhere else" says this
+  page has let go of the town, with "Play here", which takes the room back; told their session has
+  ended, the kit's "Signed out" card.
 - **Who is here.** The town says where the member is (the town, the camp, or nowhere while a game
   is open, which says its own place) and whether their character stays, and hears who else is in
-  the game and who has gone in the last day and stays. Up to twelve of the first stand about as
-  visitors (`visitors.ts`) in their own skins: strolling in town, by the Works' door, or watching at
-  the stump; nobody at their own camp. They come in through the gate, never speak, and their card
-  has only their name and rank; a guest's says "Guest". Up to twelve of the others, most recent first, doze at a free seat
+  the game and who has gone in the last day and stays. It goes on saying so every half minute in
+  the live room too, though Leaf writes where the member is from the room: that answer is how it
+  hears who rests and who is at the Works or the stump. Up to twelve of those in the game stand
+  about as visitors (`visitors.ts`) in their own skins: by the Works' door, or watching at the
+  stump, and with the made-up guild strolling in town; on the guild's own server those in town are
+  there live instead, and nobody live is a visitor or a dozer as well. Nobody at their own camp.
+  They come in through the gate, never speak, and their card has only their name and rank; a
+  guest's says "Guest". Up to twelve of the others, most recent first, doze at a free seat
   for where they were (a log at the fire for the town, the log at the stump for the table, the bench
   by the Works' door for the Works, then whatever seat is free; never the member's own; nobody last
   at their camp): eyes closed, a "z" drifting up, never speaking or moving. A visitor who goes sits
@@ -245,7 +272,9 @@ Leaf. `live.test.ts` holds the live guild to handing the town nobody the server 
 `review/live.ts` is a stand-in for the server, for looking at all of this without one: `bun
 review/live.ts 8790` serves the built town and games under `/play/` with a made-up member called
 Tester, five others about and three dozing; `GET /review/raid` brings a raid party home; `--signed-out`,
-`--not-a-member` and `--down` show the cards.
+`--not-a-member` and `--down` show the cards. Its live room has nobody in it but the member, so
+nobody is about in town there; the real app with a crowd walking about the live room is
+`apps/api/test/play.ts` (the repository's README).
 
 What each game says is waiting behind its door, what the Works made while the member was away, and
 what the member has won in each game come from `games.ts`: one small function a game, returning a
@@ -303,6 +332,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/guild.ts`, `src/madeup.ts`       | The questions asked of the guild, and the made-up guild that answers                    |
 | `src/live.ts`, `src/news.ts`          | The real guild's answers on its own server; the feed's line for each moment             |
 | `src/visitors.ts`                     | Real members in the game, standing about the town, and those dozing in it               |
+| `src/players.ts`, `src/motion.ts`     | The town live: in the room, everybody else drawn from it, emotes; its rules             |
 | `src/save.ts`, `src/keep.ts`          | The kept record and its rules; reading and writing it in the browser                    |
 | `src/record.ts`                       | The one record as it is held while the page is open                                     |
 | `src/letter.ts`                       | Putting the arrival letter together from the time away                                  |
@@ -312,7 +342,8 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/campsfx.ts`                      | The camp's own sounds                                                                   |
 
 `grid.ts`, `camp.ts`, `things.ts`, `mail.ts`, `save.ts`, `letter.ts`, `madeup.ts`, `games.ts`,
-`folk.ts`, `live.ts` and `news.ts` have no page in them, and tests beside them; `folk.test.ts` also
+`folk.ts`, `live.ts`, `news.ts` and `motion.ts` have no page in them, and tests beside them
+(`motion.test.ts` plays Leaf's side of a live connection with the kit's stand-in socket); `folk.test.ts` also
 reads every file of the three games to check that nothing but members is drawn from a skin. `record.ts` has tests too,
 for what is sent to the camp.
 
@@ -328,7 +359,10 @@ there, gets a note and a way back; one that says it later opens over the note.
 
 `window.town` has handles for taking pictures of it: `skip(seconds)` runs the clock on, `hold(true)`
 stops the clock so that only `skip` moves it, `enter()` puts the arrival letter away, `visit(place)`
-and `open(panel)` open things in town, `tp(x, y)` moves the member in town, `happen("raid" | "war" |
+and `open(panel)` open things in town, `tp(x, y)` moves the member in town, `walk(x, y)` walks them
+to a point, `emote(kind)` makes an emote, `players()` says where everybody else in the live room
+would be drawn this moment, `told()` what the room was last told of the member and when, `link()`
+how the live connection is, `happen("raid" | "war" |
 "level" | "milestone" | "call")` sets off one of the made-up guild's moments, `inside(game)` goes
 through a door, `door()` says how far that has got, `leave()` comes back, `kept()` shows the record
 as it would be saved, `who()` says where each of the town's own is and what it is doing,

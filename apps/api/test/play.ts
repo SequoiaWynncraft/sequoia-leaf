@@ -1,7 +1,7 @@
 /**
  * Leaf on this machine, for trying the game against it:
  *
- *   bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy]
+ *   bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--crowd <n>]
  *
  * It runs the real app on a database in memory, seeded with a day of play for
  * a member called Tester and four other members, and serves `<public-dir>`
@@ -16,11 +16,19 @@
  *
  * The cookie `seq_session=tester` is Tester's session; any other, or none, is
  * signed out. `/sign-in?return_to=<address>` sets it and goes back, as the
- * website's sign-in would, and `/sign-out?return_to=<address>` clears it.
+ * website's sign-in would, and `/sign-out?return_to=<address>` clears it and
+ * ends the session, as the website's sign-out does, until Tester signs in again.
+ * Each of the others has a session too, `as-<name>` in small letters
+ * (`seq_session=as-quillon`), for a second page as somebody else:
+ * `/sign-in?as=quillon&return_to=<address>` sets it. A page as somebody the
+ * script walks about the town takes their place there, and they stop.
  *
  * - `--guest`: Tester is signed in but not in the guild (any more), so they play as a guest.
  * - `--down`: the backend can't be asked who Tester is, so they answer 503.
  * - `--busy`: every minute, a few of the four finish a raid together, for the guild's news.
+ * - `--crowd <n>`: n more members, each in their own skin, in the town's live room and walking
+ *   about it along its paths: stopping, sitting on a log by the fire a while, and waving now and
+ *   then. They say nothing of where they are but by being in the room.
  */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -45,17 +53,23 @@ import {
   testLeaf,
 } from "./support.ts";
 
-const USAGE = "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy]";
+const USAGE = "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--crowd <n>]";
 
 const [portText = "", publicDirText = "", ...options] = process.argv.slice(2);
 const port = Number(portText);
 const known = new Set(["--guest", "--down", "--busy"]);
+const crowdAt = options.indexOf("--crowd");
+const crowdSize = crowdAt < 0 ? 0 : Number(options[crowdAt + 1]);
+const flags = crowdAt < 0 ? options : options.filter((_, i) => i !== crowdAt && i !== crowdAt + 1);
 if (
   !Number.isInteger(port) ||
   port <= 0 ||
   port > 65_535 ||
   publicDirText === "" ||
-  options.some((o) => !known.has(o))
+  !Number.isInteger(crowdSize) ||
+  crowdSize < 0 ||
+  crowdSize > 200 ||
+  flags.some((o) => !known.has(o))
 ) {
   console.error(USAGE);
   process.exit(2);
@@ -65,9 +79,9 @@ if (!existsSync(publicDir)) {
   console.error(`${publicDir} does not exist. Build the pages into it first.\n${USAGE}`);
   process.exit(2);
 }
-const guest = options.includes("--guest");
-const down = options.includes("--down");
-const busy = options.includes("--busy");
+const guest = flags.includes("--guest");
+const down = flags.includes("--down");
+const busy = flags.includes("--busy");
 const origin = `http://127.0.0.1:${port}`;
 
 interface Member {
@@ -120,6 +134,47 @@ const pebblefoot = {
   look: { skin: [240, 200, 170, 255], hair: [200, 200, 205, 255], shirt: [180, 130, 60, 255], legs: [90, 70, 50, 255] },
 } as const;
 
+/** Invented handles for `--crowd`: none of them the town's own, the four, or the made-up guild's stand-ins. */
+const CROWD_NAMES = [
+  "Thistledown",
+  "Brackenfoot",
+  "Hollyhock",
+  "Larkspur",
+  "Cobblestep",
+  "Dewberry",
+  "Nettlebrook",
+  "Rushlight",
+  "Mapleshade",
+  "Tansy",
+  "Sorrelby",
+  "Hazelnook",
+  "Ashgrove",
+  "Moonpetal",
+  "Burrowby",
+  "Clovermere",
+  "Duskmoth",
+  "Elderleaf",
+  "Foxglove",
+  "Gorseby",
+  "Heathertop",
+  "Primrose",
+  "Juniper",
+  "Kindlewood",
+] as const;
+const CROWD_RANKS = ["Recruit", "Recruiter", "Captain", "Strategist", "Chief"] as const;
+
+/** A colour of the crowd's, the same for the same member and part each time. */
+const shade = (n: number, part: number): Rgba => {
+  const h = Math.imul(n * 7 + part * 131 + 17, 2_654_435_761) >>> 0;
+  return [40 + (h % 200), 40 + ((h >>> 8) % 200), 40 + ((h >>> 16) % 200), 255];
+};
+const crowd: readonly Member[] = Array.from({ length: crowdSize }, (_, n) => ({
+  id: playerId(`7e570000-0000-4000-8000-${String(100 + n).padStart(12, "0")}`),
+  name: `${CROWD_NAMES[n % CROWD_NAMES.length] ?? "Crowd"}${n < CROWD_NAMES.length ? "" : String(Math.floor(n / CROWD_NAMES.length) + 1)}`,
+  rank: CROWD_RANKS[n % CROWD_RANKS.length] ?? "Recruit",
+  look: { skin: shade(n, 0), hair: shade(n, 1), shirt: shade(n, 2), legs: shade(n, 3) },
+}));
+
 // The clock is the real one, except while the past day is being played.
 let playingAt: number | undefined;
 const clock: TestClock = {
@@ -136,24 +191,31 @@ const SEEDING = "seeding";
 let seeding = true;
 /** The script's own session for each of the other four, to say where they are in the game. */
 const sessionFor = (member: { readonly name: string }) => `as-${member.name.toLowerCase()}`;
+/** Tester signed out on the website: their session has ended, until they sign in again. */
+let signedOut = false;
 const { backend, fetcher } = fakeBackend({
   tester: () =>
     down
       ? new Response("down", { status: 502 })
-      : Response.json(sessionOf(tester.id, tester.name, guest ? null : tester.rank)),
+      : signedOut
+        ? Response.json({ error: "unauthorized" }, { status: 401 })
+        : Response.json(sessionOf(tester.id, tester.name, guest ? null : tester.rank)),
   [SEEDING]: () =>
     seeding
       ? Response.json(sessionOf(tester.id, tester.name, tester.rank))
       : Response.json({ error: "unauthorized" }, { status: 401 }),
   ...Object.fromEntries(
-    mates.map((mate) => [sessionFor(mate), () => Response.json(sessionOf(mate.id, mate.name, mate.rank))]),
+    [...mates, ...crowd].map((mate) => [
+      sessionFor(mate),
+      () => Response.json(sessionOf(mate.id, mate.name, mate.rank)),
+    ]),
   ),
   [sessionFor(pebblefoot)]: () => Response.json(sessionOf(pebblefoot.id, pebblefoot.name, null)),
 });
 
 const mojang = fakeMojang();
-for (const [index, member] of [...members, pebblefoot].entries()) {
-  const texture = `5e1f${index}a`;
+for (const [index, member] of [...members, pebblefoot, ...crowd].entries()) {
+  const texture = `5e1f${index.toString(16)}a`;
   mojang.profiles.set(member.id, { name: member.name, skin: `http://textures.minecraft.net/texture/${texture}` });
   mojang.textures.set(`https://textures.minecraft.net/texture/${texture}`, skinPng(member.look));
 }
@@ -423,11 +485,24 @@ function signing(request: Request): Response | undefined {
   if (!back.startsWith(`${origin}/`)) {
     return new Response("return_to must be an address on this server", { status: 400 });
   }
-  const cookie =
-    url.pathname === "/sign-in"
-      ? "seq_session=tester; Path=/; HttpOnly; SameSite=Lax"
-      : "seq_session=; Path=/; Max-Age=0";
-  return new Response(null, { status: 302, headers: { Location: back, "Set-Cookie": cookie } });
+  if (url.pathname === "/sign-out") {
+    // Only Tester's session can end: the others' are the script's own.
+    if (request.headers.get("cookie")?.includes("seq_session=tester") ?? true) signedOut = true;
+    return new Response(null, {
+      status: 302,
+      headers: { Location: back, "Set-Cookie": "seq_session=; Path=/; Max-Age=0" },
+    });
+  }
+  // `?as=<name>`: one of the others, for a second page as somebody else; otherwise Tester.
+  const as = url.searchParams.get("as")?.toLowerCase();
+  const other = [...mates, pebblefoot, ...crowd].find((m) => m.name.toLowerCase() === as);
+  if (as !== undefined && !other) return new Response("There is nobody of that name here", { status: 404 });
+  if (!other) signedOut = false;
+  const session = other ? sessionFor(other) : "tester";
+  return new Response(null, {
+    status: 302,
+    headers: { Location: back, "Set-Cookie": `seq_session=${session}; Path=/; HttpOnly; SameSite=Lax` },
+  });
 }
 
 // Served as production serves it, so that live connections work too, with the sign-in beside it.
@@ -437,7 +512,8 @@ const signingRoute = (path: "/sign-in" | "/sign-out") =>
     path,
     Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
       HttpServerResponse.fromWeb(
-        signing(new Request(`${origin}${request.url}`)) ?? new Response(null, { status: 404 }),
+        signing(new Request(`${origin}${request.url}`, { headers: request.headers })) ??
+          new Response(null, { status: 404 }),
       ),
     ),
   );
@@ -491,18 +567,231 @@ if (birchwood) {
     0,
   );
 }
+// Round the south of the fire, never through it.
 await walk(
   pebblefoot,
   [
     [256, 120],
     [150, 220],
+    [210, 258],
+    [300, 258],
     [380, 230],
   ],
   3,
 );
 
+// ---------- the crowd ----------
+
+/**
+ * The town's paths as the crowd walks them, in the town's art pixels: spots on open ground, and
+ * which two can be walked between in a straight line without crossing anything solid (the fire and
+ * its logs, the stumps, the quest board, the lantern tree, the great stump).
+ */
+const SPOTS: Readonly<Record<string, readonly [number, number]>> = {
+  gate: [256, 112],
+  road: [256, 137],
+  roadW: [180, 137],
+  treasury: [104, 136],
+  roadE: [330, 140],
+  works: [380, 138],
+  board: [206, 168],
+  squareN: [256, 182],
+  squareNW: [222, 186],
+  squareW: [206, 222],
+  squareSW: [222, 248],
+  squareS: [256, 252],
+  squareSE: [292, 246],
+  squareE: [306, 222],
+  squareNE: [290, 186],
+  market: [190, 262],
+  stalls: [120, 264],
+  pondW: [340, 247],
+  pond: [378, 252],
+  tree: [352, 218],
+  stumpW: [400, 210],
+  stumpS: [444, 232],
+  south: [252, 280],
+  garden: [240, 300],
+  gardenW: [200, 318],
+  bench: [130, 322],
+  // Where somebody steps up to a seat by the fire from.
+  logN: [248, 188],
+  logSW: [248, 246],
+  logSE: [264, 246],
+  logE: [300, 214],
+};
+const WAYS: readonly (readonly [string, string])[] = [
+  ["gate", "road"],
+  ["road", "roadW"],
+  ["roadW", "treasury"],
+  ["road", "roadE"],
+  ["roadE", "works"],
+  ["road", "board"],
+  ["road", "squareN"],
+  ["squareN", "squareNW"],
+  ["squareN", "squareNE"],
+  ["squareN", "logN"],
+  ["squareNW", "squareW"],
+  ["squareW", "squareSW"],
+  ["squareSW", "squareS"],
+  ["squareS", "logSW"],
+  ["squareS", "logSE"],
+  ["squareS", "squareSE"],
+  ["squareSE", "squareE"],
+  ["squareE", "logE"],
+  ["squareE", "squareNE"],
+  ["squareSW", "market"],
+  ["market", "stalls"],
+  ["squareSE", "pondW"],
+  ["pondW", "pond"],
+  ["squareE", "tree"],
+  ["tree", "stumpW"],
+  ["stumpW", "stumpS"],
+  ["squareS", "south"],
+  ["south", "garden"],
+  ["garden", "gardenW"],
+  ["gardenW", "bench"],
+];
+/**
+ * The seats by the fire the crowd sits on: where the sitter is, which way they face, and the spot
+ * they step up from. Never the log the town keeps for its member, or the stump on the west where
+ * the town's glorp sits.
+ */
+const LOGS: readonly { readonly x: number; readonly y: number; readonly facing: number; readonly from: string }[] = [
+  { x: 248, y: 201, facing: 0, from: "logN" },
+  { x: 248, y: 236, facing: 3, from: "logSW" },
+  { x: 264, y: 236, facing: 3, from: "logSE" },
+  { x: 291, y: 213, facing: 1, from: "logE" },
+];
+const NEXT = new Map<string, string[]>();
+for (const [a, b] of WAYS) {
+  NEXT.set(a, [...(NEXT.get(a) ?? []), b]);
+  NEXT.set(b, [...(NEXT.get(b) ?? []), a]);
+}
+/** The spots along the way from one spot to another, the first left out. */
+function way(from: string, to: string): string[] {
+  const back = new Map<string, string>([[from, from]]);
+  const queue = [from];
+  for (let here = queue.shift(); here !== undefined && here !== to; here = queue.shift()) {
+    for (const next of NEXT.get(here) ?? []) {
+      if (back.has(next)) continue;
+      back.set(next, here);
+      queue.push(next);
+    }
+  }
+  const out: string[] = [];
+  for (let here = to; here !== from; here = back.get(here) ?? from) out.unshift(here);
+  return out;
+}
+const chance = <A>(list: readonly A[]): A => pick(list, Math.floor(Math.random() * list.length));
+const between = (low: number, high: number) => low + Math.random() * (high - low);
+/** The town's facings: 0 down, 1 left, 2 right, 3 up. */
+const facingOf = (dx: number, dy: number) => (Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0);
+const sitting = new Set<number>();
+const WANDER = Object.keys(SPOTS).filter((name) => !name.startsWith("log"));
+
+/**
+ * One of the crowd, in the town's live room as a player's game would be: walking from spot to spot
+ * along the paths at about the town's pace, `CLIENT_HZ` moves a second while walking and one when
+ * they stop; standing a few seconds at each, now and then sitting on a free log by the fire for a
+ * while, and waving (or cheering, laughing, sending a heart) now and then.
+ */
+async function wander(member: Member) {
+  const client = await LiveClient.open(origin, { bearer: sessionFor(member) });
+  await client.welcome();
+  // Only the walking is wanted; what Leaf says back would pile up.
+  client.onSnapshot = () => {
+    client.snapshots.length = 0;
+  };
+  let spot = chance(WANDER);
+  let [x, y] = SPOTS[spot] ?? [256, 200];
+  let facing = 0;
+  let route: string[] = [];
+  /** The log they are on their way to (kept for them), and the one they are sitting on. */
+  let going: number | null = null;
+  let seat: number | null = null;
+  let resting = between(0, 4);
+  const speed = between(48, 64);
+  const say = (moving: boolean, vx = 0, vy = 0) =>
+    client.move({ x, y, vx, vy, facing, pose: seat === null ? 0 : 1, flags: moving ? Flag.Moving : 0, jump: 0 });
+  const emote = (sometimes: number) => {
+    if (Math.random() >= sometimes) return;
+    client.send({ t: "act", kind: "emote", arg: Math.random() < 0.6 ? "wave" : chance(["cheer", "laugh", "heart"]) });
+  };
+  const letGo = () => {
+    for (const log of [going, seat]) if (log !== null) sitting.delete(log);
+    going = null;
+    seat = null;
+  };
+  say(false);
+  const tick = setInterval(() => {
+    client.texts.length = 0;
+    client.arrived.length = 0;
+    if (client.closed) {
+      // Somebody signed in as them elsewhere has taken their place: they stop.
+      clearInterval(tick);
+      letGo();
+      return;
+    }
+    const dt = 1 / CLIENT_HZ;
+    if (resting > 0) {
+      resting -= dt;
+      if (resting > 0) return;
+      if (seat !== null) {
+        // Up off the log, back to where they stepped up from.
+        letGo();
+        [x, y] = SPOTS[spot] ?? [x, y];
+        say(false);
+      }
+      const free = LOGS.map((_, i) => i).filter((i) => !sitting.has(i));
+      if (free.length > 0 && Math.random() < 0.25) {
+        going = chance(free);
+        sitting.add(going);
+        route = way(spot, LOGS[going]?.from ?? spot);
+      } else route = way(spot, chance(WANDER.filter((name) => name !== spot)));
+    }
+    const next = route[0];
+    if (next === undefined) return;
+    const [tx, ty] = SPOTS[next] ?? [x, y];
+    const dx = tx - x;
+    const dy = ty - y;
+    const d = Math.hypot(dx, dy);
+    const step = speed * dt;
+    if (d > 0) facing = facingOf(dx, dy);
+    if (d > step) {
+      x += (dx / d) * step;
+      y += (dy / d) * step;
+      say(true, (dx / d) * speed, (dy / d) * speed);
+      return;
+    }
+    [x, y] = [tx, ty];
+    spot = next;
+    route.shift();
+    if (route.length > 0) return;
+    const log = going === null ? undefined : LOGS[going];
+    if (log) {
+      // Sits down on the log, facing the fire, for a while.
+      seat = going;
+      going = null;
+      [x, y] = [log.x, log.y];
+      facing = log.facing;
+      resting = between(10, 25);
+      say(false);
+      emote(0.5);
+      return;
+    }
+    resting = between(2, 7);
+    facing = chance([0, 0, 1, 2]);
+    say(false);
+    emote(0.3);
+  }, 1000 / CLIENT_HZ);
+}
+await Promise.all(crowd.map((member) => wander(member)));
+
 const state = guest ? " (Tester is a guest)" : down ? " (the backend is down)" : "";
-console.log(`Leaf is playing at ${origin}/play/town/${state}`);
+console.log(
+  `Leaf is playing at ${origin}/play/town/${state}${crowd.length > 0 ? `, with a crowd of ${crowd.length}` : ""}`,
+);
 console.log(
   `Sign in: ${origin}/sign-in?return_to=${encodeURIComponent(`${origin}/play/town/`)}, or send the cookie seq_session=tester`,
 );

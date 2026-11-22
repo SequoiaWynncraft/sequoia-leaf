@@ -37,7 +37,7 @@ import { kept } from "./record.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Hover, Scene, Stage, Steer } from "./stage.ts";
-import { makeTown } from "./townscene.ts";
+import { makeTown, type Town } from "./townscene.ts";
 import { dismissArrival } from "./ui.ts";
 import { lookFor } from "./visitors.ts";
 import type { PlaceId } from "./world.ts";
@@ -52,6 +52,8 @@ declare global {
       close: () => void;
       visit: (id: PlaceId) => void;
       tp: (x: number, y: number) => void;
+      /** Walks the member to a point in town, round whatever is in the way. */
+      walk: (x: number, y: number) => void;
       tap: (x: number, y: number) => void;
       happen: (kind: Moment) => void;
       page: (x: number, y: number) => Pt;
@@ -77,6 +79,14 @@ declare global {
       where: () => { where: "town" | "camp"; dark: number };
       /** The member's camp: go there, come back, and what `campscene.ts` offers besides. */
       camp: CampScene["handles"] & { go: () => void };
+      /** Everybody else in town live (on the guild's own server), as they would be drawn this moment. */
+      players: Town["handles"]["players"];
+      /** What the town's live room was last told of the member, and when. */
+      told: Town["handles"]["told"];
+      /** The live connection: its status, what is shown of it, and how many others are in the room. */
+      link: Town["handles"]["link"];
+      /** The member makes an emote, as if chosen from the plaque over their head. */
+      emote: Town["handles"]["emote"];
     };
   }
 }
@@ -210,6 +220,7 @@ async function boot(): Promise<void> {
           if (inside) scene.cameBack(inside);
           inside = null;
           guild.here(G.where);
+          if (scene === town) town.onStage(true);
           wake();
         },
       });
@@ -398,6 +409,8 @@ async function boot(): Promise<void> {
         scene.resize(G.view.w, G.view.h);
         aim(true);
         guild.here(G.where);
+        // The town's live room is only for while the town is on the stage.
+        town.onStage(scene === town);
       }
     } else if (trip) {
       G.dark = Math.max(0, G.dark - dt / DAYBREAK);
@@ -408,8 +421,9 @@ async function boot(): Promise<void> {
       iris.open += Math.sign(d) * Math.min(Math.abs(d), dt / CLOSE_IN);
     }
     if (visit && iris.open <= 0 && !paused) {
-      // The view has closed in: the game takes the page from here.
+      // The view has closed in: the game takes the page from here, and the town's room is left.
       paused = true;
+      town.onStage(false);
       keys.clear();
       held = null;
       const at = toPage(iris.at.x, iris.at.y);
@@ -458,6 +472,7 @@ async function boot(): Promise<void> {
   // Whether the member's character stays in town after they go, as they last said in their cabin.
   guild.stay(kept.stay);
   guild.here("town");
+  town.onStage(true);
   wake();
 
   window.town = {

@@ -11,7 +11,7 @@
  * guild's stream a raid party coming home, one of them in town.
  *
  * `--signed-out` answers 401 (and its sign-in sends the page straight back), `--not-a-member` 403
- * and `--down` 503.
+ * and `--down` 503. The town's live room (`/v1/game/live`) has nobody in it but the member.
  */
 
 import { homedir } from "node:os";
@@ -308,5 +308,31 @@ async function route(req: Request): Promise<Response> {
   return json({ code: "not_found", message: "No such route" }, 404);
 }
 
-Bun.serve({ port, hostname: "127.0.0.1", fetch: route, idleTimeout: 0 });
+// The town's live room, with nobody in it but the member: their page is welcomed, and its pings answered.
+const ROSTER = [{ id: 1, player: ME, name: "Tester", rank: "captain", guest: false }];
+Bun.serve({
+  port,
+  hostname: "127.0.0.1",
+  idleTimeout: 0,
+  fetch(req, server) {
+    const live = new URL(req.url).pathname === "/v1/game/live" && mode === "";
+    if (live && server.upgrade(req)) return undefined;
+    return route(req);
+  },
+  websocket: {
+    open(ws) {
+      ws.send(JSON.stringify({ t: "welcome", v: 2, you: 1, room: "town/1", hz: 30, time: Date.now(), roster: ROSTER }));
+    },
+    message(ws, text) {
+      if (typeof text !== "string") return;
+      try {
+        const m: unknown = JSON.parse(text);
+        if (typeof m === "object" && m !== null && "t" in m && m.t === "ping" && "c" in m)
+          ws.send(JSON.stringify({ t: "pong", c: m.c, s: Date.now() }));
+      } catch {
+        // Not anything the stand-in reads.
+      }
+    },
+  },
+});
 console.log(`${origin}/play/town/ ${mode}`);
