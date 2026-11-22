@@ -1,3 +1,5 @@
+import { below, mix, pick, type Stream } from "@sequoia-leaf/core";
+
 /**
  * A bot that plays the game through the same actions a member has. It has habits rather than
  * cleverness: what it likes, how much it saves, whether it levels or rolls. It exists to try the
@@ -12,7 +14,6 @@ import { stepFor, TRAIT_IDS, type TraitId } from "./content/traits.ts";
 import { arrange } from "./formation.ts";
 import { SEATS } from "./hex.ts";
 import { charmsOf, countTraits } from "./party.ts";
-import { below, mix, pick, type Stream } from "./rng.ts";
 import {
   beginFight,
   buy,

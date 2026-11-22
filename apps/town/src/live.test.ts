@@ -4,8 +4,8 @@ import { restart, start } from "@sequoia-leaf/kit/live.ts";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { balance, forgetLedger, leafShown } from "@sequoia-leaf/kit/purse.ts";
 import { GUEST, HELLO, membersOnly, type Reply, type Standin, standin, TESTER } from "@sequoia-leaf/kit/standin.ts";
+import { isFolk } from "@sequoia-leaf/town/folk.ts";
 
-import { isFolk } from "./folk.ts";
 import type { Happening, Person } from "./guild.ts";
 import { compose } from "./letter.ts";
 import {

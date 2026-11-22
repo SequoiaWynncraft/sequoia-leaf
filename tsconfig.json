@@ -23,6 +23,12 @@
       "path": "./packages/yard/tsconfig.test.json"
     },
     {
+      "path": "./packages/town"
+    },
+    {
+      "path": "./packages/town/tsconfig.test.json"
+    },
+    {
       "path": "./apps/api"
     },
     {

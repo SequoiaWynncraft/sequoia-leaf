@@ -10,12 +10,13 @@
 
 import { where } from "@sequoia-leaf/kit/live.ts";
 import type { Look } from "@sequoia-leaf/kit/skin.ts";
+import type { Stall, Stock, Ware } from "@sequoia-leaf/town/catalogue.ts";
+import type { Letter } from "@sequoia-leaf/town/mail.ts";
 
 import type { PetId, Placed } from "./camp.ts";
 import { keepText, kept } from "./keep.ts";
 import { makeLive, prepared } from "./live.ts";
 import { makeGuild } from "./madeup.ts";
-import type { Letter } from "./mail.ts";
 
 export interface Member {
   name: string;
@@ -50,36 +51,6 @@ export interface Quest {
   claim: boolean;
   /** When it ends, in milliseconds since 1970, if it ends at a set time. */
   ends: number | null;
-}
-
-/** Something the Treasury sells for Leaf. */
-export interface Ware {
-  id: string;
-  name: string;
-  about: string;
-  price: number;
-  /** Bought once and kept, or as often as wanted. */
-  once: boolean;
-  /** Something that shows on the member, and so can be taken off again. */
-  worn: boolean;
-  /** What the keeper says when it is bought: at the counter, and out loud. */
-  thanks: readonly [string, string];
-}
-
-/** A camp thing and what it costs: Coins at a stall, Leaf at the Treasury. */
-export interface Stock {
-  thing: string;
-  price: number;
-}
-
-/** One of the market's stalls: who keeps it, and the camp things it sells for Coins. Nothing ever sells out. */
-export interface Stall {
-  id: string;
-  by: string;
-  name: string;
-  /** What the keeper says when something goes. */
-  words: readonly string[];
-  stock: readonly Stock[];
 }
 
 /** Somebody who lives in a camp. */

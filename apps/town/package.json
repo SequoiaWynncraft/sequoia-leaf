@@ -1,5 +1,5 @@
 {
-  "name": "@sequoia-leaf/town",
+  "name": "@sequoia-leaf/town-page",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
   "dependencies": {
     "@sequoia-leaf/kit": "workspace:*",
     "@sequoia-leaf/raid": "workspace:*",
+    "@sequoia-leaf/town": "workspace:*",
     "@sequoia-leaf/yard": "workspace:*"
   }
 }

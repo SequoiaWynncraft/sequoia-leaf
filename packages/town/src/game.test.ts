@@ -1,0 +1,543 @@
+import { describe, expect, test } from "bun:test";
+
+import { type Ctx, DAY_MS, type Done, LOGGED, type Refused } from "@sequoia-leaf/core";
+
+import { canPlace, MOST_OWNED, MOST_PARCELS, MOST_PLACED, NEW_CAMP, type Spot, YARD } from "./camp.ts";
+import { STALLS } from "./catalogue.ts";
+import { CALLERS, folk, GIFTS } from "./folk.ts";
+import {
+  adopt,
+  CALLS,
+  decodeTown,
+  encodeTown,
+  readCommand,
+  TOWN,
+  type Town,
+  type TownCommand,
+  type TownNote,
+  townView,
+} from "./game.ts";
+import { BOX, letter } from "./mail.ts";
+import { THINGS } from "./things.ts";
+
+/** Wednesday 25 November 2026, 12:00 UTC. */
+const T0 = Date.UTC(2026, 10, 25, 12);
+const SECOND = 1000;
+const HOUR = 3600 * SECOND;
+const ctx = (now = T0, awards: readonly string[] = []): Ctx => ({
+  now,
+  player: { id: "p", guest: false },
+  seed: 7,
+  room: 1e9,
+  awards,
+});
+const fresh = (): Town => TOWN.create(ctx());
+
+/** A command done, or the test fails. */
+function did(s: Town, c: TownCommand, at = ctx()): Done<Town, TownNote> {
+  const answer = TOWN.apply(s, c, at);
+  if ("refused" in answer) throw new Error(`${c.do} was refused: ${answer.refused}`);
+  return answer;
+}
+/** The code a command is refused with; the state it was given is left as it was. */
+function refused(s: Town, c: TownCommand, at = ctx()): string {
+  const before = encodeTown(s);
+  const answer: Done<Town, TownNote> | Refused = TOWN.apply(s, c, at);
+  expect(encodeTown(s)).toBe(before);
+  if (!("refused" in answer)) throw new Error(`${c.do} was done`);
+  return answer.refused;
+}
+const nOf = (s: Town, id: string): number => s.camp.placed.find((p) => p.id === id)?.n ?? -1;
+
+describe("a new member's town", () => {
+  test("is the camp every member starts with, each thing numbered, nothing welcomed, and a caller on the way", () => {
+    const s = fresh();
+    expect(s.camp.placed.map(({ id, x, y, t }) => ({ id, x, y, t }))).toEqual([...NEW_CAMP]);
+    expect(s.camp.placed.map((p) => p.n)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(s.made).toBe(9);
+    expect([s.seenAt, s.welcomedDay, s.chestDay, s.visit]).toEqual([0, -1, -1, null]);
+    expect(s.nextCall).toBeGreaterThanOrEqual(T0 + CALLS.least);
+    expect(s.nextCall).toBeLessThan(T0 + CALLS.least + CALLS.more);
+    expect(TOWN.create({ ...ctx(), seed: 8 }).rng).not.toBe(s.rng);
+  });
+
+  test("is shown without its stream, its counter or when the next caller comes, and with the letter Leaf would post", () => {
+    const view = TOWN.view(fresh(), ctx());
+    expect(Object.keys(view).toSorted()).toEqual(
+      [
+        "sightings",
+        "spotAt",
+        "chestDay",
+        "welcomedDay",
+        "seenAt",
+        "cursor",
+        "stay",
+        "camp",
+        "visit",
+        "arrival",
+      ].toSorted(),
+    );
+    expect(view.arrival).toMatchObject({
+      first: true,
+      newDay: true,
+      away: 0,
+      said: ["Tindra left a mushroom by your gate."],
+    });
+    expect(view.arrival.mail.map((l) => [l.from, l.gift])).toEqual([["Tindra", "toadstool"]]);
+  });
+});
+
+describe("the arrival letter", () => {
+  test("posts what the view said it would, once, and welcomes the member now", () => {
+    const s = fresh();
+    const said = townView(s, T0).arrival;
+    const after = did(s, { do: "welcome", cursor: 5 }).state;
+    expect(after.camp.letters).toEqual(said.mail);
+    expect([after.seenAt, after.welcomedDay, after.cursor]).toEqual([T0, Math.floor(T0 / DAY_MS), 5]);
+    // Put away again at once: nothing more, and the news told never goes back.
+    const again = did(after, { do: "welcome", cursor: 2 }).state;
+    expect(again.camp.letters).toEqual(after.camp.letters);
+    expect(again.cursor).toBe(5);
+    expect(townView(again, T0).arrival).toMatchObject({ first: false, newDay: false, away: 0, mail: [] });
+  });
+
+  test("brings a letter after an hour away and a caller's present too after six, from Leaf's clock", () => {
+    const home = did(fresh(), { do: "welcome", cursor: null }).state;
+    const soon = townView(home, T0 + 59 * 60 * SECOND).arrival;
+    expect(soon.mail).toEqual([]);
+    const hour = townView(home, T0 + HOUR).arrival;
+    expect([hour.mail.length, hour.said.length, hour.away]).toEqual([1, 1, HOUR]);
+    const long = townView(home, T0 + 7 * HOUR).arrival;
+    expect(long.mail).toHaveLength(2);
+    expect(GIFTS.some((g) => g === long.mail[1]?.gift)).toBe(true);
+    const back = did(home, { do: "welcome", cursor: null }, ctx(T0 + 7 * HOUR)).state;
+    expect(back.camp.letters.slice(1)).toEqual(long.mail);
+    expect(new Set(back.camp.letters.map((l) => l.id)).size).toBe(3);
+  });
+
+  test("a new UTC day is a new day, and being here moves the time away on", () => {
+    const home = did(fresh(), { do: "welcome", cursor: null }).state;
+    expect(townView(home, Date.UTC(2026, 10, 26, 0, 1)).arrival.newDay).toBe(true);
+    const here = did(home, { do: "here", cursor: 9 }, ctx(T0 + 2 * HOUR)).state;
+    expect([here.seenAt, here.cursor]).toEqual([T0 + 2 * HOUR, 9]);
+    expect(townView(here, T0 + 2 * HOUR + 59 * 60 * SECOND).arrival.mail).toEqual([]);
+  });
+});
+
+describe("the chest", () => {
+  test("pays 3 Coins, free, once a UTC day", () => {
+    const first = did(fresh(), { do: "openChest" }, ctx(Date.UTC(2026, 10, 25, 23, 59)));
+    const day = Math.floor(Date.UTC(2026, 10, 25) / DAY_MS);
+    expect(first.coins).toEqual([{ amount: 3, reason: "The chest by the Treasury", key: `chest:${day}`, free: true }]);
+    expect(refused(first.state, { do: "openChest" }, ctx(Date.UTC(2026, 10, 25, 0, 0)))).toBe("opened_today");
+    const next = did(first.state, { do: "openChest" }, ctx(Date.UTC(2026, 10, 26, 0, 1)));
+    expect(next.coins?.[0]?.key).toBe(`chest:${day + 1}`);
+  });
+});
+
+describe("the missing crab", () => {
+  test("is counted at most once in five seconds", () => {
+    const s = did(fresh(), { do: "spotCrab" }).state;
+    expect(s.sightings).toBe(1);
+    expect(refused(s, { do: "spotCrab" }, ctx(T0 + 4999))).toBe("too_soon");
+    expect(did(s, { do: "spotCrab" }, ctx(T0 + 5000)).state.sightings).toBe(2);
+  });
+});
+
+describe("buying", () => {
+  const [stall] = STALLS;
+  const ware = stall?.stock[0];
+  if (!stall || !ware) throw new Error("no stall");
+
+  test("sends one thing by the trail and takes the stall's price, keyed by a number of its own", () => {
+    const one = did(fresh(), { do: "buy", stall: stall.id, thing: ware.thing });
+    expect(one.state.camp.parcels).toEqual([ware.thing]);
+    expect(one.coins).toEqual([{ amount: -ware.price, reason: "A thing for the camp", key: "buy:9" }]);
+    expect(one.log).toEqual([{ kind: LOGGED.townBought, data: { thing: ware.thing, price: ware.price } }]);
+    expect(did(one.state, { do: "buy", stall: stall.id, thing: ware.thing }).coins?.[0]?.key).toBe("buy:10");
+  });
+
+  test("is refused, before anything is paid, for what the stall does not sell, a full trail, or 999 of it", () => {
+    const s = fresh();
+    expect(refused(s, { do: "buy", stall: stall.id, thing: "fountain" })).toBe("not_for_sale");
+    expect(refused(s, { do: "buy", stall: "nowhere", thing: ware.thing })).toBe("not_for_sale");
+    s.camp.parcels = Array.from({ length: MOST_PARCELS }, () => "rock");
+    expect(refused(s, { do: "buy", stall: stall.id, thing: ware.thing })).toBe("trail_full");
+    s.camp.parcels = [];
+    s.camp.tray[ware.thing] = MOST_OWNED;
+    expect(refused(s, { do: "buy", stall: stall.id, thing: ware.thing })).toBe("plenty");
+  });
+});
+
+describe("the pet", () => {
+  test("is chosen once", () => {
+    const one = did(fresh(), { do: "choosePet", pet: "fox" });
+    expect(one.state.camp.first).toBe("fox");
+    expect(one.log).toEqual([{ kind: LOGGED.townPet, data: { pet: "fox" } }]);
+    expect(refused(one.state, { do: "choosePet", pet: "cat" })).toBe("pet_chosen");
+  });
+});
+
+describe("callers", () => {
+  test("come only when Leaf's clock reaches the next, one at most for each call however long nobody was here", () => {
+    const s = fresh();
+    expect(TOWN.advance(s, ctx(s.nextCall - 1))).toBe(s);
+    const week = s.nextCall + 7 * DAY_MS;
+    const one = TOWN.advance(s, ctx(week));
+    expect(one.visit).toMatchObject({ id: 9 });
+    expect(CALLERS).toContain(one.visit?.who ?? "pipwick");
+    expect(one.nextCall).toBeGreaterThanOrEqual(week + CALLS.least);
+    expect(one.nextCall).toBeLessThan(week + CALLS.least + CALLS.more);
+    // The same state at the same moment always comes to the same caller: the page is shown it before it is greeted.
+    expect(TOWN.advance(s, ctx(week))).toEqual(one);
+    expect(TOWN.advance(one, ctx(week))).toBe(one);
+  });
+
+  test("a caller still waiting when the next comes leaves what they brought in the mailbox", () => {
+    let s = fresh();
+    const left: string[] = [];
+    for (let k = 0; k < 40; k++) {
+      const before = s.visit;
+      s = TOWN.advance(s, ctx(s.nextCall));
+      if (before && (before.note !== "" || before.gift !== "")) left.push(`v-${before.id}`);
+    }
+    expect(s.camp.letters).toHaveLength(BOX);
+    expect(s.camp.letters.every((l) => left.includes(l.id))).toBe(true);
+  });
+
+  test("bring a present two times in five and a note seven times in ten", () => {
+    let s = fresh();
+    let gifts = 0;
+    let notes = 0;
+    const N = 2000;
+    for (let k = 0; k < N; k++) {
+      s = TOWN.advance(s, ctx(s.nextCall));
+      if (s.visit?.gift) gifts++;
+      if (s.visit?.note) notes++;
+    }
+    expect(Math.abs(gifts / N - 0.4)).toBeLessThan(0.04);
+    expect(Math.abs(notes / N - 0.7)).toBeLessThan(0.04);
+  });
+
+  test("are greeted by their id: counted, what they brought posted, and gone", () => {
+    let s = fresh();
+    while (!(s.visit && s.visit.gift !== "")) s = TOWN.advance(s, ctx(s.nextCall));
+    const visit = s.visit;
+    expect(refused(s, { do: "greet", visit: visit.id + 1 })).toBe("no_such_visit");
+    const after = did(s, { do: "greet", visit: visit.id }).state;
+    expect([after.camp.greeted, after.visit]).toEqual([1, null]);
+    expect(after.camp.letters.at(-1)).toMatchObject({
+      id: `v-${visit.id}`,
+      from: folk(visit.who).name,
+      gift: visit.gift,
+    });
+    expect(refused(after, { do: "greet", visit: visit.id })).toBe("no_such_visit");
+  });
+});
+
+describe("trophies", () => {
+  test("each won elsewhere goes by the trail once, while there is room there", () => {
+    const s = fresh();
+    s.camp.parcels = Array.from({ length: MOST_PARCELS }, () => "rock");
+    const awards = ["trophy-oldbramble", "model-crab", "not-a-thing"];
+    // The trail is full: they wait.
+    expect(TOWN.advance(s, ctx(T0, awards))).toBe(s);
+    s.camp.parcels = [];
+    const won = TOWN.advance(s, ctx(T0, awards));
+    expect(won.camp.parcels).toEqual(["trophy-oldbramble", "model-crab"]);
+    expect(won.camp.earned).toEqual(["trophy-oldbramble", "model-crab"]);
+    expect(TOWN.advance(won, ctx(T0, awards))).toBe(won);
+  });
+
+  test("arrive in the camp when unpacked, and that is logged", () => {
+    const won = TOWN.advance(fresh(), ctx(T0, ["model-beacon"]));
+    const opened = did(won, { do: "unpack", x: 30, y: 20, t: 0 });
+    expect(opened.notes).toEqual([{ t: "landed", thing: "model-beacon", n: 9 }]);
+    expect(opened.log).toEqual([{ kind: LOGGED.townTrophy, data: { thing: "model-beacon" } }]);
+  });
+});
+
+describe("the mailbox", () => {
+  test("is read, and what has been dealt with is cleared", () => {
+    const s = fresh();
+    s.camp.letters = [letter("a", "Pipwick", "hello"), letter("b", "Tindra", "for you", "pumpkin")];
+    const read = did(s, { do: "readMail" }).state;
+    expect(read.camp.letters.every((l) => l.read)).toBe(true);
+    expect(did(read, { do: "clearLetters" }).state.camp.letters.map((l) => l.id)).toEqual(["b"]);
+  });
+
+  test("a present is set down where the page proposes, or put in the tray where it may not stand", () => {
+    const s = fresh();
+    s.camp.letters = [letter("a", "Tindra", "for you", "pumpkin"), letter("b", "Tindra", "and this", "pumpkin")];
+    const one = did(s, { do: "takePresent", letter: "a", x: 30, y: 20, t: 0 });
+    expect(one.notes).toEqual([{ t: "landed", thing: "pumpkin", n: 9 }]);
+    expect(one.state.camp.letters[0]?.taken).toBe(true);
+    const two = did(one.state, { do: "takePresent", letter: "b", x: 30, y: 20, t: 0 });
+    expect(two.notes).toEqual([{ t: "tray", thing: "pumpkin" }]);
+    expect(two.state.camp.tray).toEqual({ pumpkin: 1 });
+    expect(refused(two.state, { do: "takePresent", letter: "b", x: 31, y: 20, t: 0 })).toBe("no_present");
+    expect(refused(two.state, { do: "takePresent", letter: "zz", x: 31, y: 20, t: 0 })).toBe("no_present");
+  });
+
+  test("a present is kept in its letter when there is no room for one more of it", () => {
+    const s = fresh();
+    s.camp.letters = [letter("a", "Tindra", "for you", "pumpkin")];
+    s.camp.tray.pumpkin = MOST_OWNED;
+    expect(refused(s, { do: "takePresent", letter: "a", x: 30, y: 20, t: 0 })).toBe("plenty");
+    expect(s.camp.letters[0]?.taken).toBe(false);
+  });
+});
+
+describe("things in the camp", () => {
+  test("a parcel unpacks where the page proposes, else into the tray", () => {
+    const s = fresh();
+    s.camp.parcels = ["rock", "rock"];
+    const one = did(s, { do: "unpack", x: 30, y: 20, t: 0 });
+    expect([one.notes, one.state.camp.parcels]).toEqual([[{ t: "landed", thing: "rock", n: 9 }], ["rock"]]);
+    const two = did(one.state, { do: "unpack", x: 30, y: 20, t: 0 });
+    expect([two.notes, two.state.camp.tray]).toEqual([[{ t: "tray", thing: "rock" }], { rock: 1 }]);
+    expect(refused(two.state, { do: "unpack", x: 30, y: 20, t: 0 })).toBe("no_parcel");
+  });
+
+  test("a thing is set out of the tray only where it may stand, turned a way it turns", () => {
+    const s = fresh();
+    s.camp.tray = { gnome: 2 };
+    expect(refused(s, { do: "setOut", thing: "rock", x: 30, y: 20, t: 0 })).toBe("not_in_tray");
+    expect(refused(s, { do: "setOut", thing: "gnome", x: 1, y: 1, t: 0 })).toBe("off");
+    expect(refused(s, { do: "setOut", thing: "gnome", x: 45, y: 26, t: 0 })).toBe("trail");
+    expect(refused(s, { do: "setOut", thing: "gnome", x: 28, y: 25, t: 0 })).toBe("taken");
+    expect(refused(s, { do: "setOut", thing: "gnome", x: 30, y: 20, t: 2 })).toBe("cannot_turn");
+    const out = did(s, { do: "setOut", thing: "gnome", x: 30, y: 20, t: 1 }).state;
+    expect(out.camp.placed.at(-1)).toEqual({ n: 9, id: "gnome", x: 30, y: 20, t: 1, s: 0 });
+    expect(out.camp.tray).toEqual({ gnome: 1 });
+    // Shutting the mailbox in is refused: rocks above it, below it and to its left, and the last to its right.
+    const box = out.camp.placed.find((p) => p.id === "mailbox");
+    if (!box) throw new Error("no mailbox");
+    const shut = structuredClone(out);
+    for (const [x, y] of [
+      [box.x, box.y - 1],
+      [box.x, box.y + 1],
+      [box.x - 1, box.y],
+    ] as const) {
+      expect(canPlace(shut.camp.placed, "rock", x, y, 0)).toBe("ok");
+      shut.camp.placed.push({ n: shut.made++, id: "rock", x, y, t: 0, s: 0 });
+    }
+    shut.camp.tray = { rock: 1 };
+    expect(refused(shut, { do: "setOut", thing: "rock", x: box.x + 1, y: box.y, t: 0 })).toBe("shut");
+    const full = structuredClone(out);
+    full.camp.placed = Array.from({ length: MOST_PLACED }, (_v, n) => ({ n, id: "rock", x: 0, y: 0, t: 0, s: 0 }));
+    expect(refused(full, { do: "setOut", thing: "gnome", x: 30, y: 20, t: 0 })).toBe("full");
+  });
+
+  test("a thing is moved, turned, put away and toggled by its id, never by its place in the list", () => {
+    const s = fresh();
+    const stump = nOf(s, "stump");
+    const post = nOf(s, "lantern-post");
+    // Two commands made from the same copy: the first takes a thing out of the list before the second's.
+    const away = did(s, { do: "putAway", n: nOf(s, "trophy-shelf") }).state;
+    const moved = did(away, { do: "move", n: stump, x: 30, y: 30, t: 0 }).state;
+    expect(moved.camp.placed.find((p) => p.n === stump)).toMatchObject({ id: "stump", x: 30, y: 30 });
+    expect(moved.camp.tray).toEqual({ "trophy-shelf": 1 });
+    // A thing set out again has a new id: the old one is never used again.
+    const back = did(moved, { do: "setOut", thing: "trophy-shelf", x: 18, y: 15, t: 0 }).state;
+    expect(back.camp.placed.at(-1)?.n).toBe(9);
+    expect(refused(back, { do: "putAway", n: 1 })).toBe("no_such_thing");
+    expect(refused(back, { do: "move", n: stump, x: 7, y: 13, t: 0 })).toBe("taken");
+    expect(refused(back, { do: "putAway", n: nOf(back, "cabin") })).toBe("rooted");
+    const lit = did(back, { do: "toggle", n: post }).state;
+    expect(lit.camp.placed.find((p) => p.n === post)?.s).toBe(1);
+    expect(did(lit, { do: "toggle", n: post }).state.camp.placed.find((p) => p.n === post)?.s).toBe(0);
+    expect(refused(back, { do: "toggle", n: stump })).toBe("nothing_to_toggle");
+    expect(refused(back, { do: "toggle", n: 99 })).toBe("no_such_thing");
+  });
+
+  test("a pennant runs through its five colours and a gnome looks the other way", () => {
+    const s = fresh();
+    s.camp.placed.push(
+      { n: 9, id: "pennant", x: 30, y: 20, t: 0, s: 0 },
+      { n: 10, id: "gnome", x: 32, y: 20, t: 0, s: 0 },
+    );
+    let t = s;
+    for (let k = 0; k < 5; k++) t = did(t, { do: "toggle", n: 9 }).state;
+    expect(t.camp.placed.find((p) => p.n === 9)?.s).toBe(0);
+    expect(did(t, { do: "toggle", n: 10 }).state.camp.placed.find((p) => p.n === 10)?.t).toBe(1);
+  });
+
+  test("the stay switch", () => {
+    expect(did(fresh(), { do: "stay", on: false }).state.stay).toBe(false);
+  });
+});
+
+describe("commands off the wire", () => {
+  test("are read with every field checked; the command's own id is let be", () => {
+    expect(readCommand({ id: "c-1", do: "move", n: 3, x: 10, y: 20, t: 1 })).toEqual({
+      do: "move",
+      n: 3,
+      x: 10,
+      y: 20,
+      t: 1,
+    });
+    expect(readCommand({ do: "welcome" })).toEqual({ do: "welcome", cursor: null });
+    expect(readCommand({ do: "buy", stall: "lamps", thing: "rock" })).toEqual({
+      do: "buy",
+      stall: "lamps",
+      thing: "rock",
+    });
+    for (const bad of [
+      null,
+      { do: "fly" },
+      { do: "move", n: -1, x: 1, y: 1, t: 0 },
+      { do: "move", n: 1, x: 1.5, y: 1, t: 0 },
+      { do: "setOut", thing: "moon", x: 1, y: 1, t: 0 },
+      { do: "choosePet", pet: "dragon" },
+      { do: "here", cursor: "far" },
+      { do: "takePresent", letter: "<b>", x: 1, y: 1, t: 0 },
+    ])
+      expect(readCommand(bad)).toBeNull();
+  });
+});
+
+// ---------- keeping it ----------
+
+/** A record the browser kept (`town.save.v1`), with a camp of the given things standing, put away, waiting and posted. */
+function oldRecord(o: {
+  placed: number;
+  tray: Record<string, number>;
+  parcels: number;
+  letters: number;
+  gave: number;
+  /** How long each letter is, in sentences. */
+  long: number;
+}): string {
+  const placed: (Spot & { s: number })[] = NEW_CAMP.map(({ id, x, y, t }) => ({ id, x, y, t, s: 0 }));
+  const some = ["rock", "flower-pot", "plank-path", "cushion", "pumpkin", "stepping-stones", "glowcap"];
+  for (let y = YARD.y0 + 1; y <= YARD.y1 && placed.length < o.placed; y += 1)
+    for (let x = YARD.x0 + 1; x < YARD.x1 && placed.length < o.placed; x += 2) {
+      const id = some[(x + y) % some.length] ?? "rock";
+      if (canPlace(placed, id, x, y, 0) === "ok") placed.push({ id, x, y, t: 0, s: 0 });
+    }
+  return JSON.stringify({
+    v: 1,
+    owned: [],
+    wearing: [],
+    claimed: [],
+    sightings: 4,
+    welcomed: "2026-11-24",
+    chest: "2026-11-24",
+    lastSeen: T0 - 3 * HOUR,
+    cursor: 12,
+    stay: false,
+    camp: {
+      first: "cat",
+      placed,
+      tray: o.tray,
+      parcels: Array.from({ length: o.parcels }, (_v, i) => some[i % some.length]),
+      letters: Array.from({ length: o.letters }, (_v, i) =>
+        letter(
+          `m-${i}`,
+          "Pipwick",
+          "Came by. You were out. I fed the fire. ".repeat(o.long).trim(),
+          i % 2 ? "pinecone" : "",
+        ),
+      ),
+      gave: Array.from({ length: o.gave }, (_v, i) => ({
+        to: `Mate ${String.fromCharCode(65 + (i % 26))}${i}`,
+        what: "pinecone",
+      })),
+      greeted: 2,
+      earned: [],
+    },
+  });
+}
+
+const NEW = oldRecord({ placed: 9, tray: {}, parcels: 0, letters: 0, gave: 0, long: 1 });
+const LIVED_IN = oldRecord({
+  placed: 39,
+  tray: Object.fromEntries(THINGS.slice(10, 20).map((t, i) => [t.id, i + 1])),
+  parcels: 3,
+  letters: 6,
+  gave: 0,
+  long: 1,
+});
+const LARGEST = oldRecord({
+  placed: MOST_PLACED,
+  tray: Object.fromEntries(THINGS.map((t) => [t.id, MOST_OWNED])),
+  parcels: MOST_PARCELS,
+  letters: 24,
+  gave: 40,
+  long: 6,
+});
+
+describe("a camp the browser kept", () => {
+  test("is brought over at each size the old record comes in, every thing standing given an id of its own", () => {
+    // About as large as STATE-MAP 2.1 measured: 620 B, 3,099 B and 26,774 B.
+    expect([NEW.length, LIVED_IN.length, LARGEST.length].map((b) => Math.round(b / 1000))).toEqual([1, 3, 26]);
+    for (const [text, placed, parcels, letters] of [
+      [NEW, 9, 0, 0],
+      [LIVED_IN, 39, 3, 6],
+      [LARGEST, MOST_PLACED, MOST_PARCELS, 24],
+    ] as const) {
+      const s = adopt(text, ctx());
+      if (!s) throw new Error("did not read");
+      expect(s.camp.placed.map((p) => p.n)).toEqual(Array.from({ length: placed }, (_v, n) => n));
+      expect([s.made, s.camp.parcels.length, s.camp.letters.length]).toEqual([placed, parcels, letters]);
+      expect([s.sightings, s.cursor, s.stay, s.seenAt, s.camp.first, s.camp.greeted]).toEqual([
+        4,
+        12,
+        false,
+        T0 - 3 * HOUR,
+        "cat",
+        2,
+      ]);
+      expect(decodeTown(encodeTown(s))).toEqual(s);
+      // And it plays on: the stump moves by its id.
+      expect(
+        did(s, { do: "move", n: nOf(s, "stump"), x: 30, y: 34, t: 0 }).state.camp.placed.find((p) => p.id === "stump"),
+      ).toMatchObject({ x: 30, y: 34 });
+    }
+    expect(adopt(LARGEST, ctx())?.camp.tray).toEqual(Object.fromEntries(THINGS.map((t) => [t.id, MOST_OWNED])));
+  });
+
+  test("is read with every check the page makes: what cannot stand goes in the tray, and a missing mailbox is put back", () => {
+    const raw = JSON.parse(NEW);
+    raw.camp.placed = [
+      ...raw.camp.placed.filter((p: Spot) => p.id !== "mailbox"),
+      { id: "well", x: 7, y: 13, t: 0, s: 0 },
+    ];
+    const s = adopt(JSON.stringify(raw), ctx());
+    expect(s?.camp.tray).toEqual({ well: 1 });
+    expect(s?.camp.placed.find((p) => p.id === "mailbox")?.n).toBe(8);
+    expect(s?.made).toBe(9);
+    expect([adopt("nonsense", ctx()), adopt(JSON.stringify({ v: 2 }), ctx())]).toEqual([null, null]);
+    // A clock set forward in the browser is no time away at all.
+    expect(adopt(JSON.stringify({ ...raw, lastSeen: T0 + DAY_MS }), ctx())?.seenAt).toBe(T0);
+  });
+});
+
+describe("keeping a town", () => {
+  test("it comes back as it was kept, and nonsense does not", () => {
+    let s = fresh();
+    s = TOWN.advance(s, ctx(s.nextCall));
+    s = did(s, { do: "welcome", cursor: 3 }).state;
+    expect(decodeTown(encodeTown(s))).toEqual(s);
+    for (const bad of [
+      "",
+      "{}",
+      "[]",
+      JSON.stringify({ ...JSON.parse(encodeTown(s)), v: 2 }),
+      JSON.stringify({ ...JSON.parse(encodeTown(s)), made: -1 }),
+    ])
+      expect(decodeTown(bad)).toBeNull();
+  });
+
+  test("the largest camp is read back in under a millisecond, trusting what Leaf stored", () => {
+    const s = adopt(LARGEST, ctx());
+    if (!s) throw new Error("did not read");
+    const text = encodeTown(s);
+    for (let k = 0; k < 20; k++) decodeTown(text);
+    const runs = 200;
+    const start = performance.now();
+    for (let k = 0; k < runs; k++) decodeTown(text);
+    expect((performance.now() - start) / runs).toBeLessThan(1);
+  });
+});

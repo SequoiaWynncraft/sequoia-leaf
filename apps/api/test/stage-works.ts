@@ -30,7 +30,7 @@ function step(w: World | null, op: Record<string, unknown>, now: number): World 
   const named = Object.entries(YARDS).find(([name]) => name === op.yard)?.[1];
   const next =
     op.yard === "new"
-      ? WORKS.create({ now, player: { id: "tester", guest: false }, seed: 20_261_122, room: 0 })
+      ? WORKS.create({ now, player: { id: "tester", guest: false }, seed: 20_261_122, room: 0, awards: [] })
       : named
         ? WORKS.decode(JSON.stringify(named))
         : undefined;

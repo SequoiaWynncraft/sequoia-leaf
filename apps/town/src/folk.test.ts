@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
-import { CALLERS, FOLK, folk, isFolk } from "./folk.ts";
+import { CALLERS, FOLK, folk, isFolk } from "@sequoia-leaf/town/folk.ts";
+
 import { STANDINS } from "./madeup.ts";
 
 const ROOT = join(import.meta.dir, "..", "..", "..");

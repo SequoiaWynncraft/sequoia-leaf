@@ -61,7 +61,8 @@ export const stageRaid = (playerId: PlayerId, ops: readonly unknown[]) =>
       return [];
     }
     const found = Option.isSome(stored) ? RAID.decode(stored.value.state) : null;
-    const table = found ?? RAID.create({ now: Date.now(), player: { id: playerId, guest: false }, seed: 1, room: 0 });
+    const table =
+      found ?? RAID.create({ now: Date.now(), player: { id: playerId, guest: false }, seed: 1, room: 0, awards: [] });
     const made: number[] = [];
     for (const op of ops) if (isRecord(op)) step(table, op, made);
     const text = RAID.encode(table);

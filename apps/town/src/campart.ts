@@ -7,6 +7,7 @@
 import { BARK, CREAM, EARTH, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, ell, flipped, outlined, R } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, hash, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
+import { THINGS } from "@sequoia-leaf/town/things.ts";
 
 import type { PetId } from "./camp.ts";
 import { drawFern } from "./ground.ts";
@@ -23,7 +24,6 @@ import {
   stones,
   windowLit,
 } from "./sprites.ts";
-import { THINGS } from "./things.ts";
 
 /** The town's letters, and a few more the camp's things want. */
 const P: Readonly<Record<string, string>> = {

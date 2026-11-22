@@ -1,3 +1,5 @@
+import { pick, type Stream, weighted } from "@sequoia-leaf/core";
+
 /**
  * Sparring partners. A sparring room is fought against the party one of the regulars at the table
  * brought (`REGULARS`: Greg, the Hearth Cat and the rest, never a member). Until real members'
@@ -11,7 +13,6 @@ import { HANDLES, ROOMS, STALL_ODDS, TRAILS } from "./content/rooms.ts";
 import { type CallingId, CALLINGS, type KinId, KINS, stepFor, TRAITS } from "./content/traits.ts";
 import { arrange } from "./formation.ts";
 import { countTraits, type Party, type Placed } from "./party.ts";
-import { pick, type Stream, weighted } from "./rng.ts";
 
 /** How much more a partner likes a figure of its kin, and of its calling. */
 const LIKES_KIN = 5;

@@ -7,6 +7,7 @@ import { BARK, CREAM, EARTH, GOLD, GREEN, SKY, STONE, WATER } from "@sequoia-lea
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { noise, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Ctx, lerp, pick } from "@sequoia-leaf/kit/util.ts";
+import { footprint, type Thing } from "@sequoia-leaf/town/things.ts";
 
 import { onScreen } from "./actors.ts";
 import type { Placed } from "./camp.ts";
@@ -15,7 +16,6 @@ import { csfx } from "./campsfx.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { changed, G, hooks } from "./game.ts";
 import { flame, type Light, type Prop } from "./props.ts";
-import { footprint, type Thing } from "./things.ts";
 
 /** A thing as it stands in a camp: its record, its picture, its light, and a little state of its own. */
 export interface Live {

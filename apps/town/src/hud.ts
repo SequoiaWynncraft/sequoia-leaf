@@ -11,9 +11,9 @@ import { balance, type CoinReason, type Currency, leafShown, spend } from "@sequ
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { DOING, type Doing } from "@sequoia-leaf/town/folk.ts";
 
 import { hop, say } from "./actors.ts";
-import { DOING, type Doing } from "./folk.ts";
 import { type Actor, after, G, hooks, show, watch } from "./game.ts";
 import type { Tone } from "./guild.ts";
 import { span } from "./letter.ts";

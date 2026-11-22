@@ -12,7 +12,7 @@ import { doNow, letGo, openYard, runYard } from "./yard.ts";
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
-const ctx = (): Ctx => ({ now: 1_800_000_000_000, player: { id: "p", guest: false }, seed: 7, room: 1e9 });
+const ctx = (): Ctx => ({ now: 1_800_000_000_000, player: { id: "p", guest: false }, seed: 7, room: 1e9, awards: [] });
 
 /**
  * A stand-in Leaf that keeps the yard with the real rules, as the play service does. It answers

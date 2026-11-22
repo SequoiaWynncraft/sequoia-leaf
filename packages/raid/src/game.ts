@@ -10,7 +10,17 @@
  * command is done, so nothing a command draws could have been worked out before it was sent. The
  * page is never shown either stream, nor any pick drawn but not yet offered.
  */
-import { type CoinChange, type Ctx, type Done, type Game, LOGGED, type Logged, type Refused } from "@sequoia-leaf/core";
+import {
+  type CoinChange,
+  type Ctx,
+  type Done,
+  draw32,
+  type Game,
+  LOGGED,
+  type Logged,
+  mix,
+  type Refused,
+} from "@sequoia-leaf/core";
 
 import { DIRECT, type Habit, type Hands, planRoom } from "./bot.ts";
 import {
@@ -35,7 +45,6 @@ import {
   recordRun,
   trailOpen,
 } from "./outside.ts";
-import { draw32, mix } from "./rng.ts";
 import {
   abandon,
   beginFight,
@@ -522,4 +531,6 @@ export const RAID: Game<Table, RaidCommand, TableView, RaidNote> = {
     score: almanac.bosses.reduce((sum, beaten) => sum + beaten.length, 0),
     also: { runs: almanac.runs, room: Math.max(0, ...almanac.best) },
   }),
+  // A carved figure of each boss the almanac has beaten, for the member's camp.
+  awards: (state) => [...new Set(state.almanac.bosses.flat())].map((boss) => `trophy-${boss}`),
 };

@@ -7,8 +7,8 @@ import { EARTH } from "@sequoia-leaf/kit/palette.ts";
 import type { Body } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { dist, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { type Errand as FolkErrand, ERRAND_LINES, type Townsperson } from "@sequoia-leaf/town/folk.ts";
 
-import { type Errand as FolkErrand, ERRAND_LINES, type Townsperson } from "./folk.ts";
 import { folkArt } from "./folkart.ts";
 import { puff } from "./fx.ts";
 import { type Actor, G, type Who } from "./game.ts";

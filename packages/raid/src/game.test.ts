@@ -30,6 +30,7 @@ const ctx = (seed = (rolls += 0x9e3779b1) >>> 0): Ctx => ({
   player: PLAYER,
   seed,
   room: 1e9,
+  awards: [],
 });
 
 type Answer = Done<Table, RaidNote> | Refused;
@@ -529,5 +530,15 @@ describe("a table's numbers on its player's card", () => {
       { label: "Runs", value: "1,200" },
       { label: "Furthest room", value: "14" },
     ]);
+  });
+});
+
+describe("awards", () => {
+  test("are a carved figure of each boss the almanac has beaten, on any trail, once", () => {
+    const state = RAID.create(ctx(1));
+    expect(RAID.awards?.(state)).toEqual([]);
+    state.almanac.bosses[0] = ["oldbramble", "bigcrab"];
+    state.almanac.bosses[1] = ["oldbramble"];
+    expect(RAID.awards?.(state)).toEqual(["trophy-oldbramble", "trophy-bigcrab"]);
   });
 });

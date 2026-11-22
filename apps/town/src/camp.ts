@@ -1,40 +1,50 @@
 /**
- * A camp, as rules with no page in them: the clearing's squares, what stands where, what may be
- * set down and what may not, the tray of things put away, who lives there, and how somebody else's
- * camp is laid out from nothing but a number. `campscene.ts` shows it; `save.ts` keeps it.
+ * The member's camp as the town page keeps it today, by places in a list: setting out, moving,
+ * turning, putting away, things arriving, who lives there, and how somebody else's camp is laid out
+ * from nothing but a number. The ground rules (what may stand where) are the town package's
+ * (`@sequoia-leaf/town/camp.ts`). `campscene.ts` shows it; `save.ts` keeps it.
  */
 
 import { rng } from "@sequoia-leaf/kit/util.ts";
+import {
+  boxOf,
+  type Camp as Kept,
+  campFull,
+  canPlace,
+  freeSpot,
+  newCamp as newKept,
+  type PetId,
+  PETS,
+  readCamp,
+  type Verdict,
+  YARD,
+} from "@sequoia-leaf/town/camp.ts";
+import { footprint, isThing, thingOf, THINGS, turnsOf } from "@sequoia-leaf/town/things.ts";
 
-import { isLetter, type Letter } from "./mail.ts";
-import { footprint, isThing, type Thing, thingOf, THINGS, turnsOf } from "./things.ts";
-
-/** The clearing in squares: fifty-two across and forty down, eight art pixels to the square. */
-export const CGW = 52;
-export const CGH = 40;
-
-interface Box {
-  readonly x0: number;
-  readonly y0: number;
-  readonly x1: number;
-  readonly y1: number;
-}
-
-/** The yard: the squares that can be walked on and built on. */
-export const YARD: Box = { x0: 4, y0: 13, x1: 47, y1: 36 };
-/** The way in off the trail, on the east side. It is kept clear, so nobody is ever shut out. */
-export const TRAIL: Box = { x0: 43, y0: 25, x1: 51, y1: 28 };
-/** The square a walker stands on once they are in off the trail. */
-export const ENTRY = { x: 44, y: 27 } as const;
-
-const within = (b: Box, x: number, y: number): boolean => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1;
-
-/** Whether anybody may stand on a square, before anything is set down. */
-export const walkable = (x: number, y: number): boolean => within(YARD, x, y) || within(TRAIL, x, y);
-
-export const PETS = ["glorp", "cat", "fox"] as const;
-export type PetId = (typeof PETS)[number];
-export const isPet = (v: unknown): v is PetId => PETS.some((p) => p === v);
+export {
+  allReached,
+  boxOf,
+  campFull,
+  canPlace,
+  CGH,
+  CGW,
+  ENTRY,
+  freeSpot,
+  isPet,
+  MOST_OWNED,
+  MOST_PARCELS,
+  MOST_PLACED,
+  owned,
+  type PetId,
+  PETS,
+  standsBy,
+  taken,
+  TRAIL,
+  type Verdict,
+  walkable,
+  WHY_NOT,
+  YARD,
+} from "@sequoia-leaf/town/camp.ts";
 
 /** A thing standing in a camp: which thing, the top-left square of the ground it takes, and how it is turned. */
 export interface Placed {
@@ -53,182 +63,9 @@ export interface Gave {
   what: string;
 }
 
-export interface Camp {
-  /** The pet the member chose to begin with; empty until they have chosen. */
-  first: PetId | "";
+export interface Camp extends Omit<Kept, "placed"> {
   placed: Placed[];
-  /** Things put away, and how many of each. */
-  tray: Record<string, number>;
-  /** Things bought or won that have not yet been unpacked in the camp. */
-  parcels: string[];
-  letters: Letter[];
   gave: Gave[];
-  /** How many of the town's own who dropped by the member has greeted (touched while they were here). */
-  greeted: number;
-  /** Trophies already handed over, so that each arrives once. */
-  earned: string[];
-}
-
-// ---------- the ground a thing takes ----------
-
-export function boxOf(p: Placed, t: Thing): Box {
-  const [w, d] = footprint(t, p.t);
-  return { x0: p.x, y0: p.y, x1: p.x + w - 1, y1: p.y + d - 1 };
-}
-
-/** Whether a square of a thing's ground stops a walker. */
-function stops(t: Thing, b: Box, x: number, y: number): boolean {
-  if (t.solid === "all") return true;
-  if (t.solid === "none") return false;
-  // Only its two ends: along whichever way it runs.
-  return b.x1 - b.x0 >= b.y1 - b.y0 ? x === b.x0 || x === b.x1 : y === b.y0 || y === b.y1;
-}
-
-/** The cabin's door is this many squares along its front; the square before it must be clear. */
-const DOOR = 6;
-
-/** The squares somebody could stand on to use a thing: before the cabin's door, or beside anything else. */
-export function standsBy(p: Placed, t: Thing): { x: number; y: number }[] {
-  const b = boxOf(p, t);
-  if (t.id === "cabin") return [{ x: b.x0 + DOOR, y: b.y1 + 1 }];
-  const out: { x: number; y: number }[] = [];
-  for (let x = b.x0; x <= b.x1; x++) out.push({ x, y: b.y1 + 1 }, { x, y: b.y0 - 1 });
-  for (let y = b.y0; y <= b.y1; y++) out.push({ x: b.x0 - 1, y }, { x: b.x1 + 1, y });
-  return out;
-}
-
-interface Taken {
-  /** Which placed thing stands on each square, and which lies on it; -1 for none. */
-  stand: Int16Array;
-  floor: Int16Array;
-  /** 1 where a walker is stopped. */
-  solid: Uint8Array;
-}
-
-/** What is on every square, leaving out one thing (the one being moved) if asked. */
-export function taken(placed: readonly Placed[], skip = -1): Taken {
-  const stand = new Int16Array(CGW * CGH).fill(-1);
-  const floor = new Int16Array(CGW * CGH).fill(-1);
-  const solid = new Uint8Array(CGW * CGH);
-  placed.forEach((p, i) => {
-    const t = thingOf(p.id);
-    if (!t || i === skip) return;
-    const b = boxOf(p, t);
-    for (let y = Math.max(0, b.y0); y <= Math.min(CGH - 1, b.y1); y++) {
-      for (let x = Math.max(0, b.x0); x <= Math.min(CGW - 1, b.x1); x++) {
-        const n = y * CGW + x;
-        if (t.flat) floor[n] = i;
-        else stand[n] = i;
-        if (stops(t, b, x, y)) solid[n] = 1;
-      }
-    }
-  });
-  return { stand, floor, solid };
-}
-
-/** Every square a walker can get to from the trail, with these squares stopped up. */
-function reach(solid: Uint8Array): Uint8Array {
-  const seen = new Uint8Array(CGW * CGH);
-  const queue = [ENTRY.y * CGW + ENTRY.x];
-  seen[queue[0] ?? 0] = 1;
-  for (let at = 0; at < queue.length; at++) {
-    const n = queue[at] ?? 0;
-    const x = n % CGW;
-    const y = Math.floor(n / CGW);
-    for (const [dx, dy] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ] as const) {
-      const nx = x + dx;
-      const ny = y + dy;
-      const m = ny * CGW + nx;
-      if (!walkable(nx, ny) || solid[m] || seen[m]) continue;
-      seen[m] = 1;
-      queue.push(m);
-    }
-  }
-  return seen;
-}
-
-/** Whether everything the camp cannot do without can still be walked up to. */
-export function allReached(placed: readonly Placed[]): boolean {
-  const seen = reach(taken(placed).solid);
-  return placed.every((p) => {
-    const t = thingOf(p.id);
-    if (!t?.rooted) return true;
-    return standsBy(p, t).some((c) => walkable(c.x, c.y) && seen[c.y * CGW + c.x] === 1);
-  });
-}
-
-// ---------- setting things down ----------
-
-/** Why a thing may not go somewhere, or that it may. */
-export type Verdict = "ok" | "off" | "trail" | "taken" | "shut" | "full";
-
-export const WHY_NOT: Readonly<Record<Exclude<Verdict, "ok">, string>> = {
-  off: "Not in the trees.",
-  trail: "The trail stays clear.",
-  taken: "Something is there already.",
-  shut: "That would shut something in.",
-  full: "The camp is full. Put something away first.",
-};
-
-/** How many things may be set out in a camp: with that many standing, more stays in the tray. */
-export const MOST_PLACED = 300;
-
-/** Whether a camp has as many things set out as may be. */
-export const campFull = (placed: readonly Placed[]): boolean => placed.length >= MOST_PLACED;
-
-/** Whether a thing may be set down with its ground starting at a square. `skip` is the thing being moved. */
-export function canPlace(placed: readonly Placed[], id: string, x: number, y: number, t: number, skip = -1): Verdict {
-  const thing = thingOf(id);
-  if (!thing) return "off";
-  const mine: Placed = { id, x, y, t, s: 0 };
-  const b = boxOf(mine, thing);
-  const on = taken(placed, skip);
-  for (let cy = b.y0; cy <= b.y1; cy++) {
-    for (let cx = b.x0; cx <= b.x1; cx++) {
-      if (!within(YARD, cx, cy)) return "off";
-      if (within(TRAIL, cx, cy)) return "trail";
-      const n = cy * CGW + cx;
-      if ((thing.flat ? on.floor[n] : on.stand[n]) !== -1) return "taken";
-    }
-  }
-  const after = placed.filter((_p, i) => i !== skip);
-  after.push(mine);
-  return allReached(after) ? "ok" : "shut";
-}
-
-/** The nearest square to `near` where a thing may be set down, looking outwards in rings. */
-export function freeSpot(
-  placed: readonly Placed[],
-  id: string,
-  near: { x: number; y: number },
-  t = 0,
-  skip = -1,
-): { x: number; y: number } | null {
-  const thing = thingOf(id);
-  if (!thing) return null;
-  const [w, d] = footprint(thing, t);
-  const ox = near.x - Math.floor(w / 2);
-  const oy = near.y - Math.floor(d / 2);
-  for (let r = 0; r < Math.max(CGW, CGH); r++) {
-    let best: { x: number; y: number } | null = null;
-    let bestD = 1e9;
-    for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-        const far = Math.hypot(dx, dy);
-        if (far >= bestD || canPlace(placed, id, ox + dx, oy + dy, t, skip) !== "ok") continue;
-        bestD = far;
-        best = { x: ox + dx, y: oy + dy };
-      }
-    }
-    if (best) return best;
-  }
-  return null;
 }
 
 /**
@@ -297,9 +134,6 @@ function takeFromTray(camp: Camp, id: string): void {
 
 // ---------- things arriving ----------
 
-/** How many parcels may wait by the trail at once: nothing more is sent while that many are there. */
-export const MOST_PARCELS = 200;
-
 /**
  * Sets a thing down at a spot, or puts it in the tray when there is no spot or the camp is full.
  * Gives what was set down, or `null` if it went into the tray.
@@ -331,19 +165,6 @@ export function unpackParcel(
   const id = camp.parcels.shift();
   if (id === undefined) return null;
   return { id, at: setDown(camp, id, campFull(camp.placed) ? null : room(id)) };
-}
-
-/**
- * How many of any one thing a member may have, standing in the camp, in the tray and waiting by
- * the trail together: nothing more of it is sent while they have that many.
- */
-export const MOST_OWNED = 999;
-
-/** How many of a thing the member has, wherever it is. */
-export function owned(camp: Camp, id: string): number {
-  return (
-    camp.placed.filter((p) => p.id === id).length + (camp.tray[id] ?? 0) + camp.parcels.filter((p) => p === id).length
-  );
 }
 
 /** The tray as a list, in the catalogue's order. */
@@ -379,29 +200,15 @@ export function petsOf(camp: Camp): PetId[] {
 
 const put = (id: string, x: number, y: number, t = 0): Placed => ({ id, x, y, t, s: 0 });
 
+/** A camp as the page keeps it: its things without ids of their own, and the presents left elsewhere. */
+const pageCamp = (camp: Kept, gave: Gave[]): Camp => ({
+  ...camp,
+  placed: camp.placed.map(({ id, x, y, t, s }) => ({ id, x, y, t, s })),
+  gave,
+});
+
 /** The camp a new member finds: a cabin, a fire with two logs by it, a mailbox, a signpost, a shelf, and room. */
-export function newCamp(): Camp {
-  return {
-    first: "",
-    placed: [
-      put("cabin", 7, 13),
-      put("trophy-shelf", 18, 15),
-      put("fire-ring", 23, 24),
-      put("log-seat", 22, 22),
-      put("log-seat", 22, 27),
-      put("lantern-post", 13, 18),
-      put("mailbox", 41, 23),
-      put("signpost", 41, 30),
-      put("stump", 28, 25),
-    ],
-    tray: {},
-    parcels: [],
-    letters: [],
-    gave: [],
-    greeted: 0,
-    earned: [],
-  };
-}
+export const newCamp = (): Camp => pageCamp(newKept(), []);
 
 const CABIN_AT = [5, 20, 34] as const;
 
@@ -469,56 +276,22 @@ export function layout(seed: number, taste: readonly string[], count: number): P
 // ---------- keeping it ----------
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-const whole = (v: unknown, most: number): number =>
-  typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.min(most, Math.floor(v)) : 0;
-const things = (v: unknown, most: number): string[] => (Array.isArray(v) ? v.filter(isThing).slice(0, most) : []);
 const isHandle = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z][A-Za-z '-]{0,23}$/.test(v);
 
-/** The most of anything a record may hold. */
-const MOST = { placed: MOST_PLACED, each: MOST_OWNED, parcels: MOST_PARCELS, letters: 24, gave: 40 };
-
 /**
- * Reads a kept camp back. Anything that is not a camp gives `null` (a new camp is made); inside
- * one, a part that makes no sense is put back to how a new member has it, and a thing standing
- * where it cannot stand is put away in the tray instead of lost.
+ * Reads a kept camp back, as the town package reads one (`readCamp`): anything that is not a camp
+ * gives `null` (a new camp is made); inside one, a part that makes no sense is put back to how a new
+ * member has it, and a thing standing where it cannot stand is put away in the tray instead of lost.
+ * The presents left at other camps are read here.
  */
 export function parseCamp(raw: unknown): Camp | null {
-  if (!isRecord(raw) || !Array.isArray(raw.placed)) return null;
-  const camp: Camp = {
-    first: isPet(raw.first) ? raw.first : "",
-    placed: [],
-    tray: {},
-    parcels: things(raw.parcels, MOST.parcels),
-    letters: Array.isArray(raw.letters) ? raw.letters.filter(isLetter).slice(-MOST.letters) : [],
-    gave: [],
-    greeted: whole(raw.greeted, 999),
-    earned: [...new Set(things(raw.earned, 64))],
-  };
-  if (isRecord(raw.tray))
-    for (const [id, n] of Object.entries(raw.tray))
-      if (isThing(id) && whole(n, MOST.each) > 0) camp.tray[id] = whole(n, MOST.each);
-  for (const p of raw.placed.slice(0, MOST.placed)) {
-    if (!isRecord(p) || !isThing(p.id)) continue;
-    const thing = thingOf(p.id);
-    if (!thing) continue;
-    const t = whole(p.t, 3) % turnsOf(thing);
-    const x = whole(p.x, CGW);
-    const y = whole(p.y, CGH);
-    if (canPlace(camp.placed, p.id, x, y, t) === "ok") camp.placed.push({ id: p.id, x, y, t, s: whole(p.s, 7) });
-    else camp.tray[p.id] = Math.min(MOST.each, (camp.tray[p.id] ?? 0) + 1);
-  }
-  // A camp is never without the things it cannot do without.
-  for (const fresh of newCamp().placed) {
-    const thing = thingOf(fresh.id);
-    if (!thing?.rooted || camp.placed.some((p) => p.id === fresh.id)) continue;
-    delete camp.tray[fresh.id];
-    const spot = freeSpot(camp.placed, fresh.id, fresh);
-    if (spot) camp.placed.push({ ...fresh, ...spot });
-  }
+  const camp = readCamp(raw);
+  if (!camp || !isRecord(raw)) return null;
+  const gave: Gave[] = [];
   if (Array.isArray(raw.gave))
-    for (const g of raw.gave.slice(0, MOST.gave)) {
-      if (!isRecord(g) || !isHandle(g.to) || !isThing(g.what) || camp.gave.some((h) => h.to === g.to)) continue;
-      camp.gave.push({ to: g.to, what: g.what });
+    for (const g of raw.gave.slice(0, 40)) {
+      if (!isRecord(g) || !isHandle(g.to) || !isThing(g.what) || gave.some((h) => h.to === g.to)) continue;
+      gave.push({ to: g.to, what: g.what });
     }
-  return camp;
+  return pageCamp(camp, gave);
 }
