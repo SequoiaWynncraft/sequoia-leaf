@@ -28,6 +28,11 @@ export interface Ctx {
    * so that what a command draws cannot be worked out beforehand from anything a player has seen.
    */
   readonly seed: number;
+  /**
+   * How many more Coins the player may earn now. Leaf pays in no more than this whatever a command
+   * says, so a game that pays past it says what was really paid.
+   */
+  readonly room: number;
 }
 
 /** Coins a command pays (or, negative, takes), each keyed by the fact it records so it is paid once. */

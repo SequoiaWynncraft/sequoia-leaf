@@ -306,10 +306,15 @@ function act(run: Run, c: RunCommand): { ok: true; notes: Note[] } | { ok: false
   }
 }
 
-/** A run that has ended: written into the almanac, let go of, and paid for under its number. */
-function finish(s: Table, run: Run, notes: RaidNote[], log: Logged[]): CoinChange[] {
+/**
+ * A run that has ended: written into the almanac, let go of, and paid for under its number. It is
+ * paid what it is worth, or what the player may still earn (`room`) when that is less, and says so.
+ */
+function finish(s: Table, run: Run, notes: RaidNote[], log: Logged[], room: number): CoinChange[] {
   const summary = summariseRun(run);
-  const paid = payout(summary);
+  const worth = payout(summary);
+  const paid: Payout =
+    worth.coins > room ? { coins: Math.max(0, room), lines: [...worth.lines, { why: "full", coins: 0 }] } : worth;
   const recorded = recordRun(s.almanac, summary);
   s.almanac = recorded.almanac;
   s.run = null;
@@ -326,7 +331,7 @@ function finish(s: Table, run: Run, notes: RaidNote[], log: Logged[]): CoinChang
   return paid.coins > 0 ? [{ amount: paid.coins, reason: "The Little Raid", key: `run:${s.runs}` }] : [];
 }
 
-function setOut(s: Table, trail: number): Answer {
+function setOut(s: Table, trail: number, room: number): Answer {
   if (!trailOpen(s.almanac, trail)) return no("trail_closed");
   const notes: RaidNote[] = [];
   const log: Logged[] = [];
@@ -336,7 +341,7 @@ function setOut(s: Table, trail: number): Answer {
     const run = s.run;
     const left = abandon(run);
     if (left.ok) notes.push(...left.notes);
-    coins = finish(s, run, notes, log);
+    coins = finish(s, run, notes, log, room);
   }
   s.runs += 1;
   s.run = startRun(draw32(s), { trail });
@@ -346,7 +351,7 @@ function setOut(s: Table, trail: number): Answer {
   return { state: s, notes, coins, log };
 }
 
-function play(s: Table, c: RunCommand): Answer {
+function play(s: Table, c: RunCommand, canEarn: number): Answer {
   const run = s.run;
   if (!run) return no("no_run");
   const room = run.record.length;
@@ -369,7 +374,7 @@ function play(s: Table, c: RunCommand): Answer {
       },
     });
   }
-  const coins = run.phase === "over" ? finish(s, run, notes, log) : [];
+  const coins = run.phase === "over" ? finish(s, run, notes, log, canEarn) : [];
   return { state: s, notes, coins, log };
 }
 
@@ -387,7 +392,7 @@ export function applyCommand(state: Table, c: RaidCommand, ctx: Ctx): Answer {
   // Leaf's dice, stirred into both streams before anything is drawn.
   s.rng = mix(s.rng, ctx.seed);
   if (s.run) s.run.rng = mix(s.run.rng, ctx.seed);
-  if (c.do === "start") return setOut(s, c.trail);
+  if (c.do === "start") return setOut(s, c.trail, ctx.room);
   if (c.do === "trail") {
     if (!trailOpen(s.almanac, c.trail)) return no("trail_closed");
     s.trail = c.trail;
@@ -398,7 +403,7 @@ export function applyCommand(state: Table, c: RaidCommand, ctx: Ctx): Answer {
     if (!wear(s.looks, c.kind, c.id)) return no("not_owned");
     return { state: s, notes: [{ t: "look", kind: c.kind, id: wornOf(s.looks, c.kind) }] };
   }
-  return play(s, c);
+  return play(s, c, ctx.room);
 }
 
 /**

@@ -658,10 +658,6 @@ describe("what play pays", () => {
       { amount: 600, reason: "works_order", game: "works", key: `page:${alice}:p-1` },
       { amount: 400, reason: "A sale", game: "works", key: `works:${alice}:sale:2` },
     ]);
-    // Coins given back for the Works are not earnings: they are paid whatever was earned.
-    expect((await page("p-3", -1000, "works_build")).status).toBe(200);
-    expect((await page("p-4", 1000, "works_refund")).status).toBe(200);
-    expect(await coinsOf(alice)).toBe(5300);
     // An hour on, the hour's room is back; the day's 20,000 still stands.
     for (const hour of [3, 5, 7]) {
       clock.now = Date.UTC(2026, 10, 25, hour);

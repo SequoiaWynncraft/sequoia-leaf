@@ -24,7 +24,12 @@ import { readNotes, readView } from "./wire.ts";
 const PLAYER = { id: "10000000-0000-0000-0000-000000000001", guest: false };
 let rolls = 0;
 /** Leaf's word on each call: its clock, the player, and fresh dice (counted, so a test can repeat them). */
-const ctx = (seed = (rolls += 0x9e3779b1) >>> 0): Ctx => ({ now: 1_800_000_000_000, player: PLAYER, seed });
+const ctx = (seed = (rolls += 0x9e3779b1) >>> 0): Ctx => ({
+  now: 1_800_000_000_000,
+  player: PLAYER,
+  seed,
+  room: 1e9,
+});
 
 type Answer = Done<Table, RaidNote> | Refused;
 const isDone = (a: Answer): a is Done<Table, RaidNote> => !("refused" in a);
@@ -242,6 +247,25 @@ describe("every command a player has", () => {
     expect(done.coins).toEqual(paid > 0 ? [{ amount: paid, reason: "The Little Raid", key: "run:1" }] : []);
     expect(done.log?.[0]).toMatchObject({ kind: "raid_ended", data: { trail: 0, ended: "left", coins: paid } });
     expect(RAID.apply(done.state, { do: "abandon" }, ctx())).toEqual({ refused: "no_run" });
+  });
+  test("a run worth more than the player may still earn is paid what is left, and says the purse is full", () => {
+    let state = planned(started(5));
+    state = must(state, { do: "fight" }).state;
+    state = must(state, { do: "take" }).state;
+    const run = state.run;
+    if (!run) throw new Error("no run");
+    const worth = payout(summariseRun({ ...structuredClone(run), phase: "over", left: true }));
+    expect(worth.coins).toBeGreaterThan(3);
+    const done = must(state, { do: "abandon" }, { ...ctx(), room: 3 });
+    const paid = { coins: 3, lines: [...worth.lines, { why: "full", coins: 0 }] };
+    expect(done.notes.find((n) => n.t === "ended")).toMatchObject({ paid });
+    expect(readNotes(structuredClone(done.notes))?.find((n) => n.t === "ended")).toMatchObject({ paid });
+    expect(done.coins).toEqual([{ amount: 3, reason: "The Little Raid", key: "run:1" }]);
+    expect(done.log?.[0]).toMatchObject({ kind: "raid_ended", data: { coins: 3 } });
+    // With no room at all nothing is paid, and the run ends all the same.
+    const none = must(state, { do: "abandon" }, { ...ctx(), room: 0 });
+    expect(none.coins).toEqual([]);
+    expect(none.state.run).toBeNull();
   });
   test("setting out afresh puts down the run laid out, as walking home does", () => {
     let state = planned(started(5));

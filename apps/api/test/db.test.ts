@@ -109,7 +109,6 @@ describe("the database", () => {
           "coin_entries",
           "coins",
           "command_days",
-          "works_builds",
           "activity",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;

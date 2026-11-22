@@ -71,7 +71,7 @@ function summaryOf(v: unknown): RunSummary {
 }
 
 const isWhy = (x: unknown): x is Payout["lines"][number]["why"] =>
-  x === "rooms" || x === "bosses" || x === "win" || x === "trail";
+  x === "rooms" || x === "bosses" || x === "win" || x === "trail" || x === "full";
 function payoutOf(v: unknown): Payout {
   const p = record(v, "what the run paid");
   return {

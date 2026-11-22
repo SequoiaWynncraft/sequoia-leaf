@@ -48,12 +48,10 @@ export class Coins extends Context.Service<
     /**
      * How many more Coins the player's play may pay in now: `EARNINGS.hourly` in any hour and
      * `EARNINGS.daily` in a UTC day at most, whatever the games (worked out from the entries of the
-     * last day alone). What a game pays in counts; the welcome, Coins brought over, and Coins given
-     * back for the Works do not.
+     * last day alone). Whatever a game pays in counts, Coins given back for something taken away
+     * too; the welcome and Coins brought over do not.
      */
     readonly room: (playerId: PlayerId, now: number) => Effect.Effect<number>;
-    /** What the player has spent building in the Works through its page, and been given back for taking things away. */
-    readonly works: (playerId: PlayerId) => Effect.Effect<{ readonly built: number; readonly refunded: number }>;
   }
 >()("leaf/Coins") {
   static readonly layer = Layer.effect(
@@ -78,13 +76,8 @@ export class Coins extends Context.Service<
                  coalesce(sum(CASE WHEN at > ${day} THEN amount END), 0) AS in_day
           FROM coin_entries
           WHERE player_id = ${playerId} AND at > ${Math.min(hour, day)} AND amount > 0
-            AND game IS NOT NULL AND reason <> 'works_refund'
+            AND game IS NOT NULL
         `,
-      });
-      const works = SqlSchema.findOneOption({
-        Request: Schema.String,
-        Result: Schema.Struct({ built: Schema.Int, refunded: Schema.Int }),
-        execute: (playerId) => sql`SELECT built, refunded FROM works_builds WHERE player_id = ${playerId}`,
       });
       const insert = (playerId: PlayerId, entry: CoinEntry, now: number) => sql`
         INSERT INTO coin_entries (player_id, amount, reason, game, key, at)
@@ -131,8 +124,6 @@ export class Coins extends Context.Service<
             Effect.map((row) => Math.max(0, Math.min(EARNINGS.hourly - row.in_hour, EARNINGS.daily - row.in_day))),
             Effect.orDie,
           ),
-        works: (playerId) =>
-          works(playerId).pipe(Effect.map(Option.getOrElse(() => ({ built: 0, refunded: 0 }))), Effect.orDie),
       });
     }),
   );

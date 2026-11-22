@@ -96,11 +96,6 @@ export class NotEnoughCoins extends Schema.Error<NotEnoughCoins>("NotEnoughCoins
   httpApiStatus: 409,
 }) {}
 
-/** A refund in the Works past what the player has spent building there: nothing was changed. */
-export class NothingToRefund extends Schema.Error<NothingToRefund>("NothingToRefund")(answer("nothing_to_refund"), {
-  httpApiStatus: 409,
-}) {}
-
 /** More Coins than a player may earn through a page's calls in an hour or a UTC day: nothing was changed. */
 export class TooMuch extends Schema.Error<TooMuch>("TooMuch")(answer("too_much"), { httpApiStatus: 429 }) {}
 
