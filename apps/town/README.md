@@ -88,11 +88,23 @@ says so.
   overlap. A member can stand behind something tall and be hidden by it: that is how the town is
   drawn, and a place to hide. Of
   everybody a touch is on, in front or behind, it means the one whose middle is nearest; a finger
-  is on a figure from 10 pixels across, the mouse from 7. Members standing still within 6 pixels of one another (the member, live players, those
-  visiting or dozing) are drawn apart (`apart.ts`), the same on every page: the first by account
-  keeps the spot and the rest are drawn 7 pixels away, right, left, down, up, then on the
-  diagonals, and 14 past nine. Only the drawing moves, over a fifth of a second as they stop or
-  set off; a touch finds them where they are drawn.
+  is on a figure from 10 pixels across, the mouse from 7.
+- **Nobody inside anybody** (`apart.ts`). A figure is drawn 10 pixels across and as tall as its pose
+  (`headOf`: 21 standing, 19 sitting facing us, 16 sitting side on or facing away); two overlapping
+  by over a third of the smaller are on top of one another (`crowds`). A walk anybody is sent on in
+  town (the member's to a tapped spot or a place, a visitor's, a dozer's to a seat, the town's own)
+  ends where it was going, or, with somebody standing or sitting still there, at the nearest place
+  to it that is on top of nobody and a straight walk from it, 21 pixels away at most (`stopAt`,
+  `beside`). The end is looked at again all along the walk's last stretch. A seat somebody stands
+  or sits on is not free, tapped or chosen as the nearest; somebody who finds their seat taken when
+  they get there goes to the next free one, or, with none, stays standing (a dozer dozes there).
+  Other players walk where their own pages send them, so members standing or sitting still on top
+  of one another anyway (the member, live players, those visiting or dozing) are drawn apart, the
+  same on every page. In turn, whoever sits first and then by account: somebody on top of nobody
+  before them stays where they are, and each of the rest is drawn at the nearest place round where
+  they are themselves that is on top of nobody drawn, 21 pixels away at most. Somebody walking is
+  drawn where they are. Only the drawing moves, 50 pixels a second, as they stop or set off; a touch
+  finds them where they are drawn.
 - **Coming in**, the feed counts everybody else in town, members and guests together: "You are
   home. 3 are in town.", "1 is in town.", or "The town is quiet."
 - **Touching things.** Lantern posts, mushrooms, flowers, ferns, the great trunks, the fire, the
@@ -278,9 +290,10 @@ card says so and the town is not loaded.
   the live room too, though Leaf writes where the member is from the room: that answer is how it
   hears who rests and who is at the Works or the stump. Up to twelve of those in the game stand
   about as visitors (`visitors.ts`) in their own skins: by the Works' door, or watching at the
-  stump; those in town are there live instead, and nobody live is a visitor or a dozer as well.
-  Nobody at their own camp.
-  They come in through the gate, never speak, and their card has only their name and rank; a
+  stump; those in town are there live instead, and nobody drawn live, fading away included, is a
+  visitor or a dozer as well. Nobody at their own camp.
+  Those there when the page opens stand where they are from the start; anybody after comes in
+  through the gate. They never speak, and their card has only their name and rank; a
   guest's says "Guest". Up to twelve of the others, most recent first, doze at a free seat
   for where they were (a log at the fire for the town, the log at the stump for the table, the bench
   by the Works' door for the Works, then whatever seat is free; never the member's own; nobody last

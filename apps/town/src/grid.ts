@@ -24,6 +24,8 @@ export interface Ground {
   readonly footBlocked: (x: number, y: number) => boolean;
   /** The clear spot nearest a point, looking outwards in rings. */
   readonly nearestFree: (x: number, y: number) => Pt;
+  /** Whether a figure walks from one point straight to another with its feet clear all the way. */
+  readonly clearLine: (a: Pt, b: Pt) => boolean;
   /**
    * A way from one point to another round whatever is in between, as points to walk to in turn.
    * `straight` pulls the way taut (the member, going where they pointed); otherwise it keeps to the
@@ -188,6 +190,7 @@ export function makeGround(gw: number, gh: number, pathD: (x: number, y: number)
     cellBlocked,
     footBlocked,
     nearestFree,
+    clearLine,
     findPath,
     pathD,
   };

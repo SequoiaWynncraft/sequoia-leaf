@@ -15,14 +15,19 @@ import { BOX_FULL, roomInBox } from "@sequoia-leaf/town/mail.ts";
 import { initAbout, openAbout } from "./aboutui.ts";
 import {
   face,
+  feet,
+  freeSeat,
+  goToSeat,
+  headOf,
   hop,
   makeActor,
   makeFolk,
+  peopleOn,
   placeFolk,
   release,
   rouse,
   say,
-  sit,
+  seatFree,
   stepActor,
   stepFolk,
   walkTo,
@@ -168,6 +173,8 @@ export interface Town extends Scene {
     who(): { name: string; x: number; y: number; doing: string }[];
     /** Real members in town just now, visiting or dozing, and where each is. */
     visitors(): { name: string; x: number; y: number; dozing: boolean }[];
+    /** Every member drawn this moment (the member, visitors, dozers, live players): who, where their feet are drawn, how tall, how opaque. */
+    drawn(): { id: string; name: string; x: number; y: number; tall: number; seated: boolean; alpha: number }[];
     me(): Pt;
     lost(): Pt;
     kept(): unknown;
@@ -181,6 +188,9 @@ export interface Town extends Scene {
     emote(kind: Emote): void;
   };
 }
+
+/** Who a figure is, for `apart`: a member's account, or which of the town's own. */
+const whoIs = (a: Actor): string => (a.folk ? `folk:${a.folk.t.id}` : a.id);
 
 export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town {
   // ---------- the place itself ----------
@@ -214,6 +224,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   G.player = player;
   // The town's own: drawn as themselves, each where its evening finds it.
   initFolkArt(campArt);
+  // A walk anybody here is sent on ends beside whoever is standing or sitting there.
+  peopleOn(TOWN, () => pic.people());
   const cinfy = makeFolk(folk("cinfy"), 104, 113);
   placeFolk(cinfy, 0);
   G.cinfy = cinfy;
@@ -288,7 +300,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       openDoor(true);
       player.dir = 3;
       player.speed = STEP_IN;
-      player.path = [{ x: player.x, y: THRESHOLD }];
+      player.path = [{ x: place("works").stand.x, y: THRESHOLD }];
       player.arrive = null;
     } else lightTable(true);
     stage.goInside(id, DOORWAY[id], of);
@@ -303,17 +315,20 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         return;
       }
       const seat =
-        SEATS.find((s) => s.at === "table" && !s.taken && s.yours) ?? SEATS.find((s) => s.at === "table" && !s.taken);
+        SEATS.find((s) => s.at === "table" && seatFree(s, player) && s.yours) ??
+        SEATS.find((s) => s.at === "table" && seatFree(s, player));
       if (seat) {
         halt();
         going = { id, through: false };
-        seat.taken = true;
-        player.goal = seat;
-        walkTo(player, seat.from, () => {
-          sit(player, seat);
-          seatWas = seat;
-          through(id);
-        });
+        goToSeat(
+          player,
+          seat,
+          () => freeSeat(player, "table"),
+          (sat) => {
+            seatWas = sat;
+            through(id);
+          },
+        );
         return;
       }
     }
@@ -397,15 +412,44 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     keepText(STOOD, G.where === "town" && !going?.through && !leaving ? stood(player, Date.now()) : null, "tab");
   });
 
-  /** Members standing still on one spot are drawn a step apart (`apart`), stepping aside and back as they stop and set off. */
+  /** Every member in town: the member, visitors and dozers, and live players. */
+  const everyone = (): Actor[] => [player, ...G.visitors, ...livePlayers()];
+  /**
+   * Where each figure's feet were at the last step, and how fast they have been going, over about a
+   * tenth of a second: a live player's place, drawn from the room's samples, jitters from frame to frame.
+   */
+  const pace = new WeakMap<Actor, { x: number; y: number; vx: number; vy: number }>();
+  /** Faster than anybody walks, in pixels a second: put somewhere else, not walking there. */
+  const JUMP = 300;
+  /**
+   * Everybody on top of one another, members and the town's own, standing, sitting or walking the
+   * same way, is drawn apart (`apart`), stepping aside and back as they meet and part. A page
+   * spreads what it shows: two walking in line may be apart on one page and not on another, and on
+   * neither inside each other.
+   */
   function standApart(dt: number): void {
-    const everybody = [player, ...G.visitors, ...livePlayers()];
-    const still = everybody.flatMap((a) => {
-      const at = a.seat ?? a;
-      return a.away || a.moving || a.alpha <= 0.02 ? [] : [{ id: a.id, x: at.x, y: at.y }];
+    if (dt <= 0) return;
+    const everybody = pic.people();
+    const k = Math.min(1, dt / 0.1);
+    const drawn = everybody.flatMap((a) => {
+      if (a.away || a.alpha <= 0.02) {
+        pace.delete(a);
+        return [];
+      }
+      const { x, y } = a.seat ?? a;
+      const was = pace.get(a);
+      const [rx, ry] = was ? [(x - was.x) / dt, (y - was.y) / dt] : [0, 0];
+      // Standing, only now in sight, or put somewhere else: not walking.
+      const walks = a.moving && Math.hypot(rx, ry) < JUMP;
+      const vx = was && walks ? was.vx + (rx - was.vx) * k : 0;
+      const vy = was && walks ? was.vy + (ry - was.vy) * k : 0;
+      pace.set(a, { x, y, vx, vy });
+      // One of the town's own at its post keeps its place, as whoever sits does.
+      const seated = a.seat !== null || (a.folk !== null && !a.moving);
+      return [{ id: whoIs(a), x, y, tall: headOf(a), seated, vx, vy }];
     });
-    const to = apart(still);
-    for (const a of everybody) ease(a.aside, to.get(a.id) ?? HOME, dt);
+    const to = apart(drawn);
+    for (const a of everybody) ease(a.aside, to.get(whoIs(a)) ?? HOME, dt);
   }
 
   /**
@@ -499,8 +543,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       const found = show.found;
       if (found && (G.t >= found.until || found.a.away)) show.found = null;
       else if (found && found.glide === null) {
-        const feet = player.seat ?? player;
-        found.glide = !inView(found.a.seat ?? found.a, { x: feet.x, y: feet.y - 12 });
+        const at = player.seat ?? player;
+        found.glide = !inView(found.a.seat ?? found.a, { x: at.x, y: at.y - 12 });
       }
       if (G.home) guild.step(dt);
       updateFx(dt);
@@ -679,6 +723,12 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         }));
       },
       visitors: members,
+      drawn: () =>
+        everyone().flatMap((a) =>
+          a.away || a.alpha <= 0.02
+            ? []
+            : [{ id: a.id, name: a.who.name, ...feet(a), tall: headOf(a), seated: a.seat !== null, alpha: a.alpha }],
+        ),
       me() {
         return { x: Math.round(player.x), y: Math.round(player.y) };
       },
