@@ -5,11 +5,12 @@
  */
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { add, amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
-import { balance, has, leafShown, spend } from "@sequoia-leaf/kit/purse.ts";
+import { balance, leafShown } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
-
 import {
+  baseOf,
   BOSS_IDS,
+  clothOf,
   COMPONENT_IDS,
   FIGURE_IDS,
   type FigureId,
@@ -17,6 +18,13 @@ import {
   FINISHED,
   FINISHED_IDS,
   itemName,
+  lanternOf,
+  LOOK_KINDS,
+  LOOK_TITLES,
+  type LookId,
+  type LookKind,
+  LOOKS,
+  owns,
   pieces,
   ROOM_COUNT,
   ROOMS,
@@ -27,24 +35,15 @@ import {
   TRAILS,
   TRAIT_IDS,
   TRAITS,
-} from "../../game/index.ts";
+  wornOf,
+} from "@sequoia-leaf/raid";
+
 import { glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
 import { portrait, starsPic } from "../art/sprites.ts";
 import { paintSwatch } from "../art/table.ts";
-import {
-  baseOf,
-  clothOf,
-  lanternOf,
-  LOOK_KINDS,
-  LOOK_TITLES,
-  type LookId,
-  type LookKind,
-  LOOKS,
-  owns,
-} from "../keep.ts";
 import { snd } from "../sounds.ts";
 import { dress } from "../stage.ts";
-import { prefsChanged, S } from "../state.ts";
+import { ask, S } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
 
 export type PageId = "front" | "almanac" | "howto" | "looks" | "summary";
@@ -62,14 +61,12 @@ let asks: PageAsks | null = null;
 let extra: PageId | null = null;
 let shownKey = "";
 let tab = "figures";
-let trail = 0;
 /** The look being tried on in the looks page, before it is bought or worn. */
 let trying: { kind: LookKind; id: LookId } | null = null;
 let sureHome = false;
 
 export function openPages(a: PageAsks): void {
   asks = a;
-  trail = S.prefs.trail;
 }
 /** Opens a page over the table. */
 export function showPage(id: PageId | null): void {
@@ -113,6 +110,12 @@ function partyRow(run: Run): HTMLElement {
 }
 
 // ---------- the front page ----------
+
+/** Picks the trail to set out on next: Leaf keeps it. */
+async function pickTrail(trail: number, card: Element | null): Promise<void> {
+  await ask({ do: "trail", trail }, card);
+  renderPages(true);
+}
 
 function front(): HTMLElement {
   const run = S.run;
@@ -195,16 +198,16 @@ function front(): HTMLElement {
       {
         type: "button",
         role: "radio",
-        "aria-selected": String(trail === i && open),
-        "aria-checked": String(trail === i && open),
-        onclick: () => {
+        "aria-selected": String(S.trail === i && open),
+        "aria-checked": String(S.trail === i && open),
+        onclick: (e: Event) => {
           if (!open) {
             snd.no();
             return;
           }
-          trail = i;
           snd.tap();
-          renderPages(true);
+          // The trail picked is Leaf's to keep: it is the one set out on next, on any page.
+          void pickTrail(i, e.currentTarget instanceof Element ? e.currentTarget : null);
         },
       },
       open ? pic(roomIcon(i === 0 ? "trouble" : i === 1 ? "spar" : "boss"), 2) : icon("lock", 2),
@@ -229,7 +232,7 @@ function front(): HTMLElement {
     el(
       "button",
       `k-btn wide${run ? " wood" : ""}`,
-      { type: "button", id: "start", onclick: () => asks?.start(trail) },
+      { type: "button", id: "start", onclick: () => asks?.start(S.trail) },
       pic(glyph("swords")),
       run ? "Set out afresh" : "Set out",
     ),
@@ -461,27 +464,22 @@ function howto(): HTMLElement {
 
 // ---------- looks for the table ----------
 
-function wearing(kind: LookKind): LookId {
-  return kind === "cloth" ? S.prefs.cloth : kind === "lantern" ? S.prefs.lantern : S.prefs.bases;
-}
-function wear(kind: LookKind, id: LookId): void {
-  const cloth = clothOf(id);
-  const lantern = lanternOf(id);
-  const bases = baseOf(id);
-  if (kind === "cloth" && cloth) S.prefs.cloth = cloth;
-  else if (kind === "lantern" && lantern) S.prefs.lantern = lantern;
-  else if (kind === "bases" && bases) S.prefs.bases = bases;
-  dress(S.prefs.cloth, S.prefs.lantern);
-  prefsChanged();
+const wearing = (kind: LookKind): LookId => wornOf(S.looks, kind);
+/** Puts a look on the table: Leaf keeps which are worn. */
+async function wear(kind: LookKind, id: LookId, button: Element | null): Promise<void> {
+  const did = await ask({ do: "look", kind, id }, button);
+  if (!did?.ok) return;
+  dress(S.looks.cloth, S.looks.lantern);
+  renderPages(true);
 }
 
 function looks(): HTMLElement {
   const tried: { kind: LookKind; id: LookId } = trying ?? { kind: "cloth", id: wearing("cloth") };
   const spec = LOOKS[tried.kind].find((l) => l.id === tried.id);
   const dressed = {
-    cloth: (tried.kind === "cloth" ? clothOf(tried.id) : null) ?? S.prefs.cloth,
-    lantern: (tried.kind === "lantern" ? lanternOf(tried.id) : null) ?? S.prefs.lantern,
-    bases: (tried.kind === "bases" ? baseOf(tried.id) : null) ?? S.prefs.bases,
+    cloth: (tried.kind === "cloth" ? clothOf(tried.id) : null) ?? S.looks.cloth,
+    lantern: (tried.kind === "lantern" ? lanternOf(tried.id) : null) ?? S.looks.lantern,
+    bases: (tried.kind === "bases" ? baseOf(tried.id) : null) ?? S.looks.bases,
   };
   const body = el("div", "k-body k-scroll", {});
   add(
@@ -497,7 +495,7 @@ function looks(): HTMLElement {
   );
   add(body, el("div", "swatch", {}, figPic(paintSwatch(dressed.cloth, dressed.lantern, dressed.bases))));
   if (spec) {
-    const mine = owns(S.prefs, tried.kind, tried.id);
+    const mine = owns(S.looks, tried.kind, tried.id);
     const on = wearing(tried.kind) === tried.id;
     const act = on
       ? el("span", "k-chip lit", {}, icon("check"), "On the table")
@@ -505,28 +503,16 @@ function looks(): HTMLElement {
         ? el(
             "button",
             "k-btn sm",
-            { type: "button", id: "uselook", onclick: () => wear(tried.kind, tried.id) },
-            "Use it",
-          )
-        : el(
-            "button",
-            `k-btn leaf sm${has("leaf", spec.leaf) ? "" : " off"}`,
             {
               type: "button",
-              id: "buylook",
-              onclick: () => {
-                if (!spend("leaf", spec.leaf, `The Little Raid: ${spec.name}`)) {
-                  snd.no();
-                  return;
-                }
-                S.prefs.owned.push(tried.id);
-                snd.leaf();
-                wear(tried.kind, tried.id);
-              },
+              id: "uselook",
+              onclick: (e: Event) =>
+                void wear(tried.kind, tried.id, e.currentTarget instanceof Element ? e.currentTarget : null),
             },
-            "Buy",
-            amount("leaf", spec.leaf),
-          );
+            "Use it",
+          )
+        : // Leaf cannot be spent in the game yet: the look is shown, and its Buy button closed.
+          el("button", "k-btn leaf sm", { type: "button", id: "buylook" }, "Buy", amount("leaf", spec.leaf));
     if (!on && !mine) closeLeaf(act, `${spec.leaf} Leaf`);
     add(
       body,
@@ -549,7 +535,7 @@ function looks(): HTMLElement {
     add(body, el("div", "k-label", { text: LOOK_TITLES[kind] }));
     const row = el("div", "k-wrap", {});
     for (const l of LOOKS[kind]) {
-      const mine = owns(S.prefs, kind, l.id);
+      const mine = owns(S.looks, kind, l.id);
       row.append(
         el(
           "button",
@@ -670,7 +656,7 @@ export function renderPages(force = false): void {
   const box = document.getElementById("modal");
   if (!box) return;
   const id = pageUp();
-  const key = `${id}:${S.run?.seed ?? 0}:${S.run?.room ?? 0}:${S.ended ? 1 : 0}`;
+  const key = `${id}:${S.runs}:${S.run?.room ?? 0}:${S.ended ? 1 : 0}`;
   if (!force && key === shownKey) return;
   shownKey = key;
   if (!id) {

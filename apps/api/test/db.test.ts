@@ -68,6 +68,7 @@ describe("the database", () => {
       { migration_id: 14, name: "guests" },
       { migration_id: 15, name: "save_history" },
       { migration_id: 16, name: "activity" },
+      { migration_id: 17, name: "play" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -103,6 +104,10 @@ describe("the database", () => {
           "visits",
           "sessions",
           "players_seen",
+          "play_state",
+          "play_commands",
+          "coin_entries",
+          "coins",
           "activity",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;

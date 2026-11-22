@@ -1,4 +1,4 @@
-import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "../src/game/bot.ts";
+import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 /**
  * Plays many whole runs with bots of different habits and prints how far each gets, room by room,
  * and which traits, figures and items do better or worse than the rest:
@@ -10,15 +10,15 @@ import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from 
  * `suits` is each figure with the finished items it held, worst first, beside the three a card
  * recommends for it.
  */
-import { GOOD_WITH } from "../src/game/content/advice.ts";
-import { BOON_IDS, type BoonId, BOONS } from "../src/game/content/boons.ts";
-import { FIGURE_IDS, type FigureId, FIGURES, isFigureId } from "../src/game/content/figures.ts";
-import { FINISHED, FINISHED_IDS, type FinishedId, holdItem, isFinishedId } from "../src/game/content/items.ts";
-import { ROOM_COUNT, ROOMS, TRAILS } from "../src/game/content/rooms.ts";
-import { CALLINGS, KINS, TRAIT_IDS, type TraitId, TRAITS } from "../src/game/content/traits.ts";
-import { resolveFight } from "../src/game/fight/engine.ts";
-import type { FightSetup, FightSummary } from "../src/game/fight/types.ts";
-import { beginFight, startRun, takeTakings, traitsNow } from "../src/game/run.ts";
+import { GOOD_WITH } from "@sequoia-leaf/raid/content/advice.ts";
+import { BOON_IDS, type BoonId, BOONS } from "@sequoia-leaf/raid/content/boons.ts";
+import { FIGURE_IDS, type FigureId, FIGURES, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
+import { FINISHED, FINISHED_IDS, type FinishedId, holdItem, isFinishedId } from "@sequoia-leaf/raid/content/items.ts";
+import { ROOM_COUNT, ROOMS, TRAILS } from "@sequoia-leaf/raid/content/rooms.ts";
+import { CALLINGS, KINS, TRAIT_IDS, type TraitId, TRAITS } from "@sequoia-leaf/raid/content/traits.ts";
+import { resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
+import type { FightSetup, FightSummary } from "@sequoia-leaf/raid/fight/types.ts";
+import { beginFight, startRun, takeTakings, traitsNow } from "@sequoia-leaf/raid/run.ts";
 
 const args = process.argv.slice(2);
 const runs = Number(args[0] ?? 200);

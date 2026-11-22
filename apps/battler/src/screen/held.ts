@@ -5,8 +5,8 @@
  * figure, so a nearer figure stands in front of it rather than under it.
  */
 import { INK } from "@sequoia-leaf/kit/palette.ts";
+import type { ItemId } from "@sequoia-leaf/raid";
 
-import type { ItemId } from "../game/index.ts";
 import { heldPic } from "./art/icons.ts";
 
 /** One picture's place, measured from the board's corner. */

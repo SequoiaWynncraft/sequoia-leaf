@@ -5,7 +5,6 @@
  * the drawing, so that they can be checked by tests.
  */
 import type { Postcard } from "@sequoia-leaf/kit/postcard.ts";
-
 import {
   type Almanac,
   boonNumber,
@@ -46,8 +45,8 @@ import {
   traitsNow,
   traitsOf,
   type UnitKind,
-} from "../game/index.ts";
-import { charmsOf } from "../game/party.ts";
+} from "@sequoia-leaf/raid";
+import { charmsOf } from "@sequoia-leaf/raid/party.ts";
 
 /** Where a figure picked up from `from` may be put down: free seats, free hollows, and places it would swap into. */
 export interface Reach {

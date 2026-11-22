@@ -107,6 +107,8 @@ export const GameMe = Schema.Struct({
   level: Me.fields.level,
   /** The id of their newest event, 0 when they have none: where to read `/v1/me/events?after=` from next visit. */
   event_cursor: Schema.Number,
+  /** Their Coins, as Leaf's ledger of them holds them. A new player's open at 300. */
+  coins: Schema.Number,
 });
 
 const SaveInfo = Schema.Struct({
@@ -178,6 +180,28 @@ export const Present = Schema.Struct({
     }),
   ),
 });
+
+/** A player's state in a game, as their page is given it. */
+export const PlayShown = Schema.Struct({
+  /** How many batches of commands have changed it. */
+  rev: Schema.Number,
+  /** Leaf's clock. */
+  now: Time,
+  /** The game's view of it: everything the page draws from, and nothing that tells the future. */
+  state: Schema.Unknown,
+});
+
+/** Commands for a game, done in order. Each has an `id` the page made, unique among its commands. */
+export const PlayBody = Schema.Struct({ commands: Schema.Array(Schema.Unknown) });
+
+/** What each command did (the game's notes), or the code it was refused with. */
+export const PlayResult = Schema.Union([
+  Schema.Struct({ id: Schema.String, notes: Schema.Array(Schema.Unknown) }),
+  Schema.Struct({ id: Schema.String, refused: Schema.String }),
+]);
+
+/** A batch done: each command's result, in the order they came, and the state after them all. */
+export const Played = Schema.Struct({ ...PlayShown.fields, results: Schema.Array(PlayResult) });
 
 // The staff's routes, under /v1/game/admin.
 

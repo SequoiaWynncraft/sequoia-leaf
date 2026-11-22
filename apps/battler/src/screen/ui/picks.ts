@@ -5,33 +5,31 @@
  */
 import { link, thing } from "@sequoia-leaf/kit/card.ts";
 import { add, el } from "@sequoia-leaf/kit/dom.ts";
-
 import {
   abilityShort,
   type BoonId,
   BOONS,
   boonShort,
   type Choice,
-  choose,
   type ComponentId,
   COMPONENTS,
   type FigureId,
   FIGURES,
   itemAdds,
   pieces,
-  redraw,
   roleLine,
   type Run,
   TRAITS,
   traitsOf,
-} from "../../game/index.ts";
+} from "@sequoia-leaf/raid";
+
 import { boonIcon, glyphPic, itemIcon, itemPic, traitIcon } from "../art/icons.ts";
 import { portrait } from "../art/sprites.ts";
 import { fly } from "../fx.ts";
 import { signal } from "../signals.ts";
 import { snd } from "../sounds.ts";
 import { boardSpot } from "../stage.ts";
-import { act, S } from "../state.ts";
+import { ask, S } from "../state.ts";
 import { boonRef, figureRef, itemRef, makesLines, pic, rich, traitRef } from "./cards.ts";
 import { holdAcorns } from "./table.ts";
 
@@ -103,15 +101,20 @@ function boonCardParts(boon: BoonId): HTMLElement[] {
   ];
 }
 
-/** Takes one of the cards: the rules settle it, and what was taken goes where it lives. */
-function take(index: number, card: HTMLElement): void {
+/** Asks Leaf for three other boons. */
+async function redrawn(button: Element | null): Promise<void> {
+  if ((await ask({ do: "redraw" }, button))?.ok) snd.rustle();
+}
+
+/** Takes one of the cards: Leaf settles it, and what was taken goes where it lives. */
+async function take(index: number, card: HTMLElement): Promise<void> {
   const run = S.run;
   const choice = run?.choices[0];
   if (!run || !choice) return;
   card.classList.add("chosen");
   const from = boardSpot(card);
   const had = run.acorns;
-  const done = act((r) => choose(r, index));
+  const done = await ask({ do: "choose", option: index }, card);
   if (!done?.ok) {
     card.classList.remove("chosen");
     return;
@@ -173,7 +176,7 @@ export function renderPicks(): void {
     if (choice.kind === "starter") add(card, ...starterCard(choice.options[i] ?? "rock"));
     else if (choice.kind === "component") add(card, ...componentCard(run, choice.options[i] ?? "thorn"));
     else add(card, ...boonCardParts(choice.options[i] ?? "windfall"));
-    card.addEventListener("click", () => take(i, card));
+    card.addEventListener("click", () => void take(i, card));
     card.setAttribute("aria-label", option);
     cards.append(card);
   });
@@ -186,9 +189,7 @@ export function renderPicks(): void {
       {
         type: "button",
         id: "redraw",
-        onclick: () => {
-          if (act((r) => redraw(r))?.ok) snd.rustle();
-        },
+        onclick: (e: Event) => void redrawn(e.currentTarget instanceof Element ? e.currentTarget : null),
       },
       choice.redraws > 0 ? "Show three others" : "No more to show",
     );

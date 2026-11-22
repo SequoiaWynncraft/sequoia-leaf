@@ -6,7 +6,7 @@
  * Only the state is here, with the time it last changed so the hop can be timed; who draws what is
  * in `scene.ts` and `ui/table.ts`. Nothing here touches the page.
  */
-import { isFigureId, type TraitId, traitsOf, type UnitKind } from "../game/index.ts";
+import { isFigureId, type TraitId, traitsOf, type UnitKind } from "@sequoia-leaf/raid";
 
 export interface Light {
   /** The trait the pointer is on, if any. */

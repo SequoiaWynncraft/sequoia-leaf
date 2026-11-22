@@ -5,8 +5,8 @@
  * Which nudges have been given is kept with the prefs.
  */
 import { el, unit } from "@sequoia-leaf/kit/dom.ts";
+import { fielded, pieces, type Run } from "@sequoia-leaf/raid";
 
-import { fielded, pieces, type Run } from "../../game/index.ts";
 import { glyph } from "../art/icons.ts";
 import { fightOn } from "../fightview.ts";
 import { canBuy, type Doing, nudgeFor, type NudgeId } from "../logic.ts";

@@ -3,6 +3,8 @@ import {
   currentQuests,
   DAY_MS,
   DEFAULT_RULES,
+  gameId,
+  isMoved,
   levelForXp,
   MAX_SAVE_BYTES,
   nextDailyChargeAt,
@@ -31,6 +33,7 @@ import {
   type Identity,
   isGuest,
   LeafApi,
+  PlayBodyErrors,
   Player,
   PresenceBodyErrors,
   RerollBodyErrors,
@@ -47,6 +50,7 @@ import {
   Invalid,
   MembersOnly,
   Missing,
+  Moved,
   NotAMember,
   NotYou,
   Refused,
@@ -67,6 +71,9 @@ import { type Here, Presence } from "../game/presence.ts";
 import { Saves } from "../game/saves.ts";
 import { Skins } from "../game/skins.ts";
 import { Ledger } from "../ledger/store.ts";
+import { Coins } from "../play/coins.ts";
+import { GAMES, type Played } from "../play/games.ts";
+import { Play } from "../play/service.ts";
 import { questJson } from "../quests/json.ts";
 import { rerollQuestFor } from "../quests/reroll.ts";
 import { Quests } from "../quests/store.ts";
@@ -332,6 +339,18 @@ export const PresenceBodyErrorsLive = Layer.succeed(PresenceBodyErrors)((httpEff
   ),
 );
 
+/** A batch whose body is not `{ "commands": [...] }` gets `invalid_command`. */
+export const PlayBodyErrorsLive = Layer.succeed(PlayBodyErrors)((httpEffect) =>
+  Effect.catchIf(httpEffect, isPayloadError, () =>
+    Effect.fail(
+      new Invalid({
+        code: "invalid_command",
+        message: 'Send commands as { "commands": [{ "id": "<yours>", ... }] }',
+      }),
+    ),
+  ),
+);
+
 /** Logs a defect, anything thrown rather than failed with a declared error, and answers `internal_error`. */
 export const UnexpectedLive = Layer.succeed(Unexpected)((httpEffect) =>
   Effect.catchDefect(httpEffect, (defect) =>
@@ -572,6 +591,15 @@ const presentJson = (here: Here) =>
 
 const invalidSlot = new Invalid({ code: "invalid_slot", message: "That is not a save slot" });
 
+/** The game a route names, if Leaf plays it. */
+const playedGame = (name: string): Effect.Effect<Played, Missing> => {
+  const id = gameId(name);
+  const played = id === undefined ? undefined : GAMES[id];
+  return played === undefined
+    ? Effect.fail(new Missing({ code: "no_such_game", message: "Leaf does not play that game" }))
+    : Effect.succeed(played);
+};
+
 /** Refuses a guest what only the guild's members may see: the guild's news, with members' names. */
 const membersOnly = Effect.flatMap(CurrentIdentity, (identity) =>
   isGuest(identity)
@@ -590,6 +618,15 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
     const visits = yield* Visits;
     const guild = yield* GuildFeed;
     const streams = yield* OpenStreams;
+    const play = yield* Play;
+    const coins = yield* Coins;
+
+    /** The player's Coins, their account opened with the welcome if they have none yet. */
+    const coinsOf = (identity: Identity) =>
+      Effect.gen(function* () {
+        yield* coins.open(identity.playerId, yield* Clock.currentTimeMillis);
+        return yield* coins.balance(identity.playerId);
+      });
 
     return (
       handlers
@@ -607,6 +644,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
                 xp: 0,
                 level: levelJson(0),
                 event_cursor: 0,
+                coins: yield* coinsOf(identity),
               } satisfies typeof Body.GameMe.Type);
             }
             // The backend vouches for the name, so the guild's news can show it.
@@ -625,6 +663,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               xp: account.xp,
               level: levelJson(account.xp),
               event_cursor: cursor,
+              coins: yield* coinsOf(identity),
             } satisfies typeof Body.GameMe.Type);
           }),
         )
@@ -672,6 +711,13 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
                 return yield* new Invalid({ code: "invalid_save", message: "A save's data must be a JSON object" });
               }
               return yield* new SaveTooLarge({ code: "save_too_large", message: "A save holds at most 256 KiB" });
+            }
+            // The game in this slot is played on Leaf now: the slot is kept as it is, to be brought over by hand.
+            if (isMoved(checked.slot)) {
+              return yield* new Moved({
+                code: "moved",
+                message: "This game is kept on Leaf now, and its old save takes no more writes",
+              });
             }
             const identity = yield* CurrentIdentity;
             const { playerId } = identity;
@@ -780,6 +826,46 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             Effect.map((here) => HttpServerResponse.jsonUnsafe(presentJson(here))),
           ),
         )
+        .handle("play", ({ params }) =>
+          Effect.gen(function* () {
+            const played = yield* playedGame(params.game);
+            const identity = yield* CurrentIdentity;
+            const shown = yield* play.open({ playerId: identity.playerId, guest: isGuest(identity) }, played);
+            return HttpServerResponse.jsonUnsafe({
+              rev: shown.rev,
+              now: iso(shown.now),
+              state: shown.view,
+            } satisfies typeof Body.PlayShown.Type);
+          }),
+        )
+        // Commands, done in order in one transaction. A command whose id was seen before answers as
+        // it did then, so a page that sends a batch again after losing the answer changes nothing.
+        .handle("command", ({ params, payload }) =>
+          Effect.gen(function* () {
+            const played = yield* playedGame(params.game);
+            const identity = yield* CurrentIdentity;
+            const batch = yield* play.send(
+              { playerId: identity.playerId, guest: isGuest(identity) },
+              played,
+              payload.commands,
+            );
+            if (batch.status === "invalid") {
+              return yield* new Invalid({ code: "invalid_command", message: batch.why });
+            }
+            if (batch.status === "slow") {
+              return yield* new SlowDown({
+                code: "slow_down",
+                message: "Commands are coming faster than Leaf takes them. Send them again in a moment",
+              });
+            }
+            return HttpServerResponse.jsonUnsafe({
+              rev: batch.rev,
+              now: iso(batch.now),
+              results: batch.results,
+              state: batch.view,
+            } satisfies typeof Body.Played.Type);
+          }),
+        )
     );
   }),
 );
@@ -869,6 +955,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     RerollBodyErrorsLive,
     SaveBodyErrorsLive,
     PresenceBodyErrorsLive,
+    PlayBodyErrorsLive,
     UnexpectedLive,
   ]),
 );

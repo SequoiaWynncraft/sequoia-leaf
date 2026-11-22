@@ -11,6 +11,12 @@
       "path": "./packages/kit"
     },
     {
+      "path": "./packages/raid"
+    },
+    {
+      "path": "./packages/raid/tsconfig.test.json"
+    },
+    {
       "path": "./apps/api"
     },
     {

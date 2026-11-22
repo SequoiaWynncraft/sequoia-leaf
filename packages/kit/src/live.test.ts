@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { followLeaf, isGuest, keepLeaf, passLeaf, readMember, restart, start, where } from "./live.ts";
+import { followLeaf, isGuest, keepLeaf, passLeaf, readCoins, readMember, restart, start, where } from "./live.ts";
 import { isRecord, type Listening } from "./net.ts";
 import {
   balance,
@@ -117,6 +117,8 @@ describe("finding out where the game is", () => {
       level: { number: 1, into: 0, next: 1000 },
       cursor: 0,
     });
+    expect(readCoins(isRecord(r) ? r.body : null)).toBe(300);
+    expect(readCoins({ coins: "lots" })).toBeNull();
   });
 
   test("it asks once per page", async () => {

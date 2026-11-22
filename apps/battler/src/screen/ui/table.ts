@@ -10,8 +10,6 @@ import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, leafShown, watch } from "@sequoia-leaf/kit/purse.ts";
 import { isMuted } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
-
-import { regularNamed } from "../../game/content/rooms.ts";
 import {
   BOONS,
   ECONOMY,
@@ -32,7 +30,9 @@ import {
   TRAITS,
   traitsNow,
   traitsOf,
-} from "../../game/index.ts";
+} from "@sequoia-leaf/raid";
+import { regularNamed } from "@sequoia-leaf/raid/content/rooms.ts";
+
 import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
 import { portrait } from "../art/sprites.ts";
 import { rimTop, stumpOf } from "../art/table.ts";
@@ -208,12 +208,11 @@ export function buildTable(a: Asks): void {
   renderPurse();
 }
 
-function renderPurse(): void {
+/** Leaf from the guild's ledger, and the Coins Leaf holds for the member. A guest's purse has only the Coins. */
+export function renderPurse(): void {
   const purse = byId("purse");
   if (!purse) return;
-  const p = balance();
-  // A guest's purse has only the Coins.
-  purse.replaceChildren(...(leafShown() ? [amount("leaf", p.leaf)] : []), amount("coin", p.coins));
+  purse.replaceChildren(...(leafShown() ? [amount("leaf", balance().leaf)] : []), amount("coin", S.coins));
 }
 
 /** A line of news at the table: a refusal, in the rules' own words. */

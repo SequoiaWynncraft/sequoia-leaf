@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { CELLS, centre, SEATS } from "../game/hex.ts";
+import { CELLS, centre, SEATS } from "@sequoia-leaf/raid/hex.ts";
+
 import {
   BENCH_SLOTS,
   BOARD_H,

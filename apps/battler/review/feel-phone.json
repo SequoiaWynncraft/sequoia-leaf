@@ -1,20 +1,29 @@
 [
   ["size", 390, 844],
   ["wait", 900],
-  ["eval", "(window.raid.fresh(), window.raid.hold(true), window.raid.taught(), 'a new member, clock held')"],
+  [
+    "eval",
+    "(async () => { await window.raid.fresh(); await window.raid.hold(true); await window.raid.taught(); return await 'a new member, clock held'; })()"
+  ],
   ["wait", 700],
   ["shot", "feel-p-01-front-page"],
-  ["eval", "(window.raid.start(11, 0), window.raid.skip(1.2), 'first pick')"],
+  [
+    "eval",
+    "(async () => { await window.raid.start(11, 0); await window.raid.skip(1.2); return await 'first pick'; })()"
+  ],
   ["wait", 700],
   [
     "eval",
-    "(document.querySelector(\"[data-pick='0']\")?.click(), window.raid.skip(0.5), JSON.stringify(window.raid.state().choice))"
+    "(async () => { await document.querySelector(\"[data-pick='0']\")?.click(); await window.raid.settled(); await window.raid.skip(0.5); return await JSON.stringify(window.raid.state().choice); })()"
   ],
-  ["eval", "(window.raid.bot(6), window.raid.plan(), window.raid.skip(1.5), 'room 7')"],
+  [
+    "eval",
+    "(async () => { await window.raid.bot(6); await window.raid.plan(); await window.raid.skip(1.5); return await 'room 7'; })()"
+  ],
   ["wait", 400],
   [
     "eval",
-    "(()=>{const id=window.raid.give('glorp'); window.raid.skip(0.3); window.raid.tap(id); window.raid.skip(0.3); return 'glorp '+id})()"
+    "(async () => {const id=await window.raid.give('glorp'); window.raid.skip(0.3); window.raid.tap(id); window.raid.skip(0.3); return 'glorp '+id})()"
   ],
   ["wait", 400],
   [
@@ -28,7 +37,10 @@
     "(()=>{const c=[...document.querySelectorAll('.k-info-chip')].find(c=>c.textContent.includes('Draws fire')); c?.dispatchEvent(new PointerEvent('pointerleave',{pointerType:'mouse'})); window.raid.drop(); return 'put away'})()"
   ],
   ["key", "Escape"],
-  ["eval", "(window.raid.fight(), window.raid.tick(120), window.raid.busy(200))"],
+  [
+    "eval",
+    "(async () => { for (const p of window.raid.party().filter((p) => p.on === 'board').slice(1)) await window.raid.send({ do: 'bench', seat: p.at }); await window.raid.fight(); await window.raid.tick(120); return await window.raid.busy(200); })()"
+  ],
   ["wait", 400],
   ["shot", "feel-p-03-fight-damage"],
   ["eval", "window.raid.tally('tanked')"],
@@ -49,19 +61,22 @@
   ["eval", "window.raid.tally('damage', 0)"],
   [
     "eval",
-    "(window.raid.carry(), window.raid.skip(1.5), document.querySelector(\"[data-pick='0']\")?.click(), window.raid.skip(2), window.raid.last())"
+    "(async () => { await window.raid.carry(); await window.raid.skip(1.5); await document.querySelector(\"[data-pick='0']\")?.click(); await window.raid.settled(); await window.raid.skip(2); return await window.raid.last(); })()"
   ],
   ["wait", 500],
   ["shot", "feel-p-07-last-fight"],
-  ["eval", "(window.raid.last(), window.raid.start(5, 0), window.raid.skip(1.2), 'a new raid')"],
+  [
+    "eval",
+    "(async () => { await window.raid.last(); await window.raid.start(5, 0); await window.raid.skip(1.2); return await 'a new raid'; })()"
+  ],
   ["wait", 700],
   [
     "eval",
-    "(document.querySelector(\"[data-pick='0']\")?.click(), window.raid.skip(0.5), JSON.stringify(window.raid.state().choice))"
+    "(async () => { await document.querySelector(\"[data-pick='0']\")?.click(); await window.raid.settled(); await window.raid.skip(0.5); return await JSON.stringify(window.raid.state().choice); })()"
   ],
   [
     "eval",
-    "(()=>{window.raid.skip(1.5); window.raid.fight(); for(let i=0;i<4000&&!window.raid.state().fight.over;i++)window.raid.tick(1); window.raid.skip(1); window.raid.skip(3); return JSON.stringify([window.raid.state().mode, window.raid.state().fight.result])})()"
+    "(async () => {window.raid.skip(1.5); await window.raid.fight(); for(let i=0;i<4000&&!window.raid.state().fight.over;i++)window.raid.tick(1); window.raid.skip(1); window.raid.skip(3); return JSON.stringify([window.raid.state().mode, window.raid.state().fight.result])})()"
   ],
   ["wait", 500],
   ["shot", "feel-p-08-sheet-won"]

@@ -5,13 +5,15 @@ edge of town: carved figures of forest spirits on a hex board cut into the rings
 member buys figures from a rolling stall, seats them, and watches them fight by themselves through
 "a little raid" of fifteen rooms.
 
-Everything in this folder is the game itself: what is in it, how a fight goes, how a run goes, a
-bot that can play it, what lasts between runs, and saving. None of it touches the page. A screen is
-a separate layer that calls in through `index.ts`.
+Everything in this package (`@sequoia-leaf/raid`) is the game itself: what is in it, how a fight
+goes, how a run goes, a bot that can play it, what lasts between runs, the table as Leaf plays it,
+and saving. None of it touches the page: it is type-checked without the page's library or Bun's.
+Leaf (the play service in `apps/api`) and the battler's page (`apps/battler`) both import it,
+through `index.ts`.
 
 ```sh
-bun test                         # the rules, checked against their own sentences
-bun review/balance.ts 200 0      # 200 runs for each bot habit on the first trail, and what did well
+bun test                                         # the rules, checked against their own sentences
+bun ../../apps/battler/review/balance.ts 200 0   # 200 runs for each bot habit on the first trail
 ```
 
 ## The rules as built
@@ -111,7 +113,9 @@ one; Gnomes find 3 after a win and 1 after a loss; Bulwark gives the rest of the
 and so on. `traitText(id, step)` gives the sentence for any step.
 
 **The fight.** A clock of 20 steps a second, decided entirely by the two parties and a seed: the
-same setup gives the same fight, event for event. In a step, things in flight land; once a second
+same setup gives the same fight, event for event. Setting out locks both boards, draws the fight's
+seed from the run's stream and works the fight out to its end there and then; the run keeps how it
+came out (`run.fight`), and the takings are paid from that. In a step, things in flight land; once a second
 burns, regrowth and dusk tick; then everyone still up has a turn, the two sides alternating: use the
 ability if the mana bar is full, else attack whoever they are after if in reach, else walk one hex
 toward them round whoever is in the way.
@@ -228,6 +232,39 @@ and the furthest room met on each trail. None of it changes a fight or the stall
 figures can be offered to everyone from their first run (`STALL_POOL`). The next trail opens when the
 last is cleared.
 
+## Chance
+
+Every draw a run makes comes from its stream (`run.rng`, `rng.ts`): the first picks, the stall, who
+waits in each room (a trouble plan, or a regular's party), the components and boons on offer, each
+fight's seed. `run.seed` is only where the stream started (the bot's own habits are drawn from it).
+At Leaf's table there is a stream of the table's own too, from which each new run's seed is drawn,
+and Leaf's dice for each command (`Ctx.seed`) are stirred into both before the command draws
+anything, so nothing a command draws can be worked out beforehand from what the player has seen.
+
+## The table, as Leaf plays it (`game.ts`)
+
+`RAID` is the game's `Game` (`packages/core/src/play.ts`), for Leaf's play service. Its state, the
+`Table`, is the run in hand (or none), the almanac, the looks (`content/looks.ts`), the trail picked
+on the front page, the number of runs begun, and the table's stream. One command for each thing a
+player does (`RaidCommand`): `start` (a run on a trail; a run in hand is put down first, as walking
+home), `trail` (pick the trail to set out on next), `look` (put an owned look on the table),
+`choose`, `redraw`, `buy`, `sell`, `move`, `bench`, `rustle`, `hold`, `xp`, `give`, `fight`
+(boards locked, the fight decided; its note carries both boards, the seed and the outcome), `take`
+and `abandon`. A refusal is a code (`REFUSALS` in `run.ts`, `TABLE_REFUSALS`), and `refusalText`
+gives the sentence the page shows.
+
+A run that ends (won, lost, or walked home from) is written into the almanac and let go of, and
+pays its Coins as one change keyed `run:<number>`. Commands log `raid_started` (trail), `raid_room`
+(room, kind, won, resolve left, the fight's seconds) and `raid_ended` (trail, rooms won, how it
+ended, Coins paid).
+
+What the page is shown (`TableView`) is the table without its streams, the run's seed, or what the
+picks waiting behind the first will offer. `readView` and `readNotes` (`wire.ts`) read what Leaf
+sends back into these types, field by field. `predict` works out on the page's copy the commands
+that draw nothing (`PREDICTED`: moving, benching, selling, handing over, holding the stall), exactly
+as Leaf will; `planCommands` has the bot plan a room on the page's copy and gives back the commands
+it would send. `encodeTable` and `decodeTable` are the table as Leaf stores it.
+
 ## What is where
 
 | File                   | What it holds                                                                                                         |
@@ -249,8 +286,11 @@ last is cleared.
 | `formation.ts`         | A plain way of seating a party, used by the bot and the sparring partners                                             |
 | `spar.ts`              | The regulars' parties for sparring                                                                                    |
 | `run.ts`               | The run and every action on it                                                                                        |
-| `save.ts`              | A run as text and back                                                                                                |
+| `save.ts`              | A run as plain data and as text, and back                                                                             |
 | `outside.ts`           | Payout, almanac, trails                                                                                               |
+| `content/looks.ts`     | How the table may look: cloths, lanterns, bases                                                                       |
+| `game.ts`              | The table as Leaf plays it: state, commands, what the page is shown, predictions                                      |
+| `wire.ts`              | Reading Leaf's view and notes back                                                                                    |
 | `tally.ts`             | What every figure did in a fight, read from its events                                                                |
 | `bot.ts`               | A player with habits                                                                                                  |
 | `index.ts`             | Everything a screen needs, in one place                                                                               |
@@ -274,15 +314,15 @@ Plume, ranged Thorn and Plume, casters and healers Glowcap) and then by its abil
 ## Driving it from a screen
 
 A run is a plain object. Every action takes it, and either changes it and gives back
-`{ ok: true, notes }` or leaves it alone and gives back `{ ok: false, why }` with a sentence to show
-the player. Notes say what happened, in order, naming figures by their own number in the run
+`{ ok: true, notes }` or leaves it alone and gives back `{ ok: false, code, why }`, a code and a
+sentence to show the player. Notes say what happened, in order, naming figures by their own number in the run
 (`piece`), so a screen can animate each one: `bought`, `merged`, `sold`, `moved`, `rustled`,
 `level`, `gave`, `acorns`, `resolve`, `choice`, `room`, `over` and so on (see `Note` in `run.ts`).
 
 ```ts
-import * as raid from "./game/index.ts";
+import * as raid from "@sequoia-leaf/raid";
 
-let almanac = raid.loadAlmanac(localStorage.getItem("almanac") ?? "") ?? raid.newAlmanac();
+let almanac = raid.newAlmanac();
 const run = raid.startRun(seed, { trail: 0 });
 
 // A choice is waiting whenever run.choices has anything in it: the first pick, a component, a boon.
@@ -295,9 +335,8 @@ const bought = raid.buy(run, 0);
 if (!bought.ok) say(bought.why); // "Not enough acorns."
 raid.move(run, { on: "bench", at: 0 }, { on: "board", at: 3 });
 raid.giveItem(run, 0, { on: "board", at: 3 });
-localStorage.setItem("run", raid.saveRun(run));
 
-// The fight. beginFight hands over the setup; the screen plays it at its own pace.
+// The fight. beginFight decides it and hands over the setup; the screen plays it at its own pace.
 const begun = raid.beginFight(run);
 if (begun.ok) {
   const fight = raid.openFight(begun.setup);
@@ -308,16 +347,15 @@ if (begun.ok) {
     await nextStep();
   }
 }
-// The takings. The run works the fight out for itself from the same setup, so this may be called
-// at any time after beginFight: that is all "skip" is.
+// The takings, paid from the fight as it was decided, so this may be called at any time after
+// beginFight: that is all "skip" is.
 const taken = raid.takeTakings(run);
 
 if (run.phase === "over") {
   const summary = raid.summariseRun(run);
-  const paid = raid.payout(summary); // Coins for the town's purse
+  const paid = raid.payout(summary); // Coins
   const recorded = raid.recordRun(almanac, summary); // .news says what is new
   almanac = recorded.almanac;
-  localStorage.setItem("almanac", raid.saveAlmanac(almanac));
 }
 ```
 
@@ -349,12 +387,11 @@ a shield); the health and shields it gave, to others or itself; how many it fell
 still stands. What a summoned figure did counts for whoever summoned it, so a Glorplet has no entry
 of its own. `partsOf(did, "damage" | "tanked" | "healing")` gives the parts a bar is drawn in.
 
-**Saving.** `saveRun(run)` is a string; `loadRun(text)` gives back the identical run, or a reason it
-is refused. It reads the text field by field and turns away anything this version could not have
-made. A fight in progress is not saved: a run saved mid-fight loads at the start of that fight,
-which plays out the same from its seed. The last fight fought is kept as its setup (`run.last`), so
-it can be played again to be looked back on; a run saved before that was kept loads with none, and
-the list of open figures an older save carries is let go.
+**Saving.** `saveRun(run)` is a string (version 2); `loadRun(text)` gives back the identical run, or
+a reason it is refused, and `checkRun(v)` does the same for plain data. It reads the data field by
+field and turns away anything this version could not have made. A fight in progress keeps its
+setup, and how it comes out is worked out again from that. The last fight fought is kept as its
+setup (`run.last`), so it can be played again to be looked back on.
 
 ## Trying the numbers
 

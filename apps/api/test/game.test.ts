@@ -266,7 +266,7 @@ describe("signing in with the website's cookie", () => {
   it("takes a write with the cookie from Leaf's own pages, and one with a Bearer from anywhere", async () => {
     const fromPage = await save("town", 0, { saved_at: 1 }, alicesPage);
     const fromMod = await save("works", 0, { saved_at: 1 }, { bearer: "alice-token" });
-    const bothNoOrigin = await save("raid", 0, { saved_at: 1 }, { bearer: "alice-token", cookie: "alice-token" });
+    const bothNoOrigin = await save("purse", 0, { saved_at: 1 }, { bearer: "alice-token", cookie: "alice-token" });
 
     expect([fromPage.status, fromMod.status, bothNoOrigin.status]).toEqual([200, 200, 200]);
   });
@@ -409,7 +409,7 @@ describe("who may use the game's routes", () => {
 });
 
 describe("GET /v1/game/me", () => {
-  it("shows the member with their rank, Leaf, XP, level and where their events are up to", async () => {
+  it("shows the member with their rank, Leaf, XP, level, Coins and where their events are up to", async () => {
     await services.post(
       { kind: "earn", playerId: alice, amount: leaf(1300), source: "staff", idempotencyKey: "a" },
       T0,
@@ -427,10 +427,11 @@ describe("GET /v1/game/me", () => {
       xp: 1300,
       level: { number: 2, xp_into_level: 300, xp_for_next_level: 1250 },
       event_cursor: 1,
+      coins: 300,
     });
   });
 
-  it("answers a guest with no Leaf, XP or cursor and a new member's level, reading nothing of the ledger", async () => {
+  it("answers a guest with no Leaf, XP or cursor and a new member's level, reading nothing of the ledger, and their Coins", async () => {
     // Carol was a member once: the ledger still holds her Leaf, and her news.
     await paid(carol);
     await raided(carol, 110);
@@ -467,6 +468,7 @@ describe("GET /v1/game/me", () => {
       xp: 0,
       level: { number: 1, xp_into_level: 0, xp_for_next_level: 1000 },
       event_cursor: 0,
+      coins: 300,
     });
     expect(await member.json()).toMatchObject({ guest: false });
     // Only the member's answer read the ledger and the news; and only the member's name is kept for the guild's news.
@@ -619,6 +621,30 @@ describe("saves", () => {
     expect(await (await get("/v1/game/saves/purse")).json()).toMatchObject({ version: 2, data: { coins: 2 } });
   });
 
+  it("takes no more writes to the battler's slot, whose game Leaf plays now: 410 moved, storing nothing; it can still be read", async () => {
+    // What was there before the game moved stays as it was.
+    await services.query(
+      (sql) => sql`
+        INSERT INTO saves (player_id, slot, version, data, updated_at, guest)
+        VALUES (${alice}, 'raid', 3, '{"saved_at":1,"keys":{"raid.run.v1":"a run"}}', ${T0 - DAY}, 0)
+      `,
+    );
+    const written = await save("raid", 3, { saved_at: 2, keys: { "raid.run.v1": "a better run" } });
+    const first = await save("raid", 0, { saved_at: 2, keys: {} }, { cookie: "bob-token", origin: ORIGIN });
+
+    expect([written.status, first.status]).toEqual([410, 410]);
+    expect(await written.json()).toEqual({
+      code: "moved",
+      message: "This game is kept on Leaf now, and its old save takes no more writes",
+    });
+    expect(await (await get("/v1/game/saves/raid")).json()).toMatchObject({
+      version: 3,
+      data: { keys: { "raid.run.v1": "a run" } },
+    });
+    expect(await services.query((sql) => sql`SELECT player_id FROM saves WHERE player_id = ${bob}`)).toEqual([]);
+    expect(await services.query((sql) => sql`SELECT count(*) AS n FROM save_history`)).toEqual([{ n: 0 }]);
+  });
+
   it("refuses a slot that is not one, reading or writing", async () => {
     const read = await get("/v1/game/saves/ledger");
     const write = await save("ledger", 0, {});
@@ -729,14 +755,14 @@ describe("saves", () => {
     clock.now = T0 + MINUTE + 5000;
     await save("works", 3, { n: 4 });
     // A slot of its own has its own copies.
-    await save("raid", 0, { r: 1 });
+    await save("town", 0, { r: 1 });
     clock.now = T0 + MINUTE + 8000;
-    await save("raid", 1, { r: 2 });
+    await save("town", 1, { r: 2 });
 
     expect(await keptCopies()).toEqual([
       { slot: "works", kind: "earlier", version: 1, data: '{"n":1}', savedAt: T0 },
       { slot: "works", kind: "earlier", version: 3, data: '{"n":3}', savedAt: T0 + 6000 },
-      { slot: "raid", kind: "earlier", version: 1, data: '{"r":1}', savedAt: T0 + MINUTE + 5000 },
+      { slot: "town", kind: "earlier", version: 1, data: '{"r":1}', savedAt: T0 + MINUTE + 5000 },
     ]);
 
     clock.now = T0 + 8 * DAY;
@@ -770,13 +796,13 @@ describe("saves", () => {
     await save("works", 1, { mine: "carol, later" }, carols);
     const readBack = await get("/v1/game/saves/works", carols);
     clock.now = T0 + 90 * DAY;
-    await save("raid", 0, {}, { bearer: "bob-token" });
+    await save("town", 0, {}, { bearer: "bob-token" });
     const before = await services.query(
       (sql) => sql`SELECT player_id, slot, guest FROM saves ORDER BY player_id, slot`,
     );
-    // Two seconds later, so that Bob's raid may be saved again; Carol's town is now past 90 days.
+    // Two seconds later, so that Bob's town may be saved again; Carol's town is now past 90 days.
     clock.now = T0 + 90 * DAY + 2000;
-    await save("raid", 1, {}, { bearer: "bob-token" });
+    await save("town", 1, {}, { bearer: "bob-token" });
     clock.now = T0 + 150 * DAY + 1;
     const untouched = await services.query((sql) => sql`SELECT player_id, slot FROM saves ORDER BY player_id, slot`);
     await save("purse", 0, {}, { bearer: "bob-token" });
@@ -784,20 +810,20 @@ describe("saves", () => {
     expect(await readBack.json()).toMatchObject({ version: 2, data: { mine: "carol, later" } });
     expect(before).toEqual([
       { player_id: alice, slot: "town", guest: 0 },
-      { player_id: bob, slot: "raid", guest: 0 },
+      { player_id: bob, slot: "town", guest: 0 },
       { player_id: carol, slot: "town", guest: 1 },
       { player_id: carol, slot: "works", guest: 1 },
     ]);
     // Nothing is removed until something is saved.
     expect(untouched).toEqual([
       { player_id: alice, slot: "town" },
-      { player_id: bob, slot: "raid" },
+      { player_id: bob, slot: "town" },
       { player_id: carol, slot: "works" },
     ]);
     expect(await services.query((sql) => sql`SELECT player_id, slot FROM saves ORDER BY player_id, slot`)).toEqual([
       { player_id: alice, slot: "town" },
       { player_id: bob, slot: "purse" },
-      { player_id: bob, slot: "raid" },
+      { player_id: bob, slot: "town" },
     ]);
   });
 });
