@@ -389,7 +389,7 @@ how the live connection is, `happen("raid" | "war" |
 "level" | "milestone" | "call")` sets off one of the made-up guild's moments, `inside(game)` goes
 through a door, `door()` says how far that has got, `leave()` comes back, `kept()` shows the record
 as it would be saved, `who()` says where each of the town's own is and what it is doing,
-`visitors()` says which real members are in town, where, and whether they are dozing, `where()` says which place is on and how dark the walk has got, `coins(n)` puts Coins in the purse for a tour that buys things (only with the made-up guild), and `page(x, y)` turns a
+`visitors()` says which real members are in town, where, and whether they are dozing, `where()` says which place is on and how dark the walk has got, `coins(n)` puts Coins in the purse for a tour that buys things (only with the made-up guild), `purse()` says what the purse holds as the page shows it, and `page(x, y)` turns a
 point in the place that is on into a point on the page, and `prompt()` says where the prompt is on the page while it is up.
 
 `window.town.camp` is the same for camps: `go()` walks out of town to the member's camp, `town()`
