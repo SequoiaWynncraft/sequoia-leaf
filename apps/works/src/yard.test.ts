@@ -155,6 +155,16 @@ describe("the yard, on Leaf", () => {
     expect(WORKS.encode(S.world)).toBe(WORKS.encode({ ...fake.leaf.yard, seed: null }));
   });
 
+  test("what a frame's steps made known is told even when that frame also collects", async () => {
+    const fake = await opened();
+    const done = { kind: "story", index: 3, title: "Planks for the Treasury", pay: 80 } as const;
+    runYard(1000 + 30_000);
+    S.world.news.push(done);
+    // A minute after the yard opened, this frame collects; the collection must not swallow the news.
+    expect(runYard(1000 + 60_000)).toEqual([done]);
+    await until(() => fake.leaf.posts >= 1);
+  });
+
   test("runs the copy on by Leaf's clock, and takes a yard put in place of another as it stands", async () => {
     const fake = await opened();
     // Fifty seconds, and fifty more: the copy runs on by itself, five hundred ticks each time.
