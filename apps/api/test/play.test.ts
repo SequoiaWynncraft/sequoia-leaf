@@ -12,8 +12,10 @@ import {
 } from "@sequoia-leaf/raid";
 import { readView as readYardView, route, WORKS } from "@sequoia-leaf/yard";
 import { Effect, Logger, References, Schema } from "effect";
+import { SqlClient } from "effect/sql";
 
 import { Standings } from "../src/api/schemas.ts";
+import { knownAmong } from "../src/game/known.ts";
 import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { played } from "../src/play/games.ts";
@@ -844,6 +846,17 @@ describe("the board", () => {
     // Bob's yard changed without earning: he reached 500 when he did, and stays second.
     await stand(bob, 500, T0 + 9);
     expect((await boardOf()).top.map((r) => r.name)).toEqual(["Carol", "Bob", "Someone", "Alice"]);
+  });
+
+  it("keeps whoever is on a board known to Leaf, so a guest long gone still has their name and face looked up", async () => {
+    await stand(stranger(2), 700, T0, true);
+    const known = await services.run(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        return yield* knownAmong(sql, [stranger(2), stranger(3)], T0 + 3 * DAY);
+      }),
+    );
+    expect([...known]).toEqual([stranger(2)]);
   });
 
   it(`shows only the top ${BOARD_MOST}, and the caller's place among everyone when they are not in it`, async () => {
