@@ -14,6 +14,14 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "timber-and-shingle",
+    at: "2026-11-22T22:20Z",
+    title: "Timber and shingle",
+    lines: [
+      "Panels have a timber frame with brass corners, tabs are wooden, notes hang on a nail and the signs along the top hang on ropes.",
+    ],
+  },
+  {
     id: "gate-card",
     at: "2026-11-22T21:52Z",
     title: "The signpost to your camp",
