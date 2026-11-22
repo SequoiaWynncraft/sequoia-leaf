@@ -188,6 +188,12 @@ export function status(w: World, i: number): Status | null {
     case "splitter":
     case "joiner":
     case "tunnel": {
+      // A splitter with every way shut can send nothing on, whether or not it holds anything yet.
+      if (b.kind === "splitter" && b.shut === 7) {
+        const line =
+          b.item === null ? "All 3 ways out are shut." : `Nowhere to send its ${many(b.item)}: all 3 ways are shut.`;
+        return { state: "blocked", line, trouble: true };
+      }
       if (b.item === null) {
         const under = b.under.filter((k) => k !== null).length;
         return under > 0
