@@ -405,7 +405,8 @@ function plotDesc(id: PlotId): Description | null {
               look: coins() >= plot.price ? "sm wide" : "sm wide off",
               icon: icon("coin"),
               on: () => {
-                buyLand(id);
+                // Bought, the card has nothing more to offer: it is put away, so it does not sit over the new land.
+                if (buyLand(id)) close();
               },
             },
           ]
