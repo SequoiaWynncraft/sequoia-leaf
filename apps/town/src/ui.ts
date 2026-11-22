@@ -19,7 +19,7 @@ import { waiting } from "@sequoia-leaf/town/mail.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
 
 import { goSit, hop, inTown, release, rouse, say, sitters } from "./actors.ts";
-import { openingTab, readNews, redrawn, shortDay, TABS } from "./board.ts";
+import { noteWhen, openingTab, readNews, redrawn, TABS } from "./board.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { named, registerCards, thingRef, wareRef } from "./cards.ts";
 import { fling } from "./flights.ts";
@@ -198,7 +198,7 @@ function newsTab(list: HTMLElement): void {
         "div",
         "k-paper quest",
         {},
-        el("div", "k-read k-dim", { text: shortDay(n.day) }),
+        el("div", "k-read k-dim", { text: noteWhen(n.at) }),
         el("div", "k-title", { text: n.title }),
         ...n.lines.map((text) => el("div", "k-read", { text })),
       ),

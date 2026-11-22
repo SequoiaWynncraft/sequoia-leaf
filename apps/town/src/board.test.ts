@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 
-import { openingTab, readNews, redrawn, SEEN, shortDay, unread } from "./board.ts";
+import { noteWhen, openingTab, readNews, redrawn, SEEN, unread } from "./board.ts";
 import type { Quest } from "./guild.ts";
 import { readQuests } from "./live.ts";
 import { NOTES } from "./notes.ts";
@@ -70,15 +70,22 @@ describe("the board's news", () => {
     world = null;
   });
 
-  test("every note has an id of its own, a real day, newest first, and one or two lines", () => {
+  test("every note has an id of its own, a real moment or day, newest first, and one or two lines", () => {
     const ids = NOTES.map((n) => n.id);
     expect(new Set(ids).size).toBe(ids.length);
-    const days = NOTES.map((n) => n.day);
-    for (const day of days) expect(new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10)).toBe(day);
-    expect(days).toEqual(days.toSorted().toReversed());
+    const ats = NOTES.map((n) => n.at);
+    for (const at of ats) {
+      expect(at).toMatch(/^\d{4}-\d\d-\d\d(T\d\d:\d\dZ)?$/);
+      expect(Number.isNaN(new Date(at).getTime())).toBe(false);
+    }
+    // A note with only its day is older than every note of that day with a time, and sorts so.
+    expect(ats).toEqual(ats.toSorted().toReversed());
     for (const n of NOTES) expect([1, 2]).toContain(n.lines.length);
-    expect(shortDay("2026-11-22")).toBe("22 Nov");
-    expect(shortDay("2027-01-05")).toBe("5 Jan");
+    expect(noteWhen("2026-11-22T19:09Z", "Europe/Stockholm")).toBe("22 Nov, 20:09");
+    expect(noteWhen("2026-11-22T23:30Z", "Europe/Stockholm")).toBe("23 Nov, 00:30");
+    expect(noteWhen("2026-11-22T05:05Z", "UTC")).toBe("22 Nov, 05:05");
+    expect(noteWhen("2026-11-22")).toBe("22 Nov");
+    expect(noteWhen("2027-01-05")).toBe("5 Jan");
   });
 
   test("news is unread, and the board opens on it, until the newest note is opened", () => {
