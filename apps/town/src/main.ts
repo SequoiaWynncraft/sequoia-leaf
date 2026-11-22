@@ -540,7 +540,8 @@ async function boot(): Promise<void> {
   keepTold({
     home: () => G.home,
     inCamp: () => scene === camp,
-    inGame: () => visit !== null,
+    // In the Grove the member is playing the pulls, as in a game opened over the town.
+    inGame: () => visit !== null || scene === grove,
     cursor: () => guild.told(),
   });
   town.onStage(true);
