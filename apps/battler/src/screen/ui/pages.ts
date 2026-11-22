@@ -627,7 +627,12 @@ function summary(): HTMLElement | null {
     trail: "The harder way",
   } as const;
   for (const l of paid.lines)
-    add(left, el("div", "k-row pay", {}, el("span", "k-grow", { text: WHY[l.why] }), amount("coin", `+${l.coins}`)));
+    add(
+      left,
+      l.why === "full"
+        ? el("div", "k-d", { text: "Your purse can take no more for now. It has room again within the hour." })
+        : el("div", "k-row pay", {}, el("span", "k-grow", { text: WHY[l.why] }), amount("coin", `+${l.coins}`)),
+    );
   if (right.childElementCount === 0)
     add(
       right,

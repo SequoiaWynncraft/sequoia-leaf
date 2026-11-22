@@ -169,19 +169,14 @@ describe("POST /v1/game/coins", () => {
     ]);
   });
 
-  it("never gives back more than was spent building in the Works: past it, 409 nothing_to_refund", async () => {
-    expect(await refused({ id: "r-1", amount: 1, reason: "works_refund" })).toEqual([409, "nothing_to_refund"]);
-    expect(await done({ id: "b-1", amount: -100, reason: "works_build" })).toBe(200);
-    expect(await done({ id: "r-2", amount: 60, reason: "works_refund" })).toBe(260);
-    expect(await refused({ id: "r-3", amount: 41, reason: "works_refund" })).toEqual([409, "nothing_to_refund"]);
-    expect(await done({ id: "r-3", amount: 40, reason: "works_refund" })).toBe(300);
-    expect(await refused({ id: "r-4", amount: 1, reason: "works_refund" })).toEqual([409, "nothing_to_refund"]);
-    // Other spending is not building: it gives nothing to refund.
-    expect(await done({ id: "p-1", amount: -50, reason: "works_plot" })).toBe(250);
-    expect(await refused({ id: "r-5", amount: 1, reason: "works_refund" })).toEqual([409, "nothing_to_refund"]);
-    expect(await services.query((sql) => sql`SELECT built, refunded FROM works_builds`)).toEqual([
-      { built: 100, refunded: 100 },
-    ]);
+  it("gives Coins back for what is taken away in the Works, built before Leaf kept Coins or since, as an earning like any other", async () => {
+    // A building bought before the ledger was there is given back for all the same.
+    expect(await done({ id: "r-1", amount: 120, reason: "works_refund" })).toBe(420);
+    expect(await done({ id: "b-1", amount: -100, reason: "works_build" })).toBe(320);
+    expect(await done({ id: "r-2", amount: 100, reason: "works_refund" })).toBe(420);
+    // It counts toward what a player may earn in the hour, so it cannot be made without end.
+    expect(await done({ id: "e-1", amount: 4780, reason: "works_order" })).toBe(5200);
+    expect(await refused({ id: "r-3", amount: 1, reason: "works_refund" })).toEqual([429, "too_much"]);
   });
 
   it("refuses an amount or a reason that is not one with 400, and a body that is not a call with invalid_command", async () => {

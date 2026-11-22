@@ -21,7 +21,6 @@ import {
   Moved,
   NotAMember,
   NotEnoughCoins,
-  NothingToRefund,
   NotYou,
   Refused,
   SaveTooLarge,
@@ -221,7 +220,7 @@ export class GameApi extends HttpApiGroup.make("game")
     HttpApiEndpoint.post("coins", "/coins", {
       payload: CoinsBody,
       success: CoinsAnswer,
-      error: [Invalid, NotYou, NotEnoughCoins, NothingToRefund, TooMuch, SlowDown],
+      error: [Invalid, NotYou, NotEnoughCoins, TooMuch, SlowDown],
     }).middleware(CoinsBodyErrors),
   )
   .middleware(Player)

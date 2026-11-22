@@ -17,6 +17,7 @@ function fakeLeaf() {
     now: 0,
     player: { id: "p", guest: false },
     seed: (rolled = (rolled * 48_271) % 2_147_483_647),
+    room: 1e9,
   });
   const leaf = { state: RAID.create(ctx()), rev: 0, seen: new Map<string, unknown>(), posts: 0 };
   /** Does a command as Leaf would, from another page of the member's. */

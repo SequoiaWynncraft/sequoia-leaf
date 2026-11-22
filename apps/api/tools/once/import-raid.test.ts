@@ -82,7 +82,7 @@ async function entry(player: string, amount: number, key: string) {
 }
 /** A raid state on Leaf, played `rev` times. */
 async function played(player: string, rev: number) {
-  const table = RAID.create({ now: NOW, player: { id: player, guest: false }, seed: 1 });
+  const table = RAID.create({ now: NOW, player: { id: player, guest: false }, seed: 1, room: 0 });
   await query(
     (sql) => sql`
       INSERT INTO play_state (player_id, game, rev, state, updated_at)

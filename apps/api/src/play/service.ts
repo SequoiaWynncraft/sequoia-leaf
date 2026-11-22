@@ -61,10 +61,11 @@ interface Sent {
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /** What Leaf tells a game about a call. */
-const ctxOf = (playing: Playing, now: number, seed: number): Ctx => ({
+const ctxOf = (playing: Playing, now: number, seed: number, room: number): Ctx => ({
   now,
   player: { id: playing.playerId, guest: playing.guest },
   seed,
+  room,
 });
 
 /** The commands of a batch with their ids, or why the batch is not one. */
@@ -96,7 +97,8 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * Coins each command paid or took, what it logged, and each command's answer. A command whose id
  * was seen before answers as it did then and changes nothing; one that would take more Coins than
  * the player has is refused with `not_enough_coins`; one that pays is done whatever the player has
- * earned, and paid only as far as they may still earn (`Coins.room`). A player with no state yet gets a new one,
+ * earned, and paid only as far as they may still earn (`Coins.room`, which each game is told, so
+ * that it says what was really paid). A player with no state yet gets a new one,
  * and their Coins open with the welcome. A stored state that will not read is left as it is: the
  * player and the game are logged, and nothing is done. Leaf's dice for each call come from
  * `SecureRandom`.
@@ -125,7 +127,7 @@ export class Play extends Context.Service<
        * The player's stored state in a game, or a new one made and stored for them, opened at now.
        * Null for a stored state that does not read, which is logged and left as it is.
        */
-      const opened = (playing: Playing, played: Played, now: number) =>
+      const opened = (playing: Playing, played: Played, now: number, room: number) =>
         Effect.gen(function* () {
           const found = yield* store.read(playing.playerId, played.id);
           let rev = 0;
@@ -134,11 +136,11 @@ export class Play extends Context.Service<
             ({ rev } = found.value);
             text = found.value.state;
           } else {
-            text = played.create(ctxOf(playing, now, yield* dice));
+            text = played.create(ctxOf(playing, now, yield* dice, room));
             yield* store.create(playing.playerId, played.id, text, now);
             yield* coins.open(playing.playerId, now);
           }
-          const game: Opened | null = played.open(text, ctxOf(playing, now, yield* dice));
+          const game: Opened | null = played.open(text, ctxOf(playing, now, yield* dice, room));
           if (game === null) {
             yield* Effect.logError(
               `The ${played.id} state stored for ${playing.playerId} does not read; it is kept as it is`,
@@ -152,7 +154,8 @@ export class Play extends Context.Service<
         open: (playing, played) =>
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
-            const open = yield* sql.withTransaction(opened(playing, played, now)).pipe(Effect.orDie);
+            const room = yield* coins.room(playing.playerId, now);
+            const open = yield* sql.withTransaction(opened(playing, played, now, room)).pipe(Effect.orDie);
             if (open === null) {
               return { status: "unreadable" } satisfies Opening;
             }
@@ -160,7 +163,7 @@ export class Play extends Context.Service<
               status: "open",
               rev: open.rev,
               now,
-              view: open.game.view(ctxOf(playing, now, 0)),
+              view: open.game.view(ctxOf(playing, now, 0, room)),
             } satisfies Opening;
           }),
         send: (playing, played, commands) =>
@@ -177,13 +180,13 @@ export class Play extends Context.Service<
             const done = yield* sql
               .withTransaction(
                 Effect.gen(function* () {
-                  const open = yield* opened(playing, played, now);
+                  let room = yield* coins.room(playing.playerId, now);
+                  const open = yield* opened(playing, played, now, room);
                   if (open === null) {
                     return null;
                   }
                   const { rev, text, game } = open;
                   let balance = yield* coins.balance(playing.playerId);
-                  let room = yield* coins.room(playing.playerId, now);
                   const results: Result[] = [];
                   const answers: { readonly id: string; readonly result: Result }[] = [];
                   const logs: Logged[] = [];
@@ -193,7 +196,7 @@ export class Play extends Context.Service<
                       results.push({ id, ...readKept(before.value) });
                       continue;
                     }
-                    const attempt = game.attempt(command, ctxOf(playing, now, yield* dice));
+                    const attempt = game.attempt(command, ctxOf(playing, now, yield* dice, room));
                     let result: Result;
                     if ("refused" in attempt) {
                       result = { id, refused: attempt.refused };
@@ -249,7 +252,7 @@ export class Play extends Context.Service<
                   // Counted for the staff's report: each command done or refused now, not those answered from before.
                   const refused = answers.filter((a) => "refused" in a.result).length;
                   yield* store.count(playing.playerId, answers.length - refused, refused, now);
-                  return { rev: next, results, view: game.view(ctxOf(playing, now, 0)) };
+                  return { rev: next, results, view: game.view(ctxOf(playing, now, 0, room)) };
                 }),
               )
               .pipe(Effect.orDie);

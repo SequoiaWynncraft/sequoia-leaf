@@ -25,8 +25,6 @@ export type PageCoinsDone =
   | { readonly status: "done"; readonly coins: number }
   /** A spend the balance does not cover. Nothing changed. */
   | { readonly status: "not_enough_coins" }
-  /** A refund past what the player has spent building in the Works. Nothing changed. */
-  | { readonly status: "nothing_to_refund" }
   /** More than the player may still earn this hour or this UTC day. Nothing changed. */
   | { readonly status: "too_much" }
   /** Calls faster than a player's pages may make them. Nothing was done, nor counted. */
@@ -37,9 +35,9 @@ export type PageCoinsDone =
  * which still work out what they earn and spend. Each call is one entry in the Coins ledger, keyed
  * `page:<player>:<id>` so that a call sent twice is done once, and named for the game its reason
  * belongs to. The daily chest is Leaf's to pay: `DAILY_CHEST`, keyed by the player and the UTC day,
- * whatever the page sent. Refused, changing nothing: a spend the balance does not cover; a refund
- * that would give back more than the player has spent building in the Works; an earning past what
- * the player may still earn (`Coins.room`, the one cap on all play). A player's pages may call `PAGE_CALLS` a second; past that a call is
+ * whatever the page sent. Refused, changing nothing: a spend the balance does not cover; an earning
+ * past what the player may still earn (`Coins.room`, the one cap on all play), which Coins given
+ * back for something taken away in the Works are too. A player's pages may call `PAGE_CALLS` a second; past that a call is
  * refused before anything is read or written. A player with no account yet has it opened with the
  * welcome first. Each call done or refused is counted for the staff's report, one answered from
  * before is not. It all goes when those games move to the play service.
@@ -62,13 +60,7 @@ export class PageCoins extends Context.Service<
           if (balance + call.amount < 0) {
             return { status: "not_enough_coins" } satisfies PageCoinsDone;
           }
-          if (call.reason === "works_refund") {
-            const works = yield* coins.works(playerId);
-            if (works.refunded + call.amount > works.built) {
-              return { status: "nothing_to_refund" } satisfies PageCoinsDone;
-            }
-          }
-          if (call.amount > 0 && call.reason !== "works_refund" && call.amount > (yield* coins.room(playerId, now))) {
+          if (call.amount > 0 && call.amount > (yield* coins.room(playerId, now))) {
             return { status: "too_much" } satisfies PageCoinsDone;
           }
           return null;

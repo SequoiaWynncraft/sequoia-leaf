@@ -58,7 +58,6 @@ import {
   Moved,
   NotAMember,
   NotEnoughCoins,
-  NothingToRefund,
   NotYou,
   Refused,
   SaveTooLarge,
@@ -931,12 +930,6 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               return yield* new SlowDown({
                 code: "slow_down",
                 message: "Coins are coming faster than Leaf takes them. Send them again in a moment",
-              });
-            }
-            if (done.status === "nothing_to_refund") {
-              return yield* new NothingToRefund({
-                code: "nothing_to_refund",
-                message: "The Works gives back no more than was spent building there",
               });
             }
             if (done.status === "too_much") {

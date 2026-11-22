@@ -82,30 +82,6 @@ export default Effect.gen(function* () {
     END
   `;
 
-  // What each player has spent building in the Works through its page, and been given back for
-  // taking things away, kept with every such entry: a refund never takes the second past the first.
-  // It goes with the pages' calls, when the Works moves to the play service.
-  yield* sql`
-    CREATE TABLE works_builds (
-      player_id TEXT    PRIMARY KEY,
-      built     INTEGER NOT NULL DEFAULT 0 CHECK (built >= 0),
-      refunded  INTEGER NOT NULL DEFAULT 0 CHECK (refunded >= 0),
-      CHECK (refunded <= built)
-    ) STRICT, WITHOUT ROWID
-  `;
-  yield* sql`
-    CREATE TRIGGER coin_entries_works_builds
-    AFTER INSERT ON coin_entries
-    WHEN NEW.reason IN ('works_build', 'works_refund')
-    BEGIN
-      INSERT OR IGNORE INTO works_builds (player_id) VALUES (NEW.player_id);
-      UPDATE works_builds
-      SET built = built + CASE NEW.reason WHEN 'works_build' THEN -NEW.amount ELSE 0 END,
-          refunded = refunded + CASE NEW.reason WHEN 'works_refund' THEN NEW.amount ELSE 0 END
-      WHERE player_id = NEW.player_id;
-    END
-  `;
-
   // What each player's commands came to on each UTC day (`day` is its first moment): how many were
   // done and how many refused, for the staff's report. Commands sent again and answered from before
   // count once. What a game's commands log is written to `activity` (migration 16).
