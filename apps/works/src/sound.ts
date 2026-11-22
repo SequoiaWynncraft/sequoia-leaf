@@ -23,6 +23,10 @@ export const yardSfx = {
     tone(note(7), 0.07, { vol: 0.08, type: "square", at: 0.03 });
     tone(note(14), 0.1, { vol: 0.07, type: "square", at: 0.09 });
   },
+  /** A brush drawn along wood. */
+  paint(): void {
+    noise(0.1, 1500, { vol: 0.07, q: 1.2 });
+  },
   turn(): void {
     noise(0.03, 2400, { vol: 0.09, q: 6 });
     tone(330, 0.04, { vol: 0.05, type: "triangle" });

@@ -17,6 +17,7 @@ import {
   aimAt,
   cancel,
   confirm,
+  paintAt,
   pickFrom,
   place,
   rotate,
@@ -51,8 +52,8 @@ interface Down {
   sx: number;
   sy: number;
   moved: boolean;
-  /** What this press is doing: moving the view, laying a run, taking things away, or nothing yet. */
-  doing: "pan" | "run" | "take" | "none";
+  /** What this press is doing: moving the view, laying a run, taking things away, colouring lines, or nothing yet. */
+  doing: "pan" | "run" | "take" | "paint" | "none";
   finger: boolean;
   last: { x: number; y: number };
 }
@@ -85,10 +86,14 @@ function ask(tx: number, ty: number, pageX: number, pageY: number): void {
   openCard(tx, ty);
 }
 
-/** A finger's tap with a tool in hand: aim first, build on the second tap of the same tile. */
+/** A finger's tap with a tool in hand: aim first, build on the second tap of the same tile. Paint goes on at the first. */
 function fingerTap(tx: number, ty: number): void {
   if (S.tool === "belt") {
     tapBelt(tx, ty);
+    return;
+  }
+  if (S.tool === "paint") {
+    paintAt(tx, ty);
     return;
   }
   if (S.aim && S.aim.x === tx && S.aim.y === ty) {
@@ -174,6 +179,9 @@ export function initInput(canvas: HTMLCanvasElement): void {
     if (S.tool === "remove") {
       d.doing = "take";
       takeAway(t.x, t.y);
+    } else if (S.tool === "paint") {
+      d.doing = "paint";
+      paintAt(t.x, t.y);
     } else if (S.tool === "belt") {
       d.doing = "run";
       runStart(t.x, t.y);
@@ -223,6 +231,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
     if (d.doing === "pan" && d.moved) pan(dx, dy);
     else if (d.doing === "run") runOver(t.x, t.y);
     else if (d.doing === "take" && (t.x !== d.last.x || t.y !== d.last.y)) takeAway(t.x, t.y, true);
+    else if (d.doing === "paint" && (t.x !== d.last.x || t.y !== d.last.y)) paintAt(t.x, t.y, true);
     d.last = t;
   });
 
@@ -271,6 +280,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
     }
     if (k === "r") rotate();
     else if (k === "e") setTool(S.tool === "remove" ? null : "remove");
+    else if (k === "c") setTool(S.tool === "paint" ? null : "paint");
     else if (k === "z") undo();
     else if (k === "q") {
       const on =

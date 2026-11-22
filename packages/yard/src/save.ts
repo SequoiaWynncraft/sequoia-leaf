@@ -3,7 +3,8 @@
  * yard it can vouch for or nothing at all. A record whose shape or version is wrong is refused
  * whole; inside a good one, a plot, plan or building that could not have come about by playing is
  * left out and the rest is kept. A yard without its seed (what the page is shown) is written and
- * read without one.
+ * read without one. A line's colour is one more part kept only when it is not as new, so a save
+ * from before there were colours reads as it is, and the version did not change for them.
  */
 import { build, planState, plotState, refusal } from "./build.ts";
 import { isItem, type Item, ITEMS, type Tally } from "./content/items.ts";
@@ -17,7 +18,7 @@ import { isDir } from "./grid.ts";
 import { LAND, type Land } from "./land.ts";
 import { fillBoard, reask } from "./orders.ts";
 import { repower } from "./power.ts";
-import { type Away, type Building, put, reopen, type Standing, WARM, type World } from "./world.ts";
+import { type Away, type Building, put, reopen, type Standing, TINTS, WARM, type World } from "./world.ts";
 
 export const VERSION = 3;
 
@@ -57,6 +58,7 @@ function pack(b: Building, i: number): Rec {
   if (!b.open) o.c = 1;
   if (b.fuel !== 0) o.f = b.fuel;
   if (b.free) o.g = 1;
+  if (b.tint !== 0) o.h = b.tint;
   return o;
 }
 
@@ -109,6 +111,7 @@ function unpack(w: World, b: Building, i: number, o: Rec): void {
     b.prog = amount(o.p, 2) ?? 0;
     b.via = whole(o.v, w.cells.length - 1) ?? -1;
   }
+  if (carries) b.tint = whole(o.h, TINTS) ?? 0;
   const held = tally(o.b, 1e6);
   const room = b.kind === "crate" ? w.rates.crate : 1e6;
   for (const item of ITEMS)

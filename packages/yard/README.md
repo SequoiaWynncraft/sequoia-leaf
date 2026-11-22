@@ -87,6 +87,14 @@ a joiner takes turn about. A tunnel is built as both mouths at once and comes up
 clear tile; a thing spends as long under the ground as it would on belts over the same tiles. A
 tunnel goes under belts, roots and the stream, but never under the depot, and the router goes round.
 
+A belt, a tunnel mouth, a splitter and a joiner each have a `tint`: 0, or one of six colours a
+player gives to tell lines apart. It changes nothing about how the yard runs. `paint` colours a
+splitter or a joiner by itself, and a belt or a tunnel mouth with its whole line (`lineOf`): every
+belt and tunnel joined end to end with it, as `rewire` hands things on, as far as the next thing
+that is neither. A belt that joins the side of a line running straight on is a line of its own. A
+belt or a run built onto a coloured line takes its colour: the line that feeds it, or else the line
+it feeds.
+
 `status(w, i)` says what the thing on a tile is doing in a sentence, and whether it is in trouble
 that will not mend itself: out of reach of power, nowhere to send what it makes, full of one part
 and waiting for another. `rate` is how many it turns out in a minute at the yard's present pace.
@@ -186,6 +194,7 @@ service gives every command an `id`.
 | `lay`      | `legs: [{kind, x, y, dir, span}]`, `turn?: {x, y, dir}`: all of it or none |
 | `remove`   | `x, y`                                                                     |
 | `turn`     | `x, y, dir`                                                                |
+| `paint`    | `x, y, tint`: the line through a tile, 1 to 6, or 0 for no colour          |
 | `recipe`   | `x, y, item` (or null)                                                     |
 | `tipOut`   | `x, y, item` (or null)                                                     |
 | `crate`    | `x, y, open`                                                               |

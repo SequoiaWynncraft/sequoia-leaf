@@ -20,6 +20,8 @@ export const LONG_PRESS = 450;
 
 let box: HTMLElement | null = null;
 let owner: object | null = null;
+/** The tip was shown for the keyboard's focus, so where the mouse goes does not matter to it. */
+let byKey = false;
 let hideAt = 0;
 
 const said = (w: Words | undefined): string => (typeof w === "function" ? w() : (w ?? ""));
@@ -48,7 +50,44 @@ export function tipOff(by: object | null = null): void {
   box?.remove();
   box = null;
   owner = null;
+  byKey = false;
   hideAt = 0;
+}
+
+/** Something shown for an element: the element, whether for the keyboard's focus, and how it is put away. */
+type Shown = { readonly by: object | null; readonly key: boolean; readonly off: () => void };
+
+/** What is shown for an element now: the tip, and whatever `goesWith` adds (a passing card). */
+const shown: (() => Shown | null)[] = [() => (box ? { by: owner, key: byKey, off: tipOff } : null)];
+
+/**
+ * Puts away what `what` says is shown once its element leaves the page or, unless it was shown for
+ * the keyboard's focus, once the mouse is on something outside it. A panel drawn again under a
+ * resting mouse takes its old buttons away with no `pointerleave`, so this is asked whenever the page
+ * changes and whenever the mouse comes onto something new.
+ */
+export function goesWith(what: () => Shown | null): void {
+  shown.push(what);
+}
+
+if (typeof window !== "undefined") {
+  const sweep = (on: EventTarget | null): void => {
+    for (const what of shown) {
+      const s = what();
+      if (s?.by instanceof Element && (!s.by.isConnected || (!s.key && on instanceof Node && !s.by.contains(on))))
+        s.off();
+    }
+  };
+  window.addEventListener(
+    "pointerover",
+    (e) => {
+      if (e.pointerType === "mouse") sweep(e.target);
+    },
+    true,
+  );
+  new MutationObserver(() => {
+    sweep(null);
+  }).observe(document.documentElement, { childList: true, subtree: true });
 }
 
 /** Whose tip is showing, if any. */
@@ -73,7 +112,9 @@ export function tip(target: HTMLElement, title: Words, text?: Words): void {
     tipOff(target);
   });
   target.addEventListener("focus", () => {
-    if (target.matches(":focus-visible")) beside(target, title, text);
+    if (!target.matches(":focus-visible")) return;
+    beside(target, title, text);
+    byKey = true;
   });
   target.addEventListener("blur", () => {
     tipOff(target);
