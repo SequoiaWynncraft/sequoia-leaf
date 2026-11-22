@@ -6,6 +6,9 @@
  *   is, sent with every batch. A page whose rules are older than Leaf's (the state will not read)
  *   loads again, and so does one Leaf answers `not_you` (signed in as someone else since it
  *   opened): nothing more is sent.
+ * - With `of`, it opens that player's state as a visitor is given it (`visitPath`): `send` is
+ *   refused `visiting` at once and sends nothing, and `refresh` reads it again. Nothing to visit
+ *   there (no such state, or a game that cannot be visited) is the trouble `nothing`.
  * - `send(command, predict)` gives the command an id, queues it, and returns at once, with a promise
  *   of Leaf's answer for it. Commands go to Leaf in order, one request at a time, as many as are
  *   waiting in each (up to 32); after a network failure, or Leaf having trouble or asking to slow
@@ -27,7 +30,7 @@
  * Every request reaches Leaf through `net.ts`, which the tests stand in for.
  */
 
-import { type GameId, MOST_COMMANDS, playPath } from "@sequoia-leaf/core";
+import { type GameId, MOST_COMMANDS, playPath, visitPath } from "@sequoia-leaf/core";
 
 import { ask, isRecord, outside } from "./net.ts";
 import { fromTown } from "./shell.ts";
@@ -43,10 +46,10 @@ export type Answer<Note> = { readonly notes: Note[] } | { readonly refused: stri
 
 /**
  * Why the page cannot play on: signed out; Leaf will not have it (no answer, no such game, not let
- * in); no Leaf with the play service answered in time (`noserver`); or the state Leaf keeps for the
- * player does not read (`unreadable`).
+ * in); no Leaf with the play service answered in time (`noserver`); the state Leaf keeps for the
+ * player does not read (`unreadable`); or, for a visitor, there is nothing of the player's to visit.
  */
-export type Trouble = "signedout" | "closed" | "noserver" | "unreadable";
+export type Trouble = "signedout" | "closed" | "noserver" | "unreadable" | "nothing";
 
 export interface Play<View, Command extends object, Note> {
   /** The copy to draw from: Leaf's state, with what is waiting for Leaf worked out on top. */
@@ -117,25 +120,31 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 /**
  * Opens a game on Leaf: its state as Leaf has it now, ready to send commands. Answers why not when
  * it cannot: `signedout`; `closed` for no answer, trouble, or a game Leaf does not play; `noserver`
- * when Leaf has had no play service for `notYet`; `unreadable` when the state it keeps does not read.
+ * when Leaf has had no play service for `notYet`; `unreadable` when the state it keeps does not read;
+ * `nothing` when there is nothing of `of`'s to visit.
  */
 export async function openPlay<View, Command extends object, Note>(
   game: GameId,
   reader: PlayReader<View, Note>,
-  options: { readonly player: string; readonly retry?: Retry; readonly notYet?: NotYet },
+  options: { readonly player: string; readonly of?: string; readonly retry?: Retry; readonly notYet?: NotYet },
 ): Promise<Play<View, Command, Note> | { trouble: Trouble }> {
   const path = playPath(game);
+  const visiting = options.of !== undefined;
+  /** Where the state is read: the player's own, or the one visited. */
+  const read = options.of === undefined ? path : visitPath(game, options.of);
   const waitFor = options.notYet ?? NOT_YET;
-  let first = await ask(path);
+  let first = await ask(read);
   for (let tried = 0; notYet(first); tried++) {
     if (tried >= waitFor.tries) return { trouble: "noserver" };
     // oxlint-disable-next-line no-await-in-loop -- the same question, a moment later
     await wait(waitFor.every);
     // oxlint-disable-next-line no-await-in-loop -- the same question, a moment later
-    first = await ask(path);
+    first = await ask(read);
   }
   if (first.status === 401) return { trouble: "signedout" };
   if (unreadable(first)) return { trouble: "unreadable" };
+  if (first.status === 404 && isRecord(first.body) && first.body.code === "nothing_to_visit")
+    return { trouble: "nothing" };
   if (first.status !== 200 || !isRecord(first.body)) return { trouble: "closed" };
   const opened = reader.view(first.body.state);
   if (opened === null) {
@@ -344,8 +353,9 @@ export async function openPlay<View, Command extends object, Note>(
     },
     send(command, predict) {
       return new Promise<Answer<Note>>((answer) => {
-        if (stopped) {
-          answer({ refused: "closed" });
+        // A visitor changes nothing: nothing is queued, so nothing is ever sent or flushed.
+        if (stopped || visiting) {
+          answer({ refused: stopped ? "closed" : "visiting" });
           return;
         }
         const pending: Pending<View, Command, Note> = { id: `${name}-${++made}`, command, predict, answer };
@@ -366,7 +376,7 @@ export async function openPlay<View, Command extends object, Note>(
     flush,
     async refresh() {
       if (stopped || flying !== null || queue.length > 0) return;
-      const reply = await ask(path);
+      const reply = await ask(read);
       if (reply.status === 401) return stop("signedout");
       if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0) {
         took({ ...reply.body, results: [] }, []);

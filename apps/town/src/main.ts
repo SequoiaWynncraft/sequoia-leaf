@@ -208,7 +208,7 @@ async function boot(): Promise<void> {
   let heldStill = false;
 
   const stage: Stage = {
-    goInside(game, at) {
+    goInside(game, at, of) {
       if (visit) return;
       inside = game;
       // The game says where the member is while it is open.
@@ -216,7 +216,8 @@ async function boot(): Promise<void> {
       iris.at = at;
       iris.goal = 0;
       hush(true);
-      visit = goIn(GAMES[game], {
+      const door = GAMES[game];
+      visit = goIn(of === undefined ? door : { ...door, url: `${door.url}?of=${encodeURIComponent(of)}` }, {
         news(text, tone) {
           hooks.feed(text, tone);
         },

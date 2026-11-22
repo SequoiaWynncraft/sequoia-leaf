@@ -14,7 +14,7 @@ import { readView as readYardView, route, WORKS } from "@sequoia-leaf/yard";
 import { Effect, Logger, References, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
-import { Standings } from "../src/api/schemas.ts";
+import { Person, Standings } from "../src/api/schemas.ts";
 import { knownAmong } from "../src/game/known.ts";
 import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
@@ -873,7 +873,7 @@ describe("the board", () => {
     expect(board.you).toMatchObject({ place: BOARD_MOST, score: 1000 - BOARD_MOST * 10 });
   });
 
-  it("is empty for a game with no board, has no place for a player not on it, and is only for a game Leaf plays", async () => {
+  it("is empty for a game nobody stands in yet, has no place for a player not on it, and is only for a game Leaf plays", async () => {
     await stand(bob, 500, T0);
     expect(await boardOf("raid")).toEqual({ top: [], you: null });
     expect((await boardOf()).you).toBeNull();
@@ -1000,5 +1000,103 @@ describe("the Works", () => {
     // The old save slot takes no more writes.
     const old = await send("PUT", "/v1/game/saves/works", { version: 0, data: { keys: {} } });
     expect([old.status, await codeOf(old)]).toEqual([410, "moved"]);
+
+    // Bob visits a minute on: he is given the yard as Alice's own page is, and nothing of it is written.
+    clock.now += MINUTE;
+    const before = { state: await storedWorks(alice), coins: await entries(alice), stood: await standings() };
+    const visited = Schema.decodeUnknownSync(Shown)(await (await visit(alice, "works", bob)).json());
+    const own = Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json());
+    expect(visited).toEqual(own);
+    expect(yardOf(visited.state).yard.tick).toBeGreaterThan(yardNow.tick);
+    expect({ state: await storedWorks(alice), coins: await entries(alice), stood: await standings() }).toEqual(before);
+    // Her card: where her yard stands.
+    expect(await personOf(alice, bob)).toEqual({
+      id: alice,
+      name: "Alice",
+      games: { works: { place: 1, score: earned, also: { story: 1 } } },
+    });
+  });
+});
+
+const storedWorks = (player: PlayerId) =>
+  services.query((sql) => sql`SELECT rev, state FROM play_state WHERE player_id = ${player} AND game = 'works'`);
+/** Somebody's state in a game, as a visitor asks for it. */
+const visit = (player: string, game: string, visitor: PlayerId = alice) =>
+  send("GET", `/v1/game/play/${game}/of/${player}`, undefined, visitor);
+/** Somebody's card's numbers, as the people route answers them. */
+async function personOf(player: string, asker: PlayerId = alice) {
+  const response = await send("GET", `/v1/game/people/${player}`, undefined, asker);
+  expect(response.status).toBe(200);
+  return Schema.decodeUnknownSync(Person)(await response.json());
+}
+
+describe("a visit", () => {
+  it("finds nothing in a game that cannot be visited, nor of a player with no state there, and makes none", async () => {
+    await opened(bob);
+    const raid = await visit(bob, "raid");
+    expect([raid.status, await codeOf(raid)]).toEqual([404, "nothing_to_visit"]);
+    for (const nobody of [carol, "not-a-player"]) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      const none = await visit(nobody, "works");
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      expect([none.status, await codeOf(none)]).toEqual([404, "nothing_to_visit"]);
+    }
+    expect(await services.query((sql) => sql`SELECT player_id FROM play_state WHERE player_id = ${carol}`)).toEqual([]);
+    expect(await entries(carol)).toEqual([]);
+    const chess = await visit(bob, "chess");
+    expect([chess.status, await codeOf(chess)]).toEqual([404, "no_such_game"]);
+  });
+
+  it("takes one of the visitor's batches: past twenty at once, slow_down", async () => {
+    await send("GET", "/v1/game/play/works", undefined, bob);
+    const answers = await Promise.all(Array.from({ length: 21 }, () => visit(bob, "works")));
+    expect(answers.map((a) => a.status).toSorted((a, b) => a - b)).toEqual([
+      ...Array.from({ length: 20 }, () => 200),
+      429,
+    ]);
+    const slow = answers.find((a) => a.status === 429);
+    expect(slow && (await codeOf(slow))).toBe("slow_down");
+    // The batches are the visitor's own: a command of theirs is held back too, and Bob's are not.
+    const held = await send("POST", "/v1/game/play/raid", { commands: ided([{ do: "start", trail: 0 }]) });
+    expect(held.status).toBe(429);
+    expect((await visit(alice, "works", bob)).status).toBe(404);
+  });
+});
+
+describe("a person's numbers", () => {
+  it("are where they stand in each game, placed as the board places them, the raid's written as their table changes", async () => {
+    await named(bob, "Bob");
+    const { view } = await playRun(bob);
+    await stand(stranger(1), 900, T0);
+    await stand(bob, 500, T0);
+    const bosses = view.almanac.bosses.flat().length;
+    expect(await personOf(bob)).toEqual({
+      id: bob,
+      name: "Bob",
+      games: {
+        raid: { place: 1, score: bosses, also: { runs: 1, room: Math.max(...view.almanac.best) } },
+        works: { place: 2, score: 500, also: { story: 500 % 16 } },
+      },
+    });
+  });
+
+  it("name one Leaf knows but cannot name Someone, and list no games for one who has played none", async () => {
+    await stand(stranger(4), 0, T0);
+    expect(await personOf(stranger(4))).toEqual({
+      id: stranger(4),
+      name: "Someone",
+      games: { works: { place: 1, score: 0, also: { story: 0 } } },
+    });
+    // Carol, a guest, asks about herself before she has played.
+    expect(await personOf(carol, carol)).toEqual({ id: carol, name: "Someone", games: {} });
+  });
+
+  it("are not given of a player Leaf does not know", async () => {
+    for (const nobody of [stranger(5), "not-a-player"]) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      const answer = await send("GET", `/v1/game/people/${nobody}`);
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      expect([answer.status, await codeOf(answer)]).toEqual([404, "no_such_player"]);
+    }
   });
 });

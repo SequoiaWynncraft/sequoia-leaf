@@ -71,7 +71,7 @@ function pointAt(tx: number, ty: number): void {
 function ask(tx: number, ty: number, pageX: number, pageY: number): void {
   const p = toYard(pageX, pageY);
   const who = callerAt(p.x, p.y);
-  if (who) {
+  if (who && !S.visiting) {
     inputHooks.caller(who.order);
     return;
   }
@@ -162,7 +162,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
       }, LONG_PRESS);
       return;
     }
-    if (e.button === 2) {
+    if (e.button === 2 && !S.visiting) {
       d.doing = "take";
       takeAway(t.x, t.y, true);
       return;
@@ -262,6 +262,8 @@ export function initInput(canvas: HTMLCanvasElement): void {
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // A visitor changes nothing: only the keys that look about work.
+    if (S.visiting && !/^(t|\+|=|_|arrow\w+|[wasd])$/.test(k)) return;
     const picked = toolForKey(e.key);
     if (picked !== undefined) {
       setTool(S.tool === picked ? null : picked);

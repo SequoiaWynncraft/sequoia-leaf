@@ -181,7 +181,7 @@ const CARDS: Readonly<Record<Exclude<Shut, "signin">, readonly [string, string, 
   closed: ["Just a moment", "The guild's books are closed for a moment. Try again.", "Try again"],
 };
 
-/** Puts the page away behind a card: a title, a line and one button. */
+/** Puts a card over the page: a title, a line and one button. */
 function card(title: string, line: string, word: string, go: () => void): void {
   const button = el("button", "k-btn wide", { type: "button" }, word);
   button.addEventListener("click", go);
@@ -217,14 +217,21 @@ export function shutCard(why: Shut, signIn: string): void {
 }
 
 /**
+ * Puts the page away behind a card in the game's own words: a title, a line and one button, which
+ * does `go`. A game in a frame says it is ready, so that the town shows the card.
+ */
+export function pageCard(title: string, line: string, word: string, go: () => void): void {
+  document.body.replaceChildren();
+  card(title, line, word, go);
+  if (inTown()) tell({ town: "ready" });
+}
+
+/**
  * Puts a game away behind the card for a page opened where no Leaf answers: a game played on Leaf
  * needs the guild's server. `line` says so in the game's words.
  */
-export function serverCard(line: string): void {
-  document.body.replaceChildren();
-  card("No server here", line, "Try again", () => location.reload());
-  if (inTown()) tell({ town: "ready" });
-}
+export const serverCard = (line: string): void =>
+  pageCard("No server here", line, "Try again", () => location.reload());
 
 /** What a game says when the state Leaf keeps for the player does not read. */
 export const UNREADABLE = "Your game could not be read. It has been kept; tell the guild.";
@@ -235,24 +242,23 @@ export const UNREADABLE = "Your game could not be read. It has been kept; tell t
  * back to town.
  */
 export function unreadableCard(): void {
-  document.body.replaceChildren();
   const back = !outside.top();
-  card("Could not be read", UNREADABLE, back ? "Back to town" : "Try again", () => {
+  pageCard("Could not be read", UNREADABLE, back ? "Back to town" : "Try again", () => {
     if (back) leave();
     else location.reload();
   });
-  if (inTown()) tell({ town: "ready" });
 }
 
 /**
  * Puts a game played on Leaf away behind the card for why it cannot go on (`play.ts`'s `Trouble`):
  * signed out or turned away, the state Leaf keeps not reading, or no Leaf with the play service
- * answering, which `line` says in the game's words.
+ * answering, which `line` says in the game's words. A game that can be visited says its own card
+ * for nothing to visit (`pageCard`); any other is shown it as closed.
  */
 export function troubleCard(why: Trouble, signIn: string, line: string): void {
   if (why === "unreadable") unreadableCard();
   else if (why === "noserver") serverCard(line);
-  else shutCard(why, signIn);
+  else shutCard(why === "nothing" ? "closed" : why, signIn);
 }
 
 // ---------- the cards for a live room let go of ----------

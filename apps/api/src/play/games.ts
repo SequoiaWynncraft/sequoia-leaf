@@ -28,6 +28,8 @@ export interface Opened {
   readonly text: () => string;
   /** What the player's page is given of it. */
   readonly view: (ctx: Ctx) => unknown;
+  /** What a visitor is given of it, or null for a game that cannot be visited. */
+  readonly visit: ((ctx: Ctx) => unknown) | null;
   /** Where it stands among everyone's, or null for a game with no board. */
   readonly standing: () => Standing | null;
 }
@@ -93,6 +95,7 @@ export function played<State, Command, View, Note>(game: Game<State, Command, Vi
         },
         text: () => game.encode(current()),
         view: (at) => game.view(current(), at),
+        visit: game.visit ? (at) => game.visit?.(current(), at) : null,
         standing: () => game.standing?.(current()) ?? null,
       };
     },

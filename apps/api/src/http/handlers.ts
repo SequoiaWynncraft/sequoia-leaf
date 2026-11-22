@@ -74,6 +74,7 @@ import { AppConfig } from "../config.ts";
 import { syncOnDemand } from "../earning/run.ts";
 import { eventJsonText, Events } from "../events/store.ts";
 import { GUILD_EVENT_TYPES, guildEvents } from "../game/guild.ts";
+import { knownAmong } from "../game/known.ts";
 import { PlayerNames } from "../game/names.ts";
 import { type Here, Presence } from "../game/presence.ts";
 import { Saves } from "../game/saves.ts";
@@ -660,6 +661,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
     const store = yield* PlayStore;
     const coins = yield* Coins;
     const pageCoins = yield* PageCoins;
+    const sql = yield* SqlClient.SqlClient;
 
     /** The player's Coins, their account opened with the welcome if they have none yet. */
     const coinsOf = (identity: Identity) =>
@@ -914,6 +916,58 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               results: batch.results,
               state: batch.view,
             } satisfies typeof Body.Played.Type);
+          }),
+        )
+        // Somebody's state as a visitor is given it: brought to now in memory, and nothing written.
+        .handle("visit", ({ params }) =>
+          Effect.gen(function* () {
+            const played = yield* playedGame(params.game);
+            const identity = yield* CurrentIdentity;
+            const player = parsePlayerId(params.player);
+            const shown =
+              player === undefined
+                ? null
+                : yield* play.visit(player, played, { playerId: identity.playerId, guest: isGuest(identity) });
+            if (shown === null || shown.status === "nothing") {
+              return yield* new Missing({
+                code: "nothing_to_visit",
+                message: "There is nothing of theirs to visit there",
+              });
+            }
+            if (shown.status === "unreadable") {
+              return yield* unreadable;
+            }
+            if (shown.status === "slow") {
+              return yield* new SlowDown({
+                code: "slow_down",
+                message: "Visits are coming faster than Leaf takes them. Ask again in a moment",
+              });
+            }
+            return HttpServerResponse.jsonUnsafe({
+              rev: shown.rev,
+              now: iso(shown.now),
+              state: shown.view,
+            } satisfies typeof Body.PlayShown.Type);
+          }),
+        )
+        // Somebody Leaf knows, or the caller (as for a skin), named as the board names them, and where they stand in each game.
+        .handle("person", ({ params }) =>
+          Effect.gen(function* () {
+            const player = parsePlayerId(params.player);
+            const { playerId: asker } = yield* CurrentIdentity;
+            const known =
+              player === asker ||
+              (player !== undefined && (yield* knownAmong(sql, [player], yield* Clock.currentTimeMillis)).has(player));
+            if (player === undefined || !known) {
+              return yield* new Missing({ code: "no_such_player", message: "Leaf does not know that player" });
+            }
+            const named = yield* names.of([player]);
+            const games = yield* store.standingsOf(player);
+            return HttpServerResponse.jsonUnsafe({
+              id: player,
+              name: named.get(player) ?? "Someone",
+              games: Object.fromEntries(games),
+            } satisfies typeof Body.Person.Type);
           }),
         )
         // A game's board, its players named as the guild's news names them.

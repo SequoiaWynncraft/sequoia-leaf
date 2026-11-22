@@ -217,6 +217,12 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     );
   }
   await call("GET /v1/game/play/{game}/standings", "GET", "/v1/game/play/works/standings");
+  // Bob's yard, as a visitor is given it; the raid, which cannot be visited; and Alice's numbers on her card.
+  await app.request("/v1/game/play/works", { headers: { Authorization: "Bearer bob-token" } });
+  await call("GET /v1/game/play/{game}/of/{player}", "GET", `/v1/game/play/works/of/${bob}`);
+  await call("GET /v1/game/play/{game}/of/{player}, nothing to visit", "GET", `/v1/game/play/raid/of/${bob}`);
+  await call("GET /v1/game/people/{player}", "GET", `/v1/game/people/${alice}`, undefined, "bob-token");
+  await call("GET /v1/game/people/{player}, unknown", "GET", "/v1/game/people/20000000-0000-0000-0000-000000000009");
   // Coins the town and the Works work out on their pages, kept in the ledger: the daily chest, a
   // thing for the camp, the same call again, a spend too dear, and a reason that is not one.
   const chest = { player: alice, id: "chest-2026-11-25", amount: 3, reason: "daily_chest" };

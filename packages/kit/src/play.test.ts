@@ -150,6 +150,32 @@ describe("opening a game on Leaf", () => {
   });
 });
 
+describe("visiting somebody's game", () => {
+  const BOB = "10000000-0000-0000-0000-000000000002";
+  const OF = `/v1/game/play/works/of/${BOB}`;
+  const yard: PlayReader<unknown, never> = { view: (v) => (isRecord(v) && "yard" in v ? v : null), notes: () => null };
+
+  test("reads what Leaf really answers a visitor, sends nothing, refuses every command, and reads it again on refresh", async () => {
+    const shown = contract("GET /v1/game/play/{game}/of/{player}");
+    world = standin({ [`GET ${OF}`]: { status: 200, body: shown } });
+    const play = await openPlay<unknown, Add, never>("works", yard, { player: "p", of: BOB });
+    if ("trouble" in play) throw new Error(play.trouble);
+    expect(play.state).toEqual(Object(Object(shown).state));
+    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "visiting" });
+    expect(play.waiting()).toBe(false);
+    play.flush();
+    await play.refresh();
+    expect(world.sent.map((s) => `${s.method} ${s.path}`)).toEqual([`GET ${OF}`, `GET ${OF}`]);
+  });
+
+  test("says when there is nothing of theirs to visit", async () => {
+    world = standin({
+      [`GET ${OF}`]: { status: 404, body: contract("GET /v1/game/play/{game}/of/{player}, nothing to visit") },
+    });
+    expect(await openPlay("works", yard, { player: "p", of: BOB })).toEqual({ trouble: "nothing" });
+  });
+});
+
 describe("sending commands", () => {
   test("returns at once, shows a prediction at once, and takes Leaf's state when it answers", async () => {
     const { routes, leaf } = counterLeaf(5);

@@ -42,6 +42,7 @@ const MEMBERS_ONLY: Readonly<Record<string, string>> = {
   "apps/town/src/aboutui.ts": "the faces of those listed in Who is about, members and guests alone",
   "apps/town/src/live.ts": "where each player's own skin is served",
   "apps/works/src/ui/board.ts": "the faces of the yards' owners on Top yards, members and guests alone",
+  "apps/works/src/ui/hud.ts": "the face of the owner of a yard visited, a member or a guest",
 };
 
 /** Whether a file takes anything from the skin figure but the name of a facing (`Dir`), which anything that turns uses. */

@@ -1212,6 +1212,71 @@
       }
     }
   },
+  "GET /v1/game/play/{game}/of/{player}": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/play/works/of/10000000-0000-0000-0000-000000000002"
+    },
+    "status": 200,
+    "body": {
+      "rev": 0,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "yard": "{\"v\":3,\"tick\":0,\"at\":1795611300000,\"till\":0,\"bank\":0,\"told\":0,\"plots\":[\"yard\"],\"plans\":[],\"story\":0,\"filled\":{},\"board\":[],\"serial\":0,\"done\":0,\"swapAt\":0,\"depot\":{},\"given\":{},\"sold\":0,\"paid\":0,\"pace\":{\"ticks\":0,\"warm\":300,\"made\":{}},\"cells\":[]}",
+        "clock": 0
+      }
+    }
+  },
+  "GET /v1/game/play/{game}/of/{player}, nothing to visit": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/play/raid/of/10000000-0000-0000-0000-000000000002"
+    },
+    "status": 404,
+    "body": {
+      "code": "nothing_to_visit",
+      "message": "There is nothing of theirs to visit there"
+    }
+  },
+  "GET /v1/game/people/{player}": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/people/10000000-0000-0000-0000-000000000001"
+    },
+    "status": 200,
+    "body": {
+      "id": "10000000-0000-0000-0000-000000000001",
+      "name": "Alice",
+      "games": {
+        "raid": {
+          "place": 1,
+          "score": 0,
+          "also": {
+            "runs": 0,
+            "room": 0
+          }
+        },
+        "works": {
+          "place": 2,
+          "score": 1840,
+          "also": {
+            "story": 3
+          }
+        }
+      }
+    }
+  },
+  "GET /v1/game/people/{player}, unknown": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/people/20000000-0000-0000-0000-000000000009"
+    },
+    "status": 404,
+    "body": {
+      "code": "no_such_player",
+      "message": "Leaf does not know that player"
+    }
+  },
   "POST /v1/game/coins": {
     "request": {
       "method": "POST",
