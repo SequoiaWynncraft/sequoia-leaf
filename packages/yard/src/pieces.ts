@@ -202,8 +202,8 @@ export function stand(
     const line = p.kind === "belt" || p.kind === "tunnel";
     for (const i of tilesOf(w, [p])) {
       const made = w.cells[i];
-      // The colour `build` gave a belt came of the pieces stood before it: the whole set is joined below.
-      if (made) Object.assign(made, { tint: line ? 0 : made.tint }, keptOf(p, p.kind));
+      // The colour `build` gave it came of what stood there or beside it: a run is joined below, as a whole.
+      if (made) Object.assign(made, { tint: 0 }, keptOf(p, p.kind));
       if (line && joins) laid.push(i);
     }
   }
