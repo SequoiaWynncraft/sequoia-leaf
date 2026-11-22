@@ -104,7 +104,7 @@ async function look(): Promise<Where> {
     if (member.guest) asGuest();
     else fromLedger(member.leaf);
     // From here on the purse's Coins are Leaf's ledger's, guest or member.
-    fromLeaf(readCoins(me.body) ?? 0);
+    fromLeaf(readCoins(me.body) ?? 0, member.id);
     signedInOn = deviceForWidth(outside.width());
     return { mode: "live", me: member, signIn };
   }

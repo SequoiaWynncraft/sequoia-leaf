@@ -121,12 +121,17 @@ function take(view: TableView): void {
 export const leafView = (): TableView | null => table?.state ?? null;
 
 /**
- * Opens the table from Leaf. Says why it could not: signed out, or no Leaf answering. After that,
- * whatever stops the page sending (being signed out) is told to `trouble`.
+ * Opens the table from Leaf, for the member the page is signed in as (`player`). Says why it could
+ * not: signed out, or no Leaf answering. After that, whatever stops the page sending (being signed
+ * out) is told to `trouble`.
  */
-export async function openTable(trouble: (why: Trouble) => void): Promise<Trouble | null> {
+export async function openTable(player: string, trouble: (why: Trouble) => void): Promise<Trouble | null> {
   S.prefs = readPrefs();
-  const opened = await openPlay<TableView, RaidCommand, RaidNote>("raid", { view: readView, notes: readNotes });
+  const opened = await openPlay<TableView, RaidCommand, RaidNote>(
+    "raid",
+    { view: readView, notes: readNotes },
+    { player },
+  );
   if ("trouble" in opened) return opened.trouble;
   table = opened;
   take(opened.state);

@@ -63,7 +63,7 @@ afterEach(() => {
 
 async function opened(routes: Record<string, (sent: Sent) => Reply>): Promise<Play<Count, Add, string>> {
   world = standin(routes);
-  const play = await openPlay<Count, Add, string>("raid", COUNTER, { retry: { first: 1, most: 4 } });
+  const play = await openPlay<Count, Add, string>("raid", COUNTER, { player: "p", retry: { first: 1, most: 4 } });
   if ("trouble" in play) throw new Error(play.trouble);
   return play;
 }
@@ -78,10 +78,14 @@ describe("opening a game on Leaf", () => {
   test("reads what Leaf really answers for a new table", async () => {
     const shown = contract("GET /v1/game/play/{game}");
     world = standin({ "GET /v1/game/play/raid": { status: 200, body: shown } });
-    const play = await openPlay("raid", {
-      view: (v) => (isRecord(v) && "almanac" in v ? v : null),
-      notes: () => [],
-    });
+    const play = await openPlay(
+      "raid",
+      {
+        view: (v) => (isRecord(v) && "almanac" in v ? v : null),
+        notes: () => [],
+      },
+      { player: "p" },
+    );
     if ("trouble" in play) throw new Error(play.trouble);
     expect(play.rev).toBe(0);
     expect(play.state).toEqual(Object(Object(shown).state));
@@ -98,13 +102,13 @@ describe("opening a game on Leaf", () => {
     let answered = 0;
     world = standin({ "GET /v1/game/play/raid": () => cases[answered++]?.[0] ?? "offline" });
     // Asked one after another, each is answered in turn.
-    const troubles = await Promise.all(cases.map(() => openPlay("raid", COUNTER)));
+    const troubles = await Promise.all(cases.map(() => openPlay("raid", COUNTER, { player: "p" })));
     expect(troubles).toEqual(cases.map(([, trouble]) => ({ trouble })));
   });
 
   test("loads the page again when Leaf's state will not read: its rules are newer than the page's", async () => {
     world = standin({ "GET /v1/game/play/raid": { status: 200, body: { rev: 3, now: "x", state: { v: 9 } } } });
-    expect(await openPlay("raid", COUNTER)).toEqual({ trouble: "closed" });
+    expect(await openPlay("raid", COUNTER, { player: "p" })).toEqual({ trouble: "closed" });
     expect(world.reloaded.count).toBe(1);
   });
 });
@@ -237,6 +241,33 @@ describe("sending commands", () => {
     expect(await b).toEqual({ refused: "signedout" });
     expect(troubles).toEqual(["signedout"]);
     expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "closed" });
+  });
+
+  test("say who the page believes the member is, with every batch", async () => {
+    const { leaf, routes } = counterLeaf(0);
+    const play = await opened(routes);
+    void play.send({ do: "add", by: 1 });
+    void play.send({ do: "add", by: 2 });
+    await settled(play);
+    const posts = world?.sent.filter((s) => s.method === "POST") ?? [];
+    expect(posts.length).toBeGreaterThan(0);
+    expect(posts.every((s) => isRecord(s.body) && s.body.player === "p")).toBe(true);
+    expect(leaf.n).toBe(3);
+  });
+
+  test("signed in as somebody else since the page opened: nothing more is sent, and the page loads again", async () => {
+    const { routes } = counterLeaf(0);
+    const play = await opened({
+      ...routes,
+      "POST /v1/game/play/raid": () => ({ status: 409, body: { code: "not_you", message: "Load it again" } }),
+    });
+    const a = play.send({ do: "add", by: 1 });
+    const b = play.send({ do: "add", by: 1 });
+    expect(await a).toEqual({ refused: "not_you" });
+    expect(await b).toEqual({ refused: "not_you" });
+    expect(world?.reloaded.count).toBe(1);
+    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "closed" });
+    expect(world?.sent.filter((s) => s.method === "POST")).toHaveLength(1);
   });
 
   test("commands Leaf will not read are answered invalid_command, and those after them still go", async () => {

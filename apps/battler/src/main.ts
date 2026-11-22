@@ -90,8 +90,8 @@ async function boot(): Promise<void> {
     serverCard(NEEDS_LEAF);
     return;
   }
-  const { signIn } = where;
-  const trouble = await openTable((why) => shutCard(why === "signedout" ? "signedout" : "closed", signIn));
+  const { signIn, me } = where;
+  const trouble = await openTable(me.id, (why) => shutCard(why === "signedout" ? "signedout" : "closed", signIn));
   if (trouble === "signedout") {
     shutCard("signedout", signIn);
     return;

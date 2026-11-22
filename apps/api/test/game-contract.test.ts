@@ -183,6 +183,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   // same batch sent again, and what is not a command or not a game.
   await call("GET /v1/game/play/{game}", "GET", "/v1/game/play/raid");
   const firstRoom = {
+    player: alice,
     commands: [
       { id: "c-1", do: "start", trail: 0 },
       { id: "c-2", do: "choose", option: 0 },
@@ -190,29 +191,41 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   };
   await call("POST /v1/game/play/{game}", "POST", "/v1/game/play/raid", firstRoom);
   await call("POST /v1/game/play/{game}, a refusal", "POST", "/v1/game/play/raid", {
+    player: alice,
     commands: [{ id: "c-3", do: "take" }],
   });
   await call("POST /v1/game/play/{game}, sent again", "POST", "/v1/game/play/raid", firstRoom);
   await call("POST /v1/game/play/{game}, not a command", "POST", "/v1/game/play/raid", {
+    player: alice,
     commands: [{ id: "c-4", do: "win" }],
   });
   await call("GET /v1/game/play/{game}, not a game", "GET", "/v1/game/play/chess");
   // Coins the town and the Works work out on their pages, kept in the ledger: the daily chest, a
   // thing for the camp, the same call again, a spend too dear, and a reason that is not one.
-  const chest = { id: "chest-2026-11-25", amount: 3, reason: "daily_chest" };
+  const chest = { player: alice, id: "chest-2026-11-25", amount: 3, reason: "daily_chest" };
   await call("POST /v1/game/coins", "POST", "/v1/game/coins", chest);
   await call("POST /v1/game/coins, a spend", "POST", "/v1/game/coins", {
+    player: alice,
     id: "t-1",
     amount: -120,
     reason: "camp_thing",
   });
   await call("POST /v1/game/coins, sent again", "POST", "/v1/game/coins", chest);
   await call("POST /v1/game/coins, not enough", "POST", "/v1/game/coins", {
+    player: alice,
     id: "w-1",
     amount: -5000,
     reason: "works_plot",
   });
-  await call("POST /v1/game/coins, not a reason", "POST", "/v1/game/coins", { id: "w-2", amount: 5, reason: "luck" });
+  await call("POST /v1/game/coins, not a reason", "POST", "/v1/game/coins", {
+    player: alice,
+    id: "w-2",
+    amount: 5,
+    reason: "luck",
+  });
+  // A page left open after someone else signed in.
+  await call("POST /v1/game/coins, not you", "POST", "/v1/game/coins", { ...chest, player: bob });
+  await call("POST /v1/game/play/{game}, not you", "POST", "/v1/game/play/raid", { ...firstRoom, player: bob });
   // A raid run of Alice's, as the play service logs it.
   for (const [minute, kind, data] of [
     [5, "raid_started", { trail: 0 }],

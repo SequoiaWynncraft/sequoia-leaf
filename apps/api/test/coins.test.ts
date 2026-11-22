@@ -33,13 +33,23 @@ afterEach(async () => {
   await services.dispose();
 });
 
-/** A page's call, as the town or the Works sends it: the website's cookie, from Leaf's own page. */
+/** Who each session is. */
+const PLAYERS: Readonly<Record<string, string>> = { "alice-token": alice, "carol-token": carol, "dave-token": dave };
+
+/**
+ * A page's call, as the town or the Works sends it: the website's cookie, from Leaf's own page, and
+ * in a body that is an object, the player the page believes it is (unless the body names one itself).
+ */
 function call(body: unknown, token = "alice-token"): Promise<Response> {
+  const sent =
+    typeof body === "object" && body !== null && !Array.isArray(body)
+      ? { player: PLAYERS[token] ?? "", ...body }
+      : body;
   return Promise.resolve(
     app.request("/v1/game/coins", {
       method: "POST",
       headers: { Cookie: `seq_session=${token}`, Origin: ORIGIN, "Content-Type": "application/json" },
-      body: typeof body === "string" ? body : JSON.stringify(body),
+      body: typeof sent === "string" ? sent : JSON.stringify(sent),
     }),
   );
 }
@@ -200,6 +210,19 @@ describe("POST /v1/game/coins", () => {
     expect(await services.query((sql) => sql`SELECT count(*) AS n FROM coin_entries`)).toEqual([{ n: 0 }]);
   });
 
+  it("is done only for a page that is the session's player: another gets 409 not_you, and nothing is done", async () => {
+    expect(await refused({ player: carol, id: "n-1", amount: -10, reason: "camp_thing" })).toEqual([409, "not_you"]);
+    expect(await refused({ player: "", id: "n-2", amount: 3, reason: "daily_chest" })).toEqual([409, "not_you"]);
+    const unnamed = await app.request("/v1/game/coins", {
+      method: "POST",
+      headers: { Cookie: "seq_session=alice-token", Origin: ORIGIN, "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "n-3", amount: 3, reason: "daily_chest" }),
+    });
+    expect([unnamed.status, await unnamed.json()]).toMatchObject([400, { code: "invalid_command" }]);
+    expect(await services.query((sql) => sql`SELECT count(*) AS n FROM coin_entries`)).toEqual([{ n: 0 }]);
+    expect(await services.query((sql) => sql`SELECT count(*) AS n FROM command_days`)).toEqual([{ n: 0 }]);
+  });
+
   it("is a guest's too, and needs a session and Leaf's own pages", async () => {
     expect(await done({ id: "g-1", amount: 3, reason: "daily_chest" }, "carol-token")).toBe(303);
     expect(await balance(carol)).toBe(303);
@@ -208,7 +231,7 @@ describe("POST /v1/game/coins", () => {
     const elsewhere = await app.request("/v1/game/coins", {
       method: "POST",
       headers: { Cookie: "seq_session=carol-token", Origin: "https://example.com", "Content-Type": "application/json" },
-      body: JSON.stringify({ id: "g-3", amount: 3, reason: "works_order" }),
+      body: JSON.stringify({ player: carol, id: "g-3", amount: 3, reason: "works_order" }),
     });
     expect([elsewhere.status, await elsewhere.json()]).toMatchObject([403, { code: "bad_origin" }]);
     expect(await balance(carol)).toBe(303);

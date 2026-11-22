@@ -2,8 +2,10 @@
  * A game played on Leaf, from the page's side. Leaf owns the game's state; the page holds a copy
  * to draw from and sends commands.
  *
- * - `openPlay(game, reader)` fetches the state. A page whose rules are older than Leaf's (the state
- *   will not read) loads again.
+ * - `openPlay(game, reader, { player })` fetches the state; `player` is who the page believes it
+ *   is, sent with every batch. A page whose rules are older than Leaf's (the state will not read)
+ *   loads again, and so does one Leaf answers `not_you` (signed in as someone else since it
+ *   opened): nothing more is sent.
  * - `send(command, predict)` gives the command an id, queues it, and returns at once, with a promise
  *   of Leaf's answer for it. Commands go to Leaf in order, one request at a time, as many as are
  *   waiting in each (up to 32); after a network failure, or Leaf having trouble or asking to slow
@@ -82,7 +84,7 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 export async function openPlay<View, Command extends object, Note>(
   game: GameId,
   reader: PlayReader<View, Note>,
-  options: { retry?: Retry } = {},
+  options: { readonly player: string; readonly retry?: Retry },
 ): Promise<Play<View, Command, Note> | { trouble: Trouble }> {
   const path = playPath(game);
   const first = await ask(path);
@@ -125,13 +127,18 @@ export async function openPlay<View, Command extends object, Note>(
     for (const fn of hearers) fn(copy, differs);
   }
 
-  function stop(why: Trouble): void {
-    if (stopped) return;
+  /** Sends nothing more: everything waiting is answered `refused`. */
+  function halt(refused: string): void {
     stopped = true;
     const left = [...(flying ?? []), ...queue];
     flying = null;
     queue = [];
-    for (const p of left) p.answer({ refused: why });
+    for (const p of left) p.answer({ refused });
+  }
+
+  function stop(why: Trouble): void {
+    if (stopped) return;
+    halt(why);
     for (const fn of troubled) fn(why);
   }
 
@@ -172,7 +179,7 @@ export async function openPlay<View, Command extends object, Note>(
     const batch = queue.slice(0, MOST_COMMANDS);
     queue = queue.slice(batch.length);
     flying = batch;
-    const body = json({ commands: batch.map((p) => ({ ...p.command, id: p.id })) });
+    const body = json({ player: options.player, commands: batch.map((p) => ({ ...p.command, id: p.id })) });
     for (;;) {
       // oxlint-disable-next-line no-await-in-loop -- the same batch, again, until Leaf has it
       const reply = await ask(path, { method: "POST", headers: { "Content-Type": "application/json" }, body });
@@ -187,6 +194,12 @@ export async function openPlay<View, Command extends object, Note>(
       }
       if (reply.status === 401) {
         stop("signedout");
+        return;
+      }
+      if (reply.status === 409 && isRecord(reply.body) && reply.body.code === "not_you") {
+        // Signed in as somebody else since this page opened: nothing of theirs is sent from it.
+        halt("not_you");
+        outside.reload();
         return;
       }
       if (reply.status === 400) {

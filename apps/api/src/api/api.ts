@@ -210,13 +210,13 @@ export class GameApi extends HttpApiGroup.make("game")
       params: GameParams,
       payload: PlayBody,
       success: Played,
-      error: [Invalid, Missing, SlowDown],
+      error: [Invalid, Missing, NotYou, SlowDown],
     }).middleware(PlayBodyErrors),
     // For the games not on the play service yet, whose pages still work out what they earn and spend.
     HttpApiEndpoint.post("coins", "/coins", {
       payload: CoinsBody,
       success: CoinsAnswer,
-      error: [Invalid, NotEnoughCoins, NothingToRefund, TooMuch, SlowDown],
+      error: [Invalid, NotYou, NotEnoughCoins, NothingToRefund, TooMuch, SlowDown],
     }).middleware(CoinsBodyErrors),
   )
   .middleware(Player)

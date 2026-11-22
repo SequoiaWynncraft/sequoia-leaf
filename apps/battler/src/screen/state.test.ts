@@ -79,7 +79,7 @@ async function until(ok: () => boolean, tries = 300): Promise<void> {
 async function seated() {
   const fake = fakeLeaf();
   world = standin(fake.routes);
-  expect(await openTable(() => undefined)).toBeNull();
+  expect(await openTable("p", () => undefined)).toBeNull();
   expect((await ask({ do: "start", trail: 0 }))?.ok).toBe(true);
   expect((await ask({ do: "choose", option: 0 }))?.ok).toBe(true);
   return fake;
@@ -101,7 +101,7 @@ describe("the table, on Leaf", () => {
 
   test("with no Leaf answering, there is no table", async () => {
     world = standin({});
-    expect(await openTable(() => undefined)).toBe("closed");
+    expect(await openTable("p", () => undefined)).toBe("closed");
   });
 
   test("moving and holding the stall show at once, from the rules; buying waits for Leaf", async () => {

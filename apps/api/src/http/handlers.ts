@@ -353,7 +353,7 @@ export const PlayBodyErrorsLive = Layer.succeed(PlayBodyErrors)((httpEffect) =>
     Effect.fail(
       new Invalid({
         code: "invalid_command",
-        message: 'Send commands as { "commands": [{ "id": "<yours>", ... }] }',
+        message: 'Send commands as { "player": "<your id>", "commands": [{ "id": "<yours>", ... }] }',
       }),
     ),
   ),
@@ -364,7 +364,8 @@ export const CoinsBodyErrorsLive = Layer.succeed(CoinsBodyErrors)((httpEffect) =
     Effect.fail(
       new Invalid({
         code: "invalid_command",
-        message: 'Send Coins as { "id": "<yours>", "amount": <whole number>, "reason": "<one of the reasons>" }',
+        message:
+          'Send Coins as { "player": "<your id>", "id": "<yours>", "amount": <whole number>, "reason": "<one of the reasons>" }',
       }),
     ),
   ),
@@ -610,6 +611,12 @@ const presentJson = (here: Here) =>
 
 const invalidSlot = new Invalid({ code: "invalid_slot", message: "That is not a save slot" });
 
+/**
+ * A write from a page that believes it is another player than the session's, such as one left open
+ * after someone else signed in: nothing is done.
+ */
+const notYou = new NotYou({ code: "not_you", message: "This page is signed in as someone else now. Load it again" });
+
 /** The game a route names, if Leaf plays it. */
 const playedGame = (name: string): Effect.Effect<Played, Missing> => {
   const id = gameId(name);
@@ -746,10 +753,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             const identity = yield* CurrentIdentity;
             const { playerId } = identity;
             if (payload.player !== playerId) {
-              return yield* new NotYou({
-                code: "not_you",
-                message: "This page is signed in as someone else now. Load it again",
-              });
+              return yield* notYou;
             }
             const now = yield* Clock.currentTimeMillis;
             const written = yield* saves.put(
@@ -868,6 +872,9 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
           Effect.gen(function* () {
             const played = yield* playedGame(params.game);
             const identity = yield* CurrentIdentity;
+            if (payload.player !== identity.playerId) {
+              return yield* notYou;
+            }
             const batch = yield* play.send(
               { playerId: identity.playerId, guest: isGuest(identity) },
               played,
@@ -899,6 +906,9 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               return yield* new Invalid({ code: call.code, message: PAGE_COINS_REFUSED[call.code] });
             }
             const identity = yield* CurrentIdentity;
+            if (payload.player !== identity.playerId) {
+              return yield* notYou;
+            }
             const done = yield* pageCoins.change(identity.playerId, call, yield* Clock.currentTimeMillis);
             if (done.status === "not_enough_coins") {
               return yield* new NotEnoughCoins({ code: "not_enough_coins", message: "There are not that many Coins" });
