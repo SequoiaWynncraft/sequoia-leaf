@@ -40,13 +40,17 @@ afterEach(async () => {
   await app.dispose();
 });
 
-/** A request as the game's page sends it: the website's cookie, from Leaf's own page. */
+/**
+ * A request as the game's page sends it: the website's cookie, from Leaf's own page, and in a body
+ * that is an object, the player the page believes it is (unless the body names one itself).
+ */
 function send(method: string, path: string, body?: unknown, player: PlayerId = alice): Promise<Response> {
+  const sent = typeof body === "object" && body !== null && !Array.isArray(body) ? { player, ...body } : body;
   return Promise.resolve(
     app.request(path, {
       method,
       headers: { Cookie: `seq_session=${SESSIONS[player]}`, Origin: ORIGIN, "Content-Type": "application/json" },
-      ...(body === undefined ? {} : { body: typeof body === "string" ? body : JSON.stringify(body) }),
+      ...(sent === undefined ? {} : { body: typeof sent === "string" ? sent : JSON.stringify(sent) }),
     }),
   );
 }
@@ -447,6 +451,25 @@ describe("one player's game", () => {
     expect((await opened(bob)).view.run?.choices[0]?.kind).toBe("starter");
   });
 
+  it("is commanded only by a page that is the session's player: another gets 409 not_you, and nothing is done", async () => {
+    await opened();
+    const fromBobsPage = await send("POST", "/v1/game/play/raid", {
+      player: bob,
+      commands: ided([{ do: "start", trail: 0 }]),
+    });
+    expect(fromBobsPage.status).toBe(409);
+    expect(await codeOf(fromBobsPage)).toBe("not_you");
+    const unnamed = await app.request("/v1/game/play/raid", {
+      method: "POST",
+      headers: { Cookie: "seq_session=alice-token", Origin: ORIGIN, "Content-Type": "application/json" },
+      body: JSON.stringify({ commands: ided([{ do: "start", trail: 0 }]) }),
+    });
+    expect(unnamed.status).toBe(400);
+    expect(await codeOf(unnamed)).toBe("invalid_command");
+    expect(await stored(alice)).toEqual([{ rev: 0, state: expect.any(String) }]);
+    expect(await services.query((sql) => sql`SELECT count(*) AS n FROM play_commands`)).toEqual([{ n: 0 }]);
+  });
+
   it("needs a session, and a write with the cookie must come from Leaf's own pages", async () => {
     expect((await app.request("/v1/game/play/raid")).status).toBe(401);
     const elsewhere = await app.request("/v1/game/play/raid", {
@@ -456,7 +479,7 @@ describe("one player's game", () => {
         Origin: "https://evil.example",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ commands: [{ id: "c-x", do: "start", trail: 0 }] }),
+      body: JSON.stringify({ player: alice, commands: [{ id: "c-x", do: "start", trail: 0 }] }),
     });
     expect(elsewhere.status).toBe(403);
     expect(await codeOf(elsewhere)).toBe("bad_origin");

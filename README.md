@@ -490,8 +490,11 @@ The games on it now: `raid`, The Little Raid (`packages/raid`).
   batches have changed the state, Leaf's clock, and the game's view of it. A
   player with no state yet gets a new one (and, if they have no Coins account
   yet, the welcome). Nothing is ever read from the old saves.
-- `POST /v1/game/play/{game}` takes `{ "commands": [{ "id", ... }] }`, at most
-  32, each with an id the page made (up to 64 letters, digits and `_ . : -`),
+- `POST /v1/game/play/{game}` takes `{ "player", "commands": [{ "id", ... }] }`:
+  `player` is the id the page believes it is (409 `not_you`, nothing done, when
+  it is not the session's player, as for a page left open after someone else
+  signed in; the kit's play client then sends nothing more and loads the page
+  again), and the commands are at most 32, each with an id the page made (up to 64 letters, digits and `_ . : -`),
   unique in the batch, and answers `{ "rev", "now", "results", "state" }`:
   for each command in order `{ "id", "notes" }` (the game's own notes of what
   happened) or `{ "id", "refused": "<code>" }`, and the state after them all.
@@ -531,8 +534,12 @@ every page shows the ledger's number, and the browser keeps none.
 **Coins from a page.** The town and the Works are not on the play service yet:
 their pages still work out what they earn and spend, and tell Leaf each change.
 This route is for them alone, and goes when they move.
-`POST /v1/game/coins` takes `{ "id", "amount", "reason" }` and answers
-`{ "coins" }`, the balance after it:
+`POST /v1/game/coins` takes `{ "player", "id", "amount", "reason" }` and
+answers `{ "coins" }`, the balance after it:
+
+- `player` is the id the page believes it is: when it is not the session's
+  player, 409 `not_you` and nothing is done (the kit's purse then sends nothing
+  more and loads the page again).
 
 - `id` is the page's own, made for the change (as a command's id is), and the
   entry's key is `page:<player>:<id>`: a call sent twice is done once, and

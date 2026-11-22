@@ -56,10 +56,12 @@ type Owed = { readonly id: string; amount: number; readonly reason: CoinReason; 
 
 /** The Coins Leaf last said the member holds; null with the made-up guild, whose Coins are the browser's. */
 let held: number | null = null;
+/** Who the page believes the member is, sent with every change. */
+let me = "";
 /** What has not been answered yet, oldest first; while `sending`, the first of it is on its way. */
 let owed: Owed[] = [];
 let sending = false;
-/** Signed out: nothing more is sent, until the page starts again. */
+/** Signed out, or signed in as somebody else: nothing more is sent, until the page starts again. */
 let halted = false;
 /** Counts each start of the Coins, so that an answer to an older one is let go. */
 let round = 0;
@@ -187,7 +189,7 @@ async function pump(): Promise<void> {
         : ask("/v1/game/coins", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: next.id, amount: next.amount, reason: next.reason }),
+            body: JSON.stringify({ player: me, id: next.id, amount: next.amount, reason: next.reason }),
           });
     // oxlint-disable-next-line no-await-in-loop -- the same change, again, until Leaf has it
     const answer = await asking;
@@ -198,6 +200,16 @@ async function pump(): Promise<void> {
       held = coins;
       show("Leaf");
       break;
+    }
+    if (answer.status === 409 && isRecord(answer.body) && answer.body.code === "not_you") {
+      // Signed in as somebody else since this page opened: nothing of this page's is theirs, and
+      // nothing more is sent. The page loads again, as whoever is signed in now.
+      halted = true;
+      owed = [];
+      sending = false;
+      for (const fn of settledHearers.splice(0)) fn();
+      outside.reload();
+      return;
     }
     if (answer.status === 401 || answer.status === 403) {
       // Signed out, or no longer let in: nothing more can be sent. The page shows Leaf's last number.
@@ -238,7 +250,7 @@ export function flushCoins(): void {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: o.id, amount: o.amount, reason: o.reason }),
+      body: JSON.stringify({ player: me, id: o.id, amount: o.amount, reason: o.reason }),
       keepalive: true,
     });
   }
@@ -359,13 +371,14 @@ export function asGuest(): void {
 }
 
 /**
- * The page is on the guild's server, and Leaf says the member holds this many Coins. From now on
- * the Coins are Leaf's: what the page earns and spends is sent to it, and nothing is kept in the
- * browser.
+ * The page is on the guild's server, and Leaf says the member (`player`, their id) holds this many
+ * Coins. From now on the Coins are Leaf's: what the page earns and spends is sent to it, as theirs,
+ * and nothing is kept in the browser.
  */
-export function fromLeaf(coins: number): void {
+export function fromLeaf(coins: number, player: string): void {
   round++;
   page ||= pageName();
+  me = player;
   held = Math.max(0, Math.floor(coins));
   owed = [];
   sending = false;

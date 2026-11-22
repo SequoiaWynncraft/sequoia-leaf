@@ -682,6 +682,7 @@
       "method": "POST",
       "path": "/v1/game/play/raid",
       "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
         "commands": [
           {
             "id": "c-1",
@@ -840,6 +841,7 @@
       "method": "POST",
       "path": "/v1/game/play/raid",
       "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
         "commands": [
           {
             "id": "c-3",
@@ -972,6 +974,7 @@
       "method": "POST",
       "path": "/v1/game/play/raid",
       "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
         "commands": [
           {
             "id": "c-1",
@@ -1130,6 +1133,7 @@
       "method": "POST",
       "path": "/v1/game/play/raid",
       "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
         "commands": [
           {
             "id": "c-4",
@@ -1160,6 +1164,7 @@
       "method": "POST",
       "path": "/v1/game/coins",
       "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
         "id": "chest-2026-11-25",
         "amount": 3,
         "reason": "daily_chest"
@@ -1175,6 +1180,7 @@
       "method": "POST",
       "path": "/v1/game/coins",
       "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
         "id": "t-1",
         "amount": -120,
         "reason": "camp_thing"
@@ -1190,6 +1196,7 @@
       "method": "POST",
       "path": "/v1/game/coins",
       "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
         "id": "chest-2026-11-25",
         "amount": 3,
         "reason": "daily_chest"
@@ -1205,6 +1212,7 @@
       "method": "POST",
       "path": "/v1/game/coins",
       "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
         "id": "w-1",
         "amount": -5000,
         "reason": "works_plot"
@@ -1221,6 +1229,7 @@
       "method": "POST",
       "path": "/v1/game/coins",
       "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
         "id": "w-2",
         "amount": 5,
         "reason": "luck"
@@ -1230,6 +1239,49 @@
     "body": {
       "code": "invalid_reason",
       "message": "The reason must be one of: camp_thing, daily_chest, works_order, works_depot, works_build, works_refund, works_plot, works_plan"
+    }
+  },
+  "POST /v1/game/coins, not you": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/coins",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "id": "chest-2026-11-25",
+        "amount": 3,
+        "reason": "daily_chest"
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "not_you",
+      "message": "This page is signed in as someone else now. Load it again"
+    }
+  },
+  "POST /v1/game/play/{game}, not you": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "commands": [
+          {
+            "id": "c-1",
+            "do": "start",
+            "trail": 0
+          },
+          {
+            "id": "c-2",
+            "do": "choose",
+            "option": 0
+          }
+        ]
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "not_you",
+      "message": "This page is signed in as someone else now. Load it again"
     }
   },
   "GET /v1/game/admin/activity, a member": {

@@ -191,8 +191,11 @@ export const PlayShown = Schema.Struct({
   state: Schema.Unknown,
 });
 
-/** Commands for a game, done in order. Each has an `id` the page made, unique among its commands. */
-export const PlayBody = Schema.Struct({ commands: Schema.Array(Schema.Unknown) });
+/**
+ * Commands for a game, done in order, from the player the page believes it is (`player`). Each has
+ * an `id` the page made, unique among its commands.
+ */
+export const PlayBody = Schema.Struct({ player: Schema.String, commands: Schema.Array(Schema.Unknown) });
 
 /** What each command did (the game's notes), or the code it was refused with. */
 export const PlayResult = Schema.Union([
@@ -204,10 +207,16 @@ export const PlayResult = Schema.Union([
 export const Played = Schema.Struct({ ...PlayShown.fields, results: Schema.Array(PlayResult) });
 
 /**
- * Coins changed by a page of a game not on the play service yet: `id` is the page's own, unique
- * for the change, `amount` a whole number (negative to spend), and `reason` one of `COIN_REASONS`.
+ * Coins changed by a page of a game not on the play service yet, for the player the page believes
+ * it is (`player`): `id` is the page's own, unique for the change, `amount` a whole number (negative
+ * to spend), and `reason` one of `COIN_REASONS`.
  */
-export const CoinsBody = Schema.Struct({ id: Schema.String, amount: Schema.Number, reason: Schema.String });
+export const CoinsBody = Schema.Struct({
+  player: Schema.String,
+  id: Schema.String,
+  amount: Schema.Number,
+  reason: Schema.String,
+});
 
 /** The player's Coins after a change. */
 export const CoinsAnswer = Schema.Struct({ coins: Schema.Number });

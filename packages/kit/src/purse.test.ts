@@ -128,10 +128,11 @@ describe("the purse beside the guild's ledger, with the made-up guild's Coins", 
   });
 });
 
-/** What a page sent Leaf about Coins. */
+/** What a page sent Leaf about Coins, and who it said it was. */
 interface Call {
   readonly path: string;
   readonly body: { id?: string; amount?: number; reason?: string } | null;
+  readonly player: unknown;
   readonly keepalive: boolean;
 }
 
@@ -155,12 +156,18 @@ const answer = (status: number, body: unknown) =>
  */
 function fakeLeaf(start: number) {
   const calls: Call[] = [];
-  const leaf = { coins: start, done: new Set<string>(), calls, offline: 0, refuse: false };
+  // `me` is who is signed in: a change from a page that says it is somebody else is not theirs.
+  const leaf = { coins: start, done: new Set<string>(), calls, offline: 0, refuse: false, me: "p" };
   let open = true;
   let held: (() => void)[] = [];
   const fetch = async (path: string, init: RequestInit = {}): Promise<Response> => {
     const body: unknown = typeof init.body === "string" ? JSON.parse(init.body) : null;
-    const call: Call = { path, body: readCall(body), keepalive: init.keepalive === true };
+    const call: Call = {
+      path,
+      body: readCall(body),
+      player: isRecord(body) ? body.player : undefined,
+      keepalive: init.keepalive === true,
+    };
     leaf.calls.push(call);
     if (!open) await new Promise<void>((resolve) => held.push(resolve));
     if (leaf.offline > 0) {
@@ -168,6 +175,7 @@ function fakeLeaf(start: number) {
       throw new TypeError("Failed to fetch");
     }
     if (path === "/v1/game/me") return answer(200, { coins: leaf.coins });
+    if (call.player !== leaf.me) return answer(409, { code: "not_you", message: "Load it again" });
     const { id = "", amount = 0 } = call.body ?? {};
     if (leaf.done.has(id)) return answer(200, { coins: leaf.coins });
     if (leaf.refuse || leaf.coins + amount < 0) return answer(409, { code: "not_enough_coins", message: "No" });
@@ -210,7 +218,7 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
     leaf = fakeLeaf(300);
     done = pretend({ store: () => store, fetch: leaf.fetch });
     fromLedger(2450);
-    fromLeaf(300);
+    fromLeaf(300, "p");
   });
   afterEach(() => {
     leaf.let();
@@ -324,6 +332,40 @@ describe("the purse on the guild's server, whose Coins are Leaf's", () => {
     await idle();
     // The same change, sent twice, is done once.
     expect(leaf.leaf.coins).toBe(315);
+  });
+
+  test("every change says who the page believes the member is", async () => {
+    earn(3, "works_order");
+    spend("coins", 1, "camp_thing");
+    await idle();
+    leaf.hold();
+    earn(4, "works_order");
+    await Promise.resolve();
+    earn(5, "works_depot");
+    flushCoins();
+    expect(new Set(leaf.leaf.calls.filter((c) => c.path === "/v1/game/coins").map((c) => c.player))).toEqual(
+      new Set(["p"]),
+    );
+  });
+
+  test("signed in as somebody else since the page opened: nothing more is sent or kept, and the page loads again", async () => {
+    let reloaded = 0;
+    done?.();
+    done = pretend({ store: () => store, fetch: leaf.fetch, reload: () => void reloaded++ });
+    leaf.leaf.me = "q";
+    earn(5, "works_order");
+    earn(6, "works_depot");
+    await idle();
+    expect(reloaded).toBe(1);
+    expect(leaf.leaf.calls.map((c) => c.body?.amount)).toEqual([5]);
+    expect(leaf.leaf.coins).toBe(300);
+    // Nothing more goes, however much the page earns or spends, nor as it goes away.
+    earn(7, "works_order");
+    expect(spend("coins", 1, "camp_thing")).toBe(true);
+    flushCoins();
+    await idle();
+    expect(leaf.leaf.calls).toHaveLength(1);
+    expect(store.map.size).toBe(0);
   });
 
   test("the made-up guild's tools leave Leaf's Coins alone", () => {
