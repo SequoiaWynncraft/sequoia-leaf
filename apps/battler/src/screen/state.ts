@@ -103,6 +103,10 @@ export function refuse(why: string): void {
 let table: Play<TableView, RaidCommand, RaidNote> | null = null;
 /** Commands sent with `ask` and not answered yet: their answers draw the table again themselves. */
 let asking = 0;
+/** Those of them after which what is on offer is something else: the stall's figures, a pick's cards, the room. */
+let turning = 0;
+/** What may be asked while Leaf answers another, because it leaves everything on offer where it is. */
+const STEADY: ReadonlySet<RaidCommand["do"]> = new Set(["buy", "xp", "trail", "look"]);
 
 /** What the page shows, as text, to tell whether Leaf's answer changed it. */
 const picture = (): string => JSON.stringify([S.run, S.almanac, S.looks, S.trail, S.runs]);
@@ -191,12 +195,21 @@ export function doNow(command: RaidCommand): Did | null {
 /**
  * Sends a command only Leaf can answer, and shows what it did when Leaf answers. `waiting` is the
  * thing asked for: it shows the kit's waiting look while Leaf takes more than a moment.
+ *
+ * Offers and cards are asked for by their place, so nothing is asked (null) while Leaf is still
+ * answering a command that changes what is on offer: a tap on what still shows would land on
+ * whatever takes its place.
  */
 export async function ask(command: RaidCommand, waiting: Element | null = null): Promise<Did | null> {
   const play = table;
-  if (!play) return null;
+  if (!play || turning > 0) return null;
+  const turns = STEADY.has(command.do) ? 0 : 1;
   asking++;
-  const answer = await waitingLook(waiting, play.send(command)).finally(() => asking--);
+  turning += turns;
+  const answer = await waitingLook(waiting, play.send(command)).finally(() => {
+    asking--;
+    turning -= turns;
+  });
   take(play.state);
   if ("refused" in answer) {
     const why = refusalText(answer.refused, play.state);

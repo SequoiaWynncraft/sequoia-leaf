@@ -29,7 +29,7 @@ import { fly } from "../fx.ts";
 import { signal } from "../signals.ts";
 import { snd } from "../sounds.ts";
 import { boardSpot } from "../stage.ts";
-import { ask, S, waitingForLeaf } from "../state.ts";
+import { ask, S } from "../state.ts";
 import { boonRef, figureRef, itemRef, makesLines, pic, rich, traitRef } from "./cards.ts";
 import { holdAcorns } from "./table.ts";
 
@@ -101,9 +101,8 @@ function boonCardParts(boon: BoonId): HTMLElement[] {
   ];
 }
 
-/** Asks Leaf for three other boons. Nothing is asked while Leaf is still answering: the cards may be about to change. */
+/** Asks Leaf for three other boons. */
 async function redrawn(button: Element | null): Promise<void> {
-  if (waitingForLeaf()) return;
   if ((await ask({ do: "redraw" }, button))?.ok) snd.rustle();
 }
 
@@ -111,8 +110,7 @@ async function redrawn(button: Element | null): Promise<void> {
 async function take(index: number, card: HTMLElement): Promise<void> {
   const run = S.run;
   const choice = run?.choices[0];
-  // A card says only which place it holds, so it is taken only while the cards are the ones Leaf last showed.
-  if (!run || !choice || waitingForLeaf()) return;
+  if (!run || !choice) return;
   card.classList.add("chosen");
   const from = boardSpot(card);
   const had = run.acorns;
