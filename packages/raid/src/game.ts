@@ -24,6 +24,7 @@ import {
 
 import { DIRECT, type Habit, type Hands, planRoom } from "./bot.ts";
 import {
+  isBoughtLook,
   isLookKind,
   type LookId,
   type LookKind,
@@ -534,6 +535,17 @@ export function decodeTable(text: string): Table | null {
   return { rng, runs, run, almanac, trail, looks };
 }
 
+/**
+ * Nothing at the table happens by itself, however long the player is away, but this: a look won as
+ * a pull's prize (`pull:look:<id>` among `ctx.awards`) is owned, as one bought is.
+ */
+function wonLooks(state: Table, ctx: Pick<Ctx, "awards">): Table {
+  const won = ctx.awards
+    .map((award) => award.replace(/^pull:look:/, ""))
+    .filter((id): id is LookId => isBoughtLook(id) && !state.looks.owned.includes(id));
+  return won.length === 0 ? state : { ...state, looks: { ...state.looks, owned: [...state.looks.owned, ...won] } };
+}
+
 /** A new player's table: nothing laid out, an empty almanac, the plain looks. */
 export const newTable = (ctx: Pick<Ctx, "seed">): Table => ({
   rng: mix(ctx.seed >>> 0, 0x7ab1e),
@@ -548,8 +560,7 @@ export const newTable = (ctx: Pick<Ctx, "seed">): Table => ({
 export const RAID: Game<Table, RaidCommand, TableView, RaidNote> = {
   id: "raid",
   create: newTable,
-  // Nothing at the table happens by itself: it waits for the player, however long they are away.
-  advance: (state) => state,
+  advance: wonLooks,
   apply: applyCommand,
   view: (state) => tableView(state),
   decode: decodeTable,

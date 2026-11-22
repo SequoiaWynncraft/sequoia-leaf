@@ -247,7 +247,9 @@ anything, so nothing a command draws can be worked out beforehand from what the 
 `Table`, is the run in hand (or none), the almanac, the looks (`content/looks.ts`), the trail picked
 on the front page, the number of runs begun, and the table's stream. One command for each thing a
 player does (`RaidCommand`): `start` (a run on a trail; a run in hand is put down first, as walking
-home, once it has fought a room), `trail` (pick the trail to set out on next), `look` (put an owned look on the table),
+home, once it has fought a room), `trail` (pick the trail to set out on next), `look` (put an owned look on the table;
+a look is owned when bought with `buyLook`, or won as a pull's prize: `advance` adds each
+`pull:look:<id>` among the player's awards to the looks owned, and takes no Leaf),
 `choose`, `redraw`, `buy`, `sell`, `move`, `bench`, `rustle`, `hold`, `xp`, `give`, `fight`
 (boards locked, the fight decided; its note carries both boards, the seed and the outcome), `take`
 and `abandon`. A run that has fought no room yet is never put down: `start` and `abandon` then leave

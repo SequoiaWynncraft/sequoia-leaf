@@ -38,6 +38,7 @@ import { again, keepTold, onTown, town as kept } from "./leaf.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Hover, Scene, Stage, Steer } from "./stage.ts";
+import { nameStatues } from "./statues.ts";
 import { makeTown, type Town } from "./townscene.ts";
 import { dismissArrival } from "./ui.ts";
 import type { PlaceId } from "./world.ts";
@@ -253,6 +254,7 @@ async function boot(): Promise<void> {
 
   initHud();
   const art = makeCampArt(sprites);
+  void nameStatues(art);
   const town = makeTown(sprites, art, stage);
   const campUi = makeCampUi(art);
   const camp = makeCamp(sprites, art, stage, town, town.backdrop, campUi);

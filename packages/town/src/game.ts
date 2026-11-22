@@ -2,7 +2,7 @@
  * The town and the camp as Leaf plays them: what the member keeps (the camp, its mail, a few
  * counters) and what Leaf decides for them (who calls, the mail while they were away, the day), one
  * command for each thing a member does, and what their page is shown. The town is not a simulation:
- * `advance` only sends the next caller when one is due, and hands over trophies won elsewhere.
+ * `advance` only sends the next caller when one is due, and hands over what was won elsewhere.
  *
  * Every draw comes from the state's own stream (`rng`), which the page is never shown. It is not
  * stirred with Leaf's dice for each call, because the page is shown what a caller brings and what
@@ -232,12 +232,19 @@ const further = (a: number | null, b: number | null): number | null =>
   a === null ? b : b === null ? a : Math.max(a, b);
 
 /**
- * The state at `ctx.now`: the trophies the member has won elsewhere that the camp has not had go
- * by the trail, while there is room there; and when a caller is due, the one waiting leaves and the
- * next sets out. At most one caller each call: time nobody was here for is not made up.
+ * The camp thing an award brings: a trophy is named as its thing, a pull's `thing:` prize is that
+ * thing, and a banner's headliner is that banner's statue.
+ */
+const thingWon = (award: string): string => award.replace(/^pull:thing:/, "").replace(/^pull:headliner:/, "statue-");
+
+/**
+ * The state at `ctx.now`: the things the member has won elsewhere (trophies, a pull's prizes) that
+ * the camp has not had go by the trail, each once, while there is room there; and when a caller is
+ * due, the one waiting leaves and the next sets out. At most one caller each call: time nobody was
+ * here for is not made up.
  */
 function advance(state: Town, ctx: Ctx): Town {
-  const won = ctx.awards.filter((id) => isThing(id) && !state.camp.earned.includes(id));
+  const won = ctx.awards.map(thingWon).filter((id) => isThing(id) && !state.camp.earned.includes(id));
   const due = ctx.now >= state.nextCall;
   if (!due && (won.length === 0 || state.camp.parcels.length >= MOST_PARCELS)) return state;
   const s = structuredClone(state);

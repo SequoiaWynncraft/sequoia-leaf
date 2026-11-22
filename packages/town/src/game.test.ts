@@ -254,6 +254,23 @@ describe("trophies", () => {
     expect(TOWN.advance(won, ctx(T0, awards))).toBe(won);
   });
 
+  test("a pull's thing goes by the trail once, whatever copies come after; its headliner brings the banner's statue", () => {
+    // Awards from before the camp knew of them: handed over on the next look.
+    const awards = ["pull:thing:fountain", "pull:look:baize", "pull:headliner:banner-1", "pull:thing:nothing"];
+    const won = TOWN.advance(fresh(), ctx(T0, awards));
+    expect(won.camp.parcels).toEqual(["fountain", "statue-banner-1"]);
+    expect(won.camp.earned).toEqual(["fountain", "statue-banner-1"]);
+    // Unpacked and gone from the trail: a second copy of the prize is the same award, and brings nothing.
+    const set = did(won, { do: "unpack", x: 30, y: 20, t: 0 });
+    expect(set.notes).toEqual([{ t: "landed", thing: "fountain", n: 9 }]);
+    expect(set.log).toEqual([]);
+    expect(TOWN.advance(set.state, ctx(T0, awards))).toBe(set.state);
+    // The statue is set out, turned and put away like any thing.
+    const statue = did(set.state, { do: "unpack", x: 34, y: 20, t: 1 });
+    expect(statue.notes).toEqual([{ t: "landed", thing: "statue-banner-1", n: 10 }]);
+    expect(did(statue.state, { do: "putAway", n: 10 }).state.camp.tray).toEqual({ "statue-banner-1": 1 });
+  });
+
   test("arrive in the camp when unpacked, and that is logged", () => {
     const won = TOWN.advance(fresh(), ctx(T0, ["model-beacon"]));
     const opened = did(won, { do: "unpack", x: 30, y: 20, t: 0 });

@@ -258,7 +258,8 @@ export function makeCamp(
       sitOn(l, wx, wy);
     },
     mail: () => waiting(shown().camp.letters) > 0,
-    trophies: () => shown().camp.earned,
+    // Of what the camp has been sent, the trophies alone: a pull's prize is noted there too.
+    trophies: () => shown().camp.earned.filter((id) => thingOf(id)?.kind === "trophies"),
     hedge: (x) => campHedge(x, seed),
   };
   const petWorld: PetWorld = { ground, member: null, fire: null };
