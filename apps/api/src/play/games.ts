@@ -1,4 +1,12 @@
-import { type CoinChange, type Ctx, type Game, type GameId, isRefused, type Logged } from "@sequoia-leaf/core";
+import {
+  type CoinChange,
+  type Ctx,
+  type Game,
+  type GameId,
+  isRefused,
+  type Logged,
+  type Standing,
+} from "@sequoia-leaf/core";
 import { RAID } from "@sequoia-leaf/raid/game.ts";
 import { WORKS } from "@sequoia-leaf/yard/game.ts";
 
@@ -20,6 +28,8 @@ export interface Opened {
   readonly text: () => string;
   /** What the player's page is given of it. */
   readonly view: (ctx: Ctx) => unknown;
+  /** Where it stands among everyone's, or null for a game with no board. */
+  readonly standing: () => Standing | null;
 }
 
 /** A game as the play service handles it: in stored text and JSON, whatever the game's own types. */
@@ -83,6 +93,7 @@ export function played<State, Command, View, Note>(game: Game<State, Command, Vi
         },
         text: () => game.encode(current()),
         view: (at) => game.view(current(), at),
+        standing: () => game.standing?.(current()) ?? null,
       };
     },
   };

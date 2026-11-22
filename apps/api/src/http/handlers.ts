@@ -83,6 +83,7 @@ import { Coins } from "../play/coins.ts";
 import { GAMES, type Played } from "../play/games.ts";
 import { PageCoins } from "../play/page.ts";
 import { Play } from "../play/service.ts";
+import { PlayStore } from "../play/store.ts";
 import { questJson } from "../quests/json.ts";
 import { rerollQuestFor } from "../quests/reroll.ts";
 import { Quests } from "../quests/store.ts";
@@ -655,6 +656,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
     const guild = yield* GuildFeed;
     const streams = yield* OpenStreams;
     const play = yield* Play;
+    const store = yield* PlayStore;
     const coins = yield* Coins;
     const pageCoins = yield* PageCoins;
 
@@ -911,6 +913,27 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               results: batch.results,
               state: batch.view,
             } satisfies typeof Body.Played.Type);
+          }),
+        )
+        // A game's board, its players named as the guild's news names them.
+        .handle("standings", ({ params }) =>
+          Effect.gen(function* () {
+            const played = yield* playedGame(params.game);
+            const { playerId } = yield* CurrentIdentity;
+            const board = yield* store.board(played.id, playerId);
+            const named = yield* names.of(board.top.map((row) => row.playerId));
+            return HttpServerResponse.jsonUnsafe({
+              top: board.top.map((row) => ({
+                place: row.place,
+                id: row.playerId,
+                name: named.get(row.playerId) ?? "Someone",
+                guest: row.guest,
+                score: row.score,
+                also: row.also,
+                you: row.playerId === playerId,
+              })),
+              you: Option.getOrNull(board.you),
+            } satisfies typeof Body.Standings.Type);
           }),
         )
         // Coins a page of the town or the Works earned or spent, as it worked them out: done once

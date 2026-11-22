@@ -14,9 +14,11 @@ const Known = Schema.Struct({ playerId: PlayerUuid });
 
 /**
  * Of these players, the ones Leaf knows: those the ledger has an account for,
- * and those whose game said where they were in the last day. Only they are
- * asked of Mojang, so no one can make Leaf fetch and keep just any player's
- * skin or name. A database failure is a defect.
+ * those whose game said where they were in the last day, and those listed on
+ * a game's board (a guest's yard stays on it long after they were last here,
+ * and everybody sees their name and face there). Only they are asked of
+ * Mojang, so no one can make Leaf fetch and keep just any player's skin or
+ * name. A database failure is a defect.
  */
 export const knownAmong = (
   sql: SqlClient.SqlClient,
@@ -30,6 +32,8 @@ export const knownAmong = (
         UNION
         SELECT player_id AS playerId FROM presence
         WHERE ${sql.in("player_id", playerIds)} AND seen_at > ${now - KNOWN_FROM_PRESENCE_MS}
+        UNION
+        SELECT player_id AS playerId FROM standings WHERE ${sql.in("player_id", playerIds)}
       `.pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(Known))),
         Effect.map((rows) => new Set(rows.map((row) => row.playerId))),

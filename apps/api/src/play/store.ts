@@ -1,6 +1,8 @@
-import { DAY_MS, type Logged, type PlayerId, utcDay } from "@sequoia-leaf/core";
+import { DAY_MS, type Logged, type PlayerId, type Standing, utcDay } from "@sequoia-leaf/core";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
+
+import { PlayerUuid } from "../wire.ts";
 
 /** How many of each player's newest commands to each game have their answers kept, so that one sent again is answered the same. */
 export const ANSWERS_KEPT = 256;
@@ -8,6 +10,8 @@ export const ANSWERS_KEPT = 256;
 export const LOGGED_A_DAY = 1000;
 /** How long what players did is kept. */
 export const ACTIVITY_KEPT_MS = 180 * DAY_MS;
+/** How many are listed at the top of a game's board. */
+export const BOARD_MOST = 20;
 
 /** A player's state in a game, as stored: how many batches have changed it, and the game's own text. */
 const Stored = Schema.Struct({ rev: Schema.Int, state: Schema.String });
@@ -26,13 +30,35 @@ const Activity = Schema.Struct({
 });
 export type ActivityRow = typeof Activity.Type;
 
+/** Where somebody stands, as read back: their place, their score and what is shown beside it. */
+const Own = Schema.Struct({
+  place: Schema.Int,
+  score: Schema.Int,
+  also: Schema.fromJsonString(Schema.Record(Schema.String, Schema.Number)),
+});
+/** Somebody on a game's board, as read back. */
+const Stood = Schema.Struct({ ...Own.fields, playerId: PlayerUuid, guest: Schema.BooleanFromBit });
+
+/** Where somebody is on a game's board: their place (how many score higher, and one), their score and what is shown beside it. */
+export interface Placed {
+  readonly place: number;
+  readonly score: number;
+  readonly also: Readonly<Record<string, number>>;
+}
+
+/** A game's board: the top `BOARD_MOST`, and the player's own place among everyone, if they are on it. */
+export interface Board {
+  readonly top: readonly (Placed & { readonly playerId: PlayerId; readonly guest: boolean })[];
+  readonly you: Option.Option<Placed>;
+}
+
 /**
  * What the play service keeps: each player's state in each game (`play_state`), what each command
  * answered (`play_commands`, each player's newest 256 to each game), the things players did that
  * are worth remembering (`activity`, up to 1,000 a player a UTC day, for 180 days), and how many of
  * each player's commands were done and refused each UTC day (`command_days`, for the staff's
- * report). Every method is meant to run inside the play service's transaction. A database failure
- * is a defect.
+ * report), and where each player's state stands in a game with a board (`standings`). Every method
+ * but `board` is meant to run inside the play service's transaction. A database failure is a defect.
  */
 export class PlayStore extends Context.Service<
   PlayStore,
@@ -70,6 +96,19 @@ export class PlayStore extends Context.Service<
     readonly activity: (playerId: PlayerId) => Effect.Effect<readonly ActivityRow[]>;
     /** Counts a player's commands on the UTC day of `now`: how many were done and how many refused. */
     readonly count: (playerId: PlayerId, done: number, refused: number, now: number) => Effect.Effect<void>;
+    /** Writes where a player's state stands; while its score is the same, it keeps when the score was reached. */
+    readonly stand: (
+      playerId: PlayerId,
+      game: string,
+      standing: Standing,
+      guest: boolean,
+      now: number,
+    ) => Effect.Effect<void>;
+    /**
+     * A game's board, of those who score above 0: the highest `BOARD_MOST`, a tie going to whoever
+     * reached it first, and the player's own place.
+     */
+    readonly board: (game: string, playerId: PlayerId) => Effect.Effect<Board>;
   }
 >()("leaf/PlayStore") {
   static readonly layer = Layer.effect(
@@ -100,6 +139,25 @@ export class PlayStore extends Context.Service<
         Result: Activity,
         execute: (playerId) => sql`
           SELECT id, player_id AS playerId, at, game, kind, data FROM activity WHERE player_id = ${playerId} ORDER BY id
+        `,
+      });
+      // A place is how many score higher, and one.
+      const place = sql`(SELECT count(*) FROM standings AS o WHERE o.game = s.game AND o.score > s.score) + 1`;
+      const top = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: Stood,
+        execute: (game) => sql`
+          SELECT ${place} AS place, score, also, player_id AS playerId, guest FROM standings AS s
+          WHERE game = ${game} AND score > 0
+          ORDER BY score DESC, updated_at, player_id LIMIT ${BOARD_MOST}
+        `,
+      });
+      const own = SqlSchema.findOneOption({
+        Request: Schema.Struct({ playerId: Schema.String, game: Schema.String }),
+        Result: Own,
+        execute: ({ playerId, game }) => sql`
+          SELECT ${place} AS place, score, also FROM standings AS s
+          WHERE player_id = ${playerId} AND game = ${game} AND score > 0
         `,
       });
       return PlayStore.of({
@@ -161,6 +219,15 @@ export class PlayStore extends Context.Service<
                 VALUES (${playerId}, ${utcDay(now) * DAY_MS}, ${done}, ${refused})
                 ON CONFLICT (player_id, day) DO UPDATE SET done = done + excluded.done, refused = refused + excluded.refused
               `.pipe(Effect.asVoid, Effect.orDie),
+        stand: (playerId, game, standing, guest, now) =>
+          sql`
+            INSERT INTO standings (player_id, game, score, also, guest, updated_at)
+            VALUES (${playerId}, ${game}, ${standing.score}, ${JSON.stringify(standing.also)}, ${guest ? 1 : 0}, ${now})
+            ON CONFLICT (player_id, game) DO UPDATE SET
+              score = excluded.score, also = excluded.also, guest = excluded.guest,
+              updated_at = CASE WHEN score = excluded.score THEN updated_at ELSE excluded.updated_at END
+          `.pipe(Effect.asVoid, Effect.orDie),
+        board: (game, playerId) => Effect.all({ top: top(game), you: own({ playerId, game }) }).pipe(Effect.orDie),
       });
     }),
   );
