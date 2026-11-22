@@ -6,7 +6,7 @@ import { BUFFER, CRATE, FUEL, KIND, TICKS } from "./content/machines.ts";
 import { RECIPES } from "./content/recipes.ts";
 import { bare, belts, lit, on, put, steps } from "./fixtures.ts";
 import { DEPOT_SHARE } from "./orders.ts";
-import { power } from "./step.ts";
+import { power, rewire, takes } from "./step.ts";
 import { at, put as hold, type World } from "./world.ts";
 
 /** Sets a thing on a belt, already across its tile and ready to be handed on. */
@@ -108,6 +108,26 @@ describe("carrying", () => {
     expect(count([5, 6, 7, 8].map((x) => [x, 5]))).toBeGreaterThan(0);
     expect(count([4, 3, 2, 1].map((y) => [4, y]))).toBeGreaterThan(0);
     expect(count([6, 7, 8, 9].map((y) => [4, y]))).toBeGreaterThan(0);
+  });
+  test("a splitter passes by a way that nothing takes from, and holds what it has when no way takes", () => {
+    const w = bare();
+    put(w, "splitter", 4, 5, 0);
+    load(w, 4, 5, "ore");
+    steps(w, 50);
+    expect(on(w, 4, 5).item).toBe("ore");
+    // A belt on its right, running away. Its turn is still the way ahead, where there is nothing.
+    put(w, "belt", 4, 6, 1);
+    // A belt on its left, pointing at it: that one takes nothing from it.
+    put(w, "belt", 4, 4, 1);
+    const wire = rewire(w);
+    expect([at(w, 5, 5), at(w, 4, 4), at(w, 4, 6)].map((to) => takes(w, wire, to, at(w, 4, 5)))).toEqual([
+      false,
+      false,
+      true,
+    ]);
+    steps(w, 1);
+    expect(on(w, 4, 5).item).toBeNull();
+    expect(on(w, 4, 6).item).toBe("ore");
   });
   test("a splitter takes nothing in at its sides", () => {
     const w = bare();

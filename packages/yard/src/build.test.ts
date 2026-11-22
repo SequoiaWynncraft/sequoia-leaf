@@ -110,6 +110,36 @@ describe("building", () => {
     expect(turn(w, 2, 4, 1)).toBe(false);
     expect(build(w, "tunnel", 2, 4, 1, 99).ok).toBe(false);
   });
+  test("a splitter or a joiner set down on a belt takes its place for the difference, and what the belt carried rides on", () => {
+    const w = bare();
+    const more = KIND.splitter.cost - KIND.belt.cost;
+    put(w, "belt", 2, 2, 0);
+    Object.assign(on(w, 2, 2), { item: "ore", prog: 0.5 });
+    expect(refusal(w, "splitter", 2, 2, more - 1)).toBe("Not enough Coins");
+    expect(build(w, "splitter", 2, 2, 0, more)).toEqual({ ok: true, cost: more });
+    expect(on(w, 2, 2)).toMatchObject({ kind: "splitter", item: "ore", prog: 0.5 });
+    expect(build(w, "joiner", 2, 2, 1, 0)).toEqual({ ok: true, cost: KIND.joiner.cost - KIND.splitter.cost });
+    expect(on(w, 2, 2)).toMatchObject({ kind: "joiner", dir: 1, item: "ore" });
+    // A belt is not set down on these, and nothing is set down on a machine.
+    expect(refusal(w, "belt", 2, 2, 99)).toBe("Something is here already");
+    put(w, "mill", 4, 2);
+    expect(refusal(w, "splitter", 4, 2, 99)).toBe("Something is here already");
+    expect(on(w, 4, 2).kind).toBe("mill");
+  });
+  test("a piece set in another's place sends that one back as if it were taken away", () => {
+    const w = bare();
+    // A splitter to hand, on a belt that was paid for: the belt's Coins come back.
+    put(w, "belt", 2, 2, 0);
+    w.spare.splitter = 1;
+    expect(build(w, "splitter", 2, 2, 0, 0)).toEqual({ ok: true, cost: -KIND.belt.cost });
+    expect(on(w, 2, 2).free).toBe(true);
+    // A joiner paid for, on a belt that was to hand: the belt goes back to hand.
+    w.spare.belt = 1;
+    put(w, "belt", 5, 2, 0);
+    expect(w.spare.belt).toBe(0);
+    expect(build(w, "joiner", 5, 2, 0, KIND.joiner.cost)).toEqual({ ok: true, cost: KIND.joiner.cost });
+    expect(w.spare.belt).toBe(1);
+  });
 });
 
 describe("Coins", () => {

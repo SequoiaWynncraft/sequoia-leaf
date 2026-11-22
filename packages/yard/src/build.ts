@@ -13,7 +13,7 @@ import { type Dir, DX, DY } from "./grid.ts";
 import { besideWater, type Plot, touching } from "./land.ts";
 import { fillBoard } from "./orders.ts";
 import { repower } from "./power.ts";
-import { at, blank, changed, reopen, take, type World } from "./world.ts";
+import { at, blank, type Building, changed, reopen, take, type World } from "./world.ts";
 
 /** What came of trying to spend Coins: what it cost, or why not, in plain words. */
 export type Spent = { readonly ok: true; readonly cost: number } | { readonly ok: false; readonly why: string };
@@ -33,6 +33,28 @@ function ground(w: World, x: number, y: number): string | null {
 
 /** What it costs to stand one more of a thing: nothing while the yard has one to hand, else its price. */
 export const costOf = (w: World, kind: Kind): number => ((w.spare[kind] ?? 0) > 0 ? 0 : KIND[kind].cost);
+
+/** What comes back for a piece taken away: all it cost, or nothing for one the yard had to hand. */
+const worth = (there: Building): number => (there.free ? 0 : KIND[there.kind].cost);
+
+/**
+ * Whether a thing may be set down on what stands on a tile, in its place: a splitter or a joiner on
+ * a belt, or on one another.
+ */
+export const replaces = (kind: Kind, there: Building): boolean =>
+  (kind === "splitter" || kind === "joiner") &&
+  there.kind !== kind &&
+  (there.kind === "belt" || there.kind === "splitter" || there.kind === "joiner");
+
+/**
+ * What building a thing on a tile takes from the purse: nothing to turn one of its kind, and less
+ * by what comes back for a piece it takes the place of (so it can be less than nothing).
+ */
+export function priceAt(w: World, kind: Kind, x: number, y: number): number {
+  const there = w.cells[at(w, x, y)];
+  if (!there) return costOf(w, kind);
+  return there.kind === kind ? 0 : costOf(w, kind) - worth(there);
+}
 
 /** Whether a tunnel may pass under a tile. It goes under belts, roots and the stream, but never under the depot. */
 export const digsUnder = (w: World, x: number, y: number): boolean => w.cells[at(w, x, y)]?.kind !== "depot";
@@ -85,28 +107,31 @@ export function refusal(
   const there = w.cells[i];
   if (there?.kind === "depot") return "The depot stands here";
   // Laying a thing over another of its kind only turns it, and costs nothing.
-  if (there) return there.kind === kind && kind !== "tunnel" ? null : "Something is here already";
+  if (there?.kind === kind && kind !== "tunnel") return null;
+  if (there && !replaces(kind, there)) return "Something is here already";
   if (kind === "gatherer" && !w.land.deposit[i]) return "A gatherer must be placed on a deposit";
   if (kind === "wheel" && !besideWater(w.land, x, y)) return "A waterwheel must be beside the stream";
   if (kind === "tunnel" && !tunnelExit(w, x, y, dir, span))
     return depotInTheWay(w, x, y, dir, span)
       ? "A tunnel cannot go under the depot"
       : "A tunnel needs a free tile to come up on, 1 to 3 tiles ahead";
-  if (coins < costOf(w, kind)) return "Not enough Coins";
+  if (coins < priceAt(w, kind, x, y)) return "Not enough Coins";
   return null;
 }
 
 /**
  * Builds something and says what it cost. A thing laid over another of its kind only turns it. A
- * tunnel is built as its two mouths at once: in at this tile, and up at the nearest clear tile
- * beyond (or `span` tiles beyond, if given).
+ * splitter or a joiner set down on a belt (or on one another) takes its place: the piece that was
+ * there goes back as if taken away, and what it was carrying rides on. A tunnel is built as its
+ * two mouths at once: in at this tile, and up at the nearest clear tile beyond (or `span` tiles
+ * beyond, if given).
  */
 export function build(w: World, kind: Kind, x: number, y: number, dir: Dir, coins: number, span?: number): Spent {
   const why = refusal(w, kind, x, y, coins, dir, span);
   if (why !== null) return { ok: false, why };
   const i = at(w, x, y);
   const there = w.cells[i];
-  if (there) {
+  if (there?.kind === kind) {
     if (there.dir !== dir) {
       there.dir = dir;
       changed(w);
@@ -114,11 +139,17 @@ export function build(w: World, kind: Kind, x: number, y: number, dir: Dir, coin
     return { ok: true, cost: 0 };
   }
   const made = blank(kind, dir);
-  const cost = costOf(w, kind);
+  const cost = priceAt(w, kind, x, y);
   if ((w.spare[kind] ?? 0) > 0) {
     // One of the pieces the yard has to hand.
     made.free = true;
     w.spare[kind] = (w.spare[kind] ?? 0) - 1;
+  }
+  if (there) {
+    if (there.free) w.spare[there.kind] = (w.spare[there.kind] ?? 0) + 1;
+    made.item = there.item;
+    made.prog = there.prog;
+    made.via = there.via;
   }
   w.cells[i] = made;
   if (kind === "tunnel") {
@@ -172,7 +203,7 @@ export function remove(w: World, x: number, y: number): Refund {
   changed(w);
   if (there.kind === "pylon") repower(w);
   if (there.free) w.spare[there.kind] = (w.spare[there.kind] ?? 0) + 1;
-  return { ok: true, refund: there.free ? 0 : KIND[there.kind].cost };
+  return { ok: true, refund: worth(there) };
 }
 
 /**

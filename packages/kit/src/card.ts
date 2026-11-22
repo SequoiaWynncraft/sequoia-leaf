@@ -16,7 +16,7 @@
  *
  * The rules of that (`Deck`, `partsOf`) touch no page and are tested; the rest draws them.
  */
-import { add, el, icon } from "./dom.ts";
+import { add, asking, el, icon, pressedTwice } from "./dom.ts";
 import { LONG_PRESS, tip, tipAt, tipOff } from "./tip.ts";
 
 /** A thing, named as `"kind:id"`: `"item:gear"`, `"figure:barrow-gnome"`, `"trait:ember"`. */
@@ -94,6 +94,8 @@ export interface Action {
   /** A tip on it. */
   readonly hint?: string;
   readonly about?: string;
+  /** For what spends: the first press only changes the button's words to these, and a second press does it. */
+  readonly ask?: string;
   readonly on: (button: HTMLButtonElement) => void;
 }
 
@@ -515,18 +517,25 @@ function entryOf(e: Entry, look: Row["look"]): HTMLElement {
   return el("span", `k-info-make${e.lit ? " lit" : ""}`, {}, pre, el("span", "k-dim k-pix", { text: "→" }), t);
 }
 
-function actionOf(a: Action): HTMLElement {
+function actionOf(a: Action, card: Ref): HTMLElement {
   const slot = a.look === "slot";
+  const key = `${card}|${a.label}`;
+  const ask = a.ask !== undefined && asking(key) ? a.ask : null;
   const b = el(
     "button",
-    slot ? `k-slot k-info-pin${a.lit ? " lit" : ""}` : `k-btn ${a.look ?? "wood sm"}${a.off ? " off" : ""}`,
+    slot
+      ? `k-slot k-info-pin${a.lit ? " lit" : ""}`
+      : `k-btn ${a.look ?? "wood sm"}${a.off ? " off" : ""}${ask ? " asking" : ""}`,
     { type: "button", "aria-label": a.label && slot ? a.label : null },
-    a.icon ? (slot ? fit(a.icon, 12) : a.icon) : null,
-    a.label && !slot ? a.label : null,
-    slot ? null : (a.after ?? null),
+    a.icon && !ask ? (slot ? fit(a.icon, 12) : a.icon) : null,
+    ask ?? (a.label && !slot ? a.label : null),
+    slot || ask ? null : (a.after ?? null),
   );
   b.addEventListener("click", () => {
+    if (a.ask !== undefined && !pressedTwice(key, () => deck.refresh())) return;
     a.on(b);
+    // Done or refused, the button no longer asks.
+    if (a.ask !== undefined) deck.refresh();
   });
   if (a.hint) tip(b, a.hint, a.about ?? "");
   return b;
@@ -626,7 +635,11 @@ function drawCard(d: Description, o: Open): HTMLElement {
             ),
         ),
       );
-    else add(card, el("div", "k-info-part k-info-acts", {}, ...(d.actions ?? []).map(actionOf)));
+    else
+      add(
+        card,
+        el("div", "k-info-part k-info-acts", {}, ...(d.actions ?? []).map((a) => actionOf(a, o.stack.at(-1) ?? ""))),
+      );
   }
   if (sheet && !partsOf(d, true).includes("head")) add(card, closeBtn);
   return card;

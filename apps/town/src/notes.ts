@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "works-splitters",
+    day: "2026-11-22",
+    title: "The Works: Splitters and buying",
+    lines: [
+      "A Splitter or a Joiner can be set straight onto a belt. A Splitter shows an arrow only towards a side that takes items, and never sends an item to a side with no belt.",
+      "Buying a plot or a plan asks you to press again. A plot's card opens when you click the plot.",
+    ],
+  },
+  {
     id: "camp-follows-you",
     day: "2026-11-22",
     title: "Your camp follows you",

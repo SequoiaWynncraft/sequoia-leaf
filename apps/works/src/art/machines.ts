@@ -532,6 +532,13 @@ function eachWay(rows: readonly string[]): Canvas[] {
   return [rows, south, west, quarter(west)].map((r) => bitmap(r, PAL));
 }
 
+/** The rows of `SPLITTER` each of its arrowheads keeps to: the one ahead, the one to the left, the one to the right. */
+const HEADS = [
+  [4, 10],
+  [0, 3],
+  [12, 15],
+] as const;
+
 /** A splitter's vane: a small brass arrow showing which way the next thing will go. */
 function vane(dir: number): Canvas {
   const rows = [
@@ -760,6 +767,8 @@ export interface Machines {
   /** splitter[dir] and joiner[dir]: what marks the tile, pointing each way. */
   splitter: Canvas[];
   joiner: Canvas[];
+  /** heads[way][dir]: one arrowhead of a splitter pointing `dir`, by itself: the way ahead, to the left, to the right. */
+  heads: Canvas[][];
   vane: Canvas[];
   /** pointer[dir], dim and bright. */
   pointer: Canvas[];
@@ -800,6 +809,9 @@ export function makeMachines(): Machines {
     hood: [0, 1, 2, 3].map(hood),
     splitter: eachWay(SPLITTER),
     joiner: eachWay(JOINER),
+    heads: HEADS.map(([top, foot]) =>
+      eachWay(SPLITTER.map((row, y) => (y >= top && y <= foot ? row : ".".repeat(16)))),
+    ),
     vane: [0, 1, 2, 3].map(vane),
     pointer: [0, 1, 2, 3].map((d) => pointer(d, GOLD[0])),
     pointerLit: [0, 1, 2, 3].map((d) => pointer(d, GOLD[2])),

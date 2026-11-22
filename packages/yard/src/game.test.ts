@@ -177,6 +177,13 @@ describe("a command", () => {
     if (mill) add(mill, "deadfall");
     go({ do: "tipOut", item: null, ...a });
     expect(on(a)?.count).toBe(0);
+    // A splitter to hand set down on a belt that was paid for: the belt's Coins come back.
+    w.spare.belt = 0;
+    w.spare.splitter = 1;
+    go({ do: "build", kind: "belt", dir: 0, ...b });
+    expect(go({ do: "build", kind: "splitter", dir: 0, ...b }).coins?.map((paid) => paid.amount)).toEqual([1]);
+    expect(on(b)?.kind).toBe("splitter");
+    go({ do: "remove", ...b });
     go({ do: "build", kind: "crate", dir: 0, ...b });
     go({ do: "crate", open: false, ...b });
     expect(on(b)?.open).toBe(false);

@@ -139,9 +139,13 @@ function payIn(w: World): CoinChange[] {
   return coins > 0 ? [change(w, coins, REASON.till, true)] : [];
 }
 
-/** The till paid in, and then a price taken. */
+/**
+ * The till paid in, and then a price taken. A price below nothing (a piece set down in the place
+ * of a dearer one) gives the difference back, as taking the dearer one away would.
+ */
 function priced(w: World, price: number, reason: string): CoinChange[] {
   const paid = payIn(w);
+  if (price < 0) return [...paid, change(w, -price, REASON.remove, true)];
   return price > 0 ? [...paid, change(w, -price, reason, false)] : paid;
 }
 

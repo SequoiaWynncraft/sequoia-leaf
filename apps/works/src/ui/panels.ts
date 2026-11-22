@@ -4,7 +4,7 @@
  */
 
 import { thing } from "@sequoia-leaf/kit/card.ts";
-import { amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
+import { amount, asking, el, icon, pressedTwice, replay } from "@sequoia-leaf/kit/dom.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
@@ -231,9 +231,11 @@ function plans(_art: Art, body: HTMLElement): () => void {
             ? el("span", "k-chip lit", {}, icon("check"), "Yours")
             : state === "for sale"
               ? button(
-                  coins() >= plan.price ? "sm" : "sm off",
-                  [icon("coin"), plan.price.toLocaleString("en-US")],
+                  `${coins() >= plan.price ? "sm" : "sm off"}${asking(planRef(id)) ? " asking" : ""}`,
+                  asking(planRef(id)) ? ["Buy?"] : [icon("coin"), plan.price.toLocaleString("en-US")],
                   (b) => {
+                    // What spends is asked once more, when the Coins are there to spend.
+                    if (coins() >= plan.price && !pressedTwice(planRef(id), build)) return;
                     if (!buyIdea(id)) replay(b, "shake");
                     else feed(`${plan.name}: ${plan.what}`, "gold");
                     panelHooks.changed();
@@ -288,7 +290,7 @@ function depot(_art: Art, body: HTMLElement): () => void {
         text: `Every item the depot takes also pays ${DEPOT_SHARE * 100}% of its worth, whether or not an order asks for it.`,
       }),
       el("div", "k-d", {
-        text: `The yard keeps working and paying for up to ${AWAY_MOST_MS / 3_600_000} hours while you are away.`,
+        text: `The yard keeps working for up to ${AWAY_MOST_MS / 3_600_000} hours while you are away. What it earned is added to your Coins when you come back to the Works.`,
       }),
       el(
         "div",
