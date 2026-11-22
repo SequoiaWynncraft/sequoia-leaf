@@ -40,8 +40,6 @@ export interface TouchWorld {
   mine: boolean;
   /** Sit down on a seat, nearest the point touched. */
   sit: (live: Live, wx: number, wy: number) => void;
-  /** Walk up to one of the camp's own places and open it. */
-  open: (what: "cabin" | "mailbox" | "signpost") => void;
   /** Whether there is mail waiting. */
   mail: () => boolean;
   /** The trophies to show on the shelf. */
@@ -169,20 +167,15 @@ const shine: Touch = (l) => {
 };
 
 const TOUCH: Readonly<Record<string, Touch>> = {
-  cabin: (l, w) => {
+  cabin: (l) => {
     nudge(l);
     sfx.knock();
-    w.open("cabin");
   },
   "fire-ring": flare,
-  mailbox: (l, w) => {
-    nudge(l);
-    w.open("mailbox");
-  },
-  signpost: (l, w) => {
+  mailbox: nudge,
+  signpost: (l) => {
     nudge(l);
     sfx.pluck(5);
-    w.open("signpost");
   },
   "trophy-shelf": (l, w) => {
     nudge(l);

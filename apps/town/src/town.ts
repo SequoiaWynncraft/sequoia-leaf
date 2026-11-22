@@ -14,7 +14,7 @@ import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { changed, G, hooks } from "./game.ts";
 import { GROUND, paintTrunk } from "./ground.ts";
 import { guild } from "./guild.ts";
-import { flame, type Light, makeProp, type Prop, propUnder, type Standing } from "./props.ts";
+import { flame, type Light, makeProp, type Prop, type Standing } from "./props.ts";
 import { BOARD, type Sprite, type Sprites } from "./sprites.ts";
 import { type Strand, STRINGS, wire } from "./strings.ts";
 import {
@@ -345,18 +345,13 @@ function tapPole(): void {
   else float(banner.x, banner.y - 40, "No banner yet", CREAM, 2);
 }
 
-function tapPlace(p: Prop): void {
-  nudge(p);
-  if (p.place) hooks.visit(p.place);
-}
-
 /** A knock on the stump: every carved figure jumps. */
 function tapTable(p: Prop): void {
   table.movedAt = G.t;
   table.moving = -2;
   noise(0.03, 1900, { vol: 0.1, q: 5 });
   tone(330, 0.07, { vol: 0.08, type: "square" });
-  tapPlace(p);
+  nudge(p);
 }
 
 /** The Works' doors swing in and the hearth lights the yard; `false` lets them fall to again. */
@@ -514,7 +509,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
   add("treasury", s.treasury, BUILDINGS.treasury.x, BUILDINGS.treasury.y, {
     z: 110,
     place: "treasury",
-    tap: tapPlace,
+    tap: nudge,
     tip: TREASURY,
   });
   add("counter", s.counter, 81, 120, {
@@ -522,7 +517,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     tip: TREASURY,
     tap: (p) => {
       ringBell();
-      tapPlace(p);
+      nudge(p);
     },
   });
   light(104, 104, 44, 0.95);
@@ -549,7 +544,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     tap: (p) => {
       smoke(8);
       sfx.clank();
-      tapPlace(p);
+      nudge(p);
     },
     extra: drawDoor,
   });
@@ -579,13 +574,13 @@ export function buildTown(s: Sprites, ground: Ctx): void {
 
   // The gate out to the member's own camp, and the signpost that says so.
   const CAMP = tipOf("camp");
-  add("gate", s.gate, BUILDINGS.gate.x, BUILDINGS.gate.y, { place: "camp", tap: tapPlace, tip: CAMP });
+  add("gate", s.gate, BUILDINGS.gate.x, BUILDINGS.gate.y, { place: "camp", tap: nudge, tip: CAMP });
   light(237, 65, 24, 0.9);
   light(275, 65, 24, 0.9);
   light(256, 84, 34, 0.85); // the last of the sun, coming up the path
   add("signpost", s.signpost, 291, 106, {
     place: "camp",
-    tap: tapPlace,
+    tap: nudge,
     hops: true,
     tip: CAMP,
     // Something is waiting at the camp: a letter, or a parcel.
@@ -602,7 +597,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     tap: (p) => {
       flutter(198, 140, 5, [CREAM, GOLD[2]], 12, 20);
       sfx.paper();
-      tapPlace(p);
+      nudge(p);
     },
     extra: (g, sx, sy) => {
       if (!guild.quests().some((q) => q.claim && q.have >= q.need && !G.claimed.has(q.id))) return;
@@ -625,7 +620,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
       tap: (p) => {
         sfx.pluck(2 + i * 2);
         G.stall = i;
-        tapPlace(p);
+        nudge(p);
       },
     });
     light(x + 12, y - 24, 34, 0.9);
@@ -665,7 +660,7 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     tip: tipOf("fire"),
     tap: (p) => {
       flare();
-      tapPlace(p);
+      nudge(p);
     },
     hit: { x: 244, y: 196, w: 24, h: 24 },
     extra: drawFire,
@@ -1291,10 +1286,6 @@ export function allLights(): Light[] {
 }
 
 /** The thing under a point, nearest the eye first. */
-export function propAt(wx: number, wy: number): Prop | null {
-  return propUnder(props, wx, wy);
-}
-
 /** A crab, drawn where it is: hopping, running off, or up to its middle in the pond. */
 function paintCrab(g: Ctx, c: Crab, cx: number, cy: number): void {
   const pic = crabPic(c);
