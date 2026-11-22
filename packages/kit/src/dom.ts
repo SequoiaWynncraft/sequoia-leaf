@@ -59,6 +59,8 @@ if (typeof document !== "undefined") {
   );
   window.addEventListener("pointerup", () => mouseHeld(false), true);
   window.addEventListener("pointercancel", () => mouseHeld(false), true);
+  // Let go outside the window, the button's lift never arrives here.
+  window.addEventListener("blur", () => mouseHeld(false));
 }
 
 type Child = Node | string | number | null | undefined | false;
