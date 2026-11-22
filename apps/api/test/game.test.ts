@@ -266,7 +266,7 @@ describe("signing in with the website's cookie", () => {
   it("takes a write with the cookie from Leaf's own pages, and one with a Bearer from anywhere", async () => {
     const fromPage = await save("town", 0, { saved_at: 1 }, alicesPage);
     const fromMod = await save("works", 0, { saved_at: 1 }, { bearer: "alice-token" });
-    const bothNoOrigin = await save("purse", 0, { saved_at: 1 }, { bearer: "alice-token", cookie: "alice-token" });
+    const bothNoOrigin = await save("town", 0, { saved_at: 1 }, { bearer: "bob-token", cookie: "bob-token" }, bob);
 
     expect([fromPage.status, fromMod.status, bothNoOrigin.status]).toEqual([200, 200, 200]);
   });
@@ -609,16 +609,16 @@ describe("saves", () => {
   });
 
   it("writes over the version last read, and refuses a stale one with version_conflict, changing nothing", async () => {
-    await save("purse", 0, { coins: 1 });
+    await save("works", 0, { coins: 1 });
     clock.now = T0 + HOUR;
-    const second = await save("purse", 1, { coins: 2 });
-    const stale = await save("purse", 1, { coins: 99 });
-    const fresh = await save("purse", 0, { coins: 99 });
+    const second = await save("works", 1, { coins: 2 });
+    const stale = await save("works", 1, { coins: 99 });
+    const fresh = await save("works", 0, { coins: 99 });
 
     expect(await second.json()).toEqual({ version: 2, updated_at: "2026-11-25T13:00:00.000Z" });
     expect([stale.status, fresh.status]).toEqual([409, 409]);
     expect(await stale.json()).toMatchObject({ code: "version_conflict" });
-    expect(await (await get("/v1/game/saves/purse")).json()).toMatchObject({ version: 2, data: { coins: 2 } });
+    expect(await (await get("/v1/game/saves/works")).json()).toMatchObject({ version: 2, data: { coins: 2 } });
   });
 
   it("takes no more writes to the battler's slot, whose game Leaf plays now: 410 moved, storing nothing; it can still be read", async () => {
@@ -695,11 +695,11 @@ describe("saves", () => {
   });
 
   it("refuses a save from a page that believes it is someone else with not_you, storing nothing", async () => {
-    await save("purse", 0, { coins: 300 });
+    await save("town", 0, { coins: 300 });
 
     // Alice's page, left open after Bob signed in in another tab: Bob's cookie, Alice's state.
-    const alicesOldPage = await save("purse", 0, { coins: 300 }, { cookie: "bob-token", origin: ORIGIN }, alice);
-    const overAlice = await save("purse", 1, { coins: 5 }, alicesPage, bob);
+    const alicesOldPage = await save("town", 0, { coins: 300 }, { cookie: "bob-token", origin: ORIGIN }, alice);
+    const overAlice = await save("town", 1, { coins: 5 }, alicesPage, bob);
     const nobody = await save("works", 0, { coins: 5 }, { bearer: "alice-token" }, "");
 
     expect([alicesOldPage.status, overAlice.status, nobody.status]).toEqual([409, 409, 409]);
@@ -709,7 +709,7 @@ describe("saves", () => {
     });
     expect([await codeOf(overAlice), await codeOf(nobody)]).toEqual(["not_you", "not_you"]);
     expect(await (await get("/v1/game/saves", { bearer: "bob-token" })).json()).toEqual({ saves: [] });
-    expect(await (await get("/v1/game/saves/purse")).json()).toMatchObject({ version: 1, data: { coins: 300 } });
+    expect(await (await get("/v1/game/saves/town")).json()).toMatchObject({ version: 1, data: { coins: 300 } });
     expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM saves`)).toEqual([{ n: 1 }]);
   });
 
@@ -805,7 +805,7 @@ describe("saves", () => {
     await save("town", 1, {}, { bearer: "bob-token" });
     clock.now = T0 + 150 * DAY + 1;
     const untouched = await services.query((sql) => sql`SELECT player_id, slot FROM saves ORDER BY player_id, slot`);
-    await save("purse", 0, {}, { bearer: "bob-token" });
+    await save("works", 0, {}, { bearer: "bob-token" });
 
     expect(await readBack.json()).toMatchObject({ version: 2, data: { mine: "carol, later" } });
     expect(before).toEqual([
@@ -822,8 +822,8 @@ describe("saves", () => {
     ]);
     expect(await services.query((sql) => sql`SELECT player_id, slot FROM saves ORDER BY player_id, slot`)).toEqual([
       { player_id: alice, slot: "town" },
-      { player_id: bob, slot: "purse" },
       { player_id: bob, slot: "town" },
+      { player_id: bob, slot: "works" },
     ]);
   });
 });

@@ -23,8 +23,10 @@ It also serves the guild's browser game, Guild Town, at `/play/town/`, and the
 routes only the game uses. Anyone signed in may play it: members, and guests
 who are not in the guild. The game shows a member's Leaf; no route lets it
 spend or pay any, and a guest has none. The Little Raid is played on Leaf's
-play service, which owns its state and pays its Coins from a ledger of their
-own; the town and the Works still keep theirs in the browser, for now.
+play service, which owns its state. Coins are a ledger of their own, the only
+Coins there are: the raid pays into it, and the town and the Works, whose
+pages still work out what they earn and spend, change it through
+`POST /v1/game/coins` until they move to the play service too.
 
 ## Getting started
 
@@ -347,6 +349,7 @@ react to `quest_completed`.
 | `GET /v1/game/admin/activity`      | For the staff alone: who played, when, where and for how long.        |
 | `GET /v1/game/play/{game}`         | The player's state in a game Leaf plays, as their page is shown it.   |
 | `POST /v1/game/play/{game}`        | Does a batch of commands in that game, and answers what each did.     |
+| `POST /v1/game/coins`              | Pays or takes Coins a page of the town or the Works worked out.       |
 
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
@@ -396,10 +399,11 @@ version, each at most once a minute a slot, for a week (`save_history`).
   not one gets 400 `invalid_slot`; a body that is not a save, or `data` that is
   not an object, 400 `invalid_save`; a save over 256 KiB, 413 `save_too_large`.
   A body over twice that is not read at all.
-- A slot whose game Leaf now plays itself (`MOVED_SLOTS` in core: `raid`) takes
-  no more writes: `PUT` answers 410 `moved` and stores nothing, so what is
-  there stays as it was, to be brought over by hand (see Moving over). It can
-  still be read.
+- A slot whose game Leaf now plays itself, or whose numbers Leaf keeps itself
+  (`MOVED_SLOTS` in core: `raid`, and `purse`, whose Coins are the ledger's),
+  takes no more writes: `PUT` answers 410 `moved` and stores nothing, so what
+  is there stays as it was, to be brought over by hand (see Moving over). It
+  can still be read.
 
 **Skins.** `GET /v1/game/skins/{uuid}` takes a Minecraft UUID with or without
 dashes, or gets 400 `invalid_uuid`. It serves only the skins of players Leaf
@@ -516,9 +520,43 @@ entry, each keyed by the fact it records (`<game>:<player>:<key>` for a
 game's, such as `raid:<player>:run:7`) so that it is never made twice. A
 trigger applies each entry to its balance, which can never go below zero, and
 entries are never changed or removed. A new player's account opens with 300,
-as one entry keyed `welcome:<player>`. Only the play service pays or takes
-them; the town and the Works still keep their own in the browser until they
-move.
+as one entry keyed `welcome:<player>`. They are the only Coins there are:
+every page shows the ledger's number, and the browser keeps none.
+
+**Coins from a page.** The town and the Works are not on the play service yet:
+their pages still work out what they earn and spend, and tell Leaf each change.
+This route is for them alone, and goes when they move.
+`POST /v1/game/coins` takes `{ "id", "amount", "reason" }` and answers
+`{ "coins" }`, the balance after it:
+
+- `id` is the page's own, made for the change (as a command's id is), and the
+  entry's key is `page:<player>:<id>`: a call sent twice is done once, and
+  answered the balance as it stands.
+- `amount` is a whole number, not 0, from -100,000 to 5,000 (`PAGE_COINS` in
+  core): what the page earned, or the negative of what it spent.
+- `reason` is one of `COIN_REASONS` in `packages/core/src/coins.ts`, each the
+  one place in the town or the Works that earns or spends Coins, and the entry
+  is the game's it names. `amount` goes the reason's way, in or out.
+
+| `reason`       | Game  | Way   | What                                                            |
+| -------------- | ----- | ----- | --------------------------------------------------------------- |
+| `camp_thing`   | town  | spend | A thing for the camp, bought at a market stall.                 |
+| `daily_chest`  | town  | earn  | The chest by the Treasury, once a UTC day.                      |
+| `quest`        | town  | earn  | A quest on the board that pays Coins, claimed.                  |
+| `while_away`   | town  | earn  | Coins the letter that meets a returning member pays out.        |
+| `works_order`  | works | earn  | Orders filled in the Works, paid from its till.                 |
+| `works_depot`  | works | earn  | What the Works' depot pays for what it takes in, from the till. |
+| `works_build`  | works | spend | A machine or a run of belt built, or one taken away put back.   |
+| `works_refund` | works | earn  | What taking a machine or a belt away gives back.                |
+| `works_plot`   | works | spend | A plot of land bought for the yard.                             |
+| `works_plan`   | works | spend | A plan bought for the yard.                                     |
+
+It refuses, changing nothing: a spend the balance does not cover, 409
+`not_enough_coins`; earnings through this route past 10,000 in any hour, 429
+`too_much`; 400 `invalid_amount` and `invalid_reason`, and `invalid_command`
+for a body that is not such a call or an id that is not one. A player with no
+account yet has it opened with the welcome first. Each call done or refused
+counts toward the staff's report (`command_days`).
 
 **Activity.** What a game's commands log (a raid begun, a room won or lost, a
 raid ended and what it paid) is written to `activity` (`player_id`, `at`,
@@ -797,8 +835,9 @@ rules are `packages/core/src/visits.ts`; the store is `apps/api/src/activity`.
   (`trail`, `rooms_won`, `ended`: `won`, `lost` or `left`, and the `coins` it
   paid); the Works will log `order_filled`, with `story` true for a story order.
 - **Commands** (`command_days`): how many of each player's commands the play
-  service did and how many it refused, by the UTC day. A command sent again
-  and answered from before is not counted again.
+  service did and how many it refused, and of their pages' calls to change
+  Coins (`POST /v1/game/coins`), by the UTC day. One sent again and answered
+  from before is not counted again.
 
 Visits and sessions that ended 180 days ago are removed whenever a visit is
 opened; players and the things done are kept for good. Every minute Leaf

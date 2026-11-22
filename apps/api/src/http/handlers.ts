@@ -1,5 +1,7 @@
 import {
+  checkPageCoins,
   checkSave,
+  COIN_REASON_NAMES,
   currentQuests,
   DAY_MS,
   DEFAULT_RULES,
@@ -10,6 +12,7 @@ import {
   nextDailyChargeAt,
   nextTimedWindowAt,
   openQuestBook,
+  PAGE_COINS,
   parsePlayerId,
   type Quest,
   QUEST_SLOTS,
@@ -29,6 +32,7 @@ import { ActivityReport } from "../activity/report.ts";
 import { Visits } from "../activity/visits.ts";
 import {
   BodyLimit,
+  CoinsBodyErrors,
   CurrentIdentity,
   type Identity,
   isGuest,
@@ -52,11 +56,13 @@ import {
   Missing,
   Moved,
   NotAMember,
+  NotEnoughCoins,
   NotYou,
   Refused,
   SaveTooLarge,
   SlowDown,
   StaffOnly,
+  TooMuch,
   Unauthorized,
   VersionConflict,
 } from "../api/errors.ts";
@@ -73,6 +79,7 @@ import { Skins } from "../game/skins.ts";
 import { Ledger } from "../ledger/store.ts";
 import { Coins } from "../play/coins.ts";
 import { GAMES, type Played } from "../play/games.ts";
+import { PageCoins } from "../play/page.ts";
 import { Play } from "../play/service.ts";
 import { questJson } from "../quests/json.ts";
 import { rerollQuestFor } from "../quests/reroll.ts";
@@ -351,6 +358,17 @@ export const PlayBodyErrorsLive = Layer.succeed(PlayBodyErrors)((httpEffect) =>
   ),
 );
 
+export const CoinsBodyErrorsLive = Layer.succeed(CoinsBodyErrors)((httpEffect) =>
+  Effect.catchIf(httpEffect, isPayloadError, () =>
+    Effect.fail(
+      new Invalid({
+        code: "invalid_command",
+        message: 'Send Coins as { "id": "<yours>", "amount": <whole number>, "reason": "<one of the reasons>" }',
+      }),
+    ),
+  ),
+);
+
 /** Logs a defect, anything thrown rather than failed with a declared error, and answers `internal_error`. */
 export const UnexpectedLive = Layer.succeed(Unexpected)((httpEffect) =>
   Effect.catchDefect(httpEffect, (defect) =>
@@ -620,6 +638,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
     const streams = yield* OpenStreams;
     const play = yield* Play;
     const coins = yield* Coins;
+    const pageCoins = yield* PageCoins;
 
     /** The player's Coins, their account opened with the welcome if they have none yet. */
     const coinsOf = (identity: Identity) =>
@@ -712,11 +731,15 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               }
               return yield* new SaveTooLarge({ code: "save_too_large", message: "A save holds at most 256 KiB" });
             }
-            // The game in this slot is played on Leaf now: the slot is kept as it is, to be brought over by hand.
+            // The game in this slot is played on Leaf now, or its Coins are Leaf's ledger's: the slot is
+            // kept as it is, to be brought over by hand.
             if (isMoved(checked.slot)) {
               return yield* new Moved({
                 code: "moved",
-                message: "This game is kept on Leaf now, and its old save takes no more writes",
+                message:
+                  checked.slot === "purse"
+                    ? "Coins are kept in Leaf's ledger now, and the old purse takes no more writes"
+                    : "This game is kept on Leaf now, and its old save takes no more writes",
               });
             }
             const identity = yield* CurrentIdentity;
@@ -866,9 +889,38 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             } satisfies typeof Body.Played.Type);
           }),
         )
+        // Coins a page of the town or the Works earned or spent, as it worked them out: done once
+        // for each id, never below nothing, and with earnings capped by the hour.
+        .handle("coins", ({ payload }) =>
+          Effect.gen(function* () {
+            const call = checkPageCoins(payload);
+            if (!call.ok) {
+              return yield* new Invalid({ code: call.code, message: PAGE_COINS_REFUSED[call.code] });
+            }
+            const identity = yield* CurrentIdentity;
+            const done = yield* pageCoins.change(identity.playerId, call, yield* Clock.currentTimeMillis);
+            if (done.status === "not_enough_coins") {
+              return yield* new NotEnoughCoins({ code: "not_enough_coins", message: "There are not that many Coins" });
+            }
+            if (done.status === "too_much") {
+              return yield* new TooMuch({
+                code: "too_much",
+                message: `Coins earned in a game's page come to at most ${PAGE_COINS.hourly} in an hour`,
+              });
+            }
+            return HttpServerResponse.jsonUnsafe({ coins: done.coins } satisfies typeof Body.CoinsAnswer.Type);
+          }),
+        )
     );
   }),
 );
+
+/** What a page's call to change Coins is told when it is not one. */
+const PAGE_COINS_REFUSED = {
+  invalid_command: "The id must be up to 64 letters, digits and _ . : -",
+  invalid_amount: `The amount must be a whole number, not 0, from ${PAGE_COINS.least} to ${PAGE_COINS.most}, earned for an earning and spent for a spending`,
+  invalid_reason: `The reason must be one of: ${COIN_REASON_NAMES.join(", ")}`,
+} as const;
 
 /** How many UTC days the staff's report covers when not told, and at most. */
 const REPORT_DAYS = 7;
@@ -956,6 +1008,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     SaveBodyErrorsLive,
     PresenceBodyErrorsLive,
     PlayBodyErrorsLive,
+    CoinsBodyErrorsLive,
     UnexpectedLive,
   ]),
 );

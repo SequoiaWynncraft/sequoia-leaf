@@ -13,8 +13,8 @@ describe("save slots", () => {
     expect(SAVE_SLOTS).toEqual(["purse", "town", "works", "raid"]);
   });
 
-  it("has moved the battler's to the play service, and only it", () => {
-    expect(SAVE_SLOTS.filter(isMoved)).toEqual(["raid"]);
+  it("has closed the battler's, now the play service's, and the purse's, now the Coins ledger's", () => {
+    expect(SAVE_SLOTS.filter(isMoved)).toEqual(["purse", "raid"]);
   });
 
   it("knows each slot by name and nothing else", () => {

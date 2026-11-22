@@ -1,5 +1,17 @@
 export { type AchievementAward, type AchievementRules, leafForAward, type PayingLadder } from "./achievements.ts";
 export { type Activity, type ActivityKind, RAID_KEYS, type RaidKey, raidKeyForName, RAIDS } from "./activity.ts";
+export {
+  checkPageCoins,
+  COIN_REASON_NAMES,
+  COIN_REASONS,
+  type CoinReason,
+  coinReason,
+  type CoinReasonSpec,
+  PAGE_COINS,
+  type PageCoinsCall,
+  type PageCoinsCheck,
+  pageCoinsKey,
+} from "./coins.ts";
 export { isLeaf, type Leaf, leaf, MAX_LEAF } from "./leaf.ts";
 export {
   type Account,

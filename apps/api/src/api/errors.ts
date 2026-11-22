@@ -47,7 +47,8 @@ export class BadOrigin extends Schema.Error<BadOrigin>("BadOrigin")(answer("bad_
  * not one, a reroll without a cost, a save slot that is not one, a save that is
  * not `{ "player", "version", "data" }` with an object as its data, a player id
  * that is not a UUID, a place in town that is not one, a number of days that is
- * not one, or a batch of commands that is not one of the game's.
+ * not one, a batch of commands that is not one of the game's, or a page's call to
+ * change Coins with an amount or a reason that is not one.
  */
 export class Invalid extends Schema.Error<Invalid>("Invalid")(
   answer(
@@ -60,6 +61,8 @@ export class Invalid extends Schema.Error<Invalid>("Invalid")(
     "invalid_place",
     "invalid_days",
     "invalid_command",
+    "invalid_amount",
+    "invalid_reason",
   ),
   { httpApiStatus: 400 },
 ) {}
@@ -80,7 +83,15 @@ export class VersionConflict extends Schema.Error<VersionConflict>("VersionConfl
  */
 export class NotYou extends Schema.Error<NotYou>("NotYou")(answer("not_you"), { httpApiStatus: 409 }) {}
 
-/** A save to a slot whose game Leaf now plays itself: nothing was written. */
+/** Coins a page asked to spend that the player does not have: nothing was changed. */
+export class NotEnoughCoins extends Schema.Error<NotEnoughCoins>("NotEnoughCoins")(answer("not_enough_coins"), {
+  httpApiStatus: 409,
+}) {}
+
+/** More Coins than a player may earn through a page's calls in an hour: nothing was changed. */
+export class TooMuch extends Schema.Error<TooMuch>("TooMuch")(answer("too_much"), { httpApiStatus: 429 }) {}
+
+/** A save to a slot whose game Leaf now plays itself, or whose numbers Leaf keeps: nothing was written. */
 export class Moved extends Schema.Error<Moved>("Moved")(answer("moved"), { httpApiStatus: 410 }) {}
 
 /** A save larger than a slot holds. */
