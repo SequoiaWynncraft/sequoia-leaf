@@ -26,6 +26,7 @@ import {
 import { Socket } from "effect/socket";
 
 import { type Visitor, Visits } from "../activity/visits.ts";
+import { Allowance } from "../allowance.ts";
 import { type Identity, isGuest } from "../api/api.ts";
 import { PLACES } from "../api/schemas.ts";
 import { Presence } from "../game/presence.ts";
@@ -103,33 +104,6 @@ const TEXTS = { rate: 8, burst: 20 } as const;
 const ACTS = { rate: 3, burst: 6 } as const;
 const OPENS = { rate: 0.1, burst: 10 } as const;
 const STRIKES = { rate: 1, burst: 200 } as const;
-
-/** A token bucket: an allowance that refills at `rate` a second, up to `burst`. */
-class Allowance {
-  private readonly spec: { readonly rate: number; readonly burst: number };
-  private tokens: number;
-  private at: number;
-  constructor(spec: { readonly rate: number; readonly burst: number }, now: number) {
-    this.spec = spec;
-    this.tokens = spec.burst;
-    this.at = now;
-  }
-  private refill(now: number): void {
-    this.tokens = Math.min(this.spec.burst, this.tokens + (Math.max(0, now - this.at) / 1000) * this.spec.rate);
-    this.at = now;
-  }
-  take(now: number): boolean {
-    this.refill(now);
-    if (this.tokens < 1) return false;
-    this.tokens -= 1;
-    return true;
-  }
-  /** Whether it has filled up again: nothing is owed on it. */
-  full(now: number): boolean {
-    this.refill(now);
-    return this.tokens >= this.spec.burst;
-  }
-}
 
 /** What the game may send as text. Anything else is not read. */
 const ToServerJson = Schema.fromJsonString(

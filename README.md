@@ -22,7 +22,9 @@ The one staff route is the record of who played the game
 It also serves the guild's browser game, Guild Town, at `/play/town/`, and the
 routes only the game uses. Anyone signed in may play it: members, and guests
 who are not in the guild. The game shows a member's Leaf; no route lets it
-spend or pay any, and a guest has none.
+spend or pay any, and a guest has none. The Little Raid is played on Leaf's
+play service, which owns its state and pays its Coins from a ledger of their
+own; the town and the Works still keep theirs in the browser, for now.
 
 ## Getting started
 
@@ -74,8 +76,10 @@ address after `return_to=`. Only `GET /v1/game/hello` reads `GAME_LEAF_SPENDING`
 | Path                  | What it is                                                           |
 | --------------------- | -------------------------------------------------------------------- |
 | `packages/core`       | The rules of the game as pure functions and types. No I/O.           |
+| `packages/raid`       | The Little Raid's rules, which Leaf and the battler's page share.    |
 | `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.        |
 | `apps/api/migrations` | The database schema, as Effect migrations applied in order at start. |
+| `apps/api/tools/once` | A tool run once, by hand, and deleted after (see Moving over).       |
 | `apps/town`           | Guild Town, the browser game's home screen.                          |
 | `apps/works`          | The Works, a game in the town.                                       |
 | `apps/battler`        | The Little Raid, a game in the town.                                 |
@@ -331,7 +335,7 @@ react to `quest_completed`.
 | Route                              | What it returns                                                       |
 | ---------------------------------- | --------------------------------------------------------------------- |
 | `GET /v1/game/hello`               | Where to sign in, and whether Leaf may be spent. Needs no session.    |
-| `GET /v1/game/me`                  | The player, their rank, Leaf, XP, level, and their newest event's id. |
+| `GET /v1/game/me`                  | The player, their rank, Leaf, XP, level, newest event's id and Coins. |
 | `GET /v1/game/saves`               | The player's saves: each slot's version and when it was written.      |
 | `GET /v1/game/saves/{slot}`        | One save, with what it holds.                                         |
 | `PUT /v1/game/saves/{slot}`        | Writes one.                                                           |
@@ -341,6 +345,8 @@ react to `quest_completed`.
 | `PUT /v1/game/presence`            | Says where in the game the player is; lists who is there and resting. |
 | `GET /v1/game/presence`            | The same lists, saying nothing: for a page in a live room.            |
 | `GET /v1/game/admin/activity`      | For the staff alone: who played, when, where and for how long.        |
+| `GET /v1/game/play/{game}`         | The player's state in a game Leaf plays, as their page is shown it.   |
+| `POST /v1/game/play/{game}`        | Does a batch of commands in that game, and answers what each did.     |
 
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
@@ -353,14 +359,16 @@ let in only members.
 and `GAME_LEAF_SPENDING`. A page that gets it knows it is on a live server.
 
 `GET /v1/game/me` answers `{ "player": { "id", "username" }, "rank", "guest",
-"leaf", "xp", "level", "event_cursor" }`. `rank` is the member's guild rank as
+"leaf", "xp", "level", "event_cursor", "coins" }`. `rank` is the member's guild rank as
 the guild writes it, such as `Captain`, or null for a guest or a website admin
 who is not in the guild. `level` is as `/v1/me` has it. `event_cursor` is the id
 of the member's newest event, 0 when they have none, from which to read
 `/v1/me/events?after=` on their next visit. For a guest, `guest` is true,
 `leaf` and `xp` are 0, `level` is a new member's and `event_cursor` is 0, and
 nothing is read from the ledger or the events: a former member's old Leaf is
-not shown to them while they are a guest.
+not shown to them while they are a guest. `coins` is the player's Coins, guest
+or member (see [The play service](#the-play-service)); asking opens a new
+player's account with the welcome.
 
 **Saves.** Each player has a save in each of four slots, `purse`, `town`,
 `works` and `raid` (`SAVE_SLOTS` in `packages/core/src/saves.ts`). A save is a
@@ -388,6 +396,10 @@ version, each at most once a minute a slot, for a week (`save_history`).
   not one gets 400 `invalid_slot`; a body that is not a save, or `data` that is
   not an object, 400 `invalid_save`; a save over 256 KiB, 413 `save_too_large`.
   A body over twice that is not read at all.
+- A slot whose game Leaf now plays itself (`MOVED_SLOTS` in core: `raid`) takes
+  no more writes: `PUT` answers 410 `moved` and stores nothing, so what is
+  there stays as it was, to be brought over by hand (see Moving over). It can
+  still be read.
 
 **Skins.** `GET /v1/game/skins/{uuid}` takes a Minecraft UUID with or without
 dashes, or gets 400 `invalid_uuid`. It serves only the skins of players Leaf
@@ -455,6 +467,65 @@ places (the town) is written there by Live itself, as if their game had said so
 one of Live's rooms asks it every 30 seconds, since the room keeps where its
 player is. Each `PUT` is also a visit's call (see
 [Who played](#who-played-the-staffs-view)); a `GET` is not.
+
+### The play service
+
+Leaf owns the state of the games played on it (`apps/api/src/play`): a
+player's page holds a copy to draw from and sends commands, and Leaf checks
+each with the game's own rules, applies it, stores the result and answers with
+what happened. A game's rules are a pure package that Leaf and the page both
+import, and hand Leaf one `Game` (`packages/core/src/play.ts`): a new
+player's state, the state brought to Leaf's clock, one command done or
+refused, what the page is shown of a state (nothing that tells the future),
+and the state as stored text. Time is Leaf's, and so are the dice: each call
+gets a fresh number from the machine's secure randomness (`Ctx.seed`), which
+the game stirs into the stream its state keeps; the stream is never shown.
+The games on it now: `raid`, The Little Raid (`packages/raid`).
+
+- `GET /v1/game/play/{game}` answers `{ "rev", "now", "state" }`: how many
+  batches have changed the state, Leaf's clock, and the game's view of it. A
+  player with no state yet gets a new one (and, if they have no Coins account
+  yet, the welcome). Nothing is ever read from the old saves.
+- `POST /v1/game/play/{game}` takes `{ "commands": [{ "id", ... }] }`, at most
+  32, each with an id the page made (up to 64 letters, digits and `_ . : -`),
+  unique in the batch, and answers `{ "rev", "now", "results", "state" }`:
+  for each command in order `{ "id", "notes" }` (the game's own notes of what
+  happened) or `{ "id", "refused": "<code>" }`, and the state after them all.
+  One refused does not stop the rest. The whole batch is one transaction: the
+  state is read, brought to now, each command done, and the state, the Coins
+  each paid or took, what each logged and each command's answer written
+  together; a failure anywhere leaves nothing of it. A command whose id was
+  seen in the last two days answers what it answered then and changes nothing,
+  so a page that lost an answer sends the batch again safely. `rev` goes up by
+  one with each batch that changed anything.
+- 404 `no_such_game` for a game Leaf does not play; 400 `invalid_command` for a
+  body that is not commands, more than 32, a missing or repeated id, or a
+  command that is not one of the game's (nothing is done); 413 as elsewhere;
+  429 `slow_down` past 10 batches a second (bursts of 20) for one player.
+- A command that takes Coins the player does not have is refused with
+  `not_enough_coins`.
+
+Tables (migration 16): `play_state` (a player's state in a game, with its
+`rev`; 0 is a state nothing has been done to), `play_commands` (each command's
+answer, kept two days), `coins` and `coin_entries`, and `activity`.
+
+**Coins** are a ledger like Leaf: a balance per player, changed only by an
+entry, each keyed by the fact it records (`<game>:<player>:<key>` for a
+game's, such as `raid:<player>:run:7`) so that it is never made twice. A
+trigger applies each entry to its balance, which can never go below zero, and
+entries are never changed or removed. A new player's account opens with 300,
+as one entry keyed `welcome:<player>`. Only the play service pays or takes
+them; the town and the Works still keep their own in the browser until they
+move.
+
+**Activity.** What a game's commands log (a raid begun, a room won or lost, a
+raid ended and what it paid) is written to `activity` (`player_id`, `at`,
+`game`, `kind`, `data` as JSON) in the same transaction, and kept.
+
+**The Little Raid** keeps the run in hand, the almanac, the looks and the trail
+picked. Its commands, notes, refusals and what its page is shown are in
+`packages/raid/src/README.md`. A run that ends pays its Coins as one entry
+keyed by the run's number.
 
 ### Live: players in the same place, as it happens
 
@@ -640,6 +711,10 @@ for app in town works battler; do (cd apps/$app && bun build index.html --outdir
 bun apps/api/test/play.ts 4000 /tmp/play --crowd 6
 ```
 
+The games Leaf plays are served as in production; The Little Raid needs it, and
+opened with no Leaf answering shows a card saying so. Its screenshot tours
+start one of these servers each (`apps/battler/review/tour.ts`).
+
 This runs the real app at `http://127.0.0.1:4000/play/town/`, on a database in
 memory, with the tests' stand-ins for the backend, Sierra and Mojang, so nothing
 leaves the machine. It first plays a day: a member called Tester raids, wars,
@@ -676,6 +751,12 @@ Pebblefoot from spot to spot.
   spot, now and then sitting on a log by the fire a while, and now and then
   waving, cheering, laughing or sending a heart. They say where they are only
   by being in the room. Every third is on a phone.
+- `--dice <n>`: Leaf's dice fall the same way every time from `n`, so a tour plays the same game each run.
+
+For the tours it also serves `POST /test/play/raid` with `{ "stage": [...] }`,
+which stages a moment at Tester's raid table that play does not reach by
+itself (a run from a chosen seed, more acorns, a figure handed over, a new
+member; `apps/api/test/stage-raid.ts`). The guild's own Leaf has no such route.
 
 ## Who played: the staff's view
 
@@ -744,6 +825,30 @@ Coins are read from the play service's `coin_entries` when there is one; it
 does not count refused commands yet, so until it does the last rule finds
 nothing. What other players see of someone stays what it was: in town now, or
 dozed off a while ago.
+## Moving over
+
+A few players have progress in the old saves (the `saves` table). It is
+brought over once, by hand, by nothing in the product: the play service never
+reads an old save, and an old slot takes no more writes once its game has
+moved. For The Little Raid:
+
+```sh
+bun apps/api/tools/once/import-raid.ts <database file> <player id>... [--write] [--force]
+```
+
+For each player named it reads their old `raid` slot (the run in progress and
+the almanac) and their Coins from the old `purse` slot, with the loaders the
+battler had (`raid-old.ts`), and prints what it found to check by eye: trail,
+room, resolve, level, acorns, the figures and their stars, items, the
+almanac's counts and Coins. Anything play cannot reach (a figure above three
+stars, more figures on the board than the level fields, more than 200 acorns,
+more than 100,000 Coins) is a warning, and that player is skipped unless
+`--force` is given too. Without `--write` nothing is written. With it, the
+table is stored as the player's `raid` state, only while their state is
+untouched (`rev` 0), with its random stream drawn afresh, and their Coins as
+one entry keyed `import:<player>` that brings their balance to what the old
+purse held, in place of the welcome. It has no "everyone". The tool and its
+loaders are deleted in the change after it has run.
 
 ## Rules the code is built on
 

@@ -12,7 +12,8 @@ import {
   type Run,
   startRun,
   traitNumber,
-} from "../game/index.ts";
+} from "@sequoia-leaf/raid";
+
 import {
   canBuy,
   combosWithHeld,

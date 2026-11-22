@@ -171,6 +171,7 @@ export {
   fieldCap,
   fielded,
   fightSetup,
+  type Fought,
   giveItem,
   hold,
   interestCap,
@@ -185,6 +186,8 @@ export {
   pieces,
   priceOf,
   redraw,
+  refusal,
+  REFUSALS,
   type Refused,
   roomNow,
   type RoomRecord,
@@ -204,9 +207,11 @@ export {
   takeTakings,
   toBench,
   traitsNow,
+  type Why,
+  whyText,
   xpToNext,
 } from "./run.ts";
-export { type Loaded, loadRun, SAVE_VERSION, saveRun } from "./save.ts";
+export { checkRun, type Loaded, loadRun, SAVE_VERSION, saveRun } from "./save.ts";
 
 // Between runs.
 export {
@@ -214,6 +219,7 @@ export {
   ALMANAC_VERSION,
   loadAlmanac,
   newAlmanac,
+  readAlmanac,
   type News,
   type Payout,
   payout,
@@ -224,5 +230,70 @@ export {
 } from "./outside.ts";
 
 // A player with habits, for trying things out.
-export { CARELESS, fondOf, type Habit, planRoom, playRoom, playRun, ROLLER, SAVER, SENSIBLE } from "./bot.ts";
+export {
+  CARELESS,
+  DIRECT,
+  fondOf,
+  type Habit,
+  type Hands,
+  planRoom,
+  playRoom,
+  playRun,
+  ROLLER,
+  SAVER,
+  SENSIBLE,
+} from "./bot.ts";
 export { type Did, type Measure, measureOf, MEASURES, partsOf, tally } from "./tally.ts";
+
+// How the table may look.
+export {
+  BASES,
+  type BaseId,
+  baseOf,
+  CLOTHS,
+  type ClothId,
+  clothOf,
+  isLookKind,
+  LANTERNS,
+  type LanternId,
+  lanternOf,
+  LOOK_KINDS,
+  LOOK_TITLES,
+  type LookId,
+  type LookKind,
+  LOOKS,
+  type Looks,
+  type LookSpec,
+  newLooks,
+  owns,
+  readLooks,
+  wear,
+  wornOf,
+} from "./content/looks.ts";
+
+// The table as Leaf plays it.
+export {
+  decodeTable,
+  encodeTable,
+  localRun,
+  newTable,
+  planCommands,
+  PREDICTED,
+  predict,
+  RAID,
+  type RaidCommand,
+  type RaidCommandName,
+  type RaidNote,
+  readCommand,
+  refusalText,
+  type RunCommand,
+  runView,
+  type RunView,
+  type Table,
+  TABLE_REFUSALS,
+  TABLE_VERSION,
+  type TableView,
+  type TableWhy,
+  tableView,
+} from "./game.ts";
+export { readNotes, readView } from "./wire.ts";

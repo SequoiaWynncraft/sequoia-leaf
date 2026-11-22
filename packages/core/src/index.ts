@@ -69,7 +69,16 @@ export {
   RULE_CHANGES,
   type Rules,
 } from "./rules.ts";
-export { checkSave, MAX_SAVE_BYTES, SAVE_SLOTS, type SaveCheck, type SaveSlot, saveSlot } from "./saves.ts";
+export {
+  checkSave,
+  isMoved,
+  MAX_SAVE_BYTES,
+  MOVED_SLOTS,
+  SAVE_SLOTS,
+  type SaveCheck,
+  type SaveSlot,
+  saveSlot,
+} from "./saves.ts";
 export {
   activityReport,
   type CoinMove,
@@ -130,3 +139,18 @@ export {
   type ToClient,
   type ToServer,
 } from "./live.ts";
+export {
+  type CoinChange,
+  COMMAND_ID,
+  type Ctx,
+  type Done,
+  GAME_IDS,
+  type Game,
+  type GameId,
+  gameId,
+  isRefused,
+  type Logged,
+  MOST_COMMANDS,
+  playPath,
+  type Refused,
+} from "./play.ts";

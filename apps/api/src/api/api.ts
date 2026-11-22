@@ -18,6 +18,7 @@ import {
   Invalid,
   MembersOnly,
   Missing,
+  Moved,
   NotAMember,
   NotYou,
   Refused,
@@ -35,6 +36,9 @@ import {
   Health,
   Hello,
   Me,
+  PlayBody,
+  Played,
+  PlayShown,
   Png,
   PresenceBody,
   Present,
@@ -113,6 +117,11 @@ export class SaveBodyErrors extends HttpApiMiddleware.Service<SaveBodyErrors>()(
   error: [Invalid, SaveTooLarge],
 }) {}
 
+/** Answers a batch whose body is not `{ "commands": [...] }` with `invalid_command`. */
+export class PlayBodyErrors extends HttpApiMiddleware.Service<PlayBodyErrors>()("leaf/api/PlayBodyErrors", {
+  error: Invalid,
+}) {}
+
 /** Answers a presence whose body is not `{ "place" }` with one of the places with `invalid_place`. */
 export class PresenceBodyErrors extends HttpApiMiddleware.Service<PresenceBodyErrors>()("leaf/api/PresenceBodyErrors", {
   error: Invalid,
@@ -148,6 +157,7 @@ export class GameHelloApi extends HttpApiGroup.make("gameHello")
   .prefix("/v1/game") {}
 
 const SlotParams = { slot: Schema.String };
+const GameParams = { game: Schema.String };
 
 /**
  * What only the browser game uses, open to anyone signed in, members and guests alike, but for the
@@ -162,7 +172,7 @@ export class GameApi extends HttpApiGroup.make("game")
       params: SlotParams,
       payload: SaveBody,
       success: Saved,
-      error: [Invalid, VersionConflict, NotYou, SaveTooLarge, SlowDown],
+      error: [Invalid, VersionConflict, NotYou, SaveTooLarge, SlowDown, Moved],
     }).middleware(SaveBodyErrors),
     HttpApiEndpoint.get("skin", "/skins/:uuid", {
       params: { uuid: Schema.String },
@@ -185,6 +195,13 @@ export class GameApi extends HttpApiGroup.make("game")
       error: Invalid,
     }).middleware(PresenceBodyErrors),
     HttpApiEndpoint.get("whoIsAbout", "/presence", { success: Present }),
+    HttpApiEndpoint.get("play", "/play/:game", { params: GameParams, success: PlayShown, error: Missing }),
+    HttpApiEndpoint.post("command", "/play/:game", {
+      params: GameParams,
+      payload: PlayBody,
+      success: Played,
+      error: [Invalid, Missing, SlowDown],
+    }).middleware(PlayBodyErrors),
   )
   .middleware(Player)
   .prefix("/v1/game") {}

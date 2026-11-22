@@ -3,15 +3,15 @@
   ["wait", 900],
   [
     "eval",
-    "(window.raid.fresh(), window.raid.hold(true), window.raid.start(11, 0), window.raid.taught(), window.raid.bot(5), window.raid.skip(2), JSON.stringify(window.raid.state()))"
+    "(async () => { await window.raid.fresh(); await window.raid.hold(true); await window.raid.start(11, 0); await window.raid.taught(); await window.raid.bot(5); await window.raid.skip(2); return await JSON.stringify(window.raid.state()); })()"
   ],
   [
     "eval",
-    "(window.raid.plan(), window.raid.skip(2), window.raid.party().map(p => p.kind + '*' + p.stars + '@' + p.on + p.at).join(' '))"
+    "(async () => { await window.raid.plan(); await window.raid.skip(2); return await window.raid.party().map(p => p.kind + '*' + p.stars + '@' + p.on + p.at).join(' '); })()"
   ],
   [
     "eval",
-    "(()=>{const id = window.raid.give('kettle', 2); window.raid.item('thorn'); window.raid.item('plume'); window.raid.item('chestnut'); window.raid.item('glowcap'); window.raid.skip(1.2); return 'kettle ' + id})()"
+    "(async () => {const id = await window.raid.give('kettle', 2); await window.raid.item('thorn'); await window.raid.item('plume'); await window.raid.item('chestnut'); await window.raid.item('glowcap'); window.raid.skip(1.2); return 'kettle ' + id})()"
   ],
   ["wait", 400],
   [
@@ -32,7 +32,10 @@
   ],
   ["wait", 500],
   ["shot", "c-03-holding-items"],
-  ["eval", "(window.raid.drop(), window.raid.offer(1, 'cindernewt'), window.raid.skip(0.3), 'stall')"],
+  [
+    "eval",
+    "(async () => { await window.raid.drop(); await window.raid.offer(1, 'cindernewt'); await window.raid.skip(0.3); return await 'stall'; })()"
+  ],
   [
     "moveAt",
     "(()=>{const r=document.querySelector('[data-offer=\"1\"]').getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
@@ -65,6 +68,7 @@
   ["wait", 600],
   ["shot", "c-06-trait-clicked"],
   ["click", ".k-info.pinned .k-info-tile.k-link"],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
   ["move", 900, 140],
   [
     "eval",
@@ -84,7 +88,10 @@
   ["wait", 600],
   ["shot", "c-08-item-card"],
   ["move", 640, 120],
-  ["eval", "(()=>{window.raid.item('honeycake'); window.raid.skip(0.3); return 'a finished item on the rack'})()"],
+  [
+    "eval",
+    "(async () => {await window.raid.item('honeycake'); window.raid.skip(0.3); return 'a finished item on the rack'})()"
+  ],
   [
     "moveAt",
     "(()=>{const a=[...document.querySelectorAll('#rack [data-item]')]; const r=a[a.length-1].getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}})()"
@@ -92,12 +99,20 @@
   ["wait", 600],
   ["shot", "c-09-finished-item-card"],
   ["move", 640, 120],
-  ["eval", "(window.raid.to('boon'), window.raid.skip(1.5), JSON.stringify(window.raid.state().choice))"],
+  [
+    "eval",
+    "(async () => { await window.raid.to('boon'); await window.raid.skip(1.5); return await JSON.stringify(window.raid.state().choice); })()"
+  ],
   ["wait", 700],
   ["shot", "c-10-boon-pick"],
   ["click", "[data-pick='0']"],
-  ["eval", "(window.raid.skip(1.5), window.raid.plan(), window.raid.fight(), window.raid.busy(), 'a fight')"],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
+  [
+    "eval",
+    "(async () => { await window.raid.skip(1.5); await window.raid.plan(); await window.raid.fight(); await window.raid.busy(); return await 'a fight'; })()"
+  ],
   ["click", "#traits .trait"],
+  ["eval", "window.raid ? window.raid.settled() : \"no table\""],
   ["move", 640, 30],
   [
     "eval",

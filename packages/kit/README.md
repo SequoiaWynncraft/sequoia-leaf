@@ -68,6 +68,7 @@ An app that uses it lists `"@sequoia-leaf/kit": "workspace:*"` in its dependenci
 | `k-over`                                                              | Words written straight over the world, with a dark edge              |
 | `k-scrim`, `k-rise`, `k-row`, `k-col`, `k-wrap`, `k-grow`, `k-scroll` | Laying things out                                                    |
 | `k-shut`                                                              | The card a page shows instead of itself when it will not open        |
+| `k-wait`                                                              | Asked of Leaf, which is taking more than a moment (`waitingLook`)    |
 
 The frames and icons are drawn in `tools/frames.ts` as rows of letters and written into
 `src/frames.css` as small pictures (`bun run frames`); add a frame or an icon there.
@@ -94,6 +95,7 @@ The frames and icons are drawn in `tools/frames.ts` as rows of letters and writt
 | `net.ts`      | Everything asked of the world outside the page: the server, storage, the address                   |
 | `live.ts`     | Where the game is being played, who the member is, and the cards for when it is shut or let go of  |
 | `cloud.ts`    | Keeping what the games keep on the member's account, when the game is live                         |
+| `play.ts`     | A game Leaf owns: its state from Leaf, commands to it, and a waiting look while Leaf answers       |
 | `keep.ts`     | Writing the game into the browser; a page that has let go of it (`stopped()`) writes none of it    |
 | `presence.ts` | Telling the server where in the game the member is, and hearing who else is about                  |
 | `realtime.ts` | Being in a live room on Leaf: who is there, and where each is to be drawn now (`joinLive`)         |
@@ -164,7 +166,8 @@ and nothing below happens. With a server it asks `GET /v1/game/me`:
 The cards are `shutCard`: a `k-paper` with a title, a line and one button, in place of the page.
 
 **Saves** (`cloud.ts`). What the games keep is text in the browser under a few names; `SLOTS`
-says which slot on the server each name belongs to (`purse`, `town`, `works`, `raid`). The
+says which slot on the server each name belongs to (`purse`, `town`, `works`). The Little Raid's
+game is Leaf's own now (below), and its old slot takes no more writes. The
 sound setting and each game's view settings are in none, and stay in the browser. Before a page
 reads anything it `pull`s its slots, which writes the server's copy into the browser; if the
 browser last held another member's game (or nobody's), the names in every slot are cleared
@@ -180,6 +183,20 @@ When another member's page has taken the browser over (or the server answers `no
 page stops (`stopped()`) before it loads again, and writes nothing more, not even as it goes, so
 nothing it still holds lands under the other member's names. A test in `keep.test.ts` holds
 every file in the kit and the games to this.
+
+**Games Leaf owns** (`play.ts`). A game on Leaf's play service keeps nothing of itself in the
+browser: `openPlay(game, reader)` fetches its state (`GET /v1/game/play/<game>`), read into the
+game's own types by `reader` (a page built for older rules than Leaf's loads again), and
+`send(command, predict)` gives the command an id, queues it and returns at once, with a promise of
+Leaf's answer: what it did (the game's notes) or the code it was refused with. Commands go in
+order, one request at a time, as many as are waiting in each (up to 32), and after a network
+failure, or Leaf having trouble or asking to slow down, the same request goes again with the same
+ids, so nothing is done twice. `predict` is the copy after a command the shared rules can work out
+without Leaf, shown at once; each answer's state takes the copy's place (with what is still waiting
+worked out again on top), and `onState` tells the page when that is not what it was showing.
+`waitingLook(element, answer)` gives what was asked for the waiting look (`k-wait`) once Leaf has
+taken more than 150 ms. `askCoins()` asks Leaf for the member's Coins, which its ledger holds; and a
+game played on Leaf, opened where no Leaf answers, shows `serverCard(line)` instead of itself.
 
 **Who is here** (`presence.ts`). A live page says where the member is (`here("town" | "camp" |
 "works" | "table")`) and whether their character stays in town after they go (`stay(on)`, true

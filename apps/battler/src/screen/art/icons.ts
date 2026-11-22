@@ -6,11 +6,11 @@
 import { GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
+import { type BoonId, BOONS } from "@sequoia-leaf/raid/content/boons.ts";
+import { isComponentId, type ItemId } from "@sequoia-leaf/raid/content/items.ts";
+import type { RoomKind } from "@sequoia-leaf/raid/content/rooms.ts";
+import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
 
-import { type BoonId, BOONS } from "../../game/content/boons.ts";
-import { isComponentId, type ItemId } from "../../game/content/items.ts";
-import type { RoomKind } from "../../game/content/rooms.ts";
-import type { TraitId } from "../../game/content/traits.ts";
 import { PAL } from "./pal.ts";
 
 const TRAIT_ROWS: Readonly<Record<TraitId, readonly string[]>> = {

@@ -138,16 +138,16 @@ describe("saves on the member's account", () => {
 
   test("a change is pushed with the version last read, and no oftener than every five seconds", async () => {
     const rows: Record<string, Row> = {
-      raid: { version: 7, data: { saved_at: 100, keys: { "raid.almanac.v1": "a" } } },
+      town: { version: 7, data: { saved_at: 100, keys: { "town.guild.v1": "a" } } },
     };
     world = standin(saves(rows));
     world.store.setItem("town.cloud.v1", JSON.stringify({ player: TESTER.player.id, slots: {} }));
     await start();
-    await pull(["raid"], page);
+    await pull(["town"], page);
     tick();
     expect(world.sent.filter((s) => s.method === "PUT")).toEqual([]);
 
-    world.store.setItem("raid.almanac.v1", "b");
+    world.store.setItem("town.guild.v1", "b");
     world.clock.now += 1000;
     tick();
     await Bun.sleep(1);
@@ -156,11 +156,11 @@ describe("saves on the member's account", () => {
     expect(first[0]?.body).toEqual({
       player: TESTER.player.id,
       version: 7,
-      data: { saved_at: world.clock.now, keys: { "raid.almanac.v1": "b" } },
+      data: { saved_at: world.clock.now, keys: { "town.guild.v1": "b" } },
     });
-    expect(rows.raid?.version).toBe(8);
+    expect(rows.town?.version).toBe(8);
 
-    world.store.setItem("raid.almanac.v1", "c");
+    world.store.setItem("town.guild.v1", "c");
     world.clock.now += 1000;
     tick();
     await Bun.sleep(1);
@@ -365,12 +365,12 @@ describe("saves on the member's account", () => {
     const rows: Record<string, Row> = {};
     world = standin(saves(rows, { "PUT /v1/game/saves/works": () => ({ status: 409, body: { code: "not_you" } }) }));
     await start();
-    await pull(["works", "raid"], page);
+    await pull(["works", "town"], page);
     world.store.setItem("works.save.v2", "a yard");
-    world.store.setItem("raid.run.v1", "a run");
+    world.store.setItem("town.guild.v1", "a guild");
     expect(await push("works")).toBe(false);
     expect(world.reloaded.count).toBe(1);
-    expect(await push("raid")).toBe(false);
+    expect(await push("town")).toBe(false);
     expect(putsOf(world).map((s) => s.path)).toEqual(["/v1/game/saves/works"]);
     expect(world.sent.filter((s) => s.method === "GET" && s.path.endsWith("/works")).length).toBe(1);
   });

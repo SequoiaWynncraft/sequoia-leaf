@@ -6,7 +6,7 @@ import { playerId } from "@sequoia-leaf/core";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
-import { fakeBackend, fakeMojang, MINUTE, sessionOf, testLeaf } from "./support.ts";
+import { fakeBackend, fakeMojang, MINUTE, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 /**
  * The game's routes as the game sees them, from the real routes:
@@ -90,7 +90,8 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   });
   const mojang = fakeMojang();
   mojang.profiles.set(bob, { name: "Bob", skin: undefined });
-  const leaf = testLeaf(clock, fetcher, {}, { mojang: mojang.service });
+  // Leaf's dice fall the same way every time, so the raid's draws in the file are always the same.
+  const leaf = testLeaf(clock, fetcher, {}, { mojang: mojang.service, dice: steadyDice(1) });
   const app = leaf.app();
   await leaf.run(runCreditSync("recent"));
   await leaf.run(runAchievementSync("recent"));
@@ -138,6 +139,12 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     version: 1,
     data: saved,
   });
+  // The battler's game is played on Leaf now, and its old slot takes no more writes.
+  await call("PUT /v1/game/saves/{slot}, a game that moved", "PUT", "/v1/game/saves/raid", {
+    player: alice,
+    version: 0,
+    data: { saved_at: T0 + 10 * MINUTE, keys: { "raid.run.v1": "{}" } },
+  });
   await call("GET /v1/game/saves/{slot}", "GET", "/v1/game/saves/town");
   await call("GET /v1/game/saves", "GET", "/v1/game/saves");
   await call("GET /v1/game/guild/events", "GET", "/v1/game/guild/events");
@@ -166,6 +173,24 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   clock.now = T0 + 25 * MINUTE;
   await call("PUT /v1/game/presence", "PUT", "/v1/game/presence", { place: "town", stay: true, device: "desktop" });
   await call("GET /v1/game/presence", "GET", "/v1/game/presence");
+  // The Little Raid on the play service: a new table, setting out and the first pick, a refusal, the
+  // same batch sent again, and what is not a command or not a game.
+  await call("GET /v1/game/play/{game}", "GET", "/v1/game/play/raid");
+  const firstRoom = {
+    commands: [
+      { id: "c-1", do: "start", trail: 0 },
+      { id: "c-2", do: "choose", option: 0 },
+    ],
+  };
+  await call("POST /v1/game/play/{game}", "POST", "/v1/game/play/raid", firstRoom);
+  await call("POST /v1/game/play/{game}, a refusal", "POST", "/v1/game/play/raid", {
+    commands: [{ id: "c-3", do: "take" }],
+  });
+  await call("POST /v1/game/play/{game}, sent again", "POST", "/v1/game/play/raid", firstRoom);
+  await call("POST /v1/game/play/{game}, not a command", "POST", "/v1/game/play/raid", {
+    commands: [{ id: "c-4", do: "win" }],
+  });
+  await call("GET /v1/game/play/{game}, not a game", "GET", "/v1/game/play/chess");
   // A raid run of Alice's, as the play service logs it.
   for (const [minute, kind, data] of [
     [5, "raid_started", { trail: "moss" }],

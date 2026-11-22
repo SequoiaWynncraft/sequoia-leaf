@@ -33,14 +33,14 @@ import { fromTown } from "./shell.ts";
 
 export { stopped };
 
-export type Slot = "purse" | "town" | "works" | "raid";
+/** The slots pages still keep their games in. The Little Raid's game is Leaf's own now (`play.ts`), and its old slot is closed. */
+export type Slot = "purse" | "town" | "works";
 
 /** Which kept names belong to which slot. What is not here (view settings, the sound) stays in the browser. */
 export const SLOTS: Readonly<Record<Slot, readonly string[]>> = {
   purse: [PURSE_KEY],
   town: ["town.save.v1", "town.guild.v1", "town.postcard.works.v1", "town.postcard.raid.v1"],
   works: ["works.save.v2"],
-  raid: ["raid.run.v1", "raid.almanac.v1"],
 };
 const ALL_SLOTS = Object.keys(SLOTS).filter((s): s is Slot => s in SLOTS);
 

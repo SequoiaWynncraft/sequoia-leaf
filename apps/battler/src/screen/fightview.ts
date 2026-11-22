@@ -12,10 +12,6 @@
 import { CREAM, EARTH, GOLD, GREEN, INK, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, lerp } from "@sequoia-leaf/kit/util.ts";
-
-import { FIGURES, isBossId, isFigureId, type UnitKind } from "../game/content/figures.ts";
-import { TRAITS } from "../game/content/traits.ts";
-import { distance, seatCell } from "../game/hex.ts";
 import {
   type Fight,
   type FightEvent,
@@ -25,7 +21,11 @@ import {
   stepFight,
   type TraitId,
   type Unit,
-} from "../game/index.ts";
+} from "@sequoia-leaf/raid";
+import { FIGURES, isBossId, isFigureId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
+import { TRAITS } from "@sequoia-leaf/raid/content/traits.ts";
+import { distance, seatCell } from "@sequoia-leaf/raid/hex.ts";
+
 import { itemPic, traitPic } from "./art/icons.ts";
 import { TRAIT_COLOUR } from "./art/pal.ts";
 import { drawBase, drawFigure, drawStars, framesOf } from "./art/sprites.ts";

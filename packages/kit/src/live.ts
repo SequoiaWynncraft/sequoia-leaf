@@ -70,6 +70,21 @@ export function readMember(v: unknown): Member | null {
   };
 }
 
+/** The member's Coins as `/v1/game/me` says them, or null for anything that does not say. */
+export function readCoins(v: unknown): number | null {
+  const coins = isRecord(v) ? num(v.coins) : null;
+  return coins === null ? null : Math.max(0, Math.floor(coins));
+}
+
+/**
+ * Asks Leaf for the member's Coins, which Leaf's ledger holds (a game played on Leaf pays them
+ * there). Null when Leaf did not say.
+ */
+export async function askCoins(): Promise<number | null> {
+  const a = await ask("/v1/game/me");
+  return a.status === 200 ? readCoins(a.body) : null;
+}
+
 async function look(): Promise<Where> {
   const hello = await ask("/v1/game/hello");
   const signIn = hello.status === 200 && isRecord(hello.body) ? str(hello.body.sign_in) : null;
@@ -161,6 +176,22 @@ const CARDS: Readonly<Record<Exclude<Shut, "signin">, readonly [string, string, 
   closed: ["Just a moment", "The guild's books are closed for a moment. Try again.", "Try again"],
 };
 
+/** Puts the page away behind a card: a title, a line and one button. */
+function card(title: string, line: string, word: string, go: () => void): void {
+  const button = el("button", "k-btn wide", { type: "button" }, word);
+  button.addEventListener("click", go);
+  const paper = el(
+    "section",
+    "k-paper k-rise k-shut",
+    { role: "alertdialog", "aria-label": title },
+    el("h1", "k-title big", { text: title }),
+    el("p", "", { text: line }),
+    button,
+  );
+  document.body.append(el("div", "k-scrim", {}, paper));
+  button.focus();
+}
+
 /**
  * Puts the page away behind the card for why it will not open: a title, a line and one button.
  * In a frame, signed out goes back to town instead of to the sign-in. On its way to sign in, the
@@ -169,26 +200,24 @@ const CARDS: Readonly<Record<Exclude<Shut, "signin">, readonly [string, string, 
 export function shutCard(why: Shut, signIn: string): void {
   document.body.replaceChildren();
   if (why !== "signin") {
-    const framed = !outside.top();
     const [title, line, word] = CARDS[why];
-    const back = why === "signedout" && framed;
-    const go = el("button", "k-btn wide", { type: "button" }, back ? "Back to town" : word);
-    go.addEventListener("click", () => {
+    const back = why === "signedout" && !outside.top();
+    card(title, line, back ? "Back to town" : word, () => {
       if (back) leave();
       else if (why === "signedout") goSignIn(signIn);
       else location.reload();
     });
-    const card = el(
-      "section",
-      "k-paper k-rise k-shut",
-      { role: "alertdialog", "aria-label": title },
-      el("h1", "k-title big", { text: title }),
-      el("p", "", { text: line }),
-      go,
-    );
-    document.body.append(el("div", "k-scrim", {}, card));
-    go.focus();
   }
+  if (inTown()) tell({ town: "ready" });
+}
+
+/**
+ * Puts a game away behind the card for a page opened where no Leaf answers: a game played on Leaf
+ * needs the guild's server. `line` says so in the game's words.
+ */
+export function serverCard(line: string): void {
+  document.body.replaceChildren();
+  card("No server here", line, "Try again", () => location.reload());
   if (inTown()) tell({ town: "ready" });
 }
 
@@ -211,7 +240,7 @@ export const LET_GO: Readonly<Record<LetGo, readonly [string, string, string]>> 
 export function letGoCard(why: LetGo, signIn: string, again: () => void): () => void {
   const [title, line, word] = LET_GO[why];
   const go = el("button", "k-btn wide", { type: "button" }, word);
-  const card = el(
+  const paper = el(
     "section",
     "k-paper k-rise k-shut",
     { role: "alertdialog", "aria-label": title },
@@ -219,7 +248,7 @@ export function letGoCard(why: LetGo, signIn: string, again: () => void): () => 
     el("p", "", { text: line }),
     go,
   );
-  const scrim = el("div", "k-scrim k-let-go", {}, card);
+  const scrim = el("div", "k-scrim k-let-go", {}, paper);
   const away = (): void => {
     scrim.remove();
   };

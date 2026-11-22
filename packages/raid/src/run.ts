@@ -4,9 +4,14 @@
  * happened, for a screen to animate, or changes nothing and gives back a reason in plain words.
  *
  * A room goes: plan (buy, sell, move, rustle, level, hand out items; no clock), `beginFight`, the
- * fight (the screen steps it from the setup it is given, or does not bother), `takeTakings`. The
- * run works the fight out for itself from the same setup when the takings are taken, so the result
- * never depends on what the screen did.
+ * fight (the screen steps it from the setup it is given, or does not bother), `takeTakings`.
+ * `beginFight` locks both boards, draws the fight's seed from the run's stream and works the fight
+ * out to its end there and then; the run keeps how it came out, and the takings are paid from that,
+ * so the result never depends on what the screen did.
+ *
+ * Every draw a run makes comes from its stream (`rng`): the first picks, the stall, who waits in
+ * each room, the components and boons on offer, each fight's seed. `seed` is only where the stream
+ * started; nothing the run draws is worked out from it after that.
  */
 import { BOON_IDS, type BoonId, boonNumber, BOONS, FIGHT_BOONS } from "./content/boons.ts";
 import { type BossId, FIGURE_IDS, type FigureId, FIGURES, isBossId, type Stars } from "./content/figures.ts";
@@ -26,7 +31,7 @@ import { resolveFight } from "./fight/engine.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
 import { COLS, SEATS } from "./hex.ts";
 import { charmsOf, countTraits, type Party, type Placed, type TraitState, traitStates, traitSteps } from "./party.ts";
-import { mix, pick, shuffled, weighted } from "./rng.ts";
+import { draw32, mix, pick, shuffled, weighted } from "./rng.ts";
 import { sparParty } from "./spar.ts";
 
 // ---------- what a run is ----------
@@ -62,8 +67,9 @@ export interface RoomRecord {
   boss: BossId | null;
 }
 export interface Run {
+  /** Where the stream started. The bot's own habits are drawn from it; the run's draws never are. */
   seed: number;
-  /** The random stream for the stall and the things on offer. */
+  /** The random stream: every draw the run makes comes from it. */
   rng: number;
   trail: number;
   /** The room being planned for or fought, counting from 0. */
@@ -95,6 +101,8 @@ export interface Run {
   left: boolean;
   /** The last fight fought, as it was set up, so that it can be played again to be looked back on. */
   last: FightSetup | null;
+  /** The fight being fought: the boards as they were locked, its seed, and how it comes out. Null outside a fight. */
+  fight: Fought | null;
   /** Things this run has done that the almanac remembers. */
   seen: {
     fielded: FigureId[];
@@ -102,6 +110,12 @@ export interface Run {
     forged: FinishedId[];
     topped: TraitId[];
   };
+}
+
+/** A fight as the run keeps it while it is being fought: its setup, and how it came out. */
+export interface Fought {
+  setup: FightSetup;
+  outcome: FightSummary;
 }
 
 /** What happened, for a screen to show. Figures are named by `piece`, their own number in the run. */
@@ -133,19 +147,57 @@ export type Note =
   | { t: "acorns"; why: "room" | "win" | "interest" | "gnomes" | "windfall"; amount: number }
   | { t: "items"; why: "basket"; items: ItemId[] }
   | { t: "resolve"; change: number; left: number }
-  | { t: "fight"; room: number; seed: number }
+  /** The fight, locked: both boards and its seed to play it from, and how it came out. */
+  | { t: "fight"; room: number; seed: number; setup: FightSetup; outcome: FightSummary }
   | { t: "result"; room: number; result: FightResult; standing: [number, number] }
   | { t: "fed"; piece: number; fed: number }
   | { t: "choice"; kind: Choice["kind"] }
   | { t: "room"; room: number; kind: RoomKind; who: string; title: string }
   | { t: "over"; won: boolean };
 
-export type Refused = { ok: false; why: string };
+/** Why an action was turned down, as a code, and the sentence a player is shown for it. */
+export const REFUSALS = {
+  raid_over: "The raid is over.",
+  fighting: "The figures are busy fighting.",
+  pick_starter: "Pick who sets out with you first.",
+  pick_boon: "Pick a boon first.",
+  pick_component: "Pick a component first.",
+  nothing_to_choose: "There is nothing to choose.",
+  not_one_of_three: "That is not one of the three.",
+  not_on_offer: "That is not on offer.",
+  no_boons: "There are no boons on offer.",
+  redrawn: "You have already asked for others.",
+  stall_empty: "That place on the stall is empty.",
+  not_enough_acorns: "Not enough acorns.",
+  bench_full: "The bench is full.",
+  nobody_there: "Nobody is there.",
+  last_figure: "Somebody has to go on the raid.",
+  no_such_place: "There is no such place.",
+  already_there: "It is already there.",
+  field_full: "You can field no more figures for now.",
+  top_level: "There is no level above this one.",
+  no_such_item: "There is no such item.",
+  hands_full: "It is holding all it can.",
+  board_empty: "Put somebody on the board first.",
+  too_many_fielded: "There are more on the board than you can field.",
+  no_fight: "There has been no fight yet.",
+  no_such_room: "There is no such room.",
+} as const;
+export type Why = keyof typeof REFUSALS;
+
+export type Refused = { ok: false; code: Why; why: string };
 export type Done = { ok: true; notes: Note[] } | Refused;
 export type Begun = { ok: true; notes: Note[]; setup: FightSetup } | Refused;
 export type Taken = { ok: true; notes: Note[]; fight: FightSummary } | Refused;
 
-const no = (why: string): Refused => ({ ok: false, why });
+/** The sentence for a refusal. How many may be fielded is said with the number, when it is given. */
+export function whyText(code: Why, cap?: number): string {
+  if (code === "field_full" && cap !== undefined) return `You can field ${cap} figure${cap === 1 ? "" : "s"} for now.`;
+  return REFUSALS[code];
+}
+/** A refusal, with its sentence. */
+export const refusal = (code: Why, cap?: number): Refused => ({ ok: false, code, why: whyText(code, cap) });
+const no = refusal;
 const yes = (notes: Note[]): Done => ({ ok: true, notes });
 
 // ---------- looking at a run ----------
@@ -218,8 +270,7 @@ export function traitsNow(run: Run): TraitState[] {
 export const roomNow = (run: Run) => ROOMS[Math.min(run.room, ROOM_COUNT - 1)];
 /** The fight for the room being fought: the same setup every time it is asked for. Null outside a fight. */
 export function fightSetup(run: Run): FightSetup | null {
-  if (run.phase !== "fight") return null;
-  return { seed: mix(run.seed, 5000 + run.record.length), sides: [partyOf(run), run.foe] };
+  return run.phase === "fight" ? (run.fight?.setup ?? null) : null;
 }
 
 // ---------- the forest's side ----------
@@ -329,39 +380,41 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
     bought: 0,
     boons: [],
     choices: [],
-    foe: opposition(seed >>> 0, 0, trail),
+    foe: { who: "", title: "", figures: [], charms: [], boons: [], might: 100 },
     record: [],
     nextId: 1,
     won: false,
     left: false,
     last: null,
+    fight: null,
     seen: { fielded: [], threeStars: [], forged: [], topped: [] },
   };
   const cheapest = STALL_POOL.filter((id) => FIGURES[id].tier === 1);
   run.choices.push({ kind: "starter", options: shuffled(run, cheapest).slice(0, ECONOMY.starters) });
   restock(run);
+  run.foe = opposition(draw32(run), 0, trail);
   return run;
 }
 
 /** Why nothing can be planned just now, or null if it can. */
-function notPlanning(run: Run): string | null {
-  if (run.phase === "over") return "The raid is over.";
-  if (run.phase === "fight") return "The figures are busy fighting.";
+function notPlanning(run: Run): Why | null {
+  if (run.phase === "over") return "raid_over";
+  if (run.phase === "fight") return "fighting";
   const choice = run.choices[0];
   if (!choice) return null;
-  if (choice.kind === "starter") return "Pick who sets out with you first.";
-  return choice.kind === "boon" ? "Pick a boon first." : "Pick a component first.";
+  if (choice.kind === "starter") return "pick_starter";
+  return choice.kind === "boon" ? "pick_boon" : "pick_component";
 }
 
 /** Settles the choice that is waiting, by taking one of its options. */
 export function choose(run: Run, option: number): Done {
-  if (run.phase === "over") return no("The raid is over.");
+  if (run.phase === "over") return no("raid_over");
   const choice = run.choices[0];
-  if (!choice) return no("There is nothing to choose.");
+  if (!choice) return no("nothing_to_choose");
   const notes: Note[] = [];
   if (choice.kind === "starter") {
     const kind = choice.options[option];
-    if (kind === undefined) return no("That is not one of the three.");
+    if (kind === undefined) return no("not_one_of_three");
     const piece = newPiece(run, kind);
     // Front row, in the middle.
     const seat = Math.floor(COLS / 2);
@@ -369,12 +422,12 @@ export function choose(run: Run, option: number): Done {
     notes.push({ t: "starter", kind, piece: piece.id, to: { on: "board", at: seat } });
   } else if (choice.kind === "component") {
     const item = choice.options[option];
-    if (item === undefined) return no("That is not on offer.");
+    if (item === undefined) return no("not_on_offer");
     run.items.push(item);
     notes.push({ t: "component", item });
   } else {
     const boon = choice.options[option];
-    if (boon === undefined) return no("That is not on offer.");
+    if (boon === undefined) return no("not_on_offer");
     run.boons.push(boon);
     notes.push({ t: "boon", boon });
     if (boon === "windfall") {
@@ -403,10 +456,10 @@ export function choose(run: Run, option: number): Done {
 }
 /** Swaps the three boons on offer for three others. Each offer of boons allows it once. */
 export function redraw(run: Run): Done {
-  if (run.phase === "over") return no("The raid is over.");
+  if (run.phase === "over") return no("raid_over");
   const choice = run.choices[0];
-  if (choice?.kind !== "boon") return no("There are no boons on offer.");
-  if (choice.redraws <= 0) return no("You have already asked for others.");
+  if (choice?.kind !== "boon") return no("no_boons");
+  if (choice.redraws <= 0) return no("redrawn");
   choice.redraws--;
   choice.options = boonOptions(run, choice.options);
   return yes([{ t: "redrawn", options: choice.options.slice() }]);
@@ -482,12 +535,12 @@ export function buy(run: Run, offerAt: number): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
   const kind = run.stall[offerAt];
-  if (!kind) return no("That place on the stall is empty.");
+  if (!kind) return no("stall_empty");
   const cost = priceOf(run, offerAt);
-  if (run.acorns < cost) return no("Not enough acorns.");
+  if (run.acorns < cost) return no("not_enough_acorns");
   const slot = run.bench.indexOf(null);
   const twins = pieces(run).filter((p) => p.kind === kind && p.stars === 1).length;
-  if (slot < 0 && twins < 2) return no("The bench is full.");
+  if (slot < 0 && twins < 2) return no("bench_full");
   run.acorns -= cost;
   run.stall[offerAt] = null;
   run.bought++;
@@ -504,8 +557,8 @@ export function sell(run: Run, from: Spot): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
   const piece = pieceAt(run, from);
-  if (!piece) return no("Nobody is there.");
-  if (pieces(run).length <= 1) return no("Somebody has to go on the raid.");
+  if (!piece) return no("nobody_there");
+  if (pieces(run).length <= 1) return no("last_figure");
   const acorns = sellValue(piece);
   run.acorns += acorns;
   run.items.push(...piece.items);
@@ -521,12 +574,11 @@ export function move(run: Run, from: Spot, to: Spot): Done {
   if (stop) return no(stop);
   const piece = pieceAt(run, from);
   const there = pieceAt(run, to);
-  if (piece === undefined || there === undefined) return no("There is no such place.");
-  if (!piece) return no("Nobody is there.");
-  if (from.on === to.on && from.at === to.at) return no("It is already there.");
+  if (piece === undefined || there === undefined) return no("no_such_place");
+  if (!piece) return no("nobody_there");
+  if (from.on === to.on && from.at === to.at) return no("already_there");
   if (!there && to.on === "board" && from.on === "bench" && fielded(run) >= fieldCap(run)) {
-    const cap = fieldCap(run);
-    return no(`You can field ${cap} figure${cap === 1 ? "" : "s"} for now.`);
+    return no("field_full", fieldCap(run));
   }
   if (to.on === "board") run.board[to.at] = piece;
   else run.bench[to.at] = piece;
@@ -538,9 +590,9 @@ export function move(run: Run, from: Spot, to: Spot): Done {
 export function toBench(run: Run, seat: number): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
-  if (!run.board[seat]) return no("Nobody is there.");
+  if (!run.board[seat]) return no("nobody_there");
   const slot = run.bench.indexOf(null);
-  if (slot < 0) return no("The bench is full.");
+  if (slot < 0) return no("bench_full");
   return move(run, { on: "board", at: seat }, { on: "bench", at: slot });
 }
 /** New offers on the stall: free once a room, then for acorns. */
@@ -548,7 +600,7 @@ export function rustle(run: Run): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
   const cost = rustleCost(run);
-  if (run.acorns < cost) return no("Not enough acorns.");
+  if (run.acorns < cost) return no("not_enough_acorns");
   if (cost === 0) run.rustles--;
   run.acorns -= cost;
   run.held = false;
@@ -578,8 +630,8 @@ function gainXp(run: Run, amount: number, notes: Note[]): void {
 export function buyXp(run: Run): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
-  if (run.level >= MAX_LEVEL) return no("There is no level above this one.");
-  if (run.acorns < ECONOMY.xpCost) return no("Not enough acorns.");
+  if (run.level >= MAX_LEVEL) return no("top_level");
+  if (run.acorns < ECONOMY.xpCost) return no("not_enough_acorns");
   run.acorns -= ECONOMY.xpCost;
   const notes: Note[] = [{ t: "xp", gained: ECONOMY.xpBought, cost: ECONOMY.xpCost }];
   gainXp(run, ECONOMY.xpBought, notes);
@@ -590,11 +642,11 @@ export function giveItem(run: Run, itemAt: number, to: Spot): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
   const item = run.items[itemAt];
-  if (item === undefined) return no("There is no such item.");
+  if (item === undefined) return no("no_such_item");
   const piece = pieceAt(run, to);
-  if (!piece) return no("Nobody is there.");
+  if (!piece) return no("nobody_there");
   const got = holdItem(piece.items, item);
-  if (!got) return no("It is holding all it can.");
+  if (!got) return no("hands_full");
   piece.items = got.held;
   run.items.splice(itemAt, 1);
   if (got.forged) remember(run.seen.forged, got.forged);
@@ -603,20 +655,25 @@ export function giveItem(run: Run, itemAt: number, to: Spot): Done {
 
 // ---------- the fight and the takings ----------
 
-/** Sends the party in. The screen gets the fight's setup to play; the run waits for `takeTakings`. */
+/**
+ * Sends the party in: both boards are locked as they stand, the fight's seed is drawn from the run's
+ * stream, and the fight is worked out to its end at once. The run keeps how it came out; the screen
+ * gets the setup to play, which gives the same fight, and the run waits for `takeTakings`.
+ */
 export function beginFight(run: Run): Begun {
   const stop = notPlanning(run);
   if (stop) return no(stop);
-  if (fielded(run) === 0) return no("Put somebody on the board first.");
-  if (fielded(run) > fieldCap(run)) return no("There are more on the board than you can field.");
+  if (fielded(run) === 0) return no("board_empty");
+  if (fielded(run) > fieldCap(run)) return no("too_many_fielded");
   run.phase = "fight";
   for (const p of run.board) if (p) remember(run.seen.fielded, p.kind);
   for (const state of traitsNow(run)) {
     if (state.step >= topStep(state.trait)) remember(run.seen.topped, state.trait);
   }
-  const setup = fightSetup(run);
-  if (!setup) return no("The figures are not ready.");
-  return { ok: true, notes: [{ t: "fight", room: run.room, seed: setup.seed }], setup };
+  const setup: FightSetup = { seed: draw32(run), sides: [partyOf(run), structuredClone(run.foe)] };
+  const outcome = resolveFight(setup);
+  run.fight = { setup, outcome };
+  return { ok: true, notes: [{ t: "fight", room: run.room, seed: setup.seed, setup, outcome }], setup };
 }
 
 /**
@@ -625,17 +682,18 @@ export function beginFight(run: Run): Begun {
  * It may be called at any point after `beginFight`, which is all "skip" is.
  */
 export function takeTakings(run: Run): Taken {
-  const setup = fightSetup(run);
-  if (!setup) return no(run.phase === "over" ? "The raid is over." : "There has been no fight yet.");
-  const fight = resolveFight(setup);
+  const fought = run.phase === "fight" ? run.fight : null;
+  if (!fought) return no(run.phase === "over" ? "raid_over" : "no_fight");
+  const { setup, outcome: fight } = fought;
   const room = ROOMS[run.room];
-  if (!room) return no("There is no such room.");
+  if (!room) return no("no_such_room");
   const won = fight.result === "win";
   const last = run.room >= ROOM_COUNT - 1;
   const notes: Note[] = [{ t: "result", room: run.room, result: fight.result, standing: fight.standing }];
   const boss = run.foe.figures.map((p) => p.kind).find(isBossId) ?? null;
   run.record.push({ room: run.room, kind: room.kind, result: fight.result, standing: fight.standing, boss });
   run.last = setup;
+  run.fight = null;
 
   if (!won) {
     // A loss costs a base and one more for each enemy left; a draw only the base.
@@ -694,7 +752,7 @@ export function takeTakings(run: Run): Taken {
   run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
   if (run.held) run.held = false;
   else restock(run);
-  run.foe = opposition(run.seed, run.room, run.trail);
+  run.foe = opposition(draw32(run), run.room, run.trail);
   const next = ROOMS[run.room];
   if (next) notes.push({ t: "room", room: run.room, kind: next.kind, who: run.foe.who, title: run.foe.title });
   const waiting = run.choices[0];
@@ -704,10 +762,11 @@ export function takeTakings(run: Run): Taken {
 
 /** Walks home early. The run is over, and is still paid for the rooms it cleared. */
 export function abandon(run: Run): Done {
-  if (run.phase === "over") return no("The raid is over.");
+  if (run.phase === "over") return no("raid_over");
   run.phase = "over";
   run.left = true;
   run.choices = [];
+  run.fight = null;
   return yes([{ t: "over", won: false }]);
 }
 

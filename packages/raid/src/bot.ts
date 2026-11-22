@@ -36,6 +36,23 @@ import {
   toBench,
 } from "./run.ts";
 
+/**
+ * The actions the bot plans with. Played directly they are the run's own; a page that plays through
+ * Leaf hands it ones that act on its copy and write down the command for each (see `game.ts`).
+ */
+export interface Hands {
+  choose: typeof choose;
+  buy: typeof buy;
+  sell: typeof sell;
+  move: typeof move;
+  toBench: typeof toBench;
+  rustle: typeof rustle;
+  buyXp: typeof buyXp;
+  giveItem: typeof giveItem;
+}
+/** The run's own actions. */
+export const DIRECT: Hands = { choose, buy, sell, move, toBench, rustle, buyXp, giveItem };
+
 export interface Habit {
   name: string;
   /** How much it likes each trait: 1 where it has no view. */
@@ -193,7 +210,7 @@ function likesComponent(run: Run, item: ComponentId): number {
   const base = item === "glowcap" ? 2 + casters * 0.4 : item === "thorn" || item === "plume" ? 3 : 2.6;
   return base + (loose ? 0.2 : 0);
 }
-function settleChoices(run: Run, habit: Habit, s: Stream): void {
+function settleChoices(run: Run, habit: Habit, s: Stream, hands: Hands): void {
   for (let guard = 0; guard < 12; guard++) {
     const choice = run.choices[0];
     if (!choice) return;
@@ -216,7 +233,7 @@ function settleChoices(run: Run, habit: Habit, s: Stream): void {
         }
       });
     }
-    if (!choose(run, best).ok) return;
+    if (!hands.choose(run, best).ok) return;
   }
 }
 
@@ -235,7 +252,7 @@ function wants(run: Run, habit: Habit, kind: FigureId, before: number): number {
   return after - before + (twins === 1 ? 0.7 * habit.chases : 0) + (better ? 0.4 * habit.chases : 0);
 }
 /** Sells whoever on the bench is doing least: not in the best party, and not half of a pair. */
-function sellSpare(run: Run, habit: Habit, keep: number): boolean {
+function sellSpare(run: Run, habit: Habit, keep: number, hands: Hands): boolean {
   const own = pieces(run);
   const best = new Set(bestParty(habit, own, fieldCap(run), charmsOf(run.boons)).map((p) => p.id));
   let worst = -1;
@@ -250,10 +267,10 @@ function sellSpare(run: Run, habit: Habit, keep: number): boolean {
     }
   });
   if (worst < 0 || worstScore > keep) return false;
-  return sell(run, { on: "bench", at: worst }).ok;
+  return hands.sell(run, { on: "bench", at: worst }).ok;
 }
 
-function shop(run: Run, habit: Habit): void {
+function shop(run: Run, habit: Habit, hands: Hands): void {
   const floor = floorOf(run, habit);
   let paidRustles = 0;
   for (let guard = 0; guard < 80; guard++) {
@@ -275,8 +292,8 @@ function shop(run: Run, habit: Habit): void {
       }
     });
     if (best >= 0) {
-      if (!run.bench.includes(null)) sellSpare(run, habit, Infinity);
-      if (buy(run, best).ok) continue;
+      if (!run.bench.includes(null)) sellSpare(run, habit, Infinity, hands);
+      if (hands.buy(run, best).ok) continue;
     }
     // Experience, by its habit.
     const short = pieces(run).length < fieldCap(run);
@@ -286,12 +303,12 @@ function shop(run: Run, habit: Habit): void {
       run.level < MAX_LEVEL &&
       (habit.levels === "keen" || (habit.levels === "par" && run.level < par)) &&
       run.acorns - ECONOMY.xpCost >= floor;
-    if (wantsLevel && buyXp(run).ok) continue;
+    if (wantsLevel && hands.buyXp(run).ok) continue;
     // New offers: the free ones always, paid ones while there are acorns to spare.
     const cost = rustleCost(run);
-    if (cost === 0 && rustle(run).ok) continue;
+    if (cost === 0 && hands.rustle(run).ok) continue;
     if (paidRustles < habit.rustles + (short ? 2 : 0) && run.acorns - cost >= Math.max(floor, short ? 1 : 2)) {
-      if (rustle(run).ok) {
+      if (hands.rustle(run).ok) {
         paidRustles++;
         continue;
       }
@@ -299,23 +316,23 @@ function shop(run: Run, habit: Habit): void {
     break;
   }
   // Anyone on the bench who is neither in the party nor half of a pair goes home.
-  for (let guard = 0; guard < ECONOMY.bench; guard++) if (!sellSpare(run, habit, 2.5)) break;
+  for (let guard = 0; guard < ECONOMY.bench; guard++) if (!sellSpare(run, habit, 2.5, hands)) break;
 }
 
 /** Buys whatever it can reach, in the order it comes. */
-function shopCarelessly(run: Run, s: Stream): void {
+function shopCarelessly(run: Run, s: Stream, hands: Hands): void {
   for (let guard = 0; guard < 20; guard++) {
     const able = run.stall.flatMap((kind, i) => (kind && priceOf(run, i) <= run.acorns ? [i] : []));
     if (able.length === 0 || !run.bench.includes(null)) break;
-    if (!buy(run, pick(s, able)).ok) break;
+    if (!hands.buy(run, pick(s, able)).ok) break;
   }
   // With a full bench it sells one at random to make room for next time.
-  if (!run.bench.includes(null)) sell(run, { on: "bench", at: below(s, run.bench.length) });
+  if (!run.bench.includes(null)) hands.sell(run, { on: "bench", at: below(s, run.bench.length) });
 }
 
 // ---------- seating and items ----------
 
-function seatParty(run: Run, habit: Habit): void {
+function seatParty(run: Run, habit: Habit, hands: Hands): void {
   const own = pieces(run);
   const charms = charmsOf(run.boons);
   const party = bestParty(habit, own, fieldCap(run), charms);
@@ -333,27 +350,27 @@ function seatParty(run: Run, habit: Habit): void {
   run.board.forEach((p, seat) => {
     if (!p || want.has(p.id)) return;
     const slot = run.bench.findIndex((b) => b !== null && want.has(b.id));
-    if (slot >= 0) move(run, { on: "bench", at: slot }, { on: "board", at: seat });
-    else if (!toBench(run, seat).ok) sell(run, { on: "board", at: seat });
+    if (slot >= 0) hands.move(run, { on: "bench", at: slot }, { on: "board", at: seat });
+    else if (!hands.toBench(run, seat).ok) hands.sell(run, { on: "board", at: seat });
   });
   run.bench.forEach((p, slot) => {
     if (!p || !want.has(p.id)) return;
     const seat = run.board.indexOf(null);
-    if (seat >= 0) move(run, { on: "bench", at: slot }, { on: "board", at: seat });
+    if (seat >= 0) hands.move(run, { on: "bench", at: slot }, { on: "board", at: seat });
   });
   // Then everyone to their own seat: each move puts at least one of them right.
   for (let guard = 0; guard < 2 * SEATS; guard++) {
     const from = run.board.findIndex((p, seat) => p !== null && want.get(p.id) !== seat && want.has(p.id));
     const to = from >= 0 ? want.get(run.board[from]?.id ?? -1) : undefined;
     if (from < 0 || to === undefined) break;
-    if (!move(run, { on: "board", at: from }, { on: "board", at: to }).ok) break;
+    if (!hands.move(run, { on: "board", at: from }, { on: "board", at: to }).ok) break;
   }
 }
-function seatCarelessly(run: Run, s: Stream): void {
+function seatCarelessly(run: Run, s: Stream, hands: Hands): void {
   run.bench.forEach((p, slot) => {
     if (!p || fielded(run) >= fieldCap(run)) return;
     const free = run.board.flatMap((b, seat) => (b ? [] : [seat]));
-    move(run, { on: "bench", at: slot }, { on: "board", at: pick(s, free) });
+    hands.move(run, { on: "bench", at: slot }, { on: "board", at: pick(s, free) });
   });
 }
 
@@ -376,7 +393,7 @@ function fits(p: Piece, suits: Suits): number {
   if (suits === "caster") return f.calling === "sage" ? 3 : f.calling === "mender" ? 2.5 : 1;
   return f.calling === "bulwark" ? 3 : f.range <= 1 ? 2 : 1;
 }
-function handOutItems(run: Run, habit: Habit): void {
+function handOutItems(run: Run, habit: Habit, hands: Hands): void {
   for (let guard = 0; guard < 30 && run.items.length > 0; guard++) {
     const item = run.items[0];
     if (item === undefined) break;
@@ -393,25 +410,25 @@ function handOutItems(run: Run, habit: Habit): void {
         bestScore = score;
       }
     });
-    if (best < 0 || !giveItem(run, 0, { on: "board", at: best }).ok) break;
+    if (best < 0 || !hands.giveItem(run, 0, { on: "board", at: best }).ok) break;
   }
 }
 
 // ---------- playing ----------
 
 /** Does everything a player does before a fight: settles what is waiting to be chosen, shops, seats the party, hands out items. */
-export function planRoom(run: Run, habit: Habit): void {
+export function planRoom(run: Run, habit: Habit, hands: Hands = DIRECT): void {
   if (run.phase !== "plan") return;
   const s: Stream = { rng: mix(run.seed, 9000 + run.record.length) };
-  settleChoices(run, habit, s);
+  settleChoices(run, habit, s, hands);
   if (habit.careless) {
-    shopCarelessly(run, s);
-    seatCarelessly(run, s);
+    shopCarelessly(run, s, hands);
+    seatCarelessly(run, s, hands);
     return;
   }
-  shop(run, habit);
-  seatParty(run, habit);
-  handOutItems(run, habit);
+  shop(run, habit, hands);
+  seatParty(run, habit, hands);
+  handOutItems(run, habit, hands);
 }
 /** Plans a room, fights it and takes the takings. */
 export function playRoom(run: Run, habit: Habit): Taken {

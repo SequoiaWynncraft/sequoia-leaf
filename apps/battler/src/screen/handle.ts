@@ -1,39 +1,41 @@
 /**
  * A handle on `window.raid` for looking at the game from outside, where a headless browser draws
- * about a frame a second: start a seeded run, let the bot play some rooms, jump to a pick or to
- * the end, hold the clock and step it (and a fight's clock) by hand, pick a figure up, open a card
- * or a page.
+ * about a frame a second: start a run, let the bot play some rooms, jump to a pick or to the end,
+ * hold the clock and step it (and a fight's clock) by hand, pick a figure up, open a card or a page.
+ *
+ * The table is Leaf's, so whatever plays goes to Leaf as commands, as the member's own do: the bot
+ * plans on the page's copy (`planCommands`) and sends what it would do. Staging a moment that play
+ * does not reach (more acorns, a figure handed over, a run from a chosen seed, a new member) asks
+ * the play server the tours run against (`apps/api/test/play.ts`), which alone answers
+ * `/test/play/raid`; the guild's own Leaf has no such route, and there they do nothing.
+ *
+ * `copy()` is the page's own copy of the run, to change by hand and see that Leaf's next answer
+ * puts it back.
  */
+import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
 import {
-  beginFight,
-  choose,
-  type FigureId,
-  giveItem,
   HZ,
   isBossId,
-  isComponentId,
-  isFigureId,
-  isFinishedId,
-  type ItemId,
   MEASURES,
   pieceAt,
   pieces,
-  planRoom,
+  planCommands,
+  type RaidCommand,
   ROOMS,
   type Run,
   SENSIBLE,
-  takeTakings,
-} from "../game/index.ts";
+  type TableView,
+} from "@sequoia-leaf/raid";
+
 import { fightState } from "./fightview.ts";
 import { carryOn, enterRun, setOut, startNew } from "./flow.ts";
 import { grab, hover, tapPawn, unpick } from "./hand.ts";
 import { heldRow, heldTop } from "./held.ts";
-import { keep, KEYS } from "./keep.ts";
 import { NUDGES } from "./logic.ts";
-import { pawns } from "./pawns.ts";
+import { pawns, syncPawns } from "./pawns.ts";
 import { arrive } from "./scene.ts";
 import * as stage from "./stage.ts";
-import { act, changed, prefsChanged, S, wake } from "./state.ts";
+import { again, ask, changed, type Did, doNow, leafView, prefsChanged, S, waitingForLeaf } from "./state.ts";
 import { closeSheet, sheetUp, toggleLastFight } from "./ui/fightsheet.ts";
 import { type PageId, showPage } from "./ui/pages.ts";
 import { redrawTallies, TV } from "./ui/tally.ts";
@@ -41,20 +43,20 @@ import { redrawTallies, TV } from "./ui/tally.ts";
 type Jump = "front" | "boon" | "component" | "spar" | "boss" | "lastboss" | "end";
 
 export interface Handle {
-  /** Starts a run from a seed on a trail, at its first pick. */
-  start(seed: number, trail?: number): string;
-  /** Forgets everything kept in the browser: a new member. */
-  fresh(): void;
+  /** Starts a run on a trail, at its first pick; from a chosen seed where the play server stages it. */
+  start(seed: number, trail?: number): Promise<string>;
+  /** A new member: the play server forgets the table, and the page takes the new one. */
+  fresh(): Promise<void>;
   /** The bot plays this many whole rooms, unseen, and the table shows the room after them. */
-  bot(rooms?: number): string;
+  bot(rooms?: number): Promise<string>;
   /** The bot plans the room that is up (shops, seats, hands out items) and stops before the fight. */
-  plan(): string;
+  plan(): Promise<string>;
   /** Plays on with the bot to a moment worth looking at. */
-  to(where: Jump): string;
+  to(where: Jump): Promise<string>;
   /** Has whoever is waiting walk in again from the trees. */
   arrive(): void;
   /** Sets out, as the button does. */
-  fight(): string;
+  fight(): Promise<string>;
   /** Moves a fight's clock on by this many of its steps. */
   tick(steps: number): string;
   /** Moves a fight on until an ability has hexes lit and something is in the air (or a number of steps has passed). */
@@ -81,7 +83,7 @@ export interface Handle {
   rack(): string[];
   held(): Record<number, string[]>;
   /** For staging a moment: every figure lets go of what it holds. */
-  strip(): void;
+  strip(): Promise<void>;
   /** Holds the item at a place on the rack over a figure; and hands it over. */
   hover(itemAt: number, id: number): void;
   hand(itemAt: number, id: number): void;
@@ -94,10 +96,21 @@ export interface Handle {
   /** Shows a tab of the tally ("damage", "tanked", "healing"), and on a phone one party (0 for yours, 1 for theirs). */
   tally(measure: string, side?: number): string;
   /** For staging a moment: more acorns, a figure onto the bench, a figure onto the stall, an item onto the rack. */
-  acorns(n: number): void;
-  give(kind: string, stars?: number): number;
-  offer(at: number, kind: string): void;
-  item(id: string): void;
+  acorns(n: number): Promise<void>;
+  give(kind: string, stars?: number): Promise<number>;
+  offer(at: number, kind: string): Promise<void>;
+  item(id: string): Promise<void>;
+  /** The page's own copy of the run, to change by hand. */
+  copy(): Run | null;
+  /** Draws the table again from the copy as it stands. */
+  redraw(): void;
+  /** Leaf's table as the page last heard it, and whether anything sent is still waiting for an answer. */
+  leaf(): TableView | null;
+  waiting(): boolean;
+  /** Waits until Leaf has answered everything sent, and the page has shown it. */
+  settled(): Promise<string>;
+  /** Sends one command as the page would, and gives back what it did. */
+  send(command: RaidCommand): Promise<Did | null>;
 }
 
 declare global {
@@ -106,14 +119,60 @@ declare global {
   }
 }
 
-/** One whole room played by the bot through the same door the member's actions go through. */
-function botRoom(): boolean {
-  const done = act((r) => {
-    planRoom(r, SENSIBLE);
-    const begun = beginFight(r);
-    return begun.ok ? takeTakings(r) : begun;
+/** Asks the play server to stage a moment, then takes the table as Leaf now has it. Gives back the numbers of figures it made. */
+async function staged(...ops: unknown[]): Promise<number[]> {
+  const answer = await askLeaf("/test/play/raid", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ stage: ops }),
   });
-  return done?.ok === true;
+  await again();
+  const body = answer.body;
+  return typeof body === "object" && body !== null && "made" in body && Array.isArray(body.made)
+    ? body.made.filter((n): n is number => typeof n === "number")
+    : [];
+}
+
+/** Waits until Leaf has answered everything sent. */
+async function settled(tries = 400): Promise<void> {
+  if (tries === 0 || !waitingForLeaf()) return;
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await settled(tries - 1);
+}
+
+/** Sends a command as the page does: at once where the rules can say, and otherwise waiting for Leaf. */
+async function send(c: RaidCommand): Promise<Did | null> {
+  const now = doNow(c);
+  if (now) {
+    await settled();
+    return now;
+  }
+  return ask(c);
+}
+
+/** The bot plans the room that is up, through commands, until it has nothing left to do. */
+async function plan(rounds = 30): Promise<void> {
+  const view = leafView();
+  if (rounds === 0 || !view) return;
+  const commands = planCommands(view, SENSIBLE);
+  if (commands.length === 0) return;
+  for (const c of commands) {
+    // oxlint-disable-next-line no-await-in-loop -- in order, each after the one before
+    await send(c);
+  }
+  await plan(rounds - 1);
+}
+
+/** One whole room played by the bot through the same commands the member's actions send. */
+async function botRoom(): Promise<boolean> {
+  // What the page has sent first (the takings of a fight just watched); a fight not yet taken is taken.
+  await settled();
+  if (S.run?.phase === "fight" && !(await ask({ do: "take" }))?.ok) return false;
+  if (S.run?.phase !== "plan") return false;
+  await plan();
+  const begun = await ask({ do: "fight" });
+  if (!begun?.ok) return false;
+  return (await ask({ do: "take" }))?.ok === true;
 }
 
 function settle(): string {
@@ -137,65 +196,73 @@ const there = (run: Run, where: Jump): boolean =>
       ? ROOMS[run.room]?.kind === where
       : false;
 
-/** The bot plans the room that is up, without fighting it. */
-function plan(): void {
-  act((r) => {
-    planRoom(r, SENSIBLE);
-    return { ok: true, notes: [] };
-  });
+async function playTo(where: Jump, guard = 60): Promise<void> {
+  await settled();
+  const run = S.run;
+  if (guard === 0 || !run || run.phase === "over") return;
+  if (where === "boon" || where === "component") {
+    // Whatever is waiting ahead of the pick that is wanted is settled plainly; the pick itself is left.
+    if (run.choices[0]?.kind === where) return;
+    if (run.choices.some((c) => c.kind === where)) {
+      await ask({ do: "choose", option: 0 });
+      return playTo(where, guard - 1);
+    }
+  } else if (where !== "end" && there(run, where)) {
+    if (run.choices.length > 0) await plan();
+    return;
+  }
+  if (!(await botRoom())) return;
+  return playTo(where, guard - 1);
+}
+
+async function bot(rooms: number): Promise<void> {
+  if (rooms <= 0 || !S.run || S.run.phase === "over") return;
+  if (!(await botRoom())) return;
+  return bot(rooms - 1);
 }
 
 export function openHandle(): void {
   window.raid = {
-    start(seed, trail = 0) {
-      startNew(trail, seed);
+    async start(seed, trail = 0) {
+      // From the chosen seed where the play server stages it; otherwise as the front page sets out.
+      const staging = await staged({ start: { seed, trail } });
+      if (staging.length === 0) await startNew(trail);
+      S.ended = null;
+      S.mode = "plan";
       return settle();
     },
-    fresh() {
-      for (const key of Object.values(KEYS)) keep(key, null);
-      wake();
+    async fresh() {
+      await staged({ fresh: true });
+      S.ended = null;
+      S.prefs.taught = [];
+      prefsChanged();
       S.mode = "front";
       changed();
     },
-    bot(rooms = 1) {
-      for (let i = 0; i < rooms && S.run && S.run.phase !== "over"; i++) if (!botRoom()) break;
+    async bot(rooms = 1) {
+      await bot(rooms);
       return settle();
     },
-    plan() {
+    async plan() {
       const run = S.run;
       if (!run || run.phase !== "plan") return "not planning";
-      plan();
+      await plan();
       return settle();
     },
-    to(where) {
+    async to(where) {
       if (where === "front") {
         S.mode = "front";
         changed();
         return "front";
       }
-      for (let guard = 0; guard < 60; guard++) {
-        const run = S.run;
-        if (!run || run.phase === "over") break;
-        if (where === "boon" || where === "component") {
-          // Whatever is waiting ahead of the pick that is wanted is settled plainly; the pick itself is left.
-          const queued = run.choices.findIndex((c) => c.kind === where);
-          if (queued >= 0) {
-            for (let i = 0; i < queued; i++) act((r) => choose(r, 0));
-            break;
-          }
-        } else if (where !== "end" && there(run, where)) {
-          if (run.choices.length > 0) plan();
-          break;
-        }
-        if (!botRoom()) break;
-      }
+      await playTo(where);
       return settle();
     },
     arrive() {
       if (S.run && S.mode === "plan") arrive(S.run);
     },
-    fight() {
-      setOut();
+    async fight() {
+      await setOut();
       return S.mode;
     },
     tick(steps) {
@@ -232,6 +299,7 @@ export function openHandle(): void {
         resolve: run?.resolve,
         choice: run?.choices[0]?.kind ?? null,
         boss: run?.foe.figures.some((p) => isBossId(p.kind)) ?? false,
+        coins: S.coins,
         fight: fightState(),
         view: { z: stage.V.z, w: stage.V.w, h: stage.V.h, bx: stage.V.bx, by: stage.V.by },
       };
@@ -267,16 +335,15 @@ export function openHandle(): void {
       for (const p of S.run ? pieces(S.run) : []) out[p.id] = [...p.items];
       return out;
     },
-    strip() {
-      act((r) => {
-        for (const p of pieces(r)) p.items = [];
-        return { ok: true, notes: [] };
-      });
+    async strip() {
+      await staged({ strip: true });
+      syncPawns(S.run, true);
+      changed();
     },
     hover,
     hand(itemAt, id) {
       const spot = pawns.get(id)?.spot;
-      if (spot) act((r) => giveItem(r, itemAt, spot));
+      if (spot) doNow({ do: "give", item: itemAt, to: spot });
     },
     drop: unpick,
     page: showPage,
@@ -295,41 +362,37 @@ export function openHandle(): void {
       redrawTallies();
       return `${TV.measure} ${TV.side}`;
     },
-    acorns(n) {
-      act((r) => {
-        r.acorns = Math.max(0, n);
-        return { ok: true, notes: [] };
-      });
+    async acorns(n) {
+      await staged({ acorns: n });
+      changed();
     },
-    give(kind, stars = 1) {
-      let id = -1;
-      if (!isFigureId(kind)) return id;
-      const figure: FigureId = kind;
-      act((r) => {
-        const slot = r.bench.indexOf(null);
-        if (slot < 0) return { ok: false, why: "The bench is full." };
-        id = r.nextId++;
-        r.bench[slot] = { id, kind: figure, stars: stars >= 3 ? 3 : stars === 2 ? 2 : 1, items: [], fed: 0 };
-        return { ok: true, notes: [] };
-      });
-      return id;
+    async give(kind, stars = 1) {
+      const [id] = await staged({ give: { kind, stars } });
+      syncPawns(S.run);
+      changed();
+      return id ?? -1;
     },
-    offer(at, kind) {
-      if (!isFigureId(kind)) return;
-      const figure: FigureId = kind;
-      act((r) => {
-        if (at < 0 || at >= r.stall.length) return { ok: false, why: "There is no such place on the stall." };
-        r.stall[at] = figure;
-        return { ok: true, notes: [] };
-      });
+    async offer(at, kind) {
+      await staged({ offer: { at, kind } });
+      changed();
     },
-    item(id) {
-      const item: ItemId | null = isComponentId(id) || isFinishedId(id) ? id : null;
-      if (!item) return;
-      act((r) => {
-        r.items.push(item);
-        return { ok: true, notes: [] };
-      });
+    async item(id) {
+      await staged({ item: id });
+      changed();
     },
+    copy: () => S.run,
+    redraw() {
+      syncPawns(S.run, true);
+      changed();
+    },
+    leaf: leafView,
+    waiting: waitingForLeaf,
+    async settled() {
+      await settled();
+      // What each answer did is shown just after it comes.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return waitingForLeaf() ? "still waiting" : "answered";
+    },
+    send,
   };
 }

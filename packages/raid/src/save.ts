@@ -1,27 +1,30 @@
 /**
- * A run in progress as text, and back. A run is plain data, so saving is writing it out with a
- * version on it. Loading is the careful half: the text is read field by field into a fresh run,
- * and anything that is not a run this version of the game could have made is refused, with a word
- * about what was wrong. A fight in progress is not saved; a run saved mid-fight loads back to the
- * start of that fight, which plays out the same from its seed.
+ * A run in progress as plain data and as text, and back. A run is plain data, so saving is writing
+ * it out with a version on it. Reading is the careful half: the data is read field by field into a
+ * fresh run, and anything that is not a run this version of the game could have made is refused,
+ * with a word about what was wrong. A fight in progress keeps its setup; how it comes out is worked
+ * out again from that, and is the same.
  */
 import { BOON_IDS, type BoonId, boonNumber, isBoonId } from "./content/boons.ts";
 import { FIGURE_IDS, type FigureId, FIGURES, isBossId, isFigureId, isStars } from "./content/figures.ts";
 import { FINISHED_IDS, HOLDS, isComponentId, isFinishedId, isItemId, type ItemId } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, ROOMS, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS, traitNumber } from "./content/traits.ts";
+import { resolveFight } from "./fight/engine.ts";
 import type { FightSetup } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
 import { isParty } from "./party.ts";
-import { type Choice, fieldCap, fielded, type Piece, type RoomRecord, type Run } from "./run.ts";
+import { type Choice, fieldCap, fielded, type Fought, type Piece, type RoomRecord, type Run } from "./run.ts";
 
-export const SAVE_VERSION = 1;
+/** The version a run is written with: 2 keeps the fight being fought. */
+export const SAVE_VERSION = 2;
 const GAME = "little-raid";
 
 /** A run as text. */
 export const saveRun = (run: Run): string => JSON.stringify({ game: GAME, v: SAVE_VERSION, run });
 
-class Nonsense extends Error {}
+/** Thrown by the readers below on the first thing that is wrong, with what it was. */
+export class Nonsense extends Error {}
 const bad = (what: string): never => {
   throw new Nonsense(what);
 };
@@ -57,8 +60,15 @@ function readPiece(v: unknown, nextId: number): Piece | null {
     fed: whole(p.fed, 0, kind === "greg" ? traitNumber("greg", "most", 1) : 0, "how much Greg has eaten"),
   };
 }
-function readChoice(v: unknown): Choice {
+/** A pick waiting. One shown to the page behind the first has its kind and nothing of what it will offer. */
+function readChoice(v: unknown, unseen = false): Choice {
   const c = record(v, "a choice");
+  if (unseen) {
+    if (c.kind === "component") return { kind: "component", options: [] };
+    if (c.kind === "boon")
+      return { kind: "boon", options: [], redraws: whole(c.redraws, 0, ECONOMY.boonRedraws, "a choice") };
+    return bad("a choice");
+  }
   if (c.kind === "starter") {
     const options = unique(each(c.options, isFigureId, 8, "the starters"), "the starters");
     if (options.length === 0 || options.some((id) => FIGURES[id].tier !== 1)) bad("the starters");
@@ -91,17 +101,27 @@ function readRecord(v: unknown, room: number): RoomRecord {
   };
 }
 
-/** The last fight's setup: a seed and two parties. A run saved before it was kept has none. */
-function readLast(v: unknown): FightSetup | null {
-  if (v === undefined || v === null) return null;
-  const r = record(v, "the last fight");
-  const sides = list(r.sides, 2, "the last fight");
-  const ours = one(sides[0], isParty, "the last fight");
-  const theirs = one(sides[1], isParty, "the last fight");
-  return { seed: whole(r.seed, 0, UINT, "the last fight"), sides: [ours, theirs] };
+/** A fight's setup: a seed and two parties. */
+function readSetup(v: unknown, what: string): FightSetup {
+  const r = record(v, what);
+  const sides = list(r.sides, 2, what);
+  const ours = one(sides[0], isParty, what);
+  const theirs = one(sides[1], isParty, what);
+  return { seed: whole(r.seed, 0, UINT, what), sides: [ours, theirs] };
+}
+/** The last fight's setup. A run saved before it was kept has none. */
+const readLast = (v: unknown): FightSetup | null =>
+  v === undefined || v === null ? null : readSetup(v, "the last fight");
+/** The fight being fought, while there is one: its setup, and how it comes out, worked out again from that. */
+function readFought(v: unknown, fighting: boolean): Fought | null {
+  if (!fighting) return v === undefined || v === null ? null : bad("the fight");
+  const setup = readSetup(v === undefined || v === null ? bad("the fight") : record(v, "the fight").setup, "the fight");
+  if (setup.sides[0].figures.length === 0 || setup.sides[1].figures.length === 0) bad("the fight");
+  return { setup, outcome: resolveFight(setup) };
 }
 
-function readRun(v: unknown): Run {
+/** A run, or (`shown`) a run as the page is shown it: with no streams, and only the first pick's options. */
+function readRun(v: unknown, shown = false): Run {
   const r = record(v, "the run");
   const boons: BoonId[] = unique(each(r.boons, isBoonId, BOON_IDS.length, "the boons"), "the boons");
   const level = whole(r.level, 1, MAX_LEVEL, "the level");
@@ -125,8 +145,8 @@ function readRun(v: unknown): Run {
   const foe = one(r.foe, isParty, "who is waiting in the room");
   if (foe.figures.length === 0) bad("who is waiting in the room");
   const run: Run = {
-    seed: whole(r.seed, 0, UINT, "the seed"),
-    rng: whole(r.rng, 0, UINT, "the random stream"),
+    seed: shown ? 0 : whole(r.seed, 0, UINT, "the seed"),
+    rng: shown ? 0 : whole(r.rng, 0, UINT, "the random stream"),
     trail: whole(r.trail, 0, TRAIL_COUNT - 1, "the trail"),
     room,
     phase,
@@ -142,13 +162,14 @@ function readRun(v: unknown): Run {
     rustles: whole(r.rustles, 0, 8, "the free rustles"),
     bought: whole(r.bought, 0, 10_000, "the figures bought"),
     boons,
-    choices: list(r.choices, 8, "the choices").map(readChoice),
+    choices: list(r.choices, 8, "the choices").map((c, i) => readChoice(c, shown && i > 0)),
     foe,
     record: list(r.record, 400, "the record").map((x) => readRecord(x, room)),
     nextId,
     won: flag(r.won, "the ending"),
     left: flag(r.left, "the ending"),
     last: readLast(r.last),
+    fight: readFought(r.fight, phase === "fight"),
     seen: {
       fielded: unique(each(seen.fielded, isFigureId, FIGURE_IDS.length, "the almanac notes"), "the almanac notes"),
       threeStars: unique(
@@ -170,6 +191,21 @@ function readRun(v: unknown): Run {
 }
 
 export type Loaded = { ok: true; run: Run } | { ok: false; why: string };
+
+/**
+ * A run from plain data, as `JSON.parse` gives it back; or the reason the data is not one. `shown`
+ * reads a run as the page is shown it, with no streams (they come back as 0) and nothing of what the
+ * picks after the first will offer.
+ */
+export function checkRun(v: unknown, shown = false): Loaded {
+  try {
+    return { ok: true, run: readRun(v, shown) };
+  } catch (err) {
+    if (err instanceof Nonsense) return { ok: false, why: `That raid does not add up: ${err.message} is wrong.` };
+    throw err;
+  }
+}
+
 /** A run from text, exactly as it was saved; or the reason the text is not one. */
 export function loadRun(text: string): Loaded {
   let raw: unknown;
@@ -187,3 +223,6 @@ export function loadRun(text: string): Loaded {
     throw err;
   }
 }
+
+/** The readers above, for reading other plain data the same way: each throws `Nonsense` naming what was wrong. */
+export const fields = { record, whole, flag, list, one, each, unique, items: readItems, setup: readSetup, bad };

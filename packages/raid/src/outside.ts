@@ -155,10 +155,13 @@ export function loadAlmanac(text: string): Almanac | null {
   } catch {
     return null;
   }
-  if (!isRecord(raw) || raw.game !== "little-raid-almanac" || raw.v !== ALMANAC_VERSION || !isRecord(raw.almanac)) {
-    return null;
-  }
-  const a = raw.almanac;
+  if (!isRecord(raw) || raw.game !== "little-raid-almanac" || raw.v !== ALMANAC_VERSION) return null;
+  return readAlmanac(raw.almanac);
+}
+
+/** An almanac from plain data, as `JSON.parse` gives it back. Anything that is not a whole almanac is none. */
+export function readAlmanac(a: unknown): Almanac | null {
+  if (!isRecord(a)) return null;
   const fielded = uniqueList(a.fielded, isFigureId, FIGURE_IDS.length);
   const threeStars = uniqueList(a.threeStars, isFigureId, FIGURE_IDS.length);
   const forged = uniqueList(a.forged, isFinishedId, FINISHED_IDS.length);

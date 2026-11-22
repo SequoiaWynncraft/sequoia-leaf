@@ -1,26 +1,13 @@
 /**
  * What happens when: sitting down to a run, setting out, the fight, counting out what the room
- * paid, and going on to the next room or to the end. The rules do all the deciding; this is the
- * order things are shown in.
+ * paid, and going on to the next room or to the end. Leaf and the rules do all the deciding; this
+ * is the order things are shown in.
  */
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { GOLD, LEAF } from "@sequoia-leaf/kit/palette.ts";
 import { leave, tell } from "@sequoia-leaf/kit/shell.ts";
+import { type BossId, fightSetup, isBossId, type RaidNote, specOf, type TraitId, TRAITS } from "@sequoia-leaf/raid";
 
-import {
-  abandon,
-  beginFight,
-  buyXp,
-  fightSetup,
-  hold,
-  isBossId,
-  type Note,
-  rustle,
-  specOf,
-  takeTakings,
-  type TraitId,
-  TRAITS,
-} from "../game/index.ts";
 import { glyphPic } from "./art/icons.ts";
 import { endFight, fightOn, setSpeed, skipFight, startFight } from "./fightview.ts";
 import { clearFx, fly, forgetLater, later, say } from "./fx.ts";
@@ -32,7 +19,7 @@ import { arrive, arrived, settleArrival, watchersCheer } from "./scene.ts";
 import { signal } from "./signals.ts";
 import { snd } from "./sounds.ts";
 import { boardSpot, dress } from "./stage.ts";
-import { act, begin, changed, prefsChanged, S } from "./state.ts";
+import { ask, changed, doNow, prefsChanged, S } from "./state.ts";
 import { acorns } from "./ui/cards.ts";
 import { closeSheet, openSheet, sheetTaking, sheetUp } from "./ui/fightsheet.ts";
 import { forgetTable, holdAcorns, renderTable, shown, wakeChip } from "./ui/table.ts";
@@ -49,7 +36,7 @@ export function enterRun(walkIn = true): void {
   clearPawns();
   clearFx();
   endFight();
-  dress(S.prefs.cloth, S.prefs.lantern);
+  dress(S.looks.cloth, S.looks.lantern);
   syncPawns(run, true);
   if (run.phase === "fight") {
     S.mode = "fight";
@@ -64,10 +51,30 @@ export function enterRun(walkIn = true): void {
   changed();
 }
 
-/** Starts a new run on a trail. */
-export function startNew(trail: number, seed = Math.floor(Math.random() * 0xffffffff)): void {
-  begin(seed, trail);
+/** Sets out on a trail: Leaf lays a new run out (putting down any run in hand), and the table shows it. Says whether it did. */
+export async function startNew(trail: number): Promise<boolean> {
+  const did = await ask({ do: "start", trail }, document.getElementById("start"));
+  if (!did?.ok) return false;
+  S.mode = "plan";
   enterRun();
+  return true;
+}
+
+/**
+ * Leaf's table moved on without this page (the member played on another page of the game): the
+ * table shows it as Leaf has it. A fight on screen plays out first; its takings say the rest.
+ */
+export function rejoin(): void {
+  if (S.mode === "fight" || S.mode === "after" || S.mode === "over") return;
+  const run = S.run;
+  if (!run || run.phase === "over") {
+    if (S.mode === "plan") {
+      S.mode = "front";
+      changed();
+    }
+    return;
+  }
+  if (S.mode === "plan") enterRun(false);
 }
 
 /** Steps back from the board to the front page; the run is kept as it is. */
@@ -80,13 +87,14 @@ export function toFront(): void {
 }
 
 /** Walks home early: the run ends here, and is still paid for the rooms it cleared. */
-export function goHome(): void {
+export async function goHome(): Promise<void> {
   if (!S.run || S.run.phase === "over") return;
   unpick();
   closeSheet(false);
   endFight();
   clearFx();
-  act((r) => abandon(r));
+  const did = await ask({ do: "abandon" });
+  if (!did?.ok) return;
   S.mode = "over";
   changed();
 }
@@ -96,20 +104,20 @@ export function leaveTable(): void {
   leave();
 }
 
-export function doRustle(): void {
+export async function doRustle(): Promise<void> {
   if (!planning()) return;
   unpick();
-  if (act((r) => rustle(r))?.ok) snd.rustle();
+  if ((await ask({ do: "rustle" }, document.getElementById("rustle")))?.ok) snd.rustle();
 }
 export function doHold(): void {
-  if (!planning()) return;
-  const done = act((r) => hold(r));
+  if (!planning() || !S.run) return;
+  const done = doNow({ do: "hold", on: !S.run.held });
   const note = done?.ok ? done.notes[0] : undefined;
   if (note?.t === "held") snd.hold(note.on);
 }
-export function doLevelUp(): void {
+export async function doLevelUp(): Promise<void> {
   if (!planning()) return;
-  const done = act((r) => buyXp(r));
+  const done = await ask({ do: "xp" }, document.getElementById("levelup"));
   if (!done?.ok) return;
   if (done.notes.some((n) => n.t === "level")) {
     snd.level();
@@ -133,13 +141,13 @@ export function traitOn(trait: TraitId, step: number): void {
   say(MIDDLE.x, MIDDLE.y + 22, `${TRAITS[trait].name} is on${step > 1 ? `, step ${step}` : ""}`, GOLD[2], { ttl: 1.3 });
 }
 
-/** Sends the party in. */
-export function setOut(): void {
+/** Sends the party in: Leaf locks both boards and decides the fight, and the table plays it. */
+export async function setOut(): Promise<void> {
   if (!planning()) return;
   unpick();
   closeSheet(false);
-  const begun = act((r) => beginFight(r));
-  if (!begun?.ok) return;
+  const begun = await ask({ do: "fight" }, document.getElementById("setout"));
+  if (!begun?.ok || S.run?.phase !== "fight") return;
   S.mode = "fight";
   changed();
   playFight();
@@ -165,8 +173,9 @@ const WHY: Readonly<Record<string, string>> = {
 };
 
 /**
- * The fight is done: the rules settle the room, its sheet rises with the tally, and what it paid is
- * counted out where it can be seen, a line at a time on the sheet too. The table waits on "Carry on".
+ * The fight is done: Leaf settles the room from the fight it decided, its sheet rises with the
+ * tally, and what it paid is counted out where it can be seen, a line at a time on the sheet too.
+ * The table waits on "Carry on".
  */
 function takings(): void {
   const run = S.run;
@@ -178,20 +187,44 @@ function takings(): void {
   shown.level = run.level;
   holdAcorns(run.acorns, 9);
   S.mode = "after";
-  const taken = act((r) => takeTakings(r));
-  if (!taken?.ok) return;
+  void taken(boss, room);
+}
+
+/** Asks Leaf to settle the room, and counts out what it paid. */
+async function taken(boss: BossId | undefined, room: number): Promise<void> {
+  const did = await ask({ do: "take" });
+  if (did?.ok) {
+    counting(did.notes, boss, room);
+    return;
+  }
+  // Taken already, on another page: the table goes on as Leaf has it.
+  shown.resolve = null;
+  shown.xp = null;
+  shown.level = null;
+  shown.acorns = null;
+  endFight();
+  if (S.run && S.run.phase !== "over") enterRun(false);
+  else {
+    S.mode = "front";
+    changed();
+  }
+}
+
+/** Leaf has settled the room: its sheet rises, and what it paid is counted out. */
+function counting(notes: readonly RaidNote[], boss: BossId | undefined, room: number): void {
   signal("fought");
   openSheet("after");
-  const won = taken.fight.result === "win";
+  const result = notes.find((n) => n.t === "result");
+  const won = result?.t === "result" && result.result === "win";
   // The run has moved on by now: it may be over.
   const over = S.run?.phase === "over";
-  if (over && run.won)
+  if (over && S.run?.won)
     tell({ town: "news", text: "A little raid cleared: The Crab Nobody Counted has been counted.", tone: "gold" });
   else if (won && boss)
     tell({ town: "news", text: `${specOf(boss).name} was seen off at the stump, room ${room + 1}.`, tone: "gold" });
   let t = 0.1;
-  const levels = taken.notes.some((n) => n.t === "level");
-  for (const note of taken.notes) t = count(note, t, levels);
+  const levels = notes.some((n) => n.t === "level");
+  for (const note of notes) t = count(note, t, levels);
   later(t + 0.5, counted);
 }
 
@@ -228,7 +261,7 @@ export function carryOn(): void {
 const purse = (): { x: number; y: number } => boardSpot(document.getElementById("acorns")) ?? MIDDLE;
 
 /** Shows one line of the takings, and says when the next may start. */
-function count(note: Note, at: number, levels: boolean): number {
+function count(note: RaidNote, at: number, levels: boolean): number {
   if (note.t === "result") {
     {
       const text = note.result === "win" ? "Room won!" : note.result === "loss" ? "Room lost." : "A draw.";
