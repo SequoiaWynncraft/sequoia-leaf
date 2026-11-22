@@ -34,7 +34,7 @@ import { G, hooks, type PanelId, show, toPage } from "./game.ts";
 import { type GameId, GAMES } from "./games.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, hush, initHud, panelBox, tickHud } from "./hud.ts";
-import { again, keepTold, onTown, town as kept } from "./leaf.ts";
+import { again, here, keepTold, onTown, town as kept } from "./leaf.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Hover, Scene, Stage, Steer } from "./stage.ts";
@@ -213,8 +213,9 @@ async function boot(): Promise<void> {
     goInside(game, at, of) {
       if (visit) return;
       inside = game;
-      // The game says where the member is while it is open.
+      // The game says where the member is while it is open, and calls Leaf itself: the town's time stops here.
       guild.here(null);
+      here();
       iris.at = at;
       iris.goal = 0;
       hush(true);
@@ -231,6 +232,7 @@ async function boot(): Promise<void> {
           if (inside) scene.cameBack(inside);
           inside = null;
           guild.here(G.where);
+          here();
           if (scene === town) town.onStage(true);
           wake();
           if (onTo !== undefined) hooks.visitCamp(onTo);
@@ -514,7 +516,12 @@ async function boot(): Promise<void> {
     if (differs) guild.stay(kept().stay);
   });
   guild.here("town");
-  keepTold({ home: () => G.home, inCamp: () => scene === camp, cursor: () => guild.told() });
+  keepTold({
+    home: () => G.home,
+    inCamp: () => scene === camp,
+    inGame: () => visit !== null,
+    cursor: () => guild.told(),
+  });
   town.onStage(true);
   wake();
   const asked = new URLSearchParams(location.search).get("camp");

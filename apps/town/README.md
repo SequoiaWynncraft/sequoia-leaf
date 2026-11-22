@@ -213,7 +213,8 @@ away, a caller greeted, the chest, buying) is shown when Leaf answers, and nothi
 meanwhile. Where something arriving lands is worked out by the page and checked by the rules.
 Whenever Leaf's town is not what the page shows, the page takes Leaf's and draws again. Every five
 minutes while the page is in view, and as it is put away, the page tells Leaf the member is still
-here. Only view settings are kept in the browser: the sound, the newest note read.
+here. While a game is open over the town, the town tells Leaf nothing; it says the member is here as
+the game opens and as they come back. Only view settings are kept in the browser: the sound, the newest note read.
 
 Leaf and Coins are the kit's one purse (`@sequoia-leaf/kit/purse.ts`), shared with every game, and
 both are Leaf's: the town asks Leaf for the Coins after a purchase or the chest, when a game in its
@@ -314,8 +315,9 @@ card says so and the town is not loaded.
   shows where they are for three seconds: a ring at their feet and their name over them, the view
   staying where it is unless they would be out of it, when it glides to them and back. On an
   upright phone the panel is the bottom sheet the others are. The button is there only in town. A
-  person's card shows what they stand at in the Works, The Little Raid and their camp (things set
-  out, callers greeted, the crab spotted), and for somebody else "Find in town" (somebody drawn
+  person's card shows how long they have played all games together, what they stand at in the
+  Works, The Little Raid and their camp (things set out, callers greeted, the crab spotted), and how
+  long they have played each, and for somebody else "Find in town" (somebody drawn
   here), "Visit yard" and "Visit camp" (somebody with one).
 
 - **A guest.** Somebody signed in who is not in the guild plays the same town, with none of the

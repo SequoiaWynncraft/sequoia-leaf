@@ -607,6 +607,9 @@ const unreadable = new StateUnreadable({
   message: "Your game could not be read. It has been kept; tell the guild",
 });
 
+/** Milliseconds as whole seconds. */
+const seconds = (ms: number): number => Math.floor(ms / 1000);
+
 /** A row of `banner_people`: a banner, and the player who is its headliner. */
 const BannerPerson = Schema.Struct({ banner: Schema.String, playerId: Schema.String });
 
@@ -850,7 +853,8 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             } satisfies typeof Body.PlayShown.Type);
           }),
         )
-        // Somebody Leaf knows, or the caller (as for a skin), named as the board names them, and where they stand in each game.
+        // Somebody Leaf knows, or the caller (as for a skin), named as the board names them, where they
+        // stand in each game, and how long they have played each.
         .handle("person", ({ params }) =>
           Effect.gen(function* () {
             const player = parsePlayerId(params.player);
@@ -862,11 +866,18 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               return yield* new Missing({ code: "no_such_player", message: "Leaf does not know that player" });
             }
             const named = yield* names.of([player]);
-            const games = yield* store.standingsOf(player);
+            const standings = yield* store.standingsOf(player);
+            const played = yield* store.playedOf(player);
+            // A game they have opened for less than a second shows nothing, as one never opened.
+            const timed = [...played].filter(([, ms]) => seconds(ms) > 0).map(([game]) => game);
+            const games = [...new Set([...standings.keys(), ...timed])].toSorted();
             return HttpServerResponse.jsonUnsafe({
               id: player,
               name: named.get(player) ?? "Someone",
-              games: Object.fromEntries(games),
+              games: Object.fromEntries(
+                games.map((game) => [game, { ...standings.get(game), played: seconds(played.get(game) ?? 0) }]),
+              ),
+              played: seconds([...played.values()].reduce((sum, ms) => sum + ms, 0)),
             } satisfies typeof Body.Person.Type);
           }),
         )
