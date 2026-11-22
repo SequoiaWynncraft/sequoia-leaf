@@ -31,7 +31,9 @@ import {
   type PlotId,
   postcard,
   power,
+  stepTo,
   type Tally,
+  WORKS,
 } from "@sequoia-leaf/yard";
 
 import { stepFlights, stepWalkers } from "./actors.ts";
@@ -310,8 +312,6 @@ async function boot(): Promise<void> {
   let slow = 0;
   /** How far into its next tick a yard held still is shown. */
   let heldLead = 0;
-  /** The moment the bench's own clock has reached. */
-  let benched = 0;
   /** A moment of the screen: `now`, the page's clock, runs the yard on to Leaf's tick; without it only the screen moves. */
   function advance(dt: number, now: number | null): void {
     S.t += dt;
@@ -466,14 +466,21 @@ async function boot(): Promise<void> {
       const kept = spent.ms;
       spent.on = true;
       spent.ms = {};
-      // On from where the last run's clock stopped, so that every run steps the yard as much as the first.
-      const began = Math.max(performance.now(), benched);
-      benched = began + (frames * 1000) / hz;
+      // A copy of the yard with a clock of its own: every run begins alike, and the yard itself,
+      // and its keeping time with Leaf, are as they were afterwards.
+      const yard = S.world;
+      const held = S.held;
+      const lead = heldLead;
+      S.world = WORKS.decode(WORKS.encode(yard)) ?? yard;
+      S.held = true;
       for (let k = 0; k < frames; k++) {
         lap();
-        advance(1 / hz, began + (k * 1000) / hz);
+        const ticks = (k * 10) / hz;
+        stepTo(S.world, yard.tick + Math.floor(ticks));
+        heldLead = ticks % 1;
+        advance(1 / hz, null);
         lap("page");
-        draw(began + (k * 1000) / hz);
+        draw(0);
         // A browser may put off the drawing it was asked for: taking the picture makes it do it now.
         taken.drawImage(picture, 0, 0);
         lap("flush");
@@ -489,6 +496,10 @@ async function boot(): Promise<void> {
         const y = Math.floor(i / land.w);
         return b && x + 1 > x0 && x < x0 + S.view.w / TILE && y + 1 > y0 && y < y0 + S.view.h / TILE;
       }).length;
+      S.world = yard;
+      S.held = held;
+      heldLead = lead;
+      S.rev++;
       return { ms, picture: { x: picture.width, y: picture.height }, pieces };
     },
     pick(tool, dir) {

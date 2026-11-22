@@ -232,7 +232,8 @@ as if the screen showed `hz` of them a second (60 unless said), and gives back w
 yard's ticks), `floor`, `belts`, `standing`, `dusk`, `marks` (the parts of `drawYard`), `words`, and
 `flush`: a browser may put off the drawing it was asked for, and `bench` takes the picture after
 each frame to have it done and counted (the words' picture and the scaling to the screen are not in
-it). Each run goes on from where the last one's clock stopped. `picture` is the picture's size in the yard's pixels and
+it). It runs a copy of the yard on a clock of its own, so every run begins alike and the yard is as it
+was afterwards. `picture` is the picture's size in the yard's pixels and
 `pieces` how many pieces are on screen. Nothing is timed while nobody asks.
 
     works.zoom(-40); works.look(24, 18); works.bench(300)
