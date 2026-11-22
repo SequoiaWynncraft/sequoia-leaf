@@ -8,14 +8,21 @@
 import { clamp } from "@sequoia-leaf/kit/util.ts";
 
 /** The most steps the view may be zoomed in, and out, from the size that suits the screen. */
-export const ZOOM = { in: 3, out: 16 } as const;
+export const ZOOM = { in: 3, out: 32 } as const;
 
 /** The size that suits the screen: the town's own scale, so a tile here is as big as a tile there. */
 export const natural = (cw: number, ch: number): number => Math.max(1, Math.floor(Math.min(cw / 160, ch / 176)));
 
 /**
- * The size drawn for so many steps from `base`: never under a third of it (nor under 1), and no
- * further in or out than `ZOOM` allows.
+ * The size drawn for so many steps from `base`: out as far as one screen pixel for each of the
+ * yard's, never under that, and no further in or out than `ZOOM` allows.
  */
 export const zoomFor = (base: number, steps: number): number =>
-  clamp(base + steps, Math.max(1, Math.ceil(base / 3), base - ZOOM.out), base + ZOOM.in);
+  clamp(base + steps, Math.max(1, base - ZOOM.out), base + ZOOM.in);
+
+/**
+ * How many times a trouble mark is enlarged at a size drawn. The view used to stop at a third of
+ * `base`: down to there a mark is its own size, and further out it grows so that it is at least as
+ * big on the screen as it was at that third.
+ */
+export const markSize = (base: number, z: number): number => Math.ceil(Math.ceil(base / 3) / z);

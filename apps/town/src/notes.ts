@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "works-smoother",
+    at: "2026-11-22T23:44Z",
+    title: "The Works: zoom out further",
+    lines: [
+      "The Works zooms out until the whole yard is on screen.",
+      "Large yards run smoother, most of all in Firefox.",
+    ],
+  },
+  {
     id: "touches-seen",
     at: "2026-11-22T23:15Z",
     title: "Everyone sees what you tap",
