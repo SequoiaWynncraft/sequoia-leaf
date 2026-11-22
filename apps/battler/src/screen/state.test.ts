@@ -140,6 +140,23 @@ describe("the table, on Leaf", () => {
     expect(both).not.toContain(null);
   });
 
+  test("while Leaf answers a purchase, nothing is done with the party: buying may make two figures one where they stand", async () => {
+    const fake = await seated();
+    const from = { on: "board", at: S.run?.board.findIndex((p) => p !== null) ?? -1 } as const;
+    const [offer = 0] = offers();
+    const posts = fake.leaf.posts;
+    const buying = ask({ do: "buy", offer });
+    // Neither shown nor sent: the sale would land on whoever stands there once the purchase is done.
+    expect(doNow({ do: "sell", from })).toBeNull();
+    expect(doNow({ do: "move", from, to: { on: "board", at: 20 } })).toBeNull();
+    expect(S.run?.board[from.at]).not.toBeNull();
+    expect((await buying)?.ok).toBe(true);
+    expect(fake.leaf.posts).toBe(posts + 1);
+    expect(fake.leaf.state.run?.board[from.at]).not.toBeNull();
+    // Once Leaf has answered, the party is the member's to move again.
+    expect(doNow({ do: "move", from, to: { on: "board", at: 20 } })?.ok).toBe(true);
+  });
+
   test("a move the rules turn down is said so, and not sent", async () => {
     const fake = await seated();
     const refusals: string[] = [];
