@@ -9,11 +9,12 @@ import { type PlanId, type PlanInfo, PLANS } from "./content/plans.ts";
 import type { PlotId } from "./content/plots.ts";
 import { RECIPE } from "./content/recipes.ts";
 import { STORY } from "./content/story.ts";
-import { type Dir, DX, DY } from "./grid.ts";
+import { BACK, type Dir, DX, DY, LEFT, RIGHT } from "./grid.ts";
 import { besideWater, type Plot, touching } from "./land.ts";
 import { fillBoard } from "./orders.ts";
 import { repower } from "./power.ts";
-import { at, blank, type Building, changed, reopen, take, type World } from "./world.ts";
+import { rewire, takes } from "./step.ts";
+import { at, blank, type Building, changed, reopen, take, type Wire, type World } from "./world.ts";
 
 /** What came of trying to spend Coins: what it cost, or why not, in plain words. */
 export type Spent = { readonly ok: true; readonly cost: number } | { readonly ok: false; readonly why: string };
@@ -122,9 +123,9 @@ export function refusal(
 /**
  * Builds something and says what it cost. A thing laid over another of its kind only turns it. A
  * splitter or a joiner set down on a belt (or on one another) takes its place: the piece that was
- * there goes back as if taken away, and what it was carrying rides on. A tunnel is built as its
- * two mouths at once: in at this tile, and up at the nearest clear tile beyond (or `span` tiles
- * beyond, if given).
+ * there goes back as if taken away, and what it was carrying and its colour stay. A tunnel is built
+ * as its two mouths at once: in at this tile, and up at the nearest clear tile beyond (or `span`
+ * tiles beyond, if given). A new belt or tunnel takes the colour of the line it joins (`join`).
  */
 export function build(w: World, kind: Kind, x: number, y: number, dir: Dir, coins: number, span?: number): Spent {
   const why = refusal(w, kind, x, y, coins, dir, span);
@@ -150,8 +151,10 @@ export function build(w: World, kind: Kind, x: number, y: number, dir: Dir, coin
     made.item = there.item;
     made.prog = there.prog;
     made.via = there.via;
+    made.tint = there.tint;
   }
   w.cells[i] = made;
+  const laid = [i];
   if (kind === "tunnel") {
     const exit = tunnelExit(w, x, y, dir, span);
     if (exit) {
@@ -160,12 +163,83 @@ export function build(w: World, kind: Kind, x: number, y: number, dir: Dir, coin
       made.underProg = Array.from({ length: exit.span }, () => 0);
       const far = blank("tunnel", dir);
       far.span = -exit.span;
+      laid.push(at(w, exit.x, exit.y));
       w.cells[at(w, exit.x, exit.y)] = far;
     }
   }
   changed(w);
   if (kind === "pylon") repower(w);
+  if (kind === "belt" || kind === "tunnel") join(w, laid);
   return { ok: true, cost };
+}
+
+// ---------- colour ----------
+
+const inLine = (b: Building | null | undefined): b is Building => b?.kind === "belt" || b?.kind === "tunnel";
+
+/**
+ * The belt or tunnel mouth a line comes onto a tile from, or -1: a tunnel's other mouth, the one
+ * straight behind if it hands to this tile, or else the only one that does. So a belt that joins
+ * the side of a line running straight on is a line of its own.
+ */
+function before(w: World, wire: Wire, j: number): number {
+  const b = w.cells[j];
+  if (!inLine(b)) return -1;
+  const W = w.land.w;
+  if (b.span < 0) return j + (b.span - 1) * (DX[b.dir] + DY[b.dir] * W);
+  const from = [BACK[b.dir], LEFT[b.dir], RIGHT[b.dir]]
+    .map((d) => at(w, (j % W) + DX[d], Math.floor(j / W) + DY[d]))
+    .filter((k) => inLine(w.cells[k]) && wire.next[k] === j && takes(w, wire, j, k));
+  return from.length === 1 || from[0] === wire.back[j] ? (from[0] ?? -1) : -1;
+}
+
+/** The belt or tunnel mouth a line goes on to from a tile, or -1. */
+function after(w: World, wire: Wire, i: number): number {
+  const j = wire.next[i] ?? -1;
+  return before(w, wire, j) === i ? j : -1;
+}
+
+/**
+ * The tiles that are coloured together with a tile: a splitter or a joiner by itself; a belt or a
+ * tunnel mouth with its whole line, every belt and tunnel joined end to end with it both ways, as
+ * far as the next thing that is neither. Nothing for anything else.
+ */
+export function lineOf(w: World, i: number): number[] {
+  const b = w.cells[i];
+  if (b?.kind === "splitter" || b?.kind === "joiner") return [i];
+  if (!inLine(b)) return [];
+  const wire = w.wire ?? rewire(w);
+  const line = [i];
+  for (const step of [after, before])
+    for (let j = step(w, wire, i); j >= 0 && !line.includes(j); j = step(w, wire, j)) line.push(j);
+  return line;
+}
+
+/** Gives the line through a tile a colour, 1 to 6, or with 0 takes it off. Says whether anything there can be coloured. */
+export function paint(w: World, x: number, y: number, tint: number): boolean {
+  const line = lineOf(w, at(w, x, y));
+  for (const i of line) {
+    const b = w.cells[i];
+    if (b) b.tint = tint;
+  }
+  return line.length > 0;
+}
+
+/**
+ * Gives tiles just laid, in the order things travel along them, the colour of the line they join:
+ * the line that feeds them, or else the line they feed.
+ */
+export function join(w: World, laid: readonly number[]): void {
+  // No colour beside them, none to take: so a yard with no colour in it works nothing out here.
+  const W = w.land.w;
+  if (!laid.some((i) => [1, -1, W, -W].some((d) => (w.cells[i + d]?.tint ?? 0) > 0))) return;
+  const wire = w.wire ?? rewire(w);
+  const takeFrom = (i: number, from: number): void => {
+    const b = w.cells[i];
+    if (b?.tint === 0) b.tint = w.cells[from]?.tint ?? 0;
+  };
+  for (const i of laid) takeFrom(i, before(w, wire, i));
+  for (const i of laid.toReversed()) takeFrom(i, after(w, wire, i));
 }
 
 /** Whether what stands on a tile can be turned: anything but the depot and a tunnel. */

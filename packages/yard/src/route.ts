@@ -3,7 +3,7 @@
  * clear run of belt between them, going under what is in the way by tunnel where tunnels are open.
  * A screen can use it to lay a belt from two taps; the balance script lays its whole yards with it.
  */
-import { build, digsUnder, refusal, type Spent, tunnelExit } from "./build.ts";
+import { build, digsUnder, join, refusal, type Spent, tunnelExit, turn, turnable } from "./build.ts";
 import { KIND, SPAN } from "./content/machines.ts";
 import { type Dir, DIRS, DX, DY } from "./grid.ts";
 import { at, type World } from "./world.ts";
@@ -191,8 +191,17 @@ export function runCost(w: World, legs: readonly Leg[]): number {
   return cost;
 }
 
-/** Lays a run found by `route`, all of it or none, and says what it cost. */
-export function lay(w: World, legs: readonly Leg[], coins: number): Spent {
+/**
+ * Lays a run found by `route`, all of it or none, and says what it cost. `bend` is a belt already
+ * standing where the run starts, turned to meet it. The run takes the colour of the line it joins.
+ */
+export function lay(
+  w: World,
+  legs: readonly Leg[],
+  coins: number,
+  bend?: { readonly x: number; readonly y: number; readonly dir: Dir },
+): Spent {
+  if (bend && !turnable(w, bend.x, bend.y)) return { ok: false, why: "There is nothing there to turn" };
   const cost = runCost(w, legs);
   const tiles = new Set<number>();
   for (const leg of legs) {
@@ -208,7 +217,9 @@ export function lay(w: World, legs: readonly Leg[], coins: number): Spent {
     if (why !== null) return { ok: false, why };
   }
   if (coins < cost) return { ok: false, why: "Not enough Coins" };
+  if (bend) turn(w, bend.x, bend.y, bend.dir);
   for (const leg of legs)
     build(w, leg.kind, leg.x, leg.y, leg.dir, Infinity, leg.kind === "tunnel" ? leg.span : undefined);
+  join(w, [...tiles]);
   return { ok: true, cost };
 }

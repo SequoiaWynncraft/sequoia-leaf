@@ -103,7 +103,8 @@ function signMaker(): (price: number) => Sprite {
   };
 }
 
-const bare = (): HTMLCanvasElement => beltTile([2, 0, 1, 0], 0, 5, 1);
+/** A piece of belt running east, with nothing on it, in a line's colour or in none. */
+export const bare = (tint = 0): HTMLCanvasElement => beltTile([2, 0, 1, 0], 0, 5, 1, tint);
 
 /** A tile where belts meet, pointing east, with what marks it: `arms` as `beltTile` takes them. */
 const meeting = (arms: Parameters<typeof beltTile>[0], top: HTMLCanvasElement | undefined): HTMLCanvasElement => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buyPlan, setOpen, setRecipe } from "./build.ts";
+import { buyPlan, paint, setOpen, setRecipe } from "./build.ts";
 import { create } from "./create.ts";
 import { belts, on, put, steps, workingYard } from "./fixtures.ts";
 import { deliver } from "./orders.ts";
@@ -30,6 +30,12 @@ describe("saving", () => {
     put(w, "crate", 19, 13);
     setOpen(w, 19, 13, false);
     setRecipe(w, 28, 17, "tool");
+    // Colours: a splitter's own, a line's, and a line's through a tunnel.
+    paint(w, 17, 13, 2);
+    paint(w, 22, 15, 5);
+    const mouth = w.cells.findIndex((b) => b?.kind === "tunnel");
+    paint(w, mouth % w.land.w, Math.floor(mouth / w.land.w), 6);
+    expect(w.cells.filter((b) => b && b.tint > 0).length).toBeGreaterThan(8);
     w.at = 1_800_000_000_000;
     Object.assign(w, { bank: 12, told: 3, away: { seconds: 900, coins: 41 } });
     steps(w, 777);
@@ -63,6 +69,23 @@ describe("saving", () => {
     steps(w, 1234);
     steps(back, 1234);
     expect(save(back)).toBe(save(w));
+  });
+  test("a save from before belts had colours reads with none, and a colour that makes no sense is none", () => {
+    const w = create();
+    belts(w, 20, 20, 23, 20);
+    put(w, "mill", 20, 22);
+    paint(w, 20, 20, 4);
+    /** The save with every kept building's colour made what `h` says for it. */
+    const withColour = (h: (n: number) => unknown): string =>
+      tampered(w, (r) => {
+        cellsOf(r).forEach((c, n) => typeof c === "object" && Object.assign(c ?? {}, { h: h(n) }));
+      });
+    const old = load(withColour(() => undefined));
+    expect(old?.cells.filter((b) => b && b.tint !== 0)).toEqual([]);
+    const odd = load(withColour((n) => [7, "red", 1.5, -1, 3][n]));
+    // The fifth is the mill, which has no colour to keep.
+    expect(odd?.cells.filter((b) => b && b.tint !== 0)).toEqual([]);
+    expect(load(save(w))?.cells.filter((b) => b?.tint === 4)).toHaveLength(4);
   });
   test("a save carries its version, and a small yard is a small save", () => {
     const w = create();

@@ -8,11 +8,12 @@ import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { costOf, KIND, type Kind } from "@sequoia-leaf/yard";
 
-import type { Art } from "../art/index.ts";
-import { S, type Tool } from "../state.ts";
+import { PAINTS } from "../art/belts.ts";
+import { type Art, bare } from "../art/index.ts";
+import { builds, S, type Tool } from "../state.ts";
 import { cancel, confirm, rotate, setTool, toolHooks, undo } from "../tools.ts";
 import { machineRef } from "./card.ts";
-import { $, button, fitted, when, yardIcon } from "./parts.ts";
+import { $, button, fitted, when, type YardIcon, yardIcon } from "./parts.ts";
 
 /** The tools in the order they sit in the dock, which is also the order of the number keys. */
 export const TOOLS: readonly Kind[] = [
@@ -56,26 +57,34 @@ function slotFor(art: Art, kind: Kind, fresh: boolean): HTMLElement {
   return b;
 }
 
+/** A tool that builds nothing: the spade, the brush. */
+function plain(tool: "remove" | "paint", name: string, pic: YardIcon): HTMLElement {
+  const b = el(
+    "button",
+    `k-slot${S.tool === tool ? " lit" : ""}`,
+    { type: "button", "aria-label": name, "aria-pressed": S.tool === tool ? "true" : "false" },
+    el("span", "art", {}, yardIcon(pic)),
+    el("span", "k-dim", { text: name }),
+  );
+  b.addEventListener("click", () => {
+    setTool(S.tool === tool ? null : tool);
+  });
+  return b;
+}
+
 function buildDock(art: Art): void {
   const dock = $("dock");
   const open = openTools();
   const first = known === null;
   const kids = open.map((k) => slotFor(art, k, !first && !(known?.has(k) ?? true)));
   known = new Set(open);
-  const spade = el(
-    "button",
-    `k-slot${S.tool === "remove" ? " lit" : ""}`,
-    { type: "button", "aria-label": "Remove", "aria-pressed": S.tool === "remove" ? "true" : "false" },
-    el("span", "art", {}, yardIcon("spade")),
-    el("span", "k-dim", { text: "Remove" }),
-  );
-  spade.addEventListener("click", () => {
-    setTool(S.tool === "remove" ? null : "remove");
-  });
+  const spade = plain("remove", "Remove", "spade");
   tip(spade, "Remove (E)", "Right-click does the same.");
-  dock.replaceChildren(...kids, spade);
+  const brush = plain("paint", "Paint", "brush");
+  tip(brush, "Paint (C)");
+  dock.replaceChildren(...kids, spade, brush);
   // On a narrow screen, more than eight tools go in two even rows.
-  const n = kids.length + 1;
+  const n = kids.length + 2;
   dock.style.setProperty("--per", String(n <= 8 ? n : Math.ceil(n / 2)));
 }
 
@@ -96,6 +105,7 @@ function handLine(): { text: string; bad: boolean } {
       bad: false,
     };
   }
+  if (tool === "paint") return { text: `${f ? "Tap" : "Click"} a belt to colour its whole line.`, bad: false };
   const name = KIND[tool].name;
   if (S.run) {
     if (S.run.why) return { text: S.run.why, bad: true };
@@ -115,7 +125,7 @@ function buildHand(): void {
   const hand = $("hand");
   const tool = S.tool;
   const line = handLine();
-  const aiming = S.finger && tool !== null && (S.aim !== null || S.run !== null);
+  const aiming = S.finger && tool !== null && tool !== "paint" && (S.aim !== null || S.run !== null);
   const kids: Node[] = [];
   const turn = button("wood icon sm", [yardIcon("turn")], rotate);
   tip(turn, "Rotate (R)", "With no tool picked, it rotates the piece you last pointed at.");
@@ -123,7 +133,7 @@ function buildHand(): void {
     undo();
   });
   tip(back, "Undo (Z)");
-  if (tool !== null && tool !== "remove") kids.push(turn);
+  if (builds(tool)) kids.push(turn);
   kids.push(back);
   if (tool !== null) {
     const away = button("wood icon sm", [icon("close")], cancel);
@@ -137,7 +147,30 @@ function buildHand(): void {
     });
     kids.push(go);
   }
-  hand.replaceChildren(el("span", line.bad ? "say bad" : "say", { text: line.text }), el("div", "acts", {}, ...kids));
+  // The brush's colours: a piece of belt in each, and one with none.
+  const tints =
+    tool === "paint"
+      ? [0, 1, 2, 3, 4, 5, 6].map((t) => {
+          const name = PAINTS[t - 1]?.name ?? "No colour";
+          const b = el(
+            "button",
+            `k-slot${S.tint === t ? " lit" : ""}`,
+            { type: "button", "aria-label": name, "aria-pressed": S.tint === t ? "true" : "false" },
+            fitted(bare(t), 10, 16),
+          );
+          b.addEventListener("click", () => {
+            S.tint = t;
+            refreshDock();
+          });
+          tip(b, name);
+          return b;
+        })
+      : [];
+  hand.replaceChildren(
+    el("span", line.bad ? "say bad" : "say", { text: line.text }),
+    ...(tints.length > 0 ? [el("div", "tints", {}, ...tints)] : []),
+    el("div", "acts", {}, ...kids),
+  );
   hand.classList.toggle("building", tool !== null);
 }
 
@@ -156,7 +189,7 @@ export function initDock(art: Art): void {
   );
   handKey = when(() => {
     const l = handLine();
-    return `${S.tool}|${S.finger}|${S.aim !== null}|${S.run !== null}|${l.text}|${(S.run?.why ?? S.aim?.why) != null}`;
+    return `${S.tool}|${S.tint}|${S.finger}|${S.aim !== null}|${S.run !== null}|${l.text}|${(S.run?.why ?? S.aim?.why) != null}`;
   }, buildHand);
   toolHooks.changed = refreshDock;
   toolHooks.said = say;

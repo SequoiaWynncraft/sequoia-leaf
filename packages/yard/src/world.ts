@@ -50,7 +50,12 @@ export interface Building {
   free: boolean;
   /** The tile the thing it carries was handed over from, or -1: only so a screen can show it coming round a corner. */
   via: number;
+  /** The colour a player gave a belt, tunnel mouth, splitter or joiner to tell lines apart: 0 for none, or 1 to 6. It changes nothing else. */
+  tint: number;
 }
+
+/** How many colours there are to give. */
+export const TINTS = 6;
 
 export const blank = (kind: Kind, dir: Dir): Building => ({
   kind,
@@ -73,6 +78,7 @@ export const blank = (kind: Kind, dir: Dir): Building => ({
   fuel: 0,
   free: false,
   via: -1,
+  tint: 0,
 });
 
 /** A standing order on the board. */

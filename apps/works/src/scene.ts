@@ -37,14 +37,14 @@ import {
 } from "@sequoia-leaf/yard";
 
 import { HOP, walkers } from "./actors.ts";
-import { type Arms, beltTile, ride, STEPS, TILE } from "./art/belts.ts";
+import { type Arms, beltTile, PAINTS, ride, STEPS, TILE } from "./art/belts.ts";
 import { BEYOND, glint } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { DEPOT } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
 import { type Layout, layout, pylonTop } from "./layout.ts";
-import { S } from "./state.ts";
+import { builds, S } from "./state.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
 export interface Moment {
@@ -540,7 +540,7 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
       const arms = L.arms[i];
       const b = w.cells[i];
       if (!arms || !b) continue;
-      g.drawImage(beltTile(arms, b.dir, step, tier), tx * TILE - cx, ty * TILE - cy);
+      g.drawImage(beltTile(arms, b.dir, step, tier, b.tint), tx * TILE - cx, ty * TILE - cy);
     }
   for (let ty = ty0; ty <= ty1; ty++)
     for (let tx = tx0; tx <= tx1; tx++) {
@@ -768,7 +768,7 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
 
   // ---------- what is being pointed at, and what is about to be built ----------
   const tool = S.tool;
-  if (tool !== null && tool !== "remove" && wantsPower(tool)) {
+  if (builds(tool) && wantsPower(tool)) {
     // Where power reaches, edged in gold dots, while placing something that it matters to.
     g.fillStyle = GOLD[1];
     const on = (tx: number, ty: number): boolean =>
@@ -823,7 +823,10 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
     const y = S.aim.y * TILE - cy;
     const bad = S.aim.why !== null;
     if (tool === "remove") corners(g, x, y, TILE, TILE, CORAL, true);
-    else if (!S.run) {
+    else if (tool === "paint") {
+      // The brush shows its colour on what it would colour, and nothing elsewhere.
+      if (!bad) corners(g, x, y, TILE, TILE, PAINTS[S.tint - 1]?.lit ?? CREAM, true);
+    } else if (!S.run) {
       const mark = used;
       const before = lit;
       if (tool === "belt" || tool === "splitter" || tool === "joiner" || tool === "tunnel") {
@@ -952,7 +955,7 @@ export function drawWords(ctx: Ctx, px: number, clear: number): void {
   // Why the thing in hand cannot go where it is pointed.
   const why = S.run?.why ?? (S.run ? null : S.aim?.why);
   const where = S.run ? (S.run.legs.at(-1) ?? S.run.turns.at(-1) ?? S.aim) : S.aim;
-  if (why && where && S.tool !== null && S.tool !== "remove")
+  if (why && where && builds(S.tool))
     plate(ctx, why, (where.x * TILE + 8 - cx) * z, (where.y * TILE - 4 - cy) * z, px, "#f4a08c");
 
   // A nudge keeps quiet while the member is being told why something cannot go where they pointed.

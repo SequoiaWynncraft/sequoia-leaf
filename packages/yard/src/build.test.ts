@@ -5,6 +5,8 @@ import {
   buyPlan,
   buyPlot,
   costOf,
+  lineOf,
+  paint,
   planRefusal,
   planState,
   plotRefusal,
@@ -23,7 +25,7 @@ import { bare, belts, lit, on, put, run, steps } from "./fixtures.ts";
 import { DX, DY } from "./grid.ts";
 import { lay, route, runCost } from "./route.ts";
 import { power } from "./step.ts";
-import { at, collect, plotAt, put as hold } from "./world.ts";
+import { at, collect, plotAt, put as hold, type World } from "./world.ts";
 
 const price = (id: string): number => [...PLOTS, ...PLANS].find((p) => p.id === id)?.price ?? -1;
 
@@ -139,6 +141,124 @@ describe("building", () => {
     expect(w.spare.belt).toBe(0);
     expect(build(w, "joiner", 5, 2, 0, KIND.joiner.cost)).toEqual({ ok: true, cost: KIND.joiner.cost });
     expect(w.spare.belt).toBe(1);
+  });
+});
+
+/** The colours along a row, from one tile to another, as digits. */
+const row = (w: World, x0: number, x1: number, y: number): string =>
+  Array.from({ length: x1 - x0 + 1 }, (_, k) => on(w, x0 + k, y).tint).join("");
+
+describe("colour", () => {
+  test("a line is coloured both ways, as far as a splitter, a joiner, a machine and the depot", () => {
+    const w = bare();
+    belts(w, 1, 2, 3, 2);
+    put(w, "splitter", 4, 2);
+    belts(w, 5, 2, 7, 2);
+    put(w, "joiner", 8, 2);
+    belts(w, 9, 2, 11, 2);
+    put(w, "mill", 12, 2);
+    belts(w, 13, 2, 15, 2);
+    expect(paint(w, 6, 2, 3)).toBe(true);
+    expect(row(w, 1, 15, 2)).toBe("000033300000000");
+    // A splitter and a joiner are each coloured by themselves.
+    paint(w, 4, 2, 1);
+    paint(w, 8, 2, 2);
+    paint(w, 10, 2, 4);
+    paint(w, 14, 2, 5);
+    expect(row(w, 1, 15, 2)).toBe("000133324440555");
+    // Round a bend and into the depot, from the middle of the line.
+    belts(w, 4, 9, 4, 7);
+    put(w, "belt", 4, 6, 0);
+    belts(w, 5, 6, 10, 6);
+    paint(w, 4, 8, 6);
+    expect(lineOf(w, at(w, 4, 8))).toHaveLength(10);
+    expect(`${on(w, 4, 9).tint}${on(w, 4, 7).tint}${row(w, 4, 11, 6)}`).toBe("6666666660");
+    // A belt that joins the side of a line is a line of its own.
+    put(w, "belt", 7, 7, 3);
+    paint(w, 7, 7, 2);
+    expect(row(w, 4, 10, 6)).toBe("6666666");
+    paint(w, 7, 6, 1);
+    expect(on(w, 7, 7).tint).toBe(2);
+    // "None" takes the colour off the same way.
+    paint(w, 10, 6, 0);
+    expect(row(w, 4, 10, 6)).toBe("0000000");
+    expect(on(w, 4, 9).tint).toBe(0);
+  });
+  test("a line goes through a tunnel, and round a loop it ends", () => {
+    const w = bare();
+    put(w, "belt", 1, 2);
+    put(w, "tunnel", 2, 2, 0, 2);
+    belts(w, 6, 2, 7, 2);
+    put(w, "belt", 3, 2, 1);
+    paint(w, 7, 2, 4);
+    expect([1, 2, 3, 5, 6, 7].map((x) => on(w, x, 2).tint)).toEqual([4, 4, 0, 4, 4, 4]);
+    put(w, "belt", 1, 8, 0);
+    put(w, "belt", 2, 8, 1);
+    put(w, "belt", 2, 9, 2);
+    put(w, "belt", 1, 9, 3);
+    expect(paint(w, 2, 9, 6)).toBe(true);
+    expect(lineOf(w, at(w, 1, 8)).toSorted((a, b) => a - b)).toEqual([
+      at(w, 1, 8),
+      at(w, 2, 8),
+      at(w, 1, 9),
+      at(w, 2, 9),
+    ]);
+    expect(row(w, 1, 2, 8) + row(w, 1, 2, 9)).toBe("6666");
+  });
+  test("nothing is coloured on bare ground, on a machine, on the depot or off the map", () => {
+    const w = bare();
+    put(w, "mill", 3, 3);
+    expect([paint(w, 1, 1, 2), paint(w, 3, 3, 2), paint(w, 12, 6, 2), paint(w, -1, 0, 2)]).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(on(w, 3, 3).tint).toBe(0);
+  });
+  test("a belt built, and a run laid, take the colour of the line they join", () => {
+    const w = bare();
+    belts(w, 2, 2, 4, 2);
+    paint(w, 2, 2, 2);
+    // From the end of the line, and into its start.
+    put(w, "belt", 5, 2);
+    put(w, "belt", 1, 2);
+    expect(row(w, 1, 5, 2)).toBe("22222");
+    // Beside it, into its side, and far from it: none.
+    put(w, "belt", 3, 3);
+    put(w, "belt", 3, 1, 1);
+    put(w, "belt", 20, 10);
+    expect([on(w, 3, 3).tint, on(w, 3, 1).tint, on(w, 20, 10).tint]).toEqual([0, 0, 0]);
+    // A tunnel dug from the end of the line, both mouths.
+    put(w, "tunnel", 6, 2, 0, 1);
+    expect([on(w, 6, 2).tint, on(w, 8, 2).tint]).toEqual([2, 2]);
+    // A run between two lines takes the colour of the one that feeds it.
+    belts(w, 1, 9, 3, 9);
+    paint(w, 1, 9, 5);
+    belts(w, 8, 9, 10, 9);
+    paint(w, 8, 9, 6);
+    expect(lay(w, route(w, [4, 9], [7, 9]) ?? [], Infinity).ok).toBe(true);
+    expect(row(w, 1, 10, 9)).toBe("5555555666");
+    // A run into the start of a line, with nothing coloured feeding it, takes that line's.
+    belts(w, 18, 3, 20, 3);
+    paint(w, 18, 3, 4);
+    expect(lay(w, route(w, [15, 3], [17, 3]) ?? [], Infinity).ok).toBe(true);
+    expect(row(w, 15, 20, 3)).toBe("444444");
+    // A run from a belt turned to meet it takes that belt's colour.
+    put(w, "belt", 16, 9, 0);
+    paint(w, 16, 9, 3);
+    const down = [10, 11].map((y) => ({ kind: "belt", x: 16, y, dir: 1, span: 0 }) as const);
+    expect(lay(w, down, Infinity, { x: 16, y: 9, dir: 1 }).ok).toBe(true);
+    expect([on(w, 16, 10).tint, on(w, 16, 11).tint]).toEqual([3, 3]);
+  });
+  test("a splitter or a joiner set down on a coloured belt keeps its colour", () => {
+    const w = bare();
+    belts(w, 2, 2, 4, 2);
+    paint(w, 2, 2, 5);
+    put(w, "splitter", 3, 2);
+    expect(on(w, 3, 2)).toMatchObject({ kind: "splitter", tint: 5 });
+    put(w, "joiner", 3, 2);
+    expect(on(w, 3, 2)).toMatchObject({ kind: "joiner", tint: 5 });
   });
 });
 

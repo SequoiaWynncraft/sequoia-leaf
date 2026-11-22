@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "belt-colours",
+    at: "2026-11-22T20:50Z",
+    title: "The Works: belt colours",
+    lines: [
+      "The Works has a Paint tool. Click a belt to colour its whole line, in one of six colours.",
+      "A belt laid from a coloured line takes its colour.",
+    ],
+  },
+  {
     id: "treasury-requests",
     at: "2026-11-22T20:40Z",
     title: "Requests at the Treasury",

@@ -82,7 +82,8 @@ pointer, with corners in gold where it can go and in coral, with the reason, whe
 click to set it down. A drag with the belt lays a run that follows the pointer and is shown before
 the button is let go; a run that ends beside the depot turns to face it. `R` turns, `E` is the
 spade, a right-click takes away, `Q` takes up the tool from the thing pointed at, `Z` undoes, `Esc`
-puts away. With nothing in hand a drag moves the view, the wheel zooms, and a click asks about a
+puts away. `C` is the brush: with it in hand the line over the dock shows six colours and none, and
+a click on a belt (or a drag across the yard) gives its whole line the one chosen. With nothing in hand a drag moves the view, the wheel zooms, and a click asks about a
 thing. With a finger, dragging always moves the view and two fingers zoom, so nothing is built by
 accident: a tap aims, and a second tap or the Build button builds. A belt is laid from two taps,
 start and end, with the router's run shown before it is laid; tapping a machine to start from
