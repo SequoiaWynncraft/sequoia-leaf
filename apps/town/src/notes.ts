@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "board-rerolls",
+    at: "2026-11-22T22:52Z",
+    title: "Quest board: kinds and rerolls",
+    lines: [
+      "Each quest on the board says whether it is daily, weekly or timed and when it ends, and one you can finish with raids or wars shows both counts.",
+      "You can reroll a daily or weekly on the board too, as in the mod. One reroll of each per UTC day is free, then each costs 100 Leaf.",
+    ],
+  },
+  {
     id: "time-played",
     at: "2026-11-22T22:41Z",
     title: "Time played",

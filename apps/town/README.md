@@ -39,7 +39,15 @@ says so.
   along the bottom opens any of them at once, the character walks there meanwhile, and the slot
   for the place they are standing at is lit.
 - **The quest board.** Two tabs: the quests, and "News", the ten newest notes on what has changed
-  in the game (`notes.ts`, newest first). The board shows a "!" while there is news the member has
+  in the game (`notes.ts`, newest first). Every quest Leaf sends (`GET /v1/me/quests`), open and
+  just finished, is a note; the panel scrolls when they do not fit. An open quest says its kind as
+  the mod names them (Daily, Weekly, Timed, Endless) and when it ends, in the member's own time,
+  and has a bar and count for each way to finish it Leaf sends (raids or wars, side by side). One
+  Leaf lets the member swap has a Reroll button with what it costs (`reroll_leaf`): a free one
+  goes at once, one that costs Leaf asks to be pressed again. `POST /v1/me/quests/{id}/reroll`
+  sends the cost shown; the new quest takes the old one's place from Leaf's answer and the purse
+  shows the Leaf left, or the note says why Leaf refused, in Leaf's words. One reroll is on its way
+  at a time. The board shows a "!" while there is news the member has
   not opened; the id of the newest note they opened is kept in the browser under `town.notes.seen`. The panel opens on "News" while there is unread news, and on
   the quests otherwise.
 - **The market.** Three stalls sell things for a camp, for Coins: lamps and oddments (kept by

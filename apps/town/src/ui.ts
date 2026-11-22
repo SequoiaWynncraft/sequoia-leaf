@@ -10,7 +10,7 @@ import { asking, asksAgain, el, icon as glyph, pressedTwice, replay, shown } fro
 import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
 import { isGuest } from "@sequoia-leaf/kit/live.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
-import { ask as askLeaf, isRecord } from "@sequoia-leaf/kit/net.ts";
+import { ask as askLeaf, isRecord, outside } from "@sequoia-leaf/kit/net.ts";
 import { CREAM } from "@sequoia-leaf/kit/palette.ts";
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
 import { fromLedger } from "@sequoia-leaf/kit/purse.ts";
@@ -24,7 +24,7 @@ import { waiting } from "@sequoia-leaf/town/mail.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
 
 import { goSit, hop, inTown, release, rouse, say, sitters } from "./actors.ts";
-import { noteWhen, openingTab, readNews, redrawn, TABS } from "./board.ts";
+import { kindLine, noteWhen, openingTab, readNews, redrawn, TABS } from "./board.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { named, registerCards, thingRef } from "./cards.ts";
 import { fling } from "./flights.ts";
@@ -252,13 +252,6 @@ function treasury(body: HTMLElement): null {
 
 // ---------- the quest board ----------
 
-const two = (n: number): string => String(n).padStart(2, "0");
-/** When something ends, as the member's own clock says it. */
-const clock = (ms: number): string => {
-  const d = new Date(ms);
-  return `${two(d.getHours())}:${two(d.getMinutes())}`;
-};
-
 /** The quest board's quests: drawn whole again whenever they are no longer the ones it shows. */
 function quests(body: HTMLElement): () => void {
   const note = guild.boardNote();
@@ -273,38 +266,100 @@ function quests(body: HTMLElement): () => void {
   );
 }
 
-/** A note for each quest on the board, in place of whatever was there; gives back how to bring them up to date. */
+/**
+ * A note for each quest on the board, in place of whatever was there; gives back how to bring them
+ * up to date. An open quest says its kind and when it ends, shows a bar for each way to finish it,
+ * and has a reroll button when it can be rerolled.
+ */
 function notes(body: HTMLElement): () => void {
   body.replaceChildren();
   const parts = guild.quests().map((first) => {
-    const fill = el("i");
-    const count = el("span", "k-dim k-grow");
+    const kind = el("div", "k-label");
+    const ways = el("div", "ways");
+    const count = el("span", "k-grow");
     const side = el("span", "k-row");
+    const said = el("div", "k-read k-coral", { hidden: true });
+    let bars: { fill: HTMLElement; count: HTMLElement }[] = [];
     const note = el(
       "div",
       "k-paper quest",
       {},
       el("div", "", { text: first.title }),
-      el("div", "k-bar leaf", {}, fill),
+      kind,
+      ways,
       el("div", "k-row", {}, count, side),
-      first.ends === null ? null : el("div", "k-dim", { text: `Ends at ${clock(first.ends)}` }),
+      said,
     );
     body.append(note);
     const now = (): Quest => guild.quests().find((q) => q.id === first.id) ?? first;
-    return when(
-      () => String(now().have),
+    const key = `reroll:${first.id}`;
+    const press = async (b: HTMLButtonElement): Promise<void> => {
+      const cost = now().reroll;
+      if (cost === null) return;
+      said.hidden = true;
+      sfx.tap();
+      // A free reroll goes at once; one that costs Leaf is asked once more.
+      if (cost > 0 && !pressedTwice(key, update)) return;
+      const did = await waitingLook(b, guild.reroll(first.id, cost));
+      if (!did) return;
+      if ("said" in did) {
+        said.textContent = did.said;
+        said.hidden = false;
+        sfx.no();
+        replay(b, "shake");
+        return;
+      }
+      sfx.paper();
+      if (did.spent > 0) {
+        sfx.buy();
+        fly("leaf", purseAt("leaf"), centre(b), 5);
+      }
+    };
+    const update = when(
+      () => JSON.stringify([now().goals, now().reroll, asking(key)]),
       () => {
         const q = now();
         // A quest pays by itself the moment it is finished.
-        const paid = q.have >= q.need;
-        fill.style.setProperty("--v", `${Math.min(100, (q.have / q.need) * 100)}%`);
-        count.textContent = `${q.have} / ${q.need} ${q.unit}`;
+        const paid = q.goals.some((g) => g.have >= g.need);
+        kind.textContent = kindLine(q, outside.now());
+        kind.hidden = paid;
+        if (bars.length !== q.goals.length) {
+          // Each way to finish it under its own bar, side by side; one way's count goes beside the Leaf.
+          bars = q.goals.map(() => ({ fill: el("i"), count: el("span", "k-dim") }));
+          const apart = bars.length > 1;
+          ways.classList.toggle("apart", apart);
+          ways.replaceChildren(
+            ...bars.flatMap((b, i) => [
+              ...(i > 0 ? [el("span", "k-label", { text: "or" })] : []),
+              el("div", "k-col k-grow", {}, el("div", "k-bar leaf", {}, b.fill), apart ? b.count : null),
+            ]),
+          );
+          count.replaceChildren(apart ? "" : (bars[0]?.count ?? ""));
+        }
+        q.goals.forEach((g, i) => {
+          const bar = bars[i];
+          if (!bar) return;
+          bar.fill.style.setProperty("--v", `${Math.min(100, (g.have / g.need) * 100)}%`);
+          bar.count.textContent = `${g.have} / ${g.need} ${g.unit}`;
+        });
         note.classList.toggle("done", paid);
         const prize = el("span", "k-chip", {}, el("span", "k-cur leaf", {}, glyph("leaf"), q.reward));
-        if (paid) side.replaceChildren(prize, el("span", "k-chip lit", {}, glyph("check"), "Paid"));
-        else side.replaceChildren(prize);
+        const cost = q.reroll;
+        side.replaceChildren(
+          prize,
+          paid
+            ? el("span", "k-chip lit", {}, glyph("check"), "Paid")
+            : cost === null
+              ? ""
+              : button(
+                  `sm ${cost > 0 ? "leaf" : "wood"}${asking(key) ? " asking" : ""}`,
+                  cost > 0 ? [asksAgain(key, ["Reroll", glyph("leaf"), leafText(cost)], "Reroll?")] : ["Reroll"],
+                  (b) => void press(b),
+                ),
+        );
       },
     );
+    return update;
   });
   return () => {
     for (const f of parts) f();

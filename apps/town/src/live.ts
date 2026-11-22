@@ -21,9 +21,10 @@ import {
   type Resting,
   stay as sayStay,
 } from "@sequoia-leaf/kit/presence.ts";
+import { fromLedger } from "@sequoia-leaf/kit/purse.ts";
 import { lookFor, skinOf } from "@sequoia-leaf/kit/skin.ts";
 
-import type { AwayLine, Guild, Happening, Mate, Me, Person, Quest, Rester, Tone, Visitor } from "./guild.ts";
+import type { AwayLine, Goal, Guild, Happening, Mate, Me, Person, Quest, Rester, Tone, Visitor } from "./guild.ts";
 import { type Line, lineFor, makePace } from "./news.ts";
 
 // ---------- who the member is ----------
@@ -60,36 +61,56 @@ function unitOf(objective: unknown): string {
   return "";
 }
 
-/** The most notes the board holds. */
-const BOARD_MOST = 5;
+/** One goal as Leaf sends it (`type`, `raid`, `progress`, `target`), full for a quest done; null for anything else. */
+function readGoal(g: unknown, done: boolean): Goal | null {
+  if (!isRecord(g)) return null;
+  const have = num(g.progress);
+  const need = num(g.target);
+  if (have === null || need === null || need <= 0) return null;
+  return { have: done ? need : Math.min(have, need), need, unit: unitOf(g) };
+}
+
+/** One quest as Leaf sends it, as a note for the board; null for anything that is not one. */
+function readQuest(q: unknown): Quest | null {
+  if (!isRecord(q) || typeof q.id !== "string" || typeof q.title !== "string" || typeof q.slot !== "string")
+    return null;
+  const done = typeof q.completed_at === "string";
+  const nearest = readGoal(
+    isRecord(q.objective) ? { ...q.objective, progress: q.progress, target: q.target } : null,
+    done,
+  );
+  if (nearest === null) return null;
+  // An open quest raids or wars can finish shows both; one done shows the goal that did it, which Leaf sends as its objective.
+  const each = done ? [] : list(q.goals).map((g) => readGoal(g, false));
+  const goals = each.length > 1 && each.every((g) => g !== null) ? each.filter((g) => g !== null) : [nearest];
+  const ends = !done && typeof q.expires_at === "string" ? Date.parse(q.expires_at) : NaN;
+  return {
+    id: q.id,
+    slot: q.slot,
+    title: q.title,
+    goals,
+    reward: isRecord(q.reward) ? (num(q.reward.leaf) ?? 0) : 0,
+    ends: Number.isFinite(ends) ? ends : null,
+    reroll: done ? null : num(q.reroll_leaf),
+  };
+}
 
 /**
  * The member's quests from `/v1/me/quests`, as notes for the board: those open now, then those
- * just finished. Each shows its nearest goal; nothing is claimed, because a quest pays itself.
+ * just finished. Nothing is claimed, because a quest pays itself.
  */
 export function readQuests(body: unknown): Quest[] {
   if (!isRecord(body)) return [];
   const out: Quest[] = [];
-  for (const q of [...list(body.quests), ...list(body.recently_completed)]) {
-    if (!isRecord(q) || typeof q.id !== "string" || typeof q.title !== "string") continue;
-    if (out.some((o) => o.id === q.id)) continue;
-    const progress = num(q.progress);
-    const target = num(q.target);
-    if (progress === null || target === null || target <= 0) continue;
-    const done = typeof q.completed_at === "string";
-    const ends = q.slot === "timed" && !done && typeof q.expires_at === "string" ? Date.parse(q.expires_at) : NaN;
-    out.push({
-      id: q.id,
-      title: q.title,
-      have: done ? target : Math.min(progress, target),
-      need: target,
-      unit: unitOf(q.objective),
-      reward: isRecord(q.reward) ? (num(q.reward.leaf) ?? 0) : 0,
-      ends: Number.isFinite(ends) ? ends : null,
-    });
+  for (const v of [...list(body.quests), ...list(body.recently_completed)]) {
+    const q = readQuest(v);
+    if (q && !out.some((o) => o.id === q.id)) out.push(q);
   }
-  return out.slice(0, BOARD_MOST);
+  return out;
 }
+
+/** What the board says when a reroll got no answer it can read. */
+export const NO_REROLL = "Could not reroll it. Try again in a moment.";
 
 // ---------- the member's news, and the guild's ----------
 
@@ -422,6 +443,7 @@ export function makeLive(p: Prepared): Guild {
     asking = false;
     if (a.status === 200) quests = readQuests(a.body);
   }
+  let swapping = false;
 
   /** From the first moment anybody listens: the member's news, the guild's, and who is here. A guest hears only who is here. */
   function begin(): void {
@@ -472,6 +494,27 @@ export function makeLive(p: Prepared): Guild {
       };
     },
     quests: () => quests,
+    async reroll(id, leaf) {
+      if (swapping || !quests.some((q) => q.id === id)) return null;
+      swapping = true;
+      const a = await ask(`/v1/me/quests/${id}/reroll`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leaf }),
+      });
+      swapping = false;
+      const body = isRecord(a.body) ? a.body : {};
+      const fresh = a.status === 200 ? readQuest(body.quest) : null;
+      const left = num(body.leaf);
+      if (fresh && left !== null) {
+        quests = quests.map((q) => (q.id === id ? fresh : q));
+        fromLedger(left);
+        return { spent: num(body.spent) ?? leaf };
+      }
+      // Refused, Leaf says why; with no answer it can read, the board says so.
+      const message = a.status >= 400 && a.status < 500 && typeof body.message === "string" ? body.message : null;
+      return { said: message ?? NO_REROLL };
+    },
     boardNote: () => (me.guest ? GUEST_BOARD : null),
     news: () => letterLines(p.since),
     hear(fn) {
