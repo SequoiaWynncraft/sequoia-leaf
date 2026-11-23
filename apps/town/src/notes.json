@@ -1,5 +1,19 @@
 [
   {
+    "id": "works-steady",
+    "at": "2026-11-24T23:59Z",
+    "title": "The Works: fixes",
+    "lines": ["A handful of fixes in the Works."],
+    "more": [
+      {
+        "head": "Fixed",
+        "points": [
+          "The tip to build a Study, or to choose research, is no longer lost when the letter about a time away opens."
+        ]
+      }
+    ]
+  },
+  {
     "id": "late-raids",
     "at": "2026-11-24T00:03Z",
     "title": "A raid counts toward the quest you had then",

@@ -29,7 +29,7 @@ import type { Ctx } from "@sequoia-leaf/kit/util.ts";
 import { PAINTS, TILE } from "./art/belts.ts";
 import type { Layout } from "./layout.ts";
 import { alarm, blockColour, layPlan, makePlan, paintPlan, type Plan } from "./plan.ts";
-import { builds, type Group, S, seenFrom } from "./state.ts";
+import { builds, type Group, S, seenFrom, tileNudge } from "./state.ts";
 import { troubled } from "./trouble.ts";
 
 /** A plan for each size a step is drawn at, made when first gone out to. */
@@ -201,9 +201,10 @@ export function drawPlanMarks(g: Ctx, y: Yard, rev: number, dx: number, dy: numb
       box(g, x, top, P, P, bad ? CORAL : CREAM, true);
     }
   }
-  if (S.nudge) {
+  const nudged = tileNudge();
+  if (nudged) {
     // The place a nudge is about.
-    box(g, dx + S.nudge.x * P, dy + S.nudge.y * P, P, P, INK, false);
-    box(g, dx + S.nudge.x * P - 1, dy + S.nudge.y * P - 1, P + 2, P + 2, GOLD[2], true);
+    box(g, dx + nudged.x * P, dy + nudged.y * P, P, P, INK, false);
+    box(g, dx + nudged.x * P - 1, dy + nudged.y * P - 1, P + 2, P + 2, GOLD[2], true);
   }
 }

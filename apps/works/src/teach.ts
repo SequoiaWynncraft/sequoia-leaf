@@ -335,3 +335,55 @@ export function nudge(
   }
   return null;
 }
+
+/**
+ * What a lasting lesson said beside the interface asks for, done: it is taken then, and only then.
+ * A lesson about a tile needs none, since what it asks for is what stops it being said.
+ */
+const LEARNT: Readonly<Record<string, (w: Yard) => boolean>> = {
+  study: (w) => has(w, STUDY) >= 0,
+  research: (w) => w.line.length > 0,
+};
+
+/** Where the lessons stand between steps: the nudge being said and since when, and the lasting lessons said and not yet learnt. */
+export interface Lessons {
+  readonly said: { readonly id: string; readonly since: number } | null;
+  readonly owed: readonly string[];
+}
+export const NO_LESSONS: Lessons = { said: null, owed: [] };
+/** How long a lesson that is not learnt by doing is said, in seconds of the screen's clock, before it counts as taken. */
+export const SAID_FOR = 14;
+
+/** One step of the lessons: what is said now, whether it has just begun to be, and the lessons taken in this step. */
+export interface LessonStep {
+  readonly lessons: Lessons;
+  readonly show: Nudge | null;
+  readonly fresh: boolean;
+  readonly taken: readonly string[];
+}
+
+/**
+ * Moves the lessons on at a moment of the screen's clock (`t`). A lasting lesson is taken once its
+ * own condition is met (`LEARNT`), whether or not it is being said; never because something hid it
+ * (`hidden`: the letter about a time away, a visit) or another nudge was said in its place. One that
+ * is not learnt by doing is taken once it has been said for `SAID_FOR` seconds.
+ */
+export function stepLessons(
+  was: Lessons,
+  w: Yard,
+  taught: ReadonlySet<string>,
+  at: { readonly t: number; readonly hidden: boolean; readonly finger: boolean; readonly looking: Looking },
+): LessonStep {
+  const learnt = was.owed.filter((id) => LEARNT[id]?.(w) === true);
+  const owed = was.owed.filter((id) => !learnt.includes(id));
+  const n = at.hidden
+    ? null
+    : nudge(w, learnt.length > 0 ? new Set([...taught, ...learnt]) : taught, at.finger, at.looking);
+  if (!n) return { lessons: { said: null, owed }, show: null, fresh: false, taken: learnt };
+  const fresh = was.said?.id !== n.id;
+  const since = fresh || !was.said ? at.t : was.said.since;
+  if (!n.lasting && at.t - since > SAID_FOR)
+    return { lessons: { said: null, owed }, show: null, fresh: false, taken: [...learnt, n.id] };
+  const kept = n.lasting && LEARNT[n.id] !== undefined && !owed.includes(n.id) ? [...owed, n.id] : owed;
+  return { lessons: { said: { id: n.id, since }, owed: kept }, show: n, fresh, taken: learnt };
+}

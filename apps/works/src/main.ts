@@ -68,7 +68,7 @@ function toolNamed(name: Named): Tool | undefined {
   if (name === null || name === "remove" || name === "select" || name === "paint") return name;
   return kindNamed(name) ?? undefined;
 }
-import { type Nudge, nudge } from "./teach.ts";
+import { NO_LESSONS, type Nudge, stepLessons } from "./teach.ts";
 import {
   aimAt,
   buyLand,
@@ -385,48 +385,27 @@ async function boot(): Promise<void> {
     }
   }
 
-  /** The nudge showing, since when, and the last one the camera was turned towards. */
+  /** When the lessons were last moved on, and where they stand (`teach.ts`). */
   let nudgeAt = 0;
-  let shown = "";
-  let since = 0;
-  /** A lesson learnt by doing that is said beside the interface: taken once what it asked for is done. */
-  let doing = "";
+  let lessons = NO_LESSONS;
   function nudges(): void {
     if (S.t < nudgeAt) return;
     nudgeAt = S.t + 0.4;
-    const looking = { picked: S.picked, hand: builds(S.tool) ? S.tool : null };
-    const n = reading() || S.visiting ? null : nudge(S.world, new Set(screen.taught), S.finger, looking);
-    if (doing !== "" && n?.id !== doing) {
-      // It was asked for and is no longer: done, and not said again.
-      screen.taught.push(doing);
-      doing = "";
-    }
-    if (!n) {
-      S.nudge = null;
-      S.nudgeTool = null;
-      S.nudgePart = null;
-      shown = "";
-      coach(null);
-      return;
-    }
-    if (n.id !== shown) {
-      shown = n.id;
-      since = S.t;
-      // The first lessons bring the place they are about into view.
-      if (n.lasting && S.world.done.length === 0 && !inView(n.x * TILE + 8, n.y * TILE + 8))
-        look(n.x * TILE + 8, n.y * TILE - 8);
-    }
-    // A lesson that is not learnt by doing is said for a while, and then counts as taken.
-    if (!n.lasting && S.t - since > 14) {
-      screen.taught.push(n.id);
-      return;
-    }
-    if (n.lasting && n.part !== undefined) doing = n.id;
+    const step = stepLessons(lessons, S.world, new Set(screen.taught), {
+      t: S.t,
+      hidden: reading() || S.visiting !== null,
+      finger: S.finger,
+      looking: { picked: S.picked, hand: builds(S.tool) ? S.tool : null },
+    });
+    lessons = step.lessons;
+    screen.taught.push(...step.taken);
+    const n = step.show;
+    S.nudge = n;
+    // The first lessons bring the place they are about into view.
+    if (n && step.fresh && n.lasting && S.world.done.length === 0 && !inView(n.x * TILE + 8, n.y * TILE + 8))
+      look(n.x * TILE + 8, n.y * TILE - 8);
     // About a part of the interface, it is said beside that part; about a tile, over the tile.
-    S.nudge = n.part === undefined ? { x: n.x, y: n.y, text: n.text, id: n.id } : null;
-    S.nudgeTool = n.tool;
-    S.nudgePart = n.part === "tier" || n.part === "research" || n.part === "grades" ? n.part : null;
-    coach(n.part === undefined ? null : n);
+    coach(n?.part === undefined ? null : n);
   }
 
   /** A single pixel to take the picture onto, for `bench`. */
@@ -588,8 +567,7 @@ async function boot(): Promise<void> {
         screen.taught = ops.some((op) => "yard" in op && op.yard === "new")
           ? []
           : ["planks", "pylon", "bench", "board", "select", "short", "starved"];
-      shown = "";
-      doing = "";
+      lessons = NO_LESSONS;
       nudgeAt = 0;
       look(home().x, home().y, true);
       refreshAll();
@@ -760,9 +738,9 @@ async function boot(): Promise<void> {
         tier: w.open.tier,
         built: layout(w, S.rev).built,
         painted: w.kind.reduce((n, k, i) => n + (k !== NONE && (w.tint[i] ?? 0) > 0 ? 1 : 0), 0),
-        nudge: S.nudge?.id ?? (shown === "" ? null : shown),
-        nudgeAt: S.nudge ? { x: S.nudge.x, y: S.nudge.y } : null,
-        nudgePart: S.nudgePart,
+        nudge: S.nudge?.id ?? null,
+        nudgeAt: S.nudge?.part === undefined && S.nudge ? { x: S.nudge.x, y: S.nudge.y } : null,
+        nudgePart: S.nudge?.part ?? null,
         taught: screen.taught,
         tool: typeof S.tool === "number" ? kindName(S.tool) : S.tool,
         grade: builds(S.tool) ? gradeInHand(S.tool) : null,

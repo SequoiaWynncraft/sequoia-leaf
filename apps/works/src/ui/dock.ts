@@ -97,7 +97,7 @@ function slotFor(art: Art, k: Kind, fresh: boolean): HTMLElement {
       : el("span", cost === 0 ? "k-dim" : "k-gold", { text: cost === 0 ? "free" : String(cost) });
   const b = el(
     "button",
-    `k-slot${S.tool === k ? " lit" : ""}${fresh ? " new" : ""}${S.nudgeTool === k && S.tool !== k ? " nudged" : ""}${full ? " off" : ""}`,
+    `k-slot${S.tool === k ? " lit" : ""}${fresh ? " new" : ""}${S.nudge?.tool === k && S.tool !== k ? " nudged" : ""}${full ? " off" : ""}`,
     {
       type: "button",
       "aria-label": KIND_INFO[k]?.name ?? "",
@@ -130,7 +130,7 @@ function plain(
 ): HTMLElement {
   const b = el(
     "button",
-    `k-slot${S.tool === tool ? " lit" : ""}${fresh ? " new" : ""}${S.nudgeTool === tool && S.tool !== tool ? " nudged" : ""}`,
+    `k-slot${S.tool === tool ? " lit" : ""}${fresh ? " new" : ""}${S.nudge?.tool === tool && S.tool !== tool ? " nudged" : ""}`,
     { type: "button", "aria-label": name, "aria-pressed": S.tool === tool ? "true" : "false" },
     // No name under it: a name is wider than a slot. Its tip and the line above the toolbar say what it is.
     el("span", "art", {}, yardIcon(pic)),
@@ -416,7 +416,7 @@ function buildHand(): void {
   hand.replaceChildren(
     el("span", line.bad ? "say bad" : "say", { text: line.text }),
     ...(tints.length > 0 ? [el("div", "tints", {}, ...tints)] : []),
-    ...(grades.length > 0 ? [el("div", `grades${S.nudgePart === "grades" ? " nudged" : ""}`, {}, ...grades)] : []),
+    ...(grades.length > 0 ? [el("div", `grades${S.nudge?.part === "grades" ? " nudged" : ""}`, {}, ...grades)] : []),
     ...(upgrade ? [el("div", "acts", {}, upgrade)] : []),
     el("div", acting ? "acts tight" : "acts", {}, ...kids),
   );
@@ -429,7 +429,7 @@ let handKey: (() => void) | null = null;
 export function initDock(art: Art): void {
   dockKey = when(
     () =>
-      `${openTools().join()}|${usable("select")}|${usable("paint")}|${S.tool}|${S.nudgeTool}|${openTools()
+      `${openTools().join()}|${usable("select")}|${usable("paint")}|${S.tool}|${S.nudge?.tool}|${openTools()
         .map((k) => `${gradeInHand(k)}:${costOf(S.world, k, gradeInHand(k))}`)
         .join()}|${usable(STOP) ? `${stopsStand().stand}/${stopsStand().may}` : ""}`,
     () => {
@@ -446,7 +446,7 @@ export function initDock(art: Art): void {
         : "";
     // With a graded kind in hand, the grades it may be built at, the one chosen, and what one costs now.
     const graded = builds(tool) && isGraded(tool) ? `${highest(S.world.open, tool)}|${gradeInHand(tool)}|${S.rev}` : "";
-    return `${tool}|${S.tint}|${S.finger}|${S.aim !== null}|${S.run !== null}|${l.text}|${(S.run?.why ?? S.aim?.why) != null}|${select}|${graded}|${S.nudgePart}`;
+    return `${tool}|${S.tint}|${S.finger}|${S.aim !== null}|${S.run !== null}|${l.text}|${(S.run?.why ?? S.aim?.why) != null}|${select}|${graded}|${S.nudge?.part}`;
   }, buildHand);
   toolHooks.changed = refreshDock;
   toolHooks.said = say;

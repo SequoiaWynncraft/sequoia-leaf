@@ -76,7 +76,7 @@ import type { Sprite } from "./art/pal.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
 import { armsAt, asIf, type Layout, layout, pylonTop } from "./layout.ts";
-import { builds, draws, type Group, handGrade, type Mark, S, seenFrom } from "./state.ts";
+import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, tileNudge } from "./state.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
 export interface Moment {
@@ -1615,10 +1615,11 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
       corners(g, x, y, TILE, TILE, bad ? CORAL : GOLD[2], true);
     }
   }
-  if (S.nudge) {
+  const nudged = tileNudge();
+  if (nudged) {
     // The place a nudge is about: a gold ring that breathes.
-    const x = S.nudge.x * TILE + 8 - cx;
-    const y = S.nudge.y * TILE + 8 - cy;
+    const x = nudged.x * TILE + 8 - cx;
+    const y = nudged.y * TILE + 8 - cy;
     const r = 9 + Math.sin(S.t * 5) * 1.5;
     pixelRing(g, x, y, r, r, GOLD[2]);
     pixelRing(g, x, y, r + 1, r + 1, GOLD[0], 2);
@@ -1724,10 +1725,11 @@ export function drawWords(ctx: Ctx, px: number, clear: number): void {
   }
 
   // A nudge keeps quiet while the member is being told why something cannot go where they pointed.
-  if (S.nudge && !(why && S.tool !== null)) {
-    const { text } = S.nudge;
-    const hx = Math.round((S.nudge.x * TILE + 8 - cx) * z);
-    const hy = Math.round((S.nudge.y * TILE - 6 - cy) * z);
+  const nudged = tileNudge();
+  if (nudged && !(why && S.tool !== null)) {
+    const { text } = nudged;
+    const hx = Math.round((nudged.x * TILE + 8 - cx) * z);
+    const hy = Math.round((nudged.y * TILE - 6 - cy) * z);
     const bob = Math.round(Math.sin(S.t * 3)) * px;
     key += `|${text}|${hx},${hy},${bob},${clear}`;
     todo.push(() => {

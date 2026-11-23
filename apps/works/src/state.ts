@@ -20,6 +20,7 @@ import {
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
+import type { Nudge } from "./teach.ts";
 
 /**
  * The kinds of piece this page draws and builds, in the order they sit in the dock (which is also
@@ -183,11 +184,8 @@ export const S: {
   clearing: Map<Plot, { at: number; x: number; y: number }>;
   /** Which panel is open. */
   panel: string | null;
-  /** The tile a nudge is pointing at, and what it says; and the tool it wants picked up. */
-  nudge: { x: number; y: number; text: string; id: string } | null;
-  nudgeTool: Tool;
-  /** The part of the interface a nudge is about, which it is said beside: a book's button, or the grades over the dock. */
-  nudgePart: "tier" | "research" | "grades" | null;
+  /** The nudge being said (`teach.ts`): over its tile, or beside the part of the interface it is about. */
+  nudge: Nudge | null;
 } = {
   world: emptyYard(LAND),
   visiting: null,
@@ -214,9 +212,10 @@ export const S: {
   clearing: new Map(),
   panel: null,
   nudge: null,
-  nudgeTool: null,
-  nudgePart: null,
 };
+
+/** The nudge being said over a tile of the yard, if the one being said is. */
+export const tileNudge = (): Nudge | null => (S.nudge?.part === undefined ? S.nudge : null);
 
 /**
  * The grade a kind of piece is built at when it is in hand: the one chosen for it, no higher than

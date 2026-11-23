@@ -32,7 +32,7 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 
-import { nudge } from "./teach.ts";
+import { NO_LESSONS, nudge, SAID_FOR, stepLessons } from "./teach.ts";
 
 const none = new Set<string>();
 const run = (w: Yard, ticks: number): void => {
@@ -224,5 +224,63 @@ describe("teaching each new idea, once, where it is met", () => {
     if (research === undefined) throw new Error("no research may be studied");
     expect(study(w, research)).toBe(true);
     expect(nudge(w, told, false)).toBeNull();
+  });
+});
+
+describe("lessons, step by step", () => {
+  const quiet = new Set(["board", "select", "short", "starved", "tier"]);
+  const looking = { picked: -1, hand: null };
+  const when = (t: number, more: Partial<Parameters<typeof stepLessons>[3]> = {}) => ({
+    t,
+    hidden: false,
+    finger: false,
+    looking,
+    ...more,
+  });
+
+  test("a lasting lesson is not taken while the letter about a time away hides it, and is said again after", () => {
+    const w = create({ seed: 4, tier: 3 });
+    let lessons = NO_LESSONS;
+    const first = stepLessons(lessons, w, quiet, when(0));
+    expect(first.show?.id).toBe("study");
+    lessons = first.lessons;
+    const hidden = stepLessons(lessons, w, quiet, when(1, { hidden: true }));
+    expect([hidden.show, hidden.taken]).toEqual([null, []]);
+    lessons = hidden.lessons;
+    const back = stepLessons(lessons, w, quiet, when(2));
+    expect([back.show?.id, back.taken]).toEqual(["study", []]);
+  });
+
+  test("a lasting lesson is not taken when another nudge is said in its place", () => {
+    const w = create({ seed: 4, tier: 3 });
+    let lessons = stepLessons(NO_LESSONS, w, quiet, when(0)).lessons;
+    const grades = stepLessons(lessons, w, quiet, when(1, { looking: { picked: -1, hand: BELT } }));
+    expect([grades.show?.id, grades.taken]).toEqual(["grades", []]);
+    lessons = grades.lessons;
+    expect(stepLessons(lessons, w, new Set([...quiet, "grades"]), when(2)).show?.id).toBe("study");
+  });
+
+  test("a lasting lesson is taken once what it asks for is done, whether or not it is being said then", () => {
+    const w = create({ seed: 4, tier: 3 });
+    let lessons = stepLessons(NO_LESSONS, w, quiet, when(0)).lessons;
+    lessons = stepLessons(lessons, w, quiet, when(1, { hidden: true })).lessons;
+    expect(build(w, STUDY, 21, 14, 0, Infinity).ok).toBe(true);
+    const built = stepLessons(lessons, w, quiet, when(2, { hidden: true }));
+    expect(built.taken).toEqual(["study"]);
+    // Taken, it is not said again even with no Study standing.
+    expect(
+      stepLessons(built.lessons, create({ seed: 4, tier: 3 }), new Set([...quiet, "study"]), when(3)).show,
+    ).toBeNull();
+  });
+
+  test("a lesson not learnt by doing is said for a while and then taken", () => {
+    const w = create({ seed: 4, tier: 1 });
+    const told = new Set(["select", "short", "starved"]);
+    let now = stepLessons(NO_LESSONS, w, told, when(0));
+    expect([now.show?.id, now.fresh]).toEqual(["board", true]);
+    now = stepLessons(now.lessons, w, told, when(SAID_FOR));
+    expect([now.show?.id, now.fresh, now.taken]).toEqual(["board", false, []]);
+    now = stepLessons(now.lessons, w, told, when(SAID_FOR + 0.5));
+    expect([now.show, now.taken]).toEqual([null, ["board"]]);
   });
 });
