@@ -37,8 +37,8 @@
  * - Leaf counts the time played from the calls it hears, so a page says it is open: while it is in
  *   view, a minute without a call to Leaf reads the state (`STILL_HERE`); with nothing waiting as it
  *   is hidden or put away, the state is read in a request that outlives it; and it is read as the
- *   page comes back (`outside.wake`). A visit says none of this, nor does a page while `away()` (the
- *   town, while a game is open over it).
+ *   page comes back (`outside.wake`), but for a game answered short, which asks for its own reads. A
+ *   visit says none of this, nor does a page while `away()` (the town, while a game is open over it).
  * - `waitingLook(element, answer)` gives what was asked for the kit's waiting look while Leaf takes
  *   more than a moment to answer.
  *
@@ -449,9 +449,11 @@ export async function openPlay<View, Command extends object, Note, Short = never
       if (document.visibilityState === "hidden") flush();
     });
   if (!visiting) {
-    outside.wake(() => {
-      if (!quiet()) void refresh();
-    });
+    // A game answered short keeps its own copy in step, and asks for its own reads.
+    if (!reader.short)
+      outside.wake(() => {
+        if (!quiet()) void refresh();
+      });
     if (typeof window !== "undefined")
       window.setInterval(() => {
         if (!document.hidden && !quiet() && outside.now() - calledAt >= STILL_HERE) void refresh();

@@ -654,6 +654,14 @@ describe("a game answered short", () => {
     ]);
     expect([play.state, states]).toEqual([{ n: 5 }, []]);
   });
+
+  test("is not read as the page comes back: its page asks for its own reads", async () => {
+    const { routes } = counterLeaf(0, true);
+    await shortly(routes);
+    world?.wake();
+    await Bun.sleep(2);
+    expect(world?.sent.map((s) => s.method)).toEqual(["GET"]);
+  });
 });
 
 describe("a page in view", () => {

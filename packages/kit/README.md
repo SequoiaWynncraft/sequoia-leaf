@@ -252,7 +252,8 @@ seconds (`NOT_YET`) before the page gives up for no server. As the page is hidde
 what Leaf has not answered goes in a request that outlives the page. Leaf counts the time played
 from the calls it hears, so a page says it is open: in view, a minute without a call reads the
 state (`STILL_HERE`); with nothing waiting as it is hidden or put away, the state is read; and it
-is read as the page comes back (`outside.wake`). A visit says none of this, nor does a page while
+is read as the page comes back (`outside.wake`), but for a game answered short, which asks for its
+own reads. A visit says none of this, nor does a page while
 `away()` (the town, while a game is open over it).
 `predict` is the copy after a command the shared rules can work out
 without Leaf, shown at once; each answer's state takes the copy's place (with what is still waiting

@@ -354,51 +354,36 @@ const cannotUndo = (why: string): void => {
   toolHooks.said(`Cannot undo: ${why.toLowerCase()}.`);
 };
 
-/** Stands again pieces that were taken away, as a copy is stood: new, and holding nothing. Gives back why it could not, or null. */
-function putBack(what: readonly Piece[]): string | null {
+/** Stands again pieces that were taken away, as a copy is stood: new, and holding nothing. */
+function putBack(what: readonly Piece[]): void {
   const no = standNow(what);
-  if (no === null) for (const s of what) puff(s.x * TILE + 8, (s.y + 1) * TILE - 2, 4, DUST, 6);
-  return no;
+  if (no !== null) cannotUndo(no);
+  else for (const s of what) puff(s.x * TILE + 8, (s.y + 1) * TILE - 2, 4, DUST, 6);
 }
 
-/** Does what undoes a thing done, part by part until one cannot be done, and gives back why, or null. */
-function undoing(last: Done): string | null {
-  const w = S.world;
-  switch (last.did) {
-    case "built": {
-      const cells = last.cells.filter((i) => w.cells[i]);
-      let no = cells.length > 0 ? attempt(null, { do: "clear", tiles: cells }) : null;
-      for (const t of last.turned) no ??= attempt(null, { do: "turn", ...xy(t.i), dir: t.was });
-      if (no !== null) return no;
-      for (const i of cells) puff((i % W()) * TILE + 8, (Math.floor(i / W()) + 1) * TILE - 4, 4, DUST, 7);
-      return last.under ? putBack(last.under) : null;
-    }
-    case "took":
-      return putBack(last.what);
-    case "painted": {
-      let no: string | null = null;
-      for (const l of last.lines.toReversed()) no ??= attempt(null, { do: "paint", ...xy(l.i), tint: l.was });
-      return no;
-    }
-    case "way":
-      return attempt(null, { do: "way", ...xy(last.i), way: last.way, open: last.was });
-    case "moved":
-      return attempt(null, { do: "move", tiles: last.tiles, turns: last.turns, x: last.x, y: last.y });
-    case "turned":
-      return attempt(null, { do: "turn", ...xy(last.i), dir: last.was });
-  }
-}
-
-/** Undoes the last thing done to the yard, if it still can be; what cannot be is said. */
+/** Undoes the last thing done to the yard, if it still can be. */
 export function undo(): boolean {
+  const w = S.world;
   const last = done.pop();
   if (!last) {
     toolHooks.said("Nothing to undo.");
     return false;
   }
-  const no = undoing(last);
-  if (no === null) yardSfx.undo();
-  else cannotUndo(no);
+  if (last.did === "built") {
+    const cells = last.cells.filter((i) => w.cells[i]);
+    if (cells.length > 0) doNow({ do: "clear", tiles: cells });
+    for (const i of cells) puff((i % W()) * TILE + 8, (Math.floor(i / W()) + 1) * TILE - 4, 4, DUST, 7);
+    for (const t of last.turned) doNow({ do: "turn", ...xy(t.i), dir: t.was });
+    if (last.under) putBack(last.under);
+  } else if (last.did === "took") putBack(last.what);
+  else if (last.did === "painted")
+    for (const l of last.lines.toReversed()) doNow({ do: "paint", ...xy(l.i), tint: l.was });
+  else if (last.did === "way") doNow({ do: "way", ...xy(last.i), way: last.way, open: last.was });
+  else if (last.did === "moved") {
+    const no = attempt(null, { do: "move", tiles: last.tiles, turns: last.turns, x: last.x, y: last.y });
+    if (no !== null) cannotUndo(no);
+  } else doNow({ do: "turn", ...xy(last.i), dir: last.was });
+  yardSfx.undo();
   // What was marked or in hand may be what was undone.
   if (S.tool === "select") {
     letGo();
@@ -407,7 +392,7 @@ export function undo(): boolean {
   touched();
   if (S.aim) aimAt(S.aim.x, S.aim.y);
   toolHooks.changed();
-  return no === null;
+  return true;
 }
 
 // ---------- runs of belt ----------

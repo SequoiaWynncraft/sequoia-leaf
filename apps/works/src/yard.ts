@@ -9,16 +9,16 @@
  * - In step. With each command sent the page keeps the copy's tick and check just after it
  *   (`check`). Leaf answers a batch with its clock and its yard's tick and check after the batch
  *   (`WorksAnswer`), not the yard. When Leaf did what the page did, at the same tick, the two checks
- *   are of the same moment: alike, the page only puts on its board the orders Leaf has hung that it
- *   lacks (`hung`: only Leaf can draw them, holding the seed), which count a few seconds after they
- *   are hung (`ORDER_WAITS`), so the copy has them in time.
+ *   are of the same moment: alike, the page only puts on its board the orders Leaf has hung that are
+ *   new to it (`hung`: only Leaf can draw them, holding the seed), which count a few seconds after
+ *   they are hung (`ORDER_WAITS`), so the copy has them in time.
  * - Taking Leaf's yard (`taking`), now and then, when the copy must give way to it: checks that
  *   differ (a fault in the rules or the check, which the page counts and tells Leaf the tick of), a
  *   command Leaf turned down or did at another tick, an order heard of after it began to count, a tab
- *   away over a minute, a yard staged from outside. The yard takes no input (`doNow` refuses) and the
- *   copy stands still; what was already handed to the kit goes to Leaf and is answered; then Leaf's
- *   yard is read, as when the page opens, and again every couple of seconds while that fails for a
- *   moment, and becomes the copy (`take`).
+ *   away over a minute, a yard staged from outside. The yard takes no input (`gate`; `doNow` refuses
+ *   too, for scripts) and the copy stands still; what was already handed to the kit goes to Leaf and
+ *   is answered; then Leaf's yard is read, as when the page opens, and again every couple of seconds
+ *   while that fails for a moment, and becomes the copy (`take`).
  *
  * Each frame (`runYard`), the copy is run on to Leaf's tick now, which is the tick Leaf last gave
  * plus one for each tenth of a second since, never earlier than one already shown. Coins are Leaf's
@@ -119,6 +119,8 @@ let collectedAt = 0;
 /** When Leaf was last asked for its yard. */
 let askedAt = -Infinity;
 const refusalHearers: ((why: string) => void)[] = [];
+/** Puts away whatever the member has under way, as the yard stops taking input (`gate`). */
+let putAway = (): void => undefined;
 
 /** What the yard says, and what anything the member does while Leaf's yard is being taken is refused with. */
 export const CATCHING_UP = "The yard is catching up with the guild's server";
@@ -184,6 +186,24 @@ function giveWay(): void {
   if (taking !== null) return;
   taking = performance.now();
   askedAt = -Infinity;
+  putAway();
+}
+
+/** Stops a press or a key at the window, while Leaf's yard is being taken. */
+const stop = (e: Event): void => {
+  if (taking !== null) e.stopImmediatePropagation();
+};
+
+/**
+ * The one gate for input while Leaf's yard is being taken. As taking begins, whatever the member
+ * has under way is put away (`away`, the tools' own `cancel`); from then until the yard has been
+ * read, no press, move, click, wheel or key goes past the window to the yard, the dock, the panels
+ * or the letter. A press or key let go still passes, so that nothing is left held down.
+ */
+export function gate(away: () => void): void {
+  putAway = away;
+  for (const type of ["pointerdown", "pointermove", "click", "wheel", "keydown"])
+    window.addEventListener(type, stop, true);
 }
 
 /** While Leaf's yard is being taken: once nothing the page handed the kit is on its way, it is asked for, and again every couple of seconds. */
@@ -197,15 +217,18 @@ function ask(now: number): void {
 export const catchingUp = (now = performance.now()): boolean => taking !== null && now - taking > 1000;
 
 /**
- * Puts on the copy's board each order Leaf has hung that it lacks, while the order does not count
- * yet; one heard of after it began to count has been missed, and Leaf's yard is taken.
+ * Puts on the copy's board each order Leaf has hung that is new to it, while the order does not
+ * count yet; one heard of after it began to count has been missed, and Leaf's yard is taken. Order
+ * ids only go up (`serial`): one under the copy's serial is one the copy has had, and may since have
+ * swapped out or handed over, so it is passed over.
  */
 function hang(hung: readonly Standing[]): void {
   const w = S.world;
   for (const order of hung) {
-    if (w.board.some((o) => o.id === order.id)) continue;
+    if (order.id < w.serial) continue;
     if (counts(order, w.tick)) return giveWay();
     w.board.push(order);
+    w.serial = order.id + 1;
   }
 }
 
@@ -310,8 +333,22 @@ export const leadAt = (now: number): number =>
 /** Whether anything sent to Leaf has not been answered yet. */
 export const waitingForLeaf = (): boolean => leaf?.waiting() ?? false;
 
-/** Takes Leaf's yard: for when one was staged from outside. */
+/** Resolves once nothing the page handed the kit is on its way. */
+async function drained(): Promise<void> {
+  if (!leaf?.waiting()) return;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  await drained();
+}
+
+/**
+ * Takes Leaf's yard: for when one was staged from outside. What is in flight is answered first, and
+ * a read already on its way, which may have set off before the staging, lands; then the yard is read
+ * again, and that read is the one taken.
+ */
 export async function again(): Promise<void> {
+  giveWay();
+  await drained();
+  await leaf?.refresh(untold);
   giveWay();
   await leaf?.refresh(untold);
 }
@@ -327,4 +364,5 @@ export function letGo(): void {
   untold = undefined;
   found = 0;
   shown = 0;
+  putAway = (): void => undefined;
 }
