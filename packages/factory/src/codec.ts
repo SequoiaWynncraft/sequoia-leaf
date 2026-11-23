@@ -136,8 +136,8 @@ const whole = (v: unknown, most: number): number | null =>
 const words = (v: unknown): string | null => (typeof v === "string" && v.length <= 200 ? v : null);
 
 /** A count by name, as kept: only real things, only sensible counts, always in the same order. */
-function tally(c: Counts): Rec {
-  const out: Rec = {};
+export function tally(c: Counts): Record<string, number> {
+  const out: Record<string, number> = {};
   for (const n of ALL_ITEMS) {
     const v = c[n] ?? 0;
     if (Number.isFinite(v) && v > 0) out[itemName(n)] = v;
@@ -145,7 +145,7 @@ function tally(c: Counts): Rec {
   return out;
 }
 /** A count by name read back. */
-function untally(v: unknown, most: number): Counts {
+export function untally(v: unknown, most: number): Counts {
   const out = counts();
   if (!isRec(v)) return out;
   for (const n of ALL_ITEMS) {
@@ -318,7 +318,7 @@ export function encode(y: Yard, keep: Keep = {}): string {
     hand: y.hand === -1 ? null : goalId(y.hand),
     line: y.line.map(goalId),
     got: Object.fromEntries(y.got.flatMap((got, g) => (got && isGoal(g) ? [[goalId(g), tally(got)]] : []))),
-    board: y.board.map((o) => ({ ...o, want: tally(o.want), filled: tally(o.filled) })),
+    board: y.board.map(keptOrder),
     serial: y.serial,
     handed: y.handed,
     swapAt: y.swapAt,
@@ -436,27 +436,40 @@ function blueprint(open: Open, slot: number, v: KeptPrint | null | undefined): U
   return blueprintRefusal(open, slot, pieces) === null ? packPieces(placed(pieces, 0, 0, 0)) : null;
 }
 
+/** A standing order as it is kept, and as Leaf's answer to a batch carries it: what it wants and has had, by name. */
+export interface KeptOrder extends Omit<Standing, "want" | "filled"> {
+  readonly want: Readonly<Record<string, number>>;
+  readonly filled: Readonly<Record<string, number>>;
+}
+export const keptOrder = (o: Standing): KeptOrder => ({ ...o, want: tally(o.want), filled: tally(o.filled) });
+
+/** A standing order read back from what `keptOrder` gives, every field checked, holding no more than it wants; or nothing. */
+export function orderOf(v: unknown): Standing | null {
+  if (!isRec(v)) return null;
+  const id = whole(v.id, 1e9);
+  const title = words(v.title);
+  const from = words(v.from);
+  const line = words(v.line);
+  const pay = whole(v.pay, 1e8);
+  const want = untally(v.want, 1e6);
+  const starts = whole(v.starts, 1e13);
+  const asked = ALL_ITEMS.filter((n) => (want[n] ?? 0) > 0).length;
+  if (id === null || title === null || from === null || line === null || pay === null || starts === null) return null;
+  if (asked < 1 || asked > 2) return null;
+  const filled = untally(v.filled, 1e6);
+  for (const n of ALL_ITEMS) filled[n] = Math.min(filled[n] ?? 0, want[n] ?? 0);
+  return { id, title, from, line, want, pay, filled, starts };
+}
+
 /**
  * A kept standing order at a tick: hung no later than an order hung then would count, and holding
  * nothing before it counts. Orders are hung at the end of the board with the next id, so its id is
  * past `after`, the id of the order before it, and below `serial`, the count of orders ever hung.
  */
 function standing(v: unknown, tick: number, after: number, serial: number): Standing | null {
-  if (!isRec(v)) return null;
-  const id = whole(v.id, serial - 1);
-  if (id !== null && id <= after) return null;
-  const title = words(v.title);
-  const from = words(v.from);
-  const line = words(v.line);
-  const pay = whole(v.pay, 1e8);
-  const want = untally(v.want, 1e6);
-  const starts = whole(v.starts, tick + ORDER_WAITS);
-  const asked = ALL_ITEMS.filter((n) => (want[n] ?? 0) > 0).length;
-  if (id === null || title === null || from === null || line === null || pay === null || starts === null) return null;
-  if (asked < 1 || asked > 2) return null;
-  const order = { id, title, from, line, want, pay, filled: untally(v.filled, 1e6), starts };
-  const live = counting(order, tick);
-  for (const n of ALL_ITEMS) order.filled[n] = live ? Math.min(order.filled[n] ?? 0, want[n] ?? 0) : 0;
+  const order = orderOf(v);
+  if (!order || order.id <= after || order.id >= serial || order.starts > tick + ORDER_WAITS) return null;
+  if (!counting(order, tick)) order.filled.fill(0);
   return order;
 }
 

@@ -594,9 +594,13 @@ export class Gen {
   }
 }
 
-/** A working yard of about `target` pieces on a land of `cols` by `rows` plots, and the commands that built it. */
-export function generate(land: F.Land, target: number, seed = 1): Gen {
+/**
+ * A working yard of about `target` pieces on a land, and the commands that built it. `before` is
+ * given the generator first: a land of many plots has its plots bought there.
+ */
+export function generate(land: F.Land, target: number, seed = 1, before: (g: Gen) => void = () => undefined): Gen {
   const g = new Gen(land, seed);
+  before(g);
   let turn = 0;
   let pieces = g.pieces();
   for (let round = 0; round < 8 && pieces < target; round++) {

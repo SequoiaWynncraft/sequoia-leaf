@@ -5,6 +5,7 @@
  */
 import {
   at,
+  costOf,
   type Dir,
   DX,
   DY,
@@ -176,14 +177,18 @@ export function within(y: Yard, x0: number, y0: number, x1: number, y1: number):
   return out;
 }
 
-/** What a set of pieces costs to stand, each priced in turn by `priceAt`, the pieces to hand used as setting it down uses them. */
-export function priceOf(y: Yard, pieces: readonly Pick<Piece, "kind" | "x" | "y" | "grade">[]): number {
+/**
+ * What a set of pieces costs to stand, each priced in turn by `priceAt`, the pieces to hand used as
+ * setting it down uses them. With `bare`, as if on clear ground: what a blueprint or a copy costs
+ * before it is aimed anywhere.
+ */
+export function priceOf(y: Yard, pieces: readonly Pick<Piece, "kind" | "x" | "y" | "grade">[], bare = false): number {
   const spare = Uint8Array.from(y.spare);
   let cost = 0;
   for (const p of pieces) {
-    const i = at(y, p.x, p.y);
+    const i = bare ? -1 : at(y, p.x, p.y);
     const there = i < 0 ? NONE : (y.kind[i] ?? NONE);
-    cost += priceAt(y, p.kind, p.x, p.y, p.grade, spare);
+    cost += bare ? costOf(y, p.kind, p.grade, spare) : priceAt(y, p.kind, p.x, p.y, p.grade, spare);
     if (there === p.kind) continue;
     if (there !== NONE && y.free[i] === 1) spare[there] = (spare[there] ?? 0) + 1;
     if ((spare[p.kind] ?? 0) > 0) spare[p.kind] = (spare[p.kind] ?? 0) - 1;

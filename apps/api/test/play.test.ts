@@ -4,6 +4,33 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { type Game, leaf, MOST_COMMANDS, type PlayerId, playerId } from "@sequoia-leaf/core";
+import {
+  ALL_ITEMS,
+  BELT,
+  check,
+  clockOf,
+  counts,
+  countsOf,
+  deliver,
+  FACTORY,
+  GOALS,
+  isFilled,
+  item,
+  itemName,
+  LEAD,
+  MILLI,
+  play as playWorks,
+  readAnswer,
+  readCommand,
+  readView as readYardView,
+  route,
+  stepTo,
+  swapRefusal,
+  TICK_MS,
+  writeAct,
+  type Yard,
+} from "@sequoia-leaf/factory";
+import { staged as stagedYard } from "@sequoia-leaf/factory/test/yards.ts";
 import { PULLS } from "@sequoia-leaf/pulls";
 import {
   planCommands,
@@ -15,24 +42,6 @@ import {
   type TableView,
 } from "@sequoia-leaf/raid";
 import { decodeTown, readNotes as readTownNotes, readView as readTownView, type TownView } from "@sequoia-leaf/town";
-import {
-  check,
-  clockOf,
-  deliver,
-  isFilled,
-  ITEMS,
-  LEAD,
-  play as playWorks,
-  readAnswer,
-  readView as readYardView,
-  route,
-  stepTo,
-  swapRefusal,
-  TICK_MS,
-  WORKS,
-  type World,
-} from "@sequoia-leaf/yard";
-import mid from "@sequoia-leaf/yard/yards/mid.json";
 import { Effect, Exit, Fiber, Logger, Option, References, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
@@ -996,9 +1005,7 @@ describe("a standing", () => {
 
 /** Writes where a player's yard stands, as the play service would have at `at`. */
 const stand = (player: PlayerId, score: number, at: number, guest = false) =>
-  services.run(
-    PlayStore.use((store) => store.stand(player, "works", { score, also: { story: score % 16 } }, guest, at)),
-  );
+  services.run(PlayStore.use((store) => store.stand(player, "works", { score, also: { tier: score % 5 } }, guest, at)));
 const named = (player: PlayerId, name: string) =>
   services.run(PlayerNames.use((names) => names.remember(player, name, clock.now)));
 const boardOf = async (game = "works", player: PlayerId = alice) => {
@@ -1015,7 +1022,7 @@ const row = (place: number, id: PlayerId, name: string, score: number, more: obj
   name,
   guest: false,
   score,
-  also: { story: score % 16 },
+  also: { tier: score % 5 },
   you: false,
   ...more,
 });
@@ -1038,7 +1045,7 @@ describe("the board", () => {
         row(3, stranger(1), "Someone", 300),
         row(4, alice, "Alice", 200, { you: true }),
       ],
-      you: { place: 4, score: 200, also: { story: 8 } },
+      you: { place: 4, score: 200, also: { tier: 0 } },
     });
     // Bob's yard changed without earning: he reached 500 when he did, and stays second.
     await stand(bob, 500, T0 + 9);
@@ -1138,7 +1145,7 @@ describe("what players did", () => {
 /** The yard as a page reads it from what Leaf answered. */
 function yardOf(state: unknown) {
   const view = readYardView(state);
-  const yard = view && WORKS.decode(view.yard);
+  const yard = view && FACTORY.decode(view.yard);
   if (!view || !yard) throw new Error(`Not a yard: ${JSON.stringify(state)}`);
   return { clock: view.clock, yard };
 }
@@ -1157,8 +1164,8 @@ describe("the Works", () => {
     const { clock: tick, yard } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
     expect(yard.seed).toBeNull();
     // The starter gatherer and mill on the deadfall by the depot, and a run of belt to it.
-    const legs = route(yard, [22, 15], [23, 17]) ?? [];
-    expect(legs.length).toBeGreaterThan(0);
+    const { legs } = writeAct({ do: "lay", legs: route(yard, [22, 15], [23, 17]) ?? [] });
+    expect(Array.isArray(legs) && legs.length).toBeGreaterThan(0);
     const built = await send("POST", "/v1/game/play/works", {
       commands: [
         { id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick },
@@ -1173,15 +1180,15 @@ describe("the Works", () => {
       { id: "w-3", notes: [] },
     ]);
     expect(await coinsOf(alice)).toBe(300);
-    // A minute on Leaf's clock: the first story order (twelve planks) is filled and paid into the till.
+    // A minute on Leaf's clock: the first lesson (twelve planks) is done and paid into the till.
     clock.now += MINUTE;
     const collected = await send("POST", "/v1/game/play/works", {
       commands: [{ id: "w-4", do: "collect", tick: tick + 600 }],
     });
     expect(collected.status).toBe(200);
     const yardNow = yardIn((await storedYard()).state);
-    expect(yardNow.story).toBe(1);
-    expect(yardNow.till).toBeLessThan(1);
+    expect(yardNow.done.map((g) => GOALS[g]?.id)).toEqual(["planks"]);
+    expect(yardNow.till).toBeLessThan(MILLI);
     expect(await coinsOf(alice)).toBeGreaterThanOrEqual(380);
     expect(await entries(alice)).toEqual([
       { amount: 300, reason: "Welcome to Guild Town", game: null, key: `welcome:${alice}` },
@@ -1195,11 +1202,11 @@ describe("the Works", () => {
     expect(await services.query((sql) => sql`SELECT kind FROM activity WHERE game = 'works'`)).toEqual([
       { kind: "works_story" },
     ]);
-    // On the board: what the yard has earned, and the story order done.
+    // On the board: what the yard has earned, and the tier it has reached.
     const earned = (await coinsOf(alice)) - 300;
     expect(await boardOf()).toEqual({
-      top: [{ place: 1, id: alice, name: "Alice", guest: false, score: earned, also: { story: 1 }, you: true }],
-      you: { place: 1, score: earned, also: { story: 1 } },
+      top: [{ place: 1, id: alice, name: "Alice", guest: false, score: earned, also: { tier: 0 }, you: true }],
+      you: { place: 1, score: earned, also: { tier: 0 } },
     });
 
     // Bob visits a minute on: he is given the yard as Alice's own page is. The minute the yard ran is
@@ -1216,7 +1223,7 @@ describe("the Works", () => {
     expect(await personOf(alice, bob)).toEqual({
       id: alice,
       name: "Alice",
-      games: { works: { place: 1, score: earned, also: { story: 1 }, played: 120 } },
+      games: { works: { place: 1, score: earned, also: { tier: 0 }, played: 120 } },
       played: 120,
     });
   });
@@ -1230,14 +1237,16 @@ describe("a batch's answer", () => {
       commands: [{ id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick }],
     });
     // The page's copy, with the same command done to it at the same tick.
-    expect("refused" in playWorks(copy, { do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick })).toBe(false);
+    const same = readCommand({ do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick });
+    if (!same) throw new Error("not a command");
+    expect("refused" in playWorks(copy, same)).toBe(false);
     const { state } = Schema.decodeUnknownSync(Answered)(await built.json());
     expect(state).toEqual({ clock: tick, tick, check: check(copy), hung: [] });
     // An opening, a visit and an opening after a time away are each given the yard, the last with its letter.
     expect(
-      yardOf(Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state).yard.cells,
-    ).toEqual(copy.cells);
-    expect((await shownYard(await visit(alice, "works", bob))).yard.cells).toEqual(copy.cells);
+      yardOf(Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state).yard.kind,
+    ).toEqual(copy.kind);
+    expect((await shownYard(await visit(alice, "works", bob))).yard.kind).toEqual(copy.kind);
     clock.now += 60 * 60_000;
     expect((await shownYard(await send("GET", "/v1/game/play/works"))).yard.away?.seconds).toBe(3600 - LEAD / 10);
   });
@@ -1299,18 +1308,22 @@ const ctxAt = (now: number) => ({ now, player: { id: alice, guest: false }, seed
 const sweep = (games: readonly Played[]) => Play.use((play) => Effect.flatten(play.tend(games)));
 /** Leaf tending every game's states. */
 const tendAll = sweep(Object.values(GAMES));
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 /** A yard read from its text, or the test fails. */
 function yardIn(text: string) {
-  const w = WORKS.decode(text);
+  const w = FACTORY.decode(text);
   if (!w) throw new Error("not a yard");
   return w;
 }
-/** Puts the kept mid-story yard in Alice's place, or `owner`'s (`shape`d so): standing at Leaf's clock now, written now, its owner there now. */
-async function keepMid(on = services, shape: (w: World) => void = () => undefined, owner: PlayerId = alice) {
-  const w = yardIn(JSON.stringify(mid));
+/** The yard part-way through the tiers that the screenshot tours stage as `mid`, built with commands, as kept: its board up, its lines delivering. */
+let midText: string | null = null;
+const mid = (): Yard => yardIn((midText ??= FACTORY.encode(stagedYard("mid"))));
+/** Puts the mid yard in Alice's place, or `owner`'s (`shape`d so): standing at Leaf's clock now, written now, its owner there now. */
+async function keepMid(on = services, shape: (w: Yard) => void = () => undefined, owner: PlayerId = alice) {
+  const w = mid();
   shape(w);
   w.at = clock.now;
-  const text = WORKS.encode(w);
+  const text = FACTORY.encode(w);
   await on.query(
     (sql) => sql`
       INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${owner}, 'works', 1, ${text}, ${clock.now})
@@ -1319,7 +1332,7 @@ async function keepMid(on = services, shape: (w: World) => void = () => undefine
   return text;
 }
 /** A yard as running every tick to Leaf's clock now, in one go, leaves it. */
-const ranOn = (text: string) => WORKS.encode(WORKS.advance(yardIn(text), ctxAt(clock.now)));
+const ranOn = (text: string) => FACTORY.encode(FACTORY.advance(yardIn(text), ctxAt(clock.now)));
 /** Alice's yard as Leaf stores it. */
 async function storedYard(on = services) {
   const [found] = await on.query(
@@ -1359,7 +1372,7 @@ async function holdingFirstRead() {
 /** Alice's page painting a belt in her yard as its copy stood at Leaf's clock now, and the yard once both that and running on are done. */
 function painting(text: string) {
   const w = yardIn(text);
-  const belt = w.cells.findIndex((b) => b?.kind === "belt");
+  const belt = beltIn(w);
   const paint = {
     do: "paint",
     x: belt % w.land.w,
@@ -1367,12 +1380,14 @@ function painting(text: string) {
     tint: 3,
     tick: clockOf(w, clock.now),
   };
-  const twin = WORKS.advance(yardIn(text), ctxAt(clock.now));
-  const read = WORKS.command(paint);
+  const twin = FACTORY.advance(yardIn(text), ctxAt(clock.now));
+  const read = FACTORY.command(paint);
   if (!read) throw new Error("not a command");
-  WORKS.apply(twin, read, ctxAt(clock.now));
-  return { paint, after: WORKS.encode(twin) };
+  FACTORY.apply(twin, read, ctxAt(clock.now));
+  return { paint, after: FACTORY.encode(twin) };
 }
+/** The first tile of a yard a belt stands on. */
+const beltIn = (w: Yard): number => w.kind.indexOf(BELT);
 
 /**
  * The Works as Leaf plays it, counting what Leaf does: each tick it runs a yard on while tending, each
@@ -1388,16 +1403,16 @@ function counted(fails: (owner: string) => boolean = () => false) {
     slices: [] as { owner: string; began: number; ended: number }[],
   };
   const game = played({
-    ...WORKS,
+    ...FACTORY,
     advance: (w, ctx) => {
       const from = w.tick;
-      const out = WORKS.advance(w, ctx);
+      const out = FACTORY.advance(w, ctx);
       run.advanced += out.tick - from;
       return out;
     },
     apply: (w, c, ctx) => {
       const from = w.tick;
-      const out = WORKS.apply(w, c, ctx);
+      const out = FACTORY.apply(w, c, ctx);
       run.applied += w.tick - from;
       return out;
     },
@@ -1405,7 +1420,7 @@ function counted(fails: (owner: string) => boolean = () => false) {
       const began = performance.now();
       let ticks = 0;
       const further =
-        WORKS.tend?.(
+        FACTORY.tend?.(
           w,
           ctx,
           () => {
@@ -1421,7 +1436,7 @@ function counted(fails: (owner: string) => boolean = () => false) {
     },
     visit: (w, ctx) => {
       run.visits++;
-      return WORKS.visit?.(w, ctx) ?? WORKS.view(w, ctx);
+      return FACTORY.visit?.(w, ctx) ?? FACTORY.view(w, ctx);
     },
   });
   return { game, run };
@@ -1489,7 +1504,7 @@ describe("Leaf tending the Works", () => {
     expect(first).toEqual({ rev: 2, state: ranOn(kept) });
     expect(yardIn(first.state).tick).toBe(yardIn(kept).tick + 6000 - LEAD);
     const scored = (await boardOf()).you?.score ?? 0;
-    expect(scored).toBe(Math.floor(yardIn(first.state).sold + yardIn(first.state).paid));
+    expect(scored).toBe(Math.floor((yardIn(first.state).sold + yardIn(first.state).paid) / MILLI));
     // Its owner's page would have sent something within the minute: a yard written that lately is the page's.
     clock.now += MINUTE;
     await tending();
@@ -1521,16 +1536,12 @@ describe("Leaf tending the Works", () => {
     clock.now += HOUR;
     const opening = await shownYard(await send("GET", "/v1/game/play/works"));
     const now = yardIn((await storedYard()).state);
-    const takenIn = Object.fromEntries(
-      ITEMS.flatMap((k) => {
-        const n = (now.depot[k] ?? 0) - (kept.depot[k] ?? 0);
-        return n > 0 ? [[k, n]] : [];
-      }),
-    );
-    expect(Object.keys(takenIn).length).toBeGreaterThan(0);
+    const takenIn = counts();
+    for (const n of ALL_ITEMS) takenIn[n] = Math.max(0, (now.depot[n] ?? 0) - (kept.depot[n] ?? 0));
+    expect(ALL_ITEMS.filter((n) => (takenIn[n] ?? 0) > 0).map(itemName).length).toBeGreaterThan(0);
     expect(opening.yard.away).toEqual({
       seconds: 3600 - LEAD / 10,
-      coins: Math.floor(now.till) - Math.floor(kept.till),
+      coins: Math.floor(now.till / MILLI) - Math.floor(kept.till / MILLI),
       made: takenIn,
     });
     // Opened again, the yard is not run or written again.
@@ -1610,10 +1621,10 @@ describe("Leaf tending the Works", () => {
       if (++reads === 1) clock.now += 5 * SECOND;
       return Promise.resolve();
     });
-    // A standing order for the kits the yard makes, which it fills by itself some ten minutes on.
+    // A standing order for the tools the yard makes, which it fills by itself a little while on.
     const kept = await keepMid(services, (w) => {
       const [first] = w.board;
-      if (first) w.board[0] = { ...first, want: { kit: 40 }, filled: {} };
+      if (first) w.board[0] = { ...first, want: countsOf({ tool: 40 }), filled: counts() };
     });
     const { order, tick } = nextFill(kept, clock.now);
     // The page swaps the order half a second before it would fill: at that tick it may, fifty ticks on it may not.
@@ -1804,7 +1815,7 @@ describe("Leaf tending the Works", () => {
       services
         .query(
           (sql) =>
-            sql`UPDATE play_state SET rev = rev + 1, state = ${WORKS.encode(moved)}, updated_at = ${clock.now - 9 * HOUR} WHERE player_id = ${alice}`,
+            sql`UPDATE play_state SET rev = rev + 1, state = ${FACTORY.encode(moved)}, updated_at = ${clock.now - 9 * HOUR} WHERE player_id = ${alice}`,
         )
         .then(() => undefined);
     let again = 0;
@@ -1952,10 +1963,10 @@ describe("Leaf tending the Works", () => {
 
   it("notices a state written behind its back: the next job in the line reads what was written", async () => {
     let reads = 0;
-    const staged = yardIn(JSON.stringify(mid));
+    const staged = mid();
     staged.at = clock.now + 10 * MINUTE;
     staged.bank += 5;
-    const text = WORKS.encode(staged);
+    const text = FACTORY.encode(staged);
     // Leaf has read Alice's yard for Bob's visit when a staging step writes another over it.
     await afterEachRead(async () => {
       if (++reads !== 1) return;
@@ -1994,9 +2005,12 @@ describe("Leaf tending the Works", () => {
 
   it("after a deploy, runs a yard kept before it knew its owner's last command eight hours on from its last tick, once; its owner opening it meanwhile waits", async () => {
     const { game, run } = counted();
-    const w = yardIn(JSON.stringify(mid));
+    const w = mid();
     w.at = clock.now;
-    const text = WORKS.encode(w).replace(`,"seen":${JSON.stringify(w.seen)}`, "");
+    const kept: unknown = JSON.parse(FACTORY.encode(w));
+    const text = JSON.stringify(
+      isRecord(kept) ? Object.fromEntries(Object.entries(kept).filter(([k]) => k !== "seen")) : {},
+    );
     expect(text).not.toContain('"seen"');
     await services.query(
       (sql) =>
@@ -2081,11 +2095,11 @@ describe("Leaf tending the Works", () => {
 
   it("checks the stored rev before it writes anything: a batch whose copy went stale is done again from what was written, and keeps its answer at that rev", async () => {
     // Leaf has read Alice's yard, a belt taken away, for her batch when a staging step writes it back.
-    const w = yardIn(JSON.stringify(mid));
-    const belt = w.cells.findIndex((b) => b?.kind === "belt");
+    const w = mid();
+    const belt = beltIn(w);
     const spot = { x: belt % w.land.w, y: Math.floor(belt / w.land.w) };
     w.at = clock.now;
-    const staged = WORKS.encode(w);
+    const staged = FACTORY.encode(w);
     let reads = 0;
     await afterEachRead(async () => {
       if (++reads !== 1) return;
@@ -2096,7 +2110,7 @@ describe("Leaf tending the Works", () => {
     });
     const kept = await keepMid(
       services,
-      (y) => void WORKS.apply(y, { do: "remove", ...spot, tick: y.tick }, ctxAt(clock.now)),
+      (y) => void FACTORY.apply(y, { do: "remove", ...spot, tick: y.tick }, ctxAt(clock.now)),
     );
     // Painting the belt: refused in the yard read, done in the one written.
     const paint = { id: "p-1", do: "paint", ...spot, tint: 3, tick: clockOf(yardIn(kept), clock.now) };
@@ -2265,7 +2279,7 @@ describe("a person's numbers", () => {
       games: {
         raid: { place: 1, score: bosses, also: { runs: 1, room: Math.max(...view.almanac.best) }, played: seconds },
         // A standing from before Leaf counted time.
-        works: { place: 2, score: 500, also: { story: 500 % 16 }, played: 0 },
+        works: { place: 2, score: 500, also: { tier: 500 % 5 }, played: 0 },
       },
       played: seconds,
     });
@@ -2276,7 +2290,7 @@ describe("a person's numbers", () => {
     expect(await personOf(stranger(4))).toEqual({
       id: stranger(4),
       name: "Someone",
-      games: { works: { place: 1, score: 0, also: { story: 0 }, played: 0 } },
+      games: { works: { place: 1, score: 0, also: { tier: 0 }, played: 0 } },
       played: 0,
     });
     // Carol, a guest, asks about herself before she has played.
@@ -2485,11 +2499,11 @@ describe("awards", () => {
     const { clock: tick } = yardOf(
       Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state,
     );
-    const yard = WORKS.decode((await storedIn("works"))[0]?.state ?? "");
+    const yard = FACTORY.decode((await storedIn("works"))[0]?.state ?? "");
     if (!yard) throw new Error("no yard");
-    deliver(yard, "crab", 1);
+    deliver(yard, item("crab"), 1);
     await services.query(
-      (sql) => sql`UPDATE play_state SET state = ${WORKS.encode(yard)} WHERE player_id = ${alice} AND game = 'works'`,
+      (sql) => sql`UPDATE play_state SET state = ${FACTORY.encode(yard)} WHERE player_id = ${alice} AND game = 'works'`,
     );
     clock.now += 5000;
     await send("POST", "/v1/game/play/works", { commands: [{ id: "w-1", do: "collect", tick: tick + 50 }] });

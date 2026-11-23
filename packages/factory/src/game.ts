@@ -22,7 +22,7 @@ import {
 } from "./build.ts";
 import { check } from "./check.ts";
 import { awayOf, here, stillAt, TICK_MS } from "./clock.ts";
-import { decode, encode } from "./codec.ts";
+import { decode, encode, type KeptOrder } from "./codec.ts";
 import { STAND_MOST } from "./content/machines.ts";
 import { LAND, type Land } from "./land.ts";
 import { paint } from "./lines.ts";
@@ -38,6 +38,7 @@ import {
   takeRefusal,
   unstudy,
 } from "./orders.ts";
+import { shortOf } from "./page.ts";
 import {
   blueprintAt,
   clear,
@@ -50,6 +51,7 @@ import {
   TINTS,
   upgrade,
 } from "./pieces.ts";
+import { postcard } from "./postcard.ts";
 import {
   BELT,
   BLUEPRINTS_MOST,
@@ -135,6 +137,14 @@ export const answer = (y: Yard): Answer => ({
   check: check(y),
   hung: y.board.filter((o) => y.tick < o.starts - ORDER_WAITS + ORDER_TOLD),
 });
+
+/** The answer as it goes on the wire (`FACTORY.answer`): Leaf's tick now beside it, and each order by name (`keptOrder`). */
+export interface Short {
+  readonly clock: number;
+  readonly tick: number;
+  readonly check: number;
+  readonly hung: readonly KeptOrder[];
+}
 
 /** A command the rules turned down: the code Leaf answers, and the sentence the page says. */
 export type Turned = Refused & { readonly why: string };
@@ -483,11 +493,8 @@ const view = (y: Yard, ctx: Ctx, blueprints = true): View => ({
   clock: clockOf(y, ctx.now),
 });
 
-/** The two things that take the whole yard, by the names the town knows them by. */
-const CAPSTONES = ["crab", "beacon"] as const;
-
 /** The Works on flat data, for Leaf's play service. */
-export const FACTORY: Game<Yard, Command, View, News> = {
+export const FACTORY: Game<Yard, Command, View, News, Short> = {
   id: "works",
   create: (ctx) => {
     const y = create({ seed: ctx.seed });
@@ -498,10 +505,12 @@ export const FACTORY: Game<Yard, Command, View, News> = {
   tend: (y, ctx, more, c) => runOn(y, ctx.now, more, c),
   apply: (y, c, ctx) => play(y, { ...c, tick: tickOf(y, c, ctx.now) }),
   view: (y, ctx) => view(y, ctx),
+  answer: (y, ctx) => shortOf(clockOf(y, ctx.now), answer(y)),
   visit: (y, ctx) => view(y, ctx, false),
   decode: (text) => decode(text),
   encode: (y) => encode(y),
   command: readCommand,
   standing: (y) => ({ score: Math.floor((y.sold + y.paid) / MILLI), also: { tier: y.open.tier } }),
-  awards: (y) => CAPSTONES.filter((name) => (y.depot[itemNamed(name) ?? 0] ?? 0) > 0).map((k) => `model-${k}`),
+  // A model of each capstone the depot has taken in, for the member's camp.
+  awards: (y) => postcard(y).trophies.map((k) => `model-${k}`),
 };

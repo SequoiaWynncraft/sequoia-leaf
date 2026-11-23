@@ -10,6 +10,7 @@
  * and "Visit camp" if they have a camp. The button is there only while the town is on the stage.
  */
 
+import { WORKS_STATS } from "@sequoia-leaf/factory/stats.ts";
 import { close, link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon as glyph } from "@sequoia-leaf/kit/dom.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
@@ -18,7 +19,6 @@ import { faceFor } from "@sequoia-leaf/kit/skin.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { RAID_STATS } from "@sequoia-leaf/raid/stats.ts";
 import { TOWN_STATS } from "@sequoia-leaf/town/stats.ts";
-import { WORKS_STATS } from "@sequoia-leaf/yard/stats.ts";
 
 import { type About, type AboutRow, ALONE, held, whoIsAbout } from "./about.ts";
 import { type Actor, G, hooks } from "./game.ts";

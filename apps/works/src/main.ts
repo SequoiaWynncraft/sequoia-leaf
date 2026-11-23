@@ -3,13 +3,36 @@
  * lies on the forest floor into what the guild has asked for.
  *
  * This file is the stage: it opens the yard, owns the canvas and the loop, and joins the parts
- * together. The rules are `@sequoia-leaf/yard`, the picture in `scene.ts` and `art/`, what the
+ * together. The rules are `@sequoia-leaf/factory`, the picture in `scene.ts` and `art/`, what the
  * member does in `tools.ts` and `input.ts`, and everything that sits over the yard in `ui/`.
  *
  * Opened with `?of=<player>`, it is a visit to that player's yard (`S.visiting`): the same yard,
- * with nothing to act with, no lessons or letters, and nothing told to the town.
+ * with nothing to act with, no lessons or letters, and nothing told to the town. Opened by a review
+ * page with a yard of its own (`S.alone`, `review/bench.ts`), it opens nothing from Leaf.
+ *
+ * The handles on `window.works` are for scripts from outside, and name kinds, plots and commands
+ * as the wire does: a command given to `act` is read as Leaf reads one (`readCommand`).
  */
 
+import {
+  ALL_ITEMS,
+  decode,
+  type Dir,
+  encode,
+  GOALS,
+  ITEM_INFO,
+  kindName,
+  kindNamed,
+  LAND,
+  MILLI,
+  NONE,
+  PIECE_BYTES,
+  plotNamed,
+  postcard,
+  power,
+  readCommand,
+  stepTo,
+} from "@sequoia-leaf/factory";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepLeaf, pageCard, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
 import { askPerson } from "@sequoia-leaf/kit/person.ts";
@@ -21,21 +44,6 @@ import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { tipOff } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
-import {
-  type Dir,
-  ITEM,
-  ITEMS,
-  type Kind,
-  LAND,
-  type PlanId,
-  type PlotId,
-  postcard,
-  power,
-  stepTo,
-  type Tally,
-  WORKS,
-  type WorksAct,
-} from "@sequoia-leaf/yard";
 
 import { stepFlights, stepWalkers } from "./actors.ts";
 import { TILE } from "./art/belts.ts";
@@ -49,10 +57,16 @@ import { drawWords, drawYard, lap, picture, spent, wipe } from "./scene.ts";
 import { sheets } from "./sheets.ts";
 import { murmur, yardSfx } from "./sound.ts";
 import { S, type Tool, toPage, touched } from "./state.ts";
+/** A goal's id, as a script reads it; null for none. */
+const goalId = (g: number): string | null => GOALS[g]?.id ?? null;
+/** A tool as a script names it, as the page holds it; undefined for a name that is none. */
+function toolNamed(name: Named): Tool | undefined {
+  if (name === null || name === "remove" || name === "select" || name === "paint") return name;
+  return kindNamed(name) ?? undefined;
+}
 import { nudge } from "./teach.ts";
 import {
   aimAt,
-  buyIdea,
   buyLand,
   cancel,
   confirm,
@@ -73,14 +87,32 @@ import { putAway, reading, showLetter } from "./ui/letter.ts";
 import { closeBanner, feed, initNotes, tickNotes } from "./ui/notes.ts";
 import { closePanel, initPanels, openPanel, panelHooks, type PanelId, refreshPanel } from "./ui/panels.ts";
 import { $ } from "./ui/parts.ts";
-import { again, differences, doNow, gate, keepScreen, leadAt, onRefused, openYard, runYard, screen } from "./yard.ts";
+import {
+  again,
+  differences,
+  doNow,
+  gate,
+  keepScreen,
+  leadAt,
+  onRefused,
+  openYard,
+  runYard,
+  screen,
+  yardReads,
+} from "./yard.ts";
 
 /** What the page says where no Leaf answers: the yard is the guild's server's. */
 const NEEDS_LEAF = "The Works needs the guild's server.";
 
 /** A moment staged in the yard by the play server on a developer's machine (`apps/api/test/play.ts`), for the tours. */
 type Staged =
-  { yard: "small" | "short" | "mid" | "large" | "new" } | { text: string } | { away: number } | { fill: number };
+  | { yard: "small" | "short" | "mid" | "large" | "new" }
+  | { text: string }
+  | { away: number }
+  | { fill: number }
+  | { feed: true };
+/** A tool as a script names it: a kind of piece by its name, the spade, Select, the brush, or nothing. */
+type Named = string | null;
 
 declare global {
   interface Window {
@@ -100,15 +132,15 @@ declare global {
        * how many pieces are on it. The yard is run that far ahead of Leaf, and waits there for it.
        */
       bench: (frames: number, hz?: number) => { ms: Record<string, number>; picture: Pt; pieces: number };
-      pick: (tool: Tool, dir?: Dir) => void;
+      pick: (tool: Named, dir?: Dir) => void;
       finger: (on: boolean) => void;
       aim: (x: number, y: number) => void;
       tap: (x: number, y: number) => void;
-      build: (kind: Kind, x: number, y: number, dir?: Dir) => boolean;
+      build: (kind: string, x: number, y: number, dir?: Dir) => boolean;
       remove: (x: number, y: number) => boolean;
       paint: (x: number, y: number, tint: number) => boolean;
-      /** Does any command as the member would, and says why the rules refuse it, or null when done. */
-      act: (act: WorksAct) => string | null;
+      /** Does any command, as the wire has it, as the member would, and says why it is refused, or null when done. */
+      act: (command: Record<string, unknown>) => string | null;
       drag: (x0: number, y0: number, x1: number, y1: number) => void;
       drop: () => void;
       confirm: () => boolean;
@@ -117,14 +149,13 @@ declare global {
       card: (x: number, y: number) => boolean;
       look: (x: number, y: number) => void;
       zoom: (by: number) => void;
-      plot: (id: PlotId) => boolean;
-      plan: (id: PlanId) => boolean;
+      plot: (id: string) => boolean;
       taught: (ids: string[]) => void;
       page: (x: number, y: number) => Pt;
       /** What is riding a belt on a tile, as a card's reference, if anything. */
       rider: (x: number, y: number) => string | null;
       /** The tiles where a kind of thing stands. */
-      where: (kind: Kind) => Pt[];
+      where: (kind: string) => Pt[];
       state: () => Record<string, unknown>;
     };
   }
@@ -177,23 +208,16 @@ function sendCard(): void {
   post("works", card);
 }
 
-async function boot(): Promise<void> {
-  await fontsReady();
-  // Every sprite on sheets: a picture of the art, which needs no yard.
-  const params = new URLSearchParams(location.search);
-  if (params.has("sheet")) {
-    sheets(makeArt(LAND), params.get("sheet") ?? "");
-    return;
-  }
-  // Who the member is, and then the yard as Leaf has it. Without Leaf there is no yard.
+/** Who the member is, once the yard is open from Leaf; or nothing, with the card that says why it is not. */
+async function opened(params: URLSearchParams): Promise<{ id: string } | null> {
   const where = await start();
   if (where.mode === "shut") {
     shutCard(where.why, where.signIn);
-    return;
+    return null;
   }
   if (where.mode !== "live") {
     serverCard(NEEDS_LEAF);
-    return;
+    return null;
   }
   const { signIn, me } = where;
   const of = params.get("of");
@@ -207,9 +231,24 @@ async function boot(): Promise<void> {
   const [trouble, owner] = await Promise.all([openYard(me.id, card), S.visiting && askPerson(S.visiting.id)]);
   if (trouble) {
     card(trouble);
-    return;
+    return null;
   }
   if (S.visiting && owner) S.visiting.name = owner.name;
+  return me;
+}
+
+async function boot(): Promise<void> {
+  await fontsReady();
+  // Every sprite on sheets: a picture of the art, which needs no yard.
+  const params = new URLSearchParams(location.search);
+  if (params.has("sheet")) {
+    sheets(makeArt(LAND), params.get("sheet") ?? "");
+    return;
+  }
+  // Who the member is, and then the yard as Leaf has it. Without Leaf there is no yard, unless a
+  // review page handed one in.
+  const me = S.alone ? { id: "" } : await opened(params);
+  if (!me) return;
   const art = makeArt(S.world.land);
 
   // The yard's picture, shown small and enlarged by the page; over it, the words, which also take every press.
@@ -269,15 +308,15 @@ async function boot(): Promise<void> {
   onRefused((why) => feed(`${why}. The yard is shown as the server has it.`, "coral"));
 
   /** What the depot had taken in a moment ago, to hear each thing arrive. */
-  let heard: Tally = { ...S.world.depot };
+  let heard = Float64Array.from(S.world.depot);
   let arriveAt = 0;
   function arrivals(): void {
     const w = S.world;
-    for (const k of ITEMS) {
+    for (const k of ALL_ITEMS) {
       const n = w.depot[k] ?? 0;
       if (n > (heard[k] ?? 0) && S.t > arriveAt) {
         arriveAt = S.t + 0.11;
-        yardSfx.arrive(ITEM[k].step);
+        yardSfx.arrive(ITEM_INFO[k]?.step ?? 0);
       }
       heard[k] = n;
     }
@@ -301,7 +340,7 @@ async function boot(): Promise<void> {
       shown = n.id;
       since = S.t;
       // The first lessons bring the place they are about into view.
-      if (n.lasting && S.world.story === 0 && !inView(n.x * TILE + 8, n.y * TILE + 8))
+      if (n.lasting && S.world.done.length === 0 && !inView(n.x * TILE + 8, n.y * TILE + 8))
         look(n.x * TILE + 8, n.y * TILE - 8);
     }
     // A lesson that is not learnt by doing is said for a while, and then counts as taken.
@@ -416,9 +455,11 @@ async function boot(): Promise<void> {
     }
   });
   window.addEventListener("pagehide", keepSettings);
-  here("works");
-  // In the town, the town says when the member's Leaf changes; opened on its own, the yard listens itself.
-  keepLeaf();
+  if (!S.alone) {
+    here("works");
+    // In the town, the town says when the member's Leaf changes; opened on its own, the yard listens itself.
+    keepLeaf();
+  }
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") keepSettings();
     // A phone may empty the pictures the frame keeps while the page is put away.
@@ -449,10 +490,13 @@ async function boot(): Promise<void> {
       setTool(null);
       S.picked = -1;
       S.clearing.clear();
-      heard = { ...S.world.depot };
-      screen.taught = ops.some((op) => "yard" in op && op.yard === "new")
-        ? []
-        : ["planks", "pylon", "bench", "board", "select", "short", "starved"];
+      heard = Float64Array.from(S.world.depot);
+      // A yard put in place of another starts its lessons as a new one does, or with them taken; a
+      // step within the same yard (a time away, an order filled, a feed) leaves what has been taught.
+      if (ops.some((op) => "yard" in op || "text" in op))
+        screen.taught = ops.some((op) => "yard" in op && op.yard === "new")
+          ? []
+          : ["planks", "pylon", "bench", "board", "select", "short", "starved"];
       shown = "";
       nudgeAt = 0;
       look(home().x, home().y, true);
@@ -477,7 +521,7 @@ async function boot(): Promise<void> {
       const yard = S.world;
       const held = S.held;
       const lead = heldLead;
-      S.world = WORKS.decode(WORKS.encode(yard)) ?? yard;
+      S.world = decode(encode(yard), yard.land) ?? yard;
       S.held = true;
       for (let k = 0; k < frames; k++) {
         lap();
@@ -494,23 +538,26 @@ async function boot(): Promise<void> {
       const ms = Object.fromEntries(Object.entries(spent.ms).map(([part, sum]) => [part, sum / frames]));
       spent.on = was;
       spent.ms = kept;
-      const { land, cells } = S.world;
+      const { land, kind } = S.world;
       const x0 = S.cam.x / TILE;
       const y0 = S.cam.y / TILE;
-      const pieces = cells.filter((b, i) => {
+      let pieces = 0;
+      for (let i = 0; i < kind.length; i++) {
         const x = i % land.w;
         const y = Math.floor(i / land.w);
-        return b && x + 1 > x0 && x < x0 + S.view.w / TILE && y + 1 > y0 && y < y0 + S.view.h / TILE;
-      }).length;
+        if (kind[i] !== NONE && x + 1 > x0 && x < x0 + S.view.w / TILE && y + 1 > y0 && y < y0 + S.view.h / TILE)
+          pieces++;
+      }
       S.world = yard;
       S.held = held;
       heldLead = lead;
       S.rev++;
       return { ms, picture: { x: picture.width, y: picture.height }, pieces };
     },
-    pick(tool, dir) {
+    pick(name, dir) {
       if (dir !== undefined) S.dir = dir;
-      setTool(tool);
+      const tool = toolNamed(name);
+      if (tool !== undefined) setTool(tool);
     },
     finger(on) {
       S.finger = on;
@@ -527,9 +574,11 @@ async function boot(): Promise<void> {
       else fingerTap(x, y);
       refreshDock();
     },
-    build(kind, x, y, dir = 0) {
+    build(name, x, y, dir = 0) {
+      const tool = toolNamed(name);
+      if (tool === undefined || tool === null) return false;
       S.dir = dir;
-      setTool(kind);
+      setTool(tool);
       const ok = place(x, y);
       setTool(null);
       return ok;
@@ -539,8 +588,10 @@ async function boot(): Promise<void> {
       S.tint = tint;
       return paintAt(x, y);
     },
-    act(act) {
-      const done = doNow(act);
+    act(command) {
+      const read = readCommand({ ...command, tick: S.world.tick });
+      if (!read) return "That is not a command";
+      const done = doNow(read);
       touched();
       refreshAll();
       return "refused" in done ? done.why : null;
@@ -563,8 +614,10 @@ async function boot(): Promise<void> {
     zoom(by) {
       zoom(by, window.innerWidth / 2, window.innerHeight / 2);
     },
-    plot: buyLand,
-    plan: buyIdea,
+    plot(id) {
+      const p = plotNamed(id);
+      return p !== null && buyLand(p);
+    },
     taught(ids) {
       screen.taught = ids;
       nudgeAt = 0;
@@ -573,9 +626,13 @@ async function boot(): Promise<void> {
     page(x, y) {
       return toPage(x * TILE + 8, y * TILE + 8);
     },
-    where(kind) {
+    where(name) {
       const w = S.world;
-      return w.cells.flatMap((b, i) => (b?.kind === kind ? [{ x: i % w.land.w, y: Math.floor(i / w.land.w) }] : []));
+      const k = kindNamed(name);
+      const out: Pt[] = [];
+      for (let i = 0; i < w.kind.length; i++)
+        if (k !== null && w.kind[i] === k) out.push({ x: i % w.land.w, y: Math.floor(i / w.land.w) });
+      return out;
     },
     state() {
       const w = S.world;
@@ -583,25 +640,29 @@ async function boot(): Promise<void> {
         coins: balance().coins,
         leaf: balance().leaf,
         tick: w.tick,
-        till: w.till,
+        till: w.till / MILLI,
         board: w.board.map((o) => o.id),
-        story: w.story,
+        hand: goalId(w.hand),
+        done: w.done.map(goalId),
+        tier: w.open.tier,
         built: layout(w, S.rev).built,
-        painted: w.cells.filter((b) => b && b.tint > 0).length,
+        painted: w.kind.reduce((n, k, i) => n + (k !== NONE && (w.tint[i] ?? 0) > 0 ? 1 : 0), 0),
         nudge: S.nudge?.id ?? null,
-        tool: S.tool,
+        nudgeAt: S.nudge ? { x: S.nudge.x, y: S.nudge.y } : null,
+        tool: typeof S.tool === "number" ? kindName(S.tool) : S.tool,
         aim: S.aim,
         run: S.run ? { legs: S.run.legs.length, cost: S.run.cost, why: S.run.why } : null,
         mark: S.mark ? { pieces: S.mark.pieces.length, cost: S.mark.cost } : null,
         group: S.group
           ? { as: S.group.as, turns: S.group.turns, bad: S.group.why.filter((r) => r !== null).length }
           : null,
-        blueprints: w.blueprints.map((b) => b?.length ?? 0),
+        blueprints: w.blueprints.map((b) => (b ? b.length / PIECE_BYTES : 0)),
         panel: S.panel,
         picked: S.picked,
         power: power(w),
         z: S.view.z,
         differences: differences(),
+        reads: yardReads(),
       };
     },
   };

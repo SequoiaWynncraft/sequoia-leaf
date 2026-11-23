@@ -247,10 +247,11 @@ const CLOSERS = ALL_GOALS.reduce<Goal[][]>((by, g) => {
 /** Everything named in some unlock, and in what a new yard has. */
 const UNLOCKS = [START, ...GOALS.map((g) => g.unlocks)];
 const most = (f: (u: Unlocks) => number | undefined): number => Math.max(0, ...UNLOCKS.map((u) => f(u) ?? 0));
-/** The most of these any yard may have: tiles under a tunnel, blueprints, things in a crate. */
+/** The most of these any yard may have: tiles under a tunnel, blueprints, things in a crate, orders on the board. */
 export const SPAN_MOST = most((u) => u.span);
 export const BLUEPRINTS_MOST = most((u) => u.blueprints?.count);
 export const CRATE_MOST = most((u) => u.crate);
+export const HOOKS_MOST = most((u) => u.hooks);
 /** The recipes some goal unlocks; every other is known from the start. */
 const LOCKED = new Set(GOALS.flatMap((g) => (g.unlocks.recipes ?? []).map(item)));
 

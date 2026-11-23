@@ -1,6 +1,6 @@
 # The game's pages, built from the three apps, the kit they share, the core
 # rules the kit shares with Leaf (the live wire), and the games' rules
-# (packages/raid, packages/yard and packages/town, which the pages share with
+# (packages/raid, packages/factory and packages/town, which the pages share with
 # Leaf's play service). Each build is plain files, so only /app/public goes on
 # to the image.
 FROM docker.io/oven/bun:1.4.4-slim AS pages
@@ -11,7 +11,7 @@ COPY package.json bun.lock bunfig.toml tsconfig.base.json ./
 COPY packages/kit/package.json packages/kit/
 COPY packages/core/package.json packages/core/
 COPY packages/raid/package.json packages/raid/
-COPY packages/yard/package.json packages/yard/
+COPY packages/factory/package.json packages/factory/
 COPY packages/town/package.json packages/town/
 COPY packages/pulls/package.json packages/pulls/
 COPY apps/town/package.json apps/town/
@@ -22,7 +22,7 @@ RUN bun install --frozen-lockfile --production
 COPY packages/kit packages/kit
 COPY packages/core packages/core
 COPY packages/raid packages/raid
-COPY packages/yard packages/yard
+COPY packages/factory packages/factory
 COPY packages/town packages/town
 COPY packages/pulls packages/pulls
 COPY apps/town apps/town
@@ -41,7 +41,7 @@ COPY package.json bun.lock bunfig.toml ./
 COPY apps/api/package.json apps/api/
 COPY packages/core/package.json packages/core/
 COPY packages/raid/package.json packages/raid/
-COPY packages/yard/package.json packages/yard/
+COPY packages/factory/package.json packages/factory/
 COPY packages/town/package.json packages/town/
 COPY packages/pulls/package.json packages/pulls/
 RUN bun install --frozen-lockfile --production
@@ -49,7 +49,7 @@ RUN bun install --frozen-lockfile --production
 COPY apps/api apps/api
 COPY packages/core packages/core
 COPY packages/raid packages/raid
-COPY packages/yard packages/yard
+COPY packages/factory packages/factory
 COPY packages/town packages/town
 COPY packages/pulls packages/pulls
 COPY --from=pages /app/public /app/public

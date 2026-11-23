@@ -3,19 +3,27 @@
  * hand, and what is being shown about it. Everything the screen's parts share lives here.
  */
 
+import {
+  type Dir,
+  emptyYard,
+  type Kind,
+  LAND,
+  type Leg,
+  type Piece,
+  type Plot,
+  type Yard,
+} from "@sequoia-leaf/factory";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
-import { create, type Dir, type Kind, type Leg, type Piece, type PlotId, type World } from "@sequoia-leaf/yard";
 
 import { TILE } from "./art/belts.ts";
 
 /**
- * What is in the member's hand: something to build, the spade that takes things away, Select for
- * many pieces at once, the brush that colours lines, or nothing.
+ * What is in the member's hand: a kind of piece to build (by its number), the spade that takes
+ * things away, Select for many pieces at once, the brush that colours lines, or nothing.
  */
 export type Tool = Kind | "remove" | "select" | "paint" | null;
 /** Whether a tool is something to build. */
-export const builds = (tool: Tool): tool is Kind =>
-  tool !== null && tool !== "remove" && tool !== "select" && tool !== "paint";
+export const builds = (tool: Tool): tool is Kind => typeof tool === "number";
 
 /** A place being pointed at to build on, and what would come of it. */
 export interface Aim {
@@ -60,13 +68,18 @@ export interface Group {
 }
 
 export const S: {
-  /** The page's copy of Leaf's yard (`yard.ts`). */
-  world: World;
+  /** The page's copy of Leaf's yard (`yard.ts`), as the rules hold it: flat arrays, read where it is drawn and decided. */
+  world: Yard;
   /**
    * Whose yard it is when it is not the member's own: a visit, where they look about and change
    * nothing. Each part of the screen that acts on the yard asks this.
    */
   visiting: { readonly id: string; name: string } | null;
+  /**
+   * The yard was handed to the page by a review page of its own (`review/bench.ts`), not opened from
+   * Leaf: nothing is opened, sent or kept, and the yard is not run on but by `works.bench`.
+   */
+  alone: boolean;
   /** Counts every change to what stands where, so that what is worked out from it can be kept until the next. */
   rev: number;
   /** Seconds the screen has been running, and whether its clock is being stepped by hand from outside. */
@@ -97,15 +110,16 @@ export const S: {
   /** The tile whose card is open. */
   picked: number;
   /** Plots being cleared before the member's eyes: when each began, in screen seconds, and where from. */
-  clearing: Map<PlotId, { at: number; x: number; y: number }>;
+  clearing: Map<Plot, { at: number; x: number; y: number }>;
   /** Which panel is open. */
   panel: string | null;
   /** The tile a nudge is pointing at, and what it says; and the tool it wants picked up. */
   nudge: { x: number; y: number; text: string; id: string } | null;
   nudgeTool: Tool;
 } = {
-  world: create(),
+  world: emptyYard(LAND),
   visiting: null,
+  alone: false,
   rev: 0,
   t: 0,
   held: false,

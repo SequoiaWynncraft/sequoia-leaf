@@ -6,10 +6,10 @@
  * (or the Build button) builds; an area is marked by tapping two opposite corners.
  */
 
+import { at, BELT } from "@sequoia-leaf/factory";
 import { pick, point, shown, surface } from "@sequoia-leaf/kit/card.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/tip.ts";
-import { at } from "@sequoia-leaf/yard";
 
 import { pan, zoom } from "./camera.ts";
 import { callerAt } from "./events.ts";
@@ -94,7 +94,7 @@ function ask(tx: number, ty: number, pageX: number, pageY: number): void {
 
 /** A finger's tap with a tool in hand: aim first, build on the second tap of the same tile. Paint goes on at the first. */
 export function fingerTap(tx: number, ty: number): void {
-  if (S.tool === "belt") {
+  if (S.tool === BELT) {
     tapBelt(tx, ty);
     return;
   }
@@ -202,7 +202,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
     } else if (S.tool === "paint") {
       d.doing = "paint";
       paintAt(t.x, t.y);
-    } else if (S.tool === "belt") {
+    } else if (S.tool === BELT) {
       d.doing = "run";
       runStart(t.x, t.y);
     } else if (S.tool === "select" && !S.group) {
@@ -321,9 +321,8 @@ export function initInput(canvas: HTMLCanvasElement): void {
       if (on) pickFrom(on.x, on.y);
     } else if (k === "o") togglePanel("orders");
     else if (k === "t") togglePanel("board");
-    else if (k === "p") togglePanel("plans");
+    else if (k === "p") togglePanel("projects");
     else if (k === "i") togglePanel("depot");
-    else if (k === "l") togglePanel("shift");
     else if (k === "+" || k === "=") zoom(1, window.innerWidth / 2, window.innerHeight / 2);
     else if (k === "_") zoom(-1, window.innerWidth / 2, window.innerHeight / 2);
     else if (k.startsWith("arrow") || k === "w" || k === "a" || k === "s" || k === "d") {

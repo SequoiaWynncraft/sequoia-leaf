@@ -12,10 +12,10 @@
   },
   "dependencies": {
     "@sequoia-leaf/core": "workspace:*",
+    "@sequoia-leaf/factory": "workspace:*",
     "@sequoia-leaf/kit": "workspace:*",
     "@sequoia-leaf/pulls": "workspace:*",
     "@sequoia-leaf/raid": "workspace:*",
-    "@sequoia-leaf/town": "workspace:*",
-    "@sequoia-leaf/yard": "workspace:*"
+    "@sequoia-leaf/town": "workspace:*"
   }
 }
