@@ -30,6 +30,8 @@ const t = traitNumber;
 const kinds = (...list: UnitKind[]): Carrier[] => list.map((kind) => ({ kind, items: [] }));
 /** What Gnome multiplies a gnome's health by at a step. */
 const gnomeHealth = (step: number) => 1 + t("gnome", "health", step) / 100;
+/** One of It Is A Rock's numbers at one star. */
+const rockSays = (name: string) => abilityNumber("rock", name, 1);
 /** Greg's health at the start of a fight, having eaten a number of times. */
 const gregsHealth = (fed: number): number => {
   const f = fightOf([{ kind: "greg", stars: 1, seat: 3, items: [], fed }], [at("mud", 3, 3)]);
@@ -213,7 +215,6 @@ describe("kins", () => {
     stillSide(f, 1);
     const rock = unitOf(f, "rock");
     const foe = unitOf(f, "mud", 1);
-    const rockSays = (name: string) => abilityNumber("rock", name, 1);
     // Its own ability is up, stronger and longer than Burrow's dig.
     brace(f, rock, rockSays("less"), rockSays("stub"), rockSays("lasts"));
     const until = rock.bracedUntil;
