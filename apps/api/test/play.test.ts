@@ -2539,7 +2539,7 @@ describe("the town, played by commands through HTTP", () => {
     expect(results.map((r) => ("notes" in r ? r.notes : r.refused))).toEqual([[], []]);
     expect([view.camp.tray, view.camp.fresh, view.camp.placed.length]).toEqual([{ pumpkin: 1 }, { pumpkin: 1 }, 9]);
     const { view: set } = await townDid([
-      { id: "a-3", do: "looked" },
+      { id: "a-3", do: "looked", things: ["pumpkin"] },
       { id: "a-3b", do: "setOut", thing: "pumpkin", x: 30, y: 20, t: 0 },
     ]);
     expect([set.camp.tray, set.camp.fresh, set.camp.placed.length]).toEqual([{}, {}, 10]);

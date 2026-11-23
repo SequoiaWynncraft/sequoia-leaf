@@ -54,7 +54,7 @@ import {
   WHILE_AWAY,
 } from "./folk.ts";
 import { isLetter, type Letter, letter, post, tidied } from "./mail.ts";
-import { isThing, thingOf, turnsOf } from "./things.ts";
+import { isThing, thingOf, THINGS, turnsOf } from "./things.ts";
 
 // ---------- the state ----------
 
@@ -141,8 +141,8 @@ export type TownCommand =
   | { do: "readMail" }
   | { do: "takePresent"; letter: string }
   | { do: "clearLetters" }
-  /** The member has looked in the tray: nothing in it is new any more. */
-  | { do: "looked" }
+  /** The member has looked in the tray: the things it showed as new are new no more. What came since stays new. */
+  | { do: "looked"; things: string[] }
   | ({ do: "setOut"; thing: string } & At)
   /** Moving and turning: the page works out where, the rules check it. */
   | ({ do: "move"; n: number } & At)
@@ -343,7 +343,7 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
       camp.letters = tidied(camp.letters);
       return done(s);
     case "looked":
-      camp.fresh = {};
+      for (const id of c.things) delete camp.fresh[id];
       return done(s);
     case "setOut": {
       if ((camp.tray[c.thing] ?? 0) < 1) return no("not_in_tray");
@@ -503,8 +503,11 @@ export function readCommand(v: unknown): TownCommand | null {
     case "spotCrab":
     case "readMail":
     case "clearLetters":
-    case "looked":
       return { do: v.do };
+    case "looked":
+      return Array.isArray(v.things) && v.things.length <= THINGS.length && v.things.every(isThing)
+        ? { do: "looked", things: v.things }
+        : null;
     case "buy":
       return typeof v.stall === "string" && isThing(v.thing) ? { do: "buy", stall: v.stall, thing: v.thing } : null;
     case "choosePet":

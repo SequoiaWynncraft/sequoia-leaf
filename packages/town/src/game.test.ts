@@ -322,7 +322,10 @@ describe("things in the camp", () => {
     // One taken in hand has been looked at; the rest are new until the tray is looked in.
     s = did(s, { do: "setOut", thing: ware.thing, x: 30, y: 20, t: 0 }).state;
     expect([s.camp.tray, s.camp.fresh]).toEqual([{ "model-crab": 1, [ware.thing]: 1 }, { "model-crab": 1 }]);
-    s = did(s, { do: "looked" }).state;
+    // Looked in: what the page showed as new is new no more, and what it had not shown yet stays new.
+    s = did(s, { do: "looked", things: [] }).state;
+    expect(newThings(s.camp)).toBe(1);
+    s = did(s, { do: "looked", things: ["model-crab"] }).state;
     expect([s.camp.tray, s.camp.fresh, newThings(s.camp)]).toEqual([{ "model-crab": 1, [ware.thing]: 1 }, {}, 0]);
     s = did(s, { do: "putAway", n: nOf(s, ware.thing) }).state;
     expect([s.camp.tray[ware.thing], s.camp.fresh]).toEqual([2, {}]);
@@ -519,7 +522,7 @@ describe("the page's copy", () => {
     const commands: TownCommand[] = [
       { do: "setOut", thing: "stump", x: 33, y: 20, t: 0 },
       { do: "takePresent", letter: "w-1" },
-      { do: "looked" },
+      { do: "looked", things: ["stump"] },
       { do: "move", n: stump, x: 30, y: 33, t: 0 },
       { do: "toggle", n: lantern },
       { do: "putAway", n: stump },
