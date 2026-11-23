@@ -12,6 +12,7 @@ import {
   BELT,
   BOILER,
   DEPOT,
+  gradeOf,
   JOINER,
   LEFT,
   litOf,
@@ -26,6 +27,7 @@ import {
   SORTER,
   SPLITTER,
   squared,
+  STOP,
   takes,
   tilesOf,
   toward,
@@ -52,8 +54,10 @@ export interface Layout {
   rev: number;
   /** The arms of every tile that carries, by tile (`Arms`); 0 for the rest. */
   arms: Uint8Array;
-  /** Tiles that hand straight to the depot. */
+  /** Tiles that hand straight to the depot, or to a cart stop, which is the depot's too. */
   intoDepot: number[];
+  /** For each of those, the cart stop it hands to, or -1 for the depot itself. */
+  intoStop: number[];
   /** The lines power is carried on, four numbers each: where each end is made fast, across and down, in the yard's pixels. */
   wires: Int32Array;
   /** The fence, three numbers to a length of it: the corner of the edge it stands on, and 1 for one that runs across. */
@@ -350,24 +354,29 @@ export function layout(y: Yard, rev: number): Layout {
   while (gy < y.land.h && (owned[y.land.plot[gy * y.land.w + cx] ?? NONE] ?? false)) gy++;
   const gate = { x: cx * TILE + 8, y: gy * TILE };
   const intoDepot: number[] = [];
+  const intoStop: number[] = [];
   const arms = new Uint8Array(y.kind.length);
+  /** Where a tile hands to, if that is the depot (-1) or a cart stop (its tile); or -2. */
+  const taker = (to: number): number => (y.kind[to] === DEPOT ? -1 : y.kind[to] === STOP ? to : -2);
   let built = 0;
   for (let i = 0; i < y.kind.length; i++) {
     const k = y.kind[i] ?? NONE;
     if (k === NONE || k === DEPOT) continue;
     built++;
-    // A kind this page does not draw is a plain post: no belt's arms, nothing riding it.
     arms[i] = draws(k) ? armsAt(y, i) : 0;
     const ways = waysOf(k);
-    let into = y.kind[nextOf(y, i)] === DEPOT;
-    for (let w = 0; w < ways; w++) if (y.kind[wayOut(y, i, w)] === DEPOT) into = true;
-    if (into) intoDepot.push(i);
+    let into = taker(nextOf(y, i));
+    for (let w = 0; w < ways && into === -2; w++) into = taker(wayOut(y, i, w));
+    if (into === -2) continue;
+    intoDepot.push(i);
+    intoStop.push(into);
   }
   kept = {
     yard: y,
     rev,
     arms,
     intoDepot,
+    intoStop,
     wires: wires(y),
     fences: fences(y, owned, gate.x, gate.y),
     gate,
@@ -385,6 +394,8 @@ let own: {
   span: Int8Array;
   shut: Uint8Array;
   tint: Uint8Array;
+  grade: Uint8Array;
+  set: Uint8Array;
   row: Int32Array;
 } | null = null;
 
@@ -392,9 +403,10 @@ let own: {
  * The yard as it would be with the pieces in hand set down where they are aimed, and for a move
  * gone from where they stand: for drawing them as they would stand, belts joined to each other and
  * to the lines already there. It shares everything with the real yard but the arrays a drawing
- * changes (what stands where, which way, a tunnel's span, a splitter's shut ways, a colour, and the
- * rows, none for a piece in hand), which are its own, kept and reused. Nothing is written to the
- * real yard. It is made once for each place the pieces are aimed, not each frame.
+ * changes (what stands where, which way, a tunnel's span, a splitter's shut ways, a colour, a grade,
+ * what a sorter is set to, and the rows, none for a piece in hand), which are its own, kept and
+ * reused. Nothing is written to the real yard. It is made once for each place the pieces are aimed,
+ * not each frame.
  */
 export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
   const n = y.kind.length;
@@ -405,6 +417,8 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
       span: new Int8Array(n),
       shut: new Uint8Array(n),
       tint: new Uint8Array(n),
+      grade: new Uint8Array(n),
+      set: new Uint8Array(n),
       row: new Int32Array(n),
     };
   const o = own;
@@ -413,6 +427,8 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
   o.span.set(y.span);
   o.shut.set(y.shut);
   o.tint.set(y.tint);
+  o.grade.set(y.grade);
+  o.set.set(y.set);
   o.row.set(y.row);
   const empty = (i: number): void => {
     o.kind[i] = NONE;
@@ -420,6 +436,8 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
     o.span[i] = 0;
     o.shut[i] = 0;
     o.tint[i] = 0;
+    o.grade[i] = 0;
+    o.set[i] = NONE;
     o.row[i] = -1;
   };
   if (grp.as === "move") for (const i of tilesOf(y, piecesAt(y, grp.tiles))) if (i >= 0) empty(i);
@@ -436,6 +454,8 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
       o.span[i] = span;
       o.shut[i] = i === near ? (p.shut ?? 0) : 0;
       o.tint[i] = p.tint ?? 0;
+      o.grade[i] = gradeOf(p.kind, p.grade);
+      o.set[i] = p.recipe ?? NONE;
     }
   }
   // Where power reaches is the real yard's, worked out by the rules first; nothing works it out again here.

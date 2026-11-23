@@ -137,12 +137,13 @@ function takenAhead(y: Yard, i: number, n: Item): "yes" | "nothing" | "never" {
   return found;
 }
 
-/** How many of a thing a gatherer or machine turns out in a minute at the yard's present pace, or 0. */
+/** How many of a thing a gatherer or machine turns out, or folios a Study takes in, in a minute at the yard's present pace, or 0. */
 export function rate(y: Yard, i: number): number {
   if (i < 0 || y.kind[i] === NONE || litOf(y)[i] !== 1) return 0;
   const share = power(y).pace;
   const pace = (PACE[y.grade[i] ?? 0] ?? 0) * share * 600;
   if (y.kind[i] === GATHERER) return pace / WORK.gather;
+  if (y.kind[i] === STUDY) return pace / WORK.study;
   const r = aim(y, i);
   return r ? pace / r.work : 0;
 }

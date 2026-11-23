@@ -1,11 +1,16 @@
 /**
  * What the member does to the yard: setting things down, laying runs of belt, turning things,
  * taking them away, colouring lines, picking a tool up off something already built, marking out an
- * area to move, copy, remove or keep as a blueprint, undoing the last thing, buying land, and taking
- * a project in hand. Each of these lands in the yard with a movement and a sound.
+ * area to move, copy, remove, raise or keep as a blueprint, undoing the last thing, buying land, and
+ * taking a project in hand. Each of these lands in the yard with a movement and a sound.
  *
  * Every tool is offered only once the yard may use it (`locked`): Select and the brush wait for
  * their unlocks, as kinds of piece do; the spade never waits.
+ *
+ * A kind that has grades is built at the grade chosen for it (`gradeInHand`). Set down over a piece
+ * of its kind of a lower grade it raises that piece, for the difference; over one of a higher grade
+ * it only turns it, and never lowers it. A copy or a blueprint stands its pieces at the grades it
+ * holds, and raises or lowers what of the same kind stands under it, as the rules do.
  */
 
 import {
@@ -20,7 +25,11 @@ import {
   DX,
   DY,
   type Goal,
+  gradeOf,
+  highest,
+  isGraded,
   isKind,
+  type Kind,
   kindAt,
   LEFT,
   type Leg,
@@ -46,6 +55,7 @@ import {
   tilesOf,
   TUNNEL,
   tunnelExit,
+  upgradePrice,
   within,
   worthAt,
 } from "@sequoia-leaf/factory";
@@ -55,7 +65,18 @@ import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { layout } from "./layout.ts";
 import { yardSfx } from "./sound.ts";
-import { type Aim, builds, draws, type Group, type Mark, type Reckoned, type Run, S, type Tool } from "./state.ts";
+import {
+  type Aim,
+  builds,
+  draws,
+  gradeInHand,
+  type Group,
+  type Mark,
+  type Reckoned,
+  type Run,
+  S,
+  type Tool,
+} from "./state.ts";
 import { coins, doNow } from "./yard.ts";
 
 const DUST = "#cbb894";
@@ -65,12 +86,21 @@ export const toolHooks: { changed: () => void; said: (text: string) => void } = 
 
 /**
  * Something done that can be undone: things built (`under`: the piece one of them took the place
- * of), things taken away, a thing turned, lines coloured (the tile each was coloured by, and the
- * colour that tile had), pieces moved as one (`tiles`: where they stand now, with the turns and
- * the corner that put them back), a splitter's way shut or opened (`was`: whether it was open).
+ * of; `was`: pieces of the same kind that stood where some were set down, as they stood, which the
+ * setting down turned, raised or lowered), pieces raised where they stand (as they stood), things
+ * taken away, a thing turned, lines coloured (the tile each was coloured by, and the colour that tile
+ * had), pieces moved as one (`tiles`: where they stand now, with the turns and the corner that put
+ * them back), a splitter's way shut or opened (`was`: whether it was open).
  */
 type Done =
-  | { did: "built"; cells: number[]; turned: { i: number; was: Dir }[]; under?: readonly Piece[] }
+  | {
+      did: "built";
+      cells: number[];
+      turned: { i: number; was: Dir }[];
+      under?: readonly Piece[];
+      was?: readonly Piece[];
+    }
+  | { did: "raised"; was: readonly Piece[] }
   | { did: "took"; what: readonly Piece[] }
   | { did: "turned"; i: number; was: Dir }
   | { did: "way"; i: number; way: number; was: boolean }
@@ -152,8 +182,41 @@ export function setTool(tool: Tool): void {
 let faced = -1;
 
 /**
+ * The grade a kind in hand would stand at on a tile: the grade chosen for it, and over a piece of
+ * its kind never lower than that piece's, which is then only turned.
+ */
+function gradeOn(tool: Kind, i: number): number {
+  const hand = gradeInHand(tool);
+  return i >= 0 && S.world.kind[i] === tool ? Math.max(hand, S.world.grade[i] ?? 1) : hand;
+}
+/** The grade of the piece on a tile that the kind in hand would raise there, or nothing if it would raise none. */
+function raisedOn(tool: Kind, i: number): number | undefined {
+  const stands = i >= 0 && S.world.kind[i] === tool ? (S.world.grade[i] ?? 0) : 0;
+  return stands > 0 && gradeInHand(tool) > stands ? stands : undefined;
+}
+
+/** Chooses the grade the kind in hand is built at: kept for that kind. */
+export function setGrade(grade: number): void {
+  const tool = S.tool;
+  if (!builds(tool) || !isGraded(tool) || grade < 1 || grade > highest(S.world.open, tool)) return;
+  S.grades[tool] = grade;
+  if (S.aim) aimAt(S.aim.x, S.aim.y);
+  yardSfx.pick();
+  toolHooks.changed();
+}
+
+/** The next grade the kind in hand may be built at, coming round to the first after the highest. */
+export function stepGrade(): void {
+  const tool = S.tool;
+  if (!builds(tool) || !isGraded(tool)) return;
+  const top = highest(S.world.open, tool);
+  if (top > 1) setGrade((gradeInHand(tool) % top) + 1);
+}
+
+/**
  * Works out what would come of using the tool in hand on a tile. A splitter or a joiner brought
- * over a belt faces the way the belt runs, until it is turned.
+ * over a belt faces the way the belt runs, until it is turned; and so does a piece brought over one
+ * of its kind that it would raise, so that raising a line a piece at a time turns none of it.
  */
 export function aimAt(x: number, y: number): void {
   const w = S.world;
@@ -170,7 +233,8 @@ export function aimAt(x: number, y: number): void {
   const there = kindAt(w, x, y);
   if (faced !== i) {
     faced = i;
-    if (there !== NONE && builds(tool) && replaces(tool, there) && S.dir !== dirOf(i)) {
+    const over = there !== NONE && builds(tool) && (replaces(tool, there) || raisedOn(tool, i) !== undefined);
+    if (over && S.dir !== dirOf(i)) {
       S.dir = dirOf(i);
       toolHooks.changed();
     }
@@ -185,8 +249,14 @@ export function aimAt(x: number, y: number): void {
     return;
   }
   const exit = tool === TUNNEL ? tunnelExit(w, x, y, S.dir) : null;
-  const why = refusal(w, tool, x, y, coins(), S.dir);
-  S.aim = aimed(x, y, why, priceAt(w, tool, x, y), exit ? at(w, exit.x, exit.y) : -1);
+  const grade = gradeOn(tool, i);
+  const raises = raisedOn(tool, i);
+  const why = refusal(w, tool, x, y, coins(), S.dir, { grade });
+  S.aim = {
+    ...aimed(x, y, why, priceAt(w, tool, x, y, grade), exit ? at(w, exit.x, exit.y) : -1),
+    grade,
+    ...(raises === undefined ? {} : { raises }),
+  };
 }
 
 /**
@@ -195,7 +265,8 @@ export function aimAt(x: number, y: number): void {
  * They are kept while the pointer stays on that tile; when the yard has changed under them (a card's
  * button, a key, an undo, Leaf's yard taken: `S.rev`) or the Coins to hand have, they are worked out
  * again for the same tile. So what is shown, and what a press sets down, is of the yard as it is.
- * Each frame asks, and so does each press that acts on an aim.
+ * Each frame asks, and so does each press that acts on an aim. A grade chosen works the aim out
+ * again itself (`setGrade`).
  */
 export function keepAim(): void {
   const a = S.aim;
@@ -237,15 +308,21 @@ export function place(x: number, y: number): boolean {
   const there = kindAt(w, x, y);
   const was = there === NONE ? undefined : dirOf(i);
   const under = there !== NONE && replaces(tool, there) ? standing(i) : null;
-  const cost = priceAt(w, tool, x, y);
-  const no = does({ do: "build", kind: tool, x, y, dir: S.dir, grade: 1 });
+  const grade = gradeOn(tool, i);
+  // Over a piece of its kind of a lower grade: that piece, as it stands, to put back.
+  const raised = raisedOn(tool, i) === undefined ? null : standing(i);
+  const cost = priceAt(w, tool, x, y, grade);
+  const no = does({ do: "build", kind: tool, x, y, dir: S.dir, grade });
   if (no !== null) {
     S.aim = aimed(x, y, no, 0);
     yardSfx.no();
     toolHooks.changed();
     return false;
   }
-  if (there !== NONE && !under) {
+  if (raised) {
+    remember({ did: "raised", was: [raised] });
+    lifted(x, y, cost);
+  } else if (there !== NONE && !under) {
     if (was !== undefined && was !== S.dir) {
       remember({ did: "turned", i, was });
       yardSfx.turn();
@@ -268,6 +345,37 @@ export function place(x: number, y: number): boolean {
 
 /** What stands on a tile, as it would need to be put back. */
 const standing = (i: number): Piece | null => piecesAt(S.world, [i])[0] ?? null;
+
+/** A piece raised where it stands: a glint, what it cost rising from it, and its sound. */
+function lifted(x: number, y: number, cost: number): void {
+  sparkle(x * TILE + 8, y * TILE + 6, 5, 7);
+  paid(x, y, cost);
+  yardSfx.place();
+}
+
+/**
+ * Raises the piece on a tile to the next grade, where it stands, for the difference: what its card
+ * offers. Says whether it was raised.
+ */
+export function raiseAt(x: number, y: number): boolean {
+  const w = S.world;
+  const i = at(w, x, y);
+  const k = i < 0 ? NONE : (w.kind[i] ?? NONE);
+  const was = i < 0 ? null : standing(i);
+  if (!isKind(k) || !was) return false;
+  const grade = (w.grade[i] ?? 0) + 1;
+  const cost = priceAt(w, k, x, y, grade);
+  const no = does({ do: "build", kind: k, x, y, dir: dirOf(i), grade });
+  if (no !== null) {
+    yardSfx.no();
+    toolHooks.said(`${no}.`);
+    return false;
+  }
+  remember({ did: "raised", was: [was] });
+  lifted(x, y, cost);
+  toolHooks.changed();
+  return true;
+}
 
 /** Takes away whatever stands on a tile, and gives back what it cost. */
 export function takeAway(x: number, y: number, quiet = false): boolean {
@@ -382,11 +490,13 @@ export function rotate(): void {
   toolHooks.changed();
 }
 
-/** Takes up the tool for whatever stands on a tile, facing the way it faces. */
+/** Takes up the tool for whatever stands on a tile, facing the way it faces, at its grade. */
 export function pickFrom(x: number, y: number): boolean {
   const k = kindAt(S.world, x, y);
   if (k === NONE || k === DEPOT || !isKind(k) || !usable(k)) return false;
-  S.dir = dirOf(at(S.world, x, y));
+  const i = at(S.world, x, y);
+  S.dir = dirOf(i);
+  if (isGraded(k)) S.grades[k] = S.world.grade[i] ?? 1;
   setTool(k);
   yardSfx.pick();
   return true;
@@ -420,6 +530,29 @@ function putBack(what: readonly Piece[]): void {
   else for (const s of what) puff(s.x * TILE + 8, (s.y + 1) * TILE - 2, 4, DUST, 6);
 }
 
+/**
+ * Gives pieces that still stand the way and the grade they had, each for the difference: together
+ * with Select, and without it one at a time, as building over a piece does. A tunnel is named by the
+ * way it goes in, so it is only raised or lowered.
+ */
+function asTheyWere(was: readonly Piece[]): void {
+  const w = S.world;
+  const still = was.filter((p) => kindAt(w, p.x, p.y) === p.kind);
+  if (still.length === 0) return;
+  if (usable("select") || still.length === 1) {
+    const no = standNow(still);
+    if (no !== null) cannotUndo(no);
+    return;
+  }
+  for (const p of still) {
+    const did = doNow({ do: "build", kind: p.kind, x: p.x, y: p.y, dir: p.dir, grade: gradeOf(p.kind, p.grade) });
+    if ("refused" in did) {
+      cannotUndo(did.why);
+      return;
+    }
+  }
+}
+
 /** Undoes the last thing done to the yard, if it still can be. */
 export function undo(): boolean {
   const w = S.world;
@@ -436,7 +569,9 @@ export function undo(): boolean {
     for (const i of cells) puff((i % W()) * TILE + 8, (Math.floor(i / W()) + 1) * TILE - 4, 4, DUST, 7);
     for (const t of last.turned) doNow({ do: "turn", ...xy(t.i), dir: t.was });
     if (last.under) putBack(last.under);
-  } else if (last.did === "took") putBack(last.what);
+    if (last.was) asTheyWere(last.was);
+  } else if (last.did === "raised") asTheyWere(last.was);
+  else if (last.did === "took") putBack(last.what);
   else if (last.did === "painted")
     for (const l of last.lines.toReversed()) doNow({ do: "paint", ...xy(l.i), tint: l.was });
   else if (last.did === "way") doNow({ do: "way", ...xy(last.i), way: last.way, open: last.was });
@@ -463,9 +598,14 @@ let path: { x: number; y: number }[] = [];
 const way = (a: { x: number; y: number }, b: { x: number; y: number }): Dir =>
   b.x > a.x ? 0 : b.x < a.x ? 2 : b.y > a.y ? 1 : 3;
 
-/** Works out the run the drag so far would lay: a belt on every clear tile, each pointing at the next. */
+/**
+ * Works out the run the drag so far would lay: a belt on every clear tile, each pointing at the
+ * next, at the grade in hand; and along a belt that already runs that way at a lower grade, that
+ * belt raised.
+ */
 function reckon(): void {
   const w = S.world;
+  const grade = gradeInHand(BELT);
   const legs: Leg[] = [];
   const turns: { x: number; y: number; dir: Dir }[] = [];
   let bad: string | null = null;
@@ -477,11 +617,14 @@ function reckon(): void {
     if (!next && prev && kindAt(w, t.x + DX[dir], t.y + DY[dir]) !== DEPOT)
       for (const d of [0, 1, 2, 3] as const) if (kindAt(w, t.x + DX[d], t.y + DY[d]) === DEPOT) dir = d;
     const there = kindAt(w, t.x, t.y);
+    const i = at(w, t.x, t.y);
     if (there === NONE) {
-      const why = refusal(w, BELT, t.x, t.y, Infinity, dir);
+      const why = refusal(w, BELT, t.x, t.y, Infinity, dir, { grade });
       if (why !== null) bad ??= why;
-      else legs.push({ tunnel: false, x: t.x, y: t.y, dir, grade: 1 });
-    } else if (there === BELT && k === 0 && next && dirOf(at(w, t.x, t.y)) !== dir) turns.push({ x: t.x, y: t.y, dir });
+      else legs.push({ tunnel: false, x: t.x, y: t.y, dir, grade });
+    } else if (there === BELT && dirOf(i) === dir && (w.grade[i] ?? 1) < grade)
+      legs.push({ tunnel: false, x: t.x, y: t.y, dir, grade });
+    else if (there === BELT && k === 0 && next && dirOf(i) !== dir) turns.push({ x: t.x, y: t.y, dir });
     // Anything else in the way is stepped over: the belt before it points into it.
   });
   const last = path.at(-1);
@@ -564,6 +707,11 @@ export function commitRun(): boolean {
   // The first belt, already standing, turned to meet the run: all of it or none, with the run.
   const [bend] = run.turns;
   const was = bend ? dirOf(at(w, bend.x, bend.y)) : undefined;
+  // The belts the run is laid along, which it raises: as they stand, to put back.
+  const raised = run.legs.flatMap((leg) =>
+    kindAt(w, leg.x, leg.y) === BELT ? (standing(at(w, leg.x, leg.y)) ?? []) : [],
+  );
+  const clear = new Set(run.legs.filter((leg) => kindAt(w, leg.x, leg.y) === NONE));
   const no = does(bend ? { do: "lay", legs: run.legs, turn: bend } : { do: "lay", legs: run.legs });
   if (no !== null) {
     yardSfx.no();
@@ -575,7 +723,7 @@ export function commitRun(): boolean {
   const cells: number[] = [];
   run.legs.forEach((leg, n) => {
     const i = at(w, leg.x, leg.y);
-    cells.push(i);
+    if (clear.has(leg)) cells.push(i);
     const far = leg.tunnel ? otherMouth(w, i) : -1;
     if (far >= 0) cells.push(far);
     // The belts go down one after another along the run, each with its own clack.
@@ -586,7 +734,7 @@ export function commitRun(): boolean {
       Math.min(n, 14) * 28,
     );
   });
-  remember({ did: "built", cells, turned });
+  remember({ did: "built", cells, turned, ...(raised.length > 0 ? { was: raised } : {}) });
   const end = run.legs.at(-1);
   if (end) {
     S.dir = end.dir;
@@ -639,7 +787,14 @@ function runTo(x: number, y: number): void {
       sy = Math.floor(out / W());
     }
   }
-  const legs = sx === x && sy === y && kindAt(w, x, y) !== NONE ? null : route(w, [sx, sy], [x, y]);
+  // The router's run, each leg at the grade in hand for its kind.
+  const found = sx === x && sy === y && kindAt(w, x, y) !== NONE ? null : route(w, [sx, sy], [x, y]);
+  const legs = found?.map((leg): Leg => {
+    const { x: lx, y: ly, dir } = leg;
+    return leg.tunnel
+      ? { tunnel: true, x: lx, y: ly, dir, span: leg.span, grade: gradeInHand(TUNNEL) }
+      : { tunnel: false, x: lx, y: ly, dir, grade: gradeInHand(BELT) };
+  });
   S.run = runOf(legs ?? [], [], legs ? null : "No free path for a belt from there to here");
   S.aim = aimed(x, y, S.run.why, S.run.cost);
 }
@@ -796,14 +951,16 @@ function setDown(): boolean {
   // What a copy would stand that is not there now, and the pieces some of it would take the place of.
   const stood = g.at.filter((p) => kindAt(w, p.x, p.y) !== p.kind);
   const under = stood.flatMap((p) => standing(at(w, p.x, p.y)) ?? []);
-  // Pieces already standing that a copy would only turn, and which way they face now.
-  const turned = g.at.flatMap((p) => {
+  // Pieces of the same kind already standing there that the rules would turn, raise or lower: as they stand now.
+  const changed = g.at.flatMap((p) => {
     const i = at(w, p.x, p.y);
-    return kindAt(w, p.x, p.y) === p.kind && dirOf(i) !== p.dir ? [{ i, was: dirOf(i) }] : [];
+    if (kindAt(w, p.x, p.y) !== p.kind) return [];
+    const turns = p.kind !== TUNNEL && dirOf(i) !== p.dir;
+    return turns || gradeOf(p.kind, p.grade) !== (w.grade[i] ?? 0) ? (standing(i) ?? []) : [];
   });
   const moving = g.as === "move";
-  // A copy over itself, just set down: nothing to stand.
-  if (!moving && aim.why === null && stood.length === 0 && turned.length === 0) return false;
+  // A copy over itself, just set down: nothing the rules would change, so nothing is sent.
+  if (!moving && aim.why === null && stood.length === 0 && changed.length === 0) return false;
   const was = boxOf(piecesInHand(g));
   const act: Act =
     typeof g.as === "number"
@@ -822,7 +979,7 @@ function setDown(): boolean {
     const [x1, y1] = [box.x + box.w - 1, box.y + box.h - 1];
     S.mark = { x0: box.x, y0: box.y, x1, y1, tiles, pieces: g.at, cost: S.mark?.cost ?? 0 };
   } else {
-    remember({ did: "built", cells: tilesOf(w, stood), turned, under });
+    remember({ did: "built", cells: tilesOf(w, stood), turned: [], under, was: changed });
     paid(aim.x, aim.y, aim.cost);
   }
   // The pieces land in a wave out from the pointer, each ring of it with one sound.
@@ -860,6 +1017,37 @@ export function clearMark(): boolean {
   yardSfx.take();
   letGo();
   S.picked = -1;
+  toolHooks.changed();
+  return true;
+}
+
+/** What raising everything marked to the highest grade the yard may build would cost: 0 where nothing marked can be raised. */
+export function upgradeCost(): number {
+  return S.mark && !S.group ? upgradePrice(S.world, S.mark.tiles) : 0;
+}
+
+/**
+ * Raises every piece marked to the highest grade the yard may build of its kind, all of them or
+ * none, for the whole price. Says whether it did; the rules' reason is said when it could not.
+ */
+export function upgradeMark(): boolean {
+  remark();
+  const w = S.world;
+  const m = S.mark;
+  if (!m || S.group) return false;
+  const was = m.pieces.filter((p) => isGraded(p.kind) && gradeOf(p.kind, p.grade) < highest(w.open, p.kind));
+  const cost = upgradePrice(w, m.tiles);
+  const no = does({ do: "upgrade", tiles: m.tiles });
+  if (no !== null) {
+    yardSfx.no();
+    toolHooks.said(`${no}.`);
+    return false;
+  }
+  remember({ did: "raised", was });
+  for (const p of was.slice(0, 160)) sparkle(p.x * TILE + 8, p.y * TILE + 6, 2, 5);
+  if (cost > 0) float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, `-${cost}`, GOLD[0], 1.2);
+  yardSfx.ready();
+  remark();
   toolHooks.changed();
   return true;
 }

@@ -173,22 +173,226 @@
         flex-direction: column;
       }
       #visit[hidden],
-      body.visiting :is(#power, #track, #hand, #dock) {
+      body.visiting :is(#power, #track, #study, #hand, #dock) {
         display: none;
       }
-      .want {
+      /* The research being studied, under the order in hand: its folio, its name, and how far it has come. */
+      #study {
+        position: fixed;
+        z-index: 4;
+        top: calc(var(--trackb, 0px) + var(--u) * 2);
+        left: var(--edge);
+        width: min(calc(var(--u) * 132), calc(100vw - var(--edge) * 2));
+        box-sizing: border-box;
         display: flex;
         align-items: center;
         gap: calc(var(--u) * 3);
+        padding: var(--u) calc(var(--u) * 3);
+        background: none;
+        color: inherit;
+        text-align: left;
+        font: var(--f-small);
       }
-      .want .k-bar {
-        flex: 1;
-        min-width: calc(var(--u) * 16);
+      #study .pic {
+        flex: none;
+        width: calc(var(--u) * 12);
+        display: grid;
+        place-items: center;
       }
-      .want .n {
-        min-width: calc(var(--u) * 28);
+      #study .name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #study .k-bar {
+        flex: none;
+        width: calc(var(--u) * 36);
+      }
+
+      /* goal lists: begin */
+      /*
+       * A goal's head and its lists (`ui/goal.ts`), laid out here and nowhere else. A list is a label
+       * on a line of its own and a row for each thing: a picture in a slot of one width, the name,
+       * and at the right edge what is counted. A long name wraps in its own column; nothing else moves.
+       */
+      .gl {
+        display: flex;
+        flex-direction: column;
+        gap: var(--u);
+        min-width: 0;
+        font: var(--f-ui);
+        color: var(--k-cream);
+      }
+      .k-paper .gl {
+        color: var(--k-ink);
+      }
+      .gl-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        column-gap: calc(var(--u) * 4);
+        min-height: calc(var(--u) * 16);
+      }
+      .gl-what {
+        display: grid;
+        grid-template-columns: calc(var(--u) * 16) minmax(0, 1fr);
+        align-items: center;
+        column-gap: calc(var(--u) * 3);
+        min-width: 0;
+        text-align: left;
+      }
+      .gl-pic {
+        width: calc(var(--u) * 16);
+        height: calc(var(--u) * 16);
+        display: grid;
+        place-items: center;
+      }
+      .gl-name {
+        min-width: 0;
+        overflow-wrap: break-word;
+      }
+      .gl-what.k-link:hover .gl-name {
+        text-decoration: underline dotted var(--k-faint);
+        text-underline-offset: calc(var(--u) * 1.5);
+      }
+      .gl-end {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: calc(var(--u) * 3);
+      }
+      .gl-end .k-bar {
+        width: calc(var(--u) * 18);
+      }
+      .gl-n {
+        min-width: calc(var(--u) * 26);
         text-align: right;
         white-space: nowrap;
+      }
+      .gl-note {
+        white-space: nowrap;
+        color: var(--k-dim);
+      }
+      .k-paper .gl-note {
+        color: #7d6551;
+      }
+      .gl-note.lit {
+        color: var(--k-leaf);
+      }
+      .k-paper .gl-note.lit {
+        color: #2f6b24;
+      }
+      /*
+       * In the corner a row is its picture, its bar and its count, with no name: the picture takes
+       * its own width and the bar the rest, and the rows are spaced as the corner spaces its lines.
+       * These are the measures the corner had before there were lists, to the pixel.
+       */
+      .gl.tight {
+        gap: calc(var(--u) * 2);
+      }
+      .gl.tight .gl-row {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 3);
+        min-height: 0;
+      }
+      .gl.tight .gl-what,
+      .gl.tight .gl-pic {
+        display: flex;
+        flex: none;
+        width: auto;
+        height: auto;
+      }
+      .gl.tight .gl-end {
+        flex: 1;
+      }
+      .gl.tight .gl-end .k-bar {
+        flex: 1;
+        width: auto;
+        min-width: calc(var(--u) * 16);
+      }
+      .gl.tight .gl-n {
+        min-width: calc(var(--u) * 28);
+      }
+      /* A goal's head: its picture in a slot, a gap, its name; and at the right what is done with it. */
+      .gh {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        column-gap: calc(var(--u) * 4);
+      }
+      .gh-what {
+        display: grid;
+        grid-template-columns: calc(var(--u) * 22) minmax(0, 1fr);
+        align-items: center;
+        column-gap: calc(var(--u) * 4);
+        min-width: 0;
+        text-align: left;
+      }
+      .gh-pic {
+        width: calc(var(--u) * 22);
+        height: calc(var(--u) * 22);
+        box-sizing: border-box;
+      }
+      .gh-name {
+        min-width: 0;
+        overflow-wrap: break-word;
+      }
+      /* On paper a name is in the paper's ink, as its titles are. */
+      .k-paper .gh-name {
+        color: #6a2a7c;
+        text-shadow: none;
+      }
+      .gh-what.k-link:hover .gh-name {
+        text-decoration: underline dotted var(--k-faint);
+        text-underline-offset: calc(var(--u) * 1.5);
+      }
+      /* Research that waits on another lies flat (the kit's `locked`), its name and picture quieter. */
+      .plan.locked .gh-what {
+        opacity: 0.7;
+      }
+      /* On a phone, in a screen of its own, a row is tall enough for a finger. */
+      @media (max-width: 760px), (orientation: portrait) {
+        #panel.full .gl-row {
+          min-height: calc(var(--u) * 20);
+        }
+      }
+      /* goal lists: end */
+
+      /*
+       * A goal on a screen: its head, then its lists, one under another. Every head on a screen begins
+       * at one left edge: a card's frame and padding come to 6 units, so a paper's thicker frame takes
+       * a unit less padding at its sides, and those done, which have no frame, are set in as far.
+       */
+      .k-card.goal,
+      .k-paper.goal {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: calc(var(--u) * 3);
+      }
+      .k-paper.goal {
+        padding-inline: calc(var(--u) * 3);
+      }
+      /* Those done: a line each, with no frame of its own. */
+      .goals-done {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 2);
+        padding-inline: calc(var(--u) * 6);
+        opacity: 0.8;
+      }
+      /* The way from the tier's screen to research. */
+      .k-card.to-research {
+        color: inherit;
+        font: var(--f-name);
+      }
+      /* A card's sentences, each on a line of its own. */
+      .said {
+        display: flex;
+        flex-direction: column;
+        gap: var(--u);
       }
 
       /* The tools, along the bottom; and over them, what is in hand and the buttons that act on it. */
@@ -236,8 +440,14 @@
       #dock button.new {
         animation: new-tool 0.5s steps(5) 4;
       }
-      #dock button.nudged {
+      #dock button.nudged,
+      #books .nudged,
+      #hand .grades.nudged {
         animation: nudged 0.9s steps(3) infinite;
+      }
+      /* No more of it may stand. */
+      #dock button.off {
+        filter: grayscale(0.7) brightness(0.6);
       }
       @keyframes new-tool {
         50% {
@@ -281,6 +491,23 @@
         display: flex;
         gap: var(--u);
       }
+      /* The grades a kind in hand may be built at: a numeral over the price of one. */
+      #hand .grades {
+        flex: none;
+        display: flex;
+        gap: var(--u);
+      }
+      #hand .grades button {
+        width: calc(var(--u) * 20);
+        height: calc(var(--u) * 20);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: var(--u);
+        color: var(--k-cream);
+        font: var(--f-name);
+      }
       #hand .acts {
         flex: none;
         display: flex;
@@ -322,6 +549,14 @@
       #panel > .k-body {
         flex: 1;
         min-height: 0;
+      }
+      /* A screen of its own has a little more room for a goal's rows. */
+      #panel.full {
+        width: min(calc(var(--u) * 224), 48vw);
+      }
+      /* A title of two parts breaks between them, never inside one. */
+      #panel .k-title span {
+        white-space: nowrap;
       }
       #panel.slide {
         animation: slide-in 0.18s ease-out;
@@ -493,8 +728,7 @@
         cursor: pointer;
       }
 
-      .k-card.order,
-      .k-paper.order {
+      .k-card.order {
         display: flex;
         flex-direction: column;
         align-items: stretch;
@@ -517,12 +751,7 @@
         justify-content: center;
         text-align: center;
       }
-      .opens {
-        display: flex;
-        flex-wrap: wrap;
-        gap: calc(var(--u) * 2);
-      }
-      /* The plans, as the small tree they are: each row a line of plans, the later hanging off the earlier. */
+      /* Research, as the small tree it is: each row a piece of it, the later hanging off the earlier. */
       .branch {
         display: flex;
         flex-direction: column;
@@ -547,25 +776,6 @@
         border-width: 0 0 calc(var(--u) * 5) calc(var(--u) * 5);
         border-image: var(--k-f-elbow) 0 0 5 5;
         image-rendering: pixelated;
-      }
-      .k-card.plan {
-        flex-direction: column;
-        align-items: stretch;
-        gap: calc(var(--u) * 2);
-      }
-      /* A long name goes onto a second line beside its price. */
-      .plan .k-thing {
-        white-space: normal;
-      }
-      /* A plan not yet to be had lies flat (the kit's `locked`), its name and picture quieter. */
-      .plan.locked .k-thing {
-        opacity: 0.7;
-      }
-      .plan.locked .k-d:not(.k-gold) {
-        color: var(--k-faint);
-      }
-      .k-card.plan.owned {
-        border-image-source: var(--k-f-card-lit);
       }
       .rows {
         display: grid;
@@ -615,16 +825,6 @@
       }
       .board-row .k-thing-name {
         color: var(--k-cream);
-      }
-      .want > .k-thing {
-        flex: none;
-        min-width: calc(var(--u) * 50);
-      }
-      .order .opens {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: var(--u) calc(var(--u) * 3);
       }
 
       .recipe {
@@ -685,6 +885,25 @@
       #feed .gone {
         opacity: 0;
         transition: opacity 0.9s;
+      }
+
+      /* A nudge about a part of the interface, said beside that part with its tail on it. */
+      #coach {
+        position: fixed;
+        z-index: 11;
+        left: 0;
+        top: 0;
+        max-width: min(calc(var(--u) * 140), calc(100vw - 16px));
+        box-sizing: border-box;
+        pointer-events: none;
+      }
+      #coach::after {
+        left: var(--tail, calc(var(--u) * 5));
+      }
+      #coach.below::after {
+        bottom: auto;
+        top: calc(var(--u) * -5);
+        transform: scaleY(-1);
       }
 
       /* An order filled: what it paid, what it opened, what is asked for next. */
@@ -820,6 +1039,14 @@
         #panel.slide {
           animation-name: slide-up;
         }
+        /* The tier's screen and research are screens of their own: the whole of the page, over the tools. */
+        #panel.full {
+          z-index: 12;
+          top: var(--top);
+          bottom: var(--bottom);
+          width: auto;
+          max-height: none;
+        }
         #hand {
           width: auto;
         }
@@ -835,7 +1062,9 @@
         #feed > :nth-last-child(n + 3),
         body.panel-open #feed,
         body.panel-open #track,
-        body.walking #track {
+        body.panel-open #study,
+        body.walking #track,
+        body.walking #study {
           display: none;
         }
       }
@@ -850,6 +1079,7 @@
       <div id="corner"></div>
     </div>
     <button id="track" class="k-plaque hung" type="button"></button>
+    <button id="study" class="k-plaque" type="button" hidden></button>
     <div id="visit" class="k-plaque" hidden></div>
     <div id="walk"></div>
     <div id="feed" aria-live="polite"></div>
@@ -857,6 +1087,7 @@
     <nav id="dock" class="k-shelf" aria-label="Tools"></nav>
     <aside id="panel" class="k-panel" hidden></aside>
     <div id="banner" class="k-panel" hidden></div>
+    <div id="coach" class="k-say" hidden></div>
     <div id="letter" hidden></div>
     <script type="module" src="./src/main.ts"></script>
   </body>

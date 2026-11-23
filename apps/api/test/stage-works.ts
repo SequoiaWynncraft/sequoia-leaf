@@ -5,7 +5,7 @@
  * Leaf has no such route.
  */
 import type { PlayerId } from "@sequoia-leaf/core";
-import { ALL_ITEMS, clockOf, deliver, FACTORY, GOALS, here, stepTo, type Yard } from "@sequoia-leaf/factory";
+import { ALL_ITEMS, clockOf, deliver, FACTORY, GOALS, here, itemName, stepTo, type Yard } from "@sequoia-leaf/factory";
 import { fillHand, isStage, staged } from "@sequoia-leaf/factory/test/yards.ts";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -24,12 +24,14 @@ const tester = (now: number, seed: number) => ({
 
 /**
  * Does one staging step to a yard: `{ yard: "mid" }` puts a yard built by commands in its place
- * (`staged` in the rules' test yards: `"small"`, `"short"`, `"mid"`, `"large"`; or `"new"`, a new
+ * (`staged` in the rules' test yards: `"small"`, `"short"`, `"mid"`, `"hall"`, `"study"`, `"large"`; or `"new"`, a new
  * one), and `{ text: "..." }` any yard as its kept text, counting its Coins on from the one it
  * replaces; `{ away: minutes }` has its owner leave it that long ago, and runs it every tick since as
  * Leaf would have; `{ fill: n }` sends the depot what the nth standing order still wants, and what
  * the node in hand wants of the same things first; `{ feed: true }` sends the depot what the node in
- * hand still wants (`fillHand`), so that it is finished, paid and logged as in play. Each arrives
+ * hand still wants (`fillHand`), so that it is finished, paid and logged as in play; and
+ * `{ feed: { but: { hamper: 3 } } }` sends it all of that but so many of the things named, so that
+ * the yard's own line brings the last of them and the page sees the node finished. Each arrives
  * through the rules' own function for a thing reaching the depot (`deliver`): a stage is a yard the
  * rules could have made.
  */
@@ -56,6 +58,14 @@ function step(y: Yard | null, op: Record<string, unknown>, now: number): Yard | 
     FACTORY.advance(y, tester(now, 0));
   }
   if (op.feed === true) fillHand(y);
+  const but = isRecord(op.feed) && isRecord(op.feed.but) ? op.feed.but : null;
+  if (but && y.hand !== -1) {
+    const want = GOALS[y.hand]?.want;
+    for (const n of ALL_ITEMS) {
+      const kept = whole(but[itemName(n)], 1e6) ?? 0;
+      deliver(y, n, (want?.[n] ?? 0) - (y.got[y.hand]?.[n] ?? 0) - kept);
+    }
+  }
   const order = y.board[whole(op.fill, 3) ?? -1];
   const hand = y.hand === -1 ? null : GOALS[y.hand];
   const got = y.hand === -1 ? null : y.got[y.hand];

@@ -1,6 +1,6 @@
 /**
  * The yard's things in the kit's one card (`card.ts`). Each kind of thing is registered once and
- * named by a reference (`cards.ts` lists them). A card is its print, what it shows of the yard and
+ * named by a reference (`refs.ts` lists them). A card is its print, what it shows of the yard and
  * the purse as plain values (`prints.ts`), drawn by `cards.ts`, which reaches no yard; its buttons
  * are the page's tools, handed in here. The card that is up is kept by its print: it is drawn again
  * exactly when that differs, so no value it shows can be missing from what it is kept by.
@@ -13,15 +13,17 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
 import { TILE } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
+import { yardSfx } from "../sound.ts";
 import { S, toPage } from "../state.ts";
-import { buyLand, pickFrom, takeAway, takeInHand, turnAt, wayAt } from "../tools.ts";
+import { buyLand, pickFrom, raiseAt, takeAway, takeInHand, toolHooks, turnAt, wayAt } from "../tools.ts";
 import { doNow } from "../yard.ts";
-import { cardOf, type Hands, itemRef, plotRef, tileRef } from "./cards.ts";
+import { cardOf, type Hands } from "./cards.ts";
 import { togglePanel } from "./panels.ts";
 import { printOf } from "./prints.ts";
+import { itemRef, plotRef, tileRef } from "./refs.ts";
 import { showView } from "./views.ts";
 
-export { itemRef, machineRef, nodeRef, orderRef, plotRef, tileRef } from "./cards.ts";
+export { itemRef, machineRef, nodeRef, orderRef, plotRef, tileRef } from "./refs.ts";
 
 /** A number read back out of a reference, if it is a whole one. */
 const numberIn = (id: string): number => (/^\d+$/.test(id) ? Number(id) : -1);
@@ -56,9 +58,18 @@ const HANDS: Hands = {
   turn: (x, y) => void turnAt(x, y),
   another: (x, y) => void pickFrom(x, y),
   remove: (x, y) => void takeAway(x, y),
+  raise: (x, y) => void raiseAt(x, y),
   way: (x, y, way) => void wayAt(x, y, way),
   buy: buyLand,
   take: (g) => void takeInHand(g),
+  // The rules say why a piece of research cannot go in the line, on the line over the dock.
+  study: (g, into) => {
+    const did = doNow({ do: into ? "study" : "unstudy", research: g });
+    if ("refused" in did) {
+      yardSfx.no();
+      toolHooks.said(`${did.why}.`);
+    } else yardSfx.plan();
+  },
   // The depot's own panel is the third view of the yard's sheet, which the card would lie over: the card is put away.
   panel: (id) => {
     if (id !== "depot") return togglePanel(id);
@@ -69,7 +80,7 @@ const HANDS: Hands = {
 
 /** Says what every kind of thing in the yard is: each card drawn from its print. */
 export function initCard(art: Art): void {
-  for (const kind of ["item", "machine", "tile", "plot", "node", "order"]) {
+  for (const kind of ["item", "machine", "tile", "plot", "node", "order", "tool", "perk", "tier", "gift"]) {
     register(kind, (id) => {
       const p = printOf(`${kind}:${id}`);
       return p && cardOf(art, p, HANDS);

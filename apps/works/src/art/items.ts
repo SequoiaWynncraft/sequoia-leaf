@@ -10,10 +10,8 @@ import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { PAL } from "./pal.ts";
 
-/** A plain square of paper, for the things of later tiers that have no picture of their own yet: the folios. */
-const PLAIN = ["aaaaa", "aAAAa", "aAAAa", "aAAAa", "aaaaa"];
-
-const ROWS: Partial<Record<ItemName, readonly string[]>> = {
+/** Every thing's picture, typed. Each thing in the tables has one: a new one without a picture does not build. */
+export const ROWS: Readonly<Record<ItemName, readonly string[]>> = {
   // A couple of fallen branches, one still in leaf.
   deadfall: ["..n...l.", ".nNn.lG.", "..nNn...", "b..nNn..", "nb..nNn.", ".nNn.nb.", "..nb...."],
   stone: ["..tSS..", ".tSSSs.", "tSSSsss", "SSSsssh", "Ssssshh", ".sshhh."],
@@ -46,18 +44,26 @@ const ROWS: Partial<Record<ItemName, readonly string[]>> = {
   beacon: ["Y..w..Y", ".YwwwY.", "..YwY..", "..xYx..", "...N...", "...N...", "..sNs.."],
   // A crab in brass, with the key to wind it.
   crab: ["....S....", "yy.SSS.yy", "y.w.S.w.y", ".yyyyyyy.", "yyyoyoyyy", ".oyyyyyo.", "o.o...o.o"],
+  // A folio: a bound book lying shut, its pages showing along two edges and a ribbon out of them.
+  // The Timber folio is bound in bark with a leaf on its cover, the Brass folio in brass with a boss.
+  timber: ["bNNNNN.", "bNNlNNc", "bNlGlNc", "bNNlNNc", "bNNNNNc", "bCCCCrc", ".....r."],
+  brass: ["oyyyyy.", "oyyYyyc", "oyYwYyc", "oyyYyyc", "oyyyyyc", "bCCCCrc", ".....r."],
 };
 
 /** Each thing's picture with its dark edge, for a belt or a card. */
 export type ItemArt = (item: Item) => HTMLCanvasElement;
 
 export function makeItems(): ItemArt {
-  const plain = outlined(bitmap(PLAIN, PAL), INK);
-  const pics = ALL_ITEMS.map((n) => {
-    const rows = ROWS[itemName(n)];
-    return rows ? outlined(bitmap(rows, PAL), INK) : plain;
-  });
-  return (item) => pics[item] ?? plain;
+  const pics = ALL_ITEMS.map((n) => outlined(bitmap(ROWS[itemName(n)], PAL), INK));
+  const none = makeCanvas(1, 1).c;
+  return (item) => pics[item] ?? none;
+}
+
+/** Each thing's picture without its dark edge, for setting on a board that gives it one. */
+export function makePlain(): ItemArt {
+  const pics = ALL_ITEMS.map((n) => bitmap(ROWS[itemName(n)], PAL));
+  const none = makeCanvas(1, 1).c;
+  return (item) => pics[item] ?? none;
 }
 
 /** A fresh copy of a picture, for putting on the page. */

@@ -34,12 +34,16 @@
 
 import {
   type Act,
+  ALL_KINDS,
   check,
   type Command,
   decode,
   drain,
   hear,
   type Heard,
+  isGraded,
+  kindName,
+  kindNamed,
   LEAD,
   MILLI,
   type News,
@@ -51,6 +55,7 @@ import {
   stepTo,
   stillAt,
   TICK_MS,
+  TOP,
   type View,
   type Wired,
   writeCommand,
@@ -73,18 +78,19 @@ const ASK_EVERY = 2000;
 /** How often a visit reads the yard from Leaf again. */
 const VISIT_EVERY = 30_000;
 
-/** What the screen itself remembers between visits: nudges already taken, and the zoom. */
+/** What the screen itself remembers between visits: nudges already taken, the zoom, and the grade chosen for each kind of piece, by its name. */
 export interface Screen {
   taught: string[];
   zoom: number;
+  grades: Record<string, number>;
 }
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 
-export const screen: Screen = { taught: [], zoom: 0 };
+export const screen: Screen = { taught: [], zoom: 0, grades: {} };
 
 /** What the screen remembered, from its text; whatever makes no sense is as a new member has it. */
 export function parseScreen(text: string | null): Screen {
-  const out: Screen = { taught: [], zoom: 0 };
+  const out: Screen = { taught: [], zoom: 0, grades: {} };
   try {
     const raw: unknown = JSON.parse(text ?? "null");
     if (!isRecord(raw)) return out;
@@ -92,14 +98,32 @@ export function parseScreen(text: string | null): Screen {
       out.taught = raw.taught.filter((v): v is string => typeof v === "string").slice(0, 60);
     // As far in or out as the camera goes, and no further.
     if (typeof raw.zoom === "number" && raw.zoom >= -ZOOM.out && raw.zoom <= ZOOM.in) out.zoom = Math.round(raw.zoom);
+    // A grade above the first, for a kind that has grades: the first is not kept, being what a kind starts at.
+    if (isRecord(raw.grades))
+      for (const [name, grade] of Object.entries(raw.grades)) {
+        const k = kindNamed(name);
+        if (
+          k !== null &&
+          isGraded(k) &&
+          typeof grade === "number" &&
+          Number.isInteger(grade) &&
+          grade > 1 &&
+          grade <= TOP
+        )
+          out.grades[name] = grade;
+      }
   } catch {
     // Nonsense in it: start with nothing remembered.
   }
   return out;
 }
 
-/** Keeps the screen's settings. */
-export const keepScreen = (): void => void keepText(SCREEN, JSON.stringify(screen));
+/** Keeps the screen's settings: with them, the grade chosen for each kind in hand. */
+export function keepScreen(): void {
+  screen.grades = {};
+  for (const k of ALL_KINDS) if ((S.grades[k] ?? 0) > 1) screen.grades[kindName(k)] = S.grades[k] ?? 1;
+  void keepText(SCREEN, JSON.stringify(screen));
+}
 
 /** A command as it goes to Leaf. */
 type Sending = Wired & { readonly tick: number };
@@ -151,6 +175,11 @@ const tickAt = (now: number): number => Math.max(shown, base.clock + Math.floor(
  */
 export async function openYard(player: string, trouble: (why: Trouble) => void): Promise<Trouble | null> {
   Object.assign(screen, parseScreen(keptText(SCREEN)));
+  S.grades.fill(0);
+  for (const [name, grade] of Object.entries(screen.grades)) {
+    const k = kindNamed(name);
+    if (k !== null) S.grades[k] = grade;
+  }
   const opened = await openPlay<View, Sending, News, Heard>(
     "works",
     { view: readView, notes: readNotes, short: readAnswer },
