@@ -8,6 +8,7 @@ import {
   folkAt,
   GATE,
   GOES_FOR,
+  HAUL,
   HOME,
   homecoming,
   MUSTER,
@@ -71,7 +72,7 @@ describe("members on the town's ground, by Leaf's clock", () => {
   });
 
   test("every spot a visitor stands at is open ground, and from each the way to any seat's step and out through the gate is clear", () => {
-    for (const stand of [...STANDS.works, ...STANDS.table]) {
+    for (const stand of [...STANDS.works, ...STANDS.table, ...STANDS.grove, ...HAUL.pile, ...HAUL.door]) {
       expect(TOWN.footBlocked(stand.x, stand.y)).toBe(false);
       for (const s of SEATS) {
         const end = walkAt({ from: stand, to: { ...s.from, dir: s.dir }, at: 0 }, PACE, 60_000);

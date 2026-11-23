@@ -74,10 +74,12 @@ export interface Visitor {
   at: Stand;
   /** Where their skin sheet is served. */
   skin: string;
+  /** When they last did something, as far as anybody knows; null for not yet. Away is Leaf's rule on it. */
+  acted: number | null;
 }
 
 /** A real member who has gone in the last day: one who stays dozes in town where they were, and one who does not goes. */
-export interface Rester extends Omit<Visitor, "at"> {
+export interface Rester extends Omit<Visitor, "at" | "acted"> {
   /** Where they were: about the town, by the Works' door, at the stump, or in the Grove. */
   at: "town" | Stand;
   /** When the game last saw them, in milliseconds since 1970. */

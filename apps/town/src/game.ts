@@ -68,6 +68,8 @@ export interface Actor {
   alpha: number;
   away: boolean;
   doing: Doing;
+  /** A member at the Works with a crate in their arms, on the way to the belt. */
+  carry: boolean;
   greeted: number;
   /** Their name shows until this moment of the town's clock, whatever else: somebody who has just arrived. */
   named: number;

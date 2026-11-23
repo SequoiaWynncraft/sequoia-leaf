@@ -417,9 +417,12 @@ card says so and the town is not loaded.
   (`where.ts`), one record for each by their id, from the live room and Leaf's list by Leaf's
   clock, and everything else reads it: "Who is about" and the number on its button, the figures in
   town and every card. Somebody Leaf last saw 90 seconds ago is gone from then on every page at
-  once, as Leaf's own visits have them. Up to twelve of those in the game stand about as visitors
-  (`visitors.ts`) in their own skins: by the Works' door, at the stump, or before the Grove's
-  stone; those in town are there live instead, and nobody drawn live, fading away included, is a
+  once, as Leaf's own visits have them. Up to twelve of those in the game are about as visitors
+  (`visitors.ts`) in their own skins, busy at it as somebody in a real town would be: at the Works
+  carrying crates from the pile at the belt's end in at its door and going back for the next
+  (`haul`, by Leaf's clock), at the raid table sitting at the stump over its board, in the Grove
+  standing before its stone while a soft light rises from it now and then; those in town are there
+  live instead, and nobody drawn live, fading away included, is a
   visitor or a dozer as well. Nobody at their own camp.
   A visitor stands at one of the spots of where they are, by their account (two on one spot are
   drawn apart). Leaf's list says nothing of when anybody came, so they are there from the moment
@@ -463,7 +466,10 @@ card says so and the town is not loaded.
   on every page. "Who is about" says it under their name ("Captain · away for 20 minutes", "at the
   Works · away for 5 minutes"), and so does their card in town, under their rank, with where they
   are when it is not the town ("At the raid table, away for 7 minutes"); nothing for somebody just
-  about the town.
+  about the town. In town they have sat down where they are and nodded off, as the dozers do: facing
+  us unless they sat on a seat, eyes closed, a "z" now and then, the same moments on every page,
+  wherever they are (in town live, at the Works' door, at the stump, before the Grove's stone); the
+  moment they move or do anything they are up and about again.
 - **A guest.** Somebody signed in who is not in the guild plays the same town, with none of the
   guild's own: `prepare()` fetches nothing, and nothing only a member may ask (`/v1/me...`, the
   guild's news) is asked. The purse shows only Coins and every Leaf button says "Leaf is earned by

@@ -610,7 +610,14 @@ export function makeLive(p: Prepared): Guild {
     },
     deeds: () => news.deeds(),
     visitors: () =>
-      standing(whereNow(), VISITORS_MOST).map(({ id, name, rank, at }) => ({ id, name, rank, at, skin: skinOf(id) })),
+      standing(whereNow(), VISITORS_MOST).map(({ id, name, rank, at, acted }) => ({
+        id,
+        name,
+        rank,
+        at,
+        skin: skinOf(id),
+        acted,
+      })),
     resting: () =>
       resters(whereNow(), RESTING_MOST).map(({ id, name, rank, at, seen, stays }) => ({
         id,

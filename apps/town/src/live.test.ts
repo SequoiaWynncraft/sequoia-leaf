@@ -870,7 +870,7 @@ describe("a guest's town", () => {
     expect(world?.sent.map((s) => s.path)).toEqual(["/v1/game/hello", "/v1/game/me", "/v1/game/presence"]);
     // Others in town, members and guests, are there all the same.
     expect(guild.visitors()).toEqual([
-      { id: "g-2", name: "Drifter", rank: "Guest", at: "table", skin: "/v1/game/skins/g-2" },
+      { id: "g-2", name: "Drifter", rank: "Guest", at: "table", skin: "/v1/game/skins/g-2", acted: null },
     ]);
   });
 
