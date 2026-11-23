@@ -20,7 +20,16 @@
  * for Coins, or waiting for deliveries or folios, so any stretch of it can be split in three.
  */
 import * as F from "../src/index.ts";
-import { Builder, piecesStanding, type Planned, powerOf, type Rec, type Source } from "./builder.ts";
+import {
+  Builder,
+  type Old,
+  piecesStanding,
+  type Planned,
+  powerOf,
+  type Rec,
+  type Restore,
+  type Source,
+} from "./builder.ts";
 import { measure } from "./measure.ts";
 import { capacity, type Delivers, type Grades, shortfall, size, type Unit } from "./needs.ts";
 
@@ -97,6 +106,22 @@ export interface Game {
 const STUCK = 12 * 36_000;
 /** How many times the player builds for a goal: once, and twice more while what its lines really bring is short of what the goal wants. */
 const ROUNDS = 3;
+/** A line as the player built it, kept so that it may be taken up again (`Old`). */
+interface Built {
+  /** The goal it was built for; nothing for Studies and power. */
+  readonly goal: F.Goal | null;
+  readonly into: Planned["into"];
+  readonly item: F.Item | null;
+  /** The tiles its pieces stand on now. */
+  readonly tiles: Set<number>;
+  readonly restores: Restore[];
+  /** Its places among the lines. */
+  readonly sources: number[];
+  /** The lines it draws from or runs onto (their places among what was built). */
+  readonly on: Set<number>;
+  gone: boolean;
+}
+
 /** The slowest line the player builds when a faster one does not fit, things a minute. */
 const SLOWEST = 1;
 const MINUTE = F.MINUTE;
@@ -126,11 +151,15 @@ export class Player {
   /** The goal what is bought now is bought for. */
   private current: F.Goal | null = null;
   private studies = false;
+  /** Every line built, and which of them each tile's piece belongs to (-1 for none). */
+  private readonly built: Built[] = [];
+  private readonly owner: Int32Array;
 
   constructor(s: Settings) {
     this.s = s;
     this.y = F.create({ seed: s.seed });
     this.purse = s.purse;
+    this.owner = new Int32Array(this.y.kind.length).fill(-1);
   }
 
   /** The grade the player builds a kind at now: its policy's, or the highest unlocked if that is lower. */
@@ -213,25 +242,26 @@ export class Player {
     const makesPower = F.highest(this.y.open, F.BOILER) > 0 || F.highest(this.y.open, F.WHEEL) > 0;
     const now = powerOf(this.y);
     if (depot.length + studies.length === 0 && (now.draws <= now.gives || !makesPower)) return false;
-    const b = new Builder(this.y, this.grades, this.lines);
+    const b = new Builder(this.y, this.grades, this.lines, this.old(g));
     const plans: Planned[] = [];
     for (const u of depot) {
-      const p = b.depotLine(u);
-      // With no room for another line of a thing that standing lines bring, the player waits on those.
+      // With no room for another line of a thing that standing lines bring, the player waits on those;
+      // a line it cannot do without, it makes room for by taking up old lines.
+      const brings = this.depotLines().some((l) => l.item === u.item && l.rate > 0);
+      const p = b.depotLine(u) ?? (brings ? null : b.depotLine(u, true));
       if (p) plans.push(p);
-      else if (this.depotLines().some((l) => l.item === u.item && l.rate > 0))
-        this.note(g, `no room for more ${many(u.item)}`);
+      else if (brings) this.note(g, `no room for more ${many(u.item)}`);
       else {
         // Else it builds the most of the line that fits, at half the pace and half again, and waits the longer.
         let less: Planned | null = null;
         for (let pace = u.perMinute / 2; !less && pace >= SLOWEST; pace /= 2)
-          less = b.depotLine(size(u.item, pace, this.grades));
+          less = b.depotLine(size(u.item, pace, this.grades), true);
         if (!less) throw this.cannot(u, b);
         plans.push(less);
         this.note(g, `only ${less.rate.toFixed(1)} ${many(u.item)} a minute fitted`);
       }
     }
-    for (const u of studies) plans.push(b.studyLine(u) ?? this.fail(u, b));
+    for (const u of studies) plans.push(b.studyLine(u) ?? b.studyLine(u, true) ?? this.fail(u, b));
     const then = powerOf(b.y);
     plans.push(...b.power(then.draws - then.gives));
     let built = false;
@@ -239,7 +269,39 @@ export class Player {
       if (g !== null && this.isDone(g)) break;
       built = built || p.into !== "power";
       if (p.into !== "power") this.busy(this.s.hands.think);
-      for (const c of p.cmds) this.buy(c);
+      const id = this.built.length;
+      const me: Built = {
+        goal: g,
+        into: p.into,
+        item: p.item,
+        tiles: new Set(),
+        restores: [],
+        sources: [],
+        on: new Set(),
+        gone: false,
+      };
+      this.built.push(me);
+      // The belts lines taken up had set splitters on go back to the lines they were belts of.
+      const back = new Map<number, number>();
+      for (const t of p.taken) {
+        const old = this.built[t];
+        if (!old) continue;
+        old.gone = true;
+        for (const r of old.restores) back.set(r.tile, r.owner);
+      }
+      for (const c of p.cmds) {
+        this.own(c, id, back);
+        this.buy(c);
+      }
+      for (const s of p.gone) {
+        const line = this.lines[s];
+        if (line) this.lines[s] = { ...line, rate: 0, tapped: 0, run: [], joinedAt: [] };
+      }
+      for (const e of p.onto) {
+        const o = this.owner[e] ?? -1;
+        if (o >= 0 && o !== id) me.on.add(o);
+      }
+      me.sources.push(...p.lines.map((_, k) => this.lines.length + k));
       this.lines.push(...p.lines);
       for (const t of p.taps) {
         const line = this.lines[t.source];
@@ -252,6 +314,67 @@ export class Player {
     }
     if (built) this.read = measure(this.y);
     return built;
+  }
+
+  /**
+   * The lines built for goals now finished, that nothing still in use draws from and whose thing the
+   * goal in hand does not want: what may be taken up to make room (`Builder.clearing`). Studies and
+   * power are always kept, and pylons, which light more than their own line.
+   */
+  private old(g: F.Goal | null): Old[] {
+    const want = g === null ? null : (F.GOALS[g]?.want ?? null);
+    const kept = new Set<number>();
+    for (const [id, b] of this.built.entries()) {
+      if (b.gone) continue;
+      const finished = b.goal !== null && this.isDone(b.goal);
+      const wanted = b.item !== null && want !== null && (want[b.item] ?? 0) > 0;
+      if (b.into !== "depot" || !finished || wanted) kept.add(id);
+    }
+    for (const id of kept) for (const o of this.built[id]?.on ?? []) if (!this.built[o]?.gone) kept.add(o);
+    return this.built.flatMap((b, id): Old[] =>
+      b.gone || kept.has(id)
+        ? []
+        : [
+            {
+              id,
+              tiles: [...b.tiles].filter((i) => this.y.kind[i] !== F.PYLON),
+              restores: b.restores,
+              sources: b.sources,
+            },
+          ],
+    );
+  }
+
+  /** Notes which line each tile's piece belongs to, as a command of line `id` sets pieces down or takes them up; a belt laid again goes back to its own line (`back`). */
+  private own(c: Rec, id: number, back: ReadonlyMap<number, number>): void {
+    const me = this.built[id];
+    const read = F.readCommand({ tick: this.y.tick, ...c });
+    if (!me || !read) return;
+    const y = this.y;
+    const take = (i: number, to: number): void => {
+      if (i < 0) return;
+      const was = this.owner[i] ?? -1;
+      if (was >= 0) this.built[was]?.tiles.delete(i);
+      this.owner[i] = to;
+      if (to >= 0) this.built[to]?.tiles.add(i);
+    };
+    if (read.do === "build") {
+      const i = F.at(y, read.x, read.y);
+      const was = this.owner[i] ?? -1;
+      if (read.kind === F.SPLITTER && y.kind[i] === F.BELT) {
+        const d = y.dir[i] ?? 0;
+        me.restores.push({ tile: i, dir: F.isDir(d) ? d : 0, grade: y.grade[i] ?? 1, owner: was });
+        if (was >= 0) me.on.add(was);
+      }
+      take(i, back.get(i) ?? id);
+    }
+    if (read.do === "lay")
+      for (const leg of read.legs) {
+        take(F.at(y, leg.x, leg.y), id);
+        const far = F.legSpan(leg) + 1;
+        if (leg.tunnel) take(F.at(y, leg.x + (F.DX[leg.dir] ?? 0) * far, leg.y + (F.DY[leg.dir] ?? 0) * far), id);
+      }
+    if (read.do === "clear") for (const i of read.tiles) take(i, -1);
   }
 
   private cannot(u: Unit, b: Builder): Error {
@@ -311,6 +434,8 @@ export class Player {
   private secondsOf(c: Rec): number {
     const h = this.s.hands;
     if (c.do === "lay") return h.run + h.tile * (Array.isArray(c.legs) ? c.legs.length : 0);
+    // Taking a line up: drawn over with Select, as a run is laid, and cleared.
+    if (c.do === "clear") return h.run + h.tile * (Array.isArray(c.tiles) ? c.tiles.length : 0);
     if (c.do === "buyPlot") return h.plot;
     if (c.do === "recipe") return h.set;
     return h.piece;
@@ -336,6 +461,7 @@ export class Player {
     if (read.do === "build") add(named(read.kind, read.grade));
     if (read.do === "lay") for (const leg of read.legs) add(named(F.legKind(leg), leg.grade));
     if (read.do === "buyPlot") add(`plot ${F.plotName(read.plot)}`);
+    if (read.do === "clear") for (const _ of read.tiles) add("taken up");
   }
 
   /** A person busy for some seconds, the yard running on meanwhile. Tending the yard on the way takes its own time, on top. */
