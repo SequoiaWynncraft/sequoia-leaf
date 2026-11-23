@@ -179,6 +179,36 @@ describe("opening a game on Leaf", () => {
   });
 });
 
+/** Leaf's counter, playing by rules of another version than this page's. */
+const otherRules = (rev = 0) => ({ rev, now: "x", state: { n: 1 }, rules: "00000000000000" });
+
+describe("rules other than Leaf's", () => {
+  test("a page opened by rules other than Leaf's loads again, once for each version of Leaf's, rather than play by its own", async () => {
+    world = standin({ "GET /v1/game/play/raid": { status: 200, body: otherRules() } });
+    expect(await openPlay("raid", COUNTER, { player: "p" })).toEqual({ trouble: "closed" });
+    expect(world.reloaded.count).toBe(1);
+    // Loaded again, and still Leaf's rules are not the page's (a deploy half done): it says so, and does not go round.
+    expect(await openPlay("raid", COUNTER, { player: "p" })).toEqual({ trouble: "closed" });
+    expect(world.reloaded.count).toBe(1);
+    // Long after, it may load again.
+    world.clock.now += 60_000;
+    expect(await openPlay("raid", COUNTER, { player: "p" })).toEqual({ trouble: "closed" });
+    expect(world.reloaded.count).toBe(2);
+  });
+
+  test("an answer by rules other than the page's, as Leaf's change under an open page, loads it again: nothing is shown done by the old rules", async () => {
+    const { routes } = counterLeaf(0);
+    const play = await opened({
+      ...routes,
+      "POST /v1/game/play/raid": () => ({ status: 200, body: { ...otherRules(1), results: [] } }),
+    });
+    const heard: Count[] = [];
+    play.onState((state) => heard.push(state));
+    expect(await play.send({ do: "add", by: 1 }, add(1))).toEqual({ refused: "outdated" });
+    expect([world?.reloaded.count, heard]).toEqual([1, []]);
+  });
+});
+
 describe("visiting somebody's game", () => {
   const BOB = "10000000-0000-0000-0000-000000000002";
   const OF = `/v1/game/play/works/of/${BOB}`;

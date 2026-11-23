@@ -190,3 +190,5 @@ export {
   type TallyUnit,
   TIMED,
 } from "./tally.ts";
+
+export { RULES_ENTRY, rulesVersion, rulesVersions } from "./version.ts";

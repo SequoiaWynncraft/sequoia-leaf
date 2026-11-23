@@ -76,6 +76,7 @@ export function standin(
   opts: { href?: string; top?: boolean; store?: MemoryStore; width?: number; deadline?: number } = {},
 ): Standin {
   const store = opts.store ?? new MemoryStore();
+  const tab = new MemoryStore();
   const sent: Sent[] = [];
   const went: string[] = [];
   const reloaded = { count: 0 };
@@ -102,6 +103,7 @@ export function standin(
       });
     },
     store: () => store,
+    tab: () => tab,
     href: () => opts.href ?? "https://leaf.example/play/town/?x=1",
     top: () => opts.top ?? true,
     go: (url) => {

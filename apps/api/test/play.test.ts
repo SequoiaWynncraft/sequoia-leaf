@@ -1,16 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
   type Game,
+  GAME_IDS,
   leaf,
   type LeafFor,
   MOST_COMMANDS,
   MOST_FLUSHED,
   type PlayerId,
   playerId,
+  rulesVersion,
 } from "@sequoia-leaf/core";
 import {
   ALL_ITEMS,
@@ -218,6 +220,31 @@ const SHOP: Game<{ bought: number }, { price: number }, { bought: number }, stri
   command: (v) =>
     typeof v === "object" && v !== null && "price" in v && typeof v.price === "number" ? { price: v.price } : null,
 };
+
+/** The version of the game's rules an answer says. */
+const rulesOf = async (response: Response): Promise<unknown> => Object(await response.json()).rules;
+
+describe("the rules' version", () => {
+  it("is said by every answer: the version of the game's rules Leaf plays it by, as the files it runs make it", async () => {
+    const root = join(import.meta.dir, "..", "..", "..");
+    const read = (path: string): string | null => {
+      try {
+        return readFileSync(join(root, path), "utf8");
+      } catch {
+        return null;
+      }
+    };
+    const raid = rulesVersion("raid", read);
+    expect(await rulesOf(await send("GET", "/v1/game/play/raid"))).toBe(raid);
+    expect(await rulesOf(await send("POST", "/v1/game/play/raid", { commands: rustles(1) }))).toBe(raid);
+    // A visit, to a game that may be visited.
+    expect(await rulesOf(await send("GET", "/v1/game/play/works"))).toBe(rulesVersion("works", read));
+    expect(await rulesOf(await send("GET", `/v1/game/play/works/of/${alice}`, undefined, bob))).toBe(
+      rulesVersion("works", read),
+    );
+    expect(new Set(GAME_IDS.map((game) => GAMES[game].rules)).size).toBe(GAME_IDS.length);
+  });
+});
 
 describe("a state made again", () => {
   it("pays for what it buys again: a command's money keys name the state's generation, not only the count kept inside it", async () => {

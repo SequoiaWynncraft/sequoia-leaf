@@ -235,7 +235,10 @@ The cards are `shutCard`: a `k-paper` with a title, a line and one button, in pl
 
 **Games Leaf owns** (`play.ts`). A game on Leaf's play service keeps nothing of itself in the
 browser: `openPlay(game, reader, { player })` fetches its state (`GET /v1/game/play/<game>`), read
-into the game's own types by `reader` (a page built for older rules than Leaf's loads again), and
+into the game's own types by `reader`, and an answer made by rules other than the page's own (each
+answer says their version, `rules`, which the page was built with too) loads the page again: once for
+each version of Leaf's within half a minute, so a deploy half done shows the "closed" card instead of
+going round. And
 `send(command, predict)` gives the command an id, queues it and returns at once, with a promise of
 Leaf's answer: what it did (the game's notes) or the code it was refused with. Commands go in
 order, one request at a time, as many as are waiting in each (up to 32), and after a network

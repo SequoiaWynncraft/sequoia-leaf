@@ -50,7 +50,9 @@
  */
 
 import { type GameId, MOST_COMMANDS, MOST_FLUSHED, playPath, readBalances, visitPath } from "@sequoia-leaf/core";
+import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
 
+import { keepText, keptText } from "./keep.ts";
 import { ask, type Backoff, backoff, isRecord, outside } from "./net.ts";
 import { fromLeaf, owe, settle } from "./purse.ts";
 
@@ -135,6 +137,34 @@ export const NOT_YET: NotYet = { every: 1000, tries: 30 };
 
 /** How long a page in view goes without a call to Leaf before it reads its state, checked every quarter of it. */
 export const STILL_HERE = 60_000;
+
+/** The version of each game's rules this page was built with (core's `rulesVersion`), made as it was built. */
+const RULES = rulesVersions();
+
+/** How long after loading again for Leaf's rules a page does not load again for the same: a deploy half done may serve the old page a moment longer. */
+export const RULES_AGAIN = 30_000;
+
+/**
+ * The rules of Leaf's an answer says it was made by, when they are not this page's (an answer that
+ * says none is from a Leaf from before it said); null when they are the page's.
+ */
+function otherRules(game: GameId, body: Record<string, unknown>): string | null {
+  return typeof body.rules === "string" && body.rules !== RULES[game] ? body.rules : null;
+}
+
+/**
+ * The page plays by rules other than Leaf's (`theirs`): it loads again, to be given Leaf's; but not
+ * again for the same rules of Leaf's within `RULES_AGAIN`, when it stays as it is. Says whether it
+ * loads again.
+ */
+function loadFor(game: GameId, theirs: string): boolean {
+  const key = `play.rules.${game}`;
+  const [version, at] = (keptText(key, "tab") ?? "").split(" ");
+  if (version === theirs && outside.now() - Number(at) < RULES_AGAIN) return false;
+  keepText(key, `${theirs} ${outside.now()}`, "tab");
+  outside.reload();
+  return true;
+}
 
 /** Whether an answer is the 404 of a Leaf that has no play service yet, rather than one about the game. */
 const notYet = (reply: { status: number; body: unknown }): boolean =>
@@ -292,6 +322,12 @@ export async function openPlay<View, Command extends object, Note, Short = never
   const end = endOf(first);
   if (end !== null) return { trouble: end };
   if (first.status !== 200 || !isRecord(first.body)) return { trouble: "closed" };
+  // Rules other than Leaf's would show what Leaf does not do: the page loads again, or says Leaf is busy.
+  const theirs = otherRules(game, first.body);
+  if (theirs !== null) {
+    loadFor(game, theirs);
+    return { trouble: "closed" };
+  }
   const opened = reader.view(first.body.state);
   if (opened === null) {
     // Leaf's rules are newer than this page's.
@@ -317,6 +353,8 @@ export async function openPlay<View, Command extends object, Note, Short = never
   const quiet = (): boolean => visiting || options.away?.() === true;
   /** The wait before a failed batch goes again. */
   let timer: ReturnType<typeof setTimeout> | null = null;
+  /** The rules of Leaf's the last answer this page could not take was made by, if it said. */
+  let newer = "unread";
   const hearers = new Set<(state: View, differs: boolean) => void>();
   const answerers = new Set<(answered: Answered<Command, Note, Short>) => void>();
   const troubled = new Set<(why: Trouble) => void>();
@@ -355,6 +393,11 @@ export async function openPlay<View, Command extends object, Note, Short = never
    * page and each command hear of it, or null when the page is too old to read it.
    */
   function took(body: Record<string, unknown>, batch: readonly P[], behind: readonly P[]): (() => void) | null {
+    const rules = otherRules(game, body);
+    if (rules !== null) {
+      newer = rules;
+      return null;
+    }
     const short = batch.length > 0 && reader.short !== undefined;
     const view = short ? null : reader.view(body.state);
     if (!short && view === null) return null;
@@ -421,8 +464,11 @@ export async function openPlay<View, Command extends object, Note, Short = never
       null,
     );
     for (const p of left) p.answer({ refused: why });
-    if (why === "not_you" || why === "outdated") outside.reload();
-    else if (why !== "put_away") for (const fn of troubled) fn(why);
+    if (why === "not_you") outside.reload();
+    else if (why === "outdated") {
+      // Loaded again for Leaf's rules a moment ago: Leaf is busy, as far as the page can tell.
+      if (!loadFor(game, newer)) for (const fn of troubled) fn("closed");
+    } else if (why !== "put_away") for (const fn of troubled) fn(why);
   }
 
   /** Sends a batch, and moves the line on by Leaf's answer to it; an answer to a batch the line has left is let go. */

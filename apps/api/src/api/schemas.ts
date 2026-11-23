@@ -201,6 +201,8 @@ export const PlayShown = Schema.Struct({
   state: Schema.Unknown,
   /** The caller's balances as they stood when it was answered: for a batch, as it left them. */
   purse: Purse,
+  /** The version of the game's rules Leaf played it by: a page built with others loads again. */
+  rules: Schema.String,
 });
 
 /**

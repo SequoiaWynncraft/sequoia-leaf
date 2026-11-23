@@ -804,6 +804,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               now: iso(shown.now),
               state: shown.view,
               purse: shown.purse,
+              rules: played.rules,
             } satisfies typeof Body.PlayShown.Type);
           }),
         )
@@ -840,6 +841,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               results: batch.results,
               state: batch.view,
               purse: batch.purse,
+              rules: played.rules,
             } satisfies typeof Body.Played.Type);
           }),
         )
@@ -875,6 +877,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               now: iso(shown.now),
               state: shown.view,
               purse: shown.purse,
+              rules: played.rules,
             } satisfies typeof Body.PlayShown.Type);
           }),
         )
