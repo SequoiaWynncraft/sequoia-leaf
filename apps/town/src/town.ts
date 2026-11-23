@@ -670,9 +670,9 @@ export function buildTown(s: Sprites, ground: Ctx): void {
     tap: nudge,
     hops: true,
     tip: CAMP,
-    // Something is waiting at the camp: a letter, or a parcel.
+    // Something is waiting at the camp: a letter, or a new thing in the tray.
     extra: (g, sx, sy) => {
-      if (mine().parcels.length === 0 && waiting(mine().letters) === 0) return;
+      if (mine().fresh.length === 0 && waiting(mine().letters) === 0) return;
       const bob = Math.round(Math.sin(G.t * 4) * 1.5);
       g.drawImage(s.bang.c, sx - 1, sy - 37 + bob);
     },

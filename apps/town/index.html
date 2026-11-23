@@ -274,7 +274,7 @@
         transition: opacity 0.9s;
       }
 
-      /* The tray, while decorating: what is in hand, and everything put away. It takes the dock's place. */
+      /* Storage (the tray), while decorating: what is in hand, and everything not set out, by kind. It takes the dock's place. */
       #tray {
         position: fixed;
         z-index: 7;
@@ -301,36 +301,83 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      #tray .row {
+      /*
+       * Two rows and the top of a third, so that it is plain there is more to scroll to. Every thing
+       * is one column of `--cols` wide, and a kind is as wide as its things, so that small kinds
+       * share a row and their things still stand in the same columns.
+       */
+      #tray .list {
+        --cols: 5;
+        container-type: inline-size;
         display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: calc(var(--u) * 2) var(--u);
+        max-height: min(calc(var(--u) * 122), 34dvh);
+        overscroll-behavior: contain;
+      }
+      #tray .kind {
+        display: flex;
+        flex-direction: column;
+        gap: var(--u);
+        min-width: 0;
+      }
+      /* The things of one row are as tall as the tallest of them, whichever kind they are of. */
+      #tray .grid {
+        flex: 1;
+      }
+      /* A kind's name takes the width of its things, on a second line if it must. */
+      #tray .kind .k-label {
+        width: 0;
+        min-width: 100%;
+      }
+      #tray .grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--u);
+      }
+      #tray .grid button {
+        position: relative;
+        display: flex;
+        flex-direction: column;
         align-items: center;
         gap: var(--u);
-        min-height: calc(var(--u) * 30);
-        overflow-x: auto;
-        scrollbar-width: none;
+        width: calc((100cqw - var(--u) * (var(--cols) - 1) - 1px) / var(--cols));
+        padding: var(--u) var(--u) calc(var(--u) * 2);
+        color: inherit;
+        text-align: center;
       }
-      #tray .row button {
-        position: relative;
-        flex: none;
-        display: grid;
-        place-items: center;
-        width: calc(var(--u) * 30);
-        height: calc(var(--u) * 30);
-        padding: 0;
-      }
-      #tray .row button:active {
+      #tray .grid button:active {
         translate: 0 var(--u);
       }
-      #tray .row .n {
+      #tray .grid .pic {
+        display: grid;
+        place-items: center;
+        height: calc(var(--u) * 30);
+      }
+      #tray .grid .n {
         position: absolute;
         right: calc(var(--u) * 2);
-        bottom: 0;
+        top: calc(var(--u) * 21);
         font: var(--f-name);
         color: var(--k-gold-lt);
         text-shadow: var(--u) var(--u) 0 var(--k-ink);
       }
-      #tray .empty {
-        padding: 0 calc(var(--u) * 2);
+      #tray .grid .new {
+        position: absolute;
+        left: calc(var(--u) * 2);
+        top: var(--u);
+      }
+      /* How many new things are in Storage, hung under the hammer. */
+      #corner .k-btn {
+        position: relative;
+      }
+      #corner .k-chip {
+        position: absolute;
+        top: calc(100% - var(--u) * 3);
+        left: 50%;
+        translate: -50% 0;
+        pointer-events: none;
       }
       body.decorating #dock {
         display: none;
@@ -744,10 +791,10 @@
           width: min(calc(var(--u) * 170), calc(100vw - var(--edge) * 2));
         }
         body.decorating #feed {
-          bottom: calc(var(--u) * 68 + var(--bottom));
+          bottom: calc(var(--u) * 160 + var(--bottom));
         }
       }
-      /* On a short screen there is no room for news and the tray both. */
+      /* On a short screen there is no room for news and Storage both. */
       @media (max-height: 500px) {
         body.decorating #feed {
           display: none;
@@ -804,7 +851,10 @@
         body.decorating #feed {
           display: none;
         }
-        /* The tray's buttons are their pictures alone, so that the name of the thing in hand has room. */
+        #tray .list {
+          --cols: 4;
+        }
+        /* The bar's buttons are their pictures alone, so that the name of the thing in hand has room. */
         #tray .bar .t {
           display: none;
         }
@@ -820,7 +870,7 @@
     <div id="corner"></div>
     <div id="feed" aria-live="polite"></div>
     <nav id="dock" class="k-shelf" aria-label="Places"></nav>
-    <div id="tray" class="k-shelf" aria-label="Things put away" hidden></div>
+    <div id="tray" class="k-shelf" aria-label="Storage" hidden></div>
     <aside id="panel" class="k-panel" hidden></aside>
     <div id="card" class="k-plaque" hidden></div>
     <div id="arrival" hidden></div>

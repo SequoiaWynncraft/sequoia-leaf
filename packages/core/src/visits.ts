@@ -239,7 +239,6 @@ export const LOGGED = {
   worksStory: "works_story",
   townBought: "town_bought",
   townPet: "town_pet",
-  townTrophy: "town_trophy",
   pullsTop: "pulls_top",
   leafSpent: "leaf_spent",
 } as const;
