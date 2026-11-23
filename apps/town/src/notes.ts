@@ -25,7 +25,7 @@ export interface Part {
 export const NOTES: readonly Note[] = [
   {
     id: "raid-fixes",
-    at: "2026-11-24T23:59Z",
+    at: "2026-11-23T23:24Z",
     title: "The Little Raid: fixes",
     lines: [
       "A fight shows the result that is paid, and a page left in a fight that another device finished goes on to the next room.",
