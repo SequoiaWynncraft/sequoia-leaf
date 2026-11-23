@@ -260,7 +260,7 @@ describe("the cards of tiers 2 and 3", () => {
     expect(printOf(nodeRef(workshop))).toMatchObject({ study: "out" });
     expect(printOf(nodeRef(tooling))).toMatchObject({
       needs: [{ goal: workshop, stands: "being studied" }],
-      studied: [0, 150],
+      studied: [0, 225],
     });
     expect(printOf(tileRef(at(y, 20, 15)))).toMatchObject({ studying: workshop, research: true });
     // With research's screen the one open, no card offers it: its button would shut the screen.
@@ -274,18 +274,18 @@ describe("the cards of tiers 2 and 3", () => {
     const got = y.got[workshop];
     if (!got) throw new Error("nothing is being studied");
     got[item("timber")] = 30;
-    expect(printOf(nodeRef(tooling))).toMatchObject({ studied: [30, 150] });
+    expect(printOf(nodeRef(tooling))).toMatchObject({ studied: [30, 225] });
     expect(cardKey(nodeRef(tooling))).not.toBe(before);
-    // The commission waits on three pieces of research: each is a thing with how it stands.
-    expect(printOf(nodeRef(goal("lanterns")))).toMatchObject({
-      may: false,
-      study: null,
-      needs: [
-        { goal: goal("oilpress"), stands: "not begun" },
-        { goal: workshop, stands: "being studied" },
-        { goal: goal("brassfolio"), stands: "not begun" },
-      ],
-    });
+    // The commission waits on all the tier's research: each is a thing with how it stands.
+    const needs = printOf(nodeRef(goal("lanterns")));
+    expect(needs).toMatchObject({ may: false, study: null });
+    const stands = needs !== null && "needs" in needs ? needs.needs : [];
+    expect(stands.length).toBe(10);
+    expect(stands.filter((n) => [goal("oilpress"), workshop, goal("brassfolio")].includes(n.goal))).toEqual([
+      { goal: goal("oilpress"), stands: "not begun" },
+      { goal: workshop, stands: "being studied" },
+      { goal: goal("brassfolio"), stands: "not begun" },
+    ]);
   });
 
   test("of a number, a tool, a tier and what a goal leaves are the rules' own: a number says what it was before", () => {
