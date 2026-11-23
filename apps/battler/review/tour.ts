@@ -4,7 +4,8 @@
  *
  *   bun review/tour.ts <steps.json> <out-dir> [<query>]
  *
- * It builds the page into a folder of its own, starts `apps/api/test/play.ts` on a free port with
+ * It builds the tours' page (`review/index.html`: the table with its handle, `window.raid`) into a
+ * folder of its own, starts `apps/api/test/play.ts` on a free port with
  * Leaf's dice falling the same way every time (so a tour plays the same game each run), signs in as
  * its Tester, and has the kit's driver go through the steps on the page (`?<query>` added to its
  * address, such as `sheet`). The server and the folder go when the tour ends.
@@ -50,7 +51,8 @@ async function until(stream: ReadableStream<Uint8Array>, said: string, seen = ""
 
 let server: ReturnType<typeof Bun.spawn> | null = null;
 try {
-  const built = Bun.spawnSync(["bun", "build", "index.html", "--outdir", join(site, "battler"), "--minify"], {
+  // The tours' page: the table with its handle (`review/index.html`), never the one that ships.
+  const built = Bun.spawnSync(["bun", "build", "review/index.html", "--outdir", join(site, "battler"), "--minify"], {
     cwd: app,
     stdout: "ignore",
     stderr: "inherit",
@@ -64,8 +66,7 @@ try {
   });
   if (!(server.stdout instanceof ReadableStream)) throw new Error("No output from the play server");
   await until(server.stdout, "Leaf is playing");
-  // The tours drive the table through its handle, which the page opens only when asked.
-  const page = `${origin}/play/battler/?handle${query ? `&${query}` : ""}`;
+  const page = `${origin}/play/battler/${query ? `?${query}` : ""}`;
   const tour = Bun.spawn(
     [
       "bun",

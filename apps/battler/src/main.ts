@@ -71,12 +71,6 @@ async function setOutOn(trail: number): Promise<void> {
 
 async function boot(): Promise<void> {
   await fontsReady();
-  // Every figure on one sheet: a picture of the rules' figures, which needs no table (for looking at, `review/`).
-  const asked = new URLSearchParams(location.search);
-  if (asked.has("sheet")) {
-    (await import("../review/sheet.ts")).showSheet();
-    return;
-  }
   // Who the member is, and then the table as Leaf has it. Without Leaf there is no table.
   const where = await start();
   if (where.mode === "shut") {
@@ -182,8 +176,6 @@ async function boot(): Promise<void> {
   });
   openHand(must(document.querySelector<HTMLCanvasElement>("#view"), "the table's canvas"));
   openLight();
-  // A handle for staging and looking at the table from outside, for the tours only (`review/handle.ts`).
-  if (asked.has("handle")) (await import("../review/handle.ts")).openHandle();
 
   // A run in progress is offered again on the front page; nothing starts by itself.
   renderTable();
@@ -203,4 +195,5 @@ async function boot(): Promise<void> {
   tell({ town: "ready" });
 }
 
-void boot();
+/** The table, opened and ready: what the tours' page (`review/index.html`) waits for before it opens its handle. */
+export const booted: Promise<void> = boot();
