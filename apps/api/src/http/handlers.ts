@@ -776,11 +776,13 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
         )
         .handle("oldSave", () => Effect.fail(notYou))
         .handle("oldCoins", () => Effect.fail(notYou))
-        .handle("play", ({ params }) =>
+        .handle("play", ({ params, query }) =>
           Effect.gen(function* () {
             const played = yield* playedGame(params.game);
             const identity = yield* CurrentIdentity;
-            const shown = yield* play.open({ playerId: identity.playerId, guest: isGuest(identity) }, played);
+            // A page whose copy turned out not to be Leaf's says at which tick as it asks for the state.
+            const differs = /^\d{1,13}$/.test(query.differs ?? "") ? Number(query.differs) : undefined;
+            const shown = yield* play.open({ playerId: identity.playerId, guest: isGuest(identity) }, played, differs);
             if (shown.status === "unreadable") {
               return yield* unreadable;
             }

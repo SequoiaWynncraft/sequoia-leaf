@@ -261,6 +261,16 @@ command, once that was five minutes ago or more), and Leaf's tick now. A visitor
 without the blueprints. The page reads it with
 `readView` and `WORKS.decode`, and holds a yard with no seed.
 
+**What a batch is answered with** (`answer`, read with `readAnswer`) is not the yard, which the page
+already holds: `{ clock, tick, check, serial }`, Leaf's tick now, the yard's tick after the batch
+and its check there, and how many orders the board has ever hung. `check(w)` (`check.ts`) mixes
+every field the rules read, of every piece and of the yard, into 32 bits in one pass, numbering
+things, kinds, plots and plans by the rules' own lists; it leaves out the seed, `at`, `away`, the
+news and what is worked out from the rest. A yard and the yard read back from its save, or from what
+the page is shown, have the same check, and two yards with the same check run on alike. Only Leaf
+can move `serial`: it hangs an order from the seed (a hand over, a swap, a fourth hook, the board
+going up), which the page's copy, with no seed, leaves empty.
+
 ## What the town can read
 
 - `w.given`: how many of each thing have gone to orders, ever.
@@ -282,6 +292,7 @@ without the blueprints. The page reads it with
 | `orders.ts`, `clock.ts` | the depot, the story, the board; the yard's time, and its owner's           |
 | `game.ts`               | the Works as Leaf holds it: its clock, its commands, its Coins, the view    |
 | `route.ts`, `save.ts`   | the shortest clear run for a belt; a yard as text, and back                 |
+| `check.ts`              | one number for a whole yard, to tell the page's copy from Leaf's            |
 | `status.ts`             | what a thing is doing, in a sentence, and whether it is in trouble          |
 | `yards/*.json`          | yards kept part-way through the story, for tests and for looking at a stage |
 
@@ -293,18 +304,26 @@ only on what stands where, so it is worked out once (`rewire`) and kept until th
 ## Running the yard ahead of Leaf
 
 ```ts
-import { play, stepTo, WORKS } from "@sequoia-leaf/yard";
+import { check, play, stepTo, WORKS } from "@sequoia-leaf/yard";
 
-// When Leaf answers: its yard, with every command not yet answered done again on top, each at its tick.
-const copy = WORKS.decode(view.yard);
+// When the member acts: done to the copy at once, and sent with the copy's tick; the copy's tick
+// and check just after it are kept.
+const done = play(copy, { do: "build", kind: "mill", x, y, dir, tick: copy.tick });
+if (!("refused" in done)) {
+  send({ do: "build", kind: "mill", x, y, dir, tick: copy.tick });
+  kept.push({ tick: copy.tick, check: check(copy) });
+}
+
+// When Leaf answers a batch: if Leaf did what the copy did (nothing refused), at the same tick, and
+// hung no order, the checks are of the same moment. Alike, the copy stays as it is.
+const same = answer.tick === last.tick && answer.serial === copy.serial && answer.check === last.check;
+
+// Otherwise, Leaf's yard asked for, with every command not yet answered done again on top, each at its tick.
+copy = WORKS.decode(view.yard);
 for (const c of unanswered) play(copy, c);
 
-// Every frame: run the copy on to Leaf's tick now, the view's clock and a tick for each 100 ms since.
-stepTo(copy, view.clock + Math.floor((performance.now() - arrived) / 100));
-
-// When the member acts: done to the copy at once, and sent with the copy's tick.
-const done = play(copy, { do: "build", kind: "mill", x, y, dir, tick: copy.tick });
-if (!("refused" in done)) send({ do: "build", kind: "mill", x, y, dir, tick: copy.tick });
+// Every frame: run the copy on to Leaf's tick now, Leaf's last clock and a tick for each 100 ms since.
+stepTo(copy, clock + Math.floor((performance.now() - arrived) / 100));
 ```
 
 What stands on a tile is `yard.cells[at(yard, x, y)]`, the ground under it is in `yard.land`, power

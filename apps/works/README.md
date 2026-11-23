@@ -28,17 +28,23 @@ cards, as the battler does. It keeps nothing of the game in the browser; only `w
 (the lessons taken, the zoom) stays.
 
 Everything the member does is done to the copy at once with the shared rules (`yard.ts`, `doNow`)
-and sent with the tick the copy stood at; a command the rules refuse is said so and not sent. Each
-frame, if Leaf has answered since the last, the copy becomes Leaf's yard with every command still
-unanswered done again on top, each at its own tick; then the copy is run on to Leaf's tick now: the
-tick Leaf last gave, and one for each tenth of a second since, never earlier than one already
-shown. A copy more than a minute behind (a tab put away) is not run on: the page asks Leaf for its
-yard, which Leaf has run on meanwhile, and shows that when it comes; away for less than five
-minutes, there is no letter. A copy standing still (its owner away eight hours) holds Leaf's tick
+and sent with the tick the copy stood at; a command the rules refuse is said so and not sent. With
+each command sent the page keeps the copy's tick and check just after it. Leaf answers a batch with
+its clock and its yard's tick, check and orders hung after it, not the yard (the yard's README).
+When Leaf did what the copy did, at the same tick, and hung no order, the checks are compared;
+alike, the copy is left as it is. Otherwise (a command Leaf turned down, a command done at another
+tick, an order only Leaf could hang, or checks that differ) the page asks Leaf for its yard, in turn
+with the batches, and the copy becomes Leaf's yard with every command still unanswered done again on
+top, each at its own tick. Checks that differ are a fault in the rules or the check: the page counts
+them (`works.state().differences`) and tells Leaf the tick as it asks, and Leaf logs it. Each frame
+the copy is run on to Leaf's tick now: the tick Leaf last gave, and one for each tenth of a second
+since, never earlier than one already shown. A copy more than a minute behind (a tab put away) is
+not run on: the page asks Leaf for its yard, which Leaf has run on meanwhile, and shows that when it
+comes; away for less than five minutes, there is no letter. A copy standing still (its owner away eight hours) holds Leaf's tick
 with it from the frame it stops in until the member acts, as Leaf does. News (a story order done, an order filled) comes from the
 copy's own stepping, and is not told again when the same ticks are stepped once more. Swapping,
-handing over and buying a plan leave a place on the board empty until Leaf hangs the next order
-there; a place the board would have filled sends `collect`, so Leaf does.
+handing over and buying a plan leave a place on the board empty until Leaf's yard, with the next
+order hung there, comes; a place the board would have filled sends `collect`, so Leaf does.
 
 **Coins.** The number the Works shows, and what a price is checked against, is the purse's (Leaf's
 ledger) and the whole Coins in the copy's till, as Leaf will count them. A command that changes
