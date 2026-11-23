@@ -26,9 +26,10 @@ export const NOTES: readonly Note[] = [
   {
     id: "town-ways",
     at: "2026-11-24T23:59Z",
-    title: "Turning back at once no longer stops the town",
+    title: "Fewer ways for the town to get stuck",
     lines: [
       "Leaving a camp or the town just as you arrive now takes you back. Before, the page stopped until it was loaded again.",
+      "Going to a camp straight from the Works no longer has you walk back into town unseen.",
     ],
   },
   {

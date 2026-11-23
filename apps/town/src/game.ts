@@ -100,8 +100,6 @@ export interface Game {
   home: boolean;
   /** The place the member is standing at, if any, by the name its dock button has. */
   near: string | null;
-  /** The member is stepping through a door, and whoever is taking them through has their fading in hand. */
-  inDoor: boolean;
   /** Which place is on the stage: the town, a camp, or the Grove. Only the stage sets it (`main.ts`). */
   where: Place;
   /** How far night has closed in on the walk between two places: 0 for not at all, 1 for dark. Only the stage sets it. */
@@ -122,7 +120,6 @@ export const G: Game = {
   panel: null,
   home: false,
   near: null,
-  inDoor: false,
   where: "town",
   dark: 0,
   stall: 0,

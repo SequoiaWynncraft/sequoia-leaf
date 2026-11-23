@@ -279,9 +279,13 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   // ---------- going places ----------
 
-  /** A game the member is on the way into: still walking to its door, or going through it. */
-  let going: { id: GameId; through: boolean } | null = null;
-  let seatWas = player.seat;
+  /**
+   * A game's door the member is on the way through: walking up to it, going in (the Works' doors
+   * part and they step into the dark; at the stump the lantern burns up), or coming back out (out of
+   * the Works' doorway to its stand; up from the stump). Only `doorTo` changes it; any halt, and any
+   * change of place, ends it.
+   */
+  let door: { readonly game: GameId; readonly phase: "walking" | "in" | "out" } | null = null;
   /** The member was put somewhere without walking there since the room was last told: a jump. */
   let jumped = false;
   /** Puts the member somewhere at once, which the room is told is a jump. */
@@ -291,11 +295,20 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     jumped = true;
   }
 
+  /** The door the member is going through is now `next`: in the Works' doorway they step slowly, and its doors stand open. */
+  function doorTo(next: typeof door): void {
+    const was = door;
+    door = next;
+    const stepping = (d: typeof door): boolean => d !== null && d.game === "works" && d.phase !== "walking";
+    player.speed = stepping(next) ? STEP_IN : STROLL;
+    if (stepping(next) !== stepping(was)) openDoor(stepping(next));
+  }
+
   function halt(): void {
     release(player);
     player.path = [];
     player.arrive = null;
-    going = null;
+    doorTo(null);
     show.dest = null;
   }
 
@@ -317,18 +330,15 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
   /** Through the door: the Works' doors part and the member steps in; at the stump the lantern burns up. */
   function through(id: GameId, of?: string): void {
     if (!stage.goInside(id, DOORWAY[id], of)) {
-      going = null;
+      doorTo(null);
       return;
     }
-    going = { id, through: true };
+    doorTo({ game: id, phase: "in" });
     show.dest = null;
     closePanel();
     closeCard();
     if (id === "works") {
-      G.inDoor = true;
-      openDoor(true);
       player.dir = 3;
-      player.speed = STEP_IN;
       player.path = [{ x: place("works").stand.x, y: THRESHOLD }];
       player.arrive = null;
     } else lightTable(true);
@@ -336,7 +346,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   /** Walks the member to a game's door and on through it (for the Works, to `of`'s yard, if given). */
   function goIn(id: GameId, of?: string): void {
-    if (!G.home || going?.through) return;
+    if (!G.home || door?.phase === "in") return;
     if (id === "table") {
       if (player.seat?.at === "table") {
         through(id);
@@ -347,13 +357,12 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         SEATS.find((s) => s.at === "table" && seatFree(s, player));
       if (seat) {
         halt();
-        going = { id, through: false };
+        doorTo({ game: id, phase: "walking" });
         goToSeat(
           player,
           seat,
           () => freeSeat(player, "table"),
-          (sat) => {
-            seatWas = sat;
+          () => {
             through(id);
           },
         );
@@ -362,7 +371,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     }
     const pl = place(id);
     halt();
-    going = { id, through: false };
+    doorTo({ game: id, phase: "walking" });
     walkTo(player, pl.stand, () => {
       player.dir = pl.face;
       through(id, of);
@@ -514,13 +523,11 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   /** The member is back from a camp: they walk in through the gate, and the town's own buttons are put back. */
   function cameFromCamp(): void {
-    going = null;
-    release(player);
+    halt();
     putAt(256, 84);
     player.dir = 0;
     player.alpha = 0;
     player.say = "";
-    player.speed = STROLL;
     walkTo(player, { x: 256, y: 128 }, () => {
       player.dir = 0;
     });
@@ -550,7 +557,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     },
 
     focus() {
-      if (going?.through) return DOORWAY[going.id];
+      if (door?.phase === "in") return DOORWAY[door.game];
       const found = show.found;
       if (found?.glide === true) {
         const there = found.a.seat ?? found.a;
@@ -586,17 +593,12 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       updateFx(dt);
 
       // Stepping through the Works' door, in or out: into the dark and back.
-      if (G.inDoor) {
-        player.alpha = clamp((player.y - THRESHOLD) / 5, 0, 1);
-        if (!going && player.path.length === 0) {
-          G.inDoor = false;
-          player.speed = STROLL;
-          openDoor(false);
-        }
-      }
+      if (door?.game === "works" && door.phase !== "walking") player.alpha = clamp((player.y - THRESHOLD) / 5, 0, 1);
+      // Out once at the Works' stand, or up from the stump.
+      const out = door?.game === "works" ? player.path.length === 0 : player.seat?.at !== "table";
+      if (door?.phase === "out" && out) doorTo(null);
       // Sitting down at the stump is sitting down to play.
-      if (awake() && player.seat !== seatWas && player.seat?.at === "table") through("table");
-      seatWas = player.seat;
+      if (awake() && door === null && player.seat?.at === "table") through("table");
     },
 
     draw: () => drawPicture(pic),
@@ -626,7 +628,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     release: () => undefined,
 
     cameBack(id) {
-      going = null;
+      doorTo({ game: id, phase: "out" });
       if (id === "table") {
         lightTable(false);
         return;

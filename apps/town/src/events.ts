@@ -96,10 +96,11 @@ export function beginEvents(): void {
 export function stepEvents(): void {
   stepLater();
   stepCues();
-  // Whoever is in the gateway is half in the dark beyond it.
+  // Whoever is in the gateway is half in the dark beyond it (the member in the Works' doorway, in
+  // the doorway's: the town sets it after).
   const all = G.player ? [G.player, ...G.folk, ...G.visitors] : [...G.folk, ...G.visitors];
   for (const a of all) {
-    if (a.away || (a.you && G.inDoor)) continue;
+    if (a.away) continue;
     a.alpha = a.y < 98 ? clamp((a.y - 84) / 12, 0, 1) : 1;
   }
 }
