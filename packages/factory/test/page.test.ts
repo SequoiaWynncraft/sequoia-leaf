@@ -107,6 +107,15 @@ describe("what the page writes for an act", () => {
     });
   });
 
+  test("for a run of belt that ends on clear ground points its last belt on the way it came, or, beside the depot, into it", () => {
+    const y = F.create({ seed: 2, tier: 2 });
+    const [mx, my] = y.land.depot;
+    // Up a column clear of the depot: the last belt goes on up.
+    expect(F.route(y, [mx - 4, my + 3], [mx - 4, my - 1])?.at(-1)).toMatchObject({ x: mx - 4, y: my - 1, dir: 3 });
+    // Along the row over the depot, to the tile over its middle: the last belt turns down into it.
+    expect(F.route(y, [mx - 4, my - 2], [mx, my - 2])?.at(-1)).toMatchObject({ x: mx, y: my - 2, dir: 1 });
+  });
+
   test("for a run of belt does the same to the page's copy as to Leaf's yard, whatever its legs carry beside what a leg is", () => {
     const page = F.create({ seed: 2, tier: 2 });
     const leaf = F.decode(F.encode(page));

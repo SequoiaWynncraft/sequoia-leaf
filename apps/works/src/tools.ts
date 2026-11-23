@@ -200,7 +200,8 @@ export function setGrade(grade: number): void {
   const tool = S.tool;
   if (!builds(tool) || !isGraded(tool) || grade < 1 || grade > highest(S.world.open, tool)) return;
   S.grades[tool] = grade;
-  if (S.aim) aimAt(S.aim.x, S.aim.y);
+  // What is aimed, a finger's run and a drag are all at the grade in hand: each is worked out again.
+  keepAim(true);
   yardSfx.pick();
   toolHooks.changed();
 }
@@ -265,16 +266,17 @@ export function aimAt(x: number, y: number): void {
  * They are kept while the pointer stays on that tile; when the yard has changed under them (a card's
  * button, a key, an undo, Leaf's yard taken: `S.rev`) or the Coins to hand have, they are worked out
  * again for the same tile. So what is shown, and what a press sets down, is of the yard as it is.
- * Each frame asks, and so does each press that acts on an aim. A grade chosen works the aim out
- * again itself (`setGrade`).
+ * Each frame asks, and so does each press that acts on an aim. With `again`, they are worked out
+ * again whatever: a grade chosen (`setGrade`) changes them and neither the yard nor the purse.
  */
-export function keepAim(): void {
+export function keepAim(again = false): void {
   const a = S.aim;
+  const stale = (r: Reckoned): boolean => again || !fresh(r);
   if (path.length > 1) {
-    if (S.run && !fresh(S.run)) reckon();
+    if (S.run && stale(S.run)) reckon();
   } else if (S.run && S.from) {
-    if (a && !fresh(S.run)) runTo(a.x, a.y);
-  } else if (a && !fresh(a)) {
+    if (a && stale(S.run)) runTo(a.x, a.y);
+  } else if (a && stale(a)) {
     if (S.from && S.tool === BELT) startAt(a.x, a.y);
     else aimAt(a.x, a.y);
   }
