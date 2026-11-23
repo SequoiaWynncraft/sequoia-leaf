@@ -2678,7 +2678,7 @@ describe("the banners", () => {
     const headliner = stranger(5);
     mojang.profiles.set(headliner, { name: "Fernwhistle", skin: undefined });
     start({ mojang: mojang.service });
-    const dates = { id: "banner-1", from: "2026-11-24T00:00:00.000Z", until: "2026-12-08T00:00:00.000Z" };
+    const dates = { id: "banner-1", from: "2026-11-23T00:00:00.000Z", until: "2026-12-08T00:00:00.000Z" };
     expect(await banners()).toEqual({ banners: [{ ...dates, headliner: null }] });
     const known = () =>
       services.run(

@@ -75,7 +75,7 @@ export interface Banner {
 }
 
 export const BANNERS: readonly Banner[] = [
-  { id: "banner-1", from: Date.UTC(2026, 10, 24), until: Date.UTC(2026, 11, 8) },
+  { id: "banner-1", from: Date.UTC(2026, 10, 23), until: Date.UTC(2026, 11, 8) },
 ];
 
 /** A banner's headliner, as a prize. */

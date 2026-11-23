@@ -143,8 +143,8 @@ describe("a pull", () => {
 
   it("is only from a banner that is open by Leaf's clock", () => {
     const s = fresh();
-    expect(refused(s, pull("banner-1"), ctx(Date.UTC(2026, 10, 23, 23, 59)))).toBe("closed");
-    expect(refused(s, pull("banner-1"), ctx(Date.UTC(2026, 10, 24)))).toBeNull();
+    expect(refused(s, pull("banner-1"), ctx(Date.UTC(2026, 10, 22, 23, 59)))).toBe("closed");
+    expect(refused(s, pull("banner-1"), ctx(Date.UTC(2026, 10, 23)))).toBeNull();
     expect(refused(s, pull("banner-1"), ctx(Date.UTC(2026, 11, 8)))).toBe("closed");
     expect(refused(s, pull("grove"), ctx(Date.UTC(2030, 0, 1)))).toBeNull();
     expect(PULLS.view(s, ctx()).open).toEqual([{ id: "banner-1", until: Date.UTC(2026, 11, 8) }]);
