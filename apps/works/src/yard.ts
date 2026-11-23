@@ -48,6 +48,7 @@
  * again every few minutes as well, and every few seconds while it hears nothing live.
  */
 
+import type { Done } from "@sequoia-leaf/core";
 import {
   type Act,
   ALL_KINDS,
@@ -73,6 +74,7 @@ import {
   stillAt,
   TICK_MS,
   TOP,
+  type Turned,
   type View,
   type Wired,
   writeCommand,
@@ -218,6 +220,17 @@ let collectedAt = 0;
 const refusalHearers: ((why: string) => void)[] = [];
 /** Puts away whatever the member has under way, as the yard stops taking input (`gate`). */
 let putAway = (): void => undefined;
+/** Hears each time the copy becomes Leaf's yard as read. */
+const takeHearers: (() => void)[] = [];
+
+/** Hears each time the copy becomes Leaf's yard as read: what was worked out of the copy before may no longer hold. */
+export const onTake = (fn: () => void): void => void takeHearers.push(fn);
+
+/**
+ * What doing something to the yard came to: the rules' refusal, or what they did, with whether Leaf
+ * did it too (`taken`, once Leaf answers: false when Leaf turned it down or it was never sent on).
+ */
+export type Did = Turned | (Done<Yard, News> & { readonly taken: Promise<boolean> });
 
 /** What the yard says, and what anything the member does while Leaf's yard is being taken is refused with. */
 export const CATCHING_UP = "The yard is catching up with the guild's server";
@@ -391,6 +404,7 @@ function take(): boolean {
   shown = Math.max(shown, yard.tick);
   S.world = yard;
   reads++;
+  for (const fn of takeHearers) fn();
   seen = Math.max(seen, rev);
   // What the yard as read has of what a visit was told is let go; none of the rest is begun.
   if (follow) {
@@ -486,28 +500,29 @@ function heard({ done, short }: Answered<Sending, News, Heard>): void {
  * is judged before it is sent. The rules' refusal is given back, and nothing is sent. A yard the
  * page was handed by a review page of its own (`S.alone`) is done to in the same way, and sends nothing.
  */
-export function doNow(act: Act): ReturnType<typeof play> {
+export function doNow(act: Act): Did {
   if (S.visiting) return { refused: "visiting", why: "This yard is somebody else's" };
   if (link.is === "givingWay") return { refused: "catching_up", why: CATCHING_UP };
   if (link.is !== "inStep" && !S.alone) return { refused: "closed", why: "The yard is not open" };
   const command: Command = { ...act, tick: S.world.tick };
   const done = play(S.world, command, balance().coins);
   if ("refused" in done) return done;
-  if (link.is !== "inStep") return done;
+  // A review page's own yard (`S.alone`) sends nothing: what is done is all there is.
+  if (link.is !== "inStep") return { ...done, taken: Promise.resolve(S.alone) };
   const sending = writeCommand(command);
   if (act.do === "collect") collectedAt = performance.now();
   go({ do: "send", sent: { command: sending, tick: S.world.tick, check: check(S.world) } });
   // What it pays or takes shows in the purse until Leaf answers, whose answer brings Leaf's word.
-  void link.leaf.send(
+  const answer = link.leaf.send(
     sending,
     undefined,
     (done.coins ?? []).reduce((sum, c) => sum + c.amount, 0),
   );
-  return done;
+  return { ...done, taken: answer.then((a) => !("refused" in a)) };
 }
 
 /** Pays the till into the ledger, and puts away the letter about a time away. */
-export const collect = (): ReturnType<typeof play> => doNow({ do: "collect" });
+export const collect = (): Did => doNow({ do: "collect" });
 
 /**
  * A moment of the page's clock (`now`, in milliseconds, as `performance.now` counts them): Leaf's

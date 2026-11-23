@@ -78,7 +78,7 @@ import {
   S,
   type Tool,
 } from "./state.ts";
-import { coins, doNow } from "./yard.ts";
+import { coins, type Did, doNow, onTake } from "./yard.ts";
 
 const DUST = "#cbb894";
 
@@ -108,11 +108,97 @@ type Done =
   | { did: "way"; i: number; shut: number; first: number }
   | { did: "painted"; stroke: number; lines: readonly { i: number; was: number }[] }
   | { did: "moved"; tiles: number[]; turns: Dir; x: number; y: number };
-const done: Done[] = [];
-const remember = (d: Done): void => {
-  done.push(d);
-  if (done.length > 60) done.shift();
-};
+
+/**
+ * Something done, kept to be undone: what to undo, its number, the tiles it touched and what stood
+ * on them just after it was done (`after`). It is undone only while they stand so, and only once
+ * Leaf has done each of its commands too; one Leaf turned down is let go, never undone.
+ */
+interface Undoable {
+  readonly done: Done;
+  readonly id: number;
+  readonly tiles: readonly number[];
+  readonly after: readonly Piece[];
+}
+/** What may be undone, oldest first; and how many commands of each Leaf has still to answer, by number. */
+let undoable: Undoable[] = [];
+const unanswered = new Map<number, number>();
+let undone = 0;
+
+/** The tiles something done touched: what it built, turned, raised, took away, coloured or moved. */
+function touched(d: Done): number[] {
+  const w = S.world;
+  switch (d.did) {
+    case "built":
+      return [...d.cells, ...d.turned.map((t) => t.i), ...tilesOf(w, d.was ?? [])];
+    case "raised":
+      return tilesOf(w, d.was);
+    case "took":
+      return tilesOf(w, d.what);
+    case "turned":
+    case "way":
+      return [d.i];
+    case "painted":
+      return d.lines.map((l) => l.i);
+    case "moved":
+      return d.tiles;
+  }
+}
+
+/** Whether two pieces stand alike, in all that undoing reads: kind, place, way, span, grade, colour and a splitter's ways. */
+const alike = (a: Piece | undefined, b: Piece | undefined): boolean =>
+  a !== undefined &&
+  b !== undefined &&
+  a.kind === b.kind &&
+  a.x === b.x &&
+  a.y === b.y &&
+  a.dir === b.dir &&
+  a.span === b.span &&
+  a.grade === b.grade &&
+  a.tint === b.tint &&
+  a.shut === b.shut &&
+  a.first === b.first;
+
+/** Whether what was done still stands as it was just after: what undoing it would put back is what it changed. */
+function holds(u: Undoable): boolean {
+  const now = piecesAt(S.world, u.tiles);
+  return now.length === u.after.length && now.every((p, k) => alike(p, u.after[k]));
+}
+
+/** Waits for Leaf's word on a command of an entry: done, it is one fewer to wait for; turned down, the entry is let go. */
+function awaitLeaf(id: number, did: Did): void {
+  unanswered.set(id, (unanswered.get(id) ?? 0) + 1);
+  const taken = "refused" in did ? Promise.resolve(false) : did.taken;
+  void taken.then(answered(id));
+}
+
+/** Hears Leaf's word on one of an entry's commands. */
+const answered =
+  (id: number) =>
+  (yes: boolean): boolean => {
+    const left = (unanswered.get(id) ?? 1) - 1;
+    if (left > 0) unanswered.set(id, left);
+    else unanswered.delete(id);
+    if (!yes) {
+      undoable = undoable.filter((u) => u.id !== id);
+      unanswered.delete(id);
+    }
+    return yes;
+  };
+
+/** Keeps something just done (`did`, as `doNow` gave it) to be undone. */
+function remember(d: Done, did: Did): void {
+  const id = ++undone;
+  const tiles = touched(d);
+  undoable.push({ done: d, id, tiles, after: piecesAt(S.world, tiles) });
+  if (undoable.length > 60) undoable.shift();
+  awaitLeaf(id, did);
+}
+
+// When the copy becomes Leaf's yard, what no longer stands as it was done is let go.
+onTake(() => {
+  undoable = undoable.filter(holds);
+});
 
 const W = (): number => S.world.land.w;
 
@@ -328,19 +414,19 @@ export function place(x: number, y: number): boolean {
   // Over a piece of its kind of a lower grade: that piece, as it stands, to put back.
   const raised = raisedOn(tool, i) === undefined ? null : standing(i);
   const cost = priceAt(w, tool, x, y, grade);
-  const no = does({ do: "build", kind: tool, x, y, dir: S.dir, grade });
-  if (no !== null) {
-    go({ do: "aim", aim: aimed(x, y, no, 0) });
+  const did = doNow({ do: "build", kind: tool, x, y, dir: S.dir, grade });
+  if ("refused" in did) {
+    go({ do: "aim", aim: aimed(x, y, did.why, 0) });
     yardSfx.no();
     toolHooks.changed();
     return false;
   }
   if (raised) {
-    remember({ did: "raised", was: [raised] });
+    remember({ did: "raised", was: [raised] }, did);
     lifted(x, y, cost);
   } else if (there !== NONE && !under) {
     if (was !== undefined && was !== S.dir) {
-      remember({ did: "turned", i, was });
+      remember({ did: "turned", i, was }, did);
       yardSfx.turn();
     }
   } else {
@@ -350,7 +436,7 @@ export function place(x: number, y: number): boolean {
       cells.push(far);
       landed(far % W(), Math.floor(far / W()), false);
     }
-    remember({ did: "built", cells, turned: [], ...(under ? { under: [under] } : {}) });
+    remember({ did: "built", cells, turned: [], ...(under ? { under: [under] } : {}) }, did);
     landed(x, y, tool === BELT);
     paid(x, y, cost);
   }
@@ -381,13 +467,13 @@ export function raiseAt(x: number, y: number): boolean {
   if (!isKind(k) || !was) return false;
   const grade = (w.grade[i] ?? 0) + 1;
   const cost = priceAt(w, k, x, y, grade);
-  const no = does({ do: "build", kind: k, x, y, dir: dirOf(i), grade });
-  if (no !== null) {
+  const did = doNow({ do: "build", kind: k, x, y, dir: dirOf(i), grade });
+  if ("refused" in did) {
     yardSfx.no();
-    toolHooks.said(`${no}.`);
+    toolHooks.said(`${did.why}.`);
     return false;
   }
-  remember({ did: "raised", was: [was] });
+  remember({ did: "raised", was: [was] }, did);
   lifted(x, y, cost);
   toolHooks.changed();
   return true;
@@ -406,7 +492,7 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
     }
     return false;
   }
-  remember({ did: "took", what: [was] });
+  remember({ did: "took", what: [was] }, did);
   const px = x * TILE + 8;
   const py = (y + 1) * TILE - 4;
   puff(px, py, 6, DUST, 9);
@@ -440,19 +526,22 @@ export function paintAt(x: number, y: number, more = false, pointer = -1): boole
   const was = i < 0 ? 0 : (w.tint[i] ?? 0);
   // A line that is that colour already is let be: a drag crosses the same line many times.
   if (line.length > 0 && line.every((j) => w.tint[j] === S.tint)) return false;
-  const no = does({ do: "paint", x, y, tint: S.tint });
-  if (no !== null) {
+  const did = doNow({ do: "paint", x, y, tint: S.tint });
+  if ("refused" in did) {
     if (!more) {
       yardSfx.no();
-      toolHooks.said(`${no}.`);
+      toolHooks.said(`${did.why}.`);
     }
     return false;
   }
-  // The stroke's lines are one entry: each line it colours is added to it.
-  const top = done.at(-1);
-  if (top?.did === "painted" && top.stroke === id)
-    done[done.length - 1] = { ...top, lines: [...top.lines, { i, was }] };
-  else remember({ did: "painted", stroke: id, lines: [{ i, was }] });
+  // The stroke's lines are one entry: each line it colours is added to it, and waited on with it.
+  const top = undoable.at(-1);
+  if (top?.done.did === "painted" && top.done.stroke === id) {
+    const lines = [...top.done.lines, { i, was }];
+    const tiles = lines.map((l) => l.i);
+    undoable[undoable.length - 1] = { ...top, done: { ...top.done, lines }, tiles, after: piecesAt(w, tiles) };
+    awaitLeaf(top.id, did);
+  } else remember({ did: "painted", stroke: id, lines: [{ i, was }] }, did);
   const col = PAINTS[S.tint - 1]?.lit ?? DUST;
   for (const j of line.slice(0, 80)) puff((j % W()) * TILE + 8, Math.floor(j / W()) * TILE + 9, 1, col, 5);
   yardSfx.paint();
@@ -470,8 +559,9 @@ export function turnAt(x: number, y: number): boolean {
     return false;
   }
   const was = dirOf(i);
-  if (does({ do: "turn", x, y, dir: RIGHT[was] }) !== null) return false;
-  remember({ did: "turned", i, was });
+  const did = doNow({ do: "turn", x, y, dir: RIGHT[was] });
+  if ("refused" in did) return false;
+  remember({ did: "turned", i, was }, did);
   yardSfx.turn();
   return true;
 }
@@ -488,11 +578,12 @@ export function wayAt(x: number, y: number, way: number): boolean {
   const putFirst = !shut && w.first[i] !== way + 1 && locked(w.open, { first: true }) === null;
   const act: Act = putFirst ? { do: "first", x, y, way } : { do: "way", x, y, way, open: shut };
   const was = { shut: w.shut[i] ?? 0, first: w.first[i] ?? 0 };
-  if (i < 0 || does(act) !== null) {
+  const did = i < 0 ? null : doNow(act);
+  if (!did || "refused" in did) {
     yardSfx.no();
     return false;
   }
-  remember({ did: "way", i, ...was });
+  remember({ did: "way", i, ...was }, did);
   // Dust where the bar drops across the way, or lifts off it; plum bits where a flag goes up.
   const dir = dirOf(i);
   const d = [dir, LEFT[dir], RIGHT[dir]][way] ?? dir;
@@ -601,14 +692,27 @@ function asTheyWere(was: readonly Piece[]): void {
   }
 }
 
-/** Undoes the last thing done to the yard, if it still can be. */
+/**
+ * Undoes the last thing done to the yard, if it still can be: once Leaf has done it too, and while
+ * what it touched stands as it was just after.
+ */
 export function undo(): boolean {
   const w = S.world;
-  const last = done.pop();
-  if (!last) {
+  const top = undoable.at(-1);
+  if (!top) {
     toolHooks.said("Nothing to undo.");
     return false;
   }
+  if (unanswered.has(top.id)) {
+    toolHooks.said("Not yet: the guild's server has not answered.");
+    return false;
+  }
+  undoable.pop();
+  if (!holds(top)) {
+    toolHooks.said("Cannot undo: it has changed since.");
+    return false;
+  }
+  const last = top.done;
   if (last.did === "built") {
     const cells = last.cells.filter((i) => w.kind[i] !== NONE);
     // Many pieces go as one with Select; without it, one at a time, as the spade takes them.
@@ -752,10 +856,10 @@ export function commitRun(): boolean {
     kindAt(w, leg.x, leg.y) === BELT ? (standing(at(w, leg.x, leg.y)) ?? []) : [],
   );
   const clear = new Set(run.legs.filter((leg) => kindAt(w, leg.x, leg.y) === NONE));
-  const no = does(bend ? { do: "lay", legs: run.legs, turn: bend } : { do: "lay", legs: run.legs });
-  if (no !== null) {
+  const did = doNow(bend ? { do: "lay", legs: run.legs, turn: bend } : { do: "lay", legs: run.legs });
+  if ("refused" in did) {
     yardSfx.no();
-    toolHooks.said(`${no}.`);
+    toolHooks.said(`${did.why}.`);
     toolHooks.changed();
     return false;
   }
@@ -774,7 +878,7 @@ export function commitRun(): boolean {
       Math.min(n, 14) * 28,
     );
   });
-  remember({ did: "built", cells, turned, ...(raised.length > 0 ? { was: raised } : {}) });
+  remember({ did: "built", cells, turned, ...(raised.length > 0 ? { was: raised } : {}) }, did);
   const end = run.legs.at(-1);
   if (end) {
     S.dir = end.dir;
@@ -1025,19 +1129,19 @@ function setDown(): boolean {
     typeof g.as === "number"
       ? { do: "placeBlueprint", slot: g.as, turns: g.turns, x: box.x, y: box.y }
       : { do: g.as, tiles: g.tiles, turns: g.turns, x: box.x, y: box.y };
-  const no = does(act);
-  if (no !== null) {
+  const did = doNow(act);
+  if ("refused" in did) {
     yardSfx.no();
-    toolHooks.said(`${no}.`);
+    toolHooks.said(`${did.why}.`);
     return false;
   }
   if (moving) {
-    remember({ did: "moved", tiles, turns: TURNS_BACK[g.turns], x: was.x, y: was.y });
+    remember({ did: "moved", tiles, turns: TURNS_BACK[g.turns], x: was.x, y: was.y }, did);
     const [x1, y1] = [box.x + box.w - 1, box.y + box.h - 1];
     go({ do: "unhold" });
     go({ do: "marked", mark: { x0: box.x, y0: box.y, x1, y1, tiles, pieces: g.at, cost: h.stage.mark?.cost ?? 0 } });
   } else {
-    remember({ did: "built", cells: tilesOf(w, stood), turned: [], under, was: changed });
+    remember({ did: "built", cells: tilesOf(w, stood), turned: [], under, was: changed }, did);
     paid(aim.x, aim.y, aim.cost);
   }
   // The pieces land in a wave out from the pointer, each ring of it with one sound.
@@ -1067,7 +1171,7 @@ export function clearMark(): boolean {
     toolHooks.said(`${did.why}.`);
     return false;
   }
-  remember({ did: "took", what: m.pieces });
+  remember({ did: "took", what: m.pieces }, did);
   for (const p of m.pieces) puff(p.x * TILE + 8, (p.y + 1) * TILE - 4, 3, DUST, 9);
   const refund = coinsOf(did);
   if (refund > 0) float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, `+${refund}`, GOLD[2], 1.2);
@@ -1094,13 +1198,13 @@ export function upgradeMark(): boolean {
   if (!m || groupOf(S.hand)) return false;
   const was = m.pieces.filter((p) => isGraded(p.kind) && gradeOf(p.kind, p.grade) < highest(w.open, p.kind));
   const cost = upgradePrice(w, m.tiles);
-  const no = does({ do: "upgrade", tiles: m.tiles });
-  if (no !== null) {
+  const did = doNow({ do: "upgrade", tiles: m.tiles });
+  if ("refused" in did) {
     yardSfx.no();
-    toolHooks.said(`${no}.`);
+    toolHooks.said(`${did.why}.`);
     return false;
   }
-  remember({ did: "raised", was });
+  remember({ did: "raised", was }, did);
   for (const p of was.slice(0, 160)) sparkle(p.x * TILE + 8, p.y * TILE + 6, 2, 5);
   if (cost > 0) float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, `-${cost}`, GOLD[0], 1.2);
   yardSfx.ready();

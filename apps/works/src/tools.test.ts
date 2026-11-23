@@ -35,7 +35,7 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 
-import { act, ctx, kindAt, opened, until, useFakeLeaf } from "./fake-leaf.ts";
+import { act, clear, ctx, kindAt, kindOn, opened, until, useFakeLeaf } from "./fake-leaf.ts";
 import { asIf, layout } from "./layout.ts";
 import { DRAWN, draws, S } from "./state.ts";
 import {
@@ -57,6 +57,7 @@ import {
   runStart,
   setTool,
   tapBelt,
+  undo,
   usable,
 } from "./tools.ts";
 import { tileRef } from "./ui/card.ts";
@@ -367,5 +368,56 @@ describe("a drag ends with what is in hand", () => {
     expect([S.aim?.x, S.aim?.y]).toEqual([18, 14]);
     await Bun.sleep(5);
     expect(fake.leaf.posts).toBe(0);
+  });
+});
+
+describe("undo, as Leaf did things", () => {
+  test("leaves alone a piece another page built, where Leaf turned this page's own piece down", async () => {
+    const fake = await opened(yardAt(2), 100);
+    const [a] = clear(1);
+    if (!a) throw new Error("no room");
+    // Another page of the member's builds a mill on a tile this page still shows empty.
+    fake.elsewhere({ do: "build", kind: "mill", ...a, dir: 0 });
+    setTool(BELT);
+    expect(place(a.x, a.y)).toBe(true);
+    // Leaf turns the belt down, and the page takes Leaf's yard, mill and all.
+    await until(() => kindAt(a) === "mill");
+    undo();
+    await Bun.sleep(5);
+    expect([kindAt(a), kindOn(fake.leaf.yard, a)]).toEqual(["mill", "mill"]);
+    expect(sent(fake.leaf).filter((c) => c === "clear" || c === "remove")).toEqual([]);
+  });
+
+  test("undoes nothing Leaf has not done yet, and once it has, what it did", async () => {
+    const fake = await opened(yardAt(2), 100);
+    const [a] = clear(1);
+    if (!a) throw new Error("no room");
+    setTool(BELT);
+    expect(place(a.x, a.y)).toBe(true);
+    // Not answered yet: nothing is undone.
+    expect(undo()).toBe(false);
+    await until(() => fake.leaf.posts >= 1);
+    await Bun.sleep(2);
+    expect(undo()).toBe(true);
+    await until(() => fake.leaf.posts >= 2);
+    expect([kindAt(a), kindOn(fake.leaf.yard, a)]).toEqual([undefined, undefined]);
+  });
+
+  test("lets go of what no longer stands as it was done, when Leaf's yard is taken", async () => {
+    const fake = await opened(yardAt(2), 100);
+    const [a] = clear(1);
+    if (!a) throw new Error("no room");
+    setTool(BELT);
+    expect(place(a.x, a.y)).toBe(true);
+    await until(() => fake.leaf.posts >= 1);
+    await Bun.sleep(2);
+    // Another page takes that belt away and puts a mill there; this page takes Leaf's yard.
+    fake.elsewhere({ do: "remove", ...a });
+    fake.elsewhere({ do: "build", kind: "mill", ...a, dir: 0 });
+    await again();
+    expect(kindAt(a)).toBe("mill");
+    expect(undo()).toBe(false);
+    await Bun.sleep(5);
+    expect([kindAt(a), sent(fake.leaf)]).toEqual(["mill", ["build"]]);
   });
 });

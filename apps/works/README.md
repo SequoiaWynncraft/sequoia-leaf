@@ -261,7 +261,9 @@ the line has Upgrade with what the rules ask for the whole of it (`upgradePrice`
 raises every marked piece to the highest grade the yard may build, all of them or none, and where it
 cannot the rules' reason is said.
 `Z` undoes a move, a copy, a removal, a piece raised or an area raised as one step, to the grades
-there were, and a splitter's way shut, opened or put first (its ways as they were).
+there were, and a splitter's way shut, opened or put first (its ways as they were). A thing is
+undone only once Leaf has done it too, and only while what it touched stands as it was just after:
+one Leaf turned down is never undone, and taking Leaf's yard lets go of what no longer stands so.
 
 **Asking.** Everything in the yard is a card in the kit's one card system (`card.ts`, registered
 in `ui/card.ts`). A card is its print: what it shows of the yard and the purse, as plain values
