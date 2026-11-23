@@ -62,22 +62,26 @@ export interface Person {
   you: boolean;
 }
 
-/** A real member who is in the game just now, as the town shows them. */
+/** A real member who is in one of the games just now, as the town shows them. */
 export interface Visitor {
   id: string;
   name: string;
   /** Their rank, when the server says. */
   rank: string | null;
-  /** About the town, by the Works' door, or watching at the stump. */
-  at: "town" | "works" | "table";
+  /** By the Works' door, or watching at the stump. */
+  at: "works" | "table";
   /** Where their skin sheet is served. */
   skin: string;
 }
 
-/** A real member who has gone, and whose character stays in town for a day, dozing where they were. */
-export interface Rester extends Visitor {
+/** A real member who has gone in the last day: one who stays dozes in town where they were, and one who does not goes. */
+export interface Rester extends Omit<Visitor, "at"> {
+  /** Where they were: about the town, by the Works' door, or at the stump. */
+  at: "town" | "works" | "table";
   /** When the game last saw them, in milliseconds since 1970. */
   seen: number;
+  /** Whether their character stays in town. */
+  stays: boolean;
 }
 
 /** Somebody else in the game now, or gone in the last day and staying, as "Who is about" lists them. */
@@ -94,12 +98,42 @@ export interface Mate {
 
 export type Tone = "gold" | "leaf" | "coral" | "rose";
 
+/**
+ * One of the guild's moments the town stages: real members home from a raid together, or a war
+ * they fought over a territory (the server's events say who fought where, not how it went).
+ */
+export interface Moment {
+  kind: "party" | "war";
+  /** The raid, or the territory. */
+  what: string;
+  /** Who was in it, as Leaf told of them, first told first. */
+  who: readonly Person[];
+  /** When it happened, as the guild's own record has it, in milliseconds since 1970. */
+  happened: number;
+  /** When the town begins to stage it, by Leaf's clock: the same on every page; 0 for one from before the page. */
+  at: number;
+}
+
+/**
+ * What the guild has done, as Leaf said when the page opened and as the page has heard since: the
+ * same on every page, however long each has been open.
+ */
+export interface Deeds {
+  /**
+   * The raid parties and wars the town may still be staging, the newest fifty; and with them the
+   * last war of all before those, for the banner.
+   */
+  moments: readonly Moment[];
+  /** A UTC day (when it began), the newest heard of, and how many raids (`party`) and wars the guild finished in it, each once. */
+  day: { from: number; party: number; war: number };
+}
+
 /** Something that has just happened out in the guild. */
 export type Happening =
-  /** Real members back from a raid together. */
-  | { kind: "party"; who: readonly Person[]; raid: string }
-  /** Real members fought a war over a territory: the server's events say who fought where, not how it went. */
-  | { kind: "war"; who: readonly Person[]; land: string }
+  /** Real members back from a raid together, the member first; `at` is when the town begins to stage it, by Leaf's clock. */
+  | { kind: "party"; who: readonly Person[]; raid: string; at: number }
+  /** Real members fought a war over a territory. */
+  | { kind: "war"; who: readonly Person[]; land: string; at: number }
   /** A real member reached a level of their own with the guild. */
   | { kind: "reached"; who: Person; level: number }
   /** A real member reached one of the guild's milestones. */
@@ -136,9 +170,11 @@ export interface Guild {
   say(h: Happening, feed: (text: string, tone: Tone) => void): void;
   /** Time passing in town, in seconds. */
   step(dt: number): void;
-  /** Real members in the game just now, never the member themself; at most twelve. */
+  /** The guild's raid parties and wars: what the town shows of them follows from these and Leaf's clock. */
+  deeds(): Deeds;
+  /** Real members in one of the games just now, never the member themself; at most twelve. */
   visitors(): readonly Visitor[];
-  /** Real members who have gone in the last day, dozing in town, most recent first; never anybody in `visitors`. */
+  /** Real members who have gone in the last day, those who stay and those who do not; never anybody in the game now. */
   resting(): readonly Rester[];
   /**
    * Everybody else in the game now, wherever they are (their own camp too), and everybody gone in the
@@ -146,8 +182,6 @@ export interface Guild {
    * says, for "Who is about".
    */
   about(): { present: readonly Mate[]; resting: readonly Mate[] };
-  /** Whether anybody has said yet who is about: the first answer takes a moment. */
-  heard(): boolean;
   /** Where the member is: in town, at their camp, or (null) in a game over the town. */
   here(place: "town" | "camp" | null): void;
   /** Whether the member's own character stays in town, dozing, for a day after they go. */

@@ -67,7 +67,7 @@ import { guildRequests, notEnoughLeaf } from "../backend/requests.ts";
 import { AppConfig } from "../config.ts";
 import { syncOnDemand } from "../earning/run.ts";
 import { eventJsonText, Events } from "../events/store.ts";
-import { GUILD_EVENT_TYPES, guildEvents } from "../game/guild.ts";
+import { GUILD_EVENT_TYPES, guildDay, type GuildEvent, guildEvents } from "../game/guild.ts";
 import { knownAmong } from "../game/known.ts";
 import { PlayerNames } from "../game/names.ts";
 import { type Here, Presence } from "../game/presence.ts";
@@ -622,6 +622,12 @@ const playedGame = (name: string): Effect.Effect<Played, Missing> => {
     : Effect.succeed(played);
 };
 
+/** The guild's events as the answer's JSON, with whatever follows them in it. */
+const guildAnswer = (shown: readonly GuildEvent[], rest = "}") =>
+  HttpServerResponse.text(`{"events":[${shown.map((event) => event.json).join(",")}]${rest}`, {
+    contentType: "application/json",
+  });
+
 /** Refuses a guest what only the guild's members may see: the guild's news, with members' names. */
 const membersOnly = Effect.flatMap(CurrentIdentity, (identity) =>
   isGuest(identity)
@@ -722,21 +728,19 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             if (after === null) {
               return yield* invalidAfter;
             }
-            const shown =
-              after === undefined
-                ? yield* events
-                    .everyoneLatest(GUILD_EVENT_TYPES, LATEST_EVENTS)
-                    .pipe(
-                      Effect.flatMap((found) =>
-                        Effect.map(names.of(found.map((event) => event.playerId)), (named) =>
-                          guildEvents(found, named),
-                        ),
-                      ),
-                    )
-                : (yield* guild.after(after)).shown;
-            return HttpServerResponse.text(`{"events":[${shown.map((event) => event.json).join(",")}]}`, {
-              contentType: "application/json",
-            });
+            if (after !== undefined) {
+              return guildAnswer((yield* guild.after(after)).shown);
+            }
+            // The newest events and the day as of one moment, so that whatever is in neither is heard after them.
+            const [found, day] = yield* sql
+              .withTransaction(
+                Effect.all([
+                  events.everyoneLatest(GUILD_EVENT_TYPES, LATEST_EVENTS),
+                  guildDay(yield* Clock.currentTimeMillis),
+                ]),
+              )
+              .pipe(Effect.orDie);
+            return guildAnswer(guildEvents(found, yield* names.of(found.map((event) => event.playerId))), `,${day}`);
           }),
         )
         .handle("guildStream", ({ query }) =>
@@ -772,11 +776,13 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
         )
         .handle("oldSave", () => Effect.fail(notYou))
         .handle("oldCoins", () => Effect.fail(notYou))
-        .handle("play", ({ params }) =>
+        .handle("play", ({ params, query }) =>
           Effect.gen(function* () {
             const played = yield* playedGame(params.game);
             const identity = yield* CurrentIdentity;
-            const shown = yield* play.open({ playerId: identity.playerId, guest: isGuest(identity) }, played);
+            // A page whose copy turned out not to be Leaf's says at which tick as it asks for the state.
+            const differs = /^\d{1,13}$/.test(query.differs ?? "") ? Number(query.differs) : undefined;
+            const shown = yield* play.open({ playerId: identity.playerId, guest: isGuest(identity) }, played, differs);
             if (shown.status === "unreadable") {
               return yield* unreadable;
             }

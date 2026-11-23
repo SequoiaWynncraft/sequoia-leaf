@@ -4,8 +4,12 @@
  * and a time (Leaf's clock, in milliseconds since 1970) and nothing else. Time is cut into turns
  * (an errand, a nap, a crab's amble, a line said), so the answer for a moment is the same whoever
  * asks and whenever they began asking. Nothing here is stepped, kept or sent.
+ *
+ * And what follows from that and what Leaf said, the same to every page: where a member in one of
+ * the games stands and where one gone from it dozes (from who Leaf lists), the pieces on the
+ * stump's board, and the guild's moments (a raid party home, a war), each from its own time.
  */
-import { mix, utcDay } from "@sequoia-leaf/core";
+import { DAY_MS, mix, utcDay } from "@sequoia-leaf/core";
 
 import { type Doing, type Errand, ERRAND_LINES, FOLK, type Townsperson } from "./folk.ts";
 
@@ -60,6 +64,13 @@ export interface Spot {
   dir: 0 | 1 | 2 | 3;
 }
 const spot = (x: number, y: number, dir: Spot["dir"]): Spot => ({ x, y, dir });
+
+/** A walk from one spot to another, begun at a moment of Leaf's clock. */
+export interface Walk {
+  from: Spot;
+  to: Spot;
+  at: number;
+}
 
 type Post = Errand | "works" | "fire";
 
@@ -221,4 +232,216 @@ export function hiding(seed: number, now: number): { stretch: number; since: num
   };
   const stretch = stretchOf(now);
   return { stretch, since: now - stretch * STRETCH, at: place(stretch), was: place(stretch - 1) };
+}
+
+// ---------- members in the games, and gone from them ----------
+
+/** Where a member in one of the games stands in town, facing it: by the Works' door, or watching at the stump. */
+export const STANDS: Readonly<Record<"works" | "table", readonly Spot[]>> = {
+  works: [
+    spot(393, 137, 3),
+    spot(352, 125, 3),
+    spot(407, 143, 3),
+    spot(383, 146, 3),
+    spot(397, 151, 3),
+    spot(409, 157, 3),
+  ],
+  table: [spot(414, 199, 3), spot(471, 199, 3), spot(437, 173, 3), spot(457, 173, 3)],
+};
+
+/** Where a member in a game stands: one of its spots by their account, the same for as long as they are there. */
+export const standOf = (id: string, at: "works" | "table"): Spot => nth(STANDS[at], seedOf(id));
+
+/** In and out of town: the gateway, in the dark. */
+export const GATE: Spot = spot(256, 84, 0);
+
+/**
+ * How long after Leaf last saw a member they stay on their feet where they were, in milliseconds.
+ * Leaf lists them as gone 90 seconds after, and every page asks who is about every 30, so by now
+ * every page knows: all see them sit down to doze, or go, at the same moment. And for how long
+ * after that somebody going out through the gate is still on the way.
+ */
+export const SITS_AFTER = 120_000;
+export const GOES_FOR = 15_000;
+
+/** A seat, as far as who dozes on it goes: what it is by, which way its sitter faces, and whether it is left for the member. */
+export interface SeatFor {
+  at: "fire" | "bench" | "works" | "table";
+  dir: number;
+  yours?: boolean;
+}
+
+/** The seats a dozer may have, by where they were: theirs first, then the fire's logs, then the benches. */
+const SEATS_FOR: Readonly<Record<"town" | "works" | "table", readonly SeatFor["at"][]>> = {
+  town: ["fire", "bench", "works"],
+  table: ["table", "fire", "bench"],
+  works: ["works", "fire", "bench"],
+};
+
+/** Seats facing us first, so that whoever dozes there is seen to; then side on; then with their back to us. */
+const facing = (s: SeatFor): number => (s.dir === 0 ? 0 : s.dir === 3 ? 2 : 1);
+
+/**
+ * The seat each member who dozes has, by their account, of the seats nobody awake sits on
+ * (`free`, in the town's own order): whoever has been gone longest chooses first (of two gone
+ * together, by account), and takes the first seat left for where they were. Never a seat left for
+ * the member; whoever finds none has none.
+ */
+export function dozing<S extends SeatFor>(
+  resting: readonly { id: string; at: "town" | "works" | "table"; seen: number }[],
+  free: readonly S[],
+): Map<string, S> {
+  const left = free.filter((s) => !s.yours);
+  const out = new Map<string, S>();
+  for (const r of resting.toSorted((a, b) => a.seen - b.seen || (a.id < b.id ? -1 : 1))) {
+    const seat = SEATS_FOR[r.at]
+      .flatMap((kind) => left.filter((s) => s.at === kind).toSorted((a, b) => facing(a) - facing(b)))
+      .at(0);
+    if (!seat) continue;
+    left.splice(left.indexOf(seat), 1);
+    out.set(r.id, seat);
+  }
+  return out;
+}
+
+/** When a member who dozes last breathed out a "z", by their account: one every 2 seconds, up to 0.8 late. */
+export function zAt(seed: number, id: string, now: number): number {
+  const r = turns(mix(seed, seedOf(id)), [2], 0.8);
+  return r.begins(r.at(now));
+}
+
+// ---------- the stump's board ----------
+
+/** Where the hexes of the stump's board are, in the stump's own pixels: a row of five, four, five. */
+export const BOARD: readonly (readonly [number, number])[] = [
+  [12, 7],
+  [18, 7],
+  [24, 7],
+  [30, 7],
+  [36, 7],
+  [15, 11],
+  [21, 11],
+  [27, 11],
+  [33, 11],
+  [12, 15],
+  [18, 15],
+  [24, 15],
+  [30, 15],
+  [36, 15],
+];
+
+/** The board with nobody at it: which hex each of the five carved figures stands on. */
+export const SET_OUT: readonly number[] = [9, 11, 13, 1, 3];
+
+/** A figure is moved every 2.1 seconds, up to 0.8 late; after this many moves they are taken back, last first. */
+const MOVE = { every: 2.1, sway: 0.8, game: 32 } as const;
+
+/**
+ * The board while somebody is at it, at a moment: the hex each figure stands on, and the figure
+ * moved this turn (which, from which hex, and when), if one was. Each turn one figure goes to a
+ * hex beside its own that nobody stands on; after 32 turns the moves are taken back one a turn,
+ * last first, so the board is set out again every 64 and never jumps.
+ */
+export function boardAt(
+  seed: number,
+  now: number,
+): { on: number[]; moved: { piece: number; from: number; at: number } | null } {
+  const r = turns(mix(seed, 0xb0a2), [MOVE.every], MOVE.sway);
+  const n = r.at(now);
+  const first = Math.floor(n / (2 * MOVE.game)) * 2 * MOVE.game;
+  const back = n - first >= MOVE.game;
+  /** The move made this turn, or taken back. */
+  const last = back ? 2 * MOVE.game - 1 - (n - first) : n - first;
+  const on = [...SET_OUT];
+  let move: { piece: number; from: number; to: number } | null = null;
+  for (let k = first; k <= first + last; k++) {
+    const piece = Math.floor(r.dice(k, 1) * on.length);
+    const from = on[piece] ?? 0;
+    const [x, y] = nth(BOARD, from);
+    const beside = BOARD.flatMap(([bx, by], i) =>
+      !on.includes(i) && Math.abs(bx - x) <= 6 && Math.abs(by - y) <= 4 ? [i] : [],
+    );
+    move = beside.length > 0 ? { piece, from, to: drawn(beside, r.dice(k, 2)) } : null;
+    if (move) on[piece] = move.to;
+  }
+  if (!move) return { on, moved: null };
+  if (back) on[move.piece] = move.from;
+  return { on, moved: { piece: move.piece, from: back ? move.to : move.from, at: r.begins(n) } };
+}
+
+// ---------- the guild's moments ----------
+
+/**
+ * A raid party's homecoming, in milliseconds after it begins: each walks in through the gate
+ * `apart` after the one before, the town cheers at `cheer`, at `part` the first goes on to the
+ * lantern tree and the others stay 3 to 6 seconds more and go, the lantern goes up at `hang`, the
+ * first stays `stay` and 3 to 6 seconds more and goes, and at `over` nobody of it is left. The
+ * walks fit a member's pace, 32 pixels a second.
+ */
+export const HOME = { apart: 350, cheer: 1500, part: 2800, hang: 8500, stay: 1600, over: 23_000 } as const;
+
+/** Where a raid party musters before the gate, each from their own side of the gateway; and where the first hangs the lantern, facing the tree. */
+export const MUSTER: readonly Spot[] = [spot(240, 112, 0), spot(272, 113, 0), spot(250, 125, 0), spot(265, 127, 0)];
+export const BY_TREE = spot(340, 216, 2);
+
+/**
+ * The walk the `i`th of a raid party home since `at` is on at a moment: in through the gate to
+ * their place before it, then (the first) to the lantern tree, then out again. Null once it is over.
+ */
+export function homecoming(seed: number, at: number, i: number, now: number): Walk | null {
+  const muster = MUSTER[i];
+  if (!muster || now >= at + HOME.over) return null;
+  const linger = 3000 + 3000 * roll(seed, at, at % DAY_MS, i);
+  const walks: Walk[] = [{ from: spot(GATE.x - 7 + (i % 2) * 13, GATE.y + 1, 0), to: muster, at: at + i * HOME.apart }];
+  if (i === 0)
+    walks.push(
+      { from: muster, to: BY_TREE, at: at + HOME.part },
+      { from: BY_TREE, to: GATE, at: at + HOME.hang + HOME.stay + linger },
+    );
+  else walks.push({ from: muster, to: GATE, at: at + HOME.part + linger });
+  return walks.findLast((w) => w.at <= now) ?? walks[0] ?? null;
+}
+
+/**
+ * What the town has staged of a day's raids or wars at a moment: how many (`n`), and when each of
+ * those the page still knows of was (`at`, oldest first: they are the newest). `count` is how many
+ * the guild finished in the day, as Leaf said and the page has heard since; `whens` is when each of
+ * them the page knows of is staged, and one still to come is not counted yet.
+ */
+export function stagedBy(count: number, whens: readonly number[], now: number): { n: number; at: number[] } {
+  const at = whens.filter((when) => when <= now).toSorted((a, b) => a - b);
+  return { n: Math.max(at.length, count - (whens.length - at.length)), at };
+}
+
+/** A war, as the banner goes by it: the territory, when the war happened, and when the town begins to stage it (0 for one from before the page). */
+export interface Fought {
+  land: string;
+  happened: number;
+  at: number;
+}
+
+/** Which of two wars is the later, as a sort has it: by when each happened, and of two at one moment the one whose territory's name sorts later. */
+export const later = (a: Omit<Fought, "at">, b: Omit<Fought, "at">): number =>
+  a.happened - b.happened || (a.land < b.land ? -1 : a.land > b.land ? 1 : 0);
+
+/** How fast the banner goes up or down its pole, in pole lengths a second; and how low it dips to change. */
+const BANNER = { pace: 0.75, dip: 0.12 } as const;
+
+/**
+ * The banner at a moment, from the wars the guild fought (`wars`, in any order): whose it is, how
+ * far up the pole (0 to 1), and when it is at the top. It is the last war's that the town has begun
+ * to stage, by when each happened (`later`), so an older war heard of late changes nothing. The
+ * first goes up; a later one finds the last flying, which dips, changes and goes up again. Null
+ * before any.
+ */
+export function bannerAt(wars: readonly Fought[], now: number): { land: string; up: number; full: number } | null {
+  const begun = wars.filter((w) => w.at <= now).toSorted(later);
+  const war = begun.at(-1);
+  if (!war) return null;
+  const flying = begun.findLast((w) => w.at < war.at);
+  const secs = (now - war.at) / 1000;
+  const dip = flying ? (1 - BANNER.dip) / BANNER.pace : 0;
+  const full = war.at + (flying ? 2 * dip : 1 / BANNER.pace) * 1000;
+  if (flying && secs < dip) return { land: flying.land, up: 1 - BANNER.pace * secs, full };
+  return { land: war.land, up: Math.min(1, (flying ? BANNER.dip : 0) + BANNER.pace * (secs - dip)), full };
 }

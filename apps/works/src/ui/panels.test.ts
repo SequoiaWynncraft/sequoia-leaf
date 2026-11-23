@@ -12,6 +12,7 @@ const order = (id: number, planks: number): Standing => ({
   want: { plank: 10 },
   pay: 1,
   filled: { plank: planks },
+  starts: 0,
 });
 const ids = (list: readonly Standing[]): number[] => list.map((s) => s.id);
 

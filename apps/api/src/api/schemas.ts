@@ -126,7 +126,10 @@ export const GameMe = Schema.Struct({
 /** A skin sheet, the 64 by 64 PNG Minecraft wraps around a character. */
 export const Png = Schema.Uint8Array.pipe(HttpApiSchema.asUint8Array({ contentType: "image/png" }));
 
-/** Events across the guild, oldest first, with whose each is. `data` is cut down by type (see the README). */
+/**
+ * Events across the guild, oldest first, with whose each is. `data` is cut down by type (see the README).
+ * The newest, asked for without a position, come with the guild's day and its last war.
+ */
 export const GuildEvents = Schema.Struct({
   events: Schema.Array(
     Schema.Struct({
@@ -137,6 +140,10 @@ export const GuildEvents = Schema.Struct({
       data: Schema.Unknown,
     }),
   ),
+  /** How many raids and wars the guild finished in the UTC day that began at `from`, each once. */
+  today: Schema.optionalKey(Schema.Struct({ from: Time, raids: Schema.Number, wars: Schema.Number })),
+  /** The last territory the guild fought at, by when the war happened; null before any. */
+  last_war: Schema.optionalKey(Schema.NullOr(Schema.Struct({ territory: Schema.String, occurred_at: Time }))),
 });
 
 /** The places in the game a member can be. */

@@ -1,7 +1,16 @@
 import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { isRecord } from "./net.ts";
-import { type Answer, NOT_YET, openPlay, type Play, type PlayReader, STILL_HERE, waitingLook } from "./play.ts";
+import {
+  type Answer,
+  type Answered,
+  NOT_YET,
+  openPlay,
+  type Play,
+  type PlayReader,
+  STILL_HERE,
+  waitingLook,
+} from "./play.ts";
 import { type Reply, type Route, type Sent, type Standin, standin } from "./standin.ts";
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
@@ -24,8 +33,17 @@ const add =
   (by: number) =>
   (copy: Count): Count => ({ n: copy.n + by });
 
-/** A stand-in Leaf for the counter: it adds what it is asked to, refusing anything over 100. */
-function counterLeaf(start = 0) {
+/** The counter answered short: a batch's answer is only the number Leaf has, as `{ sum }`. */
+interface Sum {
+  sum: number;
+}
+const SHORT: PlayReader<Count, string, Sum> = {
+  ...COUNTER,
+  short: (v) => (isRecord(v) && typeof v.sum === "number" ? { sum: v.sum } : null),
+};
+
+/** A stand-in Leaf for the counter: it adds what it is asked to, refusing anything over 100; `short`, it answers a batch short. */
+function counterLeaf(start = 0, short = false) {
   const leaf = {
     n: start,
     rev: 0,
@@ -51,7 +69,8 @@ function counterLeaf(start = 0) {
       return result;
     });
     if (changed) leaf.rev += 1;
-    return { status: 200, body: { rev: leaf.rev, now: "2026-11-25T12:00:00.000Z", results, state: { n: leaf.n } } };
+    const state = short ? { sum: leaf.n } : { n: leaf.n };
+    return { status: 200, body: { rev: leaf.rev, now: "2026-11-25T12:00:00.000Z", results, state } };
   };
   return {
     leaf,
@@ -78,6 +97,9 @@ async function opened(routes: Record<string, Route>): Promise<Play<Count, Add, s
   if ("trouble" in play) throw new Error(play.trouble);
   return play;
 }
+/** An answer that never comes. */
+const never = (): Promise<Reply> => new Promise<Reply>(() => undefined);
+
 /** Waits until nothing is waiting for Leaf, a millisecond at a time. */
 async function settled(play: Play<Count, Add, string>, tries = 200): Promise<void> {
   if (tries === 0 || !play.waiting()) return;
@@ -448,6 +470,64 @@ describe("sending commands", () => {
     expect(told).toEqual(["signedout"]);
   });
 
+  test("asking for the state again ends the page for what ends it at the opening, and asks nothing after", async () => {
+    const ends = [
+      [{ status: 409, body: { code: "state_unreadable", message: "Kept" } }, "unreadable"],
+      [{ status: 404, body: { code: "nothing_to_visit", message: "None" } }, "nothing"],
+    ] as const;
+    for (const [reply, why] of ends) {
+      const { routes } = counterLeaf();
+      // oxlint-disable-next-line no-await-in-loop -- one page after another
+      const play = await opened(routes);
+      const told: string[] = [];
+      play.onTrouble((trouble) => told.push(trouble));
+      world?.done();
+      world = standin({ "GET /v1/game/play/raid": reply });
+      // oxlint-disable-next-line no-await-in-loop -- one page after another
+      await play.refresh();
+      // oxlint-disable-next-line no-await-in-loop -- one page after another
+      await play.refresh();
+      expect([why, told, world.sent.length]).toEqual([why, [why], 1]);
+    }
+  });
+
+  test("a request that never settles is let go at its deadline: a batch goes again with the same ids, and a read can be asked again", async () => {
+    const { routes, leaf } = counterLeaf();
+    let hang = true;
+    world = standin({
+      "GET /v1/game/play/raid": () => (hang ? never() : routes["GET /v1/game/play/raid"]()),
+      "POST /v1/game/play/raid": (sent) => (hang ? never() : routes["POST /v1/game/play/raid"](sent)),
+    });
+    hang = false;
+    const play = await openPlay<Count, Add, string>("raid", COUNTER, {
+      player: "p",
+      retry: { first: 1, most: 4 },
+      deadline: 20,
+    });
+    if ("trouble" in play) throw new Error(play.trouble);
+    hang = true;
+    const answer = play.send({ do: "add", by: 3 });
+    await Bun.sleep(1);
+    hang = false;
+    expect(await answer).toEqual({ notes: ["added 3"] });
+    const ids = world.sent
+      .filter((s) => s.method === "POST")
+      .map((s) =>
+        isRecord(s.body) && Array.isArray(s.body.commands)
+          ? s.body.commands.map((c) => (isRecord(c) ? c.id : null))
+          : [],
+      );
+    expect([ids.length, ids[1]]).toEqual([2, ids[0]]);
+    expect(leaf.n).toBe(3);
+    // A read that never settles is let go too, and the next is asked.
+    hang = true;
+    const reads = world.sent.length;
+    await play.refresh();
+    hang = false;
+    await play.refresh();
+    expect([world.sent.length - reads, play.state]).toEqual([2, { n: 3 }]);
+  });
+
   test("say who the page believes the member is, with every batch", async () => {
     const { leaf, routes } = counterLeaf(0);
     const play = await opened(routes);
@@ -506,6 +586,81 @@ describe("sending commands", () => {
     await settled(play);
     await Bun.sleep(5);
     expect(world?.reloaded.count).toBe(1);
+  });
+});
+
+/** The counter, answered short, opened on a stand-in Leaf. */
+async function shortly(routes: Record<string, Route>): Promise<Play<Count, Add, string, Sum>> {
+  world = standin(routes);
+  const play = await openPlay<Count, Add, string, Sum>("raid", SHORT, { player: "p", retry: { first: 1, most: 4 } });
+  if ("trouble" in play) throw new Error(play.trouble);
+  return play;
+}
+
+describe("a game answered short", () => {
+  test("keeps the state as Leaf last gave it, and the page hears each batch's answer before anything more is sent", async () => {
+    const { routes, leaf } = counterLeaf(10, true);
+    const play = await shortly(routes);
+    const heard: Answered<Add, string, Sum>[] = [];
+    const sentBy: number[] = [];
+    const states: Count[] = [];
+    play.onState((state) => states.push(state));
+    play.onAnswer((answered) => {
+      heard.push(answered);
+      sentBy.push(leaf.batches.length);
+    });
+    const one = play.send({ do: "add", by: 2 });
+    const two = play.send({ do: "add", by: 200 });
+    expect(await one).toEqual({ notes: ["added 2"] });
+    expect(await two).toEqual({ refused: "too_much" });
+    expect(heard).toEqual([
+      { done: [{ command: { do: "add", by: 2 }, answer: { notes: ["added 2"] } }], short: { sum: 12 } },
+      { done: [{ command: { do: "add", by: 200 }, answer: { refused: "too_much" } }], short: { sum: 12 } },
+    ]);
+    expect(sentBy).toEqual([1, 2]);
+    expect([play.state, play.rev, states]).toEqual([{ n: 10 }, 1, []]);
+  });
+
+  test("reads the state when asked, with the tick a page found its copy not Leaf's", async () => {
+    const { routes } = counterLeaf(0, true);
+    const play = await shortly(routes);
+    await play.send({ do: "add", by: 3 });
+    expect(play.state).toEqual({ n: 0 });
+    await play.refresh(1234);
+    expect(play.state).toEqual({ n: 3 });
+    expect(world?.sent.at(-1)?.path).toBe("/v1/game/play/raid?differs=1234");
+    await play.refresh();
+    expect(world?.sent.at(-1)?.path).toBe("/v1/game/play/raid");
+  });
+
+  test("a batch Leaf will not read, or answers with the state (a Leaf older than the page), is heard with no answer of Leaf's, and the state stays", async () => {
+    const { routes } = counterLeaf(5);
+    let readable = false;
+    const play = await shortly({
+      ...routes,
+      "POST /v1/game/play/raid": (sent) =>
+        readable ? routes["POST /v1/game/play/raid"](sent) : { status: 400, body: { code: "invalid_command" } },
+    });
+    const heard: Answered<Add, string, Sum>[] = [];
+    const states: Count[] = [];
+    play.onAnswer((answered) => heard.push(answered));
+    play.onState((state) => states.push(state));
+    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "invalid_command" });
+    readable = true;
+    expect(await play.send({ do: "add", by: 2 })).toEqual({ notes: ["added 2"] });
+    expect(heard).toEqual([
+      { done: [{ command: { do: "add", by: 1 }, answer: { refused: "invalid_command" } }], short: undefined },
+      { done: [{ command: { do: "add", by: 2 }, answer: { notes: ["added 2"] } }], short: undefined },
+    ]);
+    expect([play.state, states]).toEqual([{ n: 5 }, []]);
+  });
+
+  test("is not read as the page comes back: its page asks for its own reads", async () => {
+    const { routes } = counterLeaf(0, true);
+    await shortly(routes);
+    world?.wake();
+    await Bun.sleep(2);
+    expect(world?.sent.map((s) => s.method)).toEqual(["GET"]);
   });
 });
 

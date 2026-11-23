@@ -34,8 +34,8 @@ import { type Actor, G, hooks, ROOM, toPage } from "./game.ts";
 import { GUEST, rankName } from "./live.ts";
 import { Company, type Fellow, linkShown, NAMED_FOR, othersIn, stepOf } from "./motion.ts";
 import { touchThing } from "./town.ts";
-import { followLive, takeSeat } from "./visitors.ts";
-import { type Seat, SEATS } from "./world.ts";
+import { followLive } from "./visitors.ts";
+import type { Seat } from "./world.ts";
 
 /** After this many milliseconds with the connection down, the others fade away and the town plays on alone. */
 const ALONE_AFTER = 5000;
@@ -52,12 +52,10 @@ export const EMOTE_NAMES: Readonly<Record<Emote, string>> = {
 interface Drawn {
   a: Actor;
   seat: Seat;
-  /** The town's own seat they are sitting on, kept for them while they sit, if they took it. */
-  held: Seat | null;
 }
 
 /** Everybody else in the room, by their account, each drawn with an actor of their own. */
-const company = new Company<Drawn>((m) => ({ a: figureOf(m), seat: seatAt(0, 0, 0), held: null }), {
+const company = new Company<Drawn>((m) => ({ a: figureOf(m), seat: seatAt(0, 0, 0) }), {
   emote: (f, kind) => {
     express(f.own.a, kind);
   },
@@ -143,7 +141,6 @@ function figureOf(m: LiveMember): Actor {
   const a = makeActor({ name: m.name, rank: rankOf(m), level: 0, voice: 0 }, bake(paintSkin(lookFor(m.name))), 0, 0);
   a.id = m.player;
   a.alpha = 0;
-  a.mode = "led";
   a.doing = "walk";
   const img = new Image();
   img.addEventListener("load", () => {
@@ -196,10 +193,7 @@ export function townOnStage(on: boolean): void {
   room = null;
   status = null;
   downAt = null;
-  for (const f of company.clear()) {
-    f.own.a.away = true;
-    letSeatGo(f.own);
-  }
+  for (const f of company.clear()) f.own.a.away = true;
   closeEmotes();
   showLink();
 }
@@ -236,10 +230,7 @@ export function stepPlayers(dt: number): void {
     if (a.moving) footfall(a, walked.get(f) ?? a.walked);
   }
   for (const f of came) f.own.a.named = G.t + NAMED_FOR;
-  for (const f of went) {
-    f.own.a.away = true;
-    letSeatGo(f.own);
-  }
+  for (const f of went) f.own.a.away = true;
   if (plaque && G.player?.moving) closeEmotes();
   placeEmotes();
 }
@@ -265,17 +256,6 @@ function dress(f: Fellow<Drawn>): void {
     // Already sitting: not drawn on the way into the seat.
     a.sat = -9;
   } else a.seat = null;
-  // Sitting on one of the town's seats, they have it: nobody dozes or sits down on top of them.
-  const on = fig.seated && !fig.gone ? (SEATS.find((s) => Math.hypot(s.x - fig.x, s.y - fig.y) <= 2) ?? null) : null;
-  if (on === own.held) return;
-  letSeatGo(own);
-  if (on && takeSeat(on)) own.held = on;
-}
-
-/** Somebody gets up, or goes: the seat they were keeping is free again. */
-function letSeatGo(own: Drawn): void {
-  if (own.held) own.held.taken = false;
-  own.held = null;
 }
 
 /** Everybody else in town, live, as they are to be drawn. */

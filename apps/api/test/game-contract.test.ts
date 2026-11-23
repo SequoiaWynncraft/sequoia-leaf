@@ -273,6 +273,20 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("POST /v1/game/requests", "POST", "/v1/game/requests", tome);
   await call("POST /v1/game/requests, refused", "POST", "/v1/game/requests", tome);
   await call("GET /v1/game/requests, a guest", "GET", "/v1/game/requests", undefined, "visitor-token");
+  // A batch in the Works, answered short: Bob sets a gatherer down at the tick his page was given.
+  const works = await app.request("/v1/game/play/works", { headers: { Authorization: "Bearer bob-token" } });
+  const tick = field(field(await works.json(), "state"), "clock");
+  const gatherer = { id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick };
+  await call(
+    "POST /v1/game/play/{game}, the Works",
+    "POST",
+    "/v1/game/play/works",
+    {
+      player: bob,
+      commands: [gatherer],
+    },
+    "bob-token",
+  );
   await app.dispose();
   return recorded;
 }
