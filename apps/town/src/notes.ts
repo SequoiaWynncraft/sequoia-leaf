@@ -14,6 +14,14 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "grove-quiet",
+    at: "2026-11-23T11:26Z",
+    title: "A quieter reveal",
+    lines: [
+      "A prize revealed at the Grove shows its name, its rank and whether it is new. It no longer says how a 50/50 fell.",
+    ],
+  },
+  {
     id: "figures-town-look",
     at: "2026-11-23T10:38Z",
     title: "The raid's characters, redrawn",
@@ -60,7 +68,7 @@ export const NOTES: readonly Note[] = [
     id: "banner-1-open",
     at: "2026-11-23T08:05Z",
     title: "The first banner is open",
-    lines: ["It is at the Grove until 8 December (UTC). Its top prize is a statue of a member for your camp."],
+    lines: ["It is at the Grove until 8 December (UTC). Its top prize is a member of the guild."],
   },
   {
     id: "one-town-2",
