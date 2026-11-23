@@ -30,13 +30,16 @@ import {
   decodeSnapshot,
   encodeMove,
   Flag,
+  type GameId,
   INTERP_MS,
   type LiveMember,
   livePath,
   type Motion,
+  parsePlayerId,
   readToClient,
   reconnects,
   type ToServer,
+  visitRoom,
 } from "@sequoia-leaf/core";
 
 import { device, member } from "./live.ts";
@@ -563,4 +566,13 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       inRoom(null);
     },
   };
+}
+
+/**
+ * Joins the room of a visit to a player's state in a game (`visitRoom`), to hear what Leaf does to it
+ * (`did`) as `joinLive` hears any room; none for somebody who is not a player.
+ */
+export function joinVisit(game: GameId, player: string, ears: LiveEars = {}): LiveRoom | null {
+  const visited = parsePlayerId(player);
+  return visited === undefined ? null : joinLive(visitRoom(game, visited), ears);
 }

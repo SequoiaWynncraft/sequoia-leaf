@@ -16,6 +16,7 @@
 
 import {
   ALL_ITEMS,
+  check,
   decode,
   type Dir,
   encode,
@@ -105,6 +106,7 @@ import {
   openYard,
   runYard,
   screen,
+  visitFollowing,
   yardReads,
 } from "./yard.ts";
 
@@ -784,6 +786,8 @@ async function boot(): Promise<void> {
         z: S.view.z,
         differences: differences(),
         reads: yardReads(),
+        check: check(w),
+        visit: S.visiting ? visitFollowing() : null,
       };
     },
   };

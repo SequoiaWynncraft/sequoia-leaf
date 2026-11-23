@@ -28,8 +28,18 @@
  * What is done is done to the copy as the rules' `Act`, with things, kinds, plots and goals as
  * numbers, and goes to Leaf as the rules write it (`writeCommand`), by name.
  *
- * A visit (`S.visiting`) opens somebody else's yard as Leaf gives a visitor it, runs it on the same
- * way, and reads it again every half minute. It sends nothing: `doNow` refuses.
+ * A visit (`S.visiting`) opens somebody else's yard as Leaf gives a visitor it and sends nothing
+ * (`doNow` refuses). It follows the yard live: in the visit's room on Leaf (`visitRoom`), it hears
+ * each batch Leaf keeps of the yard as Leaf keeps it (`told`): the commands done, each at the tick
+ * Leaf did it, and Leaf's answer after them. Its copy runs a little behind Leaf's clock (`hold`), so
+ * that it hears of a command before it reaches the command's tick, and does each command there; at
+ * the tick of each answer it holds itself to Leaf's check, and puts the orders Leaf hung on its board,
+ * as the owner's page does (`follow`). Whatever was done while it was not in the room is never told:
+ * each time the room welcomes it, it reads the yard again. Leaf's word that comes after the copy
+ * passed its tick, a command the copy refuses, or a check that differs, is a copy that is not Leaf's
+ * yard: it takes Leaf's yard as above, and a copy that heard too late is held further behind from
+ * then on. It reads the yard again every few minutes as well, and every few seconds while it hears
+ * nothing live; a read older than a batch the copy has done is let go.
  */
 
 import {
@@ -49,6 +59,7 @@ import {
   type News,
   play,
   readAnswer,
+  readCommand,
   readNotes,
   readView,
   type Standing,
@@ -59,11 +70,13 @@ import {
   type View,
   type Wired,
   writeCommand,
+  type Yard,
 } from "@sequoia-leaf/factory";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
 import { type Answered, openPlay, type Play, type Trouble } from "@sequoia-leaf/kit/play.ts";
 import { balance, heardCoins, refreshCoins } from "@sequoia-leaf/kit/purse.ts";
+import { joinVisit, type LiveRoom } from "@sequoia-leaf/kit/realtime.ts";
 
 import { S } from "./state.ts";
 import { ZOOM } from "./zoom.ts";
@@ -75,8 +88,18 @@ const BEHIND_MOST = 600;
 const COLLECT_EVERY = 60_000;
 /** How often Leaf is asked for its yard while it is being taken, until it has come. */
 const ASK_EVERY = 2000;
-/** How often a visit reads the yard from Leaf again. */
-const VISIT_EVERY = 30_000;
+/** How often a visit reads the yard from Leaf again: now and then while Leaf tells it what it does, often while it does not. */
+const VISIT_EVERY = { live: 5 * 60_000, alone: 15_000 };
+/**
+ * How far behind Leaf's clock a visit's copy runs, in ticks: at first half a second, time enough for
+ * the owner's command to reach Leaf and Leaf's word of it to reach the visitor; and the most, once
+ * that word has come too late.
+ */
+const VISIT_HOLD = { first: 5, most: 30 };
+/** How many ticks Leaf's clock, as a batch tells it, may be from the visit's reckoning before the visit takes Leaf's. */
+const VISIT_SLACK = 2;
+/** The most batches a visit keeps told and not done (a tab put away, hearing all the while): past it, it reads the yard. */
+const TOLD_MOST = 256;
 
 /** What the screen itself remembers between visits: nudges already taken, the zoom, and the grade chosen for each kind of piece, by its name. */
 export interface Screen {
@@ -144,6 +167,23 @@ let untold: number | undefined;
 let found = 0;
 /** How many times the copy has become Leaf's yard as read: the opening, and each time it was taken since. */
 let reads = 0;
+/** A batch Leaf told a visit it kept of the yard: its revision, each command done, Leaf's answer after them, and how many the copy has done. */
+interface Told {
+  readonly rev: number;
+  readonly acts: readonly Command[];
+  readonly after: Heard;
+  done: number;
+}
+/** A visit's room on Leaf, and whether it has welcomed the page since the connection last dropped. */
+let room: LiveRoom | null = null;
+let live = false;
+/** The batches told and not yet all done to the copy, oldest first; the revision of the newest the copy has begun, or was read at. */
+let told: Told[] = [];
+let upTo = 0;
+/** How far behind Leaf's clock the copy runs, in ticks: none for the owner's page (`VISIT_HOLD`). */
+let hold = 0;
+/** For a visit: batches done as told, those told after the copy had passed their tick, and those the copy did not do as Leaf had. */
+const followed = { batches: 0, late: 0, unlike: 0 };
 /** Leaf's tick in its last answer, and when that came on the page's own clock. */
 let base = { clock: 0, at: 0 };
 /** The latest tick the page has shown. */
@@ -189,6 +229,7 @@ export async function openYard(player: string, trouble: (why: Trouble) => void):
   leaf = opened;
   unanswered = [];
   shown = 0;
+  hold = S.visiting ? VISIT_HOLD.first : 0;
   // Play that has ended has no Leaf: the yard is run and taken no more, and input is let through
   // to the screen that says why.
   opened.onTrouble((why) => {
@@ -201,7 +242,88 @@ export async function openYard(player: string, trouble: (why: Trouble) => void):
   collectedAt = performance.now();
   askedAt = collectedAt;
   if (!take()) return "closed";
+  if (S.visiting) listen(S.visiting.id);
   return null;
+}
+
+/**
+ * A visit goes into the visit's room on Leaf, to hear each batch Leaf keeps of the yard. What was
+ * done before the room welcomed it was never told: at each welcome, Leaf's yard is read again.
+ */
+function listen(of: string): void {
+  room = joinVisit("works", of, {
+    welcome: () => {
+      live = true;
+      giveWay();
+    },
+    did: hearDid,
+    status: (s) => {
+      if (s !== "open" && s !== "connecting") live = false;
+    },
+  });
+}
+
+/**
+ * Hears a batch Leaf kept of a visited yard, to be done to the copy as it reaches each command's
+ * tick. Leaf's clock as it tells it is taken when the visit's reckoning is off by more than a
+ * little: a yard that stood still, say, and has been set going. A batch this page's rules cannot
+ * read is from rules newer than the page's, which loads again.
+ */
+function hearDid(rev: number, did: readonly unknown[], answer: unknown): void {
+  const after = readAnswer(answer);
+  const acts = did.map(readCommand).filter((c): c is Command => c !== null);
+  if (!after || acts.length !== did.length) {
+    outside.reload();
+    return;
+  }
+  if (told.length >= TOLD_MOST) {
+    told = [];
+    giveWay();
+  }
+  told.push({ rev, acts, after, done: 0 });
+  const now = performance.now();
+  const at = after.clock - hold;
+  if (Math.abs(at - tickAt(now)) > VISIT_SLACK) base = { clock: at, at: now };
+  // Heard well before the copy reaches it, the copy may run nearer Leaf's clock, down to where it began.
+  if (hold > VISIT_HOLD.first && (acts[0]?.tick ?? after.tick) - tickAt(now) > VISIT_SLACK + 1) hold--;
+}
+
+/**
+ * Does to a visit's copy what Leaf told it was done, each command as the copy reaches its tick, and
+ * at the tick of each batch's answer holds the copy to Leaf's check and hears the orders Leaf hung.
+ * False when the copy is not Leaf's yard: told after it had passed the tick (from then on it is held
+ * further behind), a command it refuses, or a check that differs.
+ */
+function follow(w: Yard, to: number): boolean {
+  for (let batch = told[0]; batch !== undefined; batch = told[0]) {
+    for (let c = batch.acts[batch.done]; c !== undefined; c = batch.acts[++batch.done]) {
+      if (c.tick > to) return true;
+      if (c.tick < w.tick) return late(w.tick - c.tick);
+      upTo = batch.rev;
+      S.rev++;
+      if ("refused" in play(w, c)) return unlike();
+    }
+    const { after } = batch;
+    if (after.tick > to) return true;
+    if (after.tick < w.tick) return late(w.tick - after.tick);
+    stepTo(w, after.tick);
+    told.shift();
+    followed.batches++;
+    if (check(w) !== after.check || !hear(w, after.hung)) return unlike();
+  }
+  return true;
+}
+
+/** Leaf's word came after the copy passed the tick it was of: the copy is held that much further behind, and more. */
+function late(by: number): false {
+  followed.late++;
+  hold = Math.min(VISIT_HOLD.most, hold + by + 2);
+  return false;
+}
+
+function unlike(): false {
+  followed.unlike++;
+  return false;
 }
 
 /** The copy becomes Leaf's yard, run on to the tick already shown, and is in step. False when Leaf's rules are newer than the page's. */
@@ -212,10 +334,13 @@ function take(): boolean {
     outside.reload();
     return false;
   }
+  // A visit's copy that has begun a batch Leaf kept after this read is further on than it: it stays.
+  const rev = leaf?.rev ?? 0;
+  if (S.visiting && taking === null && rev < upTo) return true;
   // Leaf's clock further behind what was shown than Leaf does a command ahead of it is a yard put in
   // place of another (by hand), or a copy run ahead of Leaf's: it is taken as it stands.
-  if (shown - view.clock > LEAD) shown = 0;
-  base = { clock: view.clock, at: performance.now() };
+  if (shown - (view.clock - hold) > LEAD) shown = 0;
+  base = { clock: view.clock - hold, at: performance.now() };
   // What has been shown was shown with its news: it is not told again.
   stepTo(yard, shown);
   drain(yard);
@@ -226,6 +351,9 @@ function take(): boolean {
   reads++;
   taking = null;
   untold = undefined;
+  // What the yard as read has of what a visit was told is let go; none of the rest is begun.
+  upTo = rev;
+  told = told.filter((batch) => batch.rev > rev);
   return true;
 }
 
@@ -350,6 +478,11 @@ export function runYard(now: number): News[] {
     ask(now);
     return [];
   }
+  // A visit does what Leaf told it was done, each at its tick, on the way.
+  if (S.visiting && !follow(w, tick)) {
+    giveWay();
+    return [];
+  }
   stepTo(w, tick);
   shown = w.tick;
   // A goal finished on the way changes what is open (the plots for sale, a pylon's reach): it is a change.
@@ -364,7 +497,7 @@ export function runYard(now: number): News[] {
   const news = drain(w);
   const waiting = leaf.waiting();
   if (S.visiting) {
-    if (!waiting && now - askedAt >= VISIT_EVERY) {
+    if (!waiting && now - askedAt >= (live ? VISIT_EVERY.live : VISIT_EVERY.alone)) {
       askedAt = now;
       void leaf.refresh();
     }
@@ -412,6 +545,9 @@ export const differences = (): number => found;
 /** How many times the copy has become Leaf's yard as read since the page opened, the opening included. */
 export const yardReads = (): number => reads;
 
+/** How a visit follows the yard: whether it hears Leaf live, how far behind it runs, the batches told and not done, and `followed`. */
+export const visitFollowing = () => ({ live, hold, waiting: told.length, upTo, ...followed });
+
 /** Sends nothing more and forgets the yard (for tests). */
 export function letGo(): void {
   leaf = null;
@@ -423,4 +559,11 @@ export function letGo(): void {
   shown = 0;
   finished = 0;
   putAway = (): void => undefined;
+  room?.close();
+  room = null;
+  live = false;
+  told = [];
+  upTo = 0;
+  hold = 0;
+  Object.assign(followed, { batches: 0, late: 0, unlike: 0 });
 }

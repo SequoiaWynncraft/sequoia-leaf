@@ -31,6 +31,7 @@ const bob = playerId("10000000-0000-0000-0000-000000000002");
 const carol = playerId("10000000-0000-0000-0000-000000000003");
 const ORIGIN = "https://leaf.seqwawa.com";
 const TOKENS: Record<PlayerId, string> = { [alice]: "alice-token", [bob]: "bob-token", [carol]: "carol-token" };
+const token = (who: PlayerId): string => TOKENS[who] ?? "";
 
 // The real clock: Live's tick and its waits keep time by it.
 const clock = {
@@ -66,7 +67,7 @@ afterEach(async () => {
 function call(method: string, path: string, who: PlayerId, body?: unknown): Promise<Response> {
   return fetch(`${server?.origin ?? ""}${path}`, {
     method,
-    headers: { Cookie: `seq_session=${TOKENS[who]}`, Origin: ORIGIN, "Content-Type": "application/json" },
+    headers: { Cookie: `seq_session=${token(who)}`, Origin: ORIGIN, "Content-Type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
@@ -102,7 +103,7 @@ async function buildStarter(owner: PlayerId): Promise<Response> {
 async function visiting(visitor: PlayerId, owner: PlayerId): Promise<LiveClient> {
   const client = await LiveClient.open(
     server?.origin ?? "",
-    { cookie: TOKENS[visitor], origin: ORIGIN },
+    { cookie: token(visitor), origin: ORIGIN },
     visitRoom("works", owner),
   );
   open.push(client);
