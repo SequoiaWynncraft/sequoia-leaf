@@ -24,6 +24,14 @@ export interface Part {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "works-made-from",
+    at: "2026-11-23T20:10Z",
+    title: "The Works: what a machine waits for",
+    lines: [
+      "A machine's card lists what it makes each one from. While it waits, the parts it is short of are in red, and pointing at one (or a long press) says how many it needs.",
+    ],
+  },
+  {
     id: "works-tier-3",
     at: "2026-11-23T18:45Z",
     title: "The Works: tier 3 takes longer",
