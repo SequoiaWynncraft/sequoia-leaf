@@ -17,7 +17,7 @@ import { staged } from "@sequoia-leaf/factory/test/yards.ts";
 import { restart, start } from "@sequoia-leaf/kit/live.ts";
 import { type FakeSocket, HELLO, liveSockets, type Reply, standin, TESTER } from "@sequoia-leaf/kit/standin.ts";
 
-import { ctx, fakeLeaf, kindAt, net, until, useFakeLeaf } from "./fake-leaf.ts";
+import { ctx, fakeLeaf, kindAt, net, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { S } from "./state.ts";
 import { differences, doNow, openYard, runYard, visitFollowing, yardReads } from "./yard.ts";
 

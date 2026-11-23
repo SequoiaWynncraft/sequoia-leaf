@@ -20,6 +20,7 @@ import { makeLand } from "@sequoia-leaf/factory/test/land.ts";
 import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 
 import { S } from "../src/state.ts";
+import { installHandles } from "./handles.ts";
 
 const pieces = Number(new URLSearchParams(location.search).get("pieces") ?? 1000);
 const plots = pieces > 1500 ? 7 : 3;
@@ -28,4 +29,6 @@ for (let k = 0; k < 3000; k++) step(made.y);
 S.world = made.y;
 S.alone = true;
 fromLeaf({ coins: 1_000_000_000, leaf: 0, version: 0 });
-await import("../src/main.ts");
+const { page } = await import("../src/main.ts");
+const opened = await page;
+if (opened) installHandles(opened);

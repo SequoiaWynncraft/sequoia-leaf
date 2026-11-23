@@ -35,7 +35,7 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 
-import { act, clear, ctx, kindAt, kindOn, opened, until, useFakeLeaf } from "./fake-leaf.ts";
+import { act, clear, ctx, kindAt, kindOn, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
 import { asIf, layout } from "./layout.ts";
 import { DRAWN, draws, S } from "./state.ts";
 import {

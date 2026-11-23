@@ -15,10 +15,10 @@ import {
 } from "@sequoia-leaf/factory";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
-import { arms, beltTile, marksOf, woodOf } from "./art/belts.ts";
-import { type Art, meetingTile } from "./art/index.ts";
-import { FLAG_AT, gathererHat, lookOf } from "./art/machines.ts";
-import type { Sprite } from "./art/pal.ts";
+import { arms, beltTile, marksOf, woodOf } from "../src/art/belts.ts";
+import { type Art, meetingTile } from "../src/art/index.ts";
+import { FLAG_AT, gathererHat, lookOf } from "../src/art/machines.ts";
+import type { Sprite } from "../src/art/pal.ts";
 import { type Entry, showSheet } from "./sheet.ts";
 
 const pics = (list: readonly (Sprite | undefined)[]): HTMLCanvasElement[] => list.flatMap((s) => (s ? [s.c] : []));

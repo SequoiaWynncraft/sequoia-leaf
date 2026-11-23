@@ -37,7 +37,7 @@ import {
   opened,
   until,
   useFakeLeaf,
-} from "./fake-leaf.ts";
+} from "../test/fake-leaf.ts";
 import { S } from "./state.ts";
 import { cancel, place, setTool, toolHooks, undo } from "./tools.ts";
 import { reading, showLetter } from "./ui/letter.ts";
