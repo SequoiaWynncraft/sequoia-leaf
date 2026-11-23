@@ -91,6 +91,16 @@ interface Target {
   readonly item?: F.Item;
 }
 
+/** Where a builder's copy stood, and how much it had worked out (`Builder.save`). */
+export interface Mark {
+  readonly y: F.Yard;
+  readonly cmds: number;
+  readonly taps: number;
+  readonly joined: number;
+  readonly onto: number;
+  readonly sources: readonly Source[];
+}
+
 /** A mill in a planned block, and the gatherers it is to be fed by. */
 interface Mill {
   readonly tile: number;
@@ -191,6 +201,30 @@ export class Builder {
         if (j >= 0 && this.y.kind[j] !== F.DEPOT) this.ring.add(j);
       }
     }
+  }
+
+  /** Where the copy stands, to come back to (`back`) if the lines worked out after it are not wanted. */
+  save(): Mark {
+    return {
+      y: structuredClone(this.y),
+      cmds: this.cmds.length,
+      taps: this.taps.length,
+      joined: this.joined.length,
+      onto: this.onto.length,
+      sources: [...this.sources],
+    };
+  }
+
+  /** Comes back to where the copy stood when it was saved. */
+  back(m: Mark): void {
+    this.y = structuredClone(m.y);
+    this.ver++;
+    this.cmds.length = m.cmds;
+    this.taps.length = m.taps;
+    this.joined.length = m.joined;
+    this.onto.length = m.onto;
+    this.sources.length = 0;
+    this.sources.push(...m.sources);
   }
 
   /** The most steps tried for a line: more for a planned block. */
