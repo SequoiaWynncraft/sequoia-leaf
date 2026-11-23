@@ -22,7 +22,7 @@ describe("the zoom kept", () => {
     ] as const) {
       const far = reach(cw, ch);
       for (const zoom of [far.out, far.in])
-        expect(back({ taught: ["planks"], zoom })).toEqual({ taught: ["planks"], zoom });
+        expect(back({ taught: ["planks"], zoom, grades: {} })).toEqual({ taught: ["planks"], zoom, grades: {} });
     }
     // A 4K screen zooms out eleven steps, to one screen pixel for each of the yard's.
     expect(reach(3840, 2160).out).toBe(-11);
@@ -72,7 +72,7 @@ describe("the zoom kept", () => {
     const base = natural(390, 844);
     const out = zoomFor(base, -1000, 2) - base;
     expect(tilePx(base + out)).toBe(4);
-    expect(back({ taught: [], zoom: out })).toEqual({ taught: [], zoom: out });
+    expect(back({ taught: [], zoom: out, grades: {} })).toEqual({ taught: [], zoom: out, grades: {} });
   });
 
   test("a trouble mark is its own size down to a third of the natural size, and grows further out", () => {
@@ -85,8 +85,9 @@ describe("the zoom kept", () => {
   test("no screen is let zoom further than the record keeps, and nonsense is not kept", () => {
     // A screen far bigger than any there is: its natural size is 100.
     expect(reach(16_000, 17_600)).toEqual({ out: -ZOOM.out, in: ZOOM.in });
-    expect(back({ taught: [], zoom: -ZOOM.out }).zoom).toBe(-ZOOM.out);
-    for (const zoom of [-ZOOM.out - 1, ZOOM.in + 1, 1e9, Number.NaN]) expect(back({ taught: [], zoom }).zoom).toBe(0);
-    expect(parseScreen("not a screen")).toEqual({ taught: [], zoom: 0 });
+    expect(back({ taught: [], zoom: -ZOOM.out, grades: {} }).zoom).toBe(-ZOOM.out);
+    for (const zoom of [-ZOOM.out - 1, ZOOM.in + 1, 1e9, Number.NaN])
+      expect(back({ taught: [], zoom, grades: {} }).zoom).toBe(0);
+    expect(parseScreen("not a screen")).toEqual({ taught: [], zoom: 0, grades: {} });
   });
 });

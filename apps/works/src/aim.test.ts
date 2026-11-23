@@ -34,6 +34,7 @@ import {
   markOver,
   markStart,
   place,
+  setGrade,
   setTool,
   takeAway,
   tapBelt,
@@ -127,6 +128,33 @@ describe("an aim", () => {
     fromLeaf(cost);
     keepAim();
     expect(S.aim?.why).toBeNull();
+  });
+
+  test("a finger's run, another grade then chosen, is laid at that grade", async () => {
+    const y = yardAt(3);
+    await opened(y, 1000);
+    S.finger = true;
+    setTool(BELT);
+    tapBelt(17, 21);
+    tapBelt(22, 21);
+    expect(S.run?.legs.map((l) => l.grade)).toEqual([1, 1, 1, 1, 1, 1]);
+    setGrade(2);
+    expect(S.run?.legs.map((l) => l.grade)).toEqual([2, 2, 2, 2, 2, 2]);
+    expect(confirm()).toBe(true);
+    expect([17, 18, 19, 20, 21, 22].map((x) => S.world.grade[at(S.world, x, 21)])).toEqual([2, 2, 2, 2, 2, 2]);
+  });
+
+  test("a finger's run tapped out to beside the depot turns into it", async () => {
+    const y = yardAt(1);
+    await opened(y, 1000);
+    // Along the row over the depot (three tiles square), to the tile over its middle.
+    const [mx, my] = S.world.land.depot;
+    S.finger = true;
+    setTool(BELT);
+    tapBelt(mx - 4, my - 2);
+    tapBelt(mx, my - 2);
+    expect(S.run?.why).toBeNull();
+    expect(S.run?.legs.at(-1)).toMatchObject({ x: mx, y: my - 2, dir: 1 });
   });
 
   test("a finger's run, a tile on its way then built on, is found again round it", async () => {

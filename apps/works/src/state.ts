@@ -7,6 +7,7 @@ import {
   DEPOT,
   type Dir,
   emptyYard,
+  highest,
   type Kind,
   kind,
   KIND_COUNT,
@@ -22,9 +23,9 @@ import { TILE } from "./art/belts.ts";
 
 /**
  * The kinds of piece this page draws and builds, in the order they sit in the dock (which is also
- * the order of the number keys). Any other (the Study, the cart stop, the sorter, which a yard has
- * only further on) is drawn as a plain post with nothing of a belt about it, is not in the dock, and
- * is not taken up as a tool. The dock, the pick and the drawing all read this list.
+ * the order of the number keys, as far as the keys go): what makes, what carries, what gives power.
+ * The dock, the pick and the drawing all read this list; a test holds it to every kind in the
+ * tables but the depot, which is never built.
  */
 export const DRAWN: readonly Kind[] = (
   [
@@ -33,9 +34,12 @@ export const DRAWN: readonly Kind[] = (
     "mill",
     "bench",
     "workshop",
+    "study",
     "splitter",
     "joiner",
+    "sorter",
     "tunnel",
+    "stop",
     "crate",
     "pylon",
     "wheel",
@@ -78,6 +82,13 @@ export interface Aim extends Reckoned {
   why: string | null;
   /** What it would cost. */
   cost: number;
+  /**
+   * The grade the piece would stand at: the one in hand, or over a piece of its kind of a higher
+   * grade, that piece's, which is only turned. Not said for a tool that builds nothing.
+   */
+  grade?: number;
+  /** Over a piece of its kind of a lower grade: the grade that piece has, which this would raise. */
+  raises?: number;
   /** For a tunnel, the tile its far mouth would come up on: worked out once for the aim, not each frame. */
   far?: number;
 }
@@ -148,6 +159,8 @@ export const S: {
   view: { w: number; h: number; z: number; dpr: number };
   tool: Tool;
   dir: Dir;
+  /** The grade each kind of piece is built at when it is in hand, by kind: 0 for one never chosen, which is the first (`gradeInHand`). */
+  grades: Uint8Array;
   /** The colour on the brush, 1 to 6, or 0 to take colour off: kept while the page is open. */
   tint: number;
   /** The tile the mouse is over, if it is over the yard. */
@@ -173,6 +186,8 @@ export const S: {
   /** The tile a nudge is pointing at, and what it says; and the tool it wants picked up. */
   nudge: { x: number; y: number; text: string; id: string } | null;
   nudgeTool: Tool;
+  /** The part of the interface a nudge is about, which it is said beside: a book's button, or the grades over the dock. */
+  nudgePart: "tier" | "research" | "grades" | null;
 } = {
   world: emptyYard(LAND),
   visiting: null,
@@ -184,6 +199,7 @@ export const S: {
   view: { w: 320, h: 200, z: 4, dpr: 1 },
   tool: null,
   dir: 0,
+  grades: new Uint8Array(KIND_COUNT),
   tint: 1,
   hover: null,
   finger: false,
@@ -199,8 +215,18 @@ export const S: {
   panel: null,
   nudge: null,
   nudgeTool: null,
+  nudgePart: null,
 };
 
+/**
+ * The grade a kind of piece is built at when it is in hand: the one chosen for it, no higher than
+ * the yard may build; the first for a kind never chosen, and 1 too for a kind with no grade.
+ */
+export function gradeInHand(k: Kind): number {
+  return Math.max(1, Math.min(S.grades[k] ?? 1, highest(S.world.open, k)));
+}
+/** The grade the tool in hand builds at: 1 for a tool that builds nothing. */
+export const handGrade = (): number => (builds(S.tool) ? gradeInHand(S.tool) : 1);
 /**
  * Where the camera is drawn from, along one way, in the yard's pixels: on a whole pixel of the
  * screen. That is a whole pixel of the yard, but for a step of the plan, where a screen pixel is

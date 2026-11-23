@@ -250,4 +250,38 @@ describe("a Study", () => {
     const back = F.decode(F.encode(y), y.land);
     expect(back && [back.line, given(back, big)]).toEqual([y.line, 2 * n]);
   });
+
+  test("what became known while the owner was away is told with the yard, until their next command", () => {
+    // The first one folio short of known and a Study holding two: it becomes known while they are away.
+    const first = free.find((g) => g !== next && folioOf(g).folio === folio) ?? big;
+    const { y } = studies([[folio, 2]]);
+    must(y, { do: "study", research: idOf(first) });
+    must(y, { do: "study", research: idOf(next) });
+    F.giveGoal(y, first, folio, wants(first) - 1);
+    expect(F.knownSince(y)).toEqual([]);
+    const at = 1_800_000_000_000;
+    y.at = at;
+    y.seen = F.here(y);
+    const ctx: Ctx = { now: at + 3600 * 1000, player: { id: "p", guest: false }, seed: 1, room: 0, awards: [] };
+    F.FACTORY.advance(y, ctx);
+    expect(y.open.done[first]).toBe(1);
+    expect(F.knownSince(y)).toEqual([first]);
+    // The page is given it with the yard, and reads it back.
+    const seen = F.decode(F.FACTORY.view(y, ctx).yard, y.land);
+    expect(seen && F.knownSince(seen)).toEqual([first]);
+    // Their next command is when Leaf logs what was done: nothing is told twice.
+    must(y, { do: "collect" });
+    expect(F.knownSince(y)).toEqual([]);
+  });
+
+  test("a Study's pace is its grade's, at the share of power the yard has, and none in the dark", () => {
+    const { y } = studies([[folio, 2]]);
+    const i = F.at(y, 5, 7);
+    expect(F.rate(y, i)).toBe(F.makes(F.STUDY, 1, null));
+    y.grade[i] = 2;
+    expect(F.rate(y, i)).toBe(F.makes(F.STUDY, 2, null));
+    // A second Study past the depot's reach is in the dark.
+    must(y, { do: "build", kind: "study", x: 0, y: 0, dir: 0 });
+    expect(F.rate(y, F.at(y, 0, 0))).toBe(0);
+  });
 });

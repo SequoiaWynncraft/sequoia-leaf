@@ -17,10 +17,12 @@ import {
   type Goal,
   GOALS,
   held,
+  highest,
   holderOf,
   isDir,
   isFilled,
   isGoal,
+  isGraded,
   isItem,
   isKind,
   isNode,
@@ -29,19 +31,31 @@ import {
   type Item,
   type Kind,
   LEFT,
+  LINE,
   locked,
+  makeable,
+  NODES,
   NONE,
   type Plot,
   plotState,
+  price,
+  priceAt,
   rate,
   ready,
   RECIPE,
   recipesFor,
   RIGHT,
+  SORTER,
   SPLITTER,
   status,
+  STOP,
+  stops,
+  STUDY,
   takes,
+  TOOLS,
   toward,
+  type Unlock,
+  unlocked,
   worthAt,
 } from "@sequoia-leaf/factory";
 
@@ -49,34 +63,31 @@ import { layout } from "../layout.ts";
 import { draws, S } from "../state.ts";
 import { usable } from "../tools.ts";
 import { coins } from "../yard.ts";
-import {
-  type GroundPrint,
-  type ItemPrint,
-  type MachinePrint,
-  type Named,
-  type NodePrint,
-  type OrderPrint,
-  orderRef,
-  type PlotPrint,
-  type Print,
-  type StandingPrint,
-  type WaysPrint,
+import type {
+  GiftPrint,
+  GroundPrint,
+  ItemPrint,
+  MachinePrint,
+  Named,
+  NodePrint,
+  OrderPrint,
+  PlotPrint,
+  Print,
+  StandingPrint,
+  TierPrint,
+  WaysPrint,
 } from "./cards.ts";
 import { KEYS, openTools } from "./dock.ts";
-import { projectsOpen } from "./panels.ts";
+import { givenIn } from "./goal.ts";
+import { kindNumbers, numbersOf, saysNumbers } from "./numbers.ts";
+import { orderRef } from "./refs.ts";
+import { given, givenTo, needsOf, researchOpen, tierOpen } from "./standing.ts";
 
 /** A number read back out of a reference, if it is a whole one. */
 const numberIn = (id: string): number => (/^\d+$/.test(id) ? Number(id) : -1);
 const asItem = (n: number): Item | null => (isItem(n) ? n : null);
 /** A count as a card prints it: "1,200". */
 const counted = (v: number): string => v.toLocaleString("en-US", { maximumFractionDigits: 3 });
-
-/** Each thing a node or an order wants, with how many have come (no more than it wants) of how many. */
-const wantsOf = (want: Float64Array, filled: Float64Array | null): (readonly [Item, number, number])[] =>
-  ALL_ITEMS.filter((k) => (want[k] ?? 0) > 0).map((k) => {
-    const of = want[k] ?? 0;
-    return [k, Math.min(filled?.[k] ?? 0, of), of] as const;
-  });
 
 function itemPrint(k: Item): ItemPrint {
   const w = S.world;
@@ -111,19 +122,25 @@ function itemPrint(k: Item): ItemPrint {
   return { card: "item", item: k, lock: RECIPE[k] ? locked(w.open, { make: k }) : null, found, asked };
 }
 
-function machinePrint(k: Kind): MachinePrint {
+/** A kind of piece at a grade: the first, unless the card names a higher or the piece stands at one. */
+function machinePrint(k: Kind, grade = 1): MachinePrint {
   const w = S.world;
   const key = S.visiting ? undefined : KEYS[openTools().indexOf(k)];
   return {
     card: "machine",
     kind: k,
+    grade,
+    graded: isGraded(k) && (grade > 1 || highest(w.open, k) > 1),
     later: !draws(k),
-    price: costOf(w, k),
+    price: grade > 1 ? price(k, grade) : costOf(w, k),
     gives: k === DEPOT ? w.open.depot : (GIVES[k] ?? 0),
     key: key ?? null,
     recipes: recipesFor(w.open, k).map((r) => r.out),
-    open: k === DEPOT || locked(w.open, { build: k }) === null,
-    spare: w.spare[k] ?? 0,
+    open: k === DEPOT || locked(w.open, { build: k, grade }) === null,
+    spare: grade > 1 ? 0 : (w.spare[k] ?? 0),
+    // What it carries a minute, once the yard counts; a grade above the first says so in its own sentence.
+    numbers: saysNumbers(w) && grade <= 1 ? kindNumbers(k, 1) : [],
+    stops: k === STOP ? [stops(w), w.open.stops] : null,
   };
 }
 
@@ -151,11 +168,17 @@ function standingPrint(i: number, k: Kind): StandingPrint {
   const h = w.holders;
   const r = holderOf(w, i);
   const making = aim(w, i);
+  const grade = w.grade[i] ?? 0;
+  const set = asItem(w.set[i] ?? NONE);
+  // A piece of a grade the yard may build higher is raised where it stands, for what the rules ask.
+  const raise = isGraded(k) && grade > 0 && grade < highest(w.open, k) ? priceAt(w, k, x, y, grade + 1) : null;
+  // A sorter is told one thing of what the yard can make, or has had at the depot.
+  const can = k === SORTER ? new Set(makeable(w)) : null;
   return {
     card: "standing",
     x,
     y,
-    machine: machinePrint(k),
+    machine: machinePrint(k, Math.max(1, grade)),
     line: st?.line ?? null,
     trouble: st?.trouble ?? false,
     state: st?.state ?? null,
@@ -167,9 +190,14 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     making: making ? making.out : null,
     gathering: k === GATHERER ? asItem(w.land.deposit[i] ?? NONE) : null,
     perMinute: per > 0 ? Math.round(per) : null,
-    set: asItem(w.set[i] ?? NONE),
+    numbers: saysNumbers(w) ? numbersOf(w, i) : [],
+    set,
+    sorts: can ? ALL_ITEMS.filter((t) => can.has(t) || (w.depot[t] ?? 0) > 0 || set === t) : [],
+    studying: k === STUDY ? (w.line[0] ?? null) : null,
+    research: researchOpen() && S.panel !== "research",
+    raise: raise === null ? null : { to: grade + 1, cost: raise, enough: coins() >= raise },
     open: r < 0 || h.open[r] === 1,
-    projects: projectsOpen(),
+    tier: tierOpen() ? w.open.tier : null,
     another: usable(k),
     refund: worthAt(w, i),
     free: w.free[i] === 1,
@@ -213,20 +241,29 @@ function plotPrint(id: Plot): PlotPrint | null {
   };
 }
 
+/** A goal: a lesson, a project, a commission or a piece of research. */
 function nodePrint(g: Goal): NodePrint | null {
   const w = S.world;
   const info = GOALS[g];
-  if (!info || !isNode(g)) return null;
+  if (!info) return null;
+  const node = isNode(g);
   const done = w.open.done[g] === 1;
   const inHand = w.hand === g;
+  const lined = w.line.includes(g);
+  const needs = needsOf(g);
+  const studied = needs.find((n) => n.stands === "being studied");
+  const far = studied ? given(studied.goal) : { have: 0, of: 0 };
   return {
     card: "node",
     goal: g,
     done,
     inHand,
-    may: !done && !inHand && info.kind !== "lesson" && ready(w.open, g),
-    needs: info.needs.filter((m) => w.open.done[m] !== 1).map((m) => GOALS[m]?.title ?? ""),
-    wants: wantsOf(info.want, done ? info.want : (w.got[g] ?? null)),
+    may: node && !done && !inHand && info.kind !== "lesson" && ready(w.open, g),
+    study: node || done ? null : lined ? "out" : ready(w.open, g) && w.line.length < LINE ? "in" : null,
+    research: researchOpen() && S.panel !== "research",
+    wants: givenTo(g),
+    needs,
+    studied: [far.have, far.of],
     visiting: S.visiting !== null,
   };
 }
@@ -242,10 +279,28 @@ function orderPrint(slot: string): NodePrint | OrderPrint | null {
     from: o.from,
     line: o.line,
     pay: o.pay,
-    wants: wantsOf(o.want, o.filled),
+    wants: givenIn(o.want, o.filled),
     full: isFilled(o.want, o.filled),
   };
 }
+
+const NUMBERED = ["stops", "crate", "reach", "depot", "span", "away", "hooks"] as const;
+
+/** The unlock a `perk:` reference names, as the rules make it. */
+function perkOf(id: string): Unlock | null {
+  const [of = "", a = "", b = ""] = id.split(".");
+  if (of === "board") return unlocked({ board: true })[0] ?? null;
+  if (of === "blueprints" && numberIn(a) >= 0 && numberIn(b) >= 0)
+    return unlocked({ blueprints: { count: numberIn(a), pieces: numberIn(b) } })[0] ?? null;
+  const numbered = NUMBERED.find((f) => f === of);
+  return numbered !== undefined && numberIn(a) >= 0 ? (unlocked({ [numbered]: numberIn(a) })[0] ?? null) : null;
+}
+
+/** A tier: whether it is open yet. */
+const tierPrint = (tier: number): TierPrint => ({ card: "tier", tier, open: tier <= S.world.open.tier });
+
+/** What a finished goal leaves in town, if it leaves anything. */
+const giftPrint = (g: Goal): GiftPrint | null => (isNode(g) && NODES[g]?.gift ? { card: "gift", goal: g } : null);
 
 /** What the card a reference names prints now, or nothing if there is no such card. */
 export function printOf(ref: string): Print | null {
@@ -256,8 +311,12 @@ export function printOf(ref: string): Print | null {
   switch (kind) {
     case "item":
       return isItem(n) ? itemPrint(n) : null;
-    case "machine":
-      return isKind(n) ? machinePrint(n) : null;
+    case "machine": {
+      // A kind, or a kind at a grade: `machine:<kind>.<grade>`.
+      const [k = "", grade] = id.split(".");
+      const kindOf = numberIn(k);
+      return isKind(kindOf) ? machinePrint(kindOf, grade === undefined ? 1 : Math.max(1, numberIn(grade))) : null;
+    }
     case "tile":
       return tilePrint(n);
     case "plot":
@@ -266,6 +325,18 @@ export function printOf(ref: string): Print | null {
       return isGoal(n) ? nodePrint(n) : null;
     case "order":
       return orderPrint(id);
+    case "tool": {
+      const tool = TOOLS.find((t) => t === id);
+      return tool === undefined ? null : { card: "tool", tool };
+    }
+    case "perk": {
+      const unlock = perkOf(id);
+      return unlock === null ? null : { card: "perk", unlock };
+    }
+    case "tier":
+      return n >= 0 ? tierPrint(n) : null;
+    case "gift":
+      return isGoal(n) ? giftPrint(n) : null;
     default:
       return null;
   }

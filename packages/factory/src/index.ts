@@ -13,6 +13,7 @@ export * from "./content/nodes.ts";
 export * from "./content/plots.ts";
 export * from "./content/recipes.ts";
 export * from "./content/research.ts";
+export * from "./content/tiers.ts";
 export {
   decode,
   encode,
@@ -38,5 +39,6 @@ export { type Leg, legKind, legPiece, legSpan, route } from "./route.ts";
 export * from "./status.ts";
 export * from "./tables.ts";
 export { step } from "./tick.ts";
+export * from "./unlocks.ts";
 export { ahead, carries, nextOf, power, rewire, takes, wayOut } from "./wire.ts";
 export * from "./yard.ts";

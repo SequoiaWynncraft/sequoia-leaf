@@ -32,6 +32,7 @@ import {
   runOver,
   runStart,
   setTool,
+  stepGrade,
   takeAway,
   tapBelt,
   undo,
@@ -308,6 +309,8 @@ export function initInput(canvas: HTMLCanvasElement): void {
       return;
     }
     if (k === "r") rotate();
+    // G steps through the grades the kind in hand may be built at.
+    else if (k === "g") stepGrade();
     else if (k === "e") setTool(S.tool === "remove" ? null : "remove");
     else if (k === "f") setTool(S.tool === "select" ? null : "select");
     else if (k === "m" && S.mark && !S.group) hold("move");
@@ -324,7 +327,8 @@ export function initInput(canvas: HTMLCanvasElement): void {
       if (on) pickFrom(on.x, on.y);
     } else if (k === "o") togglePanel("orders");
     else if (k === "t") togglePanel("board");
-    else if (k === "p") togglePanel("projects");
+    else if (k === "p") togglePanel("tier");
+    else if (k === "l") togglePanel("research");
     else if (k === "i") toggleView("needs");
     else if (k === "+" || k === "=") zoom(1, window.innerWidth / 2, window.innerHeight / 2);
     else if (k === "_") zoom(-1, window.innerWidth / 2, window.innerHeight / 2);

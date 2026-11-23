@@ -76,7 +76,8 @@ function takesFrom(y: Yard, t: number, c: number, d: Dir): boolean {
 /**
  * The shortest clear run from the tile `from` to `to`. If something stands on `to`, the run ends
  * beside it, pointing into it from a side it takes things from (for the depot, whichever of its
- * tiles is nearest); if `to` is clear ground, the run ends on it. Nothing if there is no way.
+ * tiles is nearest); if `to` is clear ground, the run ends on it, pointing on the way it came, or
+ * into the depot if it ends beside it. Nothing if there is no way.
  */
 export function route(
   y: Yard,
@@ -165,6 +166,18 @@ function search(
       }
     }
   if (end < 0) return null;
+  // On clear ground the last belt goes on the way the run came; beside the depot, into it: a run
+  // that ends there was meant to go in.
+  if (target < 0) {
+    const p = prev[end] ?? -1;
+    if (p >= 0) endDir = wayBetween(W, Math.floor(p / 5), goal);
+    const onto = toward(land, goal, endDir);
+    if (onto < 0 || y.kind[onto] !== DEPOT)
+      for (const d of DIRS) {
+        const j = toward(land, goal, d);
+        if (j >= 0 && y.kind[j] === DEPOT && takesFrom(y, j, goal, d)) endDir = d;
+      }
+  }
 
   // Walk back from the end, giving each tile the way to the tile after it.
   const legs: Leg[] = [];

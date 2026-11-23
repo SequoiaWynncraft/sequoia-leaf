@@ -401,7 +401,7 @@ function needsView(_art: Art, host: HTMLElement): () => void {
   const things = table("A minute", ["Can make", "Needs", "Reached the depot"]);
   const none = el("div", "k-dim", { text: "Nothing is made yet." });
   const over = el("div", "k-s k-dim");
-  const totals = table("In total", [""], { wide: 44 });
+  const totals = table("In total", [""], { wide: 60 });
   host.append(things.el, none, over, totals.el);
   let drawn = "";
   return () => {
