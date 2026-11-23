@@ -26,30 +26,28 @@ export const NOTES: readonly Note[] = [
   {
     id: "works-splitter-grades",
     at: "2026-11-23T23:59Z",
-    title: "The Works: splitters, joiners and sorters have grades",
+    title: "The Works: grades for splitters, joiners and sorters",
     lines: [
-      "Splitters, joiners and sorters come in grades I to III, as belts do, and pass items on as fast as a belt of their grade.",
-      "Yours were raised to the highest belt grade your yard has, for free, so no line is slower.",
+      "Splitters, joiners and sorters come in grades I to III, as belts do. Yours were raised to the highest belt grade your yard has, for free, so no line is slower.",
+      "Grade III now has a look of its own: iron and brass, where grade II is waxed wood and brass.",
     ],
     more: [
       {
-        head: "Grades",
+        head: "Splitters, joiners and sorters",
         points: [
           "Grade I passes on up to 150 items a minute, grade II 200 and grade III 300, the same as belts.",
           "One of a lower grade than the belts around it slows its line to its own pace.",
-          "Grade II comes with Wax for the belts and grade III with Brass fittings for the belts, as for belts.",
-          "Each is drawn in its grade's wood and studs, like the belts of that grade.",
+          "Their grades unlock with the belts': grade II with Wax for the lines, grade III with Iron rollers for the lines.",
+          "Splitter and joiner cost 8, 24 and 64 Coins. Sorter: 12, 36 and 96.",
+          "Choose the grade in the dock, as for belts. It starts at I until you choose another.",
         ],
       },
       {
-        head: "Prices, in Coins",
-        points: ["Splitter and joiner: 8, 24 and 64.", "Sorter: 12, 36 and 96."],
-      },
-      {
-        head: "Building",
+        head: "How each grade looks",
         points: [
-          "Choose the grade in the dock, as for belts. It starts at I until you choose another.",
-          "Building one over a lower one raises it in place, and Upgrading an area raises them with the belts.",
+          "Grade I is plain wood. Grade II is waxed wood with brass trim.",
+          "Grade III is iron with brass: lines run on iron rollers between brass rails, machines have iron frames, tunnels iron hoods, and gatherers a wheelbarrow.",
+          "Grade II pieces have 1 brass stud in the corner and grade III 2, as before.",
         ],
       },
       {
@@ -57,6 +55,7 @@ export const NOTES: readonly Note[] = [
         points: [
           "Every splitter, joiner and sorter you had was raised to the highest belt grade your yard has unlocked, for free.",
           "One saved in a blueprint was raised to the grade of the belts saved with it.",
+          "Wax for the belts is now called Wax for the lines, and Brass fittings for the belts is Iron rollers for the lines.",
         ],
       },
     ],

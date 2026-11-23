@@ -84,7 +84,7 @@ function riding(x: number, z: number, thing: F.Item): void {
 }
 
 // Power for the northern block: two rows of pylons between the grades' rows, and boilers by the depot.
-for (const x of [6, 16, 26, 36, 46, 56]) for (const z of [5, 9]) build("pylon", x, z, 0);
+for (const x of [6, 16, 26, 36, 46, 56, 64, 72, 80, 88, 96]) for (const z of [5, 9]) build("pylon", x, z, 0);
 for (const x of [27, 28, 29, 30, 34, 35]) {
   const i = build("boiler", x, 22, 0);
   y.holders.fuel[F.holderOf(y, i)] = 20;

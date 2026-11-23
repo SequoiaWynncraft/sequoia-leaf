@@ -5,10 +5,10 @@
  */
 
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
-import { bitmap, ell, flipped, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
+import { bitmap, ell, flipped, outlined, paint, R, rgb } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, hash, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
-import { bm, CLAY, DARK, PAL, spr, type Sprite } from "./pal.ts";
+import { bm, CLAY, DARK, IRON, PAL, spr, type Sprite } from "./pal.ts";
 
 type Canvas = HTMLCanvasElement;
 
@@ -229,12 +229,37 @@ const RAKE = [
   "...b...",
 ];
 const BASKET = [".N..N.", "NnNnNn", "nNnNnN", ".nNnN."];
+/** What a third-grade gatherer puts what he finds in, where the first two have a basket. */
 const BARROW = ["...nnnnnn.", "b..NNNNNN.", ".bbnnnnnn.", "...bbbbb..", "...sS..b..", "...Ss..b.."];
 
 // ---------- the brass a higher grade wears ----------
 
 /** Brass as the yard has it: in shade, lit, and where the light catches it. */
 const BRASS = [GOLD[0], GOLD[1], GOLD[2]] as const;
+
+/**
+ * A piece of the third grade is iron where the first two are wood: each step of the wood's ramp
+ * becomes the same step of `IRON`, in place, over the whole picture drawn so far; with `stone`, its
+ * stone too (a kiln's foot and chimney, a tunnel's hood). Its brass stays brass.
+ */
+function ironClad(g: Ctx, grade: number, stone = false): void {
+  if (grade < 3) return;
+  const from = [...BARK, ...(stone ? STONE : [])].map(rgb);
+  const to = [...IRON, ...(stone ? IRON.slice(1) : [])].map(rgb);
+  const { width: w, height: h } = g.canvas;
+  const img = g.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) continue;
+    const k = from.findIndex(([r, gg, b]) => d[i] === r && d[i + 1] === gg && d[i + 2] === b);
+    const [r, gg, b] = to[k] ?? [];
+    if (r === undefined || gg === undefined || b === undefined) continue;
+    d[i] = r;
+    d[i + 1] = gg;
+    d[i + 2] = b;
+  }
+  g.putImageData(img, 0, 0);
+}
 
 /**
  * What a machine of the second grade and up wears: a brass band, two pixels deep, across it from `x`
@@ -284,6 +309,7 @@ function saw(step: number, grade = 1): Sprite {
     R(g, 10, 14, 3, 1, "#cbb894");
     R(g, 11, 13, 1, 1, "#e9d8b8");
     fitted(g, grade, 0, 9, 16, 6, 12);
+    ironClad(g, grade);
   });
 }
 
@@ -312,6 +338,7 @@ function kiln(step: number, grade = 1): Sprite {
     R(g, 5, 10, 6, 1, DARK);
     // The band hoops the dome over the arch; the plate is the arch's keystone.
     fitted(g, grade, 2, 6, 12, 6, 8);
+    ironClad(g, grade, true);
   });
 }
 
@@ -341,6 +368,7 @@ function press(step: number, grade = 1): Sprite {
     R(g, 0, 16, 16, 1, BARK[3]);
     R(g, 0, 18, 16, 1, BARK[0]);
     fitted(g, grade, 0, 16, 16, 6, 2);
+    ironClad(g, grade);
   });
 }
 
@@ -378,6 +406,7 @@ function bench(step: number, grade = 1): Sprite {
     R(g, 3, 13, 10, 1, BARK[1]);
     R(g, 5, 12, 2, 1, GOLD[1]);
     fitted(g, grade, 0, 10, 16, 8, 13);
+    ironClad(g, grade);
   });
 }
 
@@ -404,6 +433,7 @@ function workshop(lit: boolean, step: number, grade = 1): Sprite {
     gear(g, 11, 15, 2, 6, step / 2, GOLD[1], GOLD[0]);
     // The band runs along the wall's foot, over the stone; the plate is the window's lintel.
     fitted(g, grade, 1, 19, 14, 3, 11);
+    ironClad(g, grade);
   });
 }
 
@@ -473,6 +503,7 @@ function study(state: number, grade = 1): Sprite {
     // The lamp hangs over the book from the cornice.
     R(g, 3, 2, 1, 2, BARK[0]);
     lantern(g, 1, 4, lit ? GOLD[2] : STONE[0], lit ? CREAM : STONE[1]);
+    ironClad(g, grade);
   });
 }
 
@@ -664,6 +695,7 @@ function hood(side: number, grade = 1): Sprite {
       R(g, 12, 5, 1, 6, BRASS[0]);
     }
   }
+  ironClad(g, grade, true);
   return spr(c, 8, 18);
 }
 
@@ -959,7 +991,9 @@ export interface Machines {
   rake: Sprite;
   rakeLeft: Sprite;
   basket: Canvas;
+  /** The wheelbarrow a gatherer of the third grade has in his basket's place, its handles to the left, and turned. */
   barrow: Canvas;
+  barrowLeft: Canvas;
   /**
    * What has a grade is drawn in two looks, `[0]` as the first grade and `[1]` with the brass of the
    * second and third (`lookOf`). Each mill face, cold first and then the steps of its work:
@@ -1007,12 +1041,14 @@ export interface Machines {
    * splitter, joiner or sorter has it laid over its arrowheads or its board.
    */
   pips: Canvas[];
+  /** The same marks, each on a tile of its own and clear but for it: laid over many tiles in one go. */
+  tilePips: Canvas[];
 }
 
-/** Which of a graded piece's two looks a grade is drawn in: the first grade's, or the brass of the second and third. */
-export const lookOf = (grade: number): number => (grade >= 2 ? 1 : 0);
-/** The two looks, as the grades they are drawn from. */
-const LOOKS = [1, 2] as const;
+/** Which of a graded piece's three looks a grade is drawn in: wood, wood with brass, or iron with brass. */
+export const lookOf = (grade: number): number => (grade >= 3 ? 2 : grade >= 2 ? 1 : 0);
+/** The three looks, as the grades they are drawn from. */
+const LOOKS = [1, 2, 3] as const;
 /**
  * The mark of a grade above the first, typed: one stud of muted brass with its dark edge for the
  * second, two side by side for the third. A belt's tile and every other graded piece use the same.
@@ -1039,6 +1075,7 @@ export function makeMachines(): Machines {
     rakeLeft: mirror(spr(bitmap(RAKE, PAL), 3, RAKE.length)),
     basket: outlined(bitmap(BASKET, PAL), INK),
     barrow: outlined(bitmap(BARROW, PAL), INK),
+    barrowLeft: flipped(outlined(bitmap(BARROW, PAL), INK)),
     saw: LOOKS.map((grade) => [0, 1, 2].map((s) => saw(s, grade))),
     kiln: LOOKS.map((grade) => [0, 1, 2, 3].map((s) => kiln(s, grade))),
     press: LOOKS.map((grade) => [0, 1, 2].map((s) => press(s, grade))),
@@ -1067,5 +1104,10 @@ export function makeMachines(): Machines {
     fenceAcross: fence(true),
     fenceDown: fence(false),
     pips: [1, 2].map(pips),
+    tilePips: [1, 2].map((count) => {
+      const { c, g } = makeCanvas(16, 16);
+      g.drawImage(pips(count), 0, 0);
+      return c;
+    }),
   };
 }

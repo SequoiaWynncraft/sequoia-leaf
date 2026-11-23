@@ -151,7 +151,8 @@ function grades(art: Art): Entry[] {
       const g = c.getContext("2d");
       const rake = left ? m.rakeLeft : m.rake;
       if (grade >= 2) g?.drawImage(rake.c, 2 + (left ? 2 : 13) - rake.ax, 16 + 15 - rake.ay);
-      g?.drawImage(m.basket, left ? 2 + 15 - m.basket.width : 2, 16 + 16 - m.basket.height);
+      const gear = grade >= 3 ? m.barrow : m.basket;
+      g?.drawImage(gear, left ? 2 + 15 - gear.width : 2, 16 + 16 - gear.height);
       return c;
     };
     out.push({ name: at(grade), pics: [gnome(0), gnome(2), gnome(3), gnome(4), gnome(0, true)] });

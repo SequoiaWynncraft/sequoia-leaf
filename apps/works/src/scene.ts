@@ -535,8 +535,11 @@ function piece(
       if (!s) break;
       stand(s, cx, foot - 1, z, a);
       head = foot - 15;
-      const gear = m.basket;
-      put(gear, left ? x + 15 - gear.width : x, foot - gear.height, z - 0.2, a);
+      // His basket at his back; from the third grade a wheelbarrow in its place, out beside him.
+      if (look >= 2) {
+        const barrow = left ? m.barrowLeft : m.barrow;
+        put(barrow, left ? x + 11 : x + 5 - barrow.width, foot - barrow.height, z - 0.2, a);
+      } else put(m.basket, left ? x + 15 - m.basket.width : x, foot - m.basket.height, z - 0.2, a);
       // From the second grade he has a rake, stood in the ground on his other side.
       if (look > 0) stand(left ? m.rakeLeft : m.rake, x + (left ? 2 : 13), foot - 1, z - 0.1, a);
       const carried = out !== NONE ? out : pose === 3 ? (y.land.deposit[i] ?? NONE) : NONE;
@@ -1114,7 +1117,7 @@ function laidOf(L: Layout, art: Art): NonNullable<typeof laid> {
     }
     here(tiles);
     // The grade's mark lies over what is laid on the tile, so no arrowhead or board hides it.
-    const pip = k === SPLITTER || k === JOINER || k === SORTER ? art.m.pips[grade - 2] : undefined;
+    const pip = k === SPLITTER || k === JOINER || k === SORTER ? art.m.tilePips[grade - 2] : undefined;
     if (pip) {
       let on = marks.get(pip);
       if (!on) {

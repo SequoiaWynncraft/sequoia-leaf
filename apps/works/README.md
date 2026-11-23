@@ -177,17 +177,21 @@ depot gains a flywheel once it gives more power. The depot
 is the back of the workshop the town sees from the front: the same planks, stone foot, chimney and
 brass wheel.
 
-**Grades.** A grade is written as a numeral: "Belt II". A piece of the second grade wears brass
-(`art/machines.ts`, `art/belts.ts`): a belt, splitter, joiner or sorter runs on darker wood with a
-brass edge and chevron, a mill, a bench and a workshop have a brass band and plate, a tunnel a
-brass hood, a gatherer a rake, a Study a brass lectern. So that a whole line reads at the farthest
-zoom, where a fitting is a pixel or two, every piece above the first grade also has a small mark of
-muted brass in the top-left of its tile, one for II and two for III: a belt has it in its tile, a
-splitter, joiner or sorter over its arrowheads or its board. The third grade is drawn as the second
-with its mark doubled; tier 4 unlocks it for belts, tunnels, splitters, joiners, sorters and
-gatherers (Brass fittings) and for mills, benches and workshops (research), and no goal unlocks it
-for the Study. `?sheet=grades` lays every graded piece out at each grade, each way round and in a
-line of belt, and `review/gallery.ts` stands them in a yard of its own.
+**Grades.** A grade is written as a numeral: "Belt II". Each grade has a look of its own
+(`art/machines.ts`, `art/belts.ts`). The first is plain wood. The second is wax and brass: a belt,
+splitter, joiner or sorter runs on paler waxed wood with a brass edge and chevron, a mill, a bench,
+a workshop and a Study have a brass band and plate, a tunnel a brass lip on its hood, and a
+gatherer a rake. The third is iron and brass: a belt, splitter, joiner or sorter runs on iron
+rollers on an iron bed between brass rails, a machine's wood is iron (and a kiln's stone too,
+`ironClad`), a tunnel's hood is iron, and a gatherer has a wheelbarrow beside him in his basket's
+place (`IRON`, in `art/pal.ts`). So that a whole line reads at the farthest zoom, where a fitting is
+a pixel or two, every piece above the first grade also has a small mark of muted brass in the
+top-left of its tile, one for II and two for III: a belt has it in its tile, a splitter, joiner or
+sorter over its arrowheads or its board. Tier 4 unlocks the third grade for belts, tunnels,
+splitters, joiners, sorters and gatherers (Iron rollers for the lines) and for mills, benches and
+workshops (research), and no goal unlocks it for the Study. `?sheet=grades` lays every graded piece
+out at each grade, each way round and in a line of belt, and `review/gallery.ts` stands them in a
+yard of its own.
 
 **The later pieces.** The Study is a bookcase, a lectern and a lamp with a gnome scholar at it: he
 turns a page as a folio is studied, stands idle with nothing to study, and the lamp is out with no

@@ -213,13 +213,16 @@ export const KIND_PIC: Readonly<Record<KindName, (p: Parts, grade: number) => HT
     g.drawImage(plank, 8 - (plank.width >> 1), 7 - (plank.height >> 1));
     return c;
   },
-  // A gatherer of the second grade has his rake stood beside him.
+  // A gatherer of the second grade has his rake stood beside him; of the third, his wheelbarrow too.
   gatherer: ({ m }, grade) => {
     const gnome = must(m.gnome[0]?.[0], "gnome").c;
     if (grade < 2) return gnome;
-    const { c, g } = makeCanvas(gnome.width + 5, gnome.height);
-    g.drawImage(m.rake.c, gnome.width - 2, gnome.height - m.rake.c.height);
-    g.drawImage(gnome, 0, 0);
+    const barrow = grade >= 3 ? m.barrow : null;
+    const left = barrow ? barrow.width - 4 : 0;
+    const { c, g } = makeCanvas(left + gnome.width + 5, gnome.height);
+    if (barrow) g.drawImage(barrow, 0, gnome.height - barrow.height);
+    g.drawImage(m.rake.c, left + gnome.width - 2, gnome.height - m.rake.c.height);
+    g.drawImage(gnome, left, 0);
     return c;
   },
   mill: ({ m }, grade) => must(m.saw[lookOf(grade)]?.[0], "saw").c,
