@@ -11,10 +11,10 @@
     "@effect/platform-bun": "4.1.4",
     "@effect/sql-sqlite-bun": "4.1.4",
     "@sequoia-leaf/core": "workspace:*",
+    "@sequoia-leaf/factory": "workspace:*",
     "@sequoia-leaf/pulls": "workspace:*",
     "@sequoia-leaf/raid": "workspace:*",
     "@sequoia-leaf/town": "workspace:*",
-    "@sequoia-leaf/yard": "workspace:*",
     "effect": "4.1.4"
   },
   "devDependencies": {

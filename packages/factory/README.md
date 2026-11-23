@@ -3,23 +3,27 @@
 The rules of the second Works, on flat data: numbers in typed arrays and a few small records,
 nothing for each piece and no string for each thing. Tiers 0 to 3 are whole: nodes (lessons,
 projects and commissions), research and the Study, counted recipes, grades, the sorter and the cart
-stop. Nothing serves or draws it yet.
+stop. Leaf's play service plays it as the Works (`FACTORY`, under the id `works`), and the Works'
+page (`apps/works`) holds a copy and draws it; the town reads its standing's words (`src/stats.ts`).
 
 ## What to read for which kind of work
 
-| To work on                                                                    | Read                                                                          |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| what things, machines, grades, recipes, plots, nodes, research and askers are | `src/content/*.ts` (data only)                                                |
-| how a name becomes a number; what is open once some goals are done; `locked`  | `src/tables.ts`                                                               |
-| what a yard holds, and its side tables                                        | `src/yard.ts`, then `src/land.ts`                                             |
-| one tick                                                                      | `src/tick.ts`, `src/wire.ts` (who hands to whom), `src/power.ts`              |
-| building, raising, removing, turning, setting pieces, plots                   | `src/build.ts`; many pieces at once: `src/pieces.ts`; colours: `src/lines.ts` |
-| the node in hand, the line of research, the board                             | `src/orders.ts`, `src/clock.ts`                                               |
-| Leaf's game: commands, Coins, time, the view and the answer                   | `src/game.ts`                                                                 |
-| keeping a yard, and the check                                                 | `src/codec.ts`, `src/bytes.ts`, `src/check.ts`                                |
-| the route for a run of belt; what a piece is doing                            | `src/route.ts`; `src/status.ts`                                               |
-| what a machine or a line makes and needs a minute                             | `src/planner.ts`, and `plan.ts` for the table of the slice                    |
-| what it costs                                                                 | `bench.ts`, and `test/budgets.test.ts` for the budgets                        |
+| To work on                                                                    | Read                                                                              |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| what things, machines, grades, recipes, plots, nodes, research and askers are | `src/content/*.ts` (data only)                                                    |
+| how a name becomes a number; what is open once some goals are done; `locked`  | `src/tables.ts`                                                                   |
+| what a yard holds, and its side tables                                        | `src/yard.ts`, then `src/land.ts`                                                 |
+| one tick                                                                      | `src/tick.ts`, `src/wire.ts` (who hands to whom), `src/power.ts`                  |
+| building, raising, removing, turning, setting pieces, plots                   | `src/build.ts`; many pieces at once: `src/pieces.ts`; colours: `src/lines.ts`     |
+| the node in hand, the line of research, the board                             | `src/orders.ts`, `src/clock.ts`                                                   |
+| Leaf's game: commands, Coins, time, the view and the answer                   | `src/game.ts`                                                                     |
+| keeping a yard, and the check                                                 | `src/codec.ts`, `src/bytes.ts`, `src/check.ts`                                    |
+| the route for a run of belt; what a piece is doing                            | `src/route.ts`; `src/status.ts` (`status`, and `condition`, the same as a number) |
+| what a machine or a line makes and needs a minute                             | `src/planner.ts`, and `plan.ts` for the table of the slice                        |
+| the wire from the page's side: a command written, what Leaf sends read back   | `src/page.ts`                                                                     |
+| what the town is told: the postcard, the standing's words                     | `src/postcard.ts`, `src/stats.ts`                                                 |
+| yards built with commands, for the tests and the play server's tours          | `test/yards.ts` (`delivering`, `generated`, `staged`)                             |
+| what it costs                                                                 | `bench.ts`, and `test/budgets.test.ts` for the budgets                            |
 
 ```sh
 bun test       # every rule, the tables and the budgets (about 15 seconds)
@@ -200,8 +204,31 @@ beyond the first, shared out between one or two things as `fresh` draws them. On
 seed, can draw one. It counts from 50 ticks after it is hung (`starts`): until then the depot gives
 it nothing, it cannot be handed over (`claim`), and the check leaves it out. A fresh order is hung at
 the end of the board. What Leaf answers a batch with (`answer`) is the yard's tick, its check, and the
-orders hung that do not count yet. `answer` is not yet a part of `FACTORY`: core on this branch has
-no place for it; it joins when the branch takes in `main`.
+orders hung in the last minute (`ORDER_TOLD`), counting or not, so that a batch that runs past the tick
+one counts from still tells the page of it. `FACTORY.answer` puts it on the wire (`Short`): Leaf's
+tick now beside it, and each order as it is kept (`keptOrder`), which the page reads back with
+`readAnswer` (`orderOf`, the same reader the codec vouches a kept order with).
+
+## The wire, from the page's side
+
+Leaf reads a command off the wire with `readCommand`; the page writes one with its inverse,
+`writeAct` (`writeCommand` with the tick), every thing, kind, plot and goal by its name, so that what
+the page writes reads back as the same act (`test/page.test.ts`, and every command of random play in
+`test/play.test.ts`). What Leaf sends back is read here too: the view (`readView`), a command's notes,
+which are the yard's news (`readNotes`), and the answer to a batch (`readAnswer`), each tested against
+what `FACTORY` really gives. The postcard the town is left (`postcard`) and what a standing says on a
+card (`WORKS_STATS`, in `src/stats.ts`, which reads nothing of the rules) are here as well.
+
+## What a piece is doing, for a screen
+
+`status` says it in a sentence; `condition` says the same state, and whether it is in trouble, as a
+number (`STATES`, and `TROUBLE` added), making nothing, so that a screen can ask it of every piece in
+view each frame. The two are held together by `test/condition.test.ts` on the staged and generated
+yards as they run, and every 50 commands of random play. Neither, nor `aim`, makes anything while the
+plumbing is worked out: they read a machine's recipes from it (`Wire.recipes`).
+
+`priceOf` with `bare` prices a set of pieces as if on clear ground: a blueprint or a copy before it
+is aimed anywhere.
 
 ## The planner
 
@@ -270,5 +297,8 @@ One file for each part: whole numbers, counted recipes (and those of tiers 0 and
 tiers), grades, tiers and tools, research, the new pieces and blueprints, orders, the tables held together (every goal reachable, nothing wanted before it can be made, every
 folio cost payable by its tier, ids unique), the planner (and that a yard does what it says), the
 codec and the check, random play (a refusal changes nothing, a yard reads back as itself, every
-command and piece takes effect) and time away, and the budgets. `test/yards.ts` builds the yards
-they share with commands off the wire.
+command and piece takes effect, what the page would write reads back as the command, `condition` is
+`status`) and time away, the wire from the page's side, and the budgets. `test/yards.ts` builds the
+yards they share with commands off the wire, and the yards the play server on a developer's machine
+stages for the tours (`staged`: `new`, `small`, `short`, `mid`, `large`), which the package exports as
+`@sequoia-leaf/factory/test/yards.ts`.

@@ -49,6 +49,10 @@ export type Dir = 0 | 1 | 2 | 3;
 export const isDir = (v: unknown): v is Dir => v === 0 || v === 1 || v === 2 || v === 3;
 /** A quarter turn to the right of a way. */
 export const right = (d: Dir): Dir => (d === 0 ? 1 : d === 1 ? 2 : d === 2 ? 3 : 0);
+/** For each way, the way behind it and a quarter turn to its left and to its right. */
+export const BACK = [2, 3, 0, 1] as const;
+export const LEFT = [3, 0, 1, 2] as const;
+export const RIGHT = [1, 2, 3, 0] as const;
 const dx = (d: number): number => DX[d & 3] ?? 0;
 const dy = (d: number): number => DY[d & 3] ?? 0;
 

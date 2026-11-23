@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import type { Standing } from "@sequoia-leaf/yard";
+import { countsOf, type Standing } from "@sequoia-leaf/factory";
 
 import { placed } from "./panels.ts";
 
@@ -9,9 +9,9 @@ const order = (id: number, planks: number): Standing => ({
   title: "",
   from: "",
   line: "",
-  want: { plank: 10 },
+  want: countsOf({ plank: 10 }),
   pay: 1,
-  filled: { plank: planks },
+  filled: countsOf({ plank: planks }),
   starts: 0,
 });
 const ids = (list: readonly Standing[]): number[] => list.map((s) => s.id);

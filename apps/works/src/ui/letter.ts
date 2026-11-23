@@ -5,10 +5,10 @@
  * the till into the purse.
  */
 
+import { ALL_ITEMS, type Away, isFilled, TICK_MS } from "@sequoia-leaf/factory";
 import { thing } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
-import { type Away, AWAY_MOST_MS, isFilled, ITEMS } from "@sequoia-leaf/yard";
 
 import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
@@ -59,7 +59,7 @@ export function showLetter(away: Away, done: () => void): void {
       el("span", "k-grow", { text: "Earned" }),
       el("b", "", { text: `+${away.coins.toLocaleString("en-US")}` }),
     );
-  const most = ITEMS.filter((k) => (away.made[k] ?? 0) > 0)
+  const most = ALL_ITEMS.filter((k) => (away.made[k] ?? 0) > 0)
     .toSorted((a, b) => (away.made[b] ?? 0) - (away.made[a] ?? 0))
     .slice(0, 5);
   list(
@@ -75,9 +75,10 @@ export function showLetter(away: Away, done: () => void): void {
         : [],
     ),
   );
+  const mostMs = S.world.open.away * TICK_MS;
   const capped =
-    away.seconds >= AWAY_MOST_MS / 1000
-      ? ` Then it stopped: it works for at most ${AWAY_MOST_MS / 3_600_000} hours while you are away.`
+    away.seconds >= mostMs / 1000
+      ? ` Then it stopped: it works for at most ${mostMs / 3_600_000} hours while you are away.`
       : "";
   const go = el("button", "k-btn wide", { type: "button", text: "Back to work" });
   const paper = el(

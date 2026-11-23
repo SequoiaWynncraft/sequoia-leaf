@@ -1,31 +1,38 @@
 /**
  * What the member does to the yard: setting things down, laying runs of belt, turning things,
  * taking them away, colouring lines, picking a tool up off something already built, marking out an
- * area to move, copy, remove or keep as a blueprint, undoing the last thing, and buying land and
- * plans. Each of these lands in the yard with a movement and a sound.
+ * area to move, copy, remove or keep as a blueprint, undoing the last thing, buying land, and taking
+ * a project in hand. Each of these lands in the yard with a movement and a sound.
+ *
+ * Every tool is offered only once the yard may use it (`locked`): Select and the brush wait for
+ * their unlocks, as kinds of piece do; the spade never waits.
  */
 
-import { CREAM, GOLD, GREEN } from "@sequoia-leaf/kit/palette.ts";
 import {
-  ahead,
+  type Act,
   at,
+  BELT,
   blueprintRefusal,
   boxOf,
+  DEPOT,
   type Dir,
   DX,
   DY,
-  KIND,
-  type Kind,
+  type Goal,
+  isKind,
+  kindAt,
   LEFT,
   type Leg,
   lineOf,
+  locked,
+  nextOf,
+  NONE,
+  otherMouth,
   type Piece,
   piecesAt,
+  piecesOf,
   placed,
-  type PlanId,
-  planRefusal,
-  PLANS,
-  type PlotId,
+  type Plot,
   plotRefusal,
   priceAt,
   priceOf,
@@ -36,10 +43,13 @@ import {
   route,
   STAND_MOST,
   standRefusal,
+  takeRefusal,
   tilesOf,
+  TUNNEL,
   within,
-  type WorksAct,
-} from "@sequoia-leaf/yard";
+  worthAt,
+} from "@sequoia-leaf/factory";
+import { CREAM, GOLD, GREEN } from "@sequoia-leaf/kit/palette.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, ring, sparkle } from "./fx.ts";
@@ -79,7 +89,7 @@ const W = (): number => S.world.land.w;
  * reason, worked out with the Coins to hand as Leaf will count them) says it cannot be. Gives back
  * why it was not done, or null.
  */
-function attempt(why: string | null, act: WorksAct): string | null {
+function attempt(why: string | null, act: Act): string | null {
   if (why !== null) return why;
   const did = doNow(act);
   return "refused" in did ? did.why : null;
@@ -88,10 +98,23 @@ function attempt(why: string | null, act: WorksAct): string | null {
 const coinsOf = (did: ReturnType<typeof doNow>): number =>
   "refused" in did ? 0 : (did.coins ?? []).reduce((sum, c) => sum + c.amount, 0);
 const xy = (i: number): { x: number; y: number } => ({ x: i % W(), y: Math.floor(i / W()) });
+/** The way a piece faces, as a way. */
+const dirOf = (i: number): Dir => {
+  const d = S.world.dir[i] ?? 0;
+  return d === 1 ? 1 : d === 2 ? 2 : d === 3 ? 3 : 0;
+};
+
+/** Whether the yard may use a tool yet: a kind of piece or Select or the brush once unlocked, the spade always. */
+export function usable(tool: Tool): boolean {
+  const open = S.world.open;
+  if (builds(tool)) return locked(open, { build: tool }) === null;
+  if (tool === "select") return locked(open, { use: "select" }) === null;
+  if (tool === "paint") return locked(open, { use: "paint" }) === null;
+  return true;
+}
 
 export function setTool(tool: Tool): void {
-  const w = S.world;
-  if (builds(tool) && !w.open.kinds.has(tool)) return;
+  if (!usable(tool)) return;
   S.tool = tool;
   S.aim = null;
   S.run = null;
@@ -122,11 +145,12 @@ export function aimAt(x: number, y: number): void {
     aimGroup(x, y);
     return;
   }
-  const there = w.cells[at(w, x, y)];
-  if (faced !== at(w, x, y)) {
-    faced = at(w, x, y);
-    if (there && builds(tool) && replaces(tool, there) && S.dir !== there.dir) {
-      S.dir = there.dir;
+  const i = at(w, x, y);
+  const there = kindAt(w, x, y);
+  if (faced !== i) {
+    faced = i;
+    if (there !== NONE && builds(tool) && replaces(tool, there) && S.dir !== dirOf(i)) {
+      S.dir = dirOf(i);
       toolHooks.changed();
     }
   }
@@ -134,7 +158,7 @@ export function aimAt(x: number, y: number): void {
     S.aim = {
       x,
       y,
-      why: there ? (there.kind === "depot" ? "The depot cannot be removed" : null) : "Nothing to remove here",
+      why: there === NONE ? "Nothing to remove here" : there === DEPOT ? "The depot cannot be removed" : null,
       cost: 0,
     };
     return;
@@ -171,32 +195,31 @@ export function place(x: number, y: number): boolean {
   if (tool === "select") return setDown();
   const w = S.world;
   const i = at(w, x, y);
-  const there = i >= 0 ? w.cells[i] : null;
-  const was = there?.dir;
-  const under = there && replaces(tool, there) ? standing(i) : null;
+  const there = kindAt(w, x, y);
+  const was = there === NONE ? undefined : dirOf(i);
+  const under = there !== NONE && replaces(tool, there) ? standing(i) : null;
   const cost = priceAt(w, tool, x, y);
-  const no = attempt(refusal(w, tool, x, y, coins(), S.dir), { do: "build", kind: tool, x, y, dir: S.dir });
+  const no = attempt(refusal(w, tool, x, y, coins(), S.dir), { do: "build", kind: tool, x, y, dir: S.dir, grade: 1 });
   if (no !== null) {
     S.aim = { x, y, why: no, cost: 0 };
     yardSfx.no();
     toolHooks.changed();
     return false;
   }
-  if (there && !under) {
+  if (there !== NONE && !under) {
     if (was !== undefined && was !== S.dir) {
       remember({ did: "turned", i, was });
       yardSfx.turn();
     }
   } else {
     const cells = [i];
-    const made = w.cells[i];
-    if (made?.kind === "tunnel") {
-      const far = at(w, x + DX[made.dir] * (made.span + 1), y + DY[made.dir] * (made.span + 1));
+    const far = w.kind[i] === TUNNEL ? otherMouth(w, i) : -1;
+    if (far >= 0) {
       cells.push(far);
       landed(far % W(), Math.floor(far / W()), false);
     }
     remember({ did: "built", cells, turned: [], ...(under ? { under: [under] } : {}) });
-    landed(x, y, tool === "belt");
+    landed(x, y, tool === BELT);
     paid(x, y, cost);
   }
   touched();
@@ -250,9 +273,9 @@ export function paintAt(x: number, y: number, more = false): boolean {
   const w = S.world;
   const i = at(w, x, y);
   const line = lineOf(w, i);
-  const was = w.cells[i]?.tint ?? 0;
+  const was = i < 0 ? 0 : (w.tint[i] ?? 0);
   // A line that is that colour already is let be: a drag crosses the same line many times.
-  if (line.length > 0 && line.every((j) => w.cells[j]?.tint === S.tint)) return false;
+  if (line.length > 0 && line.every((j) => w.tint[j] === S.tint)) return false;
   const no = attempt(null, { do: "paint", x, y, tint: S.tint });
   if (no !== null) {
     if (!more) {
@@ -277,13 +300,13 @@ export function paintAt(x: number, y: number, more = false): boolean {
 export function turnAt(x: number, y: number): boolean {
   const w = S.world;
   const i = at(w, x, y);
-  const b = w.cells[i];
-  if (!b || b.kind === "depot" || b.kind === "tunnel") {
+  const k = kindAt(w, x, y);
+  if (k === NONE || k === DEPOT || k === TUNNEL) {
     yardSfx.no();
     return false;
   }
-  const was = b.dir;
-  if (attempt(null, { do: "turn", x, y, dir: RIGHT[b.dir] }) !== null) return false;
+  const was = dirOf(i);
+  if (attempt(null, { do: "turn", x, y, dir: RIGHT[was] }) !== null) return false;
   remember({ did: "turned", i, was });
   yardSfx.turn();
   touched();
@@ -293,15 +316,15 @@ export function turnAt(x: number, y: number): boolean {
 /** Shuts one of the ways out of the splitter on a tile (0 ahead, 1 left, 2 right), or opens it if it was shut. */
 export function wayAt(x: number, y: number, way: number): boolean {
   const i = at(S.world, x, y);
-  const b = S.world.cells[i];
-  const was = (((b?.shut ?? 0) >> way) & 1) === 0;
-  if (!b || attempt(null, { do: "way", x, y, way, open: !was }) !== null) {
+  const was = i >= 0 && (((S.world.shut[i] ?? 0) >> way) & 1) === 0;
+  if (i < 0 || attempt(null, { do: "way", x, y, way, open: !was }) !== null) {
     yardSfx.no();
     return false;
   }
   remember({ did: "way", i, way, was });
   // Dust where the bar drops across the way, or lifts off it.
-  const d = [b.dir, LEFT[b.dir], RIGHT[b.dir]][way] ?? b.dir;
+  const dir = dirOf(i);
+  const d = [dir, LEFT[dir], RIGHT[dir]][way] ?? dir;
   puff(x * TILE + 8 + DX[d] * 7, y * TILE + 9 + DY[d] * 7, 3, DUST, 5);
   if (was) yardSfx.belt();
   else yardSfx.turn();
@@ -326,10 +349,10 @@ export function rotate(): void {
 
 /** Takes up the tool for whatever stands on a tile, facing the way it faces. */
 export function pickFrom(x: number, y: number): boolean {
-  const b = S.world.cells[at(S.world, x, y)];
-  if (!b || b.kind === "depot") return false;
-  S.dir = b.dir;
-  setTool(b.kind);
+  const k = kindAt(S.world, x, y);
+  if (k === NONE || k === DEPOT || !isKind(k) || !usable(k)) return false;
+  S.dir = dirOf(at(S.world, x, y));
+  setTool(k);
   yardSfx.pick();
   return true;
 }
@@ -370,8 +393,10 @@ export function undo(): boolean {
     return false;
   }
   if (last.did === "built") {
-    const cells = last.cells.filter((i) => w.cells[i]);
-    if (cells.length > 0) doNow({ do: "clear", tiles: cells });
+    const cells = last.cells.filter((i) => w.kind[i] !== NONE);
+    // Many pieces go as one with Select; without it, one at a time, as the spade takes them.
+    if (usable("select") && cells.length > 0) doNow({ do: "clear", tiles: cells });
+    else for (const p of piecesAt(w, cells)) doNow({ do: "remove", x: p.x, y: p.y });
     for (const i of cells) puff((i % W()) * TILE + 8, (Math.floor(i / W()) + 1) * TILE - 4, 4, DUST, 7);
     for (const t of last.turned) doNow({ do: "turn", ...xy(t.i), dir: t.was });
     if (last.under) putBack(last.under);
@@ -414,14 +439,14 @@ function reckon(): void {
     const prev = path[k - 1];
     let dir = next ? way(t, next) : prev ? way(prev, t) : S.dir;
     // A run that ends beside the depot was meant to go in: its last belt turns to face the wall.
-    if (!next && prev && w.cells[at(w, t.x + DX[dir], t.y + DY[dir])]?.kind !== "depot")
-      for (const d of [0, 1, 2, 3] as const) if (w.cells[at(w, t.x + DX[d], t.y + DY[d])]?.kind === "depot") dir = d;
-    const there = w.cells[at(w, t.x, t.y)];
-    if (!there) {
-      const why = refusal(w, "belt", t.x, t.y, Infinity, dir);
+    if (!next && prev && kindAt(w, t.x + DX[dir], t.y + DY[dir]) !== DEPOT)
+      for (const d of [0, 1, 2, 3] as const) if (kindAt(w, t.x + DX[d], t.y + DY[d]) === DEPOT) dir = d;
+    const there = kindAt(w, t.x, t.y);
+    if (there === NONE) {
+      const why = refusal(w, BELT, t.x, t.y, Infinity, dir);
       if (why !== null) bad ??= why;
-      else legs.push({ kind: "belt", x: t.x, y: t.y, dir, span: 0 });
-    } else if (there.kind === "belt" && k === 0 && next && there.dir !== dir) turns.push({ x: t.x, y: t.y, dir });
+      else legs.push({ kind: BELT, x: t.x, y: t.y, dir, span: 0 });
+    } else if (there === BELT && k === 0 && next && dirOf(at(w, t.x, t.y)) !== dir) turns.push({ x: t.x, y: t.y, dir });
     // Anything else in the way is stepped over: the belt before it points into it.
   });
   const cost = priceOf(w, legs);
@@ -493,7 +518,7 @@ export function commitRun(): boolean {
   }
   // The first belt, already standing, turned to meet the run: all of it or none, with the run.
   const [bend] = run.turns;
-  const was = bend ? w.cells[at(w, bend.x, bend.y)]?.dir : undefined;
+  const was = bend ? dirOf(at(w, bend.x, bend.y)) : undefined;
   const no = attempt(null, bend ? { do: "lay", legs: run.legs, turn: bend } : { do: "lay", legs: run.legs });
   if (no !== null) {
     yardSfx.no();
@@ -504,14 +529,14 @@ export function commitRun(): boolean {
   const turned = bend && was !== undefined ? [{ i: at(w, bend.x, bend.y), was }] : [];
   const cells: number[] = [];
   run.legs.forEach((leg, n) => {
-    cells.push(at(w, leg.x, leg.y));
-    const made = w.cells[at(w, leg.x, leg.y)];
-    if (leg.kind === "tunnel" && made)
-      cells.push(at(w, leg.x + DX[leg.dir] * (made.span + 1), leg.y + DY[leg.dir] * (made.span + 1)));
+    const i = at(w, leg.x, leg.y);
+    cells.push(i);
+    const far = leg.kind === TUNNEL ? otherMouth(w, i) : -1;
+    if (far >= 0) cells.push(far);
     // The belts go down one after another along the run, each with its own clack.
     window.setTimeout(
       () => {
-        landed(leg.x, leg.y, leg.kind === "belt", n);
+        landed(leg.x, leg.y, leg.kind === BELT, n);
       },
       Math.min(n, 14) * 28,
     );
@@ -544,21 +569,20 @@ export function tapBelt(x: number, y: number): void {
     S.from = { x, y };
     S.run = null;
     aimAt(x, y);
-    const there = w.cells[at(w, x, y)];
-    if (there) S.aim = { x, y, why: null, cost: 0 };
+    if (kindAt(w, x, y) !== NONE) S.aim = { x, y, why: null, cost: 0 };
     toolHooks.changed();
     return;
   }
   let sx = S.from.x;
   let sy = S.from.y;
-  if (w.cells[at(w, sx, sy)]) {
-    const out = ahead(w, at(w, sx, sy));
+  if (kindAt(w, sx, sy) !== NONE) {
+    const out = nextOf(w, at(w, sx, sy));
     if (out >= 0) {
       sx = out % W();
       sy = Math.floor(out / W());
     }
   }
-  const legs = sx === x && sy === y && w.cells[at(w, x, y)] ? null : route(w, [sx, sy], [x, y]);
+  const legs = sx === x && sy === y && kindAt(w, x, y) !== NONE ? null : route(w, [sx, sy], [x, y]);
   if (!legs) S.run = { legs: [], turns: [], cost: 0, why: "No free path for a belt from there to here" };
   else {
     const cost = priceOf(w, legs);
@@ -632,8 +656,9 @@ function markTiles(box: Pick<Mark, "x0" | "y0" | "x1" | "y1">, tiles: readonly n
   const w = S.world;
   const pieces = piecesAt(w, tiles);
   // What they cost: what taking them away gives back.
-  const cost = pieces.reduce((sum, p) => sum + (w.cells[at(w, p.x, p.y)]?.free ? 0 : KIND[p.kind].cost), 0);
-  S.mark = { x0: box.x0, y0: box.y0, x1: box.x1, y1: box.y1, tiles: tiles.filter((i) => w.cells[i]), pieces, cost };
+  const cost = pieces.reduce((sum, p) => sum + worthAt(w, at(w, p.x, p.y)), 0);
+  const stood = tiles.filter((i) => w.kind[i] !== NONE);
+  S.mark = { x0: box.x0, y0: box.y0, x1: box.x1, y1: box.y1, tiles: stood, pieces, cost };
 }
 
 /** One corner of an area: where a mouse's drag begins, or a finger's first tap. Whatever was marked is let go. */
@@ -660,7 +685,8 @@ export function markEnd(): void {
 /** Takes in hand the marked pieces, to move them or to stand a copy of them, or the blueprint kept in a place. */
 export function hold(as: Group["as"]): void {
   remark();
-  const pieces = typeof as === "number" ? S.world.blueprints[as] : S.mark?.pieces;
+  const print = typeof as === "number" ? S.world.blueprints[as] : null;
+  const pieces = typeof as === "number" ? print && piecesOf(print) : S.mark?.pieces;
   if (!pieces || pieces.length === 0) return;
   if (typeof as === "number") S.mark = null;
   S.group = { as, pieces, turns: 0, at: [], why: [] };
@@ -702,13 +728,12 @@ function setDown(): boolean {
   const box = boxOf(g.at);
   const tiles = tilesOf(w, g.at);
   // What a copy would stand that is not there now, and the pieces some of it would take the place of.
-  const stood = g.at.filter((p) => w.cells[at(w, p.x, p.y)]?.kind !== p.kind);
+  const stood = g.at.filter((p) => kindAt(w, p.x, p.y) !== p.kind);
   const under = stood.flatMap((p) => standing(at(w, p.x, p.y)) ?? []);
   // Pieces already standing that a copy would only turn, and which way they face now.
   const turned = g.at.flatMap((p) => {
     const i = at(w, p.x, p.y);
-    const b = w.cells[i];
-    return b && b.kind === p.kind && b.dir !== p.dir ? [{ i, was: b.dir }] : [];
+    return kindAt(w, p.x, p.y) === p.kind && dirOf(i) !== p.dir ? [{ i, was: dirOf(i) }] : [];
   });
   const moving = g.as === "move";
   // A copy over itself, just set down: nothing to stand.
@@ -740,7 +765,7 @@ function setDown(): boolean {
   wave.forEach((these, n) => {
     window.setTimeout(() => {
       these.forEach((p, k) => {
-        landed(p.x, p.y, p.kind === "belt", n, k > 0);
+        landed(p.x, p.y, p.kind === BELT, n, k > 0);
       });
     }, n * 28);
   });
@@ -777,7 +802,8 @@ export function clearMark(): boolean {
 
 /** Save was pressed: the places are offered, unless the marked pieces cannot be a blueprint. */
 export function askSave(): void {
-  const no = S.mark ? blueprintRefusal(S.mark.pieces) : null;
+  // Whichever place it goes in, the pieces themselves must be ones a blueprint may hold.
+  const no = S.mark ? blueprintRefusal(S.world.open, 0, S.mark.pieces) : null;
   if (no !== null) {
     yardSfx.no();
     toolHooks.said(`${no}.`);
@@ -790,7 +816,8 @@ export function askSave(): void {
 /** Keeps the marked pieces as the blueprint in a place. They glint as it is taken down. */
 export function saveMark(slot: number): boolean {
   const m = S.mark;
-  if (!m || attempt(blueprintRefusal(m.pieces), { do: "saveBlueprint", slot, tiles: m.tiles }) !== null) return false;
+  const no = m && blueprintRefusal(S.world.open, slot, m.pieces);
+  if (!m || attempt(no, { do: "saveBlueprint", slot, tiles: m.tiles }) !== null) return false;
   S.saving = false;
   for (const p of m.pieces.slice(0, 120)) sparkle(p.x * TILE + 8, p.y * TILE + 6, 2, 5);
   float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, "Blueprint saved", GOLD[2], 1.6);
@@ -808,13 +835,13 @@ export function dropBlueprint(slot: number): void {
   toolHooks.changed();
 }
 
-// ---------- land and plans ----------
+// ---------- land, and the node in hand ----------
 
 /** Buys a plot: the undergrowth comes down from its signpost outwards, before the member's eyes. */
-export function buyLand(id: PlotId): boolean {
+export function buyLand(id: Plot): boolean {
   const w = S.world;
-  const plot = w.land.plots.find((p) => p.id === id);
-  const sign = layout(w, S.rev).signs.find((s) => s.plot.id === id);
+  const plot = w.land.plots.find((p) => p.plot === id);
+  const sign = layout(w, S.rev).signs.find((s) => s.plot.plot === id);
   const no = plot ? attempt(plotRefusal(w, id, coins()), { do: "buyPlot", plot: id }) : "There is no such plot";
   if (!plot || no !== null) {
     yardSfx.no();
@@ -833,7 +860,7 @@ export function buyLand(id: PlotId): boolean {
 export function stepClearing(): void {
   const w = S.world;
   for (const [id, c] of S.clearing) {
-    const plot = w.land.plots.find((p) => p.id === id);
+    const plot = w.land.plots.find((p) => p.plot === id);
     const r = (S.t - c.at) * 260;
     if (!plot || r > 420) {
       S.clearing.delete(id);
@@ -850,32 +877,16 @@ export function stepClearing(): void {
   }
 }
 
-/** Buys a plan. The machines it changes glint as it takes hold. */
-export function buyIdea(id: PlanId): boolean {
-  const w = S.world;
-  const plan = PLANS.find((p) => p.id === id);
-  const no = plan ? attempt(planRefusal(w, id, coins()), { do: "buyPlan", plan: id }) : "There is no such plan";
-  if (!plan || no !== null) {
+/** Takes a project, or the commission, in hand: what reaches the depot goes to it first. Says why not, or nothing. */
+export function takeInHand(g: Goal): string | null {
+  const no = attempt(takeRefusal(S.world, g), { do: "take", node: g });
+  if (no !== null) {
     yardSfx.no();
     toolHooks.said(`${no}.`);
-    return false;
+    return no;
   }
   yardSfx.plan();
-  const e = plan.effect;
-  const touches = (kind: Kind): boolean =>
-    (e.gather !== undefined && kind === "gatherer") ||
-    (e.craft !== undefined && (kind === "mill" || kind === "bench" || kind === "workshop")) ||
-    (e.belt !== undefined && (kind === "belt" || kind === "tunnel" || kind === "splitter" || kind === "joiner")) ||
-    (e.reach !== undefined && kind === "pylon") ||
-    (e.crate !== undefined && kind === "crate") ||
-    ((e.depot !== undefined || e.slots !== undefined) && kind === "depot");
-  let shown = 0;
-  w.cells.forEach((b, i) => {
-    if (!b || !touches(b.kind) || shown > 80) return;
-    shown++;
-    sparkle((i % W()) * TILE + 8, Math.floor(i / W()) * TILE + 4, b.kind === "belt" ? 1 : 5, 5);
-  });
   touched();
   toolHooks.changed();
-  return true;
+  return null;
 }

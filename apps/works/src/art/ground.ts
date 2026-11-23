@@ -5,10 +5,10 @@
  * What lies in the ground is the same in both, and so is the stream.
  */
 
+import { isItem, itemName, type Land, RAW, type RawName } from "@sequoia-leaf/factory";
 import { BARK, CREAM, EARTH, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, ell, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, must, vnoise } from "@sequoia-leaf/kit/util.ts";
-import type { Land, Raw } from "@sequoia-leaf/yard";
 
 import { TILE } from "./belts.ts";
 import { nearFerns, rock, stump, trunk } from "./nature.ts";
@@ -31,15 +31,22 @@ export interface Ground {
 const ringed = (x: number, y: number, r: number, of: (ax: number, ay: number) => boolean): boolean =>
   of(x - r, y) && of(x + r, y) && of(x, y - r) && of(x, y + r);
 
-const RAWS: readonly Raw[] = ["deadfall", "stone", "ore", "clay", "sand", "resin"];
+const RAWS: readonly RawName[] = ["deadfall", "stone", "ore", "clay", "sand", "resin"];
+/** What lies in the ground on a tile of a land, by name, or nothing. */
+const rawAt = (land: Land, i: number): RawName | null => {
+  const n = land.deposit[i] ?? -1;
+  const name = isItem(n) ? itemName(n) : null;
+  return RAW.find((r) => r === name) ?? null;
+};
 
 function floor(land: Land, wild: boolean): HTMLCanvasElement {
   const mw = land.w * TILE;
   const mh = land.h * TILE;
   const dep = new Uint8Array(land.w * land.h);
-  land.deposit.forEach((d, i) => {
-    dep[i] = d ? RAWS.indexOf(d) + 1 : 0;
-  });
+  for (let i = 0; i < dep.length; i++) {
+    const raw = rawAt(land, i);
+    dep[i] = raw ? RAWS.indexOf(raw) + 1 : 0;
+  }
   const tile = (x: number, y: number): number =>
     clamp(Math.floor(y / TILE), 0, land.h - 1) * land.w + clamp(Math.floor(x / TILE), 0, land.w - 1);
   const wet = (x: number, y: number): boolean => land.water[tile(x, y)] === 1;
@@ -185,7 +192,7 @@ const FLOWERS = [
 function deposits(g: Ctx, land: Land): void {
   for (let ty = 0; ty < land.h; ty++)
     for (let tx = 0; tx < land.w; tx++) {
-      const d = land.deposit[ty * land.w + tx];
+      const d = rawAt(land, ty * land.w + tx);
       if (!d) continue;
       const ox = tx * TILE + MARGIN.l;
       const oy = ty * TILE + MARGIN.t;
@@ -272,7 +279,7 @@ function flowers(g: Ctx, land: Land): void {
   for (let ty = 0; ty < land.h; ty++)
     for (let tx = 0; tx < land.w; tx++) {
       const i = ty * land.w + tx;
-      if (land.deposit[i] || land.water[i] || land.trunk[i] || hash(tx, ty, 97) < 0.86) continue;
+      if (rawAt(land, i) || land.water[i] || land.trunk[i] || hash(tx, ty, 97) < 0.86) continue;
       if (Math.hypot(tx - land.depot[0], ty - land.depot[1]) < 6) continue;
       const pic = pics[Math.floor(hash(tx, ty, 98) * pics.length)];
       if (pic) g.drawImage(pic, tx * TILE + MARGIN.l + 3 + Math.floor(hash(tx, ty, 99) * 8), ty * TILE + MARGIN.t + 5);

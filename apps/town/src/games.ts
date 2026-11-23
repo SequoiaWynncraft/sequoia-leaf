@@ -6,9 +6,9 @@
  * the camp through Leaf (its awards).
  */
 
+import { WORKS_STATS } from "@sequoia-leaf/factory/stats.ts";
 import { read } from "@sequoia-leaf/kit/postcard.ts";
 import { RAID_STATS } from "@sequoia-leaf/raid/stats.ts";
-import { WORKS_STATS } from "@sequoia-leaf/yard/stats.ts";
 
 import type { AwayLine } from "./guild.ts";
 

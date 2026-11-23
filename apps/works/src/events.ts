@@ -1,12 +1,13 @@
 /**
- * The yard's moments: what happens in the yard itself when an order is filled, and when a standing
- * order is handed over. Things in the world move; nothing is only a notice.
+ * The yard's moments: what happens in the yard itself when the node in hand is finished, when a
+ * standing order is filled, and when one is handed over. Things in the world move; nothing is only
+ * a notice.
  */
 
+import { goalNamed, isFilled, isNode, item, ITEM_INFO, type News, NODES, type Standing } from "@sequoia-leaf/factory";
 import { CREAM, GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { tell } from "@sequoia-leaf/kit/shell.ts";
 import { hash, type Pt } from "@sequoia-leaf/kit/util.ts";
-import { isFilled, ITEM, type News, type Standing, STORY } from "@sequoia-leaf/yard";
 
 import { flights, send, speak, toss, type Walker, walker, walkers } from "./actors.ts";
 import { TILE } from "./art/belts.ts";
@@ -135,11 +136,18 @@ export function handOver(id: number): boolean {
 export function onNews(art: Art, news: readonly News[]): void {
   const w = S.world;
   for (const n of news) {
-    if (n.kind === "story") {
-      const done = STORY[n.index];
-      if (!done) continue;
+    if (n.kind === "done") {
+      const g = goalNamed(n.goal);
+      if (g === null) continue;
+      // Research known is said in passing; a node finished is a moment.
+      if (!isNode(g)) {
+        yardSfx.ready();
+        feed(`${n.title} is known.`, "gold");
+        continue;
+      }
+      const gift = NODES[g]?.gift;
       yardSfx.order();
-      banner(art, done, STORY[n.index + 1] ?? null);
+      banner(art, g, w.hand === -1 ? null : w.hand);
       // The yard's hand carries the last crate out of the door, down the path and through the gate.
       const s = spots();
       const p = walker(HAND.name, HAND.hat, { x: s.door.x, y: s.door.y - 4 });
@@ -151,7 +159,7 @@ export function onNews(art: Art, news: readonly News[]): void {
       });
       sparkle(s.door.x, s.door.y - 14, 14, 10);
       coinsFrom(toPage(s.door.x, s.door.y - 14), n.pay);
-      tell({ town: "news", text: done.gift ? done.gift.line : `The Works filled "${done.title}".`, tone: "gold" });
+      tell({ town: "news", text: gift ? gift.line : `The Works filled "${n.title}".`, tone: "gold" });
     } else if (n.kind === "filled") {
       yardSfx.ready();
       const order = w.board.find((o) => o.id === n.id);
@@ -164,21 +172,23 @@ export function onNews(art: Art, news: readonly News[]): void {
   }
 }
 
-/** What has ever come in of the two things that take the whole yard, to notice the first of each. */
-let firsts: { beacon: number; crab: number } | null = null;
+/** The two things that take the whole yard, and what has ever come in of each, to notice the first of each. */
+const CAPSTONES = [item("beacon"), item("crab")] as const;
+let firsts: number[] | null = null;
 
 /** Tells the town the first time a Beacon or a clockwork crab is made. */
 export function capstones(): void {
   const w = S.world;
-  const now = { beacon: w.depot.beacon ?? 0, crab: w.depot.crab ?? 0 };
+  const now = CAPSTONES.map((k) => w.depot[k] ?? 0);
   if (firsts) {
-    for (const k of ["beacon", "crab"] as const)
-      if (firsts[k] === 0 && now[k] > 0) {
-        const s = spots();
-        sparkle(s.door.x, s.door.y - 20, 24, 14);
-        feed(`The yard has made its first ${ITEM[k].name.toLowerCase()}.`, "gold");
-        tell({ town: "news", text: `The Works made its first ${ITEM[k].name.toLowerCase()}.`, tone: "gold" });
-      }
+    CAPSTONES.forEach((k, n) => {
+      if (firsts?.[n] !== 0 || (now[n] ?? 0) <= 0) return;
+      const name = (ITEM_INFO[k]?.name ?? "").toLowerCase();
+      const s = spots();
+      sparkle(s.door.x, s.door.y - 20, 24, 14);
+      feed(`The yard has made its first ${name}.`, "gold");
+      tell({ town: "news", text: `The Works made its first ${name}.`, tone: "gold" });
+    });
   }
   firsts = now;
 }

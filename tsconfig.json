@@ -17,12 +17,6 @@
       "path": "./packages/raid/tsconfig.test.json"
     },
     {
-      "path": "./packages/yard"
-    },
-    {
-      "path": "./packages/yard/tsconfig.test.json"
-    },
-    {
       "path": "./packages/factory"
     },
     {

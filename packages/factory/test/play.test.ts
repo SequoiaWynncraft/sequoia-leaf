@@ -1,8 +1,8 @@
 /**
  * Playing at random, and time away. A seeded player gives yards thousands of commands off the wire,
  * valid and not, with ticks between: a refused command leaves the yard as running on to its tick
- * alone leaves it, the yard reads back as itself throughout, and every kind of command and piece
- * takes effect somewhere. Leaf runs a yard on in slices of any size to the same yard, and it stands
+ * alone leaves it, the yard reads back as itself throughout, every command the page would write
+ * for one reads back as it, and every kind of command and piece takes effect somewhere. Leaf runs a yard on in slices of any size to the same yard, and it stands
  * still once its owner has been away as long as it runs unwatched.
  */
 import { describe, expect, test } from "bun:test";
@@ -11,6 +11,7 @@ import type { Ctx } from "@sequoia-leaf/core";
 
 import * as F from "../src/index.ts";
 import { rng } from "./random.ts";
+import { bothSay } from "./said.ts";
 import { delivering, generated } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
@@ -160,6 +161,8 @@ class Player {
       const tick = this.r() < 0.05 ? Math.max(0, y.tick - 1 - this.int(5)) : y.tick + ahead;
       const c = F.readCommand({ ...this.command(), tick });
       if (!c) continue;
+      // What the page would write for it reads back as the same command.
+      expect(F.readCommand(JSON.parse(JSON.stringify(F.writeCommand(c))))).toEqual(c);
       const alone = F.decode(F.encode(y), y.land);
       if (!alone) throw new Error("the yard does not read back");
       F.stepTo(alone, tick);
@@ -171,6 +174,8 @@ class Player {
       if (k % 50 === 49) {
         const back = F.decode(F.encode(y), y.land);
         expect(back && [F.check(back), F.encode(back)]).toEqual([F.check(y), F.encode(y)]);
+        const said = bothSay(y);
+        expect(said.condition).toEqual(said.status);
       }
     }
   }

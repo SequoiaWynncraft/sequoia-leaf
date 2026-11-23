@@ -7,16 +7,16 @@
  * (`CLIENT_HZ` moves a second). Each move is timed from when its player sent it to when each other
  * player in the same room was told it, on one clock, since everybody is in this one process. The
  * server and every player share one CPU here, so the times are an upper bound on the server's.
- * With `yards`, that many members have the largest kept yard in the Works, left eight hours ago,
+ * With `yards`, that many members have the largest staged yard in the Works, left eight hours ago,
  * and Leaf tends them all meanwhile, as it would after a deploy; with `visitors`, that many players
  * visit the first of those yards at once as the tending begins, and each visit is timed. With
- * `fresh`, the first player has the largest kept yard, written a minute ago: that many players visit
+ * `fresh`, the first player has the largest staged yard, written a minute ago: that many players visit
  * it at once, its owner's page sends a command right behind them, and then one every half second;
  * each command is timed from its sending to its answer.
  */
 import { CLIENT_HZ, Flag, playerId, playPath, visitPath } from "@sequoia-leaf/core";
-import { WORKS } from "@sequoia-leaf/yard";
-import large from "@sequoia-leaf/yard/yards/large.json";
+import { FACTORY, here } from "@sequoia-leaf/factory";
+import { staged } from "@sequoia-leaf/factory/test/yards.ts";
 import { Effect } from "effect";
 import { SqlClient } from "effect/sql";
 
@@ -71,13 +71,13 @@ const server = await leaf.serve();
 
 // The yards, eight hours behind, each as if its owner left then.
 const left = Date.now() - 8 * 3600 * 1000;
-const yard = WORKS.decode(JSON.stringify(large));
-if (!yard) throw new Error("The largest kept yard does not read");
+const yard = staged("large");
+yard.seen = here(yard);
 const ownerOf = (i: number) => playerId(`20000000-0000-4000-8000-${String(i).padStart(12, "0")}`);
 /** Keeps the largest yard as `owner`'s, standing at `at` and written then. */
 const keep = (owner: string, at: number) => {
   yard.at = at;
-  const kept = WORKS.encode(yard);
+  const kept = FACTORY.encode(yard);
   return leaf.run(
     SqlClient.SqlClient.use(
       (sql) =>

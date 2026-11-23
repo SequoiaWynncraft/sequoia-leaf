@@ -1,14 +1,19 @@
-/** Every thing the yard gathers and makes, as a tiny picture: small enough to ride a belt, plain enough to know at a glance. */
+/**
+ * Every thing the yard gathers and makes, as a tiny picture: small enough to ride a belt, plain
+ * enough to know at a glance. Looked up by name once, into a list by the thing's number.
+ */
 
+import { ALL_ITEMS, type Item, type ItemName, itemName } from "@sequoia-leaf/factory";
 import { INK } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
-import { makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
-import type { Item } from "@sequoia-leaf/yard";
-import { ITEMS } from "@sequoia-leaf/yard";
+import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { PAL } from "./pal.ts";
 
-const ROWS: Record<Item, readonly string[]> = {
+/** A plain square of paper, for the things of later tiers that have no picture of their own yet: the folios. */
+const PLAIN = ["aaaaa", "aAAAa", "aAAAa", "aAAAa", "aaaaa"];
+
+const ROWS: Partial<Record<ItemName, readonly string[]>> = {
   // A couple of fallen branches, one still in leaf.
   deadfall: ["..n...l.", ".nNn.lG.", "..nNn...", "b..nNn..", "nb..nNn.", ".nNn.nb.", "..nb...."],
   stone: ["..tSS..", ".tSSSs.", "tSSSsss", "SSSsssh", "Ssssshh", ".sshhh."],
@@ -47,8 +52,12 @@ const ROWS: Record<Item, readonly string[]> = {
 export type ItemArt = (item: Item) => HTMLCanvasElement;
 
 export function makeItems(): ItemArt {
-  const pics = new Map<Item, HTMLCanvasElement>(ITEMS.map((k) => [k, outlined(bitmap(ROWS[k], PAL), INK)]));
-  return (item) => must(pics.get(item), item);
+  const plain = outlined(bitmap(PLAIN, PAL), INK);
+  const pics = ALL_ITEMS.map((n) => {
+    const rows = ROWS[itemName(n)];
+    return rows ? outlined(bitmap(rows, PAL), INK) : plain;
+  });
+  return (item) => pics[item] ?? plain;
 }
 
 /** A fresh copy of a picture, for putting on the page. */
