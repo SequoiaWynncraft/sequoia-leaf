@@ -338,14 +338,23 @@ export class Player {
     if (read.do === "buyPlot") add(`plot ${F.plotName(read.plot)}`);
   }
 
-  /** A person busy for some seconds, the yard running on meanwhile. */
+  /** A person busy for some seconds, the yard running on meanwhile. Tending the yard on the way takes its own time, on top. */
   private busy(seconds: number): void {
-    const to = this.y.tick + Math.round(seconds * 10);
-    this.run("build", () => this.y.tick < to);
+    let to = this.y.tick + Math.round(seconds * 10);
+    this.run(
+      "build",
+      () => this.y.tick < to,
+      (tended) => {
+        to += tended;
+      },
+    );
   }
 
-  /** Runs the yard on, a tick at a time, while `more` says; the person is `doing` meanwhile. Once a minute the player tends the yard. */
-  private run(doing: Doing, more: () => boolean): void {
+  /**
+   * Runs the yard on, a tick at a time, while `more` says; the person is `doing` meanwhile. Once a
+   * minute the player tends the yard, and `tended` hears how many ticks that took.
+   */
+  private run(doing: Doing, more: () => boolean, tended?: (ticks: number) => void): void {
     const from = this.y.tick;
     while (more()) {
       if (this.y.tick - from > STUCK) {
@@ -358,7 +367,9 @@ export class Player {
       this.watch();
       if (!this.tending && this.y.tick >= this.nextTend) {
         this.mark(doing);
+        const began = this.y.tick;
         this.tend();
+        tended?.(this.y.tick - began);
       }
     }
     this.mark(doing);
@@ -394,8 +405,11 @@ export class Player {
     const slow = this.s.swap === null ? undefined : this.slowest(this.s.swap);
     if (slow && F.swapRefusal(this.y, slow.id) === null) {
       this.busy(this.s.hands.order);
-      this.give({ do: "swap", order: slow.id });
-      this.swaps++;
+      // The yard ran on while the person reached for it: an order that filled meanwhile is let be.
+      if (F.swapRefusal(this.y, slow.id) === null) {
+        this.give({ do: "swap", order: slow.id });
+        this.swaps++;
+      }
     }
     this.queue();
     this.tending = false;
