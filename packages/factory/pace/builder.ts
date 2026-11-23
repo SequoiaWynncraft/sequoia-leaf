@@ -782,8 +782,8 @@ export class Builder {
    * of them, if the unit has more than one, against a side of its own).
    */
   private blockStudy(u: Unit): number {
-    const one: Unit = { ...u, count: 1 };
-    for (const s of this.sites(one, null)) {
+    const single: Unit = { ...u, count: 1 };
+    for (const s of this.sites(single, null)) {
       if (this.tries > BLOCK_TRIES) break;
       let made = 0;
       const ok = this.attempt(() => {
@@ -791,10 +791,10 @@ export class Builder {
         if (!this.light(s, new Set([s, ...around])) || !this.put("study", s, 0, this.grades(F.STUDY))) return false;
         for (let c = 0; c < u.count; c++) {
           const sides = DIRS.filter((d) => this.plain(this.step(s, d))).toSorted(
-            (a, b) => this.rawsAway(one, this.step(s, a)) - this.rawsAway(one, this.step(s, b)),
+            (a, b) => this.rawsAway(single, this.step(s, a)) - this.rawsAway(single, this.step(s, b)),
           );
-          if (!sides.some((d) => this.attempt(() => this.block(one, this.step(s, d), BACK[d] ?? 0)))) return false;
-          made += capacity(one);
+          if (!sides.some((d) => this.attempt(() => this.block(single, this.step(s, d), BACK[d] ?? 0)))) return false;
+          made += capacity(single);
         }
         this.sources.push({ item: u.item, rate: made, into: "study", tapped: 0, run: [], joinedAt: [] });
         return true;
@@ -811,14 +811,14 @@ export class Builder {
    * cart stop set against it, where one more may stand. Then everything below it.
    */
   private blockHome(u: Unit): number {
-    const one: Unit = { ...u, count: 1 };
+    const single: Unit = { ...u, count: 1 };
     let made = 0;
     for (let c = 0; c < u.count; c++) {
       const stops: number[] = [];
       for (let i = 0; i < this.y.kind.length; i++) if (this.y.kind[i] === F.STOP) stops.push(i);
       const t: Target = { tile: this.depotTile(), joins: [...this.joinable(u.item), ...stops], item: u.item };
       let run: number[] | null = null;
-      for (const p of this.sites(one, t)) {
+      for (const p of this.sites(single, t)) {
         if (run || this.tries > BLOCK_TRIES) break;
         const ways = DIRS.filter((o) => this.free(this.step(p, o))).toSorted(
           (a, b) => this.near(this.step(p, a), t) - this.near(this.step(p, b), t),
@@ -826,19 +826,19 @@ export class Builder {
         for (const o of ways) {
           const out = this.step(p, o);
           const ok = this.attempt(() => {
-            if (!this.machineOn(one, p, o)) return false;
+            if (!this.machineOn(single, p, o)) return false;
             const home = this.routeTo(out, t, true);
             if (!home && !this.put("stop", out, 0)) return false;
             run = home ?? [];
-            return this.parts(one, p, o);
+            return this.parts(single, p, o);
           });
           if (ok) break;
           run = null;
         }
       }
       if (!run) return this.no(`no block of ${F.itemName(u.item)} fitted with a way home`);
-      this.sources.push({ item: u.item, rate: capacity(one), into: "depot", tapped: 0, run, joinedAt: [] });
-      made += capacity(one);
+      this.sources.push({ item: u.item, rate: capacity(single), into: "depot", tapped: 0, run, joinedAt: [] });
+      made += capacity(single);
     }
     return made;
   }
@@ -890,7 +890,7 @@ export class Builder {
    * side; more than one, either side of a short belt into it.
    */
   private feeder(part: Unit, p: number, s: F.Dir, mills: Mill[]): boolean {
-    const one: Unit = { ...part, count: 1 };
+    const single: Unit = { ...part, count: 1 };
     const back = BACK[s] ?? 0;
     const stub = this.step(p, s);
     const split = (): boolean =>
@@ -900,7 +900,7 @@ export class Builder {
     if (this.attempt(split)) return true;
     if (part.count === 1) {
       const q = this.step(p, s);
-      return this.machineOn(one, q, back) && this.below(one, q, back, mills);
+      return this.machineOn(single, q, back) && this.below(single, q, back, mills);
     }
     const belts: number[] = [];
     for (let b = this.step(p, s), k = 0; k < Math.ceil(part.count / 2); k++, b = this.step(b, s)) {
@@ -913,7 +913,7 @@ export class Builder {
         if (placed === part.count) break;
         const q = this.step(b, side);
         const face = BACK[side % 4] ?? 0;
-        if (!this.machineOn(one, q, face) || !this.below(one, q, face, mills)) return false;
+        if (!this.machineOn(single, q, face) || !this.below(single, q, face, mills)) return false;
         placed++;
       }
     return placed === part.count;
@@ -926,7 +926,7 @@ export class Builder {
     const pick = (used: F.Dir[]): void => {
       const part = parts[used.length];
       if (!part) {
-        const score = used.reduce((sum, s, k) => sum + this.rawsAway(parts[k] ?? part, this.step(p, s)), 0);
+        const score = used.reduce<number>((sum, s, k) => sum + this.rawsAway(parts[k] ?? part, this.step(p, s)), 0);
         out.push({ ways: [...used], score });
         return;
       }

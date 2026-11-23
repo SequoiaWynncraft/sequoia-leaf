@@ -1,18 +1,19 @@
 /**
  * The pace script's parts, each on what it decides by itself: how a line is sized from the planner,
  * which lines a goal needs beyond what stands, that a line the builder lays out delivers what it is
- * booked for (on its own, and split off another), that what the player reads off the yard is what
- * arrives (with a split laid above another, which the builder's booking gets wrong), that a play
- * repeats to the tick and splits every stretch of the clock in three, and what the table makes of a
- * play and of several. The run of the whole slice (`bun pace.ts`) is not a test. Paces and counts are
+ * booked for (on its own, and split off another), that a line that fits nowhere else takes up only
+ * the old line in its way, that what the player reads off the yard is what arrives (with a split laid
+ * above another, which the builder's booking gets wrong), the order research is studied and nodes
+ * are turned to in, that a play repeats to the tick and splits every stretch of the clock in three,
+ * and what the table makes of a play and of several. The run of the whole slice (`bun pace.ts`) is not a test. Paces and counts are
  * read from the tables.
  */
 import { describe, expect, test } from "bun:test";
 
-import { Builder, type Planned, type Source } from "../pace/builder.ts";
+import { Builder, type Old, type Planned, type Source } from "../pace/builder.ts";
 import { measure } from "../pace/measure.ts";
 import { capacity, one, shortfall, size, type Unit } from "../pace/needs.ts";
-import { type Game, type Hands, Player, type Settings } from "../pace/player.ts";
+import { type Game, type Hands, Player, researchOrder, type Settings } from "../pace/player.ts";
 import { type Report, report, seeds, spread } from "../pace/table.ts";
 import * as F from "../src/index.ts";
 import { bareLand } from "./land.ts";
@@ -274,5 +275,82 @@ describe("the table", () => {
     const row = s.tiers.find((t) => t.tier === tier);
     expect(row && [row.seeds, row.minutes]).toEqual([3, { least: 10, middle: 20, most: 30 }]);
     expect(s.stuck).toEqual([{ seed: 4, why: "no way was found" }]);
+  });
+});
+
+describe("old lines taken up to make room", () => {
+  test("a line that fits nowhere else takes up only the old line on its ground, lays again the belt of a kept line it had split, and delivers what it is booked for", () => {
+    // A strip of land, the depot at its east end, deadfall and stone at its west end. Line B runs along
+    // the bottom row into the depot; line A covers everything else west of the depot, and has set a
+    // splitter on B's belt. Nothing has room until A goes.
+    const land = bareLand(
+      10,
+      7,
+      [
+        [1, 2, "deadfall"],
+        [1, 4, "stone"],
+      ],
+      [8, 3],
+    );
+    const y = F.create({ land, tier: 4, seed: 1 });
+    must(y, { do: "lay", legs: belts(span(0, 6), 6, 0) });
+    must(y, { do: "lay", legs: belts([7], 6, 3) });
+    const a: number[] = [];
+    for (let z = 0; z < 6; z++)
+      for (const x of span(0, 6))
+        if (y.kind[F.at(y, x, z)] === F.NONE && y.land.deposit[F.at(y, x, z)] === F.NONE) {
+          must(y, { do: "build", kind: "belt", x, y: z, dir: 0 });
+          a.push(F.at(y, x, z));
+        }
+    must(y, { do: "build", kind: "splitter", x: 3, y: 6, dir: 0 });
+    const split = F.at(y, 3, 6);
+    const b = [...span(0, 6).map((x) => F.at(y, x, 6)), F.at(y, 7, 6)].filter((i) => i !== split);
+    const old: Old[] = [
+      { id: 0, tiles: [...a, split], restores: [{ tile: split, dir: 0, grade: 1, owner: 1 }], sources: [] },
+      { id: 1, tiles: b, restores: [], sources: [] },
+    ];
+    const u = size(F.item("frame"), 1, ones);
+    expect(new Builder(y, ones, [], old).depotLine(u)).toBeNull();
+    const p = new Builder(y, ones, [], old).depotLine(u, true);
+    if (!p) throw new Error("no line, even taking up old lines");
+    expect(p.taken).toEqual([0]);
+    build(y, [p]);
+    expect([y.kind[split], y.dir[split]]).toEqual([F.BELT, 0]);
+    expect(b.every((i) => y.kind[i] === F.BELT)).toBe(true);
+    const got = delivered(y, 10)[F.item("frame")];
+    expect({ got, near: near(got, p.rate) }).toEqual({ got, near: true });
+  });
+});
+
+/** Numbers least first. */
+const up = (a: number, b: number): number => a - b;
+
+describe("the order of things", () => {
+  test("research a node of an open tier needs comes first, then the rest of the player's list, each piece after what it needs", () => {
+    const open = F.create({ tier: 4, seed: 1 }).open;
+    const node = F.NODES.find((n) => n.tier <= open.tier && (n.needs ?? []).some((id) => !F.isNode(F.goal(id))));
+    if (!node) throw new Error("no node needs research in the tables");
+    const research = F.ALL_GOALS.filter((g) => !F.isNode(g) && (F.GOALS[g]?.tier ?? 0) < open.tier);
+    const needed = new Set<F.Goal>();
+    const need = (g: F.Goal): void => {
+      if (F.isNode(g) || needed.has(g)) return;
+      needed.add(g);
+      for (const n of F.GOALS[g]?.needs ?? []) need(n);
+    };
+    for (const id of node.needs ?? []) need(F.goal(id));
+    // Asked for in the reverse of the tables' order, as if the player's list put what the node needs last.
+    const list = research.toReversed().map((g) => F.GOALS[g]?.id ?? "");
+    const unknown = new Set<number>(research);
+    const fresh = { ...open, done: open.done.map((d, g) => (unknown.has(g) ? 0 : d)) };
+    const order = researchOrder(fresh, [node.id], list);
+    expect(order.slice(0, needed.size).toSorted(up)).toEqual([...needed].toSorted(up));
+    for (const [k, g] of order.entries())
+      for (const n of F.GOALS[g]?.needs ?? []) if (!F.isNode(n)) expect(order.indexOf(n)).toBeLessThan(k);
+    expect(order.slice(needed.size).toSorted(up)).toEqual(research.filter((g) => !needed.has(g)).toSorted(up));
+  });
+
+  test("the player turns to the first node in its order that may be taken", () => {
+    const r = report(new Player({ ...first, nodes: first.nodes.toReversed() }).play(), first.seed, first.folios);
+    expect(r.goals.map((g) => g.goal)).toEqual([...first.nodes]);
   });
 });
