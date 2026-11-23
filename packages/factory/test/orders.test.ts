@@ -12,6 +12,8 @@ import { give, must } from "./yards.ts";
 const fill = (o: F.Standing): void => {
   for (const n of F.ALL_ITEMS) o.filled[n] = o.want[n] ?? 0;
 };
+/** A kept order with another id. */
+const withId = (o: unknown, id: number): unknown => (typeof o === "object" ? { ...o, id } : o);
 /** The work in an order: every tick a gatherer and machine at grade 1 spends on what it wants. */
 const work = (o: F.Standing): number => F.ALL_ITEMS.reduce((sum, n) => sum + (o.want[n] ?? 0) * F.workOf(n), 0);
 
@@ -85,6 +87,44 @@ describe("an order hung", () => {
     expect(back?.board.some((o) => o.id === early.id)).toBe(false);
     expect(back && give(back, { do: "handOver", order: early.id })).toMatchObject({ refused: "not_filled" });
     expect(give(y, { do: "handOver", order: early.id })).not.toHaveProperty("refused");
+  });
+
+  test("a kept board reads back as play hangs one, ids rising and each below the count ever hung, so handing over, swapping and the answer act on one order once", () => {
+    const y = F.create({ seed: 3, tier: 4 });
+    for (let k = 0; k < F.ORDER_WAITS; k++) F.step(y);
+    const rec: unknown = JSON.parse(F.encode(y));
+    if (typeof rec !== "object" || rec === null || !("board" in rec) || !Array.isArray(rec.board))
+      throw new Error("no board kept");
+    const [a, b, c]: unknown[] = rec.board;
+    // Two with one id, one with an id not hung yet, and two out of order.
+    for (const board of [
+      [a, withId(b, 0), c],
+      [a, b, withId(c, 3)],
+      [b, a, c],
+    ]) {
+      const text = JSON.stringify({ ...rec, board });
+      const back = F.decode(text, y.land);
+      if (!back) throw new Error("the yard does not read back");
+      const ids = back.board.map((o) => o.id);
+      expect(ids.every((id, k) => id < back.serial && id > (ids[k - 1] ?? -1))).toBe(true);
+      // Every order was hung within the minute: the answer carries each once.
+      expect(F.answer(back).hung.map((o) => o.id)).toEqual(ids);
+      // Swapping one takes that one down; handing each over pays it once.
+      const first = ids[0] ?? -1;
+      expect(give(back, { do: "swap", order: first })).not.toHaveProperty("refused");
+      expect(back.board.some((o) => o.id === first)).toBe(false);
+      for (let k = 0; k < F.ORDER_WAITS; k++) F.step(back);
+      for (const order of back.board.slice(0, 2)) {
+        fill(order);
+        expect(give(back, { do: "handOver", order: order.id })).toMatchObject({
+          log: [{ kind: "works_order", data: { order: order.id, pay: order.pay } }],
+        });
+        expect(give(back, { do: "handOver", order: order.id })).toMatchObject({ refused: "not_filled" });
+      }
+      expect(new Set(back.board.map((o) => o.id)).size).toBe(back.board.length);
+      // Read back twice, the same yard.
+      expect(F.encode(F.decode(text, y.land) ?? y)).toBe(F.encode(F.decode(text, y.land) ?? y));
+    }
   });
 
   test("a yard with no seed, as the page's copy is, hangs none", () => {

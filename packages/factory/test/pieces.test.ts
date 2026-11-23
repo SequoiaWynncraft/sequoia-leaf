@@ -2,7 +2,7 @@
  * The new pieces: a cart stop takes things from any side and they have reached the depot at once,
  * as many stops as the yard has unlocked; a sorter, in at the back, sends the one thing it is set to
  * out to its left and everything else ahead, and with nothing set is a belt. And a blueprint, set
- * down by naming its place.
+ * down by naming its place: turned any way, it stands as turned, tunnels whole, all or none.
  */
 import { describe, expect, test } from "bun:test";
 
@@ -102,6 +102,149 @@ describe("a blueprint", () => {
       why: "There is no blueprint there",
     });
     expect(belts()).toBe(800);
+  });
+});
+
+/**
+ * A blueprint holding tunnels, as stood at (1, 5) on a land of 20 by 14: a belt in; a tunnel east under
+ * 2 tiles with a belt facing north on the first of them; a grade 2 tunnel south under 1. Its box is 6
+ * by 3, and its bottom row and right-hand column hold one tile each when turned 0 and 3 times: the
+ * grade 2 tunnel's far mouth.
+ */
+const PRINT = [
+  { kind: "belt", x: 1, y: 5, dir: 0, span: 0 },
+  { kind: "tunnel", x: 2, y: 5, dir: 0, span: 2 },
+  { kind: "belt", x: 3, y: 5, dir: 3, span: 0 },
+  { kind: "tunnel", x: 6, y: 5, dir: 1, span: 1, grade: 2 },
+] as const;
+
+/** A tile and what stands on it: kind, way, span (negative at a far mouth) and grade. */
+type Stood = readonly [x: number, z: number, kind: number, dir: number, span: number, grade: number];
+
+/** The tiles `PRINT` takes, both mouths of each tunnel, turned `turns` quarter turns right with the corner of its box on (x, y). */
+function turned(turns: number, x: number, z: number): Stood[] {
+  let tiles = PRINT.flatMap((p): Stood[] => {
+    const k = F.kindNamed(p.kind) ?? F.NONE;
+    const g = F.gradeOf(k, "grade" in p ? p.grade : 1);
+    const far = p.span + 1;
+    const near: Stood = [p.x, p.y, k, p.dir, p.span, g];
+    return k === F.TUNNEL ? [near, [p.x + F.DX[p.dir] * far, p.y + F.DY[p.dir] * far, k, p.dir, -p.span, g]] : [near];
+  });
+  for (let t = 0; t < turns; t++) tiles = tiles.map(([a, b, k, d, s, g]): Stood => [-b, a, k, (d + 1) & 3, s, g]);
+  const x0 = Math.min(...tiles.map((t) => t[0]));
+  const z0 = Math.min(...tiles.map((t) => t[1]));
+  return tiles.map(([a, b, k, d, s, g]): Stood => [a - x0 + x, b - z0 + z, k, d, s, g]);
+}
+/** What stands on a tile. */
+function stood(y: F.Yard, x: number, z: number): Stood {
+  const i = F.at(y, x, z);
+  return [x, z, y.kind[i] ?? F.NONE, y.dir[i] ?? 0, y.span[i] ?? 0, y.grade[i] ?? 0];
+}
+/** How many tiles have a piece on them. */
+const tilesStood = (y: F.Yard): number => y.kind.filter((k) => k !== F.NONE && k !== F.DEPOT).length;
+
+/** A yard of every goal of the slice done on 20 by 14, nothing to hand, with `PRINT` standing and kept as blueprint 0. */
+function printed(): F.Yard {
+  const y = F.create({ land: bareLand(20, 14, [], [10, 7]), tier: 4, seed: 1 });
+  y.spare.fill(0);
+  must(y, { do: "stand", pieces: PRINT });
+  must(y, { do: "saveBlueprint", slot: 0, tiles: F.within(y, 1, 5, 6, 7) });
+  return y;
+}
+/** The Coins a command took from the purse. */
+function spent(y: F.Yard, c: Record<string, unknown>): number {
+  const did = give(y, c);
+  if ("refused" in did) throw new Error(`${String(c.do)} was refused: ${did.why}`);
+  return (did.coins ?? []).reduce((sum, ch) => sum + (ch.reason === "Earned in the Works" ? 0 : -ch.amount), 0);
+}
+
+describe("a blueprint holding tunnels", () => {
+  test("set down by its place, turned each of the four ways into each corner of the map, stands exactly turned, both mouths of each tunnel at its span and way, and is charged each piece's price once", () => {
+    const y = printed();
+    const price = 2 * F.price(F.BELT, 1) + F.price(F.TUNNEL, 1) + F.price(F.TUNNEL, 2);
+    const corners = [
+      [0, 0],
+      [17, 0],
+      [14, 11],
+      [0, 8],
+    ] as const;
+    corners.forEach(([x, z], turns) => {
+      const before = tilesStood(y);
+      expect(spent(y, { do: "placeBlueprint", slot: 0, x, y: z, turns })).toBe(price);
+      const want = turned(turns, x, z);
+      expect(want.map(([a, b]) => stood(y, a, b))).toEqual(want);
+      expect(tilesStood(y)).toBe(before + want.length);
+    });
+  });
+
+  test("is refused whole, nothing changed, where a tunnel's far mouth would fall off the map or onto something, or one of its tunnels would go in over a tunnel that is not the same", () => {
+    const y = printed();
+    const refused = { refused: "cannot_place_blueprint" };
+    let kept = F.encode(y);
+    // The grade 2 tunnel's far mouth alone off the bottom of the map, and alone off its right side.
+    expect(give(y, { do: "placeBlueprint", slot: 0, x: 7, y: 12, turns: 0 })).toMatchObject(refused);
+    expect(give(y, { do: "placeBlueprint", slot: 0, x: 18, y: 0, turns: 3 })).toMatchObject(refused);
+    expect(F.encode(y)).toBe(kept);
+    // Onto a crate, at (12, 2).
+    must(y, { do: "build", kind: "crate", x: 12, y: 2, dir: 0 });
+    kept = F.encode(y);
+    expect(give(y, { do: "placeBlueprint", slot: 0, x: 7, y: 0, turns: 0 })).toMatchObject(refused);
+    expect(F.encode(y)).toBe(kept);
+    must(y, { do: "remove", x: 12, y: 2 });
+    // The tunnel east going in at (8, 0) over a tunnel going in there south, and over a far mouth.
+    for (const [x, z, dir] of [
+      [8, 0, 1],
+      [8, 2, 3],
+    ] as const) {
+      expect(F.build(y, F.TUNNEL, x, z, dir, Infinity, { span: 1, grade: 2 }).ok).toBe(true);
+      kept = F.encode(y);
+      expect(give(y, { do: "placeBlueprint", slot: 0, x: 7, y: 0, turns: 0 })).toMatchObject({
+        ...refused,
+        why: "Something is here already",
+      });
+      expect(F.encode(y)).toBe(kept);
+      must(y, { do: "remove", x, y: z });
+    }
+  });
+
+  test("set down over pieces already standing, turns a belt of its own to its way, raises the same tunnel where it stands, passes under another belt, and is charged only what changes", () => {
+    const y = printed();
+    // Turned twice at (7, 0): a belt west at (12, 2), the tunnel west going in at (11, 2) to (8, 2), a
+    // belt south at (10, 2) and the grade 2 tunnel north going in at (7, 2) to (7, 0).
+    must(y, { do: "build", kind: "belt", x: 12, y: 2, dir: 3 });
+    must(y, { do: "build", kind: "belt", x: 9, y: 2, dir: 0 });
+    expect(F.build(y, F.TUNNEL, 7, 2, 3, Infinity, { span: 1 }).ok).toBe(true);
+    const before = tilesStood(y);
+    const price = F.price(F.TUNNEL, 1) + F.price(F.BELT, 1) + F.price(F.TUNNEL, 2) - F.price(F.TUNNEL, 1);
+    expect(spent(y, { do: "placeBlueprint", slot: 0, x: 7, y: 0, turns: 2 })).toBe(price);
+    const want = turned(2, 7, 0);
+    expect(want.map(([a, b]) => stood(y, a, b))).toEqual(want);
+    expect(stood(y, 9, 2)).toEqual([9, 2, F.BELT, 0, 0, 1]);
+    expect(tilesStood(y)).toBe(before + 3);
+  });
+
+  test("whose own pieces overlap, as a kept yard might hold, is refused whole whichever way it is turned, never half set down", () => {
+    const y = F.create({ land: bareLand(20, 14, [], [10, 7]), tier: 4, seed: 1 });
+    const rec: unknown = JSON.parse(F.encode(y));
+    if (typeof rec !== "object" || rec === null) throw new Error("not a record");
+    const { BELT: b, TUNNEL: t } = F;
+    // Each piece as kept: kind, x, y, its way (with 4 for a span), and a tunnel's span.
+    for (const bytes of [
+      [b, 0, 0, 0, b, 0, 0, 1, b, 1, 0, 0],
+      [t, 0, 0, 4, 1, b, 2, 0, 0],
+      [t, 0, 0, 4, 1, t, 2, 0, 4, 1],
+      [t, 0, 0, 4, 1, t, 2, 0, 4 | 2, 1],
+    ]) {
+      const back = F.decode(JSON.stringify({ ...rec, blueprints: [F.toBase64(Uint8Array.from(bytes))] }), y.land);
+      if (!back) throw new Error("the yard does not read back");
+      const kept = F.encode(back);
+      for (const turns of [0, 1, 2, 3])
+        expect(give(back, { do: "placeBlueprint", slot: 0, x: 2, y: 2, turns })).toMatchObject({
+          refused: "cannot_place_blueprint",
+          why: "Two pieces cannot stand on one tile",
+        });
+      expect(F.encode(back)).toBe(kept);
+    }
   });
 });
 
