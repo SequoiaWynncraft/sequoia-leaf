@@ -2,7 +2,20 @@ import { beforeEach, describe, expect, test } from "bun:test";
 
 import { dist } from "@sequoia-leaf/kit/util.ts";
 
-import { feet, goSit, goToSeat, headOf, makeActor, peopleOn, seatFree, stepActor, stopAt, walkTo } from "./actors.ts";
+import {
+  feet,
+  goSit,
+  goToSeat,
+  headOf,
+  HOP,
+  hop,
+  makeActor,
+  peopleOn,
+  seatFree,
+  stepActor,
+  stopAt,
+  walkTo,
+} from "./actors.ts";
 import { crowds } from "./apart.ts";
 import { type Actor, G } from "./game.ts";
 import { type Seat, SEATS, TOWN } from "./world.ts";
@@ -22,6 +35,13 @@ const seatAt = (x: number, y: number): Seat => {
   if (!s) throw new Error(`no seat at ${x},${y}`);
   return s;
 };
+/** A member gone for the day, dozing on a seat. */
+function dozer(name: string, s: Seat): Actor {
+  const a = member(name, s.from.x, s.from.y);
+  a.seat = s;
+  a.dozing = 1;
+  return a;
+}
 /** Time passing for everybody. */
 function run(seconds: number): void {
   for (let t = 0; t < seconds; t += 1 / 30) for (const a of people) stepActor(a, 1 / 30);
@@ -82,6 +102,49 @@ describe("seats", () => {
     expect(sat).toBe(other);
     expect(b.seat).toBe(other);
     expect(s.taken).toBe(false);
+  });
+
+  test("a seat somebody dozes on is the member's to take: tapped, they walk there and sit on it", () => {
+    const s = seatAt(248, 201);
+    dozer("Fernhollow", s);
+    const me = member("Tester", 256, 170, true);
+    G.player = me;
+    expect(seatFree(s, me)).toBe(true);
+    expect(goSit(s)).toBe(true);
+    expect(me.goal).toBe(s);
+    run(4);
+    expect(me.seat).toBe(s);
+  });
+
+  test("a seat a member has set off for is still theirs if somebody is given it to doze on meanwhile", () => {
+    const s = seatAt(248, 236);
+    const a = member("Quillon", 248, 290);
+    let sat: Seat | null | undefined;
+    goToSeat(
+      a,
+      s,
+      () => null,
+      (got) => (sat = got),
+    );
+    run(0.3);
+    dozer("Fernhollow", s);
+    run(4);
+    expect(sat).toBe(s);
+    expect(a.seat).toBe(s);
+  });
+});
+
+describe("hops", () => {
+  test("a hop timed by Leaf's clock is as far along as the clock has it, however late it is played", () => {
+    const a = member("Quillon", 256, 170);
+    // Three hops begun 0.4 seconds ago: the first is over, and the second a third done.
+    hop(a, 3, HOP + 0.1);
+    expect(a.hop).toBeCloseTo(HOP - 0.1);
+    expect(a.hops).toBe(1);
+    // All of them over by now: nothing.
+    const b = member("Wrenly", 256, 170);
+    hop(b, 3, 3 * HOP);
+    expect([b.hop, b.hops]).toEqual([0, 0]);
   });
 });
 

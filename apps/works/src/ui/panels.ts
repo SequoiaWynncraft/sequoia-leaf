@@ -10,6 +10,7 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip, tipOff } from "@sequoia-leaf/kit/tip.ts";
 import {
   AWAY_MOST_MS,
+  counts,
   DEPOT_SHARE,
   isFilled,
   ITEM,
@@ -190,7 +191,8 @@ function orders(_art: Art, body: HTMLElement): () => void {
       kids.push(
         el(
           "div",
-          full ? "k-card order ready" : "k-card order",
+          // One Leaf has just hung is quiet until it counts.
+          full ? "k-card order ready" : counts(s, w.tick) ? "k-card order" : "k-card order hung",
           { "data-order": s.id },
           el("div", "from", {}, el("span", "k-label", { text: s.from }), el("span", "k-grow"), act),
           el(
@@ -224,7 +226,10 @@ function orders(_art: Art, body: HTMLElement): () => void {
   const shape = when(
     () =>
       `${S.world.story}|${S.world.open.board}|${S.world.rates.slots}|${S.world.board
-        .map((s) => `${s.id}:${isFilled(s.want, s.filled)}:${swapRefusal(S.world, s.id) === null}`)
+        .map(
+          (s) =>
+            `${s.id}:${isFilled(s.want, s.filled)}:${swapRefusal(S.world, s.id) === null}:${counts(s, S.world.tick)}`,
+        )
         .join()}`,
     build,
   );

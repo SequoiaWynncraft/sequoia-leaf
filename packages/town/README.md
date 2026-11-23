@@ -18,7 +18,7 @@ bun test
 | `folk.ts`      | The town's own: who each is and what they say; who calls at a camp, their notes and presents |
 | `mail.ts`      | The mailbox: twelve letters, and which make room for the next                                |
 | `camp.ts`      | What may stand where in a camp, turning, the tray, who lives there, the new camp, an old one |
-| `clock.ts`     | The town by the clock: where the town's own and the crabs are at any moment, from a seed     |
+| `clock.ts`     | The town by the clock: the town's own, the crabs, members, the stump's board, the moments    |
 | `game.ts`      | The state, the commands, what happens by itself, what the page is shown, keeping it          |
 | `stats.ts`     | What a person's card says of their camp                                                      |
 
@@ -102,6 +102,25 @@ and nothing is kept: any page, and Leaf, gets the same answer for the same momen
 - `hiding(seed, now)`: where the missing crab hides. One place for each 60 seconds (`STRETCH`),
   never the same place twice running; `stretchOf(now)` is which 60 seconds, and `spotCrab` counts
   one sighting in each.
+- `boardAt(seed, now)`: the hex each of the five figures on the stump's board is on while
+  somebody is at it, and the one moved this turn: one every 2.1 seconds (up to 0.8 late) to a free
+  hex beside its own. After 32 moves they are taken back, last first, so the board is `SET_OUT`
+  again every 64 turns and never jumps.
+
+What follows from what Leaf said is here too, as functions of that and the clock:
+
+- `standOf(id, at)`: the spot a member at the Works or the table stands at, by their account.
+  `dozing(resting, free)`: the seat of each member who dozes, of the seats nobody awake sits on:
+  whoever has been gone longest chooses first, the first seat left for where they were, never one
+  left for the member. `SITS_AFTER` (120 seconds after Leaf last saw them) is when a member gone
+  from a game sits down, or goes. `zAt` is when a dozer last breathed out a "z" (one every 2
+  seconds, up to 0.8 late).
+- `homecoming(seed, at, i, now)`: the walk the `i`th of a raid party home since `at` is on: in
+  through the gate, the first on to the lantern tree, and out again, to the timetable `HOME`.
+- `bannerAt(wars, now)`: whose banner flies and how far up the pole: the last war's by when each
+  happened (`later`), of those the town has begun to stage.
+- `stagedBy(count, whens, now)`: how many of a day's raids or wars the town has staged: Leaf's
+  count of the day, less those still to come.
 
 The page walks the way between two spots at the figure's pace; its test checks that every walk
 fits its turn on the town's ground.

@@ -52,12 +52,14 @@ export {
   turn,
   turnable,
 } from "./build.ts";
+export { check } from "./check.ts";
 export { AWAY_MOST_MS, awayOf, here, stillAt, TICK_MS } from "./clock.ts";
 export { create, type Fresh } from "./create.ts";
 export {
   clockOf,
   LEAD,
   play,
+  readAnswer,
   readCommand,
   readNotes,
   readView,
@@ -65,6 +67,7 @@ export {
   stepTo,
   type Turned,
   type WorksAct,
+  type WorksAnswer,
   type WorksCommand,
   type WorksNote,
   type WorksView,
@@ -75,12 +78,14 @@ export { bareLand, besideWater, cellOf, type Land, LAND, landFrom, type Plot, to
 export {
   askable,
   claim,
+  counts,
   deliver,
   DEPOT_SHARE,
   fillBoard,
   fresh,
   isFilled,
   makeable,
+  ORDER_WAITS,
   storyOrder,
   swap,
   SWAP_EVERY,
