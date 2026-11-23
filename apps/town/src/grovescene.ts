@@ -1403,9 +1403,9 @@ export function makeGrove(
         flood(INK);
         g.restore();
       }
-      // the rarest goes on hopping, pleased
+      // the rarest goes on hopping, pleased; a figure of the raid breathes, each out of step with the next
       const size = endSize(p);
-      const { spr, id } = standing(p, size);
+      const { spr, id } = standing(p, size, 0, p.body ? 0 : beatAt(v, k / 3));
       const glad = isRare && τ >= HOP ? hopOf(mod(τ - HOP, 1.6) - 1.0, 6, 2) : 0;
       const [x, y] = footed(p, spr, size, spot.x, spot.feet, dy + glad);
       ellipse(spot.x, spot.feet - 1, Math.max(14, spr.width * 0.42), 3, INK);
