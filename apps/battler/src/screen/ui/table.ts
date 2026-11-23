@@ -8,7 +8,7 @@ import { portrait, portraitRoom } from "@sequoia-leaf/figures/sprites.ts";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { add, amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
-import { balance, leafShown, watch } from "@sequoia-leaf/kit/purse.ts";
+import { balance, watch } from "@sequoia-leaf/kit/purse.ts";
 import { isMuted } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import {
@@ -213,11 +213,11 @@ export function buildTable(a: Asks): void {
   renderPurse();
 }
 
-/** Leaf from the guild's ledger, and the Coins Leaf holds for the member (the kit's purse). A guest's purse has only the Coins. */
+/** Leaf from the guild's ledger, and the Coins Leaf holds for the member (the kit's purse). */
 export function renderPurse(): void {
   const purse = byId("purse");
   if (!purse) return;
-  purse.replaceChildren(...(leafShown() ? [amount("leaf", balance().leaf)] : []), amount("coin", balance().coins));
+  purse.replaceChildren(amount("leaf", balance().leaf), amount("coin", balance().coins));
 }
 
 /** A line of news at the table: a refusal, in the rules' own words. */

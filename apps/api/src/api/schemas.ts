@@ -110,8 +110,9 @@ export const GameMe = Schema.Struct({
   /** Their rank in the guild as the guild writes it, or null for a guest or a website admin who is not a member. */
   rank: Schema.NullOr(Schema.String),
   /**
-   * Whether they play as a guest: signed in, but not a member of the guild. A guest's Leaf and XP
-   * are 0, their level is a new member's, and their cursor is 0, whatever the ledger holds.
+   * Whether they play as a guest: signed in, but not a member of the guild. A guest's Leaf is the
+   * ledger's, as a member's is; their XP is 0, their level a new member's and their cursor 0,
+   * whatever the ledger holds.
    */
   guest: Schema.Boolean,
   leaf: Schema.Number,

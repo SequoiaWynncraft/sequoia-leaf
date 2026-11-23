@@ -4,15 +4,17 @@
  * the purse only shows them:
  *
  * - **Leaf** is the guild's ledger's (`fromLedger`), and nothing else: a page never takes Leaf
- *   itself. A game's command on Leaf may take it, while Leaf says spending is on (`leafSpending`)
- *   and the member is not a guest (`leafOpen`); every other Leaf button shows itself closed. A
- *   guest, who is not in the guild, has no Leaf at all (`asGuest`): no page shows a Leaf number
- *   (`leafShown`), and every Leaf button is closed with the guest's own line (`leafShut`).
+ *   itself. A game's command on Leaf may take it, while Leaf says spending is on (`leafOpen`);
+ *   every other Leaf button shows itself closed (`leafShut`). A guest, who is not in the guild
+ *   (`asGuest`), has their Leaf as a member has, but may not spend it on what is for members only
+ *   (`leafFor`), whose buttons say so (`LEAF_MEMBERS`).
  * - **Coins** are the Coins ledger's (`fromLeaf`, with what `/v1/game/me` says). A game's commands
  *   pay and take them on Leaf; the page then asks Leaf for the balance again (`refreshCoins`), or
  *   takes the number another page of the game heard (`heardCoins`), or a game shows the change it
  *   worked out itself until Leaf answers. Nothing of either is kept in the browser.
  */
+
+import { type LeafFor, mayBuy } from "@sequoia-leaf/core";
 
 import { ask, isRecord } from "./net.ts";
 
@@ -26,7 +28,7 @@ const watchers = new Set<(p: Purse, why: string) => void>();
 let purse: Purse = { leaf: 0, coins: 0 };
 /** Whether the purse holds Leaf's numbers yet: until it does, Leaf is not asked anything. */
 let onLeaf = false;
-/** Whether the purse is a guest's, with no Leaf to show. */
+/** Whether the purse is a guest's, who may not spend Leaf on what is for members. */
 let guest = false;
 /** Whether Leaf says a game's command may take Leaf (`/v1/game/hello`'s `leaf_spending`). */
 let spending = false;
@@ -57,10 +59,9 @@ export function fromLedger(leaf: number): void {
   tell("the guild's ledger");
 }
 
-/** The purse is a guest's: somebody signed in who is not in the guild. They have no Leaf, and no page shows a Leaf number. */
+/** The purse is a guest's: somebody signed in who is not in the guild. */
 export function asGuest(): void {
   guest = true;
-  fromLedger(0);
 }
 
 /** Leaf says the member holds this many Coins. From now on the purse's Coins are Leaf's. */
@@ -114,21 +115,21 @@ export function leafSpending(on: boolean): void {
   spending = on;
 }
 
-/** Whether a game's command may take Leaf: while Leaf's spending is on, and the member is not a guest. */
-export const leafOpen = (): boolean => spending && !guest;
+/** Whether a game's command may take Leaf: while Leaf's spending is on. */
+export const leafOpen = (): boolean => spending;
 
-/** Whether a page shows the purse's Leaf: not to a guest, who has none. */
-export const leafShown = (): boolean => !guest;
+/** Whether the player may spend Leaf on something that is `forWhom`: a guest only on what is for everyone. */
+export const leafFor = (forWhom: LeafFor): boolean => mayBuy(forWhom, guest);
 
-/** What every closed Leaf button says to a member. */
+/** What a closed Leaf button says while Leaf's spending is off. */
 export const LEAF_SHUT = "Leaf spending opens after the play-test.";
 /** What a Leaf button with no command to take its Leaf says, while spending is on. */
 export const LEAF_NOT_HERE = "Leaf cannot be spent here yet.";
-/** What every Leaf button says to a guest. */
-export const LEAF_GUEST = "Leaf is earned by raiding with Sequoia.";
+/** What a Leaf button for something only members may buy says to a guest. */
+export const LEAF_MEMBERS = "For guild members.";
 
-/** What a closed Leaf button says, to whoever is playing. */
-export const leafShut = (): string => (guest ? LEAF_GUEST : spending ? LEAF_NOT_HERE : LEAF_SHUT);
+/** What a closed Leaf button says. */
+export const leafShut = (): string => (spending ? LEAF_NOT_HERE : LEAF_SHUT);
 
 /** Lets the ledgers go again (for tests). */
 export function forgetLedger(): void {

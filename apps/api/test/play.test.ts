@@ -3,7 +3,7 @@ import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { type Game, leaf, MOST_COMMANDS, type PlayerId, playerId } from "@sequoia-leaf/core";
+import { type Game, leaf, type LeafFor, MOST_COMMANDS, type PlayerId, playerId } from "@sequoia-leaf/core";
 import { PULLS } from "@sequoia-leaf/pulls";
 import {
   isParty,
@@ -858,7 +858,7 @@ describe("Leaf a command takes", () => {
     ]);
   });
 
-  it("is refused, changing nothing, for too little Leaf, for a guest, and while spending is off", async () => {
+  it("is refused, changing nothing, for too little Leaf and while spending is off", async () => {
     await spending();
     await raided(alice, 20);
     await opened();
@@ -867,13 +867,6 @@ describe("Leaf a command takes", () => {
     expect((await commanded([dear])).results).toEqual([{ id: dear.id, refused: "not_enough_leaf" }]);
     expect(await untouched(alice)).toEqual(before);
     expect(await services.account(alice)).toMatchObject({ balance: 20 });
-
-    // Carol is signed in but not in the guild: a guest has no Leaf to spend.
-    await opened(carol);
-    const guest = await untouched(carol);
-    const theirs = buyCloth("baize");
-    expect((await commanded([theirs], carol)).results).toEqual([{ id: theirs.id, refused: "leaf_closed" }]);
-    expect(await untouched(carol)).toEqual(guest);
 
     await app.dispose();
     start();
@@ -884,15 +877,34 @@ describe("Leaf a command takes", () => {
     expect((await commanded([shut])).results).toEqual([{ id: shut.id, refused: "leaf_closed" }]);
     expect(await untouched(alice)).toEqual(off);
   });
+
+  it("buys a guest a look with the Leaf they have, as it does a member", async () => {
+    await spending();
+    // Carol is signed in but not in the guild: a guest with no Leaf has too little.
+    await opened(carol);
+    const none = buyCloth("baize");
+    expect((await commanded([none], carol)).results).toEqual([{ id: none.id, refused: "not_enough_leaf" }]);
+    // Leaf she earned as a member, before she left the guild, is hers to spend.
+    await raided(carol, 12_000);
+    const theirs = buyCloth("baize");
+    const done = await commanded([theirs], carol);
+    expect(done.results).toEqual([{ id: theirs.id, notes: [{ t: "look", kind: "cloth", id: "baize" }] }]);
+    expect(await services.account(carol)).toMatchObject({ balance: 0 });
+    expect((await ledgerOf(carol)).map((e) => [e.kind, e.origin, e.key, e.delta])).toEqual([
+      ["earn", "raid", `raid:${carol}`, 12_000],
+      ["spend", "shop", `play:raid:${carol}:look:baize`, -12_000],
+    ]);
+  });
 });
 
 /**
  * A market whose every sale takes Leaf and pays Coins, each as the command says, with keys the
- * command names: a game that takes Leaf, which the raid does only for its looks.
+ * command names, for everyone or (`for`) for members: a game that takes Leaf, as the raid's looks
+ * and the pulls do.
  */
 const MARKET: Game<
   { bought: number },
-  { leaf: readonly number[]; keys: readonly string[]; pay: number },
+  { leaf: readonly number[]; keys: readonly string[]; pay: number; for: LeafFor },
   { bought: number },
   string
 > = {
@@ -905,7 +917,7 @@ const MARKET: Game<
   apply: (state, c) => ({
     state: { bought: state.bought + 1 },
     notes: ["sold"],
-    leaf: c.leaf.map((amount, i) => ({ amount, reason: "A stall", key: c.keys[i] ?? `stall:${i}` })),
+    leaf: c.leaf.map((amount, i) => ({ amount, reason: "A stall", key: c.keys[i] ?? `stall:${i}`, for: c.for })),
     coins: c.pay > 0 ? [{ amount: c.pay, reason: "A sale", key: `sale:${state.bought}` }] : [],
   }),
   command: (v) =>
@@ -919,15 +931,27 @@ const MARKET: Game<
     v.keys.every((k) => typeof k === "string") &&
     "pay" in v &&
     typeof v.pay === "number"
-      ? { leaf: v.leaf, keys: v.keys, pay: v.pay }
+      ? { leaf: v.leaf, keys: v.keys, pay: v.pay, for: "for" in v && v.for === "members" ? "members" : "everyone" }
       : null,
 };
 
 describe("a command's Leaf", () => {
   const market = played(MARKET);
-  const sold = (id: string, leafTaken: readonly number[], keys: readonly string[], pay = 0) =>
+  const sold = (
+    id: string,
+    leafTaken: readonly number[],
+    keys: readonly string[],
+    pay = 0,
+    {
+      player = alice,
+      guest = false,
+      for: forWhom = "everyone",
+    }: { player?: PlayerId; guest?: boolean; for?: LeafFor } = {},
+  ) =>
     services.run(
-      Play.use((play) => play.send({ playerId: alice, guest: false }, market, [{ id, leaf: leafTaken, keys, pay }])),
+      Play.use((play) =>
+        play.send({ playerId: player, guest }, market, [{ id, leaf: leafTaken, keys, pay, for: forWhom }]),
+      ),
     );
 
   it("is weighed with the Coins in the batch's transaction: taken and paid together, added up against the balance", async () => {
@@ -978,6 +1002,28 @@ describe("a command's Leaf", () => {
     }
     expect([await ledgerOf(alice), await entries(alice)]).toEqual(before);
     expect(await services.account(alice)).toMatchObject({ balance: 90 });
+  });
+
+  it("is a guest's to spend on what is for everyone, and refused members_only, taking nothing, on what is for members", async () => {
+    await spending();
+    // Leaf Carol earned as a member, before she left the guild.
+    await raided(carol, 100);
+    const asCarol = { player: carol, guest: true };
+    expect(await sold("g-1", [30], ["a"], 0, asCarol)).toMatchObject({ results: [{ id: "g-1", notes: ["sold"] }] });
+    expect(await services.account(carol)).toMatchObject({ balance: 70 });
+    const before = [await ledgerOf(carol), await entries(carol)];
+    expect(await sold("g-2", [20], ["b"], 500, { ...asCarol, for: "members" })).toMatchObject({
+      results: [{ id: "g-2", refused: "members_only" }],
+      view: { bought: 1 },
+    });
+    expect([await ledgerOf(carol), await entries(carol)]).toEqual(before);
+    expect(await services.account(carol)).toMatchObject({ balance: 70 });
+    // A member spends on the same.
+    await raided(alice, 100);
+    expect(await sold("m-1", [20], ["b"], 0, { for: "members" })).toMatchObject({
+      results: [{ id: "m-1", notes: ["sold"] }],
+    });
+    expect(await services.account(alice)).toMatchObject({ balance: 80 });
   });
 });
 
@@ -2770,6 +2816,19 @@ describe("pulls", () => {
     expect(new Set((await awarded(alice)).map((a) => a.id))).toEqual(
       new Set(Object.keys(have).map((id) => `pull:${id}`)),
     );
+  });
+
+  it("take a guest's Leaf as they take a member's", async () => {
+    await spending();
+    await raided(carol, 10_000);
+    await send("GET", "/v1/game/play/pulls", undefined, carol);
+    expect((await pulled([tenPulls("g-1")], carol)).results).toMatchObject([{ id: "g-1", notes: expect.any(Array) }]);
+    expect(await services.account(carol)).toMatchObject({ balance: 0 });
+    expect((await ledgerOf(carol)).at(-1)).toMatchObject({
+      kind: "spend",
+      key: `play:pulls:${carol}:pull:0`,
+      delta: -10_000,
+    });
   });
 
   it("are refused, changing nothing, for too little Leaf and while spending is off", async () => {

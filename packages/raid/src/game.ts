@@ -166,6 +166,7 @@ export const TABLE_REFUSALS = {
   // Leaf's own refusals of a command that takes Leaf.
   not_enough_leaf: "Not enough Leaf.",
   leaf_closed: "Leaf cannot be spent here.",
+  members_only: "For guild members.",
 } as const;
 export type TableWhy = keyof typeof TABLE_REFUSALS;
 
@@ -435,7 +436,7 @@ export function applyCommand(state: Table, c: RaidCommand, ctx: Ctx): Answer {
     return {
       state: s,
       notes: [{ t: "look", kind: c.kind, id: spec.id }],
-      leaf: [{ amount: spec.leaf, reason: `Raid table look: ${spec.name}`, key: `look:${spec.id}` }],
+      leaf: [{ amount: spec.leaf, reason: `Raid table look: ${spec.name}`, key: `look:${spec.id}`, for: spec.for }],
     };
   }
   return play(s, c, ctx);
