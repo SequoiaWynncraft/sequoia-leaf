@@ -1,8 +1,10 @@
 import {
   type Device,
   DEVICES,
+  GAME_AT,
   joinsSession,
   type PlayerId,
+  playing,
   silentSince,
   VISIT_RULES,
   visitSeconds,
@@ -31,15 +33,30 @@ const OpenVisit = Schema.Struct({
   source: Schema.Literals(["room", "call"]),
   enteredAt: Schema.Int,
   heardAt: Schema.Int,
+  /** When the player last did something, as Leaf had heard by then; null for not yet. */
+  actedAt: Schema.NullOr(Schema.Int),
   /** The Leaf that heard of it last. */
   instance: Schema.String,
 });
 type OpenVisit = typeof OpenVisit.Type;
 
+/** How long a player has played a game, and been in it AFK, in milliseconds. */
+export interface Time {
+  readonly played: number;
+  readonly afk: number;
+}
+
 /**
  * Every stay of a player in one of the game's places (`visits`), the sittings they make up
  * (`sessions`: visits less than five minutes apart) and one row a player (`players_seen`), for the
- * staff's view of who played (`GET /v1/game/admin/activity`).
+ * staff's view of who played (`GET /v1/game/admin/activity`); and each player's time in each game,
+ * for good (`time_in`), for their card.
+ *
+ * Every stretch of a visit, from when it was last heard of to when it is heard of again or closes,
+ * is time played in its place's game (`GAME_AT`), or time AFK when the player had done nothing
+ * Leaf heard of for `afkMs` before it began (`playing`). What they do is told as it happens
+ * (`acted`: a command, a move, an act), kept in memory, and written on their open visit each time
+ * it is heard of, so that a Leaf taking over in a deploy goes on from it.
  *
  * A visit opens when a player comes into a live room of a place, or when their page says it is
  * there (`PUT /v1/game/presence`), and is heard of again while they stay: by the room every half
@@ -68,6 +85,10 @@ export class Visits extends Context.Service<
     readonly closeAll: (now: number) => Effect.Effect<void>;
     /** Closes every open visit not heard of for 90 seconds, at the last time it was. */
     readonly closeSilent: (now: number) => Effect.Effect<void>;
+    /** A player did something at `now`: a command that is not a chore, or in a live room a move or an act. */
+    readonly acted: (playerId: PlayerId, now: number) => Effect.Effect<void>;
+    /** How long a player has played each game, and been in it AFK, by game. */
+    readonly timeOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, Time>>;
   }
 >()("leaf/Visits") {
   static readonly layer = Layer.effect(
@@ -81,7 +102,7 @@ export class Visits extends Context.Service<
         Result: OpenVisit,
         execute: (playerId) => sql`
           SELECT id, session_id AS sessionId, player_id AS playerId, place, source, entered_at AS enteredAt,
-                 heard_at AS heardAt, instance
+                 heard_at AS heardAt, acted_at AS actedAt, instance
           FROM visits WHERE player_id = ${playerId} AND left_at IS NULL
         `,
       });
@@ -90,7 +111,7 @@ export class Visits extends Context.Service<
         Result: OpenVisit,
         execute: () => sql`
           SELECT id, session_id AS sessionId, player_id AS playerId, place, source, entered_at AS enteredAt,
-                 heard_at AS heardAt, instance
+                 heard_at AS heardAt, acted_at AS actedAt, instance
           FROM visits WHERE left_at IS NULL ORDER BY id
         `,
       });
@@ -99,7 +120,7 @@ export class Visits extends Context.Service<
         Result: OpenVisit,
         execute: () => sql`
           SELECT id, session_id AS sessionId, player_id AS playerId, place, source, entered_at AS enteredAt,
-                 heard_at AS heardAt, instance
+                 heard_at AS heardAt, acted_at AS actedAt, instance
           FROM visits WHERE left_at IS NULL AND instance = ${instance} ORDER BY id
         `,
       });
@@ -126,10 +147,41 @@ export class Visits extends Context.Service<
         `,
       });
 
+      const timeOf = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: Schema.Struct({ game: Schema.String, played: Schema.Int, afk: Schema.Int }),
+        execute: (playerId) =>
+          sql`SELECT game, played_ms AS played, afk_ms AS afk FROM time_in WHERE player_id = ${playerId} ORDER BY game`,
+      });
+
+      /** When each player last did something, as this Leaf has heard. */
+      const acted = new Map<string, number>();
+      /** When a visit's player last did something, as far as Leaf knows. */
+      const actedOf = (visit: OpenVisit): number | null => {
+        const heard = acted.get(visit.playerId);
+        return heard === undefined ? visit.actedAt : Math.max(heard, visit.actedAt ?? heard);
+      };
+
+      /** Counts a visit's time from when it was last heard of to `to`: played, or AFK. */
+      const count = (visit: OpenVisit, to: number) =>
+        Effect.gen(function* () {
+          const ms = to - visit.heardAt;
+          if (ms <= 0) return;
+          const game = GAME_AT[visit.place] ?? visit.place;
+          const played = playing(visit.heardAt, actedOf(visit), rules) ? ms : 0;
+          yield* sql`
+            INSERT INTO time_in (player_id, game, played_ms, afk_ms)
+            VALUES (${visit.playerId}, ${game}, ${played}, ${ms - played})
+            ON CONFLICT (player_id, game) DO UPDATE SET
+              played_ms = played_ms + excluded.played_ms, afk_ms = afk_ms + excluded.afk_ms
+          `;
+        });
+
       /** Closes a visit at `at` (never before it began), and adds its time to its session and its player. */
       const close = (visit: OpenVisit, at: number) =>
         Effect.gen(function* () {
           const leftAt = Math.max(visit.enteredAt, at);
+          yield* count(visit, leftAt);
           const seconds = visitSeconds(visit.enteredAt, leftAt);
           const path = `$."${visit.place}"`;
           yield* sql`UPDATE visits SET left_at = ${leftAt}, seconds = ${seconds} WHERE id = ${visit.id}`;
@@ -163,8 +215,9 @@ export class Visits extends Context.Service<
             ? joined.value.id
             : (yield* beginSession({ playerId: who.playerId, guest: who.guest, at, device: who.device })).id;
           yield* sql`
-            INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, instance)
-            VALUES (${sessionId}, ${who.playerId}, ${guest}, ${place}, ${source}, ${at}, ${at}, ${instance})
+            INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, acted_at, instance)
+            VALUES (${sessionId}, ${who.playerId}, ${guest}, ${place}, ${source}, ${at}, ${at},
+                    ${acted.get(who.playerId) ?? null}, ${instance})
           `;
           yield* sql`
             INSERT INTO players_seen (player_id, name, guest, first_seen_at, last_seen_at, sessions)
@@ -190,9 +243,10 @@ export class Visits extends Context.Service<
           if (Option.isSome(current) && current.value.place === place) {
             const kept = source === "room" ? "room" : current.value.source;
             const guest = who.guest ? 1 : 0;
+            yield* count(current.value, now);
             yield* sql`
-              UPDATE visits SET heard_at = max(heard_at, ${now}), source = ${kept}, guest = ${guest},
-                instance = ${instance}
+              UPDATE visits SET heard_at = max(heard_at, ${now}), acted_at = ${actedOf(current.value)},
+                source = ${kept}, guest = ${guest}, instance = ${instance}
               WHERE id = ${current.value.id}
             `;
             yield* sql`
@@ -248,6 +302,15 @@ export class Visits extends Context.Service<
             now,
           ),
         closeSilent: (now) => sql.withTransaction(closeSilent(now)).pipe(Effect.orDie),
+        acted: (playerId, now) =>
+          Effect.sync(() => {
+            acted.set(playerId, Math.max(now, acted.get(playerId) ?? now));
+          }),
+        timeOf: (playerId) =>
+          timeOf(playerId).pipe(
+            Effect.map((rows) => new Map(rows.map(({ game, ...time }) => [game, time]))),
+            Effect.orDie,
+          ),
       });
     }),
   );

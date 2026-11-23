@@ -704,5 +704,7 @@ export const TOWN: Game<Town, TownCommand, TownView, TownNote> = {
   decode: decodeTown,
   encode: encodeTown,
   command: readCommand,
+  // The page says the member is here every five minutes, and as it goes.
+  chore: (c) => c.do === "here",
   standing: standingOf,
 };

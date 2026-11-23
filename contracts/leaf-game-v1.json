@@ -1796,69 +1796,6 @@
       "message": "There is nothing of theirs to visit there"
     }
   },
-  "GET /v1/game/people/{player}": {
-    "request": {
-      "method": "GET",
-      "path": "/v1/game/people/10000000-0000-0000-0000-000000000001"
-    },
-    "status": 200,
-    "body": {
-      "id": "10000000-0000-0000-0000-000000000001",
-      "name": "Alice",
-      "games": {
-        "pulls": {
-          "played": 60,
-          "afk": 0,
-          "spent": 0
-        },
-        "raid": {
-          "place": 1,
-          "score": 0,
-          "also": {
-            "runs": 0,
-            "room": 0
-          },
-          "played": 0,
-          "afk": 0,
-          "spent": 0
-        },
-        "town": {
-          "place": 1,
-          "score": 10,
-          "also": {
-            "greeted": 0,
-            "sightings": 0
-          },
-          "played": 180,
-          "afk": 120,
-          "spent": 25
-        },
-        "works": {
-          "place": 2,
-          "score": 1840,
-          "also": {
-            "story": 3
-          },
-          "played": 0,
-          "afk": 0,
-          "spent": 0
-        }
-      },
-      "played": 240,
-      "afk": 120
-    }
-  },
-  "GET /v1/game/people/{player}, unknown": {
-    "request": {
-      "method": "GET",
-      "path": "/v1/game/people/20000000-0000-0000-0000-000000000009"
-    },
-    "status": 404,
-    "body": {
-      "code": "no_such_player",
-      "message": "Leaf does not know that player"
-    }
-  },
   "GET /v1/game/banners, no headliner yet": {
     "request": {
       "method": "GET",
@@ -2098,6 +2035,64 @@
           "value": 1
         }
       ]
+    }
+  },
+  "GET /v1/game/people/{player}": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/people/10000000-0000-0000-0000-000000000001"
+    },
+    "status": 200,
+    "body": {
+      "id": "10000000-0000-0000-0000-000000000001",
+      "name": "Alice",
+      "games": {
+        "raid": {
+          "place": 1,
+          "score": 0,
+          "also": {
+            "runs": 0,
+            "room": 0
+          },
+          "played": 120,
+          "afk": 0,
+          "spent": 0
+        },
+        "town": {
+          "place": 1,
+          "score": 10,
+          "also": {
+            "greeted": 0,
+            "sightings": 0
+          },
+          "played": 180,
+          "afk": 150,
+          "spent": 25
+        },
+        "works": {
+          "place": 2,
+          "score": 1840,
+          "also": {
+            "story": 3
+          },
+          "played": 0,
+          "afk": 0,
+          "spent": 0
+        }
+      },
+      "played": 300,
+      "afk": 150
+    }
+  },
+  "GET /v1/game/people/{player}, unknown": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/people/20000000-0000-0000-0000-000000000009"
+    },
+    "status": 404,
+    "body": {
+      "code": "no_such_player",
+      "message": "Leaf does not know that player"
     }
   },
   "GET /v1/game/requests": {
