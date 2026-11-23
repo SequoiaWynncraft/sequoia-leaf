@@ -197,10 +197,11 @@ export class Visits extends Context.Service<
         });
 
       /**
-       * Opens a visit for a player who has none open, in their last session if it ended less than
-       * five minutes ago, or else in a new one, and removes what has been kept long enough.
+       * Opens a visit for a player who has none open, who last did something at `actedAt`, in their
+       * last session if it ended less than five minutes ago, or else in a new one, and removes what
+       * has been kept long enough.
        */
-      const open = (who: Visitor, place: string, source: Source, at: number) =>
+      const open = (who: Visitor, place: string, source: Source, at: number, actedAt: number | null) =>
         Effect.gen(function* () {
           const guest = who.guest ? 1 : 0;
           const last = yield* lastSession(who.playerId);
@@ -216,8 +217,7 @@ export class Visits extends Context.Service<
             : (yield* beginSession({ playerId: who.playerId, guest: who.guest, at, device: who.device })).id;
           yield* sql`
             INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, acted_at, instance)
-            VALUES (${sessionId}, ${who.playerId}, ${guest}, ${place}, ${source}, ${at}, ${at},
-                    ${acted.get(who.playerId) ?? null}, ${instance})
+            VALUES (${sessionId}, ${who.playerId}, ${guest}, ${place}, ${source}, ${at}, ${at}, ${actedAt}, ${instance})
           `;
           yield* sql`
             INSERT INTO players_seen (player_id, name, guest, first_seen_at, last_seen_at, sessions)
@@ -255,8 +255,10 @@ export class Visits extends Context.Service<
             `;
             return;
           }
+          // What they last did goes with them: a Leaf that took over in a deploy knows it from their visit alone.
+          const actedAt = Option.isSome(current) ? actedOf(current.value) : (acted.get(who.playerId) ?? null);
           if (Option.isSome(current)) yield* close(current.value, now);
-          yield* open(who, place, source, now);
+          yield* open(who, place, source, now, actedAt);
         });
 
       const closeSilent = (now: number) =>

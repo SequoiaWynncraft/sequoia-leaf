@@ -277,7 +277,8 @@ describe("the database", () => {
           yield* sql`INSERT INTO played (player_id, game, ms, seen_at) VALUES (${member}, ${game}, ${ms}, ${began})`;
         }
         // Since then the member was in town 40 minutes, in a camp 5 and at the table 1 (less than its
-        // calls); and in town before then, which counts for nothing. The stayer is in town still, two hours on.
+        // calls); and in town before then, which counts for nothing. The stayer came to town half an
+        // hour before then, and is there still, two hours after.
         const [session] = yield* sql<{ id: number }>`
           INSERT INTO sessions (player_id, guest, started_at) VALUES (${member}, 0, ${began}) RETURNING id
         `;
@@ -286,7 +287,7 @@ describe("the database", () => {
           [member, "town", began + MINUTE, 40, false],
           [member, "camp", began + 50 * MINUTE, 5, false],
           [member, "table", began + 60 * MINUTE, 1, false],
-          [stayer, "town", began + MINUTE, 120, true],
+          [stayer, "town", began - 30 * MINUTE, 150, true],
         ] as const) {
           const to = from + minutes * MINUTE;
           yield* sql`
