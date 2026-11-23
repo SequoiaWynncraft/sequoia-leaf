@@ -21,9 +21,12 @@ import {
   item,
   plot,
   power,
+  setFirst,
   setRecipe,
   setSort,
+  setWay,
   SORTER,
+  SPLITTER,
   START,
   STOP,
   STUDY,
@@ -64,6 +67,18 @@ describe("a card", () => {
     const after = printOf(ref);
     expect(before).toMatchObject({ line: "Waiting for planks and ingots to make tools.", perMinute: 30 });
     expect(after).toMatchObject({ line: "Waiting for planks and ingots to make tools.", perMinute: 21 });
+    expect(cardKey(ref)).not.toBe(key);
+  });
+
+  test("of a splitter prints each way shut and the way it puts first, and changes when another is put first", () => {
+    S.world = create({ seed: 5, tier: 5 });
+    build(S.world, SPLITTER, 20, 15, 0, Infinity);
+    setWay(S.world, 20, 15, 2, false);
+    const ref = tileRef(at(S.world, 20, 15));
+    expect(printOf(ref)).toMatchObject({ ways: { shut: [false, false, true], first: -1 } });
+    const key = cardKey(ref);
+    expect(setFirst(S.world, 20, 15, 1)).toBeNull();
+    expect(printOf(ref)).toMatchObject({ ways: { first: 1 } });
     expect(cardKey(ref)).not.toBe(key);
   });
 
@@ -120,7 +135,7 @@ describe("a card", () => {
   test("is drawn by modules that reach no yard: none imports anything of the page's that holds one", async () => {
     // What draws a card (`cards.ts`), the lists of a goal on it (`goal.ts`) and the names cards go by (`refs.ts`).
     const drawing: Record<string, string[]> = {
-      "./cards.ts": ["../art/belts.ts", "../sound.ts", "./goal.ts", "./parts.ts", "./refs.ts"],
+      "./cards.ts": ["../art/belts.ts", "../art/machines.ts", "../sound.ts", "./goal.ts", "./parts.ts", "./refs.ts"],
       "./goal.ts": ["./parts.ts", "./refs.ts"],
       "./refs.ts": [],
     };

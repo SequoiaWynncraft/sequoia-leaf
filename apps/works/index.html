@@ -154,6 +154,12 @@
       #track .k-label {
         flex: 1 0 auto;
       }
+      /* What comes into hand next, in one line. */
+      #track .then {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       /* A visit: in the order's place, whose yard it is; and nothing to act with. */
       #visit {
         position: fixed;
@@ -321,6 +327,14 @@
         grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
         column-gap: calc(var(--u) * 4);
+      }
+      /* A head with two buttons, or a place in the line and a button, has them on a line under its name. */
+      .gh:has(> .k-row) {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: calc(var(--u) * 2);
+      }
+      .gh > .k-row {
+        justify-self: end;
       }
       .gh-what {
         display: grid;
@@ -904,6 +918,10 @@
         bottom: auto;
         top: calc(var(--u) * -5);
         transform: scaleY(-1);
+      }
+      /* Said about a part of a card, it is over the card. */
+      #coach.on-card {
+        z-index: 91;
       }
 
       /* An order filled: what it paid, what it opened, what is asked for next. */

@@ -8,7 +8,7 @@ import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoi
 import { bitmap, ell, flipped, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, hash, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
-import { CLAY, DARK, PAL, spr, type Sprite } from "./pal.ts";
+import { bm, CLAY, DARK, PAL, spr, type Sprite } from "./pal.ts";
 
 type Canvas = HTMLCanvasElement;
 
@@ -928,6 +928,25 @@ function flag(step: number): Sprite {
   return spr(c, 1, 16);
 }
 
+/**
+ * The flag a splitter wears on the way it puts first: a pennant in the dusk plum of the town's roofs
+ * on a pole of light wood, typed flying east with its pole at the left; its spot is the pole's foot.
+ * `FLAG_AT[side]` is where on a tile (from its top-left corner) the foot stands for each side (east,
+ * south, west, north), in that side's arrowhead; on the west side the pennant flies west, the
+ * picture turned over.
+ */
+const PENNANT = ["Npppp", "Nvvvp", "Nvvv.", "Nv...", "N....", "N....", "N...."];
+export const FLAG_AT = [
+  [13, 10],
+  [8, 16],
+  [3, 10],
+  [8, 4],
+] as const;
+const pennant = (west: boolean): Sprite => {
+  const east = bm(PENNANT, 0, PENNANT.length);
+  return west ? mirror(east) : east;
+};
+
 // ---------- the set ----------
 
 export interface Machines {
@@ -977,6 +996,8 @@ export interface Machines {
   /** The depot's brass flywheel, for when the plan is bought. */
   fly: Canvas[];
   flag: Sprite[];
+  /** pennant[side]: a splitter's flag on the way it puts first, standing on that side of its tile (`FLAG_AT`). */
+  pennant: Sprite[];
   gate: Sprite;
   fenceAcross: Sprite;
   fenceDown: Sprite;
@@ -1040,6 +1061,7 @@ export function makeMachines(): Machines {
     depot: depot(),
     fly: [0, 1, 2, 3].map((s) => outlined(wheelPic(s, GOLD[1], GOLD[0], GOLD[0], CREAM, DEPOT.wheelR), INK)),
     flag: [0, 1].map(flag),
+    pennant: [0, 1, 2, 3].map((side) => pennant(side === 2)),
     gate: gate(),
     fenceAcross: fence(true),
     fenceDown: fence(false),

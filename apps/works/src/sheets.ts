@@ -17,7 +17,7 @@ import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { arms, beltTile, marksOf, woodOf } from "./art/belts.ts";
 import type { Art } from "./art/index.ts";
-import { lookOf } from "./art/machines.ts";
+import { FLAG_AT, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { type Entry, showSheet } from "./sheet.ts";
 
@@ -35,6 +35,15 @@ const WAYS = [0, 1, 2, 3] as const;
 /** The arms of a splitter and of a joiner pointing each way (east, south, west, north), as `beltTile` takes them. */
 const SPLITS = [arms(2, 2, 1, 2), arms(2, 2, 2, 1), arms(1, 2, 2, 2), arms(2, 1, 2, 2)];
 const JOINS = [arms(2, 1, 1, 1), arms(1, 2, 1, 1), arms(1, 1, 2, 1), arms(1, 1, 1, 2)];
+/** A splitter pointing a way with its way ahead put first: its flag, with a tile's room around it for the flag to stand in. */
+function flagged(art: Art, dir: (typeof WAYS)[number]): HTMLCanvasElement {
+  const { c, g } = makeCanvas(24, 24);
+  g.drawImage(onBelt(beltTile(SPLITS[dir] ?? 0, dir, 5, 0), art.m.splitter[dir] ?? null), 4, 6);
+  const flag = art.m.pennant[dir];
+  const [x, y] = FLAG_AT[dir];
+  if (flag) g.drawImage(flag.c, 4 + x - flag.ax, 6 + y - flag.ay);
+  return c;
+}
 /** A kind's name, as the sheet labels it. */
 const named = (k: KindName): string => KIND_INFO[kind(k)]?.name ?? "";
 /** Every thing of a step, labelled with its picture. */
@@ -244,6 +253,7 @@ export function sheets(art: Art, which: string): void {
         onBelt(beltTile(arms(2, 2, 1, 3), 0, 5, 0, tint), m.heads[0]?.[0] ?? null),
       ),
     },
+    { name: "the way ahead put first, its flag on it", pics: WAYS.map((dir) => flagged(art, dir)) },
     {
       name: `${named("joiner")}: east, south, west, north`,
       pics: JOINS.map((a, dir) => onBelt(beltTile(a, WAYS[dir] ?? 0, 5, 0), m.joiner[dir] ?? null)),

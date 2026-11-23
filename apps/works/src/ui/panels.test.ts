@@ -20,6 +20,7 @@ import {
   reopen,
   STUDY,
   study,
+  TIERS,
   type Yard,
 } from "@sequoia-leaf/factory";
 
@@ -154,6 +155,17 @@ describe("the tier's screen", () => {
     expect(named(tierPrint().done)).toContain("wax");
   });
 
+  test("prints the nodes in line after the one in hand, in their order", () => {
+    const y = yardAt(1);
+    for (const [act, node] of [
+      ["take", "boiler"],
+      ["queue", "signs"],
+      ["queue", "crates"],
+    ] as const)
+      play(y, { do: act, node: goal(node), tick: y.tick });
+    expect([tierPrint().hand, named(tierPrint().queue)]).toEqual([goal("boiler"), ["signs", "crates"]]);
+  });
+
   test("leads on: what the commission waits on is each a thing with how it stands, and the first that can be begun says how", () => {
     const y = yardAt(3);
     // No Study stands: nothing is studied without one, so the first piece of research leads to building one.
@@ -192,11 +204,11 @@ describe("the tier's screen", () => {
     expect(whatNext()).toBe("Take a project in Tier 2.");
     yardAt(3);
     expect(whatNext()).toBe("Open Tier 3 for its commission and what it needs first.");
-    // Every goal of the slice done: tier 4 is open, with nothing in it yet.
+    // Every goal of the slice done: the tier after the last is open, with nothing in it yet.
     y.done = [...ALL_GOALS];
     reopen(y);
     S.world = y;
-    expect([y.open.tier, whatNext()]).toEqual([4, "More is being built."]);
+    expect([y.open.tier, whatNext()]).toEqual([TIERS.length, "More is being built."]);
   });
 
   test("the node in hand in Orders prints what it waits on the same way", () => {
