@@ -38,7 +38,8 @@ describe("the size of a standing order", () => {
 describe("an order hung", () => {
   test("goes at the end of the board, and counts only from 50 ticks after: until then the depot gives it nothing and the check leaves it out", () => {
     const y = F.create({ seed: 3, tier: 4 });
-    for (let k = 0; k < 60; k++) F.step(y);
+    // Past the minute for which the answer carries the orders the board went up with.
+    for (let k = 0; k < F.ORDER_TOLD; k++) F.step(y);
     const first = y.board[0];
     if (!first) throw new Error("no board");
     must(y, { do: "swap", order: first.id });
@@ -58,9 +59,12 @@ describe("an order hung", () => {
     F.deliver(y, thing, 1);
     expect(hung.filled[thing] ?? 0).toBe(0);
     for (let k = 0; k < F.ORDER_WAITS; k++) F.step(y);
-    expect(F.answer(y).hung).toEqual([]);
+    // It counts now, and the answer still carries it: a batch may have run past this tick.
+    expect(F.answer(y).hung).toEqual([hung]);
     F.deliver(y, thing, 1);
     expect(hung.filled[thing]).toBe(1);
+    for (let k = F.ORDER_WAITS; k < F.ORDER_TOLD; k++) F.step(y);
+    expect(F.answer(y).hung).toEqual([]);
   });
 
   test("one that does not count yet cannot be handed over, and is read back holding nothing; one kept without the tick it counts from is left out", () => {
