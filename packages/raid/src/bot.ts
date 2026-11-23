@@ -27,18 +27,22 @@ import {
   buy,
   buyXp,
   choose,
+  type Done,
   fieldCap,
   fielded,
   giveItem,
   move,
+  picksOf,
   type Piece,
   pieces,
   priceOf,
   type Run,
   type RunOptions,
+  type RunView,
   rustle,
   rustleCost,
   sell,
+  type Spot,
   startRun,
   type Taken,
   takeTakings,
@@ -46,18 +50,19 @@ import {
 } from "./run.ts";
 
 /**
- * The actions the bot plans with. Played directly they are the run's own; a page that plays through
- * Leaf hands it ones that act on its copy and write down the command for each (see `game.ts`).
+ * The actions the bot plans with, on a run `R`. Played directly they are the run's own; a page that
+ * plays through Leaf hands it ones that act on its copy, which has no streams, and write down the
+ * command for each (see `game.ts`).
  */
-export interface Hands {
-  choose: typeof choose;
-  buy: typeof buy;
-  sell: typeof sell;
-  move: typeof move;
-  toBench: typeof toBench;
-  rustle: typeof rustle;
-  buyXp: typeof buyXp;
-  giveItem: typeof giveItem;
+export interface Hands<R extends RunView = Run> {
+  choose(run: R, option: number): Done;
+  buy(run: R, offer: number): Done;
+  sell(run: R, from: Spot): Done;
+  move(run: R, from: Spot, to: Spot): Done;
+  toBench(run: R, seat: number): Done;
+  rustle(run: R): Done;
+  buyXp(run: R): Done;
+  giveItem(run: R, item: number, to: Spot): Done;
 }
 /** The run's own actions. */
 export const DIRECT: Hands = { choose, buy, sell, move, toBench, rustle, buyXp, giveItem };
@@ -164,7 +169,7 @@ function bestParty(habit: Habit, all: readonly Piece[], size: number): Piece[] {
   return party;
 }
 
-const floorOf = (run: Run, habit: Habit): number => {
+const floorOf = (run: RunView, habit: Habit): number => {
   // Near the end, or near going home, there is nothing to save for.
   if (run.room >= 13 || run.resolve <= 8) return 0;
   return habit.keeps[Math.min(2, Math.floor(run.room / 5))] ?? 0;
@@ -194,7 +199,7 @@ const BOON_LIKES: Record<BoonId, number> = {
   crabcharm: 3,
   gnomecharm: 3,
 };
-function likesBoon(run: Run, habit: Habit, boon: BoonId): number {
+function likesBoon(run: RunView, habit: Habit, boon: BoonId): number {
   let score = BOON_LIKES[boon];
   if (isEmblemId(boon)) {
     const kin = EMBLEMS[boon];
@@ -208,16 +213,16 @@ function likesBoon(run: Run, habit: Habit, boon: BoonId): number {
   if (boon === "smallfry") score = run.board.filter((p) => p && FIGURES[p.kind].tier <= 2).length * 1.3;
   return score;
 }
-function likesComponent(run: Run, item: ComponentId): number {
+function likesComponent(run: RunView, item: ComponentId): number {
   const own = pieces(run);
   const loose = own.some((p) => p.items.some(isComponentId)) || run.items.some(isComponentId);
   const casters = own.filter((p) => FIGURES[p.kind].calling === "sage" || FIGURES[p.kind].calling === "mender").length;
   const base = item === "glowcap" ? 2 + casters * 0.4 : item === "thorn" || item === "plume" ? 3 : 2.6;
   return base + (loose ? 0.2 : 0);
 }
-function settleChoices(run: Run, habit: Habit, s: Stream, hands: Hands): void {
+function settleChoices<R extends RunView>(run: R, habit: Habit, s: Stream, hands: Hands<R>): void {
   for (let guard = 0; guard < 12; guard++) {
-    const choice = run.choices[0];
+    const choice = picksOf(run)[0];
     if (!choice) return;
     let best = 0;
     if (habit.careless) best = below(s, choice.options.length);
@@ -245,7 +250,7 @@ function settleChoices(run: Run, habit: Habit, s: Stream, hands: Hands): void {
 // ---------- shopping ----------
 
 /** How much it wants an offer: what it would add to its best party, and something for being a second or third copy. */
-function wants(run: Run, habit: Habit, kind: FigureId, before: number): number {
+function wants(run: RunView, habit: Habit, kind: FigureId, before: number): number {
   const own = pieces(run);
   const cap = fieldCap(run);
   const twins = own.filter((p) => p.kind === kind && p.stars === 1).length;
@@ -256,7 +261,7 @@ function wants(run: Run, habit: Habit, kind: FigureId, before: number): number {
   return after - before + (twins === 1 ? 0.7 * habit.chases : 0) + (better ? 0.4 * habit.chases : 0);
 }
 /** Sells whoever on the bench is doing least: not in the best party, and not half of a pair. */
-function sellSpare(run: Run, habit: Habit, keep: number, hands: Hands): boolean {
+function sellSpare<R extends RunView>(run: R, habit: Habit, keep: number, hands: Hands<R>): boolean {
   const own = pieces(run);
   const best = new Set(bestParty(habit, own, fieldCap(run)).map((p) => p.id));
   let worst = -1;
@@ -274,7 +279,7 @@ function sellSpare(run: Run, habit: Habit, keep: number, hands: Hands): boolean 
   return hands.sell(run, { on: "bench", at: worst }).ok;
 }
 
-function shop(run: Run, habit: Habit, hands: Hands): void {
+function shop<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
   const floor = floorOf(run, habit);
   let paidRustles = 0;
   for (let guard = 0; guard < 80; guard++) {
@@ -323,7 +328,7 @@ function shop(run: Run, habit: Habit, hands: Hands): void {
 }
 
 /** Buys whatever it can reach, in the order it comes. */
-function shopCarelessly(run: Run, s: Stream, hands: Hands): void {
+function shopCarelessly<R extends RunView>(run: R, s: Stream, hands: Hands<R>): void {
   for (let guard = 0; guard < 20; guard++) {
     const able = run.stall.flatMap((kind, i) => (kind && priceOf(run, i) <= run.acorns ? [i] : []));
     if (able.length === 0 || !run.bench.includes(null)) break;
@@ -335,7 +340,7 @@ function shopCarelessly(run: Run, s: Stream, hands: Hands): void {
 
 // ---------- seating and items ----------
 
-function seatParty(run: Run, habit: Habit, hands: Hands): void {
+function seatParty<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
   const own = pieces(run);
   const party = bestParty(habit, own, fieldCap(run));
   const counts = countTraits(party);
@@ -365,7 +370,7 @@ function seatParty(run: Run, habit: Habit, hands: Hands): void {
     if (!hands.move(run, { on: "board", at: from }, { on: "board", at: to }).ok) break;
   }
 }
-function seatCarelessly(run: Run, s: Stream, hands: Hands): void {
+function seatCarelessly<R extends RunView>(run: R, s: Stream, hands: Hands<R>): void {
   run.bench.forEach((p, slot) => {
     if (!p || fielded(run) >= fieldCap(run)) return;
     const free = run.board.flatMap((b, seat) => (b ? [] : [seat]));
@@ -392,7 +397,7 @@ function fits(p: Piece, suits: Suits): number {
   if (suits === "caster") return f.calling === "sage" ? 3 : f.calling === "mender" ? 2.5 : 1;
   return f.calling === "bulwark" ? 3 : f.range <= 1 ? 2 : 1;
 }
-function handOutItems(run: Run, habit: Habit, hands: Hands): void {
+function handOutItems<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
   // Components and finished items first, the first on the item bench first.
   for (let guard = 0; guard < 30; guard++) {
     const at = run.items.findIndex((item) => !isEmblemId(item));
@@ -433,10 +438,16 @@ function handOutItems(run: Run, habit: Habit, hands: Hands): void {
 
 // ---------- playing ----------
 
-/** Does everything a player does before a fight: settles what is waiting to be chosen, shops, seats the party, hands out items. */
-export function planRoom(run: Run, habit: Habit, hands: Hands = DIRECT): void {
-  if (run.phase !== "plan") return;
-  const s: Stream = { rng: mix(run.seed, 9000 + run.record.length) };
+/** Does everything a player does before a fight, with the run's own actions, its habits drawn from the run's seed. */
+export function planRoom(run: Run, habit: Habit): void {
+  planWith(run, habit, DIRECT, { rng: mix(run.seed, 9000 + run.record.length) });
+}
+/**
+ * Does everything a player does before a fight, with `hands`, its habits drawn from `s`: settles
+ * what is waiting to be chosen, shops, seats the party, hands out items.
+ */
+export function planWith<R extends RunView>(run: R, habit: Habit, hands: Hands<R>, s: Stream): void {
+  if (run.stage.phase !== "plan") return;
   settleChoices(run, habit, s, hands);
   if (habit.careless) {
     shopCarelessly(run, s, hands);
@@ -457,7 +468,7 @@ export function playRoom(run: Run, habit: Habit): Taken {
 /** Plays a whole run from a seed. */
 export function playRun(seed: number, habit: Habit, options: RunOptions = {}): Run {
   const run = startRun(seed, options);
-  for (let guard = 0; guard < 200 && run.phase !== "over"; guard++) {
+  for (let guard = 0; guard < 200 && run.stage.phase !== "over"; guard++) {
     if (!playRoom(run, habit).ok) break;
   }
   return run;

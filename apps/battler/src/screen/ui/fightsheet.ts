@@ -180,5 +180,6 @@ export function closeSheet(sound = true): void {
 /** Opens "Last fight", or puts it away if it is up. */
 export function toggleLastFight(): void {
   if (SH.up === "again") closeSheet();
-  else if (S.mode === "plan" && hasLastFight() && (S.run?.choices.length ?? 0) === 0) openSheet("again");
+  else if (S.mode === "plan" && hasLastFight() && S.run?.stage.phase === "plan" && S.run.stage.picks.length === 0)
+    openSheet("again");
 }

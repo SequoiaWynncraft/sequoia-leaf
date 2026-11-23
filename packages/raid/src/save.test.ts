@@ -5,13 +5,29 @@ import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
 import { FINISHED_IDS, isEmblemId } from "./content/items.ts";
 import { ECONOMY } from "./content/rooms.ts";
 import { TRAIT_IDS } from "./content/traits.ts";
-import { beginFight, buy, choose, giveItem, pieces, type Run, rustle, spotOf, startRun, takeTakings } from "./run.ts";
-import { checkRun, loadRun, SAVE_VERSION, saveRun } from "./save.ts";
+import {
+  beginFight,
+  buy,
+  choose,
+  giveItem,
+  picksOf,
+  pieces,
+  type Run,
+  rustle,
+  spotOf,
+  startRun,
+  takeTakings,
+} from "./run.ts";
+import { checkRun, type Loaded } from "./save.ts";
+
+/** A run as a table keeps it, written out and read back. */
+const saveRun = (run: Run): string => JSON.stringify({ run });
+const loadRun = (text: string): Loaded => checkRun(JSON.parse(text).run);
 
 /** A run played by the bot up to a room, stopped in the middle of planning it. */
 function midRun(seed: number, rooms: number): Run {
   const run = startRun(seed);
-  for (let i = 0; i < rooms && run.phase !== "over"; i++) {
+  for (let i = 0; i < rooms && run.stage.phase !== "over"; i++) {
     planRoom(run, SENSIBLE);
     if (!beginFight(run).ok) break;
     takeTakings(run);
@@ -94,12 +110,12 @@ describe("saving a run", () => {
     expect(back.rng).toBe(run.rng);
     expect(back.foe).toEqual(run.foe);
     expect(back.room).toBe(run.room);
-    expect(back.choices).toEqual(run.choices);
+    expect(back.stage).toEqual(run.stage);
   });
   test("a loaded run goes on exactly as the original would have", () => {
     const a = midRun(77, 4);
     const b = reload(a);
-    for (let i = 0; i < 6 && a.phase !== "over"; i++) {
+    for (let i = 0; i < 6 && a.stage.phase !== "over"; i++) {
       // The same actions on both: new offers, a purchase, a planned room, a fight.
       expect(rustle(b)).toEqual(rustle(a));
       expect(buy(b, 0)).toEqual(buy(a, 0));
@@ -114,12 +130,12 @@ describe("saving a run", () => {
   test("a run saved before its first pick, and one saved in the middle of a fight, load too", () => {
     const fresh = startRun(5);
     expect(reload(fresh)).toEqual(fresh);
-    expect(reload(fresh).choices[0]?.kind).toBe("starter");
+    expect(picksOf(reload(fresh))[0]?.kind).toBe("starter");
     const fighting = midRun(5, 2);
     planRoom(fighting, SENSIBLE);
     const begun = beginFight(fighting);
     const back = reload(fighting);
-    expect(back.phase).toBe("fight");
+    expect(back.stage.phase).toBe("fight");
     // The fight plays out the same from its seed, so the takings are the same.
     const original = takeTakings(fighting);
     expect(takeTakings(back)).toEqual(original);
@@ -162,7 +178,7 @@ describe("saving a run", () => {
   });
   test("a finished run loads as finished", () => {
     const run = midRun(3, 99);
-    expect(run.phase).toBe("over");
+    expect(run.stage.phase).toBe("over");
     expect(reload(run)).toEqual(run);
   });
 });
@@ -202,7 +218,7 @@ describe("loading puts right what today's rules would not allow", () => {
       tampered(run, (raw) => (raw.stall = ["dragon", null, null, null, null])),
       tampered(run, (raw) => (raw.foe = { who: "x" })),
       tampered(run, (raw) => (raw.foe = { who: "x", title: "", figures: [], charms: [], boons: [], might: 100 })),
-      tampered(run, (raw) => (raw.choices = [{ kind: "boon", options: [], redraws: 0 }])),
+      tampered(run, (raw) => (raw.stage = { phase: "plan", picks: [{ kind: "boon", options: [], redraws: 0 }] })),
     ].map(mustLoad);
     for (const laid of again) {
       expect([laid.board, laid.bench, laid.items, laid.acorns, laid.level, laid.room]).toEqual([
@@ -216,39 +232,33 @@ describe("loading puts right what today's rules would not allow", () => {
       expect(laid.stall.every((offer) => offer === null || FIGURE_IDS.includes(offer))).toBe(true);
       expect(laid.foe.figures.length).toBeGreaterThan(0);
     }
-    expect(again[3]?.choices).toMatchObject([{ kind: "boon", redraws: 0 }]);
-    expect(again[3]?.choices[0]?.options).toHaveLength(3);
+    const boon = again[3];
+    expect(boon && picksOf(boon)).toMatchObject([{ kind: "boon", redraws: 0 }]);
+    expect(boon && picksOf(boon)[0]?.options).toHaveLength(3);
   });
   test("a run in a fight that no longer reads is put back to planning the room", () => {
     const fighting = midRun(12, 4);
     expect(beginFight(fighting).ok).toBe(true);
     const back = mustLoad(
       tampered(fighting, (raw) => {
-        raw.fight = { setup: { seed: 1, sides: [] } };
+        raw.stage = { phase: "fight", fight: { setup: { seed: 1, sides: [] } } };
       }),
     );
-    expect([back.phase, back.fight, back.room]).toEqual(["plan", null, fighting.room]);
+    expect([back.stage, back.room]).toEqual([{ phase: "plan", picks: [] }, fighting.room]);
   });
   test("a stall or a bench of another size is today's size, and starters that cost more are offered as they were", () => {
     expect(mustLoad(tampered(run, (raw) => (raw.stall = [null]))).stall).toHaveLength(ECONOMY.stall);
     expect(mustLoad(tampered(run, (raw) => listIn(raw.bench).push(null))).bench).toHaveLength(ECONOMY.bench);
     const fresh = startRun(4);
-    const greg = mustLoad(tampered(fresh, (raw) => (raw.choices = [{ kind: "starter", options: ["greg"] }])));
-    expect(greg.choices).toEqual([{ kind: "starter", options: ["greg"] }]);
+    const greg = mustLoad(
+      tampered(fresh, (raw) => (raw.stage = { phase: "plan", picks: [{ kind: "starter", options: ["greg"] }] })),
+    );
+    expect(picksOf(greg)).toEqual([{ kind: "starter", options: ["greg"] }]);
   });
 });
 
 describe("loading refuses nonsense", () => {
   const run = midRun(12, 4);
-  test("text that is not a save at all", () => {
-    for (const text of ["", "not json", "null", "[]", "{}", '{"game":"another","v":1,"run":{}}', "42"]) {
-      expect(refused(text)).toBe("That is not a saved raid.");
-    }
-  });
-  test("a save from another version", () => {
-    const text = tampered(run, (_, whole) => (whole.v = SAVE_VERSION + 1));
-    expect(refused(text)).toBe("That raid was saved by a different version of the game.");
-  });
   test("numbers out of range", () => {
     const cases: [string, unknown][] = [
       ["acorns", -1],
@@ -261,7 +271,7 @@ describe("loading refuses nonsense", () => {
       ["rng", -1],
       ["seed", 2 ** 32],
       ["xp", -1],
-      ["phase", "napping"],
+      ["stage", { phase: "napping" }],
       ["held", "yes"],
     ];
     for (const [field, value] of cases) {
@@ -298,12 +308,12 @@ describe("loading refuses nonsense", () => {
     ).toContain("numbers");
   });
   test("a choice that is no choice", () => {
-    expect(refused(tampered(run, (raw) => (raw.choices = [{ kind: "wish", options: ["worm"] }])))).toContain(
-      "a choice",
-    );
+    expect(
+      refused(tampered(run, (raw) => (raw.stage = { phase: "plan", picks: [{ kind: "wish", options: ["worm"] }] }))),
+    ).toContain("a choice");
   });
   test("an ending that contradicts itself", () => {
-    expect(refused(tampered(run, (raw) => (raw.won = true)))).toContain("the ending");
+    expect(refused(tampered(run, (raw) => (raw.stage = { phase: "over", ending: "maybe" })))).toContain("the ending");
     expect(refused(tampered(run, (raw) => (raw.resolve = 0)))).toContain("the ending");
     expect(refused(tampered(run, (raw) => delete raw.seen))).toContain("the almanac notes");
     expect(refused(tampered(run, (raw) => delete raw.record))).toContain("the record");

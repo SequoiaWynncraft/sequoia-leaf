@@ -18,7 +18,7 @@ import { ROOM_COUNT, ROOMS, TRAILS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { CALLINGS, KINS, TRAIT_IDS, type TraitId, TRAITS } from "@sequoia-leaf/raid/content/traits.ts";
 import { resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
 import type { FightSetup, FightSummary } from "@sequoia-leaf/raid/fight/types.ts";
-import { beginFight, startRun, takeTakings, traitsNow } from "@sequoia-leaf/raid/run.ts";
+import { beginFight, endingOf, startRun, takeTakings, traitsNow } from "@sequoia-leaf/raid/run.ts";
 
 const args = process.argv.slice(2);
 const runs = Number(args[0] ?? 200);
@@ -134,7 +134,7 @@ for (const habit of HABITS) {
   for (let i = 0; i < ROOM_COUNT + 1; i++) line.ends.push(0);
   for (let n = 1; n <= runs; n++) {
     const run = startRun(n * 7919 + 13, { trail });
-    for (let guard = 0; guard < 200 && run.phase !== "over"; guard++) {
+    for (let guard = 0; guard < 200 && run.stage.phase !== "over"; guard++) {
       planRoom(run, habit);
       const room = run.room;
       const traits = traitsNow(run).filter((t) => t.step > 0);
@@ -188,10 +188,10 @@ for (const habit of HABITS) {
     if (furthest >= 5) line.wing1++;
     if (furthest >= 10) line.wing2++;
     if (furthest >= ROOM_COUNT - 1) line.met++;
-    if (run.won) line.beat++;
+    if (endingOf(run) === "won") line.beat++;
     line.rooms += cleared;
     line.level += run.level;
-    const end = run.won ? ROOM_COUNT : furthest;
+    const end = endingOf(run) === "won" ? ROOM_COUNT : furthest;
     line.ends[end] = (line.ends[end] ?? 0) + 1;
   }
   lines.push(line);

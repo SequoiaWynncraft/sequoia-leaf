@@ -8,7 +8,7 @@ import { HOLDS } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
 import { RAID, type Table } from "./game.ts";
-import type { Piece, Run } from "./run.ts";
+import { type Choice, type Fought, foughtOf, type Phase, picksOf, type Piece, type Run } from "./run.ts";
 
 /**
  * Tables as Leaf stores them, made by the rules of earlier versions and frozen in `../stored`. Each
@@ -39,9 +39,17 @@ const runOf = (table: Table): Run => {
   if (!table.run) throw new Error("no run");
   return table.run;
 };
-/** A fixture as later rules might find it: its text with `change` made to its data. */
-function shifted(name: string, change: (raw: Table & { run: Run }) => void): string {
-  const raw: Table & { run: Run } = JSON.parse(fixture(name));
+/** A run as a table of version 1 kept it: where it stood as a phase, the picks, two flags and the fight. */
+type Kept1 = Omit<Run, "stage"> & {
+  phase: Phase;
+  choices: Choice[];
+  won: boolean;
+  left: boolean;
+  fight: Fought | null;
+};
+/** A fixture (each is of version 1) as later rules might find it: its text with `change` made to its data. */
+function shifted(name: string, change: (raw: Omit<Table, "run"> & { run: Kept1 }) => void): string {
+  const raw: Omit<Table, "run"> & { run: Kept1 } = JSON.parse(fixture(name));
   change(raw);
   return JSON.stringify(raw);
 }
@@ -52,7 +60,7 @@ describe("every stored table kept as a fixture", () => {
     expect(read(RAID.encode(table))).toEqual(table);
     expect(RAID.view(table, ctx())).toBeDefined();
     const run = table.run;
-    const next = !run ? "start" : run.phase === "fight" ? "take" : run.choices.length > 0 ? "choose" : "fight";
+    const next = !run ? "start" : run.stage.phase === "fight" ? "take" : picksOf(run).length > 0 ? "choose" : "fight";
     const command = RAID.command({ do: next, trail: 0, option: 0 });
     if (!command) throw new Error("no command");
     const done = RAID.apply(table, command, ctx());
@@ -68,6 +76,22 @@ describe("every stored table kept as a fixture", () => {
       "planning.json",
       "starter-waiting.json",
     ]);
+  });
+});
+
+describe("a table of version 1", () => {
+  test("reads with where its run stands as one value: the picks waiting, or the fight with the outcome Leaf kept", () => {
+    const picks: { run: Kept1 } = JSON.parse(fixture("picks-waiting.json"));
+    expect(runOf(read(fixture("picks-waiting.json"))).stage).toEqual({ phase: "plan", picks: picks.run.choices });
+    const fighting: { run: Kept1 } = JSON.parse(fixture("fighting.json"));
+    expect(foughtOf(runOf(read(fixture("fighting.json"))))).toEqual(fighting.run.fight);
+  });
+  test("is stored again as the version now, and reads back the same", () => {
+    for (const [, text] of FIXTURES) {
+      const table = read(text);
+      expect(JSON.parse(RAID.encode(table))).toMatchObject({ v: 2 });
+      expect(read(RAID.encode(table))).toEqual(table);
+    }
   });
 });
 
@@ -144,13 +168,15 @@ describe("a table stored under other numbers", () => {
   });
 
   test("starters that no longer cost 1 are offered as they were", () => {
-    const options = runOf(
-      read(
-        shifted("starter-waiting.json", (raw) => {
-          raw.run.choices = [{ kind: "starter", options: ["worm", "badger", "greg"] }];
-        }),
+    const options = picksOf(
+      runOf(
+        read(
+          shifted("starter-waiting.json", (raw) => {
+            raw.run.choices = [{ kind: "starter", options: ["worm", "badger", "greg"] }];
+          }),
+        ),
       ),
-    ).choices;
+    );
     expect(options).toEqual([{ kind: "starter", options: ["worm", "badger", "greg"] }]);
   });
 
@@ -164,7 +190,7 @@ describe("a table stored under other numbers", () => {
       ),
     );
     expect(run.resolve).toBe(ECONOMY.resolve);
-    expect(run.choices.find((c) => c.kind === "boon")).toMatchObject({ redraws: ECONOMY.boonRedraws });
+    expect(picksOf(run).find((c) => c.kind === "boon")).toMatchObject({ redraws: ECONOMY.boonRedraws });
   });
 
   test("a figure holding more than a figure holds now: the rest go to the item bench", () => {

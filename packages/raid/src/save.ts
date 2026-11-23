@@ -1,6 +1,7 @@
 /**
- * A run in progress as plain data and as text, and back. A run is plain data, so saving is writing
- * it out with a version on it. Reading is the careful half, done in two layers.
+ * A run in progress read back from plain data: as Leaf stored it in a table, or as the page is shown
+ * it. A run is plain data, so keeping it is writing it out. Reading is the careful half, done in two
+ * layers.
  *
  * The first reads the shape every run of this version has, field by field into a fresh run, and
  * refuses anything else with a word about what was wrong: figures, items and boons the content does
@@ -41,20 +42,16 @@ import {
   type Fought,
   gainXp,
   layOutAfresh,
+  picksOf,
   type Piece,
   pieces,
   type RoomRecord,
   type Run,
+  type RunView,
   sellValue,
+  type Stage,
   stallSize,
 } from "./run.ts";
-
-/** The version a run is written with: 2 keeps the fight being fought. */
-export const SAVE_VERSION = 2;
-const GAME = "little-raid";
-
-/** A run as text. */
-export const saveRun = (run: Run): string => JSON.stringify({ game: GAME, v: SAVE_VERSION, run });
 
 /** Thrown by the readers below on the first thing that is wrong, with what it was. */
 export class Nonsense extends Error {}
@@ -177,9 +174,8 @@ function readOutcome(v: unknown, what: string): FightSummary {
     units: list(o.units, 400, what).map((u) => readTally(u, what)),
   };
 }
-/** The fight being fought, while there is one: its setup, and how Leaf decided it came out. */
-function readFought(v: unknown, fighting: boolean): Fought | null {
-  if (!fighting) return v === undefined || v === null ? null : bad("the fight");
+/** The fight being fought: its setup, and how Leaf decided it came out. */
+function readFought(v: unknown): Fought {
   const fight = record(v, "the fight");
   const setup = readSetup(fight.setup, "the fight");
   if (setup.sides[0].figures.length === 0 || setup.sides[1].figures.length === 0) bad("the fight");
@@ -190,16 +186,42 @@ function readFoe(v: unknown): Party {
   return foe.figures.length === 0 ? bad("who is waiting in the room") : foe;
 }
 
+/** Reading one part of a run: as it is, or what to put in its place if it does not read (`drawn`). */
+type Drawn = <T>(read: () => T, otherwise: T, again?: boolean) => T;
+
+/** The picks waiting: the first with what it offers, and (`shown`) the rest by their kind alone. */
+const readPicks = (v: unknown, shown: boolean, drawn: Drawn): Choice[] =>
+  list(v, 8, "the choices").map((c, i) =>
+    shown && i > 0 ? blankChoice(c) : drawn(() => readChoice(c), blankChoice(c)),
+  );
+
 /**
- * A run, or (`shown`) a run as the page is shown it: with no streams, and only the first pick's
- * options. What the run drew and no longer reads is drawn again; a run as shown has no stream to
- * draw it from, and is refused.
+ * Where the run stands. A table of version 1 kept it as a phase, the picks, two flags for the ending
+ * and the fight beside them; from version 2 it is one value.
  */
-function readRun(v: unknown, shown = false): Run {
-  const r = record(v, "the run");
+function readStage(r: Record<string, unknown>, old: boolean, shown: boolean, drawn: Drawn): Stage {
+  const s = old ? r : record(r.stage, "the stage");
+  const phase = s.phase === "plan" || s.phase === "fight" || s.phase === "over" ? s.phase : bad("the phase");
+  if (phase === "plan") return { phase, picks: readPicks(old ? s.choices : s.picks, shown, drawn) };
+  if (phase === "fight") {
+    const fight = drawn(() => readFought(s.fight), null);
+    return fight ? { phase, fight } : { phase: "plan", picks: [] };
+  }
+  if (!old)
+    return {
+      phase,
+      ending: s.ending === "won" || s.ending === "lost" || s.ending === "left" ? s.ending : bad("the ending"),
+    };
+  return { phase, ending: flag(s.won, "the ending") ? "won" : flag(s.left, "the ending") ? "left" : "lost" };
+}
+
+/**
+ * Everything of a run but its streams. What the run drew and does not read is left to be drawn again
+ * (`afresh`), but for a run as the page is shown it, which has no stream to draw it from: that is refused.
+ */
+function readParts(r: Record<string, unknown>, old: boolean, shown: boolean): { run: RunView; afresh: boolean } {
   let afresh = false;
-  /** A part the run drew: read, or (on Leaf) `otherwise`, and drawn again unless it is only looked back on. */
-  const drawn = <T>(read: () => T, otherwise: T, again = true): T => {
+  const drawn: Drawn = (read, otherwise, again = true) => {
     try {
       return read();
     } catch (err) {
@@ -211,7 +233,6 @@ function readRun(v: unknown, shown = false): Run {
   const boons: BoonId[] = unique(each(r.boons, isBoonId, BOON_IDS.length, "the boons"), "the boons");
   const room = whole(r.room, 0, ROOMY, "the room");
   const nextId = whole(r.nextId, 1, 1_000_000, "the figures' numbers");
-  const phase = r.phase === "plan" || r.phase === "fight" || r.phase === "over" ? r.phase : bad("the phase");
   const board = list(r.board, SEATS, "the board").map((x) => readPiece(x, nextId));
   const bench = list(r.bench, ROOMY, "the bench").map((x) => readPiece(x, nextId));
   if (board.length !== SEATS) bad("the board");
@@ -227,12 +248,10 @@ function readRun(v: unknown, shown = false): Run {
   unique(emblems, "the emblems");
   // A run saved while some figures were locked lists the ones its stall could offer; every figure can now.
   const seen = record(r.seen, "the almanac notes");
-  const run: Run = {
-    seed: shown ? 0 : whole(r.seed, 0, UINT, "the seed"),
-    rng: shown ? 0 : whole(r.rng, 0, UINT, "the random stream"),
+  const run: RunView = {
     trail: whole(r.trail, 0, ROOMY, "the trail"),
     room,
-    phase,
+    stage: readStage(r, old, shown, drawn),
     resolve: whole(r.resolve, 0, ROOMY, "the resolve"),
     acorns: whole(r.acorns, 0, 100_000, "the acorns"),
     // A run saved before streaks were kept has none.
@@ -253,16 +272,10 @@ function readRun(v: unknown, shown = false): Run {
     rustles: whole(r.rustles, 0, ROOMY, "the free rustles"),
     bought: whole(r.bought, 0, 10_000, "the figures bought"),
     boons,
-    choices: list(r.choices, 8, "the choices").map((c, i) =>
-      shown && i > 0 ? blankChoice(c) : drawn(() => readChoice(c), blankChoice(c)),
-    ),
     foe: drawn(() => readFoe(r.foe), { who: "", title: "", figures: [], boons: [], might: 100 }),
     record: list(r.record, 400, "the record").map((x) => readRecord(x, room)),
     nextId,
-    won: flag(r.won, "the ending"),
-    left: flag(r.left, "the ending"),
     last: drawn(() => readLast(r.last), null, false),
-    fight: drawn(() => readFought(r.fight, phase === "fight"), null),
     seen: {
       fielded: unique(each(seen.fielded, isFigureId, FIGURE_IDS.length, "the almanac notes"), "the almanac notes"),
       threeStars: unique(
@@ -274,18 +287,30 @@ function readRun(v: unknown, shown = false): Run {
     },
   };
   // The parts have to agree with each other, too.
-  if (run.phase === "fight" && fielded(run) === 0) bad("who is fighting");
-  if (run.phase !== "over" && (run.won || run.left || run.resolve <= 0)) bad("the ending");
-  if (run.won && (run.left || run.resolve <= 0)) bad("the ending");
-  if (run.phase !== "over" && ids.length === 0 && run.choices[0]?.kind !== "starter") bad("the party");
-  if (run.choices.some((c, i) => c.kind === "starter" && (i > 0 || ids.length > 0))) bad("the choices");
+  const picks = picksOf(run);
+  if (run.stage.phase === "fight" && fielded(run) === 0) bad("who is fighting");
+  if (run.stage.phase !== "over" && run.resolve <= 0) bad("the ending");
+  if (run.stage.phase !== "over" && ids.length === 0 && picks[0]?.kind !== "starter") bad("the party");
+  if (picks.some((c, i) => c.kind === "starter" && (i > 0 || ids.length > 0))) bad("the choices");
   // A streak is no longer than the rooms fought, and runs the way the last one went.
   const lastResult = run.record.at(-1)?.result;
   if (Math.abs(run.streak) > run.record.length) bad("the streak");
   if (run.streak > 0 && lastResult !== "win") bad("the streak");
   if (run.streak < 0 && lastResult !== "loss") bad("the streak");
-  if (afresh && run.phase !== "over") layOutAfresh(run, mix(run.rng, 0xa7e5));
-  if (!shown) settle(run);
+  return { run, afresh };
+}
+
+/** A run as Leaf keeps it, of table version 1 (`old`) or since: with its streams, under today's numbers. */
+function readRun(v: unknown, old: boolean): Run {
+  const r = record(v, "the run");
+  const { run: parts, afresh } = readParts(r, old, false);
+  const run: Run = {
+    seed: whole(r.seed, 0, UINT, "the seed"),
+    rng: whole(r.rng, 0, UINT, "the random stream"),
+    ...parts,
+  };
+  if (afresh && run.stage.phase !== "over") layOutAfresh(run, mix(run.rng, 0xa7e5));
+  settle(run);
   return run;
 }
 
@@ -332,41 +357,29 @@ function settle(run: Run): void {
     piece.items = held;
     piece.fed = piece.kind === "greg" ? Math.min(piece.fed, traitNumber("greg", "most", 1)) : 0;
   }
-  for (const choice of run.choices) {
+  for (const choice of picksOf(run)) {
     if (choice.kind === "boon") choice.redraws = Math.min(choice.redraws, ECONOMY.boonRedraws);
   }
 }
 
 export type Loaded = { ok: true; run: Run } | { ok: false; why: string };
 
-/**
- * A run from plain data, as `JSON.parse` gives it back; or the reason the data is not one. `shown`
- * reads a run as the page is shown it, with no streams (they come back as 0) and nothing of what the
- * picks after the first will offer.
- */
-export function checkRun(v: unknown, shown = false): Loaded {
+/** A run as Leaf keeps it in a table of version 1 (`old`) or since; or the reason the data is not one. */
+export function checkRun(v: unknown, old = false): Loaded {
   try {
-    return { ok: true, run: readRun(v, shown) };
+    return { ok: true, run: readRun(v, old) };
   } catch (err) {
     if (err instanceof Nonsense) return { ok: false, why: `That raid does not add up: ${err.message} is wrong.` };
     throw err;
   }
 }
 
-/** A run from text, exactly as it was saved; or the reason the text is not one. */
-export function loadRun(text: string): Loaded {
-  let raw: unknown;
+/** A run as the page is shown it (no streams, only the first pick's options), or null for one these rules could not have made. */
+export function readRunView(v: unknown): RunView | null {
   try {
-    raw = JSON.parse(text);
-  } catch {
-    return { ok: false, why: "That is not a saved raid." };
-  }
-  if (!isRecord(raw) || raw.game !== GAME) return { ok: false, why: "That is not a saved raid." };
-  if (raw.v !== SAVE_VERSION) return { ok: false, why: "That raid was saved by a different version of the game." };
-  try {
-    return { ok: true, run: readRun(raw.run) };
+    return readParts(record(v, "the run"), false, true).run;
   } catch (err) {
-    if (err instanceof Nonsense) return { ok: false, why: `That saved raid does not add up: ${err.message} is wrong.` };
+    if (err instanceof Nonsense) return null;
     throw err;
   }
 }

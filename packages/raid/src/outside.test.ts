@@ -20,8 +20,7 @@ import { type RunSummary, startRun } from "./run.ts";
 
 const summary = (more: Partial<RunSummary> = {}): RunSummary => ({
   trail: 0,
-  won: false,
-  left: false,
+  ending: "lost",
   cleared: 0,
   reached: 1,
   bosses: [],
@@ -32,7 +31,7 @@ const summary = (more: Partial<RunSummary> = {}): RunSummary => ({
   ...more,
 });
 const WON = summary({
-  won: true,
+  ending: "won",
   cleared: 15,
   reached: 15,
   bosses: ["oldbramble", "hoardmagpie", "bigcrab"],
@@ -53,7 +52,7 @@ describe("the payout", () => {
   });
   test("an abandoned run is paid for what it cleared, the same as one that walked home", () => {
     const walked = summary({ cleared: 6, bosses: ["oldbramble"] });
-    expect(payout({ ...walked, left: true })).toEqual(payout(walked));
+    expect(payout({ ...walked, ending: "left" })).toEqual(payout(walked));
   });
   test("harder trails pay their share more, and the lines add up to the total", () => {
     for (let trail = 0; trail < TRAILS.length; trail++) {

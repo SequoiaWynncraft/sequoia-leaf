@@ -203,9 +203,14 @@ export {
   type Refused,
   roomNow,
   type RoomRecord,
+  type Ending,
+  endingOf,
+  foughtOf,
+  picksOf,
   type Run,
   type RunOptions,
   type RunSummary,
+  type Stage,
   rustle,
   rustleCost,
   sell,
@@ -226,7 +231,7 @@ export {
   whyText,
   xpToNext,
 } from "./run.ts";
-export { checkRun, type Loaded, loadRun, SAVE_VERSION, saveRun } from "./save.ts";
+export { checkRun, type Loaded, readRunView } from "./save.ts";
 
 // Between runs.
 export {
@@ -252,6 +257,7 @@ export {
   type Habit,
   type Hands,
   planRoom,
+  planWith,
   playRoom,
   playRun,
   ROLLER,
@@ -290,9 +296,10 @@ export {
 export {
   decodeTable,
   encodeTable,
-  localRun,
+  isPredicted,
   newTable,
   planCommands,
+  type Predicted,
   PREDICTED,
   predict,
   RAID,

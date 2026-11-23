@@ -44,7 +44,9 @@ import {
 import { staged as stagedYard } from "@sequoia-leaf/factory/test/yards.ts";
 import { PULLS } from "@sequoia-leaf/pulls";
 import {
+  foughtOf,
   isParty,
+  picksOf,
   planCommands,
   RAID,
   type RaidCommand,
@@ -280,7 +282,7 @@ describe("a new player", () => {
     const table = await opened(carol);
     expect(table.view.run).toBeNull();
     const done = await commanded(ided([{ do: "start", trail: 0 }]), carol);
-    expect(done.view.run?.choices[0]?.kind).toBe("starter");
+    expect(done.view.run && picksOf(done.view.run)[0]?.kind).toBe("starter");
     expect(await coinsOf(carol)).toBe(300);
   });
 });
@@ -487,10 +489,10 @@ describe("commands", () => {
     expect(kept).toHaveLength(ANSWERS_KEPT);
     expect(kept.at(-1)).toEqual({ command_id: `c-${made}`, result: '{"refused":"pick_starter"}' });
     expect(kept.some((row) => Object(row).command_id === setOut.id)).toBe(false);
-    // The first is no longer known: sent again it is done again (and setting out again, with no room fought, changes nothing).
+    // The first is no longer known: sent again it is done again (and setting out again, with no room fought, is refused).
     clock.now += 4000;
     const again = await commanded(first);
-    expect(again.results).toEqual([{ id: setOut.id, notes: [] }]);
+    expect(again.results).toEqual([{ id: setOut.id, refused: "unfought" }]);
     expect(again.rev).toBe(1);
   });
 
@@ -602,10 +604,12 @@ describe("one player's game", () => {
     const fromAlice = await commanded(shared, alice);
     const fromBob = await commanded(shared, bob);
     expect(fromBob.results[0]).toMatchObject({ notes: [{ t: "started", run: 1 }] });
-    // Alice's raid has fought no room yet, so setting out again leaves it as it is.
-    expect(fromAlice.results[0]).toEqual({ id: "c-shared", notes: [] });
-    expect((await opened(alice)).view.run?.choices).toEqual([]);
-    expect((await opened(bob)).view.run?.choices[0]?.kind).toBe("starter");
+    // Alice's raid has fought no room yet, so setting out again is refused, and it stays as it is.
+    expect(fromAlice.results[0]).toEqual({ id: "c-shared", refused: "unfought" });
+    const alices = (await opened(alice)).view.run;
+    expect(alices && picksOf(alices)).toEqual([]);
+    const bobsNow = (await opened(bob)).view.run;
+    expect(bobsNow && picksOf(bobsNow)[0]?.kind).toBe("starter");
   });
 
   it("is commanded only by a page that is the session's player: another gets 409 not_you, and nothing is done", async () => {
@@ -727,7 +731,7 @@ describe("the view", () => {
     const run = done.view.run;
     expect(run && "seed" in run).toBe(false);
     expect(Object.keys(Object(Object(done.state).run))).not.toContain("seed");
-    expect(run?.fight?.setup.seed).toEqual(expect.any(Number));
+    expect(run && foughtOf(run)?.setup.seed).toEqual(expect.any(Number));
   });
 });
 
@@ -1155,7 +1159,10 @@ const KEEPER: Game<{ bought: number }, { slot: string; text: string }, { bought:
 };
 
 /** The party Leaf decided the fight from, as the batch that fought was answered. */
-const fought = (answer: Awaited<ReturnType<typeof commanded>>) => answer.view.run?.fight?.setup.sides[0];
+const fought = (answer: Awaited<ReturnType<typeof commanded>>) => {
+  const run = answer.view.run;
+  return run ? foughtOf(run)?.setup.sides[0] : undefined;
+};
 
 describe("what a game keeps of a player's", () => {
   it("is the board a member fought a room with, by trail and room; fought again, the room's board is the newer", async () => {
@@ -1330,7 +1337,7 @@ describe("the board", () => {
 });
 
 describe("setting out afresh", () => {
-  it("before a room is fought changes nothing: no new opening, nothing paid, nothing logged", async () => {
+  it("before a room is fought is refused: no new opening, nothing paid, nothing logged", async () => {
     const begun = await commanded(
       ided([
         { do: "start", trail: 0 },
@@ -1338,7 +1345,11 @@ describe("setting out afresh", () => {
       ]),
     );
     const again = await commanded(ided([{ do: "start", trail: 0 }, { do: "abandon" }, { do: "start", trail: 0 }]));
-    expect(again.results.map((r) => ("notes" in r ? r.notes : r.refused))).toEqual([[], [], []]);
+    expect(again.results.map((r) => ("notes" in r ? r.notes : r.refused))).toEqual([
+      "unfought",
+      "unfought",
+      "unfought",
+    ]);
     expect(again.rev).toBe(begun.rev);
     expect(again.state).toEqual(begun.state);
     expect(await services.query((sql) => sql`SELECT kind FROM activity`)).toEqual([{ kind: "raid_started" }]);

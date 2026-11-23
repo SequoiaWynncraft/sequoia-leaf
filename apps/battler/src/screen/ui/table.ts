@@ -20,10 +20,11 @@ import {
   FIGURES,
   type ItemId,
   MAX_LEVEL,
+  picksOf,
   pieces,
   priceOf,
   ROOMS,
-  type Run,
+  type RunView,
   rustleCost,
   tally,
   topStep,
@@ -230,16 +231,16 @@ export function toast(text: string, tone: "coral" | "gold" | "leaf" = "coral"): 
   window.setTimeout(() => line.remove(), 2200);
 }
 
-function renderTrack(run: Run): void {
+function renderTrack(run: RunView): void {
   const track = byId("track");
   if (!track) return;
-  const key = `${run.seed}:${run.room}:${run.phase}:${run.record.map((r) => r.result[0]).join("")}`;
+  const key = `${S.runs}:${run.room}:${run.stage.phase}:${run.record.map((r) => r.result[0]).join("")}`;
   if (key === trackKey) return;
   trackKey = key;
   track.replaceChildren();
   ROOMS.forEach((room, i) => {
     const record = run.record.findLast((r) => r.room === i);
-    const here = i === run.room && run.phase !== "over";
+    const here = i === run.room && run.stage.phase !== "over";
     const state = record ? (record.result === "win" ? "won" : record.result === "loss" ? "lost" : "drawn") : "";
     const pip = el(
       "button",
@@ -252,7 +253,7 @@ function renderTrack(run: Run): void {
   });
 }
 
-function renderResolve(run: Run): void {
+function renderResolve(run: RunView): void {
   const node = byId("resolve");
   if (!node) return;
   const n = shown.resolve ?? run.resolve;
@@ -275,7 +276,7 @@ function chipFor(trait: TraitId): HTMLButtonElement {
   return chip;
 }
 
-function renderTraits(run: Run): void {
+function renderTraits(run: RunView): void {
   const box = byId("traits");
   if (!box) return;
   const states = traitsNow(run);
@@ -309,7 +310,7 @@ function renderTraits(run: Run): void {
   paintLight();
 }
 
-function renderRack(run: Run): void {
+function renderRack(run: RunView): void {
   const rack = byId("rack");
   if (!rack) return;
   const key = `${run.items.join()}|${run.boons.join()}`;
@@ -344,13 +345,14 @@ function renderRack(run: Run): void {
 }
 
 /** How many of a figure the party owns at one star: two means the next one makes three. */
-const twins = (run: Run, kind: FigureId): number => pieces(run).filter((p) => p.kind === kind && p.stars === 1).length;
+const twins = (run: RunView, kind: FigureId): number =>
+  pieces(run).filter((p) => p.kind === kind && p.stars === 1).length;
 
 /** The stall whose width is watched, and the watcher. */
 let stallWatched: HTMLElement | null = null;
 let stallWatcher: ResizeObserver | null = null;
 
-function renderStall(run: Run): void {
+function renderStall(run: RunView): void {
   const stall = byId("stall");
   if (!stall) return;
   const key = run.stall
@@ -402,7 +404,7 @@ function renderStall(run: Run): void {
   paintLight();
 }
 
-function renderPurseSide(run: Run): void {
+function renderPurseSide(run: RunView): void {
   const node = byId("acorns");
   const level = byId("level");
   if (!node || !level) return;
@@ -461,7 +463,7 @@ function face(node: HTMLElement, says: string, ...kids: Node[]): void {
   node.replaceChildren(...kids);
 }
 
-function renderActs(run: Run): void {
+function renderActs(run: RunView): void {
   const rustle = byId("rustle");
   const hold = byId("holdbtn");
   const levelUp = byId("levelup");
@@ -483,7 +485,7 @@ function renderActs(run: Run): void {
   setOut.classList.toggle("off", fielded(run) === 0);
 }
 
-function renderFightBar(run: Run): void {
+function renderFightBar(run: RunView): void {
   panelTally?.across(run.foe.who);
   for (const tab of document.querySelectorAll<HTMLElement>("#speeds [data-speed]")) {
     tab.setAttribute("aria-selected", String(Number(tab.dataset.speed) === S.prefs.speed));
@@ -494,7 +496,7 @@ function renderFightBar(run: Run): void {
  * Who is across the table, on a small plate beside them: a regular with the town's mark, "Greg
  * brought Mist Fangs"; the forest's own trouble by its name.
  */
-function renderFoe(run: Run): void {
+function renderFoe(run: RunView): void {
   const foe = byId("foe");
   if (!foe) return;
   // While a fight's sheet is up the room that is over is what is talked about, not the one coming.
@@ -541,10 +543,10 @@ export function renderTable(): void {
   if ((!run || S.mode === "front" || S.mode === "over") && (light.kept !== null || light.pointed !== null))
     forgetLight();
   if (!run) return;
-  document.body.dataset.picking = run.choices.length > 0 && S.mode === "plan" ? "yes" : "no";
+  document.body.dataset.picking = picksOf(run).length > 0 && S.mode === "plan" ? "yes" : "no";
   renderTrack(run);
   const last = byId("lastfight");
-  if (last) last.hidden = S.mode !== "plan" || run.last === null || run.choices.length > 0;
+  if (last) last.hidden = S.mode !== "plan" || run.last === null || picksOf(run).length > 0;
   renderResolve(run);
   renderTraits(run);
   renderRack(run);

@@ -22,7 +22,7 @@ import {
   type Refused,
 } from "@sequoia-leaf/core";
 
-import { DIRECT, type Habit, type Hands, planRoom } from "./bot.ts";
+import { type Habit, type Hands, planWith } from "./bot.ts";
 import {
   isBoughtLook,
   isLookKind,
@@ -54,6 +54,7 @@ import {
   buyXp,
   type Choice,
   choose,
+  type Done as RunDone,
   fieldCap,
   giveItem,
   hold,
@@ -64,9 +65,11 @@ import {
   REFUSALS,
   type Run,
   type RunSummary,
+  type RunView,
   rustle,
   sell,
   type Spot,
+  type Stage,
   startRun,
   summariseRun,
   takeTakings,
@@ -75,6 +78,8 @@ import {
   whyText,
 } from "./run.ts";
 import { checkRun } from "./save.ts";
+
+export type { RunView } from "./run.ts";
 
 // ---------- the state ----------
 
@@ -91,9 +96,6 @@ export interface Table {
   trail: number;
   looks: Looks;
 }
-
-/** A run as the page is shown it: without its streams, and with only the first of the picks waiting. */
-export type RunView = Omit<Run, "seed" | "rng">;
 
 /** What the player's page is given. */
 export interface TableView {
@@ -145,7 +147,10 @@ export type RaidCommandName = RaidCommand["do"];
 export type RunCommand = Exclude<RaidCommand, { do: "start" | "trail" | "look" | "buyLook" }>;
 
 /** The commands a page may show before Leaf answers: they draw nothing, so Leaf will do just the same. */
-export const PREDICTED: readonly RaidCommandName[] = ["move", "bench", "sell", "give", "hold", "buy", "xp"];
+export const PREDICTED = ["move", "bench", "sell", "give", "hold", "buy", "xp"] as const satisfies RaidCommandName[];
+/** A command a page may show before Leaf answers. */
+export type Predicted = Extract<RaidCommand, { do: (typeof PREDICTED)[number] }>;
+export const isPredicted = (c: RaidCommand): c is Predicted => PREDICTED.some((name) => name === c.do);
 
 /** What a command did, for the page to show. */
 export type RaidNote =
@@ -159,6 +164,7 @@ export type RaidNote =
 /** Why the table turned a command down, besides the run's own reasons. */
 export const TABLE_REFUSALS = {
   no_run: "There is no raid laid out.",
+  unfought: "The first room has not been fought yet.",
   trail_closed: "That trail is not open yet.",
   no_such_look: "There is no such look.",
   not_owned: "That look is not yours yet.",
@@ -175,7 +181,7 @@ export function refusalText(code: string, view?: TableView): string {
   const table = Object.entries(TABLE_REFUSALS).find(([c]) => c === code);
   if (table) return table[1];
   const run = Object.keys(REFUSALS).find((c): c is Why => c === code);
-  if (run) return whyText(run, view?.run ? fieldCap(localRun(view.run)) : undefined);
+  if (run) return whyText(run, view?.run ? fieldCap(view.run) : undefined);
   return "That cannot be done just now.";
 }
 
@@ -245,12 +251,16 @@ function unseen(choice: Choice): Choice {
       : { kind: "starter", options: [] };
 }
 
+/** Where a run stands as the page is shown it: only the first of the picks waiting says what it offers. */
+const stageView = (stage: Stage): Stage =>
+  stage.phase === "plan" ? { phase: "plan", picks: stage.picks.map((c, i) => (i === 0 ? c : unseen(c))) } : stage;
+
 /** A run as the page is shown it. Each field is named, so nothing new is shown by accident. */
-export function runView(run: Run): RunView {
+export function runView(run: RunView): RunView {
   return {
     trail: run.trail,
     room: run.room,
-    phase: run.phase,
+    stage: stageView(run.stage),
     resolve: run.resolve,
     acorns: run.acorns,
     streak: run.streak,
@@ -264,20 +274,13 @@ export function runView(run: Run): RunView {
     rustles: run.rustles,
     bought: run.bought,
     boons: run.boons,
-    choices: run.choices.map((c, i) => (i === 0 ? c : unseen(c))),
     foe: run.foe,
     record: run.record,
     nextId: run.nextId,
-    won: run.won,
-    left: run.left,
     last: run.last,
-    fight: run.fight,
     seen: run.seen,
   };
 }
-
-/** The page's copy of a run, as one the rules can act on. It has no stream: only what draws nothing may be done to it. */
-export const localRun = (view: RunView): Run => ({ ...structuredClone(view), seed: 0, rng: 0 });
 
 export function tableView(state: Table): TableView {
   return {
@@ -294,13 +297,9 @@ export function tableView(state: Table): TableView {
 type Answer = Done<Table, RaidNote> | Refused;
 const no = (code: TableWhy | Why): Refused => ({ refused: code });
 
-/** A run action, on the run in hand. */
-function act(run: Run, c: RunCommand): { ok: true; notes: Note[] } | { ok: false; code: Why } {
+/** A command that draws nothing, on a run with or without its streams: Leaf's, or the page's copy. */
+function plan(run: RunView, c: Predicted): RunDone {
   switch (c.do) {
-    case "choose":
-      return choose(run, c.option);
-    case "redraw":
-      return redraw(run);
     case "buy":
       return buy(run, c.offer);
     case "sell":
@@ -309,14 +308,25 @@ function act(run: Run, c: RunCommand): { ok: true; notes: Note[] } | { ok: false
       return move(run, c.from, c.to);
     case "bench":
       return toBench(run, c.seat);
-    case "rustle":
-      return rustle(run);
     case "hold":
       return hold(run, c.on);
     case "xp":
       return buyXp(run);
     case "give":
       return giveItem(run, c.item, c.to);
+  }
+}
+
+/** A run action, on the run in hand. */
+function act(run: Run, c: RunCommand): RunDone {
+  if (isPredicted(c)) return plan(run, c);
+  switch (c.do) {
+    case "choose":
+      return choose(run, c.option);
+    case "redraw":
+      return redraw(run);
+    case "rustle":
+      return rustle(run);
     case "fight":
       return beginFight(run);
     case "take":
@@ -344,7 +354,7 @@ function finish(s: Table, run: Run, notes: RaidNote[], log: Logged[], room: numb
     data: {
       trail: run.trail,
       rooms_won: summary.cleared,
-      ended: run.won ? "won" : run.left ? "left" : "lost",
+      ended: summary.ending ?? "lost",
       coins: paid.coins,
     },
   });
@@ -376,7 +386,7 @@ function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
   if (!run) return no("no_run");
   const room = run.record.length;
   // The takings are paid from the fight as it was decided when the party set out.
-  const seconds = run.fight?.outcome.seconds ?? 0;
+  const seconds = run.stage.phase === "fight" ? run.stage.fight.outcome.seconds : 0;
   const done = act(run, c);
   if (!done.ok) return no(done.code);
   const notes: RaidNote[] = [...done.notes];
@@ -394,24 +404,24 @@ function play(s: Table, c: RunCommand, ctx: Ctx): Answer {
       },
     });
   }
-  const coins = run.phase === "over" ? finish(s, run, notes, log, ctx.room) : [];
+  const coins = run.stage.phase === "over" ? finish(s, run, notes, log, ctx.room) : [];
   // A member's party as the fight was decided from, left for others to meet on that trail, in that
   // room (its place in `ROOMS`).
-  const party = c.do === "fight" && !ctx.player.guest ? run.fight?.setup.sides[0] : undefined;
+  const party =
+    c.do === "fight" && !ctx.player.guest && run.stage.phase === "fight" ? run.stage.fight.setup.sides[0] : undefined;
   if (!party) return { state: s, notes, coins, log };
   return { state: s, notes, coins, log, keep: [{ slot: `board:${run.trail}:${run.room}`, data: party }] };
 }
 
 /**
  * Whether the run in hand has fought no room yet. Such a run is not put down: setting out afresh or
- * walking home leaves it as it is, so that a run's opening cannot be drawn again and again for free.
+ * walking home is refused, so that a run's opening cannot be drawn again and again for free.
  */
 export const unfought = (run: Pick<Run, "record">): boolean => run.record.length === 0;
 
 export function applyCommand(state: Table, c: RaidCommand, ctx: Ctx): Answer {
   if (c.do === "start" && !trailOpen(state.almanac, c.trail)) return no("trail_closed");
-  // The run in hand as it is: nothing drawn, paid or logged.
-  if ((c.do === "start" || c.do === "abandon") && state.run && unfought(state.run)) return { state, notes: [] };
+  if ((c.do === "start" || c.do === "abandon") && state.run && unfought(state.run)) return no("unfought");
   const s = structuredClone(state);
   // Leaf's dice, stirred into both streams before anything is drawn.
   s.rng = mix(s.rng, ctx.seed);
@@ -451,21 +461,12 @@ export function predict(
   view: TableView,
   c: RaidCommand,
 ): { view: TableView; notes: RaidNote[] } | { refused: string } | null {
-  if (
-    c.do !== "move" &&
-    c.do !== "bench" &&
-    c.do !== "sell" &&
-    c.do !== "give" &&
-    c.do !== "hold" &&
-    c.do !== "buy" &&
-    c.do !== "xp"
-  )
-    return null;
+  if (!isPredicted(c)) return null;
   if (!view.run) return { refused: "no_run" };
-  const run = localRun(view.run);
-  const done = act(run, c);
+  const run = structuredClone(view.run);
+  const done = plan(run, c);
   if (!done.ok) return { refused: done.code };
-  return { view: { ...view, run: runView(run) }, notes: done.notes };
+  return { view: { ...view, run }, notes: done.notes };
 }
 
 /**
@@ -475,35 +476,37 @@ export function predict(
  * answered: an empty list means the room is planned.
  */
 export function planCommands(view: TableView, habit: Habit): RaidCommand[] {
-  if (!view.run || view.run.phase !== "plan") return [];
-  const run = localRun(view.run);
+  if (view.run?.stage.phase !== "plan") return [];
+  const run = structuredClone(view.run);
   const out: RaidCommand[] = [];
   const wrote = <T extends { ok: boolean }>(done: T, c: RaidCommand): T => {
     if (done.ok) out.push(c);
     return done;
   };
-  const hands: Hands = {
+  const hands: Hands<RunView> = {
     // Written down but not done here: the bot stops at it, and plans the rest once Leaf has answered.
     choose: (_, option) => {
       out.push({ do: "choose", option });
       return refusal("nothing_to_choose");
     },
-    buy: (r, offer) => wrote(DIRECT.buy(r, offer), { do: "buy", offer }),
-    sell: (r, from) => wrote(DIRECT.sell(r, from), { do: "sell", from }),
-    move: (r, from, to) => wrote(DIRECT.move(r, from, to), { do: "move", from, to }),
-    toBench: (r, seat) => wrote(DIRECT.toBench(r, seat), { do: "bench", seat }),
+    buy: (r, offer) => wrote(buy(r, offer), { do: "buy", offer }),
+    sell: (r, from) => wrote(sell(r, from), { do: "sell", from }),
+    move: (r, from, to) => wrote(move(r, from, to), { do: "move", from, to }),
+    toBench: (r, seat) => wrote(toBench(r, seat), { do: "bench", seat }),
     rustle: () => refusal("not_enough_acorns"),
-    buyXp: (r) => wrote(DIRECT.buyXp(r), { do: "xp" }),
-    giveItem: (r, item, to) => wrote(DIRECT.giveItem(r, item, to), { do: "give", item, to }),
+    buyXp: (r) => wrote(buyXp(r), { do: "xp" }),
+    giveItem: (r, item, to) => wrote(giveItem(r, item, to), { do: "give", item, to }),
   };
-  planRoom(run, habit, hands);
+  // The page's own stream for the bot's habits: the run's is Leaf's.
+  planWith(run, habit, hands, { rng: mix(view.runs, 9000 + run.record.length) });
   return out;
 }
 
 // ---------- keeping it ----------
 
 const GAME = "little-raid-table";
-export const TABLE_VERSION = 1;
+/** 2: a run keeps where it stands as one value (`Stage`). A table of version 1 is read as well. */
+export const TABLE_VERSION = 2;
 
 export const encodeTable = (state: Table): string =>
   JSON.stringify({
@@ -530,14 +533,14 @@ export function decodeTable(text: string): Table | null {
   } catch {
     return null;
   }
-  if (!isRecord(raw) || raw.game !== GAME || raw.v !== TABLE_VERSION) return null;
+  if (!isRecord(raw) || raw.game !== GAME || (raw.v !== 1 && raw.v !== TABLE_VERSION)) return null;
   const { rng, runs, trail } = raw;
   if (!whole(rng, 0, UINT) || !whole(runs, 0, 1_000_000_000) || !whole(trail, 0, 999)) return null;
   const almanac = readAlmanac(raw.almanac);
   const looks = readLooks(raw.looks);
   if (!almanac || !looks) return null;
-  const read = raw.run === null ? null : checkRun(raw.run);
-  const run = read?.ok && read.run.phase !== "over" && runs > 0 ? read.run : null;
+  const read = raw.run === null ? null : checkRun(raw.run, raw.v === 1);
+  const run = read?.ok && read.run.stage.phase !== "over" && runs > 0 ? read.run : null;
   return { rng, runs, run, almanac, trail: trailOpen(almanac, trail) ? trail : 0, looks };
 }
 

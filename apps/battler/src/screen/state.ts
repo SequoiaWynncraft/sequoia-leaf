@@ -17,7 +17,6 @@
 import { makeHold, openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
 import {
   type Almanac,
-  localRun,
   type Looks,
   newAlmanac,
   newLooks,
@@ -29,8 +28,8 @@ import {
   readNotes,
   readView,
   refusalText,
-  type Run,
   type RunSummary,
+  type RunView,
   type TableView,
 } from "@sequoia-leaf/raid";
 
@@ -41,7 +40,7 @@ export type Mode = "front" | "plan" | "fight" | "after" | "over";
 
 /** How a finished run came out, for the page at the end. */
 export interface Ended {
-  run: Run;
+  run: RunView;
   summary: RunSummary;
   paid: Payout;
   news: News[];
@@ -49,7 +48,7 @@ export interface Ended {
 
 export const S: {
   /** The run in hand, as the page's copy; after a run ends, that run until the next is set out on. */
-  run: Run | null;
+  run: RunView | null;
   almanac: Almanac;
   looks: Looks;
   /** The trail picked to set out on next. */
@@ -132,7 +131,7 @@ function take(view: TableView): void {
   S.trail = view.trail;
   S.runs = view.runs;
   // A run that has ended stays on the table, for its last page, until the next one is set out on.
-  S.run = view.run ? localRun(view.run) : (S.ended?.run ?? null);
+  S.run = view.run ?? S.ended?.run ?? null;
 }
 
 /** The table's state as Leaf gave it, for looking at from outside. */
@@ -168,7 +167,7 @@ export async function openTable(player: string, trouble: (why: Trouble) => void)
 function noted(notes: readonly RaidNote[]): void {
   for (const note of notes) {
     if (note.t === "ended") {
-      const ended: Ended = { run: localRun(note.run), summary: note.summary, paid: note.paid, news: note.news };
+      const ended: Ended = { run: note.run, summary: note.summary, paid: note.paid, news: note.news };
       S.ended = ended;
       for (const fn of endHearers) fn(ended);
     } else if (note.t === "started") S.ended = null;

@@ -18,12 +18,13 @@ import {
   HZ,
   isBossId,
   MEASURES,
+  picksOf,
   pieceAt,
   pieces,
   planCommands,
   type RaidCommand,
   ROOMS,
-  type Run,
+  type RunView,
   SENSIBLE,
   type TableView,
 } from "@sequoia-leaf/raid";
@@ -102,7 +103,7 @@ export interface Handle {
   offer(at: number, kind: string): Promise<void>;
   item(id: string): Promise<void>;
   /** The page's own copy of the run, to change by hand. */
-  copy(): Run | null;
+  copy(): RunView | null;
   /** Draws the table again from the copy as it stands. */
   redraw(): void;
   /** Leaf's table as the page last heard it, and whether anything sent is still waiting for an answer. */
@@ -168,8 +169,8 @@ async function plan(rounds = 30): Promise<void> {
 async function botRoom(): Promise<boolean> {
   // What the page has sent first (the takings of a fight just watched); a fight not yet taken is taken.
   await settled();
-  if (S.run?.phase === "fight" && !(await ask({ do: "take" }))?.ok) return false;
-  if (S.run?.phase !== "plan") return false;
+  if (S.run?.stage.phase === "fight" && !(await ask({ do: "take" }))?.ok) return false;
+  if (S.run?.stage.phase !== "plan") return false;
   await plan();
   const begun = await ask({ do: "fight" });
   if (!begun?.ok) return false;
@@ -179,18 +180,18 @@ async function botRoom(): Promise<boolean> {
 function settle(): string {
   const run = S.run;
   if (!run) return "no run";
-  if (run.phase === "over") {
+  if (run.stage.phase === "over") {
     closeSheet(false);
     S.mode = "over";
     changed();
     return "over";
   }
   enterRun(false);
-  return `room ${run.room + 1}, ${ROOMS[run.room]?.kind ?? ""}, ${run.choices[0]?.kind ?? "planning"}`;
+  return `room ${run.room + 1}, ${ROOMS[run.room]?.kind ?? ""}, ${picksOf(run)[0]?.kind ?? "planning"}`;
 }
 
 /** Whether the run is at the room a jump is for. */
-const there = (run: Run, where: Jump): boolean =>
+const there = (run: RunView, where: Jump): boolean =>
   where === "lastboss"
     ? run.room === ROOMS.length - 1
     : where === "boss" || where === "spar"
@@ -200,16 +201,16 @@ const there = (run: Run, where: Jump): boolean =>
 async function playTo(where: Jump, guard = 60): Promise<void> {
   await settled();
   const run = S.run;
-  if (guard === 0 || !run || run.phase === "over") return;
+  if (guard === 0 || !run || run.stage.phase === "over") return;
   if (where === "boon" || where === "component") {
     // Whatever is waiting ahead of the pick that is wanted is settled plainly; the pick itself is left.
-    if (run.choices[0]?.kind === where) return;
-    if (run.choices.some((c) => c.kind === where)) {
+    if (picksOf(run)[0]?.kind === where) return;
+    if (picksOf(run).some((c) => c.kind === where)) {
       await ask({ do: "choose", option: 0 });
       return playTo(where, guard - 1);
     }
   } else if (where !== "end" && there(run, where)) {
-    if (run.choices.length > 0) await plan();
+    if (picksOf(run).length > 0) await plan();
     return;
   }
   if (!(await botRoom())) return;
@@ -217,7 +218,7 @@ async function playTo(where: Jump, guard = 60): Promise<void> {
 }
 
 async function bot(rooms: number): Promise<void> {
-  if (rooms <= 0 || !S.run || S.run.phase === "over") return;
+  if (rooms <= 0 || !S.run || S.run.stage.phase === "over") return;
   if (!(await botRoom())) return;
   return bot(rooms - 1);
 }
@@ -246,7 +247,7 @@ export function openHandle(): void {
     },
     async plan() {
       const run = S.run;
-      if (!run || run.phase !== "plan") return "not planning";
+      if (!run || run.stage.phase !== "plan") return "not planning";
       await plan();
       return settle();
     },
@@ -294,11 +295,11 @@ export function openHandle(): void {
         mode: S.mode,
         room: run ? run.room + 1 : 0,
         kind: run ? ROOMS[run.room]?.kind : "",
-        phase: run?.phase,
+        phase: run?.stage.phase,
         acorns: run?.acorns,
         level: run?.level,
         resolve: run?.resolve,
-        choice: run?.choices[0]?.kind ?? null,
+        choice: (run && picksOf(run)[0]?.kind) ?? null,
         boss: run?.foe.figures.some((p) => isBossId(p.kind)) ?? false,
         coins: balance().coins,
         fight: fightState(),

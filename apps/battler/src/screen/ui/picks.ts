@@ -17,9 +17,10 @@ import {
   type FigureId,
   FIGURES,
   itemAdds,
+  picksOf,
   pieces,
   roleLine,
-  type Run,
+  type RunView,
   TRAITS,
   traitsOf,
 } from "@sequoia-leaf/raid";
@@ -73,7 +74,7 @@ function starterCard(kind: FigureId): HTMLElement[] {
  * half's picture, an arrow and the finished item. The ones whose other half the party already
  * holds come first, lit and tagged "have", so the pick that finishes an item is plain.
  */
-function componentCard(run: Run, item: ComponentId): HTMLElement[] {
+function componentCard(run: RunView, item: ComponentId): HTMLElement[] {
   const lines = makesLines(item, run).map((line) =>
     el(
       "div",
@@ -109,7 +110,7 @@ async function redrawn(button: Element | null): Promise<void> {
 /** Takes one of the cards: Leaf settles it, and what was taken goes where it lives. */
 async function take(index: number, card: HTMLElement): Promise<void> {
   const run = S.run;
-  const choice = run?.choices[0];
+  const choice = run ? picksOf(run)[0] : undefined;
   if (!run || !choice) return;
   card.classList.add("chosen");
   const from = boardSpot(card);
@@ -152,7 +153,7 @@ export function renderPicks(): void {
   const box = document.getElementById("picks");
   if (!box) return;
   const run = S.run;
-  const choice = run && S.mode === "plan" ? run.choices[0] : undefined;
+  const choice = run && S.mode === "plan" ? picksOf(run)[0] : undefined;
   if (!run || !choice) {
     key = "";
     box.hidden = true;
@@ -163,7 +164,7 @@ export function renderPicks(): void {
   const held = `${run.items.join()}|${pieces(run)
     .map((p) => p.items.join())
     .join(";")}`;
-  const now = `${run.seed}:${run.record.length}:${run.choices.length}:${choice.kind}:${choice.options.join()}:${held}`;
+  const now = `${S.runs}:${run.record.length}:${picksOf(run).length}:${choice.kind}:${choice.options.join()}:${held}`;
   if (now === key) return;
   key = now;
   box.hidden = false;

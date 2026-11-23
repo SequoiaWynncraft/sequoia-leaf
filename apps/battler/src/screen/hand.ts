@@ -12,7 +12,15 @@ import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
 import { canvasCard, close, hold, onCard, pick as pickCard, point, show, surface } from "@sequoia-leaf/kit/card.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/tip.ts";
-import { type FigureId, isComponentId, type ItemId, pieceAt, type Run, sellValue, type Spot } from "@sequoia-leaf/raid";
+import {
+  type FigureId,
+  isComponentId,
+  type ItemId,
+  pieceAt,
+  type RunView,
+  sellValue,
+  type Spot,
+} from "@sequoia-leaf/raid";
 
 import { itemPic } from "./art/icons.ts";
 import { unitUnder } from "./fightview.ts";
@@ -51,7 +59,7 @@ let restKey = "";
 
 /** Whether figures may be moved about just now: planning, with nothing waiting to be chosen. */
 export const planning = (): boolean =>
-  S.mode === "plan" && S.run !== null && S.run.phase === "plan" && S.run.choices.length === 0;
+  S.mode === "plan" && S.run?.stage.phase === "plan" && S.run.stage.picks.length === 0;
 
 const spotOfPawn = (id: number): Spot | null => pawns.get(id)?.spot ?? null;
 const sameSpot = (a: Spot, b: Spot): boolean => a.on === b.on && a.at === b.at;
@@ -78,7 +86,7 @@ function clearMarks(): void {
 }
 
 /** Lights where the thing in the hand, or the thing tapped, may go. */
-function light(run: Run, held: Held): void {
+function light(run: RunView, held: Held): void {
   if (held.what === "pawn") {
     const from = spotOfPawn(held.id);
     if (!from) return;
@@ -116,7 +124,7 @@ export function unpick(): void {
 /** A box on the page round a pawn, for its card. */
 const pawnBox = (p: Pawn): { x: number; y: number; w: number; h: number } => pageBox(p.x, p.y, framesOf(p.kind).tall);
 
-function pick(run: Run, held: Held): void {
+function pick(run: RunView, held: Held): void {
   unpick();
   picked = held;
   light(run, held);
@@ -135,7 +143,7 @@ function pick(run: Run, held: Held): void {
   }
 }
 
-function startDrag(run: Run, held: Held): void {
+function startDrag(run: RunView, held: Held): void {
   close();
   hold(true);
   picked = null;
@@ -158,12 +166,12 @@ function startDrag(run: Run, held: Held): void {
 }
 
 /** The party's figure an item in the hand is over, if it could take it. */
-function takerAt(run: Run, x: number, y: number): Pawn | null {
+function takerAt(run: RunView, x: number, y: number): Pawn | null {
   const p = pawnAt(run, x, y);
   return p && marks.takers.includes(p.id) ? p : null;
 }
 
-function whileDragging(run: Run, e: PointerEvent): void {
+function whileDragging(run: RunView, e: PointerEvent): void {
   const b = toBoard(e.clientX, e.clientY);
   marks.at = b;
   if (!dragging) return;
@@ -183,7 +191,7 @@ function whileDragging(run: Run, e: PointerEvent): void {
   document.body.classList.toggle("sell-hot", overShop && dragging.what === "pawn");
 }
 
-function drop(run: Run, e: PointerEvent): void {
+function drop(run: RunView, e: PointerEvent): void {
   const held = dragging;
   const b = toBoard(e.clientX, e.clientY);
   const under = document.elementFromPoint(e.clientX, e.clientY);
@@ -235,7 +243,7 @@ function buyTo(offer: number, spot: Spot | null): void {
 }
 
 /** A tap on the thing that was pressed. */
-function tap(run: Run, held: Held | null, e: PointerEvent): void {
+function tap(run: RunView, held: Held | null, e: PointerEvent): void {
   const b = toBoard(e.clientX, e.clientY);
   if (held?.what === "offer") {
     unpick();
@@ -284,7 +292,7 @@ function tap(run: Run, held: Held | null, e: PointerEvent): void {
 }
 
 /** The card for a figure that is not the party's to move: one waiting across the board, or anyone in a fight. */
-function showStranger(run: Run, x: number, y: number, pinned: boolean): boolean {
+function showStranger(run: RunView, x: number, y: number, pinned: boolean): boolean {
   const found = strangerAt(run, x, y);
   if (!found) return false;
   if (pinned) pickCard(found.ref, found.box.x, found.box.y, found.box.w, found.box.h);
@@ -294,7 +302,7 @@ function showStranger(run: Run, x: number, y: number, pinned: boolean): boolean 
 
 /** Someone not the party's to move under a point: in a fight, anyone; while planning, one waiting across the board. */
 function strangerAt(
-  run: Run,
+  run: RunView,
   x: number,
   y: number,
 ): { ref: string; box: { x: number; y: number; w: number; h: number } } | null {
@@ -312,7 +320,7 @@ function strangerAt(
 
 /** What the pointer is on at a point of the table: an item a figure holds, a figure of the party's, or a stranger. */
 function cardUnder(
-  run: Run,
+  run: RunView,
   x: number,
   y: number,
 ): { ref: string; box: { x: number; y: number; w: number; h: number } } | null {
@@ -329,7 +337,7 @@ function cardUnder(
 }
 
 /** The mouse resting on a figure, or on an item one holds, says what it is, after a moment. */
-function rest(run: Run, e: PointerEvent): void {
+function rest(run: RunView, e: PointerEvent): void {
   if (e.target !== canvas) {
     if (restKey) {
       restKey = "";

@@ -8,9 +8,9 @@ import { beatAt, drawBase, drawFigure, drawStars, framesOf, hoverAt } from "@seq
 import { CREAM, GOLD, INK, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
-import { fieldCap, fielded, type ItemId, pieceAt, type Run, type Spot, type Stars } from "@sequoia-leaf/raid";
+import { fieldCap, fielded, type ItemId, pieceAt, type RunView, type Spot, type Stars } from "@sequoia-leaf/raid";
 import { type FigureId, isBossId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
-import { regularNamed, REGULARS, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
+import { regularNamed, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
 import { itemPic } from "./art/icons.ts";
@@ -20,7 +20,7 @@ import { burst, drawFlyers, drawFxOver, drawFxUnder, wordsFx } from "./fx.ts";
 import { cellXY, GAP, HEX_H, HEX_W, type Pt, ROW, seatXY, slotXY } from "./geometry.ts";
 import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
 import { DIM, shineOf } from "./light.ts";
-import { handing } from "./logic.ts";
+import { arrivalOf, handing, watchersOf } from "./logic.ts";
 import { FOOT, type Pawn, pawns } from "./pawns.ts";
 import { snd } from "./sounds.ts";
 import { boardHalves, place, type Standing, V } from "./stage.ts";
@@ -70,25 +70,23 @@ let swapMark: HTMLCanvasElement | null = null;
 
 // ---------- who is waiting on the far half ----------
 
-/** The far party walking in: when it began, and for which room. */
-const arrival = { t0: -99, room: -1, seed: -1, boss: false, stomps: 0 };
+/** The far party walking in: when it began, and which walk-in it is (`arrivalOf`). */
+const arrival = { t0: -99, key: "", boss: false, stomps: 0 };
 
 /** Starts the far party's walk in from the trees. A boss comes first, and slowly. */
-export function arrive(run: Run): void {
+export function arrive(run: RunView): void {
   arrival.t0 = V.t;
-  arrival.room = run.room;
-  arrival.seed = run.seed;
+  arrival.key = arrivalOf(run);
   arrival.boss = run.foe.figures.some((p) => isBossId(p.kind));
   arrival.stomps = 0;
   if (arrival.boss) snd.boss();
 }
 /** Whether the far party is the one that has already walked in. */
-export const arrived = (run: Run): boolean => arrival.room === run.room && arrival.seed === run.seed;
+export const arrived = (run: RunView): boolean => arrival.key === arrivalOf(run);
 /** Puts the far party in its place without the walk. */
-export function settleArrival(run: Run): void {
+export function settleArrival(run: RunView): void {
   arrival.t0 = -99;
-  arrival.room = run.room;
-  arrival.seed = run.seed;
+  arrival.key = arrivalOf(run);
   arrival.boss = false;
 }
 
@@ -252,7 +250,7 @@ function drawMarks(g: Ctx): void {
 }
 
 /** How many may be fielded, as a column of pips beside the front line: gold for a figure, hollow for room. */
-function drawCap(g: Ctx, run: Run): void {
+function drawCap(g: Ctx, run: RunView): void {
   const cap = fieldCap(run);
   const on = fielded(run);
   const x = V.bx - 7;
@@ -267,18 +265,8 @@ function drawCap(g: Ctx, run: Run): void {
 }
 
 /** The regular who brought the party across the table, if a regular did: the forest's trouble has nobody sat there. */
-function regularOf(run: Run): FigureId | null {
+function regularOf(run: RunView): FigureId | null {
   return ROOMS[run.room]?.kind === "spar" ? (regularNamed(run.foe.who)?.kind ?? null) : null;
-}
-
-/** The two regulars who watch from the side logs, picked by the run so they stay the same all raid. */
-function watchers(run: Run): [FigureId, FigureId] {
-  const across = regularNamed(run.foe.who)?.kind;
-  const others = REGULARS.map((r) => r.kind).filter((k) => k !== across);
-  const a = others[run.seed % others.length] ?? "moth";
-  const rest = others.filter((k) => k !== a);
-  const b = rest[(run.seed >>> 8) % rest.length] ?? "crab7";
-  return [a, b];
 }
 
 /** When the watchers last had something to hop about. */
@@ -316,7 +304,7 @@ function drawAcross(g: Ctx, kind: FigureId, cx: number, rim: number): void {
   );
 }
 
-function drawPeople(g: Ctx, run: Run): void {
+function drawPeople(g: Ctx, run: RunView): void {
   const p = place();
   const { cx, cy, rx } = stumpOf(p);
   const rim = rimTop(p);
@@ -326,7 +314,7 @@ function drawPeople(g: Ctx, run: Run): void {
   const across = regularOf(run);
   if (across) drawAcross(g, across, cx, rim);
   if (p.w > 330) {
-    const [a, b] = watchers(run);
+    const [a, b] = watchersOf(S.runs, run.foe.who);
     drawFigure(g, a, cx - rx - 34, cy + 5 - bounce(0), { beat: Math.floor(V.t * 1.2) % 2 === 0 ? 0 : 1 });
     drawFigure(g, b, cx + rx + 34, cy + 11 - bounce(1), {
       left: true,
@@ -450,7 +438,7 @@ export function drawOver(g: Ctx): boolean {
 }
 
 /** The far party's figure under a point measured from the board's corner, while planning. */
-export function foeAt(run: Run, x: number, y: number): { kind: UnitKind; stars: Stars; seat: number } | null {
+export function foeAt(run: RunView, x: number, y: number): { kind: UnitKind; stars: Stars; seat: number } | null {
   let best: { kind: UnitKind; stars: Stars; seat: number } | null = null;
   let bestY = -1e9;
   for (const foe of run.foe.figures) {
@@ -468,7 +456,7 @@ export function foeAt(run: Run, x: number, y: number): { kind: UnitKind; stars: 
 }
 
 /** The item a figure holds under a point measured from the board's corner: in its row under the base. */
-export function heldUnder(run: Run, x: number, y: number): HeldAt | null {
+export function heldUnder(run: RunView, x: number, y: number): HeldAt | null {
   if (S.mode === "fight" || S.mode === "after") return fightHeldUnder(x, y);
   if (S.mode !== "plan") return null;
   for (const p of pawns.values()) {

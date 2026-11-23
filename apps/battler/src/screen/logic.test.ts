@@ -9,12 +9,15 @@ import {
   move,
   newAlmanac,
   type Piece,
+  type RoomRecord,
   type Run,
   startRun,
   traitNumber,
 } from "@sequoia-leaf/raid";
+import { REGULARS } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import {
+  arrivalOf,
   canBuy,
   combosWithHeld,
   fightTitle,
@@ -38,6 +41,7 @@ import {
   streakNow,
   streakRule,
   TraitWatch,
+  watchersOf,
   whereIs,
 } from "./logic.ts";
 
@@ -321,9 +325,9 @@ describe("teaching by doing", () => {
   });
   test("nothing is said while something is waiting to be chosen, or once everything has been", () => {
     const run = begun();
-    run.choices.push({ kind: "component", options: ["thorn", "bark", "plume"] });
+    run.stage = { phase: "plan", picks: [{ kind: "component", options: ["thorn", "bark", "plume"] }] };
     expect(nudgeFor(run, "plan", [])).toBeNull();
-    run.choices = [];
+    run.stage = { phase: "plan", picks: [] };
     expect(
       nudgeFor(run, "plan", all("pick", "buy", "setout", "watch", "field", "three", "item", "trait", "save", "rustle")),
     ).toBeNull();
@@ -333,7 +337,7 @@ describe("teaching by doing", () => {
 describe("what a card says about a figure", () => {
   test("a figure's numbers on the board count its items and its party's traits", () => {
     const run = startRun(3, { trail: 0 });
-    run.choices = [];
+    run.stage = { phase: "plan", picks: [] };
     run.board.fill(null);
     run.bench.fill(null);
     run.board[0] = { id: 1, kind: "barrowgnome", stars: 1, items: ["stump"], fed: 0 };
@@ -413,5 +417,30 @@ describe("a fight's sheet", () => {
     expect(fightTitle("loss", 411)).toBe("Room lost · 21 s");
     expect(fightTitle("draw", 900)).toBe("A draw · 45 s");
     expect(fightTitle("win", 0)).toBe("Room won · 1 s");
+  });
+});
+
+describe("who watches from the side logs", () => {
+  test("is the same two all raid, others from one raid to the next, and never the regular across the table", () => {
+    expect(watchersOf(7, "The forest")).toEqual(watchersOf(7, "The forest"));
+    const pairs = new Set(Array.from({ length: 40 }, (_, n) => watchersOf(n + 1, "The forest").join()));
+    expect(pairs.size).toBeGreaterThan(10);
+    for (const regular of REGULARS) {
+      for (let n = 1; n < 30; n++) {
+        const [a, b] = watchersOf(n, regular.name);
+        expect([a === regular.kind, b === regular.kind, a === b]).toEqual([false, false, false]);
+      }
+    }
+  });
+});
+
+describe("the far party walking in", () => {
+  test("walks in for each room met, and again when the last room is fought again", () => {
+    const run = startRun(9, { trail: 0 });
+    const first = arrivalOf(run);
+    expect(arrivalOf({ ...run, room: 1 })).not.toBe(first);
+    const lost: RoomRecord = { room: 14, kind: "boss", result: "loss", standing: [0, 2], boss: "bigcrab" };
+    const once = { ...run, room: 14, record: [lost] };
+    expect(arrivalOf({ ...once, record: [lost, lost] })).not.toBe(arrivalOf(once));
   });
 });

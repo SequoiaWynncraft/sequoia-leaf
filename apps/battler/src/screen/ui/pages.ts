@@ -31,7 +31,7 @@ import {
   type RaidCommand,
   ROOM_COUNT,
   ROOMS,
-  type Run,
+  type RunView,
   specOf,
   TRAIL_COUNT,
   trailOpen,
@@ -101,7 +101,7 @@ function panel(title: string, sign: HTMLElement | null, body: HTMLElement, withC
 }
 
 /** The figures a run has on its board, with their stars. */
-function partyRow(run: Run): HTMLElement {
+function partyRow(run: RunView): HTMLElement {
   const row = el("div", "party", {});
   const board = run.board.flatMap((p) => (p ? [p] : []));
   for (const p of board.length > 0 ? board : pieces(run)) {
@@ -123,7 +123,7 @@ async function pickTrail(trail: number, card: Element | null): Promise<void> {
 function front(): HTMLElement {
   const run = S.run;
   const body = el("div", "k-body k-scroll", {});
-  if (run && run.phase !== "over") {
+  if (run && run.stage.phase !== "over") {
     const going = el(
       "div",
       "k-card going",
@@ -193,7 +193,7 @@ function front(): HTMLElement {
     add(body, el("hr", "k-rule"));
   }
   // The raid laid out, while it has fought no room, stays the one set out on.
-  const keep = run !== null && run.phase !== "over" && unfought(run);
+  const keep = run !== null && run.stage.phase !== "over" && unfought(run);
   if (keep) add(body, el("div", "k-label", { text: "Which way, next time?" }));
   const trails = el("div", "trails", { role: "radiogroup" });
   for (let i = 0; i < TRAIL_COUNT; i++) {
@@ -587,15 +587,16 @@ function summary(): HTMLElement | null {
   const ended = S.ended;
   if (!ended) return null;
   const { run, summary: sum, paid, news } = ended;
-  const title = sum.won ? "The raid is done." : sum.left ? "Home early." : "Home again.";
+  const title = sum.ending === "won" ? "The raid is done." : sum.ending === "left" ? "Home early." : "Home again.";
   const paper = el("section", "k-paper page k-rise summary", { role: "dialog", "aria-label": title });
   add(
     paper,
     el("h1", "k-title big", { text: title }),
     el("div", "", {
-      text: sum.won
-        ? "Fifteen rooms, and the crab nobody counted has been counted."
-        : `${TRAILS[sum.trail]?.name ?? ""}: ${sum.cleared} room${sum.cleared === 1 ? "" : "s"} won, as far as room ${sum.reached}.`,
+      text:
+        sum.ending === "won"
+          ? "Fifteen rooms, and the crab nobody counted has been counted."
+          : `${TRAILS[sum.trail]?.name ?? ""}: ${sum.cleared} room${sum.cleared === 1 ? "" : "s"} won, as far as room ${sum.reached}.`,
     }),
   );
   const pips = el("div", "pips", {});

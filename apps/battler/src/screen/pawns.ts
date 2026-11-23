@@ -9,7 +9,7 @@ import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
  */
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { clamp, lerp } from "@sequoia-leaf/kit/util.ts";
-import type { Note, RaidNote, Run, Spot, Stars } from "@sequoia-leaf/raid";
+import type { Note, RaidNote, RunView, Spot, Stars } from "@sequoia-leaf/raid";
 import type { FigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { carries } from "@sequoia-leaf/raid/content/items.ts";
 import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
@@ -128,9 +128,9 @@ export function clearPawns(): void {
  * Makes the pawns agree with the run: a pawn for every figure, each on its way to where its figure
  * is. Pawns in the middle of leaving are left to finish.
  */
-export function syncPawns(run: Run | null, settle = false): void {
+export function syncPawns(run: RunView | null, settle = false): void {
   const seen = new Set<number>();
-  const visit = (piece: Run["board"][number], spot: Spot): void => {
+  const visit = (piece: RunView["board"][number], spot: Spot): void => {
     if (!piece) return;
     seen.add(piece.id);
     const at = spotXY(spot);
@@ -185,7 +185,7 @@ export function stepPawns(): void {
 }
 
 /** The pawn under a point measured from the board's corner: by its body first, then by its seat. */
-export function pawnAt(run: Run, x: number, y: number): Pawn | null {
+export function pawnAt(run: RunView, x: number, y: number): Pawn | null {
   let best: Pawn | null = null;
   for (const p of pawns.values()) {
     if (p.leaving || !p.spot) continue;
@@ -211,7 +211,7 @@ export function spotAt(x: number, y: number): Spot | null {
 }
 
 /** Every fielded figure of a trait hops, one after another: the trait answering. */
-export function cheer(run: Run, trait: TraitId): void {
+export function cheer(run: RunView, trait: TraitId): void {
   let n = 0;
   for (const piece of run.board) {
     if (!piece || !carries(piece.kind, piece.items, trait)) continue;

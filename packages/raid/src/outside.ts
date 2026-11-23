@@ -22,7 +22,7 @@ export interface Payout {
 export function payout(summary: RunSummary): Payout {
   const rooms = summary.cleared * PAYOUT.room;
   const bosses = summary.bosses.length * PAYOUT.boss;
-  const win = summary.won ? PAYOUT.win : 0;
+  const win = summary.ending === "won" ? PAYOUT.win : 0;
   const base = rooms + bosses + win;
   const coins = Math.round((base * (TRAILS[summary.trail]?.pays ?? 100)) / 100);
   const lines: Payout["lines"] = [];

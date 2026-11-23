@@ -9,7 +9,9 @@ import { leave, tell } from "@sequoia-leaf/kit/shell.ts";
 import {
   type AcornsWhy,
   type BossId,
+  endingOf,
   type FightSummary,
+  foughtOf,
   isBossId,
   playsAsKept,
   type RaidNote,
@@ -49,7 +51,7 @@ export function enterRun(walkIn = true): void {
   endFight();
   dress(S.looks.cloth, S.looks.lantern);
   syncPawns(run, true);
-  if (run.phase === "fight") {
+  if (run.stage.phase === "fight") {
     S.mode = "fight";
     settleArrival(run);
     changed();
@@ -78,7 +80,7 @@ export async function startNew(trail: number): Promise<boolean> {
 export function rejoin(): void {
   if (S.mode === "fight" || S.mode === "after" || S.mode === "over") return;
   const run = S.run;
-  if (!run || run.phase === "over") {
+  if (!run || run.stage.phase === "over") {
     if (S.mode === "plan") {
       S.mode = "front";
       changed();
@@ -99,7 +101,7 @@ export function toFront(): void {
 
 /** Walks home early: the run ends here, and is still paid for the rooms it cleared. */
 export async function goHome(): Promise<void> {
-  if (!S.run || S.run.phase === "over") return;
+  if (!S.run || S.run.stage.phase === "over") return;
   unpick();
   closeSheet(false);
   endFight();
@@ -158,7 +160,7 @@ export async function setOut(): Promise<void> {
   unpick();
   closeSheet(false);
   const begun = await ask({ do: "fight" }, document.getElementById("setout"));
-  if (!begun?.ok || S.run?.phase !== "fight") return;
+  if (!begun?.ok || S.run?.stage.phase !== "fight") return;
   S.mode = "fight";
   changed();
   playFight();
@@ -169,7 +171,7 @@ export async function setOut(): Promise<void> {
  * deploy, or a fight decided before one) is not shown: only how Leaf says it came out, and what it paid.
  */
 function playFight(): void {
-  const fought = S.run?.phase === "fight" ? S.run.fight : null;
+  const fought = S.run ? foughtOf(S.run) : null;
   if (!fought) return;
   if (playsAsKept(fought)) startFight(fought.setup, S.prefs.speed, () => takings(true));
   else takings(false);
@@ -197,7 +199,7 @@ const whyName = (why: AcornsWhy): string => (why === "streak" && S.run ? streakN
  */
 function takings(kept: boolean): void {
   const run = S.run;
-  const outcome = run?.phase === "fight" ? run.fight?.outcome : undefined;
+  const outcome = run ? foughtOf(run)?.outcome : undefined;
   if (!run || !outcome) return;
   const boss = run.foe.figures.map((p) => p.kind).find(isBossId);
   const room = run.room;
@@ -226,7 +228,7 @@ async function taken(
   shown.level = null;
   shown.acorns = null;
   endFight();
-  if (S.run && S.run.phase !== "over") enterRun(false);
+  if (S.run && S.run.stage.phase !== "over") enterRun(false);
   else {
     S.mode = "front";
     changed();
@@ -245,8 +247,8 @@ function counting(
   const result = notes.find((n) => n.t === "result");
   const won = result?.t === "result" && result.result === "win";
   // The run has moved on by now: it may be over.
-  const over = S.run?.phase === "over";
-  if (over && S.run?.won)
+  const over = S.run?.stage.phase === "over";
+  if (over && S.run && endingOf(S.run) === "won")
     tell({ town: "news", text: "A little raid cleared: The Crab Nobody Counted has been counted.", tone: "gold" });
   else if (won && boss)
     tell({ town: "news", text: `${specOf(boss).name} was seen off at the stump, room ${room + 1}.`, tone: "gold" });
@@ -276,7 +278,7 @@ export function carryOn(): void {
   closeSheet(false);
   endFight();
   snd.tap();
-  if (run.phase === "over") S.mode = "over";
+  if (run.stage.phase === "over") S.mode = "over";
   else {
     S.mode = "plan";
     syncPawns(run, true);
