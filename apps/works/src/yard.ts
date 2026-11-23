@@ -149,7 +149,11 @@ export async function openYard(player: string, trouble: (why: Trouble) => void):
   leaf = opened;
   unanswered = [];
   shown = 0;
-  opened.onTrouble(trouble);
+  // Play that has ended takes Leaf's yard no more: the screen that says why must be pressable.
+  opened.onTrouble((why) => {
+    taking = null;
+    trouble(why);
+  });
   opened.onState(() => void take());
   opened.onAnswer(heard);
   collectedAt = performance.now();
