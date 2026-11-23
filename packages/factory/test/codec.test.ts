@@ -7,7 +7,8 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
-import { delivering, generated } from "./yards.ts";
+import { bareLand } from "./land.ts";
+import { delivering, generated, must } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -152,6 +153,26 @@ describe("what could not have come about by playing is left out", () => {
     expect(back.board.some((o) => o.id === 99)).toBe(false);
     expect(F.encode(back)).toBe(good);
   });
+
+  test("a setting, a colour or a blueprint the yard may not have: a mill told to make lamp oil and a painted belt, without the oil press and Paint", () => {
+    const y = F.create({ land: bareLand(13, 9, [], [9, 4]), tier: 4, seed: 1 });
+    must(y, { do: "build", kind: "mill", x: 2, y: 2, dir: 0 });
+    must(y, { do: "recipe", x: 2, y: 2, item: "oil" });
+    must(y, { do: "build", kind: "belt", x: 3, y: 2, dir: 0 });
+    must(y, { do: "paint", x: 3, y: 2, tint: 4 });
+    must(y, { do: "saveBlueprint", slot: 0, tiles: F.within(y, 2, 2, 3, 2) });
+    const rec = record(F.encode(y));
+    const done = Array.isArray(rec.done) ? rec.done.filter((id) => id !== "oilpress" && id !== "signs") : [];
+    const back = F.decode(JSON.stringify({ ...rec, done }), y.land);
+    if (!back) throw new Error("the yard does not read back");
+    expect([back.kind[F.at(back, 2, 2)], back.set[F.at(back, 2, 2)], back.tint[F.at(back, 3, 2)]]).toEqual([
+      F.MILL,
+      F.NONE,
+      0,
+    ]);
+    expect(back.blueprints[0]).toBeNull();
+    expect(F.decode(F.encode(y), y.land)?.blueprints[0]).not.toBeNull();
+  });
 });
 
 /** What the check leaves out, by path: everything else in a yard must change the check when it changes. */
@@ -161,8 +182,6 @@ const LEFT_OUT = new Set([
   "serial",
   "at",
   "away",
-  // When an order began to count, which nothing reads once it does.
-  "board.0.starts",
   // News no screen has taken yet.
   "news",
   // Shared by every yard on it, and never kept.
@@ -251,6 +270,16 @@ describe("the check", () => {
       if (F.check(copy) !== sum) told++;
     }
     expect(told).toBe(40);
+  });
+
+  test("mixes in the high halves of wide counters", () => {
+    const y = delivering();
+    for (const part of ["tick", "bank", "till"] as const) {
+      const other = F.decode(F.encode(y), y.land);
+      if (!other) throw new Error("no copy");
+      other[part] += 2 ** 32;
+      expect(F.check(other)).not.toBe(F.check(y));
+    }
   });
 
   test("tells apart two yards whose standing orders want the same and pay differently", () => {

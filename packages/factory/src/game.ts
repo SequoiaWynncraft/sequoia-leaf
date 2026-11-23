@@ -24,12 +24,23 @@ import { check } from "./check.ts";
 import { awayOf, here, stillAt, TICK_MS } from "./clock.ts";
 import { decode, encode } from "./codec.ts";
 import { STAND_MOST } from "./content/machines.ts";
-import type { Tool } from "./content/nodes.ts";
 import { LAND, type Land } from "./land.ts";
 import { paint } from "./lines.ts";
 import { claim, counting, fillBoard, study, studyRefusal, swap, takeNode, takeRefusal, unstudy } from "./orders.ts";
-import { clear, deleteBlueprint, keptOf, move, type Piece, saveBlueprint, stand, TINTS, upgrade } from "./pieces.ts";
 import {
+  blueprintAt,
+  clear,
+  deleteBlueprint,
+  keptOf,
+  move,
+  type Piece,
+  saveBlueprint,
+  stand,
+  TINTS,
+  upgrade,
+} from "./pieces.ts";
+import {
+  BELT,
   BLUEPRINTS_MOST,
   DEPOT,
   type Goal,
@@ -40,13 +51,15 @@ import {
   itemNamed,
   type Kind,
   kindNamed,
+  type Lock,
+  locked,
   MILLI,
   type Plot,
   plotName,
   plotNamed,
   SPAN_MOST,
-  toolBit,
   TOP,
+  TUNNEL,
 } from "./tables.ts";
 import { step } from "./tick.ts";
 import { collect, drain, emptyYard, type News, type Standing, type Yard } from "./yard.ts";
@@ -64,6 +77,7 @@ export type Act =
   | ({ readonly do: "build"; readonly kind: Kind; readonly dir: Dir; readonly grade: number } & At)
   | { readonly do: "lay"; readonly legs: readonly Piece[]; readonly turn?: At & { readonly dir: Dir } }
   | { readonly do: "stand"; readonly pieces: readonly Piece[] }
+  | ({ readonly do: "placeBlueprint"; readonly slot: number; readonly turns: Dir } & At)
   | ({ readonly do: "move"; readonly tiles: readonly number[]; readonly turns: Dir } & At)
   | ({ readonly do: "remove" } & At)
   | { readonly do: "clear"; readonly tiles: readonly number[] }
@@ -119,6 +133,7 @@ export const REFUSED = {
   build: "cannot_build",
   lay: "cannot_lay",
   stand: "cannot_stand",
+  placeBlueprint: "cannot_place_blueprint",
   move: "cannot_move",
   remove: "nothing_to_take_away",
   clear: "nothing_to_clear",
@@ -210,33 +225,21 @@ type Did = { readonly coins: CoinChange[]; readonly log: Logged[] } | Turned;
 const no = (c: { readonly do: keyof typeof REFUSED }, why: string): Turned => ({ refused: REFUSED[c.do], why });
 const done = (coins: CoinChange[] = [], log: Logged[] = []): Did => ({ coins, log });
 
-/** The tool a command belongs to, if it is one a yard must unlock; a single piece and a run of belt need none. */
-const TOOL: Partial<Record<Command["do"], Tool | "blueprints">> = {
-  paint: "paint",
-  move: "select",
-  clear: "select",
-  stand: "select",
-  upgrade: "upgrade",
-  saveBlueprint: "blueprints",
+/** The tool a command is one of, if it is one a yard must unlock (asked of `locked`); a single piece and a run of belt are of none. */
+const TOOL: Partial<Record<Command["do"], Lock>> = {
+  paint: { use: "paint" },
+  move: { use: "select" },
+  clear: { use: "select" },
+  stand: { use: "select" },
+  placeBlueprint: { use: "select" },
+  upgrade: { use: "upgrade" },
+  saveBlueprint: { blueprint: 0 },
 };
-const NOT_YET = {
-  paint: "Paint is not unlocked yet",
-  select: "Select is not unlocked yet",
-  upgrade: "Upgrading an area is not unlocked yet",
-  blueprints: "Blueprints are not unlocked yet",
-} as const;
-
-/** Why a yard may not use a command's tool yet, or nothing. */
-function locked(y: Yard, c: Command): string | null {
-  const tool = TOOL[c.do];
-  if (tool === undefined) return null;
-  const open = tool === "blueprints" ? y.open.blueprints > 0 : (y.open.tools & toolBit(tool)) !== 0;
-  return open ? null : NOT_YET[tool];
-}
 
 /** Does a command to a yard already at its tick. Nothing is changed unless it is done. */
 function act(y: Yard, c: Command): Did {
-  const lock = locked(y, c);
+  const tool = TOOL[c.do];
+  const lock = tool === undefined ? null : locked(y.open, tool);
   if (lock !== null) return { refused: LOCKED, why: lock };
   switch (c.do) {
     case "build": {
@@ -244,8 +247,11 @@ function act(y: Yard, c: Command): Did {
       return did.ok ? done(priced(y, did.cost, REASON.build)) : no(c, did.why);
     }
     case "lay":
-    case "stand": {
-      const did = c.do === "lay" ? stand(y, c.legs, Infinity, true, c.turn) : stand(y, c.pieces, Infinity);
+    case "stand":
+    case "placeBlueprint": {
+      const pieces = c.do === "stand" ? c.pieces : c.do === "lay" ? c.legs : blueprintAt(y, c.slot, c.turns, c.x, c.y);
+      if (!pieces) return no(c, "There is no blueprint there");
+      const did = stand(y, pieces, Infinity, c.do === "lay", c.do === "lay" ? c.turn : undefined);
       return did.ok ? done(priced(y, did.cost, c.do === "lay" ? REASON.lay : REASON.build)) : no(c, did.why);
     }
     case "move": {
@@ -272,8 +278,10 @@ function act(y: Yard, c: Command): Did {
       return turn(y, c.x, c.y, c.dir) ? done() : no(c, "That cannot be turned");
     case "paint":
       return paint(y, at(y, c.x, c.y), c.tint) ? done() : no(c, "Nothing to paint here");
-    case "recipe":
-      return setRecipe(y, c.x, c.y, c.item) ? done() : no(c, "That cannot make it");
+    case "recipe": {
+      const why = setRecipe(y, c.x, c.y, c.item);
+      return why === null ? done() : no(c, why);
+    }
     case "sort":
       return setSort(y, c.x, c.y, c.item) ? done() : no(c, "There is no sorter there");
     case "tipOut":
@@ -356,9 +364,17 @@ export function readPiece(v: unknown, mx = 255, my = 255): Piece | null {
   return { kind: k, x: v.x, y: v.y, dir: v.dir, span: v.span, ...keptOf({ ...v, recipe: recipe ?? undefined }, k) };
 }
 
-function piecesOf(v: unknown, most: number): Piece[] | null {
+/** A leg of a run read off the wire: a belt or a tunnel, where it goes, which way, how far and at what grade, and nothing else. */
+function readLeg(v: unknown): Piece | null {
+  const p = readPiece(v);
+  if (!p || (p.kind !== BELT && p.kind !== TUNNEL)) return null;
+  const leg = { kind: p.kind, x: p.x, y: p.y, dir: p.dir, span: p.span };
+  return p.grade === undefined ? leg : { ...leg, grade: p.grade };
+}
+
+function listOf(v: unknown, most: number, read: (v: unknown) => Piece | null): Piece[] | null {
   if (!Array.isArray(v) || v.length > most) return null;
-  const pieces = v.map((p) => readPiece(p)).filter((p) => p !== null);
+  const pieces = v.map(read).filter((p) => p !== null);
   return pieces.length === v.length ? pieces : null;
 }
 
@@ -379,7 +395,7 @@ function what(v: Record<string, unknown>): Act | null {
         : null;
     }
     case "lay": {
-      const legs = piecesOf(v.legs, TILES);
+      const legs = listOf(v.legs, TILES, readLeg);
       if (!legs) return null;
       const t = v.turn;
       if (t === undefined) return { do: "lay", legs };
@@ -387,9 +403,11 @@ function what(v: Record<string, unknown>): Act | null {
       return { do: "lay", legs, turn: { x: t.x, y: t.y, dir: t.dir } };
     }
     case "stand": {
-      const pieces = piecesOf(v.pieces, STAND_MOST);
+      const pieces = listOf(v.pieces, STAND_MOST, (p) => readPiece(p));
       return pieces && { do: "stand", pieces };
     }
+    case "placeBlueprint":
+      return spot && slot !== null && isDir(v.turns) ? { do: "placeBlueprint", slot, turns: v.turns, ...spot } : null;
     case "move":
       return spot && tiles && isDir(v.turns) ? { do: "move", tiles, turns: v.turns, ...spot } : null;
     case "remove":

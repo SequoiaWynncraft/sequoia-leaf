@@ -1,8 +1,9 @@
 /**
- * Tiers, as nodes: lessons come into hand by themselves in their order; a project is taken into
- * hand once its tier is open and what it needs is done; what reaches the depot goes to the node in
- * hand first, then the board; what a node has been given stays given; a commission opens the next
- * tier, whose land is then for sale; a tool not unlocked refuses its commands with a code of its own.
+ * Tiers, as nodes: lessons come into hand by themselves in their order; a project or a commission
+ * is taken into hand once its tier is open and what it needs is done; what reaches the depot goes to
+ * the node in hand first, then the board; what a node has been given stays given; a commission opens
+ * the next tier, whose land is then for sale; a tool not unlocked refuses its commands with a code of
+ * its own, and a run of belt is never a way round one.
  */
 import { describe, expect, test } from "bun:test";
 
@@ -28,6 +29,26 @@ const refused = (y: F.Yard, c: Record<string, unknown>): string | null => {
   const did = give(y, c);
   return "refused" in did ? did.refused : null;
 };
+/** Puts a piece of research in the line and gives it every folio it wants, as Studies would. */
+function learn(y: F.Yard, research: string): void {
+  must(y, { do: "study", research });
+  const g = F.goal(research);
+  for (const n of F.FOLIOS) F.giveGoal(y, g, n, F.GOALS[g]?.want[n] ?? 0);
+  expect(y.open.done[g]).toBe(1);
+}
+/** A yard with every goal of the tiers below `tier` done but some. */
+function without(tier: number, ...ids: string[]): F.Yard {
+  const y = F.create({ seed: 1, tier });
+  y.done = y.done.filter((g) => !ids.includes(F.GOALS[g]?.id ?? ""));
+  F.reopen(y);
+  return y;
+}
+/** A kept yard as a record. */
+function record(y: F.Yard): Record<string, unknown> {
+  const rec: unknown = JSON.parse(F.encode(y));
+  if (typeof rec !== "object" || rec === null) throw new Error("not a record");
+  return { ...rec };
+}
 
 describe("the lessons", () => {
   test("a new yard has the first lesson in hand; each comes into hand by itself when the one before is done, pays as today's first orders did, and unlocks", () => {
@@ -108,9 +129,23 @@ describe("projects and commissions", () => {
     must(y, { do: "take", node: "drawing" });
   });
 
+  test("tier 3's commission needs the oil press and the workshop known: before, it cannot be taken and does not come into hand; it comes when they are, if nothing is in hand", () => {
+    const y = F.create({ seed: 1, tier: 3 });
+    expect(y.hand).toBe(-1);
+    expect(give(y, { do: "take", node: "lanterns" })).toMatchObject({
+      refused: "cannot_take",
+      why: "Lanterns for the great tree is not open yet",
+    });
+    learn(y, "oilpress");
+    expect(y.hand).toBe(-1);
+    learn(y, "workshop");
+    expect(id(y)).toBe("lanterns");
+  });
+
   test("when the last commission is done, nothing is in hand", () => {
     const y = F.create({ seed: 1, tier: 3 });
-    expect(id(y)).toBe("lanterns");
+    learn(y, "oilpress");
+    learn(y, "workshop");
     fill(y);
     expect([y.open.tier, y.hand]).toEqual([4, -1]);
     F.deliver(y, F.item("lantern"), 5);
@@ -154,6 +189,33 @@ describe("tools", () => {
     expect(asks(F.create({ seed: 1, tier: 3 }))).toEqual([null, null, null, null, null]);
   });
 
+  test("a run of belt is belts and tunnels and nothing else: a mill does not read as a leg, and a leg's colour or setting is not laid", () => {
+    const y = F.create({ seed: 1 });
+    const [cx, cy] = y.land.depot;
+    const leg = { x: cx + 2, y: cy - 3, dir: 0, span: 0 };
+    expect(F.readCommand({ tick: 0, do: "lay", legs: [{ kind: "mill", ...leg }] })).toBeNull();
+    must(y, { do: "lay", legs: [{ kind: "belt", ...leg, tint: 3, recipe: "plank", shut: 2 }] });
+    expect([y.kind[F.at(y, leg.x, leg.y)], F.keptAt(y, F.at(y, leg.x, leg.y))]).toEqual([F.BELT, {}]);
+  });
+
+  test("a colour given in stand needs Paint, and raising an area needs Select as well as its own unlock", () => {
+    const y = without(4, "signs");
+    const [cx, cy] = y.land.depot;
+    const belt = { kind: "belt", x: cx + 2, y: cy - 3, dir: 0, span: 0 };
+    expect(give(y, { do: "stand", pieces: [{ ...belt, tint: 2 }] })).toMatchObject({
+      refused: "cannot_stand",
+      why: "Paint is not unlocked yet",
+    });
+    must(y, { do: "stand", pieces: [belt] });
+    const z = without(4, "chain", "drawing");
+    must(z, { do: "build", kind: "belt", x: cx + 2, y: cy - 3, dir: 0 });
+    expect(give(z, { do: "upgrade", tiles: [F.at(z, cx + 2, cy - 3)] })).toMatchObject({
+      refused: F.LOCKED,
+      why: "Select is not unlocked yet",
+    });
+    expect(z.grade[F.at(z, cx + 2, cy - 3)]).toBe(1);
+  });
+
   test("the tunnel's span and the blueprints' size come from what is unlocked", () => {
     const y = F.create({ seed: 1, tier: 1 });
     expect([y.open.kinds[F.TUNNEL], y.open.span]).toEqual([0, 0]);
@@ -178,5 +240,21 @@ describe("keeping goals", () => {
     const bad = F.decode(JSON.stringify({ ...rec, done: ["hall", "gears", "planks"] }));
     expect(bad?.done.map((g) => F.GOALS[g]?.id)).toEqual(["planks"]);
     expect(bad && id(bad)).toBe("ingots");
+  });
+
+  test("a node read back given all it wants, or more, is finished by the rule that finishes one in play: done, paid, logged, and the next in hand", () => {
+    const y = F.create({ seed: 1 });
+    const back = F.decode(JSON.stringify({ ...record(y), got: { planks: { plank: 50 } } }));
+    if (!back) throw new Error("the yard does not read back");
+    expect([back.open.done[F.goal("planks")], id(back), back.till, back.got[F.goal("planks")]]).toEqual([
+      1,
+      "ingots",
+      80 * F.MILLI,
+      null,
+    ]);
+    const did = give(back, { do: "collect" });
+    expect("refused" in did ? [] : did.log).toEqual([
+      { kind: "works_story", data: { node: "planks", title: "Planks for the Treasury", pay: 80 } },
+    ]);
   });
 });

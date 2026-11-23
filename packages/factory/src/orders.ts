@@ -26,6 +26,7 @@ import {
   ITEM_COUNT,
   ITEM_INFO,
   itemName,
+  locked,
   MILLI,
   nextHand,
   NONE,
@@ -34,6 +35,7 @@ import {
   type Plot,
   ready,
   RECIPES_N,
+  STUDY,
   workOf,
 } from "./tables.ts";
 import { type Counts, counts, hold, reopen, type Standing, type Yard } from "./yard.ts";
@@ -104,7 +106,10 @@ function filledOrder(y: Yard, order: Standing): void {
   y.news.push({ kind: "filled", id: order.id, title: order.title, pay: order.pay });
 }
 
-/** A goal has all it wants: it is done, pays, unlocks what it unlocks, and a node finished brings the next into hand. */
+/**
+ * A goal has all it wants: it is done, pays and unlocks what it unlocks; when it was the node in hand,
+ * or nothing is in hand, the next comes into hand; research known lets the next in the line begin.
+ */
 function finish(y: Yard, g: Goal): void {
   const info = GOALS[g];
   if (!info) return;
@@ -114,7 +119,7 @@ function finish(y: Yard, g: Goal): void {
   y.paid += info.pay * MILLI;
   y.news.push({ kind: "done", goal: info.id, title: info.title, pay: info.pay });
   reopen(y);
-  if (y.hand === g) hold(y, nextHand(y.open));
+  if (y.hand === g || y.hand === -1) hold(y, nextHand(y.open));
   if (y.line[0] === g) {
     y.line.shift();
     begin(y);
@@ -122,11 +127,20 @@ function finish(y: Yard, g: Goal): void {
   fillBoard(y);
 }
 
-/** The research first in the line begins: somewhere to count what it is given, and every Study looks again at what it holds. */
+/**
+ * The research first in the line begins: somewhere to count what it is given, and every Study looks
+ * again at what it holds. The work a Study had done was for the research first before, and is dropped.
+ */
 function begin(y: Yard): void {
   const g = y.line[0];
   if (g !== undefined) y.got[g] ??= counts();
-  y.holders.idle.fill(0);
+  const h = y.holders;
+  h.idle.fill(0);
+  for (let r = 0; r < h.size; r++)
+    if (y.kind[h.tile[r] ?? 0] === STUDY) {
+      h.making[r] = NONE;
+      h.work[r] = 0;
+    }
 }
 
 /** Why a piece of research cannot be put in the line just now, or nothing if it can. */
@@ -209,7 +223,7 @@ export function makeableOn(land: Land, open: Open, plots: readonly Plot[]): Item
   for (let grew = true; grew;) {
     grew = false;
     for (const r of RECIPES_N) {
-      if (can[r.out] === 1 || open.kinds[r.by] === 0 || open.recipes[r.out] === 0) continue;
+      if (can[r.out] === 1 || locked(open, { make: r.out }) !== null) continue;
       if (!r.from.every((k) => can[k] === 1)) continue;
       can[r.out] = 1;
       grew = true;
@@ -297,11 +311,11 @@ function titled(items: readonly Item[], from: string): string {
 /** Where an order hangs on the board, by its id, or -1. */
 const slotOf = (y: Yard, id: number): number => y.board.findIndex((o) => o.id === id);
 
-/** Hands a filled standing order over, by its id: it pays into the till and a fresh order takes its place. */
+/** Hands a filled standing order that counts over, by its id: it pays into the till and a fresh order takes its place. */
 export function claim(y: Yard, id: number): number | null {
   const slot = slotOf(y, id);
   const order = y.board[slot];
-  if (!order || !isFilled(order.want, order.filled)) return null;
+  if (!order || !counting(order, y.tick) || !isFilled(order.want, order.filled)) return null;
   y.till += order.pay * MILLI;
   y.paid += order.pay * MILLI;
   y.handed++;

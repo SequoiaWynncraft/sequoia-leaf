@@ -10,7 +10,7 @@ stop. Nothing serves or draws it yet.
 | To work on                                                                    | Read                                                                          |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | what things, machines, grades, recipes, plots, nodes, research and askers are | `src/content/*.ts` (data only)                                                |
-| how a name becomes a number; what is open once some goals are done            | `src/tables.ts`                                                               |
+| how a name becomes a number; what is open once some goals are done; `locked`  | `src/tables.ts`                                                               |
 | what a yard holds, and its side tables                                        | `src/yard.ts`, then `src/land.ts`                                             |
 | one tick                                                                      | `src/tick.ts`, `src/wire.ts` (who hands to whom), `src/power.ts`              |
 | building, raising, removing, turning, setting pieces, plots                   | `src/build.ts`; many pieces at once: `src/pieces.ts`; colours: `src/lines.ts` |
@@ -60,8 +60,8 @@ and grow by half when full:
 
 The plumbing (`wire`) is worked out once after a change: four lists of tiles, sized by what
 stands (the order things are handed on in, the tiles that carry, the pieces that work, the boilers
-in reach), and for each tile the sides it takes things in from, a bit each. A tick runs down those
-lists and nothing else, and makes nothing.
+in reach), for each tile the sides it takes things in from, a bit each, and for each kind of machine
+the recipes it may make. A tick runs down those lists and nothing else, and makes nothing.
 
 Beside them, plain records: the clock, the till, the power put by, the goals (done, in the order
 they were done; the node in hand; the line of research; what each goal not done has been given),
@@ -87,8 +87,10 @@ for their range.
   it does not, none does. With 5 power of every 8 drawn they work 5 ticks in 8, exactly; what is left
   over carries to the next tick and is kept with the yard. A yard with power enough works every tick
   and keeps nothing in the store.
-- **Reach** is whole squared distances: a tile is in reach when the square of its distance is no
-  more than the reach squared, rounded down.
+- **Reach** is in hundredths of a tile (`REACH`: a pylon 460), made longer by a whole percentage
+  (`open.reach`: 100, 135 with "Taller pylons"), and read as a whole squared distance: a tile is in
+  reach when the square of its distance is no more than the reach squared, rounded down.
+- **The pace** of what reaches the depot counts whole ticks, and halves them, rounded down, each hour.
 
 ## Recipes that count
 
@@ -101,8 +103,16 @@ It takes a part while it holds fewer than 4 of the smallest batch of it that any
 Where every count is 1 that is 4, as before; so a bench with nothing set takes 4 planks, and a
 hamper is not started until a second plank comes. Once it holds a pot, only the hamper is left, and
 it takes planks up to 8. A machine with enough of one part and none of another takes no more of the
-first; it is starved, its status names the part to tip out (`tipOut`) and the one it waits for, and
-telling it what to make (`recipe`) tips out what that recipe does not use.
+first; it is starved, its status names the part to tip out (`tipOut`) and the one it waits for.
+Telling it what to make (`recipe`) tips out whatever it holds beyond 4 of that recipe's batches of
+each part (so all of a part the recipe does not use); told nothing, beyond what the recipe of all it
+may make that takes the most of each part keeps (`keeps`, `holdsMost`).
+
+Every recipe a yard of tier 0 or 1 may make takes one of each part: the hamper and the glazed shell
+are unlocked by tier 1's commission, and lanterns and raid kits are made in a workshop. A machine
+makes, is told to make and takes parts in for only the recipes `locked` lets it.
+
+Not built, on purpose: a recipe that makes more than one.
 
 ## Grades
 
@@ -134,24 +144,47 @@ nothing unlocks is known from the start; a new yard has `START`.
 - **The node in hand** takes what reaches the depot first; the board's orders take the rest. A
   goal is `ready` when it is not done, its tier is open, what it needs is done, and for a lesson,
   every lesson before it is done. `take` puts any ready node in hand; what each node has been given
-  stays given. When the node in hand is finished, the next lesson comes into hand, else the
-  commission of the highest tier open, else nothing.
+  stays given. When the node in hand is finished, or a goal is finished while nothing is in hand,
+  the next lesson comes into hand, else the commission of the highest tier open if it is ready, else
+  nothing. Tier 3's commission needs the oil press and the workshop known.
 - **Research** is studied in a line of up to 4 (`study`, `unstudy`); the first is being studied. A
   Study holding a folio the research still wants works on it as a machine works (100 half-ticks at
   its grade's pace, so one every 50 ticks at grade 1), and then puts it toward the research. One the
   research has stopped wanting meanwhile stays in the Study, as does any folio the research does not
-  want. Known, the research unlocks, and the next in line begins.
+  want. A Study's work belongs to the research first in the line: when another comes first (one taken
+  out, or known), every Study's work is dropped; tipping out a folio drops it only if it is the one
+  being worked on. Known, the research unlocks, and the next in line begins.
 - **Finishing** either kind of goal is one function (`finish`): it is done, what it unlocks is open,
-  a node pays and brings the next into hand, research lets the next begin, and the yard has news of
+  a node pays and the next comes into hand, research lets the next begin, and the yard has news of
   it. Leaf logs each node finished.
-- **Tools.** A command of a tool the yard has not unlocked is refused with `locked`: `paint` (Paint);
-  `move`, `clear`, `stand` (Select); `saveBlueprint` (any blueprints); `upgrade` (Upgrading an area).
-  A single piece (`build`) and a run of belt (`lay`) never are.
+
+## What a yard may do
+
+One function says it: `locked(open, lock)`, in `tables.ts`, gives why a yard may not yet do
+something, or nothing. It is asked of a kind of piece at a grade, a recipe (its own unlock and its
+machine's), a tool (an area is raised with Select as well as Upgrading an area), how many cart stops
+may stand, and a blueprint (its place, how many pieces, how large). Nothing else reads what is open
+to decide these: building, standing and laying (`refusal`, and `pieceRefusal` for what a piece is set
+to and its colour), moving, raising an area (`highest`), setting a recipe, the plumbing's recipes for
+each machine (`recipesFor`), the router, keeping a blueprint, what the board may ask for, and reading
+a yard back.
+
+- **Tools.** A command of a tool the yard has not unlocked is refused with the code `locked`: `paint`
+  (Paint); `move`, `clear`, `stand`, `placeBlueprint` (Select); `saveBlueprint` (any blueprints);
+  `upgrade` (Upgrading an area, and Select). A single piece (`build`) and a run of belt (`lay`) never
+  are.
+- **A run of belt** (`lay`) reads only belts and tunnels: where each leg goes, which way, how far
+  and at what grade. A leg of any other kind does not read; a colour or a setting on one is let be.
+  A run that names a tunnel twice, by both its mouths, is refused before anything changes, and a run
+  is charged the price `priceOf` gives it.
+- **Standing pieces** (`stand`) is for a copy or an undone removal, at most 160 a command; a colour
+  in it needs Paint, and what a piece is set to its own unlock. A blueprint is set down by naming its
+  place, its corner and its turns (`placeBlueprint`), all or none, whatever its size.
 
 ## Pieces new to this design
 
 - **The Study** (`study`), one tile: takes folios in from any side, holds up to 20 of each kind, and
-  draws 6 power at grade 1.
+  draws 6 power at grade 1. Its work, and the folio it works on, are kept with the yard.
 - **The cart stop** (`stop`): takes things in from any side, and each has reached the depot at once.
   A yard may stand as many as it has unlocked.
 - **The sorter** (`sorter`): takes things in from behind; the one thing it is set to (`sort`) goes out
@@ -162,9 +195,10 @@ nothing unlocks is known from the start; a new yard has `START`.
 A standing order is sized by the tier reached: 6,000 ticks of work and 3,000 more for each tier open
 beyond the first, shared out between one or two things as `fresh` draws them. Only Leaf, holding the
 seed, can draw one. It counts from 50 ticks after it is hung (`starts`): until then the depot gives
-it nothing and the check leaves it out. A fresh order is hung at the end of the board. What Leaf
-answers a batch with (`answer`) is the yard's tick, its check, and the orders hung that do not count
-yet.
+it nothing, it cannot be handed over (`claim`), and the check leaves it out. A fresh order is hung at
+the end of the board. What Leaf answers a batch with (`answer`) is the yard's tick, its check, and the
+orders hung that do not count yet. `answer` is not yet a part of `FACTORY`: core on this branch has
+no place for it; it joins when the branch takes in `main`.
 
 ## The planner
 
@@ -183,16 +217,28 @@ something, the thing and its progress, then only the parts that are not as new (
 them, when above 1). A blueprint's piece is its kind, x, y and way, then only the parts it keeps.
 
 `decode` refuses whole a record of the wrong shape or version, and pieces' bytes cut short, left
-over, with a part it does not know or with a count past what the tables allow; it builds every
-piece again through the rules (`vouch`), takes the goals done in their order only where each could
-have been done then, and leaves out anything that could not have come about by playing.
+over, with a part it does not know or with a count past what the tables allow. Inside a good one it
+gives back a yard play could have made (`vouch`), doing again through the rules what play does, and
+leaves out what it could not:
 
-`check` is one pass over the yard into 32 bits, for Leaf and the page to compare their copies: every
-part of the yard the rules read. It leaves out what only Leaf holds and moves (the seed, `serial`,
-the orders that do not count yet, its clock's moment, the letter), an order's `starts`, news, what is
-worked out again (what is open, power, the plumbing, a machine's idle note) and which row of a side
-table holds a piece's parts; a yard read back gives the same check. `test/codec.test.ts` changes
-every other part of a yard in turn, and fails on one added unmixed.
+- the goals done, in their order, only where each could have been done then; the node in hand and
+  the line of research only where each could be taken up;
+- what each goal that could have been given anything was given, given again through `giveGoal`, so
+  that one given all it wants is finished as in play (it pays, and Leaf logs it);
+- each order only with the tick it counts from, no later than one hung now would; one that does not
+  count yet holds nothing;
+- each piece built again through `build`; what it is set to, its colour, what it holds, makes and has
+  made only as `locked` lets the yard, a machine no more than it keeps; a Study's work and folio only
+  while research it wants is being studied;
+- each blueprint only in a place the yard has, holding pieces, grades and settings it may build.
+
+`check` is one pass over the yard into 32 bits, for Leaf and the page to compare their copies:
+everything `decode` keeps of the rules' state, each number that may pass 32 bits by both its halves.
+It leaves out what only Leaf holds and moves (the seed, `serial`, the orders that do not count yet,
+its clock's moment, the letter), news, what is worked out again (what is open, power, the plumbing,
+a machine's idle note) and which row of a side table holds a piece's parts; a yard read back gives
+the same check. `test/codec.test.ts` changes every other part of a yard in turn, and fails on one
+added unmixed.
 
 ## Budgets
 
@@ -215,8 +261,8 @@ Measured beside them and printed: the first tick after a change, and a tick that
 
 ## The tests
 
-One file for each part: whole numbers, counted recipes, grades, tiers, research, the new pieces,
-orders, the tables held together (every goal reachable, nothing wanted before it can be made, every
+One file for each part: whole numbers, counted recipes (and those of tiers 0 and 1, in yards of those
+tiers), grades, tiers and tools, research, the new pieces and blueprints, orders, the tables held together (every goal reachable, nothing wanted before it can be made, every
 folio cost payable by its tier, ids unique), the planner (and that a yard does what it says), the
 codec and the check, random play (a refusal changes nothing, a yard reads back as itself, every
 command and piece takes effect) and time away, and the budgets. `test/yards.ts` builds the yards

@@ -81,10 +81,4 @@ describe("the tables", () => {
     );
     expect(folios).toBe(1490);
   });
-
-  test("tiers 0 and 1 have only recipes of one of each part, as today's game", () => {
-    const early = makeableFor(F.goal("banners"));
-    const counted = early.filter((n) => (F.RECIPE[n]?.need ?? []).some((c) => c > 1));
-    expect(counted.map(F.itemName)).toEqual([]);
-  });
 });

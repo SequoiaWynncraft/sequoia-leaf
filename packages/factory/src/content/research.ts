@@ -51,7 +51,7 @@ export const RESEARCH: readonly ResearchInfo[] = [
     name: "Taller pylons",
     what: "Pylons reach 35% further, and can stand 35% further apart.",
     cost: { timber: 60 },
-    unlocks: { reach: 1.35 },
+    unlocks: { reach: 135 },
   },
   {
     id: "flywheel",

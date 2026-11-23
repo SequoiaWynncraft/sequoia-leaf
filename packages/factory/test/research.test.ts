@@ -1,8 +1,9 @@
 /**
  * Research: one piece studied and up to three waiting; a Study holding a folio the research still
  * wants puts one toward it every 50 ticks at grade 1, and what the research does not want stays in
- * the Study; known, it unlocks, the next begins, and the yard has news of it. It goes on while the
- * owner is away.
+ * the Study; a Study's work belongs to the research it was begun for, and is kept with the yard;
+ * known, research unlocks, the next begins, and the yard has news of it. It goes on while the owner
+ * is away.
  */
 import { describe, expect, test } from "bun:test";
 
@@ -65,6 +66,36 @@ describe("a Study", () => {
     must(faster.y, { do: "study", research: "workshop" });
     run(faster.y, 500);
     expect(got(faster.y, "workshop")).toBe(15);
+  });
+
+  test("part-way through a folio, keeps its work and the folio it works on when the yard is kept and read back", () => {
+    const { y } = studies([[timber, 2]]);
+    must(y, { do: "study", research: "workshop" });
+    run(y, 30);
+    const back = F.decode(F.encode(y), y.land);
+    if (!back) throw new Error("the yard does not read back");
+    expect(F.check(back)).toBe(F.check(y));
+    run(back, 20);
+    expect(got(back, "workshop")).toBe(1);
+  });
+
+  test("its work belongs to the research it was begun for: taking that out of the line drops it; tipping out another folio does not", () => {
+    const { y } = studies([
+      [timber, 3],
+      [brass, 2],
+    ]);
+    must(y, { do: "study", research: "workshop" });
+    run(y, 30);
+    must(y, { do: "tipOut", x: 5, y: 7, item: "brass" });
+    run(y, 20);
+    expect(got(y, "workshop")).toBe(1);
+    run(y, 30);
+    must(y, { do: "unstudy", research: "workshop" });
+    must(y, { do: "study", research: "workshop" });
+    run(y, 20);
+    expect(got(y, "workshop")).toBe(1);
+    run(y, 30);
+    expect(got(y, "workshop")).toBe(2);
   });
 
   test("takes folios in from a belt, and keeps up to 20 of each kind", () => {

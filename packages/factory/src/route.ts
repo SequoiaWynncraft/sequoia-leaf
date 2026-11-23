@@ -12,6 +12,7 @@ import {
   DEPOT,
   JOINER,
   type Kind,
+  locked,
   MILL,
   NONE,
   SORTER,
@@ -83,7 +84,7 @@ function search(
   // A clear tile is one a belt may be built on: `refusal` for a belt on empty ground, asked of the land directly.
   const { land } = y;
   const owned = land.plots.map((p) => y.plots.includes(p.plot));
-  const belts = y.open.kinds[BELT] !== 0;
+  const belts = locked(y.open, { build: BELT }) === null;
   const clear = (i: number): boolean =>
     i >= 0 &&
     belts &&
@@ -92,7 +93,7 @@ function search(
     land.water[i] === 0 &&
     land.trunk[i] === 0;
   if (!clear(start)) return null;
-  const digs = tunnels && y.open.kinds[TUNNEL] !== 0;
+  const digs = tunnels && locked(y.open, { build: TUNNEL }) === null;
   const target = y.kind[goal] !== NONE ? goal : -1;
   const toDepot = y.kind[goal] === DEPOT;
 

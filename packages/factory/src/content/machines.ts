@@ -156,8 +156,8 @@ export const GRADES = [
   { pace: 1.5, price: 3, draw: 1.5 },
   { pace: 2, price: 8, draw: 2 },
 ] as const;
-/** How far power reaches from the depot and from a pylon, and how far apart two joined pylons may stand. */
-export const REACH = { depot: 6.6, pylon: 4.6, link: 8.1 } as const;
+/** How far power reaches from the depot and from a pylon, and how far apart two joined pylons may stand, in hundredths of a tile. */
+export const REACH = { depot: 660, pylon: 460, link: 810 } as const;
 /** How many recipes' worth of each part a machine keeps by it, how much fuel a boiler holds, and how many of each folio a Study holds. */
 export const BUFFER = 4;
 export const FUEL = 8;

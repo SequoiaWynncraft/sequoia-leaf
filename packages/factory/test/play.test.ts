@@ -96,9 +96,8 @@ class Player {
         return { do: "stand", pieces: this.named(F.placed(F.piecesAt(y, this.box()), this.int(4), at.x, at.y)) };
       case 6: {
         const slot = this.int(F.BLUEPRINTS_MOST);
-        const print = y.blueprints[slot];
-        if (!print || this.r() < 0.2) return { do: "deleteBlueprint", slot };
-        return { do: "stand", pieces: this.named(F.placed(F.piecesOf(print), this.int(4), at.x, at.y)) };
+        if (!y.blueprints[slot] || this.r() < 0.2) return { do: "deleteBlueprint", slot };
+        return { do: "placeBlueprint", slot, turns: this.int(4), ...at };
       }
       case 7:
         return { do: "saveBlueprint", slot: this.int(F.BLUEPRINTS_MOST), tiles: this.box() };

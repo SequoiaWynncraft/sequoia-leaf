@@ -8,7 +8,7 @@
  * tile. A number becomes one only through its guard (`isItem`, `isKind`, ...), which checks it.
  */
 import { ITEM, type ItemName, ITEMS, type Wants } from "./content/items.ts";
-import { BUFFER, GRADED, GRADES, KIND, type KindName, KINDS, STARTERS, TICKS } from "./content/machines.ts";
+import { BLUEPRINT, BUFFER, GRADED, GRADES, KIND, type KindName, KINDS, STARTERS, TICKS } from "./content/machines.ts";
 import { NODES, START, type Tool, TOOLS, type Unlocks } from "./content/nodes.ts";
 import { PLOT_IDS, type PlotName } from "./content/plots.ts";
 import { RECIPES } from "./content/recipes.ts";
@@ -180,9 +180,9 @@ export function needOf(r: Recipe, n: number): number {
   for (let p = 0; p < r.from.length; p++) if (r.from[p] === n) return r.need[p] ?? 0;
   return 0;
 }
-/** The most of a thing a machine of a kind keeps by it: `BUFFER` recipes' worth, for the recipe that takes the most of it. */
-export const holdsMost = (k: Kind, n: Item): number =>
-  BUFFER * Math.max(0, ...(MADE_BY[k] ?? []).map((r) => needOf(r, n)));
+/** The most of a thing a machine keeps by it for some recipes: `BUFFER` recipes' worth, for the one that takes the most of it. */
+export const holdsMost = (recipes: readonly Recipe[], n: number): number =>
+  BUFFER * Math.max(0, ...recipes.map((r) => needOf(r, n)));
 
 /** Everything that goes into a thing, all the way down to the ground, the thing itself included. */
 export function partsOf(n: Item): Item[] {
@@ -271,6 +271,7 @@ export interface Open {
   readonly pieces: number;
   readonly stops: number;
   readonly crate: number;
+  /** How far a pylon reaches, in hundredths of its plain reach. */
   readonly reach: number;
   readonly depot: number;
   readonly span: number;
@@ -281,7 +282,7 @@ export interface Open {
 }
 
 /** A tool's bit in `Open.tools`. */
-export const toolBit = (t: Tool): number => 1 << TOOLS.indexOf(t);
+const toolBit = (t: Tool): number => 1 << TOOLS.indexOf(t);
 
 /** The highest tier open with these goals done: the first always, and each next one once every lesson and commission of the one before it is done. */
 function tierOf(done: Uint8Array): number {
@@ -332,6 +333,71 @@ export function openOf(goals: readonly Goal[]): Open {
   };
 }
 
+// ---------- what a yard may do ----------
+
+/** Something a yard may be locked out of, as `locked` is asked it. */
+export type Lock =
+  /** Stand a piece of a kind at a grade (1 if not said). */
+  | { readonly build: Kind; readonly grade?: number | undefined }
+  /** Make a thing by its recipe: be told to make it, start it, take its parts in. */
+  | { readonly make: Item }
+  | { readonly use: Tool }
+  /** Have this many cart stops standing. */
+  | { readonly stops: number }
+  /** Keep a blueprint in a place, of so many pieces in a box of so many tiles across and down. */
+  | { readonly blueprint: number; readonly pieces?: number; readonly w?: number; readonly h?: number };
+
+const TOOL_NAME: Readonly<Record<Tool, string>> = { paint: "Paint", select: "Select", upgrade: "Upgrading an area" };
+/** A tool used with another: an area is raised with Select. */
+const TOOL_WITH: Partial<Record<Tool, Tool>> = { upgrade: "select" };
+const kindWord = (k: Kind): string => (KIND_INFO[k]?.name ?? "").toLowerCase();
+
+/**
+ * Why a yard may not do something yet, or nothing if it may: the one place that says which kinds of
+ * piece it may build and to what grade, what its machines may make, which tools it may use, and how
+ * many cart stops and blueprints it may have. Everything that builds, sets, makes, takes in, keeps or
+ * reads a yard back asks it.
+ */
+export function locked(open: Open, ask: Lock): string | null {
+  if ("build" in ask) {
+    const top = open.kinds[ask.build] ?? 0;
+    const g = gradeOf(ask.build, ask.grade);
+    if (top === 0) return `The ${kindWord(ask.build)} is not unlocked yet`;
+    return g > top ? `A grade ${g} ${kindWord(ask.build)} is not unlocked yet` : null;
+  }
+  if ("make" in ask) {
+    const r = RECIPE[ask.make];
+    const many = ITEM_INFO[ask.make]?.many ?? "";
+    if (!r) return `Nothing makes ${many}`;
+    return open.recipes[ask.make] === 1 ? locked(open, { build: r.by }) : `The recipe for ${many} is not unlocked yet`;
+  }
+  if ("use" in ask) {
+    const first = TOOL_WITH[ask.use];
+    const before = first === undefined ? null : locked(open, { use: first });
+    if (before !== null) return before;
+    return (open.tools & toolBit(ask.use)) === 0 ? `${TOOL_NAME[ask.use]} is not unlocked yet` : null;
+  }
+  if ("stops" in ask)
+    return ask.stops > open.stops ? `The yard may have ${open.stops} cart stop${open.stops === 1 ? "" : "s"}` : null;
+  const { blueprint: slot, pieces = 0, w = 0, h = 0 } = ask;
+  if (open.blueprints === 0) return "Blueprints are not unlocked yet";
+  if (slot < 0 || slot >= open.blueprints) return "There is no such blueprint";
+  if (pieces > open.pieces) return `A blueprint holds at most ${open.pieces} pieces. This is ${pieces}`;
+  if (w > BLUEPRINT.w || h > BLUEPRINT.h)
+    return `A blueprint is at most ${BLUEPRINT.w} tiles by ${BLUEPRINT.h}. This is ${w} by ${h}`;
+  return null;
+}
+
+/** The recipes a kind of machine may make, in the table's order, as `locked` says. */
+export const recipesFor = (open: Open, k: number): Recipe[] =>
+  (MADE_BY[k] ?? []).filter((r) => locked(open, { make: r.out }) === null);
+
+/** The highest grade of a kind that may be built, as `locked` says: 0 for a kind not unlocked. */
+export function highest(open: Open, k: Kind): number {
+  for (let g = TOP; g > 0; g--) if (locked(open, { build: k, grade: g }) === null) return g;
+  return 0;
+}
+
 /**
  * Whether a goal may be taken up now, a node into hand or research into the line: not done, its
  * tier open, what it needs done, and for a lesson, every lesson before it done.
@@ -341,6 +407,17 @@ export function ready(open: Open, g: Goal): boolean {
   if (!info || open.done[g] === 1 || info.tier > open.tier) return false;
   if (info.kind === "lesson" && LESSONS.some((l) => l < g && open.done[l] !== 1)) return false;
   return info.needs.every((n) => open.done[n] === 1);
+}
+
+/** Every goal of the tiers below `tier`, in an order play could have done them: each the first that is ready. */
+export function goalsBelow(tier: number): Goal[] {
+  const done: Goal[] = [];
+  const next = (): Goal | undefined => {
+    const open = openOf(done);
+    return ALL_GOALS.find((g) => (GOALS[g]?.tier ?? 0) < tier && ready(open, g));
+  };
+  for (let g = next(); g !== undefined; g = next()) done.push(g);
+  return done;
 }
 
 /** The node that comes into hand by itself: the next lesson, else the commission of the highest tier open, else none. */
