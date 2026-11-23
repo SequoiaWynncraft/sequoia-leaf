@@ -4,7 +4,8 @@
  * in a sentence for a screen to show (`status`, which words what `condition` decides). Nothing here
  * changes the yard but working out its power and plumbing if a change left them unknown.
  */
-import { BUFFER, FUEL, REACH } from "./content/machines.ts";
+import { BUFFER, FUEL, REACH, TICKS } from "./content/machines.ts";
+import { MINUTE } from "./planner.ts";
 import { litOf } from "./power.ts";
 import {
   ALL_ITEMS,
@@ -41,7 +42,7 @@ import {
   WORKSHOP,
 } from "./tables.ts";
 import { ahead, behind, carries, nextOf, power, rewire, wayIn, wayOut } from "./wire.ts";
-import { held, holderOf, tunnelOf, type Yard } from "./yard.ts";
+import { type Counts, held, holderOf, tunnelOf, type Yard } from "./yard.ts";
 
 /** How a thing stands: doing its job, with nothing to do just now, or in trouble that will not mend itself. */
 export const STATES = [
@@ -144,6 +145,70 @@ export function rate(y: Yard, i: number): number {
   if (y.kind[i] === GATHERER) return pace / WORK.gather;
   const r = aim(y, i);
   return r ? pace / r.work : 0;
+}
+
+/**
+ * What the pieces standing in a yard can make of each thing a minute, and what they need of each a
+ * minute to do it: added to `made` and `needed`, which the caller clears. Every gatherer, machine and
+ * Study power reaches is taken as working each tick the yard's power lets it (as `rate` takes it),
+ * never waiting for a part or for room: so `made` is a ceiling, not a count of anything.
+ *
+ * A machine is counted for the recipe it is working toward (`aim`). One that holds nothing and is
+ * told nothing has none for the moment: where the caller keeps `aimed` (a thing for each tile, `NONE`
+ * to begin with), it is counted for the recipe it was last counted for, and this writes there what it
+ * counts each machine for. A Study needs the folios the research first in line still wants, in the
+ * shares it wants them; a boiler in reach, the deadfall it burns.
+ *
+ * It runs down the plumbing's lists, so it costs in step with the pieces that work, and makes nothing.
+ */
+export function flow(y: Yard, made: Counts, needed: Counts, aimed?: Uint8Array): void {
+  const wire = y.wire ?? rewire(y);
+  const share = power(y).pace;
+  const work = wire.work;
+  for (let c = 0; c < work.length; c++) {
+    const i = work[c] ?? 0;
+    const k = y.kind[i] ?? NONE;
+    const often = (PACE[y.grade[i] ?? 0] ?? 0) * share * MINUTE;
+    if (k === GATHERER) {
+      const n = y.land.deposit[i] ?? NONE;
+      if (isItem(n)) made[n] = (made[n] ?? 0) + often / WORK.gather;
+      continue;
+    }
+    if (k === STUDY) {
+      const g = y.line[0];
+      const want = g === undefined ? undefined : GOALS[g]?.want;
+      const got = g === undefined ? null : (y.got[g] ?? null);
+      if (!want) continue;
+      let left = 0;
+      for (let f = 0; f < FOLIOS.length; f++) {
+        const n = FOLIOS[f] ?? NONE;
+        left += Math.max(0, (want[n] ?? 0) - (got?.[n] ?? 0));
+      }
+      if (left <= 0) continue;
+      for (let f = 0; f < FOLIOS.length; f++) {
+        const n = FOLIOS[f] ?? NONE;
+        const still = Math.max(0, (want[n] ?? 0) - (got?.[n] ?? 0));
+        if (still > 0) needed[n] = (needed[n] ?? 0) + ((often / WORK.study) * still) / left;
+      }
+      continue;
+    }
+    let rec = aim(y, i);
+    if (rec) {
+      if (aimed) aimed[i] = rec.out;
+    } else {
+      const last = aimed ? RECIPE[aimed[i] ?? NONE] : undefined;
+      // What was kept for another kind of machine on this tile, or for a recipe it may not make now, is not this one's.
+      rec = last && last.by === k && wire.recipes[k]?.includes(last) === true ? last : null;
+    }
+    if (!rec) continue;
+    const batches = often / rec.work;
+    made[rec.out] = (made[rec.out] ?? 0) + batches;
+    for (let p = 0; p < rec.from.length; p++) {
+      const n = rec.from[p] ?? NONE;
+      needed[n] = (needed[n] ?? 0) + batches * (rec.need[p] ?? 1);
+    }
+  }
+  needed[DEADFALL] = (needed[DEADFALL] ?? 0) + (wire.boilers.length * MINUTE) / TICKS.burn;
 }
 
 /** How `condition` says a piece stands: its state's place in `STATES`, with this added while it is in trouble. */

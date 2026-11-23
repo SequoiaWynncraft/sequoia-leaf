@@ -456,7 +456,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
     actions.push(
       { label: "Orders", on: () => hands.panel("orders") },
       ...(p.projects ? [{ label: "Projects", on: () => hands.panel("projects") }] : []),
-      { label: "Stats", on: () => hands.panel("depot") },
+      { label: "Makes and needs", on: () => hands.panel("depot") },
     );
   } else {
     if (k !== TUNNEL && k !== PYLON && k !== WHEEL && k !== BOILER)
@@ -486,6 +486,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
     tag: el("span", p.trouble ? "k-coral" : "", { text: p.line ?? KIND_INFO[k]?.what ?? "" }),
     blocks: [
       ...(base.blocks ?? []),
+      ...(k === DEPOT ? [{ body: `Each thing that arrives pays ${DEPOT_SHARE * 100}% of its worth.` }] : []),
       ...(advice ? [{ body: advice }] : []),
       ...(p.ways ? [{ title: "Ways out", body: waysOf(art, p, p.ways, hands) }] : []),
     ],

@@ -54,8 +54,6 @@ import {
 import { ahead, farMouth, nextOf, rewire, wayIn, wayOut } from "./wire.ts";
 import { enough, holderOf, type Holders, put, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
 
-/** How many ticks the pace is measured over before old ticks start to count for less: an hour. */
-export const PACE_WINDOW = 36_000;
 const BURNS = (GIVES[BOILER] ?? 0) * HALF;
 const NO_RECIPES: readonly Recipe[] = [];
 const NO_TILES = new Int32Array(0);
@@ -66,13 +64,6 @@ export function step(y: Yard): void {
   const { kind, item, prog, span } = y;
   const h = y.holders;
   y.tick++;
-  const pace = y.pace;
-  if (pace.warm > 0) pace.warm--;
-  else if (++pace.ticks >= PACE_WINDOW) {
-    // Old ticks count for less and less, so the pace follows the yard as it is now.
-    pace.ticks = Math.floor(pace.ticks / 2);
-    for (let k = 0; k < ITEM_COUNT; k++) pace.made[k] = Math.floor((pace.made[k] ?? 0) / 2);
-  }
 
   // Power: boilers burn what they hold, and what there is is set against what is drawn.
   let supply = wire.steady;

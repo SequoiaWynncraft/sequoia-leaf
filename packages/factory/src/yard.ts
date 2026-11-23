@@ -192,15 +192,10 @@ export interface Yard {
   depot: Counts;
   sold: number;
   paid: number;
-  /** What the depot has been taking in since the yard was last changed; `warm` counts down ticks left out. */
-  pace: { ticks: number; warm: number; made: Counts };
   /** Worked out from the goals done (`reopen`). */
   open: Open;
   news: News[];
 }
-
-/** Ticks left out of the pace after the yard is changed, while belts fill. */
-export const WARM = 300;
 
 const holders = (cap: number): Holders => ({
   size: 0,
@@ -271,7 +266,6 @@ export function emptyYard(land: Land, tier = 0): Yard {
     depot: counts(),
     sold: 0,
     paid: 0,
-    pace: { ticks: 0, warm: WARM, made: counts() },
     open: openOf(done),
     news: [],
   };
@@ -301,10 +295,9 @@ export function hold(y: Yard, g: Goal | -1): void {
   if (g >= 0) y.got[g] ??= counts();
 }
 
-/** Marks the yard as changed: its plumbing is worked out afresh, and its pace is measured from now. */
+/** Marks the yard as changed: its plumbing is worked out afresh. */
 export function changed(y: Yard): void {
   y.wire = null;
-  y.pace = { ticks: 0, warm: WARM, made: counts() };
 }
 
 /** Takes the whole Coins out of the till, and says how many. */

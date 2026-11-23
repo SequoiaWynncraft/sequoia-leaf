@@ -98,11 +98,13 @@
       .pip {
         position: relative;
       }
+      /* A count sits on the button's corner: a longer one widens outward, past the corner, and hides no more of the picture. */
       .pip[data-n]::after {
         content: attr(data-n);
         position: absolute;
+        z-index: 1;
         top: calc(var(--u) * -3);
-        right: calc(var(--u) * -3);
+        left: calc(100% - var(--u) * 8);
         min-width: calc(var(--u) * 11);
         height: calc(var(--u) * 11);
         font: var(--f-name);
@@ -112,6 +114,18 @@
         background: var(--k-gold-lt);
         box-shadow: 0 0 0 var(--u) var(--k-ink);
         text-shadow: none;
+      }
+
+      /* From three digits a count is set small, to stay on the corner. */
+      .pip.long[data-n]::after {
+        font: var(--f-small);
+        line-height: calc(var(--u) * 11);
+      }
+
+      /* How many pieces are in trouble is coral: what waits to be handed over is gold. */
+      .pip.bad[data-n]::after {
+        color: #2b0b12;
+        background: var(--k-coral);
       }
 
       /* The order in hand, always in view. */
@@ -324,6 +338,161 @@
           opacity: 0;
         }
       }
+      /* The yard's sheet: its row of views stays put, and the view under it scrolls. */
+      #panel > .k-body.views {
+        overflow: hidden;
+      }
+      .views > .k-tabs,
+      .views > .walk-slot {
+        flex: none;
+      }
+      /*
+       * Three names in a row, the last a long one: each tab is as wide as its name wants, and a name
+       * breaks where the row is short. Pressed, a tab is the same size: nothing moves under the press.
+       */
+      .views > .k-tabs > .k-btn,
+      .views > .k-tabs > .k-btn:active {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: var(--u) calc(var(--u) * 3);
+        line-height: 1.1;
+        white-space: normal;
+      }
+      .views > .walk-slot:empty {
+        display: none;
+      }
+      .views > .view {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 4);
+      }
+      /* The map: a whole number of screen pixels to each of its own, in the middle of the sheet. */
+      .view[data-view="map"] {
+        align-items: center;
+      }
+      canvas.map {
+        flex: none;
+        display: block;
+        touch-action: none;
+        cursor: pointer;
+      }
+      /* The bar that stays while a group of trouble is walked: what is wrong, which of how many, back, on and out. */
+      .walk {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 2);
+        padding: var(--u) calc(var(--u) * 2) var(--u) calc(var(--u) * 4);
+        box-sizing: border-box;
+      }
+      .walk[hidden] {
+        display: none;
+      }
+      /* As wide as "88 of 88", so the buttons beside it stay where they are. */
+      .walk-at {
+        flex: none;
+        min-width: calc(var(--u) * 44);
+        font: var(--f-name);
+        text-align: right;
+        white-space: nowrap;
+      }
+      .walk .flip {
+        transform: scaleX(-1);
+      }
+      #walk {
+        position: fixed;
+        z-index: 7;
+        top: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
+        left: var(--edge);
+        right: var(--edge);
+      }
+      /* What is wrong, and the kinds of piece it is wrong with. */
+      .wrong {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 3);
+        min-width: 0;
+      }
+      .wrong .kinds {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: var(--u);
+      }
+
+      /*
+       * A table of numbers (`ui/table.ts`): what a row is about takes the room there is, and each
+       * number has a column of one width, right-aligned under its name. A row shares the table's
+       * columns, so every row lines up with the head.
+       */
+      .tbl {
+        --col: calc(var(--u) * 30);
+        flex: none;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) repeat(var(--cols), var(--col));
+        gap: calc(var(--u) * 2) calc(var(--u) * 3);
+      }
+      .tbl > .tbl-head,
+      .tbl > .tbl-row {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: subgrid;
+        align-items: center;
+        gap: 0 calc(var(--u) * 3);
+      }
+      .tbl[hidden] {
+        display: none;
+      }
+      .tbl-head {
+        align-items: end;
+        font: var(--f-small);
+        color: var(--k-dim);
+      }
+      .tbl-head > * {
+        text-align: right;
+      }
+      .tbl-head > :first-child {
+        text-align: left;
+      }
+      .tbl .num {
+        font: var(--f-name);
+        text-align: right;
+        white-space: nowrap;
+      }
+      .tbl .num.faint {
+        color: var(--k-faint);
+      }
+      .tbl .num.coral {
+        color: var(--k-coral);
+      }
+      .tbl .num.gold {
+        color: var(--k-gold);
+      }
+      .tbl-what {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--u);
+      }
+      .tbl-note {
+        font: var(--f-small);
+        color: var(--k-coral);
+      }
+      .tbl-note:empty {
+        display: none;
+      }
+      /* Rows to be pressed are cards, tall enough for a finger; the head keeps to their inside edges. */
+      .tbl.cards > .tbl-head {
+        padding-inline: calc(var(--u) * 6);
+      }
+      button.tbl-row {
+        min-height: calc(var(--u) * 24);
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+
       .k-card.order,
       .k-paper.order {
         display: flex;
@@ -627,6 +796,15 @@
         #books {
           order: 4;
         }
+        /* The yard's button leads its row, which ends at the screen's edge: its count has room to widen there. */
+        #books > .pip.bad {
+          order: -1;
+        }
+        /* Any other button may end the row: its count widens inward, so the edge never cuts it. */
+        #books > .pip:not(.bad)[data-n]::after {
+          left: auto;
+          right: calc(var(--u) * -3);
+        }
         /* Short of power, the numbers say so and the bar gives them its room. */
         #power.short .k-bar {
           display: none;
@@ -648,9 +826,16 @@
         #feed {
           bottom: calc(var(--bottom) + var(--dockh, 0px) + var(--u) * 28);
         }
+        /* The yard's sheet is a full sheet: from under the top row to the foot of the screen. */
+        #panel[data-panel="depot"] {
+          top: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
+          bottom: var(--bottom);
+          max-height: none;
+        }
         #feed > :nth-last-child(n + 3),
         body.panel-open #feed,
-        body.panel-open #track {
+        body.panel-open #track,
+        body.walking #track {
           display: none;
         }
       }
@@ -666,6 +851,7 @@
     </div>
     <button id="track" class="k-plaque hung" type="button"></button>
     <div id="visit" class="k-plaque" hidden></div>
+    <div id="walk"></div>
     <div id="feed" aria-live="polite"></div>
     <div id="hand" class="k-tip"></div>
     <nav id="dock" class="k-shelf" aria-label="Tools"></nav>

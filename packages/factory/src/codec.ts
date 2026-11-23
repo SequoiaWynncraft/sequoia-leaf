@@ -71,7 +71,6 @@ import {
   TUNNEL,
   WORK,
 } from "./tables.ts";
-import { PACE_WINDOW } from "./tick.ts";
 import { carries } from "./wire.ts";
 import {
   type Away,
@@ -86,7 +85,6 @@ import {
   reopen,
   type Standing,
   tunnelOf,
-  WARM,
   type Yard,
 } from "./yard.ts";
 
@@ -326,7 +324,6 @@ export function encode(y: Yard, keep: Keep = {}): string {
     depot: tally(y.depot),
     sold: y.sold,
     paid: y.paid,
-    pace: { ticks: y.pace.ticks, warm: y.pace.warm, made: tally(y.pace.made) },
     cells: toBase64(packCells(y)),
     ...(prints.some((b) => b !== null) ? { blueprints: prints.map((b) => b && toBase64(packPrint(b))) } : {}),
   });
@@ -679,12 +676,6 @@ export function vouch(
   for (const [i, o] of kept) unpack(y, i, o, studied);
 
   fillBoard(y);
-  const pace = isRec(raw.pace) ? raw.pace : {};
-  y.pace = {
-    ticks: whole(pace.ticks, PACE_WINDOW - 1) ?? 0,
-    warm: whole(pace.warm, WARM) ?? WARM,
-    made: untally(pace.made, 1e12),
-  };
   // A yard kept before it knew its owner's last command is taken as last seen at its last tick.
   const seen = isRec(raw.seen) ? raw.seen : {};
   const last = whole(seen.tick, tick);

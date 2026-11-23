@@ -56,7 +56,7 @@ function worked(y: F.Yard, r: number, n: number): number {
 }
 
 describe("whole numbers", () => {
-  test("no number in a working yard is a fraction, kept or not: what is open, the pace counter and a pylon's reach among them", () => {
+  test("no number in a working yard is a fraction, kept or not: what is open and a pylon's reach among them", () => {
     const shortYard = short(32).y;
     for (let k = 0; k < 777; k++) F.step(shortYard);
     const running = F.decode(F.encode(generated().y), generated().y.land);

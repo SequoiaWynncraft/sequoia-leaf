@@ -66,6 +66,19 @@ describe("decode(encode(yard))", () => {
   });
 });
 
+describe("a yard kept before the rules stopped counting a pace", () => {
+  test("reads back without it: the same yard, with the same check, and it is not kept again", () => {
+    const y = delivering();
+    const kept = record(F.encode(y));
+    expect("pace" in kept).toBe(false);
+    const old = JSON.stringify({ ...kept, pace: { ticks: 412, warm: 0, made: { plank: 31, deadfall: 12 } } });
+    const back = F.decode(old, y.land);
+    if (!back) throw new Error("the older yard did not read back");
+    expect(F.check(back)).toBe(F.check(y));
+    expect(F.encode(back)).toBe(F.encode(y));
+  });
+});
+
 describe("decode refuses whole", () => {
   test("anything that is not a kept yard of this version", () => {
     const good = F.encode(F.create({ seed: 1 }));

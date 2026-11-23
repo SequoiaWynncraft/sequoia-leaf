@@ -58,10 +58,9 @@ export function isFilled(want: Counts, filled: Counts): boolean {
   return true;
 }
 
-/** The depot takes in `n` of a thing: it counts toward the pace, pays its price, and goes toward whatever wants it. */
+/** The depot takes in `n` of a thing: it goes into its books, pays its price, and goes toward whatever wants it. */
 export function deliver(y: Yard, thing: number, n: number): void {
   if (n <= 0) return;
-  if (y.pace.warm <= 0) y.pace.made[thing] = (y.pace.made[thing] ?? 0) + n;
   y.depot[thing] = (y.depot[thing] ?? 0) + n;
   const coins = (ARRIVAL[thing] ?? 0) * n;
   y.till += coins;

@@ -109,6 +109,18 @@ const ICONS = {
     ".mmmmmmmm.",
     "..m....m..",
   ],
+  // The yard's sheet: a folded map, with the stream on it and a mark.
+  map: [
+    "www....www",
+    "wwwCCCCwww",
+    "wgwCCuCwww",
+    "wgwCuuCwrw",
+    "wwwCuCCwww",
+    "wwuCCCCwgw",
+    "wuuCCgCwgw",
+    "wwwCCCCwww",
+    "...CCCC...",
+  ],
   // The depot's books: a crate.
   depot: [
     "NNNNNNNNNN",

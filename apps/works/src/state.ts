@@ -140,7 +140,11 @@ export const S: {
   held: boolean;
   /** The top-left corner of what is on screen, in the yard's pixels. */
   cam: Pt;
-  /** The picture's size in the yard's pixels, how many screen pixels to each, and the screen's own ratio. */
+  /**
+   * The view's size in the yard's pixels, how many screen pixels to each, and the screen's own
+   * ratio. `z` is a whole number, but for a step of the plan (`zoom.ts`), where it is under 1: a
+   * half or a quarter.
+   */
   view: { w: number; h: number; z: number; dpr: number };
   tool: Tool;
   dir: Dir;
@@ -197,16 +201,24 @@ export const S: {
   nudgeTool: null,
 };
 
+/**
+ * Where the camera is drawn from, along one way, in the yard's pixels: on a whole pixel of the
+ * screen. That is a whole pixel of the yard, but for a step of the plan, where a screen pixel is
+ * several of the yard's.
+ */
+export const seenFrom = (cam: number): number =>
+  S.view.z >= 1 ? Math.round(cam) : Math.round(cam * S.view.z) / S.view.z;
+
 /** A point on the page as a point in the yard, in the yard's pixels. */
 export function toYard(pageX: number, pageY: number): Pt {
   const k = S.view.dpr / S.view.z;
-  return { x: pageX * k + Math.round(S.cam.x), y: pageY * k + Math.round(S.cam.y) };
+  return { x: pageX * k + seenFrom(S.cam.x), y: pageY * k + seenFrom(S.cam.y) };
 }
 
 /** A point in the yard as a point on the page. */
 export function toPage(x: number, y: number): Pt {
   const k = S.view.z / S.view.dpr;
-  return { x: (x - Math.round(S.cam.x)) * k, y: (y - Math.round(S.cam.y)) * k };
+  return { x: (x - seenFrom(S.cam.x)) * k, y: (y - seenFrom(S.cam.y)) * k };
 }
 
 /** The tile a point on the page is over. */
