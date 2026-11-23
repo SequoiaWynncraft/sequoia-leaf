@@ -45,6 +45,14 @@ export { Flag, type LiveMember, type Motion } from "@sequoia-leaf/core";
 
 // ---------- Leaf's clock ----------
 
+/** How far Leaf's clock is ahead of this page's, as any room on the page last heard. */
+let leafAhead = 0;
+/**
+ * Leaf's clock at a moment of this page's (`now`), as last heard: between connections and out of
+ * a room the last word stands, so nothing timed by it jumps. The page's own until a room has heard.
+ */
+export const leafClock = (now: number): number => now + leafAhead;
+
 /**
  * Leaf's clock as this page can know it, from pings: each answer says how far Leaf's clock is from
  * this one, give or take half the round trip. The answer that came back quickest is the best guess,
@@ -267,8 +275,6 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
   let link: Link | null = null;
   let shown: Link | null = null;
   let done = member() === null;
-  /** How far Leaf's clock is ahead of this page's, as last heard. */
-  let ahead = 0;
   /** How many acts may be sent now, and when that was last counted. */
   let acts = 5;
   let actedAt = outside.now();
@@ -534,9 +540,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       return l.tracks.get(id)?.at(l.clock.server(outside.now()) - INTERP_MS) ?? null;
     },
     serverNow() {
-      // Between connections the last word on Leaf's clock stands, so nothing timed by it jumps.
-      if (shown?.clock) ahead = shown.clock.server(0);
-      return outside.now() + ahead;
+      if (shown?.clock) leafAhead = shown.clock.server(0);
+      return leafClock(outside.now());
     },
     rtt: () => shown?.clock?.rtt() ?? null,
     close() {
