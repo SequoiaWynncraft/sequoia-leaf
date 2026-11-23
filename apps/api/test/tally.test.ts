@@ -465,6 +465,8 @@ describe("the counters' first counts", () => {
         (sql) => sql`INSERT INTO time_in (player_id, game, played_ms, afk_ms) VALUES (${bob}, 'town', 7200000, 60000)`,
       );
       // Leaf as it was before the Tally: the counters' migration, and those after it, not yet run.
+      await before.query((sql) => sql`DROP INDEX play_state_due`);
+      await before.query((sql) => sql`ALTER TABLE play_state DROP COLUMN due_at`);
       await before.query((sql) => sql`ALTER TABLE play_state DROP COLUMN born`);
       await before.query((sql) => sql`DROP TABLE tallies`);
       await before.query((sql) => sql`DROP TABLE camp_visits`);

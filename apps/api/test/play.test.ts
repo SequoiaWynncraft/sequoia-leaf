@@ -65,7 +65,7 @@ import { knownAmong } from "../src/game/known.ts";
 import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { GAMES, type Played, played } from "../src/play/games.ts";
-import { KEPT_BYTES, Play, TEND_AFTER } from "../src/play/service.ts";
+import { type JobTimes, KEPT_BYTES, Play, TEND_AFTER } from "../src/play/service.ts";
 import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
 import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
@@ -2394,6 +2394,37 @@ describe("Leaf tending the Works", () => {
       expect(await next.query((sql) => sql`SELECT command_id FROM play_commands`)).toEqual([]);
       await next.run(tendAll);
       expect(await storedYard(next)).toEqual({ rev: 2, state: ranOn(kept) });
+      await next.dispose();
+    } finally {
+      for (const end of ["", "-wal", "-shm"]) rmSync(`${path}${end}`, { force: true });
+    }
+  });
+
+  it("tends a yard it found standing still no more, nor does the next Leaf, until a command moves it", async () => {
+    const path = join(tmpdir(), `leaf-still-${crypto.randomUUID()}.db`);
+    const tends: string[] = [];
+    const meter = (times: JobTimes) => void (times.kind === "tend" && tends.push(times.game));
+    try {
+      const first = testLeaf(clock, noNetwork, { databasePath: path }, { meter });
+      await keepMid(first);
+      // Eight hours on, as far as a yard goes by itself, it stands still.
+      clock.now += 9 * HOUR;
+      await first.run(tendAll);
+      expect([tends.length, (await storedYard(first)).rev]).toEqual([1, 2]);
+      clock.now += 3 * MINUTE;
+      await first.run(tendAll);
+      expect(tends).toHaveLength(1);
+      await first.dispose();
+      const next = testLeaf(clock, noNetwork, { databasePath: path }, { meter });
+      clock.now += 3 * MINUTE;
+      await next.run(tendAll);
+      expect(tends).toHaveLength(1);
+      // Its owner's command has it going on again: two minutes on, Leaf tends it.
+      const owner = { playerId: alice, guest: false };
+      await next.run(Play.use((play) => play.send(owner, GAMES.works, [{ id: "w-1", do: "collect", tick: 0 }])));
+      clock.now += 3 * MINUTE;
+      await next.run(tendAll);
+      expect([tends.length, (await storedYard(next)).rev]).toEqual([2, 4]);
       await next.dispose();
     } finally {
       for (const end of ["", "-wal", "-shm"]) rmSync(`${path}${end}`, { force: true });

@@ -761,13 +761,15 @@ and stored by the first of those. Anything going wrong in a job drops the copy,
 and the next job reads what is stored. A batch is done whatever becomes of its
 request; an open, a visit or a tend whose caller has gone while it waited is
 never done. A lane with nothing in its line and nothing unsaved is let go.
-Every minute, from a minute after it starts (so that a Leaf starting beside one
-stopping does not tend against it), Leaf puts a tend in the line of each state
-no batch has written for two minutes (`TEND_AFTER`; an open page sends
-something more often), but for those it found standing still when it last read
-them (a yard eight hours after its owner was last there), until they are
-written again, and those with a tend in their line already; it waits for none
-of them, and each reads nothing until the slices give it its first turn. A tend
+Each state of a game that goes on by itself is stored with when it is next
+due a tend (`due_at`): two minutes after a batch wrote it (`TEND_AFTER`; an open
+page sends something more often), or never while it stands still (a yard eight
+hours after its owner was last there) until a command moves it; a state Leaf
+reads that stands still is marked so too, and one written some other way is due
+at once. Every minute, from a minute after it starts (so that a Leaf starting
+beside one stopping does not tend against it), Leaf reads the states due from an
+index and puts a tend in the line of each, but those with a tend in their line
+already; it waits for none of them, and each reads nothing until the slices give it its first turn. A tend
 that fails is logged (`Tending the <game> state of <player> failed`), and the
 others are tended all the same. Leaf stopped with jobs waiting has written
 nothing of them: every state is as last stored, only behind, and the next Leaf

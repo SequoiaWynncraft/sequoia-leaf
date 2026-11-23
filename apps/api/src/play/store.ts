@@ -24,8 +24,9 @@ export const BOARD_MOST = 20;
 
 /**
  * A player's state in a game, as stored: how many batches have changed it, the game's own text,
- * when it was last written, whether the player was a guest when it was, and when it was made (its
- * generation; 0 for one made before Leaf kept that).
+ * when it was last written, whether the player was a guest when it was, when it was made (its
+ * generation; 0 for one made before Leaf kept that), and when Leaf is next to tend it (null: never,
+ * as for a state standing still or of a game that does not go on by itself).
  */
 const Stored = Schema.Struct({
   rev: Schema.Int,
@@ -33,6 +34,7 @@ const Stored = Schema.Struct({
   updatedAt: Schema.Int,
   guest: Schema.BooleanFromBit,
   born: Schema.Int,
+  dueAt: Schema.NullOr(Schema.Int),
 });
 export type Stored = typeof Stored.Type;
 
@@ -79,28 +81,32 @@ export class PlayStore extends Context.Service<
   {
     /** The player's state in a game, or none yet. */
     readonly read: (playerId: PlayerId, game: string) => Effect.Effect<Option.Option<Stored>>;
-    /** The players whose state in a game was last written before `before`, longest ago first, with each state's `rev`. */
-    readonly unwritten: (
-      game: string,
-      before: number,
-    ) => Effect.Effect<readonly { readonly playerId: PlayerId; readonly rev: number }[]>;
-    /** Stores a new player's state, untouched (`rev` 0), made `now`. Says whether it did: false when one was there already. */
+    /** The players whose state in a game was due a tend before `now`, the longest due first. */
+    readonly due: (game: string, now: number) => Effect.Effect<readonly PlayerId[]>;
+    /** Says a state stored at `rev` stands still: it is due no tend until it is written again. */
+    readonly rest: (playerId: PlayerId, game: string, rev: number) => Effect.Effect<void>;
+    /**
+     * Stores a new player's state, untouched (`rev` 0), made `now`, due a tend at `dueAt` (null:
+     * never). Says whether it did: false when one was there already.
+     */
     readonly create: (
       playerId: PlayerId,
       game: string,
       state: string,
       guest: boolean,
       now: number,
+      dueAt: number | null,
     ) => Effect.Effect<boolean>;
     /** Whether the player's state in a game is stored at `rev`. */
     readonly isAt: (playerId: PlayerId, game: string, rev: number) => Effect.Effect<boolean>;
-    /** Stores a state over the one there, its `rev` up by one. */
+    /** Stores a state over the one there, its `rev` up by one, due a tend at `dueAt` (null: never). */
     readonly write: (
       playerId: PlayerId,
       game: string,
       state: string,
       guest: boolean,
       now: number,
+      dueAt: number | null,
     ) => Effect.Effect<void>;
     /** What a command answered (its notes or its refusal, as JSON), if it was done before. */
     readonly answered: (playerId: PlayerId, game: string, commandId: string) => Effect.Effect<Option.Option<string>>;
@@ -155,13 +161,13 @@ export class PlayStore extends Context.Service<
         Request: Schema.Struct({ playerId: Schema.String, game: Schema.String }),
         Result: Stored,
         execute: ({ playerId, game }) =>
-          sql`SELECT rev, state, updated_at AS updatedAt, guest, born FROM play_state WHERE player_id = ${playerId} AND game = ${game}`,
+          sql`SELECT rev, state, updated_at AS updatedAt, guest, born, due_at AS dueAt FROM play_state WHERE player_id = ${playerId} AND game = ${game}`,
       });
-      const unwritten = SqlSchema.findAll({
-        Request: Schema.Struct({ game: Schema.String, before: Schema.Int }),
-        Result: Schema.Struct({ playerId: PlayerUuid, rev: Schema.Int }),
-        execute: ({ game, before }) => sql`
-          SELECT player_id AS playerId, rev FROM play_state WHERE game = ${game} AND updated_at < ${before} ORDER BY updated_at
+      const due = SqlSchema.findAll({
+        Request: Schema.Struct({ game: Schema.String, now: Schema.Int }),
+        Result: Schema.Struct({ playerId: PlayerUuid }),
+        execute: ({ game, now }) => sql`
+          SELECT player_id AS playerId FROM play_state WHERE game = ${game} AND due_at < ${now} ORDER BY due_at
         `,
       });
       const answered = SqlSchema.findOneOption({
@@ -217,11 +223,20 @@ export class PlayStore extends Context.Service<
       });
       return PlayStore.of({
         read: (playerId, game) => read({ playerId, game }).pipe(Effect.orDie),
-        unwritten: (game, before) => unwritten({ game, before }).pipe(Effect.orDie),
-        create: (playerId, game, state, guest, now) =>
+        due: (game, now) =>
+          due({ game, now }).pipe(
+            Effect.map((rows) => rows.map((row) => row.playerId)),
+            Effect.orDie,
+          ),
+        rest: (playerId, game, rev) =>
+          sql`UPDATE play_state SET due_at = NULL WHERE player_id = ${playerId} AND game = ${game} AND rev = ${rev}`.pipe(
+            Effect.asVoid,
+            Effect.orDie,
+          ),
+        create: (playerId, game, state, guest, now, dueAt) =>
           sql`
-            INSERT INTO play_state (player_id, game, rev, state, guest, updated_at, born)
-            VALUES (${playerId}, ${game}, 0, ${state}, ${guest ? 1 : 0}, ${now}, ${now})
+            INSERT INTO play_state (player_id, game, rev, state, guest, updated_at, born, due_at)
+            VALUES (${playerId}, ${game}, 0, ${state}, ${guest ? 1 : 0}, ${now}, ${now}, ${dueAt})
             ON CONFLICT (player_id, game) DO NOTHING
             RETURNING rev
           `.pipe(
@@ -233,9 +248,9 @@ export class PlayStore extends Context.Service<
             Effect.map((rows) => rows.length > 0),
             Effect.orDie,
           ),
-        write: (playerId, game, state, guest, now) =>
+        write: (playerId, game, state, guest, now, dueAt) =>
           sql`
-            UPDATE play_state SET rev = rev + 1, state = ${state}, guest = ${guest ? 1 : 0}, updated_at = ${now}
+            UPDATE play_state SET rev = rev + 1, state = ${state}, guest = ${guest ? 1 : 0}, updated_at = ${now}, due_at = ${dueAt}
             WHERE player_id = ${playerId} AND game = ${game}
           `.pipe(Effect.asVoid, Effect.orDie),
         answered: (playerId, game, commandId) =>

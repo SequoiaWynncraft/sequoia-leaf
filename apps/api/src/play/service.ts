@@ -258,6 +258,10 @@ function keepable({ slot, data }: Kept): string | null {
   return SLOT.test(slot) && text !== undefined && Buffer.byteLength(text) <= KEPT_BYTES ? text : null;
 }
 
+/** Whether a state stands still: would never go on by itself, however long. */
+const standsStill = (held: Held, player: PlayerId, guest: boolean) =>
+  !held.run(ctxOf({ playerId: player, guest }, Infinity, 0, 0, []), () => false);
+
 /** A tend that failed, logged (whose, and of which game) as the sweep's tends are waited for: the others go on. */
 const failed = (player: PlayerId, game: string, defect: unknown) =>
   Effect.annotateLogs(Effect.logError(`Tending the ${game} state of ${player} failed`, defect), { player, game });
@@ -374,8 +378,6 @@ export class Play extends Context.Service<
       // Every lane, by `keyOf`; and how many jobs have arrived, in all of them.
       const lanes = new Map<string, Lane>();
       let arrivals = 0;
-      // The stored states found standing still, by `keyOf`, with the `rev` each was found at.
-      const stills = new Map<string, number>();
 
       // The one budget: the slices asked for, and how many players' slices a waiting tend has let go.
       const asks: Ask[] = [];
@@ -457,7 +459,7 @@ export class Play extends Context.Service<
       const copyOf = (job: Job, maker: Playing | null) =>
         Effect.gen(function* () {
           const { lane, at } = job;
-          const { key, player, played } = lane;
+          const { player, played } = lane;
           const found = yield* inSqlite(job, store.read(player, played.id));
           if (Option.isSome(found) && lane.copy?.rev === found.value.rev) return lane.copy;
           if (Option.isNone(found)) {
@@ -471,20 +473,17 @@ export class Play extends Context.Service<
             return held && (lane.copy = { rev: null, text, guest: maker.guest, born: null, at, held, unsaved: true });
           }
           lane.copy = undefined;
-          const { rev, state, guest, born } = found.value;
+          const { rev, state, guest, born, dueAt } = found.value;
           const held = played.read(state);
           if (held === null) {
             yield* Effect.logError(
               `The ${played.id} state stored for ${player} does not read; it is kept as it is`,
             ).pipe(Effect.annotateLogs({ player, game: played.id, rev }));
           }
-          // Whether the state as stored stands still: would never go on by itself, however long.
-          if (
-            played.tends &&
-            (held === null || !held.run(ctxOf({ playerId: player, guest }, Infinity, 0, 0, []), () => false))
-          ) {
-            stills.set(key, rev);
-          } else stills.delete(key);
+          // A state stored due a tend that stands still is due none until it is written again.
+          if (dueAt !== null && (held === null || standsStill(held, player, guest))) {
+            yield* inSqlite(job, store.rest(player, played.id, rev));
+          }
           return held && (lane.copy = { rev, text: state, guest, born, at, held, unsaved: false });
         });
 
@@ -601,6 +600,8 @@ export class Play extends Context.Service<
           const changed = text !== copy.text;
           const standing = changed ? game.standing() : null;
           const won = changed ? game.awards().filter((id) => !awards.includes(id)) : [];
+          // A state that goes on by itself is Leaf's to tend once no page has kept it up for a while.
+          const dueAt = played.tends && !standsStill(copy.held, player, playing.guest) ? at + TEND_AFTER : null;
           const { rev, purse } = yield* inSqlite(
             job,
             sql.withTransaction(
@@ -608,7 +609,7 @@ export class Play extends Context.Service<
                 // What is stored first: the copy is kept over the `rev` it came from, or as the first state.
                 const first =
                   copy.rev === null
-                    ? store.create(player, played.id, copy.text, playing.guest, at)
+                    ? store.create(player, played.id, copy.text, playing.guest, at, dueAt)
                     : store.isAt(player, played.id, copy.rev);
                 if (!(yield* first)) return yield* new Lost();
                 // Then the balances the commands were weighed against.
@@ -622,7 +623,7 @@ export class Play extends Context.Service<
                 }
                 const next = (copy.rev ?? 0) + (changed ? 1 : 0);
                 if (changed) {
-                  yield* store.write(player, played.id, text, playing.guest, at);
+                  yield* store.write(player, played.id, text, playing.guest, at, dueAt);
                   if (standing !== null) yield* store.stand(player, played.id, standing, playing.guest, at);
                   yield* store.award(player, won, at);
                 }
@@ -820,9 +821,8 @@ export class Play extends Context.Service<
             const ends: Effect.Effect<void>[] = [];
             for (const played of games) {
               if (!played.tends) continue;
-              for (const { playerId: player, rev } of yield* store.unwritten(played.id, began - TEND_AFTER)) {
-                const key = keyOf(player, played);
-                if (stills.get(key) === rev || lanes.get(key)?.jobs.some((job) => job.kind === "tend")) continue;
+              for (const player of yield* store.due(played.id, began)) {
+                if (lanes.get(keyOf(player, played))?.jobs.some((job) => job.kind === "tend")) continue;
                 const tended = yield* line("tend", player, played, tending);
                 ends.push(Effect.catchDefect(tended, (defect) => failed(player, played.id, defect)));
               }

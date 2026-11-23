@@ -35,20 +35,28 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
+/** Undoes migration 32 (when each state is next due a tend), for a test going back before it. */
+const beforePlayDue = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    yield* sql`DROP INDEX play_state_due`;
+    yield* sql`ALTER TABLE play_state DROP COLUMN due_at`;
+  });
+
 /**
- * Undoes migrations 31 (a state's generation, `play_state.born`) and 30 (the Tally's `tallies` and
- * `camp_visits`), for a test going back before them.
+ * Undoes migrations 32 (`play_due`), 31 (a state's generation, `play_state.born`) and 30 (the
+ * Tally's `tallies` and `camp_visits`), for a test going back before them.
  */
 const beforeTallies = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
+    yield* beforePlayDue(sql);
     yield* sql`ALTER TABLE play_state DROP COLUMN born`;
     yield* sql`DROP TABLE tallies`;
     yield* sql`DROP TABLE camp_visits`;
   });
 
 /**
- * Undoes migrations 30 (`tallies`), 29 (`presence_left`) and 28 (`time_in`), for a test going back
- * before them: `played` as migrations 23 and 27 left it.
+ * Undoes migrations 32 (`play_due`), 31 (`play_born`), 30 (`tallies`), 29 (`presence_left`) and 28 (`time_in`), for a
+ * test going back before them: `played` as migrations 23 and 27 left it.
  */
 const beforeTimeIn = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
@@ -118,6 +126,7 @@ describe("the database", () => {
       { migration_id: 29, name: "presence_left" },
       { migration_id: 30, name: "tallies" },
       { migration_id: 31, name: "play_born" },
+      { migration_id: 32, name: "play_due" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -181,7 +190,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 31 },
+      { latest: 32 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -329,6 +338,28 @@ describe("the database", () => {
       { player: stayer, game: "town", played: 0, afk: 120 * MINUTE },
     ]);
     expect(await query(path, (sql) => sql`SELECT name FROM sqlite_master WHERE name = 'played'`)).toEqual([]);
+  });
+
+  it("has each yard due a tend two minutes after it was last written, and no state of another game ever", async () => {
+    const path = join(directory, "leaf.db");
+    const member = "00000000-0000-4000-8000-00000000000a";
+    const written = Date.UTC(2026, 10, 23, 20);
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Back to before migration 32, with a yard and a camp stored.
+        yield* beforePlayDue(sql);
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 32`;
+        for (const game of ["works", "town"]) {
+          yield* sql`INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${member}, ${game}, 3, '{}', ${written})`;
+        }
+      }),
+    );
+    expect(await query(path, (sql) => sql`SELECT game, due_at AS due FROM play_state ORDER BY game`)).toEqual([
+      { game: "town", due: null },
+      { game: "works", due: written + 120_000 },
+    ]);
   });
 
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {
