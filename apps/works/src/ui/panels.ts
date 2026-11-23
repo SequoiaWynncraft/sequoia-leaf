@@ -155,6 +155,10 @@ interface OrderLine extends Placed {
   readonly why: string | null;
 }
 
+/** More than one of a kind, by its name: Mills, Benches, Studies. */
+export const plural = (name: string): string =>
+  /[^aeiou]y$/.test(name) ? `${name.slice(0, -1)}ies` : /(?:ch|sh|s|x)$/.test(name) ? `${name}es` : `${name}s`;
+
 /** What the orders panel prints: the node in hand and how it is spoken of, whether the board is up and its places, and each order. */
 export function ordersPrint(): {
   readonly hand: Goal | -1;
@@ -210,7 +214,8 @@ function orders(_art: Art, body: HTMLElement): () => void {
             "k-row",
             {},
             el("div", "k-grow opens", {}, opens.length > 0 ? el("span", "k-label", { text: "Opens" }) : null, ...opens),
-            el("span", "k-chip", {}, amount("coin", o.pay)),
+            // A project pays nothing, and says nothing of pay.
+            o.pay > 0 ? el("span", "k-chip", {}, amount("coin", o.pay)) : null,
           ),
         ),
       );
@@ -602,7 +607,7 @@ function powerBook(_art: Art, body: HTMLElement): () => void {
     const draws = p.draws.flatMap(([k, n, dark, drawn]) => {
       const name = KIND_INFO[k]?.name ?? "";
       return n + dark > 0
-        ? row(`${name}s`, `${n} in reach${dark ? `, ${dark} in the dark` : ""}, ${DRAW[k] ?? 0} each`, drawn)
+        ? row(plural(name), `${n} in reach${dark ? `, ${dark} in the dark` : ""}, ${DRAW[k] ?? 0} each`, drawn)
         : [];
     });
     body.replaceChildren(

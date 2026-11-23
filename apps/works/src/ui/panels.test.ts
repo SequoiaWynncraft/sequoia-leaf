@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { create, deliver, item, play, power } from "@sequoia-leaf/factory";
 
 import { S } from "../state.ts";
-import { depotPrint, ordersPrint, placed, powerPrint } from "./panels.ts";
+import { depotPrint, ordersPrint, placed, plural, powerPrint } from "./panels.ts";
 
 const order = (id: number, planks: number): { id: number; full: boolean } => ({ id, full: planks >= 10 });
 const ids = (list: readonly { id: number }[]): number[] => list.map((s) => s.id);
@@ -42,6 +42,16 @@ describe("a panel is kept by what it prints", () => {
     y.tick += 600;
     expect(why()[0]).not.toBe(JSON.parse(now).orders[0].why);
     expect(JSON.stringify(ordersPrint())).not.toBe(now);
+  });
+
+  test("power: more than one of a kind is spelt as it is said", () => {
+    expect(["Mill", "Bench", "Workshop", "Study", "Gatherer"].map(plural)).toEqual([
+      "Mills",
+      "Benches",
+      "Workshops",
+      "Studies",
+      "Gatherers",
+    ]);
   });
 
   test("power: a yard a little short is never printed as at 100%", () => {

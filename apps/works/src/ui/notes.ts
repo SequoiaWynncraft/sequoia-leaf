@@ -57,6 +57,9 @@ export function closeBanner(): void {
 }
 
 /** What each tool that a node may unlock is, in a line. */
+/** The head of the notice for a goal finished, by what it was. */
+const DONE = { lesson: "Lesson done", project: "Project done", commission: "Commission done" } as const;
+
 const TOOL_WORDS = {
   paint: ["Paint", "Gives a belt's whole line a colour, to tell lines apart."],
   select: ["Select", "Mark out an area to move, copy, remove or save as a blueprint."],
@@ -169,7 +172,14 @@ export function banner(art: Art, done: Goal, next: Goal | null): void {
   const then = next === null ? undefined : NODES[next];
   const nextInfo = next === null ? undefined : GOALS[next];
   b.replaceChildren(
-    el("header", "k-head", {}, icon("check"), el("h2", "k-title", { text: "Order filled" }), close),
+    el(
+      "header",
+      "k-head",
+      {},
+      icon("check"),
+      el("h2", "k-title", { text: node ? DONE[node.kind] : "Order filled" }),
+      close,
+    ),
     el(
       "div",
       "k-body",
