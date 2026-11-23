@@ -5,6 +5,7 @@ import { here } from "./clock.ts";
 import { create } from "./create.ts";
 import { belts, on, put, steps, workingYard } from "./fixtures.ts";
 import { deliver } from "./orders.ts";
+import { repower } from "./power.ts";
 import { load, save, VERSION } from "./save.ts";
 import { power } from "./step.ts";
 import { at, type World } from "./world.ts";
@@ -47,7 +48,7 @@ describe("saving", () => {
     if (!back) throw new Error("the yard did not come back");
     expect(save(back)).toBe(text);
     expect(back.cells).toEqual(w.cells.map((b) => (b ? { ...b, idle: false } : null)));
-    expect([...back.power]).toEqual([...w.power]);
+    expect([...repower(back)]).toEqual([...(w.power ?? repower(w))]);
     expect(power(back)).toEqual(power(w));
     expect(back.rates).toEqual(w.rates);
     expect([...back.open.kinds].toSorted()).toEqual([...w.open.kinds].toSorted());

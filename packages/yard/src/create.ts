@@ -3,7 +3,6 @@ import { BLUEPRINTS, CRATE, KIND, STARTERS } from "./content/machines.ts";
 import { STORY } from "./content/story.ts";
 import { LAND, type Land } from "./land.ts";
 import { fillBoard } from "./orders.ts";
-import { repower } from "./power.ts";
 import { blank, type Building, reopen, WARM, type World } from "./world.ts";
 
 export interface Fresh {
@@ -23,7 +22,7 @@ export function create(opts: Fresh = {}): World {
   const w: World = {
     land,
     cells,
-    power: new Uint8Array(land.w * land.h),
+    power: null,
     seed: (opts.seed ?? 1) >>> 0,
     tick: 0,
     at: 0,
@@ -55,7 +54,6 @@ export function create(opts: Fresh = {}): World {
     news: [],
   };
   reopen(w);
-  repower(w);
   fillBoard(w);
   return w;
 }

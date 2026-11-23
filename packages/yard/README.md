@@ -308,6 +308,7 @@ if (!("refused" in done)) send({ do: "build", kind: "mill", x, y, dir, tick: cop
 ```
 
 What stands on a tile is `yard.cells[at(yard, x, y)]`, the ground under it is in `yard.land`, power
-reaches where `yard.power[i]` is 1, and the orders are `storyOrder(yard)` with `yard.filled`, and
-`yard.board`. `route(yard, from, to)` and `stand` are there for laying a belt from two taps, which
-suits a phone better than dragging.
+reaches where `(yard.power ?? repower(yard))[i]` is 1 (it is worked out when first read after a
+change), and the orders are `storyOrder(yard)` with `yard.filled`, and `yard.board`.
+`route(yard, from, to)` and `stand` are there for laying a belt from two taps, which suits a phone
+better than dragging.

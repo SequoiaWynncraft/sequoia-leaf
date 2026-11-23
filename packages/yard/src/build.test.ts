@@ -24,6 +24,7 @@ import { create } from "./create.ts";
 import { bare, belts, lit, on, put, run, steps } from "./fixtures.ts";
 import { DX, DY } from "./grid.ts";
 import { priceOf, stand } from "./pieces.ts";
+import { repower } from "./power.ts";
 import { route } from "./route.ts";
 import { power } from "./step.ts";
 import { at, collect, plotAt, put as hold, type World } from "./world.ts";
@@ -437,11 +438,12 @@ describe("plans", () => {
   test("taller pylons reach further, and join pylons further off", () => {
     const w = create({ story: 20 });
     put(w, "pylon", 30, 14);
-    const before = w.power.reduce((n, p) => n + p, 0);
-    expect(w.power[at(w, 30, 14 - 6)]).toBe(0);
+    const reached = (): Uint8Array => w.power ?? repower(w);
+    const before = reached().reduce((n, p) => n + p, 0);
+    expect(reached()[at(w, 30, 14 - 6)]).toBe(0);
     buyPlan(w, "tallpylons", Infinity);
-    expect(w.power.reduce((n, p) => n + p, 0)).toBeGreaterThan(before);
-    expect(w.power[at(w, 30, 14 - 6)]).toBe(1);
+    expect(reached().reduce((n, p) => n + p, 0)).toBeGreaterThan(before);
+    expect(reached()[at(w, 30, 14 - 6)]).toBe(1);
     expect(REACH.pylon * w.rates.reach).toBeGreaterThan(6);
   });
   test("bigger crates hold more, and a bigger flywheel gives more power", () => {

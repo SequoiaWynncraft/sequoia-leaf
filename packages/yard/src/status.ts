@@ -6,6 +6,7 @@ import { ITEM, type Item, ITEMS } from "./content/items.ts";
 import { BUFFER, FUEL, KIND, REACH, TICKS } from "./content/machines.ts";
 import { MADE_BY, MILLED, RECIPE, type Recipe } from "./content/recipes.ts";
 import { DX, DY } from "./grid.ts";
+import { repower } from "./power.ts";
 import { power, rewire } from "./step.ts";
 import { at, type Building, type World } from "./world.ts";
 
@@ -123,7 +124,7 @@ function stuck(w: World, i: number, item: Item): Status {
 /** How many of a thing a gatherer or machine turns out in a minute at the yard's present pace, or 0. */
 export function rate(w: World, i: number): number {
   const b = w.cells[i];
-  if (!b || w.power[i] !== 1) return 0;
+  if (!b || (w.power ?? repower(w))[i] !== 1) return 0;
   const share = power(w).pace;
   if (b.kind === "gatherer") return (600 * w.rates.gather * share) / TICKS.gather;
   const r = aim(b);
@@ -134,7 +135,7 @@ export function rate(w: World, i: number): number {
 export function status(w: World, i: number): Status | null {
   const b = i < 0 ? null : w.cells[i];
   if (!b) return null;
-  const lit = w.power[i] === 1;
+  const lit = (w.power ?? repower(w))[i] === 1;
   const share = power(w).pace;
   const slow = share < 1 ? `, at ${Math.round(share * 100)}% of its pace: the yard is short of power` : "";
   switch (b.kind) {

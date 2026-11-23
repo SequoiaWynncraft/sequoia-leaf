@@ -31,7 +31,7 @@ export function bare(deposits: Readonly<Record<string, Raw>> = {}, opts: Bare = 
 
 /** Gives every tile power, whatever the pylons say. */
 export function lit(w: World): World {
-  w.power.fill(1);
+  w.power = new Uint8Array(w.land.w * w.land.h).fill(1);
   w.wire = null;
   return w;
 }
