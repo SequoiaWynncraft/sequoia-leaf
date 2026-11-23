@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { restart, start } from "@sequoia-leaf/kit/live.ts";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
-import { balance, forgetLedger } from "@sequoia-leaf/kit/purse.ts";
+import { balance, forgetLedger, fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 import {
   GUEST,
   HELLO,
@@ -491,6 +491,18 @@ describe("the feed's pace, live", () => {
   });
 });
 
+/** A reroll answered as Leaf answers one: its body, and Leaf's word as of the spend beside it, `ahead` versions on. */
+const rerolled =
+  (body: unknown, leaf: number, ahead = 2) =>
+  () =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Leaf-Purse": JSON.stringify({ coins: 300, leaf, version: TESTER.version + ahead }),
+      },
+    });
+
 describe("the live guild", () => {
   let world: Standin | null = null;
   afterEach(() => {
@@ -582,7 +594,7 @@ describe("the live guild", () => {
   const REROLLED = answer("POST /v1/me/quests/{id}/reroll");
 
   test("a reroll's new quest takes the old one's place at once, and the purse shows the Leaf left", async () => {
-    const { guild, posted } = await onTheBoard({ status: 200, body: REROLLED });
+    const { guild, posted } = await onTheBoard(rerolled(REROLLED, 5135));
     expect(guild.quests().map((q) => q.id)).toEqual(["weekly:1", "timed:1", "daily:1"]);
     expect(await guild.reroll("weekly:1", 0)).toEqual({ spent: 0 });
     expect(posted().map((s) => [s.path, s.body])).toEqual([["/v1/me/quests/weekly:1/reroll", { leaf: 0 }]]);
@@ -594,9 +606,19 @@ describe("the live guild", () => {
 
   test("a paid reroll sends the Leaf the member was shown", async () => {
     const paid = isRecord(REROLLED) ? { ...REROLLED, leaf: 2350, spent: 100 } : {};
-    const { guild, posted } = await onTheBoard({ status: 200, body: paid });
+    const { guild, posted } = await onTheBoard(rerolled(paid, 2350));
     expect(await guild.reroll("weekly:1", 100)).toEqual({ spent: 100 });
     expect(posted().map((s) => s.body)).toEqual([{ leaf: 100 }]);
+    expect(balance().leaf).toBe(2350);
+  });
+
+  test("a play answer read before a reroll's spend, come after it, does not take back the Leaf it left", async () => {
+    const paid = isRecord(REROLLED) ? { ...REROLLED, leaf: 2350, spent: 100 } : {};
+    // Leaf's word as of the spend, beside the answer the mod reads.
+    const { guild } = await onTheBoard(rerolled(paid, 2350));
+    expect(await guild.reroll("weekly:1", 100)).toEqual({ spent: 100 });
+    // A play answer on its way meanwhile, read before the spend.
+    fromLeaf({ coins: 300, leaf: 2450, version: TESTER.version + 1 });
     expect(balance().leaf).toBe(2350);
   });
 

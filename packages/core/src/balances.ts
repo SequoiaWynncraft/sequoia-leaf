@@ -4,6 +4,12 @@
  */
 
 /**
+ * The header an answer that moved the player's Leaf outside the play service (a reroll, a request
+ * bought) carries Leaf's word in, as JSON `Balances`: beside its body, which the mod reads as it was.
+ */
+export const PURSE_HEADER = "Leaf-Purse";
+
+/**
  * A player's Coins and Leaf as one moment of Leaf's ledgers had them, and that moment's `version`,
  * which grows with every entry to either ledger and never goes back: of two, the one with the higher
  * version is the newer. Every answer of the play service carries the caller's, and so does

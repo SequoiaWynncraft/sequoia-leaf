@@ -5,7 +5,6 @@ import {
   balance,
   forgetLedger,
   fromLeaf,
-  fromLedger,
   LEAF_MEMBERS,
   LEAF_SHUT,
   leafFor,
@@ -26,9 +25,9 @@ describe("the purse", () => {
     watch((p, why) => heard.push(`${p.leaf}/${p.coins} ${why}`));
     expect(onLeaf()).toBe(false);
     fromLeaf({ coins: 300, leaf: 1860, version: 4 });
-    fromLedger(1900);
+    fromLeaf({ coins: 300, leaf: 1900, version: 5 });
     expect(balance()).toEqual({ leaf: 1900, coins: 300 });
-    expect(heard).toEqual(["1860/300 Leaf", "1900/300 the guild's ledger"]);
+    expect(heard).toEqual(["1860/300 Leaf", "1900/300 Leaf"]);
     expect([onLeaf(), leafShut(), leafFor("everyone"), leafFor("members")]).toEqual([true, LEAF_SHUT, true, true]);
   });
 

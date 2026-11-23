@@ -299,6 +299,17 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     expect(spends).toEqual([{ origin: "reroll", balance_delta: -100, idempotency_key: `reroll:${alice}:daily:2` }]);
   });
 
+  it("says Leaf's word on the purse beside a reroll's answer, whose body stays as the mod reads it", async () => {
+    await earn(150);
+    await reroll("daily:1");
+    const paid = await reroll("daily:2", 100);
+    expect(Object.keys(Object(await paid.clone().json())).toSorted()).toEqual(["leaf", "quest", "spent"]);
+    const said: unknown = JSON.parse(paid.headers.get("Leaf-Purse") ?? "null");
+    const me = await app.request("/v1/game/me", { headers: { Authorization: "Bearer alice-token" } });
+    const { coins, version } = Object(await me.json());
+    expect(said).toEqual({ coins, leaf: 50, version });
+  });
+
   it("counts each slot's free reroll on its own, and gives another the next UTC day", async () => {
     await reroll("daily:1");
     expect(await quests()).toMatchObject({ quests: [{ reroll_leaf: 100 }, { id: "weekly:1", reroll_leaf: 0 }] });

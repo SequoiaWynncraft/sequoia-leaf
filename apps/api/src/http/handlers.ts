@@ -1,4 +1,5 @@
 import {
+  type Balances,
   currentQuests,
   DAY_MS,
   DEFAULT_RULES,
@@ -9,6 +10,7 @@ import {
   openQuestBook,
   parsePlayerId,
   PERIODS,
+  PURSE_HEADER,
   type Quest,
   QUEST_SLOTS,
   type QuestSlot,
@@ -388,6 +390,7 @@ const invalidAfter = new Invalid({ code: "invalid_after", message: "after must b
 const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
   Effect.gen(function* () {
     const ledger = yield* Ledger;
+    const coins = yield* Coins;
     const quests = yield* Quests;
     const events = yield* Events;
     const streams = yield* OpenStreams;
@@ -464,11 +467,14 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
             if (result.status === "refused") {
               return yield* new Refused({ code: result.reason, message: REFUSALS[result.reason] });
             }
-            return HttpServerResponse.jsonUnsafe({
-              leaf: result.balance,
-              spent: result.spent,
-              quest: questOnOffer(result.quest, yield* quests.rerollsOnDay(playerId, now)),
-            } satisfies typeof Body.Rerolled.Type);
+            return HttpServerResponse.jsonUnsafe(
+              {
+                leaf: result.balance,
+                spent: result.spent,
+                quest: questOnOffer(result.quest, yield* quests.rerollsOnDay(playerId, now)),
+              } satisfies typeof Body.Rerolled.Type,
+              purseBeside(yield* coins.balances(playerId)),
+            );
           }),
         )
         .handle("events", ({ query }) =>
@@ -621,6 +627,13 @@ const seconds = (ms: number): number => Math.floor(ms / 1000);
 
 /** A row of `banner_people`: a banner, and the player who is its headliner. */
 const BannerPerson = Schema.Struct({ banner: Schema.String, playerId: Schema.String });
+
+/**
+ * Leaf's word on the player's balances beside an answer that moved their Leaf outside the play
+ * service (`PURSE_HEADER`), read after it: the page's purse takes it as newer than anything asked
+ * before, so an answer on its way from before the spend cannot take it back.
+ */
+const purseBeside = (purse: Balances) => ({ headers: { [PURSE_HEADER.toLowerCase()]: JSON.stringify(purse) } });
 
 /** Who calls a game, as the play service needs to know them. */
 const playingOf = (identity: Identity): Playing => ({ playerId: identity.playerId, guest: isGuest(identity) });
@@ -1005,13 +1018,16 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             if (made.status === "busy") {
               return yield* new RequestsUnavailable({ code: "requests_unavailable", message: made.message });
             }
-            const { balance } = yield* ledger.account(identity.playerId);
-            return HttpServerResponse.jsonUnsafe({
-              type: payload.type,
-              position: made.position,
-              leaf_paid: made.paid,
-              leaf: balance,
-            } satisfies typeof Body.RequestMade.Type);
+            const purse = yield* coins.balances(identity.playerId);
+            return HttpServerResponse.jsonUnsafe(
+              {
+                type: payload.type,
+                position: made.position,
+                leaf_paid: made.paid,
+                leaf: purse.leaf,
+              } satisfies typeof Body.RequestMade.Type,
+              purseBeside(purse),
+            );
           }),
         )
         // A board of the Tally, as the caller is shown it.

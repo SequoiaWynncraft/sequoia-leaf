@@ -258,7 +258,9 @@ the body `{ "leaf": n }`, the `reroll_leaf` the member was shown and agreed to
 pay, first counts what was just played, as `?sync=1` does, so a quest just
 finished is paid rather than swapped. It answers `{ "leaf", "spent", "quest" }`:
 the balance after it, what it cost, and the new quest in the shape `quests`
-uses. A body without a whole `leaf` of 0 or more gets 400 `invalid_cost`. It
+uses; and beside it, in the header `Leaf-Purse`, Leaf's word on the player's
+purse after it, `{ "coins", "leaf", "version" }` as `/v1/game/me` gives them,
+for the game's purse to take as newer than anything asked before. A body without a whole `leaf` of 0 or more gets 400 `invalid_cost`. It
 refuses with 409 and one of these codes, changing nothing:
 
 - `not_current`: that quest is no longer in its slot. It was finished or
@@ -422,8 +424,9 @@ the member, with their own session and the website's mod version. A guest gets
 member may buy it now; the backend refusing them answers 409 `request_refused`,
 and the backend not answering 503 `requests_unavailable`. `POST /v1/game/requests`
 takes `{ "type": "aspect" }` or `{ "type": "tome", "reason" }` (1 to 1,000
-characters) and answers `{ "type", "position", "leaf_paid", "leaf" }`; the
-backend charges the member through `PUT /internal/v1/purchases/{key}` before it
+characters) and answers `{ "type", "position", "leaf_paid", "leaf" }`, with
+Leaf's word on the purse beside it in the header `Leaf-Purse`, as a reroll's;
+the backend charges the member through `PUT /internal/v1/purchases/{key}` before it
 answers. Refused, it answers 409 `request_refused` with the backend's reason and
 nothing taken. With no answer that says, 504 `request_unknown`: it may have been
 made, and is not to be sent again. Leaf waits 30 seconds for it.

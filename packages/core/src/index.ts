@@ -1,6 +1,6 @@
 export { type AchievementAward, type AchievementRules, leafForAward, type PayingLadder } from "./achievements.ts";
 export { type Activity, type ActivityKind, RAID_KEYS, type RaidKey, raidKeyForName, RAIDS } from "./activity.ts";
-export { type Balances, readBalances } from "./balances.ts";
+export { type Balances, PURSE_HEADER, readBalances } from "./balances.ts";
 export { DAILY_CHEST, EARNINGS } from "./coins.ts";
 export { DAY_MS, utcDay, utcWeekStart, WEEK_MS } from "./days.ts";
 export { isLeaf, type Leaf, leaf, MAX_LEAF } from "./leaf.ts";
