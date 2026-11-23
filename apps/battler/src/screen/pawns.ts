@@ -18,6 +18,7 @@ import { glyphPic, itemPic } from "./art/icons.ts";
 import { TRAIT_COLOUR } from "./art/pal.ts";
 import { burst, fly, later, ring, say } from "./fx.ts";
 import { type Pt, seatAtPoint, seatXY, slotAtPoint, slotXY } from "./geometry.ts";
+import { fadingOf, goneOnLanding, type Life, lifeAfter, type LifeEvent, placeOf } from "./pawnlife.ts";
 import { signal } from "./signals.ts";
 import { snd } from "./sounds.ts";
 import { boardSpot, V } from "./stage.ts";
@@ -28,36 +29,37 @@ export const FOOT = 3;
 export interface Pawn {
   id: number;
   kind: FigureId;
-  /** Its stars as shown, which lag the rules for the moment three are hopping together. */
+  /** Its stars as shown, and the rules' stars still to pop while three hop together into it. */
   stars: Stars;
-  /** Three are hopping together into it: its stars wait for the hop. */
-  starring: boolean;
-  /** Where it belongs; null for one that is on its way out, or has no place yet. */
-  spot: Spot | null;
+  due: Stars | null;
+  /** Where it is in its life on the table: here at its place, loose, or going (`pawnlife.ts`). */
+  life: Life;
+  /** Where it is this moment, how high off the table, and how see-through. */
   x: number;
   y: number;
-  /** How high off the table it is this moment. */
   lift: number;
-  /** Where it is hopping to, by the stage's clock; null standing still. */
-  move: Move | null;
+  alpha: number;
+  /** Where it is hopping to, by the stage's clock, and whether over the whole interface; null standing still. */
+  move: (Move & { over: boolean }) | null;
   /** Out of step with the others, so they do not all breathe together. */
   phase: number;
   /** When its star last popped, when it last cheered, and until when it wiggles to be noticed. */
   popAt: number;
   cheerAt: number;
   wiggleUntil: number;
-  /** On its way to being gone: into another figure, or back to the stall (fading as it goes). */
-  leaving: boolean;
-  /** On the last hop it will make: it is gone when it lands. */
-  last: boolean;
-  fading: boolean;
-  /** Drawn over the whole interface while it flies, because it is crossing it. */
-  air: boolean;
-  alpha: number;
   facing: boolean;
 }
 
 export const pawns = new Map<number, Pawn>();
+
+/** A pawn's place, while it has one (`pawnlife.ts`). */
+export const spotOfPawn = (p: Pawn | undefined): Spot | null => (p ? placeOf(p.life) : null);
+/** Whether a pawn is drawn over the whole interface: loose, or hopping across it. */
+export const aloft = (p: Pawn): boolean => p.life.is === "loose" || (p.move?.over ?? false);
+/** Moves a pawn's life on. */
+const live = (p: Pawn, ev: LifeEvent): void => {
+  p.life = lifeAfter(p.life, ev);
+};
 
 /** Where a figure's feet go for a place on the board or the bench. */
 export function spotXY(spot: Spot): Pt {
@@ -71,31 +73,26 @@ function make(id: number, kind: FigureId, stars: Stars, at: Pt, spot: Spot | nul
     id,
     kind,
     stars,
-    spot,
+    due: null,
+    life: spot ? { is: "here", spot } : { is: "loose" },
     x: at.x,
     y: at.y,
     lift: 0,
+    alpha: 1,
     move: null,
     phase: (id * 0.37) % 1,
-    starring: false,
     popAt: -9,
     cheerAt: -9,
     wiggleUntil: -9,
-    leaving: false,
-    last: false,
-    fading: false,
-    air: false,
-    alpha: 1,
     facing: false,
   };
   pawns.set(id, p);
   return p;
 }
 
-/** Sends a pawn hopping to a point. */
-export function hop(p: Pawn, to: Pt, dur = 0.24, arc = 9, air = false): void {
-  p.move = { from: { x: p.x, y: p.y }, to, t0: V.t, dur, arc, smooth: true };
-  p.air = air;
+/** Sends a pawn hopping to a point: `over` the whole interface, for one crossing it. */
+export function hop(p: Pawn, to: Pt, dur = 0.24, arc = 9, over = false): void {
+  p.move = { from: { x: p.x, y: p.y }, to, t0: V.t, dur, arc, smooth: true, over };
   if (Math.abs(to.x - p.x) > 1) p.facing = to.x < p.x;
 }
 
@@ -106,7 +103,7 @@ export function clearPawns(): void {
 
 /**
  * Makes the pawns agree with the run: a pawn for every figure, each on its way to where its figure
- * is. Pawns in the middle of leaving are left to finish.
+ * is. Pawns going (into another, or back to the stall) are left to finish.
  */
 export function syncPawns(run: RunView | null, settle = false): void {
   const seen = new Set<number>();
@@ -119,19 +116,21 @@ export function syncPawns(run: RunView | null, settle = false): void {
       p = make(piece.id, piece.kind, piece.stars, at, spot);
       return;
     }
-    const moved = !p.spot || p.spot.on !== spot.on || p.spot.at !== spot.at;
-    p.spot = spot;
-    p.leaving = false;
+    const was = spotOfPawn(p);
+    const moved = !was || was.on !== spot.on || was.at !== spot.at;
+    const over = aloft(p);
+    live(p, { e: "placed", spot });
     // The rules' stars, unless three are hopping together into it and its new star is still to pop.
-    if (!p.starring) p.stars = piece.stars;
+    if (p.due === null) p.stars = piece.stars;
+    else p.due = piece.stars;
     if (settle) {
       p.x = at.x;
       p.y = at.y;
       p.move = null;
-      p.air = false;
       p.stars = piece.stars;
+      p.due = null;
     } else if (moved || (!p.move && (Math.abs(p.x - at.x) > 0.5 || Math.abs(p.y - at.y) > 0.5))) {
-      hop(p, at, 0.22, 8, p.air);
+      hop(p, at, 0.22, 8, over);
     }
   };
   if (run) {
@@ -139,7 +138,7 @@ export function syncPawns(run: RunView | null, settle = false): void {
     run.bench.forEach((piece, at) => visit(piece, { on: "bench", at }));
   }
   for (const [id, p] of pawns) {
-    if (!seen.has(id) && !p.leaving) pawns.delete(id);
+    if (!seen.has(id) && p.life.is !== "going") pawns.delete(id);
   }
 }
 
@@ -153,12 +152,11 @@ export function stepPawns(): void {
     p.x = now.x;
     p.y = now.y;
     p.lift = now.lift;
-    if (p.fading) p.alpha = 1 - now.k * now.k;
+    if (fadingOf(p.life)) p.alpha = 1 - now.k * now.k;
     if (now.k >= 1) {
       p.move = null;
-      p.air = false;
       p.lift = 0;
-      if (p.leaving && p.last) pawns.delete(id);
+      if (goneOnLanding(p.life)) pawns.delete(id);
     }
   }
 }
@@ -167,7 +165,7 @@ export function stepPawns(): void {
 export function pawnAt(run: RunView, x: number, y: number): Pawn | null {
   let best: Pawn | null = null;
   for (const p of pawns.values()) {
-    if (p.leaving || !p.spot) continue;
+    if (!spotOfPawn(p)) continue;
     const f = framesOf(p.kind);
     const half = Math.max(6, f.wide / 2);
     if (x < p.x - half || x > p.x + half || y > p.y + 3 || y < p.y - f.tall - 1) continue;
@@ -214,22 +212,20 @@ const STAR_COLS = [GOLD[2], GOLD[1], "#ffffff"];
 /** Three become one: the two that go hop onto the one that stays, and its new star pops. */
 function merge(note: Extract<Note, { t: "merged" }>, delay: number): void {
   const keeper = pawns.get(note.piece);
-  if (keeper) keeper.starring = true;
+  if (keeper) keeper.due = note.stars;
   // The two that go are spoken for from this moment, though they have not yet jumped.
   for (const id of note.gone) {
     const p = pawns.get(id);
-    if (!p) continue;
-    p.leaving = true;
-    p.spot = null;
+    if (p) live(p, { e: "spoken", to: "merge" });
   }
   later(delay, () => {
     snd.hopTogether();
     for (const id of note.gone) {
       const p = pawns.get(id);
       if (!p) continue;
-      p.last = true;
+      live(p, { e: "last hop" });
       const to = keeper ? { x: keeper.x, y: keeper.y } : spotXY(note.at);
-      hop(p, to, 0.34, 18, p.air);
+      hop(p, to, 0.34, 18, aloft(p));
     }
     // The one that stays jumps to meet them.
     if (keeper) keeper.cheerAt = V.t + 0.06;
@@ -237,8 +233,8 @@ function merge(note: Extract<Note, { t: "merged" }>, delay: number): void {
   later(delay + 0.35, () => {
     const at = keeper ? { x: keeper.x, y: keeper.y } : spotXY(note.at);
     if (keeper) {
-      keeper.stars = note.stars;
-      keeper.starring = false;
+      keeper.stars = keeper.due ?? note.stars;
+      keeper.due = null;
       keeper.popAt = V.t;
     }
     const grand = note.stars >= 3;
@@ -261,9 +257,9 @@ export function hearNotes(notes: readonly RaidNote[]): void {
     if (note.t === "bought") {
       {
         const from = boardSpot(document.querySelector(`[data-offer="${note.offer}"]`)) ?? slotXY(4);
+        // Straight into three of a kind, it has no place: it is loose, held up until it hops in.
         const p = make(note.piece, note.kind, 1, from, note.to);
         if (note.to) hop(p, spotXY(note.to), 0.3, 12, true);
-        else p.air = true;
         snd.buy();
         delay = Math.max(delay, 0.16);
       }
@@ -286,10 +282,8 @@ export function hearNotes(notes: readonly RaidNote[]): void {
         const to = boardSpot(document.getElementById("stall")) ?? slotXY(4);
         const from = p ? { x: p.x, y: p.y - 8 } : spotXY(note.from);
         if (p) {
-          p.leaving = true;
-          p.last = true;
-          p.fading = true;
-          p.spot = null;
+          live(p, { e: "spoken", to: "stall" });
+          live(p, { e: "last hop" });
           hop(p, to, 0.3, 10, true);
         }
         snd.sell();

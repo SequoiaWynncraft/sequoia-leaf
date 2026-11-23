@@ -1,0 +1,22 @@
+<!doctype html>
+<!--
+  The Little Raid for the tours and the play server: the page (`../index.html`) with the tours'
+  handle on `window.raid`, and with `?sheet` every figure on one sheet (`dev.ts`). Never shipped.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <title>The Little Raid</title>
+    <link rel="stylesheet" href="../../../packages/kit/src/kit.css" />
+    <link rel="stylesheet" href="../src/screen/raid.css" />
+  </head>
+  <body data-mode="front">
+    <canvas id="view"></canvas>
+    <canvas id="over"></canvas>
+    <div id="picks" hidden></div>
+    <div id="nudge" hidden></div>
+    <div id="modal" hidden></div>
+    <script type="module" src="./dev.ts"></script>
+  </body>
+</html>

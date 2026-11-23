@@ -22,7 +22,7 @@ import { handMarks } from "./hand.ts";
 import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
 import { DIM, shineOf } from "./light.ts";
 import { arrivalOf, handing, watchersOf } from "./logic.ts";
-import { FOOT, type Pawn, pawns } from "./pawns.ts";
+import { aloft, FOOT, type Pawn, pawns, spotOfPawn } from "./pawns.ts";
 import { snd } from "./sounds.ts";
 import { boardHalves, place, type Standing, V } from "./stage.ts";
 import { S } from "./state.ts";
@@ -103,7 +103,8 @@ export function stepScene(dt: number): void {
 /** One of the party's own figures, where it stands or hops. */
 function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
   const f = framesOf(p.kind);
-  const piece = S.run && p.spot && !p.leaving ? pieceAt(S.run, p.spot) : null;
+  const spot = spotOfPawn(p);
+  const piece = S.run && spot ? pieceAt(S.run, spot) : null;
   const items = piece?.items ?? [];
   const pop = V.t - p.popAt;
   const cheer = V.t - p.cheerAt;
@@ -328,8 +329,8 @@ export function drawScene(g: Ctx): void {
     });
   }
   for (const p of pawns.values()) {
-    if (p.air || p.id === marks.held) continue;
-    if (fighting && p.spot?.on === "board") continue;
+    if (aloft(p) || p.id === marks.held) continue;
+    if (fighting && spotOfPawn(p)?.on === "board") continue;
     list.push(pawnStanding(g, p, V.bx, V.by));
   }
   list.sort((a, b) => a.y - b.y || a.x - b.x);
@@ -375,7 +376,7 @@ export function drawOver(g: Ctx): boolean {
   let any = false;
   const marks = handMarks();
   for (const p of pawns.values()) {
-    if (!p.air && p.id !== marks.held) continue;
+    if (!aloft(p) && p.id !== marks.held) continue;
     any = true;
     if (p.id === marks.held) {
       const sway = Math.round(Math.sin(V.t * 9) * 1);
@@ -429,8 +430,9 @@ export function heldUnder(run: RunView, x: number, y: number): HeldAt | null {
   if (S.screen.at === "fight" || S.screen.at === "after") return fightHeldUnder(x, y);
   if (S.screen.at !== "plan") return null;
   for (const p of pawns.values()) {
-    if (p.leaving || !p.spot || p.id === handMarks().held) continue;
-    const piece = pieceAt(run, p.spot);
+    const spot = spotOfPawn(p);
+    if (!spot || p.id === handMarks().held) continue;
+    const piece = pieceAt(run, spot);
     const hit = piece ? heldAt(heldRow(piece.items, p.x, heldTop(p.y, false)), x, y) : null;
     if (hit) return hit;
   }

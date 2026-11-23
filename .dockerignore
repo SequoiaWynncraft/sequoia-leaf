@@ -6,3 +6,4 @@ data
 **/*.test.ts
 *.md
 **/dist
+**/review

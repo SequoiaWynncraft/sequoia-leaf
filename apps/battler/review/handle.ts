@@ -34,7 +34,7 @@ import { carryOn, enterRun, lookBack, setOut, startNew, toFront } from "../src/s
 import { grab, hover, tapPawn, unpick } from "../src/screen/hand.ts";
 import { heldRow, heldTop } from "../src/screen/held.ts";
 import { NUDGES } from "../src/screen/logic.ts";
-import { pawns, syncPawns } from "../src/screen/pawns.ts";
+import { pawns, spotOfPawn, syncPawns } from "../src/screen/pawns.ts";
 import { arrive } from "../src/screen/scene.ts";
 import { type Ended, endedIn } from "../src/screen/screen.ts";
 import * as stage from "../src/screen/stage.ts";
@@ -329,8 +329,8 @@ export function openHandle(): void {
         id: p.id,
         kind: p.kind,
         stars: p.stars,
-        on: p.spot?.on ?? "",
-        at: p.spot?.at ?? -1,
+        on: spotOfPawn(p)?.on ?? "",
+        at: spotOfPawn(p)?.at ?? -1,
       }));
     },
     grab(id, x, y) {
@@ -343,7 +343,8 @@ export function openHandle(): void {
     },
     heldAt(id, i) {
       const p = pawns.get(id);
-      const piece = S.run && p?.spot ? pieceAt(S.run, p.spot) : null;
+      const spot = spotOfPawn(p);
+      const piece = S.run && spot ? pieceAt(S.run, spot) : null;
       const at = p && piece ? heldRow(piece.items, p.x, heldTop(p.y, false))[i] : undefined;
       return at ? stage.boardToPage(at.x + at.w / 2, at.y + at.h / 2) : null;
     },
@@ -362,7 +363,7 @@ export function openHandle(): void {
     },
     hover,
     hand(itemAt, id) {
-      const spot = pawns.get(id)?.spot;
+      const spot = spotOfPawn(pawns.get(id));
       if (spot) doNow({ do: "give", item: itemAt, to: spot });
     },
     drop: unpick,

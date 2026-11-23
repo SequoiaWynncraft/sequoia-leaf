@@ -240,14 +240,15 @@ on a phone, a party. `copy()` is the page's own copy of the run and `leaf()` the
 table it draws from, to change by hand and see Leaf's next answer put it back; `redraw()` draws the
 table from them.
 
-`?sheet` in the address shows every figure on one sheet with its name (`review/sheet.ts`), and
-`?handle` opens `window.raid`, for staging and looking at the game from outside (`review/handle.ts`).
-Neither runs in a page opened without them.
+The tours use a page of their own, `review/index.html`: the page that ships, with `window.raid` for
+staging and looking at the game from outside (`review/handle.ts`), and with `?sheet` every figure on
+one sheet with its name (`review/sheet.ts`) instead of the table. Nothing in `src/` imports from
+`review/`, and the image leaves `review/` out.
 
 The lists in `review/` are the tours the screenshots came from. `review/tour.ts` runs one against a
 play server of its own: it builds the page, starts `apps/api/test/play.ts` on a free port with
-`--dice 1` (so the tour plays the same game every time), signs in as its Tester, opens the page with
-`?handle` and has the kit's driver go through the steps:
+`--dice 1` (so the tour plays the same game every time), signs in as its Tester and has the kit's
+driver go through the steps on the tours' page:
 
 ```sh
 bun review/tour.ts review/tour-desktop.json <out-dir>

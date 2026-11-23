@@ -18,7 +18,7 @@ import { pieceAt, type RunView, sellValue, type Spot } from "@sequoia-leaf/raid"
 import { unitUnder } from "./fightview.ts";
 import { type Gesture, type HandEvent, handStep, type Held, IDLE, type Marks, marksOf } from "./gesture.ts";
 import { handing } from "./logic.ts";
-import { hop, type Pawn, pawnAt, pawns, spotAt, spotXY } from "./pawns.ts";
+import { hop, type Pawn, pawnAt, pawns, spotAt, spotOfPawn, spotXY } from "./pawns.ts";
 import { boardFull, foeAt, heldUnder } from "./scene.ts";
 import { snd } from "./sounds.ts";
 import { artPx, boardToPage, toBoard, V } from "./stage.ts";
@@ -49,7 +49,7 @@ let restKey = "";
 export const planning = (): boolean =>
   S.screen.at === "plan" && S.run?.stage.phase === "plan" && S.run.stage.picks.length === 0;
 
-const spotOfPawn = (id: number): Spot | null => pawns.get(id)?.spot ?? null;
+const placeOfPawn = (id: number): Spot | null => spotOfPawn(pawns.get(id));
 const sameSpot = (a: Spot, b: Spot): boolean => a.on === b.on && a.at === b.at;
 
 /** Where a pawn is on the page, as a box for a card to sit beside. */
@@ -111,7 +111,7 @@ function startDrag(run: RunView, held: Held, pointer: number, at: { x: number; y
   close();
   hold(true);
   if (held.what === "pawn") {
-    const spot = spotOfPawn(held.id);
+    const spot = placeOfPawn(held.id);
     const piece = spot ? pieceAt(run, spot) : null;
     const hint = document.getElementById("sellhint");
     if (piece && hint) hint.replaceChildren("Sell for ", acorns(`+${sellValue(piece)}`));
@@ -149,7 +149,7 @@ function drop(run: RunView, e: PointerEvent, held: Held): void {
   unpick();
   if (held.what === "pawn") {
     const p = pawns.get(held.id);
-    const from = spotOfPawn(held.id);
+    const from = placeOfPawn(held.id);
     if (!p || !from) return;
     // It comes down from where the hand let go of it.
     p.x = b.x;
@@ -173,8 +173,8 @@ function drop(run: RunView, e: PointerEvent, held: Held): void {
     return;
   }
   const taker = takerAt(run, b.x, b.y) ?? pawnAt(run, b.x, b.y);
-  if (taker?.spot) {
-    const to = taker.spot;
+  const to = spotOfPawn(taker ?? undefined);
+  if (to) {
     doNow({ do: "give", item: held.at, to });
   }
 }
@@ -206,7 +206,7 @@ function tap(run: RunView, held: Held | null, e: PointerEvent): void {
   }
   if (held?.what === "pawn") {
     const p = pawns.get(held.id);
-    const here = p?.spot;
+    const here = spotOfPawn(p);
     if (!p || !here) return;
     if (picked?.what === "item") {
       const item = picked.at;
@@ -215,7 +215,7 @@ function tap(run: RunView, held: Held | null, e: PointerEvent): void {
       return;
     }
     if (picked?.what === "pawn") {
-      const from = spotOfPawn(picked.id);
+      const from = placeOfPawn(picked.id);
       const same = picked.id === held.id;
       unpick();
       if (!same && from) doNow({ do: "move", from, to: here });
@@ -227,7 +227,7 @@ function tap(run: RunView, held: Held | null, e: PointerEvent): void {
   // A tap on the bare table: put the tapped thing there, or ask about whoever is waiting.
   const spot = spotAt(b.x, b.y);
   if (picked?.what === "pawn" && spot) {
-    const from = spotOfPawn(picked.id);
+    const from = placeOfPawn(picked.id);
     unpick();
     if (from) {
       const done = doNow({ do: "move", from, to: spot });
@@ -443,7 +443,8 @@ export function hover(itemAt: number, id: number): void {
   const at = { x: p.x + 4, y: p.y - 12 };
   startDrag(run, { what: "item", at: itemAt, item }, -1, at);
   hand({ e: "move", pointer: -1, x: at.x, y: at.y, over: null, taker: id, shop: false });
-  const piece = p.spot ? pieceAt(run, p.spot) : null;
+  const spot = spotOfPawn(p);
+  const piece = spot ? pieceAt(run, spot) : null;
   const would = piece ? handing(piece, item) : null;
   const b = pawnBox(p);
   if (would?.can) show(dropRef(itemAt, id), b.x, b.y, b.w, b.h);
