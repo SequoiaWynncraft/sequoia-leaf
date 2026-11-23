@@ -16,7 +16,7 @@ import {
   type UnitKind,
 } from "@sequoia-leaf/raid/content/figures.ts";
 
-import { ART } from "./figures.ts";
+import { artOf } from "./figures.ts";
 import { FOREST_TONES, PAL, SUMMON_TONES, TIER_TONES, type Tones } from "./pal.ts";
 
 export type Pose = "idle" | "cast" | "fallen";
@@ -90,7 +90,7 @@ function tipped(src: HTMLCanvasElement, left: boolean): HTMLCanvasElement {
 const edged = (c: HTMLCanvasElement): HTMLCanvasElement => outlined(c, INK);
 
 function bake(kind: UnitKind): { right: Frames; left: Frames } {
-  const art = ART[kind];
+  const art = artOf(kind);
   const at = art.breath ?? Math.floor(art.rows.length * 0.6);
   const lists = {
     a: art.rows,

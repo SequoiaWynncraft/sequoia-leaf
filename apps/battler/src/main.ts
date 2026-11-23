@@ -36,11 +36,9 @@ import {
 } from "./screen/flow.ts";
 import { stepFx } from "./screen/fx.ts";
 import { openHand, unpick } from "./screen/hand.ts";
-import { openHandle } from "./screen/handle.ts";
 import { postcard } from "./screen/logic.ts";
 import { hearNotes, stepPawns, syncPawns } from "./screen/pawns.ts";
 import { drawOver, drawScene, stepScene, wordsScene } from "./screen/scene.ts";
-import { showSheet } from "./screen/sheet.ts";
 import { snd } from "./screen/sounds.ts";
 import * as stage from "./screen/stage.ts";
 import { onChange, onHeld, onNotes, onRefused, openTable, S } from "./screen/state.ts";
@@ -73,9 +71,10 @@ async function setOutOn(trail: number): Promise<void> {
 
 async function boot(): Promise<void> {
   await fontsReady();
-  // Every figure on one sheet: a picture of the rules' figures, which needs no table.
-  if (new URLSearchParams(location.search).has("sheet")) {
-    showSheet();
+  // Every figure on one sheet: a picture of the rules' figures, which needs no table (for looking at, `review/`).
+  const asked = new URLSearchParams(location.search);
+  if (asked.has("sheet")) {
+    (await import("../review/sheet.ts")).showSheet();
     return;
   }
   // Who the member is, and then the table as Leaf has it. Without Leaf there is no table.
@@ -183,7 +182,8 @@ async function boot(): Promise<void> {
   });
   openHand(must(document.querySelector<HTMLCanvasElement>("#view"), "the table's canvas"));
   openLight();
-  openHandle();
+  // A handle for staging and looking at the table from outside, for the tours only (`review/handle.ts`).
+  if (asked.has("handle")) (await import("../review/handle.ts")).openHandle();
 
   // A run in progress is offered again on the front page; nothing starts by itself.
   renderTable();

@@ -64,7 +64,8 @@ try {
   });
   if (!(server.stdout instanceof ReadableStream)) throw new Error("No output from the play server");
   await until(server.stdout, "Leaf is playing");
-  const page = `${origin}/play/battler/${query ? `?${query}` : ""}`;
+  // The tours drive the table through its handle, which the page opens only when asked.
+  const page = `${origin}/play/battler/?handle${query ? `&${query}` : ""}`;
   const tour = Bun.spawn(
     [
       "bun",

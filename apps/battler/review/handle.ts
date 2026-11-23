@@ -29,14 +29,14 @@ import {
   type TableView,
 } from "@sequoia-leaf/raid";
 
-import { fightState } from "./fightview.ts";
-import { carryOn, enterRun, lookBack, setOut, startNew, toFront } from "./flow.ts";
-import { grab, hover, tapPawn, unpick } from "./hand.ts";
-import { heldRow, heldTop } from "./held.ts";
-import { NUDGES } from "./logic.ts";
-import { pawns, syncPawns } from "./pawns.ts";
-import { arrive } from "./scene.ts";
-import * as stage from "./stage.ts";
+import { fightState } from "../src/screen/fightview.ts";
+import { carryOn, enterRun, lookBack, setOut, startNew, toFront } from "../src/screen/flow.ts";
+import { grab, hover, tapPawn, unpick } from "../src/screen/hand.ts";
+import { heldRow, heldTop } from "../src/screen/held.ts";
+import { NUDGES } from "../src/screen/logic.ts";
+import { pawns, syncPawns } from "../src/screen/pawns.ts";
+import { arrive } from "../src/screen/scene.ts";
+import * as stage from "../src/screen/stage.ts";
 import {
   again,
   ask,
@@ -49,10 +49,10 @@ import {
   S,
   tableNow,
   waitingForLeaf,
-} from "./state.ts";
-import { sheetUp } from "./ui/fightsheet.ts";
-import { type PageId, showPage } from "./ui/pages.ts";
-import { redrawTallies, TV } from "./ui/tally.ts";
+} from "../src/screen/state.ts";
+import { sheetUp } from "../src/screen/ui/fightsheet.ts";
+import { type PageId, showPage } from "../src/screen/ui/pages.ts";
+import { redrawTallies, TV } from "../src/screen/ui/tally.ts";
 
 type Jump = "front" | "boon" | "component" | "spar" | "boss" | "lastboss" | "end";
 

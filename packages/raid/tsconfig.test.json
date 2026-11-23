@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["bun"]
   },
-  "include": ["src/**/*.test.ts", "src/testkit.ts"]
+  "include": ["src/**/*.test.ts", "src/testkit.ts", "review"]
 }

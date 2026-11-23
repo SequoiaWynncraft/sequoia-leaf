@@ -13,7 +13,7 @@ through `index.ts`.
 
 ```sh
 bun test                                         # the rules, checked against their own sentences
-bun ../../apps/battler/review/balance.ts 200 0   # 200 runs for each bot habit on the first trail
+bun review/balance.ts 200 0                      # 200 runs for each bot habit on the first trail
 ```
 
 ## The rules as built

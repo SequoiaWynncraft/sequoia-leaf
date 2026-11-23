@@ -200,9 +200,8 @@ timed can be stepped by hand.
 | `src/screen/keep.ts`          | The view settings kept in the browser                                                            |
 | `src/screen/sounds.ts`        | The table's sounds, made from the kit's tones                                                    |
 | `src/screen/signals.ts`       | Small happenings more than one part answers: an acorn landing, a star                            |
-| `src/screen/handle.ts`        | `window.raid`, for looking at the game from outside                                              |
 | `@sequoia-leaf/figures`       | The figures' pictures, which the town draws too (`packages/figures`, with its README)            |
-| `src/screen/art/icons.ts`     | A small picture for every trait, item, boon, kind of room and button                             |
+| `src/screen/art/icons.ts`     | A small picture for every trait, item, boon, kind of room and button, typed in `icons.txt`       |
 | `src/screen/art/table.ts`     | The painted table, the halves of the board, the looks                                            |
 | `src/screen/art/pal.ts`       | A colour for each trait                                                                          |
 | `src/screen/ui/table.ts`      | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's panel     |
@@ -241,12 +240,14 @@ on a phone, a party. `copy()` is the page's own copy of the run and `leaf()` the
 table it draws from, to change by hand and see Leaf's next answer put it back; `redraw()` draws the
 table from them.
 
-`?sheet` in the address shows every figure on one sheet with its name.
+`?sheet` in the address shows every figure on one sheet with its name (`review/sheet.ts`), and
+`?handle` opens `window.raid`, for staging and looking at the game from outside (`review/handle.ts`).
+Neither runs in a page opened without them.
 
 The lists in `review/` are the tours the screenshots came from. `review/tour.ts` runs one against a
 play server of its own: it builds the page, starts `apps/api/test/play.ts` on a free port with
-`--dice 1` (so the tour plays the same game every time), signs in as its Tester and has the kit's
-driver go through the steps:
+`--dice 1` (so the tour plays the same game every time), signs in as its Tester, opens the page with
+`?handle` and has the kit's driver go through the steps:
 
 ```sh
 bun review/tour.ts review/tour-desktop.json <out-dir>
@@ -269,9 +270,8 @@ moments a card used to go missing (a click on the chip, the stall changing size,
 again under the pointer, just after a drag, the first room with a nudge up) and prints whether the
 card is up after each.
 
-`review/balance.ts` plays whole runs with bots of different habits and prints how far each gets
-(`bun review/balance.ts 200 0`); it is the rules' gauge and has nothing to do with the screen. Its
-`suits` section is how the items a card recommends were checked.
+`packages/raid/review/balance.ts`, the rules' gauge, plays whole runs with bots of different habits;
+its `suits` section is how the items a card recommends were checked.
 
 ## Where the shape comes from
 
