@@ -8,9 +8,9 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@sequoia-leaf/factory": "workspace:*",
     "@sequoia-leaf/kit": "workspace:*",
-    "@sequoia-leaf/raid": "workspace:*",
-    "@sequoia-leaf/yard": "workspace:*"
+    "@sequoia-leaf/raid": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "1.4.4"

@@ -19,17 +19,17 @@
   ["wait", 300],
   [
     "eval",
-    "(()=>{const e = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:gear'); e.scrollIntoView({block: 'center', behavior: 'instant'}); return 'scrolled'})()"
+    "(()=>{const e = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:14'); e.scrollIntoView({block: 'center', behavior: 'instant'}); return 'scrolled'})()"
   ],
   [
     "finger",
     "down",
-    "(()=>{const e = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:gear'); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+    "(()=>{const e = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:14'); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
   ],
   [
     "finger",
     "up",
-    "(()=>{const e = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:gear'); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+    "(()=>{const e = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:14'); const b = e.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
   ],
   ["wait", 300],
   [

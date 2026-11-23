@@ -1,564 +1,32 @@
 /**
- * What everything in the yard says about itself, in the kit's one card (`card.ts`). Each kind of
- * thing is registered once and named by a reference:
- *
- * - `item:<item>` a thing: its step, what it is made from and where, what it goes into, what the
- *   depot pays, and the orders asking for it (or, for one from the ground, where it lies);
- * - `machine:<kind>` a kind of machine: what it does, what it can make, its draw, pace and price;
- * - `tile:<index>` whatever stands on a tile of the yard: its machine's card with what this one is
- *   doing and holds, and what can be done with it (a splitter's three ways out, each to shut or open);
- * - `plot:<id>`, `plan:<id>`, and `order:story` or `order:<slot>` for the board's orders.
+ * The yard's things in the kit's one card (`card.ts`). Each kind of thing is registered once and
+ * named by a reference (`refs.ts` lists them). A card is its print, what it shows of the yard and
+ * the purse as plain values (`prints.ts`), drawn by `cards.ts`, which reaches no yard; its buttons
+ * are the page's tools, handed in here. The card that is up is kept by its print: it is drawn again
+ * exactly when that differs, so no value it shows can be missing from what it is kept by.
  *
  * Pointing at a thing on the yard says what it is; clicking or tapping pins its card.
  */
-import {
-  type Action,
-  type Block,
-  close,
-  type Description,
-  type Entry,
-  pick,
-  refresh,
-  register,
-  type Row,
-  shown,
-  type Stat,
-  watch,
-} from "@sequoia-leaf/kit/card.ts";
-import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { at, carries, isItem, NONE } from "@sequoia-leaf/factory";
+import { close, pick, refresh, register, shown, watch } from "@sequoia-leaf/kit/card.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
-import {
-  aim,
-  at,
-  costOf,
-  DEPOT_SHARE,
-  FUEL,
-  isFilled,
-  isItem,
-  isKind,
-  isPlanId,
-  isPlotId,
-  isRaw,
-  ITEM,
-  type Item,
-  ITEMS,
-  KIND,
-  type Kind,
-  LEFT,
-  MADE_BY,
-  type PlanId,
-  PLANS,
-  planState,
-  type PlotId,
-  plotState,
-  rate,
-  type Raw,
-  RECIPE,
-  RECIPES,
-  rewire,
-  RIGHT,
-  status,
-  STORY,
-  storyOrder,
-  takes,
-  type Tally,
-  TICKS,
-} from "@sequoia-leaf/yard";
 
-import { beltTile, TILE } from "../art/belts.ts";
+import { TILE } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
-import { layout } from "../layout.ts";
 import { yardSfx } from "../sound.ts";
-import { S, toPage, touched } from "../state.ts";
-import { buyIdea, buyLand, pickFrom, takeAway, turnAt, wayAt } from "../tools.ts";
-import { coins, doNow } from "../yard.ts";
-import { KEYS, openTools } from "./dock.ts";
+import { S, toPage } from "../state.ts";
+import { buyLand, pickFrom, raiseAt, takeAway, takeInHand, toolHooks, turnAt, wayAt } from "../tools.ts";
+import { doNow } from "../yard.ts";
+import { cardOf, type Hands } from "./cards.ts";
 import { togglePanel } from "./panels.ts";
-import { fitted, pic, yardIcon } from "./parts.ts";
+import { printOf } from "./prints.ts";
+import { itemRef, plotRef, tileRef } from "./refs.ts";
+import { showView } from "./views.ts";
 
-const GROUND: Record<Raw, readonly [string, string]> = {
-  deadfall: ["Deadfall", "Fallen branches. A gatherer here picks them up; a mill saws them into planks."],
-  stone: ["A stone outcrop", "A gatherer here picks up stone; a mill fires it into bricks."],
-  ore: ["An ore seam", "A gatherer here picks up ore; a mill smelts it into ingots."],
-  clay: ["A clay bank", "A gatherer here digs clay; a mill fires it into pots."],
-  sand: ["Sand", "A gatherer here shovels sand; a mill melts it into glass."],
-  resin: ["Old stumps weeping resin", "A gatherer here collects resin; a mill presses it into lamp oil."],
-};
+export { itemRef, machineRef, nodeRef, orderRef, plotRef, tileRef } from "./refs.ts";
 
-const STEPS = ["From the ground", "Worked once", "Put together", "The guild's goods", "Takes the whole yard"];
-
-/** Which machine's picture stands for a plan. */
-export const PLAN_ART: Record<PlanId, Kind> = {
-  rakes: "gatherer",
-  barrows: "gatherer",
-  tooling: "mill",
-  jigs: "bench",
-  waxed: "belt",
-  rollers: "belt",
-  boiler: "boiler",
-  tunnel: "tunnel",
-  workshop: "workshop",
-  flywheel: "depot",
-  tallpylons: "pylon",
-  bigcrates: "crate",
-  fourth: "depot",
-};
-
-let theArt: Art | null = null;
-
-/** Seconds, as a card says them: "1.2s". */
-const secs = (ticks: number): string => `${Math.round(ticks) / 10}s`;
-const n = (v: number): string => v.toLocaleString("en-US", { maximumFractionDigits: 3 });
-
-export const itemRef = (k: Item): string => `item:${k}`;
-export const machineRef = (k: Kind): string => `machine:${k}`;
-export const tileRef = (i: number): string => `tile:${i}`;
-export const plotRef = (id: PlotId): string => `plot:${id}`;
-export const planRef = (id: PlanId): string => `plan:${id}`;
-export const orderRef = (slot: number | "story"): string => `order:${slot}`;
-
-/** A machine's picture cut to a card's slot: a tall machine is known by its head. */
-const machinePic = (art: Art, kind: Kind): HTMLCanvasElement => fitted(art.icon(kind), 22, 22);
-
-// ---------- things ----------
-
-/** The orders on the board (and the story's) that still want a thing, and how many they are owed. */
-function askedFor(k: Item): Entry[] {
-  const w = S.world;
-  const out: Entry[] = [];
-  const story = storyOrder(w);
-  const owed = (want: Tally, filled: Tally): number => Math.max(0, (want[k] ?? 0) - (filled[k] ?? 0));
-  if (story && owed(story.want, w.filled) > 0)
-    out.push({ ref: orderRef("story"), note: `${n(owed(story.want, w.filled))} owed`, tag: "story" });
-  w.board.forEach((o, slot) => {
-    const left = owed(o.want, o.filled);
-    if (left > 0) out.push({ ref: orderRef(slot), note: `${n(left)} owed` });
-  });
-  return out;
-}
-
-/** The plots a thing from the ground lies in, with how many tiles of it each has. */
-function foundIn(raw: Raw): Entry[] {
-  const w = S.world;
-  const counts = new Map<number, number>();
-  w.land.deposit.forEach((d, i) => {
-    if (d !== raw) return;
-    const p = w.land.plot[i] ?? -1;
-    counts.set(p, (counts.get(p) ?? 0) + 1);
-  });
-  return [...counts].flatMap(([p, count]) => {
-    const plot = w.land.plots[p];
-    if (!plot) return [];
-    return [
-      {
-        ref: plotRef(plot.id),
-        note: `${count} tiles`,
-        ...(w.plots.includes(plot.id) ? { lit: true, tag: "yours" } : {}),
-      },
-    ];
-  });
-}
-
-function itemDesc(art: Art, k: Item): Description {
-  const info = ITEM[k];
-  const recipe = RECIPE[k];
-  const usedIn = RECIPES.filter((r) => r.from.includes(k)).map((r) => ({ ref: itemRef(r.out) }));
-  const rows: Row[] = [];
-  if (recipe) {
-    rows.push({ label: "Made from", things: recipe.from.map((p) => ({ ref: itemRef(p), count: "×1" })) });
-    rows.push({ label: "In", things: [{ ref: machineRef(recipe.by), note: `${secs(recipe.ticks)} for one` }] });
-  } else if (isRaw(k)) {
-    rows.push({
-      label: "Gathered by",
-      things: [{ ref: machineRef("gatherer"), note: `${secs(TICKS.gather)} for one` }],
-    });
-    rows.push({ label: "Lies in", things: foundIn(k) });
-  }
-  rows.push({ label: "Used in", things: usedIn });
-  rows.push({ label: "Asked for by", things: askedFor(k) });
-  return {
-    name: info.name,
-    icon: art.item(k),
-    tag: STEPS[info.step] ?? "",
-    aside: amount("coin", n(info.worth)),
-    stats: [
-      { label: "Step", value: String(info.step) },
-      { label: "Orders pay", value: n(info.worth) },
-      { label: "Depot pays", value: n(info.worth * DEPOT_SHARE) },
-    ],
-    blocks: isRaw(k) ? [{ title: GROUND[k][0], body: GROUND[k][1] }] : [],
-    rows,
-  };
-}
-
-// ---------- machines ----------
-
-/** How long a machine takes over one thing, at the plain pace. */
-function paceOf(kind: Kind): string {
-  if (kind === "gatherer") return secs(TICKS.gather);
-  if (kind === "belt" || kind === "tunnel") return `${secs(TICKS.belt)} a tile`;
-  if (kind === "boiler") return `${secs(TICKS.burn)} a piece`;
-  if (kind === "mill" || kind === "bench" || kind === "workshop") {
-    const ticks = MADE_BY[kind].map((r) => r.ticks);
-    const lo = Math.min(...ticks);
-    const hi = Math.max(...ticks);
-    return lo === hi ? secs(lo) : `${secs(lo)}–${secs(hi)}`;
-  }
-  return "";
-}
-
-function machineDesc(art: Art, kind: Kind): Description {
-  const w = S.world;
-  const info = KIND[kind];
-  const price = costOf(w, kind);
-  const stats: Stat[] = [];
-  if (info.draw > 0) stats.push({ label: "Draws", value: String(info.draw) });
-  if (info.gives > 0) stats.push({ label: "Gives", value: String(kind === "depot" ? w.rates.depot : info.gives) });
-  const pace = paceOf(kind);
-  if (pace) stats.push({ label: "Pace", value: pace });
-  const key = KEYS[openTools().indexOf(kind)];
-  if (key && !S.visiting) stats.push({ label: "Key", value: key });
-  const rows: Row[] = [];
-  if (kind === "mill" || kind === "bench" || kind === "workshop")
-    rows.push({ label: "Can make", things: MADE_BY[kind].map((r) => ({ ref: itemRef(r.out) })) });
-  if (kind === "gatherer")
-    rows.push({ label: "Gathers", things: ITEMS.filter(isRaw).map((k) => ({ ref: itemRef(k) })) });
-  if (kind === "boiler") rows.push({ label: "Burns", things: [{ ref: itemRef("deadfall") }] });
-  const open = kind === "depot" || w.open.kinds.has(kind);
-  const spare = w.spare[kind] ?? 0;
-  // A price needs no sentence: the card shows it, and taking a piece away gives all of it back.
-  const blocks = spare > 0 ? [{ body: `${spare} free to place.` }] : [];
-  return {
-    name: info.name,
-    icon: machinePic(art, kind),
-    tag: open ? info.what : `${info.what} Not unlocked yet.`,
-    blocks,
-    ...(kind === "depot" ? {} : { aside: amount("coin", price === 0 ? "free" : price) }),
-    stats,
-    rows,
-  };
-}
-
-/** Where on a card each side of a splitter is, round its picture: east, south, west, north. */
-const SIDES = ["2 / 3", "3 / 2", "2 / 1", "1 / 2"] as const;
-
-/**
- * A splitter's three ways out round its picture, as they lie in the yard: each says whether it is
- * open, shut, or open with nothing to take from it, and a press shuts or opens it. A visitor is
- * shown the same, with nothing to press.
- */
-function waysOf(art: Art, i: number): HTMLElement {
-  const w = S.world;
-  const b = w.cells[i];
-  const box = el("div", "ways");
-  if (!b) return box;
-  const wire = w.wire ?? rewire(w);
-  const arms = layout(w, S.rev).arms[i] ?? [0, 0, 0, 0];
-  const here = pic(beltTile(arms, b.dir, 5, w.rates.belt >= 2 ? 2 : w.rates.belt >= 1.5 ? 1 : 0, b.tint), 3);
-  const g = here.getContext("2d");
-  [b.dir, LEFT[b.dir], RIGHT[b.dir]].forEach((d, k) => {
-    const head = art.m.heads[k]?.[b.dir];
-    if (head && arms[d] === 2) g?.drawImage(head, 0, 0);
-    const shut = ((b.shut >> k) & 1) === 1;
-    const led = takes(w, wire, wire.ways[i * 3 + k] ?? -1, i);
-    const state = shut ? "Shut" : led ? "Open" : "No belt";
-    // Seen, a button's place says which way it is; read out, its name has to.
-    const named = { "aria-label": `${["Ahead", "Left", "Right"][k]}: ${state}` };
-    const way = el(
-      S.visiting ? "span" : "button",
-      `k-btn ${shut ? "coral" : led ? "green" : "slate"}`,
-      S.visiting
-        ? named
-        : { ...named, type: "button", onclick: () => wayAt(i % w.land.w, Math.floor(i / w.land.w), k) },
-      state,
-    );
-    way.style.gridArea = SIDES[d];
-    box.append(way);
-  });
-  box.append(here);
-  return box;
-}
-
-/** A machine standing in the yard: its kind's card, with what this one is doing and holds, and what can be done with it. */
-function standingDesc(art: Art, i: number): Description | null {
-  const w = S.world;
-  const b = w.cells[i];
-  if (!b) return null;
-  const x = i % w.land.w;
-  const y = Math.floor(i / w.land.w);
-  const base = machineDesc(art, b.kind);
-  const st = status(w, i);
-  const per = rate(w, i);
-  const rows: Row[] = [];
-  const held = ITEMS.filter((k) => (b.buf[k] ?? 0) > 0);
-  if (held.length > 0)
-    rows.push({
-      label: b.kind === "boiler" ? `Holds, of ${FUEL}` : b.kind === "crate" ? `Holds, of ${w.rates.crate}` : "Holds",
-      things: held.map((k) => ({ ref: itemRef(k), count: `×${b.buf[k] ?? 0}` })),
-    });
-  const r = aim(b);
-  if (r)
-    rows.push({
-      label: "Making",
-      things: [{ ref: itemRef(r.out), note: per > 0 ? `up to ${Math.round(per)} a minute` : "" }],
-    });
-  if (b.kind === "gatherer") {
-    const raw = w.land.deposit[i];
-    if (raw)
-      rows.push({
-        label: "Gathering",
-        things: [{ ref: itemRef(raw), note: per > 0 ? `${Math.round(per)} a minute` : "" }],
-      });
-  }
-  rows.push(...(base.rows ?? []));
-
-  const actions: Action[] = [];
-  const maker = b.kind === "mill" || b.kind === "bench" || b.kind === "workshop" ? b.kind : null;
-  if (maker) {
-    actions.push({
-      label: "Any recipe",
-      look: "slot",
-      icon: icon("more"),
-      lit: b.recipe === null,
-      hint: "Any recipe",
-      about: "It makes whichever item its inputs combine into.",
-      on: () => {
-        doNow({ do: "recipe", x, y, item: null });
-        sfx.tap();
-        touched();
-      },
-    });
-    for (const rec of MADE_BY[maker])
-      actions.push({
-        label: `Only ${ITEM[rec.out].many}`,
-        look: "slot",
-        icon: art.item(rec.out),
-        lit: b.recipe === rec.out,
-        hint: `Only ${ITEM[rec.out].many}`,
-        about: `From ${rec.from.map((k) => ITEM[k].many).join(" and ")}. It takes in no other item.`,
-        on: () => {
-          doNow({ do: "recipe", x, y, item: b.recipe === rec.out ? null : rec.out });
-          sfx.tap();
-          touched();
-        },
-      });
-  }
-  const spare = st?.spare ?? null;
-  if (b.count > 0 && (b.kind === "crate" || spare !== null || st?.state === "idle"))
-    actions.push({
-      label: spare ? `Empty the ${ITEM[spare].many}` : "Empty it",
-      look: spare ? "sm" : "wood sm",
-      hint: "Empty",
-      about: spare
-        ? `It is full of ${ITEM[spare].many}, so the other item it needs cannot get in. Emptying them clears it. To stop this, bring each input in on its own belt.`
-        : "Removes the items inside. They are lost.",
-      on: () => {
-        if (!("refused" in doNow({ do: "tipOut", x, y, item: spare }))) yardSfx.take();
-        touched();
-      },
-    });
-  if (b.kind === "crate")
-    actions.push({
-      label: b.open ? "Shut it" : "Open it",
-      hint: b.open ? "Shut" : "Open",
-      about: "While shut, it takes items in and lets none out.",
-      on: () => {
-        doNow({ do: "crate", x, y, open: !b.open });
-        sfx.clack();
-        touched();
-      },
-    });
-  if (b.kind === "depot") {
-    actions.push(
-      { label: "Orders", on: () => togglePanel("orders") },
-      { label: "Plans", on: () => togglePanel("plans") },
-      { label: "Stats", on: () => togglePanel("depot") },
-    );
-  } else {
-    if (b.kind !== "tunnel" && b.kind !== "pylon" && b.kind !== "wheel" && b.kind !== "boiler")
-      actions.push({
-        label: "Rotate",
-        hint: "Rotate (R)",
-        on: () => turnAt(x, y),
-      });
-    actions.push({
-      label: "Another",
-      hint: "Another (Q)",
-      about: `Picks the ${KIND[b.kind].name.toLowerCase()} as your tool, facing the same way.`,
-      on: () => pickFrom(x, y),
-    });
-    const refund = b.free ? 0 : KIND[b.kind].cost;
-    actions.push({
-      label: "Remove",
-      look: "coral sm",
-      after: refund > 0 ? amount("coin", `+${refund}`) : null,
-      hint: "Remove",
-      ...(b.free ? {} : { about: "Any items inside it are lost." }),
-      on: () => takeAway(x, y),
-    });
-  }
-  const advice =
-    st?.state === "starved" && st.spare
-      ? `A bench takes things in at its back and both sides. Bring ${ITEM[st.spare].many} in one way and ${(st.missing ?? []).map((k) => ITEM[k].many).join(" and ")} another, and it cannot fill up with the wrong one.`
-      : null;
-  return {
-    ...base,
-    tag: el("span", st?.trouble ? "k-coral" : "", { text: st?.line ?? KIND[b.kind].what }),
-    blocks: [
-      ...(base.blocks ?? []),
-      ...(advice ? [{ body: advice }] : []),
-      ...(b.kind === "splitter" ? [{ title: "Ways out", body: waysOf(art, i) }] : []),
-    ],
-    rows,
-    actions,
-  };
-}
-
-// ---------- land, plans, orders ----------
-
-/** What lies in a plot's ground, by thing, with how many tiles of each. */
-function inTheGround(id: PlotId): Entry[] {
-  const w = S.world;
-  const index = w.land.plots.findIndex((p) => p.id === id);
-  const counts = new Map<Raw, number>();
-  w.land.deposit.forEach((d, i) => {
-    if (d && w.land.plot[i] === index) counts.set(d, (counts.get(d) ?? 0) + 1);
-  });
-  return [...counts].map(([raw, count]) => ({ ref: itemRef(raw), note: `${count} tiles` }));
-}
-
-/** What a button that buys says once it has been pressed: the second press buys. */
-const AGAIN = "Press again to buy";
-
-/** For something that costs more Coins than there are: how many more it takes. */
-const short = (price: number): Block[] =>
-  coins() >= price ? [] : [{ body: `You need ${(price - coins()).toLocaleString("en-US")} more Coins.` }];
-
-function plotDesc(id: PlotId): Description | null {
-  const w = S.world;
-  const plot = w.land.plots.find((p) => p.id === id);
-  if (!plot) return null;
-  const { state, why } = plotState(w, id);
-  const index = w.land.plots.indexOf(plot);
-  const bank = w.land.water.some((v, i) => v === 1 && w.land.plot[i] === index);
-  return {
-    name: plot.name,
-    icon: icon("star"),
-    tag: plot.why,
-    aside:
-      state === "owned"
-        ? el("span", "k-chip lit", {}, icon("check"), "Yours")
-        : amount("coin", plot.price.toLocaleString("en-US")),
-    blocks: [
-      ...(bank ? [{ body: "The stream runs through it. A waterwheel must be beside the stream." }] : []),
-      ...(state === "not yet" ? [{ body: `${why ?? "Not for sale yet"}.` }] : []),
-      ...(state === "for sale" ? short(plot.price) : []),
-    ],
-    rows: [{ label: "In the ground", things: inTheGround(id) }],
-    actions:
-      state === "for sale"
-        ? [
-            {
-              label: `Buy for ${plot.price.toLocaleString("en-US")}`,
-              look: coins() >= plot.price ? "sm wide" : "sm wide off",
-              icon: icon("coin"),
-              ...(coins() >= plot.price ? { ask: AGAIN } : {}),
-              on: () => {
-                // Bought, the card has nothing more to offer: it is put away, so it does not sit over the new land.
-                if (buyLand(id)) close();
-              },
-            },
-          ]
-        : [],
-  };
-}
-
-function planDesc(art: Art, id: PlanId): Description | null {
-  const plan = PLANS.find((p) => p.id === id);
-  if (!plan) return null;
-  const { state, why } = planState(S.world, id);
-  const opens = plan.effect.opens ?? [];
-  return {
-    name: plan.name,
-    icon: machinePic(art, PLAN_ART[id]),
-    tag: plan.what,
-    aside:
-      state === "owned"
-        ? el("span", "k-chip lit", {}, icon("check"), "Yours")
-        : amount("coin", plan.price.toLocaleString("en-US")),
-    blocks: state === "not yet" && why ? [{ body: `${why}.` }] : state === "for sale" ? short(plan.price) : [],
-    rows: [
-      { label: "Opens", things: opens.map((k) => ({ ref: machineRef(k) })) },
-      {
-        label: "Needs",
-        things: plan.needs.map((p) => ({
-          ref: planRef(p),
-          ...(S.world.plans.includes(p) ? { lit: true, tag: "yours" } : {}),
-        })),
-      },
-    ],
-    actions:
-      state === "for sale"
-        ? [
-            {
-              label: `Buy for ${plan.price.toLocaleString("en-US")}`,
-              look: coins() >= plan.price ? "sm wide" : "sm wide off",
-              icon: icon("coin"),
-              ...(coins() >= plan.price ? { ask: AGAIN } : {}),
-              on: () => {
-                buyIdea(id);
-              },
-            },
-          ]
-        : [],
-  };
-}
-
-/** What an order wants, each thing with how many have come of how many. */
-const wantsOf = (want: Tally, filled: Tally): Entry[] =>
-  ITEMS.filter((k) => (want[k] ?? 0) > 0).map((k) => {
-    const of = want[k] ?? 0;
-    const have = Math.min(filled[k] ?? 0, of);
-    return { ref: itemRef(k), note: `${n(have)} / ${n(of)}`, lit: have >= of };
-  });
-
-function orderDesc(slot: string): Description | null {
-  const w = S.world;
-  if (slot === "story") {
-    const o = storyOrder(w);
-    if (!o) return null;
-    const opens = o.opens;
-    const things: Entry[] = [
-      ...(opens.kinds ?? []).map((k) => ({ ref: machineRef(k) })),
-      ...(opens.plots ?? []).map((p) => ({ ref: plotRef(p) })),
-      ...(opens.plans ?? []).map((p) => ({ ref: planRef(p) })),
-    ];
-    return {
-      name: o.title,
-      icon: yardIcon("orders"),
-      tag: `Order ${w.story + 1} of ${STORY.length}, from ${o.from}`,
-      aside: amount("coin", o.pay.toLocaleString("en-US")),
-      blocks: [{ body: o.say }, ...(opens.board ? [{ body: "Unlocks side orders." }] : [])],
-      rows: [
-        { label: "Wants", things: wantsOf(o.want, w.filled) },
-        { label: "Opens", things },
-      ],
-    };
-  }
-  const o = w.board[Number(slot)];
-  if (!o) return null;
-  return {
-    name: o.title,
-    icon: yardIcon("orders"),
-    tag: `From ${o.from}`,
-    aside: amount("coin", o.pay.toLocaleString("en-US")),
-    blocks: [
-      { body: o.line },
-      ...(isFilled(o.want, o.filled) ? [{ body: "Filled, and waiting to be handed over." }] : []),
-    ],
-    rows: [{ label: "Wants", things: wantsOf(o.want, o.filled) }],
-  };
-}
+/** A number read back out of a reference, if it is a whole one. */
+const numberIn = (id: string): number => (/^\d+$/.test(id) ? Number(id) : -1);
 
 // ---------- the yard's tiles ----------
 
@@ -567,11 +35,11 @@ export function refAt(x: number, y: number): string | null {
   const w = S.world;
   const i = at(w, x, y);
   if (i < 0) return null;
-  const plot = w.land.plots[w.land.plot[i] ?? -1];
-  if (plot && !w.plots.includes(plot.id)) return plotRef(plot.id);
-  if (w.cells[i]) return tileRef(i);
-  const raw = w.land.deposit[i];
-  if (raw) return itemRef(raw);
+  const plot = w.land.plots[w.land.plot[i] ?? NONE];
+  if (plot && !w.plots.includes(plot.plot)) return plotRef(plot.plot);
+  if (w.kind[i] !== NONE) return tileRef(i);
+  const raw = w.land.deposit[i] ?? NONE;
+  if (isItem(raw)) return itemRef(raw);
   if (w.land.water[i] === 1 || w.land.trunk[i] === 1) return tileRef(i);
   return null;
 }
@@ -579,63 +47,49 @@ export function refAt(x: number, y: number): string | null {
 /** What is riding a belt on a tile, if anything: pointing there is asking about it. */
 export function riderAt(x: number, y: number): string | null {
   const w = S.world;
-  const b = w.cells[at(w, x, y)];
-  return b &&
-    (b.kind === "belt" || b.kind === "tunnel" || b.kind === "joiner" || b.kind === "splitter") &&
-    b.item !== null
-    ? itemRef(b.item)
-    : null;
+  const i = at(w, x, y);
+  const carried = i < 0 ? NONE : (w.item[i] ?? NONE);
+  return i >= 0 && carries(w.kind[i] ?? NONE) && isItem(carried) ? itemRef(carried) : null;
 }
 
-function tileDesc(art: Art, i: number): Description | null {
-  const w = S.world;
-  if (w.cells[i]) return standingDesc(art, i);
-  if (w.land.water[i] === 1)
-    return {
-      name: "The stream",
-      tag: "Nothing can be built on it. A waterwheel beside it makes power, and a tunnel can go under it.",
-    };
-  if (w.land.trunk[i] === 1)
-    return {
-      name: "A redwood",
-      tag: "Nothing can be built on it. Belts go round it, or under it by tunnel.",
-    };
-  return null;
-}
+/** What a card's buttons do: the page's own tools. */
+const HANDS: Hands = {
+  act: (a) => !("refused" in doNow(a)),
+  turn: (x, y) => void turnAt(x, y),
+  another: (x, y) => void pickFrom(x, y),
+  remove: (x, y) => void takeAway(x, y),
+  raise: (x, y) => void raiseAt(x, y),
+  way: (x, y, way) => void wayAt(x, y, way),
+  buy: buyLand,
+  take: (g) => void takeInHand(g),
+  // The rules say why a piece of research cannot go in the line, on the line over the dock.
+  study: (g, into) => {
+    const did = doNow({ do: into ? "study" : "unstudy", research: g });
+    if ("refused" in did) {
+      yardSfx.no();
+      toolHooks.said(`${did.why}.`);
+    } else yardSfx.plan();
+  },
+  // The depot's own panel is the third view of the yard's sheet, which the card would lie over: the card is put away.
+  panel: (id) => {
+    if (id !== "depot") return togglePanel(id);
+    close();
+    showView("needs");
+  },
+};
 
-/** In a visit, nothing on a card does anything: its buttons are left off. */
-const looked = (d: Description | null): Description | null => (d && S.visiting ? { ...d, actions: [] } : d);
-
-/** Says what every kind of thing in the yard is. */
+/** Says what every kind of thing in the yard is: each card drawn from its print. */
 export function initCard(art: Art): void {
-  theArt = art;
-  register("item", (k) => (isItem(k) ? itemDesc(art, k) : null));
-  register("machine", (k) => (isKind(k) ? machineDesc(art, k) : null));
-  register("tile", (i) => looked(tileDesc(art, Number(i))));
-  register("plot", (id) => looked(isPlotId(id) ? plotDesc(id) : null));
-  register("plan", (id) => looked(isPlanId(id) ? planDesc(art, id) : null));
-  register("order", (slot) => orderDesc(slot));
-}
-
-/** What the card that is up is about would say differently now: a key that changes when it would. */
-export function cardKey(ref: string | null): string {
-  const w = S.world;
-  if (!ref) return "";
-  if (ref.startsWith("tile:")) {
-    const i = Number(ref.slice(5));
-    const b = w.cells[i];
-    const st = b ? status(w, i) : null;
-    const held = b ? ITEMS.map((k) => b.buf[k] ?? 0).join("") : "";
-    return `${ref}|${S.rev}|${b?.kind}|${st?.line}|${held}|${b?.recipe}|${b?.open}|${b?.shut}|${b?.item}|${Math.floor(coins() / 50)}`;
+  for (const kind of ["item", "machine", "tile", "plot", "node", "order", "tool", "perk", "tier", "gift"]) {
+    register(kind, (id) => {
+      const p = printOf(`${kind}:${id}`);
+      return p && cardOf(art, p, HANDS);
+    });
   }
-  const filled = [w.filled, ...w.board.map((o) => o.filled)]
-    .map((f) => ITEMS.map((k) => f[k] ?? 0).join(","))
-    .join("|");
-  return `${ref}|${S.rev}|${w.story}|${w.plans.join()}|${w.plots.join()}|${Math.floor(coins() / 50)}|${filled}`;
 }
 
-/** The art the cards draw from, once it is made. */
-export const cardArt = (): Art | null => theArt;
+/** What the card a reference names prints now, as one string: the key it is kept by. */
+export const cardKey = (ref: string | null): string => (ref ? `${ref}|${JSON.stringify(printOf(ref))}` : "");
 
 /** Where a tile is on the page, for a card to sit beside. */
 export function tileBox(x: number, y: number): { x: number; y: number; w: number; h: number } {
@@ -660,7 +114,7 @@ export function closeCard(): void {
 }
 
 let lastKey = "";
-/** The card that is up says again what its thing is, when what it would say has changed. */
+/** The card that is up says again what its thing is, when what it prints has changed. */
 export function refreshCard(): void {
   const key = cardKey(shown()?.ref ?? null);
   if (key === lastKey) return;
@@ -675,7 +129,7 @@ export function refreshCard(): void {
 export function followCards(pan: (dx: number, dy: number) => void): void {
   watch((_pointed, pinned) => {
     const was = S.picked;
-    S.picked = pinned?.startsWith("tile:") ? Number(pinned.slice(5)) : -1;
+    S.picked = pinned?.startsWith("tile:") ? numberIn(pinned.slice(5)) : -1;
     if (S.picked < 0 || S.picked === was) return;
     if (S.picked !== was) sfx.tap();
     requestAnimationFrame(() => {

@@ -1,20 +1,39 @@
-import { expect, test } from "bun:test";
+/**
+ * The panels: the side orders keep their places in the list, and each panel is kept by what it
+ * prints (`shows`), so a value it shows that changes alone, such as the minutes before an order may
+ * be swapped again, changes what it is kept by. The tier's screen and research print how every goal
+ * stands, and lead on: what a goal waits on is printed with what begins it.
+ */
+import { describe, expect, test } from "bun:test";
 
-import type { Standing } from "@sequoia-leaf/yard";
+import {
+  ALL_GOALS,
+  build,
+  create,
+  type Goal,
+  goal,
+  GOALS,
+  item,
+  LINE,
+  play,
+  power,
+  reopen,
+  STUDY,
+  study,
+  type Yard,
+} from "@sequoia-leaf/factory";
 
-import { placed } from "./panels.ts";
+import { S } from "../state.ts";
+import type { Need } from "./goal.ts";
+import { ordersPrint, placed, plural, powerPrint } from "./panels.ts";
+import { researchPrint, stripPrint } from "./research.ts";
+import { researchOpen, takeable, tierOpen, whatNext } from "./standing.ts";
+import { tierPrint } from "./tier.ts";
 
-const order = (id: number, planks: number): Standing => ({
-  id,
-  title: "",
-  from: "",
-  line: "",
-  want: { plank: 10 },
-  pay: 1,
-  filled: { plank: planks },
-  starts: 0,
-});
-const ids = (list: readonly Standing[]): number[] => list.map((s) => s.id);
+const order = (id: number, planks: number): { id: number; full: boolean } => ({ id, full: planks >= 10 });
+const ids = (list: readonly { id: number }[]): number[] => list.map((s) => s.id);
+/** Why each order on the board cannot be swapped now, as the orders panel prints it. */
+const why = (): (string | null)[] => ordersPrint().orders.map((o) => o.why);
 
 test("filled orders are first when the list opens, and an order keeps its place until one leaves", () => {
   const open = ids(placed([], [order(1, 0), order(2, 10), order(3, 4), order(4, 10)]));
@@ -27,4 +46,219 @@ test("filled orders are first when the list opens, and an order keeps its place 
   expect(handed).toEqual([4, 3, 1]);
   // Leaf hangs a fresh order in the first slot of the board: the list shows it last.
   expect(ids(placed(handed, [order(5, 0), order(1, 0), order(3, 10), order(4, 10)]))).toEqual([4, 3, 1, 5]);
+});
+
+describe("a panel is kept by what it prints", () => {
+  test("the orders: an order just swapped says how many minutes until the next, and the minutes count down", () => {
+    const y = create({ seed: 5, tier: 1 });
+    const first = y.board[0];
+    if (!first) throw new Error("no board");
+    const did = play(y, { do: "swap", order: first.id, tick: y.tick });
+    if ("refused" in did) throw new Error(did.why);
+    S.world = y;
+    const now = JSON.stringify(ordersPrint());
+    expect(why()[0]).toMatch(/^You can replace an order again in \d+ minutes$/);
+    // A minute on, nothing else about the board changed.
+    y.tick += 600;
+    expect(why()[0]).not.toBe(JSON.parse(now).orders[0].why);
+    expect(JSON.stringify(ordersPrint())).not.toBe(now);
+  });
+
+  test("power: more than one of a kind is spelt as it is said", () => {
+    expect(["Mill", "Bench", "Workshop", "Study", "Gatherer"].map(plural)).toEqual([
+      "Mills",
+      "Benches",
+      "Workshops",
+      "Studies",
+      "Gatherers",
+    ]);
+  });
+
+  test("power: a yard a little short is never printed as at 100%", () => {
+    const y = create({ seed: 5, tier: 1 });
+    // Worked out once, then set a hair short: 200 power made, 201 drawn.
+    power(y);
+    y.supply = 400;
+    y.demand = 402;
+    S.world = y;
+    expect([power(y).pace < 1, Math.round(power(y).pace * 100), powerPrint().pace]).toEqual([true, 100, 99]);
+  });
+});
+
+/** A yard of a tier, as the page's own (not a visit). */
+function yardAt(tier: number): Yard {
+  const y = create({ seed: 5, tier });
+  S.world = y;
+  S.visiting = null;
+  return y;
+}
+/** Goals by their names in the tables. */
+const named = (goals: readonly Goal[]): string[] => goals.map((g) => GOALS[g]?.id ?? "");
+/** What a goal waits on, each by its name, how it stands, and what begins it. */
+const waits = (needs: readonly Need[]): string[] =>
+  needs.map((n) => [GOALS[n.goal]?.id, n.stands, ...(n.begin ? [n.begin] : [])].join(": "));
+
+describe("the tier's screen", () => {
+  test("is there from tier 1 and research from the tier that has a Study, and neither in a visit", () => {
+    yardAt(0);
+    expect([tierOpen(), researchOpen()]).toEqual([false, false]);
+    yardAt(1);
+    expect([tierOpen(), researchOpen()]).toEqual([true, false]);
+    expect(tierPrint().research).toBeNull();
+    yardAt(3);
+    expect([tierOpen(), researchOpen()]).toEqual([true, true]);
+    S.visiting = { id: "q", name: "Somebody" };
+    expect([tierOpen(), researchOpen()]).toEqual([false, false]);
+    S.visiting = null;
+  });
+
+  test("prints the tier's commission, its projects with the one in hand, and those done", () => {
+    const y = yardAt(2);
+    const p = tierPrint();
+    // A tier opens with its commission in hand.
+    expect([p.tier, GOALS[p.hand]?.id, GOALS[p.commission?.goal ?? -1]?.id, p.commission?.take]).toEqual([
+      2,
+      "hall",
+      "hall",
+      true,
+    ]);
+    expect(named(p.projects.map((g) => g.goal))).toEqual([
+      "stew",
+      "chain",
+      "drawing",
+      "wax",
+      "rakes",
+      "windows",
+      "shells",
+    ]);
+    // A drawing board waits on the surveyor's chain, which may be taken: the rest may be taken as they are.
+    for (const g of p.projects) {
+      const drawing = g.goal === goal("drawing");
+      expect([GOALS[g.goal]?.id, g.take, waits(g.needs)]).toEqual([
+        GOALS[g.goal]?.id,
+        !drawing,
+        drawing ? ["chain: not begun: take"] : [],
+      ]);
+    }
+    expect(named(p.done)).toEqual(["boiler", "crates", "culvert", "signs", "banners"]);
+    expect(named(takeable())).toContain("wax");
+    // One taken in hand, then done: it is among those done, and no longer a project.
+    const before = JSON.stringify(p);
+    y.hand = goal("wax");
+    expect(tierPrint().hand).toBe(goal("wax"));
+    expect(JSON.stringify(tierPrint())).not.toBe(before);
+    y.hand = -1;
+    y.done = [...y.done, goal("wax")];
+    reopen(y);
+    expect(named(tierPrint().projects.map((g) => g.goal))).not.toContain("wax");
+    expect(named(tierPrint().done)).toContain("wax");
+  });
+
+  test("leads on: what the commission waits on is each a thing with how it stands, and the first that can be begun says how", () => {
+    const y = yardAt(3);
+    // No Study stands: nothing is studied without one, so the first piece of research leads to building one.
+    expect(waits(tierPrint().commission?.needs ?? [])).toEqual([
+      "oilpress: not begun: build",
+      "workshop: not begun",
+      "brassfolio: not begun",
+    ]);
+    expect(tierPrint().research).toEqual({ known: 0, all: 10 });
+    build(y, STUDY, 20, 15, 0, Infinity);
+    expect(waits(tierPrint().commission?.needs ?? [])[0]).toBe("oilpress: not begun: study");
+    study(y, goal("oilpress"));
+    study(y, goal("workshop"));
+    // Both under way: nothing more of what it waits on can be begun yet (the Brass folio waits on research itself).
+    expect(waits(tierPrint().commission?.needs ?? [])).toEqual([
+      "oilpress: being studied",
+      "workshop: in the line",
+      "brassfolio: not begun",
+    ]);
+    // A folio studied moves a bar, and builds nothing again: the screen prints the same.
+    const before = JSON.stringify(tierPrint());
+    const got = y.got[goal("oilpress")];
+    if (!got) throw new Error("nothing is being studied");
+    got[item("timber")] = 10;
+    expect(JSON.stringify(tierPrint())).toBe(before);
+    // Known: it says so, and the count of what is known goes up.
+    y.line = y.line.filter((g) => g !== goal("oilpress"));
+    y.done = [...y.done, goal("oilpress")];
+    reopen(y);
+    expect(waits(tierPrint().commission?.needs ?? [])[0]).toBe("oilpress: known");
+    expect(tierPrint().research).toEqual({ known: 1, all: 10 });
+  });
+
+  test("with nothing in hand, says what to do by what the tier holds: a project, the commission, or nothing yet", () => {
+    const y = yardAt(2);
+    expect(whatNext()).toBe("Take a project in Tier 2.");
+    yardAt(3);
+    expect(whatNext()).toBe("Open Tier 3 for its commission and what it needs first.");
+    // Every goal of the slice done: tier 4 is open, with nothing in it yet.
+    y.done = [...ALL_GOALS];
+    reopen(y);
+    S.world = y;
+    expect([y.open.tier, whatNext()]).toEqual([4, "More is being built."]);
+  });
+
+  test("the node in hand in Orders prints what it waits on the same way", () => {
+    const y = yardAt(3);
+    // Nothing in hand, and tier 3 has no projects: Orders says where its commission is.
+    expect(ordersPrint()).toMatchObject({
+      hand: -1,
+      needs: [],
+      next: "Open Tier 3 for its commission and what it needs first.",
+    });
+    y.hand = goal("lanterns");
+    expect(waits(ordersPrint().needs)[0]).toBe("oilpress: not begun: build");
+  });
+});
+
+describe("research", () => {
+  test("prints what is being studied, the rest of the line, what may be studied and what waits, and what is known", () => {
+    const y = yardAt(3);
+    build(y, STUDY, 20, 15, 0, Infinity);
+    let p = researchPrint();
+    expect([p.first, p.next, p.full, p.left, p.known]).toEqual([null, [], false, true, []]);
+    expect(p.todo.length).toBe(10);
+    // Second-tier machines waits on the workshop: it may not be studied yet, and says what it waits on.
+    const tooling = p.todo.find((o) => o.goal === goal("tooling"));
+    expect([tooling?.may, tooling?.waiting, waits(tooling?.needs ?? [])]).toEqual([
+      false,
+      true,
+      ["workshop: not begun"],
+    ]);
+    for (const g of ["workshop", "oilpress", "flywheel", "sorter"] as const) study(y, goal(g));
+    p = researchPrint();
+    expect([GOALS[p.first?.goal ?? -1]?.id, named(p.next), p.full]).toEqual([
+      "workshop",
+      ["oilpress", "flywheel", "sorter"],
+      true,
+    ]);
+    expect(y.line.length).toBe(LINE);
+    // The line is full: nothing more may be put in it, and what is in it is not listed to study.
+    expect(p.todo.some((o) => o.may)).toBe(false);
+    expect(named(p.todo.map((o) => o.goal))).not.toContain("workshop");
+    // A folio studied moves a bar on the screen, and builds nothing again.
+    const before = JSON.stringify(p);
+    const got = y.got[goal("workshop")];
+    if (!got) throw new Error("nothing is being studied");
+    got[item("timber")] = 30;
+    expect(JSON.stringify(researchPrint())).toBe(before);
+  });
+
+  test("the slim bar is there once a Study stands with something to study, and says how far the research has come", () => {
+    const y = yardAt(3);
+    expect(stripPrint()).toEqual({ hidden: true, goal: null, have: 0, of: 0 });
+    build(y, STUDY, 20, 15, 0, Infinity);
+    // Something could be studied: the bar is there, and says nothing is.
+    expect(stripPrint()).toEqual({ hidden: false, goal: null, have: 0, of: 0 });
+    study(y, goal("workshop"));
+    expect(stripPrint()).toEqual({ hidden: false, goal: goal("workshop"), have: 0, of: 150 });
+    const got = y.got[goal("workshop")];
+    if (!got) throw new Error("nothing is being studied");
+    got[item("timber")] = 30;
+    expect(stripPrint()).toMatchObject({ have: 30, of: 150 });
+    S.visiting = { id: "q", name: "Somebody" };
+    expect(stripPrint().hidden).toBe(true);
+    S.visiting = null;
+  });
 });

@@ -42,6 +42,8 @@
  * - `--spending`: Leaf's spending is on (`GAME_LEAF_SPENDING`): a game's command may take Leaf.
  * - `--leaf <n>`: after the day, Tester holds `n` Leaf (the rest spent at once), to look at a price
  *   they cannot pay.
+ * - `--log`: Leaf's own warnings and errors are printed, one JSON line each, as production prints
+ *   them: a page's copy found not to be Leaf's, a state that does not read.
  *
  * The games Leaf plays (the play service) are served as in production. For the screenshot tours,
  * `POST /test/play/raid` with `{ "stage": [...] }` stages a moment at Tester's raid table that play
@@ -89,11 +91,11 @@ import {
 } from "./support.ts";
 
 const USAGE =
-  "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--spending] [--crowd <n>] [--dice <n>] [--leaf <n>]";
+  "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--spending] [--log] [--crowd <n>] [--dice <n>] [--leaf <n>]";
 
 const [portText = "", publicDirText = "", ...given] = process.argv.slice(2);
 const port = Number(portText);
-const known = new Set(["--guest", "--down", "--busy", "--admin", "--spending"]);
+const known = new Set(["--guest", "--down", "--busy", "--admin", "--spending", "--log"]);
 const crowdAt = given.indexOf("--crowd");
 const crowdSize = crowdAt < 0 ? 0 : Number(given[crowdAt + 1]);
 const diceAt = given.indexOf("--dice");
@@ -129,6 +131,7 @@ const down = flags.includes("--down");
 const busy = flags.includes("--busy");
 const admin = flags.includes("--admin");
 const spending = flags.includes("--spending");
+const printLog = flags.includes("--log");
 const origin = `http://127.0.0.1:${port}`;
 
 interface Member {
@@ -312,7 +315,7 @@ const leaf = testLeaf(
     gameSignInUrl: `${origin}/sign-in?return_to=`,
     gameLeafSpending: spending,
   },
-  { mojang: mojang.service, ...(steady === undefined ? {} : { dice: steadyDice(steady) }) },
+  { mojang: mojang.service, log: printLog, ...(steady === undefined ? {} : { dice: steadyDice(steady) }) },
 );
 const app = leaf.app();
 backend.api = rewardQueue("tester", tester.id, (path, init) => app.request(path, init)).api;

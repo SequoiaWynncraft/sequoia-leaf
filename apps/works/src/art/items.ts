@@ -1,14 +1,17 @@
-/** Every thing the yard gathers and makes, as a tiny picture: small enough to ride a belt, plain enough to know at a glance. */
+/**
+ * Every thing the yard gathers and makes, as a tiny picture: small enough to ride a belt, plain
+ * enough to know at a glance. Looked up by name once, into a list by the thing's number.
+ */
 
+import { ALL_ITEMS, type Item, type ItemName, itemName } from "@sequoia-leaf/factory";
 import { INK } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
-import { makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
-import type { Item } from "@sequoia-leaf/yard";
-import { ITEMS } from "@sequoia-leaf/yard";
+import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { PAL } from "./pal.ts";
 
-const ROWS: Record<Item, readonly string[]> = {
+/** Every thing's picture, typed. Each thing in the tables has one: a new one without a picture does not build. */
+export const ROWS: Readonly<Record<ItemName, readonly string[]>> = {
   // A couple of fallen branches, one still in leaf.
   deadfall: ["..n...l.", ".nNn.lG.", "..nNn...", "b..nNn..", "nb..nNn.", ".nNn.nb.", "..nb...."],
   stone: ["..tSS..", ".tSSSs.", "tSSSsss", "SSSsssh", "Ssssshh", ".sshhh."],
@@ -41,14 +44,26 @@ const ROWS: Record<Item, readonly string[]> = {
   beacon: ["Y..w..Y", ".YwwwY.", "..YwY..", "..xYx..", "...N...", "...N...", "..sNs.."],
   // A crab in brass, with the key to wind it.
   crab: ["....S....", "yy.SSS.yy", "y.w.S.w.y", ".yyyyyyy.", "yyyoyoyyy", ".oyyyyyo.", "o.o...o.o"],
+  // A folio: a bound book lying shut, its pages showing along two edges and a ribbon out of them.
+  // The Timber folio is bound in bark with a leaf on its cover, the Brass folio in brass with a boss.
+  timber: ["bNNNNN.", "bNNlNNc", "bNlGlNc", "bNNlNNc", "bNNNNNc", "bCCCCrc", ".....r."],
+  brass: ["oyyyyy.", "oyyYyyc", "oyYwYyc", "oyyYyyc", "oyyyyyc", "bCCCCrc", ".....r."],
 };
 
 /** Each thing's picture with its dark edge, for a belt or a card. */
 export type ItemArt = (item: Item) => HTMLCanvasElement;
 
 export function makeItems(): ItemArt {
-  const pics = new Map<Item, HTMLCanvasElement>(ITEMS.map((k) => [k, outlined(bitmap(ROWS[k], PAL), INK)]));
-  return (item) => must(pics.get(item), item);
+  const pics = ALL_ITEMS.map((n) => outlined(bitmap(ROWS[itemName(n)], PAL), INK));
+  const none = makeCanvas(1, 1).c;
+  return (item) => pics[item] ?? none;
+}
+
+/** Each thing's picture without its dark edge, for setting on a board that gives it one. */
+export function makePlain(): ItemArt {
+  const pics = ALL_ITEMS.map((n) => bitmap(ROWS[itemName(n)], PAL));
+  const none = makeCanvas(1, 1).c;
+  return (item) => pics[item] ?? none;
 }
 
 /** A fresh copy of a picture, for putting on the page. */

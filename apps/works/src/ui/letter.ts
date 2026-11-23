@@ -1,19 +1,20 @@
 /**
  * The letter that says what the yard did while the member was away, as Leaf counted it (the
- * yard's `away`): how long it worked, the Coins it earned, what the depot took in most of, and the
- * orders waiting to be handed over. It is read on paper, a line at a time; putting it away pays
- * the till into the purse.
+ * yard's `away`): how long it worked, the Coins it earned, what the depot took in most of, the
+ * research that became known meanwhile (the rules' `knownSince`), and the orders waiting to be
+ * handed over. It is read on paper, a line at a time; putting it away pays the till into the purse.
  */
 
+import { ALL_ITEMS, type Away, isFilled, knownSince, TICK_MS } from "@sequoia-leaf/factory";
 import { thing } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
-import { type Away, AWAY_MOST_MS, isFilled, ITEMS } from "@sequoia-leaf/yard";
 
 import { yardSfx } from "../sound.ts";
 import { S } from "../state.ts";
 import { collect } from "../yard.ts";
 import { itemRef, orderRef } from "./card.ts";
+import { goals } from "./goal.ts";
 import { coinsFrom } from "./notes.ts";
 import { $, centre } from "./parts.ts";
 
@@ -59,7 +60,7 @@ export function showLetter(away: Away, done: () => void): void {
       el("span", "k-grow", { text: "Earned" }),
       el("b", "", { text: `+${away.coins.toLocaleString("en-US")}` }),
     );
-  const most = ITEMS.filter((k) => (away.made[k] ?? 0) > 0)
+  const most = ALL_ITEMS.filter((k) => (away.made[k] ?? 0) > 0)
     .toSorted((a, b) => (away.made[b] ?? 0) - (away.made[a] ?? 0))
     .slice(0, 5);
   list(
@@ -67,6 +68,9 @@ export function showLetter(away: Away, done: () => void): void {
     most.map((k) => thing(itemRef(k), { count: (away.made[k] ?? 0).toLocaleString("en-US") })),
   );
   if (lines.length === 0) line(icon("heart"), el("span", "k-grow", { text: "Nothing reached the depot." }));
+  // What the Studies made known while nobody watched: each a thing that says what it unlocked.
+  const known = goals("Became known", knownSince(S.world));
+  if (known) lines.push(el("div", "line", {}, el("hr"), known.node));
   list(
     "To hand over",
     S.world.board.flatMap((o, slot) =>
@@ -75,9 +79,10 @@ export function showLetter(away: Away, done: () => void): void {
         : [],
     ),
   );
+  const mostMs = S.world.open.away * TICK_MS;
   const capped =
-    away.seconds >= AWAY_MOST_MS / 1000
-      ? ` Then it stopped: it works for at most ${AWAY_MOST_MS / 3_600_000} hours while you are away.`
+    away.seconds >= mostMs / 1000
+      ? ` Then it stopped: it works for at most ${mostMs / 3_600_000} hours while you are away.`
       : "";
   const go = el("button", "k-btn wide", { type: "button", text: "Back to work" });
   const paper = el(

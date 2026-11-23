@@ -1,9 +1,15 @@
 /**
- * What is always in view over the yard: the power as two numbers and a bar, the order in hand, the
- * buttons for the yard's books, and the way back to town. In a visit, only "Top yards" of the books,
- * and in the order's place a strip that says whose yard it is.
+ * What is always in view over the yard: the power as two numbers and a bar, the node in hand (a
+ * lesson, a project or the commission) and under it the research being studied, the buttons for the
+ * yard's books, and the way back to town. The tier's screen has its button only once tier 1 is open,
+ * and research only once the Study may be built. The last button is the depot's until the yard owns
+ * a second plot, and from then the yard's (`views.ts`; on a phone it leads the row instead, so that
+ * its count has room: `index.html`): the same sheet, with its map and its list of trouble, and on the
+ * button how many pieces are in trouble. In a visit, only "Top yards" of the books, and in the node's
+ * place a strip that says whose yard it is.
  */
 
+import { GOALS, isFilled, NODES, power, TICK_MS, tierName } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
@@ -11,22 +17,27 @@ import { leave } from "@sequoia-leaf/kit/shell.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
-import { AWAY_MOST_MS, isFilled, PLANS, planState, power, SHIFT, storyOrder } from "@sequoia-leaf/yard";
 
-import type { Art } from "../art/index.ts";
 import { S } from "../state.ts";
-import { coins, collect, keepScreen } from "../yard.ts";
-import { orderRef } from "./card.ts";
-import { storyLabel } from "./notes.ts";
-import { type PanelId, togglePanel } from "./panels.ts";
-import { $, button, pic, wantRows, when, type YardIcon, yardIcon } from "./parts.ts";
+import { collect, keepScreen } from "../yard.ts";
+import { wantsShort } from "./goal.ts";
+import { handLabel } from "./notes.ts";
+import { openPanel, type PanelId, togglePanel } from "./panels.ts";
+import { $, button, pic, shows, when, type YardIcon, yardIcon } from "./parts.ts";
+import { orderRef } from "./refs.ts";
+import { studyStrip } from "./research.ts";
+import { givenTo, researchOpen, takeable, tierOpen } from "./standing.ts";
+import { hasViews, refreshWalk, wrongCount } from "./views.ts";
 
 const books = new Map<PanelId, HTMLElement>();
+/** What each book's button is called: the tier's, by the tier. */
+const titles = new Map<PanelId, (tier: number) => string>();
 
-/** Puts a small count on a button's corner, or takes it off. */
+/** Puts a small count on a button's corner, or takes it off. One of three digits or more is set small, to fit the corner. */
 function set(b: HTMLElement, n: string | null): void {
   if (n) b.dataset.n = n;
   else delete b.dataset.n;
+  b.classList.toggle("long", n !== null && n.length > 2);
 }
 
 function powerPlaque(): () => void {
@@ -41,54 +52,57 @@ function powerPlaque(): () => void {
   tip(host, "Power", () => {
     const p = power(S.world);
     return p.pace < 1
-      ? `The yard uses ${p.demand} power and makes ${p.supply}. Every machine works at ${Math.round(p.pace * 100)}% speed.`
+      ? `The yard uses ${p.demand} power and makes ${p.supply}. Every machine works at ${Math.floor(p.pace * 100)}% speed.`
       : `The yard uses ${p.demand} of the ${p.supply} power it makes.`;
   });
-  return when(
+  return shows(
     () => {
       const p = power(S.world);
-      return `${p.demand}/${p.supply}`;
+      return { demand: p.demand, supply: p.supply, pace: Math.floor(p.pace * 100) };
     },
-    () => {
-      const p = power(S.world);
-      nums.textContent =
-        p.pace < 1 ? `${p.demand} / ${p.supply} · ${Math.round(p.pace * 100)}%` : `${p.demand} / ${p.supply}`;
-      nums.classList.toggle("short", p.pace < 1);
-      host.classList.toggle("short", p.pace < 1);
-      bar.classList.toggle("coral", p.pace < 1);
+    (p) => {
+      const short = p.pace < 100;
+      nums.textContent = short ? `${p.demand} / ${p.supply} · ${p.pace}%` : `${p.demand} / ${p.supply}`;
+      nums.classList.toggle("short", short);
+      host.classList.toggle("short", short);
+      bar.classList.toggle("coral", short);
       fill.style.setProperty("--v", `${Math.min(100, (p.demand / Math.max(1, p.supply)) * 100)}%`);
     },
   );
 }
 
-function tracker(art: Art): () => void {
+function tracker(): () => void {
   const host = $("track");
   host.addEventListener("click", () => {
     togglePanel("orders");
   });
   // Tapping opens the orders; pointing (or a finger kept on it) shows the order's card.
   link(host, orderRef("story"), { acts: true });
-  return when(
+  return shows(
     () => {
       const w = S.world;
-      const o = storyOrder(w);
-      const got = o ? Object.values(w.filled).join() : "";
-      return `${w.story}|${got}|${w.board.map((s) => (isFilled(s.want, s.filled) ? 1 : 0)).join("")}`;
+      const o = w.hand === -1 ? undefined : GOALS[w.hand];
+      return {
+        label: handLabel(),
+        from: w.hand === -1 ? null : (NODES[w.hand]?.from ?? null),
+        title: o?.title ?? null,
+        ready: w.board.filter((s) => isFilled(s.want, s.filled)).length,
+        wants: w.hand === -1 ? [] : givenTo(w.hand),
+      };
     },
-    () => {
-      const w = S.world;
-      const o = storyOrder(w);
-      const ready = w.board.filter((s) => isFilled(s.want, s.filled)).length;
+    (p) => {
+      // What it wants, by the one part that lays such rows out: here each a picture, a bar and a count.
+      const wanted = wantsShort(p.wants);
       host.replaceChildren(
         el(
           "div",
           "k-row",
           {},
-          el("span", "k-label k-grow", { text: o ? `${storyLabel()} · ${o.from}` : storyLabel() }),
-          ready > 0 ? el("span", "k-chip lit", { text: `${ready} to hand over` }) : null,
+          el("span", "k-label k-grow", { text: p.from ? `${p.label} · ${p.from}` : p.label }),
+          p.ready > 0 ? el("span", "k-chip lit", { text: `${p.ready} to hand over` }) : null,
         ),
-        el("div", "", { text: o ? o.title : "Story complete" }),
-        ...(o ? wantRows(art, o.want, w.filled) : []),
+        el("div", "", { text: p.title ?? "No project in hand" }),
+        ...(wanted ? [wanted.node] : []),
       );
     },
   );
@@ -96,52 +110,61 @@ function tracker(art: Art): () => void {
 
 function bookButtons(): () => void {
   const host = $("books");
-  const make = (
-    id: PanelId & YardIcon,
-    title: string,
-    key: string,
-    about?: () => string,
-    green = false,
-  ): HTMLElement => {
-    const b = el(
-      "button",
-      green ? "k-btn leaf icon pip" : "k-btn wood icon pip",
-      { type: "button", "aria-label": title },
-      yardIcon(id),
-    );
+  const make = (id: PanelId, art: YardIcon, title: (tier: number) => string, key: string, about?: () => string) => {
+    const b = el("button", "k-btn wood icon pip", { type: "button", "data-book": id }, yardIcon(art));
     b.addEventListener("click", () => {
       togglePanel(id);
     });
-    tip(b, `${title} (${key})`, about);
+    tip(b, () => `${title(S.world.open.tier)} (${key})`, about);
     books.set(id, b);
+    titles.set(id, title);
     if (!S.visiting || id === "board") host.append(b);
     return b;
   };
-  const ordersBtn = make("orders", "Orders", "O");
-  make("board", "Top yards", "T");
-  const plansBtn = make("plans", "Plans", "P", () => "Improvements to buy with Coins.");
-  make("depot", "The depot", "I", () => "What the depot has taken in, and what the yard earns per hour.");
-  make(
-    "shift",
-    "A second shift",
-    "L",
-    () => `Everything works twice as fast for ${SHIFT.minutes} minutes. Costs ${SHIFT.leaf} Leaf.`,
-    true,
+  const ordersBtn = make("orders", "orders", () => "Orders", "O");
+  make("board", "board", () => "Top yards", "T");
+  const tierBtn = make("tier", "projects", tierName, "P");
+  const researchBtn = make("research", "research", () => "Research", "L");
+  const depotBtn = make("depot", "depot", () => "The depot", "I");
+  // The same sheet once the yard owns a second plot, with its map and its list of trouble: the yard's button.
+  const yardBtn = el(
+    "button",
+    "k-btn wood icon pip bad",
+    { type: "button", "aria-label": "The yard" },
+    yardIcon("map"),
   );
-  return when(
-    () => {
-      const w = S.world;
-      const ready = w.board.filter((s) => isFilled(s.want, s.filled)).length;
-      const buyable = PLANS.filter((p) => planState(w, p.id).state === "for sale" && coins() >= p.price).length;
-      return `${ready}|${buyable}|${S.panel}`;
-    },
-    () => {
-      const w = S.world;
-      const ready = w.board.filter((s) => isFilled(s.want, s.filled)).length;
-      const buyable = PLANS.filter((p) => planState(w, p.id).state === "for sale" && coins() >= p.price).length;
-      set(ordersBtn, ready > 0 ? String(ready) : null);
-      set(plansBtn, buyable > 0 ? String(buyable) : null);
-      for (const [id, b] of books) b.classList.toggle("down", S.panel === id);
+  yardBtn.addEventListener("click", () => {
+    togglePanel("depot");
+  });
+  tip(yardBtn, "The yard (M)");
+  if (!S.visiting) host.append(yardBtn);
+  return shows(
+    () => ({
+      ready: S.world.board.filter((s) => isFilled(s.want, s.filled)).length,
+      open: takeable().length,
+      // The tier's screen is there once there is more than lessons, and research once the Study may be built.
+      tier: tierOpen() ? S.world.open.tier : null,
+      research: researchOpen(),
+      yard: hasViews(),
+      // Looked for at most once a second, and not at all in a yard of one plot or in a visit.
+      wrong: S.visiting ? 0 : wrongCount(),
+      panel: S.panel,
+      nudged: S.nudgePart,
+    }),
+    (p) => {
+      set(ordersBtn, p.ready > 0 ? String(p.ready) : null);
+      set(tierBtn, p.open > 0 ? String(p.open) : null);
+      tierBtn.hidden = p.tier === null;
+      researchBtn.hidden = !p.research;
+      depotBtn.hidden = p.yard;
+      yardBtn.hidden = !p.yard;
+      set(yardBtn, p.wrong > 0 ? String(p.wrong) : null);
+      for (const [id, b] of books) {
+        b.classList.toggle("down", p.panel === id);
+        b.classList.toggle("nudged", p.nudged === id && p.panel !== id);
+        b.setAttribute("aria-label", titles.get(id)?.(p.tier ?? 0) ?? "");
+      }
+      yardBtn.classList.toggle("down", p.panel === "depot");
     },
   );
 }
@@ -160,7 +183,11 @@ function corner(): void {
   back.addEventListener("click", () => {
     toTown();
   });
-  tip(back, "Back to town", `The yard keeps working for up to ${AWAY_MOST_MS / 3_600_000} hours while you are away.`);
+  tip(
+    back,
+    "Back to town",
+    () => `The yard keeps working for up to ${(S.world.open.away * TICK_MS) / 3_600_000} hours while you are away.`,
+  );
   const mute = el("button", "k-btn wood icon", { type: "button", "aria-label": "Sound" });
   const draw = (): void => {
     mute.replaceChildren(icon(isMuted() ? "mute" : "sound"));
@@ -197,11 +224,15 @@ function visitStrip(who: { readonly id: string; readonly name: string }): () => 
 
 let parts: (() => void)[] = [];
 
-export function initHud(art: Art): void {
-  parts = S.visiting ? [visitStrip(S.visiting), bookButtons()] : [powerPlaque(), tracker(art), bookButtons()];
+export function initHud(): void {
+  parts = S.visiting
+    ? [visitStrip(S.visiting), bookButtons()]
+    : [powerPlaque(), tracker(), studyStrip(() => openPanel("research")), bookButtons()];
   corner();
 }
 
 export function refreshHud(): void {
   for (const f of parts) f();
+  // The bar that stays while a group of trouble is walked.
+  refreshWalk();
 }

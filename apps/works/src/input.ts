@@ -6,10 +6,10 @@
  * (or the Build button) builds; an area is marked by tapping two opposite corners.
  */
 
+import { at, BELT } from "@sequoia-leaf/factory";
 import { pick, point, shown, surface } from "@sequoia-leaf/kit/card.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/tip.ts";
-import { at } from "@sequoia-leaf/yard";
 
 import { pan, zoom } from "./camera.ts";
 import { callerAt } from "./events.ts";
@@ -32,6 +32,7 @@ import {
   runOver,
   runStart,
   setTool,
+  stepGrade,
   takeAway,
   tapBelt,
   undo,
@@ -40,6 +41,7 @@ import { closeCard, openCard, refAt, riderAt, tileBox } from "./ui/card.ts";
 import { refreshDock, toolForKey } from "./ui/dock.ts";
 import { closeBanner } from "./ui/notes.ts";
 import { closePanel, togglePanel } from "./ui/panels.ts";
+import { hasViews, toggleView } from "./ui/views.ts";
 
 /** What input asks of the rest of the screen. */
 export const inputHooks: {
@@ -94,7 +96,7 @@ function ask(tx: number, ty: number, pageX: number, pageY: number): void {
 
 /** A finger's tap with a tool in hand: aim first, build on the second tap of the same tile. Paint goes on at the first. */
 export function fingerTap(tx: number, ty: number): void {
-  if (S.tool === "belt") {
+  if (S.tool === BELT) {
     tapBelt(tx, ty);
     return;
   }
@@ -202,7 +204,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
     } else if (S.tool === "paint") {
       d.doing = "paint";
       paintAt(t.x, t.y);
-    } else if (S.tool === "belt") {
+    } else if (S.tool === BELT) {
       d.doing = "run";
       runStart(t.x, t.y);
     } else if (S.tool === "select" && !S.group) {
@@ -307,9 +309,13 @@ export function initInput(canvas: HTMLCanvasElement): void {
       return;
     }
     if (k === "r") rotate();
+    // G steps through the grades the kind in hand may be built at.
+    else if (k === "g") stepGrade();
     else if (k === "e") setTool(S.tool === "remove" ? null : "remove");
     else if (k === "f") setTool(S.tool === "select" ? null : "select");
     else if (k === "m" && S.mark && !S.group) hold("move");
+    // With nothing marked, M is the map, once the yard has one.
+    else if (k === "m" && hasViews()) toggleView("map");
     // C copies a marked area; with none marked it is the brush.
     else if (k === "c" && S.mark && !S.group) hold("copy");
     else if (k === "c") setTool(S.tool === "paint" ? null : "paint");
@@ -321,9 +327,9 @@ export function initInput(canvas: HTMLCanvasElement): void {
       if (on) pickFrom(on.x, on.y);
     } else if (k === "o") togglePanel("orders");
     else if (k === "t") togglePanel("board");
-    else if (k === "p") togglePanel("plans");
-    else if (k === "i") togglePanel("depot");
-    else if (k === "l") togglePanel("shift");
+    else if (k === "p") togglePanel("tier");
+    else if (k === "l") togglePanel("research");
+    else if (k === "i") toggleView("needs");
     else if (k === "+" || k === "=") zoom(1, window.innerWidth / 2, window.innerHeight / 2);
     else if (k === "_") zoom(-1, window.innerWidth / 2, window.innerHeight / 2);
     else if (k.startsWith("arrow") || k === "w" || k === "a" || k === "s" || k === "d") {
