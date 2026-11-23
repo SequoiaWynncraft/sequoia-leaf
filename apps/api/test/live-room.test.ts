@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { decodeSnapshot, Flag, type Motion, readToClient, type ToClient } from "@sequoia-leaf/core";
 
-import { Room, Rooms } from "../src/live/room.ts";
+import { QUIET_MS, Room, Rooms } from "../src/live/room.ts";
 
 /** What one person in a room was sent: the text decoded, and the binary frames as they were. */
 function inbox() {
@@ -220,6 +220,32 @@ describe("a room", () => {
     expect(decodeSnapshot(b.frames.at(-1) ?? new Uint8Array())?.entries.map((e) => [e.x, e.vx, e.flags])).toEqual([
       [50, 0, 4],
     ]);
+  });
+
+  it("stands somebody shown walking still where they are once their game has said nothing for a while", () => {
+    const room = new Room("town", 1, TOWN);
+    const b = inbox();
+    const alice = room.join(person("Alice"), inbox().outbox, 0, 30, 1);
+    room.join(person("Bob"), b.outbox, 0, 30, 1);
+    // Alice walks right, twenty moves a second, and her tab is hidden after the last.
+    for (let i = 0; i <= 10; i++)
+      room.move(alice.member.id, i + 1, { ...at(50 + i * 3, 60, Flag.Moving), vx: 64 }, i * 50);
+    room.flush(1, 500);
+    const shown = () => decodeSnapshot(b.frames.at(-1) ?? new Uint8Array())?.entries.map((e) => [e.x, e.vx, e.flags]);
+    expect(shown()).toEqual([[80, 64, Flag.Moving]]);
+
+    // Still walking a moment after her last move: a move may be a little late.
+    room.quiet(500 + QUIET_MS - 1);
+    expect(room.flush(2, 500 + QUIET_MS - 1)).toBe(false);
+    room.quiet(500 + QUIET_MS);
+    room.flush(3, 500 + QUIET_MS);
+    expect(shown()).toEqual([[80, 0, 0]]);
+    // Standing, she stays as she is, however long it is quiet; her next move walks her on.
+    room.quiet(60_000);
+    expect(room.flush(4, 60_000)).toBe(false);
+    room.move(alice.member.id, 20, { ...at(83, 60, Flag.Moving), vx: 64 }, 60_010);
+    room.flush(5, 60_010);
+    expect(shown()).toEqual([[83, 64, Flag.Moving]]);
   });
 
   it("tells the others what somebody did, and that they left", () => {

@@ -28,10 +28,12 @@ import {
   follow,
   linkShown,
   newFigure,
+  NO_ID,
   othersIn,
   type Placed,
   Pose,
   QUIET_FOR,
+  REJOIN_FOR,
   stepOf,
 } from "./motion.ts";
 import { inTownLine } from "./news.ts";
@@ -258,10 +260,14 @@ describe("everybody else in the room", () => {
   });
 
   test("are drawn from the room's samples, and those who have gone fade away and are forgotten", async () => {
-    const { company, room, s, now } = await inTown();
+    const { world, company, room, s, now } = await inTown();
     s.says(welcome(1, now, [me(1), ALICE]));
-    s.snapshot(now - 200, [{ id: 2, seq: 1, ...walking(100, 50) }]);
-    s.snapshot(now - 100, [{ id: 2, seq: 2, ...walking(110, 50) }]);
+    // Each snapshot comes 50 ms after Leaf sent it; by the time the page draws, the moment drawn has passed the second.
+    world.standin.clock.now = now + 50;
+    s.snapshot(now, [{ id: 2, seq: 1, ...walking(100, 50) }]);
+    world.standin.clock.now = now + 150;
+    s.snapshot(now + 100, [{ id: 2, seq: 2, ...walking(110, 50) }]);
+    world.standin.clock.now = now + 250;
     const sample = (id: number): Motion | null => room.sample(id);
 
     expect(company.step(sample, DT).came.map((f) => f.who.name)).toEqual(["Alice"]);
@@ -273,6 +279,63 @@ describe("everybody else in the room", () => {
     expect(company.all().map((f) => f.fig.alpha)).toEqual([0.5]);
     expect(company.step(sample, FADE / 2).went.map((f) => f.own)).toEqual(["figure of Alice"]);
     expect(company.all()).toEqual([]);
+  });
+
+  test("after Leaf restarts, whoever is not back yet stands where they were, the same figure when back; gone after five seconds", async () => {
+    const { world, company, room, s, now } = await inTown();
+    s.says(welcome(1, now, [me(1), ALICE, BOB]));
+    s.snapshot(now, [
+      { id: 2, seq: 1, ...at(40, 40) },
+      { id: 3, seq: 1, ...at(80, 80) },
+    ]);
+    world.standin.clock.now = now + 500;
+    // In sight, and faded in.
+    company.step((id) => room.sample(id), DT);
+    company.step((id) => room.sample(id), FADE);
+    const [alice, bob] = company.all();
+    s.drop(CLOSE.restart);
+
+    // Back in the new Leaf before the others: they stand where they were, numbered as nobody.
+    await Bun.sleep(700);
+    const again = socket(world, 1);
+    again.open();
+    again.says(welcome(1, now + 900, [me(1)]));
+    company.step((id) => room.sample(id), DT);
+    expect(company.all().map((f) => [f.who.name, f.id, f.fig.x, f.fig.alpha, f.fig.gone])).toEqual([
+      ["Alice", NO_ID, 40, 1, false],
+      ["Bob", NO_ID, 80, 1, false],
+    ]);
+    expect(company.awaited().map((f) => f.who.name)).toEqual(["Alice", "Bob"]);
+
+    // Alice comes back, numbered afresh: the same figure, put where she is now.
+    again.says({ t: "joined", member: { ...ALICE, id: 7 } });
+    world.standin.clock.now = now + 1200;
+    again.snapshot(now + 1000, [{ id: 7, seq: 1, ...at(44, 40) }]);
+    world.standin.clock.now = now + 1400;
+    const { came } = company.step((id) => room.sample(id), DT);
+    expect(came).toEqual([]);
+    expect(company.all()[0]).toBe(alice);
+    expect([alice?.id, alice?.fig.x, alice?.fig.alpha]).toEqual([7, 44, 1]);
+
+    // Bob is not back in five seconds: he goes.
+    company.step((id) => room.sample(id), REJOIN_FOR);
+    expect(bob?.fig.gone).toBe(true);
+    expect(company.awaited()).toEqual([]);
+  });
+
+  test("after a drop that was not Leaf restarting, whoever is not in the room any more has gone", async () => {
+    const { world, company, room, s, now } = await inTown();
+    s.says(welcome(1, now, [me(1), ALICE]));
+    s.snapshot(now, [{ id: 2, seq: 1, ...at(40, 40) }]);
+    company.step((id) => room.sample(id), FADE);
+    s.drop();
+    await Bun.sleep(400);
+    const again = socket(world, 1);
+    again.open();
+    again.says(welcome(1, now, [me(1)]));
+
+    expect(company.all().map((f) => f.fig.gone)).toEqual([true]);
+    expect(company.awaited()).toEqual([]);
   });
 
   test("are counted for the feed: everybody in the room but the member", async () => {

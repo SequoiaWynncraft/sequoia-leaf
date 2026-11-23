@@ -400,22 +400,33 @@ card says so and the town is not loaded.
   does everybody's picture of them when the room tells them. Nothing typed is sent.
 - **The connection.** While it is down, the town plays on; once it has been down two seconds a
   small "Reconnecting…" sits by the purse, so that a blip is not announced, and after five seconds
-  the others fade away until the room welcomes the page again. Told the
+  the others fade away until the room welcomes the page again. When Leaf restarts (a deploy) every
+  page is told to come back at once, and they come back within a second or two in no order: whoever
+  is not in the room yet when this page is welcomed into it stands where they were, in town as far
+  as everything else on the page goes, for up to five seconds (`REJOIN_FOR`), and is the same figure
+  when they are back, put where they are now; whoever is not back by then goes. Told the
   member opened the game live somewhere else, the kit's card "Playing somewhere else" says this
   page has let go of the town, with "Play here", which takes the room back; told their session has
   ended, the kit's "Signed out" card.
-- **Who is here.** The town says where the member is (the town, the camp, or nowhere while a game
-  is open, which says its own place) and whether their character stays, and hears who else is in
-  the game and who has gone in the last day and stays. It goes on saying so every half minute in
-  the live room too, though Leaf writes where the member is from the room: that answer is how it
-  hears who rests and who is at the Works or the stump. Up to twelve of those in the game stand
-  about as visitors (`visitors.ts`) in their own skins: by the Works' door, or watching at the
-  stump; those in town are there live instead, and nobody drawn live, fading away included, is a
+- **Who is here.** The town says where the member is (the town, the camp, the Grove, or nowhere
+  while a game is open, which says its own place) and whether their character stays, and hears who
+  else is in the game and who has gone in the last day and stays. It goes on asking every half
+  minute in the live room too, though Leaf writes where the member is from the room, and at once
+  whenever the room says who is where has changed: that answer is how it hears who rests and who is
+  at the Works, the stump or the Grove. Where each person is, is worked out in one place
+  (`where.ts`), one record for each by their id, from the live room and Leaf's list by Leaf's
+  clock, and everything else reads it: "Who is about" and the number on its button, the figures in
+  town and every card. Somebody Leaf last saw 90 seconds ago is gone from then on every page at
+  once, as Leaf's own visits have them. Up to twelve of those in the game are about as visitors
+  (`visitors.ts`) in their own skins, busy at it as somebody in a real town would be: at the Works
+  carrying crates from the pile at the belt's end in at its door and going back for the next
+  (`haul`, by Leaf's clock), at the raid table sitting at the stump over its board, in the Grove
+  standing before its stone while a soft light rises from it now and then; those in town are there
+  live instead, and nobody drawn live, fading away included, is a
   visitor or a dozer as well. Nobody at their own camp.
-  Where each is follows from Leaf's list and Leaf's clock, so it is the same on every page. A
-  visitor stands at one of the spots of where they are, by their account (two on one spot are
+  A visitor stands at one of the spots of where they are, by their account (two on one spot are
   drawn apart). Leaf's list says nothing of when anybody came, so they are there from the moment
-  the page hears of them; two pages ask at different moments, half a minute apart at most. They
+  the page hears of them, which is the moment Leaf tells the room. They
   never speak, and their card has only their name and rank; a
   guest's says "Guest". Up to twelve of the others, most recent first, doze on a seat
   for where they were (a log at the fire for the town, the log at the stump for the table, the bench
@@ -430,7 +441,7 @@ card says so and the town is not loaded.
   (under it where the screen is too narrow) with two heads and how many are in the game now, the
   member too, opens a panel that lists them: **In town**, everybody in the live room with the
   member, the member first and marked "you" (out of the room, whoever the guild says is in town); **Elsewhere**, in the game but not in town, "at the Works", "at the
-  raid table" or "in their camp"; and **Seen lately**, those gone in the last day who stay, newest
+  raid table", "in the Grove" or "in their camp"; and **Seen lately**, those gone in the last day who stay, newest
   first, with how long ago in the words the dozers' cards use ("3 hours ago"). Each has their
   face, name, and rank or "Guest"; the guild's lists say no ranks, so somebody never seen in the
   room has their rank only if they are a guest. A part with nobody in it is left out; with nobody
@@ -447,6 +458,18 @@ card says so and the town is not loaded.
   greeted, the crab spotted), and how long they have played each and been AFK in it, and for somebody else "Find in town" (somebody drawn
   here), "Visit yard" and "Visit camp" (somebody with one).
 
+- **Away.** Somebody in the game who has done nothing for five minutes is away: Leaf's own rule,
+  the one that counts their time AFK (`away` in `@sequoia-leaf/core`). Leaf's list says when each
+  of those in the game last did something (`acted_at`), and the page takes it as later when it sees
+  them move somewhere, emote or touch something in the room, which Leaf counts too; and Leaf tells
+  every room when somebody away does something again. So they stop being away the moment they act,
+  on every page. "Who is about" says it under their name ("Captain · away for 20 minutes", "at the
+  Works · away for 5 minutes"), and so does their card in town, under their rank, with where they
+  are when it is not the town ("At the raid table, away for 7 minutes"); nothing for somebody just
+  about the town. In town they have sat down where they are and nodded off, as the dozers do: facing
+  us unless they sat on a seat, eyes closed, a "z" now and then, the same moments on every page,
+  wherever they are (in town live, at the Works' door, at the stump, before the Grove's stone); the
+  moment they move or do anything they are up and about again.
 - **A guest.** Somebody signed in who is not in the guild plays the same town, with none of the
   guild's own: `prepare()` fetches nothing, and nothing only a member may ask (`/v1/me...`, the
   guild's news) is asked. The purse shows only Coins and every Leaf button says "Leaf is earned by
@@ -516,6 +539,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/players.ts`, `src/motion.ts`     | The town live: in the room, everybody else drawn from it, emotes; its rules                     |
 | `src/apart.ts`                        | Back where the member stood after a reload; members on one spot drawn a step apart              |
 | `src/aboutui.ts`, `src/about.ts`      | Who is about: the button and its panel; who goes in which part, and the words                   |
+| `src/where.ts`                        | Where everybody else is, one record each, from the room and Leaf's list: what everything reads  |
 | `src/letter.ts`                       | Putting the arrival letter together from Leaf's arrival and the member's news                   |
 | `src/fx.ts`                           | Sparks, leaves and rising words                                                                 |
 | `src/sprites.ts`, `src/ground.ts`     | The town's art                                                                                  |
@@ -527,7 +551,7 @@ The catalogue of camp things (`things.ts`), what is for sale (`catalogue.ts`), t
 (`mail.ts`), the town's own (`folk.ts`), what goes by Leaf's clock (`clock.ts`), a
 camp's rules (`camp.ts`) and the town's commands (`game.ts`) are in `packages/town`, the rules Leaf plays the town by; the page imports them from
 there and works out with them what it shows at once. `grid.ts`, `letter.ts`, `games.ts`, `live.ts`,
-`news.ts`, `motion.ts`, `apart.ts` and `about.ts` have no page in them, and tests beside them (`motion.test.ts`
+`news.ts`, `motion.ts`, `apart.ts`, `about.ts` and `where.ts` have no page in them, and tests beside them (`motion.test.ts`
 plays Leaf's side of a live connection with the kit's stand-in socket); `folk.test.ts` also reads
 every file of the three games to check that nothing but members is drawn from a skin,
 `touch.ts` has tests for what a touch means, and `props.ts` for when a member is hidden and what

@@ -7,7 +7,7 @@
 
 import { emotePicture } from "@sequoia-leaf/kit/emotes.ts";
 import { acornPicture, acornScale, FOLK_COLOUR } from "@sequoia-leaf/kit/mark.ts";
-import { CREAM, GOLD, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
+import { BARK, CREAM, GOLD, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { bubble, bubbleSize, prompt, promptSize, wrap } from "@sequoia-leaf/kit/signs.ts";
 import { FOOT_X, FOOT_Y, SIT, WALK } from "@sequoia-leaf/kit/skin.ts";
@@ -169,7 +169,16 @@ function drawActor(g: Ctx, a: Actor, cx: number, cy: number): void {
   const y = Math.round(at.y - hopOf(a)) - cy;
   g.globalAlpha = a.alpha;
   g.drawImage(frame, x - FOOT_X, y - FOOT_Y);
+  if (a.carry && a.dir !== 3) crate(g, a.dir === 1 ? x - 7 : a.dir === 2 ? x + 1 : x - 3, y - 12 + (pose % 2));
   g.globalAlpha = 1;
+}
+
+/** A crate held in front, from the Works' pile: six by five, its slats and its rim; seen from behind, the body hides it. */
+function crate(g: Ctx, x: number, y: number): void {
+  R(g, x, y, 6, 5, BARK[1]);
+  R(g, x + 1, y + 1, 4, 3, BARK[3]);
+  R(g, x + 1, y + 2, 4, 1, BARK[2]);
+  R(g, x + 1, y, 4, 1, BARK[4]);
 }
 
 export function pixelRing(g: Ctx, x: number, y: number, rx: number, ry: number, col: string): void {

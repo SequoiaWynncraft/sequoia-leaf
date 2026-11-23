@@ -27,6 +27,13 @@ export const FADE = 0.3;
 /** How long a name shows over somebody who has just arrived, in seconds. */
 export const NAMED_FOR = 3;
 
+/**
+ * How long, after Leaf restarts, somebody who is not back in the room yet stays where they were, in
+ * seconds: every page is told to come back at the same moment, and comes back within a second or
+ * two, so they are not drawn going and coming again.
+ */
+export const REJOIN_FOR = 5;
+
 /** The parts of a figure its motion is told from: where its feet are, which way it faces, whether it walks or sits. */
 export interface Placed {
   x: number;
@@ -149,11 +156,17 @@ export function linkShown(status: LiveStatus | null, down: number | null): LinkS
 
 /** Somebody else in the room: their number in it now, who they are, their figure, and what the page draws them with. */
 export interface Fellow<T> {
+  /** Their number in the room now; `NO_ID` while they are awaited back after Leaf restarted. */
   id: number;
   who: LiveMember;
   fig: Figure;
   own: T;
+  /** Seconds left of waiting for them to come back after Leaf restarted; 0 when they are not awaited. */
+  awaited: number;
 }
+
+/** The number of somebody awaited back in the room, which is nobody's: Leaf never numbers anybody 0. */
+export const NO_ID = 0;
 
 /** What the page does about what it hears: somebody made an emote or touched a thing, the connection changed. */
 export interface Heard<T> {
@@ -181,7 +194,7 @@ export class Company<T> {
   }
 
   readonly ears: LiveEars = {
-    welcome: (you, _room, roster) => {
+    welcome: (you, _room, roster, restarted) => {
       this.you = you;
       const here = new Set<string>();
       for (const m of roster) {
@@ -189,8 +202,15 @@ export class Company<T> {
         here.add(m.player);
         this.arrive(m);
       }
-      // Anybody heard of before and not in the room now has gone.
-      for (const [player, f] of this.fellows) if (!here.has(player)) f.fig.gone = true;
+      // Anybody heard of before and not in the room now has gone, unless Leaf has just restarted:
+      // then they stand where they were, numbered as nobody, until they are back or `REJOIN_FOR` is up.
+      for (const [player, f] of this.fellows) {
+        if (here.has(player) || f.fig.gone) continue;
+        if (restarted) {
+          f.id = NO_ID;
+          f.awaited = REJOIN_FOR;
+        } else f.fig.gone = true;
+      }
     },
     joined: (m) => {
       if (m.id !== this.you) this.arrive(m);
@@ -216,20 +236,27 @@ export class Company<T> {
 
   /** Whoever has this number in the room now, and has not gone. */
   byId(id: number): Fellow<T> | undefined {
-    return this.all().find((f) => f.id === id && !f.fig.gone);
+    return id === NO_ID ? undefined : this.all().find((f) => f.id === id && !f.fig.gone);
+  }
+
+  /** Those awaited back after Leaf restarted, standing where they were: in town still, as far as anybody can tell. */
+  awaited(): Fellow<T>[] {
+    return this.all().filter((f) => f.awaited > 0 && !f.fig.gone);
   }
 
   /** Somebody is in the room: drawn from their first motion, fading in. */
   private arrive(m: LiveMember): void {
     const f = this.fellows.get(m.player);
     if (!f) {
-      this.fellows.set(m.player, { id: m.id, who: m, fig: newFigure(), own: this.make(m) });
+      this.fellows.set(m.player, { id: m.id, who: m, fig: newFigure(), own: this.make(m), awaited: 0 });
       return;
     }
-    // Back before they had faded away: they arrive again, from wherever they are now.
+    // Back before they had faded away: they arrive again, from wherever they are now. Back after Leaf
+    // restarted, before anybody saw them go: the same figure, put where they are as at a jump.
     if (f.fig.gone) f.fig = newFigure();
     f.id = m.id;
     f.who = m;
+    f.awaited = 0;
   }
 
   /**
@@ -240,7 +267,11 @@ export class Company<T> {
     const came: Fellow<T>[] = [];
     const went: Fellow<T>[] = [];
     for (const [player, f] of this.fellows) {
-      if (follow(f.fig, f.fig.gone ? null : sample(f.id), dt) === "first") came.push(f);
+      if (f.awaited > 0) {
+        f.awaited = Math.max(0, f.awaited - dt);
+        if (f.awaited === 0) f.fig.gone = true;
+      }
+      if (follow(f.fig, f.fig.gone || f.id === NO_ID ? null : sample(f.id), dt) === "first") came.push(f);
       if (f.fig.gone && f.fig.alpha <= 0) {
         this.fellows.delete(player);
         went.push(f);

@@ -583,14 +583,20 @@ const leftJson = (player: Here["resting"][number]) => ({
   seen_at: iso(player.seenAt),
 });
 
-const presentJson = (here: Here) =>
+/** Who is about, with when each of those here last did something (`acted`, as `Visits.lastActed` has it). */
+const presentJson = (here: Here, acted: ReadonlyMap<string, number>) =>
   ({
-    present: here.present.map((player) => ({
-      id: player.playerId,
-      username: player.username,
-      place: player.place,
-      guest: player.guest,
-    })),
+    present: here.present.map((player) => {
+      const did = acted.get(player.playerId);
+      return {
+        id: player.playerId,
+        username: player.username,
+        place: player.place,
+        guest: player.guest,
+        seen_at: iso(player.seenAt),
+        acted_at: did === undefined ? null : iso(did),
+      };
+    }),
     resting: here.resting.map(leftJson),
     gone: here.gone.map(leftJson),
   }) satisfies typeof Body.Present.Type;
@@ -768,15 +774,17 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               payload.place,
               now,
             );
-            return HttpServerResponse.jsonUnsafe(presentJson(here));
+            const acted = yield* visits.lastActed(here.present.map((player) => player.playerId));
+            return HttpServerResponse.jsonUnsafe(presentJson(here, acted));
           }),
         )
         // The same lists, writing nothing: for a page in a live room, where the room keeps the player's place.
         .handle("whoIsAbout", () =>
-          Clock.currentTimeMillis.pipe(
-            Effect.flatMap(presence.look),
-            Effect.map((here) => HttpServerResponse.jsonUnsafe(presentJson(here))),
-          ),
+          Effect.gen(function* () {
+            const here = yield* presence.look(yield* Clock.currentTimeMillis);
+            const acted = yield* visits.lastActed(here.present.map((player) => player.playerId));
+            return HttpServerResponse.jsonUnsafe(presentJson(here, acted));
+          }),
         )
         .handle("oldSave", () => Effect.fail(notYou))
         .handle("oldCoins", () => Effect.fail(notYou))
@@ -812,7 +820,8 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             }
             // Anything but what the page sends by itself is the player at the keys, done or refused.
             if (payload.commands.some((command) => !played.chore(command))) {
-              yield* visits.acted(identity.playerId, yield* Clock.currentTimeMillis);
+              // Back from being away: every page is told, so that nobody shows them away a moment longer.
+              if (yield* visits.acted(identity.playerId, yield* Clock.currentTimeMillis)) yield* presence.back;
             }
             if (batch.status === "unreadable") {
               return yield* unreadable;

@@ -76,6 +76,7 @@ export {
   type Rules,
 } from "./rules.ts";
 export {
+  away,
   activityReport,
   type CoinMove,
   type CommandDay,

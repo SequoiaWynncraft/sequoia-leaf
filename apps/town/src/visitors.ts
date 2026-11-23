@@ -2,10 +2,13 @@
  * Real members, and only real members, in their own skins, each where Leaf's list and Leaf's clock
  * have them (the rules are `@sequoia-leaf/town/clock.ts`), so the same on every page:
  *
- * - **Visitors**, in one of the games just now: standing by the Works' door or watching at the
- *   stump, at a spot that follows from their account. Leaf's list says nothing of when anybody
- *   came, so one is there from the moment the page hears of them. They never speak, and their card
- *   has only their name and rank.
+ * - **Visitors**, in one of the games just now, busy at it as somebody in a real town would be, at
+ *   spots that follow from their account: at the Works carrying crates from the pile to the belt and
+ *   going back for the next (`haul`), at the raid table sitting at the stump over its board, in the
+ *   Grove standing before its stone while a light rises from it now and then. Away (Leaf's rule) they
+ *   have sat down where they are and nodded off: eyes closed, a "z" now and then. Leaf's list says
+ *   nothing of when anybody came, so one is there from the moment the page hears of them. They never
+ *   speak, and their card has their name and rank, and what they are about.
  * - **Dozers**, gone in the last day and happy to be left in town: each on a seat for where they
  *   were (`dozing`), eyes closed, a small "z" drifting up. They never speak or move. Whoever goes
  *   from a game stays on their feet until `SITS_AFTER` after Leaf last saw them, then walks to
@@ -17,33 +20,37 @@
  * drawn here as well.
  */
 
-import { CREAM } from "@sequoia-leaf/kit/palette.ts";
+import { away } from "@sequoia-leaf/core";
+import { CREAM, LEAF } from "@sequoia-leaf/kit/palette.ts";
 import { bake, type Body, lookFor, paintSkin, SIT, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 import {
   dozing,
   GATE,
   GOES_FOR,
+  haul,
   homecoming,
   MUSTER,
   SITS_AFTER,
+  type Spot,
   standOf,
   type Walk,
   zAt,
 } from "@sequoia-leaf/town/clock.ts";
 
 import { feet, makeActor, onScreen, onWalk, sitsOn, stepPassing, walkAt } from "./actors.ts";
-import { float } from "./fx.ts";
+import { bit, float } from "./fx.ts";
 import { type Actor, type Doing, G, SEED } from "./game.ts";
 import { guild, type Person } from "./guild.ts";
-import { type Seat, SEATS } from "./world.ts";
+import { GROVE, type Seat, SEATS } from "./world.ts";
 
 /** How fast a member strolls, in pixels a second. */
 const STROLL = 32;
 
 /**
  * Somebody drawn here: their figure, eyes open (a look of their own until their skin arrives) and
- * shut, the "z" they last breathed, and whether they have been put anywhere yet.
+ * shut, the "z" they last breathed, whether they have been put anywhere yet, and a seat of their own
+ * for sitting where they are (at the stump, or nodded off).
  */
 interface Visiting {
   a: Actor;
@@ -51,6 +58,7 @@ interface Visiting {
   shut: Body | null;
   z: number;
   put: boolean;
+  spot: Seat;
 }
 
 const here = new Map<string, Visiting>();
@@ -112,7 +120,7 @@ function shutEyes(c: HTMLCanvasElement, hx: number, hy: number): HTMLCanvasEleme
 }
 
 /** A member's figure dozing: sitting facing us with their eyes closed, and their face so on a card. */
-function dozy(body: Body): Body {
+export function dozy(body: Body): Body {
   const frames = body.frames.map((row) => [...row]);
   const front = frames[0];
   const sat = front?.[SIT];
@@ -133,7 +141,14 @@ function figure(p: { id: string; name: string; rank?: string | null }): Visiting
   const a = makeActor({ name: p.name, rank: p.rank ?? "", level: 0, voice: 0 }, null, 0, 0);
   a.id = p.id;
   a.speed = STROLL;
-  const v: Visiting = { a, open: bake(paintSkin(lookFor(p.name))), shut: null, z: 0, put: false };
+  const v: Visiting = {
+    a,
+    open: bake(paintSkin(lookFor(p.name))),
+    shut: null,
+    z: 0,
+    put: false,
+    spot: { x: 0, y: 0, dir: 0, from: { x: 0, y: 0 }, at: "table", taken: false },
+  };
   here.set(p.id, v);
   G.visitors.push(a);
   const img = new Image();
@@ -161,6 +176,54 @@ function afoot(v: Visiting, w: Walk, doing: Doing): void {
   v.a.doing = onWalk(v.a, w) ? doing : "walk";
 }
 
+/** Sitting where they are, on a seat of their own there (`v.spot`), facing as `at` does. */
+function sitAt(v: Visiting, at: Spot): void {
+  const a = v.a;
+  const s = v.spot;
+  if (a.seat !== s || s.x !== at.x || s.y !== at.y || s.dir !== at.dir) {
+    Object.assign(s, { x: at.x, y: at.y, dir: at.dir, from: { x: at.x, y: at.y } });
+    a.sat = -9;
+  }
+  v.put = true;
+  a.seat = s;
+  a.x = at.x;
+  a.y = at.y;
+  a.dir = at.dir;
+  a.moving = false;
+  a.dozing = null;
+}
+
+/** A "z" drifting up from somebody asleep, every two seconds or so by Leaf's clock, the same moments on every page. */
+function breathe(v: Visiting): void {
+  const a = v.a;
+  const z = zAt(SEED, a.id, G.now);
+  if (z === v.z) return;
+  v.z = z;
+  const at = feet(a);
+  if (onScreen(at.x, at.y)) float(at.x + 4, at.y - 20, "z", CREAM, 1.4);
+}
+
+/** Away from the keys, though still in the game: sat down where they are, facing us, nodded off. */
+function nap(v: Visiting, at: Spot): void {
+  sitAt(v, { ...at, dir: 0 });
+  v.a.body = v.shut ??= dozy(v.open);
+  breathe(v);
+}
+
+/** How often a light rises from the Grove's stone while somebody is at it, by Leaf's clock. */
+const MOTE_MS = 2400;
+/** The last of them, by its number. */
+let mote = 0;
+
+/** A light rising from the Grove's stone, now and then while somebody is at it: the same moments on every page. */
+function stoneLight(): void {
+  const k = Math.floor(G.now / MOTE_MS);
+  if (k === mote) return;
+  mote = k;
+  if (!onScreen(GROVE.x, GROVE.y)) return;
+  bit({ x: GROVE.x - 2 + (k % 5), y: GROVE.y - 10, vx: 0, vy: -9, drag: 0.3, ttl: 1.9, col: LEAF, glow: true });
+}
+
 /**
  * Asleep on a seat since the game last saw them (`seen`): eyes closed, a "z" now and then. Whoever
  * walked there, or is moved from another seat, is seen to sit down; whoever is first put here was
@@ -178,10 +241,7 @@ function asleep(v: Visiting, s: Seat, seen: number): void {
   a.dozing = seen;
   a.doing = "home";
   a.body = v.shut ??= dozy(v.open);
-  const z = zAt(SEED, a.id, G.now);
-  if (z === v.z) return;
-  v.z = z;
-  if (onScreen(s.x, s.y)) float(feet(a).x + 4, feet(a).y - 20, "z", CREAM, 1.4);
+  breathe(v);
 }
 
 /**
@@ -203,10 +263,30 @@ export function stepVisitors(dt: number, awake: readonly Actor[]): void {
     return figure(p);
   };
 
+  let atStone = false;
   for (const w of guild.visitors()) {
     const v = draw(w);
-    if (v) afoot(v, still(standOf(w.id, w.at)), w.at);
+    if (!v) continue;
+    v.a.carry = false;
+    const stood = standOf(w.id, w.at);
+    if (away(w.acted, now)) {
+      nap(v, stood);
+      continue;
+    }
+    v.a.doing = w.at;
+    v.a.body = v.open;
+    if (w.at === "works") {
+      const { walk, laden } = haul(w.id, now);
+      const before = now < walk.at;
+      afoot(v, before ? still(walk.from) : walk, "works");
+      v.a.carry = laden && (before || v.a.moving);
+    } else if (w.at === "table") sitAt(v, stood);
+    else {
+      afoot(v, still(stood), "grove");
+      atStone = true;
+    }
   }
+  if (atStone) stoneLight();
 
   const resting = guild.resting().filter((r) => !liveNow.has(r.id));
   const seats = dozing(

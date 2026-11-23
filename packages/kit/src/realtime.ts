@@ -20,8 +20,9 @@
  * moment to read the state again.
  *
  * What it does not do is draw anybody. A page asks it each frame where somebody is to be drawn
- * (`sample`): their motion as it was `INTERP_MS` ago by Leaf's clock, between the two snapshots
- * either side of that moment, so that everybody moves smoothly whatever the network does.
+ * (`sample`): their motion `INTERP_MS` behind the newest snapshots as they reach this page
+ * (`Playout`), between the two snapshots either side of that moment, so that everybody moves
+ * smoothly and only where they have been, whatever the network's delay and unevenness.
  */
 
 import {
@@ -29,7 +30,6 @@ import {
   CLOSE,
   decodeSnapshot,
   encodeMove,
-  Flag,
   type GameId,
   INTERP_MS,
   type LiveMember,
@@ -44,7 +44,7 @@ import {
 
 import { device, member } from "./live.ts";
 import { ask, type LiveSocket, outside } from "./net.ts";
-import { inRoom } from "./presence.ts";
+import { askAgain, inRoom } from "./presence.ts";
 
 // What a page needs of the wire to draw who is in its room.
 export { Flag, type LiveMember, type Motion } from "@sequoia-leaf/core";
@@ -91,12 +91,59 @@ export class ClockSync {
   }
 }
 
+// ---------- when to draw others ----------
+
+/** How many of the latest snapshots' times on the way the playout goes by. */
+const TRANSITS = 40;
+/** The most the slowest snapshots lately may put the moment drawn back, in milliseconds, however uneven the network. */
+const MOST_UNEVEN = 1500;
+/** How much faster or slower than its own clock the moment drawn may run while it settles: a tenth. */
+const SETTLE = 0.1;
+
+/**
+ * The moment of Leaf's clock to draw others at. A snapshot stamped `time` reaches this page some
+ * while later by its own clock: the network's delay, and how far the two clocks differ, together.
+ * The page draws at its own clock less the time most snapshots lately took (all but the slowest
+ * tenth), less `INTERP_MS`, so that the moment drawn has a snapshot on either side of it however
+ * slow and uneven the network is. Drawn behind Leaf's clock as it is instead, a page whose snapshots
+ * take longer than `INTERP_MS` would have nothing past the newest to draw but a guess, and somebody
+ * stopping or turning would be seen overshooting and coming back. The moment drawn settles towards
+ * a new delay by at most a tenth of the time passing, so that nobody is ever drawn jumping or going
+ * back when the network changes.
+ */
+export class Playout {
+  private readonly transits: number[] = [];
+  /** How far behind this page's clock the moment drawn is, and when that was last worked out. */
+  private behind: number | null = null;
+  private at = 0;
+
+  /** A snapshot stamped `time` by Leaf's clock came at `now` by this page's. */
+  heard(time: number, now: number): void {
+    this.transits.push(now - time);
+    if (this.transits.length > TRANSITS) this.transits.shift();
+  }
+
+  /** The moment of Leaf's clock to draw others at, at `now` by this page's clock; null before any snapshot came. */
+  time(now: number): number | null {
+    if (this.transits.length === 0) return null;
+    const sorted = this.transits.toSorted((a, b) => a - b);
+    const quickest = sorted[0] ?? 0;
+    const most = sorted[Math.ceil((sorted.length - 1) * 0.9)] ?? quickest;
+    const want = quickest + Math.min(most - quickest, MOST_UNEVEN) + INTERP_MS;
+    if (this.behind === null) this.behind = want;
+    else {
+      const step = Math.max(0, now - this.at) * SETTLE;
+      this.behind += Math.max(-step, Math.min(step, want - this.behind));
+    }
+    this.at = now;
+    return now - this.behind;
+  }
+}
+
 // ---------- somebody's track ----------
 
 /** The longest a track keeps, in milliseconds of Leaf's clock. */
-const KEEP_MS = 1000;
-/** The furthest ahead of the newest snapshot somebody is drawn, going on as they were. */
-const AHEAD_MS = 200;
+const KEEP_MS = 2500;
 
 /** Somebody's motion as snapshots told it, and where they are to be drawn at any moment of Leaf's clock. */
 export class Track {
@@ -111,9 +158,9 @@ export class Track {
   }
 
   /**
-   * Where they are at `time`: between the snapshots either side of it, or going on from the newest
-   * for a little while if none is newer yet, if they were moving. Between two snapshots with
-   * different jumps they are drawn where they were, then where they jumped to, never on the way.
+   * Where they are at `time`: between the snapshots either side of it, or where the newest has them
+   * if none is newer yet: never anywhere they have not been. Between two snapshots with different
+   * jumps they are drawn where they were, then where they jumped to, never on the way.
    */
   at(time: number): Motion | null {
     const pts = this.points;
@@ -121,11 +168,7 @@ export class Track {
     const last = pts.at(-1);
     if (!first || !last) return null;
     if (time <= first.time) return first.m;
-    if (time >= last.time) {
-      if ((last.m.flags & Flag.Moving) === 0) return last.m;
-      const ahead = Math.min(time - last.time, AHEAD_MS) / 1000;
-      return { ...last.m, x: last.m.x + last.m.vx * ahead, y: last.m.y + last.m.vy * ahead };
-    }
+    if (time >= last.time) return last.m;
     let i = pts.length - 1;
     while (i > 0 && (pts[i - 1]?.time ?? 0) > time) i--;
     const a = pts[i - 1];
@@ -169,8 +212,12 @@ export type LiveStatus = "connecting" | "open" | "closed" | "replaced" | "signed
 
 /** What a page hears from its room. Every one is optional. */
 export interface LiveEars {
-  /** In the room (again, after a reconnect): who is there. Anybody heard of before and not in it has gone. */
-  welcome?(you: number, room: string, roster: readonly LiveMember[]): void;
+  /**
+   * In the room (again, after a reconnect): who is there. Anybody heard of before and not in it has
+   * gone; but `restarted` (the connection before it was closed because Leaf was restarting) they may
+   * only not be back yet, every page having been told to come back at the same moment.
+   */
+  welcome?(you: number, room: string, roster: readonly LiveMember[], restarted: boolean): void;
   joined?(m: LiveMember): void;
   left?(id: number): void;
   act?(id: number, kind: string, arg: string): void;
@@ -192,7 +239,7 @@ export interface LiveRoom {
   move(step: Step, jumped?: boolean): void;
   /** Something the player did that others see once: one of core's `ACTS`. */
   act(kind: string, arg: string): void;
-  /** Where somebody is to be drawn now, `INTERP_MS` behind Leaf's clock. */
+  /** Where somebody is to be drawn now: `INTERP_MS` behind the newest snapshots as they reach the page (`Playout`). */
   sample(id: number): Motion | null;
   /** Leaf's clock now, as far as this page can tell. */
   serverNow(): number;
@@ -262,6 +309,8 @@ interface Link {
   readonly people: Map<number, LiveMember>;
   readonly tracks: Map<number, Track>;
   clock: ClockSync | null;
+  /** When to draw others, from when this connection's snapshots came. */
+  playout: Playout;
   you: number | null;
   open: boolean;
   /** When anything last came from Leaf on it, and when it last sent a ping (this page's clock). */
@@ -289,6 +338,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
   // Since the last welcome: when the connection went down, how many tries since, how many in a row
   // did not open, and when the last one began.
   let downSince: number | null = null;
+  /** Whether the last connection was closed because Leaf was restarting. */
+  let restarting = false;
   let tries = 0;
   let failed = 0;
   let lastTry = 0;
@@ -363,14 +414,19 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         tries = 0;
         l.you = m.you;
         l.clock = new ClockSync(m.time, outside.now());
+        l.playout = new Playout();
         l.people.clear();
         l.tracks.clear();
         for (const r of m.roster) l.people.set(r.id, r);
         shown = l;
         inRoom(room);
+        // Whoever came or went while the page was not in the room, Leaf's list says now.
+        askAgain();
         // Nothing has been sent on this connection yet: whatever the player says next goes at once.
         sent = null;
-        ears.welcome?.(m.you, m.room, m.roster);
+        const restarted = restarting;
+        restarting = false;
+        ears.welcome?.(m.you, m.room, m.roster, restarted);
         // Said again, unless whoever heard the welcome has just said it: this room has not heard
         // from the player on this connection yet.
         if (motion && sent === null) want(motion);
@@ -394,6 +450,9 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       case "pong":
         l.clock?.add(m.c, m.s, outside.now());
         return;
+      case "about":
+        if (shown === l) askAgain();
+        return;
       case "error":
         return;
     }
@@ -404,6 +463,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
     if (l.you === null) return;
     const snap = decodeSnapshot(new Uint8Array(data));
     if (!snap) return;
+    l.playout.heard(snap.time, outside.now());
     for (const entry of snap.entries) {
       if (entry.id === l.you) continue;
       let track = l.tracks.get(entry.id);
@@ -439,6 +499,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
     watcher = stop(watcher);
     if (done) return;
     if (!reconnects(code)) return letGo(code === CLOSE.replaced ? "replaced" : "signedout");
+    // A try that did not open says nothing new of why the room was left.
+    if (l.open) restarting = code === CLOSE.restart;
     const now = outside.now();
     if (downSince === null) {
       downSince = now;
@@ -497,6 +559,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       people: new Map(),
       tracks: new Map(),
       clock: null,
+      playout: new Playout(),
       you: null,
       open: false,
       heard: lastTry,
@@ -546,9 +609,8 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       say(link, { t: "act", kind, arg });
     },
     sample(id) {
-      const l = shown;
-      if (!l?.clock) return null;
-      return l.tracks.get(id)?.at(l.clock.server(outside.now()) - INTERP_MS) ?? null;
+      const time = shown?.playout.time(outside.now()) ?? null;
+      return time === null ? null : (shown?.tracks.get(id)?.at(time) ?? null);
     },
     serverNow() {
       if (shown?.clock) leafAhead = shown.clock.server(0);

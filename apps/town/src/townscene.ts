@@ -13,6 +13,7 @@ import { boardAt, SET_OUT } from "@sequoia-leaf/town/clock.ts";
 import { FOLK, folk, KEEPER } from "@sequoia-leaf/town/folk.ts";
 import { BOX_FULL, roomInBox } from "@sequoia-leaf/town/mail.ts";
 
+import { cardLine } from "./about.ts";
 import { initAbout, openAbout } from "./aboutui.ts";
 import {
   byClock,
@@ -54,12 +55,15 @@ import {
   emotesOpen,
   inRoom,
   isLivePlayer,
+  knownRanks,
   leafNow,
   liveHandles,
   livePlayers,
   openEmotes,
   othersInTown,
+  roomNow,
   stepPlayers,
+  stirred,
   tellRoom,
   townOnStage,
   waveAt,
@@ -208,11 +212,16 @@ export interface Town extends Scene {
 /** Who a figure is, for `apart`: a member's account, or which of the town's own. */
 const whoIs = (a: Actor): string => (a.folk ? `folk:${a.folk.t.id}` : a.id);
 
+/** What somebody's card says they are about, under their rank, as everything else has it (`where.ts`). */
+const aboutLine = (who: Actor) => (): string => cardLine(guild.whereabouts().get(who.id), leafNow()) ?? "";
+
 export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town {
   // ---------- the place itself ----------
 
   G.now = leafNow();
   hooks.deeds = () => guild.deeds();
+  // Where everybody is (`where.ts`) is worked out from the room as much as from Leaf's list.
+  guild.followRoom({ room: roomNow, ranks: knownRanks, stirred });
   const ground = paintGround();
   buildTown(sprites, must(ground.getContext("2d"), "ground"));
   const standing = crabsStanding();
@@ -401,6 +410,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   /** The member's own figure had its emotes up when the touch came. */
   let plaque = false;
+
   /** Somebody in town is touched. */
   function meet(who: Actor): void {
     // Somebody dozing sleeps on; their card says who they are.
@@ -415,7 +425,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     }
     // Another player, live: drawn where they really are, so they do not turn; their card has a wave.
     if (isLivePlayer(who)) {
-      showCard(who, null, () => {
+      showCard(who, aboutLine(who), () => {
         waveAt(who);
       });
       return;
@@ -428,7 +438,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     // A member really here: they look round, and their card says who they are.
     if (isVisitor(who)) {
       if (!who.seat && !who.moving) face(who, player.x, player.y);
-      showCard(who);
+      showCard(who, aboutLine(who));
       return;
     }
     const t = who.folk?.t;

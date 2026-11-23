@@ -517,6 +517,89 @@ describe("where players are, from the room", () => {
     expect(after[0]?.seen_at).toBeLessThan(left + 1000);
   });
 
+  it("lists somebody who leaves the room as gone at once, from then, and as here again when they come back", async () => {
+    await start();
+    const a = await connect(page("alice"));
+    await a.welcome();
+    await rowsWhen((r) => r.length === 1);
+    ahead = 20_000;
+    const left = Date.now() + ahead;
+    a.send({ t: "leave" });
+    await rowsWhen((r) => (r[0]?.seen_at ?? 0) >= left);
+
+    const gone: unknown = await (await sayHere("bob-token", "works")).json();
+    expect(gone).toMatchObject({ present: [{ username: "Bob", place: "works" }], resting: [{ username: "Alice" }] });
+    const seen = Date.parse(
+      Schema.decodeUnknownSync(Schema.Struct({ resting: Schema.Tuple([Schema.Struct({ seen_at: Schema.String })]) }))(
+        gone,
+      ).resting[0].seen_at,
+    );
+    expect(seen - left).toBeLessThan(1000);
+    expect(seen).toBeGreaterThanOrEqual(left);
+
+    a.send({ t: "join", room: "town" });
+    await a.welcome();
+    await rowsWhen((r) => r.length === 2 && r.every((row) => row.place !== "camp"));
+    const back: unknown = await (await sayHere("bob-token", "works")).json();
+    expect(back).toMatchObject({ present: [{ username: "Alice", place: "town" }, { username: "Bob" }], resting: [] });
+  });
+
+  it("tells everybody in every room when who is where changes, once it is written, and not when it is only said again", async () => {
+    await start();
+    const a = await connect(page("alice"));
+    await a.welcome();
+    await rowsWhen((r) => r.length === 1);
+    await Bun.sleep(100);
+    a.texts.length = 0;
+    const b = await connect(page("bob"));
+    await b.welcome();
+    // Bob coming in is a change: Alice hears of it, and so does Bob.
+    await a.next("about");
+    await b.next("about");
+    await Bun.sleep(100);
+    expect([...a.texts, ...b.texts].filter((m) => m.t === "about")).toEqual([]);
+
+    // Carol's game says she is at the Works: a change; saying it again is not.
+    expect((await sayHere("carol-token", "works")).status).toBe(200);
+    await a.next("about");
+    await b.next("about");
+    expect((await sayHere("carol-token", "works")).status).toBe(200);
+    await Bun.sleep(150);
+    expect(a.texts.filter((m) => m.t === "about")).toEqual([]);
+
+    // Bob leaves the room: Alice hears it, and Leaf's list says so by the time she does.
+    b.send({ t: "leave" });
+    await a.next("about");
+    const now: unknown = await (
+      await fetch(`${server?.origin ?? ""}/v1/game/presence`, {
+        headers: { Authorization: "Bearer alice-token" },
+      })
+    ).json();
+    expect(now).toMatchObject({
+      present: [{ username: "Alice" }, { username: "Carol" }],
+      resting: [{ username: "Bob" }],
+    });
+  });
+
+  it("tells everybody in every room when somebody away does something again, and not at every move", async () => {
+    await start();
+    const a = await connect(page("alice"));
+    await a.welcome();
+    const b = await connect(page("bob"));
+    await b.welcome();
+    b.move(at(100, 100, 0));
+    await rowsWhen((r) => r.length === 2);
+    await Bun.sleep(150);
+    a.texts.length = 0;
+
+    // Bob has done nothing Leaf heard of yet: away. His first move somewhere brings him back.
+    b.move(at(110, 100));
+    await a.next("about");
+    b.move(at(120, 100));
+    await Bun.sleep(150);
+    expect(a.texts.filter((m) => m.t === "about")).toEqual([]);
+  });
+
   it("writes them gone at the end of their grace when the connection drops", async () => {
     await start({ graceMs: 150 });
     const a = await connect(page("alice"));

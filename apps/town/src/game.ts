@@ -14,9 +14,9 @@ import type { PlaceId, Seat } from "./world.ts";
 export type PanelId = PlaceId | "profile";
 /**
  * What somebody is about: what one of the town's own is doing (`folk.ts`), or for a member where
- * they are (about the town, by the Works, watching at the stump, at home in a camp).
+ * they are (about the town, by the Works, at the stump, before the Grove's stone, at home in a camp).
  */
-export type Doing = FolkDoing | "table" | "home";
+export type Doing = FolkDoing | "table" | "grove" | "home";
 
 /** Who somebody is, as a name plate and a card say: their name, and a member's rank and level. */
 export interface Who {
@@ -68,6 +68,8 @@ export interface Actor {
   alpha: number;
   away: boolean;
   doing: Doing;
+  /** A member at the Works with a crate in their arms, on the way to the belt. */
+  carry: boolean;
   greeted: number;
   /** Their name shows until this moment of the town's clock, whatever else: somebody who has just arrived. */
   named: number;

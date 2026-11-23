@@ -148,7 +148,7 @@ export const GuildEvents = Schema.Struct({
 });
 
 /** The places in the game a member can be. */
-export const PLACES = ["town", "camp", "works", "table"] as const;
+export const PLACES = ["town", "camp", "works", "table", "grove"] as const;
 
 /**
  * Where the member is; whether their character may stay in town, dozing, after they go, when the
@@ -161,13 +161,8 @@ export const PresenceBody = Schema.Struct({
   device: Schema.optional(Schema.Literals(DEVICES)),
 });
 
-/**
- * Everyone seen in the game in the last 90 seconds, the caller included, at most the 50 seen most
- * recently; and those who were seen between 90 seconds and a day ago and are happy to be left in
- * town, newest first, at most 24. Each says whether they play as a guest.
- */
-/** Somebody gone from the game in the last day, and when they were last seen. */
-const Left = Schema.Struct({
+/** Somebody in the game, or gone from it in the last day, and when they were last seen. */
+const Seen = Schema.Struct({
   id: Schema.String,
   username: Schema.String,
   place: Schema.String,
@@ -175,12 +170,17 @@ const Left = Schema.Struct({
   seen_at: Time,
 });
 
+/**
+ * Everyone seen in the game in the last 90 seconds who has not left a live room since, the caller
+ * included, at most the 50 seen most recently, each with when they last did something as far as
+ * Leaf knows (null for not yet: away); and those gone since (seen between 90 seconds and a day ago,
+ * or who left a room), in two lists, newest first, at most 24 each: those happy to be left in town,
+ * and the rest. Each says whether they play as a guest, and when they were last seen.
+ */
 export const Present = Schema.Struct({
-  present: Schema.Array(
-    Schema.Struct({ id: Schema.String, username: Schema.String, place: Schema.String, guest: Schema.Boolean }),
-  ),
-  resting: Schema.Array(Left),
-  gone: Schema.Array(Left),
+  present: Schema.Array(Schema.Struct({ ...Seen.fields, acted_at: Schema.NullOr(Time) })),
+  resting: Schema.Array(Seen),
+  gone: Schema.Array(Seen),
 });
 
 /** A player's state in a game, as their page is given it. */

@@ -10,11 +10,17 @@
  * figure, and what everybody sees of them), the wave on a live player's card, the small
  * "Reconnecting…" once the connection has been down a couple of seconds, and the kit's cards for
  * a connection Leaf has let go of. The rules are in `motion.ts`.
+ *
+ * Somebody away (Leaf's rule, as everything else has it: `where.ts`) has sat down where they are and
+ * nodded off: facing us unless they sat on a seat, eyes closed, a "z" now and then, the same moments
+ * on every page; the moment they move or do anything, they are up and about again.
  */
 
+import { away } from "@sequoia-leaf/core";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
 import { type LetGo, letGoCard, member, where } from "@sequoia-leaf/kit/live.ts";
+import { CREAM } from "@sequoia-leaf/kit/palette.ts";
 import {
   joinLive,
   leafClock,
@@ -24,17 +30,19 @@ import {
   type LiveStatus,
   type Step,
 } from "@sequoia-leaf/kit/realtime.ts";
-import { bake, lookFor, paintSkin, skinOf } from "@sequoia-leaf/kit/skin.ts";
+import { bake, type Body, lookFor, paintSkin, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { zAt } from "@sequoia-leaf/town/clock.ts";
 
 import { face, feet, footfall, headOf, hop, makeActor, onScreen, stepActor } from "./actors.ts";
-import { emoteOver } from "./fx.ts";
-import { type Actor, G, hooks, ROOM, toPage } from "./game.ts";
+import { emoteOver, float } from "./fx.ts";
+import { type Actor, G, hooks, ROOM, SEED, toPage } from "./game.ts";
+import { guild } from "./guild.ts";
 import { GUEST, rankName } from "./live.ts";
 import { Company, type Fellow, linkShown, NAMED_FOR, othersIn, stepOf } from "./motion.ts";
 import { touchThing } from "./town.ts";
-import { followLive } from "./visitors.ts";
+import { dozy, followLive } from "./visitors.ts";
 import type { Seat } from "./world.ts";
 
 /** After this many milliseconds with the connection down, the others fade away and the town plays on alone. */
@@ -48,14 +56,21 @@ export const EMOTE_NAMES: Readonly<Record<Emote, string>> = {
   heart: "Heart",
 };
 
-/** How somebody else in the room is drawn: their actor, and a seat of their own for when they sit, wherever they are. */
+/**
+ * How somebody else in the room is drawn: their actor, a seat of their own for when they sit,
+ * wherever they are, their figure with eyes open (a look of their own until their skin arrives) and
+ * shut, and the "z" they last breathed while nodded off.
+ */
 interface Drawn {
   a: Actor;
   seat: Seat;
+  open: Body;
+  shut: Body | null;
+  z: number;
 }
 
 /** Everybody else in the room, by their account, each drawn with an actor of their own. */
-const company = new Company<Drawn>((m) => ({ a: figureOf(m), seat: seatAt(0, 0, 0) }), {
+const company = new Company<Drawn>(drawnOf, {
   emote: (f, kind) => {
     express(f.own.a, kind);
   },
@@ -90,6 +105,11 @@ const rankOf = (m: LiveMember): string => (m.guest ? GUEST : m.rank === null ? "
 
 /** Everybody's rank as the room last showed it, by their account, for those other lists do not say it of. */
 export const knownRanks = new Map<string, string>();
+/**
+ * When this page last saw each of the others do something in the room, by Leaf's clock and their
+ * account: a move somewhere, an emote, a touch, which is what Leaf counts as doing something too.
+ */
+export const stirred = new Map<string, number>();
 const learn = (m: LiveMember): void => {
   const rank = rankOf(m);
   if (rank === "") knownRanks.delete(m.player);
@@ -99,8 +119,8 @@ const learn = (m: LiveMember): void => {
 /** What the page hears from the room: the company's, and the welcome ends any drop. */
 const ears: LiveEars = {
   ...company.ears,
-  welcome(you, name, roster) {
-    company.ears.welcome?.(you, name, roster);
+  welcome(you, name, roster, restarted) {
+    company.ears.welcome?.(you, name, roster, restarted);
     for (const m of roster) learn(m);
     downAt = null;
     showLink();
@@ -108,6 +128,11 @@ const ears: LiveEars = {
   joined(m) {
     company.ears.joined?.(m);
     learn(m);
+  },
+  act(id, kind, arg) {
+    const f = company.byId(id);
+    if (f) stirred.set(f.who.player, leafNow());
+    company.ears.act?.(id, kind, arg);
   },
 };
 
@@ -118,10 +143,14 @@ const ears: LiveEars = {
  */
 const alone = (): boolean => downAt !== null && performance.now() - downAt > ALONE_AFTER;
 
-/** Everybody in the room with the member, the member too, with their rank as the town shows it; null while the page is in no room. */
+/**
+ * Everybody in the room with the member, the member too, with their rank as the town shows it, and
+ * those awaited back after Leaf restarted, who stand where they were; null while the page is in no
+ * room.
+ */
 export function roomNow(): { id: string; name: string; rank: string | null }[] | null {
   if (!room || room.you() === null || alone()) return null;
-  return [...room.members().values()].map((m) => {
+  return [...room.members().values(), ...company.awaited().map((f) => f.who)].map((m) => {
     const rank = rankOf(m);
     return { id: m.player, name: m.name, rank: rank === "" ? null : rank };
   });
@@ -137,21 +166,24 @@ const seatAt = (x: number, y: number, dir: Actor["dir"]): Seat => ({
 });
 
 /** Somebody's figure: a look of their own at first, and their own skin once it has arrived. */
-function figureOf(m: LiveMember): Actor {
-  const a = makeActor({ name: m.name, rank: rankOf(m), level: 0, voice: 0 }, bake(paintSkin(lookFor(m.name))), 0, 0);
+function drawnOf(m: LiveMember): Drawn {
+  const open = bake(paintSkin(lookFor(m.name)));
+  const a = makeActor({ name: m.name, rank: rankOf(m), level: 0, voice: 0 }, open, 0, 0);
   a.id = m.player;
   a.alpha = 0;
   a.doing = "walk";
+  const d: Drawn = { a, seat: seatAt(0, 0, 0), open, shut: null, z: 0 };
   const img = new Image();
   img.addEventListener("load", () => {
     try {
-      a.body = bake(img);
+      d.open = bake(img);
+      d.shut = null;
     } catch {
       // A picture that cannot be read: the look of their own stays.
     }
   });
   img.src = skinOf(m.player);
-  return a;
+  return d;
 }
 
 /** The connection is let go of for good: everybody fades away, and the kit's card says why. */
@@ -221,12 +253,22 @@ export function stepPlayers(dt: number): void {
   if (downAt !== null && performance.now() - downAt > ALONE_AFTER) company.goAll();
   if (downAt !== null) showLink();
   const walked = new Map(company.all().map((f) => [f, f.own.a.walked]));
+  const stood = new Map(company.all().map((f) => [f, { x: f.fig.x, y: f.fig.y, jump: f.fig.jump }]));
   const { came, went } = company.step((id) => room?.sample(id) ?? null, dt);
+  const now = leafNow();
+  for (const f of company.all()) {
+    // A move somewhere, as the room tells it, is doing something: by Leaf's rule too.
+    const before = stood.get(f);
+    if (before && before.jump === f.fig.jump && (before.x !== f.fig.x || before.y !== f.fig.y))
+      stirred.set(f.who.player, now);
+  }
+  const all = guild.whereabouts();
   for (const f of company.all()) {
     const a = f.own.a;
     // Hops and words; a figure drawn from the room walks nowhere of its own accord.
     stepActor(a, dt);
-    dress(f);
+    const w = all.get(f.who.player);
+    dress(f, w !== undefined && w.live && away(w.acted, now));
     if (a.moving) footfall(a, walked.get(f) ?? a.walked);
   }
   for (const f of came) f.own.a.named = G.t + NAMED_FOR;
@@ -235,8 +277,8 @@ export function stepPlayers(dt: number): void {
   placeEmotes();
 }
 
-/** Puts somebody's actor where their figure is: on their feet, or seated where they are. */
-function dress(f: Fellow<Drawn>): void {
+/** Puts somebody's actor where their figure is: on their feet, or seated where they are; `idle`, nodded off there. */
+function dress(f: Fellow<Drawn>, idle: boolean): void {
   const { fig, own } = f;
   const a = own.a;
   a.who =
@@ -250,12 +292,22 @@ function dress(f: Fellow<Drawn>): void {
   a.walked = fig.walked;
   a.alpha = fig.alpha;
   a.moving = fig.moving;
-  if (fig.seated) {
-    Object.assign(own.seat, { x: fig.x, y: fig.y, dir: fig.dir, from: { x: fig.x, y: fig.y } });
+  if (fig.seated || idle) {
+    // Nodded off on their feet, they sit down where they are, facing us.
+    const dir = fig.seated ? fig.dir : 0;
+    Object.assign(own.seat, { x: fig.x, y: fig.y, dir, from: { x: fig.x, y: fig.y } });
     a.seat = own.seat;
+    a.dir = dir;
     // Already sitting: not drawn on the way into the seat.
     a.sat = -9;
   } else a.seat = null;
+  a.body = idle ? (own.shut ??= dozy(own.open)) : own.open;
+  if (!idle) return;
+  // A "z" now and then, at the same moments on every page.
+  const z = zAt(SEED, a.id, G.now);
+  if (z === own.z) return;
+  own.z = z;
+  if (a.alpha > 0.5 && onScreen(fig.x, fig.y)) float(fig.x + 4, fig.y - 20, "z", CREAM, 1.4);
 }
 
 /** Everybody else in town, live, as they are to be drawn. */

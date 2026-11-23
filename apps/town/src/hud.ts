@@ -317,15 +317,16 @@ export function closeCard(): void {
 
 /** What one of the town's own is doing, in a line for its card. */
 const doingLine = (a: Actor): string => {
-  const d: Doing = a.doing === "table" || a.doing === "home" ? "walk" : a.doing;
+  const d: Doing = a.doing === "table" || a.doing === "home" || a.doing === "grove" ? "walk" : a.doing;
   return DOING[d];
 };
 
 /**
- * A card for somebody who was tapped. A real member's says only who they are: their name and rank,
+ * A card for somebody who was tapped. A real member's says who they are: their name and rank, under
+ * that what `doing` says of them while it says anything (at one of the games, away for how long),
  * and for one dozing in town how long ago they dozed off; another player live in town has a wave
  * (`waveTo`). One of the town's own says what it is, what it is doing, and has a wave; `doing` says
- * that middle line, if the usual one will not do.
+ * that middle line, if the usual one will not do. Either line is said again while the card is up.
  */
 export function showCard(a: Actor, doing: (() => string) | null = null, waveTo: (() => void) | null = null): void {
   const c = $("card");
@@ -341,8 +342,8 @@ export function showCard(a: Actor, doing: (() => string) | null = null, waveTo: 
   doingOf = doing;
   const f = a.folk;
   if (!f) {
-    // A real member: their name and rank, and nothing else.
-    doingEl = null;
+    // A real member: their name and rank, and what they are about, if anything.
+    doingEl = doing ? el("div", "k-dim") : null;
     const asleep = a.dozing;
     c.append(
       el(
@@ -356,6 +357,7 @@ export function showCard(a: Actor, doing: (() => string) | null = null, waveTo: 
           {},
           el("div", "k-title k-member", { text: a.who.name }),
           a.who.rank ? el("div", "k-dim", { text: a.who.rank }) : null,
+          doingEl,
           asleep === null
             ? null
             : el("div", "k-dim", { text: `Left ${span(Math.max(0, (Date.now() - asleep) / 60000))} ago.` }),
@@ -550,7 +552,11 @@ export function tickHud(dt: number): void {
   strip?.();
   const of = show.card;
   if (of) {
-    if (doingEl) doingEl.textContent = doingOf ? doingOf() : doingLine(of);
+    if (doingEl) {
+      const line = doingOf ? doingOf() : doingLine(of);
+      doingEl.textContent = line;
+      doingEl.hidden = line === "";
+    }
     if (performance.now() > cardUntil || of.away) closeCard();
   }
 }

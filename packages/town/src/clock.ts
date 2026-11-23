@@ -236,8 +236,14 @@ export function hiding(seed: number, now: number): { stretch: number; since: num
 
 // ---------- members in the games, and gone from them ----------
 
-/** Where a member in one of the games stands in town, facing it: by the Works' door, or watching at the stump. */
-export const STANDS: Readonly<Record<"works" | "table", readonly Spot[]>> = {
+/** A game a member can be in that has a place in town to stand at. */
+export type Stand = "works" | "table" | "grove";
+
+/**
+ * Where a member in one of the games is in town, facing it: by the Works' door, sitting at the stump
+ * over its board, or before the Grove's standing stone. At the Works they carry crates (`haul`).
+ */
+export const STANDS: Readonly<Record<Stand, readonly Spot[]>> = {
   works: [
     spot(393, 137, 3),
     spot(352, 125, 3),
@@ -246,11 +252,39 @@ export const STANDS: Readonly<Record<"works" | "table", readonly Spot[]>> = {
     spot(397, 151, 3),
     spot(409, 157, 3),
   ],
-  table: [spot(414, 199, 3), spot(471, 199, 3), spot(437, 173, 3), spot(457, 173, 3)],
+  table: [spot(418, 196, 2), spot(444, 205, 3), spot(436, 172, 0), spot(456, 172, 0)],
+  grove: [spot(94, 196, 3), spot(114, 196, 3), spot(84, 188, 2), spot(124, 188, 1)],
 };
 
 /** Where a member in a game stands: one of its spots by their account, the same for as long as they are there. */
-export const standOf = (id: string, at: "works" | "table"): Spot => nth(STANDS[at], seedOf(id));
+export const standOf = (id: string, at: Stand): Spot => nth(STANDS[at], seedOf(id));
+
+/** Where a member at the Works carries crates: from in front of the pile at the belt's end, facing it, in at the Works' door. */
+export const HAUL: Readonly<Record<"pile" | "door", readonly Spot[]>> = {
+  pile: [spot(466, 148, 3), spot(470, 154, 3)],
+  door: [spot(374, 131, 3), spot(383, 132, 3)],
+};
+/** How long a crate takes, there and back, by Leaf's clock; and how long a member stands at each end of the way. */
+export const HAUL_MS = 10_000;
+export const HAUL_STANDS = 1400;
+
+/**
+ * A member at the Works, by Leaf's clock, the same on every page: the walk they are on, in with a
+ * crate (`laden`) from the pile at the belt's end to the Works' door, or back for the next. Each walk
+ * begins once they have stood a moment where it starts; each member keeps their own way and their
+ * own time round, by their account.
+ */
+export function haul(id: string, now: number): { walk: Walk; laden: boolean } {
+  const seed = seedOf(id);
+  const pile = nth(HAUL.pile, seed);
+  const belt = nth(HAUL.door, seed >>> 4);
+  const into = mod(now + (seed % HAUL_MS), HAUL_MS);
+  const begun = now - into;
+  const half = HAUL_MS / 2;
+  return into < half
+    ? { walk: { from: pile, to: belt, at: begun + HAUL_STANDS }, laden: true }
+    : { walk: { from: belt, to: pile, at: begun + half + HAUL_STANDS }, laden: false };
+}
 
 /** In and out of town: the gateway, in the dark. */
 export const GATE: Spot = spot(256, 84, 0);
@@ -272,8 +306,9 @@ export interface SeatFor {
 }
 
 /** The seats a dozer may have, by where they were: theirs first, then the fire's logs, then the benches. */
-const SEATS_FOR: Readonly<Record<"town" | "works" | "table", readonly SeatFor["at"][]>> = {
+const SEATS_FOR: Readonly<Record<"town" | Stand, readonly SeatFor["at"][]>> = {
   town: ["fire", "bench", "works"],
+  grove: ["fire", "bench", "works"],
   table: ["table", "fire", "bench"],
   works: ["works", "fire", "bench"],
 };
@@ -288,7 +323,7 @@ const facing = (s: SeatFor): number => (s.dir === 0 ? 0 : s.dir === 3 ? 2 : 1);
  * the member; whoever finds none has none.
  */
 export function dozing<S extends SeatFor>(
-  resting: readonly { id: string; at: "town" | "works" | "table"; seen: number }[],
+  resting: readonly { id: string; at: "town" | Stand; seen: number }[],
   free: readonly S[],
 ): Map<string, S> {
   const left = free.filter((s) => !s.yours);
