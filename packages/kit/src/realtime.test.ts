@@ -475,7 +475,7 @@ describe("a live room", () => {
     expect(w.sent.filter((x) => x.path === "/v1/game/presence").map((x) => x.method)).toEqual(["GET", "PUT"]);
   });
 
-  test("asks who is about again at each welcome, and whenever the room says who is where has changed", async () => {
+  test("asks who is about again at each welcome, and when the room says who is where changed without saying who", async () => {
     const w = standin({
       "GET /v1/game/hello": HELLO,
       "GET /v1/game/me": { status: 200, body: TESTER },
@@ -500,9 +500,12 @@ describe("a live room", () => {
     await Bun.sleep(10);
     s.says({ t: "about" });
     await Bun.sleep(10);
+    // A room's word with Leaf's lists in it is taken as it is: nothing is asked.
+    s.says({ t: "about", who: { at: "2026-11-25T10:00:00.000Z", present: [], resting: [], gone: [] } });
+    await Bun.sleep(10);
     here(null);
 
-    // Said before the room welcomed the page; then asked at the welcome, and again at the room's word.
+    // Said before the room welcomed the page; then asked at the welcome, and again at the room's word without lists.
     expect(w.sent.filter((x) => x.path === "/v1/game/presence").map((x) => x.method)).toEqual(["PUT", "GET", "GET"]);
   });
 
