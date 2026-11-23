@@ -1,15 +1,17 @@
 /**
  * How long the slice takes: `bun pace.ts` (`--json` for the same as data, `--seed N` for another
- * land's orders). It plays tiers 0 to 3 of the second design from a new yard to the last goal of
- * tier 3, by the real rules, as one careful, ordinary player would (`pace/player.ts`), and prints
- * how long each goal and each tier took: building, waiting for Coins, waiting for deliveries.
+ * land's orders, `--seeds 1-12` for the least, the middle and the most of each tier over those
+ * seeds, `--folios N` for the folios a minute the Studies are built for). It plays tiers 0 to 3 of
+ * the second design from a new yard to the last goal of tier 3, by the real rules, as one careful,
+ * ordinary player would (`pace/player.ts`), and prints how long each goal and each tier took:
+ * building, waiting for Coins, waiting for deliveries.
  *
  * Everything the player decides by is below, as data: the order of goals, what it builds with what
  * it unlocks, and the seconds a person takes over each thing. Change them and run it again; the same
  * seed and the same numbers give the same table, to the tick.
  */
 import { type Hands, Player, type Settings } from "./pace/player.ts";
-import { report, text } from "./pace/table.ts";
+import { type Report, report, seeds, seedsText, text } from "./pace/table.ts";
 
 /** The nodes in the order the player turns to them: lessons in theirs; in each tier the projects in the table's order, then the commission. */
 export const NODES = [
@@ -58,8 +60,8 @@ export const RESEARCH = [
  */
 export const MINUTES = [3, 8, 12, 15];
 
-/** Folios a minute the Studies are built for: one Study at grade 1, fed flat out, as its card says (one every 5 seconds). */
-export const FOLIOS = 12;
+/** Folios a minute the Studies are built for, unless `--folios` says: two Studies at grade 1, each fed flat out (one every 5 seconds). */
+export const FOLIOS = 24;
 
 /**
  * What the player builds with what it unlocks: new pieces at the highest grade unlocked, up to
@@ -102,17 +104,14 @@ export const HANDS: Hands = {
   order: 3,
 };
 
-if (import.meta.main) {
-  const args = process.argv.slice(2);
-  const at = args.indexOf("--seed");
-  const seed = at >= 0 ? Number(args[at + 1]) : 1;
-  if (!Number.isInteger(seed) || seed < 0) throw new Error("--seed takes a whole number");
-  const settings: Settings = {
+/** The settings above for a seed and a pace of folios, with a person's time at `CARE` times the taps. */
+export function settings(seed: number, folios: number): Settings {
+  return {
     seed,
     nodes: NODES,
     research: RESEARCH,
     minutes: MINUTES,
-    folios: FOLIOS,
+    folios,
     hands: {
       piece: HANDS.piece * CARE,
       set: HANDS.set * CARE,
@@ -127,8 +126,35 @@ if (import.meta.main) {
     swap: SWAP,
     purse: PURSE,
   };
+}
+
+/** The whole number after a flag, or `none` without the flag. */
+function flag(args: readonly string[], name: string, none: number): number {
+  const at = args.indexOf(name);
+  if (at < 0) return none;
+  const n = Number(args[at + 1]);
+  if (!Number.isInteger(n) || n < 0) throw new Error(`${name} takes a whole number`);
+  return n;
+}
+
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  const json = args.includes("--json");
+  const folios = flag(args, "--folios", FOLIOS);
+  const at = args.indexOf("--seeds");
+  const range = at >= 0 ? /^(\d+)-(\d+)$/.exec(args[at + 1] ?? "") : null;
+  if (at >= 0 && !range) throw new Error("--seeds takes a range of whole numbers, as 1-12");
+  const list = range
+    ? Array.from({ length: Math.max(0, Number(range[2]) - Number(range[1]) + 1) }, (_, k) => Number(range[1]) + k)
+    : [flag(args, "--seed", 1)];
   const began = performance.now();
-  const r = report(new Player(settings).play(), seed);
-  console.log(args.includes("--json") ? JSON.stringify(r, null, 2) : text(r));
+  const reports: Report[] = list.map((seed) => report(new Player(settings(seed, folios)).play(), seed, folios));
+  if (range) {
+    const all = seeds(reports);
+    console.log(json ? JSON.stringify({ ...all, reports }, null, 2) : seedsText(all));
+  } else {
+    const [r] = reports;
+    if (r) console.log(json ? JSON.stringify(r, null, 2) : text(r));
+  }
   console.error(`(played in ${((performance.now() - began) / 1000).toFixed(1)} s)`);
 }

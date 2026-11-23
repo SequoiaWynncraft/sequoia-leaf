@@ -62,7 +62,7 @@ describe("whole numbers", () => {
     const running = F.decode(F.encode(generated().y), generated().y.land);
     if (!running) throw new Error("no yard");
     for (let k = 0; k < 2000; k++) F.step(running);
-    expect(running.open.reach).toBe(135);
+    expect(running.open.reach).toBe(Math.max(F.START.reach ?? 0, ...F.GOALS.map((g) => g.unlocks.reach ?? 0)));
     for (const y of [delivering(), running, shortYard]) {
       expect(numbers(JSON.parse(F.encode(y)), "", []).filter(([, v]) => !Number.isInteger(v))).toEqual([]);
       expect(numbers(y, "", []).filter(([, v]) => !Number.isInteger(v))).toEqual([]);
@@ -70,22 +70,25 @@ describe("whole numbers", () => {
   });
 
   test("short of power, every machine works on exactly as many ticks as the power covers, and nothing is lost over time", () => {
-    // 20 power and 32 drawn: 5 ticks in 8.
-    const { y, r } = short(32);
+    // The depot's power, and twelve more gatherers than it powers: as many ticks in each as it covers.
+    const power = F.create({ tier: 2 }).open.depot;
+    const drawn = power + 12;
+    const { y, r } = short(drawn);
     F.rewire(y);
     // Power is counted in halves.
-    expect([y.supply, y.demand]).toEqual([40, 64]);
-    expect(worked(y, r, 1000)).toBe(625);
-    expect(worked(y, r, 3)).toBe(Math.floor((1003 * 5) / 8) - 625);
+    expect([y.supply, y.demand]).toEqual([2 * power, 2 * drawn]);
+    const covered = (n: number): number => Math.floor((n * power) / drawn);
+    expect(worked(y, r, 1000)).toBe(covered(1000));
+    expect(worked(y, r, 3)).toBe(covered(1003) - covered(1000));
     // Read back half way, what was put by is kept: the same ticks are worked as without a break.
-    const a = short(32);
-    const b = short(32);
+    const a = short(drawn);
+    const b = short(drawn);
     const first = worked(a.y, a.r, 501);
     const back = F.decode(F.encode(a.y), a.y.land);
     if (!back) throw new Error("no yard");
     expect(first + worked(back, back.row[F.at(back, 5, 3)] ?? -1, 499)).toBe(worked(b.y, b.r, 1000));
     // With power enough, every tick.
-    const full = short(20);
+    const full = short(power);
     expect(worked(full.y, full.r, 100)).toBe(100);
   });
 
