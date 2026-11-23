@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { playerId } from "@sequoia-leaf/core";
+import { type Motion, playerId } from "@sequoia-leaf/core";
 import { Schema } from "effect";
 
 import type { LiveTuning } from "../src/live/live.ts";
@@ -181,6 +181,47 @@ describe("visits from the live rooms", () => {
     await Bun.sleep(200);
 
     expect(await visits()).toMatchObject([{ place: "town", source: "room", left_at: null }]);
+  });
+});
+
+/** Standing at `x`, `y`, facing one way or another. */
+const standing = (x: number, y: number, facing = 2): Motion => ({
+  x,
+  y,
+  vx: 0,
+  vy: 0,
+  facing,
+  pose: 0,
+  flags: 0,
+  jump: 0,
+});
+
+describe("time in the town's room", () => {
+  it("is played after a move that goes somewhere, and AFK after only a first move and a turn on the spot", async () => {
+    await start();
+    const a = await connect({ bearer: "alice-token" });
+    const b = await connect({ bearer: "bob-token" });
+    await a.welcome();
+    await b.welcome();
+    await visitsWhen((r) => r.length === 2);
+    a.move(standing(10, 10));
+    a.move(standing(40, 10));
+    b.move(standing(10, 10));
+    b.move(standing(10, 10, 3));
+    await Bun.sleep(200);
+    ahead = 40_000;
+    a.send({ t: "leave" });
+    b.send({ t: "leave" });
+    await visitsWhen((r) => r.length === 2 && r.every(closed));
+    expect(
+      await services?.query(
+        (sql) =>
+          sql`SELECT player_id, game, played_ms > 0 AS played, afk_ms > 0 AS afk FROM time_in ORDER BY player_id`,
+      ),
+    ).toEqual([
+      { player_id: alice, game: "town", played: 1, afk: 0 },
+      { player_id: bob, game: "town", played: 0, afk: 1 },
+    ]);
   });
 });
 
