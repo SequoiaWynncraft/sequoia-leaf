@@ -308,64 +308,83 @@ second and 300 at the third, which a test holds a real belt to.
 
 ## How long the slice takes
 
-`bun pace.ts` plays tiers 0 to 3 from a new yard to the last goal of tier 3 (the commission and
-every piece of research), by the rules: every change is a command off the wire given with `play`
-at the yard's tick, and the yard runs on, tick by tick, meanwhile. It prints a row for each goal in
-the order done, a row for each tier beside the time the design means it to take, and a line for the
-slice; `--json` gives the same as data, `--seed N` plays another land's orders, `--folios N` builds
-the Studies for N folios a minute (24, two Studies, unless said). `--seeds 1-12` plays each of those
-seeds and prints, for each tier, the least, the middle and the most minutes, building and waiting
-(for Coins and for deliveries together) of the seeds that finished it, and names any seed that
-stopped short. The same seed and settings give the same table, to the tick. A run takes about 4
-seconds; twelve seeds, about 40.
+`bun pace.ts` plays every node and piece of research listed at the top of `pace.ts` (today tiers 0
+to 3, from a new yard to tier 3's commission and every piece of research), by the rules: every change
+is a command off the wire given with `play` at the yard's tick, and the yard runs on, tick by tick,
+meanwhile. It prints a row for each goal in the order done, a row for each tier with nodes beside
+the time the design means it to take (`TARGETS` in `pace/table.ts`; "none yet" for a tier with
+none), and a line for the slice; `--json` gives the same as data, `--seed N` plays another land's
+orders, `--folios N` builds the Studies for N folios a minute (24, two Studies, unless said).
+`--seeds 1-12` plays each of those seeds and prints, for each tier, the least, the middle and the
+most minutes, building and waiting (for Coins and for deliveries together) of the seeds that
+finished it, and names any seed that stopped short. The same seed and settings give the same table,
+to the tick. A run takes about 9 seconds; twelve seeds, about 2 minutes. A new tier needs only its
+nodes and research added to `NODES` and `RESEARCH`, and its time to `TARGETS`.
 
 Each row's time runs from when the player turned to the goal (for research, from when it began to be
 studied) to when it was done, split into building (setting pieces down, laying belts, buying plots,
-working lines out, reading), waiting for Coins and waiting for deliveries or folios. A row also has
-the pieces standing, the Coins the player has, the power drawn and given, and what was bought for it.
-A tier runs from when it opened to when its commission was done and the next opened. Research of a
-tier still being studied then is marked (`~ after:`), not counted in the tier, and summed on a line
-of its own: the folios it still wanted, and the minutes it then took at this pace.
+taking lines up, working lines out, reading), waiting for Coins and waiting for deliveries or folios.
+A row also has the pieces standing, the Coins the player has, the power drawn and given, and what was
+bought for it (and how many pieces were taken up for it). A tier runs from when it opened to when its
+commission was done and the next opened. Research of a tier still being studied then is marked
+(`~ after:`), not counted in the tier, and summed on a line of its own: the folios it still wanted,
+and the minutes it then took at this pace.
 
 The player is one careful, ordinary player. Everything it decides by is at the top of `pace.ts`:
 
-- **The order of goals**: lessons in theirs, then each tier's projects in the table's order and its
-  commission; research in its table's order, each as soon as it may be studied, the line kept full.
+- **The order of goals**: nodes in `NODES` order, the first not done that may be taken, so that a
+  node waiting on research lets the next go first. Research: what the nodes of the tiers open need
+  first, each piece after what it needs (`researchOrder`), then `RESEARCH`; each goes in the line as
+  soon as it may be studied, the line kept full, and what may now be studied sooner than what stands
+  in the line is moved ahead of it (what it had been given stays given).
 - **Lines.** For the node in hand it asks the planner for the lines that would bring each thing it
-  still wants in the tier's minutes (`MINUTES`), less what standing lines already bring the depot
-  (`pace/needs.ts`), and builds those. It keeps everything it builds. Every line ends in the depot.
-  Once the splitter is unlocked, a machine's part is split off a standing line of it where one has
-  enough to spare; otherwise it gets a line of its own straight in (`pace/builder.ts`, which works
-  each line out on a copy of the yard, with the router, before the player builds it). A line that
-  will not fit at the pace wanted is built at half that pace, and half again, down to one a minute,
-  and the player waits the longer.
+  still wants in the tier's minutes (`MINUTES`; a tier past the last given takes the last), less what
+  standing lines already bring the depot (`pace/needs.ts`), and builds those. Every line ends in the
+  depot or a Study. Once the splitter is unlocked, a machine's part is split off a standing line of it
+  where one has enough to spare; otherwise it gets a line of its own straight in (`pace/builder.ts`,
+  which works each line out on a copy of the yard, with the router, before the player builds it).
+- **Blocks, where greedy placing runs out.** A line that will not fit greedily is planned as a block:
+  its last machine where belts from free deposits of everything it needs (or from a standing line of
+  a part it may split) are shortest, measured as a belt goes, round what stands and under it by
+  tunnel; each machine against the side of the one it feeds, handing its things straight in, a part
+  split off a standing line first; only the gatherers' belts and the way home laid by the router. A
+  Study stands against its block's last machine; a block into the depot goes home by one belt, or
+  into a cart stop where one may stand.
+- **Taking up old lines.** A line the player cannot do without (nothing standing brings its thing)
+  that fits nowhere, not even on a plot bought for it, is worked out as a block on a copy with every
+  old line taken up: those built for goals now finished, that nothing still in use draws from, whose
+  thing the goal in hand does not want, keeping off their ground where it can. Then the old lines in
+  its way are taken up one at a time, nearest first, and the block tried again with the rest still
+  standing to be split; a belt of a kept line that one of them had set a splitter on is laid again.
+  Taking a line up is a Select drawn over its pieces and cleared; their Coins come back. Pylons stay.
+  Failing that, the line is laid as its parts first, each a line into the depot with twice what the
+  line takes of it, and then the most of the line that fits, split off them; failing that, at half
+  the pace and half again, down to one a minute, and the player waits the longer.
 - **What it believes standing lines bring** is what it reads off the yard once its new lines have
   filled (`pace/measure.ts`: a copy run on three minutes, then read over five), as a player reads the
   pace on the page; while that is short of the pace the goal wants, it builds again, up to three
   times. The builder's own booking of a split (half of what the line has left) is only its estimate
   for choosing where to split; a split laid above an earlier one takes half of all that passes and
   leaves the earlier one less, and what is read says so.
-- **Research**: once the Study is unlocked, Studies and their folio lines for `FOLIOS` a minute.
-- **Policy**: new pieces at the highest grade unlocked up to `GRADES`; a boiler (or a waterwheel, when
-  short by no more than one gives) whenever the yard would draw more than it gives; a plot only when
-  the land has too little of what a line gathers or no room for it; any filled order handed over,
-  and an order that would take more than `SWAP` minutes swapped when a swap is free; never building
-  for an order. The till is collected once a minute, as the page does. It starts with `PURSE` Coins.
-- **A person's time** (`HANDS`): seconds for each piece set down, each run of belt and each tile of it,
-  each plot bought, each line worked out, each node or piece of research read, each order handed over.
+- **Research**: once the Study is unlocked, for each kind of folio that may be made and that research
+  of an open tier wants, Studies and their folio lines for `FOLIOS` a minute of it.
+- **Policy**: new pieces at the highest grade unlocked up to `GRADES`; after a goal's lines, a boiler
+  (or a waterwheel, when short by no more than one gives, and the other where one will not fit)
+  whenever the yard would draw more than it gives; a plot only when the land has too little of what a
+  line gathers or no room for it; any filled order handed over, and an order that would take more
+  than `SWAP` minutes swapped when a swap is free; never building for an order. The till is collected
+  once a minute, as the page does. It starts with `PURSE` Coins.
+- **A person's time** (`HANDS`): seconds for each piece set down, each run of belt and each tile of it
+  (taking a line up counts as such a run over its pieces), each plot bought, each line worked out,
+  each node or piece of research read, each order handed over and each piece of research moved in
+  the line.
 
-What it does not do, so that a real player may be faster or slower: it lays lines out greedily, each
-fitted into what is left, and never moves or removes a piece; it does not raise standing pieces to
-a higher grade; it uses no crate, sorter, cart stop, Paint or blueprint.
-
-**Where it stops short.** Laid out greedily, the depot's plot fills with tier 0 and 1 and becomes
-a wall between the other plots and the depot, and every line of tier 2 and 3 from another plot must
-cross it. With what it believes true, the player now plays tiers 0 to 2 and stops at the first
-Study's line of Timber folios; believing the builder's booking it went further only because it built
-less than the goals wanted. No rule on this layout fixed that for the tables in a range (see the
-second pass of the brief); it needs a planned layout: the ground of supply belts kept from where a
-thing is gathered to where it is used, machines standing beside the belts they draw from, and ways
-across the depot's plot kept free before tier 1 fills it.
+What it does not do, so that a real player may be faster or slower: it lays tiers 0 to 2 out
+greedily, each line fitted into what is left, which walls the free deposits of the yard's plot into
+pockets by tier 3; it never moves a piece, and takes up only whole old lines, only when nothing else
+will do; it does not raise standing pieces to a higher grade; it builds for the node in hand only
+(not the commission's lines while the research it waits on is studied); it uses no crate, sorter,
+Paint or blueprint, and a cart stop only for a block with no way home.
 
 ## Keeping a yard
 
@@ -434,9 +453,10 @@ yard as it stands can make and needs (`flow`), the codec and the check, random p
 command and piece takes effect, what the page would write reads back as the command) and time away,
 how a piece stands (`condition`), the wire from the page's side, the staged yards, the budgets, and
 the pace script's parts (`test/pace.test.ts`: sizing lines, which lines a goal needs beyond what
-stands, that a line laid out delivers what it is booked for, that what the player reads off the yard
-is what arrives, that a play repeats to the tick, and what the table makes of one play and of
-several). `test/goals.ts` reads from the tables the goals a test needs (the research with nothing
+stands, that a line laid out delivers what it is booked for, that a line that fits nowhere takes up
+only the old line in its way, that what the player reads off the yard is what arrives, the order it
+studies research and turns to nodes in, that a play repeats to the tick, and what the table makes of
+one play and of several). `test/goals.ts` reads from the tables the goals a test needs (the research with nothing
 needed first, what a node wants and pays, a commission's needs), so that no test names a count from
 the tables and changing one breaks none. `test/yards.ts` builds the
 yards they share with commands off the wire, and the yards the play server on a developer's machine

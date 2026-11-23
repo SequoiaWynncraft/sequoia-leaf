@@ -1,19 +1,23 @@
 /**
  * One careful, ordinary player, playing the real yard by the real rules: every change is a command
  * off the wire, given with `play` at the yard's tick, and the yard runs on, tick by tick, while the
- * player works. The player keeps what it builds, and for the goal in hand builds only the lines its
- * planner says are missing (`needs.ts`), laid out first on a copy (`builder.ts`).
+ * player works. For the goal in hand it builds only the lines its planner says are missing
+ * (`needs.ts`), laid out first on a copy (`builder.ts`). It keeps what it builds, until a line it
+ * cannot do without (nothing standing brings its thing) fits nowhere: then it takes up the fewest it
+ * can of the old lines in its way, those built for goals now finished that nothing still in use draws
+ * from, and gets their Coins back; it knows which line each piece belongs to, and what each draws on.
  *
  * What it believes the standing lines bring the depot is what it reads off the yard once its new
  * lines have filled (`measure.ts`), as a player reads the pace on the page: a split above another,
  * a joined belt, a machine short of a part are all in it. While that is short of the pace the goal in
- * hand wants, it builds again. Where a line will not fit at that pace, it builds the most of it that
- * does, at half the pace and half again, and waits the longer.
+ * hand wants, it builds again. Where a line will not fit at that pace, it lays its parts first, each a
+ * line into the depot, or builds the most of it that does, at half the pace and half again, and
+ * waits the longer.
  *
  * Coins are real: the yard keeps no purse, so the player keeps one, as Leaf's ledger does. It pays
  * for each piece as it sets it down, and when it cannot, it waits with the yard running. Once a
  * minute, as the page does, it collects the till, hands over filled orders, swaps an order nothing
- * it has built could fill, and keeps the line of research full.
+ * it has built could fill, and keeps the line of research full, what the open nodes need first.
  *
  * A person's time is real too: each thing done costs seconds (`Hands`), during which the yard runs
  * on. Every tick of the yard's clock is marked as building (thinking and reading included), waiting
@@ -613,35 +617,14 @@ export class Player {
   }
 
   /**
-   * The research in the order the player wants it known: what the nodes of the tiers open and not yet
-   * done need, in the order it turns to them, each after what it needs in turn; then its list.
-   */
-  private priority(): F.Goal[] {
-    const out: F.Goal[] = [];
-    const add = (g: F.Goal): void => {
-      const info = F.GOALS[g];
-      if (!info || F.isNode(g) || out.includes(g) || this.isDone(g)) return;
-      for (const n of info.needs) add(n);
-      out.push(g);
-    };
-    for (const id of this.s.nodes) {
-      const g = F.goal(id);
-      const info = F.GOALS[g];
-      if (info && !this.isDone(g) && info.tier <= this.y.open.tier) for (const n of info.needs) add(n);
-    }
-    for (const id of this.s.research) add(F.goal(id));
-    return out;
-  }
-
-  /**
-   * Keeps the line of research full, in the order the player wants (`priority`): what may be studied
+   * Keeps the line of research full, in the order the player wants (`researchOrder`): what may be studied
    * goes in as soon as it may; when something it wants sooner may be studied, what stands behind it
    * in the line comes out and goes back in after it.
    */
   private queue(): void {
     const was = this.tending;
     this.tending = true;
-    const want = this.priority()
+    const want = researchOrder(this.y.open, this.s.nodes, this.s.research)
       .filter((g) => this.y.line.includes(g) || F.ready(this.y.open, g))
       .slice(0, F.LINE);
     const line = [...this.y.line];
@@ -703,6 +686,28 @@ export class Player {
       this.tierAt.push(y.tick);
     }
   }
+}
+
+/**
+ * The research not yet known, in the order a player wants it known: what the nodes of the tiers open
+ * and not yet done need (`nodes`, in the order the player turns to them), each after what it needs in
+ * turn; then the rest of its list (`research`).
+ */
+export function researchOrder(open: F.Open, nodes: readonly string[], research: readonly string[]): F.Goal[] {
+  const out: F.Goal[] = [];
+  const add = (g: F.Goal): void => {
+    const info = F.GOALS[g];
+    if (!info || F.isNode(g) || out.includes(g) || open.done[g] === 1) return;
+    for (const n of info.needs) add(n);
+    out.push(g);
+  };
+  for (const id of nodes) {
+    const g = F.goal(id);
+    const info = F.GOALS[g];
+    if (info && open.done[g] !== 1 && info.tier <= open.tier) for (const n of info.needs) add(n);
+  }
+  for (const id of research) add(F.goal(id));
+  return out;
 }
 
 const many = (n: F.Item): string => F.ITEM_INFO[n]?.many ?? "things";
