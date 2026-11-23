@@ -30,25 +30,26 @@ export const NODES = [
   "drawing",
   "wax",
   "rakes",
+  "windows",
+  "shells",
   "hall",
   // Tier 3.
   "lanterns",
 ];
 
-/** Research in the order of its table; each goes in the line as soon as what it needs is known, the line kept full. */
+/** Research in the order the player studies it; each goes in the line as soon as what it needs is known, the line kept full. */
 export const RESEARCH = [
+  // What the commission needs, and the machines that make it quicker, first.
   "oilpress",
   "workshop",
-  "bigcrates",
-  "tallpylons",
-  "flywheel",
   "tooling",
+  "brassfolio",
+  "flywheel",
   "sorter",
   "planchest",
   "carttrack",
-  "nightshift",
   "upgrading",
-  "brassfolio",
+  "nightshift",
 ];
 
 /**
@@ -74,7 +75,15 @@ export const SWAP = 30;
 /** Coins to start with: a new player's, with nothing from the rest of the town. */
 export const PURSE = 0;
 
-/** Seconds of a person's time. */
+/**
+ * How much longer a person takes than the taps alone: finding the tool, turning a piece twice, a run
+ * laid and taken up again, a look round the yard. Play-testers of the first design took 2.5 to 3
+ * times what its script said for the same orders; with the taps below at 4 times, this script
+ * agrees with them at the 4th, 6th and 11th order (about 40, 90 and 230 minutes).
+ */
+export const CARE = 4;
+
+/** Seconds of a person's time for the taps alone. */
 export const HANDS: Hands = {
   /** A piece set down: pick it from the toolbar, tap the tile, turn it the right way. */
   piece: 4,
@@ -104,7 +113,16 @@ if (import.meta.main) {
     research: RESEARCH,
     minutes: MINUTES,
     folios: FOLIOS,
-    hands: HANDS,
+    hands: {
+      piece: HANDS.piece * CARE,
+      set: HANDS.set * CARE,
+      run: HANDS.run * CARE,
+      tile: HANDS.tile * CARE,
+      plot: HANDS.plot * CARE,
+      think: HANDS.think * CARE,
+      read: HANDS.read * CARE,
+      order: HANDS.order * CARE,
+    },
     grades: GRADES,
     swap: SWAP,
     purse: PURSE,
