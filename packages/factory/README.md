@@ -22,7 +22,7 @@ game as today's.
 | what it costs                                                              | `bench.ts`, and `test/budgets.test.ts` for the budgets                        |
 
 ```sh
-bun test --parallel            # the side-by-side harness and the budgets, a Bun to each file
+bun test                       # the side-by-side harness and the budgets (about half a minute)
 bun bench.ts [real-yard.json]  # times and sizes beside today's yard
 ```
 
