@@ -39,7 +39,7 @@ import {
   zAt,
 } from "@sequoia-leaf/town/clock.ts";
 
-import { feet, makeActor, onScreen, onWalk, sitsOn, stepPassing, walkAt } from "./actors.ts";
+import { feet, makeActor, onScreen, onWalk, putAs, sitsOn, stepPassing, walkAt } from "./actors.ts";
 import { bit, float } from "./fx.ts";
 import { type Actor, type Doing, G, SEED } from "./game.ts";
 import { guild, type Person } from "./guild.ts";
@@ -196,7 +196,7 @@ const still = (to: Walk["to"]): Walk => ({ from: to, to, at: 0 });
 /** On their feet: where a walk has them by Leaf's clock, or standing where it ends. */
 function afoot(v: Visiting, w: Walk, doing: Doing): void {
   v.put = true;
-  v.a.seat = null;
+  putAs(v.a, null);
   v.a.dozing = null;
   v.a.body = v.open;
   v.a.doing = onWalk(v.a, w) ? doing : "walk";
@@ -211,7 +211,7 @@ function sitAt(v: Visiting, at: Spot): void {
     a.sat = -9;
   }
   v.put = true;
-  a.seat = s;
+  putAs(a, s);
   a.x = at.x;
   a.y = at.y;
   a.dir = at.dir;
@@ -223,7 +223,7 @@ function sitAt(v: Visiting, at: Spot): void {
 function standAt(v: Visiting, at: Pt, dir: Spot["dir"]): void {
   const a = v.a;
   v.put = true;
-  a.seat = null;
+  putAs(a, null);
   a.dozing = null;
   a.body = v.open;
   a.x = at.x;
@@ -272,7 +272,7 @@ function asleep(v: Visiting, s: Seat, seen: number): void {
   const a = v.a;
   if (a.seat !== s) a.sat = v.put ? G.t : -9;
   v.put = true;
-  a.seat = s;
+  putAs(a, s);
   a.x = s.from.x;
   a.y = s.from.y;
   a.dir = s.dir;

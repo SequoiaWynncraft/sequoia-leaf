@@ -10,7 +10,6 @@
  * to act with (no cabin, mailbox, tray or decorating; only the signpost, home or to town).
  */
 
-import { member } from "@sequoia-leaf/kit/live.ts";
 import { CREAM, GOLD, GREEN, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import type { Dir } from "@sequoia-leaf/kit/skin.ts";
@@ -39,7 +38,7 @@ import { AT_CAMP, folk } from "@sequoia-leaf/town/folk.ts";
 import { BOX_FULL, waiting } from "@sequoia-leaf/town/mail.ts";
 import { footprint, thingOf, turnsOf } from "@sequoia-leaf/town/things.ts";
 
-import { face, hop, makeFolk, release, say, sit, stepActor, walkTo } from "./actors.ts";
+import { face, hop, hopTo, makeFolk, say, stepActor, stop, walkAlong, walkTo, walkToSeat, wayTo } from "./actors.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import {
   CAMP_GROUND,
@@ -71,12 +70,12 @@ import {
   lookAt,
   type Looked,
   mine,
+  numbered,
   ok,
   onTown,
-  openCamp,
   refusal,
+  setOutAs,
   shown,
-  troubleCard,
   visiting,
 } from "./leaf.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
@@ -110,14 +109,8 @@ export interface Held {
 }
 
 export interface CampScene extends Scene {
-  /** Lays out the camp gone to (`visit`), or else the member's own, and brings the member in off the trail. */
-  enter(): void;
-  /** Goes to somebody's camp, or the member's own for their own id: from town through the gate, from a camp down the trail. */
-  visit(id: string, name?: string): Promise<void>;
   /** Walk up to one of the camp's places and use it. */
   go(what: CampPlace): void;
-  /** Leave down the trail: for the town, for home, or for somebody's camp opened. */
-  leave(to: "town" | "home" | Looked): void;
   decorating(): boolean;
   decorate(on: boolean): void;
   held(): Held | null;
@@ -169,10 +162,7 @@ function player(): Actor {
 
 /** The member stops whatever they are doing: walking somewhere, sitting. */
 function halt(): void {
-  const p = player();
-  release(p);
-  p.path = [];
-  p.arrive = null;
+  stop(player());
   show.dest = null;
 }
 
@@ -205,14 +195,11 @@ export function makeCamp(
   sprites: Sprites,
   art: CampArt,
   stage: Stage,
-  town: Scene & { cameFromCamp(): void },
   backdrop: { sky: HTMLCanvasElement; near: HTMLCanvasElement },
   ui: CampUi,
 ): CampScene {
   // ---------- what is here ----------
 
-  /** The camp to show when the camp is next entered: somebody's opened, or null for the member's own. */
-  let coming: Looked | null = null;
   let lives: Live[] = [];
   /** Each thing's life in the camp, by its id, so that it is the same thing whatever Leaf's copy is. */
   const byId = new Map<number, Live>();
@@ -430,24 +417,14 @@ export function makeCamp(
       return list;
     });
     for (const a of everybody()) {
-      if (a.seat && old.includes(a.seat) && !seats.includes(a.seat)) release(a);
-      // Nobody is left fenced in: whoever can no longer get to the trail hops over to where they can.
+      if (a.seat && old.includes(a.seat) && !seats.includes(a.seat)) stop(a);
+      // Nobody is left fenced in: whoever can no longer get to the trail hops over to where they can,
+      // and goes on with whatever walk they were on.
       if (!a.seat && a.x < CW - CELL && !ground.footBlocked(a.x, a.y) && cutOff(a)) {
         const to = wayOut(a);
-        if (to) {
-          a.x = to.x;
-          a.y = to.y;
-          a.path = [];
-          hop(a);
-        }
+        if (to) hopTo(a, to, ground);
       }
-      if (!a.seat && a.x < CW - CELL && ground.footBlocked(a.x, a.y)) {
-        const to = ground.nearestFree(a.x, a.y);
-        a.x = to.x;
-        a.y = to.y;
-        a.path = [];
-        hop(a);
-      }
+      if (!a.seat && a.x < CW - CELL && ground.footBlocked(a.x, a.y)) hopTo(a, ground.nearestFree(a.x, a.y), ground);
     }
     for (const p of pets) {
       if (p.x >= CW - CELL || !ground.footBlocked(p.x, p.y)) continue;
@@ -488,7 +465,7 @@ export function makeCamp(
       prompt: { x: CW - 30, y: TRAIL_Y - 44 },
       reach: 26,
       box: { x: CW - 34, y: TRAIL.y0 * CELL - 4, w: 48, h: (TRAIL.y1 - TRAIL.y0 + 1) * CELL + 12 },
-      use: () => leave(home ? "town" : "home"),
+      use: () => hooks.go(home ? { to: "town" } : { to: "camp" }),
     });
     petWorld.fire = fire;
   }
@@ -588,11 +565,10 @@ export function makeCamp(
 
   // ---------- getting about ----------
 
-  let leaving = false;
   /** How far the view has been pushed off the member while something is dragged near an edge. */
   const pan = { x: 0, y: 0 };
 
-  const awake = (): boolean => G.home && G.dark < 0.35 && !leaving;
+  const awake = (): boolean => stage.mayAct();
 
   function go(what: CampPlace): void {
     const spot = spots.find((s) => s.id === what);
@@ -600,7 +576,7 @@ export function makeCamp(
   }
 
   function sitOn(l: Live, wx: number, wy: number): void {
-    if (decor) return;
+    if (decor()) return;
     const p = player();
     const own = (seatsOf.get(l.placed.n)?.seats ?? []).filter((s) => !s.taken || s === p.seat);
     const best = own.toSorted((a, b) => dist(wx, wy, a.x, a.y - 6) - dist(wx, wy, b.x, b.y - 6))[0];
@@ -609,51 +585,8 @@ export function makeCamp(
       return;
     }
     halt();
-    best.taken = true;
-    p.goal = best;
     sfx.tap();
-    walkTo(
-      p,
-      best.from,
-      () => {
-        sit(p, best);
-      },
-      ground,
-    );
-  }
-
-  /** Off down the trail. Night closes in once they are nearly out of sight, or have walked a while. */
-  function leave(to: "town" | "home" | Looked): void {
-    if (leaving || !G.home) return;
-    const p = player();
-    halt();
-    decorate(false);
-    closePanel();
-    closeCard();
-    leaving = true;
-    walkTo(p, { x: CW - 6, y: TRAIL_Y + 2 }, null, ground);
-    p.path.push({ ...TRAIL_END });
-    const set = (): void => {
-      if (to === "town") {
-        stage.travel(town, () => {
-          leaving = false;
-          clear();
-          lookAt(null);
-          // Straight to town from somebody's camp: the strip that says whose camp it is goes with the camp.
-          setStrip(null, () => {});
-          town.cameFromCamp();
-        });
-        return;
-      }
-      coming = to === "home" ? null : to;
-      stage.travel(scene, enter);
-    };
-    const started = G.t;
-    const wait = (): void => {
-      if (dist(p.x, p.y, TRAIL_END.x, TRAIL_END.y) < 70 || G.t - started > 0.9) set();
-      else after(0.1, wait);
-    };
-    wait();
+    walkToSeat(p, best, null, ground);
   }
 
   /** Everything about to happen and everything said is forgotten: the camp is being left. */
@@ -678,17 +611,15 @@ export function makeCamp(
   }
 
   function gone(a: Actor): void {
-    release(a);
+    stop(a);
     guests = guests.filter((g) => g !== a);
     if (show.card === a) closeCard();
   }
 
   function walkOff(a: Actor): void {
-    walkTo(a, { x: CW - 6, y: TRAIL_Y + 2 }, null, ground);
-    a.path.push({ ...TRAIL_END });
-    a.arrive = (): void => {
+    walkAlong(a, [...wayTo(a, { x: CW - 6, y: TRAIL_Y + 2 }, ground), { ...TRAIL_END }], () => {
       gone(a);
-    };
+    });
   }
 
   /** The caller Leaf says is waiting at the camp, and their figure here. */
@@ -782,7 +713,7 @@ export function makeCamp(
 
   /** Whoever Leaf says is waiting comes in, and whoever it no longer has goes. */
   function meetCaller(): void {
-    if (G.where !== "camp" || !G.home || leaving) return;
+    if (G.where !== "camp" || !G.home || stage.now().at === "dusk") return;
     const visit = shown().visit;
     if (caller && caller.visit.id !== visit?.id) {
       sendOff(caller);
@@ -882,33 +813,29 @@ export function makeCamp(
 
   // ---------- coming in ----------
 
-  function enter(): void {
+  /** Lays out the camp walked to (`of`, somebody's opened), or else the member's own, and brings the member in off the trail. */
+  function enter(of: Looked | null): void {
     clear();
-    lookAt(coming);
-    coming = null;
-    G.where = "camp";
+    lookAt(of);
     const host = visiting();
     seed = host ? nameSeed(host.id) % 5000 : 0;
     pets = [];
     lanterns.length = 0;
-    sel = null;
-    decor = false;
-    leaving = false;
+    decorating = null;
     pan.x = 0;
     pan.y = 0;
 
     const p = player();
-    release(p);
+    stop(p);
     p.x = TRAIL_END.x;
     p.y = TRAIL_END.y;
     p.dir = 1;
     p.alpha = 0;
     p.speed = 64;
     p.say = "";
-    p.path = [{ ...TRAIL_IN }];
-    p.arrive = (): void => {
+    walkAlong(p, [{ ...TRAIL_IN }], () => {
       p.dir = 1;
-    };
+    });
 
     byId.clear();
     seatsOf.clear();
@@ -933,32 +860,6 @@ export function makeCamp(
     ui.arrived();
   }
 
-  async function goTo(id: string, name?: string): Promise<void> {
-    if (id === member()?.id) {
-      if (G.where === "camp") leave("home");
-      else hooks.toCamp();
-      return;
-    }
-    if (!G.home || leaving) return;
-    const opened = await openCamp(id, name);
-    if (typeof opened === "string") {
-      troubleCard(opened);
-      return;
-    }
-    if (G.where === "camp") {
-      leave(opened);
-      return;
-    }
-    // A visit that cannot set off changes nothing: Leaf took a while and the member has gone into a game
-    // meanwhile, or is already on the way to another camp. It is not kept for the next walk to a camp.
-    const was = coming;
-    coming = opened;
-    if (hooks.toCamp()) return;
-    coming = was;
-    opened.play.close();
-  }
-  hooks.visitCamp = (id, name) => void goTo(id, name);
-
   /** Leaf's copy has changed: the camp is laid out from it again, and its caller comes or goes. */
   onTown(() => {
     if (G.where !== "camp") return;
@@ -970,20 +871,27 @@ export function makeCamp(
 
   // ---------- decorating ----------
 
-  let decor = false;
-  let sel: Hold | null = null;
+  /** Decorating, and whatever is in hand meanwhile; null while not decorating, when nothing can be in hand. */
+  let decorating: { hand: Hold | null } | null = null;
+  const decor = (): boolean => decorating !== null;
+  /** What is in hand, while decorating. */
+  const hand = (): Hold | null => decorating?.hand ?? null;
+  /** Takes something in hand, or puts it down (null): only while decorating. */
+  function grip(h: Hold | null): void {
+    if (decorating) decorating.hand = h;
+  }
 
   function decorate(on: boolean): void {
-    if (decor === on || (on && visiting())) return;
-    decor = on;
+    if (decor() === on || (on && visiting())) return;
     if (on) {
+      decorating = { hand: null };
       closePanel();
       closeCard();
       halt();
       sfx.open();
     } else {
       settle();
-      sel = null;
+      decorating = null;
       sfx.close();
     }
     pan.x = 0;
@@ -996,7 +904,7 @@ export function makeCamp(
 
   /** Shows the thing in hand where it would go; anything else is where it stands. */
   function showHeld(): void {
-    const h = sel;
+    const h = hand();
     const l = h ? liveAt(h.n) : null;
     if (!h || !l) return;
     const at = footOf({ ...l.placed, x: h.x, y: h.y, t: h.t });
@@ -1020,14 +928,14 @@ export function makeCamp(
   function pickUp(n: number, grab: Pt): void {
     const p = placedAt(n);
     if (!p) return;
-    sel = { n, x: p.x, y: p.y, t: p.t, ok: "ok", dragging: true, grab, moved: false };
+    grip({ n, x: p.x, y: p.y, t: p.t, ok: "ok", dragging: true, grab, moved: false });
     csfx.lift();
     showHeld();
     ui.tray();
   }
 
   function dragTo(at: Pt): void {
-    const h = sel;
+    const h = hand();
     const p = h ? placedAt(h.n) : null;
     const thing = p ? thingOf(p.id) : null;
     if (!h || !p || !thing || !h.dragging) return;
@@ -1048,11 +956,17 @@ export function makeCamp(
 
   /** The thing in hand is set down where it is held, or goes back where it came from. */
   function settle(): void {
-    const h = sel;
+    const h = hand();
     const p = h ? placedAt(h.n) : null;
     if (!h || !p) return;
     const was = h.dragging;
     h.dragging = false;
+    // Just set out, and not numbered by Leaf yet: it is held where it was let go, and moved there
+    // once it is (`numberedAs`).
+    if (h.n < 0) {
+      if (was) sfx.tap();
+      return;
+    }
     if (h.moved || h.t !== p.t) {
       const did = doNow({ do: "move", n: h.n, x: h.x, y: h.y, t: h.t });
       const now = placedAt(h.n) ?? p;
@@ -1076,8 +990,13 @@ export function makeCamp(
   }
 
   function turn(): void {
-    const h = sel;
+    const h = hand();
     if (!h) return;
+    // Nothing is done to a thing Leaf has not numbered yet: it is a moment.
+    if (h.n < 0) {
+      sfx.no();
+      return;
+    }
     settle();
     const next = turned(layout(), h.n);
     const p = placedAt(h.n);
@@ -1109,10 +1028,14 @@ export function makeCamp(
   }
 
   function stow(): void {
-    const h = sel;
+    const h = hand();
     const p = h ? placedAt(h.n) : null;
     const thing = p ? thingOf(p.id) : null;
     if (!h || !p || !thing) return;
+    if (h.n < 0) {
+      sfx.no();
+      return;
+    }
     settle();
     const at = footOf(p);
     const sprite = pictureOf(art, p.id, p.t, p.s);
@@ -1124,7 +1047,7 @@ export function makeCamp(
       return;
     }
     if (at && sprite) ui.toTray(sprite.c, { x: at.x, y: at.y - sprite.c.height / 2 }, thing.id);
-    sel = null;
+    grip(null);
     sfx.pop();
     rebuild();
     ui.tray();
@@ -1162,9 +1085,28 @@ export function makeCamp(
     return best;
   }
 
+  /**
+   * Leaf has answered for a thing just set out (`mark`, the page's own number for it): whatever has
+   * it in hand from now names Leaf's number, and is moved to where it was let go meanwhile; if Leaf
+   * did not set it out, nothing is in hand.
+   */
+  async function numberedAs(mark: number): Promise<void> {
+    const n = await numbered(mark);
+    const h = hand();
+    if (!h || h.n !== mark) return;
+    if (n === null) {
+      grip(null);
+      ui.tray();
+      return;
+    }
+    h.n = n;
+    if (!h.dragging && h.moved) settle();
+    ui.tray();
+  }
+
   function takeOut(id: string): boolean {
     const thing = thingOf(id);
-    if (!decor || !thing) return false;
+    if (!decor() || !thing) return false;
     settle();
     // With as many set out as may be, it stays in the tray.
     if (campFull(mine().placed)) {
@@ -1179,18 +1121,22 @@ export function makeCamp(
       y: clamp(Math.floor(p.y / CELL) + 2, 14, CGH - 6),
     };
     const spot = roomy(id, near) ?? freeSpot(layout(), id, near);
-    // What is set out is given the id Leaf will give it: the next of the camp's counter.
-    const n = shown().made;
-    if (!spot || !ok(doNow({ do: "setOut", thing: id, x: spot.x, y: spot.y, t: 0 }))) {
+    const did = spot ? doNow({ do: "setOut", thing: id, x: spot.x, y: spot.y, t: 0 }) : null;
+    // Held by the page's own number for it until Leaf gives it one (`numberedAs`).
+    const n = did ? setOutAs(did) : null;
+    if (n === null) {
       sfx.no();
       hooks.feed("No room for that. Put something away first.", "coral");
       return false;
     }
+    void numberedAs(n);
     rebuild();
     const where = placedAt(n);
-    sel = where
-      ? { n, x: where.x, y: where.y, t: where.t, ok: "ok", dragging: false, grab: { x: 0, y: 0 }, moved: false }
-      : null;
+    grip(
+      where
+        ? { n, x: where.x, y: where.y, t: where.t, ok: "ok", dragging: false, grab: { x: 0, y: 0 }, moved: false }
+        : null,
+    );
     const at = where ? footOf(where) : null;
     if (at) {
       puff(at.x, at.y, 5, "#966c4a");
@@ -1233,7 +1179,7 @@ export function makeCamp(
   const touch = makeTouch({
     ground,
     // While decorating, nothing is walked up to and used.
-    doors: () => (decor ? [] : spots),
+    doors: () => (decor() ? [] : spots),
     people: everybody,
     greet: meet,
     own(x, y) {
@@ -1295,9 +1241,9 @@ export function makeCamp(
     },
     under(g, cx, cy) {
       // A soft grid round whatever is in hand, and the ground it would take.
-      const h = sel;
+      const h = hand();
       const l = h ? liveAt(h.n) : null;
-      if (decor && h && l) {
+      if (decor() && h && l) {
         const [w, d] = footprint(l.thing, h.t);
         if (h.dragging)
           for (let y = h.y - 3; y <= h.y + d + 2; y++)
@@ -1337,9 +1283,9 @@ export function makeCamp(
         g.globalAlpha = 1;
       }
       // Gold corners round the thing in hand.
-      const h = sel;
+      const h = hand();
       const l = h ? liveAt(h.n) : null;
-      const box = decor && l ? l.prop.hit : null;
+      const box = decor() && l ? l.prop.hit : null;
       if (!box) return;
       const x0 = Math.round(box.x) - cx - 2;
       const y0 = Math.round(box.y) - cy - 2;
@@ -1392,7 +1338,7 @@ export function makeCamp(
       G.t += dt;
       const p = player();
       stepActor(p, dt, ground);
-      touch.step(dt, sel?.dragging ? null : steer);
+      touch.step(dt, hand()?.dragging ? null : steer);
       for (const a of guests) stepActor(a, dt, ground);
       // Whoever is out past the posts is behind the great tree, and then gone.
       for (const a of everybody()) a.alpha = clamp((CW + 12 - a.x) / 6, 0, 1);
@@ -1438,7 +1384,7 @@ export function makeCamp(
       }
 
       // Something dragged near an edge of the view pushes the view along: of as much of it as the tray leaves.
-      if (sel?.dragging && lastDrag) {
+      if (hand()?.dragging && lastDrag) {
         const tray = covered();
         const fx = (lastDrag.x - G.cam.x) / G.view.w;
         const fy = (lastDrag.y - G.cam.y) / (tray?.under ? (tray.top * G.view.dpr) / G.view.z : G.view.h);
@@ -1459,20 +1405,20 @@ export function makeCamp(
 
     tap(x, y, finger) {
       lastDrag = { x, y };
-      if (!decor || !awake()) return touch.tap(x, y, finger);
+      if (!decor() || !awake()) return touch.tap(x, y, finger);
       // Decorating, a touch takes hold of a thing, or puts down what is in hand and walks.
       show.touch = finger;
       closeCard();
       const n = thingAt(x, y);
       if (n !== null) {
-        if (sel && sel.n !== n) settle();
+        if ((hand()?.n ?? n) !== n) settle();
         const l = liveAt(n);
         pickUp(n, l ? { x: x - l.prop.x, y: y - l.prop.y } : { x: 0, y: 0 });
         return false;
       }
-      if (sel) {
+      if (hand()) {
         settle();
-        sel = null;
+        grip(null);
         ui.tray();
       }
       return touch.walk(x, y);
@@ -1485,16 +1431,16 @@ export function makeCamp(
 
     release(_at, over) {
       lastDrag = null;
-      if (!sel?.dragging) return;
+      if (!hand()?.dragging) return;
       if (over?.closest("#tray")) stow();
       else settle();
     },
 
     point(at) {
-      if (!decor || !at || !awake()) return touch.point(at);
+      if (!decor() || !at || !awake()) return touch.point(at);
       // The thing in hand has its own corners.
-      const n = sel?.dragging ? null : thingAt(at.x, at.y);
-      const l = n !== null && n !== sel?.n ? liveAt(n) : null;
+      const n = hand()?.dragging ? null : thingAt(at.x, at.y);
+      const l = n !== null && n !== hand()?.n ? liveAt(n) : null;
       const h: Hover | null = l?.prop.hit
         ? { box: l.prop.hit, tip: [l.thing.name, ""], ref: thingRef(l.thing.id) }
         : null;
@@ -1502,33 +1448,49 @@ export function makeCamp(
       show.pointed = null;
       return h;
     },
-    act: () => (decor ? turn() : touch.act()),
+    act: () => (decor() ? turn() : touch.act()),
 
     back() {
       if (G.panel) closePanel();
-      else if (decor) decorate(false);
+      else if (decor()) decorate(false);
       else closeCard();
     },
 
     key(k) {
-      if (!decor) return false;
+      if (!decor()) return false;
       if (k === "r") turn();
       else if (k === "delete" || k === "backspace") stow();
       else return false;
       return true;
     },
 
-    awake,
     cameBack: () => undefined,
+    wayOut() {
+      halt();
+      decorate(false);
+      closePanel();
+      closeCard();
+      // Off down the trail, and on past the posts.
+      return [...wayTo(player(), { x: CW - 6, y: TRAIL_Y + 2 }, ground), { ...TRAIL_END }];
+    },
+    // Night falls once they are nearly out of sight behind the great tree.
+    nightFrom: 70,
+    putAway() {
+      clear();
+      lookAt(null);
+      // The strip that says whose camp it is goes with the camp.
+      setStrip(null, () => {});
+    },
+    putOn(to) {
+      enter(to.place === "camp" ? to.of : null);
+    },
 
-    enter,
-    visit: goTo,
     go,
-    leave,
-    decorating: () => decor,
+    decorating: () => decor(),
     decorate,
     held() {
-      const p = sel ? placedAt(sel.n) : null;
+      const h = hand();
+      const p = h ? placedAt(h.n) : null;
       const thing = p ? thingOf(p.id) : null;
       return thing ? { name: thing.name, turns: turnsOf(thing) > 1, stays: thing.rooted } : null;
     },
@@ -1550,22 +1512,22 @@ export function makeCamp(
 
     handles: {
       home() {
-        leave("home");
+        hooks.go({ to: "camp" });
       },
       town() {
-        leave("town");
+        hooks.go({ to: "town" });
       },
       walk: go,
       decorate,
       take: takeOut,
       grab(n) {
         const l = liveAt(n);
-        if (!decor || !l) return;
-        if (sel && sel.n !== n) settle();
+        if (!decor() || !l) return;
+        if ((hand()?.n ?? n) !== n) settle();
         pickUp(n, { x: 0, y: -4 });
       },
       dragTo(cx, cy) {
-        const h = sel;
+        const h = hand();
         const p = h ? placedAt(h.n) : null;
         const thing = p ? thingOf(p.id) : null;
         if (!h || !thing) return;
@@ -1582,8 +1544,9 @@ export function makeCamp(
         });
       },
       hand() {
-        const p = sel ? placedAt(sel.n) : null;
-        return sel && p ? { id: p.id, cx: sel.x, cy: sel.y, ok: sel.ok } : null;
+        const h = hand();
+        const p = h ? placedAt(h.n) : null;
+        return h && p ? { id: p.id, cx: h.x, cy: h.y, ok: h.ok } : null;
       },
       pets() {
         return pets.map((p) => ({ name: p.name, x: Math.round(p.x), y: Math.round(p.y) }));

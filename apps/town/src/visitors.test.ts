@@ -5,7 +5,7 @@ import { forgetLedger } from "@sequoia-leaf/kit/purse.ts";
 import { HELLO, type Standin, standin, TESTER } from "@sequoia-leaf/kit/standin.ts";
 import { dozing, HOME, homecoming, SITS_AFTER } from "@sequoia-leaf/town/clock.ts";
 
-import { HOP, hop, makeActor, walkAt } from "./actors.ts";
+import { HOP, hop, makeActor, sit, walkAt } from "./actors.ts";
 import type * as Events from "./events.ts";
 import { type Actor, G, SEED } from "./game.ts";
 import type * as Guild from "./guild.ts";
@@ -123,7 +123,7 @@ describe("members dozing", () => {
     const first = figure("Fernhollow").seat;
     if (!first) throw new Error("not on a seat");
     const me = makeActor({ name: "Tester", rank: "", level: 1, voice: 1 }, null, first.from.x, first.from.y, true);
-    me.seat = first;
+    sit(me, first);
     step(0, [me]);
     const next = dozing(
       resting,

@@ -10,7 +10,17 @@
 
 import type { Ctx, Pt, Rect } from "@sequoia-leaf/kit/util.ts";
 
+import type { Visit } from "./doors.ts";
 import type { GameId } from "./games.ts";
+import type { Looked } from "./leaf.ts";
+import type { Place, Screen } from "./screen.ts";
+
+/** Where a walk off is to: a place; for a camp, somebody's opened (`openCamp`), or the member's own (null). */
+export type Bound =
+  { readonly place: "town" } | { readonly place: "grove" } | { readonly place: "camp"; readonly of: Looked | null };
+
+/** The stage's one state (`screen.ts`), with where a walk is to and a game's open door. */
+export type Stood = Screen<Bound, Visit>;
 
 /** Which way the member is steering by hand: with the keys, or towards a finger held on the world. */
 export interface Steer {
@@ -58,27 +68,33 @@ export interface Scene {
   drag(at: Pt): void;
   /** It has been lifted, at a point in the scene and over this part of the page. */
   release(at: Pt, over: Element | null): void;
-  /** Whether the member may move about yet. */
-  awake(): boolean;
   /** The member has come back out of a game. */
   cameBack(game: GameId): void;
+  /**
+   * The member walks off towards another place (`to`): whatever is open is put away and the member
+   * stops, and this is the way they walk, in its pixels (none: night falls where they stand).
+   */
+  wayOut(to: Place): readonly Pt[];
+  /** How far from the end of that way night begins to fall, in its pixels. */
+  readonly nightFrom: number;
+  /** It is left, at the darkest moment of the walk off. */
+  putAway(): void;
+  /** It is walked into from `from`, at the darkest moment: laid out, and the member put at the way in. */
+  putOn(to: Bound, from: Place): void;
 }
 
 /** What a scene asks of the stage it is on. */
 export interface Stage {
+  /** Whether the member may move about and act: home, and not walking off or still in the dark of walking in. */
+  mayAct(): boolean;
+  /** Where the stage is, for a scene that shows its own coming and going. */
+  now(): Stood;
   /**
    * Take the member into a game: the view closes in on `at` (a point in the scene), and the game
-   * opens out of it; for the Works, on `of`'s yard, if given.
+   * opens out of it; for the Works, on `of`'s yard, if given. Says whether they went: only while
+   * they may act.
    */
-  goInside(game: GameId, at: Pt, of?: string): void;
+  goInside(game: GameId, at: Pt, of?: string): boolean;
   /** Point the camera now, without easing. */
   snap(): void;
-  /** Put another scene on in this one's place, at once. */
-  put(next: Scene): void;
-  /**
-   * Walk from this place to another: night closes in on whoever is walking off, at its darkest
-   * `swap` sets the next place up and it is put on, and then the night lifts on them walking in.
-   * Says whether the member set off: not while another walk is under way.
-   */
-  travel(next: Scene, swap: () => void): boolean;
 }

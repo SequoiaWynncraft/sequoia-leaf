@@ -14,7 +14,7 @@
 import { pick as pickCard, point } from "@sequoia-leaf/kit/card.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { heldAgain, typing } from "@sequoia-leaf/kit/keys.ts";
-import { balance } from "@sequoia-leaf/kit/purse.ts";
+import { member } from "@sequoia-leaf/kit/live.ts";
 import { bake, lookFor, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
@@ -23,93 +23,30 @@ import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { FOLK } from "@sequoia-leaf/town/folk.ts";
 
 import { stepAbout } from "./aboutui.ts";
+import { walkAlong, walkLeft } from "./actors.ts";
 import { makeCampArt } from "./campart.ts";
-import { type CampScene, makeCamp } from "./campscene.ts";
+import { makeCamp } from "./campscene.ts";
 import { makeCampUi } from "./campui.ts";
-import { goIn, type Visit } from "./doors.ts";
+import { goIn } from "./doors.ts";
 import { drawIris } from "./draw.ts";
 import { folkArt, initFolkArt } from "./folkart.ts";
 import { clearFx } from "./fx.ts";
-import { G, hooks, type PanelId, show, toPage } from "./game.ts";
-import { type GameId, GAMES } from "./games.ts";
-import { type Grove, makeGrove } from "./grovescene.ts";
+import { G, type Going, hooks, show, toPage } from "./game.ts";
+import { GAMES } from "./games.ts";
+import { makeGrove } from "./grovescene.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, covered, hush, initHud, tickHud } from "./hud.ts";
-import { again, here, keepTold, onTown, town as kept, troubleCard } from "./leaf.ts";
+import { here, keepTold, onTown, openCamp, town as kept, troubleCard, visiting } from "./leaf.ts";
 import { leafNow } from "./players.ts";
+import { lookFromOutside } from "./review.ts";
+import { darkOf, inGame, mayAct, next, openOf, type Place, placeOf, takesWalk } from "./screen.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
-import type { Hover, Scene, Stage, Steer } from "./stage.ts";
+import type { Bound, Hover, Scene, Stage, Steer, Stood } from "./stage.ts";
 import { nameStatues } from "./statues.ts";
-import { makeTown, type Town } from "./townscene.ts";
+import { makeTown } from "./townscene.ts";
 import { dismissArrival } from "./ui.ts";
-import type { PlaceId } from "./world.ts";
 
-declare global {
-  interface Window {
-    /** Handles for looking at the town from outside: jump the clock, open a place, move the member. */
-    town?: {
-      skip: (seconds: number) => void;
-      enter: () => void;
-      /** Opens "Who is about". */
-      about: () => void;
-      /** Whoever was chosen in "Who is about" and is being shown, whether the view went to them, and the seconds left. */
-      found: Town["handles"]["found"];
-      open: (id: PanelId) => void;
-      close: () => void;
-      visit: (id: PlaceId) => void;
-      tp: (x: number, y: number) => void;
-      /** Walks the member to a point in town, round whatever is in the way. */
-      walk: (x: number, y: number) => void;
-      tap: (x: number, y: number) => void;
-      page: (x: number, y: number) => Pt;
-      /** Where the prompt by a door is on the page, while it is up. */
-      prompt: () => Pt | null;
-      who: () => { name: string; x: number; y: number; doing: string }[];
-      /** Real members in town just now (on the guild's own server). */
-      visitors: () => { name: string; x: number; y: number }[];
-      /** Every member drawn this moment: who, where their feet are drawn, how opaque. */
-      drawn: Town["handles"]["drawn"];
-      /** Where the member is, and where the missing crab is hiding. */
-      me: () => Pt;
-      lost: () => Pt;
-      /** Milliseconds to work out and draw one frame, averaged over a hundred. */
-      bench: () => number;
-      /** Goes into a game by its door; says where that has got to; comes back out. */
-      inside: (id: GameId) => void;
-      door: () => "town" | "closing in" | ReturnType<Visit["state"]>;
-      leave: () => void;
-      /** Stops the town's clock (it is still drawn), so that `skip` alone moves it on. */
-      hold: (on: boolean) => void;
-      /** What the purse holds as the page shows it: Leaf's numbers. */
-      purse: () => { leaf: number; coins: number };
-      /** The member's town as the page shows it: Leaf's copy. */
-      kept: () => unknown;
-      /** Asks Leaf for the town again: for after a tour has staged something. */
-      again: () => Promise<void>;
-      /** Which place is on the stage, and how dark the walk between two has got (0 for not at all). */
-      where: () => { where: "town" | "camp" | "grove"; dark: number };
-      /** The member's camp: go there, come back, and what `campscene.ts` offers besides. */
-      camp: CampScene["handles"] & { go: () => void };
-      /** The Grove: go there, and what `grovescene.ts` offers besides. */
-      grove: Grove["handles"] & { go: () => void };
-      /** Everybody else in town live (on the guild's own server), as they would be drawn this moment. */
-      players: Town["handles"]["players"];
-      /** What the town's live room was last told of the member, and when. */
-      told: Town["handles"]["told"];
-      /** The live connection: its status, what is shown of it, and how many others are in the room. */
-      link: Town["handles"]["link"];
-      /** The member makes an emote, as if chosen from the plaque over their head. */
-      emote: Town["handles"]["emote"];
-    };
-  }
-}
-
-/** How long the view takes to close in on a door, and to open out again, in seconds. */
-const CLOSE_IN = 0.55;
-/** How long night takes to close in on somebody walking off to another place, and to lift on them walking in. */
-const NIGHTFALL = 0.6;
-const DAYBREAK = 0.75;
 /** How long the pointer rests on a thing before its tip shows, in milliseconds. */
 const REST = 400;
 
@@ -170,8 +107,9 @@ async function boot(): Promise<void> {
       if (box.under) fh = Math.max(40, box.top * k);
       else fw = Math.max(40, box.left * k);
     }
-    const at = scene.focus();
-    const { w, top, bottom } = scene.bounds;
+    const on = scene();
+    const at = on.focus();
+    const { w, top, bottom } = on.bounds;
     let tx = at.x - fw / 2;
     let ty = at.y - fh / 2;
     tx = vw > w + (vw - fw) ? (w - vw) / 2 : clamp(tx, 0, w - fw);
@@ -193,107 +131,169 @@ async function boot(): Promise<void> {
     G.view = { w: Math.ceil(cw / z), h: Math.ceil(ch / z), z, dpr };
     // The usual text size; on a sharp screen, the size the kit gives second lines.
     wordPx = Math.max(1, Math.round(unit() * dpr * (dpr >= 2 ? 0.75 : 1)));
-    scene.resize(G.view.w, G.view.h);
+    scene().resize(G.view.w, G.view.h);
     aim(true);
-    if (paused) draw();
+    if (screen.at === "inside") draw();
   }
 
-  // ---------- through a door, and back ----------
+  // ---------- the stage ----------
 
-  /**
-   * The view closes in on a point of the scene before a game opens, and opens out from it after:
-   * `open` runs from 1 (the whole view) down to 0 (shut).
-   */
-  const iris = { at: { x: 0, y: 0 }, open: 1, goal: 1 };
-  let visit: Visit | null = null;
-  let inside: GameId | null = null;
-  /** A game is open over the town: nothing here is stepped or drawn until it is put away. */
-  let paused = false;
+  /** Where the stage is (`screen.ts`): the town to begin with. Only `move` changes it. */
+  let screen: Stood = { at: "playing", place: "town" };
+  /** The loop is asking for frames; and the clock is being stepped by hand from outside. */
   let running = false;
-  /** The clock is being stepped by hand from outside. */
   let heldStill = false;
+  /** Each command given, numbered: what Leaf answers for one is acted on only if no other has come since. */
+  let asked = 0;
 
   const stage: Stage = {
+    mayAct: () => G.home && mayAct(screen),
+    now: () => screen,
     goInside(game, at, of) {
-      if (visit) return;
-      inside = game;
-      // The game says where the member is while it is open, and calls Leaf itself: the town's time stops here.
-      guild.here(null);
-      here();
-      // The town's live room is left at once, before the game's page is made: it may go into a live
-      // room of its own (a visit's), and a player is live in one room at a time.
-      town.onStage(false);
-      iris.at = at;
-      iris.goal = 0;
-      hush(true);
+      if (!stage.mayAct()) return false;
       const door = GAMES[game];
-      visit = goIn(of === undefined ? door : { ...door, url: `${door.url}?of=${encodeURIComponent(of)}` }, {
+      const visit = goIn(of === undefined ? door : { ...door, url: `${door.url}?of=${encodeURIComponent(of)}` }, {
         news(text, tone) {
           hooks.feed(text, tone);
         },
         back(onTo) {
-          visit = null;
-          paused = false;
-          iris.goal = 1;
-          hush(false);
-          if (inside) scene.cameBack(inside);
-          inside = null;
-          guild.here(G.where);
-          here();
-          if (scene === town) town.onStage(true);
-          wake();
-          if (onTo !== undefined) hooks.visitCamp(onTo);
+          move(next(screen, { kind: "back" }));
+          if (onTo !== undefined) go({ to: "camp", of: onTo });
         },
       });
+      move(next(screen, { kind: "door", game, door: at, visit }));
+      return true;
     },
     snap() {
       aim(true);
     },
-    put(next) {
-      scene = next;
-      scene.resize(G.view.w, G.view.h);
-      aim(true);
-    },
-    travel(next, swap) {
-      if (trip) return false;
-      trip = { next, swap, there: false };
-      tipOff(TIP);
-      return true;
-    },
   };
-  /** A walk from one place to another, part-way through: night closing in, or lifting. */
-  let trip: { next: Scene; swap: () => void; there: boolean } | null = null;
 
   initHud();
   const art = makeCampArt(sprites);
   void nameStatues(art);
   const town = makeTown(sprites, art, stage);
   const campUi = makeCampUi(art);
-  const camp = makeCamp(sprites, art, stage, town, town.backdrop, campUi);
+  const camp = makeCamp(sprites, art, stage, town.backdrop, campUi);
   campUi.bind(camp);
-  town.toCamp = (): void => {
-    stage.travel(camp, () => {
-      camp.enter();
-    });
-  };
-  const grove = makeGrove(sprites, art, stage, town);
-  town.toGrove = async (free): Promise<boolean> => {
-    const trouble = await grove.open();
-    if (trouble === "signedout" || trouble === "unreadable") troubleCard(trouble);
-    else if (trouble) hooks.feed("The Grove could not be opened. Try again in a moment.", "coral");
-    // While Leaf answered, the member may have set off somewhere else, or gone into a game.
-    return (
-      !trouble &&
-      free() &&
-      scene === town &&
-      !visit &&
-      stage.travel(grove, () => {
-        grove.enter();
-      })
-    );
-  };
-  /** The place that is on screen: the town to begin with. */
-  let scene: Scene = town;
+  const grove = makeGrove(sprites, art, stage);
+  const scenes: Readonly<Record<Place, Scene>> = { town, camp, grove };
+  /** The place that is on screen. */
+  const scene = (): Scene => scenes[placeOf(screen)];
+
+  /**
+   * The stage moves on (`next`), and everything that follows from where it is changes with it, here
+   * and nowhere else: which place is on, how dark it is, where the member is said to be, the town's
+   * live room, the sound, and the loop.
+   */
+  function move(now: Stood): void {
+    const was = screen;
+    if (now === was) return;
+    screen = now;
+    G.where = placeOf(now);
+    G.dark = darkOf(now);
+    if (now.at === "dusk" && was.at !== "dusk") setOff(now);
+    if (was.at === "dusk" && now.at !== "dusk") swap(was);
+    const game = inGame(now);
+    if (game !== inGame(was)) hush(game);
+    const at = game ? null : placeOf(now);
+    if (at !== (inGame(was) ? null : placeOf(was))) {
+      // In a game, the game says where the member is, and calls Leaf itself: the town's time stops
+      // here, and it says so as they go in and again as they come out.
+      guild.here(at);
+      if (game !== inGame(was)) here();
+      // The town's live room is only for while the town is on the stage: a game may go into a live
+      // room of its own (a visit's), and a player is live in one room at a time.
+      town.onStage(at === "town");
+    }
+    if (now.at === "inside" && was.at !== "inside") {
+      // The view has closed in: the game takes the page from here.
+      keys.clear();
+      held = null;
+      now.visit.arrived(toPage(now.door.x, now.door.y));
+    }
+    if (now.at === "opening" && was.at !== "opening") {
+      scene().cameBack(now.game);
+      wake();
+    }
+  }
+
+  /** The member sets off for another place, on the way the place they are leaving gives. */
+  function setOff(off: Extract<Stood, { at: "dusk" }>): void {
+    tipOff(TIP);
+    const p = G.player;
+    const way = scenes[off.from].wayOut(off.to.place);
+    if (p) walkAlong(p, way);
+  }
+
+  /** At the darkest moment of a walk: the place walked off from is put away, and the next put on. */
+  function swap(off: Extract<Stood, { at: "dusk" }>): void {
+    keys.clear();
+    held = null;
+    closePanel();
+    closeCard();
+    clearFx();
+    show.prompt = null;
+    show.promptT = 0;
+    show.hover = null;
+    show.pointed = null;
+    show.dest = null;
+    scenes[off.from].putAway();
+    scenes[off.to.place].putOn(off.to, off.from);
+    scene().resize(G.view.w, G.view.h);
+    aim(true);
+  }
+
+  /** Sets off for a place, if the stage takes the walk; says whether it did. */
+  function walkOff(to: Bound): boolean {
+    const was = screen;
+    move(next(screen, { kind: "walk", to }));
+    return screen !== was;
+  }
+
+  /** Where the member asks to go, as the stage allows: the one way between places, and into the games. */
+  function go(g: Going): void {
+    const n = ++asked;
+    const latest = (): boolean => n === asked;
+    if (!G.home) return;
+    switch (g.to) {
+      case "game":
+        if (stage.mayAct() && placeOf(screen) === "town") town.goIn(g.game, g.of);
+        return;
+      case "town":
+        walkOff({ place: "town" });
+        return;
+      case "grove":
+        if (!takesWalk(screen)) return;
+        closePanel();
+        closeCard();
+        void (async () => {
+          const trouble = await grove.open();
+          if (trouble === "signedout" || trouble === "unreadable") troubleCard(trouble);
+          else if (trouble) hooks.feed("The Grove could not be opened. Try again in a moment.", "coral");
+          // While Leaf answered, the member may have asked for somewhere else, or gone into a game.
+          else if (latest()) walkOff({ place: "grove" });
+        })();
+        return;
+      case "camp": {
+        if (g.of === undefined || g.of === member()?.id) {
+          // At home already: whatever it was asked from is put away.
+          if (placeOf(screen) === "camp" && visiting() === null) closePanel();
+          else walkOff({ place: "camp", of: null });
+          return;
+        }
+        if (!takesWalk(screen)) return;
+        const { of, name } = g;
+        void (async () => {
+          const opened = await openCamp(of, name);
+          if (typeof opened === "string") troubleCard(opened);
+          // Not set off for (another command came meanwhile, or the stage will not take the walk): put away.
+          else if (!latest() || !walkOff({ place: "camp", of: opened })) opened.play.close();
+        })();
+      }
+    }
+  }
+  hooks.go = go;
 
   // ---------- keys and fingers ----------
 
@@ -310,7 +310,7 @@ async function boot(): Promise<void> {
   window.addEventListener("keydown", (e) => {
     unlock();
     // Typed into a field (a tome's reason), a key is a letter, not a step or a press.
-    if (paused || typing(e)) return;
+    if (screen.at === "inside" || typing(e)) return;
     const k = e.key.toLowerCase();
     const onButton = e.target instanceof HTMLButtonElement;
     // A key held down is one press: only walking goes on while its key is held (`keys`).
@@ -321,12 +321,12 @@ async function boot(): Promise<void> {
         return;
       }
       // A button that has the keyboard answers Enter and Space itself.
-      if (!repeated && (k === "e" || !onButton)) scene.act();
+      if (!repeated && (k === "e" || !onButton)) scene().act();
       // Or Enter, and Enter held, would go on to press the first button of the card it has just opened.
       if (k !== "e" && (!onButton || repeated)) e.preventDefault();
       return;
     }
-    if (!scene.awake()) return;
+    if (!stage.mayAct()) return;
     if (repeated) {
       if (k.startsWith("arrow")) e.preventDefault();
       // Still held when the town woke: the member walks on.
@@ -334,10 +334,10 @@ async function boot(): Promise<void> {
       return;
     }
     if (k === "escape") {
-      scene.back();
+      scene().back();
       return;
     }
-    if (scene.key(k)) {
+    if (scene().key(k)) {
       e.preventDefault();
       return;
     }
@@ -369,18 +369,18 @@ async function boot(): Promise<void> {
     window.clearTimeout(pressed);
     const finger = e.pointerType !== "mouse";
     const at = toWorld(e.clientX, e.clientY);
-    const groundTap = scene.tap(at.x, at.y, finger);
+    const groundTap = scene().tap(at.x, at.y, finger);
     held = groundTap ? { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, steer: false } : null;
     down = true;
     canvas.setPointerCapture(e.pointerId);
     // A finger kept on a thing asks what it is: a camp thing's card stays until put away, a line goes by itself.
     if (finger && !groundTap)
       pressed = window.setTimeout(() => {
-        const h = scene.point(at);
+        const h = scene().point(at);
         if (h) showTip(h, true);
         window.setTimeout(() => {
           tipOff(TIP);
-          scene.point(null);
+          scene().point(null);
         }, 2200);
       }, LONG_PRESS);
   });
@@ -403,7 +403,7 @@ async function boot(): Promise<void> {
   });
   canvas.addEventListener("pointermove", (e) => {
     mouse = e.pointerType === "mouse" ? { x: e.clientX, y: e.clientY } : null;
-    if (down) scene.drag(toWorld(e.clientX, e.clientY));
+    if (down) scene().drag(toWorld(e.clientX, e.clientY));
     if (!held) return;
     held.x = e.clientX;
     held.y = e.clientY;
@@ -414,7 +414,7 @@ async function boot(): Promise<void> {
     window.clearTimeout(pressed);
     if (!down) return;
     down = false;
-    scene.release(toWorld(e.clientX, e.clientY), document.elementFromPoint(e.clientX, e.clientY));
+    scene().release(toWorld(e.clientX, e.clientY), document.elementFromPoint(e.clientX, e.clientY));
   };
   canvas.addEventListener("pointerup", lift);
   canvas.addEventListener("pointercancel", lift);
@@ -428,8 +428,8 @@ async function boot(): Promise<void> {
 
   /** The mouse resting on a thing marks it, and after a moment says what it is. */
   function pointing(): void {
-    const h = mouse ? scene.point(toWorld(mouse.x, mouse.y)) : null;
-    if (!mouse) scene.point(null);
+    const h = mouse ? scene().point(toWorld(mouse.x, mouse.y)) : null;
+    if (!mouse) scene().point(null);
     canvas.style.cursor = h ? "pointer" : "default";
     // A camp thing explains itself through the cards, which keep their own time.
     if (h?.ref || rest?.hover.ref) {
@@ -452,66 +452,32 @@ async function boot(): Promise<void> {
 
   function tick(dt: number): void {
     G.now = leafNow();
-    scene.step(dt, steering());
-    if (trip && !trip.there) {
-      // Night closes in on whoever is walking off; at its darkest the next place is put on.
-      G.dark = Math.min(1, G.dark + dt / NIGHTFALL);
-      if (G.dark >= 1) {
-        trip.there = true;
-        keys.clear();
-        held = null;
-        closePanel();
-        closeCard();
-        clearFx();
-        show.prompt = null;
-        show.promptT = 0;
-        show.hover = null;
-        show.pointed = null;
-        show.dest = null;
-        trip.swap();
-        scene = trip.next;
-        scene.resize(G.view.w, G.view.h);
-        aim(true);
-        // In the Grove, whoever asks hears so: everybody else sees them before its stone.
-        guild.here(G.where);
-        // The town's live room is only for while the town is on the stage.
-        town.onStage(scene === town);
-      }
-    } else if (trip) {
-      G.dark = Math.max(0, G.dark - dt / DAYBREAK);
-      if (G.dark <= 0) trip = null;
-    }
-    if (iris.open !== iris.goal) {
-      const d = iris.goal - iris.open;
-      iris.open += Math.sign(d) * Math.min(Math.abs(d), dt / CLOSE_IN);
-    }
-    if (visit && iris.open <= 0 && !paused) {
-      // The view has closed in: the game takes the page from here.
-      paused = true;
-      keys.clear();
-      held = null;
-      const at = toPage(iris.at.x, iris.at.y);
-      visit.arrived(at);
-    }
+    const on = scene();
+    on.step(dt, steering());
+    // Night begins to fall once the member walking off is nearly out of sight.
+    const p = G.player;
+    move(next(screen, { kind: "tick", dt, near: !p || walkLeft(p) <= on.nightFrom }));
   }
 
   function draw(): void {
-    const small = scene.draw();
+    const on = scene();
+    const small = on.draw();
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(small, 0, 0, small.width * G.view.z, small.height * G.view.z);
-    scene.words(ctx, wordPx);
-    if (iris.open >= 1) return;
-    const at = toPage(iris.at.x, iris.at.y);
+    on.words(ctx, wordPx);
+    if (screen.at !== "closing" && screen.at !== "inside" && screen.at !== "opening") return;
+    const open = openOf(screen);
+    const at = toPage(screen.door.x, screen.door.y);
     const x = at.x * G.view.dpr;
     const y = at.y * G.view.dpr;
     const far = Math.hypot(Math.max(x, canvas.width - x), Math.max(y, canvas.height - y));
     // Slow at the last, so the eye lands on the door.
-    drawIris(ctx, x, y, far * iris.open * iris.open, G.view.z);
+    drawIris(ctx, x, y, far * open * open, G.view.z);
   }
 
   let last = performance.now();
   function frame(now: number): void {
-    if (paused) {
+    if (screen.at === "inside") {
       running = false;
       return;
     }
@@ -541,74 +507,44 @@ async function boot(): Promise<void> {
   onTown((differs) => {
     if (differs) guild.stay(kept().stay);
   });
+  // Where the stage starts: the member is in town, and so in its live room.
   guild.here("town");
+  town.onStage(true);
   keepTold({
     home: () => G.home,
-    inCamp: () => scene === camp,
+    inCamp: () => placeOf(screen) === "camp",
     // In the Grove the member is playing the pulls, as in a game opened over the town.
-    inGame: () => visit !== null || scene === grove,
+    inGame: () => inGame(screen) || placeOf(screen) === "grove",
     cursor: () => guild.told(),
   });
-  town.onStage(true);
   wake();
-  const asked = new URLSearchParams(location.search).get("camp");
+  const camped = new URLSearchParams(location.search).get("camp");
   const goAsked = (): void => {
-    if (asked === null) return;
-    if (G.home) hooks.visitCamp(asked);
+    if (camped === null) return;
+    if (G.home) go({ to: "camp", of: camped });
     else window.setTimeout(goAsked, 250);
   };
   goAsked();
 
-  window.town = {
-    ...town.handles,
-    skip(seconds) {
-      for (let i = 0; i < seconds * 30 && !paused; i++) tick(1 / 30);
+  lookFromOutside({
+    town,
+    camp,
+    grove,
+    tick,
+    draw,
+    snap: () => {
       aim(true);
     },
-    page(x, y) {
-      return toPage(x, y);
-    },
-    prompt: () => (show.sign ? toPage(show.sign.x + show.sign.w / 2, show.sign.y + show.sign.h / 2) : null),
-    bench() {
-      const t0 = performance.now();
-      for (let i = 0; i < 100; i++) {
-        tick(1 / 60);
-        draw();
-      }
-      return (performance.now() - t0) / 100;
-    },
-    door() {
-      return visit ? (paused ? visit.state() : "closing in") : "town";
-    },
-    leave() {
-      visit?.leave();
-    },
-    hold(on) {
+    stood: () => screen,
+    hold: (on) => {
       heldStill = on;
     },
-    purse: () => ({ ...balance() }),
-    again,
-    where: () => ({ where: G.where, dark: Math.round(G.dark * 100) / 100 }),
     tap(x, y) {
-      scene.tap(x, y, false);
-      scene.release({ x, y }, null);
+      scene().tap(x, y, false);
+      scene().release({ x, y }, null);
     },
-    camp: {
-      ...camp.handles,
-      go() {
-        hooks.toCamp();
-      },
-    },
-    grove: {
-      ...grove.handles,
-      go() {
-        hooks.toGrove();
-      },
-    },
-  };
-  // In whichever place is on the stage: the member, a touch, and the point on the page.
-  const outside = window.town;
-  outside.me = (): Pt => (G.player ? { x: Math.round(G.player.x), y: Math.round(G.player.y) } : { x: 0, y: 0 });
+    go,
+  });
 }
 
 void boot();

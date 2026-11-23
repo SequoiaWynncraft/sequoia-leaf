@@ -35,7 +35,7 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { clamp, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { zAt } from "@sequoia-leaf/town/clock.ts";
 
-import { face, feet, footfall, headOf, hop, makeActor, onScreen, stepActor } from "./actors.ts";
+import { face, feet, footfall, headOf, hop, makeActor, onScreen, putAs, stepActor } from "./actors.ts";
 import { emoteOver, float } from "./fx.ts";
 import { type Actor, G, hooks, ROOM, SEED, toPage } from "./game.ts";
 import { guild } from "./guild.ts";
@@ -296,11 +296,11 @@ function dress(f: Fellow<Drawn>, idle: boolean): void {
     // Nodded off on their feet, they sit down where they are, facing us.
     const dir = fig.seated ? fig.dir : 0;
     Object.assign(own.seat, { x: fig.x, y: fig.y, dir, from: { x: fig.x, y: fig.y } });
-    a.seat = own.seat;
+    putAs(a, own.seat);
     a.dir = dir;
     // Already sitting: not drawn on the way into the seat.
     a.sat = -9;
-  } else a.seat = null;
+  } else putAs(a, null);
   a.body = idle ? (own.shut ??= dozy(own.open)) : own.open;
   if (!idle) return;
   // A "z" now and then, at the same moments on every page.

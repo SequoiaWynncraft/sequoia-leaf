@@ -21,7 +21,7 @@ import { folk, folkNamed, KEEPER } from "@sequoia-leaf/town/folk.ts";
 import { waiting } from "@sequoia-leaf/town/mail.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
 
-import { goSit, hop, inTown, release, rouse, say, sitters } from "./actors.ts";
+import { goSit, hop, inTown, rouse, say, sitters, stop } from "./actors.ts";
 import { kindLine, noteWhen, openingTab, readNews, redrawn, TABS } from "./board.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { named, registerCards, thingRef } from "./cards.ts";
@@ -570,7 +570,7 @@ function doorCard(id: "works" | "table"): (body: HTMLElement) => null {
   return (body) => {
     const game = GAMES[id];
     const go = button("wide", [game.go], () => {
-      hooks.goIn(id);
+      hooks.go({ to: "game", game: id });
     });
     go.dataset.first = "";
     body.append(
@@ -645,7 +645,7 @@ function fireside(body: HTMLElement): () => void {
       seat.replaceChildren(
         p?.seat
           ? button("wood", ["Stand up"], () => {
-              release(p);
+              stop(p);
               sfx.tap();
             })
           : button("", [p?.goal ? "On your way" : "Sit down"], (b) => {
@@ -741,7 +741,7 @@ export function campWaiting(): string {
 function campCard(body: HTMLElement): () => void {
   const news = el("div");
   const go = button("wide", ["Go home"], () => {
-    hooks.toCamp();
+    hooks.go({ to: "camp" });
   });
   go.dataset.first = "";
   body.append(
@@ -763,7 +763,7 @@ function campCard(body: HTMLElement): () => void {
 function groveCard(body: HTMLElement): () => void {
   const open = el("div", "k-paper", { hidden: true });
   const go = button("wide", ["Go in"], () => {
-    hooks.toGrove();
+    hooks.go({ to: "grove" });
   });
   go.dataset.first = "";
   body.append(
@@ -837,7 +837,7 @@ function profile(body: HTMLElement): null {
       {},
       el("div", "k-grow", {}, "Your things", el("div", "k-d", { text: "What you have won is in your cabin." })),
       button("wood sm", ["Go home"], () => {
-        hooks.toCamp();
+        hooks.go({ to: "camp" });
       }),
     ),
   );

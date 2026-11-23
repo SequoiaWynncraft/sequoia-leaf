@@ -9,12 +9,17 @@ import {
   headOf,
   HOP,
   hop,
+  hopTo,
   makeActor,
   peopleOn,
+  putAs,
   seatFree,
+  sit,
   stepActor,
+  stop,
   stopAt,
   walkTo,
+  walkToSeat,
 } from "./actors.ts";
 import { crowds } from "./apart.ts";
 import { type Actor, G } from "./game.ts";
@@ -38,7 +43,7 @@ const seatAt = (x: number, y: number): Seat => {
 /** A member gone for the day, dozing on a seat. */
 function dozer(name: string, s: Seat): Actor {
   const a = member(name, s.from.x, s.from.y);
-  a.seat = s;
+  putAs(a, s);
   a.dozing = 1;
   return a;
 }
@@ -175,5 +180,109 @@ describe("where a walk ends", () => {
     run(6);
     expect(dist(b.x, b.y, 256, 160)).toBe(0);
     expect(onTop(a, b)).toBe(false);
+  });
+});
+
+describe("what somebody's feet are doing", () => {
+  test("a walk ends standing at its end, and what was to happen there happens once", () => {
+    const a = member("Quillon", 200, 160);
+    let done = 0;
+    walkTo(a, { x: 300, y: 160 }, () => done++);
+    expect(a.move.kind).toBe("walking");
+    // Somebody not the member walks at 30 to 40 pixels a second.
+    run(4);
+    expect(a.move.kind).toBe("still");
+    expect(dist(a.x, a.y, 300, 160)).toBeLessThan(2);
+    expect(done).toBe(1);
+  });
+
+  test("a walk set off on from a seat stands up first, and lets the seat go", () => {
+    const s = seatAt(248, 236);
+    const a = member("Quillon", 248, 290);
+    sit(a, s);
+    expect(a.seat).toBe(s);
+    walkTo(a, { x: 300, y: 160 });
+    expect(a.seat).toBeNull();
+    expect(s.taken).toBe(false);
+    expect(a.move.kind).toBe("walking");
+  });
+
+  test("stopping drops the walk and what was to happen at its end, and the seat kept on the way", () => {
+    const s = seatAt(248, 236);
+    const a = member("Quillon", 248, 290);
+    let told: Seat | null | undefined;
+    walkToSeat(a, s, (sat) => (told = sat));
+    expect(a.goal).toBe(s);
+    expect(s.taken).toBe(true);
+    run(0.2);
+    stop(a);
+    expect(a.move).toEqual({ kind: "still" });
+    expect(a.goal).toBeNull();
+    expect(a.path).toEqual([]);
+    expect(s.taken).toBe(false);
+    run(4);
+    expect(a.seat).toBeNull();
+    expect(told).toBeUndefined();
+  });
+
+  test("stopping on a seat stands somebody up on the ground before it", () => {
+    const s = seatAt(248, 236);
+    const a = member("Quillon", 248, 290);
+    sit(a, s);
+    stop(a);
+    expect(a.move.kind).toBe("still");
+    expect({ x: a.x, y: a.y }).toEqual(s.from);
+    expect(s.taken).toBe(false);
+  });
+
+  test("a new walk takes the place of the old: only the new one's end happens", () => {
+    const a = member("Quillon", 200, 160);
+    const ends: string[] = [];
+    walkTo(a, { x: 300, y: 160 }, () => ends.push("first"));
+    run(0.3);
+    walkTo(a, { x: 220, y: 170 }, () => ends.push("second"));
+    run(4);
+    expect(ends).toEqual(["second"]);
+  });
+
+  test("sitting on one seat while another was kept lets the other go", () => {
+    const s = seatAt(248, 236);
+    const other = seatAt(264, 236);
+    const a = member("Quillon", 248, 290);
+    walkToSeat(a, s);
+    sit(a, other);
+    expect(s.taken).toBe(false);
+    expect(other.taken).toBe(true);
+    expect(a.seat).toBe(other);
+    expect(a.goal).toBeNull();
+  });
+
+  test("somebody put where others say is moved by nobody else: not walked, not stopped", () => {
+    const own: Seat = { x: 230, y: 180, dir: 0, from: { x: 230, y: 180 }, at: "fire", taken: false };
+    const a = member("Birchwood", 230, 180);
+    putAs(a, own);
+    stop(a);
+    stepActor(a, 1);
+    expect(a.move).toEqual({ kind: "puppet", seat: own });
+    expect(a.seat).toBe(own);
+    expect({ x: a.x, y: a.y }).toEqual({ x: 230, y: 180 });
+    putAs(a, null);
+    expect(a.seat).toBeNull();
+  });
+
+  // Bug C: a figure fenced in by a camp's rebuild was hopped out with its way emptied and what was
+  // to happen at the end kept: the end was never reached, so a caller walking off never went. Hopped
+  // out now, they walk on to the same end, and it happens.
+  test("hopped out of somewhere shut in, a walker goes on to the same end, and what was to happen there does", () => {
+    const a = member("Fernwhistle", 200, 160);
+    let gone = false;
+    walkTo(a, { x: 300, y: 160 }, () => (gone = true));
+    run(0.3);
+    hopTo(a, { x: 240, y: 172 });
+    expect(a.hop).toBeGreaterThan(0);
+    expect(a.move.kind).toBe("walking");
+    run(5);
+    expect(gone).toBe(true);
+    expect(dist(a.x, a.y, 300, 160)).toBeLessThan(2);
   });
 });

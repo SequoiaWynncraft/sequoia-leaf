@@ -357,7 +357,11 @@ describe("things in the camp", () => {
     s = did(s, { do: "looked", through: 99 }).state;
     expect([s.camp.fresh, s.camp.looked]).toEqual([[], 4]);
     // Setting one out and putting it away again makes nothing new.
-    s = did(s, { do: "setOut", thing: ware.thing, x: 30, y: 20, t: 0 }).state;
+    const made = s.made;
+    const setOut = did(s, { do: "setOut", thing: ware.thing, x: 30, y: 20, t: 0 });
+    // What it was set out as: the number whatever is done to it next names.
+    expect(setOut.notes).toEqual([{ t: "setOut", n: made }]);
+    s = setOut.state;
     s = did(s, { do: "putAway", n: nOf(s, ware.thing) }).state;
     expect([s.camp.tray[ware.thing], s.camp.fresh]).toEqual([3, []]);
   });
@@ -550,6 +554,10 @@ describe("the page's copy", () => {
       null,
     ]);
     expect([readNotes([]), readNotes([{ t: "tray", thing: "rock" }]), readNotes({})]).toEqual([[], null, null]);
+    expect([readNotes([{ t: "setOut", n: 12 }]), readNotes([{ t: "setOut", n: -1 }])]).toEqual([
+      [{ t: "setOut", n: 12 }],
+      null,
+    ]);
   });
 
   test("comes to what Leaf comes to for every command the page works out itself, ids and all", () => {

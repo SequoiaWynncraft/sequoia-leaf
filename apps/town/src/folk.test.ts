@@ -30,6 +30,7 @@ function sources(): Map<string, string> {
 const MEMBERS_ONLY: Readonly<Record<string, string>> = {
   "apps/town/src/townscene.ts": "the member themself",
   "apps/town/src/grovescene.ts": "a pull banner's headliner, a member, in the Grove",
+  "apps/town/src/grovepicture.ts": "the headliner's figure, drawn large in the Grove's ceremony",
   "apps/town/src/visitors.ts": "real members visiting or dozing",
   "apps/town/src/players.ts": "other players in town, live, in their own skins",
   "apps/town/src/draw.ts": "where a member's figure stands in its frame",

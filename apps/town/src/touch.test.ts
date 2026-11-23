@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import { HOP, hop, makeActor, stepActor } from "./actors.ts";
+import { HOP, hop, makeActor, stepActor, stop } from "./actors.ts";
 import { G, show } from "./game.ts";
 import { makeGround } from "./grid.ts";
 import { makeProp } from "./props.ts";
@@ -58,8 +58,7 @@ const touch = makeTouch({
   sky: (_x, y) => y < 10,
   awake: () => true,
   halt: () => {
-    me.path = [];
-    me.arrive = null;
+    stop(me);
   },
 });
 
@@ -85,7 +84,7 @@ beforeEach(() => {
   used = [];
   me.x = 160;
   me.y = 160;
-  me.path = [];
+  stop(me);
   show.promptT = 0;
   show.sign = null;
 });
