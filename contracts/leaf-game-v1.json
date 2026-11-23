@@ -2144,5 +2144,42 @@
       "code": "members_only",
       "message": "For guild members with 7 days in the guild."
     }
+  },
+  "POST /v1/game/play/{game}, the Works": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/works",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "commands": [
+          {
+            "id": "w-1",
+            "do": "build",
+            "kind": "gatherer",
+            "x": 20,
+            "y": 15,
+            "dir": 0,
+            "tick": 0
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 1,
+      "now": "2026-11-25T12:55:00.000Z",
+      "results": [
+        {
+          "id": "w-1",
+          "notes": []
+        }
+      ],
+      "state": {
+        "clock": 0,
+        "tick": 0,
+        "check": 4166492682,
+        "hung": []
+      }
+    }
   }
 }

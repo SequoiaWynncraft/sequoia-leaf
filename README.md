@@ -538,7 +538,9 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
 - `GET /v1/game/play/{game}` answers `{ "rev", "now", "state" }`: how many
   batches have changed the state, Leaf's clock, and the game's view of it. A
   player with no state yet gets a new one (and, if they have no Coins account
-  yet, the welcome). Nothing is ever read from the old saves.
+  yet, the welcome). Nothing is ever read from the old saves. `?differs=<tick>`
+  is from a page that found its own copy not to be Leaf's state at that tick;
+  Leaf logs it, with whose and which game.
 - `POST /v1/game/play/{game}` takes `{ "player", "commands": [{ "id", ... }] }`:
   `player` is the id the page believes it is (409 `not_you`, nothing done, when
   it is not the session's player, as for a page left open after someone else
@@ -546,13 +548,17 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   again), and the commands are at most 32, each with an id the page made (up to 64 letters, digits and `_ . : -`),
   unique in the batch, and answers `{ "rev", "now", "results", "state" }`:
   for each command in order `{ "id", "notes" }` (the game's own notes of what
-  happened) or `{ "id", "refused": "<code>" }`, and the state after them all.
+  happened) or `{ "id", "refused": "<code>" }`, and the state after them all;
+  or, for a game whose page keeps a copy with the same rules (the Works),
+  the game's short answer instead (`Game.answer`: for the Works, Leaf's tick,
+  and the yard's tick, check and the orders hung that do not count yet after
+  the batch).
   One refused does not stop the rest. The whole batch is kept in one
   transaction: the state brought to now with each command done, the Coins each
   paid or took, what each logged and each command's answer, written together;
   a failure anywhere leaves nothing of it. A command whose id is
   among the player's newest 256 to the game answers what it answered then
-  (its notes or its refusal, with the state as it stands now) and changes
+  (its notes or its refusal, with the state, or short answer, as it stands now) and changes
   nothing, so a page that lost an answer sends the batch again safely. `rev`
   goes up by one with each batch that changed anything, Leaf's own tending
   (below) among them.
