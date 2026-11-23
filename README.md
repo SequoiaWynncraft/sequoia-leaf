@@ -958,9 +958,11 @@ each copy owned by one of them. A change to the wire goes with a new
 
 **How long it takes.** From a player moving to another player seeing it: up to
 50 ms waiting for the game's next send (starting, stopping and jumping go at
-once), the network there, up to 33 ms waiting for Leaf's tick, the network back,
-and then the 100 ms the game draws others behind Leaf's clock, which absorbs the
-network's unevenness. `bun apps/api/test/live-load.ts [players] [seconds] [yards] [visitors] [fresh]` runs
+once), the network there, up to 33 ms waiting for Leaf's tick, the network back
+(the slowest but a tenth of the latest snapshots), and then 100 ms more: the game
+draws others that far behind the newest snapshots as they reach it, so that it
+always has two to go between and never guesses past the newest. A player whose
+game sends no move for 300 ms (a hidden tab) is stood still where they are. `bun apps/api/test/live-load.ts [players] [seconds] [yards] [visitors] [fresh]` runs
 the real app with that many players walking about the town at the game's pace
 (and that many large yards for Leaf to tend meanwhile), and times every move from its sender to each other player receiving it (not to
 the screen). On the development machine, with the server and every player in one

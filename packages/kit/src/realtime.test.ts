@@ -4,6 +4,7 @@ import {
   CLOSE,
   encodeSnapshot,
   Flag,
+  INTERP_MS,
   livePath,
   type Motion,
   playerId,
@@ -22,6 +23,7 @@ import {
   joinLive,
   type LiveRoom,
   type LiveStatus,
+  Playout,
   retryAfter,
   sendIn,
   silent,
@@ -57,14 +59,11 @@ describe("somebody's track", () => {
     expect(t.at(900)).toMatchObject({ x: 0, y: 0 });
   });
 
-  test("goes on as they were for a little while past the newest, if they were moving, and no further", () => {
+  test("past the newest, is where the newest has them: never anywhere they have not been", () => {
     const t = new Track();
     t.add(1000, at(100, 50, Flag.Moving, 0, 64));
-    expect(t.at(1100)).toMatchObject({ x: 106.4, y: 50 });
-    expect(t.at(5000)).toMatchObject({ x: 112.8 });
-    const still = new Track();
-    still.add(1000, at(100, 50, 0, 0, 64));
-    expect(still.at(1500)).toMatchObject({ x: 100 });
+    expect(t.at(1100)).toMatchObject({ x: 100, y: 50 });
+    expect(t.at(5000)).toMatchObject({ x: 100 });
   });
 
   test("is never drawn on the way across a jump", () => {
@@ -77,12 +76,76 @@ describe("somebody's track", () => {
     expect(t.at(1150)).toMatchObject({ x: 405 });
   });
 
-  test("keeps about a second, and takes no snapshot older than the newest", () => {
+  test("keeps two and a half seconds, and takes no snapshot older than the newest", () => {
     const t = new Track();
-    for (let time = 0; time <= 3000; time += 100) t.add(time, at(time, 0));
+    for (let time = 0; time <= 5000; time += 100) t.add(time, at(time, 0));
     t.add(2000, at(-1, -1));
-    expect(t.at(1000)).toMatchObject({ x: 1900 });
-    expect(t.at(2950)).toMatchObject({ x: 2950 });
+    expect(t.at(1000)).toMatchObject({ x: 2400 });
+    expect(t.at(4950)).toMatchObject({ x: 4950 });
+  });
+});
+
+describe("when to draw others", () => {
+  test("INTERP_MS behind the newest snapshots as they come, however far behind Leaf's clock the network has them", () => {
+    const p = new Playout();
+    expect(p.time(0)).toBeNull();
+    // Leaf's clock is 5 s ahead of the page's, and each snapshot takes 120 ms to come.
+    for (let i = 0; i < 20; i++) p.heard(5000 + i * 50, i * 50 + 120);
+    // The newest, sent at 5950 by Leaf's clock, came at 1070 by the page's: drawn INTERP_MS behind it.
+    expect(p.time(1070)).toBe(5950 - INTERP_MS);
+  });
+
+  test("lets most of an uneven network's snapshots come before the moment drawn, all but the slowest tenth", () => {
+    const p = new Playout();
+    // Twenty snapshots, every 50 ms: most take 40 ms, every tenth 140.
+    for (let i = 0; i < 20; i++) p.heard(i * 50, i * 50 + (i % 10 === 9 ? 140 : 40));
+    expect(p.time(1000)).toBe(1000 - 140 - INTERP_MS);
+    const q = new Playout();
+    for (let i = 0; i < 20; i++) q.heard(i * 50, i * 50 + (i % 20 === 19 ? 400 : 40));
+    expect(q.time(1000)).toBe(1000 - 40 - INTERP_MS);
+  });
+
+  test("settles to a slower network by a tenth of the time passing at most, so the moment drawn never goes back", () => {
+    const p = new Playout();
+    p.heard(0, 40);
+    expect(p.time(100)).toBe(100 - 40 - INTERP_MS);
+    // The network slows: snapshots now take 240 ms.
+    for (let i = 1; i <= 40; i++) p.heard(i * 50, i * 50 + 240);
+    const times = Array.from({ length: 30 }, (_, i) => p.time(2100 + i * 100) ?? 0);
+    for (let i = 1; i < times.length; i++) expect((times[i] ?? 0) - (times[i - 1] ?? 0)).toBeGreaterThanOrEqual(90);
+    expect(times.at(-1)).toBe(2100 + 29 * 100 - 240 - INTERP_MS);
+  });
+
+  test("follows a walker over a slow, uneven network smoothly, never back, and where they really were", () => {
+    // Alice walks right at 64 a second, her page saying so every 50 ms; Leaf stamps each and sends it
+    // on, and it comes 80 to 200 ms later, in order.
+    const p = new Playout();
+    const t = new Track();
+    let due = 0;
+    const arrivals: { time: number; came: number; x: number }[] = [];
+    for (let time = 0; time <= 6000; time += 50) {
+      const wait = 80 + ((time * 7919) % 121);
+      due = Math.max(due, time + wait);
+      arrivals.push({ time, came: due, x: time * 0.064 });
+    }
+    let next = 0;
+    let was = -Infinity;
+    let worst = 0;
+    for (let now = 1000; now <= 6000; now += 16) {
+      while ((arrivals[next]?.came ?? Infinity) <= now) {
+        const a = arrivals[next++];
+        if (!a) break;
+        p.heard(a.time, a.came);
+        t.add(a.time, at(a.x, 0, Flag.Moving, 0, 64));
+      }
+      const time = p.time(now) ?? 0;
+      const x = t.at(time)?.x ?? 0;
+      expect(x).toBeGreaterThanOrEqual(was);
+      was = x;
+      worst = Math.max(worst, Math.abs(x - time * 0.064));
+    }
+    // Where she was at the moment drawn, to within the steps her page said it in.
+    expect(worst).toBeLessThan(0.5);
   });
 });
 
@@ -231,19 +294,26 @@ describe("a live room", () => {
     s.says(welcome(1, now + 5000));
     s.says({ t: "joined", member: ALICE });
     s.says({ t: "act", id: 2, kind: "emote", arg: "wave" });
-    // Alice walks right: two snapshots 100 ms apart by Leaf's clock; the player's own figure (1) is not followed.
+    // Alice walks right: two snapshots 100 ms apart by Leaf's clock, each coming 30 ms after it was
+    // sent; the player's own figure (1) is not followed.
+    w.clock.now = now + 30;
     s.sends(
-      encodeSnapshot(1, now + 5000 - 200, [
+      encodeSnapshot(1, now + 5000, [
         { id: 2, seq: 1, ...at(0, 10, Flag.Moving) },
         { id: 1, seq: 1, ...at(9, 9) },
       ]),
     );
-    s.sends(encodeSnapshot(2, now + 5000 - 100, [{ id: 2, seq: 2, ...at(20, 10, Flag.Moving) }]));
+    w.clock.now = now + 130;
+    s.sends(encodeSnapshot(2, now + 5100, [{ id: 2, seq: 2, ...at(20, 10, Flag.Moving) }]));
 
     expect(room.you()).toBe(1);
     expect([...room.members().keys()]).toEqual([1, 2]);
-    // Drawn 100 ms behind Leaf's clock, which is 5 s ahead of the page's.
-    expect(room.serverNow()).toBe(now + 5000);
+    // Leaf's clock is 5 s ahead of the page's; Alice is drawn 100 ms behind the newest snapshot as it
+    // came: half way, and then, 50 ms on, where the newest has her.
+    expect(room.serverNow()).toBe(now + 5130);
+    w.clock.now = now + 180;
+    expect(room.sample(2)).toMatchObject({ x: 10, y: 10 });
+    w.clock.now = now + 230;
     expect(room.sample(2)).toMatchObject({ x: 20, y: 10 });
     expect(room.sample(1)).toBeNull();
 

@@ -258,10 +258,14 @@ describe("everybody else in the room", () => {
   });
 
   test("are drawn from the room's samples, and those who have gone fade away and are forgotten", async () => {
-    const { company, room, s, now } = await inTown();
+    const { world, company, room, s, now } = await inTown();
     s.says(welcome(1, now, [me(1), ALICE]));
-    s.snapshot(now - 200, [{ id: 2, seq: 1, ...walking(100, 50) }]);
-    s.snapshot(now - 100, [{ id: 2, seq: 2, ...walking(110, 50) }]);
+    // Each snapshot comes 50 ms after Leaf sent it; by the time the page draws, the moment drawn has passed the second.
+    world.standin.clock.now = now + 50;
+    s.snapshot(now, [{ id: 2, seq: 1, ...walking(100, 50) }]);
+    world.standin.clock.now = now + 150;
+    s.snapshot(now + 100, [{ id: 2, seq: 2, ...walking(110, 50) }]);
+    world.standin.clock.now = now + 250;
     const sample = (id: number): Motion | null => room.sample(id);
 
     expect(company.step(sample, DT).came.map((f) => f.who.name)).toEqual(["Alice"]);

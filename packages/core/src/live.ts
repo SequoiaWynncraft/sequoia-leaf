@@ -37,7 +37,11 @@ export const livePath = (room: string): string => `${LIVE_PATH}?v=${LIVE_VERSION
 export const SERVER_HZ = 30;
 /** How often, at most, the game sends its player's motion, a second. */
 export const CLIENT_HZ = 20;
-/** How far behind the server's clock the game draws other players, in milliseconds, to have two snapshots to go between. */
+/**
+ * How far behind the newest snapshots, as they reach it, the game draws other players, in
+ * milliseconds: past the gap between two of a walker's snapshots (50 ms for the game's next send, 33
+ * for Leaf's tick), so that there are always two to go between.
+ */
 export const INTERP_MS = 100;
 
 /** What a binary frame is, by its first byte. */

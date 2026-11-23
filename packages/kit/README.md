@@ -306,9 +306,12 @@ replaces the old one only at its welcome, so nothing of one connection is mixed 
 `ACTS`). The page says where its player is with `move(step, jumped)` as often as it likes: it goes
 at most 20 times a second and only when it changed; starting, stopping and a jump at once, even
 with a move waiting its turn (`sendIn`), and the last change always. Each frame the page asks
-`sample(id)` where somebody is to be drawn: their motion 100 ms behind Leaf's clock (learnt from
-pings, by the quickest), between the snapshots either side, going on for up to 200 ms past the
-newest while they were moving, and never on the way across a jump. Without Leaf it opens
+`sample(id)` where somebody is to be drawn: their motion 100 ms behind the newest snapshots as they
+reach the page (`Playout`: the page's clock less the time all but the slowest tenth of the latest 40
+took to come, less 100 ms, settling to a new delay by a tenth of the time passing at most), between
+the snapshots either side, where the newest has them past it, and never on the way across a jump.
+So nobody is ever drawn anywhere they have not been, however slow or uneven the network. Leaf's clock
+(learnt from pings, by the quickest) is for what goes by Leaf's time. Without Leaf it opens
 nothing, and nobody is ever there. Drawing the others is the page's.
 Once a connection has let go for good, `letGoCard(why, signIn, again)` puts the
 kit's card for it over the page, which plays on beneath: "Playing somewhere
