@@ -187,8 +187,6 @@ const followed = { batches: 0, late: 0, unlike: 0 };
 let base = { clock: 0, at: 0 };
 /** The latest tick the page has shown. */
 let shown = 0;
-/** How many goals the copy had done when `S.rev` last counted a change. */
-let finished = 0;
 let collectedAt = 0;
 /** When Leaf was last asked for its yard. */
 let askedAt = -Infinity;
@@ -299,7 +297,6 @@ function follow(w: Yard, to: number): boolean {
       if (c.tick > to) return true;
       if (c.tick < w.tick) return late(w.tick - c.tick);
       upTo = batch.rev;
-      S.rev++;
       if ("refused" in play(w, c)) return unlike();
     }
     const { after } = batch;
@@ -345,8 +342,6 @@ function take(): boolean {
   drain(yard);
   shown = Math.max(shown, yard.tick);
   S.world = yard;
-  S.rev++;
-  finished = yard.done.length;
   reads++;
   taking = null;
   untold = undefined;
@@ -442,8 +437,6 @@ export function doNow(act: Act): ReturnType<typeof play> {
   const command: Command = { ...act, tick: S.world.tick };
   const done = play(S.world, command, balance().coins);
   if ("refused" in done) return done;
-  // The yard has changed: what is worked out from it and kept is looked at again.
-  S.rev++;
   if (!leaf) return done;
   const sending = writeCommand(command);
   if (act.do === "collect") collectedAt = performance.now();
@@ -484,11 +477,6 @@ export function runYard(now: number): News[] {
   }
   stepTo(w, tick);
   shown = w.tick;
-  // A goal finished on the way changes what is open (the plots for sale, a pylon's reach): it is a change.
-  if (w.done.length !== finished) {
-    finished = w.done.length;
-    S.rev++;
-  }
   // A yard standing still (its owner away eight hours) holds Leaf's clock with it from the frame it
   // stops in, as Leaf does, until they act.
   if (w.tick >= stillAt(w)) base = { clock: w.tick, at: now };
@@ -556,7 +544,6 @@ export function letGo(): void {
   found = 0;
   reads = 0;
   shown = 0;
-  finished = 0;
   putAway = (): void => undefined;
   room?.close();
   room = null;

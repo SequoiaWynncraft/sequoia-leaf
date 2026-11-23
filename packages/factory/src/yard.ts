@@ -201,6 +201,13 @@ export interface Yard {
   /** Worked out from the goals done (`reopen`). */
   open: Open;
   news: News[];
+  /**
+   * How many changes the rules have made to the yard other than running it on: each command done
+   * (`play`), and each time what is open is worked out again (`reopen`, as a goal is finished).
+   * Whatever is worked out from the yard and kept is kept by the yard and this. It is not written
+   * or checked: a yard read afresh is another yard, and starts again.
+   */
+  rev: number;
 }
 
 const holders = (cap: number): Holders => ({
@@ -276,6 +283,7 @@ export function emptyYard(land: Land, tier = 0): Yard {
     paid: 0,
     open: openOf(done),
     news: [],
+    rev: 0,
   };
   const [cx, cy] = land.depot;
   for (let dy = -1; dy <= 1; dy++)
@@ -295,6 +303,7 @@ export function reopen(y: Yard): void {
   y.open = openOf(y.done);
   y.powered = false;
   y.wire = null;
+  y.rev++;
 }
 
 /** Takes a node into hand, or with -1 none, with somewhere to count what it is given. */

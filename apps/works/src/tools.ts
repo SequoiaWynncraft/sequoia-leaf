@@ -131,7 +131,8 @@ const aimed = (x: number, y: number, why: string | null, cost: number, far = -1)
   why,
   cost,
   far,
-  rev: S.rev,
+  yard: S.world,
+  rev: S.world.rev,
   coins: coins(),
 });
 /**
@@ -141,7 +142,7 @@ const aimed = (x: number, y: number, why: string | null, cost: number, far = -1)
  */
 function fresh(r: Reckoned): boolean {
   const now = coins();
-  return r.rev === S.rev && (r.coins === now || (r.cost <= r.coins && r.cost <= now));
+  return r.yard === S.world && r.rev === S.world.rev && (r.coins === now || (r.cost <= r.coins && r.cost <= now));
 }
 /** What a thing done paid in or took, in all. */
 const coinsOf = (did: ReturnType<typeof doNow>): number =>
@@ -267,7 +268,7 @@ export function aimAt(x: number, y: number): void {
  * The aim, a run shown before it is laid, and the pieces in hand as they would stand are each
  * worked out for a tile, a tool and what is in hand, from the yard and the purse as they were then.
  * They are kept while the pointer stays on that tile; when the yard has changed under them (a card's
- * button, a key, an undo, Leaf's yard taken: `S.rev`) or the Coins to hand have, they are worked out
+ * button, a key, an undo, Leaf's yard taken: `y.rev`) or the Coins to hand have, they are worked out
  * again for the same tile. So what is shown, and what a press sets down, is of the yard as it is.
  * Each frame asks, and so does each press that acts on an aim. With `again`, they are worked out
  * again whatever: a grade chosen (`setGrade`) changes them and neither the yard nor the purse.
@@ -675,7 +676,7 @@ function reckon(): void {
 function runOf(legs: Leg[], turns: Run["turns"], bad: string | null): Run {
   const pieces = legs.map(legPiece);
   const why = bad ?? standRefusal(S.world, pieces, coins());
-  return { legs, turns, cost: priceOf(S.world, pieces), why, rev: S.rev, coins: coins() };
+  return { legs, turns, cost: priceOf(S.world, pieces), why, yard: S.world, rev: S.world.rev, coins: coins() };
 }
 
 /** A drag with the belt in hand begins on a tile. */
@@ -1122,7 +1123,7 @@ export function dropBlueprint(slot: number): void {
 export function buyLand(id: Plot): boolean {
   const w = S.world;
   const plot = w.land.plots.find((p) => p.plot === id);
-  const sign = layout(w, S.rev).signs.find((s) => s.plot.plot === id);
+  const sign = layout(w).signs.find((s) => s.plot.plot === id);
   const no = plot ? does({ do: "buyPlot", plot: id }) : "There is no such plot";
   if (!plot || no !== null) {
     yardSfx.no();

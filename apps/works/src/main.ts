@@ -621,7 +621,6 @@ async function boot(): Promise<void> {
       S.world = yard;
       S.held = held;
       heldLead = lead;
-      S.rev++;
       return { ms, picture: { x: picture.width, y: picture.height }, pieces };
     },
     pick(name, dir) {
@@ -719,7 +718,7 @@ async function boot(): Promise<void> {
     },
     trouble() {
       const w = S.world;
-      const found = troubled(w, S.rev);
+      const found = troubled(w);
       return Array.from(found.tiles.subarray(0, found.count), (i) => ({
         x: i % w.land.w,
         y: Math.floor(i / w.land.w),
@@ -736,7 +735,7 @@ async function boot(): Promise<void> {
         hand: goalId(w.hand),
         done: w.done.map(goalId),
         tier: w.open.tier,
-        built: layout(w, S.rev).built,
+        built: layout(w).built,
         painted: w.kind.reduce((n, k, i) => n + (k !== NONE && (w.tint[i] ?? 0) > 0 ? 1 : 0), 0),
         nudge: S.nudge?.id ?? null,
         nudgeAt: S.nudge?.part === undefined && S.nudge ? { x: S.nudge.x, y: S.nudge.y } : null,

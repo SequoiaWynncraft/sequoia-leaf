@@ -63,13 +63,14 @@ export type Tool = Kind | "remove" | "select" | "paint" | null;
 export const builds = (tool: Tool): tool is Kind => typeof tool === "number";
 
 /**
- * What an aim or a run was worked out from, beside its tile, the tool and what is in hand: the
- * yard's count of changes (`S.rev`) and the Coins to hand then, and what it costs. Of the purse it
- * reads only whether the Coins cover the cost, and when they do not, by how much. When the yard has
- * changed, or the Coins to hand have in a way it reads, it is worked out again for the same tile
- * (`keepAim`, in `tools.ts`).
+ * What an aim or a run was worked out from, beside its tile, the tool and what is in hand: the yard
+ * and the rules' count of its changes then (`y.rev`), the Coins to hand then, and what it costs. Of
+ * the purse it reads only whether the Coins cover the cost, and when they do not, by how much. When
+ * the yard has changed, or the Coins to hand have in a way it reads, it is worked out again for the
+ * same tile (`keepAim`, in `tools.ts`).
  */
 export interface Reckoned {
+  yard: Yard;
   rev: number;
   coins: number;
   cost: number;
@@ -140,13 +141,6 @@ export const S: {
    * Leaf: nothing is opened, sent or kept, and the yard is not run on but by `works.bench`.
    */
   alone: boolean;
-  /**
-   * Counts every change to the yard that is not a tick's: a command done, a yard taken from Leaf, a
-   * goal finished (what is open changes with it). What is worked out from the yard and kept (an aim,
-   * the layout) is looked at again when it moves, and worked out again if what it reads differs.
-   * Only `yard.ts` moves it.
-   */
-  rev: number;
   /** Seconds the screen has been running, and whether its clock is being stepped by hand from outside. */
   t: number;
   held: boolean;
@@ -190,7 +184,6 @@ export const S: {
   world: emptyYard(LAND),
   visiting: null,
   alone: false,
-  rev: 0,
   t: 0,
   held: false,
   cam: { x: 0, y: 0 },

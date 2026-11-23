@@ -24,10 +24,10 @@ const line = (y: Yard): number[] => {
   return tiles;
 };
 /** Runs a yard on so many ticks, looking at it after each as a plan on screen does. */
-function watch(y: Yard, ticks: number, rev = 0): void {
+function watch(y: Yard, ticks: number): void {
   for (let k = 0; k < ticks; k++) {
     step(y);
-    carriedAt(y, rev, 0);
+    carriedAt(y, 0);
   }
 }
 
@@ -37,11 +37,11 @@ describe("what a plan's lines carry", () => {
     const tiles = line(y);
     expect(tiles.length).toBeGreaterThan(5);
     // Nothing has been carried yet: wood.
-    expect(tiles.map((i) => carriedAt(y, 0, i))).toEqual(tiles.map(() => NONE));
+    expect(tiles.map((i) => carriedAt(y, i))).toEqual(tiles.map(() => NONE));
     watch(y, 300);
     // One plank every second and a half, four ticks to a tile: most tiles hold nothing now.
     expect(tiles.filter((i) => y.item[i] === NONE).length).toBeGreaterThan(tiles.length / 2);
-    expect(tiles.map((i) => carriedAt(y, 0, i))).toEqual(tiles.map(() => plank));
+    expect(tiles.map((i) => carriedAt(y, i))).toEqual(tiles.map(() => plank));
   });
 
   test("the first plank seen colours the line ahead of it at once, down to where things are handed on", () => {
@@ -51,7 +51,7 @@ describe("what a plan's lines carry", () => {
     for (let k = 0; k < 200 && y.item[tiles[0] ?? 0] === NONE; k++) step(y);
     expect(y.item[tiles[0] ?? 0]).toBe(plank);
     // One look: every belt after it is taken to carry the same.
-    expect(tiles.map((i) => carriedAt(y, 0, i))).toEqual(tiles.map(() => plank));
+    expect(tiles.map((i) => carriedAt(y, i))).toEqual(tiles.map(() => plank));
   });
 
   test("a line that has carried nothing for a minute is wood again", () => {
@@ -60,10 +60,10 @@ describe("what a plan's lines carry", () => {
     watch(y, 300);
     must(y, { do: "remove", x: 2, y: 4 });
     // What the mill held is sawn and carried off; then a minute with nothing on the line.
-    watch(y, 400, 1);
-    expect(tiles.map((i) => carriedAt(y, 1, i))).toEqual(tiles.map(() => plank));
-    watch(y, 500, 1);
-    expect(tiles.map((i) => carriedAt(y, 1, i))).toEqual(tiles.map(() => NONE));
+    watch(y, 400);
+    expect(tiles.map((i) => carriedAt(y, i))).toEqual(tiles.map(() => plank));
+    watch(y, 500);
+    expect(tiles.map((i) => carriedAt(y, i))).toEqual(tiles.map(() => NONE));
   });
 
   test("a tile that carries no longer keeps nothing of what it carried", () => {
@@ -72,6 +72,6 @@ describe("what a plan's lines carry", () => {
     watch(y, 300);
     const gone = tiles[2] ?? 0;
     must(y, { do: "remove", x: gone % y.land.w, y: Math.floor(gone / y.land.w) });
-    expect(carriedAt(y, 1, gone)).toBe(NONE);
+    expect(carriedAt(y, gone)).toBe(NONE);
   });
 });

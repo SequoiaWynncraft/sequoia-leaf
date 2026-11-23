@@ -65,7 +65,7 @@ import {
   upgradeMark,
   usable,
 } from "../tools.ts";
-import { CATCHING_UP, catchingUp } from "../yard.ts";
+import { CATCHING_UP, catchingUp, yardReads } from "../yard.ts";
 import { machineRef } from "./card.ts";
 import { $, button, fitted, when, type YardIcon, yardIcon } from "./parts.ts";
 
@@ -442,10 +442,13 @@ export function initDock(art: Art): void {
     // With Select in hand, also what is marked or held, and (by the yard's own count of changes) the blueprints.
     const select =
       tool === "select"
-        ? `${S.mark !== null}|${S.corner !== null}|${S.group?.as}|${S.saving}|${S.rev}|${asking("upgrade")}`
+        ? `${S.mark !== null}|${S.corner !== null}|${S.group?.as}|${S.saving}|${yardReads()}.${S.world.rev}|${asking("upgrade")}`
         : "";
     // With a graded kind in hand, the grades it may be built at, the one chosen, and what one costs now.
-    const graded = builds(tool) && isGraded(tool) ? `${highest(S.world.open, tool)}|${gradeInHand(tool)}|${S.rev}` : "";
+    const graded =
+      builds(tool) && isGraded(tool)
+        ? `${highest(S.world.open, tool)}|${gradeInHand(tool)}|${yardReads()}.${S.world.rev}`
+        : "";
     return `${tool}|${S.tint}|${S.finger}|${S.aim !== null}|${S.run !== null}|${l.text}|${(S.run?.why ?? S.aim?.why) != null}|${select}|${graded}|${S.nudge?.part}`;
   }, buildHand);
   toolHooks.changed = refreshDock;

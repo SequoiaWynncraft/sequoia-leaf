@@ -60,7 +60,7 @@ const lastView = (): View => {
 /** Whether the yard has the map, the list of trouble and the count: from its second plot. Before that the sheet is the depot's panel alone. */
 export const hasViews = (): boolean => S.world.plots.length > 1;
 /** How many pieces are in trouble, for the count on the button; nothing is looked at in a yard of one plot. */
-export const wrongCount = (): number => (hasViews() ? troubled(S.world, S.rev).count : 0);
+export const wrongCount = (): number => (hasViews() ? troubled(S.world).count : 0);
 
 /** The sheet's name and picture: the yard's, or in a yard of one plot the depot's. */
 export const sheetTitle = (): string => (hasViews() ? "The yard" : "The depot");
@@ -94,7 +94,7 @@ let bar: {
   at: HTMLElement;
 } | null = null;
 
-const groupOf = (title: string): Group | undefined => troubleGroups(S.world, S.rev).find((g) => g.title === title);
+const groupOf = (title: string): Group | undefined => troubleGroups(S.world).find((g) => g.title === title);
 
 function endWalk(): void {
   walk = null;
@@ -204,7 +204,7 @@ function price(g: CanvasRenderingContext2D, text: string, cx: number, cy: number
 /** The plots for sale, each with its price as it is written and the middle of it on the map: worked out when what stands changes, not each frame. */
 let sales: { yard: Yard; rev: number; plots: { price: string; x: number; y: number }[] } | null = null;
 function forSale(y: Yard): readonly { price: string; x: number; y: number }[] {
-  if (sales?.yard === y && sales.rev === S.rev) return sales.plots;
+  if (sales?.yard === y && sales.rev === y.rev) return sales.plots;
   const plots = y.land.plots.flatMap((plot) =>
     !y.plots.includes(plot.plot) && plotState(y, plot.plot).state === "for sale"
       ? [
@@ -216,7 +216,7 @@ function forSale(y: Yard): readonly { price: string; x: number; y: number }[] {
         ]
       : [],
   );
-  sales = { yard: y, rev: S.rev, plots };
+  sales = { yard: y, rev: y.rev, plots };
   return plots;
 }
 
@@ -248,10 +248,10 @@ function mapView(_art: Art, host: HTMLElement): () => void {
     const { land } = y;
     const W = land.w;
     fit();
-    paintPlan(plan, y, layout(y, S.rev), S.rev);
+    paintPlan(plan, y, layout(y));
     g.clearRect(0, 0, c.width, c.height);
     layPlan(g, plan, y, 0, 0);
-    const wrong = troubled(y, S.rev);
+    const wrong = troubled(y);
     for (let n = 0; n < wrong.count; n++) {
       const i = wrong.tiles[n] ?? 0;
       alarm(g, MAP, i % W, Math.floor(i / W), 0, 0, S.t);
@@ -298,7 +298,7 @@ function mapView(_art: Art, host: HTMLElement): () => void {
       pick(plotRef(plot.plot), e.clientX - 1, e.clientY - 1, 2, 2);
       return;
     }
-    const wrong = troubled(y, S.rev);
+    const wrong = troubled(y);
     let near = -1;
     let best = (REACH / at.size + 0.5) ** 2;
     for (let n = 0; n < wrong.count; n++) {
@@ -378,7 +378,7 @@ function troubleView(art: Art, host: HTMLElement): () => void {
           ]
         : [],
     );
-    const groups = troubleGroups(y, S.rev);
+    const groups = troubleGroups(y);
     list.el.hidden = groups.length === 0;
     none.hidden = groups.length > 0;
     list.set(
@@ -407,7 +407,7 @@ function needsView(_art: Art, host: HTMLElement): () => void {
   let drawn = "";
   return () => {
     const y = S.world;
-    const flows = yardFlows(y, S.rev);
+    const flows = yardFlows(y);
     const rows = flowRows(flows.made, flows.needed, reached);
     const seconds = countedOver();
     // Everything shown, as one line: the tables are written again only when it differs.

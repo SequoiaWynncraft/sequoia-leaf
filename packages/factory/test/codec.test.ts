@@ -300,8 +300,9 @@ const LEFT_OUT = new Set([
   "serial",
   "at",
   "away",
-  // News no screen has taken yet.
+  // News no screen has taken yet, and the count of changes a screen keys what it works out on.
   "news",
+  "rev",
   // Shared by every yard on it, and never kept.
   "land",
   // Worked out again from the rest: what is open, power, the plumbing, idle notes.

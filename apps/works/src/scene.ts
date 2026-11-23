@@ -946,10 +946,18 @@ function marked(g: Ctx, w: Yard, m: Mark, cx: number, cy: number): void {
   g.setLineDash([]);
 }
 
-/** The pieces in hand, drawn once for each place they are aimed at and kept: `for` is the aim it was drawn for, and `rev` the yard's count of changes then. */
-const held: { c: HTMLCanvasElement; g: Ctx; for: Group["at"] | null; rev: number; lost: number } = {
+/** The pieces in hand, drawn once for each place they are aimed at and kept: `for` is the aim it was drawn for, of that yard at that count of its changes. */
+const held: {
+  c: HTMLCanvasElement;
+  g: Ctx;
+  for: Group["at"] | null;
+  yard: Yard | null;
+  rev: number;
+  lost: number;
+} = {
   ...makeCanvas(1, 1, true),
   for: null,
+  yard: null,
   rev: -1,
   lost: -1,
 };
@@ -966,9 +974,10 @@ const ROOM = { side: 8, top: 40, bottom: 8 } as const;
  */
 function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, cy: number): void {
   const box = boxOf(grp.at);
-  if (held.for !== grp.at || held.rev !== S.rev || held.lost !== lost) {
+  if (held.for !== grp.at || held.yard !== w || held.rev !== w.rev || held.lost !== lost) {
     held.for = grp.at;
-    held.rev = S.rev;
+    held.yard = w;
+    held.rev = w.rev;
     held.lost = lost;
     const tiles = tilesOf(w, grp.at);
     held.c.width = box.w * TILE + ROOM.side * 2;
@@ -1173,12 +1182,12 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
   const cx = (camX = Math.round(S.cam.x) + corner.x);
   const cy = (camY = Math.round(S.cam.y) + corner.y);
   const w = S.world;
-  const L: Layout = layout(w, S.rev);
+  const L: Layout = layout(w);
   if (S.view.z < 1) {
     // Further out than a screen pixel for each of the yard's, the yard is its plan (`far.ts`).
-    const [dx, dy] = drawPlan(g, w, L, S.rev, corner.x, corner.y);
+    const [dx, dy] = drawPlan(g, w, L, corner.x, corner.y);
     lap("plan");
-    drawPlanMarks(g, w, S.rev, dx, dy);
+    drawPlanMarks(g, w, dx, dy);
     lap("marks");
     return buf.c;
   }

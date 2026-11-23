@@ -412,6 +412,7 @@ export function play(y: Yard, c: Command, purse = Infinity): Done<Yard, News> | 
   const did = act(y, c, purse + Math.floor(y.till / MILLI));
   if ("refused" in did) return did;
   y.seen = here(y);
+  y.rev++;
   return { state: y, notes: drain(y), coins: did.coins, log: [...did.log, ...told(y)] };
 }
 

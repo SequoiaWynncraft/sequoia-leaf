@@ -224,13 +224,13 @@ describe("the yard, on Leaf", () => {
     const fake = await opened();
     const [a] = clear(1);
     if (!a) throw new Error("no room");
-    const [copy, rev] = [S.world, S.rev];
+    const [copy, rev] = [S.world, S.world.rev];
     doNow(act({ do: "build", kind: "belt", dir: 0, ...a }));
     await until(() => fake.leaf.posts >= 1);
     await Bun.sleep(5);
     runYard(1000);
     // The build is one change to the copy, counted once; the copy is the same yard, not read again.
-    expect([S.world, S.rev, fake.leaf.reads.length, differences()]).toEqual([copy, rev + 1, 1, 0]);
+    expect([S.world, S.world.rev, fake.leaf.reads.length, differences()]).toEqual([copy, rev + 1, 1, 0]);
   });
 
   test("two commands unanswered at once are each compared at the tick the copy did it, though it has run on", async () => {

@@ -61,9 +61,9 @@ function titleOf(y: Yard, i: number): string {
 /**
  * The pieces in trouble: their tiles (`count` of them at the head of `tiles`), as of the last look.
  * It looks again when the yard's clock has reached another second or what stands has changed
- * (`rev`, the yard's count of changes), and otherwise costs nothing.
+ * (`y.rev`, the rules' count of changes), and otherwise costs nothing.
  */
-export function troubled(y: Yard, rev: number): Found {
+export function troubled(y: Yard): Found {
   const n = y.kind.length;
   if (found?.listed.length !== n)
     found = {
@@ -81,7 +81,7 @@ export function troubled(y: Yard, rev: number): Found {
     };
   const f = found;
   const second = Math.floor(y.tick / 10);
-  if (f.yard === y && f.rev === rev && f.second === second) return f;
+  if (f.yard === y && f.rev === y.rev && f.second === second) return f;
   // The first look at a yard takes its trouble as it finds it: how long it has lasted is not known.
   const fresh = f.yard === null || y.tick < f.tick || y.tick - f.tick > ANOTHER;
   if (fresh) {
@@ -89,7 +89,7 @@ export function troubled(y: Yard, rev: number): Found {
     f.said.clear();
   }
   // What stands has changed: whatever is out of trouble now was mended, and is dropped at once.
-  const mended = f.rev !== rev;
+  const mended = f.yard !== y || f.rev !== y.rev;
   let count = 0;
   for (let i = 0; i < n; i++) {
     const wrong = y.kind[i] !== NONE && condition(y, i) >= TROUBLE;
@@ -113,7 +113,7 @@ export function troubled(y: Yard, rev: number): Found {
   }
   f.count = count;
   f.yard = y;
-  f.rev = rev;
+  f.rev = y.rev;
   f.tick = y.tick;
   f.second = second;
   f.turn++;
@@ -133,8 +133,8 @@ let grouped: { turn: number; groups: readonly Group[] } | null = null;
  * The pieces in trouble in groups by what is wrong, the largest first (of two as large, the one
  * whose first piece comes first). Worked out once for each look (`troubled`), and only when asked.
  */
-export function troubleGroups(y: Yard, rev: number): readonly Group[] {
-  const f = troubled(y, rev);
+export function troubleGroups(y: Yard): readonly Group[] {
+  const f = troubled(y);
   if (grouped?.turn === f.turn) return grouped.groups;
   const by = new Map<string, { title: string; tiles: number[]; kinds: Kind[] }>();
   for (let c = 0; c < f.count; c++) {

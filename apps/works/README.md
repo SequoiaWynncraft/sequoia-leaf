@@ -127,11 +127,10 @@ whoever is walking about), then the lines between pylons, the dusk, and last wha
 pointed at or is about to be built. Only tiles on screen are looked at; every sprite is made once
 and kept; what is worked out from the yard's layout (belt shapes, lines, fences, signposts) is kept
 by what it reads (`layout.ts`): what stands on each tile (kind, way, span, shut ways, colour), the
-plots owned and the goals done, which say what is open. A change is counted in one place, `yard.ts`
-(`S.rev`): a command done, a yard taken from Leaf, and a goal finished as the copy runs on. When it
-has moved the layout compares the yard with what it was worked out from, so the till collected, an
-order handed over or a node taken costs no layout, and Leaf's yard taken standing the same keeps it.
-The lines between pylons are kept while the pylons power reaches are the same.
+plots owned and the goals done, which say what is open. The rules count every change they make to a
+yard other than running it on (`y.rev`: a command done, a goal finished), and the layout and every
+other thing worked out from the yard and kept is kept by the yard and that count; a yard taken from
+Leaf is another yard. The lines between pylons are kept while the pylons power reaches are the same.
 
 Most of a frame is what the last one showed, and a browser charges for each thing drawn, so
 `scene.ts` keeps what stays and draws what moved:
@@ -179,7 +178,7 @@ seen on each of its tiles, handed on down the line to tiles that have shown noth
 forgotten a minute after it was last seen, so a line is one colour along its length and not a dot
 for each thing on it (`plan.test.ts`). A plan keeps one number for each tile, everything that tile's
 picture is painted from, and paints again only the tiles whose number has changed: when what stands
-changes (`S.rev`) and once for each second of the yard's clock. It is used at 8 and 4 pixels for the
+changes (`y.rev`) and once for each second of the yard's clock. It is used at 8 and 4 pixels for the
 far steps and at 3 for the map, each kept only while it is shown.
 
 **What things look like.** A gatherer is a gnome who bends and lifts, and sits down asleep when no
