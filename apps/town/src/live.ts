@@ -12,6 +12,7 @@
  * rank, and other guests in town are marked the same way.
  */
 
+import { DAY_MS, utcDay } from "@sequoia-leaf/core";
 import { followCoins, followLeaf, type Member, member } from "@sequoia-leaf/kit/live.ts";
 import { ask, isRecord, listen, outside } from "@sequoia-leaf/kit/net.ts";
 import {
@@ -22,9 +23,25 @@ import {
   stay as sayStay,
 } from "@sequoia-leaf/kit/presence.ts";
 import { fromLedger } from "@sequoia-leaf/kit/purse.ts";
+import { leafClock } from "@sequoia-leaf/kit/realtime.ts";
 import { lookFor, skinOf } from "@sequoia-leaf/kit/skin.ts";
+import { HOME, later } from "@sequoia-leaf/town/clock.ts";
 
-import type { AwayLine, Goal, Guild, Happening, Mate, Me, Person, Quest, Rester, Tone, Visitor } from "./guild.ts";
+import type {
+  AwayLine,
+  Deeds,
+  Goal,
+  Guild,
+  Happening,
+  Mate,
+  Me,
+  Moment,
+  Person,
+  Quest,
+  Rester,
+  Tone,
+  Visitor,
+} from "./guild.ts";
 import { type Line, lineFor, makePace } from "./news.ts";
 
 // ---------- who the member is ----------
@@ -217,64 +234,137 @@ export function weekOf(events: readonly Ev[], now: number, asked = 50): string[]
   return out.length > 0 ? out : ["a quiet one so far"];
 }
 
-/** How long the guild's news waits for the rest of a raid party or a war to come in, in milliseconds. */
-export const GATHER = 4000;
-/** How long a party or war already told is remembered, so that a late name does not tell it twice. */
-const REMEMBER = 10 * 60_000;
+/**
+ * How long after Leaf wrote down the first of a raid party's or a war's events the town begins to
+ * stage it, in milliseconds: Leaf's stream looks for news every 2 seconds, so by then every page
+ * has heard of everybody in it.
+ */
+export const BEGINS = 6000;
+/** How many raid parties and wars the page keeps for staging, the newest: a later row of one of them is not another. */
+export const KEPT = 50;
+
+const when = (v: unknown): number => (typeof v === "string" ? Date.parse(v) : NaN);
 
 /**
- * The guild's news as it arrives, turned into the town's moments: everybody paid for the same raid
- * at the same time is one party back (and the same for a war), told once they have all come in; a
- * level or a milestone is told at once. Nothing is told twice, and no amount of Leaf goes with any
- * of it.
+ * What Leaf says of the guild's day with its newest events (`GET /v1/game/guild/events`): the
+ * UTC day and how many raids and wars the guild finished in it, and the last war; null for an
+ * answer without them.
  */
-export function makeNews(meId: string): { add(e: Ev, now: number): void; due(now: number): Happening[] } {
-  const heard = new Set<number>();
-  const told = new Map<string, number>();
-  const gathering = new Map<string, { kind: "party" | "war"; what: string; who: Person[]; due: number }>();
+export function readDay(body: unknown): { day: Deeds["day"]; flag: { land: string; happened: number } | null } | null {
+  const today = isRecord(body) && isRecord(body.today) ? body.today : null;
+  const from = when(today?.from);
+  const raids = num(today?.raids);
+  const wars = num(today?.wars);
+  if (!isRecord(body) || !Number.isFinite(from) || raids === null || wars === null) return null;
+  const war = isRecord(body.last_war) ? body.last_war : null;
+  const happened = when(war?.occurred_at);
+  return {
+    day: { from, party: raids, war: wars },
+    flag:
+      war && typeof war.territory === "string" && Number.isFinite(happened) ? { land: war.territory, happened } : null,
+  };
+}
+
+/** What makes a moment itself: its events share what it was and when it happened. */
+const keyOf = (m: Moment): string => `${m.kind}|${m.what}|${m.happened}`;
+const fought = (m: Moment): { land: string; happened: number } => ({ land: m.what, happened: m.happened });
+
+/**
+ * The guild's news, turned into the town's moments. Everybody paid for the same raid at the same
+ * time is one party (and the same for a war), which begins `BEGINS` after Leaf wrote down the
+ * first of them, with whoever Leaf had written down by then: the same on every page, whenever each
+ * heard. `due` tells each once as it begins, but not one already over; a level or a milestone is
+ * told at once, unless it is `old` (what a page that opens reads to catch up).
+ *
+ * How many raids and wars the day has had and where the guild last fought are Leaf's to say, which
+ * has every event (`said`, with the newest events it was counted with, which are `old`); each raid
+ * or war first heard of after that is one more in the UTC day it happened, and a war that happened
+ * later than the last is the last. So a page open for long shows what one just opened does. The
+ * newest `KEPT` moments are kept for staging. No amount of Leaf goes with any of it.
+ */
+export function makeNews(meId: string): {
+  said(day: Deeds["day"], flag: { land: string; happened: number } | null): void;
+  add(e: Ev, old?: boolean): void;
+  due(now: number): Happening[];
+  deeds(): Deeds;
+} {
+  let last = -Infinity;
+  /** Each moment kept by what it was and when it happened, first heard first, with whether it has been told. */
+  const known = new Map<string, { m: Moment & { who: Person[] }; told: boolean }>();
+  /** The last war of those no longer kept, or never: Leaf's own word of it, or one let go since. */
+  let before: Moment | null = null;
+  let day: Deeds["day"] = { from: 0, party: 0, war: 0 };
+  let deeds: Deeds = { moments: [], day };
   const ready: Happening[] = [];
   const person = (e: Ev): Person | null => (e.who ? { id: e.who.id, name: e.who.name, you: e.who.id === meId } : null);
+  const show = (): void => {
+    const kept = [...known.values()].map((k) => k.m);
+    deeds = { moments: before && !known.has(keyOf(before)) ? [before, ...kept] : kept, day };
+  };
   return {
-    add(e, now) {
-      if (heard.has(e.id)) return;
-      heard.add(e.id);
+    said(counted, flag) {
+      day = counted;
+      before = flag && { kind: "war", what: flag.land, who: [], happened: flag.happened, at: 0 };
+      show();
+    },
+    add(e, old = false) {
+      if (e.id <= last) return;
+      last = e.id;
       const who = person(e);
       if (!who) return;
       if (e.type === "leaf_earned" && (e.data.source === "raid" || e.data.source === "war")) {
+        const kind = e.data.source === "raid" ? "party" : "war";
         const what = typeof e.data.detail === "string" ? e.data.detail : "";
-        const key = `${e.data.source}|${what}|${String(e.data.occurred_at)}`;
-        if (told.has(key)) return;
-        const g = gathering.get(key) ?? {
-          kind: e.data.source === "raid" ? "party" : "war",
+        const happened = when(e.data.occurred_at);
+        const m: Moment & { who: Person[] } = {
+          kind,
           what,
           who: [],
-          due: 0,
+          happened: Number.isFinite(happened) ? happened : e.at,
+          at: e.at + BEGINS,
         };
-        if (!g.who.some((p) => p.id === who.id)) g.who.push(who);
-        g.due = now + GATHER;
-        gathering.set(key, g);
-      } else if (e.type === "level_up" && typeof e.data.level === "number")
+        const key = keyOf(m);
+        // A later row of the last war before those kept is not that war again; one Leaf counted the day with is its moment.
+        if (!old && !known.has(key) && before && key === keyOf(before)) return;
+        const k = known.get(key) ?? { m, told: false };
+        if (e.at < k.m.at && !k.m.who.some((p) => p.id === who.id)) k.m.who.push(who);
+        if (!known.has(key)) {
+          known.set(key, k);
+          // What Leaf counted the day with is in its count already.
+          const from = utcDay(m.happened) * DAY_MS;
+          if (!old && from > day.from) day = { from, party: 0, war: 0 };
+          if (!old && from === day.from) day = { ...day, [kind]: day[kind] + 1 };
+          for (const [oldest, gone] of known) {
+            if (known.size <= KEPT) break;
+            known.delete(oldest);
+            if (gone.m.kind === "war" && (!before || later(fought(gone.m), fought(before)) > 0)) before = gone.m;
+          }
+        }
+        show();
+      } else if (old) return;
+      else if (e.type === "level_up" && typeof e.data.level === "number")
         ready.push({ kind: "reached", who, level: e.data.level });
       else if (e.type === "achievement_paid")
         ready.push({ kind: "milestone", who, label: typeof e.data.label === "string" ? e.data.label : "a milestone" });
     },
     due(now) {
-      for (const [key, g] of gathering) {
-        if (g.due > now) continue;
-        gathering.delete(key);
-        told.set(key, now);
+      for (const k of known.values()) {
+        const { m } = k;
+        if (k.told || m.at > now) continue;
+        k.told = true;
+        if (now >= m.at + HOME.over) continue;
         // The member first, if they were there.
-        const who = g.who.toSorted((a, b) => Number(b.you) - Number(a.you));
+        const who = m.who.toSorted((a, b) => Number(b.you) - Number(a.you));
         // A war's events say who fought where (and whether it was in the guild's claim), not how it went.
         ready.push(
-          g.kind === "party"
-            ? { kind: "party", who, raid: g.what || "a raid" }
-            : { kind: "war", who, land: g.what || "new ground" },
+          m.kind === "party"
+            ? { kind: "party", who, raid: m.what || "a raid", at: m.at }
+            : { kind: "war", who, land: m.what || "new ground", at: m.at },
         );
       }
-      for (const [key, at] of told) if (now - at > REMEMBER) told.delete(key);
       return ready.splice(0);
     },
+    deeds: () => deeds,
   };
 }
 
@@ -283,11 +373,15 @@ export function makeNews(meId: string): { add(e: Ev, now: number): void; due(now
 /** The most visitors the town shows at once. */
 export const VISITORS_MOST = 12;
 
-/** Who is in the game, as visitors to the town: everybody but the member, and nobody at their own camp. */
+/**
+ * Who is in one of the games, as visitors to the town: everybody at the Works or the stump but the
+ * member, the first twelve Leaf lists. Whoever is in town is there live, and nobody is shown at
+ * their own camp.
+ */
 export function toVisitors(present: readonly Present[], meId: string): Visitor[] {
   const out: Visitor[] = [];
   for (const p of present) {
-    if (p.id === meId || p.place === "camp" || out.length >= VISITORS_MOST) continue;
+    if (p.id === meId || p.place === "camp" || p.place === "town" || out.length >= VISITORS_MOST) continue;
     out.push({
       id: p.id,
       name: p.name,
@@ -330,16 +424,23 @@ export function toAbout(
 export const RESTING_MOST = 12;
 
 /**
- * Who is resting, as the town shows them: members gone in the last day whose characters stay,
- * most recent first; never the member, nobody in the game just now, nobody last at their own camp.
+ * Who has gone in the last day, as the town shows them, most recent first, whether their
+ * characters stay (`stays`) or not: never the member, nobody in the game just now, nobody last at
+ * their own camp.
  */
-export function toResting(resting: readonly Resting[], present: readonly Present[], meId: string): Rester[] {
+export function toResting(
+  resting: readonly Resting[],
+  present: readonly Present[],
+  meId: string,
+  stays = true,
+): Rester[] {
   const here = new Set(present.map((p) => p.id));
   const out: Rester[] = [];
   for (const r of resting.toSorted((a, b) => b.seen - a.seen)) {
     if (r.id === meId || here.has(r.id) || r.place === "camp" || out.some((o) => o.id === r.id)) continue;
     if (out.length >= RESTING_MOST) break;
-    out.push({ id: r.id, name: r.name, rank: r.guest ? GUEST : null, at: r.place, skin: skinOf(r.id), seen: r.seen });
+    const rank = r.guest ? GUEST : null;
+    out.push({ id: r.id, name: r.name, rank, at: r.place, skin: skinOf(r.id), seen: r.seen, stays });
   }
   return out;
 }
@@ -423,7 +524,6 @@ export function makeLive(p: Prepared): Guild {
   let present: Visitor[] = [];
   let resting: Rester[] = [];
   let about: { present: Mate[]; resting: Mate[] } = { present: [], resting: [] };
-  let heard = false;
   let begun = false;
   const ears = new Set<(h: Happening) => void>();
   const news = makeNews(me.id);
@@ -458,10 +558,9 @@ export function makeLive(p: Prepared): Guild {
     begun = true;
     hearPresent((seen, staying, gone) => {
       present = toVisitors(seen, me.id);
-      resting = toResting(staying, seen, me.id);
+      resting = [...toResting(staying, seen, me.id), ...toResting(gone, seen, me.id, false)];
       // The panel lists everybody gone in the last day; only those who stay are drawn dozing.
       about = toAbout(seen, [...staying, ...gone], me.id);
-      heard = true;
     });
     // Back in view, the town asks Leaf for the Coins: a game or another device may have changed them.
     followCoins();
@@ -476,10 +575,23 @@ export function makeLive(p: Prepared): Guild {
         me = fresh;
       },
     );
-    listen("/v1/game/guild/events/stream", (e) => {
-      const ev = readEvent(e.data);
-      if (ev) news.add(ev, outside.now());
-    });
+    // Leaf's word of the guild's day and its newest news first, for the moments under way; then as it happens.
+    void (async () => {
+      const a = await ask("/v1/game/guild/events");
+      const newest = a.status === 200 ? readEvents(a.body) : [];
+      const counted = readDay(a.body);
+      if (counted) news.said(counted.day, counted.flag);
+      for (const e of newest) news.add(e, true);
+      const from = newest.at(-1);
+      listen(
+        "/v1/game/guild/events/stream",
+        (e) => {
+          const ev = readEvent(e.data);
+          if (ev) news.add(ev);
+        },
+        from ? { after: from.id } : {},
+      );
+    })();
     setInterval(() => void fetchBoard(), BOARD_EVERY);
   }
 
@@ -539,13 +651,13 @@ export function makeLive(p: Prepared): Guild {
       sayDue();
     },
     step() {
-      for (const h of news.due(outside.now())) tell(h);
+      for (const h of news.due(leafClock(outside.now()))) tell(h);
       sayDue();
     },
+    deeds: () => news.deeds(),
     visitors: () => present,
     resting: () => resting,
     about: () => about,
-    heard: () => heard,
     here(place) {
       sayHere(place);
     },

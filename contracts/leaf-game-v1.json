@@ -271,7 +271,16 @@
             "tier": "bronze"
           }
         }
-      ]
+      ],
+      "today": {
+        "from": "2026-11-25T00:00:00.000Z",
+        "raids": 9,
+        "wars": 1
+      },
+      "last_war": {
+        "territory": "Detlas",
+        "occurred_at": "2026-11-25T12:37:00.000Z"
+      }
     }
   },
   "GET /v1/game/guild/events?after=": {

@@ -1,71 +1,59 @@
 /**
- * Real members, and only real members, in their own skins (on the guild's own server; with the
- * made-up guild, its stand-ins):
+ * Real members, and only real members, in their own skins, each where Leaf's list and Leaf's clock
+ * have them (the rules are `@sequoia-leaf/town/clock.ts`), so the same on every page:
  *
- * - **Visitors**, in the game just now: standing or strolling where they are (about the town, by
- *   the Works' door, watching at the stump), there from the start if they were when the page
- *   opened, or walking in through the gate when they arrive. They never speak, and their card has
- *   only their name and rank. When a raid party of real members comes home, its members walk in as
- *   visitors too (`figure`).
- * - **Dozers**, gone in the last day and happy to be left in town: each sits at a free seat for
- *   where they were (a log at the fire, the log at the stump, the bench by the Works' door), eyes
- *   closed, a small "z" drifting up. They never speak or move. A visitor who goes sits down where
- *   they are to doze, if they may; a dozer who comes back gets up and is a visitor again.
+ * - **Visitors**, in one of the games just now: standing by the Works' door or watching at the
+ *   stump, at a spot that follows from their account. Leaf's list says nothing of when anybody
+ *   came, so one is there from the moment the page hears of them. They never speak, and their card
+ *   has only their name and rank.
+ * - **Dozers**, gone in the last day and happy to be left in town: each on a seat for where they
+ *   were (`dozing`), eyes closed, a small "z" drifting up. They never speak or move. Whoever goes
+ *   from a game stays on their feet until `SITS_AFTER` after Leaf last saw them, then walks to
+ *   their seat, or out through the gate if they do not stay or no seat is left.
+ * - **A raid party home** (`homecoming`): those of it with no figure in town walk in through the
+ *   gate, each in their own place in the party, and go again.
  *
- * On the guild's own server, whoever is about the town is there live (`players.ts`), where they
- * really are: those the guild says are in town are not visitors here, and nobody live is a visitor
- * or a dozer as well. Those by the Works' door and at the stump still are.
+ * Whoever is about the town is there live (`players.ts`), where they really are, and nobody live is
+ * drawn here as well.
  */
 
 import { CREAM } from "@sequoia-leaf/kit/palette.ts";
 import { bake, type Body, lookFor, paintSkin, SIT, skinOf } from "@sequoia-leaf/kit/skin.ts";
-import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
-
+import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 import {
-  feet,
-  goToSeat,
-  makeActor,
-  onScreen,
-  release,
-  seatFree,
-  sit,
-  stand,
-  stepActor,
-  stopAt,
-  walkTo,
-} from "./actors.ts";
+  dozing,
+  GATE,
+  GOES_FOR,
+  homecoming,
+  MUSTER,
+  SITS_AFTER,
+  standOf,
+  type Walk,
+  zAt,
+} from "@sequoia-leaf/town/clock.ts";
+
+import { feet, makeActor, onScreen, onWalk, sitsOn, stepPassing, walkAt } from "./actors.ts";
 import { float } from "./fx.ts";
-import { type Actor, after, G } from "./game.ts";
-import { guild, type Person, type Rester, type Visitor } from "./guild.ts";
-import { VISITORS_MOST } from "./live.ts";
-import { nearestFree, place, type Seat, SEATS, SPOTS } from "./world.ts";
+import { type Actor, type Doing, G, SEED } from "./game.ts";
+import { guild, type Person } from "./guild.ts";
+import { type Seat, SEATS } from "./world.ts";
 
-/** In and out of town: the gateway, just inside the dark. */
-export const GATE: Pt = { x: 256, y: 85 };
+/** How fast a member strolls, in pixels a second. */
 const STROLL = 32;
-/** The most members drawn dozing at once. */
-export const DOZERS_MOST = 12;
 
+/**
+ * Somebody drawn here: their figure, eyes open (a look of their own until their skin arrives) and
+ * shut, the "z" they last breathed, and whether they have been put anywhere yet.
+ */
 interface Visiting {
   a: Actor;
-  id: string;
-  at: Visitor["at"];
-  /** On the way out through the gate. */
-  going: boolean;
-  /** Only passing through with a raid party: goes again once it is home. */
-  passing: boolean;
-  /** Asleep at a seat, or on the way to one: gone from the game, left in town. */
-  dozing: boolean;
-  /** Where their skin sheet is served; empty for a made-up member. */
-  skin: string;
-  /** When to wander off somewhere else in town, by the town's clock; for a dozer, the next "z". */
-  next: number;
+  open: Body;
+  shut: Body | null;
+  z: number;
+  put: boolean;
 }
 
 const here = new Map<string, Visiting>();
-let lookIn = 0;
-/** The guild has said who is about: whoever it said first was here before the page was. */
-let heard = false;
 
 /** Who is drawn in town live (fading away too), by their account, and their figure: told by `players.ts`; nobody until it does. */
 let live: { ids(): ReadonlySet<string>; actor(id: string): Actor | null } = {
@@ -75,17 +63,6 @@ let live: { ids(): ReadonlySet<string>; actor(id: string): Actor | null } = {
 /** Hears who is in town live, so that nobody is drawn twice. */
 export function followLive(l: typeof live): void {
   live = l;
-}
-
-/** Who the guild says is in the game, as visitors: nobody in town (they are there live) and nobody live. */
-function wantedNow(): readonly Visitor[] {
-  const now = live.ids();
-  return guild.visitors().filter((w) => w.at !== "town" && !now.has(w.id));
-}
-/** Who the guild says has gone and stays, as dozers: never anybody live. */
-function restingNow(): readonly Rester[] {
-  const now = live.ids();
-  return guild.resting().filter((r) => !now.has(r.id));
 }
 
 // ---------- eyes closed ----------
@@ -144,335 +121,141 @@ function dozy(body: Body): Body {
   return { frames, face: shutEyes(body.face, 0, 0) };
 }
 
-/** Puts a member in their own skin once it has arrived (and keeps their eyes shut if they doze). */
-function dress(v: Visiting): void {
-  if (!v.skin) return;
+// ---------- where each is ----------
+
+/** Somebody's figure here, made (and their skin asked for) the first time they are drawn. */
+function figure(p: { id: string; name: string; rank?: string | null }): Visiting {
+  const had = here.get(p.id);
+  if (had) {
+    if (p.rank) had.a.who = { ...had.a.who, rank: p.rank };
+    return had;
+  }
+  const a = makeActor({ name: p.name, rank: p.rank ?? "", level: 0, voice: 0 }, null, 0, 0);
+  a.id = p.id;
+  a.speed = STROLL;
+  const v: Visiting = { a, open: bake(paintSkin(lookFor(p.name))), shut: null, z: 0, put: false };
+  here.set(p.id, v);
+  G.visitors.push(a);
   const img = new Image();
   img.addEventListener("load", () => {
     try {
-      const body = bake(img);
-      v.a.body = v.dozing ? dozy(body) : body;
-      awake.set(v.a, body);
+      v.open = bake(img);
+      v.shut = null;
     } catch {
       // A picture that cannot be read: the look of their own stays.
     }
   });
-  img.src = v.skin;
-}
-/** Each member's figure with their eyes open, for when a dozer wakes. */
-const awake = new WeakMap<Actor, Body>();
-
-// ---------- where they stand, and where they sit ----------
-
-const near = (x: number, y: number): Pt => nearestFree(x, y);
-
-/** Somewhere to stand for a visitor of where they are; `n` spreads several out. */
-function spotFor(at: Visitor["at"], n: number): Pt {
-  if (at === "works") {
-    const s = place("works").stand;
-    // Against the wall beside the door and along the road before it, clear of the lantern tree's canopy.
-    const off = [
-      [20, 10],
-      [-21, -2],
-      [34, 16],
-      [10, 19],
-      [24, 24],
-      [36, 30],
-    ][n % 6] ?? [0, 12];
-    return near(s.x + (off[0] ?? 0), s.y + (off[1] ?? 0));
-  }
-  if (at === "table") {
-    const s = SPOTS[n % SPOTS.length];
-    return s ? near(s.x, s.y + 2) : near(430 + (n % 4) * 10, 236);
-  }
-  // About the town: anywhere on the open ground between the places.
-  return near(150 + Math.random() * 230, 140 + Math.random() * 150);
-}
-
-/** The seats a dozer may have, by where they were: theirs first, then the fire's logs, then the benches. */
-const SEATS_FOR: Readonly<Record<Visitor["at"], readonly Seat["at"][]>> = {
-  town: ["fire", "bench", "works"],
-  table: ["table", "fire", "bench"],
-  works: ["works", "fire", "bench"],
-};
-
-/** Seats facing us first, so that whoever dozes there is seen to; then side on; then with their back to us. */
-const facing = (s: Seat): number => (s.dir === 0 ? 0 : s.dir === 3 ? 2 : 1);
-
-/** A free seat for somebody (`who`, if they are in town) dozing off who was last at a place; never one kept for the member. */
-export function seatFor(at: Visitor["at"], who: Actor | null = null): Seat | null {
-  for (const kind of SEATS_FOR[at]) {
-    const s = SEATS.filter((x) => x.at === kind && seatFree(x, who) && !x.yours).toSorted(
-      (a, b) => facing(a) - facing(b),
-    )[0];
-    if (s) return s;
-  }
-  return null;
-}
-
-function count(at: Visitor["at"]): number {
-  let n = 0;
-  for (const v of here.values()) if (v.at === at && !v.going && !v.dozing) n++;
-  return n;
-}
-const dozers = (): number => [...here.values()].filter((v) => v.dozing).length;
-
-// ---------- coming and going ----------
-
-function spawn(id: string, name: string, rank: string | null, at: Visitor["at"], skin: string): Visiting {
-  const a = makeActor({ name, rank: rank ?? "", level: 0, voice: 0 }, bake(paintSkin(lookFor(name))), GATE.x, GATE.y);
-  a.id = id;
-  a.alpha = 0;
-  a.mode = "led";
-  a.speed = STROLL;
-  a.doing = "walk";
-  const v: Visiting = {
-    a,
-    id,
-    at,
-    going: false,
-    passing: false,
-    dozing: false,
-    skin,
-    next: G.t + 6 + Math.random() * 8,
-  };
-  here.set(id, v);
-  G.visitors.push(a);
-  dress(v);
+  img.src = skinOf(p.id);
   return v;
 }
 
-/** Takes somebody out of town for good, letting go of any seat or spot they held. */
-function forget(v: Visiting): void {
-  release(v.a);
-  here.delete(v.id);
-  G.visitors = G.visitors.filter((a) => a !== v.a);
-}
+/** Standing at a spot, as a walk that is over. */
+const still = (to: Walk["to"]): Walk => ({ from: to, to, at: 0 });
 
-function goOut(v: Visiting): void {
-  v.going = true;
-  release(v.a);
-  walkTo(v.a, GATE, () => {
-    forget(v);
-  });
-}
-
-/** Somebody goes to a spot for where they are: walking there, or (`now`) standing there already. */
-function settle(v: Visiting, now = false): void {
-  const to = spotFor(v.at, count(v.at));
-  const there = (): void => {
-    v.a.dir = v.at === "town" ? v.a.dir : 3;
-    v.a.doing = v.at === "works" ? "works" : v.at === "table" ? "table" : "walk";
-  };
-  if (!now) {
-    walkTo(v.a, to, there);
-    return;
-  }
-  const at = stopAt(v.a, to);
-  v.a.x = at.x;
-  v.a.y = at.y;
-  v.a.alpha = 1;
-  there();
-}
-
-/** Sits a member down on a seat, asleep; with no seat, they doze where they stand. */
-function doze(v: Visiting, s: Seat | null, seen: number): void {
-  const a = v.a;
-  v.dozing = true;
-  if (s) sit(a, s);
-  a.moving = false;
-  a.dozing = seen;
-  a.mode = "led";
-  a.doing = "home";
-  a.say = "";
-  const open = awake.get(a) ?? a.body;
-  if (open) {
-    awake.set(a, open);
-    a.body = dozy(open);
-  }
-}
-
-/** A dozer who is in the game again: they get up, eyes open, and go where they are. */
-function wake(v: Visiting, at: Visitor["at"]): void {
-  const a = v.a;
-  v.dozing = false;
-  a.dozing = null;
-  a.body = awake.get(a) ?? a.body;
-  stand(a);
-  release(a);
-  v.at = at;
-  settle(v);
-}
-
-/** Keeps the visitors and dozers in step with who the guild says is here and who has gone. */
-export function stepVisitors(dt: number): void {
-  for (const v of here.values()) {
-    // Everybody walks, until they are asleep.
-    if (v.a.dozing === null) {
-      stepActor(v.a, dt);
-      continue;
-    }
-    // A dozer breathes out a "z" now and then.
-    if (G.t >= v.next) {
-      v.next = G.t + 1.6 + Math.random() * 0.8;
-      const at = feet(v.a);
-      if (onScreen(at.x, at.y)) float(at.x + 4, at.y - 20, "z", CREAM, 1.4);
-    }
-  }
-  // Anybody drawn here as a visitor or a dozer who is now in town live is drawn by `players.ts`,
-  // where they really are: this figure of them goes at once, so that nobody is ever seen twice.
-  const liveNow = live.ids();
-  for (const v of here.values()) if (liveNow.has(v.id)) forget(v);
-
-  lookIn -= dt;
-  if (lookIn > 0) return;
-  lookIn = 1;
-  const want = wantedNow();
-  const rest = restingNow();
-  const already = !heard;
-  heard = guild.heard();
-  const wantedIds = new Set(want.map((w) => w.id));
-  const resting = new Map(rest.map((r) => [r.id, r]));
-
-  for (const v of here.values()) {
-    if (v.passing || v.going || wantedIds.has(v.id)) continue;
-    const r = resting.get(v.id);
-    if (v.dozing) {
-      // Gone for more than a day, or would rather not be left: they are simply not here any more.
-      if (!r) forget(v);
-      continue;
-    }
-    // Gone: sits down to doze where they were, if they may and there is a seat; else out through the gate.
-    const s = r && dozers() < DOZERS_MOST ? seatFor(r.at, v.a) : null;
-    if (!r || !s) {
-      goOut(v);
-      continue;
-    }
-    v.a.mode = "led";
-    goToSeat(
-      v.a,
-      s,
-      () => seatFor(r.at, v.a),
-      (sat) => doze(v, sat, r.seen),
-    );
-    v.dozing = true;
-  }
-
-  for (const w of want) {
-    const v = here.get(w.id);
-    if (!v) {
-      // In through the gate; but those about when the page opened stand where they are from the start.
-      if (here.size - dozers() < VISITORS_MOST) settle(spawn(w.id, w.name, w.rank, w.at, w.skin), already);
-      continue;
-    }
-    v.a.who = { ...v.a.who, rank: w.rank ?? v.a.who.rank };
-    if (v.dozing) wake(v, w.at);
-    else if (v.passing) {
-      // Came home with a party, and is in the game after all: stays.
-      v.passing = false;
-      v.at = w.at;
-    } else if (v.going || v.at !== w.at) {
-      v.going = false;
-      v.at = w.at;
-      settle(v);
-    }
-  }
-
-  // Those gone a while already, most recent first, sit where they were from the start.
-  for (const r of rest) {
-    if (here.has(r.id) || wantedIds.has(r.id) || dozers() >= DOZERS_MOST) continue;
-    const s = seatFor(r.at);
-    if (!s) continue;
-    const v = spawn(r.id, r.name, r.rank, r.at, r.skin);
-    v.a.alpha = 1;
-    doze(v, s, r.seen);
-    v.a.x = s.x;
-    v.a.y = s.y;
-    v.a.sat = -9;
-    v.next = G.t + Math.random() * 2;
-  }
-
-  for (const v of here.values()) {
-    if (
-      v.at !== "town" ||
-      v.dozing ||
-      v.going ||
-      v.passing ||
-      v.a.mode !== "led" ||
-      v.a.path.length > 0 ||
-      G.t < v.next
-    )
-      continue;
-    v.next = G.t + 8 + Math.random() * 12;
-    settle(v);
-  }
+/** On their feet: where a walk has them by Leaf's clock, or standing where it ends. */
+function afoot(v: Visiting, w: Walk, doing: Doing): void {
+  v.put = true;
+  v.a.seat = null;
+  v.a.dozing = null;
+  v.a.body = v.open;
+  v.a.doing = onWalk(v.a, w) ? doing : "walk";
 }
 
 /**
- * Another player, live, sits down on a seat: anybody dozing there shuffles over to another free
- * seat for where they were (or, with none, is not drawn), and the seat is kept for the player.
- * Says whether it is theirs now; a seat the member or one of the town's own sits on is not.
+ * Asleep on a seat since the game last saw them (`seen`): eyes closed, a "z" now and then. Whoever
+ * walked there, or is moved from another seat, is seen to sit down; whoever is first put here was
+ * sitting already.
  */
-export function takeSeat(s: Seat): boolean {
-  if (!s.taken) {
-    s.taken = true;
-    return true;
+function asleep(v: Visiting, s: Seat, seen: number): void {
+  const a = v.a;
+  if (a.seat !== s) a.sat = v.put ? G.t : -9;
+  v.put = true;
+  a.seat = s;
+  a.x = s.from.x;
+  a.y = s.from.y;
+  a.dir = s.dir;
+  a.moving = false;
+  a.dozing = seen;
+  a.doing = "home";
+  a.body = v.shut ??= dozy(v.open);
+  const z = zAt(SEED, a.id, G.now);
+  if (z === v.z) return;
+  v.z = z;
+  if (onScreen(s.x, s.y)) float(feet(a).x + 4, feet(a).y - 20, "z", CREAM, 1.4);
+}
+
+/**
+ * Puts every visitor, dozer and raid party walking in where Leaf's list, the guild's moments and
+ * Leaf's clock (`G.now`) have them, `dt` seconds on for their hops, and takes away whoever they
+ * have nowhere. `awake` is everybody else who may be sitting on one of the town's seats (the
+ * member, the town's own, the other players): a seat one of them sits on is theirs, and whoever
+ * dozed there dozes on the next.
+ */
+export function stepVisitors(dt: number, awake: readonly Actor[]): void {
+  const now = G.now;
+  for (const v of here.values()) stepPassing(v.a, dt);
+  const liveNow = live.ids();
+  const drawn = new Set<string>();
+  /** Somebody to draw, unless they are in town live. */
+  const draw = (p: { id: string; name: string; rank?: string | null }): Visiting | null => {
+    if (liveNow.has(p.id)) return null;
+    drawn.add(p.id);
+    return figure(p);
+  };
+
+  for (const w of guild.visitors()) {
+    const v = draw(w);
+    if (v) afoot(v, still(standOf(w.id, w.at)), w.at);
   }
-  const v = [...here.values()].find((x) => x.dozing && x.a.seat === s);
-  if (!v) return false;
-  stand(v.a);
-  s.taken = true;
-  const other = seatFor(v.at);
-  if (!other) {
-    forget(v);
-    return true;
+
+  const resting = guild.resting().filter((r) => !liveNow.has(r.id));
+  const seats = dozing(
+    resting.filter((r) => r.stays),
+    SEATS.filter((s) => awake.every((a) => !sitsOn(a, s))),
+  );
+  for (const r of resting) {
+    const up = r.seen + SITS_AFTER;
+    const seat = seats.get(r.id);
+    // Whoever was about the town was there live, and is next seen on their seat.
+    if (r.at === "town") {
+      const v = seat && now >= up ? draw(r) : null;
+      if (v && seat) asleep(v, seat, r.seen);
+      continue;
+    }
+    if (!seat && now >= up + GOES_FOR) continue;
+    const v = draw(r);
+    if (!v) continue;
+    const stood = standOf(r.id, r.at);
+    const walk: Walk = { from: stood, to: seat ? { ...seat.from, dir: seat.dir } : GATE, at: up };
+    if (now < up) afoot(v, still(stood), r.at);
+    else if (seat && walkAt(walk, STROLL, now).next === null) asleep(v, seat, r.seen);
+    else afoot(v, walk, "walk");
   }
-  sit(v.a, other);
-  v.a.x = other.x;
-  v.a.y = other.y;
-  v.a.sat = -9;
-  return true;
+
+  for (const m of guild.deeds().moments) {
+    if (m.kind !== "party" || now < m.at) continue;
+    // Each has one place in the party from its start to its end; whoever has a figure in town already takes part where they are.
+    m.who.slice(0, MUSTER.length).forEach((p, i) => {
+      const walk = p.you || drawn.has(p.id) ? null : homecoming(SEED, m.at, i, now);
+      const v = walk && draw(p);
+      if (v && walk) afoot(v, walk, "walk");
+    });
+  }
+
+  for (const [id, v] of here) {
+    if (drawn.has(id)) continue;
+    here.delete(id);
+    G.visitors = G.visitors.filter((a) => a !== v.a);
+  }
 }
 
 /** Whether somebody in town is a real member other than the member themself: visiting, or dozing. */
 export const isVisitor = (a: Actor): boolean => G.visitors.includes(a);
 
-/**
- * A real member to take part in one of the guild's moments: the visitor themself if they are in
- * town, or somebody passing in through the gate who goes again when `done` is called. Nobody for
- * somebody dozing in town: they sleep through it.
- */
-export function figure(p: Person): Actor | null {
-  const had = here.get(p.id);
-  // Somebody live is where they really are, and goes nowhere the town leads them.
-  if (had?.dozing || live.ids().has(p.id)) return null;
-  const v = had ?? spawn(p.id, p.name, null, "town", skinOf(p.id));
-  if (!ids().has(p.id)) v.passing = true;
-  v.going = false;
-  release(v.a);
-  v.a.mode = "busy";
-  return v.a;
-}
-
-const ids = (): Set<string> => new Set(wantedNow().map((w) => w.id));
-
-/** The moment is over: a visitor goes back to where they were, and somebody passing goes again. */
-export function done(a: Actor): void {
-  const v = [...here.values()].find((x) => x.a === a);
-  if (!v) return;
-  a.mode = "led";
-  // Somebody passing stays a moment to be cheered, and then goes.
-  if (v.passing)
-    after(3 + Math.random() * 3, () => {
-      if (v.passing) goOut(v);
-    });
-  else settle(v);
-}
-
 /** The visitor somebody is, if they are in town and awake, or their figure if they are there live. */
 export function visitorOf(p: Person): Actor | null {
   const v = here.get(p.id);
-  return live.actor(p.id) ?? (v && !v.dozing ? v.a : null);
+  return live.actor(p.id) ?? (v && v.a.dozing === null ? v.a : null);
 }
 
 /** Whoever somebody is drawn as in town, if anybody: their figure if they are there live, or the visitor they are, awake or dozing. */
@@ -480,10 +263,10 @@ export function drawnAs(id: string): Actor | null {
   return live.actor(id) ?? here.get(id)?.a ?? null;
 }
 
-/** Real members in town for looking at it from outside: where each is, and whether they are dozing. */
-export function members(): { name: string; x: number; y: number; dozing: boolean }[] {
-  return [...here.values()].map((v) => {
-    const at = v.a.seat ?? v.a;
-    return { name: v.a.who.name, x: Math.round(at.x), y: Math.round(at.y), dozing: v.dozing };
+/** Real members in town for looking at it from outside: where each is and what they are doing, and whether they are dozing. */
+export function members(): { name: string; x: number; y: number; doing: string; dozing: boolean }[] {
+  return [...here.values()].map(({ a }) => {
+    const at = a.seat ?? a;
+    return { name: a.who.name, x: Math.round(at.x), y: Math.round(at.y), doing: a.doing, dozing: a.dozing !== null };
   });
 }

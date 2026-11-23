@@ -16,7 +16,7 @@ import { onScreen } from "./actors.ts";
 import { type CampArt, HUES, pictureOf, SHELF_SLOTS, TUBES, WICKS } from "./campart.ts";
 import { csfx } from "./campsfx.ts";
 import { bit, burst, float, flutter, puff, ring, sparkle } from "./fx.ts";
-import { G, hooks } from "./game.ts";
+import { G, hooks, today } from "./game.ts";
 import { flame, type Light, type Prop } from "./props.ts";
 
 /** A thing as it stands in a camp: its record, its picture, its light, and a little state of its own. */
@@ -730,14 +730,15 @@ export function extraOf(l: Live, w: TouchWorld): Extra | null {
         R(g, sx - 1, sy - 17 - Math.round(leap * 4), 2, 2, CREAM);
       };
     case "cabin":
-      // A pennant on the roof for every land the guild has taken tonight.
+      // A pennant on the roof once the guild has fought for a land today, its colour by how many.
       return (g, sx, sy) => {
-        if (G.lands <= 0) return;
+        const lands = today("war").n;
+        if (lands <= 0) return;
         const cols = [SKY[4], WATER[2], SKY[3], GREEN[3]];
         const x = sx + 30;
         const y = sy - 78;
         R(g, x, y, 1, 12, BARK[0]);
-        const col = cols[G.lands % cols.length] ?? SKY[4];
+        const col = cols[lands % cols.length] ?? SKY[4];
         for (let i = 0; i < 7; i++) {
           const wave = Math.round(Math.sin(G.t * 5 - i * 0.7) * (i / 6));
           R(g, x + 1 + i, y + 1 + wave, 1, Math.max(1, 5 - Math.floor(i / 2)), col);

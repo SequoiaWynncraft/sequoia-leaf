@@ -285,14 +285,6 @@ export const SEATS: Seat[] = [
   { x: 457, y: 213, dir: 3, from: { x: 457, y: 224 }, at: "table", taken: false },
 ];
 
-/** Where to stand and watch a game at the stump. (Where the town's own go is the clock's: `clock.ts`.) */
-export const SPOTS: readonly Pt[] = [
-  { x: 414, y: 197 },
-  { x: 471, y: 197 },
-  { x: 437, y: 171 },
-  { x: 457, y: 171 },
-];
-
 /** Where the stallkeepers stand, behind each stall by its place in the row, and in front of each (on the counter). */
 export const STALL_BEHIND: readonly Pt[] = [
   { x: 60, y: 238 },
@@ -302,14 +294,6 @@ export const STALL_BEHIND: readonly Pt[] = [
 export const STALL_FRONT_Y = 249;
 /** The top of a stall's counter, for whoever is on it. */
 export const STALL_TOP_Y = 233;
-
-/** Where a raid party musters before the gate. */
-export const MUSTER: readonly Pt[] = [
-  { x: 240, y: 112 },
-  { x: 272, y: 113 },
-  { x: 250, y: 125 },
-  { x: 265, y: 127 },
-];
 
 // ---------- the squares, worked out once everything above is known ----------
 

@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "one-town-2",
+    at: "2026-11-23T02:12Z",
+    title: "The same members, the same moments",
+    lines: [
+      "Members at the Works or the raid table, members dozing, and the pieces on the stump's board are in the same place for everyone in town.",
+      "A raid party walks in, its lantern goes up and the town cheers at the same second for everyone. The tree has one lantern for each raid today (UTC), and the banner is the last territory fought at.",
+    ],
+  },
+  {
     id: "works-away",
     at: "2026-11-23T01:16Z",
     title: "The Works keeps working while you are away",
