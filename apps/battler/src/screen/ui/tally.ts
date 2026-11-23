@@ -1,3 +1,4 @@
+import { framesOf, portrait } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The tally as the page shows it: what every figure in a fight did, a row each, "You" on the left
  * and the other party on the right (one at a time on an upright phone, with a switch). Each row is
@@ -25,7 +26,6 @@ import {
 } from "@sequoia-leaf/raid";
 import { regularNamed } from "@sequoia-leaf/raid/content/rooms.ts";
 
-import { framesOf, portrait } from "../art/sprites.ts";
 import { opening } from "../logic.ts";
 import { snd } from "../sounds.ts";
 import { pic } from "./cards.ts";

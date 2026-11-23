@@ -14,6 +14,55 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "figures-town-look",
+    at: "2026-11-23T10:38Z",
+    title: "The raid's characters, redrawn",
+    lines: [
+      "The Little Raid's characters are drawn in the town's colours now. Its gnomes, crabs, cat, fox and Glorp are the town's own, only bigger.",
+    ],
+  },
+  {
+    id: "grove-hold",
+    at: "2026-11-23T10:29Z",
+    title: "Rare prizes wait for you",
+    lines: [
+      "In 10 pulls at the Grove, a Dryad or better stays on screen until you press Next, tap the picture or press a key. Skip still goes past it.",
+      "The Prizes list opens on the prizes. The rules are behind the ? there.",
+    ],
+  },
+  {
+    id: "pull-characters",
+    at: "2026-11-23T09:40Z",
+    title: "Pulls give characters",
+    lines: [
+      "A pull at the Grove now gives a character from The Little Raid for your camp. It goes into Storage; set it out and touch it.",
+      "Everything you won from earlier pulls is still yours.",
+    ],
+  },
+  {
+    id: "storage",
+    at: "2026-11-23T08:50Z",
+    title: "Storage",
+    lines: [
+      "Everything you buy, win or take out of a letter goes into Storage. Nothing is placed in your camp for you.",
+      "At your camp, the hammer opens Storage. The number on it is how many new things are inside. Parcels that were waiting by your trail are there too.",
+    ],
+  },
+  {
+    id: "grove-full-screen",
+    at: "2026-11-23T08:10Z",
+    title: "The Grove fills the screen",
+    lines: [
+      "The Grove's picture covers the whole window on every phone and screen. It was a small picture in the middle.",
+    ],
+  },
+  {
+    id: "banner-1-open",
+    at: "2026-11-23T08:05Z",
+    title: "The first banner is open",
+    lines: ["It is at the Grove until 8 December (UTC). Its top prize is a statue of a member for your camp."],
+  },
+  {
     id: "one-town-2",
     at: "2026-11-23T02:12Z",
     title: "The same members, the same moments",

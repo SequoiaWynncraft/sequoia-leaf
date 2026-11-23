@@ -1,7 +1,8 @@
 /**
  * What the Grove says and counts, with no page in it: what a prize is called and is for, what a
  * reveal says of it, the line for the pulls towards a top prize, the chances and the rules as
- * `RATES` has them, and why a pull cannot be made. `grovescene.ts` and `groveui.ts` show them.
+ * `RATES` has them, when each beat of a ceremony falls and where its clock waits, and why a pull
+ * cannot be made. `grovescene.ts` and `groveui.ts` show them.
  */
 
 import {
@@ -17,6 +18,7 @@ import {
   topChance,
 } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
+import { FIGURES, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { LOOK_KINDS, LOOKS } from "@sequoia-leaf/raid/content/looks.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
 
@@ -53,20 +55,21 @@ export const poolName = (pool: string, banners: readonly BannerPerson[]): string
 
 // ---------- a prize ----------
 
-/** What a prize is called. A headliner is called by their name, which only Leaf knows. */
+/**
+ * What a prize is called: a figure by its name in the raid, a headliner by their name, which only
+ * Leaf knows, and a thing or a look of earlier pulls by its own.
+ */
 export function prizeName(prize: string, banners: readonly BannerPerson[]): string {
   const [kind = "", id = ""] = prize.split(":");
+  if (kind === "figure") return isFigureId(id) ? FIGURES[id].name : id;
   if (kind === "thing") return thingOf(id)?.name ?? id;
   if (kind === "look") return LOOK_KINDS.flatMap((k) => LOOKS[k]).find((l) => l.id === id)?.name ?? id;
   return banners.find((b) => b.id === id)?.headliner?.name ?? "The headliner";
 }
 
-/** What a prize is for. */
-export function prizeIs(prize: string): string {
-  if (prize.startsWith("thing:")) return "For your camp";
-  if (prize.startsWith("look:")) return "A look for the raid's table";
-  return "A statue for your camp";
-}
+/** What a prize a pool gives is: a figure, or a banner's headliner. */
+export const prizeIs = (prize: string): string =>
+  prize.startsWith("figure:") ? "A character for your camp" : "A statue for your camp";
 
 /** What a reveal says of the prize a pull drew, or Seeds bought. */
 export interface Reveal {
@@ -157,6 +160,45 @@ export function rules(headliner: string | null): string[] {
     `Free pull: 1 every ${free.every / 3_600_000} hours. Up to ${free.most} wait.`,
   ];
 }
+
+// ---------- a ceremony's clock ----------
+
+/** How long each reveal holds, by its tier; a top prize's begins with half a second of black. */
+const REVEAL: Record<Tier, number> = { filler: 1.3, mid: 1.9, top: 3.4 };
+const FRAME = 1 / 60;
+
+/** When each beat of a ceremony falls, in seconds on its clock. */
+export interface Timeline {
+  /** When the reveals begin: after the tell, or at once for a prize had for Seeds. */
+  readonly tell: number;
+  readonly starts: readonly number[];
+  readonly end: number;
+  /**
+   * Where the clock stops until the player goes on: the last frame of the reveal of each mid-tier
+   * or top prize among several. One prize alone stays on show whatever it is, so it has none.
+   */
+  readonly waits: readonly number[];
+}
+
+/** The timeline of a ceremony for prizes of these tiers, in the order Leaf drew them. */
+export function timeline(tiers: readonly Tier[], tell: number): Timeline {
+  const starts: number[] = [];
+  const waits: number[] = [];
+  let at = tell;
+  for (const tier of tiers) {
+    starts.push(at);
+    at += REVEAL[tier];
+    if (tier !== "filler" && tiers.length > 1) waits.push(at - FRAME);
+  }
+  return { tell, starts, end: at, waits };
+}
+
+/** The clock `dt` after `t`: it runs as far as a wait, and stands there. */
+export const ticked = (line: Timeline, t: number, dt: number): number =>
+  line.waits.find((w) => t <= w && w < t + dt) ?? t + dt;
+
+/** Where going on puts the clock: at the next reveal (the first, from the tell), and after the last at the end. */
+export const onward = (line: Timeline, t: number): number => line.starts.find((start) => start > t) ?? line.end;
 
 // ---------- the buttons ----------
 

@@ -1,3 +1,4 @@
+import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The member's hand: picking figures up and putting them down, with a mouse or a finger. Anything
  * may be dragged (a figure about the board and bench or onto the stall to sell it, an offer off
@@ -14,7 +15,6 @@ import { LONG_PRESS } from "@sequoia-leaf/kit/tip.ts";
 import { type FigureId, isComponentId, type ItemId, pieceAt, type Run, sellValue, type Spot } from "@sequoia-leaf/raid";
 
 import { itemPic } from "./art/icons.ts";
-import { framesOf } from "./art/sprites.ts";
 import { unitUnder } from "./fightview.ts";
 import { handing, reachOf, reachOfOffer } from "./logic.ts";
 import { hop, type Pawn, pawnAt, pawns, spotAt, spotXY } from "./pawns.ts";

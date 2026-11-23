@@ -31,8 +31,15 @@ only the last room is fought again until it is won or the party goes home.
 
 **Resolve.** Twenty. A lost room costs 2 and 1 more for each enemy still standing, never more than 7. A draw costs 2. At 0 the run ends. Clearing room fifteen wins it.
 
-**Acorns.** The run starts with 2. After every room: 5, 1 more for a win, and 1 for every 10 held
-before the room paid, up to 5. There is no bonus for winning or losing several in a row.
+**Acorns.** The run starts with 2. After every room: 4, 1 more for a win, and 1 for every 10 held
+before the room paid, up to 5.
+
+**Streaks.** The run counts rooms won in a row and rooms lost in a row (`run.streak`: above 0 for
+wins, below 0 for losses). A win after a loss, or a loss after a win, starts a new streak of 1; a
+draw makes it 0. After every room, counting that room, a streak of 3 or 4 pays 1 acorn more and 5
+or more pays 2, the same for wins and losses (`streakAcorns` in `content/rooms.ts`). The base pay went from 5 to 4 when streaks came in, so a
+run pays about the same as before: 200 runs a habit on the first trail beat the last boss 23.6% of
+the time without streaks and 23.8% with them.
 
 - The stall shows 5 figures. A figure costs its tier, 1 to 5. One rustle a room is free; more cost 2. The stall can be held as it is for the next room.
 - Selling returns the price at one star, and one or two acorns less than was paid for a merged

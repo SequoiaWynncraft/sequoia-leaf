@@ -1,3 +1,4 @@
+import { portrait } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * Picks: three cards laid on the table to choose one from. The first figure to set out with, a
  * component after trouble, a boon now and then (with the one redraw). Nothing else can be done
@@ -24,7 +25,6 @@ import {
 } from "@sequoia-leaf/raid";
 
 import { boonIcon, glyphPic, itemIcon, itemPic, traitIcon } from "../art/icons.ts";
-import { portrait } from "../art/sprites.ts";
 import { fly } from "../fx.ts";
 import { signal } from "../signals.ts";
 import { snd } from "../sounds.ts";

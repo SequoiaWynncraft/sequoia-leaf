@@ -1,3 +1,4 @@
+import { portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The pages that sit over the table: the front page before a run, the almanac of everything met so
  * far, how to play, the looks for the table that Leaf buys, and the paper at a run's end. One is up
@@ -43,7 +44,6 @@ import {
 } from "@sequoia-leaf/raid";
 
 import { glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
-import { portrait, starsPic } from "../art/sprites.ts";
 import { paintSwatch } from "../art/table.ts";
 import { snd } from "../sounds.ts";
 import { dress } from "../stage.ts";

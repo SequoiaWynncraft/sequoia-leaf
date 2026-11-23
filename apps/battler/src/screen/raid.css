@@ -308,6 +308,13 @@ body[data-picking="yes"] #foe {
   line-height: 1;
   display: grid;
   place-items: center;
+  max-width: 100%;
+  overflow: hidden;
+}
+/* A word too wide for its card (see fitNames): every name in the small style, as on a phone. */
+#stall.tight .offer .name {
+  font: var(--f-small);
+  min-height: calc(var(--t-s) * 2);
 }
 .offer .foot {
   display: flex;
@@ -410,6 +417,25 @@ body[data-picking="yes"] #foe {
 }
 .k-cur.big {
   font: var(--f-head);
+}
+/* The purse's count, and beside it a flame for rooms won in a row or frost for rooms lost in a row. */
+#acorns .count {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+}
+#acorns .streak {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  font: var(--f-name);
+  white-space: nowrap;
+}
+#acorns .streak.won {
+  color: var(--k-gold-lt);
+}
+#acorns .streak.lost {
+  color: var(--k-blue);
 }
 .piles {
   display: flex;
@@ -598,7 +624,7 @@ body[data-picking="yes"] #foe {
   gap: calc(var(--u) * 6);
 }
 #fsheet.after .fs-main {
-  grid-template-columns: minmax(0, 1fr) calc(var(--u) * 82);
+  grid-template-columns: minmax(0, 1fr) minmax(calc(var(--u) * 82), auto);
 }
 .fs-aside {
   justify-content: flex-start;
@@ -612,6 +638,10 @@ body[data-picking="yes"] #foe {
 }
 .fs-aside .pay {
   gap: calc(var(--u) * 2);
+}
+/* "Win streak 3" on one line: the column is as wide as its longest line needs. */
+.fs-aside .pay > .k-grow {
+  white-space: nowrap;
 }
 /* However the sheet scrolls, "Carry on" stays in reach. */
 #carry {
