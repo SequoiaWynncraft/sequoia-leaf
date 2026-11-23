@@ -15,7 +15,7 @@ export interface Note {
 export const NOTES: readonly Note[] = [
   {
     id: "works-away",
-    at: "2026-11-23T00:18Z",
+    at: "2026-11-23T01:16Z",
     title: "The Works keeps working while you are away",
     lines: [
       "Your yard now really runs for up to 8 hours after you leave, and Top yards keeps up while you sleep.",
