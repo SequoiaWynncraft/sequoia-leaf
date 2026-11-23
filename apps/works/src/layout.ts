@@ -135,9 +135,9 @@ export function armsAt(y: Yard, i: number): Arms {
 
 /**
  * The lines last worked out, and what they were worked out from: the tiles of the pylons power
- * reached, the depot, and how far a pylon reaches. A layout worked out again for a belt keeps them.
+ * reached (and the land's width, which says where a tile is), the depot, and how far a pylon reaches. A layout worked out again for a belt keeps them.
  */
-let strung: { pylons: number[]; depot: string; reach: number; wires: Int32Array } | null = null;
+let strung: { pylons: number[]; width: number; depot: string; reach: number; wires: Int32Array } | null = null;
 
 /** The lines power is carried on: from the depot to each pylon joined to it, each by its nearest joined neighbour. */
 function wires(y: Yard): Int32Array {
@@ -150,6 +150,7 @@ function wires(y: Yard): Int32Array {
   if (
     s &&
     s.reach === y.open.reach &&
+    s.width === W &&
     s.depot === depot &&
     s.pylons.length === pylons.length &&
     s.pylons.every((i, n) => pylons[n] === i)
@@ -196,7 +197,7 @@ function wires(y: Yard): Int32Array {
     const to = nodes[j];
     if (from && to) out.push(from.at.x, from.at.y, to.at.x, to.at.y);
   }
-  strung = { pylons, depot, reach: y.open.reach, wires: Int32Array.from(out) };
+  strung = { pylons, width: W, depot, reach: y.open.reach, wires: Int32Array.from(out) };
   return strung.wires;
 }
 

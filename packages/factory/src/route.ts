@@ -40,7 +40,9 @@ interface Laid {
  * tunnel standing there, raised or lowered). A leg has nothing to set: no colour, no recipe, no shut
  * way. A run takes the colour of the line it joins.
  */
-export type Leg = (Laid & { readonly tunnel: false }) | (Laid & { readonly tunnel: true; readonly span: number });
+export type Leg =
+  | (Laid & { readonly tunnel: false; readonly span?: never })
+  | (Laid & { readonly tunnel: true; readonly span: number });
 
 /** What a leg lays. */
 export const legKind = (l: Leg): Kind => (l.tunnel ? TUNNEL : BELT);

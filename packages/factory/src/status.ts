@@ -237,7 +237,7 @@ export function status(y: Yard, i: number): Status | null {
 function words(y: Yard, i: number, state: State): Words {
   const k = y.kind[i] ?? NONE;
   const share = power(y).pace;
-  const slow = share < 1 ? `, at ${Math.round(share * 100)}% of its pace: the yard is short of power` : "";
+  const slow = share < 1 ? `, at ${Math.floor(share * 100)}% of its pace: the yard is short of power` : "";
   const h = y.holders;
   const r = holderOf(y, i);
   const unlinked = "Not connected to a pylon, so the power it makes is not used.";

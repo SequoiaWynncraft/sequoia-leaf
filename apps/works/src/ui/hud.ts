@@ -42,13 +42,13 @@ function powerPlaque(): () => void {
   tip(host, "Power", () => {
     const p = power(S.world);
     return p.pace < 1
-      ? `The yard uses ${p.demand} power and makes ${p.supply}. Every machine works at ${Math.round(p.pace * 100)}% speed.`
+      ? `The yard uses ${p.demand} power and makes ${p.supply}. Every machine works at ${Math.floor(p.pace * 100)}% speed.`
       : `The yard uses ${p.demand} of the ${p.supply} power it makes.`;
   });
   return shows(
     () => {
       const p = power(S.world);
-      return { demand: p.demand, supply: p.supply, pace: Math.round(p.pace * 100) };
+      return { demand: p.demand, supply: p.supply, pace: Math.floor(p.pace * 100) };
     },
     (p) => {
       const short = p.pace < 100;

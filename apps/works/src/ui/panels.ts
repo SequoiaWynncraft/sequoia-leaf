@@ -570,7 +570,8 @@ export function powerPrint(): {
   return {
     supply: p.supply,
     demand: p.demand,
-    pace: Math.round(p.pace * 100),
+    // Rounded down: a yard a little short of power is at 99%, never at 100%.
+    pace: Math.floor(p.pace * 100),
     depot: w.open.depot,
     wheels: [count(WHEEL, true), count(WHEEL, false)],
     boilers: [count(BOILER, true), count(BOILER, false), burning],

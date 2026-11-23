@@ -5,10 +5,10 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { create, deliver, item, play } from "@sequoia-leaf/factory";
+import { create, deliver, item, play, power } from "@sequoia-leaf/factory";
 
 import { S } from "../state.ts";
-import { depotPrint, ordersPrint, placed } from "./panels.ts";
+import { depotPrint, ordersPrint, placed, powerPrint } from "./panels.ts";
 
 const order = (id: number, planks: number): { id: number; full: boolean } => ({ id, full: planks >= 10 });
 const ids = (list: readonly { id: number }[]): number[] => list.map((s) => s.id);
@@ -42,6 +42,16 @@ describe("a panel is kept by what it prints", () => {
     y.tick += 600;
     expect(why()[0]).not.toBe(JSON.parse(now).orders[0].why);
     expect(JSON.stringify(ordersPrint())).not.toBe(now);
+  });
+
+  test("power: a yard a little short is never printed as at 100%", () => {
+    const y = create({ seed: 5, tier: 1 });
+    // Worked out once, then set a hair short: 200 power made, 201 drawn.
+    power(y);
+    y.supply = 400;
+    y.demand = 402;
+    S.world = y;
+    expect([power(y).pace < 1, Math.round(power(y).pace * 100), powerPrint().pace]).toEqual([true, 100, 99]);
   });
 
   test("the depot's book: each thing taken in counts, as it is printed", () => {
