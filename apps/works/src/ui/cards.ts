@@ -173,6 +173,8 @@ export interface StandingPrint {
   readonly count: number;
   /** What it makes or gathers, and how many a minute at the yard's pace now, as the card rounds it (null when none). */
   readonly making: Item | null;
+  /** What it makes one from: each part, how many one takes and how many it has. */
+  readonly parts: readonly { readonly item: Item; readonly need: number; readonly have: number }[];
   readonly gathering: Item | null;
   readonly perMinute: number | null;
   /** What it makes, needs, gathers, studies or carries a minute, in sentences (`numbers.ts`): none until the yard counts. */
@@ -502,6 +504,17 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
       label: "Making",
       things: [{ ref: itemRef(p.making), note: per !== null ? `up to ${per} a minute` : "" }],
     });
+  // Waiting for its parts, the part it is short of is in coral, and its tip says by how many.
+  const waits = p.making !== null && (p.state === "waiting" || p.state === "starved");
+  if (p.parts.length > 0)
+    rows.push({
+      label: "Made from",
+      things: p.parts.map(({ item, need, have }) => ({
+        ref: itemRef(item),
+        count: `×${need}`,
+        ...(waits && have < need ? { short: `Short by ${need - have}. It has ${have} and needs ${need}.` } : {}),
+      })),
+    });
   if (p.gathering !== null)
     rows.push({
       label: "Gathering",
@@ -631,19 +644,22 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
       : null;
   // A cart stop and a sorter say what they do in their own words: the rules' line for either is of
   // every belt. What is wrong with one is the rules' to say.
+  // What a machine waiting for its parts is short of is in its rows, not in a sentence.
   const said =
-    p.trouble && p.line !== null
-      ? p.line
-      : k === STOP
-        ? "Items handed in here reach the depot at once."
-        : k === SORTER
-          ? p.set !== null
-            ? "Everything else goes ahead."
-            : "With nothing set it is a belt."
-          : (p.line ?? KIND_INFO[k]?.what ?? "");
+    waits && p.making !== null
+      ? `Waiting to make ${many(p.making)}.`
+      : p.trouble && p.line !== null
+        ? p.line
+        : k === STOP
+          ? "Items handed in here reach the depot at once."
+          : k === SORTER
+            ? p.set !== null
+              ? "Everything else goes ahead."
+              : "With nothing set it is a belt."
+            : (p.line ?? KIND_INFO[k]?.what ?? "");
   return {
     ...base,
-    tag: el("span", p.trouble ? "k-coral" : "", { text: said }),
+    tag: el("span", p.trouble && !waits ? "k-coral" : "", { text: said }),
     // What is wrong and what to do about it comes first; the numbers are under it.
     blocks: [
       ...spareBlocks(m),
