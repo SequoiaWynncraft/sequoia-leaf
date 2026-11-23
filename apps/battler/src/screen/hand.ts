@@ -6,37 +6,26 @@ import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
  * then tap where it goes. Resting the pointer on a figure, or keeping a finger on it, says what
  * it is.
  *
- * The hand only works out what was meant and asks the rules to do it; `scene.ts` draws what the
- * hand is holding from the `marks` filled in here.
+ * The hand only works out what was meant and asks the rules to do it. What it is doing is one value
+ * (`gesture.ts`): a thing tapped, or a thing carried by one pointer, which no other pointer moves or
+ * lets go of; `scene.ts` draws the marks worked out from it (`handMarks`).
  */
 import { canvasCard, close, hold, onCard, pick as pickCard, point, show, surface } from "@sequoia-leaf/kit/card.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { LONG_PRESS } from "@sequoia-leaf/kit/tip.ts";
-import {
-  type FigureId,
-  isComponentId,
-  type ItemId,
-  pieceAt,
-  type RunView,
-  sellValue,
-  type Spot,
-} from "@sequoia-leaf/raid";
+import { pieceAt, type RunView, sellValue, type Spot } from "@sequoia-leaf/raid";
 
-import { itemPic } from "./art/icons.ts";
 import { unitUnder } from "./fightview.ts";
-import { handing, reachOf, reachOfOffer } from "./logic.ts";
+import { type Gesture, type HandEvent, handStep, type Held, IDLE, type Marks, marksOf } from "./gesture.ts";
+import { handing } from "./logic.ts";
 import { hop, type Pawn, pawnAt, pawns, spotAt, spotXY } from "./pawns.ts";
-import { foeAt, heldUnder, marks } from "./scene.ts";
+import { boardFull, foeAt, heldUnder } from "./scene.ts";
 import { snd } from "./sounds.ts";
 import { artPx, boardToPage, toBoard, V } from "./stage.ts";
 import { doNow, S } from "./state.ts";
 import { acorns, dropRef, foeRef, itemRef, pieceRef, unitRef } from "./ui/cards.ts";
 
-type Held =
-  | { what: "pawn"; id: number }
-  | { what: "offer"; at: number; kind: FigureId }
-  | { what: "item"; at: number; item: ItemId };
-
+/** One pointer's press: what was under it, where, whether it has moved or asked what the thing is. */
 interface Press {
   held: Held | null;
   x: number;
@@ -50,9 +39,8 @@ interface Press {
 
 /** What each pointer pressed: two thumbs on the stall at once are two presses. */
 const presses = new Map<number, Press>();
-let dragging: Held | null = null;
-/** Tapped, and waiting to be told where it goes. */
-let picked: Held | null = null;
+/** What the hand is doing: nothing, a thing tapped, or a thing carried by one pointer. */
+let gesture: Gesture = IDLE;
 let canvas: HTMLCanvasElement | null = null;
 /** What the resting mouse is on, as a card's reference. */
 let restKey = "";
@@ -71,49 +59,27 @@ function pageBox(x: number, y: number, tall: number): { x: number; y: number; w:
   return { x: top.x, y: top.y, w: 18 * px, h: (tall + 12) * px };
 }
 
-function clearMarks(): void {
-  marks.seats = [];
-  marks.swaps = [];
-  marks.slots = [];
-  marks.target = null;
-  marks.takers = [];
-  marks.taker = -1;
-  marks.held = -1;
-  marks.ghost = null;
-  marks.picked = -1;
-  marks.forging = null;
-  document.body.classList.remove("dragging", "selling", "sell-hot");
+/** Moves the hand on, and the page's look with it: something carried, a figure over the stall to sell. */
+function hand(ev: HandEvent): void {
+  gesture = handStep(gesture, ev);
+  const carried = gesture.at === "dragging" ? gesture : null;
+  document.body.classList.toggle("dragging", carried !== null);
+  document.body.classList.toggle("selling", carried?.held.what === "pawn");
+  document.body.classList.toggle("sell-hot", carried?.held.what === "pawn" && carried.shop);
 }
 
-/** Lights where the thing in the hand, or the thing tapped, may go. */
-function light(run: RunView, held: Held): void {
-  if (held.what === "pawn") {
-    const from = spotOfPawn(held.id);
-    if (!from) return;
-    const reach = reachOf(run, from);
-    marks.seats = reach.seats;
-    marks.swaps = reach.swaps;
-    marks.slots = [...reach.slots, ...reach.slotSwaps];
-  } else if (held.what === "offer") {
-    const reach = reachOfOffer(run);
-    marks.seats = reach.seats;
-    marks.slots = reach.slots;
-  } else {
-    marks.takers = [];
-    marks.forging = isComponentId(held.item) ? held.item : null;
-    for (const p of pawns.values()) {
-      const piece = p.spot ? pieceAt(run, p.spot) : null;
-      if (piece && handing(piece, held.item).can) marks.takers.push(p.id);
-    }
-  }
+let marked: { g: Gesture; run: RunView | null; marks: Marks } | null = null;
+/** What the table shows of the hand, worked out again only when the hand or the run has changed. */
+export function handMarks(): Marks {
+  if (marked?.g !== gesture || marked.run !== S.run)
+    marked = { g: gesture, run: S.run, marks: marksOf(gesture, S.run) };
+  return marked.marks;
 }
 
-/** Puts down whatever was tapped, and the card that went with it. */
+/** Puts down whatever was tapped or carried, and the card that went with it. */
 export function unpick(): void {
-  const was = dragging;
-  picked = null;
-  dragging = null;
-  clearMarks();
+  const was = gesture.at === "dragging";
+  hand({ e: "clear" });
   if (was) {
     show(null);
     hold(false);
@@ -124,15 +90,12 @@ export function unpick(): void {
 /** A box on the page round a pawn, for its card. */
 const pawnBox = (p: Pawn): { x: number; y: number; w: number; h: number } => pageBox(p.x, p.y, framesOf(p.kind).tall);
 
-function pick(run: RunView, held: Held): void {
+function pick(held: Held): void {
   unpick();
-  picked = held;
-  light(run, held);
+  hand({ e: "pick", held });
   // A figure picked up to move pins no card over where it may go: a resting mouse or a finger kept on it shows it.
-  if (held.what === "pawn") {
-    marks.picked = held.id;
-    snd.lift();
-  } else if (held.what === "item") {
+  if (held.what === "pawn") snd.lift();
+  else if (held.what === "item") {
     const slot = document.querySelector<HTMLElement>(`[data-item="${held.at}"]`);
     slot?.classList.add("lit");
     if (slot) {
@@ -143,62 +106,47 @@ function pick(run: RunView, held: Held): void {
   }
 }
 
-function startDrag(run: RunView, held: Held): void {
+/** Carries a thing off with a pointer (`-1` for one moved from outside), from a point of the board. */
+function startDrag(run: RunView, held: Held, pointer: number, at: { x: number; y: number }): void {
   close();
   hold(true);
-  picked = null;
-  clearMarks();
-  dragging = held;
-  light(run, held);
-  document.body.classList.add("dragging");
   if (held.what === "pawn") {
-    marks.held = held.id;
     const spot = spotOfPawn(held.id);
     const piece = spot ? pieceAt(run, spot) : null;
     const hint = document.getElementById("sellhint");
-    if (piece && hint) {
-      hint.replaceChildren("Sell for ", acorns(`+${sellValue(piece)}`));
-      document.body.classList.add("selling");
-    }
-  } else if (held.what === "offer") marks.ghost = { kind: held.kind, pic: null };
-  else marks.ghost = { kind: null, pic: itemPic(held.item) };
+    if (piece && hint) hint.replaceChildren("Sell for ", acorns(`+${sellValue(piece)}`));
+  }
+  hand({ e: "clear" });
+  hand({ e: "carry", pointer, held, x: at.x, y: at.y });
   snd.lift();
 }
 
 /** The party's figure an item in the hand is over, if it could take it. */
 function takerAt(run: RunView, x: number, y: number): Pawn | null {
   const p = pawnAt(run, x, y);
-  return p && marks.takers.includes(p.id) ? p : null;
+  return p && handMarks().takers.includes(p.id) ? p : null;
 }
 
-function whileDragging(run: RunView, e: PointerEvent): void {
+/** The pointer carrying something has moved: it goes with it, and an item says what it would do to the figure it is over. */
+function whileDragging(run: RunView, e: PointerEvent, carried: Extract<Gesture, { at: "dragging" }>): void {
   const b = toBoard(e.clientX, e.clientY);
-  marks.at = b;
-  if (!dragging) return;
-  const overShop = document.elementFromPoint(e.clientX, e.clientY)?.closest("#shop") != null;
-  if (dragging.what === "item") {
-    const p = takerAt(run, b.x, b.y);
-    const id = p?.id ?? -1;
-    if (id !== marks.taker) {
-      marks.taker = id;
-      const box = p ? pawnBox(p) : null;
-      if (p && box) show(dropRef(dragging.at, p.id), box.x, box.y, box.w, box.h);
-      else show(null);
-    }
-    return;
-  }
-  marks.target = overShop ? null : spotAt(b.x, b.y);
-  document.body.classList.toggle("sell-hot", overShop && dragging.what === "pawn");
+  const shop = document.elementFromPoint(e.clientX, e.clientY)?.closest("#shop") != null;
+  const taker = carried.held.what === "item" ? (takerAt(run, b.x, b.y)?.id ?? -1) : -1;
+  hand({ e: "move", pointer: carried.pointer, x: b.x, y: b.y, over: shop ? null : spotAt(b.x, b.y), taker, shop });
+  if (carried.held.what !== "item" || taker === carried.taker) return;
+  const p = pawns.get(taker);
+  const box = p ? pawnBox(p) : null;
+  if (box) show(dropRef(carried.held.at, taker), box.x, box.y, box.w, box.h);
+  else show(null);
 }
 
-function drop(run: RunView, e: PointerEvent): void {
-  const held = dragging;
+/** The pointer carrying something has let go of it. */
+function drop(run: RunView, e: PointerEvent, held: Held): void {
   const b = toBoard(e.clientX, e.clientY);
   const under = document.elementFromPoint(e.clientX, e.clientY);
   const overShop = under?.closest("#shop") != null;
   const spot = overShop ? null : spotAt(b.x, b.y);
   unpick();
-  if (!held) return;
   if (held.what === "pawn") {
     const p = pawns.get(held.id);
     const from = spotOfPawn(held.id);
@@ -213,7 +161,7 @@ function drop(run: RunView, e: PointerEvent): void {
     }
     const done = spot && !sameSpot(spot, from) ? doNow({ do: "move", from, to: spot }) : undefined;
     if (done?.ok) return;
-    if (done && spot?.on === "board") marks.fullAt = V.t;
+    if (done && spot?.on === "board") boardFull.at = V.t;
     hop(p, spotXY(from), 0.2, 6);
     // Held off while Leaf answers (null): the refusal sound has said so.
     if (done !== null) snd.place();
@@ -239,12 +187,13 @@ function buyTo(offer: number, spot: Spot | null): void {
   const merged = done.notes.some((n) => n.t === "merged");
   if (bought?.t !== "bought" || !bought.to || merged || sameSpot(bought.to, spot)) return;
   const moved = doNow({ do: "move", from: bought.to, to: spot });
-  if (moved && !moved.ok && spot.on === "board") marks.fullAt = V.t;
+  if (moved && !moved.ok && spot.on === "board") boardFull.at = V.t;
 }
 
 /** A tap on the thing that was pressed. */
 function tap(run: RunView, held: Held | null, e: PointerEvent): void {
   const b = toBoard(e.clientX, e.clientY);
+  const picked = gesture.at === "picked" ? gesture.held : null;
   if (held?.what === "offer") {
     unpick();
     doNow({ do: "buy", offer: held.at });
@@ -252,7 +201,7 @@ function tap(run: RunView, held: Held | null, e: PointerEvent): void {
   }
   if (held?.what === "item") {
     if (picked?.what === "item" && picked.at === held.at) unpick();
-    else pick(run, held);
+    else pick(held);
     return;
   }
   if (held?.what === "pawn") {
@@ -272,7 +221,7 @@ function tap(run: RunView, held: Held | null, e: PointerEvent): void {
       if (!same && from) doNow({ do: "move", from, to: here });
       return;
     }
-    pick(run, held);
+    pick(held);
     return;
   }
   // A tap on the bare table: put the tapped thing there, or ask about whoever is waiting.
@@ -282,7 +231,7 @@ function tap(run: RunView, held: Held | null, e: PointerEvent): void {
     unpick();
     if (from) {
       const done = doNow({ do: "move", from, to: spot });
-      if (done && !done.ok && spot.on === "board") marks.fullAt = V.t;
+      if (done && !done.ok && spot.on === "board") boardFull.at = V.t;
     }
     return;
   }
@@ -375,12 +324,11 @@ function down(e: PointerEvent): void {
     if (item !== undefined) held = { what: "item", at, item };
   } else if (target === canvas) {
     const b = toBoard(e.clientX, e.clientY);
-    marks.at = b;
     const p = planning() ? pawnAt(run, b.x, b.y) : null;
     if (p) held = { what: "pawn", id: p.id };
   } else {
     // Anything else on the page: a button does its own work; the tapped thing is put down.
-    if (picked && !target.closest("#shop, #rack")) unpick();
+    if (gesture.at === "picked" && !target.closest("#shop, #rack")) unpick();
     return;
   }
   const touch = e.pointerType !== "mouse";
@@ -410,11 +358,14 @@ function moveTo(e: PointerEvent): void {
     if (far > (press.touch ? 9 : 5)) {
       press.moved = true;
       window.clearTimeout(press.timer);
-      if (press.held && !press.asked) startDrag(run, press.held);
+      // One thing is carried at a time: a second finger moving off what it pressed carries nothing.
+      if (press.held && !press.asked && gesture.at !== "dragging")
+        startDrag(run, press.held, e.pointerId, toBoard(e.clientX, e.clientY));
     }
   }
-  if (dragging) whileDragging(run, e);
-  else if (!press && e.pointerType === "mouse") rest(run, e);
+  if (gesture.at === "dragging") {
+    if (gesture.pointer === e.pointerId) whileDragging(run, e, gesture);
+  } else if (!press && e.pointerType === "mouse") rest(run, e);
 }
 
 function up(e: PointerEvent): void {
@@ -424,22 +375,24 @@ function up(e: PointerEvent): void {
   if (!was) return;
   window.clearTimeout(was.timer);
   if (!run) return;
-  if (dragging) {
-    drop(run, e);
+  // The pointer carrying something puts it down; any other pointer lifted meanwhile does nothing.
+  if (gesture.at === "dragging") {
+    if (gesture.pointer === e.pointerId) drop(run, e, gesture.held);
     return;
   }
   if (was.asked || was.moved) return;
   if (was.held || e.target === canvas) tap(run, was.held, e);
 }
 
-/** Calls off one pointer's press, or with none named every one. */
+/** Calls off one pointer's press, or with none named every one, and what it was carrying. */
 function cancel(id?: number): void {
   for (const [at, press] of presses) {
     if (id !== undefined && id !== at) continue;
     window.clearTimeout(press.timer);
     presses.delete(at);
   }
-  if (dragging) unpick();
+  const carrying = gesture.at === "dragging" && (id === undefined || gesture.pointer === id);
+  if (carrying) unpick();
 }
 
 /** Starts listening to the mouse and to fingers. */
@@ -472,15 +425,13 @@ export function grab(id: number | null, at?: { x: number; y: number }): void {
   const run = S.run;
   unpick();
   if (!run || id === null) return;
-  startDrag(run, { what: "pawn", id });
-  if (at) {
-    marks.at = at;
-    marks.target = spotAt(at.x, at.y);
-  }
+  const where = at ?? { x: 0, y: 0 };
+  startDrag(run, { what: "pawn", id }, -1, where);
+  if (at) hand({ e: "move", pointer: -1, x: at.x, y: at.y, over: spotAt(at.x, at.y), taker: -1, shop: false });
 }
 /** For looking from outside: taps one of the party's figures. */
 export function tapPawn(id: number): void {
-  if (S.run) pick(S.run, { what: "pawn", id });
+  if (S.run) pick({ what: "pawn", id });
 }
 /** For looking from outside: holds an item over one of the party's figures. */
 export function hover(itemAt: number, id: number): void {
@@ -489,9 +440,9 @@ export function hover(itemAt: number, id: number): void {
   const p = pawns.get(id);
   if (!run || item === undefined || !p) return;
   unpick();
-  startDrag(run, { what: "item", at: itemAt, item });
-  marks.at = { x: p.x + 4, y: p.y - 12 };
-  marks.taker = id;
+  const at = { x: p.x + 4, y: p.y - 12 };
+  startDrag(run, { what: "item", at: itemAt, item }, -1, at);
+  hand({ e: "move", pointer: -1, x: at.x, y: at.y, over: null, taker: id, shop: false });
   const piece = p.spot ? pieceAt(run, p.spot) : null;
   const would = piece ? handing(piece, item) : null;
   const b = pawnBox(p);

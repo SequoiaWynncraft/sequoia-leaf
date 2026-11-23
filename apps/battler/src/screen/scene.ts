@@ -8,7 +8,7 @@ import { beatAt, drawBase, drawFigure, drawStars, framesOf, hoverAt } from "@seq
 import { CREAM, GOLD, INK, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
-import { fieldCap, fielded, type ItemId, pieceAt, type RunView, type Spot, type Stars } from "@sequoia-leaf/raid";
+import { fieldCap, fielded, type ItemId, pieceAt, type RunView, type Stars } from "@sequoia-leaf/raid";
 import { type FigureId, isBossId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { regularNamed, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
@@ -17,7 +17,8 @@ import { itemPic } from "./art/icons.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
 import { drawFight, drawFightAir, fightHeldUnder, fightOn } from "./fightview.ts";
 import { burst, drawFlyers, drawFxOver, drawFxUnder, wordsFx } from "./fx.ts";
-import { cellXY, GAP, HEX_H, HEX_W, type Pt, ROW, seatXY, slotXY } from "./geometry.ts";
+import { cellXY, GAP, HEX_H, HEX_W, ROW, seatXY, slotXY } from "./geometry.ts";
+import { handMarks } from "./hand.ts";
 import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
 import { DIM, shineOf } from "./light.ts";
 import { arrivalOf, handing, watchersOf } from "./logic.ts";
@@ -26,43 +27,8 @@ import { snd } from "./sounds.ts";
 import { boardHalves, place, type Standing, V } from "./stage.ts";
 import { S } from "./state.ts";
 
-/** What the member's hand is doing, for the table to show: filled in by `hand.ts`. */
-export const marks: {
-  /** Free seats a held figure may go to, and seats whose figure it would change places with. */
-  seats: number[];
-  swaps: number[];
-  /** Hollows of the bench it may go to. */
-  slots: number[];
-  /** The place under the hand. */
-  target: Spot | null;
-  /** The pawn tapped and waiting to be told where to go, and the pawn in the hand; -1 for none. */
-  picked: number;
-  held: number;
-  /** Pawns that would take the item in the hand, and the one it is over. */
-  takers: number[];
-  taker: number;
-  /** Where the hand is, from the board's corner. */
-  at: Pt;
-  /** Something carried in the hand that is not a pawn yet: an offer from the stall, an item. */
-  ghost: { kind: UnitKind | null; pic: HTMLCanvasElement | null } | null;
-  /** A component in the hand (carried or tapped): figures holding its pair show what the two would make. */
-  forging: ItemId | null;
-  /** When the board was last found full, for flashing its count. */
-  fullAt: number;
-} = {
-  seats: [],
-  swaps: [],
-  slots: [],
-  target: null,
-  picked: -1,
-  held: -1,
-  takers: [],
-  taker: -1,
-  at: { x: 0, y: 0 },
-  ghost: null,
-  forging: null,
-  fullAt: -9,
-};
+/** When the board was last found full, for flashing its count. */
+export const boardFull = { at: -9 };
 
 let litMark: HTMLCanvasElement | null = null;
 let aimMark: HTMLCanvasElement | null = null;
@@ -175,7 +141,8 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
       const starsAt = y - 3 - hover - f.tall - (grew ? Math.round(Math.sin((pop / 0.7) * Math.PI) * 3) : 0);
       drawStars(g, p.stars, x, starsAt, grew);
       // A component in the hand: what it would make with the one this figure holds, faint, over its head.
-      const would = marks.forging && piece ? handing(piece, marks.forging) : null;
+      const forging = handMarks().forging;
+      const would = forging && piece ? handing(piece, forging) : null;
       if (would?.can && would.forged) {
         const pic = itemPic(would.forged);
         g.globalAlpha = 0.55 + 0.15 * Math.sin(V.t * 4 + p.phase * 6);
@@ -226,6 +193,7 @@ function drawMarks(g: Ctx): void {
   aimMark ??= hexMark("#ffffff", GOLD[1]);
   swapMark ??= hexMark(WATER[3], WATER[2]);
   const pulse = 0.5 + 0.14 * Math.sin(V.t * 5);
+  const marks = handMarks();
   const put = (mark: HTMLCanvasElement, seat: number, alpha: number): void => {
     const at = seatXY(seat);
     g.globalAlpha = alpha;
@@ -255,7 +223,7 @@ function drawCap(g: Ctx, run: RunView): void {
   const on = fielded(run);
   const x = V.bx - 7;
   const y0 = V.by + HOME_ROWS * ROW + 4;
-  const flash = V.t - marks.fullAt < 0.5 && Math.floor(V.t * 12) % 2 === 0;
+  const flash = V.t - boardFull.at < 0.5 && Math.floor(V.t * 12) % 2 === 0;
   for (let i = 0; i < cap; i++) {
     const y = y0 + i * 6;
     R(g, x, y, 5, 5, INK);
@@ -335,6 +303,7 @@ function drawLamps(g: Ctx): void {
 }
 
 export function drawScene(g: Ctx): void {
+  const marks = handMarks();
   const { far, near } = boardHalves();
   g.drawImage(far, V.bx - 1, V.by - Math.round(V.gap) - 1);
   g.drawImage(near, V.bx - 1, V.by + HOME_ROWS * ROW - 1);
@@ -405,6 +374,7 @@ export function wordsScene(ctx: Ctx, px: number): void {
 /** What flies over the interface: a figure in the hand, one crossing from the stall, acorns. */
 export function drawOver(g: Ctx): boolean {
   let any = false;
+  const marks = handMarks();
   for (const p of pawns.values()) {
     if (!p.air && p.id !== marks.held) continue;
     any = true;
@@ -428,11 +398,13 @@ export function drawOver(g: Ctx): boolean {
     any = true;
     const x = V.bx + marks.at.x;
     const y = V.by + marks.at.y;
-    if (ghost.kind) {
+    if ("kind" in ghost) {
       drawBase(g, ghost.kind, x, y + 2);
       drawFigure(g, ghost.kind, x, y, { beat: 1 });
-    } else if (ghost.pic)
-      g.drawImage(ghost.pic, Math.round(x - ghost.pic.width / 2), Math.round(y - ghost.pic.height / 2) - 4);
+    } else {
+      const pic = itemPic(ghost.item);
+      g.drawImage(pic, Math.round(x - pic.width / 2), Math.round(y - pic.height / 2) - 4);
+    }
   }
   return drawFlyers(g) || any;
 }
@@ -460,7 +432,7 @@ export function heldUnder(run: RunView, x: number, y: number): HeldAt | null {
   if (S.screen.at === "fight" || S.screen.at === "after") return fightHeldUnder(x, y);
   if (S.screen.at !== "plan") return null;
   for (const p of pawns.values()) {
-    if (p.leaving || !p.spot || p.id === marks.held) continue;
+    if (p.leaving || !p.spot || p.id === handMarks().held) continue;
     const piece = pieceAt(run, p.spot);
     const hit = piece ? heldAt(heldRow(piece.items, p.x, heldTop(p.y, false)), x, y) : null;
     if (hit) return hit;
