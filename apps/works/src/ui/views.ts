@@ -9,9 +9,10 @@
  * - **Trouble**: the pieces in trouble (`trouble.ts`) in groups by what is wrong, the largest first.
  *   A tap on a group goes to its first piece and opens its card, and a bar stays while the member
  *   walks the group: what is wrong, which of how many, back and on, and a way out.
- * - **Makes and needs**: for each thing, what the yard's pieces can make a minute and need a minute
- *   (the rules' `flow`), and what reached the depot in the last minute, counted (`arrivals.ts`);
- *   what the yard needs more of than it can make first, with the shortfall. Then the yard's totals.
+ * - **Makes and needs**: for each thing, at most how many the yard's pieces can make and can use a
+ *   minute (the rules' `flow`), and what reached the depot in the last minute, counted
+ *   (`arrivals.ts`); what they can use more of than they can make first, with by how many. Then the
+ *   yard's totals.
  *
  * None of it does anything while the sheet is shut: the map is painted and the lists worked out only
  * for the view that is up.
@@ -398,7 +399,7 @@ function troubleView(art: Art, host: HTMLElement): () => void {
 const coins = (thousandths: number): string => Math.floor(thousandths / MILLI).toLocaleString("en-US");
 
 function needsView(_art: Art, host: HTMLElement): () => void {
-  const things = table("A minute", ["Can make", "Needs", "Reached the depot"]);
+  const things = table("A minute", ["Can make", "Can use", "Reached the depot"]);
   const none = el("div", "k-dim", { text: "Nothing is made yet." });
   const over = el("div", "k-s k-dim");
   const totals = table("In total", [""], { wide: 60 });
@@ -423,7 +424,7 @@ function needsView(_art: Art, host: HTMLElement): () => void {
         return {
           key: String(f.item),
           head: () => thing(itemRef(f.item)),
-          ...(lacks ? { note: `Short by ${said(aMinute(short))}` } : {}),
+          ...(lacks ? { note: `Can use ${said(aMinute(short))} more than it makes` } : {}),
           cells: [aMinute(f.made), lacks ? [said(need), "coral"] : need, aMinute(f.reached)],
         };
       }),

@@ -37,10 +37,8 @@ describe("a goal's head and lists", () => {
   test("are built by `goal.ts` alone: no other module names their classes or writes a list's label", async () => {
     const all = await sources();
     expect(using(all, CLASS)).toEqual(["src/ui/goal.ts"]);
-    // The yard's sheet heads a column of numbers "Needs" (what its machines need a minute): a table's
-    // column, not a goal's list.
     const labels = using(all, /["'`](?:Wants|Unlocks|Needs|Leaves in town)["'`]/);
-    expect(labels.filter((f) => f !== "src/ui/views.ts")).toEqual(["src/ui/goal.ts"]);
+    expect(labels).toEqual(["src/ui/goal.ts"]);
     // The rows a panel once laid out itself, and the helper that made them, are gone.
     expect(using(all, /\bwantRows\b|["'`]want["'`]|\bopensThings\b|\bunlockWords\b/)).toEqual([]);
   });
