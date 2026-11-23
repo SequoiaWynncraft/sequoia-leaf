@@ -14,6 +14,12 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "banner-1-open",
+    at: "2026-11-23T08:05Z",
+    title: "The first banner is open",
+    lines: ["It is at the Grove until 8 December (UTC). Its top prize is a statue of a member for your camp."],
+  },
+  {
     id: "one-town-2",
     at: "2026-11-23T02:12Z",
     title: "The same members, the same moments",
