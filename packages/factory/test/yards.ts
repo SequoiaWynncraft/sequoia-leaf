@@ -14,10 +14,13 @@
  *   a way to a crate; `hall`, the same yard with every node of tier 2 done too, so tier 3 has just
  *   opened: the Study may be built, none stands, nothing is studied; `study`, that yard with two
  *   boilers and a line of Timber folios into a Study, the first research known and four in the line,
- *   the first of them part studied; `large`, every node of tiers 0 to 2 done (tier 3 open) and the
- *   generator's pieces on every plot the slice sells, as far as a yard with no research known may
- *   build them. Research is studied in a Study and does not arrive at the depot: only `study` knows
- *   any, and its Study studied it, a folio at a time, from the line that stands there.
+ *   the first of them part studied; `gate`, that yard on until its Study has made known the research
+ *   tier 3's commission needs, and the commission finished, so tier 4 has just opened, with a
+ *   splitter on the ingots' line to the tools' bench sending half of them to the depot; `large`,
+ *   every node of tiers 0 to 2 done (tier 3 open) and the generator's pieces on every plot the slice
+ *   sells, as far as a yard with no research known may build them. Research is studied in a Study
+ *   and does not arrive at the depot: only `study` and `gate` know any, and their Study studied it,
+ *   a folio at a time, from the line that stands there.
  */
 import * as F from "../src/index.ts";
 import { type Gen, generate } from "./gen.ts";
@@ -72,7 +75,7 @@ let small: Gen | null = null;
 export const generated = (): Gen => (small ??= generate(makeLand(3, 3, 7), 1000));
 
 /** The names of the yards the play server stages. */
-export const STAGES = ["new", "small", "short", "mid", "hall", "study", "large"] as const;
+export const STAGES = ["new", "small", "short", "mid", "hall", "study", "gate", "large"] as const;
 export type Stage = (typeof STAGES)[number];
 export const isStage = (v: unknown): v is Stage => STAGES.some((s) => s === v);
 
@@ -174,6 +177,18 @@ function studyAll(y: F.Yard): void {
     if (!F.isNode(g) && F.studyRefusal(y, g) === null) must(y, { do: "study", research: F.GOALS[g]?.id });
 }
 
+/** Studies the research a goal needs, each alone in the line, until the Study has made it known, the needs of each first. */
+function studyFor(y: F.Yard, goal: string): void {
+  const needs = (g: F.Goal): F.Goal[] => [...(F.GOALS[g]?.needs ?? []).flatMap(needs), g];
+  for (const g of needs(F.goal(goal))) {
+    if (F.isNode(g) || y.open.done[g] === 1) continue;
+    for (let other = y.line[0]; other !== undefined; other = y.line[0])
+      must(y, { do: "unstudy", research: F.GOALS[other]?.id });
+    must(y, { do: "study", research: F.GOALS[g]?.id });
+    for (let k = 0; k < 200_000 && y.open.done[g] !== 1; k++) F.step(y);
+  }
+}
+
 /** A yard on the guild's land as play brings one there (see the head of this file), its owner there at its last tick. */
 export function staged(name: Stage, seed = 20_261_122): F.Yard {
   const y = built(name, seed);
@@ -226,5 +241,14 @@ function built(name: Stage, seed: number): F.Yard {
   for (let k = 0; k < 60_000 && !known(); k++) F.step(y);
   studyAll(y);
   for (let k = 0; k < 1500; k++) F.step(y);
+  if (name === "study") return y;
+  // The research tier 3's commission needs, made known by the Study; then the commission, which opens tier 4.
+  studyFor(y, "lanterns");
+  fillHand(y);
+  // A splitter on the ingots' line to the tools' bench, its left way down to the depot's line of ore.
+  must(y, { do: "build", kind: "splitter", x: 26, y: 13, dir: 2 });
+  lay(y, [26, 14], [26, 17]);
+  must(y, { do: "way", x: 26, y: 13, way: 2, open: false });
+  for (let k = 0; k < 1200; k++) F.step(y);
   return y;
 }

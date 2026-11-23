@@ -363,7 +363,10 @@ export function setOpen(y: Yard, x: number, z: number, open: boolean): boolean {
   return true;
 }
 
-/** Shuts or opens one of a splitter's ways out: 0 for ahead, 1 for left, 2 for right. Says whether there was a splitter. */
+/**
+ * Shuts or opens one of a splitter's ways out: 0 for ahead, 1 for left, 2 for right. Shutting the
+ * way it puts first puts none first. Says whether there was a splitter.
+ */
 export function setWay(y: Yard, x: number, z: number, way: number, open: boolean): boolean {
   const i = at(y, x, z);
   if (i < 0 || y.kind[i] !== SPLITTER || (way !== 0 && way !== 1 && way !== 2)) return false;
@@ -371,9 +374,23 @@ export function setWay(y: Yard, x: number, z: number, way: number, open: boolean
   const shut = open ? was & ~(1 << way) : was | (1 << way);
   if (was !== shut) {
     y.shut[i] = shut;
+    if (!open && y.first[i] === way + 1) y.first[i] = 0;
     changed(y);
   }
   return true;
+}
+
+/**
+ * Puts one of a splitter's open ways out first (0 ahead, 1 left, 2 right), or with null none: what
+ * it carries goes that way while the tile there takes it, and only the rest to its other ways. Who
+ * hands to whom is the same, so the plumbing stands. Says why it could not, or nothing.
+ */
+export function setFirst(y: Yard, x: number, z: number, way: number | null): string | null {
+  const i = at(y, x, z);
+  if (i < 0 || y.kind[i] !== SPLITTER) return "There is no splitter there";
+  if (way !== null && ((y.shut[i] ?? 0) >> way) & 1) return "That way is shut";
+  y.first[i] = way === null ? 0 : way + 1;
+  return null;
 }
 
 // ---------- land ----------

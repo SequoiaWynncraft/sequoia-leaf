@@ -50,6 +50,7 @@ function pictured(u: Unlock): boolean {
       return typeof PERK_ART[u.of] === "function";
     case "blueprints":
     case "board":
+    case "first":
       return typeof PERK_ART[u.is] === "function";
     // A plot's card has the one picture every plot has.
     case "plot":
@@ -70,7 +71,18 @@ describe("a picture for everything a screen shows", () => {
 
   test("every tool, and every number a goal may raise", () => {
     for (const tool of TOOLS) expect([tool, typeof TOOL_ICON[tool]]).toEqual([tool, "string"]);
-    for (const of of ["stops", "crate", "reach", "depot", "span", "away", "hooks", "blueprints", "board"] as const)
+    for (const of of [
+      "stops",
+      "crate",
+      "reach",
+      "depot",
+      "span",
+      "away",
+      "hooks",
+      "blueprints",
+      "board",
+      "first",
+    ] as const)
       expect([of, typeof PERK_ART[of]]).toEqual([of, "function"]);
   });
 

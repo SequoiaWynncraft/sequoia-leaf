@@ -57,6 +57,8 @@ export interface Kept {
   readonly open?: false;
   readonly tint?: number;
   readonly shut?: number;
+  /** For a splitter, the way it puts first: 0 ahead, 1 left, 2 right. Never a way it has shut. */
+  readonly first?: number;
   /** Its grade, when it is above 1. */
   readonly grade?: number;
 }
@@ -74,6 +76,17 @@ export interface Piece extends Kept {
 const tinted = (k: number): boolean => k === BELT || k === TUNNEL || k === SPLITTER || k === JOINER || k === SORTER;
 const upTo = (v: unknown, most: number): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= most;
+const isWay = (v: unknown): v is number => v === 0 || v === 1 || v === 2;
+/** Whether a way is one of the shut ways `shut` holds, a bit each. */
+const shutAt = (shut: unknown, way: number): boolean => typeof shut === "number" && ((shut >> way) & 1) === 1;
+
+/**
+ * A splitter's ways as one byte, as a blueprint and a kept yard hold them: its shut ways a bit each,
+ * and 8 times what it puts first, 1 + the way or 0 for none.
+ */
+export const packWays = (shut: number, first: number): number => shut | (first << 3);
+/** A splitter's ways read back from their byte, as `keptOf` reads them: the shut ways, and the way put first or -1. */
+export const unpackWays = (b: number): { shut: number; first: number } => ({ shut: b & 7, first: (b >> 3) - 1 });
 
 /** What a record has of what a piece keeps, if that kind of piece may keep it. */
 export const keptOf = (v: { readonly [K in keyof Kept]?: unknown }, k: Kind): Kept => ({
@@ -83,6 +96,7 @@ export const keptOf = (v: { readonly [K in keyof Kept]?: unknown }, k: Kind): Ke
   ...(v.open === false && k === CRATE ? { open: v.open } : {}),
   ...(upTo(v.tint, TINTS) && tinted(k) ? { tint: v.tint } : {}),
   ...(upTo(v.shut, 7) && k === SPLITTER ? { shut: v.shut } : {}),
+  ...(isWay(v.first) && k === SPLITTER && !shutAt(v.shut, v.first) ? { first: v.first } : {}),
   ...(upTo(v.grade, TOP) && v.grade > 1 && isGraded(k) ? { grade: v.grade } : {}),
 });
 
@@ -99,6 +113,7 @@ export function keptAt(y: Yard, i: number): Kept {
       ...(k === CRATE && r >= 0 && h.open[r] === 0 ? { open: false } : {}),
       tint: y.tint[i],
       shut: y.shut[i],
+      first: (y.first[i] ?? 0) - 1,
       grade: y.grade[i],
     },
     k,
@@ -196,11 +211,12 @@ export function priceOf(y: Yard, pieces: readonly Pick<Piece, "kind" | "x" | "y"
   return cost;
 }
 
-/** Why a yard may not have a piece as it is asked for, wherever it stands: its kind at its grade, what it is set to, its colour. */
+/** Why a yard may not have a piece as it is asked for, wherever it stands: its kind at its grade, what it is set to, its colour, a way put first. */
 export const pieceRefusal = (open: Open, p: Piece): string | null =>
   locked(open, { build: p.kind, grade: p.grade }) ??
   (p.recipe !== undefined && p.kind !== SORTER ? locked(open, { make: p.recipe }) : null) ??
-  ((p.tint ?? 0) > 0 ? locked(open, { use: "paint" }) : null);
+  ((p.tint ?? 0) > 0 ? locked(open, { use: "paint" }) : null) ??
+  (p.first === undefined ? null : locked(open, { first: true }));
 
 /** The tiles setting a piece down changes: a piece of its kind standing there, both mouths of a tunnel, or else its own. */
 function claims(y: Yard, p: Piece): number[] {
@@ -280,6 +296,7 @@ export function stand(
       // The colour it came with is of what stood there: a run is joined below, as a whole.
       y.tint[i] = kept.tint ?? 0;
       if (kept.shut !== undefined) y.shut[i] = kept.shut;
+      if (kept.first !== undefined) y.first[i] = kept.first + 1;
       const r = holderOf(y, i);
       if (kept.recipe !== undefined) y.set[i] = kept.recipe;
       if (kept.open === false && r >= 0) y.holders.open[r] = 0;
@@ -300,6 +317,7 @@ const PARTS = [
   "tint",
   "turn",
   "shut",
+  "first",
   "set",
   "grade",
   "free",
@@ -389,7 +407,7 @@ export function packPieces(pieces: readonly Piece[]): Uint8Array {
         p.recipe ?? NONE,
         p.open === false ? 0 : 1,
         p.tint ?? 0,
-        p.shut ?? 0,
+        packWays(p.shut ?? 0, (p.first ?? -1) + 1),
         p.grade ?? 1,
       ],
       n * PIECE_BYTES,
@@ -402,7 +420,7 @@ export function packPieces(pieces: readonly Piece[]): Uint8Array {
 export function piecesOf(bytes: Uint8Array): Piece[] {
   const out: Piece[] = [];
   for (let from = 0; from + PIECE_BYTES <= bytes.length; from += PIECE_BYTES) {
-    const [k = NONE, x = 0, z = 0, d = 0, span = 0, recipe = NONE, open = 1, tint = 0, shut = 0, grade = 1] =
+    const [k = NONE, x = 0, z = 0, d = 0, span = 0, recipe = NONE, open = 1, tint = 0, ways = 0, grade = 1] =
       bytes.subarray(from, from + PIECE_BYTES);
     if (!isKind(k) || !isDir(d)) continue;
     out.push({
@@ -411,7 +429,7 @@ export function piecesOf(bytes: Uint8Array): Piece[] {
       y: z,
       dir: d,
       span,
-      ...keptOf({ recipe, open: open === 0 ? false : undefined, tint, shut, grade }, k),
+      ...keptOf({ recipe, open: open === 0 ? false : undefined, tint, ...unpackWays(ways), grade }, k),
     });
   }
   return out;

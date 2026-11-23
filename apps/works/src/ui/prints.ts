@@ -144,7 +144,7 @@ function machinePrint(k: Kind, grade = 1): MachinePrint {
   };
 }
 
-/** A splitter's ways out (ahead, left, right) as its card shows them: its picture, and each way shut, and led somewhere. */
+/** A splitter's ways out (ahead, left, right) as its card shows them: its picture, each way shut and led somewhere, and the way put first. */
 function waysPrint(i: number): WaysPrint {
   const w = S.world;
   const d = w.dir[i] ?? 0;
@@ -156,6 +156,7 @@ function waysPrint(i: number): WaysPrint {
     tint: w.tint[i] ?? 0,
     shut: sides.map((_, n) => (((w.shut[i] ?? 0) >> n) & 1) === 1),
     led: sides.map((side) => takes(w, toward(w.land, i, side), i)),
+    first: (w.first[i] ?? 0) - 1,
   };
 }
 
@@ -290,6 +291,7 @@ const NUMBERED = ["stops", "crate", "reach", "depot", "span", "away", "hooks"] a
 function perkOf(id: string): Unlock | null {
   const [of = "", a = "", b = ""] = id.split(".");
   if (of === "board") return unlocked({ board: true })[0] ?? null;
+  if (of === "first") return unlocked({ first: true })[0] ?? null;
   if (of === "blueprints" && numberIn(a) >= 0 && numberIn(b) >= 0)
     return unlocked({ blueprints: { count: numberIn(a), pieces: numberIn(b) } })[0] ?? null;
   const numbered = NUMBERED.find((f) => f === of);

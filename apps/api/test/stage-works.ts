@@ -24,7 +24,7 @@ const tester = (now: number, seed: number) => ({
 
 /**
  * Does one staging step to a yard: `{ yard: "mid" }` puts a yard built by commands in its place
- * (`staged` in the rules' test yards: `"small"`, `"short"`, `"mid"`, `"hall"`, `"study"`, `"large"`; or `"new"`, a new
+ * (`staged` in the rules' test yards: `"small"`, `"short"`, `"mid"`, `"hall"`, `"study"`, `"gate"`, `"large"`; or `"new"`, a new
  * one), and `{ text: "..." }` any yard as its kept text, counting its Coins on from the one it
  * replaces; `{ away: minutes }` has its owner leave it that long ago, and runs it every tick since as
  * Leaf would have; `{ fill: n }` sends the depot what the nth standing order still wants, and what

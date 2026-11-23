@@ -3,8 +3,8 @@
  * (`ARRIVAL`); goals and orders are where the rest is. Each thing taken in goes toward the node in
  * hand first, then toward the board's standing orders from the top; the folios a Study takes in go
  * toward the research being studied. A goal is finished the moment it has all it wants: what it
- * unlocks is unlocked, a node pays and brings the next into hand, and research known lets the next
- * in the line begin. A standing order, once filled, waits on the board until it is handed over (`claim`).
+ * unlocks is unlocked, a node pays and brings the next into hand (the first in line after it that
+ * may be taken, else the next by itself), and research known lets the next in the line begin. A standing order, once filled, waits on the board until it is handed over (`claim`).
  *
  * A standing order is drawn from the yard's seed, which only Leaf holds, so the page's copy cannot
  * hang one. Each counts only from `ORDER_WAITS` ticks after it is hung (`starts`): until then the
@@ -12,7 +12,7 @@
  * of it in time to put it on its own board.
  */
 import { ASKS } from "./content/asks.ts";
-import { NODES } from "./content/nodes.ts";
+import { NODES, QUEUE } from "./content/nodes.ts";
 import { LINE } from "./content/research.ts";
 import type { Land } from "./land.ts";
 import {
@@ -109,7 +109,8 @@ function filledOrder(y: Yard, order: Standing): void {
 
 /**
  * A goal has all it wants: it is done, pays and unlocks what it unlocks; when it was the node in hand,
- * or nothing is in hand, the next comes into hand; research known lets the next in the line begin.
+ * or nothing is in hand, the next comes into hand (`upNext`); research known lets the next in the
+ * line begin.
  */
 function finish(y: Yard, g: Goal): void {
   const info = GOALS[g];
@@ -120,7 +121,7 @@ function finish(y: Yard, g: Goal): void {
   y.paid += info.pay * MILLI;
   y.news.push({ kind: "done", goal: info.id, title: info.title, pay: info.pay });
   reopen(y);
-  if (y.hand === g || y.hand === -1) hold(y, nextHand(y.open));
+  if (y.hand === g || y.hand === -1) hold(y, upNext(y));
   if (y.line[0] === g) {
     y.line.shift();
     begin(y);
@@ -180,11 +181,41 @@ export function takeRefusal(y: Yard, g: Goal): string | null {
   return ready(y.open, g) ? null : `${info.title} is not open yet`;
 }
 
-/** Takes a node into hand in place of the one there; what each has been given stays given. Says whether it could. */
+/** Takes a node into hand in place of the one there, and out of the line if it was in it; what each has been given stays given. Says whether it could. */
 export function takeNode(y: Yard, g: Goal): boolean {
   if (takeRefusal(y, g) !== null) return false;
+  unqueue(y, g);
   hold(y, g);
   return true;
+}
+
+/** The node that comes into hand when the one there is finished: the first in line after it that may be taken now, out of the line; else the next by itself (`nextHand`). */
+function upNext(y: Yard): Goal | -1 {
+  const at = y.queue.findIndex((g) => takeRefusal(y, g) === null);
+  return at < 0 ? nextHand(y.open) : (y.queue.splice(at, 1)[0] ?? -1);
+}
+
+/** Why a node cannot be put in line after the one in hand just now, or nothing if it can: as for taking it, and the line not full. */
+export function queueRefusal(y: Yard, g: Goal): string | null {
+  const why = takeRefusal(y, g);
+  if (why !== null) return why;
+  if (y.queue.includes(g)) return `${GOALS[g]?.title ?? ""} is in the line already`;
+  return y.queue.length >= QUEUE ? `The line holds ${QUEUE} projects` : null;
+}
+
+/** Puts a node at the end of the line after the one in hand; with nothing in hand it is taken at once. Says whether it could. */
+export function queue(y: Yard, g: Goal): boolean {
+  if (queueRefusal(y, g) !== null) return false;
+  if (y.hand === -1) hold(y, g);
+  else y.queue.push(g);
+  return true;
+}
+
+/** Takes a node out of the line after the one in hand, keeping what it has been given. Says whether it was there. */
+export function unqueue(y: Yard, g: Goal): boolean {
+  const at = y.queue.indexOf(g);
+  if (at >= 0) y.queue.splice(at, 1);
+  return at >= 0;
 }
 
 /** What finished nodes have left in the town, oldest first. */

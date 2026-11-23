@@ -2,7 +2,8 @@
  * Tiers, as nodes: lessons come into hand by themselves in their order; a project or a commission
  * is taken into hand once its tier is open and what it needs is done; what reaches the depot goes to
  * the node in hand first, then the board; what a node has been given stays given; a commission opens
- * the next tier, whose land is then for sale; a tool not unlocked refuses its commands with a code of
+ * the next tier, whose land is then for sale; nodes put in line after the one in hand come into hand
+ * in their order as each before is finished; a tool not unlocked refuses its commands with a code of
  * its own, and a run of belt is never a way round one.
  */
 import { describe, expect, test } from "bun:test";
@@ -12,6 +13,7 @@ import { fill, idOf, learn, needsFirst, paidFor } from "./goals.ts";
 import { give, must } from "./yards.ts";
 
 const id = (y: F.Yard): string | null => (y.hand === -1 ? null : (F.GOALS[y.hand]?.id ?? null));
+const idsOf = (gs: readonly F.Goal[]): string[] => gs.map(idOf);
 /** The goals of a tier of a kind, in the order of the table. */
 const goalsOf = (tier: number, kind: F.GoalInfo["kind"]): F.Goal[] =>
   F.ALL_GOALS.filter((g) => F.GOALS[g]?.tier === tier && F.GOALS[g]?.kind === kind);
@@ -210,6 +212,73 @@ function asks(y: F.Yard): (string | null)[] {
 /** The largest of a number that a new yard has and that goals of the tiers below `tier` unlock. */
 const most = (tier: number, f: (u: F.Unlocks) => number | undefined): number =>
   Math.max(0, f(F.START) ?? 0, ...F.GOALS.filter((g) => g.tier < tier).map((g) => f(g.unlocks) ?? 0));
+
+describe("the line after the node in hand", () => {
+  test("as the node in hand is finished, the first in line comes into hand, then the next; with the line empty, the next comes by itself", () => {
+    const y = F.create({ seed: 1, tier: 1 });
+    must(y, { do: "take", node: "boiler" });
+    must(y, { do: "queue", node: "crates" });
+    must(y, { do: "queue", node: "culvert" });
+    expect([id(y), idsOf(y.queue)]).toEqual(["boiler", ["crates", "culvert"]]);
+    fill(y);
+    expect([id(y), idsOf(y.queue)]).toEqual(["crates", ["culvert"]]);
+    fill(y);
+    expect([id(y), idsOf(y.queue)]).toEqual(["culvert", []]);
+    fill(y);
+    expect(id(y)).toBe("banners");
+  });
+
+  test("a node is put in line only as it could be taken in hand, once, and the line holds 3; taken in hand, it leaves the line; what each has been given stays given", () => {
+    const y = F.create({ seed: 1, tier: 1 });
+    must(y, { do: "take", node: "boiler" });
+    const why = (node: string): unknown => {
+      const did = give(y, { do: "queue", node });
+      return "refused" in did ? [did.refused, did.why] : null;
+    };
+    expect(why("boiler")).toEqual(["cannot_queue", "A boiler for the workshop is in hand already"]);
+    expect(why("planks")).toEqual(["cannot_queue", "Planks for the Treasury is done already"]);
+    expect(why("stew")).toEqual(["cannot_queue", "Pots for the campfire stew is not open yet"]);
+    must(y, { do: "queue", node: "crates" });
+    expect(why("crates")).toEqual(["cannot_queue", "Crates for the market is in the line already"]);
+    must(y, { do: "queue", node: "culvert" });
+    must(y, { do: "queue", node: "signs" });
+    expect(why("banners")).toEqual(["cannot_queue", `The line holds ${F.QUEUE} projects`]);
+    F.deliver(y, F.item("brick"), 5);
+    must(y, { do: "take", node: "culvert" });
+    expect([id(y), idsOf(y.queue)]).toEqual(["culvert", ["crates", "signs"]]);
+    must(y, { do: "unqueue", node: "signs" });
+    expect(give(y, { do: "unqueue", node: "signs" })).toMatchObject({ refused: "not_queued" });
+    must(y, { do: "queue", node: "boiler" });
+    expect(y.got[F.goal("boiler")]?.[F.item("brick")]).toBe(5);
+  });
+
+  test("with nothing in hand, a node put in line is taken into hand at once", () => {
+    const y = without(3, "wax");
+    expect(y.hand).toBe(-1);
+    must(y, { do: "queue", node: "wax" });
+    expect([id(y), y.queue]).toEqual(["wax", []]);
+  });
+
+  test("is kept, and changes the check; a yard kept without one reads back with none, and a node that could not be in line is left out", () => {
+    const y = F.create({ seed: 1, tier: 1 });
+    must(y, { do: "take", node: "boiler" });
+    const none = F.check(y);
+    must(y, { do: "queue", node: "signs" });
+    must(y, { do: "queue", node: "crates" });
+    expect(F.check(y)).not.toBe(none);
+    const back = F.decode(F.encode(y));
+    expect(back && [idsOf(back.queue), F.check(back)]).toEqual([["signs", "crates"], F.check(y)]);
+    const { queue: _, ...old } = record(y);
+    expect(F.decode(JSON.stringify(old))?.queue).toEqual([]);
+    const bad = F.decode(
+      JSON.stringify({
+        ...record(y),
+        queue: ["signs", "boiler", "planks", "stew", "signs", "crates", "culvert", "banners"],
+      }),
+    );
+    expect(bad && idsOf(bad.queue)).toEqual(["signs", "crates", "culvert"]);
+  });
+});
 
 describe("tools", () => {
   test("a tool not unlocked refuses its commands with a code of its own; a single piece and a run of belt never are", () => {

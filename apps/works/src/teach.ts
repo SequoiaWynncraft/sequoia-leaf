@@ -2,8 +2,9 @@
  * Teaching by doing. Looking at the yard as it stands, this says what the next small thing to try
  * is, and where: one nudge at a time, in the place it matters. The lessons of the first tier are the
  * lesson, each nudge keyed on the lesson in hand; after them each new idea is said once, when its
- * thing first exists (the tier's screen, a machine's numbers, the grades, the Study, research), and
- * otherwise the yard is left to explain itself when something goes wrong.
+ * thing first exists (the tier's screen, a machine's numbers, the grades, the Study, research, a
+ * splitter's way put first), and otherwise the yard is left to explain itself when something goes
+ * wrong.
  *
  * A nudge is about a tile of the yard, or about a part of the interface (`part`), beside which it is
  * then said. Nothing here draws anything or touches the yard.
@@ -37,6 +38,7 @@ import {
   RECIPES_N,
   recipeSays,
   refusal,
+  SPLITTER,
   STATES,
   STUDY,
   TROUBLE,
@@ -57,9 +59,10 @@ export interface Nudge {
   lasting: boolean;
   /**
    * The part of the interface it is about, and is said beside, in place of a tile: the tier's
-   * button, research's, the grades over the toolbar, or the slot of the tool it wants picked up.
+   * button, research's, the grades over the toolbar, the slot of the tool it wants picked up, or
+   * the ways out on a splitter's card.
    */
-  part?: "tier" | "research" | "grades" | "tool";
+  part?: "tier" | "research" | "grades" | "tool" | "ways";
 }
 
 /** What the member has before them that the yard does not hold: the tile whose card is open (or -1), and the kind of piece in hand. */
@@ -232,6 +235,18 @@ export function nudge(
       y: Math.floor(at.picked / w.land.w),
       tool: null,
       lasting: false,
+    };
+
+  // A way put first, the first time a splitter's card is opened once the yard may put one first: beside its ways.
+  if (!told("first") && picked === SPLITTER && locked(w.open, { first: true }) === null)
+    return {
+      id: "first",
+      text: "Press a way until it says First. Items go that way while it can take them; the rest go to the other ways.",
+      x: at.picked % w.land.w,
+      y: Math.floor(at.picked / w.land.w),
+      tool: null,
+      lasting: false,
+      part: "ways",
     };
 
   if (w.open.board && !told("board"))

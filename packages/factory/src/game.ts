@@ -13,6 +13,7 @@ import {
   type Dir,
   isDir,
   remove,
+  setFirst,
   setOpen,
   setRecipe,
   setSort,
@@ -31,11 +32,14 @@ import {
   fillBoard,
   ORDER_TOLD,
   ORDER_WAITS,
+  queue,
+  queueRefusal,
   study,
   studyRefusal,
   swap,
   takeNode,
   takeRefusal,
+  unqueue,
   unstudy,
 } from "./orders.ts";
 import { shortOf } from "./page.ts";
@@ -106,8 +110,9 @@ export type Act =
   | ({ readonly do: "tipOut"; readonly item: Item | null } & At)
   | ({ readonly do: "crate"; readonly open: boolean } & At)
   | ({ readonly do: "way"; readonly way: number; readonly open: boolean } & At)
+  | ({ readonly do: "first"; readonly way: number | null } & At)
   | { readonly do: "buyPlot"; readonly plot: Plot }
-  | { readonly do: "take"; readonly node: Goal }
+  | { readonly do: "take" | "queue" | "unqueue"; readonly node: Goal }
   | { readonly do: "study" | "unstudy"; readonly research: Goal }
   | { readonly do: "swap"; readonly order: number }
   | { readonly do: "handOver"; readonly order: number }
@@ -152,7 +157,7 @@ export interface Short {
 /** A command the rules turned down: the code Leaf answers, and the sentence the page says. */
 export type Turned = Refused & { readonly why: string };
 
-/** The code a command is refused with when it is one of a tool the yard has not unlocked. */
+/** The code a command is refused with when it needs what the yard has not unlocked: a tool, or putting a way first. */
 export const LOCKED = "locked";
 
 /** The code each command is refused with otherwise. */
@@ -175,8 +180,11 @@ export const REFUSED = {
   tipOut: "nothing_to_tip_out",
   crate: "not_a_crate",
   way: "not_a_splitter",
+  first: "cannot_put_first",
   buyPlot: "plot_not_for_sale",
   take: "cannot_take",
+  queue: "cannot_queue",
+  unqueue: "not_queued",
   study: "cannot_study",
   unstudy: "not_studied",
   swap: "cannot_swap",
@@ -253,7 +261,7 @@ type Did = { readonly coins: CoinChange[]; readonly log: Logged[] } | Turned;
 const no = (c: { readonly do: keyof typeof REFUSED }, why: string): Turned => ({ refused: REFUSED[c.do], why });
 const done = (coins: CoinChange[] = [], log: Logged[] = []): Did => ({ coins, log });
 
-/** The tool a command is one of, if it is one a yard must unlock (asked of `locked`); a single piece and a run of belt are of none. */
+/** What a command needs unlocked, if anything (asked of `locked`): its tool, or putting a way first. A single piece and a run of belt need none. */
 const TOOL: Partial<Record<Command["do"], Lock>> = {
   paint: { use: "paint" },
   move: { use: "select" },
@@ -263,6 +271,7 @@ const TOOL: Partial<Record<Command["do"], Lock>> = {
   placeBlueprint: { use: "select" },
   upgrade: { use: "upgrade" },
   saveBlueprint: { blueprint: 0 },
+  first: { first: true },
 };
 
 /**
@@ -333,6 +342,10 @@ function act(y: Yard, c: Command, coins: number): Did {
       return setOpen(y, c.x, c.y, c.open) ? done() : no(c, "There is no crate there");
     case "way":
       return setWay(y, c.x, c.y, c.way, c.open) ? done() : no(c, "There is no splitter there");
+    case "first": {
+      const why = setFirst(y, c.x, c.y, c.way);
+      return why === null ? done() : no(c, why);
+    }
     case "buyPlot": {
       const did = buyPlot(y, c.plot, coins);
       if (!did.ok) return no(c, did.why);
@@ -346,6 +359,14 @@ function act(y: Yard, c: Command, coins: number): Did {
       takeNode(y, c.node);
       return done();
     }
+    case "queue": {
+      const why = queueRefusal(y, c.node);
+      if (why !== null) return no(c, why);
+      queue(y, c.node);
+      return done();
+    }
+    case "unqueue":
+      return unqueue(y, c.node) ? done() : no(c, "That is not in the line");
     case "study": {
       const why = studyRefusal(y, c.research);
       if (why !== null) return no(c, why);
@@ -489,13 +510,17 @@ function what(v: Record<string, unknown>): Act | null {
       return spot && whole(v.way, 2) && typeof v.open === "boolean"
         ? { do: "way", way: v.way, open: v.open, ...spot }
         : null;
+    case "first":
+      return spot && (v.way === null || whole(v.way, 2)) ? { do: "first", way: v.way, ...spot } : null;
     case "buyPlot": {
       const p = plotNamed(v.plot);
       return p === null ? null : { do: "buyPlot", plot: p };
     }
-    case "take": {
+    case "take":
+    case "queue":
+    case "unqueue": {
       const g = goalNamed(v.node);
-      return g === null ? null : { do: "take", node: g };
+      return g === null ? null : { do: v.do, node: g };
     }
     case "study":
     case "unstudy": {

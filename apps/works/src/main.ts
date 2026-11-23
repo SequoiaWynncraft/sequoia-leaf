@@ -225,7 +225,9 @@ function coach(n: Nudge | null): void {
         ? document.querySelector("#hand .grades")
         : part === "tool" && n && typeof n.tool === "number"
           ? document.querySelector(`#dock [data-tool="${n.tool}"]`)
-          : null;
+          : part === "ways"
+            ? document.querySelector(".k-info .ways")
+            : null;
   if (!n || !(at instanceof HTMLElement) || at.hidden || S.panel !== null) {
     box.hidden = true;
     return;
@@ -234,11 +236,12 @@ function coach(n: Nudge | null): void {
   box.hidden = false;
   const r = at.getBoundingClientRect();
   const b = box.getBoundingClientRect();
-  // Under what is at the top of the page, over what is at the bottom.
-  const below = r.top < window.innerHeight / 2;
+  // Under what is at the top of the page, over what is at the bottom; over a card's ways, whose buttons are under them.
+  const below = part !== "ways" && r.top < window.innerHeight / 2;
   const x = Math.round(Math.min(Math.max(8, r.left + r.width / 2 - b.width / 2), window.innerWidth - b.width - 8));
   const y = Math.round(below ? r.bottom + 10 : r.top - b.height - 10);
   box.classList.toggle("below", below);
+  box.classList.toggle("on-card", part === "ways");
   box.style.transform = `translate(${x}px, ${y}px)`;
   box.style.setProperty("--tail", `${Math.round(r.left + r.width / 2 - x - 6)}px`);
 }

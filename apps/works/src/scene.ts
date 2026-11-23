@@ -71,7 +71,7 @@ import { HOP, walkers } from "./actors.ts";
 import { armAt, type Arms, arms, beltTile, marksOf, PAINTS, ride, STEPS, TILE, withArm, woodOf } from "./art/belts.ts";
 import { BEYOND, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
-import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
+import { DEPOT as DEPOT_ART, FLAG_AT, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
@@ -678,8 +678,17 @@ function piece(
       head = foot - 20;
       break;
     }
+    case SPLITTER: {
+      // It lies flat with the floor; the way it puts first wears a flag, standing in that way's arrowhead.
+      const side = firstSide(y, i);
+      if (side === null) return;
+      const [fx, fy] = FLAG_AT[side];
+      const s = m.pennant[side];
+      if (s) stand(s, x + fx, top + fy, top + fy + camY, a);
+      return;
+    }
     default:
-      // What lies flat (belts, splitters, joiners, sorters) is drawn with the floor.
+      // What lies flat (belts, joiners, sorters) is drawn with the floor.
       return;
   }
   // The grade's mark, in the same corner of every graded piece: a belt has it in its own tile.
@@ -1119,6 +1128,12 @@ const dirAt = (y: Yard, i: number): Dir => {
   const d = y.dir[i] ?? 0;
   return d === 1 ? 1 : d === 2 ? 2 : d === 3 ? 3 : 0;
 };
+/** The side of its tile a splitter's way put first leaves by, or null for none. */
+function firstSide(y: Yard, i: number): Dir | null {
+  const d = dirAt(y, i);
+  const way = y.first[i] ?? 0;
+  return way === 1 ? d : way === 2 ? LEFT[d] : way === 3 ? RIGHT[d] : null;
+}
 /** A picture as something to fill tiles with: side by side, from the yard's own corner. */
 const fills = new Map<HTMLCanvasElement, CanvasPattern>();
 function lay(g: Ctx, pic: HTMLCanvasElement, tiles: Path2D): void {
@@ -1599,6 +1614,9 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
 /** The way a splitter sends its next thing: the first, from the one whose turn it is, that leads somewhere. */
 function sendWay(y: Yard, i: number, a: Arms): Dir {
   const d = dirAt(y, i);
+  // The way put first, when it leads somewhere: where things go while it takes them.
+  const out = firstSide(y, i);
+  if (out !== null && armAt(a, out) === 2) return out;
   for (let k = 0; k < 3; k++) {
     const turn = ((y.turn[i] ?? 0) + k) % 3;
     const side = turn === 0 ? d : turn === 1 ? LEFT[d] : RIGHT[d];

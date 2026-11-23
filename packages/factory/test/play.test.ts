@@ -78,7 +78,7 @@ class Player {
     const at = this.spot();
     const orders = y.board.map((o) => o.id);
     const things = [...F.ITEMS, "moss"];
-    switch (this.int(24)) {
+    switch (this.int(26)) {
       case 0:
         return { do: "build", kind: this.pick([...F.KINDS, "cart"]), dir: this.int(4), ...this.grade(), ...at };
       case 1:
@@ -143,6 +143,10 @@ class Player {
       }
       case 22:
         return { do: "collect" };
+      case 23:
+        return { do: "first", way: this.pick([null, 0, 1, 2, 3]), ...this.of(F.SPLITTER) };
+      case 24:
+        return { do: this.r() < 0.7 ? "queue" : "unqueue", node: this.pick([...F.NODES.map((n) => n.id), "nap"]) };
       default:
         return (
           this.pick<Rec>([
@@ -194,6 +198,7 @@ describe("random play", () => {
     ["a new yard", () => F.create({ seed: 11 })],
     ["a yard at tier 1", () => F.create({ seed: 12, tier: 1 })],
     ["a yard at tier 3", () => F.create({ seed: 13, tier: 3 })],
+    ["a yard with tier 4 done", () => F.create({ seed: 14, tier: 5 })],
     ["a delivering yard, its board filled", boardFilled],
     ["a generated yard", () => F.decode(F.encode(generated().y), generated().y.land) ?? F.create()],
   ];
