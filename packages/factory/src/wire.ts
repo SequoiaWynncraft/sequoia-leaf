@@ -20,6 +20,7 @@ import {
   GIVES,
   HALF,
   JOINER,
+  type Kind,
   MILL,
   NONE,
   recipesFor,
@@ -64,7 +65,7 @@ export function nextOf(y: Yard, i: number): number {
 }
 
 /** Whether a kind carries things across its tile, and whether it is a machine that makes things. */
-export const carries = (k: number): boolean =>
+export const carries = (k: number): k is Kind =>
   k === BELT || k === SPLITTER || k === JOINER || k === TUNNEL || k === SORTER;
 /** How many ways out a piece with ways has: a splitter 3, a sorter 2 (ahead and left). */
 export const waysOf = (k: number): number => (k === SPLITTER ? 3 : k === SORTER ? 2 : 0);

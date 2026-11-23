@@ -39,6 +39,25 @@ export function must(y: F.Yard, c: Rec): void {
   const did = give(y, c);
   if ("refused" in did) throw new Error(`${JSON.stringify(c)} was refused: ${did.why}`);
 }
+/**
+ * How many planks a minute reach the depot from the crate on a tile, kept full: once its line has
+ * filled (two minutes), over the next minute.
+ */
+export function flatOut(y: F.Yard, x: number, z: number): number {
+  const plank = F.item("plank");
+  const crate = F.holderOf(y, F.at(y, x, z));
+  const run = (ticks: number): void => {
+    for (let k = 0; k < ticks; k++) {
+      while (F.held(y.holders, crate, plank) < 8) F.put(y.holders, crate, plank);
+      F.step(y);
+    }
+  };
+  run(2 * F.MINUTE);
+  const before = y.depot[plank] ?? 0;
+  run(F.MINUTE);
+  return (y.depot[plank] ?? 0) - before;
+}
+
 /** Lays the run of belt the router finds from a tile to a piece. */
 export function lay(y: F.Yard, from: readonly [number, number], to: readonly [number, number]): void {
   const legs = F.route(y, from, to);

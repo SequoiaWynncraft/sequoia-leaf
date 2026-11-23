@@ -9,8 +9,8 @@
  */
 import {
   aim,
-  BELT,
   carried,
+  carries,
   feeders,
   GATHERER,
   held,
@@ -29,7 +29,6 @@ import {
   RECIPES_N,
   status,
   STUDY,
-  TUNNEL,
   type Yard,
 } from "@sequoia-leaf/factory";
 
@@ -50,9 +49,9 @@ const n = (v: number): string => v.toLocaleString("en-US", { maximumFractionDigi
 const things = (v: number, k: number): string =>
   `${n(v)} ${v === 1 ? (ITEM_INFO[k]?.name ?? "").toLowerCase() : (ITEM_INFO[k]?.many ?? "")}`;
 
-/** What a kind of piece does a minute at a grade, where that needs no recipe: a belt or a tunnel carries. */
+/** What a kind of piece does a minute at a grade, where that needs no recipe: a belt, tunnel, splitter, joiner or sorter carries. */
 export function kindNumbers(k: Kind, grade: number): string[] {
-  if (k === BELT || k === TUNNEL) return [`Carries up to ${n(carried(grade))} items a minute.`];
+  if (carries(k)) return [`Carries up to ${n(carried(grade))} items a minute.`];
   return [];
 }
 
@@ -70,7 +69,7 @@ export function numbersOf(w: Yard, i: number): string[] {
     return isItem(raw) ? [`Gathers ${things(makes(GATHERER, grade, null) * share, raw)} a minute${short}.`] : [];
   }
   if (k === STUDY) return [`Studies ${n(makes(STUDY, grade, null) * share)} folios a minute${short}.`];
-  if (k === BELT || k === TUNNEL) return kindNumbers(k === BELT ? BELT : TUNNEL, grade);
+  if (carries(k)) return kindNumbers(k, grade);
   return [];
 }
 

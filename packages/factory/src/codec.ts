@@ -20,7 +20,8 @@
  * does not know, and any count past what the tables allow (more pieces than tiles, more kinds of
  * thing than there are, more of one thing than any piece holds, a tunnel longer than tunnels go). *
  * A yard kept by the Works' first design (version 3, its pieces a list) is brought over as far as is
- * cheap (`fromFirst`): it is a new yard at the tier its story had reached.
+ * cheap (`fromFirst`): it is a new yard at the tier its story had reached. One kept by version 6
+ * reads as this version's, but for the grades it did not keep (`UNGRADED`).
  */
 import { build, isDir, keeps, plotState, refusal } from "./build.ts";
 import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
@@ -44,6 +45,7 @@ import {
   ALL_GOALS,
   ALL_ITEMS,
   ALL_KINDS,
+  BELT,
   BLUEPRINTS_MOST,
   BOILER,
   CRATE,
@@ -54,6 +56,7 @@ import {
   type Goal,
   goalNamed,
   GOALS,
+  highest,
   holdsMost,
   isFolio,
   isGoal,
@@ -105,8 +108,23 @@ import {
   type Yard,
 } from "./yard.ts";
 
-/** 6: whole numbers, grades, goals and research. */
-export const VERSION = 6;
+/** 7: whole numbers, grades (a splitter's, a joiner's and a sorter's too), goals and research. */
+export const VERSION = 7;
+/**
+ * The version before splitters, joiners and sorters had grades, which it kept with none. It still
+ * reads: each it kept in the yard stands at the highest grade the yard may build of its kind, for
+ * nothing, so that no line goes slower than it went; one kept in a blueprint, at the highest grade
+ * of the belts and tunnels in that blueprint (`regraded`).
+ */
+const UNGRADED = 6;
+/** The kinds `UNGRADED` kept with no grade. */
+const REGRADED: ReadonlySet<number> = new Set([SPLITTER, JOINER, SORTER]);
+/**
+ * The grade of a piece kept: as it says, or where it says none, the first; but a splitter, joiner or
+ * sorter that `UNGRADED` kept (`ungraded`) goes at `top`.
+ */
+const regraded = (k: number, grade: number | undefined, ungraded: boolean, top: () => number): number =>
+  grade ?? (ungraded && REGRADED.has(k) ? top() : 1);
 
 /** The parts a piece's bytes may say follow, a bit each. */
 const PARTS = 0x3ffe;
@@ -282,7 +300,8 @@ export type KeptPrint = readonly {
   readonly open: boolean;
   readonly tint: number;
   readonly ways: number;
-  readonly grade: number;
+  /** Its grade, where it is kept: above the first. */
+  readonly grade?: number;
 }[];
 
 /** A kept blueprint's pieces read back from their bytes, or null for bytes that are not pieces. */
@@ -299,9 +318,20 @@ function unpackPrint(bytes: Uint8Array | null): KeptPrint | null {
     const tint = f & 8 ? r.byte() : 0;
     const ways = f & 16 ? r.byte() : 0;
     const recipe = f & 64 ? r.byte() : NONE;
-    const grade = f & 128 ? r.byte() : 1;
+    const grade = f & 128 ? r.byte() : undefined;
     if (r.over) return null;
-    out.push({ kind, x, y, dir: f & 3, span, recipe, open: (f & 32) === 0, tint, ways, grade });
+    out.push({
+      kind,
+      x,
+      y,
+      dir: f & 3,
+      span,
+      recipe,
+      open: (f & 32) === 0,
+      tint,
+      ways,
+      ...(grade === undefined ? {} : { grade }),
+    });
   }
   return out;
 }
@@ -414,9 +444,10 @@ function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
 /**
  * Stands each kept piece again through the rules, as play would build it, and gives it the parts it
  * was kept with: everything but the far mouths of tunnels, which come with their near mouths. Says
- * which pieces could not stand (far mouths aside).
+ * which pieces could not stand (far mouths aside). A splitter, joiner or sorter kept with no grade
+ * by a version that gave them none (`ungraded`) stands at the highest grade the yard may build of its kind.
  */
-function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined): KeptPiece[] {
+function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined, ungraded: boolean): KeptPiece[] {
   const kept: [number, KeptPiece][] = [];
   const far: KeptPiece[] = [];
   const left: KeptPiece[] = [];
@@ -437,7 +468,8 @@ function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined)
     }
     const x = i % land.w;
     const z = (i - x) / land.w;
-    const lay = k === TUNNEL ? { span, grade: o.grade ?? 1 } : { grade: o.grade ?? 1 };
+    const grade = regraded(k, o.grade, ungraded, () => highest(y.open, k));
+    const lay = k === TUNNEL ? { span, grade } : { grade };
     if (y.kind[i] !== NONE || refusal(y, k, x, z, Infinity, d, lay) !== null) {
       left.push(o);
       continue;
@@ -520,7 +552,7 @@ function fromFirst(raw: Rec, land: Land): Yard | null {
   y.told = y.done.length;
   if (y.hand !== -1 && y.done.includes(y.hand)) hold(y, nextHand(y.open));
   // Its pieces where they stood, as far as the tier lets them stand; each that cannot is paid back.
-  for (const o of stand(y, pieces, undefined))
+  for (const o of stand(y, pieces, undefined, true))
     if (o.free !== true && !(o.kind === TUNNEL && (o.span ?? 0) < 0)) y.till += price(o.kind, 1) * MILLI;
   // What the till holds was not earned while away.
   y.seen = here(y);
@@ -566,7 +598,7 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
     return null;
   }
   if (isRec(raw) && raw.v === FIRST && Array.isArray(raw.cells)) return fromFirst(raw, land);
-  if (!isRec(raw) || raw.v !== VERSION || typeof raw.cells !== "string") return null;
+  if (!isRec(raw) || (raw.v !== VERSION && raw.v !== UNGRADED) || typeof raw.cells !== "string") return null;
   const bytes = fromBase64(raw.cells);
   const pieces = bytes && unpackCells(bytes, land.w * land.h);
   if (!pieces) return null;
@@ -579,11 +611,18 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
   );
 }
 
-/** A kept blueprint read back: real pieces the yard may keep in it, in the place it is kept in, or nothing. */
-function blueprint(open: Open, slot: number, v: KeptPrint | null | undefined): Uint8Array | null {
+/**
+ * A kept blueprint read back: real pieces the yard may keep in it, in the place it is kept in, or
+ * nothing. A splitter, joiner or sorter kept in it with no grade by a version that gave them none
+ * (`ungraded`) is at the highest grade of the belts and tunnels it is kept with.
+ */
+function blueprint(open: Open, slot: number, v: KeptPrint | null | undefined, ungraded: boolean): Uint8Array | null {
   if (!v) return null;
+  const line = (): number =>
+    Math.max(1, ...v.flatMap((p) => (p.kind === BELT || p.kind === TUNNEL ? [p.grade ?? 1] : [])));
   const pieces: Piece[] = [];
-  for (const { kind: k, x, y: z, dir: d, span, recipe, open: lets, tint, ways, grade } of v) {
+  for (const { kind: k, x, y: z, dir: d, span, recipe, open: lets, tint, ways, grade: kept } of v) {
+    const grade = regraded(k, kept, ungraded, line);
     if (!isKind(k) || k === DEPOT || !isDir(d)) return null;
     if (whole(x, BLUEPRINT.w - 1) === null || whole(z, BLUEPRINT.h - 1) === null || whole(span, SPAN_MOST) === null)
       return null;
@@ -811,7 +850,8 @@ export function vouch(
   // The Studies' work was for the research first in the line as kept: it is kept only while that is
   // still first, as play drops it when another comes first (`begin`).
   const studied = y.line[0] !== undefined && y.line[0] === goalNamed(line[0]) ? y.line[0] : undefined;
-  y.blueprints = Array.from({ length: BLUEPRINTS_MOST }, (_, k) => blueprint(y.open, k, prints[k]));
+  const ungraded = raw.v === UNGRADED;
+  y.blueprints = Array.from({ length: BLUEPRINTS_MOST }, (_, k) => blueprint(y.open, k, prints[k], ungraded));
 
   // Plots in the order they were bought, each only if it could have been bought then.
   for (const name of raw.plots) {
@@ -819,7 +859,7 @@ export function vouch(
     if (p !== null && plotState(y, p).state === "for sale") y.plots.push(p);
   }
 
-  stand(y, pieces, studied);
+  stand(y, pieces, studied, ungraded);
 
   fillBoard(y);
   // A yard kept before it knew its owner's last command is taken as last seen at its last tick.

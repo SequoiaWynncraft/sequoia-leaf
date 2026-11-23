@@ -78,8 +78,8 @@ export const FOLIOS = 24;
 
 /**
  * What the player builds with what it unlocks: new pieces at the highest grade unlocked, up to
- * these (grade 2 belts and gatherers once the wax and the rakes are done, grade 2 machines once they
- * are researched). Power: after a goal's lines, boilers (a waterwheel when short by no more than
+ * these (grade 2 belts, splitters and gatherers once the wax and the rakes are done, grade 2
+ * machines once they are researched): a splitter at the grade of the belts it lays. Power: after a goal's lines, boilers (a waterwheel when short by no more than
  * one gives, and the other where the one will not fit) for whatever the yard would then draw beyond
  * what it gives. It never builds for an order, and buys a plot only when the land has too little of
  * what a line gathers, or no room for it. Where greedy placing finds no room for a line, it plans
@@ -88,7 +88,18 @@ export const FOLIOS = 24;
  * at a time from the nearest will make room for (not the fewest of any choice), or is
  * laid as its parts first, each a line into the depot, and split off them.
  */
-export const GRADES = { belt: 2, tunnel: 2, gatherer: 2, mill: 2, bench: 2, workshop: 2, study: 1 } as const;
+export const GRADES = {
+  belt: 2,
+  tunnel: 2,
+  splitter: 2,
+  joiner: 2,
+  sorter: 2,
+  gatherer: 2,
+  mill: 2,
+  bench: 2,
+  workshop: 2,
+  study: 1,
+} as const;
 /** When a free swap is due, it swaps the order that would take longest to fill at what its lines bring the depot, if that is more than half an hour (an order nothing it has built brings, at once). */
 export const SWAP = 30;
 /** Coins to start with: a new player's, with nothing from the rest of the town. */

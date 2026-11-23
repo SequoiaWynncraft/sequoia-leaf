@@ -35,6 +35,7 @@ import {
   STUDY,
   TUNNEL,
 } from "./tables.ts";
+import { carries } from "./wire.ts";
 
 /** A grade as it is written: I, II, III. */
 export const numeral = (grade: number): string => ["", "I", "II", "III"][grade] ?? String(grade);
@@ -122,8 +123,7 @@ export function recipeSays(out: Item): string {
 /** What a kind of piece at a grade above the first does more than the first, and what one costs. */
 export function gradeSays(k: Kind, grade: number): string {
   const cost = `${k === BELT ? "A tile costs" : "Costs"} ${n(price(k, grade))} Coins.`;
-  if (k === BELT || k === TUNNEL)
-    return `Carries up to ${n(carried(grade))} items a minute${upFrom(carried(grade - 1))}. ${cost}`;
+  if (carries(k)) return `Carries up to ${n(carried(grade))} items a minute${upFrom(carried(grade - 1))}. ${cost}`;
   const draw = (g: number): number => ((DRAW[k] ?? 0) * (DRAWN[g] ?? HALF)) / HALF;
   const power = `draws ${n(draw(grade))} power${upFrom(draw(grade - 1))}`;
   if (k === GATHERER)

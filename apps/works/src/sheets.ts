@@ -16,7 +16,7 @@ import {
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { arms, beltTile, marksOf, woodOf } from "./art/belts.ts";
-import type { Art } from "./art/index.ts";
+import { type Art, meetingTile } from "./art/index.ts";
 import { FLAG_AT, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { type Entry, showSheet } from "./sheet.ts";
@@ -97,6 +97,25 @@ function run(art: Art, grade: number, dir: Dir, riding: number, tint = 0): HTMLC
   return c;
 }
 
+/** A line of belt east at a grade through a splitter, a joiner and a sorter of the same grade, with a plank on its way. */
+function line(art: Art, grade: number): HTMLCanvasElement {
+  const { c, g } = makeCanvas(7 * 16, 16);
+  const belt = beltTile(STRAIGHT[0] ?? 0, 0, 5, woodOf(grade), 0, marksOf(grade));
+  const tiles = [
+    belt,
+    meetingTile(art.m, SPLITS[0] ?? 0, 0, art.m.splitter[0], grade),
+    belt,
+    meetingTile(art.m, JOINS[0] ?? 0, 0, art.m.joiner[0], grade),
+    belt,
+    meetingTile(art.m, SORTS[0] ?? 0, 0, art.sorter(0, NONE), grade),
+    belt,
+  ];
+  tiles.forEach((tile, k) => g.drawImage(tile, k * 16, 0));
+  const plank = art.item(item("plank"));
+  g.drawImage(plank, 16 * 2 + 8 - (plank.width >> 1), 7 - (plank.height >> 1));
+  return c;
+}
+
 /** A grade, as a label names it. */
 const at = (grade: number): string => `grade ${numeral(grade)}`;
 
@@ -169,13 +188,22 @@ function grades(art: Art): Entry[] {
       name: at(grade),
       pics: [0, 1, 2, 3, 4].map((state) => standing(art, m.study[lookOf(grade)]?.[state], grade)),
     });
+  head("Splitters, joiners and sorters: each grade, each way, and in a line of belt of their grade");
+  for (const grade of GRADES) {
+    out.push({
+      name: `${at(grade)}, splitters`,
+      pics: WAYS.map((dir) => meetingTile(m, SPLITS[dir] ?? 0, dir, m.splitter[dir], grade)),
+    });
+    out.push({ name: "joiners", pics: WAYS.map((dir) => meetingTile(m, JOINS[dir] ?? 0, dir, m.joiner[dir], grade)) });
+    out.push({
+      name: "sorters",
+      pics: WAYS.map((dir) => meetingTile(m, SORTS[dir] ?? 0, dir, art.sorter(dir, NONE), grade)),
+    });
+    out.push({ name: "in a line", pics: [line(art, grade)] });
+  }
   head("The sorter: not set, and set, each way; the cart stop: waiting, loaded, under, gone, back");
-  const sorter = (dir: Dir, thing: number): HTMLCanvasElement => {
-    const { c, g } = makeCanvas(16, 16);
-    g.drawImage(beltTile(SORTS[dir] ?? 0, dir, 5, 0), 0, 0);
-    g.drawImage(art.sorter(dir, thing), 0, 0);
-    return c;
-  };
+  const sorter = (dir: Dir, thing: number): HTMLCanvasElement =>
+    meetingTile(m, SORTS[dir] ?? 0, dir, art.sorter(dir, thing), 1);
   out.push({ name: "not set", pics: WAYS.map((dir) => sorter(dir, NONE)) });
   for (const name of ["plank", "ore", "lantern", "timber"] as const)
     out.push({ name: `set to ${ITEM_INFO[item(name)]?.many}`, pics: WAYS.map((dir) => sorter(dir, item(name))) });
@@ -188,9 +216,20 @@ function grades(art: Art): Entry[] {
     });
   head("The grade's mark, and each kind's picture for a button at each grade");
   out.push({ name: "II, III", pics: m.pips });
-  for (const name of ["belt", "tunnel", "gatherer", "mill", "bench", "workshop", "study"] as const)
+  for (const name of [
+    "belt",
+    "tunnel",
+    "splitter",
+    "joiner",
+    "sorter",
+    "gatherer",
+    "mill",
+    "bench",
+    "workshop",
+    "study",
+  ] as const)
     out.push({ name: named(name), pics: GRADES.map((grade) => art.icon(kind(name), grade)) });
-  out.push({ name: "sorter, cart stop", pics: [art.icon(kind("sorter")), art.icon(kind("stop"))] });
+  out.push({ name: "cart stop", pics: [art.icon(kind("stop"))] });
   return out;
 }
 

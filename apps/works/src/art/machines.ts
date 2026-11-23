@@ -1003,7 +1003,8 @@ export interface Machines {
   fenceDown: Sprite;
   /**
    * The mark every piece of the second grade wears in the top-left corner of its tile, and the two of
-   * the third: pips[0] and pips[1]. A belt has the same mark as part of its tile (`belts.ts`).
+   * the third: pips[0] and pips[1]. A belt has the same mark as part of its tile (`belts.ts`); a
+   * splitter, joiner or sorter has it laid over its arrowheads or its board.
    */
   pips: Canvas[];
 }

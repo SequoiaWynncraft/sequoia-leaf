@@ -24,6 +24,44 @@ export interface Part {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "works-splitter-grades",
+    at: "2026-11-23T23:59Z",
+    title: "The Works: splitters, joiners and sorters have grades",
+    lines: [
+      "Splitters, joiners and sorters come in grades I to III, as belts do, and pass items on as fast as a belt of their grade.",
+      "Yours were raised to the highest belt grade your yard has, for free, so no line is slower.",
+    ],
+    more: [
+      {
+        head: "Grades",
+        points: [
+          "Grade I passes on up to 150 items a minute, grade II 200 and grade III 300, the same as belts.",
+          "One of a lower grade than the belts around it slows its line to its own pace.",
+          "Grade II comes with Wax for the belts and grade III with Brass fittings for the belts, as for belts.",
+          "Each is drawn in its grade's wood and studs, like the belts of that grade.",
+        ],
+      },
+      {
+        head: "Prices, in Coins",
+        points: ["Splitter and joiner: 8, 24 and 64.", "Sorter: 12, 36 and 96."],
+      },
+      {
+        head: "Building",
+        points: [
+          "Choose the grade in the dock, as for belts. It starts at I until you choose another.",
+          "Building one over a lower one raises it in place, and Upgrading an area raises them with the belts.",
+        ],
+      },
+      {
+        head: "Your yard",
+        points: [
+          "Every splitter, joiner and sorter you had was raised to the highest belt grade your yard has unlocked, for free.",
+          "One saved in a blueprint was raised to the grade of the belts saved with it.",
+        ],
+      },
+    ],
+  },
+  {
     id: "works-recipe",
     at: "2026-11-23T20:20Z",
     title: "The Works: a machine's recipe on its card",

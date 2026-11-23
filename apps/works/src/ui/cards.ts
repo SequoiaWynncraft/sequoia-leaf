@@ -25,8 +25,8 @@
 import {
   type Act,
   ALL_ITEMS,
-  BELT,
   BOILER,
+  carries,
   CRATE,
   DEADFALL,
   DEPOT,
@@ -400,7 +400,7 @@ function paceOf(k: Kind, grade: number): string {
   const faster = (PACE[1] ?? 2) / (PACE[grade] ?? PACE[1] ?? 2);
   if (k === GATHERER) return secs(TICKS.gather * faster);
   if (k === STUDY) return `${secs(TICKS.study * faster)} a folio`;
-  if (k === TUNNEL || k === BELT) return `${secs(Math.ceil(8 / (PACE[grade] ?? 2)))} a tile`;
+  if (carries(k)) return `${secs(Math.ceil(8 / (PACE[grade] ?? 2)))} a tile`;
   if (k === BOILER) return `${secs(TICKS.burn)} a piece`;
   if (isMaker(k)) {
     const ticks = (MADE_BY[k] ?? []).map((r) => r.ticks * faster);

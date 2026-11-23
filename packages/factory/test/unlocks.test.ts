@@ -62,12 +62,11 @@ describe("what is unlocked", () => {
         if (e.is !== "grade") continue;
         expect(e.name).toBe(`${F.KIND_INFO[e.kind]?.name} ${F.numeral(e.grade)}`);
         expect(e.says).toContain(`${F.price(e.kind, e.grade).toLocaleString("en-US")} Coins.`);
-        const more =
-          e.kind === F.BELT || e.kind === F.TUNNEL
-            ? [F.carried(e.grade), F.carried(e.grade - 1)]
-            : e.kind === F.GATHERER || e.kind === F.STUDY
-              ? [F.makes(e.kind, e.grade, null), F.makes(e.kind, e.grade - 1, null)]
-              : [(F.PACE[e.grade] ?? 0) / (F.PACE[1] ?? 1)];
+        const more = F.carries(e.kind)
+          ? [F.carried(e.grade), F.carried(e.grade - 1)]
+          : e.kind === F.GATHERER || e.kind === F.STUDY
+            ? [F.makes(e.kind, e.grade, null), F.makes(e.kind, e.grade - 1, null)]
+            : [(F.PACE[e.grade] ?? 0) / (F.PACE[1] ?? 1)];
         for (const v of more) expect(e.says).toContain(v.toLocaleString("en-US", { maximumFractionDigits: 1 }));
       }
     expect([1, 2, 3].map(F.numeral)).toEqual(["I", "II", "III"]);

@@ -178,14 +178,16 @@ is the back of the workshop the town sees from the front: the same planks, stone
 brass wheel.
 
 **Grades.** A grade is written as a numeral: "Belt II". A piece of the second grade wears brass
-(`art/machines.ts`, `art/belts.ts`): a belt runs on darker wood with a brass edge and chevron, a
-mill, a bench and a workshop have a brass band and plate, a tunnel a brass hood, a gatherer a rake,
-a Study a brass lectern. So that a whole line reads at the farthest zoom, where a fitting is a pixel
-or two, every piece above the first grade also has a small mark of muted brass in the top-left of
-its tile, one for II and two for III. The third grade is drawn as the second with its mark doubled;
-tier 4 unlocks it for belts, tunnels and gatherers (Brass fittings) and for mills, benches and
-workshops (research), and no goal unlocks it for the Study. `?sheet=grades` lays every graded piece
-out at each grade, and `review/gallery.ts` stands them in a yard of its own.
+(`art/machines.ts`, `art/belts.ts`): a belt, splitter, joiner or sorter runs on darker wood with a
+brass edge and chevron, a mill, a bench and a workshop have a brass band and plate, a tunnel a
+brass hood, a gatherer a rake, a Study a brass lectern. So that a whole line reads at the farthest
+zoom, where a fitting is a pixel or two, every piece above the first grade also has a small mark of
+muted brass in the top-left of its tile, one for II and two for III: a belt has it in its tile, a
+splitter, joiner or sorter over its arrowheads or its board. The third grade is drawn as the second
+with its mark doubled; tier 4 unlocks it for belts, tunnels, splitters, joiners, sorters and
+gatherers (Brass fittings) and for mills, benches and workshops (research), and no goal unlocks it
+for the Study. `?sheet=grades` lays every graded piece out at each grade, each way round and in a
+line of belt, and `review/gallery.ts` stands them in a yard of its own.
 
 **The later pieces.** The Study is a bookcase, a lectern and a lamp with a gnome scholar at it: he
 turns a page as a folio is studied, stands idle with nothing to study, and the lamp is out with no
@@ -499,7 +501,8 @@ Leaf (`S.alone`): it is the page's entry with that file in place of `src/main.ts
 the rules and sent nowhere, and its member has Coins enough for anything: `after` is what a tap costs
 on it, a frame after a real command. `review/gallery.ts` is built and opened the same way
 (`/play/works-gallery/gallery.html`): a yard of its own with every graded piece at grades I to III,
-each way round, in the light and in the dark, sorters set and not, a Study and a cart stop. No goal
+each way round, in the light and in the dark, sorters set and not, a line of belt through a
+splitter, a joiner and a sorter at each grade, a Study and a cart stop. No goal
 unlocks a Study of the third grade, so each piece is built by the rules and its grade set on it.
 
 With `?meter` in the address, a corner of the page says, each second: the frames a second the
