@@ -47,7 +47,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 function isStep(v: unknown): v is Step {
   if (!Array.isArray(v)) return false;
   const [kind, a, b, c] = v as unknown[];
-  if (kind === "size") return typeof a === "number" && typeof b === "number" && typeof (c ?? 1) === "number";
+  if (kind === "size") return typeof a === "number" && typeof b === "number" && (c === undefined || typeof c === "number");
   if (kind === "tap" || kind === "down" || kind === "move" || kind === "up")
     return typeof a === "number" && typeof b === "number";
   if (kind === "wait") return typeof a === "number";

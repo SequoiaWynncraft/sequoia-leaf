@@ -501,8 +501,8 @@ export function makeGrove(
     // An art pixel is seldom a whole number of device pixels, and enlarged to one by the browser
     // some rows would be fatter than others. So the picture is shown enlarged by the next whole
     // number up, and the browser brings that down smoothly: every art pixel is as wide as the next.
-    // At a whole number there is nothing to bring down, and it is shown as it is.
-    const up = Math.ceil(px);
+    // At a whole number the browser enlarges it evenly by itself, and it is shown as it is.
+    const up = Number.isInteger(px) ? 1 : Math.ceil(px);
     canvas.width = whole.width * up;
     canvas.height = whole.height * up;
     screen2d.imageSmoothingEnabled = false;
@@ -511,7 +511,7 @@ export function makeGrove(
       top: `${Y0 * SCALE}px`,
       width: `${whole.width * SCALE}px`,
       height: `${whole.height * SCALE}px`,
-      imageRendering: up === px ? "pixelated" : "auto",
+      imageRendering: up === 1 ? "pixelated" : "auto",
     });
     ui.fit(W, H, SCALE, TALL, left, top);
   }
