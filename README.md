@@ -32,7 +32,7 @@ pay into it and take from it.
 ```sh
 mise install     # install the pinned bun
 bun install
-bun run verify   # format check, lint, typecheck and test
+bun run verify   # format check, lint, typecheck, test, and the pages built as the image builds them
 bun run ci       # CI's workflow, on this machine (see below)
 bun fmt          # format everything
 bun run dev      # run the server at http://localhost:3000, restarting on changes

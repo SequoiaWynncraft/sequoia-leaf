@@ -156,6 +156,11 @@ up since (a held Enter saying itself again, `keys.ts`) does not make it. `unask(
 waiting at once, as four seconds left alone do.
 
 `tools/drive.ts` drives a built page in headless Chromium and takes screenshots; its header says how.
+`tools/pages.ts` (`bun run pages`, the end of `bun run verify`) builds every app's page as the image
+does: the Dockerfile's page stage copied by `.dockerignore` into a folder of its own, its production
+install and `bun build index.html --minify`, so a page that only builds here is found here.
+`tools/pages.test.ts` holds that nothing that ships (an app's or a package's `src/`, an app's page)
+imports from a `review/` folder, which the image leaves out.
 
 ## Cards
 
