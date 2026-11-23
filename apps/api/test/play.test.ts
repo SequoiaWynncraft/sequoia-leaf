@@ -1648,6 +1648,7 @@ describe("a yard the Works' first design kept", () => {
       tick: 4000,
       at: clock.now,
       till: 0,
+      bank: 2,
       story: 20,
       plots: ["yard", "meadow", "bank", "stream", "grove", "seam", "quarry", "hollow", "pond"],
       board: [],
@@ -1662,6 +1663,14 @@ describe("a yard the Works' first design kept", () => {
         INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${alice}, 'works', 7, ${first}, ${clock.now})
       `,
     );
+    // The two Coins entries the first design's yard made, as the ledger has them.
+    await services.query(
+      (sql) => sql`
+        INSERT INTO coin_entries (player_id, amount, reason, game, key, at) VALUES
+          (${alice}, 100, 'Earned in the Works', 'works', ${`works:${alice}:bank:0`}, ${clock.now}),
+          (${alice}, 100, 'Earned in the Works', 'works', ${`works:${alice}:bank:1`}, ${clock.now})
+      `,
+    );
     const opening = await send("GET", "/v1/game/play/works");
     expect(opening.status).toBe(200);
     const { clock: tick, yard } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
@@ -1670,7 +1679,12 @@ describe("a yard the Works' first design kept", () => {
     expect(yard.till).toBe(11_600 * MILLI);
     const collected = await send("POST", "/v1/game/play/works", { commands: [{ id: "f-1", do: "collect", tick }] });
     expect(collected.status).toBe(200);
-    expect((await entries(alice)).map((e) => e.amount)).toEqual([11_600]);
+    // Paid in under the next name, after the two it had made.
+    expect((await entries(alice)).map((e) => [e.amount, e.key])).toEqual([
+      [100, `works:${alice}:bank:0`],
+      [100, `works:${alice}:bank:1`],
+      [11_600, `works:${alice}:bank:2`],
+    ]);
     // Kept now as this design keeps a yard.
     expect(yardIn((await storedYard()).state).open.tier).toBe(2);
   });

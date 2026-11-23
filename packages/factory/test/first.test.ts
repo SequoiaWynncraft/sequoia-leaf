@@ -57,9 +57,9 @@ describe("a yard kept by the first design", () => {
     const y = read(first(20));
     const fresh = F.create({ seed: 77, tier: 2 });
     expect([y.done, y.hand]).toEqual([fresh.done, fresh.hand]);
-    // No piece stands but the depot; the depot's books and the till begin again.
+    // No piece stands but the depot, and the depot's books begin again.
     expect(y.kind.filter((k) => k !== F.NONE && k !== F.DEPOT).length).toBe(0);
-    expect([y.till, F.ALL_ITEMS.every((n) => (y.depot[n] ?? 0) === 0)]).toEqual([0, true]);
+    expect(F.ALL_ITEMS.every((n) => (y.depot[n] ?? 0) === 0)).toBe(true);
   });
 
   test("owns again each plot it owned that its tier sells, and only those", () => {
@@ -80,11 +80,11 @@ describe("a yard kept by the first design", () => {
     const y = read(first(20, ALL_PLOTS));
     const unsold = F.LAND.plots.filter((p) => !y.plots.includes(p.plot));
     expect(unsold.length).toBeGreaterThan(0);
-    expect(y.till).toBe(unsold.reduce((sum, p) => sum + p.price, 0) * F.MILLI);
+    expect(y.till).toBe((40 + unsold.reduce((sum, p) => sum + p.price, 0)) * F.MILLI);
     expect(F.postcard(y).till).toBe(y.till / F.MILLI);
     // The letter for time away counts only what the till gains from here.
     expect(y.seen.till).toBe(y.till);
-    expect(read(first(20, ["yard"])).till).toBe(0);
+    expect(read(first(20, ["yard"])).till).toBe(40 * F.MILLI);
   });
 
   test("keeps what it was paid, what it sold and the side orders it handed over, and so its score on the board", () => {
@@ -100,9 +100,18 @@ describe("a yard kept by the first design", () => {
     expect(F.check(read(text))).toBe(F.check(y));
   });
 
-  test("with its story or its totals missing, is not a yard", () => {
+  test("counts its Coins entries on from where it was, so that none is named as one already made", () => {
+    expect(read(first(20)).bank).toBe(12);
+  });
+
+  test("keeps what its till held, not yet paid in", () => {
     const raw: Record<string, unknown> = JSON.parse(first(20));
-    for (const field of ["story", "paid", "sold", "plots"]) {
+    expect(read(JSON.stringify({ ...raw, till: 40.75 })).till).toBe(40_750);
+  });
+
+  test("with its story, its totals or its count of Coins entries missing, is not a yard", () => {
+    const raw: Record<string, unknown> = JSON.parse(first(20));
+    for (const field of ["story", "paid", "sold", "plots", "bank"]) {
       expect(F.decode(JSON.stringify({ ...raw, [field]: undefined }))).toBeNull();
     }
     expect(F.decode(JSON.stringify({ ...raw, story: -1 }))).toBeNull();
