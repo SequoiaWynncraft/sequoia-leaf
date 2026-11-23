@@ -24,6 +24,40 @@ export interface Part {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "town-presence",
+    at: "2026-11-24T23:59Z",
+    title: "Who is where, the same everywhere",
+    lines: [
+      "Somebody away for 5 minutes or more sits down where they are and dozes off, and is up again the moment they do anything. Their card says for how long.",
+      "Somebody at the Works carries crates in at its door, at the raid table sits at the stump, and in the Grove stands at its stone. Their card says where they are.",
+    ],
+    more: [
+      {
+        head: "Away",
+        points: [
+          "Away is 5 minutes without moving, an emote, or anything done in a game: the same rule that counts your time AFK on your card.",
+          'Who is about and a person\'s card say it with the time: "away for 20 minutes".',
+        ],
+      },
+      {
+        head: "Where people are",
+        points: [
+          "Who is about, the number on its button, the people in town and every card now agree on where each person is, on every page.",
+          "Somebody who leaves town is listed where they went within a second, not up to 30 seconds later. Somebody who closes the game is listed as seen lately at once, not 90 seconds later.",
+          "Somebody in the Grove is listed in the Grove. They used to be listed as seen lately.",
+        ],
+      },
+      {
+        head: "Others walking about",
+        points: [
+          "Others in town walk where they really walked, a little behind, and no longer overshoot a stop or a turn and step back on a slow connection.",
+          "Somebody whose game is hidden or stalled stops walking where they are, instead of walking on the spot.",
+          "When the game server restarts, everybody stays where they were while their game reconnects, instead of fading out and in.",
+        ],
+      },
+    ],
+  },
+  {
     id: "works-visit-live",
     at: "2026-11-23T21:22Z",
     title: "The Works: visits keep up",
