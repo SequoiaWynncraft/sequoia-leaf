@@ -183,8 +183,8 @@ function runNote(n: Record<string, unknown>): Note {
     case "acorns":
       return { t: "acorns", why: one(n.why, isAcornsWhy, what), amount: whole(n.amount, 0, 999, what) };
     case "items":
-      if (n.why !== "basket") return bad(what);
-      return { t: "items", why: "basket", items: each(n.items, isItemId, 8, what) };
+      if (n.why !== "basket" && n.why !== "charm") return bad(what);
+      return { t: "items", why: n.why, items: each(n.items, isItemId, 8, what) };
     case "resolve":
       return {
         t: "resolve",

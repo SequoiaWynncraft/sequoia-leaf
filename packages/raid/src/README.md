@@ -94,7 +94,8 @@ the three dearest carry a third trait.
 | 5    | Hearth Cat       | Ember   | Sneak + Fang   | 700    | 66     | 1     | **Off The Table.** Looks at its target, then bats it off its hex: 240 physical damage, knocked back 2 hexes, stunned for 1.5 seconds.                 |
 
 **Traits.** A trait switches on when the party fields enough _different_ figures that carry it;
-copies of one figure count once. Every kin has four members, one of them at one acorn and one at
+copies of one figure count once, however many emblems they hold. A figure carries its own traits
+and the kin of any emblem it holds. Every kin has four members, one of them at one acorn and one at
 two, so any kin can be started in the first rooms.
 
 | Trait   | Steps   | What it does at its first step                                                                                                                                                            |
@@ -116,9 +117,9 @@ two, so any kin can be started in the first rooms.
 
 The second steps: Ember burns from the whole party's hits and hotter; Moss regrows more; Mist gives
 more ward and more slips; Burrow digs deeper; Feather quickens more; Crab's uncounted crab is a big
-one, and at five crabs (which takes the charm) a big one and a small one come; Gnomes have 20% more
-health and find 3 after a win and 2 after a loss; Bulwark gives the rest of the party armour too;
-and so on. `traitText(id, step)` gives the sentence for any step.
+one, and at five crabs (which takes a Crab emblem) a big one and a small one come; Gnomes have 20%
+more health and find 3 after a win and 2 after a loss; Bulwark gives the rest of the party armour
+too; and so on. `traitText(id, step)` gives the sentence for any step.
 
 **The fight.** A clock of 20 steps a second, decided entirely by the two parties and a seed: the
 same setup gives the same fight, event for event. Setting out locks both boards, draws the fight's
@@ -153,6 +154,14 @@ ability aimed at "its target" goes for the same one; abilities that say "nearest
 finished items with both stats and an effect. A figure holds three. Trouble rooms give a pick of one
 component from three when won and from two when lost; a beaten boss gives two picks.
 
+Emblems are a third sort of item, one for each kin, and a charm boon is the only way to get one. An
+emblem has the charm's id, name and quip, no stats and no effect of its own: whoever holds it is of
+that kin as well, in the count and in the fight (a Feather emblem quickens its holder, a Crab
+emblem's holder answers roll call as a crab). It takes one of the three places and never forges, so
+components still pair up beside it. It is not given to a figure of its kin already (`already_kin`:
+"It is of that kin already."). Selling the holder, or a merge with no room for it, puts it back on
+the item bench like any other item.
+
 | Item               | Made of             | What it does                                                                                                                                          |
 | ------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Thorn              |                     | +15% attack.                                                                                                                                          |
@@ -178,6 +187,7 @@ component from three when won and from two when lost; a beaten boss gives two pi
 
 **Boons.** After room 2 and after each of the first two bosses: one of three, with one free redraw.
 A charm is only offered for a kin the party owns one of, and never more than one charm in a three.
+Each charm puts its emblem on the item bench, for one figure to hold.
 
 | Boon                  | What it does                                                                                                     |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -194,13 +204,13 @@ A charm is only offered for a kin the party owns one of, and never more than one
 | Warm Blanket          | 4 resolve back now, and every room you lose costs 1 less.                                                        |
 | Small Fry             | Your one- and two-acorn figures have 18% more health and attack.                                                 |
 | Tidy Formation        | Figures that start in your front row have 25 more armour; figures that start in your back row attack 15% faster. |
-| Coal On A String      | Counts as one more Ember.                                                                                        |
-| Pocket Moss           | Counts as one more Moss.                                                                                         |
-| Jar Of Fog            | Counts as one more Mist.                                                                                         |
-| A Small Hole          | Counts as one more Burrow.                                                                                       |
-| Lucky Feather         | Counts as one more Feather.                                                                                      |
-| Roll Call Sheet       | Counts as one more Crab.                                                                                         |
-| Spare Hat             | Counts as one more Gnome.                                                                                        |
+| Coal On A String      | An emblem for one figure to hold: it is an Ember as well, and counts as one more Ember.                          |
+| Pocket Moss           | An emblem for one figure to hold: it is a Moss as well, and counts as one more Moss.                             |
+| Jar Of Fog            | An emblem for one figure to hold: it is a Mist as well, and counts as one more Mist.                             |
+| A Small Hole          | An emblem for one figure to hold: it is a Burrow as well, and counts as one more Burrow.                         |
+| Lucky Feather         | An emblem for one figure to hold: it is a Feather as well, and counts as one more Feather.                       |
+| Roll Call Sheet       | An emblem for one figure to hold: it is a Crab as well, and counts as one more Crab.                             |
+| Spare Hat             | An emblem for one figure to hold: it is a Gnome as well, and counts as one more Gnome.                           |
 
 **Sparring.** A sparring room is fought against a party one of the regulars at the table brought
 (`REGULARS` in `content/rooms.ts`: Greg, the Hearth Cat, a Barrow Gnome, Crab #7, Orphion
@@ -285,7 +295,7 @@ it would send. `encodeTable` and `decodeTable` are the table as Leaf stores it.
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `content/figures.ts`   | The 28 figures, the forest's trouble and bosses, and the summoned: names, numbers, ability sentences, quips           |
 | `content/traits.ts`    | Kins and callings: steps, sentences, numbers                                                                          |
-| `content/items.ts`     | Components, finished items, what forges into what, how a figure holds them                                            |
+| `content/items.ts`     | Components, finished items, emblems, what forges into what, how a figure holds them                                   |
 | `content/boons.ts`     | The boons                                                                                                             |
 | `content/rooms.ts`     | Acorns, levels, stall odds, the fight's clock, the fifteen rooms and their plans, sparring strength, trails, regulars |
 | `content/keepsakes.ts` | The payout                                                                                                            |
@@ -402,9 +412,13 @@ of its own. `partsOf(did, "damage" | "tanked" | "healing")` gives the parts a ba
 
 **Saving.** `saveRun(run)` is a string (version 2); `loadRun(text)` gives back the identical run, or
 a reason it is refused, and `checkRun(v)` does the same for plain data. It reads the data field by
-field and turns away anything this version could not have made. A fight in progress keeps its
-setup, and how it comes out is worked out again from that. The last fight fought is kept as its
-setup (`run.last`), so it can be played again to be looked back on.
+field and turns away anything this version could not have made. A run saved by an older game is
+brought up to date as it is read, without a new version: a field it did not keep yet gets what a new
+run starts with, a charm taken when charms counted for their kin gets its emblem on the item bench
+(once: not when the emblem is on the bench or held already), and a stored party's old `charms` is
+let be and counts for nothing. A fight in progress keeps its setup, and how it comes out is worked
+out again from that. The last fight fought is kept as its setup (`run.last`), so it can be played
+again to be looked back on.
 
 ## Trying the numbers
 
@@ -456,8 +470,9 @@ by more than 1.
 ## Where this differs from the brief
 
 - Losing a room moves on to the next one rather than replaying it; only the last room is repeated.
-- Every kin has exactly four members, so a kin's second step needs all four or three and a charm,
-  and Crab's third step at five needs all four and the charm.
+- Every kin has exactly four members, so a kin's second step needs all four, or three and an emblem
+  held by a figure of another kin; and Crab's third step at five needs all four crabs and a Crab
+  emblem on another figure.
   Bulwark and Fang have six members and a third step at six; the other callings stop at four.
 - Burrow's dig is on the way down, not at the start: a Burrow figure digs in the first time it
   drops under half health. It stays where it is and keeps fighting: it used to go to ground, which
