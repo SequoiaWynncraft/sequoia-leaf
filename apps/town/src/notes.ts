@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "works-gate",
+    at: "2026-11-23T17:31Z",
+    title: "The Works: tier 4",
+    lines: [
+      "After the lanterns comes tier 4, The gate, and Windfall Hollow, the Far Seam and the Millpond go up for sale.",
+      "Its flags let a splitter put one way first, and up to 3 projects can wait in line after the one in hand.",
+    ],
+  },
+  {
     id: "grove-quiet",
     at: "2026-11-23T11:26Z",
     title: "A quieter reveal",

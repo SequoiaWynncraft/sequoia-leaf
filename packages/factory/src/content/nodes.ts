@@ -10,6 +10,8 @@ import type { KindName } from "./machines.ts";
 import type { PlotName } from "./plots.ts";
 
 export const TOOLS = ["paint", "select", "upgrade"] as const;
+/** How many nodes may wait in line after the one in hand. */
+export const QUEUE = 3;
 export type Tool = (typeof TOOLS)[number];
 
 /** What finishing a node or a piece of research unlocks. Where two give a number, the larger holds. */
@@ -41,6 +43,8 @@ export interface Unlocks {
   readonly hooks?: number;
   /** The board of standing orders goes up. */
   readonly board?: true;
+  /** A splitter may put one of its ways first. */
+  readonly first?: true;
 }
 
 /** What a new yard has. */
@@ -273,8 +277,74 @@ export const NODES: readonly NodeInfo[] = [
     say: "A lantern for every raid that came home. The scholars want the first Brass folios, too.",
     want: { lantern: 400, brass: 60 },
     pay: 5000,
-    unlocks: {},
+    unlocks: { plots: ["hollow", "seam", "pond"] },
     needs: ["oilpress", "workshop", "brassfolio"],
     gift: { id: "tree-lanterns", line: "Lanterns from the Works hang in the great tree." },
+  },
+
+  // Tier 4: the gate.
+  {
+    id: "flags",
+    tier: 4,
+    kind: "project",
+    title: "Flags for the splitters",
+    from: "The gnomes",
+    say: "The gnomes want to tell a splitter which way comes first. They made flags. The flags are small.",
+    want: { tool: 200, frame: 200 },
+    unlocks: { first: true },
+  },
+  {
+    id: "longculvert",
+    tier: 4,
+    kind: "project",
+    title: "A longer culvert",
+    from: "Pipwick",
+    say: "The new path crosses the stream twice. I have fallen in both.",
+    want: { brick: 300, gear: 200 },
+    unlocks: { span: 5 },
+  },
+  {
+    id: "secondcart",
+    tier: 4,
+    kind: "project",
+    title: "A second cart",
+    from: "The market stalls",
+    say: "One cart cannot keep up with market day.",
+    want: { engine: 120, frame: 200 },
+    unlocks: { stops: 2 },
+    needs: ["carttrack"],
+  },
+  {
+    id: "brassfittings",
+    tier: 4,
+    kind: "project",
+    title: "Brass fittings for the belts",
+    from: "The gnomes",
+    say: "Grade III belts. The gnomes have polished the brass already.",
+    want: { lantern: 150, gear: 300 },
+    unlocks: { grades: { belt: 3, tunnel: 3, gatherer: 3 } },
+  },
+  {
+    id: "shelves",
+    tier: 4,
+    kind: "project",
+    title: "Shelves for the plan chest",
+    from: "Tindra",
+    say: "The plans are on the floor again. Four shelves, please.",
+    want: { frame: 300, glass: 200 },
+    unlocks: { blueprints: { count: 4, pieces: 1000 } },
+    needs: ["planchest"],
+  },
+  {
+    id: "kits",
+    tier: 4,
+    kind: "commission",
+    title: "Raid kits for the gate",
+    from: "The raid parties",
+    say: "Every party that goes out takes a kit. Every party that comes back has lost it.",
+    want: { kit: 300, engine: 150 },
+    pay: 8000,
+    unlocks: {},
+    gift: { id: "gate-kits", line: "Raid kits from the Works are stacked by the gate." },
   },
 ];

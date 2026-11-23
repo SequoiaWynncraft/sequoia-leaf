@@ -1,7 +1,7 @@
 # The Works, second design
 
 The rules of the second Works, on flat data: numbers in typed arrays and a few small records,
-nothing for each piece and no string for each thing. Tiers 0 to 3 are whole: nodes (lessons,
+nothing for each piece and no string for each thing. Tiers 0 to 4 are whole: nodes (lessons,
 projects and commissions), research and the Study, counted recipes, grades, the sorter and the cart
 stop. Leaf's play service plays it as the Works (`FACTORY`, under the id `works`), and the Works'
 page (`apps/works`) holds a copy and draws it; the town reads its standing's words (`src/stats.ts`).
@@ -51,6 +51,7 @@ nothing:
 | `tint`  | Uint8 | a line's colour, 0 to 6                                                         |
 | `turn`  | Uint8 | a splitter's next way out, a joiner's next way in                               |
 | `shut`  | Uint8 | a splitter's shut ways, a bit each                                              |
+| `first` | Uint8 | the way a splitter puts first, 1 + the way, or 0 for none                       |
 | `set`   | Uint8 | the one thing a machine is told to make, or a sorter sends to its left          |
 | `free`  | Uint8 | 1 for one of the pieces a new yard has to hand                                  |
 | `span`  | Int8  | a tunnel's tiles under: positive at the way-in mouth, negative at the other     |
@@ -153,9 +154,12 @@ nothing unlocks is known from the start; a new yard has `START`.
 - **The node in hand** takes what reaches the depot first; the board's orders take the rest. A
   goal is `ready` when it is not done, its tier is open, what it needs is done, and for a lesson,
   every lesson before it is done. `take` puts any ready node in hand; what each node has been given
-  stays given. When the node in hand is finished, or a goal is finished while nothing is in hand,
-  the next lesson comes into hand, else the commission of the highest tier open if it is ready, else
-  nothing. Tier 3's commission needs the oil press and the workshop known.
+  stays given. Up to 3 more may wait in a line after it, in the player's order (`queue`, `unqueue`):
+  a node goes in only as it could be taken in hand, once, and with nothing in hand it is taken at
+  once; taken in hand, it leaves the line. When the node in hand is finished, or a goal is finished
+  while nothing is in hand, the first in the line that may be taken comes into hand; with none, the
+  next lesson, else the commission of the highest tier open if it is ready, else nothing. Tier 3's
+  commission needs the oil press, the workshop and the Brass folio known.
 - **Research** is studied in a line of up to 4 (`study`, `unstudy`); the first is being studied. A
   Study holding a folio the research still wants works on it as a machine works (100 half-ticks at
   its grade's pace, so one every 50 ticks at grade 1), and then puts it toward the research. One the
@@ -219,6 +223,11 @@ a yard back.
   A yard may stand as many as it has unlocked.
 - **The sorter** (`sorter`): takes things in from behind; the one thing it is set to (`sort`) goes out
   to its left, everything else ahead. With nothing set it is a belt.
+- **A way put first** (`first`, once the yard has unlocked it): a splitter may put one of its open
+  ways out first. What it carries goes that way whenever the tile there takes it, and only otherwise
+  to its other open ways, in the turn it keeps. Shutting that way puts none first. Who hands to whom
+  is the same, so the plumbing stands; the planner and `flow`, which read no splitter, are as they
+  were.
 
 ## Standing orders
 
@@ -365,6 +374,8 @@ bytes (`cells`, in base64) and each blueprint the same. The pieces' bytes begin 
 are; a piece is a few bytes: the gap since the last piece, its kind and way and whether it carries
 something, the thing and its progress, then only the parts that are not as new (its grade among
 them, when above 1). A blueprint's piece is its kind, x, y and way, then only the parts it keeps.
+A splitter's ways are one byte wherever they are kept (`packWays`): its shut ways a bit each, and 8
+times 1 + the way it puts first, so a yard kept before there was a way first reads back with none.
 
 `decode` refuses whole a record of the wrong shape or version, and pieces' bytes cut short, left
 over, with a part it does not know or with a count past what the tables allow. A record kept while
@@ -373,17 +384,18 @@ yard, with the same check, and is kept again without it. Inside a good one it
 gives back a yard play could have made (`vouch`), doing again through the rules what play does, and
 leaves out what it could not:
 
-- the goals done, in their order, only where each could have been done then; the node in hand and
-  the line of research only where each could be taken up;
+- the goals done, in their order, only where each could have been done then; the node in hand, the
+  nodes in line after it (none in a yard kept before there was a line) and the line of research only
+  where each could be taken up;
 - what each goal that could have been given anything was given, given again through `giveGoal`, so
   that one given all it wants is finished as in play (it pays, and Leaf logs it);
 - each order only with the tick it counts from, no later than one hung now would, and with an id
   past the one before it and below the count of orders ever hung (`serial`); one that does not count
   yet holds nothing;
 - each piece built again through `build`; what it is set to, its colour, what it holds, makes and has
-  made only as `locked` lets the yard, a machine no more than it keeps; work only toward what is being
-  made, below what that takes; a Study's work and folio only while the research they were for is
-  still first in the line;
+  made only as `locked` lets the yard (and a way put first only where it lets one, and only an open
+  way), a machine no more than it keeps; work only toward what is being made, below what that takes;
+  a Study's work and folio only while the research they were for is still first in the line;
 - each blueprint only in a place the yard has, holding pieces, grades and settings it may build.
 
 `check` is one pass over the yard into 32 bits, for Leaf and the page to compare their copies:
@@ -428,11 +440,14 @@ several). `test/goals.ts` reads from the tables the goals a test needs (the rese
 needed first, what a node wants and pays, a commission's needs), so that no test names a count from
 the tables and changing one breaks none. `test/yards.ts` builds the
 yards they share with commands off the wire, and the yards the play server on a developer's machine
-stages for the tours (`staged`: `new`, `small`, `short`, `mid`, `hall`, `study`, `large`), which the package exports as
+stages for the tours (`staged`: `new`, `small`, `short`, `mid`, `hall`, `study`, `gate`, `large`), which the package exports as
 `@sequoia-leaf/factory/test/yards.ts`. A stage is a yard the rules could have made: built by
 commands, every goal finished, paid and logged by the rules, by lines of its own or by what the node
 in hand wants arriving at the depot through `deliver` (`fillHand`). Research is studied in a Study,
 not delivered: `hall` is tier 3 just open, with no Study; `study` adds a line of Timber folios into a
 Study and runs it until the first piece of research is known by the Study's own work, with the line
-of research filled after it. `large` is the generator's pieces on a yard with every node of
-tiers 0 to 2 done, building only what such a yard may, and knows no research.
+of research filled after it. `gate` runs that yard on until its Study has made known what tier 3's
+commission needs, each alone in the line, and the commission is finished: tier 4 has just opened,
+with a splitter on the ingots' line to the tools' bench. `large` is the generator's pieces on a
+yard with every node of tiers 0 to 2 done, building only what such a yard may, and knows no
+research.

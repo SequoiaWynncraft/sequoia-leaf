@@ -280,6 +280,8 @@ export interface Open {
   readonly away: number;
   readonly hooks: number;
   readonly board: boolean;
+  /** Whether a splitter may put one of its ways first. */
+  readonly first: boolean;
 }
 
 /** A tool's bit in `Open.tools`. */
@@ -301,6 +303,7 @@ export function openOf(goals: readonly Goal[]): Open {
   let plots = 0;
   let tools = 0;
   let board = false;
+  let first = false;
   const unlocks = [START, ...goals.flatMap((g) => GOALS[g]?.unlocks ?? [])];
   for (const u of unlocks) {
     for (const k of u.kinds ?? []) kinds[kind(k)] = Math.max(kinds[kind(k)] ?? 0, 1);
@@ -312,6 +315,7 @@ export function openOf(goals: readonly Goal[]): Open {
     for (const p of u.plots ?? []) plots |= 1 << plot(p);
     for (const t of u.tools ?? []) tools |= toolBit(t);
     if (u.board) board = true;
+    if (u.first) first = true;
   }
   const top = (f: (u: Unlocks) => number | undefined): number => Math.max(0, ...unlocks.map((u) => f(u) ?? 0));
   return {
@@ -331,6 +335,7 @@ export function openOf(goals: readonly Goal[]): Open {
     away: top((u) => u.away) * 36_000,
     hooks: top((u) => u.hooks),
     board,
+    first,
   };
 }
 
@@ -343,6 +348,8 @@ export type Lock =
   /** Make a thing by its recipe: be told to make it, start it, take its parts in. */
   | { readonly make: Item }
   | { readonly use: Tool }
+  /** Put one of a splitter's ways first. */
+  | { readonly first: true }
   /** Have this many cart stops standing. */
   | { readonly stops: number }
   /** Keep a blueprint in a place, of so many pieces in a box of so many tiles across and down. */
@@ -355,9 +362,9 @@ const kindWord = (k: Kind): string => (KIND_INFO[k]?.name ?? "").toLowerCase();
 
 /**
  * Why a yard may not do something yet, or nothing if it may: the one place that says which kinds of
- * piece it may build and to what grade, what its machines may make, which tools it may use, and how
- * many cart stops and blueprints it may have. Everything that builds, sets, makes, takes in, keeps or
- * reads a yard back asks it.
+ * piece it may build and to what grade, what its machines may make, which tools it may use, whether
+ * a splitter may put a way first, and how many cart stops and blueprints it may have. Everything
+ * that builds, sets, makes, takes in, keeps or reads a yard back asks it.
  */
 export function locked(open: Open, ask: Lock): string | null {
   if ("build" in ask) {
@@ -378,6 +385,7 @@ export function locked(open: Open, ask: Lock): string | null {
     if (before !== null) return before;
     return (open.tools & toolBit(ask.use)) === 0 ? `${TOOL_NAME[ask.use]} is not unlocked yet` : null;
   }
+  if ("first" in ask) return open.first ? null : "Putting a way first is not unlocked yet";
   if ("stops" in ask)
     return ask.stops > open.stops ? `The yard may have ${open.stops} cart stop${open.stops === 1 ? "" : "s"}` : null;
   const { blueprint: slot, pieces = 0, w = 0, h = 0 } = ask;

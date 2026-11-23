@@ -393,6 +393,7 @@ let own: {
   dir: Uint8Array;
   span: Int8Array;
   shut: Uint8Array;
+  first: Uint8Array;
   tint: Uint8Array;
   grade: Uint8Array;
   set: Uint8Array;
@@ -403,7 +404,7 @@ let own: {
  * The yard as it would be with the pieces in hand set down where they are aimed, and for a move
  * gone from where they stand: for drawing them as they would stand, belts joined to each other and
  * to the lines already there. It shares everything with the real yard but the arrays a drawing
- * changes (what stands where, which way, a tunnel's span, a splitter's shut ways, a colour, a grade,
+ * changes (what stands where, which way, a tunnel's span, a splitter's ways, a colour, a grade,
  * what a sorter is set to, and the rows, none for a piece in hand), which are its own, kept and
  * reused. Nothing is written to the real yard. It is made once for each place the pieces are aimed,
  * not each frame.
@@ -416,6 +417,7 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
       dir: new Uint8Array(n),
       span: new Int8Array(n),
       shut: new Uint8Array(n),
+      first: new Uint8Array(n),
       tint: new Uint8Array(n),
       grade: new Uint8Array(n),
       set: new Uint8Array(n),
@@ -426,6 +428,7 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
   o.dir.set(y.dir);
   o.span.set(y.span);
   o.shut.set(y.shut);
+  o.first.set(y.first);
   o.tint.set(y.tint);
   o.grade.set(y.grade);
   o.set.set(y.set);
@@ -435,6 +438,7 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
     o.dir[i] = 0;
     o.span[i] = 0;
     o.shut[i] = 0;
+    o.first[i] = 0;
     o.tint[i] = 0;
     o.grade[i] = 0;
     o.set[i] = NONE;
@@ -453,6 +457,7 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
       o.dir[i] = p.dir;
       o.span[i] = span;
       o.shut[i] = i === near ? (p.shut ?? 0) : 0;
+      o.first[i] = i === near ? (p.first ?? -1) + 1 : 0;
       o.tint[i] = p.tint ?? 0;
       o.grade[i] = gradeOf(p.kind, p.grade);
       o.set[i] = p.recipe ?? NONE;

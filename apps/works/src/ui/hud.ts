@@ -88,6 +88,7 @@ function tracker(): () => void {
         title: o?.title ?? null,
         ready: w.board.filter((s) => isFilled(s.want, s.filled)).length,
         wants: w.hand === -1 ? [] : givenTo(w.hand),
+        after: GOALS[w.queue[0] ?? -1]?.title ?? null,
       };
     },
     (p) => {
@@ -103,6 +104,7 @@ function tracker(): () => void {
         ),
         el("div", "", { text: p.title ?? "No project in hand" }),
         ...(wanted ? [wanted.node] : []),
+        ...(p.after === null ? [] : [el("span", "k-label then", { text: `Then: ${p.after}` })]),
       );
     },
   );
