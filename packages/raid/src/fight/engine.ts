@@ -197,7 +197,8 @@ function switchOn(f: Fight, side: Side, party: Party): void {
           u.armour += v("armour");
           u.digs = true;
           u.digHeal = v("heal");
-          u.digFor = secs(v("under"));
+          u.digLess = v("less");
+          u.digFor = v("lasts");
         }
         break;
       case "feather":
@@ -238,10 +239,15 @@ function switchOn(f: Fight, side: Side, party: Party): void {
           u.sneakBy = v("extra");
         }
         break;
-      case "crab":
       case "gnome":
+        for (const u of members) {
+          u.maxHp = Math.round(u.maxHp * (1 + v("health") / 100));
+          u.hp = u.maxHp;
+        }
+        break;
+      case "crab":
       case "greg":
-        // Roll call happens once everyone is seated; gnomes and Greg do their part after the fight.
+        // Roll call happens once everyone is seated; Greg does his part after the fight.
         break;
     }
     emit(f, { t: "trait", side, trait, step, ids: touched.map((u) => u.id) });
@@ -257,8 +263,8 @@ function rollCall(f: Fight, side: Side): void {
   if (!anchor) return;
   let stars: Stars = 1;
   for (const u of crabs) if (u.stars > stars) stars = u.stars;
-  const kind = traitNumber("crab", "big", step) > 0 ? "biguncounted" : "uncounted";
-  summon(f, kind, stars, side, freeNear(f, anchor.cell, 4), null);
+  if (traitNumber("crab", "big", step) > 0) summon(f, "biguncounted", stars, side, freeNear(f, anchor.cell, 4), null);
+  if (traitNumber("crab", "small", step) > 0) summon(f, "uncounted", stars, side, freeNear(f, anchor.cell, 4), null);
 }
 
 /** Sneaks with their trait on, and magpies always, start by getting round the back. */
@@ -477,10 +483,7 @@ function expire(f: Fight, u: Unit): void {
     u.shield = 0;
     off(f, u, "shield");
   }
-  if (u.hiddenUntil === now) {
-    off(f, u, "hidden");
-    if (u.digHeal > 0) heal(f, u, (u.maxHp * u.digHeal) / 100, "burrow", null);
-  }
+  if (u.hiddenUntil === now) off(f, u, "hidden");
 }
 
 function act(f: Fight, u: Unit): void {

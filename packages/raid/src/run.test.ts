@@ -582,7 +582,7 @@ describe("the takings", () => {
     expect(taken.fight.result).toBe("loss");
     expect(run.acorns).toBe(20 + 4 + 2);
   });
-  test("gnomes find acorns: more after a win, and at the second step even after a loss", () => {
+  test("gnomes find acorns after every room, won or lost, and more after a win at the second step", () => {
     const two = winning();
     put(two, "barrowgnome", 10);
     put(two, "lanterngnome", 11);
@@ -591,6 +591,14 @@ describe("the takings", () => {
     const taken = fight(two);
     expect(two.acorns).toBe(4 + 1 + traitNumber("gnome", "win", 1));
     expect(taken.notes.some((n) => n.t === "acorns" && n.why === "gnomes")).toBe(true);
+
+    const lost = losing();
+    put(lost, "barrowgnome", 10);
+    put(lost, "lanterngnome", 11);
+    lost.level = 8;
+    lost.acorns = 0;
+    fight(lost);
+    expect(lost.acorns).toBe(4 + traitNumber("gnome", "loss", 1));
 
     const four = losing();
     four.level = 8;
@@ -605,8 +613,7 @@ describe("the takings", () => {
     four.acorns = 0;
     fight(four);
     expect(four.acorns).toBe(4 + traitNumber("gnome", "loss", 2));
-    expect(traitNumber("gnome", "loss", 1)).toBe(0);
-    expect(traitNumber("gnome", "loss", 2)).toBeGreaterThan(0);
+    expect(traitNumber("gnome", "loss", 2)).toBeGreaterThan(traitNumber("gnome", "loss", 1));
   });
   test("two copies of one gnome are one gnome", () => {
     const run = winning();

@@ -97,26 +97,27 @@ the three dearest carry a third trait.
 copies of one figure count once. Every kin has four members, one of them at one acorn and one at
 two, so any kin can be started in the first rooms.
 
-| Trait   | Steps   | What it does at its first step                                                                                                                                                       |
-| ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Ember   | 2, 4    | Ember figures' attacks and abilities leave a burn: 2% of health a second for 4 seconds. Healing on the burning is 40% weaker.                                                        |
-| Moss    | 2, 4    | The whole party regrows 1.2% of its health every second.                                                                                                                             |
-| Mist    | 2, 4    | The whole party gains 20 ward, and 12 attacks in every hundred slip past it.                                                                                                         |
-| Burrow  | 2, 4    | Burrow figures dig in: +15 armour. The first time one drops under half health it goes to ground for 2 seconds, where nothing can reach it, and comes up with 15% of its health back. |
-| Feather | 2, 4    | Feather figures attack 5% faster after every attack, up to 10 times over.                                                                                                            |
-| Crab    | 2, 4    | Roll call: when the fight starts, an Uncounted Crab turns up beside your crabs, as starry as the best of them.                                                                       |
-| Gnome   | 2, 4    | After a room you win, the gnomes find 1 more acorn.                                                                                                                                  |
-| Bulwark | 2, 4, 6 | Bulwarks gain 10 armour.                                                                                                                                                             |
-| Fang    | 2, 4, 6 | Fangs gain 12% attack, and 10 more of their attacks in a hundred land hard, for half as much again.                                                                                  |
-| Slinger | 2, 4    | Slingers reach 1 hex further, and each attack on the same target does 7% more than the last, up to 6 times over.                                                                     |
-| Sage    | 2, 4    | Sages' abilities are 25% stronger, and each of their attacks gives 3 more mana.                                                                                                      |
-| Mender  | 2, 4    | Menders' healing and shields count for 20% more.                                                                                                                                     |
-| Sneak   | 2, 4    | When the fight starts, Sneaks leap to the enemy's back row, and their first 2 attacks do 40% more.                                                                                   |
-| Greg    | 1       | After every fight Greg is in, he has eaten something: +3% health for good, up to 10 times.                                                                                           |
+| Trait   | Steps   | What it does at its first step                                                                                                                                                            |
+| ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ember   | 2, 4    | Ember figures' attacks and abilities leave a burn: 2% of health a second for 4 seconds. Healing on the burning is 40% weaker.                                                             |
+| Moss    | 2, 4    | The whole party regrows 1.2% of its health every second.                                                                                                                                  |
+| Mist    | 2, 4    | The whole party gains 20 ward, and 12 attacks in every hundred slip past it.                                                                                                              |
+| Burrow  | 2, 4    | Burrow figures dig in: +15 armour. The first time one drops under half health it gets 10% of its health back and takes 25% less from attacks and abilities for 2 seconds, still fighting. |
+| Feather | 2, 4    | Feather figures attack 5% faster after every attack, up to 10 times over.                                                                                                                 |
+| Crab    | 2, 4, 5 | Roll call: when the fight starts, an Uncounted Crab turns up beside your crabs, as starry as the best of them.                                                                            |
+| Gnome   | 2, 4    | Gnome figures have 10% more health. After every room, won or lost, the gnomes find 1 more acorn.                                                                                          |
+| Bulwark | 2, 4, 6 | Bulwarks gain 10 armour.                                                                                                                                                                  |
+| Fang    | 2, 4, 6 | Fangs gain 12% attack, and 10 more of their attacks in a hundred land hard, for half as much again.                                                                                       |
+| Slinger | 2, 4    | Slingers reach 1 hex further, and each attack on the same target does 7% more than the last, up to 6 times over.                                                                          |
+| Sage    | 2, 4    | Sages' abilities are 25% stronger, and each of their attacks gives 3 more mana.                                                                                                           |
+| Mender  | 2, 4    | Menders' healing and shields count for 20% more.                                                                                                                                          |
+| Sneak   | 2, 4    | When the fight starts, Sneaks leap to the enemy's back row, and their first 2 attacks do 40% more.                                                                                        |
+| Greg    | 1       | After every fight Greg is in, he has eaten something: +3% health for good, up to 10 times.                                                                                                |
 
 The second steps: Ember burns from the whole party's hits and hotter; Moss regrows more; Mist gives
 more ward and more slips; Burrow digs deeper; Feather quickens more; Crab's uncounted crab is a big
-one; Gnomes find 3 after a win and 1 after a loss; Bulwark gives the rest of the party armour too;
+one, and at five crabs (which takes the charm) a big one and a small one come; Gnomes have 20% more
+health and find 3 after a win and 2 after a loss; Bulwark gives the rest of the party armour too;
 and so on. `traitText(id, step)` gives the sentence for any step.
 
 **The fight.** A clock of 20 steps a second, decided entirely by the two parties and a seed: the
@@ -455,10 +456,12 @@ by more than 1.
 ## Where this differs from the brief
 
 - Losing a room moves on to the next one rather than replaying it; only the last room is repeated.
-- Every kin has exactly four members, so a kin's second step needs all four or three and a charm.
+- Every kin has exactly four members, so a kin's second step needs all four or three and a charm,
+  and Crab's third step at five needs all four and the charm.
   Bulwark and Fang have six members and a third step at six; the other callings stop at four.
-- Burrow's dig is on the way down, not at the start: a Burrow figure goes to ground the first time
-  it drops under half health.
+- Burrow's dig is on the way down, not at the start: a Burrow figure digs in the first time it
+  drops under half health. It stays where it is and keeps fighting: it used to go to ground, which
+  took the party's front line away just when it was needed.
 - A beaten boss gives two component picks, since otherwise a run forges three items at most.
 - Two loose components that meet on one figure in a merge forge without being asked.
 - Deep Pockets pays interest on every 5 acorns and raises the cap to 6, rather than only raising
