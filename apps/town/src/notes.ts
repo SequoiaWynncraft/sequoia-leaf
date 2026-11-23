@@ -2,6 +2,9 @@
  * What has changed in the game, for the "News" tab on the quest board, newest first. A change a
  * player can see adds a note at the top, in the words of someone telling a friend, and nothing is
  * ever taken out of the middle.
+ *
+ * A note's one or two lines are what everyone reads on the board. A bigger change also has its full
+ * notes (`more`), which open under the lines: a few parts, each a heading and what changed under it.
  */
 
 export interface Note {
@@ -10,16 +13,145 @@ export interface Note {
   at: string;
   title: string;
   lines: readonly string[];
+  more?: readonly Part[];
+}
+
+/** A part of a note's full notes: its heading, and each thing that changed, one sentence or two. */
+export interface Part {
+  head: string;
+  points: readonly string[];
 }
 
 export const NOTES: readonly Note[] = [
   {
+    id: "works-tier-3",
+    at: "2026-11-23T18:45Z",
+    title: "The Works: tier 3 takes longer",
+    lines: [
+      "Lanterns for the great tree needs all 10 pieces of tier 3 research, not 3, and tier 3 research costs 1.5 times as many Timber folios.",
+      "Research you have finished stays finished. Research you are studying keeps the folios it has had.",
+    ],
+    more: [
+      {
+        head: "Why",
+        points: [
+          "Played through by the rules, tier 3 took about 1 hour 45 minutes. It is meant to take 4 to 5 hours. It now takes about 4 hours 15 minutes.",
+        ],
+      },
+      {
+        head: "Tier 3 research, in Timber folios",
+        points: [
+          "The oil press: 90, was 60.",
+          "The workshop: 225, was 150.",
+          "A bigger flywheel: 300, was 200.",
+          "Second-tier machines: 600, was 400.",
+          "The sorter: 450, was 300.",
+          "A plan chest: 450, was 300.",
+          "The cart track: 600, was 400.",
+          "A night shift: 600, was 400.",
+          "Upgrading an area: 375, was 250.",
+          "The Brass folio: 1,350, was 900.",
+        ],
+      },
+    ],
+  },
+  {
     id: "works-gate",
-    at: "2026-11-23T17:31Z",
+    at: "2026-11-23T17:52Z",
     title: "The Works: tier 4",
     lines: [
       "After the lanterns comes tier 4, The gate, and Windfall Hollow, the Far Seam and the Millpond go up for sale.",
       "Its flags let a splitter put one way first, and up to 3 projects can wait in line after the one in hand.",
+    ],
+    more: [
+      {
+        head: "Tier 4 projects, in any order",
+        points: [
+          "Flags for the splitters: 200 tools and 200 frames. A splitter can put one of its ways first.",
+          "A longer culvert: 300 bricks and 200 gears. A tunnel runs under up to 5 tiles.",
+          "A second cart: 120 engines and 200 frames, after the cart track. 2 cart stops.",
+          "Brass fittings for the belts: 150 lanterns and 300 gears. Grade III belts, tunnels and gatherers.",
+          "Shelves for the plan chest: 300 frames and 200 glass, after the plan chest. 4 blueprints of up to 1,000 pieces.",
+        ],
+      },
+      {
+        head: "The commission",
+        points: [
+          "Raid kits for the gate: 300 raid kits and 150 engines. It pays 8,000 Coins, stacks raid kits by the town's gate and opens tier 5, where more is being built.",
+        ],
+      },
+      {
+        head: "Tier 4 research, in Brass folios",
+        points: [
+          "Third-tier machines: 300. Grade III mills, benches and workshops.",
+          "A heavier flywheel: 200. The depot makes 60 power, up from 40.",
+          "A second night shift: 250. Your yard runs for 16 hours after you leave, up from 12.",
+          "A second desk: 200. Grade II Studies.",
+        ],
+      },
+      {
+        head: "A way put first",
+        points: [
+          "With the flags, pressing a way on a splitter's card goes Open, First, Shut. Only one way is first.",
+          "Things go the first way while it can take them. Only what it cannot take is shared among the other open ways.",
+          "In the yard, a small flag marks the way that is first.",
+        ],
+      },
+      {
+        head: "Projects in a line",
+        points: [
+          "On the tier's screen, Next puts a project in the line, up to 3, and Take out takes it out again.",
+          "When the project in hand is finished, the first in the line that can be taken goes into hand. Under the project in hand, Then says which comes next.",
+        ],
+      },
+      {
+        head: "Also",
+        points: [
+          "Back after time away, the letter names the projects, commissions and research finished while you were gone.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "works-tiers",
+    at: "2026-11-23T16:05Z",
+    title: "The Works, in tiers",
+    lines: [
+      "The Works is played in tiers now. Each has projects, done in any order, and a commission that opens the next; from tier 3, a Study turns folios into research.",
+      "Your yard from before is at tier 0, 1 or 2, with its pieces where they stood. What its tier cannot have yet was paid back in Coins.",
+    ],
+    more: [
+      {
+        head: "Tiers",
+        points: [
+          "Tier 0, The lesson, is 4 short goals. Then come The home yard, The stream and The Study.",
+          "A project or a commission is paid in goods from the depot. Each unlocks something, and its card says what.",
+          "A commission opens the next tier and leaves something in town.",
+        ],
+      },
+      {
+        head: "Grades",
+        points: [
+          "Belts, tunnels, gatherers and machines can be built at grade II and III, which work faster. A piece is upgraded where it stands.",
+        ],
+      },
+      {
+        head: "Research",
+        points: [
+          "Tier 2's commission builds the scholars' hall. After it, your yard can make Timber folios and build Studies.",
+          "A Study takes in folios and studies one piece of research at a time. Up to 3 more wait in line.",
+          "Studies keep studying while you are away, as long as your yard runs.",
+        ],
+      },
+      {
+        head: "Your yard from before",
+        points: [
+          "It is at tier 2 if it had filled 10 or more of the 20 story orders, tier 1 from 4, and tier 0 below that.",
+          "Pieces stand where they stood if your tier has them. A project of your tier is done if it unlocks a piece you already had.",
+          "Pieces your tier does not have yet, and land it does not sell yet, were paid back in Coins. Your Coins and your place on Top yards are kept.",
+          "Windfall Hollow, the Far Seam and the Millpond are sold again from tier 4.",
+        ],
+      },
     ],
   },
   {

@@ -100,7 +100,7 @@ describe("the board's news", () => {
     world = null;
   });
 
-  test("every note has an id of its own, a real moment or day, newest first, and one or two lines", () => {
+  test("every note has an id of its own, a real moment or day, newest first, one or two lines, and full notes that say something", () => {
     const ids = NOTES.map((n) => n.id);
     expect(new Set(ids).size).toBe(ids.length);
     const ats = NOTES.map((n) => n.at);
@@ -111,6 +111,14 @@ describe("the board's news", () => {
     // A note with only its day is older than every note of that day with a time, and sorts so.
     expect(ats).toEqual(ats.toSorted().toReversed());
     for (const n of NOTES) expect([1, 2]).toContain(n.lines.length);
+    // Full notes, where a note has them: each part a heading and something under it, and no empty words.
+    for (const n of NOTES)
+      for (const p of n.more ?? []) {
+        expect(p.head.trim()).not.toBe("");
+        expect(p.points.length).toBeGreaterThan(0);
+        for (const point of p.points) expect(point.trim()).not.toBe("");
+      }
+    expect(NOTES.some((n) => n.more !== undefined)).toBe(true);
     expect(noteWhen("2026-11-22T19:09Z", "Europe/Stockholm")).toBe("22 Nov, 20:09");
     expect(noteWhen("2026-11-22T23:30Z", "Europe/Stockholm")).toBe("23 Nov, 00:30");
     expect(noteWhen("2026-11-22T05:05Z", "UTC")).toBe("22 Nov, 05:05");
