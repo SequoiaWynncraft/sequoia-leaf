@@ -26,6 +26,8 @@ export type Attempt =
       readonly pieces: readonly Kept[];
       /** Makes the state the command left the open state. Until then, nothing has changed. */
       readonly keep: () => void;
+      /** What a visitor's page is told of it (`Game.echo`): asked once it is kept, before the next command. */
+      readonly echo: () => unknown;
     };
 
 /** A state brought to Leaf's clock, that commands are done to one at a time. */
@@ -70,6 +72,8 @@ export interface Played {
   readonly read: (text: string) => Held | null;
   /** Whether its states go on by themselves (`Game.tend`), for Leaf to tend. */
   readonly tends: boolean;
+  /** Whether a visitor's page is told each command done (`Game.echo`). */
+  readonly echoes: boolean;
 }
 
 /**
@@ -113,6 +117,7 @@ export function played<State, Command, View, Note, Short>(game: Game<State, Comm
             state = answer.state;
             undo = null;
           },
+          echo: () => game.echo?.(answer.state, command),
         };
       },
       text: () => game.encode(current()),
@@ -143,6 +148,7 @@ export function played<State, Command, View, Note, Short>(game: Game<State, Comm
       return decoded === null ? null : held(decoded);
     },
     tends: game.tend !== undefined,
+    echoes: game.echo !== undefined,
   };
 }
 

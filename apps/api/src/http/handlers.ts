@@ -831,7 +831,8 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             } satisfies typeof Body.Played.Type);
           }),
         )
-        // Somebody's state as a visitor is given it: brought to now in memory, and nothing written.
+        // Somebody's state as a visitor is given it: brought to now, and kept so as any job keeps a
+        // state it ran on; nothing of the visitor's is written.
         .handle("visit", ({ params }) =>
           Effect.gen(function* () {
             const played = yield* playedGame(params.game);

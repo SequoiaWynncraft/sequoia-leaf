@@ -17,7 +17,9 @@ import {
   roomKind,
   SNAPSHOT_HEAD_BYTES,
   type ToClient,
+  visitRoom,
 } from "./live.ts";
+import { playerId } from "./player.ts";
 
 const walking: Motion = { x: 120.5, y: 88.25, vx: 64, vy: -12.5, facing: 2, pose: 7, flags: Flag.Moving, jump: 3 };
 
@@ -82,6 +84,21 @@ describe("rooms", () => {
     expect(roomKind("town")).toEqual({ width: 512, height: 352, capacity: 32, speed: 160 });
     expect([roomKind("hall"), roomKind("toString"), roomKind("__proto__")]).toEqual([undefined, undefined, undefined]);
   });
+
+  test("a visit's room is one for each state visited, still, and only of a game and a player there are", () => {
+    const owner = playerId("a0000000-0000-0000-0000-00000000000b");
+    expect(visitRoom("works", owner)).toBe(`visit:works:${owner}`);
+    expect(roomKind(visitRoom("works", owner))).toEqual({ width: 0, height: 0, capacity: 1000, speed: 0, still: true });
+    for (const name of [
+      `visit:hall:${owner}`,
+      "visit:works:a000000000000000000000000000000b",
+      `visit:works:${owner.toUpperCase()}`,
+      `visit:works:${owner}x`,
+      "visit:works:",
+      "visit",
+    ])
+      expect(roomKind(name)).toBeUndefined();
+  });
 });
 
 describe("reading what Leaf says", () => {
@@ -103,6 +120,7 @@ describe("reading what Leaf says", () => {
       { t: "act", id: 1, kind: "emote", arg: "wave" },
       { t: "pong", c: 1.5, s: 2 },
       { t: "error", code: "not_in_room" },
+      { t: "did", rev: 4, did: [{ do: "collect", tick: 9 }], after: { tick: 9, check: 1 } },
     ];
     for (const m of all) expect(readToClient(JSON.stringify(m))).toEqual(m);
   });
@@ -116,6 +134,9 @@ describe("reading what Leaf says", () => {
       JSON.stringify({ t: "bye", code: "restart" }),
       JSON.stringify({ t: "joined", member: { ...alice, guest: "no" } }),
       JSON.stringify({ t: "welcome", v: 1, you: 1, room: "town/1", hz: 30, time: 5, roster: [alice, null] }),
+      JSON.stringify({ t: "did", rev: "4", did: [], after: null }),
+      JSON.stringify({ t: "did", rev: 4, did: {}, after: null }),
+      JSON.stringify({ t: "did", rev: 4, did: [] }),
     ])
       expect(readToClient(text)).toBeNull();
   });

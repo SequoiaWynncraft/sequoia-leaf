@@ -54,15 +54,15 @@ describe("decode(encode(yard))", () => {
     roundTrip(delivering());
   }, 30_000);
 
-  test("the page's view leaves the seed out and keeps the letter; a visitor's leaves the blueprints out", () => {
+  test("the page's view leaves the seed out and keeps the letter and the blueprints; a visitor is given the same", () => {
     const y = running(100);
     expect(F.saveBlueprint(y, 0, F.within(y, 0, 0, 20, 20))).toBeNull();
     const ctx = { now: y.at + 9e6, player: { id: "p", guest: false }, seed: 1, room: 0, awards: [] };
     const page = F.decode(F.FACTORY.view(y, ctx).yard, y.land);
     expect(page?.seed).toBeNull();
     expect(page?.blueprints[0]).not.toBeNull();
-    const visit = F.decode(F.FACTORY.visit?.(y, ctx).yard, y.land);
-    expect(visit?.blueprints.every((b) => b === null)).toBe(true);
+    // A visitor's copy does the owner's commands as Leaf tells it them, a blueprint set down among them.
+    expect(F.FACTORY.visit?.(y, ctx)).toEqual(F.FACTORY.view(y, ctx));
   });
 });
 

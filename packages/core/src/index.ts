@@ -138,6 +138,7 @@ export {
   THINGS,
   type ToClient,
   type ToServer,
+  visitRoom,
 } from "./live.ts";
 export {
   type CoinChange,

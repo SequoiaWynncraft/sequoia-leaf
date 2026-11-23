@@ -341,14 +341,11 @@ export interface Keep {
   readonly seed?: boolean;
   /** What the yard did while its owner was away, for the page's letter. */
   readonly away?: Away | null;
-  /** Whether to keep the blueprints: not in what a visitor is shown. */
-  readonly blueprints?: boolean;
 }
 
 /** A yard as text: its numbers and orders as JSON, its pieces and blueprints packed. */
 export function encode(y: Yard, keep: Keep = {}): string {
   const away = keep.away === undefined ? y.away : keep.away;
-  const prints = keep.blueprints === false ? [] : y.blueprints;
   return JSON.stringify({
     v: VERSION,
     ...(y.seed === null || keep.seed === false ? {} : { seed: y.seed }),
@@ -374,7 +371,9 @@ export function encode(y: Yard, keep: Keep = {}): string {
     sold: y.sold,
     paid: y.paid,
     cells: toBase64(packCells(y)),
-    ...(prints.some((b) => b !== null) ? { blueprints: prints.map((b) => b && toBase64(packPrint(b))) } : {}),
+    ...(y.blueprints.some((b) => b !== null)
+      ? { blueprints: y.blueprints.map((b) => b && toBase64(packPrint(b))) }
+      : {}),
   });
 }
 

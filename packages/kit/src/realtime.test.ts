@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, jest, test } from "bun:test";
 
-import { CLOSE, encodeSnapshot, Flag, livePath, type Motion, type ToClient } from "@sequoia-leaf/core";
+import {
+  CLOSE,
+  encodeSnapshot,
+  Flag,
+  livePath,
+  type Motion,
+  playerId,
+  type ToClient,
+  visitRoom,
+} from "@sequoia-leaf/core";
 
 import { restart, start } from "./live.ts";
 import { onWake, pretend } from "./net.ts";
@@ -241,6 +250,21 @@ describe("a live room", () => {
     s.says({ t: "left", id: 2 });
     expect(room.sample(2)).toBeNull();
     expect(heard).toEqual(["welcome 1 town/1 1", "joined Alice", "act 2 emote wave", "left 2"]);
+  });
+
+  test("in a visit's room, hears each batch Leaf did to the state visited, from its welcome on", async () => {
+    const w = await live();
+    const heard: unknown[] = [];
+    const visited = visitRoom("works", playerId("10000000-0000-0000-0000-000000000001"));
+    room = joinLive(visited, { did: (rev, did, after) => heard.push({ rev, did, after }) });
+    const s = socket(0);
+    expect(s.url).toBe(`wss://leaf.example${livePath(visited)}&device=desktop`);
+    s.open();
+    // Nothing heard before the welcome counts.
+    s.says({ t: "did", rev: 3, did: [{ do: "collect", tick: 9 }], after: { tick: 9 } });
+    s.says(welcome(1, w.clock.now));
+    s.says({ t: "did", rev: 4, did: [{ do: "collect", tick: 10 }], after: { tick: 10 } });
+    expect(heard).toEqual([{ rev: 4, did: [{ do: "collect", tick: 10 }], after: { tick: 10 } }]);
   });
 
   test("while welcomed into the town's room, the page only asks who is about; dropped, it says where the player is", async () => {

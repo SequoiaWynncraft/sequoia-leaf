@@ -10,6 +10,8 @@ import {
   mayBuy,
   MOST_COMMANDS,
   type PlayerId,
+  type ToClient,
+  visitRoom,
 } from "@sequoia-leaf/core";
 import { Clock, Context, Data, Deferred, Effect, Exit, Fiber, Latch, Layer, Option, Schema } from "effect";
 import { SecureRandom } from "effect/crypto";
@@ -18,6 +20,7 @@ import { SqlClient } from "effect/sql";
 import { Allowances } from "../allowance.ts";
 import { AppConfig } from "../config.ts";
 import { Ledger } from "../ledger/store.ts";
+import { Watchers } from "../live/watchers.ts";
 import { type CoinEntry, Coins } from "./coins.ts";
 import type { Attempt, Held, Played } from "./games.ts";
 import { PlayStore } from "./store.ts";
@@ -264,6 +267,10 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * and their Coins open with the welcome as it is made. A stored state that will not read is left as
  * it is: the player and the game are logged, and nothing is done. Leaf's dice for each call come from
  * `SecureRandom`. A visitor (`visit`) is shown somebody's state, and is given nothing of theirs.
+ * Everybody in the state's visit room (`visitRoom`, `Watchers`) is told each batch once it is kept,
+ * for a game that echoes its commands (`Game.echo`): the live wire's `did`, with each command kept,
+ * in order, as the game echoes it, the stored `rev` after the batch, and the batch's answer. With
+ * nobody there, nothing is made for them.
  *
  * Everything asked of one player's state in one game (an open, a visit, a batch, Leaf's own tend)
  * is a job in that state's lane (`Lane`), which holds at most one copy of it in memory (`Copy`).
@@ -312,6 +319,7 @@ export class Play extends Context.Service<
       const { gameLeafSpending } = yield* AppConfig;
       const random = yield* SecureRandom.SecureRandom;
       const clock = yield* Clock.Clock;
+      const watchers = yield* Watchers;
       const scope = yield* Effect.scope;
       const dice = random.intBetween(0, 0xffffffff);
       // Each player's batches and commands, across all games.
@@ -456,6 +464,9 @@ export class Play extends Context.Service<
           const taken: Taken[] = [];
           const logs: Logged[] = [];
           const kept: { readonly slot: string; readonly data: string }[] = [];
+          // Everybody visiting the state hears what the batch did, if anybody does: each command kept, as the game echoes it.
+          const visitors = played.echoes ? visitRoom(played.id, player) : null;
+          const echoes: unknown[] | null = visitors !== null && watchers.heard(visitors) ? [] : null;
           const dropped = `A ${played.id} command left a piece Leaf does not keep`;
           /**
            * A command the rules did, refused `leaf_closed`, `members_only`, `not_enough_leaf` (its spends whose keys the
@@ -479,6 +490,7 @@ export class Play extends Context.Service<
               const amounts = payable(did.coins, balance, room);
               if (amounts === null) return { id, refused: "not_enough_coins" };
               did.keep();
+              echoes?.push(did.echo());
               taken.push(...spends);
               for (const { amount, reason } of spends)
                 logs.push({ kind: LOGGED.leafSpent, data: { leaf: amount, reason } });
@@ -569,7 +581,13 @@ export class Play extends Context.Service<
             )
             .pipe(Effect.catchTag("SqlError", Effect.die));
           Object.assign(copy, { rev, text, guest: playing.guest, unsaved: false });
-          return { now: at, rev, results, view: () => game.answer(ctx(0, room)) };
+          let answered: unknown;
+          const view = () => (answered ??= game.answer(ctx(0, room)));
+          if (visitors !== null && echoes !== null && echoes.length > 0) {
+            const did = { t: "did", rev, did: echoes, after: view() } satisfies ToClient;
+            watchers.tell(visitors, JSON.stringify(did));
+          }
+          return { now: at, rev, results, view };
         });
 
       /** Writes the job's copy if it leaves its line empty with the copy unsaved, as a batch of no commands from its owner keeps it. */

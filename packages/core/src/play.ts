@@ -149,6 +149,14 @@ export interface Game<State, Command, View, Note, Short = never> {
   answer?(state: State, ctx: Ctx): Short;
   /** What a visitor is given of somebody's state (`ctx.player` is the visitor); a game without it cannot be visited. */
   visit?(state: State, ctx: Ctx): View;
+  /**
+   * For a game whose visitor's page runs the same rules on a copy of the state visited: a command
+   * just done, as the page does it again, from the state it left. Leaf tells everybody visiting
+   * each command of a batch it keeps, in order, with the batch's `answer` (the live wire's `did`),
+   * so that a copy that does them sees what the owner does as they do it. A game without it tells
+   * visitors nothing.
+   */
+  echo?(state: State, command: Command): unknown;
   /** Reads stored text back, of this or an older version, or null for nonsense. */
   decode(text: string): State | null;
   encode(state: State): string;
