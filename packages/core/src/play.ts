@@ -154,6 +154,12 @@ export interface Game<State, Command, View, Note, Short = never> {
   encode(state: State): string;
   /** Reads a command off the wire, or null. */
   command(v: unknown): Command | null;
+  /**
+   * A command the game's page sends by itself, on a timer or as it goes, rather than for something
+   * the player did: it says nothing of whether they are at the keys (time AFK, `visits.ts`). A game
+   * without it has none.
+   */
+  chore?(command: Command): boolean;
   /** Where a state stands among everyone's, for a game with a board (`GET /v1/game/play/{game}/standings`). */
   standing?(state: State): Standing;
   /** What this state shows was won for good (a boss beaten, a capstone built), by names other games know it by. */

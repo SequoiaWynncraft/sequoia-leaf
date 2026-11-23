@@ -74,6 +74,7 @@ const placeOf = (kindName: string): string | null => PLACES.find((p) => p === ki
 type Whereabouts =
   | { readonly kind: "in"; readonly players: readonly Visitor[]; readonly place: string; readonly at: number }
   | { readonly kind: "left"; readonly playerId: PlayerId; readonly place: string; readonly at: number }
+  | { readonly kind: "acted"; readonly playerId: PlayerId; readonly at: number }
   | { readonly kind: "farewell"; readonly at: number; readonly done: Deferred.Deferred<void> };
 
 /** A write of where players are that fails is logged, not tried again: the next one, at most `presenceMs` later, says as much. */
@@ -104,6 +105,9 @@ const TEXTS = { rate: 8, burst: 20 } as const;
 const ACTS = { rate: 3, burst: 6 } as const;
 const OPENS = { rate: 0.1, burst: 10 } as const;
 const STRIKES = { rate: 1, burst: 200 } as const;
+
+/** The most often a player's moves and acts are told to Leaf's count of their time (`Visits.acted`): it counts in half minutes. */
+const ACTED_EVERY = 10_000;
 
 /** What the game may send as text. Anything else is not read. */
 const ToServerJson = Schema.fromJsonString(
@@ -189,6 +193,8 @@ class Player {
   opening = 0;
   /** What their connection's page said it is on, if it did. */
   device: Device | null = null;
+  /** When Leaf was last told they did something here (`Visits.acted`), at most every `ACTED_EVERY`. */
+  actedTold = Number.NEGATIVE_INFINITY;
   readonly moves: Allowance;
   readonly texts: Allowance;
   readonly acts: Allowance;
@@ -335,6 +341,8 @@ export class Live extends Context.Service<
               quietly("live presence", presence.leftRoom(w.playerId, w.place, w.at)),
               ofVisits(visits.leftRoom(w.playerId, w.place, w.at)),
             );
+          case "acted":
+            return ofVisits(visits.acted(w.playerId, w.at));
           case "farewell":
             return ofVisits(visits.closeAll(w.at)).pipe(
               Effect.andThen(
@@ -395,6 +403,13 @@ export class Live extends Context.Service<
 
       // ---- what a player sends ----
 
+      /** The player did something in their room: Leaf's count of their time is told, now and then. */
+      const acted = (p: Player, now: number): void => {
+        if (now - p.actedTold < ACTED_EVERY) return;
+        p.actedTold = now;
+        Queue.offerUnsafe(whereabouts, { kind: "acted", playerId: p.identity.playerId, at: now });
+      };
+
       const strike = (p: Player, now: number): void => {
         counts.dropped++;
         if (!p.strikes.take(now)) p.pipe?.close(CLOSE.policy, "too much that could not be taken");
@@ -405,7 +420,7 @@ export class Live extends Context.Service<
           counts.movesIn++;
           const move = decodeMove(frame);
           if (!move || !p.moves.take(now)) return strike(p, now);
-          if (p.room && p.occupant) p.room.move(p.occupant.member.id, move.seq, move.motion, now);
+          if (p.room && p.occupant && p.room.move(p.occupant.member.id, move.seq, move.motion, now)) acted(p, now);
           return;
         }
         counts.textsIn++;
@@ -426,6 +441,7 @@ export class Live extends Context.Service<
             }
             if (!p.acts.take(now)) return strike(p, now);
             if (!p.room || !p.occupant) return p.send(say({ t: "error", code: "not_in_room" }));
+            acted(p, now);
             return p.room.act(p.occupant.member.id, m.kind, m.arg);
         }
       };

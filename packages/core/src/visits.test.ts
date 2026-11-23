@@ -4,9 +4,11 @@ import { DAY_MS } from "./quests.ts";
 import {
   activityReport,
   deviceForWidth,
+  GAME_AT,
   joinsSession,
   ODD_RULES,
   oddities,
+  playing,
   readDevice,
   silentSince,
   VISIT_RULES,
@@ -51,6 +53,21 @@ describe("visits and sessions", () => {
 
   test("an open visit goes silent 90 seconds after it was last heard of", () => {
     expect([silentSince(0, 89_999), silentSince(0, 90_000)]).toEqual([false, true]);
+  });
+
+  test("time is played from less than five minutes after the player last did something, or after it; AFK from five, or never having", () => {
+    const did = 10 * MINUTE;
+    expect([did - MINUTE, did, did + 5 * MINUTE - 1, did + 5 * MINUTE].map((from) => playing(from, did))).toEqual([
+      true,
+      true,
+      true,
+      false,
+    ]);
+    expect(playing(did, null)).toBe(false);
+  });
+
+  test("the town and the camps are the town's game, the table the raid's", () => {
+    expect(GAME_AT).toEqual({ town: "town", camp: "town", works: "works", table: "raid" });
   });
 });
 

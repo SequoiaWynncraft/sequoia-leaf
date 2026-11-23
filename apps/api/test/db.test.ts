@@ -35,6 +35,24 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
+/** Undoes migration 28 (`time_in`), for a test going back before it: `played` as migrations 23 and 27 left it. */
+const beforeTimeIn = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    yield* sql`DROP TABLE time_in`;
+    yield* sql`ALTER TABLE visits DROP COLUMN acted_at`;
+    yield* sql`
+      CREATE TABLE played (
+        player_id TEXT,
+        game      TEXT,
+        ms        INTEGER NOT NULL,
+        seen_at   INTEGER NOT NULL,
+        afk_ms    INTEGER NOT NULL DEFAULT 0,
+        afk       INTEGER NOT NULL DEFAULT 0 CHECK (afk IN (0, 1)),
+        PRIMARY KEY (player_id, game)
+      ) STRICT, WITHOUT ROWID
+    `;
+  });
+
 function query(path: string, statement: (sql: SqlClient.SqlClient) => Effect.Effect<ReadonlyArray<unknown>, unknown>) {
   return onFile(path, SqlClient.SqlClient.use(statement));
 }
@@ -80,6 +98,7 @@ describe("the database", () => {
       { migration_id: 25, name: "wars_by_time" },
       { migration_id: 26, name: "play_kept" },
       { migration_id: 27, name: "afk" },
+      { migration_id: 28, name: "time_in" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -125,8 +144,8 @@ describe("the database", () => {
           "cancelled_purchases",
           "awards",
           "banner_people",
-          "played",
           "play_kept",
+          "time_in",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
         }
@@ -141,7 +160,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 27 },
+      { latest: 28 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -162,6 +181,7 @@ describe("the database", () => {
         yield* sql`ALTER TABLE play_state DROP COLUMN guest`;
         yield* sql`DROP INDEX activities_wars`;
         yield* sql`DROP TABLE play_kept`;
+        yield* beforeTimeIn(sql);
         yield* sql`ALTER TABLE played DROP COLUMN afk_ms`;
         yield* sql`ALTER TABLE played DROP COLUMN afk`;
         yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 24`;
@@ -212,6 +232,7 @@ describe("the database", () => {
         // Back to before migration 26, with a member who has pulled, one who has only opened the
         // pulls, one who has only played the raid, and a guest.
         yield* sql`DROP TABLE play_kept`;
+        yield* beforeTimeIn(sql);
         yield* sql`ALTER TABLE played DROP COLUMN afk_ms`;
         yield* sql`ALTER TABLE played DROP COLUMN afk`;
         yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 26`;
@@ -231,6 +252,62 @@ describe("the database", () => {
     expect(
       await query(path, (sql) => sql`SELECT player_id AS player, game, slot, data, updated_at AS at FROM play_kept`),
     ).toEqual([{ player: pulled, game: "pulls", slot: "have", data: JSON.stringify(have), at: 5 }]);
+  });
+
+  it("starts each player's time in each game from what Leaf had: their pages' calls as played, the rest of their visits since as AFK", async () => {
+    const path = join(directory, "leaf.db");
+    const member = "00000000-0000-4000-8000-00000000000a";
+    const stayer = "00000000-0000-4000-8000-00000000000b";
+    const MINUTE = 60_000;
+    const began = Date.UTC(2026, 10, 22, 22, 49, 27);
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Back to before migration 28, Leaf having begun counting calls at migration 23.
+        yield* beforeTimeIn(sql);
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 28`;
+        yield* sql`UPDATE effect_sql_migrations SET created_at = '2026-11-22 22:49:27' WHERE migration_id = 23`;
+        // The member's pages called the town ten minutes, the pulls five and the raid two; the stayer's none.
+        for (const [game, ms] of [
+          ["town", 10 * MINUTE],
+          ["pulls", 5 * MINUTE],
+          ["raid", 2 * MINUTE],
+        ] as const) {
+          yield* sql`INSERT INTO played (player_id, game, ms, seen_at) VALUES (${member}, ${game}, ${ms}, ${began})`;
+        }
+        // Since then the member was in town 40 minutes, in a camp 5 and at the table 1 (less than its
+        // calls); and in town before then, which counts for nothing. The stayer came to town half an
+        // hour before then, and is there still, two hours after.
+        const [session] = yield* sql<{ id: number }>`
+          INSERT INTO sessions (player_id, guest, started_at) VALUES (${member}, 0, ${began}) RETURNING id
+        `;
+        for (const [player, place, from, minutes, open] of [
+          [member, "town", began - 60 * MINUTE, 30, false],
+          [member, "town", began + MINUTE, 40, false],
+          [member, "camp", began + 50 * MINUTE, 5, false],
+          [member, "table", began + 60 * MINUTE, 1, false],
+          [stayer, "town", began - 30 * MINUTE, 150, true],
+        ] as const) {
+          const to = from + minutes * MINUTE;
+          yield* sql`
+            INSERT INTO visits (session_id, player_id, guest, place, source, entered_at, heard_at, instance, left_at, seconds)
+            VALUES (${session?.id ?? 0}, ${player}, 0, ${place}, 'call', ${from}, ${to}, 'old', ${open ? null : to}, ${minutes * 60})
+          `;
+        }
+      }),
+    );
+    expect(
+      await query(
+        path,
+        (sql) => sql`SELECT player_id AS player, game, played_ms AS played, afk_ms AS afk FROM time_in ORDER BY 1, 2`,
+      ),
+    ).toEqual([
+      { player: member, game: "raid", played: 2 * MINUTE, afk: 0 },
+      { player: member, game: "town", played: 15 * MINUTE, afk: 30 * MINUTE },
+      { player: stayer, game: "town", played: 0, afk: 120 * MINUTE },
+    ]);
+    expect(await query(path, (sql) => sql`SELECT name FROM sqlite_master WHERE name = 'played'`)).toEqual([]);
   });
 
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {

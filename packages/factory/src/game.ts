@@ -541,6 +541,8 @@ export const FACTORY: Game<Yard, Command, View, News, Short> = {
   decode: (text) => decode(text),
   encode: (y) => encode(y),
   command: readCommand,
+  // The page collects once a minute while the yard is watched, whether or not anybody is.
+  chore: (c) => c.do === "collect",
   standing: (y) => ({ score: Math.floor((y.sold + y.paid) / MILLI), also: { tier: y.open.tier } }),
   // A model of each capstone the depot has taken in, for the member's camp.
   awards: (y) => postcard(y).trophies.map((k) => `model-${k}`),

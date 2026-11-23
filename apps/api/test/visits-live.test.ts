@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { playerId } from "@sequoia-leaf/core";
+import { type Motion, playerId } from "@sequoia-leaf/core";
 import { Schema } from "effect";
 
 import type { LiveTuning } from "../src/live/live.ts";
@@ -184,6 +184,47 @@ describe("visits from the live rooms", () => {
   });
 });
 
+/** Standing at `x`, `y`, facing one way or another. */
+const standing = (x: number, y: number, facing = 2): Motion => ({
+  x,
+  y,
+  vx: 0,
+  vy: 0,
+  facing,
+  pose: 0,
+  flags: 0,
+  jump: 0,
+});
+
+describe("time in the town's room", () => {
+  it("is played after a move that goes somewhere, and AFK after only a first move and a turn on the spot", async () => {
+    await start();
+    const a = await connect({ bearer: "alice-token" });
+    const b = await connect({ bearer: "bob-token" });
+    await a.welcome();
+    await b.welcome();
+    await visitsWhen((r) => r.length === 2);
+    a.move(standing(10, 10));
+    a.move(standing(40, 10));
+    b.move(standing(10, 10));
+    b.move(standing(10, 10, 3));
+    await Bun.sleep(200);
+    ahead = 40_000;
+    a.send({ t: "leave" });
+    b.send({ t: "leave" });
+    await visitsWhen((r) => r.length === 2 && r.every(closed));
+    expect(
+      await services?.query(
+        (sql) =>
+          sql`SELECT player_id, game, played_ms > 0 AS played, afk_ms > 0 AS afk FROM time_in ORDER BY player_id`,
+      ),
+    ).toEqual([
+      { player_id: alice, game: "town", played: 1, afk: 0 },
+      { player_id: bob, game: "town", played: 0, afk: 1 },
+    ]);
+  });
+});
+
 describe("when Leaf stops", () => {
   it("closes every open visit at that moment, the rooms' and the calls', before any connection", async () => {
     await start();
@@ -203,6 +244,30 @@ describe("when Leaf stops", () => {
       ["camp", true],
     ]);
     expect((await a.ended()).code).toBe(1012);
+  });
+
+  it("in a deploy, what a player last did goes with them to another place, though only the Leaf stopping heard it", async () => {
+    const { old, next } = await deploying();
+    const headers = { Authorization: "Bearer alice-token", "Content-Type": "application/json" };
+    expect((await sayHere("alice-token", "table", old)).status).toBe(200);
+    // She starts a run on the old Leaf, which writes it on her visit as it hears of her again.
+    expect((await fetch(`${old.origin}/v1/game/play/raid`, { headers })).status).toBe(200);
+    const started = await fetch(`${old.origin}/v1/game/play/raid`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ player: alice, commands: [{ id: "a-1", do: "start", trail: 0 }] }),
+    });
+    expect(started.status).toBe(200);
+    expect((await sayHere("alice-token", "table", old)).status).toBe(200);
+    // Then her page talks to the new Leaf, from the Works, for a minute.
+    expect((await sayHere("alice-token", "works", next)).status).toBe(200);
+    ahead = 60_000;
+    expect((await sayHere("alice-token", "works", next)).status).toBe(200);
+    expect(
+      await services?.query(
+        (sql) => sql`SELECT game, played_ms >= 60000 AS played, afk_ms FROM time_in WHERE game = 'works'`,
+      ),
+    ).toEqual([{ game: "works", played: 1, afk_ms: 0 }]);
   });
 
   it("in a deploy, closes only the visits the new Leaf has not heard of since, and leaves the others open as they began", async () => {
