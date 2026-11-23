@@ -54,11 +54,13 @@ import {
   emotesOpen,
   inRoom,
   isLivePlayer,
+  knownRanks,
   leafNow,
   liveHandles,
   livePlayers,
   openEmotes,
   othersInTown,
+  roomNow,
   stepPlayers,
   tellRoom,
   townOnStage,
@@ -213,6 +215,8 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   G.now = leafNow();
   hooks.deeds = () => guild.deeds();
+  // Where everybody is (`where.ts`) is worked out from the room as much as from Leaf's list.
+  guild.followRoom({ room: roomNow, ranks: knownRanks });
   const ground = paintGround();
   buildTown(sprites, must(ground.getContext("2d"), "ground"));
   const standing = crabsStanding();

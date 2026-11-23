@@ -499,7 +499,7 @@ learns a new one, removes those nobody asked for in 30 days. An event whose
 member no one can name yet, because Mojang can't be reached, is left out.
 
 **Presence.** `PUT /v1/game/presence` takes `{ "place", "stay", "device" }`:
-`place` is one of `town`, `camp`, `works` and `table`; `stay`, true or false and
+`place` is one of `town`, `camp`, `works`, `table` and `grove`; `stay`, true or false and
 optional, says whether the player's character may stay in town, dozing, for a
 day after they go (the town's page says it, from its own state; left out, it is
 as it was, and on for a player Leaf has never been told about); and `device`, `phone` or `desktop` and

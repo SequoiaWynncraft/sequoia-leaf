@@ -236,8 +236,14 @@ export function hiding(seed: number, now: number): { stretch: number; since: num
 
 // ---------- members in the games, and gone from them ----------
 
-/** Where a member in one of the games stands in town, facing it: by the Works' door, or watching at the stump. */
-export const STANDS: Readonly<Record<"works" | "table", readonly Spot[]>> = {
+/** A game a member can be in that has a place in town to stand at. */
+export type Stand = "works" | "table" | "grove";
+
+/**
+ * Where a member in one of the games stands in town, facing it: by the Works' door, at the stump,
+ * or before the Grove's standing stone.
+ */
+export const STANDS: Readonly<Record<Stand, readonly Spot[]>> = {
   works: [
     spot(393, 137, 3),
     spot(352, 125, 3),
@@ -247,10 +253,11 @@ export const STANDS: Readonly<Record<"works" | "table", readonly Spot[]>> = {
     spot(409, 157, 3),
   ],
   table: [spot(414, 199, 3), spot(471, 199, 3), spot(437, 173, 3), spot(457, 173, 3)],
+  grove: [spot(94, 196, 3), spot(114, 196, 3), spot(84, 188, 2), spot(124, 188, 1)],
 };
 
 /** Where a member in a game stands: one of its spots by their account, the same for as long as they are there. */
-export const standOf = (id: string, at: "works" | "table"): Spot => nth(STANDS[at], seedOf(id));
+export const standOf = (id: string, at: Stand): Spot => nth(STANDS[at], seedOf(id));
 
 /** In and out of town: the gateway, in the dark. */
 export const GATE: Spot = spot(256, 84, 0);
@@ -272,8 +279,9 @@ export interface SeatFor {
 }
 
 /** The seats a dozer may have, by where they were: theirs first, then the fire's logs, then the benches. */
-const SEATS_FOR: Readonly<Record<"town" | "works" | "table", readonly SeatFor["at"][]>> = {
+const SEATS_FOR: Readonly<Record<"town" | Stand, readonly SeatFor["at"][]>> = {
   town: ["fire", "bench", "works"],
+  grove: ["fire", "bench", "works"],
   table: ["table", "fire", "bench"],
   works: ["works", "fire", "bench"],
 };
@@ -288,7 +296,7 @@ const facing = (s: SeatFor): number => (s.dir === 0 ? 0 : s.dir === 3 ? 2 : 1);
  * the member; whoever finds none has none.
  */
 export function dozing<S extends SeatFor>(
-  resting: readonly { id: string; at: "town" | "works" | "table"; seen: number }[],
+  resting: readonly { id: string; at: "town" | Stand; seen: number }[],
   free: readonly S[],
 ): Map<string, S> {
   const left = free.filter((s) => !s.yours);

@@ -238,7 +238,7 @@ async function boot(): Promise<void> {
           hush(false);
           if (inside) scene.cameBack(inside);
           inside = null;
-          guild.here(G.where === "camp" ? "camp" : "town");
+          guild.here(G.where);
           here();
           if (scene === town) town.onStage(true);
           wake();
@@ -472,8 +472,8 @@ async function boot(): Promise<void> {
         scene = trip.next;
         scene.resize(G.view.w, G.view.h);
         aim(true);
-        // In the Grove the member is still in town, to whoever asks.
-        guild.here(G.where === "camp" ? "camp" : "town");
+        // In the Grove, whoever asks hears so: everybody else sees them before its stone.
+        guild.here(G.where);
         // The town's live room is only for while the town is on the stage.
         town.onStage(scene === town);
       }

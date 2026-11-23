@@ -14,9 +14,9 @@ import type { PlaceId, Seat } from "./world.ts";
 export type PanelId = PlaceId | "profile";
 /**
  * What somebody is about: what one of the town's own is doing (`folk.ts`), or for a member where
- * they are (about the town, by the Works, watching at the stump, at home in a camp).
+ * they are (about the town, by the Works, at the stump, before the Grove's stone, at home in a camp).
  */
-export type Doing = FolkDoing | "table" | "home";
+export type Doing = FolkDoing | "table" | "grove" | "home";
 
 /** Who somebody is, as a name plate and a card say: their name, and a member's rank and level. */
 export interface Who {

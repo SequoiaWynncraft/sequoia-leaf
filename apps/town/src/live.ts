@@ -27,22 +27,9 @@ import { leafClock } from "@sequoia-leaf/kit/realtime.ts";
 import { lookFor, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { HOME, later } from "@sequoia-leaf/town/clock.ts";
 
-import type {
-  AwayLine,
-  Deeds,
-  Goal,
-  Guild,
-  Happening,
-  Mate,
-  Me,
-  Moment,
-  Person,
-  Quest,
-  Rester,
-  Tone,
-  Visitor,
-} from "./guild.ts";
+import type { AwayLine, Deeds, Goal, Guild, Happening, Me, Moment, Person, Quest, RoomSays, Tone } from "./guild.ts";
 import { type Line, lineFor, makePace } from "./news.ts";
+import { type Listed, resters, standing, whereabouts } from "./where.ts";
 
 // ---------- who the member is ----------
 
@@ -370,80 +357,32 @@ export function makeNews(meId: string): {
 
 // ---------- who else is here ----------
 
-/** The most visitors the town shows at once. */
+/** The most members the town draws standing at the games at once. */
 export const VISITORS_MOST = 12;
-
-/**
- * Who is in one of the games, as visitors to the town: everybody at the Works or the stump but the
- * member, the first twelve Leaf lists. Whoever is in town is there live, and nobody is shown at
- * their own camp.
- */
-export function toVisitors(present: readonly Present[], meId: string): Visitor[] {
-  const out: Visitor[] = [];
-  for (const p of present) {
-    if (p.id === meId || p.place === "camp" || p.place === "town" || out.length >= VISITORS_MOST) continue;
-    out.push({
-      id: p.id,
-      name: p.name,
-      rank: p.guest ? GUEST : p.rank === null ? null : rankName(p.rank),
-      at: p.place,
-      skin: skinOf(p.id),
-    });
-  }
-  return out;
-}
-
-/** Somebody's rank as "Who is about" shows it: `GUEST` for a guest, a member's if the server said it. */
-const aboutRank = (p: { guest: boolean; rank?: string | null }): string | null =>
-  p.guest ? GUEST : p.rank === null || p.rank === undefined ? null : rankName(p.rank);
-
-/**
- * Who is about, for "Who is about": everybody else in the game now, wherever they are, and everybody
- * gone in the last day, whether or not their character stays, newest first; never the member, nobody twice. The
- * server says no ranks here: a guest is `GUEST`, and a member's rank is left for whoever knows it.
- */
-export function toAbout(
-  present: readonly Present[],
-  resting: readonly Resting[],
-  meId: string,
-): { present: Mate[]; resting: Mate[] } {
-  const now: Mate[] = [];
-  for (const p of present) {
-    if (p.id === meId || now.some((o) => o.id === p.id)) continue;
-    now.push({ id: p.id, name: p.name, rank: aboutRank(p), at: p.place, seen: null });
-  }
-  const gone: Mate[] = [];
-  for (const r of resting.toSorted((a, b) => b.seen - a.seen)) {
-    if (r.id === meId || now.some((o) => o.id === r.id) || gone.some((o) => o.id === r.id)) continue;
-    gone.push({ id: r.id, name: r.name, rank: aboutRank(r), at: r.place, seen: r.seen });
-  }
-  return { present: now, resting: gone };
-}
-
 /** The most members the town draws dozing at once. */
 export const RESTING_MOST = 12;
 
-/**
- * Who has gone in the last day, as the town shows them, most recent first, whether their
- * characters stay (`stays`) or not: never the member, nobody in the game just now, nobody last at
- * their own camp.
- */
-export function toResting(
-  resting: readonly Resting[],
-  present: readonly Present[],
-  meId: string,
-  stays = true,
-): Rester[] {
-  const here = new Set(present.map((p) => p.id));
-  const out: Rester[] = [];
-  for (const r of resting.toSorted((a, b) => b.seen - a.seen)) {
-    if (r.id === meId || here.has(r.id) || r.place === "camp" || out.some((o) => o.id === r.id)) continue;
-    if (out.length >= RESTING_MOST) break;
-    const rank = r.guest ? GUEST : null;
-    out.push({ id: r.id, name: r.name, rank, at: r.place, skin: skinOf(r.id), seen: r.seen, stays });
-  }
-  return out;
-}
+/** Somebody's rank as the town shows it from Leaf's list: `GUEST` for a guest, a member's if the list says it. */
+const listedRank = (guest: boolean, rank: string | null): string | null =>
+  guest ? GUEST : rank === null ? null : rankName(rank);
+
+/** Somebody Leaf lists as in the game, as the town reads them (`where.ts`). */
+export const listedHere = (p: Present): Listed => ({
+  id: p.id,
+  name: p.name,
+  rank: listedRank(p.guest, p.rank),
+  at: p.place,
+  seen: p.seen,
+});
+
+/** Somebody Leaf lists as gone, as the town reads them. */
+export const listedGone = (r: Resting): Listed => ({
+  id: r.id,
+  name: r.name,
+  rank: listedRank(r.guest, null),
+  at: r.place,
+  seen: r.seen,
+});
 
 // ---------- before the town opens ----------
 
@@ -521,9 +460,11 @@ export function makeLive(p: Prepared): Guild {
   let me = p.me;
   let quests = p.quests;
   let told = p.mark;
-  let present: Visitor[] = [];
-  let resting: Rester[] = [];
-  let about: { present: Mate[]; resting: Mate[] } = { present: [], resting: [] };
+  /** Leaf's list of who is about, as last heard; and what the town's live room says, once it is followed. */
+  let listed: { present: Listed[]; resting: Listed[]; gone: Listed[] } = { present: [], resting: [], gone: [] };
+  let room: RoomSays = { room: () => null, ranks: new Map() };
+  const whereNow = () =>
+    whereabouts({ me: me.id, room: room.room(), ...listed, ranks: room.ranks, now: leafClock(outside.now()) });
   let begun = false;
   const ears = new Set<(h: Happening) => void>();
   const news = makeNews(me.id);
@@ -557,10 +498,7 @@ export function makeLive(p: Prepared): Guild {
     if (begun) return;
     begun = true;
     hearPresent((seen, staying, gone) => {
-      present = toVisitors(seen, me.id);
-      resting = [...toResting(staying, seen, me.id), ...toResting(gone, seen, me.id, false)];
-      // The panel lists everybody gone in the last day; only those who stay are drawn dozing.
-      about = toAbout(seen, [...staying, ...gone], me.id);
+      listed = { present: seen.map(listedHere), resting: staying.map(listedGone), gone: gone.map(listedGone) };
     });
     // Back in view, the town asks Leaf for the Coins: a game or another device may have changed them.
     followCoins();
@@ -663,9 +601,22 @@ export function makeLive(p: Prepared): Guild {
       sayDue();
     },
     deeds: () => news.deeds(),
-    visitors: () => present,
-    resting: () => resting,
-    about: () => about,
+    visitors: () =>
+      standing(whereNow(), VISITORS_MOST).map(({ id, name, rank, at }) => ({ id, name, rank, at, skin: skinOf(id) })),
+    resting: () =>
+      resters(whereNow(), RESTING_MOST).map(({ id, name, rank, at, seen, stays }) => ({
+        id,
+        name,
+        rank,
+        at,
+        skin: skinOf(id),
+        seen,
+        stays,
+      })),
+    whereabouts: whereNow,
+    followRoom(says) {
+      room = says;
+    },
     here(place) {
       sayHere(place);
     },

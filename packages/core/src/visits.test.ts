@@ -67,7 +67,7 @@ describe("visits and sessions", () => {
   });
 
   test("the town and the camps are the town's game, the table the raid's", () => {
-    expect(GAME_AT).toEqual({ town: "town", camp: "town", works: "works", table: "raid" });
+    expect(GAME_AT).toEqual({ town: "town", camp: "town", grove: "town", works: "works", table: "raid" });
   });
 });
 

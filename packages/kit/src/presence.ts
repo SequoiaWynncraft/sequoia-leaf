@@ -1,6 +1,6 @@
 /**
  * Who is here: when the game is live, each page tells the server where in the game the member is
- * (the town, their camp, the Works, the table) and what the page is on, every half minute and at
+ * (the town, their camp, the Works, the table, the Grove) and what the page is on, every half minute and at
  * once when where changes; and hears back everybody seen in the last little while, and those gone in
  * the last day whose characters stay. Whether the member's character may stay in town after they go
  * is the town's to say (`stay`, from Leaf's town): a page that has not been told says nothing of it,
@@ -13,7 +13,7 @@
 import { device, member } from "./live.ts";
 import { ask, isRecord, put } from "./net.ts";
 
-export type Place = "town" | "camp" | "works" | "table";
+export type Place = "town" | "camp" | "works" | "table" | "grove";
 
 /** Somebody the server has seen in the game lately, and where. */
 export interface Present {
@@ -41,7 +41,7 @@ export interface Resting {
 
 export const EVERY = 30_000;
 
-const PLACES: readonly Place[] = ["town", "camp", "works", "table"];
+const PLACES: readonly Place[] = ["town", "camp", "works", "table", "grove"];
 export const isPlace = (v: unknown): v is Place => PLACES.some((p) => p === v);
 
 /** The list from the server's answer, leaving out anything that makes no sense. */

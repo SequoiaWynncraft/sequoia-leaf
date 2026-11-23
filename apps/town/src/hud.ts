@@ -317,7 +317,7 @@ export function closeCard(): void {
 
 /** What one of the town's own is doing, in a line for its card. */
 const doingLine = (a: Actor): string => {
-  const d: Doing = a.doing === "table" || a.doing === "home" ? "walk" : a.doing;
+  const d: Doing = a.doing === "table" || a.doing === "home" || a.doing === "grove" ? "walk" : a.doing;
   return DOING[d];
 };
 

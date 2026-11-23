@@ -20,6 +20,8 @@ import {
   type Ev,
   KEPT,
   letterLines,
+  listedGone,
+  listedHere,
   makeLive,
   makeNews,
   NO_REROLL,
@@ -30,8 +32,6 @@ import {
   readEvent,
   readEvents,
   readQuests,
-  toResting,
-  toVisitors,
   unprepare,
   weekOf,
 } from "./live.ts";
@@ -658,6 +658,8 @@ describe("the live guild", () => {
       "GET /v1/me/events": { status: 200, body: EVENTS },
       "PUT /v1/game/presence": { status: 200, body: reply },
     });
+    // The moment Leaf's answer was given, by its clock: everybody it lists as here was seen then.
+    world.clock.now = Date.UTC(2026, 10, 25, 12, 55);
     await start();
     expect(await prepare(null)).toBe(true);
     const p = prepared();
@@ -769,66 +771,28 @@ describe("the live guild", () => {
 });
 
 describe("who is here, and who is dozing", () => {
-  test("those resting: never the member, nobody in the game, nobody last at their camp; newest first, at most twelve", () => {
-    const at = Date.UTC(2026, 10, 25, 12);
-    const present = [{ id: "a", name: "Alice", place: "works" as const, rank: null, guest: false, seen: null }];
-    const resting = [
-      { id: ME, name: "Tester", place: "town" as const, seen: at - 1, guest: false },
-      { id: "a", name: "Alice", place: "town" as const, seen: at - 2, guest: false },
-      { id: "b", name: "Bob", place: "camp" as const, seen: at - 3, guest: false },
-      ...Array.from({ length: 14 }, (_, i) => ({
-        id: `n${i}`,
-        name: `N${i}`,
-        place: "table" as const,
-        seen: at - 9 + i,
-        guest: false,
-      })),
-    ];
-    const r = toResting(resting, present, ME);
-    expect(r.length).toBe(12);
-    expect(r[0]).toEqual({
-      id: "n13",
-      name: "N13",
-      rank: null,
+  test("Leaf's list as the town reads it: a guest is Guest, a member's rank the list says is the town's word for it", () => {
+    expect(listedHere({ id: "g", name: "Wanderer", place: "table", rank: null, guest: true, seen: 5 })).toEqual({
+      id: "g",
+      name: "Wanderer",
+      rank: "Guest",
       at: "table",
-      skin: "/v1/game/skins/n13",
-      seen: at + 4,
-      stays: true,
+      seen: 5,
     });
-    expect(r.map((x) => x.seen)).toEqual(r.map((x) => x.seen).toSorted((x, y) => y - x));
-    expect(r.some((x) => x.id === ME || x.id === "a" || x.id === "b")).toBe(false);
-  });
-
-  test("everybody at the Works or the stump but the member (whoever is in town is there live), at most twelve", () => {
-    const present = [
-      { id: ME, name: "Tester", place: "town" as const, rank: "captain", guest: false, seen: null },
-      { id: "a", name: "Alice", place: "works" as const, rank: "chief", guest: false, seen: null },
-      { id: "b", name: "Bob", place: "camp" as const, rank: null, guest: false, seen: null },
-      { id: "c", name: "Cleo", place: "town" as const, rank: null, guest: false, seen: null },
-      ...Array.from({ length: 14 }, (_, i) => ({
-        id: `n${i}`,
-        name: `N${i}`,
-        place: "table" as const,
-        rank: null,
-        guest: false,
-        seen: null,
-      })),
-    ];
-    const v = toVisitors(present, ME);
-    expect(v.length).toBe(12);
-    expect(v[0]).toEqual({ id: "a", name: "Alice", rank: "Chief", at: "works", skin: "/v1/game/skins/a" });
-    expect(v.some((x) => x.id === ME || x.id === "b" || x.id === "c")).toBe(false);
-  });
-
-  test("a guest is drawn like any member, their own skin and name, with Guest for a rank, here or dozing", () => {
-    const present = [{ id: "g", name: "Wanderer", place: "table" as const, rank: null, guest: true, seen: null }];
-    const gone = [{ id: "h", name: "Drifter", place: "works" as const, seen: 5, guest: true }];
-    expect(toVisitors(present, ME)).toEqual([
-      { id: "g", name: "Wanderer", rank: "Guest", at: "table", skin: "/v1/game/skins/g" },
-    ]);
-    expect(toResting(gone, present, ME, false)).toEqual([
-      { id: "h", name: "Drifter", rank: "Guest", at: "works", skin: "/v1/game/skins/h", seen: 5, stays: false },
-    ]);
+    expect(listedHere({ id: "a", name: "Alice", place: "works", rank: "chief", guest: false, seen: null })).toEqual({
+      id: "a",
+      name: "Alice",
+      rank: "Chief",
+      at: "works",
+      seen: null,
+    });
+    expect(listedGone({ id: "h", name: "Drifter", place: "grove", seen: 5, guest: false })).toEqual({
+      id: "h",
+      name: "Drifter",
+      rank: null,
+      at: "grove",
+      seen: 5,
+    });
   });
 
   test("the feed counts everybody else in town, members and guests together", () => {

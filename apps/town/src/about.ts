@@ -1,30 +1,24 @@
 /**
  * "Who is about": the rules with no page in them. Who goes in which part of the panel, in what
- * order, and the line under each name (`whoIsAbout`). `aboutui.ts` is the page that shows them.
+ * order, and the line under each name (`whoIsAbout`), all from where each person is (`where.ts`),
+ * which is where the figures in town and every card have them too. `aboutui.ts` is the page that
+ * shows them.
  *
- * - **In town**: everybody in the town's live room with the member, the member first, marked as
- *   them. Out of the room (the made-up guild, or a connection let go of), whoever the guild says is
- *   in town.
- * - **Elsewhere**: in the game, but not in town: at the Works, at the raid table, in their camp.
+ * - **In town**: the member first, marked as them; then everybody in town: in the town's live room
+ *   with the member, or out of the room, whoever Leaf has in town.
+ * - **Elsewhere**: in the game, but not in town: at the Works, at the raid table, in the Grove, in
+ *   their camp.
  * - **Seen lately**: gone in the last day, newest first, with how long ago; first of all whoever
  *   has only just walked out of the town's room.
  *
- * The panel is one row for each player, kept by their id, so nobody can be listed twice: the room
- * is believed over the guild's lists, which can be half a minute old, and whoever is in the game
- * now is not "seen lately". That is the panel as it is opened; while it stays open its order holds
- * (`held`).
+ * The panel is one row for each player, kept by their id, so nobody can be listed twice. That is
+ * the panel as it is opened; while it stays open its order holds (`held`).
  */
 
-import type { Mate } from "./guild.ts";
-import { span } from "./letter.ts";
+import type { Place } from "@sequoia-leaf/kit/presence.ts";
 
-/** Somebody in the town's live room, as the panel needs them. */
-export interface InRoom {
-  id: string;
-  name: string;
-  /** Their rank as the town shows it, `GUEST` for a guest, or null for none. */
-  rank: string | null;
-}
+import { span } from "./letter.ts";
+import type { InRoom, Where } from "./where.ts";
 
 export type PartName = "In town" | "Elsewhere" | "Seen lately";
 
@@ -69,10 +63,11 @@ export const partsOf = (a: About): AboutPart[] =>
 export const ALONE = "Only you, for now.";
 
 /** Where somebody in the game but not in town is, in words. */
-export const WHERE: Readonly<Record<Mate["at"], string>> = {
+export const WHERE: Readonly<Record<Place, string>> = {
   town: "in town",
   works: "at the Works",
   table: "at the raid table",
+  grove: "in the Grove",
   camp: "in their camp",
 };
 
@@ -87,39 +82,24 @@ const byName = (a: { name: string }, b: { name: string }): number =>
   a.name.localeCompare(b.name, "en", { sensitivity: "base" });
 
 /**
- * Who is about, part by part. `me` is the member; `room` everybody in the town's room with them,
- * the member too, or null while the page is in no room; `present` and `resting` the guild's lists
- * (`Guild.about`); `ranks` the ranks the page has learnt of anybody, by id, for those the lists do
- * not say; `now` the time, in milliseconds since 1970.
+ * Who is about, part by part. `me` is the member; `all` where everybody else is (`whereabouts`);
+ * `now` Leaf's clock, in milliseconds since 1970.
  */
-export function whoIsAbout(o: {
-  me: InRoom;
-  room: readonly InRoom[] | null;
-  present: readonly Mate[];
-  resting: readonly Mate[];
-  ranks?: ReadonlyMap<string, string>;
-  now: number;
-}): About {
-  const rankOf = (m: { id: string; rank: string | null }): string | null => m.rank ?? o.ranks?.get(m.id) ?? null;
+export function whoIsAbout(o: { me: InRoom; all: ReadonlyMap<string, Where>; now: number }): About {
   const rows = new Map<string, AboutRow>();
   /** Lists somebody in `part`, unless an earlier part has them. */
   const put = (part: PartName, m: { id: string; name: string }, words: string, you = false): void => {
     if (!rows.has(m.id)) rows.set(m.id, { id: m.id, name: m.name, part, line: words, you });
   };
+  const all = [...o.all.values()];
 
-  put("In town", o.me, line(rankOf(o.me)), true);
-  const others =
-    o.room === null
-      ? o.present.filter((m) => m.at === "town").map((m) => ({ id: m.id, name: m.name, rank: m.rank }))
-      : o.room;
-  for (const m of others.toSorted(byName)) put("In town", m, line(rankOf(m)));
-  for (const m of o.present.filter((p) => p.at !== "town").toSorted(byName))
-    put("Elsewhere", m, line(rankOf(m), WHERE[m.at]));
-  // In the room, the room says who is in town: anybody the guild still has in town has just left
-  // it, and heads "Seen lately" until the guild's lists say so themselves.
-  const justLeft = o.room === null ? [] : o.present.filter((m) => m.at === "town").toSorted(byName);
-  for (const m of [...justLeft, ...o.resting.toSorted((a, b) => (b.seen ?? 0) - (a.seen ?? 0))])
-    put("Seen lately", m, line(rankOf(m), m.seen === null ? JUST_NOW : agoLine(m.seen, o.now)));
+  put("In town", o.me, line(o.me.rank), true);
+  for (const w of all.filter((x) => x.here && x.at === "town").toSorted(byName)) put("In town", w, line(w.rank));
+  for (const w of all.filter((x) => x.here && x.at !== "town").toSorted(byName))
+    put("Elsewhere", w, line(w.rank, WHERE[w.at]));
+  // In the order the record has them: whoever has only just left first, then newest first.
+  for (const w of all.filter((x) => !x.here))
+    put("Seen lately", w, line(w.rank, w.seen === null ? JUST_NOW : agoLine(w.seen, o.now)));
 
   const count = [...rows.values()].filter((r) => r.part !== "Seen lately").length;
   return { rows, count, alone: count === 1 && rows.size === 1 };

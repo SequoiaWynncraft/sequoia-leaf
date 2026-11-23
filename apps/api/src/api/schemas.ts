@@ -148,7 +148,7 @@ export const GuildEvents = Schema.Struct({
 });
 
 /** The places in the game a member can be. */
-export const PLACES = ["town", "camp", "works", "table"] as const;
+export const PLACES = ["town", "camp", "works", "table", "grove"] as const;
 
 /**
  * Where the member is; whether their character may stay in town, dozing, after they go, when the

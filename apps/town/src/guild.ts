@@ -9,8 +9,10 @@
 
 import type { Look } from "@sequoia-leaf/kit/skin.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
+import type { Stand } from "@sequoia-leaf/town/clock.ts";
 
 import { makeLive, prepared } from "./live.ts";
+import type { InRoom, Where } from "./where.ts";
 
 export interface Member {
   name: string;
@@ -68,32 +70,26 @@ export interface Visitor {
   name: string;
   /** Their rank, when the server says. */
   rank: string | null;
-  /** By the Works' door, or watching at the stump. */
-  at: "works" | "table";
+  /** By the Works' door, at the stump, or before the Grove's stone. */
+  at: Stand;
   /** Where their skin sheet is served. */
   skin: string;
 }
 
 /** A real member who has gone in the last day: one who stays dozes in town where they were, and one who does not goes. */
 export interface Rester extends Omit<Visitor, "at"> {
-  /** Where they were: about the town, by the Works' door, or at the stump. */
-  at: "town" | "works" | "table";
+  /** Where they were: about the town, by the Works' door, at the stump, or in the Grove. */
+  at: "town" | Stand;
   /** When the game last saw them, in milliseconds since 1970. */
   seen: number;
   /** Whether their character stays in town. */
   stays: boolean;
 }
 
-/** Somebody else in the game now, or gone in the last day and staying, as "Who is about" lists them. */
-export interface Mate {
-  id: string;
-  name: string;
-  /** Their rank as the town shows it, `GUEST` for a guest, or null when nobody has said. */
-  rank: string | null;
-  /** Where they are, or were last. */
-  at: "town" | "camp" | "works" | "table";
-  /** When the game last saw them, in milliseconds since 1970: for somebody gone; null for somebody in the game now. */
-  seen: number | null;
+/** What the town's live room tells the guild of who is in it: everybody with the member, or null out of it; and their ranks. */
+export interface RoomSays {
+  room(): readonly InRoom[] | null;
+  readonly ranks: ReadonlyMap<string, string>;
 }
 
 export type Tone = "gold" | "leaf" | "coral" | "rose";
@@ -172,18 +168,20 @@ export interface Guild {
   step(dt: number): void;
   /** The guild's raid parties and wars: what the town shows of them follows from these and Leaf's clock. */
   deeds(): Deeds;
-  /** Real members in one of the games just now, never the member themself; at most twelve. */
+  /** Real members standing at one of the games just now (`whereabouts`), never the member themself; at most twelve. */
   visitors(): readonly Visitor[];
-  /** Real members who have gone in the last day, those who stay and those who do not; never anybody in the game now. */
+  /** Real members who have gone in the last day, those who stay and those who do not (`whereabouts`); never anybody in the game now. */
   resting(): readonly Rester[];
   /**
-   * Everybody else in the game now, wherever they are (their own camp too), and everybody gone in the
-   * last day whose character stays, newest first, wherever they were last: as many as the guild
-   * says, for "Who is about".
+   * Where everybody else is, one record each by id (`where.ts`), from the town's live room and
+   * Leaf's list, by Leaf's clock: what "Who is about", its count, the figures in town and every card
+   * show.
    */
-  about(): { present: readonly Mate[]; resting: readonly Mate[] };
-  /** Where the member is: in town, at their camp, or (null) in a game over the town. */
-  here(place: "town" | "camp" | null): void;
+  whereabouts(): ReadonlyMap<string, Where>;
+  /** Hears who is in the town's live room from the page that keeps it (`players.ts`). */
+  followRoom(says: RoomSays): void;
+  /** Where the member is: in town, at their camp, in the Grove, or (null) in a game over the town. */
+  here(place: "town" | "camp" | "grove" | null): void;
   /** Whether the member's own character stays in town, dozing, for a day after they go. */
   stay(on: boolean): void;
   /** How far the member's own news has been told, for Leaf's town to keep so that the next letter starts after it. */

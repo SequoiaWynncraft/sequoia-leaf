@@ -24,7 +24,7 @@ import { type About, type AboutRow, ALONE, held, partsOf, whoIsAbout } from "./a
 import { type Actor, G, hooks } from "./game.ts";
 import { guild } from "./guild.ts";
 import { $, closePanel, openPanel, pic, when } from "./hud.ts";
-import { knownRanks, roomNow } from "./players.ts";
+import { leafNow } from "./players.ts";
 import { drawnAs, visitorOf } from "./visitors.ts";
 
 /** The panel's name, as `G.panel` has it while it is open. */
@@ -33,17 +33,13 @@ export const ABOUT = "about";
 /** The member's own id: their account's on the guild's server; with the made-up guild, a word of its own. */
 const myId = (): string => member()?.id ?? "you";
 
-/** Who is about now, as the panel shows it. */
+/** Who is about now, as the panel shows it: from where everybody is (`guild.whereabouts`), by Leaf's clock. */
 export function aboutNow(): About {
   const me = guild.me();
-  const { present, resting } = guild.about();
   return whoIsAbout({
     me: { id: myId(), name: me.name, rank: me.rank === "" ? null : me.rank },
-    room: roomNow(),
-    present,
-    resting,
-    ranks: knownRanks,
-    now: Date.now(),
+    all: guild.whereabouts(),
+    now: leafNow(),
   });
 }
 

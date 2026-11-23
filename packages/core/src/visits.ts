@@ -65,8 +65,14 @@ export const joinsSession = (endedAt: number | null, at: number, rules: VisitRul
 export const playing = (from: number, actedAt: number | null, rules: VisitRules = VISIT_RULES): boolean =>
   actedAt !== null && from - actedAt < rules.afkMs;
 
-/** The game each place is in, as a person's card counts time: the town and the camps are the town's. */
-export const GAME_AT: Readonly<Record<string, GameId>> = { town: "town", camp: "town", works: "works", table: "raid" };
+/** The game each place is in, as a person's card counts time: the town, the camps and the Grove are the town's. */
+export const GAME_AT: Readonly<Record<string, GameId>> = {
+  town: "town",
+  camp: "town",
+  grove: "town",
+  works: "works",
+  table: "raid",
+};
 
 /** Whether an open visit last heard of at `heardAt` has gone silent by `now`, so is to be closed at `heardAt`. */
 export const silentSince = (heardAt: number, now: number, rules: VisitRules = VISIT_RULES): boolean =>
