@@ -318,8 +318,10 @@ orders, `--folios N` builds the Studies for N folios a minute (24, two Studies, 
 `--seeds 1-12` plays each of those seeds and prints, for each tier, the least, the middle and the
 most minutes, building and waiting (for Coins and for deliveries together) of the seeds that
 finished it, and names any seed that stopped short. The same seed and settings give the same table,
-to the tick. A run takes about 9 seconds; twelve seeds, about 2 minutes. A new tier needs only its
-nodes and research added to `NODES` and `RESEARCH`, and its time to `TARGETS`.
+to the tick. A run takes about 9 seconds; twelve seeds, about 2 minutes. To report a new tier, add
+its nodes and research to `NODES` and `RESEARCH` and its time to `TARGETS`; whether the player can
+then lay it out is another matter, to be seen in the run (tier 4 does not lay out yet: the raid
+kits find no room).
 
 Each row's time runs from when the player turned to the goal (for research, from when it began to be
 studied) to when it was done, split into building (setting pieces down, laying belts, buying plots,

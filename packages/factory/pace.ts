@@ -84,7 +84,8 @@ export const FOLIOS = 24;
  * what it gives. It never builds for an order, and buys a plot only when the land has too little of
  * what a line gathers, or no room for it. Where greedy placing finds no room for a line, it plans
  * the line as a block (`pace/builder.ts`); a line it cannot do without that still fits nowhere is laid
- * where old lines stood, taking up the fewest it can of those built for goals now finished, or is
+ * where old lines stood, taking up those built for goals now finished, nearest first, as few as one
+ * at a time from the nearest will make room for (not the fewest of any choice), or is
  * laid as its parts first, each a line into the depot, and split off them.
  */
 export const GRADES = { belt: 2, tunnel: 2, gatherer: 2, mill: 2, bench: 2, workshop: 2, study: 1 } as const;
