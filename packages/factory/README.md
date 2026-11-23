@@ -182,9 +182,11 @@ a yard back.
   `saveBlueprint` (any blueprints); `upgrade` (Upgrading an area, and Select). A single piece
   (`build`, or a `stand` of one: a removal undone) and a run of belt (`lay`) never are.
 - **A run of belt** (`lay`) is made of legs (`Leg`, in `route.ts`): a belt or a tunnel, its tile and
-  way, for a tunnel how far under (0 for the tunnel standing there, raised or lowered), and its grade.
-  A leg has nothing to set, so the router, the page's run, the writer and the reader carry nothing
-  else, and the rules stand each leg as a piece made of those parts alone (`legPiece`). A run that
+  way, and its grade; only a tunnel's leg says how far under (`span`: 0 for the tunnel standing there,
+  raised or lowered), since only a tunnel goes under, so a belt's leg cannot hold one. A leg has nothing
+  to set, so the router, the page's run, the writer and the reader carry nothing else, and the rules
+  stand each leg as a piece made of those parts alone (`legPiece`). On the wire a belt's leg is a
+  piece's shape, with a span of 0. A run that
   names a tunnel twice, by both its mouths, is refused before anything changes, and a run is charged
   the price `priceOf` gives it. Its `turn` turns a belt already standing where the run starts, and
   nothing but a belt.
@@ -198,6 +200,13 @@ a yard back.
   none, whatever its size. A tunnel named with its span over a tunnel must be that tunnel, going in
   on its tile that way that far, and is raised or lowered; two pieces of one set on one tile, as a
   kept blueprint might hold, are refused.
+
+- **Coins.** The yard keeps no purse: Leaf plays a command (`FACTORY.apply`) with none, and its
+  ledger refuses a price the member's Coins do not cover. The page plays the same command on its copy
+  with the purse as it is at the moment it sends (`play(y, command, purse)`): whatever costs more than
+  the purse and the till's whole Coins (which a command that costs pays in first) is refused with the
+  rules' own sentence ("Not enough Coins", or "Not enough Coins: 12 short" for many pieces at once),
+  and nothing changes.
 
 ## Pieces new to this design
 

@@ -798,13 +798,23 @@ function wires(g: Ctx, gr: Ground, L: Layout, cx: number, cy: number): void {
   }
   g.globalAlpha = 0.6;
   blit(g, s.c, cx - gr.x, cy - gr.y, g.canvas.width, g.canvas.height, 0, 0);
+  // A pixel at a time, a thousand or more of them on a large yard: the colour is given only when it
+  // changes, as reading a colour again for each pixel costs more than drawing it.
+  g.fillStyle = GOLD[2];
   for (const line of s.lines)
     for (let k = line.lit - 1; k <= line.lit + 1; k++)
-      if (line.alone[k] === 1) R(g, (line.xs[k] ?? 0) - cx, (line.ys[k] ?? 0) - cy, 1, 1, GOLD[2]);
+      if (line.alone[k] === 1) g.fillRect((line.xs[k] ?? 0) - cx, (line.ys[k] ?? 0) - cy, 1, 1);
+  let fill: string = GOLD[2];
   for (let j = 0; j < s.shared.length; j += 2) {
     const line = s.lines[s.shared[j] ?? 0];
     const k = s.shared[j + 1] ?? 0;
-    if (line) R(g, (line.xs[k] ?? 0) - cx, (line.ys[k] ?? 0) - cy, 1, 1, Math.abs(k - line.lit) < 2 ? GOLD[2] : WIRE);
+    if (!line) continue;
+    const col = Math.abs(k - line.lit) < 2 ? GOLD[2] : WIRE;
+    if (col !== fill) {
+      g.fillStyle = col;
+      fill = col;
+    }
+    g.fillRect((line.xs[k] ?? 0) - cx, (line.ys[k] ?? 0) - cy, 1, 1);
   }
   g.globalAlpha = 1;
 }

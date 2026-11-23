@@ -634,7 +634,7 @@ export class Builder {
     const wire = legs.map((l) => {
       const kind = F.legKind(l);
       const g = this.grades(kind);
-      const leg = { kind: F.kindName(kind), x: l.x, y: l.y, dir: l.dir, span: l.span };
+      const leg = { kind: F.kindName(kind), x: l.x, y: l.y, dir: l.dir, span: F.legSpan(l) };
       return g > 1 ? { ...leg, grade: g } : leg;
     });
     if (!this.cmd({ do: "lay", legs: wire })) return null;

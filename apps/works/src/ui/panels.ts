@@ -23,6 +23,7 @@ import {
   holderOf,
   isFilled,
   isNode,
+  type Item,
   item,
   ITEM_INFO,
   type Kind,
@@ -36,7 +37,6 @@ import {
   plot,
   power,
   ready,
-  type Standing,
   STARTING,
   STUDY,
   SWAP_EVERY,
@@ -58,7 +58,7 @@ import { doNow } from "../yard.ts";
 import { board } from "./board.ts";
 import { itemRef, machineRef, nodeRef, plotRef } from "./card.ts";
 import { feed, handLabel } from "./notes.ts";
-import { $, button, unlockWords, wantWords, when, yardIcon } from "./parts.ts";
+import { $, button, shows, unlockWords, wantWords, yardIcon } from "./parts.ts";
 
 export type PanelId = "orders" | "board" | "projects" | "depot" | "power";
 
@@ -79,23 +79,30 @@ const TITLES: Record<PanelId, string> = {
 
 // ---------- what an order wants ----------
 
-/** Rows for what an order wants, and a way to bring their bars up to date without rebuilding them. */
-function wants(want: Counts, filled: () => Counts | null): { rows: HTMLElement[]; update: () => void } {
-  const parts = ALL_ITEMS.filter((k) => (want[k] ?? 0) > 0).map((k) => {
+/** Each thing an order or a node wants, with how many: as a panel prints it, and builds its bars from. */
+type Wants = readonly (readonly [Item, number])[];
+const wantsIn = (want: Counts): Wants =>
+  ALL_ITEMS.filter((k) => (want[k] ?? 0) > 0).map((k) => [k, want[k] ?? 0] as const);
+
+/**
+ * Rows for what an order wants, and a way to bring their bars up to date without rebuilding them:
+ * the bars are drawn from the yard at every refresh, and so are never behind it.
+ */
+function wants(want: Wants, filled: () => Counts | null): { rows: HTMLElement[]; update: () => void } {
+  const parts = want.map(([k, of]) => {
     const bar = el("i");
     const count = el("span", "n");
     const holder = el("div", "k-bar", {}, bar);
     const row = el("div", "want", {}, thing(itemRef(k)), holder, count);
-    return { k, bar, count, holder, row };
+    return { k, of, bar, count, holder, row };
   });
   const update = (): void => {
     const f = filled();
     for (const p of parts) {
-      const n = want[p.k] ?? 1;
-      const have = Math.min(f?.[p.k] ?? 0, n);
-      p.bar.style.setProperty("--v", `${(have / n) * 100}%`);
-      p.count.textContent = `${have} / ${n}`;
-      p.holder.classList.toggle("leaf", have >= n);
+      const have = Math.min(f?.[p.k] ?? 0, p.of);
+      p.bar.style.setProperty("--v", `${(have / p.of) * 100}%`);
+      p.count.textContent = `${have} / ${p.of}`;
+      p.holder.classList.toggle("leaf", have >= p.of);
     }
   };
   update();
@@ -116,8 +123,14 @@ export function opensThings(g: Goal): HTMLElement[] {
 /** The lesson that unlocks side orders, and its place among the lessons. */
 const BOARD_AT = ALL_GOALS.find((g) => GOALS[g]?.unlocks.board === true) ?? goal("gears");
 
-const filledFirst = (list: readonly Standing[]): Standing[] =>
-  list.toSorted((a, b) => Number(isFilled(b.want, b.filled)) - Number(isFilled(a.want, a.filled)));
+/** An order on the list, as far as where it goes in the list is concerned: which it is, and whether it is filled. */
+interface Placed {
+  readonly id: number;
+  readonly full: boolean;
+}
+
+const filledFirst = <T extends Placed>(list: readonly T[]): T[] =>
+  list.toSorted((a, b) => Number(b.full) - Number(a.full));
 
 /**
  * The side orders in the places the list shows them, given the places it showed them in (by id).
@@ -125,24 +138,62 @@ const filledFirst = (list: readonly Standing[]): Standing[] =>
  * (handed over or swapped), those that stay are put filled first. An order new to the list goes
  * last, where the place waiting for it was; when the list opens, every order is new to it.
  */
-export function placed(places: readonly number[], hung: readonly Standing[]): Standing[] {
+export function placed<T extends Placed>(places: readonly number[], hung: readonly T[]): T[] {
   const kept = places.flatMap((id) => hung.find((s) => s.id === id) ?? []);
   const fresh = hung.filter((s) => !places.includes(s.id));
   return [...(kept.length < places.length ? filledFirst(kept) : kept), ...filledFirst(fresh)];
 }
 
+/** An order of the board as the orders panel prints it: its words and pay, what it wants, whether it is filled or counts yet, and why it cannot be swapped now. */
+interface OrderLine extends Placed {
+  readonly from: string;
+  readonly title: string;
+  readonly line: string;
+  readonly pay: number;
+  readonly want: Wants;
+  readonly counting: boolean;
+  readonly why: string | null;
+}
+
+/** What the orders panel prints: the node in hand and how it is spoken of, whether the board is up and its places, and each order. */
+export function ordersPrint(): {
+  readonly hand: Goal | -1;
+  readonly label: string;
+  readonly board: boolean;
+  readonly hooks: number;
+  readonly orders: readonly OrderLine[];
+} {
+  const w = S.world;
+  return {
+    hand: w.hand,
+    label: handLabel(),
+    board: w.open.board,
+    hooks: w.open.hooks,
+    orders: w.board.map((s) => ({
+      id: s.id,
+      full: isFilled(s.want, s.filled),
+      from: s.from,
+      title: s.title,
+      line: s.line,
+      pay: s.pay,
+      want: wantsIn(s.want),
+      counting: counting(s, w.tick),
+      why: swapRefusal(w, s.id),
+    })),
+  };
+}
+
 function orders(_art: Art, body: HTMLElement): () => void {
   let live: (() => void)[] = [];
   let places: number[] = [];
-  const build = (): void => {
-    const w = S.world;
+  const draw = (p: ReturnType<typeof ordersPrint>): void => {
     live = [];
-    const g = w.hand;
+    const g = p.hand;
     const o = g === -1 ? undefined : GOALS[g];
     const node = g === -1 ? undefined : NODES[g];
     const kids: HTMLElement[] = [];
     if (g !== -1 && o && node) {
-      const rows = wants(o.want, () => S.world.got[g] ?? null);
+      const rows = wants(wantsIn(o.want), () => S.world.got[g] ?? null);
       live.push(rows.update);
       const opens = opensThings(g);
       kids.push(
@@ -150,7 +201,7 @@ function orders(_art: Art, body: HTMLElement): () => void {
           "div",
           "k-paper order",
           {},
-          el("div", "k-label", { text: `${handLabel()} · from ${node.from}` }),
+          el("div", "k-label", { text: `${p.label} · from ${node.from}` }),
           el("div", "k-title", { text: o.title }),
           el("div", "k-read k-dim", { text: node.say }),
           ...rows.rows,
@@ -174,32 +225,30 @@ function orders(_art: Art, body: HTMLElement): () => void {
         ),
       );
     kids.push(el("div", "k-label", { text: "Side orders" }));
-    if (!w.open.board)
+    if (!p.board)
       kids.push(
         el("div", "k-d", {
           text: `Unlock when you fill lesson ${LESSONS.indexOf(BOARD_AT) + 1}: ${GOALS[BOARD_AT]?.title}.`,
         }),
       );
-    const shown = placed(places, w.board);
+    const shown = placed(places, p.orders);
     places = shown.map((s) => s.id);
     for (const s of shown) {
-      const full = isFilled(s.want, s.filled);
       const filled = (): Counts | null => S.world.board.find((b) => b.id === s.id)?.filled ?? null;
       const rows = wants(s.want, filled);
       live.push(rows.update);
-      const why = swapRefusal(w, s.id);
       const ask = `swap:${s.id}`;
-      const act = full
+      const act = s.full
         ? button("sm", ["Hand over"], () => {
             panelHooks.handOver(s.id);
           })
         : button(
-            `wood sm${why === null ? "" : " off"}${asking(ask) ? " asking" : ""}`,
+            `wood sm${s.why === null ? "" : " off"}${asking(ask) ? " asking" : ""}`,
             [asksAgain(ask, ["Swap"], "Swap?")],
             (b) => {
               const no = swapRefusal(S.world, s.id);
               // The list moves up under the pointer after a hand over: what has been delivered is not lost to one press.
-              if (no === null && (filled()?.some((n) => n > 0) ?? false) && !pressedTwice(ask, build)) return;
+              if (no === null && (filled()?.some((n) => n > 0) ?? false) && !pressedTwice(ask, again)) return;
               if (no !== null || "refused" in doNow({ do: "swap", order: s.id })) {
                 yardSfx.no();
                 replay(b, "shake");
@@ -210,18 +259,18 @@ function orders(_art: Art, body: HTMLElement): () => void {
               panelHooks.changed();
             },
           );
-      if (!full)
+      if (!s.full)
         tip(
           act,
           "Swap",
-          why ?? `Replaces this order with a new one. Free, once every ${(SWAP_EVERY * TICK_MS) / 60_000} minutes.`,
+          s.why ?? `Replaces this order with a new one. Free, once every ${(SWAP_EVERY * TICK_MS) / 60_000} minutes.`,
         );
       // The button is in the card's first line, so it is in the same spot whatever the card's height.
       kids.push(
         el(
           "div",
           // One Leaf has just hung is quiet until it counts.
-          full ? "k-card order ready" : counting(s, w.tick) ? "k-card order" : "k-card order hung",
+          s.full ? "k-card order ready" : s.counting ? "k-card order" : "k-card order hung",
           { "data-order": s.id },
           el("div", "from", {}, el("span", "k-label", { text: s.from }), el("span", "k-grow"), act),
           el(
@@ -237,8 +286,8 @@ function orders(_art: Art, body: HTMLElement): () => void {
       );
     }
     // A place on the board Leaf has yet to hang an order in: last, and the order takes this place.
-    if (w.open.board)
-      for (let n = w.board.length; n < w.open.hooks; n++)
+    if (p.board)
+      for (let n = p.orders.length; n < p.hooks; n++)
         kids.push(el("div", "k-card order waiting", {}, el("div", "k-dim", { text: "A new order is on its way." })));
     // A list shorter than it is scrolled would slide down: it keeps that much room at its end.
     const top = body.scrollTop;
@@ -252,16 +301,9 @@ function orders(_art: Art, body: HTMLElement): () => void {
       body.append(el("div", "", { style: `flex: none; height: ${need - body.scrollHeight}px` }));
     body.scrollTop = top;
   };
-  const shape = when(
-    () =>
-      `${S.world.hand}|${S.world.open.board}|${S.world.open.hooks}|${S.world.board
-        .map(
-          (s) =>
-            `${s.id}:${isFilled(s.want, s.filled)}:${swapRefusal(S.world, s.id) === null}:${counting(s, S.world.tick)}`,
-        )
-        .join()}`,
-    build,
-  );
+  /** Draws the list again as it is now: for a button that asks to be pressed twice. */
+  const again = (): void => draw(ordersPrint());
+  const shape = shows(ordersPrint, draw);
   return () => {
     shape();
     for (const f of live) f();
@@ -284,26 +326,47 @@ const nodesOpen = (): Goal[] =>
 export const takeable = (): Goal[] => nodesOpen().filter((g) => g !== S.world.hand && ready(S.world.open, g));
 
 /**
+ * What the projects panel prints: the node in hand; each project or commission of the tiers open
+ * not yet done that may be taken (or a commission that may not yet), with the titles of what it still
+ * needs first; and those done.
+ */
+export function projectsPrint(): {
+  readonly hand: Goal | -1;
+  readonly open: readonly { readonly goal: Goal; readonly take: boolean; readonly needs: readonly string[] }[];
+  readonly done: readonly Goal[];
+} {
+  const w = S.world;
+  const nodes = nodesOpen();
+  return {
+    hand: w.hand,
+    open: nodes.flatMap((g) => {
+      const info = GOALS[g];
+      if (!info || w.open.done[g] === 1) return [];
+      const take = ready(w.open, g);
+      // Nothing that is not ready is shown, but for the commission, with what it still needs.
+      if (!take && info.kind !== "commission") return [];
+      return [
+        { goal: g, take, needs: info.needs.filter((n) => w.open.done[n] !== 1).map((n) => GOALS[n]?.title ?? "") },
+      ];
+    }),
+    done: nodes.filter((g) => w.open.done[g] === 1),
+  };
+}
+
+/**
  * The projects as a list: each that may be taken up (and the commission), with what it wants and
  * has been given and what it unlocks, and one button that takes it in hand; the one in hand marked.
  * A commission not ready yet says what it still needs. The done ones follow, plainly.
  */
 function projects(_art: Art, body: HTMLElement): () => void {
   let live: (() => void)[] = [];
-  const build = (): void => {
-    const w = S.world;
+  const draw = (p: ReturnType<typeof projectsPrint>): void => {
     live = [];
     const kids: HTMLElement[] = [];
-    const nodes = nodesOpen();
-    const open = nodes.filter((g) => w.open.done[g] !== 1);
-    const done = nodes.filter((g) => w.open.done[g] === 1);
-    for (const g of open) {
+    for (const { goal: g, take, needs } of p.open) {
       const info = GOALS[g];
       if (!info) continue;
-      const take = ready(w.open, g);
-      // Nothing that is not ready is shown, but for the commission, with what it still needs.
-      if (!take && info.kind !== "commission") continue;
-      const held = w.hand === g;
+      const held = p.hand === g;
       const side = held
         ? el("span", "k-chip lit", {}, icon("check"), "In hand")
         : take
@@ -313,10 +376,9 @@ function projects(_art: Art, body: HTMLElement): () => void {
               panelHooks.changed();
             })
           : el("span", "k-chip", {}, icon("lock"), "Not yet");
-      const rows = wants(info.want, () => S.world.got[g] ?? null);
+      const rows = wants(wantsIn(info.want), () => S.world.got[g] ?? null);
       live.push(rows.update);
       const opens = opensThings(g);
-      const needs = info.needs.filter((n) => w.open.done[n] !== 1).map((n) => GOALS[n]?.title ?? "");
       kids.push(
         el(
           "div",
@@ -330,8 +392,8 @@ function projects(_art: Art, body: HTMLElement): () => void {
         ),
       );
     }
-    if (done.length > 0) kids.push(el("div", "k-label", { text: "Done" }));
-    for (const g of done)
+    if (p.done.length > 0) kids.push(el("div", "k-label", { text: "Done" }));
+    for (const g of p.done)
       kids.push(
         el(
           "div",
@@ -348,7 +410,7 @@ function projects(_art: Art, body: HTMLElement): () => void {
       );
     body.replaceChildren(...kids);
   };
-  const shape = when(() => `${S.world.hand}|${S.world.done.length}|${S.world.open.tier}`, build);
+  const shape = shows(projectsPrint, draw);
   return () => {
     shape();
     for (const f of live) f();
@@ -357,24 +419,63 @@ function projects(_art: Art, body: HTMLElement): () => void {
 
 // ---------- the depot's books ----------
 
-function depot(_art: Art, body: HTMLElement): () => void {
-  const build = (): void => {
-    const w = S.world;
-    const ticks = w.pace.ticks;
-    const perHour = (k: number): number => (ticks > 0 ? ((w.pace.made[k] ?? 0) / ticks) * 36_000 : 0);
-    const rows = ALL_ITEMS.flatMap((k) => ((w.depot[k] ?? 0) > 0 || perHour(k) > 0 ? [k] : [])).flatMap((k) => [
-      thing(itemRef(k)),
-      el("span", "num k-gold", {
-        text: perHour(k) >= 1 ? `${Math.round(perHour(k)).toLocaleString("en-US")} an hour` : "",
-      }),
-      el("span", "num k-dim", { text: Math.floor(w.depot[k] ?? 0).toLocaleString("en-US") }),
-    ]);
-    const hourly = ALL_ITEMS.reduce((sum, k) => sum + perHour(k) * (ITEM_INFO[k]?.worth ?? 0), 0);
-    const spare = ALL_KINDS.flatMap((k) => {
+/**
+ * What the depot's book prints, each number as it is printed: what the depot has taken in of each
+ * thing and how many an hour come in now, what that is worth an hour (or that the yard is still
+ * being measured), what has been earned in all, the nodes done and orders handed over, the pieces to
+ * hand, and how long the yard works on while its owner is away.
+ */
+export function depotPrint(): {
+  readonly rows: readonly (readonly [Item, string, string])[];
+  readonly measuring: boolean;
+  readonly hourly: string;
+  readonly alone: number;
+  readonly paid: string;
+  readonly sold: string;
+  readonly nodes: number;
+  readonly handed: number;
+  readonly spare: readonly string[];
+  readonly away: number;
+} {
+  const w = S.world;
+  const ticks = w.pace.ticks;
+  const perHour = (k: number): number => (ticks > 0 ? ((w.pace.made[k] ?? 0) / ticks) * 36_000 : 0);
+  const hourly = ALL_ITEMS.reduce((sum, k) => sum + perHour(k) * (ITEM_INFO[k]?.worth ?? 0), 0);
+  return {
+    rows: ALL_ITEMS.flatMap((k) =>
+      (w.depot[k] ?? 0) > 0 || perHour(k) > 0
+        ? [
+            [
+              k,
+              perHour(k) >= 1 ? `${Math.round(perHour(k)).toLocaleString("en-US")} an hour` : "",
+              Math.floor(w.depot[k] ?? 0).toLocaleString("en-US"),
+            ] as const,
+          ]
+        : [],
+    ),
+    measuring: w.pace.warm > 0 || ticks < 200,
+    hourly: Math.round(hourly).toLocaleString("en-US"),
+    alone: Math.max(0, Math.round(hourly * DEPOT_SHARE)),
+    paid: Math.floor(w.paid / MILLI).toLocaleString("en-US"),
+    sold: Math.floor(w.sold / MILLI).toLocaleString("en-US"),
+    nodes: w.done.filter(isNode).length,
+    handed: w.handed,
+    spare: ALL_KINDS.flatMap((k) => {
       const left = w.spare[k] ?? 0;
       const name = (KIND_INFO[k]?.name ?? "").toLowerCase();
       return left > 0 && (STARTING[k] ?? 0) > 0 ? [`${left} ${name}${left === 1 ? "" : "s"}`] : [];
-    });
+    }),
+    away: (w.open.away * TICK_MS) / 3_600_000,
+  };
+}
+
+function depot(_art: Art, body: HTMLElement): () => void {
+  const draw = (p: ReturnType<typeof depotPrint>): void => {
+    const rows = p.rows.flatMap(([k, hour, total]) => [
+      thing(itemRef(k)),
+      el("span", "num k-gold", { text: hour }),
+      el("span", "num k-dim", { text: total }),
+    ]);
     body.replaceChildren(
       el("div", "k-label", { text: "How you are paid" }),
       el("div", "k-d", { text: "A lesson or a commission pays when it is filled." }),
@@ -383,7 +484,7 @@ function depot(_art: Art, body: HTMLElement): () => void {
         text: `Every item the depot takes also pays ${DEPOT_SHARE * 100}% of its worth, whether or not an order asks for it.`,
       }),
       el("div", "k-d", {
-        text: `The yard keeps working for up to ${(w.open.away * TICK_MS) / 3_600_000} hours while you are away. What it earned is added to your Coins when you come back to the Works.`,
+        text: `The yard keeps working for up to ${p.away} hours while you are away. What it earned is added to your Coins when you come back to the Works.`,
       }),
       el(
         "div",
@@ -395,10 +496,9 @@ function depot(_art: Art, body: HTMLElement): () => void {
           {},
           "Coming in now",
           el("div", "k-d", {
-            text:
-              w.pace.warm > 0 || ticks < 200
-                ? "Still measuring: the yard changed a moment ago."
-                : `Worth ${Math.round(hourly).toLocaleString("en-US")} Coins per hour when it fills orders. The depot alone pays ${Math.max(0, Math.round(hourly * DEPOT_SHARE))} per hour.`,
+            text: p.measuring
+              ? "Still measuring: the yard changed a moment ago."
+              : `Worth ${p.hourly} Coins per hour when it fills orders. The depot alone pays ${p.alone} per hour.`,
           }),
         ),
       ),
@@ -415,14 +515,16 @@ function depot(_art: Art, body: HTMLElement): () => void {
           {},
           "In total",
           el("div", "k-d", {
-            text: `${Math.floor(w.paid / MILLI).toLocaleString("en-US")} Coins from orders, ${Math.floor(w.sold / MILLI).toLocaleString("en-US")} from the depot. ${w.done.filter(isNode).length} of ${NODE_COUNT} lessons, projects and commissions, ${w.handed} side orders.`,
+            text: `${p.paid} Coins from orders, ${p.sold} from the depot. ${p.nodes} of ${NODE_COUNT} lessons, projects and commissions, ${p.handed} side orders.`,
           }),
         ),
       ),
-      ...(spare.length > 0 ? [el("div", "k-dim", { text: `Free pieces left to place: ${spare.join(", ")}.` })] : []),
+      ...(p.spare.length > 0
+        ? [el("div", "k-dim", { text: `Free pieces left to place: ${p.spare.join(", ")}.` })]
+        : []),
     );
   };
-  return when(() => `${Math.floor(S.world.tick / 20)}|${S.rev}`, build);
+  return shows(depotPrint, draw);
 }
 
 // ---------- power ----------
@@ -435,45 +537,71 @@ const row = (name: string, about: string, n: number, lit = false): HTMLElement[]
   el("span", lit ? "num k-gold" : "num", { text: String(n) }),
 ];
 
+/**
+ * What the power book prints: the power made and used, and the pace when short; what the depot
+ * gives; the waterwheels turning and out of reach; the boilers burning and cold; and for each kind
+ * that draws, how many are in reach and in the dark, and what those in reach draw.
+ */
+export function powerPrint(): {
+  readonly supply: number;
+  readonly demand: number;
+  readonly pace: number;
+  readonly depot: number;
+  readonly wheels: readonly [number, number];
+  readonly boilers: readonly [number, number, number];
+  readonly draws: readonly (readonly [Kind, number, number, number])[];
+} {
+  const w = S.world;
+  const p = power(w);
+  const lit = litOf(w);
+  const count = (k: Kind, live: boolean): number =>
+    w.kind.reduce((n, there, i) => n + (there === k && (lit[i] === 1) === live ? 1 : 0), 0);
+  /** What the pieces of a kind in reach draw, each at its grade. */
+  const drawn = (k: Kind): number =>
+    w.kind.reduce(
+      (n, there, i) =>
+        n + (there === k && lit[i] === 1 ? ((DRAW[k] ?? 0) * (DRAWN[w.grade[i] ?? 1] ?? HALF)) / HALF : 0),
+      0,
+    );
+  const burning = w.kind.reduce((n, there, i) => {
+    const r = holderOf(w, i);
+    return n + (there === BOILER && lit[i] === 1 && r >= 0 && (w.holders.fuel[r] ?? 0) > 0 ? 1 : 0);
+  }, 0);
+  return {
+    supply: p.supply,
+    demand: p.demand,
+    pace: Math.round(p.pace * 100),
+    depot: w.open.depot,
+    wheels: [count(WHEEL, true), count(WHEEL, false)],
+    boilers: [count(BOILER, true), count(BOILER, false), burning],
+    draws: [GATHERER, MILL, BENCH, WORKSHOP, STUDY].map((k) => [k, count(k, true), count(k, false), drawn(k)] as const),
+  };
+}
+
 function powerBook(_art: Art, body: HTMLElement): () => void {
-  const build = (): void => {
-    const w = S.world;
-    const p = power(w);
-    const lit = litOf(w);
-    const count = (k: Kind, live: boolean): number =>
-      w.kind.reduce((n, there, i) => n + (there === k && (lit[i] === 1) === live ? 1 : 0), 0);
-    /** What the pieces of a kind in reach draw, each at its grade. */
-    const drawn = (k: Kind): number =>
-      w.kind.reduce(
-        (n, there, i) =>
-          n + (there === k && lit[i] === 1 ? ((DRAW[k] ?? 0) * (DRAWN[w.grade[i] ?? 1] ?? HALF)) / HALF : 0),
-        0,
-      );
-    const burning = w.kind.reduce((n, there, i) => {
-      const r = holderOf(w, i);
-      return n + (there === BOILER && lit[i] === 1 && r >= 0 && (w.holders.fuel[r] ?? 0) > 0 ? 1 : 0);
-    }, 0);
-    const cold = count(BOILER, true) - burning;
+  const draw = (p: ReturnType<typeof powerPrint>): void => {
+    const [turning, away] = p.wheels;
+    const [hot, far, burning] = p.boilers;
+    const cold = hot - burning;
+    const short = p.pace < 100;
     const gives = [
-      ...row("The depot", "always", w.open.depot, true),
-      ...(count(WHEEL, true) + count(WHEEL, false) > 0
+      ...row("The depot", "always", p.depot, true),
+      ...(turning + away > 0
         ? row(
             "Waterwheels",
-            `${count(WHEEL, true)} turning${count(WHEEL, false) ? `, ${count(WHEEL, false)} out of reach` : ""}`,
-            count(WHEEL, true) * (GIVES[WHEEL] ?? 0),
+            `${turning} turning${away ? `, ${away} out of reach` : ""}`,
+            turning * (GIVES[WHEEL] ?? 0),
             true,
           )
         : []),
-      ...(count(BOILER, true) + count(BOILER, false) > 0
+      ...(hot + far > 0
         ? row("Boilers", `${burning} burning${cold ? `, ${cold} cold` : ""}`, burning * (GIVES[BOILER] ?? 0), true)
         : []),
     ];
-    const draws = [GATHERER, MILL, BENCH, WORKSHOP, STUDY].flatMap((k) => {
-      const n = count(k, true);
-      const dark = count(k, false);
+    const draws = p.draws.flatMap(([k, n, dark, drawn]) => {
       const name = KIND_INFO[k]?.name ?? "";
       return n + dark > 0
-        ? row(`${name}s`, `${n} in reach${dark ? `, ${dark} in the dark` : ""}, ${DRAW[k] ?? 0} each`, drawn(k))
+        ? row(`${name}s`, `${n} in reach${dark ? `, ${dark} in the dark` : ""}, ${DRAW[k] ?? 0} each`, drawn)
         : [];
     });
     body.replaceChildren(
@@ -489,24 +617,23 @@ function powerBook(_art: Art, body: HTMLElement): () => void {
       draws.length > 0 ? el("div", "rows", {}, ...draws) : el("div", "k-dim", { text: "Nothing is using power yet." }),
       el(
         "div",
-        p.pace < 1 ? "k-card lit" : "k-card",
+        short ? "k-card lit" : "k-card",
         {},
         el(
           "div",
           "k-grow",
           {},
-          p.pace < 1 ? `Not enough power: every machine works at ${Math.round(p.pace * 100)}% speed` : "Enough power",
+          short ? `Not enough power: every machine works at ${p.pace}% speed` : "Enough power",
           el("div", "k-d", {
-            text:
-              p.pace < 1
-                ? "To make more power, build a waterwheel beside the stream or a boiler fed with deadfall. To use less, remove machines that are doing nothing."
-                : `${p.supply - p.demand} power to spare.`,
+            text: short
+              ? "To make more power, build a waterwheel beside the stream or a boiler fed with deadfall. To use less, remove machines that are doing nothing."
+              : `${p.supply - p.demand} power to spare.`,
           }),
         ),
       ),
     );
   };
-  return when(() => `${S.rev}|${power(S.world).supply}|${power(S.world).demand}`, build);
+  return shows(powerPrint, draw);
 }
 
 // ---------- opening and closing ----------

@@ -5,7 +5,7 @@
  * the node's place a strip that says whose yard it is.
  */
 
-import { GOALS, isFilled, NODES, power, TICK_MS } from "@sequoia-leaf/factory";
+import { ALL_ITEMS, GOALS, isFilled, NODES, power, TICK_MS } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
@@ -20,7 +20,7 @@ import { collect, keepScreen } from "../yard.ts";
 import { orderRef } from "./card.ts";
 import { handLabel } from "./notes.ts";
 import { type PanelId, projectsOpen, takeable, togglePanel } from "./panels.ts";
-import { $, button, pic, wantRows, when, type YardIcon, yardIcon } from "./parts.ts";
+import { $, button, pic, shows, wantRows, when, type YardIcon, yardIcon } from "./parts.ts";
 
 const books = new Map<PanelId, HTMLElement>();
 
@@ -45,18 +45,17 @@ function powerPlaque(): () => void {
       ? `The yard uses ${p.demand} power and makes ${p.supply}. Every machine works at ${Math.round(p.pace * 100)}% speed.`
       : `The yard uses ${p.demand} of the ${p.supply} power it makes.`;
   });
-  return when(
+  return shows(
     () => {
       const p = power(S.world);
-      return `${p.demand}/${p.supply}`;
+      return { demand: p.demand, supply: p.supply, pace: Math.round(p.pace * 100) };
     },
-    () => {
-      const p = power(S.world);
-      nums.textContent =
-        p.pace < 1 ? `${p.demand} / ${p.supply} · ${Math.round(p.pace * 100)}%` : `${p.demand} / ${p.supply}`;
-      nums.classList.toggle("short", p.pace < 1);
-      host.classList.toggle("short", p.pace < 1);
-      bar.classList.toggle("coral", p.pace < 1);
+    (p) => {
+      const short = p.pace < 100;
+      nums.textContent = short ? `${p.demand} / ${p.supply} · ${p.pace}%` : `${p.demand} / ${p.supply}`;
+      nums.classList.toggle("short", short);
+      host.classList.toggle("short", short);
+      bar.classList.toggle("coral", short);
       fill.style.setProperty("--v", `${Math.min(100, (p.demand / Math.max(1, p.supply)) * 100)}%`);
     },
   );
@@ -69,27 +68,34 @@ function tracker(art: Art): () => void {
   });
   // Tapping opens the orders; pointing (or a finger kept on it) shows the order's card.
   link(host, orderRef("story"), { acts: true });
-  return when(
-    () => {
-      const w = S.world;
-      const got = w.hand === -1 ? "" : (w.got[w.hand]?.join() ?? "");
-      return `${w.hand}|${got}|${w.board.map((s) => (isFilled(s.want, s.filled) ? 1 : 0)).join("")}`;
-    },
+  return shows(
     () => {
       const w = S.world;
       const o = w.hand === -1 ? undefined : GOALS[w.hand];
-      const from = w.hand === -1 ? undefined : NODES[w.hand]?.from;
-      const ready = w.board.filter((s) => isFilled(s.want, s.filled)).length;
+      const got = w.hand === -1 ? null : (w.got[w.hand] ?? null);
+      return {
+        label: handLabel(),
+        from: w.hand === -1 ? null : (NODES[w.hand]?.from ?? null),
+        title: o?.title ?? null,
+        ready: w.board.filter((s) => isFilled(s.want, s.filled)).length,
+        wants: o
+          ? ALL_ITEMS.filter((k) => (o.want[k] ?? 0) > 0).map(
+              (k) => [k, Math.min(got?.[k] ?? 0, o.want[k] ?? 0), o.want[k] ?? 1] as const,
+            )
+          : [],
+      };
+    },
+    (p) => {
       host.replaceChildren(
         el(
           "div",
           "k-row",
           {},
-          el("span", "k-label k-grow", { text: from ? `${handLabel()} · ${from}` : handLabel() }),
-          ready > 0 ? el("span", "k-chip lit", { text: `${ready} to hand over` }) : null,
+          el("span", "k-label k-grow", { text: p.from ? `${p.label} · ${p.from}` : p.label }),
+          p.ready > 0 ? el("span", "k-chip lit", { text: `${p.ready} to hand over` }) : null,
         ),
-        el("div", "", { text: o ? o.title : "No project in hand" }),
-        ...(o && w.hand !== -1 ? wantRows(art, o.want, w.got[w.hand] ?? null) : []),
+        el("div", "", { text: p.title ?? "No project in hand" }),
+        ...wantRows(art, p.wants),
       );
     },
   );
@@ -111,21 +117,19 @@ function bookButtons(): () => void {
   make("board", "Top yards", "T");
   const projectsBtn = make("projects", "Projects", "P", () => "Deliveries for the guild. Each unlocks something.");
   make("depot", "The depot", "I", () => "What the depot has taken in, and what the yard earns per hour.");
-  return when(
-    () => {
-      const w = S.world;
-      const ready = w.board.filter((s) => isFilled(s.want, s.filled)).length;
-      return `${ready}|${takeable().length}|${projectsOpen()}|${S.panel}`;
-    },
-    () => {
-      const w = S.world;
-      const ready = w.board.filter((s) => isFilled(s.want, s.filled)).length;
-      const open = takeable().length;
-      set(ordersBtn, ready > 0 ? String(ready) : null);
-      set(projectsBtn, open > 0 ? String(open) : null);
-      // Projects is there only once there are projects: from tier 1 on.
-      projectsBtn.hidden = S.visiting !== null || !projectsOpen();
-      for (const [id, b] of books) b.classList.toggle("down", S.panel === id);
+  return shows(
+    () => ({
+      ready: S.world.board.filter((s) => isFilled(s.want, s.filled)).length,
+      open: takeable().length,
+      // Projects is there only once there are projects: from tier 1 on, and not in a visit.
+      projects: projectsOpen(),
+      panel: S.panel,
+    }),
+    (p) => {
+      set(ordersBtn, p.ready > 0 ? String(p.ready) : null);
+      set(projectsBtn, p.open > 0 ? String(p.open) : null);
+      projectsBtn.hidden = !p.projects;
+      for (const [id, b] of books) b.classList.toggle("down", p.panel === id);
     },
   );
 }

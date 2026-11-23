@@ -34,7 +34,6 @@ import {
   piecesOf,
   placed,
   type Plot,
-  plotRefusal,
   priceAt,
   priceOf,
   refusal,
@@ -44,7 +43,6 @@ import {
   route,
   STAND_MOST,
   standRefusal,
-  takeRefusal,
   tilesOf,
   TUNNEL,
   tunnelExit,
@@ -57,7 +55,7 @@ import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { layout } from "./layout.ts";
 import { yardSfx } from "./sound.ts";
-import { builds, draws, type Group, type Mark, S, type Tool } from "./state.ts";
+import { type Aim, builds, draws, type Group, type Mark, type Reckoned, type Run, S, type Tool } from "./state.ts";
 import { coins, doNow } from "./yard.ts";
 
 const DUST = "#cbb894";
@@ -87,14 +85,32 @@ const remember = (d: Done): void => {
 const W = (): number => S.world.land.w;
 
 /**
- * Does something to the yard (on the page's copy at once, and on Leaf), unless `why` (the rules'
- * reason, worked out with the Coins to hand as Leaf will count them) says it cannot be. Gives back
- * why it was not done, or null.
+ * Does something to the yard (on the page's copy at once, and on Leaf). The rules judge it then,
+ * with the purse as it is (`doNow`), whatever was worked out when it was aimed. Gives back the rules'
+ * reason it was not done, or null.
  */
-function attempt(why: string | null, act: Act): string | null {
-  if (why !== null) return why;
+function does(act: Act): string | null {
   const did = doNow(act);
   return "refused" in did ? did.why : null;
+}
+/** An aim at a tile: why it cannot be, what it costs, and for a tunnel its far mouth; of the yard and the purse as they are now. */
+const aimed = (x: number, y: number, why: string | null, cost: number, far = -1): Aim => ({
+  x,
+  y,
+  why,
+  cost,
+  far,
+  rev: S.rev,
+  coins: coins(),
+});
+/**
+ * Whether what was worked out is of the yard and the purse as they are now: the same yard, and Coins
+ * that still cover its cost, or that fall short of it by as much as before. The till's whole Coins
+ * go up as the yard earns; an aim they covered and still cover is not worked out again for that.
+ */
+function fresh(r: Reckoned): boolean {
+  const now = coins();
+  return r.rev === S.rev && (r.coins === now || (r.cost <= r.coins && r.cost <= now));
 }
 /** What a thing done paid in or took, in all. */
 const coinsOf = (did: ReturnType<typeof doNow>): number =>
@@ -160,26 +176,37 @@ export function aimAt(x: number, y: number): void {
     }
   }
   if (tool === "remove") {
-    S.aim = {
-      x,
-      y,
-      why: there === NONE ? "Nothing to remove here" : there === DEPOT ? "The depot cannot be removed" : null,
-      cost: 0,
-    };
+    const why = there === NONE ? "Nothing to remove here" : there === DEPOT ? "The depot cannot be removed" : null;
+    S.aim = aimed(x, y, why, 0);
     return;
   }
   if (tool === "paint") {
-    S.aim = { x, y, why: lineOf(w, at(w, x, y)).length > 0 ? null : "Nothing to paint here", cost: 0 };
+    S.aim = aimed(x, y, lineOf(w, at(w, x, y)).length > 0 ? null : "Nothing to paint here", 0);
     return;
   }
   const exit = tool === TUNNEL ? tunnelExit(w, x, y, S.dir) : null;
-  S.aim = {
-    x,
-    y,
-    why: refusal(w, tool, x, y, coins(), S.dir),
-    cost: priceAt(w, tool, x, y),
-    far: exit ? at(w, exit.x, exit.y) : -1,
-  };
+  const why = refusal(w, tool, x, y, coins(), S.dir);
+  S.aim = aimed(x, y, why, priceAt(w, tool, x, y), exit ? at(w, exit.x, exit.y) : -1);
+}
+
+/**
+ * The aim, a run shown before it is laid, and the pieces in hand as they would stand are each
+ * worked out for a tile, a tool and what is in hand, from the yard and the purse as they were then.
+ * They are kept while the pointer stays on that tile; when the yard has changed under them (a card's
+ * button, a key, an undo, Leaf's yard taken: `S.rev`) or the Coins to hand have, they are worked out
+ * again for the same tile. So what is shown, and what a press sets down, is of the yard as it is.
+ * Each frame asks, and so does each press that acts on an aim.
+ */
+export function keepAim(): void {
+  const a = S.aim;
+  if (path.length > 1) {
+    if (S.run && !fresh(S.run)) reckon();
+  } else if (S.run && S.from) {
+    if (a && !fresh(S.run)) runTo(a.x, a.y);
+  } else if (a && !fresh(a)) {
+    if (S.from && S.tool === BELT) startAt(a.x, a.y);
+    else aimAt(a.x, a.y);
+  }
 }
 
 /** What something just built took from the purse, or gave back, rising from its tile. */
@@ -211,9 +238,9 @@ export function place(x: number, y: number): boolean {
   const was = there === NONE ? undefined : dirOf(i);
   const under = there !== NONE && replaces(tool, there) ? standing(i) : null;
   const cost = priceAt(w, tool, x, y);
-  const no = attempt(refusal(w, tool, x, y, coins(), S.dir), { do: "build", kind: tool, x, y, dir: S.dir, grade: 1 });
+  const no = does({ do: "build", kind: tool, x, y, dir: S.dir, grade: 1 });
   if (no !== null) {
-    S.aim = { x, y, why: no, cost: 0 };
+    S.aim = aimed(x, y, no, 0);
     yardSfx.no();
     toolHooks.changed();
     return false;
@@ -250,7 +277,7 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   const did = doNow({ do: "remove", x, y });
   if ("refused" in did || !was) {
     if (!quiet) {
-      S.aim = { x, y, why: "refused" in did ? did.why : null, cost: 0 };
+      S.aim = aimed(x, y, "refused" in did ? did.why : null, 0);
       yardSfx.no();
     }
     return false;
@@ -286,7 +313,7 @@ export function paintAt(x: number, y: number, more = false): boolean {
   const was = i < 0 ? 0 : (w.tint[i] ?? 0);
   // A line that is that colour already is let be: a drag crosses the same line many times.
   if (line.length > 0 && line.every((j) => w.tint[j] === S.tint)) return false;
-  const no = attempt(null, { do: "paint", x, y, tint: S.tint });
+  const no = does({ do: "paint", x, y, tint: S.tint });
   if (no !== null) {
     if (!more) {
       yardSfx.no();
@@ -316,7 +343,7 @@ export function turnAt(x: number, y: number): boolean {
     return false;
   }
   const was = dirOf(i);
-  if (attempt(null, { do: "turn", x, y, dir: RIGHT[was] }) !== null) return false;
+  if (does({ do: "turn", x, y, dir: RIGHT[was] }) !== null) return false;
   remember({ did: "turned", i, was });
   yardSfx.turn();
   return true;
@@ -326,7 +353,7 @@ export function turnAt(x: number, y: number): boolean {
 export function wayAt(x: number, y: number, way: number): boolean {
   const i = at(S.world, x, y);
   const was = i >= 0 && (((S.world.shut[i] ?? 0) >> way) & 1) === 0;
-  if (i < 0 || attempt(null, { do: "way", x, y, way, open: !was }) !== null) {
+  if (i < 0 || does({ do: "way", x, y, way, open: !was }) !== null) {
     yardSfx.no();
     return false;
   }
@@ -414,7 +441,7 @@ export function undo(): boolean {
     for (const l of last.lines.toReversed()) doNow({ do: "paint", ...xy(l.i), tint: l.was });
   else if (last.did === "way") doNow({ do: "way", ...xy(last.i), way: last.way, open: last.was });
   else if (last.did === "moved") {
-    const no = attempt(null, { do: "move", tiles: last.tiles, turns: last.turns, x: last.x, y: last.y });
+    const no = does({ do: "move", tiles: last.tiles, turns: last.turns, x: last.x, y: last.y });
     if (no !== null) cannotUndo(no);
   } else doNow({ do: "turn", ...xy(last.i), dir: last.was });
   yardSfx.undo();
@@ -423,7 +450,7 @@ export function undo(): boolean {
     letGo();
     S.aim = null;
   }
-  if (S.aim) aimAt(S.aim.x, S.aim.y);
+  keepAim();
   toolHooks.changed();
   return true;
 }
@@ -453,20 +480,29 @@ function reckon(): void {
     if (there === NONE) {
       const why = refusal(w, BELT, t.x, t.y, Infinity, dir);
       if (why !== null) bad ??= why;
-      else legs.push({ tunnel: false, x: t.x, y: t.y, dir, span: 0, grade: 1 });
+      else legs.push({ tunnel: false, x: t.x, y: t.y, dir, grade: 1 });
     } else if (there === BELT && k === 0 && next && dirOf(at(w, t.x, t.y)) !== dir) turns.push({ x: t.x, y: t.y, dir });
     // Anything else in the way is stepped over: the belt before it points into it.
   });
-  const cost = priceOf(w, legs.map(legPiece));
   const last = path.at(-1);
   if (path.length > 1) {
-    S.run = { legs, turns, cost, why: bad ?? (cost > coins() ? "Not enough Coins" : null) };
-    if (last) S.aim = { x: last.x, y: last.y, why: S.run.why, cost };
+    S.run = runOf(legs, turns, bad);
+    if (last) S.aim = aimed(last.x, last.y, S.run.why, S.run.cost);
   } else {
     S.run = null;
     if (last) aimAt(last.x, last.y);
   }
   toolHooks.changed();
+}
+
+/**
+ * A run as it would be laid: its legs, the belt it turns where it starts, what it costs, and why it
+ * cannot be (`bad`, a tile it cannot cross, or else what the rules say of the purse now).
+ */
+function runOf(legs: Leg[], turns: Run["turns"], bad: string | null): Run {
+  const pieces = legs.map(legPiece);
+  const why = bad ?? standRefusal(S.world, pieces, coins());
+  return { legs, turns, cost: priceOf(S.world, pieces), why, rev: S.rev, coins: coins() };
 }
 
 /** A drag with the belt in hand begins on a tile. */
@@ -510,8 +546,9 @@ export function runEnd(): void {
   commitRun();
 }
 
-/** Lays the run that is showing. */
+/** Lays the run that is showing, worked out again first if the yard or the purse has changed under it. */
 export function commitRun(): boolean {
+  keepAim();
   const w = S.world;
   const run = S.run;
   S.run = null;
@@ -527,7 +564,7 @@ export function commitRun(): boolean {
   // The first belt, already standing, turned to meet the run: all of it or none, with the run.
   const [bend] = run.turns;
   const was = bend ? dirOf(at(w, bend.x, bend.y)) : undefined;
-  const no = attempt(null, bend ? { do: "lay", legs: run.legs, turn: bend } : { do: "lay", legs: run.legs });
+  const no = does(bend ? { do: "lay", legs: run.legs, turn: bend } : { do: "lay", legs: run.legs });
   if (no !== null) {
     yardSfx.no();
     toolHooks.said(`${no}.`);
@@ -566,7 +603,6 @@ export function commitRun(): boolean {
  * hands things on, or a splitter's way ahead.
  */
 export function tapBelt(x: number, y: number): void {
-  const w = S.world;
   if (!S.from || (S.run === null && S.from.x === x && S.from.y === y)) {
     if (S.from) {
       // The same tile twice: one belt, the way the hand is pointing.
@@ -575,12 +611,25 @@ export function tapBelt(x: number, y: number): void {
       return;
     }
     S.from = { x, y };
-    S.run = null;
-    aimAt(x, y);
-    if (kindAt(w, x, y) !== NONE) S.aim = { x, y, why: null, cost: 0 };
+    startAt(x, y);
     toolHooks.changed();
     return;
   }
+  runTo(x, y);
+  toolHooks.changed();
+}
+
+/** Where a finger's run starts, aimed: a clear tile as a belt would be, or a piece to start from, which stands as it is. */
+function startAt(x: number, y: number): void {
+  S.run = null;
+  aimAt(x, y);
+  if (kindAt(S.world, x, y) !== NONE) S.aim = aimed(x, y, null, 0);
+}
+
+/** The run from where a finger's run starts (`S.from`; on a piece, the tile ahead of it) to a tile: the shortest clear way. */
+function runTo(x: number, y: number): void {
+  const w = S.world;
+  if (!S.from) return;
   let sx = S.from.x;
   let sy = S.from.y;
   if (kindAt(w, sx, sy) !== NONE) {
@@ -591,13 +640,8 @@ export function tapBelt(x: number, y: number): void {
     }
   }
   const legs = sx === x && sy === y && kindAt(w, x, y) !== NONE ? null : route(w, [sx, sy], [x, y]);
-  if (!legs) S.run = { legs: [], turns: [], cost: 0, why: "No free path for a belt from there to here" };
-  else {
-    const cost = priceOf(w, legs.map(legPiece));
-    S.run = { legs, turns: [], cost, why: cost > coins() ? "Not enough Coins" : null };
-  }
-  S.aim = { x, y, why: S.run.why, cost: S.run.cost };
-  toolHooks.changed();
+  S.run = runOf(legs ?? [], [], legs ? null : "No free path for a belt from there to here");
+  S.aim = aimed(x, y, S.run.why, S.run.cost);
 }
 
 /** The gold button: builds what is aimed, or lays the run that is showing. */
@@ -728,7 +772,7 @@ function aimGroup(x: number, y: number): void {
   const moving = g.as === "move";
   g.why = refusals(w, g.at, moving ? tilesOf(w, from) : null);
   const why = moving ? (g.why.find((r) => r !== null) ?? null) : standRefusal(w, g.at, coins(), g.why);
-  S.aim = { x, y, why, cost: moving ? 0 : priceOf(w, g.at) };
+  S.aim = aimed(x, y, why, moving ? 0 : priceOf(w, g.at));
 }
 
 /** The quarter turns that undo so many. */
@@ -736,10 +780,13 @@ const TURNS_BACK = [0, 3, 2, 1] as const;
 
 /**
  * Sets the pieces in hand down where they are aimed, all of them or none, in one command: a move,
- * a copy or a blueprint, each naming the turns and the corner. Moved pieces are done with, and stay
- * marked where they now stand; a copy or a blueprint stays in hand for another.
+ * a copy or a blueprint, each naming the turns and the corner. What is in hand is worked out again
+ * first if the yard or the purse has changed since it was aimed, and the rules judge the command as
+ * it is sent. Moved pieces are done with, and stay marked where they now stand; a copy or a
+ * blueprint stays in hand for another.
  */
 function setDown(): boolean {
+  keepAim();
   const w = S.world;
   const g = S.group;
   const aim = S.aim;
@@ -762,7 +809,7 @@ function setDown(): boolean {
     typeof g.as === "number"
       ? { do: "placeBlueprint", slot: g.as, turns: g.turns, x: box.x, y: box.y }
       : { do: g.as, tiles: g.tiles, turns: g.turns, x: box.x, y: box.y };
-  const no = attempt(aim.why, act);
+  const no = does(act);
   if (no !== null) {
     yardSfx.no();
     toolHooks.said(`${no}.`);
@@ -833,8 +880,7 @@ export function askSave(): void {
 /** Keeps the marked pieces as the blueprint in a place. They glint as it is taken down. */
 export function saveMark(slot: number): boolean {
   const m = S.mark;
-  const no = m && blueprintRefusal(S.world.open, slot, m.pieces);
-  if (!m || attempt(no, { do: "saveBlueprint", slot, tiles: m.tiles }) !== null) return false;
+  if (!m || does({ do: "saveBlueprint", slot, tiles: m.tiles }) !== null) return false;
   S.saving = false;
   for (const p of m.pieces.slice(0, 120)) sparkle(p.x * TILE + 8, p.y * TILE + 6, 2, 5);
   float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, "Blueprint saved", GOLD[2], 1.6);
@@ -859,7 +905,7 @@ export function buyLand(id: Plot): boolean {
   const w = S.world;
   const plot = w.land.plots.find((p) => p.plot === id);
   const sign = layout(w, S.rev).signs.find((s) => s.plot.plot === id);
-  const no = plot ? attempt(plotRefusal(w, id, coins()), { do: "buyPlot", plot: id }) : "There is no such plot";
+  const no = plot ? does({ do: "buyPlot", plot: id }) : "There is no such plot";
   if (!plot || no !== null) {
     yardSfx.no();
     toolHooks.said(`${no}.`);
@@ -895,7 +941,7 @@ export function stepClearing(): void {
 
 /** Takes a project, or the commission, in hand: what reaches the depot goes to it first. Says why not, or nothing. */
 export function takeInHand(g: Goal): string | null {
-  const no = attempt(takeRefusal(S.world, g), { do: "take", node: g });
+  const no = does({ do: "take", node: g });
   if (no !== null) {
     yardSfx.no();
     toolHooks.said(`${no}.`);

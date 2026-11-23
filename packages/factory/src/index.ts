@@ -34,7 +34,7 @@ export * from "./pieces.ts";
 export * from "./planner.ts";
 export * from "./postcard.ts";
 export { litOf, repower, squared } from "./power.ts";
-export { type Leg, legKind, legPiece, route } from "./route.ts";
+export { type Leg, legKind, legPiece, legSpan, route } from "./route.ts";
 export * from "./status.ts";
 export * from "./tables.ts";
 export { PACE_WINDOW, step } from "./tick.ts";

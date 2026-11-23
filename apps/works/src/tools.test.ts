@@ -1,12 +1,14 @@
 /**
  * What the member does, on the page against a stand-in Leaf: Select's copy is one command whatever
  * its size; the phone's belt tool starts a run on the tile ahead of what it taps; what is worked
- * out from the yard is worked out again when a goal is finished; the page builds, picks up and
+ * out from the yard is worked out again when a goal is finished, and kept through a command that
+ * changes nothing that stands; the page builds, picks up and
  * draws as belts only the kinds it draws; and a drawing of pieces in hand writes nothing to the yard.
  */
 import { describe, expect, test } from "bun:test";
 
 import {
+  ALL_GOALS,
   at,
   BELT,
   build,
@@ -14,12 +16,15 @@ import {
   check,
   create,
   deliver,
+  DEPOT,
   encode,
   goal,
   GOALS,
   holderOf,
+  isNode,
   item,
   kind,
+  MILLI,
   NONE,
   piecesAt,
   placed,
@@ -28,6 +33,7 @@ import {
   put,
   SORTER,
   SPLITTER,
+  takeRefusal,
   type Yard,
 } from "@sequoia-leaf/factory";
 
@@ -47,8 +53,9 @@ import {
   tapBelt,
   usable,
 } from "./tools.ts";
-import { cardKey, tileRef } from "./ui/card.ts";
-import { differences, doNow, runYard } from "./yard.ts";
+import { tileRef } from "./ui/card.ts";
+import { printOf } from "./ui/prints.ts";
+import { again, differences, doNow, runYard } from "./yard.ts";
 
 useFakeLeaf();
 
@@ -58,8 +65,11 @@ function yardAt(tier: number): Yard {
   y.at = ctx().now;
   return y;
 }
-/** What a tile's card says it holds, as its key has it. */
-const holds = (i: number): string => cardKey(tileRef(i)).split("|")[4] ?? "";
+/** What a tile's card says it holds, as its print has it. */
+const holds = (i: number): readonly (readonly [number, number])[] => {
+  const p = printOf(tileRef(i));
+  return p?.card === "standing" ? p.holding : [];
+};
 /** The commands Leaf was sent, by what each did. */
 const sent = (leaf: { commands: unknown[] }): unknown[] =>
   leaf.commands.map((c) => (typeof c === "object" && c !== null && "do" in c ? c.do : null));
@@ -166,12 +176,38 @@ describe("what is worked out from the yard and kept", () => {
     expect(signed()).toBe(true);
   });
 
-  test("is worked out again when a line is coloured, as after any command done", async () => {
+  test("is worked out again when a line is coloured: a colour is part of what stands", async () => {
     const y = yardAt(2);
     for (let x = 18; x < 22; x++) build(y, BELT, x, 13, 0, Infinity);
     await opened(y);
     const before = layout(S.world, S.rev);
     expect("refused" in doNow(act({ do: "paint", x: 19, y: 13, tint: 3 }))).toBe(false);
+    expect(layout(S.world, S.rev)).not.toBe(before);
+  });
+
+  test("is kept through commands that change nothing that stands, and when Leaf's yard is taken standing the same", async () => {
+    const y = yardAt(2);
+    for (let x = 18; x < 22; x++) build(y, BELT, x, 13, 0, Infinity);
+    y.till = 3 * MILLI;
+    const fake = await opened(y);
+    const before = layout(S.world, S.rev);
+    const project = ALL_GOALS.find(
+      (g) => isNode(g) && GOALS[g]?.kind === "project" && takeRefusal(S.world, g) === null,
+    );
+    if (project === undefined) throw new Error("no project to take");
+    for (const c of [{ do: "collect" }, { do: "take", node: GOALS[project]?.id }]) {
+      const rev = S.rev;
+      expect("refused" in doNow(act(c))).toBe(false);
+      expect(S.rev).toBe(rev + 1);
+      expect(layout(S.world, S.rev)).toBe(before);
+    }
+    await until(() => fake.leaf.posts >= 1);
+    await again();
+    expect(differences()).toBe(0);
+    expect(layout(S.world, S.rev)).toBe(before);
+    expect(layout(S.world, S.rev).yard).toBe(S.world);
+    // A piece built is a change to what stands.
+    expect("refused" in doNow(act({ do: "build", kind: "belt", x: 22, y: 13, dir: 0 }))).toBe(false);
     expect(layout(S.world, S.rev)).not.toBe(before);
   });
 });
@@ -183,6 +219,8 @@ describe("the kinds this page draws", () => {
     build(y, BELT, 19, 13, 0, Infinity);
     await opened(y);
     expect(DRAWN.every(draws)).toBe(true);
+    // The depot is drawn too, and is no tool.
+    expect([draws(DEPOT), usable(DEPOT), DRAWN.includes(DEPOT)]).toEqual([true, false, false]);
     expect([draws(SORTER), usable(SORTER), usable(kind("stop")), usable(kind("study"))]).toEqual([
       false,
       false,
@@ -221,8 +259,8 @@ describe("a tunnel's card", () => {
     for (let k = 0; k < 3; k++) put(y.holders, holderOf(y, crate), item("plank"));
     await opened(y);
     expect([S.world.row[crate], S.world.row[tunnel]]).toEqual([0, 0]);
-    expect(holds(crate)).toContain("3");
-    expect(holds(tunnel)).toBe("");
+    expect(holds(crate)).toEqual([[item("plank"), 3]]);
+    expect(holds(tunnel)).toEqual([]);
   });
 });
 

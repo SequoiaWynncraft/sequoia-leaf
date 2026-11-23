@@ -10,11 +10,14 @@
  *     sed 's#./src/main.ts#./review/bench.ts#' index.html > bench.html
  *     bun build bench.html --outdir <site>/works-bench
  *
- * and opened at `/play/works-bench/bench.html?pieces=5500`.
+ * and opened at `/play/works-bench/bench.html?pieces=5500`. Commands done there (`works.act`,
+ * `works.after`) are done to that yard by the rules and sent nowhere; its member has Coins enough
+ * for anything.
  */
 import { step } from "@sequoia-leaf/factory";
 import { generate } from "@sequoia-leaf/factory/test/gen.ts";
 import { makeLand } from "@sequoia-leaf/factory/test/land.ts";
+import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 
 import { S } from "../src/state.ts";
 
@@ -24,4 +27,5 @@ const made = generate(makeLand(plots, plots, 7), pieces);
 for (let k = 0; k < 3000; k++) step(made.y);
 S.world = made.y;
 S.alone = true;
+fromLeaf(1_000_000_000);
 await import("../src/main.ts");

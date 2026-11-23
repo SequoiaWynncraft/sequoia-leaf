@@ -18,7 +18,7 @@ const readBack = (a: F.Act, tick = 7): F.Command | null =>
   F.readCommand(JSON.parse(JSON.stringify({ ...F.writeAct(a), tick })));
 
 describe("what the page writes for an act", () => {
-  const leg: F.Leg = { tunnel: false, x: 3, y: 4, dir: 1, span: 0, grade: 1 };
+  const leg: F.Leg = { tunnel: false, x: 3, y: 4, dir: 1, grade: 1 };
   const acts: F.Act[] = [
     { do: "build", kind: F.MILL, x: 20, y: 15, dir: 2, grade: 1 },
     { do: "build", kind: F.GATHERER, x: 1, y: 2, dir: 3, grade: 2 },
@@ -83,6 +83,30 @@ describe("what the page writes for an act", () => {
       expect(F.readLeg({ x: 1, y: 1, dir: 0, ...bad })).toBeNull();
   });
 
+  test("for a run of belt holds a span only on a tunnel's leg: as the router finds the legs, and as they are read", () => {
+    const y = F.create({ seed: 2, tier: 2 });
+    // A wall of belts down the yard's own plot (rows 12 to 23), so the router goes under it by tunnel and on by belt.
+    for (let z = 12; z < 24; z++) F.build(y, F.BELT, 22, z, 1, Infinity);
+    const legs = F.route(y, [20, 13], [26, 13]) ?? [];
+    expect(legs.some((l) => l.tunnel) && legs.some((l) => !l.tunnel)).toBe(true);
+    for (const l of legs) expect("span" in l).toBe(l.tunnel);
+    expect(F.readLeg({ kind: "belt", x: 1, y: 1, dir: 0, span: 0 })).toEqual({
+      tunnel: false,
+      x: 1,
+      y: 1,
+      dir: 0,
+      grade: 1,
+    });
+    expect(F.readLeg({ kind: "tunnel", x: 1, y: 1, dir: 0, span: 2 })).toEqual({
+      tunnel: true,
+      x: 1,
+      y: 1,
+      dir: 0,
+      grade: 1,
+      span: 2,
+    });
+  });
+
   test("for a run of belt does the same to the page's copy as to Leaf's yard, whatever its legs carry beside what a leg is", () => {
     const page = F.create({ seed: 2, tier: 2 });
     const leaf = F.decode(F.encode(page));
@@ -106,6 +130,65 @@ describe("what the page writes for an act", () => {
     expect(wired.find((w) => w.includes("buyPlot"))).toBe('{"do":"buyPlot","plot":"meadow"}');
     expect(wired.find((w) => w.includes("take"))).toBe('{"do":"take","node":"crates"}');
     expect(wired.find((w) => w.includes('"bench"'))).toContain('"recipe":"tool"');
+  });
+});
+
+/** A yard of tier 3 with two crates on the yard's own plot, both kept as a blueprint. */
+function priced(): { y: F.Yard; crates: number[] } {
+  const y = F.create({ seed: 2, tier: 3 });
+  must(y, { do: "build", kind: "crate", x: 18, y: 13, dir: 0 });
+  must(y, { do: "build", kind: "crate", x: 19, y: 13, dir: 0 });
+  const crates = [F.at(y, 18, 13), F.at(y, 19, 13)];
+  must(y, { do: "saveBlueprint", slot: 0, tiles: crates });
+  return { y, crates };
+}
+/** An act played as the page plays it: at the yard's tick, with the purse. */
+const play = (y: F.Yard, a: F.Act, purse: number): ReturnType<typeof F.play> =>
+  F.play(y, { ...a, tick: y.tick }, purse);
+
+describe("a command played with the purse, as the page plays it", () => {
+  test("refuses whatever costs more than the purse and the till's whole Coins, with the rules' own sentence, and changes nothing", () => {
+    const { y, crates } = priced();
+    const crate = F.priceAt(y, F.kind("crate"), 20, 15);
+    expect(crate).toBeGreaterThan(0);
+    // Past the twelve belts to hand, a run's belts cost.
+    const legs: F.Leg[] = Array.from({ length: 14 }, (_, k) => ({ tunnel: false, x: 17 + k, y: 21, dir: 0, grade: 1 }));
+    const cases: [F.Act, string][] = [
+      [{ do: "build", kind: F.kind("crate"), x: 20, y: 15, dir: 0, grade: 1 }, "Not enough Coins"],
+      [{ do: "lay", legs }, `Not enough Coins: ${F.priceOf(y, legs.map(F.legPiece))} short`],
+      [{ do: "copy", tiles: crates, turns: 0, x: 18, y: 15 }, `Not enough Coins: ${2 * crate} short`],
+      [{ do: "placeBlueprint", slot: 0, turns: 0, x: 18, y: 16 }, `Not enough Coins: ${2 * crate} short`],
+      [
+        {
+          do: "stand",
+          pieces: [
+            { kind: F.kind("crate"), x: 20, y: 16, dir: 0, span: 0 },
+            { kind: F.kind("crate"), x: 21, y: 16, dir: 0, span: 0 },
+          ],
+        },
+        `Not enough Coins: ${2 * crate} short`,
+      ],
+      [{ do: "buyPlot", plot: F.plot("meadow") }, "Not enough Coins"],
+    ];
+    const kept = F.encode(y);
+    for (const [a, why] of cases) {
+      expect(play(y, a, 0)).toMatchObject({ why });
+      expect(F.encode(y)).toBe(kept);
+      // Leaf plays it with no purse: its ledger is what refuses.
+      const leaf = priced().y;
+      expect("refused" in F.play(leaf, { ...a, tick: leaf.tick })).toBe(false);
+    }
+  });
+
+  test("counts the till's whole Coins, which a command that costs pays in first", () => {
+    const { y } = priced();
+    const crate = F.priceAt(y, F.kind("crate"), 20, 15);
+    const build: F.Act = { do: "build", kind: F.kind("crate"), x: 20, y: 15, dir: 0, grade: 1 };
+    y.till = 1.5 * F.MILLI;
+    expect(play(y, build, crate - 2)).toMatchObject({ why: "Not enough Coins" });
+    const did = play(y, build, crate - 1);
+    if ("refused" in did) throw new Error(did.why);
+    expect(did.coins?.map((c) => c.amount)).toEqual([1, -crate]);
   });
 });
 
