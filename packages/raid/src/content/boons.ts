@@ -1,10 +1,9 @@
 /**
  * Boons: three times a run the party is offered three and keeps one. Some change the stall and the
- * purse, some change the fight, and seven are charms that count as one more of a kin. Words and
+ * purse, some change the fight, and seven are charms, each of which gives the emblem of the same id
+ * (`EMBLEMS` in `items.ts`): an item that makes whoever holds it one of a kin as well. Words and
  * numbers only; `run.ts` and `fight/` read the numbers.
  */
-import type { KinId } from "./traits.ts";
-
 export const BOON_IDS = [
   "deeppockets",
   "regular",
@@ -37,8 +36,6 @@ export interface BoonSpec {
   /** The same in a few words for a card, filled the same way. */
   readonly short: string;
   readonly n: Readonly<Record<string, number>>;
-  /** For a charm: the kin it counts as one more of. */
-  readonly charm?: KinId;
   readonly quip: string;
 }
 
@@ -150,63 +147,56 @@ export const BOONS: Record<BoonId, BoonSpec> = {
   embercharm: {
     name: "Coal On A String",
     sort: "charm",
-    charm: "ember",
-    text: "Counts as one more Ember.",
-    short: "Counts as +1 Ember.",
+    text: "An emblem for one figure to hold: it is an Ember as well, and counts as one more Ember.",
+    short: "Gives an emblem. Its holder is an Ember too.",
     n: {},
     quip: "Still warm.",
   },
   mosscharm: {
     name: "Pocket Moss",
     sort: "charm",
-    charm: "moss",
-    text: "Counts as one more Moss.",
-    short: "Counts as +1 Moss.",
+    text: "An emblem for one figure to hold: it is a Moss as well, and counts as one more Moss.",
+    short: "Gives an emblem. Its holder is a Moss too.",
     n: {},
     quip: "It was in the pocket already.",
   },
   mistcharm: {
     name: "Jar Of Fog",
     sort: "charm",
-    charm: "mist",
-    text: "Counts as one more Mist.",
-    short: "Counts as +1 Mist.",
+    text: "An emblem for one figure to hold: it is a Mist as well, and counts as one more Mist.",
+    short: "Gives an emblem. Its holder is a Mist too.",
     n: {},
     quip: "Keep the lid on.",
   },
   burrowcharm: {
     name: "A Small Hole",
     sort: "charm",
-    charm: "burrow",
-    text: "Counts as one more Burrow.",
-    short: "Counts as +1 Burrow.",
+    text: "An emblem for one figure to hold: it is a Burrow as well, and counts as one more Burrow.",
+    short: "Gives an emblem. Its holder is a Burrow too.",
     n: {},
     quip: "Portable.",
   },
   feathercharm: {
     name: "Lucky Feather",
     sort: "charm",
-    charm: "feather",
-    text: "Counts as one more Feather.",
-    short: "Counts as +1 Feather.",
+    text: "An emblem for one figure to hold: it is a Feather as well, and counts as one more Feather.",
+    short: "Gives an emblem. Its holder is a Feather too.",
     n: {},
     quip: "Lucky for you. Less so for the bird.",
   },
   crabcharm: {
     name: "Roll Call Sheet",
     sort: "charm",
-    charm: "crab",
-    text: "Counts as one more Crab.",
-    short: "Counts as +1 Crab.",
+    text: "An emblem for one figure to hold: it is a Crab as well, and counts as one more Crab.",
+    short: "Gives an emblem. Its holder is a Crab too.",
     n: {},
     quip: "One name is smudged.",
   },
   gnomecharm: {
     name: "Spare Hat",
     sort: "charm",
-    charm: "gnome",
-    text: "Counts as one more Gnome.",
-    short: "Counts as +1 Gnome.",
+    text: "An emblem for one figure to hold: it is a Gnome as well, and counts as one more Gnome.",
+    short: "Gives an emblem. Its holder is a Gnome too.",
     n: {},
     quip: "Pointed. Red. Unclaimed.",
   },

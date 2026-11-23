@@ -1026,10 +1026,8 @@ button.k-info-chip:hover .k-chip {
 .k-btn.icon.sm {
   width: calc(var(--u) * 16);
 }
-/* What a button costs or pays, written on it. */
+/* What a button costs or pays, written on it: in the button's own ink, with nothing behind it. */
 .k-btn .k-cur {
-  padding: calc(var(--u) * 1.5) calc(var(--u) * 3);
-  background: #0000004a;
   color: inherit;
   text-shadow: none;
 }

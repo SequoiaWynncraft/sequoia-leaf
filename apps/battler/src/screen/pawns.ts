@@ -10,7 +10,8 @@ import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { clamp, lerp } from "@sequoia-leaf/kit/util.ts";
 import type { Note, RaidNote, Run, Spot, Stars } from "@sequoia-leaf/raid";
-import { type FigureId, traitsOf } from "@sequoia-leaf/raid/content/figures.ts";
+import type { FigureId } from "@sequoia-leaf/raid/content/figures.ts";
+import { carries } from "@sequoia-leaf/raid/content/items.ts";
 import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
 
 import { glyphPic, itemPic } from "./art/icons.ts";
@@ -213,7 +214,7 @@ export function spotAt(x: number, y: number): Spot | null {
 export function cheer(run: Run, trait: TraitId): void {
   let n = 0;
   for (const piece of run.board) {
-    if (!piece || !traitsOf(piece.kind).includes(trait)) continue;
+    if (!piece || !carries(piece.kind, piece.items, trait)) continue;
     const p = pawns.get(piece.id);
     if (!p) continue;
     p.cheerAt = V.t + n * 0.07;

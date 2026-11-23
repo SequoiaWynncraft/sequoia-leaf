@@ -17,7 +17,15 @@ import { draw32, mix, pick, shuffled, weighted } from "@sequoia-leaf/core";
  */
 import { BOON_IDS, type BoonId, boonNumber, BOONS, FIGHT_BOONS } from "./content/boons.ts";
 import { type BossId, FIGURE_IDS, type FigureId, FIGURES, isBossId, type Stars } from "./content/figures.ts";
-import { COMPONENT_IDS, type ComponentId, type FinishedId, holdItem, type ItemId } from "./content/items.ts";
+import {
+  COMPONENT_IDS,
+  type ComponentId,
+  EMBLEMS,
+  type FinishedId,
+  holdItem,
+  isEmblemId,
+  type ItemId,
+} from "./content/items.ts";
 import {
   ECONOMY,
   MAX_LEVEL,
@@ -32,7 +40,7 @@ import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
 import { resolveFight } from "./fight/engine.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
 import { COLS, SEATS } from "./hex.ts";
-import { charmsOf, countTraits, type Party, type Placed, type TraitState, traitStates, traitSteps } from "./party.ts";
+import { type Party, type Placed, type TraitState, traitStates, traitSteps } from "./party.ts";
 import { sparParty } from "./spar.ts";
 
 // ---------- what a run is ----------
@@ -84,7 +92,7 @@ export interface Run {
   xp: number;
   board: (Piece | null)[];
   bench: (Piece | null)[];
-  /** Items nobody is holding. */
+  /** Items nobody is holding: components, finished items, and the emblems charm boons gave. */
   items: ItemId[];
   stall: (FigureId | null)[];
   /** The stall is being kept as it is for the next room. */
@@ -152,7 +160,8 @@ export type Note =
   | { t: "level"; level: number }
   | { t: "gave"; item: ItemId; piece: number; forged: FinishedId | null; holds: ItemId[] }
   | { t: "acorns"; why: AcornsWhy; amount: number }
-  | { t: "items"; why: "basket"; items: ItemId[] }
+  /** Items put on the item bench by a boon: A Basket On The Stump's components, or a charm's emblem. */
+  | { t: "items"; why: "basket" | "charm"; items: ItemId[] }
   | { t: "resolve"; change: number; left: number }
   /** The fight, locked: both boards and its seed to play it from, and how it came out. */
   | { t: "fight"; room: number; seed: number; setup: FightSetup; outcome: FightSummary }
@@ -185,6 +194,7 @@ export const REFUSALS = {
   top_level: "There is no level above this one.",
   no_such_item: "There is no such item.",
   hands_full: "It is holding all it can.",
+  already_kin: "It is of that kin already.",
   board_empty: "Put somebody on the board first.",
   too_many_fielded: "There are more on the board than you can field.",
   no_fight: "There has been no fight yet.",
@@ -274,16 +284,12 @@ export function partyOf(run: Run): Party {
     who: "You",
     title: "",
     figures,
-    charms: charmsOf(run.boons),
     boons: run.boons.filter((b) => FIGHT_BOONS.includes(b)),
     might: 100,
   };
 }
 /** The traits the fielded party has any of, with counts and steps, switched-on ones first. */
-export function traitsNow(run: Run): TraitState[] {
-  const kinds = run.board.flatMap((p) => (p ? [p.kind] : []));
-  return traitStates(countTraits(kinds, charmsOf(run.boons)));
-}
+export const traitsNow = (run: Run): TraitState[] => traitStates(run.board.flatMap((p) => (p ? [p] : [])));
 /** The room the run is in. */
 export const roomNow = (run: Run) => ROOMS[Math.min(run.room, ROOM_COUNT - 1)];
 /** The fight for the room being fought: the same setup every time it is asked for. Null outside a fight. */
@@ -308,7 +314,6 @@ export function opposition(seed: number, roomIndex: number, trailIndex: number):
     who: "The forest",
     title: plan.name,
     figures,
-    charms: [],
     boons: [],
     might: (room.kind === "boss" ? trail?.boss : trail?.trouble) ?? 100,
   };
@@ -338,10 +343,8 @@ function restock(run: Run): void {
 
 function boonOptions(run: Run, not: readonly BoonId[]): BoonId[] {
   const kins = new Set(pieces(run).map((p) => FIGURES[p.kind].kin));
-  const fits = (id: BoonId): boolean => {
-    const charm = BOONS[id].charm;
-    return !run.boons.includes(id) && (charm === undefined || kins.has(charm));
-  };
+  // A charm only for a kin the party owns a figure of.
+  const fits = (id: BoonId): boolean => !run.boons.includes(id) && (!isEmblemId(id) || kins.has(EMBLEMS[id]));
   const all = BOON_IDS.filter(fits);
   const fresh = all.filter((id) => !not.includes(id));
   const left = fresh.length >= ECONOMY.boonOptions ? fresh : all;
@@ -399,7 +402,7 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
     bought: 0,
     boons: [],
     choices: [],
-    foe: { who: "", title: "", figures: [], charms: [], boons: [], might: 100 },
+    foe: { who: "", title: "", figures: [], boons: [], might: 100 },
     record: [],
     nextId: 1,
     won: false,
@@ -499,6 +502,10 @@ export function choose(run: Run, option: number): Done {
       while (run.stall.length < stallSize(run)) run.stall.push(drawOffer(run));
     } else if (boon === "regular") {
       run.rustles += boonNumber(boon, "rustles");
+    } else if (isEmblemId(boon)) {
+      // A charm is its emblem, for one figure to hold.
+      run.items.push(boon);
+      notes.push({ t: "items", why: "charm", items: [boon] });
     }
   }
   run.choices.shift();
@@ -554,8 +561,8 @@ function merge(run: Run, loose: Piece | null, notes: Note[]): void {
       else if (from) run.bench[from.at] = null;
       else spare = null;
       for (const item of gone.items) {
-        const got = holdItem(keep.items, item);
-        if (!got) {
+        const got = holdItem(keep, item);
+        if ("refused" in got) {
           spilled.push(item);
           continue;
         }
@@ -689,7 +696,10 @@ export function buyXp(run: Run): Done {
   gainXp(run, ECONOMY.xpBought, notes);
   return yes(notes);
 }
-/** Hands an item from the item bench to a figure. Two components on one figure become a finished item. */
+/**
+ * Hands an item from the item bench to a figure. Two components on one figure become a finished
+ * item; an emblem is not given to a figure of its kin already.
+ */
 export function giveItem(run: Run, itemAt: number, to: Spot): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
@@ -697,8 +707,8 @@ export function giveItem(run: Run, itemAt: number, to: Spot): Done {
   if (item === undefined) return no("no_such_item");
   const piece = pieceAt(run, to);
   if (!piece) return no("nobody_there");
-  const got = holdItem(piece.items, item);
-  if (!got) return no("hands_full");
+  const got = holdItem(piece, item);
+  if ("refused" in got) return no(got.refused);
   piece.items = got.held;
   run.items.splice(itemAt, 1);
   if (got.forged) remember(run.seen.forged, got.forged);

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { restart, start } from "@sequoia-leaf/kit/live.ts";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
-import { balance, forgetLedger, leafShown } from "@sequoia-leaf/kit/purse.ts";
+import { balance, forgetLedger } from "@sequoia-leaf/kit/purse.ts";
 import {
   GUEST,
   HELLO,
@@ -917,10 +917,9 @@ describe("a guest's town", () => {
     ]);
   });
 
-  test("their purse has Coins and no Leaf, and they are a Guest where a member has a rank", async () => {
+  test("their purse has the ledger's Leaf and Coins, and they are a Guest where a member has a rank", async () => {
     const guild = await guestTown([]);
-    expect(balance().leaf).toBe(0);
-    expect(leafShown()).toBe(false);
+    expect(balance()).toEqual({ leaf: GUEST.leaf, coins: GUEST.coins });
     expect(guild.me()).toMatchObject({ name: "Wanderer", rank: "Guest", level: 1, ranks: [], week: [] });
   });
 

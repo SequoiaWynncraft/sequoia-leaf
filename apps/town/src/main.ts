@@ -513,6 +513,8 @@ async function boot(): Promise<void> {
       running = false;
       return;
     }
+    // The next frame is asked for first: a fault in this one is told to the console and the town goes on.
+    requestAnimationFrame(frame);
     const dt = heldStill ? 0 : Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
     if (dt > 0) tick(dt);
@@ -521,7 +523,6 @@ async function boot(): Promise<void> {
     tickHud(dt);
     stepAbout(dt);
     draw();
-    requestAnimationFrame(frame);
   }
   function wake(): void {
     if (running) return;

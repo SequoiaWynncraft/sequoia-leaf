@@ -6,7 +6,7 @@
  * Only the state is here, with the time it last changed so the hop can be timed; who draws what is
  * in `scene.ts` and `ui/table.ts`. Nothing here touches the page.
  */
-import { isFigureId, type TraitId, traitsOf, type UnitKind } from "@sequoia-leaf/raid";
+import { carries, type ItemId, type TraitId, type UnitKind } from "@sequoia-leaf/raid";
 
 export interface Light {
   /** The trait the pointer is on, if any. */
@@ -77,16 +77,20 @@ export function hopOf(since: number, now: number, order: number): number {
 
 /** How far a figure is dimmed while a trait it does not carry is lit. */
 export const DIM = 0.45;
-/** How the lit trait shows on a figure standing `x` pixels along the table: lit (and how high it hops), dimmed, or neither. */
+/**
+ * How the lit trait shows on a figure standing `x` pixels along the table: lit (and how high it
+ * hops) if it carries the trait, by its own traits or an emblem it holds; dimmed; or neither.
+ */
 export function shineOf(
   kind: UnitKind,
+  items: readonly ItemId[],
   x: number,
   now: number,
   l: Light = light,
 ): { lit: boolean; dim: boolean; hop: number } {
   const trait = litTrait(l);
   if (!trait) return { lit: false, dim: false, hop: 0 };
-  const has = isFigureId(kind) && traitsOf(kind).includes(trait);
+  const has = carries(kind, items, trait);
   // One after another from the left, so the hop runs along the table.
   return { lit: has, dim: !has, hop: has ? hopOf(l.since, now, Math.max(0, Math.round(x / 18))) : 0 };
 }

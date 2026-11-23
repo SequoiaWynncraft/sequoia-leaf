@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { leaf, playerId } from "@sequoia-leaf/core";
+import { type Ctx, leaf, playerId } from "@sequoia-leaf/core";
+import { PULLS } from "@sequoia-leaf/pulls";
 import { Effect, Layer } from "effect";
 import { SqlClient } from "effect/sql";
 
@@ -77,6 +78,8 @@ describe("the database", () => {
       { migration_id: 23, name: "played" },
       { migration_id: 24, name: "play_guest" },
       { migration_id: 25, name: "wars_by_time" },
+      { migration_id: 26, name: "play_kept" },
+      { migration_id: 27, name: "afk" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -123,6 +126,7 @@ describe("the database", () => {
           "awards",
           "banner_people",
           "played",
+          "play_kept",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
         }
@@ -137,7 +141,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 25 },
+      { latest: 27 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -157,6 +161,9 @@ describe("the database", () => {
         // and a player never seen.
         yield* sql`ALTER TABLE play_state DROP COLUMN guest`;
         yield* sql`DROP INDEX activities_wars`;
+        yield* sql`DROP TABLE play_kept`;
+        yield* sql`ALTER TABLE played DROP COLUMN afk_ms`;
+        yield* sql`ALTER TABLE played DROP COLUMN afk`;
         yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 24`;
         for (const [player, game] of [
           [guest, "works"],
@@ -179,6 +186,51 @@ describe("the database", () => {
       { player: member, game: "works", guest: 0 },
       { player: unknown, game: "works", guest: 0 },
     ]);
+  });
+
+  it("keeps how many of each prize each member who has pulled has, from their stored pulls, as the game reads them", async () => {
+    const path = join(directory, "leaf.db");
+    const pulled = "00000000-0000-4000-8000-00000000000a";
+    const opened = "00000000-0000-4000-8000-00000000000b";
+    const raided = "00000000-0000-4000-8000-00000000000c";
+    const guest = "00000000-0000-4000-8000-00000000000d";
+    const ctx: Ctx = {
+      now: Date.UTC(2026, 10, 25),
+      player: { id: pulled, guest: false },
+      seed: 7,
+      room: 0,
+      awards: [],
+    };
+    const have = { "figure:greg": 2, "headliner:banner-1": 1 };
+    // With a ware of the Treasury's, retired: let go of as the game reads the state.
+    const state = PULLS.encode({ ...PULLS.create(ctx), have: { ...have, "ware:jar": 1 } });
+    expect(PULLS.decode(state)?.have).toEqual(have);
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Back to before migration 26, with a member who has pulled, one who has only opened the
+        // pulls, one who has only played the raid, and a guest.
+        yield* sql`DROP TABLE play_kept`;
+        yield* sql`ALTER TABLE played DROP COLUMN afk_ms`;
+        yield* sql`ALTER TABLE played DROP COLUMN afk`;
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 26`;
+        for (const [player, game, text, isGuest] of [
+          [pulled, "pulls", state, 0],
+          [opened, "pulls", PULLS.encode(PULLS.create(ctx)), 0],
+          [raided, "raid", "{}", 0],
+          [guest, "pulls", state, 1],
+        ] as const) {
+          yield* sql`
+            INSERT INTO play_state (player_id, game, rev, state, updated_at, guest)
+            VALUES (${player}, ${game}, 1, ${text}, 5, ${isGuest})
+          `;
+        }
+      }),
+    );
+    expect(
+      await query(path, (sql) => sql`SELECT player_id AS player, game, slot, data, updated_at AS at FROM play_kept`),
+    ).toEqual([{ player: pulled, game: "pulls", slot: "have", data: JSON.stringify(have), at: 5 }]);
   });
 
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {

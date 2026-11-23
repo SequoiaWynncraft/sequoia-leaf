@@ -2,13 +2,21 @@ import { PAL } from "@sequoia-leaf/figures/pal.ts";
 /**
  * The small pictures: one for every trait, component, finished item and boon, the three kinds of
  * room, and the few signs the buttons carry. Typed as rows of letters like the figures, baked once
- * with a dark edge, and handed out as fresh little canvases to put on the page.
+ * with a dark edge, and handed out as fresh little canvases to put on the page. An emblem is its
+ * kin's own sign.
  */
 import { GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
-import { type BoonId, BOONS } from "@sequoia-leaf/raid/content/boons.ts";
-import { isComponentId, type ItemId } from "@sequoia-leaf/raid/content/items.ts";
+import type { BoonId } from "@sequoia-leaf/raid/content/boons.ts";
+import {
+  type ComponentId,
+  EMBLEMS,
+  type FinishedId,
+  isComponentId,
+  isEmblemId,
+  type ItemId,
+} from "@sequoia-leaf/raid/content/items.ts";
 import type { RoomKind } from "@sequoia-leaf/raid/content/rooms.ts";
 import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
 
@@ -139,7 +147,7 @@ const TRAIT_ROWS: Readonly<Record<TraitId, readonly string[]>> = {
   greg: ["..GGGGG..", ".GGGGGGG.", "GkGGGGGkG", "GGGGGGGGG", "GkkkkkkkG", "GLLLLLLLG", ".GLLLLLG.", "..GGGGG.."],
 };
 
-const ITEM_ROWS: Readonly<Record<ItemId, readonly string[]>> = {
+const ITEM_ROWS: Readonly<Record<ComponentId | FinishedId, readonly string[]>> = {
   thorn: [
     ".......b..",
     "......bb..",
@@ -747,7 +755,8 @@ function copy(src: HTMLCanvasElement): HTMLCanvasElement {
 /** The kept picture of a trait, for drawing on the table. Do not put it on the page. */
 export const traitPic = (id: TraitId): HTMLCanvasElement => bakedOf(`t:${id}`, TRAIT_ROWS[id]);
 export const traitIcon = (id: TraitId): HTMLCanvasElement => copy(traitPic(id));
-export const itemPic = (id: ItemId): HTMLCanvasElement => bakedOf(`i:${id}`, ITEM_ROWS[id]);
+export const itemPic = (id: ItemId): HTMLCanvasElement =>
+  isEmblemId(id) ? traitPic(EMBLEMS[id]) : bakedOf(`i:${id}`, ITEM_ROWS[id]);
 export const itemIcon = (id: ItemId): HTMLCanvasElement => copy(itemPic(id));
 export const glyphPic = (id: Glyph): HTMLCanvasElement => bakedOf(`g:${id}`, GLYPH_ROWS[id], id !== "hand");
 export const glyph = (id: Glyph): HTMLCanvasElement => copy(glyphPic(id));
@@ -757,9 +766,8 @@ export const roomIcon = (kind: RoomKind): HTMLCanvasElement => copy(bakedOf(`r:$
 export function boonIcon(id: BoonId): HTMLCanvasElement {
   const rows = BOON_ROWS[id];
   if (rows) return copy(bakedOf(`b:${id}`, rows));
-  const kin = BOONS[id].charm;
-  if (!kin) return copy(glyphPic("acorn"));
-  const sign = traitPic(kin);
+  if (!isEmblemId(id)) return copy(glyphPic("acorn"));
+  const sign = traitPic(EMBLEMS[id]);
   const { c, g } = makeCanvas(sign.width, sign.height + 3);
   g.fillStyle = PAL.c ?? "#e9d8b8";
   g.fillRect(Math.floor(sign.width / 2) - 1, 0, 1, 3);
@@ -803,15 +811,15 @@ function halved(rows: readonly string[]): string[] {
 }
 
 /**
- * What a figure holds, as it is shown under its base: the item at half size, a finished one with a
- * gold edge and a loose component with the plain dark one, so a component waiting for its pair
- * stands out. Do not put it on the page.
+ * What a figure holds, as it is shown under its base: the item at half size, a finished one (and an
+ * emblem) with a gold edge and a loose component with the plain dark one, so a component waiting for
+ * its pair stands out. Do not put it on the page.
  */
 export function heldPic(id: ItemId): HTMLCanvasElement {
   const key = `h:${id}`;
   let c = baked.get(key);
   if (!c) {
-    const pic = bitmap(halved(ITEM_ROWS[id]), PAL);
+    const pic = bitmap(halved(isEmblemId(id) ? TRAIT_ROWS[EMBLEMS[id]] : ITEM_ROWS[id]), PAL);
     c = outlined(pic, isComponentId(id) ? INK : GOLD[2]);
     baked.set(key, c);
   }

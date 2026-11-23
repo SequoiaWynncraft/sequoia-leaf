@@ -4,10 +4,23 @@
  * fresh run, and anything that is not a run this version of the game could have made is refused,
  * with a word about what was wrong. A fight in progress keeps its setup; how it comes out is worked
  * out again from that, and is the same.
+ *
+ * A run saved by an older game of the same version is brought up to date as it is read, each change
+ * where its field is read: a field it did not keep yet gets what a new run starts with, and a charm
+ * taken before charms were emblems gets its emblem on the item bench.
  */
 import { BOON_IDS, type BoonId, boonNumber, isBoonId } from "./content/boons.ts";
-import { FIGURE_IDS, type FigureId, FIGURES, isBossId, isFigureId, isStars } from "./content/figures.ts";
-import { FINISHED_IDS, HOLDS, isComponentId, isFinishedId, isItemId, type ItemId } from "./content/items.ts";
+import { FIGURE_IDS, type FigureId, FIGURES, isBossId, isFigureId, isStars, traitsOf } from "./content/figures.ts";
+import {
+  EMBLEMS,
+  FINISHED_IDS,
+  HOLDS,
+  isComponentId,
+  isEmblemId,
+  isFinishedId,
+  isItemId,
+  type ItemId,
+} from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, ROOMS, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS, traitNumber } from "./content/traits.ts";
 import { resolveFight } from "./fight/engine.ts";
@@ -52,11 +65,14 @@ function readPiece(v: unknown, nextId: number): Piece | null {
   if (v === null) return null;
   const p = record(v, "a figure");
   const kind = one(p.kind, isFigureId, "a figure's kind");
+  const items = readItems(p.items, "what a figure holds");
+  // Nobody holds the emblem of a kin it is already.
+  if (items.some((item) => isEmblemId(item) && traitsOf(kind).includes(EMBLEMS[item]))) bad("what a figure holds");
   return {
     id: whole(p.id, 1, nextId - 1, "a figure's number"),
     kind,
     stars: one(p.stars, isStars, "a figure's stars"),
-    items: readItems(p.items, "what a figure holds"),
+    items,
     fed: whole(p.fed, 0, kind === "greg" ? traitNumber("greg", "most", 1) : 0, "how much Greg has eaten"),
   };
 }
@@ -140,6 +156,14 @@ function readRun(v: unknown, shown = false): Run {
   if (bench.length !== ECONOMY.bench) bad("the bench");
   const ids = [...board, ...bench].flatMap((p) => (p ? [p.id] : []));
   unique(ids, "the figures' numbers");
+  const items = each(r.items, isItemId, 400, "the item bench");
+  const held = [...board, ...bench].flatMap((p) => p?.items ?? []);
+  // A charm taken before a charm was an emblem has none anywhere: it is put on the item bench.
+  for (const boon of boons) if (isEmblemId(boon) && !items.includes(boon) && !held.includes(boon)) items.push(boon);
+  // Every emblem is its charm's, and there is one of it.
+  const emblems = [...items, ...held].filter(isEmblemId);
+  if (emblems.some((emblem) => !boons.includes(emblem))) bad("the emblems");
+  unique(emblems, "the emblems");
   // A run saved while some figures were locked lists the ones its stall could offer; every figure can now.
   const seen = record(r.seen, "the almanac notes");
   const foe = one(r.foe, isParty, "who is waiting in the room");
@@ -158,7 +182,7 @@ function readRun(v: unknown, shown = false): Run {
     xp: whole(r.xp, 0, need - 1, "the experience"),
     board,
     bench,
-    items: each(r.items, isItemId, 400, "the item bench"),
+    items,
     stall,
     held: flag(r.held, "the held stall"),
     rustles: whole(r.rustles, 0, 8, "the free rustles"),

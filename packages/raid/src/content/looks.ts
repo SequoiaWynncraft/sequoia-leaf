@@ -4,34 +4,51 @@
  * with Leaf (the table's `buyLook`).
  */
 
+import type { LeafFor } from "@sequoia-leaf/core";
+
 export interface LookSpec<Id extends string> {
   readonly id: Id;
   readonly name: string;
   readonly text: string;
   /** What it costs in Leaf; 0 for the one everybody has. */
   readonly leaf: number;
+  /** Who may buy it. */
+  readonly for: LeafFor;
 }
 
 export const CLOTHS = [
-  { id: "bare", name: "Bare rings", text: "The stump as it was cut.", leaf: 0 },
-  { id: "baize", name: "Green baize", text: "A proper games cloth, moss green.", leaf: 12_000 },
-  { id: "plum", name: "Dusk velvet", text: "Plum velvet with a gold edge. Shows every crumb.", leaf: 28_000 },
+  { id: "bare", name: "Bare rings", text: "The stump as it was cut.", leaf: 0, for: "everyone" },
+  { id: "baize", name: "Green baize", text: "A proper games cloth, moss green.", leaf: 12_000, for: "everyone" },
+  {
+    id: "plum",
+    name: "Dusk velvet",
+    text: "Plum velvet with a gold edge. Shows every crumb.",
+    leaf: 28_000,
+    for: "everyone",
+  },
   {
     id: "gingham",
     name: "Picnic gingham",
     text: "Somebody's picnic blanket. They have not asked for it back.",
     leaf: 12_000,
+    for: "everyone",
   },
 ] as const satisfies readonly LookSpec<string>[];
 export const LANTERNS = [
-  { id: "iron", name: "Iron lantern", text: "The same as on every post in town.", leaf: 0 },
-  { id: "paper", name: "Paper lantern", text: "A rose paper lantern from the tree.", leaf: 12_000 },
-  { id: "jar", name: "Jar of fireflies", text: "They come and go as they please. Mostly they stay.", leaf: 28_000 },
+  { id: "iron", name: "Iron lantern", text: "The same as on every post in town.", leaf: 0, for: "everyone" },
+  { id: "paper", name: "Paper lantern", text: "A rose paper lantern from the tree.", leaf: 12_000, for: "everyone" },
+  {
+    id: "jar",
+    name: "Jar of fireflies",
+    text: "They come and go as they please. Mostly they stay.",
+    leaf: 28_000,
+    for: "everyone",
+  },
 ] as const satisfies readonly LookSpec<string>[];
 export const BASES = [
-  { id: "plain", name: "Plain bases", text: "Painted the colour of what the figure costs.", leaf: 0 },
-  { id: "moss", name: "Mossy bases", text: "Left out on the stump over winter.", leaf: 12_000 },
-  { id: "gilt", name: "Gilt rims", text: "A line of gold round every base.", leaf: 28_000 },
+  { id: "plain", name: "Plain bases", text: "Painted the colour of what the figure costs.", leaf: 0, for: "everyone" },
+  { id: "moss", name: "Mossy bases", text: "Left out on the stump over winter.", leaf: 12_000, for: "everyone" },
+  { id: "gilt", name: "Gilt rims", text: "A line of gold round every base.", leaf: 28_000, for: "everyone" },
 ] as const satisfies readonly LookSpec<string>[];
 
 export type ClothId = (typeof CLOTHS)[number]["id"];

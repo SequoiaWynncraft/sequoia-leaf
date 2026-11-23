@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { planRoom, SENSIBLE } from "./bot.ts";
-import { FIGURE_IDS } from "./content/figures.ts";
-import { FINISHED_IDS } from "./content/items.ts";
+import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
+import { FINISHED_IDS, isEmblemId } from "./content/items.ts";
 import { TRAIT_IDS } from "./content/traits.ts";
-import { beginFight, buy, choose, type Run, rustle, startRun, takeTakings } from "./run.ts";
-import { loadRun, SAVE_VERSION, saveRun } from "./save.ts";
+import { beginFight, buy, choose, giveItem, pieces, type Run, rustle, spotOf, startRun, takeTakings } from "./run.ts";
+import { checkRun, loadRun, SAVE_VERSION, saveRun } from "./save.ts";
 
 /** A run played by the bot up to a room, stopped in the middle of planning it. */
 function midRun(seed: number, rooms: number): Run {
@@ -126,6 +126,31 @@ describe("saving a run", () => {
     };
     expect(reload(run)).toEqual(run);
   });
+  test("a run saved when a charm counted for its kin gets the emblem on its item bench, once", () => {
+    const run = midRun(12, 4);
+    run.items = run.items.filter((item) => !isEmblemId(item));
+    for (const p of pieces(run)) p.items = p.items.filter((item) => !isEmblemId(item));
+    // As it was stored then: the charm among the boons, no emblem anywhere, and parties with charms.
+    const old = tampered(run, (raw) => {
+      raw.boons = ["crabcharm"];
+      if (isRecord(raw.foe)) raw.foe.charms = [];
+      if (isRecord(raw.last)) for (const side of listIn(raw.last.sides)) if (isRecord(side)) side.charms = ["crab"];
+    });
+    const loaded = loadRun(old);
+    if (!loaded.ok) throw new Error(loaded.why);
+    expect(loaded.run.boons).toEqual(["crabcharm"]);
+    expect(loaded.run.items).toEqual([...run.items, "crabcharm"]);
+    // Read again, it is still the one.
+    const again = loadRun(saveRun(loaded.run));
+    expect(again.ok && again.run.items).toEqual(loaded.run.items);
+    // A figure holding it is somewhere it is: none is added.
+    const figure = pieces(loaded.run).find((p) => FIGURES[p.kind].kin !== "crab" && p.items.length < 3);
+    const spot = figure ? spotOf(loaded.run, figure.id) : null;
+    if (!spot) throw new Error("nobody to hold it");
+    expect(giveItem(loaded.run, loaded.run.items.indexOf("crabcharm"), spot).ok).toBe(true);
+    const held = checkRun(JSON.parse(JSON.stringify(loaded.run)));
+    expect(held.ok && held.run.items.filter((item) => item === "crabcharm")).toEqual([]);
+  });
   test("a finished run loads as finished", () => {
     const run = midRun(3, 99);
     expect(run.phase).toBe("over");
@@ -234,6 +259,25 @@ describe("loading refuses nonsense", () => {
     expect(refused(tampered(run, (raw) => (raw.resolve = 0)))).toContain("the ending");
     expect(refused(tampered(run, (raw) => delete raw.seen))).toContain("the almanac notes");
     expect(refused(tampered(run, (raw) => delete raw.record))).toContain("the record");
+  });
+  test("an emblem with no charm to give it, two of one emblem, or one held by a figure of its kin", () => {
+    expect(refused(tampered(run, (raw) => listIn(raw.items).push("crabcharm")))).toContain("the emblems");
+    expect(
+      refused(
+        tampered(run, (raw) => {
+          raw.boons = ["crabcharm"];
+          listIn(raw.items).push("crabcharm", "crabcharm");
+        }),
+      ),
+    ).toContain("the emblems");
+    expect(
+      refused(
+        tampered(run, (raw) => {
+          raw.boons = ["burrowcharm"];
+          listIn(raw.bench)[8] = { id: 2, kind: "worm", stars: 1, items: ["burrowcharm"], fed: 0 };
+        }),
+      ),
+    ).toContain("what a figure holds");
   });
   test("extra fields are dropped rather than kept", () => {
     const loaded = loadRun(tampered(run, (raw) => (raw.cheat = { acorns: 9999 })));

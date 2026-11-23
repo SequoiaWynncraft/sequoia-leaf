@@ -1,8 +1,13 @@
 /**
  * Items: five plain components, one stat each, and the fifteen things any two of them make when
  * the same figure holds both. A finished item has the stats of both its halves and one effect of
- * its own. Words and numbers only; the effects happen in `fight/`.
+ * its own. And seven emblems, one for each kin, which a charm boon gives: whoever holds one is of
+ * that kin as well. Words and numbers only; the effects happen in `fight/`.
  */
+import { BOONS } from "./boons.ts";
+import { isFigureId, traitsOf, type UnitKind } from "./figures.ts";
+import { type KinId, type TraitId, TRAITS } from "./traits.ts";
+
 export const COMPONENT_IDS = ["thorn", "plume", "glowcap", "bark", "chestnut"] as const;
 export type ComponentId = (typeof COMPONENT_IDS)[number];
 
@@ -81,7 +86,18 @@ export const FINISHED_IDS = [
   "hoard",
 ] as const;
 export type FinishedId = (typeof FINISHED_IDS)[number];
-export type ItemId = ComponentId | FinishedId;
+/** The emblems have the ids of the charm boons that give them, and their names and quips. */
+export const EMBLEM_IDS = [
+  "embercharm",
+  "mosscharm",
+  "mistcharm",
+  "burrowcharm",
+  "feathercharm",
+  "crabcharm",
+  "gnomecharm",
+] as const;
+export type EmblemId = (typeof EMBLEM_IDS)[number];
+export type ItemId = ComponentId | FinishedId | EmblemId;
 
 export interface FinishedSpec {
   readonly name: string;
@@ -217,13 +233,39 @@ export const FINISHED: Record<FinishedId, FinishedSpec> = {
   },
 };
 
-export const ITEM_IDS: readonly ItemId[] = [...COMPONENT_IDS, ...FINISHED_IDS];
+/** The kin each emblem makes whoever holds it. An emblem has no stats and does nothing else. */
+export const EMBLEMS: Readonly<Record<EmblemId, KinId>> = {
+  embercharm: "ember",
+  mosscharm: "moss",
+  mistcharm: "mist",
+  burrowcharm: "burrow",
+  feathercharm: "feather",
+  crabcharm: "crab",
+  gnomecharm: "gnome",
+};
+
+export const ITEM_IDS: readonly ItemId[] = [...COMPONENT_IDS, ...FINISHED_IDS, ...EMBLEM_IDS];
 /** How many items one figure can hold. */
 export const HOLDS = 3;
 
 export const isComponentId = (v: unknown): v is ComponentId => typeof v === "string" && Object.hasOwn(COMPONENTS, v);
 export const isFinishedId = (v: unknown): v is FinishedId => typeof v === "string" && Object.hasOwn(FINISHED, v);
-export const isItemId = (v: unknown): v is ItemId => isComponentId(v) || isFinishedId(v);
+export const isEmblemId = (v: unknown): v is EmblemId => typeof v === "string" && Object.hasOwn(EMBLEMS, v);
+export const isItemId = (v: unknown): v is ItemId => isComponentId(v) || isFinishedId(v) || isEmblemId(v);
+
+/** A kin's name with "a" or "an" before it: "a Crab", "an Ember". */
+const aKin = (kin: KinId): string => `${/^[AEIOU]/.test(TRAITS[kin].name) ? "an" : "a"} ${TRAITS[kin].name}`;
+
+/** The traits a figure carries: its own, then the kin of each emblem it holds. Nobody else carries any. */
+export function carriedTraits(kind: UnitKind, items: readonly ItemId[]): TraitId[] {
+  if (!isFigureId(kind)) return [];
+  const out: TraitId[] = [...traitsOf(kind)];
+  for (const item of items) if (isEmblemId(item) && !out.includes(EMBLEMS[item])) out.push(EMBLEMS[item]);
+  return out;
+}
+/** Whether a figure carries a trait, as its own or by an emblem it holds. */
+export const carries = (kind: UnitKind, items: readonly ItemId[], trait: TraitId): boolean =>
+  carriedTraits(kind, items).includes(trait);
 
 const recipes = new Map<string, FinishedId>();
 for (const id of FINISHED_IDS) {
@@ -237,9 +279,10 @@ export function forge(a: ComponentId, b: ComponentId): FinishedId {
   if (made === undefined) throw new Error(`nothing is made of ${a} and ${b}`);
   return made;
 }
-/** What an item adds: a component's own stat, or both halves of a finished one. */
+/** What an item adds: a component's own stat, both halves of a finished one, or nothing for an emblem. */
 export function itemStats(id: ItemId): ItemStats {
   if (isComponentId(id)) return COMPONENTS[id].stats;
+  if (isEmblemId(id)) return none;
   const [a, b] = FINISHED[id].made;
   const x = COMPONENTS[a].stats;
   const y = COMPONENTS[b].stats;
@@ -252,7 +295,10 @@ export function itemStats(id: ItemId): ItemStats {
     health: x.health + y.health,
   };
 }
-export const itemName = (id: ItemId): string => (isComponentId(id) ? COMPONENTS[id].name : FINISHED[id].name);
+export const itemName = (id: ItemId): string =>
+  isComponentId(id) ? COMPONENTS[id].name : isEmblemId(id) ? BOONS[id].name : FINISHED[id].name;
+export const itemQuip = (id: ItemId): string =>
+  isComponentId(id) ? COMPONENTS[id].quip : isEmblemId(id) ? BOONS[id].quip : FINISHED[id].quip;
 /** What an item adds, in numbers, as short parts: `+15% attack`, `+20 armour`. */
 export function itemAdds(id: ItemId): string[] {
   const s = itemStats(id);
@@ -265,9 +311,10 @@ export function itemAdds(id: ItemId): string[] {
     s.health ? `+${s.health}% health` : "",
   ].filter((part) => part !== "");
 }
-/** What an item does in a few words for a card: a component's stat, or a finished item's effect. */
+/** What an item does in a few words for a card: a component's stat, a finished item's effect, an emblem's kin. */
 export function itemShort(id: ItemId): string {
   if (isComponentId(id)) return COMPONENTS[id].short;
+  if (isEmblemId(id)) return `Its holder is ${aKin(EMBLEMS[id])} too.`;
   const spec = FINISHED[id];
   return spec.short.replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {
     const v = spec.n[key];
@@ -277,6 +324,10 @@ export function itemShort(id: ItemId): string {
 /** What an item does, in a sentence or two: its stats, then its effect if it is a finished one. */
 export function itemText(id: ItemId): string {
   if (isComponentId(id)) return COMPONENTS[id].text;
+  if (isEmblemId(id)) {
+    const kin = EMBLEMS[id];
+    return `Whoever holds it is ${aKin(kin)} as well, and counts as one more ${TRAITS[kin].name}.`;
+  }
   const spec = FINISHED[id];
   const s = itemStats(id);
   const stats = [
@@ -293,15 +344,20 @@ export function itemText(id: ItemId): string {
   return `${stats.join(", ")}. ${effect}`;
 }
 
+/** Why an item cannot be held: no place for it, or an emblem of a kin its holder already carries. */
+export type NotHeld = "hands_full" | "already_kin";
 /**
  * Puts one more item into what a figure holds, the way handing it over does: a component meets the
  * first loose component already held and the two become a finished item; otherwise it takes a free
- * place. Gives the new holding and what was forged, or null if there is no room for it.
+ * place. An emblem only ever takes a place, and is not held by a figure that carries its kin
+ * already. Gives the new holding and what was forged, or why it cannot be held.
  */
 export function holdItem(
-  held: readonly ItemId[],
+  holder: { readonly kind: UnitKind; readonly items: readonly ItemId[] },
   item: ItemId,
-): { held: ItemId[]; forged: FinishedId | null; with: ComponentId | null } | null {
+): { held: ItemId[]; forged: FinishedId | null; with: ComponentId | null } | { refused: NotHeld } {
+  const held = holder.items;
+  if (isEmblemId(item) && carries(holder.kind, held, EMBLEMS[item])) return { refused: "already_kin" };
   if (isComponentId(item)) {
     const at = held.findIndex(isComponentId);
     const loose = held[at];
@@ -310,6 +366,6 @@ export function holdItem(
       return { held: held.with(at, forged), forged, with: loose };
     }
   }
-  if (held.length >= HOLDS) return null;
+  if (held.length >= HOLDS) return { refused: "hands_full" };
   return { held: [...held, item], forged: null, with: null };
 }

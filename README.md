@@ -408,10 +408,11 @@ react to `quest_completed`.
 
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
-plays as a **guest**: they have games, skins and presence like a member, but no
-Leaf, XP, quests or news, and the guild's events (and their stream) refuse them
-with 403 `members_only`. The mod's routes, `/v1/me` and those under it, still
-let in only members.
+plays as a **guest**: they have games, skins and presence like a member, and
+their Leaf (what they earned as a member, or the staff gave them) to spend on
+anything that is for everyone, but no XP, quests or news, and the guild's events
+(and their stream) refuse them with 403 `members_only`. The mod's routes,
+`/v1/me` and those under it, still let in only members.
 
 The Treasury's routes ask sequoia-backend's reward queue (`/api/reward-queue`) as
 the member, with their own session and the website's mod version. A guest gets
@@ -585,14 +586,27 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   its entry has `earned` 0.
 - A command may take Leaf (`Done.leaf`: a whole number above 0, what it was
   for, and a key unique among the game's spends for the player); no game pays
-  Leaf in. While `GAME_LEAF_SPENDING` is off, or for a guest, such a command is
-  refused with `leaf_closed`; when its spends come to more than the ledger's
-  balance, with `not_enough_leaf`. Otherwise each spend is posted to the ledger
+  Leaf in. Each spend says who may make it (`LeafSpend.for`): `everyone`, or
+  `members` only. While `GAME_LEAF_SPENDING` is off, such a command is refused
+  with `leaf_closed`; for a guest when one of its spends is for `members`, with
+  `members_only`; when its spends come to more than the ledger's balance, with
+  `not_enough_leaf`. Otherwise each spend is posted to the ledger
   in the batch's transaction, as a `spend` on the `shop` sink keyed
   `play:<game>:<player>:<key>` with what it was for as its memo, and logged as
   `leaf_spent` for the staff's report. A key the ledger has seen is not taken
   again, and the command stands. A spend earns no XP and uses none of the
-  Coins' room. The raid's `buyLook` is the one command that takes Leaf.
+  Coins' room. The raid's `buyLook` and the pulls' `pull` take Leaf, both for
+  everyone.
+- A command may ask Leaf to keep pieces of the player's apart from their
+  state (`Done.keep`: a slot's name and its data), for another player's game
+  to be given later. Each is kept in the batch's transaction if the command is
+  done, over the one in its slot before. A slot's name is up to 64 small
+  letters, digits and `_ . : -` (`SLOT`), and a piece at most 16 KiB of JSON
+  (`KEPT_BYTES`); one past either is not kept and is logged, and the command
+  stands. No page and no route is given them. Kept so far: the board a member
+  fought each room with (`board:<trail>:<room>`, the party the fight was
+  decided from), and how many of each prize a member has (`have`), after each
+  pull and exchange.
 - A stored state that does not read (a rules change that forgot an older
   version, say) answers both routes 409 `state_unreadable`: nothing is done,
   the state is kept as it is, and Leaf logs the player and the game. The page
@@ -610,14 +624,18 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
 - Each call a player makes to a game (an opening, a batch not refused whole,
   a visit, for the visitor) adds the time since their last call to that game
   to how long they have played it, when that is at most 3 minutes
-  (`IDLE_MS`; a page in view calls at least every 75 seconds); a longer gap
-  adds nothing. Leaf's own tending (below) is not a call. It is written as the
-  call arrives, with that moment, before the call waits for anything, and by
-  Leaf itself, so that the caller going away cannot stop it: one that waits in
-  a line (below) counts from when it came. `GET /v1/game/people/{player}` answers `{ "id", "name",
-"games", "played" }`: for each game they stand in or have played a second
-  of, `played` in whole seconds and, with a standing, its `place`, `score`
-  and `also`; and `played` for all games together.
+  (`IDLE_MS`; an open page calls at least every 75 seconds); a longer gap
+  adds nothing. A call with `?afk=1` says its player is away from the keys
+  (the page hidden, or nothing done on it for 5 minutes): the time after it,
+  up to the next call, is time AFK instead. Leaf's own tending (below) is not a
+  call. It is written as the call arrives, with that moment, before the call
+  waits for anything, and by Leaf itself, so that the caller going away cannot
+  stop it: one that waits in a line (below) counts from when it came.
+  `GET /v1/game/people/{player}` answers `{ "id", "name", "games", "played",
+"afk" }`: for each game they stand in or have had open a second, `played`
+  and `afk` in whole seconds, `spent` (the Coins its commands have taken from
+  them, from the Coins ledger) and, with a standing, its `place`, `score` and
+  `also`; and `played` and `afk` for all games together.
 
 Tables (migration 17): `play_state` (a player's state in a game, with its
 `rev`; 0 is a state nothing has been done to), `play_commands` (each command's
@@ -634,7 +652,9 @@ milliseconds, and when Leaf last heard from them there (`seen_at`). Migration 24
 gave `play_state` `guest`, whether the player was a guest when it was last
 written (a state from before took it from where it stands, or else from the
 player as last seen), which whatever Leaf writes of it while they are away says
-too.
+too. Migration 26 made `play_kept` (a piece in each `player_id`, `game` and
+`slot`, its `data` as JSON) and gave each member who had pulled their `have`,
+from their stored pulls.
 
 **Coins** are a ledger like Leaf: a balance per player, changed only by an
 entry, each keyed by the fact it records (`<game>:<player>:<key>` for a

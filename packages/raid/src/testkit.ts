@@ -31,7 +31,6 @@ export const partyOfFigures = (figures: Placed[], more: Partial<Party> = {}): Pa
   who: "test",
   title: "",
   figures,
-  charms: [],
   boons: [],
   might: 100,
   ...more,

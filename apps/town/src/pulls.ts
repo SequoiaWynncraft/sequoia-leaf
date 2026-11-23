@@ -67,35 +67,24 @@ export function prizeName(prize: string, banners: readonly BannerPerson[]): stri
   return banners.find((b) => b.id === id)?.headliner?.name ?? "The headliner";
 }
 
-/** What a prize a pool gives is: a figure, or a banner's headliner. */
-export const prizeIs = (prize: string): string =>
-  prize.startsWith("figure:") ? "A character for your camp" : "A statue for your camp";
-
 /** What a reveal says of the prize a pull drew, or Seeds bought. */
 export interface Reveal {
   readonly name: string;
   readonly rarity: Rarity;
-  readonly is: string;
   /** "New", or how many the player has now. */
   readonly have: string;
   readonly owned: boolean;
   /** The Seeds the pull gave; none for a prize had for Seeds. */
   readonly seeds: string | null;
-  /** For a top prize from a banner: how its 50/50 fell. */
-  readonly fifty: string | null;
 }
-
-const FIFTY = { won: "50/50 won", lost: "50/50 lost", owed: "Owed from a lost 50/50" } as const;
 
 export function revealOf(note: PullsNote, banners: readonly BannerPerson[]): Reveal {
   return {
     name: prizeName(note.prize, banners),
     rarity: note.rarity,
-    is: prizeIs(note.prize),
     have: note.have > 1 ? `You have ${count(note.have)}` : "New",
     owned: note.have > 1,
     seeds: note.t === "pull" ? `+${seeds(RATES.seeds[tierOf(note.rarity)])}` : null,
-    fifty: note.fifty ? FIFTY[note.fifty] : null,
   };
 }
 

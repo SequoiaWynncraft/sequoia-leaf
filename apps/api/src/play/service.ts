@@ -3,9 +3,11 @@ import {
   COMMAND_ID,
   type Ctx,
   isLeaf,
+  type Kept,
   type Leaf,
   LOGGED,
   type Logged,
+  mayBuy,
   MOST_COMMANDS,
   type PlayerId,
 } from "@sequoia-leaf/core";
@@ -44,6 +46,13 @@ const SLICE_NS = 2_000_000n;
 const TEND_WAITS = 3;
 /** How many times in all a job is done, each from what is stored, when what is stored moves on under it. */
 const TRIES = 3;
+/**
+ * The longest a piece a command asks Leaf to keep (`Done.keep`) may be, as JSON, in bytes. The
+ * largest board the raid can leave is about 4 KiB.
+ */
+export const KEPT_BYTES = 16 * 1024;
+/** What a kept piece's slot may be called. */
+export const SLOT = /^[a-z0-9_.:-]{1,64}$/;
 
 /** What is stored moved on while a job worked from its copy: another Leaf wrote it, or a tool did. */
 class Lost extends Data.TaggedError("Lost") {}
@@ -108,6 +117,8 @@ interface Ask {
 export interface Playing {
   readonly playerId: PlayerId;
   readonly guest: boolean;
+  /** Whether their page said they are away from the keys on this call (`?afk=1`): only their time is told by it. */
+  readonly afk?: boolean;
 }
 
 /** What one command answered: what it did, or the code it was refused with. */
@@ -195,6 +206,15 @@ interface Taken {
 /** What spends come to, in Leaf. */
 const sum = (spends: readonly Taken[]) => spends.reduce((all, spend) => all + spend.amount, 0);
 
+/**
+ * A piece's data as the JSON it is kept as, or null when it is not kept: its slot is not one `SLOT`
+ * allows, or its data is not JSON or is over `KEPT_BYTES`.
+ */
+function keepable({ slot, data }: Kept): string | null {
+  const text: string | undefined = JSON.stringify(data);
+  return SLOT.test(slot) && text !== undefined && Buffer.byteLength(text) <= KEPT_BYTES ? text : null;
+}
+
 /** A tend that failed, logged (whose, and of which game) as the sweep's tends are waited for: the others go on. */
 const failed = (player: PlayerId, game: string, defect: unknown) =>
   Effect.annotateLogs(Effect.logError(`Tending the ${game} state of ${player} failed`, defect), { player, game });
@@ -234,11 +254,15 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * one that pays is done whatever the player has earned, and paid only as far as they may still earn
  * (`Coins.room`, which each game is told, so that it says what was really paid), but for a change
  * that is `free`, which is paid whole and uses none of it. A command may take Leaf (`Done.leaf`), never
- * pay it in: it is refused `leaf_closed` while `GAME_LEAF_SPENDING` is off or the player is a guest,
- * and `not_enough_leaf` when its spends come to more than the ledger's balance; otherwise each is
+ * pay it in: it is refused `leaf_closed` while `GAME_LEAF_SPENDING` is off, `members_only` when the
+ * player is a guest and one of its spends is for members (`LeafSpend.for`), and `not_enough_leaf`
+ * when its spends come to more than the ledger's balance; otherwise each is
  * posted to the ledger as a spend on the `shop` sink, keyed `play:<game>:<player>:<key>`, and logged
  * (`leaf_spent`). A key the ledger has seen is not taken again, and the command stands. Leaf earns no
- * XP and uses none of the Coins' room. A player with no state yet gets a new one,
+ * XP and uses none of the Coins' room. A command done may leave pieces of the player's for Leaf to
+ * keep (`Done.keep`): each is written in the batch's transaction over the one in its slot, but one
+ * whose slot is not one `SLOT` allows or whose JSON is over `KEPT_BYTES`, which is logged and let go
+ * while the command stands. A player with no state yet gets a new one,
  * and their Coins open with the welcome as it is made. A stored state that will not read is left as
  * it is: the player and the game are logged, and nothing is done. Leaf's dice for each call come from
  * `SecureRandom`. A visitor (`visit`) is shown somebody's state, and is given nothing of theirs.
@@ -437,14 +461,17 @@ export class Play extends Context.Service<
           const entries: CoinEntry[] = [];
           const taken: Taken[] = [];
           const logs: Logged[] = [];
+          const kept: { readonly slot: string; readonly data: string }[] = [];
+          const dropped = `A ${played.id} command left a piece Leaf does not keep`;
           /**
-           * A command the rules did, refused `leaf_closed`, `not_enough_leaf` (its spends whose keys the
+           * A command the rules did, refused `leaf_closed`, `members_only`, `not_enough_leaf` (its spends whose keys the
            * ledger and the batch have not seen, past the balance less what the batch took) or
            * `not_enough_coins` (`payable`), or kept. A spend not a whole number of Leaf above 0 is a defect.
            */
           const weigh = (id: string, did: Exclude<Attempt, { readonly refused: string }>) =>
             Effect.gen(function* () {
-              if (did.leaf.length > 0 && (!gameLeafSpending || playing.guest)) return { id, refused: "leaf_closed" };
+              if (did.leaf.length > 0 && !gameLeafSpending) return { id, refused: "leaf_closed" };
+              if (!did.leaf.every((spend) => mayBuy(spend.for, playing.guest))) return { id, refused: "members_only" };
               const spends: Taken[] = [];
               for (const { amount, reason, key } of did.leaf) {
                 if (!isLeaf(amount)) return yield* Effect.die(new Error(`A ${played.id} command took ${amount} Leaf`));
@@ -473,6 +500,13 @@ export class Play extends Context.Service<
                 room -= free ? 0 : Math.max(0, amount);
               }
               logs.push(...did.log);
+              for (const piece of did.pieces) {
+                const data = keepable(piece);
+                if (data !== null) kept.push({ slot: piece.slot, data });
+                // A fault in the game's rules, not the player's: the piece is let go, and the command stands.
+                else
+                  yield* Effect.annotateLogs(Effect.logWarning(dropped), { player, game: played.id, slot: piece.slot });
+              }
               return { id, notes: did.notes };
             });
           for (const { id, command } of sent) {
@@ -532,6 +566,7 @@ export class Play extends Context.Service<
                 }
                 for (const entry of entries) yield* coins.post(player, entry, at);
                 yield* store.log(player, played.id, logs, at);
+                for (const { slot, data } of kept) yield* store.keep(player, played.id, slot, data, at);
                 // Counted for the staff's report: each command done or refused now, not those answered from before.
                 const refused = answers.filter((a) => "refused" in a.result).length;
                 yield* store.count(player, answers.length - refused, refused, at);
@@ -606,7 +641,9 @@ export class Play extends Context.Service<
             lanes.set(key, lane);
             yield* Effect.forkIn(drain(lane), scope);
           }
-          const heard = caller && (yield* Effect.forkIn(store.heard(caller.playerId, played.id, job.at), scope));
+          const heard =
+            caller &&
+            (yield* Effect.forkIn(store.heard(caller.playerId, played.id, job.at, caller.afk === true), scope));
           return Effect.andThen(heard ? Fiber.join(heard) : Effect.void, Deferred.await(done)).pipe(
             Effect.onError(() => Effect.sync(() => void (job.gone = kind !== "batch"))),
           );

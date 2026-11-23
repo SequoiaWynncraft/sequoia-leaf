@@ -19,11 +19,10 @@ import {
   forgetLedger,
   fromLedger,
   heardCoins,
-  LEAF_GUEST,
   LEAF_NOT_HERE,
   LEAF_SHUT,
+  leafFor,
   leafOpen,
-  leafShown,
   leafShut,
 } from "./purse.ts";
 import {
@@ -91,21 +90,19 @@ describe("finding out where the game is", () => {
     expect(balance().leaf).toBe(2450);
   });
 
-  test("200 as a guest: live, as them, with no Leaf to show or spend, and every Leaf button says why", async () => {
+  test("200 as a guest: live, as them, with the ledger's Leaf, to spend on what is for everyone but not for members", async () => {
     world = live({ status: 200, body: GUEST });
     const w = await start();
     expect(w).toMatchObject({ mode: "live", me: { id: GUEST.player.id, name: "Wanderer", rank: null, guest: true } });
     expect(isGuest()).toBe(true);
-    expect(balance().leaf).toBe(0);
-    expect(leafShown()).toBe(false);
-    expect(leafShut()).toBe(LEAF_GUEST);
-    expect(LEAF_GUEST).toBe("Leaf is earned by raiding with Sequoia.");
+    expect(balance().leaf).toBe(1500);
+    expect([leafShut(), leafFor("everyone"), leafFor("members")]).toEqual([LEAF_SHUT, true, false]);
   });
 
-  test("a member's Leaf buttons keep the play-test's line, and their Leaf shows", async () => {
+  test("a member's Leaf buttons keep the play-test's line, and anything is theirs to buy", async () => {
     world = live({ status: 200, body: TESTER });
     await start();
-    expect([isGuest(), leafShown(), leafShut()]).toEqual([false, true, LEAF_SHUT]);
+    expect([isGuest(), leafShut(), leafFor("members")]).toEqual([false, LEAF_SHUT, true]);
   });
 
   test("reads a guest from what Leaf really answers", () => {
@@ -385,10 +382,9 @@ describe("against what Leaf really answers", () => {
       "GET /v1/game/me": said("GET /v1/game/me, a guest"),
     });
     expect(await start()).toMatchObject({ mode: "live", me: { name: "Visitor", guest: true } });
-    expect(leafShown()).toBe(false);
-    // Leaf's spending is on, but a guest has no Leaf to spend.
-    expect([leafOpen(), leafShut()]).toEqual([false, LEAF_GUEST]);
-    expect(await refreshLeaf()).toBeNull();
+    // Leaf's spending is on, for a guest as for a member, and the purse asks the ledger again after a spend.
+    expect([leafOpen(), leafShut(), leafFor("members")]).toEqual([true, LEAF_NOT_HERE, false]);
+    expect(await refreshLeaf()).toMatchObject({ name: "Visitor", guest: true, leaf: 0 });
   });
 
   test("spending on: a command may take a member's Leaf, any other Leaf button stays closed, and the purse asks again after", async () => {
@@ -413,7 +409,7 @@ describe("against what Leaf really answers", () => {
 });
 
 describe("a guest's page", () => {
-  test("follows no Leaf and asks nothing only a member may: on its own, in the town, or when told Leaf by the town", async () => {
+  test("follows no news and asks nothing only a member may, and keeps the Leaf the ledger gave them", async () => {
     const asked: string[] = [];
     world = standin({
       "GET /v1/game/hello": HELLO,
@@ -427,6 +423,6 @@ describe("a guest's page", () => {
     stop();
     expect(asked).toEqual([]);
     expect(world.sent.map((s) => s.path)).toEqual(["/v1/game/hello", "/v1/game/me"]);
-    expect(balance().leaf).toBe(0);
+    expect(balance().leaf).toBe(GUEST.leaf);
   });
 });

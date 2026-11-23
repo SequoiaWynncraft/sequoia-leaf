@@ -95,8 +95,8 @@ function trySuits(setup: FightSetup, base: FightSummary): void {
   ours.figures.forEach((p, i) => {
     if (!isFigureId(p.kind)) return;
     for (const item of FINISHED_IDS) {
-      const held = holdItem(p.items, item);
-      if (!held) return;
+      const held = holdItem(p, item);
+      if ("refused" in held) return;
       const figures = ours.figures.with(i, { ...p, items: held.held });
       const now = margin(resolveFight({ seed: setup.seed, sides: [{ ...ours, figures }, theirs] }));
       const key = `${p.kind} ${item}`;
