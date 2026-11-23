@@ -1,9 +1,9 @@
 /**
- * Keeping a yard, and reading it back. The yard is written as a small JSON record of its numbers and
- * orders, as today's yard is, with its pieces packed into bytes (`cells`, base64) and each of its
- * blueprints the same (`packPrint`). Reading gives back a yard it can vouch for or nothing at all: a record of the wrong shape
- * or version is refused whole; inside a good one, a plot, plan or piece that could not have come
- * about by playing is left out, by building each piece again through the rules (`vouch`).
+ * Keeping a yard, and reading it back. The yard is written as a small JSON record of its numbers,
+ * goals and orders, with its pieces packed into bytes (`cells`, base64) and each of its
+ * blueprints the same (`packPrint`). Reading gives back a yard it can vouch for or nothing at all: a
+ * record of the wrong shape or version is refused whole; inside a good one, whatever could not have
+ * come about by playing is left out, by doing again through the rules what play does (`vouch`).
  *
  * The pieces' bytes are how many pieces there are (varint), then each piece in tile order: the tiles
  * since the last piece less one (varint); a byte of its kind (low four bits), its way (two bits),
@@ -11,54 +11,76 @@
  * (byte) and its progress in eighths with the side it came in from (a byte, four bits each); if more
  * follow, which (varint, a bit each), then those:
  *   2 what it holds: how many kinds (varint), then a thing (byte) and how many (varint) each
- *   4 out (byte)   8 work (num)   16 making (byte)   32 turn (byte)   64 recipe (byte)
+ *   4 out (byte)   8 work (varint)   16 making (byte)   32 turn (byte)   64 what it is set to (byte)
  *   128 span (byte, +8), and for a way-in mouth a thing (byte) and its progress (byte) for each tile under
  *   256 a shut crate   512 fuel (byte)   1024 one of the pieces to hand   2048 tint (byte)   4096 shut ways (byte)
+ *   8192 a grade above 1 (byte)
  *
  * Bytes that are not pieces are refused whole: bytes cut short or left over, a part this version
  * does not know, and any count past what the tables allow (more pieces than tiles, more kinds of
  * thing than there are, more of one thing than any piece holds, a tunnel longer than tunnels go).
  */
-import { build, isDir, planState, plotState, refusal } from "./build.ts";
+import { build, isDir, keeps, plotState, refusal } from "./build.ts";
 import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
 import { here } from "./clock.ts";
-import { BLUEPRINT, BLUEPRINTS, BUFFER, CRATE_HOLDS, FUEL, SPAN, TICKS } from "./content/machines.ts";
-import { STORY } from "./content/story.ts";
+import { BLUEPRINT, FUEL, STUDY_HOLDS, TICKS } from "./content/machines.ts";
 import { LAND, type Land } from "./land.ts";
-import { countsOf, fillBoard, reask } from "./orders.ts";
+import { counting, fillBoard, giveGoal, ORDER_WAITS, study } from "./orders.ts";
 import { blueprintRefusal, keptOf, packPieces, type Piece, piecesOf, placed, TINTS } from "./pieces.ts";
 import {
+  ALL_GOALS,
   ALL_ITEMS,
+  ALL_KINDS,
+  BLUEPRINTS_MOST,
   BOILER,
   CRATE,
+  CRATE_MOST,
   DEADFALL,
   DEPOT,
   GATHERER,
+  type Goal,
+  goalNamed,
+  GOALS,
+  holdsMost,
+  isFolio,
+  isGoal,
   isItem,
   isKind,
   isMaker,
+  isNode,
   isRaw,
+  type Item,
   ITEM_COUNT,
   itemName,
   JOINER,
+  locked,
+  MADE_BY,
+  nextHand,
   NONE,
-  PLAN_INFO,
-  planName,
-  planNamed,
+  type Open,
+  openOf,
+  PACE,
   plotName,
   plotNamed,
+  ready,
   RECIPE,
+  SORTER,
+  SPAN_MOST,
   SPLITTER,
+  STUDY,
   TUNNEL,
-  uses,
+  WORK,
 } from "./tables.ts";
+import { PACE_WINDOW } from "./tick.ts";
 import { carries } from "./wire.ts";
 import {
   type Away,
   type Counts,
   counts,
   emptyYard,
+  enough,
   held,
+  hold,
   holds,
   put,
   reopen,
@@ -67,13 +89,20 @@ import {
   type Yard,
 } from "./yard.ts";
 
-/** 5: the pieces' bytes begin with how many pieces there are. */
-export const VERSION = 5;
+/** 6: whole numbers, grades, goals and research. */
+export const VERSION = 6;
 
 /** The parts a piece's bytes may say follow, a bit each. */
-const PARTS = 0x1ffe;
-/** The most of one thing any piece holds: a crate grown as large as a plan makes it. */
-const HOLDS_MOST = Math.max(BUFFER, FUEL, CRATE_HOLDS, ...PLAN_INFO.map((p) => p?.effect.crate ?? 0));
+const PARTS = 0x3ffe;
+/** The most of one thing any piece holds: a crate as large as it grows. */
+const HOLDS_MOST = Math.max(
+  FUEL,
+  STUDY_HOLDS,
+  CRATE_MOST,
+  ...ALL_KINDS.flatMap((k) => ALL_ITEMS.map((n) => holdsMost(MADE_BY[k] ?? [], n))),
+);
+/** A goal's id, as kept. */
+const goalId = (g: Goal): string => GOALS[g]?.id ?? "";
 
 /** A piece as kept, in the yard's own units, before it is vouched for. */
 export interface KeptPiece {
@@ -97,14 +126,13 @@ export interface KeptPiece {
   readonly free?: boolean;
   readonly tint?: number;
   readonly ways?: number;
+  readonly grade?: number;
 }
 
 type Rec = Record<string, unknown>;
 const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
 const whole = (v: unknown, most: number): number | null =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= most ? v : null;
-const amount = (v: unknown, most: number): number | null =>
-  typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= most ? v : null;
 const words = (v: unknown): string | null => (typeof v === "string" && v.length <= 200 ? v : null);
 
 /** A count by name, as kept: only real things, only sensible counts, always in the same order. */
@@ -121,7 +149,7 @@ function untally(v: unknown, most: number): Counts {
   const out = counts();
   if (!isRec(v)) return out;
   for (const n of ALL_ITEMS) {
-    const got = amount(v[itemName(n)], most);
+    const got = whole(v[itemName(n)], most);
     if (got !== null && got > 0) out[n] = got;
   }
   return out;
@@ -152,13 +180,14 @@ function packCells(y: Yard): Uint8Array {
     if (holder && h.work[r] !== 0) f |= 8;
     if (holder && h.making[r] !== NONE) f |= 16;
     if (y.turn[i] !== 0) f |= 32;
-    if (holder && h.recipe[r] !== NONE) f |= 64;
+    if (y.set[i] !== NONE) f |= 64;
     if (span !== 0) f |= 128;
     if (k === CRATE && holder && h.open[r] === 0) f |= 256;
     if (holder && h.fuel[r] !== 0) f |= 512;
     if (y.free[i] === 1) f |= 1024;
     if (y.tint[i] !== 0) f |= 2048;
     if (y.shut[i] !== 0) f |= 4096;
+    if ((y.grade[i] ?? 0) > 1) f |= 8192;
     const carrying = y.item[i] !== NONE;
     o.byte(k | ((y.dir[i] ?? 0) << 4) | (carrying ? 64 : 0) | (f === 0 ? 0 : 128));
     if (carrying) {
@@ -175,13 +204,13 @@ function packCells(y: Yard): Uint8Array {
       }
     }
     if (f & 4) o.byte(h.out[r] ?? NONE);
-    if (f & 8) o.num(h.work[r] ?? 0);
+    if (f & 8) o.varint(h.work[r] ?? 0);
     if (f & 16) o.byte(h.making[r] ?? NONE);
     if (f & 32) o.byte(y.turn[i] ?? 0);
-    if (f & 64) o.byte(h.recipe[r] ?? NONE);
+    if (f & 64) o.byte(y.set[i] ?? NONE);
     if (f & 128) {
       o.byte(span + 8);
-      const tr = span > 0 ? (y.row[i] ?? 0) * SPAN : -1;
+      const tr = span > 0 ? (y.row[i] ?? 0) * SPAN_MOST : -1;
       for (let s = 0; s < span; s++) {
         o.byte(t.under[tr + s] ?? NONE);
         o.byte(t.along[tr + s] ?? 0);
@@ -190,14 +219,15 @@ function packCells(y: Yard): Uint8Array {
     if (f & 512) o.byte(h.fuel[r] ?? 0);
     if (f & 2048) o.byte(y.tint[i] ?? 0);
     if (f & 4096) o.byte(y.shut[i] ?? 0);
+    if (f & 8192) o.byte(y.grade[i] ?? 1);
   }
   return o.bytes();
 }
 
 /**
  * A blueprint as kept: each piece in its order, as its kind, x and y (a byte each), then its way
- * with a bit for each part that follows (4 span, 8 tint, 16 shut ways, 32 a shut crate, 64 recipe),
- * then those, a byte each.
+ * with a bit for each part that follows (4 span, 8 tint, 16 shut ways, 32 a shut crate, 64 recipe,
+ * 128 a grade above 1), then those, a byte each.
  */
 function packPrint(b: Uint8Array): Uint8Array {
   const o = new Writer();
@@ -205,19 +235,21 @@ function packPrint(b: Uint8Array): Uint8Array {
     o.byte(p.kind);
     o.byte(p.x);
     o.byte(p.y);
-    const { span, tint = 0, shut = 0, recipe } = p;
+    const { span, tint = 0, shut = 0, recipe, grade = 1 } = p;
     o.byte(
       p.dir |
         (span > 0 ? 4 : 0) |
         (tint > 0 ? 8 : 0) |
         (shut > 0 ? 16 : 0) |
         (p.open === false ? 32 : 0) |
-        (recipe === undefined ? 0 : 64),
+        (recipe === undefined ? 0 : 64) |
+        (grade > 1 ? 128 : 0),
     );
     if (span > 0) o.byte(span);
     if (tint > 0) o.byte(tint);
     if (shut > 0) o.byte(shut);
     if (recipe !== undefined) o.byte(recipe);
+    if (grade > 1) o.byte(grade);
   }
   return o.bytes();
 }
@@ -233,6 +265,7 @@ export type KeptPrint = readonly {
   readonly open: boolean;
   readonly tint: number;
   readonly shut: number;
+  readonly grade: number;
 }[];
 
 /** A kept blueprint's pieces read back from their bytes, or null for bytes that are not pieces. */
@@ -245,13 +278,13 @@ function unpackPrint(bytes: Uint8Array | null): KeptPrint | null {
     const x = r.byte();
     const y = r.byte();
     const f = r.byte();
-    if (f > 127) return null;
     const span = f & 4 ? r.byte() : 0;
     const tint = f & 8 ? r.byte() : 0;
     const shut = f & 16 ? r.byte() : 0;
     const recipe = f & 64 ? r.byte() : NONE;
+    const grade = f & 128 ? r.byte() : 1;
     if (r.over) return null;
-    out.push({ kind, x, y, dir: f & 3, span, recipe, open: (f & 32) === 0, tint, shut });
+    out.push({ kind, x, y, dir: f & 3, span, recipe, open: (f & 32) === 0, tint, shut, grade });
   }
   return out;
 }
@@ -273,6 +306,7 @@ export function encode(y: Yard, keep: Keep = {}): string {
     v: VERSION,
     ...(y.seed === null || keep.seed === false ? {} : { seed: y.seed }),
     tick: y.tick,
+    charge: y.charge,
     at: y.at,
     till: y.till,
     bank: y.bank,
@@ -280,15 +314,15 @@ export function encode(y: Yard, keep: Keep = {}): string {
     ...(away === null ? {} : { away: { seconds: away.seconds, coins: away.coins, made: tally(away.made) } }),
     seen: { tick: y.seen.tick, till: y.seen.till, depot: tally(y.seen.depot) },
     plots: y.plots.map(plotName),
-    plans: y.plans.map(planName),
-    story: y.story,
-    filled: tally(y.filled),
+    done: y.done.map(goalId),
+    hand: y.hand === -1 ? null : goalId(y.hand),
+    line: y.line.map(goalId),
+    got: Object.fromEntries(y.got.flatMap((got, g) => (got && isGoal(g) ? [[goalId(g), tally(got)]] : []))),
     board: y.board.map((o) => ({ ...o, want: tally(o.want), filled: tally(o.filled) })),
     serial: y.serial,
-    done: y.done,
+    handed: y.handed,
     swapAt: y.swapAt,
     depot: tally(y.depot),
-    given: tally(y.given),
     sold: y.sold,
     paid: y.paid,
     pace: { ticks: y.pace.ticks, warm: y.pace.warm, made: tally(y.pace.made) },
@@ -332,13 +366,13 @@ function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
       p.held = pairs;
     }
     if (f & 4) p.out = r.byte();
-    if (f & 8) p.work = r.num();
+    if (f & 8) p.work = r.varint();
     if (f & 16) p.making = r.byte();
     if (f & 32) p.turn = r.byte();
     if (f & 64) p.recipe = r.byte();
     if (f & 128) {
       p.span = r.byte() - 8;
-      if (p.span < -SPAN || p.span > SPAN) return null;
+      if (p.span < -SPAN_MOST || p.span > SPAN_MOST) return null;
       const under: number[] = [];
       const along: number[] = [];
       for (let s = 0; s < p.span; s++) {
@@ -353,6 +387,7 @@ function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
     if (f & 1024) p.free = true;
     if (f & 2048) p.tint = r.byte();
     if (f & 4096) p.ways = r.byte();
+    if (f & 8192) p.grade = r.byte();
     if (r.over) return null;
     out.push(p);
   }
@@ -381,13 +416,13 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
   );
 }
 
-/** A kept blueprint read back: real pieces within a blueprint's limits, or nothing. */
-function blueprint(v: KeptPrint | null | undefined): Uint8Array | null {
+/** A kept blueprint read back: real pieces the yard may keep in it, in the place it is kept in, or nothing. */
+function blueprint(open: Open, slot: number, v: KeptPrint | null | undefined): Uint8Array | null {
   if (!v) return null;
   const pieces: Piece[] = [];
-  for (const { kind: k, x, y: z, dir: d, span, recipe, open, tint, shut } of v) {
+  for (const { kind: k, x, y: z, dir: d, span, recipe, open: lets, tint, shut, grade } of v) {
     if (!isKind(k) || k === DEPOT || !isDir(d)) return null;
-    if (whole(x, BLUEPRINT.w - 1) === null || whole(z, BLUEPRINT.h - 1) === null || whole(span, SPAN) === null)
+    if (whole(x, BLUEPRINT.w - 1) === null || whole(z, BLUEPRINT.h - 1) === null || whole(span, SPAN_MOST) === null)
       return null;
     pieces.push({
       kind: k,
@@ -395,44 +430,72 @@ function blueprint(v: KeptPrint | null | undefined): Uint8Array | null {
       y: z,
       dir: d,
       span,
-      ...keptOf({ recipe, open: open ? undefined : false, tint, shut }, k),
+      ...keptOf({ recipe, open: lets ? undefined : false, tint, shut, grade }, k),
     });
   }
-  return blueprintRefusal(pieces) === null ? packPieces(placed(pieces, 0, 0, 0)) : null;
+  return blueprintRefusal(open, slot, pieces) === null ? packPieces(placed(pieces, 0, 0, 0)) : null;
 }
 
-function standing(v: unknown): Standing | null {
+/**
+ * A kept standing order at a tick: hung no later than an order hung then would count, and holding
+ * nothing before it counts. Orders are hung at the end of the board with the next id, so its id is
+ * past `after`, the id of the order before it, and below `serial`, the count of orders ever hung.
+ */
+function standing(v: unknown, tick: number, after: number, serial: number): Standing | null {
   if (!isRec(v)) return null;
-  const id = whole(v.id, 1e9);
+  const id = whole(v.id, serial - 1);
+  if (id !== null && id <= after) return null;
   const title = words(v.title);
   const from = words(v.from);
   const line = words(v.line);
   const pay = whole(v.pay, 1e8);
   const want = untally(v.want, 1e6);
+  const starts = whole(v.starts, tick + ORDER_WAITS);
   const asked = ALL_ITEMS.filter((n) => (want[n] ?? 0) > 0).length;
-  if (id === null || title === null || from === null || line === null || pay === null || asked < 1 || asked > 2)
-    return null;
-  const filled = untally(v.filled, 1e6);
-  for (const n of ALL_ITEMS) if ((filled[n] ?? 0) > 0) filled[n] = Math.min(Math.floor(filled[n] ?? 0), want[n] ?? 0);
-  return reask({ id, title, from, line, want, pay, filled });
+  if (id === null || title === null || from === null || line === null || pay === null || starts === null) return null;
+  if (asked < 1 || asked > 2) return null;
+  const order = { id, title, from, line, want, pay, filled: untally(v.filled, 1e6), starts };
+  const live = counting(order, tick);
+  for (const n of ALL_ITEMS) order.filled[n] = live ? Math.min(order.filled[n] ?? 0, want[n] ?? 0) : 0;
+  return order;
 }
 
 function keptAway(v: unknown): Away | null {
   if (!isRec(v)) return null;
-  const seconds = amount(v.seconds, 1e9);
+  const seconds = whole(v.seconds, 1e9);
   const coins = whole(v.coins, 1e12);
   return seconds === null || coins === null ? null : { seconds, coins, made: untally(v.made, 1e12) };
 }
 
-/** How many of a thing a kept piece may hold, by what it is. */
-function mostHeld(k: number, n: number): number {
-  if (isKind(k) && isMaker(k)) return isItem(n) && uses(k, n) ? BUFFER : 0;
+/** How many of a thing the piece on a tile may hold: a machine, as many as it keeps for what it may make (`keeps`). */
+function mostHeld(y: Yard, i: number, n: number): number {
+  const k = y.kind[i] ?? NONE;
+  if (isMaker(k)) return holdsMost(keeps(y, i), n);
   if (k === BOILER) return n === DEADFALL ? FUEL : 0;
+  if (k === STUDY) return isFolio(n) ? STUDY_HOLDS : 0;
   return k === CRATE ? 1e6 : 0;
 }
 
-/** Puts a kept piece's parts back onto the piece new-built where it stood. */
-function unpack(y: Yard, i: number, o: KeptPiece): void {
+/**
+ * What a piece's work toward what it is making stays below: what that takes; with nothing being made,
+ * what a tick at the top pace can leave over once a thing is done.
+ */
+const workFor = (k: number, making: number): number =>
+  k === GATHERER
+    ? WORK.gather
+    : making === NONE
+      ? Math.max(...PACE)
+      : k === STUDY
+        ? WORK.study
+        : (RECIPE[making]?.work ?? 0);
+
+/**
+ * Puts a kept piece's parts back onto the piece new-built where it stood, each only as the rules let
+ * it be: a colour where the yard may paint; a machine told to make, holding, making and having made
+ * only what it may make (`locked`), and no more than it keeps; a Study at work on a folio it holds for
+ * `studied`, the research its work was for; work only toward what is being made (`workFor`).
+ */
+function unpack(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): void {
   const k = y.kind[i] ?? NONE;
   const makes = isMaker(k);
   if (carries(k) && o.item !== undefined && isItem(o.item)) {
@@ -440,36 +503,37 @@ function unpack(y: Yard, i: number, o: KeptPiece): void {
     y.prog[i] = whole(o.prog, 16) ?? 0;
     y.via[i] = whole(o.via, 4) ?? 0;
   }
-  if (carries(k)) y.tint[i] = whole(o.tint, TINTS) ?? 0;
+  if (carries(k) && locked(y.open, { use: "paint" }) === null) y.tint[i] = whole(o.tint, TINTS) ?? 0;
   const r = y.row[i] ?? -1;
   if (holds(k) && r >= 0) {
     const h = y.holders;
-    const room = k === CRATE ? y.rates.crate : 1e6;
+    const may = (n: number | undefined): n is Item =>
+      n !== undefined && isItem(n) && RECIPE[n]?.by === k && locked(y.open, { make: n }) === null;
+    if (makes && may(o.recipe)) y.set[i] = o.recipe;
+    const room = k === CRATE ? y.open.crate : 1e6;
     const has = counts();
-    for (const [n, c] of o.held ?? []) if (isItem(n) && (amount(c, 1e6) ?? 0) > 0) has[n] = c;
+    for (const [n, c] of o.held ?? []) if (isItem(n) && (whole(c, 1e6) ?? 0) > 0) has[n] = c;
     for (const n of ALL_ITEMS)
-      for (let c = Math.min(Math.floor(has[n] ?? 0), mostHeld(k, n)); c > 0 && (h.count[r] ?? 0) < room; c--)
+      for (let c = Math.min(Math.floor(has[n] ?? 0), mostHeld(y, i, n)); c > 0 && (h.count[r] ?? 0) < room; c--)
         put(h, r, n);
     h.idle[r] = 0;
     const out = o.out !== undefined && isItem(o.out) ? o.out : null;
-    if (out !== null) {
-      if (k === CRATE || (k === GATHERER && isRaw(out))) h.out[r] = out;
-      if (makes && RECIPE[out]?.by === k) h.out[r] = out;
-    }
-    if (makes || k === GATHERER) h.work[r] = amount(o.work, 200) ?? 0;
-    if (makes && o.recipe !== undefined && isItem(o.recipe) && RECIPE[o.recipe]?.by === k) h.recipe[r] = o.recipe;
-    if (makes && o.making !== undefined && isItem(o.making)) {
-      const rec = RECIPE[o.making];
-      if (rec?.by === k && rec.from.every((n) => held(h, r, n) > 0)) h.making[r] = o.making;
-    }
+    if (out !== null && (k === CRATE || (k === GATHERER && isRaw(out)) || (makes && may(out)))) h.out[r] = out;
+    const m = o.making;
+    if (makes && m !== undefined && keeps(y, i).some((rec) => rec.out === m && enough(h, r, rec))) h.making[r] = m;
+    const wanted = studied !== undefined && m !== undefined && isFolio(m) && (GOALS[studied]?.want[m] ?? 0) > 0;
+    if (k === STUDY && wanted && held(h, r, m) > 0) h.making[r] = m;
+    if (makes || k === GATHERER || (k === STUDY && studied !== undefined))
+      h.work[r] = whole(o.work, workFor(k, h.making[r] ?? NONE) - 1) ?? 0;
     if (k === CRATE) h.open[r] = o.closed === true ? 0 : 1;
     if (k === BOILER) h.fuel[r] = whole(o.fuel, TICKS.burn) ?? 0;
   }
   if (k === SPLITTER || k === JOINER) y.turn[i] = whole(o.turn, 2) ?? 0;
+  if (k === SORTER && o.recipe !== undefined && isItem(o.recipe)) y.set[i] = o.recipe;
   if (k === SPLITTER) y.shut[i] = whole(o.ways, 7) ?? 0;
   const span = y.span[i] ?? 0;
   if (span > 0 && o.under && o.along) {
-    const at = (y.row[i] ?? 0) * SPAN;
+    const at = (y.row[i] ?? 0) * SPAN_MOST;
     for (let s = 0; s < span; s++) {
       const n = o.under[s] ?? NONE;
       y.tunnels.under[at + s] = isItem(n) ? n : NONE;
@@ -490,57 +554,82 @@ export function vouch(
   land: Land,
 ): Yard | null {
   const seed = "seed" in raw ? whole(raw.seed, 0xffffffff) : null;
+  const charge = whole(raw.charge, 1e9);
   const tick = whole(raw.tick, 1e12);
-  const at = amount(raw.at, 8.64e15);
-  const till = amount(raw.till, 1e12);
+  const at = whole(raw.at, 8.64e15);
+  const till = whole(raw.till, 1e12);
   const bank = whole(raw.bank, 1e12);
-  const told = whole(raw.told, STORY.length);
-  const story = whole(raw.story, STORY.length);
+  const told = whole(raw.told, GOALS.length);
   const serial = whole(raw.serial, 1e9);
-  const done = whole(raw.done, 1e9);
+  const handed = whole(raw.handed, 1e9);
   const swapAt = whole(raw.swapAt, 1e13);
-  const sold = amount(raw.sold, 1e15);
-  const paid = amount(raw.paid, 1e15);
+  const sold = whole(raw.sold, 1e15);
+  const paid = whole(raw.paid, 1e15);
   if (
     ("seed" in raw && seed === null) ||
     tick === null ||
+    charge === null ||
     at === null ||
     till === null ||
     bank === null ||
     told === null ||
-    story === null ||
     serial === null ||
-    done === null ||
+    handed === null ||
     swapAt === null ||
     sold === null ||
     paid === null ||
     !Array.isArray(raw.plots) ||
-    !Array.isArray(raw.plans) ||
+    !Array.isArray(raw.done) ||
     !Array.isArray(raw.board) ||
     pieces.length > land.w * land.h
   )
     return null;
 
-  const y = emptyYard(land, story);
-  Object.assign(y, { seed, tick, at, till, bank, told: Math.min(told, story), away: keptAway(raw.away) });
-  Object.assign(y, { serial, done, swapAt, sold, paid, board: [] });
-  y.blueprints = Array.from({ length: BLUEPRINTS }, (_, k) => blueprint(prints[k]));
+  const y = emptyYard(land);
+  Object.assign(y, { seed, tick, charge, at, till, bank, away: keptAway(raw.away) });
+  Object.assign(y, { serial, handed, swapAt, sold, paid, board: [] });
   y.depot = untally(raw.depot, 1e12);
-  y.given = untally(raw.given, 1e12);
-  const want = STORY[story] ? countsOf(STORY[story].want) : counts();
-  y.filled = untally(raw.filled, 1e6);
-  for (const n of ALL_ITEMS) if ((y.filled[n] ?? 0) > 0) y.filled[n] = Math.min(y.filled[n] ?? 0, want[n] ?? 0);
 
-  // Plots and plans in the order they were bought, each only if it could have been bought then.
+  // Goals in the order they were done, each only if it could have been done then.
+  for (const id of raw.done) {
+    const g = goalNamed(id);
+    if (g === null || !ready(y.open, g)) continue;
+    y.done.push(g);
+    y.open = openOf(y.done);
+  }
+  reopen(y);
+  y.told = Math.min(told, y.done.length);
+  for (const o of raw.board) {
+    const order = standing(o, tick, y.board.at(-1)?.id ?? -1, serial);
+    if (order && y.open.board && y.board.length < y.open.hooks) y.board.push(order);
+  }
+  // The node in hand and the line of research, each only if it could be taken up now; then what each
+  // goal that could have been given anything was given, given again as play gives it, so that a goal
+  // given all it wants is finished.
+  y.got = GOALS.map(() => null);
+  const hand = goalNamed(raw.hand);
+  hold(y, hand !== null && isNode(hand) && ready(y.open, hand) ? hand : nextHand(y.open));
+  const line: unknown[] = Array.isArray(raw.line) ? raw.line : [];
+  for (const id of line) {
+    const g = goalNamed(id);
+    if (g !== null) study(y, g);
+  }
+  const got = isRec(raw.got) ? raw.got : {};
+  for (const g of ALL_GOALS.filter((h) => ready(y.open, h) && isRec(got[GOALS[h]?.id ?? ""]))) {
+    const given = untally(got[GOALS[g]?.id ?? ""], 1e6);
+    y.got[g] ??= counts();
+    for (const n of ALL_ITEMS) giveGoal(y, g, n, given[n] ?? 0);
+  }
+  // The Studies' work was for the research first in the line as kept: it is kept only while that is
+  // still first, as play drops it when another comes first (`begin`).
+  const studied = y.line[0] !== undefined && y.line[0] === goalNamed(line[0]) ? y.line[0] : undefined;
+  y.blueprints = Array.from({ length: BLUEPRINTS_MOST }, (_, k) => blueprint(y.open, k, prints[k]));
+
+  // Plots in the order they were bought, each only if it could have been bought then.
   for (const name of raw.plots) {
     const p = plotNamed(name);
     if (p !== null && plotState(y, p).state === "for sale") y.plots.push(p);
   }
-  for (const name of raw.plans) {
-    const p = planNamed(name);
-    if (p !== null && planState(y, p).state === "for sale") y.plans.push(p);
-  }
-  reopen(y);
 
   // Pieces: everything but the far mouths of tunnels, which come with their near mouths.
   const kept: [number, KeptPiece][] = [];
@@ -558,12 +647,12 @@ export function vouch(
     }
     const x = i % land.w;
     const z = (i - x) / land.w;
-    const tunnel = k === TUNNEL ? span : undefined;
-    if (y.kind[i] !== NONE || refusal(y, k, x, z, Infinity, d, tunnel) !== null) continue;
+    const lay = k === TUNNEL ? { span, grade: o.grade ?? 1 } : { grade: o.grade ?? 1 };
+    if (y.kind[i] !== NONE || refusal(y, k, x, z, Infinity, d, lay) !== null) continue;
     // Only a piece kept as one the yard had to hand takes the place of one: the rest were paid for.
     const spare = y.spare[k] ?? 0;
     if (o.free !== true) y.spare[k] = 0;
-    const did = build(y, k, x, z, d, Infinity, tunnel);
+    const did = build(y, k, x, z, d, Infinity, lay);
     if (o.free !== true) y.spare[k] = spare;
     if (did.ok) kept.push([i, o]);
   }
@@ -572,23 +661,19 @@ export function vouch(
     if (i !== null && y.kind[i] === TUNNEL && (y.span[i] ?? 0) < 0 && y.span[i] === o.span && y.dir[i] === o.dir)
       kept.push([i, o]);
   }
-  for (const [i, o] of kept) unpack(y, i, o);
+  for (const [i, o] of kept) unpack(y, i, o, studied);
 
-  for (const o of raw.board) {
-    const order = standing(o);
-    if (order && y.open.board && y.board.length < y.rates.slots) y.board.push(order);
-  }
   fillBoard(y);
   const pace = isRec(raw.pace) ? raw.pace : {};
   y.pace = {
-    ticks: amount(pace.ticks, 1e9) ?? 0,
+    ticks: whole(pace.ticks, PACE_WINDOW - 1) ?? 0,
     warm: whole(pace.warm, WARM) ?? WARM,
     made: untally(pace.made, 1e12),
   };
   // A yard kept before it knew its owner's last command is taken as last seen at its last tick.
   const seen = isRec(raw.seen) ? raw.seen : {};
   const last = whole(seen.tick, tick);
-  const had = amount(seen.till, 1e12);
+  const had = whole(seen.till, 1e12);
   y.seen = last === null || had === null ? here(y) : { tick: last, till: had, depot: untally(seen.depot, 1e12) };
   y.news = [];
   return y;

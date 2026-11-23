@@ -1,7 +1,8 @@
 /**
  * Everything the yard gathers and makes. Six things come from the ground, six are worked once,
- * six are put together, and five are goods the guild asks for by name. Nothing here fells a living
- * tree: wood is deadfall, picked up off the forest floor.
+ * six are put together, and five are goods the guild asks for by name; two are folios, which the
+ * Study turns into research. Nothing here fells a living tree: wood is deadfall, picked up off the
+ * forest floor.
  */
 
 export const RAW = ["deadfall", "stone", "ore", "clay", "sand", "resin"] as const;
@@ -26,6 +27,8 @@ export const ITEMS = [
   "kit",
   "beacon",
   "crab",
+  "timber",
+  "brass",
 ] as const;
 export type ItemName = (typeof ITEMS)[number];
 
@@ -40,6 +43,8 @@ export interface ItemInfo {
   readonly step: 0 | 1 | 2 | 3 | 4;
   /** What an order pays for one, in Coins. The depot pays a hundredth of it for anything that arrives. */
   readonly worth: number;
+  /** A folio, which the Study takes in. */
+  readonly folio?: true;
 }
 
 export const ITEM: Record<ItemName, ItemInfo> = {
@@ -66,4 +71,6 @@ export const ITEM: Record<ItemName, ItemInfo> = {
   kit: { name: "Raid kit", many: "raid kits", step: 3, worth: 5 },
   beacon: { name: "Beacon", many: "beacons", step: 4, worth: 24 },
   crab: { name: "Clockwork crab", many: "clockwork crabs", step: 4, worth: 20 },
+  timber: { name: "Timber folio", many: "Timber folios", step: 3, worth: 3, folio: true },
+  brass: { name: "Brass folio", many: "Brass folios", step: 3, worth: 6, folio: true },
 };
