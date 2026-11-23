@@ -25,7 +25,7 @@ export type Attempt =
       readonly keep: () => void;
     };
 
-/** A stored state, opened at Leaf's clock, that commands are done to one at a time. */
+/** A state brought to Leaf's clock, that commands are done to one at a time. */
 export interface Opened {
   readonly attempt: (command: unknown, ctx: Ctx) => Attempt;
   /** The state as it stands, as the game stores it. */
@@ -40,11 +40,14 @@ export interface Opened {
   readonly awards: () => readonly string[];
 }
 
-/** A stored state of a game that tends its states (`Game.tend`), read, to be run on a slice at a time. */
-export interface Tending {
-  /** Runs it on toward `ctx.now` while `more` says to; says whether there is further to go. */
+/** A stored state read into memory, one state however it is used: run on, brought to a moment, and commanded. */
+export interface Held {
+  /**
+   * Runs it on toward `ctx.now` while `more` says to (`Game.tend`), and says whether there is
+   * further to go: never, for a game that does not tend its states.
+   */
   readonly run: (ctx: Ctx, more: () => boolean) => boolean;
-  /** The state as it stands, brought to `ctx.now`, as `Played.open` opens a stored one. */
+  /** Brings it to `ctx.now` (`Game.advance`), to show and to do commands to. */
   readonly open: (ctx: Ctx) => Opened;
 }
 
@@ -55,10 +58,10 @@ export interface Played {
   readonly create: (ctx: Ctx) => string;
   /** Whether a command reads as one of the game's. */
   readonly reads: (command: unknown) => boolean;
-  /** A stored state brought to `ctx.now`; null when the text is not one the game can read. */
-  readonly open: (text: string, ctx: Ctx) => Opened | null;
-  /** A stored state read for tending; null when the text does not read. Null for a game that does not tend. */
-  readonly tend: ((text: string) => Tending | null) | null;
+  /** A stored state read into memory; null when the text is not one the game can read. */
+  readonly read: (text: string) => Held | null;
+  /** Whether its states go on by themselves (`Game.tend`), for Leaf to tend. */
+  readonly tends: boolean;
 }
 
 /**
@@ -68,9 +71,8 @@ export interface Played {
  * the service goes on only from a state whose command was done.
  */
 export function played<State, Command, View, Note>(game: Game<State, Command, View, Note>): Played {
-  /** A state brought to `ctx.now`, to have commands done to it. */
-  const opening = (decoded: State, ctx: Ctx): Opened => {
-    let state = game.advance(decoded, ctx);
+  const held = (decoded: State): Held => {
+    let state = decoded;
     /** The state as it was before a command that has not been kept. */
     let undo: string | null = null;
     const current = (): State => {
@@ -80,7 +82,7 @@ export function played<State, Command, View, Note>(game: Game<State, Command, Vi
       }
       return state;
     };
-    return {
+    const opened: Opened = {
       attempt: (raw, at) => {
         const command = game.command(raw);
         if (command === null) {
@@ -109,23 +111,23 @@ export function played<State, Command, View, Note>(game: Game<State, Command, Vi
       standing: () => game.standing?.(current()) ?? null,
       awards: () => game.awards?.(current()) ?? [],
     };
+    return {
+      run: (ctx, more) => game.tend?.(current(), ctx, more) ?? false,
+      open: (ctx) => {
+        state = game.advance(current(), ctx);
+        return opened;
+      },
+    };
   };
   return {
     id: game.id,
     create: (ctx) => game.encode(game.create(ctx)),
     reads: (command) => game.command(command) !== null,
-    open: (text, ctx) => {
+    read: (text) => {
       const decoded = game.decode(text);
-      return decoded === null ? null : opening(decoded, ctx);
+      return decoded === null ? null : held(decoded);
     },
-    tend: game.tend
-      ? (text) => {
-          const state = game.decode(text);
-          return state === null
-            ? null
-            : { run: (ctx, more) => game.tend?.(state, ctx, more) ?? false, open: (ctx) => opening(state, ctx) };
-        }
-      : null,
+    tends: game.tend !== undefined,
   };
 }
 

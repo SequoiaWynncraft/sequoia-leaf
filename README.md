@@ -541,10 +541,10 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   unique in the batch, and answers `{ "rev", "now", "results", "state" }`:
   for each command in order `{ "id", "notes" }` (the game's own notes of what
   happened) or `{ "id", "refused": "<code>" }`, and the state after them all.
-  One refused does not stop the rest. The whole batch is one transaction: the
-  state is read, brought to now, each command done, and the state, the Coins
-  each paid or took, what each logged and each command's answer written
-  together; a failure anywhere leaves nothing of it. A command whose id is
+  One refused does not stop the rest. The whole batch is kept in one
+  transaction: the state brought to now with each command done, the Coins each
+  paid or took, what each logged and each command's answer, written together;
+  a failure anywhere leaves nothing of it. A command whose id is
   among the player's newest 256 to the game answers what it answered then
   (its notes or its refusal, with the state as it stands now) and changes
   nothing, so a page that lost an answer sends the batch again safely. `rev`
@@ -598,9 +598,9 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   a visit, for the visitor) adds the time since their last call to that game
   to how long they have played it, when that is at most 3 minutes
   (`IDLE_MS`; a page in view calls at least every 75 seconds); a longer gap
-  adds nothing. Leaf's own tending (below) is not a call. It is written in the call's
-  transaction where there is one; a failure to write it is logged, and the
-  call goes on. `GET /v1/game/people/{player}` answers `{ "id", "name",
+  adds nothing. Leaf's own tending (below) is not a call. It is written as the
+  call arrives, with that moment, before the call waits for anything: one that
+  waits in a line (below) counts from when it came. `GET /v1/game/people/{player}` answers `{ "id", "name",
 "games", "played" }`: for each game they stand in or have played a second
   of, `played` in whole seconds and, with a standing, its `place`, `score`
   and `also`; and `played` for all games together.
@@ -649,43 +649,49 @@ the camp as a trophy.
 
 **Tending.** A game may say that its states go on by themselves for hours
 (`Game.tend`): the Works' yards work while their owners are away. Everything
-asked of one player's state in a game (opened, sent to, visited, tended) waits
-in that state's line and is done one at a time, in the order it came, at the
-moment it came: a batch is done at the moment it arrived, however long it
-waited behind another. A batch is done on a fiber of the service's own, whatever
-becomes of its request; an open or a visit let go of while it waits leaves the
-line. Such a state is read and run on in memory to that moment and no further,
-2 ms of work at a time with as long a rest after each; one slice runs at a time
-for every state and every request together, so tending never has more than
-half the thread, however many ask at once. What one in the line has run on is
-gone on from by the next, while nothing has written the state since and the
-moment it ran to is not past the next one's; nothing of it is kept once the
-line is empty. One no batch has written for two minutes (`TEND_AFTER`; an open
-page sends something more often) is kept on the way as a batch of no commands
-keeps a state: with where it stands and what it has won, and `rev` goes up by
-one. Leaf does so itself every minute for each of them, one after another,
-waiting while any request is in a line and giving way at the next slice to any
-that comes: a request waits behind Leaf's own tending for at most one slice and
-its rest. A state Leaf fails to tend is logged (`Tending the <game> state of
-<player> failed`), and the others are tended all the same. A state is opened
-only as run on from the very state stored, so one written meanwhile by anything
-else is read again and run on again in slices: no request runs more than a
-slice of it at once. A state left two minutes with nothing to run (a yard
-standing still) is not looked at again until a batch changes it. Leaf stopped
-part-way has written nothing of it: the state is only behind, and the next Leaf
+Leaf does with one player's state in a game is a job in that state's lane: an
+open, a visit, a batch, or Leaf's own tend. A job takes its place in the
+lane's line as it arrives, with the moment it arrived, and the lane does its
+jobs one at a time in that order, each at its own moment: a batch is done at the
+moment it arrived, however long it waited. A lane holds at most one copy of the
+state in memory. For each job it reads the stored state if it has no copy or
+the stored `rev` is no longer its copy's (a staging step or another Leaf wrote
+it), brings the copy to the job's moment, and then shows it, or does the batch
+to it and keeps it. A state that tends is brought there 2 ms of work at a time,
+with as long a rest after each; one slice runs at a time for every state and
+every job together. The next slice goes to the players' job that arrived
+first, but a tend that has waited through three of those has the next: a
+player's job waits behind at most one slice of Leaf's own tending, and the
+tending goes on however busy the players are. No transaction runs a state on:
+the copy is there before one begins. The copy is written by a batch, and when a
+job leaves the line empty with the copy run on past what is stored, as a batch
+of no commands keeps a state (where it stands and what it has won with it, and
+`rev` up by one); nothing else writes it, and the job is answered after. A
+new player's state is made in memory and stored by the first of those, in its
+transaction. Anything going wrong in a job drops the copy, and the next job
+reads what is stored. A batch is done whatever becomes of its request; an
+open, a visit or a tend whose caller has gone while it waited is never done.
+A lane with nothing in its line and nothing unsaved is let go. Every minute
+Leaf puts a tend in the line of each state no batch has written for two
+minutes (`TEND_AFTER`; an open page sends something more often), one after
+another, but for those it found standing still when it last read them (a yard
+eight hours after its owner was last there), until they are written again. A
+tend that fails is logged (`Tending the <game> state of <player> failed`), and
+the others are tended all the same. Leaf stopped with jobs waiting has written
+nothing of them: every state is as last stored, only behind, and the next Leaf
 runs it on from there. A minute in which Leaf tended anything logs `tended`:
 how many states, and how long it took. On the development machine, tending the
 largest kept yard (228 pieces) takes 9.5 ms of work two and a half minutes
 behind and 0.9 s eight hours behind, so half a core keeps about 7,900 such
-yards up; `bun apps/api/test/live-load.ts 32 20 50 10` timed the town while
-fifty of them, eight hours behind, were tended and ten players visited one at
-once: 17 ms at the median, 32 ms at the 95th percentile and 37 ms at worst,
-against 16, 32 and 35 ms without; the ten visits were answered within 2.1 s.
-With `32 20 50 0 50`, fifty players visited a large yard written a minute ago
-at once, all answered within 0.07 s, and its owner's command sent behind them
-was answered in 74 ms; their page's commands after, once every half second,
-took 9 ms at the median and 13 ms at worst, against 5 and 8 ms with nothing to
-tend.
+yards up; its owner opening it eight hours behind, on a Leaf just started,
+waits about 2 s. `bun apps/api/test/live-load.ts 32 20
+50 10` timed the town while fifty of them, eight hours behind, were tended and
+ten players visited one at once: 16.9 ms at the median, 31.8 ms at the 95th
+percentile and 35.8 ms at worst, against 16.0, 31.6 and 34.5 ms without; the ten
+visits were answered within 2.1 s. With `32 20 50 0 50`, fifty players visited a
+large yard written a minute ago at once, all answered within 0.06 s, and its
+owner's command sent behind them was answered in 58 ms; their page's commands
+after, once every half second, took 4 ms at the median and 9 ms at worst.
 
 **The town and the camp** keep the camp (what stands where, each thing by an
 id of its own, the tray, the parcels by the trail, the letters, the pets),
