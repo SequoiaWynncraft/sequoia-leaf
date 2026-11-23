@@ -1,3 +1,4 @@
+import { drawBase, drawFigure, drawStars, framesOf } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The fight, played on the table from the rules' own steps. The rules decide everything; this
  * turns each thing that happened into something seen on the board: figures walk, turn, lunge,
@@ -28,7 +29,6 @@ import { distance, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
 import { itemPic, traitPic } from "./art/icons.ts";
 import { TRAIT_COLOUR } from "./art/pal.ts";
-import { drawBase, drawFigure, drawStars, framesOf } from "./art/sprites.ts";
 import { hexMark } from "./art/table.ts";
 import { burst, motes, ring, say } from "./fx.ts";
 import { cellXY, HEX_H, HEX_W, type Pt } from "./geometry.ts";

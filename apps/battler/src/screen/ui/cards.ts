@@ -1,3 +1,4 @@
+import { portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * Cards: what each thing at the table says about itself, in the kit's one card (`card.ts`). Every
  * kind of thing is registered once and named by a reference:
@@ -69,7 +70,6 @@ import {
 import { regularNamed } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
-import { portrait, starsPic } from "../art/sprites.ts";
 import { fightUnits } from "../fightview.ts";
 import {
   combosWithHeld,
