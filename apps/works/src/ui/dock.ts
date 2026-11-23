@@ -2,18 +2,42 @@
  * The tools along the bottom, and over them the line that says what is in hand with the buttons
  * that act on it: turn, undo, and (for a finger, which cannot hover) build and put away. With
  * Select in hand the line holds what is done to the marked pieces, and the yard's blueprints.
+ *
+ * A kind of piece or a tool is in the dock only once the yard may use it (`usable`, which asks
+ * `locked`), and a kind only if this page draws it (`DRAWN`): the pieces of later tiers that have no
+ * art yet (the Study, the cart stop, the sorter) are not in it.
  */
 
+import {
+  BELT,
+  BENCH,
+  BOILER,
+  boxOf,
+  costOf,
+  CRATE,
+  DX,
+  DY,
+  GATHERER,
+  type Kind,
+  KIND_INFO,
+  MILL,
+  type Piece,
+  piecesOf,
+  priceOf,
+  PYLON,
+  TUNNEL,
+  WHEEL,
+  WORKSHOP,
+} from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { asking, el, icon, pressedTwice, shown } from "@sequoia-leaf/kit/dom.ts";
 import { GOLD, GREEN, INK, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
-import { boxOf, costOf, DX, DY, KIND, type Kind, type Piece, priceOf } from "@sequoia-leaf/yard";
 
 import { PAINTS } from "../art/belts.ts";
 import { type Art, bare } from "../art/index.ts";
-import { builds, S, type Tool } from "../state.ts";
+import { builds, DRAWN, S, type Tool } from "../state.ts";
 import {
   askSave,
   cancel,
@@ -21,55 +45,44 @@ import {
   confirm,
   dropBlueprint,
   hold,
+  piecesInHand,
   rotate,
   saveMark,
   setTool,
   toolHooks,
   undo,
+  usable,
 } from "../tools.ts";
 import { CATCHING_UP, catchingUp } from "../yard.ts";
 import { machineRef } from "./card.ts";
 import { $, button, fitted, when, type YardIcon, yardIcon } from "./parts.ts";
 
-/** The tools in the order they sit in the dock, which is also the order of the number keys. */
-export const TOOLS: readonly Kind[] = [
-  "belt",
-  "gatherer",
-  "mill",
-  "bench",
-  "workshop",
-  "splitter",
-  "joiner",
-  "tunnel",
-  "crate",
-  "pylon",
-  "wheel",
-  "boiler",
-];
+/** The tools in the order they sit in the dock, which is also the order of the number keys: every kind this page draws. */
+export const TOOLS: readonly Kind[] = DRAWN;
 export const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="];
 
 /** The tools the yard may build, in dock order. */
-export const openTools = (): Kind[] => TOOLS.filter((k) => S.world.open.kinds.has(k));
+export const openTools = (): Kind[] => TOOLS.filter(usable);
 
 /** Tools seen in the dock before, so that a new one can make an entrance. */
-let known: Set<Kind> | null = null;
+let known: Set<Kind | "select" | "paint"> | null = null;
 let message = "";
 let messageUntil = 0;
 
-function slotFor(art: Art, kind: Kind, fresh: boolean): HTMLElement {
-  const cost = costOf(S.world, kind);
+function slotFor(art: Art, k: Kind, fresh: boolean): HTMLElement {
+  const cost = costOf(S.world, k);
   const b = el(
     "button",
-    `k-slot${S.tool === kind ? " lit" : ""}${fresh ? " new" : ""}${S.nudgeTool === kind && S.tool !== kind ? " nudged" : ""}`,
-    { type: "button", "aria-label": KIND[kind].name, "aria-pressed": S.tool === kind ? "true" : "false" },
-    el("span", "art", {}, fitted(art.icon(kind), 20, 19)),
+    `k-slot${S.tool === k ? " lit" : ""}${fresh ? " new" : ""}${S.nudgeTool === k && S.tool !== k ? " nudged" : ""}`,
+    { type: "button", "aria-label": KIND_INFO[k]?.name ?? "", "aria-pressed": S.tool === k ? "true" : "false" },
+    el("span", "art", {}, fitted(art.icon(k), 20, 19)),
     el("span", cost === 0 ? "k-dim" : "k-gold", { text: cost === 0 ? "free" : String(cost) }),
   );
   b.addEventListener("click", () => {
-    setTool(S.tool === kind ? null : kind);
+    setTool(S.tool === k ? null : k);
   });
   // Clicking takes it up as the tool; pointing (or a finger kept on it) shows the machine's card.
-  link(b, machineRef(kind), { acts: true });
+  link(b, machineRef(k), { acts: true });
   return b;
 }
 
@@ -80,10 +93,11 @@ function plain(
   pic: YardIcon,
   key: string,
   more?: string,
+  fresh = false,
 ): HTMLElement {
   const b = el(
     "button",
-    `k-slot${S.tool === tool ? " lit" : ""}${S.nudgeTool === tool && S.tool !== tool ? " nudged" : ""}`,
+    `k-slot${S.tool === tool ? " lit" : ""}${fresh ? " new" : ""}${S.nudgeTool === tool && S.tool !== tool ? " nudged" : ""}`,
     { type: "button", "aria-label": name, "aria-pressed": S.tool === tool ? "true" : "false" },
     // No name under it: a name is wider than a slot. Its tip and the line above the toolbar say what it is.
     el("span", "art", {}, yardIcon(pic)),
@@ -99,12 +113,25 @@ function buildDock(art: Art): void {
   const dock = $("dock");
   const open = openTools();
   const first = known === null;
-  const kids = open.map((k) => slotFor(art, k, !first && !(known?.has(k) ?? true)));
-  known = new Set(open);
+  const fresh = (t: Kind | "select" | "paint"): boolean => !first && !(known?.has(t) ?? true);
+  const kids = open.map((k) => slotFor(art, k, fresh(k)));
+  const tools = (["select", "paint"] as const).filter(usable);
+  known = new Set([...open, ...tools]);
   const others = [
-    plain("select", "Select", "select", "F", "Mark out an area to move, copy, remove or save as a blueprint."),
+    ...(usable("select")
+      ? [
+          plain(
+            "select",
+            "Select",
+            "select",
+            "F",
+            "Mark out an area to move, copy, remove or save as a blueprint.",
+            fresh("select"),
+          ),
+        ]
+      : []),
     plain("remove", "Remove", "spade", "E", "Right-click does the same."),
-    plain("paint", "Paint", "brush", "C"),
+    ...(usable("paint") ? [plain("paint", "Paint", "brush", "C", undefined, fresh("paint"))] : []),
   ];
   dock.replaceChildren(...kids, ...others);
   // On a narrow screen, more than eight tools go in two even rows.
@@ -122,7 +149,7 @@ function selectLine(f: boolean): { text: string; bad: boolean } {
     const moving = g.as === "move";
     const what = moving
       ? "Move"
-      : `${g.as === "copy" ? "Copy" : "Blueprint"}, ${price(S.aim?.cost ?? priceOf(S.world, g.pieces, true))}`;
+      : `${g.as === "copy" ? "Copy" : "Blueprint"}, ${price(S.aim?.cost ?? priceOf(S.world, piecesInHand(g), true))}`;
     if (f) return { text: S.aim ? `${what}. Tap again, or Build.` : `${what}: tap where it goes.`, bad: false };
     return { text: `${what}: click to place it. R rotates it.`, bad: false };
   }
@@ -153,14 +180,14 @@ function handLine(): { text: string; bad: boolean } {
     };
   }
   if (tool === "paint") return { text: `${f ? "Tap" : "Click"} a belt to colour its whole line.`, bad: false };
-  const name = KIND[tool].name;
+  const name = KIND_INFO[tool]?.name ?? "";
   if (S.run) {
     if (S.run.why) return { text: S.run.why, bad: true };
     const n = S.run.legs.length;
     return { text: `${n} belt${n === 1 ? "" : "s"}, ${S.run.cost === 0 ? "free" : `${S.run.cost} Coins`}`, bad: false };
   }
   if (S.aim?.why) return { text: S.aim.why, bad: true };
-  if (tool === "belt") {
+  if (tool === BELT) {
     if (!f) return { text: "Belt: drag to place a line. R rotates it.", bad: false };
     return { text: S.from ? "Now tap where it ends." : "Tap where the line starts.", bad: false };
   }
@@ -168,16 +195,16 @@ function handLine(): { text: string; bad: boolean } {
   return { text: `${name}: click to place it. R rotates it.`, bad: false };
 }
 
-const DOT: Partial<Record<Kind, string>> = {
-  gatherer: GREEN[4],
-  mill: GOLD[1],
-  bench: GOLD[1],
-  workshop: GOLD[1],
-  crate: "#a35d3b",
-  pylon: WATER[3],
-  wheel: WATER[3],
-  boiler: WATER[3],
-};
+const DOT = new Map<number, string>([
+  [GATHERER, GREEN[4]],
+  [MILL, GOLD[1]],
+  [BENCH, GOLD[1]],
+  [WORKSHOP, GOLD[1]],
+  [CRATE, "#a35d3b"],
+  [PYLON, WATER[3]],
+  [WHEEL, WATER[3]],
+  [BOILER, WATER[3]],
+]);
 
 /** A blueprint's layout as a small picture on dark, a dot to a tile: belts pale, gatherers green, machines gold, power blue. */
 function thumb(pieces: readonly Piece[]): HTMLCanvasElement {
@@ -186,9 +213,9 @@ function thumb(pieces: readonly Piece[]): HTMLCanvasElement {
   g.fillStyle = INK;
   g.fillRect(0, 0, c.width, c.height);
   for (const p of pieces) {
-    g.fillStyle = DOT[p.kind] ?? "#cbb894";
+    g.fillStyle = DOT.get(p.kind) ?? "#cbb894";
     g.fillRect(p.x + 1, p.y + 1, 1, 1);
-    if (p.kind === "tunnel") g.fillRect(p.x + 1 + DX[p.dir] * (p.span + 1), p.y + 1 + DY[p.dir] * (p.span + 1), 1, 1);
+    if (p.kind === TUNNEL) g.fillRect(p.x + 1 + DX[p.dir] * (p.span + 1), p.y + 1 + DY[p.dir] * (p.span + 1), 1, 1);
   }
   return shown(c, box.w > 14 || box.h > 10 ? 0.5 : box.w > 6 || box.h > 4 ? 1 : 2);
 }
@@ -199,12 +226,13 @@ function thumb(pieces: readonly Piece[]): HTMLCanvasElement {
  * place keeps the marked pieces there: at once in an empty one, on a second press over a kept one.
  */
 function place(slot: number): HTMLElement {
-  const print = S.world.blueprints[slot];
+  const kept = S.world.blueprints[slot];
   const key = `blueprint-${slot}`;
-  if (!print)
+  if (!kept)
     return button(S.saving ? "wood sm" : "wood sm off", ["Empty"], () => {
       if (S.saving) saveMark(slot);
     });
+  const print = piecesOf(kept);
   const box = boxOf(print);
   const cost = priceOf(S.world, print, true);
   const facts = el(
@@ -237,7 +265,9 @@ function buildHand(): void {
   const marking = tool === "select" && !g;
   /** The four actions on a marked area: with them the buttons sit closer, to fit a phone's width. */
   const acting = marking && S.mark !== null && !S.saving;
-  if (marking && !S.corner && (S.saving || !S.mark)) kids.push(...S.world.blueprints.map((_, slot) => place(slot)));
+  // As many places for blueprints as the yard has unlocked, and none before.
+  if (marking && !S.corner && (S.saving || !S.mark))
+    kids.push(...Array.from({ length: S.world.open.blueprints }, (_, slot) => place(slot)));
   else if (acting) {
     kids.push(
       action("Move", "M", () => {
@@ -312,7 +342,7 @@ let handKey: (() => void) | null = null;
 export function initDock(art: Art): void {
   dockKey = when(
     () =>
-      `${openTools().join()}|${S.tool}|${S.nudgeTool}|${openTools()
+      `${openTools().join()}|${usable("select")}|${usable("paint")}|${S.tool}|${S.nudgeTool}|${openTools()
         .map((k) => costOf(S.world, k))
         .join()}`,
     () => {

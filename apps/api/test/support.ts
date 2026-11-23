@@ -1,7 +1,18 @@
 import { deflateSync } from "node:zlib";
 
 import type { Activity, PlayerId, Posting } from "@sequoia-leaf/core";
-import { Clock, ConfigProvider, Duration, Effect, Layer, ManagedRuntime, Option, Redacted, References } from "effect";
+import {
+  Clock,
+  ConfigProvider,
+  Duration,
+  Effect,
+  Layer,
+  Logger,
+  ManagedRuntime,
+  Option,
+  Redacted,
+  References,
+} from "effect";
 import { SecureRandom } from "effect/crypto";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -85,6 +96,8 @@ export interface Fakes {
   readonly instance?: string;
   /** Leaf's dice, for tests that need them to fall the same way every time. Without it they are the machine's. */
   readonly dice?: SecureRandom.SecureRandom["Service"];
+  /** Leaf's own warnings and errors, printed as production prints them (the play server's `--log`). Without it Leaf logs nothing. */
+  readonly log?: boolean;
 }
 
 /** Dice that fall the same way every time from the same seed: a counter, mixed (for tests and play only). */
@@ -148,7 +161,9 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     handClock,
     Layer.succeed(LeafInstance)(fakes.instance ?? crypto.randomUUID()),
     fakes.dice === undefined ? SecureRandom.layerWebCrypto : Layer.succeed(SecureRandom.SecureRandom)(fakes.dice),
-    Layer.succeed(References.MinimumLogLevel)("None"),
+    fakes.log === true
+      ? Layer.mergeAll(Logger.layer([Logger.consoleJson]), Layer.succeed(References.MinimumLogLevel)("Warn"))
+      : Layer.succeed(References.MinimumLogLevel)("None"),
   );
   const stores = Stores.pipe(Layer.provideMerge(databaseAt(configured.databasePath)), Layer.provideMerge(outside));
   // The real stores, or whatever the test puts in between; everything built on top sees the same.

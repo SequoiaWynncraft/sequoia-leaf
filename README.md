@@ -82,21 +82,21 @@ and lets a game's command take Leaf (see the play service).
 
 ## Layout
 
-| Path                  | What it is                                                              |
-| --------------------- | ----------------------------------------------------------------------- |
-| `packages/core`       | The rules of the game as pure functions and types. No I/O.              |
-| `packages/raid`       | The Little Raid's rules, which Leaf and the battler's page share.       |
-| `packages/yard`       | The Works' rules, with no screen in them; Leaf and the page use them.   |
-| `packages/town`       | The town's and the camp's rules and catalogue; the town page uses them. |
-| `packages/pulls`      | The pulls' rules: prizes, banners, odds and Seeds.                      |
-| `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.           |
-| `apps/api/migrations` | The database schema, as Effect migrations applied in order at start.    |
-| `apps/town`           | Guild Town, the browser game's home screen.                             |
-| `apps/works`          | The Works, a game in the town.                                          |
-| `apps/battler`        | The Little Raid, a game in the town.                                    |
-| `packages/kit`        | What the town and its games share: look, sound and plumbing.            |
-| `packages/figures`    | The raid's figures as pictures, for the raid's page and the town's.     |
-| `Dockerfile`          | The production image, with the game's pages built into it.              |
+| Path                  | What it is                                                                    |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `packages/core`       | The rules of the game as pure functions and types. No I/O.                    |
+| `packages/raid`       | The Little Raid's rules, which Leaf and the battler's page share.             |
+| `packages/factory`    | The Works' rules on flat data, no screen in them; Leaf and the page use them. |
+| `packages/town`       | The town's and the camp's rules and catalogue; the town page uses them.       |
+| `packages/pulls`      | The pulls' rules: prizes, banners, odds and Seeds.                            |
+| `apps/api`            | The server, on Effect: the HTTP API, database and feed syncs.                 |
+| `apps/api/migrations` | The database schema, as Effect migrations applied in order at start.          |
+| `apps/town`           | Guild Town, the browser game's home screen.                                   |
+| `apps/works`          | The Works, a game in the town.                                                |
+| `apps/battler`        | The Little Raid, a game in the town.                                          |
+| `packages/kit`        | What the town and its games share: look, sound and plumbing.                  |
+| `packages/figures`    | The raid's figures as pictures, for the raid's page and the town's.           |
+| `Dockerfile`          | The production image, with the game's pages built into it.                    |
 
 ## How Leaf is earned
 
@@ -533,7 +533,7 @@ refused, what the page is shown of a state (nothing that tells the future),
 and the state as stored text. Time is Leaf's, and so are the dice: each call
 gets a fresh number from the machine's secure randomness (`Ctx.seed`), which
 the game stirs into the stream its state keeps; the stream is never shown.
-The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Works (`packages/yard`), and
+The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Works (`packages/factory`), and
 `pulls` (`packages/pulls`).
 
 - `GET /v1/game/play/{game}` answers `{ "rev", "now", "state" }`: how many
@@ -744,8 +744,8 @@ picked. Its commands, notes, refusals and what its page is shown are in
 keyed by the run's number.
 
 **The Works** keeps the yard, its clock and its till; its commands, what its
-page is shown and how the page runs the yard ahead of Leaf are in
-`packages/yard/README.md`. Time is Leaf's: a yard holds the ticks it has run
+page is shown and answered and how the page runs the yard ahead of Leaf are in
+`packages/factory/README.md` and `apps/works/README.md`. Time is Leaf's: a yard holds the ticks it has run
 and the moment of Leaf's clock its last tick stands for, ten ticks a second.
 Leaf runs every yard tick for tick, looked at or not (tending, above), for
 eight hours after its owner's last command; then it stands still until their
@@ -756,9 +756,11 @@ remembers of that moment, and shown to the page for its letter once that was
 five minutes ago or more. Its Coins are
 keyed `works:<player>:bank:<n>` by the yard's own count, and every one it pays
 in is `free`: the till paid in before any price is taken and when the page
-collects it, and what a piece cost given back when it is taken away. A plot or
-a plan bought, a standing order handed over and each story order finished are
-logged.
+collects it, and what a piece cost given back when it is taken away. A plot
+bought, a standing order handed over and each lesson, project and commission
+finished are logged. A yard kept by the first design's rules (`packages/yard`,
+now gone) does not read: Leaf logs it, keeps it as it is, answers its owner
+`state_unreadable`, and does not tend it.
 
 ### Live: players in the same place, as it happens
 

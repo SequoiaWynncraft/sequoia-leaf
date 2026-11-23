@@ -7,10 +7,10 @@
  * Each tile is drawn once for every step of the march and kept.
  */
 
+import type { Dir } from "@sequoia-leaf/factory";
 import { BARK, CREAM, GOLD, INK, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { paint } from "@sequoia-leaf/kit/pix.ts";
 import { clamp } from "@sequoia-leaf/kit/util.ts";
-import type { Dir } from "@sequoia-leaf/yard";
 
 import { CLAY } from "./pal.ts";
 
@@ -20,7 +20,18 @@ export const STEPS = 16;
 
 /** For each side of a tile (east, south, west, north): no arm, an arm things come in along, one they leave by, or a way out that is shut. */
 export type Arm = 0 | 1 | 2 | 3;
-export type Arms = readonly [Arm, Arm, Arm, Arm];
+/** A tile's four arms in one number, two bits a side, east lowest: 0 for a tile with none (`arms`). */
+export type Arms = number;
+/** The arms of the four sides, east, south, west and north, as one number. */
+export const arms = (e: Arm, s: Arm, w: Arm, n: Arm): Arms => e | (s << 2) | (w << 4) | (n << 6);
+/** The arm on one side. */
+export const armAt = (a: Arms, side: number): Arm => {
+  const v = (a >> ((side & 3) * 2)) & 3;
+  return v === 1 ? 1 : v === 2 ? 2 : v === 3 ? 3 : 0;
+};
+/** The arms with one side's set. */
+export const withArm = (a: Arms, side: number, arm: Arm): Arms =>
+  (a & ~(3 << ((side & 3) * 2))) | (arm << ((side & 3) * 2));
 
 interface Wood {
   bed: string;
@@ -67,15 +78,14 @@ const cache = new Map<number, HTMLCanvasElement>();
  * line's colour, or 0. The tiles kept are at most seven times those of a yard with no colour in it,
  * and a splitter's are at most eight times those of one with no way shut.
  */
-export function beltTile(arms: Arms, main: Dir, step: number, tier: number, tint = 0): HTMLCanvasElement {
-  const key =
-    ((((((arms[0] * 4 + arms[1]) * 4 + arms[2]) * 4 + arms[3]) * 4 + main) * STEPS + step) * 3 + tier) * 7 + tint;
+export function beltTile(a: Arms, main: Dir, step: number, tier: number, tint = 0): HTMLCanvasElement {
+  const key = (((a * 4 + main) * STEPS + step) * 3 + tier) * 7 + tint;
   const had = cache.get(key);
   if (had) return had;
   const wood = WOODS[tier] ?? WOODS[0];
   if (!wood) throw new Error("no belt wood");
   const hue = PAINTS[tint - 1];
-  const arm = (side: number): boolean => arms[side] === 1 || arms[side] === 2;
+  const arm = (side: number): boolean => armAt(a, side) === 1 || armAt(a, side) === 2;
   // Which arm, if any, a pixel's bed belongs to: 0 to 3 for a side, 4 for the middle, -1 for none.
   const part = (x: number, y: number): number => {
     const u = x - 7.5;
@@ -91,7 +101,7 @@ export function beltTile(arms: Arms, main: Dir, step: number, tier: number, tint
    */
   const bar = (x: number, y: number): string | null => {
     for (let side = 0; side < 4; side++) {
-      if (arms[side] !== 3) continue;
+      if (armAt(a, side) !== 3) continue;
       const depth = side === 0 ? 15 - x : side === 1 ? 15 - y : side === 2 ? x : y;
       const across = Math.abs((side % 2 === 0 ? y : x) - 7.5);
       if (depth > 3 || across > HALF) continue;
@@ -125,7 +135,7 @@ export function beltTile(arms: Arms, main: Dir, step: number, tier: number, tint
     }
     if (hue && brim(x, y)) return hue.dim;
     // An arm that things come in along runs the other way from the side it is on.
-    const way = p === 4 ? main : arms[p] === 1 ? (p + 2) % 4 : p;
+    const way = p === 4 ? main : armAt(a, p) === 1 ? (p + 2) % 4 : p;
     const s = along(x, y, way);
     if (p === 4 || way === main) {
       // The chevron: a small arrowhead, one to a tile, pointing the way of the run.

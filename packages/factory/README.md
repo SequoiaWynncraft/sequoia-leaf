@@ -3,7 +3,8 @@
 The rules of the second Works, on flat data: numbers in typed arrays and a few small records,
 nothing for each piece and no string for each thing. Tiers 0 to 3 are whole: nodes (lessons,
 projects and commissions), research and the Study, counted recipes, grades, the sorter and the cart
-stop. Nothing serves or draws it yet.
+stop. Leaf's play service plays it as the Works (`FACTORY`, under the id `works`), and the Works'
+page (`apps/works`) holds a copy and draws it; the town reads its standing's words (`src/stats.ts`).
 
 ## What to read for which kind of work
 
@@ -17,8 +18,11 @@ stop. Nothing serves or draws it yet.
 | the node in hand, the line of research, the board                             | `src/orders.ts`, `src/clock.ts`                                               |
 | Leaf's game: commands, Coins, time, the view and the answer                   | `src/game.ts`                                                                 |
 | keeping a yard, and the check                                                 | `src/codec.ts`, `src/bytes.ts`, `src/check.ts`                                |
-| the route for a run of belt; what a piece is doing                            | `src/route.ts`; `src/status.ts`                                               |
+| the route for a run of belt and its legs; what a piece is doing               | `src/route.ts`; `src/status.ts` (`condition` decides, `status` words it)      |
 | what a machine or a line makes and needs a minute                             | `src/planner.ts`, and `plan.ts` for the table of the slice                    |
+| the wire from the page's side: a command written, what Leaf sends read back   | `src/page.ts`                                                                 |
+| what the town is told: the postcard, the standing's words                     | `src/postcard.ts`, `src/stats.ts`                                             |
+| yards built with commands, for the tests and the play server's tours          | `test/yards.ts` (`delivering`, `generated`, `staged`)                         |
 | how long the slice takes a player                                             | `pace.ts` (its settings), then `pace/`                                        |
 | what it costs                                                                 | `bench.ts`, and `test/budgets.test.ts` for the budgets                        |
 
@@ -48,11 +52,13 @@ nothing:
 | `set`   | Uint8 | the one thing a machine is told to make, or a sorter sends to its left          |
 | `free`  | Uint8 | 1 for one of the pieces a new yard has to hand                                  |
 | `span`  | Int8  | a tunnel's tiles under: positive at the way-in mouth, negative at the other     |
-| `row`   | Int32 | the piece's row in a side table, or -1                                          |
+| `row`   | Int32 | the piece's row in a side table, or -1: read only by `holderOf`, `tunnelOf`     |
 | `lit`   | Uint8 | 1 where power reaches                                                           |
 
 Side tables have a row for each piece that needs one, kept packed (a removed row takes the last),
-and grow by half when full:
+and grow by half when full. `row` holds a holder's row for some kinds and a tunnel's for another, so
+it is read only through `holderOf` and `tunnelOf`, which give -1 for a kind without that table's row
+(`test/condition.test.ts` holds every file of the rules to it):
 
 - **holders**, for gatherers, mills, benches, workshops, crates, boilers and Studies: `out`,
   `making` (things, Uint8), `work` (Uint16, half-ticks), `idle`, `open`, `fuel`, `kinds` (Uint8),
@@ -172,19 +178,35 @@ each machine (`recipesFor`), the router, keeping a blueprint, what the board may
 a yard back.
 
 - **Tools.** A command of a tool the yard has not unlocked is refused with the code `locked`: `paint`
-  (Paint); `move`, `clear`, `placeBlueprint` and a `stand` of two pieces or more (Select);
+  (Paint); `move`, `copy`, `clear`, `placeBlueprint` and a `stand` of two pieces or more (Select);
   `saveBlueprint` (any blueprints); `upgrade` (Upgrading an area, and Select). A single piece
   (`build`, or a `stand` of one: a removal undone) and a run of belt (`lay`) never are.
-- **A run of belt** (`lay`) reads only belts and tunnels: where each leg goes, which way, how far
-  and at what grade. A leg of any other kind does not read; a colour or a setting on one is let be.
-  A run that names a tunnel twice, by both its mouths, is refused before anything changes, and a run
-  is charged the price `priceOf` gives it. Its `turn` turns a belt already standing where the run
-  starts, and nothing but a belt.
-- **Standing pieces** (`stand`) is for a copy or an undone removal, at most 160 a command; a colour
-  in it needs Paint, and what a piece is set to its own unlock. A blueprint is set down by naming its
-  place, its corner and its turns (`placeBlueprint`), all or none, whatever its size. A tunnel named
-  with its span over a tunnel must be that tunnel, going in on its tile that way that far, and is
-  raised or lowered; two pieces of one set on one tile, as a kept blueprint might hold, are refused.
+- **A run of belt** (`lay`) is made of legs (`Leg`, in `route.ts`): a belt or a tunnel, its tile and
+  way, and its grade; only a tunnel's leg says how far under (`span`: 0 for the tunnel standing there,
+  raised or lowered), since only a tunnel goes under, so a belt's leg cannot hold one. A leg has nothing
+  to set, so the router, the page's run, the writer and the reader carry nothing else, and the rules
+  stand each leg as a piece made of those parts alone (`legPiece`). On the wire a belt's leg is a
+  piece's shape, with a span of 0. A run that
+  names a tunnel twice, by both its mouths, is refused before anything changes, and a run is charged
+  the price `priceOf` gives it. Its `turn` turns a belt already standing where the run starts, and
+  nothing but a belt.
+- **A copy** (`copy`) is one command, as a move is: the tiles, the turns and the corner. What stands
+  on those tiles is stood again there (`copyOf`), all or none whatever its size, with the same checks
+  as standing those pieces, and charged as one change.
+- **Standing pieces** (`stand`) is only for putting back what was taken away (an undone removal), at
+  most 160 a command, since Leaf reads a body of at most 16 KiB: a larger put-back goes as several,
+  each all or none. A colour in it needs Paint, and what a piece is set to its own unlock. A
+  blueprint is set down by naming its place, its corner and its turns (`placeBlueprint`), all or
+  none, whatever its size. A tunnel named with its span over a tunnel must be that tunnel, going in
+  on its tile that way that far, and is raised or lowered; two pieces of one set on one tile, as a
+  kept blueprint might hold, are refused.
+
+- **Coins.** The yard keeps no purse: Leaf plays a command (`FACTORY.apply`) with none, and its
+  ledger refuses a price the member's Coins do not cover. The page plays the same command on its copy
+  with the purse as it is at the moment it sends (`play(y, command, purse)`): whatever costs more than
+  the purse and the till's whole Coins (which a command that costs pays in first) is refused with the
+  rules' own sentence ("Not enough Coins", or "Not enough Coins: 12 short" for many pieces at once),
+  and nothing changes.
 
 ## Pieces new to this design
 
@@ -202,8 +224,33 @@ beyond the first, shared out between one or two things as `fresh` draws them. On
 seed, can draw one. It counts from 50 ticks after it is hung (`starts`): until then the depot gives
 it nothing, it cannot be handed over (`claim`), and the check leaves it out. A fresh order is hung at
 the end of the board. What Leaf answers a batch with (`answer`) is the yard's tick, its check, and the
-orders hung that do not count yet. `answer` is not yet a part of `FACTORY`: core on this branch has
-no place for it; it joins when the branch takes in `main`.
+orders hung in the last minute (`ORDER_TOLD`), counting or not, so that a batch that runs past the tick
+one counts from still tells the page of it. `FACTORY.answer` puts it on the wire (`Short`): Leaf's
+tick now beside it, and each order as it is kept (`keptOrder`), which the page reads back with
+`readAnswer` (`orderOf`, the same reader the codec vouches a kept order with).
+
+## The wire, from the page's side
+
+Leaf reads a command off the wire with `readCommand`; the page writes one with its inverse,
+`writeAct` (`writeCommand` with the tick), every thing, kind, plot and goal by its name, so that what
+the page writes reads back as the same act (`test/page.test.ts`, and every command of random play in
+`test/play.test.ts`). What Leaf sends back is read here too: the view (`readView`), a command's notes,
+which are the yard's news (`readNotes`), and the answer to a batch (`readAnswer`), each tested against
+what `FACTORY` really gives; and the orders in an answer are put on the page's copy by `hear`, so that
+nothing on the page writes to its yard but the rules. The postcard the town is left (`postcard`) and what a standing says on a
+card (`WORKS_STATS`, in `src/stats.ts`, which reads nothing of the rules) are here as well.
+
+## What a piece is doing, for a screen
+
+`condition` is the one place a piece's state, and whether it is in trouble, is decided: a number
+(`STATES`, and `TROUBLE` added), making nothing, so that a screen can ask it of every piece in view
+each frame. `status` takes the state and the trouble from it and adds the sentence, and what the
+sentence names (the part to tip out, what is waited for). `test/condition.test.ts` holds each
+decision on yards built for it. Neither, nor `aim`, makes anything while the plumbing is worked out:
+they read a machine's recipes from it (`Wire.recipes`).
+
+`priceOf` with `bare` prices a set of pieces as if on clear ground: a blueprint or a copy before it
+is aimed anywhere.
 
 ## The planner
 
@@ -333,10 +380,18 @@ One file for each part: whole numbers, counted recipes (and those of tiers 0 and
 tiers), grades, tiers and tools, research, the new pieces and blueprints, orders, the tables held together (every goal reachable, nothing wanted before it can be made, every
 folio cost payable by its tier, ids unique), the planner (and that a yard does what it says), the
 codec and the check, random play (a refusal changes nothing, a yard reads back as itself, every
-command and piece takes effect) and time away, the budgets, and the pace script's parts
-(`test/pace.test.ts`: sizing lines, which lines a goal needs beyond what stands, that a line laid
-out delivers what it is booked for, that what the player reads off the yard is what arrives, that a
-play repeats to the tick, and what the table makes of one play and of several). `test/yards.ts`
-builds the yards they share with commands off the wire; `test/goals.ts` reads from the tables the
-goals a test needs (the research with nothing needed first, what a node wants and pays, a
-commission's needs), so that no test names a count from the tables and changing one breaks none.
+command and piece takes effect, what the page would write reads back as the command) and time away,
+how a piece stands (`condition`), the wire from the page's side, the staged yards, the budgets, and
+the pace script's parts (`test/pace.test.ts`: sizing lines, which lines a goal needs beyond what
+stands, that a line laid out delivers what it is booked for, that what the player reads off the yard
+is what arrives, that a play repeats to the tick, and what the table makes of one play and of
+several). `test/goals.ts` reads from the tables the goals a test needs (the research with nothing
+needed first, what a node wants and pays, a commission's needs), so that no test names a count from
+the tables and changing one breaks none. `test/yards.ts` builds the
+yards they share with commands off the wire, and the yards the play server on a developer's machine
+stages for the tours (`staged`: `new`, `small`, `short`, `mid`, `large`), which the package exports as
+`@sequoia-leaf/factory/test/yards.ts`. A stage is a yard the rules could have made: built by
+commands, every goal finished, paid and logged by the rules, by lines of its own or by what the node
+in hand wants arriving at the depot through `deliver` (`fillHand`). Research is studied in a Study,
+not delivered, so no stage knows any: `large` is the generator's pieces on a yard with every node of
+tiers 0 to 2 done, building only what such a yard may.

@@ -5,6 +5,7 @@
  */
 import {
   at,
+  costOf,
   type Dir,
   DX,
   DY,
@@ -45,7 +46,7 @@ import {
   TOP,
   TUNNEL,
 } from "./tables.ts";
-import { changed, holds, PIECE_BYTES, type Yard } from "./yard.ts";
+import { changed, holderOf, PIECE_BYTES, tunnelOf, type Yard } from "./yard.ts";
 
 /** How many colours there are to give. */
 export const TINTS = 6;
@@ -89,7 +90,7 @@ export const keptOf = (v: { readonly [K in keyof Kept]?: unknown }, k: Kind): Ke
 export function keptAt(y: Yard, i: number): Kept {
   const k = y.kind[i] ?? NONE;
   if (!isKind(k)) return {};
-  const r = y.row[i] ?? -1;
+  const r = holderOf(y, i);
   const h = y.holders;
   const recipe = y.set[i] ?? NONE;
   return keptOf(
@@ -176,14 +177,18 @@ export function within(y: Yard, x0: number, y0: number, x1: number, y1: number):
   return out;
 }
 
-/** What a set of pieces costs to stand, each priced in turn by `priceAt`, the pieces to hand used as setting it down uses them. */
-export function priceOf(y: Yard, pieces: readonly Pick<Piece, "kind" | "x" | "y" | "grade">[]): number {
+/**
+ * What a set of pieces costs to stand, each priced in turn by `priceAt`, the pieces to hand used as
+ * setting it down uses them. With `bare`, as if on clear ground: what a blueprint or a copy costs
+ * before it is aimed anywhere.
+ */
+export function priceOf(y: Yard, pieces: readonly Pick<Piece, "kind" | "x" | "y" | "grade">[], bare = false): number {
   const spare = Uint8Array.from(y.spare);
   let cost = 0;
   for (const p of pieces) {
-    const i = at(y, p.x, p.y);
+    const i = bare ? -1 : at(y, p.x, p.y);
     const there = i < 0 ? NONE : (y.kind[i] ?? NONE);
-    cost += priceAt(y, p.kind, p.x, p.y, p.grade, spare);
+    cost += bare ? costOf(y, p.kind, p.grade, spare) : priceAt(y, p.kind, p.x, p.y, p.grade, spare);
     if (there === p.kind) continue;
     if (there !== NONE && y.free[i] === 1) spare[there] = (spare[there] ?? 0) + 1;
     if ((spare[p.kind] ?? 0) > 0) spare[p.kind] = (spare[p.kind] ?? 0) - 1;
@@ -275,7 +280,7 @@ export function stand(
       // The colour it came with is of what stood there: a run is joined below, as a whole.
       y.tint[i] = kept.tint ?? 0;
       if (kept.shut !== undefined) y.shut[i] = kept.shut;
-      const r = y.row[i] ?? -1;
+      const r = holderOf(y, i);
       if (kept.recipe !== undefined) y.set[i] = kept.recipe;
       if (kept.open === false && r >= 0) y.holders.open[r] = 0;
       if (joins && (p.kind === BELT || p.kind === TUNNEL)) laid.push(i);
@@ -325,12 +330,24 @@ export function move(y: Yard, tiles: readonly number[], turns: number, x: number
     PARTS.forEach((part, n) => (y[part][i] = parts[n] ?? 0));
     y.dir[i] = ways[k] ?? y.dir[i] ?? 0;
     y.via[i] = 0;
-    const r = y.row[i] ?? -1;
-    if (r >= 0) (holds(y.kind[i] ?? NONE) ? y.holders.tile : y.tunnels.tile)[r] = i;
+    const r = holderOf(y, i);
+    if (r >= 0) y.holders.tile[r] = i;
+    const t = tunnelOf(y, i);
+    if (t >= 0) y.tunnels.tile[t] = i;
   });
   changed(y);
   y.powered = false;
   return null;
+}
+
+/**
+ * The pieces a copy of what stands on some tiles stands: turned `turns` quarter turns right, the
+ * corner of their box on (x, y), each keeping what a piece copied keeps; nothing if none stands there.
+ * The copy is stood all or none (`stand`), as one command, however many pieces it is.
+ */
+export function copyOf(y: Yard, tiles: readonly number[], turns: number, x: number, z: number): Piece[] | null {
+  const from = piecesAt(y, tiles);
+  return from.length === 0 ? null : placed(from, turns, x, z);
 }
 
 /** Takes away every piece on some tiles, and says what comes back. */

@@ -1,6 +1,8 @@
 /**
- * What a piece in the yard is doing, in a sentence, and whether it is in trouble: for a screen to
- * show. Nothing here changes the yard but working out its power and plumbing if a change left them unknown.
+ * How a piece in the yard stands, and whether it is in trouble: decided in one place (`condition`,
+ * a number, making nothing, so that a screen can ask it of every piece in view each frame), and put
+ * in a sentence for a screen to show (`status`, which words what `condition` decides). Nothing here
+ * changes the yard but working out its power and plumbing if a change left them unknown.
  */
 import { BUFFER, FUEL, REACH } from "./content/machines.ts";
 import { litOf } from "./power.ts";
@@ -28,7 +30,6 @@ import {
   PYLON,
   RECIPE,
   type Recipe,
-  recipesFor,
   SORTER,
   SPAN_MOST,
   SPLITTER,
@@ -39,12 +40,23 @@ import {
   WORK,
   WORKSHOP,
 } from "./tables.ts";
-import { ahead, behind, nextOf, power, wayIn, wayOut } from "./wire.ts";
-import { held, type Yard } from "./yard.ts";
+import { ahead, behind, carries, nextOf, power, rewire, wayIn, wayOut } from "./wire.ts";
+import { held, holderOf, tunnelOf, type Yard } from "./yard.ts";
 
 /** How a thing stands: doing its job, with nothing to do just now, or in trouble that will not mend itself. */
-export type State =
-  "working" | "carrying" | "giving" | "idle" | "waiting" | "blocked" | "starved" | "unpowered" | "cold" | "shut";
+export const STATES = [
+  "working",
+  "carrying",
+  "giving",
+  "idle",
+  "waiting",
+  "blocked",
+  "starved",
+  "unpowered",
+  "cold",
+  "shut",
+] as const;
+export type State = (typeof STATES)[number];
 
 export interface Status {
   readonly state: State;
@@ -75,59 +87,53 @@ export function holding(y: Yard, r: number): string {
   return parts.length ? `${parts.join(", ")} and ${last}` : last || "nothing";
 }
 
+/** The recipes a kind of machine may make, as the plumbing has them (`recipesFor`, worked out once a change). */
+const recipesOf = (y: Yard, k: number): readonly Recipe[] => (y.wire ?? rewire(y)).recipes[k] ?? [];
+
+/** Whether a holder's row holds nothing a recipe does not use. */
+function onlyFor(y: Yard, r: number, rec: Recipe): boolean {
+  for (const n of ALL_ITEMS) if (held(y.holders, r, n) > 0 && !rec.from.includes(n)) return false;
+  return true;
+}
+
 /** The recipe a machine is working toward: the one it is pinned to, or the first that uses everything it holds. */
 export function aim(y: Yard, i: number): Recipe | null {
   const k = y.kind[i] ?? NONE;
   if (k !== MILL && k !== BENCH && k !== WORKSHOP) return null;
   const h = y.holders;
-  const r = y.row[i] ?? 0;
+  const r = holderOf(y, i);
   if (h.making[r] !== NONE) return RECIPE[h.making[r] ?? NONE] ?? null;
   if (y.set[i] !== NONE) return RECIPE[y.set[i] ?? NONE] ?? null;
   if (h.count[r] === 0) return null;
-  return (
-    recipesFor(y.open, k).find((rec) => ALL_ITEMS.every((n) => held(h, r, n) === 0 || rec.from.includes(n))) ?? null
-  );
+  for (const rec of recipesOf(y, k)) if (onlyFor(y, r, rec)) return rec;
+  return null;
 }
 
-/** Whether what stands ahead of a tile could ever take a thing from it. A full belt or machine still counts. */
+/** Whether the piece at `to` could ever take a thing from the tile `i`, handed it there. A full belt or machine still counts. */
+function takes(y: Yard, i: number, to: number, n: Item): boolean {
+  const k = y.kind[to] ?? NONE;
+  if (k === DEPOT || k === STOP || (k === STUDY && isFolio(n))) return true;
+  if ((k === BELT || k === CRATE) && ahead(y, to) !== i) return true;
+  if ((k === SPLITTER || k === SORTER || (k === TUNNEL && (y.span[to] ?? 0) > 0)) && behind(y, to) === i) return true;
+  if (k === JOINER && (wayIn(y, to, 0) === i || wayIn(y, to, 1) === i || wayIn(y, to, 2) === i)) return true;
+  const only = y.set[to] ?? NONE;
+  if (isMaker(k))
+    for (const rec of recipesOf(y, k)) if (rec.from.includes(n) && (only === NONE || only === rec.out)) return true;
+  return k === BOILER && n === DEADFALL;
+}
+
+/** Whether what stands ahead of a tile could ever take a thing from it: yes, nothing stands there, or never. */
 function takenAhead(y: Yard, i: number, n: Item): "yes" | "nothing" | "never" {
   const k0 = y.kind[i];
-  const outs =
-    k0 === SPLITTER
-      ? [0, 1, 2].map((w) => wayOut(y, i, w))
-      : k0 === SORTER
-        ? [wayOut(y, i, n === y.set[i] ? 1 : 0)]
-        : [nextOf(y, i)];
+  const ways = k0 === SPLITTER ? 3 : 1;
   let found: "nothing" | "never" = "nothing";
-  for (const to of outs) {
-    const k = to < 0 ? NONE : (y.kind[to] ?? NONE);
-    if (k === NONE) continue;
+  for (let w = 0; w < ways; w++) {
+    const to = k0 === SPLITTER ? wayOut(y, i, w) : k0 === SORTER ? wayOut(y, i, n === y.set[i] ? 1 : 0) : nextOf(y, i);
+    if (to < 0 || (y.kind[to] ?? NONE) === NONE) continue;
     found = "never";
-    if (k === DEPOT || k === STOP || (k === STUDY && isFolio(n))) return "yes";
-    if ((k === BELT || k === CRATE) && ahead(y, to) !== i) return "yes";
-    if ((k === SPLITTER || k === SORTER || (k === TUNNEL && (y.span[to] ?? 0) > 0)) && behind(y, to) === i)
-      return "yes";
-    if (k === JOINER && [0, 1, 2].some((w) => wayIn(y, to, w) === i)) return "yes";
-    const only = y.set[to] ?? NONE;
-    if (isMaker(k) && recipesFor(y.open, k).some((rec) => rec.from.includes(n) && (only === NONE || only === rec.out)))
-      return "yes";
-    if (k === BOILER && n === DEADFALL) return "yes";
+    if (takes(y, i, to, n)) return "yes";
   }
   return found;
-}
-
-function stuck(y: Yard, i: number, n: Item): Status {
-  const there = takenAhead(y, i, n);
-  if (there === "nothing") {
-    // Only a splitter has ways to shut.
-    const shut = y.shut[i] ?? 0;
-    const why =
-      shut === 7 ? "all 3 ways are shut" : `nothing is on ${shut ? "any way that is open" : "the tile it points at"}`;
-    return { state: "blocked", line: `Nowhere to send its ${many(n)}: ${why}.`, trouble: true };
-  }
-  if (there === "never")
-    return { state: "blocked", line: `The piece it points at does not take ${many(n)}.`, trouble: true };
-  return { state: "waiting", line: `Waiting: no room ahead for its ${many(n)}.`, trouble: false };
 }
 
 /** How many of a thing a gatherer or machine turns out in a minute at the yard's present pace, or 0. */
@@ -140,111 +146,166 @@ export function rate(y: Yard, i: number): number {
   return r ? pace / r.work : 0;
 }
 
-/** What the piece on a tile is doing. Nothing if nothing stands there. */
-export function status(y: Yard, i: number): Status | null {
+/** How `condition` says a piece stands: its state's place in `STATES`, with this added while it is in trouble. */
+export const TROUBLE = 16;
+const as = (st: State, trouble = false): number => STATES.indexOf(st) + (trouble ? TROUBLE : 0);
+/** The state of a thing a piece holds ready with nowhere to go. */
+const stuckAs = (y: Yard, i: number, n: Item): number =>
+  takenAhead(y, i, n) === "yes" ? as("waiting") : as("blocked", true);
+
+/**
+ * How the piece on a tile stands: its state's place in `STATES`, and `TROUBLE` more while it is in
+ * trouble; -1 if nothing stands there. The one place either is decided (`status` words it). It
+ * makes nothing, so a screen can ask it of every piece in view.
+ */
+export function condition(y: Yard, i: number): number {
   const k = i < 0 ? NONE : (y.kind[i] ?? NONE);
-  if (k === NONE) return null;
+  if (k === NONE) return -1;
   const lit = litOf(y)[i] === 1;
-  const share = power(y).pace;
-  const slow = share < 1 ? `, at ${Math.round(share * 100)}% of its pace: the yard is short of power` : "";
   const h = y.holders;
-  const r = y.row[i] ?? 0;
-  const unlinked = {
-    state: "unpowered",
-    line: "Not connected to a pylon, so the power it makes is not used.",
-    trouble: true,
-  } as const;
-  if (k === DEPOT)
-    return { state: "giving", line: `Sells every item that reaches it. Makes ${y.open.depot} power.`, trouble: false };
-  if (k === STOP) return { state: "giving", line: "Sends every item that reaches it to the depot.", trouble: false };
+  if (k === DEPOT || k === STOP) return as("giving");
+  if (k === PYLON || k === WHEEL) return lit ? as("giving") : as("unpowered", true);
+  if (carries(k)) {
+    const n = y.item[i] ?? NONE;
+    // A splitter with every way shut can send nothing on, whether or not it holds anything yet.
+    if (k === SPLITTER && y.shut[i] === 7) return as("blocked", true);
+    if (!isItem(n)) return underground(y, i) > 0 ? as("carrying") : as("idle");
+    if ((y.prog[i] ?? 0) < 8) return as("carrying");
+    return tunnelOf(y, i) >= 0 ? as("waiting") : stuckAs(y, i, n);
+  }
+  const r = holderOf(y, i);
+  if (k === BOILER) return !lit ? as("unpowered", true) : (h.fuel[r] ?? 0) > 0 ? as("giving") : as("cold", true);
+  if (k === CRATE) return h.open[r] === 1 ? as((h.count[r] ?? 0) > 0 ? "carrying" : "idle") : as("shut");
+  if (!lit) return as("unpowered", true);
+  if (k === STUDY) {
+    const g = y.line[0];
+    if (g === undefined) return as("idle");
+    for (const n of FOLIOS)
+      if ((GOALS[g]?.want[n] ?? 0) > (y.got[g]?.[n] ?? 0) && held(h, r, n) > 0) return as("working");
+    return as("waiting");
+  }
+  const out = h.out[r] ?? NONE;
+  if (isItem(out)) return stuckAs(y, i, out);
+  if (k === GATHERER || isItem(h.making[r] ?? NONE)) return as("working");
+  const rec = aim(y, i);
+  if (!rec) return as("idle", (h.count[r] ?? 0) > 0);
+  let missing = false;
+  let full = false;
+  for (let p = 0; p < rec.from.length; p++) {
+    const have = held(h, r, rec.from[p] ?? NONE);
+    const need = rec.need[p] ?? 1;
+    if (have < need) missing = true;
+    if (have >= BUFFER * need) full = true;
+  }
+  return !missing ? as("working") : full ? as("starved", true) : as("waiting");
+}
+
+/** How many things are under the ground in the tunnel going in on a tile: 0 for anything else. */
+function underground(y: Yard, i: number): number {
+  const t = tunnelOf(y, i);
+  if (t < 0) return 0;
+  let under = 0;
+  for (let s = 0; s < (y.span[i] ?? 0); s++) if (y.tunnels.under[t * SPAN_MOST + s] !== NONE) under++;
+  return under;
+}
+
+/** Why a thing held ready has nowhere to go, in words: what stands ahead never takes it, or nothing does. */
+function nowhere(y: Yard, i: number, n: Item): string {
+  if (takenAhead(y, i, n) === "never") return `The piece it points at does not take ${many(n)}.`;
+  // Only a splitter has ways to shut.
+  const shut = y.shut[i] ?? 0;
+  const why =
+    shut === 7 ? "all 3 ways are shut" : `nothing is on ${shut ? "any way that is open" : "the tile it points at"}`;
+  return `Nowhere to send its ${many(n)}: ${why}.`;
+}
+
+type Words = Omit<Status, "state" | "trouble">;
+
+/**
+ * What the piece on a tile is doing, in a sentence: the state and trouble `condition` decides, and
+ * the words for it, with what they name (the part to tip out, what is waited for). Nothing if nothing
+ * stands there.
+ */
+export function status(y: Yard, i: number): Status | null {
+  const c = condition(y, i);
+  const state = STATES[c % TROUBLE];
+  if (c < 0 || state === undefined) return null;
+  return { state, trouble: c >= TROUBLE, ...words(y, i, state) };
+}
+
+/** The words for how the piece on a tile stands, the state given. */
+function words(y: Yard, i: number, state: State): Words {
+  const k = y.kind[i] ?? NONE;
+  const share = power(y).pace;
+  const slow = share < 1 ? `, at ${Math.floor(share * 100)}% of its pace: the yard is short of power` : "";
+  const h = y.holders;
+  const r = holderOf(y, i);
+  const unlinked = "Not connected to a pylon, so the power it makes is not used.";
+  if (k === DEPOT) return { line: `Sells every item that reaches it. Makes ${y.open.depot} power.` };
+  if (k === STOP) return { line: "Sends every item that reaches it to the depot." };
   if (k === PYLON)
-    return lit
-      ? {
-          state: "giving",
-          line: `Powers the tiles up to ${Math.floor((REACH.pylon * y.open.reach) / 10_000)} tiles from it.`,
-          trouble: false,
-        }
-      : {
-          state: "unpowered",
-          line: "Not connected. It must be within reach of the depot or of a connected pylon.",
-          trouble: true,
-        };
-  if (k === WHEEL)
-    return lit ? { state: "giving", line: `Running. Makes ${GIVES[WHEEL] ?? 0} power.`, trouble: false } : unlinked;
+    return {
+      line:
+        state === "giving"
+          ? `Powers the tiles up to ${Math.floor((REACH.pylon * y.open.reach) / 10_000)} tiles from it.`
+          : "Not connected. It must be within reach of the depot or of a connected pylon.",
+    };
+  if (k === WHEEL) return { line: state === "giving" ? `Running. Makes ${GIVES[WHEEL] ?? 0} power.` : unlinked };
   if (k === BOILER) {
-    if (!lit) return unlinked;
-    return (h.fuel[r] ?? 0) > 0
-      ? {
-          state: "giving",
-          line: `Running. Makes ${GIVES[BOILER] ?? 0} power. Holds ${held(h, r, DEADFALL)} of ${FUEL} deadfall.`,
-          trouble: false,
-        }
-      : { state: "cold", line: "Out of fuel. It makes power only while it has deadfall.", trouble: true };
+    if (state === "unpowered") return { line: unlinked };
+    return {
+      line:
+        state === "giving"
+          ? `Running. Makes ${GIVES[BOILER] ?? 0} power. Holds ${held(h, r, DEADFALL)} of ${FUEL} deadfall.`
+          : "Out of fuel. It makes power only while it has deadfall.",
+    };
   }
   if (k === CRATE) {
     const count = h.count[r] ?? 0;
     const line = `Holds ${count} of ${y.open.crate}${count > 0 ? `: ${holding(y, r)}` : ""}.`;
-    return h.open[r] === 1
-      ? { state: count > 0 ? "carrying" : "idle", line, trouble: false }
-      : { state: "shut", line: `Shut: it lets no items out. ${line}`, trouble: false };
+    return { line: state === "shut" ? `Shut: it lets no items out. ${line}` : line };
   }
-  if (k === BELT || k === SPLITTER || k === JOINER || k === TUNNEL || k === SORTER) {
+  if (carries(k)) {
     const n = asItem(y.item[i] ?? NONE);
-    // A splitter with every way shut can send nothing on, whether or not it holds anything yet.
-    if (k === SPLITTER && y.shut[i] === 7) {
-      const line = n === null ? "All 3 ways out are shut." : `Nowhere to send its ${many(n)}: all 3 ways are shut.`;
-      return { state: "blocked", line, trouble: true };
-    }
     if (n === null) {
-      let under = 0;
-      const span = y.span[i] ?? 0;
-      for (let s = 0; s < span; s++) if (y.tunnels.under[(y.row[i] ?? 0) * SPAN_MOST + s] !== NONE) under++;
-      return under > 0
-        ? { state: "carrying", line: `${under} thing${under === 1 ? "" : "s"} under the ground.`, trouble: false }
-        : { state: "idle", line: "Empty.", trouble: false };
+      if (state === "blocked") return { line: "All 3 ways out are shut." };
+      const under = underground(y, i);
+      return { line: state === "carrying" ? `${under} thing${under === 1 ? "" : "s"} under the ground.` : "Empty." };
     }
-    if ((y.prog[i] ?? 0) < 8) return { state: "carrying", line: `Carrying ${many(n)}.`, trouble: false };
-    const s = k === TUNNEL && (y.span[i] ?? 0) > 0 ? null : stuck(y, i, n);
-    return s && s.state === "blocked"
-      ? s
-      : { state: "waiting", line: `${cap(many(n))} waiting to move on.`, trouble: false };
+    if (state === "carrying") return { line: `Carrying ${many(n)}.` };
+    if (state === "blocked") return { line: nowhere(y, i, n) };
+    return { line: `${cap(many(n))} waiting to move on.` };
   }
-  if (!lit) return { state: "unpowered", line: "No power here. Place a pylon near it.", trouble: true };
+  if (state === "unpowered") return { line: "No power here. Place a pylon near it." };
   if (k === STUDY) {
     const g = y.line[0];
     const holds = (h.count[r] ?? 0) > 0 ? `Holds ${holding(y, r)}. ` : "";
-    if (g === undefined) return { state: "idle", line: `${holds}Nothing is being studied.`, trouble: false };
+    if (g === undefined) return { line: `${holds}Nothing is being studied.` };
     const name = GOALS[g]?.title ?? "";
+    if (state === "working") return { line: `Studying ${name}${slow}.` };
     const missing = FOLIOS.filter((n) => (GOALS[g]?.want[n] ?? 0) > (y.got[g]?.[n] ?? 0));
-    if (missing.some((n) => held(h, r, n) > 0))
-      return { state: "working", line: `Studying ${name}${slow}.`, trouble: false };
-    return { state: "waiting", line: `${holds}Waiting for ${list(missing)} for ${name}.`, trouble: false, missing };
+    return { line: `${holds}Waiting for ${list(missing)} for ${name}.`, missing };
   }
   const out = asItem(h.out[r] ?? NONE);
-  if (out !== null) return stuck(y, i, out);
+  if (out !== null)
+    return { line: state === "blocked" ? nowhere(y, i, out) : `Waiting: no room ahead for its ${many(out)}.` };
   if (k === GATHERER) {
     const what = asItem(y.land.deposit[i] ?? NONE);
-    return { state: "working", line: `Gathering ${what === null ? "nothing" : many(what)}${slow}.`, trouble: false };
+    return { line: `Gathering ${what === null ? "nothing" : many(what)}${slow}.` };
   }
   const making = asItem(h.making[r] ?? NONE);
-  if (making !== null) return { state: "working", line: `Making ${many(making)}${slow}.`, trouble: false };
+  if (making !== null) return { line: `Making ${many(making)}${slow}.` };
   const rec = aim(y, i);
   if (!rec)
-    return {
-      state: "idle",
-      line: h.count[r] === 0 ? "Waiting for items." : `Holds ${holding(y, r)}. No recipe combines these.`,
-      trouble: (h.count[r] ?? 0) > 0,
-    };
+    return { line: h.count[r] === 0 ? "Waiting for items." : `Holds ${holding(y, r)}. No recipe combines these.` };
+  if (state === "working") return { line: `Making ${many(rec.out)}${slow}.` };
   const missing = rec.from.filter((n, p) => held(h, r, n) < (rec.need[p] ?? 1));
-  if (missing.length === 0) return { state: "working", line: `Making ${many(rec.out)}${slow}.`, trouble: false };
   const full = rec.from.find((n, p) => held(h, r, n) >= BUFFER * (rec.need[p] ?? 1));
-  if (full !== undefined)
+  if (state === "starved" && full !== undefined)
     return {
-      state: "starved",
       line: `Full of ${many(full)} and waiting for ${list(missing)}. If both come in on one belt, the ${many(full)} will be blocking it.`,
-      trouble: true,
       spare: full,
       missing,
     };
-  return { state: "waiting", line: `Waiting for ${list(missing)} to make ${many(rec.out)}.`, trouble: false, missing };
+  return { line: `Waiting for ${list(missing)} to make ${many(rec.out)}.`, missing };
 }

@@ -1,8 +1,8 @@
 /**
  * Playing at random, and time away. A seeded player gives yards thousands of commands off the wire,
  * valid and not, with ticks between: a refused command leaves the yard as running on to its tick
- * alone leaves it, the yard reads back as itself throughout, and every kind of command and piece
- * takes effect somewhere. Leaf runs a yard on in slices of any size to the same yard, and it stands
+ * alone leaves it, the yard reads back as itself throughout, every command the page would write
+ * for one reads back as it, and every kind of command and piece takes effect somewhere. Leaf runs a yard on in slices of any size to the same yard, and it stands
  * still once its owner has been away as long as it runs unwatched.
  */
 import { describe, expect, test } from "bun:test";
@@ -90,7 +90,7 @@ class Player {
       case 4: {
         const to = this.spot();
         const legs = F.route(y, [at.x, at.y], [to.x, to.y], { tunnels: this.r() < 0.7 }) ?? [];
-        return { do: "lay", legs: this.named(legs.map((l) => Object.assign({}, l, this.grade()))) };
+        return F.writeAct({ do: "lay", legs: legs.map((l) => Object.assign({}, l, this.grade())) });
       }
       case 5:
         return { do: "stand", pieces: this.named(F.placed(F.piecesAt(y, this.box()), this.int(4), at.x, at.y)) };
@@ -101,8 +101,11 @@ class Player {
       }
       case 7:
         return { do: "saveBlueprint", slot: this.int(F.BLUEPRINTS_MOST), tiles: this.box() };
-      case 8:
-        return { do: "move", tiles: this.box(), turns: this.int(4), ...this.spot() };
+      case 8: {
+        // A move or a copy, by the size of the box: the same draws either way.
+        const tiles = this.box();
+        return { do: tiles.length % 3 === 0 ? "copy" : "move", tiles, turns: this.int(4), ...this.spot() };
+      }
       case 9:
         return { do: "clear", tiles: this.box() };
       case 10:
@@ -160,6 +163,8 @@ class Player {
       const tick = this.r() < 0.05 ? Math.max(0, y.tick - 1 - this.int(5)) : y.tick + ahead;
       const c = F.readCommand({ ...this.command(), tick });
       if (!c) continue;
+      // What the page would write for it reads back as the same command.
+      expect(F.readCommand(JSON.parse(JSON.stringify(F.writeCommand(c))))).toEqual(c);
       const alone = F.decode(F.encode(y), y.land);
       if (!alone) throw new Error("the yard does not read back");
       F.stepTo(alone, tick);

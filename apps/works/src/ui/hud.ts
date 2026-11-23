@@ -1,9 +1,11 @@
 /**
- * What is always in view over the yard: the power as two numbers and a bar, the order in hand, the
- * buttons for the yard's books, and the way back to town. In a visit, only "Top yards" of the books,
- * and in the order's place a strip that says whose yard it is.
+ * What is always in view over the yard: the power as two numbers and a bar, the node in hand (a
+ * lesson, a project or the commission), the buttons for the yard's books, and the way back to town.
+ * Projects has its button only once tier 1 is open. In a visit, only "Top yards" of the books, and in
+ * the node's place a strip that says whose yard it is.
  */
 
+import { ALL_ITEMS, GOALS, isFilled, NODES, power, TICK_MS } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
@@ -11,15 +13,14 @@ import { leave } from "@sequoia-leaf/kit/shell.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { isMuted, setMuted, sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
-import { AWAY_MOST_MS, isFilled, PLANS, planState, power, SHIFT, storyOrder } from "@sequoia-leaf/yard";
 
 import type { Art } from "../art/index.ts";
 import { S } from "../state.ts";
-import { coins, collect, keepScreen } from "../yard.ts";
+import { collect, keepScreen } from "../yard.ts";
 import { orderRef } from "./card.ts";
-import { storyLabel } from "./notes.ts";
-import { type PanelId, togglePanel } from "./panels.ts";
-import { $, button, pic, wantRows, when, type YardIcon, yardIcon } from "./parts.ts";
+import { handLabel } from "./notes.ts";
+import { type PanelId, projectsOpen, takeable, togglePanel } from "./panels.ts";
+import { $, button, pic, shows, wantRows, when, type YardIcon, yardIcon } from "./parts.ts";
 
 const books = new Map<PanelId, HTMLElement>();
 
@@ -41,21 +42,20 @@ function powerPlaque(): () => void {
   tip(host, "Power", () => {
     const p = power(S.world);
     return p.pace < 1
-      ? `The yard uses ${p.demand} power and makes ${p.supply}. Every machine works at ${Math.round(p.pace * 100)}% speed.`
+      ? `The yard uses ${p.demand} power and makes ${p.supply}. Every machine works at ${Math.floor(p.pace * 100)}% speed.`
       : `The yard uses ${p.demand} of the ${p.supply} power it makes.`;
   });
-  return when(
+  return shows(
     () => {
       const p = power(S.world);
-      return `${p.demand}/${p.supply}`;
+      return { demand: p.demand, supply: p.supply, pace: Math.floor(p.pace * 100) };
     },
-    () => {
-      const p = power(S.world);
-      nums.textContent =
-        p.pace < 1 ? `${p.demand} / ${p.supply} · ${Math.round(p.pace * 100)}%` : `${p.demand} / ${p.supply}`;
-      nums.classList.toggle("short", p.pace < 1);
-      host.classList.toggle("short", p.pace < 1);
-      bar.classList.toggle("coral", p.pace < 1);
+    (p) => {
+      const short = p.pace < 100;
+      nums.textContent = short ? `${p.demand} / ${p.supply} · ${p.pace}%` : `${p.demand} / ${p.supply}`;
+      nums.classList.toggle("short", short);
+      host.classList.toggle("short", short);
+      bar.classList.toggle("coral", short);
       fill.style.setProperty("--v", `${Math.min(100, (p.demand / Math.max(1, p.supply)) * 100)}%`);
     },
   );
@@ -68,27 +68,34 @@ function tracker(art: Art): () => void {
   });
   // Tapping opens the orders; pointing (or a finger kept on it) shows the order's card.
   link(host, orderRef("story"), { acts: true });
-  return when(
+  return shows(
     () => {
       const w = S.world;
-      const o = storyOrder(w);
-      const got = o ? Object.values(w.filled).join() : "";
-      return `${w.story}|${got}|${w.board.map((s) => (isFilled(s.want, s.filled) ? 1 : 0)).join("")}`;
+      const o = w.hand === -1 ? undefined : GOALS[w.hand];
+      const got = w.hand === -1 ? null : (w.got[w.hand] ?? null);
+      return {
+        label: handLabel(),
+        from: w.hand === -1 ? null : (NODES[w.hand]?.from ?? null),
+        title: o?.title ?? null,
+        ready: w.board.filter((s) => isFilled(s.want, s.filled)).length,
+        wants: o
+          ? ALL_ITEMS.filter((k) => (o.want[k] ?? 0) > 0).map(
+              (k) => [k, Math.min(got?.[k] ?? 0, o.want[k] ?? 0), o.want[k] ?? 1] as const,
+            )
+          : [],
+      };
     },
-    () => {
-      const w = S.world;
-      const o = storyOrder(w);
-      const ready = w.board.filter((s) => isFilled(s.want, s.filled)).length;
+    (p) => {
       host.replaceChildren(
         el(
           "div",
           "k-row",
           {},
-          el("span", "k-label k-grow", { text: o ? `${storyLabel()} · ${o.from}` : storyLabel() }),
-          ready > 0 ? el("span", "k-chip lit", { text: `${ready} to hand over` }) : null,
+          el("span", "k-label k-grow", { text: p.from ? `${p.label} · ${p.from}` : p.label }),
+          p.ready > 0 ? el("span", "k-chip lit", { text: `${p.ready} to hand over` }) : null,
         ),
-        el("div", "", { text: o ? o.title : "Story complete" }),
-        ...(o ? wantRows(art, o.want, w.filled) : []),
+        el("div", "", { text: p.title ?? "No project in hand" }),
+        ...wantRows(art, p.wants),
       );
     },
   );
@@ -96,19 +103,8 @@ function tracker(art: Art): () => void {
 
 function bookButtons(): () => void {
   const host = $("books");
-  const make = (
-    id: PanelId & YardIcon,
-    title: string,
-    key: string,
-    about?: () => string,
-    green = false,
-  ): HTMLElement => {
-    const b = el(
-      "button",
-      green ? "k-btn leaf icon pip" : "k-btn wood icon pip",
-      { type: "button", "aria-label": title },
-      yardIcon(id),
-    );
+  const make = (id: PanelId & YardIcon, title: string, key: string, about?: () => string): HTMLElement => {
+    const b = el("button", "k-btn wood icon pip", { type: "button", "aria-label": title }, yardIcon(id));
     b.addEventListener("click", () => {
       togglePanel(id);
     });
@@ -119,29 +115,21 @@ function bookButtons(): () => void {
   };
   const ordersBtn = make("orders", "Orders", "O");
   make("board", "Top yards", "T");
-  const plansBtn = make("plans", "Plans", "P", () => "Improvements to buy with Coins.");
+  const projectsBtn = make("projects", "Projects", "P", () => "Deliveries for the guild. Each unlocks something.");
   make("depot", "The depot", "I", () => "What the depot has taken in, and what the yard earns per hour.");
-  make(
-    "shift",
-    "A second shift",
-    "L",
-    () => `Everything works twice as fast for ${SHIFT.minutes} minutes. Costs ${SHIFT.leaf} Leaf.`,
-    true,
-  );
-  return when(
-    () => {
-      const w = S.world;
-      const ready = w.board.filter((s) => isFilled(s.want, s.filled)).length;
-      const buyable = PLANS.filter((p) => planState(w, p.id).state === "for sale" && coins() >= p.price).length;
-      return `${ready}|${buyable}|${S.panel}`;
-    },
-    () => {
-      const w = S.world;
-      const ready = w.board.filter((s) => isFilled(s.want, s.filled)).length;
-      const buyable = PLANS.filter((p) => planState(w, p.id).state === "for sale" && coins() >= p.price).length;
-      set(ordersBtn, ready > 0 ? String(ready) : null);
-      set(plansBtn, buyable > 0 ? String(buyable) : null);
-      for (const [id, b] of books) b.classList.toggle("down", S.panel === id);
+  return shows(
+    () => ({
+      ready: S.world.board.filter((s) => isFilled(s.want, s.filled)).length,
+      open: takeable().length,
+      // Projects is there only once there are projects: from tier 1 on, and not in a visit.
+      projects: projectsOpen(),
+      panel: S.panel,
+    }),
+    (p) => {
+      set(ordersBtn, p.ready > 0 ? String(p.ready) : null);
+      set(projectsBtn, p.open > 0 ? String(p.open) : null);
+      projectsBtn.hidden = !p.projects;
+      for (const [id, b] of books) b.classList.toggle("down", p.panel === id);
     },
   );
 }
@@ -160,7 +148,11 @@ function corner(): void {
   back.addEventListener("click", () => {
     toTown();
   });
-  tip(back, "Back to town", `The yard keeps working for up to ${AWAY_MOST_MS / 3_600_000} hours while you are away.`);
+  tip(
+    back,
+    "Back to town",
+    () => `The yard keeps working for up to ${(S.world.open.away * TICK_MS) / 3_600_000} hours while you are away.`,
+  );
   const mute = el("button", "k-btn wood icon", { type: "button", "aria-label": "Sound" });
   const draw = (): void => {
     mute.replaceChildren(icon(isMuted() ? "mute" : "sound"));
