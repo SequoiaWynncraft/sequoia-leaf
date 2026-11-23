@@ -54,6 +54,8 @@ export class Coins extends Context.Service<
      * something paid for, or paid by Leaf's own clock); the welcome and Coins brought over do not.
      */
     readonly room: (playerId: PlayerId, now: number) => Effect.Effect<number>;
+    /** The Coins each game's commands have taken from the player, by game: none for a game that has taken none. */
+    readonly spentOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, number>>;
   }
 >()("leaf/Coins") {
   static readonly layer = Layer.effect(
@@ -79,6 +81,15 @@ export class Coins extends Context.Service<
           FROM coin_entries
           WHERE player_id = ${playerId} AND at > ${Math.min(hour, day)} AND amount > 0
             AND game IS NOT NULL AND earned = 1
+        `,
+      });
+      const spentOf = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: Schema.Struct({ game: Schema.String, spent: Schema.Int }),
+        execute: (playerId) => sql`
+          SELECT game, -sum(amount) AS spent FROM coin_entries
+          WHERE player_id = ${playerId} AND amount < 0 AND game IS NOT NULL
+          GROUP BY game ORDER BY game
         `,
       });
       const insert = (playerId: PlayerId, entry: CoinEntry, now: number) => sql`
@@ -124,6 +135,11 @@ export class Coins extends Context.Service<
         room: (playerId, now) =>
           earned({ playerId, hour: now - HOUR_MS, day: utcDay(now) * DAY_MS - 1 }).pipe(
             Effect.map((row) => Math.max(0, Math.min(EARNINGS.hourly - row.in_hour, EARNINGS.daily - row.in_day))),
+            Effect.orDie,
+          ),
+        spentOf: (playerId) =>
+          spentOf(playerId).pipe(
+            Effect.map((rows) => new Map(rows.map((row) => [row.game, row.spent]))),
             Effect.orDie,
           ),
       });

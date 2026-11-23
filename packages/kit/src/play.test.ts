@@ -253,6 +253,30 @@ describe("sending commands", () => {
     expect(play.state).toEqual({ n: 40 });
   });
 
+  test("say afk=1 while the player is AFK, as the opening, reads and the request that outlives the page do, and nothing of it otherwise", async () => {
+    const { routes, leaf } = counterLeaf();
+    // Opened in a tab that is hidden.
+    const w = standin(routes);
+    world = w;
+    w.player.afk = true;
+    const play = await openPlay<Count, Add, string>("raid", COUNTER, { player: "p" });
+    if ("trouble" in play) throw new Error(play.trouble);
+    await play.send({ do: "add", by: 1 });
+    await play.refresh();
+    play.flush();
+    await Bun.sleep(2);
+    w.player.afk = false;
+    await play.send({ do: "add", by: 2 });
+    expect(w.sent.map((s) => `${s.method} ${s.path}`)).toEqual([
+      "GET /v1/game/play/raid?afk=1",
+      "POST /v1/game/play/raid?afk=1",
+      "GET /v1/game/play/raid?afk=1",
+      "GET /v1/game/play/raid?afk=1",
+      "POST /v1/game/play/raid",
+    ]);
+    expect(leaf.n).toBe(3);
+  });
+
   test("a few long commands go in more than one request, and a body Leaf will not read is not sent for ever", async () => {
     const { routes, leaf } = counterLeaf();
     const play = await opened(routes);
@@ -729,7 +753,7 @@ describe("a page in view", () => {
     expect(play.state).toEqual({ n: 3 });
   });
 
-  test("reads its state after a minute without a call to Leaf, and not while hidden, put aside, or in a visit", async () => {
+  test("reads its state after a minute without a call to Leaf, hidden too, and not while put aside or in a visit", async () => {
     jest.useFakeTimers();
     const doc = Object.assign(new EventTarget(), { hidden: false });
     const win = Object.assign(new EventTarget(), {
@@ -775,15 +799,21 @@ describe("a page in view", () => {
       expect(reads()).toBe(before + 1);
       await ticks(1);
       expect(reads()).toBe(before + 2);
+      // Hidden, it still says it is open, each minute, and that the player is AFK.
       doc.hidden = true;
+      w.player.afk = true;
       await ticks(8);
+      expect(reads()).toBe(before + 4);
+      expect(w.sent.slice(-2).map((s) => s.path)).toEqual(["/v1/game/play/raid?afk=1", "/v1/game/play/raid?afk=1"]);
       doc.hidden = false;
+      w.player.afk = false;
       away = true;
       await ticks(8);
-      expect(reads()).toBe(before + 2);
+      expect(reads()).toBe(before + 4);
       away = false;
       await ticks(1);
-      expect(reads()).toBe(before + 3);
+      expect(reads()).toBe(before + 5);
+      expect(w.sent.at(-1)?.path).toBe("/v1/game/play/raid");
       expect(w.sent.filter((s) => s.path.endsWith("/of/bob"))).toHaveLength(1);
     } finally {
       jest.useRealTimers();

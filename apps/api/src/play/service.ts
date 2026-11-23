@@ -117,6 +117,8 @@ interface Ask {
 export interface Playing {
   readonly playerId: PlayerId;
   readonly guest: boolean;
+  /** Whether their page said they are away from the keys on this call (`?afk=1`): only their time is told by it. */
+  readonly afk?: boolean;
 }
 
 /** What one command answered: what it did, or the code it was refused with. */
@@ -639,7 +641,9 @@ export class Play extends Context.Service<
             lanes.set(key, lane);
             yield* Effect.forkIn(drain(lane), scope);
           }
-          const heard = caller && (yield* Effect.forkIn(store.heard(caller.playerId, played.id, job.at), scope));
+          const heard =
+            caller &&
+            (yield* Effect.forkIn(store.heard(caller.playerId, played.id, job.at, caller.afk === true), scope));
           return Effect.andThen(heard ? Fiber.join(heard) : Effect.void, Deferred.await(done)).pipe(
             Effect.onError(() => Effect.sync(() => void (job.gone = kind !== "batch"))),
           );

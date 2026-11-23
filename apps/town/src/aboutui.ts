@@ -20,7 +20,7 @@ import { RAID_STATS } from "@sequoia-leaf/raid/stats.ts";
 import { TOWN_STATS } from "@sequoia-leaf/town/stats.ts";
 import { WORKS_STATS } from "@sequoia-leaf/yard/stats.ts";
 
-import { type About, type AboutRow, ALONE, held, whoIsAbout } from "./about.ts";
+import { type About, type AboutRow, ALONE, held, partsOf, whoIsAbout } from "./about.ts";
 import { type Actor, G, hooks } from "./game.ts";
 import { guild } from "./guild.ts";
 import { $, closePanel, openPanel, pic, when } from "./hud.ts";
@@ -70,7 +70,10 @@ const faceOf = (r: AboutRow): HTMLCanvasElement => figureOf(r)?.body?.face ?? fa
 const rowKey = (r: AboutRow): string => `${r.id}/${r.name}/${r.line}/${pictureNo(faceOf(r))}/${r.gone ? "gone" : ""}`;
 
 /** Says what the panel shows, so that it is drawn again only when that changes. */
-const keyOf = (a: About): string => a.parts.flatMap((p) => [p.title, ...p.rows.map(rowKey)]).join("|");
+const keyOf = (a: About): string =>
+  partsOf(a)
+    .map((p) => `${p.title}|${p.rows.map(rowKey).join("|")}`)
+    .join("|");
 
 /** One line of the panel, standing for whoever it is: choosing it shows their card. */
 function rowOf(r: AboutRow): HTMLElement {
@@ -112,7 +115,7 @@ function fill(list: HTMLElement, a: About): void {
     return b;
   };
   list.replaceChildren(
-    ...a.parts.flatMap((p) => [
+    ...partsOf(a).flatMap((p) => [
       el("div", "k-label", { text: p.title }),
       el("div", "about-part", {}, ...p.rows.map(row)),
     ]),
@@ -132,7 +135,7 @@ function initPeople(locate: (a: Actor) => void): void {
     stats: { works: WORKS_STATS, raid: RAID_STATS, town: TOWN_STATS },
     actions: (p) => {
       const you = p.id === myId();
-      const inTown = aboutNow().parts.some((part) => part.title === "In town" && part.rows.some((r) => r.id === p.id));
+      const inTown = aboutNow().rows.get(p.id)?.part === "In town";
       const a = inTown ? (you ? G.player : visitorOf({ id: p.id, name: p.name, you })) : null;
       return [
         ...(a ? [{ label: "Find in town", on: away(() => locate(a)) }] : []),

@@ -75,7 +75,7 @@ import { Skins } from "../game/skins.ts";
 import { Ledger } from "../ledger/store.ts";
 import { Coins } from "../play/coins.ts";
 import { GAMES, type Played } from "../play/games.ts";
-import { Play } from "../play/service.ts";
+import { Play, type Playing } from "../play/service.ts";
 import { PlayStore } from "../play/store.ts";
 import { questJson } from "../quests/json.ts";
 import { rerollQuestFor } from "../quests/reroll.ts";
@@ -613,6 +613,13 @@ const seconds = (ms: number): number => Math.floor(ms / 1000);
 /** A row of `banner_people`: a banner, and the player who is its headliner. */
 const BannerPerson = Schema.Struct({ banner: Schema.String, playerId: Schema.String });
 
+/** Who calls a game, as the play service needs to know them: with `afk=1`, their page says they are AFK. */
+const playingOf = (identity: Identity, query: { readonly afk?: string | undefined }): Playing => ({
+  playerId: identity.playerId,
+  guest: isGuest(identity),
+  afk: query.afk === "1",
+});
+
 /** The game a route names, if Leaf plays it. */
 const playedGame = (name: string): Effect.Effect<Played, Missing> => {
   const id = gameId(name);
@@ -783,7 +790,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             const identity = yield* CurrentIdentity;
             // A page whose copy turned out not to be Leaf's says at which tick as it asks for the state.
             const differs = /^\d{1,13}$/.test(query.differs ?? "") ? Number(query.differs) : undefined;
-            const shown = yield* play.open({ playerId: identity.playerId, guest: isGuest(identity) }, played, differs);
+            const shown = yield* play.open(playingOf(identity, query), played, differs);
             if (shown.status === "unreadable") {
               return yield* unreadable;
             }
@@ -796,18 +803,14 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
         )
         // Commands, done in order in one transaction. A command whose id was seen before answers as
         // it did then, so a page that sends a batch again after losing the answer changes nothing.
-        .handle("command", ({ params, payload }) =>
+        .handle("command", ({ params, query, payload }) =>
           Effect.gen(function* () {
             const played = yield* playedGame(params.game);
             const identity = yield* CurrentIdentity;
             if (payload.player !== identity.playerId) {
               return yield* notYou;
             }
-            const batch = yield* play.send(
-              { playerId: identity.playerId, guest: isGuest(identity) },
-              played,
-              payload.commands,
-            );
+            const batch = yield* play.send(playingOf(identity, query), played, payload.commands);
             if (batch.status === "invalid") {
               return yield* new Invalid({ code: "invalid_command", message: batch.why });
             }
@@ -829,15 +832,12 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
           }),
         )
         // Somebody's state as a visitor is given it: brought to now in memory, and nothing written.
-        .handle("visit", ({ params }) =>
+        .handle("visit", ({ params, query }) =>
           Effect.gen(function* () {
             const played = yield* playedGame(params.game);
             const identity = yield* CurrentIdentity;
             const player = parsePlayerId(params.player);
-            const shown =
-              player === undefined
-                ? null
-                : yield* play.visit(player, played, { playerId: identity.playerId, guest: isGuest(identity) });
+            const shown = player === undefined ? null : yield* play.visit(player, played, playingOf(identity, query));
             if (shown === null || shown.status === "nothing") {
               return yield* new Missing({
                 code: "nothing_to_visit",
@@ -861,7 +861,8 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
           }),
         )
         // Somebody Leaf knows, or the caller (as for a skin), named as the board names them, where they
-        // stand in each game, and how long they have played each.
+        // stand in each game, how long they have played each and had it open while AFK, and the Coins
+        // each has taken.
         .handle("person", ({ params }) =>
           Effect.gen(function* () {
             const player = parsePlayerId(params.player);
@@ -874,17 +875,30 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             }
             const named = yield* names.of([player]);
             const standings = yield* store.standingsOf(player);
-            const played = yield* store.playedOf(player);
-            // A game they have opened for less than a second shows nothing, as one never opened.
-            const timed = [...played].filter(([, ms]) => seconds(ms) > 0).map(([game]) => game);
+            const times = yield* store.playedOf(player);
+            const spent = yield* coins.spentOf(player);
+            // A game they have had open for less than a second shows nothing, as one never opened.
+            const timed = [...times]
+              .filter(([, time]) => seconds(time.played) > 0 || seconds(time.afk) > 0)
+              .map(([game]) => game);
             const games = [...new Set([...standings.keys(), ...timed])].toSorted();
+            const all = (of: "played" | "afk") => seconds([...times.values()].reduce((sum, time) => sum + time[of], 0));
             return HttpServerResponse.jsonUnsafe({
               id: player,
               name: named.get(player) ?? "Someone",
               games: Object.fromEntries(
-                games.map((game) => [game, { ...standings.get(game), played: seconds(played.get(game) ?? 0) }]),
+                games.map((game) => [
+                  game,
+                  {
+                    ...standings.get(game),
+                    played: seconds(times.get(game)?.played ?? 0),
+                    afk: seconds(times.get(game)?.afk ?? 0),
+                    spent: spent.get(game) ?? 0,
+                  },
+                ]),
               ),
-              played: seconds([...played.values()].reduce((sum, ms) => sum + ms, 0)),
+              played: all("played"),
+              afk: all("afk"),
             } satisfies typeof Body.Person.Type);
           }),
         )

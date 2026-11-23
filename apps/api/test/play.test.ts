@@ -1363,8 +1363,9 @@ describe("the Works", () => {
     expect(await personOf(alice, bob)).toEqual({
       id: alice,
       name: "Alice",
-      games: { works: { place: 1, score: earned, also: { story: 1 }, played: 120 } },
+      games: { works: { place: 1, score: earned, also: { story: 1 }, played: 120, afk: 0, spent: 0 } },
       played: 120,
+      afk: 0,
     });
   });
 });
@@ -2410,11 +2411,19 @@ describe("a person's numbers", () => {
       id: bob,
       name: "Bob",
       games: {
-        raid: { place: 1, score: bosses, also: { runs: 1, room: Math.max(...view.almanac.best) }, played: seconds },
+        raid: {
+          place: 1,
+          score: bosses,
+          also: { runs: 1, room: Math.max(...view.almanac.best) },
+          played: seconds,
+          afk: 0,
+          spent: 0,
+        },
         // A standing from before Leaf counted time.
-        works: { place: 2, score: 500, also: { story: 500 % 16 }, played: 0 },
+        works: { place: 2, score: 500, also: { story: 500 % 16 }, played: 0, afk: 0, spent: 0 },
       },
       played: seconds,
+      afk: 0,
     });
   });
 
@@ -2423,11 +2432,12 @@ describe("a person's numbers", () => {
     expect(await personOf(stranger(4))).toEqual({
       id: stranger(4),
       name: "Someone",
-      games: { works: { place: 1, score: 0, also: { story: 0 }, played: 0 } },
+      games: { works: { place: 1, score: 0, also: { story: 0 }, played: 0, afk: 0, spent: 0 } },
       played: 0,
+      afk: 0,
     });
     // Carol, a guest, asks about herself before she has played.
-    expect(await personOf(carol, carol)).toEqual({ id: carol, name: "Someone", games: {}, played: 0 });
+    expect(await personOf(carol, carol)).toEqual({ id: carol, name: "Someone", games: {}, played: 0, afk: 0 });
   });
 
   it("are not given of a player Leaf does not know", async () => {
@@ -2440,13 +2450,20 @@ describe("a person's numbers", () => {
   });
 });
 
-/** Alice's time in each game, in milliseconds, as Leaf keeps it. */
-const playedMs = () =>
-  services.run(PlayStore.use((store) => store.playedOf(alice))).then((games) => Object.fromEntries(games));
-/** A call of Alice's to a game `after` milliseconds on: opening it. */
-async function openAfter(after: number, game = "raid") {
+/** Somebody's time played in each game, in milliseconds, as Leaf keeps it. */
+const playedMs = (player: PlayerId = alice) =>
+  services
+    .run(PlayStore.use((store) => store.playedOf(player)))
+    .then((games) => Object.fromEntries([...games].map(([game, time]) => [game, time.played])));
+/** Alice's time AFK in each game, in milliseconds, as Leaf keeps it. */
+const afkMs = () =>
+  services
+    .run(PlayStore.use((store) => store.playedOf(alice)))
+    .then((games) => Object.fromEntries([...games].map(([game, time]) => [game, time.afk])));
+/** A call of Alice's to a game `after` milliseconds on: opening it, saying she is AFK if `afk`. */
+async function openAfter(after: number, game = "raid", afk = false) {
   clock.now += after;
-  expect((await send("GET", `/v1/game/play/${game}`)).status).toBe(200);
+  expect((await send("GET", `/v1/game/play/${game}${afk ? "?afk=1" : ""}`)).status).toBe(200);
 }
 
 describe("time played", () => {
@@ -2470,6 +2487,77 @@ describe("time played", () => {
     expect(await playedMs()).toEqual({ raid: 2 * MINUTE + 100 + IDLE_MS + 30_000 });
   });
 
+  it("counts the time after a call that says its player is AFK as time AFK, until a call says they are back", async () => {
+    await openAfter(0);
+    // The minute before a call that says she is AFK she was not yet: it is time played.
+    await openAfter(MINUTE, "raid", true);
+    await openAfter(MINUTE, "raid", true);
+    // A batch that says nothing of it says she is back; the minute before it she was AFK.
+    clock.now += MINUTE;
+    await commanded(ided([{ do: "start", trail: 0 }]));
+    await openAfter(MINUTE);
+    expect(await playedMs()).toEqual({ raid: 2 * MINUTE });
+    expect(await afkMs()).toEqual({ raid: 2 * MINUTE + 100 });
+    // AFK for longer than a gap that counts is time away, as for playing.
+    await openAfter(0, "raid", true);
+    await openAfter(IDLE_MS + 1, "raid", true);
+    expect(await afkMs()).toEqual({ raid: 2 * MINUTE + 100 });
+    // Anything but afk=1 is not AFK: the minute after a call with it is time played.
+    clock.now += MINUTE;
+    expect((await send("POST", "/v1/game/play/raid?afk=yes", { commands: ided([{ do: "take" }]) })).status).toBe(200);
+    await openAfter(MINUTE);
+    expect(await playedMs()).toEqual({ raid: 3 * MINUTE });
+    expect(await afkMs()).toEqual({ raid: 3 * MINUTE + 100 });
+  });
+
+  it("counts a visit's word that the visitor is AFK for the visitor", async () => {
+    await send("GET", "/v1/game/play/works", undefined, bob);
+    await openAfter(0, "raid");
+    expect((await send("GET", `/v1/game/play/works/of/${bob}?afk=1`)).status).toBe(200);
+    clock.now += MINUTE;
+    expect((await send("GET", `/v1/game/play/works/of/${bob}?afk=1`)).status).toBe(200);
+    expect(await afkMs()).toEqual({ raid: 0, works: MINUTE });
+    expect(await playedMs()).toEqual({ raid: 0, works: 0 });
+  });
+
+  it("puts each game's time AFK and the Coins it has taken on the card, and all games' time AFK together", async () => {
+    await openAfter(0, "town");
+    await openAfter(MINUTE, "town", true);
+    await openAfter(2 * MINUTE, "town");
+    await openAfter(0, "raid", true);
+    await openAfter(MINUTE, "raid");
+    await services.run(
+      Coins.use((coins) =>
+        Effect.gen(function* () {
+          yield* coins.open(alice, clock.now);
+          yield* coins.post(
+            alice,
+            { amount: -120, reason: "A thing for the camp", game: "town", key: "buy:1" },
+            clock.now,
+          );
+          yield* coins.post(
+            alice,
+            { amount: -30, reason: "A thing for the camp", game: "town", key: "buy:2" },
+            clock.now,
+          );
+          // Coins paid in are not spent, whatever the game.
+          yield* coins.post(
+            alice,
+            { amount: 50, reason: "The chest", game: "town", key: "chest:1", free: true },
+            clock.now,
+          );
+        }),
+      ),
+    );
+    expect(await personOf(alice)).toEqual({
+      id: alice,
+      name: "Someone",
+      games: { raid: { played: 0, afk: 60, spent: 0 }, town: { played: 60, afk: 120, spent: 150 } },
+      played: 60,
+      afk: 180,
+    });
+  });
+
   it("is each game's apart, and all games' together on the card, in whole seconds; a game with time and no standing has its entry", async () => {
     await openAfter(0, "raid");
     await openAfter(10_000, "town");
@@ -2479,8 +2567,9 @@ describe("time played", () => {
     expect(await personOf(alice)).toEqual({
       id: alice,
       name: "Someone",
-      games: { raid: { played: 60 }, town: { played: 120 } },
+      games: { raid: { played: 60, afk: 0, spent: 0 }, town: { played: 120, afk: 0, spent: 0 } },
       played: 180,
+      afk: 0,
     });
   });
 
@@ -2493,15 +2582,16 @@ describe("time played", () => {
       expect((await visit(bob, "works")).status).toBe(200);
     }
     expect(await playedMs()).toEqual({ raid: 0, works: MINUTE });
-    expect(Object.fromEntries(await services.run(PlayStore.use((store) => store.playedOf(bob))))).toEqual({
+    expect(await playedMs(bob)).toEqual({
       works: 0,
     });
     // On her card, the raid she has opened and not played for a second is not listed.
     expect(await personOf(alice)).toEqual({
       id: alice,
       name: "Someone",
-      games: { works: { played: 60 } },
+      games: { works: { played: 60, afk: 0, spent: 0 } },
       played: 60,
+      afk: 0,
     });
   });
 
@@ -2552,7 +2642,7 @@ describe("time played", () => {
     clock.now += 2 * MINUTE + 1;
     await services.run(Play.use((play) => play.open(bobs, game)));
     expect(await visiting).toEqual(expect.objectContaining({ status: "open" }));
-    expect(Object.fromEntries(await services.run(PlayStore.use((store) => store.playedOf(bob))))).toEqual({
+    expect(await playedMs(bob)).toEqual({
       works: 3 * MINUTE + 1,
     });
   });
@@ -2565,13 +2655,13 @@ describe("time played", () => {
     start({
       play: (real) => ({
         ...real,
-        heard: (player, game, now) =>
+        heard: (...args) =>
           holding
             ? Effect.promise(() => gate.promise).pipe(
-                Effect.andThen(real.heard(player, game, now)),
+                Effect.andThen(real.heard(...args)),
                 Effect.andThen(Effect.sync(() => void (written = true))),
               )
-            : real.heard(player, game, now),
+            : real.heard(...args),
       }),
     });
     await keepMid();
@@ -2590,7 +2680,7 @@ describe("time played", () => {
     );
     gate.resolve();
     await until(() => written);
-    expect(Object.fromEntries(await services.run(PlayStore.use((store) => store.playedOf(bob))))).toEqual({
+    expect(await playedMs(bob)).toEqual({
       works: MINUTE,
     });
   });
