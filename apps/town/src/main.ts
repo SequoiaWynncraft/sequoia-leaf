@@ -15,7 +15,6 @@ import { pick as pickCard, point } from "@sequoia-leaf/kit/card.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
 import { heldAgain, typing } from "@sequoia-leaf/kit/keys.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
-import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { bake, lookFor, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
@@ -26,87 +25,27 @@ import { FOLK } from "@sequoia-leaf/town/folk.ts";
 import { stepAbout } from "./aboutui.ts";
 import { walkAlong, walkLeft } from "./actors.ts";
 import { makeCampArt } from "./campart.ts";
-import { type CampScene, makeCamp } from "./campscene.ts";
+import { makeCamp } from "./campscene.ts";
 import { makeCampUi } from "./campui.ts";
-import { goIn, type Visit } from "./doors.ts";
+import { goIn } from "./doors.ts";
 import { drawIris } from "./draw.ts";
 import { folkArt, initFolkArt } from "./folkart.ts";
 import { clearFx } from "./fx.ts";
-import { G, type Going, hooks, type PanelId, show, toPage } from "./game.ts";
-import { type GameId, GAMES } from "./games.ts";
-import { type Grove, makeGrove } from "./grovescene.ts";
+import { G, type Going, hooks, show, toPage } from "./game.ts";
+import { GAMES } from "./games.ts";
+import { makeGrove } from "./grovescene.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, covered, hush, initHud, tickHud } from "./hud.ts";
-import { again, here, keepTold, onTown, openCamp, town as kept, troubleCard, visiting } from "./leaf.ts";
+import { here, keepTold, onTown, openCamp, town as kept, troubleCard, visiting } from "./leaf.ts";
 import { leafNow } from "./players.ts";
+import { lookFromOutside } from "./review.ts";
 import { darkOf, inGame, mayAct, next, openOf, type Place, placeOf, takesWalk } from "./screen.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Bound, Hover, Scene, Stage, Steer, Stood } from "./stage.ts";
 import { nameStatues } from "./statues.ts";
-import { makeTown, type Town } from "./townscene.ts";
+import { makeTown } from "./townscene.ts";
 import { dismissArrival } from "./ui.ts";
-import type { PlaceId } from "./world.ts";
-
-declare global {
-  interface Window {
-    /** Handles for looking at the town from outside: jump the clock, open a place, move the member. */
-    town?: {
-      skip: (seconds: number) => void;
-      enter: () => void;
-      /** Opens "Who is about". */
-      about: () => void;
-      /** Whoever was chosen in "Who is about" and is being shown, whether the view went to them, and the seconds left. */
-      found: Town["handles"]["found"];
-      open: (id: PanelId) => void;
-      close: () => void;
-      visit: (id: PlaceId) => void;
-      tp: (x: number, y: number) => void;
-      /** Walks the member to a point in town, round whatever is in the way. */
-      walk: (x: number, y: number) => void;
-      tap: (x: number, y: number) => void;
-      page: (x: number, y: number) => Pt;
-      /** Where the prompt by a door is on the page, while it is up. */
-      prompt: () => Pt | null;
-      who: () => { name: string; x: number; y: number; doing: string }[];
-      /** Real members in town just now (on the guild's own server). */
-      visitors: () => { name: string; x: number; y: number }[];
-      /** Every member drawn this moment: who, where their feet are drawn, how opaque. */
-      drawn: Town["handles"]["drawn"];
-      /** Where the member is, and where the missing crab is hiding. */
-      me: () => Pt;
-      lost: () => Pt;
-      /** Milliseconds to work out and draw one frame, averaged over a hundred. */
-      bench: () => number;
-      /** Goes into a game by its door; says where that has got to; comes back out. */
-      inside: (id: GameId) => void;
-      door: () => "town" | "closing in" | ReturnType<Visit["state"]>;
-      leave: () => void;
-      /** Stops the town's clock (it is still drawn), so that `skip` alone moves it on. */
-      hold: (on: boolean) => void;
-      /** What the purse holds as the page shows it: Leaf's numbers. */
-      purse: () => { leaf: number; coins: number };
-      /** The member's town as the page shows it: Leaf's copy. */
-      kept: () => unknown;
-      /** Asks Leaf for the town again: for after a tour has staged something. */
-      again: () => Promise<void>;
-      /** Which place is on the stage, and how dark the walk between two has got (0 for not at all). */
-      where: () => { where: "town" | "camp" | "grove"; dark: number };
-      /** The member's camp: go there, come back, and what `campscene.ts` offers besides. */
-      camp: CampScene["handles"] & { go: () => void };
-      /** The Grove: go there, and what `grovescene.ts` offers besides. */
-      grove: Grove["handles"] & { go: () => void };
-      /** Everybody else in town live (on the guild's own server), as they would be drawn this moment. */
-      players: Town["handles"]["players"];
-      /** What the town's live room was last told of the member, and when. */
-      told: Town["handles"]["told"];
-      /** The live connection: its status, what is shown of it, and how many others are in the room. */
-      link: Town["handles"]["link"];
-      /** The member makes an emote, as if chosen from the plaque over their head. */
-      emote: Town["handles"]["emote"];
-    };
-  }
-}
 
 /** How long the pointer rests on a thing before its tip shows, in milliseconds. */
 const REST = 400;
@@ -587,56 +526,25 @@ async function boot(): Promise<void> {
   };
   goAsked();
 
-  window.town = {
-    ...town.handles,
-    skip(seconds) {
-      for (let i = 0; i < seconds * 30 && screen.at !== "inside"; i++) tick(1 / 30);
+  lookFromOutside({
+    town,
+    camp,
+    grove,
+    tick,
+    draw,
+    snap: () => {
       aim(true);
     },
-    page(x, y) {
-      return toPage(x, y);
-    },
-    prompt: () => (show.sign ? toPage(show.sign.x + show.sign.w / 2, show.sign.y + show.sign.h / 2) : null),
-    bench() {
-      const t0 = performance.now();
-      for (let i = 0; i < 100; i++) {
-        tick(1 / 60);
-        draw();
-      }
-      return (performance.now() - t0) / 100;
-    },
-    door() {
-      return screen.at === "inside" ? screen.visit.state() : screen.at === "closing" ? "closing in" : "town";
-    },
-    leave() {
-      if (screen.at === "closing" || screen.at === "inside") screen.visit.leave();
-    },
-    hold(on) {
+    stood: () => screen,
+    hold: (on) => {
       heldStill = on;
     },
-    purse: () => ({ ...balance() }),
-    again,
-    where: () => ({ where: G.where, dark: Math.round(G.dark * 100) / 100 }),
     tap(x, y) {
       scene().tap(x, y, false);
       scene().release({ x, y }, null);
     },
-    camp: {
-      ...camp.handles,
-      go() {
-        go({ to: "camp" });
-      },
-    },
-    grove: {
-      ...grove.handles,
-      go() {
-        go({ to: "grove" });
-      },
-    },
-  };
-  // In whichever place is on the stage: the member, a touch, and the point on the page.
-  const outside = window.town;
-  outside.me = (): Pt => (G.player ? { x: Math.round(G.player.x), y: Math.round(G.player.y) } : { x: 0, y: 0 });
+    go,
+  });
 }
 
 void boot();

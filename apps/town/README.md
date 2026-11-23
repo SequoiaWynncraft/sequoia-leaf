@@ -540,6 +540,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/main.ts`                         | The stage: canvas, camera, keys and fingers, the loop, the walk between places                  |
 | `src/stage.ts`                        | What the stage asks of a scene, and a scene of the stage                                        |
 | `src/screen.ts`                       | Where the stage is, as one value, and the one function that moves it                            |
+| `src/review.ts`                       | `window.town`: handles for the tours and the console, the town's own among them                 |
 | `src/touch.ts`                        | What a tap, the pointer, the key and the member's feet mean, in the town and in a camp          |
 | `src/townscene.ts`                    | The town as a scene: who is here, taps, getting about, going into games and to the camp         |
 | `src/campscene.ts`                    | A camp as a scene: laying it out, who is there, taps, decorating, visiting                      |

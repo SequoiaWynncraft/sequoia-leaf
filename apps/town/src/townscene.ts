@@ -4,21 +4,17 @@
  * about it.
  */
 
-import type { Emote } from "@sequoia-leaf/kit/emotes.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
 import { bake, type Body, type Look, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { clamp, type Ctx, dist, must, pick, type Pt } from "@sequoia-leaf/kit/util.ts";
-import { boardAt, SET_OUT } from "@sequoia-leaf/town/clock.ts";
 import { FOLK, folk, KEEPER } from "@sequoia-leaf/town/folk.ts";
 import { BOX_FULL, roomInBox } from "@sequoia-leaf/town/mail.ts";
 
 import { cardLine } from "./about.ts";
-import { initAbout, openAbout } from "./aboutui.ts";
+import { initAbout } from "./aboutui.ts";
 import {
-  byClock,
   face,
-  feet,
   freeSeat,
   goToSeat,
   headOf,
@@ -40,10 +36,10 @@ import {
 import { apart, ease, stood, stoodAt } from "./apart.ts";
 import type { CampArt } from "./campart.ts";
 import { drawPicture, drawWords, type Picture, sizeBuffers } from "./draw.ts";
-import { beginEvents, cheered, stepEvents } from "./events.ts";
+import { beginEvents, stepEvents } from "./events.ts";
 import { initFolkArt } from "./folkart.ts";
 import { updateFx } from "./fx.ts";
-import { type Actor, after, changed, G, hooks, type PanelId, SEED, show } from "./game.ts";
+import { type Actor, after, changed, G, hooks, show } from "./game.ts";
 import { type GameId, isGame, worksWaiting } from "./games.ts";
 import { GROUND, NEAR, paintBackdrop, paintGround, paintNear, SKYLINE } from "./ground.ts";
 import { guild } from "./guild.ts";
@@ -53,13 +49,11 @@ import { compose } from "./letter.ts";
 import { inTownLine } from "./news.ts";
 import {
   closeEmotes,
-  emote,
   emotesOpen,
   inRoom,
   isLivePlayer,
   knownRanks,
   leafNow,
-  liveHandles,
   livePlayers,
   openEmotes,
   othersInTown,
@@ -70,6 +64,7 @@ import {
   townOnStage,
   waveAt,
 } from "./players.ts";
+import { type TownHandles, townHandles } from "./review.ts";
 import { placeOf } from "./screen.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Scene, Stage } from "./stage.ts";
@@ -78,17 +73,12 @@ import {
   allLights,
   buildTown,
   crabAt,
-  crabs,
   crabsStanding,
   drawGlows,
   drawStrings,
   drawWater,
-  flown,
-  hung,
-  lastTouches,
   lightTable,
   openDoor,
-  placeCrabs,
   props,
   stepTown,
   table,
@@ -96,8 +86,8 @@ import {
   touchThing,
   twinkleAll,
 } from "./town.ts";
-import { dismissArrival, initUI, openPanel, showArrival, townDock } from "./ui.ts";
-import { isVisitor, members, spotsNow, stepVisitors, worksTools } from "./visitors.ts";
+import { initUI, openPanel, showArrival, townDock } from "./ui.ts";
+import { isVisitor, stepVisitors, worksTools } from "./visitors.ts";
 import { H, place, type PlaceId, PLACES, pondD, SEATS, TOWN, W } from "./world.ts";
 
 /** Where the view closes in when the member goes into each game, and where they stand to go in. */
@@ -164,48 +154,8 @@ export interface Town extends Scene {
    * the page in the town's live room.
    */
   onStage(on: boolean): void;
-  /** The town's own handles for looking at it from outside. */
-  readonly handles: {
-    enter(): void;
-    /** Opens "Who is about". */
-    about(): void;
-    /** Whoever was chosen in "Who is about" and is being shown, whether the view went to them, and the seconds left. */
-    found(): { name: string; glide: boolean; left: number } | null;
-    open(id: PanelId): void;
-    close(): void;
-    visit(id: PlaceId): void;
-    inside(id: GameId): void;
-    tp(x: number, y: number): void;
-    /** Walks the member to a point, round whatever is in the way, as a tap on bare ground there would. */
-    walk(x: number, y: number): void;
-    /** The town's own, where each is and what it is doing, by Leaf's clock this moment. */
-    who(): { name: string; x: number; y: number; doing: string }[];
-    /** The crabs by their numbers, where each is by Leaf's clock this moment, and whether it is running off. */
-    crabs(): { n: number; x: number; y: number; gone: boolean }[];
-    /** Real members in town, visiting, dozing or walking in with a raid party: where each is and what they are doing, by Leaf's clock this moment. */
-    visitors(): ReturnType<typeof members>;
-    /** Each of the games' spots in town for members busy at them: those laid by hand, then those further out. */
-    spots(): ReturnType<typeof spotsNow>;
-    /** The stump's board this moment: the hex each carved figure is on, and whether anybody is at it. */
-    board(): { on: readonly number[]; played: boolean };
-    /** What the guild's raid parties and wars have left: how many lanterns the day has, whose banner flies, and the last cheers played here, each by when (Leaf's clock). */
-    moments(): { lanterns: number; banner: string | null; cheered: { what: string; at: number }[] };
-    /** Every member drawn this moment (the member, visitors, dozers, live players): who, where their feet are drawn, how tall, how opaque. */
-    drawn(): { id: string; name: string; x: number; y: number; tall: number; seated: boolean; alpha: number }[];
-    me(): Pt;
-    lost(): Pt;
-    kept(): unknown;
-    /** Everybody else in town live, as they would be drawn this moment. */
-    players: (typeof liveHandles)["players"];
-    /** What the town's room was last told of the member, and when (milliseconds since 1970). */
-    told: (typeof liveHandles)["told"];
-    /** The last touches on things in town played here, and whether each was the member's own. */
-    touches(): { name: string; own: boolean }[];
-    /** The live connection: its status, what is shown of it, the member's number, how many others. */
-    link: (typeof liveHandles)["link"];
-    /** The member makes an emote, as if chosen from the plaque over their head. */
-    emote(kind: Emote): void;
-  };
+  /** The town's own handles for looking at it from outside (`review.ts`). */
+  readonly handles: TownHandles;
 }
 
 /** Who a figure is, for `apart`: a member's account, or which of the town's own. */
@@ -709,77 +659,20 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       }
     },
 
-    handles: {
-      enter() {
-        dismissArrival();
-      },
-      about() {
-        openAbout();
-      },
-      found() {
-        const f = show.found;
-        return f ? { name: f.a.who.name, glide: f.glide === true, left: Math.round((f.until - G.t) * 10) / 10 } : null;
-      },
-      open: openPanel,
-      close: closePanel,
+    handles: townHandles({
+      player,
+      cinfy,
       visit,
-      inside(id) {
-        hooks.go({ to: "game", game: id });
-      },
-      tp(x, y) {
-        halt();
-        putAt(x, y);
-        stage.snap();
-      },
-      walk(x, y) {
+      halt,
+      putAt,
+      walk: (x, y) => {
         touch.walk(x, y);
       },
-      who() {
-        G.now = leafNow();
-        return [cinfy, ...G.folk].map((a) => {
-          byClock(a);
-          return { name: a.who.name, x: Math.round(a.x), y: Math.round(a.y), doing: a.doing };
-        });
+      snap: () => {
+        stage.snap();
       },
-      crabs() {
-        G.now = leafNow();
-        placeCrabs();
-        return crabs.map((c) => ({ n: c.n, x: Math.round(c.x), y: Math.round(c.y), gone: c.bolt > 0 }));
-      },
-      visitors() {
-        G.now = leafNow();
-        stepVisitors(0, [player, ...livePlayers(), ...G.folk]);
-        return members();
-      },
-      spots: spotsNow,
-      board() {
-        G.now = leafNow();
-        return { on: table.played ? boardAt(SEED, G.now).on : SET_OUT, played: table.played };
-      },
-      moments() {
-        G.now = leafNow();
-        return { lanterns: hung(), banner: flown()?.land ?? null, cheered: [...cheered] };
-      },
-      drawn: () =>
-        everyone().flatMap((a) =>
-          a.away || a.alpha <= 0.02
-            ? []
-            : [{ id: a.id, name: a.who.name, ...feet(a), tall: headOf(a), seated: a.seat !== null, alpha: a.alpha }],
-        ),
-      me() {
-        return { x: Math.round(player.x), y: Math.round(player.y) };
-      },
-      lost() {
-        const c = crabs.find((k) => k.lost);
-        return c ? { x: Math.round(c.x), y: Math.round(c.y) } : { x: 0, y: 0 };
-      },
-      kept: () => kept(),
-      players: liveHandles.players,
-      told: liveHandles.told,
-      touches: () => [...lastTouches],
-      link: liveHandles.link,
-      emote,
-    },
+      everyone,
+    }),
   };
   return town;
 }
