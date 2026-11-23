@@ -36,6 +36,7 @@ import { type Grove, makeGrove } from "./grovescene.ts";
 import { guild } from "./guild.ts";
 import { closeCard, closePanel, hush, initHud, panelBox, tickHud } from "./hud.ts";
 import { again, here, keepTold, onTown, town as kept, troubleCard } from "./leaf.ts";
+import { leafNow } from "./players.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Hover, Scene, Stage, Steer } from "./stage.ts";
@@ -447,6 +448,7 @@ async function boot(): Promise<void> {
   // ---------- every moment ----------
 
   function tick(dt: number): void {
+    G.now = leafNow();
     scene.step(dt, steering());
     if (trip && !trip.there) {
       // Night closes in on whoever is walking off; at its darkest the next place is put on.
