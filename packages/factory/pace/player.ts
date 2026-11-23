@@ -630,14 +630,16 @@ export class Player {
     const line = [...this.y.line];
     let k = 0;
     while (k < line.length && line[k] === want[k]) k++;
+    // The yard runs on while the player reaches for each: research that becomes known meanwhile has
+    // left the line, and is passed over rather than asked for.
     for (const g of line.slice(k).toReversed()) {
       this.busy(this.s.hands.order);
-      this.give({ do: "unstudy", research: F.GOALS[g]?.id });
+      if (this.y.line.includes(g)) this.give({ do: "unstudy", research: F.GOALS[g]?.id });
     }
     for (const g of want.slice(k)) {
       this.busy(this.known.has(g) ? this.s.hands.order : this.s.hands.read);
       this.known.add(g);
-      this.give({ do: "study", research: F.GOALS[g]?.id });
+      if (!this.y.line.includes(g) && F.ready(this.y.open, g)) this.give({ do: "study", research: F.GOALS[g]?.id });
     }
     this.tending = was;
   }
