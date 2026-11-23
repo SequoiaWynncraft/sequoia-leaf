@@ -904,10 +904,6 @@ button.k-info-chip:hover .k-chip {
 .k-thing.lit .k-thing-name {
   color: var(--k-gold-lt);
 }
-/* Too few of it: its name and count in coral. */
-.k-thing.short :is(.k-thing-name, .k-thing-count) {
-  color: var(--k-coral);
-}
 .k-link {
   cursor: pointer;
 }

@@ -408,6 +408,88 @@
         flex-direction: column;
         gap: var(--u);
       }
+      /*
+       * A machine's recipe (`ui/flow.ts`): its parts' slots, an arrow, and the thing it makes. Over a
+       * part, a dot for each one a make takes; in its slot's corner, how many it holds; under it, how
+       * many a minute and the machines that make that many.
+       */
+      .flow {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        gap: calc(var(--u) * 3);
+      }
+      .flow .fl-in {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: calc(var(--u) * 3);
+      }
+      .flow .fl-part {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: calc(var(--u) * 2);
+        min-width: calc(var(--u) * 32);
+      }
+      .flow .fl-dots {
+        display: flex;
+        gap: calc(var(--u) * 2);
+        height: calc(var(--u) * 4);
+      }
+      .flow .fl-dot {
+        width: calc(var(--u) * 4);
+        height: calc(var(--u) * 4);
+        box-shadow: inset 0 0 0 var(--u) var(--k-dim);
+      }
+      .flow .fl-dot.full {
+        background: var(--k-cream);
+        box-shadow: none;
+      }
+      .flow .fl-dot.missing {
+        box-shadow: inset 0 0 0 var(--u) var(--k-coral);
+      }
+      .flow .fl-slot {
+        position: relative;
+        width: calc(var(--u) * 28);
+        height: calc(var(--u) * 28);
+      }
+      .flow .fl-slot.short {
+        outline: var(--u) solid var(--k-coral);
+        outline-offset: calc(var(--u) * -1);
+      }
+      .flow .fl-have {
+        position: absolute;
+        right: var(--u);
+        bottom: calc(var(--u) * -2);
+        color: var(--k-gold);
+      }
+      .flow .fl-slot.short .fl-have,
+      .flow .fl-made.k-coral .fl-rate {
+        color: var(--k-coral);
+      }
+      .flow .fl-rate {
+        display: inline-flex;
+        align-items: baseline;
+        white-space: nowrap;
+      }
+      .flow .fl-by {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .flow .fl-top {
+        color: var(--k-dim);
+        white-space: nowrap;
+      }
+      .flow .fl-arrow {
+        margin-top: calc(var(--u) * 16);
+      }
+      .flow .fl-made {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--u);
+      }
 
       /* The tools, along the bottom; and over them, what is in hand and the buttons that act on it. */
       #dock {
