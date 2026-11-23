@@ -470,6 +470,12 @@ export function predict(
 }
 
 /**
+ * Whether a command that draws nothing would be done to a run as it stands: the rules asked, on a
+ * copy, so that a page lights only what Leaf would do and never works the rules out again.
+ */
+export const legal = (run: RunView, c: Predicted): boolean => plan(structuredClone(run), c).ok;
+
+/**
  * The commands the bot would send to plan the room that is up, worked out on the page's copy. A pick
  * waiting is one command alone, since what comes after it is Leaf's to say; and the bot never
  * rustles here, since the new stall is Leaf's to draw. Send them, and ask again once Leaf has

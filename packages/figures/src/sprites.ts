@@ -262,10 +262,22 @@ export function tonesOf(kind: UnitKind): Tones {
 /** Whether a figure is one of the big ones. */
 export const isBig = (kind: UnitKind): boolean => isBossId(kind);
 
-/** Draws the base a figure stands on, with the figure's feet at `x`, `y`. */
-export function drawBase(g: Ctx, kind: UnitKind, x: number, y: number, look: BaseLook = "plain"): void {
-  const c = baseOf(tonesOf(kind), isBig(kind), isFigureId(kind) ? look : "plain");
+/**
+ * A figure standing on its base, the base's middle at `x`, `y` and the figure on it, `hover` higher
+ * as it bobs. Whoever draws one names the base's look: the member's own figures stand on the bases
+ * they chose, anyone else's on plain ones.
+ */
+export function drawStanding(
+  g: Ctx,
+  kind: UnitKind,
+  x: number,
+  y: number,
+  base: BaseLook,
+  o: Shown & { hover?: number } = {},
+): void {
+  const c = baseOf(tonesOf(kind), isBig(kind), isFigureId(kind) ? base : "plain");
   g.drawImage(c, Math.round(x) - Math.floor(c.width / 2), Math.round(y) - Math.floor(c.height / 2) - 1);
+  drawFigure(g, kind, x, y - 2 - (o.hover ?? 0), o);
 }
 
 // ---------- stars ----------

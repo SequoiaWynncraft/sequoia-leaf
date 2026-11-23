@@ -297,6 +297,7 @@ export {
   decodeTable,
   encodeTable,
   isPredicted,
+  legal,
   newTable,
   planCommands,
   type Predicted,

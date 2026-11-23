@@ -1,3 +1,4 @@
+import { type Move, moveAt } from "@sequoia-leaf/figures/move.ts";
 import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The party's figures as they stand on the table while planning: one pawn for every figure the
@@ -8,7 +9,6 @@ import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
  * Everything is measured from the board's corner, in art pixels.
  */
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
-import { clamp, lerp } from "@sequoia-leaf/kit/util.ts";
 import type { Note, RaidNote, RunView, Spot, Stars } from "@sequoia-leaf/raid";
 import type { FigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { carries } from "@sequoia-leaf/raid/content/items.ts";
@@ -38,14 +38,8 @@ export interface Pawn {
   y: number;
   /** How high off the table it is this moment. */
   lift: number;
-  moving: boolean;
-  fx: number;
-  fy: number;
-  tx: number;
-  ty: number;
-  t0: number;
-  dur: number;
-  arc: number;
+  /** Where it is hopping to, by the stage's clock; null standing still. */
+  move: Move | null;
   /** Out of step with the others, so they do not all breathe together. */
   phase: number;
   /** When its star last popped, when it last cheered, and until when it wiggles to be noticed. */
@@ -81,14 +75,7 @@ function make(id: number, kind: FigureId, stars: Stars, at: Pt, spot: Spot | nul
     x: at.x,
     y: at.y,
     lift: 0,
-    moving: false,
-    fx: at.x,
-    fy: at.y,
-    tx: at.x,
-    ty: at.y,
-    t0: 0,
-    dur: 0,
-    arc: 0,
+    move: null,
     phase: (id * 0.37) % 1,
     starring: false,
     popAt: -9,
@@ -107,14 +94,7 @@ function make(id: number, kind: FigureId, stars: Stars, at: Pt, spot: Spot | nul
 
 /** Sends a pawn hopping to a point. */
 export function hop(p: Pawn, to: Pt, dur = 0.24, arc = 9, air = false): void {
-  p.fx = p.x;
-  p.fy = p.y;
-  p.tx = to.x;
-  p.ty = to.y;
-  p.t0 = V.t;
-  p.dur = dur;
-  p.arc = arc;
-  p.moving = true;
+  p.move = { from: { x: p.x, y: p.y }, to, t0: V.t, dur, arc, smooth: true };
   p.air = air;
   if (Math.abs(to.x - p.x) > 1) p.facing = to.x < p.x;
 }
@@ -147,10 +127,10 @@ export function syncPawns(run: RunView | null, settle = false): void {
     if (settle) {
       p.x = at.x;
       p.y = at.y;
-      p.moving = false;
+      p.move = null;
       p.air = false;
       p.stars = piece.stars;
-    } else if (moved || (!p.moving && (Math.abs(p.x - at.x) > 0.5 || Math.abs(p.y - at.y) > 0.5))) {
+    } else if (moved || (!p.move && (Math.abs(p.x - at.x) > 0.5 || Math.abs(p.y - at.y) > 0.5))) {
       hop(p, at, 0.22, 8, p.air);
     }
   };
@@ -165,18 +145,17 @@ export function syncPawns(run: RunView | null, settle = false): void {
 
 export function stepPawns(): void {
   for (const [id, p] of pawns) {
-    if (!p.moving) {
+    if (!p.move) {
       p.lift = 0;
       continue;
     }
-    const k = clamp((V.t - p.t0) / p.dur, 0, 1);
-    const e = k * k * (3 - 2 * k);
-    p.x = lerp(p.fx, p.tx, e);
-    p.y = lerp(p.fy, p.ty, e);
-    p.lift = Math.sin(k * Math.PI) * p.arc;
-    if (p.fading) p.alpha = 1 - k * k;
-    if (k >= 1) {
-      p.moving = false;
+    const now = moveAt(p.move, V.t);
+    p.x = now.x;
+    p.y = now.y;
+    p.lift = now.lift;
+    if (p.fading) p.alpha = 1 - now.k * now.k;
+    if (now.k >= 1) {
+      p.move = null;
       p.air = false;
       p.lift = 0;
       if (p.leaving && p.last) pawns.delete(id);

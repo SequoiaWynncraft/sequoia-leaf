@@ -104,13 +104,13 @@ describe("where a held figure may go", () => {
   });
   test("an offer straight off the stall needs a free hollow, and a free seat needs room on the board", () => {
     const run = begun();
-    expect(reachOfOffer(run).slots.length).toBe(9);
-    expect(reachOfOffer(run).seats).toEqual([]);
+    expect(reachOfOffer(run, 0).slots.length).toBe(9);
+    expect(reachOfOffer(run, 0).seats).toEqual([]);
     run.level = 2;
-    expect(reachOfOffer(run).seats.length).toBe(27);
+    expect(reachOfOffer(run, 0).seats.length).toBe(27);
     for (let i = 0; i < 9; i++) put(run, "worm", "bench", i);
-    expect(reachOfOffer(run).slots).toEqual([]);
-    expect(reachOfOffer(run).seats).toEqual([]);
+    expect(reachOfOffer(run, 0).slots).toEqual([]);
+    expect(reachOfOffer(run, 0).seats).toEqual([]);
   });
 });
 

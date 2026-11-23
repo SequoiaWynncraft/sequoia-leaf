@@ -164,7 +164,7 @@ onScreen(acted);
 /** Plays a fight new to the screen, as Leaf decided it; one these rules would play otherwise is only ended. */
 function played(play: Playback): void {
   unpick();
-  if (play.kept) startFight(play.fought.setup, S.prefs.speed, () => go({ e: "played", key: play.key }));
+  if (play.kept) startFight(play.fought.setup, S.prefs.speed, S.looks.bases, () => go({ e: "played", key: play.key }));
   else go({ e: "played", key: play.key });
 }
 

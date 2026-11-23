@@ -8,6 +8,7 @@ import { mix, type Postcard } from "@sequoia-leaf/core";
 import {
   type Almanac,
   boonNumber,
+  buy,
   COMPONENT_IDS,
   type ComponentId,
   countTraits,
@@ -27,13 +28,13 @@ import {
   interestNow,
   isComponentId,
   type ItemId,
+  legal,
   openFight,
   type Party,
   partyOf,
   picksOf,
   type Piece,
   pieces,
-  priceOf,
   type RunView,
   specOf,
   type Spot,
@@ -58,46 +59,37 @@ export interface Reach {
   slotSwaps: number[];
 }
 
+/** Where a figure picked up from `from` may be put down: every place the rules would move it to. */
 export function reachOf(run: RunView, from: Spot): Reach {
   const out: Reach = { seats: [], swaps: [], slots: [], slotSwaps: [] };
-  // A figure coming off the bench onto a free seat makes one more on the board.
-  const room = from.on === "board" || fielded(run) < fieldCap(run);
+  const may = (to: Spot): boolean => legal(run, { do: "move", from, to });
   run.board.forEach((piece, at) => {
-    if (from.on === "board" && from.at === at) return;
-    if (piece) out.swaps.push(at);
-    else if (room) out.seats.push(at);
+    if (may({ on: "board", at })) (piece ? out.swaps : out.seats).push(at);
   });
   run.bench.forEach((piece, at) => {
-    if (from.on === "bench" && from.at === at) return;
-    if (piece) out.slotSwaps.push(at);
-    else out.slots.push(at);
+    if (may({ on: "bench", at })) (piece ? out.slotSwaps : out.slots).push(at);
   });
   return out;
 }
 
-/** Where a figure straight off the stall may be put: free hollows, and free seats while there is room on the board. */
-export function reachOfOffer(run: RunView): Reach {
-  const room = fielded(run) < fieldCap(run);
-  const seats: number[] = [];
-  const slots: number[] = [];
-  if (run.bench.includes(null)) {
-    run.board.forEach((piece, at) => {
-      if (!piece && room) seats.push(at);
-    });
-    run.bench.forEach((piece, at) => {
-      if (!piece) slots.push(at);
-    });
-  }
-  return { seats, swaps: [], slots, slotSwaps: [] };
+/**
+ * Where an offer carried off the stall may be put down: bought (to the bench's first free hollow),
+ * then anywhere the rules would move it from there; nowhere for one that cannot be bought, or that
+ * goes straight into three of a kind.
+ */
+export function reachOfOffer(run: RunView, offer: number): Reach {
+  const after = structuredClone(run);
+  const done = buy(after, offer);
+  const bought = done.ok ? done.notes.find((n) => n.t === "bought") : undefined;
+  const from = bought?.t === "bought" ? bought.to : null;
+  if (!from) return { seats: [], swaps: [], slots: [], slotSwaps: [] };
+  const reach = reachOf(after, from);
+  // Where it lands on the bench is one of the places, though it is already there.
+  return { seats: reach.seats, swaps: [], slots: [from.at, ...reach.slots].toSorted((a, b) => a - b), slotSwaps: [] };
 }
 
-/** Whether an offer on the stall can be paid for and has somewhere to go (or completes three of a kind). */
-export function canBuy(run: RunView, offer: number): boolean {
-  const kind = run.stall[offer];
-  if (!kind || run.acorns < priceOf(run, offer)) return false;
-  if (run.bench.includes(null)) return true;
-  return pieces(run).filter((p) => p.kind === kind && p.stars === 1).length >= 2;
-}
+/** Whether an offer on the stall can be bought now: paid for, with somewhere to go (or completing three of a kind). */
+export const canBuy = (run: RunView, offer: number): boolean => legal(run, { do: "buy", offer });
 
 /**
  * What handing an item to a figure would do: nothing (no room, or an emblem of a kin it is already),

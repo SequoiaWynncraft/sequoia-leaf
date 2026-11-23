@@ -122,7 +122,7 @@ export function marksOf(g: Gesture, run: RunView | null): Marks {
     return { ...marks, seats: reach.seats, swaps: reach.swaps, slots: [...reach.slots, ...reach.slotSwaps] };
   }
   if (held.what === "offer") {
-    const reach = reachOfOffer(run);
+    const reach = reachOfOffer(run, held.at);
     return { ...marks, seats: reach.seats, slots: reach.slots };
   }
   const item = held.item;

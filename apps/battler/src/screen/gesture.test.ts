@@ -96,8 +96,8 @@ describe("what the table shows of the hand", () => {
     );
     expect([marks.ghost, marks.seats, marks.slots]).toEqual([
       { kind },
-      reachOfOffer(run).seats,
-      reachOfOffer(run).slots,
+      reachOfOffer(run, 0).seats,
+      reachOfOffer(run, 0).slots,
     ]);
   });
 

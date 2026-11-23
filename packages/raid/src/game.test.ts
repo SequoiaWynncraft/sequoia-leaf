@@ -10,13 +10,16 @@ import { resolveFight } from "./fight/engine.ts";
 import {
   decodeTable,
   encodeTable,
+  legal,
   planCommands,
   predict,
+  type Predicted,
   RAID,
   type RaidCommand,
   type RaidNote,
   readCommand,
   refusalText,
+  runView,
   type Table,
   tableView,
 } from "./game.ts";
@@ -537,6 +540,29 @@ describe("what the page may show before Leaf answers", () => {
     // The offer just bought has gone from the stall, as Leaf would say.
     expect(predict(RAID.view(state, ctx()), { do: "buy", offer })).toEqual({ refused: "stall_empty" });
     expect(predict(RAID.view(state, ctx()), { do: "rustle" })).toBeNull();
+  });
+});
+
+describe("whether the rules would do a command", () => {
+  test("is what doing it on a copy says, and the run is left as it was", () => {
+    const run = planned(started(11)).run;
+    if (!run) throw new Error("no run");
+    const view = runView(run);
+    const before = structuredClone(view);
+    const commands: Predicted[] = [
+      { do: "buy", offer: 0 },
+      { do: "buy", offer: 9 },
+      { do: "move", from: { on: "board", at: 3 }, to: { on: "bench", at: 8 } },
+      { do: "sell", from: { on: "bench", at: 8 } },
+      { do: "xp" },
+      { do: "hold", on: true },
+      { do: "give", item: 0, to: { on: "board", at: 3 } },
+    ];
+    for (const c of commands) {
+      const done = predict({ ...RAID.view(RAID.create(ctx(1)), ctx()), run: structuredClone(view) }, c);
+      expect([c.do, legal(view, c)]).toEqual([c.do, done !== null && "view" in done]);
+    }
+    expect(view).toEqual(before);
   });
 });
 

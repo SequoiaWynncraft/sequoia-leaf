@@ -1,5 +1,5 @@
 import { PAL } from "@sequoia-leaf/figures/pal.ts";
-import { type BaseLook, drawBase, drawFigure } from "@sequoia-leaf/figures/sprites.ts";
+import { type BaseLook, drawStanding } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The table, painted once for the size of the window and kept: the top of the great stump with its
  * rings, the clearing and the far trunks behind it, the cloth, the bench along its near edge, the
@@ -548,8 +548,7 @@ export function paintSwatch(cloth: ClothId, lantern: LanternId, bases: BaseLook)
     ["glorp", 76, 45],
   ];
   for (const [kind, x, y] of stand) {
-    drawBase(g, kind, x, y, bases);
-    drawFigure(g, kind, x, y - 2);
+    drawStanding(g, kind, x, y, bases);
   }
   drawPost(g, 9, 56, 1, lantern);
   g.globalCompositeOperation = "lighter";
