@@ -2,38 +2,39 @@
  * Real members, and only real members, in their own skins, each where Leaf's list and Leaf's clock
  * have them (the rules are `@sequoia-leaf/town/clock.ts`), so the same on every page:
  *
- * - **Visitors**, in one of the games just now, busy at it as somebody in a real town would be, at
- *   spots that follow from their account: at the Works carrying crates from the pile to the belt and
- *   going back for the next (`haul`), at the raid table sitting at the stump over its board, in the
- *   Grove standing before its stone while a light rises from it now and then. Away (Leaf's rule) they
- *   have sat down where they are and nodded off: eyes closed, a "z" now and then. Leaf's list says
- *   nothing of when anybody came, so one is there from the moment the page hears of them. They never
- *   speak, and their card has their name and rank, and what they are about.
+ * - **Visitors**, in one of the games just now, busy at it in place, each at a spot of their own
+ *   (`spots.ts`): at the Works working at a crate beside them, at the raid table sitting at the stump
+ *   over its board, in the Grove standing before its stone while a light rises from it now and then.
+ *   Away (Leaf's rule) they have sat down in their spot and nodded off: eyes closed, a "z" now and
+ *   then. Somebody the page sees go to one of them walks to their spot once, from where the page last
+ *   drew them or the place's way in, and stops; anybody there when the page first hears of them is
+ *   there already. They never speak, and their card has their name and rank, and what they are about.
  * - **Dozers**, gone in the last day and happy to be left in town: each on a seat for where they
  *   were (`dozing`), eyes closed, a small "z" drifting up. They never speak or move. Whoever goes
- *   from a game stays on their feet until `SITS_AFTER` after Leaf last saw them, then walks to
- *   their seat, or out through the gate if they do not stay or no seat is left.
+ *   from a game stays on their feet in their spot until `SITS_AFTER` after Leaf last saw them, then
+ *   walks to their seat, or out through the gate if they do not stay or no seat is left.
  * - **A raid party home** (`homecoming`): those of it with no figure in town walk in through the
  *   gate, each in their own place in the party, and go again.
  *
- * Whoever is about the town is there live (`players.ts`), where they really are, and nobody live is
- * drawn here as well.
+ * Anybody drawn here whom the page no longer has anywhere to draw (gone to their camp, say) walks off
+ * through the gate once. Whoever is about the town is there live (`players.ts`), where they really
+ * are, and nobody live is drawn here as well.
  */
 
 import { away } from "@sequoia-leaf/core";
-import { CREAM, LEAF } from "@sequoia-leaf/kit/palette.ts";
+import { BARK, CREAM, LEAF, PAPER, STONE } from "@sequoia-leaf/kit/palette.ts";
+import { R } from "@sequoia-leaf/kit/pix.ts";
 import { bake, type Body, lookFor, paintSkin, SIT, skinOf } from "@sequoia-leaf/kit/skin.ts";
-import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
+import { type Ctx, makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 import {
   dozing,
   GATE,
   GOES_FOR,
-  haul,
   homecoming,
   MUSTER,
   SITS_AFTER,
   type Spot,
-  standOf,
+  type Stand,
   type Walk,
   zAt,
 } from "@sequoia-leaf/town/clock.ts";
@@ -42,15 +43,32 @@ import { feet, makeActor, onScreen, onWalk, sitsOn, stepPassing, walkAt } from "
 import { bit, float } from "./fx.ts";
 import { type Actor, type Doing, G, SEED } from "./game.ts";
 import { guild, type Person } from "./guild.ts";
-import { GROVE, type Seat, SEATS } from "./world.ts";
+import { VISITORS_MOST } from "./live.ts";
+import { crate, type Standing } from "./props.ts";
+import {
+  type Box,
+  clearOf,
+  crateAt,
+  further,
+  keepClear,
+  LAID,
+  makeSpots,
+  meet,
+  poseAt,
+  strings,
+  WAY_IN,
+} from "./spots.ts";
+import { props } from "./town.ts";
+import { GROVE, type Seat, SEATS, TOWN } from "./world.ts";
 
 /** How fast a member strolls, in pixels a second. */
 const STROLL = 32;
 
 /**
  * Somebody drawn here: their figure, eyes open (a look of their own until their skin arrives) and
- * shut, the "z" they last breathed, whether they have been put anywhere yet, and a seat of their own
- * for sitting where they are (at the stump, or nodded off).
+ * shut, the "z" they last breathed, whether they have been put anywhere yet, a seat of their own for
+ * sitting where they are (at the stump, or nodded off), the spot they have at one of the games and
+ * their one walk to it, the last blow of their hammer, and their walk off once they have nowhere.
  */
 interface Visiting {
   a: Actor;
@@ -58,7 +76,11 @@ interface Visiting {
   shut: Body | null;
   z: number;
   put: boolean;
-  spot: Seat;
+  seat: Seat;
+  at: { place: Stand; n: number; spot: Spot } | null;
+  walk: Walk | null;
+  blow: number;
+  off: Walk | null;
 }
 
 const here = new Map<string, Visiting>();
@@ -147,7 +169,11 @@ function figure(p: { id: string; name: string; rank?: string | null }): Visiting
     shut: null,
     z: 0,
     put: false,
-    spot: { x: 0, y: 0, dir: 0, from: { x: 0, y: 0 }, at: "table", taken: false },
+    seat: { x: 0, y: 0, dir: 0, from: { x: 0, y: 0 }, at: "table", taken: false },
+    at: null,
+    walk: null,
+    blow: 0,
+    off: null,
   };
   here.set(p.id, v);
   G.visitors.push(a);
@@ -176,10 +202,10 @@ function afoot(v: Visiting, w: Walk, doing: Doing): void {
   v.a.doing = onWalk(v.a, w) ? doing : "walk";
 }
 
-/** Sitting where they are, on a seat of their own there (`v.spot`), facing as `at` does. */
+/** Sitting where they are, on a seat of their own there (`v.seat`), facing as `at` does. */
 function sitAt(v: Visiting, at: Spot): void {
   const a = v.a;
-  const s = v.spot;
+  const s = v.seat;
   if (a.seat !== s || s.x !== at.x || s.y !== at.y || s.dir !== at.dir) {
     Object.assign(s, { x: at.x, y: at.y, dir: at.dir, from: { x: at.x, y: at.y } });
     a.sat = -9;
@@ -193,6 +219,19 @@ function sitAt(v: Visiting, at: Spot): void {
   a.dozing = null;
 }
 
+/** On their feet in their spot, facing `dir`. */
+function standAt(v: Visiting, at: Pt, dir: Spot["dir"]): void {
+  const a = v.a;
+  v.put = true;
+  a.seat = null;
+  a.dozing = null;
+  a.body = v.open;
+  a.x = at.x;
+  a.y = at.y;
+  a.dir = dir;
+  a.moving = false;
+}
+
 /** A "z" drifting up from somebody asleep, every two seconds or so by Leaf's clock, the same moments on every page. */
 function breathe(v: Visiting): void {
   const a = v.a;
@@ -203,7 +242,7 @@ function breathe(v: Visiting): void {
   if (onScreen(at.x, at.y)) float(at.x + 4, at.y - 20, "z", CREAM, 1.4);
 }
 
-/** Away from the keys, though still in the game: sat down where they are, facing us, nodded off. */
+/** Away from the keys, though still in the game: sat down in their spot, facing us, nodded off. */
 function nap(v: Visiting, at: Spot): void {
   sitAt(v, { ...at, dir: 0 });
   v.a.body = v.shut ??= dozy(v.open);
@@ -244,17 +283,126 @@ function asleep(v: Visiting, s: Seat, seen: number): void {
   breathe(v);
 }
 
+// ---------- the spots ----------
+
+/** The places that are busy, in the order their spots are given out. */
+const STANDS: readonly Stand[] = ["works", "table", "grove"];
+
+/** The most spots each place has: everybody the town draws at the games at once, and a few gone from them still on their feet. */
+const MOST = VISITORS_MOST + 4;
+
+/**
+ * Each place's spots, worked out once the town stands: those laid by hand, then further ones a step
+ * out (`further`), clear of everything in `keepClear`, of the strings of lights, of the things
+ * standing (`clearOf`), and of the spots of the places worked out before.
+ */
+let spotsLaid: Map<Stand, readonly Spot[]> | null = null;
+function spotsOf(at: Stand): readonly Spot[] {
+  if (!spotsLaid) {
+    const taken: Box[] = [...keepClear(), ...strings()];
+    const offThings = clearOf(props.flatMap((p) => (p.hit ? [{ box: p.hit, z: p.z }] : [])));
+    const out = new Map<Stand, readonly Spot[]>();
+    for (const place of STANDS) {
+      const others = taken.slice();
+      const spots = further(
+        place,
+        MOST,
+        (p) => !TOWN.footBlocked(p.x, p.y),
+        (b) => offThings(b) && others.every((t) => !meet(b, t)),
+      );
+      out.set(place, spots);
+      for (const s of spots)
+        taken.push({ x: s.x - 5, y: s.y - 21, w: 10, h: 21 }, ...(place === "works" ? [crateAt(s)] : []));
+    }
+    spotsLaid = out;
+  }
+  return spotsLaid.get(at) ?? LAID[at];
+}
+
+/** Each place's spots, for looking at the town from outside: where each is, which way it faces, and whether it was laid by hand. */
+export const spotsNow = (): { at: Stand; x: number; y: number; dir: number; laid: boolean }[] =>
+  STANDS.flatMap((at) => spotsOf(at).map((s, n) => ({ at, x: s.x, y: s.y, dir: s.dir, laid: n < LAID[at].length })));
+
+/** Who has which spot at each place, kept while they stay. */
+const spots = makeSpots(spotsOf);
+
+/** Where each was last drawn live in town, and when by Leaf's clock: whoever then goes into a game walks to their spot from there. */
+const lastLive = new Map<string, { x: number; y: number; at: number }>();
+/** How long after the page last drew somebody live their walk to a spot sets out from there, in milliseconds. */
+const LIVE_FOR = 15_000;
+/** Everybody the page had anywhere at the last step: whoever turns up at a game after that came from somewhere, and walks to their spot. */
+let known = new Set<string>();
+
+/** Crates on the ground and hammers in hand at the Works this moment, as they are drawn among the people. */
+let tools: Standing[] = [];
+
+/** A hammer, by the hand of somebody facing left or right (`dir`), raised or down on their crate. */
+function hammer(g: Ctx, x: number, y: number, dir: Spot["dir"], up: boolean): void {
+  const s = dir === 1 ? -1 : 1;
+  const at = (dx: number, dy: number, w: number, h: number, col: string): void =>
+    R(g, s > 0 ? x + dx : x - dx - w + 1, y + dy, w, h, col);
+  if (up) {
+    // Raised before their face.
+    at(5, -16, 1, 4, BARK[3]);
+    at(4, -18, 3, 2, STONE[2]);
+  } else {
+    at(2, -11, 1, 1, BARK[3]);
+    at(3, -10, 1, 1, BARK[3]);
+    at(4, -9, 1, 1, BARK[3]);
+    at(4, -8, 3, 2, STONE[2]);
+  }
+}
+
+/** Somebody at work at the Works: in their spot, their crate in their arms or beside them, their hammer raised or down, a chip off the crate at each blow. */
+function work(v: Visiting, at: Stand, n: number, s: Spot, w: NonNullable<ReturnType<typeof poseAt>["work"]>): void {
+  standAt(v, s, w.dir);
+  v.a.carry = w.held;
+  v.a.doing = at;
+  if (!w.held) tools.push(crateOf(s));
+  if (w.hammer) {
+    const up = w.hammer === "up";
+    const a = v.a;
+    tools.push({
+      z: s.y + 0.1,
+      paint: (g, cx, cy) => {
+        const f = feet(a);
+        hammer(g, Math.round(f.x) - cx, Math.round(f.y) - cy, w.dir, up);
+      },
+    });
+  }
+  if (w.blow !== v.blow) {
+    const first = v.blow === 0;
+    v.blow = w.blow;
+    const c = crateAt(s);
+    if (!first && !w.held && onScreen(s.x, s.y))
+      bit({
+        x: c.x + 3,
+        y: c.y,
+        vx: (s.dir === 1 ? -1 : 1) * (6 + (n % 3) * 3),
+        vy: -18,
+        pull: 60,
+        ttl: 0.5,
+        col: PAPER[1],
+      });
+  }
+}
+
 /**
  * Puts every visitor, dozer and raid party walking in where Leaf's list, the guild's moments and
- * Leaf's clock (`G.now`) have them, `dt` seconds on for their hops, and takes away whoever they
- * have nowhere. `awake` is everybody else who may be sitting on one of the town's seats (the
- * member, the town's own, the other players): a seat one of them sits on is theirs, and whoever
- * dozed there dozes on the next.
+ * Leaf's clock (`G.now`) have them, `dt` seconds on for their hops, sends whoever they have nowhere
+ * off through the gate, and takes them away once they are through. `awake` is everybody else who may
+ * be sitting on one of the town's seats (the member, the town's own, the other players): a seat one
+ * of them sits on is theirs, and whoever dozed there dozes on the next.
  */
 export function stepVisitors(dt: number, awake: readonly Actor[]): void {
   const now = G.now;
+  tools = [];
   for (const v of here.values()) stepPassing(v.a, dt);
   const liveNow = live.ids();
+  for (const id of liveNow) {
+    const a = live.actor(id);
+    if (a) lastLive.set(id, { x: a.x, y: a.y, at: now });
+  }
   const drawn = new Set<string>();
   /** Somebody to draw, unless they are in town live. */
   const draw = (p: { id: string; name: string; rank?: string | null }): Visiting | null => {
@@ -263,32 +411,67 @@ export function stepVisitors(dt: number, awake: readonly Actor[]): void {
     return figure(p);
   };
 
+  const visitors = guild.visitors().filter((w) => !liveNow.has(w.id));
+  const resting = guild.resting().filter((r) => !liveNow.has(r.id));
+  // Who has which spot at each place: those busy there, and those gone from it still on their feet there.
+  const placed = new Map(
+    STANDS.map((at) => [
+      at,
+      spots.place(at, [
+        ...visitors.filter((w) => w.at === at).map((w) => w.id),
+        ...resting.filter((r) => r.at === at && now < r.seen + SITS_AFTER).map((r) => r.id),
+      ]),
+    ]),
+  );
+  /** Gives somebody their spot at a place, and the one walk there if they are new to it: from where they are, from where the page last drew them live, or the place's way in. */
+  const toSpot = (v: Visiting, id: string, at: Stand, got: { spot: Spot; n: number }, fresh: boolean): void => {
+    if (v.at?.place === at && v.at.n === got.n) return;
+    const was = lastLive.get(id);
+    const from: Pt | null = v.put
+      ? v.a
+      : fresh && known.has(id)
+        ? was && now - was.at < LIVE_FOR
+          ? was
+          : WAY_IN[at]
+        : null;
+    v.at = { place: at, n: got.n, spot: got.spot };
+    v.walk = from ? { from: { x: from.x, y: from.y, dir: v.a.dir }, to: got.spot, at: now } : null;
+  };
+
   let atStone = false;
-  for (const w of guild.visitors()) {
+  for (const w of visitors) {
+    const got = placed.get(w.at)?.get(w.id);
+    if (!got) continue;
+    const fresh = !here.has(w.id);
     const v = draw(w);
     if (!v) continue;
+    v.off = null;
     v.a.carry = false;
-    const stood = standOf(w.id, w.at);
-    if (away(w.acted, now)) {
-      nap(v, stood);
-      continue;
+    toSpot(v, w.id, w.at, got, fresh);
+    const way = v.walk ? walkAt(v.walk, STROLL, now) : null;
+    const pose = poseAt({ id: w.id, at: w.at, spot: got.spot, n: got.n, away: away(w.acted, now), now, way });
+    if (pose.walking && v.walk) afoot(v, v.walk, w.at);
+    else if (pose.dozing) {
+      v.walk = null;
+      nap(v, got.spot);
+      v.a.doing = w.at;
+      if (w.at === "works") tools.push(crateOf(got.spot));
+    } else {
+      v.walk = null;
+      v.a.body = v.open;
+      if (pose.work) work(v, w.at, got.n, got.spot, pose.work);
+      else if (pose.seated) {
+        sitAt(v, got.spot);
+        v.a.doing = w.at;
+      } else {
+        standAt(v, got.spot, pose.dir);
+        v.a.doing = w.at;
+      }
     }
-    v.a.doing = w.at;
-    v.a.body = v.open;
-    if (w.at === "works") {
-      const { walk, laden } = haul(w.id, now);
-      const before = now < walk.at;
-      afoot(v, before ? still(walk.from) : walk, "works");
-      v.a.carry = laden && (before || v.a.moving);
-    } else if (w.at === "table") sitAt(v, stood);
-    else {
-      afoot(v, still(stood), "grove");
-      atStone = true;
-    }
+    if (w.at === "grove") atStone = true;
   }
   if (atStone) stoneLight();
 
-  const resting = guild.resting().filter((r) => !liveNow.has(r.id));
   const seats = dozing(
     resting.filter((r) => r.stays),
     SEATS.filter((s) => awake.every((a) => !sitsOn(a, s))),
@@ -299,16 +482,25 @@ export function stepVisitors(dt: number, awake: readonly Actor[]): void {
     // Whoever was about the town was there live, and is next seen on their seat.
     if (r.at === "town") {
       const v = seat && now >= up ? draw(r) : null;
+      if (v) v.off = null;
       if (v && seat) asleep(v, seat, r.seen);
       continue;
     }
     if (!seat && now >= up + GOES_FOR) continue;
+    const got = placed.get(r.at)?.get(r.id);
+    if (now < up && !got) continue;
     const v = draw(r);
     if (!v) continue;
-    const stood = standOf(r.id, r.at);
+    v.off = null;
+    v.a.carry = false;
+    if (got) toSpot(v, r.id, r.at, got, false);
+    const stood = v.at?.spot ?? { ...WAY_IN[r.at], dir: 0 };
     const walk: Walk = { from: stood, to: seat ? { ...seat.from, dir: seat.dir } : GATE, at: up };
-    if (now < up) afoot(v, still(stood), r.at);
-    else if (seat && walkAt(walk, STROLL, now).next === null) asleep(v, seat, r.seen);
+    if (now < up) {
+      // Gone, and not yet off: on their feet in their spot, their crate by them at the Works.
+      afoot(v, still(stood), r.at);
+      if (r.at === "works") tools.push(crateOf(stood));
+    } else if (seat && walkAt(walk, STROLL, now).next === null) asleep(v, seat, r.seen);
     else afoot(v, walk, "walk");
   }
 
@@ -318,16 +510,40 @@ export function stepVisitors(dt: number, awake: readonly Actor[]): void {
     m.who.slice(0, MUSTER.length).forEach((p, i) => {
       const walk = p.you || drawn.has(p.id) ? null : homecoming(SEED, m.at, i, now);
       const v = walk && draw(p);
-      if (v && walk) afoot(v, walk, "walk");
+      if (v && walk) {
+        v.off = null;
+        afoot(v, walk, "walk");
+      }
     });
   }
 
+  // Whoever the page has nowhere now walks off through the gate once, unless they are in town live.
   for (const [id, v] of here) {
     if (drawn.has(id)) continue;
+    if (!liveNow.has(id) && v.put) {
+      v.off ??= { from: { x: v.a.x, y: v.a.y, dir: v.a.dir }, to: GATE, at: now };
+      v.at = null;
+      v.walk = null;
+      v.a.carry = false;
+      if (walkAt(v.off, STROLL, now).next !== null && now < v.off.at + 4 * GOES_FOR) {
+        afoot(v, v.off, "walk");
+        continue;
+      }
+    }
     here.delete(id);
     G.visitors = G.visitors.filter((a) => a !== v.a);
   }
+  known = new Set(guild.whereabouts().keys());
 }
+
+/** A crate on the ground beside somebody's spot at the Works. */
+function crateOf(s: Spot): Standing {
+  const c = crateAt(s);
+  return { z: s.y - 0.1, paint: (g, cx, cy) => crate(g, c.x - cx, c.y - cy) };
+}
+
+/** Crates on the ground and hammers in hand at the Works this moment, to be drawn among the people. */
+export const worksTools = (): readonly Standing[] => tools;
 
 /** Whether somebody in town is a real member other than the member themself: visiting, or dozing. */
 export const isVisitor = (a: Actor): boolean => G.visitors.includes(a);
@@ -343,10 +559,35 @@ export function drawnAs(id: string): Actor | null {
   return live.actor(id) ?? here.get(id)?.a ?? null;
 }
 
-/** Real members in town for looking at it from outside: where each is and what they are doing, and whether they are dozing. */
-export function members(): { name: string; x: number; y: number; doing: string; dozing: boolean }[] {
-  return [...here.values()].map(({ a }) => {
+/**
+ * Real members in town for looking at it from outside: where each is drawn and what they are doing,
+ * whether they are dozing on a seat (gone) or nodded off in their spot (away), walking, carrying a
+ * crate, and the spot they have at one of the games (its place and number), if any.
+ */
+export function members(): {
+  name: string;
+  x: number;
+  y: number;
+  doing: string;
+  dozing: boolean;
+  nodded: boolean;
+  walking: boolean;
+  carry: boolean;
+  spot: string | null;
+}[] {
+  return [...here.values()].map((v) => {
+    const { a } = v;
     const at = a.seat ?? a;
-    return { name: a.who.name, x: Math.round(at.x), y: Math.round(at.y), doing: a.doing, dozing: a.dozing !== null };
+    return {
+      name: a.who.name,
+      x: Math.round(at.x),
+      y: Math.round(at.y),
+      doing: a.doing,
+      dozing: a.dozing !== null,
+      nodded: a.dozing === null && v.shut !== null && a.body === v.shut,
+      walking: a.moving,
+      carry: a.carry,
+      spot: v.at ? `${v.at.place} ${v.at.n}` : null,
+    };
   });
 }
