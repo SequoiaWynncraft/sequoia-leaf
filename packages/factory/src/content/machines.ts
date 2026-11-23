@@ -14,6 +14,9 @@ export const KINDS = [
   "wheel",
   "boiler",
   "depot",
+  "study",
+  "stop",
+  "sorter",
 ] as const;
 export type KindName = (typeof KINDS)[number];
 
@@ -107,10 +110,28 @@ export const KIND: Record<KindName, KindInfo> = {
     gives: 20,
     what: "Takes every item that reaches it. Each item counts towards an order that asks for it, and also pays 1% of its worth.",
   },
+  study: {
+    name: "Study",
+    cost: 200,
+    draw: 6,
+    gives: 0,
+    what: "Takes in folios from any side, and puts 1 every 5 seconds towards the research being studied. Holds up to 20 of each kind.",
+  },
+  stop: {
+    name: "Cart stop",
+    cost: 150,
+    draw: 0,
+    gives: 0,
+    what: "Takes items in from any side. Each counts as having reached the depot.",
+  },
+  sorter: {
+    name: "Sorter",
+    cost: 12,
+    draw: 0,
+    gives: 0,
+    what: "Takes items in from behind. The one item it is set to goes out to its left; everything else goes straight on.",
+  },
 };
-
-/** What a new yard can build before any order is filled. */
-export const START_KINDS: readonly KindName[] = ["belt", "gatherer", "mill", "pylon"];
 
 /**
  * What a new yard has to hand: pieces left behind the workshop, enough for a first line. Standing
@@ -120,22 +141,28 @@ export const START_KINDS: readonly KindName[] = ["belt", "gatherer", "mill", "py
 export const STARTERS: Partial<Record<KindName, number>> = { gatherer: 1, mill: 1, belt: 12 };
 
 /**
- * Ticks for a gatherer to gather one thing, for a belt to carry a thing one tile, and for a boiler
- * to burn one piece. A gatherer is a little slower than the mill it feeds (see the recipes), so at
- * first it is the gatherer that sets a line's pace; quicker gatherers and quicker machines then
- * take turns at being what holds a line back.
+ * Ticks for a gatherer to gather one thing, for a boiler to burn one piece, and for a Study to take
+ * in one folio, at grade 1; a belt at grade 1 carries a thing across a tile in 4. A gatherer is a
+ * little slower than the mill it feeds (see the recipes), so at first it is the gatherer that sets a
+ * line's pace; gatherers and machines of higher grades then take turns at being what holds a line back.
  */
-export const TICKS = { gather: 15, belt: 4, burn: 20 } as const;
-/** How far power reaches from the depot and from a pylon, and how far apart two joined pylons may stand. */
-export const REACH = { depot: 6.6, pylon: 4.6, link: 8.1 } as const;
-/** How many of each thing a machine keeps by it, how much fuel a boiler holds, and what a crate holds. */
+export const TICKS = { gather: 15, burn: 20, study: 50 } as const;
+
+/** The kinds that have a grade, 1 to 3, kept on the piece. */
+export const GRADED: readonly KindName[] = ["belt", "tunnel", "gatherer", "mill", "bench", "workshop", "study"];
+/** Grades 1 to 3, against grade 1: how fast a piece works or carries, what it costs, and the power it draws. */
+export const GRADES = [
+  { pace: 1, price: 1, draw: 1 },
+  { pace: 1.5, price: 3, draw: 1.5 },
+  { pace: 2, price: 8, draw: 2 },
+] as const;
+/** How far power reaches from the depot and from a pylon, and how far apart two joined pylons may stand, in hundredths of a tile. */
+export const REACH = { depot: 660, pylon: 460, link: 810 } as const;
+/** How many recipes' worth of each part a machine keeps by it, how much fuel a boiler holds, and how many of each folio a Study holds. */
 export const BUFFER = 4;
 export const FUEL = 8;
-export const CRATE_HOLDS = 32;
-/** The longest a tunnel can be once tunnels are open, in tiles passed under. */
-export const SPAN = 3;
-/** How many blueprints a yard keeps, and the most one holds: pieces, and tiles across and down. */
-export const BLUEPRINTS = 3;
-export const BLUEPRINT = { pieces: 400, w: 32, h: 24 } as const;
+export const STUDY_HOLDS = 20;
+/** The most tiles across and down a blueprint holds. */
+export const BLUEPRINT = { w: 32, h: 24 } as const;
 /** The most pieces one `stand` command carries: Leaf reads a command of at most 16 KiB. */
 export const STAND_MOST = 160;

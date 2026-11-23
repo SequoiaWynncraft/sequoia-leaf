@@ -1,36 +1,39 @@
 /**
  * The yard as flat data. Everything about a tile is a number in an array indexed by the tile;
  * what only some pieces have lives in side tables with a row for each such piece (`row`): the
- * holders (gatherers, mills, benches, workshops, crates, boilers) and the tunnels' near mouths.
- * Beside them, a few small records: the yard's numbers, its orders, what is open, its blueprints.
+ * holders (gatherers, mills, benches, workshops, crates, boilers, Studies) and the tunnels' near mouths.
+ * Beside them, a few small records: the yard's numbers, its goals and orders, its blueprints, and
+ * what is open, worked out from the goals done.
  *
  * The yard keeps no purse: what it earns gathers in `till` until a command pays it in.
  */
-import { BLUEPRINTS, CRATE_HOLDS, SPAN } from "./content/machines.ts";
-import { STORY } from "./content/story.ts";
 import type { Land } from "./land.ts";
 import {
   BENCH,
+  BLUEPRINTS_MOST,
   BOILER,
   CRATE,
   DEPOT,
   GATHERER,
-  GIVES,
+  type Goal,
+  GOALS,
+  goalsBelow,
+  gradeOf,
   type Item,
   ITEM_COUNT,
   type Kind,
-  kind,
-  kindBit,
   MILL,
+  MILLI,
+  nextHand,
   NONE,
-  type Plan,
-  plan,
-  PLAN_INFO,
-  PLAN_OPENS,
+  type Open,
+  openOf,
   type Plot,
   plot,
-  START_OPEN,
+  type Recipe,
+  SPAN_MOST,
   STARTING,
+  STUDY,
   WORKSHOP,
 } from "./tables.ts";
 
@@ -38,17 +41,16 @@ import {
 export type Counts = Float64Array;
 export const counts = (): Counts => new Float64Array(ITEM_COUNT);
 
-/** What the gatherers, machines, crates and boilers hold: a row each. */
+/** What the gatherers, machines, crates, boilers and Studies hold: a row each. */
 export interface Holders {
   size: number;
   /** The tile each row belongs to. */
   tile: Int32Array;
-  /** A finished piece waiting to leave, what is being made next, and the one thing a machine was told to make. */
+  /** A finished thing waiting to leave, and what is being made next. */
   out: Uint8Array;
   making: Uint8Array;
-  recipe: Uint8Array;
-  /** The work done on the next piece, in ticks at the plain pace: a fraction when power is short. */
-  work: Float64Array;
+  /** The work done on the next piece, in half-ticks (`tick.ts`). */
+  work: Uint16Array;
   /** 1 while a machine has looked at what it holds and found nothing it can start on. */
   idle: Uint8Array;
   /** 1 while a crate lets things out. */
@@ -69,7 +71,7 @@ export interface Tunnels {
   along: Uint8Array;
 }
 
-/** A standing order on the board. */
+/** A standing order on the board, and the tick from which it counts. */
 export interface Standing {
   readonly id: number;
   readonly title: string;
@@ -78,11 +80,12 @@ export interface Standing {
   readonly want: Counts;
   readonly pay: number;
   readonly filled: Counts;
+  readonly starts: number;
 }
 
-/** Something that happened which a screen will want to make a moment of. */
+/** Something that happened which a screen will want to make a moment of: a node finished or research known, a standing order filled or handed over. */
 export type News =
-  | { readonly kind: "story"; readonly index: number; readonly title: string; readonly pay: number }
+  | { readonly kind: "done"; readonly goal: string; readonly title: string; readonly pay: number }
   | { readonly kind: "filled"; readonly id: number; readonly title: string; readonly pay: number }
   | { readonly kind: "standing"; readonly id: number; readonly title: string; readonly pay: number };
 
@@ -100,25 +103,6 @@ export interface Seen {
   readonly depot: Counts;
 }
 
-/** How fast things go and how far things reach, with the plans bought counted in. */
-export interface Rates {
-  readonly gather: number;
-  readonly belt: number;
-  readonly craft: number;
-  readonly reach: number;
-  readonly crate: number;
-  readonly depot: number;
-  readonly slots: number;
-}
-
-/** What may be built, bought and read, a bit for each kind, plot and plan. */
-export interface Open {
-  readonly kinds: number;
-  readonly plots: number;
-  readonly plans: number;
-  readonly board: boolean;
-}
-
 /** The yard's plumbing, worked out from what stands where (`wire.ts`). */
 export interface Wire {
   /** Tiles that hand things on, each after the tiles it hands to. */
@@ -129,13 +113,15 @@ export interface Wire {
   readonly boilers: Int32Array;
   /** For each tile, the sides it takes things in from, a bit each (`sidesTaken`). */
   readonly taken: Uint8Array;
+  /** For each kind of machine, the recipes it may make (`recipesFor`): all a machine reads of what is unlocked. */
+  readonly recipes: readonly (readonly Recipe[])[];
   /** Power always there (the depot and the waterwheels), and power drawn. */
   readonly steady: number;
   readonly demand: number;
 }
 
-/** A piece kept in a blueprint, 9 bytes: kind, x, y, way, span, recipe, open, tint, shut. */
-export const PIECE_BYTES = 9;
+/** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, shut, grade. */
+export const PIECE_BYTES = 10;
 
 export interface Yard {
   readonly land: Land;
@@ -151,6 +137,10 @@ export interface Yard {
   readonly tint: Uint8Array;
   readonly turn: Uint8Array;
   readonly shut: Uint8Array;
+  /** The one thing a machine is told to make, or `NONE`. */
+  readonly set: Uint8Array;
+  /** A piece's grade, 1 to 3, or 0 for a kind that has none. */
+  readonly grade: Uint8Array;
   /** 1 for one of the pieces a new yard has to hand: it cost nothing and gives nothing back. */
   readonly free: Uint8Array;
   /** For a tunnel, the tiles it passes under: positive at the mouth things go in at, negative at the other. */
@@ -165,38 +155,45 @@ export interface Yard {
   wire: Wire | null;
   supply: number;
   demand: number;
+  /** Power put by toward the next tick the machines work, while the yard is short of it (`tick.ts`). */
+  charge: number;
 
   /** What the board's orders are drawn from; a yard read from a view has none, and hangs no order. */
   seed: number | null;
   tick: number;
   /** The moment of Leaf's clock `tick` stands for. */
   at: number;
-  /** Coins earned and not yet paid in. */
+  /** Coins earned and not yet paid in, in thousandths; and all the yard has earned from the depot and from orders. */
   till: number;
-  /** How many changes to Coins the yard has made, and how many story orders it has logged. */
+  /** How many changes to Coins the yard has made, and how many of the goals done it has logged. */
   bank: number;
   told: number;
   away: Away | null;
   seen: Seen;
-  /** Plots and plans owned, in the order they were bought. */
+  /** Plots owned, in the order they were bought. */
   plots: Plot[];
-  plans: Plan[];
   /** The pieces to hand that are not standing, by kind. */
   readonly spare: Uint8Array;
   blueprints: (Uint8Array | null)[];
-  story: number;
-  filled: Counts;
+  /**
+   * The goals done, in the order they were done; the node in hand, or -1; the research being studied
+   * and that waiting after it; and what each goal not done has been given.
+   */
+  done: Goal[];
+  hand: Goal | -1;
+  line: Goal[];
+  got: (Counts | null)[];
   board: Standing[];
   serial: number;
-  done: number;
+  /** How many standing orders have been handed over. */
+  handed: number;
   swapAt: number;
   depot: Counts;
-  given: Counts;
   sold: number;
   paid: number;
   /** What the depot has been taking in since the yard was last changed; `warm` counts down ticks left out. */
   pace: { ticks: number; warm: number; made: Counts };
-  rates: Rates;
+  /** Worked out from the goals done (`reopen`). */
   open: Open;
   news: News[];
 }
@@ -209,8 +206,7 @@ const holders = (cap: number): Holders => ({
   tile: new Int32Array(cap),
   out: new Uint8Array(cap),
   making: new Uint8Array(cap),
-  recipe: new Uint8Array(cap),
-  work: new Float64Array(cap),
+  work: new Uint16Array(cap),
   idle: new Uint8Array(cap),
   open: new Uint8Array(cap),
   fuel: new Uint8Array(cap),
@@ -221,15 +217,14 @@ const holders = (cap: number): Holders => ({
 const tunnels = (cap: number): Tunnels => ({
   size: 0,
   tile: new Int32Array(cap),
-  under: new Uint8Array(cap * SPAN),
-  along: new Uint8Array(cap * SPAN),
+  under: new Uint8Array(cap * SPAN_MOST),
+  along: new Uint8Array(cap * SPAN_MOST),
 });
 
-const PLAIN: Rates = { gather: 1, belt: 1, craft: 1, reach: 1, crate: CRATE_HOLDS, depot: GIVES[DEPOT] ?? 0, slots: 3 };
-
-/** A yard with nothing on it but the depot, and the starting pieces to hand. */
-export function emptyYard(land: Land, story = 0): Yard {
+/** A yard with nothing on it but the depot, and the starting pieces to hand; every goal below `tier` done, for trying later parts. */
+export function emptyYard(land: Land, tier = 0): Yard {
   const n = land.w * land.h;
+  const done = goalsBelow(tier);
   const y: Yard = {
     land,
     kind: new Uint8Array(n).fill(NONE),
@@ -240,6 +235,8 @@ export function emptyYard(land: Land, story = 0): Yard {
     tint: new Uint8Array(n),
     turn: new Uint8Array(n),
     shut: new Uint8Array(n),
+    set: new Uint8Array(n).fill(NONE),
+    grade: new Uint8Array(n),
     free: new Uint8Array(n),
     span: new Int8Array(n),
     row: new Int32Array(n).fill(-1),
@@ -250,31 +247,31 @@ export function emptyYard(land: Land, story = 0): Yard {
     wire: null,
     supply: 0,
     demand: 0,
+    charge: 0,
     seed: null,
     tick: 0,
     at: 0,
     till: 0,
     bank: 0,
-    told: 0,
+    told: done.length,
     away: null,
     seen: { tick: 0, till: 0, depot: counts() },
     plots: [plot("yard")],
-    plans: [],
     spare: Uint8Array.from(STARTING),
-    blueprints: Array.from({ length: BLUEPRINTS }, () => null),
-    story: Math.max(0, Math.min(STORY.length, Math.floor(story))),
-    filled: counts(),
+    blueprints: Array.from({ length: BLUEPRINTS_MOST }, () => null),
+    done,
+    hand: -1,
+    line: [],
+    got: GOALS.map(() => null),
     board: [],
     serial: 0,
-    done: 0,
+    handed: 0,
     swapAt: 0,
     depot: counts(),
-    given: counts(),
     sold: 0,
     paid: 0,
     pace: { ticks: 0, warm: WARM, made: counts() },
-    rates: PLAIN,
-    open: { kinds: 0, plots: 0, plans: 0, board: false },
+    open: openOf(done),
     news: [],
   };
   const [cx, cy] = land.depot;
@@ -283,42 +280,24 @@ export function emptyYard(land: Land, story = 0): Yard {
       const i = (cy + dy) * land.w + cx + dx;
       if (i >= 0 && i < n) y.kind[i] = DEPOT;
     }
-  reopen(y);
+  hold(y, nextHand(y.open));
   return y;
 }
 
-/** Works out again what is open and how fast things go, from the story so far and the plans owned. */
+/**
+ * Works out again what is open, from the goals done. The depot's power, and how far power reaches,
+ * may have changed with it, so power and the plumbing are worked out again when next read.
+ */
 export function reopen(y: Yard): void {
-  let kinds = START_OPEN;
-  let plots = 1 << plot("yard");
-  let plans = 0;
-  let board = false;
-  for (const order of STORY.slice(0, y.story)) {
-    for (const k of order.opens.kinds ?? []) kinds |= kindBit(kind(k));
-    for (const p of order.opens.plots ?? []) plots |= 1 << plot(p);
-    for (const p of order.opens.plans ?? []) plans |= 1 << plan(p);
-    if (order.opens.board) board = true;
-  }
-  let { gather, belt, craft, reach, crate, depot, slots } = PLAIN;
-  PLAN_INFO.forEach((info, n) => {
-    if (!info || !y.plans.includes(plan(info.id))) return;
-    const e = info.effect;
-    kinds |= PLAN_OPENS[n] ?? 0;
-    gather = Math.max(gather, e.gather ?? 0);
-    belt = Math.max(belt, e.belt ?? 0);
-    craft = Math.max(craft, e.craft ?? 0);
-    reach = Math.max(reach, e.reach ?? 0);
-    crate = Math.max(crate, e.crate ?? 0);
-    depot = Math.max(depot, e.depot ?? 0);
-    slots = Math.max(slots, e.slots ?? 0);
-  });
-  y.open = { kinds, plots, plans, board };
-  // Power reaches other tiles now, and who is in reach is part of the plumbing.
-  if (reach !== y.rates.reach) {
-    y.powered = false;
-    y.wire = null;
-  }
-  y.rates = { gather, belt, craft, reach, crate, depot, slots };
+  y.open = openOf(y.done);
+  y.powered = false;
+  y.wire = null;
+}
+
+/** Takes a node into hand, or with -1 none, with somewhere to count what it is given. */
+export function hold(y: Yard, g: Goal | -1): void {
+  y.hand = g;
+  if (g >= 0) y.got[g] ??= counts();
 }
 
 /** Marks the yard as changed: its plumbing is worked out afresh, and its pace is measured from now. */
@@ -329,8 +308,8 @@ export function changed(y: Yard): void {
 
 /** Takes the whole Coins out of the till, and says how many. */
 export function collect(y: Yard): number {
-  const coins = Math.floor(y.till);
-  y.till -= coins;
+  const coins = Math.floor(y.till / MILLI);
+  y.till -= coins * MILLI;
   return coins;
 }
 
@@ -345,7 +324,7 @@ export function drain(y: Yard): News[] {
 
 /** Whether a kind of piece holds things, and so has a row in `holders`. */
 export const holds = (k: number): boolean =>
-  k === GATHERER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE || k === BOILER;
+  k === GATHERER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE || k === BOILER || k === STUDY;
 
 /** How much a full side table grows by: a half, so a yard of nothing but crates stays under a megabyte. */
 const grown = (size: number): number => Math.ceil(size * 1.5);
@@ -355,19 +334,7 @@ export function holderRow(y: Yard, tile: number): number {
   let h = y.holders;
   if (h.size === h.tile.length) {
     const bigger = holders(grown(h.size));
-    for (const key of [
-      "tile",
-      "out",
-      "making",
-      "recipe",
-      "work",
-      "idle",
-      "open",
-      "fuel",
-      "kinds",
-      "count",
-      "stock",
-    ] as const)
+    for (const key of ["tile", "out", "making", "work", "idle", "open", "fuel", "kinds", "count", "stock"] as const)
       bigger[key].set(h[key]);
     bigger.size = h.size;
     y.holders = h = bigger;
@@ -376,7 +343,6 @@ export function holderRow(y: Yard, tile: number): number {
   h.tile[r] = tile;
   h.out[r] = NONE;
   h.making[r] = NONE;
-  h.recipe[r] = NONE;
   h.work[r] = 0;
   h.idle[r] = 0;
   h.open[r] = 1;
@@ -397,8 +363,8 @@ export function tunnelRow(y: Yard, tile: number): number {
   }
   const r = t.size++;
   t.tile[r] = tile;
-  t.under.fill(NONE, r * SPAN, (r + 1) * SPAN);
-  t.along.fill(0, r * SPAN, (r + 1) * SPAN);
+  t.under.fill(NONE, r * SPAN_MOST, (r + 1) * SPAN_MOST);
+  t.along.fill(0, r * SPAN_MOST, (r + 1) * SPAN_MOST);
   return r;
 }
 
@@ -411,7 +377,7 @@ export function dropRow(y: Yard, tile: number): void {
     const h = y.holders;
     const last = --h.size;
     if (r !== last) {
-      for (const key of ["tile", "out", "making", "recipe", "work", "idle", "open", "fuel", "kinds", "count"] as const)
+      for (const key of ["tile", "out", "making", "work", "idle", "open", "fuel", "kinds", "count"] as const)
         h[key][r] = h[key][last] ?? 0;
       h.stock.copyWithin(r * ITEM_COUNT, last * ITEM_COUNT, (last + 1) * ITEM_COUNT);
       y.row[h.tile[r] ?? 0] = r;
@@ -421,8 +387,8 @@ export function dropRow(y: Yard, tile: number): void {
     const last = --t.size;
     if (r !== last) {
       t.tile[r] = t.tile[last] ?? 0;
-      t.under.copyWithin(r * SPAN, last * SPAN, (last + 1) * SPAN);
-      t.along.copyWithin(r * SPAN, last * SPAN, (last + 1) * SPAN);
+      t.under.copyWithin(r * SPAN_MOST, last * SPAN_MOST, (last + 1) * SPAN_MOST);
+      t.along.copyWithin(r * SPAN_MOST, last * SPAN_MOST, (last + 1) * SPAN_MOST);
       y.row[t.tile[r] ?? 0] = r;
     }
   }
@@ -437,24 +403,33 @@ export function put(h: Holders, r: number, n: number): void {
   h.count[r] = (h.count[r] ?? 0) + 1;
   h.idle[r] = 0;
 }
-export function take(h: Holders, r: number, n: number): void {
+/** Takes `c` of a thing from a holder's row, or as many as it holds. */
+export function take(h: Holders, r: number, n: number, c = 1): void {
   const at = r * ITEM_COUNT + n;
   const had = h.stock[at] ?? 0;
-  if (had <= 0) return;
-  if (had === 1) h.kinds[r] = (h.kinds[r] ?? 0) - 1;
-  h.stock[at] = had - 1;
-  h.count[r] = (h.count[r] ?? 1) - 1;
+  const gone = Math.min(had, c);
+  if (gone <= 0) return;
+  if (had === gone) h.kinds[r] = (h.kinds[r] ?? 0) - 1;
+  h.stock[at] = had - gone;
+  h.count[r] = (h.count[r] ?? gone) - gone;
 }
 /** How many of a thing a holder's row holds. */
 export const held = (h: Holders, r: number, n: Item | number): number => h.stock[r * ITEM_COUNT + n] ?? 0;
+/** Whether a holder's row holds all a recipe takes. */
+export function enough(h: Holders, r: number, recipe: Recipe): boolean {
+  for (let p = 0; p < recipe.from.length; p++)
+    if ((h.stock[r * ITEM_COUNT + (recipe.from[p] ?? 0)] ?? 0) < (recipe.need[p] ?? 1)) return false;
+  return true;
+}
 
 // ---------- pieces on tiles ----------
 
-/** Sets a new piece of a kind down on a tile, facing a way, with a row if it needs one. */
-export function place(y: Yard, i: number, k: Kind, d: number): void {
+/** Sets a new piece of a kind down on a tile, facing a way, at a grade if its kind has one, with a row if it needs one. */
+export function place(y: Yard, i: number, k: Kind, d: number, g = 1): void {
   vacate(y, i);
   y.kind[i] = k;
   y.dir[i] = d;
+  y.grade[i] = gradeOf(k, g);
   if (holds(k)) y.row[i] = holderRow(y, i);
 }
 
@@ -469,6 +444,8 @@ export function vacate(y: Yard, i: number): void {
   y.tint[i] = 0;
   y.turn[i] = 0;
   y.shut[i] = 0;
+  y.set[i] = NONE;
+  y.grade[i] = 0;
   y.free[i] = 0;
   y.span[i] = 0;
 }

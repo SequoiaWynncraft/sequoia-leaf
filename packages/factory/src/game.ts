@@ -1,5 +1,5 @@
 /**
- * The Works as Leaf plays it, as today's yard does: Leaf owns the yard, its clock and its Coins; the
+ * The Works as Leaf plays it: Leaf owns the yard, its clock and its Coins; the
  * page holds a copy and runs it ahead with the same rules. A yard holds `tick` and `at`, the moment
  * of Leaf's clock that tick stands for; every command carries the tick the page's copy stood at and
  * is done at that tick. Coins are the ledger's: each change is keyed by the yard's `bank`.
@@ -9,40 +9,71 @@ import { type CoinChange, type Ctx, type Done, type Game, LOGGED, type Logged, t
 import {
   at,
   build,
-  buyPlan,
   buyPlot,
   type Dir,
   isDir,
   remove,
   setOpen,
   setRecipe,
+  setSort,
   setWay,
   tipOut,
   turn,
 } from "./build.ts";
+import { check } from "./check.ts";
 import { awayOf, here, stillAt, TICK_MS } from "./clock.ts";
 import { decode, encode } from "./codec.ts";
-import { BLUEPRINTS, SPAN, STAND_MOST } from "./content/machines.ts";
-import { STORY } from "./content/story.ts";
+import { STAND_MOST } from "./content/machines.ts";
 import { LAND, type Land } from "./land.ts";
 import { paint } from "./lines.ts";
-import { claim, fillBoard, swap } from "./orders.ts";
-import { clear, deleteBlueprint, keptOf, move, type Piece, saveBlueprint, stand, TINTS } from "./pieces.ts";
 import {
+  claim,
+  fillBoard,
+  ORDER_TOLD,
+  ORDER_WAITS,
+  study,
+  studyRefusal,
+  swap,
+  takeNode,
+  takeRefusal,
+  unstudy,
+} from "./orders.ts";
+import {
+  blueprintAt,
+  clear,
+  deleteBlueprint,
+  keptOf,
+  move,
+  type Piece,
+  saveBlueprint,
+  stand,
+  TINTS,
+  upgrade,
+} from "./pieces.ts";
+import {
+  BELT,
+  BLUEPRINTS_MOST,
   DEPOT,
+  type Goal,
+  goalNamed,
+  GOALS,
+  isNode,
   type Item,
   itemNamed,
   type Kind,
   kindNamed,
-  type Plan,
-  planName,
-  planNamed,
+  type Lock,
+  locked,
+  MILLI,
   type Plot,
   plotName,
   plotNamed,
+  SPAN_MOST,
+  TOP,
+  TUNNEL,
 } from "./tables.ts";
 import { step } from "./tick.ts";
-import { collect, drain, emptyYard, type News, type Yard } from "./yard.ts";
+import { collect, drain, emptyYard, type News, type Standing, type Yard } from "./yard.ts";
 
 /** How far behind Leaf's clock `advance` leaves a yard, in ticks; and how far ahead a command may be done. */
 export const LEAD = 30;
@@ -52,24 +83,27 @@ interface At {
   readonly y: number;
 }
 
-/** Everything a player does to the yard, with things, kinds, plots and plans as numbers. */
+/** Everything a player does to the yard, with things, kinds, plots and goals as numbers. */
 export type Act =
-  | ({ readonly do: "build"; readonly kind: Kind; readonly dir: Dir } & At)
+  | ({ readonly do: "build"; readonly kind: Kind; readonly dir: Dir; readonly grade: number } & At)
   | { readonly do: "lay"; readonly legs: readonly Piece[]; readonly turn?: At & { readonly dir: Dir } }
   | { readonly do: "stand"; readonly pieces: readonly Piece[] }
+  | ({ readonly do: "placeBlueprint"; readonly slot: number; readonly turns: Dir } & At)
   | ({ readonly do: "move"; readonly tiles: readonly number[]; readonly turns: Dir } & At)
   | ({ readonly do: "remove" } & At)
   | { readonly do: "clear"; readonly tiles: readonly number[] }
+  | { readonly do: "upgrade"; readonly tiles: readonly number[] }
   | { readonly do: "saveBlueprint"; readonly slot: number; readonly tiles: readonly number[] }
   | { readonly do: "deleteBlueprint"; readonly slot: number }
   | ({ readonly do: "turn"; readonly dir: Dir } & At)
   | ({ readonly do: "paint"; readonly tint: number } & At)
-  | ({ readonly do: "recipe"; readonly item: Item | null } & At)
+  | ({ readonly do: "recipe" | "sort"; readonly item: Item | null } & At)
   | ({ readonly do: "tipOut"; readonly item: Item | null } & At)
   | ({ readonly do: "crate"; readonly open: boolean } & At)
   | ({ readonly do: "way"; readonly way: number; readonly open: boolean } & At)
   | { readonly do: "buyPlot"; readonly plot: Plot }
-  | { readonly do: "buyPlan"; readonly plan: Plan }
+  | { readonly do: "take"; readonly node: Goal }
+  | { readonly do: "study" | "unstudy"; readonly research: Goal }
   | { readonly do: "swap"; readonly order: number }
   | { readonly do: "handOver"; readonly order: number }
   | { readonly do: "collect" };
@@ -83,27 +117,54 @@ export interface View {
   readonly clock: number;
 }
 
+/**
+ * What Leaf answers a batch of commands with, in place of the yard the page already holds: the
+ * yard's tick after the batch and its check there (`check.ts`), and the orders hung on its board in
+ * the last minute, which only Leaf, holding the seed, can draw. An order goes with every answer for
+ * a minute, counting or not, so that a batch that runs past the tick an order counts from still
+ * tells the page of it: the page passes over one it has, and takes Leaf's yard for one it hears
+ * of too late.
+ */
+export interface Answer {
+  readonly tick: number;
+  readonly check: number;
+  readonly hung: readonly Standing[];
+}
+export const answer = (y: Yard): Answer => ({
+  tick: y.tick,
+  check: check(y),
+  hung: y.board.filter((o) => y.tick < o.starts - ORDER_WAITS + ORDER_TOLD),
+});
+
 /** A command the rules turned down: the code Leaf answers, and the sentence the page says. */
 export type Turned = Refused & { readonly why: string };
 
-/** The code each command is refused with. */
+/** The code a command is refused with when it is one of a tool the yard has not unlocked. */
+export const LOCKED = "locked";
+
+/** The code each command is refused with otherwise. */
 export const REFUSED = {
   build: "cannot_build",
   lay: "cannot_lay",
   stand: "cannot_stand",
+  placeBlueprint: "cannot_place_blueprint",
   move: "cannot_move",
   remove: "nothing_to_take_away",
   clear: "nothing_to_clear",
+  upgrade: "cannot_upgrade",
   saveBlueprint: "cannot_save_blueprint",
   deleteBlueprint: "no_blueprint",
   turn: "cannot_turn",
   paint: "nothing_to_paint",
   recipe: "cannot_set_recipe",
+  sort: "not_a_sorter",
   tipOut: "nothing_to_tip_out",
   crate: "not_a_crate",
   way: "not_a_splitter",
   buyPlot: "plot_not_for_sale",
-  buyPlan: "plan_not_for_sale",
+  take: "cannot_take",
+  study: "cannot_study",
+  unstudy: "not_studied",
   swap: "cannot_swap",
   handOver: "not_filled",
 } as const;
@@ -114,13 +175,14 @@ const REASON = {
   build: "Built in the Works",
   lay: "Belts laid in the Works",
   remove: "Taken away in the Works",
+  lower: "Lowered in the Works",
+  upgrade: "Upgraded in the Works",
   buyPlot: "A plot for the Works",
-  buyPlan: "A plan for the Works",
 } as const;
 
-/** A new yard: the depot in the middle, a few pieces to hand, seeded; `story` orders done already, for trying later parts. */
-export function create(opts: { readonly seed?: number; readonly land?: Land; readonly story?: number } = {}): Yard {
-  const y = emptyYard(opts.land ?? LAND, opts.story ?? 0);
+/** A new yard: the depot in the middle, a few pieces to hand, seeded; every goal below `tier` done already, for trying later parts. */
+export function create(opts: { readonly seed?: number; readonly land?: Land; readonly tier?: number } = {}): Yard {
+  const y = emptyYard(opts.land ?? LAND, opts.tier ?? 0);
   y.seed = (opts.seed ?? 1) >>> 0;
   fillBoard(y);
   return y;
@@ -169,7 +231,7 @@ function payIn(y: Yard): CoinChange[] {
 }
 function priced(y: Yard, price: number, reason: string): CoinChange[] {
   const paid = payIn(y);
-  if (price < 0) return [...paid, change(y, -price, REASON.remove, true)];
+  if (price < 0) return [...paid, change(y, -price, REASON.lower, true)];
   return price > 0 ? [...paid, change(y, -price, reason, false)] : paid;
 }
 
@@ -177,16 +239,34 @@ type Did = { readonly coins: CoinChange[]; readonly log: Logged[] } | Turned;
 const no = (c: { readonly do: keyof typeof REFUSED }, why: string): Turned => ({ refused: REFUSED[c.do], why });
 const done = (coins: CoinChange[] = [], log: Logged[] = []): Did => ({ coins, log });
 
+/** The tool a command is one of, if it is one a yard must unlock (asked of `locked`); a single piece and a run of belt are of none. */
+const TOOL: Partial<Record<Command["do"], Lock>> = {
+  paint: { use: "paint" },
+  move: { use: "select" },
+  clear: { use: "select" },
+  stand: { use: "select" },
+  placeBlueprint: { use: "select" },
+  upgrade: { use: "upgrade" },
+  saveBlueprint: { blueprint: 0 },
+};
+
 /** Does a command to a yard already at its tick. Nothing is changed unless it is done. */
 function act(y: Yard, c: Command): Did {
+  // One piece stood again (a removal undone) is a piece built: it is of no tool.
+  const tool = c.do === "stand" && c.pieces.length === 1 ? undefined : TOOL[c.do];
+  const lock = tool === undefined ? null : locked(y.open, tool);
+  if (lock !== null) return { refused: LOCKED, why: lock };
   switch (c.do) {
     case "build": {
-      const did = build(y, c.kind, c.x, c.y, c.dir, Infinity);
+      const did = build(y, c.kind, c.x, c.y, c.dir, Infinity, { grade: c.grade });
       return did.ok ? done(priced(y, did.cost, REASON.build)) : no(c, did.why);
     }
     case "lay":
-    case "stand": {
-      const did = c.do === "lay" ? stand(y, c.legs, Infinity, true, c.turn) : stand(y, c.pieces, Infinity);
+    case "stand":
+    case "placeBlueprint": {
+      const pieces = c.do === "stand" ? c.pieces : c.do === "lay" ? c.legs : blueprintAt(y, c.slot, c.turns, c.x, c.y);
+      if (!pieces) return no(c, "There is no blueprint there");
+      const did = stand(y, pieces, Infinity, c.do === "lay", c.do === "lay" ? c.turn : undefined);
       return did.ok ? done(priced(y, did.cost, c.do === "lay" ? REASON.lay : REASON.build)) : no(c, did.why);
     }
     case "move": {
@@ -199,6 +279,10 @@ function act(y: Yard, c: Command): Did {
       if (!did.ok) return no(c, did.why);
       return done(did.refund > 0 ? [change(y, did.refund, REASON.remove, true)] : []);
     }
+    case "upgrade": {
+      const did = upgrade(y, c.tiles, Infinity);
+      return did.ok ? done(priced(y, did.cost, REASON.upgrade)) : no(c, did.why);
+    }
     case "saveBlueprint": {
       const why = saveBlueprint(y, c.slot, c.tiles);
       return why === null ? done() : no(c, why);
@@ -209,8 +293,12 @@ function act(y: Yard, c: Command): Did {
       return turn(y, c.x, c.y, c.dir) ? done() : no(c, "That cannot be turned");
     case "paint":
       return paint(y, at(y, c.x, c.y), c.tint) ? done() : no(c, "Nothing to paint here");
-    case "recipe":
-      return setRecipe(y, c.x, c.y, c.item) ? done() : no(c, "That cannot make it");
+    case "recipe": {
+      const why = setRecipe(y, c.x, c.y, c.item);
+      return why === null ? done() : no(c, why);
+    }
+    case "sort":
+      return setSort(y, c.x, c.y, c.item) ? done() : no(c, "There is no sorter there");
     case "tipOut":
       return tipOut(y, c.x, c.y, c.item) > 0 ? done() : no(c, "There is nothing to tip out");
     case "crate":
@@ -224,13 +312,20 @@ function act(y: Yard, c: Command): Did {
         { kind: LOGGED.worksPlot, data: { plot: plotName(c.plot), price: did.cost } },
       ]);
     }
-    case "buyPlan": {
-      const did = buyPlan(y, c.plan, Infinity);
-      if (!did.ok) return no(c, did.why);
-      return done(priced(y, did.cost, REASON.buyPlan), [
-        { kind: LOGGED.worksPlan, data: { plan: planName(c.plan), price: did.cost } },
-      ]);
+    case "take": {
+      const why = takeRefusal(y, c.node);
+      if (why !== null) return no(c, why);
+      takeNode(y, c.node);
+      return done();
     }
+    case "study": {
+      const why = studyRefusal(y, c.research);
+      if (why !== null) return no(c, why);
+      study(y, c.research);
+      return done();
+    }
+    case "unstudy":
+      return unstudy(y, c.research) ? done() : no(c, "That is not in the line");
     case "swap":
       return swap(y, c.order) ? done() : no(c, "That order cannot be swapped just now");
     case "handOver": {
@@ -245,13 +340,15 @@ function act(y: Yard, c: Command): Did {
   }
 }
 
-/** The story orders finished since the yard last logged one. */
+/** The nodes finished since the yard last logged one. */
 function told(y: Yard): Logged[] {
-  const log = STORY.slice(y.told, y.story).map((o, k): Logged => ({
-    kind: LOGGED.worksStory,
-    data: { order: y.told + k + 1, title: o.title, pay: o.pay },
-  }));
-  y.told = y.story;
+  const log = y.done.slice(y.told).flatMap((g): Logged[] => {
+    const info = GOALS[g];
+    return info && isNode(g)
+      ? [{ kind: LOGGED.worksStory, data: { node: info.id, title: info.title, pay: info.pay } }]
+      : [];
+  });
+  y.told = y.done.length;
   return log;
 }
 
@@ -277,14 +374,22 @@ export function readPiece(v: unknown, mx = 255, my = 255): Piece | null {
   if (!isRecord(v)) return null;
   const k = kindNamed(v.kind);
   if (k === null || k === DEPOT || !isDir(v.dir)) return null;
-  if (!whole(v.x, mx) || !whole(v.y, my) || !whole(v.span, SPAN)) return null;
+  if (!whole(v.x, mx) || !whole(v.y, my) || !whole(v.span, SPAN_MOST)) return null;
   const recipe = itemNamed(v.recipe);
   return { kind: k, x: v.x, y: v.y, dir: v.dir, span: v.span, ...keptOf({ ...v, recipe: recipe ?? undefined }, k) };
 }
 
-function piecesOf(v: unknown, most: number): Piece[] | null {
+/** A leg of a run read off the wire: a belt or a tunnel, where it goes, which way, how far and at what grade, and nothing else. */
+function readLeg(v: unknown): Piece | null {
+  const p = readPiece(v);
+  if (!p || (p.kind !== BELT && p.kind !== TUNNEL)) return null;
+  const leg = { kind: p.kind, x: p.x, y: p.y, dir: p.dir, span: p.span };
+  return p.grade === undefined ? leg : { ...leg, grade: p.grade };
+}
+
+function listOf(v: unknown, most: number, read: (v: unknown) => Piece | null): Piece[] | null {
   if (!Array.isArray(v) || v.length > most) return null;
-  const pieces = v.map((p) => readPiece(p)).filter((p) => p !== null);
+  const pieces = v.map(read).filter((p) => p !== null);
   return pieces.length === v.length ? pieces : null;
 }
 
@@ -295,14 +400,17 @@ function what(v: Record<string, unknown>): Act | null {
     Array.isArray(v.tiles) && v.tiles.length <= TILES && v.tiles.every((t): t is number => whole(t, TILES - 1))
       ? v.tiles
       : null;
-  const slot = whole(v.slot, BLUEPRINTS - 1) ? v.slot : null;
+  const slot = whole(v.slot, BLUEPRINTS_MOST - 1) ? v.slot : null;
   switch (v.do) {
     case "build": {
       const k = kindNamed(v.kind);
-      return spot && k !== null && isDir(v.dir) ? { do: "build", kind: k, dir: v.dir, ...spot } : null;
+      const grade = v.grade === undefined ? 1 : whole(v.grade, TOP) && v.grade >= 1 ? v.grade : null;
+      return spot && k !== null && isDir(v.dir) && grade !== null
+        ? { do: "build", kind: k, dir: v.dir, grade, ...spot }
+        : null;
     }
     case "lay": {
-      const legs = piecesOf(v.legs, TILES);
+      const legs = listOf(v.legs, TILES, readLeg);
       if (!legs) return null;
       const t = v.turn;
       if (t === undefined) return { do: "lay", legs };
@@ -310,15 +418,18 @@ function what(v: Record<string, unknown>): Act | null {
       return { do: "lay", legs, turn: { x: t.x, y: t.y, dir: t.dir } };
     }
     case "stand": {
-      const pieces = piecesOf(v.pieces, STAND_MOST);
+      const pieces = listOf(v.pieces, STAND_MOST, (p) => readPiece(p));
       return pieces && { do: "stand", pieces };
     }
+    case "placeBlueprint":
+      return spot && slot !== null && isDir(v.turns) ? { do: "placeBlueprint", slot, turns: v.turns, ...spot } : null;
     case "move":
       return spot && tiles && isDir(v.turns) ? { do: "move", tiles, turns: v.turns, ...spot } : null;
     case "remove":
       return spot && { do: "remove", ...spot };
     case "clear":
-      return tiles && { do: "clear", tiles };
+    case "upgrade":
+      return tiles && { do: v.do, tiles };
     case "saveBlueprint":
       return tiles && slot !== null ? { do: "saveBlueprint", slot, tiles } : null;
     case "deleteBlueprint":
@@ -328,6 +439,7 @@ function what(v: Record<string, unknown>): Act | null {
     case "paint":
       return spot && whole(v.tint, TINTS) ? { do: "paint", tint: v.tint, ...spot } : null;
     case "recipe":
+    case "sort":
     case "tipOut":
       return spot && item !== undefined ? { do: v.do, item, ...spot } : null;
     case "crate":
@@ -340,9 +452,14 @@ function what(v: Record<string, unknown>): Act | null {
       const p = plotNamed(v.plot);
       return p === null ? null : { do: "buyPlot", plot: p };
     }
-    case "buyPlan": {
-      const p = planNamed(v.plan);
-      return p === null ? null : { do: "buyPlan", plan: p };
+    case "take": {
+      const g = goalNamed(v.node);
+      return g === null ? null : { do: "take", node: g };
+    }
+    case "study":
+    case "unstudy": {
+      const g = goalNamed(v.research);
+      return g === null ? null : { do: v.do, research: g };
     }
     case "swap":
     case "handOver":
@@ -385,6 +502,6 @@ export const FACTORY: Game<Yard, Command, View, News> = {
   decode: (text) => decode(text),
   encode: (y) => encode(y),
   command: readCommand,
-  standing: (y) => ({ score: Math.floor(y.sold + y.paid), also: { story: y.story } }),
+  standing: (y) => ({ score: Math.floor((y.sold + y.paid) / MILLI), also: { tier: y.open.tier } }),
   awards: (y) => CAPSTONES.filter((name) => (y.depot[itemNamed(name) ?? 0] ?? 0) > 0).map((k) => `model-${k}`),
 };

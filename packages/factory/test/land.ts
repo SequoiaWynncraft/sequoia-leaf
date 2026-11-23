@@ -4,17 +4,16 @@
  * deposits 14% of tiles (deadfall 28% of them, stone 19, ore 15, sand 16, clay 14, resin 8),
  * water 5.4%, redwoods 2.1% (2 by 2 trunks). Plots of 16 by 12, the depot in the middle plot.
  *
- * The whole map is one plot ("yard"), owned: the rules' plot ids are a closed list of nine, and
- * which plot a tile is on does not change what a tick or a save costs.
+ * The whole map is one plot ("yard"), owned: which plot a tile is on does not change what a tick or
+ * a save costs.
  */
-import type { Land, Raw } from "@sequoia-leaf/yard";
-
+import * as F from "../src/index.ts";
 import { rng } from "./random.ts";
 
 export const PW = 16;
 export const PH = 12;
 
-const KINDS: [Raw, number][] = [
+const KINDS: [F.RawName, number][] = [
   ["deadfall", 0.28],
   ["stone", 0.19],
   ["ore", 0.15],
@@ -23,15 +22,35 @@ const KINDS: [Raw, number][] = [
   ["resin", 0.08],
 ];
 
-export function makeLand(cols: number, rows: number, seed = 7): Land {
+/** A land of one owned plot, from its deposits (by thing), water and trunks. */
+function oneplot(
+  w: number,
+  h: number,
+  deposit: Uint8Array,
+  water: Uint8Array,
+  trunk: Uint8Array,
+  depot: readonly [number, number],
+): F.Land {
+  return F.landOf({
+    w,
+    h,
+    deposit,
+    water,
+    trunk,
+    plot: new Uint8Array(w * h),
+    plots: [{ plot: F.plot("yard"), name: "The Yard", why: "", price: 0, x: 0, y: 0, w, h }],
+    depot,
+  });
+}
+
+export function makeLand(cols: number, rows: number, seed = 7): F.Land {
   const r = rng(seed);
   const w = cols * PW;
   const h = rows * PH;
   const n = w * h;
-  const deposit: (Raw | null)[] = Array.from({ length: n }, () => null);
+  const deposit = new Uint8Array(n).fill(F.NONE);
   const water = new Uint8Array(n);
   const trunk = new Uint8Array(n);
-  const plot = new Int8Array(n);
   const cx = Math.floor(cols / 2) * PW + 8;
   const cy = Math.floor(rows / 2) * PH + 6;
   const nearDepot = (x: number, y: number): boolean => Math.abs(x - cx) <= 3 && Math.abs(y - cy) <= 3;
@@ -64,9 +83,9 @@ export function makeLand(cols: number, rows: number, seed = 7): Land {
 
   const clear = (x: number, y: number): boolean => {
     const i = idx(x, y);
-    return i >= 0 && water[i] === 0 && trunk[i] === 0 && deposit[i] === null && !nearDepot(x, y);
+    return i >= 0 && water[i] === 0 && trunk[i] === 0 && deposit[i] === F.NONE && !nearDepot(x, y);
   };
-  const pick = (): Raw => {
+  const pick = (): F.RawName => {
     let at = r();
     for (const [k, p] of KINDS) {
       at -= p;
@@ -89,7 +108,7 @@ export function makeLand(cols: number, rows: number, seed = 7): Land {
       }
       // Three blobs a plot, about 9 tiles each: 27 of 192 tiles, 14%.
       for (let b = 0; b < 3; b++) {
-        const kind = pick();
+        const kind = F.item(pick());
         const size = 6 + Math.floor(r() * 7);
         for (let tries = 0; tries < 40; tries++) {
           const bx = x0 + 2 + Math.floor(r() * (PW - 4));
@@ -113,61 +132,34 @@ export function makeLand(cols: number, rows: number, seed = 7): Land {
         }
       }
     }
-  return {
-    w,
-    h,
-    deposit,
-    water,
-    trunk,
-    plot,
-    plots: [{ id: "yard", name: "The Yard", why: "", price: 0, x: 0, y: 0, w, h }],
-    depot: [cx, cy],
-  };
+  return oneplot(w, h, deposit, water, trunk, [cx, cy]);
 }
 
 /** A small bare land, one plot owned, with a few deposits where asked and the depot's middle at `depot`. */
 export function bareLand(
   w: number,
   h: number,
-  deposits: readonly [number, number, Raw][],
-  depot: [number, number],
-): Land {
-  const deposit: (Raw | null)[] = Array.from({ length: w * h }, () => null);
-  for (const [x, y, raw] of deposits) deposit[y * w + x] = raw;
-  return {
-    w,
-    h,
-    deposit,
-    water: new Uint8Array(w * h),
-    trunk: new Uint8Array(w * h),
-    plot: new Int8Array(w * h),
-    plots: [{ id: "yard", name: "The Yard", why: "", price: 0, x: 0, y: 0, w, h }],
-    depot,
-  };
+  deposits: readonly (readonly [number, number, F.RawName])[],
+  depot: readonly [number, number],
+): F.Land {
+  const deposit = new Uint8Array(w * h).fill(F.NONE);
+  for (const [x, y, raw] of deposits) deposit[y * w + x] = F.item(raw);
+  return oneplot(w, h, deposit, new Uint8Array(w * h), new Uint8Array(w * h), depot);
 }
 
 /**
  * The same land in a larger map: its tiles at the top left, bare owned ground to the right and below.
  * The same pieces stand on it at the same places, so a yard can be made again on a map of another size.
  */
-export function widened(land: Land, w: number, h: number): Land {
-  const deposit: (Raw | null)[] = Array.from({ length: w * h }, () => null);
+export function widened(land: F.Land, w: number, h: number): F.Land {
+  const deposit = new Uint8Array(w * h).fill(F.NONE);
   const water = new Uint8Array(w * h);
   const trunk = new Uint8Array(w * h);
   for (let y = 0; y < land.h; y++)
     for (let x = 0; x < land.w; x++) {
-      deposit[y * w + x] = land.deposit[y * land.w + x] ?? null;
+      deposit[y * w + x] = land.deposit[y * land.w + x] ?? F.NONE;
       water[y * w + x] = land.water[y * land.w + x] ?? 0;
       trunk[y * w + x] = land.trunk[y * land.w + x] ?? 0;
     }
-  return {
-    w,
-    h,
-    deposit,
-    water,
-    trunk,
-    plot: new Int8Array(w * h),
-    plots: [{ id: "yard", name: "The Yard", why: "", price: 0, x: 0, y: 0, w, h }],
-    depot: land.depot,
-  };
+  return oneplot(w, h, deposit, water, trunk, land.depot);
 }

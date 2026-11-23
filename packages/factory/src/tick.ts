@@ -1,16 +1,26 @@
 /**
  * Moving the yard on by one tick. Ten ticks are a second.
  *
- * A tick has three parts, as today's yard has. Power: boilers burn, and what there is is set against
- * what is drawn; when it falls short every machine works slower by the same share. Work: things on
- * belts move along their tile, gatherers gather, machines make. Handing on: every tile hands on what
- * it has finished with, each after the tile it hands to (`wire.ts`), so a full belt moves as one.
+ * A tick has three parts. Power: boilers burn, and what there is is set against
+ * what is drawn. Work: things on belts move along their tile, gatherers gather, machines make.
+ * Handing on: every tile hands on what it has finished with, each after the tile it hands to
+ * (`wire.ts`), so a full belt moves as one.
+ *
+ * Every number is whole. Work is counted in half-ticks: a machine at grade 1 does 2 a tick, at grade
+ * 2 3 and at grade 3 4 (`PACE`), and a recipe of 12 ticks wants 24. Power is counted in halves. When the yard is short of power the machines work on only some
+ * ticks: each tick the power there is goes into a store (`charge`), and when the store holds all
+ * that is drawn it is spent and every gatherer and machine works that tick. So with 3 power of every
+ * 4 drawn they work 3 ticks in 4, exactly, and nothing is lost over time. A yard with power enough
+ * works every tick and keeps nothing in the store.
+ *
+ * A machine makes, and takes parts in for, only the recipes the plumbing says it may (`Wire.recipes`,
+ * asked of `locked` when the plumbing is worked out).
  *
  * This is the hot path: it loops over the plumbing's lists, which hold only tiles where something
  * stands, and makes no arrays, objects, closures or strings (but for the rare order filled).
  */
-import { BUFFER, FUEL, SPAN, TICKS } from "./content/machines.ts";
-import { deliver } from "./orders.ts";
+import { BUFFER, FUEL, STUDY_HOLDS, TICKS } from "./content/machines.ts";
+import { deliver, giveGoal } from "./orders.ts";
 import {
   BELT,
   BENCH,
@@ -18,27 +28,37 @@ import {
   CRATE,
   DEADFALL,
   DEPOT,
+  FOLIOS,
   GATHERER,
   GIVES,
+  type Goal,
+  GOALS,
+  HALF,
+  isFolio,
   ITEM_COUNT,
   JOINER,
-  MADE_BY,
   MILL,
-  MILLED,
   NONE,
+  PACE,
   RECIPE,
   type Recipe,
+  SORTER,
+  SPAN_MOST,
   SPLITTER,
+  STOP,
+  STUDY,
   TUNNEL,
+  WORK,
   WORKSHOP,
 } from "./tables.ts";
 import { ahead, farMouth, nextOf, rewire, wayIn, wayOut } from "./wire.ts";
-import { type Holders, put, take, type Yard } from "./yard.ts";
+import { enough, type Holders, put, take, type Wire, type Yard } from "./yard.ts";
 
 /** How many ticks the pace is measured over before old ticks start to count for less: an hour. */
 export const PACE_WINDOW = 36_000;
-const BURNS = GIVES[BOILER] ?? 0;
+const BURNS = (GIVES[BOILER] ?? 0) * HALF;
 const NO_RECIPES: readonly Recipe[] = [];
+const NO_TILES = new Int32Array(0);
 
 /** Moves the whole yard on by one tick. */
 export function step(y: Yard): void {
@@ -50,8 +70,8 @@ export function step(y: Yard): void {
   if (pace.warm > 0) pace.warm--;
   else if (++pace.ticks >= PACE_WINDOW) {
     // Old ticks count for less and less, so the pace follows the yard as it is now.
-    pace.ticks /= 2;
-    for (let k = 0; k < ITEM_COUNT; k++) pace.made[k] = (pace.made[k] ?? 0) / 2;
+    pace.ticks = Math.floor(pace.ticks / 2);
+    for (let k = 0; k < ITEM_COUNT; k++) pace.made[k] = Math.floor((pace.made[k] ?? 0) / 2);
   }
 
   // Power: boilers burn what they hold, and what there is is set against what is drawn.
@@ -69,39 +89,47 @@ export function step(y: Yard): void {
     }
   }
   y.supply = supply;
-  const share = wire.demand > supply ? supply / wire.demand : 1;
+  const demand = wire.demand;
+  const store = y.charge + supply;
+  const works = store >= demand;
+  y.charge = supply >= demand ? 0 : works ? store - demand : store;
 
-  // Work: things on belts move along (in eighths of a tile), gatherers gather, machines make.
-  const along = (y.rates.belt * 8) / TICKS.belt;
+  // Work: things on belts move along (in eighths of a tile), gatherers gather, machines make, each
+  // at its own grade's pace.
+  const grade = y.grade;
   const carry = wire.carry;
   const under = y.tunnels.under;
   const below = y.tunnels.along;
   for (let c = 0; c < carry.length; c++) {
     const i = carry[c] ?? 0;
+    const along = PACE[grade[i] ?? 0] ?? 0;
     if (item[i] !== NONE && (prog[i] ?? 0) < 8) prog[i] = (prog[i] ?? 0) + along;
     const s = span[i] ?? 0;
     if (s <= 0) continue;
-    const at = (row[i] ?? 0) * SPAN;
+    const at = (row[i] ?? 0) * SPAN_MOST;
     for (let k = at; k < at + s; k++) if (under[k] !== NONE && (below[k] ?? 0) < 8) below[k] = (below[k] ?? 0) + along;
   }
-  const gather = y.rates.gather * share;
-  const craft = y.rates.craft * share;
-  const work = wire.work;
+  const work = works ? wire.work : NO_TILES;
   for (let c = 0; c < work.length; c++) {
     const i = work[c] ?? 0;
     const r = row[i] ?? 0;
+    const speed = PACE[grade[i] ?? 0] ?? 0;
     if (h.out[r] !== NONE) continue;
+    if (kind[i] === STUDY) {
+      learn(y, r, speed);
+      continue;
+    }
     if (kind[i] === GATHERER) {
-      h.work[r] = (h.work[r] ?? 0) + gather;
-      if ((h.work[r] ?? 0) >= TICKS.gather) {
-        h.work[r] = (h.work[r] ?? 0) - TICKS.gather;
+      h.work[r] = (h.work[r] ?? 0) + speed;
+      if ((h.work[r] ?? 0) >= WORK.gather) {
+        h.work[r] = (h.work[r] ?? 0) - WORK.gather;
         h.out[r] = y.land.deposit[i] ?? NONE;
       }
       continue;
     }
     if (h.making[r] === NONE) {
       if (h.idle[r] === 1) continue;
-      const found = choose(h, r, kind[i] ?? NONE);
+      const found = choose(h, r, wire.recipes[kind[i] ?? NONE] ?? NO_RECIPES, y.set[i] ?? NONE);
       if (found === NONE) {
         h.idle[r] = 1;
         continue;
@@ -110,10 +138,10 @@ export function step(y: Yard): void {
     }
     const recipe = RECIPE[h.making[r] ?? NONE];
     if (!recipe) continue;
-    h.work[r] = (h.work[r] ?? 0) + craft;
-    if ((h.work[r] ?? 0) >= recipe.ticks) {
-      h.work[r] = (h.work[r] ?? 0) - recipe.ticks;
-      for (let p = 0; p < recipe.from.length; p++) take(h, r, recipe.from[p] ?? NONE);
+    h.work[r] = (h.work[r] ?? 0) + speed;
+    if ((h.work[r] ?? 0) >= recipe.work) {
+      h.work[r] = (h.work[r] ?? 0) - recipe.work;
+      for (let p = 0; p < recipe.from.length; p++) take(h, r, recipe.from[p] ?? NONE, recipe.need[p] ?? 1);
       h.out[r] = recipe.out;
       h.making[r] = NONE;
     }
@@ -121,15 +149,15 @@ export function step(y: Yard): void {
 
   // Then hand things on.
   const order = wire.order;
-  const taken = wire.taken;
   for (let o = 0; o < order.length; o++) {
     const i = order[o] ?? 0;
     const k = kind[i];
     if (k === TUNNEL) {
       if ((span[i] ?? 0) > 0) passUnder(y, i);
-      else carryOn(y, i, taken);
-    } else if (k === BELT || k === JOINER) carryOn(y, i, taken);
-    else if (k === SPLITTER) split(y, i, taken);
+      else carryOn(y, i, wire);
+    } else if (k === BELT || k === JOINER) carryOn(y, i, wire);
+    else if (k === SPLITTER) split(y, i, wire);
+    else if (k === SORTER) sort(y, i, wire);
     else {
       const r = row[i] ?? 0;
       if (k === CRATE) {
@@ -151,22 +179,57 @@ export function step(y: Yard): void {
           }
         }
       }
-      sendOut(y, i, r, taken);
+      sendOut(y, i, r, wire);
     }
   }
 }
 
-/** The recipe a machine can start on with what it holds, by what it makes, or `NONE`. */
-function choose(h: Holders, r: number, k: number): number {
-  const recipes = MADE_BY[k] ?? NO_RECIPES;
-  const only = h.recipe[r] ?? NONE;
+/**
+ * A Study works as a machine does, on one folio at a time that the research being studied still
+ * wants, and when it is done the folio goes toward the research. One the research has stopped wanting
+ * meanwhile (another Study gave it the last) stays in the Study.
+ */
+function learn(y: Yard, r: number, speed: number): void {
+  const g = y.line[0];
+  if (g === undefined) return;
+  const h = y.holders;
+  if (h.making[r] === NONE) {
+    if (h.idle[r] === 1) return;
+    const found = wanted(y, g, h, r);
+    if (found === NONE) {
+      h.idle[r] = 1;
+      return;
+    }
+    h.making[r] = found;
+  }
+  h.work[r] = (h.work[r] ?? 0) + speed;
+  if ((h.work[r] ?? 0) < WORK.study) return;
+  h.work[r] = (h.work[r] ?? 0) - WORK.study;
+  const n = h.making[r] ?? NONE;
+  h.making[r] = NONE;
+  if (giveGoal(y, g, n, 1) > 0) take(h, r, n);
+}
+
+/** The first folio a Study holds that a piece of research still wants, or `NONE`. */
+function wanted(y: Yard, g: Goal, h: Holders, r: number): number {
+  const want = GOALS[g]?.want;
+  const got = y.got[g];
+  if (!want || !got) return NONE;
+  for (let f = 0; f < FOLIOS.length; f++) {
+    const n = FOLIOS[f] ?? NONE;
+    if ((h.stock[r * ITEM_COUNT + n] ?? 0) > 0 && (want[n] ?? 0) > (got[n] ?? 0)) return n;
+  }
+  return NONE;
+}
+
+/**
+ * The recipe a machine can start on with what it holds, by what it makes, or `NONE`: the first of
+ * those it may make, or the one it is told to make (`only`), with as many of each part as it takes.
+ */
+function choose(h: Holders, r: number, recipes: readonly Recipe[], only: number): number {
   for (let n = 0; n < recipes.length; n++) {
     const recipe = recipes[n];
-    if (!recipe || (only !== NONE && recipe.out !== only)) continue;
-    let all = true;
-    for (let p = 0; p < recipe.from.length; p++)
-      if ((h.stock[r * ITEM_COUNT + (recipe.from[p] ?? 0)] ?? 0) <= 0) all = false;
-    if (all) return recipe.out;
+    if (recipe && (only === NONE || recipe.out === only) && enough(h, r, recipe)) return recipe.out;
   }
   return NONE;
 }
@@ -183,6 +246,7 @@ function ready(y: Yard, i: number, to: number): boolean {
       (y.prog[i] ?? 0) >= 8 &&
       (wayOut(y, i, 0) === to || wayOut(y, i, 1) === to || wayOut(y, i, 2) === to)
     );
+  if (k === SORTER) return y.item[i] !== NONE && (y.prog[i] ?? 0) >= 8 && sortedTo(y, i) === to;
   if (k === GATHERER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE)
     return nextOf(y, i) === to && y.holders.out[y.row[i] ?? 0] !== NONE;
   return false;
@@ -196,13 +260,13 @@ function wayInOn(y: Yard, to: number, side: number): number {
 
 /**
  * Whether the tile at `to` will take the thing `n` handed to it from the tile beside it on its side
- * `side` (a way); `taken` is which sides each tile takes from, as the plumbing worked it out.
+ * `side` (a way), by the plumbing: which sides each tile takes from, and what each machine may make.
  */
-function accepts(y: Yard, to: number, n: number, side: number, taken: Uint8Array): boolean {
-  if (to < 0 || (((taken[to] ?? 0) >> side) & 1) === 0) return false;
+function accepts(y: Yard, to: number, n: number, side: number, wire: Wire): boolean {
+  if (to < 0 || (((wire.taken[to] ?? 0) >> side) & 1) === 0) return false;
   const k = y.kind[to];
-  if (k === DEPOT) return true;
-  if (k === BELT || k === SPLITTER || k === TUNNEL) return y.item[to] === NONE;
+  if (k === DEPOT || k === STOP) return true;
+  if (k === BELT || k === SPLITTER || k === TUNNEL || k === SORTER) return y.item[to] === NONE;
   if (k === JOINER) {
     if (y.item[to] !== NONE) return false;
     const way = wayInOn(y, to, side);
@@ -214,32 +278,29 @@ function accepts(y: Yard, to: number, n: number, side: number, taken: Uint8Array
   const h = y.holders;
   const r = y.row[to] ?? 0;
   const have = h.stock[r * ITEM_COUNT + n] ?? 0;
-  if (k === MILL) {
-    const recipe = MILLED[n];
-    if (!recipe || (h.recipe[r] !== NONE && h.recipe[r] !== recipe.out)) return false;
-    return have < BUFFER && (h.kinds[r] === 0 || have > 0);
-  }
-  if (k === BENCH || k === WORKSHOP) {
-    if (have >= BUFFER) return false;
-    // It takes a thing if some one recipe uses it together with everything already held.
-    const recipes = MADE_BY[k] ?? NO_RECIPES;
-    const only = h.recipe[r] ?? NONE;
+  if (k === MILL || k === BENCH || k === WORKSHOP) {
+    // It takes a thing that some recipe it may make uses together with everything it holds, while it
+    // holds fewer than `BUFFER` of the fewest of it any such recipe takes.
+    const recipes = wire.recipes[k] ?? NO_RECIPES;
+    const only = y.set[to] ?? NONE;
+    let least = 0;
     for (let c = 0; c < recipes.length; c++) {
       const recipe = recipes[c];
       if (!recipe || (only !== NONE && recipe.out !== only)) continue;
-      let used = false;
+      let need = 0;
       let held = 0;
       for (let p = 0; p < recipe.from.length; p++) {
         const part = recipe.from[p] ?? NONE;
-        if (part === n) used = true;
+        if (part === n) need = recipe.need[p] ?? 0;
         if ((h.stock[r * ITEM_COUNT + part] ?? 0) > 0) held++;
       }
-      if (used && held === h.kinds[r]) return true;
+      if (need > 0 && held === h.kinds[r] && (least === 0 || need < least)) least = need;
     }
-    return false;
+    return have < BUFFER * least;
   }
-  if (k === CRATE) return (h.count[r] ?? 0) + (h.out[r] === NONE ? 0 : 1) < y.rates.crate;
+  if (k === CRATE) return (h.count[r] ?? 0) + (h.out[r] === NONE ? 0 : 1) < y.open.crate;
   if (k === BOILER) return n === DEADFALL && have < FUEL;
+  if (k === STUDY) return isFolio(n) && have < STUDY_HOLDS;
   return false;
 }
 
@@ -249,7 +310,7 @@ function accepts(y: Yard, to: number, n: number, side: number, taken: Uint8Array
  */
 function give(y: Yard, to: number, n: number, side: number, over: number): void {
   const k = y.kind[to];
-  if (k === DEPOT) {
+  if (k === DEPOT || k === STOP) {
     deliver(y, n, 1);
     return;
   }
@@ -257,7 +318,7 @@ function give(y: Yard, to: number, n: number, side: number, over: number): void 
     const way = wayInOn(y, to, side);
     y.turn[to] = way + 1 > 2 ? 0 : way + 1;
   }
-  if (k === JOINER || k === BELT || k === SPLITTER || k === TUNNEL) {
+  if (k === JOINER || k === BELT || k === SPLITTER || k === TUNNEL || k === SORTER) {
     y.item[to] = n;
     y.prog[to] = over;
     y.via[to] = 1 + side;
@@ -270,7 +331,7 @@ function give(y: Yard, to: number, n: number, side: number, over: number): void 
 function passUnder(y: Yard, i: number): void {
   const under = y.tunnels.under;
   const along = y.tunnels.along;
-  const at = (y.row[i] ?? 0) * SPAN;
+  const at = (y.row[i] ?? 0) * SPAN_MOST;
   const last = at + (y.span[i] ?? 0) - 1;
   const mouth = farMouth(y, i);
   for (let k = last; k >= at; k--) {
@@ -300,12 +361,12 @@ function passUnder(y: Yard, i: number): void {
 }
 
 /** A belt, joiner or tunnel's far mouth hands on the thing it carries once it has crossed the tile. */
-function carryOn(y: Yard, i: number, taken: Uint8Array): void {
+function carryOn(y: Yard, i: number, wire: Wire): void {
   const n = y.item[i] ?? NONE;
   if (n === NONE || (y.prog[i] ?? 0) < 8) return;
   const to = ahead(y, i);
   const side = ((y.dir[i] ?? 0) + 2) & 3;
-  if (!accepts(y, to, n, side, taken)) return;
+  if (!accepts(y, to, n, side, wire)) return;
   give(y, to, n, side, (y.prog[i] ?? 8) - 8);
   y.item[i] = NONE;
   y.prog[i] = 0;
@@ -313,7 +374,7 @@ function carryOn(y: Yard, i: number, taken: Uint8Array): void {
 }
 
 /** A splitter sends what it carries to its ways out in turn: ahead, left, right, from the way after the last. */
-function split(y: Yard, i: number, taken: Uint8Array): void {
+function split(y: Yard, i: number, wire: Wire): void {
   const n = y.item[i] ?? NONE;
   if (n === NONE || (y.prog[i] ?? 0) < 8) return;
   const turn = y.turn[i] ?? 0;
@@ -321,7 +382,7 @@ function split(y: Yard, i: number, taken: Uint8Array): void {
     const way = (k + turn) % 3;
     const to = wayOut(y, i, way);
     const side = ((y.dir[i] ?? 0) + (way === 0 ? 2 : way === 1 ? 1 : 3)) & 3;
-    if (!accepts(y, to, n, side, taken)) continue;
+    if (!accepts(y, to, n, side, wire)) continue;
     give(y, to, n, side, (y.prog[i] ?? 8) - 8);
     y.item[i] = NONE;
     y.prog[i] = 0;
@@ -331,14 +392,31 @@ function split(y: Yard, i: number, taken: Uint8Array): void {
   }
 }
 
+/** Where a sorter sends what it carries: the thing it is set to to its left, anything else ahead. */
+const sortedTo = (y: Yard, i: number): number => wayOut(y, i, y.item[i] === y.set[i] ? 1 : 0);
+
+/** A sorter hands on what it carries, once it has crossed the tile, the one way it goes. */
+function sort(y: Yard, i: number, wire: Wire): void {
+  const n = y.item[i] ?? NONE;
+  if (n === NONE || (y.prog[i] ?? 0) < 8) return;
+  const left = n === y.set[i];
+  const side = ((y.dir[i] ?? 0) + (left ? 1 : 2)) & 3;
+  const to = sortedTo(y, i);
+  if (!accepts(y, to, n, side, wire)) return;
+  give(y, to, n, side, (y.prog[i] ?? 8) - 8);
+  y.item[i] = NONE;
+  y.prog[i] = 0;
+  y.via[i] = 0;
+}
+
 /** A gatherer, machine or crate hands on its finished piece. */
-function sendOut(y: Yard, i: number, r: number, taken: Uint8Array): void {
+function sendOut(y: Yard, i: number, r: number, wire: Wire): void {
   const h = y.holders;
   const n = h.out[r] ?? NONE;
   if (n === NONE) return;
   const to = ahead(y, i);
   const side = ((y.dir[i] ?? 0) + 2) & 3;
-  if (!accepts(y, to, n, side, taken)) return;
+  if (!accepts(y, to, n, side, wire)) return;
   give(y, to, n, side, 0);
   h.out[r] = NONE;
 }

@@ -1,12 +1,11 @@
 /**
- * Packed bytes, written and read: small whole numbers as varints, any other number as its eight
- * bytes, and bytes as base64 text for a store that keeps text.
+ * Packed bytes, written and read: whole numbers as varints, and bytes as base64 text for a store
+ * that keeps text.
  */
 
 /** Bytes written one after another into a buffer that grows. */
 export class Writer {
   private buf = new Uint8Array(1 << 12);
-  private view = new DataView(this.buf.buffer);
   length = 0;
 
   private room(k: number): void {
@@ -16,7 +15,6 @@ export class Writer {
     const next = new Uint8Array(size);
     next.set(this.buf.subarray(0, this.length));
     this.buf = next;
-    this.view = new DataView(next.buffer);
   }
   byte(b: number): void {
     this.room(1);
@@ -31,17 +29,6 @@ export class Writer {
     }
     this.buf[this.length++] = v;
   }
-  /** Any number exactly: twice its eighths as a varint when it is a whole number of eighths, else 1 and its eight bytes. */
-  num(x: number): void {
-    const q = x * 8;
-    if (Number.isInteger(q) && q >= 0 && q < 2 ** 40) this.varint(q * 2);
-    else {
-      this.varint(1);
-      this.room(8);
-      this.view.setFloat64(this.length, x, true);
-      this.length += 8;
-    }
-  }
   bytes(): Uint8Array {
     return this.buf.slice(0, this.length);
   }
@@ -52,10 +39,8 @@ export class Reader {
   private at = 0;
   over = false;
   private readonly buf: Uint8Array;
-  private readonly view: DataView;
   constructor(buf: Uint8Array) {
     this.buf = buf;
-    this.view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   }
   get done(): boolean {
     return this.at >= this.buf.length;
@@ -76,17 +61,6 @@ export class Reader {
     }
     this.over = true;
     return 0;
-  }
-  num(): number {
-    const v = this.varint();
-    if (v !== 1) return v / 16;
-    if (this.at + 8 > this.buf.length) {
-      this.over = true;
-      return 0;
-    }
-    const x = this.view.getFloat64(this.at, true);
-    this.at += 8;
-    return x;
   }
 }
 
