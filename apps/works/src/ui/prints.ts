@@ -189,6 +189,9 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     most: k === BOILER ? FUEL : k === CRATE ? w.open.crate : null,
     count: r < 0 ? 0 : (h.count[r] ?? 0),
     making: making ? making.out : null,
+    parts: making
+      ? making.from.map((item, n) => ({ item, need: making.need[n] ?? 1, have: r < 0 ? 0 : held(h, r, item) }))
+      : [],
     gathering: k === GATHERER ? asItem(w.land.deposit[i] ?? NONE) : null,
     perMinute: per > 0 ? Math.round(per) : null,
     numbers: saysNumbers(w) ? numbersOf(w, i) : [],
