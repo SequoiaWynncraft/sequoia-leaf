@@ -162,6 +162,18 @@ describe("buying a request", () => {
     });
   });
 
+  it("says Leaf's word on the purse beside its answer, as /v1/game/me has it after the spend", async () => {
+    const cookie = { Cookie: "seq_session=alice-token", Origin: ORIGIN, "Content-Type": "application/json" };
+    const bought = await app.request("/v1/game/requests", {
+      method: "POST",
+      headers: cookie,
+      body: JSON.stringify({ type: "aspect" }),
+    });
+    const said: unknown = JSON.parse(bought.headers.get("Leaf-Purse") ?? "null");
+    const me = Object(await (await app.request("/v1/game/me", { headers: cookie })).json());
+    expect(said).toEqual({ coins: me.coins, leaf: 2000, version: me.version });
+  });
+
   it("sends a tome's reason as the member wrote it, and wants one", async () => {
     expect((await call("POST", { type: "tome" })).body).toEqual({
       code: "invalid_reason",

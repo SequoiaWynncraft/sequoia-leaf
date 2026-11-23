@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { DAY_MS } from "./quests.ts";
+import { DAY_MS } from "./days.ts";
 import {
   activityReport,
   away,

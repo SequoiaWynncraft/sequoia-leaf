@@ -10,8 +10,8 @@
  * - **On its way**: a game may show at once the Coins a command pays or takes (`play.ts`'s `send`,
  *   which `owe`s them by the command's id) until Leaf answers it, when they go (`settle`) in the same
  *   moment as the answer's word is taken: a purchase on its way is never shown undone, nor twice.
- * - Leaf told some other way, with no version (a request or a reroll answers with the Leaf left:
- *   `fromLedger`), is taken at once, and stands until a newer word.
+ * - An answer that moved Leaf outside the play service (a request bought, a reroll) says Leaf's word
+ *   beside it, which `net.ts` gives the purse: nothing tells it a number without a version.
  *
  * A game's command on Leaf may take Leaf while Leaf says spending is on (`leafOpen`); every other
  * Leaf button shows itself closed (`leafShut`). A guest, who is not in the guild (`asGuest`), has
@@ -85,13 +85,6 @@ export function owe(id: string, coins: number): void {
   if (coins === 0 || word === null) return;
   owed.set(id, coins);
   tell("on its way");
-}
-
-/** Leaf says, with no version, that the member holds this much Leaf: taken until a newer word. */
-export function fromLedger(leaf: number): void {
-  if (word === null) return;
-  word = { ...word, leaf: Math.max(0, Math.floor(leaf)) };
-  tell("the guild's ledger");
 }
 
 /** The purse is a guest's: somebody signed in who is not in the guild. */

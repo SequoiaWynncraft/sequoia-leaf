@@ -8,9 +8,14 @@
  * - whatever is tried again after a failure waits by one rule (`Backoff`, `backoff`), with numbers
  *   of its own for each channel;
  * - an answer that is no longer news is let go by what it answers: a state's `rev`, the purse's
- *   `version`, the connection it came on; never by a flag kept beside the question.
+ *   `version`, the connection it came on; never by a flag kept beside the question;
+ * - an answer that moved the player's Leaf outside the play service says Leaf's word beside it
+ *   (`PURSE_HEADER`), which the purse is given here, whoever asked.
  */
 
+import { PURSE_HEADER, readBalances } from "@sequoia-leaf/core";
+
+import { fromLeaf } from "./purse.ts";
 import { fromTown } from "./shell.ts";
 
 /** The part of a WebSocket the game uses. */
@@ -154,9 +159,21 @@ export interface Answer {
 const within = (ms: number, also?: AbortSignal | null): AbortSignal =>
   also ? AbortSignal.any([also, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms);
 
+/** Leaf's word on the purse an answer says beside it, if it says one. */
+function purseOf(res: Response): void {
+  const said = res.headers.get(PURSE_HEADER);
+  if (said === null) return;
+  try {
+    const word = readBalances(JSON.parse(said));
+    if (word) fromLeaf(word);
+  } catch {
+    // Not Leaf's word: nothing.
+  }
+}
+
 /**
  * Asks the server something. Never throws: no answer, or none within the deadline, is status 0, and
- * a body that is not JSON is null.
+ * a body that is not JSON is null. Leaf's word on the purse beside the answer is taken (`purseOf`).
  */
 export async function ask(path: string, init: RequestInit = {}): Promise<Answer> {
   let res: Response;
@@ -166,6 +183,7 @@ export async function ask(path: string, init: RequestInit = {}): Promise<Answer>
   } catch {
     return { status: 0, body: null };
   }
+  purseOf(res);
   let body: unknown = null;
   try {
     body = await res.json();

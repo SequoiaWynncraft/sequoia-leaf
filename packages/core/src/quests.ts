@@ -1,4 +1,5 @@
 import { type Activity, type RaidKey } from "./activity.ts";
+import { DAY_MS, utcDay, utcWeekStart, WEEK_MS } from "./days.ts";
 import type { PlayerId } from "./player.ts";
 
 /**
@@ -141,19 +142,6 @@ export interface QuestBook {
   readonly dailyChargedDay: number;
   /** The most recent quest of each slot, finished or not. */
   readonly latest: { readonly [slot in QuestSlot]?: Quest };
-}
-
-export const DAY_MS = 24 * 60 * 60 * 1000;
-export const WEEK_MS = 7 * DAY_MS;
-/** 1970-01-05 was a Monday, so weeks counted from here start on Mondays. */
-const FIRST_MONDAY_MS = 4 * DAY_MS;
-
-export function utcDay(at: number): number {
-  return Math.floor(at / DAY_MS);
-}
-
-export function utcWeekStart(at: number): number {
-  return FIRST_MONDAY_MS + Math.floor((at - FIRST_MONDAY_MS) / WEEK_MS) * WEEK_MS;
 }
 
 /** The book of a player who has never had a quest: one daily is ready on the day they start. */

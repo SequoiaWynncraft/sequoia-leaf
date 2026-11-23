@@ -258,7 +258,9 @@ the body `{ "leaf": n }`, the `reroll_leaf` the member was shown and agreed to
 pay, first counts what was just played, as `?sync=1` does, so a quest just
 finished is paid rather than swapped. It answers `{ "leaf", "spent", "quest" }`:
 the balance after it, what it cost, and the new quest in the shape `quests`
-uses. A body without a whole `leaf` of 0 or more gets 400 `invalid_cost`. It
+uses; and beside it, in the header `Leaf-Purse`, Leaf's word on the player's
+purse after it, `{ "coins", "leaf", "version" }` as `/v1/game/me` gives them,
+for the game's purse to take as newer than anything asked before. A body without a whole `leaf` of 0 or more gets 400 `invalid_cost`. It
 refuses with 409 and one of these codes, changing nothing:
 
 - `not_current`: that quest is no longer in its slot. It was finished or
@@ -422,8 +424,9 @@ the member, with their own session and the website's mod version. A guest gets
 member may buy it now; the backend refusing them answers 409 `request_refused`,
 and the backend not answering 503 `requests_unavailable`. `POST /v1/game/requests`
 takes `{ "type": "aspect" }` or `{ "type": "tome", "reason" }` (1 to 1,000
-characters) and answers `{ "type", "position", "leaf_paid", "leaf" }`; the
-backend charges the member through `PUT /internal/v1/purchases/{key}` before it
+characters) and answers `{ "type", "position", "leaf_paid", "leaf" }`, with
+Leaf's word on the purse beside it in the header `Leaf-Purse`, as a reroll's;
+the backend charges the member through `PUT /internal/v1/purchases/{key}` before it
 answers. Refused, it answers 409 `request_refused` with the backend's reason and
 nothing taken. With no answer that says, 504 `request_unknown`: it may have been
 made, and is not to be sent again. Leaf waits 30 seconds for it.
@@ -549,9 +552,12 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   the caller's `{ "coins", "leaf", "version" }` as `/v1/game/me` has them (a
   batch's, as its transaction left them), so a page never asks for them again
   after a command, and the version of the game's rules Leaf plays it by (core's
-  `rulesVersion`: a hash of every file the rules import, made by a macro,
-  `packages/core/build/rules.ts`, as Leaf starts and as a page is built). A page
-  built with other rules loads again rather than show what Leaf does not do.
+  `rulesVersion`: a hash of each module the game's `Game` runs, followed by
+  the names it needs through core's index to the modules that make them, made
+  by a macro, `packages/core/build/rules.ts`, as Leaf starts and as a page is
+  built; a change to a module no game runs, such as the live wire, changes no
+  version). A page built with other rules loads again rather than show what
+  Leaf does not do.
   Every answer below has the same five, a batch's `results` beside them. A
   player with no state yet gets a new one (and, if they have no Coins account
   yet, the welcome). Nothing is ever read from the old saves. `?differs=<tick>`

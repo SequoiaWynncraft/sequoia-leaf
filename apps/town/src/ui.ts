@@ -12,7 +12,6 @@ import { isGuest } from "@sequoia-leaf/kit/live.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { ask as askLeaf, isRecord, outside } from "@sequoia-leaf/kit/net.ts";
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
-import { fromLedger } from "@sequoia-leaf/kit/purse.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { dist, makeCanvas, pick } from "@sequoia-leaf/kit/util.ts";
@@ -217,7 +216,6 @@ function treasury(body: HTMLElement): null {
       typeof made.leaf_paid === "number" &&
       typeof made.leaf === "number"
     ) {
-      fromLedger(made.leaf);
       said[kind] = {
         text: `Added your ${kind} request to the queue at position #${made.position}. ${leafText(made.leaf_paid)} Leaf paid; you have ${leafText(made.leaf)} left.`,
         tone: "k-gold",

@@ -22,7 +22,6 @@ import {
   type Resting,
   stay as sayStay,
 } from "@sequoia-leaf/kit/presence.ts";
-import { fromLedger } from "@sequoia-leaf/kit/purse.ts";
 import { leafClock } from "@sequoia-leaf/kit/realtime.ts";
 import { lookFor, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { HOME, later } from "@sequoia-leaf/town/clock.ts";
@@ -584,8 +583,8 @@ export function makeLive(p: Prepared): Guild {
       const fresh = a.status === 200 ? readQuest(body.quest) : null;
       const left = num(body.leaf);
       if (fresh && left !== null) {
+        // The purse took Leaf's word from beside the answer (`net.ts`).
         quests = quests.map((q) => (q.id === id ? fresh : q));
-        fromLedger(left);
         return { spent: num(body.spent) ?? leaf };
       }
       // What Leaf found on the way to refusing (the quest finished meanwhile) is read.
