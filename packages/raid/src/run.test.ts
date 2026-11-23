@@ -21,6 +21,7 @@ import {
   interestNow,
   layOutAfresh,
   move,
+  nextStreak,
   opposition,
   type Piece,
   pieceAt,
@@ -34,6 +35,7 @@ import {
   sellValue,
   STALL_POOL,
   startRun,
+  streakPay,
   summariseRun,
   takeTakings,
   toBench,
@@ -472,15 +474,15 @@ describe("items", () => {
 });
 
 describe("the takings", () => {
-  test("a won room pays five, one for the win, and interest on what was held", () => {
+  test("a won room pays four, one for the win, and interest on what was held", () => {
     const run = winning();
     run.acorns = 37;
     const taken = fight(run);
     expect(taken.fight.result).toBe("win");
-    expect(run.acorns).toBe(37 + 5 + 1 + 3);
+    expect(run.acorns).toBe(37 + 4 + 1 + 3);
     const paid = taken.notes.flatMap((n) => (n.t === "acorns" ? [[n.why, n.amount]] : []));
     expect(paid).toEqual([
-      ["room", 5],
+      ["room", 4],
       ["win", 1],
       ["interest", 3],
     ]);
@@ -501,26 +503,84 @@ describe("the takings", () => {
     }
     run.acorns = 500;
     fight(run);
-    expect(run.acorns).toBe(500 + 5 + 1 + 5);
+    expect(run.acorns).toBe(500 + 4 + 1 + 5);
   });
-  test("there is no bonus for winning, or losing, several in a row", () => {
+  test("a streak pays nothing at 1 or 2, 1 at 3 or 4, and 2 at 5 or more, won or lost", () => {
+    expect(ECONOMY.streakAcorns).toEqual([0, 0, 0, 1, 1, 2]);
+    for (const [streak, pay] of [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+      [3, 1],
+      [4, 1],
+      [5, 2],
+      [6, 2],
+      [14, 2],
+    ] as const) {
+      expect(streakPay(streak)).toBe(pay);
+      expect(streakPay(-streak)).toBe(pay);
+    }
+  });
+  test("a streak counts wins in a row or losses in a row; turning starts it at 1, a draw ends it", () => {
+    expect(nextStreak(0, "win")).toBe(1);
+    expect(nextStreak(3, "win")).toBe(4);
+    expect(nextStreak(-4, "win")).toBe(1);
+    expect(nextStreak(0, "loss")).toBe(-1);
+    expect(nextStreak(-2, "loss")).toBe(-3);
+    expect(nextStreak(5, "loss")).toBe(-1);
+    expect(nextStreak(5, "draw")).toBe(0);
+    expect(nextStreak(-5, "draw")).toBe(0);
+    expect(nextStreak(0, "draw")).toBe(0);
+  });
+  test("rooms won in a row pay more, room by room, counting the room just won", () => {
     const run = winning();
+    expect(run.streak).toBe(0);
+    const gains: number[] = [];
+    const streaks: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      settle(run);
+      run.acorns = 0;
+      run.foe = structuredClone(PUSHOVER);
+      const taken = fight(run);
+      gains.push(run.acorns);
+      streaks.push(run.streak);
+      const streakNote = taken.notes.find((n) => n.t === "acorns" && n.why === "streak");
+      expect(streakNote?.t === "acorns" ? streakNote.amount : 0).toBe(streakPay(run.streak));
+    }
+    expect(streaks).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(gains).toEqual([5, 5, 6, 6, 7, 7]);
+  });
+  test("rooms lost in a row pay the same, and a win after them starts again from 1", () => {
+    const run = losing();
     const gains: number[] = [];
     for (let i = 0; i < 4; i++) {
       settle(run);
       run.acorns = 0;
-      run.foe = structuredClone(PUSHOVER);
+      run.resolve = 20;
+      run.foe = structuredClone(WALL);
       fight(run);
       gains.push(run.acorns);
     }
-    expect(gains).toEqual([6, 6, 6, 6]);
+    expect(run.streak).toBe(-4);
+    expect(gains).toEqual([4, 4, 5, 5]);
+    settle(run);
+    run.level = 3;
+    run.board = run.board.map(() => null);
+    put(run, "badger", 3, 3);
+    put(run, "crab40", 2, 3);
+    run.acorns = 0;
+    run.foe = structuredClone(PUSHOVER);
+    const taken = fight(run);
+    expect(run.streak).toBe(1);
+    expect(run.acorns).toBe(5);
+    expect(taken.notes.some((n) => n.t === "acorns" && n.why === "streak")).toBe(false);
   });
-  test("a lost room still pays five and interest, but not the acorn for winning", () => {
+  test("a lost room still pays four and interest, but not the acorn for winning", () => {
     const run = losing();
     run.acorns = 20;
     const taken = fight(run);
     expect(taken.fight.result).toBe("loss");
-    expect(run.acorns).toBe(20 + 5 + 2);
+    expect(run.acorns).toBe(20 + 4 + 2);
   });
   test("gnomes find acorns: more after a win, and at the second step even after a loss", () => {
     const two = winning();
@@ -529,7 +589,7 @@ describe("the takings", () => {
     two.level = 8;
     two.acorns = 0;
     const taken = fight(two);
-    expect(two.acorns).toBe(5 + 1 + traitNumber("gnome", "win", 1));
+    expect(two.acorns).toBe(4 + 1 + traitNumber("gnome", "win", 1));
     expect(taken.notes.some((n) => n.t === "acorns" && n.why === "gnomes")).toBe(true);
 
     const four = losing();
@@ -544,7 +604,7 @@ describe("the takings", () => {
     }
     four.acorns = 0;
     fight(four);
-    expect(four.acorns).toBe(5 + traitNumber("gnome", "loss", 2));
+    expect(four.acorns).toBe(4 + traitNumber("gnome", "loss", 2));
     expect(traitNumber("gnome", "loss", 1)).toBe(0);
     expect(traitNumber("gnome", "loss", 2)).toBeGreaterThan(0);
   });
@@ -556,7 +616,7 @@ describe("the takings", () => {
     expect(traitsNow(run).find((t) => t.trait === "gnome")).toEqual({ trait: "gnome", count: 1, step: 0 });
     run.acorns = 0;
     fight(run);
-    expect(run.acorns).toBe(6);
+    expect(run.acorns).toBe(5);
   });
 });
 
@@ -583,7 +643,7 @@ describe("resolve", () => {
     const taken = fight(run);
     expect(taken.fight.result).toBe("draw");
     expect(run.resolve).toBe(20 - ECONOMY.lossBase);
-    expect(run.acorns).toBe(ECONOMY.startAcorns + 5);
+    expect(run.acorns).toBe(ECONOMY.startAcorns + ECONOMY.roomAcorns);
   });
   test("at no resolve the party walks home: the run is over, and still summed up for what it cleared", () => {
     const run = winning();
