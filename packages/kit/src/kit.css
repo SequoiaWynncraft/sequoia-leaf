@@ -637,6 +637,10 @@ button.k-slot:hover {
   flex: none;
   align-self: flex-start;
 }
+/* The close button's room on a card that is not pinned (card.ts): it is there, and not seen. */
+.k-info-x.unseen {
+  visibility: hidden;
+}
 /* The parts of a card, one under another. */
 .k-info-part {
   display: flex;
