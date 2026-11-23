@@ -373,6 +373,7 @@ export const listedHere = (p: Present): Listed => ({
   rank: listedRank(p.guest, p.rank),
   at: p.place,
   seen: p.seen,
+  acted: p.acted,
 });
 
 /** Somebody Leaf lists as gone, as the town reads them. */
@@ -462,9 +463,16 @@ export function makeLive(p: Prepared): Guild {
   let told = p.mark;
   /** Leaf's list of who is about, as last heard; and what the town's live room says, once it is followed. */
   let listed: { present: Listed[]; resting: Listed[]; gone: Listed[] } = { present: [], resting: [], gone: [] };
-  let room: RoomSays = { room: () => null, ranks: new Map() };
+  let room: RoomSays = { room: () => null, ranks: new Map(), stirred: new Map() };
   const whereNow = () =>
-    whereabouts({ me: me.id, room: room.room(), ...listed, ranks: room.ranks, now: leafClock(outside.now()) });
+    whereabouts({
+      me: me.id,
+      room: room.room(),
+      ...listed,
+      ranks: room.ranks,
+      stirred: room.stirred,
+      now: leafClock(outside.now()),
+    });
   let begun = false;
   const ears = new Set<(h: Happening) => void>();
   const news = makeNews(me.id);

@@ -352,7 +352,10 @@ export class Live extends Context.Service<
               ofVisits(visits.leftRoom(w.playerId, w.place, w.at)),
             );
           case "acted":
-            return ofVisits(visits.acted(w.playerId, w.at));
+            // Back from being away: told to every page, as a change to who is about.
+            return ofVisits(
+              Effect.flatMap(visits.acted(w.playerId, w.at), (back) => (back ? presence.back : Effect.void)),
+            );
           case "farewell":
             return ofVisits(visits.closeAll(w.at)).pipe(
               Effect.andThen(

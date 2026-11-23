@@ -65,6 +65,14 @@ export const joinsSession = (endedAt: number | null, at: number, rules: VisitRul
 export const playing = (from: number, actedAt: number | null, rules: VisitRules = VISIT_RULES): boolean =>
   actedAt !== null && from - actedAt < rules.afkMs;
 
+/**
+ * Whether a player who last did something at `actedAt` (null for not since Leaf began hearing) is
+ * away from the keys at `now`, as everybody is shown: by the rule that counts their time AFK
+ * (`playing`), so that a page and a person's card never call somebody away whose time is played.
+ */
+export const away = (actedAt: number | null, now: number, rules: VisitRules = VISIT_RULES): boolean =>
+  !playing(now, actedAt, rules);
+
 /** The game each place is in, as a person's card counts time: the town, the camps and the Grove are the town's. */
 export const GAME_AT: Readonly<Record<string, GameId>> = {
   town: "town",

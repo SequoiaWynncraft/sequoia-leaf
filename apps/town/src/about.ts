@@ -5,9 +5,10 @@
  * shows them.
  *
  * - **In town**: the member first, marked as them; then everybody in town: in the town's live room
- *   with the member, or out of the room, whoever Leaf has in town.
+ *   with the member, or out of the room, whoever Leaf has in town; and for whoever is away, for how
+ *   long.
  * - **Elsewhere**: in the game, but not in town: at the Works, at the raid table, in the Grove, in
- *   their camp.
+ *   their camp; and for whoever is away, for how long.
  * - **Seen lately**: gone in the last day, newest first, with how long ago; first of all whoever
  *   has only just walked out of the town's room.
  *
@@ -15,6 +16,7 @@
  * the panel as it is opened; while it stays open its order holds (`held`).
  */
 
+import { away } from "@sequoia-leaf/core";
 import type { Place } from "@sequoia-leaf/kit/presence.ts";
 
 import { span } from "./letter.ts";
@@ -71,6 +73,26 @@ export const WHERE: Readonly<Record<Place, string>> = {
   camp: "in their camp",
 };
 
+/** How long somebody has been away, in words: "away for 20 minutes"; only "away" when Leaf has never heard them do anything. */
+export const awayWords = (acted: number | null, now: number): string =>
+  acted === null ? "away" : `away for ${span(Math.max(0, (now - acted) / 60_000))}`;
+
+/**
+ * What somebody in the game is about, in words, for their row and their card: where they are if not
+ * in town, and for how long they have been away if they are (Leaf's rule, `away`); nothing for
+ * somebody just about the town, or gone.
+ */
+export function doingWords(w: Where, now: number): string[] {
+  if (!w.here) return [];
+  return [...(w.at === "town" ? [] : [WHERE[w.at]]), ...(away(w.acted, now) ? [awayWords(w.acted, now)] : [])];
+}
+
+/** A person's card's line under their rank: "At the Works", "Away for 20 minutes", both; null for nothing to say. */
+export function cardLine(w: Where | undefined, now: number): string | null {
+  const said = w ? doingWords(w, now).join(", ") : "";
+  return said === "" ? null : said.charAt(0).toUpperCase() + said.slice(1);
+}
+
 /** The line for somebody who walked out of town within the last minute or so. */
 export const JUST_NOW = "just now";
 
@@ -94,9 +116,10 @@ export function whoIsAbout(o: { me: InRoom; all: ReadonlyMap<string, Where>; now
   const all = [...o.all.values()];
 
   put("In town", o.me, line(o.me.rank), true);
-  for (const w of all.filter((x) => x.here && x.at === "town").toSorted(byName)) put("In town", w, line(w.rank));
+  for (const w of all.filter((x) => x.here && x.at === "town").toSorted(byName))
+    put("In town", w, line(w.rank, ...doingWords(w, o.now)));
   for (const w of all.filter((x) => x.here && x.at !== "town").toSorted(byName))
-    put("Elsewhere", w, line(w.rank, WHERE[w.at]));
+    put("Elsewhere", w, line(w.rank, ...doingWords(w, o.now)));
   // In the order the record has them: whoever has only just left first, then newest first.
   for (const w of all.filter((x) => !x.here))
     put("Seen lately", w, line(w.rank, w.seen === null ? JUST_NOW : agoLine(w.seen, o.now)));

@@ -106,6 +106,8 @@ export class Presence extends Context.Service<
     readonly leftRoom: (playerId: PlayerId, place: string, now: number) => Effect.Effect<void>;
     /** Hears of every change to who is where, once it is written; a burst of them may be heard as one. */
     readonly changes: Effect.Effect<PubSub.Subscription<void>, never, Scope.Scope>;
+    /** Somebody who was away has done something (`Visits.acted`): told as a change, for the pages to ask again. */
+    readonly back: Effect.Effect<void>;
   }
 >()("leaf/Presence") {
   static readonly layer = Layer.effect(
@@ -148,7 +150,8 @@ export class Presence extends Context.Service<
           onNone: () => true,
           onSome: (row) => row.place !== place || row.leftAt !== null || (said !== null && row.stay !== said),
         });
-      const tell = (changed: boolean) => (changed ? PubSub.publish(news, undefined) : Effect.void);
+      const tell = (changed: boolean): Effect.Effect<void> =>
+        changed ? Effect.asVoid(PubSub.publish(news, undefined)) : Effect.void;
       const forgetOld = (now: number) => sql`DELETE FROM presence WHERE seen_at < ${now - DAY_MS}`;
       const lists = (now: number) =>
         Effect.all({
@@ -216,6 +219,7 @@ export class Presence extends Context.Service<
             Effect.flatMap((rows) => tell(rows.length > 0)),
           ),
         changes: PubSub.subscribe(news),
+        back: tell(true),
       });
     }),
   );

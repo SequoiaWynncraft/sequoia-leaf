@@ -90,6 +90,11 @@ const rankOf = (m: LiveMember): string => (m.guest ? GUEST : m.rank === null ? "
 
 /** Everybody's rank as the room last showed it, by their account, for those other lists do not say it of. */
 export const knownRanks = new Map<string, string>();
+/**
+ * When this page last saw each of the others do something in the room, by Leaf's clock and their
+ * account: a move somewhere, an emote, a touch, which is what Leaf counts as doing something too.
+ */
+export const stirred = new Map<string, number>();
 const learn = (m: LiveMember): void => {
   const rank = rankOf(m);
   if (rank === "") knownRanks.delete(m.player);
@@ -108,6 +113,11 @@ const ears: LiveEars = {
   joined(m) {
     company.ears.joined?.(m);
     learn(m);
+  },
+  act(id, kind, arg) {
+    const f = company.byId(id);
+    if (f) stirred.set(f.who.player, leafNow());
+    company.ears.act?.(id, kind, arg);
   },
 };
 
@@ -225,7 +235,15 @@ export function stepPlayers(dt: number): void {
   if (downAt !== null && performance.now() - downAt > ALONE_AFTER) company.goAll();
   if (downAt !== null) showLink();
   const walked = new Map(company.all().map((f) => [f, f.own.a.walked]));
+  const stood = new Map(company.all().map((f) => [f, { x: f.fig.x, y: f.fig.y, jump: f.fig.jump }]));
   const { came, went } = company.step((id) => room?.sample(id) ?? null, dt);
+  const now = leafNow();
+  for (const f of company.all()) {
+    // A move somewhere, as the room tells it, is doing something: by Leaf's rule too.
+    const before = stood.get(f);
+    if (before && before.jump === f.fig.jump && (before.x !== f.fig.x || before.y !== f.fig.y))
+      stirred.set(f.who.player, now);
+  }
   for (const f of company.all()) {
     const a = f.own.a;
     // Hops and words; a figure drawn from the room walks nowhere of its own accord.

@@ -772,20 +772,12 @@ describe("the live guild", () => {
 
 describe("who is here, and who is dozing", () => {
   test("Leaf's list as the town reads it: a guest is Guest, a member's rank the list says is the town's word for it", () => {
-    expect(listedHere({ id: "g", name: "Wanderer", place: "table", rank: null, guest: true, seen: 5 })).toEqual({
-      id: "g",
-      name: "Wanderer",
-      rank: "Guest",
-      at: "table",
-      seen: 5,
-    });
-    expect(listedHere({ id: "a", name: "Alice", place: "works", rank: "chief", guest: false, seen: null })).toEqual({
-      id: "a",
-      name: "Alice",
-      rank: "Chief",
-      at: "works",
-      seen: null,
-    });
+    expect(
+      listedHere({ id: "g", name: "Wanderer", place: "table", rank: null, guest: true, seen: 5, acted: 3 }),
+    ).toEqual({ id: "g", name: "Wanderer", rank: "Guest", at: "table", seen: 5, acted: 3 });
+    expect(
+      listedHere({ id: "a", name: "Alice", place: "works", rank: "chief", guest: false, seen: null, acted: null }),
+    ).toEqual({ id: "a", name: "Alice", rank: "Chief", at: "works", seen: null, acted: null });
     expect(listedGone({ id: "h", name: "Drifter", place: "grove", seen: 5, guest: false })).toEqual({
       id: "h",
       name: "Drifter",

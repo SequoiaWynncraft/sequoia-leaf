@@ -581,6 +581,25 @@ describe("where players are, from the room", () => {
     });
   });
 
+  it("tells everybody in every room when somebody away does something again, and not at every move", async () => {
+    await start();
+    const a = await connect(page("alice"));
+    await a.welcome();
+    const b = await connect(page("bob"));
+    await b.welcome();
+    b.move(at(100, 100, 0));
+    await rowsWhen((r) => r.length === 2);
+    await Bun.sleep(150);
+    a.texts.length = 0;
+
+    // Bob has done nothing Leaf heard of yet: away. His first move somewhere brings him back.
+    b.move(at(110, 100));
+    await a.next("about");
+    b.move(at(120, 100));
+    await Bun.sleep(150);
+    expect(a.texts.filter((m) => m.t === "about")).toEqual([]);
+  });
+
   it("writes them gone at the end of their grace when the connection drops", async () => {
     await start({ graceMs: 150 });
     const a = await connect(page("alice"));

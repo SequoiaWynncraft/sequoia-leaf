@@ -455,6 +455,15 @@ card says so and the town is not loaded.
   greeted, the crab spotted), and how long they have played each and been AFK in it, and for somebody else "Find in town" (somebody drawn
   here), "Visit yard" and "Visit camp" (somebody with one).
 
+- **Away.** Somebody in the game who has done nothing for five minutes is away: Leaf's own rule,
+  the one that counts their time AFK (`away` in `@sequoia-leaf/core`). Leaf's list says when each
+  of those in the game last did something (`acted_at`), and the page takes it as later when it sees
+  them move somewhere, emote or touch something in the room, which Leaf counts too; and Leaf tells
+  every room when somebody away does something again. So they stop being away the moment they act,
+  on every page. "Who is about" says it under their name ("Captain · away for 20 minutes", "at the
+  Works · away for 5 minutes"), and so does their card in town, under their rank, with where they
+  are when it is not the town ("At the raid table, away for 7 minutes"); nothing for somebody just
+  about the town.
 - **A guest.** Somebody signed in who is not in the guild plays the same town, with none of the
   guild's own: `prepare()` fetches nothing, and nothing only a member may ask (`/v1/me...`, the
   guild's news) is asked. The purse shows only Coins and every Leaf button says "Leaf is earned by

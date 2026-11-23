@@ -26,6 +26,8 @@ export interface Present {
   guest: boolean;
   /** When the server last saw them there, in milliseconds since 1970; null from a server that does not say. */
   seen: number | null;
+  /** When they last did something, as far as the server knows, in milliseconds since 1970; null for not yet, or a server that does not say. */
+  acted: number | null;
 }
 
 /** Somebody gone from the game in the last day whose character stays in town, and when they were last seen. */
@@ -51,6 +53,7 @@ export function readPresent(v: unknown): Present[] {
   for (const p of v.present) {
     if (!isRecord(p) || typeof p.id !== "string" || typeof p.username !== "string" || !isPlace(p.place)) continue;
     const seen = typeof p.seen_at === "string" ? Date.parse(p.seen_at) : NaN;
+    const acted = typeof p.acted_at === "string" ? Date.parse(p.acted_at) : NaN;
     out.push({
       id: p.id,
       name: p.username,
@@ -58,6 +61,7 @@ export function readPresent(v: unknown): Present[] {
       rank: typeof p.rank === "string" ? p.rank : null,
       guest: p.guest === true,
       seen: Number.isFinite(seen) ? seen : null,
+      acted: Number.isFinite(acted) ? acted : null,
     });
   }
   return out;

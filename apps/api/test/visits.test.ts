@@ -140,6 +140,26 @@ describe("time in each game", () => {
     expect(await services.query((sql) => sql`SELECT acted_at FROM visits`)).toEqual([{ acted_at: T0 + MINUTE }]);
   });
 
+  it("is in Leaf's list of who is about: when each of those here last did something, as their time counts it", async () => {
+    await call("alice", "table");
+    clock.now = T0 + MINUTE;
+    await command("alice", "raid", [{ do: "start", trail: 0 }]);
+    clock.now = T0 + 2 * MINUTE;
+    await call("alice", "table");
+    await call("bob", "town");
+    // Bob's page says where he is; that is not Bob doing anything.
+    await command("bob", "town", [{ do: "here", cursor: null }]);
+    clock.now = T0 + 3 * MINUTE;
+    const response = await app.request("/v1/game/presence", { headers: { Authorization: "Bearer bob-token" } });
+
+    expect(await response.json()).toMatchObject({
+      present: [
+        { username: "Alice", acted_at: new Date(T0 + MINUTE).toISOString() },
+        { username: "Bob", acted_at: null },
+      ],
+    });
+  });
+
   it("counts nothing a page sends by itself as the player doing something: the town's page saying they are here", async () => {
     await call("bob", "town");
     await command("bob", "town", [{ do: "here", cursor: null }]);

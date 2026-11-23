@@ -30,6 +30,7 @@ describe("who is here", () => {
         rank: null,
         guest: false,
         seen: Date.UTC(2026, 10, 25, 12, 55),
+        acted: null,
       },
       {
         id: "10000000-0000-0000-0000-000000000003",
@@ -38,6 +39,7 @@ describe("who is here", () => {
         rank: null,
         guest: true,
         seen: Date.UTC(2026, 10, 25, 12, 55),
+        acted: null,
       },
     ]);
     expect(readResting(isRecord(r) ? r.body : null)).toEqual([
@@ -79,7 +81,7 @@ describe("who is here", () => {
           "nobody",
         ],
       }),
-    ).toEqual([{ id: "a", name: "Alice", place: "works", rank: "chief", guest: false, seen: null }]);
+    ).toEqual([{ id: "a", name: "Alice", place: "works", rank: "chief", guest: false, seen: null, acted: null }]);
     expect(readPresent(null)).toEqual([]);
   });
 });
@@ -129,7 +131,12 @@ describe("staying in town after going", () => {
 /** Leaf's answer with Alice alone, at `place`. */
 const aliceAt = (place: string) => ({
   status: 200,
-  body: { present: [{ id: "a", username: "Alice", place, seen_at: "2026-11-25T10:00:00.000Z" }], resting: [] },
+  body: {
+    present: [
+      { id: "a", username: "Alice", place, seen_at: "2026-11-25T10:00:00.000Z", acted_at: "2026-11-25T09:58:00.000Z" },
+    ],
+    resting: [],
+  },
 });
 
 describe("saying where the member is", () => {
@@ -204,6 +211,9 @@ describe("saying where the member is", () => {
     stop();
 
     expect(heard.map((p) => p.map((m) => m.place))).toEqual([["works"]]);
-    expect(heard[0]?.[0]?.seen).toBe(Date.UTC(2026, 10, 25, 10));
+    expect([heard[0]?.[0]?.seen, heard[0]?.[0]?.acted]).toEqual([
+      Date.UTC(2026, 10, 25, 10),
+      Date.UTC(2026, 10, 25, 9, 58),
+    ]);
   });
 });

@@ -13,6 +13,10 @@
  * - **On Leaf's list as gone**: where they were last, when Leaf last saw them, and whether their
  *   character stays in town.
  *
+ * Whoever is in the game says too when they last did something (`acted`): what Leaf's list says, or
+ * later, what the page itself saw them do in the room (a move somewhere, an emote, a touch), which is
+ * what Leaf counts too. Away is Leaf's rule on it (`away`).
+ *
  * Out of the room (the connection down a while), whoever Leaf has in town is in town, not drawn.
  */
 
@@ -36,6 +40,8 @@ export interface Listed {
   at: Place;
   /** When Leaf last saw them, in milliseconds since 1970; null when it does not say. */
   seen: number | null;
+  /** In the game: when they last did something, as far as Leaf knows; null for not yet. */
+  acted?: number | null;
 }
 
 /** Where somebody else is, by the one account of it. */
@@ -54,6 +60,8 @@ export interface Where {
   seen: number | null;
   /** Gone: whether their character stays in town, dozing. */
   stays: boolean;
+  /** Here: when they last did something, as far as anybody knows, in milliseconds since 1970; null for not yet. Null when gone. */
+  acted: number | null;
 }
 
 /**
@@ -61,7 +69,8 @@ export interface Where {
  * those here (name order, as Leaf sends it), then those gone, newest first. `room` is everybody in
  * the room but the member, or null while the page is in no room; `present`, `resting` (gone, and
  * staying) and `gone` (gone, and not) are Leaf's lists; `ranks` the ranks the page has learnt of
- * anybody, by id, for those the lists do not say; `now` Leaf's clock.
+ * anybody, by id, for those the lists do not say; `stirred` when the page saw anybody in the room do
+ * something, by id; `now` Leaf's clock.
  */
 export function whereabouts(o: {
   me: string;
@@ -70,14 +79,26 @@ export function whereabouts(o: {
   resting: readonly Listed[];
   gone: readonly Listed[];
   ranks?: ReadonlyMap<string, string>;
+  stirred?: ReadonlyMap<string, number>;
   now: number;
   rules?: VisitRules;
 }): ReadonlyMap<string, Where> {
   const out = new Map<string, Where>();
   const rules = o.rules ?? VISIT_RULES;
+  const leafActed = new Map(o.present.map((p) => [p.id, p.acted ?? null]));
+  /** When somebody here last did something: Leaf's word, or what the page saw since, whichever is later. */
+  const actedOf = (id: string): number | null => {
+    const leaf = leafActed.get(id) ?? null;
+    const seen = o.stirred?.get(id) ?? null;
+    return leaf === null ? seen : seen === null ? leaf : Math.max(leaf, seen);
+  };
   const put = (w: Where): void => {
     if (w.id === o.me || out.has(w.id)) return;
-    out.set(w.id, { ...w, rank: w.rank ?? o.ranks?.get(w.id) ?? null });
+    out.set(w.id, {
+      ...w,
+      rank: w.rank ?? o.ranks?.get(w.id) ?? null,
+      acted: w.here ? actedOf(w.id) : null,
+    });
   };
   const gone = (p: Listed, seen: number | null, stays: boolean): Where => ({
     id: p.id,
@@ -88,15 +109,37 @@ export function whereabouts(o: {
     live: false,
     seen,
     stays,
+    acted: null,
   });
 
   for (const m of o.room ?? [])
-    put({ id: m.id, name: m.name, rank: m.rank, at: "town", here: true, live: true, seen: null, stays: true });
+    put({
+      id: m.id,
+      name: m.name,
+      rank: m.rank,
+      at: "town",
+      here: true,
+      live: true,
+      seen: null,
+      stays: true,
+      acted: null,
+    });
   const leftJustNow: Listed[] = [];
   for (const p of o.present) {
     if (p.seen !== null && silentSince(p.seen, o.now, rules)) leftJustNow.push(p);
     else if (o.room !== null && p.at === "town") leftJustNow.push({ ...p, seen: null });
-    else put({ id: p.id, name: p.name, rank: p.rank, at: p.at, here: true, live: false, seen: null, stays: true });
+    else
+      put({
+        id: p.id,
+        name: p.name,
+        rank: p.rank,
+        at: p.at,
+        here: true,
+        live: false,
+        seen: null,
+        stays: true,
+        acted: null,
+      });
   }
   // Gone, newest first, those who have only just left first of all; what Leaf says next of staying is
   // believed, until then they stay, as Leaf has anybody who never said.

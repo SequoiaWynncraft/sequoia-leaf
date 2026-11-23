@@ -1,4 +1,5 @@
 import {
+  away,
   type Device,
   DEVICES,
   GAME_AT,
@@ -85,8 +86,14 @@ export class Visits extends Context.Service<
     readonly closeAll: (now: number) => Effect.Effect<void>;
     /** Closes every open visit not heard of for 90 seconds, at the last time it was. */
     readonly closeSilent: (now: number) => Effect.Effect<void>;
-    /** A player did something at `now`: a command that is not a chore, or in a live room a move or an act. */
-    readonly acted: (playerId: PlayerId, now: number) => Effect.Effect<void>;
+    /**
+     * A player did something at `now`: a command that is not a chore, or in a live room a move or an
+     * act. Says whether they had been away until then, as far as this Leaf knows (`away`): back, for
+     * everybody to be told.
+     */
+    readonly acted: (playerId: PlayerId, now: number) => Effect.Effect<boolean>;
+    /** When each of these players last did something, as far as Leaf knows: this Leaf's word, or their open visit's. */
+    readonly lastActed: (playerIds: readonly string[]) => Effect.Effect<ReadonlyMap<string, number>>;
     /** How long a player has played each game, and been in it AFK, by game. */
     readonly timeOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, Time>>;
   }
@@ -144,6 +151,15 @@ export class Visits extends Context.Service<
           INSERT INTO sessions (player_id, guest, started_at, device)
           VALUES (${playerId}, ${guest ? 1 : 0}, ${at}, ${device})
           RETURNING id
+        `,
+      });
+
+      const openActed = SqlSchema.findAll({
+        Request: Schema.Array(Schema.String),
+        Result: Schema.Struct({ playerId: Schema.String, actedAt: Schema.NullOr(Schema.Int) }),
+        execute: (ids) => sql`
+          SELECT player_id AS playerId, acted_at AS actedAt FROM visits
+          WHERE left_at IS NULL AND ${sql.in("player_id", ids)}
         `,
       });
 
@@ -306,8 +322,27 @@ export class Visits extends Context.Service<
         closeSilent: (now) => sql.withTransaction(closeSilent(now)).pipe(Effect.orDie),
         acted: (playerId, now) =>
           Effect.sync(() => {
-            acted.set(playerId, Math.max(now, acted.get(playerId) ?? now));
+            const before = acted.get(playerId);
+            acted.set(playerId, Math.max(now, before ?? now));
+            return away(before ?? null, now, rules);
           }),
+        lastActed: (playerIds) =>
+          playerIds.length === 0
+            ? Effect.succeed(new Map())
+            : openActed(playerIds).pipe(
+                Effect.map((rows) => {
+                  const out = new Map<string, number>();
+                  for (const id of playerIds) {
+                    const heard = acted.get(id);
+                    if (heard !== undefined) out.set(id, heard);
+                  }
+                  for (const row of rows) {
+                    if (row.actedAt !== null) out.set(row.playerId, Math.max(row.actedAt, out.get(row.playerId) ?? 0));
+                  }
+                  return out;
+                }),
+                Effect.orDie,
+              ),
         timeOf: (playerId) =>
           timeOf(playerId).pipe(
             Effect.map((rows) => new Map(rows.map(({ game, ...time }) => [game, time]))),

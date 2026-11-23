@@ -86,10 +86,14 @@ export interface Rester extends Omit<Visitor, "at"> {
   stays: boolean;
 }
 
-/** What the town's live room tells the guild of who is in it: everybody with the member, or null out of it; and their ranks. */
+/**
+ * What the town's live room tells the guild of who is in it: everybody with the member, or null out
+ * of it; their ranks; and when the page last saw each do something there (a move somewhere, an act).
+ */
 export interface RoomSays {
   room(): readonly InRoom[] | null;
   readonly ranks: ReadonlyMap<string, string>;
+  readonly stirred: ReadonlyMap<string, number>;
 }
 
 export type Tone = "gold" | "leaf" | "coral" | "rose";

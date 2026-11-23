@@ -1254,8 +1254,8 @@ describe("GET /v1/game/presence", () => {
     expect(looked.status).toBe(200);
     expect(await looked.json()).toEqual({
       present: [
-        { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 30_000) },
-        { id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0) },
+        { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 30_000), acted_at: null },
+        { id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0), acted_at: null },
       ],
       resting: [],
       gone: [],
@@ -1275,14 +1275,16 @@ describe("PUT /v1/game/presence", () => {
 
     expect(await first.json()).toEqual({
       present: [
-        { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 60_000) },
-        { id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0) },
+        { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 60_000), acted_at: null },
+        { id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0), acted_at: null },
       ],
       resting: [],
       gone: [],
     });
     expect(await later.json()).toEqual({
-      present: [{ id: alice, username: "Alice", place: "camp", guest: false, seen_at: iso(T0 + 91_000) }],
+      present: [
+        { id: alice, username: "Alice", place: "camp", guest: false, seen_at: iso(T0 + 91_000), acted_at: null },
+      ],
       resting: [{ id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0) }],
       gone: [],
     });
@@ -1319,13 +1321,14 @@ describe("PUT /v1/game/presence", () => {
     expect(kept.length).toBeGreaterThan(0);
     expect(body).toEqual({
       present: [
-        { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(now) },
+        { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(now), acted_at: null },
         {
           id: rows[0]?.playerId,
           username: "Member0",
           place: "town",
           guest: false,
           seen_at: iso(rows[0]?.seenAt ?? 0),
+          acted_at: null,
         },
       ],
       resting: kept.slice(0, 24).map(row),
@@ -1369,7 +1372,9 @@ describe("PUT /v1/game/presence", () => {
     const back = await arrive("town");
 
     expect(await without.json()).toEqual({
-      present: [{ id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 5 * MINUTE) }],
+      present: [
+        { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 5 * MINUTE), acted_at: null },
+      ],
       resting: [],
       gone: [{ id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0) }],
     });
@@ -1378,7 +1383,9 @@ describe("PUT /v1/game/presence", () => {
       gone: [{ id: bob, place: "table", seen_at: iso(T0 + 6 * MINUTE) }],
     });
     expect(await back.json()).toEqual({
-      present: [{ id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 13 * MINUTE) }],
+      present: [
+        { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 13 * MINUTE), acted_at: null },
+      ],
       resting: [{ id: bob, username: "Bob", place: "camp", guest: false, seen_at: iso(T0 + 10 * MINUTE) }],
       gone: [],
     });
@@ -1398,8 +1405,8 @@ describe("PUT /v1/game/presence", () => {
 
     expect(await withGuest.json()).toEqual({
       present: [
-        { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 2 * MINUTE) },
-        { id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0 + 2 * MINUTE) },
+        { id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0 + 2 * MINUTE), acted_at: null },
+        { id: bob, username: "Bob", place: "works", guest: false, seen_at: iso(T0 + 2 * MINUTE), acted_at: null },
       ],
       resting: [{ id: carol, username: "Carol", place: "table", guest: true, seen_at: iso(T0) }],
       gone: [],
@@ -1443,7 +1450,7 @@ describe("PUT /v1/game/presence", () => {
     expect(soon.status).toBe(200);
     expect(await soon.json()).toEqual({
       // Not written down: Leaf saw them last at the write before.
-      present: [{ id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0) }],
+      present: [{ id: alice, username: "Alice", place: "town", guest: false, seen_at: iso(T0), acted_at: null }],
       resting: [],
       gone: [],
     });

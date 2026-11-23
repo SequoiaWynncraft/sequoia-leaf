@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { DAY_MS } from "./quests.ts";
 import {
   activityReport,
+  away,
   deviceForWidth,
   GAME_AT,
   joinsSession,
@@ -66,7 +67,13 @@ describe("visits and sessions", () => {
     expect(playing(did, null)).toBe(false);
   });
 
-  test("the town and the camps are the town's game, the table the raid's", () => {
+  test("a player is away from five minutes after they last did something, as their time is counted AFK, or never having", () => {
+    const did = 10 * MINUTE;
+    expect([did, did + 5 * MINUTE - 1, did + 5 * MINUTE].map((now) => away(did, now))).toEqual([false, false, true]);
+    expect(away(null, did)).toBe(true);
+  });
+
+  test("the town, the camps and the Grove are the town's game, the table the raid's", () => {
     expect(GAME_AT).toEqual({ town: "town", camp: "town", grove: "town", works: "works", table: "raid" });
   });
 });

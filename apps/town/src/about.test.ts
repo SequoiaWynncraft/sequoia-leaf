@@ -2,27 +2,32 @@ import { describe, expect, test } from "bun:test";
 
 import type { Place } from "@sequoia-leaf/kit/presence.ts";
 
-import { agoLine, ALONE, held, partsOf, whoIsAbout } from "./about.ts";
+import { agoLine, ALONE, cardLine, held, partsOf, whoIsAbout } from "./about.ts";
 import { GUEST } from "./live.ts";
 import { type InRoom, type Listed, whereabouts } from "./where.ts";
 
 const NOW = 1_800_000_000_000;
 const MIN = 60_000;
 const ME: InRoom = { id: "me", name: "Tester", rank: "Strategist" };
-/** Somebody on Leaf's list: in the game now (seen just now), or gone (seen when given). */
-const mate = (id: string, name: string, at: Place, rank: string | null = null, seen: number = NOW): Listed => ({
-  id,
-  name,
-  rank,
-  at,
-  seen,
-});
-/** Who is about with the member, from the room (or none) and Leaf's lists, by way of where each is. */
+/** Somebody on Leaf's list: in the game now (seen, and doing something, just now), or gone (seen when given). */
+const mate = (
+  id: string,
+  name: string,
+  at: Place,
+  rank: string | null = null,
+  seen: number = NOW,
+  acted: number | null = NOW,
+): Listed => ({ id, name, rank, at, seen, acted });
+/**
+ * Who is about with the member, from the room (or none) and Leaf's lists, by way of where each is;
+ * everybody in the room seen doing something just now, but those `idle`.
+ */
 function whoIs(o: {
   room: readonly InRoom[] | null;
   present?: readonly Listed[];
   resting?: readonly Listed[];
   ranks?: ReadonlyMap<string, string>;
+  idle?: readonly string[];
 }): ReturnType<typeof whoIsAbout> {
   const all = whereabouts({
     me: ME.id,
@@ -31,6 +36,7 @@ function whoIs(o: {
     resting: o.resting ?? [],
     gone: [],
     ...(o.ranks ? { ranks: o.ranks } : {}),
+    stirred: new Map((o.room ?? []).filter((m) => !o.idle?.includes(m.id)).map((m) => [m.id, NOW])),
     now: NOW,
   });
   return whoIsAbout({ me: ME, all, now: NOW });
@@ -167,6 +173,69 @@ describe("who is about", () => {
     expect(shown(about).slice(1)).toEqual([
       ["Elsewhere", ["Quillon: Chief · at the Works"]],
       ["Seen lately", ["Fernhollow: Recruit · 3 hours ago"]],
+    ]);
+  });
+});
+
+describe("who is away", () => {
+  test("whoever has done nothing for five minutes is away, by Leaf's rule, with for how long, in town or elsewhere", () => {
+    const about = whoIs({
+      room: [ME, { id: "b", name: "Birchwood", rank: "Captain" }, { id: "w", name: "Wrenly", rank: null }],
+      present: [
+        mate("b", "Birchwood", "town", null, NOW, NOW - 20 * MIN),
+        mate("q", "Quillon", "works", null, NOW, NOW - 5 * MIN),
+        mate("m", "Mossling", "table", "Recruiter", NOW, NOW - 5 * MIN + 1),
+        mate("g", "Glimmer", "grove", null, NOW, null),
+      ],
+      idle: ["b", "w"],
+    });
+    expect(shown(about)).toEqual([
+      ["In town", ["Tester: Strategist (you)", "Birchwood: Captain · away for 20 minutes", "Wrenly: away"]],
+      [
+        "Elsewhere",
+        [
+          "Glimmer: in the Grove · away",
+          "Mossling: Recruiter · at the raid table",
+          "Quillon: at the Works · away for 5 minutes",
+        ],
+      ],
+    ]);
+  });
+
+  test("whoever the page sees do something in the room is back at once, whatever Leaf's list said", () => {
+    const all = whereabouts({
+      me: ME.id,
+      room: [ME, { id: "b", name: "Birchwood", rank: null }],
+      present: [mate("b", "Birchwood", "town", null, NOW, NOW - 20 * MIN)],
+      resting: [],
+      gone: [],
+      stirred: new Map([["b", NOW - 1000]]),
+      now: NOW,
+    });
+    expect(all.get("b")?.acted).toBe(NOW - 1000);
+    expect(shown(whoIsAbout({ me: ME, all, now: NOW }))[0]?.[1]).toEqual(["Tester: Strategist (you)", "Birchwood: "]);
+  });
+
+  test("a person's card says where they are and for how long they have been away, and nothing for somebody about the town", () => {
+    const all = whereabouts({
+      me: ME.id,
+      room: [ME, { id: "b", name: "Birchwood", rank: null }],
+      present: [
+        mate("b", "Birchwood", "town", null, NOW, NOW - 61 * MIN),
+        mate("q", "Quillon", "works"),
+        mate("m", "Mossling", "table", null, NOW, NOW - 7 * MIN),
+      ],
+      resting: [mate("f", "Fernhollow", "town", null, NOW - 3 * MIN)],
+      gone: [],
+      stirred: new Map([["b", NOW - 61 * MIN]]),
+      now: NOW,
+    });
+    expect(["b", "q", "m", "f", "nobody"].map((id) => cardLine(all.get(id), NOW))).toEqual([
+      "Away for an hour",
+      "At the Works",
+      "At the raid table, away for 7 minutes",
+      null,
+      null,
     ]);
   });
 });
