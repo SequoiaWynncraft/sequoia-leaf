@@ -202,7 +202,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
     await wait(waitFor.every);
     return stopped ? reply : patiently(asking, tried + 1);
   }
-  const first = await patiently(() => timed(read));
+  const first = await patiently(() => timed(saying(read)));
   if (notYet(first)) return { trouble: "noserver" };
   const end = endOf(first);
   if (end !== null) return { trouble: end };
