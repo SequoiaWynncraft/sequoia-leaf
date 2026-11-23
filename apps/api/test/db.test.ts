@@ -35,9 +35,27 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 33 (who is about from visits), for a test going back before it. */
+/** Undoes migration 34: `presence` back, empty, as migrations 12 to 29 left it. */
+const beforeDropPresence = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    yield* sql`
+      CREATE TABLE presence (
+        player_id TEXT    PRIMARY KEY,
+        username  TEXT    NOT NULL,
+        place     TEXT    NOT NULL,
+        seen_at   INTEGER NOT NULL,
+        stay      INTEGER NOT NULL DEFAULT 1 CHECK (stay IN (0, 1)),
+        guest     INTEGER NOT NULL DEFAULT 0 CHECK (guest IN (0, 1)),
+        left_at   INTEGER
+      ) STRICT
+    `;
+    yield* sql`CREATE INDEX presence_by_time ON presence (seen_at)`;
+  });
+
+/** Undoes migrations 34 and 33 (who is about from visits), for a test going back before them. */
 const beforeAboutFromVisits = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
+    yield* beforeDropPresence(sql);
     yield* sql`DROP INDEX visits_by_heard`;
     yield* sql`ALTER TABLE players_seen DROP COLUMN stay`;
   });
@@ -136,6 +154,7 @@ describe("the database", () => {
       { migration_id: 31, name: "play_born" },
       { migration_id: 32, name: "play_due" },
       { migration_id: 33, name: "about_from_visits" },
+      { migration_id: 34, name: "drop_presence" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -166,7 +185,6 @@ describe("the database", () => {
           "saves",
           "skins",
           "player_names",
-          "presence",
           "save_history",
           "visits",
           "sessions",
@@ -199,11 +217,11 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 33 },
+      { latest: 34 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
-    expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM presence WHERE stay = 1`)).toEqual([{ n: 0 }]);
+    expect(await query(path, (sql) => sql`SELECT name FROM sqlite_master WHERE name = 'presence'`)).toEqual([]);
   });
 
   it("marks each state kept before it knew a guest's as theirs: from where it stands, or else as the player was last seen", async () => {

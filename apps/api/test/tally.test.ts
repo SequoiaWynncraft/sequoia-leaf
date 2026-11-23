@@ -465,6 +465,14 @@ describe("the counters' first counts", () => {
         (sql) => sql`INSERT INTO time_in (player_id, game, played_ms, afk_ms) VALUES (${bob}, 'town', 7200000, 60000)`,
       );
       // Leaf as it was before the Tally: the counters' migration, and those after it, not yet run.
+      await before.query(
+        (sql) => sql`
+          CREATE TABLE presence (
+            player_id TEXT PRIMARY KEY, username TEXT NOT NULL, place TEXT NOT NULL, seen_at INTEGER NOT NULL,
+            stay INTEGER NOT NULL DEFAULT 1, guest INTEGER NOT NULL DEFAULT 0, left_at INTEGER
+          ) STRICT
+        `,
+      );
       await before.query((sql) => sql`DROP INDEX visits_by_heard`);
       await before.query((sql) => sql`ALTER TABLE players_seen DROP COLUMN stay`);
       await before.query((sql) => sql`DROP INDEX play_state_due`);
