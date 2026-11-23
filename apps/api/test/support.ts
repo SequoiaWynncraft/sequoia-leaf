@@ -20,6 +20,7 @@ import { SqlClient } from "effect/sql";
 import { routerConfig, Routes, serveLeaf, Stores } from "../src/app.ts";
 import { AppConfig, type Settings, settings } from "../src/config.ts";
 import { databaseAt } from "../src/db.ts";
+import { Credits } from "../src/earning/run.ts";
 import type { CreditSource } from "../src/earning/sync.ts";
 import { Events } from "../src/events/store.ts";
 import { Mojang, MojangError, type MojangProfile } from "../src/game/mojang.ts";
@@ -195,9 +196,10 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     ),
   );
   // Who hears what Leaf does to a state: the play service tells them, Live puts them there.
-  const layer = Layer.merge(Play.layer.pipe(Layer.provideMerge(between.pipe(Layer.provideMerge(stores)))), live).pipe(
-    Layer.provideMerge(Watchers.layer),
-  );
+  const layer = Layer.merge(
+    Layer.mergeAll(Play.layer, Credits.layer).pipe(Layer.provideMerge(between.pipe(Layer.provideMerge(stores)))),
+    live,
+  ).pipe(Layer.provideMerge(Watchers.layer));
   // Layers built through the same memo map are built once, so `run` and `app` see the same database.
   const memoMap = Layer.makeMemoMapUnsafe();
   const runtime = ManagedRuntime.make(layer, { memoMap });

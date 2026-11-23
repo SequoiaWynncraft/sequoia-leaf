@@ -69,7 +69,7 @@ import type * as Body from "../api/schemas.ts";
 import { Identities } from "../auth/session.ts";
 import { guildRequests, notEnoughLeaf } from "../backend/requests.ts";
 import { AppConfig } from "../config.ts";
-import { syncOnDemand } from "../earning/run.ts";
+import { Credits } from "../earning/run.ts";
 import { eventJsonText, Events } from "../events/store.ts";
 import { GUILD_EVENT_TYPES, guildDay, type GuildEvent, guildEvents } from "../game/guild.ts";
 import { knownAmong } from "../game/known.ts";
@@ -392,6 +392,7 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
     const ledger = yield* Ledger;
     const coins = yield* Coins;
     const quests = yield* Quests;
+    const credits = yield* Credits;
     const events = yield* Events;
     const streams = yield* OpenStreams;
     const { pollMs } = yield* StreamTuning;
@@ -413,7 +414,7 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
           Effect.gen(function* () {
             const { playerId } = yield* CurrentIdentity;
             if (query.sync === "1") {
-              yield* syncOnDemand;
+              yield* credits.fresh(Effect.void);
             }
             const now = yield* Clock.currentTimeMillis;
             const stored = yield* quests.book(playerId);
@@ -453,27 +454,31 @@ const MeHandlers = HttpApiBuilder.group(LeafApi, "me", (handlers) =>
               return yield* new Invalid({ code: "invalid_quest", message: "That is not a quest id" });
             }
             const { playerId } = yield* CurrentIdentity;
-            // A quest just finished is paid rather than swapped away.
-            yield* syncOnDemand;
-            const now = yield* Clock.currentTimeMillis;
-            const result = yield* rerollQuestFor(
-              playerId,
-              slot,
-              Number(id[2]),
-              payload.leaf,
-              now,
-              DEFAULT_RULES.quests,
-            );
-            if (result.status === "refused") {
-              return yield* new Refused({ code: result.reason, message: REFUSALS[result.reason] });
-            }
-            return HttpServerResponse.jsonUnsafe(
-              {
-                leaf: result.balance,
-                spent: result.spent,
-                quest: questOnOffer(result.quest, yield* quests.rerollsOnDay(playerId, now)),
-              } satisfies typeof Body.Rerolled.Type,
-              purseBeside(yield* coins.balances(playerId)),
+            // A quest just finished is paid rather than swapped away: the feed is brought in first,
+            // and no sync writes what it fetched in between.
+            return yield* credits.fresh(
+              Effect.gen(function* () {
+                const now = yield* Clock.currentTimeMillis;
+                const result = yield* rerollQuestFor(
+                  playerId,
+                  slot,
+                  Number(id[2]),
+                  payload.leaf,
+                  now,
+                  DEFAULT_RULES.quests,
+                );
+                if (result.status === "refused") {
+                  return yield* new Refused({ code: result.reason, message: REFUSALS[result.reason] });
+                }
+                return HttpServerResponse.jsonUnsafe(
+                  {
+                    leaf: result.balance,
+                    spent: result.spent,
+                    quest: questOnOffer(result.quest, yield* quests.rerollsOnDay(playerId, now)),
+                  } satisfies typeof Body.Rerolled.Type,
+                  purseBeside(yield* coins.balances(playerId)),
+                );
+              }),
             );
           }),
         )

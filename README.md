@@ -256,7 +256,8 @@ Each quest in its `quests` also has `reroll_leaf`: what rerolling it costs now,
 `POST /v1/me/quests/{id}/reroll`, with the quest's `id` such as `daily:4` and
 the body `{ "leaf": n }`, the `reroll_leaf` the member was shown and agreed to
 pay, first counts what was just played, as `?sync=1` does, so a quest just
-finished is paid rather than swapped. It answers `{ "leaf", "spent", "quest" }`:
+finished is paid rather than swapped. A sync already reading the feed is waited
+for, and none writes in between. It answers `{ "leaf", "spent", "quest" }`:
 the balance after it, what it cost, and the new quest in the shape `quests`
 uses; and beside it, in the header `Leaf-Purse`, Leaf's word on the player's
 purse after it, `{ "coins", "leaf", "version" }` as `/v1/game/me` gives them,
@@ -276,7 +277,7 @@ windows) and when the next one opens (`next_at`).
 
 `GET /v1/me/quests?sync=1` reads the credit feed first, at most once every 15
 seconds, so a raid that just finished shows up without waiting for the next
-scheduled run.
+scheduled run. Asked while a sync is reading the feed, it waits for that one.
 
 ### The contract clients test against
 

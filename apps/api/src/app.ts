@@ -8,6 +8,7 @@ import { Visits } from "./activity/visits.ts";
 import { Identities } from "./auth/session.ts";
 import { AppConfig } from "./config.ts";
 import { Database } from "./db.ts";
+import { Credits } from "./earning/run.ts";
 import { Events } from "./events/store.ts";
 import { Mojang } from "./game/mojang.ts";
 import { PlayerNames } from "./game/names.ts";
@@ -112,10 +113,10 @@ export const Stores = Layer.mergeAll(
 
 /**
  * What Leaf reaches outside its own code (its settings, its database, Mojang, the network and the
- * machine's dice), the play service on the stores, and the live rooms, which the routes serve and
+ * machine's dice), the play service and the credit sync on the stores, and the live rooms, which the routes serve and
  * the server's farewell closes, and which write who is in them into the stores' presence and visits.
  */
-export const Services = Layer.mergeAll(Play.layer, Live.layer).pipe(
+export const Services = Layer.mergeAll(Play.layer, Credits.layer, Live.layer).pipe(
   Layer.provideMerge(Watchers.layer),
   Layer.provideMerge(Stores),
   Layer.provideMerge(Database),
