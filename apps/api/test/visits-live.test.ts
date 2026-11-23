@@ -246,6 +246,30 @@ describe("when Leaf stops", () => {
     expect((await a.ended()).code).toBe(1012);
   });
 
+  it("in a deploy, what a player last did goes with them to another place, though only the Leaf stopping heard it", async () => {
+    const { old, next } = await deploying();
+    const headers = { Authorization: "Bearer alice-token", "Content-Type": "application/json" };
+    expect((await sayHere("alice-token", "table", old)).status).toBe(200);
+    // She starts a run on the old Leaf, which writes it on her visit as it hears of her again.
+    expect((await fetch(`${old.origin}/v1/game/play/raid`, { headers })).status).toBe(200);
+    const started = await fetch(`${old.origin}/v1/game/play/raid`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ player: alice, commands: [{ id: "a-1", do: "start", trail: 0 }] }),
+    });
+    expect(started.status).toBe(200);
+    expect((await sayHere("alice-token", "table", old)).status).toBe(200);
+    // Then her page talks to the new Leaf, from the Works, for a minute.
+    expect((await sayHere("alice-token", "works", next)).status).toBe(200);
+    ahead = 60_000;
+    expect((await sayHere("alice-token", "works", next)).status).toBe(200);
+    expect(
+      await services?.query(
+        (sql) => sql`SELECT game, played_ms >= 60000 AS played, afk_ms FROM time_in WHERE game = 'works'`,
+      ),
+    ).toEqual([{ game: "works", played: 1, afk_ms: 0 }]);
+  });
+
   it("in a deploy, closes only the visits the new Leaf has not heard of since, and leaves the others open as they began", async () => {
     const { old, next } = await deploying();
     // Alice in the old Leaf's town, Bob's page in the camp: both heard of by the old Leaf alone.

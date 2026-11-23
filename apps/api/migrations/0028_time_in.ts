@@ -8,7 +8,7 @@ import { SqlClient } from "effect/sql";
 //
 // It starts from what Leaf had: the time each player's pages called each game, since Leaf began
 // counting it (migration 23, `played`; the pulls are played in town), as time played; and the rest
-// of their visits since then as time AFK. `played` goes.
+// of their visits since then (of one under way then, the part after) as time AFK. `played` goes.
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* sql`
@@ -27,8 +27,8 @@ export default Effect.gen(function* () {
     ),
     visited AS (
       SELECT player_id, CASE place WHEN 'camp' THEN 'town' WHEN 'table' THEN 'raid' ELSE place END AS game,
-             sum(coalesce(left_at, heard_at) - entered_at) AS ms
-      FROM visits, since WHERE entered_at >= since.at GROUP BY 1, 2
+             sum(coalesce(left_at, heard_at) - max(entered_at, since.at)) AS ms
+      FROM visits, since WHERE coalesce(left_at, heard_at) > since.at GROUP BY 1, 2
     ),
     called AS (
       SELECT player_id, CASE game WHEN 'pulls' THEN 'town' ELSE game END AS game, sum(ms) AS ms
