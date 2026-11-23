@@ -27,24 +27,27 @@ import {
   type BoonId,
   BOONS,
   boonShort,
+  carriedTraits,
   type ComponentId,
-  COMPONENTS,
   drawName,
   drawOf,
   drawTip,
   ECONOMY,
+  EMBLEMS,
   type FigureId,
   FIGURES,
   FINISHED,
   GOOD_WITH,
   isBoonId,
   isComponentId,
+  isEmblemId,
   isFigureId,
   isItemId,
   isTraitId,
   itemAdds,
   type ItemId,
   itemName,
+  itemQuip,
   itemShort,
   itemText,
   type Party,
@@ -62,7 +65,6 @@ import {
   type TraitId,
   TRAITS,
   traitShort,
-  traitsOf,
   traitText,
   type Unit,
   type UnitKind,
@@ -179,7 +181,7 @@ export interface FigureExtras {
   /** The run, for the traits' counts and the rack; none in the almanac. */
   run?: Run | null;
   /** The party it belongs to, for the traits' counts, when it is not the member's. */
-  party?: Pick<Party, "figures" | "charms"> | null;
+  party?: Pick<Party, "figures"> | null;
   /** The almanac's card: the long sentence and the flavour line too. */
   lore?: boolean;
   /** One of the party's own while planning: it can be sold. */
@@ -196,7 +198,9 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
 
   const count = (t: TraitId): TraitCount | null =>
     extras.party ? traitCount(extras.party, t) : extras.run ? ownTraitCount(extras.run, t) : null;
-  const [kin, calling, ...more] = isFigureId(kind) ? traitsOf(kind) : [];
+  const items = extras.items ?? u?.items ?? [];
+  // Its own traits, then the kin of any emblem it holds.
+  const [kin, calling, ...more] = carriedTraits(kind, items);
   const chip = (t: TraitId | undefined, label: string): Chip | null => {
     if (!t) return null;
     const c = count(t);
@@ -245,7 +249,6 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
   }
 
   // What it holds, and the three finished items that suit it (lit if the rack has one, or both its halves).
-  const items = extras.items ?? u?.items ?? [];
   const run = extras.run ?? null;
   const rows: Row[] = [{ label: "Holds", look: "icons", things: items.map((item) => ({ ref: itemRef(item) })) }];
   if (isFigureId(kind))
@@ -342,7 +345,6 @@ export function traitDesc(id: TraitId, run: Run | null, lore = false): Descripti
   if (draws)
     blocks.unshift({ body: rich(`${draws}: enemies pick them as if a hex ${draw > 0 ? "nearer" : "further"}.`) });
   if (lore) spec.steps.forEach((need, i) => blocks.push({ title: `${need}`, body: traitText(id, i + 1) }));
-  if (run && run.boons.some((b) => BOONS[b].charm === id)) blocks.push({ body: "A charm counts as one more." });
   return {
     name: spec.name,
     icon: traitIcon(id),
@@ -361,19 +363,38 @@ export function traitDesc(id: TraitId, run: Run | null, lore = false): Descripti
 
 // ---------- an item, a boon ----------
 
-/** What an item adds, in numbers, on a line; and what it does. */
-const itemWords = (id: ItemId): HTMLElement =>
-  el("div", "", {}, rich(itemAdds(id).join(" · "), "adds"), isComponentId(id) ? null : rich(itemShort(id)));
+/** What an item adds, in numbers, on a line (an emblem adds none); and what it does. */
+const itemWords = (id: ItemId): HTMLElement => {
+  const adds = itemAdds(id);
+  return el(
+    "div",
+    "",
+    {},
+    adds.length > 0 ? rich(adds.join(" · "), "adds") : null,
+    isComponentId(id) ? null : rich(itemShort(id)),
+  );
+};
 
 /**
- * An item: what it adds and does, and what it is made of or makes. A component's "makes" lines put
- * first, lit and tagged "have", the ones whose other half the party already holds.
+ * An item: what it adds and does, and what it is made of or makes (or for an emblem, its kin). A
+ * component's "makes" lines put first, lit and tagged "have", the ones whose other half the party
+ * already holds.
  */
 export function itemDesc(id: ItemId, run: Run | null, itemAt = -1, lore = false): Description {
   const blocks: Block[] = [{ body: itemWords(id) }];
   if (lore) {
     blocks.push({ body: itemText(id) });
-    blocks.push({ body: el("i", "k-dim quip", { text: isComponentId(id) ? COMPONENTS[id].quip : FINISHED[id].quip }) });
+    blocks.push({ body: el("i", "k-dim quip", { text: itemQuip(id) }) });
+  }
+  if (isEmblemId(id)) {
+    const kin = EMBLEMS[id];
+    return {
+      name: itemName(id),
+      icon: itemIcon(id),
+      tag: "An emblem",
+      blocks,
+      chips: [{ label: "Kin", text: TRAITS[kin].name, icon: traitIcon(kin), ref: traitRef(kin) }],
+    };
   }
   return {
     name: itemName(id),
@@ -401,7 +422,7 @@ export function makesLines(id: ItemId, run: Run | null, itemAt = -1): Entry[] {
 
 export function boonDesc(id: BoonId): Description {
   const spec = BOONS[id];
-  const kin = spec.charm;
+  const kin = isEmblemId(id) ? EMBLEMS[id] : undefined;
   return {
     name: spec.name,
     icon: boonIcon(id),

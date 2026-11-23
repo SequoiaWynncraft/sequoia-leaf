@@ -46,7 +46,6 @@ import {
   traitsOf,
   type UnitKind,
 } from "@sequoia-leaf/raid";
-import { charmsOf } from "@sequoia-leaf/raid/party.ts";
 
 /** Where a figure picked up from `from` may be put down: free seats, free hollows, and places it would swap into. */
 export interface Reach {
@@ -98,13 +97,16 @@ export function canBuy(run: Run, offer: number): boolean {
   return pieces(run).filter((p) => p.kind === kind && p.stars === 1).length >= 2;
 }
 
-/** What handing an item to a figure would do: nothing (no room), hold it, or forge it with a component already held. */
+/**
+ * What handing an item to a figure would do: nothing (no room, or an emblem of a kin it is already),
+ * hold it, or forge it with a component already held.
+ */
 export type Handing =
   { can: false } | { can: true; forged: null } | { can: true; forged: FinishedId; with: ComponentId };
 
-export function handing(piece: Pick<Piece, "items">, item: ItemId): Handing {
-  const got = holdItem(piece.items, item);
-  if (!got) return { can: false };
+export function handing(piece: Pick<Piece, "kind" | "items">, item: ItemId): Handing {
+  const got = holdItem(piece, item);
+  if ("refused" in got) return { can: false };
   if (got.forged && got.with) return { can: true, forged: got.forged, with: got.with };
   return { can: true, forged: null };
 }
@@ -303,7 +305,7 @@ export function plainNumbers(kind: UnitKind, stars: Stars): Numbers {
   };
 }
 
-const EMPTY: Party = { who: "", title: "", figures: [], charms: [], boons: [], might: 100 };
+const EMPTY: Party = { who: "", title: "", figures: [], boons: [], might: 100 };
 
 /**
  * A figure's numbers as the next fight would start them: its items, its party's boons and, on the
@@ -333,7 +335,6 @@ export function pieceNumbers(run: Run, spot: Spot): Numbers | null {
   const alone: Party = {
     ...partyOf(run),
     figures: [{ kind: piece.kind, stars: piece.stars, seat: 7, items: piece.items.slice(), fed: piece.fed }],
-    charms: [],
   };
   return startNumbers(alone, 7);
 }
@@ -345,18 +346,14 @@ export interface TraitCount {
   next: number;
   step: number;
 }
-export function traitCount(party: Pick<Party, "figures" | "charms">, trait: TraitId): TraitCount {
-  const counts = countTraits(
-    party.figures.map((p) => p.kind),
-    party.charms,
-  );
+export function traitCount(party: Pick<Party, "figures">, trait: TraitId): TraitCount {
+  const counts = countTraits(party.figures);
   const count = counts[trait] ?? 0;
   const steps = TRAITS[trait].steps;
   return { count, next: steps.find((need) => need > count) ?? steps.at(-1) ?? 1, step: stepFor(trait, count) };
 }
 /** The same for the member's party as it is fielded now. */
-export const ownTraitCount = (run: Run, trait: TraitId): TraitCount =>
-  traitCount({ figures: partyOf(run).figures, charms: charmsOf(run.boons) }, trait);
+export const ownTraitCount = (run: Run, trait: TraitId): TraitCount => traitCount(partyOf(run), trait);
 
 /** Where the member has a figure just now: fielded, on the bench, on the stall, or nowhere. */
 export function whereIs(run: Run, kind: FigureId): "board" | "bench" | "stall" | null {

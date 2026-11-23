@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { boonNumber } from "./content/boons.ts";
 import { FIGURE_IDS, type FigureId, FIGURES, isFigureId, type Stars } from "./content/figures.ts";
-import type { ItemId } from "./content/items.ts";
+import { isEmblemId, type ItemId } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, ROOMS, STALL_ODDS } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
 import { resolveFight } from "./fight/engine.ts";
@@ -256,6 +256,17 @@ describe("selling and moving", () => {
     sell(run, { on: "bench", at: 4 });
     expect(run.acorns).toBe(acorns + 5 + 1);
   });
+  test("selling a figure that holds an emblem gives the emblem back to the item bench, for another to hold", () => {
+    const run = started();
+    run.items = [];
+    onBench(run, "finch", 0, 1, ["crabcharm", "thorn"]);
+    const done = sell(run, { on: "bench", at: 0 });
+    expect(done.ok && done.notes[0]).toMatchObject({ t: "sold", items: ["crabcharm", "thorn"] });
+    expect(run.items).toEqual(["crabcharm", "thorn"]);
+    onBench(run, "worm", 1);
+    expect(giveItem(run, 0, { on: "bench", at: 1 }).ok).toBe(true);
+    expect(run.bench[1]?.items).toEqual(["crabcharm"]);
+  });
   test("nobody is nowhere, and the last figure stays", () => {
     const run = started();
     expect(sell(run, { on: "bench", at: 3 })).toMatchObject({ ok: false, why: "Nobody is there." });
@@ -392,6 +403,18 @@ describe("three of a kind", () => {
     expect(run.items).toEqual(["blackthorn"]);
     expect(done.ok && done.notes[1]).toMatchObject({ t: "merged", spilled: ["blackthorn"] });
   });
+  test("an emblem a merged copy held goes to the keeper while it has room, like any item", () => {
+    const run = started();
+    run.board[3] = null;
+    const keeper = put(run, "worm", 3, 1, ["wasptail", "stump"]);
+    onBench(run, "worm", 0, 1, ["crabcharm", "mistcharm"]);
+    run.acorns = 5;
+    stock(run, 0, "worm");
+    buy(run, 0);
+    expect(keeper.stars).toBe(2);
+    expect(keeper.items).toEqual(["wasptail", "stump", "crabcharm"]);
+    expect(run.items).toEqual(["mistcharm"]);
+  });
   test("loose components that meet in a merge forge, as they would if handed over", () => {
     const run = started();
     run.board[3] = null;
@@ -460,6 +483,36 @@ describe("items", () => {
     giveItem(run, 0, { on: "board", at: 3 });
     giveItem(run, 0, { on: "board", at: 3 });
     expect(run.board[3]?.items).toEqual(["stump"]);
+  });
+  test("an emblem takes one of a figure's three places, and components still forge beside it", () => {
+    const run = started();
+    run.board[3] = null;
+    const finch = put(run, "finch", 3);
+    run.items = ["crabcharm", "thorn", "plume", "hoard", "bark"];
+    expect(giveItem(run, 0, { on: "board", at: 3 })).toMatchObject({ ok: true, notes: [{ forged: null }] });
+    giveItem(run, 0, { on: "board", at: 3 });
+    expect(giveItem(run, 0, { on: "board", at: 3 })).toMatchObject({ ok: true, notes: [{ forged: "wasptail" }] });
+    expect(finch.items).toEqual(["crabcharm", "wasptail"]);
+    giveItem(run, 0, { on: "board", at: 3 });
+    expect(finch.items).toEqual(["crabcharm", "wasptail", "hoard"]);
+    expect(giveItem(run, 0, { on: "board", at: 3 })).toMatchObject({ ok: false, code: "hands_full" });
+    expect(run.items).toEqual(["bark"]);
+  });
+  test("an emblem is refused for a figure of its kin already, and the refusal says so", () => {
+    const run = started();
+    run.board[3] = null;
+    const finch = put(run, "finch", 3);
+    run.items = ["feathercharm", "crabcharm"];
+    expect(giveItem(run, 0, { on: "board", at: 3 })).toEqual({
+      ok: false,
+      code: "already_kin",
+      why: "It is of that kin already.",
+    });
+    expect(finch.items).toEqual([]);
+    expect(run.items).toEqual(["feathercharm", "crabcharm"]);
+    // A Finch is no Crab, and takes the other.
+    expect(giveItem(run, 1, { on: "board", at: 3 }).ok).toBe(true);
+    expect(finch.items).toEqual(["crabcharm"]);
   });
   test("a figure holds three, and no more", () => {
     const run = started();
@@ -582,7 +635,7 @@ describe("the takings", () => {
     expect(taken.fight.result).toBe("loss");
     expect(run.acorns).toBe(20 + 4 + 2);
   });
-  test("gnomes find acorns: more after a win, and at the second step even after a loss", () => {
+  test("gnomes find acorns after every room, won or lost, and more after a win at the second step", () => {
     const two = winning();
     put(two, "barrowgnome", 10);
     put(two, "lanterngnome", 11);
@@ -591,6 +644,14 @@ describe("the takings", () => {
     const taken = fight(two);
     expect(two.acorns).toBe(4 + 1 + traitNumber("gnome", "win", 1));
     expect(taken.notes.some((n) => n.t === "acorns" && n.why === "gnomes")).toBe(true);
+
+    const lost = losing();
+    put(lost, "barrowgnome", 10);
+    put(lost, "lanterngnome", 11);
+    lost.level = 8;
+    lost.acorns = 0;
+    fight(lost);
+    expect(lost.acorns).toBe(4 + traitNumber("gnome", "loss", 1));
 
     const four = losing();
     four.level = 8;
@@ -605,8 +666,7 @@ describe("the takings", () => {
     four.acorns = 0;
     fight(four);
     expect(four.acorns).toBe(4 + traitNumber("gnome", "loss", 2));
-    expect(traitNumber("gnome", "loss", 1)).toBe(0);
-    expect(traitNumber("gnome", "loss", 2)).toBeGreaterThan(0);
+    expect(traitNumber("gnome", "loss", 2)).toBeGreaterThan(traitNumber("gnome", "loss", 1));
   });
   test("two copies of one gnome are one gnome", () => {
     const run = winning();
@@ -903,11 +963,25 @@ describe("boons", () => {
     pockets.acorns = 300;
     expect(interestNow(pockets)).toBe(boonNumber("deeppockets", "cap"));
   });
-  test("a charm counts toward its kin on the board", () => {
-    const run = withBoon("crabcharm");
+  test("choosing a charm puts its emblem on the item bench, and counts for nothing until a figure holds it", () => {
+    const run = winning();
+    run.choices = [{ kind: "boon", options: ["crabcharm"], redraws: 0 }];
+    const done = choose(run, 0);
+    expect(done.ok && done.notes).toEqual([
+      { t: "boon", boon: "crabcharm" },
+      { t: "items", why: "charm", items: ["crabcharm"] },
+    ]);
+    expect(run.items).toEqual(["crabcharm"]);
+    expect(run.boons).toEqual(["crabcharm"]);
+    // The party is a Badger and a Crab #40: one Crab.
+    expect(traitsNow(run).find((t) => t.trait === "crab")).toEqual({ trait: "crab", count: 1, step: 0 });
+    // The Badger takes it, and is a Crab as well.
+    expect(giveItem(run, 0, { on: "board", at: 3 }).ok).toBe(true);
+    expect(run.items).toEqual([]);
     expect(traitsNow(run).find((t) => t.trait === "crab")).toEqual({ trait: "crab", count: 2, step: 1 });
     const begun = beginFight(run);
-    expect(begun.ok && begun.setup.sides[0].charms).toEqual(["crab"]);
+    expect(begun.ok && begun.setup.sides[0].figures.find((p) => p.kind === "badger")?.items).toEqual(["crabcharm"]);
+    expect(begun.ok && begun.setup.sides[1].figures.length).toBeGreaterThan(0);
   });
   test("boons that matter in a fight travel with the party; the others stay home", () => {
     const run = winning();
@@ -944,6 +1018,13 @@ describe("who is waiting", () => {
     expect(party.figures.length).toBe(ROOMS[7]?.spar?.level ?? 0);
     expect(new Set(party.figures.map((p) => p.seat)).size).toBe(party.figures.length);
     expect(new Set(party.figures.map((p) => p.kind)).size).toBe(party.figures.length);
+  });
+  test("a sparring partner's figures hold components and finished items, never an emblem", () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      for (const room of [2, 7, 13]) {
+        for (const p of sparParty(seed, room, 2).figures) expect(p.items.some(isEmblemId)).toBe(false);
+      }
+    }
   });
   test("partners spend what the room allows, more in later rooms and on harder trails", () => {
     for (const room of [2, 7, 13]) {
