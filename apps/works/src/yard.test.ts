@@ -26,8 +26,20 @@ import mid from "@sequoia-leaf/yard/yards/mid.json";
 type Ctx = Parameters<typeof WORKS.apply>[2];
 
 import { S } from "./state.ts";
-import { place, setTool, toolHooks, undo } from "./tools.ts";
-import { CATCHING_UP, catchingUp, differences, doNow, letGo, onRefused, openYard, runYard } from "./yard.ts";
+import { cancel, place, setTool, toolHooks, undo } from "./tools.ts";
+import { reading, showLetter } from "./ui/letter.ts";
+import {
+  again,
+  CATCHING_UP,
+  catchingUp,
+  differences,
+  doNow,
+  gate,
+  letGo,
+  onRefused,
+  openYard,
+  runYard,
+} from "./yard.ts";
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -92,6 +104,8 @@ afterEach(() => {
   world = null;
   letGo();
   performance.now = clock;
+  Reflect.deleteProperty(globalThis, "window");
+  Reflect.deleteProperty(globalThis, "document");
 });
 
 /** Waits until a condition holds, a millisecond at a time. */
@@ -137,6 +151,47 @@ function runBoth(fake: ReturnType<typeof fakeLeaf>, ms: number): void {
   performance.now = () => 1000 + ms;
   runYard(1000 + ms);
   stepTo(fake.leaf.yard, S.world.tick);
+}
+
+/** Leaf answers each call to `route` only when the test lets it go (`held`, oldest first), as it stands then. */
+function holding(fake: ReturnType<typeof fakeLeaf>, route: keyof ReturnType<typeof fakeLeaf>["routes"]) {
+  const held: (() => void)[] = [];
+  world?.done();
+  world = standin({
+    ...fake.routes,
+    [route]: (sent: Sent) => new Promise<Reply>((answer) => held.push(() => answer(fake.routes[route](sent)))),
+  });
+  return held;
+}
+
+/** Just enough of an element for the letter: it hears what reaches it, and holds nothing. */
+class Part extends EventTarget {
+  className = "";
+  textContent = "";
+  hidden = true;
+  readonly classList = { add: (): void => undefined, remove: (): void => undefined };
+  readonly setAttribute = (): void => undefined;
+  readonly appendChild = <T>(kid: T): T => kid;
+  readonly replaceChildren = (): void => undefined;
+  readonly focus = (): void => undefined;
+  readonly getBoundingClientRect = () => ({ left: 0, top: 0, width: 0, height: 0 });
+}
+/**
+ * The page: a window, which hears every press first, with the gate on it, and the letter's place.
+ * Made after the yard is opened, so that the kit hears nothing of it.
+ */
+function page(): { window: EventTarget; letter: Part } {
+  const win = new EventTarget();
+  const letter = new Part();
+  const doc = {
+    createElement: () => new Part(),
+    createTextNode: () => new Part(),
+    getElementById: (id: string) => (id === "letter" ? letter : null),
+  };
+  Object.defineProperty(globalThis, "window", { value: win, configurable: true });
+  Object.defineProperty(globalThis, "document", { value: doc, configurable: true });
+  gate(cancel);
+  return { window: win, letter };
 }
 
 describe("the yard, on Leaf", () => {
@@ -291,28 +346,16 @@ describe("the yard, on Leaf", () => {
     expect([fake.leaf.calls, asked, differences(), S.world.till]).toEqual([["read", "batch", "read"], 3, 1, 0]);
   });
 
-  test("while Leaf's yard is being taken, the yard takes no input, records nothing to undo, and stands still", async () => {
+  test("while Leaf's yard is being taken, a script's command is refused and the copy stands still", async () => {
     const fake = await opened();
     const [a, b] = clear(2);
     if (!a || !b) throw new Error("no room");
-    const held: (() => void)[] = [];
-    world?.done();
-    world = standin({
-      ...fake.routes,
-      "GET /v1/game/play/works": (sent) =>
-        new Promise<Reply>((answer) => held.push(() => answer(fake.routes["GET /v1/game/play/works"](sent)))),
-    });
+    const held = holding(fake, "GET /v1/game/play/works");
     S.world.till += 5;
     doNow({ do: "build", kind: "belt", dir: 0, ...a });
     await until(() => held.length >= 1);
     const [copy, tick] = [S.world, S.world.tick];
-    const said: string[] = [];
-    toolHooks.said = (text) => void said.push(text);
     expect(doNow({ do: "build", kind: "belt", dir: 0, ...b })).toEqual({ refused: "catching_up", why: CATCHING_UP });
-    setTool("belt");
-    expect(place(b.x, b.y)).toBe(false);
-    expect([S.aim?.why, undo(), said]).toEqual([CATCHING_UP, false, ["Nothing to undo."]]);
-    setTool(null);
     // Three seconds on, the copy has not moved; after the first second, the line over the dock says why.
     runYard(1000 + 3000);
     expect([S.world, S.world.tick, kindAt(b), fake.leaf.posts]).toEqual([copy, tick, undefined, 1]);
@@ -323,6 +366,73 @@ describe("the yard, on Leaf", () => {
     expect("refused" in doNow({ do: "build", kind: "belt", dir: 0, ...b })).toBe(false);
     await until(() => fake.leaf.posts >= 2);
     expect([kindAt(b), differences()]).toEqual(["belt", 1]);
+  });
+
+  test("undo pressed while Leaf's yard is being taken leaves what there is to undo as it was", async () => {
+    const fake = await opened();
+    const [a] = clear(1);
+    if (!a) throw new Error("no room");
+    const held = holding(fake, "GET /v1/game/play/works");
+    const { window: win } = page();
+    // The page's Z, which hears a key only after the gate.
+    win.addEventListener("keydown", () => void undo());
+    const said: string[] = [];
+    toolHooks.said = (text) => void said.push(text);
+    // The copy has gone astray: the belt is answered with a check that differs, and Leaf's yard is asked for.
+    S.world.till += 5;
+    setTool("belt");
+    expect(place(a.x, a.y)).toBe(true);
+    await until(() => held.length >= 1);
+    // The tool's ghost was put away as taking began, and the press reaches nothing.
+    expect(S.aim).toBeNull();
+    win.dispatchEvent(new Event("keydown"));
+    expect([kindAt(a), said, fake.leaf.posts]).toEqual(["belt", [], 1]);
+    held.shift()?.();
+    await until(() => !catchingUp(1000 + 1100));
+    // In step again, the same press undoes the belt: it was still there to undo.
+    win.dispatchEvent(new Event("keydown"));
+    expect([kindAt(a), said]).toEqual([undefined, []]);
+    await until(() => fake.leaf.posts >= 2);
+  });
+
+  test("the letter's button pressed while Leaf's yard is being taken leaves the letter up, and collects when pressed after", async () => {
+    const fake = await opened();
+    const [a] = clear(1);
+    if (!a) throw new Error("no room");
+    const held = holding(fake, "GET /v1/game/play/works");
+    const { window: win, letter } = page();
+    // A press goes on from the window down to the letter, unless the gate stops it.
+    win.addEventListener("click", () => letter.dispatchEvent(new Event("click")));
+    showLetter({ seconds: 600, coins: 0, made: {} }, () => undefined);
+    S.world.till += 5;
+    doNow({ do: "build", kind: "belt", dir: 0, ...a });
+    await until(() => held.length >= 1);
+    win.dispatchEvent(new Event("click"));
+    expect([reading(), fake.leaf.posts]).toEqual([true, 1]);
+    held.shift()?.();
+    await until(() => !catchingUp(1000 + 1100));
+    win.dispatchEvent(new Event("click"));
+    expect(reading()).toBe(false);
+    await until(() => fake.leaf.posts >= 2);
+    expect(fake.leaf.commands.map((c) => isRecord(c) && c.do)).toEqual(["build", "collect"]);
+  });
+
+  test("a yard staged from outside is taken once what is in flight is answered, from a read set off after the staging", async () => {
+    const fake = await opened();
+    const [a, b] = clear(2);
+    if (!a || !b) throw new Error("no room");
+    const held = holding(fake, "POST /v1/game/play/works");
+    doNow({ do: "build", kind: "belt", dir: 0, ...a });
+    await until(() => held.length >= 1);
+    // Staged on Leaf while the belt is on its way.
+    fake.elsewhere({ do: "build", kind: "mill", dir: 0, ...b });
+    const staging = again();
+    const first = await Promise.race([staging.then(() => "taken"), Bun.sleep(20).then(() => "waiting")]);
+    expect([first, fake.leaf.reads.length]).toEqual(["waiting", 1]);
+    held.shift()?.();
+    await staging;
+    expect([kindAt(a), kindAt(b), catchingUp(Infinity)]).toEqual(["belt", "mill", false]);
+    expect(WORKS.encode(S.world)).toBe(WORKS.encode({ ...fake.leaf.yard, seed: null }));
   });
 
   test("a read of Leaf's yard that ends the page goes to its screen, and is not asked again", async () => {
@@ -461,6 +571,49 @@ describe("the yard, on Leaf", () => {
     await Bun.sleep(5);
     expect([fake.leaf.reads.length, differences(), fake.leaf.yard.done - mid.done]).toEqual([1, 0, 100]);
   });
+
+  test.each([
+    ["before", ORDER_WAITS - 5],
+    ["after", ORDER_WAITS + 10],
+  ])(
+    "an earlier batch's answer naming an order the member has since swapped out does not put it back, %s it counts",
+    async (_, late) => {
+      const fake = await opened(board());
+      const held = holding(fake, "POST /v1/game/play/works");
+      const [a] = clear(1);
+      if (!a) throw new Error("no room");
+      /** The page's clock and Leaf's, `ticks` past the opening; Leaf runs its yard only as it is sent commands. */
+      const on = (ticks: number): void => {
+        fake.leaf.ms = ticks * TICK_MS;
+        performance.now = () => 1000 + ticks * TICK_MS;
+        runYard(1000 + ticks * TICK_MS);
+      };
+      // An order is handed over, and Leaf's answer brings the one it hangs in its place.
+      doNow({ do: "handOver", order: S.world.board[0]?.id ?? -1 });
+      await until(() => held.length >= 1);
+      held.shift()?.();
+      await until(() => S.world.board.length === 3);
+      const hung = S.world.board.at(-1);
+      if (!hung) throw new Error("no order hung");
+      // A belt goes, and before Leaf answers it the member swaps the new order out.
+      on(5);
+      doNow({ do: "build", kind: "belt", dir: 0, ...a });
+      await until(() => held.length >= 1);
+      on(40);
+      expect("refused" in doNow({ do: "swap", order: hung.id })).toBe(false);
+      // The belt's answer still names the order, and comes when the copy is `late` ticks on.
+      on(late);
+      held.shift()?.();
+      await until(() => held.length >= 1);
+      expect(S.world.board.map((o) => o.id)).not.toContain(hung.id);
+      held.shift()?.();
+      await until(() => S.world.board.length === 3);
+      await Bun.sleep(5);
+      const ids = fake.leaf.yard.board.map((o) => o.id);
+      expect([S.world.board.map((o) => o.id), ids.includes(hung.id)]).toEqual([ids, false]);
+      expect([fake.leaf.reads.length, differences()]).toEqual([1, 0]);
+    },
+  );
 
   test("what a frame's steps made known is told even when that frame also collects", async () => {
     const fake = await opened();

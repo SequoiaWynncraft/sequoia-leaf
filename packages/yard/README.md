@@ -274,8 +274,10 @@ then), `at`, `away`, the news and what is worked out from the rest. Each word is
 before it is joined, so that any bit of any field reaches every bit of the check. A yard and the
 yard read back from its save, or from what the page is shown, have the same check, and two yards
 with the same check run on alike. Only Leaf hangs an order, from the seed (a hand over, a swap, a
-fourth hook, the board going up); the page puts each in `hung` that its copy lacks on its board
-while it does not count yet, and the two yards agree from then on.
+fourth hook, the board going up); the page puts on its copy's board each in `hung` that is new to
+it while it does not count yet, and the two yards agree from then on. Order ids only go up
+(`serial`), so one is new when its id is at or past the copy's `serial`, which then moves past it;
+any other the copy has had, and may have swapped out or handed over since.
 
 ## What the town can read
 
@@ -321,10 +323,14 @@ if (!("refused" in done)) {
 }
 
 // When Leaf answers a batch: if Leaf did what the copy did (nothing refused), at the same tick, the
-// checks are of the same moment. Alike, the copy takes the orders Leaf hung, while they wait.
+// checks are of the same moment. Alike, the copy takes the orders Leaf hung that are new to it,
+// while they wait.
 if (answer.tick === last.tick && answer.check === last.check)
   for (const order of answer.hung)
-    if (!copy.board.some((o) => o.id === order.id) && !counts(order, copy.tick)) copy.board.push(order);
+    if (order.id >= copy.serial && !counts(order, copy.tick)) {
+      copy.board.push(order);
+      copy.serial = order.id + 1;
+    }
 
 // Otherwise (or for an order heard of too late), once every command sent has been answered, Leaf's yard.
 copy = WORKS.decode(view.yard);

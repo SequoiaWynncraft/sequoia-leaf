@@ -54,6 +54,7 @@ import {
   aimAt,
   buyIdea,
   buyLand,
+  cancel,
   confirm,
   paintAt,
   place,
@@ -72,7 +73,7 @@ import { putAway, reading, showLetter } from "./ui/letter.ts";
 import { closeBanner, feed, initNotes, tickNotes } from "./ui/notes.ts";
 import { closePanel, initPanels, openPanel, panelHooks, type PanelId, refreshPanel } from "./ui/panels.ts";
 import { $ } from "./ui/parts.ts";
-import { again, differences, doNow, keepScreen, leadAt, onRefused, openYard, runYard, screen } from "./yard.ts";
+import { again, differences, doNow, gate, keepScreen, leadAt, onRefused, openYard, runYard, screen } from "./yard.ts";
 
 /** What the page says where no Leaf answers: the yard is the guild's server's. */
 const NEEDS_LEAF = "The Works needs the guild's server.";
@@ -219,6 +220,8 @@ async function boot(): Promise<void> {
   canvas.addEventListener("contextrestored", wipe);
   let wordPx = 2;
 
+  // While Leaf's yard is being taken, what is under way is put away and no press or key goes on.
+  gate(cancel);
   initNotes();
   initPanels(art);
   initBoard(me.id);

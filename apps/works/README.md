@@ -32,12 +32,15 @@ and sent with the tick the copy stood at; a command the rules refuse is said so 
 each command sent the page keeps the copy's tick and check just after it. Leaf answers a batch with
 its clock, its yard's tick and check after it, and the orders it hung that do not count yet, not
 the yard (the yard's README). When Leaf did what the copy did, at the same tick, the checks are
-compared; alike, the copy only puts on its board the orders Leaf hung that it lacks, each a few
-seconds before it counts. Otherwise (checks that differ, a command Leaf turned down or did at
-another tick, an order heard of after it began to count, a tab away over a minute, a yard staged
-from outside) the page takes Leaf's yard. Meanwhile the yard takes no input: a tool does nothing,
-records nothing to undo and shows the refusal it would show for anything that cannot go there, and
-the copy stands still. What the page had already handed to the kit goes to Leaf and is answered;
+compared; alike, the copy only puts on its board the orders Leaf hung that are new to it, each a
+few seconds before it counts (ids only go up: one under the copy's `serial` it has had, and may
+have swapped out or handed over since). Otherwise (checks that differ, a command Leaf turned down
+or did at another tick, an order heard of after it began to count, a tab away over a minute, a yard
+staged from outside) the page takes Leaf's yard. Meanwhile the yard takes no input, at one gate
+(`gate`): as it begins, whatever the member had under way is put away, as `Esc` puts it away, and
+no press, move, click, wheel or key goes past the window to the yard, the dock, the panels or the
+letter (a press or key let go still passes, so nothing stays held); the copy stands still. What the
+page had already handed to the kit goes to Leaf and is answered;
 then it asks for Leaf's yard, and again every two seconds while that fails for a moment (what ends
 the page at the opening ends it here too, with the same screens); the copy is then Leaf's yard.
 Should that take more than a second, the line over the dock says the yard is catching up with the
