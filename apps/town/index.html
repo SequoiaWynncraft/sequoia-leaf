@@ -240,6 +240,43 @@
         align-items: flex-start;
         gap: calc(var(--u) * 3);
       }
+      /* A note's full notes, under its lines: each part's heading, then its points one under the other. */
+      .quest .more {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 2);
+        margin-top: var(--u);
+      }
+      .quest .more[hidden] {
+        display: none;
+      }
+      .quest .more > .k-label {
+        color: #6a2a7c;
+      }
+      .quest .points {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--u) * 2);
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .quest .points li {
+        position: relative;
+        padding-left: calc(var(--u) * 6);
+      }
+      .quest .points li::before {
+        content: "";
+        position: absolute;
+        left: var(--u);
+        top: calc(0.5lh - var(--u));
+        width: calc(var(--u) * 2);
+        height: calc(var(--u) * 2);
+        background: #6a2a7c;
+      }
+      .quest > .k-btn {
+        align-self: flex-start;
+      }
       .crabs {
         display: grid;
         grid-template-columns: repeat(3, 1fr);

@@ -48,7 +48,7 @@ import {
 } from "./hud.ts";
 import { ask, mine, refusal, town } from "./leaf.ts";
 import type { Letter } from "./letter.ts";
-import { NOTES } from "./notes.ts";
+import { NOTES, type Part } from "./notes.ts";
 import { emote, EMOTE_NAMES } from "./players.ts";
 import { icon, type Sprites } from "./sprites.ts";
 import { LOG, thingName, touchThing } from "./town.ts";
@@ -364,7 +364,10 @@ function notes(body: HTMLElement): () => void {
   };
 }
 
-/** What has changed in the game: the ten newest notes. */
+/**
+ * What has changed in the game: the ten newest notes, each its lines. A note with full notes has
+ * Read more under them, which opens its parts in the same paper.
+ */
 function newsTab(list: HTMLElement): void {
   list.replaceChildren(
     ...NOTES.slice(0, 10).map((n) =>
@@ -375,9 +378,31 @@ function newsTab(list: HTMLElement): void {
         el("div", "k-label", { text: noteWhen(n.at) }),
         el("div", "k-title", { text: n.title }),
         ...n.lines.map((text) => el("div", "k-read", { text })),
+        ...(n.more ? fullNotes(n.more) : []),
       ),
     ),
   );
+}
+
+/** A note's full notes, shut, and the button that opens and shuts them. */
+function fullNotes(parts: readonly Part[]): HTMLElement[] {
+  const full = el(
+    "div",
+    "more",
+    { hidden: true },
+    ...parts.flatMap((p) => [
+      el("div", "k-label", { text: p.head }),
+      el("ul", "points", {}, ...p.points.map((text) => el("li", "k-read", { text }))),
+    ]),
+  );
+  const toggle = button("sm blue", ["Read more"], (b) => {
+    full.hidden = !full.hidden;
+    b.textContent = full.hidden ? "Read more" : "Less";
+    b.setAttribute("aria-expanded", String(!full.hidden));
+    sfx.paper();
+  });
+  toggle.setAttribute("aria-expanded", "false");
+  return [full, toggle];
 }
 
 /** The quest board: its quests on one tab, and on the other what has changed in the game. */
