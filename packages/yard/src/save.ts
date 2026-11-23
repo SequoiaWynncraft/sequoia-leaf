@@ -21,7 +21,6 @@ import { isDir } from "./grid.ts";
 import { LAND, type Land } from "./land.ts";
 import { fillBoard, reask } from "./orders.ts";
 import { blueprintRefusal, keptOf, type Piece, placed } from "./pieces.ts";
-import { repower } from "./power.ts";
 import { type Away, type Building, put, reopen, type Standing, TINTS, WARM, type World } from "./world.ts";
 
 export const VERSION = 3;
@@ -298,7 +297,6 @@ export function load(text: string | null | undefined, land: Land = LAND): World 
     const order = standing(o);
     if (order && w.open.board && w.board.length < w.rates.slots) w.board.push(order);
   }
-  repower(w);
   fillBoard(w);
   const pace = isRec(raw.pace) ? raw.pace : {};
   w.pace = { ticks: amount(pace.ticks, 1e9) ?? 0, warm: whole(pace.warm, WARM) ?? WARM, made: tally(pace.made, 1e12) };

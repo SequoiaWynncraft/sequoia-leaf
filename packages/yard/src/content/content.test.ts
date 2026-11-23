@@ -4,6 +4,7 @@ import { buyPlan, buyPlot } from "../build.ts";
 import { create } from "../create.ts";
 import { LAND, touching } from "../land.ts";
 import { makeable } from "../orders.ts";
+import { repower } from "../power.ts";
 import type { World } from "../world.ts";
 import { ASKS } from "./asks.ts";
 import { ITEM, type Item, ITEMS, RAW } from "./items.ts";
@@ -90,10 +91,10 @@ describe("the land", () => {
     expect(w.cells.filter((b) => b).length).toBe(9);
   });
   test("the yard has deadfall within the depot's power, and its ore and stone beyond it", () => {
-    const w = create();
+    const power = repower(create());
     const yard = LAND.plots.findIndex((p) => p.id === "yard");
     const within = (item: string, lit: number): number =>
-      LAND.deposit.filter((d, i) => d === item && LAND.plot[i] === yard && w.power[i] === lit).length;
+      LAND.deposit.filter((d, i) => d === item && LAND.plot[i] === yard && power[i] === lit).length;
     expect(within("deadfall", 1)).toBeGreaterThanOrEqual(6);
     expect(within("ore", 1)).toBe(0);
     expect(within("stone", 1)).toBe(0);

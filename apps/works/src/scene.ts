@@ -34,6 +34,7 @@ import {
   MILLED,
   REACH,
   RECIPE,
+  repower,
   RIGHT,
   type Status,
   status,
@@ -418,7 +419,7 @@ function build(art: Art, w: World, b: Building, i: number, x: number, y: number,
   const z = foot + camY;
   const a = ghost > 0 ? ghost : 1;
   const real = ghost === 0;
-  const powered = !real || w.power[i] === 1;
+  const powered = !real || (w.power ?? repower(w))[i] === 1;
   const mem = real ? memOf(w, b, i) : null;
   const st = mem ? reading(w, i, mem) : null;
   const working = real && st?.state === "working";
@@ -833,7 +834,7 @@ function inHand(g: Ctx, art: Art, w: World, grp: Group, now: Moment, cx: number,
     held.lost = lost;
     const tiles = tilesOf(w, grp.at);
     // The yard as it would be: for a move without the pieces where they stand now, and with every piece in hand set down.
-    const yard: World = { ...w, cells: [...w.cells], wire: null };
+    const yard: World = { ...w, cells: [...w.cells], power: w.power ?? repower(w), wire: null };
     if (grp.as === "move") for (const i of tilesOf(w, grp.pieces)) yard.cells[i] = null;
     for (const p of grp.at) {
       const [near = -1, far = -1] = tilesOf(w, [p]);
@@ -1297,8 +1298,9 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
   if (builds(tool) && wantsPower(tool)) {
     // Where power reaches, edged in gold dots, while placing something that it matters to.
     g.fillStyle = GOLD[1];
+    const power = w.power ?? repower(w);
     const on = (tx: number, ty: number): boolean =>
-      tx >= 0 && ty >= 0 && tx < land.w && ty < land.h && w.power[ty * land.w + tx] === 1;
+      tx >= 0 && ty >= 0 && tx < land.w && ty < land.h && power[ty * land.w + tx] === 1;
     for (let ty = ty0; ty <= ty1 + 1; ty++)
       for (let tx = tx0; tx <= tx1 + 1; tx++) {
         const here = on(tx, ty);

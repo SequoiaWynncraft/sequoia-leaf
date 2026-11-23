@@ -12,7 +12,6 @@ import { STORY } from "./content/story.ts";
 import { BACK, type Dir, DX, DY, LEFT, RIGHT } from "./grid.ts";
 import { besideWater, type Plot, touching } from "./land.ts";
 import { fillBoard } from "./orders.ts";
-import { repower } from "./power.ts";
 import { rewire, takes } from "./step.ts";
 import { at, blank, type Building, changed, reopen, take, type Wire, type World } from "./world.ts";
 
@@ -20,6 +19,10 @@ import { at, blank, type Building, changed, reopen, take, type Wire, type World 
 export type Spent = { readonly ok: true; readonly cost: number } | { readonly ok: false; readonly why: string };
 /** What came of taking something away: the Coins that come back, or why not. */
 export type Refund = { readonly ok: true; readonly refund: number } | { readonly ok: false; readonly why: string };
+/** What came of setting a piece down: what it cost and the tiles it was laid on, or why not. */
+export type Laid =
+  | { readonly ok: true; readonly cost: number; readonly laid: readonly number[] }
+  | { readonly ok: false; readonly why: string };
 
 /** Why nothing can stand on a tile, whatever it is: off the map, not the yard's land, water, or a redwood. */
 function ground(w: World, x: number, y: number): string | null {
@@ -128,6 +131,18 @@ export function refusal(
  * tiles beyond, if given). A new belt or tunnel takes the colour of the line it joins (`join`).
  */
 export function build(w: World, kind: Kind, x: number, y: number, dir: Dir, coins: number, span?: number): Spent {
+  const did = setDown(w, kind, x, y, dir, coins, span);
+  if (!did.ok) return did;
+  if (kind === "belt" || kind === "tunnel") join(w, did.laid);
+  return { ok: true, cost: did.cost };
+}
+
+/**
+ * Sets a piece down as `build` does, but leaves a new belt or tunnel the colour it came with, so
+ * that a set of pieces (`stand`) is coloured once, as a whole. Says what it cost and the tiles it
+ * was laid on: none, if it only turned one of its kind.
+ */
+export function setDown(w: World, kind: Kind, x: number, y: number, dir: Dir, coins: number, span?: number): Laid {
   const why = refusal(w, kind, x, y, coins, dir, span);
   if (why !== null) return { ok: false, why };
   const i = at(w, x, y);
@@ -137,7 +152,7 @@ export function build(w: World, kind: Kind, x: number, y: number, dir: Dir, coin
       there.dir = dir;
       changed(w);
     }
-    return { ok: true, cost: 0 };
+    return { ok: true, cost: 0, laid: [] };
   }
   const made = blank(kind, dir);
   const cost = priceAt(w, kind, x, y);
@@ -168,9 +183,8 @@ export function build(w: World, kind: Kind, x: number, y: number, dir: Dir, coin
     }
   }
   changed(w);
-  if (kind === "pylon") repower(w);
-  if (kind === "belt" || kind === "tunnel") join(w, laid);
-  return { ok: true, cost };
+  if (kind === "pylon") w.power = null;
+  return { ok: true, cost, laid };
 }
 
 // ---------- colour ----------
@@ -284,7 +298,7 @@ export function remove(w: World, x: number, y: number): Refund {
     w.cells[at(w, x + DX[there.dir] * far, y + DY[there.dir] * far)] = null;
   }
   changed(w);
-  if (there.kind === "pylon") repower(w);
+  if (there.kind === "pylon") w.power = null;
   if (there.free) w.spare[there.kind] = (w.spare[there.kind] ?? 0) + 1;
   return { ok: true, refund: worth(there) };
 }
@@ -436,7 +450,6 @@ export function buyPlan(w: World, id: PlanId, coins: number): Spent {
   w.plans.push(id);
   reopen(w);
   changed(w);
-  repower(w);
   fillBoard(w);
   return { ok: true, cost: planOf(id)?.price ?? 0 };
 }

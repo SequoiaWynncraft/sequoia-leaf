@@ -52,6 +52,7 @@ import {
   RECIPE,
   refusal,
   remove,
+  repower,
   route,
   save,
   type Spent,
@@ -176,11 +177,12 @@ class Player {
   light(x: number, y: number): void {
     const { w } = this;
     const [cx, cy] = w.land.depot;
-    for (let tries = 0; tries < 12 && w.power[at(w, x, y)] !== 1; tries++) {
+    for (let tries = 0; tries < 12 && (w.power ?? repower(w))[at(w, x, y)] !== 1; tries++) {
       const link = REACH.link * w.rates.reach;
       const live: Cell[] = [[cx, cy]];
+      const lit = w.power ?? repower(w);
       w.cells.forEach((b, i) => {
-        if (b?.kind === "pylon" && w.power[i] === 1) live.push([i % w.land.w, Math.floor(i / w.land.w)]);
+        if (b?.kind === "pylon" && lit[i] === 1) live.push([i % w.land.w, Math.floor(i / w.land.w)]);
       });
       let best: Cell | null = null;
       let bestD = Infinity;
@@ -472,6 +474,7 @@ class Player {
     const y0 = Math.min(...owned.map((p) => p.y));
     const y1 = Math.max(...owned.map((p) => p.y + p.h));
     const rows: string[] = [];
+    const lit = w.power ?? repower(w);
     for (let y = y0; y < y1; y++) {
       let row = `     ${lpad(y, 2)} `;
       for (let x = x0; x < x1; x++) {
@@ -488,7 +491,7 @@ class Player {
               ? "T"
               : dep
                 ? (L[dep] ?? "?")
-                : w.power[i]
+                : lit[i]
                   ? "·"
                   : " ";
       }
@@ -619,7 +622,7 @@ for (const [n, order] of STORY.entries()) {
       p.w.cells.forEach((b, i) => {
         if (b && (b.kind === "bench" || b.kind === "workshop" || b.kind === "mill"))
           console.log(
-            `   ${b.kind} at ${i % p.w.land.w},${Math.floor(i / p.w.land.w)} facing ${b.dir}: holds ${JSON.stringify(b.buf)}, out ${b.out}, power ${p.w.power[i]}`,
+            `   ${b.kind} at ${i % p.w.land.w},${Math.floor(i / p.w.land.w)} facing ${b.dir}: holds ${JSON.stringify(b.buf)}, out ${b.out}, power ${(p.w.power ?? repower(p.w))[i]}`,
           );
       });
       throw new Error(`order ${n + 1} never filled: ${JSON.stringify(p.w.filled)} of ${JSON.stringify(order.want)}`);
