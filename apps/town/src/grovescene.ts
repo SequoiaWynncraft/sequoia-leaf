@@ -742,7 +742,7 @@ export function makeGrove(
 
   /** A tag's words, its plate, the plate's light top, and its letters. */
   type Tag = readonly [string, string, string, string];
-  /** A small tag: a plate with an ink edge, a light top and a word in the pixel font. */
+  /** A small tag: a plate with an ink edge, a light top and a word in the pixel font, whose tails (g, y) clear the foot's edge. */
   const chipWidth = (text: string, px = 2): number => widthOf(g, text, px) + 5 * px;
   function chip(text: string, x: number, y: number, bg: string, top: string, fg: string, px = 2): number {
     const w = chipWidth(text, px);
@@ -751,7 +751,7 @@ export function makeGrove(
     R(x, y, w, h, bg);
     R(x, y, w, px, top);
     R(x, y + h - px, w, px, INK);
-    write(g, text, x + 3 * px, y + 2 * px, { px, colour: fg, shadow: false });
+    write(g, text, x + 3 * px, y + px, { px, colour: fg, shadow: false });
     return w;
   }
 
