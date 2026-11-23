@@ -94,7 +94,7 @@ import {
   twinkleAll,
 } from "./town.ts";
 import { dismissArrival, initUI, openPanel, showArrival, townDock } from "./ui.ts";
-import { isVisitor, members, stepVisitors } from "./visitors.ts";
+import { isVisitor, members, spotsNow, stepVisitors, worksTools } from "./visitors.ts";
 import { H, place, type PlaceId, PLACES, pondD, SEATS, TOWN, W } from "./world.ts";
 
 /** Where the view closes in when the member goes into each game, and where they stand to go in. */
@@ -187,6 +187,8 @@ export interface Town extends Scene {
     crabs(): { n: number; x: number; y: number; gone: boolean }[];
     /** Real members in town, visiting, dozing or walking in with a raid party: where each is and what they are doing, by Leaf's clock this moment. */
     visitors(): ReturnType<typeof members>;
+    /** Each of the games' spots in town for members busy at them: those laid by hand, then those further out. */
+    spots(): ReturnType<typeof spotsNow>;
     /** The stump's board this moment: the hex each carved figure is on, and whether anybody is at it. */
     board(): { on: readonly number[]; played: boolean };
     /** What the guild's raid parties and wars have left: how many lanterns the day has, whose banner flies, and the last cheers played here, each by when (Leaf's clock). */
@@ -233,7 +235,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     near: paintNear(),
     nearAt: { x: NEAR.x, y: NEAR.y },
     props,
-    others: () => standing,
+    others: () => [...standing, ...worksTools()],
     people: () => [...G.folk, ...G.visitors, ...livePlayers(), player, cinfy],
     lights: allLights,
     beyond: () => undefined,
@@ -778,6 +780,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
         stepVisitors(0, [player, ...livePlayers(), ...G.folk]);
         return members();
       },
+      spots: spotsNow,
       board() {
         G.now = leafNow();
         return { on: table.played ? boardAt(SEED, G.now).on : SET_OUT, played: table.played };

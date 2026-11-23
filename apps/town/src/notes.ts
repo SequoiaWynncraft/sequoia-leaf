@@ -70,7 +70,7 @@ export const NOTES: readonly Note[] = [
     title: "Who is where, the same everywhere",
     lines: [
       "Somebody away for 5 minutes or more sits down where they are and dozes off, and is up again the moment they do anything. Their card says for how long.",
-      "Somebody at the Works carries crates in at its door, at the raid table sits at the stump, and in the Grove stands at its stone. Their card says where they are.",
+      "Somebody at the Works works at a crate beside them, at the raid table sits at the stump, and in the Grove stands at its stone. Their card says where they are.",
     ],
     more: [
       {
@@ -86,6 +86,7 @@ export const NOTES: readonly Note[] = [
           "Who is about, the number on its button, the people in town and every card now agree on where each person is, on every page.",
           "Somebody who leaves town is listed where they went within a second, not up to 30 seconds later. Somebody who closes the game is listed as seen lately at once, not 90 seconds later.",
           "Somebody in the Grove is listed in the Grove. They used to be listed as seen lately.",
+          "Everybody at the Works, the raid table or the Grove has a spot of their own there and stays in it, so nobody walks through anybody or the bench.",
         ],
       },
       {

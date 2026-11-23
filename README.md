@@ -1085,6 +1085,10 @@ Pebblefoot from spot to spot.
   spot, now and then sitting on a log by the fire a while, and now and then
   waving, cheering, laughing or sending a heart. They say where they are only
   by being in the room. Every third is on a phone.
+- `--at <place>:<n>[:<away>],...`: n more members at each game with a place in
+  town (`works`, `table`, `grove`), saying so every half minute; the first `away`
+  of each never do anything, so Leaf has them away. `--at works:8:2` has eight at
+  the Works, two of them away.
 - `--dice <n>`: Leaf's dice fall the same way every time from `n`, so a tour plays the same game each run.
 
 For the tours it also serves `POST /test/play/raid` with `{ "stage": [...] }`,

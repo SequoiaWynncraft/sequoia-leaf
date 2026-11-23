@@ -111,12 +111,12 @@ and nothing is kept: any page, and Leaf, gets the same answer for the same momen
 
 What follows from what Leaf said is here too, as functions of that and the clock:
 
-- `standOf(id, at)`: the spot a member at the Works or the table stands at, by their account.
-  `dozing(resting, free)`: the seat of each member who dozes, of the seats nobody awake sits on:
+- `dozing(resting, free)`: the seat of each member who dozes, of the seats nobody awake sits on:
   whoever has been gone longest chooses first, the first seat left for where they were, never one
   left for the member. `SITS_AFTER` (120 seconds after Leaf last saw them) is when a member gone
   from a game sits down, or goes. `zAt` is when a dozer last breathed out a "z" (one every 2
-  seconds, up to 0.8 late).
+  seconds, up to 0.8 late). Where a member busy at one of the games is drawn, a spot of their own,
+  is the town page's (`apps/town/src/spots.ts`).
 - `homecoming(seed, at, i, now)`: the walk the `i`th of a raid party home since `at` is on: in
   through the gate, the first on to the lantern tree, and out again, to the timetable `HOME`.
 - `bannerAt(wars, now)`: whose banner flies and how far up the pole: the last war's by when each

@@ -4,6 +4,7 @@
  * a camp's are both made of these.
  */
 
+import { BARK } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, type Rect } from "@sequoia-leaf/kit/util.ts";
 
@@ -46,6 +47,17 @@ export interface Light {
 export interface Standing {
   readonly z: number;
   paint(g: Ctx, cx: number, cy: number): void;
+}
+
+/**
+ * A crate from the Works' pile, its top-left at `x`, `y`: six by five, its slats and its rim. Held in
+ * front of somebody (seen from behind, the body hides it), or on the ground beside whoever works at it.
+ */
+export function crate(g: Ctx, x: number, y: number): void {
+  R(g, x, y, 6, 5, BARK[1]);
+  R(g, x + 1, y + 1, 4, 3, BARK[3]);
+  R(g, x + 1, y + 2, 4, 1, BARK[2]);
+  R(g, x + 1, y, 4, 1, BARK[4]);
 }
 
 /** A prop with everything it may leave out filled in. */

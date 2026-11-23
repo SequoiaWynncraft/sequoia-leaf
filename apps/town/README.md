@@ -431,23 +431,30 @@ card says so and the town is not loaded.
   clock, and everything else reads it: "Who is about" and the number on its button, the figures in
   town and every card. Somebody Leaf last saw 90 seconds ago is gone from then on every page at
   once, as Leaf's own visits have them. Up to twelve of those in the game are about as visitors
-  (`visitors.ts`) in their own skins, busy at it as somebody in a real town would be: at the Works
-  carrying crates from the pile at the belt's end in at its door and going back for the next
-  (`haul`, by Leaf's clock), at the raid table sitting at the stump over its board, in the Grove
-  standing before its stone while a soft light rises from it now and then; those in town are there
-  live instead, and nobody drawn live, fading away included, is a
-  visitor or a dozer as well. Nobody at their own camp.
-  A visitor stands at one of the spots of where they are, by their account (two on one spot are
-  drawn apart). Leaf's list says nothing of when anybody came, so they are there from the moment
-  the page hears of them, which is the moment Leaf tells the room. They
-  never speak, and their card has only their name and rank; a
+  (`visitors.ts`) in their own skins, each at a spot of their own (`spots.ts`), busy at it in place:
+  at the Works working at a crate beside them (hammering it, then lifting it and turning to us to
+  look it over, setting it down and standing a moment, a round of 9 seconds of their own by Leaf's
+  clock), at the raid table sitting at the stump over its board, in the Grove standing facing its
+  stone while a soft light rises from it now and then; those in town are there live instead, and
+  nobody drawn live, fading away included, is a visitor or a dozer as well. Nobody at their own
+  camp. Each place has spots laid by hand (the Works five, along its front and by the crate pile,
+  none on the bench, in the doorway or where the town's own stand at the door; the stump four round
+  it; the Grove four before the stone), and past those further ones a step out, worked out once the
+  town stands: on open ground, on top of nobody's spot, seat or post and of no thing's foot, and
+  behind nothing that would hide them. A member's spot is the one their account wants among those
+  laid by hand, or the next free one, and they keep it for as long as they stay; nobody is given a
+  spot somebody has. Somebody the page saw elsewhere who goes to one of the games walks to their
+  spot once (from where they were drawn live, or the place's door) and stops there; anybody there
+  when the page first hears of them is there already, and Leaf's list says nothing of when anybody
+  came. Somebody drawn here whom the page then has nowhere (gone to their camp) walks off through
+  the gate once. They never speak, and their card has only their name and rank; a
   guest's says "Guest". Up to twelve of the others, most recent first, doze on a seat
   for where they were (a log at the fire for the town, the log at the stump for the table, the bench
   by the Works' door for the Works, then whatever seat is left; never the member's own; nobody last
   at their camp): eyes closed, a "z" drifting up every 2 seconds, never speaking or moving.
   Whoever has been gone longest chooses first, and a seat a player or one of the town's own sits
   on is passed over (`dozing`): a player may sit down where somebody dozes, and the dozer is on
-  the next seat in its order from then, on every page. A visitor who goes stays on their feet until 120 seconds after Leaf
+  the next seat in its order from then, on every page. A visitor who goes stays on their feet in their spot until 120 seconds after Leaf
   last saw them (Leaf lists them as gone at 90, and by 120 every page has asked), then walks to
   their seat to doze if they stay, and out through the gate if not, or if no seat is left.
 - **Who is about** (`aboutui.ts`, its rules in `about.ts`). A small wooden button beside the purse
@@ -481,8 +488,10 @@ card says so and the town is not loaded.
   are when it is not the town ("At the raid table, away for 7 minutes"); nothing for somebody just
   about the town. In town they have sat down where they are and nodded off, as the dozers do: facing
   us unless they sat on a seat, eyes closed, a "z" now and then, the same moments on every page,
-  wherever they are (in town live, at the Works' door, at the stump, before the Grove's stone); the
-  moment they move or do anything they are up and about again.
+  wherever they are (in town live, or in their spot at the Works, at the stump or before the
+  Grove's stone, their crate beside them at the Works); the moment they move or do anything they
+  are up and about again. Nobody walking has the "z": somebody away on their way to their spot
+  nods off once they are there.
 - **A guest.** Somebody signed in who is not in the guild plays the same town, with none of the
   guild's own: `prepare()` fetches nothing, and nothing only a member may ask (`/v1/me...`, the
   guild's news) is asked. The purse shows only Coins and every Leaf button says "Leaf is earned by
@@ -553,6 +562,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/apart.ts`                        | Back where the member stood after a reload; members on one spot drawn a step apart              |
 | `src/aboutui.ts`, `src/about.ts`      | Who is about: the button and its panel; who goes in which part, and the words                   |
 | `src/where.ts`                        | Where everybody else is, one record each, from the room and Leaf's list: what everything reads  |
+| `src/spots.ts`                        | A spot of their own for each member busy at a game, kept while they stay; what they do there    |
 | `src/letter.ts`                       | Putting the arrival letter together from Leaf's arrival and the member's news                   |
 | `src/fx.ts`                           | Sparks, leaves and rising words                                                                 |
 | `src/sprites.ts`, `src/ground.ts`     | The town's art                                                                                  |
@@ -564,7 +574,7 @@ The catalogue of camp things (`things.ts`), what is for sale (`catalogue.ts`), t
 (`mail.ts`), the town's own (`folk.ts`), what goes by Leaf's clock (`clock.ts`), a
 camp's rules (`camp.ts`) and the town's commands (`game.ts`) are in `packages/town`, the rules Leaf plays the town by; the page imports them from
 there and works out with them what it shows at once. `grid.ts`, `letter.ts`, `games.ts`, `live.ts`,
-`news.ts`, `motion.ts`, `apart.ts`, `about.ts` and `where.ts` have no page in them, and tests beside them (`motion.test.ts`
+`news.ts`, `motion.ts`, `apart.ts`, `about.ts`, `where.ts` and `spots.ts` have no page in them, and tests beside them (`motion.test.ts`
 plays Leaf's side of a live connection with the kit's stand-in socket); `folk.test.ts` also reads
 every file of the three games to check that nothing but members is drawn from a skin,
 `touch.ts` has tests for what a touch means, and `props.ts` for when a member is hidden and what
@@ -592,7 +602,7 @@ asks Leaf for it again (after staging something), `who()` says where each of the
 what it is doing and `crabs()` where each crab is and whether it is running off, both by Leaf's
 clock at the moment they are asked (neither `skip` nor `hold` moves that clock; held, the picture
 stays as it was last put), `visitors()` says which real members are in town, where, what each is
-doing and whether they are dozing, `board()` which hex each figure on the stump is on and whether
+doing, whether they are dozing on a seat or nodded off in their spot, walking or carrying a crate, and the spot they have, `spots()` every spot at the games (laid by hand or further out), `board()` which hex each figure on the stump is on and whether
 anybody is at it, and `moments()` how many lanterns hang, whose banner flies and the last cheers
 played with when each was, all three by Leaf's clock too, `where()` says which place is on and how dark the walk has got, `purse()` says what the
 purse holds, `page(x, y)` turns a point in the place that is on into a point on the page, and

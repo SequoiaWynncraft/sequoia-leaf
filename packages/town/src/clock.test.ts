@@ -10,9 +10,6 @@ import {
   dozing,
   folkAt,
   type FolkNow,
-  HAUL,
-  haul,
-  HAUL_MS,
   hiding,
   HOME,
   homecoming,
@@ -20,8 +17,6 @@ import {
   seedOf,
   SET_OUT,
   stagedBy,
-  standOf,
-  STANDS,
   STRETCH,
   stretchOf,
   zAt,
@@ -218,37 +213,6 @@ describe("members in the games and gone from them, by Leaf's list", () => {
   ];
   const seats = (free: readonly (typeof SEATS)[number][] = SEATS, resting = RESTING): Record<string, number> =>
     Object.fromEntries([...dozing(resting, free)].map(([id, s]) => [id, s.n]));
-
-  test("a member in a game stands at one of its spots by their account, the same whenever it is asked", () => {
-    const stood = new Set<string>();
-    for (let i = 0; i < 200; i++) {
-      const id = `7e570000-0000-4000-8000-${String(i).padStart(12, "0")}`;
-      for (const at of ["works", "table", "grove"] as const) {
-        const s = standOf(id, at);
-        expect(STANDS[at]).toContain(s);
-        expect(standOf(id, at)).toBe(s);
-        stood.add(`${at} ${s.x},${s.y}`);
-      }
-    }
-    // Every spot of each is somebody's.
-    expect(stood.size).toBe(STANDS.works.length + STANDS.table.length + STANDS.grove.length);
-  });
-
-  test("a member at the Works carries crates from the pile to the belt and goes back for the next, by Leaf's clock", () => {
-    const id = "7e570000-0000-4000-8000-000000000002";
-    const seen = Array.from({ length: 16 }, (_, i) => haul(id, T0 + i * (HAUL_MS / 8)));
-    // Half of each round in with a crate, half back; the same moment is the same walk.
-    expect(seen.filter((h) => h.laden).length).toBe(8);
-    expect(haul(id, T0 + 1234)).toEqual(haul(id, T0 + 1234));
-    for (const h of seen) {
-      expect(h.laden ? HAUL.pile : HAUL.door).toContainEqual(h.walk.from);
-      expect(h.laden ? HAUL.door : HAUL.pile).toContainEqual(h.walk.to);
-      // A round begins at most a round ago, and each walk once they have stood a moment.
-      expect(h.walk.at).toBeGreaterThan(T0 - HAUL_MS);
-    }
-    // Two members keep their own time round.
-    expect(haul("7e570000-0000-4000-8000-000000000003", T0).walk.at).not.toBe(haul(id, T0).walk.at);
-  });
 
   test("each dozer has the first seat left for where they were, whoever has been gone longest first; never the member's", () => {
     // The Works' bench holds two: the third from the Works has a log by the fire, side on, the logs facing us being taken or the member's.

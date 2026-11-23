@@ -8,18 +8,17 @@ import {
   folkAt,
   GATE,
   GOES_FOR,
-  HAUL,
   HOME,
   homecoming,
   MUSTER,
   SITS_AFTER,
-  STANDS,
   type Walk,
 } from "@sequoia-leaf/town/clock.ts";
 import { folk } from "@sequoia-leaf/town/folk.ts";
 
 import { walkAt } from "./actors.ts";
 import { SEED } from "./game.ts";
+import { LAID } from "./spots.ts";
 import { SEATS, TOWN } from "./world.ts";
 
 /** Noon to noon, so that the UTC day turns in the middle. */
@@ -71,8 +70,8 @@ describe("members on the town's ground, by Leaf's clock", () => {
     expect(SITS_AFTER - EVERY).toBe(90_000);
   });
 
-  test("every spot a visitor stands at is open ground, and from each the way to any seat's step and out through the gate is clear", () => {
-    for (const stand of [...STANDS.works, ...STANDS.table, ...STANDS.grove, ...HAUL.pile, ...HAUL.door]) {
+  test("every spot laid by hand at the games is open ground, and from each the way to any seat's step and out through the gate is clear", () => {
+    for (const stand of [...LAID.works, ...LAID.table, ...LAID.grove]) {
       expect(TOWN.footBlocked(stand.x, stand.y)).toBe(false);
       for (const s of SEATS) {
         const end = walkAt({ from: stand, to: { ...s.from, dir: s.dir }, at: 0 }, PACE, 60_000);
