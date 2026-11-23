@@ -284,7 +284,7 @@ export function makeGroveUi(host: GroveHost) {
         "k-row",
         {},
         el("span", "k-grow", { text: `Yours: ${all.filter((prize) => v.have[prize]).length} of ${all.length}` }),
-        el("button", "k-btn blue icon sm", {
+        el("button", "k-btn blue icon sm grove-rules", {
           type: "button",
           "aria-label": "Rules",
           "aria-expanded": String(ruled),
@@ -293,6 +293,8 @@ export function makeGroveUi(host: GroveHost) {
             ruled = !ruled;
             sfx.tap();
             renderPanel();
+            // The panel is drawn again: the press stays on the button that was pressed.
+            panel.querySelector<HTMLElement>(".grove-rules")?.focus();
           },
         }),
       ),

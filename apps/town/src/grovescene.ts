@@ -1190,7 +1190,9 @@ export function makeGrove(
       const step = WALK[Math.floor((x - from) / K / 5) % 4] ?? 0;
       const pose = p.body ? (isLit ? 0 : step) : isLit ? beatAt(u - 0.35) : 0;
       const { spr, id } = standing(p, K, isLit ? 0 : 2, pose);
-      const up = isLit ? hopOf(u - 0.35, 10, f === "aurora" ? 2 : 1) : 0;
+      // a person the ceremony waits at goes on hopping now and then, as they do on the banner
+      const again = p.body ? hopOf(mod(u - 0.35, 4) - 3, 10) : 0;
+      const up = isLit ? Math.max(again, hopOf(u - 0.35, 10, f === "aurora" ? 2 : 1)) : 0;
       const [sx, sy] = footed(p, spr, K, x, pl.feet, up);
       ellipse(x, pl.feet - 2, half * 0.84, 5, INK);
       if (!isLit) {
