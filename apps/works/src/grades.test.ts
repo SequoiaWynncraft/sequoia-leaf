@@ -114,6 +114,21 @@ describe("the grade in hand", () => {
 });
 
 describe("a piece set down over one of its kind", () => {
+  test("aimed at first at its own grade, then raised by a grade chosen, keeps the way it points", async () => {
+    const y = yardAt(3);
+    build(y, BELT, 20, 16, 1, Infinity);
+    await opened(y, 1000);
+    setTool(BELT);
+    S.dir = 0;
+    aimAt(20, 16);
+    // At grade I the hand builds over nothing it would raise, and keeps its own way.
+    expect([S.aim?.raises, S.dir]).toEqual([undefined, 0]);
+    setGrade(2);
+    expect([S.aim?.raises, S.dir]).toEqual([1, 1]);
+    expect(place(20, 16)).toBe(true);
+    expect([grades([20], 16), S.world.dir[at(S.world, 20, 16)]]).toEqual([[2], 1]);
+  });
+
   test("of a lower grade raises it for the difference, says so in the aim, and is undone to the grade it had", async () => {
     const y = yardAt(3);
     build(y, BELT, 20, 16, 0, Infinity);
