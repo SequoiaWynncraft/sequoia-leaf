@@ -274,7 +274,7 @@
         transition: opacity 0.9s;
       }
 
-      /* The tray, while decorating: what is in hand, and everything put away. It takes the dock's place. */
+      /* Storage (the tray), while decorating: what is in hand, and everything not set out, by kind. It takes the dock's place. */
       #tray {
         position: fixed;
         z-index: 7;
@@ -301,36 +301,83 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      #tray .row {
+      /*
+       * Two rows and the top of a third, so that it is plain there is more to scroll to. Every thing
+       * is one column of `--cols` wide, and a kind is as wide as its things, so that small kinds
+       * share a row and their things still stand in the same columns.
+       */
+      #tray .list {
+        --cols: 5;
+        container-type: inline-size;
         display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: calc(var(--u) * 2) var(--u);
+        max-height: min(calc(var(--u) * 122), 34dvh);
+        overscroll-behavior: contain;
+      }
+      #tray .kind {
+        display: flex;
+        flex-direction: column;
+        gap: var(--u);
+        min-width: 0;
+      }
+      /* The things of one row are as tall as the tallest of them, whichever kind they are of. */
+      #tray .grid {
+        flex: 1;
+      }
+      /* A kind's name takes the width of its things, on a second line if it must. */
+      #tray .kind .k-label {
+        width: 0;
+        min-width: 100%;
+      }
+      #tray .grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--u);
+      }
+      #tray .grid button {
+        position: relative;
+        display: flex;
+        flex-direction: column;
         align-items: center;
         gap: var(--u);
-        min-height: calc(var(--u) * 30);
-        overflow-x: auto;
-        scrollbar-width: none;
+        width: calc((100cqw - var(--u) * (var(--cols) - 1) - 1px) / var(--cols));
+        padding: var(--u) var(--u) calc(var(--u) * 2);
+        color: inherit;
+        text-align: center;
       }
-      #tray .row button {
-        position: relative;
-        flex: none;
-        display: grid;
-        place-items: center;
-        width: calc(var(--u) * 30);
-        height: calc(var(--u) * 30);
-        padding: 0;
-      }
-      #tray .row button:active {
+      #tray .grid button:active {
         translate: 0 var(--u);
       }
-      #tray .row .n {
+      #tray .grid .pic {
+        display: grid;
+        place-items: center;
+        height: calc(var(--u) * 30);
+      }
+      #tray .grid .n {
         position: absolute;
         right: calc(var(--u) * 2);
-        bottom: 0;
+        top: calc(var(--u) * 21);
         font: var(--f-name);
         color: var(--k-gold-lt);
         text-shadow: var(--u) var(--u) 0 var(--k-ink);
       }
-      #tray .empty {
-        padding: 0 calc(var(--u) * 2);
+      #tray .grid .new {
+        position: absolute;
+        left: calc(var(--u) * 2);
+        top: var(--u);
+      }
+      /* How many new things are in Storage, hung under the hammer. */
+      #corner .k-btn {
+        position: relative;
+      }
+      #corner .k-chip {
+        position: absolute;
+        top: calc(100% - var(--u) * 3);
+        left: 50%;
+        translate: -50% 0;
+        pointer-events: none;
       }
       body.decorating #dock {
         display: none;
@@ -442,26 +489,27 @@
       }
 
       /*
-       * The Grove: its own picture over the town's, centred, and its words and buttons over that.
-       * What is tied to the picture is placed in the picture's own pixels (--g, set with its size).
+       * The Grove: its own picture over the whole window, and its words and buttons over that. The
+       * picture is composed for a frame, which is `.grove-stage`: what is tied to the picture is
+       * placed in the frame's own pixels (--g), and what is the window's (--side, --head) by how far
+       * the frame stands in from the window's left and top (--fx, --fy). All four are set with its size.
        */
       #grove {
         position: fixed;
         z-index: 12;
         inset: 0;
+        overflow: hidden;
         background: #1a0f1e;
         touch-action: manipulation;
       }
       .grove-stage {
         position: absolute;
-        overflow: hidden;
         --rim: calc(var(--g) * 8);
+        --side: calc(max(var(--rim), var(--edge)) - var(--fx));
+        --head: calc(max(var(--rim), var(--top)) - var(--fy));
       }
       .grove-stage > canvas {
-        display: block;
-        width: 100%;
-        height: 100%;
-        image-rendering: pixelated;
+        position: absolute;
       }
       .grove-banner {
         position: absolute;
@@ -470,6 +518,7 @@
       }
       .grove-banner > *,
       .grove-skip,
+      .grove-go,
       .grove-end,
       .grove-name,
       .grove-said,
@@ -480,30 +529,31 @@
       .grove-said {
         left: 50%;
         translate: -50% 0;
-        top: calc(var(--g) * 30);
+        top: calc(var(--head) + var(--u) * 22);
         max-width: 90%;
         text-align: center;
       }
       .tall .grove-said {
-        top: calc(var(--g) * 82);
+        top: calc(var(--head) + var(--u) * 48);
       }
       .grove-back {
-        left: var(--rim);
-        top: var(--rim);
+        left: var(--side);
+        top: var(--head);
       }
       #grove .grove-leaf {
-        right: var(--rim);
-        top: var(--rim);
+        right: var(--side);
+        top: var(--head);
         padding: var(--u) calc(var(--u) * 4);
       }
       .grove-skip {
-        right: var(--rim);
-        top: var(--rim);
+        right: var(--side);
+        top: var(--head);
       }
+      /* The pools are the window's too: between its corners, or under them where there is no room between. */
       .grove-pools {
         left: 50%;
         translate: -50% 0;
-        top: var(--rim);
+        top: var(--head);
       }
       /* The pool's words and buttons: one column, the pulls at its foot. */
       .grove-words {
@@ -561,14 +611,28 @@
         gap: calc(var(--u) * 3);
         padding-block: 0;
       }
+      /* The end's buttons; and Next where a ceremony waits, in their place, clear of the row of squares under it. */
+      .grove-go,
+      .grove-end {
+        left: 50%;
+        translate: -50% 0;
+        bottom: max(var(--rim), var(--bottom));
+        will-change: transform;
+      }
+      .grove-go {
+        margin-bottom: calc(var(--g) * 14);
+      }
+      /* On an upright screen a prize's tags come down to the squares: Next stands at their right. */
+      .tall .grove-go {
+        left: auto;
+        right: var(--side);
+        translate: none;
+        margin-bottom: 0;
+      }
       .grove-end {
         display: flex;
         align-items: center;
         gap: calc(var(--u) * 4);
-        left: 50%;
-        translate: -50% 0;
-        bottom: var(--rim);
-        will-change: transform;
       }
       /* A prize's name in the end picture, under it or over it, with its rarity's colour before it. */
       .grove-name {
@@ -589,6 +653,16 @@
         max-width: calc(var(--g) * 84);
         font: var(--f-small);
       }
+      /* In a window too low for them (a phone on its side) the names are smaller too, and the end's buttons the small button's height. */
+      @media (max-height: 500px) {
+        .grove-name {
+          font: var(--f-small);
+        }
+        #grove .grove-go,
+        #grove .grove-end .k-btn {
+          min-height: calc(var(--u) * 16);
+        }
+      }
       .grove-name.above {
         translate: -50% -100%;
       }
@@ -605,10 +679,12 @@
         color: #1a0f1e;
         font: var(--f-name);
       }
+      /* The panel begins under the window's corners, so it has the window's height. */
       .grove-panel {
         z-index: 2;
         display: flex;
         flex-direction: column;
+        top: calc(var(--head) + var(--u) * 18);
       }
       .grove-panel > .k-body {
         flex: 1;
@@ -632,26 +708,25 @@
       .desk .grove-words {
         right: calc(var(--g) * 16);
         top: calc(var(--g) * 140);
-        bottom: calc(var(--g) * 12);
+        bottom: max(calc(var(--g) * 12), var(--bottom));
         align-items: flex-end;
         text-align: right;
       }
       .desk .grove-panel {
         left: 50%;
         translate: -50% 0;
-        top: calc(var(--g) * 26);
         bottom: calc(var(--g) * 10);
         width: min(calc(var(--u) * 270), 94%);
       }
       /* An upright screen: the words across its lower third. */
       .tall .grove-pools {
-        top: calc(var(--g) * 60);
+        top: calc(var(--head) + var(--u) * 26);
       }
       .tall .grove-words {
         left: 0;
         right: 0;
         top: calc(var(--g) * 416);
-        bottom: calc(var(--g) * 8);
+        bottom: max(calc(var(--g) * 8), var(--bottom));
         align-items: center;
         text-align: center;
         gap: calc(var(--u) * 2);
@@ -660,7 +735,9 @@
         padding-block: calc(var(--u) * 3) var(--u);
       }
       .tall .grove-panel {
-        inset: calc(var(--g) * 44) calc(var(--g) * 2) calc(var(--g) * 6);
+        left: calc(var(--g) * 2);
+        right: calc(var(--g) * 2);
+        bottom: calc(var(--g) * 6);
       }
       /* Three tabs and the way out fit its head with nothing to spare. */
       #grove .tall .grove-panel .k-head {
@@ -730,10 +807,10 @@
           width: min(calc(var(--u) * 170), calc(100vw - var(--edge) * 2));
         }
         body.decorating #feed {
-          bottom: calc(var(--u) * 68 + var(--bottom));
+          bottom: calc(var(--u) * 160 + var(--bottom));
         }
       }
-      /* On a short screen there is no room for news and the tray both. */
+      /* On a short screen there is no room for news and Storage both. */
       @media (max-height: 500px) {
         body.decorating #feed {
           display: none;
@@ -790,7 +867,10 @@
         body.decorating #feed {
           display: none;
         }
-        /* The tray's buttons are their pictures alone, so that the name of the thing in hand has room. */
+        #tray .list {
+          --cols: 4;
+        }
+        /* The bar's buttons are their pictures alone, so that the name of the thing in hand has room. */
         #tray .bar .t {
           display: none;
         }
@@ -806,7 +886,7 @@
     <div id="corner"></div>
     <div id="feed" aria-live="polite"></div>
     <nav id="dock" class="k-shelf" aria-label="Places"></nav>
-    <div id="tray" class="k-shelf" aria-label="Things put away" hidden></div>
+    <div id="tray" class="k-shelf" aria-label="Storage" hidden></div>
     <aside id="panel" class="k-panel" hidden></aside>
     <div id="card" class="k-plaque" hidden></div>
     <div id="arrival" hidden></div>

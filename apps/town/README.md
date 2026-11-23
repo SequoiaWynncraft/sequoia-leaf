@@ -61,8 +61,8 @@ says so.
   present, or what wins it). A stall in a card is a
   card of its own, with everything it sells. Pointing shows the card, clicking the picture or the
   name pins it, a finger kept on a thing in the camp pins it as a sheet. People keep their own
-  card (below), and the town's other things their one-line hint. What is bought leaves the stall as a parcel, up the path and out through
-  the gate, and is waiting at the camp.
+  card (below), and the town's other things their one-line hint. What is bought is in the camp's
+  Storage at once: its picture goes from the stall's button to the camp's button in the dock.
 - **The Treasury.** Cinfy sells the guild's two paid requests, an aspect request and a tome
   request, for the Leaf the backend asks (3,000 each). The page asks Leaf
   (`GET /v1/game/requests`), which asks the backend as the member: each row has its price on a
@@ -176,29 +176,38 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   and a mark over it mean it may not, and letting go then puts it back and says why. Things may
   not go on top of each other, on the trail, or anywhere that would shut the cabin's door, the
   mailbox or the signpost off from the trail. What lies flat (rugs, paths, a ring of mushrooms) is
-  walked over, and other things may stand on it. The tray along the bottom has what is in hand
-  (with Turn, for things that turn, and Put away) and everything put away; tapping one sets it out
-  near the member, in hand. The cabin, the mailbox and the signpost may be moved but stay out. R
-  turns, Delete puts away, Escape is done. Every change is a command to Leaf (below).
-- **Things.** Seventy-five of them (`things.ts`, in `packages/town`), in eight kinds, each drawn in the town's way and
+  walked over, and other things may stand on it. The cabin, the mailbox and the signpost may be
+  moved but stay out. R turns, Delete puts away, Escape is done. Every change is a command to Leaf
+  (below).
+- **Storage.** Everything the member has that is not set out (`camp.tray` in the code; a player
+  reads "Storage"). Nothing stands in a camp that its member did not set there: a thing bought, a
+  thing won and a present taken out of a letter each go into Storage (`store` in
+  `packages/town`). It is the sheet along the bottom while decorating: a bar with what is in hand
+  (Rotate, for things that turn, and Put away) or its name, and under it everything stored, by
+  kind, each with its picture, its name and how many, in a list that scrolls. Tapping one sets it
+  out near the member, in hand; a thing dragged onto the sheet is put away. The camera keeps the
+  member above the sheet (`covered` in `hud.ts`). What has come since the member last looked is
+  new (`camp.fresh`, which Leaf keeps): the hammer carries how many, the camp's card in town says
+  so, and the things are marked "New" in the list. Opening Storage is looking (`looked`): the
+  marks stay until it is shut.
+- **Things.** 104 of them (`things.ts`, in `packages/town`), in nine kinds, each drawn in the town's way and
   nearly all doing something when touched: a lantern goes out and lights, a wind chime rings, the
   music box plays its tune, Worm looks out of Worm's pot, and something in the barrel looks back.
   They come from the market for Coins, from the games as trophies that
   cannot be bought (a carved figure for each boss beaten in The Little Raid, a model of each
   capstone built in the Works), from pulls as prizes, and from the town's own as small presents.
+  A pull's prize is a **character**: one of The Little Raid's figures, drawn with the raid's own
+  pictures from `packages/figures` (`character` in `campart.ts`), on 3 squares of ground. Set out, it
+  breathes as it does on the raid's table, and the one that flies hovers (`stepLive` in
+  `camptouch.ts`); "Rotate" mirrors it, and touched it hops and says its line from the raid.
   A banner's headliner brings a statue of that member (`statues.ts`): Leaf says who
   (`GET /v1/game/banners`), the thing is called "Statue of NAME", and its picture is their own
   figure facing us, every colour turned to marble by its lightness, on the fox statue's plinth
-  (`carve` in `campart.ts`). Every page asks, so a visitor sees whose it is. Whatever is bought or won
-  waits by the trail as a parcel, and the parcels open one after another when the member is in:
-  each thing flies to a clear spot and lands. As many as two hundred parcels may wait; with that
-  many by the trail the market sells nothing more (and takes nothing) until some are
-  unpacked, and a trophy waits on Leaf. A member may have as many as 999 of any one thing,
-  standing, put away and waiting together; with that many the market sells no more
-  of it (and take nothing), and a present or a trophy of it is not added. As many as three hundred
-  things may be set out in a camp; with that many standing, nothing more comes out of the tray and
-  a parcel or a present opens into the tray instead, until something is put away. A thing is in the
-  camp the moment its parcel opens; the flight is only how it is seen arriving.
+  (`carve` in `campart.ts`). Every page asks, so a visitor sees whose it is. A member may have as
+  many as 999 of any one thing, standing and stored together; with that many the market sells no
+  more of it (and takes nothing), a present of it stays in its letter, and a prize of it is not
+  kept. As many as three hundred things may be set out in a camp; with that many standing, nothing
+  more comes out of Storage until something is put away.
 - **The cabin.** Walking up to its door opens the member's own things: their rank, level and week
   with the guild, a switch, "Leave my character in town when I go" (on until turned off, kept in
   Leaf's town and said with where they are as `stay`), the trophies they have won, and who lives
@@ -228,7 +237,7 @@ in off the trail. The trail between the two lantern posts on the camp's east sid
   town, and from then until the member leaves `visiting()` says whose camp it is and `shown()` is
   theirs: the same scene draws it, with their pets in a colour of their own and a roof of their
   own. Everything stands and answers a touch, and a thing's card opens; nothing can be changed:
-  `doNow` and `ask` refuse, and there is no cabin, mailbox, tray, caller or decorating. Under the
+  `doNow` and `ask` refuse, and there is no cabin, mailbox, Storage, caller or decorating. Under the
   top bar a strip says whose camp it is, with "My camp"; the signpost offers Home and Town. Their
   camp is read again every half minute, and as the tab comes back. Nothing to visit puts the page
   behind the kit's card, "No camp to visit", with "My camp".
@@ -245,14 +254,19 @@ The Grove (the standing stone among young redwoods, west of the quest board) is 
 pulls are made. A tap on it, its E prompt and its dock button open its card ("Go in", and whose
 banner is open until when); walking on into it goes straight in. Night closes in as on the way to
 the camp, and lifts on the Grove's own picture, which takes the whole page; "Back to town" or
-Escape goes back the same way. The pulls are Leaf's (`@sequoia-leaf/pulls`): the page reads them on
+Escape goes back the same way. The picture is composed for a frame (640 by 360 art pixels, or 360 by
+640 in an upright window) shown as large as the window allows, in the middle of the window's foot;
+the clearing is painted on from the frame to the window's edges, and "Back to town", the Leaf,
+Skip and the pools are at the window's top. An art pixel is seldom a whole number of device pixels, so the
+picture is drawn enlarged by the next whole number up and the browser brings it down smoothly
+(`fit` in `grovescene.ts`). The pulls are Leaf's (`@sequoia-leaf/pulls`): the page reads them on
 each way in, draws Leaf's view, and sends `pull` and `exchange`. Who headlines the banners is asked
 on each way in while Leaf has named nobody, and the pulls again when a banner is due to open or end.
 
 - **The banner.** The first thing seen is the pool on show: a banner that is open and has a
   headliner (their figure from their own skin, their name, and when it ends), with the always-open
   pool, "Evergreen", on a tab beside it; with no such banner, Evergreen alone, with its three top
-  prizes standing in the clearing. Who a banner's headliner is comes from Leaf
+  figures standing in the clearing. Who a banner's headliner is comes from Leaf
   (`GET /v1/game/banners`), and nothing about them is in the page.
 - **Pulling.** "Pull 1" and "Pull 10" say their price in Leaf and ask to be pressed twice. While a
   free pull waits, one pull is "Free pull". With too little Leaf, with Leaf's spending off, or for
@@ -261,16 +275,22 @@ on each way in while Leaf has named nobody, and the pulls again when a banner is
 - **The ceremony** plays what Leaf answered. Night falls on the clearing, a drop of light lands on
   the path, a light for each pull rises among the trees and flares in its prize's colour, and the
   sky shows the best tier: green by day for filler, gold for mid, an aurora for top. Then each
-  prize is shown in its tier's light: its own picture (a headliner walks in as the town's people
-  walk), its name, its rarity in the rarity's colour, what it is for, whether it is new, the
+  prize is shown in its tier's light: its own picture (a figure of the raid as the camp draws it,
+  breathing once it is lit; a headliner walks in as the town's people walk), its name, its rarity
+  in the rarity's colour, what it is, whether it is new, the
   Seeds it gave, and for a banner's top prize how its 50/50 fell. Ten pulls end on all ten set out
-  in the clearing, the rarest in front. Skip (or a tap, Space or the right arrow) goes on to the
-  next prize; held, to the end. Every beat has its sound.
+  in the clearing, the rarest in front. A filler prize gives way to the next by itself; at a
+  mid-tier or top prize among several the ceremony's clock stands once its reveal is done
+  (`timeline` and `ticked` in `pulls.ts`), the prize and the sky going on moving, until "Next", a
+  tap on the picture or a key goes on. Skip (or a tap, Space or the right arrow) goes on to the
+  next prize; held, to the end, past every wait. Every beat has its sound.
 - **The count towards a top prize** is on the banner ("34 of 80"), and after a lost 50/50 the line
   under it names who the next top prize is.
-- **The panel** has three tabs: every prize of the pool by rarity with its chance, the rules in
-  numbers written from the rules' own table (`RATES`) and how many of each the member has; the
-  Seeds and each mid-tier prize they buy; and the last 200 pulls.
+- **The panel** has three tabs: every prize of the pool by rarity with its chance and how many of
+  each the member has, with the rules in numbers written from the rules' own table (`RATES`)
+  behind its "?"; the
+  Seeds and each mid-tier prize they buy; and the last 200 pulls, among them the things and looks
+  that pulls gave before they gave figures.
 
 The Grove is in one state at a time (`groveState` in `pulls.ts`): arriving, at the banner, a
 command sent and not yet answered, a ceremony, a ceremony's end, or leaving. A pull or an exchange is
@@ -287,10 +307,11 @@ mail, the crab's sightings, the days the chest last paid and the member was last
 they were last here, how far their own news has been told, and whether their character stays. The
 page opens it from Leaf, holds a copy to draw from, and sends what the member does as commands,
 each thing named by its id. What the shared rules can work out (setting out, moving, turning,
-putting away, unpacking, a present taken, a lantern lit, the mail read, the crab spotted, a pet
-chosen, staying in town) is shown at once and sent; what only Leaf can answer (the letter put
-away, a caller greeted, the chest, buying) is shown when Leaf answers, and nothing more is done
-meanwhile. Where something arriving lands is worked out by the page and checked by the rules.
+putting away, a present taken, Storage looked in, a lantern lit, the mail read, the crab spotted,
+a pet chosen, staying in town) is shown at once and sent; what only Leaf can answer (the letter
+put away, a caller greeted, the chest, buying) is shown when Leaf answers, and nothing more is done
+meanwhile. Where a thing taken out of Storage is set down is worked out by the page and checked by
+the rules.
 Whenever Leaf's town is not what the page shows, the page takes Leaf's and draws again. Every five
 minutes while the page is in view, and as it is put away, the page tells Leaf the member is still
 here. While a game is open over the town, the town tells Leaf nothing; it says the member is here as
@@ -301,7 +322,7 @@ both are Leaf's: the town asks Leaf for the Coins after a purchase or the chest,
 frame closes, and when its page comes back into view.
 
 Trophies come from Leaf too: what the member wins in The Little Raid or builds in the Works is an
-award Leaf keeps, and it goes by the camp's trail as a parcel; the feed says so.
+award Leaf keeps, and it goes into the camp's Storage; the feed says what was won.
 
 ## Where the guild comes from
 
@@ -469,7 +490,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/stage.ts`                        | What the stage asks of a scene, and a scene of the stage                                        |
 | `src/touch.ts`                        | What a tap, the pointer, the key and the member's feet mean, in the town and in a camp          |
 | `src/townscene.ts`                    | The town as a scene: who is here, taps, getting about, going into games and to the camp         |
-| `src/campscene.ts`                    | A camp as a scene: laying it out, who is there, taps, decorating, parcels, visiting             |
+| `src/campscene.ts`                    | A camp as a scene: laying it out, who is there, taps, decorating, visiting                      |
 | `src/grovescene.ts`                   | The Grove as a scene: Leaf's pulls, and the ceremony drawn from its time alone                  |
 | `src/grovestage.ts`                   | The Grove's clearing, painted with the town's painters in three lights                          |
 | `src/groveui.ts`                      | The Grove's words and buttons, and its panel of prizes, Seeds and history                       |
@@ -478,13 +499,13 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/world.ts`                        | The town's map: paths, pond, what is solid, where places are                                    |
 | `src/leaf.ts`                         | The member's town and camp on Leaf: the copy, commands done at once or asked, keeping Leaf told |
 | `src/town.ts`, `src/camptouch.ts`     | What each thing does when touched, and the parts that move                                      |
-| `src/props.ts`, `src/flights.ts`      | Things that stand and can be touched; things in the air                                         |
+| `src/props.ts`                        | Things that stand and can be touched                                                            |
 | `src/actors.ts`, `src/pets.ts`        | Walking, sitting, speaking; the town's own put where Leaf's clock has them; the pets            |
 | `src/folkart.ts`                      | How each of the town's own is drawn (never a skin)                                              |
 | `src/events.ts`                       | What of the guild's moments is played once, each at its time: the fanfare, the cheer, the line  |
 | `src/draw.ts`                         | Drawing a frame of any place; name plates and speech; the round hole a door closes to           |
 | `src/hud.ts`                          | The purse, corner, feed, dock, panel and cards, shared by both places                           |
-| `src/ui.ts`, `src/campui.ts`          | The town's panels and arrival letter; the camp's panels and tray                                |
+| `src/ui.ts`, `src/campui.ts`          | The town's panels and arrival letter; the camp's panels and Storage                             |
 | `src/cards.ts`                        | What camp things and stalls say about themselves, as kit cards                                  |
 | `src/doors.ts`                        | A game in a frame: opening it, hearing it, the note when it will not open                       |
 | `src/games.ts`                        | The games that are places, and what each says is waiting                                        |
@@ -542,13 +563,13 @@ purse holds, `page(x, y)` turns a point in the place that is on into a point on 
 `window.town.camp` is the same for camps: `go()` walks out of town to the member's camp, `town()`
 and `home()` walk back, `greet(n)` touches the nth of whoever has dropped by, `walk("cabin" |
 "mailbox" | "signpost" | "trail")` walks up to a place and uses it, `decorate(on)`, `take(id)` sets
-a thing out of the tray, `grab(n)`, `dragTo(cx, cy)` and `drop()` move a thing by its id and by
+a thing out of Storage, `grab(n)`, `dragTo(cx, cy)` and `drop()` move a thing by its id and by
 squares, `hand()` says what is held and whether it may go where it is, `things()` (each with its
 id), `pets()` and `guests()` say what is there, `pet(n)` touches one, and `choose(kind)` picks who
 lives there first.
 
 `window.town.grove` is the same for the Grove: `go()` goes in, `state()` says its state, the
-ceremony's time and beats and Leaf's view, `jump(t)` moves the ceremony's
+ceremony's time, beats and waits and Leaf's view, `jump(t)` moves the ceremony's
 clock (with `hold(true)`, a still of any moment), `pool(id)` shows a pool, and `again()` asks Leaf
 for the pulls again.
 
@@ -565,11 +586,13 @@ bun packages/kit/tools/drive.ts "http://127.0.0.1:4000/sign-in?return_to=http%3A
 ```
 
 Moments play does not reach quickly are staged through `POST /test/play/town` (`stage-town.ts`:
-a new member's town, a lived-in camp, a caller waiting, a time away, a full mailbox, Coins to shop
-with). `tour.json` and `tour-phone.json` stage a new member's town with Coins and go from the
-arrival letter through a stall, the parcel unpacked, a thing moved and turned, a lantern put out,
-a caller greeted, the mail and its present, and the chest, to a reload that finds the same camp, at
-1280x760 and 390x844. `second-page-b.json` waits in the camp while `second-page-a.json`, started
+a new member's town, a lived-in camp, a Storage of many kinds, a caller waiting, a time away, a
+full mailbox, Coins to shop with, prizes won). `tour.json` and `tour-phone.json`, each on a play
+server just started, stage a new member's town with Coins and go from the arrival letter through
+a stall, the camp's card, the camp with one new thing in Storage and then eleven (ten prizes
+staged), Storage opened, a thing taken out and placed, one put away, a caller greeted, a present
+taken out of its letter, and a Storage of sixty kinds scrolled, to a reload that finds the same
+camp, at 1280x760 and 390x844. `second-page-b.json` waits in the camp while `second-page-a.json`, started
 some twenty seconds later, puts a lantern out: the first shows the change at its next look at
 Leaf. `about.json` and `about-phone.json` are "Who is about" at 1280x760 and 390x844 (with
 `--crowd 6`): the button, the panel, somebody on the screen chosen, and somebody off it, the view

@@ -187,11 +187,10 @@ timed can be stepped by hand.
 | `src/screen/sounds.ts`        | The table's sounds, made from the kit's tones                                                    |
 | `src/screen/signals.ts`       | Small happenings more than one part answers: an acorn landing, a star                            |
 | `src/screen/handle.ts`        | `window.raid`, for looking at the game from outside                                              |
-| `src/screen/art/figures.ts`   | Every figure, typed out as rows of letters                                                       |
-| `src/screen/art/sprites.ts`   | Those rows baked into pictures: standing, breathing, casting, tipped over; bases and stars       |
+| `@sequoia-leaf/figures`       | The figures' pictures, which the town draws too (`packages/figures`, with its README)            |
 | `src/screen/art/icons.ts`     | A small picture for every trait, item, boon, kind of room and button                             |
 | `src/screen/art/table.ts`     | The painted table, the halves of the board, the looks                                            |
-| `src/screen/art/pal.ts`       | The letters' colours, and the colours that mean something                                        |
+| `src/screen/art/pal.ts`       | A colour for each trait                                                                          |
 | `src/screen/ui/table.ts`      | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's panel     |
 | `src/screen/ui/tally.ts`      | The tally as rows and bars, two parties side by side (one at a time on a phone), with its tabs   |
 | `src/screen/ui/fightsheet.ts` | The sheet of a fight that is over: after it with the takings and "Carry on", or "Last fight"     |

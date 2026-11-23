@@ -13,7 +13,7 @@ import { isTraitId, TRAIT_IDS } from "./content/traits.ts";
 import { resolveFight } from "./fight/engine.ts";
 import { type RaidNote, type RunView, runView, type TableView } from "./game.ts";
 import { type News, type Payout, readAlmanac, trailOpen } from "./outside.ts";
-import type { Note, RunSummary, Spot } from "./run.ts";
+import { ACORNS_WHYS, type AcornsWhy, type Note, type RunSummary, type Spot } from "./run.ts";
 import { checkRun, fields, Nonsense } from "./save.ts";
 
 const { record, whole, flag, list, one, each, items, setup, bad } = fields;
@@ -105,8 +105,7 @@ function newsOf(v: unknown): News {
   }
 }
 
-const isAcornsWhy = (v: unknown): v is "room" | "win" | "interest" | "gnomes" | "windfall" =>
-  v === "room" || v === "win" || v === "interest" || v === "gnomes" || v === "windfall";
+const isAcornsWhy = (v: unknown): v is AcornsWhy => ACORNS_WHYS.some((why) => why === v);
 const isResult = (v: unknown): v is "win" | "loss" | "draw" => v === "win" || v === "loss" || v === "draw";
 const isChoiceKind = (v: unknown): v is "starter" | "component" | "boon" =>
   v === "starter" || v === "component" || v === "boon";

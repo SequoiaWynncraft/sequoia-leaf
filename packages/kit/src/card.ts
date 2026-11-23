@@ -598,6 +598,8 @@ function drawCard(d: Description, o: Open): HTMLElement {
           icon("back"),
         )
       : null;
+  // A passing card keeps the close button's room, unseen, so that pinning it moves nothing: a name
+  // that fitted two lines beside no button would take three beside one.
   const closeBtn = o.pinned
     ? el(
         "button",
@@ -605,7 +607,7 @@ function drawCard(d: Description, o: Open): HTMLElement {
         { type: "button", "aria-label": "Close", onclick: () => deck.close() },
         icon("close"),
       )
-    : null;
+    : el("span", "k-btn wood icon sm k-info-x unseen", { "aria-hidden": "true" }, icon("close"));
   for (const part of partsOf(d, o.pinned)) {
     if (part === "head") {
       add(

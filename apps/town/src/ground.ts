@@ -157,15 +157,17 @@ export function trunkHalf(hw: number, height: number, seed: number, y: number): 
 
 /**
  * A redwood trunk seen from its foot upwards: round, deeply furrowed, spreading into roots.
- * `dim` is how many rows from the top are lost in the canopy's shade.
+ * `dim` is how many rows from the top are lost in the canopy's shade; `above` more rows of it
+ * go on over its top, further into that shade.
  */
-export function paintTrunk(hw: number, height: number, seed: number, dim: number): Painted {
+export function paintTrunk(hw: number, height: number, seed: number, dim: number, above = 0): Painted {
   const flare = Math.round(hw * 0.5);
   const w = (hw + flare) * 2 + 4;
   const cx = w / 2;
   const foot = (x: number): number =>
     height - 2 - 3.2 * (0.5 + 0.5 * Math.sin(x * 0.2 + seed * 2.1)) - 2 * (0.5 + 0.5 * Math.sin(x * 0.57 + seed));
-  const c = paint(w, height, (x, y) => {
+  const c = paint(w, height + above, (x, row) => {
+    const y = row - above;
     const hf = trunkHalf(hw, height, seed, y);
     const off = Math.abs(x + 0.5 - cx);
     if (off >= hf || y > foot(x)) return null;
@@ -180,7 +182,7 @@ export function paintTrunk(hw: number, height: number, seed: number, dim: number
     if (off > hf - 1.3 || y > foot(x) - 1) idx = Math.min(idx, 1.4);
     return at(TRUNK_RAMP, idx);
   });
-  return { c, ax: Math.round(cx), ay: height - 1 };
+  return { c, ax: Math.round(cx), ay: height + above - 1 };
 }
 
 // ---------- ferns ----------
