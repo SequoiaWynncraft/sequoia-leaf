@@ -46,6 +46,8 @@ const ORDER_WORK = { first: 6000, tier: 3000, deepest: 0.4, ground: 0.3 } as con
 export const SWAP_EVERY = 6000;
 /** Ticks an order hangs on the board before it counts: five seconds, longer than Leaf takes to answer. */
 export const ORDER_WAITS = 50;
+/** For how many ticks after an order is hung the answer to a batch carries it: a minute. */
+export const ORDER_TOLD = 600;
 /** Whether an order counts at a tick: the depot gives to it, and the check mixes it in. */
 export const counting = (order: Standing, tick: number): boolean => tick >= order.starts;
 const WORTH = ITEM_INFO.map((i) => i?.worth ?? 0);

@@ -26,7 +26,18 @@ import { decode, encode } from "./codec.ts";
 import { STAND_MOST } from "./content/machines.ts";
 import { LAND, type Land } from "./land.ts";
 import { paint } from "./lines.ts";
-import { claim, counting, fillBoard, study, studyRefusal, swap, takeNode, takeRefusal, unstudy } from "./orders.ts";
+import {
+  claim,
+  fillBoard,
+  ORDER_TOLD,
+  ORDER_WAITS,
+  study,
+  studyRefusal,
+  swap,
+  takeNode,
+  takeRefusal,
+  unstudy,
+} from "./orders.ts";
 import {
   blueprintAt,
   clear,
@@ -108,8 +119,11 @@ export interface View {
 
 /**
  * What Leaf answers a batch of commands with, in place of the yard the page already holds: the
- * yard's tick after the batch and its check there (`check.ts`), and the orders on its board that do
- * not count yet, which only Leaf, holding the seed, can draw.
+ * yard's tick after the batch and its check there (`check.ts`), and the orders hung on its board in
+ * the last minute, which only Leaf, holding the seed, can draw. An order goes with every answer for
+ * a minute, counting or not, so that a batch that runs past the tick an order counts from still
+ * tells the page of it: the page passes over one it has, and takes Leaf's yard for one it hears
+ * of too late.
  */
 export interface Answer {
   readonly tick: number;
@@ -119,7 +133,7 @@ export interface Answer {
 export const answer = (y: Yard): Answer => ({
   tick: y.tick,
   check: check(y),
-  hung: y.board.filter((o) => !counting(o, y.tick)),
+  hung: y.board.filter((o) => y.tick < o.starts - ORDER_WAITS + ORDER_TOLD),
 });
 
 /** A command the rules turned down: the code Leaf answers, and the sentence the page says. */
