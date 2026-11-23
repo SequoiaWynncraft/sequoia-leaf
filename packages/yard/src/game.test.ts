@@ -220,6 +220,18 @@ describe("a command", () => {
     did(page, belt(64));
     expect(save({ ...there, at: 0 })).toBe(save(page));
   });
+  test("run on toward it by `tend` first, in slices, is done where `apply` alone would do it, and `apply` runs no tick", () => {
+    const sliced = kept(workingYard());
+    const whole = kept(workingYard());
+    const now = ctx(T0 + 5 * SECOND);
+    const c = belt(500);
+    for (let left = 0; WORKS.tend?.(sliced, now, () => left-- > 0, c) === true; left = 7);
+    expect(sliced.tick).toBe(50 + LEAD);
+    expect(WORKS.tend?.(sliced, now, () => false, c)).toBe(false);
+    // What happened on the way is kept for the command's news, as `apply` alone would have it.
+    expect(WORKS.apply(sliced, c, now)).toEqual(WORKS.apply(whole, c, now));
+    expect(save(sliced)).toBe(save(whole));
+  });
   test("refused leaves the yard as running on to its tick alone would", () => {
     const w = kept(workingYard());
     const twin = kept(workingYard());

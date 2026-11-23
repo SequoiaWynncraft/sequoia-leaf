@@ -4,21 +4,20 @@ import {
   type Ctx,
   isLeaf,
   type Leaf,
-  type LeafSpend,
   LOGGED,
   type Logged,
   MOST_COMMANDS,
   type PlayerId,
 } from "@sequoia-leaf/core";
-import { Clock, Context, Deferred, Effect, Exit, Latch, Layer, Option, Schema } from "effect";
+import { Clock, Context, Data, Deferred, Effect, Exit, Fiber, Latch, Layer, Option, Schema } from "effect";
 import { SecureRandom } from "effect/crypto";
 import { SqlClient } from "effect/sql";
 
 import { Allowances } from "../allowance.ts";
 import { AppConfig } from "../config.ts";
 import { Ledger } from "../ledger/store.ts";
-import { Coins } from "./coins.ts";
-import type { Held, Played } from "./games.ts";
+import { type CoinEntry, Coins } from "./coins.ts";
+import type { Attempt, Held, Played } from "./games.ts";
 import { PlayStore } from "./store.ts";
 
 /** How often a player may send a batch of commands: ten a second, bursts of twenty. */
@@ -41,6 +40,11 @@ export const TEND_AFTER = 2 * 60_000;
 const SLICE_NS = 2_000_000n;
 /** How many slices for players' jobs a waiting tend lets go first; the next is its own. */
 const TEND_WAITS = 3;
+/** How many times in all a job is done, each from what is stored, when what is stored moves on under it. */
+const TRIES = 3;
+
+/** What is stored moved on while a job worked from its copy: another Leaf wrote it, or a tool did. */
+class Lost extends Data.TaggedError("Lost") {}
 
 /** A player's state in a game as its lane holds it in memory. */
 interface Copy {
@@ -62,12 +66,16 @@ interface Copy {
 interface Job {
   /** Leaf's own, not a player's. */
   readonly tend: boolean;
+  /** The lane whose line it is in. */
+  readonly lane: Lane;
   /** Its place among the arrivals of every lane's jobs. */
   readonly seq: number;
+  /** The moment it arrived, read once, as it took its place. */
+  readonly at: number;
   /** All but a batch: its caller has gone while it waited, and it is never done. */
   gone: boolean;
-  /** Does it, saves the copy if it leaves the line empty, then answers it; false when anything went wrong. */
-  readonly run: Effect.Effect<boolean>;
+  /** Does it, saves the copy if it leaves the line empty, then answers it. */
+  readonly run: Effect.Effect<void>;
   /** Answers it as stopped, unless it has been answered. */
   readonly stop: () => void;
 }
@@ -81,6 +89,11 @@ interface Lane {
   readonly jobs: Job[];
   copy: Copy | undefined;
 }
+
+/** Which job it is: a player's open, visit or batch, or Leaf's own tend. */
+type Kind = "open" | "visit" | "batch" | "tend";
+/** What a job does, given the job: its answer, given once the copy is saved. */
+type Work<A> = (job: Job) => Effect.Effect<() => A, Lost>;
 
 /** A slice of running a state on, asked for by a lane's job. */
 interface Ask {
@@ -177,6 +190,13 @@ interface Taken {
   readonly key: string;
 }
 
+/** What spends come to, in Leaf. */
+const sum = (spends: readonly Taken[]) => spends.reduce((all, spend) => all + spend.amount, 0);
+
+/** A tend that failed, logged (whose, and of which game) as the sweep's tends are waited for: the others go on. */
+const failed = (player: PlayerId, game: string, defect: unknown) =>
+  Effect.annotateLogs(Effect.logError(`Tending the ${game} state of ${player} failed`, defect), { player, game });
+
 /** The commands of a batch with their ids, or why the batch is not one. */
 function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] | string {
   if (commands.length > MOST_COMMANDS) {
@@ -215,30 +235,33 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * posted to the ledger as a spend on the `shop` sink, keyed `play:<game>:<player>:<key>`, and logged
  * (`leaf_spent`). A key the ledger has seen is not taken again, and the command stands. Leaf earns no
  * XP and uses none of the Coins' room. A player with no state yet gets a new one,
- * and their Coins open with the welcome. A stored state that will not read is left as it is: the
- * player and the game are logged, and nothing is done. Leaf's dice for each call come from
+ * and their Coins open with the welcome as it is made. A stored state that will not read is left as
+ * it is: the player and the game are logged, and nothing is done. Leaf's dice for each call come from
  * `SecureRandom`. A visitor (`visit`) is shown somebody's state, and is given nothing of theirs.
  *
  * Everything asked of one player's state in one game (an open, a visit, a batch, Leaf's own tend)
  * is a job in that state's lane (`Lane`), which holds at most one copy of it in memory (`Copy`).
  * A job takes its place in the lane's line as it arrives, with the moment it arrived, before
  * anything is waited for; the lane does them one at a time in that order. Doing one: the copy is
- * read from what is stored if there is none or the stored `rev` is no longer its own, brought to the
- * job's moment (for a game that tends its states, a slice at a time), and then shown, or commanded
- * and kept. The copy is written by a batch, and whenever a job leaves the line empty with the copy
- * run on past what is stored, as a batch of no commands from its owner; nothing else writes it.
- * Anything going wrong in a job drops the copy. A batch is done whatever becomes of its request;
- * any other job whose caller has gone while it waited is never done. A lane with an empty line and
- * nothing unsaved is let go.
+ * read from what is stored if there is none or the stored `rev` is no longer its own, run on to the
+ * job's moment (a slice at a time, for a game that tends its states), and shown; or each of a
+ * batch's commands is done to it in order, once it is run on to where the command is done, and
+ * weighed against the balances as they stood before; and then a transaction checks and writes: the
+ * stored `rev` first, then those balances, then what the batch did. The copy is written by a batch,
+ * and whenever a job leaves the line empty with the copy unsaved, as a batch of no commands; nothing
+ * else writes it. What is stored having moved on (`Lost`), nothing is written, and the job is done
+ * again from it, `TRIES` times in all. Anything going wrong drops the copy. A batch is done whatever
+ * becomes of its request; any other job whose caller has gone while it waited is never done.
  *
- * One slice of running states on (`SLICE_NS`) runs at a time, then a rest as long. The next goes to
- * the job that arrived first among players' jobs, but to Leaf's own once one has waited through
- * `TEND_WAITS` of those. Leaf tends every state stored longer ago than `TEND_AFTER` of a game that
- * tends its states (`tend`), one after another, but for those found standing still.
+ * One slice of running states on (`SLICE_NS`) runs at a time, then a rest as long: the next to the
+ * players' job that arrived first (a tend with one behind it in its line runs for it), but to Leaf's
+ * own once one has waited through `TEND_WAITS` of those. Leaf puts a tend in the line of each state
+ * of a game that tends its states stored longer ago than `TEND_AFTER` (`tend`), but those found
+ * standing still or with one in line, and waits for none; each reads nothing until its first turn.
  *
  * Each call taken (an opening, a batch that is not refused whole, a visit) counts for the caller the
- * time since their last call to that game (`PlayStore.heard`), once, at the moment it arrived, as it
- * takes its place. Leaf's own tending is no call, and counts nothing.
+ * time since their last call to that game (`PlayStore.heard`), once, at the moment it arrived,
+ * written by Leaf's own fiber. Leaf's own tending is no call, and counts nothing.
  */
 export class Play extends Context.Service<
   Play,
@@ -249,8 +272,8 @@ export class Play extends Context.Service<
     readonly send: (playing: Playing, played: Played, commands: readonly unknown[]) => Effect.Effect<Batch>;
     /** Another player's state in a game, as a visitor (`caller`) is given it. Takes one of the caller's batches. */
     readonly visit: (player: PlayerId, played: Played, caller: Playing) => Effect.Effect<Visiting>;
-    /** Tends every stored state of these games last written longer ago than `TEND_AFTER` and not standing still. */
-    readonly tend: (games: readonly Played[]) => Effect.Effect<void>;
+    /** Puts a tend in the line of each of these games' states due one, and is done; what it gives back waits for them. */
+    readonly tend: (games: readonly Played[]) => Effect.Effect<Effect.Effect<void>>;
   }
 >()("leaf/Play") {
   static readonly layer = Layer.effect(
@@ -278,11 +301,13 @@ export class Play extends Context.Service<
       const asked = yield* Latch.make(false);
       const nanos = () => clock.monotonicTimeNanosUnsafe();
       let waited = 0;
+      /** Whose a slice is: the oldest player's job waiting in the line of the lane that asks, or else its own. */
+      const whose = (ask: Ask) => ask.job.lane.jobs.find((job) => !job.tend && !job.gone) ?? ask.job;
       /** The slice to run next, taken from those asked for. */
       const nextAsk = () => {
         const first = (tend: boolean) =>
           asks.reduce<Ask | undefined>(
-            (o, a) => (a.job.tend === tend && (o === undefined || a.job.seq < o.job.seq) ? a : o),
+            (o, a) => (whose(a).tend === tend && (o === undefined || whose(a).seq < whose(o).seq) ? a : o),
             undefined,
           );
         const player = first(false);
@@ -323,8 +348,9 @@ export class Play extends Context.Service<
 
       /**
        * The lane's copy for a job at `at`: the one it holds while the stored `rev` is its own, or
-       * else the stored state read; for its owner's open or batch (`maker`) where none is stored, a
-       * new one, unsaved. Undefined for no state; null for one that does not read, which is logged.
+       * else the stored state read; where none is stored, the new one it holds, unsaved, or for its
+       * owner's open or batch (`maker`) one made now. Undefined for no state; null for one that does
+       * not read, which is logged.
        */
       const copyOf = (lane: Lane, at: number, maker: Playing | null) =>
         Effect.gen(function* () {
@@ -332,10 +358,11 @@ export class Play extends Context.Service<
           const found = yield* store.read(player, played.id);
           if (Option.isSome(found) && lane.copy?.rev === found.value.rev) return lane.copy;
           if (Option.isNone(found)) {
-            // Nothing stored: only a new copy, not yet stored, still stands.
+            // Nothing stored: only a new copy, not yet stored, still stands, whoever asks.
             if (lane.copy?.rev !== null) lane.copy = undefined;
-            if (maker === null) return undefined;
-            if (lane.copy !== undefined) return lane.copy;
+            if (lane.copy !== undefined || maker === null) return lane.copy;
+            // The player's Coins open with the welcome as their first state is made.
+            yield* coins.open(player, at);
             const text = played.create(ctxOf(maker, at, yield* dice, 0, yield* store.awards(player)));
             const held = played.read(text);
             return held && (lane.copy = { rev: null, text, guest: maker.guest, at, held, unsaved: true });
@@ -358,198 +385,169 @@ export class Play extends Context.Service<
           return held && (lane.copy = { rev, text: state, guest, at, held, unsaved: false });
         });
 
-      /**
-       * The lane's copy (`copyOf`) brought to the job's moment, a slice at a time (`slice`) for as
-       * long as the game says there is further to go, with what its owner has won; or none.
-       */
-      const brought = (lane: Lane, job: Job, at: number, maker: Playing | null) =>
+      /** Runs the job's copy on to its moment, or to where `command` is done, a slice at a time while there is further to go. */
+      const runOn = (job: Job, copy: Copy, awards: readonly string[], command?: unknown) =>
         Effect.gen(function* () {
-          const copy = yield* copyOf(lane, at, maker);
+          // Running on is no call: it gets no dice.
+          const ctx = ctxOf({ playerId: job.lane.player, guest: copy.guest }, copy.at, 0, 0, awards);
+          if (!copy.held.run(ctx, () => false, command)) return;
+          copy.unsaved = true;
+          for (let more = true; more;) more = yield* slice(job, (time) => copy.held.run(ctx, time, command));
+        });
+
+      /** The lane's copy (`copyOf`) brought to the job's moment (`runOn`), with what its owner has won; or none. */
+      const brought = (job: Job, maker: Playing | null) =>
+        Effect.gen(function* () {
+          const copy = yield* copyOf(job.lane, job.at, maker);
           if (!copy) return copy;
-          const awards = yield* store.awards(lane.player);
-          // Tending is no call: it gets no dice.
-          const ctx = ctxOf({ playerId: lane.player, guest: copy.guest }, at, 0, 0, awards);
-          copy.at = at;
-          if (copy.held.run(ctx, () => false)) {
-            copy.unsaved = true;
-            for (let more = true; more;) more = yield* slice(job, (time) => copy.held.run(ctx, time));
-          }
+          const awards = yield* store.awards(job.lane.player);
+          copy.at = job.at;
+          yield* runOn(job, copy, awards);
           return { copy, awards };
         });
 
       /**
-       * What of a command's Leaf the ledger is to take (the spends whose keys it has not seen), or
-       * why none may be: `leaf_closed` or `not_enough_leaf`. A spend that is not a whole number of
-       * Leaf above 0 is the game's defect.
+       * Does a batch's commands to the job's copy with the dice `seed`, each once the copy is run on to
+       * it (`runOn`) and weighed against the balances as they were before (`weigh`); then keeps it in a
+       * transaction that only checks and writes, or fails `Lost` when what is stored moved on.
        */
-      const leafOf = (playing: Playing, played: Played, spends: readonly LeafSpend[]) =>
+      const batch = (job: Job, copy: Copy, playing: Playing, sent: readonly Sent[], seed: number) =>
         Effect.gen(function* () {
-          if (spends.length === 0) return [];
-          if (!gameLeafSpending || playing.guest) return "leaf_closed";
-          const unseen: Taken[] = [];
-          for (const { amount, reason, key } of spends) {
-            if (!isLeaf(amount)) {
-              return yield* Effect.die(new Error(`A ${played.id} command took ${amount} Leaf`));
+          const { player, played } = job.lane;
+          const { at } = copy;
+          const awards = yield* store.awards(player);
+          const against = { coins: yield* coins.balance(player), room: yield* coins.room(player, at) };
+          // The ledger's balance, read once a command takes Leaf.
+          let leaf: number | null = null;
+          let { coins: balance, room } = against;
+          const ctx = (roll: number, left: number): Ctx => ctxOf(playing, at, roll, left, awards);
+          const game = copy.held.open(ctx(seed, room));
+          const results: Result[] = [];
+          const answers: { readonly id: string; readonly result: Result }[] = [];
+          const entries: CoinEntry[] = [];
+          const taken: Taken[] = [];
+          const logs: Logged[] = [];
+          /**
+           * A command the rules did, refused `leaf_closed`, `not_enough_leaf` (its spends whose keys the
+           * ledger and the batch have not seen, past the balance less what the batch took) or
+           * `not_enough_coins` (`payable`), or kept. A spend not a whole number of Leaf above 0 is a defect.
+           */
+          const weigh = (id: string, did: Exclude<Attempt, { readonly refused: string }>) =>
+            Effect.gen(function* () {
+              if (did.leaf.length > 0 && (!gameLeafSpending || playing.guest)) return { id, refused: "leaf_closed" };
+              const spends: Taken[] = [];
+              for (const { amount, reason, key } of did.leaf) {
+                if (!isLeaf(amount)) return yield* Effect.die(new Error(`A ${played.id} command took ${amount} Leaf`));
+                const spend = { amount, reason, key: `play:${played.id}:${player}:${key}` };
+                if (!taken.some((t) => t.key === spend.key) && !(yield* ledger.isRecorded(spend.key)))
+                  spends.push(spend);
+              }
+              if (spends.length > 0 && sum(spends) + sum(taken) > (leaf ??= (yield* ledger.account(player)).balance)) {
+                return { id, refused: "not_enough_leaf" };
+              }
+              const amounts = payable(did.coins, balance, room);
+              if (amounts === null) return { id, refused: "not_enough_coins" };
+              did.keep();
+              taken.push(...spends);
+              for (const { amount, reason } of spends)
+                logs.push({ kind: LOGGED.leafSpent, data: { leaf: amount, reason } });
+              for (const [n, change] of did.coins.entries()) {
+                // Past what the player may still earn, the command is done all the same and pays what is left.
+                const amount = amounts[n] ?? 0;
+                const key = `${played.id}:${player}:${change.key}`;
+                // A change whose key was paid before is not paid again, and the command stands.
+                if (amount === 0 || entries.some((e) => e.key === key) || (yield* coins.posted(key))) continue;
+                const free = change.free === true;
+                entries.push({ amount, reason: change.reason, game: played.id, key, free });
+                balance += amount;
+                room -= free ? 0 : Math.max(0, amount);
+              }
+              logs.push(...did.log);
+              return { id, notes: did.notes };
+            });
+          for (const { id, command } of sent) {
+            const before = yield* store.answered(player, played.id, id);
+            if (Option.isSome(before)) {
+              results.push({ id, ...readKept(before.value) });
+              continue;
             }
-            const taken = { amount, reason, key: `play:${played.id}:${playing.playerId}:${key}` };
-            if (!(yield* ledger.isRecorded(taken.key))) unseen.push(taken);
+            yield* runOn(job, copy, awards, command);
+            const attempt = game.attempt(command, ctx(yield* dice, room));
+            // A command refused, by the rules or for Leaf or Coins, is not done at all.
+            const result = "refused" in attempt ? { id, refused: attempt.refused } : yield* weigh(id, attempt);
+            results.push(result);
+            answers.push({ id, result });
           }
-          const { balance } = yield* ledger.account(playing.playerId);
-          return unseen.reduce((sum, spend) => sum + spend.amount, 0) > balance ? "not_enough_leaf" : unseen;
+          const text = game.text();
+          const changed = text !== copy.text;
+          const standing = changed ? game.standing() : null;
+          const won = changed ? game.awards().filter((id) => !awards.includes(id)) : [];
+          const rev = yield* sql
+            .withTransaction(
+              Effect.gen(function* () {
+                // What is stored first: the copy is kept over the `rev` it came from, or as the first state.
+                const first =
+                  copy.rev === null
+                    ? store.create(player, played.id, copy.text, playing.guest, at)
+                    : store.isAt(player, played.id, copy.rev);
+                if (!(yield* first)) return yield* new Lost();
+                // Then the balances the commands were weighed against.
+                if (
+                  answers.length > 0 &&
+                  ((yield* coins.balance(player)) !== against.coins ||
+                    (yield* coins.room(player, at)) !== against.room ||
+                    (leaf !== null && (yield* ledger.account(player)).balance !== leaf))
+                ) {
+                  return yield* new Lost();
+                }
+                const next = (copy.rev ?? 0) + (changed ? 1 : 0);
+                if (changed) {
+                  yield* store.write(player, played.id, text, playing.guest, at);
+                  if (standing !== null) yield* store.stand(player, played.id, standing, playing.guest, at);
+                  yield* store.award(player, won, at);
+                }
+                for (const { id, result } of answers) {
+                  // An answer kept for it already: another Leaf did it at this `rev`.
+                  if (!(yield* store.answer(player, played.id, id, next, keptOf(result)))) return yield* new Lost();
+                }
+                if (answers.length > 0) yield* store.keepNewest(player, played.id);
+                for (const { amount, reason, key } of taken) {
+                  const posted = yield* ledger.post(
+                    { kind: "spend", playerId: player, amount, sink: "shop", idempotencyKey: key, memo: reason },
+                    at,
+                  );
+                  // Weighed against the balance this transaction checked: a refusal is a defect.
+                  if (posted.status === "rejected")
+                    return yield* Effect.die(new Error(`The ledger refused ${key}: ${posted.reason}`));
+                }
+                for (const entry of entries) yield* coins.post(player, entry, at);
+                yield* store.log(player, played.id, logs, at);
+                // Counted for the staff's report: each command done or refused now, not those answered from before.
+                const refused = answers.filter((a) => "refused" in a.result).length;
+                yield* store.count(player, answers.length - refused, refused, at);
+                return next;
+              }),
+            )
+            .pipe(Effect.catchTag("SqlError", Effect.die));
+          Object.assign(copy, { rev, text, guest: playing.guest, unsaved: false });
+          return { now: at, rev, results, view: () => game.view(ctx(0, room)) };
         });
 
-      /**
-       * Does a batch of commands to the lane's copy at `at`, opened with the dice `seed`, and keeps it
-       * in one transaction: the copy, if it changed, written over the `rev` it came from (a new one
-       * stored first), and whatever else changed with it.
-       */
-      const batch = (
-        lane: Lane,
-        copy: Copy,
-        playing: Playing,
-        sent: readonly Sent[],
-        at: number,
-        awards: readonly string[],
-        seed: number,
-      ) =>
-        sql
-          .withTransaction(
-            Effect.gen(function* () {
-              const { played } = lane;
-              if (copy.rev === null) {
-                // A new state, stored first, and the player's Coins opened with the welcome.
-                if (!(yield* store.create(playing.playerId, played.id, copy.text, playing.guest, at))) {
-                  return yield* Effect.die(
-                    new Error(`A ${played.id} state for ${playing.playerId} was made meanwhile`),
-                  );
-                }
-                yield* coins.open(playing.playerId, at);
-                copy.rev = 0;
-              }
-              const over = copy.rev;
-              let room = yield* coins.room(playing.playerId, at);
-              const ctx = (roll: number, left: number): Ctx => ctxOf(playing, at, roll, left, awards);
-              const game = copy.held.open(ctx(seed, room));
-              let balance = yield* coins.balance(playing.playerId);
-              const results: Result[] = [];
-              const answers: { readonly id: string; readonly result: Result }[] = [];
-              const logs: Logged[] = [];
-              for (const { id, command } of sent) {
-                const before = yield* store.answered(playing.playerId, played.id, id);
-                if (Option.isSome(before)) {
-                  results.push({ id, ...readKept(before.value) });
-                  continue;
-                }
-                const attempt = game.attempt(command, ctx(yield* dice, room));
-                const leaf = "refused" in attempt ? [] : yield* leafOf(playing, played, attempt.leaf);
-                const amounts = "refused" in attempt ? null : payable(attempt.coins, balance, room);
-                let result: Result;
-                if ("refused" in attempt) {
-                  result = { id, refused: attempt.refused };
-                } else if (typeof leaf === "string") {
-                  // Leaf that may not be taken: the command is not done at all.
-                  result = { id, refused: leaf };
-                } else if (amounts === null) {
-                  // A command that takes Coins the player does not have is not done at all.
-                  result = { id, refused: "not_enough_coins" };
-                } else {
-                  attempt.keep();
-                  for (const { amount, reason, key } of leaf) {
-                    const posted = yield* ledger.post(
-                      {
-                        kind: "spend",
-                        playerId: playing.playerId,
-                        amount,
-                        sink: "shop",
-                        idempotencyKey: key,
-                        memo: reason,
-                      },
-                      at,
-                    );
-                    if (posted.status === "rejected") {
-                      // Weighed in this transaction: the batch is undone whole.
-                      return yield* Effect.die(new Error(`The ledger refused ${key}: ${posted.reason}`));
-                    }
-                    logs.push({ kind: LOGGED.leafSpent, data: { leaf: amount, reason } });
-                  }
-                  for (const [n, change] of attempt.coins.entries()) {
-                    // Past what the player may still earn, the command is done all the same and pays what is left.
-                    const amount = amounts[n] ?? 0;
-                    if (amount === 0) {
-                      continue;
-                    }
-                    const free = change.free === true;
-                    const posted = yield* coins.post(
-                      playing.playerId,
-                      {
-                        amount,
-                        reason: change.reason,
-                        game: played.id,
-                        key: `${played.id}:${playing.playerId}:${change.key}`,
-                        free,
-                      },
-                      at,
-                    );
-                    if (posted.status === "posted") {
-                      balance += amount;
-                      room -= free ? 0 : Math.max(0, amount);
-                    }
-                  }
-                  logs.push(...attempt.log);
-                  result = { id, notes: attempt.notes };
-                }
-                results.push(result);
-                answers.push({ id, result });
-              }
-              const after = game.text();
-              if (after !== copy.text) {
-                if (!(yield* store.write(playing.playerId, played.id, over, after, playing.guest, at))) {
-                  return yield* Effect.die(
-                    new Error(`The ${played.id} state of ${playing.playerId} changed underfoot`),
-                  );
-                }
-                copy.rev = over + 1;
-                copy.text = after;
-                copy.guest = playing.guest;
-                const standing = game.standing();
-                if (standing !== null) {
-                  yield* store.stand(playing.playerId, played.id, standing, playing.guest, at);
-                }
-                const won = game.awards().filter((id) => !awards.includes(id));
-                yield* store.award(playing.playerId, won, at);
-              }
-              copy.unsaved = false;
-              yield* store.log(playing.playerId, played.id, logs, at);
-              for (const { id, result } of answers) {
-                yield* store.answer(playing.playerId, played.id, id, copy.rev, keptOf(result));
-              }
-              if (answers.length > 0) {
-                yield* store.keepNewest(playing.playerId, played.id);
-              }
-              // Counted for the staff's report: each command done or refused now, not those answered from before.
-              const refused = answers.filter((a) => "refused" in a.result).length;
-              yield* store.count(playing.playerId, answers.length - refused, refused, at);
-              return { now: at, rev: copy.rev, results, view: game.view(ctx(0, room)) };
-            }),
-          )
-          .pipe(Effect.orDie);
-
-      /** Writes the lane's copy if the job leaves its line empty with the copy unsaved, as a batch of no commands from its owner keeps it. */
-      const settle = (lane: Lane) =>
-        Effect.gen(function* () {
-          const { copy } = lane;
-          if (lane.jobs.length > 1 || copy?.unsaved !== true) return;
-          const owner = { playerId: lane.player, guest: copy.guest };
+      /** Writes the job's copy if it leaves its line empty with the copy unsaved, as a batch of no commands from its owner keeps it. */
+      const settle = (job: Job) =>
+        Effect.suspend(() => {
+          const { jobs, copy, player } = job.lane;
           // Leaf keeping a copy is no call: it gets no dice.
-          yield* batch(lane, copy, owner, [], copy.at, yield* store.awards(lane.player), 0);
+          return jobs.length > 1 || copy?.unsaved !== true
+            ? Effect.void
+            : Effect.asVoid(batch(job, copy, { playerId: player, guest: copy.guest }, [], 0));
         });
 
       /** Does a lane's jobs one at a time, in the order they came, and lets it go when its line is empty. */
       const drain = (lane: Lane) =>
         Effect.gen(function* () {
           for (let job = lane.jobs[0]; job !== undefined; job = lane.jobs[0]) {
-            // Anything gone wrong drops the copy: the next job reads what is stored.
-            if (!(yield* job.run)) lane.copy = undefined;
+            yield* job.run;
             lane.jobs.shift();
           }
           lanes.delete(lane.key);
@@ -558,86 +556,93 @@ export class Play extends Context.Service<
           Effect.onExit(() => Effect.sync(() => lane.jobs.forEach((job) => job.stop()))),
         );
 
-      /** Counts the caller's time in a game up to a moment (`PlayStore.heard`). */
-      const heard = (playing: Playing, played: Played, at: number) => store.heard(playing.playerId, played.id, at);
-
       /**
-       * Puts a job in the line of `player`'s state in a game, at once and with the moment it
-       * arrived, starting the lane if it had none; counts the caller's time for a call; and waits for
-       * the answer, which `work` gives once the copy is saved. All but a batch are never done once
-       * their caller has gone.
+       * Puts a job in the line of `player`'s state in a game, at once and with the moment it arrived;
+       * counts the caller's time, by Leaf's own fiber; and gives back the wait for what `work` answers,
+       * once the copy is saved. What is stored moving on (`Lost`), the job is done again, `TRIES` times
+       * in all. All but a batch are never done once whoever waits has gone, but for saving the copy.
        */
-      const ask = <A>(
-        kind: "open" | "visit" | "batch" | "tend",
-        player: PlayerId,
-        played: Played,
-        caller: Playing | null,
-        work: (lane: Lane, job: Job, at: number) => Effect.Effect<() => A>,
-      ) =>
-        Effect.uninterruptibleMask((restore) =>
-          Effect.gen(function* () {
-            const key = keyOf(player, played);
-            const idle = lanes.get(key);
-            const lane = idle ?? { key, player, played, jobs: [], copy: undefined };
-            const at = clock.currentTimeMillisUnsafe();
-            const done = Deferred.makeUnsafe<A>();
-            const job: Job = {
-              tend: kind === "tend",
-              seq: ++arrivals,
-              gone: false,
-              run: Effect.gen(function* () {
-                if (job.gone) return Exit.isSuccess(yield* Effect.exit(settle(lane)));
-                const exit = yield* Effect.exit(
-                  Effect.flatMap(work(lane, job, at), (answer) => Effect.map(settle(lane), answer)),
-                );
-                Deferred.doneUnsafe(done, exit);
-                return Exit.isSuccess(exit);
-              }),
-              stop: () => void Deferred.doneUnsafe(done, Exit.interrupt()),
-            };
-            lane.jobs.push(job);
-            if (idle === undefined) {
-              lanes.set(key, lane);
-              yield* Effect.forkIn(drain(lane), scope);
-            }
-            return yield* restore(
-              Effect.andThen(caller === null ? Effect.void : heard(caller, played, at), Deferred.await(done)),
-            ).pipe(Effect.onError(() => Effect.sync(() => void (job.gone = kind !== "batch"))));
-          }),
+      const line = <A>(kind: Kind, player: PlayerId, played: Played, caller: Playing | null, work: Work<A>) =>
+        Effect.gen(function* () {
+          const key = keyOf(player, played);
+          const idle = lanes.get(key);
+          const lane = idle ?? { key, player, played, jobs: [], copy: undefined };
+          const done = Deferred.makeUnsafe<A>();
+          const again = <B>(effect: Effect.Effect<B, Lost>) =>
+            effect.pipe(
+              Effect.onError(() => Effect.sync(() => void (lane.copy = undefined))),
+              Effect.retry({ times: TRIES - 1 }),
+              Effect.orDie,
+              Effect.exit,
+            );
+          const job: Job = {
+            tend: kind === "tend",
+            lane,
+            seq: ++arrivals,
+            at: clock.currentTimeMillisUnsafe(),
+            gone: false,
+            run: Effect.suspend(() =>
+              job.gone
+                ? Effect.asVoid(again(settle(job)))
+                : Effect.map(
+                    again(Effect.flatMap(work(job), (then) => Effect.map(settle(job), then))),
+                    (exit) => void Deferred.doneUnsafe(done, exit),
+                  ),
+            ),
+            stop: () => void Deferred.doneUnsafe(done, Exit.interrupt()),
+          };
+          lane.jobs.push(job);
+          if (idle === undefined) {
+            lanes.set(key, lane);
+            yield* Effect.forkIn(drain(lane), scope);
+          }
+          const heard = caller && (yield* Effect.forkIn(store.heard(caller.playerId, played.id, job.at), scope));
+          return Effect.andThen(heard ? Fiber.join(heard) : Effect.void, Deferred.await(done)).pipe(
+            Effect.onError(() => Effect.sync(() => void (job.gone = kind !== "batch"))),
+          );
+        });
+
+      /** A caller's job put in its line (`line`), and its answer waited for: only the waiting may be interrupted. */
+      const ask = <A>(kind: Kind, player: PlayerId, played: Played, caller: Playing, work: Work<A>) =>
+        Effect.uninterruptibleMask((restore) => Effect.flatMap(line(kind, player, played, caller, work), restore));
+
+      /** Leaf's own tend: its work, reading the state as much as running it on, waits for its turn (`slice`). */
+      const tending: Work<void> = (job) =>
+        slice(job, () => false).pipe(
+          Effect.andThen(brought(job, null)),
+          Effect.as(() => {}),
         );
 
       return Play.of({
         open: (playing, played) =>
-          ask("open", playing.playerId, played, playing, (lane, job, at) =>
+          ask("open", playing.playerId, played, playing, (job) =>
             Effect.gen(function* () {
-              const got = yield* brought(lane, job, at, playing);
+              const got = yield* brought(job, playing);
               if (!got) return (): Opening => ({ status: "unreadable" });
-              const room = yield* coins.room(playing.playerId, at);
-              const ctx = (seed: number): Ctx => ctxOf(playing, at, seed, room, got.awards);
+              const room = yield* coins.room(playing.playerId, job.at);
+              const ctx = (seed: number): Ctx => ctxOf(playing, job.at, seed, room, got.awards);
               const seed = yield* dice;
               return (): Opening => {
                 const view = got.copy.held.open(ctx(seed)).view(ctx(0));
                 // A new state not yet stored, a batch behind it in the line, is one nothing has been done to.
-                return { status: "open", rev: got.copy.rev ?? 0, now: at, view };
+                return { status: "open", rev: got.copy.rev ?? 0, now: job.at, view };
               };
             }),
           ),
         send: (playing, played, commands) =>
           Effect.gen(function* () {
             const sent = sentOf(played, commands);
-            if (typeof sent === "string") {
-              return { status: "invalid", why: sent } satisfies Batch;
-            }
+            if (typeof sent === "string") return { status: "invalid", why: sent } satisfies Batch;
             // A batch that would take the player past either allowance is refused whole.
             if (!pace.take(playing.playerId, yield* Clock.currentTimeMillis, [1, sent.length])) {
               return { status: "slow" } satisfies Batch;
             }
-            return yield* ask("batch", playing.playerId, played, playing, (lane, job, at) =>
+            return yield* ask("batch", playing.playerId, played, playing, (job) =>
               Effect.gen(function* () {
-                const got = yield* brought(lane, job, at, playing);
+                const got = yield* brought(job, playing);
                 if (!got) return (): Batch => ({ status: "unreadable" });
-                const done = yield* batch(lane, got.copy, playing, sent, at, got.awards, yield* dice);
-                return (): Batch => ({ status: "done", ...done });
+                const done = yield* batch(job, got.copy, playing, sent, yield* dice);
+                return (): Batch => ({ status: "done", ...done, view: done.view() });
               }),
             );
           }),
@@ -646,17 +651,17 @@ export class Play extends Context.Service<
             if (!pace.take(caller.playerId, yield* Clock.currentTimeMillis, [1, 0])) {
               return { status: "slow" } satisfies Visiting;
             }
-            return yield* ask("visit", player, played, caller, (lane, job, at) =>
+            return yield* ask("visit", player, played, caller, (job) =>
               Effect.gen(function* () {
-                const got = yield* brought(lane, job, at, null);
+                const got = yield* brought(job, null);
                 if (!got) return (): Visiting => ({ status: got === null ? "unreadable" : "nothing" });
                 // Nothing is earned by a visit: the call may pay none.
-                const ctx = (seed: number): Ctx => ctxOf(caller, at, seed, 0, got.awards);
+                const ctx = (seed: number): Ctx => ctxOf(caller, job.at, seed, 0, got.awards);
                 const seed = yield* dice;
                 return (): Visiting => {
                   const { visit } = got.copy.held.open(ctx(seed));
-                  const rev = got.copy.rev ?? 0;
-                  return visit === null ? { status: "nothing" } : { status: "open", rev, now: at, view: visit(ctx(0)) };
+                  if (visit === null) return { status: "nothing" };
+                  return { status: "open", rev: got.copy.rev ?? 0, now: job.at, view: visit(ctx(0)) };
                 };
               }),
             );
@@ -664,28 +669,23 @@ export class Play extends Context.Service<
         tend: (games) =>
           Effect.gen(function* () {
             const began = yield* Clock.currentTimeMillis;
-            let tended = 0;
+            const ends: Effect.Effect<void>[] = [];
             for (const played of games) {
               if (!played.tends) continue;
-              for (const { playerId, rev } of yield* store.unwritten(played.id, began - TEND_AFTER)) {
-                if (stills.get(keyOf(playerId, played)) === rev) continue;
-                // One state that fails is logged, and the others are tended all the same.
-                yield* ask("tend", playerId, played, null, (lane, job, at) =>
-                  Effect.as(brought(lane, job, at, null), () => undefined),
-                ).pipe(
-                  Effect.catchDefect((defect) =>
-                    Effect.logError(`Tending the ${played.id} state of ${playerId} failed`, defect).pipe(
-                      Effect.annotateLogs({ player: playerId, game: played.id }),
-                    ),
-                  ),
-                );
-                tended++;
+              for (const { playerId: player, rev } of yield* store.unwritten(played.id, began - TEND_AFTER)) {
+                const key = keyOf(player, played);
+                if (stills.get(key) === rev || lanes.get(key)?.jobs.some((job) => job.tend)) continue;
+                const tended = yield* line("tend", player, played, null, tending);
+                ends.push(Effect.catchDefect(tended, (defect) => failed(player, played.id, defect)));
               }
             }
-            if (tended > 0) {
+            const ended = Effect.gen(function* () {
+              yield* Effect.all(ends, { discard: true });
               const took = (yield* Clock.currentTimeMillis) - began;
-              yield* Effect.logInfo("tended").pipe(Effect.annotateLogs({ states: tended, took_ms: took }));
-            }
+              if (ends.length > 0)
+                yield* Effect.annotateLogs(Effect.logInfo("tended"), { states: ends.length, took_ms: took });
+            });
+            return Fiber.join(yield* Effect.forkIn(ended, scope));
           }),
       });
     }),

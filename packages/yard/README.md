@@ -212,7 +212,9 @@ its past: a tick at a time however far, moving `at` with it (`stepTo`). A yard s
 Leaf's clock with it (`at` is set to now), so the hours it stood are let go and it starts again from
 its owner's next command. `tend` does what `advance` does for as long as Leaf says, so that Leaf
 can run a yard on a slice at a time: Leaf runs every yard so, whether or not anyone is looking (the
-root README's play service).
+root README's play service). Given a command, `tend` runs the yard instead toward the tick `apply`
+does it at, keeping what happened on the way as the command's news: Leaf runs a yard there before
+each command, so that `apply` has no tick left to run.
 
 **Commands** each carry `tick`, the tick the page's copy stood at. `apply` runs the yard to that
 tick (one in its past is done now, one more than `LEAD` ahead of the clock at `LEAD`), then does

@@ -129,15 +129,29 @@ export function stepTo(w: World, tick: number): void {
   w.at += n * TICK_MS;
 }
 
+/** The tick a command is done at by Leaf's clock: its own, but none further than `LEAD` past the clock. */
+const tickOf = (w: World, c: WorksCommand, now: number): number => Math.min(c.tick, clockOf(w, now) + LEAD);
+
 /**
- * Runs a yard toward `LEAD` short of Leaf's clock, a tick at a time for as long as `more` says,
- * and says whether it has further to go. What happened unwatched is no command's news.
+ * Runs a yard toward a tick, a tick at a time for as long as `more` says and never past where it
+ * stands still, and says whether it has further to go.
  */
-function runOn(w: World, now: number, more: () => boolean): boolean {
-  const to = Math.min(clockOf(w, now) - LEAD, stillAt(w));
+function runTo(w: World, tick: number, more: () => boolean): boolean {
+  const to = Math.min(tick, stillAt(w));
   while (w.tick < to && more()) stepTo(w, w.tick + 1);
-  drain(w);
   return w.tick < to;
+}
+
+/**
+ * Runs a yard toward `LEAD` short of Leaf's clock while `more` says, and says whether it has
+ * further to go; or toward the tick a command is done at, whose news is what happened on the way.
+ * What happened unwatched is no command's news.
+ */
+function runOn(w: World, now: number, more: () => boolean, c?: WorksCommand): boolean {
+  if (c) return runTo(w, tickOf(w, c, now), more);
+  const further = runTo(w, clockOf(w, now) - LEAD, more);
+  drain(w);
+  return further;
 }
 
 /**
@@ -392,9 +406,9 @@ export const WORKS: Game<World, WorksCommand, WorksView, WorksNote> = {
     return w;
   },
   advance,
-  tend: (w, ctx, more) => runOn(w, ctx.now, more),
+  tend: (w, ctx, more, c) => runOn(w, ctx.now, more, c),
   // A tick further ahead than `LEAD` past Leaf's clock is done at `LEAD`.
-  apply: (w, c, ctx) => play(w, { ...c, tick: Math.min(c.tick, clockOf(w, ctx.now) + LEAD) }),
+  apply: (w, c, ctx) => play(w, { ...c, tick: tickOf(w, c, ctx.now) }),
   view,
   // A visitor is given what the owner is, but for the blueprints.
   visit: (w, ctx) => view({ ...w, blueprints: [] }, ctx),
