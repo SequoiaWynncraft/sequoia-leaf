@@ -442,26 +442,27 @@
       }
 
       /*
-       * The Grove: its own picture over the town's, centred, and its words and buttons over that.
-       * What is tied to the picture is placed in the picture's own pixels (--g, set with its size).
+       * The Grove: its own picture over the whole window, and its words and buttons over that. The
+       * picture is composed for a frame, which is `.grove-stage`: what is tied to the picture is
+       * placed in the frame's own pixels (--g), and what is the window's (--side, --head) by how far
+       * the frame stands in from the window's left and top (--fx, --fy). All four are set with its size.
        */
       #grove {
         position: fixed;
         z-index: 12;
         inset: 0;
+        overflow: hidden;
         background: #1a0f1e;
         touch-action: manipulation;
       }
       .grove-stage {
         position: absolute;
-        overflow: hidden;
         --rim: calc(var(--g) * 8);
+        --side: calc(max(var(--rim), var(--edge)) - var(--fx));
+        --head: calc(max(var(--rim), var(--top)) - var(--fy));
       }
       .grove-stage > canvas {
-        display: block;
-        width: 100%;
-        height: 100%;
-        image-rendering: pixelated;
+        position: absolute;
       }
       .grove-banner {
         position: absolute;
@@ -480,30 +481,31 @@
       .grove-said {
         left: 50%;
         translate: -50% 0;
-        top: calc(var(--g) * 30);
+        top: calc(var(--head) + var(--u) * 22);
         max-width: 90%;
         text-align: center;
       }
       .tall .grove-said {
-        top: calc(var(--g) * 82);
+        top: calc(var(--head) + var(--u) * 48);
       }
       .grove-back {
-        left: var(--rim);
-        top: var(--rim);
+        left: var(--side);
+        top: var(--head);
       }
       #grove .grove-leaf {
-        right: var(--rim);
-        top: var(--rim);
+        right: var(--side);
+        top: var(--head);
         padding: var(--u) calc(var(--u) * 4);
       }
       .grove-skip {
-        right: var(--rim);
-        top: var(--rim);
+        right: var(--side);
+        top: var(--head);
       }
+      /* The pools are the window's too: between its corners, or under them where there is no room between. */
       .grove-pools {
         left: 50%;
         translate: -50% 0;
-        top: var(--rim);
+        top: var(--head);
       }
       /* The pool's words and buttons: one column, the pulls at its foot. */
       .grove-words {
@@ -567,7 +569,7 @@
         gap: calc(var(--u) * 4);
         left: 50%;
         translate: -50% 0;
-        bottom: var(--rim);
+        bottom: max(var(--rim), var(--bottom));
         will-change: transform;
       }
       /* A prize's name in the end picture, under it or over it, with its rarity's colour before it. */
@@ -589,6 +591,15 @@
         max-width: calc(var(--g) * 84);
         font: var(--f-small);
       }
+      /* In a window too low for them (a phone on its side) the names are smaller too, and the end's buttons the small button's height. */
+      @media (max-height: 500px) {
+        .grove-name {
+          font: var(--f-small);
+        }
+        #grove .grove-end .k-btn {
+          min-height: calc(var(--u) * 16);
+        }
+      }
       .grove-name.above {
         translate: -50% -100%;
       }
@@ -605,10 +616,12 @@
         color: #1a0f1e;
         font: var(--f-name);
       }
+      /* The panel begins under the window's corners, so it has the window's height. */
       .grove-panel {
         z-index: 2;
         display: flex;
         flex-direction: column;
+        top: calc(var(--head) + var(--u) * 18);
       }
       .grove-panel > .k-body {
         flex: 1;
@@ -632,26 +645,25 @@
       .desk .grove-words {
         right: calc(var(--g) * 16);
         top: calc(var(--g) * 140);
-        bottom: calc(var(--g) * 12);
+        bottom: max(calc(var(--g) * 12), var(--bottom));
         align-items: flex-end;
         text-align: right;
       }
       .desk .grove-panel {
         left: 50%;
         translate: -50% 0;
-        top: calc(var(--g) * 26);
         bottom: calc(var(--g) * 10);
         width: min(calc(var(--u) * 270), 94%);
       }
       /* An upright screen: the words across its lower third. */
       .tall .grove-pools {
-        top: calc(var(--g) * 60);
+        top: calc(var(--head) + var(--u) * 26);
       }
       .tall .grove-words {
         left: 0;
         right: 0;
         top: calc(var(--g) * 416);
-        bottom: calc(var(--g) * 8);
+        bottom: max(calc(var(--g) * 8), var(--bottom));
         align-items: center;
         text-align: center;
         gap: calc(var(--u) * 2);
@@ -660,7 +672,9 @@
         padding-block: calc(var(--u) * 3) var(--u);
       }
       .tall .grove-panel {
-        inset: calc(var(--g) * 44) calc(var(--g) * 2) calc(var(--g) * 6);
+        left: calc(var(--g) * 2);
+        right: calc(var(--g) * 2);
+        bottom: calc(var(--g) * 6);
       }
       /* Three tabs and the way out fit its head with nothing to spare. */
       #grove .tall .grove-panel .k-head {

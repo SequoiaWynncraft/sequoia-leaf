@@ -7,7 +7,8 @@
  * (`http://grove.test/?debug#glade`).
  *
  * Steps run one after another:
- * - `["size", w, h]` sets the window (CSS pixels); `["wait", ms]` waits;
+ * - `["size", w, h]` sets the window (CSS pixels), and `["size", w, h, ratio]` its device pixels to
+ *   a CSS pixel too (1 without); `["wait", ms]` waits;
  * - `["tap", x, y]` taps a point (CSS pixels); `["tapAt", "expr"]` taps where a page expression
  *   says (`{x, y}` in CSS pixels; with `?debug`, `grove.hudToCss(x, y)` turns HUD art pixels into
  *   CSS pixels); `["click", "selector"]` taps the middle of an element;
@@ -28,7 +29,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 
 type Step =
-  | ["size", number, number]
+  | ["size", number, number, number?]
   | ["wait", number]
   | ["tap", number, number]
   | ["tapAt", string]
@@ -45,8 +46,9 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 
 function isStep(v: unknown): v is Step {
   if (!Array.isArray(v)) return false;
-  const [kind, a, b] = v as unknown[];
-  if (kind === "size" || kind === "tap" || kind === "down" || kind === "move" || kind === "up")
+  const [kind, a, b, c] = v as unknown[];
+  if (kind === "size") return typeof a === "number" && typeof b === "number" && typeof (c ?? 1) === "number";
+  if (kind === "tap" || kind === "down" || kind === "move" || kind === "up")
     return typeof a === "number" && typeof b === "number";
   if (kind === "wait") return typeof a === "number";
   if (kind === "hold") return typeof a === "string" && typeof b === "number";
@@ -149,8 +151,8 @@ async function answer(paused: Record<string, unknown>): Promise<void> {
   });
 }
 
-const metrics = (w: number, h: number): Promise<unknown> =>
-  send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+const metrics = (w: number, h: number, ratio = 1): Promise<unknown> =>
+  send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: ratio, mobile: false });
 
 await send("Page.enable");
 // A tab opened over the protocol starts in the background, where animation frames never run.
@@ -207,7 +209,7 @@ async function run(step: Step): Promise<void> {
       return;
     }
     case "size":
-      await metrics(step[1], step[2]);
+      await metrics(step[1], step[2], step[3]);
       await Bun.sleep(300);
       return;
     case "wait":

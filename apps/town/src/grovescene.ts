@@ -3,11 +3,14 @@
  * is. The pulls are Leaf's (`@sequoia-leaf/pulls`): the page opens them, draws Leaf's view, and
  * sends `pull` and `exchange`; a ceremony plays the notes Leaf answered with, and never a guess.
  *
- * Its picture is its own canvas over the town's, 640 by 360 art pixels (360 by 640 on an upright
- * screen) at a whole number of screen pixels each, on the stage of `grovestage.ts`. One timeline:
- * `paint` draws the whole frame for the time `t` alone (seconds since the pull was answered), from
- * nothing kept between frames. A person is the town's own walking figure (the kit's `bake`), drawn
- * large and moved as the town moves it; a thing is its own picture from the game's art.
+ * Its picture is its own canvas over the town's, on the stage of `grovestage.ts`. It is composed
+ * for a frame of 640 by 360 art pixels (360 by 640 in an upright window), which is shown as large
+ * as the window allows (`fit`) and stands in the middle of the window's foot; the stage and
+ * whatever crosses the whole picture are drawn on from the frame to the window's edges. One
+ * timeline: `paint` draws the whole picture for the time `t` alone (seconds since the pull was
+ * answered), from nothing kept between frames. A person is the town's own walking figure (the
+ * kit's `bake`), drawn large and moved as the town moves it; a thing is its own picture from the
+ * game's art.
  *
  * `main.ts` drives it through `Scene`. What is said and counted is in `pulls.ts`, and the words and
  * buttons over the picture are `groveui.ts`.
@@ -437,19 +440,24 @@ export function makeGrove(
     mark();
   }
   const canvas = ui.canvas;
-  const g = must(canvas.getContext("2d"), "2d context");
-  const fx = makeCanvas(640, 640, true);
+  const screen2d = must(canvas.getContext("2d"), "2d context");
+  /** The picture, a pixel to an art pixel, drawn in the frame's places: (0, 0) is the frame's corner. */
+  const { c: whole, g } = makeCanvas(1, 1, true);
+  const fx = makeCanvas(1, 1, true);
 
+  /** The frame, and whether it is the upright one. */
   let W = 640;
   let H = 360;
   let TALL = false;
-  /** Screen pixels to an art pixel. */
+  /** CSS pixels to an art pixel. */
   let SCALE = 2;
-  let backdrops: { desk: Backdrop; tall: Backdrop } | null = null;
-  const scene = (): Backdrop => {
-    backdrops ??= { desk: buildStage(sprites, 320, 180, 86), tall: buildStage(sprites, 180, 320, 90) };
-    return TALL ? backdrops.tall : backdrops.desk;
-  };
+  /** The window's left, top and right edges in the frame's art pixels; the frame's foot is the window's. */
+  let X0 = 0;
+  let Y0 = 0;
+  let X1 = 640;
+  /** The stage for this frame and this much round it, built when it is first drawn. */
+  let built: Backdrop | null = null;
+  const scene = (): Backdrop => (built ??= buildStage(sprites, W / 2, H / 2, TALL ? 90 : 86, -X0 / 2, -Y0 / 2));
   /** What the town's canvas shows under this one: nothing. */
   const under = makeCanvas(1, 1);
 
@@ -461,18 +469,51 @@ export function makeGrove(
     fit();
   }
 
+  /**
+   * The frame as large as the window allows, in the middle of the window's foot, and the picture on
+   * from it to the window's edges. An upright window takes the upright frame, which is the larger there.
+   */
   function fit(): void {
+    const dpr = devicePixelRatio || 1;
+    const was = `${W} ${X0} ${Y0}`;
     TALL = innerHeight > innerWidth;
     W = TALL ? 360 : 640;
     H = TALL ? 640 : 360;
-    // Whole pixels where the window has room for them; on a window too small for one to one, the
-    // whole stage is made smaller, so the buttons at its foot are never out of reach.
-    const most = Math.min(innerWidth / W, innerHeight / H);
-    SCALE = most >= 1 ? Math.floor(most) : most;
-    canvas.width = W;
-    canvas.height = H;
+    // Device pixels to an art pixel: a fraction if it must be, and within a hundredth over a whole number, that number.
+    let px = Math.min(innerWidth / W, innerHeight / H) * dpr;
+    if (px - Math.floor(px) < Math.floor(px) / 100) px = Math.floor(px);
+    SCALE = px / dpr;
+    // The frame stands on a device pixel; the picture goes on round it in scene pixels, two art pixels each.
+    const left = Math.round(((innerWidth - W * SCALE) / 2) * dpr) / dpr;
+    const top = Math.ceil((innerHeight - H * SCALE) * dpr) / dpr;
+    X0 = -2 * Math.ceil(Math.max(left, innerWidth - left - W * SCALE) / SCALE / 2);
+    Y0 = -2 * Math.ceil(top / SCALE / 2);
+    X1 = W - X0;
+    if (was !== `${W} ${X0} ${Y0}`) {
+      built = null;
+      keptCache.clear();
+      shownCache.clear();
+    }
+    whole.width = X1 - X0;
+    whole.height = H - Y0;
     g.imageSmoothingEnabled = false;
-    ui.fit(W, H, SCALE, TALL);
+    g.translate(-X0, -Y0);
+    // An art pixel is seldom a whole number of device pixels, and enlarged to one by the browser
+    // some rows would be fatter than others. So the picture is shown enlarged by the next whole
+    // number up, and the browser brings that down smoothly: every art pixel is as wide as the next.
+    // At a whole number there is nothing to bring down, and it is shown as it is.
+    const up = Math.ceil(px);
+    canvas.width = whole.width * up;
+    canvas.height = whole.height * up;
+    screen2d.imageSmoothingEnabled = false;
+    Object.assign(canvas.style, {
+      left: `${X0 * SCALE}px`,
+      top: `${Y0 * SCALE}px`,
+      width: `${whole.width * SCALE}px`,
+      height: `${whole.height * SCALE}px`,
+      imageRendering: up === px ? "pixelated" : "auto",
+    });
+    ui.fit(W, H, SCALE, TALL, left, top);
   }
 
   // ---------------------------------------------------------------- pictures
@@ -543,7 +584,7 @@ export function makeGrove(
 
   /** The stage in one light, darkened by `k` so that what stands on it stands out. */
   function dimmed(light: Light, k: number): HTMLCanvasElement {
-    return memo(keptCache, `dim${TALL}${light}${k}`, () => {
+    return memo(keptCache, `dim${light}${k}`, () => {
       const src = scene().pic[light];
       const { c, g: cg } = makeCanvas(src.width, src.height);
       cg.drawImage(src, 0, 0);
@@ -556,14 +597,14 @@ export function makeGrove(
 
   /** Night over the stage, a step at a time: a quarter of its pixels, a checker, three quarters, all. */
   function nightStep(step: number): HTMLCanvasElement {
-    return memo(keptCache, `night${TALL}${step}`, () => {
+    return memo(keptCache, `night${step}`, () => {
       const src = scene().pic.night;
       const { c, g: cg } = makeCanvas(src.width, src.height);
       cg.drawImage(src, 0, 0);
       const bayer = [0, 2, 3, 1];
       for (let y = 0; y < src.height; y += 2)
         for (let x = 0; x < src.width; x += 2)
-          if ((bayer[((y >> 1) % 2) * 2 + ((x >> 1) % 2)] ?? 0) >= step) cg.clearRect(x, y, 2, 2);
+          if ((bayer[(((y + Y0) >> 1) & 1) * 2 + (((x + X0) >> 1) & 1)] ?? 0) >= step) cg.clearRect(x, y, 2, 2);
       return c;
     });
   }
@@ -578,6 +619,18 @@ export function makeGrove(
   function R(x: number, y: number, w: number, h: number, c: string, cx: Ctx = g): void {
     cx.fillStyle = c;
     cx.fillRect(r(x), r(y), r(w), r(h));
+  }
+  /** A picture as large as the whole picture (the stage in a light, or the offscreen picture), laid over it. */
+  const lay = (c: HTMLCanvasElement): void => g.drawImage(c, X0, Y0);
+  /** One colour over the whole picture. */
+  const flood = (c: string): void => R(X0, Y0, X1 - X0, H - Y0, c);
+  /** The offscreen picture, emptied, to be drawn in as the picture is. */
+  function blank(): Ctx {
+    fx.c.width = whole.width;
+    fx.c.height = whole.height;
+    fx.g.imageSmoothingEnabled = false;
+    fx.g.translate(-X0, -Y0);
+    return fx.g;
   }
   const disc = (cx: number, cy: number, rad: number, c: string): void => ell(g, r(cx), r(cy), r(rad), r(rad), c);
   const ellipse = (cx: number, cy: number, rx: number, ry: number, c: string): void =>
@@ -715,7 +768,7 @@ export function makeGrove(
     front: number,
     seed: number,
   ): void {
-    for (let x = 0; x < W; x += 2) {
+    for (let x = X0; x < X1; x += 2) {
       if (x > front - hash(x, seed, 9) * 18) continue;
       const n = x / 640;
       const hem = r(
@@ -738,17 +791,13 @@ export function makeGrove(
     }
   }
 
-  /** Draw into the offscreen picture with `draw`, keep only what lands on `mask` (drawn at mx, my), lay it on. */
-  function throughMask(draw: (c: Ctx) => void, mask: HTMLCanvasElement, mx: number, my: number): void {
-    fx.c.width = W;
-    fx.c.height = H;
-    const c = fx.g;
-    c.imageSmoothingEnabled = false;
+  /** Draw into the offscreen picture with `draw`, keep only what lands on `mask`, lay it on. */
+  function throughMask(draw: (c: Ctx) => void, mask: HTMLCanvasElement): void {
+    const c = blank();
     draw(c);
     c.globalCompositeOperation = "destination-in";
-    c.drawImage(mask, mx, my);
-    c.globalCompositeOperation = "source-over";
-    g.drawImage(fx.c, 0, 0);
+    c.drawImage(mask, X0, Y0);
+    lay(fx.c);
   }
 
   // ---------------------------------------------------------------- the banner and the tell
@@ -779,13 +828,15 @@ export function makeGrove(
 
   /** The plum ground the words stand on, on an upright screen: its top edge steps up to the right. */
   function lowerThird(base: number): void {
-    for (let x = 0; x < W; x += 12) {
+    for (let x = Math.floor(X0 / 12) * 12; x < X1; x += 12) {
       const top = base - Math.floor(x / 24) * 3;
       R(x, top, 12, H - top, SKY[1]);
       R(x, top, 12, 2, INK);
     }
-    R(0, Math.max(base, H - 32), W, 32, SKY[0]);
+    R(X0, Math.max(base, H - 32), X1 - X0, 32, SKY[0]);
   }
+  /** How far the banner has dropped out of the picture, `at` seconds into a pull: a little lift first. */
+  const dropped = (at: number): number => r(inBack(at / 0.4, 1.4) * (H - Y0));
 
   /** Where the banner's plum ground begins on an upright screen, and where its name is written. */
   const THIRD = 372;
@@ -796,11 +847,11 @@ export function makeGrove(
   function bannerField(sink: number): void {
     if (TALL) lowerThird(THIRD + sink);
     else
-      for (let y = sink; y < H; y++) {
+      for (let y = Y0 + sink; y < H; y++) {
         const edge = r(384 - 0.3 * (y - sink));
         R(edge, y, 6, 1, GOLD[1]);
         R(edge + 6, y, 2, 1, INK);
-        R(edge + 8, y, W - edge - 8, 1, SKY[0]);
+        R(edge + 8, y, X1 - edge - 8, 1, SKY[0]);
       }
     const name = ui.poolName();
     const at = NAME_AT();
@@ -837,7 +888,7 @@ export function makeGrove(
 
   function drawBanner(ti: number): void {
     const st = scene();
-    g.drawImage(st.pic.day, 0, 0);
+    lay(st.pic.day);
     lanternGlow(ti, 1);
     // a few motes drift up from each lantern
     for (let k = 0; k < 8; k++) {
@@ -873,20 +924,15 @@ export function makeGrove(
   function aurora(t: number, col: (layer: number) => (x: number) => Trio, front: number): void {
     const st = scene();
     const [hem, amp, len, hem2, len2] = auroraShape();
-    throughMask(
-      (c) => {
-        curtains(c, t * 1.2 + 7, hem2, amp * 0.7, len2, col(1), front - 40, 3);
-        curtains(c, t, hem, amp, len, col(0), front, 1);
-      },
-      st.sky,
-      0,
-      0,
-    );
+    throughMask((c) => {
+      curtains(c, t * 1.2 + 7, hem2, amp * 0.7, len2, col(1), front - 40, 3);
+      curtains(c, t, hem, amp, len, col(0), front, 1);
+    }, st.sky);
     g.save();
     g.beginPath();
-    g.rect(0, 0, r(front - 20), H);
+    g.rect(X0, Y0, r(front - 20) - X0, H - Y0);
     g.clip();
-    g.drawImage(tinted(st.rim, `rim${TALL}`, col(0)(W / 2).m), 0, 0);
+    lay(tinted(st.rim, "rim", col(0)(W / 2).m));
     g.restore();
   }
 
@@ -898,31 +944,33 @@ export function makeGrove(
     // whoever is on the banner and its words drop away together
     if (tt < 0.4) {
       const step = Math.floor(tt / 0.1);
-      const sink = r(inBack(tt / 0.4, 1.4) * H);
-      g.drawImage(st.pic.day, 0, 0);
-      if (step > 0) g.drawImage(nightStep(step), 0, 0);
+      const sink = dropped(tt);
+      lay(st.pic.day);
+      if (step > 0) lay(nightStep(step));
       lanternGlow(0, 1 - step / 2);
       faces(0, sink);
       bannerField(sink);
       return;
     }
-    g.drawImage(st.pic.night, 0, 0);
+    lay(st.pic.night);
     stars(ta);
 
     // 1.6–2.6: the aurora unrolls left to right across the sky, in the colour of the best finish
-    if (t >= 1.6) aurora(ta, (layer) => tellColour(s, ta, layer), inOutSine(clamp01((t - 1.6) / 0.6)) * (W + 40));
+    if (t >= 1.6)
+      aurora(ta, (layer) => tellColour(s, ta, layer), X0 + inOutSine(clamp01((t - 1.6) / 0.6)) * (X1 - X0 + 40));
 
     const [lx, ly] = st.root;
     // 0.4–1.0: a glint gathers at the top of the screen, then one bright drop falls to the path
+    const top = Y0 + 3;
     if (tt < 1.0) {
       if (tt < 0.6) {
         const k = (tt - 0.4) / 0.2;
-        glow(lx, 3, 8, GOLD[0], 0.3);
-        sparkle(lx, 3, k < 0.35 ? 2 : k < 0.7 ? 5 : 4, GOLD[2]);
-        R(lx - 1, 2, 3, 3, CREAM);
+        glow(lx, top, 8, GOLD[0], 0.3);
+        sparkle(lx, top, k < 0.35 ? 2 : k < 0.7 ? 5 : 4, GOLD[2]);
+        R(lx - 1, top - 1, 3, 3, CREAM);
       } else {
         const u = (tt - 0.6) / 0.4;
-        const y = r(3 + (ly - 3) * u * u);
+        const y = r(top + (ly - top) * u * u);
         const trail = r(5 + u * u * 40);
         for (let k = 1; k <= trail; k++)
           if (k < trail * 0.45 || k % 2 === 0)
@@ -959,22 +1007,20 @@ export function makeGrove(
         const k = outCubic(Math.min(1, u / 0.5));
         const rx = 16 + k * W * 0.6;
         const ry = Math.max(2, r(rx * 0.22));
-        fx.c.width = W;
-        fx.c.height = H;
-        const c = fx.g;
+        const c = blank();
         c.fillStyle = "#fff";
         for (let dy = -ry; dy <= ry; dy++) {
           const w = Math.floor(rx * Math.sqrt(1 - (dy * dy) / (ry * ry)));
           c.fillRect(lx - w, ly + dy, w * 2 + 1, 1);
         }
         c.globalCompositeOperation = "source-in";
-        c.drawImage(st.pic.dusk, 0, 0);
+        c.drawImage(st.pic.dusk, X0, Y0);
         g.save();
         g.beginPath();
-        g.rect(0, st.horizon, W, H - st.horizon);
+        g.rect(X0, st.horizon, X1 - X0, H - st.horizon);
         g.clip();
         g.globalAlpha = u < 0.2 ? 0.9 : u < 0.4 ? 0.65 : u < 0.6 ? 0.4 : 0.2;
-        g.drawImage(fx.c, 0, 0);
+        lay(fx.c);
         g.restore();
       }
       ring(0, TALL ? 230 : 320, GOLD[2]);
@@ -1027,17 +1073,14 @@ export function makeGrove(
 
   /** The stage in the finish's own light: day for a leaf, lantern-lit dusk, a night under the aurora. */
   function backdrop(f: Finish, u: number): void {
-    if (f === "leaf") {
-      g.drawImage(dimmed("day", 0.35), 0, 0);
-      return;
-    }
+    if (f === "leaf") return lay(dimmed("day", 0.35));
     if (f === "lantern") {
-      g.drawImage(dimmed("dusk", 0.12), 0, 0);
+      lay(dimmed("dusk", 0.12));
       return lanternGlow(u, 1, 22);
     }
-    g.drawImage(scene().pic.night, 0, 0);
+    lay(scene().pic.night);
     stars(u);
-    aurora(u + 3, (layer) => drifting(u, 1.1, layer), W + 60);
+    aurora(u + 3, (layer) => drifting(u, 1.1, layer), X1 + 60);
   }
 
   /**
@@ -1045,13 +1088,13 @@ export function makeGrove(
    * (0..1). With `shade`, the stage to the right of the band is darkened by that much, so words there read.
    */
   function band(cx: number, cy: number, slope: number, half: number, colour: string, off: number, shade = 0): void {
-    const d = off * (W + 260);
-    for (let y = 0; y < H; y++) {
+    const d = off * (X1 - X0 - Y0 + 260);
+    for (let y = Y0; y < H; y++) {
       const xc = cx + slope * (y - cy - d * 0.6) - d;
       if (shade > 0) {
         g.globalAlpha = shade;
         g.fillStyle = INK;
-        g.fillRect(r(xc), y, W, 1);
+        g.fillRect(r(xc), y, X1 - xc, 1);
         g.globalAlpha = 1;
       }
       g.fillStyle = colour;
@@ -1086,7 +1129,7 @@ export function makeGrove(
   function drawReveal(s: Show, i: number, u: number): void {
     const p = must(s.list[i], "a prize");
     const f = p.finish;
-    R(0, 0, W, H, INK);
+    flood(INK);
     if (u < 0) return; // an aurora's half second of black, one note held
 
     const pl = placeOf();
@@ -1134,7 +1177,7 @@ export function makeGrove(
       const K = p.body ? 10 : fitting(p.pic, 190, 210, [14, 12, 10, 8, 6, 5, 4, 3, 2, 1]);
       const half = (p.body ? 12 : p.pic.width) * K * 0.5;
       const k = clamp01((u - 0.1) / 0.23);
-      const from = -half - 20;
+      const from = X0 - half - 20;
       const x = isLit ? pl.cx : r(lerp(from, pl.cx, outCubic(k)));
       // a step of the walk for every five of its own pixels walked, as in the town
       const pose = isLit ? 0 : (WALK[Math.floor((x - from) / K / 5) % 4] ?? 0);
@@ -1288,8 +1331,8 @@ export function makeGrove(
     g.save();
     g.globalCompositeOperation = "lighter";
     g.globalAlpha = 0.06 + flick * 0.01;
-    ellipse(W / 2, H + 10, W * 0.6, TALL ? 170 : 100, GOLD[0]);
-    ellipse(W / 2, H + 10, W * 0.4, TALL ? 110 : 66, GOLD[0]);
+    ellipse(W / 2, H + 10, (X1 - X0) * 0.6, TALL ? 170 : 100, GOLD[0]);
+    ellipse(W / 2, H + 10, (X1 - X0) * 0.4, TALL ? 110 : 66, GOLD[0]);
     g.restore();
     for (let k = 0; k < 10; k++) {
       const ph = mod(v / (1.6 + hash(k, 1, 44) * 1.4) + hash(k, 2, 44), 1);
@@ -1350,7 +1393,7 @@ export function makeGrove(
         shaded = true;
         g.save();
         g.globalAlpha = 0.3;
-        R(0, 0, W, H, INK);
+        flood(INK);
         g.restore();
       }
       // the rarest goes on hopping, pleased
@@ -1411,6 +1454,7 @@ export function makeGrove(
       else if (part.kind === "reveal") drawReveal(show, part.i, part.u);
       else drawEnd(show, part.v);
     }
+    screen2d.drawImage(whole, 0, 0, canvas.width, canvas.height);
     layout();
   }
 
@@ -1438,7 +1482,7 @@ export function makeGrove(
     // 0.0–0.4 of a pull: the banner's interface drops away downward, a little lift first
     const dropping = s !== null && s.tell > 0 && t < 0.4;
     ui.banner.hidden = s !== null && !dropping;
-    ui.banner.style.transform = dropping ? `translateY(${r(inBack(t / 0.4, 1.4) * H) * SCALE}px)` : "";
+    ui.banner.style.transform = dropping ? `translateY(${dropped(t) * SCALE}px)` : "";
     ui.skip.hidden = s === null || dropping || t >= s.end;
     const b = v - (many ? END_BUTTONS : 0.2);
     ui.end.hidden = s === null || b < 0;
