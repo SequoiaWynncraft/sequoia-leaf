@@ -459,6 +459,9 @@ describe("the yard, on Leaf", () => {
     expect([told, reads]).toEqual([["unreadable"], 2]);
     // The screen that says why can be pressed: the page is no longer taking, so nothing is stopped.
     expect(catchingUp(performance.now() + 60_000)).toBe(false);
+    // Nor does a later frame begin taking again, however far behind the copy is by then.
+    runYard(performance.now() + 600_000);
+    expect(catchingUp(performance.now() + 700_000)).toBe(false);
   });
 
   test("a copy run ahead of Leaf's clock takes Leaf's yard, once, and stays in step under steady building", async () => {
