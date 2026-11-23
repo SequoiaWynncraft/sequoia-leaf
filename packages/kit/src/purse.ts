@@ -37,6 +37,8 @@ let round = 0;
 /** Whether Leaf is being asked for the Coins, and whether it is to be asked again after. */
 let asking = false;
 let again = false;
+/** Counts each change to the Coins the purse is told of (`heardCoins`), so that an answer asked for before one is let go. */
+let told = 0;
 
 const whole = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;
@@ -82,15 +84,17 @@ export function refreshCoins(): void {
     return;
   }
   asking = true;
-  void askCoins(round);
+  void askCoins(round, told);
 }
 
-async function askCoins(mine: number): Promise<void> {
+async function askCoins(mine: number, since: number): Promise<void> {
   const answer = await ask("/v1/game/me");
   if (mine !== round) return;
   asking = false;
   const coins = answer.status === 200 && isRecord(answer.body) ? whole(answer.body.coins) : null;
-  if (coins !== null && coins !== purse.coins) {
+  // Coins spent or paid after it was asked (a purchase shown at once, another page's number) may
+  // not be in the answer: it is let go, and the answer to that purchase asks again.
+  if (coins !== null && coins !== purse.coins && since === told) {
     purse = { ...purse, coins };
     tell("Leaf");
   }
@@ -103,6 +107,7 @@ async function askCoins(mine: number): Promise<void> {
 /** Another page of the game (the town, to a game in its frame), or a game's own reckoning, says the Coins are now this. */
 export function heardCoins(coins: number): void {
   if (!onLeaf) return;
+  told++;
   purse = { ...purse, coins: Math.max(0, Math.floor(coins)) };
   tell("the town");
 }
