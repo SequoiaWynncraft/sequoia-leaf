@@ -14,6 +14,15 @@ export interface Note {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "storage",
+    at: "2026-11-23T08:50Z",
+    title: "Storage",
+    lines: [
+      "Everything you buy, win or take out of a letter goes into Storage. Nothing is placed in your camp for you.",
+      "At your camp, the hammer opens Storage. The number on it is how many new things are inside. Parcels that were waiting by your trail are there too.",
+    ],
+  },
+  {
     id: "grove-full-screen",
     at: "2026-11-23T08:10Z",
     title: "The Grove fills the screen",

@@ -59,16 +59,14 @@ import { extraOf, lightOf, type Live, stateOf, stepLive, touch as touchThing, ty
 import { type CampUi } from "./campui.ts";
 import { thingRef } from "./cards.ts";
 import { drawPicture, drawProp, drawWords, type Picture, sizeBuffers } from "./draw.ts";
-import { clearFlights, flights, fling, stepFlights } from "./flights.ts";
 import { bit, burst, float, flutter, puff, sparkle, updateFx } from "./fx.ts";
 import { type Actor, after, changed, cue, forgetLater, G, hooks, show, stepCues, stepLater, today } from "./game.ts";
 import { CELL, makeGround } from "./grid.ts";
 import { paintTrunk } from "./ground.ts";
 import { guild, type Happening } from "./guild.ts";
-import { closeCard, closePanel, setStrip, showCard } from "./hud.ts";
+import { closeCard, closePanel, covered, setStrip, showCard } from "./hud.ts";
 import {
   ask,
-  type Did,
   doNow,
   lookAt,
   type Looked,
@@ -129,8 +127,6 @@ export interface CampScene extends Scene {
   stow(): void;
   /** The member chooses who lives with them first. */
   choose(kind: PetId): void;
-  /** The present in a letter (by the letter's id) comes out and into the camp. */
-  unwrap(letter: string): void;
   /** For looking at the camp from outside. */
   readonly handles: {
     home(): void;
@@ -217,11 +213,6 @@ export function makeCamp(
 
   /** The camp to show when the camp is next entered: somebody's opened, or null for the member's own. */
   let coming: Looked | null = null;
-  /**
-   * What is set down in the layout but still in the air on its way there, by id: not drawn standing,
-   * in nobody's way and not to be picked up, until it lands or the flights are cleared away.
-   */
-  const aloft = new Set<number>();
   let lives: Live[] = [];
   /** Each thing's life in the camp, by its id, so that it is the same thing whatever Leaf's copy is. */
   const byId = new Map<number, Live>();
@@ -377,7 +368,7 @@ export function makeCamp(
   }
 
   function block(): void {
-    const on = taken(layout().filter((p) => !aloft.has(p.n)));
+    const on = taken(layout());
     for (let y = 0; y < CGH; y++)
       for (let x = 0; x < CGW; x++) {
         const n = y * CGW + x;
@@ -409,7 +400,7 @@ export function makeCamp(
   /** Everything is made again from the layout: after a thing is moved, turned, put away or set out, or Leaf's copy came. */
   function rebuild(): void {
     lives = layout().flatMap((p) => {
-      const l = aloft.has(p.n) ? null : liveOf(p);
+      const l = liveOf(p);
       return l ? [l] : [];
     });
     flats = lives.filter((l) => l.thing.flat).map((l) => l.prop);
@@ -665,16 +656,12 @@ export function makeCamp(
     wait();
   }
 
-  /** Everything in the air, everything about to happen and everything said is forgotten: the camp is being left. */
+  /** Everything about to happen and everything said is forgotten: the camp is being left. */
   function clear(): void {
     forgetLater("camp");
-    // What was on its way down is where it was going already.
-    clearFlights();
-    aloft.clear();
     for (const s of seats) s.taken = false;
     guests = [];
     caller = null;
-    unpacking = false;
   }
 
   // ---------- who is here ----------
@@ -879,127 +866,6 @@ export function makeCamp(
   }
   guild.hear(hear);
 
-  // ---------- parcels, presents, and things arriving ----------
-
-  let unpacking = false;
-  const PARCEL_AT: readonly Pt[] = [
-    { x: CW - 14, y: 246 },
-    { x: CW - 5, y: 250 },
-    { x: CW - 10, y: 240 },
-    { x: CW - 19, y: 254 },
-  ];
-
-  /**
-   * A free spot near a square with air round it (two squares to either side, three behind and one
-   * before, since things stand taller than the ground they take), so that what arrives does not
-   * land in a heap.
-   */
-  function roomy(id: string, near: { x: number; y: number }): { x: number; y: number } | null {
-    const thing = thingOf(id);
-    if (!thing) return null;
-    const [w, d] = footprint(thing, 0);
-    const placed = layout();
-    const on = taken(layout());
-    let best: { x: number; y: number } | null = null;
-    let bestD = 1e9;
-    for (let y = near.y - 12; y <= near.y + 6; y++)
-      for (let x = near.x - 26; x <= near.x + 6; x++) {
-        const far = Math.hypot(x - near.x, (y - near.y) * 1.2);
-        if (far >= bestD) continue;
-        let free = true;
-        for (let cy = y - 3; cy <= y + d && free; cy++)
-          for (let cx = x - 2; cx <= x + w + 1 && free; cx++)
-            if (cx >= 0 && cy >= 0 && cx < CGW && cy < CGH && on.stand[cy * CGW + cx] !== -1) free = false;
-        // Not on the earth people walk along, either.
-        for (let cy = y; cy < y + d && free; cy++)
-          for (let cx = x; cx < x + w && free; cx++)
-            if (troddenD(paths, cx * CELL + 4, cy * CELL + 4) < 3) free = false;
-        if (!free || canPlace(placed, id, x, y, 0) !== "ok") continue;
-        bestD = far;
-        best = { x, y };
-      }
-    return best;
-  }
-
-  /**
-   * Where a thing arriving near a square is proposed to come down: somewhere with air round it, or
-   * else anywhere it fits; where nothing fits, a square the rules turn down, so it goes into the tray.
-   */
-  function landing(id: string, near: { x: number; y: number }): { x: number; y: number; t: number } {
-    const spot = campFull(layout()) ? null : (roomy(id, near) ?? freeSpot(layout(), id, near));
-    return spot ? { ...spot, t: 0 } : { x: 0, y: 0, t: 0 };
-  }
-
-  /**
-   * Shows what a command set down (`landed`, by its id) flying there from somewhere, or what went
-   * into the tray. The copy has it already, and holds its ground while it is in the air: the flight
-   * is only how it is seen arriving, so leaving, or a reload, meanwhile loses nothing.
-   */
-  function comeDown(did: Did | null, from: Pt, done: (() => void) | null): void {
-    const note = did && "notes" in did ? did.notes[0] : undefined;
-    const thing = note ? thingOf(note.thing) : null;
-    if (!note || !thing) {
-      if (did && "refused" in did) hooks.feed(refusal(did.refused), "coral");
-      done?.();
-      return;
-    }
-    if (note.t === "tray") {
-      float(from.x, from.y - 14, `${thing.name}: in your tray`, CREAM, 2.2);
-      ui.tray();
-      done?.();
-      return;
-    }
-    const at = layout().find((p) => p.n === note.n);
-    const sprite = pictureOf(art, thing.id, 0, 0);
-    const foot = at ? footOf(at) : null;
-    if (!sprite || !foot) {
-      done?.();
-      return;
-    }
-    aloft.add(note.n);
-    rebuild();
-    sfx.pop();
-    fling(sprite.c, from, foot, 0.6, 30, () => {
-      aloft.delete(note.n);
-      rebuild();
-      csfx.thud();
-      puff(foot.x, foot.y, 5, "#966c4a");
-      sparkle(foot.x, foot.y - 8, 8, 6);
-      float(foot.x, foot.y - 20, thing.name, GOLD[2], 1.8);
-      done?.();
-    });
-  }
-
-  /** The parcels by the trail open one after another, and what was in each lands in the camp. */
-  function unpack(): void {
-    const camp = shown().camp;
-    // Not until the member is in and looking, and has somebody to watch it with.
-    if (unpacking || camp.parcels.length === 0 || G.where !== "camp" || !camp.first || G.dark > 0) return;
-    unpacking = true;
-    // Said once, the first time a parcel opens into the tray because the camp is full.
-    let toldFull = false;
-    const next = (): void => {
-      const parcels = shown().camp.parcels;
-      const first = parcels[0];
-      const from = PARCEL_AT[Math.min(PARCEL_AT.length, parcels.length) - 1] ?? { x: CW - 14, y: 246 };
-      // Out of the parcels and into the camp in one command; then it is seen flying there.
-      const did = first === undefined ? null : doNow({ do: "unpack", ...landing(first, { x: 37, y: 31 }) });
-      if (!did || "refused" in did) {
-        unpacking = false;
-        return;
-      }
-      if (did.notes[0]?.t === "tray" && !toldFull && campFull(mine().placed)) {
-        toldFull = true;
-        hooks.feed(WHY_NOT.full, "coral");
-      }
-      puff(from.x, from.y - 4, 6, "#a35d3b");
-      comeDown(did, { x: from.x, y: from.y }, () => {
-        after(0.3, next);
-      });
-    };
-    after(0.5, next);
-  }
-
   /** Somebody new moves in when the camp has earned it; they come in off the trail. */
   function movingIn(): void {
     if (visiting()) return;
@@ -1091,16 +957,8 @@ export function makeCamp(
   }
   hooks.visitCamp = (id, name) => void goTo(id, name);
 
-  /** Leaf's copy has changed: the camp is laid out from it again, its caller comes or goes, and what it has won is said. */
-  let earned = new Set<string>();
+  /** Leaf's copy has changed: the camp is laid out from it again, and its caller comes or goes. */
   onTown(() => {
-    const won = mine().earned.filter((id) => !earned.has(id));
-    earned = new Set(mine().earned);
-    if (G.home)
-      for (const id of won) {
-        const thing = thingOf(id);
-        if (thing) hooks.feed(`Won: ${thing.name}. It is waiting by the trail.`, "gold");
-      }
     if (G.where !== "camp") return;
     rebuild();
     meetCaller();
@@ -1270,6 +1128,38 @@ export function makeCamp(
     ui.tray();
   }
 
+  /**
+   * A free spot near a square with air round it (two squares to either side, three behind and one
+   * before, since things stand taller than the ground they take), so that what is taken out of the
+   * tray is not set down in a heap.
+   */
+  function roomy(id: string, near: { x: number; y: number }): { x: number; y: number } | null {
+    const thing = thingOf(id);
+    if (!thing) return null;
+    const [w, d] = footprint(thing, 0);
+    const placed = layout();
+    const on = taken(layout());
+    let best: { x: number; y: number } | null = null;
+    let bestD = 1e9;
+    for (let y = near.y - 12; y <= near.y + 6; y++)
+      for (let x = near.x - 26; x <= near.x + 6; x++) {
+        const far = Math.hypot(x - near.x, (y - near.y) * 1.2);
+        if (far >= bestD) continue;
+        let free = true;
+        for (let cy = y - 3; cy <= y + d && free; cy++)
+          for (let cx = x - 2; cx <= x + w + 1 && free; cx++)
+            if (cx >= 0 && cy >= 0 && cx < CGW && cy < CGH && on.stand[cy * CGW + cx] !== -1) free = false;
+        // Not on the earth people walk along, either.
+        for (let cy = y; cy < y + d && free; cy++)
+          for (let cx = x; cx < x + w && free; cx++)
+            if (troddenD(paths, cx * CELL + 4, cy * CELL + 4) < 3) free = false;
+        if (!free || canPlace(placed, id, x, y, 0) !== "ok") continue;
+        bestD = far;
+        best = { x, y };
+      }
+    return best;
+  }
+
   function takeOut(id: string): boolean {
     const thing = thingOf(id);
     if (!decor || !thing) return false;
@@ -1384,7 +1274,7 @@ export function makeCamp(
     near: backdrop.near,
     nearAt: { x: -72, y: CH - 34 },
     props: [],
-    others: () => [...pets, ...flights],
+    others: () => pets,
     people: everybody,
     lights: () => [...lights],
     beyond(g, cx, cy) {
@@ -1428,13 +1318,6 @@ export function makeCamp(
             );
       }
       for (const p of flats) drawProp(g, p, cx, cy);
-      // Parcels waiting by the trail.
-      shown()
-        .camp.parcels.slice(0, PARCEL_AT.length)
-        .forEach((_id, i) => {
-          const at = PARCEL_AT[i];
-          if (at) g.drawImage(art.parcel.c, at.x - art.parcel.ax - cx, at.y - art.parcel.ay - cy);
-        });
     },
     over: () => undefined,
     glows(g, cx, cy, spark) {
@@ -1518,7 +1401,6 @@ export function makeCamp(
       }
       for (const l of lives) stepLive(l, world, dt);
       for (const l of gateLights) l.boost = Math.max(0, l.boost - dt * 1.4);
-      stepFlights(dt);
       stepLater();
       stepCues();
       if (G.home) guild.step(dt);
@@ -1551,13 +1433,13 @@ export function makeCamp(
           });
         if (G.home && Math.random() < 0.3) sfx.cricket();
         movingIn();
-        if (!unpacking) unpack();
       }
 
-      // Something dragged near an edge of the view pushes the view along.
+      // Something dragged near an edge of the view pushes the view along: of as much of it as the tray leaves.
       if (sel?.dragging && lastDrag) {
+        const tray = covered();
         const fx = (lastDrag.x - G.cam.x) / G.view.w;
-        const fy = (lastDrag.y - G.cam.y) / G.view.h;
+        const fy = (lastDrag.y - G.cam.y) / (tray?.under ? (tray.top * G.view.dpr) / G.view.z : G.view.h);
         pan.x = clamp(pan.x + edgePush(fx) * 90 * dt, -CW, CW);
         pan.y = clamp(pan.y + edgePush(fy) * 90 * dt, -CH, CH);
         if (edgePush(fx) !== 0 || edgePush(fy) !== 0) dragTo(lastDrag);
@@ -1662,16 +1544,6 @@ export function makeCamp(
       sfx.twinkle();
       sparkle(pet.x, pet.y - 8, 12, 8);
       hooks.feed(`${pet.name} lives here now. ${PET_ABOUT[kind]}`, "leaf");
-    },
-
-    unwrap(letter) {
-      const gift = mine().letters.find((l) => l.id === letter)?.gift ?? "";
-      if (visiting() || !thingOf(gift)) return;
-      const box = lives.find((l) => l.thing.id === "mailbox");
-      const from = box ? { x: box.prop.x, y: box.prop.y - 8 } : player();
-      if (box) box.prop.bumpAt = G.t;
-      const near = box ? { x: box.placed.x - 2, y: box.placed.y + 2 } : { x: 37, y: 31 };
-      comeDown(doNow({ do: "takePresent", letter, ...landing(gift, near) }), { x: from.x, y: from.y }, null);
     },
 
     handles: {

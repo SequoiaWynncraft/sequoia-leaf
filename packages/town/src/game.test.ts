@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { type Ctx, DAY_MS, type Done, LOGGED, type Refused } from "@sequoia-leaf/core";
 
-import { canPlace, MOST_OWNED, MOST_PARCELS, MOST_PLACED, NEW_CAMP, YARD } from "./camp.ts";
+import { canPlace, MOST_NEW, MOST_OWNED, MOST_PLACED, NEW_CAMP, store, YARD } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
 import { STRETCH, stretchOf } from "./clock.ts";
 import { CALLERS, folk, GIFTS } from "./folk.ts";
@@ -154,21 +154,19 @@ describe("buying", () => {
   const ware = stall?.stock[0];
   if (!stall || !ware) throw new Error("no stall");
 
-  test("sends one thing by the trail and takes the stall's price, keyed by a number of its own", () => {
+  test("puts one thing in the tray, new, and nothing on the ground, and takes the stall's price, keyed by a number of its own", () => {
     const one = did(fresh(), { do: "buy", stall: stall.id, thing: ware.thing });
-    expect(one.state.camp.parcels).toEqual([ware.thing]);
+    expect([one.state.camp.tray, one.state.camp.fresh]).toEqual([{ [ware.thing]: 1 }, [ware.thing]]);
+    expect(one.state.camp.placed).toEqual(fresh().camp.placed);
     expect(one.coins).toEqual([{ amount: -ware.price, reason: "A thing for the camp", key: "buy:9" }]);
     expect(one.log).toEqual([{ kind: LOGGED.townBought, data: { thing: ware.thing, price: ware.price } }]);
     expect(did(one.state, { do: "buy", stall: stall.id, thing: ware.thing }).coins?.[0]?.key).toBe("buy:10");
   });
 
-  test("is refused, before anything is paid, for what the stall does not sell, a full trail, or 999 of it", () => {
+  test("is refused, before anything is paid, for what the stall does not sell, or 999 of it", () => {
     const s = fresh();
     expect(refused(s, { do: "buy", stall: stall.id, thing: "fountain" })).toBe("not_for_sale");
     expect(refused(s, { do: "buy", stall: "nowhere", thing: ware.thing })).toBe("not_for_sale");
-    s.camp.parcels = Array.from({ length: MOST_PARCELS }, () => "rock");
-    expect(refused(s, { do: "buy", stall: stall.id, thing: ware.thing })).toBe("trail_full");
-    s.camp.parcels = [];
     s.camp.tray[ware.thing] = MOST_OWNED;
     expect(refused(s, { do: "buy", stall: stall.id, thing: ware.thing })).toBe("plenty");
   });
@@ -242,42 +240,44 @@ describe("callers", () => {
   });
 });
 
-describe("trophies", () => {
-  test("each won elsewhere goes by the trail once, while there is room there", () => {
-    const s = fresh();
-    s.camp.parcels = Array.from({ length: MOST_PARCELS }, () => "rock");
+describe("things won", () => {
+  test("each won elsewhere goes into the tray once, new, and nothing on the ground", () => {
     const awards = ["trophy-oldbramble", "model-crab", "not-a-thing"];
-    // The trail is full: they wait.
-    expect(TOWN.advance(s, ctx(T0, awards))).toBe(s);
-    s.camp.parcels = [];
-    const won = TOWN.advance(s, ctx(T0, awards));
-    expect(won.camp.parcels).toEqual(["trophy-oldbramble", "model-crab"]);
+    const won = TOWN.advance(fresh(), ctx(T0, awards));
+    expect([won.camp.tray, won.camp.fresh]).toEqual([
+      { "trophy-oldbramble": 1, "model-crab": 1 },
+      ["trophy-oldbramble", "model-crab"],
+    ]);
+    expect(won.camp.placed).toEqual(fresh().camp.placed);
     expect(won.camp.earned).toEqual(["trophy-oldbramble", "model-crab"]);
     expect(TOWN.advance(won, ctx(T0, awards))).toBe(won);
   });
 
-  test("a pull's thing goes by the trail once, whatever copies come after; its headliner brings the banner's statue", () => {
+  test("a pull's thing arrives once, whatever copies come after; its headliner brings the banner's statue", () => {
     // Awards from before the camp knew of them: handed over on the next look.
     const awards = ["pull:thing:fountain", "pull:look:baize", "pull:headliner:banner-1", "pull:thing:nothing"];
     const won = TOWN.advance(fresh(), ctx(T0, awards));
-    expect(won.camp.parcels).toEqual(["fountain", "statue-banner-1"]);
+    expect(won.camp.tray).toEqual({ fountain: 1, "statue-banner-1": 1 });
     expect(won.camp.earned).toEqual(["fountain", "statue-banner-1"]);
-    // Unpacked and gone from the trail: a second copy of the prize is the same award, and brings nothing.
-    const set = did(won, { do: "unpack", x: 30, y: 20, t: 0 });
-    expect(set.notes).toEqual([{ t: "landed", thing: "fountain", n: 9 }]);
-    expect(set.log).toEqual([]);
-    expect(TOWN.advance(set.state, ctx(T0, awards))).toBe(set.state);
+    // Set out and gone from the tray: a second copy of the prize is the same award, and brings nothing.
+    const set = did(won, { do: "setOut", thing: "fountain", x: 30, y: 20, t: 0 }).state;
+    expect(TOWN.advance(set, ctx(T0, awards))).toBe(set);
     // The statue is set out, turned and put away like any thing.
-    const statue = did(set.state, { do: "unpack", x: 34, y: 20, t: 1 });
-    expect(statue.notes).toEqual([{ t: "landed", thing: "statue-banner-1", n: 10 }]);
-    expect(did(statue.state, { do: "putAway", n: 10 }).state.camp.tray).toEqual({ "statue-banner-1": 1 });
+    const statue = did(set, { do: "setOut", thing: "statue-banner-1", x: 34, y: 20, t: 1 }).state;
+    expect(did(statue, { do: "putAway", n: nOf(statue, "statue-banner-1") }).state.camp.tray).toEqual({
+      "statue-banner-1": 1,
+    });
   });
 
-  test("arrive in the camp when unpacked, and that is logged", () => {
-    const won = TOWN.advance(fresh(), ctx(T0, ["model-beacon"]));
-    const opened = did(won, { do: "unpack", x: 30, y: 20, t: 0 });
-    expect(opened.notes).toEqual([{ t: "landed", thing: "model-beacon", n: 9 }]);
-    expect(opened.log).toEqual([{ kind: LOGGED.townTrophy, data: { thing: "model-beacon" } }]);
+  test("one more of a thing the member has 999 of is won, and not kept", () => {
+    const s = fresh();
+    s.camp.tray = { "model-crab": MOST_OWNED };
+    const won = TOWN.advance(s, ctx(T0, ["model-crab"]));
+    expect([won.camp.tray, won.camp.fresh, won.camp.earned]).toEqual([
+      { "model-crab": MOST_OWNED },
+      [],
+      ["model-crab"],
+    ]);
   });
 });
 
@@ -290,37 +290,51 @@ describe("the mailbox", () => {
     expect(did(read, { do: "clearLetters" }).state.camp.letters.map((l) => l.id)).toEqual(["b"]);
   });
 
-  test("a present is set down where the page proposes, or put in the tray where it may not stand", () => {
+  test("a present taken goes into the tray once, new, and nothing on the ground", () => {
     const s = fresh();
-    s.camp.letters = [letter("a", "Tindra", "for you", "pumpkin"), letter("b", "Tindra", "and this", "pumpkin")];
-    const one = did(s, { do: "takePresent", letter: "a", x: 30, y: 20, t: 0 });
-    expect(one.notes).toEqual([{ t: "landed", thing: "pumpkin", n: 9 }]);
-    expect(one.state.camp.letters[0]?.taken).toBe(true);
-    const two = did(one.state, { do: "takePresent", letter: "b", x: 30, y: 20, t: 0 });
-    expect(two.notes).toEqual([{ t: "tray", thing: "pumpkin" }]);
-    expect(two.state.camp.tray).toEqual({ pumpkin: 1 });
-    expect(refused(two.state, { do: "takePresent", letter: "b", x: 31, y: 20, t: 0 })).toBe("no_present");
-    expect(refused(two.state, { do: "takePresent", letter: "zz", x: 31, y: 20, t: 0 })).toBe("no_present");
+    s.camp.letters = [letter("a", "Tindra", "for you", "pumpkin")];
+    const one = did(s, { do: "takePresent", letter: "a" }).state;
+    expect([one.camp.tray, one.camp.fresh]).toEqual([{ pumpkin: 1 }, ["pumpkin"]]);
+    expect(one.camp.placed).toEqual(s.camp.placed);
+    expect(one.camp.letters[0]?.taken).toBe(true);
+    expect(refused(one, { do: "takePresent", letter: "a" })).toBe("no_present");
+    expect(refused(one, { do: "takePresent", letter: "zz" })).toBe("no_present");
   });
 
   test("a present is kept in its letter when there is no room for one more of it", () => {
     const s = fresh();
     s.camp.letters = [letter("a", "Tindra", "for you", "pumpkin")];
     s.camp.tray.pumpkin = MOST_OWNED;
-    expect(refused(s, { do: "takePresent", letter: "a", x: 30, y: 20, t: 0 })).toBe("plenty");
+    expect(refused(s, { do: "takePresent", letter: "a" })).toBe("plenty");
     expect(s.camp.letters[0]?.taken).toBe(false);
   });
 });
 
 describe("things in the camp", () => {
-  test("a parcel unpacks where the page proposes, else into the tray", () => {
-    const s = fresh();
-    s.camp.parcels = ["rock", "rock"];
-    const one = did(s, { do: "unpack", x: 30, y: 20, t: 0 });
-    expect([one.notes, one.state.camp.parcels]).toEqual([[{ t: "landed", thing: "rock", n: 9 }], ["rock"]]);
-    const two = did(one.state, { do: "unpack", x: 30, y: 20, t: 0 });
-    expect([two.notes, two.state.camp.tray]).toEqual([[{ t: "tray", thing: "rock" }], { rock: 1 }]);
-    expect(refused(two.state, { do: "unpack", x: 30, y: 20, t: 0 })).toBe("no_parcel");
+  test("what arrives is new until the member looks in the tray, and not after; what they put away is not new", () => {
+    const [stall] = STALLS;
+    const ware = stall?.stock[0];
+    if (!stall || !ware) throw new Error("no stall");
+    let s = TOWN.advance(fresh(), ctx(T0, ["model-crab"]));
+    s = did(s, { do: "buy", stall: stall.id, thing: ware.thing }).state;
+    s = did(s, { do: "buy", stall: stall.id, thing: ware.thing }).state;
+    expect([s.camp.fresh, s.camp.looked]).toEqual([["model-crab", ware.thing, ware.thing], 0]);
+    // A page that showed the first two says so: those are new no more, and the third still is.
+    s = did(s, { do: "looked", through: 2 }).state;
+    expect([s.camp.fresh, s.camp.looked]).toEqual([[ware.thing], 2]);
+    // Said again, or by a second page that showed the same, it takes the mark off nothing more.
+    s = did(s, { do: "looked", through: 2 }).state;
+    expect([s.camp.fresh, s.camp.looked]).toEqual([[ware.thing], 2]);
+    // One more arrives before Leaf hears the page looked at all three: it is new still.
+    s = did(s, { do: "buy", stall: stall.id, thing: ware.thing }).state;
+    s = did(s, { do: "looked", through: 3 }).state;
+    expect([s.camp.fresh, s.camp.looked]).toEqual([[ware.thing], 3]);
+    s = did(s, { do: "looked", through: 99 }).state;
+    expect([s.camp.fresh, s.camp.looked]).toEqual([[], 4]);
+    // Setting one out and putting it away again makes nothing new.
+    s = did(s, { do: "setOut", thing: ware.thing, x: 30, y: 20, t: 0 }).state;
+    s = did(s, { do: "putAway", n: nOf(s, ware.thing) }).state;
+    expect([s.camp.tray[ware.thing], s.camp.fresh]).toEqual([3, []]);
   });
 
   test("a thing is set out of the tray only where it may stand, turned a way it turns", () => {
@@ -415,7 +429,8 @@ describe("commands off the wire", () => {
       { do: "setOut", thing: "moon", x: 1, y: 1, t: 0 },
       { do: "choosePet", pet: "dragon" },
       { do: "here", cursor: "far" },
-      { do: "takePresent", letter: "<b>", x: 1, y: 1, t: 0 },
+      { do: "takePresent", letter: "<b>" },
+      { do: "unpack", x: 1, y: 1, t: 0 },
     ])
       expect(readCommand(bad)).toBeNull();
   });
@@ -423,7 +438,7 @@ describe("commands off the wire", () => {
 
 // ---------- keeping it ----------
 
-/** The largest camp there can be: as many things set out as may be, the tray as full as it goes, the trail and the mailbox full. */
+/** The largest camp there can be: as many things set out as may be, the tray as full as it goes and all of it new, the mailbox full. */
 function largest(): Town {
   const s = fresh();
   const some = ["rock", "flower-pot", "plank-path", "cushion", "pumpkin", "stepping-stones", "glowcap"];
@@ -433,7 +448,7 @@ function largest(): Town {
       if (canPlace(s.camp.placed, id, x, y, 0) === "ok") s.camp.placed.push({ n: s.made++, id, x, y, t: 0, s: 0 });
     }
   s.camp.tray = Object.fromEntries(THINGS.map((t) => [t.id, MOST_OWNED]));
-  s.camp.parcels = Array.from({ length: MOST_PARCELS }, (_v, i) => some[i % some.length] ?? "rock");
+  s.camp.fresh = Array.from({ length: MOST_NEW }, (_v, i) => THINGS[i % THINGS.length]?.id ?? "rock");
   s.camp.letters = Array.from({ length: BOX }, (_v, i) =>
     letter(`m-${i}`, "Pipwick", "Came by. You were out. I fed the fire. ".repeat(6).trim(), i % 2 ? "pinecone" : ""),
   );
@@ -459,6 +474,26 @@ describe("keeping a town", () => {
       expect(decodeTown(bad)).toBeNull();
   });
 
+  test("past 500 arrivals nobody looked at, the oldest count as looked at", () => {
+    const s = fresh();
+    for (let i = 0; i <= MOST_NEW; i++) store(s.camp, i === 0 ? "rock" : "stump");
+    expect([s.camp.fresh.length, s.camp.fresh[0], s.camp.looked]).toEqual([MOST_NEW, "stump", 1]);
+  });
+
+  test("a camp kept with parcels by the trail is read with them in the tray, new, and what stood still stands", () => {
+    const s = fresh();
+    s.camp.tray = { rock: 1 };
+    const kept = JSON.stringify({
+      ...JSON.parse(encodeTown(s)),
+      camp: { ...s.camp, fresh: undefined, looked: undefined, parcels: ["rock", "toadstool", "rock"] },
+    });
+    expect(decodeTown(kept)?.camp).toEqual({
+      ...s.camp,
+      tray: { rock: 3, toadstool: 1 },
+      fresh: ["rock", "toadstool", "rock"],
+    });
+  });
+
   test("the largest camp is read back in under a millisecond, trusting what Leaf stored", () => {
     const s = largest();
     expect(s.camp.placed).toHaveLength(MOST_PLACED);
@@ -471,11 +506,11 @@ describe("keeping a town", () => {
   });
 });
 
-/** A town with a caller, a parcel, a present and something in the tray. */
+/** A town with a caller, a present, and two things in the tray, one of them new. */
 function lived(): Town {
   const s = TOWN.advance(fresh(), ctx(fresh().nextCall));
-  s.camp.parcels = ["rock"];
-  s.camp.tray = { stump: 1 };
+  s.camp.tray = { stump: 1, rock: 1 };
+  s.camp.fresh = ["rock"];
   s.camp.letters = [letter("w-1", "Tindra", "For you.", "toadstool")];
   return s;
 }
@@ -489,16 +524,7 @@ describe("the page's copy", () => {
       null,
       null,
     ]);
-    expect(
-      readNotes([
-        { t: "landed", thing: "rock", n: 9 },
-        { t: "tray", thing: "rock" },
-      ]),
-    ).toEqual([
-      { t: "landed", thing: "rock", n: 9 },
-      { t: "tray", thing: "rock" },
-    ]);
-    expect([readNotes([{ t: "landed", thing: "rock" }]), readNotes({})]).toEqual([null, null]);
+    expect([readNotes([]), readNotes([{ t: "tray", thing: "rock" }]), readNotes({})]).toEqual([[], null, null]);
   });
 
   test("comes to what Leaf comes to for every command the page works out itself, ids and all", () => {
@@ -506,9 +532,9 @@ describe("the page's copy", () => {
     const stump = nOf(s, "stump");
     const lantern = nOf(s, "lantern-post");
     const commands: TownCommand[] = [
-      { do: "unpack", x: 30, y: 20, t: 0 },
       { do: "setOut", thing: "stump", x: 33, y: 20, t: 0 },
-      { do: "takePresent", letter: "w-1", x: 36, y: 20, t: 0 },
+      { do: "takePresent", letter: "w-1" },
+      { do: "looked", through: 1 },
       { do: "move", n: stump, x: 30, y: 33, t: 0 },
       { do: "toggle", n: lantern },
       { do: "putAway", n: stump },
@@ -565,9 +591,9 @@ describe("a visit", () => {
     s.sightings = 5;
     const lantern = s.camp.placed.find((p) => p.id === "lantern-post");
     if (lantern) lantern.s = 1;
-    // A caller waiting, a letter, a parcel and something in the tray: the owner's own.
+    // A caller waiting, a letter, and things in the tray, one of them new: the owner's own.
     expect(s.visit).not.toBeNull();
-    expect([s.camp.letters.length, s.camp.parcels.length, s.camp.tray]).toEqual([1, 1, { stump: 1 }]);
+    expect([s.camp.letters.length, s.camp.fresh, s.camp.tray]).toEqual([1, ["rock"], { stump: 1, rock: 1 }]);
     const before = encodeTown(s);
     const seen = TOWN.visit?.(s, ctx()) ?? null;
     expect(seen).toEqual({
@@ -578,7 +604,16 @@ describe("a visit", () => {
       seenAt: 0,
       cursor: null,
       stay: false,
-      camp: { first: "fox", placed: s.camp.placed, tray: {}, parcels: [], letters: [], greeted: 0, earned: [] },
+      camp: {
+        first: "fox",
+        placed: s.camp.placed,
+        tray: {},
+        fresh: [],
+        looked: 0,
+        letters: [],
+        greeted: 0,
+        earned: [],
+      },
       visit: null,
       made: 0,
       arrival: { first: false, newDay: false, away: 0, said: [], mail: [] },

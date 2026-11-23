@@ -11,7 +11,6 @@ import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
 import { isGuest } from "@sequoia-leaf/kit/live.ts";
 import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { ask as askLeaf, isRecord, outside } from "@sequoia-leaf/kit/net.ts";
-import { CREAM } from "@sequoia-leaf/kit/palette.ts";
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
 import { fromLedger } from "@sequoia-leaf/kit/purse.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
@@ -27,9 +26,7 @@ import { goSit, hop, inTown, release, rouse, say, sitters } from "./actors.ts";
 import { kindLine, noteWhen, openingTab, readNews, redrawn, TABS } from "./board.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { named, registerCards, thingRef } from "./cards.ts";
-import { fling } from "./flights.ts";
 import { folkArt } from "./folkart.ts";
-import { puff } from "./fx.ts";
 import { type Actor, after, G, hooks, type PanelId } from "./game.ts";
 import { GAMES } from "./games.ts";
 import { type AwayLine, guild, type Quest } from "./guild.ts";
@@ -38,6 +35,7 @@ import {
   button,
   centre,
   closePanel,
+  dockAt,
   faceOf,
   fly,
   nameOf,
@@ -467,15 +465,13 @@ function shopRow(body: HTMLElement, s: Stock, buy: HTMLElement): () => void {
 
 // ---------- the market ----------
 
-/** Where each stall stands in town, for parcels to leave from. */
-const STALL_AT = [60, 108, 156] as const;
-
 /**
- * A stall's button for a thing, which asks Leaf to sell it: Leaf takes the price, and the parcel
- * leaves for the camp from the stall. Refused, nothing is paid, and the feed says why.
+ * A stall's button for a thing, which asks Leaf to sell it: Leaf takes the price, and the thing
+ * goes to the camp's button in the dock: it is in the camp's Storage. Refused, nothing is paid, and
+ * the feed says why.
  */
-function stallButton(stall: string, s: Stock, sold: () => { x: number; y: number }): HTMLElement {
-  const thing = thingOf(s.thing);
+function stallButton(stall: string, s: Stock, sold: () => void): HTMLElement {
+  const sprite = ART ? pictureOf(ART, s.thing, 0, 0) : null;
   const b = button("sm", [glyph("coin"), String(s.price)], (me) => {
     void (async () => {
       const did = await ask({ do: "buy", stall, thing: s.thing }, me);
@@ -488,14 +484,12 @@ function stallButton(stall: string, s: Stock, sold: () => { x: number; y: number
       }
       sfx.buy();
       fly("coin", purseAt("coins"), centre(me), Math.min(7, 2 + Math.floor(s.price / 40)));
-      const from = sold();
-      // It leaves for the camp at once: a parcel, up the path and out through the gate.
-      if (S) fling(S.crate.c, from, { x: 256, y: 92 }, 0.9, 30, () => puff(256, 90, 4, CREAM));
+      sold();
+      if (sprite) fly(sprite.c, centre(me), dockAt("camp"), 1);
       if (G.player) hop(G.player);
-      if (thing) hooks.feed(`${thing.name}: on its way to your camp.`, "gold");
     })();
   });
-  tip(b, `${s.price} Coins`, "It will be waiting at your camp.");
+  tip(b, `${s.price} Coins`, "It goes into Storage at your camp.");
   return b;
 }
 
@@ -526,7 +520,6 @@ function market(body: HTMLElement): () => void {
             say(keeper, pick(stall.words, Math.random()), 2.6);
           }
           sfx.pluck(2 + i * 2);
-          return { x: STALL_AT[i] ?? 108, y: 232 };
         }),
       ),
     );
@@ -713,10 +706,10 @@ const many = (n: number, one: string, more: string): string => `${COUNT[n] ?? n}
 export function campWaiting(): string {
   const camp = mine();
   const letters = waiting(camp.letters);
-  const parcels = camp.parcels.length;
+  const fresh = camp.fresh.length;
   const parts: string[] = [];
   if (letters > 0) parts.push(`${many(letters, "letter", "letters")} in the mailbox.`);
-  if (parcels > 0) parts.push(`${many(parcels, "parcel", "parcels")} by the trail.`);
+  if (fresh > 0) parts.push(`${many(fresh, "new thing", "new things")} in Storage.`);
   if (!camp.first) parts.push("Somebody small has been waiting for you.");
   return parts.length > 0 ? parts.join(" ") : "The fire is lit. Nothing needs doing.";
 }

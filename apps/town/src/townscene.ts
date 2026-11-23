@@ -38,7 +38,6 @@ import { apart, ease, stood, stoodAt } from "./apart.ts";
 import type { CampArt } from "./campart.ts";
 import { drawPicture, drawWords, type Picture, sizeBuffers } from "./draw.ts";
 import { beginEvents, cheered, stepEvents } from "./events.ts";
-import { flights, stepFlights } from "./flights.ts";
 import { initFolkArt } from "./folkart.ts";
 import { updateFx } from "./fx.ts";
 import { type Actor, after, changed, G, hooks, type PanelId, SEED, show } from "./game.ts";
@@ -225,7 +224,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     near: paintNear(),
     nearAt: { x: NEAR.x, y: NEAR.y },
     props,
-    others: () => (flights.length > 0 ? [...standing, ...flights] : standing),
+    others: () => standing,
     people: () => [...G.folk, ...G.visitors, ...livePlayers(), player, cinfy],
     lights: allLights,
     beyond: () => undefined,
@@ -571,7 +570,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       stepFolk(dt, walkers);
       standApart(dt);
       stepTown(dt, walkers);
-      stepFlights(dt);
       stepEvents();
       // Somebody shown where they are, for a few seconds, or until they go.
       const found = show.found;

@@ -32,12 +32,13 @@ import {
   CGH,
   CGW,
   isPet,
+  lookedThrough,
+  MOST_NEW,
   MOST_OWNED,
-  MOST_PARCELS,
   newCamp,
-  owned,
   type PetId,
   type Placed,
+  store,
   type Verdict,
 } from "./camp.ts";
 import { STALLS } from "./catalogue.ts";
@@ -140,10 +141,10 @@ export type TownCommand =
   /** The caller waiting, by its id. */
   | { do: "greet"; visit: number }
   | { do: "readMail" }
-  | ({ do: "takePresent"; letter: string } & At)
+  | { do: "takePresent"; letter: string }
   | { do: "clearLetters" }
-  /** The first parcel waiting by the trail. */
-  | ({ do: "unpack" } & At)
+  /** The member has looked in the tray, at every arrival up to the `through`th (`camp.looked` and what was new, as their page had them). */
+  | { do: "looked"; through: number }
   | ({ do: "setOut"; thing: string } & At)
   /** Moving and turning: the page works out where, the rules check it. */
   | ({ do: "move"; n: number } & At)
@@ -152,8 +153,8 @@ export type TownCommand =
   | { do: "toggle"; n: number }
   | { do: "stay"; on: boolean };
 
-/** Where a thing that arrived went: set down as the page proposed, or into the tray. */
-export type TownNote = { t: "landed"; thing: string; n: number } | { t: "tray"; thing: string };
+/** No command of the town's answers with anything but the state. */
+export type TownNote = never;
 
 /** Why a command may not be done, besides where a thing may not stand (`Verdict`). */
 export type Why =
@@ -161,12 +162,10 @@ export type Why =
   | "opened_today"
   | "too_soon"
   | "not_for_sale"
-  | "trail_full"
   | "plenty"
   | "pet_chosen"
   | "no_such_visit"
   | "no_present"
-  | "no_parcel"
   | "not_in_tray"
   | "cannot_turn"
   | "no_such_thing"
@@ -249,20 +248,18 @@ const thingWon = (award: string): string => award.replace(/^pull:thing:/, "").re
 
 /**
  * The state at `ctx.now`: the things the member has won elsewhere (trophies, a pull's prizes) that
- * the camp has not had go by the trail, each once, while there is room there; and when a caller is
- * due, the one waiting leaves and the next sets out. At most one caller each call: time nobody was
- * here for is not made up.
+ * the camp has not had go into the tray, each once; and when a caller is due, the one waiting
+ * leaves and the next sets out. At most one caller each call: time nobody was here for is not made up.
  */
 function advance(state: Town, ctx: Ctx): Town {
   const won = ctx.awards.map(thingWon).filter((id) => isThing(id) && !state.camp.earned.includes(id));
   const due = ctx.now >= state.nextCall;
-  if (!due && (won.length === 0 || state.camp.parcels.length >= MOST_PARCELS)) return state;
+  if (!due && won.length === 0) return state;
   const s = structuredClone(state);
   for (const id of won) {
-    if (s.camp.parcels.length >= MOST_PARCELS) break;
     s.camp.earned.push(id);
-    // One more of a thing the member has as many of as may be had is won, and simply not added.
-    if (owned(s.camp, id) < MOST_OWNED) s.camp.parcels.push(id);
+    // One more of a thing the member has as many of as may be had is won, and simply not kept.
+    store(s.camp, id);
   }
   if (due) call(s, ctx.now);
   return s;
@@ -272,9 +269,9 @@ function advance(state: Town, ctx: Ctx): Town {
 
 type Answer = Done<Town, TownNote> | Refused;
 const no = (why: Why): Refused => ({ refused: why });
-const done = (s: Town, notes: TownNote[] = [], more: { coins?: CoinChange[]; log?: Logged[] } = {}): Answer => ({
+const done = (s: Town, more: { coins?: CoinChange[]; log?: Logged[] } = {}): Answer => ({
   state: s,
-  notes,
+  notes: [],
   ...more,
 });
 
@@ -283,17 +280,6 @@ function standing(placed: readonly Placed[], id: string, at: At, skip = -1): Ver
   const thing = thingOf(id);
   if (!thing || at.t >= turnsOf(thing)) return "cannot_turn";
   return canPlace(placed, id, at.x, at.y, at.t, skip);
-}
-
-/** A thing arriving in the camp: set down where the page proposes if it may stand there, else into the tray. */
-function land(s: Town, id: string, at: At): TownNote {
-  if (!campFull(s.camp.placed) && standing(s.camp.placed, id, at) === "ok") {
-    const n = next(s);
-    s.camp.placed.push({ n, id, x: at.x, y: at.y, t: at.t, s: 0 });
-    return { t: "landed", thing: id, n };
-  }
-  s.camp.tray[id] = (s.camp.tray[id] ?? 0) + 1;
-  return { t: "tray", thing: id };
 }
 
 function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
@@ -317,7 +303,7 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
       const day = utcDay(now);
       if (s.chestDay === day) return no("opened_today");
       s.chestDay = day;
-      return done(s, [], {
+      return done(s, {
         coins: [{ amount: DAILY_CHEST, reason: "The chest by the Treasury", key: `chest:${day}`, free: true }],
       });
     }
@@ -330,10 +316,8 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
     case "buy": {
       const sold = STALLS.find((st) => st.id === c.stall)?.stock.find((k) => k.thing === c.thing);
       if (!sold) return no("not_for_sale");
-      if (camp.parcels.length >= MOST_PARCELS) return no("trail_full");
-      if (owned(camp, sold.thing) >= MOST_OWNED) return no("plenty");
-      camp.parcels.push(sold.thing);
-      return done(s, [], {
+      if (!store(camp, sold.thing)) return no("plenty");
+      return done(s, {
         coins: [{ amount: -sold.price, reason: "A thing for the camp", key: `buy:${next(s)}` }],
         log: [{ kind: LOGGED.townBought, data: { thing: sold.thing, price: sold.price } }],
       });
@@ -341,7 +325,7 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
     case "choosePet":
       if (camp.first !== "") return no("pet_chosen");
       camp.first = c.pet;
-      return done(s, [], { log: [{ kind: LOGGED.townPet, data: { pet: c.pet } }] });
+      return done(s, { log: [{ kind: LOGGED.townPet, data: { pet: c.pet } }] });
     case "greet":
       if (s.visit?.id !== c.visit) return no("no_such_visit");
       camp.greeted = Math.min(999, camp.greeted + 1);
@@ -353,19 +337,16 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
     case "takePresent": {
       const l = camp.letters.find((m) => m.id === c.letter);
       if (!l || l.gift === "" || l.taken) return no("no_present");
-      if (owned(camp, l.gift) >= MOST_OWNED) return no("plenty");
+      if (!store(camp, l.gift)) return no("plenty");
       l.taken = true;
-      return done(s, [land(s, l.gift, c)]);
+      return done(s);
     }
     case "clearLetters":
       camp.letters = tidied(camp.letters);
       return done(s);
-    case "unpack": {
-      const id = camp.parcels.shift();
-      if (id === undefined) return no("no_parcel");
-      const log: Logged[] = thingOf(id)?.kind === "trophies" ? [{ kind: LOGGED.townTrophy, data: { thing: id } }] : [];
-      return done(s, [land(s, id, c)], { log });
-    }
+    case "looked":
+      lookedThrough(camp, c.through);
+      return done(s);
     case "setOut": {
       if ((camp.tray[c.thing] ?? 0) < 1) return no("not_in_tray");
       if (campFull(camp.placed)) return no("full");
@@ -437,7 +418,7 @@ export const townView = (s: Town, now: number): TownView => ({
 
 /**
  * What a visitor is given of somebody's camp: what stands there, each thing in its own state, and
- * the pet they chose; nothing else of theirs (no letters, parcels, tray or caller, every counter at
+ * the pet they chose; nothing else of theirs (no letters, tray or caller, every counter at
  * 0, an arrival letter that says nothing), in the shape the page draws a camp from.
  */
 export const visitView = (s: Town): TownView => ({
@@ -452,7 +433,8 @@ export const visitView = (s: Town): TownView => ({
     first: s.camp.first,
     placed: s.camp.placed.map((p) => ({ ...p })),
     tray: {},
-    parcels: [],
+    fresh: [],
+    looked: 0,
     letters: [],
     greeted: 0,
     earned: [],
@@ -523,6 +505,8 @@ export function readCommand(v: unknown): TownCommand | null {
     case "readMail":
     case "clearLetters":
       return { do: v.do };
+    case "looked":
+      return whole(v.through, 0, 1e9) ? { do: "looked", through: v.through } : null;
     case "buy":
       return typeof v.stall === "string" && isThing(v.thing) ? { do: "buy", stall: v.stall, thing: v.thing } : null;
     case "choosePet":
@@ -530,11 +514,7 @@ export function readCommand(v: unknown): TownCommand | null {
     case "greet":
       return whole(v.visit, 0, 1e9) ? { do: "greet", visit: v.visit } : null;
     case "takePresent":
-      return spot && typeof v.letter === "string" && ID.test(v.letter)
-        ? { do: "takePresent", letter: v.letter, ...spot }
-        : null;
-    case "unpack":
-      return spot && { do: "unpack", ...spot };
+      return typeof v.letter === "string" && ID.test(v.letter) ? { do: "takePresent", letter: v.letter } : null;
     case "setOut":
       return spot && isThing(v.thing) ? { do: "setOut", thing: v.thing, ...spot } : null;
     case "move":
@@ -593,21 +573,36 @@ function all<T>(v: unknown, one: (x: unknown) => T | null): T[] | null {
   return out;
 }
 
-/** A camp as Leaf stored it. It is trusted to stand as it was kept: the rules checked every change to it. */
+/** How many of each thing, as stored; null if any of it does not read. */
+function counts(v: unknown): Record<string, number> | null {
+  if (!isRecord(v)) return null;
+  const out: Record<string, number> = {};
+  for (const [id, n] of Object.entries(v)) {
+    if (!isThing(id) || !whole(n, 1, MOST_OWNED)) return null;
+    out[id] = n;
+  }
+  return out;
+}
+
+/**
+ * A camp as Leaf stored it. It is trusted to stand as it was kept: the rules checked every change
+ * to it. One kept from before everything went into the tray has no `fresh`, and may have parcels
+ * waiting by its trail (`parcels`): they are in the tray now, and new.
+ */
 function storedCamp(v: unknown): Camp | null {
-  if (!isRecord(v) || !isRecord(v.tray) || !(v.first === "" || isPet(v.first)) || !whole(v.greeted, 0, 999))
-    return null;
+  if (!isRecord(v) || !(v.first === "" || isPet(v.first)) || !whole(v.greeted, 0, 999)) return null;
   const placed = all(v.placed, placedOf);
-  const parcels = all(v.parcels, (p) => (isThing(p) ? p : null));
+  const parcels = all(v.parcels ?? [], (p) => (isThing(p) ? p : null));
   const letters = all(v.letters, (l) => (isLetter(l) ? { ...l, from: nowNamed(l.from) } : null));
   const earned = all(v.earned, (p) => (isThing(p) ? p : null));
-  const tray: Record<string, number> = {};
-  for (const [id, n] of Object.entries(v.tray)) {
-    if (!isThing(id) || !whole(n, 1, MOST_OWNED)) return null;
-    tray[id] = n;
-  }
-  if (!placed || !parcels || !letters || !earned) return null;
-  return { first: v.first, placed, tray, parcels, letters, greeted: v.greeted, earned };
+  const tray = counts(v.tray);
+  const fresh = all(v.fresh ?? [], (p) => (isThing(p) ? p : null));
+  const looked = v.looked ?? 0;
+  if (!placed || !parcels || !letters || !earned || !tray || !fresh || !whole(looked, 0, 1e9)) return null;
+  if (fresh.length > MOST_NEW) return null;
+  const camp: Camp = { first: v.first, placed, tray, fresh, looked, letters, greeted: v.greeted, earned };
+  for (const id of parcels) store(camp, id);
+  return camp;
 }
 
 function visitOf(v: unknown): Visit | null {
@@ -668,17 +663,8 @@ export function readView(v: unknown): TownView | null {
   return { ...held, arrival: { first, newDay, away, said, mail } };
 }
 
-/** What a command answered off the wire, or null. */
-export const readNotes = (v: unknown): TownNote[] | null =>
-  all(v, (n) =>
-    isRecord(n) && isThing(n.thing)
-      ? n.t === "tray"
-        ? { t: "tray", thing: n.thing }
-        : n.t === "landed" && whole(n.n, 0, 1e9)
-          ? { t: "landed", thing: n.thing, n: n.n }
-          : null
-      : null,
-  );
+/** What a command answered off the wire: nothing, or null. */
+export const readNotes = (v: unknown): TownNote[] | null => (Array.isArray(v) && v.length === 0 ? [] : null);
 
 /** A new member's town: the camp every member starts with, nothing welcomed, and the first caller on the way. */
 export function newTown(ctx: Pick<Ctx, "seed" | "now">): Town {

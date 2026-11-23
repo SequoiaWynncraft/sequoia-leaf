@@ -722,15 +722,15 @@ command sent behind them was answered in 67 to 83 ms; their page's commands
 after, once every half second, took 4 to 5 ms at the median and 11 ms at worst.
 
 **The town and the camp** keep the camp (what stands where, each thing by an
-id of its own, the tray, the parcels by the trail, the letters, the pets),
+id of its own, the tray of things not set out, the letters, the pets),
 the caller waiting at it and when the next sets out, the chest's and the
 welcome's UTC days, when the member was last here, how far their news has been
 told and whether their character stays. Its commands, what happens by itself
 and what its page is shown are in `packages/town/README.md`. Buying at a stall
 takes the price; the chest pays 3 Coins once a UTC day, free of the cap; where
 a camp stands (things set out, callers greeted, the crab's sightings) is shown
-on a person's card. Each trophy the player holds (an award) goes by the trail
-as a parcel.
+on a person's card. Each trophy the player holds (an award) goes into the
+camp's tray.
 
 **The pulls** keep what each player has won, their counters, Seeds and free
 pulls; the rules and odds are in `packages/pulls/README.md`. Pulls paid with
