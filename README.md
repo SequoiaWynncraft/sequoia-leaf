@@ -1170,6 +1170,11 @@ seconds on the same database file. That is safe: SQLite locks the file between
 them, and the credit sync's lease lets only one of them read the feed.
 Otherwise the service is built to run as a single instance.
 
+A game's state the new container wrote in a shape the old one cannot read is
+answered 409 `state_unreadable` by the old one; a page asks again each second
+for 30 seconds, as it does a Leaf without the play service (`play.ts` in the
+kit), and shows the card for it only after.
+
 A deploy starts the new container, waits for it to answer `/healthz`, and then
 stops the old one with SIGTERM. The proxy in front (Traefik) shares requests
 between every running container of the app and drops one only once it has
