@@ -222,7 +222,8 @@ no Leaf, and the page shows `serverCard(line)` in its own words. With Leaf it as
   more if asked meanwhile): a game does when a command of its paid or took some, the town when a
   framed game closes and when its page comes back into view (`followCoins`). The town tells a game
   in its frame of a change to its Coins (`passCoins`, the shell's `{ town: "coins", coins }`), and a
-  game shows a change it worked out itself at once (`heardCoins`) until Leaf answers.
+  game shows a change it worked out itself at once (`heardCoins`) until Leaf answers. An answer
+  asked for before such a change is let go, since it may not hold it.
 - **Known as a guest** (`guest: true`: signed in, not in the guild). The game is live, as them,
   with no Leaf (`asGuest`): `leafShown()` is false, so no page shows a Leaf number, and every Leaf
   button's tip is "Leaf is earned by raiding with Sequoia." (`leafShut()`). `followLeaf` and
