@@ -152,6 +152,8 @@ function readRun(v: unknown, shown = false): Run {
     phase,
     resolve: whole(r.resolve, 0, ECONOMY.resolve, "the resolve"),
     acorns: whole(r.acorns, 0, 100_000, "the acorns"),
+    // A run saved before streaks were kept has none.
+    streak: r.streak === undefined ? 0 : whole(r.streak, -400, 400, "the streak"),
     level,
     xp: whole(r.xp, 0, need - 1, "the experience"),
     board,
@@ -187,6 +189,11 @@ function readRun(v: unknown, shown = false): Run {
   if (run.won && (run.left || run.resolve <= 0)) bad("the ending");
   if (run.phase !== "over" && ids.length === 0 && run.choices[0]?.kind !== "starter") bad("the party");
   if (run.choices.some((c, i) => c.kind === "starter" && (i > 0 || ids.length > 0))) bad("the choices");
+  // A streak is no longer than the rooms fought, and runs the way the last one went.
+  const lastResult = run.record.at(-1)?.result;
+  if (Math.abs(run.streak) > run.record.length) bad("the streak");
+  if (run.streak > 0 && lastResult !== "win") bad("the streak");
+  if (run.streak < 0 && lastResult !== "loss") bad("the streak");
   return run;
 }
 
