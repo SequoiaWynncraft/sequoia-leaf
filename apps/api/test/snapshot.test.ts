@@ -14,7 +14,7 @@ import {
   SNAPSHOTS_KEPT,
   takeSnapshot,
 } from "../src/backup/snapshot.ts";
-import { noNetwork, testLeaf } from "./support.ts";
+import { noNetwork, rejection, testLeaf } from "./support.ts";
 
 const alice = playerId("00000000-0000-4000-8000-00000000000a");
 const T0 = Date.parse("2026-11-16T13:00:00Z");
@@ -25,7 +25,8 @@ let server: ReturnType<typeof testLeaf>;
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), "leaf-snapshot-"));
-  server = testLeaf({ now: T0 }, noNetwork);
+  // On a file, as on the server: a snapshot is copied from the database's file.
+  server = testLeaf({ now: T0 }, noNetwork, { databasePath: join(directory, "leaf.db") });
 });
 
 afterEach(async () => {
@@ -46,6 +47,15 @@ function names(): string[] {
 }
 
 describe("snapshots", () => {
+  it("are not taken of a database in memory, which has no file to copy from", async () => {
+    const inMemory = testLeaf({ now: T0 }, noNetwork);
+    const refused = await rejection(inMemory.run(takeSnapshot(join(directory, "backups"), T0)));
+    await inMemory.dispose();
+
+    expect(String(refused)).toContain("A database in memory has no file to copy");
+    expect(names()).toEqual([]);
+  });
+
   it("writes a database file that holds what the live one held at that moment", async () => {
     await server.post({ kind: "earn", playerId: alice, amount: leaf(110), source: "raid", idempotencyKey: "a" }, T0);
 

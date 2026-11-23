@@ -120,6 +120,7 @@ describe("reading what Leaf says", () => {
       { t: "act", id: 1, kind: "emote", arg: "wave" },
       { t: "pong", c: 1.5, s: 2 },
       { t: "about" },
+      { t: "about", who: { at: "2026-11-24T12:00:00.000Z", present: [], resting: [], gone: [] } },
       { t: "error", code: "not_in_room" },
       { t: "did", rev: 4, did: [{ do: "collect", tick: 9 }], after: { tick: 9, check: 1 } },
     ];

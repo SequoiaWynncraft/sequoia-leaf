@@ -28,7 +28,7 @@ import { HOME, later } from "@sequoia-leaf/town/clock.ts";
 
 import type { AwayLine, Deeds, Goal, Guild, Happening, Me, Moment, Person, Quest, RoomSays, Tone } from "./guild.ts";
 import { type Line, lineFor, makePace } from "./news.ts";
-import { type Listed, resters, standing, whereabouts } from "./where.ts";
+import { type Listed, resters, standing, type Where, whereabouts } from "./where.ts";
 
 /** How the guild's news is asked for again when Leaf did not answer: three seconds, doubling. */
 const NEWS_BACKOFF: Backoff = { first: 3000, most: 24_000, jitter: 0.25 };
@@ -456,6 +456,9 @@ export function unprepare(): void {
 
 // ---------- the guild ----------
 
+/** How long one account of where everybody is serves: a frame, in milliseconds. */
+const FRAME_MS = 16;
+
 /** How often the board is fetched again besides when a quest moves, in milliseconds. */
 const BOARD_EVERY = 5 * 60_000;
 
@@ -466,15 +469,23 @@ export function makeLive(p: Prepared): Guild {
   /** Leaf's list of who is about, as last heard; and what the town's live room says, once it is followed. */
   let listed: { present: Listed[]; resting: Listed[]; gone: Listed[] } = { present: [], resting: [], gone: [] };
   let room: RoomSays = { room: () => null, ranks: new Map(), stirred: new Map() };
-  const whereNow = () =>
-    whereabouts({
+  // The one account of where everybody is, worked out at most once a frame, however many ask in it
+  // (the figures, the visitors, Who is about, a card), and at once when Leaf's lists come.
+  let snapshot: { made: number; listed: typeof listed; where: ReadonlyMap<string, Where> } | null = null;
+  const whereNow = (): ReadonlyMap<string, Where> => {
+    const made = outside.now();
+    if (snapshot?.listed === listed && made >= snapshot.made && made - snapshot.made < FRAME_MS) return snapshot.where;
+    const where = whereabouts({
       me: me.id,
       room: room.room(),
       ...listed,
       ranks: room.ranks,
       stirred: room.stirred,
-      now: leafClock(outside.now()),
+      now: leafClock(made),
     });
+    snapshot = { made, listed, where };
+    return where;
+  };
   let begun = false;
   const ears = new Set<(h: Happening) => void>();
   const news = makeNews(me.id);

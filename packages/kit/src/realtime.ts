@@ -46,7 +46,7 @@ import {
 
 import { device, type LetGo, member } from "./live.ts";
 import { ask, type Backoff, backoff, type LiveSocket, outside } from "./net.ts";
-import { askAgain, inRoom } from "./presence.ts";
+import { askAgain, heardAbout, inRoom } from "./presence.ts";
 
 // What a page needs of the wire to draw who is in its room.
 export { Flag, type LiveMember, type Motion } from "@sequoia-leaf/core";
@@ -600,7 +600,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         l.clock?.add(m.c, m.s, outside.now());
         return;
       case "about":
-        if (showing) askAgain();
+        if (showing) heardAbout(m.who);
         return;
       case "error":
         return;

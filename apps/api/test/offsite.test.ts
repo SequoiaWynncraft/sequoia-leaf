@@ -19,7 +19,8 @@ let leafServer: ReturnType<typeof testLeaf>;
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), "leaf-offsite-"));
   backups = join(directory, "backups");
-  leafServer = testLeaf({ now: T0 }, noNetwork);
+  // On a file, as on the server: a snapshot is copied from the database's file.
+  leafServer = testLeaf({ now: T0 }, noNetwork, { databasePath: join(directory, "leaf.db") });
 });
 
 afterEach(async () => {

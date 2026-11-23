@@ -1,5 +1,6 @@
 import { deflateSync } from "node:zlib";
 
+import { BunServices } from "@effect/platform-bun";
 import type { Activity, PlayerId, Posting } from "@sequoia-leaf/core";
 import {
   Clock,
@@ -20,6 +21,7 @@ import { SqlClient } from "effect/sql";
 import { routerConfig, Routes, serveLeaf, Stores } from "../src/app.ts";
 import { AppConfig, type Settings, settings } from "../src/config.ts";
 import { databaseAt } from "../src/db.ts";
+import { Credits } from "../src/earning/run.ts";
 import type { CreditSource } from "../src/earning/sync.ts";
 import { Events } from "../src/events/store.ts";
 import { Mojang, MojangError, type MojangProfile } from "../src/game/mojang.ts";
@@ -27,7 +29,7 @@ import { LeafInstance } from "../src/instance.ts";
 import { Ledger } from "../src/ledger/store.ts";
 import { Live, LiveTuning } from "../src/live/live.ts";
 import { Watchers } from "../src/live/watchers.ts";
-import { Play } from "../src/play/service.ts";
+import { type JobTimes, Play, PlayMeter } from "../src/play/service.ts";
 import { PlayStore } from "../src/play/store.ts";
 
 export const MINUTE = 60_000;
@@ -99,6 +101,8 @@ export interface Fakes {
   readonly dice?: SecureRandom.SecureRandom["Service"];
   /** Leaf's own warnings and errors, printed as production prints them (the play server's `--log`). Without it Leaf logs nothing. */
   readonly log?: boolean;
+  /** Told where each of the play service's jobs spent its time (`PlayMeter`), for the load test. */
+  readonly meter?: (times: JobTimes) => void;
 }
 
 /** Dice that fall the same way every time from the same seed: a counter, mixed (for tests and play only). */
@@ -161,6 +165,8 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     network,
     handClock,
     Layer.succeed(LeafInstance)(fakes.instance ?? crypto.randomUUID()),
+    Layer.succeed(PlayMeter)(fakes.meter ?? null),
+    BunServices.layer,
     fakes.dice === undefined ? SecureRandom.layerWebCrypto : Layer.succeed(SecureRandom.SecureRandom)(fakes.dice),
     fakes.log === true
       ? Layer.mergeAll(Logger.layer([Logger.consoleJson]), Layer.succeed(References.MinimumLogLevel)("Warn"))
@@ -195,9 +201,10 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
     ),
   );
   // Who hears what Leaf does to a state: the play service tells them, Live puts them there.
-  const layer = Layer.merge(Play.layer.pipe(Layer.provideMerge(between.pipe(Layer.provideMerge(stores)))), live).pipe(
-    Layer.provideMerge(Watchers.layer),
-  );
+  const layer = Layer.merge(
+    Layer.mergeAll(Play.layer, Credits.layer).pipe(Layer.provideMerge(between.pipe(Layer.provideMerge(stores)))),
+    live,
+  ).pipe(Layer.provideMerge(Watchers.layer));
   // Layers built through the same memo map are built once, so `run` and `app` see the same database.
   const memoMap = Layer.makeMemoMapUnsafe();
   const runtime = ManagedRuntime.make(layer, { memoMap });

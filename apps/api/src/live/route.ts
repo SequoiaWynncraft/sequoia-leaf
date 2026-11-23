@@ -3,7 +3,7 @@ import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
 import { BadOrigin, Unauthorized } from "../api/errors.ts";
-import { sessionChecks } from "../http/handlers.ts";
+import { sessionChecks } from "../http/routes/middleware.ts";
 import { Live } from "./live.ts";
 
 /** An answer in the API's `{ "code", "message" }` shape, for a request that is not let through to a live connection. */

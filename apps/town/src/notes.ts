@@ -24,6 +24,15 @@ export interface Part {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "leaf-turns",
+    at: "2026-11-23T23:43Z",
+    title: "Rerolls and yards wait their turn",
+    lines: [
+      "Rerolling a quest while Leaf is counting a raid you just did no longer swaps away a quest that raid finished.",
+      "When Leaf has many yards to bring up to date, your own commands in the Works no longer wait for all of them.",
+    ],
+  },
+  {
     id: "raid-fixes",
     at: "2026-11-23T23:24Z",
     title: "The Little Raid: fixes",

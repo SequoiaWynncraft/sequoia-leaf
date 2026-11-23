@@ -180,6 +180,8 @@ const Seen = Schema.Struct({
  * and the rest. Each says whether they play as a guest, and when they were last seen.
  */
 export const Present = Schema.Struct({
+  /** Leaf's clock when the lists were made: of two, the later is newer. */
+  at: Time,
   present: Schema.Array(Schema.Struct({ ...Seen.fields, acted_at: Schema.NullOr(Time) })),
   resting: Schema.Array(Seen),
   gone: Schema.Array(Seen),

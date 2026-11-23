@@ -708,6 +708,30 @@ describe("the live guild", () => {
     expect(heard).toEqual([]);
   });
 
+  test("works out where everybody is once a frame, however many ask in it, and again once Leaf's lists come", async () => {
+    world = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/me/quests": { status: 200, body: QUESTS },
+      "GET /v1/me/events": { status: 200, body: EVENTS },
+      "PUT /v1/game/presence": { status: 200, body: { present: [], resting: [], gone: [] } },
+    });
+    world.clock.now = Date.UTC(2026, 10, 25, 12, 55);
+    await start();
+    expect(await prepare(null)).toBe(true);
+    const p = prepared();
+    if (!p) throw new Error("nothing prepared");
+    const guild = makeLive(p);
+    guild.hear(() => undefined);
+    const first = guild.whereabouts();
+
+    // The figures, the visitors and Who is about, all in one frame, see the one account.
+    expect([guild.whereabouts(), guild.whereabouts()]).toEqual([first, first]);
+    expect(guild.whereabouts()).toBe(first);
+    world.clock.now += 20;
+    expect(guild.whereabouts()).not.toBe(first);
+  });
+
   test("the world does not wait for the feed: a party and a war come in at once, their lines in turn", async () => {
     world = standin({
       "GET /v1/game/hello": HELLO,

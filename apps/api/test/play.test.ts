@@ -65,7 +65,7 @@ import { knownAmong } from "../src/game/known.ts";
 import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { GAMES, type Played, played } from "../src/play/games.ts";
-import { KEPT_BYTES, Play, TEND_AFTER } from "../src/play/service.ts";
+import { type JobTimes, KEPT_BYTES, Play, TEND_AFTER } from "../src/play/service.ts";
 import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
 import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
@@ -566,7 +566,9 @@ describe("a stored state that does not read", () => {
   it("answers 409 state_unreadable to the page, changes nothing, and logs whose it is", async () => {
     await commanded(ided([{ do: "start", trail: 0 }]));
     // As a rules change that forgot the stored version would leave it.
-    await services.query((sql) => sql`UPDATE play_state SET state = '{"game":"little-raid-table","v":0}'`);
+    await services.query(
+      (sql) => sql`UPDATE play_state SET rev = rev + 1, state = '{"game":"little-raid-table","v":0}'`,
+    );
     const before = await stored(alice);
     const opening = await send("GET", "/v1/game/play/raid");
     expect([opening.status, await codeOf(opening)]).toEqual([409, "state_unreadable"]);
@@ -668,6 +670,21 @@ describe("the limits", () => {
     expect((await send("POST", "/v1/game/play/raid", { commands: [] })).status).toBe(429);
     // Another player has their own allowance.
     expect((await send("POST", "/v1/game/play/raid", { commands: [] }, bob)).status).toBe(200);
+  });
+
+  it("refuse a batch that comes too fast as nothing the player did: it keeps nobody from being away", async () => {
+    await opened();
+    expect((await send("PUT", "/v1/game/presence", { place: "table" })).status).toBe(200);
+    for (let n = 0; n < 20; n++) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another, as a page sends them
+      await send("POST", "/v1/game/play/raid", { commands: [] });
+    }
+    const tooMany = await send("POST", "/v1/game/play/raid", { commands: ided([{ do: "start", trail: 0 }]) });
+
+    expect(tooMany.status).toBe(429);
+    expect(await (await send("GET", "/v1/game/presence")).json()).toMatchObject({
+      present: [{ id: alice, acted_at: null }],
+    });
   });
 
   it("are ten commands a second done, in bursts of forty, across all games: a batch past it is refused whole", async () => {
@@ -2060,6 +2077,38 @@ describe("Leaf tending the Works", () => {
     expect(run.slices.length).toBeGreaterThan(before + meanwhile.length);
   });
 
+  it("goes round the yards catching up, so a command to a yard kept up waits for a slice of each, not all of theirs", async () => {
+    const { game, run } = counted();
+    // Bob's, Carol's and Dave's yards left two hours ago, as after a deploy; Alice's a minute ago.
+    clock.now -= 2 * HOUR;
+    for (const owner of [bob, carol, dave]) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      await keepMid(services, undefined, owner);
+    }
+    clock.now += 2 * HOUR - MINUTE;
+    await keepMid();
+    clock.now += MINUTE;
+    // Their owners open them at once, and Alice's page sends a command once they are catching up.
+    let caughtUp = 0;
+    const opens = [bob, carol, dave].map((owner) =>
+      services.run(Play.use((play) => play.open({ playerId: owner, guest: false }, game))).then(() => void caughtUp++),
+    );
+    await until(() => run.slices.length >= 3);
+    const before = run.slices.length;
+    const sent = await services.run(
+      Play.use((play) => play.send({ playerId: alice, guest: false }, game, [{ id: "w-1", do: "collect", tick: 0 }])),
+    );
+    const answered = run.slices.length;
+    const caughtUpBy = caughtUp;
+    await Promise.all(opens);
+
+    expect(sent.status).toBe("done");
+    // Answered within a round of the three, while all three were still catching up.
+    expect(caughtUpBy).toBe(0);
+    expect(answered - before).toBeLessThan(8);
+    expect(run.slices.length - answered).toBeGreaterThan(30);
+  });
+
   it("logs a yard it cannot tend, whose and of which game, and tends the others all the same", async () => {
     const { game } = counted((owner) => owner === bob);
     await keepMid(services, undefined, bob);
@@ -2299,6 +2348,59 @@ describe("Leaf tending the Works", () => {
     expect(await storedYard()).toEqual({ rev: 2, state: text });
   });
 
+  it("holds a yard's copy past its line: while the stored rev is the copy's it reads nothing more, and a write behind its back is read", async () => {
+    let reads = 0;
+    await afterEachRead(() => Promise.resolve(void reads++));
+    await keepMid();
+    const owner = { playerId: alice, guest: false };
+    await services.run(Play.use((play) => play.open(owner, GAMES.works)));
+    clock.now += 5000;
+    const sent = await services.run(
+      Play.use((play) => play.send(owner, GAMES.works, [{ id: "w-1", do: "collect", tick: 0 }])),
+    );
+    clock.now += 5000;
+    const seen = await services.run(
+      Play.use((play) => play.visit(alice, GAMES.works, { playerId: bob, guest: false })),
+    );
+    expect([sent.status, seen.status, reads]).toEqual(["done", "open", 1]);
+    // A tool writes the yard, raising its rev as every writer must: the next job reads it.
+    await services.query((sql) => sql`UPDATE play_state SET rev = rev + 1 WHERE player_id = ${alice}`);
+    const after = await services.run(
+      Play.use((play) => play.visit(alice, GAMES.works, { playerId: carol, guest: false })),
+    );
+    expect([after.status, "rev" in after ? after.rev : null, reads]).toEqual(["open", (await storedYard()).rev, 2]);
+  });
+
+  it("answers a batch sent again while it is still in its line once, as a page whose wait timed out sends it", async () => {
+    await app.dispose();
+    const gate = Promise.withResolvers<void>();
+    const batches: JobTimes[] = [];
+    let reads = 0;
+    start({
+      // The first read of the yard waits, as a yard far behind would keep a batch waiting.
+      play: (real) => ({
+        ...real,
+        read: (player, game) =>
+          real
+            .read(player, game)
+            .pipe(Effect.tap(() => (++reads === 1 ? Effect.promise(() => gate.promise) : Effect.void))),
+      }),
+      meter: (times) => void (times.kind === "batch" && batches.push(times)),
+    });
+    await keepMid();
+    const owner = { playerId: alice, guest: false };
+    const commands = [{ id: "w-1", do: "collect", tick: 0 }];
+    const first = services.run(Play.use((play) => play.send(owner, GAMES.works, commands)));
+    await until(() => reads === 1);
+    const again = services.run(Play.use((play) => play.send(owner, GAMES.works, commands)));
+    gate.resolve();
+    const [answered, answeredAgain] = await Promise.all([first, again]);
+
+    expect(answered.status).toBe("done");
+    expect(answeredAgain).toEqual(answered);
+    expect(batches).toHaveLength(1);
+  });
+
   it("keeps a guest's yard a guest's, though they left it before their first command", async () => {
     // Carol is not in the guild.
     expect((await send("GET", "/v1/game/play/works", undefined, carol)).status).toBe(200);
@@ -2362,6 +2464,37 @@ describe("Leaf tending the Works", () => {
       expect(await next.query((sql) => sql`SELECT command_id FROM play_commands`)).toEqual([]);
       await next.run(tendAll);
       expect(await storedYard(next)).toEqual({ rev: 2, state: ranOn(kept) });
+      await next.dispose();
+    } finally {
+      for (const end of ["", "-wal", "-shm"]) rmSync(`${path}${end}`, { force: true });
+    }
+  });
+
+  it("tends a yard it found standing still no more, nor does the next Leaf, until a command moves it", async () => {
+    const path = join(tmpdir(), `leaf-still-${crypto.randomUUID()}.db`);
+    const tends: string[] = [];
+    const meter = (times: JobTimes) => void (times.kind === "tend" && tends.push(times.game));
+    try {
+      const first = testLeaf(clock, noNetwork, { databasePath: path }, { meter });
+      await keepMid(first);
+      // Eight hours on, as far as a yard goes by itself, it stands still.
+      clock.now += 9 * HOUR;
+      await first.run(tendAll);
+      expect([tends.length, (await storedYard(first)).rev]).toEqual([1, 2]);
+      clock.now += 3 * MINUTE;
+      await first.run(tendAll);
+      expect(tends).toHaveLength(1);
+      await first.dispose();
+      const next = testLeaf(clock, noNetwork, { databasePath: path }, { meter });
+      clock.now += 3 * MINUTE;
+      await next.run(tendAll);
+      expect(tends).toHaveLength(1);
+      // Its owner's command has it going on again: two minutes on, Leaf tends it.
+      const owner = { playerId: alice, guest: false };
+      await next.run(Play.use((play) => play.send(owner, GAMES.works, [{ id: "w-1", do: "collect", tick: 0 }])));
+      clock.now += 3 * MINUTE;
+      await next.run(tendAll);
+      expect([tends.length, (await storedYard(next)).rev]).toEqual([2, 4]);
       await next.dispose();
     } finally {
       for (const end of ["", "-wal", "-shm"]) rmSync(`${path}${end}`, { force: true });
@@ -2495,13 +2628,13 @@ describe("Leaf tending the Works", () => {
   it("shows a visitor behind its owner's first open the yard that open made, before it is stored", async () => {
     await app.dispose();
     const gate = Promise.withResolvers<void>();
-    // Whether a state was stored at each read: the open's, held, and the visit's behind it.
+    // Whether a state was stored at each look: the open's, held, and the visit's behind it.
     const found: boolean[] = [];
     start({
       play: (real) => ({
         ...real,
-        read: (player, game) =>
-          real.read(player, game).pipe(
+        revOf: (player, game) =>
+          real.revOf(player, game).pipe(
             Effect.tap((state) => Effect.sync(() => void found.push(Option.isSome(state)))),
             Effect.tap(() => (found.length === 1 ? Effect.promise(() => gate.promise) : Effect.void)),
           ),
@@ -2658,7 +2791,8 @@ describe("awards", () => {
     if (!yard) throw new Error("no yard");
     deliver(yard, item("crab"), 1);
     await services.query(
-      (sql) => sql`UPDATE play_state SET state = ${FACTORY.encode(yard)} WHERE player_id = ${alice} AND game = 'works'`,
+      (sql) =>
+        sql`UPDATE play_state SET rev = rev + 1, state = ${FACTORY.encode(yard)} WHERE player_id = ${alice} AND game = 'works'`,
     );
     clock.now += 5000;
     await send("POST", "/v1/game/play/works", { commands: [{ id: "w-1", do: "collect", tick: tick + 50 }] });

@@ -212,7 +212,7 @@ describe("who is away", () => {
       stirred: new Map([["b", NOW - 1000]]),
       now: NOW,
     });
-    expect(all.get("b")?.acted).toBe(NOW - 1000);
+    expect(all.get("b")).toMatchObject({ state: "live", acted: NOW - 1000 });
     expect(shown(whoIsAbout({ me: ME, all, now: NOW }))[0]?.[1]).toEqual(["Tester: Strategist (you)", "Birchwood: "]);
   });
 

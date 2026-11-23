@@ -256,7 +256,8 @@ Each quest in its `quests` also has `reroll_leaf`: what rerolling it costs now,
 `POST /v1/me/quests/{id}/reroll`, with the quest's `id` such as `daily:4` and
 the body `{ "leaf": n }`, the `reroll_leaf` the member was shown and agreed to
 pay, first counts what was just played, as `?sync=1` does, so a quest just
-finished is paid rather than swapped. It answers `{ "leaf", "spent", "quest" }`:
+finished is paid rather than swapped. A sync already reading the feed is waited
+for, and none writes in between. It answers `{ "leaf", "spent", "quest" }`:
 the balance after it, what it cost, and the new quest in the shape `quests`
 uses; and beside it, in the header `Leaf-Purse`, Leaf's word on the player's
 purse after it, `{ "coins", "leaf", "version" }` as `/v1/game/me` gives them,
@@ -276,7 +277,7 @@ windows) and when the next one opens (`next_at`).
 
 `GET /v1/me/quests?sync=1` reads the credit feed first, at most once every 15
 seconds, so a raid that just finished shows up without waiting for the next
-scheduled run.
+scheduled run. Asked while a sync is reading the feed, it waits for that one.
 
 ### The contract clients test against
 
@@ -511,26 +512,24 @@ day after they go (the town's page says it, from its own state; left out, it is
 as it was, and on for a player Leaf has never been told about); and `device`, `phone` or `desktop` and
 optional, is what the page is on, by its window's width when it signed in
 (under 700 CSS pixels is a phone), for the staff's record of who played.
-Anything else gets 400 `invalid_place`. It records
-both, with whether the player is a guest, and answers `{ "present": [...],
-"resting": [...], "gone": [...] }`, each `{ "id", "username", "place", "guest",
-"seen_at" }`: `present` is the 50 seen most recently of everyone whose game
-said where they were in the last 90 seconds and who has not left a live room
-since, the player included, in name order; `resting` is the rest of those last
-seen in the last day (between 90 seconds and a day ago, or who left a room)
-whose `stay` was true, newest first, at most 24, and `gone` the same of those
-whose `stay` was false. The 90 seconds are the visits' (`VISIT_RULES.silentMs`),
-so Leaf's two records of who is where agree. A game that says the same place
-and `stay` less than 5 seconds after anything was last written for its player is
-answered the lists, but nothing is written; somewhere else, or other about
-staying, is written at once. A player in one of Live's rooms of the game's
-places (the town) is written there by Live itself, as if their game had said so
-(below). Players not seen for a day are forgotten.
-`GET /v1/game/presence` answers the same lists and writes nothing: a page in
-one of Live's rooms asks it every 30 seconds, since the room keeps where its
-player is, and at once whenever the room says who is where has changed (`about`,
-below). Each `PUT` is also a visit's call (see
-[Who played](#who-played-the-staffs-view)); a `GET` is not.
+Anything else gets 400 `invalid_place`. It is a
+visit's call (see [Who played](#who-played-the-staffs-view)): where a player is
+is their newest visit, one record, and nothing else. `stay` is kept with the
+player (`players_seen.stay`). It answers `{ "at", "present": [...], "resting":
+[...], "gone": [...] }`, `at` Leaf's clock as the lists were made (of two, the
+later is newer), each entry `{ "id", "username", "place", "guest", "seen_at" }`:
+`present` is the 50 heard of most recently of everyone whose newest visit is
+open and was heard of in the last 90 seconds (`VISIT_RULES.silentMs`), the
+player included, in name order, each with `acted_at`; `resting` is the rest of
+those whose newest visit was heard of in the last day (closed, or silent), last
+seen when it closed, whose `stay` is true, newest first, at most 24, and `gone`
+the same of those whose `stay` is false. All of it is read in one statement. A
+player in one of Live's rooms of the game's places (the town) is there by Live
+itself, as if their game had said so (below). Word of a player older than the
+last Leaf heard of them, such as a room's written late, moves them nowhere.
+`GET /v1/game/presence` answers the same lists and writes nothing, for a page in
+one of Live's rooms, which is told the lists whenever they change (`about`,
+below) and asks only when it comes into the room.
 
 ### The play service
 
@@ -730,18 +729,20 @@ open, a visit, a batch, or Leaf's own tend. A job takes its place in the
 lane's line as it arrives, with the moment it arrived, and the lane does its
 jobs one at a time in that order, each at its own moment: a batch is done at the
 moment it arrived, however long it waited. A lane holds at most one copy of the
-state in memory. For each job it reads the stored state if it has no copy or
-the stored `rev` is no longer its copy's (a staging step or another Leaf wrote
-it), brings the copy to the job's moment, and then shows it; or does each of
+state in memory. For each job it reads the stored `rev` alone, and the stored
+state only if it has no copy or the `rev` is no longer its copy's (a staging
+step or another Leaf wrote it; whatever writes a state raises its `rev`), brings the copy to the job's moment, and then shows it; or does each of
 the batch's commands to it in order, once the copy is run on to the tick the
 command is done at, weighing each against the balances as they stood before any
 was kept, and keeps it. A state that tends is run on 2 ms of work at a time,
 with as long a rest after each; one slice runs at a time for every state and
-every job together. The next slice goes to the players' job that arrived
-first (a tend with one behind it in its line runs as that one's), but a tend
-that has waited through three of those has the next: a player's job waits
-behind at most one slice of Leaf's own tending, and the tending goes on however
-busy the players are. No transaction runs a state on or does a command: a
+every job together. Players' slices go round the states asking for one, in
+the order they asked (a tend with a player's job behind it in its line runs as
+that one's), so a yard catching up eight hours holds up another yard's command
+for one slice, not for all of its catching up; but a tend that has waited
+through three of those has the next, the tend that came first: a player's job
+waits behind at most one slice of Leaf's own tending, and the tending goes on
+however busy the players are. No transaction runs a state on or does a command: a
 batch's transaction only checks and writes, the stored `rev` first, whether or
 not the state changed, then the balances its commands were weighed against
 (Coins, what may still be earned, and Leaf if any was taken), then the state,
@@ -755,16 +756,23 @@ from what is stored at its own moment, three times at most before it fails: so
 between two Leafs the row decides, and no command is lost or done twice. A new
 player's state is made in memory, their Coins opened with the welcome as it is,
 and stored by the first of those. Anything going wrong in a job drops the copy,
-and the next job reads what is stored. A batch is done whatever becomes of its
-request; an open, a visit or a tend whose caller has gone while it waited is
-never done. A lane with nothing in its line and nothing unsaved is let go.
-Every minute, from a minute after it starts (so that a Leaf starting beside one
-stopping does not tend against it), Leaf puts a tend in the line of each state
-no batch has written for two minutes (`TEND_AFTER`; an open page sends
-something more often), but for those it found standing still when it last read
-them (a yard eight hours after its owner was last there), until they are
-written again, and those with a tend in their line already; it waits for none
-of them, and each reads nothing until the slices give it its first turn. A tend
+and the next job reads what is stored. The same commands sent again, as a page
+whose wait ran out sends them, while their batch is still in its line, wait for
+that batch's answer rather than join the line again. A batch is done whatever
+becomes of its request; an open, a visit or a tend whose caller has gone while it waited is
+never done. A lane with nothing in its line and nothing unsaved is let go, and its copy
+held for the state's next job: up to 4 MiB of stored text in all, about a
+thousand of the largest yards and 50 MiB in memory, the copy used least lately
+let go first.
+Each state of a game that goes on by itself is stored with when it is next
+due a tend (`due_at`): two minutes after a batch wrote it (`TEND_AFTER`; an open
+page sends something more often), or never while it stands still (a yard eight
+hours after its owner was last there) until a command moves it; a state Leaf
+reads that stands still is marked so too, and one written some other way is due
+at once. Every minute, from a minute after it starts (so that a Leaf starting
+beside one stopping does not tend against it), Leaf reads the states due from an
+index and puts a tend in the line of each, but those with a tend in their line
+already; it waits for none of them, and each reads nothing until the slices give it its first turn. A tend
 that fails is logged (`Tending the <game> state of <player> failed`), and the
 others are tended all the same. Leaf stopped with jobs waiting has written
 nothing of them: every state is as last stored, only behind, and the next Leaf
@@ -773,15 +781,15 @@ many states, and how long they took. On the development machine, tending the
 largest kept yard (228 pieces) takes 9.5 ms of work two and a half minutes
 behind and 0.9 s eight hours behind, so half a core keeps about 7,900 such
 yards up; its owner opening it eight hours behind, on a Leaf just started,
-waits about 2 s. `bun apps/api/test/live-load.ts 32 20
-50 10` timed the town while fifty of them, eight hours behind, were tended and
-ten players visited one at once: 17.4 ms at the median, 32.8 ms at the 95th
-percentile and 36.9 ms at worst, against 15.9, 31.6 and 33.7 ms without; the ten
-visits were answered within 2.7 s, the other forty-nine tends taking every
-fourth slice meanwhile. With `32 20 50 0 50`, fifty players visited a large yard
-written a minute ago at once, all answered within 0.07 s, and its owner's
-command sent behind them was answered in 67 to 83 ms; their page's commands
-after, once every half second, took 4 to 5 ms at the median and 11 ms at worst.
+waits about 2 s. The load test (`apps/api/test/load/`, under Live) ran Leaf
+limited to four cores and 16 GB, as the server is, with 300 players walking
+about the town and twenty owners' pages each sending a batch of one to eight
+commands a second: the batches took 3.3 ms at the median, 14 ms at the 95th
+percentile and 22 ms at the 99th, and fifty visits to one of those yards at once
+were answered within 24 ms. Tending fifty of the largest yards eight hours behind
+took 273 s, 2.2 s of work each; meanwhile fifty visits to one of them waited
+6.9 s for it to be brought up, and a batch to another yard waited as long behind
+them.
 
 **The town and the camp** keep the camp (what stands where, each thing by an
 id of its own, the tray of things not set out, the letters, the pets),
@@ -997,22 +1005,22 @@ the game's page is made, since that page may go into a visit's room on the same
 connection. The `live` line counts `told`, the batches told to visits' rooms.
 
 **Where they are, for everybody else.** A player in a room whose kind is one of
-the game's places (`town`) is present there as `PUT /v1/game/presence` has it,
-written by Live: when they come into the room (keeping what they last said
-about staying, and staying if they never said), again every 30 seconds while
-they are in it, and when they leave it (their connection's grace run out, a
-`leave`, or another room), as last seen there then and gone from then on, unless
-their game has said since that they are somewhere else. So pages that ask who is
-about count them right, and they rest in town after they go, though their page
-never says where it is. The same moments open, keep and close their visit there.
-Every change to who is where, once it is written (somebody comes into a room or
-leaves it, a page says its player is somewhere else, or says otherwise about
-staying), is told to everybody in every room of the game's places as
-`{ "t": "about" }` (not a visit's room), and each page
-asks the lists again at once; a write that only says again what was said is not
-a change. A message a page does not know is ignored, so a page from before it was
-told simply asks every 30 seconds as it did: a message added for pages to hear is
-not a new `LIVE_VERSION`.
+the game's places (`town`) is there as `PUT /v1/game/presence` would have them,
+by Live: their visit there opens when they come into the room (keeping what they
+last said about staying, and staying if they never said), is heard of again
+every 30 seconds while they are in it, and closes when they leave it (their
+connection's grace run out, a `leave`, or another room), last seen there then
+and gone from then on, unless their game has said since that they are somewhere
+else. So pages count them right, and they rest in town after they go, though
+their page never says where it is. Every change to who is about, once it is
+written (somebody comes into a room or leaves it, a page says its player is
+somewhere else, or says otherwise about staying, a visit goes silent, somebody
+away does something), is told to everybody in every room of the game's places
+(not a visit's room) as `{ "t": "about", "who" }`, `who` the presence routes'
+answer, read once 200 ms after the first change of a burst; a write that only
+says again what was said is not a change. A page from before `who` was sent
+asks for the lists when told, and a page that does not know `about` at all
+asks every 30 seconds: neither is a new `LIVE_VERSION`.
 
 **What it is not, yet.** Positions are the game's to say, inside the room and
 at its pace: right for walking about together, never for anything that pays or
@@ -1030,13 +1038,19 @@ once), the network there, up to 33 ms waiting for Leaf's tick, the network back
 (the slowest but a tenth of the latest snapshots), and then 100 ms more: the game
 draws others that far behind the newest snapshots as they reach it, so that it
 always has two to go between and never guesses past the newest. A player whose
-game sends no move for 300 ms (a hidden tab) is stood still where they are. `bun apps/api/test/live-load.ts [players] [seconds] [yards] [visitors] [fresh]` runs
-the real app with that many players walking about the town at the game's pace
-(and that many large yards for Leaf to tend meanwhile), and times every move from its sender to each other player receiving it (not to
-the screen). On the development machine, with the server and every player in one
-process: 32 players, every move seen by all 31 others, 17 ms at the median and
-35 ms at worst, 15 KiB a second to each player; 128 players in four copies of
-the town, 19 ms and 38 ms, 19% of one core for everything. Measured on the
+game sends no move for 300 ms (a hidden tab) is stood still where they are. `apps/api/test/load/`
+loads the real app from a process of its own: `leaf.ts` serves it (started in a
+scope limited as the server is, `systemd-run --user --scope -p CPUQuota=400% -p
+MemoryMax=16G`), and `drive.ts` walks players about the town at the game's pace,
+has one in thirty join anew each second, has owners' pages send commands, visits
+yards in bursts and has Leaf tend fifty yards eight hours behind. It times every
+move from its sender to each other player in the room receiving it (not to the
+screen), every command and every visit; Leaf says how long its event loop was
+held, where the play service's time went, its CPU and its memory. On the
+development machine, 300 players: 18.6 ms at the median, 34 ms at the 95th
+percentile and 37 ms at the 99th, the event loop held 3.6 ms at the 99th, 31% of
+one core and 212 MiB; while Leaf tended the fifty yards, 37 ms at the 99th and
+113 ms at worst. Measured on the
 screen, with `play.ts --crowd 6` and two pages as two members on the same
 machine, one walking about the town and the other read every 100 ms for 24
 seconds: the second draws the first where the first said it was 125 to 135 ms
@@ -1378,7 +1392,9 @@ docker run --publish 3000:3000 --volume leaf-data:/data --env BACKEND_INTERNAL_T
 
 Every six hours the server writes a snapshot, a complete copy of the database
 consistent as of one moment, to `/data/backups`, and keeps the newest 28, which
-is a week. A snapshot is an ordinary SQLite file. To restore one, stop the app
+is a week. Another process makes each one (`apps/api/src/backup/vacuum.ts`),
+reading the database file beside Leaf, so Leaf goes on answering meanwhile. A
+snapshot is an ordinary SQLite file. To restore one, stop the app
 in Coolify, copy the snapshot over `/data/leaf.db`, delete `leaf.db-wal` and
 `leaf.db-shm` beside it, and start the app.
 

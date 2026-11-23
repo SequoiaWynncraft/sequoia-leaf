@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { leaf, playerId, RAIDS } from "@sequoia-leaf/core";
 
+import { runCreditSync } from "../src/earning/run.ts";
 import { MINUTE, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -22,6 +23,8 @@ const member = {
 let sessions: Record<string, () => Response>;
 let credits: unknown;
 let backendCalls: string[];
+/** While set, the credit feed answers only once the test lets it (`holdFeed`). */
+let feedHeld: { readonly asked: () => void; readonly answer: Promise<void> } | null;
 const clock = { now: T0 };
 let services: ReturnType<typeof testLeaf>;
 let app: ReturnType<(typeof services)["app"]>;
@@ -36,9 +39,32 @@ function backend(url: string, init: RequestInit): Promise<Response> {
     return Promise.resolve(answer());
   }
   if (path === "/internal/player-credits") {
-    return Promise.resolve(Response.json(credits));
+    if (feedHeld === null) {
+      return Promise.resolve(Response.json(credits));
+    }
+    feedHeld.asked();
+    return feedHeld.answer.then(() => Response.json(credits));
   }
   return Promise.resolve(new Response("not found", { status: 404 }));
+}
+
+/** Holds the credit feed's next answers: `asked` once Leaf has asked it, and they go once `answer` is called. */
+function holdFeed() {
+  const asked = Promise.withResolvers<void>();
+  const answer = Promise.withResolvers<void>();
+  feedHeld = { asked: () => asked.resolve(), answer: answer.promise };
+  return {
+    asked: asked.promise,
+    answer: () => {
+      feedHeld = null;
+      answer.resolve();
+    },
+  };
+}
+
+/** Whether a request answers within a moment: what it answered, or "waiting". */
+function soon(response: Promise<Response>): Promise<Response | "waiting"> {
+  return Promise.race([response, Bun.sleep(200).then((): "waiting" => "waiting")]);
 }
 
 function get(path: string, headers: Record<string, string> = { Authorization: "Bearer alice-token" }) {
@@ -49,6 +75,7 @@ beforeEach(() => {
   sessions = { "alice-token": () => Response.json(member) };
   credits = { raids: [], wars: [] };
   backendCalls = [];
+  feedHeld = null;
   clock.now = T0;
   services = testLeaf(clock, backend);
   app = services.app();
@@ -244,6 +271,22 @@ function earn(amount: number) {
   );
 }
 
+/** The feed lists three of every raid a minute after T0, which finishes any daily the rules can hand out. */
+function dailyFinished() {
+  credits = {
+    raids: Object.values(RAIDS).flatMap((raidName, kind) =>
+      [0, 1, 2].map((run) => ({
+        completion_id: 100 + kind * 3 + run,
+        completed_at: new Date(T0 + MINUTE + (kind * 3 + run) * 1000).toISOString(),
+        raid_name: raidName,
+        season_rating: 110,
+        player_uuid: alice,
+      })),
+    ),
+    wars: [],
+  };
+}
+
 describe("POST /v1/me/quests/:id/reroll", () => {
   it("swaps a quest for another, free the first time each day, and then offers the next for 100 Leaf", async () => {
     expect(await quests()).toMatchObject({
@@ -419,19 +462,7 @@ describe("POST /v1/me/quests/:id/reroll", () => {
 
   it("counts what was just played first, so a quest just finished is paid rather than swapped", async () => {
     await get("/v1/me/quests?sync=1");
-    // Three of every raid finishes any daily the rules can hand out.
-    credits = {
-      raids: Object.values(RAIDS).flatMap((raidName, kind) =>
-        [0, 1, 2].map((run) => ({
-          completion_id: 100 + kind * 3 + run,
-          completed_at: new Date(T0 + MINUTE + (kind * 3 + run) * 1000).toISOString(),
-          raid_name: raidName,
-          season_rating: 110,
-          player_uuid: alice,
-        })),
-      ),
-      wars: [],
-    };
+    dailyFinished();
     clock.now = T0 + 5 * MINUTE;
 
     const response = await reroll("daily:1");
@@ -439,6 +470,60 @@ describe("POST /v1/me/quests/:id/reroll", () => {
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ code: "not_current" });
     expect(await quests()).toMatchObject({ recently_completed: [{ id: "daily:1" }] });
+  });
+
+  it("waits for a sync another request started, so the raids it is fetching finish the quest first", async () => {
+    await get("/v1/me/quests?sync=1");
+    dailyFinished();
+    clock.now = T0 + 5 * MINUTE;
+    const feed = holdFeed();
+    const refreshing = get("/v1/me/quests?sync=1");
+    await feed.asked;
+
+    const rerolling = reroll("daily:1");
+    expect(await soon(rerolling)).toBe("waiting");
+    feed.answer();
+
+    expect((await refreshing).status).toBe(200);
+    const response = await rerolling;
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "not_current" });
+    expect(await quests()).toMatchObject({ recently_completed: [{ id: "daily:1" }] });
+    expect(await services.query((sql) => sql`SELECT COUNT(*) AS n FROM quest_rerolls`)).toEqual([{ n: 0 }]);
+  });
+
+  it("waits for the scheduled sync too, when it is fetching as the reroll comes", async () => {
+    await get("/v1/me/quests?sync=1");
+    dailyFinished();
+    clock.now = T0 + 5 * MINUTE;
+    const feed = holdFeed();
+    const scheduled = services.run(runCreditSync("recent"));
+    await feed.asked;
+
+    const rerolling = reroll("daily:1");
+    expect(await soon(rerolling)).toBe("waiting");
+    feed.answer();
+
+    expect(await scheduled).toMatchObject({ status: "synced" });
+    expect(await (await rerolling).json()).toMatchObject({ code: "not_current" });
+    expect(await quests()).toMatchObject({ recently_completed: [{ id: "daily:1" }] });
+  });
+
+  it("answers a refresh that comes while a sync is fetching with what that sync paid", async () => {
+    await get("/v1/me/quests?sync=1");
+    dailyFinished();
+    clock.now = T0 + 5 * MINUTE;
+    const feed = holdFeed();
+    const first = get("/v1/me/quests?sync=1");
+    await feed.asked;
+
+    const second = get("/v1/me/quests?sync=1");
+    expect(await soon(second)).toBe("waiting");
+    feed.answer();
+
+    expect(await (await first).json()).toMatchObject({ recently_completed: [{ id: "daily:1" }] });
+    expect(await (await second).json()).toMatchObject({ recently_completed: [{ id: "daily:1" }] });
+    expect(backendCalls.filter((path) => path === "/internal/player-credits")).toHaveLength(1);
   });
 
   it("asks for a session like every /v1/me route", async () => {

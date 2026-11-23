@@ -156,7 +156,10 @@ export const stageTown = (playerId: PlayerId, ops: readonly unknown[], others: r
         liveIn(s, many);
         s.camp.first = PETS[i % PETS.length] ?? "cat";
         const standing = TOWN.standing?.(s) ?? { score: 0, also: {} };
-        yield* sql`INSERT OR REPLACE INTO play_state (player_id, game, rev, state, updated_at) VALUES (${other.id}, 'town', 1, ${TOWN.encode(s)}, ${now})`;
+        yield* sql`
+          INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${other.id}, 'town', 1, ${TOWN.encode(s)}, ${now})
+          ON CONFLICT (player_id, game) DO UPDATE SET rev = rev + 1, state = excluded.state, updated_at = excluded.updated_at
+        `;
         yield* sql`
           INSERT OR REPLACE INTO standings (player_id, game, score, also, guest, updated_at)
           VALUES (${other.id}, 'town', ${standing.score}, ${JSON.stringify(standing.also)}, ${other.guest ? 1 : 0}, ${now})

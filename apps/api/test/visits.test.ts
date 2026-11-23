@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { type PlayerId, playerId } from "@sequoia-leaf/core";
 import { Schema } from "effect";
 
+import { Visits } from "../src/activity/visits.ts";
 import { type Backend, DAY, fakeBackend, HOUR, MINUTE, sessionOf, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -226,6 +227,26 @@ describe("visits from the presence calls", () => {
     await call("bob", "town");
 
     expect((await visits())[0]).toMatchObject({ place: "camp", left_at: T0 + 60 * SECOND, seconds: 60 });
+  });
+
+  it("never moves a player back on word older than what Leaf heard since: a room's heartbeat written late", async () => {
+    // Alice is in the town's live room; her page then says the Works, and the room's heartbeat from
+    // before it, which Live had waiting, is written after.
+    const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
+    await services.run(Visits.use((v) => v.inRoom([inTown], "town", T0)));
+    clock.now = T0 + 20 * SECOND;
+    await call("alice", "works");
+    await services.run(Visits.use((v) => v.inRoom([inTown], "town", T0 + 10 * SECOND)));
+    await services.run(Visits.use((v) => v.leftRoom(alice, "town", T0 + 15 * SECOND)));
+
+    expect(await visits()).toMatchObject([
+      { place: "town", source: "room", entered_at: T0, left_at: T0 + 20 * SECOND },
+      { place: "works", source: "call", entered_at: T0 + 20 * SECOND, left_at: null },
+    ]);
+    const about = await services.run(Visits.use((v) => v.about(T0 + 21 * SECOND)));
+    expect(about.present).toEqual([
+      { playerId: alice, username: "Alice", place: "works", guest: false, seenAt: T0 + 20 * SECOND },
+    ]);
   });
 
   it("closes the visit in one place when the player comes to another, in the same session", async () => {

@@ -1,4 +1,4 @@
-import { BunHttpServer } from "@effect/platform-bun";
+import { BunHttpServer, BunServices } from "@effect/platform-bun";
 import { Duration, Effect, Layer } from "effect";
 import { SecureRandom } from "effect/crypto";
 import { FetchHttpClient, HttpRouter } from "effect/http";
@@ -8,10 +8,10 @@ import { Visits } from "./activity/visits.ts";
 import { Identities } from "./auth/session.ts";
 import { AppConfig } from "./config.ts";
 import { Database } from "./db.ts";
+import { Credits } from "./earning/run.ts";
 import { Events } from "./events/store.ts";
 import { Mojang } from "./game/mojang.ts";
 import { PlayerNames } from "./game/names.ts";
-import { Presence } from "./game/presence.ts";
 import { Skins } from "./game/skins.ts";
 import { ApiRoutes, NotFound } from "./http/handlers.ts";
 import { SafetyHeaders } from "./http/headers.ts";
@@ -102,7 +102,6 @@ export const serveLeaf = (options: {
 export const Stores = Layer.mergeAll(
   Events.layer,
   Quests.layer,
-  Presence.layer,
   ActivityReport.layer.pipe(Layer.provideMerge(Visits.layer)),
   Layer.mergeAll(Skins.layer, Tallies.layer).pipe(Layer.provideMerge(PlayerNames.layer)),
   PlayStore.layer,
@@ -111,16 +110,17 @@ export const Stores = Layer.mergeAll(
 ).pipe(Layer.provideMerge(Ledger.layer));
 
 /**
- * What Leaf reaches outside its own code (its settings, its database, Mojang, the network and the
- * machine's dice), the play service on the stores, and the live rooms, which the routes serve and
+ * What Leaf reaches outside its own code (its settings, its database, Mojang, the network, the
+ * machine's dice and its processes), the play service and the credit sync on the stores, and the live rooms, which the routes serve and
  * the server's farewell closes, and which write who is in them into the stores' presence and visits.
  */
-export const Services = Layer.mergeAll(Play.layer, Live.layer).pipe(
+export const Services = Layer.mergeAll(Play.layer, Credits.layer, Live.layer).pipe(
   Layer.provideMerge(Watchers.layer),
   Layer.provideMerge(Stores),
   Layer.provideMerge(Database),
   Layer.provide(Mojang.layer),
   Layer.provide(SecureRandom.layerWebCrypto),
+  Layer.provideMerge(BunServices.layer),
   Layer.provideMerge(FetchHttpClient.layer),
   Layer.provideMerge(AppConfig.layer),
 );

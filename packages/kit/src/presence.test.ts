@@ -5,6 +5,7 @@ import { isRecord } from "./net.ts";
 import {
   askAgain,
   forgetPresence,
+  heardAbout,
   hearPresent,
   here,
   inRoom,
@@ -129,9 +130,11 @@ describe("staying in town after going", () => {
 });
 
 /** Leaf's answer with Alice alone, at `place`. */
-const aliceAt = (place: string) => ({
+/** Leaf's lists with Alice at `place`, made at `made` by Leaf's clock. */
+const aliceAt = (place: string, made = "2026-11-25T10:00:01.000Z") => ({
   status: 200,
   body: {
+    at: made,
     present: [
       { id: "a", username: "Alice", place, seen_at: "2026-11-25T10:00:00.000Z", acted_at: "2026-11-25T09:58:00.000Z" },
     ],
@@ -187,7 +190,7 @@ describe("saying where the member is", () => {
     ]);
   });
 
-  test("takes Leaf's answers in the order they were asked for: one that comes after a later one is dropped", async () => {
+  test("keeps the lists Leaf made last: an answer that comes after later lists is dropped", async () => {
     let calls = 0;
     world = standin({
       ...routes,
@@ -196,9 +199,9 @@ describe("saying where the member is", () => {
         calls++;
         if (calls === 1) {
           await Bun.sleep(30);
-          return aliceAt("town");
+          return aliceAt("town", "2026-11-25T10:00:01.000Z");
         }
-        return aliceAt("works");
+        return aliceAt("works", "2026-11-25T10:00:02.000Z");
       },
     });
     await start();
@@ -215,5 +218,22 @@ describe("saying where the member is", () => {
       Date.UTC(2026, 10, 25, 10),
       Date.UTC(2026, 10, 25, 9, 58),
     ]);
+  });
+
+  test("in a live room of the place, takes the lists the room tells, the newest, and asks nothing more", async () => {
+    world = standin({ ...routes, "GET /v1/game/presence": aliceAt("town", "2026-11-25T10:00:02.000Z") });
+    await start();
+    const heard: string[][] = [];
+    const stop = hearPresent((present) => heard.push(present.map((m) => m.place)));
+    inRoom("town");
+    here("town");
+    await Bun.sleep(10);
+    heardAbout(aliceAt("works", "2026-11-25T10:00:03.000Z").body);
+    // Made before the lists already heard, as a frame sent before the answer was: dropped.
+    heardAbout(aliceAt("table", "2026-11-25T10:00:00.000Z").body);
+    stop();
+
+    expect(heard).toEqual([["town"], ["works"]]);
+    expect(world.sent.filter((s) => s.path === "/v1/game/presence").map((s) => s.method)).toEqual(["GET"]);
   });
 });

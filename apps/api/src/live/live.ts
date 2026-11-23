@@ -26,11 +26,11 @@ import {
 } from "effect";
 import { Socket } from "effect/socket";
 
+import { whoIsAbout } from "../activity/about.ts";
 import { type Visitor, Visits } from "../activity/visits.ts";
 import { Allowance } from "../allowance.ts";
 import { type Identity, isGuest } from "../api/api.ts";
 import { PLACES } from "../api/schemas.ts";
-import { Presence } from "../game/presence.ts";
 import { Tallies } from "../tally/store.ts";
 import { type Occupant, type Room, Rooms } from "./room.ts";
 import { Watchers } from "./watchers.ts";
@@ -66,6 +66,9 @@ export interface LiveTuning {
 export const LiveTuning = Context.Reference<LiveTuning>("leaf/LiveTuning", {
   defaultValue: () => ({ recheckMs: 30_000, graceMs: 10_000, mostPlayers: 1000, presenceMs: 30_000 }),
 });
+
+/** How long Live waits after a change to who is about before it tells the rooms, for the rest of a burst to come. */
+const ABOUT_GATHER = Duration.millis(200);
 
 /** Where a player's presence says they are while they are in a room of a kind, if it is one of the game's places. */
 const placeOf = (kindName: string): string | null => PLACES.find((p) => p === kindName) ?? null;
@@ -273,12 +276,13 @@ export type Opened = "served" | "full" | "busy" | "stopping";
  * by connection. Rooms are in memory, in this process: during a deploy every player is told Leaf is
  * restarting, and reconnects to the new container.
  *
- * A player in a room of one of the game's places (the town) is present there as far as `Presence`
- * knows, as if their game said so: written when they come in, every `presenceMs` while they stay,
- * and when they go, so that nobody's page need say where they are while it is in a room. The same
- * moments open, keep and close their visit there (`Visits`); and Leaf's farewell closes every open
- * visit before it closes any connection. Whenever who is where changes, everybody in every room of
- * the game's places is told (`{ t: "about" }`), to ask Leaf's list again.
+ * A player in a room of one of the game's places (the town) is there as far as their visits know
+ * (`Visits`), as if their game said so: their visit opens when they come in, is heard of every
+ * `presenceMs` while they stay, and closes when they go, so that nobody's page need say where they
+ * are while it is in a room; and Leaf's farewell closes every open visit before it closes any
+ * connection. Whenever who is about changes, everybody in every room of the game's places is told
+ * who is about now (`{ t: "about", who }`, the presence routes' answer), once for a burst of
+ * changes within `ABOUT_GATHER`.
  *
  * A player in a visit's room (`visitRoom`: somebody's yard, from Top yards) hears what Leaf does to
  * the state they visit while they are in it, as the play service tells it (`Watchers`). A visit's
@@ -319,7 +323,6 @@ export class Live extends Context.Service<
     Live,
     Effect.gen(function* () {
       const tuning = yield* LiveTuning;
-      const presence = yield* Presence;
       const visits = yield* Visits;
       const watchers = yield* Watchers;
       const tallies = yield* Tallies;
@@ -330,10 +333,9 @@ export class Live extends Context.Service<
       /** Leaf is stopping: no connection is let in, and one still opening is told to come back. */
       let stopping = false;
 
-      // ---- where players are, as presence has it ----
+      // ---- where players are, as their visits have it ----
 
-      // Said here as it happens, without waiting, and written by one fiber in the same order: where
-      // everybody else sees them (presence), and their visits.
+      // Said here as it happens, without waiting, and written by one fiber in the same order.
       const whereabouts = yield* Queue.unbounded<Whereabouts>();
       const inRoom = (p: Player): Visitor => ({
         playerId: p.identity.playerId,
@@ -352,20 +354,11 @@ export class Live extends Context.Service<
       const write = (w: Whereabouts): Effect.Effect<void> => {
         switch (w.kind) {
           case "in":
-            return Effect.andThen(
-              quietly("live presence", presence.inRoom(w.players, w.place, w.at)),
-              ofVisits(visits.inRoom(w.players, w.place, w.at)),
-            );
+            return ofVisits(visits.inRoom(w.players, w.place, w.at));
           case "left":
-            return Effect.andThen(
-              quietly("live presence", presence.leftRoom(w.playerId, w.place, w.at)),
-              ofVisits(visits.leftRoom(w.playerId, w.place, w.at)),
-            );
+            return ofVisits(visits.leftRoom(w.playerId, w.place, w.at));
           case "acted":
-            // Back from being away: told to every page, as a change to who is about.
-            return ofVisits(
-              Effect.flatMap(visits.acted(w.playerId, w.at), (back) => (back ? presence.back : Effect.void)),
-            );
+            return ofVisits(visits.acted(w.playerId, w.at));
           case "act":
             return quietly("live tallies", tallies.acted(w.playerId, w.act, w.arg, w.at));
           case "farewell":
@@ -385,21 +378,18 @@ export class Live extends Context.Service<
         ),
       );
 
-      // Every change to who is where, once it is written (here, or by a page saying where it is), is
-      // told to everybody in every room of the game's places, so that each page asks Leaf's list
-      // again at once. A visit's room is no place, and its pages show nobody about.
-      const about = say({ t: "about" });
-      const changed = yield* presence.changes;
-      yield* Effect.forkScoped(
-        Effect.forever(
-          Effect.flatMap(PubSub.take(changed), () =>
-            Effect.sync(() => {
-              for (const room of rooms.all())
-                if (placeOf(room.kindName)) for (const o of room.occupants.values()) o.outbox.send(about);
-            }),
-          ),
-        ),
-      );
+      // Every change to who is about, once it is written (here, or by a page saying where it is), is
+      // told to everybody in every room of the game's places: who is about now, read once for a
+      // burst of changes. A visit's room is no place, and its pages show nobody about.
+      const changed = yield* visits.changes;
+      const tellAbout = Effect.gen(function* () {
+        yield* PubSub.take(changed);
+        yield* Effect.sleep(ABOUT_GATHER);
+        const about = say({ t: "about", who: yield* whoIsAbout(yield* Clock.currentTimeMillis) });
+        for (const room of rooms.all())
+          if (placeOf(room.kindName)) for (const o of room.occupants.values()) o.outbox.send(about);
+      });
+      yield* Effect.forkScoped(Effect.forever(quietly("live about", Effect.provideService(tellAbout, Visits, visits))));
 
       // ---- who is in which room: these three alone change it ----
 

@@ -1,5 +1,6 @@
 import {
   away,
+  DAY_MS,
   type Device,
   DEVICES,
   GAME_AT,
@@ -11,7 +12,7 @@ import {
   VISIT_RULES,
   visitSeconds,
 } from "@sequoia-leaf/core";
-import { Context, Effect, Layer, Option, Schema } from "effect";
+import { Context, Effect, Layer, Option, PubSub, Schema, type Scope } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
 import { LeafInstance } from "../instance.ts";
@@ -44,6 +45,82 @@ const OpenVisit = Schema.Struct({
 });
 type OpenVisit = typeof OpenVisit.Type;
 
+/** A player counts as here this long after Leaf last heard of them in a place, unless they left it: 90 seconds (`VISIT_RULES.silentMs`). */
+export const PRESENT_FOR_MS = VISIT_RULES.silentMs;
+/** The most players listed as here in one answer: those heard of most lately. */
+export const PRESENT_MOST = 50;
+/** The most listed as gone in one answer, of those who stay and of those who do not. */
+export const RESTING_MOST = 24;
+
+/** Somebody on Leaf's list of who is about: where they are, or were last, and when Leaf last heard of them there. */
+export interface Seen {
+  readonly playerId: string;
+  readonly username: string;
+  readonly place: string;
+  readonly guest: boolean;
+  readonly seenAt: number;
+}
+
+/**
+ * Who is about: those here now, and those gone in the last day, in two lists: `resting`, whose
+ * characters stay in town, and `gone`, whose do not. They are apart so that a page which draws
+ * everybody resting as dozing never draws somebody who would rather not stay.
+ */
+export interface Here {
+  readonly present: readonly Seen[];
+  readonly resting: readonly Seen[];
+  readonly gone: readonly Seen[];
+}
+
+/** Each player's newest visit of the last day, with who they are and whether they stay. */
+const Latest = Schema.Struct({
+  playerId: Schema.String,
+  username: Schema.String,
+  place: Schema.String,
+  guest: Schema.BooleanFromBit,
+  heardAt: Schema.Int,
+  leftAt: Schema.NullOr(Schema.Int),
+  stay: Schema.BooleanFromBit,
+});
+
+/** Somebody on the lists, from their newest visit: last seen when it closed, or was last heard of. */
+const seen = (v: typeof Latest.Type): Seen => ({
+  playerId: v.playerId,
+  username: v.username,
+  place: v.place,
+  guest: v.guest,
+  seenAt: v.leftAt ?? v.heardAt,
+});
+/** Newest first, then by id. */
+const byNewest = (a: Seen, b: Seen) => b.seenAt - a.seenAt || (a.playerId < b.playerId ? -1 : 1);
+/** By name, then by id. */
+const byName = (a: Seen, b: Seen) =>
+  a.username < b.username ? -1 : a.username > b.username ? 1 : a.playerId < b.playerId ? -1 : 1;
+
+/**
+ * Who is about at `now`, from each player's newest visit: here while it is open and was heard of
+ * in the last 90 seconds, at most the 50 heard of most lately, in name order; gone otherwise, last
+ * seen when it closed (or was last heard of), newest first, at most 24 of those who stay and 24 of
+ * those who do not.
+ */
+export function hereFrom(visits: readonly (typeof Latest.Type)[], now: number): Here {
+  const isHere = (v: typeof Latest.Type) => v.leftAt === null && v.heardAt > now - PRESENT_FOR_MS;
+  const left = visits.filter((v) => !isHere(v));
+  return {
+    present: visits.filter(isHere).map(seen).toSorted(byNewest).slice(0, PRESENT_MOST).toSorted(byName),
+    resting: left
+      .filter((v) => v.stay)
+      .map(seen)
+      .toSorted(byNewest)
+      .slice(0, RESTING_MOST),
+    gone: left
+      .filter((v) => !v.stay)
+      .map(seen)
+      .toSorted(byNewest)
+      .slice(0, RESTING_MOST),
+  };
+}
+
 /** How long a player has played a game, and been in it AFK, in milliseconds. */
 export interface Time {
   readonly played: number;
@@ -66,7 +143,14 @@ export interface Time {
  * there (`PUT /v1/game/presence`), and is heard of again while they stay: by the room every half
  * minute, and by each of the page's calls. It closes when they leave the room (or their grace runs
  * out), when they go somewhere else, or, not heard of for 90 seconds, at the last time it was. A
- * player has one open visit at most: coming somewhere closes the one anywhere else. Sessions and
+ * player has one open visit at most: coming somewhere closes the one anywhere else. Word of a
+ * player older than the last Leaf heard of them (a room's, written late) moves them nowhere.
+ *
+ * Each player's newest visit is also where everybody else sees them (`about`): here, or gone and
+ * last seen when, with whether their character stays in town after they go, as their page last
+ * said (`players_seen.stay`; yes until it says). Every change to it (somebody comes, goes, is
+ * somewhere else, says otherwise about staying, or is back from being away) is told on `changes`
+ * once it is written; a burst may be heard as one. Sessions and
  * players are kept up to date as visits open and close, in the same transaction, and a player's
  * name and whether a guest each time Leaf hears of them. A visit belongs to the Leaf process
  * (`LeafInstance`) that last heard of it, so that a player who moves to the new container in a
@@ -76,8 +160,8 @@ export interface Time {
 export class Visits extends Context.Service<
   Visits,
   {
-    /** A player's page said they are at `place` now. */
-    readonly called: (who: Visitor, place: string, now: number) => Effect.Effect<void>;
+    /** A player's page said they are at `place` now, and whether they would stay (null: as they last said). */
+    readonly called: (who: Visitor, place: string, stay: boolean | null, now: number) => Effect.Effect<void>;
     /** Players are in a live room of `place` now: just come in, or still there. */
     readonly inRoom: (who: readonly Visitor[], place: string, now: number) => Effect.Effect<void>;
     /** A player has left a live room of `place`. Nothing changes if Leaf has heard since that they are somewhere else. */
@@ -91,10 +175,13 @@ export class Visits extends Context.Service<
     readonly closeSilent: (now: number) => Effect.Effect<void>;
     /**
      * A player did something at `now`: a command that is not a chore, or in a live room a move or an
-     * act. Says whether they had been away until then, as far as this Leaf knows (`away`): back, for
-     * everybody to be told.
+     * act. Back from being away until then, as far as this Leaf knows (`away`), it is told on `changes`.
      */
-    readonly acted: (playerId: PlayerId, now: number) => Effect.Effect<boolean>;
+    readonly acted: (playerId: PlayerId, now: number) => Effect.Effect<void>;
+    /** Who is about at `now`, from each player's newest visit (`hereFrom`), read in one statement. */
+    readonly about: (now: number) => Effect.Effect<Here>;
+    /** Hears of every change to who is about, once it is written; a burst of them may be heard as one. */
+    readonly changes: Effect.Effect<PubSub.Subscription<void>, never, Scope.Scope>;
     /** When each of these players last did something, as far as Leaf knows: this Leaf's word, or their open visit's. */
     readonly lastActed: (playerIds: readonly string[]) => Effect.Effect<ReadonlyMap<string, number>>;
     /** How long a player has played each game, and been in it AFK, by game. */
@@ -107,6 +194,20 @@ export class Visits extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const instance = yield* LeafInstance;
       const rules = VISIT_RULES;
+      // Only that something changed is told, so one waiting is as good as many.
+      const news = yield* PubSub.sliding<void>(1);
+      const tell = (changed: boolean): Effect.Effect<void> =>
+        changed ? Effect.asVoid(PubSub.publish(news, undefined)) : Effect.void;
+      const latest = SqlSchema.findAll({
+        Request: Schema.Int,
+        Result: Latest,
+        execute: (since) => sql`
+          SELECT v.player_id AS playerId, p.name AS username, v.place, v.guest, v.heard_at AS heardAt,
+                 v.left_at AS leftAt, p.stay
+          FROM visits AS v JOIN players_seen AS p ON p.player_id = v.player_id
+          WHERE v.id IN (SELECT max(id) FROM visits WHERE heard_at >= ${since} GROUP BY player_id)
+        `,
+      });
       const openOf = SqlSchema.findOneOption({
         Request: Schema.String,
         Result: OpenVisit,
@@ -260,11 +361,14 @@ export class Visits extends Context.Service<
       /**
        * A player is at `place` now: their open visit there is heard of again, by this Leaf (and is
        * the room's, if this is the room), with their name and whether a guest as they are now; or
-       * the one they have elsewhere closes and one opens here.
+       * the one they have elsewhere closes and one opens here, unless Leaf heard of them there
+       * later than `now`. Says whether who is about changed.
        */
       const arrive = (who: Visitor, place: string, source: Source, now: number) =>
         Effect.gen(function* () {
           const current = yield* openOf(who.playerId);
+          // Word older than what Leaf has heard since moves nobody.
+          if (Option.isSome(current) && current.value.place !== place && current.value.heardAt > now) return false;
           if (Option.isSome(current) && current.value.place === place) {
             const kept = source === "room" ? "room" : current.value.source;
             const guest = who.guest ? 1 : 0;
@@ -278,63 +382,99 @@ export class Visits extends Context.Service<
               UPDATE players_seen SET name = ${who.username}, guest = ${guest}
               WHERE player_id = ${who.playerId} AND (name <> ${who.username} OR guest <> ${guest})
             `;
-            return;
+            return false;
           }
           // What they last did goes with them: a Leaf that took over in a deploy knows it from their visit alone.
           const actedAt = Option.isSome(current) ? actedOf(current.value) : (acted.get(who.playerId) ?? null);
           if (Option.isSome(current)) yield* close(current.value, now);
           yield* open(who, place, source, now, actedAt);
+          return true;
         });
 
+      /** Closes every visit gone silent, at the last time it was heard of; says whether there was any. */
       const closeSilent = (now: number) =>
-        Effect.flatMap(allOpen(undefined), (visits) =>
-          Effect.forEach(
-            visits.filter((v) => silentSince(v.heardAt, now, rules)),
-            (v) => close(v, v.heardAt),
-            { discard: true },
-          ),
-        );
+        Effect.flatMap(allOpen(undefined), (visits) => {
+          const silent = visits.filter((v) => silentSince(v.heardAt, now, rules));
+          return Effect.as(
+            Effect.forEach(silent, (v) => close(v, v.heardAt), { discard: true }),
+            silent.length > 0,
+          );
+        });
 
-      /** Runs a change in one transaction, after closing whatever has gone silent. */
-      const write = <A, E>(change: Effect.Effect<A, E>, now: number) =>
-        sql.withTransaction(Effect.andThen(closeSilent(now), change)).pipe(Effect.orDie);
+      /**
+       * Runs a change in one transaction, after closing whatever has gone silent, and tells of it
+       * once it is written if either changed who is about.
+       */
+      const write = <E>(change: Effect.Effect<boolean, E>, now: number) =>
+        sql
+          .withTransaction(
+            Effect.all([closeSilent(now), change]).pipe(Effect.map(([silent, changed]) => silent || changed)),
+          )
+          .pipe(Effect.orDie, Effect.flatMap(tell));
 
       return Visits.of({
-        called: (who, place, now) => write(arrive(who, place, "call", now), now),
+        called: (who, place, stay, now) =>
+          write(
+            Effect.gen(function* () {
+              const moved = yield* arrive(who, place, "call", now);
+              if (stay === null) return moved;
+              const said = yield* sql`
+                UPDATE players_seen SET stay = ${stay ? 1 : 0} WHERE player_id = ${who.playerId} AND stay <> ${stay ? 1 : 0}
+                RETURNING player_id
+              `;
+              return moved || said.length > 0;
+            }),
+            now,
+          ),
         inRoom: (who, place, now) =>
           who.length === 0
             ? Effect.void
             : write(
-                Effect.forEach(who, (w) => arrive(w, place, "room", now), { discard: true }),
+                Effect.map(
+                  Effect.forEach(who, (w) => arrive(w, place, "room", now)),
+                  (moved) => moved.some(Boolean),
+                ),
                 now,
               ),
         leftRoom: (playerId, place, now) =>
           write(
             Effect.flatMap(openOf(playerId), (current) =>
-              // Only this Leaf's to close: a player who has moved to another Leaf (a deploy) is still there.
+              // Only this Leaf's to close: a player who has moved to another Leaf (a deploy) is still
+              // there; and not on word older than what Leaf has heard of them since.
               Option.isSome(current) &&
               current.value.place === place &&
               current.value.source === "room" &&
-              current.value.instance === instance
-                ? close(current.value, now)
-                : Effect.void,
+              current.value.instance === instance &&
+              current.value.heardAt <= now
+                ? Effect.as(close(current.value, now), true)
+                : Effect.succeed(false),
             ),
             now,
           ),
         closeAll: (now) =>
           write(
             Effect.flatMap(ownOpen(undefined), (visits) =>
-              Effect.forEach(visits, (v) => close(v, now), { discard: true }),
+              Effect.as(
+                Effect.forEach(visits, (v) => close(v, now), { discard: true }),
+                visits.length > 0,
+              ),
             ),
             now,
           ),
-        closeSilent: (now) => sql.withTransaction(closeSilent(now)).pipe(Effect.orDie),
+        closeSilent: (now) => sql.withTransaction(closeSilent(now)).pipe(Effect.orDie, Effect.flatMap(tell)),
         acted: (playerId, now) =>
-          Effect.sync(() => {
+          Effect.suspend(() => {
             const before = acted.get(playerId);
             acted.set(playerId, Math.max(now, before ?? now));
-            return away(before ?? null, now, rules);
+            // Back from being away: told to every page, so that nobody shows them away a moment longer.
+            return tell(away(before ?? null, now, rules));
           }),
+        about: (now) =>
+          latest(now - DAY_MS).pipe(
+            Effect.map((visits) => hereFrom(visits, now)),
+            Effect.orDie,
+          ),
+        changes: PubSub.subscribe(news),
         lastActed: (playerIds) =>
           playerIds.length === 0
             ? Effect.succeed(new Map())

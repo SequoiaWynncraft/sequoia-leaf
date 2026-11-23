@@ -5,9 +5,10 @@
  * the last day whose characters stay. Whether the member's character may stay in town after they go
  * is the town's to say (`stay`, from Leaf's town): a page that has not been told says nothing of it,
  * and Leaf keeps what it had. While the page is in a live room of the place it is at, the room says
- * where the member is, and the page only asks who is about; and the room says whenever who is where
- * changes, when the page asks at once (`askAgain`). Answers are taken in the order they were asked
- * for: one that comes after a later one has come is dropped. Without Leaf it does nothing.
+ * where the member is: the page asks who is about as the room welcomes it (`askAgain`), and after
+ * that the room tells it whenever who is about changes, with the lists (`heardAbout`). Of two lists,
+ * the one Leaf made later is kept, by the time Leaf put on it (`at`): one older than lists already
+ * heard is dropped, however it came. Without Leaf it does nothing.
  */
 
 import { device, member } from "./live.ts";
@@ -91,33 +92,43 @@ let timer: ReturnType<typeof setInterval> | null = null;
 const ears = new Set<(present: readonly Present[], resting: readonly Resting[], gone: readonly Resting[]) => void>();
 /** The place of the live room this page is in now (`realtime.ts` says), if it is one. */
 let roomed: Place | null = null;
-/** How many times the server has been asked, and the number of the newest answer taken. */
-let asked = 0;
-let taken = 0;
+/** When Leaf made the newest lists heard, by its clock, in milliseconds since 1970; or none yet. */
+let newest = -Infinity;
+
+/**
+ * Leaf's lists of who is about, from an answer or a room's word, told to everybody listening unless
+ * Leaf made lists later than these already heard. Lists that do not say when (an older Leaf's) are
+ * taken as they come.
+ */
+function heard(body: unknown): void {
+  const made = isRecord(body) && typeof body.at === "string" ? Date.parse(body.at) : NaN;
+  if (made < newest) return;
+  if (Number.isFinite(made)) newest = made;
+  const present = readPresent(body);
+  const resting = readResting(body);
+  const gone = readResting(body, "gone");
+  for (const fn of ears) fn(present, resting, gone);
+}
 
 /**
  * Tells the server where the member is and hears who is about; only asks who is about while the
- * page is in a live room of that place, unless what the member said about staying is to be told.
- * An answer older than one already taken is dropped.
+ * page is in a live room of that place (`asking`), unless what the member said about staying is to
+ * be told.
  */
-async function send(telling = false): Promise<void> {
+async function send(telling = false, asking = false): Promise<void> {
   if (at === null || !member()) return;
+  const roomKeeps = at === roomed && !telling;
+  // In a room of the place, the room keeps the member there, and tells the page of every change.
+  if (roomKeeps && !asking) return;
   const on = device();
-  const n = ++asked;
-  const a =
-    at === roomed && !telling
-      ? await ask("/v1/game/presence")
-      : await put("/v1/game/presence", {
-          place: at,
-          ...(staying === null ? {} : { stay: staying }),
-          ...(on === null ? {} : { device: on }),
-        });
-  if (a.status !== 200 || n < taken) return;
-  taken = n;
-  const present = readPresent(a.body);
-  const resting = readResting(a.body);
-  const gone = readResting(a.body, "gone");
-  for (const fn of ears) fn(present, resting, gone);
+  const a = roomKeeps
+    ? await ask("/v1/game/presence")
+    : await put("/v1/game/presence", {
+        place: at,
+        ...(staying === null ? {} : { stay: staying }),
+        ...(on === null ? {} : { device: on }),
+      });
+  if (a.status === 200) heard(a.body);
 }
 
 /** Says where the member is now; `null` while this page is not where they are (a game is open over it). */
@@ -126,7 +137,7 @@ export function here(place: Place | null): void {
   const moved = place !== at;
   at = place;
   timer ??= setInterval(() => void send(), EVERY);
-  if (moved && place !== null) void send();
+  if (moved && place !== null) void send(false, true);
 }
 
 /**
@@ -148,11 +159,21 @@ export function inRoom(kind: string | null): void {
 }
 
 /**
- * Who is where has changed, or may have (the room says so, or has just welcomed the page): asks
- * again at once, from a page in a live room of the place it is at; any other asks at its turn.
+ * The page has just been welcomed into a live room, or the room said who is about changed without
+ * saying who (an older Leaf): asks at once, from a page in a live room of the place it is at; any
+ * other asks at its turn.
  */
 export function askAgain(): void {
-  if (roomed !== null && roomed === at) void send();
+  if (roomed !== null && roomed === at) void send(false, true);
+}
+
+/**
+ * The room says who is about has changed (`about`), with Leaf's lists (`who`), or without them from
+ * an older Leaf, when the page asks.
+ */
+export function heardAbout(who: unknown): void {
+  if (who === undefined) askAgain();
+  else if (roomed !== null && roomed === at) heard(who);
 }
 
 /** Forgets where the member is and what the town said of staying (for tests). */
@@ -160,8 +181,7 @@ export function forgetPresence(): void {
   at = null;
   staying = null;
   roomed = null;
-  asked = 0;
-  taken = 0;
+  newest = -Infinity;
   if (timer !== null) clearInterval(timer);
   timer = null;
 }

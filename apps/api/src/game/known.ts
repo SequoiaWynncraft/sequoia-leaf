@@ -31,8 +31,8 @@ export const knownAmong = (
     : sql`
         SELECT player_id AS playerId FROM accounts WHERE ${sql.in("player_id", playerIds)}
         UNION
-        SELECT player_id AS playerId FROM presence
-        WHERE ${sql.in("player_id", playerIds)} AND seen_at > ${now - KNOWN_FROM_PRESENCE_MS}
+        SELECT player_id AS playerId FROM visits
+        WHERE ${sql.in("player_id", playerIds)} AND heard_at > ${now - KNOWN_FROM_PRESENCE_MS}
         UNION
         SELECT player_id AS playerId FROM standings WHERE ${sql.in("player_id", playerIds)}
         UNION
