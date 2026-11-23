@@ -54,6 +54,10 @@ let commands: number[] = [];
 let refused: Record<string, number> = {};
 let visits: number[] = [];
 let coldVisits: number[] = [];
+/** The room's words of who is about the walkers were told, and how many bytes they came to. */
+let abouts = 0;
+let aboutBytes = 0;
+let phaseBegan = 0;
 const phases: { name: string; [measure: string]: unknown }[] = [];
 const begin = async (name: string) => {
   await fetch(`${origin}/load/phase?name=${name}`, { method: "POST" });
@@ -62,6 +66,9 @@ const begin = async (name: string) => {
   refused = {};
   visits = [];
   coldVisits = [];
+  abouts = 0;
+  aboutBytes = 0;
+  phaseBegan = performance.now();
 };
 const end = (name: string, more: Record<string, unknown> = {}) =>
   phases.push({
@@ -69,6 +76,10 @@ const end = (name: string, more: Record<string, unknown> = {}) =>
     moves_seen_ms: spread(moves),
     works_commands_ms: spread(commands),
     works_answers_not_200: refused,
+    about_frames: {
+      n: abouts,
+      kib_per_walker_s: Number((aboutBytes / 1024 / walkers / ((performance.now() - phaseBegan) / 1000)).toFixed(1)),
+    },
     ...(visits.length > 0 && { visits_ms: spread(visits) }),
     ...(coldVisits.length > 0 && { visits_to_a_cold_yard_ms: spread(coldVisits) }),
     ...more,
@@ -110,6 +121,11 @@ const connect = async (w: Walker): Promise<void> => {
       const sent = sentBy.get(keyOf(w.room, e.id))?.get(e.seq);
       if (sent !== undefined) moves.push(at - sent);
     }
+    for (const m of client.texts)
+      if (m.t === "about") {
+        abouts++;
+        aboutBytes += JSON.stringify(m).length;
+      }
     // Only the timings are wanted: what arrives is let go.
     client.snapshots.length = 0;
     client.texts.length = 0;
