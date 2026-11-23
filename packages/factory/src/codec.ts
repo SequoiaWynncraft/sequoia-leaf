@@ -26,6 +26,7 @@ import { build, isDir, keeps, plotState, refusal } from "./build.ts";
 import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
 import { here } from "./clock.ts";
 import { BLUEPRINT, FUEL, STUDY_HOLDS, TICKS } from "./content/machines.ts";
+import { NODES } from "./content/nodes.ts";
 import { LAND, type Land } from "./land.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, study } from "./orders.ts";
 import { blueprintRefusal, keptOf, packPieces, type Piece, piecesOf, placed, TINTS } from "./pieces.ts";
@@ -54,7 +55,9 @@ import {
   type Item,
   ITEM_COUNT,
   itemName,
+  itemNamed,
   JOINER,
+  kindNamed,
   locked,
   MADE_BY,
   MILLI,
@@ -65,6 +68,7 @@ import {
   PACE,
   plotName,
   plotNamed,
+  price,
   ready,
   RECIPE,
   SORTER,
@@ -395,6 +399,54 @@ function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
   return r.done ? out : null;
 }
 
+/**
+ * Stands each kept piece again through the rules, as play would build it, and gives it the parts it
+ * was kept with: everything but the far mouths of tunnels, which come with their near mouths. Says
+ * which pieces could not stand (far mouths aside).
+ */
+function stand(y: Yard, pieces: readonly KeptPiece[], studied: Goal | undefined): KeptPiece[] {
+  const kept: [number, KeptPiece][] = [];
+  const far: KeptPiece[] = [];
+  const left: KeptPiece[] = [];
+  const { land } = y;
+  const tiles = land.w * land.h;
+  for (const o of pieces) {
+    const i = whole(o.tile, tiles - 1);
+    const k = o.kind;
+    const d = o.dir;
+    if (i === null || !isKind(k) || !isDir(d)) {
+      left.push(o);
+      continue;
+    }
+    const span = o.span ?? 0;
+    if (k === TUNNEL && span < 0) {
+      far.push(o);
+      continue;
+    }
+    const x = i % land.w;
+    const z = (i - x) / land.w;
+    const lay = k === TUNNEL ? { span, grade: o.grade ?? 1 } : { grade: o.grade ?? 1 };
+    if (y.kind[i] !== NONE || refusal(y, k, x, z, Infinity, d, lay) !== null) {
+      left.push(o);
+      continue;
+    }
+    // Only a piece kept as one the yard had to hand takes the place of one: the rest were paid for.
+    const spare = y.spare[k] ?? 0;
+    if (o.free !== true) y.spare[k] = 0;
+    const did = build(y, k, x, z, d, Infinity, lay);
+    if (o.free !== true) y.spare[k] = spare;
+    if (did.ok) kept.push([i, o]);
+    else left.push(o);
+  }
+  for (const o of far) {
+    const i = whole(o.tile, tiles - 1);
+    if (i !== null && y.kind[i] === TUNNEL && (y.span[i] ?? 0) < 0 && y.span[i] === o.span && y.dir[i] === o.dir)
+      kept.push([i, o]);
+  }
+  for (const [i, o] of kept) unpack(y, i, o, studied);
+  return left;
+}
+
 /** The version of the yards the Works' first design kept. */
 const FIRST = 3;
 /** How many of the first design's twenty story orders a yard had filled to begin a tier: tier 1 from 4, tier 2 from 10. */
@@ -403,10 +455,14 @@ const FIRST_TIERS = [4, 10] as const;
 /**
  * A yard the first design kept, brought over: what is cheap to bring, and the rest let go. It is a
  * new yard with every goal below a tier done, the tier its story had reached (2 at most, so that
- * the Study and research are still to come); the plots it owned that the tier sells are its own
- * again, and those it does not sell yet are paid back into the till, beside what the till held; what it was paid, what the depot sold for it and how many side orders it handed over stay
- * its totals, so its place on the board holds; and it counts its Coins entries on from where it was. Its pieces, what they held, its orders and its blueprints are let go; its Coins were never
- * in it, and are its owner's as they were.
+ * the Study and research are still to come). The plots it owned that the tier sells are its own
+ * again; its pieces stand where they stood, as far as the tier lets them (not a kind it has not
+ * opened, nor on a plot it does not own), and each project of its tier that opens a kind it had
+ * standing is done. A plot or a piece that cannot be its own yet is paid back
+ * into the till, at what it would cost again, beside what the till held. What it was paid, what the
+ * depot sold for it and how many side orders it handed over stay its totals, so its place on the
+ * board holds, and it counts its Coins entries on from where it was. What its pieces held, its
+ * orders and its blueprints are let go; its Coins were never in it, and are its owner's as they were.
  */
 function fromFirst(raw: Rec, land: Land): Yard | null {
   const story = whole(raw.story, 1000);
@@ -433,10 +489,59 @@ function fromFirst(raw: Rec, land: Land): Yard | null {
     // A plot the tier does not sell yet is paid back, in the till, at what it would cost again.
     else y.till += (land.plots.find((q) => q.plot === p)?.price ?? 0) * MILLI;
   }
+  const cells: unknown[] = Array.isArray(raw.cells) ? raw.cells : [];
+  const pieces = cells.map(firstPiece).filter((o) => o !== null);
+  // A project of its tier that opens a kind it had standing is done, so that what it had still
+  // stands (its boilers, its tunnels, its waterwheels); the commission and research are still to do.
+  const had = new Set(pieces.map((o) => o.kind));
+  for (let more = true; more;) {
+    more = false;
+    for (const g of ALL_GOALS) {
+      const node = NODES[g];
+      if (node?.kind !== "project" || node.tier !== y.open.tier || y.done.includes(g) || !ready(y.open, g)) continue;
+      if (!(GOALS[g]?.unlocks.kinds ?? []).some((name) => had.has(kindNamed(name) ?? NONE))) continue;
+      y.done.push(g);
+      reopen(y);
+      more = true;
+    }
+  }
+  y.told = y.done.length;
+  if (y.hand !== -1 && y.done.includes(y.hand)) hold(y, nextHand(y.open));
+  // Its pieces where they stood, as far as the tier lets them stand; each that cannot is paid back.
+  for (const o of stand(y, pieces, undefined))
+    if (o.free !== true && !(o.kind === TUNNEL && (o.span ?? 0) < 0)) y.till += price(o.kind, 1) * MILLI;
   // What the till holds was not earned while away.
   y.seen = here(y);
   fillBoard(y);
   return y;
+}
+
+/**
+ * A piece as the first design kept it (`{ i, k, d }` and the parts not as new), as this design keeps
+ * one: how it stands and what it is set to (its way, a tunnel's span, its recipe, a crate shut, its
+ * line's colour, its shut ways, one of those to hand), not what it held or was doing.
+ */
+function firstPiece(v: unknown): KeptPiece | null {
+  if (!isRec(v) || typeof v.k !== "string") return null;
+  const kind = kindNamed(v.k);
+  const tile = whole(v.i, 1e6);
+  const dir = whole(v.d, 3);
+  if (kind === null || kind === DEPOT || tile === null || dir === null) return null;
+  const span = typeof v.s === "number" && Number.isInteger(v.s) ? v.s : 0;
+  const recipe = typeof v.r === "string" ? itemNamed(v.r) : null;
+  const tint = whole(v.h, 255) ?? 0;
+  const ways = whole(v.x, 255) ?? 0;
+  return {
+    tile,
+    kind,
+    dir,
+    ...(span === 0 ? {} : { span }),
+    ...(recipe === null ? {} : { recipe }),
+    ...(v.c === 1 ? { closed: true } : {}),
+    ...(v.g === 1 ? { free: true } : {}),
+    ...(tint === 0 ? {} : { tint }),
+    ...(ways === 0 ? {} : { ways }),
+  };
 }
 
 /** A yard read back from text, on the guild's land unless another is given; nothing if the text is not a yard. */
@@ -691,37 +796,7 @@ export function vouch(
     if (p !== null && plotState(y, p).state === "for sale") y.plots.push(p);
   }
 
-  // Pieces: everything but the far mouths of tunnels, which come with their near mouths.
-  const kept: [number, KeptPiece][] = [];
-  const far: KeptPiece[] = [];
-  const tiles = land.w * land.h;
-  for (const o of pieces) {
-    const i = whole(o.tile, tiles - 1);
-    const k = o.kind;
-    const d = o.dir;
-    if (i === null || !isKind(k) || !isDir(d)) continue;
-    const span = o.span ?? 0;
-    if (k === TUNNEL && span < 0) {
-      far.push(o);
-      continue;
-    }
-    const x = i % land.w;
-    const z = (i - x) / land.w;
-    const lay = k === TUNNEL ? { span, grade: o.grade ?? 1 } : { grade: o.grade ?? 1 };
-    if (y.kind[i] !== NONE || refusal(y, k, x, z, Infinity, d, lay) !== null) continue;
-    // Only a piece kept as one the yard had to hand takes the place of one: the rest were paid for.
-    const spare = y.spare[k] ?? 0;
-    if (o.free !== true) y.spare[k] = 0;
-    const did = build(y, k, x, z, d, Infinity, lay);
-    if (o.free !== true) y.spare[k] = spare;
-    if (did.ok) kept.push([i, o]);
-  }
-  for (const o of far) {
-    const i = whole(o.tile, tiles - 1);
-    if (i !== null && y.kind[i] === TUNNEL && (y.span[i] ?? 0) < 0 && y.span[i] === o.span && y.dir[i] === o.dir)
-      kept.push([i, o]);
-  }
-  for (const [i, o] of kept) unpack(y, i, o, studied);
+  stand(y, pieces, studied);
 
   fillBoard(y);
   // A yard kept before it knew its owner's last command is taken as last seen at its last tick.
