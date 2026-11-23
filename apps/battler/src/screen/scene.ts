@@ -143,7 +143,7 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
   const items = piece?.items ?? [];
   const pop = V.t - p.popAt;
   const cheer = V.t - p.cheerAt;
-  const shine = shineOf(p.kind, p.x, V.t);
+  const shine = shineOf(p.kind, items, p.x, V.t);
   let lift = p.lift + shine.hop;
   if (pop >= 0 && pop < 0.4) lift += Math.sin((pop / 0.4) * Math.PI) * 8;
   if (cheer >= 0 && cheer < 0.3) lift += Math.sin((cheer / 0.3) * Math.PI) * 5;
@@ -202,7 +202,7 @@ function foeStanding(
   const come = approach(order, big);
   if (!come.here) return null;
   const f = framesOf(kind);
-  const shine = shineOf(kind, at.x, V.t);
+  const shine = shineOf(kind, items, at.x, V.t);
   const x = V.bx + at.x;
   const y = V.by + at.y + FOOT - come.away - come.lift - shine.hop;
   const phase = (seat * 0.23) % 1;

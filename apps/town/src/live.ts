@@ -6,8 +6,8 @@
  * `prepare(cursor)` fetches what the town needs before it opens, from how far Leaf's town says the
  * member's news has been told; `makeLive` is the guild from then on.
  *
- * A guest (signed in, not in the guild) gets the same town with none of the guild's own: no Leaf,
- * quests or news, and nothing is asked of the server that is only for members (`/v1/me...`, the
+ * A guest (signed in, not in the guild) gets the same town with none of the guild's own but their
+ * Leaf: no quests or news, and nothing is asked of the server that is only for members (`/v1/me...`, the
  * guild's news). Their board holds one note saying why, they are a "Guest" where a member has a
  * rank, and other guests in town are marked the same way.
  */

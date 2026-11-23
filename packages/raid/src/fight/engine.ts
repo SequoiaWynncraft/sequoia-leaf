@@ -11,10 +11,10 @@ import { chance, mix } from "@sequoia-leaf/core";
  * after if they are in reach, else walks a hex toward them).
  */
 import { boonNumber } from "../content/boons.ts";
-import { abilityNumber, FIGURES, isFigureId, specOf, type Stars, starScale, traitsOf } from "../content/figures.ts";
-import { FINISHED, type FinishedId, type ItemId, itemStats } from "../content/items.ts";
+import { abilityNumber, FIGURES, isFigureId, specOf, type Stars, starScale } from "../content/figures.ts";
+import { carries, FINISHED, type FinishedId, type ItemId, itemStats } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
-import { TRAIT_IDS, type TraitId, traitNumber } from "../content/traits.ts";
+import { TRAIT_IDS, traitNumber } from "../content/traits.ts";
 import { backRow, cellAt, CELLS, colOf, distance, HOME_ROWS, seatCell, type Side, stepToward } from "../hex.ts";
 import { type Party, type Placed, traitSteps } from "../party.ts";
 import { cast } from "./abilities.ts";
@@ -47,8 +47,6 @@ import type { Fight, FightEvent, FightResult, FightSetup, FightSummary, Pending,
 
 /** One of a finished item's numbers. */
 const itemNumber = (id: FinishedId, name: string): number => FINISHED[id].n[name] ?? 0;
-/** Whether a figure carries a trait. */
-const carries = (u: Unit, trait: TraitId): boolean => isFigureId(u.kind) && traitsOf(u.kind).includes(trait);
 
 /** What an item does besides its stats, as numbers on whoever holds it. */
 function equip(u: Unit, item: ItemId): void {
@@ -108,6 +106,14 @@ function equip(u: Unit, item: ItemId): void {
     case "glowcap":
     case "bark":
     case "chestnut":
+    // An emblem's kin is in what its holder carries.
+    case "embercharm":
+    case "mosscharm":
+    case "mistcharm":
+    case "burrowcharm":
+    case "feathercharm":
+    case "crabcharm":
+    case "gnomecharm":
       break;
   }
 }
@@ -174,7 +180,8 @@ function switchOn(f: Fight, side: Side, party: Party): void {
     const step = steps[trait] ?? 0;
     if (step <= 0) continue;
     const v = (name: string): number => traitNumber(trait, name, step);
-    const members = mine.filter((u) => carries(u, trait));
+    // Whoever carries it: as one of its own traits, or by an emblem it holds.
+    const members = mine.filter((u) => carries(u.kind, u.items, trait));
     let touched = members;
     switch (trait) {
       case "ember":
@@ -197,7 +204,8 @@ function switchOn(f: Fight, side: Side, party: Party): void {
           u.armour += v("armour");
           u.digs = true;
           u.digHeal = v("heal");
-          u.digFor = secs(v("under"));
+          u.digLess = v("less");
+          u.digFor = v("lasts");
         }
         break;
       case "feather":
@@ -208,7 +216,7 @@ function switchOn(f: Fight, side: Side, party: Party): void {
         break;
       case "bulwark":
         if (v("party") > 0) touched = mine;
-        for (const u of mine) u.armour += carries(u, trait) ? v("armour") : v("party");
+        for (const u of mine) u.armour += members.includes(u) ? v("armour") : v("party");
         break;
       case "fang":
         for (const u of members) {
@@ -238,27 +246,35 @@ function switchOn(f: Fight, side: Side, party: Party): void {
           u.sneakBy = v("extra");
         }
         break;
-      case "crab":
       case "gnome":
+        for (const u of members) {
+          u.maxHp = Math.round(u.maxHp * (1 + v("health") / 100));
+          u.hp = u.maxHp;
+        }
+        break;
+      case "crab":
       case "greg":
-        // Roll call happens once everyone is seated; gnomes and Greg do their part after the fight.
+        // Roll call happens once everyone is seated; Greg does his part after the fight.
         break;
     }
     emit(f, { t: "trait", side, trait, step, ids: touched.map((u) => u.id) });
   }
 }
 
-/** Roll call: a crab nobody counted turns up beside the first of a side's crabs, as starry as the best of them. */
+/**
+ * Roll call: a crab nobody counted turns up beside the first of a side's crabs (whoever carries Crab,
+ * a Crab emblem's holder too), as starry as the best of them.
+ */
 function rollCall(f: Fight, side: Side): void {
   const step = f.traits[side].crab ?? 0;
   if (step <= 0) return;
-  const crabs = f.units.filter((u) => u.side === side && isFigureId(u.kind) && FIGURES[u.kind].kin === "crab");
+  const crabs = f.units.filter((u) => u.side === side && carries(u.kind, u.items, "crab"));
   const anchor = crabs[0] ?? f.units.find((u) => u.side === side);
   if (!anchor) return;
   let stars: Stars = 1;
   for (const u of crabs) if (u.stars > stars) stars = u.stars;
-  const kind = traitNumber("crab", "big", step) > 0 ? "biguncounted" : "uncounted";
-  summon(f, kind, stars, side, freeNear(f, anchor.cell, 4), null);
+  if (traitNumber("crab", "big", step) > 0) summon(f, "biguncounted", stars, side, freeNear(f, anchor.cell, 4), null);
+  if (traitNumber("crab", "small", step) > 0) summon(f, "uncounted", stars, side, freeNear(f, anchor.cell, 4), null);
 }
 
 /** Sneaks with their trait on, and magpies always, start by getting round the back. */
@@ -477,10 +493,7 @@ function expire(f: Fight, u: Unit): void {
     u.shield = 0;
     off(f, u, "shield");
   }
-  if (u.hiddenUntil === now) {
-    off(f, u, "hidden");
-    if (u.digHeal > 0) heal(f, u, (u.maxHp * u.digHeal) / 100, "burrow", null);
-  }
+  if (u.hiddenUntil === now) off(f, u, "hidden");
 }
 
 function act(f: Fight, u: Unit): void {

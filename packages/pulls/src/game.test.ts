@@ -178,17 +178,21 @@ describe("a pull", () => {
     expect(PULLS.command({ ...pull("grove"), n: 5 })).toBeNull();
   });
 
-  it("is not for a guest", () => {
+  it("is a guest's as much as a member's: free pulls, exchanges, and pulls for Leaf that anyone may spend on", () => {
     const s = { ...fresh(), seeds: 500 };
-    expect(refused(s, pull("grove", 1, "free"), ctx(T0, true))).toBe("members_only");
-    expect(refused(s, exchange("figure:badger"), ctx(T0, true))).toBe("members_only");
+    const guest = ctx(T0, true);
+    expect(refused(s, pull("grove", 1, "free"), guest)).toBeNull();
+    expect(refused(s, exchange("figure:badger"), guest)).toBeNull();
+    expect(done(s, pull("grove"), guest).leaf).toEqual([
+      { amount: 10_000, reason: "Pulls: 10 in grove", key: "pull:0", for: "everyone" },
+    ]);
   });
 
   it("takes 1,000 Leaf, ten at once as one spend keyed by the pulls before them", () => {
     const ten = done(fresh(), pull("grove"));
-    expect(ten.leaf).toEqual([{ amount: 10_000, reason: "Pulls: 10 in grove", key: "pull:0" }]);
+    expect(ten.leaf).toEqual([{ amount: 10_000, reason: "Pulls: 10 in grove", key: "pull:0", for: "everyone" }]);
     expect(done(ten.state, pull("banner-1", 1)).leaf).toEqual([
-      { amount: 1000, reason: "Pulls: 1 in banner-1", key: "pull:10" },
+      { amount: 1000, reason: "Pulls: 1 in banner-1", key: "pull:10", for: "everyone" },
     ]);
   });
 
@@ -254,6 +258,19 @@ describe("Seeds", () => {
       expect(refused(dryad.state, exchange(prize))).toBe("not_for_seeds");
     const druid = done({ ...dryad.state, seeds: 150 }, exchange("figure:crab40"));
     expect([druid.state.seeds, druid.state.have["figure:crab40"], druid.state.pulls]).toEqual([0, 1, 0]);
+  });
+});
+
+describe("what a member has", () => {
+  it("is left for Leaf to keep, as it stands after each pull and exchange; a refused command leaves nothing", () => {
+    const ten = done(fresh(), pull("grove"));
+    expect(ten.keep).toEqual([{ slot: "have", data: ten.state.have }]);
+    expect(Object.values(ten.state.have).reduce((sum, n) => sum + n, 0)).toBe(10);
+    const one = done(ten.state, pull("banner-1", 1, "free"));
+    expect(one.keep).toEqual([{ slot: "have", data: one.state.have }]);
+    const bought = done({ ...one.state, seeds: 60, have: {} }, exchange("figure:badger"));
+    expect(bought.keep).toEqual([{ slot: "have", data: { "figure:badger": 1 } }]);
+    expect(PULLS.apply(bought.state, exchange("figure:badger"), ctx())).toEqual({ refused: "owned" });
   });
 });
 

@@ -6,14 +6,22 @@ import { below, mix, pick, type Stream } from "@sequoia-leaf/core";
  * numbers out in `review/balance.ts`, and it is honest about being a rough player: a person will
  * place figures better than it does.
  */
-import { type BoonId, BOONS } from "./content/boons.ts";
+import type { BoonId } from "./content/boons.ts";
 import { type FigureId, FIGURES, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
-import { type ComponentId, FINISHED, holdItem, isComponentId, type ItemId } from "./content/items.ts";
+import {
+  type ComponentId,
+  EMBLEMS,
+  FINISHED,
+  type FinishedId,
+  holdItem,
+  isComponentId,
+  isEmblemId,
+} from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL } from "./content/rooms.ts";
 import { stepFor, TRAIT_IDS, type TraitId } from "./content/traits.ts";
 import { arrange } from "./formation.ts";
 import { SEATS } from "./hex.ts";
-import { charmsOf, countTraits } from "./party.ts";
+import { countTraits } from "./party.ts";
 import {
   beginFight,
   buy,
@@ -121,13 +129,10 @@ const worthOf = (habit: Habit, kind: FigureId, stars: Stars): number =>
   (TIER_WORTH[FIGURES[kind].tier - 1] ?? 1) * (STAR_WORTH[stars - 1] ?? 1) * (0.7 + 0.3 * liking(habit, kind));
 
 /** How good a set of figures is as a party: what each is worth, and something for every trait step switched on. */
-function partyScore(habit: Habit, party: readonly Piece[], charms: readonly TraitId[]): number {
+function partyScore(habit: Habit, party: readonly Piece[]): number {
   let score = 0;
   for (const p of party) score += worthOf(habit, p.kind, p.stars);
-  const counts = countTraits(
-    party.map((p) => p.kind),
-    charms,
-  );
+  const counts = countTraits(party);
   for (const trait of TRAIT_IDS) {
     const step = stepFor(trait, counts[trait] ?? 0);
     if (step > 0) score += step * 1.1 * (habit.taste[trait] ?? 1);
@@ -135,7 +140,7 @@ function partyScore(habit: Habit, party: readonly Piece[], charms: readonly Trai
   return score;
 }
 /** The best party of a size it can find among some figures: one at a time, whoever adds most. */
-function bestParty(habit: Habit, all: readonly Piece[], size: number, charms: readonly TraitId[]): Piece[] {
+function bestParty(habit: Habit, all: readonly Piece[], size: number): Piece[] {
   const party: Piece[] = [];
   const rest = all.slice();
   while (party.length < size && rest.length > 0) {
@@ -145,7 +150,7 @@ function bestParty(habit: Habit, all: readonly Piece[], size: number, charms: re
       const p = rest[i];
       if (!p) continue;
       party.push(p);
-      const score = partyScore(habit, party, charms);
+      const score = partyScore(habit, party);
       party.pop();
       if (score > bestScore) {
         best = i;
@@ -191,12 +196,11 @@ const BOON_LIKES: Record<BoonId, number> = {
 };
 function likesBoon(run: Run, habit: Habit, boon: BoonId): number {
   let score = BOON_LIKES[boon];
-  const charm = BOONS[boon].charm;
-  if (charm !== undefined) {
-    const kinds = run.board.flatMap((p) => (p ? [p.kind] : []));
-    const count = countTraits(kinds, charmsOf(run.boons))[charm] ?? 0;
-    if (stepFor(charm, count + 1) > stepFor(charm, count)) score += 5;
-    score *= habit.taste[charm] ?? 1;
+  if (isEmblemId(boon)) {
+    const kin = EMBLEMS[boon];
+    const count = countTraits(run.board.flatMap((p) => (p ? [p] : [])))[kin] ?? 0;
+    if (stepFor(kin, count + 1) > stepFor(kin, count)) score += 5;
+    score *= habit.taste[kin] ?? 1;
   }
   if (boon === "blanket" && run.resolve <= 12) score += 3;
   if (boon === "deeppockets" && habit.levels === "keen") score += 3;
@@ -243,19 +247,18 @@ function settleChoices(run: Run, habit: Habit, s: Stream, hands: Hands): void {
 /** How much it wants an offer: what it would add to its best party, and something for being a second or third copy. */
 function wants(run: Run, habit: Habit, kind: FigureId, before: number): number {
   const own = pieces(run);
-  const charms = charmsOf(run.boons);
   const cap = fieldCap(run);
   const twins = own.filter((p) => p.kind === kind && p.stars === 1).length;
   const better = own.some((p) => p.kind === kind && p.stars > 1);
   if (twins >= 2) return 6 + FIGURES[kind].tier * habit.chases;
   const guest: Piece = { id: -1, kind, stars: 1, items: [], fed: 0 };
-  const after = partyScore(habit, bestParty(habit, [...own, guest], cap, charms), charms);
+  const after = partyScore(habit, bestParty(habit, [...own, guest], cap));
   return after - before + (twins === 1 ? 0.7 * habit.chases : 0) + (better ? 0.4 * habit.chases : 0);
 }
 /** Sells whoever on the bench is doing least: not in the best party, and not half of a pair. */
 function sellSpare(run: Run, habit: Habit, keep: number, hands: Hands): boolean {
   const own = pieces(run);
-  const best = new Set(bestParty(habit, own, fieldCap(run), charmsOf(run.boons)).map((p) => p.id));
+  const best = new Set(bestParty(habit, own, fieldCap(run)).map((p) => p.id));
   let worst = -1;
   let worstScore = Infinity;
   run.bench.forEach((p, slot) => {
@@ -278,8 +281,7 @@ function shop(run: Run, habit: Habit, hands: Hands): void {
     // The offer it wants most, if it can pay for it.
     let best = -1;
     let bestWant = 0;
-    const charms = charmsOf(run.boons);
-    const before = partyScore(habit, bestParty(habit, pieces(run), fieldCap(run), charms), charms);
+    const before = partyScore(habit, bestParty(habit, pieces(run), fieldCap(run)));
     run.stall.forEach((kind, i) => {
       if (!kind) return;
       const cost = priceOf(run, i);
@@ -335,12 +337,8 @@ function shopCarelessly(run: Run, s: Stream, hands: Hands): void {
 
 function seatParty(run: Run, habit: Habit, hands: Hands): void {
   const own = pieces(run);
-  const charms = charmsOf(run.boons);
-  const party = bestParty(habit, own, fieldCap(run), charms);
-  const counts = countTraits(
-    party.map((p) => p.kind),
-    charms,
-  );
+  const party = bestParty(habit, own, fieldCap(run));
+  const counts = countTraits(party);
   const seats = arrange(
     party.map((p) => ({ kind: p.kind, health: specOf(p.kind).hp * starScale(p.stars) })),
     stepFor("sneak", counts.sneak ?? 0) > 0,
@@ -376,7 +374,7 @@ function seatCarelessly(run: Run, s: Stream, hands: Hands): void {
 }
 
 type Suits = "hitter" | "caster" | "wall";
-const suitOf = (item: ItemId): Suits => {
+const suitOf = (item: ComponentId | FinishedId): Suits => {
   const part: ComponentId = isComponentId(item) ? item : FINISHED[item].made[0];
   return part === "thorn" || part === "plume" ? "hitter" : part === "glowcap" ? "caster" : "wall";
 };
@@ -395,14 +393,16 @@ function fits(p: Piece, suits: Suits): number {
   return f.calling === "bulwark" ? 3 : f.range <= 1 ? 2 : 1;
 }
 function handOutItems(run: Run, habit: Habit, hands: Hands): void {
-  for (let guard = 0; guard < 30 && run.items.length > 0; guard++) {
-    const item = run.items[0];
-    if (item === undefined) break;
+  // Components and finished items first, the first on the item bench first.
+  for (let guard = 0; guard < 30; guard++) {
+    const at = run.items.findIndex((item) => !isEmblemId(item));
+    const item = run.items[at];
+    if (item === undefined || isEmblemId(item)) break;
     const suits = suitOf(item);
     let best = -1;
     let bestScore = 0;
     run.board.forEach((p, seat) => {
-      if (!p || !holdItem(p.items, item)) return;
+      if (!p || "refused" in holdItem(p, item)) return;
       // Somebody already holding a loose component can forge with it now.
       const forges = isComponentId(item) && p.items.some(isComponentId) ? 1.5 : 1;
       const score = fits(p, suits) * forges * worthOf(habit, p.kind, p.stars);
@@ -411,7 +411,23 @@ function handOutItems(run: Run, habit: Habit, hands: Hands): void {
         bestScore = score;
       }
     });
-    if (best < 0 || !hands.giveItem(run, 0, { on: "board", at: best }).ok) break;
+    if (best < 0 || !hands.giveItem(run, at, { on: "board", at: best }).ok) break;
+  }
+  // Then each emblem, to the worthiest figure on the board that can take it.
+  for (let at = run.items.length - 1; at >= 0; at--) {
+    const item = run.items[at];
+    if (!isEmblemId(item)) continue;
+    let best = -1;
+    let bestScore = 0;
+    run.board.forEach((p, seat) => {
+      if (!p || "refused" in holdItem(p, item)) return;
+      const score = worthOf(habit, p.kind, p.stars);
+      if (score > bestScore) {
+        best = seat;
+        bestScore = score;
+      }
+    });
+    if (best >= 0) hands.giveItem(run, at, { on: "board", at: best });
   }
 }
 

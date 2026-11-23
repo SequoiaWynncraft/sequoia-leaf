@@ -508,6 +508,8 @@ async function boot(): Promise<void> {
   let last = performance.now();
   let told = false;
   function frame(now: number): void {
+    // The next frame is asked for first: a fault in this one is told to the console and the yard goes on.
+    requestAnimationFrame(frame);
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     count(now, now - last);
     last = now;
@@ -519,7 +521,6 @@ async function boot(): Promise<void> {
       told = true;
       tell({ town: "ready" });
     }
-    requestAnimationFrame(frame);
   }
 
   // ---------- keeping, and the town ----------

@@ -73,10 +73,13 @@ kit's card: "The table needs the guild's server."
 - **Acorns.** The purse shows the number and a row of piles, one for every ten held, lit as they
   fill, with what they will pay next room. Experience is a bar under the level. Rustle (free once a
   room), hold the stall, level up, set out.
-- **Items.** Components and finished items sit on a rack. Every figure shows what it holds as a
-  row of up to three small pictures under its base (under its health bar in a fight), on both sides
-  of the table, following it about and falling with it: a finished item has a gold edge, a loose
-  component the plain dark one, each on a small dark tile; pointing at one shows that item's card.
+- **Items.** Components, finished items and emblems sit on a rack. An emblem (what a charm boon
+  gives) is drawn as its kin's sign; its card says its name, that its holder is of that kin too,
+  and the kin as a chip, and a figure holding one has that kin among its chips and lights with it.
+  Every figure shows what it holds as a row of up to three small pictures under its base (under its
+  health bar in a fight), on both sides of the table, following it about and falling with it: a
+  finished item or an emblem has a gold edge, a loose component the plain dark one, each on a small
+  dark tile; pointing at one shows that item's card.
   The row is never wider than a hex, so it never reaches a neighbour on its row, and it is drawn
   with its figure, so a nearer figure stands in front of it. While a component is in the hand
   (carried or tapped), every figure holding its other half shows what the two would make, faint,
