@@ -499,10 +499,14 @@ button.k-slot:hover {
   text-shadow: none;
 }
 .k-paper :is(.k-dim, .k-d, .k-label) {
-  color: #7d6551;
+  color: #6b5442;
 }
-/* Written on paper itself, an amount and a name of the town's own are in ink. */
-:is(.k-paper, .k-say) :is(.k-cur, .k-gold):not(.k-chip *, .k-btn *) {
+/*
+ * Written on paper itself, nothing is in the gold of a dark panel: an amount, a count, a name of
+ * the town's own and a thing pointed at are in ink. Every style that writes in gold is named here
+ * or is dark itself wherever it stands (a card, a chip): `type.test.ts` holds it to that.
+ */
+:is(.k-paper, .k-say) :is(.k-cur, .k-gold, .k-thing-count, .k-thing.lit .k-thing-name):not(.k-chip *, .k-btn *) {
   color: #96560a;
 }
 :is(.k-paper, .k-say) :is(.k-cur.leaf, .k-leafy, .k-folk):not(.k-chip *, .k-btn *) {
