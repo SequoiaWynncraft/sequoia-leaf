@@ -7,23 +7,23 @@
   ],
   [
     "moveAt",
-    "(()=>{const t = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:gear'); const b = t.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+    "(()=>{const t = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:14'); const b = t.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
   ],
   ["wait", 500],
   ["eval", "'passing: ' + document.querySelector('.k-info .k-name')?.textContent"],
   [
     "downAt",
-    "(()=>{const t = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:gear'); const b = t.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+    "(()=>{const t = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:14'); const b = t.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
   ],
   [
     "upAt",
-    "(()=>{const t = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:gear'); const b = t.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+    "(()=>{const t = [...document.querySelectorAll('#panel .want .k-thing')].find(e => e.dataset.ref === 'item:14'); const b = t.getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
   ],
   ["move", 640, 300],
   ["wait", 400],
   ["eval", "'pinned: ' + document.querySelector('.k-info.pinned .k-name')?.textContent"],
-  ["shot", "w-01-gear-from-order"],
-  ["click", ".k-info.pinned .k-info-row .k-thing[data-ref='machine:bench']"],
+  ["shot", "w-01-frame-from-order"],
+  ["click", ".k-info.pinned .k-info-row .k-thing[data-ref='machine:3']"],
   ["move", 640, 300],
   ["wait", 400],
   [
@@ -56,18 +56,18 @@
   ["move", 640, 40],
   [
     "moveAt",
-    "(()=>{const b = document.querySelector('#dock [data-ref=\"machine:workshop\"]').getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+    "(()=>{const b = document.querySelector('#dock [data-ref=\"machine:8\"]').getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
   ],
   ["wait", 500],
   ["shot", "w-05-toolbar-machine"],
   ["move", 640, 40],
-  ["eval", "(window.works.open('plans'), window.works.skip(0.5), 'plans')"],
+  ["eval", "(window.works.open('projects'), window.works.skip(0.5), 'projects')"],
   [
     "moveAt",
-    "(()=>{const b = document.querySelector('#panel .k-thing[data-ref=\"plan:jigs\"]').getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
+    "(()=>{const b = document.querySelector('#panel .k-thing[data-ref=\"node:9\"]').getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}})()"
   ],
   ["wait", 500],
-  ["shot", "w-06-plan-card"],
+  ["shot", "w-06-project-card"],
   [
     "eval",
     "(window.works.close(), window.works.stage({ fill: 0 }, { fill: 2 }).then(() => (window.works.skip(16), 'two orders filled; gnomes come to the gate')))"

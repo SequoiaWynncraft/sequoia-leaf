@@ -1,15 +1,30 @@
-/** All of the yard's art, made once when the page opens. */
+/**
+ * All of the yard's art, made once when the page opens. Pictures are looked up by name here, once,
+ * into lists indexed by the number of the thing or kind of piece (`icon`, and `item` in `items.ts`).
+ */
 
-import { BARK, CREAM, GOLD, GREEN, INK, PAPER } from "@sequoia-leaf/kit/palette.ts";
+import {
+  ALL_KINDS,
+  type Dir,
+  isItem,
+  item as thing,
+  ITEM_COUNT,
+  type Kind,
+  type KindName,
+  kindName,
+  type Land,
+  LEFT,
+  NONE,
+} from "@sequoia-leaf/factory";
+import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { hash, makeCanvas, must, vnoise } from "@sequoia-leaf/kit/util.ts";
-import type { Kind, Land } from "@sequoia-leaf/yard";
 
-import { beltTile, TILE } from "./belts.ts";
+import { type Arms, arms, beltTile, marksOf, TILE, woodOf } from "./belts.ts";
 import { type Ground, paintGround } from "./ground.ts";
-import { type ItemArt, makeItems } from "./items.ts";
-import { type Machines, makeMachines } from "./machines.ts";
+import { type ItemArt, makeItems, makePlain } from "./items.ts";
+import { lookOf, type Machines, makeMachines } from "./machines.ts";
 import { bush, fern, trunk } from "./nature.ts";
 import { bm, DEEP, spr, type Sprite } from "./pal.ts";
 
@@ -36,8 +51,13 @@ export interface Art {
   /** A crate as it is carried out of the gate. */
   parcel: Sprite;
   sign: (price: number) => Sprite;
-  /** A machine's picture for a button or a card. */
-  icon: (kind: Kind) => HTMLCanvasElement;
+  /**
+   * What lies over a sorter's tile, facing a way: its gate, and the board that shows the thing it
+   * sends to its left; with no thing (`NONE`), the board is bare.
+   */
+  sorter: (dir: Dir, item: number) => HTMLCanvasElement;
+  /** A machine's picture for a button or a card, as it stands at a grade (the first, unless said). */
+  icon: (kind: Kind, grade?: number) => HTMLCanvasElement;
 }
 
 const WILD = [DEEP[1], DEEP[2], GREEN[0], GREEN[1], GREEN[2]];
@@ -51,7 +71,7 @@ function undergrowth(land: Land): Under[][] {
         if (land.water[i] === 1 || land.trunk[i] === 1) continue;
         // What lies in the ground shows through here and there, so a plot says what it holds.
         const thick = vnoise(tx / 2.6, ty / 2.6, 130 + n);
-        const keep = (land.deposit[i] ? 0.3 : 0.62) + (thick - 0.5) * 0.7;
+        const keep = (land.deposit[i] === NONE ? 0.62 : 0.3) + (thick - 0.5) * 0.7;
         if (hash(tx, ty, 120 + n) > keep) continue;
         out.push({
           x: tx * TILE + 3 + Math.floor(hash(tx, ty, 121) * 10),
@@ -104,50 +124,115 @@ function signMaker(): (price: number) => Sprite {
 }
 
 /** A piece of belt running east, with nothing on it, in a line's colour or in none. */
-export const bare = (tint = 0): HTMLCanvasElement => beltTile([2, 0, 1, 0], 0, 5, 1, tint);
+export const bare = (tint = 0): HTMLCanvasElement => beltTile(arms(2, 0, 1, 0), 0, 5, 1, tint);
 
-/** A tile where belts meet, pointing east, with what marks it: `arms` as `beltTile` takes them. */
-const meeting = (arms: Parameters<typeof beltTile>[0], top: HTMLCanvasElement | undefined): HTMLCanvasElement => {
+/** A tile where belts meet, pointing east, with what marks it: `a` as `beltTile` takes them. */
+const meeting = (a: Arms, top: HTMLCanvasElement | undefined): HTMLCanvasElement => {
   const { c, g } = makeCanvas(16, 16);
-  g.drawImage(beltTile(arms, 0, 5, 1), 0, 0);
+  g.drawImage(beltTile(a, 0, 5, 1), 0, 0);
   if (top) g.drawImage(top, 0, 0);
   return c;
 };
 
-/** A picture of each kind of thing that can be built, as it looks standing idle: for the toolbar and the cards. */
-function icons(m: Machines, item: ItemArt): (kind: Kind) => HTMLCanvasElement {
-  // A belt is known by what rides on it.
-  const belt = (): HTMLCanvasElement => {
+/**
+ * What lies over a sorter pointing east: a framed board across the belt, things passing under it,
+ * and an arrowhead on the way out to its left, in brass once it is set to a thing. Turned for the
+ * other ways, with the thing on the board the right way up whichever way it points.
+ */
+function sorterTops(plain: ItemArt): Art["sorter"] {
+  const made = new Map<number, HTMLCanvasElement>();
+  return (dir, item) => {
+    const key = dir * (ITEM_COUNT + 1) + (isItem(item) ? item : ITEM_COUNT);
+    const had = made.get(key);
+    if (had) return had;
+    const set = isItem(item);
+    const { c, g } = makeCanvas(TILE, TILE);
+    // The arrowhead, on the edge things leave by to the left: drawn pointing north, and turned.
+    g.save();
+    g.translate(8, 8);
+    g.rotate(((LEFT[dir] + 1) * Math.PI) / 2);
+    g.translate(-8, -8);
+    const [dark, body] = set ? [GOLD[0], GOLD[1]] : [BARK[1], BARK[2]];
+    R(g, 4, 2, 8, 1, INK);
+    R(g, 5, 1, 6, 1, INK);
+    R(g, 6, 0, 4, 1, INK);
+    R(g, 5, 2, 6, 1, dark);
+    R(g, 6, 1, 4, 1, body);
+    R(g, 7, 0, 2, 1, body);
+    g.restore();
+    // The board: a slate in a wooden frame, dark so that pale things and dark both show on it.
+    R(g, 3, 3, 10, 10, BARK[2]);
+    R(g, 3, 3, 10, 1, BARK[4]);
+    R(g, 3, 12, 10, 1, BARK[1]);
+    R(g, 4, 4, 8, 8, SKY[0]);
+    if (set) {
+      const pic = plain(item);
+      const w = Math.min(8, pic.width);
+      const h = Math.min(8, pic.height);
+      g.drawImage(pic, (pic.width - w) >> 1, (pic.height - h) >> 1, w, h, 4 + ((8 - w) >> 1), 4 + ((8 - h) >> 1), w, h);
+    }
+    made.set(key, c);
+    return c;
+  };
+}
+
+/** What a kind's picture is put together from: the machines' art, the things', and a sorter's top. */
+interface Parts {
+  readonly m: Machines;
+  readonly item: ItemArt;
+  readonly sorter: Art["sorter"];
+}
+
+/**
+ * How each kind of piece is pictured, standing idle at a grade: for the toolbar and the cards. Every
+ * kind in the tables has its entry, or this does not build; `pictures.test.ts` walks the tables
+ * against it too.
+ */
+export const KIND_PIC: Readonly<Record<KindName, (p: Parts, grade: number) => HTMLCanvasElement>> = {
+  // A belt is known by what rides on it. At the first grade its button has lighter slats than the yard's.
+  belt: ({ item }, grade) => {
     const { c, g } = makeCanvas(16, 16);
-    g.drawImage(bare(), 0, 0);
-    const plank = item("plank");
+    g.drawImage(grade >= 2 ? beltTile(arms(2, 0, 1, 0), 0, 5, woodOf(grade), 0, marksOf(grade)) : bare(), 0, 0);
+    const plank = item(thing("plank"));
     g.drawImage(plank, 8 - (plank.width >> 1), 7 - (plank.height >> 1));
     return c;
-  };
-  const tunnel = (): HTMLCanvasElement => {
-    const hood = must(m.hood[0], "hood");
+  },
+  // A gatherer of the second grade has his rake stood beside him.
+  gatherer: ({ m }, grade) => {
+    const gnome = must(m.gnome[0]?.[0], "gnome").c;
+    if (grade < 2) return gnome;
+    const { c, g } = makeCanvas(gnome.width + 5, gnome.height);
+    g.drawImage(m.rake.c, gnome.width - 2, gnome.height - m.rake.c.height);
+    g.drawImage(gnome, 0, 0);
+    return c;
+  },
+  mill: ({ m }, grade) => must(m.saw[lookOf(grade)]?.[0], "saw").c,
+  bench: ({ m }, grade) => must(m.bench[lookOf(grade)]?.[0], "bench").c,
+  workshop: ({ m }, grade) => must(m.workshop[lookOf(grade)]?.[1]?.[0], "workshop").c,
+  splitter: ({ m }) => meeting(arms(2, 2, 1, 2), m.splitter[0]),
+  joiner: ({ m }) => meeting(arms(2, 1, 1, 1), m.joiner[0]),
+  tunnel: ({ m }, grade) => {
+    const hood = must(m.hood[lookOf(grade)]?.[0], "hood");
     const { c, g } = makeCanvas(18, 20);
-    g.drawImage(beltTile([0, 0, 1, 0], 0, 5, 0), 1, 3);
+    g.drawImage(beltTile(arms(0, 0, 1, 0), 0, 5, woodOf(grade)), 1, 3);
     g.drawImage(hood.c, 0, 0);
     return c;
-  };
-  const pics: Record<Kind, () => HTMLCanvasElement> = {
-    belt,
-    gatherer: () => must(m.gnome[0]?.[0], "gnome").c,
-    mill: () => must(m.saw[0], "saw").c,
-    bench: () => must(m.bench[0], "bench").c,
-    workshop: () => must(m.workshop[1]?.[0], "workshop").c,
-    splitter: () => meeting([2, 2, 1, 2], m.splitter[0]),
-    joiner: () => meeting([2, 1, 1, 1], m.joiner[0]),
-    tunnel,
-    crate: () => must(m.crate[0]?.[0], "crate").c,
-    pylon: () => must(m.pylon[0]?.[2], "pylon").c,
-    wheel: () => must(m.wheel[0], "wheel").c,
-    boiler: () => must(m.boiler[1], "boiler").c,
-    depot: () => m.depot.c,
-  };
-  return (kind) => {
-    const src = pics[kind]();
+  },
+  crate: ({ m }) => must(m.crate[0]?.[0], "crate").c,
+  pylon: ({ m }) => must(m.pylon[0]?.[2], "pylon").c,
+  wheel: ({ m }) => must(m.wheel[0], "wheel").c,
+  boiler: ({ m }) => must(m.boiler[1], "boiler").c,
+  depot: ({ m }) => m.depot.c,
+  study: ({ m }, grade) => must(m.study[lookOf(grade)]?.[2], "study").c,
+  stop: ({ m }) => must(m.stop[0], "stop").c,
+  sorter: ({ sorter }) => meeting(arms(2, 0, 1, 2), sorter(0, thing("plank"))),
+};
+
+/** A copy of each kind's picture, for a button or a card. */
+function icons(parts: Parts): Art["icon"] {
+  const made = ALL_KINDS.map((k) => KIND_PIC[kindName(k)]);
+  return (kind, grade = 1) => {
+    const src = must(made[kind], "a kind's picture")(parts, grade);
     const { c, g } = makeCanvas(src.width, src.height);
     g.drawImage(src, 0, 0);
     return c;
@@ -157,6 +242,7 @@ function icons(m: Machines, item: ItemArt): (kind: Kind) => HTMLCanvasElement {
 export function makeArt(land: Land): Art {
   const m = makeMachines();
   const item = makeItems();
+  const sorter = sorterTops(makePlain());
   return {
     ground: paintGround(land),
     item,
@@ -175,6 +261,7 @@ export function makeArt(land: Land): Art {
     zed: bm(["www", ".w.", "www"], 1, 3),
     parcel: bm(["NNNNNNN", "NnnynnN", "nnnynnb", "nnnnnnb", "nbbbbbb"], 3, 5),
     sign: signMaker(),
-    icon: icons(m, item),
+    sorter,
+    icon: icons({ m, item, sorter }),
   };
 }

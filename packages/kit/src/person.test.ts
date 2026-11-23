@@ -40,7 +40,7 @@ describe("a person's card", () => {
       games: {
         raid: { placed: { place: 1, score: 0, also: { runs: 0, room: 0 } }, played: 120, afk: 0, spent: 0 },
         town: { placed: { place: 1, score: 10, also: { greeted: 0, sightings: 0 } }, played: 180, afk: 150, spent: 25 },
-        works: { placed: { place: 2, score: 1840, also: { story: 3 } }, played: 0, afk: 0, spent: 0 },
+        works: { placed: { place: 2, score: 1840, also: { tier: 1 } }, played: 0, afk: 0, spent: 0 },
       },
       played: 300,
       afk: 150,
@@ -139,11 +139,11 @@ test("a time played is written in minutes under an hour, hours and minutes under
 test("a board reads what Leaf really answers, and nothing from what makes no sense", () => {
   const standings = isRecord(GAME) ? GAME["GET /v1/game/play/{game}/standings"] : null;
   const board = readBoard(isRecord(standings) ? standings.body : null);
-  expect(board?.top.map((r) => [r.place, r.name, r.guest, r.score, r.also.story, r.you])).toEqual([
-    [1, "Bob", false, 5120, 7, false],
-    [2, "Alice", false, 1840, 3, true],
-    [3, "Visitor", true, 960, 2, false],
+  expect(board?.top.map((r) => [r.place, r.name, r.guest, r.score, r.also.tier, r.you])).toEqual([
+    [1, "Bob", false, 5120, 2, false],
+    [2, "Alice", false, 1840, 1, true],
+    [3, "Visitor", true, 960, 1, false],
   ]);
-  expect(board?.you).toEqual({ place: 2, score: 1840, also: { story: 3 } });
+  expect(board?.you).toEqual({ place: 2, score: 1840, also: { tier: 1 } });
   expect(readBoard({ top: [{ place: 1 }], you: null })).toBeNull();
 });

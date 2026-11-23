@@ -1,15 +1,29 @@
 /** Small pieces the yard's interface is put together from: its own icons, and a few helpers over the kit's. */
 
-import { add, el, shown } from "@sequoia-leaf/kit/dom.ts";
+import { ALL_ITEMS, type Counts, type Item, ITEM_INFO, RECIPE } from "@sequoia-leaf/factory";
+import { add, el, shown, when } from "@sequoia-leaf/kit/dom.ts";
 import { INK } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
-import { ITEM, type Item, ITEMS, type Tally } from "@sequoia-leaf/yard";
 
-import type { Art } from "../art/index.ts";
 import { PAL } from "../art/pal.ts";
 
 export { when } from "@sequoia-leaf/kit/dom.ts";
+
+/**
+ * A part of the interface kept by what it prints: `print` works out every value it shows of the
+ * yard and the purse, as plain data, and `draw` draws it from that alone. It is drawn again exactly
+ * when the print differs, so no value it shows can be missing from what it is kept by.
+ */
+export function shows<P>(print: () => P, draw: (p: P) => void): () => void {
+  let p = print();
+  return when(
+    () => JSON.stringify((p = print())),
+    () => {
+      draw(p);
+    },
+  );
+}
 
 export type Kid = Node | string | null;
 
@@ -72,8 +86,8 @@ const ICONS = {
   ],
   // Top yards: a cup.
   board: ["oyyyyyyo", "y.yYYy.y", "y.yYyy.y", ".oyyyyo.", "..oyyo..", "...yy...", "...yy...", "..oyyo.."],
-  // Plans: a rolled drawing, blue, with a white line on it.
-  plans: [
+  // Projects: a rolled drawing, blue, with a white line on it.
+  projects: [
     ".uuuuuuuu.",
     "uUUUUUUUUu",
     "uUwwwwUUUu",
@@ -84,6 +98,18 @@ const ICONS = {
     "uUUUUUUUUu",
     ".mmmmmmmm.",
     "..m....m..",
+  ],
+  // The yard's sheet: a folded map, with the stream on it and a mark.
+  map: [
+    "www....www",
+    "wwwCCCCwww",
+    "wgwCCuCwww",
+    "wgwCuuCwrw",
+    "wwwCuCCwww",
+    "wwuCCCCwgw",
+    "wuuCCgCwgw",
+    "wwwCCCCwww",
+    "...CCCC...",
   ],
   // The depot's books: a crate.
   depot: [
@@ -97,19 +123,6 @@ const ICONS = {
     "nnnNnnNnnn",
     "nnNnnnnNnn",
     "bbbbbbbbbb",
-  ],
-  // The second shift: a moon and a star, for working on into the night.
-  shift: [
-    "...wwww...",
-    "..www.....",
-    ".www....w.",
-    ".www...www",
-    ".www....w.",
-    ".wwww.....",
-    "..wwwww...",
-    "...wwwww..",
-    "..........",
-    "..........",
   ],
   turn: [
     "...wwww...",
@@ -184,6 +197,51 @@ const ICONS = {
     ".bByyyyBb.",
     "bbbbbbbbbb",
   ],
+  // Research: a book lying open, its pages lifting from the spine.
+  research: [
+    ".ww.....ww.",
+    "wwww...wwww",
+    "wNNww.wwNNw",
+    "wwwwwbwwwww",
+    "wNNNwbwNNNw",
+    "wwwwwbwwwww",
+    "nwwwwbwwwwn",
+    ".nnnnbnnnn.",
+  ],
+  // A blueprint: a blue sheet with a drawing on it.
+  print: [
+    "uuuuuuuuuu",
+    "uUUUUUUUUu",
+    "uUwwwwUUUu",
+    "uUwUUwUUUu",
+    "uUwUUwwwUu",
+    "uUwwwUUwUu",
+    "uUUUwwwwUu",
+    "uUUUUUUUUu",
+    "uuuuuuuuuu",
+  ],
+  // Raising an area: the area marked out, and an arrow up in it.
+  upgrade: [
+    "ww.ww.ww..",
+    "w...y...w.",
+    "...yyy....",
+    "w.yyyyy.w.",
+    "w...y.....",
+    "....y...w.",
+    "w...y.....",
+    "ww.ww.ww..",
+  ],
+  // The yard at night, while nobody watches it: a moon and a star.
+  moon: [
+    "..yYY.....",
+    ".yY.....w.",
+    "yY........",
+    "yY.....w..",
+    "yY........",
+    ".yY....y..",
+    "..yYYYYy..",
+    "...yyyy...",
+  ],
   lookAt: [
     "...wwww...",
     "..w....w..",
@@ -211,32 +269,32 @@ export function yardIcon(name: YardIcon, scale = 1): HTMLCanvasElement {
   return pic(c, scale);
 }
 
-/** A thing's picture and how many, as one row of an order: "[plank] 8 / 12" with a bar between. */
-export function wantRows(art: Art, want: Tally, filled: Tally, leaf = false): HTMLElement[] {
-  return ITEMS.filter((k) => (want[k] ?? 0) > 0).map((k) => {
-    const have = Math.min(filled[k] ?? 0, want[k] ?? 0);
-    const n = want[k] ?? 1;
-    const bar = el("i");
-    bar.style.setProperty("--v", `${(have / n) * 100}%`);
-    const row = el(
-      "div",
-      "want",
-      { title: ITEM[k].name },
-      pic(art.item(k), 1),
-      el("div", leaf || have >= n ? "k-bar leaf" : "k-bar", {}, bar),
-      el("span", "n", { text: `${have} / ${n}` }),
-    );
-    return row;
-  });
-}
-
 /** What an order asks for, in words: "12 planks and 12 ingots". */
-export function wantWords(want: Tally): string {
-  const parts = ITEMS.filter((k) => (want[k] ?? 0) > 0).map(
-    (k) => `${want[k]} ${want[k] === 1 ? ITEM[k].name.toLowerCase() : ITEM[k].many}`,
+export function wantWords(want: Counts): string {
+  const parts = ALL_ITEMS.filter((k) => (want[k] ?? 0) > 0).map(
+    (k) => `${want[k]} ${want[k] === 1 ? (ITEM_INFO[k]?.name ?? "").toLowerCase() : (ITEM_INFO[k]?.many ?? "")}`,
   );
   const last = parts.pop() ?? "";
   return parts.length ? `${parts.join(", ")} and ${last}` : last;
 }
 
-export const itemName = (k: Item): string => ITEM[k].name;
+/** More than one of a kind of piece, in words: "belts", "benches", "studies". */
+export const plural = (name: string): string => {
+  const w = name.toLowerCase();
+  if (/(ch|sh|s)$/.test(w)) return `${w}es`;
+  return /[^aeiou]y$/.test(w) ? `${w.slice(0, -1)}ies` : `${w}s`;
+};
+/** A recipe's parts, in words: "planks and ingots", or with counts where it takes more than one of a part: "2 planks and 1 pot". */
+export function partsWords(k: Item): string {
+  const r = RECIPE[k];
+  if (!r) return "";
+  const counted = r.need.some((c) => c > 1);
+  return r.from
+    .map((p, i) => {
+      const c = r.need[i] ?? 1;
+      const one = (ITEM_INFO[p]?.name ?? "").toLowerCase();
+      const many = ITEM_INFO[p]?.many ?? "";
+      return counted ? `${c} ${c === 1 ? one : many}` : many;
+    })
+    .join(" and ");
+}

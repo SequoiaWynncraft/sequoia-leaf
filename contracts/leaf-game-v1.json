@@ -1734,7 +1734,7 @@
           "guest": false,
           "score": 5120,
           "also": {
-            "story": 7
+            "tier": 2
           },
           "you": false
         },
@@ -1745,7 +1745,7 @@
           "guest": false,
           "score": 1840,
           "also": {
-            "story": 3
+            "tier": 1
           },
           "you": true
         },
@@ -1756,7 +1756,7 @@
           "guest": true,
           "score": 960,
           "also": {
-            "story": 2
+            "tier": 1
           },
           "you": false
         }
@@ -1765,7 +1765,7 @@
         "place": 2,
         "score": 1840,
         "also": {
-          "story": 3
+          "tier": 1
         }
       }
     }
@@ -1780,7 +1780,7 @@
       "rev": 0,
       "now": "2026-11-25T12:55:00.000Z",
       "state": {
-        "yard": "{\"v\":3,\"tick\":0,\"at\":1795611300000,\"till\":0,\"bank\":0,\"told\":0,\"seen\":{\"tick\":0,\"till\":0,\"depot\":{}},\"plots\":[\"yard\"],\"plans\":[],\"story\":0,\"filled\":{},\"board\":[],\"serial\":0,\"done\":0,\"swapAt\":0,\"depot\":{},\"given\":{},\"sold\":0,\"paid\":0,\"pace\":{\"ticks\":0,\"warm\":300,\"made\":{}},\"cells\":[]}",
+        "yard": "{\"v\":6,\"tick\":0,\"charge\":0,\"at\":1795611300000,\"till\":0,\"bank\":0,\"told\":0,\"seen\":{\"tick\":0,\"till\":0,\"depot\":{}},\"plots\":[\"yard\"],\"done\":[],\"hand\":\"planks\",\"line\":[],\"got\":{\"planks\":{}},\"board\":[],\"serial\":0,\"handed\":0,\"swapAt\":0,\"depot\":{},\"sold\":0,\"paid\":0,\"cells\":\"AA==\"}",
         "clock": 0
       }
     }
@@ -2073,7 +2073,7 @@
           "place": 2,
           "score": 1840,
           "also": {
-            "story": 3
+            "tier": 1
           },
           "played": 0,
           "afk": 0,
@@ -2187,7 +2187,7 @@
       "state": {
         "clock": 0,
         "tick": 0,
-        "check": 4166492682,
+        "check": 2857088010,
         "hung": []
       }
     }
