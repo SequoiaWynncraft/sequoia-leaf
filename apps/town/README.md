@@ -436,14 +436,15 @@ card says so and the town is not loaded.
   room has their rank only if they are a guest. A part with nobody in it is left out; with nobody
   but the member it says "Only you, for now." It keeps up with the room as it changes, and with the
   guild's lists as they come, every half minute. It is sorted when it is opened, and while it stays
-  open its order holds (`held`): whoever has left a part stays listed in it, dimmed, and whoever is
-  new to a part goes to its end. Choosing somebody in town puts the panel away and
+  open its order holds (`held`): whoever has left a part stays listed in it, dimmed, with where they
+  are now ("Guest · just now", "at the Works"), and whoever is new to the panel goes to the end of
+  their part. It holds one row for each player, by id, so nobody is ever listed twice. Choosing somebody in town puts the panel away and
   shows where they are for three seconds: a ring at their feet and their name over them, the view
   staying where it is unless they would be out of it, when it glides to them and back. On an
   upright phone the panel is the bottom sheet the others are. The button is there only in town. A
-  person's card shows how long they have played all games together, what they stand at in the
-  Works, The Little Raid and their camp (things set out, callers greeted, the crab spotted), and how
-  long they have played each, and for somebody else "Find in town" (somebody drawn
+  person's card shows how long they have played all games together and been AFK in them, what they
+  stand at in the Works, The Little Raid and their camp (things set out, Coins spent, callers
+  greeted, the crab spotted), and how long they have played each and been AFK in it, and for somebody else "Find in town" (somebody drawn
   here), "Visit yard" and "Visit camp" (somebody with one).
 
 - **A guest.** Somebody signed in who is not in the guild plays the same town, with none of the
