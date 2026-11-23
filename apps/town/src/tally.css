@@ -106,8 +106,19 @@
   background: none;
   text-align: center;
 }
+.tally-said {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--u);
+  min-width: 0;
+}
 .tally-figure .tally-who {
   align-items: center;
+}
+/* The place, written out where there is no plinth to carry it. */
+.tally-medal {
+  display: none;
 }
 /* A name longer than its place breaks where it can, after an underscore (`tallyui.ts`), and else anywhere. */
 .tally-figure .k-name {
@@ -145,7 +156,7 @@
   text-align: center;
 }
 
-/* A board too narrow for three names side by side: the three as rows, first first, each beside its plinth. */
+/* A board too narrow for three names side by side: the three as rows, first first, each with its place written out before it. */
 @container board (max-width: 449px) {
   .tally-podium {
     display: flex;
@@ -154,26 +165,32 @@
     gap: calc(var(--u) * 3);
     padding-top: calc(var(--u) * 8);
   }
-  .tally-spot {
-    flex-direction: row-reverse;
-    justify-content: flex-end;
-    gap: calc(var(--u) * 4);
-  }
   .tally-spot.p1 {
     order: -1;
   }
-  .tally-spot:not(:has(.tally-figure)) {
+  .tally-spot:not(:has(.tally-figure)),
+  .tally-spot > .tally-plinth {
     display: none;
   }
   .tally-figure {
-    flex: 1;
+    width: 100%;
     flex-direction: row;
     gap: calc(var(--u) * 4);
     margin: 0;
     text-align: left;
   }
+  .tally-medal {
+    display: block;
+    min-width: calc(var(--u) * 14);
+    color: var(--k-gold);
+    text-align: center;
+  }
+  .tally-said,
   .tally-figure .tally-who {
     align-items: flex-start;
+  }
+  .tally-said {
+    flex: 1;
   }
 }
 

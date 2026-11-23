@@ -191,7 +191,7 @@ export const TALLY_BOARDS: readonly [TallyBoard, ...TallyBoard[]] = [
     id: "dozing",
     group: "town",
     name: "Dozing",
-    counts: "Time in town AFK: 5 minutes or more with nothing done.",
+    counts: "Time AFK in town and camp: 5 minutes or more with nothing done.",
     unit: "time",
     week: true,
   },

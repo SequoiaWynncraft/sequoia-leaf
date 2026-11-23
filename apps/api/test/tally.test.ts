@@ -371,11 +371,12 @@ describe("the counters", () => {
     expect(await rows("rolls", "all")).toEqual(["Alice 1 1"]);
   });
 
-  it("start the week again on Monday, keeping all time", async () => {
+  it("start the week again on Monday, keeping all time; a count from an earlier week, come late, adds to all time only", async () => {
     await withSql((sql) => tally(sql, bob, "waves", 4, LAST_WEEK));
     await withSql((sql) => tally(sql, bob, "waves", 1, T0 - HOUR));
+    await withSql((sql) => tally(sql, bob, "waves", 2, LAST_WEEK));
     expect(await rows("waves", "week")).toEqual(["Bob 1 1"]);
-    expect(await rows("waves", "all")).toEqual(["Bob 1 5"]);
+    expect(await rows("waves", "all")).toEqual(["Bob 1 7"]);
   });
 });
 

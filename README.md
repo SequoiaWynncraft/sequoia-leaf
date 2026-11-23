@@ -821,7 +821,8 @@ in a row.
   played and in town AFK, as `time_in` counts it from visits; and what players do in the town's
   live room, at most once each `ACT_EVERY_MS` for a player and counter (a wave every 30 seconds, a
   touch, a log on the fire every 5, the crabs' roll every 10), so a script gains a handful a
-  minute. The counters began from what Leaf had: the activity log's rooms, wins and orders (since
+  minute. A count from a week before the one a counter is on (a visit closed late) adds to all
+  time only. The counters began from what Leaf had: the activity log's rooms, wins and orders (since
   the games moved onto Leaf, on 22 November 2026), where camps stood, and `time_in`; this week's
   time began at the migration.
 - **Camps visited, and visitors** (`camp_visits`: one row a visitor and camp, when they first and

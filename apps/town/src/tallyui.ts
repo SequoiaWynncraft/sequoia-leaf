@@ -90,7 +90,14 @@ function spot(r: Row | undefined, at: 1 | 2 | 3, unit: TallyUnit): HTMLElement {
         : place === 2
           ? el("div", "k-tier-1 tally-face", {}, pic(face, 3))
           : slot(pic(face, 3), 34);
-    const figure = el("button", "tally-figure", { type: "button" }, frame, who(r), scoreOf(unit, r.score));
+    const figure = el(
+      "button",
+      "tally-figure",
+      { type: "button" },
+      el("b", "k-title big tally-medal", { text: String(r.place) }),
+      frame,
+      el("span", "tally-said", {}, who(r), scoreOf(unit, r.score)),
+    );
     personLink(figure, r, face);
     stand.append(figure);
   }
@@ -138,17 +145,23 @@ function drawBoard(at: HTMLElement, board: Board, b: TallyBoard, rise: boolean):
   );
   const empty = podium.length === 0 ? el("div", "k-dim tally-empty", { text: "Nobody yet." }) : null;
   const rows = el("div", rise ? "tally-rows rise" : "tally-rows", {}, ...rest.map((r, i) => line(r, b.unit, i)));
+  // A guest is told nothing of a guild's board, which is for members.
+  const canJoin = member()?.guest !== true || b.group !== "guild";
   const foot =
     board.you === null && podium.length > 0
-      ? el("div", "k-dim tally-off", { text: "You are not on this board yet." })
+      ? canJoin
+        ? el("div", "k-dim tally-off", { text: "You are not on this board yet." })
+        : null
       : ownPlace(board, b.unit);
   at.replaceChildren(stage, ...(empty ? [empty] : []), rows, ...(foot ? [foot] : []));
   if (!rise) return;
-  // Third, second, then first: a note as each lands.
+  // Third, second, then first: a note as each lands; the first board of the first visit, a fanfare.
+  const fanfare = firstTime;
+  firstTime = false;
   const notes: readonly (readonly [number, () => void])[] = [
     [140, () => sfx.pluck(3)],
     [300, () => sfx.pluck(5)],
-    [480, () => (firstTime ? sfx.fanfare() : sfx.twinkle())],
+    [480, () => (fanfare ? sfx.fanfare() : sfx.twinkle())],
   ];
   for (const [ms, play] of notes.slice(3 - Math.min(3, podium.length))) {
     setTimeout(() => {

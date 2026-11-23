@@ -49,7 +49,7 @@ export const NOTES: readonly Note[] = [
       {
         head: "The town",
         points: [
-          "Time in town, and dozing: time in town AFK.",
+          "Time in town and camp, and dozing: time there AFK.",
           "Crab No. 7 spotted, callers greeted at your camp, camps visited and visitors to your camp. A visit counts after 30 seconds.",
           "Waves, things tapped, logs on the fire and roll calls. One wave counts every 30 seconds, a tap or a log every 5, a roll call every 10.",
         ],

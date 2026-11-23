@@ -24,7 +24,8 @@ import { PlayerUuid } from "../wire.ts";
 
 /**
  * Adds `n` to a player's counter, for all time and for the UTC week of `now` (`utcWeekStart`, as the
- * weekly quests count it), as of `now`. Written in the transaction of whatever it counts.
+ * weekly quests count it), as of `now`. A count from a week before the one the counter is on adds to
+ * all time only. Written in the transaction of whatever it counts.
  */
 export const tally = (sql: SqlClient.SqlClient, playerId: PlayerId, stat: TallyStat, n: number, now: number) =>
   n <= 0
@@ -34,8 +35,13 @@ export const tally = (sql: SqlClient.SqlClient, playerId: PlayerId, stat: TallyS
         VALUES (${playerId}, ${stat}, ${n}, ${utcWeekStart(now)}, ${n}, ${now})
         ON CONFLICT (player_id, stat) DO UPDATE SET
           n = n + excluded.n,
-          week_n = CASE WHEN week = excluded.week THEN week_n + excluded.week_n ELSE excluded.week_n END,
-          week = excluded.week, at = excluded.at
+          week_n = CASE
+            WHEN excluded.week = week THEN week_n + excluded.week_n
+            WHEN excluded.week > week THEN excluded.week_n
+            ELSE week_n
+          END,
+          week = max(week, excluded.week),
+          at = max(at, excluded.at)
       `.pipe(Effect.asVoid);
 
 /**
