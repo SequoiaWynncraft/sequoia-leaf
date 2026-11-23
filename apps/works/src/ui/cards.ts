@@ -87,10 +87,10 @@ import {
 } from "@sequoia-leaf/kit/card.ts";
 import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
+import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { beltTile } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
-import { copyOf } from "../art/items.ts";
 import { FLAG_AT } from "../art/machines.ts";
 import { yardSfx } from "../sound.ts";
 import { type Given, leaves, type Listed, type Need, needs, some, unlocks, wantsGiven } from "./goal.ts";
@@ -455,8 +455,9 @@ function waysOf(art: Art, p: StandingPrint, ways: WaysPrint, hands: Hands): HTML
   const d = ways.dir;
   // A copy: the tile is the belts' own, kept for every splitter that looks the same, and the
   // arrowheads and the flag drawn on it here are this splitter's alone.
-  const tile = copyOf(beltTile(ways.arms, d, 5, 0, ways.tint));
-  const g = tile.getContext("2d");
+  const shared = beltTile(ways.arms, d, 5, 0, ways.tint);
+  const { c: tile, g } = makeCanvas(shared.width, shared.height);
+  g.drawImage(shared, 0, 0);
   [d, LEFT[d], RIGHT[d]].forEach((side, k) => {
     const head = art.m.heads[k]?.[d];
     if (head && ((ways.arms >> (side * 2)) & 3) === 2) g?.drawImage(head, 0, 0);
