@@ -52,7 +52,7 @@ import {
   WORKSHOP,
 } from "./tables.ts";
 import { ahead, farMouth, nextOf, rewire, wayIn, wayOut } from "./wire.ts";
-import { enough, type Holders, put, take, type Wire, type Yard } from "./yard.ts";
+import { enough, holderOf, type Holders, put, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
 
 /** How many ticks the pace is measured over before old ticks start to count for less: an hour. */
 export const PACE_WINDOW = 36_000;
@@ -63,7 +63,7 @@ const NO_TILES = new Int32Array(0);
 /** Moves the whole yard on by one tick. */
 export function step(y: Yard): void {
   const wire = y.wire ?? rewire(y);
-  const { kind, row, item, prog, span } = y;
+  const { kind, item, prog, span } = y;
   const h = y.holders;
   y.tick++;
   const pace = y.pace;
@@ -78,7 +78,7 @@ export function step(y: Yard): void {
   let supply = wire.steady;
   const boilers = wire.boilers;
   for (let b = 0; b < boilers.length; b++) {
-    const r = row[boilers[b] ?? 0] ?? 0;
+    const r = holderOf(y, boilers[b] ?? 0);
     if ((h.fuel[r] ?? 0) <= 0 && (h.stock[r * ITEM_COUNT + DEADFALL] ?? 0) > 0) {
       take(h, r, DEADFALL);
       h.fuel[r] = TICKS.burn;
@@ -104,15 +104,16 @@ export function step(y: Yard): void {
     const i = carry[c] ?? 0;
     const along = PACE[grade[i] ?? 0] ?? 0;
     if (item[i] !== NONE && (prog[i] ?? 0) < 8) prog[i] = (prog[i] ?? 0) + along;
+    const t = tunnelOf(y, i);
+    if (t < 0) continue;
     const s = span[i] ?? 0;
-    if (s <= 0) continue;
-    const at = (row[i] ?? 0) * SPAN_MOST;
+    const at = t * SPAN_MOST;
     for (let k = at; k < at + s; k++) if (under[k] !== NONE && (below[k] ?? 0) < 8) below[k] = (below[k] ?? 0) + along;
   }
   const work = works ? wire.work : NO_TILES;
   for (let c = 0; c < work.length; c++) {
     const i = work[c] ?? 0;
-    const r = row[i] ?? 0;
+    const r = holderOf(y, i);
     const speed = PACE[grade[i] ?? 0] ?? 0;
     if (h.out[r] !== NONE) continue;
     if (kind[i] === STUDY) {
@@ -159,7 +160,7 @@ export function step(y: Yard): void {
     else if (k === SPLITTER) split(y, i, wire);
     else if (k === SORTER) sort(y, i, wire);
     else {
-      const r = row[i] ?? 0;
+      const r = holderOf(y, i);
       if (k === CRATE) {
         if (h.open[r] === 0) continue;
         if (h.out[r] === NONE && (h.count[r] ?? 0) > 0) {
@@ -248,7 +249,7 @@ function ready(y: Yard, i: number, to: number): boolean {
     );
   if (k === SORTER) return y.item[i] !== NONE && (y.prog[i] ?? 0) >= 8 && sortedTo(y, i) === to;
   if (k === GATHERER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE)
-    return nextOf(y, i) === to && y.holders.out[y.row[i] ?? 0] !== NONE;
+    return nextOf(y, i) === to && y.holders.out[holderOf(y, i)] !== NONE;
   return false;
 }
 
@@ -276,7 +277,7 @@ function accepts(y: Yard, to: number, n: number, side: number, wire: Wire): bool
     return true;
   }
   const h = y.holders;
-  const r = y.row[to] ?? 0;
+  const r = holderOf(y, to);
   const have = h.stock[r * ITEM_COUNT + n] ?? 0;
   if (k === MILL || k === BENCH || k === WORKSHOP) {
     // It takes a thing that some recipe it may make uses together with everything it holds, while it
@@ -324,14 +325,14 @@ function give(y: Yard, to: number, n: number, side: number, over: number): void 
     y.via[to] = 1 + side;
     return;
   }
-  put(y.holders, y.row[to] ?? 0, n);
+  put(y.holders, holderOf(y, to), n);
 }
 
 /** Moves what is under a tunnel along, and brings it up at the far mouth. */
 function passUnder(y: Yard, i: number): void {
   const under = y.tunnels.under;
   const along = y.tunnels.along;
-  const at = (y.row[i] ?? 0) * SPAN_MOST;
+  const at = tunnelOf(y, i) * SPAN_MOST;
   const last = at + (y.span[i] ?? 0) - 1;
   const mouth = farMouth(y, i);
   for (let k = last; k >= at; k--) {

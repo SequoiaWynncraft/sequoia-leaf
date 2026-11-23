@@ -22,7 +22,7 @@ import {
 } from "./build.ts";
 import { check } from "./check.ts";
 import { awayOf, here, stillAt, TICK_MS } from "./clock.ts";
-import { decode, encode } from "./codec.ts";
+import { decode, encode, type KeptOrder } from "./codec.ts";
 import { STAND_MOST } from "./content/machines.ts";
 import { LAND, type Land } from "./land.ts";
 import { paint } from "./lines.ts";
@@ -38,9 +38,11 @@ import {
   takeRefusal,
   unstudy,
 } from "./orders.ts";
+import { shortOf } from "./page.ts";
 import {
   blueprintAt,
   clear,
+  copyOf,
   deleteBlueprint,
   keptOf,
   move,
@@ -50,6 +52,8 @@ import {
   TINTS,
   upgrade,
 } from "./pieces.ts";
+import { postcard } from "./postcard.ts";
+import { type Leg, legPiece } from "./route.ts";
 import {
   BELT,
   BLUEPRINTS_MOST,
@@ -86,10 +90,11 @@ interface At {
 /** Everything a player does to the yard, with things, kinds, plots and goals as numbers. */
 export type Act =
   | ({ readonly do: "build"; readonly kind: Kind; readonly dir: Dir; readonly grade: number } & At)
-  | { readonly do: "lay"; readonly legs: readonly Piece[]; readonly turn?: At & { readonly dir: Dir } }
+  | { readonly do: "lay"; readonly legs: readonly Leg[]; readonly turn?: At & { readonly dir: Dir } }
   | { readonly do: "stand"; readonly pieces: readonly Piece[] }
   | ({ readonly do: "placeBlueprint"; readonly slot: number; readonly turns: Dir } & At)
   | ({ readonly do: "move"; readonly tiles: readonly number[]; readonly turns: Dir } & At)
+  | ({ readonly do: "copy"; readonly tiles: readonly number[]; readonly turns: Dir } & At)
   | ({ readonly do: "remove" } & At)
   | { readonly do: "clear"; readonly tiles: readonly number[] }
   | { readonly do: "upgrade"; readonly tiles: readonly number[] }
@@ -136,6 +141,14 @@ export const answer = (y: Yard): Answer => ({
   hung: y.board.filter((o) => y.tick < o.starts - ORDER_WAITS + ORDER_TOLD),
 });
 
+/** The answer as it goes on the wire (`FACTORY.answer`): Leaf's tick now beside it, and each order by name (`keptOrder`). */
+export interface Short {
+  readonly clock: number;
+  readonly tick: number;
+  readonly check: number;
+  readonly hung: readonly KeptOrder[];
+}
+
 /** A command the rules turned down: the code Leaf answers, and the sentence the page says. */
 export type Turned = Refused & { readonly why: string };
 
@@ -149,6 +162,7 @@ export const REFUSED = {
   stand: "cannot_stand",
   placeBlueprint: "cannot_place_blueprint",
   move: "cannot_move",
+  copy: "cannot_copy",
   remove: "nothing_to_take_away",
   clear: "nothing_to_clear",
   upgrade: "cannot_upgrade",
@@ -243,6 +257,7 @@ const done = (coins: CoinChange[] = [], log: Logged[] = []): Did => ({ coins, lo
 const TOOL: Partial<Record<Command["do"], Lock>> = {
   paint: { use: "paint" },
   move: { use: "select" },
+  copy: { use: "select" },
   clear: { use: "select" },
   stand: { use: "select" },
   placeBlueprint: { use: "select" },
@@ -250,24 +265,37 @@ const TOOL: Partial<Record<Command["do"], Lock>> = {
   saveBlueprint: { blueprint: 0 },
 };
 
-/** Does a command to a yard already at its tick. Nothing is changed unless it is done. */
-function act(y: Yard, c: Command): Did {
+/**
+ * Does a command to a yard already at its tick, with `coins` to spend: the purse's and the till's
+ * whole Coins, which a command that costs pays in first. Nothing is changed unless it is done.
+ */
+function act(y: Yard, c: Command, coins: number): Did {
   // One piece stood again (a removal undone) is a piece built: it is of no tool.
   const tool = c.do === "stand" && c.pieces.length === 1 ? undefined : TOOL[c.do];
   const lock = tool === undefined ? null : locked(y.open, tool);
   if (lock !== null) return { refused: LOCKED, why: lock };
   switch (c.do) {
     case "build": {
-      const did = build(y, c.kind, c.x, c.y, c.dir, Infinity, { grade: c.grade });
+      const did = build(y, c.kind, c.x, c.y, c.dir, coins, { grade: c.grade });
       return did.ok ? done(priced(y, did.cost, REASON.build)) : no(c, did.why);
     }
-    case "lay":
+    case "lay": {
+      // A run stands its legs as pieces made of what a leg holds, and nothing else.
+      const did = stand(y, c.legs.map(legPiece), coins, true, c.turn);
+      return did.ok ? done(priced(y, did.cost, REASON.lay)) : no(c, did.why);
+    }
     case "stand":
-    case "placeBlueprint": {
-      const pieces = c.do === "stand" ? c.pieces : c.do === "lay" ? c.legs : blueprintAt(y, c.slot, c.turns, c.x, c.y);
-      if (!pieces) return no(c, "There is no blueprint there");
-      const did = stand(y, pieces, Infinity, c.do === "lay", c.do === "lay" ? c.turn : undefined);
-      return did.ok ? done(priced(y, did.cost, c.do === "lay" ? REASON.lay : REASON.build)) : no(c, did.why);
+    case "placeBlueprint":
+    case "copy": {
+      const pieces =
+        c.do === "stand"
+          ? c.pieces
+          : c.do === "copy"
+            ? copyOf(y, c.tiles, c.turns, c.x, c.y)
+            : blueprintAt(y, c.slot, c.turns, c.x, c.y);
+      if (!pieces) return no(c, c.do === "copy" ? "There is nothing here to copy" : "There is no blueprint there");
+      const did = stand(y, pieces, coins);
+      return did.ok ? done(priced(y, did.cost, REASON.build)) : no(c, did.why);
     }
     case "move": {
       const why = move(y, c.tiles, c.turns, c.x, c.y);
@@ -280,7 +308,7 @@ function act(y: Yard, c: Command): Did {
       return done(did.refund > 0 ? [change(y, did.refund, REASON.remove, true)] : []);
     }
     case "upgrade": {
-      const did = upgrade(y, c.tiles, Infinity);
+      const did = upgrade(y, c.tiles, coins);
       return did.ok ? done(priced(y, did.cost, REASON.upgrade)) : no(c, did.why);
     }
     case "saveBlueprint": {
@@ -306,7 +334,7 @@ function act(y: Yard, c: Command): Did {
     case "way":
       return setWay(y, c.x, c.y, c.way, c.open) ? done() : no(c, "There is no splitter there");
     case "buyPlot": {
-      const did = buyPlot(y, c.plot, Infinity);
+      const did = buyPlot(y, c.plot, coins);
       if (!did.ok) return no(c, did.why);
       return done(priced(y, did.cost, REASON.buyPlot), [
         { kind: LOGGED.worksPlot, data: { plot: plotName(c.plot), price: did.cost } },
@@ -352,10 +380,15 @@ function told(y: Yard): Logged[] {
   return log;
 }
 
-/** Does a command at its tick: the yard is run on to it, then the command is done or refused. */
-export function play(y: Yard, c: Command): Done<Yard, News> | Turned {
+/**
+ * Does a command at its tick: the yard is run on to it, then the command is done or refused. With
+ * the purse (the member's Coins in the ledger), a command that costs more than the purse and the
+ * till's whole Coins is refused, with the rules' own sentence, as the ledger would refuse its price:
+ * so the page asks at the moment it sends. Leaf plays with none, and its ledger is what refuses.
+ */
+export function play(y: Yard, c: Command, purse = Infinity): Done<Yard, News> | Turned {
   stepTo(y, c.tick);
-  const did = act(y, c);
+  const did = act(y, c, purse + Math.floor(y.till / MILLI));
   if ("refused" in did) return did;
   y.seen = here(y);
   return { state: y, notes: drain(y), coins: did.coins, log: [...did.log, ...told(y)] };
@@ -379,15 +412,22 @@ export function readPiece(v: unknown, mx = 255, my = 255): Piece | null {
   return { kind: k, x: v.x, y: v.y, dir: v.dir, span: v.span, ...keptOf({ ...v, recipe: recipe ?? undefined }, k) };
 }
 
-/** A leg of a run read off the wire: a belt or a tunnel, where it goes, which way, how far and at what grade, and nothing else. */
-function readLeg(v: unknown): Piece | null {
-  const p = readPiece(v);
-  if (!p || (p.kind !== BELT && p.kind !== TUNNEL)) return null;
-  const leg = { kind: p.kind, x: p.x, y: p.y, dir: p.dir, span: p.span };
-  return p.grade === undefined ? leg : { ...leg, grade: p.grade };
+/**
+ * A leg of a run read off the wire: a belt, or a tunnel; where it goes, which way, for a tunnel how
+ * far under, and at what grade. A belt that passes under is no leg; whatever else is on one is let be.
+ */
+export function readLeg(v: unknown): Leg | null {
+  if (!isRecord(v)) return null;
+  const k = kindNamed(v.kind);
+  if ((k !== BELT && k !== TUNNEL) || !isDir(v.dir) || !whole(v.x, 255) || !whole(v.y, 255)) return null;
+  if (!whole(v.span, k === TUNNEL ? SPAN_MOST : 0)) return null;
+  const grade = v.grade === undefined ? 1 : whole(v.grade, TOP) && v.grade >= 1 ? v.grade : null;
+  if (grade === null) return null;
+  const laid = { x: v.x, y: v.y, dir: v.dir, grade };
+  return k === TUNNEL ? { tunnel: true, ...laid, span: v.span } : { tunnel: false, ...laid };
 }
 
-function listOf(v: unknown, most: number, read: (v: unknown) => Piece | null): Piece[] | null {
+function listOf<T>(v: unknown, most: number, read: (v: unknown) => T | null): T[] | null {
   if (!Array.isArray(v) || v.length > most) return null;
   const pieces = v.map(read).filter((p) => p !== null);
   return pieces.length === v.length ? pieces : null;
@@ -424,7 +464,8 @@ function what(v: Record<string, unknown>): Act | null {
     case "placeBlueprint":
       return spot && slot !== null && isDir(v.turns) ? { do: "placeBlueprint", slot, turns: v.turns, ...spot } : null;
     case "move":
-      return spot && tiles && isDir(v.turns) ? { do: "move", tiles, turns: v.turns, ...spot } : null;
+    case "copy":
+      return spot && tiles && isDir(v.turns) ? { do: v.do, tiles, turns: v.turns, ...spot } : null;
     case "remove":
       return spot && { do: "remove", ...spot };
     case "clear":
@@ -483,11 +524,8 @@ const view = (y: Yard, ctx: Ctx, blueprints = true): View => ({
   clock: clockOf(y, ctx.now),
 });
 
-/** The two things that take the whole yard, by the names the town knows them by. */
-const CAPSTONES = ["crab", "beacon"] as const;
-
 /** The Works on flat data, for Leaf's play service. */
-export const FACTORY: Game<Yard, Command, View, News> = {
+export const FACTORY: Game<Yard, Command, View, News, Short> = {
   id: "works",
   create: (ctx) => {
     const y = create({ seed: ctx.seed });
@@ -498,10 +536,12 @@ export const FACTORY: Game<Yard, Command, View, News> = {
   tend: (y, ctx, more, c) => runOn(y, ctx.now, more, c),
   apply: (y, c, ctx) => play(y, { ...c, tick: tickOf(y, c, ctx.now) }),
   view: (y, ctx) => view(y, ctx),
+  answer: (y, ctx) => shortOf(clockOf(y, ctx.now), answer(y)),
   visit: (y, ctx) => view(y, ctx, false),
   decode: (text) => decode(text),
   encode: (y) => encode(y),
   command: readCommand,
   standing: (y) => ({ score: Math.floor((y.sold + y.paid) / MILLI), also: { tier: y.open.tier } }),
-  awards: (y) => CAPSTONES.filter((name) => (y.depot[itemNamed(name) ?? 0] ?? 0) > 0).map((k) => `model-${k}`),
+  // A model of each capstone the depot has taken in, for the member's camp.
+  awards: (y) => postcard(y).trophies.map((k) => `model-${k}`),
 };

@@ -8,7 +8,7 @@
  *
  * - In step. With each command sent the page keeps the copy's tick and check just after it
  *   (`check`). Leaf answers a batch with its clock and its yard's tick and check after the batch
- *   (`WorksAnswer`), not the yard. When Leaf did what the page did, at the same tick, the two checks
+ *   (`Heard`), not the yard. When Leaf did what the page did, at the same tick, the two checks
  *   are of the same moment: alike, the page only puts on its board the orders Leaf has hung that are
  *   new to it (`hung`: only Leaf can draw them, holding the seed), which count a few seconds after
  *   they are hung (`ORDER_WAITS`), so the copy has them in time.
@@ -25,19 +25,23 @@
  * ledger's: the number the Works shows is the purse's and the whole Coins in the copy's till. Only
  * the screen's own settings stay in the browser.
  *
+ * What is done is done to the copy as the rules' `Act`, with things, kinds, plots and goals as
+ * numbers, and goes to Leaf as the rules write it (`writeCommand`), by name.
+ *
  * A visit (`S.visiting`) opens somebody else's yard as Leaf gives a visitor it, runs it on the same
  * way, and reads it again every half minute. It sends nothing: `doNow` refuses.
  */
 
-import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
-import { outside } from "@sequoia-leaf/kit/net.ts";
-import { type Answered, openPlay, type Play, type Trouble } from "@sequoia-leaf/kit/play.ts";
-import { balance, heardCoins, refreshCoins } from "@sequoia-leaf/kit/purse.ts";
 import {
+  type Act,
   check,
-  counts,
+  type Command,
+  decode,
   drain,
+  hear,
+  type Heard,
   LEAD,
+  MILLI,
   type News,
   play,
   readAnswer,
@@ -47,13 +51,14 @@ import {
   stepTo,
   stillAt,
   TICK_MS,
-  WORKS,
-  type WorksAct,
-  type WorksAnswer,
-  type WorksCommand,
-  type WorksNote,
-  type WorksView,
-} from "@sequoia-leaf/yard";
+  type View,
+  type Wired,
+  writeCommand,
+} from "@sequoia-leaf/factory";
+import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
+import { outside } from "@sequoia-leaf/kit/net.ts";
+import { type Answered, openPlay, type Play, type Trouble } from "@sequoia-leaf/kit/play.ts";
+import { balance, heardCoins, refreshCoins } from "@sequoia-leaf/kit/purse.ts";
 
 import { S } from "./state.ts";
 import { ZOOM } from "./zoom.ts";
@@ -96,10 +101,12 @@ export function parseScreen(text: string | null): Screen {
 /** Keeps the screen's settings. */
 export const keepScreen = (): void => void keepText(SCREEN, JSON.stringify(screen));
 
-let leaf: Play<WorksView, WorksCommand, WorksNote, WorksAnswer> | null = null;
+/** A command as it goes to Leaf. */
+type Sending = Wired & { readonly tick: number };
+let leaf: Play<View, Sending, News, Heard> | null = null;
 /** A command sent and not answered yet: the copy's tick and check just after it was done, and whether it changed Coins. */
 interface Sent {
-  readonly command: WorksCommand;
+  readonly command: Sending;
   readonly tick: number;
   readonly check: number;
   readonly paid: boolean;
@@ -111,10 +118,14 @@ let taking: number | null = null;
 /** The tick the copy was last found not to be Leaf's yard, until Leaf is told; and how often that was found. */
 let untold: number | undefined;
 let found = 0;
+/** How many times the copy has become Leaf's yard as read: the opening, and each time it was taken since. */
+let reads = 0;
 /** Leaf's tick in its last answer, and when that came on the page's own clock. */
 let base = { clock: 0, at: 0 };
 /** The latest tick the page has shown. */
 let shown = 0;
+/** How many goals the copy had done when `S.rev` last counted a change. */
+let finished = 0;
 let collectedAt = 0;
 /** When Leaf was last asked for its yard. */
 let askedAt = -Infinity;
@@ -129,7 +140,7 @@ export const CATCHING_UP = "The yard is catching up with the guild's server";
 export const onRefused = (fn: (why: string) => void): void => void refusalHearers.push(fn);
 
 /** The Coins the member has to spend in the Works, as Leaf will count them: the purse's, and the till's whole Coins (not in a visit). */
-export const coins = (): number => balance().coins + (S.visiting ? 0 : Math.floor(S.world.till));
+export const coins = (): number => balance().coins + (S.visiting ? 0 : Math.floor(S.world.till / MILLI));
 
 /** Leaf's tick now, as the page reckons it. */
 const tickAt = (now: number): number => Math.max(shown, base.clock + Math.floor((now - base.at) / TICK_MS));
@@ -140,7 +151,7 @@ const tickAt = (now: number): number => Math.max(shown, base.clock + Math.floor(
  */
 export async function openYard(player: string, trouble: (why: Trouble) => void): Promise<Trouble | null> {
   Object.assign(screen, parseScreen(keptText(SCREEN)));
-  const opened = await openPlay<WorksView, WorksCommand, WorksNote, WorksAnswer>(
+  const opened = await openPlay<View, Sending, News, Heard>(
     "works",
     { view: readView, notes: readNotes, short: readAnswer },
     { player, ...(S.visiting ? { of: S.visiting.id } : {}) },
@@ -167,7 +178,7 @@ export async function openYard(player: string, trouble: (why: Trouble) => void):
 /** The copy becomes Leaf's yard, run on to the tick already shown, and is in step. False when Leaf's rules are newer than the page's. */
 function take(): boolean {
   const view = leaf?.state;
-  const yard = view ? WORKS.decode(view.yard) : null;
+  const yard = view ? decode(view.yard) : null;
   if (!view || !yard) {
     outside.reload();
     return false;
@@ -182,6 +193,8 @@ function take(): boolean {
   shown = Math.max(shown, yard.tick);
   S.world = yard;
   S.rev++;
+  finished = yard.done.length;
+  reads++;
   taking = null;
   untold = undefined;
   return true;
@@ -223,19 +236,11 @@ function ask(now: number): void {
 export const catchingUp = (now = performance.now()): boolean => taking !== null && now - taking > 1000;
 
 /**
- * Puts on the copy's board each order Leaf has hung that is new to it, while the order does not
- * count yet; one heard of after it began to count has been missed, and Leaf's yard is taken. Order
- * ids only go up (`serial`): one under the copy's serial is one the copy has had, and may since have
- * swapped out or handed over, so it is passed over.
+ * Puts on the copy's board each order Leaf has hung that is new to it (the rules' `hear`); one heard
+ * of after it began to count has been missed, and Leaf's yard is taken.
  */
 function hang(hung: readonly Standing[]): void {
-  const w = S.world;
-  for (const order of hung) {
-    if (order.id < w.serial) continue;
-    if (counts(order, w.tick)) return giveWay();
-    w.board.push(order);
-    w.serial = order.id + 1;
-  }
+  if (!hear(S.world, hung)) giveWay();
 }
 
 /**
@@ -243,7 +248,7 @@ function hang(hung: readonly Standing[]): void {
  * with the orders Leaf hung put on its board, or Leaf's is asked for. Leaf may have turned a command
  * down that the page had shown done.
  */
-function heard({ done, short }: Answered<WorksCommand, WorksNote, WorksAnswer>): void {
+function heard({ done, short }: Answered<Sending, News, Heard>): void {
   const mine = unanswered.filter((sent) => done.some((d) => d.command === sent.command));
   unanswered = unanswered.filter((sent) => !mine.includes(sent));
   if (short) base = { clock: short.clock, at: performance.now() };
@@ -269,22 +274,30 @@ function heard({ done, short }: Answered<WorksCommand, WorksNote, WorksAnswer>):
 
 /**
  * Does what the member did to the copy at once, with the shared rules, and sends it to Leaf with
- * the tick the copy stands at; whatever Coins it pays or takes show at once. The rules' refusal is
- * given back, and nothing is sent.
+ * the tick the copy stands at; whatever Coins it pays or takes show at once. The rules are asked
+ * with the purse as it is at this moment, so that whatever costs more Coins than there are is
+ * refused here, with their sentence, however long ago it was aimed: this is the one place a price
+ * is judged before it is sent. The rules' refusal is given back, and nothing is sent. A yard the
+ * page was handed by a review page of its own (`S.alone`) is done to in the same way, and sends nothing.
  */
-export function doNow(act: WorksAct): ReturnType<typeof play> {
+export function doNow(act: Act): ReturnType<typeof play> {
   if (S.visiting) return { refused: "visiting", why: "This yard is somebody else's" };
-  if (!leaf) return { refused: "closed", why: "The yard is not open" };
+  if (!leaf && !S.alone) return { refused: "closed", why: "The yard is not open" };
   if (taking !== null) return { refused: "catching_up", why: CATCHING_UP };
-  const command: WorksCommand = { ...act, tick: S.world.tick };
-  const done = play(S.world, command);
+  const command: Command = { ...act, tick: S.world.tick };
+  const done = play(S.world, command, balance().coins);
   if ("refused" in done) return done;
+  // The yard has changed: what is worked out from it and kept is looked at again.
+  S.rev++;
   const change = (done.coins ?? []).reduce((sum, c) => sum + c.amount, 0);
   if (change !== 0) heardCoins(balance().coins + change);
+  if (!leaf) return done;
+  const sending = writeCommand(command);
   if (act.do === "collect") collectedAt = performance.now();
   // A collection may pay what only Leaf knows of (a tab put away earns on Leaf, not on the copy).
-  unanswered.push({ command, tick: S.world.tick, check: check(S.world), paid: change !== 0 || act.do === "collect" });
-  void leaf.send(command);
+  const paid = change !== 0 || act.do === "collect";
+  unanswered.push({ command: sending, tick: S.world.tick, check: check(S.world), paid });
+  void leaf.send(sending);
   return done;
 }
 
@@ -310,6 +323,11 @@ export function runYard(now: number): News[] {
   }
   stepTo(w, tick);
   shown = w.tick;
+  // A goal finished on the way changes what is open (the plots for sale, a pylon's reach): it is a change.
+  if (w.done.length !== finished) {
+    finished = w.done.length;
+    S.rev++;
+  }
   // A yard standing still (its owner away eight hours) holds Leaf's clock with it from the frame it
   // stops in, as Leaf does, until they act.
   if (w.tick >= stillAt(w)) base = { clock: w.tick, at: now };
@@ -326,7 +344,7 @@ export function runYard(now: number): News[] {
   // A slot the board would have filled (a story order done) is filled by Leaf. And once a minute
   // the page collects whether or not the till holds a Coin: it keeps Leaf's yard in step with one
   // being watched, so that a yard earning nothing is not taken for one its owner left.
-  const empty = w.open.board && w.board.length < w.rates.slots;
+  const empty = w.open.board && w.board.length < w.open.hooks;
   // Not while a letter about a time away waits to be read: putting it away is what collects.
   if (!waiting && !w.away && (empty || now - collectedAt >= COLLECT_EVERY)) collect();
   return news;
@@ -362,6 +380,9 @@ export async function again(): Promise<void> {
 /** How many times the copy has been found not to be Leaf's yard since the page opened. */
 export const differences = (): number => found;
 
+/** How many times the copy has become Leaf's yard as read since the page opened, the opening included. */
+export const yardReads = (): number => reads;
+
 /** Sends nothing more and forgets the yard (for tests). */
 export function letGo(): void {
   leaf = null;
@@ -369,6 +390,8 @@ export function letGo(): void {
   taking = null;
   untold = undefined;
   found = 0;
+  reads = 0;
   shown = 0;
+  finished = 0;
   putAway = (): void => undefined;
 }

@@ -31,7 +31,7 @@ import {
   WHEEL,
   WORKSHOP,
 } from "./tables.ts";
-import type { Wire, Yard } from "./yard.ts";
+import { holderOf, type Wire, type Yard } from "./yard.ts";
 
 /** The tile ahead of a piece, behind it, and to its left and right; -1 off the map. */
 export const ahead = (y: Yard, i: number): number => toward(y.land, i, y.dir[i] ?? 0);
@@ -129,7 +129,7 @@ export function rewire(y: Yard): Wire {
   y.wire = wire;
   y.demand = demand;
   let burning = 0;
-  for (const i of boilers) if ((y.holders.fuel[y.row[i] ?? 0] ?? 0) > 0) burning++;
+  for (const i of boilers) if ((y.holders.fuel[holderOf(y, i)] ?? 0) > 0) burning++;
   y.supply = steady + burning * (GIVES[BOILER] ?? 0) * HALF;
   return wire;
 }

@@ -1,15 +1,15 @@
-/** What the yard says in passing: the purse and Coins flying to it, a line of news, and the notice when a story order is filled. */
+/** What the yard says in passing: the purse and Coins flying to it, a line of news, and the notice when the node in hand is finished. */
 
+import { type Goal, GOALS, item, ITEM_INFO, kind, KIND_INFO, NODES, plot, RECIPE } from "@sequoia-leaf/factory";
 import { amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { fly, type PurseBar, purseBar } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
-import { KIND, PLANS, STORY, type StoryOrder } from "@sequoia-leaf/yard";
 
 import type { Art } from "../art/index.ts";
 import { S } from "../state.ts";
 import { coins } from "../yard.ts";
-import { $, button, fitted, pic, wantWords, yardIcon } from "./parts.ts";
+import { $, button, fitted, partsWords, pic, wantWords, yardIcon } from "./parts.ts";
 
 let bar: PurseBar | null = null;
 
@@ -23,7 +23,7 @@ export function tickNotes(dt: number): void {
 }
 
 /** Where a currency's icon is in the purse, for things to fly to and from. */
-export const purseAt = (kind: "leaf" | "coins"): Pt => bar?.at(kind) ?? { x: 30, y: 30 };
+export const purseAt = (currency: "leaf" | "coins"): Pt => bar?.at(currency) ?? { x: 30, y: 30 };
 
 /** Coins fly from a spot on the page into the purse. */
 export function coinsFrom(from: Pt, pay: number): void {
@@ -56,60 +56,94 @@ export function closeBanner(): void {
   $("banner").hidden = true;
 }
 
+/** What each tool that a node may unlock is, in a line. */
+/** The head of the notice for a goal finished, by what it was. */
+const DONE = { lesson: "Lesson done", project: "Project done", commission: "Commission done" } as const;
+
+const TOOL_WORDS = {
+  paint: ["Paint", "Gives a belt's whole line a colour, to tell lines apart."],
+  select: ["Select", "Mark out an area to move, copy, remove or save as a blueprint."],
+  upgrade: ["Upgrading an area", "Raises every piece in a marked area to the highest grade the yard may build."],
+} as const;
+
 /**
- * A story order has been filled: what it paid, what it opened (each with its picture and what it
- * is for), and what is asked for next. It stays until it is put away or a while has passed.
+ * The node in hand is finished: what it paid, what it unlocked (each with its picture and what it is
+ * for), what it left in the town, and the node now in hand. It stays until it is put away or a while
+ * has passed.
  */
-export function banner(art: Art, done: StoryOrder, next: StoryOrder | null): void {
+export function banner(art: Art, done: Goal, next: Goal | null): void {
   const b = $("banner");
+  const info = GOALS[done];
+  const node = NODES[done];
+  if (!info) return;
+  const u = info.unlocks;
   const opened: HTMLElement[] = [];
-  for (const kind of done.opens.kinds ?? [])
+  for (const name of u.kinds ?? []) {
+    const k = kind(name);
+    const what = KIND_INFO[k];
     opened.push(
       el(
         "div",
         "k-card",
         {},
-        fitted(art.icon(kind), 20, 20),
+        fitted(art.icon(k), 20, 20),
         el(
           "div",
           "k-grow",
           {},
-          `New: the ${KIND[kind].name.toLowerCase()}`,
-          el("div", "k-d", { text: KIND[kind].what }),
+          `New: the ${(what?.name ?? "").toLowerCase()}`,
+          el("div", "k-d", { text: what?.what ?? "" }),
         ),
       ),
     );
-  for (const id of done.opens.plots ?? []) {
-    const plot = S.world.land.plots.find((p) => p.id === id);
-    if (plot)
+  }
+  for (const name of u.tools ?? []) {
+    const [title, what] = TOOL_WORDS[name];
+    opened.push(
+      el(
+        "div",
+        "k-card",
+        {},
+        yardIcon(name === "paint" ? "brush" : "select"),
+        el("div", "k-grow", {}, `New: ${title}`, el("div", "k-d", { text: what })),
+      ),
+    );
+  }
+  for (const name of u.recipes ?? []) {
+    const n = item(name);
+    const r = RECIPE[n];
+    opened.push(
+      el(
+        "div",
+        "k-card",
+        {},
+        pic(art.item(n), 1),
+        el(
+          "div",
+          "k-grow",
+          {},
+          `New recipe: ${ITEM_INFO[n]?.many ?? ""}`,
+          el("div", "k-d", {
+            text: `From ${partsWords(n)}, at a ${(KIND_INFO[r?.by ?? kind("bench")]?.name ?? "").toLowerCase()}.`,
+          }),
+        ),
+      ),
+    );
+  }
+  for (const name of u.plots ?? []) {
+    const p = S.world.land.plots.find((q) => q.plot === plot(name));
+    if (p)
       opened.push(
         el(
           "div",
           "k-card",
           {},
           icon("star"),
-          el("div", "k-grow", {}, `For sale: ${plot.name}`, el("div", "k-d", { text: plot.why })),
+          el("div", "k-grow", {}, `For sale: ${p.name}`, el("div", "k-d", { text: p.why })),
         ),
       );
   }
-  const plans = (done.opens.plans ?? []).flatMap((id) => PLANS.filter((p) => p.id === id));
-  if (plans.length > 0)
-    opened.push(
-      el(
-        "div",
-        "k-card",
-        {},
-        yardIcon("plans"),
-        el(
-          "div",
-          "k-grow",
-          {},
-          plans.length === 1 ? "A new plan to buy" : "New plans to buy",
-          el("div", "k-dim", { text: plans.map((p) => p.name).join(", ") }),
-        ),
-      ),
-    );
-  if (done.opens.board)
+  if (u.board)
     opened.push(
       el(
         "div",
@@ -127,35 +161,51 @@ export function banner(art: Art, done: StoryOrder, next: StoryOrder | null): voi
         ),
       ),
     );
-  if (done.gift) opened.push(el("div", "k-card", {}, icon("heart"), el("div", "k-grow k-d", { text: done.gift.line })));
+  if (node?.gift)
+    opened.push(el("div", "k-card", {}, icon("heart"), el("div", "k-grow k-d", { text: node.gift.line })));
   const close = el(
     "button",
     "k-btn wood icon sm",
     { type: "button", "aria-label": "Close", onclick: closeBanner },
     icon("close"),
   );
+  const then = next === null ? undefined : NODES[next];
+  const nextInfo = next === null ? undefined : GOALS[next];
   b.replaceChildren(
-    el("header", "k-head", {}, icon("check"), el("h2", "k-title", { text: "Order filled" }), close),
+    el(
+      "header",
+      "k-head",
+      {},
+      icon("check"),
+      el("h2", "k-title", { text: node ? DONE[node.kind] : "Order filled" }),
+      close,
+    ),
     el(
       "div",
       "k-body",
       {},
-      el("div", "k-row", {}, el("div", "k-grow", { text: done.title }), amount("coin", `+${done.pay}`)),
+      el(
+        "div",
+        "k-row",
+        {},
+        el("div", "k-grow", { text: info.title }),
+        info.pay > 0 ? amount("coin", `+${info.pay}`) : null,
+      ),
       ...opened,
-      next
+      then && nextInfo
         ? el(
             "div",
             "k-say",
             {},
-            el("b", "", { text: `Next, from ${next.from}` }),
-            `${next.title}: ${wantWords(next.want)}.`,
+            el("b", "", { text: `Next, from ${then.from}` }),
+            `${then.title}: ${wantWords(nextInfo.want)}.`,
           )
         : el(
             "div",
             "k-say",
             {},
             el("b", "", { text: "The guild" }),
-            "That was the last story order. Side orders keep coming.",
+            "Nothing is in hand. Take a project in Projects. Side orders keep coming.",
           ),
       button("wide", ["Back to work"], closeBanner),
     ),
@@ -167,8 +217,16 @@ export function banner(art: Art, done: StoryOrder, next: StoryOrder | null): voi
   sfx.open();
 }
 
-/** How far the story has come, in words for a label. */
-export const storyLabel = (): string =>
-  S.world.story >= STORY.length ? "The story is told" : `Order ${S.world.story + 1} of ${STORY.length}`;
+/** How many lessons there are, and the place of each among them. */
+const LESSONS = GOALS.flatMap((g, n) => (g.kind === "lesson" ? [n] : []));
+
+/** The node in hand, in words for a label: "Lesson 2 of 4", "Tier 1 project", "Tier 1 commission"; or the tier, with nothing in hand. */
+export function handLabel(): string {
+  const w = S.world;
+  const info = w.hand === -1 ? undefined : GOALS[w.hand];
+  if (!info) return `Tier ${w.open.tier}`;
+  if (info.kind === "lesson") return `Lesson ${LESSONS.indexOf(w.hand) + 1} of ${LESSONS.length}`;
+  return `Tier ${info.tier} ${info.kind}`;
+}
 
 export { pic };

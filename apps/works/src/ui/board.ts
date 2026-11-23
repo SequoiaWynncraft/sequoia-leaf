@@ -6,6 +6,7 @@
  * (`person`), with "Visit yard" and "Visit camp" for anybody else's.
  */
 
+import { WORKS_STATS } from "@sequoia-leaf/factory/stats.ts";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { amount, el } from "@sequoia-leaf/kit/dom.ts";
 import { member, where } from "@sequoia-leaf/kit/live.ts";
@@ -14,8 +15,6 @@ import { type Board, known, people, readBoard, type Row } from "@sequoia-leaf/ki
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
 import { faceFor, facesCame } from "@sequoia-leaf/kit/skin.ts";
 import { RAID_STATS } from "@sequoia-leaf/raid/stats.ts";
-import { STORY } from "@sequoia-leaf/yard";
-import { WORKS_STATS } from "@sequoia-leaf/yard/stats.ts";
 
 import type { Art } from "../art/index.ts";
 import { toTown } from "./hud.ts";
@@ -45,7 +44,7 @@ export function initBoard(myId: string): void {
 
 /** One line of the board, standing for its owner. */
 function line(r: Row): HTMLElement {
-  const said = `${r.guest ? "Guest · " : ""}Story ${r.also.story ?? 0} of ${STORY.length}`;
+  const said = `${r.guest ? "Guest · " : ""}Tier ${r.also.tier ?? 0}`;
   const face = faceFor(r.id, r.name, where().mode === "live");
   const row = el(
     "div",

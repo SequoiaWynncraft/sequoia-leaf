@@ -213,16 +213,16 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     ],
   });
   // The Works' board: Bob's yard, Alice's and the guest's, as the play service writes where each stands.
-  for (const [player, score, story, guest] of [
-    [bob, 5120, 7, 0],
-    [alice, 1840, 3, 0],
-    [visitor, 960, 2, 1],
+  for (const [player, score, tier, guest] of [
+    [bob, 5120, 2, 0],
+    [alice, 1840, 1, 0],
+    [visitor, 960, 1, 1],
   ] as const) {
     // oxlint-disable-next-line no-await-in-loop -- one after another
     await leaf.query(
       (sql) => sql`
         INSERT INTO standings (player_id, game, score, also, guest, updated_at)
-        VALUES (${player}, 'works', ${score}, ${JSON.stringify({ story })}, ${guest}, ${clock.now})
+        VALUES (${player}, 'works', ${score}, ${JSON.stringify({ tier })}, ${guest}, ${clock.now})
       `,
     );
   }

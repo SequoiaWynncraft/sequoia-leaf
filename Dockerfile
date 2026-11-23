@@ -1,6 +1,6 @@
 # The game's pages, built from the three apps, the kit they share, the core
 # rules the kit shares with Leaf (the live wire), the games' rules
-# (packages/raid, packages/yard and packages/town, which the pages share with
+# (packages/raid, packages/factory and packages/town, which the pages share with
 # Leaf's play service), and the raid's figures, which the raid's page and the
 # town's draw (packages/figures). Each build is plain files, so only
 # /app/public goes on to the image.
@@ -12,7 +12,7 @@ COPY package.json bun.lock bunfig.toml tsconfig.base.json ./
 COPY packages/kit/package.json packages/kit/
 COPY packages/core/package.json packages/core/
 COPY packages/raid/package.json packages/raid/
-COPY packages/yard/package.json packages/yard/
+COPY packages/factory/package.json packages/factory/
 COPY packages/town/package.json packages/town/
 COPY packages/pulls/package.json packages/pulls/
 COPY packages/figures/package.json packages/figures/
@@ -24,7 +24,7 @@ RUN bun install --frozen-lockfile --production
 COPY packages/kit packages/kit
 COPY packages/core packages/core
 COPY packages/raid packages/raid
-COPY packages/yard packages/yard
+COPY packages/factory packages/factory
 COPY packages/town packages/town
 COPY packages/pulls packages/pulls
 COPY packages/figures packages/figures
@@ -44,7 +44,7 @@ COPY package.json bun.lock bunfig.toml ./
 COPY apps/api/package.json apps/api/
 COPY packages/core/package.json packages/core/
 COPY packages/raid/package.json packages/raid/
-COPY packages/yard/package.json packages/yard/
+COPY packages/factory/package.json packages/factory/
 COPY packages/town/package.json packages/town/
 COPY packages/pulls/package.json packages/pulls/
 RUN bun install --frozen-lockfile --production
@@ -52,7 +52,7 @@ RUN bun install --frozen-lockfile --production
 COPY apps/api apps/api
 COPY packages/core packages/core
 COPY packages/raid packages/raid
-COPY packages/yard packages/yard
+COPY packages/factory packages/factory
 COPY packages/town packages/town
 COPY packages/pulls packages/pulls
 COPY --from=pages /app/public /app/public

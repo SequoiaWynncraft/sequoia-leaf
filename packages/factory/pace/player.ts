@@ -302,7 +302,7 @@ export class Player {
     const read = F.readCommand({ tick: this.y.tick, ...c });
     if (!read) return 0;
     if (read.do === "build") return F.priceAt(this.y, read.kind, read.x, read.y, read.grade);
-    if (read.do === "lay") return F.priceOf(this.y, read.legs);
+    if (read.do === "lay") return F.priceOf(this.y, read.legs.map(F.legPiece));
     if (read.do === "buyPlot") return this.y.land.plots.find((p) => p.plot === read.plot)?.price ?? 0;
     return 0;
   }
@@ -334,7 +334,7 @@ export class Player {
     this.bought.set(this.current, got);
     const add = (what: string): void => void got.set(what, (got.get(what) ?? 0) + 1);
     if (read.do === "build") add(named(read.kind, read.grade));
-    if (read.do === "lay") for (const leg of read.legs) add(named(leg.kind, leg.grade));
+    if (read.do === "lay") for (const leg of read.legs) add(named(F.legKind(leg), leg.grade));
     if (read.do === "buyPlot") add(`plot ${F.plotName(read.plot)}`);
   }
 

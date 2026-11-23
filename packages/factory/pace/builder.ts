@@ -632,12 +632,13 @@ export class Builder {
   /** Lays a run of belt at the grades the player builds belts and tunnels at, and gives the tiles of its belts. */
   private lay(legs: readonly F.Leg[]): number[] | null {
     const wire = legs.map((l) => {
-      const g = this.grades(l.kind);
-      const leg = { kind: F.kindName(l.kind), x: l.x, y: l.y, dir: l.dir, span: l.span };
+      const kind = F.legKind(l);
+      const g = this.grades(kind);
+      const leg = { kind: F.kindName(kind), x: l.x, y: l.y, dir: l.dir, span: F.legSpan(l) };
       return g > 1 ? { ...leg, grade: g } : leg;
     });
     if (!this.cmd({ do: "lay", legs: wire })) return null;
-    return legs.filter((l) => l.kind === F.BELT).map((l) => F.at(this.y, l.x, l.y));
+    return legs.filter((l) => !l.tunnel).map((l) => F.at(this.y, l.x, l.y));
   }
 
   /** Stands pylons toward a tile, each as near it as can be joined to power, until power reaches it; never on `keep`. */
