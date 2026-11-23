@@ -25,7 +25,7 @@ export interface Part {
 export const NOTES: readonly Note[] = [
   {
     id: "town-presence",
-    at: "2026-11-24T23:59Z",
+    at: "2026-11-23T21:50Z",
     title: "Who is where, the same everywhere",
     lines: [
       "Somebody away for 5 minutes or more sits down where they are and dozes off, and is up again the moment they do anything. Their card says for how long.",
