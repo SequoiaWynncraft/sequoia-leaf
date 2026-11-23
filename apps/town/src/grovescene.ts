@@ -65,6 +65,7 @@ import {
   type Timeline,
   timeline,
 } from "./pulls.ts";
+import { placeOf as onStage } from "./screen.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Scene, Stage } from "./stage.ts";
 
@@ -294,8 +295,6 @@ type PullsPlay = Play<PullsView, PullsCommand, PullsNote>;
 export interface Grove extends Scene {
   /** Opens the pulls from Leaf, or asks for them again; says why not if they will not open. */
   open(): Promise<Trouble | null>;
-  /** The member has arrived: the picture and its words are put on. */
-  enter(): void;
   /** Handles for looking at it from outside. */
   readonly handles: {
     /** Where the screen is (its state), the ceremony's time and beats, and Leaf's view. */
@@ -309,12 +308,7 @@ export interface Grove extends Scene {
   };
 }
 
-export function makeGrove(
-  sprites: Sprites,
-  art: CampArt,
-  stage: Stage,
-  town: Scene & { cameFromGrove(): void },
-): Grove {
+export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
   // ---------------------------------------------------------------- Leaf
 
   let play: PullsPlay | null = null;
@@ -323,9 +317,8 @@ export function makeGrove(
   let person: { id: string; body: Body } | null = null;
   /** The pool on show. */
   let pool = GROVE;
-  /** Leaf is answering a pull or an exchange; and the member is on the way out, or not here at all. */
+  /** Leaf is answering a pull or an exchange. */
   let sent = false;
-  let leaving = true;
   /** When Leaf was last asked for the pulls, and for the banners' headliners, while nothing told the page to. */
   let asked = 0;
   let metAt = 0;
@@ -333,7 +326,12 @@ export function makeGrove(
   const view = (): PullsView => must(play, "the pulls").state;
   const banner = (): ReturnType<typeof showing> => showing(view(), banners);
   /** The Grove's one state: what may be pressed in it, and whether a command may be sent (`takesCommand`). */
-  const state = (): GroveState => groveState({ leaving, sent, dark: G.dark, end: show?.end ?? null, t });
+  const state = (): GroveState => {
+    // On the way out, or not here at all: the stage says.
+    const now = stage.now();
+    const leaving = onStage(now) !== "grove" || now.at === "dusk";
+    return groveState({ leaving, sent, dark: G.dark, end: show?.end ?? null, t });
+  };
   const mark = (): void => ui.at(state());
 
   function meet(who: { id: string; name: string }): void {
@@ -1561,16 +1559,7 @@ export function makeGrove(
 
   /** Back to town from the banner, the way the member came: night closes in, and lifts on the town. */
   function leave(): void {
-    if (state() !== "banner") return;
-    const went = stage.travel(town, () => {
-      ui.root.hidden = true;
-      hush(false);
-      town.cameFromGrove();
-    });
-    if (!went) return;
-    leaving = true;
-    sfx.close();
-    mark();
+    if (state() === "banner") hooks.go({ to: "town" });
   }
 
   canvas.addEventListener("pointerdown", () => {
@@ -1579,9 +1568,17 @@ export function makeGrove(
 
   return {
     open,
-    enter() {
-      G.where = "grove";
-      leaving = false;
+    wayOut() {
+      sfx.close();
+      mark();
+      return [];
+    },
+    nightFrom: 0,
+    putAway() {
+      ui.root.hidden = true;
+      hush(false);
+    },
+    putOn() {
       show = null;
       // The banner is the first thing seen, when there is one.
       pool = banner()?.id ?? GROVE;
@@ -1638,7 +1635,6 @@ export function makeGrove(
     },
     drag: () => undefined,
     release: () => undefined,
-    awake: () => !leaving && G.dark < 0.35,
     cameBack: () => undefined,
     handles: {
       state: () => ({

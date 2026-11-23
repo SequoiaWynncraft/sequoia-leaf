@@ -103,6 +103,51 @@ function way(name: string, art: HTMLCanvasElement, go: () => void, line = ""): H
   );
 }
 
+// ---------- the signpost ----------
+
+/** Home (at somebody else's camp) and town; and at the member's own, the camps on the town's board. */
+function signpost(body: HTMLElement): (() => void) | null {
+  const host = visiting();
+  if (host)
+    body.append(
+      way("Home", shown(campIcon("home"), 1), () => {
+        hooks.go({ to: "camp" });
+      }),
+    );
+  body.append(
+    way("Town", shown(campIcon("town"), 1), () => {
+      hooks.go({ to: "town" });
+    }),
+  );
+  if (host) return null;
+  const list = el("div", "k-col");
+  body.append(list);
+  let camps: readonly Row[] = [];
+  void (async () => {
+    const a = await askLeaf("/v1/game/play/town/standings");
+    const board = a.status === 200 ? readBoard(a.body) : null;
+    camps = board ? board.top.filter((r) => !r.you).slice(0, CAMPS_LISTED) : [];
+    refreshPanel();
+  })();
+  return when(
+    () => `${facesCame()}|${camps.map((r) => `${r.id}/${r.score}`).join()}`,
+    () => {
+      list.replaceChildren(
+        ...camps.map((r) =>
+          way(
+            r.name,
+            pic(faceFor(r.id, r.name, true), 2),
+            () => {
+              hooks.go({ to: "camp", of: r.id, name: r.name });
+            },
+            `${r.score} things set out`,
+          ),
+        ),
+      );
+    },
+  );
+}
+
 export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): void } {
   let scene: CampScene | null = null;
   const at = (): CampScene => {
@@ -303,51 +348,6 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
     );
   }
 
-  // ---------- the signpost ----------
-
-  /** Home (at somebody else's camp) and town; and at the member's own, the camps on the town's board. */
-  function signpost(body: HTMLElement): (() => void) | null {
-    const host = visiting();
-    if (host)
-      body.append(
-        way("Home", shown(campIcon("home"), 1), () => {
-          at().leave("home");
-        }),
-      );
-    body.append(
-      way("Town", shown(campIcon("town"), 1), () => {
-        at().leave("town");
-      }),
-    );
-    if (host) return null;
-    const list = el("div", "k-col");
-    body.append(list);
-    let camps: readonly Row[] = [];
-    void (async () => {
-      const a = await askLeaf("/v1/game/play/town/standings");
-      const board = a.status === 200 ? readBoard(a.body) : null;
-      camps = board ? board.top.filter((r) => !r.you).slice(0, CAMPS_LISTED) : [];
-      refreshPanel();
-    })();
-    return when(
-      () => `${facesCame()}|${camps.map((r) => `${r.id}/${r.score}`).join()}`,
-      () => {
-        list.replaceChildren(
-          ...camps.map((r) =>
-            way(
-              r.name,
-              pic(faceFor(r.id, r.name, true), 2),
-              () => {
-                hooks.visitCamp(r.id, r.name);
-              },
-              `${r.score} things set out`,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   function choose(body: HTMLElement): null {
     body.append(
       el("div", "", { text: "Three small faces look round the cabin door. One of them would like to stay." }),
@@ -544,13 +544,8 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
             }
           : null,
       );
-      hooks.toCamp = (): boolean => {
-        if (!home) s.leave("home");
-        else closePanel();
-        return true;
-      };
       setStrip(host, () => {
-        s.leave("home");
+        hooks.go({ to: "camp" });
       });
       tray.hidden = true;
       document.body.classList.remove("decorating");

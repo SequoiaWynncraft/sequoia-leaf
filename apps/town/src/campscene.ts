@@ -10,7 +10,6 @@
  * to act with (no cabin, mailbox, tray or decorating; only the signpost, home or to town).
  */
 
-import { member } from "@sequoia-leaf/kit/live.ts";
 import { CREAM, GOLD, GREEN, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import type { Dir } from "@sequoia-leaf/kit/skin.ts";
@@ -39,7 +38,7 @@ import { AT_CAMP, folk } from "@sequoia-leaf/town/folk.ts";
 import { BOX_FULL, waiting } from "@sequoia-leaf/town/mail.ts";
 import { footprint, thingOf, turnsOf } from "@sequoia-leaf/town/things.ts";
 
-import { face, hop, makeFolk, release, say, sit, stepActor, walkTo } from "./actors.ts";
+import { face, hop, makeFolk, release, say, sit, stepActor, walkTo, wayTo } from "./actors.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import {
   CAMP_GROUND,
@@ -65,20 +64,7 @@ import { CELL, makeGround } from "./grid.ts";
 import { paintTrunk } from "./ground.ts";
 import { guild, type Happening } from "./guild.ts";
 import { closeCard, closePanel, covered, setStrip, showCard } from "./hud.ts";
-import {
-  ask,
-  doNow,
-  lookAt,
-  type Looked,
-  mine,
-  ok,
-  onTown,
-  openCamp,
-  refusal,
-  shown,
-  troubleCard,
-  visiting,
-} from "./leaf.ts";
+import { ask, doNow, lookAt, type Looked, mine, ok, onTown, refusal, shown, visiting } from "./leaf.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
 import type { Sprites } from "./sprites.ts";
@@ -110,14 +96,8 @@ export interface Held {
 }
 
 export interface CampScene extends Scene {
-  /** Lays out the camp gone to (`visit`), or else the member's own, and brings the member in off the trail. */
-  enter(): void;
-  /** Goes to somebody's camp, or the member's own for their own id: from town through the gate, from a camp down the trail. */
-  visit(id: string, name?: string): Promise<void>;
   /** Walk up to one of the camp's places and use it. */
   go(what: CampPlace): void;
-  /** Leave down the trail: for the town, for home, or for somebody's camp opened. */
-  leave(to: "town" | "home" | Looked): void;
   decorating(): boolean;
   decorate(on: boolean): void;
   held(): Held | null;
@@ -205,14 +185,11 @@ export function makeCamp(
   sprites: Sprites,
   art: CampArt,
   stage: Stage,
-  town: Scene & { cameFromCamp(): void },
   backdrop: { sky: HTMLCanvasElement; near: HTMLCanvasElement },
   ui: CampUi,
 ): CampScene {
   // ---------- what is here ----------
 
-  /** The camp to show when the camp is next entered: somebody's opened, or null for the member's own. */
-  let coming: Looked | null = null;
   let lives: Live[] = [];
   /** Each thing's life in the camp, by its id, so that it is the same thing whatever Leaf's copy is. */
   const byId = new Map<number, Live>();
@@ -488,7 +465,7 @@ export function makeCamp(
       prompt: { x: CW - 30, y: TRAIL_Y - 44 },
       reach: 26,
       box: { x: CW - 34, y: TRAIL.y0 * CELL - 4, w: 48, h: (TRAIL.y1 - TRAIL.y0 + 1) * CELL + 12 },
-      use: () => leave(home ? "town" : "home"),
+      use: () => hooks.go(home ? { to: "town" } : { to: "camp" }),
     });
     petWorld.fire = fire;
   }
@@ -588,11 +565,10 @@ export function makeCamp(
 
   // ---------- getting about ----------
 
-  let leaving = false;
   /** How far the view has been pushed off the member while something is dragged near an edge. */
   const pan = { x: 0, y: 0 };
 
-  const awake = (): boolean => G.home && G.dark < 0.35 && !leaving;
+  const awake = (): boolean => stage.mayAct();
 
   function go(what: CampPlace): void {
     const spot = spots.find((s) => s.id === what);
@@ -620,40 +596,6 @@ export function makeCamp(
       },
       ground,
     );
-  }
-
-  /** Off down the trail. Night closes in once they are nearly out of sight, or have walked a while. */
-  function leave(to: "town" | "home" | Looked): void {
-    if (leaving || !G.home) return;
-    const p = player();
-    halt();
-    decorate(false);
-    closePanel();
-    closeCard();
-    leaving = true;
-    walkTo(p, { x: CW - 6, y: TRAIL_Y + 2 }, null, ground);
-    p.path.push({ ...TRAIL_END });
-    const set = (): void => {
-      if (to === "town") {
-        stage.travel(town, () => {
-          leaving = false;
-          clear();
-          lookAt(null);
-          // Straight to town from somebody's camp: the strip that says whose camp it is goes with the camp.
-          setStrip(null, () => {});
-          town.cameFromCamp();
-        });
-        return;
-      }
-      coming = to === "home" ? null : to;
-      stage.travel(scene, enter);
-    };
-    const started = G.t;
-    const wait = (): void => {
-      if (dist(p.x, p.y, TRAIL_END.x, TRAIL_END.y) < 70 || G.t - started > 0.9) set();
-      else after(0.1, wait);
-    };
-    wait();
   }
 
   /** Everything about to happen and everything said is forgotten: the camp is being left. */
@@ -782,7 +724,7 @@ export function makeCamp(
 
   /** Whoever Leaf says is waiting comes in, and whoever it no longer has goes. */
   function meetCaller(): void {
-    if (G.where !== "camp" || !G.home || leaving) return;
+    if (G.where !== "camp" || !G.home || stage.now().at === "dusk") return;
     const visit = shown().visit;
     if (caller && caller.visit.id !== visit?.id) {
       sendOff(caller);
@@ -882,18 +824,16 @@ export function makeCamp(
 
   // ---------- coming in ----------
 
-  function enter(): void {
+  /** Lays out the camp walked to (`of`, somebody's opened), or else the member's own, and brings the member in off the trail. */
+  function enter(of: Looked | null): void {
     clear();
-    lookAt(coming);
-    coming = null;
-    G.where = "camp";
+    lookAt(of);
     const host = visiting();
     seed = host ? nameSeed(host.id) % 5000 : 0;
     pets = [];
     lanterns.length = 0;
     sel = null;
     decor = false;
-    leaving = false;
     pan.x = 0;
     pan.y = 0;
 
@@ -932,32 +872,6 @@ export function makeCamp(
     }
     ui.arrived();
   }
-
-  async function goTo(id: string, name?: string): Promise<void> {
-    if (id === member()?.id) {
-      if (G.where === "camp") leave("home");
-      else hooks.toCamp();
-      return;
-    }
-    if (!G.home || leaving) return;
-    const opened = await openCamp(id, name);
-    if (typeof opened === "string") {
-      troubleCard(opened);
-      return;
-    }
-    if (G.where === "camp") {
-      leave(opened);
-      return;
-    }
-    // A visit that cannot set off changes nothing: Leaf took a while and the member has gone into a game
-    // meanwhile, or is already on the way to another camp. It is not kept for the next walk to a camp.
-    const was = coming;
-    coming = opened;
-    if (hooks.toCamp()) return;
-    coming = was;
-    opened.play.close();
-  }
-  hooks.visitCamp = (id, name) => void goTo(id, name);
 
   /** Leaf's copy has changed: the camp is laid out from it again, and its caller comes or goes. */
   onTown(() => {
@@ -1518,13 +1432,28 @@ export function makeCamp(
       return true;
     },
 
-    awake,
     cameBack: () => undefined,
+    wayOut() {
+      halt();
+      decorate(false);
+      closePanel();
+      closeCard();
+      // Off down the trail, and on past the posts.
+      return [...wayTo(player(), { x: CW - 6, y: TRAIL_Y + 2 }, ground), { ...TRAIL_END }];
+    },
+    // Night falls once they are nearly out of sight behind the great tree.
+    nightFrom: 70,
+    putAway() {
+      clear();
+      lookAt(null);
+      // The strip that says whose camp it is goes with the camp.
+      setStrip(null, () => {});
+    },
+    putOn(to) {
+      enter(to.place === "camp" ? to.of : null);
+    },
 
-    enter,
-    visit: goTo,
     go,
-    leave,
     decorating: () => decor,
     decorate,
     held() {
@@ -1550,10 +1479,10 @@ export function makeCamp(
 
     handles: {
       home() {
-        leave("home");
+        hooks.go({ to: "camp" });
       },
       town() {
-        leave("town");
+        hooks.go({ to: "town" });
       },
       walk: go,
       decorate,

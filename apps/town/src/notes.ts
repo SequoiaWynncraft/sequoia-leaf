@@ -24,6 +24,14 @@ export interface Part {
 
 export const NOTES: readonly Note[] = [
   {
+    id: "town-ways",
+    at: "2026-11-24T23:59Z",
+    title: "Turning back at once no longer stops the town",
+    lines: [
+      "Leaving a camp or the town just as you arrive now takes you back. Before, the page stopped until it was loaded again.",
+    ],
+  },
+  {
     id: "leaf-turns",
     at: "2026-11-23T23:43Z",
     title: "Rerolls and yards wait their turn",

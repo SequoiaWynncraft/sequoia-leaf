@@ -9,6 +9,7 @@ import type { Doing as FolkDoing, Townsperson } from "@sequoia-leaf/town/folk.ts
 import type { FolkArt } from "./folkart.ts";
 import type { GameId } from "./games.ts";
 import type { Deeds, Moment, Tone } from "./guild.ts";
+import type { Place } from "./screen.ts";
 import type { PlaceId, Seat } from "./world.ts";
 
 export type PanelId = PlaceId | "profile";
@@ -101,9 +102,9 @@ export interface Game {
   near: string | null;
   /** The member is stepping through a door, and whoever is taking them through has their fading in hand. */
   inDoor: boolean;
-  /** Which place is on the stage: the town, a camp, or the Grove. */
-  where: "town" | "camp" | "grove";
-  /** How far night has closed in on the walk between two places: 0 for not at all, 1 for dark. */
+  /** Which place is on the stage: the town, a camp, or the Grove. Only the stage sets it (`main.ts`). */
+  where: Place;
+  /** How far night has closed in on the walk between two places: 0 for not at all, 1 for dark. Only the stage sets it. */
   dark: number;
   /** Which of the market's stalls the member last looked at. */
   stall: number;
@@ -165,22 +166,26 @@ export const show: {
   found: null,
 };
 
-/** Things one part of the town asks of another without knowing who answers. */
+/**
+ * Somewhere the member asks to go: the town or the Grove; somebody's camp by their id (`name`, if
+ * known, is theirs), or the member's own without one or with their own id; or through a game's
+ * door, walking up to it first (for the Works, to `of`'s yard, if given).
+ */
+export type Going =
+  | { readonly to: "town" | "grove" }
+  | { readonly to: "camp"; readonly of?: string; readonly name?: string }
+  | { readonly to: "game"; readonly game: GameId; readonly of?: string };
+
+/** Things one part of the town asks of another without knowing who answers. Each is set once, as the page starts. */
 export const hooks: {
   /** Open a place at once, and walk there meanwhile. */
   visit: (id: PlaceId) => void;
   /** A line for the guild feed. */
   feed: (text: string, tone?: Tone) => void;
-  /** Go through a game's door: walk up to it and on inside; for the Works, to `of`'s yard, if given. */
-  goIn: (id: GameId, of?: string) => void;
-  /** Walk out through the gate and down the trail to the camp; says whether the member set off. */
-  toCamp: () => boolean;
-  /** Into the Grove, where the pulls are made. */
-  toGrove: () => void;
+  /** Go somewhere, as the stage allows (`main.ts`): it is the one way between places and into games. */
+  go: (where: Going) => void;
   /** The banner open in the Grove, whose it is and until when, in a line; null while there is none or Leaf has not said whose. */
   groveBanner: () => string | null;
-  /** Go to somebody's camp (`name`, if known, is theirs), or the member's own for their own id. */
-  visitCamp: (id: string, name?: string) => void;
   /** Tell the town's room that the member touched a thing in town, by its name. */
   tell: (name: string) => void;
   /** The guild's raid parties and wars, as the guild has them (`guild.deeds`). */
@@ -188,11 +193,8 @@ export const hooks: {
 } = {
   visit: () => undefined,
   feed: () => undefined,
-  goIn: () => undefined,
-  toCamp: () => false,
-  toGrove: () => undefined,
+  go: () => undefined,
   groveBanner: () => null,
-  visitCamp: () => undefined,
   tell: () => undefined,
   deeds: () => ({ moments: [], day: { from: 0, party: 0, war: 0 } }),
 };

@@ -519,11 +519,16 @@ only says where things go. `hud.ts` has what the town and the camp share (the pu
 buttons, the feed, the dock, the panel's frame, a card for whoever was tapped), and `ui.ts` and
 `campui.ts` say what each puts in them.
 
-`main.ts` is a stage, and the town and the camp are scenes on it. `main.ts` owns the canvas, the
-camera, the keys and fingers, the loop, the walk from one place to another, and the way into a
-game and back; everything else it asks of a `Scene` (`stage.ts`). A scene is put on with
-`stage.travel(scene, swap)`, which is the walk through the dark, or `stage.put(scene)`, at once.
-One camp scene shows the member's own camp (or, one day, anybody else's).
+`main.ts` is a stage, and the town, the camp and the Grove are scenes on it. `main.ts` owns the
+canvas, the camera, the keys and fingers, the loop, the walk from one place to another, and the way
+into a game and back; everything else it asks of a `Scene` (`stage.ts`). Where the stage is, is one
+value (`screen.ts`): a place played in, night falling on the member walking off, night lifting on
+them walking in, or the view closing in on a game's door, the game open, and the view opening out.
+Only `next` moves it, and `main.ts` does what each change means in one place: which scene is on,
+where the member is said to be, the town's live room, the loop. Every way to go somewhere, from any
+panel or button, is `hooks.go` (`game.ts`), which the stage answers: a walk off is taken whenever the
+member may act, and one asked while night lifts turns into night falling from where it is. One camp
+scene shows the member's own camp and anybody else's.
 
 While a game is open the loop is stopped: nothing is stepped or drawn and nothing makes a sound,
 and it picks up where it was when the game is put away. While the member is in a camp the town is
@@ -534,6 +539,7 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/open.ts`                         | The front door: who the member is, their town from Leaf, the guild's news, then the town        |
 | `src/main.ts`                         | The stage: canvas, camera, keys and fingers, the loop, the walk between places                  |
 | `src/stage.ts`                        | What the stage asks of a scene, and a scene of the stage                                        |
+| `src/screen.ts`                       | Where the stage is, as one value, and the one function that moves it                            |
 | `src/touch.ts`                        | What a tap, the pointer, the key and the member's feet mean, in the town and in a camp          |
 | `src/townscene.ts`                    | The town as a scene: who is here, taps, getting about, going into games and to the camp         |
 | `src/campscene.ts`                    | A camp as a scene: laying it out, who is there, taps, decorating, visiting                      |

@@ -186,6 +186,25 @@ export const sitsOn = (a: Actor, s: Seat): boolean => a.seat !== null && dist(a.
 /** The last point of each walk `walkTo` sets out on, looked at again on the way there (`stepActor`). */
 const ends = new WeakSet<Pt>();
 
+/** The way someone would walk to a point, round whatever is in the way, to stop there or beside whoever is there (`stopAt`). */
+export function wayTo(a: Actor, to: Pt, ground: Ground = TOWN): Pt[] {
+  const path = ground.findPath(a, stopAt(a, to, ground), a.you);
+  const end = path.at(-1);
+  if (end) ends.add(end);
+  return path;
+}
+
+/** How far somebody still has to walk along their way, in pixels. */
+export function walkLeft(a: Actor): number {
+  let left = 0;
+  let from: Pt = a;
+  for (const p of a.path) {
+    left += dist(from.x, from.y, p.x, p.y);
+    from = p;
+  }
+  return left;
+}
+
 /**
  * Sets someone walking to a point, round whatever is in the way, to stop there or beside whoever
  * is there (`stopAt`, and again on the last stretch); `then` happens when they get there. The ground
@@ -193,9 +212,7 @@ const ends = new WeakSet<Pt>();
  */
 export function walkTo(a: Actor, to: Pt, then: (() => void) | null = null, ground: Ground = TOWN): void {
   stand(a);
-  a.path = ground.findPath(a, stopAt(a, to, ground), a.you);
-  const end = a.path.at(-1);
-  if (end) ends.add(end);
+  a.path = wayTo(a, to, ground);
   a.arrive = then;
   if (a.path.length === 0) {
     a.arrive = null;

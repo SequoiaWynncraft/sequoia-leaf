@@ -34,6 +34,7 @@ import {
   stepActor,
   stepFolk,
   walkTo,
+  wayTo,
 } from "./actors.ts";
 import { apart, ease, stood, stoodAt } from "./apart.ts";
 import type { CampArt } from "./campart.ts";
@@ -68,6 +69,7 @@ import {
   townOnStage,
   waveAt,
 } from "./players.ts";
+import { placeOf } from "./screen.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Scene, Stage } from "./stage.ts";
 import { type Door, makeTouch } from "./touch.ts";
@@ -152,16 +154,10 @@ export interface Town extends Scene {
    * went, is back where they stood), to a letter if there is one to read.
    */
   arrive(): void;
-  /** The member is back from a camp: they walk in through the gate, and the town's own buttons are put back. */
-  cameFromCamp(): void;
   /** The town's painted sky and near ferns, which a camp at the same dusk shares. */
   readonly backdrop: { sky: HTMLCanvasElement; near: HTMLCanvasElement };
-  /** How the stage is told the way to the camp, once there is one. */
-  toCamp: (() => void) | null;
-  /** The member is back from the Grove, where they stood. */
-  cameFromGrove(): void;
-  /** How the stage is asked into the Grove, once Leaf has opened it if the member is `free` still: it says whether they went. */
-  toGrove: ((free: () => boolean) => Promise<boolean>) | null;
+  /** Walks the member to a game's door and on through it (for the Works, to `of`'s yard, if given). */
+  goIn(id: GameId, of?: string): void;
   /**
    * The town is on the stage, or off it (the camp, or a game open over it): only while it is on is
    * the page in the town's live room.
@@ -320,6 +316,10 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
 
   /** Through the door: the Works' doors part and the member steps in; at the stump the lantern burns up. */
   function through(id: GameId, of?: string): void {
+    if (!stage.goInside(id, DOORWAY[id], of)) {
+      going = null;
+      return;
+    }
     going = { id, through: true };
     show.dest = null;
     closePanel();
@@ -332,7 +332,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       player.path = [{ x: place("works").stand.x, y: THRESHOLD }];
       player.arrive = null;
     } else lightTable(true);
-    stage.goInside(id, DOORWAY[id], of);
   }
 
   /** Walks the member to a game's door and on through it (for the Works, to `of`'s yard, if given). */
@@ -369,46 +368,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       through(id, of);
     });
   }
-  hooks.goIn = goIn;
-
-  /** Out through the gate and down the trail to the member's own camp. */
-  let leaving = false;
-  function toCamp(): boolean {
-    if (!G.home || going || leaving || !town.toCamp) return false;
-    halt();
-    closePanel();
-    closeCard();
-    leaving = true;
-    walkTo(player, { x: 256, y: 100 });
-    player.path.push({ x: 256, y: 84 });
-    const started = G.t;
-    const wait = (): void => {
-      if (player.y < 130 || G.t - started > 0.9) town.toCamp?.();
-      else after(0.1, wait);
-    };
-    wait();
-    return true;
-  }
-  hooks.toCamp = toCamp;
-
-  /**
-   * Into the Grove from where the member stands: night closes in on the town once Leaf has opened
-   * the pulls, if the member has not set off for anywhere else meanwhile.
-   */
-  let asking = false;
-  function toGrove(): void {
-    if (!G.home || going || leaving || asking || !town.toGrove) return;
-    halt();
-    closePanel();
-    closeCard();
-    asking = true;
-    void (async () => {
-      const went = await town.toGrove?.(() => !going && !leaving);
-      asking = false;
-      if (went) leaving = true;
-    })();
-  }
-  hooks.toGrove = toGrove;
 
   /** The member's own figure had its emotes up when the touch came. */
   let plaque = false;
@@ -453,11 +412,14 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     showCard(who);
   }
 
-  const awake = (): boolean => G.home && !going?.through && !leaving && G.dark < 0.35;
+  const awake = (): boolean => stage.mayAct();
 
-  // The page going (a reload, a deploy's reload) keeps where the member stands in town for the next page in this tab.
+  // The page going (a reload, a deploy's reload) keeps where the member stands in town for the next page
+  // in this tab: not while they walk off, or go through a door.
   addEventListener("pagehide", () => {
-    keepText(STOOD, G.where === "town" && !going?.through && !leaving ? stood(player, Date.now()) : null, "tab");
+    const now = stage.now();
+    const here = placeOf(now) === "town" && (now.at === "playing" || now.at === "dawn");
+    keepText(STOOD, here ? stood(player, Date.now()) : null, "tab");
   });
 
   /** Every member in town: the member, visitors and dozers, and live players. */
@@ -518,7 +480,11 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       box: pl.id === "camp" ? { x: 242, y: 72, w: 28, h: 28 } : undefined,
       at: AT[pl.id],
       use: () => openPanel(pl.id),
-      enter: game ? () => goIn(game) : pl.id === "camp" ? () => void toCamp() : pl.id === "grove" ? toGrove : undefined,
+      enter: game
+        ? () => goIn(game)
+        : pl.id === "camp" || pl.id === "grove"
+          ? () => hooks.go({ to: pl.id === "camp" ? "camp" : "grove" })
+          : undefined,
     });
   });
 
@@ -546,10 +512,36 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     halt,
   });
 
+  /** The member is back from a camp: they walk in through the gate, and the town's own buttons are put back. */
+  function cameFromCamp(): void {
+    going = null;
+    release(player);
+    putAt(256, 84);
+    player.dir = 0;
+    player.alpha = 0;
+    player.say = "";
+    player.speed = STROLL;
+    walkTo(player, { x: 256, y: 128 }, () => {
+      player.dir = 0;
+    });
+    townDock();
+    setFace(openProfile);
+    setHammer(null);
+    // Whoever of the town's own is nearest the gate looks up.
+    const nearest = G.folk
+      .filter((a) => !a.away && !a.seat && a.doing !== "asleep" && dist(a.x, a.y, 256, 128) < 90)
+      .toSorted((a, b) => dist(a.x, a.y, 256, 128) - dist(b.x, b.y, 256, 128))[0];
+    if (nearest)
+      after(0.9, () => {
+        if (!nearest.moving) face(nearest, player.x, player.y);
+        hop(nearest);
+        say(nearest, pick(nearest.folk?.t.greets ?? ["hi!"], Math.random()), 2);
+      });
+  }
+
   const town: Town = {
     backdrop: { sky: pic.sky, near: pic.near },
-    toCamp: null,
-    toGrove: null,
+    goIn,
     onStage: townOnStage,
     bounds: BOUNDS,
 
@@ -619,7 +611,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     },
     point: touch.point,
     act() {
-      if (G.panel && isGame(G.panel)) goIn(G.panel);
+      if (G.panel && isGame(G.panel)) hooks.go({ to: "game", game: G.panel });
       else touch.act();
     },
 
@@ -632,8 +624,6 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     key: () => false,
     drag: () => undefined,
     release: () => undefined,
-
-    awake,
 
     cameBack(id) {
       going = null;
@@ -648,38 +638,18 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       player.arrive = null;
     },
 
-    cameFromGrove() {
-      G.where = "town";
-      leaving = false;
+    wayOut(to) {
+      halt();
+      closePanel();
+      closeCard();
+      // Out through the gate and up the trail beyond it; for anywhere else, night falls where the member stands.
+      return to === "camp" ? [...wayTo(player, { x: 256, y: 100 }), { x: 256, y: 84 }] : [];
     },
-
-    cameFromCamp() {
-      G.where = "town";
-      leaving = false;
-      going = null;
-      release(player);
-      putAt(256, 84);
-      player.dir = 0;
-      player.alpha = 0;
-      player.say = "";
-      player.speed = STROLL;
-      walkTo(player, { x: 256, y: 128 }, () => {
-        player.dir = 0;
-      });
-      townDock();
-      setFace(openProfile);
-      setHammer(null);
-      hooks.toCamp = toCamp;
-      // Whoever of the town's own is nearest the gate looks up.
-      const nearest = G.folk
-        .filter((a) => !a.away && !a.seat && a.doing !== "asleep" && dist(a.x, a.y, 256, 128) < 90)
-        .toSorted((a, b) => dist(a.x, a.y, 256, 128) - dist(b.x, b.y, 256, 128))[0];
-      if (nearest)
-        after(0.9, () => {
-          if (!nearest.moving) face(nearest, player.x, player.y);
-          hop(nearest);
-          say(nearest, pick(nearest.folk?.t.greets ?? ["hi!"], Math.random()), 2);
-        });
+    // Night falls from about where the gate's stand is.
+    nightFrom: 46,
+    putAway: () => undefined,
+    putOn(_to, from) {
+      if (from === "camp") cameFromCamp();
     },
 
     arrive() {
@@ -754,7 +724,9 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
       open: openPanel,
       close: closePanel,
       visit,
-      inside: goIn,
+      inside(id) {
+        hooks.go({ to: "game", game: id });
+      },
       tp(x, y) {
         halt();
         putAt(x, y);

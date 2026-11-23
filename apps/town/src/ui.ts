@@ -570,7 +570,7 @@ function doorCard(id: "works" | "table"): (body: HTMLElement) => null {
   return (body) => {
     const game = GAMES[id];
     const go = button("wide", [game.go], () => {
-      hooks.goIn(id);
+      hooks.go({ to: "game", game: id });
     });
     go.dataset.first = "";
     body.append(
@@ -741,7 +741,7 @@ export function campWaiting(): string {
 function campCard(body: HTMLElement): () => void {
   const news = el("div");
   const go = button("wide", ["Go home"], () => {
-    hooks.toCamp();
+    hooks.go({ to: "camp" });
   });
   go.dataset.first = "";
   body.append(
@@ -763,7 +763,7 @@ function campCard(body: HTMLElement): () => void {
 function groveCard(body: HTMLElement): () => void {
   const open = el("div", "k-paper", { hidden: true });
   const go = button("wide", ["Go in"], () => {
-    hooks.toGrove();
+    hooks.go({ to: "grove" });
   });
   go.dataset.first = "";
   body.append(
@@ -837,7 +837,7 @@ function profile(body: HTMLElement): null {
       {},
       el("div", "k-grow", {}, "Your things", el("div", "k-d", { text: "What you have won is in your cabin." })),
       button("wood sm", ["Go home"], () => {
-        hooks.toCamp();
+        hooks.go({ to: "camp" });
       }),
     ),
   );
