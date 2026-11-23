@@ -40,6 +40,7 @@ import { closeCard, openCard, refAt, riderAt, tileBox } from "./ui/card.ts";
 import { refreshDock, toolForKey } from "./ui/dock.ts";
 import { closeBanner } from "./ui/notes.ts";
 import { closePanel, togglePanel } from "./ui/panels.ts";
+import { hasViews, toggleView } from "./ui/views.ts";
 
 /** What input asks of the rest of the screen. */
 export const inputHooks: {
@@ -310,6 +311,8 @@ export function initInput(canvas: HTMLCanvasElement): void {
     else if (k === "e") setTool(S.tool === "remove" ? null : "remove");
     else if (k === "f") setTool(S.tool === "select" ? null : "select");
     else if (k === "m" && S.mark && !S.group) hold("move");
+    // With nothing marked, M is the map, once the yard has one.
+    else if (k === "m" && hasViews()) toggleView("map");
     // C copies a marked area; with none marked it is the brush.
     else if (k === "c" && S.mark && !S.group) hold("copy");
     else if (k === "c") setTool(S.tool === "paint" ? null : "paint");
@@ -322,7 +325,7 @@ export function initInput(canvas: HTMLCanvasElement): void {
     } else if (k === "o") togglePanel("orders");
     else if (k === "t") togglePanel("board");
     else if (k === "p") togglePanel("projects");
-    else if (k === "i") togglePanel("depot");
+    else if (k === "i") toggleView("needs");
     else if (k === "+" || k === "=") zoom(1, window.innerWidth / 2, window.innerHeight / 2);
     else if (k === "_") zoom(-1, window.innerWidth / 2, window.innerHeight / 2);
     else if (k.startsWith("arrow") || k === "w" || k === "a" || k === "s" || k === "d") {

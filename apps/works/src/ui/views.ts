@@ -1,0 +1,506 @@
+/**
+ * The yard's sheet: one panel with three views and a row to move between them, for finding the way
+ * round a yard too large to see. It is the depot's panel too: in a yard of one plot it is only its
+ * third view, and the other two, the row and the count on its button come with the second plot.
+ *
+ * - **Map**: the whole land as a plan (`plan.ts`), a mark on every piece in trouble, the part of the
+ *   yard on screen as a frame, a price on each plot for sale. A tap goes there (to the piece in
+ *   trouble under the finger, with its card); on land that is not the yard's it opens the plot's card.
+ * - **Trouble**: the pieces in trouble (`trouble.ts`) in groups by what is wrong, the largest first.
+ *   A tap on a group goes to its first piece and opens its card, and a bar stays while the member
+ *   walks the group: what is wrong, which of how many, back and on, and a way out.
+ * - **Makes and needs**: for each thing, what the yard's pieces can make a minute and need a minute
+ *   (the rules' `flow`), and what reached the depot in the last minute, counted (`arrivals.ts`);
+ *   what the yard needs more of than it can make first, with the shortfall. Then the yard's totals.
+ *
+ * None of it does anything while the sheet is shut: the map is painted and the lists worked out only
+ * for the view that is up.
+ */
+
+import { isNode, type Kind, MILLI, NODE_COUNT, NONE, plotState, power, type Yard } from "@sequoia-leaf/factory";
+import { pick, shown as cardShown, thing } from "@sequoia-leaf/kit/card.ts";
+import { el, icon, unit } from "@sequoia-leaf/kit/dom.ts";
+import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
+import { CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
+import { sfx } from "@sequoia-leaf/kit/sound.ts";
+import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
+import { must } from "@sequoia-leaf/kit/util.ts";
+
+import { countedOver, reached } from "../arrivals.ts";
+import { TILE } from "../art/belts.ts";
+import type { Art } from "../art/index.ts";
+import { aMinute, flowRows, said, SHORT, yardFlows } from "../flows.ts";
+import { layout } from "../layout.ts";
+import { alarm, layPlan, makePlan, paintPlan, type Plan } from "../plan.ts";
+import { S, seenFrom } from "../state.ts";
+import { type Group, troubled, troubleGroups } from "../trouble.ts";
+import { itemRef, openCard, plotRef, tileRef } from "./card.ts";
+import { closePanel, openPanel, refreshPanel } from "./panels.ts";
+import { $, fitted, yardIcon } from "./parts.ts";
+import { type Line, table } from "./table.ts";
+
+export type View = "map" | "trouble" | "needs";
+const VIEWS: readonly View[] = ["map", "trouble", "needs"];
+const NAMES: Readonly<Record<View, string>> = { map: "Map", trouble: "Trouble", needs: "Makes and needs" };
+
+/** Where the view last used is kept, beside the screen's other settings. */
+const KEPT = "works.view.v1";
+const isView = (v: unknown): v is View => VIEWS.some((one) => one === v);
+/** The view the sheet opens on: the one last used. */
+let view: View | null = null;
+const lastView = (): View => {
+  if (view === null) {
+    const kept = keptText(KEPT);
+    view = isView(kept) ? kept : "map";
+  }
+  return view;
+};
+
+/** Whether the yard has the map, the list of trouble and the count: from its second plot. Before that the sheet is the depot's panel alone. */
+export const hasViews = (): boolean => S.world.plots.length > 1;
+/** How many pieces are in trouble, for the count on the button; nothing is looked at in a yard of one plot. */
+export const wrongCount = (): number => (hasViews() ? troubled(S.world, S.rev).count : 0);
+
+/** The sheet's name and picture: the yard's, or in a yard of one plot the depot's. */
+export const sheetTitle = (): string => (hasViews() ? "The yard" : "The depot");
+export const sheetIcon = (): Node => yardIcon(hasViews() ? "map" : "depot");
+
+/** What the sheet asks of the rest of the screen: to bring a point of the yard, in its pixels, to the middle of the view at once. */
+export const viewHooks: { look: (x: number, y: number) => void } = { look: () => {} };
+
+/** Whether the sheet is a full sheet, as on a phone, and not the panel beside the yard: the page's own breakpoint. */
+const narrow = (): boolean => window.matchMedia("(max-width: 760px), (orientation: portrait)").matches;
+
+// ---------- going to a place ----------
+
+/** Brings a tile to the middle of the view at once, and with `card` pins the card of what stands there. */
+function goTo(i: number, card: boolean): void {
+  const W = S.world.land.w;
+  const x = i % W;
+  const y = Math.floor(i / W);
+  viewHooks.look(x * TILE + TILE / 2, y * TILE + TILE / 2);
+  // Pinning the card that is already pinned would put it away.
+  if (card && cardShown()?.ref !== tileRef(i)) openCard(x, y);
+}
+
+// ---------- walking a group ----------
+
+/** The group being walked, by what is wrong, and the tile of the piece the member is at. */
+let walk: { title: string; tile: number } | null = null;
+let bar: {
+  el: HTMLElement;
+  title: HTMLElement;
+  at: HTMLElement;
+} | null = null;
+
+const groupOf = (title: string): Group | undefined => troubleGroups(S.world, S.rev).find((g) => g.title === title);
+
+function endWalk(): void {
+  walk = null;
+  if (bar) bar.el.hidden = true;
+  document.body.classList.remove("walking");
+}
+
+/** Goes back or on along the group; from a piece that is no longer in trouble, to the nearest still in it that way. */
+function stepWalk(by: number): void {
+  const g = walk ? groupOf(walk.title) : undefined;
+  if (!walk || !g) return endWalk();
+  const tiles = g.tiles;
+  const at = tiles.indexOf(walk.tile);
+  const here = walk.tile;
+  const next =
+    at >= 0
+      ? tiles[(at + by + tiles.length) % tiles.length]
+      : by > 0
+        ? (tiles.find((t) => t > here) ?? tiles[0])
+        : (tiles.findLast((t) => t < here) ?? tiles.at(-1));
+  if (next === undefined) return endWalk();
+  walk.tile = next;
+  sfx.tap();
+  goTo(next, true);
+  refreshWalk();
+}
+
+/** One of the bar's buttons: a picture, and what it is called for whoever cannot see it. */
+function press(label: string, kid: Node, on: () => void): HTMLElement {
+  const b = el("button", "k-btn wood icon sm", { type: "button", "aria-label": label }, kid);
+  b.addEventListener("click", on);
+  return b;
+}
+
+function makeBar(): NonNullable<typeof bar> {
+  const title = el("span", "k-grow walk-what");
+  const at = el("span", "walk-at");
+  const on = icon("back");
+  on.classList.add("flip");
+  const made = el(
+    "div",
+    "k-plaque walk",
+    { hidden: true },
+    title,
+    at,
+    press("Back", icon("back"), () => stepWalk(-1)),
+    press("On", on, () => stepWalk(1)),
+    press("Stop", icon("close"), endWalk),
+  );
+  return { el: made, title, at };
+}
+
+/** A group was pressed: its first piece, with its card, and the bar to walk the rest. On a phone the sheet gives way to the bar. */
+function startWalk(title: string): void {
+  const first = groupOf(title)?.tiles[0];
+  if (first === undefined) return;
+  walk = { title, tile: first };
+  if (narrow()) closePanel();
+  goTo(first, true);
+  refreshWalk();
+}
+
+/**
+ * The walking bar, brought up to date: where it sits (at the head of the panel beside the yard; on a
+ * phone, under the top row, where the sheet was), what is wrong, and which of how many. Its group
+ * mended, or the panel it sits in closed, it goes.
+ */
+export function refreshWalk(): void {
+  if (!walk) return;
+  const g = groupOf(walk.title);
+  const home = narrow() ? $("walk") : document.querySelector<HTMLElement>("#panel .walk-slot");
+  if (!g || !home) return endWalk();
+  bar ??= makeBar();
+  if (bar.el.parentElement !== home) home.append(bar.el);
+  const at = g.tiles.indexOf(walk.tile);
+  const n = g.tiles.length;
+  const where = at >= 0 ? `${at + 1} of ${n}` : `${n} left`;
+  if (bar.title.textContent !== g.title) bar.title.textContent = g.title;
+  if (bar.at.textContent !== where) bar.at.textContent = where;
+  bar.el.hidden = false;
+  document.body.classList.add("walking");
+}
+
+// ---------- the map ----------
+
+/** The map's plan: 3 pixels to a tile, kept while the page is open, painted only while the map is up. */
+let mapPlan: Plan | null = null;
+const MAP = 3;
+/** How near a tap must be to a piece in trouble to mean it, in CSS pixels: a finger's reach. */
+const REACH = 14;
+
+/** A small coin and a price, centred on a point of the map. */
+function price(g: CanvasRenderingContext2D, text: string, cx: number, cy: number): void {
+  const w = widthOf(g, text, 1);
+  const left = Math.round(cx - (w + 7) / 2);
+  const top = Math.round(cy - 4);
+  g.fillStyle = INK;
+  g.fillRect(left - 1, top + 1, 7, 7);
+  g.fillStyle = GOLD[1];
+  g.fillRect(left + 1, top + 2, 3, 5);
+  g.fillRect(left, top + 3, 5, 3);
+  g.fillStyle = CREAM;
+  g.fillRect(left + 1, top + 3, 1, 1);
+  write(g, text, left + 7, top, { px: 1, colour: GOLD[2], edge: INK });
+}
+
+/** The plots for sale, each with its price as it is written and the middle of it on the map: worked out when what stands changes, not each frame. */
+let sales: { yard: Yard; rev: number; plots: { price: string; x: number; y: number }[] } | null = null;
+function forSale(y: Yard): readonly { price: string; x: number; y: number }[] {
+  if (sales?.yard === y && sales.rev === S.rev) return sales.plots;
+  const plots = y.land.plots.flatMap((plot) =>
+    !y.plots.includes(plot.plot) && plotState(y, plot.plot).state === "for sale"
+      ? [
+          {
+            price: plot.price.toLocaleString("en-US"),
+            x: (plot.x + plot.w / 2) * MAP,
+            y: (plot.y + plot.h / 2) * MAP,
+          },
+        ]
+      : [],
+  );
+  sales = { yard: y, rev: S.rev, plots };
+  return plots;
+}
+
+function mapView(_art: Art, host: HTMLElement): () => void {
+  const plan = (mapPlan ??= makePlan(MAP));
+  const c = el("canvas", "k-px map", { "aria-label": "Map of the yard" });
+  const g = must(c.getContext("2d"), "2d context");
+  host.append(c);
+
+  /** The map at a whole number of screen pixels to each of its own, as large as the sheet has room for. */
+  const fit = (): void => {
+    const { land } = S.world;
+    if (c.width !== land.w * MAP) c.width = land.w * MAP;
+    if (c.height !== land.h * MAP) c.height = land.h * MAP;
+    const dpr = window.devicePixelRatio || 1;
+    // As wide as the sheet, and no taller than the window leaves under the row of views.
+    const room = host.clientWidth - 2;
+    const high = window.innerHeight - host.getBoundingClientRect().top - unit() * 12;
+    const n = Math.max(1, Math.floor(Math.min((room * dpr) / c.width, (high * dpr) / c.height)));
+    const width = `${(c.width * n) / dpr}px`;
+    if (c.style.width !== width) {
+      c.style.width = width;
+      c.style.height = `${(c.height * n) / dpr}px`;
+    }
+  };
+
+  const draw = (): void => {
+    const y = S.world;
+    const { land } = y;
+    const W = land.w;
+    fit();
+    paintPlan(plan, y, layout(y, S.rev), S.rev);
+    g.clearRect(0, 0, c.width, c.height);
+    layPlan(g, plan, y, 0, 0);
+    const wrong = troubled(y, S.rev);
+    for (let n = 0; n < wrong.count; n++) {
+      const i = wrong.tiles[n] ?? 0;
+      alarm(g, MAP, i % W, Math.floor(i / W), 0, 0, S.t);
+    }
+    for (const plot of forSale(y)) price(g, plot.price, plot.x, plot.y);
+    // The part of the yard now on screen.
+    const k = MAP / TILE;
+    const x0 = Math.max(0, Math.round(seenFrom(S.cam.x) * k));
+    const y0 = Math.max(0, Math.round(seenFrom(S.cam.y) * k));
+    const x1 = Math.min(c.width, Math.round((seenFrom(S.cam.x) + S.view.w) * k));
+    const y1 = Math.min(c.height, Math.round((seenFrom(S.cam.y) + S.view.h) * k));
+    if (x1 > x0 && y1 > y0)
+      for (const [grow, col] of [
+        [1, INK],
+        [0, CREAM],
+      ] as const) {
+        g.fillStyle = col;
+        g.fillRect(x0 - grow, y0 - grow, x1 - x0 + grow * 2, 1);
+        g.fillRect(x0 - grow, y1 - 1 + grow, x1 - x0 + grow * 2, 1);
+        g.fillRect(x0 - grow, y0 - grow, 1, y1 - y0 + grow * 2);
+        g.fillRect(x1 - 1 + grow, y0 - grow, 1, y1 - y0 + grow * 2);
+      }
+  };
+
+  /** The tile of the map under a point of the page, and how many CSS pixels a tile is there. */
+  const tileUnder = (e: PointerEvent): { x: number; y: number; size: number } => {
+    const box = c.getBoundingClientRect();
+    const size = (box.width / c.width) * MAP;
+    const { land } = S.world;
+    return {
+      x: Math.min(land.w - 1, Math.max(0, Math.floor((e.clientX - box.left) / size))),
+      y: Math.min(land.h - 1, Math.max(0, Math.floor((e.clientY - box.top) / size))),
+      size,
+    };
+  };
+
+  /** A tap: land that is not the yard's opens its plot's card; a piece in trouble under the finger is gone to, with its card; else that place. */
+  const tap = (e: PointerEvent): void => {
+    const y = S.world;
+    const { land } = y;
+    const at = tileUnder(e);
+    const plot = land.plots[land.plot[at.y * land.w + at.x] ?? NONE];
+    if (plot && !y.plots.includes(plot.plot)) {
+      pick(plotRef(plot.plot), e.clientX - 1, e.clientY - 1, 2, 2);
+      return;
+    }
+    const wrong = troubled(y, S.rev);
+    let near = -1;
+    let best = (REACH / at.size + 0.5) ** 2;
+    for (let n = 0; n < wrong.count; n++) {
+      const i = wrong.tiles[n] ?? 0;
+      const d = ((i % land.w) - at.x) ** 2 + (Math.floor(i / land.w) - at.y) ** 2;
+      if (d < best) {
+        best = d;
+        near = i;
+      }
+    }
+    sfx.tap();
+    if (narrow()) closePanel();
+    goTo(near >= 0 ? near : at.y * land.w + at.x, near >= 0);
+  };
+
+  let down: { x: number; y: number; moved: boolean } | null = null;
+  c.addEventListener("pointerdown", (e) => {
+    down = { x: e.clientX, y: e.clientY, moved: false };
+    c.setPointerCapture(e.pointerId);
+  });
+  c.addEventListener("pointermove", (e) => {
+    if (!down) return;
+    if (!down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) down.moved = true;
+    // Beside the yard, a drag moves the camera with it.
+    if (!down.moved || narrow()) return;
+    const at = tileUnder(e);
+    viewHooks.look(at.x * TILE + TILE / 2, at.y * TILE + TILE / 2);
+  });
+  c.addEventListener("pointerup", (e) => {
+    const was = down;
+    down = null;
+    if (was && !was.moved) tap(e);
+  });
+  c.addEventListener("pointercancel", () => {
+    down = null;
+  });
+
+  // The marks fade and come back, and the frame follows the camera: drawn each frame, while the map is up.
+  const frame = (): void => {
+    if (!c.isConnected) return;
+    draw();
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  return draw;
+}
+
+// ---------- trouble ----------
+
+function troubleView(art: Art, host: HTMLElement): () => void {
+  const short = table("Power", ["Used", "Made", "Speed"]);
+  const list = table("", ["Pieces"], { cards: true });
+  const none = el("div", "k-dim", { text: "Nothing is wrong." });
+  host.append(short.el, list.el, none);
+  /** What is wrong, and the kinds of piece it is wrong with, as pictures. */
+  const head = (title: string, kinds: readonly Kind[]): Node =>
+    el(
+      "span",
+      "wrong",
+      {},
+      el("span", "k-grow", { text: title }),
+      el("span", "kinds", {}, ...kinds.slice(0, 4).map((k) => fitted(art.icon(k), 12, 12))),
+    );
+  return () => {
+    const y = S.world;
+    const p = power(y);
+    short.el.hidden = p.pace >= 1;
+    short.set(
+      p.pace < 1
+        ? [
+            {
+              key: "power",
+              head: () =>
+                el("span", "wrong", {}, yardIcon("bolt"), el("span", "k-grow k-coral", { text: "Not enough" })),
+              cells: [String(p.demand), String(p.supply), `${Math.round(p.pace * 100)}%`],
+            },
+          ]
+        : [],
+    );
+    const groups = troubleGroups(y, S.rev);
+    list.el.hidden = groups.length === 0;
+    none.hidden = groups.length > 0;
+    list.set(
+      groups.map((g): Line => ({
+        // Its pictures are built once for a row: a group that gains a kind of piece is a new row.
+        key: `${g.title}|${g.kinds.join()}`,
+        head: () => head(g.title, g.kinds),
+        cells: [String(g.tiles.length)],
+        on: () => startWalk(g.title),
+      })),
+    );
+  };
+}
+
+// ---------- makes and needs ----------
+
+/** Coins kept in thousandths, as whole Coins. */
+const coins = (thousandths: number): string => Math.floor(thousandths / MILLI).toLocaleString("en-US");
+
+function needsView(_art: Art, host: HTMLElement): () => void {
+  const things = table("A minute", ["Can make", "Needs", "Reached the depot"]);
+  const none = el("div", "k-dim", { text: "Nothing is made yet." });
+  const over = el("div", "k-s k-dim");
+  const totals = table("In total", [""], { wide: 44 });
+  host.append(things.el, none, over, totals.el);
+  let drawn = "";
+  return () => {
+    const y = S.world;
+    const flows = yardFlows(y, S.rev);
+    const rows = flowRows(flows.made, flows.needed, reached);
+    const seconds = countedOver();
+    // Everything shown, as one line: the tables are written again only when it differs.
+    const now = JSON.stringify([rows, seconds, y.paid, y.sold, y.done.length, y.handed]);
+    if (now === drawn) return;
+    drawn = now;
+    things.el.hidden = rows.length === 0;
+    none.hidden = rows.length > 0;
+    things.set(
+      rows.map((f): Line => {
+        const short = f.needed - f.made;
+        const lacks = short >= SHORT;
+        const need = aMinute(f.needed);
+        return {
+          key: String(f.item),
+          head: () => thing(itemRef(f.item)),
+          ...(lacks ? { note: `Short by ${said(aMinute(short))}` } : {}),
+          cells: [aMinute(f.made), lacks ? [said(need), "coral"] : need, aMinute(f.reached)],
+        };
+      }),
+    );
+    // For the first minute the last column is a minute's worth of what was counted so far.
+    over.hidden = seconds >= 60 || rows.length === 0;
+    over.textContent = `Reached the depot: counted over ${seconds} second${seconds === 1 ? "" : "s"} so far.`;
+    totals.set([
+      { key: "orders", head: () => "Coins from orders", cells: [[coins(y.paid), "gold"]] },
+      { key: "depot", head: () => "Coins from the depot", cells: [[coins(y.sold), "gold"]] },
+      { key: "goals", head: () => "Goals done", cells: [`${y.done.filter(isNode).length} of ${NODE_COUNT}`] },
+      { key: "handed", head: () => "Side orders handed over", cells: [y.handed.toLocaleString("en-US")] },
+    ]);
+  };
+}
+
+// ---------- the sheet ----------
+
+const BUILD: Readonly<Record<View, (art: Art, host: HTMLElement) => () => void>> = {
+  map: mapView,
+  trouble: troubleView,
+  needs: needsView,
+};
+
+/** Whether the sheet is the panel that is open. */
+const open = (): boolean => S.panel === "depot";
+
+/**
+ * Builds the sheet into a panel's body: the bar's place at its head, the row of views, and the view
+ * that is up. What it gives brings it up to date: the row (there only with a second plot), the view
+ * (in a yard of one plot, the third), and what the view shows.
+ */
+export function sheet(art: Art, body: HTMLElement): () => void {
+  body.classList.add("views");
+  const slot = el("div", "walk-slot");
+  const tabs = el("div", "k-tabs", { role: "tablist" });
+  const pressed = new Map<View, HTMLElement>();
+  for (const v of VIEWS) {
+    const tab = el("button", "k-btn", { type: "button", role: "tab", text: NAMES[v] });
+    tab.addEventListener("click", () => {
+      showView(v);
+      sfx.tap();
+    });
+    pressed.set(v, tab);
+    tabs.append(tab);
+  }
+  const host = el("div", "view k-scroll");
+  body.append(slot, tabs, host);
+  let up: View | null = null;
+  let refresh: (() => void) | null = null;
+  return () => {
+    const many = hasViews();
+    const want = many ? lastView() : "needs";
+    tabs.hidden = !many;
+    if (want !== up) {
+      up = want;
+      host.replaceChildren();
+      host.dataset.view = want;
+      host.scrollTop = 0;
+      refresh = BUILD[want](art, host);
+      for (const [v, tab] of pressed) tab.setAttribute("aria-selected", String(v === want));
+    }
+    refresh?.();
+    refreshWalk();
+  };
+}
+
+/** Shows a view, and keeps it as the one last used; the sheet is opened if it is shut. */
+export function showView(v: View): void {
+  view = v;
+  keepText(KEPT, v);
+  if (open()) refreshPanel();
+  else openPanel("depot");
+}
+
+/** Opens the sheet on a view, or shuts it if it is open on that view: for a key. */
+export function toggleView(v: View): void {
+  if (open() && (lastView() === v || !hasViews())) closePanel();
+  else showView(v);
+}

@@ -4,7 +4,7 @@
  * clock, the power put by, the till and its counter, the goals (those done, in order, the node in
  * hand, the line of research, and what each goal not done has been given) and the board (each order's
  * wants, what came in, its pay, its words and when it began to count), the depot's books (what awards
- * and the standing are read from), what was seen at the owner's last command, the pace, the pieces to
+ * and the standing are read from), what was seen at the owner's last command, the pieces to
  * hand, the blueprints, and every part of every piece, tile by tile, numbered by the tables. Every
  * number that may pass 32 bits (the clock, the counters, the Coins, the books) is mixed in by both
  * halves of its 64.
@@ -74,9 +74,6 @@ export function check(y: Yard): number {
   num(y.seen.tick);
   num(y.seen.till);
   tally(y.seen.depot);
-  num(y.pace.ticks);
-  mix(y.pace.warm);
-  tally(y.pace.made);
   for (const p of y.plots) mix(p + 32);
   bytes(y.spare);
   for (const b of y.blueprints) bytes(b);

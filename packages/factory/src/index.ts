@@ -37,6 +37,6 @@ export { litOf, repower, squared } from "./power.ts";
 export { type Leg, legKind, legPiece, legSpan, route } from "./route.ts";
 export * from "./status.ts";
 export * from "./tables.ts";
-export { PACE_WINDOW, step } from "./tick.ts";
+export { step } from "./tick.ts";
 export { ahead, carries, nextOf, power, rewire, takes, wayOut } from "./wire.ts";
 export * from "./yard.ts";
