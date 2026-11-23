@@ -16,7 +16,7 @@ import {
   endingOf,
   fieldCap,
   fielded,
-  fightSetup,
+  foughtOf,
   giveItem,
   hold,
   interestNow,
@@ -730,7 +730,7 @@ describe("the rooms", () => {
   test("a room is planned, fought and paid for, in that order", () => {
     const run = winning();
     expect(takeTakings(run)).toMatchObject({ ok: false, why: "There has been no fight yet." });
-    expect(fightSetup(run)).toBeNull();
+    expect(foughtOf(run)).toBeNull();
     const begun = beginFight(run);
     expect(begun.ok).toBe(true);
     expect(run.stage.phase).toBe("fight");
@@ -746,7 +746,7 @@ describe("the rooms", () => {
     const run = winning(5);
     const begun = beginFight(run);
     if (!begun.ok) throw new Error(begun.why);
-    expect(fightSetup(run)).toEqual(begun.setup);
+    expect(foughtOf(run)?.setup).toEqual(begun.setup);
     const watched = resolveFight(begun.setup);
     const taken = takeTakings(run);
     expect(taken.ok && taken.fight).toEqual(watched);

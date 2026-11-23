@@ -81,8 +81,6 @@ export function onCarry(carry: () => void, look: () => void): void {
 }
 
 export const sheetUp = (): "after" | "again" | null => SH.up;
-/** Whether there is a last fight to look back on. */
-export const hasLastFight = (): boolean => (S.run?.last ?? null) !== null;
 
 /** Keeps the sheet clear of the bar along the top, however tall the window is. */
 export function placeSheet(): void {

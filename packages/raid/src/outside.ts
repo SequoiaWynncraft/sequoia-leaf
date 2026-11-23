@@ -130,11 +130,7 @@ export function recordRun(old: Almanac, summary: RunSummary): { almanac: Almanac
   return { almanac, news };
 }
 
-// ---------- keeping the almanac ----------
-
-export const ALMANAC_VERSION = 1;
-export const saveAlmanac = (almanac: Almanac): string =>
-  JSON.stringify({ game: "little-raid-almanac", v: ALMANAC_VERSION, almanac });
+// ---------- reading the almanac ----------
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 /** A list with nothing in it twice, every entry passing a check. */
@@ -146,17 +142,6 @@ function uniqueList<T>(v: unknown, is: (x: unknown) => x is T, most: number): T[
     out.push(x);
   }
   return out;
-}
-/** An almanac from text. Text that is not a whole almanac of this version is no almanac. */
-export function loadAlmanac(text: string): Almanac | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (!isRecord(raw) || raw.game !== "little-raid-almanac" || raw.v !== ALMANAC_VERSION) return null;
-  return readAlmanac(raw.almanac);
 }
 
 /**

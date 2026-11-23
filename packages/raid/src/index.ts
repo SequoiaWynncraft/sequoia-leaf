@@ -181,7 +181,6 @@ export {
   type Done,
   fieldCap,
   fielded,
-  fightSetup,
   type Fought,
   giveItem,
   hold,
@@ -236,15 +235,12 @@ export { checkRun, type Loaded, readRunView } from "./save.ts";
 // Between runs.
 export {
   type Almanac,
-  ALMANAC_VERSION,
-  loadAlmanac,
   newAlmanac,
   readAlmanac,
   type News,
   type Payout,
   payout,
   recordRun,
-  saveAlmanac,
   trailCleared,
   trailOpen,
 } from "./outside.ts";

@@ -5,17 +5,7 @@ import { FINISHED_IDS } from "./content/items.ts";
 import { PAYOUT } from "./content/keepsakes.ts";
 import { ROOM_COUNT, TRAILS } from "./content/rooms.ts";
 import { TRAIT_IDS } from "./content/traits.ts";
-import {
-  ALMANAC_VERSION,
-  loadAlmanac,
-  newAlmanac,
-  payout,
-  readAlmanac,
-  recordRun,
-  saveAlmanac,
-  trailCleared,
-  trailOpen,
-} from "./outside.ts";
+import { type Almanac, newAlmanac, payout, readAlmanac, recordRun, trailCleared, trailOpen } from "./outside.ts";
 import { type RunSummary, startRun } from "./run.ts";
 
 const summary = (more: Partial<RunSummary> = {}): RunSummary => ({
@@ -36,6 +26,17 @@ const WON = summary({
   reached: 15,
   bosses: ["oldbramble", "hoardmagpie", "bigcrab"],
 });
+
+/** An almanac as a table keeps it, written out and read back. */
+const saveAlmanac = (almanac: Almanac): string => JSON.stringify({ almanac });
+function loadAlmanac(text: string): Almanac | null {
+  try {
+    const raw: unknown = JSON.parse(text);
+    return readAlmanac(typeof raw === "object" && raw !== null && "almanac" in raw ? raw.almanac : null);
+  } catch {
+    return null;
+  }
+}
 
 describe("the payout", () => {
   test("is for rooms won, bosses beaten, and a bonus for winning", () => {
@@ -196,8 +197,6 @@ describe("keeping the almanac", () => {
     };
     expect(loadAlmanac(change(() => {}))).not.toBeNull();
     for (const text of ["", "nope", "{}", "[]", "null"]) expect(loadAlmanac(text)).toBeNull();
-    expect(loadAlmanac(change((_, whole) => (whole.v = ALMANAC_VERSION + 1)))).toBeNull();
-    expect(loadAlmanac(change((_, whole) => (whole.game = "little-raid")))).toBeNull();
     expect(loadAlmanac(change((a) => (a.fielded = ["dragon"])))).toBeNull();
     expect(loadAlmanac(change((a) => (a.fielded = ["worm", "worm"])))).toBeNull();
     expect(loadAlmanac(change((a) => (a.forged = ["thorn"])))).toBeNull();

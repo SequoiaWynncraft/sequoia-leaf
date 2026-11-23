@@ -325,8 +325,6 @@ export const traitsNow = (run: Pick<Run, "board">): TraitState[] =>
   traitStates(run.board.flatMap((p) => (p ? [p] : [])));
 /** The room the run is in. */
 export const roomNow = (run: Pick<Run, "room">) => ROOMS[Math.min(run.room, ROOM_COUNT - 1)];
-/** The fight for the room being fought: the same setup every time it is asked for. Null outside a fight. */
-export const fightSetup = (run: Pick<Run, "stage">): FightSetup | null => foughtOf(run)?.setup ?? null;
 
 // ---------- the forest's side ----------
 
