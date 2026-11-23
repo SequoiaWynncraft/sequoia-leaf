@@ -543,7 +543,8 @@ not stepped either; what the guild does meanwhile is applied to it without cerem
 | `src/touch.ts`                        | What a tap, the pointer, the key and the member's feet mean, in the town and in a camp          |
 | `src/townscene.ts`                    | The town as a scene: who is here, taps, getting about, going into games and to the camp         |
 | `src/campscene.ts`                    | A camp as a scene: laying it out, who is there, taps, decorating, visiting                      |
-| `src/grovescene.ts`                   | The Grove as a scene: Leaf's pulls, and the ceremony drawn from its time alone                  |
+| `src/grovescene.ts`                   | The Grove as a scene: Leaf's pulls, the ceremony's clock and its sound                          |
+| `src/grovepicture.ts`                 | The Grove's picture: the banner, the tell, a reveal and the end picture, drawn from the time    |
 | `src/grovestage.ts`                   | The Grove's clearing, painted with the town's painters in three lights                          |
 | `src/groveui.ts`                      | The Grove's words and buttons, and its panel of prizes, Seeds and history                       |
 | `src/pulls.ts`                        | What the Grove says and counts: a prize's name, a reveal's words, the chances, the rules        |
