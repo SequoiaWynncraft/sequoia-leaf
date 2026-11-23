@@ -129,6 +129,21 @@ export interface Fought {
   outcome: FightSummary;
 }
 
+/**
+ * Whether the rules loaded here play a fight from its setup to the outcome Leaf kept. A page whose
+ * rules are not Leaf's (one opened before a deploy) does not, and loads again rather than show a
+ * fight that is not the one paid for.
+ */
+export function playsAsKept({ setup, outcome }: Fought): boolean {
+  const here = resolveFight(setup);
+  return (
+    here.result === outcome.result &&
+    here.ticks === outcome.ticks &&
+    here.standing[0] === outcome.standing[0] &&
+    here.standing[1] === outcome.standing[1]
+  );
+}
+
 /** Why acorns were paid: the room, a win, savings, gnomes, a streak, or Windfall. */
 export type AcornsWhy = "room" | "win" | "interest" | "gnomes" | "streak" | "windfall";
 export const ACORNS_WHYS: readonly AcornsWhy[] = ["room", "win", "interest", "gnomes", "streak", "windfall"];

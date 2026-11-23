@@ -5,11 +5,20 @@
  * fight" opens it again for the fight the run kept, until the next fight takes its place.
  *
  * The fight is played again from the setup the run kept to be counted, so the sheet says the same
- * after a reload as it did when the fight ended.
+ * after a reload as it did when the fight ended. As a fight ends, its title is how Leaf decided it
+ * came out, and a fight these rules would play otherwise has no tally.
  */
 import { register } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
-import { type Fight, type FightEvent, type FightSetup, openFight, stepFight, tally } from "@sequoia-leaf/raid";
+import {
+  type Fight,
+  type FightEvent,
+  type FightSetup,
+  type FightSummary,
+  openFight,
+  stepFight,
+  tally,
+} from "@sequoia-leaf/raid";
 
 import { fightTitle, opening } from "../logic.ts";
 import { snd } from "../sounds.ts";
@@ -86,25 +95,27 @@ export function placeSheet(): void {
 }
 
 /**
- * Opens the sheet: `after` as a fight ends, with room for the takings and "Carry on"; `again` from
- * "Last fight", with a button to put it away.
+ * Opens the sheet: `after` as a fight ends, with how Leaf decided it came out (`leaf`), room for the
+ * takings and "Carry on"; `again` from "Last fight", with a button to put it away.
  */
-export function openSheet(how: "after" | "again"): void {
+export function openSheet(how: "after" | "again", leaf?: { outcome: FightSummary; kept: boolean }): void {
   const p = played();
   const bottom = document.getElementById("bottom");
   if (!p || !bottom) return;
   closeSheet(false);
-  const result = p.fight.result ?? "draw";
-  const title = fightTitle(result, p.fight.tick);
+  const result = leaf?.outcome.result ?? p.fight.result ?? "draw";
+  const title = fightTitle(result, leaf?.outcome.ticks ?? p.fight.tick);
   const view = tallyView(foughtRef, "sheet");
   view.across(p.setup.sides[1].who);
-  view.show(
-    p.fight.units,
-    tally(
-      p.events,
-      p.fight.units.map((u) => u.id),
-    ),
-  );
+  if (leaf?.kept !== false) {
+    view.show(
+      p.fight.units,
+      tally(
+        p.events,
+        p.fight.units.map((u) => u.id),
+      ),
+    );
+  }
   const close =
     how === "again"
       ? el(

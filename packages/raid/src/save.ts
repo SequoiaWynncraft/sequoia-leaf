@@ -18,7 +18,7 @@
 import { mix } from "@sequoia-leaf/core";
 
 import { BOON_IDS, type BoonId, isBoonId } from "./content/boons.ts";
-import { FIGURE_IDS, type FigureId, isBossId, isFigureId, isStars } from "./content/figures.ts";
+import { FIGURE_IDS, type FigureId, isBossId, isFigureId, isStars, isUnitKind } from "./content/figures.ts";
 import {
   carries,
   EMBLEMS,
@@ -32,8 +32,7 @@ import {
 } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS, traitNumber } from "./content/traits.ts";
-import { resolveFight } from "./fight/engine.ts";
-import type { FightSetup } from "./fight/types.ts";
+import type { FightResult, FightSetup, FightSummary, Tally } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
 import { isParty, type Party } from "./party.ts";
 import {
@@ -144,12 +143,47 @@ function readSetup(v: unknown, what: string): FightSetup {
 /** The last fight's setup. A run saved before it was kept has none. */
 const readLast = (v: unknown): FightSetup | null =>
   v === undefined || v === null ? null : readSetup(v, "the last fight");
-/** The fight being fought, while there is one: its setup, and how it comes out, worked out again from that. */
+const isResult = (v: unknown): v is FightResult => v === "win" || v === "loss" || v === "draw";
+/** A count kept as a fraction: health, damage. */
+const amount = (v: unknown, what: string): number =>
+  typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : bad(what);
+function readTally(v: unknown, what: string): Tally {
+  const t = record(v, what);
+  return {
+    id: whole(t.id, 0, 10_000, what),
+    side: t.side === 0 || t.side === 1 ? t.side : bad(what),
+    kind: one(t.kind, isUnitKind, what),
+    stars: one(t.stars, isStars, what),
+    summoned: flag(t.summoned, what),
+    alive: flag(t.alive, what),
+    hp: amount(t.hp, what),
+    maxHp: amount(t.maxHp, what),
+    dealt: amount(t.dealt, what),
+    taken: amount(t.taken, what),
+    healed: amount(t.healed, what),
+    casts: whole(t.casts, 0, 1_000_000, what),
+  };
+}
+/** How a fight came out, as Leaf decided it: read as it was kept, never worked out again. */
+function readOutcome(v: unknown, what: string): FightSummary {
+  const o = record(v, what);
+  const standing = list(o.standing, 2, what);
+  return {
+    result: one(o.result, isResult, what),
+    ticks: whole(o.ticks, 0, 10_000_000, what),
+    seconds: amount(o.seconds, what),
+    standing: [whole(standing[0], 0, 99, what), whole(standing[1], 0, 99, what)],
+    dusk: flag(o.dusk, what),
+    units: list(o.units, 400, what).map((u) => readTally(u, what)),
+  };
+}
+/** The fight being fought, while there is one: its setup, and how Leaf decided it came out. */
 function readFought(v: unknown, fighting: boolean): Fought | null {
   if (!fighting) return v === undefined || v === null ? null : bad("the fight");
-  const setup = readSetup(v === undefined || v === null ? bad("the fight") : record(v, "the fight").setup, "the fight");
+  const fight = record(v, "the fight");
+  const setup = readSetup(fight.setup, "the fight");
   if (setup.sides[0].figures.length === 0 || setup.sides[1].figures.length === 0) bad("the fight");
-  return { setup, outcome: resolveFight(setup) };
+  return { setup, outcome: readOutcome(fight.outcome, "the fight") };
 }
 function readFoe(v: unknown): Party {
   const foe = one(v, isParty, "who is waiting in the room");
@@ -338,4 +372,16 @@ export function loadRun(text: string): Loaded {
 }
 
 /** The readers above, for reading other plain data the same way: each throws `Nonsense` naming what was wrong. */
-export const fields = { record, whole, flag, list, one, each, unique, items: readItems, setup: readSetup, bad };
+export const fields = {
+  record,
+  whole,
+  flag,
+  list,
+  one,
+  each,
+  unique,
+  items: readItems,
+  setup: readSetup,
+  outcome: readOutcome,
+  bad,
+};

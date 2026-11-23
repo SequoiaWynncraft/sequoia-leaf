@@ -9,8 +9,9 @@ import { leave, tell } from "@sequoia-leaf/kit/shell.ts";
 import {
   type AcornsWhy,
   type BossId,
-  fightSetup,
+  type FightSummary,
   isBossId,
+  playsAsKept,
   type RaidNote,
   specOf,
   type TraitId,
@@ -163,11 +164,15 @@ export async function setOut(): Promise<void> {
   playFight();
 }
 
+/**
+ * Plays the fight Leaf decided. One these rules would play otherwise (a page opened before a
+ * deploy, or a fight decided before one) is not shown: only how Leaf says it came out, and what it paid.
+ */
 function playFight(): void {
-  const run = S.run;
-  const setup = run ? fightSetup(run) : null;
-  if (!run || !setup) return;
-  startFight(setup, S.prefs.speed, takings);
+  const fought = S.run?.phase === "fight" ? S.run.fight : null;
+  if (!fought) return;
+  if (playsAsKept(fought)) startFight(fought.setup, S.prefs.speed, () => takings(true));
+  else takings(false);
 }
 
 export function doSkip(): void {
@@ -190,9 +195,10 @@ const whyName = (why: AcornsWhy): string => (why === "streak" && S.run ? streakN
  * tally, and what it paid is counted out where it can be seen, a line at a time on the sheet too.
  * The table waits on "Carry on".
  */
-function takings(): void {
+function takings(kept: boolean): void {
   const run = S.run;
-  if (!run || run.phase !== "fight") return;
+  const outcome = run?.phase === "fight" ? run.fight?.outcome : undefined;
+  if (!run || !outcome) return;
   const boss = run.foe.figures.map((p) => p.kind).find(isBossId);
   const room = run.room;
   shown.resolve = run.resolve;
@@ -200,14 +206,18 @@ function takings(): void {
   shown.level = run.level;
   holdAcorns(run.acorns, 9);
   S.mode = "after";
-  void taken(boss, room);
+  void taken(boss, room, { outcome, kept });
 }
 
 /** Asks Leaf to settle the room, and counts out what it paid. */
-async function taken(boss: BossId | undefined, room: number): Promise<void> {
+async function taken(
+  boss: BossId | undefined,
+  room: number,
+  fight: { outcome: FightSummary; kept: boolean },
+): Promise<void> {
   const did = await ask({ do: "take" });
   if (did?.ok) {
-    counting(did.notes, boss, room);
+    counting(did.notes, boss, room, fight);
     return;
   }
   // Taken already, on another page: the table goes on as Leaf has it.
@@ -224,9 +234,14 @@ async function taken(boss: BossId | undefined, room: number): Promise<void> {
 }
 
 /** Leaf has settled the room: its sheet rises, and what it paid is counted out. */
-function counting(notes: readonly RaidNote[], boss: BossId | undefined, room: number): void {
+function counting(
+  notes: readonly RaidNote[],
+  boss: BossId | undefined,
+  room: number,
+  fight: { outcome: FightSummary; kept: boolean },
+): void {
   signal("fought");
-  openSheet("after");
+  openSheet("after", fight);
   const result = notes.find((n) => n.t === "result");
   const won = result?.t === "result" && result.result === "win";
   // The run has moved on by now: it may be over.

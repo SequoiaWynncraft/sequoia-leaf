@@ -22,7 +22,7 @@ import {
 } from "./game.ts";
 import { payout } from "./outside.ts";
 import { isParty } from "./party.ts";
-import { pieces, spotOf, summariseRun } from "./run.ts";
+import { pieces, playsAsKept, spotOf, summariseRun } from "./run.ts";
 import { RAID_STATS } from "./stats.ts";
 import { readNotes, readView } from "./wire.ts";
 
@@ -192,6 +192,19 @@ describe("every command a player has", () => {
     if (!fight) throw new Error("no fight");
     fight.outcome.result = kept === "win" ? "loss" : "win";
     expect(must(other, { do: "take" }).notes[0]).toMatchObject({ t: "result", result: fight.outcome.result });
+  });
+  test("the outcome Leaf kept is kept across a restart: a table stored in a fight reads back with it, not one worked out again", () => {
+    const fighting = must(planned(started(5)), { do: "fight" }).state;
+    const run = fighting.run;
+    const fight = run?.fight;
+    if (!run || !fight) throw new Error("no fight");
+    // An outcome the rules loaded now would not give from that setup, as after a balance change.
+    const kept = { ...fight.outcome, result: fight.outcome.result === "win" ? "loss" : "win", ticks: 4321 } as const;
+    const stored = RAID.encode({ ...fighting, run: { ...run, fight: { ...fight, outcome: kept } } });
+    const read = RAID.decode(stored);
+    expect(read?.run?.fight?.outcome).toEqual(kept);
+    if (!read) throw new Error("does not read");
+    expect(must(read, { do: "take" }).notes[0]).toMatchObject({ t: "result", result: kept.result });
   });
   test("a room taken is logged: which, what kind, won or not, resolve left, how long the fight took", () => {
     const fighting = must(planned(started(5)), { do: "fight" }).state;
@@ -562,6 +575,27 @@ describe("what Leaf sends the page", () => {
       check(must(state, { do: "take" }));
     }
     expect(state.run).toBeNull();
+  });
+  test("a fight's outcome is read as Leaf sent it, in its note and in the view, never worked out again", () => {
+    const done = must(planned(started(5)), { do: "fight" });
+    const note = done.notes[0];
+    if (note?.t !== "fight") throw new Error("no fight note");
+    const other = { ...note.outcome, result: note.outcome.result === "win" ? "loss" : "win", ticks: 4321 } as const;
+    expect(readNotes(wire([{ ...note, outcome: other }]))).toEqual([{ ...note, outcome: other }]);
+    const view = RAID.view(done.state, ctx());
+    const run = view.run;
+    if (!run?.fight) throw new Error("no fight");
+    const shown = { ...view, run: { ...run, fight: { ...run.fight, outcome: other } } };
+    expect(readView(wire(shown))?.run?.fight?.outcome).toEqual(other);
+    expect(readNotes(wire([{ ...note, outcome: { ...other, result: "maybe" } }]))).toBeNull();
+  });
+  test("the page's rules play a fight to the outcome Leaf kept, or say they do not, for the page to load again", () => {
+    const fought = must(planned(started(5)), { do: "fight" }).state.run?.fight;
+    if (!fought) throw new Error("no fight");
+    expect(playsAsKept(fought)).toBe(true);
+    expect(playsAsKept({ ...fought, outcome: { ...fought.outcome, ticks: fought.outcome.ticks + 1 } })).toBe(false);
+    const flipped = fought.outcome.result === "win" ? "loss" : "win";
+    expect(playsAsKept({ ...fought, outcome: { ...fought.outcome, result: flipped } })).toBe(false);
   });
   test("anything else is not read", () => {
     const view = wire(RAID.view(started(), ctx()));

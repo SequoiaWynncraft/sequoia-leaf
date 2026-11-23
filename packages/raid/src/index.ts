@@ -214,6 +214,7 @@ export {
   spotOf,
   STALL_POOL,
   layOutAfresh,
+  playsAsKept,
   startRun,
   streakPay,
   summariseRun,
