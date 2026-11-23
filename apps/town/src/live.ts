@@ -577,7 +577,15 @@ export function makeLive(p: Prepared): Guild {
     );
     // Leaf's word of the guild's day and its newest news first, for the moments under way; then as it happens.
     void (async () => {
-      const a = await ask("/v1/game/guild/events");
+      let a = await ask("/v1/game/guild/events");
+      // Without it the page has no word of the guild's day: one that got no answer, or Leaf's
+      // trouble for one, is asked for again, a few times.
+      for (let tries = 0; (a.status === 0 || a.status >= 500) && tries < 5; tries++) {
+        // oxlint-disable-next-line no-await-in-loop -- waiting before trying again
+        await new Promise((again) => setTimeout(again, 3000));
+        // oxlint-disable-next-line no-await-in-loop -- one try at a time
+        a = await ask("/v1/game/guild/events");
+      }
       const newest = a.status === 200 ? readEvents(a.body) : [];
       const counted = readDay(a.body);
       if (counted) news.said(counted.day, counted.flag);

@@ -76,7 +76,8 @@ const TOLD = "activities a JOIN ledger_entries l ON l.idempotency_key = a.source
  * What the town shows of the guild that its newest events cannot say, as the
  * rest of the answer's JSON: how many raids and wars the guild finished in the
  * UTC day of `now`, by when each happened, each once however many members it
- * paid (their rows share a `detail` and an `occurred_at`); and the last
+ * paid (a row's `source_key` is the raid's or the war's own id and then the
+ * member's); and the last
  * territory fought at, by when the war happened, of two at one moment the one
  * whose name sorts later.
  */
@@ -87,7 +88,7 @@ export const guildDay = Effect.fnUntraced(function* (now: number) {
     Request: Schema.Int,
     Result: Schema.Struct({ kind: Schema.Literals(["raid", "war"]), count: Schema.Int }),
     execute: (since) => sql`
-      SELECT a.kind AS kind, COUNT(DISTINCT a.detail || char(31) || a.occurred_at) AS count
+      SELECT a.kind AS kind, COUNT(DISTINCT replace(a.source_key, ':' || a.player_id, '')) AS count
       FROM ${sql.literal(TOLD)}
       WHERE a.occurred_at >= ${since} AND a.occurred_at < ${since + DAY_MS}
       GROUP BY a.kind
