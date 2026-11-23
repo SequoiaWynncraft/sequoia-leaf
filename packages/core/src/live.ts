@@ -11,6 +11,9 @@
  * - **Text, the cold path.** Everything else is a small JSON object with a `t`: joining and leaving a
  *   room, who is in it, clock pings, and actions (`ToServer`, `ToClient`).
  *
+ * A visit's room (`visitRoom`) is still: everybody visiting one player's state, who hear what Leaf
+ * does to it as it does it (`did`), and nothing of each other but who is there.
+ *
  * Why Leaf closes a connection is said by its close code alone (`CLOSE`).
  *
  * Motion is state, never an event: each frame says all of where a player is, and only the newest
@@ -19,6 +22,9 @@
  * its bounds. `facing`, `pose` and the high bits of `flags` are the game's to define: Leaf passes
  * them on.
  */
+
+import { type GameId, gameId } from "./play.ts";
+import { parsePlayerId, type PlayerId } from "./player.ts";
 
 export const LIVE_PATH = "/v1/game/live";
 /** The wire's version. Version 1 had no jump count, and no client ever spoke it. */
@@ -265,18 +271,26 @@ export type ToClient =
   | { t: "left"; id: number }
   | { t: "act"; id: number; kind: string; arg: string }
   | { t: "pong"; c: number; s: number }
-  | { t: "error"; code: "unknown_room" | "not_in_room" | "bad_act" };
+  | { t: "error"; code: "unknown_room" | "not_in_room" | "bad_act" }
+  /**
+   * In a visit's room: a batch of commands Leaf has just done to the state visited, as it kept them.
+   * `rev` is the state's stored revision after the batch, `did` each command done, in order, as the
+   * game writes it (`Game.echo`), and `after` the game's answer to the batch (`Game.answer`).
+   */
+  | { t: "did"; rev: number; did: unknown[]; after: unknown };
 
 /**
  * What a kind of room is: how far it reaches, how many fit in one copy of it before another is
  * opened, and its pace: the fastest anybody gets about in it, in its units a second. Leaf shows a
- * move further than that pace allows as a jump.
+ * move further than that pace allows as a jump. In a `still` room nobody's motion or actions reach
+ * anybody: it is for hearing what Leaf says there.
  */
 export interface RoomKind {
   width: number;
   height: number;
   capacity: number;
   speed: number;
+  still?: boolean;
 }
 
 /** The rooms there are. Each place that wants its players live adds itself here. */
@@ -285,9 +299,21 @@ export const ROOMS: Readonly<Record<string, RoomKind>> = {
   town: { width: 512, height: 352, capacity: 32, speed: 160 },
 };
 
-/** The kind of room a name asks for, if there is one. */
+/**
+ * A visit's room: everybody visiting one player's state in a game (`visit:works:<uuid>`), in one
+ * copy. Leaf tells them each batch of commands it does to that state as it does it (`did`).
+ */
+export const visitRoom = (game: GameId, player: PlayerId): string => `visit:${game}:${player}`;
+const VISIT: RoomKind = { width: 0, height: 0, capacity: 1000, speed: 0, still: true };
+const VISIT_ROOM = /^visit:([a-z]{1,16}):(.{36})$/;
+
+/** The kind of room a name asks for, if there is one: one of `ROOMS`, or a visit's room. */
 export function roomKind(name: string): RoomKind | undefined {
-  return Object.hasOwn(ROOMS, name) ? ROOMS[name] : undefined;
+  if (Object.hasOwn(ROOMS, name)) return ROOMS[name];
+  const visit = VISIT_ROOM.exec(name);
+  if (visit === null) return undefined;
+  const [, game = "", player = ""] = visit;
+  return gameId(game) !== undefined && parsePlayerId(player) === player ? VISIT : undefined;
 }
 
 // ---------- reading text frames ----------
@@ -343,6 +369,10 @@ export function readToClient(text: string): ToClient | null {
       const code = ERRORS.find((c) => c === v.code);
       return code ? { t: "error", code } : null;
     }
+    case "did":
+      return num(v.rev) && Array.isArray(v.did) && "after" in v
+        ? { t: "did", rev: v.rev, did: v.did, after: v.after }
+        : null;
     default:
       return null;
   }

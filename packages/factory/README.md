@@ -253,7 +253,12 @@ the page writes reads back as the same act (`test/page.test.ts`, and every comma
 `test/play.test.ts`). What Leaf sends back is read here too: the view (`readView`), a command's notes,
 which are the yard's news (`readNotes`), and the answer to a batch (`readAnswer`), each tested against
 what `FACTORY` really gives; and the orders in an answer are put on the page's copy by `hear`, so that
-nothing on the page writes to its yard but the rules. The postcard the town is left (`postcard`) and what a standing says on a
+nothing on the page writes to its yard but the rules. A visitor is given the yard as its owner's
+page is (`FACTORY.visit`, blueprints and all), and Leaf tells a visitor's page each command it keeps
+as `FACTORY.echo` writes it: as the owner's page wrote it, with the tick it was done at, the yard's
+after it. A copy that does each one off the wire (`readCommand`, `play`) at its tick, and runs on to
+the tick of Leaf's answer, has Leaf's check there (`test/play.test.ts`, over random play and time
+away). The postcard the town is left (`postcard`) and what a standing says on a
 card (`WORKS_STATS`, in `src/stats.ts`, which reads nothing of the rules) are here as well.
 
 ## What is unlocked, for a screen

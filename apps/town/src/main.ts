@@ -220,6 +220,9 @@ async function boot(): Promise<void> {
       // The game says where the member is while it is open, and calls Leaf itself: the town's time stops here.
       guild.here(null);
       here();
+      // The town's live room is left at once, before the game's page is made: it may go into a live
+      // room of its own (a visit's), and a player is live in one room at a time.
+      town.onStage(false);
       iris.at = at;
       iris.goal = 0;
       hush(true);
@@ -483,9 +486,8 @@ async function boot(): Promise<void> {
       iris.open += Math.sign(d) * Math.min(Math.abs(d), dt / CLOSE_IN);
     }
     if (visit && iris.open <= 0 && !paused) {
-      // The view has closed in: the game takes the page from here, and the town's room is left.
+      // The view has closed in: the game takes the page from here.
       paused = true;
-      town.onStage(false);
       keys.clear();
       held = null;
       const at = toPage(iris.at.x, iris.at.y);

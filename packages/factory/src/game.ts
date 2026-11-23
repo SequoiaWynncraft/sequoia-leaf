@@ -42,7 +42,7 @@ import {
   unqueue,
   unstudy,
 } from "./orders.ts";
-import { shortOf } from "./page.ts";
+import { shortOf, writeCommand } from "./page.ts";
 import {
   blueprintAt,
   clear,
@@ -544,8 +544,8 @@ export function readCommand(v: unknown): Command | null {
   return rest && { ...rest, tick: v.tick };
 }
 
-const view = (y: Yard, ctx: Ctx, blueprints = true): View => ({
-  yard: encode(y, { seed: false, away: awayOf(y), blueprints }),
+const view = (y: Yard, ctx: Ctx): View => ({
+  yard: encode(y, { seed: false, away: awayOf(y) }),
   clock: clockOf(y, ctx.now),
 });
 
@@ -562,7 +562,11 @@ export const FACTORY: Game<Yard, Command, View, News, Short> = {
   apply: (y, c, ctx) => play(y, { ...c, tick: tickOf(y, c, ctx.now) }),
   view: (y, ctx) => view(y, ctx),
   answer: (y, ctx) => shortOf(clockOf(y, ctx.now), answer(y)),
-  visit: (y, ctx) => view(y, ctx, false),
+  // A visitor is given the yard as its owner's page is, blueprints and all, so that its copy can do
+  // each command the owner does (a blueprint set down among them); the page shows none of them.
+  visit: (y, ctx) => view(y, ctx),
+  // The command as the owner's page wrote it, at the tick it was done at: the yard's, after it.
+  echo: (y, c) => writeCommand({ ...c, tick: y.tick }),
   decode: (text) => decode(text),
   encode: (y) => encode(y),
   command: readCommand,

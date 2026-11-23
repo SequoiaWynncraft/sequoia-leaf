@@ -31,6 +31,7 @@ import { type Identity, isGuest } from "../api/api.ts";
 import { PLACES } from "../api/schemas.ts";
 import { Presence } from "../game/presence.ts";
 import { type Occupant, type Room, Rooms } from "./room.ts";
+import { Watchers } from "./watchers.ts";
 
 /**
  * What Bun is told about every WebSocket: no frame over 4 KiB, a client that falls a megabyte
@@ -195,6 +196,8 @@ class Player {
   device: Device | null = null;
   /** When Leaf was last told they did something here (`Visits.acted`), at most every `ACTED_EVERY`. */
   actedTold = Number.NEGATIVE_INFINITY;
+  /** In a still room, what stops them hearing what Leaf tells it (`Watchers`). */
+  hearing: (() => void) | null = null;
   readonly moves: Allowance;
   readonly texts: Allowance;
   readonly acts: Allowance;
@@ -248,8 +251,8 @@ interface Census {
   readonly rooms: Readonly<Record<string, number>>;
 }
 
-/** What a `live` log line says: who is here now, and what happened since the last line. */
-export type LiveLine = Census & Readonly<Counts>;
+/** What a `live` log line says: who is here now, and what happened since the last line, with the frames Leaf told visits' rooms. */
+export type LiveLine = Census & Readonly<Counts> & { readonly told: number };
 
 /** What came of a player's asking to open a connection: served until it closed, or turned away. */
 export type Opened = "served" | "full" | "busy" | "stopping";
@@ -265,6 +268,10 @@ export type Opened = "served" | "full" | "busy" | "stopping";
  * and when they go, so that nobody's page need say where they are while it is in a room. The same
  * moments open, keep and close their visit there (`Visits`); and Leaf's farewell closes every open
  * visit before it closes any connection.
+ *
+ * A player in a visit's room (`visitRoom`: somebody's yard, from Top yards) hears what Leaf does to
+ * the state they visit while they are in it, as the play service tells it (`Watchers`). A visit's
+ * room is no place, so nobody's presence there is written.
  */
 export class Live extends Context.Service<
   Live,
@@ -303,6 +310,7 @@ export class Live extends Context.Service<
       const tuning = yield* LiveTuning;
       const presence = yield* Presence;
       const visits = yield* Visits;
+      const watchers = yield* Watchers;
       const rooms = new Rooms();
       const players = new Map<string, Player>();
       let counts = noCounts();
@@ -364,6 +372,8 @@ export class Live extends Context.Service<
 
       const leave = (p: Player, now: number): void => {
         const { room, occupant } = p;
+        p.hearing?.();
+        p.hearing = null;
         p.room = null;
         p.occupant = null;
         if (!room || !occupant) return;
@@ -397,6 +407,8 @@ export class Live extends Context.Service<
         if (!room) return;
         p.occupant = room.join(who, p, now, SERVER_HZ, LIVE_VERSION);
         p.room = room;
+        // In a visit's room they hear what Leaf does to the state visited.
+        if (room.kind.still === true) p.hearing = watchers.hear(room.kindName, p);
         const place = placeOf(kindName);
         if (place) Queue.offerUnsafe(whereabouts, { kind: "in", players: [inRoom(p)], place, at: now });
       };
@@ -494,11 +506,19 @@ export class Live extends Context.Service<
         Effect.sync(() => {
           counts.refused[code] = (counts.refused[code] ?? 0) + 1;
         });
-      const line = Effect.map(census, (now): LiveLine => ({ ...now, ...counts, refused: { ...counts.refused } }));
+      /** How many frames Leaf had told visits' rooms when the last line was written. */
+      let toldBefore = watchers.told();
+      const line = Effect.map(census, (now): LiveLine => ({
+        ...now,
+        ...counts,
+        refused: { ...counts.refused },
+        told: watchers.told() - toldBefore,
+      }));
 
       // A line a minute while anybody is about, or anything happened, refusals included.
       const report = Effect.flatMap(line, (said) => {
         counts = noCounts();
+        toldBefore += said.told;
         if (said.players === 0 && said.opened === 0 && Object.keys(said.refused).length === 0) return Effect.void;
         return Effect.logInfo("live").pipe(Effect.annotateLogs({ ...said }));
       });

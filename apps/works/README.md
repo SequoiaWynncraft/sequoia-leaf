@@ -74,6 +74,23 @@ handing over leave a place on the board empty until Leaf's answer, with the next
 place the board would have filled (when the board goes up) sends `collect`, so Leaf does. A new
 order shows faint in the list until it counts.
 
+**A visit** (`?of=<player>`, from Top yards or a card's "Visit yard") opens somebody else's yard
+as Leaf gives a visitor it, the owner's page's view, and sends nothing: every tool, button and card
+action is gone, and `doNow` refuses. It follows the yard live. The page goes into the yard's visit
+room on Leaf (the kit's `joinVisit`) and hears each batch Leaf keeps of the yard as it keeps it: the
+commands done, each at the tick Leaf did it, and Leaf's answer after them. Its copy runs half a
+second behind Leaf's clock, so that it hears of what the owner did before it reaches that tick, and
+does each command there, then at the answer's tick holds itself to Leaf's check and puts the orders
+Leaf hung on its board, as the owner's page does (`follow`, in `yard.ts`). So what the owner
+builds, takes away, turns, raises, paints or sets, and the goals they finish, show about half a
+second after they do it, and the yard moves as theirs does, a yard set going again included. Each
+time the room welcomes it the page reads the yard again, since what was done while it was not in the
+room is never told. Leaf's word that comes after the copy has passed its tick, a command the copy
+refuses, or a check that differs, and it takes Leaf's yard as above; told too late, it runs further
+behind from then on (up to three seconds), and nearer again as batches come in good time. It reads
+the yard again every five minutes as well, and every fifteen seconds while it hears nothing live; a
+read older than a batch the copy has begun is let go.
+
 **Coins.** The number the Works shows, and what a price is checked against, is the purse's (Leaf's
 ledger) and the whole Coins in the copy's till, as Leaf will count them. A command that changes
 Coins shows what it expects at once (`heardCoins`), and the purse asks Leaf for the true number
@@ -480,8 +497,10 @@ taken. `page(x, y)` is where a tile is on the page, `rider(x, y)` what is riding
 `where(kind)` where a kind of thing stands, `trouble()` the tiles of the pieces in trouble as the
 yard's sheet counts them, and `state()` a summary (among it the node in hand, the goals done, the
 tier, the grade in hand, the research line and how far the first of it has come, how many Studies and
-cart stops stand, the nudge and the part it is said beside, `differences`, and `reads`, how many times
-the copy has become Leaf's yard as read, the opening included).
+cart stops stand, the nudge and the part it is said beside, `differences`, `reads`, how many times
+the copy has become Leaf's yard as read, the opening included, the copy's `check`, and in a visit
+`visit`: whether it hears Leaf live, how many ticks behind it runs, the batches told and not yet done,
+the newest `rev` it has, and how many batches it did, heard too late, and did not do as Leaf had).
 
 **How long a frame takes.** `works.bench(frames, hz)` does that many frames' work one after another,
 as if the screen showed `hz` of them a second (60 unless said), and gives back what one took:

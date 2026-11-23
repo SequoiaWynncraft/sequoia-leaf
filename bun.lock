@@ -55,6 +55,7 @@
     "apps/works": {
       "name": "@sequoia-leaf/works",
       "dependencies": {
+        "@sequoia-leaf/core": "workspace:*",
         "@sequoia-leaf/factory": "workspace:*",
         "@sequoia-leaf/kit": "workspace:*",
         "@sequoia-leaf/raid": "workspace:*",

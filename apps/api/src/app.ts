@@ -20,6 +20,7 @@ import { OpenStreams } from "./http/streams.ts";
 import { Ledger } from "./ledger/store.ts";
 import { Live, LIVE_SOCKETS } from "./live/live.ts";
 import { LiveRoute } from "./live/route.ts";
+import { Watchers } from "./live/watchers.ts";
 import { Coins } from "./play/coins.ts";
 import { Play } from "./play/service.ts";
 import { PlayStore } from "./play/store.ts";
@@ -114,6 +115,7 @@ export const Stores = Layer.mergeAll(
  * the server's farewell closes, and which write who is in them into the stores' presence and visits.
  */
 export const Services = Layer.mergeAll(Play.layer, Live.layer).pipe(
+  Layer.provideMerge(Watchers.layer),
   Layer.provideMerge(Stores),
   Layer.provideMerge(Database),
   Layer.provide(Mojang.layer),

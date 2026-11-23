@@ -15,6 +15,9 @@
  * What this page knows of the room starts at a welcome, each time: who is in it, where they have
  * been, and Leaf's clock. Nothing heard before a welcome counts, and a new connection's picture
  * replaces the old one only then, so nothing of one room, or one connection, is mixed with another's.
+ * In a visit's room (core's `visitRoom`) it hears what Leaf does to the state visited (`did`); what
+ * was done while it was not in the room is never told, so a page hears a welcome after a drop as the
+ * moment to read the state again.
  *
  * What it does not do is draw anybody. A page asks it each frame where somebody is to be drawn
  * (`sample`): their motion as it was `INTERP_MS` ago by Leaf's clock, between the two snapshots
@@ -27,13 +30,16 @@ import {
   decodeSnapshot,
   encodeMove,
   Flag,
+  type GameId,
   INTERP_MS,
   type LiveMember,
   livePath,
   type Motion,
+  parsePlayerId,
   readToClient,
   reconnects,
   type ToServer,
+  visitRoom,
 } from "@sequoia-leaf/core";
 
 import { device, member } from "./live.ts";
@@ -168,6 +174,8 @@ export interface LiveEars {
   joined?(m: LiveMember): void;
   left?(id: number): void;
   act?(id: number, kind: string, arg: string): void;
+  /** In a visit's room: a batch of commands Leaf has just done to the state visited (core's `did`). */
+  did?(rev: number, did: readonly unknown[], after: unknown): void;
   status?(s: LiveStatus): void;
 }
 
@@ -380,6 +388,9 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       case "act":
         if (shown === l) ears.act?.(m.id, m.kind, m.arg);
         return;
+      case "did":
+        if (shown === l) ears.did?.(m.rev, m.did, m.after);
+        return;
       case "pong":
         l.clock?.add(m.c, m.s, outside.now());
         return;
@@ -555,4 +566,13 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
       inRoom(null);
     },
   };
+}
+
+/**
+ * Joins the room of a visit to a player's state in a game (`visitRoom`), to hear what Leaf does to it
+ * (`did`) as `joinLive` hears any room; none for somebody who is not a player.
+ */
+export function joinVisit(game: GameId, player: string, ears: LiveEars = {}): LiveRoom | null {
+  const visited = parsePlayerId(player);
+  return visited === undefined ? null : joinLive(visitRoom(game, visited), ears);
 }

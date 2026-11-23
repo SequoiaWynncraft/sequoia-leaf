@@ -51,7 +51,8 @@ const clamp = (n: number, low: number, high: number): number => Math.min(high, M
 /**
  * One copy of a room: who is in it and where. It is plain state, changed by one thing at a time, and
  * says what it has to say through each occupant's outbox: who came and went and what they did, as
- * it happens, and everyone's changed motion once a tick (`flush`), made once for all of them.
+ * it happens, and everyone's changed motion once a tick (`flush`), made once for all of them. In a
+ * still room (a visit's) it says only who came and went.
  */
 export class Room {
   readonly occupants = new Map<number, Occupant>();
@@ -120,11 +121,12 @@ export class Room {
    * theirs sends its first move (it may count from anywhere), so nobody is ever drawn sliding from
    * where they were; and whenever a move goes further than the room's pace allows since the last
    * (`outpaced`), so a game that says its player is anywhere it likes only has them jump there.
-   * Says whether they went anywhere: a first move, or one that only turns them, does not.
+   * Says whether they went anywhere: a first move, or one that only turns them, does not. In a
+   * still room nobody moves.
    */
   move(id: number, seq: number, m: Motion, time: number): boolean {
     const o = this.occupants.get(id);
-    if (!o) return false;
+    if (!o || this.kind.still === true) return false;
     const x = clamp(m.x, 0, this.kind.width);
     const y = clamp(m.y, 0, this.kind.height);
     const was = o.motion;
@@ -164,9 +166,9 @@ export class Room {
     o.dirty = true;
   }
 
-  /** Tells everyone else what somebody did. */
+  /** Tells everyone else what somebody did; in a still room, nobody. */
   act(id: number, kind: string, arg: string): void {
-    if (!this.occupants.has(id)) return;
+    if (!this.occupants.has(id) || this.kind.still === true) return;
     this.others(id, text({ t: "act", id, kind, arg }));
   }
 

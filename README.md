@@ -621,6 +621,22 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   them ("Someone" for one Leaf has none for); the outer `you` is the caller's
   own `{ "place", "score", "also" }`, or null before they score. Empty for a
   game with no board.
+- `GET /v1/game/play/{game}/of/{player}` answers `{ "rev", "now", "state" }`
+  as the owner's own read does, with what a visitor is given of somebody's
+  state (`Game.visit`; the Works gives a visitor the yard as its owner's page
+  is given it). 404 `nothing_to_visit` for a game that cannot be visited or a
+  player with nothing there; it takes one of the visitor's batches of the
+  allowance. Nothing of the visitor's is written, and the state run on is kept
+  as after any job. A visitor sends no commands: a batch is always the
+  caller's own state.
+- For a game whose visitor's page runs the same rules on a copy (`Game.echo`:
+  the Works), everybody in the state's visit room (Live's `visit:<game>:<player>`,
+  below) is told each batch once it is kept, as the live wire's `did`: each
+  command done, in order, as the game echoes it (the Works: as its page writes
+  it, with the tick Leaf did it at), the stored `rev` after the batch, and the
+  batch's short answer. A command refused, or answered from before, is not
+  told. A copy that does each at its tick is the state Leaf has, and the
+  answer's check says so. With nobody in the room nothing is made for it.
 - A batch with a command that is not a chore (`Game.chore`: one the page
   sends by itself, the town's `here` and the Works' `collect`) is the player
   doing something, done or refused, for their time (below).
@@ -898,6 +914,16 @@ line: players, how many are connected, who is in which room, how many connection
 opened and closed, how many frames came in and were dropped, and `refused`, how
 many openings were turned away before the upgrade, by code (`unauthorized: 3`).
 
+**A visit's room** (`visitRoom` in core: `visit:<game>:<player>`, one copy for
+everybody visiting that player's state) is still: nobody's motion or actions
+there reach anybody, and it is no place, so nobody's presence is written for
+it. Whoever is in it hears what the play service tells it (`Watchers`): each
+batch Leaf keeps of that state, as above. What was done while a page was not in
+the room is never told, so the Works' visit reads the yard each time the room
+welcomes it. Going into a game, the town leaves its own room at once, before
+the game's page is made, since that page may go into a visit's room on the same
+connection. The `live` line counts `told`, the batches told to visits' rooms.
+
 **Where they are, for everybody else.** A player in a room whose kind is one of
 the game's places (`town`) is present there as `PUT /v1/game/presence` has it,
 written by Live: when they come into the room (keeping what they last said
@@ -913,8 +939,8 @@ at its pace: right for walking about together, never for anything that pays or
 wins. Fights
 and rewards will need commands Leaf checks and outcomes Leaf decides. A room is
 found by its kind; camps and tables will need copies addressed by who they
-belong to, and a moment the whole town sees (a pull at the tree) will need to
-reach every copy of the town. One process holds every room; a second would need
+belong to, as a visit's room is, and a moment the whole town sees (a pull at the
+tree) will need to reach every copy of the town. One process holds every room; a second would need
 each copy owned by one of them. A change to the wire goes with a new
 `LIVE_VERSION`, and pages built for the old one need a way to load again.
 
