@@ -30,7 +30,7 @@
  *
  * A visit (`S.visiting`) opens somebody else's yard as Leaf gives a visitor it and sends nothing
  * (`doNow` refuses). It follows the yard live: in the visit's room on Leaf (`visitRoom`), it hears
- * each batch Leaf keeps of the yard as Leaf keeps it (`told`): the commands done, each at the tick
+ * each batch Leaf keeps of the yard as Leaf keeps it (`hearDid`): the commands done, each at the tick
  * Leaf did it, and Leaf's answer after them. Its copy runs a little behind Leaf's clock (`hold`), so
  * that it hears of a command before it reaches the command's tick, and does each command there; at
  * the tick of each answer it holds itself to Leaf's check, and puts the orders Leaf hung on its board,
@@ -39,7 +39,7 @@
  * passed its tick, a command the copy refuses, or a check that differs, is a copy that is not Leaf's
  * yard: it takes Leaf's yard as above, and a copy that heard too late is held further behind from
  * then on. It reads the yard again every few minutes as well, and every few seconds while it hears
- * nothing live; a read older than a batch the copy has done is let go.
+ * nothing live; a read older than a batch the copy has begun is let go.
  */
 
 import {
