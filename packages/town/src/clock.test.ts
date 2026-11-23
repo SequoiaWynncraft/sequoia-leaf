@@ -279,11 +279,13 @@ const beside = (a: number, b: number): boolean => {
 };
 
 describe("the stump's board by the clock", () => {
-  test("over a day one figure at a time goes to a free hex beside its own, each 2.1 seconds as before (1.3 to 2.9), and the board never jumps", () => {
+  test("over six hours one figure at a time goes to a free hex beside its own, each 2.1 seconds as before (1.3 to 2.9), and the board never jumps", () => {
+    // Six hours, not the day the others watch: a board is replayed from its last set-out, every quarter second, so a day of them took CI past its 5 seconds.
+    const hours = 6;
     let was = boardAt(SEED, T0);
     let moves = 0;
     let setOut = 0;
-    for (let now = T0 + 250; now < T0 + HOURS * 3_600_000; now += 250) {
+    for (let now = T0 + 250; now < T0 + hours * 3_600_000; now += 250) {
       const b = boardAt(SEED, now);
       expect(new Set(b.on).size).toBe(SET_OUT.length);
       if (b.moved?.at !== was.moved?.at) {
@@ -302,10 +304,10 @@ describe("the stump's board by the clock", () => {
       was = b;
     }
     // 1,714 turns an hour; in a few of them the figure whose turn it is has no free hex beside it.
-    expect(Math.round(moves / HOURS)).toBeGreaterThanOrEqual(1690);
-    expect(Math.round(moves / HOURS)).toBeLessThanOrEqual(1715);
+    expect(Math.round(moves / hours)).toBeGreaterThanOrEqual(1690);
+    expect(Math.round(moves / hours)).toBeLessThanOrEqual(1715);
     // Set out again every 64 turns: about 27 times an hour.
-    expect(Math.round(setOut / HOURS)).toBeGreaterThanOrEqual(26);
+    expect(Math.round(setOut / hours)).toBeGreaterThanOrEqual(26);
   });
 
   test("the same board whenever it is asked, and another in another room", () => {

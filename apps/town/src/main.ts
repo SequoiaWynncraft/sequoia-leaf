@@ -34,7 +34,7 @@ import { G, hooks, type PanelId, show, toPage } from "./game.ts";
 import { type GameId, GAMES } from "./games.ts";
 import { type Grove, makeGrove } from "./grovescene.ts";
 import { guild } from "./guild.ts";
-import { closeCard, closePanel, hush, initHud, panelBox, tickHud } from "./hud.ts";
+import { closeCard, closePanel, covered, hush, initHud, tickHud } from "./hud.ts";
 import { again, here, keepTold, onTown, town as kept, troubleCard } from "./leaf.ts";
 import { leafNow } from "./players.ts";
 import { showCampSheet, showSheet } from "./sheet.ts";
@@ -165,9 +165,9 @@ async function boot(): Promise<void> {
     const vh = G.view.h;
     let fw = vw;
     let fh = vh;
-    const box = panelBox();
+    const box = covered();
     if (box) {
-      if (box.width > window.innerWidth * 0.7) fh = Math.max(40, box.top * k);
+      if (box.under) fh = Math.max(40, box.top * k);
       else fw = Math.max(40, box.left * k);
     }
     const at = scene.focus();

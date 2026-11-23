@@ -78,6 +78,8 @@ export interface Run {
   phase: Phase;
   resolve: number;
   acorns: number;
+  /** Rooms won in a row (above 0), or lost in a row (below 0), up to the last one fought. A draw makes it 0. */
+  streak: number;
   level: number;
   xp: number;
   board: (Piece | null)[];
@@ -119,6 +121,10 @@ export interface Fought {
   outcome: FightSummary;
 }
 
+/** Why acorns were paid: the room, a win, savings, gnomes, a streak, or Windfall. */
+export type AcornsWhy = "room" | "win" | "interest" | "gnomes" | "streak" | "windfall";
+export const ACORNS_WHYS: readonly AcornsWhy[] = ["room", "win", "interest", "gnomes", "streak", "windfall"];
+
 /** What happened, for a screen to show. Figures are named by `piece`, their own number in the run. */
 export type Note =
   | { t: "starter"; kind: FigureId; piece: number; to: Spot }
@@ -145,7 +151,7 @@ export type Note =
   | { t: "xp"; gained: number; cost: number }
   | { t: "level"; level: number }
   | { t: "gave"; item: ItemId; piece: number; forged: FinishedId | null; holds: ItemId[] }
-  | { t: "acorns"; why: "room" | "win" | "interest" | "gnomes" | "windfall"; amount: number }
+  | { t: "acorns"; why: AcornsWhy; amount: number }
   | { t: "items"; why: "basket"; items: ItemId[] }
   | { t: "resolve"; change: number; left: number }
   /** The fight, locked: both boards and its seed to play it from, and how it came out. */
@@ -237,6 +243,17 @@ export const interestNow = (run: Run): number => {
   const per = run.boons.includes("deeppockets") ? boonNumber("deeppockets", "per") : ECONOMY.interestPer;
   return Math.min(interestCap(run), Math.floor(run.acorns / per));
 };
+/** The streak after a room: one more win or loss in a row, a new streak of 1 when it turns, 0 after a draw. */
+export function nextStreak(streak: number, result: FightResult): number {
+  if (result === "win") return streak > 0 ? streak + 1 : 1;
+  if (result === "loss") return streak < 0 ? streak - 1 : -1;
+  return 0;
+}
+/** What a streak pays after the room it was reached in, won or lost alike. */
+export function streakPay(streak: number): number {
+  const table = ECONOMY.streakAcorns;
+  return table[Math.min(Math.abs(streak), table.length - 1)] ?? 0;
+}
 /** What an offer on the stall costs right now; 0 for an empty place. */
 export function priceOf(run: Run, offer: number): number {
   const kind = run.stall[offer];
@@ -370,6 +387,7 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
     phase: "plan",
     resolve: ECONOMY.resolve,
     acorns: ECONOMY.startAcorns,
+    streak: 0,
     level: 1,
     xp: 0,
     board,
@@ -726,6 +744,7 @@ export function takeTakings(run: Run): Taken {
   const notes: Note[] = [{ t: "result", room: run.room, result: fight.result, standing: fight.standing }];
   const boss = run.foe.figures.map((p) => p.kind).find(isBossId) ?? null;
   run.record.push({ room: run.room, kind: room.kind, result: fight.result, standing: fight.standing, boss });
+  run.streak = nextStreak(run.streak, fight.result);
   run.last = setup;
   run.fight = null;
 
@@ -751,18 +770,21 @@ export function takeTakings(run: Run): Taken {
     return { ok: true, notes, fight };
   }
 
-  // Acorns: interest on what was held, then the room's pay.
-  const pay = (why: "room" | "win" | "interest" | "gnomes", amount: number): void => {
-    if (amount <= 0) return;
-    notes.push({ t: "acorns", why, amount });
-  };
+  // Acorns: the room's pay, the streak, interest on what was held before any of it, and the gnomes.
   const interest = interestNow(run);
   const gnomes = traitNumber("gnome", won ? "win" : "loss", traitSteps(partyOf(run)).gnome ?? 0);
-  pay("room", ECONOMY.roomAcorns);
-  pay("win", won ? ECONOMY.winAcorns : 0);
-  pay("interest", interest);
-  pay("gnomes", gnomes);
-  run.acorns += ECONOMY.roomAcorns + (won ? ECONOMY.winAcorns : 0) + interest + gnomes;
+  const paid: [AcornsWhy, number][] = [
+    ["room", ECONOMY.roomAcorns],
+    ["win", won ? ECONOMY.winAcorns : 0],
+    ["streak", streakPay(run.streak)],
+    ["interest", interest],
+    ["gnomes", gnomes],
+  ];
+  for (const [why, amount] of paid) {
+    if (amount <= 0) continue;
+    notes.push({ t: "acorns", why, amount });
+    run.acorns += amount;
+  }
   const xp = run.boons.includes("quickstudy") ? boonNumber("quickstudy", "xp") : ECONOMY.xpRoom;
   notes.push({ t: "xp", gained: xp, cost: 0 });
   gainXp(run, xp, notes);

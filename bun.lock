@@ -29,6 +29,7 @@
       "name": "@sequoia-leaf/battler",
       "dependencies": {
         "@sequoia-leaf/core": "workspace:*",
+        "@sequoia-leaf/figures": "workspace:*",
         "@sequoia-leaf/kit": "workspace:*",
         "@sequoia-leaf/raid": "workspace:*",
       },
@@ -40,6 +41,7 @@
       "name": "@sequoia-leaf/town-page",
       "dependencies": {
         "@sequoia-leaf/core": "workspace:*",
+        "@sequoia-leaf/figures": "workspace:*",
         "@sequoia-leaf/kit": "workspace:*",
         "@sequoia-leaf/pulls": "workspace:*",
         "@sequoia-leaf/raid": "workspace:*",
@@ -71,6 +73,16 @@
       "name": "@sequoia-leaf/factory",
       "dependencies": {
         "@sequoia-leaf/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "1.4.4",
+      },
+    },
+    "packages/figures": {
+      "name": "@sequoia-leaf/figures",
+      "dependencies": {
+        "@sequoia-leaf/kit": "workspace:*",
+        "@sequoia-leaf/raid": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "1.4.4",
@@ -109,6 +121,7 @@
       "name": "@sequoia-leaf/town",
       "dependencies": {
         "@sequoia-leaf/core": "workspace:*",
+        "@sequoia-leaf/raid": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "1.4.4",
@@ -188,6 +201,8 @@
     "@sequoia-leaf/core": ["@sequoia-leaf/core@workspace:packages/core"],
 
     "@sequoia-leaf/factory": ["@sequoia-leaf/factory@workspace:packages/factory"],
+
+    "@sequoia-leaf/figures": ["@sequoia-leaf/figures@workspace:packages/figures"],
 
     "@sequoia-leaf/kit": ["@sequoia-leaf/kit@workspace:packages/kit"],
 
