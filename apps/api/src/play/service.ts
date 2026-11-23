@@ -26,6 +26,8 @@ export const BATCHES = { rate: 10, burst: 20 } as const;
 export const COMMANDS = { rate: 10, burst: 40 } as const;
 /** How many players' allowances are kept before those filled up again are let go. */
 const ALLOWANCES_KEPT = 1000;
+/** How often a page saying its copy was not Leaf's state is logged, for a player and a game: once a minute. */
+const DIFFERENCES = { rate: 1 / 60, burst: 1 } as const;
 /**
  * How long a state of a game that tends its states (`Game.tend`) may go unwritten before Leaf tends
  * it itself: long enough that one whose player's page is open, sending a command now and then, is
@@ -224,7 +226,9 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * (`open`), and sends commands (`send`); Leaf does them in order with the game's rules, and keeps a
  * batch in one transaction: the state, and for a game with a board where it stands, the Coins each
  * command paid or took, what it logged, each command's answer, and what the state shows the player
- * has won for good (`Game.awards`), which every game is told on every call. A command whose id
+ * has won for good (`Game.awards`), which every game is told on every call. A batch is answered
+ * with each command's answer and the game's answer to it (`Game.answer`), or for a game without one
+ * its view; an opening and a visit always with the view. A command whose id
  * was seen before answers as it did then and changes nothing; one whose Coins changes, added to the
  * balance in order, would take it below nothing at any point is refused with `not_enough_coins`;
  * one that pays is done whatever the player has earned, and paid only as far as they may still earn
@@ -266,8 +270,12 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
 export class Play extends Context.Service<
   Play,
   {
-    /** The player's state in a game, made for them if they have none. */
-    readonly open: (playing: Playing, played: Played) => Effect.Effect<Opening>;
+    /**
+     * The player's state in a game, made for them if they have none. `differs` is the tick at which
+     * their page found its copy not to be the state Leaf has: a fault in the rules, logged at most
+     * once a minute for a player and a game.
+     */
+    readonly open: (playing: Playing, played: Played, differs?: number) => Effect.Effect<Opening>;
     /** Does a batch of commands, as they came off the wire. */
     readonly send: (playing: Playing, played: Played, commands: readonly unknown[]) => Effect.Effect<Batch>;
     /** Another player's state in a game, as a visitor (`caller`) is given it. Takes one of the caller's batches. */
@@ -290,6 +298,8 @@ export class Play extends Context.Service<
       const dice = random.intBetween(0, 0xffffffff);
       // Each player's batches and commands, across all games.
       const pace = new Allowances([BATCHES, COMMANDS], ALLOWANCES_KEPT);
+      // Each player's and game's differences logged.
+      const differed = new Allowances([DIFFERENCES], ALLOWANCES_KEPT);
       // Every lane, by `keyOf`; and how many jobs have arrived, in all of them.
       const lanes = new Map<string, Lane>();
       let arrivals = 0;
@@ -530,7 +540,7 @@ export class Play extends Context.Service<
             )
             .pipe(Effect.catchTag("SqlError", Effect.die));
           Object.assign(copy, { rev, text, guest: playing.guest, unsaved: false });
-          return { now: at, rev, results, view: () => game.view(ctx(0, room)) };
+          return { now: at, rev, results, view: () => game.answer(ctx(0, room)) };
         });
 
       /** Writes the job's copy if it leaves its line empty with the copy unsaved, as a batch of no commands from its owner keeps it. */
@@ -614,7 +624,7 @@ export class Play extends Context.Service<
         );
 
       return Play.of({
-        open: (playing, played) =>
+        open: (playing, played, differs) =>
           ask("open", playing.playerId, played, playing, (job) =>
             Effect.gen(function* () {
               const got = yield* brought(job, playing);
@@ -628,6 +638,17 @@ export class Play extends Context.Service<
                 return { status: "open", rev: got.copy.rev ?? 0, now: job.at, view };
               };
             }),
+          ).pipe(
+            Effect.ensuring(
+              Effect.suspend(() =>
+                differs === undefined ||
+                !differed.take(keyOf(playing.playerId, played), clock.currentTimeMillisUnsafe(), [1])
+                  ? Effect.void
+                  : Effect.logWarning(`A page's copy of the ${played.id} state was not Leaf's`).pipe(
+                      Effect.annotateLogs({ player: playing.playerId, game: played.id, tick: differs }),
+                    ),
+              ),
+            ),
           ),
         send: (playing, played, commands) =>
           Effect.gen(function* () {

@@ -157,7 +157,7 @@ take turns at being what a line is waiting for.
 
 **Orders.** The depot pays a hundredth of a thing's worth for anything that arrives, so nothing is
 wasted, but orders are where the Coins are. Each thing that arrives goes toward one order that
-still wants it: the story's first, then the board's from the top.
+still wants it: the story's first, then the board's in the order they were hung.
 
 - _The story_ is twenty orders, one after another (`content/story.ts`). Filling one pays at once
   and opens machines, plots and plans. Eight of them leave something in the town for good.
@@ -171,10 +171,13 @@ still wants it: the story's first, then the board's from the top.
   yard is always offered the same orders, reload or no. It asks only for things the yard can make
   as it stands and that the story has already asked for, in numbers sized by the work in them
   (every tick of gathering and making that goes into one), and pays what those goods are worth.
-  Nothing on the board has a clock. A filled order waits there until it is handed over (`claim`),
+  Nothing on the board runs out. A filled order waits there until it is handed over (`claim`),
   which pays it and hangs a fresh one; one unfilled order may be swapped for a fresh one, free,
-  every ten minutes of the yard's time. Both name the order by its id. A yard without its seed (the
-  page's copy) hangs no order: the place stays empty until Leaf's yard, which has the seed, comes.
+  every ten minutes of the yard's time. Both name the order by its id. A fresh order goes up at the
+  end of the board and counts from `ORDER_WAITS` ticks (five seconds) after it is hung (`starts`,
+  `counts`): until then the depot gives it nothing. A yard without its seed (the page's copy) hangs
+  no order; Leaf tells the page of each with its answer, before it counts. An order kept before
+  orders waited counts from the start.
 
 **A second shift** (`SHIFT`, in `content/shift.ts`) would run the yard at double pace for an hour,
 for 100 Leaf. Leaf may not be spent in town yet, so nothing runs it: the page shows its button
@@ -261,6 +264,21 @@ command, once that was five minutes ago or more), and Leaf's tick now. A visitor
 without the blueprints. The page reads it with
 `readView` and `WORKS.decode`, and holds a yard with no seed.
 
+**What a batch is answered with** (`answer`, read with `readAnswer`) is not the yard, which the page
+already holds: `{ clock, tick, check, hung }`, Leaf's tick now, the yard's tick after the batch
+and its check there, and the orders on the board that do not count yet. `check(w)` (`check.ts`)
+mixes every field the rules read, of every piece and of the yard, into 32 bits in one pass,
+numbering things, kinds, plots and plans by the rules' own lists; it leaves out the seed and
+`serial` (only Leaf draws orders), the orders that do not count yet (nothing reads them until
+then), `at`, `away`, the news and what is worked out from the rest. Each word is finished as MurmurHash3 finishes its sum
+before it is joined, so that any bit of any field reaches every bit of the check. A yard and the
+yard read back from its save, or from what the page is shown, have the same check, and two yards
+with the same check run on alike. Only Leaf hangs an order, from the seed (a hand over, a swap, a
+fourth hook, the board going up); the page puts on its copy's board each in `hung` that is new to
+it while it does not count yet, and the two yards agree from then on. Order ids only go up
+(`serial`), so one is new when its id is at or past the copy's `serial`, which then moves past it;
+any other the copy has had, and may have swapped out or handed over since.
+
 ## What the town can read
 
 - `w.given`: how many of each thing have gone to orders, ever.
@@ -282,6 +300,7 @@ without the blueprints. The page reads it with
 | `orders.ts`, `clock.ts` | the depot, the story, the board; the yard's time, and its owner's           |
 | `game.ts`               | the Works as Leaf holds it: its clock, its commands, its Coins, the view    |
 | `route.ts`, `save.ts`   | the shortest clear run for a belt; a yard as text, and back                 |
+| `check.ts`              | one number for a whole yard, to tell the page's copy from Leaf's            |
 | `status.ts`             | what a thing is doing, in a sentence, and whether it is in trouble          |
 | `yards/*.json`          | yards kept part-way through the story, for tests and for looking at a stage |
 
@@ -293,18 +312,31 @@ only on what stands where, so it is worked out once (`rewire`) and kept until th
 ## Running the yard ahead of Leaf
 
 ```ts
-import { play, stepTo, WORKS } from "@sequoia-leaf/yard";
+import { check, counts, play, stepTo, WORKS } from "@sequoia-leaf/yard";
 
-// When Leaf answers: its yard, with every command not yet answered done again on top, each at its tick.
-const copy = WORKS.decode(view.yard);
-for (const c of unanswered) play(copy, c);
-
-// Every frame: run the copy on to Leaf's tick now, the view's clock and a tick for each 100 ms since.
-stepTo(copy, view.clock + Math.floor((performance.now() - arrived) / 100));
-
-// When the member acts: done to the copy at once, and sent with the copy's tick.
+// When the member acts: done to the copy at once, and sent with the copy's tick; the copy's tick
+// and check just after it are kept.
 const done = play(copy, { do: "build", kind: "mill", x, y, dir, tick: copy.tick });
-if (!("refused" in done)) send({ do: "build", kind: "mill", x, y, dir, tick: copy.tick });
+if (!("refused" in done)) {
+  send({ do: "build", kind: "mill", x, y, dir, tick: copy.tick });
+  kept.push({ tick: copy.tick, check: check(copy) });
+}
+
+// When Leaf answers a batch: if Leaf did what the copy did (nothing refused), at the same tick, the
+// checks are of the same moment. Alike, the copy takes the orders Leaf hung that are new to it,
+// while they wait.
+if (answer.tick === last.tick && answer.check === last.check)
+  for (const order of answer.hung)
+    if (order.id >= copy.serial && !counts(order, copy.tick)) {
+      copy.board.push(order);
+      copy.serial = order.id + 1;
+    }
+
+// Otherwise (or for an order heard of too late), once every command sent has been answered, Leaf's yard.
+copy = WORKS.decode(view.yard);
+
+// Every frame: run the copy on to Leaf's tick now, Leaf's last clock and a tick for each 100 ms since.
+stepTo(copy, clock + Math.floor((performance.now() - arrived) / 100));
 ```
 
 What stands on a tile is `yard.cells[at(yard, x, y)]`, the ground under it is in `yard.land`, power
