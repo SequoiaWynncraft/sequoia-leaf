@@ -161,7 +161,9 @@ export const DEFAULT_RULES: Rules = {
     timed: { everyMs: 4 * HOUR_MS, openMs: 2 * HOUR_MS, firstAt: Date.UTC(2026, 10, 19, 4) },
     // A member can swap a daily or weekly they don't fancy: once a day per slot
     // for free, then 100 Leaf a time. Timed quests are the guild's shared one.
-    reroll: { slots: ["daily", "weekly"], freePerDay: 1, leaf: 100 },
+    // A raid the backend holds back (100 s) and the sync lets settle (30 s) may come after a reroll
+    // it finished the quest of: the replaced quest takes such reports for 10 minutes.
+    reroll: { slots: ["daily", "weekly"], freePerDay: 1, leaf: 100, heldMs: 10 * 60_000 },
   },
   levels: {
     firstLevelXp: 1000,

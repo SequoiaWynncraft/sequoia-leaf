@@ -257,7 +257,16 @@ Each quest in its `quests` also has `reroll_leaf`: what rerolling it costs now,
 the body `{ "leaf": n }`, the `reroll_leaf` the member was shown and agreed to
 pay, first counts what was just played, as `?sync=1` does, so a quest just
 finished is paid rather than swapped. A sync already reading the feed is waited
-for, and none writes in between. It answers `{ "leaf", "spent", "quest" }`:
+for, and none writes in between. A raid or war the feed lists only later (the
+backend holds a raid back about 100 seconds, and the sync lets it settle 30) still
+counts toward the quest that was open when it happened: for 10 minutes after a
+reroll (`RerollRules.heldMs`), the quest it replaced takes activities from its own
+time, while nothing in its slot has finished since. One that finishes it pays it,
+once (`quest:<player>:<slot>:<sequence>`), and undoes the reroll: what the slot's
+rerolls from that quest on cost is given back, and the quest the reroll gave
+stays only as the next daily while another is banked; otherwise it is withdrawn,
+and a weekly finished so keeps its week. Nothing from before a quest began counts
+toward it. It answers `{ "leaf", "spent", "quest" }`:
 the balance after it, what it cost, and the new quest in the shape `quests`
 uses; and beside it, in the header `Leaf-Purse`, Leaf's word on the player's
 purse after it, `{ "coins", "leaf", "version" }` as `/v1/game/me` gives them,

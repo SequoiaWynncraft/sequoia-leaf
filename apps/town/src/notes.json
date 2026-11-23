@@ -1,5 +1,14 @@
 [
   {
+    "id": "late-raids",
+    "at": "2026-11-24T23:59Z",
+    "title": "A raid counts toward the quest you had then",
+    "lines": [
+      "Leaf hears of a raid about 2 minutes after it ends. Reroll a quest in that time, and the raid still counts toward the quest you had.",
+      "If it finishes that quest, the quest is paid, the reroll's Leaf comes back, and the reroll's quest goes unless you have another daily banked."
+    ]
+  },
+  {
     "id": "town-ways",
     "at": "2026-11-23T23:57Z",
     "title": "Fewer ways for the town to get stuck",

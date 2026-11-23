@@ -530,7 +530,7 @@ describe("the repeatable", () => {
 });
 
 /** One free reroll a slot a day, then 100 Leaf, for dailies and weeklies. */
-const REROLLS: RerollRules = { slots: ["daily", "weekly"], freePerDay: 1, leaf: 100 };
+const REROLLS: RerollRules = { slots: ["daily", "weekly"], freePerDay: 1, leaf: 100, heldMs: 10 * 60_000 };
 
 /** Two dailies and two weeklies to swap between. */
 const rerollRules: QuestRules = {
@@ -554,6 +554,100 @@ function started() {
   const fresh = refreshQuests(openQuestBook(WEDNESDAY_NOON), alice, WEDNESDAY_NOON, rerollRules).book;
   return play(fresh, [raid(WEDNESDAY_NOON + 1), war(WEDNESDAY_NOON + 2)], rerollRules).book;
 }
+
+/** Alice's book once a reroll of `slot` an hour after `started()`, with the quest it replaced held for late reports. */
+function rerolled(slot: QuestSlot, book = started()) {
+  const step = rerollQuest(book, alice, slot, book.latest[slot]?.sequence ?? 0, WEDNESDAY_NOON + HOUR, 0, rerollRules);
+  if (step.status !== "rerolled") throw new Error(`refused: ${step.reason}`);
+  return { book: { ...step.book, replaced: [step.replaced] }, at: WEDNESDAY_NOON + HOUR };
+}
+
+/** Plays activities in turn, as `play` does, with the rerolls each step undid. */
+function playLate(book: QuestBook, activities: Activity[]) {
+  let current = book;
+  const completed: string[] = [];
+  const undone: string[] = [];
+  for (const activity of activities) {
+    const step = applyActivityToQuests(current, activity, rerollRules);
+    current = step.book;
+    completed.push(...step.completed.map((quest) => `${quest.slot}:${quest.sequence}`));
+    undone.push(...(step.undone ?? []).map((u) => `${u.slot} from ${u.from}`));
+  }
+  return { book: current, completed, undone };
+}
+
+/** One raid and five wars, a minute apart from `from`: with `started()`'s, either daily is finished. */
+const dailyDone = (from: number) => [raid(from), ...[1, 2, 3, 4, 5].map((n) => war(from + n * 60_000))];
+
+describe("activities reported after a reroll, from before it", () => {
+  it("finish the daily it replaced, which is paid; with no daily banked, the reroll's daily is withdrawn", () => {
+    const { book, at } = rerolled("daily");
+
+    const late = playLate(book, dailyDone(at - 30 * 60_000));
+
+    expect(late.completed).toEqual(["daily:1"]);
+    expect(late.undone).toEqual(["daily from 1"]);
+    expect(late.book.dailyCharges).toBe(0);
+    expect(late.book.latest.daily).toMatchObject({ sequence: 2, expiresAt: late.book.latest.daily?.startedAt });
+    expect(currentQuests(late.book, at + 1).map((q) => q.slot)).toEqual(["weekly"]);
+  });
+
+  it("leave the reroll's daily as the next while a daily is banked", () => {
+    const { book, at } = rerolled("daily", { ...started(), dailyCharges: 2 });
+
+    const late = playLate(book, dailyDone(at - 30 * 60_000));
+
+    expect([late.completed, late.undone, late.book.dailyCharges]).toEqual([["daily:1"], ["daily from 1"], 1]);
+    expect(currentQuests(late.book, at + 1).map((q) => `${q.slot}:${q.sequence}`)).toEqual(["daily:2", "weekly:1"]);
+  });
+
+  it("finish the weekly it replaced, which keeps its week: the reroll's weekly is withdrawn, and the next comes on Monday", () => {
+    const { book, at } = rerolled("weekly");
+    const from = at - 50 * 60_000;
+    const enough = [
+      raid(from),
+      raid(from + 60_000),
+      ...Array.from({ length: 8 }, (_, n) => war(from + (n + 2) * 60_000)),
+    ];
+
+    const late = playLate(book, enough);
+
+    expect(late.completed).toContain("weekly:1");
+    expect(late.undone).toContain("weekly from 1");
+    expect(currentQuests(late.book, at + DAY_MS).some((q) => q.slot === "weekly")).toBe(false);
+    const monday = refreshQuests(late.book, alice, MONDAY + WEEK_MS, rerollRules).book;
+    expect(monday.latest.weekly).toMatchObject({ sequence: 3, startedAt: MONDAY + WEEK_MS, completedAt: null });
+  });
+
+  it("count toward the quest open then, and nothing from before a quest began counts for it", () => {
+    const { book, at } = rerolled("daily");
+    // Tuesday's raid is from before Wednesday's daily began: it counts for neither.
+    const before = playLate(book, [raid(MONDAY + DAY_MS + 12 * HOUR)]);
+    expect(before.completed).toEqual([]);
+    expect(goalProgress(before.book, "daily")).toEqual([0]);
+    expect(before.book.replaced?.[0]?.goals).toEqual(book.replaced[0]?.goals);
+    // A raid and a war from the morning count toward a fresh daily replaced, and finish nothing yet.
+    const fresh = rerolled(
+      "daily",
+      refreshQuests(openQuestBook(WEDNESDAY_NOON), alice, WEDNESDAY_NOON, rerollRules).book,
+    );
+    const two = playLate(fresh.book, [raid(at - 10 * 60_000), war(at - 9 * 60_000)]);
+    expect(two.book.replaced?.[0]?.goals.map((g) => g.progress)).toEqual([1]);
+    expect(goalProgress(two.book, "daily")).toEqual([0]);
+    expect([two.completed, two.undone]).toEqual([[], []]);
+  });
+
+  it("count toward nothing replaced once the reroll's quest has finished", () => {
+    const { book, at } = rerolled("daily");
+    // The reroll's daily finished after the reroll, by both its ways at once.
+    const after = playLate(book, dailyDone(at + 60_000).concat(dailyDone(at + 10 * 60_000)));
+    expect(after.completed).toContain("daily:2");
+
+    const late = playLate(after.book, dailyDone(at - 30 * 60_000));
+    expect(late.completed.filter((q) => q === "daily:1")).toEqual([]);
+    expect(late.undone).toEqual([]);
+  });
+});
 
 describe("rerolling", () => {
   it("swaps the daily for another that counts from the reroll, on the same banked daily", () => {
