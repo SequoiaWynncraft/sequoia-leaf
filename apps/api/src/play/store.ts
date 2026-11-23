@@ -81,6 +81,8 @@ export class PlayStore extends Context.Service<
   {
     /** The player's state in a game, or none yet. */
     readonly read: (playerId: PlayerId, game: string) => Effect.Effect<Option.Option<Stored>>;
+    /** The `rev` the player's state in a game is stored at, or none yet: whether a copy of it is still the state, reading no more. */
+    readonly revOf: (playerId: PlayerId, game: string) => Effect.Effect<Option.Option<number>>;
     /** The players whose state in a game was due a tend before `now`, the longest due first. */
     readonly due: (game: string, now: number) => Effect.Effect<readonly PlayerId[]>;
     /** Says a state stored at `rev` stands still: it is due no tend until it is written again. */
@@ -99,7 +101,10 @@ export class PlayStore extends Context.Service<
     ) => Effect.Effect<boolean>;
     /** Whether the player's state in a game is stored at `rev`. */
     readonly isAt: (playerId: PlayerId, game: string, rev: number) => Effect.Effect<boolean>;
-    /** Stores a state over the one there, its `rev` up by one, due a tend at `dueAt` (null: never). */
+    /**
+     * Stores a state over the one there, its `rev` up by one, due a tend at `dueAt` (null: never).
+     * Whatever else writes a state must raise its `rev` too: Leaf holds a copy while the `rev` is its own.
+     */
     readonly write: (
       playerId: PlayerId,
       game: string,
@@ -163,6 +168,12 @@ export class PlayStore extends Context.Service<
         execute: ({ playerId, game }) =>
           sql`SELECT rev, state, updated_at AS updatedAt, guest, born, due_at AS dueAt FROM play_state WHERE player_id = ${playerId} AND game = ${game}`,
       });
+      const revOf = SqlSchema.findOneOption({
+        Request: Schema.Struct({ playerId: Schema.String, game: Schema.String }),
+        Result: Schema.Struct({ rev: Schema.Int }),
+        execute: ({ playerId, game }) =>
+          sql`SELECT rev FROM play_state WHERE player_id = ${playerId} AND game = ${game}`,
+      });
       const due = SqlSchema.findAll({
         Request: Schema.Struct({ game: Schema.String, now: Schema.Int }),
         Result: Schema.Struct({ playerId: PlayerUuid }),
@@ -223,6 +234,8 @@ export class PlayStore extends Context.Service<
       });
       return PlayStore.of({
         read: (playerId, game) => read({ playerId, game }).pipe(Effect.orDie),
+        revOf: (playerId, game) =>
+          revOf({ playerId, game }).pipe(Effect.map(Option.map((row) => row.rev)), Effect.orDie),
         due: (game, now) =>
           due({ game, now }).pipe(
             Effect.map((rows) => rows.map((row) => row.playerId)),

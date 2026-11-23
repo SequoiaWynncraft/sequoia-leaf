@@ -566,7 +566,9 @@ describe("a stored state that does not read", () => {
   it("answers 409 state_unreadable to the page, changes nothing, and logs whose it is", async () => {
     await commanded(ided([{ do: "start", trail: 0 }]));
     // As a rules change that forgot the stored version would leave it.
-    await services.query((sql) => sql`UPDATE play_state SET state = '{"game":"little-raid-table","v":0}'`);
+    await services.query(
+      (sql) => sql`UPDATE play_state SET rev = rev + 1, state = '{"game":"little-raid-table","v":0}'`,
+    );
     const before = await stored(alice);
     const opening = await send("GET", "/v1/game/play/raid");
     expect([opening.status, await codeOf(opening)]).toEqual([409, "state_unreadable"]);
@@ -2331,6 +2333,29 @@ describe("Leaf tending the Works", () => {
     expect(await storedYard()).toEqual({ rev: 2, state: text });
   });
 
+  it("holds a yard's copy past its line: while the stored rev is the copy's it reads nothing more, and a write behind its back is read", async () => {
+    let reads = 0;
+    await afterEachRead(() => Promise.resolve(void reads++));
+    await keepMid();
+    const owner = { playerId: alice, guest: false };
+    await services.run(Play.use((play) => play.open(owner, GAMES.works)));
+    clock.now += 5000;
+    const sent = await services.run(
+      Play.use((play) => play.send(owner, GAMES.works, [{ id: "w-1", do: "collect", tick: 0 }])),
+    );
+    clock.now += 5000;
+    const seen = await services.run(
+      Play.use((play) => play.visit(alice, GAMES.works, { playerId: bob, guest: false })),
+    );
+    expect([sent.status, seen.status, reads]).toEqual(["done", "open", 1]);
+    // A tool writes the yard, raising its rev as every writer must: the next job reads it.
+    await services.query((sql) => sql`UPDATE play_state SET rev = rev + 1 WHERE player_id = ${alice}`);
+    const after = await services.run(
+      Play.use((play) => play.visit(alice, GAMES.works, { playerId: carol, guest: false })),
+    );
+    expect([after.status, "rev" in after ? after.rev : null, reads]).toEqual(["open", (await storedYard()).rev, 2]);
+  });
+
   it("keeps a guest's yard a guest's, though they left it before their first command", async () => {
     // Carol is not in the guild.
     expect((await send("GET", "/v1/game/play/works", undefined, carol)).status).toBe(200);
@@ -2558,13 +2583,13 @@ describe("Leaf tending the Works", () => {
   it("shows a visitor behind its owner's first open the yard that open made, before it is stored", async () => {
     await app.dispose();
     const gate = Promise.withResolvers<void>();
-    // Whether a state was stored at each read: the open's, held, and the visit's behind it.
+    // Whether a state was stored at each look: the open's, held, and the visit's behind it.
     const found: boolean[] = [];
     start({
       play: (real) => ({
         ...real,
-        read: (player, game) =>
-          real.read(player, game).pipe(
+        revOf: (player, game) =>
+          real.revOf(player, game).pipe(
             Effect.tap((state) => Effect.sync(() => void found.push(Option.isSome(state)))),
             Effect.tap(() => (found.length === 1 ? Effect.promise(() => gate.promise) : Effect.void)),
           ),
@@ -2721,7 +2746,8 @@ describe("awards", () => {
     if (!yard) throw new Error("no yard");
     deliver(yard, item("crab"), 1);
     await services.query(
-      (sql) => sql`UPDATE play_state SET state = ${FACTORY.encode(yard)} WHERE player_id = ${alice} AND game = 'works'`,
+      (sql) =>
+        sql`UPDATE play_state SET rev = rev + 1, state = ${FACTORY.encode(yard)} WHERE player_id = ${alice} AND game = 'works'`,
     );
     clock.now += 5000;
     await send("POST", "/v1/game/play/works", { commands: [{ id: "w-1", do: "collect", tick: tick + 50 }] });

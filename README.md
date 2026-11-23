@@ -731,9 +731,9 @@ open, a visit, a batch, or Leaf's own tend. A job takes its place in the
 lane's line as it arrives, with the moment it arrived, and the lane does its
 jobs one at a time in that order, each at its own moment: a batch is done at the
 moment it arrived, however long it waited. A lane holds at most one copy of the
-state in memory. For each job it reads the stored state if it has no copy or
-the stored `rev` is no longer its copy's (a staging step or another Leaf wrote
-it), brings the copy to the job's moment, and then shows it; or does each of
+state in memory. For each job it reads the stored `rev` alone, and the stored
+state only if it has no copy or the `rev` is no longer its copy's (a staging
+step or another Leaf wrote it; whatever writes a state raises its `rev`), brings the copy to the job's moment, and then shows it; or does each of
 the batch's commands to it in order, once the copy is run on to the tick the
 command is done at, weighing each against the balances as they stood before any
 was kept, and keeps it. A state that tends is run on 2 ms of work at a time,
@@ -760,7 +760,10 @@ player's state is made in memory, their Coins opened with the welcome as it is,
 and stored by the first of those. Anything going wrong in a job drops the copy,
 and the next job reads what is stored. A batch is done whatever becomes of its
 request; an open, a visit or a tend whose caller has gone while it waited is
-never done. A lane with nothing in its line and nothing unsaved is let go.
+never done. A lane with nothing in its line and nothing unsaved is let go, and its copy
+held for the state's next job: up to 4 MiB of stored text in all, about a
+thousand of the largest yards and 50 MiB in memory, the copy used least lately
+let go first.
 Each state of a game that goes on by itself is stored with when it is next
 due a tend (`due_at`): two minutes after a batch wrote it (`TEND_AFTER`; an open
 page sends something more often), or never while it stands still (a yard eight

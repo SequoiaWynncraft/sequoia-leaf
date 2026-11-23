@@ -23,6 +23,7 @@ import { AppConfig } from "../config.ts";
 import { Ledger } from "../ledger/store.ts";
 import { Watchers } from "../live/watchers.ts";
 import { type CoinEntry, Coins } from "./coins.ts";
+import { Copies } from "./copies.ts";
 import type { Attempt, Held, Played } from "./games.ts";
 import { nextSlice } from "./slices.ts";
 import { PlayStore } from "./store.ts";
@@ -51,6 +52,12 @@ const SLICE_NS = 2_000_000n;
 const TEND_WAITS = 3;
 /** How many times in all a job is done, each from what is stored, when what is stored moves on under it. */
 const TRIES = 3;
+/**
+ * How much stored text the copies held past their lanes may come to in all before the one used
+ * least lately is let go: 4 MiB, about a thousand of the largest yards, which held decoded come to
+ * about 50 MiB (a large yard's 4 KiB of text is about 46 KiB in memory).
+ */
+export const HELD_TEXT_BYTES = 4 * 1024 * 1024;
 /**
  * The longest a piece a command asks Leaf to keep (`Done.keep`) may be, as JSON, in bytes. The
  * largest board the raid can leave is about 4 KiB.
@@ -378,6 +385,8 @@ export class Play extends Context.Service<
       // Every lane, by `keyOf`; and how many jobs have arrived, in all of them.
       const lanes = new Map<string, Lane>();
       let arrivals = 0;
+      // The copies of states whose lanes have let go, by `keyOf`, for each state's next job.
+      const copies = new Copies<Copy>(HELD_TEXT_BYTES);
 
       // The one budget: the slices asked for, and how many players' slices a waiting tend has let go.
       const asks: Ask[] = [];
@@ -460,8 +469,10 @@ export class Play extends Context.Service<
         Effect.gen(function* () {
           const { lane, at } = job;
           const { player, played } = lane;
-          const found = yield* inSqlite(job, store.read(player, played.id));
-          if (Option.isSome(found) && lane.copy?.rev === found.value.rev) return lane.copy;
+          // While the stored `rev` is the copy's own, the copy is the state: nothing more is read.
+          const storedAt = yield* inSqlite(job, store.revOf(player, played.id));
+          if (Option.isSome(storedAt) && lane.copy?.rev === storedAt.value) return lane.copy;
+          const found = Option.isNone(storedAt) ? Option.none() : yield* inSqlite(job, store.read(player, played.id));
           if (Option.isNone(found)) {
             // Nothing stored: only a new copy, not yet stored, still stands, whoever asks.
             if (lane.copy?.rev !== null) lane.copy = undefined;
@@ -680,6 +691,8 @@ export class Play extends Context.Service<
             lane.jobs.shift();
           }
           lanes.delete(lane.key);
+          // A copy as stored is held for the state's next job.
+          if (lane.copy !== undefined && !lane.copy.unsaved && lane.copy.rev !== null) copies.put(lane.key, lane.copy);
         }).pipe(
           // Stopped (Leaf is stopping): every job still in the line is answered so.
           Effect.onExit(() => Effect.sync(() => lane.jobs.forEach((job) => job.stop()))),
@@ -695,7 +708,7 @@ export class Play extends Context.Service<
         Effect.gen(function* () {
           const key = keyOf(player, played);
           const idle = lanes.get(key);
-          const lane = idle ?? { key, player, played, jobs: [], copy: undefined };
+          const lane = idle ?? { key, player, played, jobs: [], copy: copies.take(key) };
           const done = Deferred.makeUnsafe<A>();
           const again = <B>(effect: Effect.Effect<B, Lost>) =>
             effect.pipe(
