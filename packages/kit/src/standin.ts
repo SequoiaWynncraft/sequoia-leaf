@@ -57,8 +57,6 @@ export interface Standin {
   reloaded: { count: number };
   /** Sets the time the page sees. */
   clock: { now: number };
-  /** Sets whether the player is AFK, as the page sees it. */
-  player: { afk: boolean };
   /** The page comes back: visible again, focused, or back on the network. */
   wake(): void;
   /** Puts the real world back. */
@@ -78,7 +76,6 @@ export function standin(
   const went: string[] = [];
   const reloaded = { count: 0 };
   const clock = { now: 1_800_000_000_000 };
-  const player = { afk: false };
   const woken = new Set<() => void>();
   const done = pretend({
     async fetch(path, init = {}) {
@@ -119,12 +116,11 @@ export function standin(
         woken.delete(fn);
       };
     },
-    afk: () => player.afk,
   });
   const wake = (): void => {
     for (const fn of woken) fn();
   };
-  return { store, sent, went, reloaded, clock, player, wake, done };
+  return { store, sent, went, reloaded, clock, wake, done };
 }
 
 /** The member `/v1/game/me` answers with in tests. */

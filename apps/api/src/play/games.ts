@@ -64,6 +64,8 @@ export interface Played {
   readonly create: (ctx: Ctx) => string;
   /** Whether a command reads as one of the game's. */
   readonly reads: (command: unknown) => boolean;
+  /** Whether a command is one of the game's that its page sends by itself (`Game.chore`), not for anything the player did. */
+  readonly chore: (command: unknown) => boolean;
   /** A stored state read into memory; null when the text is not one the game can read. */
   readonly read: (text: string) => Held | null;
   /** Whether its states go on by themselves (`Game.tend`), for Leaf to tend. */
@@ -132,6 +134,10 @@ export function played<State, Command, View, Note, Short>(game: Game<State, Comm
     id: game.id,
     create: (ctx) => game.encode(game.create(ctx)),
     reads: (command) => game.command(command) !== null,
+    chore: (raw) => {
+      const command = game.command(raw);
+      return command !== null && game.chore?.(command) === true;
+    },
     read: (text) => {
       const decoded = game.decode(text);
       return decoded === null ? null : held(decoded);

@@ -20,7 +20,7 @@ const RAID: GameStats = { name: "The Little Raid", numbers: (p) => [{ label: "Ru
 const STATS = { works: WORKS, raid: RAID };
 
 describe("a person's card", () => {
-  test("shows time AFK only from a minute, and time played from a second", () => {
+  test("shows time AFK only from a minute, time played from a second, and a game with time and no standing by its time alone", () => {
     const g = { placed: null, spent: 0 };
     expect(
       numbersOf({ name: "Wrenly", games: { works: { ...g, played: 1, afk: 59 } }, played: 1, afk: 59 }, STATS),
@@ -38,13 +38,12 @@ describe("a person's card", () => {
     expect(said).toEqual({
       name: "Alice",
       games: {
-        pulls: { placed: null, played: 60, afk: 0, spent: 0 },
-        raid: { placed: { place: 1, score: 0, also: { runs: 0, room: 0 } }, played: 0, afk: 0, spent: 0 },
-        town: { placed: { place: 1, score: 10, also: { greeted: 0, sightings: 0 } }, played: 180, afk: 120, spent: 25 },
+        raid: { placed: { place: 1, score: 0, also: { runs: 0, room: 0 } }, played: 120, afk: 0, spent: 0 },
+        town: { placed: { place: 1, score: 10, also: { greeted: 0, sightings: 0 } }, played: 180, afk: 150, spent: 25 },
         works: { placed: { place: 2, score: 1840, also: { story: 3 } }, played: 0, afk: 0, spent: 0 },
       },
-      played: 240,
-      afk: 120,
+      played: 300,
+      afk: 150,
     });
     const TOWN: GameStats = {
       name: "Camp",
@@ -53,33 +52,31 @@ describe("a person's card", () => {
         { label: "Coins spent", value: String(spent) },
       ],
     };
-    const PULLS: GameStats = { name: "Pulls", numbers: () => [{ label: "Pulled", value: "0" }] };
-    expect(said && numbersOf(said, { ...STATS, town: TOWN, pulls: PULLS })).toEqual({
+    expect(said && numbersOf(said, { ...STATS, town: TOWN })).toEqual({
       stats: [
-        { label: "Time played", value: "4 min" },
+        { label: "Time played", value: "5 min" },
         { label: "Time AFK", value: "2 min" },
         "The Works",
         { label: "Coins", value: "1840" },
         { label: "Place", value: "#2" },
         "The Little Raid",
         { label: "Runs", value: "0" },
+        { label: "Time played", value: "2 min" },
         "Camp",
         { label: "Things set out", value: "10" },
         { label: "Coins spent", value: "25" },
         { label: "Time played", value: "3 min" },
         { label: "Time AFK", value: "2 min" },
-        // Played, with no standing: its time alone.
-        "Pulls",
-        { label: "Time played", value: "1 min" },
       ],
     });
     // A game the page does not say is left out, but counts in all.
     expect(said && numbersOf(said, { raid: RAID })).toEqual({
       stats: [
-        { label: "Time played", value: "4 min" },
+        { label: "Time played", value: "5 min" },
         { label: "Time AFK", value: "2 min" },
         "The Little Raid",
         { label: "Runs", value: "0" },
+        { label: "Time played", value: "2 min" },
       ],
     });
   });
