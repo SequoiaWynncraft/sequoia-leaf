@@ -66,8 +66,9 @@ export interface Board {
  * are worth remembering (`activity`, up to 1,000 a player a UTC day, for 180 days), and how many of
  * each player's commands were done and refused each UTC day (`command_days`, for the staff's
  * report), where each player's state stands in a game with a board (`standings`), what each
- * player has won for good in any game (`awards`, never taken away), and how long each player has
- * played each game (`played`). Every method but `board` is meant to run inside the play service's
+ * player has won for good in any game (`awards`, never taken away), how long each player has
+ * played each game (`played`), and the pieces of a player's that a game asks to keep (`play_kept`,
+ * one for each slot). Every method but `board` is meant to run inside the play service's
  * transaction. A database failure is a defect.
  */
 export class PlayStore extends Context.Service<
@@ -146,6 +147,8 @@ export class PlayStore extends Context.Service<
     readonly heard: (playerId: PlayerId, game: string, now: number) => Effect.Effect<void>;
     /** How long a player has played each game, in milliseconds, by game. */
     readonly playedOf: (playerId: PlayerId) => Effect.Effect<ReadonlyMap<string, number>>;
+    /** Keeps a piece of the player's in a game (`Done.keep`), its data as JSON, over the one in its slot. */
+    readonly keep: (playerId: PlayerId, game: string, slot: string, data: string, now: number) => Effect.Effect<void>;
   }
 >()("leaf/PlayStore") {
   static readonly layer = Layer.effect(
@@ -325,6 +328,11 @@ export class PlayStore extends Context.Service<
             Effect.map((rows) => new Map(rows.map((row) => [row.game, row.ms]))),
             Effect.orDie,
           ),
+        keep: (playerId, game, slot, data, now) =>
+          sql`
+            INSERT INTO play_kept (player_id, game, slot, data, updated_at) VALUES (${playerId}, ${game}, ${slot}, ${data}, ${now})
+            ON CONFLICT (player_id, game, slot) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
+          `.pipe(Effect.asVoid, Effect.orDie),
       });
     }),
   );
