@@ -117,8 +117,6 @@ interface Ask {
 export interface Playing {
   readonly playerId: PlayerId;
   readonly guest: boolean;
-  /** Whether their page said they are away from the keys on this call (`?afk=1`): only their time is told by it. */
-  readonly afk?: boolean;
 }
 
 /** What one command answered: what it did, or the code it was refused with. */
@@ -286,10 +284,6 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * own once one has waited through `TEND_WAITS` of those. Leaf puts a tend in the line of each state
  * of a game that tends its states stored longer ago than `TEND_AFTER` (`tend`), but those found
  * standing still or with one in line, and waits for none; each reads nothing until its first turn.
- *
- * Each call taken (an opening, a batch that is not refused whole, a visit) counts for the caller the
- * time since their last call to that game (`PlayStore.heard`), once, at the moment it arrived,
- * written by Leaf's own fiber. Leaf's own tending is no call, and counts nothing.
  */
 export class Play extends Context.Service<
   Play,
@@ -603,11 +597,11 @@ export class Play extends Context.Service<
 
       /**
        * Puts a job in the line of `player`'s state in a game, at once and with the moment it arrived;
-       * counts the caller's time, by Leaf's own fiber; and gives back the wait for what `work` answers,
+       * and gives back the wait for what `work` answers,
        * once the copy is saved. What is stored moving on (`Lost`), the job is done again, `TRIES` times
        * in all. All but a batch are never done once whoever waits has gone, but for saving the copy.
        */
-      const line = <A>(kind: Kind, player: PlayerId, played: Played, caller: Playing | null, work: Work<A>) =>
+      const line = <A>(kind: Kind, player: PlayerId, played: Played, work: Work<A>) =>
         Effect.gen(function* () {
           const key = keyOf(player, played);
           const idle = lanes.get(key);
@@ -641,17 +635,12 @@ export class Play extends Context.Service<
             lanes.set(key, lane);
             yield* Effect.forkIn(drain(lane), scope);
           }
-          const heard =
-            caller &&
-            (yield* Effect.forkIn(store.heard(caller.playerId, played.id, job.at, caller.afk === true), scope));
-          return Effect.andThen(heard ? Fiber.join(heard) : Effect.void, Deferred.await(done)).pipe(
-            Effect.onError(() => Effect.sync(() => void (job.gone = kind !== "batch"))),
-          );
+          return Deferred.await(done).pipe(Effect.onError(() => Effect.sync(() => void (job.gone = kind !== "batch"))));
         });
 
       /** A caller's job put in its line (`line`), and its answer waited for: only the waiting may be interrupted. */
-      const ask = <A>(kind: Kind, player: PlayerId, played: Played, caller: Playing, work: Work<A>) =>
-        Effect.uninterruptibleMask((restore) => Effect.flatMap(line(kind, player, played, caller, work), restore));
+      const ask = <A>(kind: Kind, player: PlayerId, played: Played, work: Work<A>) =>
+        Effect.uninterruptibleMask((restore) => Effect.flatMap(line(kind, player, played, work), restore));
 
       /** Leaf's own tend: its work, reading the state as much as running it on, waits for its turn (`slice`). */
       const tending: Work<void> = (job) =>
@@ -662,7 +651,7 @@ export class Play extends Context.Service<
 
       return Play.of({
         open: (playing, played, differs) =>
-          ask("open", playing.playerId, played, playing, (job) =>
+          ask("open", playing.playerId, played, (job) =>
             Effect.gen(function* () {
               const got = yield* brought(job, playing);
               if (!got) return (): Opening => ({ status: "unreadable" });
@@ -695,7 +684,7 @@ export class Play extends Context.Service<
             if (!pace.take(playing.playerId, yield* Clock.currentTimeMillis, [1, sent.length])) {
               return { status: "slow" } satisfies Batch;
             }
-            return yield* ask("batch", playing.playerId, played, playing, (job) =>
+            return yield* ask("batch", playing.playerId, played, (job) =>
               Effect.gen(function* () {
                 const got = yield* brought(job, playing);
                 if (!got) return (): Batch => ({ status: "unreadable" });
@@ -709,7 +698,7 @@ export class Play extends Context.Service<
             if (!pace.take(caller.playerId, yield* Clock.currentTimeMillis, [1, 0])) {
               return { status: "slow" } satisfies Visiting;
             }
-            return yield* ask("visit", player, played, caller, (job) =>
+            return yield* ask("visit", player, played, (job) =>
               Effect.gen(function* () {
                 const got = yield* brought(job, null);
                 if (!got) return (): Visiting => ({ status: got === null ? "unreadable" : "nothing" });
@@ -733,7 +722,7 @@ export class Play extends Context.Service<
               for (const { playerId: player, rev } of yield* store.unwritten(played.id, began - TEND_AFTER)) {
                 const key = keyOf(player, played);
                 if (stills.get(key) === rev || lanes.get(key)?.jobs.some((job) => job.tend)) continue;
-                const tended = yield* line("tend", player, played, null, tending);
+                const tended = yield* line("tend", player, played, tending);
                 ends.push(Effect.catchDefect(tended, (defect) => failed(player, played.id, defect)));
               }
             }

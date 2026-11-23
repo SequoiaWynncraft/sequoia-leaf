@@ -53,7 +53,7 @@ import { PlayerNames } from "../src/game/names.ts";
 import { Coins } from "../src/play/coins.ts";
 import { GAMES, type Played, played } from "../src/play/games.ts";
 import { KEPT_BYTES, Play, TEND_AFTER } from "../src/play/service.ts";
-import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, IDLE_MS, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
+import { ACTIVITY_KEPT_MS, ANSWERS_KEPT, BOARD_MOST, LOGGED_A_DAY, PlayStore } from "../src/play/store.ts";
 import { DAY, fakeBackend, fakeMojang, type Fakes, noNetwork, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -1366,12 +1366,13 @@ describe("the Works", () => {
     expect(yardOf(visited.state).yard.tick).toBeGreaterThan(yardNow.tick);
     expect((await storedPlay(alice)).map((found) => found.rev)).toEqual([visited.rev]);
     expect(await entries(alice)).toEqual(coinsBefore);
-    // Her card: where her yard stands, and the two minutes she has had it open.
+    // Her card: where her yard stands, and what it has taken. Calls to the game are no time: that is
+    // counted from where she is (`visits.test.ts`).
     expect(await personOf(alice, bob)).toEqual({
       id: alice,
       name: "Alice",
-      games: { works: { place: 1, score: earned, also: { tier: 0 }, played: 120, afk: 0, spent: 0 } },
-      played: 120,
+      games: { works: { place: 1, score: earned, also: { tier: 0 }, played: 0, afk: 0, spent: 0 } },
+      played: 0,
       afk: 0,
     });
   });
@@ -2330,16 +2331,11 @@ describe("Leaf tending the Works", () => {
   it("lets the row decide between two Leafs on one database: a batch read in one while the other's tend writes is done once, over what was written, and answered", async () => {
     const path = join(tmpdir(), `leaf-two-${crypto.randomUUID()}.db`);
     try {
-      // A deploy: the Leaf starting tends Alice's yard once the one stopping has read it for her batch, and
-      // has written her call. (Two Leafs in one process: one's write in the other's transaction would hold both.)
+      // A deploy: the Leaf starting tends Alice's yard once the one stopping has read it for her batch.
       const starting = testLeaf(clock, noNetwork, { databasePath: path });
       await starting.query((sql) => sql`SELECT 1`);
       let reads = 0;
-      let heard = false;
-      const tend = async () => {
-        await until(() => heard);
-        await starting.run(tendAll);
-      };
+      const tend = () => starting.run(tendAll);
       const stopping = testLeaf(
         clock,
         noNetwork,
@@ -2349,7 +2345,6 @@ describe("Leaf tending the Works", () => {
             ...real,
             read: (player, game) =>
               real.read(player, game).pipe(Effect.tap(() => (++reads === 1 ? Effect.promise(tend) : Effect.void))),
-            heard: (...args) => Effect.tap(real.heard(...args), () => Effect.sync(() => void (heard = true))),
           }),
         },
       );
@@ -2466,9 +2461,7 @@ describe("a visit", () => {
 describe("a person's numbers", () => {
   it("are where they stand in each game, placed as the board places them, the raid's written as their table changes", async () => {
     await named(bob, "Bob");
-    const from = clock.now;
     const { view } = await playRun(bob);
-    const seconds = Math.floor((clock.now - from) / 1000);
     await stand(stranger(1), 900, T0);
     await stand(bob, 500, T0);
     const bosses = view.almanac.bosses.flat().length;
@@ -2480,14 +2473,13 @@ describe("a person's numbers", () => {
           place: 1,
           score: bosses,
           also: { runs: 1, room: Math.max(...view.almanac.best) },
-          played: seconds,
+          played: 0,
           afk: 0,
           spent: 0,
         },
-        // A standing from before Leaf counted time.
         works: { place: 2, score: 500, also: { tier: 500 % 5 }, played: 0, afk: 0, spent: 0 },
       },
-      played: seconds,
+      played: 0,
       afk: 0,
     });
   });
@@ -2512,255 +2504,6 @@ describe("a person's numbers", () => {
       // oxlint-disable-next-line no-await-in-loop -- one after another
       expect([answer.status, await codeOf(answer)]).toEqual([404, "no_such_player"]);
     }
-  });
-});
-
-/** Somebody's time played in each game, in milliseconds, as Leaf keeps it. */
-const playedMs = (player: PlayerId = alice) =>
-  services
-    .run(PlayStore.use((store) => store.playedOf(player)))
-    .then((games) => Object.fromEntries([...games].map(([game, time]) => [game, time.played])));
-/** Alice's time AFK in each game, in milliseconds, as Leaf keeps it. */
-const afkMs = () =>
-  services
-    .run(PlayStore.use((store) => store.playedOf(alice)))
-    .then((games) => Object.fromEntries([...games].map(([game, time]) => [game, time.afk])));
-/** A call of Alice's to a game `after` milliseconds on: opening it, saying she is AFK if `afk`. */
-async function openAfter(after: number, game = "raid", afk = false) {
-  clock.now += after;
-  expect((await send("GET", `/v1/game/play/${game}${afk ? "?afk=1" : ""}`)).status).toBe(200);
-}
-
-describe("time played", () => {
-  const MINUTE = 60_000;
-
-  it(`adds up the gaps between a player's calls to a game of up to ${IDLE_MS / MINUTE} minutes, from the second call`, async () => {
-    await openAfter(0);
-    expect(await playedMs()).toEqual({ raid: 0 });
-    // A clock that does not move adds nothing.
-    await openAfter(0);
-    expect(await playedMs()).toEqual({ raid: 0 });
-    // A batch is a call, as an opening is.
-    clock.now += 2 * MINUTE;
-    await commanded(ided([{ do: "start", trail: 0 }]));
-    expect(await playedMs()).toEqual({ raid: 2 * MINUTE + 100 });
-    await openAfter(IDLE_MS);
-    expect(await playedMs()).toEqual({ raid: 2 * MINUTE + 100 + IDLE_MS });
-    // Longer, and they were away: nothing, and the time counts again from there.
-    await openAfter(IDLE_MS + 1);
-    await openAfter(30_000);
-    expect(await playedMs()).toEqual({ raid: 2 * MINUTE + 100 + IDLE_MS + 30_000 });
-  });
-
-  it("counts the time after a call that says its player is AFK as time AFK, until a call says they are back", async () => {
-    await openAfter(0);
-    // The minute before a call that says she is AFK she was not yet: it is time played.
-    await openAfter(MINUTE, "raid", true);
-    await openAfter(MINUTE, "raid", true);
-    // A batch that says nothing of it says she is back; the minute before it she was AFK.
-    clock.now += MINUTE;
-    await commanded(ided([{ do: "start", trail: 0 }]));
-    await openAfter(MINUTE);
-    expect(await playedMs()).toEqual({ raid: 2 * MINUTE });
-    expect(await afkMs()).toEqual({ raid: 2 * MINUTE + 100 });
-    // AFK for longer than a gap that counts is time away, as for playing.
-    await openAfter(0, "raid", true);
-    await openAfter(IDLE_MS + 1, "raid", true);
-    expect(await afkMs()).toEqual({ raid: 2 * MINUTE + 100 });
-    // Anything but afk=1 is not AFK: the minute after a call with it is time played.
-    clock.now += MINUTE;
-    expect((await send("POST", "/v1/game/play/raid?afk=yes", { commands: ided([{ do: "take" }]) })).status).toBe(200);
-    await openAfter(MINUTE);
-    expect(await playedMs()).toEqual({ raid: 3 * MINUTE });
-    expect(await afkMs()).toEqual({ raid: 3 * MINUTE + 100 });
-  });
-
-  it("counts a visit's word that the visitor is AFK for the visitor", async () => {
-    await send("GET", "/v1/game/play/works", undefined, bob);
-    await openAfter(0, "raid");
-    expect((await send("GET", `/v1/game/play/works/of/${bob}?afk=1`)).status).toBe(200);
-    clock.now += MINUTE;
-    expect((await send("GET", `/v1/game/play/works/of/${bob}?afk=1`)).status).toBe(200);
-    expect(await afkMs()).toEqual({ raid: 0, works: MINUTE });
-    expect(await playedMs()).toEqual({ raid: 0, works: 0 });
-  });
-
-  it("puts each game's time AFK and the Coins it has taken on the card, and all games' time AFK together", async () => {
-    await openAfter(0, "town");
-    await openAfter(MINUTE, "town", true);
-    await openAfter(2 * MINUTE, "town");
-    await openAfter(0, "raid", true);
-    await openAfter(MINUTE, "raid");
-    await services.run(
-      Coins.use((coins) =>
-        Effect.gen(function* () {
-          yield* coins.open(alice, clock.now);
-          yield* coins.post(
-            alice,
-            { amount: -120, reason: "A thing for the camp", game: "town", key: "buy:1" },
-            clock.now,
-          );
-          yield* coins.post(
-            alice,
-            { amount: -30, reason: "A thing for the camp", game: "town", key: "buy:2" },
-            clock.now,
-          );
-          // Coins paid in are not spent, whatever the game.
-          yield* coins.post(
-            alice,
-            { amount: 50, reason: "The chest", game: "town", key: "chest:1", free: true },
-            clock.now,
-          );
-        }),
-      ),
-    );
-    expect(await personOf(alice)).toEqual({
-      id: alice,
-      name: "Someone",
-      games: { raid: { played: 0, afk: 60, spent: 0 }, town: { played: 60, afk: 120, spent: 150 } },
-      played: 60,
-      afk: 180,
-    });
-  });
-
-  it("is each game's apart, and all games' together on the card, in whole seconds; a game with time and no standing has its entry", async () => {
-    await openAfter(0, "raid");
-    await openAfter(10_000, "town");
-    await openAfter(50_000, "raid");
-    await openAfter(MINUTE + 10_999, "town");
-    expect(await playedMs()).toEqual({ raid: MINUTE, town: 2 * MINUTE + 999 });
-    expect(await personOf(alice)).toEqual({
-      id: alice,
-      name: "Someone",
-      games: { raid: { played: 60, afk: 0, spent: 0 }, town: { played: 120, afk: 0, spent: 0 } },
-      played: 180,
-      afk: 0,
-    });
-  });
-
-  it("counts a visit for the visitor, in that game, and nothing for whoever is visited", async () => {
-    await send("GET", "/v1/game/play/works", undefined, bob);
-    await openAfter(0, "raid");
-    for (const after of [MINUTE, 30_000, 30_000]) {
-      clock.now += after;
-      // oxlint-disable-next-line no-await-in-loop -- one after another
-      expect((await visit(bob, "works")).status).toBe(200);
-    }
-    expect(await playedMs()).toEqual({ raid: 0, works: MINUTE });
-    expect(await playedMs(bob)).toEqual({
-      works: 0,
-    });
-    // On her card, the raid she has opened and not played for a second is not listed.
-    expect(await personOf(alice)).toEqual({
-      id: alice,
-      name: "Someone",
-      games: { works: { played: 60, afk: 0, spent: 0 } },
-      played: 60,
-      afk: 0,
-    });
-  });
-
-  it("counts a batch taken when it came, however it ends, and nothing for one refused whole", async () => {
-    await app.dispose();
-    // The first batch that has anything to log (setting out) fails as it writes it.
-    let full = true;
-    start({
-      play: (real) => ({
-        ...real,
-        log: (player, game, what, now) =>
-          Effect.suspend(() => {
-            if (what.length === 0 || !full) return real.log(player, game, what, now);
-            full = false;
-            return Effect.die(new Error("the disk is full"));
-          }),
-      }),
-    });
-    await openAfter(0);
-    await openAfter(MINUTE);
-    clock.now += MINUTE;
-    const refused = await send("POST", "/v1/game/play/raid", { commands: [{ id: "x-1", do: "win" }] });
-    expect(refused.status).toBe(400);
-    // A command the rules refuse is in a batch taken: it counts.
-    clock.now += MINUTE;
-    expect((await commanded(ided([{ do: "take" }]))).results).toMatchObject([{ refused: expect.any(String) }]);
-    expect(await playedMs()).toEqual({ raid: 3 * MINUTE + 100 });
-    // One taken that then fails was a call all the same.
-    clock.now += MINUTE;
-    const failed = await send("POST", "/v1/game/play/raid", { commands: ided([{ do: "start", trail: 0 }]) });
-    expect(failed.status).toBe(500);
-    expect(await playedMs()).toEqual({ raid: 4 * MINUTE + 100 });
-    await openAfter(MINUTE);
-    expect(await playedMs()).toEqual({ raid: 5 * MINUTE + 100 });
-  });
-
-  it("counts a visit at the moment it came, though it waits in a line: a later call joins on to it", async () => {
-    const { game, run } = counted();
-    await keepMid();
-    clock.now += 480 * MINUTE;
-    const bobs = { playerId: bob, guest: false };
-    // Bob opens his own yard, and a minute later visits Alice's, which is brought up eight hours first.
-    await services.run(Play.use((play) => play.open(bobs, game)));
-    clock.now += MINUTE;
-    const visiting = services.run(Play.use((play) => play.visit(alice, game, bobs)));
-    await until(() => run.ticks > 0);
-    // Two minutes on, while the visit still waits, he looks at his own again.
-    clock.now += 2 * MINUTE + 1;
-    await services.run(Play.use((play) => play.open(bobs, game)));
-    expect(await visiting).toEqual(expect.objectContaining({ status: "open" }));
-    expect(await playedMs(bob)).toEqual({
-      works: 3 * MINUTE + 1,
-    });
-  });
-
-  it("counts a call though its caller goes while it is written: Leaf's own fiber writes it", async () => {
-    await app.dispose();
-    const gate = Promise.withResolvers<void>();
-    let holding = false;
-    let written = false;
-    start({
-      play: (real) => ({
-        ...real,
-        heard: (...args) =>
-          holding
-            ? Effect.promise(() => gate.promise).pipe(
-                Effect.andThen(real.heard(...args)),
-                Effect.andThen(Effect.sync(() => void (written = true))),
-              )
-            : real.heard(...args),
-      }),
-    });
-    await keepMid();
-    const bobs = { playerId: bob, guest: false };
-    // Bob opens his own yard, and a minute later visits Alice's: his page closes while that call is written.
-    await services.run(Play.use((play) => play.open(bobs, GAMES.works)));
-    clock.now += MINUTE;
-    holding = true;
-    await services.run(
-      Play.use((play) =>
-        Effect.gen(function* () {
-          const visiting = yield* Effect.forkChild(play.visit(alice, GAMES.works, bobs), { startImmediately: true });
-          yield* Fiber.interrupt(visiting);
-        }),
-      ),
-    );
-    gate.resolve();
-    await until(() => written);
-    expect(await playedMs(bob)).toEqual({
-      works: MINUTE,
-    });
-  });
-
-  it("counts nothing for Leaf tending a yard while its owner is away", async () => {
-    await keepMid();
-    await openAfter(0, "works");
-    // Within three minutes of her call, past the two after which Leaf keeps the yard itself.
-    clock.now += TEND_AFTER + 30_000;
-    await tending();
-    expect((await storedYard()).rev).toBe(2);
-    expect(await playedMs()).toEqual({ works: 0 });
-    // Three and a half minutes after her own last call, she was away.
-    await openAfter(MINUTE, "works");
-    expect(await playedMs()).toEqual({ works: 0 });
   });
 });
 

@@ -107,6 +107,73 @@ async function report(query = "") {
   return { status: response.status, body };
 }
 
+/** A player's commands to a game, at the clock's time, as their page sends them: the game opened, then one batch. */
+async function command(who: Who, game: string, commands: readonly object[]) {
+  const headers = { Authorization: `Bearer ${who}-token`, "Content-Type": "application/json" };
+  expect((await app.request(`/v1/game/play/${game}`, { headers })).status).toBe(200);
+  const player = { alice, bob, carol, dave }[who];
+  const ided = commands.map((c, i) => ({ ...c, id: `${who}-${clock.now}-${i}` }));
+  const response = await app.request(`/v1/game/play/${game}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ player, commands: ided }),
+  });
+  expect(response.status).toBe(200);
+}
+
+/** Each player's time in each game, played and AFK, in milliseconds. */
+const timeIn = () =>
+  services.query(
+    (sql) => sql`SELECT player_id, game, played_ms AS played, afk_ms AS afk FROM time_in ORDER BY player_id, game`,
+  );
+
+describe("time in each game", () => {
+  it("is played for each stretch of a visit begun within five minutes of something the player did, and AFK from then", async () => {
+    await call("alice", "table");
+    // A minute at the table before she does anything: AFK.
+    await stay("alice", "table", T0 + MINUTE, 0);
+    await command("alice", "raid", [{ do: "start", trail: 0 }]);
+    await stay("alice", "table", T0 + 2 * MINUTE, 6);
+    // The five stretches begun up to five minutes after the start are played; the two after, AFK.
+    expect(await timeIn()).toEqual([{ player_id: alice, game: "raid", played: 5 * MINUTE, afk: 3 * MINUTE }]);
+    // What she did is kept on the visit, for a Leaf that takes over in a deploy.
+    expect(await services.query((sql) => sql`SELECT acted_at FROM visits`)).toEqual([{ acted_at: T0 + MINUTE }]);
+  });
+
+  it("counts nothing a page sends by itself as the player doing something: the town's page saying they are here", async () => {
+    await call("bob", "town");
+    await command("bob", "town", [{ do: "here", cursor: null }]);
+    await stay("bob", "town", T0 + MINUTE, 2);
+    expect(await timeIn()).toEqual([{ player_id: bob, game: "town", played: 0, afk: 3 * MINUTE }]);
+  });
+
+  it("counts a camp as the town's, the time up to a visit's close, and nothing for the silence before a silent one closes", async () => {
+    await command("alice", "raid", [{ do: "start", trail: 0 }]);
+    await stay("alice", "town", T0, 1);
+    // Two minutes in town, up to when she comes to the camp; a minute there.
+    await stay("alice", "camp", T0 + 2 * MINUTE, 1);
+    // Nothing heard for long enough: the camp's visit closes at its last call.
+    clock.now = T0 + 10 * MINUTE;
+    await call("bob", "works");
+    expect(await timeIn()).toEqual([{ player_id: alice, game: "town", played: 3 * MINUTE, afk: 0 }]);
+  });
+
+  it("is on the card: each game's in whole seconds, and all of them together", async () => {
+    await call("carol", "works");
+    clock.now = T0 + 30 * SECOND;
+    await command("carol", "raid", [{ do: "start", trail: 0 }]);
+    await stay("carol", "works", T0 + MINUTE, 7);
+    const response = await app.request(`/v1/game/people/${carol}`, {
+      headers: { Authorization: "Bearer carol-token" },
+    });
+    expect(await response.json()).toMatchObject({
+      games: { works: { played: (6 * MINUTE) / SECOND, afk: (2 * MINUTE) / SECOND, spent: 0 } },
+      played: (6 * MINUTE) / SECOND,
+      afk: (2 * MINUTE) / SECOND,
+    });
+  });
+});
+
 describe("visits from the presence calls", () => {
   it("opens a visit at the first call, moves it on with each, and closes it at the last after 90 silent seconds", async () => {
     await call("alice", "camp");

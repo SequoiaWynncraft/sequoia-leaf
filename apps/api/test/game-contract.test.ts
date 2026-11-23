@@ -231,23 +231,6 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await app.request("/v1/game/play/works", { headers: { Authorization: "Bearer bob-token" } });
   await call("GET /v1/game/play/{game}/of/{player}", "GET", `/v1/game/play/works/of/${bob}`);
   await call("GET /v1/game/play/{game}/of/{player}, nothing to visit", "GET", `/v1/game/play/raid/of/${bob}`);
-  // Alice is still in town three minutes on, and then AFK there two minutes; and has the pulls open
-  // a minute, which has no board.
-  for (const [after, game, afk] of [
-    [3 * MINUTE, "town", true],
-    [2 * MINUTE, "town", false],
-    [0, "pulls", false],
-    [MINUTE, "pulls", false],
-  ] as const) {
-    clock.now += after;
-    // oxlint-disable-next-line no-await-in-loop -- one after another
-    await app.request(`/v1/game/play/${game}${afk ? "?afk=1" : ""}`, {
-      headers: { Authorization: "Bearer alice-token" },
-    });
-  }
-  await call("GET /v1/game/people/{player}", "GET", `/v1/game/people/${alice}`, undefined, "bob-token");
-  clock.now = T0 + 25 * MINUTE;
-  await call("GET /v1/game/people/{player}, unknown", "GET", "/v1/game/people/20000000-0000-0000-0000-000000000009");
   // The pull banners: before Leaf has a headliner for the first, and once it has Bob.
   await call("GET /v1/game/banners, no headliner yet", "GET", "/v1/game/banners");
   await leaf.query((sql) => sql`INSERT INTO banner_people (banner, player_id) VALUES ('banner-1', ${bob})`);
@@ -271,6 +254,29 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   }
   await call("GET /v1/game/admin/activity, a member", "GET", "/v1/game/admin/activity");
   await call("GET /v1/game/admin/activity", "GET", "/v1/game/admin/activity?days=2", undefined, "staff-token");
+  // Alice's page says where she is each minute: two more at the table, then five in town, where she
+  // does nothing after what she did at T0 + 25 minutes, so from five minutes after it she is AFK.
+  for (const [at, place] of [
+    [26, "table"],
+    [27, "table"],
+    [27, "town"],
+    [28, "town"],
+    [29, "town"],
+    [30, "town"],
+    [31, "town"],
+    [32, "town"],
+  ] as const) {
+    clock.now = T0 + at * MINUTE;
+    // oxlint-disable-next-line no-await-in-loop -- one after another
+    await app.request("/v1/game/presence", {
+      method: "PUT",
+      headers: { Authorization: "Bearer alice-token", "Content-Type": "application/json" },
+      body: JSON.stringify({ place }),
+    });
+  }
+  await call("GET /v1/game/people/{player}", "GET", `/v1/game/people/${alice}`, undefined, "bob-token");
+  clock.now = T0 + 25 * MINUTE;
+  await call("GET /v1/game/people/{player}, unknown", "GET", "/v1/game/people/20000000-0000-0000-0000-000000000009");
   // The Treasury: a tome request bought (the backend charges it through Leaf), the same again, and a guest.
   backend.api = rewardQueue("alice-token", alice, (path, init) => app.request(path, init)).api;
   await call("GET /v1/game/requests", "GET", "/v1/game/requests");

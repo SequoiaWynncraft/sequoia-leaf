@@ -120,10 +120,11 @@ export class Room {
    * theirs sends its first move (it may count from anywhere), so nobody is ever drawn sliding from
    * where they were; and whenever a move goes further than the room's pace allows since the last
    * (`outpaced`), so a game that says its player is anywhere it likes only has them jump there.
+   * Says whether they went anywhere: a first move, or one that only turns them, does not.
    */
-  move(id: number, seq: number, m: Motion, time: number): void {
+  move(id: number, seq: number, m: Motion, time: number): boolean {
     const o = this.occupants.get(id);
-    if (!o) return;
+    if (!o) return false;
     const x = clamp(m.x, 0, this.kind.width);
     const y = clamp(m.y, 0, this.kind.height);
     const was = o.motion;
@@ -146,6 +147,7 @@ export class Room {
       jump: o.jump,
     };
     o.dirty = true;
+    return was !== null && (was.x !== x || was.y !== y);
   }
 
   /** Somebody's game has a new connection: whatever it counts its jumps from, its first move is one. */
