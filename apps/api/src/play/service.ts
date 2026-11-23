@@ -120,6 +120,12 @@ interface Lane {
 
 /** Which job it is: a player's open, visit or batch, or Leaf's own tend. */
 export type Kind = "open" | "visit" | "batch" | "tend";
+/** Where a job's answer is shared, under its key, with the same job asked for again while it waits. */
+interface Shared<A> {
+  readonly answers: Map<string, Deferred.Deferred<A>>;
+  readonly key: string;
+}
+
 /** What a job does, given the job: its answer, given once the copy is saved. */
 type Work<A> = (job: Job) => Effect.Effect<() => A, Lost>;
 
@@ -704,12 +710,14 @@ export class Play extends Context.Service<
        * once the copy is saved. What is stored moving on (`Lost`), the job is done again, `TRIES` times
        * in all. All but a batch are never done once whoever waits has gone, but for saving the copy.
        */
-      const line = <A>(kind: Kind, player: PlayerId, played: Played, work: Work<A>) =>
+      const line = <A>(kind: Kind, player: PlayerId, played: Played, work: Work<A>, shared?: Shared<A>) =>
         Effect.gen(function* () {
           const key = keyOf(player, played);
           const idle = lanes.get(key);
           const lane = idle ?? { key, player, played, jobs: [], copy: copies.take(key) };
           const done = Deferred.makeUnsafe<A>();
+          shared?.answers.set(shared.key, done);
+          const unshare = () => void shared?.answers.delete(shared.key);
           const again = <B>(effect: Effect.Effect<B, Lost>) =>
             effect.pipe(
               Effect.onError(() => Effect.sync(() => void (lane.copy = undefined))),
@@ -734,9 +742,12 @@ export class Play extends Context.Service<
                     again(Effect.flatMap(work(job), (then) => Effect.map(settle(job), then))),
                     (exit) => void Deferred.doneUnsafe(done, exit),
                   );
-              return Effect.ensuring(doing, measured(job));
+              return Effect.ensuring(doing, Effect.andThen(Effect.sync(unshare), measured(job)));
             }),
-            stop: () => void Deferred.doneUnsafe(done, Exit.interrupt()),
+            stop: () => {
+              unshare();
+              Deferred.doneUnsafe(done, Exit.interrupt());
+            },
           };
           lane.jobs.push(job);
           if (idle === undefined) {
@@ -747,8 +758,10 @@ export class Play extends Context.Service<
         });
 
       /** A caller's job put in its line (`line`), and its answer waited for: only the waiting may be interrupted. */
-      const ask = <A>(kind: Kind, player: PlayerId, played: Played, work: Work<A>) =>
-        Effect.uninterruptibleMask((restore) => Effect.flatMap(line(kind, player, played, work), restore));
+      const ask = <A>(kind: Kind, player: PlayerId, played: Played, work: Work<A>, shared?: Shared<A>) =>
+        Effect.uninterruptibleMask((restore) => Effect.flatMap(line(kind, player, played, work, shared), restore));
+      // The answers to the batches in the lines, by lane and their commands' ids, for the same batch sent again.
+      const sending = new Map<string, Deferred.Deferred<Batch>>();
 
       /** Leaf's own tend: its work, reading the state as much as running it on, waits for its turn (`slice`). */
       const tending: Work<void> = (job) =>
@@ -798,13 +811,22 @@ export class Play extends Context.Service<
             if (!pace.take(playing.playerId, yield* Clock.currentTimeMillis, [1, fresh])) {
               return { status: "slow" } satisfies Batch;
             }
-            return yield* ask("batch", playing.playerId, played, (job) =>
-              Effect.gen(function* () {
-                const got = yield* brought(job, playing);
-                if (!got) return (): Batch => ({ status: "unreadable" });
-                const done = yield* batch(job, got.copy, playing, sent, yield* dice);
-                return (): Batch => ({ status: "done", ...done, view: done.view() });
-              }),
+            // The same commands sent again while their batch is still in its line (its page's wait ran out) wait for its answer.
+            const same = `${keyOf(playing.playerId, played)} ${sent.map((one) => one.id).join(" ")}`;
+            const inLine = sent.length > 0 ? sending.get(same) : undefined;
+            if (inLine !== undefined) return yield* Deferred.await(inLine);
+            return yield* ask(
+              "batch",
+              playing.playerId,
+              played,
+              (job) =>
+                Effect.gen(function* () {
+                  const got = yield* brought(job, playing);
+                  if (!got) return (): Batch => ({ status: "unreadable" });
+                  const done = yield* batch(job, got.copy, playing, sent, yield* dice);
+                  return (): Batch => ({ status: "done", ...done, view: done.view() });
+                }),
+              sent.length > 0 ? { answers: sending, key: same } : undefined,
             );
           }),
         visit: (player, played, caller) =>

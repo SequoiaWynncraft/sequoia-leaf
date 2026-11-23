@@ -758,8 +758,10 @@ from what is stored at its own moment, three times at most before it fails: so
 between two Leafs the row decides, and no command is lost or done twice. A new
 player's state is made in memory, their Coins opened with the welcome as it is,
 and stored by the first of those. Anything going wrong in a job drops the copy,
-and the next job reads what is stored. A batch is done whatever becomes of its
-request; an open, a visit or a tend whose caller has gone while it waited is
+and the next job reads what is stored. The same commands sent again, as a page
+whose wait ran out sends them, while their batch is still in its line, wait for
+that batch's answer rather than join the line again. A batch is done whatever
+becomes of its request; an open, a visit or a tend whose caller has gone while it waited is
 never done. A lane with nothing in its line and nothing unsaved is let go, and its copy
 held for the state's next job: up to 4 MiB of stored text in all, about a
 thousand of the largest yards and 50 MiB in memory, the copy used least lately

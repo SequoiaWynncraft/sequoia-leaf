@@ -2356,6 +2356,36 @@ describe("Leaf tending the Works", () => {
     expect([after.status, "rev" in after ? after.rev : null, reads]).toEqual(["open", (await storedYard()).rev, 2]);
   });
 
+  it("answers a batch sent again while it is still in its line once, as a page whose wait timed out sends it", async () => {
+    await app.dispose();
+    const gate = Promise.withResolvers<void>();
+    const batches: JobTimes[] = [];
+    let reads = 0;
+    start({
+      // The first read of the yard waits, as a yard far behind would keep a batch waiting.
+      play: (real) => ({
+        ...real,
+        read: (player, game) =>
+          real
+            .read(player, game)
+            .pipe(Effect.tap(() => (++reads === 1 ? Effect.promise(() => gate.promise) : Effect.void))),
+      }),
+      meter: (times) => void (times.kind === "batch" && batches.push(times)),
+    });
+    await keepMid();
+    const owner = { playerId: alice, guest: false };
+    const commands = [{ id: "w-1", do: "collect", tick: 0 }];
+    const first = services.run(Play.use((play) => play.send(owner, GAMES.works, commands)));
+    await until(() => reads === 1);
+    const again = services.run(Play.use((play) => play.send(owner, GAMES.works, commands)));
+    gate.resolve();
+    const [answered, answeredAgain] = await Promise.all([first, again]);
+
+    expect(answered.status).toBe("done");
+    expect(answeredAgain).toEqual(answered);
+    expect(batches).toHaveLength(1);
+  });
+
   it("keeps a guest's yard a guest's, though they left it before their first command", async () => {
     // Carol is not in the guild.
     expect((await send("GET", "/v1/game/play/works", undefined, carol)).status).toBe(200);
