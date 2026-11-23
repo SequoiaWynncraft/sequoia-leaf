@@ -64,7 +64,20 @@ import { CELL, makeGround } from "./grid.ts";
 import { paintTrunk } from "./ground.ts";
 import { guild, type Happening } from "./guild.ts";
 import { closeCard, closePanel, covered, setStrip, showCard } from "./hud.ts";
-import { ask, doNow, lookAt, type Looked, mine, ok, onTown, refusal, shown, visiting } from "./leaf.ts";
+import {
+  ask,
+  doNow,
+  lookAt,
+  type Looked,
+  mine,
+  numbered,
+  ok,
+  onTown,
+  refusal,
+  setOutAs,
+  shown,
+  visiting,
+} from "./leaf.ts";
 import { comeTo, makePet, MY_PETS, PET_ABOUT, petAt, type PetLive, type PetWorld, pleased, stepPet } from "./pets.ts";
 import { type Light, makeProp, type Prop, propUnder } from "./props.ts";
 import type { Sprites } from "./sprites.ts";
@@ -942,6 +955,12 @@ export function makeCamp(
     if (!h || !p) return;
     const was = h.dragging;
     h.dragging = false;
+    // Just set out, and not numbered by Leaf yet: it is held where it was let go, and moved there
+    // once it is (`numberedAs`).
+    if (h.n < 0) {
+      if (was) sfx.tap();
+      return;
+    }
     if (h.moved || h.t !== p.t) {
       const did = doNow({ do: "move", n: h.n, x: h.x, y: h.y, t: h.t });
       const now = placedAt(h.n) ?? p;
@@ -967,6 +986,11 @@ export function makeCamp(
   function turn(): void {
     const h = sel;
     if (!h) return;
+    // Nothing is done to a thing Leaf has not numbered yet: it is a moment.
+    if (h.n < 0) {
+      sfx.no();
+      return;
+    }
     settle();
     const next = turned(layout(), h.n);
     const p = placedAt(h.n);
@@ -1002,6 +1026,10 @@ export function makeCamp(
     const p = h ? placedAt(h.n) : null;
     const thing = p ? thingOf(p.id) : null;
     if (!h || !p || !thing) return;
+    if (h.n < 0) {
+      sfx.no();
+      return;
+    }
     settle();
     const at = footOf(p);
     const sprite = pictureOf(art, p.id, p.t, p.s);
@@ -1051,6 +1079,25 @@ export function makeCamp(
     return best;
   }
 
+  /**
+   * Leaf has answered for a thing just set out (`mark`, the page's own number for it): whatever has
+   * it in hand from now names Leaf's number, and is moved to where it was let go meanwhile; if Leaf
+   * did not set it out, nothing is in hand.
+   */
+  async function numberedAs(mark: number): Promise<void> {
+    const n = await numbered(mark);
+    const h = sel;
+    if (!h || h.n !== mark) return;
+    if (n === null) {
+      sel = null;
+      ui.tray();
+      return;
+    }
+    h.n = n;
+    if (!h.dragging && h.moved) settle();
+    ui.tray();
+  }
+
   function takeOut(id: string): boolean {
     const thing = thingOf(id);
     if (!decor || !thing) return false;
@@ -1068,13 +1115,15 @@ export function makeCamp(
       y: clamp(Math.floor(p.y / CELL) + 2, 14, CGH - 6),
     };
     const spot = roomy(id, near) ?? freeSpot(layout(), id, near);
-    // What is set out is given the id Leaf will give it: the next of the camp's counter.
-    const n = shown().made;
-    if (!spot || !ok(doNow({ do: "setOut", thing: id, x: spot.x, y: spot.y, t: 0 }))) {
+    const did = spot ? doNow({ do: "setOut", thing: id, x: spot.x, y: spot.y, t: 0 }) : null;
+    // Held by the page's own number for it until Leaf gives it one (`numberedAs`).
+    const n = did ? setOutAs(did) : null;
+    if (n === null) {
       sfx.no();
       hooks.feed("No room for that. Put something away first.", "coral");
       return false;
     }
+    void numberedAs(n);
     rebuild();
     const where = placedAt(n);
     sel = where

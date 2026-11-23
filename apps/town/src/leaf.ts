@@ -150,23 +150,71 @@ export function troubleCard(why: Trouble): void {
 }
 
 /**
+ * The things set out that Leaf has not answered for yet, by the page's own number for each, and
+ * Leaf's number to come (null: Leaf did not set it out). The page's own numbers are below nothing,
+ * so none is ever one Leaf gives; the copy shows a thing by it until Leaf's state comes with its own.
+ */
+const unnumbered = new Map<number, Promise<number | null>>();
+let marked = 0;
+
+/** The number of the thing a command set out, as its notes give it. */
+const setOutIn = (notes: readonly TownNote[]): number | null => notes.find((n) => n.t === "setOut")?.n ?? null;
+
+/** A command's prediction with the thing it sets out numbered `mark` instead of the next of the copy's counter. */
+function markedAs(
+  guess: { view: TownView; notes: TownNote[] },
+  mark: number | null,
+): { view: TownView; notes: TownNote[] } {
+  const n = setOutIn(guess.notes);
+  if (mark === null || n === null) return guess;
+  const placed = guess.view.camp.placed.map((p) => (p.n === n ? { ...p, n: mark } : p));
+  return {
+    view: { ...guess.view, camp: { ...guess.view.camp, placed } },
+    notes: guess.notes.map((note) => (note.t === "setOut" ? { ...note, n: mark } : note)),
+  };
+}
+
+/**
  * Does a command the shared rules work out on the copy: shows it at once and sends it. A command
- * they turn down is not sent, and its refusal is given back. Null for one that must be asked, and
- * for one held off while Leaf answers another (nothing is done or sent). In a visit, refused.
+ * they turn down is not sent, and its refusal is given back. Null for one that must be asked, for
+ * one held off while Leaf answers another, and for one naming a thing set out that Leaf has not
+ * numbered yet (nothing is done or sent: `numbered`). In a visit, refused. A thing set out is
+ * numbered by the page below nothing until Leaf answers (`setOutAs`).
  */
 export function doNow(command: TownCommand, now = Date.now()): Did | null {
   if (looked) return { refused: "visiting" };
   const play = leaf;
   if (!play || hold.held(false)) return null;
+  if ("n" in command && command.n < 0) return null;
+  const mark = command.do === "setOut" ? -++marked : null;
   const guess = predict(play.state, command, now);
   if (!guess) return null;
   if ("refused" in guess) return guess;
-  void play.send(command, (copy) => {
+  const answer = play.send(command, (copy) => {
     const redone = predict(copy, command, now);
-    return redone && "view" in redone ? redone.view : copy;
+    return redone && "view" in redone ? markedAs(redone, mark).view : copy;
   });
+  if (mark !== null) {
+    const leafs = (async () => {
+      const a = await answer;
+      unnumbered.delete(mark);
+      return "notes" in a ? setOutIn(a.notes) : null;
+    })();
+    unnumbered.set(mark, leafs);
+  }
   tell(false);
-  return { notes: guess.notes };
+  return { notes: markedAs(guess, mark).notes };
+}
+
+/** The page's own number for the thing a command it did set out (`doNow`), below nothing until Leaf numbers it. */
+export const setOutAs = (did: Did): number | null => ("notes" in did ? setOutIn(did.notes) : null);
+
+/**
+ * The number Leaf gave a thing the page knows as `n`: `n` itself, unless it is one the page gave a
+ * thing just set out, when it is Leaf's once Leaf answers (null: Leaf did not set it out).
+ */
+export async function numbered(n: number): Promise<number | null> {
+  return n >= 0 ? n : ((await unnumbered.get(n)) ?? null);
 }
 
 /**

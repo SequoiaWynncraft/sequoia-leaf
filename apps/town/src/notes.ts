@@ -31,6 +31,15 @@ export const NOTES: readonly Note[] = [
       "Leaving a camp or the town just as you arrive now takes you back. Before, the page stopped until it was loaded again.",
       "Going to a camp straight from the Works no longer has you walk back into town unseen.",
     ],
+    more: [
+      {
+        head: "Also fixed",
+        points: [
+          "With your camp open on two pages, a thing set out on one is no longer moved or put away by the other in its place.",
+          "A caller leaving your camp goes, even if you set something down in their way.",
+        ],
+      },
+    ],
   },
   {
     id: "leaf-turns",

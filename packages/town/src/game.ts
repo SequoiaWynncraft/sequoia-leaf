@@ -153,8 +153,8 @@ export type TownCommand =
   | { do: "toggle"; n: number }
   | { do: "stay"; on: boolean };
 
-/** No command of the town's answers with anything but the state. */
-export type TownNote = never;
+/** What a command did besides change the town: the number Leaf gave a thing set out, which whatever is done to it next names. */
+export type TownNote = { readonly t: "setOut"; readonly n: number };
 
 /** Why a command may not be done, besides where a thing may not stand (`Verdict`). */
 export type Why =
@@ -274,7 +274,7 @@ function advance(state: Town, ctx: Ctx): Town {
 
 type Answer = Done<Town, TownNote> | Refused;
 const no = (why: Why): Refused => ({ refused: why });
-const done = (s: Town, more: { coins?: CoinChange[]; log?: Logged[] } = {}): Answer => ({
+const done = (s: Town, more: { coins?: CoinChange[]; log?: Logged[]; notes?: TownNote[] } = {}): Answer => ({
   state: s,
   notes: [],
   ...more,
@@ -361,8 +361,9 @@ function apply(state: Town, c: TownCommand, ctx: Ctx): Answer {
       const left = (camp.tray[c.thing] ?? 0) - 1;
       if (left > 0) camp.tray[c.thing] = left;
       else delete camp.tray[c.thing];
-      camp.placed.push({ n: next(s), id: c.thing, x: c.x, y: c.y, t: c.t, s: 0 });
-      return done(s);
+      const n = next(s);
+      camp.placed.push({ n, id: c.thing, x: c.x, y: c.y, t: c.t, s: 0 });
+      return done(s, { notes: [{ t: "setOut", n }] });
     }
     case "move": {
       const i = at(c.n);
@@ -669,8 +670,16 @@ export function readView(v: unknown): TownView | null {
   return { ...held, arrival: { first, newDay, away, said, mail } };
 }
 
-/** What a command answered off the wire: nothing, or null. */
-export const readNotes = (v: unknown): TownNote[] | null => (Array.isArray(v) && v.length === 0 ? [] : null);
+/** What a command answered off the wire: nothing, or the number of a thing set out; null for anything else. */
+export function readNotes(v: unknown): TownNote[] | null {
+  if (!Array.isArray(v)) return null;
+  const notes: TownNote[] = [];
+  for (const note of v) {
+    if (!isRecord(note) || note.t !== "setOut" || !whole(note.n, 0, 1e9)) return null;
+    notes.push({ t: "setOut", n: note.n });
+  }
+  return notes;
+}
 
 /** A new member's town: the camp every member starts with, nothing welcomed, and the first caller on the way. */
 export function newTown(ctx: Pick<Ctx, "seed" | "now">): Town {
