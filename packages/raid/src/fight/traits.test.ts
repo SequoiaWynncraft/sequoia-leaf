@@ -26,6 +26,8 @@ import { heal, hurt, HZ, shieldUp } from "./core.ts";
 import { speedNow } from "./engine.ts";
 
 const t = traitNumber;
+/** What Gnome multiplies a gnome's health by at a step. */
+const gnomeHealth = (step: number) => 1 + t("gnome", "health", step) / 100;
 /** Greg's health at the start of a fight, having eaten a number of times. */
 const gregsHealth = (fed: number): number => {
   const f = fightOf([{ kind: "greg", stars: 1, seat: 3, items: [], fed }], [at("mud", 3, 3)]);
@@ -129,7 +131,7 @@ describe("kins", () => {
     expect(slips / swings).toBeLessThan(t("mist", "slip", 1) / 100 + 0.05);
     expect(only(events, "hit").length).toBe(swings - slips);
   });
-  test("Burrow: Burrow figures dig in for armour, and go to ground the first time they drop under half", () => {
+  test("Burrow: Burrow figures dig in for armour, and the first time they drop under half get health back and take less, still fighting", () => {
     const f = fightOf([at("worm", 3, 0), at("chickaree", 3, 2), at("crab7", 2, 0)], [at("mud", 3, 3)]);
     stillSide(f, 1);
     const worm = unitOf(f, "worm");
@@ -139,20 +141,20 @@ describe("kins", () => {
     worm.manaFull = 0;
     f.out = [];
     hurt(f, worm, worm.maxHp * 0.6, "true", "attack", foe);
-    const under = only(f.out, "status").find((e) => e.status === "hidden" && e.on);
-    expect(under?.ticks).toBe(t("burrow", "under", 1) * HZ);
-    const hp = worm.hp;
-    // Nothing reaches it down there.
-    expect(hurt(f, worm, 500, "true", "attack", foe)).toBe(0);
-    expect(worm.hp).toBe(hp);
-    const events = steps(f, t("burrow", "under", 1) * HZ);
-    expect(only(events, "swing").some((e) => e.id === worm.id)).toBe(false);
-    const up = only(events, "heal").find((e) => e.source === "burrow");
-    expect(up?.amount).toBe(Math.round((worm.maxHp * t("burrow", "heal", 1)) / 100));
+    const back = only(f.out, "heal").find((e) => e.source === "burrow");
+    expect(back?.amount).toBe(Math.round((worm.maxHp * t("burrow", "heal", 1)) / 100));
+    const braced = only(f.out, "status").find((e) => e.status === "braced" && e.on);
+    expect(braced?.ticks).toBe(t("burrow", "lasts", 1) * HZ);
+    expect(braced?.amount).toBe(t("burrow", "less", 1));
+    // It is still there to be hit, for less, and it keeps fighting.
+    expect(only(f.out, "status").some((e) => e.status === "hidden")).toBe(false);
+    expect(hurt(f, worm, 100, "true", "attack", foe)).toBe(Math.round(100 * (1 - t("burrow", "less", 1) / 100)));
+    const events = steps(f, t("burrow", "lasts", 1) * HZ);
+    expect(only(events, "swing").some((e) => e.id === worm.id)).toBe(true);
     // Only the once.
     f.out = [];
     hurt(f, worm, 1, "true", "attack", foe);
-    expect(only(f.out, "status").some((e) => e.status === "hidden")).toBe(false);
+    expect(only(f.out, "heal").some((e) => e.source === "burrow")).toBe(false);
   });
   test("Feather: every attack makes the next come quicker, up to a point", () => {
     const f = fightOf([at("jay", 3, 0), at("finch", 3, 2)], [at("mud", 3, 0)]);
@@ -184,6 +186,22 @@ describe("kins", () => {
     expect(unitsOf(big, "uncounted", 0).length).toBe(0);
     const none = fightOf([at("crab7", 3, 0), at("crab7", 2, 0)], [at("mud", 3, 3)]);
     expect(none.units.filter((u) => u.summoned).length).toBe(0);
+  });
+  test("Crab: at five, which takes the charm, a big one and a small one both come", () => {
+    const crabs = [at("crab7", 3, 0), at("crab12", 3, 2), at("crab23", 2, 2), at("crab40", 2, 0)];
+    const five = fightOf(crabs, [at("mud", 3, 3)], { ours: { charms: ["crab"] } });
+    expect(only(five.opening, "summon").map((e) => e.kind)).toEqual(["biguncounted", "uncounted"]);
+  });
+  test("Gnome: Gnome figures have more health, more at the second step; nobody else does", () => {
+    const two = fightOf([at("barrowgnome", 3, 0), at("lanterngnome", 3, 2), at("finch", 2, 2)], [at("mud", 3, 3)]);
+    expect(unitOf(two, "barrowgnome").maxHp).toBe(Math.round(FIGURES.barrowgnome.hp * gnomeHealth(1)));
+    expect(unitOf(two, "barrowgnome").hp).toBe(unitOf(two, "barrowgnome").maxHp);
+    expect(unitOf(two, "finch").maxHp).toBe(FIGURES.finch.hp);
+    const four = fightOf(
+      [at("barrowgnome", 3, 0), at("lanterngnome", 3, 2), at("bushgnome", 2, 0), at("apothecary", 2, 2)],
+      [at("mud", 3, 3)],
+    );
+    expect(unitOf(four, "apothecary").maxHp).toBe(Math.round(FIGURES.apothecary.hp * gnomeHealth(2)));
   });
 });
 

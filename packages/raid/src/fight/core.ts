@@ -418,6 +418,7 @@ export function enter(f: Fight, s: Start): Unit {
     sneakBy: 0,
     digs: false,
     digHeal: 0,
+    digLess: 0,
     digFor: 0,
     regrow: 0,
     thorns: 0,
@@ -548,9 +549,10 @@ export function hurt(
 /** What a figure does about having been hurt and still being up. */
 function answer(f: Fight, u: Unit): void {
   if (u.digs && u.hp * 2 < u.maxHp) {
-    // Burrow: the first time under half health, it goes to ground.
+    // Burrow: the first time under half health, it digs in where it stands and keeps fighting.
     u.digs = false;
-    hide(f, u, u.digFor);
+    heal(f, u, (u.maxHp * u.digHeal) / 100, "burrow", null);
+    brace(f, u, u.digLess, 0, u.digFor);
   }
   if (u.logUnder > 0 && u.hp * 100 < u.maxHp * u.logUnder) {
     // Hollow Log: once, it climbs inside.
