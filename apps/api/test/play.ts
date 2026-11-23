@@ -1,7 +1,7 @@
 /**
  * Leaf on this machine, for trying the game against it:
  *
- *   bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--spending] [--crowd <n>] [--dice <n>] [--leaf <n>]
+ *   bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--spending] [--crowd <n>] [--at <place>:<n>[:<away>],...] [--dice <n>] [--leaf <n>]
  *
  * It runs the real app on a database in memory, seeded with a day of play for
  * a member called Tester and four other members, and serves `<public-dir>`
@@ -37,6 +37,11 @@
  * - `--crowd <n>`: n more members, each in their own skin, in the town's live room and walking
  *   about it along its paths: stopping, sitting on a log by the fire a while, and waving now and
  *   then. They say nothing of where they are but by being in the room. Every third is on a phone.
+ * - `--at <place>:<n>[:<away>],...`: n more members at each of the games with a place in town
+ *   (`works`, `table`, `grove`), each in their own skin, saying so every half minute as Mossling
+ *   does; the first `away` of each place's never do anything, so Leaf has them away, and the rest do
+ *   something in their town every minute. `--at works:5:2,table:4` has five at the Works, two of them
+ *   away, and four at the table.
  * - `--dice <n>`: Leaf's dice fall the same way every time from `n`, so that a tour plays the same
  *   game each time it runs. Without it they are the machine's.
  * - `--spending`: Leaf's spending is on (`GAME_LEAF_SPENDING`): a game's command may take Leaf.
@@ -94,7 +99,7 @@ import {
 } from "./support.ts";
 
 const USAGE =
-  "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--spending] [--log] [--crowd <n>] [--dice <n>] [--leaf <n>]";
+  "Usage: bun apps/api/test/play.ts <port> <public-dir> [--guest] [--down] [--busy] [--admin] [--spending] [--log] [--crowd <n>] [--at <place>:<n>[:<away>],...] [--dice <n>] [--leaf <n>]";
 
 const [portText = "", publicDirText = "", ...given] = process.argv.slice(2);
 const port = Number(portText);
@@ -106,8 +111,17 @@ const diceText = diceAt >= 0 ? given[diceAt + 1] : undefined;
 const steady = diceText === undefined ? undefined : Number(diceText);
 const leafAt = given.indexOf("--leaf");
 const leftLeaf = leafAt < 0 ? undefined : Number(given[leafAt + 1]);
+const busyAt = given.indexOf("--at");
+/** With `--at`: how many members are at each game with a place in town, and how many of them are away. */
+const atGames = (busyAt < 0 ? "" : (given[busyAt + 1] ?? "?"))
+  .split(",")
+  .filter((part) => part !== "")
+  .map((part) => {
+    const [place = "", n = "", afk = "0"] = part.split(":");
+    return { place, n: Number(n), afk: Number(afk) };
+  });
 /** The options with a value, each with its value, taken out. */
-const valued = new Set([crowdAt, diceAt, leafAt].flatMap((i) => (i >= 0 ? [i, i + 1] : [])));
+const valued = new Set([crowdAt, diceAt, leafAt, busyAt].flatMap((i) => (i >= 0 ? [i, i + 1] : [])));
 const flags = given.filter((_, i) => !valued.has(i));
 if (
   !Number.isInteger(port) ||
@@ -119,7 +133,18 @@ if (
   crowdSize > 200 ||
   flags.some((o) => !known.has(o)) ||
   (diceAt >= 0 && (steady === undefined || !Number.isInteger(steady))) ||
-  (leftLeaf !== undefined && (!Number.isInteger(leftLeaf) || leftLeaf < 0))
+  (leftLeaf !== undefined && (!Number.isInteger(leftLeaf) || leftLeaf < 0)) ||
+  (busyAt >= 0 && atGames.length === 0) ||
+  atGames.some(
+    ({ place, n, afk }) =>
+      !["works", "table", "grove"].includes(place) ||
+      !Number.isInteger(n) ||
+      n < 1 ||
+      n > 12 ||
+      !Number.isInteger(afk) ||
+      afk < 0 ||
+      afk > n,
+  )
 ) {
   console.error(USAGE);
   process.exit(2);
@@ -254,6 +279,37 @@ const crowd: readonly Member[] = Array.from({ length: crowdSize }, (_, n) => ({
   look: { skin: shade(n, 0), hair: shade(n, 1), shirt: shade(n, 2), legs: shade(n, 3) },
 }));
 
+/** Invented handles for `--at`: none of them the crowd's, the town's own, the four, or the made-up guild's stand-ins. */
+const AT_NAMES = [
+  "Wickerby",
+  "Bramblewit",
+  "Quarrystone",
+  "Tumbleburr",
+  "Cinderfern",
+  "Pinewhistle",
+  "Oakhollow",
+  "Reedmoor",
+  "Thornapple",
+  "Willowmere",
+  "Lichenby",
+  "Copperkettle",
+] as const;
+/** With `--at`: the members at each game, each with where they are and whether they are away. */
+const atMembers: readonly (Member & { readonly place: string; readonly afk: boolean })[] = atGames.flatMap(
+  ({ place, n, afk }, g) =>
+    Array.from({ length: n }, (_, k) => {
+      const i = g * 12 + k;
+      return {
+        id: playerId(`7e570000-0000-4000-8000-${String(300 + i).padStart(12, "0")}`),
+        name: `${AT_NAMES[k % AT_NAMES.length] ?? "Busy"}${g === 0 ? "" : String(g + 1)}`,
+        rank: CROWD_RANKS[i % CROWD_RANKS.length] ?? "Recruit",
+        look: { skin: shade(i + 60, 0), hair: shade(i + 60, 1), shirt: shade(i + 60, 2), legs: shade(i + 60, 3) },
+        place,
+        afk: k < afk,
+      };
+    }),
+);
+
 // The clock is the real one, except while the past day is being played, and as far ahead as a tour
 // of the pulls has moved it (to a day when a banner is open).
 let playingAt: number | undefined;
@@ -286,7 +342,7 @@ const { backend, fetcher } = fakeBackend({
       ? Response.json(sessionOf(tester.id, tester.name, tester.rank))
       : Response.json({ error: "unauthorized" }, { status: 401 }),
   ...Object.fromEntries(
-    [...mates, ...crowd].map((mate) => [
+    [...mates, ...crowd, ...atMembers].map((mate) => [
       sessionFor(mate),
       () => Response.json(sessionOf(mate.id, mate.name, mate.rank)),
     ]),
@@ -303,7 +359,7 @@ const { backend, fetcher } = fakeBackend({
 });
 
 const mojang = fakeMojang();
-for (const [index, member] of [...members, pebblefoot, ...crowd, ...away].entries()) {
+for (const [index, member] of [...members, pebblefoot, ...crowd, ...away, ...atMembers].entries()) {
   const texture = `5e1f${index.toString(16)}a`;
   mojang.profiles.set(member.id, { name: member.name, skin: `http://textures.minecraft.net/texture/${texture}` });
   mojang.textures.set(`https://textures.minecraft.net/texture/${texture}`, skinPng(member.look));
@@ -551,6 +607,27 @@ if (birchwood && mossling && fernhollow && quillon) {
   const here = () => Promise.all([arrive(birchwood, "town"), arrive(mossling, "table"), arrive(pebblefoot, "town")]);
   await here();
   setInterval(() => void here(), 30_000);
+}
+
+/** With `--at`: one of those at a game does something in their town, as Leaf counts it: they are not away. */
+let busyActs = 0;
+async function busyAct(member: Member) {
+  const headers = { Authorization: `Bearer ${sessionFor(member)}`, "Content-Type": "application/json" };
+  await app.request("/v1/game/play/town", { headers });
+  busyActs += 1;
+  await app.request("/v1/game/play/town", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ player: member.id, commands: [{ id: `busy-${busyActs}`, do: "stay", on: true }] }),
+  });
+}
+if (atMembers.length > 0) {
+  const sayWhere = () => Promise.all(atMembers.map((m) => arrive(m, m.place)));
+  await sayWhere();
+  const act = () => Promise.all(atMembers.filter((m) => !m.afk).map((m) => busyAct(m)));
+  await act();
+  setInterval(() => void sayWhere(), 30_000);
+  setInterval(() => void act(), 60_000);
 }
 
 /** A party finished a raid, or fought a war, 40 seconds ago, and Leaf reads of it now: the `n`th such, for its name. */
@@ -1000,7 +1077,7 @@ await Promise.all(crowd.map((member, n) => wander(member, n % 3 === 0)));
 
 const state = `${guest ? " (Tester is a guest)" : down ? " (the backend is down)" : ""}${spending ? " (Leaf's spending is on)" : ""}`;
 console.log(
-  `Leaf is playing at ${origin}/play/town/${state}${crowd.length > 0 ? `, with a crowd of ${crowd.length}` : ""}`,
+  `Leaf is playing at ${origin}/play/town/${state}${crowd.length > 0 ? `, with a crowd of ${crowd.length}` : ""}${atMembers.length > 0 ? `, with ${atGames.map((g) => `${g.n} at ${g.place} (${g.afk} away)`).join(", ")}` : ""}`,
 );
 console.log(
   `Sign in: ${origin}/sign-in?return_to=${encodeURIComponent(`${origin}/play/town/`)}, or send the cookie seq_session=tester`,
