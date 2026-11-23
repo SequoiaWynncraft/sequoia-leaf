@@ -1,14 +1,14 @@
 /**
  * The panels: the side orders keep their places in the list, and each panel is kept by what it
  * prints (`shows`), so a value it shows that changes alone, such as the minutes before an order may
- * be swapped again or what the depot has taken in, changes what it is kept by.
+ * be swapped again, changes what it is kept by.
  */
 import { describe, expect, test } from "bun:test";
 
-import { create, deliver, item, play, power } from "@sequoia-leaf/factory";
+import { create, play, power } from "@sequoia-leaf/factory";
 
 import { S } from "../state.ts";
-import { depotPrint, ordersPrint, placed, plural, powerPrint } from "./panels.ts";
+import { ordersPrint, placed, plural, powerPrint } from "./panels.ts";
 
 const order = (id: number, planks: number): { id: number; full: boolean } => ({ id, full: planks >= 10 });
 const ids = (list: readonly { id: number }[]): number[] => list.map((s) => s.id);
@@ -62,14 +62,5 @@ describe("a panel is kept by what it prints", () => {
     y.demand = 402;
     S.world = y;
     expect([power(y).pace < 1, Math.round(power(y).pace * 100), powerPrint().pace]).toEqual([true, 100, 99]);
-  });
-
-  test("the depot's book: each thing taken in counts, as it is printed", () => {
-    const y = create({ seed: 5, tier: 1 });
-    S.world = y;
-    const before = JSON.stringify(depotPrint());
-    deliver(y, item("plank"), 1);
-    expect(depotPrint().rows.find(([k]) => k === item("plank"))?.[2]).toBe("1");
-    expect(JSON.stringify(depotPrint())).not.toBe(before);
   });
 });

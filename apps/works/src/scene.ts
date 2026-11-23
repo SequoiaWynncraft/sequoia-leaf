@@ -71,9 +71,10 @@ import { BEYOND, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { DEPOT as DEPOT_ART } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
+import { drawPlan, drawPlanMarks } from "./far.ts";
 import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
 import { armsAt, asIf, type Layout, layout, pylonTop } from "./layout.ts";
-import { builds, draws, type Group, type Mark, S } from "./state.ts";
+import { builds, draws, type Group, type Mark, S, seenFrom } from "./state.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
 export interface Moment {
@@ -1100,9 +1101,17 @@ export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
   const cx = (camX = Math.round(S.cam.x) + corner.x);
   const cy = (camY = Math.round(S.cam.y) + corner.y);
   const w = S.world;
+  const L: Layout = layout(w, S.rev);
+  if (S.view.z < 1) {
+    // Further out than a screen pixel for each of the yard's, the yard is its plan (`far.ts`).
+    const [dx, dy] = drawPlan(g, w, L, S.rev, corner.x, corner.y);
+    lap("plan");
+    drawPlanMarks(g, w, S.rev, dx, dy);
+    lap("marks");
+    return buf.c;
+  }
   if (w !== drawn) carry(w);
   const { land } = w;
-  const L: Layout = layout(w, S.rev);
   const gr = art.ground;
   used = 0;
   lit = 0;
@@ -1553,8 +1562,8 @@ const todo: (() => void)[] = [];
  */
 export function drawWords(ctx: Ctx, px: number, clear: number): void {
   const z = S.view.z;
-  const cx = Math.round(S.cam.x);
-  const cy = Math.round(S.cam.y);
+  const cx = seenFrom(S.cam.x);
+  const cy = seenFrom(S.cam.y);
   const wide = ctx.canvas.width;
   let key = String(lost);
   todo.length = 0;

@@ -1,17 +1,16 @@
 /**
- * The yard's books, each a panel: the orders, the projects, what the depot has taken in, and where
- * the power comes from and goes.
+ * The yard's books, each a panel: the orders, the projects, where the power comes from and goes, and
+ * the yard's sheet (`views.ts`: the map, the trouble and what the yard makes and needs, which is the
+ * depot's panel).
  */
 
 import {
   ALL_GOALS,
   ALL_ITEMS,
-  ALL_KINDS,
   BENCH,
   BOILER,
   counting,
   type Counts,
-  DEPOT_SHARE,
   DRAW,
   DRAWN,
   GATHERER,
@@ -25,19 +24,15 @@ import {
   isNode,
   type Item,
   item,
-  ITEM_INFO,
   type Kind,
   kind,
   KIND_INFO,
   litOf,
   MILL,
-  MILLI,
-  NODE_COUNT,
   NODES,
   plot,
   power,
   ready,
-  STARTING,
   STUDY,
   SWAP_EVERY,
   swapRefusal,
@@ -59,6 +54,7 @@ import { board } from "./board.ts";
 import { itemRef, machineRef, nodeRef, plotRef } from "./card.ts";
 import { feed, handLabel } from "./notes.ts";
 import { $, button, shows, unlockWords, wantWords, yardIcon } from "./parts.ts";
+import { sheet, sheetIcon, sheetTitle } from "./views.ts";
 
 export type PanelId = "orders" | "board" | "projects" | "depot" | "power";
 
@@ -69,12 +65,12 @@ export const panelHooks: {
   changed: () => void;
 } = { handOver: () => {}, changed: () => {} };
 
-const TITLES: Record<PanelId, string> = {
-  orders: "Orders",
-  board: "Top yards",
-  projects: "Projects",
-  depot: "The depot",
-  power: "Power",
+const TITLES: Record<PanelId, () => string> = {
+  orders: () => "Orders",
+  board: () => "Top yards",
+  projects: () => "Projects",
+  depot: sheetTitle,
+  power: () => "Power",
 };
 
 // ---------- what an order wants ----------
@@ -422,116 +418,6 @@ function projects(_art: Art, body: HTMLElement): () => void {
   };
 }
 
-// ---------- the depot's books ----------
-
-/**
- * What the depot's book prints, each number as it is printed: what the depot has taken in of each
- * thing and how many an hour come in now, what that is worth an hour (or that the yard is still
- * being measured), what has been earned in all, the nodes done and orders handed over, the pieces to
- * hand, and how long the yard works on while its owner is away.
- */
-export function depotPrint(): {
-  readonly rows: readonly (readonly [Item, string, string])[];
-  readonly measuring: boolean;
-  readonly hourly: string;
-  readonly alone: number;
-  readonly paid: string;
-  readonly sold: string;
-  readonly nodes: number;
-  readonly handed: number;
-  readonly spare: readonly string[];
-  readonly away: number;
-} {
-  const w = S.world;
-  const ticks = w.pace.ticks;
-  const perHour = (k: number): number => (ticks > 0 ? ((w.pace.made[k] ?? 0) / ticks) * 36_000 : 0);
-  const hourly = ALL_ITEMS.reduce((sum, k) => sum + perHour(k) * (ITEM_INFO[k]?.worth ?? 0), 0);
-  return {
-    rows: ALL_ITEMS.flatMap((k) =>
-      (w.depot[k] ?? 0) > 0 || perHour(k) > 0
-        ? [
-            [
-              k,
-              perHour(k) >= 1 ? `${Math.round(perHour(k)).toLocaleString("en-US")} an hour` : "",
-              Math.floor(w.depot[k] ?? 0).toLocaleString("en-US"),
-            ] as const,
-          ]
-        : [],
-    ),
-    measuring: w.pace.warm > 0 || ticks < 200,
-    hourly: Math.round(hourly).toLocaleString("en-US"),
-    alone: Math.max(0, Math.round(hourly * DEPOT_SHARE)),
-    paid: Math.floor(w.paid / MILLI).toLocaleString("en-US"),
-    sold: Math.floor(w.sold / MILLI).toLocaleString("en-US"),
-    nodes: w.done.filter(isNode).length,
-    handed: w.handed,
-    spare: ALL_KINDS.flatMap((k) => {
-      const left = w.spare[k] ?? 0;
-      const name = (KIND_INFO[k]?.name ?? "").toLowerCase();
-      return left > 0 && (STARTING[k] ?? 0) > 0 ? [`${left} ${name}${left === 1 ? "" : "s"}`] : [];
-    }),
-    away: (w.open.away * TICK_MS) / 3_600_000,
-  };
-}
-
-function depot(_art: Art, body: HTMLElement): () => void {
-  const draw = (p: ReturnType<typeof depotPrint>): void => {
-    const rows = p.rows.flatMap(([k, hour, total]) => [
-      thing(itemRef(k)),
-      el("span", "num k-gold", { text: hour }),
-      el("span", "num k-dim", { text: total }),
-    ]);
-    body.replaceChildren(
-      el("div", "k-label", { text: "How you are paid" }),
-      el("div", "k-d", { text: "A lesson or a commission pays when it is filled." }),
-      el("div", "k-d", { text: "A side order pays when you hand it over." }),
-      el("div", "k-d", {
-        text: `Every item the depot takes also pays ${DEPOT_SHARE * 100}% of its worth, whether or not an order asks for it.`,
-      }),
-      el("div", "k-d", {
-        text: `The yard keeps working for up to ${p.away} hours while you are away. What it earned is added to your Coins when you come back to the Works.`,
-      }),
-      el(
-        "div",
-        "k-card",
-        {},
-        el(
-          "div",
-          "k-grow",
-          {},
-          "Coming in now",
-          el("div", "k-d", {
-            text: p.measuring
-              ? "Still measuring: the yard changed a moment ago."
-              : `Worth ${p.hourly} Coins per hour when it fills orders. The depot alone pays ${p.alone} per hour.`,
-          }),
-        ),
-      ),
-      rows.length > 0
-        ? el("div", "rows", {}, ...rows)
-        : el("div", "k-dim", { text: "Nothing has reached the depot yet." }),
-      el(
-        "div",
-        "k-card",
-        {},
-        el(
-          "div",
-          "k-grow",
-          {},
-          "In total",
-          el("div", "k-d", {
-            text: `${p.paid} Coins from orders, ${p.sold} from the depot. ${p.nodes} of ${NODE_COUNT} lessons, projects and commissions, ${p.handed} side orders.`,
-          }),
-        ),
-      ),
-      ...(p.spare.length > 0
-        ? [el("div", "k-dim", { text: `Free pieces left to place: ${p.spare.join(", ")}.` })]
-        : []),
-    );
-  };
-  return shows(depotPrint, draw);
-}
-
 // ---------- power ----------
 
 /** A line of the power book: what, how many, and the power that comes to. */
@@ -648,14 +534,14 @@ const BUILD: Record<PanelId, (art: Art, body: HTMLElement) => () => void> = {
   orders,
   board,
   projects,
-  depot,
+  depot: (art, body) => sheet(art, body),
   power: powerBook,
 };
 const HEAD: Record<PanelId, () => Node> = {
   orders: () => yardIcon("orders"),
   board: () => yardIcon("board"),
   projects: () => yardIcon("projects"),
-  depot: () => yardIcon("depot"),
+  depot: () => sheetIcon(),
   power: () => yardIcon("bolt"),
 };
 
@@ -674,13 +560,15 @@ export function openPanel(id: PanelId): void {
   const p = $("panel");
   p.hidden = true;
   p.replaceChildren();
+  // Which panel it is, for the page's styles: the yard's sheet is a full sheet on a phone.
+  p.dataset.panel = id;
   const x = el(
     "button",
     "k-btn wood icon sm",
     { type: "button", "aria-label": "Close", onclick: closePanel },
     icon("close"),
   );
-  p.append(el("header", "k-head", {}, HEAD[id](), el("h2", "k-title", { text: TITLES[id] }), x));
+  p.append(el("header", "k-head", {}, HEAD[id](), el("h2", "k-title", { text: TITLES[id]() }), x));
   const body = el("div", "k-body k-scroll");
   p.append(body);
   refresh = BUILD[id](theArt, body);
