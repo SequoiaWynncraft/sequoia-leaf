@@ -408,10 +408,11 @@ react to `quest_completed`.
 
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
-plays as a **guest**: they have games, skins and presence like a member, but no
-Leaf, XP, quests or news, and the guild's events (and their stream) refuse them
-with 403 `members_only`. The mod's routes, `/v1/me` and those under it, still
-let in only members.
+plays as a **guest**: they have games, skins and presence like a member, and
+their Leaf (what they earned as a member, or the staff gave them) to spend on
+anything that is for everyone, but no XP, quests or news, and the guild's events
+(and their stream) refuse them with 403 `members_only`. The mod's routes,
+`/v1/me` and those under it, still let in only members.
 
 The Treasury's routes ask sequoia-backend's reward queue (`/api/reward-queue`) as
 the member, with their own session and the website's mod version. A guest gets
@@ -585,14 +586,17 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   its entry has `earned` 0.
 - A command may take Leaf (`Done.leaf`: a whole number above 0, what it was
   for, and a key unique among the game's spends for the player); no game pays
-  Leaf in. While `GAME_LEAF_SPENDING` is off, or for a guest, such a command is
-  refused with `leaf_closed`; when its spends come to more than the ledger's
-  balance, with `not_enough_leaf`. Otherwise each spend is posted to the ledger
+  Leaf in. Each spend says who may make it (`LeafSpend.for`): `everyone`, or
+  `members` only. While `GAME_LEAF_SPENDING` is off, such a command is refused
+  with `leaf_closed`; for a guest when one of its spends is for `members`, with
+  `members_only`; when its spends come to more than the ledger's balance, with
+  `not_enough_leaf`. Otherwise each spend is posted to the ledger
   in the batch's transaction, as a `spend` on the `shop` sink keyed
   `play:<game>:<player>:<key>` with what it was for as its memo, and logged as
   `leaf_spent` for the staff's report. A key the ledger has seen is not taken
   again, and the command stands. A spend earns no XP and uses none of the
-  Coins' room. The raid's `buyLook` is the one command that takes Leaf.
+  Coins' room. The raid's `buyLook` and the pulls' `pull` take Leaf, both for
+  everyone.
 - A command may ask Leaf to keep pieces of the player's apart from their
   state (`Done.keep`: a slot's name and its data), for another player's game
   to be given later. Each is kept in the batch's transaction if the command is

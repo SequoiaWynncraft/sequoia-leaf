@@ -135,12 +135,12 @@ export const TESTER = {
   coins: 300,
 };
 
-/** A guest, as `/v1/game/me` answers for somebody signed in who is not in the guild. */
+/** A guest, as `/v1/game/me` answers for somebody signed in who is not in the guild: with Leaf they earned as a member. */
 export const GUEST = {
   player: { id: "10000000-0000-0000-0000-00000000000b", username: "Wanderer" },
   rank: null,
   guest: true,
-  leaf: 0,
+  leaf: 1500,
   xp: 0,
   level: { number: 1, xp_into_level: 0, xp_for_next_level: 1000 },
   event_cursor: 0,

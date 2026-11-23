@@ -178,17 +178,21 @@ describe("a pull", () => {
     expect(PULLS.command({ ...pull("grove"), n: 5 })).toBeNull();
   });
 
-  it("is not for a guest", () => {
+  it("is a guest's as much as a member's: free pulls, exchanges, and pulls for Leaf that anyone may spend on", () => {
     const s = { ...fresh(), seeds: 500 };
-    expect(refused(s, pull("grove", 1, "free"), ctx(T0, true))).toBe("members_only");
-    expect(refused(s, exchange("figure:badger"), ctx(T0, true))).toBe("members_only");
+    const guest = ctx(T0, true);
+    expect(refused(s, pull("grove", 1, "free"), guest)).toBeNull();
+    expect(refused(s, exchange("figure:badger"), guest)).toBeNull();
+    expect(done(s, pull("grove"), guest).leaf).toEqual([
+      { amount: 10_000, reason: "Pulls: 10 in grove", key: "pull:0", for: "everyone" },
+    ]);
   });
 
   it("takes 1,000 Leaf, ten at once as one spend keyed by the pulls before them", () => {
     const ten = done(fresh(), pull("grove"));
-    expect(ten.leaf).toEqual([{ amount: 10_000, reason: "Pulls: 10 in grove", key: "pull:0" }]);
+    expect(ten.leaf).toEqual([{ amount: 10_000, reason: "Pulls: 10 in grove", key: "pull:0", for: "everyone" }]);
     expect(done(ten.state, pull("banner-1", 1)).leaf).toEqual([
-      { amount: 1000, reason: "Pulls: 1 in banner-1", key: "pull:10" },
+      { amount: 1000, reason: "Pulls: 1 in banner-1", key: "pull:10", for: "everyone" },
     ]);
   });
 
@@ -266,7 +270,6 @@ describe("what a member has", () => {
     expect(one.keep).toEqual([{ slot: "have", data: one.state.have }]);
     const bought = done({ ...one.state, seeds: 60, have: {} }, exchange("figure:badger"));
     expect(bought.keep).toEqual([{ slot: "have", data: { "figure:badger": 1 } }]);
-    expect(PULLS.apply(fresh(), pull("grove"), ctx(T0, true))).toEqual({ refused: "members_only" });
     expect(PULLS.apply(bought.state, exchange("figure:badger"), ctx())).toEqual({ refused: "owned" });
   });
 });

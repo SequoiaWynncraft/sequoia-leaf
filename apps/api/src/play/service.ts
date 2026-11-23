@@ -7,6 +7,7 @@ import {
   type Leaf,
   LOGGED,
   type Logged,
+  mayBuy,
   MOST_COMMANDS,
   type PlayerId,
 } from "@sequoia-leaf/core";
@@ -251,8 +252,9 @@ function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] |
  * one that pays is done whatever the player has earned, and paid only as far as they may still earn
  * (`Coins.room`, which each game is told, so that it says what was really paid), but for a change
  * that is `free`, which is paid whole and uses none of it. A command may take Leaf (`Done.leaf`), never
- * pay it in: it is refused `leaf_closed` while `GAME_LEAF_SPENDING` is off or the player is a guest,
- * and `not_enough_leaf` when its spends come to more than the ledger's balance; otherwise each is
+ * pay it in: it is refused `leaf_closed` while `GAME_LEAF_SPENDING` is off, `members_only` when the
+ * player is a guest and one of its spends is for members (`LeafSpend.for`), and `not_enough_leaf`
+ * when its spends come to more than the ledger's balance; otherwise each is
  * posted to the ledger as a spend on the `shop` sink, keyed `play:<game>:<player>:<key>`, and logged
  * (`leaf_spent`). A key the ledger has seen is not taken again, and the command stands. Leaf earns no
  * XP and uses none of the Coins' room. A command done may leave pieces of the player's for Leaf to
@@ -460,13 +462,14 @@ export class Play extends Context.Service<
           const kept: { readonly slot: string; readonly data: string }[] = [];
           const dropped = `A ${played.id} command left a piece Leaf does not keep`;
           /**
-           * A command the rules did, refused `leaf_closed`, `not_enough_leaf` (its spends whose keys the
+           * A command the rules did, refused `leaf_closed`, `members_only`, `not_enough_leaf` (its spends whose keys the
            * ledger and the batch have not seen, past the balance less what the batch took) or
            * `not_enough_coins` (`payable`), or kept. A spend not a whole number of Leaf above 0 is a defect.
            */
           const weigh = (id: string, did: Exclude<Attempt, { readonly refused: string }>) =>
             Effect.gen(function* () {
-              if (did.leaf.length > 0 && (!gameLeafSpending || playing.guest)) return { id, refused: "leaf_closed" };
+              if (did.leaf.length > 0 && !gameLeafSpending) return { id, refused: "leaf_closed" };
+              if (!did.leaf.every((spend) => mayBuy(spend.for, playing.guest))) return { id, refused: "members_only" };
               const spends: Taken[] = [];
               for (const { amount, reason, key } of did.leaf) {
                 if (!isLeaf(amount)) return yield* Effect.die(new Error(`A ${played.id} command took ${amount} Leaf`));

@@ -51,6 +51,16 @@ export interface CoinChange {
   readonly free?: true;
 }
 
+/**
+ * Who may spend Leaf on something: anyone signed in, guests too, or only the guild's members (and
+ * website admins). Every offer says which, so that nothing is members-only, or open to guests, by
+ * being left out.
+ */
+export type LeafFor = "everyone" | "members";
+
+/** Whether a player, a guest or not, may spend Leaf on something that is `forWhom`. */
+export const mayBuy = (forWhom: LeafFor, guest: boolean): boolean => forWhom === "everyone" || !guest;
+
 /** Leaf a command takes. No game ever pays Leaf in. */
 export interface LeafSpend {
   /** A whole number of Leaf, above 0. */
@@ -59,6 +69,8 @@ export interface LeafSpend {
   readonly reason: string;
   /** Unique among the game's spends for this player, such as `look:plum`. */
   readonly key: string;
+  /** Who may spend it: Leaf refuses a guest `members_only` for a spend that is `members`. */
+  readonly for: LeafFor;
 }
 
 /** Something worth remembering that a player did, for the `activity` table. */

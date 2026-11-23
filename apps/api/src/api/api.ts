@@ -78,7 +78,8 @@ export class CurrentIdentity extends Context.Service<CurrentIdentity, Identity>(
 
 /**
  * Whether someone is in the game as a guest: signed in, but neither a member of the guild now nor a
- * website admin. Guests play, but have no Leaf, quests or news of the guild's.
+ * website admin. Guests play, and spend their Leaf on what is for everyone, but have no XP, quests
+ * or news of the guild's.
  */
 export const isGuest = (identity: Identity): boolean => identity.guildRank === null && !identity.admin;
 

@@ -5,7 +5,7 @@
  * for a Leaf button that may not take Leaf.
  */
 import { el, icon, type IconName, replay } from "./dom.ts";
-import { balance, type Currency, leafShown, leafShut } from "./purse.ts";
+import { balance, type Currency, leafShut } from "./purse.ts";
 import { sfx } from "./sound.ts";
 import { tip, tipAt } from "./tip.ts";
 import type { Pt } from "./util.ts";
@@ -31,11 +31,11 @@ const centre = (node: Element): Pt => {
 
 /**
  * Fills `host` (a `k-plaque`, usually) with the two counters, and keeps them in step with the purse.
- * A guest's purse has only the Coins. `coins` is the number of Coins to show, when a page counts
+ * `coins` is the number of Coins to show, when a page counts
  * more than the purse holds (the Works, with its till).
  */
 export function purseBar(host: HTMLElement, coins: () => number = () => balance().coins): PurseBar {
-  const kinds = leafShown() ? (["leaf", "coins"] as const) : (["coins"] as const);
+  const kinds = ["leaf", "coins"] as const;
   const held = (kind: Currency): number => (kind === "coins" ? coins() : balance().leaf);
   const parts = kinds.map((kind) => {
     const art = icon(kind === "leaf" ? "leaf" : "coin");

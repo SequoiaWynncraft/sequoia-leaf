@@ -176,12 +176,12 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     commands: [{ id: "c-4", do: "win" }],
   });
   await call("GET /v1/game/play/{game}, not a game", "GET", "/v1/game/play/chess");
-  // A look for the table bought with Leaf, the same command sent again, and a guest, who has no Leaf.
+  // A look for the table bought with Leaf, the same command sent again, and a guest with too little Leaf for it.
   const buyLook = { player: alice, commands: [{ id: "c-5", do: "buyLook", kind: "cloth", look: "plum" }] };
   await call("POST /v1/game/play/{game}, a look bought with Leaf", "POST", "/v1/game/play/raid", buyLook);
   await call("POST /v1/game/play/{game}, a look bought, sent again", "POST", "/v1/game/play/raid", buyLook);
   await call(
-    "POST /v1/game/play/{game}, Leaf a guest cannot spend",
+    "POST /v1/game/play/{game}, a guest with too little Leaf",
     "POST",
     "/v1/game/play/raid",
     { player: visitor, commands: [{ id: "v-1", do: "buyLook", kind: "cloth", look: "plum" }] },

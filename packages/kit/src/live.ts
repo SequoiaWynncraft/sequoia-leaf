@@ -5,8 +5,8 @@
  * answer, or anything but that answer, is no server. With a server it asks who the member is:
  *
  * - known: the game is live, as them, and the purse keeps the ledger's Leaf and Leaf's Coins;
- * - known as a guest (signed in, not in the guild): the game is live, as them, with no Leaf but
- *   Leaf's Coins, and the page asks nothing that is only for members (`/v1/me...`, the guild's news);
+ * - known as a guest (signed in, not in the guild): the game is live, as them, with the ledger's
+ *   Leaf and Leaf's Coins, and the page asks nothing that is only for members (`/v1/me...`, the guild's news);
  * - signed out: the whole window goes to the guild's sign-in and comes back, once; refused again
  *   within a minute, or in a frame, it says so on a card instead;
  * - not a member (a server that lets in only members), or the server is having trouble: a card says so.
@@ -38,7 +38,7 @@ export interface Member {
   name: string;
   /** Their rank in the guild as the guild writes it, or null for somebody let in without one. */
   rank: string | null;
-  /** Whether they play as a guest: signed in, but not in the guild. A guest has no Leaf, quests or guild news. */
+  /** Whether they play as a guest: signed in, but not in the guild. A guest has their Leaf, but no quests or guild news. */
   guest: boolean;
   leaf: number;
   level: { number: number; into: number; next: number };
@@ -102,7 +102,7 @@ async function look(): Promise<Where> {
       // Nothing was remembered.
     }
     if (member.guest) asGuest();
-    else fromLedger(member.leaf);
+    fromLedger(member.leaf);
     leafSpending(isRecord(hello.body) && hello.body.leaf_spending === true);
     // From here on the purse's Coins are Leaf's ledger's, guest or member.
     fromLeaf(readCoins(me.body) ?? 0);
@@ -305,15 +305,15 @@ export function letGoCard(why: LetGo, signIn: string, again: () => void): () => 
 // ---------- the member's own news ----------
 
 /**
- * Asks Leaf for the member again, and the purse takes the Leaf the ledger gives them: after the
- * member's news, or a command that took Leaf. The member as Leaf has them, or null for no answer,
- * a guest, or the made-up guild (nothing is asked).
+ * Asks Leaf for the player again, and the purse takes the Leaf the ledger gives them: after the
+ * member's news, or a command that took Leaf. The player as Leaf has them, or null for no answer
+ * or the made-up guild (nothing is asked).
  */
 export async function refreshLeaf(): Promise<Member | null> {
-  if (!member() || isGuest()) return null;
+  if (!member()) return null;
   const a = await ask("/v1/game/me");
   const m = a.status === 200 ? readMember(a.body) : null;
-  if (!m || m.guest) return null;
+  if (!m) return null;
   fromLedger(m.leaf);
   return m;
 }
@@ -363,7 +363,7 @@ export function followLeaf(
 export function keepLeaf(): () => void {
   if (inTown()) {
     return fromTown((msg) => {
-      if (msg.town === "leaf" && member() && !isGuest()) fromLedger(msg.leaf);
+      if (msg.town === "leaf" && member()) fromLedger(msg.leaf);
       else if (msg.town === "coins" && member()) heardCoins(msg.coins);
     });
   }
