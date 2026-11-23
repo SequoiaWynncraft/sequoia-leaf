@@ -621,21 +621,15 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   them ("Someone" for one Leaf has none for); the outer `you` is the caller's
   own `{ "place", "score", "also" }`, or null before they score. Empty for a
   game with no board.
-- Each call a player makes to a game (an opening, a batch not refused whole,
-  a visit, for the visitor) adds the time since their last call to that game
-  to how long they have played it, when that is at most 3 minutes
-  (`IDLE_MS`; an open page calls at least every 75 seconds); a longer gap
-  adds nothing. A call with `?afk=1` says its player is away from the keys
-  (the page hidden, or nothing done on it for 5 minutes): the time after it,
-  up to the next call, is time AFK instead. Leaf's own tending (below) is not a
-  call. It is written as the call arrives, with that moment, before the call
-  waits for anything, and by Leaf itself, so that the caller going away cannot
-  stop it: one that waits in a line (below) counts from when it came.
+- A batch with a command that is not a chore (`Game.chore`: one the page
+  sends by itself, the town's `here` and the Works' `collect`) is the player
+  doing something, done or refused, for their time (below).
   `GET /v1/game/people/{player}` answers `{ "id", "name", "games", "played",
-"afk" }`: for each game they stand in or have had open a second, `played`
-  and `afk` in whole seconds, `spent` (the Coins its commands have taken from
-  them, from the Coins ledger) and, with a standing, its `place`, `score` and
-  `also`; and `played` and `afk` for all games together.
+"afk" }`: for each game they stand in or have been in a second, `played`
+  and `afk` in whole seconds (from their visits, below), `spent` (the Coins
+  its commands have taken from them, from the Coins ledger) and, with a
+  standing, its `place`, `score` and `also`; and `played` and `afk` for all
+  games together.
 
 Tables (migration 17): `play_state` (a player's state in a game, with its
 `rev`; 0 is a state nothing has been done to), `play_commands` (each command's
@@ -654,7 +648,9 @@ written (a state from before took it from where it stands, or else from the
 player as last seen), which whatever Leaf writes of it while they are away says
 too. Migration 26 made `play_kept` (a piece in each `player_id`, `game` and
 `slot`, its `data` as JSON) and gave each member who had pulled their `have`,
-from their stored pulls.
+from their stored pulls. Migration 27 gave `played` time AFK, as pages said
+it; migration 28 put `time_in` in its place, counted from visits (below), and
+removed it.
 
 **Coins** are a ledger like Leaf: a balance per player, changed only by an
 entry, each keyed by the fact it records (`<game>:<player>:<key>` for a
@@ -1044,6 +1040,18 @@ rules are `packages/core/src/visits.ts`; the store is `apps/api/src/activity`.
 - **Players** (`players_seen`): one row a player: first and last seen, all
   their seconds, their sessions, and their name and whether a guest as last
   known, written each time Leaf hears of them.
+- **Time in each game** (`time_in`, migration 28, for a person's card): each
+  stretch of a visit, from when it was last heard of to when it is heard of
+  again or closes, goes to its place's game (`GAME_AT`: `town` and `camp` are
+  the town's, `table` the raid's) as time played, or as time AFK when the
+  player had done nothing for 5 minutes before it began (`playing`). Doing
+  something is a batch with a command that is not a chore, or in a live room
+  a move that goes somewhere (not a first move, nor a turn on the spot) or an
+  act; Leaf hears it as it happens (`Visits.acted`, from a room at most every
+  10 seconds) and writes it on the open visit (`acted_at`) as the visit is
+  heard of, so the Leaf taking over in a deploy goes on from it. Kept for good.
+  It began from what Leaf had: the time pages called each game since
+  migration 23 as played, and the rest of each player's visits since as AFK.
 - **Things done** (`activity`): what each game's commands log through the play
   service (`Done.log`), as JSON, by the names in `LOGGED` in core. A raid run
   is `raid_started` (`trail`), a `raid_room` for each room fought (`room`,

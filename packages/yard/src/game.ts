@@ -444,6 +444,8 @@ export const WORKS: Game<World, WorksCommand, WorksView, WorksNote, WorksAnswer>
   decode: (text) => load(text),
   encode: save,
   command: readCommand,
+  // The page collects once a minute while the yard is watched, whether or not anybody is.
+  chore: (c) => c.do === "collect",
   // The Coins the yard has ever earned, from the depot and from orders, and how many story orders are done.
   standing: (w) => ({ score: Math.floor(w.sold + w.paid), also: { story: w.story } }),
   // A model of each capstone the depot has taken in, for the member's camp.

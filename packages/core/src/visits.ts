@@ -5,6 +5,7 @@
  * rows and writes what these decide.
  */
 
+import type { GameId } from "./play.ts";
 import { DAY_MS, utcDay } from "./quests.ts";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -29,6 +30,8 @@ export const readDevice = (named: unknown): Device | null => DEVICES.find((d) =>
 export interface VisitRules {
   /** An open visit not heard of for this long is closed at the last time it was. */
   readonly silentMs: number;
+  /** A player who has done nothing Leaf hears of for this long is AFK: their time is time AFK. */
+  readonly afkMs: number;
   /** Visits by one player less than this apart are one session. */
   readonly sessionGapMs: number;
   /** Visits and sessions are kept this long after they end. */
@@ -37,6 +40,7 @@ export interface VisitRules {
 
 export const VISIT_RULES: VisitRules = {
   silentMs: 90_000,
+  afkMs: 5 * 60_000,
   sessionGapMs: 5 * 60_000,
   keptMs: 180 * DAY_MS,
 };
@@ -51,6 +55,18 @@ export const visitSeconds = (enteredAt: number, leftAt: number): number =>
  */
 export const joinsSession = (endedAt: number | null, at: number, rules: VisitRules = VISIT_RULES): boolean =>
   endedAt === null || at - endedAt < rules.sessionGapMs;
+
+/**
+ * Whether the time from `from` on is time played rather than time AFK, for a player who last did
+ * something at `actedAt` (null for not since Leaf began hearing it): it is when that was less than
+ * `afkMs` before. What counts as doing something is a command that is not a chore (`Game.chore`),
+ * and in a live room a move that goes somewhere or an act.
+ */
+export const playing = (from: number, actedAt: number | null, rules: VisitRules = VISIT_RULES): boolean =>
+  actedAt !== null && from - actedAt < rules.afkMs;
+
+/** The game each place is in, as a person's card counts time: the town and the camps are the town's. */
+export const GAME_AT: Readonly<Record<string, GameId>> = { town: "town", camp: "town", works: "works", table: "raid" };
 
 /** Whether an open visit last heard of at `heardAt` has gone silent by `now`, so is to be closed at `heardAt`. */
 export const silentSince = (heardAt: number, now: number, rules: VisitRules = VISIT_RULES): boolean =>
