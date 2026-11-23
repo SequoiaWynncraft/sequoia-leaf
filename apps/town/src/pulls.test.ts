@@ -11,6 +11,7 @@ import {
   groveState,
   nextFree,
   offers,
+  onward,
   owedLine,
   past,
   percent,
@@ -24,6 +25,8 @@ import {
   seedsOf,
   showing,
   takesCommand,
+  ticked,
+  timeline,
 } from "./pulls.ts";
 
 const banner = BANNERS[0] ?? { id: "banner-1", from: 0, until: 0 };
@@ -199,6 +202,51 @@ test("a pull or an exchange is taken only at the banner and at a ceremony's end"
   ];
   expect(states).toEqual(["arriving", "banner", "sent", "ceremony", "end", "sent", "leaving"]);
   expect(states.filter(takesCommand)).toEqual(["banner", "end"]);
+});
+
+test("a ceremony's clock stops at each mid-tier and top prize among several, once its reveal is done, and at no filler", () => {
+  const line = timeline(["filler", "mid", "filler", "top"], 2.6);
+  expect(line.starts.map((s) => Number(s.toFixed(3)))).toEqual([2.6, 3.9, 5.8, 7.1]);
+  expect(line.end).toBeCloseTo(10.5, 9);
+  // The last frame of the second and the fourth reveals, and nowhere else.
+  expect(line.waits.map((w) => Number((w + 1 / 60).toFixed(3)))).toEqual([5.8, 10.5]);
+
+  /** Where the clock stands after `seconds` of frames from `t`, and how long it stood still. */
+  const run = (t: number, seconds: number): [number, number] => {
+    let stood = 0;
+    for (let n = 0; n < seconds * 30; n++) {
+      const to = ticked(line, t, 1 / 30);
+      stood += t + 1 / 30 - to;
+      t = to;
+    }
+    return [t, stood];
+  };
+  const [first = 0, last = 0] = line.waits;
+  // The filler goes on by itself; the mid-tier prize is not left, however long nobody presses.
+  const [t, stood] = run(0, 60);
+  expect(t).toBe(first);
+  expect(stood).toBeCloseTo(60 - first, 6);
+  // Going on is to the next prize, which goes on by itself to the top prize, and waits there.
+  expect(onward(line, first)).toBe(line.starts[2] ?? 0);
+  expect(run(onward(line, first), 60)[0]).toBe(last);
+  // Going on from the last wait is the end, and the end's clock runs.
+  expect(onward(line, last)).toBe(line.end);
+  expect(run(line.end, 2)[0]).toBeCloseTo(line.end + 2, 6);
+  // Skip pressed goes on from wherever the clock is, past the tell first; held, it puts the clock at the end, past every wait.
+  expect([onward(line, 0), onward(line, 2.6), onward(line, 4)]).toEqual(line.starts.slice(0, 3));
+  expect(line.waits.every((w) => w < line.end)).toBe(true);
+});
+
+test("one prize alone stays on show as it did, and ten fillers never wait", () => {
+  expect(timeline(["top"], 2.6).waits).toEqual([]);
+  expect(timeline(["mid"], 0).waits).toEqual([]);
+  expect(
+    timeline(
+      Array.from({ length: 10 }, () => "filler" as const),
+      2.6,
+    ).waits,
+  ).toEqual([]);
+  expect(ticked(timeline(["top"], 2.6), 5.99, 0.05)).toBeCloseTo(6.04, 9);
 });
 
 const redraw = (): void => undefined;

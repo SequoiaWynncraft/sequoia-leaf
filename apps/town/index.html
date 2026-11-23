@@ -518,6 +518,7 @@
       }
       .grove-banner > *,
       .grove-skip,
+      .grove-go,
       .grove-end,
       .grove-name,
       .grove-said,
@@ -610,14 +611,28 @@
         gap: calc(var(--u) * 3);
         padding-block: 0;
       }
+      /* The end's buttons; and Next where a ceremony waits, in their place, clear of the row of squares under it. */
+      .grove-go,
       .grove-end {
-        display: flex;
-        align-items: center;
-        gap: calc(var(--u) * 4);
         left: 50%;
         translate: -50% 0;
         bottom: max(var(--rim), var(--bottom));
         will-change: transform;
+      }
+      .grove-go {
+        margin-bottom: calc(var(--g) * 14);
+      }
+      /* On an upright screen a prize's tags come down to the squares: Next stands at their right. */
+      .tall .grove-go {
+        left: auto;
+        right: var(--side);
+        translate: none;
+        margin-bottom: 0;
+      }
+      .grove-end {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 4);
       }
       /* A prize's name in the end picture, under it or over it, with its rarity's colour before it. */
       .grove-name {
@@ -643,6 +658,7 @@
         .grove-name {
           font: var(--f-small);
         }
+        #grove .grove-go,
         #grove .grove-end .k-btn {
           min-height: calc(var(--u) * 16);
         }
