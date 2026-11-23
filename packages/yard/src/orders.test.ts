@@ -10,11 +10,13 @@ import { put, steps } from "./fixtures.ts";
 import {
   askable,
   claim,
+  counts,
   deliver,
   DEPOT_SHARE,
   fresh,
   isFilled,
   makeable,
+  ORDER_WAITS,
   reask,
   storyOrder,
   swap,
@@ -206,8 +208,9 @@ describe("the board", () => {
     }
     expect(doubled).toBeLessThan(30);
   });
-  test("each thing goes to one order only: the story's first, then the board's from the top", () => {
+  test("each thing goes to one order only: the story's first, then the board's in the order hung", () => {
     const w = create({ seed: 3, story: 4 });
+    steps(w, ORDER_WAITS);
     // The story wants engines; make the board want them too.
     const order = w.board[0];
     if (!order) throw new Error("no board");
@@ -228,6 +231,7 @@ describe("the board", () => {
   });
   test("a filled order waits to be handed over, however long that takes; handing it over pays and hangs a fresh one", () => {
     const w = create({ seed: 5, story: 6 });
+    steps(w, ORDER_WAITS);
     collect(w);
     const order = w.board[1];
     if (!order) throw new Error("no board");
@@ -242,23 +246,48 @@ describe("the board", () => {
     expect(claim(w, order.id)).toBe(order.pay);
     expect(w.till).toBe(before + order.pay);
     expect(w.done).toBe(1);
-    expect(w.board[1]?.id).toBe(3);
+    // The fresh one goes up at the end, and counts once it has hung for a while.
+    expect(w.board.map((o) => o.id)).toEqual([0, 2, 3]);
+    const next = w.board[2];
+    if (!next) throw new Error("none hung");
+    expect([counts(next, w.tick + ORDER_WAITS - 1), counts(next, w.tick + ORDER_WAITS)]).toEqual([false, true]);
     expect(drain(w)).toEqual([{ kind: "standing", id: order.id, title: order.title, pay: order.pay }]);
     expect(claim(w, order.id)).toBeNull();
-    // A yard with no seed (the page's copy) leaves the place empty, for Leaf to hang the next.
+    // A yard with no seed (the page's copy) hangs none: Leaf's comes with its answer.
     const copy = create({ seed: 5, story: 6 });
+    steps(copy, ORDER_WAITS);
     const first = copy.board[0];
     copy.seed = null;
     for (const item of ITEMS) deliver(copy, item, first?.want[item] ?? 0);
     expect(claim(copy, first?.id ?? -1)).toBe(first?.pay ?? -1);
     expect(copy.board.map((o) => o.id)).toEqual([1, 2]);
   });
+  test("an order Leaf hangs counts once it has hung ORDER_WAITS ticks; one kept from before orders waited counts at once", () => {
+    // No story order left, so whatever comes in goes to the board.
+    const w = create({ seed: 5, story: STORY.length });
+    const [order] = w.board;
+    const item = ITEMS.find((k) => (order?.want[k] ?? 0) > 0);
+    if (!order || !item) throw new Error("no board");
+    const raw: unknown = JSON.parse(save(w));
+    if (typeof raw !== "object" || raw === null || !("board" in raw) || !Array.isArray(raw.board))
+      throw new Error("no board kept");
+    for (const o of raw.board) Reflect.deleteProperty(o, "starts");
+    const before = load(JSON.stringify(raw));
+    deliver(w, item, 1);
+    expect(w.board.map((o) => o.filled)).toEqual([{}, {}, {}]);
+    steps(w, ORDER_WAITS);
+    deliver(w, item, 1);
+    expect(order.filled).toEqual({ [item]: 1 });
+    if (!before) throw new Error("not a yard");
+    deliver(before, item, 1);
+    expect(before.board[0]?.filled).toEqual({ [item]: 1 });
+  });
   test("one order may be swapped for a fresh one, free, every ten minutes of the yard's time", () => {
     const w = create({ seed: 5, story: 6 });
     const was = w.board.map((o) => o.id);
     expect(swapRefusal(w, 0)).toBeNull();
     expect(swap(w, 0)).toBe(true);
-    expect(w.board.map((o) => o.id)).toEqual([3, was[1] ?? -1, was[2] ?? -1]);
+    expect(w.board.map((o) => o.id)).toEqual([was[1] ?? -1, was[2] ?? -1, 3]);
     expect(swapRefusal(w, 1)).toBe("You can replace an order again in 10 minutes");
     expect(swap(w, 1)).toBe(false);
     steps(w, SWAP_EVERY - 600);
@@ -267,18 +296,18 @@ describe("the board", () => {
     expect(swap(w, 1)).toBe(true);
     expect(swapRefusal(w, 0)).toBe("There is no such order");
     // A filled one is handed over, not swapped away.
-    const order = w.board[2];
+    const order = w.board[0];
     for (const item of ITEMS) deliver(w, item, order?.want[item] ?? 0);
     steps(w, SWAP_EVERY);
     expect(swapRefusal(w, order?.id ?? -1)).toBe("That order is filled. Hand it over instead");
   });
-  test("nothing on the board has a clock on it", () => {
+  test("nothing on the board runs out: an order stays as it was hung, however long the yard runs", () => {
     const w = create({ seed: 5, story: 6 });
     const board = structuredClone(w.board);
     steps(w, 300_000);
     expect(w.board).toEqual(board);
     for (const o of w.board)
-      expect(Object.keys(o).toSorted()).toEqual(["filled", "from", "id", "line", "pay", "title", "want"]);
+      expect(Object.keys(o).toSorted()).toEqual(["filled", "from", "id", "line", "pay", "starts", "title", "want"]);
   });
 });
 
@@ -311,6 +340,7 @@ describe("who asks the Works for things", () => {
       want: { glass: 40 },
       pay: 90,
       filled: { glass: 3 },
+      starts: 0,
     };
     const again = reask(old);
     expect(allowed(again.from)).toBe(true);

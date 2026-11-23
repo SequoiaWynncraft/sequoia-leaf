@@ -26,12 +26,12 @@ import { isPlotId, type PlotId, PLOTS } from "./content/plots.ts";
 import { STORY } from "./content/story.ts";
 import { create } from "./create.ts";
 import { type Dir, isDir } from "./grid.ts";
-import { claim, swap } from "./orders.ts";
+import { claim, counts, swap } from "./orders.ts";
 import { clear, deleteBlueprint, move, type Piece, saveBlueprint, stand } from "./pieces.ts";
 import { postcard } from "./postcard.ts";
-import { load, readPiece, save } from "./save.ts";
+import { load, readPiece, readStanding, save } from "./save.ts";
 import { step } from "./step.ts";
-import { collect, drain, type News, TINTS, type World } from "./world.ts";
+import { collect, drain, type News, type Standing, TINTS, type World } from "./world.ts";
 
 /** How far behind Leaf's clock `advance` leaves a yard, in ticks, so that a command made a moment ago is never in its past; and how far ahead a command may be done. */
 export const LEAD = 30;
@@ -84,14 +84,14 @@ export interface WorksView {
 
 /**
  * What Leaf answers a batch with, in place of the yard the page already holds: Leaf's tick now; the
- * yard's tick after the batch, and its check there (`check.ts`); and how many orders the board has
- * ever hung (`serial`), which only Leaf, holding the seed, moves on.
+ * yard's tick after the batch, and its check there (`check.ts`); and the orders on its board that do
+ * not count yet (`hung`), which only Leaf, holding the seed, can draw.
  */
 export interface WorksAnswer {
   readonly clock: number;
   readonly tick: number;
   readonly check: number;
-  readonly serial: number;
+  readonly hung: readonly Standing[];
 }
 
 /** What a command did, in the yard's own news: an order handed over, and any story order finished on the way to it. */
@@ -302,6 +302,8 @@ const whole = (v: unknown, most: number): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= most;
 /** The most legs a run may have, and the most tiles a command may name: every tile of the land. */
 const TILES = 48 * 36;
+/** The most orders an answer may say were hung: more than a board holds. */
+const HUNG_MOST = 8;
 
 /** A list of at most `most` pieces off the wire, or null. */
 function piecesOf(v: unknown, most: number): Piece[] | null {
@@ -389,8 +391,10 @@ export function readView(v: unknown): WorksView | null {
 
 /** What Leaf answered a batch with, read back; null for anything these rules could not have made. */
 export function readAnswer(v: unknown): WorksAnswer | null {
-  if (!isRecord(v) || !whole(v.clock, 1e12) || !whole(v.tick, 1e12) || !whole(v.serial, 1e9)) return null;
-  return whole(v.check, 0xffffffff) ? { clock: v.clock, tick: v.tick, check: v.check, serial: v.serial } : null;
+  if (!isRecord(v) || !whole(v.clock, 1e12) || !whole(v.tick, 1e12) || !whole(v.check, 0xffffffff)) return null;
+  if (!Array.isArray(v.hung) || v.hung.length > HUNG_MOST) return null;
+  const hung = v.hung.map(readStanding).filter((o) => o !== null);
+  return hung.length === v.hung.length ? { clock: v.clock, tick: v.tick, check: v.check, hung } : null;
 }
 
 /** One piece of the yard's news, read back. */
@@ -429,7 +433,12 @@ export const WORKS: Game<World, WorksCommand, WorksView, WorksNote, WorksAnswer>
   // A tick further ahead than `LEAD` past Leaf's clock is done at `LEAD`.
   apply: (w, c, ctx) => play(w, { ...c, tick: tickOf(w, c, ctx.now) }),
   view,
-  answer: (w, ctx) => ({ clock: clockOf(w, ctx.now), tick: w.tick, check: check(w), serial: w.serial }),
+  answer: (w, ctx) => ({
+    clock: clockOf(w, ctx.now),
+    tick: w.tick,
+    check: check(w),
+    hung: w.board.filter((o) => !counts(o, w.tick)),
+  }),
   // A visitor is given what the owner is, but for the blueprints.
   visit: (w, ctx) => view({ ...w, blueprints: [] }, ctx),
   decode: (text) => load(text),

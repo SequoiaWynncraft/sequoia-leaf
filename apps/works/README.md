@@ -30,15 +30,18 @@ cards, as the battler does. It keeps nothing of the game in the browser; only `w
 Everything the member does is done to the copy at once with the shared rules (`yard.ts`, `doNow`)
 and sent with the tick the copy stood at; a command the rules refuse is said so and not sent. With
 each command sent the page keeps the copy's tick and check just after it. Leaf answers a batch with
-its clock and its yard's tick, check and orders hung after it, not the yard (the yard's README).
-When Leaf did what the copy did, at the same tick, and hung no order, the checks are compared;
-alike, the copy is left as it is. Otherwise (checks that differ, a command Leaf turned down or did at
-another tick, an order only Leaf could hang, a tab come back) the page takes Leaf's yard: it sends
-nothing and does nothing to the copy, keeping what the member does meanwhile; once every batch
-already sent has been answered it asks for Leaf's yard, and again every two seconds until it comes;
-the copy is then Leaf's yard, and what the member did is done, at the yard's tick then. Should that
-take more than a second, the line over the dock says the yard is catching up with the guild's
-server. Checks that differ are a fault in the rules or the check: the page counts them
+its clock, its yard's tick and check after it, and the orders it hung that do not count yet, not
+the yard (the yard's README). When Leaf did what the copy did, at the same tick, the checks are
+compared; alike, the copy only puts on its board the orders Leaf hung that it lacks, each a few
+seconds before it counts. Otherwise (checks that differ, a command Leaf turned down or did at
+another tick, an order heard of after it began to count, a tab away over a minute, a yard staged
+from outside) the page takes Leaf's yard. Meanwhile the yard takes no input: a tool does nothing,
+records nothing to undo and shows the refusal it would show for anything that cannot go there, and
+the copy stands still. What the page had already handed to the kit goes to Leaf and is answered;
+then it asks for Leaf's yard, and again every two seconds while that fails for a moment (what ends
+the page at the opening ends it here too, with the same screens); the copy is then Leaf's yard.
+Should that take more than a second, the line over the dock says the yard is catching up with the
+guild's server. Checks that differ are a fault in the rules or the check: the page counts them
 (`works.state().differences`) and tells Leaf the tick as it asks, and Leaf logs it, once a minute
 at most. Each frame
 the copy is run on to Leaf's tick now: the tick Leaf last gave, and one for each tenth of a second
@@ -47,8 +50,9 @@ not run on: the page asks Leaf for its yard, which Leaf has run on meanwhile, an
 comes; away for less than five minutes, there is no letter. A copy standing still (its owner away eight hours) holds Leaf's tick
 with it from the frame it stops in until the member acts, as Leaf does. News (a story order done, an order filled) comes from the
 copy's own stepping, and is not told again when the same ticks are stepped once more. Swapping,
-handing over and buying a plan leave a place on the board empty until Leaf's yard, with the next
-order hung there, comes; a place the board would have filled sends `collect`, so Leaf does.
+handing over and buying a plan leave a place on the board empty until Leaf's answer, with the next
+order, comes; a place the board would have filled sends `collect`, so Leaf does. A new order shows
+faint in the list until it counts.
 
 **Coins.** The number the Works shows, and what a price is checked against, is the purse's (Leaf's
 ledger) and the whole Coins in the copy's till, as Leaf will count them. A command that changes

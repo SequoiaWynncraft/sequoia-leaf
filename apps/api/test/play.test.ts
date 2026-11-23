@@ -1223,7 +1223,7 @@ describe("the Works", () => {
 });
 
 describe("a batch's answer", () => {
-  it("for the Works holds no yard: Leaf's clock, and the yard's tick, check and orders hung, as the page works them out", async () => {
+  it("for the Works holds no yard: Leaf's clock, and the yard's tick, check and orders hung that do not count yet, as the page works them out", async () => {
     const opening = Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json());
     const { clock: tick, yard: copy } = yardOf(opening.state);
     const built = await send("POST", "/v1/game/play/works", {
@@ -1232,7 +1232,7 @@ describe("a batch's answer", () => {
     // The page's copy, with the same command done to it at the same tick.
     expect("refused" in playWorks(copy, { do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick })).toBe(false);
     const { state } = Schema.decodeUnknownSync(Answered)(await built.json());
-    expect(state).toEqual({ clock: tick, tick, check: check(copy), serial: copy.serial });
+    expect(state).toEqual({ clock: tick, tick, check: check(copy), hung: [] });
     // An opening, a visit and an opening after a time away are each given the yard, the last with its letter.
     expect(
       yardOf(Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state).yard.cells,

@@ -551,7 +551,8 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   happened) or `{ "id", "refused": "<code>" }`, and the state after them all;
   or, for a game whose page keeps a copy with the same rules (the Works),
   the game's short answer instead (`Game.answer`: for the Works, Leaf's tick,
-  and the yard's tick, check and orders hung after the batch).
+  and the yard's tick, check and the orders hung that do not count yet after
+  the batch).
   One refused does not stop the rest. The whole batch is kept in one
   transaction: the state brought to now with each command done, the Coins each
   paid or took, what each logged and each command's answer, written together;

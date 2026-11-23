@@ -6,18 +6,21 @@
  * One pass mixes in, a 32-bit word at a time, every field the rules read: every part of every
  * piece, and everything of the yard's that is kept. Each word is first finished as MurmurHash3
  * finishes its sum, so that any bit of it reaches every bit of the check, and then joined as
- * MurmurHash3 joins a block; a number is taken as both halves of its 64 bits. Left out are what only Leaf holds
- * (`seed`), what Leaf and the page each move by their own clock (`at`, the moment a tick stands for,
- * which Leaf sets again while a yard stands still), the letter only the page is shown (`away`), the
- * news, and whatever is worked out again from the rest: power, the plumbing, what is open and how
- * fast, a machine's `idle`, `kinds` and `count`, where a thing on a belt came from (`via`), and an
- * order's words. Things, kinds, plots and plans are numbered by the rules' own lists, so that any two
- * places running these rules agree.
+ * MurmurHash3 joins a block; a number is taken as both halves of its 64 bits. Left out are what only
+ * Leaf holds and moves, to draw orders with (`seed`, and `serial`, the orders ever hung), and the
+ * orders it has hung that do not count yet, which nothing reads until then and the page may not
+ * have heard of; what Leaf and the page each move by their own clock (`at`, the moment a tick stands
+ * for, which Leaf sets again while a yard stands still); the letter only the page is shown (`away`);
+ * the news; and whatever is worked out again from the rest: power, the plumbing, what is open and
+ * how fast, a machine's `idle`, `kinds` and `count`, where a thing on a belt came from (`via`), and
+ * an order's words and the tick it began to count. Things, kinds, plots and plans are numbered by the
+ * rules' own lists, so that any two places running these rules agree.
  */
 import { ITEMS, type Tally } from "./content/items.ts";
 import { KINDS } from "./content/machines.ts";
 import { PLAN_IDS } from "./content/plans.ts";
 import { PLOT_IDS } from "./content/plots.ts";
+import { counts } from "./orders.ts";
 import type { Building, World } from "./world.ts";
 
 /** A thing's, a kind's, a plot's and a plan's number, from 1: 0 is none. */
@@ -79,8 +82,7 @@ function piece(b: Building): void {
 /** The yard's check: a whole number from 0 up to 2^32. */
 export function check(w: World): number {
   h = 0x811c9dc5 | 0;
-  for (const n of [w.tick, w.till, w.bank, w.told, w.seen.tick, w.seen.till, w.story, w.serial, w.done, w.swapAt])
-    num(n);
+  for (const n of [w.tick, w.till, w.bank, w.told, w.seen.tick, w.seen.till, w.story, w.done, w.swapAt]) num(n);
   for (const n of [w.sold, w.paid, w.pace.ticks, w.pace.warm]) num(n);
   for (const t of [w.seen.depot, w.filled, w.depot, w.given, w.pace.made]) tally(t);
   for (const p of w.plots) mix(PLOT_NO.get(p) ?? 0);
@@ -88,13 +90,14 @@ export function check(w: World): number {
   for (const p of w.plans) mix(PLAN_NO.get(p) ?? 0);
   mix(0);
   for (const kind of KINDS) num(w.spare[kind] ?? 0);
-  for (const o of w.board) {
+  const counting = w.board.filter((o) => counts(o, w.tick));
+  for (const o of counting) {
     num(o.id);
     num(o.pay);
     tally(o.want);
     tally(o.filled);
   }
-  mix(w.board.length);
+  mix(counting.length);
   for (const print of w.blueprints) {
     for (const p of print ?? []) {
       mix(((KIND_NO.get(p.kind) ?? 0) << 2) | p.dir);

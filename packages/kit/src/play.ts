@@ -15,7 +15,9 @@
  *   down, the same request goes again with the same ids, so nothing is done twice.
  * - `refresh()` asks Leaf for the state again, one question at a time: asked again meanwhile, it
  *   gives the one on its way. Its answer is let go if a command was sent meanwhile. With `differs`,
- *   it tells Leaf the tick at which the page found its copy not to be Leaf's.
+ *   it tells Leaf the tick at which the page found its copy not to be Leaf's. Read again, the state
+ *   ends the page for what ends it at the opening (`endOf`): signed out, a state Leaf cannot read, or
+ *   nothing to visit; any other failure is let go, for the page to ask again.
  * - `predict`, for a command the shared rules can work out without Leaf, gives the copy after it:
  *   it is shown at once. When Leaf answers, Leaf's state takes the copy's place (with what is still
  *   waiting worked out again on top), and if that is not what the page was showing, the page is
@@ -27,6 +29,8 @@
  *   the page shows the kit's card for it. During a deploy a call can reach the Leaf before this one,
  *   which has no such route (404 `not_found`): that is "not yet", tried again each second for 30
  *   seconds before the page gives up for no server.
+ * - Every request the page waits on is let go after `DEADLINE`, as if Leaf had not answered: a batch
+ *   goes again with the same ids, as after any failure.
  * - As the page is hidden or put away, or the town closes the game, everything Leaf has not
  *   answered is sent at once in a request that outlives the page (`flush`), so the last thing done
  *   before leaving is not lost.
@@ -88,7 +92,8 @@ export interface Play<View, Command extends object, Note, Short = never> {
   /**
    * Asks Leaf for the state again, when nothing is waiting for it: one question at a time, so asked
    * again meanwhile it gives the one on its way. The answer is let go if a command was sent meanwhile.
-   * `differs` is the tick at which the page found its copy not to be Leaf's, for Leaf to log.
+   * `differs` is the tick at which the page found its copy not to be Leaf's, for Leaf to log. What
+   * ends the page at the opening ends it here too, told to `onTrouble`.
    */
   refresh(differs?: number): Promise<void>;
   /**
@@ -121,12 +126,21 @@ export const NOT_YET: NotYet = { every: 1000, tries: 30 };
 /** How long a page in view goes without a call to Leaf before it reads its state, checked every quarter of it. */
 export const STILL_HERE = 60_000;
 
+/** How long a request may go unanswered before it is let go as no answer: ten seconds. */
+export const DEADLINE = 10_000;
+
 /** Whether an answer is the 404 of a Leaf that has no play service yet, rather than one about the game. */
 const notYet = (reply: { status: number; body: unknown }): boolean =>
   reply.status === 404 && isRecord(reply.body) && reply.body.code === "not_found";
 /** Whether an answer says the state Leaf keeps does not read. */
 const unreadable = (reply: { status: number; body: unknown }): boolean =>
   reply.status === 409 && isRecord(reply.body) && reply.body.code === "state_unreadable";
+/** What a read of the state says ends the page: signed out, a state Leaf cannot read, or nothing to visit; or nothing. */
+function endOf(reply: { status: number; body: unknown }): Trouble | null {
+  if (reply.status === 401) return "signedout";
+  if (unreadable(reply)) return "unreadable";
+  return reply.status === 404 && isRecord(reply.body) && reply.body.code === "nothing_to_visit" ? "nothing" : null;
+}
 
 interface Pending<View, Command, Note> {
   readonly id: string;
@@ -161,6 +175,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
     readonly away?: () => boolean;
     readonly retry?: Retry;
     readonly notYet?: NotYet;
+    readonly deadline?: number;
   },
 ): Promise<Play<View, Command, Note, Short> | { trouble: Trouble }> {
   const path = playPath(game);
@@ -168,18 +183,19 @@ export async function openPlay<View, Command extends object, Note, Short = never
   /** Where the state is read: the player's own, or the one visited. */
   const read = options.of === undefined ? path : visitPath(game, options.of);
   const waitFor = options.notYet ?? NOT_YET;
-  let first = await ask(read);
+  const deadline = options.deadline ?? DEADLINE;
+  /** A request to Leaf, let go as no answer once it has gone unanswered past the deadline. */
+  const timed: typeof ask = (to, init) => ask(to, { ...init, signal: AbortSignal.timeout(deadline) });
+  let first = await timed(read);
   for (let tried = 0; notYet(first); tried++) {
     if (tried >= waitFor.tries) return { trouble: "noserver" };
     // oxlint-disable-next-line no-await-in-loop -- the same question, a moment later
     await wait(waitFor.every);
     // oxlint-disable-next-line no-await-in-loop -- the same question, a moment later
-    first = await ask(read);
+    first = await timed(read);
   }
-  if (first.status === 401) return { trouble: "signedout" };
-  if (unreadable(first)) return { trouble: "unreadable" };
-  if (first.status === 404 && isRecord(first.body) && first.body.code === "nothing_to_visit")
-    return { trouble: "nothing" };
+  const end = endOf(first);
+  if (end !== null) return { trouble: end };
   if (first.status !== 200 || !isRecord(first.body)) return { trouble: "closed" };
   const opened = reader.view(first.body.state);
   if (opened === null) {
@@ -205,7 +221,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
   const call: typeof ask = (to, init) => {
     calledAt = outside.now();
     calls++;
-    return ask(to, init);
+    return timed(to, init);
   };
   const quiet = (): boolean => visiting || options.away?.() === true;
   let pause = retry.first;
@@ -406,7 +422,8 @@ export async function openPlay<View, Command extends object, Note, Short = never
     const asked = call(differs === undefined ? read : `${read}?differs=${differs}`);
     const mine = calls;
     const reply = await asked;
-    if (reply.status === 401) return stop("signedout");
+    const ended = endOf(reply);
+    if (ended !== null) return stop(ended);
     // A command sent and answered while this was on its way has told the page more than this has.
     if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0 && calls === mine) {
       took({ ...reply.body, results: [] }, []);
