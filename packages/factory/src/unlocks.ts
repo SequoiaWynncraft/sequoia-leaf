@@ -75,6 +75,7 @@ export type Unlock = Said &
         readonly amount: string;
       }
     | { readonly is: "board"; readonly hooks: number }
+    | { readonly is: "first" }
   );
 
 /** What each tool is called, and what it does. */
@@ -188,7 +189,7 @@ const NUMBERED: readonly Numbered[] = ["stops", "crate", "reach", "depot", "span
 
 /**
  * What an `Unlocks` unlocks, each thing once, in the order a screen lists them: kinds of piece,
- * grades, recipes, tools, blueprints, numbers, the board, and plots put up for sale. A number that
+ * grades, recipes, tools, blueprints, numbers, the board, a way put first, and plots put up for sale. A number that
  * comes with the kind it belongs to, with nothing before it (a tunnel's first length, the first cart
  * stop), is the kind's: the kind is shown with that number beside it and says its sentence after its
  * own, and the number is not listed again.
@@ -262,6 +263,12 @@ export function unlocked(u: Unlocks): Unlock[] {
       says: `The guild hangs side orders on a board at the depot, ${n(hooks)} at a time.`,
     });
   }
+  if (u.first)
+    out.push({
+      is: "first",
+      name: "First way",
+      says: "A splitter can put one of its ways first: items go that way while it can take them, and only the rest go to its other ways.",
+    });
   for (const name of u.plots ?? []) {
     const info = PLOTS.find((p) => p.id === name);
     const cost = info?.price ?? 0;

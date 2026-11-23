@@ -82,9 +82,13 @@ export function writeAct(a: Act): Wired {
       return { do: a.do, open: a.open, x: a.x, y: a.y };
     case "way":
       return { do: a.do, way: a.way, open: a.open, x: a.x, y: a.y };
+    case "first":
+      return { do: a.do, way: a.way, x: a.x, y: a.y };
     case "buyPlot":
       return { do: a.do, plot: plotName(a.plot) };
     case "take":
+    case "queue":
+    case "unqueue":
       return { do: a.do, node: goalId(a.node) };
     case "study":
     case "unstudy":

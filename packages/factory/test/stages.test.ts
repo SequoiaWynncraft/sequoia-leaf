@@ -20,8 +20,8 @@ describe("a staged yard", () => {
     test(`${name}: every goal it has done was finished and paid by the rules, and it reads back as itself`, () => {
       const y = staged(name);
       expect([y.paid, y.handed]).toEqual([earned(y), 0]);
-      // Only the stage with a Study knows any research.
-      if (name !== "study") for (const g of y.done) expect(F.isNode(g)).toBe(true);
+      // Only the stages with a Study know any research.
+      if (name !== "study" && name !== "gate") for (const g of y.done) expect(F.isNode(g)).toBe(true);
       const back = F.decode(F.encode(y), y.land);
       expect(back && [F.check(back), F.encode(back)]).toEqual([F.check(y), F.encode(y)]);
     });
@@ -63,6 +63,25 @@ describe("a staged yard", () => {
     expect(F.status(y, study)?.state).toBe("working");
     // Some research still needs another first: the screen has one to show dim.
     expect(F.ALL_GOALS.some((g) => !F.isNode(g) && y.open.done[g] !== 1 && !F.ready(y.open, g))).toBe(true);
+  });
+
+  test("gate has tier 4 just opened, by research its Study made known: its commission in hand, its land for sale, and a splitter putting no way first", () => {
+    const y = staged("gate");
+    expect([y.open.tier, F.GOALS[y.hand === -1 ? 0 : y.hand]?.id]).toEqual([4, "kits"]);
+    expect(ids(y).filter((id) => F.NODES.some((n) => n.id === id))).toEqual(below(4));
+    expect((["hollow", "seam", "pond"] as const).map((p) => F.plotState(y, F.plot(p)).state)).toEqual([
+      "for sale",
+      "for sale",
+      "for sale",
+    ]);
+    const split = F.at(y, 26, 13);
+    expect([y.kind[split], y.first[split], F.locked(y.open, { first: true })]).toEqual([
+      F.SPLITTER,
+      0,
+      "Putting a way first is not unlocked yet",
+    ]);
+    // Both its open ways lead somewhere, and both have had something.
+    expect([F.takes(y, F.at(y, 25, 13), split), F.takes(y, F.at(y, 26, 14), split)]).toEqual([true, true]);
   });
 
   test("fed, the node in hand is finished at the depot as in play: paid, the next in hand, and logged with the next command", () => {

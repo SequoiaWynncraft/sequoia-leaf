@@ -1,12 +1,15 @@
 /**
  * The new pieces: a cart stop takes things from any side and they have reached the depot at once,
  * as many stops as the yard has unlocked; a sorter, in at the back, sends the one thing it is set to
- * out to its left and everything else ahead, and with nothing set is a belt. And a blueprint, set
- * down by naming its place: turned any way, it stands as turned, tunnels whole, all or none.
+ * out to its left and everything else ahead, and with nothing set is a belt. A splitter with a way
+ * put first sends everything that way while it takes it, and only the rest to its other ways. And a
+ * blueprint, set down by naming its place: turned any way, it stands as turned, tunnels whole, all or
+ * none.
  */
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
+import { fill } from "./goals.ts";
 import { bareLand } from "./land.ts";
 import { give, must } from "./yards.ts";
 
@@ -29,6 +32,11 @@ function source(y: F.Yard, x: number, z: number, dir: number, things: readonly (
 const run = (y: F.Yard, ticks: number): void => {
   for (let k = 0; k < ticks; k++) F.step(y);
 };
+/** Takes a node into hand and sends the depot all it wants, so that it is finished as in play. */
+function fillHandWith(y: F.Yard, node: string): void {
+  must(y, { do: "take", node });
+  fill(y);
+}
 
 describe("a cart stop", () => {
   test("takes things in from any side, and each has reached the depot at once", () => {
@@ -324,6 +332,122 @@ describe("a sorter", () => {
     const back = F.decode(F.encode(y), y.land);
     expect(back?.set[F.at(back, 4, 4)]).toBe(brick);
     expect(back && F.keptAt(back, F.at(back, 4, 4))).toEqual({ recipe: brick });
+  });
+});
+
+/**
+ * A splitter at (4, 4) facing east, fed from a crate behind it, with a belt and a shut crate on each
+ * way out: ahead (east), left (north) and right (south). With `first`, that way is put first.
+ * Gives the yard, and how many each way's crate holds after `ticks`.
+ */
+function splitting(
+  things: number,
+  ticks: number,
+  first: number | null = null,
+): { y: F.Yard; got: () => [number, number, number] } {
+  const y = yard(5);
+  must(y, { do: "build", kind: "splitter", x: 4, y: 4, dir: 0 });
+  must(y, { do: "build", kind: "belt", x: 3, y: 4, dir: 0 });
+  must(y, { do: "build", kind: "belt", x: 5, y: 4, dir: 0 });
+  must(y, { do: "build", kind: "belt", x: 4, y: 3, dir: 3 });
+  must(y, { do: "build", kind: "belt", x: 4, y: 5, dir: 1 });
+  const sinks = [sink(y, 6, 4), sink(y, 4, 2), sink(y, 4, 6)];
+  source(y, 2, 4, 0, [[plank, things]]);
+  if (first !== null) must(y, { do: "first", x: 4, y: 4, way: first });
+  run(y, ticks);
+  const got = (): [number, number, number] => {
+    const [a = 0, l = 0, r = 0] = sinks.map((s) => F.held(y.holders, s, plank));
+    return [a, l, r];
+  };
+  return { y, got };
+}
+
+describe("a splitter with a way put first", () => {
+  test("sends everything that way while the tile there takes it; only what it cannot take is shared among the other ways, as an even splitter shares it", () => {
+    // Even, as before: an item each way in turn.
+    expect(splitting(60, 400).got()).toEqual([20, 20, 20]);
+    // The left way first, while its crate has room: all of it.
+    expect(splitting(60, 400, 1).got()).toEqual([0, 60, 0]);
+    // Its crate full (and one more on its belt), the rest goes ahead and right in turn; nothing is lost.
+    const { y, got } = splitting(200, 1200, 1);
+    const [ahead, left, right] = got();
+    expect(left).toBe(y.open.crate);
+    expect(y.item[F.at(y, 4, 3)]).toBe(plank);
+    expect(ahead + right).toBe(200 - left - 1);
+    expect(Math.abs(ahead - right)).toBeLessThanOrEqual(1);
+  });
+
+  test("is set and cleared by its own command; only an open way may be first, and shutting it puts none first", () => {
+    const { y } = splitting(0, 0);
+    must(y, { do: "way", x: 4, y: 4, way: 2, open: false });
+    expect(give(y, { do: "first", x: 4, y: 4, way: 2 })).toMatchObject({
+      refused: "cannot_put_first",
+      why: "That way is shut",
+    });
+    expect(give(y, { do: "first", x: 3, y: 4, way: 0 })).toMatchObject({
+      refused: "cannot_put_first",
+      why: "There is no splitter there",
+    });
+    must(y, { do: "first", x: 4, y: 4, way: 0 });
+    expect(F.keptAt(y, F.at(y, 4, 4))).toEqual({ shut: 4, first: 0 });
+    must(y, { do: "first", x: 4, y: 4, way: 1 });
+    expect(y.first[F.at(y, 4, 4)]).toBe(2);
+    must(y, { do: "first", x: 4, y: 4, way: null });
+    expect(y.first[F.at(y, 4, 4)]).toBe(0);
+    must(y, { do: "first", x: 4, y: 4, way: 1 });
+    must(y, { do: "way", x: 4, y: 4, way: 1, open: false });
+    expect(F.keptAt(y, F.at(y, 4, 4))).toEqual({ shut: 6 });
+  });
+
+  test("is refused, with its own code, until the yard has unlocked it, set by its command or kept on a piece stood", () => {
+    const y = yard(4);
+    must(y, { do: "build", kind: "splitter", x: 4, y: 4, dir: 0 });
+    const no = { refused: "locked", why: "Putting a way first is not unlocked yet" };
+    expect(give(y, { do: "first", x: 4, y: 4, way: 0 })).toMatchObject(no);
+    const piece = { kind: "splitter", x: 6, y: 6, dir: 0, span: 0, first: 2 };
+    expect(give(y, { do: "stand", pieces: [piece] })).toMatchObject({
+      refused: "cannot_stand",
+      why: no.why,
+    });
+    fillHandWith(y, "flags");
+    must(y, { do: "first", x: 4, y: 4, way: 0 });
+    must(y, { do: "stand", pieces: [piece] });
+    expect(y.first[F.at(y, 6, 6)]).toBe(3);
+  });
+
+  test("is kept: read back, in a blueprint and in a copy, each turned; read back where the yard may not put a way first, or the way is shut, it is let go", () => {
+    const { y } = splitting(0, 0, 2);
+    const back = F.decode(F.encode(y), y.land);
+    expect(back && [back.first[F.at(back, 4, 4)], F.check(back)]).toEqual([3, F.check(y)]);
+    must(y, { do: "saveBlueprint", slot: 0, tiles: F.within(y, 4, 4, 4, 4) });
+    must(y, { do: "placeBlueprint", slot: 0, x: 10, y: 2, turns: 1 });
+    must(y, { do: "copy", tiles: F.within(y, 4, 4, 4, 4), x: 10, y: 6, turns: 2 });
+    expect([F.at(y, 10, 2), F.at(y, 10, 6)].map((i) => [y.dir[i], y.first[i]])).toEqual([
+      [1, 3],
+      [2, 3],
+    ]);
+    const again = F.decode(F.encode(y), y.land);
+    expect(again?.blueprints[0] && F.piecesOf(again.blueprints[0])).toEqual([
+      { kind: F.SPLITTER, x: 0, y: 0, dir: 0, span: 0, first: 2 },
+    ]);
+    // Kept by a yard that has not unlocked it: the splitter stands, putting no way first.
+    const rec: unknown = JSON.parse(F.encode(y));
+    if (typeof rec !== "object" || rec === null) throw new Error("not a record");
+    const done = yard(4).done.map((g) => F.GOALS[g]?.id);
+    const early = F.decode(JSON.stringify({ ...rec, done }), y.land);
+    expect(early && [early.kind[F.at(early, 4, 4)], early.first[F.at(early, 4, 4)]]).toEqual([F.SPLITTER, 0]);
+    // A way put first that is shut is not kept, wherever it is read from.
+    expect(F.keptOf({ shut: 2, first: 1 }, F.SPLITTER)).toEqual({ shut: 2 });
+    expect(F.keptOf({ first: 1 }, F.BELT)).toEqual({});
+  });
+
+  test("changes the check, and a splitter that puts no way first keeps the check it had", () => {
+    const { y } = splitting(0, 0);
+    const even = F.check(y);
+    must(y, { do: "first", x: 4, y: 4, way: 0 });
+    const first = F.check(y);
+    must(y, { do: "first", x: 4, y: 4, way: null });
+    expect([first === even, F.check(y)]).toEqual([false, even]);
   });
 });
 
