@@ -20,6 +20,7 @@ import {
   goal,
   GOALS,
   HALF,
+  holderOf,
   isFilled,
   isNode,
   item,
@@ -449,7 +450,7 @@ function powerBook(_art: Art, body: HTMLElement): () => void {
         0,
       );
     const burning = w.kind.reduce((n, there, i) => {
-      const r = w.row[i] ?? -1;
+      const r = holderOf(w, i);
       return n + (there === BOILER && lit[i] === 1 && r >= 0 && (w.holders.fuel[r] ?? 0) > 0 ? 1 : 0);
     }, 0);
     const cold = count(BOILER, true) - burning;

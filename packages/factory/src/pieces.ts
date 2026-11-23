@@ -46,7 +46,7 @@ import {
   TOP,
   TUNNEL,
 } from "./tables.ts";
-import { changed, holds, PIECE_BYTES, type Yard } from "./yard.ts";
+import { changed, holderOf, PIECE_BYTES, tunnelOf, type Yard } from "./yard.ts";
 
 /** How many colours there are to give. */
 export const TINTS = 6;
@@ -90,7 +90,7 @@ export const keptOf = (v: { readonly [K in keyof Kept]?: unknown }, k: Kind): Ke
 export function keptAt(y: Yard, i: number): Kept {
   const k = y.kind[i] ?? NONE;
   if (!isKind(k)) return {};
-  const r = y.row[i] ?? -1;
+  const r = holderOf(y, i);
   const h = y.holders;
   const recipe = y.set[i] ?? NONE;
   return keptOf(
@@ -280,7 +280,7 @@ export function stand(
       // The colour it came with is of what stood there: a run is joined below, as a whole.
       y.tint[i] = kept.tint ?? 0;
       if (kept.shut !== undefined) y.shut[i] = kept.shut;
-      const r = y.row[i] ?? -1;
+      const r = holderOf(y, i);
       if (kept.recipe !== undefined) y.set[i] = kept.recipe;
       if (kept.open === false && r >= 0) y.holders.open[r] = 0;
       if (joins && (p.kind === BELT || p.kind === TUNNEL)) laid.push(i);
@@ -330,12 +330,24 @@ export function move(y: Yard, tiles: readonly number[], turns: number, x: number
     PARTS.forEach((part, n) => (y[part][i] = parts[n] ?? 0));
     y.dir[i] = ways[k] ?? y.dir[i] ?? 0;
     y.via[i] = 0;
-    const r = y.row[i] ?? -1;
-    if (r >= 0) (holds(y.kind[i] ?? NONE) ? y.holders.tile : y.tunnels.tile)[r] = i;
+    const r = holderOf(y, i);
+    if (r >= 0) y.holders.tile[r] = i;
+    const t = tunnelOf(y, i);
+    if (t >= 0) y.tunnels.tile[t] = i;
   });
   changed(y);
   y.powered = false;
   return null;
+}
+
+/**
+ * The pieces a copy of what stands on some tiles stands: turned `turns` quarter turns right, the
+ * corner of their box on (x, y), each keeping what a piece copied keeps; nothing if none stands there.
+ * The copy is stood all or none (`stand`), as one command, however many pieces it is.
+ */
+export function copyOf(y: Yard, tiles: readonly number[], turns: number, x: number, z: number): Piece[] | null {
+  const from = piecesAt(y, tiles);
+  return from.length === 0 ? null : placed(from, turns, x, z);
 }
 
 /** Takes away every piece on some tiles, and says what comes back. */

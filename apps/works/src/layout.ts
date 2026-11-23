@@ -2,7 +2,8 @@
  * What the picture needs that is worked out from what stands where: the shape of every belt, the
  * lines between pylons, where the fence runs and the gate stands, which plots carry a signpost.
  * None of it changes until the yard does, so it is worked out once for each change and kept, in
- * flat lists of numbers like the yard's own: nothing is made for each piece.
+ * flat lists of numbers like the yard's own: nothing is made for each piece. And the yard as it would
+ * be with the pieces in hand set down (`asIf`), for drawing them.
  */
 
 import {
@@ -15,6 +16,7 @@ import {
   litOf,
   nextOf,
   NONE,
+  piecesAt,
   plotState,
   type Plotted,
   PYLON,
@@ -24,6 +26,7 @@ import {
   SPLITTER,
   squared,
   takes,
+  tilesOf,
   toward,
   TUNNEL,
   wayOut,
@@ -33,6 +36,7 @@ import {
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { armAt, type Arms, TILE, withArm } from "./art/belts.ts";
+import { draws, type Group } from "./state.ts";
 
 export interface Sign {
   plot: Plotted;
@@ -133,38 +137,45 @@ function wires(y: Yard): Int32Array {
   const tall = y.open.reach > 100;
   const link = squared(REACH.link, y.open.reach);
   const [cx, cy] = y.land.depot;
-  const nodes: { x: number; y: number; at: Pt; joined: boolean }[] = [
-    { x: cx, y: cy, at: { x: cx * TILE + 8 - 14, y: (cy - 1) * TILE - 8 }, joined: true },
+  const nodes: { x: number; y: number; at: Pt }[] = [
+    { x: cx, y: cy, at: { x: cx * TILE + 8 - 14, y: (cy - 1) * TILE - 8 } },
   ];
   const lit = litOf(y);
   for (let i = 0; i < y.kind.length; i++) {
     if (y.kind[i] !== PYLON || lit[i] !== 1) continue;
     const x = i % W;
     const z = (i - x) / W;
-    nodes.push({ x, y: z, at: pylonTop(x, z, tall), joined: false });
+    nodes.push({ x, y: z, at: pylonTop(x, z, tall) });
   }
+  // The pylon nearest to anything already joined is joined next, so the lines never double back:
+  // for each pylon not yet joined, its nearest joined one within a link (the first of those as near),
+  // brought up to date as each is joined. Of two as near, the one listed first goes first.
+  const n = nodes.length;
+  const near = new Float64Array(n).fill(Infinity);
+  const by = new Int32Array(n).fill(-1);
+  const joined = new Uint8Array(n);
   const out: number[] = [];
-  for (let grew = true; grew;) {
-    grew = false;
-    // The pylon nearest to anything already joined is joined next, so the lines never double back.
-    let best: { from: number; to: number; d: number } | null = null;
-    for (const [n, p] of nodes.entries()) {
-      if (p.joined) continue;
-      for (const [m, q] of nodes.entries()) {
-        if (!q.joined) continue;
-        const dx = p.x - q.x;
-        const dy = p.y - q.y;
-        const d = Math.hypot(dx, dy);
-        if (dx * dx + dy * dy <= link && (!best || d < best.d)) best = { from: m, to: n, d };
+  for (let j = 0; j >= 0;) {
+    joined[j] = 1;
+    const q = nodes[j];
+    if (!q) break;
+    for (let k = 0; k < n; k++) {
+      const p = nodes[k];
+      if (!p || joined[k] === 1) continue;
+      const dx = p.x - q.x;
+      const dy = p.y - q.y;
+      const d = Math.hypot(dx, dy);
+      if (dx * dx + dy * dy <= link && (d < (near[k] ?? Infinity) || (d === near[k] && j < (by[k] ?? -1)))) {
+        near[k] = d;
+        by[k] = j;
       }
     }
-    if (!best) break;
-    const from = nodes[best.from];
-    const to = nodes[best.to];
-    if (!from || !to) break;
-    to.joined = true;
-    out.push(from.at.x, from.at.y, to.at.x, to.at.y);
-    grew = true;
+    j = -1;
+    for (let k = 0; k < n; k++)
+      if (joined[k] === 0 && (by[k] ?? -1) >= 0 && (j < 0 || (near[k] ?? 0) < (near[j] ?? 0))) j = k;
+    const from = nodes[by[j] ?? -1];
+    const to = nodes[j];
+    if (from && to) out.push(from.at.x, from.at.y, to.at.x, to.at.y);
   }
   return Int32Array.from(out);
 }
@@ -245,7 +256,8 @@ export function layout(y: Yard, rev: number): Layout {
     const k = y.kind[i] ?? NONE;
     if (k === NONE || k === DEPOT) continue;
     built++;
-    arms[i] = armsAt(y, i);
+    // A kind this page does not draw is a plain post: no belt's arms, nothing riding it.
+    arms[i] = draws(k) ? armsAt(y, i) : 0;
     const ways = waysOf(k);
     let into = y.kind[nextOf(y, i)] === DEPOT;
     for (let w = 0; w < ways; w++) if (y.kind[wayOut(y, i, w)] === DEPOT) into = true;
@@ -264,4 +276,68 @@ export function layout(y: Yard, rev: number): Layout {
     built,
   };
   return kept;
+}
+
+/** The arrays a drawing of pieces in hand changes, kept for the next and filled afresh each time. */
+let own: {
+  kind: Uint8Array;
+  dir: Uint8Array;
+  span: Int8Array;
+  shut: Uint8Array;
+  tint: Uint8Array;
+  row: Int32Array;
+} | null = null;
+
+/**
+ * The yard as it would be with the pieces in hand set down where they are aimed, and for a move
+ * gone from where they stand: for drawing them as they would stand, belts joined to each other and
+ * to the lines already there. It shares everything with the real yard but the arrays a drawing
+ * changes (what stands where, which way, a tunnel's span, a splitter's shut ways, a colour, and the
+ * rows, none for a piece in hand), which are its own, kept and reused. Nothing is written to the
+ * real yard. It is made once for each place the pieces are aimed, not each frame.
+ */
+export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
+  const n = y.kind.length;
+  if (own?.kind.length !== n)
+    own = {
+      kind: new Uint8Array(n),
+      dir: new Uint8Array(n),
+      span: new Int8Array(n),
+      shut: new Uint8Array(n),
+      tint: new Uint8Array(n),
+      row: new Int32Array(n),
+    };
+  const o = own;
+  o.kind.set(y.kind);
+  o.dir.set(y.dir);
+  o.span.set(y.span);
+  o.shut.set(y.shut);
+  o.tint.set(y.tint);
+  o.row.set(y.row);
+  const empty = (i: number): void => {
+    o.kind[i] = NONE;
+    o.dir[i] = 0;
+    o.span[i] = 0;
+    o.shut[i] = 0;
+    o.tint[i] = 0;
+    o.row[i] = -1;
+  };
+  if (grp.as === "move") for (const i of tilesOf(y, piecesAt(y, grp.tiles))) if (i >= 0) empty(i);
+  for (const p of grp.at) {
+    const [near = -1, far = -1] = tilesOf(y, [p]);
+    for (const [i, span] of [
+      [near, p.span],
+      [far, -p.span],
+    ] as const) {
+      if (i < 0) continue;
+      empty(i);
+      o.kind[i] = p.kind;
+      o.dir[i] = p.dir;
+      o.span[i] = span;
+      o.shut[i] = i === near ? (p.shut ?? 0) : 0;
+      o.tint[i] = p.tint ?? 0;
+    }
+  }
+  // Where power reaches is the real yard's, worked out by the rules first; nothing works it out again here.
+  return { ...y, ...o, lit: litOf(y), powered: true, wire: null };
 }

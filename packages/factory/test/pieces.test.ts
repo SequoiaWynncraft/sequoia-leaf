@@ -105,6 +105,56 @@ describe("a blueprint", () => {
   });
 });
 
+/** 200 belts on the tiles from (1, 2) to (10, 21), on a land of 48 by 30; and how many belts stand. */
+function beltsToCopy(): { y: F.Yard; tiles: number[]; count: () => number } {
+  const y = F.create({ land: bareLand(48, 30, [], [44, 4]), tier: 4, seed: 1 });
+  y.spare.fill(0);
+  for (let z = 2; z < 22; z++) for (let x = 1; x < 11; x++) expect(F.build(y, F.BELT, x, z, 0, Infinity).ok).toBe(true);
+  return { y, tiles: F.within(y, 1, 2, 10, 21), count: () => y.kind.filter((k) => k === F.BELT).length };
+}
+const coinsOf = (did: ReturnType<typeof give>): { amount: number }[] =>
+  "refused" in did ? [] : (did.coins ?? []).filter((c) => c.reason !== "Earned in the Works");
+
+describe("a copy", () => {
+  test("is one command naming the tiles, the turns and the corner, as a move is, all or none whatever its size: 200 pieces", () => {
+    const { y, tiles, count } = beltsToCopy();
+    const did = give(y, { do: "copy", tiles, turns: 1, x: 12, y: 2 });
+    if ("refused" in did) throw new Error(did.why);
+    expect([count(), y.dir[F.at(y, 12, 2)], y.kind[F.at(y, 31, 11)]]).toEqual([400, 1, F.BELT]);
+    expect(coinsOf(did).map((c) => -c.amount)).toEqual([200]);
+    // Where one of its pieces cannot stand, off the map, none does.
+    const kept = F.encode(y);
+    expect(give(y, { do: "copy", tiles, turns: 0, x: 40, y: 12 })).toMatchObject({
+      refused: "cannot_copy",
+      why: "That is off the map",
+    });
+    expect(give(y, { do: "copy", tiles: [F.at(y, 30, 28)], turns: 0, x: 1, y: 1 })).toMatchObject({
+      refused: "cannot_copy",
+      why: "There is nothing here to copy",
+    });
+    expect(F.encode(y)).toBe(kept);
+  });
+
+  test("over pieces it lowers is charged once, for the whole of it: what its first pieces cost less what its last give back", () => {
+    const { y, tiles } = beltsToCopy();
+    // Raised belts where the copy's last 120 pieces would go.
+    for (let z = 10; z < 22; z++)
+      for (let x = 22; x < 32; x++) must(y, { do: "build", kind: "belt", x, y: z, dir: 0, grade: 2 });
+    const pieces = F.copyOf(y, tiles, 0, 22, 2) ?? [];
+    const first = F.priceOf(y, pieces.slice(0, F.STAND_MOST));
+    const whole = F.priceOf(y, pieces);
+    expect(first).toBeGreaterThan(whole);
+    const did = give(y, { do: "copy", tiles, turns: 0, x: 22, y: 2 });
+    expect(coinsOf(did).map((c) => c.amount)).toEqual([-whole]);
+  });
+
+  test("needs Select, as a move does", () => {
+    const y = F.create({ land: bareLand(48, 30, [], [44, 4]), tier: 1, seed: 1 });
+    must(y, { do: "build", kind: "belt", x: 1, y: 1, dir: 0 });
+    expect(give(y, { do: "copy", tiles: [F.at(y, 1, 1)], turns: 0, x: 3, y: 3 })).toMatchObject({ refused: "locked" });
+  });
+});
+
 /**
  * A blueprint holding tunnels, as stood at (1, 5) on a land of 20 by 14: a belt in; a tunnel east under
  * 2 tiles with a belt facing north on the first of them; a grade 2 tunnel south under 1. Its box is 6

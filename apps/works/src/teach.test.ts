@@ -11,6 +11,7 @@ import {
   GATHERER,
   item,
   type ItemName,
+  legPiece,
   litOf,
   MILL,
   NONE,
@@ -77,7 +78,7 @@ describe("teaching", () => {
 
     const legs = route(w, [third?.x ?? 0, third?.y ?? 0], w.land.depot);
     if (!legs) throw new Error("no way to the depot");
-    expect(stand(w, legs, 0).ok).toBe(true);
+    expect(stand(w, legs.map(legPiece), 0).ok).toBe(true);
     // Until a plank has arrived the belt lesson has nothing more to point at, and says nothing.
     expect(nudge(w, none, false)).toBeNull();
     run(w, 120);

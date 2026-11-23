@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import {
-  type Act,
   ALL_ITEMS,
   at,
   BELT,
@@ -11,146 +10,38 @@ import {
   deliver,
   FACTORY as WORKS,
   GOALS,
-  isKind,
   item,
-  kindName,
   LEAD,
-  NONE,
   ORDER_WAITS,
   readAnswer,
-  readCommand,
-  refusal,
   stepTo,
   TICK_MS,
   type Yard,
 } from "@sequoia-leaf/factory";
 import { staged } from "@sequoia-leaf/factory/test/yards.ts";
 import type { Trouble } from "@sequoia-leaf/kit/play.ts";
-import { type Reply, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
+import { type Reply, type Sent, standin } from "@sequoia-leaf/kit/standin.ts";
 
-/** What Leaf tells the game about each call. */
-type Ctx = Parameters<typeof WORKS.apply>[2];
-/** A command as the wire names it, read as the rules read it: what a script, or the member, does. */
-function act(c: Record<string, unknown>): Act {
-  const read = readCommand({ tick: 0, ...c });
-  if (!read) throw new Error(`${JSON.stringify(c)} does not read`);
-  return read;
-}
-/** The name of the kind of piece on a tile of a yard, if one stands there. */
-const kindOn = (y: Yard, p: { x: number; y: number }): string | undefined => {
-  const k = y.kind[at(y, p.x, p.y)] ?? NONE;
-  return isKind(k) ? kindName(k) : undefined;
-};
-
+import {
+  act,
+  clear,
+  ctx,
+  type FakeLeaf,
+  fakeLeaf,
+  isRecord,
+  kindAt,
+  kindOn,
+  net,
+  opened,
+  until,
+  useFakeLeaf,
+} from "./fake-leaf.ts";
 import { S } from "./state.ts";
 import { cancel, place, setTool, toolHooks, undo } from "./tools.ts";
 import { reading, showLetter } from "./ui/letter.ts";
-import {
-  again,
-  CATCHING_UP,
-  catchingUp,
-  differences,
-  doNow,
-  gate,
-  letGo,
-  onRefused,
-  openYard,
-  runYard,
-} from "./yard.ts";
+import { again, CATCHING_UP, catchingUp, differences, doNow, gate, onRefused, openYard, runYard } from "./yard.ts";
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-
-const ctx = (): Ctx => ({ now: 1_800_000_000_000, player: { id: "p", guest: false }, seed: 7, room: 1e9, awards: [] });
-
-/**
- * A stand-in Leaf that keeps the yard with the real rules, as the play service does, and answers a
- * batch as it does: short. It answers `answers` batches, and finds no network after that until it
- * is given more; it keeps the address of every read of the yard (`reads`), every command it is sent
- * (`commands`), and what came in what order (`calls`); and its clock stands `ms` past the tests' own.
- */
-function fakeLeaf(yard: Yard = WORKS.create(ctx())) {
-  const leaf = {
-    yard,
-    posts: 0,
-    answers: Infinity,
-    reads: [] as string[],
-    commands: [] as unknown[],
-    calls: [] as string[],
-    ms: 0,
-  };
-  const now = (): Ctx => ({ ...ctx(), now: ctx().now + leaf.ms });
-  const shown = (): unknown => WORKS.view(leaf.yard, now());
-  /** Does a command (as the wire names it) as Leaf would, from another page of the member's. */
-  const elsewhere = (c: Record<string, unknown>): void => {
-    const done = WORKS.apply(leaf.yard, { ...act(c), tick: leaf.yard.tick }, ctx());
-    if ("refused" in done) throw new Error(done.refused);
-  };
-  const post = (sent: Sent): Reply => {
-    if (leaf.posts >= leaf.answers) return "offline";
-    leaf.posts += 1;
-    leaf.calls.push("batch");
-    const commands = isRecord(sent.body) && Array.isArray(sent.body.commands) ? sent.body.commands : [];
-    leaf.commands.push(...commands);
-    const results = commands.map((c: unknown) => {
-      const id = isRecord(c) && typeof c.id === "string" ? c.id : "";
-      const command = WORKS.command(c);
-      const done = command ? WORKS.apply(leaf.yard, command, now()) : { refused: "invalid" };
-      return "refused" in done ? { id, refused: done.refused } : { id, notes: done.notes };
-    });
-    return { status: 200, body: { rev: leaf.posts, now: "x", results, state: WORKS.answer?.(leaf.yard, now()) } };
-  };
-  const routes = {
-    "GET /v1/game/play/works": (sent: Sent): Reply => {
-      leaf.reads.push(sent.path);
-      leaf.calls.push("read");
-      return { status: 200, body: { rev: 0, now: "x", state: shown() } };
-    },
-    "POST /v1/game/play/works": post,
-  };
-  return { leaf, routes, elsewhere };
-}
-
-let world: Standin | null = null;
-const clock = performance.now.bind(performance);
-beforeEach(() => {
-  // The page's own clock stands still, so that the yard runs on only when a test says so.
-  performance.now = () => 1000;
-});
-afterEach(() => {
-  world?.done();
-  world = null;
-  letGo();
-  performance.now = clock;
-  Reflect.deleteProperty(globalThis, "window");
-  Reflect.deleteProperty(globalThis, "document");
-});
-
-/** Waits until a condition holds, a millisecond at a time. */
-async function until(ok: () => boolean, tries = 1500): Promise<void> {
-  if (ok() || tries === 0) return;
-  await Bun.sleep(1);
-  await until(ok, tries - 1);
-}
-
-/** The first tiles a belt could stand on. */
-function clear(n: number): { x: number; y: number }[] {
-  const w = S.world;
-  const out: { x: number; y: number }[] = [];
-  for (let i = 0; i < w.kind.length && out.length < n; i++) {
-    const x = i % w.land.w;
-    const y = Math.floor(i / w.land.w);
-    if (w.kind[i] === NONE && refusal(w, BELT, x, y, Infinity) === null) out.push({ x, y });
-  }
-  return out;
-}
-const kindAt = (p: { x: number; y: number }) => kindOn(S.world, p);
-
-async function opened(yard?: Yard) {
-  const fake = fakeLeaf(yard);
-  world = standin(fake.routes);
-  expect(await openYard("p", () => undefined)).toBeNull();
-  return fake;
-}
+useFakeLeaf();
 
 /** The staged mid yard, with the board up, standing for Leaf's clock now, and its first order filled. */
 function board(): Yard {
@@ -175,7 +66,7 @@ function beforeTheBoard(): Yard {
 }
 
 /** The page's clock and Leaf's run on together, `ms` past the opening; Leaf runs its yard on to the copy's tick, as it may. */
-function runBoth(fake: ReturnType<typeof fakeLeaf>, ms: number): void {
+function runBoth(fake: FakeLeaf, ms: number): void {
   fake.leaf.ms = ms;
   performance.now = () => 1000 + ms;
   runYard(1000 + ms);
@@ -183,10 +74,10 @@ function runBoth(fake: ReturnType<typeof fakeLeaf>, ms: number): void {
 }
 
 /** Leaf answers each call to `route` only when the test lets it go (`held`, oldest first), as it stands then. */
-function holding(fake: ReturnType<typeof fakeLeaf>, route: keyof ReturnType<typeof fakeLeaf>["routes"]) {
+function holding(fake: FakeLeaf, route: keyof FakeLeaf["routes"]) {
   const held: (() => void)[] = [];
-  world?.done();
-  world = standin({
+  net.world?.done();
+  net.world = standin({
     ...fake.routes,
     [route]: (sent: Sent) => new Promise<Reply>((answer) => held.push(() => answer(fake.routes[route](sent)))),
   });
@@ -246,11 +137,11 @@ describe("the yard, on Leaf", () => {
     if (!a) throw new Error("no room");
     doNow(act({ do: "build", kind: "belt", dir: 0, ...a }));
     await until(() => fake.leaf.posts >= 1);
-    expect([...(world?.store.map.keys() ?? [])].filter((k) => k.startsWith("works.save"))).toEqual([]);
+    expect([...(net.world?.store.map.keys() ?? [])].filter((k) => k.startsWith("works.save"))).toEqual([]);
   });
 
   test("with no Leaf answering, there is no yard", async () => {
-    world = standin({ "GET /v1/game/play/works": "offline" });
+    net.world = standin({ "GET /v1/game/play/works": "offline" });
     expect(await openYard("p", () => undefined)).toBe("closed");
   });
 
@@ -311,7 +202,8 @@ describe("the yard, on Leaf", () => {
     await until(() => fake.leaf.posts >= 1);
     await Bun.sleep(5);
     runYard(1000);
-    expect([S.world, S.rev, fake.leaf.reads.length, differences()]).toEqual([copy, rev, 1, 0]);
+    // The build is one change to the copy, counted once; the copy is the same yard, not read again.
+    expect([S.world, S.rev, fake.leaf.reads.length, differences()]).toEqual([copy, rev + 1, 1, 0]);
   });
 
   test("two commands unanswered at once are each compared at the tick the copy did it, though it has run on", async () => {
@@ -355,8 +247,8 @@ describe("the yard, on Leaf", () => {
     const [a] = clear(1);
     if (!a) throw new Error("no room");
     let fails = true;
-    world?.done();
-    world = standin({
+    net.world?.done();
+    net.world = standin({
       ...fake.routes,
       "GET /v1/game/play/works": (sent) => (fails ? "offline" : fake.routes["GET /v1/game/play/works"](sent)),
     });
@@ -371,7 +263,7 @@ describe("the yard, on Leaf", () => {
     fails = false;
     runYard(1000 + 63_000);
     await until(() => fake.leaf.calls.length >= 3);
-    const asked = world.sent.filter((s) => s.method === "GET").length;
+    const asked = net.world.sent.filter((s) => s.method === "GET").length;
     expect([fake.leaf.calls, asked, differences(), S.world.till]).toEqual([["read", "batch", "read"], 3, 1, 0]);
   });
 
@@ -470,7 +362,7 @@ describe("the yard, on Leaf", () => {
   test("a read of Leaf's yard that ends the page goes to its screen, and is not asked again", async () => {
     const fake = fakeLeaf();
     let opening = true;
-    world = standin({
+    net.world = standin({
       ...fake.routes,
       "GET /v1/game/play/works": (sent) =>
         opening
@@ -487,7 +379,7 @@ describe("the yard, on Leaf", () => {
     await until(() => told.length > 0);
     for (const later of [2000, 4000, 10_000, 60_000]) runYard(1000 + later);
     await Bun.sleep(5);
-    const reads = world.sent.filter((s) => s.method === "GET").length;
+    const reads = net.world.sent.filter((s) => s.method === "GET").length;
     expect([told, reads]).toEqual([["unreadable"], 2]);
     // The screen that says why can be pressed: the page is no longer taking, so nothing is stopped.
     expect(catchingUp(performance.now() + 60_000)).toBe(false);
@@ -528,7 +420,7 @@ describe("the yard, on Leaf", () => {
   });
 
   /** Ways Leaf hangs an order: a yard to open, and what the member (or the depot) does to it. */
-  const hangings: [string, () => Yard, (fake: ReturnType<typeof fakeLeaf>) => void][] = [
+  const hangings: [string, () => Yard, (fake: FakeLeaf) => void][] = [
     ["a hand-over", board, () => void doNow(act({ do: "handOver", order: S.world.board[0]?.id ?? 0 }))],
     ["a swap", board, () => void doNow(act({ do: "swap", order: S.world.board[1]?.id ?? 0 }))],
     [
@@ -568,8 +460,8 @@ describe("the yard, on Leaf", () => {
   test("an order heard of after it began to count takes Leaf's yard, once", async () => {
     const fake = await opened(board());
     const held: (() => void)[] = [];
-    world?.done();
-    world = standin({
+    net.world?.done();
+    net.world = standin({
       ...fake.routes,
       "POST /v1/game/play/works": (sent) =>
         new Promise<Reply>((answer) => held.push(() => answer(fake.routes["POST /v1/game/play/works"](sent)))),
@@ -661,8 +553,8 @@ describe("the yard, on Leaf", () => {
   test("a tab that comes back asks Leaf for its yard once every two seconds, however often it draws", async () => {
     const fake = await opened();
     let asked = 0;
-    world?.done();
-    world = standin({
+    net.world?.done();
+    net.world = standin({
       ...fake.routes,
       "GET /v1/game/play/works": () => {
         asked += 1;
@@ -702,8 +594,8 @@ describe("the yard, on Leaf", () => {
     fake.leaf.yard.at = ctx().now;
     // Leaf takes its time to answer a question for the yard, with the yard as it was asked.
     const held: (() => void)[] = [];
-    world?.done();
-    world = standin({
+    net.world?.done();
+    net.world = standin({
       ...fake.routes,
       "GET /v1/game/play/works": () => {
         const reply = {

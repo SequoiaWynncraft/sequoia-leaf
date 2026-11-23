@@ -36,9 +36,9 @@ import {
   type Act,
   check,
   type Command,
-  counting,
   decode,
   drain,
+  hear,
   type Heard,
   LEAD,
   MILLI,
@@ -124,6 +124,8 @@ let reads = 0;
 let base = { clock: 0, at: 0 };
 /** The latest tick the page has shown. */
 let shown = 0;
+/** How many goals the copy had done when `S.rev` last counted a change. */
+let finished = 0;
 let collectedAt = 0;
 /** When Leaf was last asked for its yard. */
 let askedAt = -Infinity;
@@ -191,6 +193,7 @@ function take(): boolean {
   shown = Math.max(shown, yard.tick);
   S.world = yard;
   S.rev++;
+  finished = yard.done.length;
   reads++;
   taking = null;
   untold = undefined;
@@ -233,19 +236,11 @@ function ask(now: number): void {
 export const catchingUp = (now = performance.now()): boolean => taking !== null && now - taking > 1000;
 
 /**
- * Puts on the copy's board each order Leaf has hung that is new to it, while the order does not
- * count yet; one heard of after it began to count has been missed, and Leaf's yard is taken. Order
- * ids only go up (`serial`): one under the copy's serial is one the copy has had, and may since have
- * swapped out or handed over, so it is passed over.
+ * Puts on the copy's board each order Leaf has hung that is new to it (the rules' `hear`); one heard
+ * of after it began to count has been missed, and Leaf's yard is taken.
  */
 function hang(hung: readonly Standing[]): void {
-  const w = S.world;
-  for (const order of hung) {
-    if (order.id < w.serial) continue;
-    if (counting(order, w.tick)) return giveWay();
-    w.board.push(order);
-    w.serial = order.id + 1;
-  }
+  if (!hear(S.world, hung)) giveWay();
 }
 
 /**
@@ -290,6 +285,8 @@ export function doNow(act: Act): ReturnType<typeof play> {
   const sending = writeCommand(command);
   const done = play(S.world, command);
   if ("refused" in done) return done;
+  // The yard has changed: what is worked out from it and kept is worked out again.
+  S.rev++;
   const change = (done.coins ?? []).reduce((sum, c) => sum + c.amount, 0);
   if (change !== 0) heardCoins(balance().coins + change);
   if (act.do === "collect") collectedAt = performance.now();
@@ -322,6 +319,11 @@ export function runYard(now: number): News[] {
   }
   stepTo(w, tick);
   shown = w.tick;
+  // A goal finished on the way changes what is open (the plots for sale, a pylon's reach): it is a change.
+  if (w.done.length !== finished) {
+    finished = w.done.length;
+    S.rev++;
+  }
   // A yard standing still (its owner away eight hours) holds Leaf's clock with it from the frame it
   // stops in, as Leaf does, until they act.
   if (w.tick >= stillAt(w)) base = { clock: w.tick, at: now };
@@ -386,5 +388,6 @@ export function letGo(): void {
   found = 0;
   reads = 0;
   shown = 0;
+  finished = 0;
   putAway = (): void => undefined;
 }

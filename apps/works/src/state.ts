@@ -7,6 +7,8 @@ import {
   type Dir,
   emptyYard,
   type Kind,
+  kind,
+  KIND_COUNT,
   LAND,
   type Leg,
   type Piece,
@@ -16,6 +18,33 @@ import {
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
+
+/**
+ * The kinds of piece this page draws and builds, in the order they sit in the dock (which is also
+ * the order of the number keys). Any other (the Study, the cart stop, the sorter, which a yard has
+ * only further on) is drawn as a plain post with nothing of a belt about it, is not in the dock, and
+ * is not taken up as a tool. The dock, the pick and the drawing all read this list.
+ */
+export const DRAWN: readonly Kind[] = (
+  [
+    "belt",
+    "gatherer",
+    "mill",
+    "bench",
+    "workshop",
+    "splitter",
+    "joiner",
+    "tunnel",
+    "crate",
+    "pylon",
+    "wheel",
+    "boiler",
+  ] as const
+).map(kind);
+const drawn = new Uint8Array(KIND_COUNT);
+for (const k of DRAWN) drawn[k] = 1;
+/** Whether this page draws and builds a kind of piece (`DRAWN`). */
+export const draws = (k: number): boolean => drawn[k] === 1;
 
 /**
  * What is in the member's hand: a kind of piece to build (by its number), the spade that takes
@@ -33,6 +62,8 @@ export interface Aim {
   why: string | null;
   /** What it would cost. */
   cost: number;
+  /** For a tunnel, the tile its far mouth would come up on: worked out once for the aim, not each frame. */
+  far?: number;
 }
 
 /** A run of belt shown before it is laid. */
@@ -59,7 +90,8 @@ export interface Mark {
 export interface Group {
   /** The marked pieces being moved, a copy of them, or the blueprint in a place (by its number). */
   as: "move" | "copy" | number;
-  pieces: readonly Piece[];
+  /** For a move or a copy, the tiles of the pieces taken up: what stands there is what is set down, as the rules do it. */
+  tiles: readonly number[];
   /** Quarter turns to the right it has been given. */
   turns: Dir;
   /** Where it is aimed (`S.aim`): the pieces as they would stand, and why each cannot. */
@@ -80,7 +112,11 @@ export const S: {
    * Leaf: nothing is opened, sent or kept, and the yard is not run on but by `works.bench`.
    */
   alone: boolean;
-  /** Counts every change to what stands where, so that what is worked out from it can be kept until the next. */
+  /**
+   * Counts every change to the yard that is not a tick's: a command done, a yard taken from Leaf, a
+   * goal finished (what is open changes with it). What is worked out from the yard and kept (the
+   * layout, the belts' picture) is kept until the next. Only `yard.ts` moves it.
+   */
   rev: number;
   /** Seconds the screen has been running, and whether its clock is being stepped by hand from outside. */
   t: number;
@@ -143,11 +179,6 @@ export const S: {
   nudge: null,
   nudgeTool: null,
 };
-
-/** The yard has been built on, cleared or bought for: whatever was worked out from it is stale. */
-export function touched(): void {
-  S.rev++;
-}
 
 /** A point on the page as a point in the yard, in the yard's pixels. */
 export function toYard(pageX: number, pageY: number): Pt {

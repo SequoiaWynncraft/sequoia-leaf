@@ -19,8 +19,13 @@ arrays by tile too. Things, kinds, plots and goals are numbers throughout, as th
 names are used only on the wire (the rules write and read it: `writeCommand`, `readView`,
 `readNotes`, `readAnswer`) and where art and words are looked up, once, into lists by number
 (`art/items.ts`, `art/index.ts`, the rules' `ITEM_INFO` and `KIND_INFO`). The page shows tiers 0 and
-1 as the first design did; every grade is drawn as the first, and the Study, the cart stop and the
-sorter, which no tier shown yet builds, are a plain post with a card that says what they are.
+1 as the first design did; every grade is drawn as the first. One list says which kinds the page
+draws and builds (`DRAWN`, in `state.ts`), and the dock, the pick (`Q`) and the drawing read it: the
+Study, the cart stop and the sorter, which no tier shown yet builds, are not on it, so each is a plain
+post with nothing of a belt about it, and a card that says what it is. Nothing on the page writes to
+its yard but the rules: pieces in hand are drawn from a yard that shares everything with the real
+one but its own few arrays (`asIf`, in `layout.ts`), and the orders Leaf hung are put on the board
+by the rules' `hear`. A side table's row is read only through the rules' `holderOf` and `tunnelOf`.
 
 ```sh
 bun run dev                      # with hot reload
@@ -101,7 +106,9 @@ far to near (machines, the depot, redwoods, the fence and gate, undergrowth on l
 whoever is walking about), then the lines between pylons, the dusk, and last whatever is being
 pointed at or is about to be built. Only tiles on screen are looked at; every sprite is made once
 and kept; what is worked out from the yard's layout (belt shapes, lines, fences, signposts) is
-worked out once for each change to the yard (`layout.ts`).
+worked out once for each change to the yard (`layout.ts`). A change is counted in one place,
+`yard.ts` (`S.rev`): a command done, a yard taken from Leaf, and a goal finished as the copy runs
+on, since that changes what is open (the plots for sale, a pylon's reach).
 
 Most of a frame is what the last one showed, and a browser charges for each thing drawn, so
 `scene.ts` keeps what stays and draws what moved:
@@ -146,8 +153,8 @@ a click on a belt (or a drag across the yard) gives its whole line the one chose
 thing. With a finger, dragging always moves the view and two fingers zoom, so nothing is built by
 accident: a tap aims, and a second tap or the Build button builds. The click a browser makes after
 a finger's tap on the yard is stopped, so the tap that opens a card presses nothing on it. A belt is laid from two taps,
-start and end, with the router's run shown before it is laid; tapping a machine to start from
-begins the run where that machine hands things on.
+start and end, with the router's run shown before it is laid; tapping a piece to start from begins
+the run on the tile ahead of it: where a machine hands things on, or a splitter's way ahead.
 
 **Many pieces at once.** Select (the dock, or `F`) marks out an area: a drag with a mouse, two taps
 on opposite corners with a finger. Every piece in it is lit gold on its tile with a gold line where
@@ -158,6 +165,10 @@ ghost that follows the pointer, drawn as they would stand, belts joined to each 
 lines already there: gold over each piece that can go, coral over each that cannot, and the reason
 for the first of those over it. `R` turns the whole of it. A click sets it down (a finger aims
 with a tap, then Build), all of it or none, and it lands in a wave of dust out from the pointer.
+A move, a copy and a blueprint each go to Leaf as one command, whatever their size: a copy sets down
+what stands on the tiles it was taken up from, as the rules' `copy` does. Only putting back what was
+taken away (`Z` after a removal) stands pieces, at most 160 to a command (all of it is checked first,
+and each command is all or none).
 Moved pieces stay marked where they now stand; a copy stays in hand for another. A moved, copied
 or kept piece has the colour it had, and the ghost shows it. With nothing
 marked the line shows the yard's blueprints, as many places as it has unlocked, each a small picture of its layout with its size
@@ -254,12 +265,13 @@ clockwork crab is made. Opened alone it plays just the same.
 stages a moment in the yard on the play server on this machine (`apps/api/test/play.ts`, through
 `POST /test/play/works`) and takes it: `{ yard: "new" }` or one of the yards the rules' test yards
 build with commands (`staged` in `packages/factory/test/yards.ts`): `"small"` (the first two
-lessons done), `"short"` (the last lesson in hand, short of power), `"mid"` (tier 2, the board up,
-plots bought, a painted line and a splitter), `"large"` (the generator's yard on every plot the slice
-sells); `{ away: minutes }`, its owner away that long and the yard run every tick meanwhile;
-`{ fill: n }`, the nth standing order filled; `{ feed: true }`, what the node in hand still wants
-laid on runs of belt into the depot, each a tile short, for the page to lay the last belt as a
-member would (so the delivery happens in the page's own ticks, with its moment); `{ text: "..." }`,
+lessons done), `"short"` (the last lesson in hand, short of power), `"mid"` (every node of tiers 0 and 1 done,
+tier 2 open, the board up, plots bought, a painted line and a splitter), `"large"` (every node of
+tiers 0 to 2 done, and the generator's pieces on every plot the slice sells); each a yard the rules
+could have made, every goal finished and paid by them; `{ away: minutes }`, its owner away that long
+and the yard run every tick meanwhile; `{ fill: n }`, the nth standing order filled; `{ feed: true }`,
+what the node in hand still wants sent to the depot, so that Leaf finishes it as in play (the page
+takes Leaf's yard after, so the moment is not shown); `{ text: "..." }`,
 any yard as its kept text. A step within the same yard keeps the lessons taken. `hold(true)` stops the screen
 running the yard on, and `hold(true, lead, at)` shows it `lead` of the way into its next tick with
 the screen's clock at `at` seconds, so a picture can be taken twice the same; `skip(seconds)` moves

@@ -34,6 +34,7 @@ import {
   SPAN_MOST,
   STARTING,
   STUDY,
+  TUNNEL,
   WORKSHOP,
 } from "./tables.ts";
 
@@ -329,6 +330,15 @@ export const holds = (k: number): boolean =>
 /** How much a full side table grows by: a half, so a yard of nothing but crates stays under a megabyte. */
 const grown = (size: number): number => Math.ceil(size * 1.5);
 
+/**
+ * The row in `holders` of the piece on a tile, or -1 for a kind that holds nothing. `row` holds a
+ * holder's row for some kinds and a tunnel's for another: it is read only through this and `tunnelOf`.
+ */
+export const holderOf = (y: Yard, i: number): number => (holds(y.kind[i] ?? NONE) ? (y.row[i] ?? -1) : -1);
+/** The row in `tunnels` of the tunnel going in on a tile (its way-in mouth), or -1 for anything else. */
+export const tunnelOf = (y: Yard, i: number): number =>
+  y.kind[i] === TUNNEL && (y.span[i] ?? 0) > 0 ? (y.row[i] ?? -1) : -1;
+
 /** A new row in a side table for the piece on a tile, the table grown if it is full. */
 export function holderRow(y: Yard, tile: number): number {
   let h = y.holders;
@@ -353,6 +363,7 @@ export function holderRow(y: Yard, tile: number): number {
   return r;
 }
 
+/** A new row in `tunnels` for the tunnel going in on a tile, the table grown if it is full. */
 export function tunnelRow(y: Yard, tile: number): number {
   let t = y.tunnels;
   if (t.size === t.tile.length) {
@@ -365,6 +376,7 @@ export function tunnelRow(y: Yard, tile: number): number {
   t.tile[r] = tile;
   t.under.fill(NONE, r * SPAN_MOST, (r + 1) * SPAN_MOST);
   t.along.fill(0, r * SPAN_MOST, (r + 1) * SPAN_MOST);
+  y.row[tile] = r;
   return r;
 }
 

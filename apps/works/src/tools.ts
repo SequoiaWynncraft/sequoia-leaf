@@ -10,6 +10,7 @@
 
 import {
   type Act,
+  ahead,
   at,
   BELT,
   blueprintRefusal,
@@ -23,9 +24,9 @@ import {
   kindAt,
   LEFT,
   type Leg,
+  legPiece,
   lineOf,
   locked,
-  nextOf,
   NONE,
   otherMouth,
   type Piece,
@@ -46,6 +47,7 @@ import {
   takeRefusal,
   tilesOf,
   TUNNEL,
+  tunnelExit,
   within,
   worthAt,
 } from "@sequoia-leaf/factory";
@@ -55,7 +57,7 @@ import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, ring, sparkle } from "./fx.ts";
 import { layout } from "./layout.ts";
 import { yardSfx } from "./sound.ts";
-import { builds, type Group, type Mark, S, type Tool, touched } from "./state.ts";
+import { builds, draws, type Group, type Mark, S, type Tool } from "./state.ts";
 import { coins, doNow } from "./yard.ts";
 
 const DUST = "#cbb894";
@@ -104,10 +106,13 @@ const dirOf = (i: number): Dir => {
   return d === 1 ? 1 : d === 2 ? 2 : d === 3 ? 3 : 0;
 };
 
-/** Whether the yard may use a tool yet: a kind of piece or Select or the brush once unlocked, the spade always. */
+/**
+ * Whether the yard may use a tool yet: a kind of piece this page draws (`DRAWN`), or Select or the
+ * brush, once unlocked; the spade always.
+ */
 export function usable(tool: Tool): boolean {
   const open = S.world.open;
-  if (builds(tool)) return locked(open, { build: tool }) === null;
+  if (builds(tool)) return draws(tool) && locked(open, { build: tool }) === null;
   if (tool === "select") return locked(open, { use: "select" }) === null;
   if (tool === "paint") return locked(open, { use: "paint" }) === null;
   return true;
@@ -167,7 +172,14 @@ export function aimAt(x: number, y: number): void {
     S.aim = { x, y, why: lineOf(w, at(w, x, y)).length > 0 ? null : "Nothing to paint here", cost: 0 };
     return;
   }
-  S.aim = { x, y, why: refusal(w, tool, x, y, coins(), S.dir), cost: priceAt(w, tool, x, y) };
+  const exit = tool === TUNNEL ? tunnelExit(w, x, y, S.dir) : null;
+  S.aim = {
+    x,
+    y,
+    why: refusal(w, tool, x, y, coins(), S.dir),
+    cost: priceAt(w, tool, x, y),
+    far: exit ? at(w, exit.x, exit.y) : -1,
+  };
 }
 
 /** What something just built took from the purse, or gave back, rising from its tile. */
@@ -222,7 +234,6 @@ export function place(x: number, y: number): boolean {
     landed(x, y, tool === BELT);
     paid(x, y, cost);
   }
-  touched();
   aimAt(x, y);
   toolHooks.changed();
   return true;
@@ -255,7 +266,6 @@ export function takeAway(x: number, y: number, quiet = false): boolean {
   // A piece taken out of a marked area is no longer marked.
   remark();
   if (S.mark?.pieces.length === 0) S.mark = null;
-  touched();
   toolHooks.changed();
   return true;
 }
@@ -309,7 +319,6 @@ export function turnAt(x: number, y: number): boolean {
   if (attempt(null, { do: "turn", x, y, dir: RIGHT[was] }) !== null) return false;
   remember({ did: "turned", i, was });
   yardSfx.turn();
-  touched();
   return true;
 }
 
@@ -328,7 +337,6 @@ export function wayAt(x: number, y: number, way: number): boolean {
   puff(x * TILE + 8 + DX[d] * 7, y * TILE + 9 + DY[d] * 7, 3, DUST, 5);
   if (was) yardSfx.belt();
   else yardSfx.turn();
-  touched();
   return true;
 }
 
@@ -358,9 +366,10 @@ export function pickFrom(x: number, y: number): boolean {
 }
 
 /**
- * Stands a set of pieces, all of it or none. A large set goes to Leaf as several commands, each
- * small enough for Leaf to read, once the whole of it is known to go. Gives back why it was not
- * done, or null.
+ * Stands again pieces that were taken away, all of them or none: the only use of `stand`. More than
+ * Leaf reads in one command (`STAND_MOST`) goes as several, once the whole is known to go, each all
+ * or none. A copy and a blueprint are each one command of their own. Gives back why it was not done,
+ * or null.
  */
 function standNow(pieces: readonly Piece[]): string | null {
   const no = standRefusal(S.world, pieces, coins());
@@ -414,7 +423,6 @@ export function undo(): boolean {
     letGo();
     S.aim = null;
   }
-  touched();
   if (S.aim) aimAt(S.aim.x, S.aim.y);
   toolHooks.changed();
   return true;
@@ -445,11 +453,11 @@ function reckon(): void {
     if (there === NONE) {
       const why = refusal(w, BELT, t.x, t.y, Infinity, dir);
       if (why !== null) bad ??= why;
-      else legs.push({ kind: BELT, x: t.x, y: t.y, dir, span: 0 });
+      else legs.push({ tunnel: false, x: t.x, y: t.y, dir, span: 0, grade: 1 });
     } else if (there === BELT && k === 0 && next && dirOf(at(w, t.x, t.y)) !== dir) turns.push({ x: t.x, y: t.y, dir });
     // Anything else in the way is stepped over: the belt before it points into it.
   });
-  const cost = priceOf(w, legs);
+  const cost = priceOf(w, legs.map(legPiece));
   const last = path.at(-1);
   if (path.length > 1) {
     S.run = { legs, turns, cost, why: bad ?? (cost > coins() ? "Not enough Coins" : null) };
@@ -531,12 +539,12 @@ export function commitRun(): boolean {
   run.legs.forEach((leg, n) => {
     const i = at(w, leg.x, leg.y);
     cells.push(i);
-    const far = leg.kind === TUNNEL ? otherMouth(w, i) : -1;
+    const far = leg.tunnel ? otherMouth(w, i) : -1;
     if (far >= 0) cells.push(far);
     // The belts go down one after another along the run, each with its own clack.
     window.setTimeout(
       () => {
-        landed(leg.x, leg.y, leg.kind === BELT, n);
+        landed(leg.x, leg.y, !leg.tunnel, n);
       },
       Math.min(n, 14) * 28,
     );
@@ -547,7 +555,6 @@ export function commitRun(): boolean {
     S.dir = end.dir;
     paid(end.x, end.y, run.cost);
   }
-  touched();
   toolHooks.changed();
   return true;
 }
@@ -555,7 +562,8 @@ export function commitRun(): boolean {
 /**
  * A tap with the belt in hand, for fingers: the first tap says where the run starts, the second
  * where it ends, and the shortest clear way between them is shown before it is laid. Tapping a
- * machine to start from begins the run where that machine hands things on.
+ * piece to start from begins the run on the tile ahead of it, the way it faces: where a machine
+ * hands things on, or a splitter's way ahead.
  */
 export function tapBelt(x: number, y: number): void {
   const w = S.world;
@@ -576,7 +584,7 @@ export function tapBelt(x: number, y: number): void {
   let sx = S.from.x;
   let sy = S.from.y;
   if (kindAt(w, sx, sy) !== NONE) {
-    const out = nextOf(w, at(w, sx, sy));
+    const out = ahead(w, at(w, sx, sy));
     if (out >= 0) {
       sx = out % W();
       sy = Math.floor(out / W());
@@ -585,7 +593,7 @@ export function tapBelt(x: number, y: number): void {
   const legs = sx === x && sy === y && kindAt(w, x, y) !== NONE ? null : route(w, [sx, sy], [x, y]);
   if (!legs) S.run = { legs: [], turns: [], cost: 0, why: "No free path for a belt from there to here" };
   else {
-    const cost = priceOf(w, legs);
+    const cost = priceOf(w, legs.map(legPiece));
     S.run = { legs, turns: [], cost, why: cost > coins() ? "Not enough Coins" : null };
   }
   S.aim = { x, y, why: S.run.why, cost: S.run.cost };
@@ -682,14 +690,23 @@ export function markEnd(): void {
   toolHooks.changed();
 }
 
+/**
+ * The pieces in hand as they stand now, at no place yet: a blueprint's, or what stands on the tiles
+ * taken up (a move or a copy sets down what stands there, as the rules do).
+ */
+export function piecesInHand(g: Pick<Group, "as" | "tiles">): Piece[] {
+  if (typeof g.as !== "number") return piecesAt(S.world, g.tiles);
+  const print = S.world.blueprints[g.as];
+  return print ? piecesOf(print) : [];
+}
+
 /** Takes in hand the marked pieces, to move them or to stand a copy of them, or the blueprint kept in a place. */
 export function hold(as: Group["as"]): void {
   remark();
-  const print = typeof as === "number" ? S.world.blueprints[as] : null;
-  const pieces = typeof as === "number" ? print && piecesOf(print) : S.mark?.pieces;
-  if (!pieces || pieces.length === 0) return;
+  const tiles = typeof as === "number" ? [] : (S.mark?.tiles ?? []);
+  if (piecesInHand({ as, tiles }).length === 0) return;
   if (typeof as === "number") S.mark = null;
-  S.group = { as, pieces, turns: 0, at: [], why: [] };
+  S.group = { as, tiles, turns: 0, at: [], why: [] };
   S.saving = false;
   S.aim = null;
   if (S.hover) aimAt(S.hover.x, S.hover.y);
@@ -705,10 +722,11 @@ function aimGroup(x: number, y: number): void {
     S.aim = null;
     return;
   }
-  const box = boxOf(placed(g.pieces, g.turns, 0, 0));
-  g.at = placed(g.pieces, g.turns, x - ((box.w - 1) >> 1), y - ((box.h - 1) >> 1));
+  const from = piecesInHand(g);
+  const box = boxOf(placed(from, g.turns, 0, 0));
+  g.at = placed(from, g.turns, x - ((box.w - 1) >> 1), y - ((box.h - 1) >> 1));
   const moving = g.as === "move";
-  g.why = refusals(w, g.at, moving ? tilesOf(w, g.pieces) : null);
+  g.why = refusals(w, g.at, moving ? tilesOf(w, from) : null);
   const why = moving ? (g.why.find((r) => r !== null) ?? null) : standRefusal(w, g.at, coins(), g.why);
   S.aim = { x, y, why, cost: moving ? 0 : priceOf(w, g.at) };
 }
@@ -717,8 +735,9 @@ function aimGroup(x: number, y: number): void {
 const TURNS_BACK = [0, 3, 2, 1] as const;
 
 /**
- * Sets the pieces in hand down where they are aimed, all of them or none. Moved pieces are done
- * with, and stay marked where they now stand; a copy or a blueprint stays in hand for another.
+ * Sets the pieces in hand down where they are aimed, all of them or none, in one command: a move,
+ * a copy or a blueprint, each naming the turns and the corner. Moved pieces are done with, and stay
+ * marked where they now stand; a copy or a blueprint stays in hand for another.
  */
 function setDown(): boolean {
   const w = S.world;
@@ -738,18 +757,18 @@ function setDown(): boolean {
   const moving = g.as === "move";
   // A copy over itself, just set down: nothing to stand.
   if (!moving && aim.why === null && stood.length === 0 && turned.length === 0) return false;
-  const no =
-    aim.why ??
-    (moving
-      ? attempt(null, { do: "move", tiles: tilesOf(w, g.pieces), turns: g.turns, x: box.x, y: box.y })
-      : standNow(g.at));
+  const was = boxOf(piecesInHand(g));
+  const act: Act =
+    typeof g.as === "number"
+      ? { do: "placeBlueprint", slot: g.as, turns: g.turns, x: box.x, y: box.y }
+      : { do: g.as, tiles: g.tiles, turns: g.turns, x: box.x, y: box.y };
+  const no = attempt(aim.why, act);
   if (no !== null) {
     yardSfx.no();
     toolHooks.said(`${no}.`);
     return false;
   }
   if (moving) {
-    const was = boxOf(g.pieces);
     remember({ did: "moved", tiles, turns: TURNS_BACK[g.turns], x: was.x, y: was.y });
     S.group = null;
     S.aim = null;
@@ -769,7 +788,6 @@ function setDown(): boolean {
       });
     }, n * 28);
   });
-  touched();
   // A copy stays in hand: under the mouse where it is, and for a finger until it is aimed again.
   if (S.group && !S.finger) aimAt(aim.x, aim.y);
   else S.aim = null;
@@ -795,7 +813,6 @@ export function clearMark(): boolean {
   yardSfx.take();
   letGo();
   S.picked = -1;
-  touched();
   toolHooks.changed();
   return true;
 }
@@ -852,7 +869,6 @@ export function buyLand(id: Plot): boolean {
   S.clearing.set(id, { at: S.t, x: from.x, y: from.y });
   yardSfx.clear();
   float(from.x, from.y - 20, plot.name, GOLD[2], 2.4);
-  touched();
   return true;
 }
 
@@ -886,7 +902,6 @@ export function takeInHand(g: Goal): string | null {
     return no;
   }
   yardSfx.plan();
-  touched();
   toolHooks.changed();
   return null;
 }

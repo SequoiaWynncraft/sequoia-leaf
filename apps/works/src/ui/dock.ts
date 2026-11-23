@@ -4,8 +4,8 @@
  * Select in hand the line holds what is done to the marked pieces, and the yard's blueprints.
  *
  * A kind of piece or a tool is in the dock only once the yard may use it (`usable`, which asks
- * `locked`). The pieces of later tiers that have no art yet (the Study, the cart stop, the sorter)
- * are not in it.
+ * `locked`), and a kind only if this page draws it (`DRAWN`): the pieces of later tiers that have no
+ * art yet (the Study, the cart stop, the sorter) are not in it.
  */
 
 import {
@@ -19,7 +19,6 @@ import {
   DY,
   GATHERER,
   type Kind,
-  kind,
   KIND_INFO,
   MILL,
   type Piece,
@@ -38,7 +37,7 @@ import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { PAINTS } from "../art/belts.ts";
 import { type Art, bare } from "../art/index.ts";
-import { builds, S, type Tool } from "../state.ts";
+import { builds, DRAWN, S, type Tool } from "../state.ts";
 import {
   askSave,
   cancel,
@@ -46,6 +45,7 @@ import {
   confirm,
   dropBlueprint,
   hold,
+  piecesInHand,
   rotate,
   saveMark,
   setTool,
@@ -57,23 +57,8 @@ import { CATCHING_UP, catchingUp } from "../yard.ts";
 import { machineRef } from "./card.ts";
 import { $, button, fitted, when, type YardIcon, yardIcon } from "./parts.ts";
 
-/** The tools in the order they sit in the dock, which is also the order of the number keys. */
-export const TOOLS: readonly Kind[] = (
-  [
-    "belt",
-    "gatherer",
-    "mill",
-    "bench",
-    "workshop",
-    "splitter",
-    "joiner",
-    "tunnel",
-    "crate",
-    "pylon",
-    "wheel",
-    "boiler",
-  ] as const
-).map(kind);
+/** The tools in the order they sit in the dock, which is also the order of the number keys: every kind this page draws. */
+export const TOOLS: readonly Kind[] = DRAWN;
 export const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="];
 
 /** The tools the yard may build, in dock order. */
@@ -164,7 +149,7 @@ function selectLine(f: boolean): { text: string; bad: boolean } {
     const moving = g.as === "move";
     const what = moving
       ? "Move"
-      : `${g.as === "copy" ? "Copy" : "Blueprint"}, ${price(S.aim?.cost ?? priceOf(S.world, g.pieces, true))}`;
+      : `${g.as === "copy" ? "Copy" : "Blueprint"}, ${price(S.aim?.cost ?? priceOf(S.world, piecesInHand(g), true))}`;
     if (f) return { text: S.aim ? `${what}. Tap again, or Build.` : `${what}: tap where it goes.`, bad: false };
     return { text: `${what}: click to place it. R rotates it.`, bad: false };
   }

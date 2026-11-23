@@ -18,12 +18,11 @@ const readBack = (a: F.Act, tick = 7): F.Command | null =>
   F.readCommand(JSON.parse(JSON.stringify({ ...F.writeAct(a), tick })));
 
 describe("what the page writes for an act", () => {
-  const belt = F.BELT;
-  const leg: F.Piece = { kind: belt, x: 3, y: 4, dir: 1, span: 0 };
+  const leg: F.Leg = { tunnel: false, x: 3, y: 4, dir: 1, span: 0, grade: 1 };
   const acts: F.Act[] = [
     { do: "build", kind: F.MILL, x: 20, y: 15, dir: 2, grade: 1 },
     { do: "build", kind: F.GATHERER, x: 1, y: 2, dir: 3, grade: 2 },
-    { do: "lay", legs: [leg, { kind: F.TUNNEL, x: 4, y: 4, dir: 0, span: 2, grade: 2 }] },
+    { do: "lay", legs: [leg, { tunnel: true, x: 4, y: 4, dir: 0, span: 2, grade: 2 }] },
     { do: "lay", legs: [leg], turn: { x: 3, y: 3, dir: 1 } },
     {
       do: "stand",
@@ -36,6 +35,7 @@ describe("what the page writes for an act", () => {
     },
     { do: "placeBlueprint", slot: 1, turns: 3, x: 9, y: 8 },
     { do: "move", tiles: [1, 2, 300], turns: 2, x: 5, y: 6 },
+    { do: "copy", tiles: [1, 2, 300], turns: 1, x: 5, y: 6 },
     { do: "remove", x: 0, y: 35 },
     { do: "clear", tiles: [10, 11] },
     { do: "upgrade", tiles: [12] },
@@ -64,6 +64,40 @@ describe("what the page writes for an act", () => {
     const kinds = new Set<string>(acts.map((a) => a.do));
     expect([...Object.keys(F.REFUSED), "collect"].filter((k) => !kinds.has(k))).toEqual([]);
     for (const a of acts) expect(readBack(a)).toEqual({ ...a, tick: 7 });
+  });
+
+  test("for a run of belt is a leg's kind, where, which way, how far under and its grade, and nothing else", () => {
+    const wired = F.writeAct({ do: "lay", legs: [leg, { tunnel: true, x: 4, y: 4, dir: 0, span: 2, grade: 2 }] });
+    expect(wired).toEqual({
+      do: "lay",
+      legs: [
+        { kind: "belt", x: 3, y: 4, dir: 1, span: 0 },
+        { kind: "tunnel", x: 4, y: 4, dir: 0, span: 2, grade: 2 },
+      ],
+    });
+    // A belt that says it passes under is no leg, nor is any other kind.
+    for (const bad of [
+      { kind: "belt", span: 1 },
+      { kind: "mill", span: 0 },
+    ])
+      expect(F.readLeg({ x: 1, y: 1, dir: 0, ...bad })).toBeNull();
+  });
+
+  test("for a run of belt does the same to the page's copy as to Leaf's yard, whatever its legs carry beside what a leg is", () => {
+    const page = F.create({ seed: 2, tier: 2 });
+    const leaf = F.decode(F.encode(page));
+    if (!leaf) throw new Error("the yard does not read back");
+    const legs = F.route(page, [20, 15], page.land.depot) ?? [];
+    // A colour, a recipe and a shut way on every leg, as a page holding pieces might pass them.
+    const a: F.Act = {
+      do: "lay",
+      legs: legs.map((l) => Object.assign({}, l, { tint: 3, recipe: F.item("plank"), shut: 2 })),
+    };
+    expect("refused" in F.play(page, { ...a, tick: page.tick })).toBe(false);
+    const read = readBack(a, leaf.tick);
+    expect(read && "refused" in F.play(leaf, read)).toBe(false);
+    expect([F.check(page), F.encode(page)]).toEqual([F.check(leaf), F.encode(leaf)]);
+    expect(page.tint[F.at(page, 20, 15)]).toBe(0);
   });
 
   test("names every thing, kind, plot and goal, and holds no number for one", () => {

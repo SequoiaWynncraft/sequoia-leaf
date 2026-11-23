@@ -134,7 +134,7 @@ describe("building over a piece of the same kind", () => {
     const run = [mouths(2)[1] ?? {}, { kind: "belt", x: 4, y: 7, dir: 0, span: 0 }];
     const read = F.readCommand({ do: "lay", legs: run, tick: y.tick });
     if (read?.do !== "lay") throw new Error("the run does not read");
-    expect(F.priceOf(y, read.legs)).toBe(24 + 1);
+    expect(F.priceOf(y, read.legs.map(F.legPiece))).toBe(24 + 1);
     expect(spent(y, { do: "lay", legs: run })).toBe(24 + 1);
     expect([y.grade[F.at(y, 1, 7)], y.grade[F.at(y, 3, 7)]]).toEqual([2, 2]);
   });
