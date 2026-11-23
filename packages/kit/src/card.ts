@@ -704,8 +704,13 @@ const view: View = {
     const card = drawCard(d, o);
     const scrolled = was?.scrollTop ?? 0;
     const held = was ? [...was.querySelectorAll("button")].findIndex((b) => b === document.activeElement) : -1;
-    if (was) was.replaceWith(card);
-    else document.body.append(card);
+    // The new card goes in beside the old before the old goes. Taking the old one out takes the
+    // focus off a button pressed in it, which puts away that button's tip; `replaceWith` puts the
+    // new card in before whatever followed the old, and when that was the tip, it was gone.
+    if (was) {
+      was.before(card);
+      was.remove();
+    } else document.body.append(card);
     node = card;
     // The same card again (pinned where it was, followed on, refreshed) keeps its corner as far as it fits.
     const same = prev !== null && prev.from === o.from && prev.stack[0] === o.stack[0] && prev.at === o.at;
