@@ -81,14 +81,17 @@ interface Copy {
 
 /** One thing asked of a lane: an open, a visit, a batch of commands, or Leaf's own tend. */
 interface Job {
-  /** Leaf's own, not a player's. */
-  readonly tend: boolean;
+  readonly kind: Kind;
   /** The lane whose line it is in. */
   readonly lane: Lane;
   /** Its place among the arrivals of every lane's jobs. */
   readonly seq: number;
-  /** The moment it arrived, read once, as it took its place. */
+  /** The moment it arrived, read once, as it took its place; and on the monotonic clock, in nanoseconds. */
   readonly at: number;
+  readonly arrived: bigint;
+  /** Where its time has gone so far, in nanoseconds: waiting (for its turn, then for slices) and in SQLite. */
+  waited: bigint;
+  sqlite: bigint;
   /** All but a batch: its caller has gone while it waited, and it is never done. */
   gone: boolean;
   /** Does it, saves the copy if it leaves the line empty, then answers it. */
@@ -108,16 +111,35 @@ interface Lane {
 }
 
 /** Which job it is: a player's open, visit or batch, or Leaf's own tend. */
-type Kind = "open" | "visit" | "batch" | "tend";
+export type Kind = "open" | "visit" | "batch" | "tend";
 /** What a job does, given the job: its answer, given once the copy is saved. */
 type Work<A> = (job: Job) => Effect.Effect<() => A, Lost>;
 
-/** A slice of running a state on, asked for by a lane's job. */
+/** A slice of running a state on, asked for by a lane's job, when it was asked for (monotonic, in nanoseconds). */
 interface Ask {
   readonly job: Job;
+  readonly asked: bigint;
   readonly work: (more: () => boolean) => boolean;
   readonly done: Deferred.Deferred<boolean>;
 }
+
+/**
+ * Where one job's time went, in milliseconds, from its arrival to its answer: `waited` for its turn
+ * in its line and for slices, `sqlite` reading the state and in the batch's transaction, and
+ * `worked`, the rest (the rules, their text, the other reads, Leaf's own code).
+ */
+export interface JobTimes {
+  readonly game: string;
+  readonly kind: Kind;
+  readonly waited: number;
+  readonly sqlite: number;
+  readonly worked: number;
+}
+
+/** Told where each job's time went (`JobTimes`), for the load test; nobody is, unless given. */
+export const PlayMeter = Context.Reference<((times: JobTimes) => void) | null>("leaf/PlayMeter", {
+  defaultValue: () => null,
+});
 
 /** Who is playing, as the play service needs to know them. */
 export interface Playing {
@@ -219,6 +241,9 @@ interface Taken {
  * whose keys stay as they were.
  */
 const ofState = (born: number, key: string): string => (born === 0 ? key : `${born}:${key}`);
+
+/** Nanoseconds in milliseconds. */
+const msOf = (ns: bigint) => Number(ns) / 1e6;
 
 /** What spends come to, in Leaf. */
 const sum = (spends: readonly Taken[]) => spends.reduce((all, spend) => all + spend.amount, 0);
@@ -336,6 +361,7 @@ export class Play extends Context.Service<
       const random = yield* SecureRandom.SecureRandom;
       const clock = yield* Clock.Clock;
       const watchers = yield* Watchers;
+      const meter = yield* PlayMeter;
       const scope = yield* Effect.scope;
       const dice = random.intBetween(0, 0xffffffff);
       // Each player's batches and commands, across all games.
@@ -354,12 +380,12 @@ export class Play extends Context.Service<
       const nanos = () => clock.monotonicTimeNanosUnsafe();
       let waited = 0;
       /** Whose a slice is: the oldest player's job waiting in the line of the lane that asks, or else its own. */
-      const whose = (ask: Ask) => ask.job.lane.jobs.find((job) => !job.tend && !job.gone) ?? ask.job;
+      const whose = (ask: Ask) => ask.job.lane.jobs.find((job) => job.kind !== "tend" && !job.gone) ?? ask.job;
       /** The slice to run next, taken from those asked for. */
       const nextAsk = () => {
         const first = (tend: boolean) =>
           asks.reduce<Ask | undefined>(
-            (o, a) => (whose(a).tend === tend && (o === undefined || whose(a).seq < whose(o).seq) ? a : o),
+            (o, a) => ((whose(a).kind === "tend") === tend && (o === undefined || whose(a).seq < whose(o).seq) ? a : o),
             undefined,
           );
         const player = first(false);
@@ -379,6 +405,7 @@ export class Play extends Context.Service<
               continue;
             }
             const began = nanos();
+            ask.job.waited += began - ask.asked;
             const ran = yield* Effect.exit(Effect.sync(() => ask.work(() => nanos() - began < SLICE_NS)));
             const rested = 2n * nanos() - began;
             Deferred.doneUnsafe(ask.done, ran);
@@ -389,11 +416,34 @@ export class Play extends Context.Service<
         }),
         scope,
       );
+      /** Does `effect` for a job, its time counted as the job's in SQLite. */
+      const inSqlite = <A, E>(job: Job, effect: Effect.Effect<A, E>) =>
+        Effect.suspend(() => {
+          const began = nanos();
+          return Effect.ensuring(
+            effect,
+            Effect.sync(() => void (job.sqlite += nanos() - began)),
+          );
+        });
+      /** Tells the meter, if there is one, where a job's time went. */
+      const measured = (job: Job) =>
+        Effect.sync(() => {
+          if (meter === null) return;
+          const total = nanos() - job.arrived;
+          meter({
+            game: job.lane.played.id,
+            kind: job.kind,
+            waited: msOf(job.waited),
+            sqlite: msOf(job.sqlite),
+            worked: msOf(total - job.waited - job.sqlite),
+          });
+        });
+
       /** Runs `work` for a job when its slice comes, and says what it said: whether there is further to go. */
       const slice = (job: Job, work: (more: () => boolean) => boolean) =>
         Effect.suspend(() => {
           const done = Deferred.makeUnsafe<boolean>();
-          asks.push({ job, work, done });
+          asks.push({ job, asked: nanos(), work, done });
           asked.openUnsafe();
           return Deferred.await(done);
         });
@@ -404,10 +454,11 @@ export class Play extends Context.Service<
        * owner's open or batch (`maker`) one made now. Undefined for no state; null for one that does
        * not read, which is logged.
        */
-      const copyOf = (lane: Lane, at: number, maker: Playing | null) =>
+      const copyOf = (job: Job, maker: Playing | null) =>
         Effect.gen(function* () {
+          const { lane, at } = job;
           const { key, player, played } = lane;
-          const found = yield* store.read(player, played.id);
+          const found = yield* inSqlite(job, store.read(player, played.id));
           if (Option.isSome(found) && lane.copy?.rev === found.value.rev) return lane.copy;
           if (Option.isNone(found)) {
             // Nothing stored: only a new copy, not yet stored, still stands, whoever asks.
@@ -450,7 +501,7 @@ export class Play extends Context.Service<
       /** The lane's copy (`copyOf`) brought to the job's moment (`runOn`), with what its owner has won; or none. */
       const brought = (job: Job, maker: Playing | null) =>
         Effect.gen(function* () {
-          const copy = yield* copyOf(job.lane, job.at, maker);
+          const copy = yield* copyOf(job, maker);
           if (!copy) return copy;
           const awards = yield* store.awards(job.lane.player);
           copy.at = job.at;
@@ -550,8 +601,9 @@ export class Play extends Context.Service<
           const changed = text !== copy.text;
           const standing = changed ? game.standing() : null;
           const won = changed ? game.awards().filter((id) => !awards.includes(id)) : [];
-          const { rev, purse } = yield* sql
-            .withTransaction(
+          const { rev, purse } = yield* inSqlite(
+            job,
+            sql.withTransaction(
               Effect.gen(function* () {
                 // What is stored first: the copy is kept over the `rev` it came from, or as the first state.
                 const first =
@@ -597,8 +649,8 @@ export class Play extends Context.Service<
                 // The balances as the batch leaves them, for the page: no other answer is needed.
                 return { rev: next, purse: yield* coins.balances(player) };
               }),
-            )
-            .pipe(Effect.catchTag("SqlError", Effect.die));
+            ),
+          ).pipe(Effect.catchTag("SqlError", Effect.die));
           Object.assign(copy, { rev, text, guest: playing.guest, born, unsaved: false });
           let answered: unknown;
           const view = () => (answered ??= game.answer(ctx(0, room)));
@@ -652,19 +704,24 @@ export class Play extends Context.Service<
               Effect.exit,
             );
           const job: Job = {
-            tend: kind === "tend",
+            kind,
             lane,
             seq: ++arrivals,
             at: clock.currentTimeMillisUnsafe(),
+            arrived: nanos(),
+            waited: 0n,
+            sqlite: 0n,
             gone: false,
-            run: Effect.suspend(() =>
-              job.gone
+            run: Effect.suspend(() => {
+              job.waited += nanos() - job.arrived;
+              const doing = job.gone
                 ? Effect.asVoid(again(settle(job)))
                 : Effect.map(
                     again(Effect.flatMap(work(job), (then) => Effect.map(settle(job), then))),
                     (exit) => void Deferred.doneUnsafe(done, exit),
-                  ),
-            ),
+                  );
+              return Effect.ensuring(doing, measured(job));
+            }),
             stop: () => void Deferred.doneUnsafe(done, Exit.interrupt()),
           };
           lane.jobs.push(job);
@@ -765,7 +822,7 @@ export class Play extends Context.Service<
               if (!played.tends) continue;
               for (const { playerId: player, rev } of yield* store.unwritten(played.id, began - TEND_AFTER)) {
                 const key = keyOf(player, played);
-                if (stills.get(key) === rev || lanes.get(key)?.jobs.some((job) => job.tend)) continue;
+                if (stills.get(key) === rev || lanes.get(key)?.jobs.some((job) => job.kind === "tend")) continue;
                 const tended = yield* line("tend", player, played, tending);
                 ends.push(Effect.catchDefect(tended, (defect) => failed(player, played.id, defect)));
               }

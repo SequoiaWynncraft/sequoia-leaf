@@ -774,15 +774,15 @@ many states, and how long they took. On the development machine, tending the
 largest kept yard (228 pieces) takes 9.5 ms of work two and a half minutes
 behind and 0.9 s eight hours behind, so half a core keeps about 7,900 such
 yards up; its owner opening it eight hours behind, on a Leaf just started,
-waits about 2 s. `bun apps/api/test/live-load.ts 32 20
-50 10` timed the town while fifty of them, eight hours behind, were tended and
-ten players visited one at once: 17.4 ms at the median, 32.8 ms at the 95th
-percentile and 36.9 ms at worst, against 15.9, 31.6 and 33.7 ms without; the ten
-visits were answered within 2.7 s, the other forty-nine tends taking every
-fourth slice meanwhile. With `32 20 50 0 50`, fifty players visited a large yard
-written a minute ago at once, all answered within 0.07 s, and its owner's
-command sent behind them was answered in 67 to 83 ms; their page's commands
-after, once every half second, took 4 to 5 ms at the median and 11 ms at worst.
+waits about 2 s. The load test (`apps/api/test/load/`, under Live) ran Leaf
+limited to four cores and 16 GB, as the server is, with 300 players walking
+about the town and twenty owners' pages each sending a batch of one to eight
+commands a second: the batches took 3.3 ms at the median, 14 ms at the 95th
+percentile and 22 ms at the 99th, and fifty visits to one of those yards at once
+were answered within 24 ms. Tending fifty of the largest yards eight hours behind
+took 273 s, 2.2 s of work each; meanwhile fifty visits to one of them waited
+6.9 s for it to be brought up, and a batch to another yard waited as long behind
+them.
 
 **The town and the camp** keep the camp (what stands where, each thing by an
 id of its own, the tray of things not set out, the letters, the pets),
@@ -1031,13 +1031,19 @@ once), the network there, up to 33 ms waiting for Leaf's tick, the network back
 (the slowest but a tenth of the latest snapshots), and then 100 ms more: the game
 draws others that far behind the newest snapshots as they reach it, so that it
 always has two to go between and never guesses past the newest. A player whose
-game sends no move for 300 ms (a hidden tab) is stood still where they are. `bun apps/api/test/live-load.ts [players] [seconds] [yards] [visitors] [fresh]` runs
-the real app with that many players walking about the town at the game's pace
-(and that many large yards for Leaf to tend meanwhile), and times every move from its sender to each other player receiving it (not to
-the screen). On the development machine, with the server and every player in one
-process: 32 players, every move seen by all 31 others, 17 ms at the median and
-35 ms at worst, 15 KiB a second to each player; 128 players in four copies of
-the town, 19 ms and 38 ms, 19% of one core for everything. Measured on the
+game sends no move for 300 ms (a hidden tab) is stood still where they are. `apps/api/test/load/`
+loads the real app from a process of its own: `leaf.ts` serves it (started in a
+scope limited as the server is, `systemd-run --user --scope -p CPUQuota=400% -p
+MemoryMax=16G`), and `drive.ts` walks players about the town at the game's pace,
+has one in thirty join anew each second, has owners' pages send commands, visits
+yards in bursts and has Leaf tend fifty yards eight hours behind. It times every
+move from its sender to each other player in the room receiving it (not to the
+screen), every command and every visit; Leaf says how long its event loop was
+held, where the play service's time went, its CPU and its memory. On the
+development machine, 300 players: 18.6 ms at the median, 34 ms at the 95th
+percentile and 37 ms at the 99th, the event loop held 3.6 ms at the 99th, 31% of
+one core and 212 MiB; while Leaf tended the fifty yards, 37 ms at the 99th and
+113 ms at worst. Measured on the
 screen, with `play.ts --crowd 6` and two pages as two members on the same
 machine, one walking about the town and the other read every 100 ms for 24
 seconds: the second draws the first where the first said it was 125 to 135 ms
