@@ -1,7 +1,16 @@
-import { DAY_MS, type Logged, type Placed, type PlayerId, type Standing, utcDay } from "@sequoia-leaf/core";
+import {
+  DAY_MS,
+  type Logged,
+  type Placed,
+  type PlayerId,
+  type Standing,
+  talliedFrom,
+  utcDay,
+} from "@sequoia-leaf/core";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
+import { tally } from "../tally/store.ts";
 import { PlayerUuid } from "../wire.ts";
 
 /** How many of each player's newest commands to each game have their answers kept, so that one sent again is answered the same. */
@@ -105,7 +114,8 @@ export class PlayStore extends Context.Service<
     readonly keepNewest: (playerId: PlayerId, game: string) => Effect.Effect<void>;
     /**
      * Writes down what a player did, as far as the UTC day's `LOGGED_A_DAY` goes, and lets go of
-     * what was done in the game longer ago than `ACTIVITY_KEPT_MS`.
+     * what was done in the game longer ago than `ACTIVITY_KEPT_MS`; and counts each thing the Tally
+     * counts (`talliedFrom`), however much was logged.
      */
     readonly log: (playerId: PlayerId, game: string, logged: readonly Logged[], now: number) => Effect.Effect<void>;
     /** A player's activity, oldest first. */
@@ -259,6 +269,8 @@ export class PlayStore extends Context.Service<
                   `;
                 }
                 yield* sql`DELETE FROM activity WHERE game = ${game} AND at < ${now - ACTIVITY_KEPT_MS}`;
+                // The Tally counts all of it, logged or not.
+                for (const stat of talliedFrom(logged)) yield* tally(sql, playerId, stat, 1, now);
               }).pipe(Effect.orDie),
         activity: (playerId) => activity(playerId).pipe(Effect.orDie),
         count: (playerId, done, refused, now) =>

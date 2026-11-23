@@ -58,6 +58,7 @@ import {
   RerollBody,
   Rerolled,
   Standings,
+  Tally,
 } from "./schemas.ts";
 
 // Leaf's HTTP API, declared once: the server implements it, and its OpenAPI
@@ -249,6 +250,11 @@ export class GameApi extends HttpApiGroup.make("game")
     HttpApiEndpoint.get("person", "/people/:player", {
       params: { player: Schema.String },
       success: Person,
+      error: Missing,
+    }),
+    HttpApiEndpoint.get("tally", "/tally/:board/:period", {
+      params: { board: Schema.String, period: Schema.String },
+      success: Tally,
       error: Missing,
     }),
     HttpApiEndpoint.get("banners", "/banners", { success: Banners }),

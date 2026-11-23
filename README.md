@@ -389,22 +389,23 @@ react to `quest_completed`.
 
 ### The game's routes
 
-| Route                                | What it returns                                                       |
-| ------------------------------------ | --------------------------------------------------------------------- |
-| `GET /v1/game/hello`                 | Where to sign in, and whether Leaf may be spent. Needs no session.    |
-| `GET /v1/game/me`                    | The player, their rank, Leaf, XP, level, newest event's id and Coins. |
-| `GET /v1/game/skins/{uuid}`          | A player's skin sheet, as a PNG.                                      |
-| `GET /v1/game/guild/events`          | What happened across the guild, oldest first.                         |
-| `GET /v1/game/guild/events/stream`   | The same as it happens, as server-sent events.                        |
-| `PUT /v1/game/presence`              | Says where in the game the player is; lists who is there and resting. |
-| `GET /v1/game/presence`              | The same lists, saying nothing: for a page in a live room.            |
-| `GET /v1/game/admin/activity`        | For the staff alone: who played, when, where and for how long.        |
-| `GET /v1/game/play/{game}`           | The player's state in a game Leaf plays, as their page is shown it.   |
-| `POST /v1/game/play/{game}`          | Does a batch of commands in that game, and answers what each did.     |
-| `GET /v1/game/play/{game}/standings` | The game's board: the twenty highest, and the player's own place.     |
-| `GET /v1/game/banners`               | Every pull banner, its dates, and its headliner's id and name.        |
-| `GET /v1/game/requests`              | The Treasury's aspect and tome requests: their price, or why not.     |
-| `POST /v1/game/requests`             | Buys one with Leaf, through the backend.                              |
+| Route                                 | What it returns                                                       |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| `GET /v1/game/hello`                  | Where to sign in, and whether Leaf may be spent. Needs no session.    |
+| `GET /v1/game/me`                     | The player, their rank, Leaf, XP, level, newest event's id and Coins. |
+| `GET /v1/game/skins/{uuid}`           | A player's skin sheet, as a PNG.                                      |
+| `GET /v1/game/guild/events`           | What happened across the guild, oldest first.                         |
+| `GET /v1/game/guild/events/stream`    | The same as it happens, as server-sent events.                        |
+| `PUT /v1/game/presence`               | Says where in the game the player is; lists who is there and resting. |
+| `GET /v1/game/presence`               | The same lists, saying nothing: for a page in a live room.            |
+| `GET /v1/game/admin/activity`         | For the staff alone: who played, when, where and for how long.        |
+| `GET /v1/game/play/{game}`            | The player's state in a game Leaf plays, as their page is shown it.   |
+| `POST /v1/game/play/{game}`           | Does a batch of commands in that game, and answers what each did.     |
+| `GET /v1/game/play/{game}/standings`  | The game's board: the twenty highest, and the player's own place.     |
+| `GET /v1/game/tally/{board}/{period}` | A board of the Tally: its top ten, and the player's own place.        |
+| `GET /v1/game/banners`                | Every pull banner, its dates, and its headliner's id and name.        |
+| `GET /v1/game/requests`               | The Treasury's aspect and tome requests: their price, or why not.     |
+| `POST /v1/game/requests`              | Buys one with Leaf, through the backend.                              |
 
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
@@ -797,6 +798,47 @@ bought, a standing order handed over and each lesson, project and commission
 finished are logged. A yard kept by the first design's rules (`packages/yard`,
 now gone) does not read: Leaf logs it, keeps it as it is, answers its owner
 `state_unreadable`, and does not tend it.
+
+### The Tally
+
+The town's leaderboards. Each board ranks players by one number Leaf counts itself, for all time
+and, for most, for the UTC week as the weekly quests count it (from Monday 00:00 UTC). The boards,
+their groups and the line each says of what it counts are `TALLY_BOARDS` in
+`packages/core/src/tally.ts`; where each one's numbers come from is `SOURCES` in
+`apps/api/src/tally/store.ts`. Nothing Leaf or Coins can buy has a board, and nothing counts days
+in a row.
+
+- **The guild's** come from what the credit feed recorded (`activities`: guild raids, each raid,
+  wars, defences, season rating), the quests finished, the ledger (Leaf earned: every earning but
+  the staff's grants, reversals taking back, spending not lowering it; and milestones) and each
+  member's XP (SEQ level, a tie at a level going to more XP).
+- **Where the games stand** (`standings`): the Works' Top yards and highest tier, and the bosses
+  beaten in The Little Raid.
+- **Leaf's own counters** (`tallies`, migration 30: one row a player and counter, its count for all
+  time and for the week, and when it was last counted), each written in the transaction of what
+  it counts: what the games log (`raid_room`, a `raid_ended` that was won, `works_order`,
+  `town_crab`, `town_greeted`), however much of it the activity log keeps; the time in each game,
+  played and in town AFK, as `time_in` counts it from visits; and what players do in the town's
+  live room, at most once each `ACT_EVERY_MS` for a player and counter (a wave every 30 seconds, a
+  touch, a log on the fire every 5, the crabs' roll every 10), so a script gains a handful a
+  minute. The counters began from what Leaf had: the activity log's rooms, wins and orders (since
+  the games moved onto Leaf, on 22 November 2026), where camps stood, and `time_in`; this week's
+  time began at the migration.
+- **Camps visited, and visitors** (`camp_visits`: one row a visitor and camp, when they first and
+  last stayed): a stay is the visitor's page reading the same camp again 30 seconds or more after
+  it first did (`STAY_MS`; a camp's page reads it every half minute), with no other camp between
+  and no gap of 90 seconds; a player's own camp never counts.
+
+`GET /v1/game/tally/{board}/{period}`, `period` being `week` or `all`, answers `{ "board",
+"period", "from", "top": [{ "place", "id", "name", "guest", "score", "you" }], "you" }`: `from` is
+the week's Monday 00:00 UTC (null for all time); `top` the ten highest scores above 0, `place`
+being how many score higher, and one, so a tie shares a place, and within a tie whoever reached it
+first goes first; names as the guild's news has them ("Someone" for one Leaf cannot name), and
+`guest` as the player was last seen; `score` a count, whole seconds of a time, Leaf, Coins or a
+level. The outer `you` is the caller's own `{ "place", "score" }`, or null when they are not on
+it. A board Leaf does not keep, or `week` for one kept for all time only, answers 404
+`no_such_board`. Each board is worked out by one query the first time it is asked for in a week
+and span, and kept a minute (`TALLY_KEPT_MS`).
 
 ### Live: players in the same place, as it happens
 

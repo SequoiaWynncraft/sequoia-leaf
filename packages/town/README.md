@@ -81,8 +81,9 @@ shut the cabin's door, the mailbox or the signpost off from the trail) or `canno
 not turn that way). A command refused changes nothing.
 
 No command answers with notes. `buy` takes the price (keyed `buy:<n>`) and `openChest` pays 3,
-`free`, keyed by the UTC day. A thing bought and a pet chosen are logged (`town_bought`,
-`town_pet`).
+`free`, keyed by the UTC day. A thing bought, a pet chosen, a sighting of the crab and a caller
+greeted are logged (`town_bought`, `town_pet`, `town_crab`, `town_greeted` with who called); the
+Tally counts the last two.
 
 ## The town by the clock
 

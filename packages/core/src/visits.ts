@@ -255,7 +255,9 @@ export interface WorksRow {
  * (`trail`, `rooms_won`, `ended`: `won`, `lost` or `left`, and the `coins` it paid); the Works logs
  * `works_plot` and `works_plan` for what was bought (`plot` or `plan`, and its `price`),
  * `works_order` for a standing order handed over (`order`, `title`, `pay`) and `works_story` for each
- * story order finished (`order`, its number in the story, `title`, `pay`); the pulls log `pulls_top`
+ * story order finished (`order`, its number in the story, `title`, `pay`); the town logs
+ * `town_bought` and `town_pet`, `town_crab` for each sighting of the missing crab and
+ * `town_greeted` for each caller greeted (`by`, who called); the pulls log `pulls_top`
  * for each top-tier prize won (`prize`, `pool`, and the pulls since the last one, `top`). The play
  * service itself logs `leaf_spent` for each Leaf a command took (`leaf`, and the `reason` it was taken for).
  */
@@ -269,6 +271,8 @@ export const LOGGED = {
   worksStory: "works_story",
   townBought: "town_bought",
   townPet: "town_pet",
+  townCrab: "town_crab",
+  townGreeted: "town_greeted",
   pullsTop: "pulls_top",
   leafSpent: "leaf_spent",
 } as const;

@@ -72,7 +72,7 @@ export class Invalid extends Schema.Error<Invalid>("Invalid")(
  * player's state in it that cannot be visited, or a player Leaf does not know.
  */
 export class Missing extends Schema.Error<Missing>("Missing")(
-  answer("no_skin", "no_such_game", "nothing_to_visit", "no_such_player"),
+  answer("no_skin", "no_such_game", "nothing_to_visit", "no_such_player", "no_such_board"),
   { httpApiStatus: 404 },
 ) {}
 

@@ -8,6 +8,7 @@ import {
   nextTimedWindowAt,
   openQuestBook,
   parsePlayerId,
+  PERIODS,
   type Quest,
   QUEST_SLOTS,
   type QuestSlot,
@@ -15,6 +16,7 @@ import {
   type RequestKind,
   rerollCost,
   RULE_CHANGES,
+  tallyBoard,
   timedWindowAt,
   utcDay,
 } from "@sequoia-leaf/core";
@@ -80,6 +82,7 @@ import { PlayStore } from "../play/store.ts";
 import { questJson } from "../quests/json.ts";
 import { rerollQuestFor } from "../quests/reroll.ts";
 import { Quests } from "../quests/store.ts";
+import { Tallies } from "../tally/store.ts";
 import { BackendLive, InternalHandlers, PurchaseBodyErrorsLive } from "./internal.ts";
 import { GuildFeed, OpenStreams, sseFrame, StreamTuning } from "./streams.ts";
 
@@ -664,6 +667,7 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
     const play = yield* Play;
     const store = yield* PlayStore;
     const coins = yield* Coins;
+    const tallies = yield* Tallies;
     const sql = yield* SqlClient.SqlClient;
     const requests = guildRequests(yield* HttpClient.HttpClient, (yield* AppConfig).backendUrl);
 
@@ -848,6 +852,10 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
             const identity = yield* CurrentIdentity;
             const player = parsePlayerId(params.player);
             const shown = player === undefined ? null : yield* play.visit(player, played, playingOf(identity));
+            // A camp read again while the visitor stays in it counts toward the Tally's visits.
+            if (player !== undefined && played.id === "town" && shown?.status === "open") {
+              yield* tallies.visited(identity.playerId, player, yield* Clock.currentTimeMillis);
+            }
             if (shown === null || shown.status === "nothing") {
               return yield* new Missing({
                 code: "nothing_to_visit",
@@ -1001,6 +1009,32 @@ const GameHandlers = HttpApiBuilder.group(LeafApi, "game", (handlers) =>
               leaf_paid: made.paid,
               leaf: balance,
             } satisfies typeof Body.RequestMade.Type);
+          }),
+        )
+        // A board of the Tally, as the caller is shown it.
+        .handle("tally", ({ params }) =>
+          Effect.gen(function* () {
+            const board = tallyBoard(params.board);
+            const period = PERIODS.find((p) => p === params.period);
+            if (board === undefined || period === undefined || (period === "week" && !board.week)) {
+              return yield* new Missing({ code: "no_such_board", message: "The Tally keeps no such board" });
+            }
+            const { playerId } = yield* CurrentIdentity;
+            const shown = yield* tallies.board(board, period, playerId);
+            return HttpServerResponse.jsonUnsafe({
+              board: board.id,
+              period,
+              from: shown.from === null ? null : iso(shown.from),
+              top: shown.top.map((row) => ({
+                place: row.place,
+                id: row.playerId,
+                name: row.name,
+                guest: row.guest,
+                score: row.score,
+                you: row.playerId === playerId,
+              })),
+              you: shown.you,
+            } satisfies typeof Body.Tally.Type);
           }),
         )
         // A game's board, its players named as the guild's news names them.

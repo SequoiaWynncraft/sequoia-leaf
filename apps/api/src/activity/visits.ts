@@ -7,6 +7,7 @@ import {
   type PlayerId,
   playing,
   silentSince,
+  TIMED,
   VISIT_RULES,
   visitSeconds,
 } from "@sequoia-leaf/core";
@@ -14,6 +15,8 @@ import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
 import { LeafInstance } from "../instance.ts";
+import { tally } from "../tally/store.ts";
+import { PlayerUuid } from "../wire.ts";
 
 /** Somebody whose stay in a place Leaf records: who they are now, and what their page said it is on, if it did. */
 export interface Visitor {
@@ -29,7 +32,7 @@ type Source = "room" | "call";
 const OpenVisit = Schema.Struct({
   id: Schema.Int,
   sessionId: Schema.Int,
-  playerId: Schema.String,
+  playerId: PlayerUuid,
   place: Schema.String,
   source: Schema.Literals(["room", "call"]),
   enteredAt: Schema.Int,
@@ -191,6 +194,12 @@ export class Visits extends Context.Service<
             ON CONFLICT (player_id, game) DO UPDATE SET
               played_ms = played_ms + excluded.played_ms, afk_ms = afk_ms + excluded.afk_ms
           `;
+          // The Tally's times, for the week as well as for all time.
+          const stats = TIMED[game];
+          if (stats) {
+            yield* tally(sql, visit.playerId, stats.played, played, to);
+            if (stats.afk) yield* tally(sql, visit.playerId, stats.afk, ms - played, to);
+          }
         });
 
       /** Closes a visit at `at` (never before it began), and adds its time to its session and its player. */
