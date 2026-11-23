@@ -504,13 +504,17 @@ button.k-slot:hover {
 /*
  * Written on paper itself, nothing is in the gold of a dark panel: an amount, a count, a name of
  * the town's own and a thing pointed at are in ink. Every style that writes in gold is named here
- * or is dark itself wherever it stands (a card, a chip): `type.test.ts` holds it to that.
+ * or is dark itself wherever it stands (a card, a chip): `type.test.ts` holds it to that. The
+ * first rule lists plain classes only, so that the green of Leaf under it still wins.
  */
-:is(.k-paper, .k-say) :is(.k-cur, .k-gold, .k-thing-count, .k-thing.lit .k-thing-name):not(.k-chip *, .k-btn *) {
+:is(.k-paper, .k-say) :is(.k-cur, .k-gold, .k-thing-count):not(.k-chip *, .k-btn *) {
   color: #96560a;
 }
 :is(.k-paper, .k-say) :is(.k-cur.leaf, .k-leafy, .k-folk):not(.k-chip *, .k-btn *) {
   color: #2f6b24;
+}
+:is(.k-paper, .k-say) .k-thing.lit .k-thing-name {
+  color: #96560a;
 }
 .k-paper hr,
 .k-rule {
