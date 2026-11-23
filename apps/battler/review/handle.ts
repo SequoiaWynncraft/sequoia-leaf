@@ -36,6 +36,7 @@ import { heldRow, heldTop } from "../src/screen/held.ts";
 import { NUDGES } from "../src/screen/logic.ts";
 import { pawns, syncPawns } from "../src/screen/pawns.ts";
 import { arrive } from "../src/screen/scene.ts";
+import { type Ended, endedIn } from "../src/screen/screen.ts";
 import * as stage from "../src/screen/stage.ts";
 import {
   again,
@@ -177,20 +178,35 @@ async function plan(rounds = 30): Promise<void> {
   await plan(rounds - 1);
 }
 
+/** How the last run the bot played to its end ended, for the page to show it (the screen did not see it taken). */
+let botEnded: Ended | null = null;
+/** Takes a room's takings as the bot, keeping how the run ended if they ended it. */
+async function take(): Promise<boolean> {
+  const did = await ask({ do: "take" });
+  if (did?.ok) botEnded = endedIn(did.notes) ?? botEnded;
+  return did?.ok === true;
+}
+
 /** One whole room played by the bot through the same commands the member's actions send. */
 async function botRoom(): Promise<boolean> {
   // What the page has sent first (the takings of a fight just watched); a fight not yet taken is taken.
   await settled();
-  if (S.run?.stage.phase === "fight" && !(await ask({ do: "take" }))?.ok) return false;
+  if (S.run?.stage.phase === "fight" && !(await take())) return false;
   if (S.run?.stage.phase !== "plan") return false;
   await plan();
   const begun = await ask({ do: "fight" });
   if (!begun?.ok) return false;
-  return (await ask({ do: "take" }))?.ok === true;
+  return take();
 }
 
-/** Sits down to the table as Leaf has it now, and says where it is. */
+/** Sits down to the table as Leaf has it now, or at the end of a run the bot played out, and says where it is. */
 function settle(): string {
+  const ended = botEnded;
+  botEnded = null;
+  if (ended && !leafView()?.run) {
+    go({ e: "ended", ended });
+    return S.screen.at;
+  }
   enterRun();
   const run = S.run;
   if (!run || S.screen.at === "front") return S.screen.at;
