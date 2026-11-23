@@ -159,8 +159,11 @@ export interface Wire {
 export interface World {
   readonly land: Land;
   readonly cells: (Building | null)[];
-  /** Which tiles power reaches; worked out again whenever a pylon is built or taken away. */
-  power: Uint8Array;
+  /**
+   * Which tiles power reaches, 1 for each; or nothing after a change that may move it, until it is
+   * next read as `w.power ?? repower(w)` (see `power.ts`).
+   */
+  power: Uint8Array | null;
   /**
    * What the board's orders are drawn from. It foretells every order the board will hang, so only
    * Leaf holds it: a yard read from what the page is shown has none, and hangs no order.
@@ -241,6 +244,7 @@ export function reopen(w: World): void {
     rates.slots = Math.max(rates.slots, e.slots ?? 0);
   }
   w.open = { kinds, plots, plans, board };
+  if (rates.reach !== w.rates.reach) w.power = null;
   w.rates = rates;
 }
 

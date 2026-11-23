@@ -6,7 +6,7 @@
  * Nothing here draws anything or touches the yard.
  */
 
-import { ahead, type Kind, power, refusal, status, type World } from "@sequoia-leaf/yard";
+import { ahead, type Kind, power, refusal, repower, status, type World } from "@sequoia-leaf/yard";
 
 export interface Nudge {
   /** Which lesson this is; one that has been taken is not given again. */
@@ -50,14 +50,12 @@ const owned = (w: World, i: number): boolean => {
 export function nudge(w: World, taught: ReadonlySet<string>, finger: boolean): Nudge | null {
   const [cx, cy] = w.land.depot;
   const told = (id: string): boolean => taught.has(id);
+  const lit = w.power ?? repower(w);
 
   if (w.story === 0) {
     const gatherer = has(w, "gatherer");
     if (gatherer < 0) {
-      const spot = nearest(
-        w,
-        (i) => w.land.deposit[i] === "deadfall" && w.power[i] === 1 && owned(w, i) && !w.cells[i],
-      );
+      const spot = nearest(w, (i) => w.land.deposit[i] === "deadfall" && lit[i] === 1 && owned(w, i) && !w.cells[i]);
       if (spot)
         return {
           id: "gatherer",
@@ -131,7 +129,7 @@ export function nudge(w: World, taught: ReadonlySet<string>, finger: boolean): N
     const spot = nearest(
       w,
       (i) =>
-        w.power[i] === 1 &&
+        lit[i] === 1 &&
         !w.land.deposit[i] &&
         Math.hypot((i % w.land.w) - cx, Math.floor(i / w.land.w) - cy) > 3.2 &&
         refusal(w, "bench", i % w.land.w, Math.floor(i / w.land.w), Infinity) === null,
