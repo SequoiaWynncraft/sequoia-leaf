@@ -19,12 +19,14 @@ stop. Nothing serves or draws it yet.
 | keeping a yard, and the check                                                 | `src/codec.ts`, `src/bytes.ts`, `src/check.ts`                                |
 | the route for a run of belt; what a piece is doing                            | `src/route.ts`; `src/status.ts`                                               |
 | what a machine or a line makes and needs a minute                             | `src/planner.ts`, and `plan.ts` for the table of the slice                    |
+| how long the slice takes a player                                             | `pace.ts` (its settings), then `pace/`                                        |
 | what it costs                                                                 | `bench.ts`, and `test/budgets.test.ts` for the budgets                        |
 
 ```sh
 bun test       # every rule, the tables and the budgets (about 15 seconds)
 bun bench.ts   # times and sizes of generated yards of about 6,000 and 10,000 pieces
 bun plan.ts    # the planner's table for every thing the slice can make
+bun pace.ts    # tiers 0 to 3 played as a careful player would, and how long each goal took (about 3 seconds)
 ```
 
 ## The yard
@@ -211,6 +213,45 @@ machine needs of each part a minute (`needs`), how many of the piece before it e
 tree takes of each piece (`bill`). Every piece is taken as working every tick. `plan.ts` prints, for
 every thing the slice can make, one machine's output a minute and the line that feeds one flat out.
 
+## How long the slice takes
+
+`bun pace.ts` plays tiers 0 to 3 from a new yard to the last goal of tier 3 (the commission and
+every piece of research), by the rules: every change is a command off the wire given with `play`
+at the yard's tick, and the yard runs on, tick by tick, meanwhile. It prints a row for each goal in
+the order done, a row for each tier beside the time the design means it to take, and a line for the
+slice; `--json` gives the same as data, `--seed N` plays another land's orders. The same seed and
+settings give the same table, to the tick. A run takes about 3 seconds.
+
+Each row's time runs from when the player turned to the goal (for research, from when it began to be
+studied) to when it was done, split into building (setting pieces down, laying belts, buying plots,
+working lines out, reading), waiting for Coins and waiting for deliveries or folios. Research rows
+overlap the nodes of their tier. A row also has the pieces standing, the Coins the player has, the
+power drawn and given, and what was bought for it. A tier runs from when it opened to its last goal.
+
+The player is one careful, ordinary player. Everything it decides by is at the top of `pace.ts`:
+
+- **The order of goals**: lessons in theirs, then each tier's projects in the table's order and its
+  commission; research in its table's order, each as soon as it may be studied, the line kept full.
+- **Lines.** For the node in hand it asks the planner for the lines that would bring each thing it
+  still wants in the tier's minutes (`MINUTES`), less what standing lines already bring the depot
+  (`pace/needs.ts`), and builds those. It keeps everything it builds. Every line ends in the depot.
+  Once the splitter is unlocked, a machine's part is split off a standing line of it where one has
+  enough to spare; otherwise it gets a line of its own straight in (`pace/builder.ts`, which works
+  each line out on a copy of the yard, with the router, before the player builds it).
+- **Research**: once the Study is unlocked, Studies and their folio lines for `FOLIOS` a minute.
+- **Policy**: new pieces at the highest grade unlocked up to `GRADES`; a boiler (or a waterwheel, when
+  short by no more than one gives) whenever the yard would draw more than it gives; a plot only when
+  the land has too little of what a line gathers or no room for it; any filled order handed over,
+  and an order that would take more than `SWAP` minutes swapped when a swap is free; never building
+  for an order. The till is collected once a minute, as the page does. It starts with `PURSE` Coins.
+- **A person's time** (`HANDS`): seconds for each piece set down, each run of belt and each tile of it,
+  each plot bought, each line worked out, each node or piece of research read, each order handed over.
+
+What it does not do, so that a real player may be faster or slower: it lays lines out greedily and
+never moves or removes a piece; it does not raise standing pieces to a higher grade; it uses no
+crate, sorter, cart stop, Paint or blueprint. A split is booked as half of what its line has left; a
+split above an earlier one takes more than that, and the earlier one gets less.
+
 ## Keeping a yard
 
 `encode` writes a JSON record of the yard's numbers, goals and orders, with its pieces packed into
@@ -270,5 +311,7 @@ One file for each part: whole numbers, counted recipes (and those of tiers 0 and
 tiers), grades, tiers and tools, research, the new pieces and blueprints, orders, the tables held together (every goal reachable, nothing wanted before it can be made, every
 folio cost payable by its tier, ids unique), the planner (and that a yard does what it says), the
 codec and the check, random play (a refusal changes nothing, a yard reads back as itself, every
-command and piece takes effect) and time away, and the budgets. `test/yards.ts` builds the yards
-they share with commands off the wire.
+command and piece takes effect) and time away, the budgets, and the pace script's parts
+(`test/pace.test.ts`: sizing lines, which lines a goal needs beyond what stands, that a line laid
+out delivers what it is booked for, that a play repeats to the tick). `test/yards.ts` builds the
+yards they share with commands off the wire.
