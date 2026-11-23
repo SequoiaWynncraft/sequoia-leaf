@@ -25,10 +25,10 @@
  * - A game whose page keeps a copy of its own with the same rules may be answered short
  *   (`PlayReader.short`, `Game.answer`): a batch's answer is then not the state, and the page hears
  *   it (`onAnswer`); only a read of the state (`refresh`) takes the copy's place.
- * - A state Leaf cannot read (`state_unreadable`) stops the page at once, with nothing sent again:
- *   the page shows the kit's card for it. During a deploy a call can reach the Leaf before this one,
- *   which has no such route (404 `not_found`): that is "not yet", tried again each second for 30
- *   seconds before the page gives up for no server.
+ * - During a deploy a call can reach the Leaf before this one, which has no such route (404
+ *   `not_found`) or cannot read the state the new one wrote (409 `state_unreadable`): either is asked
+ *   again each second for 30 seconds (`NOT_YET`), and only then stops the page, for no server or a
+ *   state that does not read, with nothing sent again: the page shows the kit's card for it.
  * - Every request the page waits on is let go after `DEADLINE`, as if Leaf had not answered: a batch
  *   goes again with the same ids, as after any failure.
  * - As the page is hidden or put away, or the town closes the game, everything Leaf has not
@@ -115,7 +115,7 @@ export interface Retry {
 }
 const RETRY: Retry = { first: 500, most: 10_000 };
 
-/** How a Leaf without the play service yet (a deploy half done) is waited for: a try each `every` ms, `tries` times. */
+/** How the Leaf before this one, during a deploy (no play service yet, or a state it cannot read), is waited for: a try each `every` ms, `tries` times. */
 export interface NotYet {
   every: number;
   tries: number;
@@ -162,8 +162,8 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 /**
  * Opens a game on Leaf: its state as Leaf has it now, ready to send commands. Answers why not when
  * it cannot: `signedout`; `closed` for no answer, trouble, or a game Leaf does not play; `noserver`
- * when Leaf has had no play service for `notYet`; `unreadable` when the state it keeps does not read;
- * `nothing` when there is nothing of `of`'s to visit.
+ * when Leaf has had no play service for `notYet`; `unreadable` when the state it keeps has not read
+ * for as long; `nothing` when there is nothing of `of`'s to visit.
  */
 export async function openPlay<View, Command extends object, Note, Short = never>(
   game: GameId,
@@ -186,14 +186,20 @@ export async function openPlay<View, Command extends object, Note, Short = never
   const deadline = options.deadline ?? DEADLINE;
   /** A request to Leaf, let go as no answer once it has gone unanswered past the deadline. */
   const timed: typeof ask = (to, init) => ask(to, { ...init, signal: AbortSignal.timeout(deadline) });
-  let first = await timed(read);
-  for (let tried = 0; notYet(first); tried++) {
-    if (tried >= waitFor.tries) return { trouble: "noserver" };
-    // oxlint-disable-next-line no-await-in-loop -- the same question, a moment later
+  let stopped = false;
+  /**
+   * Asks, and while Leaf answers "not yet" or that the state does not read (the Leaf before this one,
+   * during a deploy), asks the same again each `waitFor.every` ms, `waitFor.tries` times, until the page
+   * stops: the last answer.
+   */
+  async function patiently(asking: () => ReturnType<typeof ask>, tried = 0): ReturnType<typeof ask> {
+    const reply = await asking();
+    if (tried >= waitFor.tries || !(notYet(reply) || unreadable(reply))) return reply;
     await wait(waitFor.every);
-    // oxlint-disable-next-line no-await-in-loop -- the same question, a moment later
-    first = await timed(read);
+    return stopped ? reply : patiently(asking, tried + 1);
   }
+  const first = await patiently(() => timed(read));
+  if (notYet(first)) return { trouble: "noserver" };
   const end = endOf(first);
   if (end !== null) return { trouble: end };
   if (first.status !== 200 || !isRecord(first.body)) return { trouble: "closed" };
@@ -213,14 +219,10 @@ export async function openPlay<View, Command extends object, Note, Short = never
   let copy: View = base;
   let queue: Pending<View, Command, Note>[] = [];
   let flying: Pending<View, Command, Note>[] | null = null;
-  let stopped = false;
   /** When the page last called Leaf, and whether it says nothing of itself (a visit, or a page put aside). */
   let calledAt = outside.now();
-  /** How many calls have set off: an answer to one that is no longer the last is out of date. */
-  let calls = 0;
   const call: typeof ask = (to, init) => {
     calledAt = outside.now();
-    calls++;
     return timed(to, init);
   };
   const quiet = (): boolean => visiting || options.away?.() === true;
@@ -340,10 +342,11 @@ export async function openPlay<View, Command extends object, Note, Short = never
     queue = queue.slice(batch.length);
     flying = batch;
     const body = bodyOf(batch);
-    let notYetTries = 0;
     for (;;) {
       // oxlint-disable-next-line no-await-in-loop -- the same batch, again, until Leaf has it
-      const reply = await call(path, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      const reply = await patiently(() =>
+        call(path, { method: "POST", headers: { "Content-Type": "application/json" }, body }),
+      );
       if (stopped) return;
       if (reply.status === 200 && isRecord(reply.body)) {
         pause = retry.first;
@@ -374,22 +377,10 @@ export async function openPlay<View, Command extends object, Note, Short = never
         }
         break;
       }
-      if (unreadable(reply)) {
-        // Sending it again would not change that: the page says so, and sends nothing more.
-        stop("unreadable");
+      if (unreadable(reply) || notYet(reply)) {
+        // Still so once waited for: the page says so, and sends nothing more.
+        stop(notYet(reply) ? "noserver" : "unreadable");
         return;
-      }
-      if (notYet(reply)) {
-        // A Leaf from before the play service, during a deploy: the same batch again in a moment.
-        if (notYetTries >= waitFor.tries) {
-          stop("noserver");
-          return;
-        }
-        notYetTries++;
-        // oxlint-disable-next-line no-await-in-loop -- waiting before trying again
-        await wait(waitFor.every);
-        if (stopped) return;
-        continue;
       }
       if (reply.status === 403 || reply.status === 404) {
         stop("closed");
@@ -419,13 +410,12 @@ export async function openPlay<View, Command extends object, Note, Short = never
 
   /** Leaf's state read again and taken, unless anything was sent meanwhile. */
   async function readAgain(differs: number | undefined): Promise<void> {
-    const asked = call(differs === undefined ? read : `${read}?differs=${differs}`);
-    const mine = calls;
-    const reply = await asked;
+    const before = made;
+    const reply = await patiently(() => call(differs === undefined ? read : `${read}?differs=${differs}`));
     const ended = endOf(reply);
     if (ended !== null) return stop(ended);
     // A command sent and answered while this was on its way has told the page more than this has.
-    if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0 && calls === mine) {
+    if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0 && made === before) {
       took({ ...reply.body, results: [] }, []);
     }
   }

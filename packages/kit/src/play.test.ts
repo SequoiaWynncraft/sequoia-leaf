@@ -139,11 +139,13 @@ describe("opening a game on Leaf", () => {
     expect(troubles).toEqual(cases.map(([, trouble]) => ({ trouble })));
   });
 
-  test("a state Leaf cannot read itself is said so, and the page does not load again", async () => {
+  test("a state Leaf still cannot read once waited for is said so, and the page does not load again", async () => {
     world = standin({ "GET /v1/game/play/raid": { status: 409, body: { code: "state_unreadable", message: "Kept" } } });
-    expect(await openPlay("raid", COUNTER, { player: "p" })).toEqual({ trouble: "unreadable" });
+    expect(await openPlay("raid", COUNTER, { player: "p", notYet: { every: 1, tries: 3 } })).toEqual({
+      trouble: "unreadable",
+    });
     expect(world.reloaded.count).toBe(0);
-    expect(world.sent).toHaveLength(1);
+    expect(world.sent).toHaveLength(4);
   });
 
   test("a Leaf without the play service yet (a deploy half done) is asked again each second, for 30 seconds", async () => {
@@ -425,7 +427,7 @@ describe("sending commands", () => {
     expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "closed" });
   });
 
-  test("a state Leaf cannot read stops the page at once: nothing is sent again, and the page is told", async () => {
+  test("a state Leaf still cannot read once waited for stops the page: nothing is sent after, and the page is told", async () => {
     const { routes } = counterLeaf(0);
     const play = await opened({
       ...routes,
@@ -434,10 +436,43 @@ describe("sending commands", () => {
     const troubles: string[] = [];
     play.onTrouble((why) => troubles.push(why));
     expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "unreadable" });
+    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "closed" });
     await Bun.sleep(10);
     expect(troubles).toEqual(["unreadable"]);
-    expect(world?.sent.filter((s) => s.method === "POST")).toHaveLength(1);
+    // The first try and three more.
+    expect(world?.sent.filter((s) => s.method === "POST")).toHaveLength(1 + 3);
     expect(world?.reloaded.count).toBe(0);
+  });
+
+  test("a state the other Leaf cannot read during a deploy is asked for again: opened, read again and sent to without trouble, each command with one id", async () => {
+    const { routes, leaf } = counterLeaf(4);
+    const kept = { status: 409, body: { code: "state_unreadable", message: "Kept" } };
+    // Two of every three requests reach the old Leaf, which cannot read the state the new one wrote.
+    let asked = 0;
+    const old = (): boolean => asked++ % 3 < 2;
+    const play = await opened({
+      "GET /v1/game/play/raid": () => (old() ? kept : routes["GET /v1/game/play/raid"]()),
+      "POST /v1/game/play/raid": (sent) => (old() ? kept : routes["POST /v1/game/play/raid"](sent)),
+    });
+    const troubles: string[] = [];
+    play.onTrouble((why) => troubles.push(why));
+    expect(play.state).toEqual({ n: 4 });
+    leaf.n = 9;
+    await play.refresh();
+    expect(play.state).toEqual({ n: 9 });
+    const answers = Promise.all([play.send({ do: "add", by: 2 }, add(2)), play.send({ do: "add", by: 3 }, add(3))]);
+    expect(play.state).toEqual({ n: 14 });
+    expect(await answers).toEqual([{ notes: ["added 2"] }, { notes: ["added 3"] }]);
+    expect([play.state, leaf.n, troubles]).toEqual([{ n: 14 }, 14, []]);
+    // Each question and each batch three times, a batch with the same ids each time.
+    const sent = (world?.sent ?? []).map((s) =>
+      isRecord(s.body) && Array.isArray(s.body.commands)
+        ? s.body.commands.map((c) => (isRecord(c) ? c.id : null)).join()
+        : s.method,
+    );
+    const [a = "", b = ""] = [sent[6], sent[9]];
+    expect(sent).toEqual(["GET", "GET", "GET", "GET", "GET", "GET", a, a, a, b, b, b]);
+    expect(a).not.toEqual(b);
   });
 
   test("a batch that reaches a Leaf without the play service yet goes again in a moment, until it has given up for no server", async () => {
@@ -470,12 +505,13 @@ describe("sending commands", () => {
     expect(told).toEqual(["signedout"]);
   });
 
-  test("asking for the state again ends the page for what ends it at the opening, and asks nothing after", async () => {
+  test("asking for the state again ends the page for what ends it at the opening, once waited for, and asks nothing after", async () => {
+    // A state that does not read is asked for four times, as at the opening.
     const ends = [
-      [{ status: 409, body: { code: "state_unreadable", message: "Kept" } }, "unreadable"],
-      [{ status: 404, body: { code: "nothing_to_visit", message: "None" } }, "nothing"],
+      [{ status: 409, body: { code: "state_unreadable", message: "Kept" } }, "unreadable", 4],
+      [{ status: 404, body: { code: "nothing_to_visit", message: "None" } }, "nothing", 1],
     ] as const;
-    for (const [reply, why] of ends) {
+    for (const [reply, why, asked] of ends) {
       const { routes } = counterLeaf();
       // oxlint-disable-next-line no-await-in-loop -- one page after another
       const play = await opened(routes);
@@ -487,7 +523,7 @@ describe("sending commands", () => {
       await play.refresh();
       // oxlint-disable-next-line no-await-in-loop -- one page after another
       await play.refresh();
-      expect([why, told, world.sent.length]).toEqual([why, [why], 1]);
+      expect([why, told, world.sent.length]).toEqual([why, [why], asked]);
     }
   });
 
