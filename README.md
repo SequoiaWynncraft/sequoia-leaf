@@ -606,7 +606,8 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   `members_only`; when its spends come to more than the ledger's balance, with
   `not_enough_leaf`. Otherwise each spend is posted to the ledger
   in the batch's transaction, as a `spend` on the `shop` sink keyed
-  `play:<game>:<player>:<key>` with what it was for as its memo, and logged as
+  `play:<game>:<player>:<born>:<key>` (`<born>`, below) with what it was for
+  as its memo, and logged as
   `leaf_spent` for the staff's report. A key the ledger has seen is not taken
   again, and the command stands. A spend earns no XP and uses none of the
   Coins' room. The raid's `buyLook` and the pulls' `pull` take Leaf, both for
@@ -683,8 +684,13 @@ it; migration 28 put `time_in` in its place, counted from visits (below), and
 removed it.
 
 **Coins** are a ledger like Leaf: a balance per player, changed only by an
-entry, each keyed by the fact it records (`<game>:<player>:<key>` for a
-game's, such as `raid:<player>:run:7`) so that it is never made twice. A
+entry, each keyed by the fact it records (`<game>:<player>:<born>:<key>` for a
+game's, such as `raid:<player>:1795608000000:run:7`) so that it is never made
+twice. A game's key often counts something kept in its state, which starts
+again in a state made again (the staff taking away one that will not read), so
+`<born>`, when the state's row was made (`play_state.born`), goes before it; a
+state made before Leaf kept that (`born` 0) keeps its keys as they were,
+`<game>:<player>:<key>`. A
 trigger applies each entry to its balance, which can never go below zero, and
 entries are never changed or removed. A new player's account opens with 300,
 as one entry keyed `welcome:<player>`. They are the only Coins there are:
@@ -800,7 +806,7 @@ and each command is done at the tick the page's copy stood at when it was
 made. What the yard did since its owner's last command is counted from what it
 remembers of that moment, and shown to the page for its letter once that was
 five minutes ago or more. Its Coins are
-keyed `works:<player>:bank:<n>` by the yard's own count, and every one it pays
+keyed `works:<player>:<born>:bank:<n>` by the yard's own count, and every one it pays
 in is `free`: the till paid in before any price is taken and when the page
 collects it, and what a piece cost given back when it is taken away. A plot
 bought, a standing order handed over and each lesson, project and commission
