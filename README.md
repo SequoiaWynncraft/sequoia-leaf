@@ -549,9 +549,12 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   the caller's `{ "coins", "leaf", "version" }` as `/v1/game/me` has them (a
   batch's, as its transaction left them), so a page never asks for them again
   after a command, and the version of the game's rules Leaf plays it by (core's
-  `rulesVersion`: a hash of every file the rules import, made by a macro,
-  `packages/core/build/rules.ts`, as Leaf starts and as a page is built). A page
-  built with other rules loads again rather than show what Leaf does not do.
+  `rulesVersion`: a hash of each module the game's `Game` runs, followed by
+  the names it needs through core's index to the modules that make them, made
+  by a macro, `packages/core/build/rules.ts`, as Leaf starts and as a page is
+  built; a change to a module no game runs, such as the live wire, changes no
+  version). A page built with other rules loads again rather than show what
+  Leaf does not do.
   Every answer below has the same five, a batch's `results` beside them. A
   player with no state yet gets a new one (and, if they have no Coins account
   yet, the welcome). Nothing is ever read from the old saves. `?differs=<tick>`

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
+import { LOGGED } from "./logged.ts";
 import {
   ACT_EVERY_MS,
   rankTally,
@@ -11,7 +12,6 @@ import {
   tallyBoard,
   tallyPath,
 } from "./tally.ts";
-import { LOGGED } from "./visits.ts";
 
 describe("the Tally's boards", () => {
   it("each have an id of their own, a group, a name and one line saying what they count", () => {

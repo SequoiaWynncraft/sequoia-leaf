@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
 import type { Activity, RaidKey } from "./activity.ts";
+import { DAY_MS, utcWeekStart, WEEK_MS } from "./days.ts";
 import { playerId } from "./player.ts";
 import {
   applyActivityToQuests,
   currentQuests,
-  DAY_MS,
   leadingGoal,
   nextDailyChargeAt,
   nextTimedWindowAt,
@@ -24,8 +24,6 @@ import {
   type RerollRules,
   timedTemplateFor,
   timedWindowAt,
-  utcWeekStart,
-  WEEK_MS,
 } from "./quests.ts";
 import { DEFAULT_RULES, leafForLevel, levelForXp } from "./rules.ts";
 

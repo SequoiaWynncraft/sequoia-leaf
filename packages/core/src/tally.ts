@@ -6,9 +6,9 @@
  * the week as the weekly quests count it (`utcWeekStart`).
  */
 import { RAID_KEYS, type RaidKey, RAIDS } from "./activity.ts";
+import { LOGGED } from "./logged.ts";
 import type { Logged } from "./play.ts";
 import { DEFAULT_RULES, levelForXp } from "./rules.ts";
-import { LOGGED } from "./visits.ts";
 
 /** The groups the boards are listed in, in order. */
 export const TALLY_GROUPS = ["guild", "works", "raid", "town"] as const;
