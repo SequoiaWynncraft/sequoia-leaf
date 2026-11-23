@@ -224,6 +224,8 @@ export class GameApi extends HttpApiGroup.make("game")
     HttpApiEndpoint.post("oldCoins", "/coins", { error: NotYou }),
     HttpApiEndpoint.get("play", "/play/:game", {
       params: GameParams,
+      // From a page that found its copy of the state not Leaf's: the tick it found it at.
+      query: { differs: Schema.optional(Schema.String) },
       success: PlayShown,
       error: [Missing, StateUnreadable],
     }),

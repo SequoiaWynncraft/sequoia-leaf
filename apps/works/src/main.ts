@@ -34,6 +34,7 @@ import {
   stepTo,
   type Tally,
   WORKS,
+  type WorksAct,
 } from "@sequoia-leaf/yard";
 
 import { stepFlights, stepWalkers } from "./actors.ts";
@@ -47,7 +48,7 @@ import { layout } from "./layout.ts";
 import { drawWords, drawYard, lap, picture, spent, wipe } from "./scene.ts";
 import { sheets } from "./sheets.ts";
 import { murmur, yardSfx } from "./sound.ts";
-import { S, type Tool, toPage } from "./state.ts";
+import { S, type Tool, toPage, touched } from "./state.ts";
 import { nudge } from "./teach.ts";
 import {
   aimAt,
@@ -71,7 +72,7 @@ import { putAway, reading, showLetter } from "./ui/letter.ts";
 import { closeBanner, feed, initNotes, tickNotes } from "./ui/notes.ts";
 import { closePanel, initPanels, openPanel, panelHooks, type PanelId, refreshPanel } from "./ui/panels.ts";
 import { $ } from "./ui/parts.ts";
-import { again, keepScreen, leadAt, onRefused, openYard, runYard, screen } from "./yard.ts";
+import { again, differences, doNow, keepScreen, leadAt, onRefused, openYard, runYard, screen } from "./yard.ts";
 
 /** What the page says where no Leaf answers: the yard is the guild's server's. */
 const NEEDS_LEAF = "The Works needs the guild's server.";
@@ -105,6 +106,8 @@ declare global {
       build: (kind: Kind, x: number, y: number, dir?: Dir) => boolean;
       remove: (x: number, y: number) => boolean;
       paint: (x: number, y: number, tint: number) => boolean;
+      /** Does any command as the member would, and says why the rules refuse it, or null when done. */
+      act: (act: WorksAct) => string | null;
       drag: (x0: number, y0: number, x1: number, y1: number) => void;
       drop: () => void;
       confirm: () => boolean;
@@ -533,6 +536,12 @@ async function boot(): Promise<void> {
       S.tint = tint;
       return paintAt(x, y);
     },
+    act(act) {
+      const done = doNow(act);
+      touched();
+      refreshAll();
+      return "refused" in done ? done.why : null;
+    },
     drag(x0, y0, x1, y1) {
       runStart(x0, y0);
       runOver(x1, y1);
@@ -589,6 +598,7 @@ async function boot(): Promise<void> {
         picked: S.picked,
         power: power(w),
         z: S.view.z,
+        differences: differences(),
       };
     },
   };

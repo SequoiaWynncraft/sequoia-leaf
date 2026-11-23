@@ -17,6 +17,7 @@
 import { type CoinChange, type Ctx, type Done, type Game, LOGGED, type Logged, type Refused } from "@sequoia-leaf/core";
 
 import { build, buyPlan, buyPlot, paint, remove, setOpen, setRecipe, setWay, tipOut, turn } from "./build.ts";
+import { check } from "./check.ts";
 import { awayOf, here, stillAt, TICK_MS } from "./clock.ts";
 import { isItem, type Item } from "./content/items.ts";
 import { BLUEPRINTS, isKind, type Kind, STAND_MOST } from "./content/machines.ts";
@@ -79,6 +80,18 @@ export type WorksCommand = WorksAct & { readonly tick: number };
 export interface WorksView {
   readonly yard: string;
   readonly clock: number;
+}
+
+/**
+ * What Leaf answers a batch with, in place of the yard the page already holds: Leaf's tick now; the
+ * yard's tick after the batch, and its check there (`check.ts`); and how many orders the board has
+ * ever hung (`serial`), which only Leaf, holding the seed, moves on.
+ */
+export interface WorksAnswer {
+  readonly clock: number;
+  readonly tick: number;
+  readonly check: number;
+  readonly serial: number;
 }
 
 /** What a command did, in the yard's own news: an order handed over, and any story order finished on the way to it. */
@@ -374,6 +387,12 @@ export function readView(v: unknown): WorksView | null {
   return isRecord(v) && typeof v.yard === "string" && whole(v.clock, 1e12) ? { yard: v.yard, clock: v.clock } : null;
 }
 
+/** What Leaf answered a batch with, read back; null for anything these rules could not have made. */
+export function readAnswer(v: unknown): WorksAnswer | null {
+  if (!isRecord(v) || !whole(v.clock, 1e12) || !whole(v.tick, 1e12) || !whole(v.serial, 1e9)) return null;
+  return whole(v.check, 0xffffffff) ? { clock: v.clock, tick: v.tick, check: v.check, serial: v.serial } : null;
+}
+
 /** One piece of the yard's news, read back. */
 function newsOf(n: unknown): WorksNote | null {
   if (!isRecord(n) || typeof n.title !== "string" || !whole(n.pay, 1e9)) return null;
@@ -398,7 +417,7 @@ const view = (w: World, ctx: Ctx): WorksView => ({
 });
 
 /** The Works, for Leaf's play service. */
-export const WORKS: Game<World, WorksCommand, WorksView, WorksNote> = {
+export const WORKS: Game<World, WorksCommand, WorksView, WorksNote, WorksAnswer> = {
   id: "works",
   create: (ctx) => {
     const w = create({ seed: ctx.seed });
@@ -410,6 +429,7 @@ export const WORKS: Game<World, WorksCommand, WorksView, WorksNote> = {
   // A tick further ahead than `LEAD` past Leaf's clock is done at `LEAD`.
   apply: (w, c, ctx) => play(w, { ...c, tick: tickOf(w, c, ctx.now) }),
   view,
+  answer: (w, ctx) => ({ clock: clockOf(w, ctx.now), tick: w.tick, check: check(w), serial: w.serial }),
   // A visitor is given what the owner is, but for the blueprints.
   visit: (w, ctx) => view({ ...w, blueprints: [] }, ctx),
   decode: (text) => load(text),

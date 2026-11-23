@@ -16,11 +16,14 @@ import {
 } from "@sequoia-leaf/raid";
 import { decodeTown, readNotes as readTownNotes, readView as readTownView, type TownView } from "@sequoia-leaf/town";
 import {
+  check,
   clockOf,
   deliver,
   isFilled,
   ITEMS,
   LEAD,
+  play as playWorks,
+  readAnswer,
   readView as readYardView,
   route,
   stepTo,
@@ -1139,6 +1142,12 @@ function yardOf(state: unknown) {
   if (!view || !yard) throw new Error(`Not a yard: ${JSON.stringify(state)}`);
   return { clock: view.clock, yard };
 }
+/** What Leaf answered a batch of the Works' commands with. */
+function answerOf(state: unknown) {
+  const answer = readAnswer(state);
+  if (!answer) throw new Error(`Not an answer: ${JSON.stringify(state)}`);
+  return answer;
+}
 
 describe("the Works", () => {
   const MINUTE = 60_000;
@@ -1169,7 +1178,8 @@ describe("the Works", () => {
     const collected = await send("POST", "/v1/game/play/works", {
       commands: [{ id: "w-4", do: "collect", tick: tick + 600 }],
     });
-    const yardNow = yardOf(Schema.decodeUnknownSync(Answered)(await collected.json()).state).yard;
+    expect(collected.status).toBe(200);
+    const yardNow = yardIn((await storedYard()).state);
     expect(yardNow.story).toBe(1);
     expect(yardNow.till).toBeLessThan(1);
     expect(await coinsOf(alice)).toBeGreaterThanOrEqual(380);
@@ -1209,6 +1219,60 @@ describe("the Works", () => {
       games: { works: { place: 1, score: earned, also: { story: 1 }, played: 120 } },
       played: 120,
     });
+  });
+});
+
+describe("a batch's answer", () => {
+  it("for the Works holds no yard: Leaf's clock, and the yard's tick, check and orders hung, as the page works them out", async () => {
+    const opening = Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json());
+    const { clock: tick, yard: copy } = yardOf(opening.state);
+    const built = await send("POST", "/v1/game/play/works", {
+      commands: [{ id: "w-1", do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick }],
+    });
+    // The page's copy, with the same command done to it at the same tick.
+    expect("refused" in playWorks(copy, { do: "build", kind: "gatherer", x: 20, y: 15, dir: 0, tick })).toBe(false);
+    const { state } = Schema.decodeUnknownSync(Answered)(await built.json());
+    expect(state).toEqual({ clock: tick, tick, check: check(copy), serial: copy.serial });
+    // An opening, a visit and an opening after a time away are each given the yard, the last with its letter.
+    expect(
+      yardOf(Schema.decodeUnknownSync(Shown)(await (await send("GET", "/v1/game/play/works")).json()).state).yard.cells,
+    ).toEqual(copy.cells);
+    expect((await shownYard(await visit(alice, "works", bob))).yard.cells).toEqual(copy.cells);
+    clock.now += 60 * 60_000;
+    expect((await shownYard(await send("GET", "/v1/game/play/works"))).yard.away?.seconds).toBe(3600 - LEAD / 10);
+  });
+
+  it("once its page found its copy not Leaf's, is followed by an opening that says the tick, which Leaf logs with whose and which game", async () => {
+    const lines: { message: unknown; annotations: unknown }[] = [];
+    const capture = Logger.layer([
+      Logger.map(Logger.formatStructured, ({ message, annotations }) => void lines.push({ message, annotations })),
+    ]);
+    const opening = await services.run(
+      Play.use((play) => play.open({ playerId: alice, guest: false }, GAMES.works, 1234)).pipe(
+        Effect.provide(capture),
+        Effect.provideService(References.MinimumLogLevel, "All"),
+      ),
+    );
+    expect(opening.status).toBe("open");
+    expect(lines.filter((l) => JSON.stringify(l.message).includes("not Leaf's"))).toEqual([
+      {
+        message: "A page's copy of the works state was not Leaf's",
+        annotations: { player: alice, game: "works", tick: 1234 },
+      },
+    ]);
+    // As the page asks it.
+    expect((await send("GET", "/v1/game/play/works?differs=1234")).status).toBe(200);
+  });
+
+  it("for the other games is their state, as an opening gives it", async () => {
+    for (const game of ["raid", "town", "pulls"]) {
+      // oxlint-disable-next-line no-await-in-loop -- one game after another
+      const shown = Schema.decodeUnknownSync(Shown)(await (await send("GET", `/v1/game/play/${game}`)).json());
+      // oxlint-disable-next-line no-await-in-loop -- one game after another
+      const sent = await send("POST", `/v1/game/play/${game}`, { commands: [] });
+      // oxlint-disable-next-line no-await-in-loop -- one game after another
+      expect([game, Schema.decodeUnknownSync(Answered)(await sent.json()).state]).toEqual([game, shown.state]);
+    }
   });
 });
 
@@ -1459,7 +1523,8 @@ describe("Leaf tending the Works", () => {
     const back = await send("POST", "/v1/game/play/works", {
       commands: [{ id: "w-1", do: "collect", tick: opening.clock }],
     });
-    expect((await shownYard(back)).yard.away).toBeNull();
+    expect(back.status).toBe(200);
+    expect((await shownYard(await send("GET", "/v1/game/play/works"))).yard.away).toBeNull();
     expect(await coinsOf(alice)).toBeGreaterThanOrEqual(opening.yard.away?.coins ?? Infinity);
   });
 
@@ -1472,7 +1537,7 @@ describe("Leaf tending the Works", () => {
     const body = Schema.decodeUnknownSync(Answered)(await late.json());
     expect(body.results).toEqual([{ id: "w-1", notes: [] }]);
     expect(body.rev).toBe(3);
-    expect(yardOf(body.state).yard.tick).toBe(yardIn(kept).tick + 6000 - LEAD);
+    expect(answerOf(body.state).tick).toBe(yardIn(kept).tick + 6000 - LEAD);
   });
 
   it("and a batch for the same yard: the tend first, the batch waits for it, and both are kept", async () => {
@@ -1544,7 +1609,7 @@ describe("Leaf tending the Works", () => {
     });
     const body = Schema.decodeUnknownSync(Answered)(await answer.json());
     expect(body.results).toEqual([{ id: "s-1", notes: [] }]);
-    expect(yardOf(body.state).yard.tick).toBe(at);
+    expect(answerOf(body.state).tick).toBe(at);
   });
 
   it("brings a yard up once however many ask for it at once, in slices each followed by a rest as long", async () => {
@@ -1782,7 +1847,7 @@ describe("Leaf tending the Works", () => {
       ),
     );
     if (sent.status !== "done" || seen.status !== "open") throw new Error(`${sent.status}, ${seen.status}`);
-    expect([sent.rev, yardOf(sent.view).yard.tick]).toEqual([2, tick]);
+    expect([sent.rev, answerOf(sent.view).tick]).toEqual([2, tick]);
     expect([seen.rev, yardOf(seen.view).yard.tick]).toEqual([3, tick + 100]);
   });
 
