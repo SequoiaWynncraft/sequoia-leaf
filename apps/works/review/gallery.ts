@@ -1,7 +1,7 @@
 /**
  * The page with a yard of its own that holds every graded piece at each grade, each way round,
  * working and not, with the Study, the sorter and the cart stop: for looking at the grades' art in
- * the yard itself, at any zoom. No goal of the slice unlocks the third grade, so no yard of Leaf's
+ * the yard itself, at any zoom. No goal unlocks a Study of the third grade, so no yard of Leaf's
  * can hold one: here each piece is built by the rules at the first grade and its grade is then set
  * on the piece, as the rules' own tests of grades set it. Nothing is opened from Leaf (`S.alone`),
  * and the yard is not run on: what each piece is doing is set on it, so a picture is the same twice.
@@ -43,7 +43,7 @@ const land = bareLand(
   ROWS.flatMap(({ z }) => GATHER.map(([x]) => [x, z, "deadfall"] as const)),
   [32, 18],
 );
-const y = F.create({ land, tier: 4, seed: 1 });
+const y = F.create({ land, tier: F.TIERS.length, seed: 1 });
 // Every goal done but one piece of research that unlocks no piece or recipe: that one is being
 // studied, so the Studies have something to study, and everything the gallery builds may be built.
 const studied = F.ALL_GOALS.find((g) => !F.isNode(g) && F.unlockedBy(g).every((e) => e.is === "number"));

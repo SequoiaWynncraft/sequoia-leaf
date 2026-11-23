@@ -59,7 +59,7 @@ import {
   within,
   worthAt,
 } from "@sequoia-leaf/factory";
-import { CREAM, GOLD, GREEN } from "@sequoia-leaf/kit/palette.ts";
+import { CREAM, GOLD, GREEN, SKY } from "@sequoia-leaf/kit/palette.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
 import { float, flutter, puff, ring, sparkle } from "./fx.ts";
@@ -90,7 +90,8 @@ export const toolHooks: { changed: () => void; said: (text: string) => void } = 
  * setting down turned, raised or lowered), pieces raised where they stand (as they stood), things
  * taken away, a thing turned, lines coloured (the tile each was coloured by, and the colour that tile
  * had), pieces moved as one (`tiles`: where they stand now, with the turns and the corner that put
- * them back), a splitter's way shut or opened (`was`: whether it was open).
+ * them back), a splitter's way shut, opened or put first (its shut ways and the way it put first, as
+ * they were).
  */
 type Done =
   | {
@@ -103,7 +104,7 @@ type Done =
   | { did: "raised"; was: readonly Piece[] }
   | { did: "took"; what: readonly Piece[] }
   | { did: "turned"; i: number; was: Dir }
-  | { did: "way"; i: number; way: number; was: boolean }
+  | { did: "way"; i: number; shut: number; first: number }
   | { did: "painted"; lines: { i: number; was: number }[] }
   | { did: "moved"; tiles: number[]; turns: Dir; x: number; y: number };
 const done: Done[] = [];
@@ -461,22 +462,47 @@ export function turnAt(x: number, y: number): boolean {
   return true;
 }
 
-/** Shuts one of the ways out of the splitter on a tile (0 ahead, 1 left, 2 right), or opens it if it was shut. */
+/**
+ * Moves one of the ways out of the splitter on a tile (0 ahead, 1 left, 2 right) on a step: an open
+ * way is put first once the yard may put a way first, and shut before then; the way put first is
+ * shut; a shut way is opened.
+ */
 export function wayAt(x: number, y: number, way: number): boolean {
-  const i = at(S.world, x, y);
-  const was = i >= 0 && (((S.world.shut[i] ?? 0) >> way) & 1) === 0;
-  if (i < 0 || does({ do: "way", x, y, way, open: !was }) !== null) {
+  const w = S.world;
+  const i = at(w, x, y);
+  const shut = (((w.shut[i] ?? 0) >> way) & 1) === 1;
+  const putFirst = !shut && w.first[i] !== way + 1 && locked(w.open, { first: true }) === null;
+  const act: Act = putFirst ? { do: "first", x, y, way } : { do: "way", x, y, way, open: shut };
+  const was = { shut: w.shut[i] ?? 0, first: w.first[i] ?? 0 };
+  if (i < 0 || does(act) !== null) {
     yardSfx.no();
     return false;
   }
-  remember({ did: "way", i, way, was });
-  // Dust where the bar drops across the way, or lifts off it.
+  remember({ did: "way", i, ...was });
+  // Dust where the bar drops across the way, or lifts off it; plum bits where a flag goes up.
   const dir = dirOf(i);
   const d = [dir, LEFT[dir], RIGHT[dir]][way] ?? dir;
-  puff(x * TILE + 8 + DX[d] * 7, y * TILE + 9 + DY[d] * 7, 3, DUST, 5);
-  if (was) yardSfx.belt();
+  const ex = x * TILE + 8 + DX[d] * 7;
+  const ey = y * TILE + 9 + DY[d] * 7;
+  if (putFirst) flutter(ex, ey - 4, 4, [SKY[3], SKY[4]], 4, 14);
+  else puff(ex, ey, 3, DUST, 5);
+  if (putFirst) yardSfx.plan();
+  else if (shut) yardSfx.belt();
   else yardSfx.turn();
   return true;
+}
+
+/** Gives the splitter on a tile the ways it had: each opened that was open, the way it put first, then each shut that was shut. */
+function asWays(i: number, shut: number, first: number): void {
+  const w = S.world;
+  const spot = xy(i);
+  for (let way = 0; way < 3; way++)
+    if (((shut >> way) & 1) === 0 && (((w.shut[i] ?? 0) >> way) & 1) === 1)
+      doNow({ do: "way", ...spot, way, open: true });
+  if (w.first[i] !== first) doNow({ do: "first", ...spot, way: first === 0 ? null : first - 1 });
+  for (let way = 0; way < 3; way++)
+    if (((shut >> way) & 1) === 1 && (((w.shut[i] ?? 0) >> way) & 1) === 0)
+      doNow({ do: "way", ...spot, way, open: false });
 }
 
 /** R: turns the thing in hand, or with nothing in hand the thing pointed at. */
@@ -578,7 +604,7 @@ export function undo(): boolean {
   else if (last.did === "took") putBack(last.what);
   else if (last.did === "painted")
     for (const l of last.lines.toReversed()) doNow({ do: "paint", ...xy(l.i), tint: l.was });
-  else if (last.did === "way") doNow({ do: "way", ...xy(last.i), way: last.way, open: last.was });
+  else if (last.did === "way") asWays(last.i, last.shut, last.first);
   else if (last.did === "moved") {
     const no = does({ do: "move", tiles: last.tiles, turns: last.turns, x: last.x, y: last.y });
     if (no !== null) cannotUndo(no);

@@ -19,8 +19,8 @@ arrays by tile too. Things, kinds, plots and goals are numbers throughout, as th
 names are used only on the wire (the rules write and read it: `writeCommand`, `readView`,
 `readNotes`, `readAnswer`) and where art and words are looked up, once, into lists by number
 (`art/items.ts`, `art/index.ts`, the rules' `ITEM_INFO` and `KIND_INFO`). The page shows tiers 0 to
-3: grades, recipes that count, the Study and research, the sorter and the cart stop each come in with
-the goal that unlocks them, and a yard in tier 0 or 1 shows none of them. One list says which kinds
+4: grades, recipes that count, the Study and research, the sorter, the cart stop and a splitter's way
+put first each come in with the goal that unlocks them, and a yard in tier 0 or 1 shows none of them. One list says which kinds
 the page draws and builds (`DRAWN`, in `state.ts`), and the dock, the pick (`Q`) and the drawing read
 it: every kind in the tables but the depot, which is drawn and never built. Nothing on the page writes to
 its yard but the rules: pieces in hand are drawn from a yard that shares everything with the real
@@ -170,7 +170,9 @@ power reaches him. A mill shows the face of its work: a saw, a kiln or a press. 
 trouble that has lasted wears a mark over its head, and so does a belt whose load has nowhere to
 go. A splitter has a brass arrowhead on each way out that leads somewhere, and on a way that is shut
 a short bar across that edge, red at its ends and pale in the middle, so that it is told from every
-colour a line can be given. Pylons grow once they reach further, crates once they hold more, and the
+colour a line can be given. The way it puts first wears a small flag, a pennant in the plum of the
+town's roofs on a pole of light wood, standing in that way's arrowhead (`FLAG_AT`, in
+`art/machines.ts`); the plan's far steps leave it out. Pylons grow once they reach further, crates once they hold more, and the
 depot gains a flywheel once it gives more power. The depot
 is the back of the workshop the town sees from the front: the same planks, stone foot, chimney and
 brass wheel.
@@ -180,9 +182,10 @@ brass wheel.
 mill, a bench and a workshop have a brass band and plate, a tunnel a brass hood, a gatherer a rake,
 a Study a brass lectern. So that a whole line reads at the farthest zoom, where a fitting is a pixel
 or two, every piece above the first grade also has a small mark of muted brass in the top-left of
-its tile, one for II and two for III. The third grade is drawn as the second with its mark doubled:
-no goal of the slice unlocks it. `?sheet=grades` lays every graded piece out at each grade, and
-`review/gallery.ts` stands them in a yard of its own.
+its tile, one for II and two for III. The third grade is drawn as the second with its mark doubled;
+tier 4 unlocks it for belts, tunnels and gatherers (Brass fittings) and for mills, benches and
+workshops (research), and no goal unlocks it for the Study. `?sheet=grades` lays every graded piece
+out at each grade, and `review/gallery.ts` stands them in a yard of its own.
 
 **The later pieces.** The Study is a bookcase, a lectern and a lamp with a gnome scholar at it: he
 turns a page as a folio is studied, stands idle with nothing to study, and the lamp is out with no
@@ -235,7 +238,7 @@ the line has Upgrade with what the rules ask for the whole of it (`upgradePrice`
 raises every marked piece to the highest grade the yard may build, all of them or none, and where it
 cannot the rules' reason is said.
 `Z` undoes a move, a copy, a removal, a piece raised or an area raised as one step, to the grades
-there were, and a splitter's way shut or opened.
+there were, and a splitter's way shut, opened or put first (its ways as they were).
 
 **Asking.** Everything in the yard is a card in the kit's one card system (`card.ts`, registered
 in `ui/card.ts`). A card is its print: what it shows of the yard and the purse, as plain values
@@ -259,7 +262,9 @@ with a back arrow.
   is doing and holds, and what can be done: pin a recipe, tip out, shut a crate, turn, take up
   another, take away, and raise it a grade where it stands ("Raise to II", with the price). A
   splitter's card has its three ways out round its picture, as they lie in the yard: each says Open,
-  Shut, or No belt (open, with nothing to take from it), and a press shuts or opens it. A sorter's
+  Shut, or No belt (open, with nothing to take from it), and a press shuts or opens it; once the
+  yard may put a way first, a way may also say First (gold, its flag in the picture), and a press
+  goes Open, First, Shut, Open, one way First at a time. A sorter's
   card chooses the thing it sends left as a machine's recipe is chosen; a cart stop's says how many
   stand of how many may; a Study's names what is being studied and opens research. A visitor sees
   them and has nothing to press. The depot's card says that each thing that arrives pays 1% of its
@@ -297,9 +302,10 @@ item, kind, tool, number and goal is walked from the tables by `ui/pictures.test
 The depot's books are built from the kit's `thing`.
 
 **The yard's books.** Always in view: the purse, power as drawn and given with a bar, and the
-node in hand: its kind ("Lesson 2 of 4", "Tier 1 project", "Tier 1 commission"), who asks, and what
-it wants and has been given. Lessons come into hand by themselves, and after the last of a tier its
-commission. Panels: the orders (the node in hand, and the board's standing orders with swap and
+node in hand: its kind ("Lesson 2 of 4", "Tier 1 project", "Tier 1 commission"), who asks, what
+it wants and has been given, and while nodes wait in line after it, "Then:" and the first of them, in
+one line. Lessons come into hand by themselves, and after the last of a tier its commission; the
+first in line comes before the commission. Panels: the orders (the node in hand, and the board's standing orders with swap and
 hand over), the tier's own screen, research, and the yard's sheet (below), which is the depot's
 panel. The power plaque opens one more, which says where the power comes from and where it goes.
 
@@ -308,7 +314,10 @@ called by the tier ("Tier 2: The stream"; the names are the rules' `content/tier
 bottom: the tier's commission as a paper, with who asks and what they say and its lists; from the
 tier that has research, a row that says how much of it is known and opens it; the projects not done,
 each a head and its lists with the button that takes it (the one in hand is marked); and those done,
-a line each: picture and name. Research (`ui/research.ts`, `L`) is there once the yard may build a
+a line each: picture and name. While a node is in hand, each that may be taken has Next beside Take,
+which puts it in line after the hand (up to 3, as the research screen keeps its line), and one in
+the line shows its place counting the hand as the first ("2nd", "3rd") and Take out. A head with two
+of these has them on a line under its name. Research (`ui/research.ts`, `L`) is there once the yard may build a
 Study: what is being studied, with each folio it wants and the pace the Studies give it (or why none
 is at work); the rest of the line, up to 4 in all, each with a button that takes it out; what may be
 studied, as the small tree it is, one that waits on another hanging off it; and what is known. Under
@@ -394,8 +403,9 @@ once each for the board, for Select when the yard has it and first holds more th
 shortage of power, and for a jammed machine. Each idea of tiers 2 and 3 has one nudge, said beside
 the part of the interface it is about: the tier's button, once there is a tier's screen; a machine's
 numbers, the first time a card is opened once the yard counts; the grade buttons, the first time a
-kind with more than one grade is in hand; the Study in the dock, until one stands; and the research
-button, until something is studied.
+kind with more than one grade is in hand; the Study in the dock, until one stands; the research
+button, until something is studied; and a splitter's ways out on its card, the first time one is
+opened once the yard may put a way first (said over the card).
 It has no screen in it and is tested.
 
 **In the town.** Inside the town's frame the page says `ready` once it has drawn, `leave` from the
@@ -439,7 +449,9 @@ stages a moment in the yard on the play server on this machine (`apps/api/test/p
 build with commands (`staged` in `packages/factory/test/yards.ts`): `"small"` (the first two
 lessons done), `"short"` (the last lesson in hand, short of power), `"mid"` (every node of tiers 0 and 1 done,
 tier 2 open, the board up, plots bought, a painted line and a splitter), `"hall"` (every node of tiers 0 to 2 done, the scholars' hall among them: tier 3 just open, and no Study yet), `"study"` (tier 3 open: a line that makes
-Timber folios, a Study at work, one piece of research known and four in the line), `"large"` (every
+Timber folios, a Study at work, one piece of research known and four in the line), `"gate"` (tier 4
+just open, by research its Study made known, with a splitter on the ingots' line to the tools'
+bench), `"large"` (every
 node of tiers 0 to 2 done, and the generator's pieces on every plot the slice sells); each a yard the rules
 could have made, every goal finished and paid by them; `{ away: minutes }`, its owner away that long
 and the yard run every tick meanwhile; `{ fill: n }`, the nth standing order filled; `{ feed: true }`,
@@ -488,7 +500,7 @@ the rules and sent nowhere, and its member has Coins enough for anything: `after
 on it, a frame after a real command. `review/gallery.ts` is built and opened the same way
 (`/play/works-gallery/gallery.html`): a yard of its own with every graded piece at grades I to III,
 each way round, in the light and in the dark, sorters set and not, a Study and a cart stop. No goal
-of the slice unlocks the third grade, so each piece is built by the rules and its grade set on it.
+unlocks a Study of the third grade, so each piece is built by the rules and its grade set on it.
 
 With `?meter` in the address, a corner of the page says, each second: the frames a second the
 screen reaches, the longest frame, and the same parts as milliseconds a frame. There `until free`

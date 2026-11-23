@@ -59,6 +59,8 @@ export function unlockRef(u: Unlock): string {
       return `perk:${u.of}.${u.to}`;
     case "board":
       return "perk:board";
+    case "first":
+      return "perk:first";
   }
 }
 

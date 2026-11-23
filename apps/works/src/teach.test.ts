@@ -24,6 +24,7 @@ import {
   recipeSays,
   refusal,
   route,
+  SPLITTER,
   stand,
   step,
   STUDY,
@@ -176,6 +177,23 @@ describe("teaching each new idea, once, where it is met", () => {
     build(w, BELT, 22, 14, 0, 999);
     expect(nudge(w, told, false, { picked: at(w, 22, 14), hand: null })).toBeNull();
     expect(nudge(w, new Set([...told, "numbers"]), false, { picked: at(w, 21, 14), hand: null })).toBeNull();
+  });
+
+  test("a way put first, the first time a splitter's card is open once the yard may put one first: over that splitter", () => {
+    const told = new Set([...quiet, "tier", "study", "research", "numbers"]);
+    const early = create({ seed: 4, tier: 4 });
+    build(early, SPLITTER, 21, 14, 0, 999);
+    expect(nudge(early, told, false, { picked: at(early, 21, 14), hand: null })).toBeNull();
+    const w = create({ seed: 4, tier: 5 });
+    build(w, SPLITTER, 21, 14, 0, 999);
+    expect(nudge(w, told, false)).toBeNull();
+    expect(nudge(w, told, false, { picked: at(w, 21, 14), hand: null })).toMatchObject({
+      id: "first",
+      x: 21,
+      y: 14,
+      part: "ways",
+    });
+    expect(nudge(w, new Set([...told, "first"]), false, { picked: at(w, 21, 14), hand: null })).toBeNull();
   });
 
   test("the grades, the first time a kind that has two is in hand: beside the buttons that choose one, with the key for a mouse", () => {

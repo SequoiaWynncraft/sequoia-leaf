@@ -182,7 +182,8 @@ function studyFor(y: F.Yard, goal: string): void {
   const needs = (g: F.Goal): F.Goal[] => [...(F.GOALS[g]?.needs ?? []).flatMap(needs), g];
   for (const g of needs(F.goal(goal))) {
     if (F.isNode(g) || y.open.done[g] === 1) continue;
-    for (const other of [...y.line]) must(y, { do: "unstudy", research: F.GOALS[other]?.id });
+    for (let other = y.line[0]; other !== undefined; other = y.line[0])
+      must(y, { do: "unstudy", research: F.GOALS[other]?.id });
     must(y, { do: "study", research: F.GOALS[g]?.id });
     for (let k = 0; k < 200_000 && y.open.done[g] !== 1; k++) F.step(y);
   }

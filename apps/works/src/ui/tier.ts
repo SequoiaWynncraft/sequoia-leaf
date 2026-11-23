@@ -2,7 +2,8 @@
  * The tier's own screen: its commission, as a paper; from the tier that has research, the way to it;
  * its projects, each with what it wants and what it unlocks; and those done, a line each. Every
  * goal on it is laid out by `goal.ts`: one head, and its lists. Nothing is said of a tier not yet
- * open but that the commission opens it.
+ * open but that the commission opens it. While a node is in hand, one that may be taken can be put
+ * in line after it (Next); one in the line shows its place after the hand ("2nd") and Take out.
  *
  * The screen always leads on: a goal that waits on another shows what it needs as things with how
  * each stands, and the first of those that can be begun carries the button that begins it.
@@ -10,7 +11,7 @@
  * It is kept by what it prints (`tierPrint`, `shows`); its bars are asked of the yard at every
  * refresh, so a thing delivered moves a bar and builds nothing again.
  */
-import { type Goal, GOALS, NODES, ready, STUDY } from "@sequoia-leaf/factory";
+import { type Goal, GOALS, NODES, QUEUE, ready, STUDY } from "@sequoia-leaf/factory";
 import { el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 
 import { yardSfx } from "../sound.ts";
@@ -52,6 +53,19 @@ function take(g: Goal, b: HTMLElement): void {
   tierHooks.changed();
 }
 
+/** Puts a node in line after the one in hand, or takes it out of the line. */
+function line(g: Goal, into: boolean, b: HTMLElement): void {
+  const did = doNow({ do: into ? "queue" : "unqueue", node: g });
+  if ("refused" in did) {
+    yardSfx.no();
+    replay(b, "shake");
+  } else yardSfx.plan();
+  tierHooks.changed();
+}
+
+/** A place in the line, counting the node in hand as the first: "2nd", "3rd". */
+const placed = (n: number): string => `${n}${n === 2 ? "nd" : n === 3 ? "rd" : "th"}`;
+
 /**
  * The button that begins a goal another waits on: a node is taken in hand; research is put in the
  * line, or with no Study standing, the Study is taken up as the tool, since nothing is studied
@@ -79,13 +93,14 @@ interface Shown {
 }
 
 /**
- * What the tier's screen prints: the tier and the node in hand; the tier's commission, while it is
- * not done; how much of the research of the tiers open is known, where there is any; the projects not
- * done, the tier's own first; and the projects and commissions done.
+ * What the tier's screen prints: the tier, the node in hand and those in line after it; the tier's
+ * commission, while it is not done; how much of the research of the tiers open is known, where there
+ * is any; the projects not done, the tier's own first; and the projects and commissions done.
  */
 export function tierPrint(): {
   readonly tier: number;
   readonly hand: Goal | -1;
+  readonly queue: readonly Goal[];
   readonly commission: Shown | null;
   readonly research: { readonly known: number; readonly all: number } | null;
   readonly projects: readonly Shown[];
@@ -106,6 +121,7 @@ export function tierPrint(): {
   return {
     tier,
     hand: w.hand,
+    queue: [...w.queue],
     commission: commission === undefined ? null : shown(commission),
     research:
       research.length > 0 ? { known: research.filter((g) => w.open.done[g] === 1).length, all: research.length } : null,
@@ -135,10 +151,33 @@ export function tierScreen(body: HTMLElement): () => void {
       live.push(...made);
       return made.map((l) => l.node);
     };
-    /** What stands at the right of a goal's head: that it is in hand, the button that takes it, or nothing while it waits on another. */
+    /**
+     * What stands at the right of a goal's head: that it is in hand; its place in the line, with the
+     * button that takes it out; the buttons that put it in the line (while a node is in hand) and take
+     * it; or nothing while it waits on another.
+     */
     const side = ({ goal: g, take: may }: Shown, label: string): HTMLElement | null => {
       if (p.hand === g) return el("span", "k-chip lit", {}, icon("check"), "In hand");
-      return may ? button("sm", [label], (b) => take(g, b)) : null;
+      const at = p.queue.indexOf(g);
+      if (at >= 0)
+        return el(
+          "span",
+          "k-row",
+          {},
+          el("span", "k-chip", { text: placed(at + 2) }),
+          button("wood sm", ["Take out"], (b) => line(g, false, b)),
+        );
+      if (!may) return null;
+      const taking = button("sm", [label], (b) => take(g, b));
+      if (p.hand === -1) return taking;
+      const full = p.queue.length >= QUEUE;
+      return el(
+        "span",
+        "k-row",
+        {},
+        button(full ? "wood sm off" : "wood sm", ["Next"], (b) => line(g, true, b)),
+        taking,
+      );
     };
     const c = p.commission;
     if (c)
