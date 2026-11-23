@@ -8,11 +8,11 @@
  */
 
 import type { Dir } from "@sequoia-leaf/factory";
-import { BARK, CREAM, GOLD, INK, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { BARK, CREAM, GOLD, INK, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { paint } from "@sequoia-leaf/kit/pix.ts";
 import { clamp } from "@sequoia-leaf/kit/util.ts";
 
-import { CLAY } from "./pal.ts";
+import { CLAY, IRON } from "./pal.ts";
 
 export const TILE = 16;
 /** How many steps the march has before it comes round: a chevron every tile, a slat every four pixels. */
@@ -42,17 +42,17 @@ interface Wood {
 }
 /**
  * Plain slats, as a belt of the first grade lies in the yard; the lighter slats its picture has on a
- * button; steel rollers, kept for the era that brings them; and waxed boards, pale, with a bright
- * edge to the bed: the second grade, and for now the third.
+ * button; iron rollers on an iron bed between brass rails, the third grade; and waxed boards, pale,
+ * with a bright edge to the bed, the second.
  */
 const WOODS: readonly Wood[] = [
   { bed: BARK[0], slat: BARK[1], mark: BARK[3], rail: BARK[2], railLit: BARK[3] },
   { bed: BARK[0], slat: BARK[2], mark: GOLD[0], rail: BARK[3], railLit: BARK[4] },
-  { bed: "#33303a", slat: STONE[1], mark: GOLD[1], rail: BARK[3], railLit: GOLD[0] },
+  { bed: IRON[1], slat: IRON[3], mark: GOLD[1], rail: GOLD[0], railLit: GOLD[1] },
   { bed: BARK[1], slat: BARK[3], mark: GOLD[1], rail: BARK[4], railLit: GOLD[0] },
 ];
-/** The wood a belt of a grade is drawn in, in the yard: `tier` for `beltTile`. */
-export const woodOf = (grade: number): number => (grade >= 2 ? 3 : 0);
+/** What a belt, splitter, joiner or sorter of a grade is drawn in, in the yard: `tier` for `beltTile`. */
+export const woodOf = (grade: number): number => (grade >= 3 ? 2 : grade >= 2 ? 3 : 0);
 /** How many of the grade's marks a belt of a grade wears in the corner of its tile: one for the second, two for the third. */
 export const marksOf = (grade: number): number => Math.max(0, Math.min(2, grade - 1));
 /** The mark of a grade above the first: a stud of muted brass with a dark edge, as every graded piece wears (`machines.ts`, `PIP`). */

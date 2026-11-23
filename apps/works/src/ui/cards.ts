@@ -25,8 +25,8 @@
 import {
   type Act,
   ALL_ITEMS,
-  BELT,
   BOILER,
+  carries,
   CRATE,
   DEADFALL,
   DEPOT,
@@ -89,7 +89,7 @@ import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
-import { beltTile } from "../art/belts.ts";
+import { beltTile, woodOf } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
 import { FLAG_AT } from "../art/machines.ts";
 import { yardSfx } from "../sound.ts";
@@ -400,7 +400,7 @@ function paceOf(k: Kind, grade: number): string {
   const faster = (PACE[1] ?? 2) / (PACE[grade] ?? PACE[1] ?? 2);
   if (k === GATHERER) return secs(TICKS.gather * faster);
   if (k === STUDY) return `${secs(TICKS.study * faster)} a folio`;
-  if (k === TUNNEL || k === BELT) return `${secs(Math.ceil(8 / (PACE[grade] ?? 2)))} a tile`;
+  if (carries(k)) return `${secs(Math.ceil(8 / (PACE[grade] ?? 2)))} a tile`;
   if (k === BOILER) return `${secs(TICKS.burn)} a piece`;
   if (isMaker(k)) {
     const ticks = (MADE_BY[k] ?? []).map((r) => r.ticks * faster);
@@ -457,14 +457,20 @@ const SIDES = ["2 / 3", "3 / 2", "2 / 1", "1 / 2"] as const;
 function waysOf(art: Art, p: StandingPrint, ways: WaysPrint, hands: Hands): HTMLElement {
   const box = el("div", "ways");
   const d = ways.dir;
-  // A copy: the tile is the belts' own, kept for every splitter that looks the same, and the
-  // arrowheads and the flag drawn on it here are this splitter's alone.
-  const shared = beltTile(ways.arms, d, 5, 0, ways.tint);
+  // A copy: the tile is the belts' own in its grade's wood, kept for every splitter that looks the
+  // same, and the arrowheads, the grade's mark over them and the flag drawn on it here are this
+  // splitter's alone.
+  const grade = p.machine.grade;
+  const shared = beltTile(ways.arms, d, 5, woodOf(grade), ways.tint);
   const { c: tile, g } = makeCanvas(shared.width, shared.height);
   g.drawImage(shared, 0, 0);
   [d, LEFT[d], RIGHT[d]].forEach((side, k) => {
     const head = art.m.heads[k]?.[d];
-    if (head && ((ways.arms >> (side * 2)) & 3) === 2) g?.drawImage(head, 0, 0);
+    if (head && ((ways.arms >> (side * 2)) & 3) === 2) g.drawImage(head, 0, 0);
+  });
+  const pip = art.m.pips[grade - 2];
+  if (pip) g.drawImage(pip, 0, 0);
+  [d, LEFT[d], RIGHT[d]].forEach((side, k) => {
     const flag = art.m.pennant[side];
     const at = FLAG_AT[side];
     if (ways.first === k && flag && at) g?.drawImage(flag.c, at[0] - flag.ax, at[1] - flag.ay);

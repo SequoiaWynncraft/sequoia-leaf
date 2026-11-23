@@ -13,6 +13,11 @@ export interface Sprite {
 
 /** Fired clay and copper: the one warm red the town already uses for pots and mushrooms. */
 export const CLAY = ["#7a2f2a", "#b0483a", SKY[5], "#f4a08c"] as const;
+/**
+ * Blackened iron, darkest first: what the third grade is made of where the first two are wood (as
+ * many steps as the wood's ramp, `BARK`) or stone. A muted, dusk-lit grey with the sky's purple in it.
+ */
+export const IRON = ["#221d27", "#2e2a35", "#403b47", "#55505c", "#6c6672"] as const;
 /** The dark inside of a doorway or a tunnel. */
 export const DARK = "#24121a";
 /** Deep forest floor, where the yard has not been cleared. */

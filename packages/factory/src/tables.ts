@@ -123,13 +123,11 @@ const halves = (f: (g: (typeof GRADES)[number]) => number): number[] => {
   return out;
 };
 /**
- * How far a piece of each grade moves on a tick in which it works: eighths of a tile along a belt or
- * a tunnel (so a tile in 4 ticks at grade 1), half-ticks of work in a gatherer, a machine or a Study.
- * At 0, a piece with no grade: a splitter, joiner or sorter passes things on at the top grade's pace,
- * so it never holds a line back.
+ * How far a piece of each grade moves on a tick in which it works: eighths of a tile along a belt, a
+ * tunnel, a splitter, a joiner or a sorter (so a tile in 4 ticks at grade 1), half-ticks of work in a
+ * gatherer, a machine or a Study. At 0, a kind with no grade, which neither carries nor works.
  */
-const PACES = halves((g) => g.pace);
-export const PACE: readonly number[] = [PACES[TOP - 1] ?? 0, ...PACES];
+export const PACE: readonly number[] = [0, ...halves((g) => g.pace)];
 /** Power is counted in halves: a power is 2, and a piece of each grade draws this many halves for each power its kind draws. */
 export const HALF = 2;
 export const DRAWN: readonly number[] = [HALF, ...halves((g) => g.draw)];
@@ -305,11 +303,13 @@ export function openOf(goals: readonly Goal[]): Open {
   let board = false;
   let first = false;
   const unlocks = [START, ...goals.flatMap((g) => GOALS[g]?.unlocks ?? [])];
+  for (const u of unlocks) for (const k of u.kinds ?? []) kinds[kind(k)] = 1;
   for (const u of unlocks) {
-    for (const k of u.kinds ?? []) kinds[kind(k)] = Math.max(kinds[kind(k)] ?? 0, 1);
+    // A grade opens a kind only once the kind itself is unlocked: the wax grades the sorter before
+    // the sorter is known.
     for (const [k, grade] of Object.entries(u.grades ?? {})) {
       const n = kindNamed(k);
-      if (n !== null && grade !== undefined) kinds[n] = Math.max(kinds[n] ?? 0, grade);
+      if (n !== null && grade !== undefined && kinds[n] !== 0) kinds[n] = Math.max(kinds[n] ?? 0, grade);
     }
     for (const r of u.recipes ?? []) recipes[item(r)] = 1;
     for (const p of u.plots ?? []) plots |= 1 << plot(p);

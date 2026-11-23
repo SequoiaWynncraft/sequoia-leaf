@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
 import { bareLand } from "./land.ts";
-import { delivering, generated, must } from "./yards.ts";
+import { delivering, flatOut, generated, must } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -79,6 +79,70 @@ describe("a yard kept before the rules stopped counting a pace", () => {
   });
 });
 
+/** A line of grade II belt from a crate into the depot through a splitter, a sorter and a joiner, all three at grade I, and a blueprint of it. */
+function line(): F.Yard {
+  const y = F.create({ land: bareLand(13, 9, [], [9, 4]), tier: 4, seed: 1 });
+  must(y, { do: "build", kind: "crate", x: 1, y: 4, dir: 0 });
+  for (const [x, kind] of [
+    [2, "belt"],
+    [3, "splitter"],
+    [4, "sorter"],
+    [5, "joiner"],
+    [6, "belt"],
+    [7, "belt"],
+  ] as const)
+    must(y, { do: "build", kind, x, y: 4, dir: 0, ...(kind === "belt" ? { grade: 2 } : {}) });
+  must(y, { do: "saveBlueprint", slot: 0, tiles: F.within(y, 2, 4, 7, 4) });
+  return y;
+}
+/**
+ * What version 6 kept of a yard: this version's record of it, with its splitters, joiners and
+ * sorters at grade I, which this version keeps as that one kept them, with no grade.
+ */
+const asKept = (y: F.Yard): string => JSON.stringify({ ...record(F.encode(y)), v: 6 });
+/** The grades of the pieces along the line. */
+const lineGrades = (y: F.Yard): number[] => [2, 3, 4, 5, 6, 7].map((x) => y.grade[F.at(y, x, 4)] ?? 0);
+
+describe("a yard kept before splitters, joiners and sorters had grades", () => {
+  test("reads each in the yard back at the highest grade the yard may build, for nothing, so its line carries what its belts carry", () => {
+    const y = line();
+    expect(lineGrades(y)).toEqual([2, 1, 1, 1, 2, 2]);
+    const back = F.decode(asKept(y), y.land);
+    if (!back) throw new Error("the older yard did not read back");
+    expect(F.highest(back.open, F.BELT)).toBe(2);
+    expect(lineGrades(back)).toEqual([2, 2, 2, 2, 2, 2]);
+    expect([back.till, back.paid]).toEqual([y.till, y.paid]);
+    expect(flatOut(back, 1, 4)).toBe(F.carried(2));
+    // Kept again, it is this version's, and reads back as itself.
+    expect(record(F.encode(back)).v).toBe(F.VERSION);
+    roundTrip(back);
+    // This version keeps a splitter of grade I as grade I.
+    expect(lineGrades(roundTrip(y))).toEqual([2, 1, 1, 1, 2, 2]);
+  });
+
+  test("with grade III belts unlocked, at grade III; and one kept in a blueprint at the grade of the belts kept with it", () => {
+    const y = line();
+    for (const node of ["brassfittings"]) {
+      must(y, { do: "take", node });
+      const g = y.hand;
+      if (g === -1) throw new Error("nothing is in hand");
+      for (const n of F.ALL_ITEMS) F.deliver(y, n, (F.GOALS[g]?.want[n] ?? 0) - (y.got[g]?.[n] ?? 0));
+    }
+    const back = F.decode(asKept(y), y.land);
+    expect(back && lineGrades(back)).toEqual([2, 3, 3, 3, 2, 2]);
+    expect(
+      back && F.piecesOf(back.blueprints[0] ?? new Uint8Array()).map((p) => [F.kindName(p.kind), p.grade ?? 1]),
+    ).toEqual([
+      ["belt", 2],
+      ["splitter", 2],
+      ["sorter", 2],
+      ["joiner", 2],
+      ["belt", 2],
+      ["belt", 2],
+    ]);
+  });
+});
+
 describe("decode refuses whole", () => {
   test("anything that is not a kept yard of this version", () => {
     const good = F.encode(F.create({ seed: 1 }));
@@ -87,7 +151,8 @@ describe("decode refuses whole", () => {
       "",
       "not json",
       "[]",
-      JSON.stringify({ ...rec, v: F.VERSION - 1 }),
+      JSON.stringify({ ...rec, v: F.VERSION + 1 }),
+      JSON.stringify({ ...rec, v: 5 }),
       JSON.stringify({ ...rec, cells: undefined }),
       JSON.stringify({ ...rec, cells: "!!!!" }),
       JSON.stringify({ ...rec, tick: -1 }),

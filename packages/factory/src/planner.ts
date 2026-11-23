@@ -17,7 +17,8 @@ export function makes(k: Kind, grade: number, r: Recipe | null): number {
 }
 
 /**
- * How many things a minute a line of belt (or a tunnel) of a grade carries, fed flat out. A tile
+ * How many things a minute a line of belt of a grade carries, fed flat out, and a tunnel, splitter,
+ * joiner or sorter of that grade in it: each crosses its tile at a belt's pace. A tile
  * holds one thing, and a thing set on a line starts at its tile's edge and crosses it in whole ticks:
  * 4, 3 and 2 at the three grades' paces, so 150, 200 and 300 a minute. Not 225 at grade 2: what a
  * thing has over at the end of a tile it keeps on the next, so the tiles after the first never hold a

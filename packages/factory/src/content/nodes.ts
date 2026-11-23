@@ -18,7 +18,7 @@ export type Tool = (typeof TOOLS)[number];
 export interface Unlocks {
   /** Kinds of piece, at grade 1. */
   readonly kinds?: readonly KindName[];
-  /** The highest grade of a kind that may be built. */
+  /** The highest grade of a kind that may be built, once the kind itself is unlocked. */
   readonly grades?: Partial<Record<KindName, number>>;
   /** Recipes, by what they make. A recipe that nothing unlocks is known from the start. */
   readonly recipes?: readonly ItemName[];
@@ -218,11 +218,11 @@ export const NODES: readonly NodeInfo[] = [
     id: "wax",
     tier: 2,
     kind: "project",
-    title: "Wax for the belts",
+    title: "Wax for the lines",
     from: "The gnomes",
-    say: "The belts squeak. It is mostly the gnomes. The wax comes in hampers.",
+    say: "The lines squeak. It is mostly the gnomes. The wax comes in hampers.",
     want: { hamper: 80 },
-    unlocks: { grades: { belt: 2, tunnel: 2 } },
+    unlocks: { grades: { belt: 2, tunnel: 2, splitter: 2, joiner: 2, sorter: 2 } },
   },
   {
     id: "rakes",
@@ -330,11 +330,11 @@ export const NODES: readonly NodeInfo[] = [
     id: "brassfittings",
     tier: 4,
     kind: "project",
-    title: "Brass fittings for the belts",
+    title: "Iron rollers for the lines",
     from: "The gnomes",
-    say: "Grade III belts. The gnomes have polished the brass already.",
+    say: "Iron rollers and brass rails. The gnomes have tried the rollers already. On themselves.",
     want: { lantern: 150, gear: 300 },
-    unlocks: { grades: { belt: 3, tunnel: 3, gatherer: 3 } },
+    unlocks: { grades: { belt: 3, tunnel: 3, splitter: 3, joiner: 3, sorter: 3, gatherer: 3 } },
   },
   {
     id: "shelves",

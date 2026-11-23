@@ -14,8 +14,11 @@ import {
   CRATE,
   create,
   encode,
+  JOINER,
   MILL,
   priceAt,
+  SORTER,
+  SPLITTER,
   TUNNEL,
   upgradePrice,
   type Yard,
@@ -99,6 +102,41 @@ describe("the grade in hand", () => {
     expect(gradeInHand(TUNNEL)).toBe(1);
     expect(pickFrom(20, 16)).toBe(true);
     expect([S.tool, gradeInHand(TUNNEL)]).toEqual([TUNNEL, 2]);
+  });
+
+  test("a splitter's, joiner's and sorter's are chosen and kept for each as a belt's is, built at, and brought by one picked up", async () => {
+    const y = yardAt(3);
+    for (let x = 18; x <= 22; x++) build(y, BELT, x, 16, 0, Infinity, { grade: 2 });
+    const fake = await opened(y, 1000);
+    setTool(SPLITTER);
+    expect(gradeInHand(SPLITTER)).toBe(1);
+    setGrade(2);
+    setTool(SORTER);
+    expect([gradeInHand(SPLITTER), gradeInHand(SORTER), gradeInHand(BELT)]).toEqual([2, 1, 1]);
+    // Set down on a belt of the line, at the grade in hand.
+    setTool(SPLITTER);
+    aimAt(20, 16);
+    expect(S.aim).toMatchObject({ grade: 2, why: null });
+    expect(place(20, 16)).toBe(true);
+    setTool(JOINER);
+    expect(place(21, 16)).toBe(true);
+    expect(grades([19, 20, 21, 22], 16)).toEqual([2, 2, 1, 2]);
+    await inStep(fake, 2);
+    expect(fake.leaf.commands.map((c) => (isRecord(c) ? [c.kind, c.grade ?? 1] : null))).toEqual([
+      ["splitter", 2],
+      ["joiner", 1],
+    ]);
+    // The joiner of grade I raised where it stands, as a belt is, for the difference.
+    setGrade(2);
+    aimAt(21, 16);
+    expect(S.aim).toMatchObject({ grade: 2, raises: 1, why: null, cost: priceAt(S.world, JOINER, 21, 16, 2) });
+    expect(place(21, 16)).toBe(true);
+    expect(grades([21], 16)).toEqual([2]);
+    setTool(null);
+    S.grades.fill(0);
+    expect(pickFrom(20, 16)).toBe(true);
+    expect([S.tool, gradeInHand(SPLITTER)]).toEqual([SPLITTER, 2]);
+    await inStep(fake, 3);
   });
 
   test("in a yard that may build nothing higher, there is nothing to choose: every piece is built at the first", async () => {

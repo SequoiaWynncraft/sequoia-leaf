@@ -16,8 +16,10 @@
  * power's reach, the same pieces stand in the dark. Along a row: belts east, west, south and north
  * (the lit ones carrying a plank and the two folios), gatherers facing each way, a mill sawing,
  * firing and pressing, a bench, a workshop, a Study, and a tunnel each way round. East of them,
- * sorters each way: not set, set to planks, set to lanterns. By the depot: a Study with nothing to
- * study, and a cart stop.
+ * sorters each way (not set at grade I, set to planks at II, to lanterns at III); a line of belt
+ * east through a splitter, a joiner and a sorter, all at the row's grade, with their side belts;
+ * then a splitter each way round, its belt in and its three ways out, and a joiner each way round,
+ * its three belts in and its way out. By the depot: a Study with nothing to study, and a cart stop.
  */
 import * as F from "@sequoia-leaf/factory";
 import { bareLand } from "@sequoia-leaf/factory/test/land.ts";
@@ -38,7 +40,7 @@ const GATHER: readonly (readonly [number, F.Dir])[] = [
 ];
 
 const land = bareLand(
-  64,
+  100,
   40,
   ROWS.flatMap(({ z }) => GATHER.map(([x]) => [x, z, "deadfall"] as const)),
   [32, 18],
@@ -82,7 +84,7 @@ function riding(x: number, z: number, thing: F.Item): void {
 }
 
 // Power for the northern block: two rows of pylons between the grades' rows, and boilers by the depot.
-for (const x of [6, 16, 26, 36, 46, 56]) for (const z of [5, 9]) build("pylon", x, z, 0);
+for (const x of [6, 16, 26, 36, 46, 56, 64, 72, 80, 88, 96]) for (const z of [5, 9]) build("pylon", x, z, 0);
 for (const x of [27, 28, 29, 30, 34, 35]) {
   const i = build("boiler", x, 22, 0);
   y.holders.fuel[F.holderOf(y, i)] = 20;
@@ -133,14 +135,51 @@ for (const { grade, z, on } of ROWS) {
   build("tunnel", 46, z + 1, 3, grade);
 }
 
-// Sorters each way: not set, set to planks, set to lanterns.
-([null, "plank", "lantern"] as const).forEach((thing, k) => {
+/** The tile one step from (x, z) a way. */
+const toward = (x: number, z: number, way: number): [number, number] => [
+  x + (F.DX[way & 3] ?? 0),
+  z + (F.DY[way & 3] ?? 0),
+];
+const asDir = (way: number): F.Dir => WAYS[way & 3] ?? 0;
+/** A belt on a tile, facing a way, at a grade. */
+const belt = ([x, z]: [number, number], way: number, grade: number): number => build("belt", x, z, asDir(way), grade);
+
+for (const { grade, z, on } of ROWS) {
+  // Sorters each way: not set at grade I, set to planks at II, to lanterns at III.
+  const thing = ([null, "plank", "lantern"] as const)[grade - 1] ?? null;
   for (const dir of WAYS) {
     const x = 50 + dir * 3;
-    build("sorter", x, lit(k + 1), dir);
-    if (thing !== null) F.setSort(y, x, lit(k + 1), F.item(thing));
+    build("sorter", x, z, dir, grade);
+    if (thing !== null) F.setSort(y, x, z, F.item(thing));
   }
-});
+  // One line east, at the row's grade: belts, a splitter with a belt off each side, a joiner with a
+  // belt in from the south, a sorter with a belt off its left, belts on into nothing.
+  const line = ["belt", "belt", "splitter", "belt", "joiner", "belt", "sorter", "belt", "belt"] as const;
+  line.forEach((kind, k) => build(kind, 63 + k, z, 0, grade));
+  belt([65, z - 1], 3, grade);
+  belt([65, z + 1], 1, grade);
+  belt([67, z + 1], 3, grade);
+  belt([69, z - 1], 3, grade);
+  if (on) {
+    riding(64, z, F.item("plank"));
+    riding(66, z, F.item("plank"));
+    riding(67, z + 1, F.FOLIOS[0] ?? F.item("plank"));
+    riding(70, z, F.item("plank"));
+  }
+  // A splitter each way round, its belt in from behind and its three ways out; then a joiner each
+  // way round, a belt in from behind and from each side, and its way out.
+  for (const dir of WAYS) {
+    const sx = 75 + dir * 3;
+    build("splitter", sx, z, dir, grade);
+    belt(toward(sx, z, dir + 2), dir, grade);
+    for (const way of [dir, dir + 3, dir + 1]) belt(toward(sx, z, way), way, grade);
+    const jx = 88 + dir * 3;
+    build("joiner", jx, z, dir, grade);
+    belt(toward(jx, z, dir), dir, grade);
+    for (const way of [dir + 2, dir + 3, dir + 1]) belt(toward(jx, z, way), way + 2, grade);
+    if (on) riding(sx, z, F.item("plank"));
+  }
+}
 // By the depot: a Study with nothing to study, and a cart stop with a belt into it.
 build("study", 36, 18, 0);
 build("stop", 28, 18, 0);

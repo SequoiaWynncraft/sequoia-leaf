@@ -40,23 +40,23 @@ bun pace.ts    # tiers 0 to 3 played as a careful player would, and how long eac
 A tile is `y * w + x`. Every array below is indexed by the tile, and holds `NONE` (255) for
 nothing:
 
-| Array   | Type  | What it holds                                                                   |
-| ------- | ----- | ------------------------------------------------------------------------------- |
-| `kind`  | Uint8 | what stands there                                                               |
-| `dir`   | Uint8 | the way it faces: 0 east, 1 south, 2 west, 3 north                              |
-| `grade` | Uint8 | its grade, 1 to 3, for a belt, tunnel, gatherer, mill, bench, workshop or Study |
-| `item`  | Uint8 | what a belt, splitter, joiner, sorter or tunnel mouth carries                   |
-| `prog`  | Uint8 | how far across its tile, in eighths                                             |
-| `via`   | Uint8 | the side it was handed in from, 1 + a way, or 0 (only for drawing)              |
-| `tint`  | Uint8 | a line's colour, 0 to 6                                                         |
-| `turn`  | Uint8 | a splitter's next way out, a joiner's next way in                               |
-| `shut`  | Uint8 | a splitter's shut ways, a bit each                                              |
-| `first` | Uint8 | the way a splitter puts first, 1 + the way, or 0 for none                       |
-| `set`   | Uint8 | the one thing a machine is told to make, or a sorter sends to its left          |
-| `free`  | Uint8 | 1 for one of the pieces a new yard has to hand                                  |
-| `span`  | Int8  | a tunnel's tiles under: positive at the way-in mouth, negative at the other     |
-| `row`   | Int32 | the piece's row in a side table, or -1: read only by `holderOf`, `tunnelOf`     |
-| `lit`   | Uint8 | 1 where power reaches                                                           |
+| Array   | Type  | What it holds                                                                                             |
+| ------- | ----- | --------------------------------------------------------------------------------------------------------- |
+| `kind`  | Uint8 | what stands there                                                                                         |
+| `dir`   | Uint8 | the way it faces: 0 east, 1 south, 2 west, 3 north                                                        |
+| `grade` | Uint8 | its grade, 1 to 3, for a belt, tunnel, splitter, joiner, sorter, gatherer, mill, bench, workshop or Study |
+| `item`  | Uint8 | what a belt, splitter, joiner, sorter or tunnel mouth carries                                             |
+| `prog`  | Uint8 | how far across its tile, in eighths                                                                       |
+| `via`   | Uint8 | the side it was handed in from, 1 + a way, or 0 (only for drawing)                                        |
+| `tint`  | Uint8 | a line's colour, 0 to 6                                                                                   |
+| `turn`  | Uint8 | a splitter's next way out, a joiner's next way in                                                         |
+| `shut`  | Uint8 | a splitter's shut ways, a bit each                                                                        |
+| `first` | Uint8 | the way a splitter puts first, 1 + the way, or 0 for none                                                 |
+| `set`   | Uint8 | the one thing a machine is told to make, or a sorter sends to its left                                    |
+| `free`  | Uint8 | 1 for one of the pieces a new yard has to hand                                                            |
+| `span`  | Int8  | a tunnel's tiles under: positive at the way-in mouth, negative at the other                               |
+| `row`   | Int32 | the piece's row in a side table, or -1: read only by `holderOf`, `tunnelOf`                               |
+| `lit`   | Uint8 | 1 where power reaches                                                                                     |
 
 Side tables have a row for each piece that needs one, kept packed (a removed row takes the last),
 and grow by half when full. `row` holds a holder's row for some kinds and a tunnel's for another, so
@@ -89,8 +89,8 @@ for their range.
 - **Work** is half-ticks. A gatherer, machine or Study does `PACE[grade]` a tick it works: 2 at
   grade 1, 3 at grade 2, 4 at grade 3. A recipe of 12 ticks wants 24; a gatherer 30; a Study 100 for
   each folio.
-- **Belts** move `PACE[grade]` eighths of a tile a tick: a tile in 4, 3 or 2 ticks. A splitter,
-  joiner or sorter, which has no grade, moves at grade 3's pace.
+- **Belts** move `PACE[grade]` eighths of a tile a tick: a tile in 4, 3 or 2 ticks; so do tunnels,
+  splitters, joiners and sorters, each at its own grade.
 - **Power** is counted in halves: a piece draws its kind's power once for each half its grade draws
   (2, 3, 4), and the depot, waterwheels and boilers give 2 halves for each power.
 - **A shortage of power** is a store (`charge`). Each tick the power there is goes into it, and when
@@ -126,10 +126,14 @@ Not built, on purpose: a recipe that makes more than one.
 
 ## Grades
 
-A belt, tunnel, gatherer, mill, bench, workshop and Study each have a grade, 1 to 3, kept on the
-piece; grade 2 works 1.5 times as fast, costs 3 times as much and draws 1.5 times the power; grade
-3, twice, 8 times and twice (`GRADES`). `open.kinds[k]` is the highest grade of a kind the yard may
-build, 0 for a kind not unlocked.
+A belt, tunnel, splitter, joiner, sorter, gatherer, mill, bench, workshop and Study each have a
+grade, 1 to 3, kept on the piece; grade 2 works 1.5 times as fast, costs 3 times as much and draws
+1.5 times the power; grade 3, twice, 8 times and twice (`GRADES`). A splitter, joiner or sorter
+passes things on at a belt's pace for its grade, so one of a lower grade than the belts round it
+holds their line back; whatever unlocks a belt's grade unlocks theirs (`content/nodes.ts`).
+`open.kinds[k]` is the highest grade of a kind the yard may build, 0 for a kind not unlocked; a
+grade unlocked opens a kind only once the kind itself is (the wax grades the sorter before the
+sorter is known).
 
 Building a kind over one of its kind turns it and sets it to the grade asked for, keeping what it
 holds, carries, its colour and what it is set to, for the difference in price, which is given back
@@ -302,9 +306,9 @@ machine needs of each part a minute (`needs`), how many of the piece before it e
 (`feeders`), the whole tree of machines and gatherers for a thing at a pace (`tree`) and what that
 tree takes of each piece (`bill`). Every piece is taken as working every tick. `plan.ts` prints, for
 every thing the slice can make, one machine's output a minute and the line that feeds one flat out.
-`carried(grade)` is how many things a minute a belt or a tunnel of a grade carries when it is kept
-full: a thing crosses a tile in a whole number of ticks, so 150 at the first grade, 200 at the
-second and 300 at the third, which a test holds a real belt to.
+`carried(grade)` is how many things a minute a belt, tunnel, splitter, joiner or sorter of a grade
+carries when it is kept full: a thing crosses a tile in a whole number of ticks, so 150 at the first
+grade, 200 at the second and 300 at the third, which a test holds a real line of each to.
 
 ## How long the slice takes
 
@@ -370,7 +374,7 @@ The player is one careful, ordinary player. Everything it decides by is at the t
   leaves the earlier one less, and what is read says so.
 - **Research**: once the Study is unlocked, for each kind of folio that may be made and that research
   of an open tier wants, Studies and their folio lines for `FOLIOS` a minute of it.
-- **Policy**: new pieces at the highest grade unlocked up to `GRADES`; after a goal's lines, a boiler
+- **Policy**: new pieces at the highest grade unlocked up to `GRADES` (a splitter at its belts'); after a goal's lines, a boiler
   (or a waterwheel, when short by no more than one gives, and the other where one will not fit)
   whenever the yard would draw more than it gives; a plot only when the land has too little of what a
   line gathers or no room for it; any filled order handed over, and an order that would take more
@@ -397,6 +401,10 @@ something, the thing and its progress, then only the parts that are not as new (
 them, when above 1). A blueprint's piece is its kind, x, y and way, then only the parts it keeps.
 A splitter's ways are one byte wherever they are kept (`packWays`): its shut ways a bit each, and 8
 times 1 + the way it puts first, so a yard kept before there was a way first reads back with none.
+A yard kept by version 6, before splitters, joiners and sorters had grades, kept them with none:
+each in the yard reads back at the highest grade the yard may build of its kind, for nothing, so no
+line goes slower than it went; each in a blueprint, at the highest grade of the belts and tunnels
+kept with it. Kept again, the yard is this version's.
 
 `decode` refuses whole a record of the wrong shape or version, and pieces' bytes cut short, left
 over, with a part it does not know or with a count past what the tables allow. A record kept while

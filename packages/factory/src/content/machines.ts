@@ -148,8 +148,22 @@ export const STARTERS: Partial<Record<KindName, number>> = { gatherer: 1, mill: 
  */
 export const TICKS = { gather: 15, burn: 20, study: 50 } as const;
 
-/** The kinds that have a grade, 1 to 3, kept on the piece. */
-export const GRADED: readonly KindName[] = ["belt", "tunnel", "gatherer", "mill", "bench", "workshop", "study"];
+/**
+ * The kinds that have a grade, 1 to 3, kept on the piece. A splitter, joiner or sorter passes things
+ * on at a belt's pace for its grade, and its grades open with the belt's (`nodes.ts`).
+ */
+export const GRADED: readonly KindName[] = [
+  "belt",
+  "tunnel",
+  "splitter",
+  "joiner",
+  "sorter",
+  "gatherer",
+  "mill",
+  "bench",
+  "workshop",
+  "study",
+];
 /** Grades 1 to 3, against grade 1: how fast a piece works or carries, what it costs, and the power it draws. */
 export const GRADES = [
   { pace: 1, price: 1, draw: 1 },

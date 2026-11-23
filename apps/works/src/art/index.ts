@@ -126,13 +126,29 @@ function signMaker(): (price: number) => Sprite {
 /** A piece of belt running east, with nothing on it, in a line's colour or in none. */
 export const bare = (tint = 0): HTMLCanvasElement => beltTile(arms(2, 0, 1, 0), 0, 5, 1, tint);
 
-/** A tile where belts meet, pointing east, with what marks it: `a` as `beltTile` takes them. */
-const meeting = (a: Arms, top: HTMLCanvasElement | undefined): HTMLCanvasElement => {
+/**
+ * A tile where belts meet at a grade, as the yard lays it: its belt in the grade's wood (`wood`, as
+ * `beltTile` takes it), what marks it, and over that the grade's mark. `a` and `main` as `beltTile`
+ * takes them.
+ */
+export function meetingTile(
+  m: Machines,
+  a: Arms,
+  main: Dir,
+  top: HTMLCanvasElement | undefined,
+  grade: number,
+  wood = woodOf(grade),
+): HTMLCanvasElement {
   const { c, g } = makeCanvas(16, 16);
-  g.drawImage(beltTile(a, 0, 5, 1), 0, 0);
+  g.drawImage(beltTile(a, main, 5, wood), 0, 0);
   if (top) g.drawImage(top, 0, 0);
+  const pip = m.pips[grade - 2];
+  if (pip) g.drawImage(pip, 0, 0);
   return c;
-};
+}
+/** A tile where belts meet, pointing east, at a grade, for a button: at the first grade, with the lighter slats a button shows a belt with. */
+const meeting = (m: Machines, a: Arms, top: HTMLCanvasElement | undefined, grade: number): HTMLCanvasElement =>
+  meetingTile(m, a, 0, top, grade, grade >= 2 ? woodOf(grade) : 1);
 
 /**
  * What lies over a sorter pointing east: a framed board across the belt, things passing under it,
@@ -197,20 +213,23 @@ export const KIND_PIC: Readonly<Record<KindName, (p: Parts, grade: number) => HT
     g.drawImage(plank, 8 - (plank.width >> 1), 7 - (plank.height >> 1));
     return c;
   },
-  // A gatherer of the second grade has his rake stood beside him.
+  // A gatherer of the second grade has his rake stood beside him; of the third, his wheelbarrow too.
   gatherer: ({ m }, grade) => {
     const gnome = must(m.gnome[0]?.[0], "gnome").c;
     if (grade < 2) return gnome;
-    const { c, g } = makeCanvas(gnome.width + 5, gnome.height);
-    g.drawImage(m.rake.c, gnome.width - 2, gnome.height - m.rake.c.height);
-    g.drawImage(gnome, 0, 0);
+    const barrow = grade >= 3 ? m.barrow : null;
+    const left = barrow ? barrow.width - 4 : 0;
+    const { c, g } = makeCanvas(left + gnome.width + 5, gnome.height);
+    if (barrow) g.drawImage(barrow, 0, gnome.height - barrow.height);
+    g.drawImage(m.rake.c, left + gnome.width - 2, gnome.height - m.rake.c.height);
+    g.drawImage(gnome, left, 0);
     return c;
   },
   mill: ({ m }, grade) => must(m.saw[lookOf(grade)]?.[0], "saw").c,
   bench: ({ m }, grade) => must(m.bench[lookOf(grade)]?.[0], "bench").c,
   workshop: ({ m }, grade) => must(m.workshop[lookOf(grade)]?.[1]?.[0], "workshop").c,
-  splitter: ({ m }) => meeting(arms(2, 2, 1, 2), m.splitter[0]),
-  joiner: ({ m }) => meeting(arms(2, 1, 1, 1), m.joiner[0]),
+  splitter: ({ m }, grade) => meeting(m, arms(2, 2, 1, 2), m.splitter[0], grade),
+  joiner: ({ m }, grade) => meeting(m, arms(2, 1, 1, 1), m.joiner[0], grade),
   tunnel: ({ m }, grade) => {
     const hood = must(m.hood[lookOf(grade)]?.[0], "hood");
     const { c, g } = makeCanvas(18, 20);
@@ -225,7 +244,7 @@ export const KIND_PIC: Readonly<Record<KindName, (p: Parts, grade: number) => HT
   depot: ({ m }) => m.depot.c,
   study: ({ m }, grade) => must(m.study[lookOf(grade)]?.[2], "study").c,
   stop: ({ m }) => must(m.stop[0], "stop").c,
-  sorter: ({ sorter }) => meeting(arms(2, 0, 1, 2), sorter(0, thing("plank"))),
+  sorter: ({ m, sorter }, grade) => meeting(m, arms(2, 0, 1, 2), sorter(0, thing("plank")), grade),
 };
 
 /** A copy of each kind's picture, for a button or a card. */

@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
 import { bareLand } from "./land.ts";
-import { must } from "./yards.ts";
+import { flatOut, must } from "./yards.ts";
 
 const plank = F.item("plank");
 const hamper = F.RECIPE[F.item("hamper")];
@@ -83,30 +83,16 @@ describe("the planner", () => {
   test("a line of belt of each grade, fed flat out, carries what the planner says: a minute over the whole ticks a thing takes across a tile", () => {
     expect([1, 2, 3].map(F.carried)).toEqual([1, 2, 3].map((g) => F.MINUTE / Math.ceil(8 / (F.PACE[g] ?? 1))));
     for (const grade of [1, 2, 3])
-      // Fed by a crate, and through a splitter, which hands on at the top grade's pace.
-      for (const first of ["belt", "splitter"] as const) {
+      // Fed by a crate, and through a splitter, a joiner or a sorter of the same grade, each of which hands on at a belt's pace.
+      for (const first of ["belt", "splitter", "joiner", "sorter"] as const) {
         const y = F.create({ land: bareLand(13, 9, [], [9, 4]), tier: 4, seed: 1 });
         must(y, { do: "build", kind: "crate", x: 1, y: 4, dir: 0 });
         must(y, { do: "build", kind: first, x: 2, y: 4, dir: 0 });
         for (let x = 3; x <= 7; x++) must(y, { do: "build", kind: "belt", x, y: 4, dir: 0 });
         // A grade the slice does not unlock is set on the piece, as the tests of grades set it.
-        for (let x = first === "belt" ? 2 : 3; x <= 7; x++) y.grade[F.at(y, x, 4)] = grade;
+        for (let x = 2; x <= 7; x++) y.grade[F.at(y, x, 4)] = grade;
         F.changed(y);
-        const crate = F.holderOf(y, F.at(y, 1, 4));
-        const top = (): void => {
-          while (F.held(y.holders, crate, plank) < 8) F.put(y.holders, crate, plank);
-        };
-        const run = (ticks: number): void => {
-          for (let k = 0; k < ticks; k++) {
-            top();
-            F.step(y);
-          }
-        };
-        // A minute once the line is full to its end.
-        run(120);
-        const before = y.depot[plank] ?? 0;
-        run(F.MINUTE);
-        expect((y.depot[plank] ?? 0) - before).toBe(F.carried(grade));
+        expect(flatOut(y, 1, 4)).toBe(F.carried(grade));
       }
   });
 

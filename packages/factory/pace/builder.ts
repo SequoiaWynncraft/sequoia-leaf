@@ -655,7 +655,7 @@ export class Builder {
         const side = this.step(b, way === 1 ? d + 3 : d + 1);
         if (!this.free(side)) continue;
         const ok = this.attempt(() => {
-          if (!this.put("splitter", b, d)) return false;
+          if (!this.put("splitter", b, d, this.grades(F.SPLITTER))) return false;
           if (!this.cmd({ do: "way", ...this.at(b), way: 3 - way, open: false })) return false;
           const run = this.routeTo(side, t, false);
           if (!run) return false;
