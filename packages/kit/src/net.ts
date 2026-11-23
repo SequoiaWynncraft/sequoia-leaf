@@ -11,6 +11,8 @@
  *   `version`, the connection it came on; never by a flag kept beside the question.
  */
 
+import { fromTown } from "./shell.ts";
+
 /** The part of a WebSocket the game uses. */
 export interface LiveSocket {
   binaryType: BinaryType;
@@ -54,6 +56,11 @@ export interface Outside {
    * focus, or the browser says the network is back. Returns how to stop.
    */
   wake(fn: () => void): () => void;
+  /**
+   * Calls `fn` whenever the page may be going: hidden, put away, or closed by the town it is
+   * framed in. Returns how to stop.
+   */
+  leaving(fn: () => void): () => void;
   /** How long a request may go unanswered before it is let go as no answer, in milliseconds. */
   deadline: number;
 }
@@ -71,6 +78,24 @@ export function onWake(fn: () => void): () => void {
     document.removeEventListener("visibilitychange", shown);
     window.removeEventListener("focus", fn);
     window.removeEventListener("online", fn);
+  };
+}
+
+/** The browser's `leaving`: the page hidden or put away, or the town closing the game in its frame. */
+export function onLeaving(fn: () => void): () => void {
+  if (typeof window === "undefined" || typeof document === "undefined") return () => undefined;
+  const hidden = (): void => {
+    if (document.visibilityState === "hidden") fn();
+  };
+  window.addEventListener("pagehide", fn);
+  document.addEventListener("visibilitychange", hidden);
+  const town = fromTown((msg) => {
+    if (msg.town === "closing") fn();
+  });
+  return () => {
+    window.removeEventListener("pagehide", fn);
+    document.removeEventListener("visibilitychange", hidden);
+    town();
   };
 }
 
@@ -106,6 +131,7 @@ export const outside: Outside = {
   socket: (url) => new WebSocket(url),
   width: () => (typeof innerWidth === "number" ? innerWidth : 0),
   wake: onWake,
+  leaving: onLeaving,
   deadline: 10_000,
 };
 

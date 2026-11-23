@@ -59,6 +59,10 @@ export interface Standin {
   clock: { now: number };
   /** The page comes back: visible again, focused, or back on the network. */
   wake(): void;
+  /** The page may be going: hidden, put away, or closed by the town. */
+  leave(): void;
+  /** How many are listening for the page coming back or going. */
+  hearing(): number;
   /** Puts the real world back. */
   done(): void;
 }
@@ -77,6 +81,7 @@ export function standin(
   const reloaded = { count: 0 };
   const clock = { now: 1_800_000_000_000 };
   const woken = new Set<() => void>();
+  const leavers = new Set<() => void>();
   const done = pretend({
     async fetch(path, init = {}) {
       await Promise.resolve();
@@ -117,11 +122,21 @@ export function standin(
         woken.delete(fn);
       };
     },
+    leaving: (fn) => {
+      leavers.add(fn);
+      return () => {
+        leavers.delete(fn);
+      };
+    },
   });
   const wake = (): void => {
     for (const fn of woken) fn();
   };
-  return { store, sent, went, reloaded, clock, wake, done };
+  const leave = (): void => {
+    for (const fn of leavers) fn();
+  };
+  const hearing = (): number => woken.size + leavers.size;
+  return { store, sent, went, reloaded, clock, wake, leave, hearing, done };
 }
 
 /** The member `/v1/game/me` answers with in tests. */

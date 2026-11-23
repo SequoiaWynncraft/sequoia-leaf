@@ -8,7 +8,7 @@ import {
   LOGGED,
   type Logged,
   mayBuy,
-  MOST_COMMANDS,
+  MOST_FLUSHED,
   type PlayerId,
   type ToClient,
   visitRoom,
@@ -222,8 +222,8 @@ const failed = (player: PlayerId, game: string, defect: unknown) =>
 
 /** The commands of a batch with their ids, or why the batch is not one. */
 function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] | string {
-  if (commands.length > MOST_COMMANDS) {
-    return `A batch holds at most ${MOST_COMMANDS} commands`;
+  if (commands.length > MOST_FLUSHED) {
+    return `A batch holds at most ${MOST_FLUSHED} commands`;
   }
   const sent: Sent[] = [];
   for (const command of commands) {
@@ -698,8 +698,13 @@ export class Play extends Context.Service<
           Effect.gen(function* () {
             const sent = sentOf(played, commands);
             if (typeof sent === "string") return { status: "invalid", why: sent } satisfies Batch;
-            // A batch that would take the player past either allowance is refused whole.
-            if (!pace.take(playing.playerId, yield* Clock.currentTimeMillis, [1, sent.length])) {
+            // A batch that would take the player past either allowance is refused whole. A command
+            // answered before changes nothing, and takes nothing of it: a page going away sends again
+            // what may have come already.
+            let fresh = 0;
+            for (const { id } of sent)
+              if (Option.isNone(yield* store.answered(playing.playerId, played.id, id))) fresh++;
+            if (!pace.take(playing.playerId, yield* Clock.currentTimeMillis, [1, fresh])) {
               return { status: "slow" } satisfies Batch;
             }
             return yield* ask("batch", playing.playerId, played, (job) =>

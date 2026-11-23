@@ -552,7 +552,10 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   `player` is the id the page believes it is (409 `not_you`, nothing done, when
   it is not the session's player, as for a page left open after someone else
   signed in; the kit's play client then sends nothing more and loads the page
-  again), and the commands are at most 32, each with an id the page made (up to 64 letters, digits and `_ . : -`),
+  again), and the commands are at most 128 (a page puts at most 32 in a batch;
+  going away, it sends everything Leaf has not answered in one request, since
+  two could arrive in either order), each with an id the page made (up to 64
+  letters, digits and `_ . : -`),
   unique in the batch, and answers `{ "rev", "now", "results", "state" }`:
   for each command in order `{ "id", "notes" }` (the game's own notes of what
   happened) or `{ "id", "refused": "<code>" }`, and the state after them all;
@@ -570,11 +573,12 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   goes up by one with each batch that changed anything, Leaf's own tending
   (below) among them.
 - 404 `no_such_game` for a game Leaf does not play; 400 `invalid_command` for a
-  body that is not commands, more than 32, a missing or repeated id, or a
+  body that is not commands, more than 128, a missing or repeated id, or a
   command that is not one of the game's (nothing is done); 413 as elsewhere;
   429 `slow_down` for a batch that would take one player past 10 batches a
   second (bursts of 20) or 10 commands a second (bursts of 40), across all
-  games: it is refused whole, and nothing is done.
+  games: it is refused whole, and nothing is done. A command answered before
+  counts for nothing of that.
 - A command's Coins are worked out in order, starting from the balance: each
   change it pays or takes is added in turn, and if the balance would go below
   nothing at any point the command is refused with `not_enough_coins` and

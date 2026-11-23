@@ -157,6 +157,7 @@ export {
   type Logged,
   mayBuy,
   MOST_COMMANDS,
+  MOST_FLUSHED,
   type Placed,
   playPath,
   type Refused,

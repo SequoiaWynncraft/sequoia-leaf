@@ -953,7 +953,9 @@ export function makeCamp(
     // meanwhile, or is already on the way to another camp. It is not kept for the next walk to a camp.
     const was = coming;
     coming = opened;
-    if (!hooks.toCamp()) coming = was;
+    if (hooks.toCamp()) return;
+    coming = was;
+    opened.play.close();
   }
   hooks.visitCamp = (id, name) => void goTo(id, name);
 

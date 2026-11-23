@@ -243,14 +243,17 @@ into the game's own types by `reader` (a page built for older rules than Leaf's 
 Leaf's answer: what it did (the game's notes) or the code it was refused with. Commands go in
 order, one request at a time, as many as are waiting in each (up to 32), and after a network
 failure, or Leaf having trouble or asking to slow down, the same request goes again with the same
-ids, so nothing is done twice; a request unanswered after ten seconds (`DEADLINE`) is let go and
-counts as no answer. Each batch carries `player`, who the page believes it is; on
+ids, so nothing is done twice; a request unanswered by the kit's deadline (ten seconds, `net.ts`)
+is let go and counts as no answer. Each batch carries `player`, who the page believes it is; on
 `not_you` (signed in as somebody else since) nothing more is sent and the page loads again. A state
 Leaf cannot read (`state_unreadable`) stops the page with `unreadableCard()` ("Your game could not
 be read. It has been kept; tell the guild."), sending nothing again. A 404 `not_found`, from a Leaf
 without the play service during a deploy, is "not yet": the call goes again each second for 30
 seconds (`NOT_YET`) before the page gives up for no server. As the page is hidden or put away,
-what Leaf has not answered goes in a request that outlives the page. A page in view reads its state
+everything Leaf has not answered goes, in order, in one request that outlives the page.
+`close()` puts a play away: what is waiting is sent so, and answered `put_away`, and the play hears
+the page no more. Where its line to Leaf is (idle, reading, sending, waiting to send again,
+stopped) is one value, moved only by `stepLine`; a stop answers everything waiting with why. A page in view reads its state
 after a minute without a call (`STILL_HERE`), so its copy is never long behind Leaf's, and as it
 comes back (`outside.wake`), but for a game answered short, which asks for its own reads; a visit
 does neither, nor does a page while `away()` (the town, while a game is open over it). Leaf counts a

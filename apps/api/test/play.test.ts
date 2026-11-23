@@ -3,7 +3,15 @@ import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { type Game, leaf, type LeafFor, MOST_COMMANDS, type PlayerId, playerId } from "@sequoia-leaf/core";
+import {
+  type Game,
+  leaf,
+  type LeafFor,
+  MOST_COMMANDS,
+  MOST_FLUSHED,
+  type PlayerId,
+  playerId,
+} from "@sequoia-leaf/core";
 import {
   ALL_ITEMS,
   BELT,
@@ -475,7 +483,7 @@ describe("commands", () => {
           { id: "x-2", do: "rustle" },
         ],
       },
-      { commands: Array.from({ length: MOST_COMMANDS + 1 }, (_, i) => ({ id: `x-${i + 3}`, do: "rustle" })) },
+      { commands: Array.from({ length: MOST_FLUSHED + 1 }, (_, i) => ({ id: `x-${i + 3}`, do: "rustle" })) },
       { orders: [] },
       "not json",
       [],
@@ -580,6 +588,9 @@ describe("one player's game", () => {
   });
 });
 
+/** Commands to Alice's table, as they came. */
+const toRaid = (commands: readonly unknown[]) => send("POST", "/v1/game/play/raid", { commands });
+
 describe("the limits", () => {
   it("are ten batches a second, in bursts of twenty: more gets slow_down and does nothing", async () => {
     await opened();
@@ -622,6 +633,22 @@ describe("the limits", () => {
     expect(elsewhere).toEqual({ status: "slow" });
     // Another player has their own.
     expect((await post(rustles(MOST_COMMANDS), bob)).status).toBe(200);
+  });
+
+  it("take a page going away's one request of everything Leaf has not answered, up to 128, the commands answered before taking nothing of the allowance", async () => {
+    await opened();
+    clock.now += 100;
+    const first = rustles(MOST_COMMANDS);
+    expect((await toRaid(first)).status).toBe(200);
+    // The page goes with those 32 still unanswered on its side and 8 more: all 40 go, and only the 8 are new.
+    const all = [...first, ...rustles(8)];
+    const going = await toRaid(all);
+    expect(going.status).toBe(200);
+    const done = Schema.decodeUnknownSync(Answered)(await going.json());
+    expect(done.results.map((r) => r.id)).toEqual(all.map((c) => c.id));
+    clock.now += 60_000;
+    expect((await toRaid(rustles(MOST_FLUSHED))).status).toBe(429);
+    expect((await toRaid(rustles(MOST_FLUSHED + 1))).status).toBe(400);
   });
 
   it("read no body over 16 KiB", async () => {

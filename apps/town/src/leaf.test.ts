@@ -55,6 +55,29 @@ test("a camp visited is opened beside the member's own and shown, and nothing bu
   expect(shown()).toEqual(own);
 });
 
+test("a camp left is put away: its copy hears the page no more, and is read no more", async () => {
+  const w = standin({
+    "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },
+    "GET /v1/game/play/town/of/bob": { status: 200, body: { rev: 4, now: "x", state: visitView(theirs) } },
+    "GET /v1/game/play/town/of/carol": { status: 200, body: { rev: 2, now: "x", state: visitView(theirs) } },
+  });
+  world = w;
+  expect(await openTown("me", () => undefined)).toBeNull();
+  const before = w.hearing();
+  const bob = await openCamp("bob", "Bob");
+  const carol = await openCamp("carol", "Carol");
+  if (typeof bob === "string" || typeof carol === "string") throw new Error("not opened");
+  lookAt(bob);
+  // On from one camp to the next, and then home: each camp left goes with it.
+  lookAt(carol);
+  expect(w.hearing()).toBe(before + 1);
+  lookAt(null);
+  expect(w.hearing()).toBe(before);
+  const asked = w.sent.length;
+  await Promise.all([bob.play.refresh(), carol.play.refresh()]);
+  expect(w.sent.length).toBe(asked);
+});
+
 test("a camp there is nothing of is the trouble nothing; a name already known is not asked", async () => {
   const w = standin({
     "GET /v1/game/play/town": { status: 200, body: { rev: 1, now: "x", state: own } },

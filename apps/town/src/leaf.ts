@@ -131,8 +131,9 @@ export async function openCamp(id: string, name?: string): Promise<Looked | Trou
   return { id, name: name ?? said?.name ?? "Someone", play: opened };
 }
 
-/** Shows a camp opened (`openCamp`); with null, the member's own again. */
+/** Shows a camp opened (`openCamp`); with null, the member's own again. The camp shown before is put away. */
 export function lookAt(at: Looked | null): void {
+  if (looked !== null && looked !== at) looked.play.close();
   looked = at;
 }
 

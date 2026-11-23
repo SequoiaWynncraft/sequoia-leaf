@@ -31,9 +31,13 @@
  *   state that does not read, with nothing sent again: the page shows the kit's card for it.
  * - Every request the page waits on is let go at the kit's deadline (`net.ts`), as if Leaf had not
  *   answered: a batch goes again with the same ids, as after any failure (`RETRY`).
- * - As the page is hidden or put away, or the town closes the game, everything Leaf has not
- *   answered is sent at once in a request that outlives the page (`flush`), so the last thing done
- *   before leaving is not lost.
+ * - As the page is hidden or put away, or the town closes the game (`outside.leaving`), everything
+ *   Leaf has not answered is sent at once, in order, in one request that outlives the page
+ *   (`flush`), so nothing done before leaving is lost. `close()` puts a play away: what is waiting
+ *   is sent so and answered `put_away`, and the play hears the page no more.
+ * - Where the play's line to Leaf is (idle, reading, sending, waiting to send again, stopped) is one
+ *   value (`Line`), moved only by `stepLine`. Every way of stopping is the one stop: everything
+ *   waiting is answered with why, and the page told what it must be (`onTrouble`, or loaded again).
  * - A page in view reads its state after a minute without a call to Leaf (`STILL_HERE`), so its
  *   copy is never long behind Leaf's; and it is read as the page comes back (`outside.wake`), but
  *   for a game answered short, which asks for its own reads. A visit does neither, nor does a page
@@ -45,10 +49,9 @@
  * Every request reaches Leaf through `net.ts`, which the tests stand in for.
  */
 
-import { type GameId, MOST_COMMANDS, playPath, visitPath } from "@sequoia-leaf/core";
+import { type GameId, MOST_COMMANDS, MOST_FLUSHED, playPath, visitPath } from "@sequoia-leaf/core";
 
 import { ask, type Backoff, backoff, isRecord, outside } from "./net.ts";
-import { fromTown } from "./shell.ts";
 
 /** Reads what Leaf sends into the game's own types; null for anything these rules could not have made. */
 export interface PlayReader<View, Note, Short = never> {
@@ -101,10 +104,17 @@ export interface Play<View, Command extends object, Note, Short = never> {
    * client does this itself when the page is hidden or put away, and when the town closes a game.
    */
   flush(): void;
+  /**
+   * Puts the play away: what Leaf has not answered is sent (`flush`) and answered `put_away`, and
+   * the play hears the page no more and does nothing after.
+   */
+  close(): void;
 }
 
 /** The most a batch's commands may come to, in characters: Leaf reads a body of at most 16 KiB. */
 const MOST_BYTES = 12_000;
+/** The most a page going away sends in its one request, in characters: all Leaf reads of a body, less the rest of it. */
+const FLUSH_BYTES = 15_500;
 /** What a command's id and the punctuation round it add to a body. */
 const ID_ROOM = 40;
 
@@ -135,12 +145,97 @@ function endOf(reply: { status: number; body: unknown }): Trouble | null {
   return reply.status === 404 && isRecord(reply.body) && reply.body.code === "nothing_to_visit" ? "nothing" : null;
 }
 
+/** Why a play sends nothing more: a trouble its page is told of, signed in as somebody else or rules older than Leaf's (the page loads again), or the page put it away (`close`). */
+export type Stopped = Trouble | "not_you" | "outdated" | "put_away";
+
+/** A command for Leaf: its id, what it is, what the page shows it doing, its size as sent, and who waits for its answer. */
 interface Pending<View, Command, Note> {
   readonly id: string;
   readonly command: Command;
   readonly predict: ((copy: View) => View) | undefined;
+  readonly size: number;
   readonly answer: (a: Answer<Note>) => void;
 }
+
+/**
+ * Where a play's line to Leaf is, moved only by `stepLine`:
+ * - `idle`: nothing on its way;
+ * - `reading`: Leaf's state asked for again (`refresh`), and nothing sent since (`done` when it has come);
+ * - `sending`: a batch on its way, and the commands queued behind it;
+ * - `waiting`: the batch failed `tries` times, and goes again after a wait (`RETRY`);
+ * - `stopped`: nothing more is sent, for `why`; nothing is queued.
+ */
+export type Line<P> =
+  | { readonly at: "idle" }
+  | { readonly at: "reading"; readonly done: Promise<void> }
+  | {
+      readonly at: "sending" | "waiting";
+      readonly batch: readonly P[];
+      readonly queue: readonly P[];
+      readonly tries: number;
+    }
+  | { readonly at: "stopped"; readonly why: Stopped };
+
+/** What moves a line on: a command sent, the state asked for, the request on its way answered or failed, its wait over, or a stop. */
+export type LineEvent<P> =
+  | { readonly do: "send"; readonly p: P }
+  | { readonly do: "read"; readonly done: Promise<void> }
+  | { readonly do: "answered" }
+  | { readonly do: "failed" }
+  | { readonly do: "again" }
+  | { readonly do: "stop"; readonly why: Stopped };
+
+/**
+ * How many from the front of a line of commands one request holds: `MOST_COMMANDS`, and no more than
+ * `MOST_BYTES` of them, so that a few long ones together do not make a body Leaf will not read.
+ * Always at least the first.
+ */
+export function fitting(line: readonly { readonly size: number }[], most = MOST_COMMANDS, bytes = MOST_BYTES): number {
+  let n = 0;
+  let size = 0;
+  for (const p of line) {
+    size += p.size;
+    if (n > 0 && (n >= most || size > bytes)) break;
+    n++;
+  }
+  return n;
+}
+
+/**
+ * The one way a play's line moves on. A command sent goes at once when nothing else is on its way,
+ * and a read of the state is let go for it; else it is queued. A batch answered makes way for as
+ * many queued as one request holds (`fitting`); one that failed waits, and goes again. A read goes
+ * only from idle. Stopped, nothing moves it.
+ */
+export function stepLine<P extends { readonly size: number }>(l: Line<P>, e: LineEvent<P>): Line<P> {
+  if (l.at === "stopped") return l;
+  switch (e.do) {
+    case "stop":
+      return { at: "stopped", why: e.why };
+    case "send":
+      return l.at === "idle" || l.at === "reading"
+        ? { at: "sending", batch: [e.p], queue: [], tries: 0 }
+        : { ...l, queue: [...l.queue, e.p] };
+    case "read":
+      return l.at === "idle" ? { at: "reading", done: e.done } : l;
+    case "answered": {
+      if (l.at === "reading") return { at: "idle" };
+      if (l.at !== "sending") return l;
+      const n = fitting(l.queue);
+      return n === 0
+        ? { at: "idle" }
+        : { at: "sending", batch: l.queue.slice(0, n), queue: l.queue.slice(n), tries: 0 };
+    }
+    case "failed":
+      return l.at === "sending" ? { ...l, at: "waiting", tries: l.tries + 1 } : l;
+    case "again":
+      return l.at === "waiting" ? { ...l, at: "sending" } : l;
+  }
+}
+
+/** Everything in a line Leaf has not answered, in order. */
+const unanswered = <P>(l: Line<P>): readonly P[] =>
+  l.at === "sending" || l.at === "waiting" ? [...l.batch, ...l.queue] : [];
 
 /** A short name for this page, so that its commands' ids are its own among the player's other pages. */
 function pageName(): string {
@@ -170,12 +265,13 @@ export async function openPlay<View, Command extends object, Note, Short = never
     readonly notYet?: NotYet;
   },
 ): Promise<Play<View, Command, Note, Short> | { trouble: Trouble }> {
+  type P = Pending<View, Command, Note>;
   const path = playPath(game);
   const visiting = options.of !== undefined;
   /** Where the state is read: the player's own, or the one visited. */
   const read = options.of === undefined ? path : visitPath(game, options.of);
   const waitFor = options.notYet ?? NOT_YET;
-  let stopped = false;
+  let line: Line<P> = { at: "idle" };
   /**
    * Asks, and while Leaf answers "not yet" or that the state does not read (the Leaf before this one,
    * during a deploy), asks the same again each `waitFor.every` ms, `waitFor.tries` times, until the page
@@ -185,7 +281,7 @@ export async function openPlay<View, Command extends object, Note, Short = never
     const reply = await asking();
     if (tried >= waitFor.tries || !(notYet(reply) || unreadable(reply))) return reply;
     await wait(waitFor.every);
-    return stopped ? reply : patiently(asking, tried + 1);
+    return line.at === "stopped" ? reply : patiently(asking, tried + 1);
   }
   const first = await patiently(() => ask(read));
   if (notYet(first)) return { trouble: "noserver" };
@@ -206,8 +302,6 @@ export async function openPlay<View, Command extends object, Note, Short = never
   let rev = typeof first.body.rev === "number" ? first.body.rev : 0;
   /** What the page is showing: Leaf's state with what is waiting worked out on top. */
   let copy: View = base;
-  let queue: Pending<View, Command, Note>[] = [];
-  let flying: Pending<View, Command, Note>[] | null = null;
   /** When the page last called Leaf, and whether it says nothing of itself (a visit, or a page put aside). */
   let calledAt = outside.now();
   const call: typeof ask = (to, init) => {
@@ -215,16 +309,14 @@ export async function openPlay<View, Command extends object, Note, Short = never
     return ask(to, init);
   };
   const quiet = (): boolean => visiting || options.away?.() === true;
-  /** How many times in a row the batch on its way has failed. */
-  let tries = 0;
-  /** The question for the state again on its way, if one is. */
-  let asking: Promise<void> | null = null;
+  /** The wait before a failed batch goes again. */
+  let timer: ReturnType<typeof setTimeout> | null = null;
   const hearers = new Set<(state: View, differs: boolean) => void>();
   const answerers = new Set<(answered: Answered<Command, Note, Short>) => void>();
   const troubled = new Set<(why: Trouble) => void>();
 
   /** A prediction on a copy. It is the page's own; one that fails is let go, and Leaf's answer will say. */
-  function predicted(p: Pending<View, Command, Note>, on: View): View {
+  function predicted(p: P, on: View): View {
     if (!p.predict) return on;
     try {
       return p.predict(on);
@@ -233,53 +325,18 @@ export async function openPlay<View, Command extends object, Note, Short = never
     }
   }
   /** Leaf's state with every prediction still waiting worked out on top. */
-  const rebuild = (): View => [...(flying ?? []), ...queue].reduce((on, p) => predicted(p, on), base);
-
-  /**
-   * As many from the front of a line of commands as one request holds: `MOST_COMMANDS`, and no more
-   * than `MOST_BYTES` of them, so that a few long ones together do not make a body Leaf will not
-   * read. Always at least the first.
-   */
-  function fitting(line: readonly Pending<View, Command, Note>[]): Pending<View, Command, Note>[] {
-    const batch: Pending<View, Command, Note>[] = [];
-    let size = 0;
-    for (const p of line) {
-      size += json(p.command).length + ID_ROOM;
-      if (batch.length > 0 && (batch.length >= MOST_COMMANDS || size > MOST_BYTES)) break;
-      batch.push(p);
-    }
-    return batch;
-  }
+  const rebuild = (waiting: readonly P[]): View => waiting.reduce((on, p) => predicted(p, on), base);
 
   /** A batch as it goes to Leaf: who the page believes it is, and each command with its id. */
-  const bodyOf = (batch: readonly Pending<View, Command, Note>[]): string =>
+  const bodyOf = (batch: readonly P[]): string =>
     json({ player: options.player, commands: batch.map((p) => ({ ...p.command, id: p.id })) });
 
   function tell(differs: boolean): void {
     for (const fn of hearers) fn(copy, differs);
   }
 
-  /** Sends nothing more: everything waiting is answered `refused`. */
-  function halt(refused: string): void {
-    stopped = true;
-    const left = [...(flying ?? []), ...queue];
-    flying = null;
-    queue = [];
-    for (const p of left) p.answer({ refused });
-  }
-
-  function stop(why: Trouble): void {
-    if (stopped) return;
-    halt(why);
-    for (const fn of troubled) fn(why);
-  }
-
   /** Tells whoever hears answers, and then each command, what Leaf answered a batch. */
-  function answered(
-    batch: readonly Pending<View, Command, Note>[],
-    answers: ReadonlyMap<string, Answer<Note>>,
-    short?: Short,
-  ): void {
+  function answered(batch: readonly P[], answers: ReadonlyMap<string, Answer<Note>>, short?: Short): void {
     if (batch.length === 0) return;
     const done = batch.map((p) => ({ p, answer: answers.get(p.id) ?? { refused: "unanswered" } }));
     for (const fn of answerers) fn({ done: done.map(({ p, answer }) => ({ command: p.command, answer })), short });
@@ -287,16 +344,14 @@ export async function openPlay<View, Command extends object, Note, Short = never
   }
 
   /**
-   * Takes Leaf's answer: its state replaces the copy, or for a batch of a game answered short, the
-   * page hears Leaf's answer; and each command hears what it did. False when the page is too old.
+   * Takes Leaf's answer: its state replaces the copy (with what is still `behind` it worked out on
+   * top), or for a batch of a game answered short, Leaf's answer is kept for the page. Gives how the
+   * page and each command hear of it, or null when the page is too old to read it.
    */
-  function took(body: Record<string, unknown>, batch: readonly Pending<View, Command, Note>[]): boolean {
+  function took(body: Record<string, unknown>, batch: readonly P[], behind: readonly P[]): (() => void) | null {
     const short = batch.length > 0 && reader.short !== undefined;
     const view = short ? null : reader.view(body.state);
-    if (!short && view === null) {
-      outside.reload();
-      return false;
-    }
+    if (!short && view === null) return null;
     const answers = new Map<string, Answer<Note>>();
     for (const r of Array.isArray(body.results) ? body.results : []) {
       if (!isRecord(r) || typeof r.id !== "string") continue;
@@ -305,142 +360,146 @@ export async function openPlay<View, Command extends object, Note, Short = never
         continue;
       }
       const notes = reader.notes(r.notes);
-      if (notes === null) {
-        outside.reload();
-        return false;
-      }
+      if (notes === null) return null;
       answers.set(r.id, { notes });
     }
     if (typeof body.rev === "number") rev = body.rev;
-    flying = null;
     if (view === null) {
-      answered(batch, answers, reader.short?.(body.state) ?? undefined);
-      return true;
+      const said = reader.short?.(body.state) ?? undefined;
+      return () => answered(batch, answers, said);
     }
     // What the page was showing, as it stands now: whatever the page did to it shows as a difference.
     const shown = json(copy);
     base = view;
-    copy = rebuild();
-    answered(batch, answers);
-    tell(json(copy) !== shown);
-    return true;
-  }
-
-  async function pump(): Promise<void> {
-    if (stopped || flying !== null || queue.length === 0) return;
-    const batch = fitting(queue);
-    queue = queue.slice(batch.length);
-    flying = batch;
-    const body = bodyOf(batch);
-    for (;;) {
-      // oxlint-disable-next-line no-await-in-loop -- the same batch, again, until Leaf has it
-      const reply = await patiently(() =>
-        call(path, { method: "POST", headers: { "Content-Type": "application/json" }, body }),
-      );
-      if (stopped) return;
-      if (reply.status === 200 && isRecord(reply.body)) {
-        tries = 0;
-        if (!took(reply.body, batch)) {
-          stopped = true;
-          return;
-        }
-        break;
-      }
-      if (reply.status === 401) {
-        stop("signedout");
-        return;
-      }
-      if (reply.status === 409 && isRecord(reply.body) && reply.body.code === "not_you") {
-        // Signed in as somebody else since this page opened: nothing of theirs is sent from it.
-        halt("not_you");
-        outside.reload();
-        return;
-      }
-      if (reply.status === 400 || reply.status === 413) {
-        // Leaf will not take these commands as they are; sending them again would not change that.
-        flying = null;
-        answered(batch, new Map(batch.map((p) => [p.id, { refused: "invalid_command" }])));
-        // A game answered short keeps no copy here to put right.
-        if (!reader.short) {
-          copy = rebuild();
-          tell(true);
-        }
-        break;
-      }
-      if (unreadable(reply) || notYet(reply)) {
-        // Still so once waited for: the page says so, and sends nothing more.
-        stop(notYet(reply) ? "noserver" : "unreadable");
-        return;
-      }
-      if (reply.status === 403 || reply.status === 404) {
-        stop("closed");
-        return;
-      }
-      // No answer, trouble, or too fast: the same batch again in a moment, with the same ids.
-      // oxlint-disable-next-line no-await-in-loop -- waiting before trying again
-      await wait(backoff(retry, tries++));
-      if (stopped) return;
-    }
-    void pump();
+    copy = rebuild(behind);
+    return () => {
+      answered(batch, answers);
+      tell(json(copy) !== shown);
+    };
   }
 
   /**
-   * The batch on its way and what is queued behind it (as many as one request holds), in order and
-   * with the ids they have, in a request that outlives the page. Leaf does each command once; if
-   * the page stays after all, they go again in turn and are answered as before.
+   * Moves the line on (`stepLine`), and does what its new place asks: a batch sent, a wait, or the
+   * stop. `heard`, the page hearing what moved it, comes first: after the line has moved, and before
+   * anything more is sent.
+   */
+  function move(e: LineEvent<P>, heard?: () => void): void {
+    const was = line;
+    const next = stepLine(was, e);
+    if (next === was) return;
+    line = next;
+    if (next.at === "stopped") return stopped(was, next.why);
+    heard?.();
+    // Whoever heard may have moved the line on, or sent: a batch is sent only while the line is at it.
+    if (next.at === "sending" && (was.at !== "sending" || was.batch !== next.batch)) {
+      if (line.at === "sending" && line.batch === next.batch) void post(next.batch);
+    } else if (next.at === "waiting" && line === next) {
+      timer = setTimeout(() => move({ do: "again" }), backoff(retry, next.tries - 1));
+    }
+  }
+
+  /** Stopped: everything that was waiting is answered why, the page is let go of, and it is told what it must be. */
+  function stopped(was: Line<P>, why: Stopped): void {
+    if (timer !== null) clearTimeout(timer);
+    unhear();
+    for (const p of unanswered(was)) p.answer({ refused: why });
+    if (why === "not_you" || why === "outdated") outside.reload();
+    else if (why !== "put_away") for (const fn of troubled) fn(why);
+  }
+
+  /** Sends a batch, and moves the line on by Leaf's answer to it; an answer to a batch the line has left is let go. */
+  async function post(batch: readonly P[]): Promise<void> {
+    const body = bodyOf(batch);
+    const reply = await patiently(() =>
+      call(path, { method: "POST", headers: { "Content-Type": "application/json" }, body }),
+    );
+    if (line.at !== "sending" || line.batch !== batch) return;
+    const behind = line.queue;
+    if (reply.status === 200 && isRecord(reply.body)) {
+      const heard = took(reply.body, batch, behind);
+      return heard ? move({ do: "answered" }, heard) : move({ do: "stop", why: "outdated" });
+    }
+    if (reply.status === 401) return move({ do: "stop", why: "signedout" });
+    // Signed in as somebody else since this page opened: nothing of theirs is sent from it.
+    if (reply.status === 409 && isRecord(reply.body) && reply.body.code === "not_you") {
+      return move({ do: "stop", why: "not_you" });
+    }
+    if (reply.status === 400 || reply.status === 413) {
+      // Leaf will not take these commands as they are; sending them again would not change that.
+      // A game answered short keeps no copy here to put right.
+      if (!reader.short) copy = rebuild(behind);
+      return move({ do: "answered" }, () => {
+        answered(batch, new Map(batch.map((p) => [p.id, { refused: "invalid_command" }])));
+        if (!reader.short) tell(true);
+      });
+    }
+    // Still so once waited for: the page says so, and sends nothing more.
+    if (unreadable(reply) || notYet(reply)) return move({ do: "stop", why: notYet(reply) ? "noserver" : "unreadable" });
+    if (reply.status === 403 || reply.status === 404) return move({ do: "stop", why: "closed" });
+    // No answer, trouble, or too fast: the same batch again in a moment, with the same ids.
+    move({ do: "failed" });
+  }
+
+  /** Leaf's state read again and taken, unless the line has moved on from this read (a command sent, or a stop). */
+  async function readNow(asked: Line<P>, differs: number | undefined): Promise<void> {
+    const reply = await patiently(() => call(differs === undefined ? read : `${read}?differs=${differs}`));
+    if (line !== asked) return;
+    const ended = endOf(reply);
+    if (ended !== null) return move({ do: "stop", why: ended });
+    const fresh = reply.status === 200 && isRecord(reply.body) ? reply.body : null;
+    const heard = fresh ? took({ ...fresh, results: [] }, [], []) : () => undefined;
+    if (!heard) return move({ do: "stop", why: "outdated" });
+    // Heard while the read is still the line's, so that a page asking again as it hears is given this one.
+    heard();
+    if (line === asked) move({ do: "answered" });
+  }
+
+  function refresh(differs?: number): Promise<void> {
+    if (line.at === "reading") return line.done;
+    if (line.at !== "idle") return Promise.resolve();
+    const { promise, resolve } = Promise.withResolvers<void>();
+    move({ do: "read", done: promise });
+    void readNow(line, differs).finally(resolve);
+    return promise;
+  }
+
+  /**
+   * Everything Leaf has not answered, in order and with the ids it has, in one request that outlives
+   * the page (as many as Leaf takes in one: `MOST_FLUSHED`, `FLUSH_BYTES`). Leaf does each command
+   * once; if the page stays after all, they go again in turn and are answered as before.
    */
   function flush(): void {
-    const left = fitting([...(flying ?? []), ...queue]);
-    if (stopped || left.length === 0) return;
+    const left = unanswered(line);
+    const n = fitting(left, MOST_FLUSHED, FLUSH_BYTES);
+    if (n === 0) return;
     void outside.fetch(path, {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: bodyOf(left),
+      body: bodyOf(left.slice(0, n)),
       keepalive: true,
     });
   }
 
-  /** Leaf's state read again and taken, unless anything was sent meanwhile. */
-  async function readAgain(differs: number | undefined): Promise<void> {
-    const before = made;
-    const reply = await patiently(() => call(differs === undefined ? read : `${read}?differs=${differs}`));
-    const ended = endOf(reply);
-    if (ended !== null) return stop(ended);
-    // A command sent and answered while this was on its way has told the page more than this has.
-    if (reply.status === 200 && isRecord(reply.body) && flying === null && queue.length === 0 && made === before) {
-      took({ ...reply.body, results: [] }, []);
-    }
-  }
-
-  function refresh(differs?: number): Promise<void> {
-    if (stopped || flying !== null || queue.length > 0) return asking ?? Promise.resolve();
-    asking ??= readAgain(differs).finally(() => {
-      asking = null;
-    });
-    return asking;
-  }
-
-  if (typeof window !== "undefined") {
-    window.addEventListener("pagehide", flush);
-    fromTown((msg) => {
-      if (msg.town === "closing") flush();
-    });
-  }
-  if (typeof document !== "undefined")
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") flush();
-    });
+  // What the play hears of the page, let go of as it stops.
+  const unheard: (() => void)[] = [outside.leaving(flush)];
   if (!visiting) {
     // A game answered short keeps its own copy in step, and asks for its own reads.
     if (!reader.short)
-      outside.wake(() => {
-        if (!quiet()) void refresh();
-      });
-    if (typeof window !== "undefined")
-      window.setInterval(() => {
+      unheard.push(
+        outside.wake(() => {
+          if (!quiet()) void refresh();
+        }),
+      );
+    if (typeof window !== "undefined") {
+      const still = window.setInterval(() => {
         if (!document.hidden && !quiet() && outside.now() - calledAt >= STILL_HERE) void refresh();
       }, STILL_HERE / 4);
+      unheard.push(() => window.clearInterval(still));
+    }
+  }
+  function unhear(): void {
+    for (const fn of unheard.splice(0)) fn();
   }
 
   return {
@@ -453,17 +512,16 @@ export async function openPlay<View, Command extends object, Note, Short = never
     send(command, predict) {
       return new Promise<Answer<Note>>((answer) => {
         // A visitor changes nothing: nothing is queued, so nothing is ever sent or flushed.
-        if (stopped || visiting) {
-          answer({ refused: stopped ? "closed" : "visiting" });
-          return;
-        }
-        const pending: Pending<View, Command, Note> = { id: `${name}-${++made}`, command, predict, answer };
-        queue.push(pending);
+        if (visiting) return answer({ refused: "visiting" });
+        if (line.at === "stopped") return answer({ refused: line.why });
+        const id = `${name}-${++made}`;
+        const size = json(command).length + ID_ROOM;
+        const pending: P = { id, command, predict, size, answer };
         copy = predicted(pending, copy);
-        void pump();
+        move({ do: "send", p: pending });
       });
     },
-    waiting: () => flying !== null || queue.length > 0,
+    waiting: () => line.at === "sending" || line.at === "waiting",
     onState(fn) {
       hearers.add(fn);
       return () => hearers.delete(fn);
@@ -478,6 +536,10 @@ export async function openPlay<View, Command extends object, Note, Short = never
     },
     flush,
     refresh,
+    close() {
+      flush();
+      move({ do: "stop", why: "put_away" });
+    },
   };
 }
 

@@ -4,10 +4,13 @@ import { isRecord } from "./net.ts";
 import {
   type Answer,
   type Answered,
+  type Line,
+  type LineEvent,
   NOT_YET,
   openPlay,
   type Play,
   type PlayReader,
+  stepLine,
   STILL_HERE,
   waitingLook,
 } from "./play.ts";
@@ -424,7 +427,7 @@ describe("sending commands", () => {
     expect(await a).toEqual({ refused: "signedout" });
     expect(await b).toEqual({ refused: "signedout" });
     expect(troubles).toEqual(["signedout"]);
-    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "closed" });
+    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "signedout" });
   });
 
   test("a state Leaf still cannot read once waited for stops the page: nothing is sent after, and the page is told", async () => {
@@ -436,7 +439,7 @@ describe("sending commands", () => {
     const troubles: string[] = [];
     play.onTrouble((why) => troubles.push(why));
     expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "unreadable" });
-    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "closed" });
+    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "unreadable" });
     await Bun.sleep(10);
     expect(troubles).toEqual(["unreadable"]);
     // The first try and three more.
@@ -589,7 +592,7 @@ describe("sending commands", () => {
     expect(await a).toEqual({ refused: "not_you" });
     expect(await b).toEqual({ refused: "not_you" });
     expect(world?.reloaded.count).toBe(1);
-    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "closed" });
+    expect(await play.send({ do: "add", by: 1 })).toEqual({ refused: "not_you" });
     expect(world?.sent.filter((s) => s.method === "POST")).toHaveLength(1);
   });
 
@@ -637,6 +640,122 @@ async function shortly(routes: Record<string, Route>): Promise<Play<Count, Add, 
   if ("trouble" in play) throw new Error(play.trouble);
   return play;
 }
+
+/** A command as a line holds it, for the line's own tests. */
+type P = { readonly id: string; readonly size: number };
+const p = (id: string, size = 10): P => ({ id, size });
+const sending = (batch: P[], queue: P[] = [], tries = 0): Line<P> => ({ at: "sending", batch, queue, tries });
+const waiting = (batch: P[], queue: P[] = [], tries = 1): Line<P> => ({ at: "waiting", batch, queue, tries });
+
+describe("where a play's line is", () => {
+  const done = Promise.resolve();
+  const [a, b, c] = [p("a"), p("b"), p("c")];
+  const many = Array.from({ length: 40 }, (_, i) => p(`q${i}`));
+
+  test.each<[string, Line<P>, LineEvent<P>, Line<P>]>([
+    ["a command sent from idle goes at once", { at: "idle" }, { do: "send", p: a }, sending([a])],
+    [
+      "a command sent while reading goes at once, and the read is let go",
+      { at: "reading", done },
+      { do: "send", p: a },
+      sending([a]),
+    ],
+    ["a command sent while one is on its way waits behind it", sending([a]), { do: "send", p: b }, sending([a], [b])],
+    [
+      "a command sent while a batch waits to go again waits behind it",
+      waiting([a], [], 2),
+      { do: "send", p: b },
+      waiting([a], [b], 2),
+    ],
+    ["a batch answered makes way for those queued", sending([a], [b, c]), { do: "answered" }, sending([b, c])],
+    [
+      "as many as one request holds",
+      sending([a], many),
+      { do: "answered" },
+      sending(many.slice(0, 32), many.slice(32)),
+    ],
+    [
+      "a long one goes alone",
+      sending([a], [p("long", 11_995), b]),
+      { do: "answered" },
+      sending([p("long", 11_995)], [b]),
+    ],
+    ["the last batch answered: idle", sending([a]), { do: "answered" }, { at: "idle" }],
+    ["a batch that failed waits", sending([a], [b]), { do: "failed" }, waiting([a], [b], 1)],
+    ["its wait over, it goes again", waiting([a], [], 1), { do: "again" }, sending([a], [], 1)],
+    ["a read goes from idle", { at: "idle" }, { do: "read", done }, { at: "reading", done }],
+    ["no read while a batch is on its way", sending([a]), { do: "read", done }, sending([a])],
+    ["the read come: idle", { at: "reading", done }, { do: "answered" }, { at: "idle" }],
+    ["a stop, from anywhere", sending([a], [b]), { do: "stop", why: "signedout" }, { at: "stopped", why: "signedout" }],
+    [
+      "nothing moves a stopped line",
+      { at: "stopped", why: "put_away" },
+      { do: "send", p: a },
+      { at: "stopped", why: "put_away" },
+    ],
+  ])("%s", (_name, from, event, to) => {
+    expect(stepLine(from, event)).toEqual(to);
+  });
+});
+
+describe("a page going", () => {
+  test("sends everything Leaf has not answered in one request, in order with its ids, however many are queued", async () => {
+    const { routes, leaf } = counterLeaf();
+    // The first batch never comes back: everything after it waits behind it.
+    const play = await opened({
+      ...routes,
+      "POST /v1/game/play/raid": (sent) => (sent.keepalive ? routes["POST /v1/game/play/raid"](sent) : never()),
+    });
+    for (let by = 1; by <= 40; by++) void play.send({ do: "add", by });
+    play.flush();
+    await Bun.sleep(2);
+    const flying = world?.sent.find((s) => !s.keepalive && s.method === "POST");
+    const first = isRecord(flying?.body) && Array.isArray(flying.body.commands) ? flying.body.commands : [];
+    expect(leaf.away.map((b) => b.length)).toEqual([40]);
+    expect(leaf.away.flat().map((c) => (isRecord(c) ? c.by : null))).toEqual(
+      Array.from({ length: 40 }, (_, i) => i + 1),
+    );
+    expect(leaf.away[0]?.[0]).toEqual(first[0]);
+    expect(leaf.n).toBe(820);
+  });
+
+  test("put away, a play sends what is queued, hears the page no more, and does nothing after", async () => {
+    const { routes, leaf } = counterLeaf();
+    const play = await opened({
+      ...routes,
+      "POST /v1/game/play/raid": (sent) => (sent.keepalive ? routes["POST /v1/game/play/raid"](sent) : never()),
+    });
+    const w = world;
+    if (!w) throw new Error("no world");
+    expect(w.hearing()).toBe(2);
+    const a = play.send({ do: "add", by: 1 });
+    const b = play.send({ do: "add", by: 2 });
+    play.close();
+    expect([await a, await b]).toEqual([{ refused: "put_away" }, { refused: "put_away" }]);
+    expect(leaf.away.flat().map((c) => (isRecord(c) ? c.by : null))).toEqual([1, 2]);
+    expect(w.hearing()).toBe(0);
+    const asked = w.sent.length;
+    w.wake();
+    w.leave();
+    play.flush();
+    await play.refresh();
+    expect(await play.send({ do: "add", by: 3 })).toEqual({ refused: "put_away" });
+    await Bun.sleep(2);
+    expect([w.sent.length, play.waiting()]).toEqual([asked, false]);
+  });
+
+  test("as the page is hidden or put away, or the town closes the game, what is waiting is sent", async () => {
+    const { routes, leaf } = counterLeaf();
+    const play = await opened({
+      ...routes,
+      "POST /v1/game/play/raid": (sent) => (sent.keepalive ? routes["POST /v1/game/play/raid"](sent) : never()),
+    });
+    void play.send({ do: "add", by: 4 });
+    world?.leave();
+    await Bun.sleep(2);
+    expect(leaf.away.flat().map((c) => (isRecord(c) ? c.by : null))).toEqual([4]);
+  });
+});
 
 describe("a game answered short", () => {
   test("keeps the state as Leaf last gave it, and the page hears each batch's answer before anything more is sent", async () => {
