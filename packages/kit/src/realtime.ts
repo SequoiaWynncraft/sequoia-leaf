@@ -223,8 +223,8 @@ export interface LiveEars {
   joined?(m: LiveMember): void;
   left?(id: number): void;
   act?(id: number, kind: string, arg: string): void;
-  /** In a visit's room: a batch of commands Leaf has just done to the state visited (core's `did`). */
-  did?(rev: number, did: readonly unknown[], after: unknown): void;
+  /** In a visit's room: a batch of commands Leaf has just done to the state visited (core's `did`), with the commands' ids when Leaf sends them. */
+  did?(rev: number, did: readonly unknown[], after: unknown, ids?: readonly string[]): void;
   status?(s: LiveStatus): void;
 }
 
@@ -594,7 +594,7 @@ export function joinLive(room: string, ears: LiveEars = {}): LiveRoom {
         if (showing) ears.act?.(m.id, m.kind, m.arg);
         return;
       case "did":
-        if (showing) ears.did?.(m.rev, m.did, m.after);
+        if (showing) ears.did?.(m.rev, m.did, m.after, m.ids);
         return;
       case "pong":
         l.clock?.add(m.c, m.s, outside.now());

@@ -19,7 +19,7 @@ import { type FakeSocket, HELLO, liveSockets, type Reply, standin, TESTER } from
 
 import { ctx, fakeLeaf, kindAt, net, until, useFakeLeaf } from "./fake-leaf.ts";
 import { S } from "./state.ts";
-import { openYard, runYard, visitFollowing, yardReads } from "./yard.ts";
+import { differences, doNow, openYard, runYard, visitFollowing, yardReads } from "./yard.ts";
 
 useFakeLeaf();
 
@@ -74,8 +74,11 @@ async function visit(yard: Yard = staged("mid")) {
     fake.leaf.ms = ms;
     await settle(ms);
   };
-  /** Leaf does the owner's commands, stamped with its clock now, and tells the room, its answer changed by `change`. */
-  const owner = (commands: Record<string, unknown>[], change = (after: Short): Short => after) => {
+  /**
+   * Leaf does the owner's commands, stamped with its clock now, and tells the room, its answer
+   * changed by `change`; with `tell` false, the room is told only when the returned function is called.
+   */
+  const owner = (commands: Record<string, unknown>[], change = (after: Short): Short => after, tell = true) => {
     const y = fake.leaf.yard;
     const atNow = leafAt();
     WORKS.tend?.(y, atNow, () => true);
@@ -91,7 +94,11 @@ async function visit(yard: Yard = staged("mid")) {
     if (!after) throw new Error("no answer");
     rev++;
     const said: ToClient = { t: "did", rev, did, after: change(after) };
-    room.says(said);
+    const say = (): void => {
+      room.says(said);
+    };
+    if (tell) say();
+    return say;
   };
   return { fake, room, at, owner, clock, reads: () => fake.leaf.reads.length };
 }
@@ -174,7 +181,7 @@ describe("a visit", () => {
     v.owner([{ do: "build", kind: "pylon", dir: 0, ...spot }]);
     await v.at(3100);
     expect(visitFollowing()).toMatchObject({ late: 1 });
-    expect(visitFollowing().hold).toBeGreaterThan(5);
+    expect(visitFollowing()?.hold).toBeGreaterThan(5);
     expect(v.reads()).toBe(3);
     expect(kindAt(spot)).toBe("pylon");
     likeLeafs(v.fake.leaf.yard);
@@ -196,6 +203,151 @@ describe("a visit", () => {
     v.room.drop();
     await v.at(5 * 60_000 + 15_002);
     expect(v.reads()).toBe(4);
-    expect(visitFollowing().live).toBe(false);
+    expect(visitFollowing()?.live).toBe(false);
+  });
+});
+
+describe("a visit, told late", () => {
+  test("of a batch a read of the yard already holds, lets it go: nothing done twice, and nothing read again for it", async () => {
+    const v = await visit();
+    await v.at(1000);
+    const spot = pylonSpot();
+    const tell = v.owner([{ do: "build", kind: "pylon", ...spot, dir: 0 }], undefined, false);
+    // The room welcomes the page again (a connection back after a drop): it reads the yard, which holds the batch.
+    await v.at(3000);
+    v.room.says({ t: "welcome", v: 2, you: 1, room: `${visitRoom("works", OWNER)}/1`, hz: 30, time: 0, roster: [] });
+    await v.at(3100);
+    expect(kindAt(spot)).toBe("pylon");
+    const reads = v.reads();
+    // The batch's word comes after, two seconds after Leaf did it: past the tick the copy now stands at.
+    tell();
+    await v.at(4500);
+    expect(kindAt(spot)).toBe("pylon");
+    expect([v.reads(), visitFollowing()?.late, visitFollowing()?.unlike]).toEqual([reads, 0, 0]);
+  });
+});
+
+/**
+ * The owner's own page, with another page of theirs (another tab, another device) that Leaf keeps
+ * batches for too: the page opens its yard from a stand-in Leaf that counts its revisions as the play
+ * service does (one for each batch that changed the yard), goes into the yard's room, and the room
+ * welcomes it. `elsewhere` is Leaf doing the other page's commands and telling the room, with their ids.
+ */
+async function owned(yard: Yard = staged("mid")) {
+  const me = TESTER.player.id;
+  yard.at = ctx().now;
+  const leaf = { yard, rev: 1, ms: 0, reads: [] as string[], posts: 0, others: 0 };
+  const leafAt = () => ({ ...ctx(), now: ctx().now + leaf.ms });
+  const runOn = () => {
+    WORKS.tend?.(leaf.yard, leafAt(), () => true);
+    WORKS.advance(leaf.yard, leafAt());
+  };
+  const said: ToClient[] = [];
+  let room: FakeSocket | null = null;
+  const tell = (m: ToClient) => {
+    said.push(m);
+    room?.says(m);
+  };
+  /** Does commands as Leaf does a batch, each with its id, and tells the room what was kept. */
+  const batch = (commands: readonly Record<string, unknown>[]) => {
+    runOn();
+    const did: unknown[] = [];
+    const ids: string[] = [];
+    const results = commands.map((c) => {
+      const id = typeof c.id === "string" ? c.id : "";
+      const command = WORKS.command(c);
+      const done = command ? WORKS.apply(leaf.yard, command, leafAt()) : { refused: "invalid" };
+      if ("refused" in done) return { id, refused: done.refused };
+      if (command) did.push(WORKS.echo?.(leaf.yard, command));
+      ids.push(id);
+      return { id, notes: done.notes };
+    });
+    if (did.length > 0) leaf.rev++;
+    const after = WORKS.answer?.(leaf.yard, leafAt());
+    if (did.length > 0) tell({ t: "did", rev: leaf.rev, did, after, ids });
+    return { results, after };
+  };
+  net.world = standin({
+    "GET /v1/game/hello": HELLO,
+    "GET /v1/game/me": { status: 200, body: TESTER },
+    "GET /v1/game/play/works": (sent): Reply => {
+      leaf.reads.push(sent.path);
+      runOn();
+      return { status: 200, body: { rev: leaf.rev, now: "x", state: WORKS.view(leaf.yard, leafAt()) } };
+    },
+    "POST /v1/game/play/works": (sent): Reply => {
+      leaf.posts++;
+      const body = sent.body;
+      const commands =
+        typeof body === "object" && body !== null && "commands" in body && Array.isArray(body.commands)
+          ? body.commands
+          : [];
+      const { results, after } = batch(commands);
+      return { status: 200, body: { rev: leaf.rev, now: "x", results, state: after } };
+    },
+  });
+  await start();
+  sockets = liveSockets();
+  S.visiting = null;
+  expect(await openYard(me, () => undefined)).toBeNull();
+  room = sockets.sockets[0] ?? null;
+  if (!room) throw new Error("the owner's page did not go into its yard's room");
+  expect(room.url).toBe(`wss://leaf.example${livePath(visitRoom("works", playerId(me)))}&device=desktop`);
+  room.open();
+  room.says({ t: "welcome", v: 2, you: 1, room: `${visitRoom("works", playerId(me))}/1`, hz: 30, time: 0, roster: [] });
+  await settle(0);
+  const at = async (ms: number) => {
+    leaf.ms = ms;
+    await settle(ms);
+  };
+  /** Leaf does a batch of the owner's other page's commands. */
+  const elsewhere = (commands: Record<string, unknown>[]) => {
+    runOn();
+    const tick = clockOf(leaf.yard, leafAt().now);
+    batch(commands.map((c) => ({ ...c, tick, id: `other-${++leaf.others}` })));
+  };
+  return { leaf, room, at, elsewhere, said };
+}
+
+describe("the owner's own page, in its yard's room", () => {
+  test("is told what another page of the owner's did, and takes Leaf's yard at once, counting no fault", async () => {
+    const o = await owned();
+    await o.at(500);
+    const reads = o.leaf.reads.length;
+    const spot = pylonSpot();
+    o.elsewhere([{ do: "build", kind: "pylon", ...spot, dir: 0 }]);
+    await o.at(800);
+    expect(kindAt(spot)).toBe("pylon");
+    expect([o.leaf.reads.length, differences()]).toEqual([reads + 1, 0]);
+    expect(o.leaf.reads.some((r) => r.includes("differs"))).toBe(false);
+  });
+
+  test("lets its own batches go as the room tells them: nothing read for them", async () => {
+    const o = await owned();
+    await o.at(500);
+    const reads = o.leaf.reads.length;
+    expect(doNow({ do: "build", kind: PYLON, ...pylonSpot(), dir: 0, grade: 1 })).not.toHaveProperty("refused");
+    await until(() => o.leaf.posts >= 1);
+    await o.at(800);
+    expect(o.said.filter((m) => m.t === "did")).toHaveLength(1);
+    expect([o.leaf.reads.length, differences()]).toEqual([reads, 0]);
+  });
+
+  test("out of the room (signed in elsewhere since), finds another page's batch at its next command, and counts no fault", async () => {
+    const o = await owned();
+    await o.at(500);
+    // Another page of the owner's opens Live: this one is let go, and hears nothing more.
+    o.room.drop(4001);
+    await o.at(600);
+    const spot = pylonSpot();
+    o.elsewhere([{ do: "build", kind: "pylon", ...spot, dir: 0 }]);
+    await o.at(900);
+    expect(kindAt(spot)).toBeUndefined();
+    expect(doNow({ do: "collect" })).not.toHaveProperty("refused");
+    await until(() => o.leaf.posts >= 1);
+    await o.at(1200);
+    expect(kindAt(spot)).toBe("pylon");
+    expect(differences()).toBe(0);
+    expect(o.leaf.reads.some((r) => r.includes("differs"))).toBe(false);
   });
 });
