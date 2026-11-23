@@ -1296,3 +1296,8 @@ name them:
   the party too. Members were paid the rest of their share
   (`raid:<completion>:<player>:guild-share`), and every earn of the 16 players who
   were never in Sequoia was reversed (`undo:<key>`).
+
+## License
+
+GNU Affero General Public License, version 3 only (`AGPL-3.0-only`). See
+[LICENSE](LICENSE).
