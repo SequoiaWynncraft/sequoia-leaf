@@ -49,10 +49,14 @@ describe("a cart stop", () => {
       why: "The cart stop is not unlocked yet",
     });
     const y = yard();
+    const most = y.open.stops;
+    expect(most).toBeGreaterThan(0);
+    // As many as it may, in a row from (3, 4) east, every other tile; then one more is refused.
+    for (let k = 1; k < most; k++) must(y, { do: "build", kind: "stop", x: 3 + 2 * k, y: 2, dir: 0 });
     must(y, { do: "build", kind: "stop", x: 3, y: 4, dir: 0 });
     expect(give(y, { do: "build", kind: "stop", x: 5, y: 4, dir: 0 })).toMatchObject({
       refused: "cannot_build",
-      why: "The yard may have 1 cart stop",
+      why: `The yard may have ${most} cart stop${most === 1 ? "" : "s"}`,
     });
     must(y, { do: "build", kind: "stop", x: 3, y: 4, dir: 1 });
     must(y, { do: "remove", x: 3, y: 4 });

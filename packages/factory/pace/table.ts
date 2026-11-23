@@ -1,7 +1,10 @@
 /**
  * What a played slice comes to: a row for each goal in the order it was done, a row for each tier
  * beside the time it is meant to take, and one for the whole slice, each split into building,
- * waiting for Coins and waiting for deliveries (or folios). As data for `--json`, and as a table.
+ * waiting for Coins and waiting for deliveries (or folios). A tier runs from when it opened to when
+ * its commission was done and the next opened; research still being studied then is listed after
+ * it, and summed on a line of its own, not counted in the tier. As data for `--json`, and as a
+ * table; and, for several seeds played, the least, the middle and the most of each tier (`seeds`).
  */
 import * as F from "../src/index.ts";
 import type { Doing, Game } from "./player.ts";
@@ -19,6 +22,8 @@ export interface GoalRow extends Split {
   readonly goal: string;
   readonly title: string;
   readonly kind: string;
+  /** Research done after its tier's commission, once the next tier was open. */
+  readonly after: boolean;
   readonly came: number;
   readonly done: number;
   readonly pieces: number;
@@ -39,24 +44,39 @@ export interface Purse {
 export interface TierRow extends Split, Purse {
   readonly tier: number;
   readonly from: number;
+  /** When its commission was done, or when the player stopped, if it was not. */
   readonly to: number;
+  readonly done: boolean;
   /** The time the design means the tier to take, in minutes: least and most. */
   readonly target: readonly [number, number];
 }
 
+/** Research of a tier and below still to do when its commission was done: folios, and the minutes it then took. */
+export interface Left {
+  readonly tier: number;
+  readonly folios: number;
+  /** Minutes from the commission to the last of it known, or nothing if the player stopped first. */
+  readonly minutes: number | null;
+}
+
 export interface Report {
   readonly seed: number;
+  readonly folios: number;
   readonly goals: readonly GoalRow[];
   readonly tiers: readonly TierRow[];
+  readonly left: readonly Left[];
   readonly slice: Split & Purse & { readonly swaps: number };
   readonly stuck: string | null;
 }
 
-/** What the design means each tier of the slice to take, in minutes (`WORKS-FOUNDATIONS.md`). */
+/**
+ * What the design means each tier of the slice to take, in minutes (`WORKS-FOUNDATIONS.md`). Tier 0
+ * is the first design's four lessons, which its play-testers took about 40 minutes over.
+ */
 export const TARGETS: readonly (readonly [number, number])[] = [
-  [20, 20],
-  [60, 60],
-  [120, 120],
+  [35, 40],
+  [50, 60],
+  [90, 120],
   [240, 300],
 ];
 
@@ -91,14 +111,17 @@ function purse(game: Game, from: number, to: number): Purse {
   };
 }
 
-export function report(game: Game, seed: number): Report {
+export function report(game: Game, seed: number, folios: number): Report {
   const goals = game.goals.map((p): GoalRow => {
     const info = F.GOALS[p.goal];
+    const tier = info?.tier ?? 0;
+    const next = game.tiers[tier + 1];
     return {
-      tier: info?.tier ?? 0,
+      tier,
       goal: info?.id ?? "",
       title: info?.title ?? "",
       kind: info?.kind ?? "",
+      after: info?.kind === "research" && next !== undefined && p.done > next,
       came: minutes(p.came),
       done: minutes(p.done),
       ...split(game, p.came, p.done),
@@ -108,18 +131,33 @@ export function report(game: Game, seed: number): Report {
       bought: [...p.bought].map(([what, n]) => (n > 0 ? `${n} ${what}` : what)).join(", "),
     };
   });
-  // A tier runs from when it opened to when its last goal was done: research of a tier may go on after the next opens.
   const tiers = TARGETS.flatMap((target, t): TierRow[] => {
     const from = game.tiers[t];
     if (from === undefined) return [];
-    const last = Math.max(...game.goals.filter((p) => F.GOALS[p.goal]?.tier === t).map((p) => p.done));
-    const to = Math.max(game.tiers[t + 1] ?? game.end, Number.isFinite(last) ? last : 0);
+    const next = game.tiers[t + 1];
+    const to = next ?? game.end;
     return [
-      { tier: t, from: minutes(from), to: minutes(to), target, ...split(game, from, to), ...purse(game, from, to) },
+      {
+        tier: t,
+        from: minutes(from),
+        to: minutes(to),
+        done: next !== undefined,
+        target,
+        ...split(game, from, to),
+        ...purse(game, from, to),
+      },
     ];
   });
+  const left = game.left.flatMap((n, t): Left[] => {
+    const at = game.tiers[t];
+    if (t === 0 || n === 0 || at === undefined) return [];
+    const theirs = game.goals.filter((p) => F.GOALS[p.goal]?.kind === "research" && (F.GOALS[p.goal]?.tier ?? 0) < t);
+    const last = Math.max(at, ...theirs.map((p) => p.done));
+    // The player plays on until every piece of research in its list is known, unless it stops short.
+    return [{ tier: t - 1, folios: n, minutes: game.stuck === null ? minutes(last - at) : null }];
+  });
   const slice = { ...split(game, 0, game.end), ...purse(game, -1, game.end), swaps: game.swaps };
-  return { seed, goals, tiers, slice, stuck: game.stuck };
+  return { seed, folios, goals, tiers, left, slice, stuck: game.stuck };
 }
 
 const cols = (cells: readonly (string | number)[], widths: readonly number[]): string =>
@@ -134,6 +172,12 @@ const m = (n: number): string => n.toFixed(1);
 const range = (target: readonly [number, number]): string =>
   target[0] === target[1] ? `${target[0]}` : `${target[0]} to ${target[1]}`;
 
+/** The line that says what research was still to do when a tier's commission was done. */
+function leftLine(l: Left, folios: number): string {
+  const took = l.minutes === null ? "not all known when the player stopped" : `${m(l.minutes)} minutes`;
+  return `Research still to do when tier ${l.tier}'s commission was done: ${l.folios} folios, ${took} at ${folios} folios a minute.`;
+}
+
 /** The report as a table to read. */
 export function text(r: Report): string {
   const out: string[] = [];
@@ -146,7 +190,7 @@ export function text(r: Report): string {
       cols(
         [
           String(g.tier),
-          `${g.kind === "research" ? "~ " : ""}${g.title}`.slice(0, 28),
+          `${g.kind === "research" ? (g.after ? "~ after: " : "~ ") : ""}${g.title}`.slice(0, 28),
           m(g.came).padStart(7),
           m(g.done).padStart(7),
           m(g.building).padStart(7),
@@ -186,7 +230,7 @@ export function text(r: Report): string {
     out.push(
       cols(
         [
-          String(row.tier),
+          `${row.tier}${row.done ? "" : "*"}`,
           m(row.from).padStart(8),
           m(row.to).padStart(8),
           m(row.minutes).padStart(8),
@@ -203,11 +247,107 @@ export function text(r: Report): string {
         t,
       ),
     );
+  if (r.tiers.some((row) => !row.done)) out.push("* its commission was not done");
+  for (const l of r.left) out.push(leftLine(l, r.folios));
   const s = r.slice;
   out.push(
     `\nThe slice: ${m(s.minutes)} minutes (${m(s.minutes / 60)} hours): building ${m(s.building)}, waiting for Coins ${m(s.coins)}, waiting for deliveries and folios ${m(s.waiting)}.`,
-    `Coins: ${s.fromOrders} from ${s.orders} orders handed over (${s.swaps} swapped), ${s.fromGoals} from goals, ${s.fromDepot} from the depot; ${s.spent} spent. Seed ${r.seed}.`,
+    `Coins: ${s.fromOrders} from ${s.orders} orders handed over (${s.swaps} swapped), ${s.fromGoals} from goals, ${s.fromDepot} from the depot; ${s.spent} spent. Seed ${r.seed}, Studies for ${r.folios} folios a minute.`,
   );
   if (r.stuck) out.push(`\nThe player stopped short: ${r.stuck}`);
+  return out.join("\n");
+}
+
+/** The least, the middle and the most of some numbers; the middle of an even count is the mean of the two in the middle. */
+export interface Spread {
+  readonly least: number;
+  readonly middle: number;
+  readonly most: number;
+}
+
+export function spread(ns: readonly number[]): Spread {
+  const s = ns.toSorted((a, b) => a - b);
+  if (s.length === 0) return { least: 0, middle: 0, most: 0 };
+  const lo = s[Math.floor((s.length - 1) / 2)] ?? 0;
+  const hi = s[Math.ceil((s.length - 1) / 2)] ?? 0;
+  return { least: s[0] ?? 0, middle: Math.round(((lo + hi) / 2) * 10) / 10, most: s.at(-1) ?? 0 };
+}
+
+/** A tier over several seeds: how many finished it, and the spread of its minutes, building and waiting (for Coins and for deliveries together). */
+export interface SeedsRow {
+  readonly tier: number;
+  readonly seeds: number;
+  readonly minutes: Spread;
+  readonly building: Spread;
+  readonly waiting: Spread;
+  readonly target: readonly [number, number];
+}
+
+export interface Seeds {
+  readonly folios: number;
+  readonly seeds: readonly number[];
+  readonly tiers: readonly SeedsRow[];
+  readonly left: readonly { readonly tier: number; readonly folios: Spread; readonly minutes: Spread }[];
+  readonly slice: Spread;
+  /** The seeds that stopped short, and why. */
+  readonly stuck: readonly { readonly seed: number; readonly why: string }[];
+}
+
+/** Several seeds' reports, played at one pace, as a row for each tier: only seeds that finished a tier count in it. */
+export function seeds(reports: readonly Report[]): Seeds {
+  const tiers = TARGETS.flatMap((target, t): SeedsRow[] => {
+    const rows = reports.flatMap((r) => r.tiers.filter((row) => row.tier === t && row.done));
+    if (rows.length === 0) return [];
+    return [
+      {
+        tier: t,
+        seeds: rows.length,
+        minutes: spread(rows.map((row) => row.minutes)),
+        building: spread(rows.map((row) => row.building)),
+        waiting: spread(rows.map((row) => Math.round((row.coins + row.waiting) * 10) / 10)),
+        target,
+      },
+    ];
+  });
+  const left = [...new Set(reports.flatMap((r) => r.left.map((l) => l.tier)))].map((tier) => {
+    const ls = reports.flatMap((r) => r.left.filter((l) => l.tier === tier));
+    return {
+      tier,
+      folios: spread(ls.map((l) => l.folios)),
+      minutes: spread(ls.flatMap((l) => (l.minutes === null ? [] : [l.minutes]))),
+    };
+  });
+  return {
+    folios: reports[0]?.folios ?? 0,
+    seeds: reports.map((r) => r.seed),
+    tiers,
+    left,
+    slice: spread(reports.filter((r) => r.stuck === null).map((r) => r.slice.minutes)),
+    stuck: reports.flatMap((r) => (r.stuck === null ? [] : [{ seed: r.seed, why: r.stuck.split("\n")[0] ?? "" }])),
+  };
+}
+
+/** Several seeds as a table to read. */
+export function seedsText(s: Seeds): string {
+  const three = (x: Spread): string => `${m(x.least).padStart(7)} ${m(x.middle).padStart(7)} ${m(x.most).padStart(7)}`;
+  const out = [
+    `Seeds ${s.seeds.join(", ")}, Studies for ${s.folios} folios a minute: the least, the middle and the most of each.`,
+    "",
+    `tier  seeds  ${"minutes".padEnd(23)}  ${"build".padEnd(23)}  ${"waiting".padEnd(23)}  meant to take`,
+  ];
+  for (const row of s.tiers)
+    out.push(
+      `${String(row.tier).padEnd(4)}  ${String(row.seeds).padStart(5)}  ${three(row.minutes)}  ${three(row.building)}  ${three(row.waiting)}  ${range(row.target).padStart(13)}`,
+    );
+  for (const l of s.left)
+    out.push(
+      `Research still to do when tier ${l.tier}'s commission was done: ${m(l.folios.least)} to ${m(l.folios.most)} folios, ${m(l.minutes.least)} to ${m(l.minutes.most)} minutes (middle ${m(l.minutes.middle)}).`,
+    );
+  const finished = s.seeds.length - s.stuck.length;
+  if (finished > 0)
+    out.push(
+      `The slice, for the ${finished} seeds that played to the end: ${m(s.slice.least)} to ${m(s.slice.most)} minutes (middle ${m(s.slice.middle)}).`,
+    );
+  for (const k of s.stuck) out.push(`Seed ${k.seed} stopped short: ${k.why}`);
   return out.join("\n");
 }
