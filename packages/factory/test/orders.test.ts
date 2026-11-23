@@ -1,13 +1,17 @@
 /**
  * Standing orders: sized by the tier reached; counting only from 50 ticks after they are hung, until
- * when the depot gives them nothing and the check leaves them out; a fresh one hung at the end of the
- * board; and what the answer to a batch carries.
+ * when the depot gives them nothing, the check leaves them out, they hold nothing and cannot be handed
+ * over; a fresh one hung at the end of the board; and what the answer to a batch carries.
  */
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
 import { give, must } from "./yards.ts";
 
+/** Fills an order by hand. */
+const fill = (o: F.Standing): void => {
+  for (const n of F.ALL_ITEMS) o.filled[n] = o.want[n] ?? 0;
+};
 /** The work in an order: every tick a gatherer and machine at grade 1 spends on what it wants. */
 const work = (o: F.Standing): number => F.ALL_ITEMS.reduce((sum, n) => sum + (o.want[n] ?? 0) * F.workOf(n), 0);
 
@@ -59,8 +63,29 @@ describe("an order hung", () => {
     expect(hung.filled[thing]).toBe(1);
   });
 
+  test("one that does not count yet cannot be handed over, and is read back holding nothing; one kept without the tick it counts from is left out", () => {
+    const y = F.create({ seed: 3, tier: 4 });
+    const early = y.board[0];
+    if (!early) throw new Error("no board");
+    fill(early);
+    expect(give(y, { do: "handOver", order: early.id })).toMatchObject({ refused: "not_filled" });
+    expect(F.decode(F.encode(y), y.land)?.board[0]?.filled).toEqual(F.counts());
+    for (let k = 0; k < F.ORDER_WAITS; k++) F.step(y);
+    const rec: unknown = JSON.parse(F.encode(y));
+    if (typeof rec !== "object" || rec === null || !("board" in rec) || !Array.isArray(rec.board))
+      throw new Error("no board kept");
+    const board: unknown[] = rec.board.map((o: unknown, k: number) =>
+      k === 0 && typeof o === "object" && o !== null ? { ...o, starts: undefined } : o,
+    );
+    const back = F.decode(JSON.stringify({ ...rec, board }), y.land);
+    expect(back?.board.some((o) => o.id === early.id)).toBe(false);
+    expect(back && give(back, { do: "handOver", order: early.id })).toMatchObject({ refused: "not_filled" });
+    expect(give(y, { do: "handOver", order: early.id })).not.toHaveProperty("refused");
+  });
+
   test("a yard with no seed, as the page's copy is, hangs none", () => {
     const y = F.create({ seed: 3, tier: 4 });
+    for (let k = 0; k < F.ORDER_WAITS; k++) F.step(y);
     const page = F.decode(F.encode(y, { seed: false }), y.land);
     if (!page) throw new Error("no copy");
     const order = page.board[0];

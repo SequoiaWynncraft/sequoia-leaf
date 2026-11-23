@@ -9,7 +9,6 @@
  */
 import type { Land } from "./land.ts";
 import {
-  ALL_GOALS,
   BENCH,
   BLUEPRINTS_MOST,
   BOILER,
@@ -18,6 +17,7 @@ import {
   GATHERER,
   type Goal,
   GOALS,
+  goalsBelow,
   gradeOf,
   type Item,
   ITEM_COUNT,
@@ -30,6 +30,7 @@ import {
   openOf,
   type Plot,
   plot,
+  type Recipe,
   SPAN_MOST,
   STARTING,
   STUDY,
@@ -112,6 +113,8 @@ export interface Wire {
   readonly boilers: Int32Array;
   /** For each tile, the sides it takes things in from, a bit each (`sidesTaken`). */
   readonly taken: Uint8Array;
+  /** For each kind of machine, the recipes it may make (`recipesFor`): all a machine reads of what is unlocked. */
+  readonly recipes: readonly (readonly Recipe[])[];
   /** Power always there (the depot and the waterwheels), and power drawn. */
   readonly steady: number;
   readonly demand: number;
@@ -221,7 +224,7 @@ const tunnels = (cap: number): Tunnels => ({
 /** A yard with nothing on it but the depot, and the starting pieces to hand; every goal below `tier` done, for trying later parts. */
 export function emptyYard(land: Land, tier = 0): Yard {
   const n = land.w * land.h;
-  const done = ALL_GOALS.filter((g) => (GOALS[g]?.tier ?? 0) < tier);
+  const done = goalsBelow(tier);
   const y: Yard = {
     land,
     kind: new Uint8Array(n).fill(NONE),
@@ -412,6 +415,12 @@ export function take(h: Holders, r: number, n: number, c = 1): void {
 }
 /** How many of a thing a holder's row holds. */
 export const held = (h: Holders, r: number, n: Item | number): number => h.stock[r * ITEM_COUNT + n] ?? 0;
+/** Whether a holder's row holds all a recipe takes. */
+export function enough(h: Holders, r: number, recipe: Recipe): boolean {
+  for (let p = 0; p < recipe.from.length; p++)
+    if ((h.stock[r * ITEM_COUNT + (recipe.from[p] ?? 0)] ?? 0) < (recipe.need[p] ?? 1)) return false;
+  return true;
+}
 
 // ---------- pieces on tiles ----------
 

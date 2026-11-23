@@ -8,6 +8,7 @@
 import { besideWater, toward } from "./land.ts";
 import { litOf } from "./power.ts";
 import {
+  ALL_KINDS,
   BELT,
   BENCH,
   BOILER,
@@ -21,6 +22,7 @@ import {
   JOINER,
   MILL,
   NONE,
+  recipesFor,
   SORTER,
   SPLITTER,
   STOP,
@@ -120,6 +122,7 @@ export function rewire(y: Yard): Wire {
     carry: Int32Array.from(carry),
     work: Int32Array.from(work),
     boilers: Int32Array.from(boilers),
+    recipes: ALL_KINDS.map((k) => recipesFor(y.open, k)),
     steady,
     demand,
   };

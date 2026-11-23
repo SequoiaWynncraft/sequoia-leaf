@@ -29,7 +29,7 @@ export interface Unlocks {
   readonly stops?: number;
   /** How many things a crate holds. */
   readonly crate?: number;
-  /** How far a pylon reaches and may stand from the next, times its plain reach. */
+  /** How far a pylon reaches and may stand from the next, in hundredths of its plain reach. */
   readonly reach?: number;
   /** The power the depot gives. */
   readonly depot?: number;
@@ -48,7 +48,7 @@ export const START: Unlocks = {
   kinds: ["belt", "gatherer", "mill", "pylon"],
   plots: ["yard"],
   crate: 32,
-  reach: 1,
+  reach: 100,
   depot: 20,
   away: 8,
   hooks: 3,
@@ -72,7 +72,7 @@ export interface NodeInfo {
   /** Coins it pays when it is finished. */
   readonly pay?: number;
   readonly unlocks: Unlocks;
-  /** The nodes that must be done first. */
+  /** The nodes done, or research known, first. */
   readonly needs?: readonly string[];
   readonly gift?: Gift;
 }
@@ -174,7 +174,7 @@ export const NODES: readonly NodeInfo[] = [
     say: "The guild took a hill, and then some more hills, and the banners are folded on a shelf. A banner should not be on a shelf.",
     want: { engine: 20, pole: 20 },
     pay: 1500,
-    unlocks: { plots: ["bank", "stream"] },
+    unlocks: { plots: ["bank", "stream"], recipes: ["hamper", "shell"] },
     gift: { id: "banner-pole", line: "A new banner pole stands in town, and the banner is up it." },
   },
 
@@ -254,6 +254,7 @@ export const NODES: readonly NodeInfo[] = [
     want: { lantern: 160 },
     pay: 5000,
     unlocks: {},
+    needs: ["oilpress", "workshop"],
     gift: { id: "tree-lanterns", line: "Lanterns from the Works hang in the great tree." },
   },
 ];

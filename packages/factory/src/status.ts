@@ -22,13 +22,13 @@ import {
   type Item,
   ITEM_INFO,
   JOINER,
-  MADE_BY,
   MILL,
   NONE,
   PACE,
   PYLON,
   RECIPE,
   type Recipe,
+  recipesFor,
   SORTER,
   SPAN_MOST,
   SPLITTER,
@@ -84,7 +84,9 @@ export function aim(y: Yard, i: number): Recipe | null {
   if (h.making[r] !== NONE) return RECIPE[h.making[r] ?? NONE] ?? null;
   if (y.set[i] !== NONE) return RECIPE[y.set[i] ?? NONE] ?? null;
   if (h.count[r] === 0) return null;
-  return (MADE_BY[k] ?? []).find((rec) => ALL_ITEMS.every((n) => held(h, r, n) === 0 || rec.from.includes(n))) ?? null;
+  return (
+    recipesFor(y.open, k).find((rec) => ALL_ITEMS.every((n) => held(h, r, n) === 0 || rec.from.includes(n))) ?? null
+  );
 }
 
 /** Whether what stands ahead of a tile could ever take a thing from it. A full belt or machine still counts. */
@@ -107,7 +109,7 @@ function takenAhead(y: Yard, i: number, n: Item): "yes" | "nothing" | "never" {
       return "yes";
     if (k === JOINER && [0, 1, 2].some((w) => wayIn(y, to, w) === i)) return "yes";
     const only = y.set[to] ?? NONE;
-    if (isMaker(k) && (MADE_BY[k] ?? []).some((rec) => rec.from.includes(n) && (only === NONE || only === rec.out)))
+    if (isMaker(k) && recipesFor(y.open, k).some((rec) => rec.from.includes(n) && (only === NONE || only === rec.out)))
       return "yes";
     if (k === BOILER && n === DEADFALL) return "yes";
   }
@@ -159,7 +161,7 @@ export function status(y: Yard, i: number): Status | null {
     return lit
       ? {
           state: "giving",
-          line: `Powers the tiles up to ${Math.floor(REACH.pylon * y.open.reach)} tiles from it.`,
+          line: `Powers the tiles up to ${Math.floor((REACH.pylon * y.open.reach) / 10_000)} tiles from it.`,
           trouble: false,
         }
       : {

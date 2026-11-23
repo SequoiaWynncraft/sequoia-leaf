@@ -13,6 +13,9 @@
  * 4 drawn they work 3 ticks in 4, exactly, and nothing is lost over time. A yard with power enough
  * works every tick and keeps nothing in the store.
  *
+ * A machine makes, and takes parts in for, only the recipes the plumbing says it may (`Wire.recipes`,
+ * asked of `locked` when the plumbing is worked out).
+ *
  * This is the hot path: it loops over the plumbing's lists, which hold only tiles where something
  * stands, and makes no arrays, objects, closures or strings (but for the rare order filled).
  */
@@ -34,7 +37,6 @@ import {
   isFolio,
   ITEM_COUNT,
   JOINER,
-  MADE_BY,
   MILL,
   NONE,
   PACE,
@@ -50,7 +52,7 @@ import {
   WORKSHOP,
 } from "./tables.ts";
 import { ahead, farMouth, nextOf, rewire, wayIn, wayOut } from "./wire.ts";
-import { type Holders, put, take, type Yard } from "./yard.ts";
+import { enough, type Holders, put, take, type Wire, type Yard } from "./yard.ts";
 
 /** How many ticks the pace is measured over before old ticks start to count for less: an hour. */
 export const PACE_WINDOW = 36_000;
@@ -68,7 +70,7 @@ export function step(y: Yard): void {
   if (pace.warm > 0) pace.warm--;
   else if (++pace.ticks >= PACE_WINDOW) {
     // Old ticks count for less and less, so the pace follows the yard as it is now.
-    pace.ticks /= 2;
+    pace.ticks = Math.floor(pace.ticks / 2);
     for (let k = 0; k < ITEM_COUNT; k++) pace.made[k] = Math.floor((pace.made[k] ?? 0) / 2);
   }
 
@@ -127,7 +129,7 @@ export function step(y: Yard): void {
     }
     if (h.making[r] === NONE) {
       if (h.idle[r] === 1) continue;
-      const found = choose(h, r, kind[i] ?? NONE, y.set[i] ?? NONE);
+      const found = choose(h, r, wire.recipes[kind[i] ?? NONE] ?? NO_RECIPES, y.set[i] ?? NONE);
       if (found === NONE) {
         h.idle[r] = 1;
         continue;
@@ -147,16 +149,15 @@ export function step(y: Yard): void {
 
   // Then hand things on.
   const order = wire.order;
-  const taken = wire.taken;
   for (let o = 0; o < order.length; o++) {
     const i = order[o] ?? 0;
     const k = kind[i];
     if (k === TUNNEL) {
       if ((span[i] ?? 0) > 0) passUnder(y, i);
-      else carryOn(y, i, taken);
-    } else if (k === BELT || k === JOINER) carryOn(y, i, taken);
-    else if (k === SPLITTER) split(y, i, taken);
-    else if (k === SORTER) sort(y, i, taken);
+      else carryOn(y, i, wire);
+    } else if (k === BELT || k === JOINER) carryOn(y, i, wire);
+    else if (k === SPLITTER) split(y, i, wire);
+    else if (k === SORTER) sort(y, i, wire);
     else {
       const r = row[i] ?? 0;
       if (k === CRATE) {
@@ -178,7 +179,7 @@ export function step(y: Yard): void {
           }
         }
       }
-      sendOut(y, i, r, taken);
+      sendOut(y, i, r, wire);
     }
   }
 }
@@ -222,18 +223,13 @@ function wanted(y: Yard, g: Goal, h: Holders, r: number): number {
 }
 
 /**
- * The recipe a machine can start on with what it holds, by what it makes, or `NONE`: the first it
- * knows, or the one it is told to make (`only`), with as many of each part as it takes.
+ * The recipe a machine can start on with what it holds, by what it makes, or `NONE`: the first of
+ * those it may make, or the one it is told to make (`only`), with as many of each part as it takes.
  */
-function choose(h: Holders, r: number, k: number, only: number): number {
-  const recipes = MADE_BY[k] ?? NO_RECIPES;
+function choose(h: Holders, r: number, recipes: readonly Recipe[], only: number): number {
   for (let n = 0; n < recipes.length; n++) {
     const recipe = recipes[n];
-    if (!recipe || (only !== NONE && recipe.out !== only)) continue;
-    let all = true;
-    for (let p = 0; p < recipe.from.length; p++)
-      if ((h.stock[r * ITEM_COUNT + (recipe.from[p] ?? 0)] ?? 0) < (recipe.need[p] ?? 1)) all = false;
-    if (all) return recipe.out;
+    if (recipe && (only === NONE || recipe.out === only) && enough(h, r, recipe)) return recipe.out;
   }
   return NONE;
 }
@@ -264,10 +260,10 @@ function wayInOn(y: Yard, to: number, side: number): number {
 
 /**
  * Whether the tile at `to` will take the thing `n` handed to it from the tile beside it on its side
- * `side` (a way); `taken` is which sides each tile takes from, as the plumbing worked it out.
+ * `side` (a way), by the plumbing: which sides each tile takes from, and what each machine may make.
  */
-function accepts(y: Yard, to: number, n: number, side: number, taken: Uint8Array): boolean {
-  if (to < 0 || (((taken[to] ?? 0) >> side) & 1) === 0) return false;
+function accepts(y: Yard, to: number, n: number, side: number, wire: Wire): boolean {
+  if (to < 0 || (((wire.taken[to] ?? 0) >> side) & 1) === 0) return false;
   const k = y.kind[to];
   if (k === DEPOT || k === STOP) return true;
   if (k === BELT || k === SPLITTER || k === TUNNEL || k === SORTER) return y.item[to] === NONE;
@@ -285,7 +281,7 @@ function accepts(y: Yard, to: number, n: number, side: number, taken: Uint8Array
   if (k === MILL || k === BENCH || k === WORKSHOP) {
     // It takes a thing that some recipe it may make uses together with everything it holds, while it
     // holds fewer than `BUFFER` of the fewest of it any such recipe takes.
-    const recipes = MADE_BY[k] ?? NO_RECIPES;
+    const recipes = wire.recipes[k] ?? NO_RECIPES;
     const only = y.set[to] ?? NONE;
     let least = 0;
     for (let c = 0; c < recipes.length; c++) {
@@ -365,12 +361,12 @@ function passUnder(y: Yard, i: number): void {
 }
 
 /** A belt, joiner or tunnel's far mouth hands on the thing it carries once it has crossed the tile. */
-function carryOn(y: Yard, i: number, taken: Uint8Array): void {
+function carryOn(y: Yard, i: number, wire: Wire): void {
   const n = y.item[i] ?? NONE;
   if (n === NONE || (y.prog[i] ?? 0) < 8) return;
   const to = ahead(y, i);
   const side = ((y.dir[i] ?? 0) + 2) & 3;
-  if (!accepts(y, to, n, side, taken)) return;
+  if (!accepts(y, to, n, side, wire)) return;
   give(y, to, n, side, (y.prog[i] ?? 8) - 8);
   y.item[i] = NONE;
   y.prog[i] = 0;
@@ -378,7 +374,7 @@ function carryOn(y: Yard, i: number, taken: Uint8Array): void {
 }
 
 /** A splitter sends what it carries to its ways out in turn: ahead, left, right, from the way after the last. */
-function split(y: Yard, i: number, taken: Uint8Array): void {
+function split(y: Yard, i: number, wire: Wire): void {
   const n = y.item[i] ?? NONE;
   if (n === NONE || (y.prog[i] ?? 0) < 8) return;
   const turn = y.turn[i] ?? 0;
@@ -386,7 +382,7 @@ function split(y: Yard, i: number, taken: Uint8Array): void {
     const way = (k + turn) % 3;
     const to = wayOut(y, i, way);
     const side = ((y.dir[i] ?? 0) + (way === 0 ? 2 : way === 1 ? 1 : 3)) & 3;
-    if (!accepts(y, to, n, side, taken)) continue;
+    if (!accepts(y, to, n, side, wire)) continue;
     give(y, to, n, side, (y.prog[i] ?? 8) - 8);
     y.item[i] = NONE;
     y.prog[i] = 0;
@@ -400,13 +396,13 @@ function split(y: Yard, i: number, taken: Uint8Array): void {
 const sortedTo = (y: Yard, i: number): number => wayOut(y, i, y.item[i] === y.set[i] ? 1 : 0);
 
 /** A sorter hands on what it carries, once it has crossed the tile, the one way it goes. */
-function sort(y: Yard, i: number, taken: Uint8Array): void {
+function sort(y: Yard, i: number, wire: Wire): void {
   const n = y.item[i] ?? NONE;
   if (n === NONE || (y.prog[i] ?? 0) < 8) return;
   const left = n === y.set[i];
   const side = ((y.dir[i] ?? 0) + (left ? 1 : 2)) & 3;
   const to = sortedTo(y, i);
-  if (!accepts(y, to, n, side, taken)) return;
+  if (!accepts(y, to, n, side, wire)) return;
   give(y, to, n, side, (y.prog[i] ?? 8) - 8);
   y.item[i] = NONE;
   y.prog[i] = 0;
@@ -414,13 +410,13 @@ function sort(y: Yard, i: number, taken: Uint8Array): void {
 }
 
 /** A gatherer, machine or crate hands on its finished piece. */
-function sendOut(y: Yard, i: number, r: number, taken: Uint8Array): void {
+function sendOut(y: Yard, i: number, r: number, wire: Wire): void {
   const h = y.holders;
   const n = h.out[r] ?? NONE;
   if (n === NONE) return;
   const to = ahead(y, i);
   const side = ((y.dir[i] ?? 0) + 2) & 3;
-  if (!accepts(y, to, n, side, taken)) return;
+  if (!accepts(y, to, n, side, wire)) return;
   give(y, to, n, side, 0);
   h.out[r] = NONE;
 }

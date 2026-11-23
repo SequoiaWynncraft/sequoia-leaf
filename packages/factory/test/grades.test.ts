@@ -50,6 +50,12 @@ function gathering(grade: number): { every: number; demand: number } {
   return { every: 600 / F.held(y.holders, crate, F.item("deadfall")), demand: y.demand };
 }
 
+/** A run naming both mouths of the tunnel from (1, 7) to (3, 7), the far one at a grade. */
+const mouths = (grade: number): Record<string, unknown>[] => [
+  { kind: "tunnel", x: 1, y: 7, dir: 0, span: 0, grade: 3 },
+  { kind: "tunnel", x: 3, y: 7, dir: 0, span: 0, grade },
+];
+
 /** A run of three belts at a grade. */
 const legs = (grade: number): Record<string, unknown>[] =>
   [3, 4, 5].map((x) => ({ kind: "belt", x, y: 2, dir: 0, span: 0, grade }));
@@ -116,6 +122,21 @@ describe("building over a piece of the same kind", () => {
     expect([3, 4, 5].map((x) => y.grade[F.at(y, x, 2)])).toEqual([2, 2, 2]);
     expect(spent(y, { do: "lay", legs: legs(1).slice(1) })).toBe(-4);
     expect([3, 4, 5].map((x) => y.grade[F.at(y, x, 2)])).toEqual([2, 1, 1]);
+  });
+
+  test("a run that names the same tunnel twice, by both its mouths, is refused before anything changes; a run is charged its price", () => {
+    const y = yard();
+    must(y, { do: "build", kind: "tunnel", x: 1, y: 7, dir: 0 });
+    const kept = F.encode(y);
+    expect(give(y, { do: "lay", legs: mouths(2) })).toMatchObject({ refused: "cannot_lay" });
+    expect(F.encode(y)).toBe(kept);
+    // Raised by its far mouth alone, with a belt laid on beyond it.
+    const run = [mouths(2)[1] ?? {}, { kind: "belt", x: 4, y: 7, dir: 0, span: 0 }];
+    const read = F.readCommand({ do: "lay", legs: run, tick: y.tick });
+    if (read?.do !== "lay") throw new Error("the run does not read");
+    expect(F.priceOf(y, read.legs)).toBe(24 + 1);
+    expect(spent(y, { do: "lay", legs: run })).toBe(24 + 1);
+    expect([y.grade[F.at(y, 1, 7)], y.grade[F.at(y, 3, 7)]]).toEqual([2, 2]);
   });
 
   test("a tunnel is raised and lowered with both its mouths", () => {

@@ -8,11 +8,13 @@ import * as F from "../src/index.ts";
 import { bareLand } from "./land.ts";
 import { delivering, generated } from "./yards.ts";
 
-/** Every number in a JSON record, with its path. */
+/** Every number a yard or a record reaches, in its parts and in its arrays of numbers (the rest hold whole numbers only), with its path. */
 function numbers(v: unknown, path: string, out: [string, number][]): [string, number][] {
   if (typeof v === "number") out.push([path, v]);
+  else if (v instanceof Float64Array) v.forEach((x, k) => out.push([`${path}.${k}`, x]));
   else if (Array.isArray(v)) v.forEach((x, k) => numbers(x, `${path}.${k}`, out));
-  else if (typeof v === "object" && v !== null) for (const [k, x] of Object.entries(v)) numbers(x, `${path}.${k}`, out);
+  else if (typeof v === "object" && v !== null && !ArrayBuffer.isView(v))
+    for (const [k, x] of Object.entries(v)) numbers(x, `${path}.${k}`, out);
   return out;
 }
 
@@ -54,22 +56,16 @@ function worked(y: F.Yard, r: number, n: number): number {
 }
 
 describe("whole numbers", () => {
-  test("nothing a working yard keeps is a fraction, nor anything in its arrays", () => {
+  test("no number in a working yard is a fraction, kept or not: what is open, the pace counter and a pylon's reach among them", () => {
     const shortYard = short(32).y;
     for (let k = 0; k < 777; k++) F.step(shortYard);
     const running = F.decode(F.encode(generated().y), generated().y.land);
     if (!running) throw new Error("no yard");
     for (let k = 0; k < 2000; k++) F.step(running);
+    expect(running.open.reach).toBe(135);
     for (const y of [delivering(), running, shortYard]) {
       expect(numbers(JSON.parse(F.encode(y)), "", []).filter(([, v]) => !Number.isInteger(v))).toEqual([]);
-      const arrays = [
-        y.depot,
-        y.seen.depot,
-        y.pace.made,
-        y.holders.work,
-        ...y.board.flatMap((o) => [o.want, o.filled]),
-      ];
-      expect(arrays.every((a) => a.every((v) => Number.isInteger(v)))).toBe(true);
+      expect(numbers(y, "", []).filter(([, v]) => !Number.isInteger(v))).toEqual([]);
     }
   });
 

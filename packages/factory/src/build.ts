@@ -11,23 +11,27 @@ import {
   DEPOT,
   GATHERER,
   gradeOf,
+  holdsMost,
   isMaker,
   type Item,
   JOINER,
   type Kind,
-  KIND_INFO,
+  locked,
   NONE,
   type Plot,
   price,
   PYLON,
   RECIPE,
+  type Recipe,
+  recipesFor,
   SORTER,
   SPLITTER,
   STOP,
+  STUDY,
   TUNNEL,
   WHEEL,
 } from "./tables.ts";
-import { changed, holds, place, take, tunnelRow, vacate, type Yard } from "./yard.ts";
+import { changed, enough, held, holds, place, take, tunnelRow, vacate, type Yard } from "./yard.ts";
 
 /** What came of trying to spend Coins: what it cost, or why not, in plain words. */
 export type Spent = { readonly ok: true; readonly cost: number } | { readonly ok: false; readonly why: string };
@@ -73,9 +77,9 @@ export interface Lay {
   readonly span?: number;
 }
 
-/** What it costs to stand one more of a kind at a grade: its price, less grade 1's while the yard has one to hand. */
-export const costOf = (y: Yard, k: Kind, g = 1): number =>
-  price(k, gradeOf(k, g)) - ((y.spare[k] ?? 0) > 0 ? price(k, gradeOf(k)) : 0);
+/** What it costs to stand one more of a kind at a grade: its price, less grade 1's while the yard has one to hand (`spare`). */
+export const costOf = (y: Yard, k: Kind, g = 1, spare: Uint8Array = y.spare): number =>
+  price(k, gradeOf(k, g)) - ((spare[k] ?? 0) > 0 ? price(k, gradeOf(k)) : 0);
 
 /** What comes back for the piece on a tile taken away: what it cost at its grade, less grade 1's for one the yard had to hand. */
 export function worthAt(y: Yard, i: number): number {
@@ -91,16 +95,16 @@ export const replaces = (k: number, there: number): boolean =>
  * What building a kind at a grade on a tile takes from the purse: over one of its kind, what its
  * grade costs more (or, lower, gives back); else its cost, less what a replaced piece gives back.
  */
-export function priceAt(y: Yard, k: Kind, x: number, z: number, g = 1): number {
+export function priceAt(y: Yard, k: Kind, x: number, z: number, g = 1, spare: Uint8Array = y.spare): number {
   const i = at(y, x, z);
   const there = i < 0 ? NONE : (y.kind[i] ?? NONE);
-  if (there === NONE) return costOf(y, k, g);
+  if (there === NONE) return costOf(y, k, g, spare);
   if (there === k) return price(k, gradeOf(k, g)) - price(k, y.grade[i] ?? 0);
-  return costOf(y, k, g) - worthAt(y, i);
+  return costOf(y, k, g, spare) - worthAt(y, i);
 }
 
 /** The other mouth of the tunnel on a tile, or -1. */
-function otherMouth(y: Yard, i: number): number {
+export function otherMouth(y: Yard, i: number): number {
   const span = y.span[i] ?? 0;
   const d = y.dir[i] ?? 0;
   const far = (Math.abs(span) + 1) * Math.sign(span);
@@ -148,12 +152,10 @@ export function refusal(
 ): string | null {
   const bad = ground(y, x, z);
   if (bad !== null) return bad;
-  const name = (KIND_INFO[k]?.name ?? "").toLowerCase();
   if (k === DEPOT) return "There is only one depot";
   const g = gradeOf(k, lay.grade);
-  const top = y.open.kinds[k] ?? 0;
-  if (top === 0) return `The ${name} is not unlocked yet`;
-  if (g > top) return `A grade ${g} ${name} is not unlocked yet`;
+  const lock = locked(y.open, { build: k, grade: g });
+  if (lock !== null) return lock;
   const i = at(y, x, z);
   const there = y.kind[i] ?? NONE;
   if (there === DEPOT) return "The depot stands here";
@@ -164,7 +166,8 @@ export function refusal(
     if (there !== NONE && !replaces(k, there)) return "Something is here already";
     if (k === GATHERER && y.land.deposit[i] === NONE) return "A gatherer must be placed on a deposit";
     if (k === WHEEL && !besideWater(y.land, i)) return "A waterwheel must be beside the stream";
-    if (k === STOP && stops(y) >= y.open.stops) return stopsRefusal(y);
+    const most = k === STOP ? locked(y.open, { stops: stops(y) + 1 }) : null;
+    if (most !== null) return most;
     if (k === TUNNEL && !tunnelExit(y, x, z, d, lay.span))
       return depotInTheWay(y, x, z, d, lay.span)
         ? "A tunnel cannot go under the depot"
@@ -238,9 +241,6 @@ export function setDown(y: Yard, k: Kind, x: number, z: number, d: Dir, coins: n
 
 /** How many cart stops stand. */
 export const stops = (y: Yard): number => y.kind.reduce((n, k) => (k === STOP ? n + 1 : n), 0);
-/** Why one more cart stop may not stand. */
-export const stopsRefusal = (y: Yard): string =>
-  `The yard may have ${y.open.stops} cart stop${y.open.stops === 1 ? "" : "s"}`;
 
 /** Whether what stands on a tile can be turned: anything but the depot and a tunnel. */
 export function turnable(y: Yard, x: number, z: number): boolean {
@@ -277,26 +277,33 @@ export function remove(y: Yard, x: number, z: number): Refund {
   return { ok: true, refund };
 }
 
-/** Tells a machine to make one thing only, or with nothing to make whatever arrives. Says whether it could. */
-export function setRecipe(y: Yard, x: number, z: number, out: Item | null): boolean {
+/** The recipes whose parts the machine on a tile keeps by it: the one it is told to make, or each it may make. */
+export function keeps(y: Yard, i: number): readonly Recipe[] {
+  const told = RECIPE[y.set[i] ?? NONE];
+  return told ? [told] : recipesFor(y.open, y.kind[i] ?? NONE);
+}
+
+/**
+ * Tells a machine to make one thing only, or with nothing to make whatever arrives. What it holds
+ * beyond what it keeps for that (`keeps`, `holdsMost`) is tipped out. Says why it could not, or nothing.
+ */
+export function setRecipe(y: Yard, x: number, z: number, out: Item | null): string | null {
   const i = at(y, x, z);
   const there = i < 0 ? NONE : (y.kind[i] ?? NONE);
-  if (there === NONE) return false;
-  const recipe = out === null ? null : RECIPE[out];
-  if (out !== null && recipe?.by !== there) return false;
-  if (!isMaker(there)) return false;
+  if (!isMaker(there) || (out !== null && RECIPE[out]?.by !== there)) return "That cannot make it";
+  const lock = out === null ? null : locked(y.open, { make: out });
+  if (lock !== null) return lock;
   const h = y.holders;
   const r = y.row[i] ?? 0;
   y.set[i] = out ?? NONE;
   h.making[r] = NONE;
   h.work[r] = 0;
   h.idle[r] = 0;
-  // What the recipe does not use is tipped out.
-  if (recipe) for (const n of ALL_ITEMS) if (!recipe.from.includes(n)) take(h, r, n, heldAt(y, r, n));
+  const kept = keeps(y, i);
+  for (const n of ALL_ITEMS) take(h, r, n, held(h, r, n) - holdsMost(kept, n));
   changed(y);
-  return true;
+  return null;
 }
-const heldAt = (y: Yard, r: number, n: number): number => y.holders.stock[r * ALL_ITEMS.length + n] ?? 0;
 
 /** Sets the one thing a sorter sends to its left, or with nothing makes it a belt. Says whether there was a sorter. */
 export function setSort(y: Yard, x: number, z: number, n: Item | null): boolean {
@@ -317,13 +324,15 @@ export function tipOut(y: Yard, x: number, z: number, only: Item | null = null):
   let gone = 0;
   for (const n of ALL_ITEMS) {
     if (only !== null && n !== only) continue;
-    gone += heldAt(y, r, n);
-    take(h, r, n, heldAt(y, r, n));
+    gone += held(h, r, n);
+    take(h, r, n, held(h, r, n));
   }
   if (gone === 0) return 0;
-  // Whatever it was part-way through making may have lost a part.
-  const making = RECIPE[h.making[r] ?? NONE];
-  if (making && !making.from.every((n, p) => heldAt(y, r, n) >= (making.need[p] ?? 1))) {
+  // Whatever it was part-way through may have lost a part: a recipe's, or the folio a Study works on.
+  const making = h.making[r] ?? NONE;
+  const recipe = RECIPE[making];
+  const lost = y.kind[i] === STUDY ? making !== NONE && held(h, r, making) === 0 : !!recipe && !enough(h, r, recipe);
+  if (lost) {
     h.making[r] = NONE;
     h.work[r] = 0;
   }

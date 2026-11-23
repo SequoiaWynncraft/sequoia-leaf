@@ -1,21 +1,22 @@
 /**
  * The check: one pass over the yard into 32 bits, for Leaf and the page to compare their copies at a
- * tick without sending the yard. It mixes in everything the rules read: the clock, the power put by,
- * the till and its counter, the goals (those done, in order, the node in hand, the line of research, and
- * what each goal not done has been given) and the board (each order's wants, what came in, its pay and its words), the
- * depot's books (what awards and the standing are read from), what was seen at the owner's last
- * command, the pace, the pieces to hand, the blueprints, and every part of every piece, tile by tile,
- * numbered by the tables. Numbers that may pass 32 bits (the clock's Coins, the books) are mixed in by
- * both halves of their 64.
+ * tick without sending the yard. It mixes in everything `decode` keeps of the rules' state: the
+ * clock, the power put by, the till and its counter, the goals (those done, in order, the node in
+ * hand, the line of research, and what each goal not done has been given) and the board (each order's
+ * wants, what came in, its pay, its words and when it began to count), the depot's books (what awards
+ * and the standing are read from), what was seen at the owner's last command, the pace, the pieces to
+ * hand, the blueprints, and every part of every piece, tile by tile, numbered by the tables. Every
+ * number that may pass 32 bits (the clock, the counters, the Coins, the books) is mixed in by both
+ * halves of its 64.
  *
  * It leaves out only what a yard read back from its kept form works out again or never had, so that
  * one gives the same check: what only Leaf holds and moves (the seed and `serial`, the orders ever
  * hung, and the orders hung that do not count yet, which the page may not have heard of; its clock's
- * moment; the letter); an order's `starts`, which nothing reads once it counts; news no
- * screen has taken; what is worked out from the rest (what is open, where power reaches and the
- * plumbing, a machine's note that it found nothing to start on); and which row
- * of a side table holds a piece's parts, which reading a yard back may change. `test/codec.test.ts`
- * changes every other part of a yard in turn and fails if the check does not change with it.
+ * moment; the letter); news no screen has taken; what is worked out from the rest (what is open,
+ * where power reaches and the plumbing, a machine's note that it found nothing to start on); and which
+ * row of a side table holds a piece's parts, which reading a yard back may change.
+ * `test/codec.test.ts` changes every other part of a yard in turn and fails if the check does not
+ * change with it.
  */
 import { counting } from "./orders.ts";
 import { ITEM_COUNT, NONE, SPAN_MOST } from "./tables.ts";
@@ -51,10 +52,10 @@ export function check(y: Yard): number {
     mix(b === null ? -1 : b.length);
     for (const v of b ?? []) mix(v);
   };
-  mix(y.tick);
+  num(y.tick);
   mix(y.charge);
   num(y.till);
-  mix(y.bank);
+  num(y.bank);
   mix(y.told);
   for (const g of y.done) mix(g);
   mix(-1);
@@ -70,7 +71,7 @@ export function check(y: Yard): number {
   num(y.swapAt);
   num(y.sold);
   num(y.paid);
-  mix(y.seen.tick);
+  num(y.seen.tick);
   num(y.seen.till);
   tally(y.seen.depot);
   num(y.pace.ticks);
@@ -83,6 +84,7 @@ export function check(y: Yard): number {
   for (const o of y.board) {
     if (!counting(o, y.tick)) continue;
     mix(o.id);
+    num(o.starts);
     num(o.pay);
     words(o.title);
     words(o.from);

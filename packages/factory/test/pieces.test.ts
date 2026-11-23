@@ -1,7 +1,8 @@
 /**
  * The new pieces: a cart stop takes things from any side and they have reached the depot at once,
  * as many stops as the yard has unlocked; a sorter, in at the back, sends the one thing it is set to
- * out to its left and everything else ahead, and with nothing set is a belt.
+ * out to its left and everything else ahead, and with nothing set is a belt. And a blueprint, set
+ * down by naming its place.
  */
 import { describe, expect, test } from "bun:test";
 
@@ -79,6 +80,30 @@ function sorted(item: string | null): { ahead: number[]; left: number[] } {
   const holds = (r: number): number[] => [F.held(y.holders, r, plank), F.held(y.holders, r, brick)];
   return { ahead: holds(ahead), left: holds(left) };
 }
+
+describe("a blueprint", () => {
+  test("is set down by naming its place, the corner and the turns, in one command that is all or none, whatever its size: 400 pieces", () => {
+    const y = F.create({ land: bareLand(48, 30, [], [44, 4]), tier: 4, seed: 1 });
+    for (let z = 2; z < 22; z++)
+      for (let x = 1; x < 21; x++) expect(F.build(y, F.BELT, x, z, 0, Infinity).ok).toBe(true);
+    must(y, { do: "saveBlueprint", slot: 2, tiles: F.within(y, 1, 2, 20, 21) });
+    const belts = (): number => y.kind.filter((k) => k === F.BELT).length;
+    const did = give(y, { do: "placeBlueprint", slot: 2, x: 22, y: 2, turns: 1 });
+    if ("refused" in did) throw new Error(did.why);
+    expect([belts(), y.dir[F.at(y, 22, 2)]]).toEqual([800, 1]);
+    expect((did.coins ?? []).reduce((sum, c) => sum - c.amount, 0)).toBe(400);
+    // Where one of its pieces cannot stand, off the map, none does.
+    expect(give(y, { do: "placeBlueprint", slot: 2, x: 30, y: 12, turns: 0 })).toMatchObject({
+      refused: "cannot_place_blueprint",
+      why: "That is off the map",
+    });
+    expect(give(y, { do: "placeBlueprint", slot: 1, x: 22, y: 2, turns: 0 })).toMatchObject({
+      refused: "cannot_place_blueprint",
+      why: "There is no blueprint there",
+    });
+    expect(belts()).toBe(800);
+  });
+});
 
 describe("a sorter", () => {
   test("sends the one thing it is set to out to its left, and everything else ahead", () => {

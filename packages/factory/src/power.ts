@@ -7,8 +7,11 @@ import { REACH } from "./content/machines.ts";
 import { PYLON } from "./tables.ts";
 import type { Yard } from "./yard.ts";
 
-/** A reach in tiles as the whole number its square may be: a tile is within it when the square of its distance is no more. */
-export const squared = (r: number): number => Math.floor(r * r);
+/**
+ * A reach in hundredths of a tile, made `percent` per cent as far, as the whole number its square may
+ * be: a tile is within it when the square of its distance is no more.
+ */
+export const squared = (r: number, percent = 100): number => Math.floor((r * percent) ** 2 / 100_000_000);
 /** Whether a whole-tile offset is within a reach given as `squared` gives it. */
 const within = (dx: number, dy: number, r2: number): boolean => dx * dx + dy * dy <= r2;
 
@@ -25,8 +28,8 @@ function mark(y: Yard, px: number, py: number, r2: number): void {
 export function repower(y: Yard): Uint8Array {
   const { land } = y;
   const [cx, cy] = land.depot;
-  const reach = squared(REACH.pylon * y.open.reach);
-  const link = squared(REACH.link * y.open.reach);
+  const reach = squared(REACH.pylon, y.open.reach);
+  const link = squared(REACH.link, y.open.reach);
   y.lit.fill(0);
   mark(y, cx, cy, squared(REACH.depot));
   const pylons: number[] = [];
