@@ -20,6 +20,7 @@ page (`apps/works`) holds a copy and draws it; the town reads its standing's wor
 | keeping a yard, and the check                                                 | `src/codec.ts`, `src/bytes.ts`, `src/check.ts`                                |
 | the route for a run of belt and its legs; what a piece is doing               | `src/route.ts`; `src/status.ts` (`condition` decides, `status` words it)      |
 | what a machine or a line makes and needs a minute                             | `src/planner.ts`, and `plan.ts` for the table of the slice                    |
+| what an unlock is, for a screen: a typed list, each with its made sentence    | `src/unlocks.ts`; what a tier is called: `src/content/tiers.ts`               |
 | what a yard as it stands can make and needs a minute                          | `flow`, in `src/status.ts`                                                    |
 | the wire from the page's side: a command written, what Leaf sends read back   | `src/page.ts`                                                                 |
 | what the town is told: the postcard, the standing's words                     | `src/postcard.ts`, `src/stats.ts`                                             |
@@ -161,7 +162,9 @@ nothing unlocks is known from the start; a new yard has `START`.
   research has stopped wanting meanwhile stays in the Study, as does any folio the research does not
   want. A Study's work belongs to the research first in the line: when another comes first (one taken
   out, or known), every Study's work is dropped; tipping out a folio drops it only if it is the one
-  being worked on. Known, the research unlocks, and the next in line begins.
+  being worked on. Known, the research unlocks, and the next in line begins. `knownSince` is the
+  research that became known since the yard's owner was last there, for the letter about a time
+  away; `rate` gives a Study's folios a minute at the yard's pace, as it gives a machine's.
 - **Finishing** either kind of goal is one function (`finish`): it is done, what it unlocks is open,
   a node pays and the next comes into hand, research lets the next begin, and the yard has news of
   it. Leaf logs each node finished.
@@ -240,6 +243,22 @@ what `FACTORY` really gives; and the orders in an answer are put on the page's c
 nothing on the page writes to its yard but the rules. The postcard the town is left (`postcard`) and what a standing says on a
 card (`WORKS_STATS`, in `src/stats.ts`, which reads nothing of the rules) are here as well.
 
+## What is unlocked, for a screen
+
+`unlocks.ts` is the one place an `Unlocks` is read into what a screen shows: `unlocked(u)` gives a
+list of things of a few kinds (a kind of piece, a kind at a grade, a recipe, a plot for sale, a tool,
+blueprints and their size, a number with what it was before, the board), each with its name and one
+plain sentence made from its own numbers and the tables' ("A bench makes hampers from 2 planks and 1
+pot.", "A crate holds 128 items, up from 32.", "Carries up to 200 items a minute, up from 150. A tile
+costs 3 Coins."). A number that comes with the kind it belongs to, with nothing before it (a tunnel's
+first length, the first cart stop), is the kind's to say and is not listed again. `unlockedBy(goal)`
+is the same for a goal, so that a screen asks by the goal and never holds an `Unlocks`; the page has
+a test that it reads no field of one. `tierName` is what a tier is called ("Tier 2: The stream"), from
+`content/tiers.ts`; `TOOL_INFO` what each tool is called and does; `numeral` a grade as it is written.
+Nothing in the rules reads any of this: what a yard may do is `openOf` and `locked`.
+
+The research table's `what` lines are written by hand and say nothing these sentences do not.
+
 ## What a piece is doing, for a screen
 
 `condition` is the one place a piece's state, and whether it is in trouble, is decided: a number
@@ -274,6 +293,9 @@ machine needs of each part a minute (`needs`), how many of the piece before it e
 (`feeders`), the whole tree of machines and gatherers for a thing at a pace (`tree`) and what that
 tree takes of each piece (`bill`). Every piece is taken as working every tick. `plan.ts` prints, for
 every thing the slice can make, one machine's output a minute and the line that feeds one flat out.
+`carried(grade)` is how many things a minute a belt or a tunnel of a grade carries when it is kept
+full: a thing crosses a tile in a whole number of ticks, so 150 at the first grade, 200 at the
+second and 300 at the third, which a test holds a real belt to.
 
 ## How long the slice takes
 
@@ -406,9 +428,11 @@ several). `test/goals.ts` reads from the tables the goals a test needs (the rese
 needed first, what a node wants and pays, a commission's needs), so that no test names a count from
 the tables and changing one breaks none. `test/yards.ts` builds the
 yards they share with commands off the wire, and the yards the play server on a developer's machine
-stages for the tours (`staged`: `new`, `small`, `short`, `mid`, `large`), which the package exports as
+stages for the tours (`staged`: `new`, `small`, `short`, `mid`, `hall`, `study`, `large`), which the package exports as
 `@sequoia-leaf/factory/test/yards.ts`. A stage is a yard the rules could have made: built by
 commands, every goal finished, paid and logged by the rules, by lines of its own or by what the node
 in hand wants arriving at the depot through `deliver` (`fillHand`). Research is studied in a Study,
-not delivered, so no stage knows any: `large` is the generator's pieces on a yard with every node of
-tiers 0 to 2 done, building only what such a yard may.
+not delivered: `hall` is tier 3 just open, with no Study; `study` adds a line of Timber folios into a
+Study and runs it until the first piece of research is known by the Study's own work, with the line
+of research filled after it. `large` is the generator's pieces on a yard with every node of
+tiers 0 to 2 done, building only what such a yard may, and knows no research.

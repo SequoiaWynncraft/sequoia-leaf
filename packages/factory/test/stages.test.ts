@@ -20,7 +20,8 @@ describe("a staged yard", () => {
     test(`${name}: every goal it has done was finished and paid by the rules, and it reads back as itself`, () => {
       const y = staged(name);
       expect([y.paid, y.handed]).toEqual([earned(y), 0]);
-      for (const g of y.done) expect(F.isNode(g)).toBe(true);
+      // Only the stage with a Study knows any research.
+      if (name !== "study") for (const g of y.done) expect(F.isNode(g)).toBe(true);
       const back = F.decode(F.encode(y), y.land);
       expect(back && [F.check(back), F.encode(back)]).toEqual([F.check(y), F.encode(y)]);
     });
@@ -30,6 +31,38 @@ describe("a staged yard", () => {
     expect([ids(mid), mid.open.tier]).toEqual([below(2), 2]);
     const large = staged("large");
     expect([ids(large), large.open.tier]).toEqual([below(3), 3]);
+  });
+
+  test("hall has tier 3 just opened: the Study may be built, none stands and nothing is studied", () => {
+    const y = staged("hall");
+    expect([ids(y), y.open.tier]).toEqual([below(3), 3]);
+    expect(F.locked(y.open, { build: F.STUDY })).toBeNull();
+    expect([y.kind.includes(F.STUDY), y.line]).toEqual([false, []]);
+  });
+
+  test("study has a Study at work on folios its own line makes, research it has made known, and a full line", () => {
+    const y = staged("study");
+    const study = y.kind.indexOf(F.STUDY);
+    expect(F.litOf(y)[study]).toBe(1);
+    expect(F.power(y).pace).toBe(1);
+    // Known: every node below tier 3, and research, each piece of it studied in full.
+    const known = y.done.filter((g) => !F.isNode(g));
+    expect(known.length).toBeGreaterThan(0);
+    expect(
+      y.done
+        .filter(F.isNode)
+        .map((g) => F.GOALS[g]?.id ?? "")
+        .toSorted(),
+    ).toEqual(below(3));
+    expect(y.line.length).toBe(F.LINE);
+    // The one being studied has been given folios, and the Study is at work on the next.
+    const first = y.line[0];
+    const given = first === undefined ? 0 : F.FOLIOS.reduce((n, f) => n + (y.got[first]?.[f] ?? 0), 0);
+    expect(given).toBeGreaterThan(0);
+    for (let k = 0; k < 100; k++) F.step(y);
+    expect(F.status(y, study)?.state).toBe("working");
+    // Some research still needs another first: the screen has one to show dim.
+    expect(F.ALL_GOALS.some((g) => !F.isNode(g) && y.open.done[g] !== 1 && !F.ready(y.open, g))).toBe(true);
   });
 
   test("fed, the node in hand is finished at the depot as in play: paid, the next in hand, and logged with the next command", () => {

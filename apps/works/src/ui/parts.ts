@@ -1,21 +1,11 @@
 /** Small pieces the yard's interface is put together from: its own icons, and a few helpers over the kit's. */
 
-import {
-  ALL_ITEMS,
-  type Counts,
-  type Item,
-  ITEM_INFO,
-  KIND_INFO,
-  kindNamed,
-  RECIPE,
-  type Unlocks,
-} from "@sequoia-leaf/factory";
+import { ALL_ITEMS, type Counts, type Item, ITEM_INFO, RECIPE } from "@sequoia-leaf/factory";
 import { add, el, shown, when } from "@sequoia-leaf/kit/dom.ts";
 import { INK } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 
-import type { Art } from "../art/index.ts";
 import { PAL } from "../art/pal.ts";
 
 export { when } from "@sequoia-leaf/kit/dom.ts";
@@ -207,6 +197,51 @@ const ICONS = {
     ".bByyyyBb.",
     "bbbbbbbbbb",
   ],
+  // Research: a book lying open, its pages lifting from the spine.
+  research: [
+    ".ww.....ww.",
+    "wwww...wwww",
+    "wNNww.wwNNw",
+    "wwwwwbwwwww",
+    "wNNNwbwNNNw",
+    "wwwwwbwwwww",
+    "nwwwwbwwwwn",
+    ".nnnnbnnnn.",
+  ],
+  // A blueprint: a blue sheet with a drawing on it.
+  print: [
+    "uuuuuuuuuu",
+    "uUUUUUUUUu",
+    "uUwwwwUUUu",
+    "uUwUUwUUUu",
+    "uUwUUwwwUu",
+    "uUwwwUUwUu",
+    "uUUUwwwwUu",
+    "uUUUUUUUUu",
+    "uuuuuuuuuu",
+  ],
+  // Raising an area: the area marked out, and an arrow up in it.
+  upgrade: [
+    "ww.ww.ww..",
+    "w...y...w.",
+    "...yyy....",
+    "w.yyyyy.w.",
+    "w...y.....",
+    "....y...w.",
+    "w...y.....",
+    "ww.ww.ww..",
+  ],
+  // The yard at night, while nobody watches it: a moon and a star.
+  moon: [
+    "..yYY.....",
+    ".yY.....w.",
+    "yY........",
+    "yY.....w..",
+    "yY........",
+    ".yY....y..",
+    "..yYYYYy..",
+    "...yyyy...",
+  ],
   lookAt: [
     "...wwww...",
     "..w....w..",
@@ -234,23 +269,6 @@ export function yardIcon(name: YardIcon, scale = 1): HTMLCanvasElement {
   return pic(c, scale);
 }
 
-/** A thing's picture and how many, as one row of an order: "[plank] 8 / 12" with a bar between. */
-export function wantRows(art: Art, wants: readonly (readonly [Item, number, number])[], leaf = false): HTMLElement[] {
-  return wants.map(([k, have, n]) => {
-    const bar = el("i");
-    bar.style.setProperty("--v", `${(have / n) * 100}%`);
-    const row = el(
-      "div",
-      "want",
-      { title: ITEM_INFO[k]?.name ?? "" },
-      pic(art.item(k), 1),
-      el("div", leaf || have >= n ? "k-bar leaf" : "k-bar", {}, bar),
-      el("span", "n", { text: `${have} / ${n}` }),
-    );
-    return row;
-  });
-}
-
 /** What an order asks for, in words: "12 planks and 12 ingots". */
 export function wantWords(want: Counts): string {
   const parts = ALL_ITEMS.filter((k) => (want[k] ?? 0) > 0).map(
@@ -261,43 +279,11 @@ export function wantWords(want: Counts): string {
 }
 
 /** More than one of a kind of piece, in words: "belts", "benches", "studies". */
-const plural = (name: string): string => {
+export const plural = (name: string): string => {
   const w = name.toLowerCase();
   if (/(ch|sh|s)$/.test(w)) return `${w}es`;
   return /[^aeiou]y$/.test(w) ? `${w.slice(0, -1)}ies` : `${w}s`;
 };
-/** The ending of a word for so many: "" for one, "s" for more. */
-const s = (n: number): string => (n === 1 ? "" : "s");
-/** A list in words: "a, b and c". */
-const listed = (parts: readonly string[]): string =>
-  parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1) ?? ""}` : (parts[0] ?? "");
-
-/** What a node or research unlocks besides machines, recipes and plots, in words: "Paint", "grade 2 belts and tunnels". */
-export function unlockWords(u: Unlocks): string[] {
-  const tools = (u.tools ?? []).map((t) => (t === "paint" ? "Paint" : t === "select" ? "Select" : "Upgrading an area"));
-  const byGrade = new Map<number, string[]>();
-  for (const [name, grade] of Object.entries(u.grades ?? {})) {
-    const k = kindNamed(name);
-    if (k === null || grade === undefined) continue;
-    byGrade.set(grade, [...(byGrade.get(grade) ?? []), plural(KIND_INFO[k]?.name ?? "")]);
-  }
-  return [
-    ...tools,
-    ...[...byGrade].map(([grade, names]) => `grade ${grade} ${listed(names)}`),
-    ...(u.blueprints
-      ? [`${u.blueprints.count} blueprint${s(u.blueprints.count)} of ${u.blueprints.pieces} pieces`]
-      : []),
-    ...(u.span !== undefined ? [`tunnels up to ${u.span} tiles`] : []),
-    ...(u.crate !== undefined ? [`a crate holds ${u.crate}`] : []),
-    ...(u.reach !== undefined ? [`pylons reach ${u.reach - 100}% further`] : []),
-    ...(u.depot !== undefined ? [`the depot gives ${u.depot} power`] : []),
-    ...(u.away !== undefined ? [`the yard runs ${u.away} hours unwatched`] : []),
-    ...(u.stops !== undefined ? [`${u.stops} cart stop${s(u.stops)}`] : []),
-    ...(u.hooks !== undefined ? [`${u.hooks} orders on the board`] : []),
-    ...(u.board ? ["side orders"] : []),
-  ];
-}
-
 /** A recipe's parts, in words: "planks and ingots", or with counts where it takes more than one of a part: "2 planks and 1 pot". */
 export function partsWords(k: Item): string {
   const r = RECIPE[k];

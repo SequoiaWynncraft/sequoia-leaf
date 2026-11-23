@@ -12,7 +12,6 @@ import { hash, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { flights, send, speak, toss, type Walker, walker, walkers } from "./actors.ts";
 import { TILE } from "./art/belts.ts";
 import { MARGIN } from "./art/ground.ts";
-import type { Art } from "./art/index.ts";
 import { PIPWICK_HAT } from "./art/machines.ts";
 import { burst, sparkle } from "./fx.ts";
 import { layout } from "./layout.ts";
@@ -133,21 +132,21 @@ export function handOver(id: number): boolean {
 }
 
 /** What the screen makes of the yard's news. */
-export function onNews(art: Art, news: readonly News[]): void {
+export function onNews(news: readonly News[]): void {
   const w = S.world;
   for (const n of news) {
     if (n.kind === "done") {
       const g = goalNamed(n.goal);
       if (g === null) continue;
-      // Research known is said in passing; a node finished is a moment.
+      // Research known: the sheet says what it unlocked, and what is studied next.
       if (!isNode(g)) {
         yardSfx.ready();
-        feed(`${n.title} is known.`, "gold");
+        banner(g, w.line[0] ?? null);
         continue;
       }
       const gift = NODES[g]?.gift;
       yardSfx.order();
-      banner(art, g, w.hand === -1 ? null : w.hand);
+      banner(g, w.hand === -1 ? null : w.hand);
       // The yard's hand carries the last crate out of the door, down the path and through the gate.
       const s = spots();
       const p = walker(HAND.name, HAND.hat, { x: s.door.x, y: s.door.y - 4 });

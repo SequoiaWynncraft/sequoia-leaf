@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   ALL_GOALS,
+  ALL_KINDS,
   at,
   BELT,
   build,
@@ -213,28 +214,34 @@ describe("what is worked out from the yard and kept", () => {
 });
 
 describe("the kinds this page draws", () => {
-  test("are the only ones in the dock, picked up with Q, or drawn with a belt's arms: a sorter is none of them", async () => {
+  test("are every kind in the tables but the depot, each once; a sorter is in the dock once unlocked, picked up with Q, and drawn with a belt's arms", async () => {
+    expect(DRAWN.toSorted((a, b) => a - b)).toEqual(ALL_KINDS.filter((k) => k !== DEPOT));
     const y = yardAt(4);
     build(y, SORTER, 18, 13, 0, Infinity);
     build(y, BELT, 19, 13, 0, Infinity);
-    await opened(y);
+    // With Coins for the cart stop built below.
+    await opened(y, 1000);
     expect(DRAWN.every(draws)).toBe(true);
     // The depot is drawn too, and is no tool.
     expect([draws(DEPOT), usable(DEPOT), DRAWN.includes(DEPOT)]).toEqual([true, false, false]);
-    expect([draws(SORTER), usable(SORTER), usable(kind("stop")), usable(kind("study"))]).toEqual([
-      false,
-      false,
-      false,
-      false,
-    ]);
+    expect([usable(SORTER), usable(kind("stop")), usable(kind("study"))]).toEqual([true, true, true]);
     setTool(null);
-    expect(pickFrom(18, 13)).toBe(false);
-    expect(S.tool).toBeNull();
-    expect(pickFrom(19, 13)).toBe(true);
-    expect(S.tool).toBe(BELT);
+    expect(pickFrom(18, 13)).toBe(true);
+    expect(S.tool).toBe(SORTER);
     const L = layout(S.world, S.rev);
-    expect([L.arms[at(S.world, 18, 13)], (L.arms[at(S.world, 19, 13)] ?? 0) > 0]).toEqual([0, true]);
+    expect([(L.arms[at(S.world, 18, 13)] ?? 0) > 0, (L.arms[at(S.world, 19, 13)] ?? 0) > 0]).toEqual([true, true]);
+    // A piece that hands into a cart stop is one whose things reach the depot: the stop is told which.
+    expect("refused" in doNow(act({ do: "build", kind: "stop", x: 20, y: 13, dir: 0 }))).toBe(false);
+    const after = layout(S.world, S.rev);
+    const n = after.intoDepot.indexOf(at(S.world, 19, 13));
+    expect([n >= 0, after.intoStop[n]]).toEqual([true, at(S.world, 20, 13)]);
   });
+
+  for (const tier of [0, 1, 2])
+    test(`none of the later kinds is in the dock of a yard in tier ${tier}`, async () => {
+      await opened(yardAt(tier));
+      expect([usable(SORTER), usable(kind("stop")), usable(kind("study"))]).toEqual([false, false, false]);
+    });
 });
 
 describe("a tunnel aimed", () => {

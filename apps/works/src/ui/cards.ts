@@ -6,18 +6,21 @@
  * (`Hands`). So the card that is up, drawn again when its print changes (`card.ts`), can never show
  * a value it is not kept by.
  *
- * A card is named by a reference, by its number in the rules' tables:
+ * A card is named by a reference (`refs.ts` lists them):
  *
- * - `item:<item>` a thing: its step, what it is made from and where, what it goes into, what the
- *   depot pays, and the orders asking for it (or, for one from the ground, where it lies);
- * - `machine:<kind>` a kind of machine: what it does, what it can make, its draw, pace and price;
- * - `tile:<index>` whatever stands on a tile of the yard: its machine's card with what this one is
- *   doing and holds, and what can be done with it (a splitter's three ways out, each to shut or open);
- * - `plot:<plot>`, `node:<goal>` for a lesson, project or commission, and `order:story` (the node in
- *   hand) or `order:<slot>` for the board's orders.
+ * - a thing: its step, what it is made from and where, what it goes into, what the depot pays, and
+ *   the orders asking for it (or, for one from the ground, where it lies);
+ * - a kind of piece, at the first grade or a higher ("Belt II"): what it does, what it can make,
+ *   its draw, pace and price at that grade;
+ * - whatever stands on a tile of the yard: its kind's card at its grade, with what this one is doing
+ *   and holds, what it makes and needs a minute once the yard counts, and what can be done with it
+ *   (a recipe pinned, a sorter set, a grade raised, a splitter's three ways out shut or opened);
+ * - a plot; a goal (a lesson, a project, a commission or a piece of research) and an order, each
+ *   with its lists as `goal.ts` lays them out;
+ * - a tool, a number a goal raises, a tier, and what a finished goal leaves in town.
  *
- * The pieces of later tiers that have no art yet (the Study, the cart stop, the sorter) say only
- * what they are.
+ * Every picture of a tool and of a number is looked up in a table with an entry for each
+ * (`TOOL_ICON`, `PERK_ART`), so that a new one without a picture does not build.
  */
 import {
   type Act,
@@ -30,14 +33,19 @@ import {
   DEPOT_SHARE,
   type Dir,
   DRAW,
+  DRAWN,
   GATHERER,
   GIVES,
   type Goal,
   GOALS,
+  gradeSays,
+  HALF,
+  isFolio,
+  isGraded,
   isMaker,
+  isNode,
   isRaw,
   type Item,
-  item as itemOf,
   ITEM_INFO,
   itemName,
   type Kind,
@@ -46,21 +54,31 @@ import {
   LEFT,
   MADE_BY,
   NODES,
+  type Numbered,
+  numeral,
   PACE,
   type Plot,
-  plot as plotOf,
   PYLON,
   RECIPE,
   RECIPES_N,
   RIGHT,
+  SORTER,
+  STOP,
+  STUDY,
   TICKS,
+  tierName,
+  type Tool,
+  TOOL_INFO,
   TUNNEL,
+  type Unlock,
+  unlockedBy,
   WHEEL,
 } from "@sequoia-leaf/factory";
 import {
   type Action,
   type Block,
   close,
+  describe,
   type Description,
   type Entry,
   type Row,
@@ -72,14 +90,9 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { beltTile } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
 import { yardSfx } from "../sound.ts";
-import { fitted, partsWords, pic, unlockWords, yardIcon } from "./parts.ts";
-
-export const itemRef = (k: Item): string => `item:${k}`;
-export const machineRef = (k: Kind): string => `machine:${k}`;
-export const tileRef = (i: number): string => `tile:${i}`;
-export const plotRef = (id: Plot): string => `plot:${id}`;
-export const nodeRef = (g: Goal): string => `node:${g}`;
-export const orderRef = (slot: number | "story"): string => `order:${slot}`;
+import { type Given, leaves, type Listed, type Need, needs, some, unlocks, wantsGiven } from "./goal.ts";
+import { fitted, partsWords, pic, type YardIcon, yardIcon } from "./parts.ts";
+import { itemRef, machineRef, nodeRef, pictureRef, plotRef } from "./refs.ts";
 
 // ---------- prints: what each card shows of the yard and the purse ----------
 
@@ -105,9 +118,13 @@ export interface ItemPrint {
 export interface MachinePrint {
   readonly card: "machine";
   readonly kind: Kind;
+  /** The grade the card is of: the first, unless it names a higher or the piece stands at one. */
+  readonly grade: number;
+  /** Whether its name says its grade ("Belt I"): from when the yard may build the kind above the first. */
+  readonly graded: boolean;
   /** A kind this page does not draw (`DRAWN`): its card says only what it is. */
   readonly later: boolean;
-  /** What one more costs now, the pieces to hand counted. */
+  /** What one more costs now: at the first grade, the pieces to hand counted. */
   readonly price: number;
   /** The power it gives: for the depot, as what is open says. */
   readonly gives: number;
@@ -119,6 +136,10 @@ export interface MachinePrint {
   readonly open: boolean;
   /** How many the yard has to hand, free to place. */
   readonly spare: number;
+  /** What the kind does a minute, in sentences (`numbers.ts`): none until the yard counts. */
+  readonly numbers: readonly string[];
+  /** For a cart stop: how many stand, of how many may. */
+  readonly stops: readonly [number, number] | null;
 }
 
 /** A splitter's three ways out as its card shows them: its picture's arms, way and colour, and each way shut, and led somewhere. */
@@ -149,12 +170,21 @@ export interface StandingPrint {
   readonly making: Item | null;
   readonly gathering: Item | null;
   readonly perMinute: number | null;
-  /** The one thing it is told to make, or nothing. */
+  /** What it makes, needs, gathers, studies or carries a minute, in sentences (`numbers.ts`): none until the yard counts. */
+  readonly numbers: readonly string[];
+  /** The one thing it is told to make, or a sorter to send left, or nothing. */
   readonly set: Item | null;
+  /** For a sorter: the things it may be told to send left. */
+  readonly sorts: readonly Item[];
+  /** For a Study: the research being studied, and whether research's screen is there to open (not while it is the one open). */
+  readonly studying: Goal | null;
+  readonly research: boolean;
+  /** The grade it may be raised to where it stands, what that costs, and whether the Coins to hand cover it. */
+  readonly raise: { readonly to: number; readonly cost: number; readonly enough: boolean } | null;
   /** For a crate: whether it is open. */
   readonly open: boolean;
-  /** For the depot: whether Projects is there. */
-  readonly projects: boolean;
+  /** For the depot: the tier whose screen is there, or nothing. */
+  readonly tier: number | null;
   /** Whether it can be picked up as the tool in hand (Another). */
   readonly another: boolean;
   /** What taking it away gives back, and whether it was one of the pieces to hand. */
@@ -187,17 +217,23 @@ export interface PlotPrint {
   readonly visiting: boolean;
 }
 
+/** A goal: a lesson, a project, a commission or a piece of research. */
 export interface NodePrint {
   readonly card: "node";
   readonly goal: Goal;
   readonly done: boolean;
   readonly inHand: boolean;
-  /** Whether it may be taken in hand now. */
+  /** A node: whether it may be taken in hand now. */
   readonly may: boolean;
-  /** The titles of the nodes it needs first that are not done. */
-  readonly needs: readonly string[];
+  /** Research: whether it is in the line (and may be taken out), or may be put in it, or neither. */
+  readonly study: "out" | "in" | null;
+  /** Whether research's screen is there to open: not while it is the one open, as the button opens and shuts it. */
+  readonly research: boolean;
   /** What it wants and has been given: each thing, how many have come, of how many. */
-  readonly wants: readonly (readonly [Item, number, number])[];
+  readonly wants: Given;
+  /** What it still waits on, each with how it stands; and how far the one being studied has come, of how far. */
+  readonly needs: readonly Need[];
+  readonly studied: readonly [number, number];
   readonly visiting: boolean;
 }
 
@@ -207,11 +243,45 @@ export interface OrderPrint {
   readonly from: string;
   readonly line: string;
   readonly pay: number;
-  readonly wants: readonly (readonly [Item, number, number])[];
+  readonly wants: Given;
   readonly full: boolean;
 }
 
-export type Print = ItemPrint | MachinePrint | StandingPrint | GroundPrint | PlotPrint | NodePrint | OrderPrint;
+export interface ToolPrint {
+  readonly card: "tool";
+  readonly tool: Tool;
+}
+
+/** A number a goal raises, as the rules make it (`unlocked`): what it is called, the number, and its sentence. */
+export interface PerkPrint {
+  readonly card: "perk";
+  readonly unlock: Unlock;
+}
+
+export interface TierPrint {
+  readonly card: "tier";
+  readonly tier: number;
+  readonly open: boolean;
+}
+
+/** What a finished goal leaves in town. */
+export interface GiftPrint {
+  readonly card: "gift";
+  readonly goal: Goal;
+}
+
+export type Print =
+  | ItemPrint
+  | MachinePrint
+  | StandingPrint
+  | GroundPrint
+  | PlotPrint
+  | NodePrint
+  | OrderPrint
+  | ToolPrint
+  | PerkPrint
+  | TierPrint
+  | GiftPrint;
 
 /** What a card's buttons do: the page's own tools, handed in, so that drawing a card reaches no yard. */
 export interface Hands {
@@ -220,10 +290,14 @@ export interface Hands {
   turn(x: number, y: number): void;
   another(x: number, y: number): void;
   remove(x: number, y: number): void;
+  /** Raises the piece on a tile to the next grade, where it stands. */
+  raise(x: number, y: number): void;
   way(x: number, y: number, way: number): void;
   buy(plot: Plot): boolean;
   take(g: Goal): void;
-  panel(id: "orders" | "projects" | "depot"): void;
+  /** Puts a piece of research in the line, or takes it out. */
+  study(g: Goal, into: boolean): void;
+  panel(id: "orders" | "tier" | "research" | "depot"): void;
 }
 
 // ---------- drawing a card from its print ----------
@@ -245,16 +319,22 @@ const n = (v: number): string => v.toLocaleString("en-US", { maximumFractionDigi
 const nameOf = (k: number): string => KIND_INFO[k]?.name ?? "";
 const many = (k: number): string => ITEM_INFO[k]?.many ?? "";
 
+/** Sentences as one block of a card, each on a line of its own. */
+const lines = (sentences: readonly string[]): Block[] =>
+  sentences.length === 0 ? [] : [{ body: el("div", "said", {}, ...sentences.map((text) => el("div", "", { text }))) }];
+/** Lists of a goal (`goal.ts`), each a block of a card. */
+const listBlocks = (...lists: readonly (Listed | null)[]): Block[] => some(...lists).map((l) => ({ body: l.node }));
+
 /** A machine's picture cut to a card's slot: a tall machine is known by its head. */
-const machinePic = (art: Art, k: Kind): HTMLCanvasElement => fitted(art.icon(k), 22, 22);
+const machinePic = (art: Art, k: Kind, grade = 1): HTMLCanvasElement => fitted(art.icon(k, grade), 22, 22);
+
+/** What a kind of piece is called on its card: "Belt", and once the yard may build it higher, "Belt I" or "Belt II". */
+const gradedName = (p: MachinePrint): string =>
+  p.graded ? `${nameOf(p.kind)} ${numeral(Math.max(1, p.grade))}` : nameOf(p.kind);
 
 /** Rows of another card named, with the words beside each. */
 const entries = (named: readonly Named[]): Entry[] =>
   named.map((e) => ({ ref: e.ref, name: e.name, note: e.note, ...(e.tag ? { tag: e.tag } : {}) }));
-
-/** What an order or a node wants, each thing with how many have come of how many. */
-const wanted = (wants: NodePrint["wants"]): Entry[] =>
-  wants.map(([k, have, of]) => ({ ref: itemRef(k), note: `${n(have)} / ${n(of)}`, lit: have >= of }));
 
 function itemCard(art: Art, p: ItemPrint): Description {
   const k = p.item;
@@ -265,7 +345,11 @@ function itemCard(art: Art, p: ItemPrint): Description {
   if (recipe) {
     rows.push({
       label: "Made from",
-      things: recipe.from.map((part, i) => ({ ref: itemRef(part), count: `×${recipe.need[i] ?? 1}` })),
+      // A count only where it is more than 1.
+      things: recipe.from.map((part, i) => ({
+        ref: itemRef(part),
+        ...((recipe.need[i] ?? 1) > 1 ? { count: `×${recipe.need[i]}` } : {}),
+      })),
     });
     rows.push({ label: "In", things: [{ ref: machineRef(recipe.by), note: `${secs(recipe.ticks)} for one` }] });
   } else if (isRaw(k)) {
@@ -283,6 +367,7 @@ function itemCard(art: Art, p: ItemPrint): Description {
     });
   }
   rows.push({ label: "Used in", things: usedIn });
+  if (isFolio(k)) rows.push({ label: "Studied in", things: [{ ref: machineRef(STUDY) }] });
   rows.push({ label: "Asked for by", things: entries(p.asked) });
   const ground = GROUND[itemName(k)];
   return {
@@ -300,13 +385,16 @@ function itemCard(art: Art, p: ItemPrint): Description {
   };
 }
 
-/** How long a machine takes over one thing, at the first grade's pace. */
-function paceOf(k: Kind): string {
-  if (k === GATHERER) return secs(TICKS.gather);
-  if (k === TUNNEL || k === BELT) return `${secs(8 / (PACE[1] ?? 2))} a tile`;
+/** How long a machine takes over one thing, at a grade's pace. */
+function paceOf(k: Kind, grade: number): string {
+  // A grade works its first grade's ticks in so many of its own.
+  const faster = (PACE[1] ?? 2) / (PACE[grade] ?? PACE[1] ?? 2);
+  if (k === GATHERER) return secs(TICKS.gather * faster);
+  if (k === STUDY) return `${secs(TICKS.study * faster)} a folio`;
+  if (k === TUNNEL || k === BELT) return `${secs(Math.ceil(8 / (PACE[grade] ?? 2)))} a tile`;
   if (k === BOILER) return `${secs(TICKS.burn)} a piece`;
   if (isMaker(k)) {
-    const ticks = (MADE_BY[k] ?? []).map((r) => r.ticks);
+    const ticks = (MADE_BY[k] ?? []).map((r) => r.ticks * faster);
     const lo = Math.min(...ticks);
     const hi = Math.max(...ticks);
     return lo === hi ? secs(lo) : `${secs(lo)}–${secs(hi)}`;
@@ -314,14 +402,22 @@ function paceOf(k: Kind): string {
   return "";
 }
 
+/** A kind's own blocks: how many are free to place. A price needs no sentence: the card shows it, and taking a piece away gives all of it back. */
+const spareBlocks = (p: MachinePrint): Block[] => (p.spare > 0 ? [{ body: `${p.spare} free to place.` }] : []);
+
+/** A kind of piece at a grade: what it is, what it draws, its pace and its price there. */
 function machineCard(art: Art, p: MachinePrint): Description {
   const k = p.kind;
-  const what = KIND_INFO[k]?.what ?? "";
+  const grade = p.grade;
+  // Above the first grade it says what that grade does more, and costs; at the first, what the kind is.
+  const what = grade > 1 ? gradeSays(k, grade) : (KIND_INFO[k]?.what ?? "");
   if (p.later) return { name: nameOf(k), icon: machinePic(art, k), tag: what };
   const stats: Stat[] = [];
-  if ((DRAW[k] ?? 0) > 0) stats.push({ label: "Draws", value: String(DRAW[k]) });
+  const draw = ((DRAW[k] ?? 0) * (DRAWN[isGraded(k) ? grade : 0] ?? HALF)) / HALF;
+  if (draw > 0) stats.push({ label: "Draws", value: n(draw) });
   if ((GIVES[k] ?? 0) > 0) stats.push({ label: "Gives", value: String(p.gives) });
-  const pace = paceOf(k);
+  if (p.stops) stats.push({ label: "Built", value: `${p.stops[0]} of ${p.stops[1]}` });
+  const pace = paceOf(k, grade);
   if (pace) stats.push({ label: "Pace", value: pace });
   if (p.key) stats.push({ label: "Key", value: p.key });
   const rows: Row[] = [];
@@ -329,13 +425,11 @@ function machineCard(art: Art, p: MachinePrint): Description {
   if (k === GATHERER)
     rows.push({ label: "Gathers", things: ALL_ITEMS.filter(isRaw).map((r) => ({ ref: itemRef(r) })) });
   if (k === BOILER) rows.push({ label: "Burns", things: [{ ref: itemRef(DEADFALL) }] });
-  // A price needs no sentence: the card shows it, and taking a piece away gives all of it back.
-  const blocks = p.spare > 0 ? [{ body: `${p.spare} free to place.` }] : [];
   return {
-    name: nameOf(k),
-    icon: machinePic(art, k),
+    name: gradedName(p),
+    icon: machinePic(art, k, grade),
     tag: p.open ? what : `${what} Not unlocked yet.`,
-    blocks,
+    blocks: [...spareBlocks(p), ...lines(p.numbers)],
     ...(k === DEPOT ? {} : { aside: amount("coin", p.price === 0 ? "free" : p.price) }),
     stats,
     rows,
@@ -389,19 +483,48 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
       label: p.most !== null ? `Holds, of ${p.most}` : "Holds",
       things: p.holding.map(([t, c]) => ({ ref: itemRef(t), count: `×${c}` })),
     });
+  // Once the card says what it makes a minute in a sentence, the row names the thing and no more.
+  const per = p.numbers.length === 0 ? p.perMinute : null;
   if (p.making !== null)
     rows.push({
       label: "Making",
-      things: [{ ref: itemRef(p.making), note: p.perMinute !== null ? `up to ${p.perMinute} a minute` : "" }],
+      things: [{ ref: itemRef(p.making), note: per !== null ? `up to ${per} a minute` : "" }],
     });
   if (p.gathering !== null)
     rows.push({
       label: "Gathering",
-      things: [{ ref: itemRef(p.gathering), note: p.perMinute !== null ? `${p.perMinute} a minute` : "" }],
+      things: [{ ref: itemRef(p.gathering), note: per !== null ? `${per} a minute` : "" }],
     });
+  if (p.studying !== null) rows.push({ label: "Studying", things: [{ ref: nodeRef(p.studying) }] });
+  if (k === SORTER && p.set !== null) rows.push({ label: "Sends left", things: [{ ref: itemRef(p.set) }] });
   rows.push(...(base.rows ?? []));
 
   const actions: Action[] = [];
+  if (k === SORTER) {
+    // The thing it sends left, chosen as a machine's recipe is.
+    const sort = (item: Item | null): void => {
+      hands.act({ do: "sort", x, y, item });
+      sfx.tap();
+    };
+    actions.push({
+      label: "Nothing",
+      look: "slot",
+      icon: icon("more"),
+      lit: p.set === null,
+      hint: "Nothing",
+      about: "With nothing set it is a belt.",
+      on: () => sort(null),
+    });
+    for (const t of p.sorts)
+      actions.push({
+        label: ITEM_INFO[t]?.name ?? "",
+        look: "slot",
+        icon: art.item(t),
+        lit: p.set === t,
+        hint: ITEM_INFO[t]?.name ?? "",
+        on: () => sort(p.set === t ? null : t),
+      });
+  }
   if (isMaker(k)) {
     actions.push({
       label: "Any recipe",
@@ -455,11 +578,24 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   if (k === DEPOT) {
     actions.push(
       { label: "Orders", on: () => hands.panel("orders") },
-      ...(p.projects ? [{ label: "Projects", on: () => hands.panel("projects") }] : []),
+      ...(p.tier !== null ? [{ label: `Tier ${p.tier}`, on: () => hands.panel("tier") }] : []),
       { label: "Makes and needs", on: () => hands.panel("depot") },
     );
   } else {
-    if (k !== TUNNEL && k !== PYLON && k !== WHEEL && k !== BOILER)
+    if (k === STUDY && p.research) actions.push({ label: "Research", on: () => hands.panel("research") });
+    // A piece of a grade the yard may build higher is raised where it stands, for the difference.
+    const raise = p.raise;
+    if (raise)
+      actions.push({
+        label: `Raise to ${numeral(raise.to)}`,
+        look: raise.enough ? "sm" : "sm off",
+        after: amount("coin", raise.cost),
+        hint: `Raise to ${numeral(raise.to)}`,
+        about: gradeSays(k, raise.to),
+        on: () => hands.raise(x, y),
+      });
+    // What takes things in from every side and hands none on has no way to face.
+    if (k !== TUNNEL && k !== PYLON && k !== WHEEL && k !== BOILER && k !== STUDY && k !== STOP)
       actions.push({ label: "Rotate", hint: "Rotate (R)", on: () => hands.turn(x, y) });
     if (p.another)
       actions.push({
@@ -481,13 +617,27 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
     p.state === "starved" && p.spare !== null
       ? `A bench takes things in at its back and both sides. Bring ${many(p.spare)} in one way and ${p.missing.map(many).join(" and ")} another, and it cannot fill up with the wrong one.`
       : null;
+  // A cart stop and a sorter say what they do in their own words: the rules' line for either is of
+  // every belt. What is wrong with one is the rules' to say.
+  const said =
+    p.trouble && p.line !== null
+      ? p.line
+      : k === STOP
+        ? "Items handed in here reach the depot at once."
+        : k === SORTER
+          ? p.set !== null
+            ? "Everything else goes ahead."
+            : "With nothing set it is a belt."
+          : (p.line ?? KIND_INFO[k]?.what ?? "");
   return {
     ...base,
-    tag: el("span", p.trouble ? "k-coral" : "", { text: p.line ?? KIND_INFO[k]?.what ?? "" }),
+    tag: el("span", p.trouble ? "k-coral" : "", { text: said }),
+    // What is wrong and what to do about it comes first; the numbers are under it.
     blocks: [
-      ...(base.blocks ?? []),
+      ...spareBlocks(m),
       ...(k === DEPOT ? [{ body: `Each thing that arrives pays ${DEPOT_SHARE * 100}% of its worth.` }] : []),
       ...(advice ? [{ body: advice }] : []),
+      ...lines(p.numbers),
       ...(p.ways ? [{ title: "Ways out", body: waysOf(art, p, p.ways, hands) }] : []),
     ],
     rows,
@@ -547,7 +697,7 @@ function plotCard(p: PlotPrint, hands: Hands): Description {
 }
 
 /** How a node is spoken of: "Lesson 2 of 4", "Tier 1 project", "Tier 1 commission". */
-function nodeKind(g: Goal): string {
+export function nodeKind(g: Goal): string {
   const info = GOALS[g];
   if (!info) return "";
   if (info.kind !== "lesson") return `Tier ${info.tier} ${info.kind}`;
@@ -555,42 +705,49 @@ function nodeKind(g: Goal): string {
   return `Lesson ${lessons.indexOf(g) + 1} of ${lessons.length}`;
 }
 
-/** A lesson, a project or a commission: who asks and what for, what it wants and has been given, what it unlocks, and whether it may be taken in hand. */
+/** A goal's picture: that of the thing that stands for it, or a note for a goal with nothing to show. */
+function goalPic(g: Goal): Node {
+  const ref = pictureRef(g);
+  return (ref === null ? null : describe(ref)?.icon) ?? yardIcon("orders");
+}
+
+/**
+ * A lesson, a project, a commission or a piece of research: who asks and what they say, what it
+ * wants and has been given, what it needs first, what it unlocks and leaves, and what may be done
+ * with it now: a node taken in hand, research put in the line or taken out.
+ */
 function nodeCard(p: NodePrint, hands: Hands): Description | null {
   const g = p.goal;
   const info = GOALS[g];
-  const node = NODES[g];
-  if (!info || !node) return null;
-  const u = info.unlocks;
-  const also = unlockWords(u);
+  if (!info) return null;
+  const node = isNode(g) ? NODES[g] : undefined;
+  const actions: Action[] = [];
+  if (p.may) actions.push({ label: "Take it in hand", look: "sm wide", on: () => hands.take(g) });
+  if (p.study === "out") actions.push({ label: "Take out", look: "wood sm", on: () => hands.study(g, false) });
+  if (p.study === "in") actions.push({ label: "Study", look: "sm", on: () => hands.study(g, true) });
+  if (!node && !p.done && p.research)
+    actions.push({ label: "Research", look: "wood sm", on: () => hands.panel("research") });
+  const [have, of] = p.studied;
+  // A node says what whoever asked says; research, what it is, in the sentence of the one thing it
+  // unlocks. Of several, each is a row below with its own card: run together, the sentences would not
+  // say whose each is.
+  const [only, more] = unlockedBy(g);
+  const says = node ? node.say : only && !more ? only.says : "";
   return {
     name: info.title,
-    icon: yardIcon("orders"),
-    tag: `${nodeKind(g)}, from ${node.from}`,
+    icon: goalPic(g),
+    tag: node ? `${nodeKind(g)}, from ${node.from}` : `Tier ${info.tier} research`,
     ...(info.pay > 0 ? { aside: amount("coin", info.pay.toLocaleString("en-US")) } : {}),
     blocks: [
-      { body: node.say },
+      ...(says === "" ? [] : [{ body: says }]),
       ...(p.done
-        ? [{ body: "Done." }]
+        ? [{ body: node ? "Done." : "Known." }]
         : p.inHand
           ? [{ body: "In hand: what reaches the depot goes to it first." }]
           : []),
-      ...(p.needs.length > 0 ? [{ body: `Needs ${p.needs.join(" and ")} first.` }] : []),
-      ...(also.length > 0 ? [{ body: `Also unlocks ${also.join(", ")}.` }] : []),
-      ...(node.gift ? [{ body: node.gift.line }] : []),
+      ...listBlocks(wantsGiven(p.wants), needs(p.needs, { given: () => ({ have, of }) }), unlocks(g), leaves(g)),
     ],
-    rows: [
-      { label: "Wants", things: wanted(p.wants) },
-      {
-        label: "Unlocks",
-        things: [
-          ...(u.kinds ?? []).map((k) => ({ ref: machineRef(kindOf(k)) })),
-          ...(u.recipes ?? []).map((k) => ({ ref: itemRef(itemOf(k)) })),
-          ...(u.plots ?? []).map((id) => ({ ref: plotRef(plotOf(id)) })),
-        ],
-      },
-    ],
-    actions: p.may && !p.visiting ? [{ label: "Take it in hand", look: "sm wide", on: () => hands.take(g) }] : [],
+    actions: p.visiting ? [] : actions,
   };
 }
 
@@ -599,9 +756,57 @@ const orderCard = (p: OrderPrint): Description => ({
   icon: yardIcon("orders"),
   tag: `From ${p.from}`,
   aside: amount("coin", p.pay.toLocaleString("en-US")),
-  blocks: [{ body: p.line }, ...(p.full ? [{ body: "Filled, and waiting to be handed over." }] : [])],
-  rows: [{ label: "Wants", things: wanted(p.wants) }],
+  blocks: [
+    { body: p.line },
+    ...(p.full ? [{ body: "Filled, and waiting to be handed over." }] : []),
+    ...listBlocks(wantsGiven(p.wants)),
+  ],
 });
+
+/** Each tool's picture: the one it has in the dock. */
+export const TOOL_ICON: Readonly<Record<Tool, YardIcon>> = { paint: "brush", select: "select", upgrade: "upgrade" };
+
+/** The picture of what each kind of number changes. */
+export const PERK_ART: Readonly<Record<Numbered | "blueprints" | "board", (art: Art) => HTMLCanvasElement>> = {
+  stops: (art) => art.icon(STOP),
+  crate: (art) => art.m.crate[1]?.[0]?.c ?? art.icon(CRATE),
+  reach: (art) => art.m.pylon[1]?.[2]?.c ?? art.icon(PYLON),
+  depot: (art) => art.m.fly[0] ?? art.icon(kindOf("depot")),
+  span: (art) => art.icon(TUNNEL),
+  away: () => yardIcon("moon"),
+  hooks: () => yardIcon("orders"),
+  blueprints: () => yardIcon("print"),
+  board: () => yardIcon("orders"),
+};
+
+/** A tool a goal unlocks, with its picture from the dock. */
+const toolCard = (p: ToolPrint): Description => ({
+  name: TOOL_INFO[p.tool].name,
+  icon: yardIcon(TOOL_ICON[p.tool]),
+  tag: TOOL_INFO[p.tool].says,
+});
+
+/** A number a goal raises, as it will be: the picture of what it changes, and the rules' sentence for it, which says what it was before. */
+function perkCard(art: Art, p: PerkPrint): Description | null {
+  const u = p.unlock;
+  const of = u.is === "number" ? u.of : u.is === "blueprints" || u.is === "board" ? u.is : null;
+  if (of === null) return null;
+  const shown = "amount" in u && u.amount !== undefined ? `${u.name} ${u.amount}` : u.name;
+  return { name: shown, icon: PERK_ART[of](art), tag: u.says };
+}
+
+/** A tier: by its number and its name once it is open, by its number alone before. */
+const tierCard = (p: TierPrint): Description => ({
+  name: p.open ? tierName(p.tier) : `Tier ${p.tier}`,
+  icon: yardIcon("projects"),
+  tag: p.open ? "Open." : "The next tier.",
+});
+
+/** What a finished goal leaves in the town. */
+function giftCard(p: GiftPrint): Description | null {
+  const gift = NODES[p.goal]?.gift;
+  return gift ? { name: "In town", icon: yardIcon("town"), tag: gift.line } : null;
+}
 
 /** A card, drawn from its print alone. */
 export function cardOf(art: Art, p: Print, hands: Hands): Description | null {
@@ -620,5 +825,13 @@ export function cardOf(art: Art, p: Print, hands: Hands): Description | null {
       return nodeCard(p, hands);
     case "order":
       return orderCard(p);
+    case "tool":
+      return toolCard(p);
+    case "perk":
+      return perkCard(art, p);
+    case "tier":
+      return tierCard(p);
+    case "gift":
+      return giftCard(p);
   }
 }

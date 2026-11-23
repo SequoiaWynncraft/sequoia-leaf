@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  ALL_GOALS,
   at,
   BELT,
   BENCH,
@@ -8,7 +9,10 @@ import {
   create,
   DEADFALL,
   deliver,
+  FOLIOS,
   GATHERER,
+  highest,
+  isNode,
   item,
   type ItemName,
   legPiece,
@@ -16,10 +20,14 @@ import {
   MILL,
   NONE,
   PYLON,
+  ready,
+  recipeSays,
   refusal,
   route,
   stand,
   step,
+  STUDY,
+  study,
   type Yard,
 } from "@sequoia-leaf/factory";
 
@@ -109,7 +117,7 @@ describe("teaching", () => {
   test("later it speaks up once for the board, for a shortage of power, and for a machine that has jammed", () => {
     const w = create({ seed: 4, tier: 1 });
     expect(nudge(w, none, false)?.id).toBe("board");
-    const taught = new Set(["board"]);
+    const taught = new Set(["board", "tier"]);
     expect(nudge(w, taught, false)).toBeNull();
     // Six benches beside the depot draw more than it gives.
     for (let k = 0; k < 6; k++) build(w, BENCH, 21, 14 + k, 0, 999);
@@ -129,7 +137,7 @@ describe("teaching", () => {
   });
 
   test("once the yard passes 60 pieces it says, once, what Select is for, but not before it has Select", () => {
-    const taught = new Set(["board"]);
+    const taught = new Set(["board", "tier", "study"]);
     const early = create({ seed: 5, tier: 1 });
     belts(early, 61);
     expect(nudge(early, taught, false)).toBeNull();
@@ -139,6 +147,64 @@ describe("teaching", () => {
     expect(nudge(w, taught, false)).toBeNull();
     belts(w, 1);
     expect(nudge(w, taught, false)).toMatchObject({ id: "select", tool: "select", lasting: false });
-    expect(nudge(w, new Set(["board", "select"]), false)).toBeNull();
+    expect(nudge(w, new Set([...taught, "select"]), false)).toBeNull();
+  });
+});
+
+describe("teaching each new idea, once, where it is met", () => {
+  /** A yard of a tier with nothing of the first tiers left to say. */
+  const quiet = new Set(["board", "select", "short", "starved"]);
+
+  test("nothing new is said in tier 0; when tier 1 opens, where the tier's screen is, beside its button, after the board", () => {
+    expect(nudge(past(2), new Set(["bench"]), false, { picked: -1, hand: BELT })).toBeNull();
+    const w = create({ seed: 4, tier: 1 });
+    expect(nudge(w, none, false)?.id).toBe("board");
+    expect(nudge(w, quiet, false)).toMatchObject({ id: "tier", part: "tier", lasting: false });
+    expect(nudge(w, new Set([...quiet, "tier"]), false)).toBeNull();
+    // A card open on a machine and a kind in hand say nothing more while every recipe is one of each and there is one grade.
+    build(w, BENCH, 21, 14, 0, 999);
+    expect(nudge(w, new Set([...quiet, "tier"]), false, { picked: at(w, 21, 14), hand: BELT })).toBeNull();
+  });
+
+  test("a machine's numbers, the first time a card is open on one once the yard counts: over that machine", () => {
+    const told = new Set([...quiet, "tier"]);
+    const w = create({ seed: 4, tier: 2 });
+    build(w, BENCH, 21, 14, 0, 999);
+    expect(nudge(w, told, false)).toBeNull();
+    expect(nudge(w, told, false, { picked: at(w, 21, 14), hand: null })).toMatchObject({ id: "numbers", x: 21, y: 14 });
+    // Not for a card on anything that makes nothing, and not twice.
+    build(w, BELT, 22, 14, 0, 999);
+    expect(nudge(w, told, false, { picked: at(w, 22, 14), hand: null })).toBeNull();
+    expect(nudge(w, new Set([...told, "numbers"]), false, { picked: at(w, 21, 14), hand: null })).toBeNull();
+  });
+
+  test("the grades, the first time a kind that has two is in hand: beside the buttons that choose one, with the key for a mouse", () => {
+    const told = new Set([...quiet, "tier", "study"]);
+    const w = create({ seed: 4, tier: 3 });
+    expect([highest(w.open, BELT), highest(w.open, MILL)]).toEqual([2, 1]);
+    expect(nudge(w, told, false, { picked: -1, hand: MILL })).toBeNull();
+    const said = nudge(w, told, false, { picked: -1, hand: BELT });
+    expect(said).toMatchObject({ id: "grades", part: "grades", lasting: false });
+    expect(said?.text).toContain("G");
+    expect(nudge(w, told, true, { picked: -1, hand: BELT })?.text).not.toContain("press G");
+    expect(nudge(w, new Set([...told, "grades"]), false, { picked: -1, hand: BELT })).toBeNull();
+  });
+
+  test("the Study, from when it may be built until one stands, beside its tool; then research, until something is studied", () => {
+    const told = new Set([...quiet, "tier"]);
+    expect(nudge(create({ seed: 4, tier: 2 }), told, false)).toBeNull();
+    const w = create({ seed: 4, tier: 3 });
+    const folio = FOLIOS[0];
+    if (folio === undefined) throw new Error("no folio");
+    const first = nudge(w, told, false);
+    expect(first).toMatchObject({ id: "study", tool: STUDY, part: "tool", lasting: true });
+    // It says how the folio is made, in the rules' own sentence for the recipe.
+    expect(first?.text).toContain(recipeSays(folio).slice(2));
+    expect(build(w, STUDY, 21, 14, 0, Infinity).ok).toBe(true);
+    expect(nudge(w, told, false)).toMatchObject({ id: "research", part: "research", lasting: true });
+    const research = ALL_GOALS.find((g) => !isNode(g) && ready(w.open, g));
+    if (research === undefined) throw new Error("no research may be studied");
+    expect(study(w, research)).toBe(true);
+    expect(nudge(w, told, false)).toBeNull();
   });
 });

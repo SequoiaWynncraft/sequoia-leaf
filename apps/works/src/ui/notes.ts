@@ -1,15 +1,16 @@
 /** What the yard says in passing: the purse and Coins flying to it, a line of news, and the notice when the node in hand is finished. */
 
-import { type Goal, GOALS, item, ITEM_INFO, kind, KIND_INFO, NODES, plot, RECIPE } from "@sequoia-leaf/factory";
+import { type Goal, GOALS, isNode, NODES } from "@sequoia-leaf/factory";
 import { amount, el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 import { fly, type PurseBar, purseBar } from "@sequoia-leaf/kit/pursebar.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
-import type { Art } from "../art/index.ts";
 import { S } from "../state.ts";
 import { coins } from "../yard.ts";
-import { $, button, fitted, partsWords, pic, wantWords, yardIcon } from "./parts.ts";
+import { head, leaves, some, unlocks } from "./goal.ts";
+import { $, button, pic, wantWords } from "./parts.ts";
+import { whatNext } from "./standing.ts";
 
 let bar: PurseBar | null = null;
 
@@ -56,160 +57,66 @@ export function closeBanner(): void {
   $("banner").hidden = true;
 }
 
-/** What each tool that a node may unlock is, in a line. */
 /** The head of the notice for a goal finished, by what it was. */
 const DONE = { lesson: "Lesson done", project: "Project done", commission: "Commission done" } as const;
 
-const TOOL_WORDS = {
-  paint: ["Paint", "Gives a belt's whole line a colour, to tell lines apart."],
-  select: ["Select", "Mark out an area to move, copy, remove or save as a blueprint."],
-  upgrade: ["Upgrading an area", "Raises every piece in a marked area to the highest grade the yard may build."],
-} as const;
-
 /**
- * The node in hand is finished: what it paid, what it unlocked (each with its picture and what it is
- * for), what it left in the town, and the node now in hand. It stays until it is put away or a while
- * has passed.
+ * A goal is finished: the node in hand filled, or research known. The sheet says what it is, what it
+ * paid, what it unlocked (each a thing with its picture and its card; for a commission the tier it
+ * opened and the land now for sale among them), what it left in the town, and what comes next: the
+ * node now in hand, or the research now being studied. It stays until it is put away or a while has
+ * passed.
  */
-export function banner(art: Art, done: Goal, next: Goal | null): void {
+export function banner(done: Goal, next: Goal | null): void {
   const b = $("banner");
   const info = GOALS[done];
-  const node = NODES[done];
   if (!info) return;
-  const u = info.unlocks;
-  const opened: HTMLElement[] = [];
-  for (const name of u.kinds ?? []) {
-    const k = kind(name);
-    const what = KIND_INFO[k];
-    opened.push(
-      el(
-        "div",
-        "k-card",
-        {},
-        fitted(art.icon(k), 20, 20),
-        el(
-          "div",
-          "k-grow",
-          {},
-          `New: the ${(what?.name ?? "").toLowerCase()}`,
-          el("div", "k-d", { text: what?.what ?? "" }),
-        ),
-      ),
-    );
-  }
-  for (const name of u.tools ?? []) {
-    const [title, what] = TOOL_WORDS[name];
-    opened.push(
-      el(
-        "div",
-        "k-card",
-        {},
-        yardIcon(name === "paint" ? "brush" : "select"),
-        el("div", "k-grow", {}, `New: ${title}`, el("div", "k-d", { text: what })),
-      ),
-    );
-  }
-  for (const name of u.recipes ?? []) {
-    const n = item(name);
-    const r = RECIPE[n];
-    opened.push(
-      el(
-        "div",
-        "k-card",
-        {},
-        pic(art.item(n), 1),
-        el(
-          "div",
-          "k-grow",
-          {},
-          `New recipe: ${ITEM_INFO[n]?.many ?? ""}`,
-          el("div", "k-d", {
-            text: `From ${partsWords(n)}, at a ${(KIND_INFO[r?.by ?? kind("bench")]?.name ?? "").toLowerCase()}.`,
-          }),
-        ),
-      ),
-    );
-  }
-  for (const name of u.plots ?? []) {
-    const p = S.world.land.plots.find((q) => q.plot === plot(name));
-    if (p)
-      opened.push(
-        el(
-          "div",
-          "k-card",
-          {},
-          icon("star"),
-          el("div", "k-grow", {}, `For sale: ${p.name}`, el("div", "k-d", { text: p.why })),
-        ),
-      );
-  }
-  if (u.board)
-    opened.push(
-      el(
-        "div",
-        "k-card",
-        {},
-        yardIcon("orders"),
-        el(
-          "div",
-          "k-grow",
-          {},
-          "Side orders unlocked",
-          el("div", "k-d", {
-            text: "Extra orders from the guild, 3 at a time. A new one comes when you hand one over.",
-          }),
-        ),
-      ),
-    );
-  if (node?.gift)
-    opened.push(el("div", "k-card", {}, icon("heart"), el("div", "k-grow k-d", { text: node.gift.line })));
+  const node = isNode(done) ? NODES[done] : undefined;
   const close = el(
     "button",
     "k-btn wood icon sm",
     { type: "button", "aria-label": "Close", onclick: closeBanner },
     icon("close"),
   );
-  const then = next === null ? undefined : NODES[next];
-  const nextInfo = next === null ? undefined : GOALS[next];
+  const then = next === null ? undefined : GOALS[next];
+  const from = next === null ? undefined : NODES[next]?.from;
+  const says = node
+    ? then && from
+      ? el("div", "k-say", {}, el("b", "", { text: `Next, from ${from}` }), `${then.title}: ${wantWords(then.want)}.`)
+      : el(
+          "div",
+          "k-say",
+          {},
+          el("b", "", { text: "The guild" }),
+          `Nothing is in hand. ${whatNext()} Side orders keep coming.`,
+        )
+    : el(
+        "div",
+        "k-say",
+        {},
+        el("b", "", { text: "The Study" }),
+        then ? `Studied next: ${then.title}.` : "Nothing is studied next. Choose in Research.",
+      );
   b.replaceChildren(
     el(
       "header",
       "k-head",
       {},
       icon("check"),
-      el("h2", "k-title", { text: node ? DONE[node.kind] : "Order filled" }),
+      el("h2", "k-title", { text: node ? DONE[node.kind] : "Research known" }),
       close,
     ),
     el(
       "div",
       "k-body",
       {},
-      el(
-        "div",
-        "k-row",
-        {},
-        el("div", "k-grow", { text: info.title }),
-        info.pay > 0 ? amount("coin", `+${info.pay}`) : null,
-      ),
-      ...opened,
-      then && nextInfo
-        ? el(
-            "div",
-            "k-say",
-            {},
-            el("b", "", { text: `Next, from ${then.from}` }),
-            `${then.title}: ${wantWords(nextInfo.want)}.`,
-          )
-        : el(
-            "div",
-            "k-say",
-            {},
-            el("b", "", { text: "The guild" }),
-            "Nothing is in hand. Take a project in Projects. Side orders keep coming.",
-          ),
+      head(done, info.pay > 0 ? amount("coin", `+${info.pay}`) : null),
+      ...some(unlocks(done), leaves(done)).map((l) => l.node),
+      says,
       button("wide", ["Back to work"], closeBanner),
     ),
   );
+  b.dataset.goal = info.id;
   b.hidden = false;
   replay(b, "k-rise");
   window.clearTimeout(bannerTimer);
