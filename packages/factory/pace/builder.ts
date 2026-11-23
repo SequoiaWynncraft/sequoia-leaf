@@ -99,6 +99,7 @@ export interface Mark {
   readonly joined: number;
   readonly onto: number;
   readonly sources: readonly Source[];
+  readonly old: readonly Old[];
 }
 
 /** A mill in a planned block, and the gatherers it is to be fed by. */
@@ -162,7 +163,8 @@ export class Builder {
   private readonly taps: { source: number; rate: number }[] = [];
   private readonly joined: number[] = [];
   private readonly onto: number[] = [];
-  private readonly old: readonly Old[];
+  /** The old lines that may still be taken up: one taken up for a line is gone for every line after it. */
+  private old: readonly Old[];
   private readonly grades: Grades;
   /** The lines standing, and those laid on the copy since, in order. */
   private readonly sources: Source[];
@@ -212,6 +214,7 @@ export class Builder {
       joined: this.joined.length,
       onto: this.onto.length,
       sources: [...this.sources],
+      old: this.old,
     };
   }
 
@@ -225,6 +228,7 @@ export class Builder {
     this.onto.length = m.onto;
     this.sources.length = 0;
     this.sources.push(...m.sources);
+    this.old = m.old;
   }
 
   /** The most steps tried for a line: more for a planned block. */
@@ -481,7 +485,7 @@ export class Builder {
       const fits = this.attempt(() => (fewer = lay()) >= 0);
       this.loose = false;
       this.planning = false;
-      if (fits) return { rate: fewer, taken: some };
+      if (fits) return this.retire({ rate: fewer, taken: some });
     }
     back();
     if (!takeUp(taken, true)) return back();
@@ -490,7 +494,14 @@ export class Builder {
     this.joined.push(...plan.joined);
     this.onto.push(...plan.onto);
     this.sources.push(...plan.sources);
-    return { rate, taken };
+    return this.retire({ rate, taken });
+  }
+
+  /** The old lines a clearing took up are gone: the next line worked out never takes up what stands there now. */
+  private retire<T extends { readonly taken: readonly Old[] }>(cleared: T): T {
+    const gone = new Set(cleared.taken.map((o) => o.id));
+    this.old = this.old.filter((o) => !gone.has(o.id));
+    return cleared;
   }
 
   /** The tiles a command sets pieces down on. */

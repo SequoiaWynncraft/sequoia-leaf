@@ -278,37 +278,43 @@ describe("the table", () => {
   });
 });
 
+/**
+ * A strip of land, the depot at its east end, deadfall and stone at its west end. Line B runs along the bottom row into the depot; line A covers everything else west of
+ * the depot, and has set a splitter on B's belt. Nothing has room until A goes.
+ */
+function strip() {
+  const land = bareLand(
+    10,
+    7,
+    [
+      [1, 2, "deadfall"],
+      [1, 4, "stone"],
+    ],
+    [8, 3],
+  );
+  const y = F.create({ land, tier: 4, seed: 1 });
+  must(y, { do: "lay", legs: belts(span(0, 6), 6, 0) });
+  must(y, { do: "lay", legs: belts([7], 6, 3) });
+  const a: number[] = [];
+  for (let z = 0; z < 6; z++)
+    for (const x of span(0, 6))
+      if (y.kind[F.at(y, x, z)] === F.NONE && y.land.deposit[F.at(y, x, z)] === F.NONE) {
+        must(y, { do: "build", kind: "belt", x, y: z, dir: 0 });
+        a.push(F.at(y, x, z));
+      }
+  must(y, { do: "build", kind: "splitter", x: 3, y: 6, dir: 0 });
+  const split = F.at(y, 3, 6);
+  const b = [...span(0, 6).map((x) => F.at(y, x, 6)), F.at(y, 7, 6)].filter((i) => i !== split);
+  const old: Old[] = [
+    { id: 0, tiles: [...a, split], restores: [{ tile: split, dir: 0, grade: 1, owner: 1 }], sources: [] },
+    { id: 1, tiles: b, restores: [], sources: [] },
+  ];
+  return { y, old, split, b };
+}
+
 describe("old lines taken up to make room", () => {
   test("a line that fits nowhere else takes up only the old line on its ground, lays again the belt of a kept line it had split, and delivers what it is booked for", () => {
-    // A strip of land, the depot at its east end, deadfall and stone at its west end. Line B runs along
-    // the bottom row into the depot; line A covers everything else west of the depot, and has set a
-    // splitter on B's belt. Nothing has room until A goes.
-    const land = bareLand(
-      10,
-      7,
-      [
-        [1, 2, "deadfall"],
-        [1, 4, "stone"],
-      ],
-      [8, 3],
-    );
-    const y = F.create({ land, tier: 4, seed: 1 });
-    must(y, { do: "lay", legs: belts(span(0, 6), 6, 0) });
-    must(y, { do: "lay", legs: belts([7], 6, 3) });
-    const a: number[] = [];
-    for (let z = 0; z < 6; z++)
-      for (const x of span(0, 6))
-        if (y.kind[F.at(y, x, z)] === F.NONE && y.land.deposit[F.at(y, x, z)] === F.NONE) {
-          must(y, { do: "build", kind: "belt", x, y: z, dir: 0 });
-          a.push(F.at(y, x, z));
-        }
-    must(y, { do: "build", kind: "splitter", x: 3, y: 6, dir: 0 });
-    const split = F.at(y, 3, 6);
-    const b = [...span(0, 6).map((x) => F.at(y, x, 6)), F.at(y, 7, 6)].filter((i) => i !== split);
-    const old: Old[] = [
-      { id: 0, tiles: [...a, split], restores: [{ tile: split, dir: 0, grade: 1, owner: 1 }], sources: [] },
-      { id: 1, tiles: b, restores: [], sources: [] },
-    ];
+    const { y, old, split, b } = strip();
     const u = size(F.item("frame"), 1, ones);
     expect(new Builder(y, ones, [], old).depotLine(u)).toBeNull();
     const p = new Builder(y, ones, [], old).depotLine(u, true);
@@ -319,6 +325,15 @@ describe("old lines taken up to make room", () => {
     expect(b.every((i) => y.kind[i] === F.BELT)).toBe(true);
     const got = delivered(y, 10)[F.item("frame")];
     expect({ got, near: near(got, p.rate) }).toEqual({ got, near: true });
+  });
+
+  test("an old line taken up for one line is gone for the next: none worked out after it takes up what the first laid there", () => {
+    const { y, old } = strip();
+    const builder = new Builder(y, ones, [], old);
+    const frames = builder.depotLine(size(F.item("frame"), 1, ones), true);
+    if (!frames) throw new Error("no frame line, even taking up old lines");
+    expect(frames.taken).toEqual([0]);
+    expect(builder.save().old.map((o) => o.id)).toEqual([1]);
   });
 });
 
