@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { boonNumber } from "../content/boons.ts";
-import { FIGURES, specOf, type UnitKind } from "../content/figures.ts";
+import { abilityNumber, FIGURES, specOf, type UnitKind } from "../content/figures.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { traitNumber } from "../content/traits.ts";
 import { backRow, cellAt, distance, rowOf } from "../hex.ts";
@@ -22,7 +22,7 @@ import {
   unitOf,
   unitsOf,
 } from "../testkit.ts";
-import { heal, hurt, HZ, shieldUp } from "./core.ts";
+import { brace, heal, hurt, HZ, shieldUp } from "./core.ts";
 import { speedNow } from "./engine.ts";
 
 const t = traitNumber;
@@ -207,6 +207,22 @@ describe("kins", () => {
     const crab = unitOf(f, "crab7");
     expect(crab.armour).toBe(FIGURES.crab7.armour + t("burrow", "armour", 1));
     expect(crab.digs).toBe(true);
+  });
+  test("Burrow: a Rock that digs in during It Is A Rock keeps the stronger brace, its sting and its end", () => {
+    const f = fightOf([at("rock", 3, 0), at("worm", 3, 2)], [at("mud", 3, 3)]);
+    stillSide(f, 1);
+    const rock = unitOf(f, "rock");
+    const foe = unitOf(f, "mud", 1);
+    const rockSays = (name: string) => abilityNumber("rock", name, 1);
+    // Its own ability is up, stronger and longer than Burrow's dig.
+    brace(f, rock, rockSays("less"), rockSays("stub"), rockSays("lasts"));
+    const until = rock.bracedUntil;
+    f.out = [];
+    // Enough, through its brace, to take it under half.
+    hurt(f, rock, rock.maxHp * 0.9, "true", "attack", foe);
+    expect(only(f.out, "heal").some((e) => e.source === "burrow")).toBe(true);
+    expect(rockSays("less")).toBeGreaterThan(t("burrow", "less", 1));
+    expect([rock.bracedBy, rock.stub, rock.bracedUntil]).toEqual([rockSays("less"), rockSays("stub"), until]);
   });
   test("Feather: every attack makes the next come quicker, up to a point", () => {
     const f = fightOf([at("jay", 3, 0), at("finch", 3, 2)], [at("mud", 3, 0)]);
